@@ -24,10 +24,11 @@ int main(int argc,char** argv){
     const auto request=Json::parse(R"({"style":"scifi","slot":"hull"})");
     const auto surface=studio::studioBuildingSurfacePreview(argv[1],request);
     AIVERSE_TEST_CHECK(surface.getStr("style")=="scifi"&&surface.getStr("slot")=="hull");
-    AIVERSE_TEST_CHECK(surface["maps"].size()==3);
+    AIVERSE_TEST_CHECK(surface["maps"].size()==4);
+    AIVERSE_TEST_CHECK(surface["maps"][size_t(3)].getStr("channel")=="occlusion");
     AIVERSE_TEST_CHECK(surface.getInt("resolution")==128);
     const auto detailed=studio::studioBuildingSurfacePreview(argv[1],Json::parse(R"({"style":"scifi","slot":"hull","resolution":256})"));
-    AIVERSE_TEST_CHECK(detailed.getInt("resolution")==256&&detailed["maps"].size()==3);
+    AIVERSE_TEST_CHECK(detailed.getInt("resolution")==256&&detailed["maps"].size()==4);
     AIVERSE_TEST_CHECK(detailed["maps"][size_t(0)].getStr("url").size()>surface["maps"][size_t(0)].getStr("url").size());
     AIVERSE_TEST_CHECK(surface==studio::studioBuildingSurfacePreview(argv[1],request));
     for(const auto& map:surface["maps"].items())

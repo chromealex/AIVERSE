@@ -56,7 +56,7 @@ function BuildingSurfacePreview({style,visible,resolution}:{style:StudioBuilding
           <figcaption>{map.label}</figcaption>
         </figure>)}
       </div>}
-      <small className="abg__note">Actual native style maps · {resolution} × {resolution} · deterministic material seed. Base Color is neutral modulation of the authored tint. Imported project textures override corresponding channels; GLB embeds the generated PNGs for remaining channels.</small>
+      <small className="abg__note">Actual native style maps (including material cavity AO) · {resolution} × {resolution} · deterministic material seed. Base Color is neutral modulation of the authored tint. Imported project textures override corresponding channels; GLB embeds the generated PNGs for remaining channels.</small>
     </>}
   </StudioSection>;
 }

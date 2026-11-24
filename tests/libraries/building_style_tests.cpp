@@ -116,7 +116,7 @@ int main(int argc,char** argv){
             // maps, including on the original Sci-Fi setting shown in Studio.
             for(const auto& material:style.materials){
                 CHECK(!material.surfacePattern.empty());
-                for(auto channel:{BuildingSurfaceChannel::BaseColor,BuildingSurfaceChannel::MetallicRoughness,BuildingSurfaceChannel::Normal}){
+                for(auto channel:kBuildingSurfaceChannels){
                     auto pixels=generateBuildingSurface(material.surfacePattern,material.id,material.surfaceSeed,channel);
                     CHECK(pixels.width==128&&pixels.height==128&&pixels.rgba.size()==128u*128u*4u);
                 }
@@ -138,12 +138,12 @@ int main(int argc,char** argv){
         // Determinism and variation.
         auto a=dressBuilding(d,st,7),b=dressBuilding(d,st,7);
         // Exercise the real GLB serializer without an Assets resolver: the
-        // original style must produce all three embedded PNGs per material.
+        // original style must produce all four embedded PNGs per material.
         buildingExport::Glb glb;glb.add(a,"procedural-textured-building");
         const auto images=Json::parse("["+glb.images+"]");
         const auto materials=Json::parse("["+glb.materials+"]");
         const auto views=Json::parse("["+glb.views+"]");
-        CHECK(images.size()==a.materials.size()*3&&materials.size()==a.materials.size());
+        CHECK(images.size()==a.materials.size()*kBuildingSurfaceChannels.size()&&materials.size()==a.materials.size());
         for(const auto& image:images.items()){
             CHECK(image.getStr("mimeType")=="image/png");
             const auto off=views[size_t(image.getInt("bufferView"))].getInt("byteOffset");
@@ -154,6 +154,7 @@ int main(int argc,char** argv){
             CHECK(material["pbrMetallicRoughness"]["baseColorTexture"].isObject());
             CHECK(material["pbrMetallicRoughness"]["metallicRoughnessTexture"].isObject());
             CHECK(material["normalTexture"].isObject());
+            CHECK(material["occlusionTexture"].isObject());
         }
         CHECK(a.vertices.size()==b.vertices.size()&&a.parts.size()==b.parts.size()&&a.materials==b.materials);
         for(size_t i=0;i<a.vertices.size();++i)for(int k=0;k<3;++k)CHECK(a.vertices[i].pos[k]==b.vertices[i].pos[k]);

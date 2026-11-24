@@ -272,7 +272,7 @@ inline StyledStructure produce(const fs::path& engine,const Request& req) {
     if(req.textureResolution)for(auto& material:generated.mesh.materials)material.surfaceResolution=req.textureResolution;
     uint64_t generatedBytes=0;
     for(const auto& material:generated.mesh.materials)if(!material.surfacePattern.empty())
-        generatedBytes+=uint64_t(material.surfaceResolution)*material.surfaceResolution*4u*3u;
+        generatedBytes+=uint64_t(material.surfaceResolution)*material.surfaceResolution*4u*kBuildingSurfaceChannels.size();
     if(generatedBytes>128u*1024u*1024u)throw std::runtime_error("Generated building exceeds 128 MiB procedural texture budget");
     if(generated.mesh.triangles()>150000)
         throw std::runtime_error("Generated building exceeds the 150k triangle asset budget");
@@ -322,7 +322,7 @@ inline Json studioBuildingCatalog(const std::filesystem::path& engine) {
     out.set("styles",std::move(styles));
     return out;
 }
-// Read-only style surface preview. One validated material, three bounded
+// Read-only style surface preview. One validated material, four bounded
 // PNGs (128/256/512). Uses the same portable generator as native Model/GLB.
 inline Json studioBuildingSurfacePreview(const std::filesystem::path& engine,const Json& params) {
     using namespace buildingStudioDetail;
@@ -340,11 +340,11 @@ inline Json studioBuildingSurfacePreview(const std::filesystem::path& engine,con
         resolution=int(n);
     }
     Json out=Json::object(),maps=Json::array();
-    const char* keys[]={"baseColor","metallicRoughness","normal"};
-    const char* labels[]={"Base Color","Metallic / Roughness","Normal"};
-    for(size_t i=0;i<3;++i){
+    const char* keys[]={"baseColor","metallicRoughness","normal","occlusion"};
+    const char* labels[]={"Base Color","Metallic / Roughness","Normal","Ambient Occlusion"};
+    for(size_t i=0;i<kBuildingSurfaceChannels.size();++i){
         const auto pixels=generateBuildingSurface(it->surfacePattern,it->id,it->surfaceSeed,
-            static_cast<BuildingSurfaceChannel>(i),resolution);
+            kBuildingSurfaceChannels[i],resolution);
         const auto png=building::encodeBuildingPngRgba(pixels.rgba,pixels.width,pixels.height);
         const std::string bytes(reinterpret_cast<const char*>(png.data()),png.size());
         Json map=Json::object();

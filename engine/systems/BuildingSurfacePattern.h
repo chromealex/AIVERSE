@@ -12,7 +12,11 @@
 
 namespace aiverse::lib::systems {
 enum class BuildingSurfaceChannel : uint8_t {
-    BaseColor, MetallicRoughness, Normal
+    BaseColor, MetallicRoughness, Normal, Occlusion
+};
+inline constexpr std::array<BuildingSurfaceChannel,4> kBuildingSurfaceChannels{
+    BuildingSurfaceChannel::BaseColor, BuildingSurfaceChannel::MetallicRoughness,
+    BuildingSurfaceChannel::Normal, BuildingSurfaceChannel::Occlusion
 };
 struct BuildingSurfacePixels {
     int width=128,height=128;
@@ -101,7 +105,8 @@ inline BuildingSurfacePixels generateBuildingSurface(
     std::string_view pattern,std::string_view materialName,
     uint32_t seed,BuildingSurfaceChannel channel,int resolution=128) {
     BuildingSurfacePixels result;
-    if(!validBuildingSurfacePattern(pattern)||pattern.empty()||!validBuildingSurfaceResolution(resolution))return result;
+    if(!validBuildingSurfacePattern(pattern)||pattern.empty()||!validBuildingSurfaceResolution(resolution)||
+       std::find(kBuildingSurfaceChannels.begin(),kBuildingSurfaceChannels.end(),channel)==kBuildingSurfaceChannels.end())return result;
     result.width=result.height=resolution;
     result.rgba.resize(size_t(result.width)*size_t(result.height)*4u);
     seed=buildingSurfaceNameSeed(materialName,seed);
@@ -122,6 +127,20 @@ inline BuildingSurfacePixels generateBuildingSurface(
             p[1]=uint8_t(std::clamp(192+(height-128)/4,0,255));
             p[2]=255; // authored metallicFactor controls metalness
             p[3]=255;
+        }else if(channel==BuildingSurfaceChannel::Occlusion){
+            // Local cavity approximation in material-space, independent of
+            // mesh lighting. Sample periodic neighbours at fixed texel distances
+            // in the original 128-unit tile so quality does not change scale.
+            const int step=resolution/128;
+            const float center=at(x,y);
+            float cavity=0.f;
+            for(int radius:{2,4}){
+                const int d=radius*step;
+                for(const auto& offset:std::array<std::array<int,2>,4>{{{d,0},{-d,0},{0,d},{0,-d}}})
+                    cavity+=std::max(0.f,at(x+offset[0],y+offset[1])-center);
+            }
+            const auto ao=uint8_t(std::clamp(int(std::lround(255.f-cavity*.22f)),64,255));
+            p[0]=p[1]=p[2]=ao;p[3]=255;
         }else {
             const int dx=int(std::lround((at(x+1,y)-at(x-1,y))*resolution/128.f));
             const int dy=int(std::lround((at(x,y+1)-at(x,y-1))*resolution/128.f));

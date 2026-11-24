@@ -96,12 +96,7 @@ inline bool bindBuildingStyleMaterials(
         // externally imported GUID assets. Imported GUIDs always win per
         // channel; generated surfaces never reach the filesystem/GPU here.
         if(!source.surfacePattern.empty()){
-            using lib::systems::BuildingSurfaceChannel;
-            const std::array<BuildingSurfaceChannel,3> channels{
-                BuildingSurfaceChannel::BaseColor,
-                BuildingSurfaceChannel::MetallicRoughness,
-                BuildingSurfaceChannel::Normal
-            };
+            const auto& channels=lib::systems::kBuildingSurfaceChannels;
             for(size_t i=0;i<channels.size();++i){
                 if(!guids[i].empty())continue;
                 const std::string key="surface:"+source.id+":"+

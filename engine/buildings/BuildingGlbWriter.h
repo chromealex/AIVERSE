@@ -130,7 +130,8 @@ struct Glb{
             generatedTexture(m,1):texture(m.textures.metallicRoughness);
         const int normal=m.textures.normal.empty()?
             generatedTexture(m,2):texture(m.textures.normal);
-        const int ao=texture(m.textures.occlusion);
+        const int ao=m.textures.occlusion.empty()?
+            generatedTexture(m,3):texture(m.textures.occlusion);
         const int emissive=texture(m.textures.emissive);
         if(base>=0)pbr.set("baseColorTexture",texInfo(base));
         if(mr>=0)pbr.set("metallicRoughnessTexture",texInfo(mr));
