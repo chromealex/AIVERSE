@@ -2203,7 +2203,6 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     if(planetProcessOverlays_.truncated)lightingStatus_+=" · overlay budget reached";
     if(planetProcessOverlays_.regionChartClipped)lightingStatus_+=" · EVOLVE chart clipped";
     if(planetForestOverlays_.invalid)lightingStatus_+=" · invalid authored forest";
-    if(planetForestOverlays_.plants)lightingStatus_+=" · authored forest: ARBOR skeleton / root footprint / capsule recipe";
     if(planetForestOverlays_.missingProfile)lightingStatus_+=" · missing ARBOR profile";
     if(planetForestOverlays_.rejected)lightingStatus_+=" · rejected forest placements";
     if(planetForestOverlays_.truncated)lightingStatus_+=" · forest overlay budget reached";
@@ -2226,6 +2225,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         if(planetLiveSnapshot_["aether"].getBool("truncated"))lightingStatus_+=" (sample capped)";
     }
     const bool liveForest=livePlanet&&planetLiveSnapshot_["forest"].getBool("active");
+    if(!liveForest&&planetForestOverlays_.plants)lightingStatus_+=" · authored forest: ARBOR skeleton / root footprint / capsule recipe";
     if(livePlanet&&planetLiveSnapshot_["forest"].isObject()){
         lightingStatus_+=liveForest?" · live forest roots / actual capsule poses":" · live forest unavailable";
         if(planetLiveSnapshot_["forest"].getBool("truncated"))lightingStatus_+=" (sample capped)";
