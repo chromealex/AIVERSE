@@ -221,6 +221,7 @@ public:
         for(const auto* name:{"astar","hpa","flow","hybrid"})
             (void)pathRouter_.unregisterSolver(name);
         registerCaveSharedGraphSolvers(pathRouter_,settings);
+        pathCache_.invalidate();
     }
     bool registerPathSolver(std::string name,CavePathBackend kind,
                             CavePathRouter::Solver solver){
