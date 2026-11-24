@@ -57,7 +57,8 @@
     "tools/studio/test_content_layout.py",
     "tools/studio/test_reference_pin_zoom.py",
     "tools/studio/test_scene_tools.py",
-    "apps/studio-web/tests/nested-dock.mjs"
+    "apps/studio-web/tests/nested-dock.mjs",
+    "CMakeLists.txt"
   ],
   "traits": {
     "editable": false,
@@ -138,7 +139,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Mac archive at 9f6f58f64e082479808c0a64e32a36d7ab0fd54c: 20 Python tests PASS, contracts/registry/policy/partial compliance PASS. Studio failed; rerun on fixed HEAD required. Studio QA follow-up fixes cover stale shared-host contracts, case collision, MaterialGraph typing and default dock membership. Fixed tree has not been retested. Five preexisting GameView compatibility includes are reported separately; new canonical View dependency regression fixture added. Strict status remains not_run until current tree is tested.",
+      "note": "Mac QA on cdfdcdcacbfe9bf0c33b18f57199314801820c98: Feature Gate 20/20, Studio contracts 48/48, TypeScript/Vite, native Studio/MCP builds, MCP registration (347 tools, 13 families) and four read-only MCP calls PASS. Web 215/216; full native build failed linking camera_client_adapter (NativeRegistrar), CTest NOT RUN. Dock fixture and explicit link to registrar owner fixed afterward; current HEAD retest required. Strict compliance blocked by not_run declarations; GUI/refresh and Mac merged-tree not verified.",
       "evidence": []
     },
     "handoff": {
