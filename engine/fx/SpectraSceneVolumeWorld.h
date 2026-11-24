@@ -33,15 +33,28 @@ public:
         if(placed.impulse&&!next->queueImpulse(*placed.impulse,placed.impulseSeconds)){
             error_="Volume impulse rejected";return false;
         }
-        renderer_.shutdown();grid_=std::move(next);asset_=std::move(placed);anchor_=anchor;error_.clear();return true;
+        renderer_.shutdown();grid_=std::move(next);asset_=std::move(placed);anchor_=anchor;deposits_.clear();error_.clear();return true;
     }
-    void shutdown(){renderer_.shutdown();grid_.reset();asset_={};error_.clear();}
-    bool step(){if(!grid_||!grid_->step()){error_=grid_?grid_->error():"No volume";return false;}return true;}
+    void shutdown(){renderer_.shutdown();grid_.reset();asset_={};deposits_.clear();error_.clear();}
+    bool step(){
+        if(!grid_){error_="No volume";return false;}
+        auto sources=asset_.sources;
+        sources.insert(sources.end(),deposits_.begin(),deposits_.end());
+        if(!grid_->setSources(sources)||!grid_->step()){error_=grid_->error();return false;}
+        deposits_.clear();return true;
+    }
     bool clear(bool retrigger){
         if(!grid_||!grid_->clear()){error_=grid_?grid_->error():"No volume";return false;}
+        deposits_.clear();
         return !retrigger||!asset_.impulse||trigger();
     }
     bool trigger(){return grid_&&asset_.impulse&&(grid_->impulsePending()||grid_->queueImpulse(*asset_.impulse,asset_.impulseSeconds));}
+    // Render-owner API: update authored continuous sources with transient particle
+    // deposits for one accepted tick. A failed step retains deposits for retry.
+    bool deposit(const Source& source){
+        if(!grid_||!source.valid()||asset_.sources.size()+deposits_.size()>=kMaxSources)return false;
+        deposits_.push_back(source);return true;
+    }
     bool hasImpulse()const{return bool(asset_.impulse);}
     bool published()const{return grid_&&grid_->published();}
     const std::string& error()const{return error_;}
@@ -62,6 +75,7 @@ private:
     std::unique_ptr<GpuGasGrid> grid_;
     GpuVolumeRenderer renderer_;
     Asset asset_;
+    std::vector<Source> deposits_;
     RenderSettings settings_;
     float3 anchor_{};
     std::string error_;
@@ -100,6 +114,18 @@ public:
             if(!instance->init(d,*row->asset,row->anchor,reader)){error_=instance->error();continue;}
             entries_.emplace(id,Entry{row->effect,row->revision,0,std::move(instance)});
         }
+    }
+    // Explicit world-space particle deposit into a named resident volume.
+    bool deposit(const std::string& identity,const Source& source){
+        auto it=entries_.find(identity);
+        return it!=entries_.end()&&it->second.instance->deposit(source);
+    }
+    // Borrowed GPU view for ordered particle compute; never read back here.
+    GpuVolumeView view(const std::string& identity){
+        auto it=entries_.find(identity);
+        if(it==entries_.end())return {};
+        auto* grid=it->second.instance->grid();
+        return grid?grid->view():GpuVolumeView{};
     }
     void step(float dt){
         if(!std::isfinite(dt)||dt<0)return;
