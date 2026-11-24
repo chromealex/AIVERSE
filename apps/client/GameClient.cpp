@@ -304,7 +304,7 @@ Json GameClient::startRuntimeTextureMaterial(size_t type,size_t choice,size_t ma
         throw std::runtime_error("runtime texture target unavailable or request active");
     const auto current=view_.graphMaterialTarget(type,choice,material);
     if(!current)throw std::runtime_error("runtime texture material not resident");
-    auto result=runtimeTextureGraph_.startResidentMaterial(graph,overrides,runtimeTextureScope_,gpuDeviceLease_,options);
+    auto result=runtimeTextureGraph_.startResidentMaterial(graph,overrides,runtimeTextureScope_,gpuDeviceLease_,options,current->identity);
     runtimeTextureRequest_=result.getStr("request");
     runtimeTextureTask_=view::RuntimeTextureGraphTask{runtimeTextureRequest_,type,choice,current->identity};
     runtimeTextureState_="queued";runtimeTextureReason_.clear();return runtimeTextureMaterialStatus();

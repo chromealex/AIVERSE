@@ -1,5 +1,6 @@
 #include "engine/render/graph/TextureGraphDagLowering.h"
 #include "engine/render/graph/TextureGraphIncremental.h"
+#include "engine/render/graph/TextureGraphOutputReuse.h"
 #include <cstdlib>
 #include <iostream>
 using namespace aiverse::render::texture_graph::gpu;
@@ -36,5 +37,15 @@ int main(){
     auto aliased=lowerDagSlots(edges,order,{4},bytes,384);
     check(incrementalKeys(aliased.schedule,[](size_t)->std::string_view{return "shader";}).empty());
     bad=false;try{(void)lowerDagSlots(edges,order,{4},bytes,511,3,true);}catch(const std::invalid_argument&){bad=true;}check(bad);
+    const std::vector<std::vector<size_t>> oe{{},{},{0},{1}};
+    const std::vector<size_t> oo{0,1,2,3};
+    std::vector<std::string> nk{"a","b","normal","color"};
+    const std::map<std::string,size_t> named{{"normal",2},{"color",3}};
+    const auto before=outputDependencyKeys(oe,oo,nk,named,"32:mips");
+    nk[0]="changed";const auto after=outputDependencyKeys(oe,oo,nk,named,"32:mips");
+    check(!unchangedOutput(before,after,"normal")&&unchangedOutput(before,after,"color"));
+    check(!unchangedOutput(before,outputDependencyKeys(oe,oo,nk,named,"32:single"),"color"));
+    check(!unchangedOutput({},after,"color"));
+    nk[0]=std::string(outputKeyBudget+1,'x');check(outputDependencyKeys(oe,oo,nk,named,"32:mips").empty());
     std::cout<<"PASS: typed capacity, multi-input order, duplicate ports/targets, output pinning, pruning, budget, binding limit, slot reuse\n";
 }

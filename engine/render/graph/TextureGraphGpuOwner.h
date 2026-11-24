@@ -9,6 +9,7 @@
 #include "engine/render/graph/TextureGraphMaterializedDispatch.h"
 #include "engine/render/graph/TextureGraphGpuResourceCache.h"
 #include "engine/render/graph/TextureGraphRequestQueue.h"
+#include "engine/render/graph/TextureGraphOutputReuse.h"
 #include "engine/render/graph/GraphGpuProfile.h"
 #include <array>
 #include <limits>
@@ -28,6 +29,7 @@ struct ResidentMaterialOptions {
     bool mipmaps=true;
     bool fusePointwise=false;
     bool incremental=false;
+    bool incrementalOutputs=false; // target-bound FenceOnly material path
     int timeoutMs=60000;
 };
 class TextureGraphGpuOwner {
@@ -58,6 +60,30 @@ class TextureGraphGpuOwner {
     }
     using Program=render::texture_graph::Program;
     using Source=render::texture_graph::gpu::Source;
+    struct OutputReceipt {
+        std::string scope;
+        uint64_t epoch=0;
+        view::LiveAppearanceMaterialTarget target;
+        gpu::OutputKeys keys,names;
+    };
+    std::optional<OutputReceipt> lastOutputReceipt_,pendingOutputReceipt_;
+    std::optional<view::LiveAppearanceMaterialTarget> outputReuseTarget_;
+    gpu::OutputKeys reusedOutputNames_;
+    bool outputNoop_=false;
+    static bool sameTarget(const view::LiveAppearanceMaterialTarget& a,const view::LiveAppearanceMaterialTarget& b){
+        return a.publication==b.publication&&a.version==b.version&&a.material==b.material;
+    }
+    static gpu::OutputKeys outputKeys(const Program& p,bool mipmaps,bool fusion){
+        std::vector<std::vector<size_t>> edges;std::vector<std::string> nodes;
+        for(const auto& node:p.nodes){edges.push_back(node.inputs);std::string key;
+            gpu::appendOutputField(key,node.info->id,gpu::outputKeyBudget);
+            if(!gpu::appendOutputField(key,node.parameters.dump(-1),gpu::outputKeyBudget))return {};
+            nodes.push_back(std::move(key));}
+        std::map<std::string,size_t> outputs;
+        for(const auto& [name,index]:p.outputs)if(materialSlot(name))outputs.emplace(name,index);
+        return gpu::outputDependencyKeys(edges,p.order,nodes,outputs,
+            std::to_string(p.size)+(mipmaps?":mips":":single")+(fusion?":fused":":plain"));
+    }
     struct Read {bool done=false;size_t offset=0,expected=0;std::vector<uint8_t> bytes;};
     std::shared_ptr<Read> read_;
     // Request-local copied textures are still owned by this same native
@@ -123,7 +149,7 @@ class TextureGraphGpuOwner {
     }
     bool gpuCleanupPending()const{return !gpuCandidates_.empty()&&
         (published_||state_=="failed"||state_=="cancelled"||project_.empty());}
-    bool gpuCandidatesReady()const{return gpuTransferRequested_&&!gpuCandidates_.empty()&&
+    bool gpuCandidatesReady()const{return gpuTransferRequested_&&(outputNoop_||!gpuCandidates_.empty())&&
         gpuAcceptedTextures_==gpuCandidates_.size()&&gpuTransferLease_.alive()&&
         state_=="ready"&&!published_&&!active()&&!inFlight_&&!matRetirementPending();}
     // This helper is called only by the frame owner. Unhealthy/expired
@@ -421,14 +447,19 @@ private:
         p.set("gpuTextureMipmaps",Json::fromBool(options.mipmaps));
         p.set("fusePointwise",Json::fromBool(options.fusePointwise));
         p.set("incremental",Json::fromBool(options.incremental));
+        p.set("incrementalOutputs",Json::fromBool(options.incrementalOutputs));
         p.set("gpuTextureFenceOnly",Json::fromBool(options.acceptance==ResidentAcceptance::FenceOnly));
         p.set("timeoutMs",Json::number(int64_t(options.timeoutMs)));
         return p;
     }
 public:
     Json startResidentMaterial(const Json& graph,const Json& overrides,const std::string& scope,
-            const render::RenderDeviceLifetime::Lease& lease,const ResidentMaterialOptions& options={}){
-        return start(residentRequest(graph,overrides,options),scope,lease);
+            const render::RenderDeviceLifetime::Lease& lease,const ResidentMaterialOptions& options={},
+            const view::LiveAppearanceMaterialTarget& target={}){
+        auto p=residentRequest(graph,overrides,options);
+        if(options.incrementalOutputs){p.set("expectedModelPublication",Json::string(std::to_string(target.publication)));
+            p.set("expectedVersion",Json::string(std::to_string(target.version)));p.set("materialIndex",Json::number(int64_t(target.material)));}
+        return start(p,scope,lease);
     }
     Json enqueueResidentMaterial(const Json& graph,const Json& overrides,const std::string& scope,
             const render::RenderDeviceLifetime::Lease& lease,const ResidentMaterialOptions& options={},int priority=1){
@@ -436,6 +467,7 @@ public:
     }
     // Queue entries are immutable JSON snapshots; pending entries have no GPU handles.
     Json enqueue(const Json& p,const std::string& scope,const render::RenderDeviceLifetime::Lease& lease,int priority=1){
+        if(p.getBool("incrementalOutputs"))throw std::invalid_argument("incremental output reuse requires direct live-target request");
         if(scope.empty()||!lease.alive()||!lease.device()||!lease.validFor(*lease.device()))
             throw std::invalid_argument("texture queue requires live native scope and lease");
         checkProject(scope);
@@ -519,6 +551,10 @@ public:
         r.set("materializedIdleBytes",Json::number(int64_t(matIdleBuffers_.bytes())));
         r.set("materializedIdlePipelines",Json::number(int64_t(matIdlePipelines_.size())));
         r.set("retainedBufferBytes",Json::number(int64_t(matIdleBuffers_.bytes()+matBytes_+capacity_*(scratch_.valid()?2:1))));
+        r.set("incrementalOutputsRequested",Json::fromBool(outputReuseTarget_.has_value()));
+        r.set("incrementalOutputNoop",Json::fromBool(outputNoop_));
+        Json reusedMaps=Json::array();for(const auto& [name,image]:reusedOutputNames_){(void)image;reusedMaps.push(Json::string(name));}
+        r.set("incrementalReusedOutputs",reusedMaps);
         r.set("gpuTextureTransferRequested",Json::fromBool(gpuTransferRequested_));
         r.set("gpuTextureMipmaps",Json::fromBool(gpuTextureMipmaps_));
         r.set("gpuTextureFenceOnly",Json::fromBool(gpuFenceOnly_));
@@ -540,7 +576,7 @@ public:
     Json start(const Json& p,const std::string& project,render::RenderDeviceLifetime::Lease lease={}){
         if(!queuePromoting_&&(!queueTicket_.empty()||!pendingRequests_.pending().empty()))throw std::runtime_error("texture queue owns scheduling; release active ticket first");
         if(queued_||inFlight_||matRetirementPending()||state_=="pending"||setPending())throw std::runtime_error("previous GPU texture request still active");
-        if(!gpuCandidates_.empty())throw std::runtime_error("publish or cancel the previous GPU texture set, then retire it");
+        if(!gpuCandidates_.empty()||(outputNoop_&&state_=="ready"&&!published_))throw std::runtime_error("publish or cancel the previous GPU texture set, then retire it");
         if(project.empty())throw std::invalid_argument("open project first");
         auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object());
         size_t target=program.nodes.size();const bool setBake=p.getBool("bakeSet"),bake=setBake||p.getBool("bake");
@@ -551,28 +587,57 @@ public:
             throw std::invalid_argument("incremental requires materialized DAG");
         if(incremental&&(!lease.alive()||!lease.device()||!lease.validFor(*lease.device())))
             throw std::invalid_argument("incremental requires native device lease");
+        const bool reuseOutputs=p.getBool("incrementalOutputs");
+        std::optional<view::LiveAppearanceMaterialTarget> reuseTarget;
+        std::optional<OutputReceipt> receipt;
+        gpu::OutputKeys reusedNames;
+        if(reuseOutputs){
+            if(!transfer||!fenceOnly||!setBake||!materialized||!incremental)
+                throw std::invalid_argument("incremental outputs require incremental materialized fence-only GPU set");
+            const view::LiveAppearanceMaterialTarget stamp{view::parseAppearanceIdentity(p.getStr("expectedModelPublication")),
+                view::parseAppearanceIdentity(p.getStr("expectedVersion")),size_t(render::texture_graph::integer(p["materialIndex"],-1,0,65535))};
+            if(!p.has("materialIndex")||!stamp.publication||!stamp.nextVersion())throw std::invalid_argument("incremental outputs require exact live target");
+            reuseTarget=stamp;
+            if(serial_==~uint64_t{0})throw std::overflow_error("GPU texture identity exhausted");
+            auto keys=outputKeys(program,mipmaps,p.getBool("fusePointwise"));
+            if(!keys.empty()){
+                OutputReceipt next{project,lease.generation(),stamp,std::move(keys),{}};
+                const bool matching=lastOutputReceipt_&&lastOutputReceipt_->scope==project&&lastOutputReceipt_->epoch==lease.generation()&&sameTarget(lastOutputReceipt_->target,stamp);
+                const auto generation="gpu_"+std::to_string(lease.generation())+"_"+std::to_string(serial_+1);
+                for(const auto& [name,key]:next.keys){(void)key;
+                    if(matching&&gpu::unchangedOutput(lastOutputReceipt_->keys,next.keys,name)&&lastOutputReceipt_->names.contains(name)){
+                        const auto& image=lastOutputReceipt_->names.at(name);reusedNames.emplace(name,image);next.names.emplace(name,image);program.outputs.erase(name);
+                    }else next.names.emplace(name,gpuGraphImageName(generation,name));
+                }
+                receipt=std::move(next);
+            }
+        }
+        bool noop=reuseTarget.has_value()&&!reusedNames.empty();
+        for(const auto& [name,index]:program.outputs){(void)index;if(materialSlot(name))noop=false;}
         render::texture_graph::gpu::TextureRequestBudget transferBudget;
         if(mipmaps&&!transfer)throw std::invalid_argument("GPU texture mipmaps require texture transfer");
         if(transfer){
             if(!setBake||!materialized)throw std::invalid_argument("GPU texture transfer requires materialized bakeSet");
             if(!lease.alive()||!lease.device()||!lease.validFor(*lease.device()))
                 throw std::invalid_argument("GPU texture transfer requires native device lease");
-            transferBudget=render::texture_graph::graphGpuTextureBudget(program,mipmaps,
+            if(!noop)transferBudget=render::texture_graph::graphGpuTextureBudget(program,mipmaps,
                 render::texture_graph::gpu::materializedBudgetBytes,fenceOnly);
-            if(!transferBudget)throw std::invalid_argument("GPU texture request exceeds budget or has no bindable outputs");
+            if(!noop&&!transferBudget)throw std::invalid_argument("GPU texture request exceeds budget or has no bindable outputs");
             gpuCandidates_.reserve(render::texture_graph::gpu::maxTextureSetImages);
         }
         auto output=p.getStr("output");
         if(setBake){for(const auto& [name,index]:program.outputs){if(fenceOnly&&!render::texture_graph::materialSlot(name))continue;output=name;target=index;break;}}
         else if(!bake&&p.has("node")){for(size_t i=0;i<program.nodes.size();++i)if(program.nodes[i].id==p.getStr("node"))target=i;}
         else{auto it=program.outputs.find(output);if(it!=program.outputs.end())target=it->second;}
-        if(target>=program.nodes.size())throw std::invalid_argument("unknown texture target");
+        if(!noop&&target>=program.nodes.size())throw std::invalid_argument("unknown texture target");
+        if(noop){target=0;output.clear();}
         if(serial_==~uint64_t{0})throw std::overflow_error("GPU texture identity exhausted");
         const int requested=bake?program.size:render::texture_graph::integer(p["resolution"],32,8,render::texture_graph::gpu::maxPreviewSize);
         timeoutMs_=render::texture_graph::integer(p["timeoutMs"],60000,1000,300000);
         deadline_=Clock::now()+std::chrono::milliseconds(timeoutMs_);
         sharedScratch_.invalidate();reusedScratch_=false;sharedScratchHits_=0;
         matIncremental_=incremental;matReusedNodes_=0;matRequested_=materialized;matFusion_=matRequested_&&p.getBool("fusePointwise");matReachableNodes_=matFusedNodes_=0;matFailed_=false;matNodePasses_=matPackPasses_=matPipelineHits_=0;matBufferHit_=false;
+        outputReuseTarget_=reuseTarget;pendingOutputReceipt_=std::move(receipt);reusedOutputNames_=std::move(reusedNames);outputNoop_=noop;
         ++serial_;gpuTransferRequested_=transfer;gpuTextureMipmaps_=mipmaps;gpuPublished_=false;gpuFenceOnly_=fenceOnly;
         gpuTransferLease_=(transfer||incremental)?lease:render::RenderDeviceLifetime::Lease{};gpuTransferBudget_=transferBudget;
         gpuAcceptedTextures_=0;gpuGeneration_=transfer?"gpu_"+std::to_string(lease.generation())+"_"+std::to_string(serial_):std::string{};
@@ -580,10 +645,12 @@ public:
         sourceGraph_=setBake?p["graph"]:Json();overrides_=setBake?(p.has("overrides")?p["overrides"]:Json::object()):Json();
         setOutputs_.clear();setImages_.clear();setBackends_.clear();reusedOutputs_=0;
         if(setBake_){for(const auto& pair:program_->outputs)if(!gpuFenceOnly_||render::texture_graph::materialSlot(pair.first))setOutputs_.push_back(pair);setImages_.reserve(setOutputs_.size());setBackends_.reserve(setOutputs_.size());}
-        plannedPasses_=plannedSlotBytes_=0;passes_=0;blocks_=received_=scratchBytes_=0;reused_=reusedBuffers_=cacheHit_=false;requireGpu_=transfer||incremental||p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=true;state_="queued";return status();
+        plannedPasses_=plannedSlotBytes_=0;passes_=0;blocks_=received_=scratchBytes_=0;reused_=reusedBuffers_=cacheHit_=false;requireGpu_=transfer||incremental||p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=!outputNoop_;state_=outputNoop_?"ready":"queued";
+        if(outputNoop_){backend_="reused";reason_="all material outputs unchanged; no GPU generation";}return status();
     }
     void checkProject(const std::string& project){
         if(!queueScope_.empty()&&queueScope_!=project)clearQueue();
+        if(lastOutputReceipt_&&lastOutputReceipt_->scope!=project)lastOutputReceipt_.reset();
         if(!project_.empty()&&project_!=project){discard("cancelled","project changed");project_.clear();}
     }
     Json cancel(const Json& p,const std::string& project){
@@ -656,6 +723,7 @@ public:
             uint64_t expectedVersion,uint64_t expectedModelPublication,size_t materialIndex,
             render::Model& model,gfx::Device& dev,const render::RenderDeviceLifetime::Lease& lease,
             render::ModelImageRollbackPool& rollback,std::string* error=nullptr){
+        if(outputReuseTarget_){if(error)*error="incremental outputs require matching live snapshot publication";return false;}
         return adoptCompletedGpuMaterial(project,request,dev,lease,
             [&](const Program& program,std::span<GpuCopy* const> copies,std::string_view generation,std::string* why){
                 return registry.publishGpuTextureGraphMaterial(key,expectedVersion,expectedModelPublication,
@@ -669,11 +737,29 @@ public:
             render::Model& model,gfx::Device& dev,const render::RenderDeviceLifetime::Lease& lease,
             render::ModelImageRollbackPool& rollback,std::vector<render::Material>* mirror=nullptr,
             std::string* error=nullptr){
-        return adoptCompletedGpuMaterial(project,request,dev,lease,
+        if(outputReuseTarget_){
+            if(!sameTarget(*outputReuseTarget_,target)||!live||live->model!=&model||
+               !target.matches(live->modelPublicationGeneration,live->version,live->materials.size())||
+               !lease.validFor(dev)||!gpuTransferLease_.validFor(dev)||lease.generation()!=gpuTransferLease_.generation()||
+               !dev.gpuHealthy()||!gpuCandidatesReady()||project_!=project||request!=std::to_string(serial_)){
+                if(error)*error="incremental output target changed";return false;
+            }
+            for(const auto& [name,expected]:reusedOutputNames_){
+                const auto slot=materialSlot(name);const int index=slot?live->materials[target.material].*slot:-1;
+                if(index<0||size_t(index)>=model.images.size()||model.images[size_t(index)].name!=expected||
+                   !model.images[size_t(index)].proceduralGraphImage||model.images[size_t(index)].proceduralGraphRetired||!model.images[size_t(index)].tex.valid()){
+                    if(error)*error="incremental output binding changed";return false;
+                }
+            }
+            if(outputNoop_){published_=gpuPublished_=true;reason_="unchanged material; no publication mutation";return true;}
+        }
+        const bool ok=adoptCompletedGpuMaterial(project,request,dev,lease,
             [&](const Program& program,std::span<GpuCopy* const> copies,std::string_view generation,std::string* why){
                 return view::AppearanceAssetRegistry::publishGpuTextureGraphSnapshot(live,target,model,dev,lease,
                     rollback,program,copies,generation,true,mirror,why);
             },error);
+        if(ok&&pendingOutputReceipt_){pendingOutputReceipt_->target.version=live->version;lastOutputReceipt_=std::move(pendingOutputReceipt_);}
+        return ok;
     }
 protected:
     // The editor adapter supplies an explicit asset sink; runtime never needs
@@ -839,6 +925,6 @@ public:
         pixels_.assign(bytes,0);state_="pending";
         if(!queueRange(dev))fallback("GPU readback request rejected");
     }
-    void shutdownAfterIdle(gfx::Device& dev){clearQueue();discard("cancelled","owner shutdown");if(dev.gpuHealthy())release(dev,true);else abandon();}
+    void shutdownAfterIdle(gfx::Device& dev){lastOutputReceipt_.reset();pendingOutputReceipt_.reset();clearQueue();discard("cancelled","owner shutdown");if(dev.gpuHealthy())release(dev,true);else abandon();}
 };
 } // namespace aiverse::render::texture_graph
