@@ -277,6 +277,8 @@ void Editor::shutdown() {
     if(!dev_->waitForResourceIdle())
         throw std::runtime_error(
             "Editor shutdown: GPU completion barrier failed");
+    pendingGraphMaterialApply_.reset();graphMaterialApplyProject_.clear();
+    graphMaterialApplyRequest_.clear();graphMaterialApplyState_="idle";graphMaterialApplyReason_.clear();
     textureGraphGpuPreview_.shutdownAfterIdle(*dev_);
     if(spectraGpuTelemetry_==spectraPreviewGpu_.get())
         spectraGpuTelemetry_=nullptr;
