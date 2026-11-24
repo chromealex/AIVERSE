@@ -256,3 +256,7 @@ The Studio presentation helper `StudioPlanetLiveBudget.h` limits compact aggrega
 ## Stage 119: Studio branch integration boundary
 
 Pinned full-tree comparison identified 19 independently divergent paths (11 under Studio), not proven merge conflicts. Reuse the Studio branch's canonical hosted current-map index API to reject planetary Live samples if the running map no longer matches Play-current-map. Added read-only `tools/studio/audit_branch_overlap.py` for the integrator. No branch merge, build or tests executed. See `docs/handoffs/world-processes-stage119-studio-integration-2026-11-24.md` for precise shared ownership and merge checklist. Physical owner work resumes next.
+
+## Stage 120: seam-aware terrain mutation preflight
+
+`PlanetTerrainFootprint.h` resolves the existing Surface cell's four canonical corner IDs, all seam/cube-corner aliases, exact signed heights in 1/16 metre units, and sorted unique affected grid cells on the same body. The existing GRANULAR soil transfer callback receives this footprint; inconsistent aliases fail before the callback. No second height store or volume solver. TerraWeave's inspected branches still lack the authoritative planetary mutation/publication API; actual height edits, conservation, persistence, navigation/render/collider invalidation remain blocked on that owner. Source fixture added; build/tests NOT RUN. See `docs/handoffs/world-processes-stage120-terrain-footprint-2026-11-24.md`.
