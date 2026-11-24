@@ -2415,7 +2415,7 @@
           "title": "Граф зависимостей ассетов",
           "titleEn": "Asset dependency graph",
           "text": "S6g: точные ссылки в картах и ресурсы glTF, прямые и обратные зависимости, безопасный предварительный просмотр; без автоматической перезаписи неизвестных зависимостей.",
-          "textEn": "S6g.6.3: bounded binary GLB URI repair, exact non-JSON chunk preservation, binary-safe history and recovery.",
+          "textEn": "S6g.6.4: loader-aware OBJ/MTL and COLLADA resource path repair, exact text spans and shared library conflict checks.",
           "status": "in-progress"
         },
         {
