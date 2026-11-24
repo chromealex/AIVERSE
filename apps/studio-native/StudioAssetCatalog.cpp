@@ -323,7 +323,8 @@ void validateMetaSetting(const std::string& importer,
 }
 }
 StudioAssetEntry StudioAssetCatalog::patchSettings(const std::string& guid,
-              const std::string& key,const Json& value,editor::ProjectHistory* history){
+              const std::string& key,const Json& value,editor::ProjectHistory* history,
+              std::vector<editor::ProjectFileEdit>* staged){
     if(!studioValidGuid(guid))throw std::runtime_error("Invalid GUID");
     const auto existing=byGuid(guid);
     if(!existing)throw std::runtime_error("Asset was not found; refresh Assets");
@@ -358,7 +359,8 @@ StudioAssetEntry StudioAssetCatalog::patchSettings(const std::string& guid,
     const auto after=unchanged?before:document.dump(2)+"\n";
     std::vector<editor::ProjectFileEdit> plan={{meta,before,after}};
     const std::string label="Asset: "+existing->path+" / "+key;
-    const auto updated=applyMetadataEdit(plan.front());
+    auto updated=staged?validateMetadataEdit(plan.front()):applyMetadataEdit(plan.front());
+    if(staged){updated.settings=Json::parse(after)["settings"];*staged=plan;}
     if(history)history->record(std::move(plan),label);
     return updated;
 }
