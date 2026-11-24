@@ -238,6 +238,11 @@
             "radius": 7,
             "intensity": 38
           }
+        ],
+        "smokeDetailVelocity": [
+          1.85,
+          1.15,
+          0.12
         ]
       }
     },

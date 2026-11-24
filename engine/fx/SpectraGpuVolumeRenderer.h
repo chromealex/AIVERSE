@@ -30,10 +30,10 @@ struct RenderSettings {
 struct VolumeRenderUniforms {
     render::mat4 invVP{};
     std::array<uint32_t,4> meta{};
-    render::float4 domain{},camera{},smoke{},fire{},controls{},sun{},sunColor{},limits{};
+    render::float4 domain{},camera{},smoke{},fire{},controls{},sun{},sunColor{},limits{},detailOffset{};
     std::array<render::float4,4> pointPos{},pointColor{};
 };
-static_assert(sizeof(VolumeRenderUniforms)==336);
+static_assert(sizeof(VolumeRenderUniforms)==352);
 inline bool supportsVolumeRender(const gfx::Device& d){
     return supportsGpuVolume(d)&&d.supportsStorageTexture(gfx::PixelFormat::RGBA16F,gfx::TextureDimension::Texture2D);
 }
@@ -87,6 +87,8 @@ public:
         u.camera={d.info().renderTargetFlipY?1.f:0.f,d.info().clipDepthZeroToOne?1.f:2.f,settings.maxDistance,0};
         u.smoke={material.smokeColor.x,material.smokeColor.y,material.smokeColor.z,material.extinction};
         u.fire={material.fireColor.x,material.fireColor.y,material.fireColor.z,material.emission};
+        const auto offset=material.smokeDetailVelocity*(float(view.tick)*kTick);
+        u.detailOffset={offset.x,offset.y,offset.z,0};
         u.controls={material.emissionThreshold,settings.ambient,settings.shadowDistance,settings.anisotropy};
         const bool sunValid=render::length(f.lighting.sunDir)>1e-6f;
         const auto sun=sunValid?render::normalize(f.lighting.sunDir):float3{};

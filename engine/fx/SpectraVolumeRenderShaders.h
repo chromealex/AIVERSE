@@ -49,15 +49,15 @@ float volumeNoise(float3 p){
 }
 float smokeDetailFactor(float3 p,float strength){
     if(strength<=0.0f)return 1.0f;
-    float low=volumeNoise(p*1.7f),high=volumeNoise(p*4.7f);
-    return max(0.1f,1.0f+strength*((low-0.5f)*1.4f+(high-0.5f)*0.8f));
+    float low=volumeNoise(p*0.95f),high=volumeNoise(p*3.1f);
+    return max(0.025f,1.0f+strength*((low-0.5f)*4.4f+(high-0.5f)*1.3f));
 }
 float flameDetailFactor(float3 p){
     float low=volumeNoise(p*2.3f),high=volumeNoise(p*6.1f);
     return clamp((low*0.7f+high*0.3f-0.26f)*2.15f,0.0f,1.0f);
 }
 float emberSample(float3 p){return volumeHash(floor(p*8.0f));}
-float shadow(float3 p,float3 dir,float reach,float4 domain,int n,uint steps,float extinction,float detail FIELD_ARG){
+float shadow(float3 p,float3 dir,float reach,float4 domain,int n,uint steps,float extinction,float detail,float3 detailOffset FIELD_ARG){
     if(steps==0u||reach<=0.0f)return 1.0f;
     float2 hit=intersectBox(p,dir,domain.xyz,domain.xyz+float3(domain.w*float(n)),reach);
     if(hit.y<=hit.x)return 1.0f;
@@ -65,7 +65,7 @@ float shadow(float3 p,float3 dir,float reach,float4 domain,int n,uint steps,floa
     for(uint i=0u;i<steps;++i){
         float3 samplePos=p+dir*(hit.x+(float(i)+0.5f)*ds);
         float density=fieldAt(samplePos,domain,n FIELD_PASS).x;
-        if(density>0.0f)tau+=density*smokeDetailFactor(samplePos,detail)*extinction*ds;
+        if(density>0.0f)tau+=density*smokeDetailFactor(samplePos-detailOffset,detail)*extinction*ds;
         if(tau>12.0f)break;
     }
     return exp(-tau);
@@ -88,7 +88,7 @@ KERNEL_BEGIN
     reach=depth<0.99999f?min(reach,u.camera.z):u.camera.z;
     int n=int(u.meta.z);
     if(depth<0.99999f&&u.sun.w>0.0f&&u.limits.x>0.0f){
-        float visibility=shadow(end,u.sun.xyz,u.controls.z,u.domain,n,uint(u.limits.x)*2u,u.smoke.w,u.limits.z FIELD_PASS);
+        float visibility=shadow(end,u.sun.xyz,u.controls.z,u.domain,n,uint(u.limits.x)*2u,u.smoke.w,u.limits.z,u.detailOffset.xyz FIELD_PASS);
         float directShare=u.sun.w/(1.0f+u.controls.y+u.sun.w);
         background.rgb*=1.0f-directShare*(1.0f-visibility);
     }
@@ -101,14 +101,14 @@ KERNEL_BEGIN
     for(uint i=0u;i<steps&&trans>0.0001f;++i){
         float3 p=eye+dir*(hit.x+(float(i)+0.5f+jitter)*ds);
         float2 field=fieldAt(p,u.domain,n FIELD_PASS);
-        float sigma=max(0.0f,field.x)*u.smoke.w*smokeDetailFactor(p,u.limits.z);
+        float sigma=max(0.0f,field.x)*u.smoke.w*smokeDetailFactor(p-u.detailOffset.xyz,u.limits.z);
         float heat=max(0.0f,field.y-u.controls.x)*u.fire.w*flameDetailFactor(p);
         if(sigma<=0.0f&&heat<=0.0f)continue;
         float tr=exp(-sigma*ds),opacity=1.0f-tr;
         float integral=sigma>1e-5f?opacity/sigma:ds;
         float3 incident=float3(u.controls.y);
         if(sigma>0.0f&&u.sun.w>0.0f){
-            float atten=shadow(p,u.sun.xyz,u.controls.z,u.domain,n,uint(u.limits.x),u.smoke.w,u.limits.z FIELD_PASS);
+            float atten=shadow(p,u.sun.xyz,u.controls.z,u.domain,n,uint(u.limits.x),u.smoke.w,u.limits.z,u.detailOffset.xyz FIELD_PASS);
             incident+=u.sunColor.xyz*(u.sun.w*phase(dot(dir,u.sun.xyz),u.controls.w)*atten);
         }
         if(sigma>0.0f)for(uint l=0u;l<uint(u.limits.y);++l){
@@ -116,7 +116,7 @@ KERNEL_BEGIN
             if(dist<=1e-5f||dist>=radius)continue;
             float3 lightDir=delta/dist;
             float falloff=1.0f-dist/radius;falloff=falloff*falloff/(1.0f+dist*dist);
-            float atten=shadow(p,lightDir,dist,u.domain,n,uint(u.limits.x),u.smoke.w,u.limits.z FIELD_PASS);
+            float atten=shadow(p,lightDir,dist,u.domain,n,uint(u.limits.x),u.smoke.w,u.limits.z,u.detailOffset.xyz FIELD_PASS);
             incident+=u.pointColor[l].xyz*(u.pointColor[l].w*falloff*phase(dot(dir,lightDir),u.controls.w)*atten);
         }
         float ember=max(0.0f,emberSample(p)-0.999f)*1000.0f*u.limits.w*min(1.0f,max(0.0f,field.x))*ds;
@@ -129,7 +129,7 @@ KERNEL_BEGIN
 inline const std::string kMetalSource=std::string(R"MSL(#include <metal_stdlib>
 using namespace metal;
 struct Cell {float4 velocity;float4 fields;};
-struct Uniforms {float4x4 invVP;uint4 meta;float4 domain,camera,smoke,fire,controls,sun,sunColor,limits;float4 pointPos[4],pointColor[4];};
+struct Uniforms {float4x4 invVP;uint4 meta;float4 domain,camera,smoke,fire,controls,sun,sunColor,limits,detailOffset;float4 pointPos[4],pointColor[4];};
 #define FIELD_ARG ,device const Cell* cells,device const uint* solid
 #define FIELD_PASS ,cells,solid
 #define OUTSIDE(q,n) (any((q)<float3(0.0f))||any((q)>=float3(float(n))))
@@ -151,7 +151,7 @@ layout(set=0,binding=5) uniform sampler2D scene;
 layout(set=0,binding=6) uniform sampler2D depthTex;
 layout(std430,set=0,binding=12) readonly buffer Cells {Cell cells[];};
 layout(std430,set=0,binding=13) readonly buffer Mask {uint solid[];};
-layout(std140,set=0,binding=16) uniform Uniforms {float4x4 invVP;uint4 meta;float4 domain,camera,smoke,fire,controls,sun,sunColor,limits;float4 pointPos[4],pointColor[4];} u;
+layout(std140,set=0,binding=16) uniform Uniforms {float4x4 invVP;uint4 meta;float4 domain,camera,smoke,fire,controls,sun,sunColor,limits,detailOffset;float4 pointPos[4],pointColor[4];} u;
 #define FIELD_ARG
 #define FIELD_PASS
 #define OUTSIDE(q,n) (any(lessThan(q,float3(0.0f)))||any(greaterThanEqual(q,float3(float(n)))))

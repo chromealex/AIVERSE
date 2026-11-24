@@ -64,11 +64,12 @@ struct Material {
     float3 smokeColor{.45f,.48f,.52f},fireColor{4.f,1.2f,.2f};
     float extinction=2,emission=1,emissionThreshold=.5f;
     float smokeDetail=0,emberIntensity=0;
+    float3 smokeDetailVelocity{}; // world units per simulation second
     bool valid()const{
         const auto positive=[](float3 v,float max){return bounded(v,max)&&v.x>=0&&v.y>=0&&v.z>=0;};
         return positive(smokeColor,16)&&positive(fireColor,64)&&between(extinction,0,100)&&
             between(emission,0,100)&&between(emissionThreshold,0,kMaxScalar)&&
-            between(smokeDetail,0,1)&&between(emberIntensity,0,10);
+            bounded(smokeDetailVelocity,100)&&between(smokeDetail,0,1)&&between(emberIntensity,0,10);
     }
 };
 inline float volumeHash(float3 p){
@@ -88,8 +89,8 @@ inline float volumeNoise(float3 p){
 }
 inline float smokeDetailFactor(float3 p,float strength){
     if(strength<=0)return 1;
-    const float low=volumeNoise(p*1.7f),high=volumeNoise(p*4.7f);
-    return std::max(.1f,1.f+strength*((low-.5f)*1.4f+(high-.5f)*.8f));
+    const float low=volumeNoise(p*.95f),high=volumeNoise(p*3.1f);
+    return std::max(.025f,1.f+strength*((low-.5f)*4.4f+(high-.5f)*1.3f));
 }
 inline float flameDetailFactor(float3 p){
     const float low=volumeNoise(p*2.3f),high=volumeNoise(p*6.1f);
@@ -218,10 +219,11 @@ public:
         if(end<=start){out=result;return true;}
         const uint32_t steps=uint32_t(std::clamp(std::ceil((end-start)/(cfg_.cellSize*.5f)),1.f,float(maxSteps)));
         const float ds=(end-start)/float(steps);float trans=1;
+        const auto detailOffset=material.smokeDetailVelocity*(float(tick_)*kTick);
         for(uint32_t i=0;i<steps&&trans>1e-4f;++i){
             Cell c;const auto p=eye+direction*(start+(float(i)+.5f)*ds);
             if(!sample(p,c))continue;
-            const float sigma=c.density*material.extinction*smokeDetailFactor(p,material.smokeDetail);
+            const float sigma=c.density*material.extinction*smokeDetailFactor(p-detailOffset,material.smokeDetail);
             const float opacity=-std::expm1(-sigma*ds);
             const float integral=sigma>1e-6f?opacity/sigma:ds;
             const float heat=std::max(0.f,c.temperature-material.emissionThreshold)*material.emission*flameDetailFactor(p);

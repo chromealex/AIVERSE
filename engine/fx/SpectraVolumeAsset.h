@@ -91,11 +91,11 @@ inline bool readAsset(const Json& root,Asset& output,std::string& error){
         return fail("Invalid volume simulation settings");
     if(root.has("material")){
         const auto& m=root["material"];auto& a=next.material;
-        if(!keys(m,{"smokeColor","fireColor","extinction","emission","emissionThreshold","smokeDetail","emberIntensity"})||
+        if(!keys(m,{"smokeColor","fireColor","extinction","emission","emissionThreshold","smokeDetail","smokeDetailVelocity","emberIntensity"})||
            !vector(m,"smokeColor",a.smokeColor)||!vector(m,"fireColor",a.fireColor)||
            !number(m,"extinction",a.extinction)||!number(m,"emission",a.emission)||
            !number(m,"emissionThreshold",a.emissionThreshold)||
-           !number(m,"smokeDetail",a.smokeDetail)||!number(m,"emberIntensity",a.emberIntensity)||
+           !vector(m,"smokeDetailVelocity",a.smokeDetailVelocity)||!number(m,"smokeDetail",a.smokeDetail)||!number(m,"emberIntensity",a.emberIntensity)||
            !a.valid())return fail("Invalid volume material");
     }
     if(root.has("lights")){
@@ -154,6 +154,7 @@ inline Json writeAsset(const Asset& a){
     m.set("smokeColor",vec(a.material.smokeColor));m.set("fireColor",vec(a.material.fireColor));
     m.set("extinction",scalar(a.material.extinction));m.set("emission",scalar(a.material.emission));
     m.set("emissionThreshold",scalar(a.material.emissionThreshold));
+    if(render::length(a.material.smokeDetailVelocity)>0)m.set("smokeDetailVelocity",vec(a.material.smokeDetailVelocity));
     if(a.material.smokeDetail!=0)m.set("smokeDetail",scalar(a.material.smokeDetail));
     if(a.material.emberIntensity!=0)m.set("emberIntensity",scalar(a.material.emberIntensity));
     root.set("material",std::move(m));

@@ -1,0 +1,30 @@
+{
+  "id": "2026-11-25-spectrafx-smoke-flow",
+  "date": "2026-11-25",
+  "system": "spectrafx",
+  "title": "Движение клубов дыма",
+  "titleEn": "Motion inside the smoke plume",
+  "summary": "Серые клубы поднимаются вдоль шлейфа, оставляя между собой просветы.",
+  "summaryEn": "Grey billows travel up the plume with thinner gaps between them.",
+  "body": [
+    "В графе fire_smoke_v2 направление движения деталей задаёт материал объёма. Внутренние тени и тень на площадке учитывают тот же движущийся рисунок плотности."
+  ],
+  "bodyEn": [
+    "In fire_smoke_v2 the volume material sets the direction of detail motion. Internal shadows and the shadow on the stage follow the same moving density pattern."
+  ],
+  "status": "experimental",
+  "verified": "Движение показано с неподвижной камерой в Studio на macOS с Metal.",
+  "verifiedEn": "Captured with a stationary camera in Studio on macOS with Metal.",
+  "limits": "Направление движения деталей задаётся для всего материала.",
+  "limitsEn": "Detail velocity is shared across the material.",
+  "branch": "codex/spectrafx-volumetric-scene",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-spectrafx-smoke-flow/01.png",
+      "caption": "Светлые просветы между клубами над площадкой.",
+      "captionEn": "Gaps between billows above the stage."
+    }
+  ],
+  "links": [],
+  "author": "render"
+}
