@@ -40,6 +40,8 @@ struct Project {
     bool saveManifest(std::string* err,const std::string& historyLabel={});
     Json historyStatus() const;
     bool historyStep(bool redo,const std::string& expectedVersion,std::string* err);
+    // Validate and advance a detached Project copy without writing any file.
+    std::vector<ProjectFileEdit> stageHistoryStep(bool redo);
     ProjectHistory documentHistory;
     std::optional<std::string> savedHistoryCheckpoint;
     std::string historyPersistenceWarning;

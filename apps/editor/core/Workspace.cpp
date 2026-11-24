@@ -307,11 +307,9 @@ Json Project::historyStatus() const {
     if(blocked)out.set("blockedReason",str(historyRequiresReload?"Reopen after changing rules source or module":"Open a project and save pending changes first"));
     return out;
 }
-bool Project::historyStep(bool redo,const std::string& expectedVersion,std::string* err) {
-    try {
+std::vector<ProjectFileEdit> Project::stageHistoryStep(bool redo) {
         if(dir.empty()||rulesDirty||manifestDirty||historyRequiresReload||!savedManifestText)
             throw std::runtime_error("Project history requires an open, saved project with unchanged rules source");
-        if(expectedVersion!=historyVersion())throw std::runtime_error("Project history changed; refresh before navigating");
         const auto& entry=documentHistory.next(redo);
         auto edits=redo?entry.files:reverseProjectFileEdits(entry.files);
         // Refuse unsaved owner mutations, even if a caller forgot to set a dirty flag.
@@ -352,12 +350,22 @@ bool Project::historyStep(bool redo,const std::string& expectedVersion,std::stri
         game::Rules nextParsed;
         if(actorSession())actor::readConfig(nextRules);else nextParsed=game::loadRules(nextRules);
         auto nextManifestText=manifestEdit->after;
-        auto history=documentHistory;history.advance(redo);
-        applyHistoryTransaction(edits,std::move(history));
         manifest=std::move(nextManifest);rulesJson=std::move(nextRules);
         rulesOrigin=std::move(nextOrigin);savedRulesText=std::move(nextRaw);
         savedManifestText=std::move(nextManifestText);rules=std::move(nextParsed);
-        rulesError.clear();
+        rulesError.clear();documentHistory.advance(redo);
+        return edits;
+}
+bool Project::historyStep(bool redo,const std::string& expectedVersion,std::string* err){
+    try{
+        if(expectedVersion!=historyVersion())throw std::runtime_error("Project history changed; refresh before navigating");
+        Project staged=*this;
+        const auto edits=staged.stageHistoryStep(redo);
+        applyHistoryTransaction(edits,std::move(staged.documentHistory));
+        staged.documentHistory=std::move(documentHistory);
+        staged.savedHistoryCheckpoint=std::move(savedHistoryCheckpoint);
+        staged.historyPersistenceWarning=std::move(historyPersistenceWarning);
+        *this=std::move(staged);
         return true;
     }catch(const std::exception& e){if(err)*err=e.what();return false;}
 }

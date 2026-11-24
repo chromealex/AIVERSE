@@ -362,7 +362,7 @@ StudioAssetEntry StudioAssetCatalog::patchSettings(const std::string& guid,
     if(history)history->record(std::move(plan),label);
     return updated;
 }
-StudioAssetEntry StudioAssetCatalog::applyMetadataEdit(const editor::ProjectFileEdit& edit) {
+StudioAssetEntry StudioAssetCatalog::validateMetadataEdit(const editor::ProjectFileEdit& edit) {
     // The sidecar is authoritative. A fresh existing-only scan catches
     // duplicated GUIDs and stale index rows without generating new sidecars.
     const auto before=Json::parse(edit.before),after=Json::parse(edit.after);
@@ -391,13 +391,19 @@ StudioAssetEntry StudioAssetCatalog::applyMetadataEdit(const editor::ProjectFile
     }
     if(!fs::is_regular_file(fs::symlink_status(physical)))
         throw std::runtime_error("Asset no longer exists");
+    return *current;
+}
+StudioAssetEntry StudioAssetCatalog::applyMetadataEdit(const editor::ProjectFileEdit& edit){
+    const auto current=validateMetadataEdit(edit);
+    const auto after=Json::parse(edit.after);
+    const auto guid=current.guid;
     const std::vector<editor::ProjectFileEdit> plan={edit};
     const auto reverse=editor::reverseProjectFileEdits(plan);
     editor::applyProjectFileEdits(project_,plan);
     try {
         rebuild(false);
         const auto updated=byGuid(guid);
-        if(!updated||updated->path!=current->path||updated->settings.dump()!=after["settings"].dump())
+        if(!updated||updated->path!=current.path||updated->settings.dump()!=after["settings"].dump())
             throw std::runtime_error("Asset index does not match saved metadata");
         return *updated;
     }catch(const std::exception& failure){

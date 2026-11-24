@@ -37,6 +37,8 @@ public:
                                    const std::string& key,const Json& value,editor::ProjectHistory* history=nullptr);
     // Native owner-generated plan only. Validates GUID/path/importer and exact bytes.
     StudioAssetEntry applyMetadataEdit(const editor::ProjectFileEdit& edit);
+    // Validate identity and sidecar location without publishing bytes.
+    StudioAssetEntry validateMetadataEdit(const editor::ProjectFileEdit& edit);
     const std::filesystem::path& project() const { return project_; }
 private:
     void exec(const char* sql) const;
