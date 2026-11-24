@@ -51,14 +51,15 @@ with tempfile.TemporaryDirectory(prefix="rts-native-projects-") as tmp:
         if r.returncode != 0:
             sys.exit(r.stdout)
         log["out"] = r.stdout
-        return (build / "gen/NativeRegistry.cpp").read_text()
+        registry = build / "gen/NativeRegistry.cpp"
+        return registry.read_text() if registry.exists() else None
 
     a = configure("a")
     assert "create_a" in a and "create_b" not in a
     b = configure("b")
     assert "create_b" in b and "create_a" not in b
     empty = configure("empty")
-    assert "create_a" not in empty and "create_b" not in empty
+    assert empty is None, "stale registry survived empty-project reconfigure"
     override = configure("b", "-DAIVERSE_NATIVE_DIR=" + str(root / "a/native"))
     assert "create_a" in override and "create_b" not in override
     # This is the cache reset supplied by aiversebuild for the current game project.
