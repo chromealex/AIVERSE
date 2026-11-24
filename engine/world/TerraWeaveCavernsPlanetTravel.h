@@ -149,7 +149,7 @@ using CavePlanetCrossingProof=std::function<bool(const World&,Entity,uint64_t,ui
 // coverage. "Destination" means the whole body has cleared the mouth.
 using CavePlanetSideProof=std::function<std::optional<CavePlanetCapsuleSide>(
     const World&,Entity,uint64_t,uint64_t,Vec3,bool)>;
-enum class CavePlanetCrossingResult { Refused,Approaching,Clearing,Completed };
+enum class CavePlanetCrossingResult { Refused,Approaching,Clearing,Completed,Recovery };
 // Pure receipt state transition. The actual motor must supply the swept
 // crossing evidence and side classification. A reverse crossing resets
 // progress; a changed authored SDF invalidates previously crossed evidence.
@@ -215,7 +215,8 @@ inline CavePlanetCrossingResult advanceCavePlanetCrossing(
         const std::shared_ptr<const game::Surface>& surface,Vec3 previous,
         const CaveSimulationPosition& position,const CavePlanetCrossingProof& swept,
         const CavePlanetSideProof& classify,Fixed capsuleMargin,uint32_t tick,
-        const std::optional<CavePlanetCrossingGoal>& goal={},bool oneStepOnly=false){
+        const std::optional<CavePlanetCrossingGoal>& goal={},bool oneStepOnly=false,
+        const std::function<bool()>& commitMotion={}){
     using R=CavePlanetCrossingResult;
     const auto* ptr=world.tryGetConst<CavePlanetTravel>(entity);
     if(!world.alive(entity)||!ptr||!validCavePlanetTravel(*ptr)||!ptr->pendingRegion||
@@ -227,6 +228,12 @@ inline CavePlanetCrossingResult advanceCavePlanetCrossing(
     const auto* entry=findPlanetCaveRegion(world,state.pendingRegion);
     const auto* mouth=cavePlanetTravelEntrance(world,state.pendingRegion,state.entrance);
     if(!epoch||!entry||!mouth||capsuleMargin>=Fixed::fromRatio(mouth->radiusCm,100))return R::Refused;
+    bool irreversible=false;
+    const auto publishMotion=[&](){
+        irreversible=true;
+        if(!commitMotion||commitMotion())return true;
+        runtime.quarantineNativeMotion();return false;
+    };
     try{
         const auto lease=runtime.committedNavigationLease(world,state.pendingRegion,epoch->revision);
         const auto cut=runtime.committedRegionCut(world,state.pendingRegion);
@@ -244,8 +251,16 @@ inline CavePlanetCrossingResult advanceCavePlanetCrossing(
         const bool reverse=crossesCavePlanetRim(*rim,*mouth,from,to,capsuleMargin,!entering);
         const auto next=advanceCavePlanetTravelReceipt(state,tick,lease->provider->revision(),forward,reverse,*side);
         if(!next||!runtime.navigationLeaseCurrent(world,*lease,epoch->revision))return R::Refused;
+        // Validate route arguments before any irreversible motion publication.
+        if(goal){
+            if(goal->algorithm.empty()||goal->algorithm.size()>128||!goal->speedCmPerTick||
+               goal->speedCmPerTick>10000||!goal->maxVisits||goal->maxVisits>1048576)return R::Refused;
+            CaveNavigationDataProvider::validateProfile(goal->agent);
+            (void)frame.fromSimulation(goal->simulationGoal);
+        }
         if(next->phase!=CavePlanetCrossingPhase::Clearance||*side!=CavePlanetCapsuleSide::Destination){
             if(oneStepOnly)return R::Refused;
+            if(!publishMotion())return R::Recovery;
             world.get<CavePlanetTravel>(entity)=*next;
             return next->phase==CavePlanetCrossingPhase::Approach?R::Approaching:R::Clearing;
         }
@@ -258,18 +273,26 @@ inline CavePlanetCrossingResult advanceCavePlanetCrossing(
                 // The cap was crossed, but the motor still needs a legal
                 // landing. Keep the receipt and pending coverage.
                 if(oneStepOnly)return R::Refused;
+                if(!publishMotion())return R::Recovery;
                 world.get<CavePlanetTravel>(entity)=*next;return R::Clearing;
             }
+            if(!publishMotion())return R::Recovery;
             if(!assignCavePlanetMotorGoal(world,entity,surface,state.pendingRegion,
-                    goal->simulationGoal,goal->agent,goal->algorithm,goal->speedCmPerTick,goal->maxVisits))return R::Refused;
+                    goal->simulationGoal,goal->agent,goal->algorithm,goal->speedCmPerTick,goal->maxVisits)){
+                runtime.quarantineNativeMotion();return R::Recovery;
+            }
         }else{
+            if(!publishMotion())return R::Recovery;
             (void)nav::cancelCaveMotorGoal(world,entity);
             world.remove<nav::CaveRouteScope>(entity);
             world.remove<nav::CaveSteeringRequest>(entity);
         }
         CavePlanetTravel completed;completed.occupiedRegion=entering?state.pendingRegion:0;
         world.get<CavePlanetTravel>(entity)=completed;return R::Completed;
-    }catch(const std::exception&){return R::Refused;}
+    }catch(...){
+        if(irreversible){runtime.quarantineNativeMotion();return R::Recovery;}
+        return R::Refused;
+    }
 }
 // Compatibility for hosts that really cross and clear in one step. The
 // old swept proof must certify whole-body clearance, not only a ray hit.

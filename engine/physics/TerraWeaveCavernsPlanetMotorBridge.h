@@ -234,4 +234,127 @@ inline std::optional<CavePlanetCapsuleSide> classifyCavePlanetCapsule(
         return CavePlanetCapsuleSide::Straddling;
     }catch(const std::exception&){return {};}
 }
+// Project capabilities are explicit: an open SDF cell does not grant flight.
+struct CavePlanetTraversalCapabilities {
+    bool ground=true,swim=false,flight=false,flightUnderwater=false;
+};
+inline std::optional<CaveTraversal> selectCavePlanetTraversal(
+        const CavePlanetTraversalCapabilities& caps,CaveTraversal current,
+        bool supported,bool groundLegal,bool swimLegal,bool flightLegal,
+        bool submerged,std::optional<Fixed> depth,Fixed enterDepth,Fixed exitDepth){
+    if(exitDepth<Fixed{}||enterDepth<=Fixed{}||exitDepth>enterDepth)return {};
+    const auto threshold=current==CaveTraversal::Swimming?exitDepth:enterDepth;
+    if(caps.swim&&supported&&swimLegal&&depth&&*depth>=threshold)return CaveTraversal::Swimming;
+    if(caps.ground&&supported&&groundLegal&&(!depth||*depth<enterDepth)&&
+       (!submerged||depth))return CaveTraversal::Ground;
+    if(caps.flight&&flightLegal&&(!submerged||caps.flightUnderwater))return CaveTraversal::Flying;
+    return {};
+}
+// Candidate at actual position and destination must be admitted by the
+// existing provider. This selects a feasible mode, not a global mixed-mode
+// route solver; the canonical repath system still finds the route.
+inline std::optional<CavePlanetCrossingGoal> chooseCavePlanetTraversalGoal(
+        const CaveNavigationDataProvider& provider,const World& world,
+        const CavePlanetFrame& frame,Vec3 position,CavePlanetCrossingGoal goal,
+        const CavePlanetTraversalCapabilities& caps,CaveTraversal current,
+        const lib::mechanics::LocomotionModeConfig& config,Fixed seconds){
+    if(!lib::mechanics::valid(config))return {};
+    try{
+        const auto from=CavePlanetFrame::centimetres(frame.fromSimulation(position));
+        const auto to=CavePlanetFrame::centimetres(frame.fromSimulation(goal.simulationGoal));
+        const auto basis=cavePlanetMotionBasis(frame,world,position);
+        const auto depth=cavePlanetSwimDepth(world,position,basis,seconds);
+        const bool submerged=lib::nereid::sampleWater(world,position).submerged||
+            lib::nereid::sampleSphereWater(world,position,seconds).submerged;
+        const auto legal=[&](CaveTraversal mode){
+            auto profile=goal.agent;profile.traversal=mode;
+            return provider.sample(from,profile).traversable&&provider.sample(to,profile).traversable;
+        };
+        const auto choice=selectCavePlanetTraversal(caps,current,basis.groundedCompatible,
+            caps.ground&&legal(CaveTraversal::Ground),caps.swim&&legal(CaveTraversal::Swimming),
+            caps.flight&&legal(CaveTraversal::Flying),submerged,depth,config.swimEnterDepth,config.swimExitDepth);
+        if(!choice)return {};
+        goal.agent.traversal=*choice;return goal;
+    }catch(const std::exception&){return {};}
+}
+// Host proof covers the full sweep envelope (including slide/step-up and
+// orientation), real exterior ownership, and retained native cave coverage.
+// This is not a callback that may mutate world, physics, or route state.
+using CavePlanetCrossingCoverage=std::function<bool(const World&,Entity,uint64_t,Vec3,Vec3,Fixed)>;
+struct CavePlanetCrossingMotion {
+    // The existing controller chooses ground input OR world velocity.
+    // A swim/flight/climb policy may stage velocity externally; it must
+    // publish its own policy state only if the returned receipt succeeds.
+    std::optional<physics::CharacterInput> ground;
+    std::optional<Vec3> velocity;
+};
+// Call inside the existing native motor under the same exclusive barrier.
+// Performs real queries on the shared Scene, stages the proxy target and
+// receipt, and schedules that proxy exactly once after preflight. Caller
+// still owns Scene::step() and the single authoritative ECS position write.
+inline CavePlanetCrossingResult stepAdmittedCavePlanetCrossing(
+        CavePlanetRuntimeFrame& runtime,physics::Scene& scene,World& world,Entity entity,
+        const CavePlanetFrame& frame,const physics::CharacterParams& params,
+        physics::CharacterState& state,physics::BodyHandle proxy,
+        const CavePlanetCrossingMotion& motion,const CavePlanetCrossingCoverage& coverage,
+        uint32_t tick,Fixed dt,const std::optional<CavePlanetCrossingGoal>& goal={}){
+    using R=CavePlanetCrossingResult;
+    if(!runtime.ownsPhysicsScene(scene)||!scene.valid(proxy)||scene.motion(proxy)!=physics::Motion::Kinematic||
+       !physics::validParams(params)||!coverage||bool(motion.ground)==bool(motion.velocity)||
+       dt<=Fixed{}||std::abs(float(dt.toDouble())-scene.dt())>0.00002f||
+       !cavePlanetCrossingReady(runtime,world,entity))return R::Refused;
+    const auto* travel=world.tryGetConst<CavePlanetTravel>(entity);
+    const auto* entry=findPlanetCaveRegion(world,travel->pendingRegion);
+    const auto cut=runtime.committedRegionCut(world,travel->pendingRegion);
+    if(!entry||!cut||!sameCavePlanetAnchor(entry->region.anchor,frame.anchor()))return R::Refused;
+    const auto region=travel->pendingRegion;
+    const auto rim=std::find_if(cut->rims.begin(),cut->rims.end(),[&](const auto& v){return v.entranceId==travel->entrance;});
+    if(rim==cut->rims.end())return R::Refused;
+    try{
+        Vec3 start,proxyPosition;
+        if(!physics::physisVec3(state.position,start)||!physics::physisVec3(scene.position(proxy),proxyPosition)||
+           (proxyPosition-start).length()>Fixed::fromRatio(1,100))return R::Refused;
+        const auto basis=cavePlanetMotionBasis(frame,world,start);
+        const auto orientation=scene.rotation(proxy);
+        if(!b3IsValidQuat(orientation))return R::Refused;
+        const auto up=b3RotateVector(orientation,{0,1,0});
+        Vec3 fixedUp;if(!physics::physisVec3(up,fixedUp))return R::Refused;
+        // Do not rotate an already overlapping capsule during a crossing.
+        // Ground mode is only legal when the existing orientation matches
+        // the actual gravity up; the host can orient outside the crossing.
+        auto candidate=state;physics::Pushes pushes;
+        const auto extent=Fixed::fromRaw(int64_t(std::ceil(double(params.height+params.stepHeight+
+            params.maxSpeed*scene.dt())*Fixed::kOne))+8);
+        if(!coverage(world,entity,region,start,start,extent))return R::Refused;
+        if(motion.ground){
+            if(!basis.groundedCompatible||fixedUp.dot(basis.up)<Fixed::fromRatio(999,1000))return R::Refused;
+            auto p=params;p.gravity=float(basis.magnitude.toDouble());
+            if(!physics::stepCharacterOriented(scene.world(),p,candidate,*motion.ground,scene.dt(),
+                    orientation,&pushes,proxy))return R::Refused;
+        }else{
+            for(auto v:{motion.velocity->x,motion.velocity->y,motion.velocity->z})if(v< -1000_fx||v>1000_fx)return R::Refused;
+            if(!physics::sweepCharacterVelocityOriented(scene.world(),params,candidate,
+                    physics::physisB3(*motion.velocity),scene.dt(),orientation,proxy))return R::Refused;
+        }
+        Vec3 finish;if(!physics::physisVec3(candidate.position,finish))return R::Refused;
+        const auto margin=Fixed::fromRaw(int64_t(std::ceil(double(params.radius)*Fixed::kOne))+8);
+        const auto readCandidate=[&](const World&,Entity e)->std::optional<Vec3>{
+            return e==entity?std::optional<Vec3>{finish}:std::nullopt;
+        };
+        const auto swept=[&](const World& ecs,Entity e,uint64_t id,uint64_t,Vec3 a,Vec3 b,bool){
+            return e==entity&&id==region&&a==start&&b==finish&&coverage(ecs,e,id,a,b,extent);
+        };
+        const auto side=[&](const World&,Entity e,uint64_t,uint64_t,Vec3 p,bool entering)
+                ->std::optional<CavePlanetCapsuleSide>{
+            if(e!=entity)return {};
+            return classifyCavePlanetCapsule(frame,*rim,p,params,orientation,entering);
+        };
+        const auto commit=[&](){
+            if(!scene.moveCharacterOriented(proxy,candidate,orientation))return false;
+            state=candidate;scene.applyPushes(pushes);return true;
+        };
+        return advanceCavePlanetCrossing(runtime,world,entity,frame.sharedSurface(),start,readCandidate,
+            swept,side,margin,tick,goal,false,commit);
+    }catch(...){return R::Refused;}
+}
 } // namespace aiverse::terraweave::caverns

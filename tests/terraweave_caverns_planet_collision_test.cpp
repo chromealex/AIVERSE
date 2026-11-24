@@ -99,6 +99,21 @@ static void checkTravelPins(){
     check(cancelCavePlanetCrossing(world,actor,[](const auto&,auto,const auto&){return true;})&&
           cavePlanetTravelPins(world).contains(9),"exit cancel preserves occupancy");
 }
+static void checkTravelModeSelection(){
+    CavePlanetTraversalCapabilities caps;
+    auto choose=[&](CaveTraversal current,bool support,bool ground,bool swim,bool fly,bool wet,std::optional<Fixed> depth){
+        return selectCavePlanetTraversal(caps,current,support,ground,swim,fly,wet,depth,
+            Fixed::fromRatio(12,10),1_fx);
+    };
+    check(choose(CaveTraversal::Ground,true,true,false,true,false,{})==CaveTraversal::Ground,"dry support selects ground");
+    check(!choose(CaveTraversal::Ground,false,false,false,true,false,{}),"no granted flight");
+    caps.swim=true;
+    check(choose(CaveTraversal::Ground,true,true,true,false,true,2_fx)==CaveTraversal::Swimming,"deep water selects swim");
+    check(choose(CaveTraversal::Swimming,true,true,true,false,true,Fixed::fromRatio(11,10))==CaveTraversal::Swimming,"swim hysteresis");
+    caps.flight=true;
+    check(choose(CaveTraversal::Ground,false,false,false,true,false,{})==CaveTraversal::Flying,"capable zero-G flight");
+    check(!choose(CaveTraversal::Ground,false,false,false,true,true,{}),"underwater flight requires explicit capability");
+}
 static void checkTravelReceipts(){
     using P=CavePlanetCrossingPhase;using S=CavePlanetCapsuleSide;
     const CavePlanetTravel start{0,9,7,10};
@@ -288,6 +303,7 @@ int main(){
     checkVolumeSweep();
     checkTravelRim();
     checkTravelReceipts();
+    checkTravelModeSelection();
     checkTravelPins();
     checkOrientedMotor();
     checkCandidateIdentity();

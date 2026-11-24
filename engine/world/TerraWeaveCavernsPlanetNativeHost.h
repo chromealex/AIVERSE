@@ -5,6 +5,7 @@
 #include "engine/world/TerraWeaveCavernsPlanetGiViewFrame.h"
 #include "engine/world/TerraWeaveCavernsPlanetEnvironmentEpoch.h"
 #include "engine/world/TerraWeaveCavernsPlanetTravel.h"
+#include "engine/physics/TerraWeaveCavernsPlanetMotorBridge.h"
 #include "engine/render/GiMainCpuBridge.h"
 #include "engine/render/GiMainGpuBridge.h"
 #include "engine/render/Renderer3D.h"
@@ -185,6 +186,15 @@ public:
             const std::optional<CavePlanetCrossingGoal>& goal={}){
         if(!admitCrossing(world,entity))return CavePlanetCrossingResult::Refused;
         return advanceCavePlanetCrossing(*runtime_,world,entity,surface_,previous,position,swept,side,margin,tick,goal);
+    }
+    CavePlanetCrossingResult stepCrossing(World& world,Entity entity,physics::Scene& scene,
+            const CavePlanetFrame& frame,const physics::CharacterParams& params,
+            physics::CharacterState& state,physics::BodyHandle proxy,const CavePlanetCrossingMotion& motion,
+            const CavePlanetCrossingCoverage& coverage,uint32_t tick,Fixed dt,
+            const std::optional<CavePlanetCrossingGoal>& goal={}){
+        if(!admitCrossing(world,entity))return CavePlanetCrossingResult::Refused;
+        return stepAdmittedCavePlanetCrossing(*runtime_,scene,world,entity,frame,params,state,proxy,
+            motion,coverage,tick,dt,goal);
     }
     // Expose the existing native admission adapter only, not a second motor.
     CavePlanetRuntimeFrame& runtime(){return *runtime_;}

@@ -81,6 +81,8 @@ public:
         failed_.clear();
     }
     void retryRefused(){failed_.clear();}
+    // Irreversible host motion/ECS publication failure: stop admitting readers.
+    void quarantineNativeMotion()noexcept{recovery_=true;}
     bool regionReady(const World& ecs,uint64_t id)const{
         if(closed_||recoveryRequired())return false;
         const auto* entry=findPlanetCaveRegion(ecs,id);
