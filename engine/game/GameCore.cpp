@@ -1676,7 +1676,12 @@ void GameCore::hashState(Simulation& sim, Hasher& h) {
     w.each<Unit, Owner, Transform>([&](Entity e, Unit& u, Owner& o, Transform& t) {
         h.u64(e.packed()); h.u32(u.type); h.fx(u.hp); h.u32(u.flags); h.u32(o.player); h.v3(t.pos); h.fx(u.energy);
         if (auto* ord = w.tryGet<Orders>(e)) { h.u32(uint32_t(ord->queue.size())); if (!ord->queue.empty()) { h.u32(uint32_t(ord->queue.front().type)); h.u32(ord->queue.front().state); } }
-        if (auto* c = w.tryGet<Combat>(e)) { h.u64(c->target.packed()); h.i32(c->slot); h.u64(c->slotTarget.packed()); }
+        if (auto* c = w.tryGet<Combat>(e)) {
+            h.u64(c->target.packed()); h.i32(c->slot); h.u64(c->slotTarget.packed());
+            const auto& weapons = rules_.types[u.type].weapons;
+            for (size_t i = 0; i < weapons.size() && i < 4; ++i)
+                if (weapons[i].preciseCooldown) { h.u32(uint32_t(i)); h.fx(c->cooldown[i]); }
+        }
         if (auto* mb = w.tryGet<Mobile>(e)) { h.v3(mb->vel); h.u32(mb->yielded); h.u32(mb->yieldUntil); h.u32(mb->pathPos); h.u32(mb->moving); }
         if (auto* g = w.tryGet<Garrison>(e)) { h.i32(g->count); h.fx(g->growth); h.i32(g->pendingOut); }
         if (auto* p = w.tryGet<Production>(e)) { h.u32(uint32_t(p->queue.size())); if (!p->queue.empty()) h.fx(p->queue[0].progress); h.u32(p->ready); h.i32(p->charges); }
