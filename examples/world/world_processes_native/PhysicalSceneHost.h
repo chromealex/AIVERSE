@@ -54,6 +54,17 @@ public:
         return it!=morphVisuals_.end()&&it->second->attach(draw);
     }
 
+    bool updatePlanetMorphVisual(InstanceId id,const World& ecs,const game::Surface& surface,
+            Entity owner,std::string_view body,int32_t unitsPerMetre,uint32_t completedTick){
+        const auto it=morphVisuals_.find(id);
+        return it!=morphVisuals_.end()&&it->second->updatePlanet(ecs,surface,owner,body,unitsPerMetre,completedTick);
+    }
+    bool attachPlanetMorphVisual(InstanceId id,render::ModelDraw& draw,Vec3 bodyAnchor,
+            render::float3 renderTranslation={})const{
+        const auto it=morphVisuals_.find(id);
+        return it!=morphVisuals_.end()&&it->second->attachPlanet(draw,bodyAnchor,renderTranslation);
+    }
+
     // Read from Scene immediately after physics::Scene::step(), but do
     // NOT modify ECS yet. The authoritative host must record these
     // integer inputs to its existing net/replay channel.
@@ -138,6 +149,7 @@ public:
         if(!render_.shutdownAfterIdle(device))return false;
         physics_.shutdown(scene);
         if(!debris_.reset(scene))return false;
+        for(auto& [id,stream]:morphVisuals_){(void)id;stream->invalidatePublication();}
         // The MORPH models remain valid if the source asset revision did
         // not change; the next update() reconstructs every vertex from
         // the restored ECS Node positions and unchanged pristine sources.

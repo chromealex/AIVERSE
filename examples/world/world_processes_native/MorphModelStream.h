@@ -4,6 +4,7 @@
 // Reuses VIVID's cross-RHI ModelVertex override path, not a second renderer.
 #pragma once
 #include "aiverselib/world/WorldProcessesQueries.h"
+#include "aiverselib/world/MorphPlanetModelFrame.h"
 #include "engine/render/Renderer3D.h"
 #include "engine/render/ModelVertexStreamOverride.h"
 #include <algorithm>
@@ -110,7 +111,53 @@ public:
         return true;
     }
 
+    // Strict opt-in: the existing vertex stream uses model-local metre
+    // deltas. Mesh bind transforms must be identity on this path; other
+    // asset layouts need an explicit owner conversion, not a guessed basis.
+    bool updatePlanet(const World& world,const game::Surface& surface,Entity owner,
+                      std::string_view body,int32_t unitsPerMetre,uint32_t completedTick){
+        invalidatePublication();
+        const auto frame=morph::resolvePlanetModelFrame(world,surface,owner,body,unitsPerMetre);
+        if(!frame||!ready()||!rigidIdentityModel()||
+           std::abs(config_.metresPerUnit*float(unitsPerMetre)-1.f)>1e-4f){
+            error_="MORPH: incompatible planetary model frame or units";return false;
+        }
+        for(const auto& bind:bindings_)for(size_t i=0;i<4;++i)
+            if(bind.weight[i]&&!morph::planetModelNodeCurrent(world,*frame,bind.node[i],completedTick)){
+                error_="MORPH: stale or mismatched planetary influence";return false;
+            }
+        if(!update(world))return false;
+        planetFrame_=*frame;
+        return true;
+    }
+    // Use this attach path for a planetary stream. Body-local origin is
+    // converted before float; optional translation is presentation only.
+    bool attachPlanet(render::ModelDraw& draw,Vec3 bodyAnchor,
+                      render::float3 renderTranslation={})const{
+        if(!planetFrame_||bodyAnchor!=game::Surface::anchor(planetFrame_->frame.body)||
+           draw.nodeWorld||draw.pose||draw.baked||draw.staticCache)return false;
+        const auto& frame=planetFrame_->frame;
+        const auto asFloat=[](Vec3 v){return render::float3{float(v.x.toDouble()),float(v.y.toDouble()),float(v.z.toDouble())};};
+        const auto p=asFloat(frame.origin-bodyAnchor)+renderTranslation;
+        const render::float3 axes[]={asFloat(frame.east),asFloat(frame.up),asFloat(frame.south)};
+        const float position[]={p.x,p.y,p.z};
+        const auto near=[](float a,float b,float eps){return std::isfinite(a)&&std::isfinite(b)&&std::abs(a-b)<=eps;};
+        for(int c=0;c<3;++c){
+            const float values[]={axes[c].x,axes[c].y,axes[c].z};
+            for(int r=0;r<3;++r)if(!near(draw.world.at(r,c),values[r],.01f))return false;
+            if(!near(draw.world.at(3,c),0.f,.001f))return false;
+        }
+        for(int r=0;r<3;++r)if(!near(draw.world.at(r,3),position[r],.02f))return false;
+        if(!near(draw.world.at(3,3),1.f,.001f))return false;
+        if(!attachInternal(draw))return false;
+        draw.lodLevel=0; // no independent LOD stream correspondence
+        draw.staticPacketRevision=0;
+        return true;
+    }
+    void invalidatePublication(){published_=false;planetFrame_.reset();}
+
     bool update(const World& world) {
+        invalidatePublication();
         if(!ready()||!device_->gpuHealthy()||
            !device_->canUpdateSharedBuffers()||
            model_->geometryRevision!=modelRevision_||
@@ -189,6 +236,10 @@ public:
     // renderer preserves the normal PBR, skin, morph, shadow and outline
     // passes; only this instance's vertex stream is replaced.
     bool attach(render::ModelDraw& draw)const {
+        return !planetFrame_&&attachInternal(draw);
+    }
+private:
+    bool attachInternal(render::ModelDraw& draw)const {
         if(!ready()||!published_||draw.model!=model_||
            draw.vertexOverride.valid()||draw.vertexOverrideCount||
            (device_->frameSerial()&&device_->frameSerial()!=lastFrame_))return false;
@@ -197,6 +248,21 @@ public:
         draw.maxVertexOffsetMetres=std::max(draw.maxVertexOffsetMetres,lastOffset_);
         return true;
     }
+    bool rigidIdentityModel()const{
+        if(!model_||!model_->skins.empty()||model_->bindWorld.size()!=model_->nodes.size())return false;
+        bool mesh=false;
+        for(size_t i=0;i<model_->nodes.size();++i){
+            const auto& node=model_->nodes[i];
+            if(node.mesh<0)continue;
+            mesh=true;
+            if(node.skin>=0)return false;
+            const auto& m=model_->bindWorld[i];
+            for(int r=0;r<4;++r)for(int c=0;c<4;++c)
+                if(!std::isfinite(m.at(r,c))||std::abs(m.at(r,c)-(r==c?1.f:0.f))>1e-4f)return false;
+        }
+        return mesh;
+    }
+public:
     bool ready()const noexcept{return device_&&model_&&buffer_.valid();}
     float maximumOffsetMetres()const noexcept{return lastOffset_;}
     const std::string& lastError()const noexcept{return error_;}
@@ -208,7 +274,7 @@ public:
         device_->destroyBuffer(buffer_);
         device_=nullptr;model_=nullptr;buffer_={};
         base_.clear();output_.clear();indices_.clear();bindings_.clear();
-        published_=false;lastFrame_=0;lastOffset_=0;
+        invalidatePublication();lastFrame_=0;lastOffset_=0;
         return true;
     }
 private:
@@ -219,6 +285,7 @@ private:
     std::uint64_t modelRevision_=0,lastFrame_=0;
     float lastOffset_=0;
     bool published_=false;
+    std::optional<morph::PlanetModelFrame> planetFrame_;
     std::vector<render::ModelVertex> base_,output_;
     std::vector<std::uint32_t> indices_;
     std::vector<MorphVertexBinding> bindings_;

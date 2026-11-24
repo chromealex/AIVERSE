@@ -13,6 +13,7 @@
 #include "aiverselib/world/WorldProcessGravity.h"
 #include "aiverselib/world/PlanetProcessGeometry.h"
 #include "aiverselib/world/PlanetGranularPhysicalFrame.h"
+#include "aiverselib/world/MorphPlanetModelFrame.h"
 #include "aiverselib/world/PlanetFractureDelivery.h"
 #include "aiverselib/world/SurfaceGravitySupport.h"
 #include "aiverselib/world/GranularPlanetTerrainTransfer.h"
@@ -715,6 +716,32 @@ static void checkPlanetCollapseDelivery(){
     AIVERSE_TEST_CHECK(!fracture::planetCollapseReceipt(before,event));
     ecs=before;AIVERSE_TEST_CHECK(fracture::projectPlanetCollapse(ecs,surface,event));
 }
+static void checkPlanetMorphModelFrame(){
+    game::Surface surface;game::BodyDef body;body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    World ecs;const auto owner=ecs.create(),node=ecs.create(),other=ecs.create();
+    WorldTransform wt;wt.position=surface.cellCenter(surface.gridCell(1,0,3,3));
+    wt.affine.m[3]=wt.position.x;wt.affine.m[7]=wt.position.y;wt.affine.m[11]=wt.position.z;
+    ecs.add<WorldTransform>(owner,wt);
+    morph::Node n;n.sampledTick=7;ecs.add<morph::Node>(node,n);
+    morph::GravityBinding binding;binding.frameOwner=owner;binding.unitsPerMetre=1000;
+    AIVERSE_TEST_CHECK(morph::bindGravity(ecs,node,binding));
+    const auto frame=morph::resolvePlanetModelFrame(ecs,surface,owner,"moon",1000);
+    AIVERSE_TEST_CHECK(frame&&frame->frame.body==1&&frame->frame.origin==wt.position);
+    AIVERSE_TEST_CHECK(morph::planetModelNodeCurrent(ecs,*frame,node,7));
+    AIVERSE_TEST_CHECK(!morph::planetModelNodeCurrent(ecs,*frame,node,8));
+    AIVERSE_TEST_CHECK(!morph::resolvePlanetModelFrame(ecs,surface,owner,"terra",1000));
+    ecs.get<morph::GravityBinding>(node).unitsPerMetre=100;
+    AIVERSE_TEST_CHECK(!morph::planetModelNodeCurrent(ecs,*frame,node,7));
+    ecs.get<morph::GravityBinding>(node).unitsPerMetre=1000;
+    ecs.get<morph::GravityBinding>(node).frameOwner=other;
+    AIVERSE_TEST_CHECK(!morph::planetModelNodeCurrent(ecs,*frame,node,7));
+    ecs.get<WorldTransform>(owner).affine.m[1]=Fixed::fromRatio(1,2);
+    AIVERSE_TEST_CHECK(!morph::resolvePlanetModelFrame(ecs,surface,owner,"moon",1000));
+    ecs.get<WorldTransform>(owner)=wt;
+    ecs.get<WorldTransform>(owner).scale.x=Fixed::fromInt(2);
+    AIVERSE_TEST_CHECK(!morph::resolvePlanetModelFrame(ecs,surface,owner,"moon",1000));
+}
 static void checkPlanetMorphContactFrame(){
     game::Surface surface;game::BodyDef body;
     body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
@@ -1405,6 +1432,7 @@ int main(){
     checkPlanetSoilTransfer();
     checkPlanetCollapseDelivery();
     checkPlanetLiveFracture();
+    checkPlanetMorphModelFrame();
     checkPlanetMorphContactFrame();
     checkPlanetProcessGeometry();
     checkPlanetGranular();
