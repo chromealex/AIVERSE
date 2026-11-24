@@ -2423,7 +2423,7 @@
           "title": "Транзакции и история редактора",
           "titleEn": "Editor history and transactions",
           "text": "Атомарные составные изменения карты, устойчивые метки истории и защита от устаревших переходов.",
-          "textEn": "S6f.3.3: mixed file history chains with replacement, quarantine and metadata identity tracking; directory and model topology fences retained.",
+          "textEn": "S6f.3.4a: mixed exact-endpoint directory chains, nested GUID checks and self-contained glTF/GLB version transitions; external-resource topology fenced.",
           "status": "in-progress"
         },
         {
