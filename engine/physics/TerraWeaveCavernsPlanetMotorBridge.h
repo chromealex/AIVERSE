@@ -264,6 +264,8 @@ inline std::optional<CavePlanetCrossingGoal> chooseCavePlanetTraversalGoal(
         const auto to=CavePlanetFrame::centimetres(frame.fromSimulation(goal.simulationGoal));
         const auto basis=cavePlanetMotionBasis(frame,world,position);
         const auto depth=cavePlanetSwimDepth(world,position,basis,seconds);
+        const bool goalSubmerged=lib::nereid::sampleWater(world,goal.simulationGoal).submerged||
+            lib::nereid::sampleSphereWater(world,goal.simulationGoal,seconds).submerged;
         const bool submerged=lib::nereid::sampleWater(world,position).submerged||
             lib::nereid::sampleSphereWater(world,position,seconds).submerged;
         const auto legal=[&](CaveTraversal mode){
@@ -272,7 +274,7 @@ inline std::optional<CavePlanetCrossingGoal> chooseCavePlanetTraversalGoal(
         };
         const auto choice=selectCavePlanetTraversal(caps,current,basis.groundedCompatible,
             caps.ground&&legal(CaveTraversal::Ground),caps.swim&&legal(CaveTraversal::Swimming),
-            caps.flight&&legal(CaveTraversal::Flying),submerged,depth,config.swimEnterDepth,config.swimExitDepth);
+            caps.flight&&(!goalSubmerged||caps.flightUnderwater)&&legal(CaveTraversal::Flying),submerged,depth,config.swimEnterDepth,config.swimExitDepth);
         if(!choice)return {};
         goal.agent.traversal=*choice;return goal;
     }catch(const std::exception&){return {};}
@@ -337,7 +339,16 @@ inline CavePlanetCrossingResult stepAdmittedCavePlanetCrossing(
                     physics::physisB3(*motion.velocity),scene.dt(),orientation,proxy))return R::Refused;
         }
         Vec3 finish;if(!physics::physisVec3(candidate.position,finish))return R::Refused;
-        const auto margin=Fixed::fromRaw(int64_t(std::ceil(double(params.radius)*Fixed::kOne))+8);
+        // Feet are the crossing reference; include the entire projected
+        // capsule axis when tilted relative to the chart's opening.
+        const auto chartUp=frame.vectorFromBody(fixedUp);
+        const auto tilt=Vec2{chartUp.x,chartUp.z}.length();
+        auto margin=Fixed::fromRaw(int64_t(std::ceil(double(params.radius)*Fixed::kOne))+8)+
+            tilt*Fixed::fromRaw(int64_t(std::ceil(double(params.height)*Fixed::kOne)));
+        if(goal){
+            if(params.radius*100>goal->agent.radiusCm||params.height*100>goal->agent.heightCm)return R::Refused;
+            margin=fxMax(margin,Fixed::fromRatio(goal->agent.radiusCm,100));
+        }
         const auto readCandidate=[&](const World&,Entity e)->std::optional<Vec3>{
             return e==entity?std::optional<Vec3>{finish}:std::nullopt;
         };
