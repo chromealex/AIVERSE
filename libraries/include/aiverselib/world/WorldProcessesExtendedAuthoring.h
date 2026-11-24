@@ -4,6 +4,7 @@
 #include "WorldProcessesAuthoring.h"
 #include "WorldProcessesSuite.h"
 #include "GranularDocument.h"
+#include "MorphGravityBinding.h"
 #include <charconv>
 #include <cstdint>
 #include <limits>
@@ -43,6 +44,8 @@ inline bool validValue(std::string_view id,std::string_view key,const Json& v){
     if(id=="MorphNode"){
         if(key=="anchored")return v.type()==Json::Type::Bool;
         if(key=="drag")return authoring::integerExact(v,0,1000);
+        if(key=="gravityImpulseMilli")return authoring::integerExact(v,0,1000000);
+        if(key=="gravityRelative")return v.type()==Json::Type::Bool;
         return (key=="restX"||key=="restY"||key=="restZ") &&
             authoring::integerExact(v,-morph::kPositionLimit,morph::kPositionLimit);
     }
@@ -94,14 +97,19 @@ inline bool validate(std::string_view id,const Json& doc,std::string* error=null
     if(id=="GranularField"&&doc.has("width"))
         return granular::authoring::validate(doc,error);
     const Json schema=defaults(id);
-    if(id=="EvolveArea"){
+    if(id=="MorphNode"){
+        const size_t extras=size_t(doc.has("gravityImpulseMilli"))+size_t(doc.has("gravityRelative"));
+        if(doc.size()!=schema.size()+extras|| (doc.has("gravityRelative")&&!doc.has("gravityImpulseMilli")))
+            return fail("Invalid optional MORPH gravity fields");
+        for(const auto& [key,value]:schema.members()){(void)value;if(!doc.has(key))return fail("Missing MORPH field: "+key);}
+    }else if(id=="EvolveArea"){
         // Stage30 maps without offsets remain valid and imply zero offsets.
         if(doc.size()!=schema.size() &&
            !(doc.size()==schema.size()-2&&!doc.has("offsetXcm")&&!doc.has("offsetZcm")))
             return fail("Missing or extra authoring fields");
     }else if(doc.size()!=schema.size())return fail("Missing or extra authoring fields");
     for(const auto& [key,v]:doc.members())
-        if(!schema.has(key)||!validValue(id,key,v))
+        if((!schema.has(key)&&!(id=="MorphNode"&&(key=="gravityImpulseMilli"||key=="gravityRelative")))||!validValue(id,key,v))
             return fail("Invalid authoring field: "+key);
     if(id=="GranularField"&&doc["initialMass"].integer()>doc["capacity"].integer())
         return fail("Granular initialMass exceeds capacity");
@@ -140,6 +148,10 @@ inline bool apply(World& world,Entity e,std::string_view id,const Json& doc,
         v.x=v.restX=n("restX");v.y=v.restY=n("restY");v.z=v.restZ=n("restZ");
         v.drag=n("drag");v.anchored=flag("anchored");v.enabled=flag("enabled");
         world.add<morph::Node>(e,v);
+        if(doc.has("gravityImpulseMilli")){
+            morph::GravityBinding binding{e,100,int32_t(n("gravityImpulseMilli")),doc.getBool("gravityRelative",true),true};
+            if(!morph::bindGravity(world,e,binding))return false;
+        }
     }else if(id=="CrowdAgent"){
         crowd::Agent v;
         v.x=n("x");v.z=n("z");v.goalX=n("goalX");v.goalZ=n("goalZ");
