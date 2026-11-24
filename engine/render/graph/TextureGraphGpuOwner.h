@@ -38,7 +38,13 @@ class TextureGraphGpuOwner {
     void clearQueue(){pendingRequests_.clear();queueScope_.clear();queueTicket_.clear();queueRequest_.clear();queueError_.clear();queueLease_={};}
     void promoteQueue(gfx::Device& dev,const std::string& scope){
         if(queueScope_.empty()||queueScope_!=scope)return;
-        if(!queueLease_.validFor(dev)||!dev.gpuHealthy()){pendingRequests_.clear();return;}
+        if(!queueLease_.validFor(dev)||!dev.gpuHealthy()){
+            pendingRequests_.clear();queueError_="texture queue device epoch expired or unhealthy";
+            if(!queueRequest_.empty()&&!published_&&state_!="cancelled"&&state_!="failed"){
+                discard("failed","texture queue device epoch expired or unhealthy");abandon();
+            }
+            return;
+        }
         if(!queueTicket_.empty()||requestBusy()||!gpuCandidates_.empty()||(state_=="ready"&&!published_))return;
         auto entry=pendingRequests_.pop();if(!entry)return;
         queueTicket_=std::to_string(entry->ticket);queueRequest_.clear();queueError_.clear();
@@ -390,8 +396,8 @@ public:
     // is not a RAII device owner and must not be relocated while active.
     TextureGraphGpuOwner(TextureGraphGpuOwner&&)=delete;
     TextureGraphGpuOwner& operator=(TextureGraphGpuOwner&&)=delete;
-    Json startResidentMaterial(const Json& graph,const Json& overrides,const std::string& scope,
-            const render::RenderDeviceLifetime::Lease& lease,const ResidentMaterialOptions& options={}){
+private:
+    static Json residentRequest(const Json& graph,const Json& overrides,const ResidentMaterialOptions& options){
         Json p=Json::object();p.set("graph",graph);p.set("overrides",overrides);
         p.set("materialized",Json::fromBool(true));p.set("bakeSet",Json::fromBool(true));
         p.set("gpuTextureTransfer",Json::fromBool(true));p.set("requireGpu",Json::fromBool(true));
@@ -400,7 +406,16 @@ public:
         p.set("incremental",Json::fromBool(options.incremental));
         p.set("gpuTextureFenceOnly",Json::fromBool(options.acceptance==ResidentAcceptance::FenceOnly));
         p.set("timeoutMs",Json::number(int64_t(options.timeoutMs)));
-        return start(p,scope,lease);
+        return p;
+    }
+public:
+    Json startResidentMaterial(const Json& graph,const Json& overrides,const std::string& scope,
+            const render::RenderDeviceLifetime::Lease& lease,const ResidentMaterialOptions& options={}){
+        return start(residentRequest(graph,overrides,options),scope,lease);
+    }
+    Json enqueueResidentMaterial(const Json& graph,const Json& overrides,const std::string& scope,
+            const render::RenderDeviceLifetime::Lease& lease,const ResidentMaterialOptions& options={},int priority=1){
+        return enqueue(residentRequest(graph,overrides,options),scope,lease,priority);
     }
     // Queue entries are immutable JSON snapshots; pending entries have no GPU handles.
     Json enqueue(const Json& p,const std::string& scope,const render::RenderDeviceLifetime::Lease& lease,int priority=1){
@@ -422,6 +437,7 @@ public:
         Json r=Json::object(),pending=Json::array();
         for(const auto& e:pendingRequests_.pending()){Json row=Json::object();row.set("ticket",Json::string(std::to_string(e.ticket)));row.set("priority",Json::number(int64_t(e.priority)));pending.push(row);}
         r.set("ok",Json::fromBool(true));r.set("pending",pending);r.set("pendingBytes",Json::number(int64_t(pendingRequests_.bytes())));
+        r.set("blockedByUnreleasedResult",Json::fromBool(queueTicket_.empty()&&state_=="ready"&&!published_));
         r.set("activeTicket",Json::string(queueTicket_));r.set("activeRequest",Json::string(queueRequest_));r.set("error",Json::string(queueError_));
         if(!queueRequest_.empty())r.set("result",status());
         return r;
