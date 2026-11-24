@@ -112,3 +112,7 @@ Genre-independent native host frame coordinator for planetary demand, shared bui
 ### Stage54v1 — IN PROGRESS
 
 Use PHYSIS gravityAt as the sole field policy; expose exact local tangent motion frame and native residency admission; extend the existing Box3D character solver with a gravity-oriented query basis, preserving flat defaults and proxy orientation, and adapt existing Fixed locomotion policy without new position writers. Zero gravity rejects grounded motor and routes to existing host free-flight policy. Regression source for tilted/ceiling support, jump and PHYSIS radial fields; native QA pending. No default legacy host migration.
+
+### Stage54v2a — IN PROGRESS
+
+Bind immutable planetary navigation sources to the actual complete volume cohort and current native publication, not the chart extent alone. Share existing SDF provider and solver APIs; sample NEREID in simulation-anchor coordinates and require explicit PHYSIS cell mapping for planetary environment costs. Preserve conservative chart-Y support until oriented clearance and solver acceptance are implemented. Acceptance: region/native/source/environment epoch fences, bounded coverage, rejection outside actual lattice, no live ECS capture by worker callbacks, flat compatibility and registered regression source. Native QA pending.
