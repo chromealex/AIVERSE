@@ -131,10 +131,10 @@ inline Encoded encodeDds(std::span<const uint8_t> rgba,int w,int h,Format f,bool
     if(w<1||h<1||w>1024||h>1024||rgba.size()!=size_t(w)*h*4u)throw std::invalid_argument("Invalid BC source image");
     if((color&&(f==Format::BC4||f==Format::BC5))||(normal&&f==Format::BC4))throw std::invalid_argument("Incompatible BC channel format");
     if(f==Format::BC1)for(size_t i=3;i<rgba.size();i+=4)if(rgba[i]!=255)throw std::invalid_argument("BC1 export requires opaque alpha; use BC3");
-    Encoded result;std::vector<std::vector<uint8_t>> levels;
+    std::vector<std::vector<uint8_t>> levels;
     std::vector<uint8_t> pixels(rgba.begin(),rgba.end());int lw=w,lh=h;
     for(;;){
-        levels.push_back(encodeLevel(pixels,lw,lh,f));result.payload+=levels.back().size();result.rgbaBytes+=pixels.size();
+        levels.push_back(encodeLevel(pixels,lw,lh,f));
         if(!mips||(lw==1&&lh==1))break;
         pixels=nextMip(pixels,lw,lh,color,normal);lw=std::max(1,lw/2);lh=std::max(1,lh/2);
     }

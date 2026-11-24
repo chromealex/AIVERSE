@@ -659,7 +659,7 @@ void uploadImage(gfx::Device& dev, Image& img) {
     if (img.compressed && !img.compressed->levels.empty()) {
         // keep KTX2 blocks compressed in VRAM when the GPU samples them (shaders decode sRGB themselves)
         const CompressedImage& c = *img.compressed;
-        const bool bc5=c.format==BlockFormat::BC5&&img.name.ends_with("_normal_bc5.dds");
+        const bool bc5=c.format==BlockFormat::BC5&&(img.name.ends_with("_normal_bc5.dds")||img.textureKey.ends_with("_normal_bc5.dds"));
         const gfx::PixelFormat pf = bc5?gfx::PixelFormat::BC5:gpuFormat(c);
         if (pf != gfx::PixelFormat::RGBA8 && dev.supports(pf)) {
             std::vector<const void*> data;
@@ -780,6 +780,7 @@ std::string ModelTextureCache::gpuKey(const Image& image) const {
     const uint64_t epoch=revision==sourceRevisions_.end()?0:revision->second;
     return image.textureKey+(image.repeat?"#repeat":"#clamp")+
            (image.nearest?"#nearest":"#linear")+
+           ((image.name.ends_with("_normal_bc5.dds")||image.textureKey.ends_with("_normal_bc5.dds"))?"#normalXY":"")+
            (image.alphaCoverageThreshold?"#alphaCoverage"+std::to_string(image.alphaCoverageThreshold):"")+
            "#revision"+std::to_string(epoch);
 }

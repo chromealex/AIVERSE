@@ -1,6 +1,7 @@
 // Exercise the production native preview owner with a real RHI, not a simulated backend.
 #pragma once
 #include "engine/render/graph/TextureGraphGpuOwner.h"
+#include "engine/render/EnvironmentIblGpu.h"
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -336,7 +337,34 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
                 else std::memcpy(&sample,capture->pixels.data()+i*4,4);
                 require(std::abs(sample-rawHdr[i])<.001f,"HDR destination pixel mismatch");
             }
-            require(dev.waitIdle(),"HDR texture retirement wait failed");dev.destroyTexture(texture);
+            require(dev.waitIdle(),"HDR texture retirement wait failed");
+            if(pixelFormat==gfx::PixelFormat::RGBA16F&&render::environment_ibl::gpuPrefilterSupported(dev)){
+                using namespace render::environment_ibl;
+                GpuPrefilter job;job.source=texture;job.side=16;
+                beginFrame();const bool encoded=job.encode(dev);dev.endFrame();
+                require(dev.waitIdle(),"GPU IBL dispatch wait failed");
+                require(encoded&&job.encoded&&job.fence,"GPU IBL compute or copy failed");
+                auto result=std::make_shared<gfx::TextureReadbackResult>();auto ready=std::make_shared<bool>(false);
+                beginFrame();
+                const bool queued=dev.readTextureAsync(job.atlas,{},[result,ready](auto r){*result=std::move(r);*ready=true;});
+                dev.endFrame();require(queued,"GPU IBL diagnostic readback rejected");
+                for(int i=0;i<16&&!*ready;++i){require(dev.waitIdle(),"IBL readback wait failed");beginFrame();dev.endFrame();}
+                require(*ready&&result->success()&&result->format==gfx::PixelFormat::RGBA16F&&result->width==bandWidth&&result->height==combinedHeight&&result->pixels.size()==size_t(bandWidth)*combinedHeight*8u,"GPU IBL atlas extent mismatch");
+                auto sample=[&](int x,int y,int c){
+                    const size_t at=(size_t(y)*bandWidth+x)*8u+size_t(c)*2u;
+                    return render::cameraHalfToFloat(uint16_t(result->pixels[at])|(uint16_t(result->pixels[at+1])<<8));
+                };
+                for(int band=0;band<bands;++band)for(int x:{0,1,65,128,129})for(int y:{0,1,32,64,65}){
+                    const int yy=band*bandHeight+y;
+                    require(std::abs(sample(x,yy,0)-12.f)<.03f&&std::abs(sample(x,yy,1)-6.f)<.03f&&sample(x,yy,2)==0.f&&sample(x,yy,3)==1.f,"GPU IBL constant radiance/gutter parity");
+                }
+                for(int x:{1,32,65,128})for(int y:{1,32,65,128}){
+                    const auto oracle=integrateBrdf((x-.5f)/brdfSize,(y-.5f)/brdfSize);
+                    require(std::abs(sample(x,radianceHeight+y,0)-oracle[0])<.02f&&std::abs(sample(x,radianceHeight+y,1)-oracle[1])<.02f,"GPU IBL BRDF LUT parity");
+                }
+                require(dev.waitIdle(),"GPU IBL retirement wait failed");job.releaseAfterIdle(dev);
+                std::printf("GPU IBL atlas: constant radiance, gutters, BRDF parity passed\n");
+            }else dev.destroyTexture(texture);
         }
         // Native function calls lower into ordinary typed DAG nodes. Two calls
         // share a definition but use independent parameter values and public IDs.
