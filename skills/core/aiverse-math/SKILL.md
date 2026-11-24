@@ -55,3 +55,5 @@ FixedNumerical.h: bounded trapezoid quadrature, bracketed bisection (continuous 
 FixedLinear.h: bounded Gauss-Jordan with partial pivoting, multiple RHS, general inverse, packed pivoted LU and determinant (nullopt on singular/near-singular or range rejection). Dimensions 1–16, Q16 rounding; no accuracy guarantee for ill-conditioned matrices. No tests.
 
 FixedLinear.h adds fxLUSolve (validated permutation and bounded substitutions), fxCholesky (exactly symmetric input, positive pivots), fxResidualInfinity (absolute Q16 residual, not relative error). Dimensions 1–16. No build/tests. QR and least squares remain.
+
+FixedQR.h: thin modified Gram-Schmidt QR, full-rank least squares (rows <=64, columns <=16), symmetric power iteration with caller seed and explicit eigenpair residual/convergence. Not a full eigensolver; Q16 conditioning limits apply. No build/tests.
