@@ -62,6 +62,14 @@
     {
      "status": "in-progress",
      "target": null,
+     "title": "Планетарный лес: редактирование размещения и выбор текстур",
+     "titleEn": "Planetary forest: placement editing and texture folder picker",
+     "text": "Stage 161D1: редактируемые body/face/x/y, переключение marker/direct, выбор папки content через Assets; сохранение и Undo через существующий валидатор. Геометрические оверлеи отдельно.",
+     "textEn": "Stage 161D1: editable body/face/x/y, marker/direct conversion, content folder choice from Assets; existing validator and Undo. Geometry overlays separately."
+    },
+    {
+     "status": "in-progress",
+     "target": null,
      "title": "Планетарный лес: посадка на поверхности Scene",
      "titleEn": "Planetary forest: direct Scene planting",
      "text": "Stage 161C: канонические body/face/x/y без служебных ECS-объектов, one-shot Scene pick, Undo.",
