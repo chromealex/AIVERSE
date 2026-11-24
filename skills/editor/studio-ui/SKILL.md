@@ -206,6 +206,9 @@ Native studio.save with dirty Rules/Manifest prepares detached MapDoc and Projec
 ## Creation-aware Studio save (S6f.4b.1)
 Native studio.save and native Save As share detached owner staging and ProjectDocumentJournal v2. Explicit createOnly output is distinct from an empty existing file, restricted to .json/.r16/.splat under maps/ with existing safe parent directories; no-clobber publish and exact-byte rollback are required. Save As refuses occupied new identities/sidecars and includes manifest registration in the same transaction. v1 recovery remains readable. Existing map history dirty marker/checkpoint is still post-commit, asset cursor checkpoint separate; standalone Workspace map_save is unchanged. Creation is save-only, not a reversible history operation. No automatic directory creation or arbitrary file deletion.
 
+## Window menu categories
+Maintain one exhaustive panel-to-category mapping in `apps/studio-web/src/windowGroups.ts` whenever registering a new StudioPanel. Window uses the shared nested context menu with alphabetic children and native open-state check marks; do not duplicate open panels into a separate flat list. Preserve workspace switching, docking, floating and Command Palette search. UI-facing labels are English, including Wind and its panel controls. The shell test enforces complete, unique registry coverage.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web
