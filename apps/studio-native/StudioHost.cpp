@@ -808,22 +808,40 @@ void StudioHost::rebuildOverlay() {
     auto shapes = extShapes_;
     if(buildingGraphOverlayScene_){
         const auto snapshot=session_->buildingGraphSnapshot(buildingGraphOverlayScene_);
-        const auto& change=snapshot["lastChange"];
-        const auto& lo=change["min"];const auto& hi=change["max"];
-        if(lo.isArray()&&hi.isArray()&&lo.size()==3&&hi.size()==3){
-            float a[3]{},b[3]{};bool valid=true;
+        size_t boxes=0;
+        auto drawBounds=[&](const Json& row,uint8_t r,uint8_t g,uint8_t bl){
+            if(boxes>=128)return;
+            const auto& lo=row["min"];const auto& hi=row["max"];
+            if(!lo.isArray()||!hi.isArray()||lo.size()!=3||hi.size()!=3)return;
+            float a[3]{},b[3]{};
             for(size_t i=0;i<3;++i){
                 const double x=lo[i].toDouble(),y=hi[i].toDouble();
-                if(!lo[i].isNumber()||!hi[i].isNumber()||!std::isfinite(x)||!std::isfinite(y)||x>y||std::abs(x)>1e7||std::abs(y)>1e7){valid=false;break;}
+                if(!lo[i].isNumber()||!hi[i].isNumber()||!std::isfinite(x)||!std::isfinite(y)||x>y||std::abs(x)>1e7||std::abs(y)>1e7)return;
                 a[i]=float(x);b[i]=float(y);
             }
-            if(valid){
-                auto corner=[&](unsigned c){return render::float3{c&1?b[0]:a[0],c&2?b[1]:a[1],c&4?b[2]:a[2]};};
-                for(unsigned c=0;c<8;++c)for(unsigned bit:{1u,2u,4u})if(!(c&bit)){
-                    StudioScene::OverlayShape sh;sh.kind=1;sh.thickness=2.5f;
-                    sh.r=255;sh.g=120;sh.bl=40;sh.a=corner(c);sh.b=corner(c|bit);
-                    shapes.push_back(sh);
-                }
+            ++boxes;
+            auto corner=[&](unsigned c){return render::float3{c&1?b[0]:a[0],c&2?b[1]:a[1],c&4?b[2]:a[2]};};
+            for(unsigned c=0;c<8;++c)for(unsigned bit:{1u,2u,4u})if(!(c&bit)){
+                if((a[1]==b[1])&&(bit==2u||(c&2u)))continue;
+                StudioScene::OverlayShape sh;sh.kind=1;sh.thickness=2.f;
+                sh.r=r;sh.g=g;sh.bl=bl;sh.a=corner(c);sh.b=corner(c|bit);
+                shapes.push_back(sh);
+            }
+        };
+        if(buildingGraphOverlayLayers_&1u)drawBounds(snapshot["lastChange"],255,120,40);
+        const auto& owners=snapshot["ownerTelemetry"];
+        if(owners.isObject())for(const auto& [name,report]:owners.members()){
+            (void)name;
+            const auto& rows=report["overlayBounds"];
+            if(!rows.isArray())continue;
+            size_t inspected=0;
+            for(const auto& row:rows.items()){
+                if(++inspected>128||boxes>=128)break;
+                const auto kind=row.getStr("kind",report.getStr("overlayKind"));
+                if(kind=="nav-tiles"&&(buildingGraphOverlayLayers_&2u))drawBounds(row,70,200,255);
+                if(kind=="grid-cells"&&(buildingGraphOverlayLayers_&4u))drawBounds(row,80,230,130);
+                if(kind=="hpa-clusters"&&(buildingGraphOverlayLayers_&8u))drawBounds(row,185,120,255);
+                if(kind=="owner-bounds"&&(buildingGraphOverlayLayers_&16u))drawBounds(row,255,210,70);
             }
         }
     }
@@ -1335,6 +1353,9 @@ bool StudioHost::handleHostMethod(const Json& req) {
             for(char c:raw){if(c<'0'||c>'9'||id>(uint64_t(INT64_MAX)-uint64_t(c-'0'))/10)throw std::runtime_error("Invalid scene ID");id=id*10+uint64_t(c-'0');}
             const auto snap=session_->buildingGraphSnapshot(id);
             if(!snap["lastChange"].isObject())throw std::runtime_error("No committed building invalidation snapshot");
+            const auto layers=params.getInt("layers",1);
+            if(layers<1||layers>31)throw std::runtime_error("Invalid graph overlay layers");
+            buildingGraphOverlayLayers_=uint32_t(layers);
             buildingGraphOverlayScene_=id;rebuildOverlay();
         }
         Json out=Json::object();out.set("active",Json::fromBool(buildingGraphOverlayScene_!=0));return out;
