@@ -3,6 +3,7 @@
 #include "apps/studio-native/StudioPlanetFractureSnapshot.h"
 #include "apps/studio-native/StudioPlanetMorphSnapshot.h"
 #include "apps/studio-native/StudioPlanetEchoSnapshot.h"
+#include "apps/studio-native/StudioPlanetCrowdSnapshot.h"
 // Actual GameCore map fixture proving native module ECS hydration via mapPlaced().
 #include "aiverselib/world/WorldProcessesNativeModule.h"
 #include "aiverselib/world/WorldProcessGravity.h"
@@ -252,6 +253,40 @@ static void checkPlanetImprint(){
     ecs.get<imprint::Cell>(duplicate).enabled=false;
     AIVERSE_TEST_CHECK(imprint::stampSurfaceMotion(ecs,surface,7));
     AIVERSE_TEST_CHECK(!ecs.get<imprint::SurfaceTrailHistory>(tracker).initialized);
+}
+static void checkPlanetLiveCrowd(){
+    using aiverse::studio::samplePlanetCrowd;
+    game::Surface surface;game::BodyDef body;body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    const int first=surface.gridCell(0,0,7,3),seam=surface.neighbor(first,0);
+    AIVERSE_TEST_CHECK(seam>=0);
+    World ecs;
+    const auto actor=ecs.create(),other=ecs.create(),slot=ecs.create(),remote=ecs.create(),pref=ecs.create();
+    const auto at=[&](Entity e,int cell){Transform t{};t.pos=surface.cellCenter(cell);ecs.add<Transform>(e,t);};
+    at(actor,first);at(other,first);at(slot,seam);at(remote,surface.gridCell(1,0,3,3));
+    crowd::Agent a{};a.sampledTick=7;a.allocated=slot;ecs.add<crowd::Agent>(actor,a);
+    a.allocated=remote;ecs.add<crowd::Agent>(other,a);
+    ecs.add<crowd::Slot>(slot);ecs.add<crowd::Slot>(remote);
+    crowd::Preference p{};p.agent=actor;p.options[0]=slot;ecs.add<crowd::Preference>(pref,p);
+    game::Mobile m{};m.moving=true;m.goal=surface.cellCenter(seam);
+    m.path={surface.cellCenter(first),surface.cellCenter(seam),surface.cellCenter(surface.gridCell(1,0,3,3))};
+    m.pathPos=1;ecs.add<game::Mobile>(actor,m);
+    ecs.add<game::Orders>(actor);
+    physis::GravitySettings gravity;gravity.baseline={};ecs.setResource<physis::GravitySettings>(gravity);
+    const auto snapshot=samplePlanetCrowd(ecs,surface,7,true);
+    AIVERSE_TEST_CHECK(snapshot.getBool("available")&&snapshot["agents"].size()==2&&snapshot["slots"].size()==2);
+    AIVERSE_TEST_CHECK(snapshot.getInt("invalidReservation")==1&&snapshot.getInt("crossBody")==2);
+    const auto& row=snapshot["agents"][size_t(0)];
+    AIVERSE_TEST_CHECK(row.getStr("id")==std::to_string(actor.packed())&&row.getBool("reservationValid"));
+    AIVERSE_TEST_CHECK(row.getInt("pathCursor")==1&&row["route"].size()==2&&row["route"][size_t(1)].isNull());
+    AIVERSE_TEST_CHECK(row["support"].getStr("status")=="weak");
+    AIVERSE_TEST_CHECK(snapshot["slots"][size_t(0)].getInt("occupancy")==1);
+    AIVERSE_TEST_CHECK(snapshot["slots"][size_t(1)].getInt("occupancy")==0);
+    const auto stale=samplePlanetCrowd(ecs,surface,8,true);
+    AIVERSE_TEST_CHECK(stale.getInt("stale")==2&&stale["agents"].size()==0);
+    const auto capped=samplePlanetCrowd(ecs,surface,7,false,nullptr,1,512,0);
+    AIVERSE_TEST_CHECK(capped.getBool("truncated")&&capped["agents"].size()==1&&capped.getInt("routePoints")==0);
+    AIVERSE_TEST_CHECK(ecs.get<crowd::Agent>(actor).allocated==slot&&ecs.get<game::Mobile>(actor).pathPos==1);
 }
 static void checkPlanetCrowdSlots(){
     game::Surface surface;
@@ -1134,6 +1169,7 @@ int main(){
     checkPlanetLiveGravity();
     checkPlanetImprint();
     checkPlanetCrowdSlots();
+    checkPlanetLiveCrowd();
     checkPlanetEvolveRegions();
     checkPlanetEcologySampling();
     const Json map=mapWithProcesses();
