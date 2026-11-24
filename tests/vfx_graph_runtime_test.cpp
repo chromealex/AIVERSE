@@ -1,6 +1,7 @@
 // SpectraFX graph-v1 host routing: conservative GPU subset or lossless CPU.
 // No FPS/RTS imports, RHI mock or real device required for these checks.
 #include "engine/fx/SpectraGraphRuntime.h"
+#include "engine/world/SpectraPhysisSnapshot.h"
 #include <array>
 #include <cmath>
 #include <iostream>
@@ -281,6 +282,47 @@ int main() {
                 "shared batching preserves Data Interface-driven particle");
         windRuntime.shutdown();
         shared.shutdown();
+    }
+
+    // Real PHYSIS committed snapshot, not a synthetic weather callback.
+    {
+        World climate;
+        world::SpectraPhysisRegion region;
+        region.origin={-50,0,-50};
+        region.spacing=100;
+        region.dimensions={2,1,2};
+        require(!world::SpectraPhysisSnapshot::capture(climate,region),"uninitialized PHYSIS unavailable");
+        physis::Settings settings;
+        settings.originX=-1;settings.originZ=-1;
+        settings.width=2;settings.height=2;settings.cellSizeMeters=100;
+        physis::initialize(climate,settings);
+        physis::initializeDisasters(climate);
+        require(physis::ignite(climate,-1,-1),"PHYSIS fire fixture");
+        const auto e=climate.create();
+        physis::WindZone zone;
+        zone.center={Fixed::fromInt(-50),Fixed{},Fixed::fromInt(-50)};
+        zone.radiusMeters=Fixed::fromInt(40);
+        zone.velocity={Fixed::fromInt(15),Fixed{},Fixed{}};
+        climate.add<physis::WindZone>(e,zone);
+        auto snap=world::SpectraPhysisSnapshot::capture(climate,region);
+        require(snap && snap->size()==4 && snap->tick()==0,"committed weather region");
+        sp::DataInterfaceRegistry registry;
+        require(world::publishSpectraPhysis(registry,snap),"publish immutable PHYSIS snapshot");
+        float value=-1;
+        require(registry.sample("physis","wind_x",{-50,0,-50},value) &&
+                std::abs(value-15)<1e-5f,"negative-coordinate wind");
+        require(registry.sample("physis","fire",{-50,0,-50},value) && value==1,
+                "real PHYSIS hazard");
+        require(!registry.sample("physis","wind_x",{1000,0,0},value),"outside coverage unavailable");
+        require(!registry.sample("physis","unknown",{-50,0,-50},value),"unknown channel unavailable");
+        auto invalid=region;invalid.dimensions={64,64,64};
+        require(!world::SpectraPhysisSnapshot::capture(climate,invalid),"bounded region budget");
+        climate=World{};
+        snap.reset();
+        require(registry.sample("physis","fire",{-50,0,-50},value) && value==1,
+                "snapshot survives authoritative world destruction");
+        require(world::publishSpectraPhysis(registry,{}) &&
+                !registry.sample("physis","fire",{-50,0,-50},value),"unload removes provider");
     }
 
     std::cout<<"PASS SpectraFX graph GPU eligibility, strict CPU preservation and host fallback\n";

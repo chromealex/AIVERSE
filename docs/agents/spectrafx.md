@@ -1059,3 +1059,7 @@ renderers remain unchanged by default. Tests/build/Metal GUI are
 NOT RUN by explicit user instruction. Preserve a separate
 Stage-29 handoff and continue feature work before testing.
 
+
+## Stage 127 — PHYSIS read-only Data Interface adapter
+
+Opt-in presentation bridge `engine/world/SpectraPhysisSnapshot.h` captures up to 4096 full 3D PHYSIS samples from one committed tick, then publishes an immutable snapshot to an existing SpectraFX DataInterfaceRegistry. Nearest sample within half-spacing support; missing atmosphere/hazards and out-of-region samples return unavailable. No PHYSIS ECS access from the burst thread, no second solver, no new graph format. Republish after changes/rollback and remove on unload. Source only; tests deferred by owner. Native graph example and existing graph runtime regression fixture added. Live Studio scene publication is not yet wired.

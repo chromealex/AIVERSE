@@ -1912,3 +1912,7 @@ Vulkan rejects invalid readback copies and stops frame submission/present progre
 ## Stage 77 — API consistency
 
 Preview stop clears transfer buffers, IDs and replay/seed queues. Replay JSON export enforces the same 64 KiB limit as import. Browser SPFT download defers URL release. Checked TS action union and MCP transfer schema against native names. No builds/tests; main synchronization and compile/acceptance remain.
+
+## Stage 127 — real PHYSIS snapshots for Data Interfaces (source; QA deferred)
+
+Native hosts include `engine/world/SpectraPhysisSnapshot.h`. On the committed PHYSIS thread, capture a bounded 3D region using SpectraPhysisSnapshot::capture; hand the immutable shared pointer to the render owner, then call publishSpectraPhysis on the existing DataInterfaceRegistry and set it on GraphRuntime after initialization. Clear the provider on rollback/unload before new bursts. Provider name physis; channels wind_x/y/z (m/s), gravity_x/y/z (m/s²), temperature, humidity, rain, snow, wetness, snowpack, ice, pressure_hpa and fire. Atmospheric/hazard values follow PHYSIS units; outside region or missing data triggers normal required/fallback behavior. World XYZ metres work for planetary gravity; no flat-world assumption for the 3D fields. Nearest sample, max 4096 nodes, not continuous per-particle sampling. Example: `examples/spectrafx/data_interface_physis_v2.vfx.json`. Author bindings with existing graph edit/validate tools; isolated Studio preview does not automatically have a live PHYSIS world. No runtime QA executed.
