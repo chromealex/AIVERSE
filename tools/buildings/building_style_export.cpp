@@ -21,7 +21,10 @@ namespace {
 std::string readFile(const std::string& p){std::ifstream f(p,std::ios::binary);if(!f)throw std::runtime_error("cannot read "+p);std::stringstream s;s<<f.rdbuf();return s.str();}
 using buildingExport::Glb;
 StyledMesh ground(float x0,float z0,float x1,float z1){
-    BuildingStyle s;s.materials={{"street",{0.05f,0.055f,0.06f},0.2f,0.75f,{0,0,0},1},{"line",{0.1f,0.2f,0.25f},0,0.4f,{0.1f,0.7f,0.9f},2}};
+    BuildingStyle s;
+    StyleMaterial street{};street.id="street";street.color={0.05f,0.055f,0.06f};street.metallic=0.2f;street.roughness=0.75f;
+    StyleMaterial line{};line.id="line";line.color={0.1f,0.2f,0.25f};line.metallic=0;line.roughness=0.4f;line.emissive={0.1f,0.7f,0.9f};line.emissiveStrength=2;
+    s.materials={street,line};
     buildingStyleDetail::Mesher m(2);m.box(0,x0,-0.2f,z0,x1,0,z1);
     for(float x=x0+2;x+3<x1;x+=6)m.box(1,x,0,-0.08f,x+3,0.01f,0.08f);
     StyledMesh out;out.materials=s.materials;out.vertices=m.v;for(int i=0;i<2;++i)out.parts.push_back({i,m.perMaterial[size_t(i)]});
