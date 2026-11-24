@@ -89,7 +89,20 @@ inline TerrainPreviewStats buildPlanetChartPreview(const editor::MapData& map,
         stats.triangles=patch.chartTriangles.size();
         stats.quads=stats.triangles/2;
         stats.rejectedEntrances=region.volume.entrances.size();
-        if(stats.rejectedEntrances)stats.cutDiagnostic="Planet chart surface intact: matching planetary volume collar not yet installed in Studio";
+        if(stats.rejectedEntrances){
+            // Preflight is independent of the baseline draw. A refusal must
+            // leave the real coarse surface visible rather than clear it.
+            try{
+                const auto frame=editor::planet_caves::frameForDocument(map,region.anchor);
+                const auto cut=editor::planet_caves::planLocalSurfaceCut(frame,patch,region.volume,revision?revision:1);
+                stats.cutDiagnostic="Planet chart solid: "+std::to_string(cut.accepted.size())+
+                    " mouth candidate(s) certified by surface preflight; "+
+                    std::to_string(region.volume.entrances.size()-cut.accepted.size())+
+                    " refused or outside selected coverage. Matching collar publication pending.";
+            }catch(const std::exception& e){
+                stats.cutDiagnostic=std::string("Planet chart solid: cut preflight refused: ")+e.what();
+            }
+        }
     }catch(const std::exception& e){
         out.clear();stats.cutDiagnostic=e.what();
     }

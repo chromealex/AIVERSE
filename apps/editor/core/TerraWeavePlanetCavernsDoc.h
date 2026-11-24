@@ -1,7 +1,7 @@
 #pragma once
 #include "apps/editor/core/MapDoc.h"
 #include "engine/world/TerraWeaveCavernsPlanetAuthority.h"
-#include "engine/world/TerraWeaveCavernsPlanetSurface.h"
+#include "engine/world/TerraWeaveCavernsPlanetCut.h"
 #include "engine/world/TerraWeaveCavernsArchive.h"
 #include "engine/world/TerraWeaveCavernsRaycast.h"
 #include <array>
@@ -86,6 +86,36 @@ inline CavePlanetSurfacePatch captureLocalSurface(const MapData& map,const CaveP
         if(inside){if(cells.size()>=8192)throw std::length_error("Caverns planetary chart surface cell budget");cells.push_back({f,x,z});}
     }
     return captureCavePlanetSurface(frame,cells,revision?revision:1);
+}
+// Editor-only coarse cut preflight. Group the exact captured cells by face;
+ // these are chart inspector groups, NOT native PlanetRenderer leaf leases.
+ // The returned plan is not permission to expose a hole before volume pairing.
+inline CavePlanetCutPlan planLocalSurfaceCut(const CavePlanetFrame& frame,
+        const CavePlanetSurfacePatch& patch,const CaveVolumeSnapshot& volume,uint64_t epoch){
+    if(!sameCavePlanetAnchor(frame.anchor(),patch.anchor)||patch.cells.empty()||
+       patch.cells.size()>8192||patch.bodyTriangles.size()!=patch.cells.size()*2||
+       patch.chartTriangles.size()!=patch.bodyTriangles.size())
+        throw std::invalid_argument("Caverns chart cut source identity");
+    std::map<int,CavePlanetSurfaceSlot> faces;
+    const auto n=frame.surface().bodies[size_t(frame.body())].faceSize;
+    for(size_t i=0;i<patch.cells.size();++i){
+        const auto cell=patch.cells[i];
+        if(cell.face<0||cell.face>=6||cell.x<0||cell.x>=n||cell.z<0||cell.z>=n)
+            throw std::invalid_argument("Caverns chart cut source cell");
+        auto& slot=faces[cell.face];
+        slot.key={cell.face,0,0,n,0};
+        for(size_t j=0;j<2;++j){
+            const auto& body=patch.bodyTriangles[i*2+j];
+            const auto chart=projectPlanetSurfaceTriangle(frame,body);
+            const auto& source=patch.chartTriangles[i*2+j];
+            if(chart.a!=source.a||chart.b!=source.b||chart.c!=source.c)
+                throw std::invalid_argument("Caverns chart cut source projection mismatch");
+            slot.bodyTriangles.push_back(body);
+        }
+    }
+    std::vector<CavePlanetSurfaceSlot> slots;
+    for(auto& [face,slot]:faces){(void)face;slots.push_back(std::move(slot));}
+    return planCavePlanetCut(frame,volume,slots,patch.surfaceRevision,epoch);
 }
 // Presentation-only picking against the exact same coarse triangle source
 // as the chart viewport. The authoritative edit re-samples the surface

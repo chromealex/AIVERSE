@@ -24,6 +24,36 @@ int main() {
     MeshBuilder planet;
     AIVERSE_TEST_CHECK(buildTerrainPreview(d,planet).quads==0);
     d.bodies.clear();
+    // Capture the actual coarse body source, not a reconstructed chart mesh.
+    {
+        namespace pc=editor::planet_caves;
+        editor::MapData map;
+        auto& body=map.bodies.emplace_back();
+        body.id="test-planet";body.faceSize=64;
+        body.meta.set("kind",Json::string("planet"));
+        body.meta.set("radius",Json::number(int64_t(100)));
+        const terraweave::caverns::CavePlanetAnchor anchor{
+            body.id,0,Fixed::fromInt(32),Fixed::fromInt(32),1000};
+        auto region=pc::create(map,anchor);
+        const auto frame=pc::frameForDocument(map,anchor);
+        const auto patch=pc::captureLocalSurface(map,anchor,7);
+        AIVERSE_TEST_CHECK(!patch.cells.empty());
+        AIVERSE_TEST_CHECK(patch.bodyTriangles.size()==patch.chartTriangles.size());
+        AIVERSE_TEST_CHECK(patch.cells.size()*2==patch.bodyTriangles.size());
+        const auto plan=pc::planLocalSurfaceCut(frame,patch,region.volume,9);
+        AIVERSE_TEST_CHECK(plan.surfaceRevision==7 && plan.surfaceEpoch==9 && plan.rims.empty());
+        size_t originalCount=0;
+        for(const auto& [key,slot]:plan.slots){
+            (void)key;originalCount+=slot.originalBody.size();
+        }
+        AIVERSE_TEST_CHECK(originalCount==patch.bodyTriangles.size());
+        auto bad=patch;
+        bad.chartTriangles.front().a.x=bad.chartTriangles.front().a.x+Fixed::fromInt(1);
+        bool refused=false;
+        try{(void)pc::planLocalSurfaceCut(frame,bad,region.volume,10);}
+        catch(const std::invalid_argument&){refused=true;}
+        AIVERSE_TEST_CHECK(refused);
+    }
     d.corners.clear();
     d.levels={2,2,2,2};
     d.heights={8,8,8,8};

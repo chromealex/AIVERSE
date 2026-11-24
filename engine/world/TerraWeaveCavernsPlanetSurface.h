@@ -16,6 +16,10 @@ struct CavePlanetSurfacePatch {
     std::vector<world::Triangle> chartTriangles;
     uint64_t surfaceRevision=0;
     CavePlanetAnchor anchor{};
+    // Parallel to chartTriangles; two outward-wound source triangles per cell.
+    // Keep exact body points rather than reconstructing them from a rounded chart.
+    std::vector<world::Triangle> bodyTriangles;
+    std::vector<CavePlanetSurfaceCell> cells;
 };
 inline world::Triangle projectPlanetSurfaceTriangle(const CavePlanetFrame& frame,
         const world::Triangle& bodyLocal){
@@ -34,6 +38,8 @@ inline CavePlanetSurfacePatch captureCavePlanetSurface(const CavePlanetFrame& fr
     std::set<std::tuple<int,int,int>> unique;
     CavePlanetSurfacePatch out;out.surfaceRevision=surfaceRevision;out.anchor=frame.anchor();
     out.chartTriangles.reserve(cells.size()*2);
+    out.bodyTriangles.reserve(cells.size()*2);
+    out.cells.reserve(cells.size());
     for(const auto& cell:cells){
         if(cell.face<0||cell.face>=6||cell.x<0||cell.z<0||cell.x>=n||cell.z>=n||
            !unique.emplace(cell.face,cell.x,cell.z).second)
@@ -47,8 +53,10 @@ inline CavePlanetSurfacePatch captureCavePlanetSurface(const CavePlanetFrame& fr
         const auto append=[&](world::Triangle t){
             if(fxCross(t.b-t.a,t.c-t.a).dot(t.a)<Fixed{})std::swap(t.b,t.c);
             out.chartTriangles.push_back(projectPlanetSurfaceTriangle(frame,t));
+            out.bodyTriangles.push_back(t);
         };
         append({a,c,b});append({a,d,c});
+        out.cells.push_back(cell);
     }
     return out;
 }
