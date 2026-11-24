@@ -2399,7 +2399,7 @@
           "title": "Квоты восстановления Studio",
           "titleEn": "Studio recovery storage quotas",
           "text": "S6h: учёт сохранённых данных и журналов, проектный лимит, защита восстановления и явная очистка без автоудаления.",
-          "textEn": "S6h: account retained data and journals, project budget, recovery protection and explicit cleanup without automatic deletion.",
+          "textEn": "S6h: account retained data and journals, project budget, history-protected reviewed batch purge and staging-space preflight without automatic deletion.",
           "status": "in-progress"
         },
         {
