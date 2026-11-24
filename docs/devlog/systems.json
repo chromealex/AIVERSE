@@ -2395,6 +2395,14 @@
       ],
       "roadmap": [
         {
+          "id": "studio-entity-debugger",
+          "title": "Отладчик ECS-сущностей",
+          "titleEn": "Entity Debugger",
+          "text": "Расширение Runtime: точные ссылки, стабильные идентификаторы, принадлежность регионам и навигация по компонентам.",
+          "textEn": "Runtime inspection with exact references, stable identities, region ownership and component navigation.",
+          "status": "in-progress"
+        },
+        {
           "id": "studio-simulation-profiler",
           "title": "Профилировщик симуляции",
           "titleEn": "Simulation Profiler",
