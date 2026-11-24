@@ -3205,6 +3205,21 @@
         "libraries/include/aiverselib/algorithms/GeometryContactCache.h",
         "libraries/include/aiverselib/algorithms/GeometrySweep.h"
       ]
+    },
+    {
+      "id": "random",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-foundation",
+      "source": "libraries/include/aiverselib/algorithms/Random.h",
+      "skill": "skills/core/aiverse-random/SKILL.md",
+      "summary": "Portable PCG32 streams, seed derivation and integer sampling",
+      "notes": "Explicit state; no replacement of simulation RNG.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_random",
+      "runtime": "header",
+      "linkDependencies": [],
+      "packageDependencies": []
     }
   ]
 }
