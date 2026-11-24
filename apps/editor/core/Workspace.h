@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 #include "MapDoc.h"
+#include "ProjectHistory.h"
 #include "engine/data/Json.h"
 #include "engine/game/GameData.h"
 #include "engine/data/JsonCompose.h"
@@ -35,8 +36,13 @@ struct Project {
     bool rulesDirty = false, manifestDirty = false;
 
     bool load(const std::string& dir, std::string* err);
-    bool saveRules(std::string* err);
-    bool saveManifest(std::string* err);
+    bool saveRules(std::string* err,const std::string& historyLabel={});
+    bool saveManifest(std::string* err,const std::string& historyLabel={});
+    Json historyStatus() const;
+    bool historyStep(bool redo,const std::string& expectedVersion,std::string* err);
+    ProjectHistory documentHistory;
+    bool historyRequiresReload=false;
+    std::string historyVersion() const;
     std::string rulesPath() const;
     std::vector<std::string> rulesFiles() const;   // rules.json + included files (relative to dir)
     // Legacy simulation host (game.json "module": rts | fps | voxel | genres | strategic). The hosts are being

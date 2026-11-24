@@ -1132,11 +1132,24 @@ Json StudioSession::dispatch(const Json& request) {
     if(stroking_){
         // The stroke owns the MapDoc transaction across frames. Only explicit
         // observational requests can enter; other edits retry after release.
-        static const std::set<std::string> reads={"studio.snapshot","studio.inspect","studio.propertiesFor","studio.history","studio.stats","studio.project","studio.agentInfo","studio.agentStop","studio.componentCatalog"};
+        static const std::set<std::string> reads={"studio.snapshot","studio.inspect","studio.propertiesFor","studio.history","studio.projectHistory","studio.stats","studio.project","studio.agentInfo","studio.agentStop","studio.componentCatalog"};
         if(method=="studio.sceneBrush"&&request["params"].has("armed")&&!request["params"].getBool("armed",true))strokeCancel();
         else if(!reads.count(method)){
             Json reply=Json::object();reply.set("id",request["id"]);reply.set("error",str("Finish or cancel the active Scene stroke first"));return reply;
         }
+    }
+    if(method=="studio.projectHistory"||method=="studio.projectHistoryStep"){
+        Json reply=Json::object();reply.set("id",request["id"]);
+        try {
+            if(!request.isObject()||!request["id"].isNumber())throw std::runtime_error("Invalid request envelope");
+            const bool step=method=="studio.projectHistoryStep";
+            auto result=ws_.call(step?"project_history_step":"project_history_status",request["params"],"studio");
+            if(result.has("error"))throw std::runtime_error(result.getStr("error"));
+            if(step){agentHistoryUnsafe_=true;result.set("snapshot",snapshot());}
+            result.set("strokeActive",Json::fromBool(stroking_));
+            reply.set("result",std::move(result));
+        }catch(const std::exception& e){reply.set("error",str(e.what()));}
+        return reply;
     }
     if(method=="studio.history"||method=="studio.historyJump") {
         Json reply=Json::object();reply.set("id",request["id"]);

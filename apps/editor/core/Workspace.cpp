@@ -186,6 +186,7 @@ bool Project::load(const std::string& d, std::string* err) {
         savedRulesText=std::move(rawRulesText);savedManifestText=std::move(manifestText);
         rulesError.clear();
         rulesDirty = manifestDirty = false;
+        documentHistory.reset();historyRequiresReload=false;
         return true;
     } catch (const std::exception& e) {
         if (err) *err = e.what();
@@ -196,7 +197,7 @@ bool Project::reloadRules() {
     try { if(actorSession()){actor::readConfig(rulesJson);rules=game::Rules{};}else rules = game::loadRules(rulesJson); rulesError.clear(); return true; }
     catch (const std::exception& e) { rulesError = e.what(); return false; }
 }
-bool Project::saveRules(std::string* err) {
+bool Project::saveRules(std::string* err,const std::string& historyLabel) {
     try {
         if(!savedManifestText||rulesOrigin.files.empty())
             throw std::runtime_error("Project documents must be loaded before saving rules");
@@ -215,6 +216,7 @@ bool Project::saveRules(std::string* err) {
         }
         applyProjectFileEdits(dir,edits);
         savedRulesText=std::move(nextRaw);rulesOrigin.text=std::move(nextNormalized);
+        documentHistory.record(std::move(edits),historyRequiresReload?std::string{}:historyLabel);
         rulesDirty=false;
         return true;
     } catch(const std::exception& e) {if(err)*err=e.what();return false;}
@@ -225,15 +227,104 @@ std::vector<std::string> Project::rulesFiles() const {
     if (out.empty()) out.push_back(manifest.getStr("rules", "rules.json"));
     return out;
 }
-bool Project::saveManifest(std::string* err) {
+bool Project::saveManifest(std::string* err,const std::string& historyLabel) {
     try {
         if(!savedManifestText)throw std::runtime_error("Project manifest must be loaded before saving");
+        const auto previous=Json::parse(*savedManifestText);
         const auto normalized=manifest.dump();
-        auto next=Json::parse(*savedManifestText).dump()==normalized?*savedManifestText:normalized+"\n";
-        applyProjectFileEdits(dir,{{fs::path(dir)/"game.json",*savedManifestText,next}});
+        auto next=previous.dump()==normalized?*savedManifestText:normalized+"\n";
+        const bool topology=previous.getStr("rules","rules.json")!=manifest.getStr("rules","rules.json")||
+                            previous.getStr("module","game")!=manifest.getStr("module","game");
+        const bool mapList=previous["maps"].dump()!=manifest["maps"].dump();
+        std::vector<ProjectFileEdit> edits={{fs::path(dir)/"game.json",*savedManifestText,next}};
+        // A recorded manifest edit must include exact rules dependencies, so
+        // history cannot silently restore a manifest against external rule edits.
+        const bool tracked=!historyLabel.empty()&&!historyRequiresReload&&!topology&&!mapList;
+        if(tracked)for(size_t i=0;i<rulesOrigin.files.size();++i){
+            const auto& bytes=savedRulesText.at(i);
+            edits.push_back({rulesOrigin.files[i],bytes,bytes});
+        }
+        applyProjectFileEdits(dir,edits);
         savedManifestText=std::move(next);manifestDirty=false;
+        documentHistory.record(std::move(edits),tracked?historyLabel:std::string{});
+        if(topology){historyRequiresReload=true;}
         return true;
     } catch(const std::exception& e){if(err)*err=e.what();return false;}
+}
+std::string Project::historyVersion() const {
+    return dir+"|project|"+std::to_string(documentHistory.version());
+}
+Json Project::historyStatus() const {
+    Json out=Json::object(),steps=Json::array();
+    size_t i=0;
+    for(const auto& entry:documentHistory.steps()){
+        Json row=Json::object();row.set("label",str(entry.label));
+        row.set("done",Json::fromBool(i++<documentHistory.position()));steps.push(std::move(row));
+    }
+    out.set("scope",str("project"));out.set("steps",std::move(steps));
+    out.set("position",Json::number(int64_t(documentHistory.position())));
+    out.set("bytes",Json::number(int64_t(documentHistory.bytes())));
+    out.set("maxSteps",Json::number(int64_t(ProjectHistory::MaxSteps)));
+    out.set("maxBytes",Json::number(int64_t(ProjectHistory::MaxBytes)));
+    out.set("version",str(historyVersion()));
+    const bool blocked=dir.empty()||rulesDirty||manifestDirty||historyRequiresReload;
+    out.set("canUndo",Json::fromBool(!blocked&&documentHistory.canUndo()));
+    out.set("canRedo",Json::fromBool(!blocked&&documentHistory.canRedo()));
+    if(blocked)out.set("blockedReason",str(historyRequiresReload?"Reopen after changing rules source or module":"Open a project and save pending changes first"));
+    return out;
+}
+bool Project::historyStep(bool redo,const std::string& expectedVersion,std::string* err) {
+    try {
+        if(dir.empty()||rulesDirty||manifestDirty||historyRequiresReload||!savedManifestText)
+            throw std::runtime_error("Project history requires an open, saved project with unchanged rules source");
+        if(expectedVersion!=historyVersion())throw std::runtime_error("Project history changed; refresh before navigating");
+        const auto& entry=documentHistory.next(redo);
+        auto edits=redo?entry.files:reverseProjectFileEdits(entry.files);
+        // Refuse unsaved owner mutations, even if a caller forgot to set a dirty flag.
+        if(manifest.dump()!=Json::parse(*savedManifestText).dump())throw std::runtime_error("Unsaved manifest changes");
+        const auto current=splitComposed(rulesJson,rulesOrigin);
+        if(current.size()!=rulesOrigin.files.size()||edits.size()!=current.size()+1)
+            throw std::runtime_error("Project history dependency set changed");
+        std::map<fs::path,const ProjectFileEdit*> target;
+        for(const auto& edit:edits){
+            if(!target.emplace(edit.path.lexically_normal(),&edit).second)
+                throw std::runtime_error("Duplicate project history dependency");
+        }
+        const auto manifestEdit=target.at((fs::path(dir)/"game.json").lexically_normal());
+        if(manifestEdit->before!=*savedManifestText)throw std::runtime_error("Manifest history baseline changed");
+        for(size_t i=0;i<current.size();++i){
+            if(current[i].second.dump()+"\n"!=rulesOrigin.text.at(i)||
+                target.at(fs::path(current[i].first).lexically_normal())->before!=savedRulesText.at(i))
+                throw std::runtime_error("Rules history baseline changed");
+        }
+        // Validate the complete target document with the same composition and
+        // game/actor loader BEFORE any disk writes, using only the typed plan.
+        auto nextManifest=Json::parse(manifestEdit->after);
+        if(!nextManifest.isObject()||
+           nextManifest.getStr("rules","rules.json")!=manifest.getStr("rules","rules.json")||
+           nextManifest.getStr("module","game")!=manifest.getStr("module","game")||
+           nextManifest["maps"].dump()!=manifest["maps"].dump())
+            throw std::runtime_error("Project history topology changed");
+        JsonOrigin nextOrigin;
+        auto nextRules=composeJson(rulesPath(),[&](const std::string& path,std::string& out){
+            const auto it=target.find(fs::path(path).lexically_normal());
+            if(it==target.end()||it->second==manifestEdit)return false;
+            out=it->second->after;return true;
+        },&nextOrigin);
+        if(nextOrigin.files!=rulesOrigin.files)throw std::runtime_error("Project history rules include set changed");
+        auto nextRaw=nextOrigin.text;
+        const auto parts=splitComposed(nextRules,nextOrigin);
+        for(size_t i=0;i<parts.size();++i)nextOrigin.text[i]=parts[i].second.dump()+"\n";
+        game::Rules nextParsed;
+        if(actorSession())actor::readConfig(nextRules);else nextParsed=game::loadRules(nextRules);
+        auto nextManifestText=manifestEdit->after;
+        applyProjectFileEdits(dir,edits);
+        manifest=std::move(nextManifest);rulesJson=std::move(nextRules);
+        rulesOrigin=std::move(nextOrigin);savedRulesText=std::move(nextRaw);
+        savedManifestText=std::move(nextManifestText);rules=std::move(nextParsed);
+        rulesError.clear();documentHistory.advance(redo);
+        return true;
+    }catch(const std::exception& e){if(err)*err=e.what();return false;}
 }
 
 // ================================================================= workspace
@@ -571,7 +662,7 @@ void Workspace::registerCoreOps() {
         project.rulesDirty = true;
         if(!project.reloadRules()) throw std::runtime_error("rules rejected by the loader: " + project.rulesError);
         std::string err;
-        if(!project.saveRules(&err)) throw std::runtime_error(err);
+        if(!project.saveRules(&err,what)) throw std::runtime_error(err);
         note({Change::Rules, 0, 0, -1, -1, -1, what});
     };
 
@@ -668,12 +759,27 @@ void Workspace::registerCoreOps() {
             Json backup=project.manifest;
             *jsonPath(project.manifest, ps(p, "path"), true) = p["value"];
             std::string err;
-            if (!project.saveManifest(&err)) {project.manifest=std::move(backup);throw std::runtime_error(err);}
+            if (!project.saveManifest(&err,"Manifest: "+ps(p,"path"))) {project.manifest=std::move(backup);throw std::runtime_error(err);}
             Json r = ok();
             r.set("summary", str("game.json: " + ps(p, "path")));
             return r;
         });
 
+    add("project_history_status","Inspect bounded project document history (separate from map history).","{}",[this,needProject](const Json&){
+        needProject();return project.historyStatus();
+    });
+    add("project_history_step","Undo or redo one saved project document edit. Requires exact version from project_history_status; refuses conflicts.",
+        R"({"properties":{"direction":{"type":"string","enum":["undo","redo"]},"expectedVersion":{"type":"string"}},"required":["direction","expectedVersion"]})",
+        [this,needProject](const Json& p){
+            needProject();
+            const auto direction=p.getStr("direction");
+            if(direction!="undo"&&direction!="redo")throw std::runtime_error("Invalid project history direction");
+            if(!p["expectedVersion"].isString())throw std::runtime_error("Project history version required");
+            std::string err;
+            if(!project.historyStep(direction=="redo",p.getStr("expectedVersion"),&err))throw std::runtime_error(err);
+            note({Change::Rules,0,0,-1,-1,-1,"Project history: "+direction});
+            return project.historyStatus();
+        });
     // ---------------------------------------------------------------- rules
     add("rules_get", "Read rules.json or a part of it by path (e.g. 'types.footman', 'resources', 'triggers[0]'). No path = whole file. "
         "Rules split over files (rules.json \"include\") read as one document; \"extends\" entries are shown as written, "
