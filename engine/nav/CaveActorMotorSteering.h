@@ -7,7 +7,10 @@
 #include "engine/world/TerraWeaveCavernsGraphSolvers.h"
 #include "engine/actor/ActorComponents.h"
 #include "engine/core/FixedMath.h"
+#include <algorithm>
 #include <cstdint>
+#include <functional>
+#include <string>
 #include <memory>
 
 namespace aiverse::nav {
@@ -20,7 +23,8 @@ inline bool steerCaveActorMotor(
     World& ecs,Entity entity,actor::Input& input,
     const terraweave::caverns::CaveNavigationDataProvider& source,
     const world::SpatialWorld& collision,
-    CaveActorMotorSteering settings={}) {
+    CaveActorMotorSteering settings={},
+    uint32_t fullMotorCmPerTick=0) {
     using namespace terraweave::caverns;
     if(!ecs.alive(entity)||!ecs.has<CaveRouteFollower>(entity)||
        !ecs.has<actor::CharacterBody>(entity)||
@@ -43,10 +47,11 @@ inline bool steerCaveActorMotor(
                        centimeters(body.pos.y),
                        centimeters(body.pos.z)};
     auto close=[&](PointCm b)->bool {
-        const int64_t dx=here.x-b.x,dy=here.y-b.y,dz=here.z-b.z;
-        return dx*dx+dy*dy+dz*dz<=
-            int64_t(settings.waypointToleranceCm)*
-            settings.waypointToleranceCm;
+        // Overflow-safe axis comparison for signed +/-1e9 cm worlds.
+        const int64_t tolerance=settings.waypointToleranceCm;
+        return std::abs(here.x-b.x)<=tolerance &&
+               std::abs(here.y-b.y)<=tolerance &&
+               std::abs(here.z-b.z)<=tolerance;
     };
     while(route.current<route.waypoints.size()&&
           close(route.waypoints[route.current]))++route.current;
@@ -79,10 +84,19 @@ inline bool steerCaveActorMotor(
         return false;
     }
     input.yaw=heading;
-    input.forward=1000;
+    input.forward=fullMotorCmPerTick
+        ?int32_t(std::min<uint64_t>(1000,
+            uint64_t(route.speedCmPerTick)*1000/fullMotorCmPerTick))
+        :1000;
     input.right=0;
     return true;
 }
+
+using CaveActorRouteSolver=std::function<
+    terraweave::caverns::CavePathResult(
+        const std::string&,
+        const terraweave::caverns::CavePathQuery&,
+        std::shared_ptr<const terraweave::caverns::CaveNavigationDataProvider>)>;
 
 // Repath happens IN the existing ActorHost's authoritative actor tick,
 // BEFORE the native character motor. It reads CharacterBody (not Transform)
@@ -90,7 +104,7 @@ inline bool steerCaveActorMotor(
 inline CaveRepathTickStats repathCaveActorRoutes(
     Simulation& sim,
     const terraweave::caverns::CaveNavigationDataProvider& provider,
-    uint32_t budget=8) {
+    uint32_t budget=8,CaveActorRouteSolver resolver={}) {
     using namespace terraweave::caverns;
     CaveRepathTickStats out;
     sim.world().each<CaveRouteIntent,CaveRouteFollower,actor::CharacterBody>(
@@ -108,8 +122,8 @@ inline CaveRepathTickStats repathCaveActorRoutes(
         if(intent.algorithm=="hpa")backend=CavePathBackend::HPAStar;
         else if(intent.algorithm=="flow")backend=CavePathBackend::FlowField;
         else if(intent.algorithm=="hybrid")backend=CavePathBackend::Hybrid;
-        else if(intent.algorithm!="astar"){
-            ++out.unavailable;return; // custom engines supply own actor hook
+        else if(intent.algorithm!="astar"&&!resolver){
+            ++out.unavailable;return;
         }
         ++out.attempted;
         const auto cm=[](Fixed f)->int64_t {
@@ -121,11 +135,15 @@ inline CaveRepathTickStats repathCaveActorRoutes(
         request.agent=route.agent;
         request.sourceRevision=provider.revision();
         request.maxVisits=intent.maxVisits;
-        auto path=solveCaveGraph(request,
-            std::shared_ptr<const CaveNavigationDataProvider>(
-                &provider,[](const CaveNavigationDataProvider*){}),
-            backend);
-        if(!path.reached || path.waypoints.empty()){
+        auto borrowed=std::shared_ptr<const CaveNavigationDataProvider>(
+            &provider,[](const CaveNavigationDataProvider*){});
+        auto path=resolver
+            ?resolver(intent.algorithm,request,borrowed)
+            :solveCaveGraph(request,borrowed,backend);
+        if(!path.reached || path.sourceRevision!=provider.revision() ||
+           (path.environmentRevision &&
+            path.environmentRevision!=provider.environmentRevision()) ||
+           path.waypoints.empty()){
             ++out.failed;
             if(intent.attempts<UINT32_MAX)++intent.attempts;
             const auto delay=std::max(1u,intent.retryTicks);
