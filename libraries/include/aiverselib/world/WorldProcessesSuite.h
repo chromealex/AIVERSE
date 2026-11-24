@@ -47,7 +47,8 @@ inline SuiteFlags suiteFlags(const Json& json) {
 }
 using ImprintTrailInstaller=void(*)(Simulation&);
 using CrowdInstaller=void(*)(Simulation&);
-inline void installSuite(Simulation& sim,SuiteFlags flags,ImprintTrailInstaller trails=nullptr,CrowdInstaller crowdInstaller=nullptr) {
+using EvolveAreaInstaller=void(*)(Simulation&);
+inline void installSuite(Simulation& sim,SuiteFlags flags,ImprintTrailInstaller trails=nullptr,CrowdInstaller crowdInstaller=nullptr,EvolveAreaInstaller areas=nullptr) {
     // Order is stable across game/server/editor builds. Integrations can
     // place their own producer systems before this opt-in installation.
     if(flags.morph)morph::install(sim);
@@ -71,7 +72,7 @@ inline void installSuite(Simulation& sim,SuiteFlags flags,ImprintTrailInstaller 
     }
     if(flags.granular)granular::install(sim);
     if(flags.evolve){
-        evolve::registerAreaPersistence(sim);
+        if(areas)areas(sim);else evolve::registerAreaPersistence(sim);
         evolve::registerClimatePersistence(sim);
         evolve::installClimateBridge(sim);
         evolve::install(sim);
