@@ -3,6 +3,7 @@
 #pragma once
 #include "engine/sim/Simulation.h"
 #include "WorldProcesses.h"
+#include "engine/core/GraphSupportCache.h"
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -71,11 +72,19 @@ inline bool validBond(const Bond& bond){
            bond.damage>=0 && bond.damage<bond.strength;
 }
 
+// Caller-owned derived cache. Compare the exact generation-safe membership
+// on every invocation, including after rollback or direct edits.
+struct SupportCache {
+    std::vector<uint64_t> memberIds;
+    lib::SupportGraphCache graph;
+};
+
 // System stage: reads Members/Bonds, writes Member.detached and optional Collapse
 // output. No entity creation, no global mutable graph, no RNG or float.
 // The host should invoke it after authoritative damage/PHYSIS and before the
 // host's durable detach + Box3D processing barrier.
-inline bool advance(World& world,std::uint32_t tick){
+inline bool advance(World& world,std::uint32_t tick,SupportCache& cache,
+                    lib::SupportGraphActivity* activity=nullptr){
     const World& read=world;
     if(read.countExisting<Member>()>kMaxMembers ||
        read.countExisting<Bond>()>kMaxBonds)return false;
@@ -101,7 +110,7 @@ inline bool advance(World& world,std::uint32_t tick){
     std::sort(bonds.begin(),bonds.end(),[](const auto& a,const auto& b){
         return a.first.packed()<b.first.packed();
     });
-    std::vector<lib::worldprocess::Edge> edges;
+    std::vector<std::pair<size_t,size_t>> edges;
     edges.reserve(bonds.size());
     for(const auto& [entity,b]:bonds){
         (void)entity;
@@ -109,17 +118,28 @@ inline bool advance(World& world,std::uint32_t tick){
         if(a==indices.end()||z==indices.end())continue;
         if(members[a->second].second.broken||members[z->second].second.broken||
            members[a->second].second.detached||members[z->second].second.detached)continue;
-        edges.push_back({a->second,z->second,b.strength-b.damage});
+        edges.emplace_back(a->second,z->second);
     }
-    const auto connected=lib::worldprocess::supported(members.size(),roots,edges);
-    if(connected.size()!=members.size())return false;
+    std::vector<uint64_t> ids;
+    ids.reserve(members.size());
+    for(const auto& item:members)ids.push_back(item.first.packed());
+    if(cache.memberIds!=ids){cache.graph.reset();cache.memberIds=std::move(ids);}
+    const auto connected=cache.graph.update(members.size(),roots,std::move(edges),activity);
+    if(!connected)return false;
+    // Stable supported structures do not require detaching COW write pools.
+    bool changes=false;
+    for(size_t i=0;i<members.size();++i)
+        if(!members[i].second.detached&&(members[i].second.broken||!(*connected)[i])){
+            changes=true;break;
+        }
+    if(!changes)return true;
 
     // All planning is finished before any authoritative writes.
     auto* write=world.prepareExistingWrite<Member>();
     if(!write)return true;
     for(std::size_t i=0;i<members.size();++i){
         const Entity e=members[i].first;
-        const bool shouldDetach=members[i].second.broken||!connected[i];
+        const bool shouldDetach=members[i].second.broken||!(*connected)[i];
         if(!shouldDetach||members[i].second.detached)continue;
         world.get<Member>(e).detached=true;
         if(read.tryGetConst<Collapse>(e)){
@@ -134,6 +154,10 @@ inline bool advance(World& world,std::uint32_t tick){
         }
     }
     return true;
+}
+inline bool advance(World& world,std::uint32_t tick){
+    SupportCache cache;
+    return advance(world,tick,cache);
 }
 inline std::vector<Event> pending(const World& world){
     std::vector<Event> events;
@@ -189,8 +213,8 @@ inline void registerPersistence(Simulation& sim){
 }
 inline void install(Simulation& sim,std::string name="fracture.support"){
     registerPersistence(sim);
-    sim.addSystem(std::move(name),[](Simulation& s){
-        (void)advance(s.world(),s.tick());
+    sim.addSystem(std::move(name),[cache=SupportCache{}](Simulation& s) mutable {
+        (void)advance(s.world(),s.tick(),cache);
     });
 }
 } // namespace aiverse::fracture
