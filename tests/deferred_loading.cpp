@@ -181,7 +181,7 @@ int aiverseMain(int, char**) {
         bool invoked=false;
         std::string error;
         const bool applied=guarded.applyGraphMaterial(0,0,target->identity,
-            [&](auto&,auto&,auto&,auto&,const auto&,auto&,std::string*) {
+            [&](auto&,auto&,auto&,auto&,const auto&,auto&,std::string*) -> bool {
                 invoked=true;
                 check(guarded.modelMutationBlocked(),"callback mutation flag");
                 check(!guarded.readModelOf(0),"callback must refuse nested reader");
@@ -194,7 +194,6 @@ int aiverseMain(int, char**) {
                 catch(const std::logic_error&) { refused=true; }
                 check(refused,"callback must not replace root provider");
                 throw std::runtime_error("intentional callback refusal");
-                return false;
             },&error);
         check(invoked&&!applied&&error=="intentional callback refusal","callback refusal evidence");
         check(!guarded.modelMutationBlocked()&&guarded.graphMaterialTarget(0,0,0)&&

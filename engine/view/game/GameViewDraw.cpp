@@ -430,6 +430,7 @@ void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o,
 
 bool GameView::resolveStatic(uint16_t type,uint8_t owner,
                             view_adapter::StaticPreviewModel& output) {
+    if(nativeGraphCallbackActive_ || strictAppearanceReload_)return false;
     if(!rules_ || type>=looks_.size() || type>=rules_->types.size())
         return false;
     loadType(type);
@@ -438,6 +439,7 @@ bool GameView::resolveStatic(uint16_t type,uint8_t owner,
 }
 
 void GameView::drawGhost(Renderer3D& r, uint16_t type, float3 pos, bool ok, const MapGrid& grid, double time) {
+    if(nativeGraphCallbackActive_ || strictAppearanceReload_)return;
     // Flat-ground, rigid ghost with a single resolved model: the host
     // supplies model assets and placement height, while View owns model
     // submission. Complex animation/planet/attachments retain legacy.
@@ -490,6 +492,7 @@ void GameView::drawGhost(Renderer3D& r, uint16_t type, float3 pos, bool ok, cons
 }
 
 void GameView::drawPreview(Renderer3D& r, uint16_t type, uint8_t owner, double time, float yaw) {
+    if(nativeGraphCallbackActive_ || strictAppearanceReload_)return;
     // Truly static single-variant previews can render through View without
     // allocating EntityAnim, a GraphInstance or advancing the old Animator.
     // All specialized resources and animations retain the legacy fallback.
