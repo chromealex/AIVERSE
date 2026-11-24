@@ -263,6 +263,7 @@ void GameClient::toMenu() {
     natureStop();
     fx_.stopMatch();
     audio_.stopAll(0.2f, combatBuses());
+    noticeEvents_.reset();
     city_.reset(); sim_.reset();
     setScreen(Screen::Menu);
     menuMusic();
@@ -424,6 +425,7 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
         if (!embedScripts(rules, map, [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); }, &terr)) throw std::runtime_error(terr);
         cityPrepare(rules, map);   // AIVERSE_CITY: a seat in a city on a server (ClientCity.cpp)
         sim_->setup(rules, map);
+        attachNoticeEvents(false);
         cityAttach();
         horizonFrameTiming_.detach(*dev_);
         if (worldScene_) { worldScene_->shutdown(*dev_); worldScene_.reset(); }
@@ -1009,8 +1011,33 @@ void GameClient::applyRtsActions(const std::vector<std::string>& actions,bool al
     if(fired("FocusCamera"))fitCamera();
 }
 
+void GameClient::attachNoticeEvents(bool confirmedOnly) {
+    noticeEvents_ = std::make_shared<PresentationEventQueue<SimEvent>>(confirmedOnly);
+    std::weak_ptr<PresentationEventQueue<SimEvent>> weak = noticeEvents_;
+    sim_->addSystem("client.notices.collect", [weak](Simulation& s) {
+        if (auto queue = weak.lock()) {
+            for (const auto& ev : s.events()) {
+                switch (ev.type) {
+                case kEvNotEnough: case kEvBuildDone: case kEvReadyToPlace:
+                case kEvResearched: case kEvLevelUp: case kEvLowPower:
+                case kEvUpgraded: case kEvRegionClaimed: case kEvPlayerDefeated:
+                    queue->push(s.tick(), ev); break;
+                default: break;
+                }
+            }
+        }
+    });
+    if (confirmedOnly) sim_->addStateRestoredHook([weak](Simulation& s) {
+        if (auto queue = weak.lock()) queue->rewind(s.tick());
+    });
+}
+
 void GameClient::processEvents() {
-    for (auto& ev : sim_->events()) {
+    if (!noticeEvents_ || !sim_) return;
+    // Input can be confirmed before the corresponding tick is simulated.
+    const uint32_t confirmed = netMatch_ && net_ && net_->session()
+        ? std::min(sim_->tick(), net_->session()->confirmedNext()) : 0;
+    for (const auto& ev : noticeEvents_->drain(confirmed)) {
         if (ev.player != human_ || spectator_) continue;
         if (ev.type == kEvNotEnough) {
             if (ev.value == 255) notice(tr("notice.need_supply"));
