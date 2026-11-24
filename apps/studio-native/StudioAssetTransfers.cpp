@@ -1435,7 +1435,8 @@ Json studioAssetTrashReview(const fs::path& project,const std::string& id,const 
     out.set("action",Json::string(action));out.set("token",Json::string(reviewed.token));
     return out;
 }
-void studioAssetTrashApply(const fs::path& project,const std::string& id,const std::string& action,const std::string& expectedToken){
+void studioAssetTrashApply(const fs::path& project,const std::string& id,const std::string& action,const std::string& expectedToken,StudioBatchAssetPlan* staged){
+    if(staged&&action!="restore")throw std::runtime_error("Only reversible restore can be staged");
     const auto reviewed=reviewTrash(project,id,action);const auto& r=reviewed.record;
     if(expectedToken.empty()||expectedToken!=reviewed.token)throw std::runtime_error("Recovery record changed; review again");
     if(action=="purge"){
@@ -1447,7 +1448,7 @@ void studioAssetTrashApply(const fs::path& project,const std::string& id,const s
         plan.quarantine=true;plan.created=r.kind=="created";
         plan.files.push_back({r.path,r.relative,{},r.digest,r.directory});
         plan.files.push_back({r.path+".meta",r.relative+".meta",r.meta,{},false});
-        studioReplayAssetQuarantine(project,plan,false);return;
+        studioReplayAssetQuarantine(project,plan,false,{},staged);return;
     }
     if(reviewed.liveDigest==r.digest)throw std::runtime_error("This version is already active");
     // Save the current live version as a new recovery record before exchanging
@@ -1464,7 +1465,7 @@ void studioAssetTrashApply(const fs::path& project,const std::string& id,const s
     plan.replacement=true;
     plan.files.push_back({r.path,outgoing,reviewed.liveMeta,reviewed.liveDigest,false});
     plan.files.push_back({r.path,r.relative,{},r.digest,false});
-    studioReplayAssetReplacement(project,plan,true);
+    studioReplayAssetReplacement(project,plan,true,staged);
 }
 namespace {
 using AssetHistory=editor::ProjectHistory;
@@ -1749,6 +1750,40 @@ bool StudioAssetHistoryPublication::cancelUnchanged(const AssetHistory& history)
        editor::readProjectFileBytes(target)!=encodeAssetHistory(impl_->project,history))return false;
     checkTrashJournal(impl_->project);
     fs::remove(cache/"asset-history.dirty");StudioMoveJournal::syncPath(cache);return true;
+}
+namespace {
+void checkCleanupHistory(const fs::path& root,const AssetHistory& history){
+    checkTrashJournal(root);
+    const auto cache=assetHistoryCache(root,true);
+    if(existsOrSymlink(cache/"asset-history.dirty")||existsOrSymlink(cache/"project-document-journal"))
+        throw std::runtime_error("Pending history recovery; reopen project before cleanup");
+    const auto target=cache/"asset-history.json";
+    if(!existsOrSymlink(target)){
+        if(!history.steps().empty())throw std::runtime_error("Missing retained asset checkpoint");
+        return;
+    }
+    if(!fs::is_regular_file(fs::symlink_status(target))||fs::file_size(target)>AssetCheckpointMaxBytes||
+       editor::readProjectFileBytes(target)!=encodeAssetHistory(root,history))
+        throw std::runtime_error("Asset history baseline changed; reopen project before cleanup");
+}
+}
+Json studioPurgeUnprotectedTrash(const fs::path& project,const std::string& id,
+    const std::string& token,const AssetHistory& history){
+    const auto root=fs::canonical(project);
+    editor::project_file_detail::Lock lock(assetHistoryCache(root,true)/"asset-history.lock");
+    checkCleanupHistory(root,history);
+    const auto protectedIds=studioProtectedTrashIds(history);
+    if(std::binary_search(protectedIds.begin(),protectedIds.end(),id))
+        throw std::runtime_error("Recovery record is protected by retained Undo/Redo");
+    studioAssetTrashApply(root,id,"purge",token);
+    Json out=Json::object();out.set("ok",Json::fromBool(true));return out;
+}
+Json studioPurgeUnprotectedTrashBatch(const fs::path& project,const std::vector<std::string>& ids,
+    const std::string& token,const AssetHistory& history){
+    const auto root=fs::canonical(project);
+    editor::project_file_detail::Lock lock(assetHistoryCache(root,true)/"asset-history.lock");
+    checkCleanupHistory(root,history);
+    return studioApplyTrashBatch(root,ids,token,history);
 }
 void studioRecoverAssetJournal(const fs::path& project){
     const auto cache=assetHistoryCache(project,false);
