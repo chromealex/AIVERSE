@@ -440,6 +440,89 @@ public:
         }
         return s->circulation.scene().host().route(*s->def.regionalNavigation,from,to,policy);
     }
+    struct AgentLiftAccess {
+        uint32_t feature=0,fromFloor=0,toFloor=0;
+        Vec3 approach{},board{},exit{};
+    };
+    bool agentLiftAccess(uint64_t id,const BuildingNavRouteStep& step,AgentLiftAccess& out)const{
+        const auto* s=find(id);
+        if(!s||s->status!=Status::Active||step.action!=BuildingRouteAction::RequestLift)return false;
+        const auto& graph=s->generated.structureGraph;
+        const auto from=std::find_if(graph.rooms.begin(),graph.rooms.end(),
+                       [&](const auto& room){return room.id==step.fromRoom;});
+        const auto to=std::find_if(graph.rooms.begin(),graph.rooms.end(),
+                       [&](const auto& room){return room.id==step.toRoom;});
+        const auto edge=std::find_if(graph.connections.begin(),graph.connections.end(),
+                       [&](const auto& e){return e.id==step.connectionId;});
+        if(from==graph.rooms.end()||to==graph.rooms.end()||edge==graph.connections.end()||
+           edge->kind!=BuildingConnectionKind::Elevator||
+           !((edge->from==from->id&&edge->to==to->id)||(edge->to==from->id&&edge->from==to->id))||
+           edge->id.rfind("vertical/",0)!=0)return false;
+        const std::string socketId="lift/"+edge->id.substr(9);
+        const auto socket=std::find_if(graph.sockets.begin(),graph.sockets.end(),
+                       [&](const auto& a){return a.id==socketId&&a.kind==BuildingFeatureKind::Elevator;});
+        if(socket==graph.sockets.end())return false;
+        const auto lift=s->circulation.scene().host().lifts().find(socket->featureIndex);
+        if(lift==s->circulation.scene().host().lifts().end()||!lift->second.online())return false;
+        const auto low=lift->second.floorHeightMm(from->floor),high=lift->second.floorHeightMm(to->floor);
+        if(!low||!high)return false;
+        const auto pose=lift->second.platformPose();const auto size=s->generated.building.constructionSize;
+        const auto at=[&](float z,int64_t y){
+            return buildingLocalToWorld((pose.x0+pose.x1)*0.5f,
+                float(y)/1000.f+pose.thickness,z,size.width,size.depth,s->def.origin,s->def.yaw);
+        };
+        out={socket->featureIndex,from->floor,to->floor,at(pose.z0-0.8f,*low),
+             at((pose.z0+pose.z1)*0.5f,*low),at(pose.z0-0.8f,*high)};
+        return true;
+    }
+    struct AgentEntrance {Vec3 outside{},inside{};std::string room;};
+    bool agentEntrance(uint64_t id,const std::string& socketId,AgentEntrance& out)const{
+        const auto* s=find(id);
+        if(!s||s->status!=Status::Active)return false;
+        const auto& graph=s->generated.structureGraph;
+        const auto socket=std::find_if(graph.sockets.begin(),graph.sockets.end(),
+                         [&](const auto& a){return a.id==socketId;});
+        if(socket==graph.sockets.end()||!buildingOperableAperture(socket->kind)||
+           socket->kind==BuildingFeatureKind::SlidingRoof)return false;
+        const auto size=s->generated.building.constructionSize;
+        float x=socket->x,z=socket->z;
+        switch(socket->side){
+            case BuildingFeatureSide::Front:z=0.9f;break;
+            case BuildingFeatureSide::Back:z=size.depth-0.9f;break;
+            case BuildingFeatureSide::Left:x=0.9f;break;
+            case BuildingFeatureSide::Right:x=size.width-0.9f;break;
+        }
+        auto room=std::find_if(graph.rooms.begin(),graph.rooms.end(),[&](const auto& r){
+            return r.floor==0&&x>=r.x0&&x<=r.x1&&z>=r.z0&&z<=r.z1;
+        });
+        if(room==graph.rooms.end())return false;
+        out={buildingLocalToWorld(socket->x,room->y0,socket->z,size.width,size.depth,s->def.origin,s->def.yaw),
+             buildingLocalToWorld(x,room->y0,z,size.width,size.depth,s->def.origin,s->def.yaw),room->id};
+        return true;
+    }
+    bool agentPath(uint64_t id,Vec3 from,Vec3 to,std::vector<Vec3>& path,uint64_t& revision)const{
+        const auto* s=find(id);
+        if(!s||!ready()||s->status!=Status::Active||s->physics.pendingGraphs()||
+           !s->def.regionalNavigation)return false;
+        const auto& mesh=*s->def.regionalNavigation;
+        if(!mesh.built()||mesh.dirty())return false;
+        nav::Query query;query.yTolerance=Fixed::fromRatio(2,5);
+        if(!mesh.findPath(from,to,query,path))return false;
+        revision=mesh.revision();return true;
+    }
+    uint64_t agentNavRevision(uint64_t id)const{
+        const auto* s=find(id);
+        if(!s||s->status!=Status::Active||s->physics.pendingGraphs()||
+           !s->def.regionalNavigation||s->def.regionalNavigation->dirty())return 0;
+        return s->def.regionalNavigation->revision();
+    }
+    // Deterministic ECS AI input is generated at the native system phase,
+    // not injected into a network sink during rollback. Use ONLY for
+    // exclusively AI-controlled entities with a reserved actor sequence.
+    bool enqueueAgentCommand(Command command){
+        if(!command.seq||!validateCommand(command))return false;
+        return dispatch(command);
+    }
     bool canBoardLift(uint64_t id,uint32_t feature,uint32_t floor)const{
         const auto* s=find(id);
         return s&&ready()&&s->status==Status::Active&&!s->physics.pendingGraphs()&&
@@ -873,19 +956,19 @@ private:
         const auto it=s->liftLayout.find(uint32_t(c.args[2]));
         return it!=s->liftLayout.end()&&uint64_t(c.args[3])<it->second;
     }
-    void dispatch(const Command& c){
-        if(!c.seq||!validateCommand(c)){lastError_="Building command rejected";return;}
+    bool dispatch(const Command& c){
+        if(!c.seq||!validateCommand(c)){lastError_="Building command rejected";return false;}
         auto* s=find(uint64_t(c.args[0]));
         if(c.args.size()==4){
-            if(s->liftQueue.size()>=1024){lastError_="Lift command queue full";return;}
+            if(s->liftQueue.size()>=1024){lastError_="Lift command queue full";return false;}
             const auto duplicate=std::find_if(s->liftQueue.begin(),s->liftQueue.end(),
                  [&](const Command& q){return q.player==c.player&&q.seq==c.seq;});
-            if(duplicate==s->liftQueue.end())s->liftQueue.push_back(c);
-            return;
+            if(duplicate!=s->liftQueue.end())return false;
+            s->liftQueue.push_back(c);return true;
         }
         BuildingApertureCommand request{uint64_t(c.args[0]),c.units[0],c.seq,
             s->poses[size_t(c.args[2])].socketId,c.param==1,s->domains,c.player};
-        (void)s->runtime->enqueue(request,&lastError_);
+        return s->runtime->enqueue(request,&lastError_);
     }
     // Retry graph ACKs BEFORE any other Simulation system can use a
     // previously dirty graph. No physical step is executed here.
