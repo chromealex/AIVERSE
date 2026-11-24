@@ -81,6 +81,14 @@ Physics and authoritative state updates remain full-rate. Actual virtualized
 actor/vehicle residency, durable cold advancement and wake admission remain
 unimplemented for the actor persistence adapter.
 
+W1.29a provides a single-type native cold catch-up API. W1.29b is in progress:
+explicit park eligibility at the authoritative tick, complete per-component
+clock/pause policy coverage, and transactional multi-type advancement/wake.
+Acceptance requires denied and incomplete groups to leave hot/cold state
+unchanged, deterministic stable-ID/component ordering, codec roundtrip of
+clocks, unchanged repeated-tick state, and fresh-save/COW continuation.
+No automatic ActorHost parking or new persistence schema in this stage.
+
 ### Feature-first continuation queue
 
 - OW-01 next: safe explicit cold/absent lifecycle, persisted reduced simulation
