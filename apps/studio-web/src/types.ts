@@ -254,7 +254,7 @@ export interface StudioParams {
   /** Tool panel ops (Terrain, Roads, PostFX, ...) with their JSON schemas. */
   'studio.ops': { panel: string };
   /** Run one Workspace op of a tool panel (validated, undoable like an agent edit). */
-  'studio.op': { op: string; params: Record<string, unknown> };
+  'studio.op': { op: string; params: Record<string, unknown>; expectedProject?: string };
   'studio.inputGet': Record<string,never>;
   'studio.inputSet': { asset: StudioInputAsset };
   'studio.assetAudit': Record<string,never>;
@@ -312,7 +312,7 @@ export interface StudioParams {
   'studio.facialPreviewControls': { revision: number; values: Record<string,number>; vectors?: Record<string,[number,number,number]> };
   'studio.facialPreviewInfo': Record<string,never>;
   'studio.shaderGraphValidate': { graph: StudioShaderGraphDocument['graph'] };
-  'studio.shaderGraphSave': { name: string; graph: StudioShaderGraphDocument['graph']; expected: StudioShaderGraphDocument['graph'] };
+  'studio.shaderGraphSave': { name: string; graph: StudioShaderGraphDocument['graph']; expected: StudioShaderGraphDocument['graph']; expectedProject: string };
   'studio.renderLighting': Record<string, never>;
   'studio.renderLightingSet': { patch: Partial<RenderLightingSettings> };
   'studio.lighting': Record<string, never>;
