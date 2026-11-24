@@ -555,5 +555,19 @@ class NativeHostBuildTest(unittest.TestCase):
                     self.assertEqual((build/"gen/NativeRegistry.cpp").exists(), bool(count))
 
 
+class SkillAuditProtocolTest(unittest.TestCase):
+    def test_protocol_methods_are_not_repository_paths(self):
+        spec = importlib.util.spec_from_file_location(
+            "skill_audit", Path(__file__).resolve().parents[1] / "tools/skills/audit.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertIsNone(module.path_candidates("tools/list"))
+        self.assertIsNone(module.path_candidates("tools/call"))
+        self.assertEqual(module.path_candidates("tools/mcp/audit_registry.py"),
+                         "tools/mcp/audit_registry.py")
+        self.assertEqual(module.path_candidates("tools/missing.py"), "tools/missing.py")
+        self.assertEqual(module.path_candidates("tools/list/unknown"), "tools/list/unknown")
+
+
 if __name__ == "__main__":
     unittest.main()
