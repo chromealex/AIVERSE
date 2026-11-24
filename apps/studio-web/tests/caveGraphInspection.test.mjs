@@ -41,3 +41,14 @@ test('native caps enforced even for rows outside first page',()=>{
  const s=snapshot(Array.from({length:100},(_,i)=>stamp(i+1)));s.stamps[99].radiusCm=0;
  assert.throws(()=>parseCaveSnapshot(s));
 });
+
+test('planet region captures preserve exact int64 identities and chart coordinates',()=>{
+ const id='9007199254740993',revision='9007199254740995';
+ const s=snapshot([stamp(Number(id))],[entrance(2)]);s.sourceRevision=Number(revision);
+ const anchor={version:1,body:'moon_1',face:5,aQ16:65536,bQ16:131072,halfExtentCm:4000};
+ const r={...reply(s),planetary:true,activeRegionId:'7',planetAnchor:anchor,planetRegions:[{id:'7',anchor,revisionText:revision}],revisionText:revision,generatorVersionText:'1',seedText:'7',stampIds:[id],entranceIds:['2']};
+ const data=inspectCaveReply(r);
+ assert.equal(data.revision,revision);assert.equal(data.stamps[0].id,id);assert.equal(data.planet.anchor.body,'moon_1');
+ assert.equal(projectCavePage(data).visible[0].id,id);
+ for(const bad of [{...r,activeRegionId:'8'},{...r,stampIds:['9']},{...r,revisionText:'8'},{...r,planetRegions:[...r.planetRegions,...r.planetRegions]}])assert.throws(()=>inspectCaveReply(bad));
+});

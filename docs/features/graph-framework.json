@@ -127,7 +127,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35F shared Building Graph exterior projection, group diagnostics and optional native route callback synchronized with integration owner. Actual owner bridge remains in separate integration branch; acceptance pending. Mac QA: repair case-insensitive diagnostic module collision and material projection typing.",
+      "note": "Building owner and Stage 53-54 guarded graph writes plus planetary inspection are present in the integration staging tree. Full Caverns owner reconciliation and merged-tree acceptance remain pending.",
       "evidence": []
     },
     "architecture": {
@@ -197,7 +197,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F fixtures added; NOT RUN.",
+      "note": "Historical isolated graph tests passed on prior source trees. This merged tree has not yet passed native, Studio, MCP, visual or Mac acceptance.",
       "evidence": []
     },
     "handoff": {

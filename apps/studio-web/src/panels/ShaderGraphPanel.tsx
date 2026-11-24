@@ -24,6 +24,8 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  const [clipboard,setClipboard]=useState<ShaderClipboard|null>(null);
  const [pendingName,setPendingName]=useState('');
  const [selected,setSelected]=useState('');
+ const saveScope=useRef({projectPath,selected});
+ saveScope.current={projectPath,selected};
  const [document,setDocument]=useState<StudioShaderGraphDocument|null>(null);
  const [draft,setDraft]=useState<StudioShaderGraphDocument['graph']|null>(null);
  const history=useRef<DraftHistory<StudioShaderGraphDocument['graph']>|null>(null);
@@ -131,10 +133,11 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
   finally{setBusy(false);}
  };
  const save=async()=>{
-  if(!draft||!selected||busy||!dirty)return;
+  if(!draft||!document||!selected||busy||!dirty)return;
   setBusy(true);setError('');setMessage('');
   try{
-   const result=await invoke('studio.shaderGraphSave',{name:selected,graph:draft});
+   const result=await invoke('studio.shaderGraphSave',{name:selected,graph:draft,expected:document.graph,expectedProject:projectPath});
+   if(saveScope.current.projectPath!==projectPath||saveScope.current.selected!==selected)return;
    setDocument(result);resetDraft(structuredClone(result.graph));
    setMessage('Graph saved to shaders/'+selected+'.json. MapDoc Undo does not apply.');
   }catch(e){setError(e instanceof Error?e.message:String(e));}

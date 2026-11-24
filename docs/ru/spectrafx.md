@@ -132,7 +132,7 @@ presenter.consumeTickEvents(tick, sim.events(),
 | `fx_graph_list` | нет | Все `fx/graphs/*.vfx.json`, диагностика компиляции для каждого файла |
 | `fx_graph_get` | `name` | JSON графа, исходный текст и результат проверки |
 | `fx_graph_validate` | `graph`, или `text`, или `name`, необязательно `overrides` | Строгие ошибки компилятора, число эмиттеров и текстуры; только чтение |
-| `fx_graph_set` | `name`, `graph` или `text` | Создание/обновление проверенного файла, уведомление `Change::Fx` |
+| `fx_graph_set` | `name`, `graph` или `text`, `expected` при обновлении | Атомарное создание/обновление с проверкой исходника, уведомление `Change::Fx` |
 | `fx_graph_delete` | `name` | Удаляет только исходный ассет графа |
 | `fx_graph_bake` | `name`, `effect`, необязательно `overrides`, `overwrite` | Компилирует граф в `fx/<effect>.json` для существующего `fx_preview` и старого рантайма |
 
@@ -951,7 +951,7 @@ CMake, ни запуск тестов, ни скриншоты, ни прове�
   Возвращает отредактированный граф и диагностику компилятора;
   файлы не пишутся.
 - `fx_graph_draft_set`, `fx_graph_draft_get`,
-  `fx_graph_draft_list`, `fx_graph_draft_publish`:
+  `fx_graph_draft_list`, `fx_graph_draft_publish` (нужен `expectedDraft`, для замены опубликованного графа — `expected`):
   неразрушающий авторинг, проверка и явная публикация.
 - Существующие `fx_graph_get/set/list/validate/bake` продолжают
   работать для обеих версий графов; опубликованные графы всегда

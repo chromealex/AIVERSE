@@ -1662,9 +1662,14 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 Json request=Json::object();
                 request.set("graph",draft);
                 if(method=="studio.shaderGraphSave") {
+                    if(params.getStr("expectedProject")!=ws_.project.dir)
+                        throw std::runtime_error("Shader Graph project changed; reload before saving");
                     const std::string name=params.getStr("name");
                     if(!validStudioShaderGraphName(name))
                         throw std::runtime_error("Invalid Shader Graph filename");
+                    if(!validStudioShaderGraphDraft(params["expected"]))
+                        throw std::runtime_error("Original Shader Graph document required; reload before saving");
+                    request.set("expected",params["expected"]);
                     request.set("name",str(name));
                 }
                 const Json raw=ws_.call(method=="studio.shaderGraphSave"?
@@ -1937,8 +1942,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 return op.name=="terraweave_caverns_paint" && !op.guiOnly;
             });
             if (!registered) out.set("status",str("unavailable"));
-            else if (ws_.map.data.planet()) out.set("status",str("unsupported"));
-            else if (static_cast<const Json&>(ws_.map.data.extra)["terraweaveCaverns"].isNull())
+            else if (!ws_.map.data.planet() && static_cast<const Json&>(ws_.map.data.extra)["terraweaveCaverns"].isNull())
                 out.set("status",str("absent"));
             else {
                 const size_t undo=ws_.map.undoDepth();
@@ -1948,7 +1952,16 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 if (report.has("error")) throw std::runtime_error(report.getStr("error"));
                 if (!(scope==graphDocumentScope()) || undo!=ws_.map.undoDepth() || dirty!=ws_.map.dirty)
                     throw std::runtime_error("Caverns read violated document scope");
-                out.set("status",str("ready"));out.set("report",report);
+                if (ws_.map.data.planet() && !report.getBool("planetary"))
+                    out.set("status",str("unsupported"));
+                else if (ws_.map.data.planet() && report.getStr("activeRegionId").empty())
+                    out.set("status",str("absent"));
+                else {
+                    if(!report.getBool("ok") || report.getBool("changed") || !report["snapshot"].isObject() ||
+                        (ws_.map.data.planet() && (!report["planetAnchor"].isObject() || !report["planetRegions"].isArray())))
+                        throw std::runtime_error("Invalid native Caverns inspection report");
+                    out.set("status",str("ready"));out.set("report",report);
+                }
             }
             reply.set("result",std::move(out));
         } else if (method == "studio.ops") {
@@ -1969,6 +1982,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
         } else if (method == "studio.op") {
             const std::string op=params.getStr("op");
             if (!studioToolAllowed(op)) throw std::runtime_error("This operation is not available in Studio panels: "+op);
+            if(params.has("expectedProject") && params.getStr("expectedProject")!=ws_.project.dir)
+                throw std::runtime_error("Studio operation project changed; reload before retrying");
             if (op.rfind("feature_readiness_",0)!=0 && ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
             if((op.starts_with("world_save_")||op=="world_job_start"||op.starts_with("world_simulation_lod_"))&&params.getStr("expectedProject")!=ws_.project.dir)
                 throw std::runtime_error("World maintenance project changed; reopen the panel");
