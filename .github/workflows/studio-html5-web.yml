@@ -1,7 +1,7 @@
 name: AIVERSE HTML5 Studio checks
 on:
   push:
-    branches: [feature/studio-html5]
+    branches: [feature/studio-html5, feature/aiv20261124_texture_graph_gpu_slots]
     paths:
       - 'apps/studio-web/**'
       - 'apps/studio-native/**'

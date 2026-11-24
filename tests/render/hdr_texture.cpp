@@ -2,6 +2,7 @@
 // Test SOURCE ONLY: this file does not claim a test execution result.
 #include "engine/render/HdrTexture.h"
 #include "engine/render/EnvironmentIbl.h"
+#include "engine/render/EnvironmentIblGpu.h"
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -189,6 +190,13 @@ void errorsAndBoundary() {
 }
 int main() {
     try {
+        {
+            std::vector<float> rgba(8*8*4);
+            for(size_t i=0;i<rgba.size();i+=4){rgba[i]=12;rgba[i+1]=6;rgba[i+2]=-2;rgba[i+3]=.25f;}
+            const auto source=render::environment_ibl::fromGraphLatLong(8,rgba);
+            require(source.width==8&&source.height==4&&render::environment_ibl::halfValue(source.rgba16f[0])==12&&source.rgba16f[2]==0&&source.rgba16f[3]==0x3c00,"graph environment lat-long mapping");
+            require(!render::environment_ibl::gpuPrefilterSource(true,8).empty()&&!render::environment_ibl::gpuPrefilterSource(false,8).empty(),"GPU IBL source missing");
+        }
         flatAndUpload();
         rleAndOrientation();
         errorsAndBoundary();

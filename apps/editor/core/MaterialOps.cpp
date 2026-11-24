@@ -11,6 +11,7 @@
 
 #include "engine/render/Model.h"
 #include "engine/render/TextureBcEncode.h"
+#include "engine/render/TextureBcGpu.h"
 #include "engine/render/DdsTexture.h"
 #include "tools/aiversebuild/TextureCompress.h"
 #include "engine/render/ExrTexture.h"
@@ -374,7 +375,8 @@ Json publishTextureGraphBcBlocks(Workspace& ws,const std::string& name,const std
     if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture name");
     const auto kind=render::texture_graph::outputKind(output);const auto f=parseFormat(format);
     if(kind==Kind::Radiance||(f==Format::BC4&&kind!=Kind::Scalar)||(f==Format::BC5&&kind!=Kind::Normal))throw std::invalid_argument("Invalid GPU BC output");
-    const auto encoded=wrapDds(size,size,f,kind==Kind::Color,{std::vector<uint8_t>(blocks.begin(),blocks.end())});
+    const bool mips=blocks.size()!=gpuBcBytes(size,f,false);
+    const auto encoded=wrapGpuBcChain(size,f,kind==Kind::Color,mips,blocks);
     return publishBcFile(ws,name,output,size,format,encoded,"gpu");
 }
 
@@ -770,18 +772,21 @@ void registerMaterialOps(Workspace& ws) {
         r.set("cacheHit",Json::fromBool(cacheHit));return r;
     });
 
-    add("texture_graph_hdr_material_variant","Create an inherited persistent PBR material referencing an existing linear EXR bake; does not overwrite assets.",R"({"properties":{"textureName":{"type":"string"},"materialName":{"type":"string"},"base":{"type":"string"},"channel":{"enum":["color","emissive"]}},"required":["textureName","materialName","base","channel"]})",[w](const Json& p){
+    add("texture_graph_hdr_material_variant","Create an inherited persistent PBR material referencing an existing linear EXR or BC6H bake; does not overwrite assets.",R"({"properties":{"textureName":{"type":"string"},"materialName":{"type":"string"},"base":{"type":"string"},"channel":{"enum":["color","emissive"]},"format":{"enum":["exr","bc6h","bc6hs"]}},"required":["textureName","materialName","base","channel"]})",[w](const Json& p){
         needProject(*w);
         const auto set=p.getStr("textureName"),name=p.getStr("materialName"),base=p.getStr("base"),channel=p.getStr("channel");
         if(!render::texture_graph::safeId(set)||!render::texture_graph::safeId(name)||!render::texture_graph::safeId(base)||name==base||(channel!="color"&&channel!="emissive"))throw std::invalid_argument("invalid HDR variant arguments");
         const auto root=fs::canonical(w->project.dir);
-        const auto rel="content/textures/"+set+"_radiance.exr";
+        const auto format=p.getStr("format","exr");
+        if(format!="exr"&&format!="bc6h"&&format!="bc6hs")throw std::invalid_argument("Invalid HDR variant format");
+        const auto rel="content/textures/"+set+(format=="exr"?"_radiance.exr":"_radiance_"+format+".dds");
         const auto file=root/rel;
         if(fs::is_symlink(root/"content")||fs::is_symlink(root/"content"/"textures")||fs::is_symlink(file)||!fs::is_regular_file(file)||fs::file_size(file)>32u*1024u*1024u)throw std::runtime_error("missing or invalid HDR bake");
         std::ifstream stream(file,std::ios::binary);
         const std::string bytes((std::istreambuf_iterator<char>(stream)),std::istreambuf_iterator<char>());
         render::RadianceImage hdr;std::string error;
-        if(!render::parseOpenExr(bytes,hdr,error,32u*1024u*1024u))throw std::runtime_error(error);
+        if(format=="exr"){if(!render::parseOpenExr(bytes,hdr,error,32u*1024u*1024u))throw std::runtime_error(error);}
+        else {render::CompressedImage image;if(!render::parseDdsTexture(bytes,image,error)||image.format!=(format=="bc6h"?render::BlockFormat::BC6H_UFloat:render::BlockFormat::BC6H_SFloat)||image.faces!=1||image.arrayLayers!=1||image.depth!=1||image.oneDimensional||image.threeDimensional)throw std::runtime_error("Invalid BC6H variant source: "+error);}
         const auto lib=loadMaterialLibrary(*w);
         if(lib.has(name)||!lib[base].isObject())throw std::runtime_error("variant name exists or base material missing");
         Json material=Json::object();material.set("base",Json::string(base));

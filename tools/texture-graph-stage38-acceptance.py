@@ -70,6 +70,8 @@ def main():
     if args.full:
         tests.update({
             "hdr_texture": "aiverse_hdr_texture_test",
+            "dds_layers": "aiverse_dds_layers_test",
+            "shader_graph": "aiverse_shader_graph_tests",
             "studio_session": "aiverse_studio_session_tests",
             "studio_pbr_adapter": "aiverse_studio_pbr_adapter_tests",
             "studio_material_validation": "aiverse_studio_material_validation_tests",

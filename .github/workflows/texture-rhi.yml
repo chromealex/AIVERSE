@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - feature/texture-rhi-unification
+      - feature/aiv20261124_texture_graph_gpu_slots
     paths:
       - 'engine/gfx/**'
       - 'engine/render/**'
@@ -108,10 +109,15 @@ jobs:
             -DAIVERSE_BUILD_HEADLESS=OFF \
             -DAIVERSE_BUILD_SERVER=OFF \
             -DAIVERSE_BUILD_TOOLS=OFF \
-            -DAIVERSE_VULKAN=ON
+            -DAIVERSE_VULKAN=ON -DAIVERSE_TEXTURE_GRAPH_GPU_TESTS=ON
           # A zero CTest exit can still indicate a SKIPPED GPU scenario.
           grep -Ei 'vulkan_backend|passed|failed|skipped' \
             build/texture-rhi-vulkan/verify-logs/ctest.log || true
+      - name: Build final graph GPU and shader compiler acceptance
+        run: |
+          cmake --build build/texture-rhi-vulkan --parallel 4 --target aiverse_texture_graph_vulkan_gpu_test aiverse_shader_graph_tests aiverse_dds_layers_test aiverse_hdr_texture_test
+          ctest --test-dir build/texture-rhi-vulkan --verbose --output-on-failure --no-tests=error -R '^(texture_graph_vulkan_offscreen|shader_graph|dds_layers|hdr_texture)$' | tee build/texture-rhi-vulkan/verify-logs/hdr-final.log
+          if grep -E 'Skipped|Not Run|Disabled' build/texture-rhi-vulkan/verify-logs/hdr-final.log; then exit 1; fi
       - name: Compile canonical VT GLSL in Vulkan-focused build
         run: |
           command -v glslangValidator
