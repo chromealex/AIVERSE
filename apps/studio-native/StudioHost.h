@@ -250,6 +250,7 @@ private:
     Json wpNumericPreview_;
     std::string wpEcologyLayer_="combined";
     bool wpLiveEcology_=false;
+    int32_t wpGranularCellCm_=0;
     double wpLiveRefresh_=0;
     Json wpLiveSnapshot_;
     std::string wpLivePlanetProject_,wpLivePlanetMapPath_;

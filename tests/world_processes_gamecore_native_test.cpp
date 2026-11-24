@@ -568,6 +568,15 @@ static void checkPlanetProcessGeometry(){
     AIVERSE_TEST_CHECK(aiverse::studio::samplePlanetImprint(ecs,surface,8)["cells"].size()==0);
     const auto capped=aiverse::studio::samplePlanetImprint(ecs,surface,7,0);
     AIVERSE_TEST_CHECK(capped.getBool("truncated")&&capped["cells"].size()==0);
+    const auto grains=aiverse::studio::samplePlanetGranular(ecs,surface,7,1000);
+    AIVERSE_TEST_CHECK(grains.getBool("available")&&grains["cells"].size()==3);
+    AIVERSE_TEST_CHECK(grains["cells"][size_t(0)].getStr("body")=="moon");
+    AIVERSE_TEST_CHECK(grains["cells"][size_t(0)].getInt("mass")==100);
+    AIVERSE_TEST_CHECK(grains["cells"][size_t(0)].getInt("row")==1);
+    AIVERSE_TEST_CHECK(aiverse::studio::samplePlanetGranular(ecs,surface,8,1000)["cells"].size()==0);
+    AIVERSE_TEST_CHECK(!aiverse::studio::samplePlanetGranular(ecs,surface,7,0).getBool("available"));
+    const auto grainCap=aiverse::studio::samplePlanetGranular(ecs,surface,7,1000,1);
+    AIVERSE_TEST_CHECK(grainCap.getBool("truncated")&&grainCap["cells"].size()==1);
 }
 static void checkPlanetGranular(){
     game::Surface surface;

@@ -90,7 +90,7 @@ Json StudioGameSurface::worldProcessDiagnostics(int cap,const std::string& focus
     return worldProcessDiagnostics_.sample(sim?&sim->world():nullptr,
         std::to_string(runtimeEpoch_),sim?sim->tick():0,cap,focus);
 }
-Json StudioGameSurface::ecologyState(){
+Json StudioGameSurface::ecologyState(int32_t granularCellCm){
     Simulation* sim=host_&&host_->inMatch()?host_->simulation():nullptr;
     Json out=Json::object(),regions=Json::array();
     out.set("active",Json::fromBool(sim!=nullptr));
@@ -104,8 +104,11 @@ Json StudioGameSurface::ecologyState(){
             out.set("epoch",Json::string(std::to_string(runtimeEpoch_)));
             for(const char* key:{"regions","plants","weather","logs","soil"})
                 out.set(key,Json::array());
-            if(host_->canControl()&&sim->tick()>0)
+            if(host_->canControl()&&sim->tick()>0){
                 out.set("imprint",samplePlanetImprint(sim->world(),*surface,sim->tick()-1));
+                if(granularCellCm>0)
+                    out.set("granular",samplePlanetGranular(sim->world(),*surface,sim->tick()-1,granularCellCm));
+            }
             return out;
         }
     if(sim){

@@ -309,7 +309,7 @@ void StudioHost::tickGame() {
                  dt, platform_.gameFocused());
     if(wpLiveEcology_ && now-wpLiveRefresh_>=.25){
         wpLiveRefresh_=now;
-        wpLiveSnapshot_=game_->ecologyState();
+        wpLiveSnapshot_=game_->ecologyState(wpGranularCellCm_);
         rebuildOverlay();
     }
 }
@@ -2040,27 +2040,39 @@ bool StudioHost::handleHostMethod(const Json& req) {
         Json out=Json::object();out.set("active",Json::fromBool(false));return out;
     });
     if(method=="studio.evolveState")return answer([&]{
+        // Browser polling can reuse the same completed-tick geometry sampled
+        // for the native Scene. No duplicate heavy GRANULAR query.
+        if(wpLiveEcology_&&wpLiveSnapshot_.getStr("topology")=="planet")return wpLiveSnapshot_;
         if(game_)return game_->ecologyState();
         Json out=Json::object();out.set("active",Json::fromBool(false));
         out.set("regions",Json::array());return out;
     });
     if(method=="studio.evolveLayer")return answer([&]{
-        if(params.has("live")){
-            wpLiveEcology_=params.getBool("live");
-            wpLiveSnapshot_=wpLiveEcology_&&game_?game_->ecologyState():Json();
-            rebuildOverlay();
-        }
         const auto layer=params.getStr("layer");
-        if(!layer.empty()){
-            if(layer!="combined"&&layer!="fertility"&&layer!="pollution"&&
-               layer!="succession"&&layer!="durability"&&layer!="off")
-                throw std::runtime_error("Invalid EVOLVE layer");
-            wpEcologyLayer_=layer;
-            rebuildOverlay();
+        if(!layer.empty()&&layer!="combined"&&layer!="fertility"&&layer!="pollution"&&
+           layer!="succession"&&layer!="durability"&&layer!="off")
+            throw std::runtime_error("Invalid EVOLVE layer");
+        int32_t cellCm=wpGranularCellCm_;
+        if(params.has("granularCellCm")){
+            const auto& v=params["granularCellCm"];
+            const auto n=v.integer(-1);
+            if(!v.isNumber()||n<0||n>10000||(n>0&&n<10)||v.fx()!=Fixed::fromInt(n))
+                throw std::runtime_error("GRANULAR diagnostic cell size must be 0 or integer 10..10000 cm");
+            cellCm=int32_t(n);
         }
+        if(params.has("live")&&params["live"].type()!=Json::Type::Bool)
+            throw std::runtime_error("Live overlay must be boolean");
+        if(!layer.empty())wpEcologyLayer_=layer;
+        if(params.has("live")||params.has("granularCellCm")){
+            wpGranularCellCm_=cellCm;
+            wpLiveEcology_=params.getBool("live",wpLiveEcology_);
+            wpLiveSnapshot_=wpLiveEcology_&&game_?game_->ecologyState(wpGranularCellCm_):Json();
+        }
+        if(!layer.empty()||params.has("live")||params.has("granularCellCm"))rebuildOverlay();
         Json result=Json::object();
         result.set("layer",Json::string(wpEcologyLayer_));
         result.set("live",Json::fromBool(wpLiveEcology_));
+        result.set("granularCellCm",Json::number(int64_t(wpGranularCellCm_)));
         return result;
     });
     if(method=="studio.worldProcessAreaPreview")return answer([&]{
@@ -2402,7 +2414,9 @@ void StudioHost::handleMessage(const std::string& json) {
     try {
         if (handleHostMethod(req)) return;
         const std::string method = req.getStr("method");
-        if (game_ && (method == "studio.openMap" || method == "studio.newMap")) game_->stop();
+        if (game_ && (method == "studio.openMap" || method == "studio.newMap")){
+            game_->stop();wpLiveSnapshot_=Json();wpLivePlanetMapPath_.clear();rebuildOverlay();
+        }
         if (projectLoading_ && method != "studio.viewportRect") { sendError(req["id"], "Project is loading"); return; }
         Json reply;
         if (method == "studio.assetThumbnail" && req["id"].isNumber()) {

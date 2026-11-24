@@ -80,6 +80,11 @@ function EcologyLiveMap({layer}:{layer:EvolveLayer}){
   },[]);
   if(error)return <span role="alert">{error}</span>;
   if(!state?.active)return <small>Live ecology: start Play mode</small>;
+  if(state.topology==='planet')return <div><small>Planetary live snapshot · tick {state.tick}</small>
+    {state.imprint&&<small>IMPRINT: {state.imprint.cells.length} traces{state.imprint.truncated?' · capped':''}</small>}
+    {state.granular&&<small>GRANULAR: {state.granular.cells.length} tops / {state.granular.fieldCount} fields · {state.granular.cellSizeCm} cm diagnostic scale{state.granular.truncated?' · capped':''} · rejected {state.granular.rejected}</small>}
+    <div aria-label="Simulation time controls">{(['pause','resume','step'] as const).map(action=><button key={action} type="button" disabled={controlBusy} onClick={()=>void control(action)}>{action==='step'?'Single tick':action==='pause'?'Pause':'Resume'}</button>)}{controlError&&<span role="alert">{controlError}</span>}</div>
+    <small>Read-only Scene gizmos. Planar ecology map unavailable on planets.</small></div>;
   const regions=state.regions.slice(0,8192);
   if(!regions.length)return <small>No active EVOLVE regions</small>;
   const x=Math.min(...regions.map(r=>r.minXcm)),z=Math.min(...regions.map(r=>r.minZcm));
@@ -125,14 +130,17 @@ function EcologyLiveMap({layer}:{layer:EvolveLayer}){
 export function EcologyLayerPicker(){
   const [layer,setLayer]=useState<EvolveLayer>('combined');
   const [live,setLive]=useState(false);
+  const [granularCellCm,setGranularCellCm]=useState(0);
   const [pending,setPending]=useState(true);
   const [error,setError]=useState('');
-  useEffect(()=>{let active=true;void invoke('studio.evolveLayer',{}).then(r=>{if(active){setLayer(r.layer);setLive(r.live);}}).catch(e=>{if(active)setError(message(e));}).finally(()=>{if(active)setPending(false);});return()=>{active=false;};},[]);
+  useEffect(()=>{let active=true;void invoke('studio.evolveLayer',{}).then(r=>{if(active){setLayer(r.layer);setLive(r.live);setGranularCellCm(r.granularCellCm??0);}}).catch(e=>{if(active)setError(message(e));}).finally(()=>{if(active)setPending(false);});return()=>{active=false;};},[]);
   return <div><label className="ptp__row"><span>EVOLVE (authored)</span><select className="au-input" value={layer} disabled={pending} onChange={e=>{
     const next=e.target.value as EvolveLayer;
     setPending(true);
     void invoke('studio.evolveLayer',{layer:next}).then(r=>{setLayer(r.layer);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));
-  }}>{(['combined','fertility','pollution','succession','durability','off'] as EvolveLayer[]).map(v=><option key={v} value={v}>{v}</option>)}</select>{error&&<span role="alert">{error}</span>}</label><label><input type="checkbox" checked={live} disabled={pending} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{live:e.target.checked}).then(r=>{setLive(r.live);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>Live 3D overlay</label><EcologyLiveMap layer={layer}/><WorldProcessDiagnostics/></div>;
+  }}>{(['combined','fertility','pollution','succession','durability','off'] as EvolveLayer[]).map(v=><option key={v} value={v}>{v}</option>)}</select>{error&&<span role="alert">{error}</span>}</label><label><input type="checkbox" checked={live} disabled={pending} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{live:e.target.checked}).then(r=>{setLive(r.live);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>Live 3D overlay</label><label className="ptp__row"><span>GRANULAR planet diagnostic cell/depth (cm)</span><select className="au-input" disabled={pending||!live} value={granularCellCm} onChange={e=>{
+    setPending(true);void invoke('studio.evolveLayer',{granularCellCm:Number(e.target.value)}).then(r=>{setGranularCellCm(r.granularCellCm??0);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));
+  }}>{Array.from(new Set([0,10,25,50,100,200,500,1000,2000,5000,10000,granularCellCm])).sort((a,b)=>a-b).map(n=><option key={n} value={n}>{n===0?'Off':n}</option>)}</select></label><small>Display scale only; ground-relative tops, no physical geometry changes.</small><EcologyLiveMap layer={layer}/><WorldProcessDiagnostics/></div>;
 }
 export default function SceneBrushBar({ kinds }: { kinds: BrushKind[] }) {
   const [brush, setBrush] = useState<StudioSceneBrush | null>(null);
