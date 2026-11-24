@@ -33,8 +33,7 @@ inline std::unique_ptr<render::Model> makeEarthworksTerrainModel(
         float uvScale=0.05f) {
     if(patch.resolution<2 || patch.resolution>129 ||
        patch.cellSizeMetres<16 || patch.cellSizeMetres>4096 ||
-       patch.collision.size()!=size_t(patch.resolution-1u)*
-                               size_t(patch.resolution-1u)*2u ||
+       !validTerrainPatchTopology(patch) ||
        patch.heightsCm.size()!=size_t(patch.resolution)*patch.resolution ||
        !std::isfinite(uvScale) || uvScale<=0.f || uvScale>16.f)
         throw std::invalid_argument("TerraWeave invalid render patch");
@@ -75,7 +74,7 @@ inline std::unique_ptr<render::Model> makeEarthworksTerrainModel(
     // camera distance, previous LOD or neighboring tile resolution.
     // Four vertices and two triangles, not six duplicated vertices
     // or an unnecessarily subdivided heightfield.
-    const bool flatQuad=patch.resolution==2 &&
+    const bool flatQuad=!patch.clippedSurface&&patch.resolution==2 &&
         patch.heightsCm.size()==4 &&
         std::all_of(patch.heightsCm.begin(),patch.heightsCm.end(),
                     [&](int32_t h){return h==patch.heightsCm.front();});
@@ -153,6 +152,8 @@ class TerrainPatchResident {
 public:
     bool resident() const {return bool(model_);}
     uint64_t revision() const {return revision_;}
+    uint64_t surfaceEpoch()const{return surfaceEpoch_;}
+    const std::vector<RectCm>& surfaceHoles()const{return surfaceHoles_;}
     uint32_t visualResolution() const {return visualResolution_;}
     const std::array<uint32_t,4>& neighborResolution() const {
         return neighborResolution_;
@@ -182,7 +183,7 @@ public:
         if(patch.presentationOnly)
             throw std::invalid_argument("TerraWeave collision patch must be authoritative");
         if(adaptiveVisual &&
-           (!adaptiveVisual->presentationOnly ||
+           (patch.clippedSurface||patch.surfaceEpoch||!adaptiveVisual->presentationOnly ||
             adaptiveVisual->cell!=patch.cell ||
             adaptiveVisual->sourceRevision!=patch.sourceRevision ||
             adaptiveVisual->cellSizeMetres!=patch.cellSizeMetres))
@@ -190,7 +191,7 @@ public:
         // Adaptive geometry can replace model allocations referenced by an
         // earlier GPU frame. Require a REAL completion barrier before
         // proceeding. Never infer GPU completion from a CPU frame count.
-        if(model_ && adaptiveVisual && !device.waitForResourceIdle())
+        if(model_ && (adaptiveVisual||surfaceEpoch_||patch.surfaceEpoch) && !device.waitForResourceIdle())
             return false;
         const TerrainPatch& visual=adaptiveVisual?*adaptiveVisual:patch;
         auto candidate=makeEarthworksTerrainModel(
@@ -205,8 +206,10 @@ public:
         // committing collision. Memory allocation failure must not create
         // geometry/collision revision skew.
         std::vector<TerrainPatchDirtyRegion> nextDirty;
+        std::vector<RectCm> nextHoles;
         try {
             nextDirty=dirty_;
+            nextHoles=patch.surfaceHoles;
             const int64_t x=int64_t(patch.cell.x)*
                             patch.cellSizeMetres*100;
             const int64_t z=int64_t(patch.cell.z)*
@@ -241,6 +244,7 @@ public:
         visualResolution_=visual.resolution;
         neighborResolution_=adaptiveVisual?neighbors:std::array<uint32_t,4>{};
         revision_=patch.sourceRevision;
+        surfaceEpoch_=patch.surfaceEpoch;surfaceHoles_.swap(nextHoles);
         return true;
     }
 
@@ -251,7 +255,7 @@ public:
                        std::array<uint32_t,4> neighbors={},
                        const render::Model* materialSource=nullptr,
                        float uvScale=0.05f) {
-        if(!model_ || !visual.presentationOnly ||
+        if(!model_ || surfaceEpoch_ || !visual.presentationOnly ||
            visual.cell!=cell_ || visual.sourceRevision!=revision_ ||
            visual.cellSizeMetres!=cellSizeMetres_)
             throw std::invalid_argument("TerraWeave visual LOD state mismatch");
@@ -299,10 +303,11 @@ public:
         std::vector<TerrainPatchDirtyRegion> undelivered;
         undelivered.swap(dirty_);
         if(!model_)return undelivered;
+        if(surfaceEpoch_&&!device.waitForResourceIdle())throw std::runtime_error("TerraWeave cut terrain shutdown requires GPU idle");
         collisions.unload(spatial,cell_);
         render::releaseModel(device,*model_);
         model_.reset();
-        revision_=0;
+        revision_=0;surfaceEpoch_=0;surfaceHoles_.clear();
         cellSizeMetres_=0;
         visualResolution_=0;
         neighborResolution_={};
@@ -312,7 +317,8 @@ private:
     std::unique_ptr<render::Model> model_;
     world::Cell cell_{};
     int32_t cellSizeMetres_=0;
-    uint64_t revision_=0;
+    uint64_t revision_=0,surfaceEpoch_=0;
+    std::vector<RectCm> surfaceHoles_;
     uint32_t visualResolution_=0;
     std::array<uint32_t,4> neighborResolution_{};
     std::vector<TerrainPatchDirtyRegion> dirty_;
