@@ -60,7 +60,7 @@ per patch, or the map block "grass": {"meadow": ...}; parse with
 parseGrassMeadow. Species presets: meadowFine, broadBlade, tallDry (panicles),
 timothy (spikes), lawn, clover, wildflower, sedge. Clumps and fields are
 world-anchored (no per-patch tiling); budgets via meadowGrassQuality(GrassTier)
-and grassTriangleBudget. Read docs/terrain/grass-meadow.md before tuning.
+and grassTriangleBudget. Author a map through terraweave_meadow_set with either preset or config; terraweave_meadow_get reads it back. Both operations are in the Studio Terrain panel. Read docs/terrain/grass-meadow.md before tuning.
 
 Use the optional GrassPlacementFilter in CPU generation for water/road exclusions;
 the live GrassPatchRenderer still requires the host to supply suitable patch state.

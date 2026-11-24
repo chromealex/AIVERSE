@@ -25,7 +25,7 @@ The same `"meadow"` value is accepted by every host:
   patches) and per-patch `"meadow"` override; `bladeSegments` (default 4 in
   meadow mode);
 - PHYSIS nature preview (editor): map block `"grass": {"meadow": ...}`, or
-  `view_wind grassMeadow=...`, or the PHYSIS window preset combo. Auto uses legacy grass when the map has no meadow block;
+  `view_wind grassMeadow=...`, or the TerraWeave meadow operation in the Studio Terrain panel. Auto uses legacy grass when the map has no meadow block;
 - C++: `parseGrassMeadow(json)` or `grassMeadowPreset("meadow")`.
 
 ```json

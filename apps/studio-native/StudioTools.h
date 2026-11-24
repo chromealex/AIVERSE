@@ -22,7 +22,7 @@ struct StudioToolGroup { const char* panel; std::vector<const char*> ops; };
 inline const std::vector<StudioToolGroup>& studioToolGroups() {
     static const std::vector<StudioToolGroup> groups = {
         {"terrain", {"map_info", "terrain_sculpt", "terrain_level", "terrain_height", "terrain_heights", "terrain_paint",
-                     "terrain_paint_material", "terrain_material", "terrain_detail", "heightmap_import", "heightmap_export"}},
+                     "terraweave_meadow_get", "terraweave_meadow_set", "terrain_paint_material", "terrain_material", "terrain_detail", "heightmap_import", "heightmap_export"}},
         {"water", {"water_types", "water_network", "water_set", "water_delete", "water_shores", "water_bake", "nereid_water_state"}},
         {"roads", {"road_types", "road_network", "road_add", "road_delete", "road_node_set", "road_edge_set", "road_split",
                    "road_toggle", "road_type_set", "road_stop_set", "road_driveway_set"}},

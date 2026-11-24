@@ -1,6 +1,7 @@
 // TerraWeave opt-in editor/MCP operations. Kept out of the runtime/simulation.
 // Registered alongside existing terrain tools so agents and GUI use one API.
 #pragma once
+#include "engine/world/TerraWeaveGrassSpeciesJson.h"
 #include "apps/editor/core/TerraWeaveMapAdapter.h"
 #include "apps/editor/core/Workspace.h"
 #include "apps/editor/core/TerraWeaveEarthworksOps.h"
@@ -252,6 +253,37 @@ inline void registerTerraWeaveOps(Workspace& ws) {
                 " " + std::to_string(mapWidth) + "x" +
                 std::to_string(mapHeight) +
                 " terrain; undo available"));
+            return result;
+        }});
+    ws.registerOp({"terraweave_meadow_get", "Read the authored grass meadow; null uses the legacy generator.",
+        Json::parse(R"({"properties":{}})"), [w](const Json&) {
+            if (w->project.dir.empty()) throw std::runtime_error("open a game first");
+            Json result = Json::object();
+            result.set("meadow", w->map.data.extra["grass"]["meadow"]);
+            return result;
+        }});
+    ws.registerOp({"terraweave_meadow_set", "Set the map meadow preset or custom species configuration. Undoable.",
+        Json::parse(R"({"properties":{"preset":{"type":"string","enum":["legacy","meadow","lushMeadow","dryMeadow","pasture","lawn","steppe","wetland"]},"config":{"type":"object"}}})"),
+        [w](const Json& params) {
+            if (w->project.dir.empty()) throw std::runtime_error("open a game first");
+            if (params.has("preset") == params.has("config"))
+                throw std::invalid_argument("Choose one preset or provide a custom config");
+            const bool custom = params.has("config");
+            const Json& value = params[custom ? "config" : "preset"];
+            if (custom ? !value.isObject() : !value.isString()) throw std::invalid_argument("Invalid meadow setting");
+            (void)terraweave::parseGrassMeadow(value);
+            Json grass = w->map.data.extra["grass"];
+            if (!grass.isNull() && !grass.isObject()) throw std::invalid_argument("Map grass must be an object");
+            if (!(grass["meadow"] == value)) {
+                if (grass.isNull()) grass = Json::object();
+                grass.set("meadow", value);
+                w->map.beginEdit();
+                w->map.data.extra.set("grass", grass);
+                w->map.touched();
+                w->note({Change::Map,0,0,-1,-1,-1,"TerraWeave meadow"});
+            }
+            Json result = Json::object();
+            result.set("meadow", value);
             return result;
         }});
     ws.registerOp({"terraweave_forest_get",

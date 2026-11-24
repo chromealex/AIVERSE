@@ -362,7 +362,7 @@ private:
 
     // Resolves settings.grassMeadow (+ the map's "grass".meadow block) into a
     // renderer quality. Parse errors fall back to legacy grass with a status.
-    terraweave::GrassRenderQuality grassQuality(const MapDoc& doc) {
+    const terraweave::GrassRenderQuality& grassQuality(const MapDoc& doc) {
         std::string source = settings.grassMeadow;
         if (source.empty() || source == "auto") {
             const Json& authored = doc.data.extra["grass"]["meadow"];
@@ -402,7 +402,7 @@ private:
     void drawGrass(gfx::Device& device, render::Renderer3D& renderer, const MapDoc& doc,
                    float cx, float cz, const HeightAt& heightAt, double timeSeconds) {
         static constexpr std::int64_t kPatchCm = 1200;
-        const terraweave::GrassRenderQuality q = grassQuality(doc);
+        const auto& q = grassQuality(doc);
         if (!sameGrassQuality_ || grassQualityKey_ != appliedGrassQualityKey_) {
             grass_.setQuality(q);
             appliedGrassQualityKey_ = grassQualityKey_;
