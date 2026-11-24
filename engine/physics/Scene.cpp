@@ -554,11 +554,14 @@ BodyHandle Scene::createCharacter(const CharacterParams& p, b3Vec3 feet, uint32_
     return h;
 }
 
-bool Scene::moveCharacter(BodyHandle h, const CharacterState& st, bool teleport) {
-    auto* s = slot(h);
-    if (!s || s->motion != Motion::Kinematic || !finite(st.position, kMaxCoord)) return false;
-    if (teleport) { b3Body_SetTransform(s->id, st.position, b3Quat_identity); b3Body_SetLinearVelocity(s->id, {0, 0, 0}); }
-    else b3Body_SetTargetTransform(s->id, b3WorldTransform{st.position, b3Quat_identity}, dt(), true);
+bool Scene::moveCharacter(BodyHandle h,const CharacterState& st,bool teleport){
+    return moveCharacterOriented(h,st,b3Quat_identity,teleport);
+}
+bool Scene::moveCharacterOriented(BodyHandle h,const CharacterState& st,b3Quat localToWorld,bool teleport){
+    auto* s=slot(h);
+    if(!s||s->motion!=Motion::Kinematic||!finite(st.position,kMaxCoord)||!b3IsValidQuat(localToWorld))return false;
+    if(teleport){b3Body_SetTransform(s->id,st.position,localToWorld);b3Body_SetLinearVelocity(s->id,{0,0,0});}
+    else b3Body_SetTargetTransform(s->id,b3WorldTransform{st.position,localToWorld},dt(),true);
     return true;
 }
 

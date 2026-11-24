@@ -8,6 +8,7 @@
 #include "../EditorUtil.h"
 #include "../core/PlanetOps.h"
 #include "../core/TerrainOps.h"
+#include "engine/world/TerraWeaveCavernsRaycast.h"
 
 namespace aiverse::editor {
 
@@ -124,8 +125,9 @@ public:
 
         if (!ed.planetMap()) {
             ui::section(ICON_TERRAIN, "TerraWeave · открытый мир / Sparse");
-            if(ui::checkbox("Кисть с автоматическим созданием чанков", &sparse_) &&
-               sparse_)setActive(ed,true);
+            if(ui::checkbox("Кисть с автоматическим созданием чанков", &sparse_) && sparse_) {
+                caverns_=false;setActive(ed,true);
+            }
             ui::hint("Можно нажимать за пределами старой карты. Созданные чанки и высоты сохраняются в map.terraweaveSparse, доступны агентам и Undo.");
             if(sparse_) {
                 static const char* sparseActions[] = {
@@ -154,9 +156,74 @@ public:
             }
         }
 
+        if (!ed.planetMap()) {
+            ui::section(ICON_TERRAIN, "TerraWeave · Caverns / SDF");
+            if(ui::checkbox("Кисть пещер в 3D-сцене", &caverns_)) {
+                if(caverns_) { sparse_=false;setActive(ed,true); }
+            }
+            if(caverns_) {
+                static const char* caveModes[]={"Вырезать (Carve)","Заполнить (Fill)"};
+                ImGui::Combo("Операция##caverns", &caveAction_, caveModes,2);
+                ImGui::SliderInt("Радиус (см)##caverns", &caveRadiusCm_,50,10000);
+                ImGui::SliderInt("Глубина под плоскостью сцены (см)##caverns",
+                                 &caveDepthCm_,0,50000);
+                ui::hint("ЛКМ: пересечение луча камеры с поверхностью SDF пещеры; "
+                         "если попадания нет, кисть не рисует. Shift меняет Carve ↔ Fill. "
+                         "Undo/Redo и сохранение через MapDoc.");
+                if(caveCacheIndex_ && caveHoverValid_) {
+                    const auto count=caveCacheIndex_->candidates(caveHoverCm_);
+                    const auto totals=caveCacheIndex_->snapshot().stamps.size();
+                    const auto totalEntrances=caveCacheIndex_->snapshot().entrances.size();
+                    ui::hint(("SDF spatial index: Carve/Fill кандидатов "+
+                        std::to_string(count.stamps)+"/"+std::to_string(totals)+
+                        ", входов "+std::to_string(count.entrances)+"/"+
+                        std::to_string(totalEntrances)).c_str());
+                }
+                ui::hint(caveHoverValid_ ? ("Курсор: "+std::to_string(caveHoverCm_.x)+", "+
+                    std::to_string(caveHoverCm_.y)+", "+std::to_string(caveHoverCm_.z)+" см").c_str():
+                    "Курсор: поверхность пещеры не найдена");
+                const Json& saved=ed.doc().data.extra["terraweaveCaverns"];
+                ui::hint(("SDF-операций: "+std::to_string(saved["stamps"].size())).c_str());
+                const auto& jobs=ed.cavernsBuildStats;
+                ui::hint(("CPU mesh: ожидание "+std::to_string(jobs.pending)+
+                          ", готово "+std::to_string(jobs.prepared)+
+                          ", выполняется "+std::to_string(jobs.inFlight)).c_str());
+                ImGui::Checkbox("3D GPU-предпросмотр пещер (только визуально)##caverns",
+                                &ed.cavernsVisualPreviewEnabled);
+                ui::hint("Предпросмотр GPU рисует GeometryScene без STRATA. "
+                         "Box3D, SpatialWorld и NavMesh НЕ изменяются; "
+                         "в игре правки пока не опубликованы.");
+                ui::hint(("GPU preview: активных групп "+std::to_string(jobs.gpuActive)+
+                          ", подготовлено "+std::to_string(jobs.gpuStaged)+
+                          ", осталось загрузить "+std::to_string(jobs.gpuRemaining)+
+                          ", ожидают GPU idle "+std::to_string(jobs.gpuRetired)).c_str());
+                ui::hint(("GPU revision "+std::to_string(jobs.gpuPreviewRevision)+
+                          ", failures "+std::to_string(jobs.gpuUploadFailures)+
+                          ", retry frame "+std::to_string(jobs.gpuRetryAfterFrame)).c_str());
+                ui::hint(("GPU frame source bytes "+std::to_string(jobs.gpuFrameBytes)+
+                          ", upload rejections "+std::to_string(jobs.gpuRejectedBytes)+
+                          ", owner pressure "+std::to_string(jobs.gpuRejectedPressure)+
+                          ", STRATA idle pending "+std::to_string(jobs.gpuRetainedStrata)).c_str());
+                if(!jobs.diagnostic.empty())
+                    ui::hint(("Caverns: "+jobs.diagnostic).c_str());
+                if(ui::wideButton(ICON_TERRAIN,"Штамп в центре камеры",0,1)){
+                    Json p=Json::object();
+                    p.set("mode",Json::string(caveAction_==0?"carve":"fill"));
+                    p.set("xCm",Json::number(int64_t(std::llround(double(ed.sceneCam.target.x)*100.))));
+                    p.set("yCm",Json::number(int64_t(std::llround(double(ed.sceneCam.target.y)*100.))-caveDepthCm_));
+                    p.set("zCm",Json::number(int64_t(std::llround(double(ed.sceneCam.target.z)*100.))));
+                    p.set("radiusCm",Json::number(int64_t(caveRadiusCm_)));
+                    report(ed,ed.ws().call("terraweave_caverns_paint",p));
+                }
+            }
+        }
+
         bool active = ed.tool == Tool::Count && owner_;
         ImGui::PushStyleColor(ImGuiCol_Text, active ? ui::toneColor(ui::Tone::Accent) : ImGui::GetStyle().Colors[ImGuiCol_Text]);
-        if (ui::checkbox(ICON_BRUSH "  Кисть рельефа в «Сцене»", &active)) setActive(ed, active);
+        if (ui::checkbox(ICON_BRUSH "  Кисть рельефа в «Сцене»", &active)) {
+            if(active){caverns_=false;sparse_=false;}
+            setActive(ed, active);
+        }
         ImGui::PopStyleColor();
         if (!ed.planetMap()) {
             ui::checkbox("Детальная карта высот", &detail_);
@@ -234,13 +301,80 @@ public:
 
     void update(Editor& ed, double) override {
         if (ed.tool != Tool::Count) owner_ = false;
-        if (!owner_ || ed.playing() || !ed.sceneVisible()) { painting_ = false; return; }
+        if (!owner_ || ed.playing() || !ed.sceneVisible()) {
+            painting_ = false;
+            ed.cavernsBrushPreview.visible=false;
+            return;
+        }
         ImGuiIO& io = ImGui::GetIO();
         Viewport& vp = *ed.sceneViewport;
+        if(caverns_ && vp.hovered) {
+            render::float3 origin{},direction{};
+            caveHoverValid_=false;
+            if(ed.sceneCam.screenRay(io.MousePos.x-vp.originX,io.MousePos.y-vp.originY,
+                                     vp.pointsW,vp.pointsH,origin,direction)) {
+                const auto& saved=ed.doc().data.extra["terraweaveCaverns"];
+                try {
+                    if(!caveCacheValid_ || saved!=caveCacheJson_) {
+                        auto snapshot=std::make_shared<terraweave::caverns::CaveVolumeSnapshot>(
+                            terraweave::caverns::caveSnapshotFromJson(saved));
+                        auto index=std::make_shared<const terraweave::caverns::CaveSnapshotSpatialIndex>(
+                            snapshot);
+                        caveCacheJson_=saved;
+                        caveCacheIndex_=std::move(index);
+                        caveCacheValid_=true;
+                    }
+                    const auto& index=*caveCacheIndex_;
+                    constexpr double scale=double(1<<20);
+                    const double dlen=std::sqrt(double(direction.x)*direction.x+
+                        double(direction.y)*direction.y+double(direction.z)*direction.z);
+                    if(dlen>0.00001) {
+                        terraweave::caverns::CaveRayCm ray;
+                        ray.origin={int64_t(std::llround(double(origin.x)*100.)),
+                                    int64_t(std::llround(double(origin.y)*100.)),
+                                    int64_t(std::llround(double(origin.z)*100.))};
+                        ray.dxQ20=int32_t(std::llround(double(direction.x)/dlen*scale));
+                        ray.dyQ20=int32_t(std::llround(double(direction.y)/dlen*scale));
+                        ray.dzQ20=int32_t(std::llround(double(direction.z)/dlen*scale));
+                        auto hit=terraweave::caverns::raycastCaveSurface(index,ray,50000,100);
+                        if(hit){caveHoverCm_=hit->point;caveHoverValid_=true;}
+                    }
+                }catch(const std::exception&){}
+            }
+        }else caveHoverValid_=false;
+        ed.cavernsBrushPreview.visible=caverns_ && caveHoverValid_;
+        if(ed.cavernsBrushPreview.visible){
+            ed.cavernsBrushPreview.position={float(double(caveHoverCm_.x)/100.),
+                float(double(caveHoverCm_.y)/100.),float(double(caveHoverCm_.z)/100.)};
+            ed.cavernsBrushPreview.radiusMetres=float(caveRadiusCm_)*.01f;
+            ed.cavernsBrushPreview.fill=(io.KeyShift?1-caveAction_:caveAction_)==1;
+        }
         if (!io.MouseDown[0]) { painting_ = false; stamped_ = false; return; }
         if (stamped_) return;
         if (!painting_ && !(io.MouseClicked[0] && vp.hovered)) return;
         if (ed.planetMap()) { planetStroke(ed, vp, io); return; }
+        if(caverns_) {
+            if(!caveHoverValid_)return;
+            const double x=double(caveHoverCm_.x)/100.;
+            const double z=double(caveHoverCm_.z)/100.;
+            const double now=ed.time();
+            if(painting_ && std::hypot(x-lastX_,z-lastZ_)<
+                double(caveRadiusCm_)*0.0025 && now-lastT_<0.033)return;
+            const int action=io.KeyShift?1-caveAction_:caveAction_;
+            Json p=Json::object();
+            p.set("mode",Json::string(action==0?"carve":"fill"));
+            p.set("xCm",Json::number(caveHoverCm_.x));
+            p.set("yCm",Json::number(caveHoverCm_.y));
+            p.set("zCm",Json::number(caveHoverCm_.z));
+            p.set("radiusCm",Json::number(int64_t(caveRadiusCm_)));
+            p.set("withinStroke",Json::fromBool(painting_));
+            const Json result=ed.ws().call("terraweave_caverns_paint",p);
+            report(ed,result);
+            if(!result.has("error")){
+                painting_=true;lastX_=float(x);lastZ_=float(z);lastT_=now;
+            }
+            return;
+        }
         float x, z;
         if (!ed.groundAt(vp, ed.sceneCam, io.MousePos.x, io.MousePos.y, x, z)) return;
         if(sparse_) {
@@ -363,6 +497,12 @@ private:
     int mode_ = 0, layer_ = 0, stamp_ = 0;
     // Shared Workspace sparse authoring API, independent of RTS/FPS map sizes.
     bool sparse_=false;
+    bool caverns_=false, caveHoverValid_=false;
+    terraweave::caverns::PointCm caveHoverCm_{};
+    Json caveCacheJson_{};
+    std::shared_ptr<const terraweave::caverns::CaveSnapshotSpatialIndex> caveCacheIndex_;
+    bool caveCacheValid_=false;
+    int caveAction_=0,caveRadiusCm_=400,caveDepthCm_=1000;
     int sparseAction_=0,sparseChunkMetres_=256;
     float radius_ = 4, strength_ = 0.5f, blend_ = 0.5f, target_ = 0, scale_ = 8, offset_ = 0, hardness_ = 0.2f, angle_ = 0;
     bool detail_ = true, pngDetail_ = false, stamped_ = false;

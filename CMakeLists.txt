@@ -258,6 +258,10 @@ if(AIVERSE_ENABLE_PHYSICS)
     add_subdirectory(engine/physics)
 endif()
 add_subdirectory(engine/meta)
+# Small, portable Caverns CPU tests, independent of optional Box3D/RHI.
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
+    add_subdirectory(tests/caverns)
+endif()
 
 # The one gameplay host: grid systems (units, orders, economy, combat, garrisons, AI) and, on world-space maps, actor systems
 add_library(aiverse_game STATIC
@@ -2854,6 +2858,12 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
     add_executable(aiverse_ecs_native_persistence_test tests/ecs_native_persistence_test.cpp)
     target_link_libraries(aiverse_ecs_native_persistence_test PRIVATE aiverse_engine)
     add_test(NAME ecs_native_persistence_test COMMAND aiverse_ecs_native_persistence_test)
+    add_executable(aiverse_terraweave_caverns_planet_authority_test
+        tests/terraweave_caverns_planet_authority_test.cpp)
+    target_link_libraries(aiverse_terraweave_caverns_planet_authority_test PRIVATE aiverse_game aiverse_world)
+    add_test(NAME terraweave_caverns_planet_authority
+        COMMAND aiverse_terraweave_caverns_planet_authority_test)
+    set_tests_properties(terraweave_caverns_planet_authority PROPERTIES LABELS "TerraWeave;Caverns;ECS;CPU")
     add_executable(aiverse_ecs_cross_genre_timed_mechanics_test
         tests/ecs_cross_genre_timed_mechanics_test.cpp)
     target_link_libraries(aiverse_ecs_cross_genre_timed_mechanics_test PRIVATE
@@ -3244,6 +3254,11 @@ endif()
 # Optional standalone physics example; normal RTS/FPS clients do not create a physics world.
 if(AIVERSE_ENABLE_PHYSICS)
     option(AIVERSE_BUILD_PHYSICS_DEMO "Build the interactive Box3D sandbox" ${AIVERSE_DESKTOP})
+    option(AIVERSE_BUILD_CAVERNS_PLANET_DEMO "Build the optional native planetary Caverns chamber" OFF)
+    option(AIVERSE_CAVERNS_PLANET_DEMO_SMOKE "Register graphical Caverns scenario tests (requires display)" OFF)
+    if(AIVERSE_CAVERNS_PLANET_DEMO_SMOKE AND (NOT AIVERSE_BUILD_CAVERNS_PLANET_DEMO OR NOT AIVERSE_DESKTOP OR NOT AIVERSE_BUILD_TESTS))
+        message(FATAL_ERROR "Caverns demo smoke requires desktop demo and tests")
+    endif()
     if(AIVERSE_BUILD_TESTS)
         add_executable(aiverse_physics_tests tests/physics/tests.cpp)
         target_link_libraries(aiverse_physics_tests PRIVATE AIVERSE::physics)
@@ -3254,6 +3269,30 @@ if(AIVERSE_ENABLE_PHYSICS)
             target_compile_options(aiverse_physics_scene_tests PRIVATE -Wall -Wextra)
         endif()
         add_test(NAME physics_scene COMMAND aiverse_physics_scene_tests ${PROJECT_SOURCE_DIR}/examples/physics/scene.json)
+        add_executable(aiverse_terraweave_caverns_planet_collision_test
+            tests/terraweave_caverns_planet_collision_test.cpp)
+        target_link_libraries(aiverse_terraweave_caverns_planet_collision_test PRIVATE
+            aiverse_game_view aiverse_models aiverse_world AIVERSE::physics)
+        add_test(NAME terraweave_caverns_planet_collision
+            COMMAND aiverse_terraweave_caverns_planet_collision_test)
+        set_tests_properties(terraweave_caverns_planet_collision PROPERTIES
+            LABELS "TerraWeave;Caverns;PHYSICS")
+    endif()
+    if(AIVERSE_BUILD_CAVERNS_PLANET_DEMO AND AIVERSE_DESKTOP)
+        add_executable(aiverse_caverns_planet_demo examples/world/terraweave_native/PlanetCavernsDemo.cpp $<TARGET_OBJECTS:aiverse_runtime>)
+        target_link_libraries(aiverse_caverns_planet_demo PRIVATE aiverse_runtime aiverse_game_view aiverse_models aiverse_world AIVERSE::physics)
+        if(AIVERSE_CAVERNS_PLANET_DEMO_SMOKE)
+            find_package(Python3 COMPONENTS Interpreter REQUIRED)
+            foreach(scenario IN ITEMS chamber portal swim moving_restore portal_restore swim_restore)
+                add_test(NAME terraweave_caverns_demo_${scenario}
+                    COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/caverns/native_demo_smoke.py"
+                        "$<TARGET_FILE:aiverse_caverns_planet_demo>" "${scenario}"
+                        "${CMAKE_BINARY_DIR}/caverns-demo-reports")
+                set_tests_properties(terraweave_caverns_demo_${scenario} PROPERTIES
+                    LABELS "TerraWeave;Caverns;PHYSICS;Renderer3D;NativeDemo"
+                    TIMEOUT 900 RESOURCE_LOCK caverns_native_display)
+            endforeach()
+        endif()
     endif()
     if(AIVERSE_BUILD_PHYSICS_DEMO AND AIVERSE_DESKTOP)
         add_executable(aiverse_physics_demo examples/physics/main.cpp $<TARGET_OBJECTS:aiverse_runtime>)
@@ -5511,4 +5550,9 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
     target_include_directories(aiverse_texture_graph_materialized_dispatch_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_compile_features(aiverse_texture_graph_materialized_dispatch_tests PRIVATE cxx_std_20)
     add_test(NAME texture_graph_materialized_dispatch COMMAND aiverse_texture_graph_materialized_dispatch_tests)
+endif()
+
+# Stage55: full native Caverns fixtures use the same CTest entry point.
+if(AIVERSE_BUILD_TESTS AND AIVERSE_DESKTOP AND NOT EMSCRIPTEN)
+    include(tests/caverns/IntegrationTests.cmake)
 endif()

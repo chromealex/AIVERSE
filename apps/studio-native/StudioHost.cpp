@@ -1110,6 +1110,29 @@ void StudioHost::importDroppedFiles(const std::vector<fs::path>& files, const st
 // LMB select (drag: marquee), Alt+LMB orbit, Alt+Command+LMB / MMB pan, RMB flythrough (WASD/QE), Alt+RMB zoom.
 void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx, double dy, double w, double h, StudioSceneMods mods) {
     auto& m = mouse_;
+    if(preview_&&onScene([&]{return preview_->caveGlobeRequested();})){
+        // Globe coordinates are never passed to flat entity/terrain tools.
+        if(button==1){if(phase==1){if(mods.alt)zoom((dx+dy)*.6);else orbit(dx,dy);}return;}
+        if(button!=0)return;
+        if(phase==0){m={};m.active=true;m.pressX=x;m.pressY=y;return;}
+        if(phase==1){
+            if(m.active&&(m.dragged||std::hypot(x-m.pressX,y-m.pressY)>=5.)){
+                m.dragged=true;orbit(dx,dy);
+            }
+            return;
+        }
+        const auto st=m;m={};
+        if(st.active&&!st.dragged&&!mods.alt&&std::hypot(x-st.pressX,y-st.pressY)<5.){
+            const auto& ws=session_->workspace();
+            auto hit=onScene([&]{return preview_->pickCaveGlobe(float(x),float(y),float(w),float(h),ws.map,ws.project.dir);});
+            if(hit.getBool("hit",false)){
+                hit.set("project",Json::string(ws.project.dir));
+                hit.set("map",Json::string(ws.map.path.empty()?"":ws.relative(ws.map.path)));
+                sendEventPayload("caverns.globePicked",hit);
+            }
+        }
+        return;
+    }
     if (button == 1) { // right: look, Alt zooms
         if (phase == 1) { if (mods.alt) zoom((dx + dy) * 0.6); else look(dx, dy); }
         return;
@@ -1826,6 +1849,24 @@ void StudioHost::handleMessage(const std::string& json) {
             reply.set("id", req["id"]);
             try { reply.set("result", assetThumbnail(req["params"].getStr("path"))); }
             catch (const std::exception& e) { reply.set("error", Json::string(e.what())); }
+        } else if (method == "studio.cavernsPreview" && req["id"].isNumber()) {
+            const auto& ws=session_->workspace();const auto& params=req["params"];
+            if(ws.project.dir.empty()||params.getStr("expectedProject")!=ws.project.dir||
+               !params["expectedMap"].isString()||params.getStr("expectedMap")!=(ws.map.path.empty()?"":ws.relative(ws.map.path)))
+                throw std::runtime_error("Caverns preview project/map changed");
+            if(!preview_)throw std::runtime_error("Open the native Scene panel first");
+            reply=Json::object();reply.set("id",req["id"]);
+            if(params.has("globeBody")){
+                if(!params["globeBody"].isString())throw std::runtime_error("Caverns globe body must be text");
+                const auto body=params.getStr("globeBody");
+                if(!body.empty()){
+                    if(session_->sceneBrush().armed)throw std::runtime_error("Disarm the Scene brush before entering globe mode");
+                    editor::planet_caves::validateAnchor(ws.map.data,{body,0,{}, {},100});
+                }
+                onScene([&]{preview_->setCaveGlobe(body,ws.project.dir,ws.map.path);});
+                mouse_={};
+            }
+            reply.set("result",onScene([&]{return preview_->cavernsPreview(params);}));
         } else if (method == "studio.gpuStats" && req["id"].isNumber()) {
             // Frame Capture / Texture Resources: Scene frame history (CPU frame time, draw calls) and live GPU textures.
             reply = Json::object();

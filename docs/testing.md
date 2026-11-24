@@ -85,3 +85,7 @@ The `--no-build` mode rejects an existing non-Debug CMake cache. After
 updating the runner, execute `./run-tests.sh` once to reconfigure
 `build/all-tests` as Debug and rebuild its test binaries. Benchmark
 timing should be measured in separate optimized builds.
+
+## Caverns Stage55 acceptance (Mac)
+
+Box3D is optional and defaults OFF: a normal green run may omit its tests. Preconfigure the dedicated KINGSTON build with `-DAIVERSE_ENABLE_PHYSICS=ON` and Studio enabled, then run the existing unified runner against that same build directory. The runner preserves these CMake cache options. Use `--quick` for the required full CTest gate; inspect the inventory for both planetary authority and collision tests, and do not treat skipped GPU tests or the CPU renderer fixtures as live GPU/GI acceptance. Use Node 22 for Studio web checks. See `docs/agent-handoffs/caverns-stage55a-2026-11-24.md` for the exact gate and missing evidence.

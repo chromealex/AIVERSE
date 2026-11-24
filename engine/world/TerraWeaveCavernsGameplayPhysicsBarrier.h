@@ -1,0 +1,157 @@
+#pragma once
+// TerraWeave Caverns Stage35: restricted game-world physics publication.
+// Invoke inside CaveGameplayEditHost::commitAtOwnerBarrier while all
+// simulation, SpatialWorld, NavMesh and render readers are EXCLUSIVE/PAUSED.
+// New body creation mutates live Box3D. Candidate insertion is rollbackable;
+// final old-body destruction is NOT rollbackable if the native API fails.
+#include "engine/world/TerraWeaveCavernsGameplayEditHost.h"
+#include <cstdint>
+#include <functional>
+#include <vector>
+#include <span>
+#include <set>
+
+namespace aiverse::terraweave::caverns {
+enum class CavePhysicsCommitPhase:uint8_t {
+    Idle,Preflight,Installing,Retiring,Complete,RecoveryRequired
+};
+struct CavePhysicsCommitStatus {
+    CavePhysicsCommitPhase phase=CavePhysicsCommitPhase::Idle;
+    uint64_t revision=0;
+    size_t installedPairs=0;
+    bool recoveryRequired=false;
+};
+class CaveGameplayPhysicsBarrier {
+    struct Pair {
+        CaveSpatialShadow* spatial=nullptr;
+        CaveBox3DShadow* box=nullptr;
+    };
+public:
+    using ExclusiveProof=std::function<bool()>;
+    const CavePhysicsCommitStatus& status()const noexcept{return status_;}
+    // The outer GPU/catalog owner may fail after physics finalized. Stop the
+    // world rather than continuing with an inconsistent publication epoch.
+    void requireRecovery()noexcept {
+        status_.phase=CavePhysicsCommitPhase::RecoveryRequired;
+        status_.recoveryRequired=true;
+    }
+    // The exclusive predicate must reflect actual host-side exclusion, not
+    // merely an animation frame counter. Exclusive lock must outlive this
+    // function and the subsequent GPU shard activation.
+    bool apply(const CaveGameplayCommitView& view,
+               physics::Scene& boxScene,world::SpatialWorld& spatial,
+               const ExclusiveProof& exclusive) {
+        if(status_.recoveryRequired||!exclusive||!exclusive()||
+           !view.snapshot.sourceRevision||view.meshes.empty())return false;
+        const uint64_t revision=view.snapshot.sourceRevision;
+        status_={CavePhysicsCommitPhase::Preflight,revision,0,false};
+        if(!view.navigation.staged(revision))return false;
+        std::vector<Pair> owners;
+        owners.reserve(view.meshes.size());
+        for(const auto& item:view.meshes) {
+            if(item.candidate.sourceRevision!=revision||
+               item.dirty.sourceRevision!=revision)return false;
+            const auto it=view.physics.find(item.dirty.key);
+            if(it==view.physics.end()||!it->second||
+               !it->second->prepared(revision))return false;
+            owners.push_back({&it->second->spatialOwner(),
+                              &it->second->boxOwner()});
+        }
+        return applyPairs(owners,revision,boxScene,spatial,exclusive,
+            [&](uint64_t rev){return view.navigation.commit(rev);});
+    }
+    // Shared native barrier for non-flat region owners. The nav callback
+    // commits the already prepared existing navigation owner, not a dummy ACK.
+    bool applyPrepared(std::span<CaveVolumePhysicsStage* const> stages,uint64_t revision,
+            physics::Scene& boxScene,world::SpatialWorld& spatial,
+            const ExclusiveProof& exclusive,const std::function<bool(uint64_t)>& finalizeNavigation){
+        if(status_.recoveryRequired||!revision||stages.empty()||!exclusive||!exclusive()||!finalizeNavigation)return false;
+        status_={CavePhysicsCommitPhase::Preflight,revision,0,false};
+        std::vector<Pair> owners;owners.reserve(stages.size());
+        std::set<CaveVolumePhysicsStage*> unique;
+        for(auto* stage:stages){
+            if(!stage||!unique.insert(stage).second||!stage->prepared(revision))return false;
+            owners.push_back({&stage->spatialOwner(),&stage->boxOwner()});
+        }
+        return applyPairs(owners,revision,boxScene,spatial,exclusive,finalizeNavigation);
+    }
+private:
+    bool applyPairs(const std::vector<Pair>& owners,uint64_t revision,
+            physics::Scene& boxScene,world::SpatialWorld& spatial,
+            const ExclusiveProof& exclusive,const std::function<bool(uint64_t)>& finalizeNavigation){
+        status_.phase=CavePhysicsCommitPhase::Installing;
+        std::vector<Pair> installed;
+        installed.reserve(owners.size());
+        try {
+        for(const auto owner:owners) {
+            if(!exclusive()){requireRecovery();return false;}
+            if(!owner.spatial->installCandidate(spatial,revision)) {
+                if(!exclusive()){requireRecovery();return false;}
+                rollback(installed,spatial,boxScene,revision);
+                return false;
+            }
+            installed.push_back(owner);
+            if(!exclusive()){requireRecovery();return false;}
+            if(!owner.box->installCandidate(boxScene,revision)) {
+                if(!exclusive()){requireRecovery();return false;}
+                rollback(installed,spatial,boxScene,revision);
+                return false;
+            }
+            ++status_.installedPairs;
+        }
+        }catch(...){
+            // An exception may originate inside a native insertion before
+            // its candidate-installed flag is set. Roll back known leases,
+            // then quarantine rather than assuming the unknown call was clean.
+            try{if(exclusive())rollback(installed,spatial,boxScene,revision);}catch(...){}
+            requireRecovery();throw;
+        }
+        if(!exclusive()){
+            requireRecovery();return false;
+        }
+        // Irreversible section. Real host must be able to enter explicit
+        // recovery when Scene::destroy fails. A false return here MUST NOT
+        // be followed by more sim steps with inconsistent scene epochs.
+        status_.phase=CavePhysicsCommitPhase::Retiring;
+        for(const auto owner:installed) {
+            if(!exclusive()||!owner.box->finalizeInstalled(boxScene,revision)) {
+                status_.phase=CavePhysicsCommitPhase::RecoveryRequired;
+                status_.recoveryRequired=true;
+                return false;
+            }
+        }
+        for(const auto owner:installed) {
+            if(!exclusive()||!owner.spatial->finalizeInstalled(spatial,revision)) {
+                status_.phase=CavePhysicsCommitPhase::RecoveryRequired;
+                status_.recoveryRequired=true;
+                return false;
+            }
+        }
+        if(!exclusive()||!finalizeNavigation(revision)) {
+            status_.phase=CavePhysicsCommitPhase::RecoveryRequired;
+            status_.recoveryRequired=true;
+            return false;
+        }
+        status_.phase=CavePhysicsCommitPhase::Complete;
+        return true;
+    }
+    void rollback(const std::vector<Pair>& installed,
+                  world::SpatialWorld& spatial,physics::Scene& boxScene,
+                  uint64_t revision) {
+        bool okay=true;
+        for(auto it=installed.rbegin();it!=installed.rend();++it) {
+            // Box first: if a new body was created, release it while reader
+            // barrier remains closed. Existing active bodies remain intact.
+            if(it->box->candidateInstalled() &&
+               !it->box->revertCandidate(boxScene,revision))okay=false;
+            if(it->spatial->candidateInstalled() &&
+               !it->spatial->revertCandidate(spatial,revision))okay=false;
+        }
+        if(!okay) {
+            status_.phase=CavePhysicsCommitPhase::RecoveryRequired;
+            status_.recoveryRequired=true;
+        } else status_.phase=CavePhysicsCommitPhase::Preflight;
+    }
+    CavePhysicsCommitStatus status_{};
+};
+} // namespace aiverse::terraweave::caverns
