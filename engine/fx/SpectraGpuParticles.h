@@ -72,6 +72,15 @@ struct VolumetricParticleMaterial {
     render::float3 axes{1,1,1}; // radii relative to particle half-size
     float noiseFrequency=3,noiseStrength=0;
     uint32_t noiseOctaves=3;
+    bool adaptiveLod=true;
+    uint32_t minimumSteps=4;
+    float lodSmallPixels=8,lodFullPixels=96;
+    float boundScale()const{
+        const float m=std::max(axes.x,std::max(axes.y,axes.z));
+        if(shape==VolumetricParticleShape::Box)return std::sqrt(axes.x*axes.x+axes.y*axes.y+axes.z*axes.z);
+        if(shape==VolumetricParticleShape::Capsule)return m+axes.y;
+        return m;
+    }
     bool sortBackToFront=true; // per-emitter centre-depth ordering, not exact OIT
     bool depthAware=false; // requires detached current-frame depth texture at draw
     uint32_t shadowSteps=4; // 0 disables self-shadowing
@@ -80,7 +89,8 @@ struct VolumetricParticleMaterial {
     std::shared_ptr<const ParticleVolumeTexture> texture;
     bool valid()const{
         return std::isfinite(density)&&density>=0&&density<=100&&
-            std::isfinite(emission)&&emission>=0&&emission<=16&&steps>=4&&steps<=32&&uint32_t(shape)<=3&&
+            std::isfinite(emission)&&emission>=0&&emission<=16&&steps>=4&&steps<=32&&minimumSteps>=4&&minimumSteps<=steps&&
+            std::isfinite(lodSmallPixels)&&std::isfinite(lodFullPixels)&&lodSmallPixels>=1&&lodFullPixels>lodSmallPixels&&lodFullPixels<=4096&&uint32_t(shape)<=3&&
             std::isfinite(axes.x)&&std::isfinite(axes.y)&&std::isfinite(axes.z)&&
             axes.x>=.1f&&axes.x<=4&&axes.y>=.1f&&axes.y<=4&&axes.z>=.1f&&axes.z<=4&&
             (shape!=VolumetricParticleShape::Sphere||(axes.x==1&&axes.y==1&&axes.z==1))&&
@@ -353,8 +363,8 @@ private:
     static_assert(sizeof(Vertex)==40);
     static_assert(sizeof(Uniforms)==352);
     static_assert(sizeof(DrawUniforms)==144);
-    struct VolumeDrawUniforms {DrawUniforms base;render::float4 lightDir,lightColor,lightControl;render::mat4 invVP;render::float4 depthControl;};
-    static_assert(sizeof(VolumeDrawUniforms)==272);
+    struct VolumeDrawUniforms {DrawUniforms base;render::float4 lightDir,lightColor,lightControl;render::mat4 invVP;render::float4 depthControl,lodControl;};
+    static_assert(sizeof(VolumeDrawUniforms)==288);
 
     bool stepImpl(float dt);
     bool stepGpuAllocated(float dt);

@@ -635,6 +635,17 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
             // across projection conventions; rasterization handles near z.
             float3 hi=c.www-c.xyz+abs(r.www-r.xyz)+abs(v.www-v.xyz);
             float3 lo=c.www+c.xyz+abs(r.www+r.xyz)+abs(v.www+v.xyz);
+            // For volumes, use support of a world-space bounding sphere,
+            // not the camera-facing quad. Keep conservative depth planes.
+            if(u.cullControl.x>1.5f){
+                float3 rowW=float3(u.cullViewProj[0].w,u.cullViewProj[1].w,u.cullViewProj[2].w);
+                float radius=halfSize*u.lodEye.w;
+                for(int axis=0;axis<3;++axis){
+                    float3 row=float3(u.cullViewProj[0][axis],u.cullViewProj[1][axis],u.cullViewProj[2][axis]);
+                    hi[axis]=c.w-c[axis]+radius*length(rowW-row);
+                    lo[axis]=c.w+c[axis]+radius*length(rowW+row);
+                }
+            }
             float eps=1e-5f*(1.0f+max(max(abs(c.x),abs(c.y)),max(abs(c.z),abs(c.w)))+
                        max(max(abs(r.x),abs(r.y)),max(abs(r.z),abs(r.w)))+
                        max(max(abs(v.x),abs(v.y)),max(abs(v.z),abs(v.w))));
@@ -643,7 +654,7 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
             // Medium quality: only distant AND small billboards are thinned.
             // Bound the full projected extent in pixels; do not thin quads
             // crossing the eye plane or with an ambiguous projection.
-            if(u.cullControl.w>u.lodEye.w && c.w>0.0f){
+            if(u.cullControl.x<1.5 && u.cullControl.w>u.lodEye.w && c.w>0.0f){
                 float minW=c.w-abs(r.w)-abs(v.w);
                 if(minW>max(1e-6f,c.w*1e-5f)){
                     float2 ndc=c.xy/c.w;
@@ -1317,6 +1328,17 @@ void main(){
             // across projection conventions; rasterization handles near z.
             vec3 hi=c.www-c.xyz+abs(r.www-r.xyz)+abs(v.www-v.xyz);
             vec3 lo=c.www+c.xyz+abs(r.www+r.xyz)+abs(v.www+v.xyz);
+            // For volumes, use support of a world-space bounding sphere,
+            // not the camera-facing quad. Keep conservative depth planes.
+            if(u.cullControl.x>1.5){
+                vec3 rowW=vec3(u.cullViewProj[0].w,u.cullViewProj[1].w,u.cullViewProj[2].w);
+                float radius=halfSize*u.lodEye.w;
+                for(int axis=0;axis<3;++axis){
+                    vec3 row=vec3(u.cullViewProj[0][axis],u.cullViewProj[1][axis],u.cullViewProj[2][axis]);
+                    hi[axis]=c.w-c[axis]+radius*length(rowW-row);
+                    lo[axis]=c.w+c[axis]+radius*length(rowW+row);
+                }
+            }
             float eps=1e-5*(1.0+max(max(abs(c.x),abs(c.y)),max(abs(c.z),abs(c.w)))+
                        max(max(abs(r.x),abs(r.y)),max(abs(r.z),abs(r.w)))+
                        max(max(abs(v.x),abs(v.y)),max(abs(v.z),abs(v.w))));
@@ -1325,7 +1347,7 @@ void main(){
             // Medium quality: only distant AND small billboards are thinned.
             // Bound the full projected extent in pixels; do not thin quads
             // crossing the eye plane or with an ambiguous projection.
-            if(u.cullControl.w>u.lodEye.w && c.w>0.0){
+            if(u.cullControl.x<1.5 && u.cullControl.w>u.lodEye.w && c.w>0.0){
                 float minW=c.w-abs(r.w)-abs(v.w);
                 if(minW>max(1e-6,c.w*1e-5)){
                     vec2 ndc=c.xy/c.w;

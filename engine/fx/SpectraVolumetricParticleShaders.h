@@ -6,7 +6,7 @@ inline constexpr const char* metal=R"MSL(
 #include <metal_stdlib>
 using namespace metal;
 struct Record {float x,y,z,u,v;uint rgba;float g0,g1,g2,g3;};
-struct U0 {float4x4 viewProj;float4 fog,camPos,params,right,up,lightDir,lightColor,lightControl;float4x4 invVP;float4 depthControl;};
+struct U0 {float4x4 viewProj;float4 fog,camPos,params,right,up,lightDir,lightColor,lightControl;float4x4 invVP;float4 depthControl,lodControl;};
 
 float hashVolume(float3 p){return fract(sin(dot(p,float3(127.1f,311.7f,74.7f)))*43758.5453f);}
 float noiseVolume(float3 p){
@@ -61,6 +61,18 @@ vertex VOut vs_main(uint vertexIndex [[vertex_id]],uint instance [[instance_id]]
  float extent=r*d/sqrt(d*d-r*r);float2 q=corners[vertexIndex&3u];
  o.world=center+extent*(right*q.x+up*q.y);o.pos=u.viewProj*float4(o.world,1);return o;
 }
+float lodFactor(float3 center,float radius,constant U0& u){
+ if(u.lodControl.x<0.5f)return 1.0f;
+ float4 clip=u.viewProj*float4(center,1);
+ float3 rowW=float3(u.viewProj[0].w,u.viewProj[1].w,u.viewProj[2].w);
+ float minW=clip.w-radius*length(rowW);
+ if(minW<=max(1e-5f,clip.w*1e-5f))return 1.0f;
+ float2 ndc=clip.xy/clip.w;
+ float3 rowX=float3(u.viewProj[0].x,u.viewProj[1].x,u.viewProj[2].x);
+ float3 rowY=float3(u.viewProj[0].y,u.viewProj[1].y,u.viewProj[2].y);
+ float pixels=radius*max(length(rowX-ndc.x*rowW)*u.depthControl.x,length(rowY-ndc.y*rowW)*u.depthControl.y)/minW;
+ return smoothstep(u.lodControl.z,u.lodControl.w,pixels);
+}
 float sampleDensity(float3 q,VOut in,constant U0& u
 #if SPECTRA_TEXTURE_VOLUME
  ,texture3d<float> densityTexture,sampler densitySampler
@@ -112,7 +124,8 @@ fragment half4 fs_main(VOut in [[stage_in]],constant U0& u [[buffer(1)]]
  if(disc<=0.0f||in.color.a<=0.0f)discard_fragment();
  float t0=max(0.0f,-b-sqrt(disc)),t1=min(reach,-b+sqrt(disc));
  if(t1<=t0)discard_fragment();
- uint steps=uint(clamp(u.params.z,4.0f,32.0f));float ds=(t1-t0)/float(steps);
+ float lod=lodFactor(in.sphere.xyz,r,u);
+ uint steps=uint(clamp(floor(mix(u.lodControl.y,u.params.z,lod)+0.5f),4.0f,32.0f));float ds=(t1-t0)/float(steps);
  float trans=1.0f;float3 rgb=float3(0);
  float3 color=in.color.rgb;
 #if AIVERSE_HDR
@@ -130,7 +143,7 @@ fragment half4 fs_main(VOut in [[stage_in]],constant U0& u [[buffer(1)]]
   float3 L=u.lightDir.xyz;
   float3 local=oc+rd*(t0+(float(i)+0.5f)*ds);
   float lb=dot(local,L),exit=max(0.0f,-lb+sqrt(max(0.0f,lb*lb-dot(local,local)+r*r)));
-  uint shadowSteps=uint(u.lightControl.x);
+  uint shadowSteps=uint(floor(u.lightControl.x*lod+0.5f));
   float optical=0.0f;
   if(shadowSteps>0u&&exit>0.0f){
    float dl=exit/float(shadowSteps);
@@ -154,7 +167,7 @@ fragment half4 fs_main(VOut in [[stage_in]],constant U0& u [[buffer(1)]]
 }
 )MSL";
 inline constexpr const char* vertex=R"GLSL(
-layout(std140) uniform U0 {mat4 u_viewProj;vec4 u_fog;vec4 u_camPos;vec4 u_params;vec4 u_right;vec4 u_up;vec4 u_lightDir;vec4 u_lightColor;vec4 u_lightControl;mat4 u_invVP;vec4 u_depthControl;};
+layout(std140) uniform U0 {mat4 u_viewProj;vec4 u_fog;vec4 u_camPos;vec4 u_params;vec4 u_right;vec4 u_up;vec4 u_lightDir;vec4 u_lightColor;vec4 u_lightControl;mat4 u_invVP;vec4 u_depthControl;vec4 u_lodControl;};
 layout(location=0) in vec3 a_pos;
 layout(location=1) in vec2 a_size;
 layout(location=2) in vec4 a_col;
@@ -210,7 +223,7 @@ void main(){
 )GLSL";
 inline constexpr const char* fragment=R"GLSL(
 precision highp float;
-layout(std140) uniform U0 {mat4 u_viewProj;vec4 u_fog;vec4 u_camPos;vec4 u_params;vec4 u_right;vec4 u_up;vec4 u_lightDir;vec4 u_lightColor;vec4 u_lightControl;mat4 u_invVP;vec4 u_depthControl;};
+layout(std140) uniform U0 {mat4 u_viewProj;vec4 u_fog;vec4 u_camPos;vec4 u_params;vec4 u_right;vec4 u_up;vec4 u_lightDir;vec4 u_lightColor;vec4 u_lightControl;mat4 u_invVP;vec4 u_depthControl;vec4 u_lodControl;};
 in highp vec3 v_world;flat in highp vec4 v_sphere;flat in highp vec4 v_color;flat in highp float v_age;
 #if SPECTRA_TEXTURE_VOLUME
 uniform highp sampler3D tex0;
@@ -247,6 +260,18 @@ float boundRadius(vec3 axes,int shape){
  if(shape==2)return length(axes);
  if(shape==3)return max(axes.x,max(axes.y,axes.z))+axes.y;
  return max(axes.x,max(axes.y,axes.z));
+}
+float lodFactor(vec3 center,float radius){
+ if(u_lodControl.x<0.5)return 1.0;
+ vec4 clip=u_viewProj*vec4(center,1);
+ vec3 rowW=vec3(u_viewProj[0].w,u_viewProj[1].w,u_viewProj[2].w);
+ float minW=clip.w-radius*length(rowW);
+ if(minW<=max(1e-5,clip.w*1e-5))return 1.0;
+ vec2 ndc=clip.xy/clip.w;
+ vec3 rowX=vec3(u_viewProj[0].x,u_viewProj[1].x,u_viewProj[2].x);
+ vec3 rowY=vec3(u_viewProj[0].y,u_viewProj[1].y,u_viewProj[2].y);
+ float pixels=radius*max(length(rowX-ndc.x*rowW)*u_depthControl.x,length(rowY-ndc.y*rowW)*u_depthControl.y)/minW;
+ return smoothstep(u_lodControl.z,u_lodControl.w,pixels);
 }
 float sampleDensity(vec3 q){
   float density=volumeDensity(q,v_sphere.xyz,int(u_params.w),u_up.xyz)*u_params.x*v_color.a;
@@ -287,7 +312,8 @@ void main(){
  float r=v_sphere.w*boundRadius(u_right.xyz,int(u_params.w)),b=dot(oc,rd),disc=b*b-dot(oc,oc)+r*r;
  if(disc<=0.0||v_color.a<=0.0)discard;
  float t0=max(0.0,-b-sqrt(disc)),t1=min(reach,-b+sqrt(disc));if(t1<=t0)discard;
- int steps=int(clamp(u_params.z,4.0,32.0));float ds=(t1-t0)/float(steps);
+ float lod=lodFactor(v_sphere.xyz,r);
+ int steps=int(clamp(floor(mix(u_lodControl.y,u_params.z,lod)+0.5),4.0,32.0));float ds=(t1-t0)/float(steps);
  float trans=1.0;vec3 rgb=vec3(0),color=v_color.rgb;
 #if AIVERSE_HDR
  color=rtsSrgbDecode(color);
@@ -300,7 +326,7 @@ void main(){
   vec3 L=u_lightDir.xyz;
   vec3 local=oc+rd*(t0+(float(i)+0.5)*ds);
   float lb=dot(local,L),exitDistance=max(0.0,-lb+sqrt(max(0.0,lb*lb-dot(local,local)+r*r)));
-  int shadowSteps=int(u_lightControl.x);float optical=0.0;
+  int shadowSteps=int(floor(u_lightControl.x*lod+0.5));float optical=0.0;
   if(shadowSteps>0&&exitDistance>0.0){
    float dl=exitDistance/float(shadowSteps);
    for(int j=0;j<shadowSteps;++j){

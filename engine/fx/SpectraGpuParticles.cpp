@@ -1423,13 +1423,15 @@ bool ComputeParticles::stepGpuAllocated(float dt){
     u.depthEye.w=desc_.reportCollisionEvents?1.f:0.f;
     u.rightSize={right_.x,right_.y,right_.z,desc_.size};u.up={up_.x,up_.y,up_.z,(dt>0.f||count>0)?1.f:0.f};
     u.meta={0,cap,count,0};
-    const bool cull=!desc_.volumeMaterial.enabled&&viewReady_&&std::all_of(viewProj_.m,viewProj_.m+16,[](float x){return std::isfinite(x);});
+    const bool cull=viewReady_&&std::all_of(viewProj_.m,viewProj_.m+16,[](float x){return std::isfinite(x);});
     if(cull){
         std::memcpy(u.cullViewProj,viewProj_.m,sizeof(u.cullViewProj));
         u.cullControl={1.f,float(viewWidth_),float(viewHeight_),0.f};
         // High is the full-density reference. Medium reuses the existing
         // quality distance as a soft LOD scale, never a simulation cutoff.
-        if(desc_.quality==fx::FxQuality::Medium){
+        if(desc_.volumeMaterial.enabled){
+            u.cullControl.x=2.f;u.lodEye.w=desc_.volumeMaterial.boundScale();
+        }else if(desc_.quality==fx::FxQuality::Medium){
             const float farDistance=fx::limitsFor(desc_.quality).cullDistance;
             u.cullControl.w=farDistance;
             u.lodEye={eye_.x,eye_.y,eye_.z,farDistance*0.25f};
@@ -1611,7 +1613,8 @@ void ComputeParticles::draw(const fx::FxFog& fog) {
             {volumeLightDirection_.x,volumeLightDirection_.y,volumeLightDirection_.z,m.directIntensity},
             {volumeLightColor_.x,volumeLightColor_.y,volumeLightColor_.z,m.ambient},
             {float(m.shadowSteps),m.shadowStrength,m.anisotropy,0},viewProj_.inverse(),
-            {float(viewWidth_),float(viewHeight_),device_->info().clipDepthZeroToOne?1.f:2.f,device_->info().renderTargetFlipY?1.f:0.f}};
+            {float(viewWidth_),float(viewHeight_),device_->info().clipDepthZeroToOne?1.f:2.f,device_->info().renderTargetFlipY?1.f:0.f},
+            {m.adaptiveLod?1.f:0.f,float(m.minimumSteps),m.lodSmallPixels,m.lodFullPixels}};
         device_->setUniforms(0,&v,sizeof(v));
     }else device_->setUniforms(0,&u,sizeof(u));
     if(!desc_.volumeMaterial.enabled)device_->setTexture(0,texture_);
