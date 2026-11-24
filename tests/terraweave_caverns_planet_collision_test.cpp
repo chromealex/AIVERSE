@@ -109,6 +109,14 @@ static void checkTravelReceipts(){
     check(cross&&cross->phase==P::Clearance&&cross->crossedSourceRevision==3,"partial crossing receipt");
     check(!advanceCavePlanetTravelReceipt(*cross,11,3,false,false,S::Destination),"duplicate tick refused");
     check(!advanceCavePlanetTravelReceipt(*cross,12,4,false,false,S::Destination),"edited cap receipt refused");
+    std::string bytes;Archive writer(&bytes);writer(*cross);
+    CavePlanetTravel restored;Archive reader(static_cast<const std::string&>(bytes));reader(restored);
+    check(writer.ok()&&reader.ok()&&!reader.remaining()&&restored.phase==P::Clearance&&
+          restored.lastReceiptTick==11&&restored.crossedSourceRevision==3,"crossing receipt archive roundtrip");
+    auto invalid=restored;invalid.crossedSourceRevision=0;
+    std::string corrupt;Archive badWriter(&corrupt);badWriter(invalid);
+    Archive badReader(static_cast<const std::string&>(corrupt));badReader(restored);
+    check(!badReader.ok(),"malformed clearance restore refused");
     auto clear=advanceCavePlanetTravelReceipt(*cross,12,3,false,false,S::Destination);
     check(clear&&clear->pendingRegion==9&&clear->phase==P::Clearance,"clearance retains pin until motor handoff");
     auto back=advanceCavePlanetTravelReceipt(*cross,12,3,false,true,S::Original);
@@ -123,6 +131,10 @@ static void checkTravelRim(){
         Fixed::fromRatio(1,4),true),"entry crosses committed rim");
     check(crossesCavePlanetRim(rim,mouth,{0_fx,-1_fx,0_fx},{0_fx,1_fx,0_fx},
         Fixed::fromRatio(1,4),false),"exit crosses committed rim");
+    check(!crossesCavePlanetRim(rim,mouth,{0_fx,1_fx,0_fx},{0_fx,0_fx,0_fx},
+        Fixed::fromRatio(1,4),true),"cap endpoint does not double count");
+    check(crossesCavePlanetRim(rim,mouth,{0_fx,0_fx,0_fx},{0_fx,-1_fx,0_fx},
+        Fixed::fromRatio(1,4),true),"cap endpoint continues inward");
     check(!crossesCavePlanetRim(rim,mouth,{1_fx,1_fx,0_fx},{1_fx,-1_fx,0_fx},
         Fixed::fromRatio(1,4),true),"rim clearance refusal");
     check(!crossesCavePlanetRim(rim,mouth,{0_fx,-1_fx,0_fx},{0_fx,1_fx,0_fx},

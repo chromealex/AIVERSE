@@ -209,4 +209,29 @@ inline std::optional<CavePlanetVolumeStep> stepAdmittedCavePlanetVolume(
         return result;
     }catch(const std::exception&){return {};}
 }
+// Conservative side classification for the host's real oriented capsule.
+// Uses the complete support range of both capsule spheres relative to the
+// exact rim's min/max chart height. Never claims clearance while straddling
+// the cap band; owner still proves collision sweep and exterior coverage.
+inline std::optional<CavePlanetCapsuleSide> classifyCavePlanetCapsule(
+        const CavePlanetFrame& frame,const CaveSurfaceRim& rim,Vec3 feet,
+        const physics::CharacterParams& params,b3Quat orientation,bool entering){
+    if(rim.ring.size()<3||rim.ring.size()>8192||!physics::validParams(params)||
+       !b3IsValidQuat(orientation))return {};
+    try{
+        auto low=Fixed::fromRaw(rim.ring.front()[1]),high=low;
+        for(const auto& p:rim.ring){low=fxMin(low,Fixed::fromRaw(p[1]));high=fxMax(high,Fixed::fromRaw(p[1]));}
+        const auto capsule=physics::characterCapsule(params);
+        Vec3 a,b;
+        if(!physics::physisVec3(b3RotateVector(orientation,capsule.center1),a)||
+           !physics::physisVec3(b3RotateVector(orientation,capsule.center2),b))return {};
+        const auto y1=frame.fromSimulation(feet+a).y,y2=frame.fromSimulation(feet+b).y;
+        // Round radius upward and retain a small fixed-point tolerance.
+        const auto radius=Fixed::fromRaw(int64_t(std::ceil(double(params.radius)*Fixed::kOne))+4);
+        const auto bottom=fxMin(y1,y2)-radius,top=fxMax(y1,y2)+radius;
+        if(bottom>high)return entering?CavePlanetCapsuleSide::Original:CavePlanetCapsuleSide::Destination;
+        if(top<low)return entering?CavePlanetCapsuleSide::Destination:CavePlanetCapsuleSide::Original;
+        return CavePlanetCapsuleSide::Straddling;
+    }catch(const std::exception&){return {};}
+}
 } // namespace aiverse::terraweave::caverns

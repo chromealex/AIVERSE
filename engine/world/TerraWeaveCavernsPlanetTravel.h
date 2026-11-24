@@ -99,7 +99,7 @@ inline bool crossesCavePlanetRim(const CaveSurfaceRim& rim,const Entrance& mouth
         if(normal.y<Fixed{})normal=normal*Fixed::fromInt(-1);
         if(normal.y<=Fixed::fromRaw(1))continue;
         const auto start=(from-center).dot(normal),finish=(to-center).dot(normal);
-        if(entering?(start<=Fixed{}||finish>Fixed{}):(start>=Fixed{}||finish<Fixed{}))continue;
+        if(entering?(start<Fixed{}||finish>=Fixed{}):(start>=Fixed{}||finish<Fixed{}))continue;
         const auto at=from+delta*(start/(start-finish));
         const auto side=crossXZ(a-center,b-center);
         const auto edgeOk=[&](Vec3 p,Vec3 q){
@@ -215,7 +215,7 @@ inline CavePlanetCrossingResult advanceCavePlanetCrossing(
         const std::shared_ptr<const game::Surface>& surface,Vec3 previous,
         const CaveSimulationPosition& position,const CavePlanetCrossingProof& swept,
         const CavePlanetSideProof& classify,Fixed capsuleMargin,uint32_t tick,
-        const std::optional<CavePlanetCrossingGoal>& goal={}){
+        const std::optional<CavePlanetCrossingGoal>& goal={},bool oneStepOnly=false){
     using R=CavePlanetCrossingResult;
     const auto* ptr=world.tryGetConst<CavePlanetTravel>(entity);
     if(!world.alive(entity)||!ptr||!validCavePlanetTravel(*ptr)||!ptr->pendingRegion||
@@ -245,6 +245,7 @@ inline CavePlanetCrossingResult advanceCavePlanetCrossing(
         const auto next=advanceCavePlanetTravelReceipt(state,tick,lease->provider->revision(),forward,reverse,*side);
         if(!next||!runtime.navigationLeaseCurrent(world,*lease,epoch->revision))return R::Refused;
         if(next->phase!=CavePlanetCrossingPhase::Clearance||*side!=CavePlanetCapsuleSide::Destination){
+            if(oneStepOnly)return R::Refused;
             world.get<CavePlanetTravel>(entity)=*next;
             return next->phase==CavePlanetCrossingPhase::Approach?R::Approaching:R::Clearing;
         }
@@ -256,6 +257,7 @@ inline CavePlanetCrossingResult advanceCavePlanetCrossing(
                !lease->provider->sample(destination,goal->agent).traversable){
                 // The cap was crossed, but the motor still needs a legal
                 // landing. Keep the receipt and pending coverage.
+                if(oneStepOnly)return R::Refused;
                 world.get<CavePlanetTravel>(entity)=*next;return R::Clearing;
             }
             if(!assignCavePlanetMotorGoal(world,entity,surface,state.pendingRegion,
@@ -282,7 +284,7 @@ inline bool commitCavePlanetCrossing(CavePlanetRuntimeFrame& runtime,World& worl
         return std::optional<CavePlanetCapsuleSide>{CavePlanetCapsuleSide::Destination};
     };
     return advanceCavePlanetCrossing(runtime,world,entity,surface,previous,position,swept,side,
-        capsuleMargin,tick,goal)==CavePlanetCrossingResult::Completed;
+        capsuleMargin,tick,goal,true)==CavePlanetCrossingResult::Completed;
 }
 // Same-region mode change uses existing route state and validates the new
 // profile at current authoritative position and destination.

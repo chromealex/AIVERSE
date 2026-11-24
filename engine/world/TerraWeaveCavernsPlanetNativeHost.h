@@ -81,7 +81,7 @@ public:
             Target& target,CavePlanetGiBindings giBindings,CavePlanetRuntimeHooks hooks,
             uint64_t policyRevision,CavePlanetDemandConfig demand={},
             CaveEnvironmentCostSettings costs={},size_t workers=2)
-        :target_(target),scene_(scene),exclusive_(hooks.exclusive),
+        :target_(target),scene_(scene),surface_(surface),exclusive_(hooks.exclusive),
          giReady_(giBindings.ready),publication_(scene,target,std::move(giBindings)){
         const auto* epoch=sim.world().resourceConst<CavePlanetEnvironmentEpoch>();
         if(!exclusive_||!giReady_||!surface||!epoch||epoch->policyRevision!=policyRevision||
@@ -175,6 +175,17 @@ public:
         return !closed_&&exclusive_()&&!notice_.pending()&&!runtime_->recoveryRequired()&&
             cavePlanetCrossingReady(*runtime_,world,entity);
     }
+    std::optional<CavePlanetCrossingGuidance> crossingGuidance(const World& world,Entity entity,Fixed extent)const{
+        if(!admitCrossing(world,entity))return {};
+        return cavePlanetCrossingGuidance(*runtime_,world,entity,surface_,extent);
+    }
+    CavePlanetCrossingResult acceptCrossingMovement(World& world,Entity entity,Vec3 previous,
+            const CaveSimulationPosition& position,const CavePlanetCrossingProof& swept,
+            const CavePlanetSideProof& side,Fixed margin,uint32_t tick,
+            const std::optional<CavePlanetCrossingGoal>& goal={}){
+        if(!admitCrossing(world,entity))return CavePlanetCrossingResult::Refused;
+        return advanceCavePlanetCrossing(*runtime_,world,entity,surface_,previous,position,swept,side,margin,tick,goal);
+    }
     // Expose the existing native admission adapter only, not a second motor.
     CavePlanetRuntimeFrame& runtime(){return *runtime_;}
     const CavePlanetRuntimeFrame& runtime()const{return *runtime_;}
@@ -214,6 +225,7 @@ public:
 private:
     Target& target_;
     render::GiGeometryScene& scene_;
+    std::shared_ptr<const game::Surface> surface_;
     CavePlanetNativeOwner::Exclusive exclusive_;
     std::function<bool()> giReady_;
     CavePlanetRestoreNotice notice_;
