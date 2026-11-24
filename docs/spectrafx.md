@@ -1,3 +1,7 @@
+## Stage 117 — canonical Device allocation ledger (in progress; QA deferred)
+
+Promote the existing envelope ledger to a generic RHI utility and let each Device own one canonical instance. All ComputeParticles and GpuPoolWorld owners acquire it automatically; explicit shared budget adoption only before a canonical owner exists, conflicting independent limits rejected, zero inherits. Keep fence charges across pool teardown, invalidate external references on Device destruction. No driver-wide accounting or new authored schema.
+
 ## Stage 116 — live GPU pool compaction (source implemented; QA deferred)
 
 After 120 birth-idle steps, use exact asynchronous occupancy proof (unchanged birth/reset epoch). If at most one quarter occupied, shrink to a geometric capacity with at least twice observed live count, minimum 256. GPU migration preserves particle state, VM parameters/attributes and owner tokens, rebuilds dense alive/free partition. Candidate overlap remains budgeted; rejection preserves old pool. Physical IDs may relocate; Medium LOD selection may change once. No synchronous readback or new authoring fields.
