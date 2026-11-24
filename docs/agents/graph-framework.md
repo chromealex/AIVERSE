@@ -227,3 +227,7 @@ Shared BuildingStructureGraphView and BuildingGeometryGraphView project the opti
 ## Stage 55 — mount shared Caverns inspection on the Building integration base
 
 On pinned Building Stage 36B base, the existing Caverns panel mounts CaveNativeInspection with the native snapshot graphDocument scope and CaveInspectionImport with explicit offline provenance. Native flat-only capture and its document/undo/dirty guard remain unchanged until the current planetary owner is reconciled. Stage 53 planetary report parser, projection, view and regression fixtures are ported from 80902238; no new generator, route solver, writer or fake runtime telemetry. Actual owner integration and tests pending.
+
+## Stage 56 — native planetary capture port
+
+The native Studio bridge now calls the registered Caverns owner's get-only operation for planetary maps, rejects failed or changed reports before status classification, and distinguishes unsupported owner contract, absent active region and ready scoped report. The existing flat absent check and document epoch/revision, undo depth and dirty invariants remain. Current Building integration base has no Caverns owner registration; the latest owner contract was reviewed at ca55f6a84fd2b9fd1dec9ab9462efb20280e6274 but not merged. This is a bridge source port, not an operational planet generator or verified runtime. Tests NOT RUN.

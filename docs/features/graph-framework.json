@@ -128,7 +128,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35F shared Building Graph exterior projection, group diagnostics and optional native route callback synchronized with integration owner. Actual owner bridge remains in separate integration branch; acceptance pending. Mac QA: repair case-insensitive diagnostic module collision and material projection typing. Stage 55 mounts shared Caverns inspection inside existing owner panel on Building integration base.",
+      "note": "Stage 35F shared Building Graph exterior projection, group diagnostics and optional native route callback synchronized with integration owner. Actual owner bridge remains in separate integration branch; acceptance pending. Mac QA: repair case-insensitive diagnostic module collision and material projection typing. Stage 55 mounts shared Caverns inspection inside existing owner panel on Building integration base. Stage 56 native planetary capture source ported; full owner merge pending.",
       "evidence": []
     },
     "architecture": {
@@ -168,7 +168,7 @@
     },
     "graphs": {
       "status": "not_run",
-      "note": "Stage 55 includes Stage 53 planetary report projection and mounts the shared scoped read-only inspection. Native route on this base remains flat-only until the planetary owner merge.",
+      "note": "Stage 55 includes Stage 53 planetary report projection and mounts the shared scoped read-only inspection. Native route on this base remains flat-only until the planetary owner merge. Stage 56 ports the get-only native planetary capture handler, retaining scope/undo/dirty checks and rejecting failed or changed reports before classification. Owner registration remains absent on the current base.",
       "evidence": []
     },
     "performance": {
@@ -198,7 +198,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F fixtures added; NOT RUN. Stage 55 source changes, execution NOT RUN.",
+      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F fixtures added; NOT RUN. Stage 55 source changes, execution NOT RUN. Stage 56 source changed; native and web tests NOT RUN.",
       "evidence": []
     },
     "handoff": {
