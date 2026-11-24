@@ -1308,6 +1308,29 @@ int main(){
             try{(void)studioPlanMixedAssetChain(p,nestedVersion,true);}
             catch(const std::runtime_error&){refused=true;}
             AIVERSE_TEST_CHECK(refused&&read(source/"Mesh.gltf")==model);
+            // Exact file endpoints can share a version exchange and a
+            // subsequent coordinated move without nested relocation roots.
+            projected=studioPlanMixedAssetChain(p,versions.steps(),true);
+            studioApplyHistoryBatch(p,projected.relocations,projected.documents,projected.movingResources);
+            move=StudioTransferPlan::internal(p,"B",{"A/Pack/Mesh.gltf","A/Pack/Paint.png"});
+            (void)move.apply(move.token(),{},{},&plan,true);
+            AIVERSE_TEST_CHECK(plan&&plan->resourceEdits.empty());
+            editor::ProjectHistory paired;
+            paired.recordMove(std::move(*plan),"Move model and image together");
+            auto chain=versions.steps();
+            const auto pairedSteps=paired.steps();
+            chain.insert(chain.end(),pairedSteps.begin(),pairedSteps.end());
+            auto chainUndo=chain;
+            std::reverse(chainUndo.begin(),chainUndo.end());
+            projected=studioPlanMixedAssetChain(p,chainUndo,false);
+            studioApplyHistoryBatch(p,projected.relocations,projected.documents,projected.movingResources);
+            AIVERSE_TEST_CHECK(read(source/"Mesh.gltf")==model&&read(source/"Paint.png")=="pixels");
+            projected=studioPlanMixedAssetChain(p,chain,true);
+            studioApplyHistoryBatch(p,projected.relocations,projected.documents,projected.movingResources);
+            AIVERSE_TEST_CHECK(read(p/"content"/"B"/"Mesh.gltf")==externalModel);
+            index.rebuild(false);
+            AIVERSE_TEST_CHECK(index.byGuid(modelGuid)->path=="B/Mesh.gltf");
+            AIVERSE_TEST_CHECK(index.byGuid(textureGuid)->path=="B/Paint.png");
 
         }
         std::cout<<"PASS studio conflict resolution and GUID-preserving asset transfers\n";
