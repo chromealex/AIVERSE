@@ -57,6 +57,9 @@ public:
         return true;
     }
 
+    // Explicit scene-coordinate transition: invalidate all probes, even
+    // when vertex coordinates happen to be unchanged.
+    void requestFullPublication(){changed_=true;overflow_=true;regions_.clear();}
     bool hasPendingChanges() const {return changed_;}
     size_t chunkCount() const {return builder_.chunkCount();}
     uint64_t revision() const {return revision_;}

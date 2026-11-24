@@ -127,12 +127,12 @@ public:
             // cohort. The actual bridge still decides if its atlas can bind.
             frameCoherent_=wasCoherent&&!restored&&!notice_.pending()&&
                 result.pinsReady&&runtime_->committedCohortsCurrent(world)&&
-                scene_.current()&&!scene_.hasPendingChanges()&&target_.ready();
+                publication_.current()&&target_.ready();
             result.diagnostic="Caverns waiting for shared GI owner/fence";
             return result;
         }
         result=runtime_->pump(world,observers,pins,jobs);
-        frameCoherent_=result.allDemandReady&&!runtime_->recoveryRequired()&&!notice_.pending();
+        frameCoherent_=result.allDemandReady&&!runtime_->recoveryRequired()&&!notice_.pending()&&publication_.current();
         return result;
     }
 
@@ -161,12 +161,24 @@ public:
     const CavePlanetRuntimeFrame& runtime()const{return *runtime_;}
     bool recoveryRequired()const noexcept{return runtime_->recoveryRequired();}
 
+    // The caller holds the existing frame barrier and coordinates lights,
+    // environment, probe focus and other presentation transforms in the same
+    // new GI space. Collision/navigation remain in simulation-anchor space.
+    // A refused target leaves the old geometry and projector intact.
+    bool reprojectGi(render::Renderer3D& renderer,CavePlanetGiProject next,
+            const CavePlanetGiOtherProject& other){
+        if(closed_||!exclusive_()||notice_.pending()||recoveryRequired())return false;
+        renderer.clearDynamicGiOverlay();frameCoherent_=false;
+        if(!target_.ready()||!giReady_())return false;
+        return publication_.reproject(std::move(next),other);
+    }
+
     // Called by the existing renderer after its GI update, before the pass.
     // The real CPU/GPU bridge also checks its own atlas presentation safety.
     bool bindIndirect(render::Renderer3D& renderer)const{
         renderer.clearDynamicGiOverlay();
         if(closed_||!frameCoherent_||notice_.pending()||recoveryRequired()||
-           publication_.staged()||scene_.hasPendingChanges())return false;
+           publication_.staged()||!publication_.current())return false;
         return renderer.setDynamicGiOverlay(target_);
     }
 

@@ -105,13 +105,17 @@ static void checkDrive(){
 struct GiFixtureTarget {
     bool accept=true;
     uint64_t revision=0;
+    size_t fullPublications=0;
     std::shared_ptr<const render::GiChunkedGeometrySnapshot> snapshot;
     bool publishGeometry(std::shared_ptr<const render::GiChunkedGeometrySnapshot> s,uint64_t r){
         if(!accept||r<=revision)return false;
-        snapshot=std::move(s);revision=r;return true;
+        snapshot=std::move(s);revision=r;++fullPublications;return true;
     }
     bool publishGeometryRegion(std::shared_ptr<const render::GiChunkedGeometrySnapshot> s,
-            uint64_t r,render::GiBounds){return publishGeometry(std::move(s),r);}
+            uint64_t r,render::GiBounds){
+        if(!accept||r<=revision)return false;
+        snapshot=std::move(s);revision=r;return true;
+    }
 };
 static void checkGiPublication(){
     render::GiGeometryScene scene;
@@ -152,12 +156,28 @@ static void checkGiPublication(){
     check(publication.prepare(candidate)&&publication.commit("planet",3),"GI publish exact replacement");
     check(publication.revision("planet")==3&&!scene.current()->findChunk(10)&&scene.current()->findChunk(20),"GI removes uncut leaf");
     check(scene.current()->findChunk(99)==unrelated,"GI preserves unrelated owner");
+    const auto oldCut=scene.currentShared();
+    const auto fullBefore=target.fullPublications;
+    const CavePlanetGiProject moved=[project](const std::string& b,Vec3 p){
+        auto v=project(b,p);v.x+=100;return v;
+    };
+    const CavePlanetGiOtherProject other=[](uint64_t,render::float3 v){v.z+=5;return v;};
+    const CavePlanetGiProject collapsed=[](const std::string&,Vec3){return render::float3{};};
+    check(!publication.reproject(collapsed,other)&&scene.currentShared()==oldCut,"degenerate coordinate refused");
+    target.accept=false;
+    check(!publication.reproject(moved,other)&&scene.currentShared()==oldCut&&publication.current(),"reproject target refusal atomic");
+    target.accept=true;
+    check(publication.reproject(moved,other)&&publication.current(),"reproject accepted");
+    check(target.fullPublications==fullBefore+1&&publication.revision("planet")==3&&
+          scene.current()->findChunk(20)->triangles[0].a.x==100,"full GI invalidation, native revision preserved");
+    check(scene.current()->findChunk(99)->triangles[0].a.z==5&&
+          oldCut->findChunk(20)->triangles[0].a.x==0,"other owner remap and immutable old snapshot");
     check(publication.prepareRetire("planet",3)&&scene.current()->findChunk(20),"GI retire staging private");
     check(publication.retire("planet",3)&&!publication.activeBodies(),"GI retirement");
     const auto* restored=scene.current()->findChunk(10);
     check(restored&&restored->triangles.size()==1&&restored->albedos.size()==1&&
-          restored->albedos[0].x==originalColor.x&&!scene.current()->findChunk(20),"GI restore baseline materials");
-    check(scene.current()->findChunk(99)==unrelated&&target.snapshot==scene.currentShared(),"GI shared owner identity");
+          restored->albedos[0].x==originalColor.x&&restored->triangles[0].a.x==100&&!scene.current()->findChunk(20),"GI restore baseline materials");
+    check(scene.current()->findChunk(99)->triangles[0].a.z==5&&target.snapshot==scene.currentShared(),"GI shared owner identity");
 }
 int main(){
     CavePlanetRestoreNotice notice;
