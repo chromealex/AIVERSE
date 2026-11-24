@@ -180,7 +180,12 @@ public:
     void draw(render::Renderer3D& renderer,const render::SphereViewFrame& view,Fixed seconds){
         if(!ready())return;
         const auto p=frame_.surface().bodyPosition(frame_.body(),seconds);
-        auto parent=view.matrix()*render::mat4::translate({float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())});
+        drawAtBodyCenter(renderer,view,{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())});
+    }
+    void drawAtBodyCenter(render::Renderer3D& renderer,const render::SphereViewFrame& view,render::float3 center){
+        if(!ready())return;
+        // Use the exact same body centre as the planet view at interpolated time.
+        auto parent=view.matrix()*render::mat4::translate(center);
         geometry_.drawExactPlaced(renderer,parent);
     }
     // Coordinated retirement. Restore the actual external original terrain
