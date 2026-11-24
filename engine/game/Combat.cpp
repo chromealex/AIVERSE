@@ -168,7 +168,16 @@ void GameCore::sysWeapons(Simulation& sim) {
         for (size_t i = 0; i < t.weapons.size() && i < 4; ++i)
             if (!t.weapons[i].preciseCooldown)
                 c.cooldown[i] = advanceWeaponCadence(c.cooldown[i], dt * atkSpeed, false);
-        if (u.flags & (kUnitUnderConstruction | kUnitDisabled | kUnitInHand)) return;
+        bool keepWindup[4]{};
+        for (size_t i = 0; i < 4; ++i) {
+            auto& phase = c.attackTiming[i];
+            if (phase.phase == AttackPhase::Recovery && advanceAttackPhase(phase, dt * atkSpeed)) {
+                sim.emit({kEvAttackRecoveryEnd, o.player, e, phase.target, int64_t(i), tr.pos});
+                phase = {};
+            }
+        }
+        auto tryFire = [&] {
+        if (u.hp.raw <= 0 || (u.flags & (kUnitUnderConstruction | kUnitDisabled | kUnitInHand))) return;
         if (auto* b = w.tryGet<Buffs>(e); b && b->stunUntil > sim.tick()) return;
         if (rules_.advancedEffects && (statusFlags(sim, e) & (kStStun | kStDisarm))) return;
         if (!w.alive(c.target) || !w.has<Unit>(c.target) || (w.get<Unit>(c.target).flags & kUnitOffMap)) { c.target = kNullEntity; return; }
@@ -206,18 +215,45 @@ void GameCore::sysWeapons(Simulation& sim) {
             if (sensors_ && sensors_->active() && !sensors_->weaponHits(u.type, i, tu.type)) continue;   // underwater: torpedoes only
             if (wd.rangeAspect != kOne && !inRangeEllipse(tr.pos, tp, wd.range + rangeBonus, wd.rangeAspect)) continue;
             if (m && m->moving && ord && !ord->queue.empty() && ord->queue.front().type == OrderType::Move) continue;
-            const uint32_t budget = wd.preciseCooldown && wd.chargeTime.raw <= 0 ? kMaxCadenceShotsPerTick : 1;
+            auto& phase = c.attackTiming[i];
+            if (phase.phase == AttackPhase::Recovery) continue;
+            if (phase.phase == AttackPhase::Windup && (!wd.hasAttackTiming() || phase.target != c.target)) {
+                const Entity previous = phase.target;
+                cancelAttackWindup(phase);
+                sim.emit({kEvAttackCancelled, o.player, e, previous, int64_t(i), tr.pos});
+                continue;
+            }
+            const bool phased = wd.hasAttackTiming();
+            const uint32_t budget = !phased && wd.preciseCooldown && wd.chargeTime.raw <= 0 ? kMaxCadenceShotsPerTick : 1;
             for (uint32_t shot = 0; shot < budget && cadenceReady(c.cooldown[i]); ++shot) {
-            if (wd.preciseCooldown && (!w.alive(c.target) || tu.hp.raw <= 0)) break;
-            if (wd.chargeTime.raw > 0) {
+            if ((phased || wd.preciseCooldown) && (!w.alive(c.target) || tu.hp.raw <= 0)) break;
+            if (wd.chargeTime.raw > 0 && phase.phase != AttackPhase::Windup) {
                 // charging shot: the weapon has to stay on the same target for chargeTime
                 if (c.chargeTarget != c.target) { c.chargeTarget = c.target; c.chargeStart = sim.tick(); }
                 if (sim.tick() - c.chargeStart < uint32_t((wd.chargeTime * int64_t(sim.tickRate())).toInt())) break;
                 c.chargeStart = sim.tick();
             }
-            if (mechOn(sim) && !mechOnFire(sim, e, i, c.target)) break;   // agent-mech: turret aim, ammo, suppression, crews
-            c.cooldown[i] = acceptCadenceShot(c.cooldown[i], wd.cooldown, wd.preciseCooldown && wd.chargeTime.raw <= 0);
+            if (wd.windup.raw > 0) {
+                if (phase.phase != AttackPhase::Windup) {
+                    beginAttackWindup(phase, c.target, wd.windup);
+                    keepWindup[i] = true;
+                    sim.emit({kEvAttackWindup, o.player, e, c.target, int64_t(i), tr.pos});
+                    break;
+                }
+                if (!advanceAttackPhase(phase, dt * atkSpeed)) {
+                    keepWindup[i] = true;
+                    break;
+                }
+            }
+            if (mechOn(sim) && !mechOnFire(sim, e, i, c.target)) break;   // acceptance, including ammo, only at release
+            c.cooldown[i] = acceptCadenceShot(c.cooldown[i], wd.cooldown, !phased && wd.preciseCooldown && wd.chargeTime.raw <= 0);
+            if (phased) {
+                phase.target = c.target;
+                commitAttackRelease(phase, wd.backswing);
+            }
             sim.emit({kEvAttack, o.player, e, c.target, int64_t(i), tr.pos});
+            if (phased && wd.backswing.raw == 0)
+                sim.emit({kEvAttackRecoveryEnd, o.player, e, c.target, int64_t(i), tr.pos});
             const bool prog = progression_ && progression_->active();
             if (prog) progression_->onShot(sim, e);   // perks that fire on every Nth shot (Progression.cpp)
             const int volley = prog ? progression_->fireCount(sim, e) : 1;   // fireCount stat: bullets per shot
@@ -261,6 +297,18 @@ void GameCore::sysWeapons(Simulation& sim) {
                     }
                 }
             }
+            }
+        }
+        };
+        tryFire();
+        // Invalid range, target, status, movement, rejected release, etc.
+        // An interrupted windup is never allowed to survive an ineligible tick.
+        for (size_t i = 0; i < 4; ++i) {
+            auto& phase = c.attackTiming[i];
+            if (!keepWindup[i] && phase.phase == AttackPhase::Windup) {
+                const Entity previous = phase.target;
+                cancelAttackWindup(phase);
+                sim.emit({kEvAttackCancelled, o.player, e, previous, int64_t(i), tr.pos});
             }
         }
     });
