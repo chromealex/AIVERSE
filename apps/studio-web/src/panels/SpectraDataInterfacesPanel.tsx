@@ -268,7 +268,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
           {validation&&<StudioAlert tone={validation.ok===true?'success':'warning'} title="Compiler diagnostics">
             {diagnostics(validation)} {validation.emitters!==undefined&&' · '+String(validation.emitters)+' emitter(s)'}
           </StudioAlert>}
-          <SpectraNativePreview graph={graph} projectPath={projectPath}
+          <SpectraNativePreview key={projectPath} graph={graph} projectPath={projectPath}
             disabled={busy}/>
           <StudioSection title="Graph Nodes & Links">
             <SpectraGraphCanvas graph={graph} disabled={busy}

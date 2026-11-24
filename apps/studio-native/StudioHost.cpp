@@ -1394,7 +1394,22 @@ Json StudioHost::runSpectraPreview(const Json& params) {
         throw std::runtime_error("Open a project before SpectraFX preview");
     if(!fxPreview_)
         throw std::runtime_error("Show the native SpectraFX Graph preview to initialize its GPU device");
+    const std::string project=session_->workspace().project.dir;
+    if(params.has("expectedProjectPath") &&
+       (!params["expectedProjectPath"].isString()||params.getStr("expectedProjectPath")!=project))
+        throw std::runtime_error("Stale SpectraFX project");
     const std::string action=params.getStr("action");
+    if(params.has("expectedGeneration")) {
+        const auto& expected=params["expectedGeneration"];
+        if(!expected.isNumber()||expected.numberLiteral().find_first_of(".eE-")!=std::string::npos||
+           expected.integer(-1)<0)
+            throw std::runtime_error("Invalid SpectraFX expected generation");
+        const auto current=onScene([&]{
+            return fxPreview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
+        });
+        if(current["generation"].integer(-2)!=expected.integer(-1))
+            throw std::runtime_error("Stale SpectraFX runtime generation");
+    }
     if(action=="capture"||action=="captureStatus"||action=="captureCancel")
         return captureSpectraFrame(params);
     // Stopping and inspecting a ready runtime never require the view to
@@ -1402,7 +1417,6 @@ Json StudioHost::runSpectraPreview(const Json& params) {
     if(action!="status" && action!="stop" &&
        (!fxPlacement_.visible || !platform_.surfaceDrawable(StudioSurface::Fx)))
         throw std::runtime_error("Open the dedicated SpectraFX native preview viewport");
-    const std::string project=session_->workspace().project.dir;
     if(action=="cameraReset"||action=="cameraOrbit"||action=="cameraZoom") {
         if(!fxSurfaceVisible_)throw std::runtime_error("Show the embedded FX viewport for its isolated camera");
         if(action=="cameraReset") {

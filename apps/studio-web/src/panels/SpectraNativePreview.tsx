@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Eye, Pause, Play, RotateCcw, SkipForward, Square, ZoomIn, ZoomOut, Focus } from 'lucide-react';
 import { invoke, nativeConnected } from '../bridge';
-import type { StudioSpectraPreviewState, StudioSpectraCameraSnapshot } from '../types';
+import type { StudioParams, StudioSpectraPreviewState, StudioSpectraCameraSnapshot } from '../types';
 import { StudioAlert, StudioBadge, StudioButton, StudioCheckbox, StudioField, StudioInput, StudioSection, StudioSelect } from '../ui';
 import type { SpectraGraphV2 } from './spectraDataInterfaceModel';
 import './SpectraNativePreview.css';
@@ -33,6 +33,15 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     mounted.current=true;
     return()=>{mounted.current=false;};
   },[]);
+  // Every command captures this mounted project's identity. In-flight RPCs
+  // cannot be unsent, but their continuations cannot issue another command
+  // after unmount, and the native host rejects stale project requests.
+  const invokePreview=async(input:StudioParams['studio.spectraPreview'])=>{
+    if(!mounted.current)throw new Error('SpectraFX preview closed');
+    const result=await invoke('studio.spectraPreview',{...input,expectedProjectPath:projectPath});
+    if(!mounted.current)throw new Error('SpectraFX preview closed');
+    return result;
+  };
   const graphSignature=useMemo(()=>JSON.stringify(graph),[graph]);
   const lastLoadedGraph=useRef('');
   const reloadBusy=useRef(false);
@@ -75,17 +84,17 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     lastLoadedGraph.current='';
   },[projectPath]);
   useEffect(()=>{
-    if(!active || !state?.ready)return;
+    if(!active || !state?.ready||busy)return;
     let closed=false,inFlight=false;
     const timer=setInterval(()=>{
       if(closed||inFlight)return;
       inFlight=true;
-      void invoke('studio.spectraPreview',{action:'status'}).then(next=>{
+      void invokePreview({action:'status'}).then(next=>{
         if(!closed)setState(next);
       }).catch(e=>{if(!closed)setError(message(e));}).finally(()=>{inFlight=false;});
     },500);
     return()=>{closed=true;clearInterval(timer);};
-  },[active,state?.ready,projectPath]);
+  },[active,state?.ready,projectPath,busy]);
 
   // Opt-in, bounded authoring-only live reload. It recompiles the current
   // in-memory graph through native StudioScene; it never saves or publishes
@@ -103,7 +112,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       // Remember an attempted invalid revision so it does not enter an
       // infinite loop while the user edits another node.
       lastLoadedGraph.current=graphSignature;
-      void invoke('studio.spectraPreview',{action:'load',graph,gpuBirthRandom}).then(async next=>{
+      void invokePreview({action:'load',graph,gpuBirthRandom}).then(async next=>{
         if(closed)return;
         if(!next.ready || next.error) {
           setState(next);
@@ -111,7 +120,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
           return;
         }
         let result=next;
-        if(wasPlaying)result=await invoke('studio.spectraPreview',{action:'play'});
+        if(wasPlaying)result=await invokePreview({action:'play',expectedGeneration:next.generation});
         if(!closed){setState(result);setSeek(result.tick);}
       }).catch(e=>{if(!closed)setError(message(e));}).finally(()=>{
         reloadBusy.current=false;
@@ -135,7 +144,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     const timer=window.setInterval(()=>{
       if(inFlight || closed)return;
       inFlight=true;
-      void invoke('studio.spectraPreview',{action:'captureStatus',captureId}).then(result=>{
+      void invokePreview({action:'captureStatus',captureId}).then(result=>{
         if(closed)return;
         setState(result);
         const capture=result.capture;
@@ -203,7 +212,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const restoreCamera=async()=>{
     if(!lockedCamera||!active||busy||capturePending||disabled)return;
     setBusy(true);setError('');
-    try{setState(await invoke('studio.spectraPreview',{action:'cameraRestore',camera:lockedCamera}));}
+    try{setState(await invokePreview({action:'cameraRestore',camera:lockedCamera,expectedGeneration:state?.generation}));}
     catch(e){setError(message(e));}finally{setBusy(false);}
   };
   const saveReplayPreset=()=>{
@@ -254,9 +263,11 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     }
     setBusy(true);setReplayRestoring(true);setError('');
     try{
+      let expectedGeneration=state?.generation;
       if(replayPreset.gpuBirthRandom!==undefined){
-        const loaded=await invoke('studio.spectraPreview',{action:'load',graph,gpuBirthRandom:replayPreset.gpuBirthRandom});
+        const loaded=await invokePreview({action:'load',graph,gpuBirthRandom:replayPreset.gpuBirthRandom});
         if(loaded.error||!loaded.ready)throw new Error(loaded.error||'Replay graph reload failed');
+        expectedGeneration=loaded.generation;
         setGpuBirthRandom(replayPreset.gpuBirthRandom);lastLoadedGraph.current=graphSignature;
       }
       // All commands are serialized. Stop playback before restoring tick/camera.
@@ -272,12 +283,12 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       ];
       let result:StudioSpectraPreviewState|null=null;
       for(const action of actions){
-        result=await invoke('studio.spectraPreview',action);
+        result=await invokePreview({...action,expectedGeneration});
         if(result.error||!result.ready)throw new Error(result.error||'Native replay restore failed');
       }
       let settled=false;
       for(let attempt=0;attempt<160;++attempt){
-        const next=await invoke('studio.spectraPreview',{action:'status'});
+        const next=await invokePreview({action:'status',expectedGeneration});
         if(next.gpuSeedFailed)throw new Error(next.error||'GPU seed reset failed after retry budget');
         if((next.error&&!next.gpuSeedPending)||!next.ready)
           throw new Error(next.error||'Replay backend unavailable');
@@ -299,8 +310,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       backend:state.backend,camera:state.camera??null,snapshotMaxSide:captureSide,
       capturedAt:new Date().toISOString()};
     try {
-      const result=await invoke('studio.spectraPreview',{
-        action:'capture',maxSide:captureSide,
+      const result=await invokePreview({
+        action:'capture',maxSide:captureSide,expectedGeneration:state.generation,
         ...(replayPreset&&state.replayReady?{requireReplayReady:true}:{})
       });
       setState(result);
@@ -318,7 +329,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     if(busy||disabled||!active)return;
     setBusy(true);setError('');
     try{
-      const result=await invoke('studio.spectraPreview',{action,...options});
+      const result=await invokePreview({action,...options,
+        ...(state?.ready&&action!=='status'?{expectedGeneration:state.generation}:{})});
       if(action==='load'&&result.ready&&!result.error)
         lastLoadedGraph.current=graphSignature;
       if(action==='stop')lastLoadedGraph.current='';
@@ -332,7 +344,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     let transferId:number|undefined;
     setBusy(true);setError('');
     try{
-      const first=await invoke('studio.spectraPreview',{action:'checkpointFileExport'});
+      const first=await invokePreview({action:'checkpointFileExport',expectedGeneration:state?.generation});
       // Acquire the lease before validating metadata so finally can cancel it.
       if(typeof first.transferId==='number'&&Number.isSafeInteger(first.transferId)&&first.transferId>0)
         transferId=first.transferId;
@@ -342,14 +354,14 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         throw new Error('Invalid checkpoint size');
       const bytes=new Uint8Array(first.fileSize);
       for(let offset=0;offset<bytes.length;offset+=32768){
-        const next=await invoke('studio.spectraPreview',{action:'checkpointFileRead',offset,transferId});
+        const next=await invokePreview({action:'checkpointFileRead',offset,transferId});
         const hex=next.fileChunk??'';
         if(next.error||next.fileSize!==bytes.length||hex.length!==2*Math.min(32768,bytes.length-offset)||!/^[0-9a-f]+$/.test(hex))throw new Error(next.error||'Invalid checkpoint chunk');
         for(let i=0;i<hex.length;i+=2)bytes[offset+i/2]=parseInt(hex.slice(i,i+2),16);
       }
       const url=URL.createObjectURL(new Blob([bytes],{type:'application/octet-stream'}));
       const a=document.createElement('a');a.href=url;a.download='spectrafx.spft';a.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
-    }catch(e){setError(message(e));}finally{if(transferId)await invoke('studio.spectraPreview',{action:'checkpointFileCancel',transferId}).catch(()=>{});setBusy(false);}
+    }catch(e){setError(message(e));}finally{if(transferId)await invokePreview({action:'checkpointFileCancel',transferId}).catch(()=>{});setBusy(false);}
   };
   const importCheckpointFile=async(file:File)=>{
     let transferId:number|undefined;
@@ -357,18 +369,18 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     try{
       if(!file.size||file.size>1048600)throw new Error('Checkpoint exceeds size limit');
       const bytes=new Uint8Array(await file.arrayBuffer());
-      const begin=await invoke('studio.spectraPreview',{action:'checkpointFileBegin'});
+      const begin=await invokePreview({action:'checkpointFileBegin',expectedGeneration:state?.generation});
       if(begin.error||!begin.transferId)throw new Error(begin.error||'Missing transfer ID');
       transferId=begin.transferId;
       for(let offset=0;offset<bytes.length;offset+=32768){
         const chunk=Array.from(bytes.subarray(offset,offset+32768),b=>b.toString(16).padStart(2,'0')).join('');
-        const next=await invoke('studio.spectraPreview',{action:'checkpointFileAppend',offset,chunk,transferId});
+        const next=await invokePreview({action:'checkpointFileAppend',offset,chunk,transferId});
         if(next.error)throw new Error(next.error);
       }
-      const result=await invoke('studio.spectraPreview',{action:'checkpointFileImport',transferId});
+      const result=await invokePreview({action:'checkpointFileImport',transferId});
       setState(result);if(result.error)throw new Error(result.error);
       transferId=undefined; // Native queue owns the uploaded bytes.
-    }catch(e){if(transferId)await invoke('studio.spectraPreview',{action:'checkpointFileCancel',transferId}).catch(()=>{});setError(message(e));}finally{setBusy(false);}
+    }catch(e){if(transferId)await invokePreview({action:'checkpointFileCancel',transferId}).catch(()=>{});setError(message(e));}finally{setBusy(false);}
   };
   const launch=async()=>{
     // Actual graph validation and device eligibility occur in StudioScene.
@@ -382,7 +394,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     if(busy||disabled||!active)return;
     setBusy(true);setError('');
     try{
-      const next=await invoke('studio.spectraPreview',{action:'parameter',name:parameter,value:numeric});
+      const next=await invokePreview({action:'parameter',name:parameter,value:numeric,expectedGeneration:state?.generation});
       setState(next);
       if(!next.ready||next.error)throw new Error(next.error||'Native scalar rejected');
       setLiveScalars(previous=>({...previous,[parameter]:numeric}));
@@ -498,7 +510,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         onClick={()=>void captureFrame()}>
         {capturePending?'Capturing GPU frame…':'Capture Frame'}
       </StudioButton>
-      {capturePending&&<StudioButton size="sm" onClick={()=>void invoke('studio.spectraPreview',{action:'captureCancel',captureId}).then(()=>{setCapturePending(false);setCaptureSlot(null);}).catch(e=>setCaptureError(message(e)))}>Cancel capture</StudioButton>}
+      {capturePending&&<StudioButton size="sm" onClick={()=>void invokePreview({action:'captureCancel',captureId}).then(()=>{setCapturePending(false);setCaptureSlot(null);}).catch(e=>setCaptureError(message(e)))}>Cancel capture</StudioButton>}
     </div>
     <div className="spectra-native__toolbar">
       <StudioButton size="sm" disabled={!active||!state?.ready||busy||capturePending}
@@ -520,9 +532,9 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         <StudioInput id="spectra-gpu-seed" type="number" min={0} max={2147483647} step={1}
           value={gpuAllocationSeed} onChange={e=>setGpuAllocationSeed(e.target.value)}/>
       </StudioField>
-      <StudioButton size="sm" disabled={!state?.gpu||state.playing||busy||state.checkpointPending} onClick={()=>void invoke('studio.spectraPreview',{action:'checkpointSave'}).then(setState).catch(e=>setError(message(e)))}>Save GPU checkpoint</StudioButton>
-      {state?.checkpointPending&&<><small>Checkpoint pending ({state.checkpointWaitFrames??0}/240 frames)</small><StudioButton size="sm" onClick={()=>void invoke('studio.spectraPreview',{action:'checkpointCancel'}).then(setState).catch(e=>setError(message(e)))}>Cancel checkpoint</StudioButton></>}
-      {(state?.checkpoints??[]).map(cp=><StudioButton key={cp.id} size="sm" disabled={busy||!!state?.playing||!!state?.checkpointPending} onClick={()=>void invoke('studio.spectraPreview',{action:'checkpointRestore',checkpointId:cp.id}).then(setState).catch(e=>setError(message(e)))}>Restore tick {cp.tick} (#{cp.id})</StudioButton>)}
+      <StudioButton size="sm" disabled={!state?.gpu||state.playing||busy||state.checkpointPending} onClick={()=>void invokePreview({action:'checkpointSave',expectedGeneration:state?.generation}).then(setState).catch(e=>setError(message(e)))}>Save GPU checkpoint</StudioButton>
+      {state?.checkpointPending&&<><small>Checkpoint pending ({state.checkpointWaitFrames??0}/240 frames)</small><StudioButton size="sm" onClick={()=>void invokePreview({action:'checkpointCancel',expectedGeneration:state?.generation}).then(setState).catch(e=>setError(message(e)))}>Cancel checkpoint</StudioButton></>}
+      {(state?.checkpoints??[]).map(cp=><StudioButton key={cp.id} size="sm" disabled={busy||!!state?.playing||!!state?.checkpointPending} onClick={()=>void invokePreview({action:'checkpointRestore',checkpointId:cp.id,expectedGeneration:state?.generation}).then(setState).catch(e=>setError(message(e)))}>Restore tick {cp.tick} (#{cp.id})</StudioButton>)}
       <StudioButton size="sm" disabled={busy||!state?.gpu||state.playing||state.checkpointPending} onClick={()=>void exportCheckpointFile()}>Export checkpoint file</StudioButton>
       <label>Import checkpoint <input type="file" accept=".spft" disabled={busy||!state?.gpu||state.playing||state.checkpointPending} onChange={e=>{const file=e.target.files?.[0];if(file)void importCheckpointFile(file);e.target.value='';}}/></label>
       <StudioField label="Metal shader seed (optional)" htmlFor="spectra-shader-seed">
