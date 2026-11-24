@@ -13,6 +13,7 @@ GraphGpuEligibility inspectGraphGpuEligibility(
     result.gpu.backend=options.preference;
     result.gpu.gpuIndirect=options.gpuIndirect;
     result.gpu.proceduralBillboards=options.proceduralBillboards;
+    result.gpu.volumeMaterial=options.volumeMaterial;
     result.gpu.gpuOwnedAllocation=options.gpuOwnedAllocation;
     result.gpu.gpuProgram=options.gpuProgram;
     result.gpu.reportCollisionEvents=options.reportCollisionEvents;
@@ -199,6 +200,7 @@ bool GraphRuntime::initGraph(gfx::Device* dev,const Json& graph,
     // Compact deterministic fingerprint; two independently seeded 64-bit lanes.
     uint64_t a=14695981039346656037ull,b=7809847782465536322ull;
     if(actual.gpuOwnedAllocation)restoreIdentity_+="\nallocator=owned-v2";
+    if(actual.volumeMaterial.enabled)restoreIdentity_+="\nvolume="+std::to_string(actual.volumeMaterial.density)+","+std::to_string(actual.volumeMaterial.emission)+","+std::to_string(actual.volumeMaterial.steps);
     for(unsigned char c:restoreIdentity_){a=(a^c)*1099511628211ull;b=(b^c)*14029467366897019727ull;}
     for(const auto& [path,bytes]:sdfDependencies){
         for(unsigned char c:path){a=(a^c)*1099511628211ull;b=(b^c)*14029467366897019727ull;}
@@ -289,7 +291,7 @@ bool GraphRuntime::initEffect(gfx::Device* dev,const fx::EffectDef& effect,
     } else {
         reason_="CPU explicitly selected";
     }
-    if(options.preference==ComputePreference::RequireGpu) {
+    if(options.preference==ComputePreference::RequireGpu||options.volumeMaterial.enabled) {
         if(reason_.empty())reason_="GPU required but not eligible";
         return false;
     }

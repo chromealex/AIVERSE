@@ -1,4 +1,5 @@
 #include "SpectraGpuParticles.h"
+#include "SpectraVolumetricParticleShaders.h"
 #include "SpectraGpuVolumeGrid.h"
 #include "SpectraParticleVolumeShaders.h"
 #include "SpectraGpuShaders.h"
@@ -47,6 +48,9 @@ bool supportsSpectraCompute(const gfx::Device& device,bool ownedAllocation){
 }
 bool validComputeEmitter(const ComputeEmitterDesc& d,std::string* why) {
     const auto fail=[&](const char* msg){if(why)*why=msg;return false;};
+    if(!d.volumeMaterial.valid()||(d.volumeMaterial.enabled&&
+       (d.backend!=ComputePreference::RequireGpu||d.gpuMaterial||!d.shaderGraph.isNull()||!d.graphInputs.isNull())))
+        return fail("Volumetric particles require dedicated GPU material and RequireGpu");
     if(d.capacity==0||d.capacity>kGpuEmitterMaxSlots)return fail("GPU emitter capacity exceeds allocation safety ceiling");
     if(d.burst==0||d.burst>64)return fail("GPU emitter burst must be 1..64");
     if(d.lifetime<0.01f||d.lifetime>60.f||!finite(d.lifetime))return fail("invalid lifetime");
@@ -212,7 +216,7 @@ bool ComputeParticles::initGpu() {
     const uint32_t cap=gpuDemandGrowth_?gpuInitialPhysicalCapacity(desc_.capacity):desc_.capacity;
     physicalCapacity_=cap;
     const bool vulkan=device_->info().backend==gfx::Backend::Vulkan;
-    proceduralActive_=desc_.proceduralBillboards&&!materialActive&&
+    proceduralActive_=(desc_.proceduralBillboards||desc_.volumeMaterial.enabled)&&!materialActive&&
         (vulkan||device_->info().backend==gfx::Backend::Metal);
     desc_.allocationBudget=device_->acquireGpuAllocationBudget(desc_.allocationBudget);
     if(!desc_.allocationBudget){reason_="GPU allocation budget conflicts with canonical Device ledger";return false;}
@@ -347,7 +351,11 @@ bool ComputeParticles::initGpu() {
         proceduralActive_&&vulkan?shaders::kProceduralBillboardGLSLFragment:fx::shaders::kParticleFS;
     shader.msl=materialActive?materialShaders.msl.c_str():
         proceduralActive_?shaders::kProceduralBillboardMetal:fx::shaders::kParticleMSL;
-    shader.textureSlots=1;shader.uniformSlots=1;
+    if(desc_.volumeMaterial.enabled){
+        shader.glslVertex=volumetric_particles::vertex;shader.glslFragment=volumetric_particles::fragment;
+        shader.msl=volumetric_particles::metal;
+    }
+    shader.textureSlots=desc_.volumeMaterial.enabled?0:1;shader.uniformSlots=1;
     shader.label=materialActive?"SpectraFX GPU particle material":"SpectraFX GPU billboard";
     vertexShader_=device_->createShader(shader);
     if(vertexShader_.valid()) {
@@ -361,7 +369,7 @@ bool ComputeParticles::initGpu() {
         pd.stride=proceduralActive_&&!vulkan?0:sizeof(Vertex);
         pd.vertexPerInstance=proceduralActive_&&vulkan;
         pd.indexType=wideIndices?gfx::IndexType::UInt32:gfx::IndexType::UInt16;
-        pd.cull=gfx::CullMode::None;pd.blend=gfx::BlendMode::Additive;
+        pd.cull=gfx::CullMode::None;pd.blend=desc_.volumeMaterial.enabled?gfx::BlendMode::Premultiplied:gfx::BlendMode::Additive;
         pd.depthTest=true;pd.depthWrite=false;
         pd.label="SpectraFX GPU additive";
         pipeline_=device_->createPipeline(pd);
@@ -1452,13 +1460,17 @@ void ComputeParticles::draw(const fx::FxFog& fog) {
     u.fog[0]=fog.color.x;u.fog[1]=fog.color.y;u.fog[2]=fog.color.z;u.fog[3]=fog.density;
     u.camera[0]=eye_.x;u.camera[1]=eye_.y;u.camera[2]=eye_.z;u.camera[3]=1;
     u.params[0]=1;u.params[1]=0;u.params[2]=0;u.params[3]=0;
+    if(desc_.volumeMaterial.enabled){
+        u.params[0]=desc_.volumeMaterial.density;u.params[1]=desc_.volumeMaterial.emission;
+        u.params[2]=float(desc_.volumeMaterial.steps);
+    }
     u.right[0]=right_.x;u.right[1]=right_.y;u.right[2]=right_.z;
     u.up[0]=up_.x;u.up[1]=up_.y;u.up[2]=up_.z;
     device_->setPipeline(pipeline_);
     device_->setVertexBuffer(vertices_);
     device_->setIndexBuffer(indices_);
     device_->setUniforms(0,&u,sizeof(u));
-    device_->setTexture(0,texture_);
+    if(!desc_.volumeMaterial.enabled)device_->setTexture(0,texture_);
     if(gpuIndirectActive_) {
         // No CPU readback, and no unsafe direct-draw fallback when GPU
         // authored arguments cannot be submitted. CPU's count is only an

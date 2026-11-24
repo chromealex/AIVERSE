@@ -17,6 +17,7 @@
 #include "SpectraAdaptiveCheckpoint.h"
 #include "SpectraActiveParticlePages.h"
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -61,6 +62,15 @@ inline constexpr size_t gpuBillboardGeometryBytes(uint32_t capacity,bool procedu
     return procedural?size_t(capacity)*40u+12u:
         size_t(capacity)*(160u+6u*(gpuEmitterUsesWideIndices(capacity)?4u:2u));
 }
+struct VolumetricParticleMaterial {
+    bool enabled=false;
+    float density=2,emission=0;
+    uint32_t steps=12;
+    bool valid()const{
+        return std::isfinite(density)&&density>=0&&density<=100&&
+            std::isfinite(emission)&&emission>=0&&emission<=16&&steps>=4&&steps<=32;
+    }
+};
 struct ComputeEmitterDesc {
     uint32_t capacity = 1024;          // default only; ceiling is kGpuEmitterMaxSlots
     uint32_t burst = 8;                // particles per call to burstAt
@@ -75,6 +85,7 @@ struct ComputeEmitterDesc {
     // paths. Requires RHI supportsGpuAuthoredIndirectDraw().
     bool gpuIndirect = false;
     bool gpuOwnedAllocation = false; // opt-in, requires GPU indirect; bounded owned checkpoint v2
+    VolumetricParticleMaterial volumeMaterial{};
     bool proceduralBillboards = false; // Metal compact records + indexed instancing
     // Experimental Metal GPU scalar VM (requires strict Stage-22 eligibility).
     // Off by default; unsupported stages/operations execute the full CPU VM.
