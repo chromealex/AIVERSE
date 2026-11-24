@@ -2,6 +2,7 @@
 #pragma once
 #include "engine/render/graph/TextureGraphGpu.h"
 #include "engine/render/graph/TextureGraphPipelineCache.h"
+#include "engine/render/graph/TextureGraphSharedScratch.h"
 #include <limits>
 #include "engine/render/graph/TextureGraphMaterialBinding.h"
 #include "engine/view/AppearanceAssetRegistry.h"
@@ -23,6 +24,9 @@ class TextureGraphGpuPreview {
     PipelineCache idlePipelines_;
     bool activePlanAccepted_=false,cacheHit_=false;
     uint64_t cacheHits_=0;
+    render::texture_graph::gpu::SharedScalarScratch sharedScratch_;
+    bool reusedScratch_=false;
+    size_t sharedScratchHits_=0;
     void destroyPair(gfx::Device& dev,gfx::ComputeHandle first,gfx::ComputeHandle second){
         if(first.valid())dev.destroyCompute(first);
         if(second.valid())dev.destroyCompute(second);
@@ -46,6 +50,7 @@ class TextureGraphGpuPreview {
     bool active()const{return queued_||state_=="pending"||setPending();}
     // Discard results now; keep submitted resources until owner retirement.
     void discard(const char* state,const char* why){
+        sharedScratch_.invalidate();reusedScratch_=false;
         queued_=false;state_=state;reason_=why;backend_="none";pixels_.clear();
         setImages_.clear();setBackends_.clear();program_.reset();sourceGraph_=Json();overrides_=Json();
     }
@@ -56,9 +61,10 @@ class TextureGraphGpuPreview {
     bool queued_=false,requireGpu_=false;
     bool ownsActiveResources()const{return buffer_.valid()||scratch_.valid()||compute_.valid()||secondCompute_.valid();}
     bool ownsResources()const{return ownsActiveResources()||idlePipelines_.size()!=0;}
-    void abandon(){buffer_={};scratch_={};compute_={};secondCompute_={};read_.reset();fence_=0;capacity_=0;activeKey_={};activePlanAccepted_=false;idlePipelines_.abandon();inFlight_=false;}
+    void abandon(){sharedScratch_.invalidate();reusedScratch_=false;buffer_={};scratch_={};compute_={};secondCompute_={};read_.reset();fence_=0;capacity_=0;activeKey_={};activePlanAccepted_=false;idlePipelines_.abandon();inFlight_=false;}
     void release(gfx::Device& dev){clearIdle(dev);if(compute_.valid())dev.destroyCompute(compute_);if(secondCompute_.valid())dev.destroyCompute(secondCompute_);if(buffer_.valid())dev.destroyBuffer(buffer_);if(scratch_.valid())dev.destroyBuffer(scratch_);abandon();}
     void fallback(const std::string& why){
+        sharedScratch_.invalidate();reusedScratch_=false;
         reason_=why;queued_=false;backend_="none";
         if(requireGpu_){state_="failed";pixels_.clear();return;}
         try{pixels_=render::texture_graph::evaluate(*program_,target_,size_).rgba;state_="ready";backend_="cpu";}
@@ -72,7 +78,7 @@ class TextureGraphGpuPreview {
             if(ref.rgba.size()!=pixels_.size())valid=false;
             else for(size_t i=0;i<pixels_.size();++i)if(std::abs(int(pixels_[i])-int(ref.rgba[i]))>1){valid=false;break;}
         }catch(...){valid=false;}
-        if(valid){activePlanAccepted_=true;state_="ready";backend_=submittedBackend_;reason_="complete native readback; CPU reference within one RGBA8 unit";}
+        if(valid){sharedScratch_.accept();if(reusedScratch_)++sharedScratchHits_;activePlanAccepted_=true;state_="ready";backend_=submittedBackend_;reason_="complete native readback; CPU reference within one RGBA8 unit";}
         else fallback("GPU readback or CPU parity check failed");
     }
     // Collect only a completed output. Multiple named outputs pointing to
@@ -94,7 +100,7 @@ class TextureGraphGpuPreview {
             reason_="all declared outputs completed";return;
         }
         const auto& next=setOutputs_[setImages_.size()];output_=next.first;target_=next.second;
-        received_=blocks_=scratchBytes_=0;passes_=0;reused_=reusedBuffers_=cacheHit_=false;pixels_.clear();
+        received_=blocks_=scratchBytes_=0;passes_=0;reused_=reusedBuffers_=cacheHit_=reusedScratch_=false;pixels_.clear();
         backend_="none";reason_.clear();queued_=true;state_="queued";
     }
     // One range in flight, with exact offset and length. No graphics stalls.
@@ -122,6 +128,8 @@ public:
         r.set("pipelineCacheHit",Json::fromBool(cacheHit_));
         r.set("pipelineCacheHits",Json::number(int64_t(std::min<uint64_t>(cacheHits_,uint64_t(std::numeric_limits<int64_t>::max())))));
         r.set("idlePipelinePlans",Json::number(int64_t(idlePipelines_.size())));
+        r.set("reusedScratch",Json::fromBool(reusedScratch_));
+        r.set("sharedScratchHits",Json::number(int64_t(sharedScratchHits_)));
         r.set("retainedBufferBytes",Json::number(int64_t(capacity_*(scratch_.valid()?2:1))));
         if(state_=="ready"){
             r.set("width",Json::number(int64_t(size_)));r.set("height",Json::number(int64_t(size_)));
@@ -143,6 +151,7 @@ public:
         const int requested=bake?program.size:render::texture_graph::integer(p["resolution"],32,8,render::texture_graph::gpu::maxPreviewSize);
         timeoutMs_=render::texture_graph::integer(p["timeoutMs"],60000,1000,300000);
         deadline_=Clock::now()+std::chrono::milliseconds(timeoutMs_);
+        sharedScratch_.invalidate();reusedScratch_=false;sharedScratchHits_=0;
         ++serial_;size_=std::min(program.size,requested);target_=target;program_=std::move(program);project_=project;output_=output;bake_=bake;published_=false;setBake_=setBake;
         sourceGraph_=setBake?p["graph"]:Json();overrides_=setBake?(p.has("overrides")?p["overrides"]:Json::object()):Json();
         setOutputs_.clear();setImages_.clear();setBackends_.clear();reusedOutputs_=0;
@@ -222,7 +231,7 @@ public:
         queued_=false;
         const bool metal=dev.info().backend==gfx::Backend::Metal,vulkan=dev.info().backend==gfx::Backend::Vulkan;
         if((!metal&&!vulkan)||!dev.supportsCompute()||!dev.gpuHealthy()){fallback("Metal/Vulkan compute unavailable");return;}
-        auto plan=render::texture_graph::gpu::plan(*program_,target_,size_);
+        auto plan=render::texture_graph::gpu::plan(*program_,target_,size_,setBake_);
         if(plan.first.msl.empty()){fallback(plan.first.reason);return;}
         scratchBytes_=plan.scratchBytes;submittedBackend_=metal?"metal":"vulkan";
         const auto first=metal?plan.first.msl:plan.first.glsl;
@@ -242,7 +251,7 @@ public:
                     [&](auto& e){destroyPair(dev,e.first,e.second);});
             else destroyPair(dev,compute_,secondCompute_);
             compute_={};secondCompute_={};activeKey_={};activePlanAccepted_=false;
-            if(!keepBuffers){if(buffer_.valid())dev.destroyBuffer(buffer_);buffer_={};if(scratch_.valid())dev.destroyBuffer(scratch_);scratch_={};capacity_=0;}
+            if(!keepBuffers){sharedScratch_.invalidate();if(buffer_.valid())dev.destroyBuffer(buffer_);buffer_={};if(scratch_.valid())dev.destroyBuffer(scratch_);scratch_={};capacity_=0;}
             reusedBuffers_=keepBuffers;
             fence_=dev.gpuSubmissionFence();inFlight_=true;
             auto createPipeline=[&](const Source& source){return dev.createCompute({metal?source.msl.c_str():nullptr,vulkan?source.glsl.c_str():nullptr,"TextureGraph compute"});};
@@ -255,7 +264,7 @@ public:
             }
             gfx::BufferDesc desc;desc.type=gfx::BufferType::Storage;desc.usage=gfx::Usage::Immutable;desc.size=bytes;desc.label="TextureGraph output";
             if(!buffer_.valid())buffer_=dev.createBuffer(desc);
-            if(plan.twoPass&&!scratch_.valid()){desc.label="TextureGraph height scratch";scratch_=dev.createBuffer(desc);}
+            if(plan.twoPass&&!scratch_.valid()){sharedScratch_.invalidate();desc.label="TextureGraph height scratch";scratch_=dev.createBuffer(desc);}
             if(!compute_.valid()||!buffer_.valid()||(plan.twoPass&&(!secondCompute_.valid()||!scratch_.valid()))){if(!ownsActiveResources())inFlight_=false;fallback("GPU plan allocation rejected");return;}
             capacity_=bytes;activeKey_=std::move(key);
         }
@@ -268,7 +277,17 @@ public:
             if(!encoded||(metal&&!dev.computeDispatchSucceeded()))return false;
             ++passes_;return true;
         };
-        if(!dispatch(compute_,plan.twoPass?scratch_:buffer_,{})||(plan.twoPass&&!dispatch(secondCompute_,buffer_,scratch_))){fallback("GPU dispatch rejected");return;}
+        // Scratch is request-local and may survive intervening pointwise outputs.
+        // Only an accepted producer with the same scalar node, size and backend
+        // can skip the first pass. Every consumer still receives CPU parity.
+        reusedScratch_=false;
+        if(setBake_&&plan.twoPass){
+            const auto& node=program_->nodes[target_];
+            const auto scalarTarget=std::string(node.info->id)=="normal"?node.inputs[0]:target_;
+            reusedScratch_=sharedScratch_.begin({serial_,scalarTarget,size_,vulkan});
+        }else if(plan.twoPass)sharedScratch_.invalidate();
+        if((!reusedScratch_&&!dispatch(compute_,plan.twoPass?scratch_:buffer_,{}))||
+            (plan.twoPass&&!dispatch(secondCompute_,buffer_,scratch_))){fallback("GPU dispatch rejected");return;}
         pixels_.assign(bytes,0);state_="pending";
         if(!queueRange(dev))fallback("GPU readback request rejected");
     }
