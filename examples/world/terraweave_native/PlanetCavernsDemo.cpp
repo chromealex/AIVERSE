@@ -3,6 +3,7 @@
 #include "engine/physis/PhysisIntegration.h"
 #include "engine/platform/Platform.h"
 #include "engine/world/TerraWeaveCavernsGraphSolvers.h"
+#include "engine/physics/TerraWeaveCavernsNativeCheckpoint.h"
 #include <algorithm>
 #include <array>
 #include <cstdio>
@@ -121,7 +122,12 @@ struct Demo {
     std::map<uint64_t,CavePlanetGiCanonicalChunk> baselineSources;
     double renderSeconds=0;
     uint32_t lastRebaseTick=0,rebaseCount=0;
-    bool movingView=false;
+    bool movingView=false,forceRebase=false;
+    bool restoreScenario=false,restoreCompleted=false;
+    std::string checkpointBytes;
+    uint32_t checkpointTick=0;
+    uint64_t checkpointChecksum=0;
+    bool restoredProxyReady=false;
     std::unique_ptr<physics::Scene> box;
     world::SpatialWorld spatial;
     CaveColliderLeasePool pool{1,1000000};
@@ -172,7 +178,7 @@ struct Demo {
     }
     void updateMovingFrame(){
         if(!movingView||!host->runtime().regionReady(sim->world(),regionId)||
-           sim->tick()-lastRebaseTick<30)return;
+           (!forceRebase&&sim->tick()>=lastRebaseTick&&sim->tick()-lastRebaseTick<30))return;
         const auto hash=sim->checksum(),physicsTick=box->tick(),spatialRevision=spatial.mutationVersion();
         const auto nextSerial=rebaseCount+1;
         const double nextTime=double(sim->tick())/tickRate;
@@ -189,7 +195,7 @@ struct Demo {
                 spatial.mutationVersion()==spatialRevision,"render rebase mutated gameplay");
         }catch(...){host->runtime().quarantineNativeMotion();throw;}
         viewFrame=nextView;project.swap(nextProject);renderSeconds=nextTime;
-        lastRebaseTick=sim->tick();rebaseCount=nextSerial;
+        lastRebaseTick=sim->tick();rebaseCount=nextSerial;forceRebase=false;
         std::fprintf(stdout,"[caverns-demo] REBASE serial=%u seconds=%.3f tick=%u\n",
             rebaseCount,renderSeconds,sim->tick());
     }
@@ -272,6 +278,11 @@ struct Demo {
         flightIntent.basis=cavePlanetMotionBasis(*frame,sim->world(),*position(sim->world(),module->actor));
         const auto orientation=cavePlanetVolumeOrientation(*frame,flightIntent);
         require(orientation&&box->moveCharacterOriented(proxy,actorState,*orientation,true),"initial proxy orientation");
+        require(host->setNativeRestoreProof([this](const Simulation& state){
+            return restoredProxyReady&&&state==sim.get()&&state.world().alive(module->actor)&&
+                caveNativeProxyPositionMatches(*box,proxy,actorState)&&
+                cavePlanetDispatchPositionMatches(position,state.world(),module->actor,actorState);
+        }),"bind native restore proof");
         // A deeply immersed swimmer must deliberately steer vertically;
         // neutral buoyancy would otherwise rise toward the water surface.
         swimConfig.buoyancy=Fixed{};
@@ -323,10 +334,56 @@ struct Demo {
                 throw std::runtime_error("native motor refused");
             if(result==CavePlanetDispatchResult::Interior&&scenario==Scenario::Swim)
                 s.world().get<DemoSwimState>(module->actor).value=stagedSwim;
+            if(result==CavePlanetDispatchResult::Held||result==CavePlanetDispatchResult::Repath){
+                require(box->setLinearVelocity(proxy,{0,0,0})&&box->setAngularVelocity(proxy,{0,0,0}),
+                    "hold actual native proxy");
+            }
         };
         render::MeshBuilder mesh;mesh.color(render::rgba(255,180,65)).sphere({},.18f);
         marker=mesh.upload(dev);
         initialized=true;exclusive=false;
+    }
+    // Save at a completed simulation/physics boundary, then deliberately
+    // advance before loading. Portal checkpoint is taken while straddling
+    // a committed rim, not before the travel request starts.
+    bool exerciseRestore(){
+        if(!restoreScenario||restoreCompleted||arrived)return false;
+        const auto* travel=sim->world().tryGetConst<CavePlanetTravel>(module->actor);
+        require(bool(travel),"checkpoint travel missing");
+        if(checkpointBytes.empty()){
+            const bool eligible=scenario==Scenario::Portal?
+                (travel->pendingRegion&&travel->phase==CavePlanetCrossingPhase::Clearance):
+                sim->tick()>=24;
+            if(!eligible)return false;
+            const auto saved=captureCaveNativeCheckpoint(*sim,*box,module->actor,proxy,actorState,position);
+            require(bool(saved),"capture actual native checkpoint");
+            checkpointBytes=encodeCaveNativeCheckpoint(*saved);
+            require(!checkpointBytes.empty(),"encode native checkpoint");
+            checkpointTick=saved->simulationTick;checkpointChecksum=saved->checksum;
+            std::fprintf(stdout,"[caverns-demo] SAVED tick=%u bytes=%zu\n",checkpointTick,checkpointBytes.size());
+            return false;
+        }
+        if(sim->tick()-checkpointTick<12)return false;
+        const auto saved=decodeCaveNativeCheckpoint(checkpointBytes);
+        require(saved&&saved->actor==module->actor&&saved->simulationTick==checkpointTick&&
+            saved->checksum==checkpointChecksum,"decode checkpoint identity");
+        restoredProxyReady=false;
+        renderer.clearDynamicGiOverlay();
+        try{
+            std::string error;
+            require(sim->deserialize(saved->simulation,&error),"restore simulation checkpoint");
+            require(sim->tick()==checkpointTick&&sim->checksum()==checkpointChecksum&&
+                sim->world().alive(saved->actor),"restore ECS identity/checksum");
+            require(cavePlanetDispatchPositionMatches(position,sim->world(),saved->actor,saved->controller),
+                "saved proxy does not match restored ECS position");
+            require(restoreCaveNativeAirborneProxy(*box,proxy,*saved,actorState),"restore actual native proxy");
+            require(!host->admitNativeTick(sim->world(),{regionId}),"restore must close native admission");
+            restoredProxyReady=true;
+        }catch(...){host->runtime().quarantineNativeMotion();throw;}
+        restoreCompleted=true;forceRebase=movingView;accumulator=0;
+        std::fprintf(stdout,"[caverns-demo] RESTORED tick=%u checksum=%llu\n",sim->tick(),
+            static_cast<unsigned long long>(checkpointChecksum));
+        return true;
     }
     // All mutation outside render passes; platform afterFrame is the actual
     // completed submission boundary. No simulation update from draw.
@@ -336,12 +393,12 @@ struct Demo {
         try{
             const auto p=position(sim->world(),module->actor);
             require(bool(p),"missing actor position");
-            updateMovingFrame();
             const std::array<CavePlanetObserver,1> observers{{{planetBody,*p}}};
             const auto progress=host->beforeFrame(sim->world(),renderer,observers,{regionId},4);
             if(progress.phase==CavePlanetRuntimePhase::Recovery||progress.phase==CavePlanetRuntimePhase::Refused)
                 throw std::runtime_error(progress.diagnostic);
             if(progress.pinsReady&&exterior->covers(host->runtime(),sim->world(),anchor.bodyId,keys)){
+                updateMovingFrame();
                 accumulator+=std::min(dt,.1);
                 while(accumulator>=1./tickRate&&!arrived){
                     const auto tick=host->stepNativeTick({regionId});
@@ -373,6 +430,7 @@ struct Demo {
                         actor.journey=Journey::Done;arrived=true;
                     }
                     if(arrived)std::fprintf(stdout,"[caverns-demo] ARRIVED tick=%u bodies=%zu\n",sim->tick(),box->bodyCount());
+                    if(exerciseRestore())break;
                 }
             }
             (void)gi.updateFrame(renderPosition(*position(sim->world(),module->actor)));
@@ -382,6 +440,7 @@ struct Demo {
             if(maxFrames&&frames>=maxFrames){
                 if(!arrived)fail("route did not arrive within frame budget");
                 else if(movingView&&!rebaseCount)fail("moving view did not publish a rebase");
+                else if(restoreScenario&&(!restoreCompleted||sim->tick()<=checkpointTick))fail("restore/replay did not complete");
                 else{stopping=true;platform::requestQuit();}
             }
         }catch(const std::exception& ex){fail(ex.what());}
@@ -432,6 +491,7 @@ int aiverseMain(int argc,char** argv){
         else if(arg=="--portal")demo->scenario=Scenario::Portal;
         else if(arg=="--swim")demo->scenario=Scenario::Swim;
         else if(arg=="--moving-view")demo->movingView=true;
+        else if(arg=="--restore")demo->restoreScenario=true;
         else{std::fprintf(stderr,"Unknown argument: %s\n",arg.c_str());return 2;}
     }
     platform::AppConfig cfg;cfg.title="AIVERSE Caverns — native chamber";cfg.width=1280;cfg.height=800;

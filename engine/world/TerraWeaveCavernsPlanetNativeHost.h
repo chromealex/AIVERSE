@@ -110,6 +110,13 @@ public:
     CavePlanetNativeHost(const CavePlanetNativeHost&)=delete;
     CavePlanetNativeHost& operator=(const CavePlanetNativeHost&)=delete;
 
+    // Register the actual native actor/physics restore proof. A Simulation
+    // restore without an acknowledged native world must never reopen ticks.
+    bool setNativeRestoreProof(std::function<bool(const Simulation&)> proof){
+        if(closed_||!exclusive_()||!proof||nativeRestoreProof_)return false;
+        nativeRestoreProof_=std::move(proof);return true;
+    }
+
     // Never step Simulation or Box3D here: the existing host owns both.
     // Pins include actors and requested destination charts, not just camera.
     CavePlanetRuntimeProgress beforeFrame(const World& world,render::Renderer3D& renderer,
@@ -125,6 +132,15 @@ public:
         }
         const auto required=cavePlanetTravelPins(world,pins);
         renderer.clearDynamicGiOverlay();
+        if(notice_.pending()){
+            bool safe=false;
+            try{safe=nativeRestoreProof_&&nativeRestoreProof_(sim_);}catch(...){safe=false;}
+            if(!safe){
+                result.phase=CavePlanetRuntimePhase::WaitingCoverage;
+                result.diagnostic="Caverns waiting for native actor restoration";
+                return result;
+            }
+        }
         const bool restored=notice_.consume();
         if(restored){runtime_->invalidateAfterRestore();motorGuard_.reset();}
         if(runtime_->recoveryRequired()){
@@ -282,6 +298,7 @@ private:
     CavePlanetNativeOwner::Exclusive exclusive_;
     std::function<bool()> giReady_;
     CavePlanetRestoreNotice notice_;
+    std::function<bool(const Simulation&)> nativeRestoreProof_;
     CavePlanetGiPublication<Target> publication_; // outlives runtime callbacks
     std::unique_ptr<CavePlanetRuntimeFrame> runtime_;
     bool frameCoherent_=false,closed_=false;

@@ -4,6 +4,7 @@
 #include "engine/physics/TerraWeaveCavernsPlanetMotorBridge.h"
 #include "engine/world/TerraWeaveCavernsPlanetGiPublication.h"
 #include "engine/world/TerraWeaveCavernsPlanetNativeHost.h"
+#include "engine/physics/TerraWeaveCavernsNativeCheckpoint.h"
 #include <stdexcept>
 #include <iostream>
 using namespace aiverse;
@@ -134,6 +135,23 @@ static void checkExactGiBaselineRemap(){
     check(refused,"unowned GI chunk refused");
     refused=false;try{(void)remap(7,{20,20,20});}catch(const std::out_of_range&){refused=true;}
     check(refused,"unknown baseline vertex refused");
+}
+static void checkNativeCheckpointCodec(){
+    CaveNativeAirborneCheckpoint c;c.actor={7,2};c.simulationTick=21;c.checksum=123;
+    c.controller.position={1,2,3};c.controller.velocity={.25f,0,-.5f};c.simulation="fixture";
+    const auto bytes=encodeCaveNativeCheckpoint(c);
+    auto restored=decodeCaveNativeCheckpoint(bytes);
+    check(restored&&restored->actor==c.actor&&restored->simulationTick==21&&
+        restored->controller.velocity.z==-.5f&&restored->simulation=="fixture","native checkpoint roundtrip");
+    check(!decodeCaveNativeCheckpoint(bytes.substr(0,bytes.size()-1)),"truncated checkpoint refused");
+    check(!decodeCaveNativeCheckpoint(bytes+"x"),"trailing checkpoint bytes refused");
+    c.controller.grounded=true;check(encodeCaveNativeCheckpoint(c).empty(),"unsupported moving ground refused");
+    c.controller.grounded=false;
+    physics::Scene scene;physics::CharacterParams params;physics::CharacterState state;
+    const auto proxy=scene.createCharacter(params,{0,0,0});
+    check(proxy!=physics::kNoBody&&restoreCaveNativeAirborneProxy(scene,proxy,c,state)&&
+        caveNativeProxyPositionMatches(scene,proxy,state)&&state.velocity.z==-.5f,"actual native proxy restore");
+    check(scene.destroy(proxy),"destroy restored proxy");
 }
 static void checkNativeDispatchGuard(){
     World world;const auto a=world.create(),b=world.create();
@@ -355,6 +373,7 @@ int main(){
     checkTravelReceipts();
     checkTravelModeSelection();
     checkNativeDispatchGuard();
+    checkNativeCheckpointCodec();
     checkExactGiBaselineRemap();
     checkTravelPins();
     checkOrientedMotor();
