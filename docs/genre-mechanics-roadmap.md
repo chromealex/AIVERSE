@@ -120,3 +120,7 @@ Bind immutable planetary navigation sources to the actual complete volume cohort
 ### Stage54v2b — IN PROGRESS
 
 Extend the shared SDF provider with deterministic gravity-oriented ground clearance, support, swept residency and step checks; preserve flat defaults and use existing graph algorithms. Restrict existing chart-Y NavMesh to compatible samples and validate all native/resident route segments, including projections. Fence native mesh caches by immutable provider identity across regions. Add registered fixtures for floor/wall/ceiling/zero gravity and invalid routes. Native QA pending; no arbitrary-gravity 2.5D mesh or host migration claimed.
+
+### Stage54v2c1 — IN PROGRESS
+
+Extend shared motor-neutral ECS navigation to resolve a scoped immutable provider per entity and persist stable region ID separately, preserving flat schemas. Search and steering use matching scope and canonical SDF/environment epochs; native residency remains a separate host admission fence, never a process-local lockstep epoch. Provide deterministic planetary region source capture and chart position/goal adapters. Test source for same-revision region separation and shared graph solvers. Native host commit/GI integration and QA remain follow-up.
