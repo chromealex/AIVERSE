@@ -680,7 +680,53 @@ static void checkAsyncPersistenceMailbox(){
 #endif
 }
 
+static void checkLedgerCompaction(){
+    RegionEntityLedger ledger;
+    AIVERSE_TEST_CHECK(ledger.spawn(1,a)&&ledger.spawn(9,b));
+    AIVERSE_TEST_CHECK(ledger.despawn(9,b));
+    const auto retiredRevision=ledger.lastRevision();
+    AIVERSE_TEST_CHECK(ledger.spawn(10,a)&&ledger.despawn(10,a));
+    const auto latest=ledger.lastRevision();
+    {
+        RegionEntityLedger::Transaction tx(ledger);
+        AIVERSE_TEST_CHECK(ledger.compactRetired(latest)==0);
+    }
+    AIVERSE_TEST_CHECK(ledger.compactRetired(latest,1)==1);
+    AIVERSE_TEST_CHECK(ledger.retiredFloor()==9&&ledger.historyFloor()==retiredRevision);
+    AIVERSE_TEST_CHECK(!ledger.find(9)&&ledger.isRetired(9)&&ledger.isRetired(8));
+    AIVERSE_TEST_CHECK(ledger.find(1)->live&&!ledger.isRetired(1));
+    AIVERSE_TEST_CHECK(!ledger.spawn(9,a)&&!ledger.spawn(8,a));
+    AIVERSE_TEST_CHECK(ledger.pageSince(0,100).resetRequired);
+    RegionChangeCursor stale;
+    AIVERSE_TEST_CHECK(stale.requiresBootstrap(ledger));
+    AIVERSE_TEST_CHECK(!stale.consume(ledger,100,[](auto,const auto&){return true;}));
+    stale.reset(latest);
+    AIVERSE_TEST_CHECK(!stale.requiresBootstrap(ledger));
+    AIVERSE_TEST_CHECK(ledger.compactRetired(latest)==1);
+    AIVERSE_TEST_CHECK(ledger.lastRevision()==latest&&ledger.nextIdentity()==11&&ledger.size()==1);
+    std::vector<uint8_t> bytes;
+    AIVERSE_TEST_CHECK(RegionCheckpointArchive::encode(ledger,bytes));
+    RegionEntityLedger restored;
+    AIVERSE_TEST_CHECK(RegionCheckpointArchive::decode(bytes,restored)&&restored.sameState(ledger));
+    RegionWalFrame frame;
+    auto next=restored;
+    {
+        RegionEntityLedger::Transaction tx(next,true);
+        AIVERSE_TEST_CHECK(tx.spawn(11,c));
+        AIVERSE_TEST_CHECK(RegionWalTransaction::encode(tx,1,frame));
+        tx.commit();
+    }
+    AIVERSE_TEST_CHECK(RegionWalTransaction::replay(restored,frame)&&restored.sameState(next));
+    // Legacy v1 ledger archive has no sealed prefix.
+    std::string v1;Archive writer(&v1);uint32_t schema=1,n=1;
+    uint64_t revision=1,id=77;RegionEntityRecord record{a,1,1};
+    writer(schema,revision,n,id,record);
+    Archive reader(v1);RegionEntityLedger legacy;io(reader,legacy);
+    AIVERSE_TEST_CHECK(reader.ok()&&legacy.nextIdentity()==78&&legacy.historyFloor()==0&&legacy.retiredFloor()==0);
+}
+
 int main() {
+    checkLedgerCompaction();
     checkAsyncPersistenceMailbox();
     checkExactMutationCapture();
     checkNativeFinality();
