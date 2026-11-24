@@ -407,6 +407,60 @@ Json MapDoc::toJson() const {
     return j;
 }
 
+std::vector<ProjectFileEdit> MapDoc::stageExistingSave(const std::filesystem::path& project){
+    namespace fs=std::filesystem;
+    if(path.empty()||compoundBefore_)throw std::runtime_error("Save an existing map outside an active compound edit");
+    const auto root=fs::canonical(project);
+    std::vector<ProjectFileEdit> edits;
+    std::set<fs::path> targets;
+    size_t bytes=0;
+    const auto append=[&](const std::string& file,const std::string& after){
+        const auto target=fs::absolute(file).lexically_normal();
+        const auto rel=target.lexically_relative(root);
+        if(rel.empty()||rel.is_absolute()||*rel.begin()==".."||
+           !fs::is_regular_file(fs::symlink_status(target))||fs::canonical(target)!=target)
+            throw std::runtime_error("Coordinated save requires an existing safe map/sidecar: "+file);
+        if(!targets.insert(target).second)throw std::runtime_error("Duplicate map sidecar target: "+file);
+        constexpr size_t limit=128u*1024u*1024u;
+        if(after.size()>limit-bytes||fs::file_size(target)>limit-bytes-after.size())
+            throw std::runtime_error("Coordinated map save exceeds snapshot budget");
+        auto before=readProjectFileBytes(target);
+        if(before.size()>limit-bytes-after.size())throw std::runtime_error("Coordinated map save exceeds snapshot budget");
+        bytes+=before.size()+after.size();
+        edits.push_back({target,std::move(before),after});
+    };
+    for(auto [a,b]:data.roads)
+        for(int i:{a,b})if(data.entities.at(size_t(i)).id.empty())
+            data.entities.at(size_t(i)).id=uniqueId(data.entities.at(size_t(i)).type);
+    auto j=toJson();
+    const auto take=[&](Json& owner,const char* fileKey,const char* blobKey){
+        if(!owner.has(blobKey))return;
+        append(cornersPath(path,owner.getStr(fileKey)),owner[blobKey].str());
+        owner.erase(blobKey);
+    };
+    if(auto* t=j.find("terrain")){
+        take(*t,"cornersFile","cornersBlob");
+        if(t->has("cornersFile"))data.cornersFile=t->getStr("cornersFile");
+        if(auto* detail=t->find("detail")){
+            take(*detail,"file","blob");take(*detail,"splat","splatBlob");
+            data.detailFile=detail->getStr("file");
+        }
+    }
+    if(auto* world=j.find("world");world&&world->find("bodies"))
+        for(size_t i=0;i<world->find("bodies")->size();++i){
+            auto* t=world->find("bodies")->at(i).find("terrain");
+            if(!t)continue;
+            if(auto* detail=t->find("detail")){
+                take(*detail,"file","blob");
+                if(i<data.bodies.size())data.bodies[i].detailFile=detail->getStr("file");
+            }
+            take(*t,"cornersFile","cornersBlob");
+            if(i<data.bodies.size()&&t->has("cornersFile"))data.bodies[i].cornersFile=t->getStr("cornersFile");
+        }
+    append(path,j.dump()+"\n");
+    return edits;
+}
+
 bool MapDoc::save(const std::string& file, std::string* err) {
     std::shared_ptr<void> historyLock;
     try{historyLock=beginHistorySave(file);}
