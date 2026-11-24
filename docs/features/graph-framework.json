@@ -135,7 +135,8 @@
     "apps/editor/core/TexturePublicationJournal.h",
     "apps/editor/core/PublicationIntegrity.h",
     "apps/studio-native/StudioAssetCatalog.cpp",
-    "apps/editor/core/ProjectAssetWriteLock.h"
+    "apps/editor/core/ProjectAssetWriteLock.h",
+    "apps/editor/core/PublicationArchive.h"
   ],
   "traits": {
     "editable": true,
@@ -181,7 +182,7 @@
     },
     "persistence": {
       "status": "not_run",
-      "note": "Stage 57 ports Stage 53/54 cooperating-writer graph asset transactions and exact original checks to Building integration; authored regressions not run. Stage 58 project-scoped generic operation form and Studio bridge regression authored; current API documentation updated. Stage 67 invalidates Native Editor GPU preview and profile on Workspace project reopen, and isolated debugger on lifetime change. GPU retirement remains owner-driven; execution NOT RUN. Stage 68 serializes native material_set/delete read-modify-write under shared graph asset lock; create-only graph variants and Studio creation use locked existence checks; existing patch cannot recreate a deleted material. Tests NOT RUN. Stage 69 records create-only building publication intent and candidate outside content; Studio project open reports incomplete/active or committed/conflicting intents without deleting uncertain assets. Tests NOT RUN. Stage 70 persists generated asset GUID expectations and exposes read-only publication diagnostics in Material Library; missing files/metadata/GUID mismatches reported. Automatic rollback and Texture Graph journal not implemented; tests NOT RUN. Stage 71 records shared CPU/GPU image/set publication intent and exposes read-only MCP/Studio diagnostics. Pending intents remain after uncertain failure; no automatic deletion or durability proof. Tests NOT RUN. Stage 72 records SHA-256 evidence before texture publication and building material commit; read-only diagnostics distinguish matching/mismatched bytes. No authentication of journal, automatic rollback or power-loss guarantee. Tests NOT RUN. Stage 73 records original sidecar JSON and adds internal explicit missing-metadata restoration with committed-material, hash, fixed path and GUID checks; caller must ensure exclusive project access. No public repair RPC or rollback yet; tests NOT RUN. Stage 74 adds reentrant owner-thread cooperative project asset writer lock across graph/material transactions, texture publication, Studio catalog and selected Studio content mutation/recovery paths. Remaining direct writers and stale-lock recovery not audited; no public destructive repair. Tests NOT RUN. Stage 75 replaces project directory lease with OS-released persistent file lock (POSIX flock/Windows exclusive handle), preserves nested calls and rejects legacy directory locks; contention fixture authored, NOT RUN. Public recovery remains gated on coverage audit. Stage 76 exposes explicit missing-sidecar recovery in Studio with required project/document epoch and cooperative writer lease. Catalog refuses fresh GUID for recoverable journal assets. No automatic deletion, MCP repair or full writer audit. Tests NOT RUN.",
+      "note": "Stage 57 ports Stage 53/54 cooperating-writer graph asset transactions and exact original checks to Building integration; authored regressions not run. Stage 58 project-scoped generic operation form and Studio bridge regression authored; current API documentation updated. Stage 67 invalidates Native Editor GPU preview and profile on Workspace project reopen, and isolated debugger on lifetime change. GPU retirement remains owner-driven; execution NOT RUN. Stage 68 serializes native material_set/delete read-modify-write under shared graph asset lock; create-only graph variants and Studio creation use locked existence checks; existing patch cannot recreate a deleted material. Tests NOT RUN. Stage 69 records create-only building publication intent and candidate outside content; Studio project open reports incomplete/active or committed/conflicting intents without deleting uncertain assets. Tests NOT RUN. Stage 70 persists generated asset GUID expectations and exposes read-only publication diagnostics in Material Library; missing files/metadata/GUID mismatches reported. Automatic rollback and Texture Graph journal not implemented; tests NOT RUN. Stage 71 records shared CPU/GPU image/set publication intent and exposes read-only MCP/Studio diagnostics. Pending intents remain after uncertain failure; no automatic deletion or durability proof. Tests NOT RUN. Stage 72 records SHA-256 evidence before texture publication and building material commit; read-only diagnostics distinguish matching/mismatched bytes. No authentication of journal, automatic rollback or power-loss guarantee. Tests NOT RUN. Stage 73 records original sidecar JSON and adds internal explicit missing-metadata restoration with committed-material, hash, fixed path and GUID checks; caller must ensure exclusive project access. No public repair RPC or rollback yet; tests NOT RUN. Stage 74 adds reentrant owner-thread cooperative project asset writer lock across graph/material transactions, texture publication, Studio catalog and selected Studio content mutation/recovery paths. Remaining direct writers and stale-lock recovery not audited; no public destructive repair. Tests NOT RUN. Stage 75 replaces project directory lease with OS-released persistent file lock (POSIX flock/Windows exclusive handle), preserves nested calls and rejects legacy directory locks; contention fixture authored, NOT RUN. Public recovery remains gated on coverage audit. Stage 76 exposes explicit missing-sidecar recovery in Studio with required project/document epoch and cooperative writer lease. Catalog refuses fresh GUID for recoverable journal assets. No automatic deletion, MCP repair or full writer audit. Tests NOT RUN. Stage 77 verifies and archives material/texture journals without deleting assets; texture set evidence covers compiled output set. Native regression authored, NOT RUN. Quarantine and rollback pending.",
       "evidence": []
     },
     "graphs": {
@@ -297,7 +298,8 @@
       "texture_graph_cache",
       "texture_graph_material_variant",
       "texture_graph_gpu_preview",
-      "texture_graph_publications_get"
+      "texture_graph_publications_get",
+      "texture_graph_publication_finalize"
     ],
     "studio_panels": [
       "shader_graph",
@@ -320,7 +322,8 @@
       "studio.materialPatch",
       "studio.assetByGuid",
       "studio.cavernsGraphInspect",
-      "studio.materialPublicationRepair"
+      "studio.materialPublicationRepair",
+      "studio.materialPublicationFinalize"
     ]
   },
   "test_reports": []

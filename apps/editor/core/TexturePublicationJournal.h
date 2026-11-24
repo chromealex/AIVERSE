@@ -2,6 +2,8 @@
 // Owner-side publication intent. Inspection never mutates or removes assets.
 #include "engine/data/Json.h"
 #include "PublicationIntegrity.h"
+#include "PublicationArchive.h"
+#include "ProjectAssetWriteLock.h"
 #include <set>
 #include "engine/render/graph/TextureGraph.h"
 #include <filesystem>
@@ -41,6 +43,16 @@ public:
         fs::rename(dir_/"files.tmp",dir_/"files.json");
     }
     void finish() noexcept {std::error_code ec;std::filesystem::remove_all(dir_,ec);}
+    static void finalize(const Path& project,const std::string& id){
+        ProjectAssetWriteLock lock(project);
+        for(const auto& row:inspect(project).items()){
+            if(row.getStr("id")!=id)continue;
+            if(row.getStr("status")!="destination_matches_evidence"||row.getBool("stagePresent"))
+                throw std::runtime_error("Texture publication not verified or staging remains");
+            archivePublicationJournal(root(project)/id);return;
+        }
+        throw std::runtime_error("Unknown texture publication");
+    }
     static Json inspect(const Path& project){
         namespace fs=std::filesystem;
         Json rows=Json::array();const auto parent=root(project);
@@ -76,7 +88,16 @@ public:
                             if(!allowed||!seen.insert(fileName).second||digest.size()!=64){valid=false;break;}
                             try{if(publicationFileSha256(set?dest/fileName:dest)!=digest)valid=false;}catch(...){valid=false;}
                         }
-                        if(set&&(!seen.count("texture-set.json")||seen.size()<2))valid=false;
+                        if(set){
+                            if(!seen.count("texture-set.json")||seen.size()<2)valid=false;
+                            if(valid)try{
+                                const auto manifest=Json::parseFile((dest/"texture-set.json").string());
+                                const auto program=render::texture_graph::compile(manifest["graph"],manifest["overrides"]);
+                                std::set<std::string> required{"texture-set.json"};
+                                for(const auto& pair:program.outputs)required.insert(pair.first+".png");
+                                if(required!=seen)valid=false;
+                            }catch(...){valid=false;}
+                        }
                         if(!set&&seen.size()!=1)valid=false;
                         row.set("status",Json::string(valid?"destination_matches_evidence":"destination_evidence_mismatch"));
                     }

@@ -122,7 +122,12 @@ int main() {
         requireGraphTest(call("texture_graph_publications_get",Json::object())["publications"][size_t(0)].getStr("status")=="destination_matches_evidence","hash verification failed");
         {std::ofstream out(file,std::ios::binary|std::ios::trunc);out<<"changed";}
         requireGraphTest(call("texture_graph_publications_get",Json::object())["publications"][size_t(0)].getStr("status")=="destination_evidence_mismatch","changed bytes accepted");
-        fs::remove(file);intent.finish();
+        const auto finalize=Json::parse(R"({"id":"image-fixture.color"})");
+        requireGraphTest(call("texture_graph_publication_finalize",finalize).has("error"),"mismatched publication finalized");
+        {std::ofstream out(file,std::ios::binary|std::ios::trunc);out<<"abc";}
+        requireGraphTest(call("texture_graph_publication_finalize",finalize).getBool("ok"),"verified publication not finalized");
+        requireGraphTest(fs::exists(file),"finalization removed asset");
+        fs::remove(file);
         requireGraphTest(call("texture_graph_publications_get",Json::object())["publications"].size()==0,"completed intent retained");
     }
     {

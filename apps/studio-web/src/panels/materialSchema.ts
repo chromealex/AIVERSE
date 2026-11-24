@@ -2,7 +2,7 @@
 export type FieldValue=string|number|boolean;
 export type MaterialData=Record<string,unknown>;
 export interface MaterialPublicationAsset {path:string;present:boolean;metadataPresent:boolean;guidMatches:boolean;hashMatches?:boolean;recoverable?:boolean}
-export interface MaterialPublication {name:string;status:string;assets:MaterialPublicationAsset[]}
+export interface MaterialPublication {name:string;status:string;finalizable?:boolean;assets:MaterialPublicationAsset[]}
 export interface MaterialLibrary {library:Record<string,MaterialData>;pendingPublications?:MaterialPublication[];publicationInspectionError?:string}
 export const MATERIAL_EDIT_KEYS=[
   'metallic','roughness','thinTransmission','shadowDiffusion','sssStrength','sssScale','sssThickness','sssColor','cutoff','teamStrength','occlusionStrength',

@@ -104,6 +104,17 @@ export default function MaterialsPanel({projectPath,previewMaterial,documentEpoc
   }catch(e){setError(e instanceof Error?e.message:String(e))}
   finally{setBusy(false)}
  };
+ const finalize=async(publication:string)=>{
+  if(busy||loading||!connected||!projectPath||!documentEpoch||changes>0)return;
+  setBusy(true);setError('');
+  try{
+   const response=await invoke('studio.materialPublicationFinalize',{name:publication,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch});
+   if(!response.finalized)throw Error('Publication finalization rejected');
+   setLibrary(current=>({...current,pendingPublications:response.pendingPublications}));
+   setMessage('Verified publication journal archived. Assets unchanged.');
+  }catch(e){setError(e instanceof Error?e.message:String(e))}
+  finally{setBusy(false)}
+ };
  const discard=()=>{
   setDraft({});
   if(pending!==null){setName(pending);setPending(null);}
@@ -127,6 +138,7 @@ export default function MaterialsPanel({projectPath,previewMaterial,documentEpoc
    <p>Recovery inspection. Restore only missing metadata from recorded evidence. No files are removed automatically.</p>
    {library.pendingPublications.map(p=><div key={p.name}>
     <strong>{p.name}</strong> — {p.status==='material_committed'?'Material committed':p.status==='material_conflict'?'Material conflict':'Incomplete or active'}
+    {p.finalizable&&<StudioButton size="sm" disabled={busy||loading||!connected||!documentEpoch||changes>0} onClick={()=>void finalize(p.name)}>Finalize verified publication</StudioButton>}
     {p.assets.map(a=><div key={a.path}>{a.path}: {!a.present?'missing texture':!a.metadataPresent?'missing metadata':!a.guidMatches?'GUID mismatch':a.hashMatches===false?'texture hash mismatch':a.hashMatches===true?'texture, hash and GUID match':'texture and GUID present; hash unverified'}{a.recoverable&&<StudioButton size="sm" disabled={busy||loading||!connected||!documentEpoch||changes>0} onClick={()=>void repair(p.name,a.path)}>Restore original metadata</StudioButton>}</div>)}
    </div>)}
   </details>}

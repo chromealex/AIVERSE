@@ -483,6 +483,7 @@ void registerMaterialOps(Workspace& ws) {
         else fs::create_hard_link(temp,file); // exclusive creation, never overwrite existing asset
     };
     add("texture_graph_publications_get","Inspect pending CPU/GPU texture publication intents; never delete or repair assets.",R"({"type":"object","additionalProperties":false})",[w](const Json&){needProject(*w);Json r=okJson();r.set("publications",TexturePublicationJournal::inspect(fs::canonical(w->project.dir)));return r;});
+    add("texture_graph_publication_finalize","Archive verified texture publication journal; no asset deletion.",R"({"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false})",[w](const Json& p){needProject(*w);TexturePublicationJournal::finalize(fs::canonical(w->project.dir),p.getStr("id"));return okJson();});
     auto textureCache=std::make_shared<render::texture_graph::EvaluationCache>();
     const std::string graphSchema=R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"textureName":{"type":"string"},"overrides":{"type":"object"}}})";
     add("texture_graph_cache","Inspect or clear this Workspace texture evaluation cache.",R"({"properties":{"clear":{"type":"boolean"}}})",[w,textureCache](const Json& p){textureCache->selectProject(w->project.dir);if(p.getBool("clear"))textureCache->clear();return textureCache->status();});

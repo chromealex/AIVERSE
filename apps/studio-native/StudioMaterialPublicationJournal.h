@@ -7,6 +7,8 @@
 #include "apps/studio-native/StudioMaterialValidation.h"
 #include "engine/data/Json.h"
 #include "apps/editor/core/PublicationIntegrity.h"
+#include "apps/editor/core/PublicationArchive.h"
+#include <set>
 #include "apps/editor/core/ProjectAssetWriteLock.h"
 #include <fstream>
 #include <filesystem>
@@ -83,6 +85,16 @@ public:
         fs::create_hard_link(payload,target); // exclusive create, never overwrite
     }
     void finish() noexcept { std::error_code ec;std::filesystem::remove_all(dir_,ec); }
+    static void finalize(const std::filesystem::path& project,const std::string& name){
+        editor::ProjectAssetWriteLock lock(project);
+        if(!validStudioMaterialName(name))throw std::runtime_error("Invalid publication name");
+        for(const auto& row:inspect(project).items()){
+            if(row.getStr("name")!=name)continue;
+            if(!row.getBool("finalizable"))throw std::runtime_error("Material publication evidence incomplete or mismatched");
+            editor::archivePublicationJournal(root(project)/name);return;
+        }
+        throw std::runtime_error("Unknown material publication");
+    }
     static Json inspect(const std::filesystem::path& project) {
         namespace fs=std::filesystem;
         Json rows=Json::array();const auto parent=root(project);
@@ -100,8 +112,9 @@ public:
             Json row=Json::object();row.set("name",Json::string(name));
             const auto file=entry.path()/"candidate.json";
             std::string status="incomplete_or_active";
+            Json candidate;
             if(fs::is_regular_file(file)&&!fs::is_symlink(file)&&fs::file_size(file)<=65536){
-                const auto candidate=Json::parseFile(file.string());
+                candidate=Json::parseFile(file.string());
                 if(library[name].isObject())status=library[name]==candidate?"material_committed":"material_conflict";
             }
             row.set("status",Json::string(status));
@@ -109,13 +122,15 @@ public:
             const auto folder=project/"content"/"GeneratedBuildingMaterials"/name;
             const auto assetsFile=entry.path()/"assets.json";
             Json checks=Json::array();
+            bool complete=false;std::set<std::string> recorded;
             if(fs::is_regular_file(assetsFile)&&!fs::is_symlink(assetsFile)&&fs::file_size(assetsFile)<=65536){
                 const auto entries=Json::parseFile(assetsFile.string());
-                if(entries.isArray()&&entries.size()<=4)for(const auto& asset:entries.items()){
+                complete=entries.isArray()&&entries.size()<=4;
+                if(complete)for(const auto& asset:entries.items()){
                     const auto rel=asset.getStr("path");
                     const auto filename=fs::path(rel).filename().string();
-                    if(filename!="base-color.png"&&filename!="metallic-roughness.png"&&filename!="normal.png"&&filename!="occlusion.png")continue;
-                    if(rel!="GeneratedBuildingMaterials/"+name+"/"+filename)continue;
+                    if(filename!="base-color.png"&&filename!="metallic-roughness.png"&&filename!="normal.png"&&filename!="occlusion.png"){complete=false;continue;}
+                    if(rel!="GeneratedBuildingMaterials/"+name+"/"+filename){complete=false;continue;}
                     const auto physical=folder/filename,meta=fs::path(physical.string()+".meta");
                     const bool safe=!fs::is_symlink(project/"content")&&!fs::is_symlink(folder.parent_path())&&!fs::is_symlink(folder);
                     const bool present=safe&&!fs::is_symlink(physical)&&fs::is_regular_file(physical);
@@ -132,10 +147,19 @@ public:
                         bool matches=false;if(present)try{matches=editor::publicationFileSha256(physical)==digest;}catch(...){}
                         check.set("hashMatches",Json::fromBool(matches));
                     }
+                    bool exactMeta=false;
+                    if(metaPresent&&fs::file_size(meta)<=65536&&asset["metadata"].isObject())try{exactMeta=Json::parseFile(meta.string())==asset["metadata"];}catch(...){}
+                    complete=complete&&recorded.insert(rel).second&&check.getBool("hashMatches")&&guidMatches&&exactMeta&&studioValidGuid(asset.getStr("guid"))&&studioMaterialTextureKey(asset.getStr("channel"))&&candidate.getStr(asset.getStr("channel"))=="content/"+rel;
                     check.set("recoverable",Json::fromBool(status=="material_committed"&&present&&!metaPresent&&check.getBool("hashMatches")&&asset["metadata"].isObject()));
                     checks.push(std::move(check));
                 }
             }
+            if(candidate.isObject())for(const auto& [key,value]:candidate.members()){
+                const std::string prefix="content/GeneratedBuildingMaterials/"+name+"/";
+                if(studioMaterialTextureKey(key)&&value.isString()&&value.str().starts_with(prefix)&&!recorded.count(value.str().substr(8)))complete=false;
+            }
+            // Do not finalize empty or filtered/malformed evidence.
+            row.set("finalizable",Json::fromBool(status=="material_committed"&&complete&&!recorded.empty()&&recorded.size()==checks.size()));
             row.set("assets",std::move(checks));rows.push(std::move(row));
         }
         return rows;

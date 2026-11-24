@@ -1,0 +1,3 @@
+# Stage 77 — verified journal finalization
+
+Parent 0ab31dd8, PR #183. Archive verified pending journals under cache without moving/deleting content. Native texture finalization via MCP and Studio operation; material finalization via scoped Studio bridge/UI. Revalidate under project writer lease. Texture sets require evidence for all compiled outputs. Material check requires committed candidate, exact metadata, hashes and generated paths. Reject uncertain/staged texture publications. Regression authored, NOT RUN. No quarantine, rollback, power-loss guarantee or full writer audit. Main untouched.
