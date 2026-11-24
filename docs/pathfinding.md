@@ -249,3 +249,60 @@ the ACTUAL game authority is required; any route/component saves created
 with schema v1 require an explicit migration to v2. Stage43 source changes
 have not been compiled or runtime-tested under the features-first policy;
 see `docs/agent-handoffs/caverns-stage43-2026-11-24.md`.
+
+## Caverns Stage44 — ActorHost single motor and persistent 3D regions
+
+`engine/actor/ActorModule.cpp` now supports explicit
+`map.cavernsNavigation.enabled` on a world-space game using
+`actor::ActorHost`. With an authored `terraweaveCaverns` SDF and
+1..64 bounded `cavernsNavigation.collisionChunks` triplets, the owning
+host generates initial full-resolution cave meshes, derives triangles
+through `prepareCaveVolumeCollision`, and adds them to its **existing**
+`SpatialWorld collision_` before character spawn and motor setup.
+No additional CharacterBody/Transform motor or genre-specific physics
+world is created. Native Box3D and live Carve/Fill collision replacement
+require the Stage35 exclusive owner publication path separately.
+
+`nav::assignCaveActorGoal(world,actor,goal,profile,backend,speed,budget)`
+and `ActorHost::navigateCaveActor(sim,actor,...)` write the same persistent
+Stage43 `CaveRouteIntent` and `CaveRouteFollower` into actual
+`actor::CharacterBody` entities (not the Transform-only follower).
+In the **existing** ActorHost fixed-tick character loop,
+`repathCaveActorRoutes` selects an integer-revision route; the
+`steerCaveActorMotor` adapter converts the next waypoint into a normal
+`actor::Input` before `moveActor` or `moveActorModes`. Only the
+original character motor advances physical state, preserving collision,
+gravity, stance and weapon action semantics. A map without the explicit
+opt-in retains existing ActorHost and FPS bots unchanged.
+`ActorHost::setCaveRouteResolver` permits a named custom C++ solver
+callback over an owned frozen SDF source; no NavMesh inheritance needed.
+
+`engine/nav/GraphRegionCache.h` is a **shared reusable derived cache**
+of deterministic graph passability, adjacency and HPA portal edges.
+`refresh(graph,dirtyNodeIDs)` re-samples the affected nodes and
+rebuilds outgoing portals for their corresponding clusters; a caller
+includes a one-cell halo for incoming links. The cache keeps bounded
+complete reverse Dijkstra/Flow integrations per goal with LRU reuse,
+discarding them when the graph changes. It uses existing
+`nav::findGraphDijkstra`, not a cave-specific solver clone. Full
+incremental shortest-path repair inside an affected flow field is
+**not** implemented yet: after a dirty event the next query rebuilds
+that goal field. `CaveNavigationRegionCache` adapts this reusable
+cache to signed centimetre 3D cave cells and half-open SDF dirty
+bounds. `CaveGameplayRuntimeFrame::enableRegionalNavigation` registers
+`regional.astar`, `regional.hpa`, `regional.flow`,
+`regional.hybrid`. An optional `map.cavernsNavigation.region`
+lets ActorHost reuse those paths without a full SDF graph build
+per route; fallback is the Stage42 bounded general 3D search.
+
+`ActorHost::acceptCommittedCaveNavigation(provider,change,exclusive)`
+may switch to a new immutable source and refresh regional data **only
+after** the actual native SpatialWorld collision change has been
+published under a held readers/simulation barrier. This API does not
+itself replace Box3D or GPU owners. Both authored and environment
+revisions remain authoritative repath constraints.
+
+Stage44 source commits are not proof of compilation, gameplay parity or
+all-owner rollback. Native builds and test campaigns remain deferred by
+the user's features-first request. See
+`docs/agent-handoffs/caverns-stage44-2026-11-24.md`.
