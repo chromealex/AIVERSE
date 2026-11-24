@@ -9,7 +9,9 @@ class SpatialIndex {
     std::vector<Extent> zones_;
     Index index_;
 public:
-    explicit SpatialIndex(const World& world):zones_(extents(world)){
+    explicit SpatialIndex(const World& world):SpatialIndex(extents(world)){}
+    // Accept a precomputed authoritative extents snapshot (already sorted).
+    explicit SpatialIndex(std::vector<Extent> zones):zones_(std::move(zones)){
         std::vector<Index::Entry> entries;
         entries.reserve(zones_.size());
         for(size_t i=0;i<zones_.size();++i){
