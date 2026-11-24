@@ -214,6 +214,34 @@ private:
         }catch(...){failed_=true;return false;}
     }
 public:
+    // Offline operator and owner-side diagnostics. Never expose a mutable
+    // persistence session or run maintenance while a transaction is pending.
+    const State* durableState()const{return !failed_?session_.state():nullptr;}
+    const world::RegionCheckpointManifest* durableManifest()const{return !failed_?session_.manifest():nullptr;}
+    world::UnifiedBackupCatalogResult backups(bool verify){
+        if(failed_||!session_.managedReady())return {};
+        return session_.backups(budget_,adapters(),[](){return std::make_unique<State>();},
+            codecs_,ActorDurableComponents::materialize,validator(),verify,ActorDurableComponents::resourcePolicy(registry_));
+    }
+    world::RegionRetentionPlan retentionPlan(world::RegionRetentionPolicy policy){
+        if(failed_||!session_.managedReady())return {};
+        return session_.retentionPlan(policy,budget_,adapters(),[](){return std::make_unique<State>();},
+            codecs_,ActorDurableComponents::materialize,validator(),ActorDurableComponents::resourcePolicy(registry_));
+    }
+    world::RegionRetentionCleanup cleanupRetention(world::RegionRetentionPolicy policy,
+        const std::vector<uint64_t>& expected){
+        const auto plan=retentionPlan(policy);
+        if(!plan.valid||plan.removeGenerations!=expected)return {};
+        return session_.cleanupRetention(policy,budget_,adapters(),[](){return std::make_unique<State>();},
+            codecs_,ActorDurableComponents::materialize,validator(),ActorDurableComponents::resourcePolicy(registry_));
+    }
+    world::RegionWalWrite forkGeneration(uint64_t generation,const std::filesystem::path& destination,
+        const std::array<uint8_t,16>& newWorld){
+        if(failed_||!session_.managedReady())return world::RegionWalWrite::NeedsRecovery;
+        return session_.forkGeneration(generation,destination,newWorld,budget_,adapters(),
+            [](){return std::make_unique<State>();},codecs_,ActorDurableComponents::materialize,
+            validator(),ActorDurableComponents::resourcePolicy(registry_));
+    }
     bool checkpointPending()const{return checkpointPending_;}
     bool pending()const{return session_.ioPending();}
     bool tickPending()const{return session_.ioPending()&&!checkpointPending_;}
