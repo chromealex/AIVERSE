@@ -16,6 +16,7 @@ from feature_registry import regressions, matrix, load_registry, owner_readiness
 from new_feature import scaffold
 from legacy_inventory import inventory
 from capability_inventory import capability_id, source_operations
+from capability_coverage import LEDGER, SURFACES, read_coverage, apply_coverage
 from graph_inventory import inventory as graph_inventory
 
 spec = importlib.util.spec_from_file_location("feature_gate", Path(__file__).resolve().parents[1] / "tools/agents/check_feature.py")
@@ -203,6 +204,42 @@ class GateTest(unittest.TestCase):
                 graphs["tasks"].append(dict(graphs["tasks"][0]))
                 self.assertTrue(any("duplicate audit task" in e for e in
                                     owner_readiness(registry, root, capabilities, graphs)["errors"]))
+
+    def test_reviewed_capability_coverage(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            ledger = root / LEDGER
+            ledger.parent.mkdir(parents=True)
+            log = ledger.parent / "audit.log"
+            log.write_text("fixture audit")
+            report = ledger.parent / "audit.json"
+            report.write_text(json.dumps({"sha": "a" * 40, "argv": ["audit"], "exit_code": 0,
+                "log": "docs/evidence/audit.log", "sha256": hashlib.sha256(log.read_bytes()).hexdigest()}))
+            record = {"capability": "render:shader", "surface": "mcp", "status": "gap",
+                      "note": "fixture missing tool", "reviewer": "fixture",
+                      "report": "docs/evidence/audit.json"}
+            ledger.write_text(json.dumps({"schema": 1, "records": [record]}))
+            records, errors = read_coverage(root, {"render:shader"}, verify_git=False)
+            self.assertEqual(errors, [])
+            row = {"id": "render:shader", "owner": "render", "title": "Shader",
+                   "coverage": {surface: "unknown" for surface in SURFACES}}
+            investigation = {"id": "audit:render:shader", "capability": row["id"],
+                             "owner": "render", "kind": "investigate"}
+            tasks = apply_coverage([row], [investigation], records)
+            self.assertEqual(row["coverage"]["mcp"], "gap")
+            self.assertEqual(tasks[0]["kind"], "implement_gap")
+            self.assertEqual(tasks[0]["id"], "implement:render:shader:mcp")
+            self.assertNotIn("mcp", tasks[1]["surfaces"])
+            self.assertIn("studio", tasks[1]["surfaces"])
+            ledger.write_text(json.dumps({"schema": 1, "records": [record, record]}))
+            records, errors = read_coverage(root, {"render:shader"}, verify_git=False)
+            self.assertFalse(records)
+            self.assertTrue(any("duplicate" in error for error in errors))
+            ledger.write_text(json.dumps({"schema": 1, "records": [record]}))
+            log.write_text("tampered")
+            records, errors = read_coverage(root, {"render:shader"}, verify_git=False)
+            self.assertFalse(records)
+            self.assertTrue(any("digest" in error for error in errors))
 
     def test_coverage(self):
         changed = {"engine/a.cpp", "apps/studio-web/a.ts", "docs/a.md"}
