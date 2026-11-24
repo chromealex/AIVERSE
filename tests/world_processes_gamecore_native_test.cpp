@@ -29,6 +29,7 @@
 #include "aiverselib/world/EvolvePlanetRootSupport.h"
 #include "engine/game/PlanetTerrainWater.h"
 #include "engine/game/PlanetSeaVolume.h"
+#include "engine/game/PlanetSeaGrid.h"
 #include "aiverselib/world/NereidPlanetBankErosion.h"
 #include "aiverselib/world/NereidPlanetSedimentTransport.h"
 #include <array>
@@ -746,6 +747,14 @@ static void checkPlanetSeaVolume(){
     ocean.center=game::Surface::anchor(1);ecs.add<nw::WaterSphereComponent>(moon,ocean);
     AIVERSE_TEST_CHECK(g::initializePlanetSeaVolume(ecs,surface,sea));
     AIVERSE_TEST_CHECK(g::initializePlanetSeaVolume(ecs,surface,moon));
+    g::MapGrid grid;grid.init(surface.W,surface.H);
+    std::fill(grid.flags.begin(),grid.flags.end(),uint8_t(g::kCellGround));
+    const int wetCell=surface.gridCell(0,0,3,3),blockedCell=surface.gridCell(0,0,3,4);
+    grid.flags[size_t(blockedCell)]=0;
+    AIVERSE_TEST_CHECK(g::refreshPlanetSeaGrid(ecs,surface,grid));
+    AIVERSE_TEST_CHECK(grid.liveSeaRadius(0)==Fixed::fromInt(70)&&grid.flags[size_t(wetCell)]==g::kCellWater&&grid.flags[size_t(blockedCell)]==0);
+    const auto boat=g::placePlanetNaval(surface,grid,surface.cellCenter(wetCell));
+    AIVERSE_TEST_CHECK(surface.altitude(boat)>Fixed::fromInt(5));
     const auto target=ecs.get<g::PlanetSeaVolumeComponent>(sea).targetCm3;
     AIVERSE_TEST_CHECK(target>0);
     ecs.enableCowSnapshots();const World before=ecs;
@@ -753,6 +762,7 @@ static void checkPlanetSeaVolume(){
     std::fill(raised.corners.begin(),raised.corners.begin()+ptrdiff_t(surface.bodies[1].cornerBase),int16_t(32));
     AIVERSE_TEST_CHECK(g::reconcilePlanetSeaVolumes(ecs,surface,raised));
     const auto level=ecs.get<nw::WaterSphereComponent>(sea).surfaceRadius;
+    AIVERSE_TEST_CHECK(g::refreshPlanetSeaGrid(ecs,raised,grid)&&grid.liveSeaRadius(0)==level);
     AIVERSE_TEST_CHECK(level>Fixed::fromInt(70)&&ecs.get<nw::WaterSphereComponent>(moon).surfaceRadius==Fixed::fromInt(70));
     const auto solution=g::solvePlanetSeaVolume(raised,0,Fixed::fromInt(50),target);
     AIVERSE_TEST_CHECK(solution&&solution->radius==level&&solution->representedCm3+

@@ -3,6 +3,7 @@
 #pragma once
 #include "EvolveSurfaceEcology.h"
 #include "engine/physis/Physis.h"
+#include "engine/game/PlanetSeaVolume.h"
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -102,6 +103,12 @@ inline std::optional<std::vector<PlanetEcologySample>> samplePlanetEcology(
             sample.climate=projectEvolutionClimate(region,sample.climate);
             ++sample.contributingRegions;
         });
+        // Mean-sea inundation overrides dry-soil proxies only on opted-in
+        // conserved seas. No new ecology or hydrology state.
+        const auto shore=game::samplePlanetShore(world,surface,request.ground,Fixed{});
+        if(shore&&shore->water.submerged&&world.has<game::PlanetSeaVolumeComponent>(shore->water.body)){
+            sample.climate.floodedPermille=1000;sample.climate.waterPermille=1000;
+        }
         output.push_back(std::move(sample));
     }
     return output;

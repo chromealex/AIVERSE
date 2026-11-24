@@ -5,6 +5,7 @@
 #include "PlanetSurfaceState.h"
 #include "PlanetTerrainWater.h"
 #include "PlanetSeaVolume.h"
+#include "PlanetSeaGrid.h"
 #include "engine/core/FixedMath.h"
 #include "engine/world/nereid/NereidSphereInteractions.h"
 #include <algorithm>
@@ -48,6 +49,7 @@ bool GameCore::stagePlanetTerrain(World& staged,const Surface& expected,
     auto* gs=staged.resource<GameState>();
     bindPlanetSurface(*gs,std::move(next),expectedRevision+1);
     gs->grid.enableSphereHeights(rules_.levelHeight);
+    if(!refreshPlanetSeaGrid(staged,*gs->surface,gs->grid))return false;
     gs->grid.invalidateSphereTerrain();
     gs->visionToken=0;
     gs->lanesDirty=true;
@@ -66,13 +68,18 @@ bool GameCore::reconcilePlanetGroundUnits(World& staged,const Surface& previous,
            u.type>=rules_.types.size()||u.hp.raw<=0||
            (u.flags&(kUnitOffMap|kUnitInTransit|kUnitPossessed)))return;
         const auto& type=rules_.types[u.type];
-        if(!(type.layer&(kLayerGround|kLayerSandOnly))||
-           (type.layer&(kLayerAir|kLayerOrbit|kLayerNaval)))return;
+        if(type.layer&(kLayerAir|kLayerOrbit))return;
         const auto* tr=staged.tryGetConst<Transform>(e);
         const auto* authored=staged.tryGetConst<AuthoredPose>(e);
         if(!tr||(authored&&authored->hasY)||!Surface::onSphere(tr->pos))return;
         const int body=previous.bodyAt(tr->pos);
         if(!previous.bodies[size_t(body)].hasSurface())return;
+        if((type.layer&kLayerNaval)&&gs->grid.liveSeaRadius(body)>Fixed{}){
+            const auto pos=placePlanetNaval(*next,gs->grid,tr->pos);
+            if(pos!=tr->pos)moves.push_back({e,pos});
+            return;
+        }
+        if(!(type.layer&(kLayerGround|kLayerSandOnly))||(type.layer&kLayerNaval))return;
         // Only terrain-attached units are moved. Preserve their radial
         // offset and avoid teleporting arbitrary airborne owner states.
         const auto oldHeight=previous.heightAt(tr->pos);
@@ -334,6 +341,14 @@ void GameCore::setupWorld(Simulation& sim, const Json& map) {
         for (size_t k = 0; k < tr.slopeClasses.size() && k < 15; ++k) g.slopeLimit[k + 1] = MapGrid::slopeUnits(tr.slopeClasses[k]);
         g.enableSphereHeights(rules_.levelHeight);
     }
+    if(conservedSea){
+        if(!refreshPlanetSeaGrid(sim.world(),*cs,g))throw std::runtime_error("invalid conserved sea grid");
+        sim.addStateRestoredHook([](Simulation& restored){
+            auto* state=restored.world().resource<GameState>();
+            if(state&&state->surface&&!refreshPlanetSeaGrid(restored.world(),*state->surface,state->grid))
+                throw std::runtime_error("invalid restored conserved sea grid");
+        });
+    }
 }
 
 // ================================================================= movement on spheres
@@ -346,6 +361,7 @@ void GameCore::moveSphere(Simulation& sim) {
     const Fixed dt = sim.dt();
     auto place = [&](const UnitType& t, Vec3 p) {   // keep a position on its layer
         if (t.layer & kLayerOrbit) return S.toShell(p, S.bodies[size_t(S.bodyAt(p))].shellRadius());
+        if((t.layer&kLayerNaval)&&!(t.layer&kLayerAir)&&g.liveSeaRadius(S.bodyAt(p))>Fixed{})return placePlanetNaval(S,g,p);
         return S.project(p);
     };
     // 1) path following on the tangent plane, re-projected onto the surface / shell every step
@@ -372,6 +388,8 @@ void GameCore::moveSphere(Simulation& sim) {
             Vec3 next = len <= step || dl.raw == 0 ? place(t, wp) : place(t, tr.pos + d * (step / dl));
             if (!free) {
                 const int c0 = g.cellOf(tr.pos), c1 = g.cellOf(next);
+                if((t.layer&kLayerNaval)&&g.liveSeaRadius(S.bodyAt(tr.pos))>Fixed{}&&
+                   c0!=c1&&(c1<0||!g.passable(c1%g.w,c1/g.w,t.pathLayer))){m.stuck+=dt;break;}
                 if (c0 != c1 && c0 >= 0 && g.passable(c0 % g.w, c0 / g.w, t.pathLayer) && !g.canMoveCells(c0, c1, t.pathLayer)) {
                     // flow-field followers slide along the wall (the move split on the face axes); others stop as before
                     bool slid = false;
@@ -449,6 +467,8 @@ void GameCore::moveSphere(Simulation& sim) {
         const Vec3 np = place(t, tr.pos + p.d);
         if (!(t.layer & kLayerAir)) {
             const int c0 = g.cellOf(tr.pos), c1 = g.cellOf(np);
+            if((t.layer&kLayerNaval)&&g.liveSeaRadius(S.bodyAt(tr.pos))>Fixed{}&&
+               c0!=c1&&(c1<0||!g.passable(c1%g.w,c1/g.w,t.pathLayer)))continue;
             if (c0 != c1 && !g.canMoveCells(c0, c1, t.pathLayer) && c0 >= 0 && g.passable(c0 % g.w, c0 / g.w, t.pathLayer)) continue;
         }
         tr.pos = np;

@@ -123,6 +123,9 @@ struct MapGrid {
     // Planet maps (world block): the cube-sphere faces of every body stacked as rows (Surface.h). Null on flat
     // maps, where every function below keeps its classic behaviour bit for bit.
     std::shared_ptr<const Surface> surf;
+    // Derived projection of opted-in NEREID mean sea; 0 means legacy body.
+    std::vector<Fixed> planetSeaRadii;
+    Fixed liveSeaRadius(int body) const {return body>=0&&size_t(body)<planetSeaRadii.size()?planetSeaRadii[size_t(body)]:Fixed{};}
     bool sphere() const { return surf != nullptr; }
     std::vector<uint8_t> flags;
     std::vector<int8_t> level;      // cliff level 0..9

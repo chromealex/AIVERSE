@@ -40,6 +40,7 @@ public:
     void updateHeights(int body, const std::vector<int16_t>& corners);   // only chunks over changed corners rebuild
     // Cell flags of a body changed (painting): colours / splat of every chunk of that body rebuild.
     void updateFlags(int body, const std::vector<uint8_t>& flags);
+    void updateSeaLevel(int body,float level){if(body>=0&&size_t(body)<world_.bodies.size())world_.bodies[size_t(body)].seaLevel=level;}
     // Explicit detail heights of a body changed (editor detail sculpt; same scale as drawn): rebuilds the
     // affected chunks. Returns false when the body draws no detail at that scale (caller re-sets the world).
     bool updateDetail(int body, const std::vector<int16_t>& detail);

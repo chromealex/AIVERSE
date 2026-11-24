@@ -18,6 +18,12 @@ namespace aiverse::game {
 using namespace render;
 
 namespace {
+void applyLiveSeaLevels(PlanetWorld& world,const MapGrid& grid){
+    for(size_t i=0;i<world.bodies.size();++i){
+        const auto radius=grid.liveSeaRadius(int(i));
+        if(radius>Fixed{})world.bodies[i].seaLevel=float(radius.toDouble())-world.bodies[i].radius;
+    }
+}
 uint32_t ringColor(const SceneObject& o) { return o.selected ? (o.owner == 0 ? rgba(255, 255, 160, 230) : rgba(120, 255, 120, 230)) : rgba(255, 255, 255, 130); }
 }
 
@@ -91,6 +97,7 @@ void GameView::setSimWorld(std::shared_ptr<const Surface> surf, const MapGrid& g
     PlanetWorld visual = loadPlanetWorld(map, &warnings_);
     loadPlanetDetailFiles(visual, map, read_, &warnings_);
     PlanetWorld w = planetWorldFromSim(std::move(surf), grid.flags, visual);
+    applyLiveSeaLevels(w,grid);
     planetDetailBaseline_.clear();planetDetailBaseline_.resize(w.bodies.size());
     for(size_t i=0;i<w.bodies.size();++i){
         const auto& body=w.bodies[i];
@@ -107,8 +114,14 @@ bool GameView::syncSimPlanetTerrain(const MapGrid& grid){
     const auto& current=planets_.world();
     if(!current.sim)return true; // editor world has its own explicit update path
     if(!grid.surf||!dev_||grid.surf->tab!=current.sim->tab)return false;
-    if(grid.surf==current.sim)return true;
+    bool seaChanged=false;
+    for(size_t i=0;i<current.bodies.size();++i){
+        const auto radius=grid.liveSeaRadius(int(i));
+        if(radius>Fixed{}&&float(radius.toDouble())-current.bodies[i].radius!=current.bodies[i].seaLevel)seaChanged=true;
+    }
+    if(grid.surf==current.sim&&!seaChanged)return true;
     auto next=planetWorldFromSim(grid.surf,grid.flags,current);
+    applyLiveSeaLevels(next,grid);
     bool rebuild=false;
     for(size_t i=0;i<next.bodies.size();++i){
         auto& body=next.bodies[i];
@@ -126,9 +139,13 @@ bool GameView::syncSimPlanetTerrain(const MapGrid& grid){
     if(rebuild){
         planets_.setWorld(next);planetVision_.clear();
     }else{
-        for(size_t i=0;i<next.bodies.size();++i)
-            if(next.bodies[i].surface()&&next.bodies[i].corners!=current.bodies[i].corners)
+        for(size_t i=0;i<next.bodies.size();++i){
+            if(!next.bodies[i].surface())continue;
+            planets_.updateSeaLevel(int(i),next.bodies[i].seaLevel);
+            if(next.bodies[i].corners!=current.bodies[i].corners)
                 planets_.updateHeights(int(i),next.bodies[i].corners);
+            planets_.updateFlags(int(i),next.bodies[i].flags);
+        }
         planets_.bindSimSurface(grid.surf);
     }
     rebuildPlanetFlora(); // existing cosmetic scatter owner; not rooted ECS lifecycle
