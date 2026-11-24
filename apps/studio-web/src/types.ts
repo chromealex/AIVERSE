@@ -115,7 +115,9 @@ export interface StudioStats { map: string; width: number; height: number; entit
   undoSteps: number; dirty: boolean; sceneFrameMs: number; sceneFrames: number;
   types: Array<{ type: string; count: number }>; owners: Array<{ owner: number; name: string; count: number }> }
 export interface StudioGpuTexture { id: number; format: string; width: number; height: number; depth: number; layers: number; mips: number; samples: number; renderTarget: boolean; bytes: number }
+export interface StudioCavernsBudgets { perSourceBytes:number; perShardBytes:number; deviceBytes:number; perSourceUploadBytes:number; perShardUploadBytes:number; deviceUploadBytes:number }
 export interface StudioCavernsPreview {
+  budgets:StudioCavernsBudgets;
   enabled:boolean; isolate:boolean; paging:boolean; visible:boolean; visualOnly:true; error:string;
   sourceRevision?:string; tracked?:string; ready?:string; pendingCpu?:string; retirePending?:string;
   activeShards?:string; stagedShards?:string; retiredScenes?:string;
@@ -333,7 +335,7 @@ export interface StudioParams {
   'studio.hubOpen': { dir: string };
   'studio.hubCreate': { template: string; name: string };
   'studio.stats': Record<string,never>;
-  'studio.cavernsPreview': { expectedProject:string; expectedMap:string; enabled?:boolean; isolate?:boolean; paging?:boolean };
+  'studio.cavernsPreview': { expectedProject:string; expectedMap:string; enabled?:boolean; isolate?:boolean; paging?:boolean; budgets?:StudioCavernsBudgets };
   'studio.gpuStats': { textures?: boolean };
   'studio.previewPlayChanges': {expectedProject:string;positions:boolean;amounts:boolean;removeDead:boolean};
   'studio.keepPlayChanges': {expectedProject:string;token:string};
