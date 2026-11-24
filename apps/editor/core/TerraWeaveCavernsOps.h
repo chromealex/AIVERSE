@@ -31,10 +31,13 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
       }
     })");
     Workspace* w=&ws;
-    struct PickCache {std::string document;std::shared_ptr<const terraweave::caverns::CaveSnapshotSpatialIndex> index;};
+    struct PickCache {std::string document;std::shared_ptr<const terraweave::caverns::CaveSnapshotSpatialIndex> index;
+        std::string surfaceProject,surfaceMap,surfaceAnchor;uint64_t surfaceRevision=0;
+        std::optional<terraweave::caverns::CavePlanetSurfacePatch> surface;
+    };
     auto cache=std::make_shared<PickCache>();
     ws.registerOp({"terraweave_caverns_pick","Read-only SDF surface raycast in cm and normalized Q20 direction.",
-        Json::parse(R"({"properties":{"xCm":{"type":"integer"},"yCm":{"type":"integer"},"zCm":{"type":"integer"},"dxQ20":{"type":"integer"},"dyQ20":{"type":"integer"},"dzQ20":{"type":"integer"}}})"),
+        Json::parse(R"({"properties":{"xCm":{"type":"integer"},"yCm":{"type":"integer"},"zCm":{"type":"integer"},"dxQ20":{"type":"integer"},"dyQ20":{"type":"integer"},"dzQ20":{"type":"integer"},"planetSurface":{"type":"boolean"}}})"),
         [w,cache](const Json& p)->Json {
             using namespace terraweave::caverns;
             if(w->project.dir.empty())throw std::invalid_argument("Caverns project required");
@@ -52,6 +55,18 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
             };
             CaveRayCm ray{{field("xCm",kLimitCm),field("yCm",kLimitCm),field("zCm",kLimitCm)},
                 int32_t(field("dxQ20",1<<20)),int32_t(field("dyQ20",1<<20)),int32_t(field("dzQ20",1<<20))};
+            if(p.getBool("planetSurface",false)){
+                if(!region)throw std::invalid_argument("Planet chart required for surface picking");
+                const auto anchor=cavePlanetAnchorToJson(region->anchor).dump(-1);
+                if(!cache->surface||cache->surfaceProject!=w->project.dir||cache->surfaceMap!=w->map.path||cache->surfaceAnchor!=anchor||cache->surfaceRevision!=w->map.revision){
+                    cache->surface=planet_caves::captureLocalSurface(w->map.data,region->anchor,w->map.revision);
+                    cache->surfaceProject=w->project.dir;cache->surfaceMap=w->map.path;cache->surfaceAnchor=anchor;cache->surfaceRevision=w->map.revision;
+                }
+                const auto hit=planet_caves::pickLocalSurface(*cache->surface,ray);
+                Json result=Json::object();result.set("hit",Json::fromBool(bool(hit)));
+                if(hit){result.set("xCm",Json::number(hit->x));result.set("yCm",Json::number(hit->y));result.set("zCm",Json::number(hit->z));}
+                return result;
+            }
             int64_t distance=50000,step=100;
             if(region){
                 // Studio camera can be outside the local chart. Clip the
