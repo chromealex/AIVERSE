@@ -41,9 +41,9 @@ public:
         view.setPlanetCaveDraw([weak,&view](render::Renderer3D& renderer,
                 const render::SphereViewFrame& frame,double seconds){
             const auto owners=weak.lock();if(!owners)return;
+            for(const auto& [id,owner]:*owners){(void)id;if(owner->recoveryRequired())return;}
             const auto& world=view.planets().world();
             for(const auto& [id,owner]:*owners){
-                if(owner->recoveryRequired())return; // host must stop all world readers
                 const int body=world.find(id);
                 if(body<0||body!=owner->frame().body()||!owner->ready())continue;
                 owner->drawAtBodyCenter(renderer,frame,world.center(body,seconds));
