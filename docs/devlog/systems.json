@@ -1720,10 +1720,10 @@
           "textEn": "Shared native GPU owner and typed material generation API extracted; Studio uses the same owner. Integrated build and hardware verification pending."
         },
         {
-          "name": "Texture Graph GPU — Stage 38C (в работе)",
-          "text": "Инкрементальный пересчёт узлов с сохранением GPU-данных.",
-          "nameEn": "Texture Graph GPU — Stage 38C (in progress)",
-          "textEn": "Incremental node evaluation with retained GPU data."
+          "name": "Texture Graph GPU — Stage 38C",
+          "text": "Добавлен инкрементальный GPU DAG: неизменённые узлы переиспользуют данные постоянных слотов. Изолированный тест пройден, аппаратная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38C",
+          "textEn": "Incremental GPU DAG with dedicated slots and unchanged-node reuse. Isolated test passed; hardware verification pending."
         }
       ],
       "enables": [
