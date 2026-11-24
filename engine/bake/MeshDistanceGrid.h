@@ -38,7 +38,7 @@ inline bool bakeMeshDistanceGrid(const std::vector<render::float3>& positions,
     const uint64_t nodes=uint64_t(dimension)*dimension*dimension;
     if(indices.empty()||indices.size()%3||count>kMeshDistanceMaxTriangles||
        positions.size()>kMeshDistanceMaxTriangles*3u)
-        return fail("SDF mesh/sample work budget exceeded or invalid triangles");
+        return fail("SDF mesh triangle/vertex budget exceeded or invalid triangles");
     for(float v:transform.m)if(!std::isfinite(v))return fail("invalid transform");
     if(transform.at(3,0)!=0||transform.at(3,1)!=0||transform.at(3,2)!=0||
        transform.at(3,3)!=1)return fail("SDF bake requires affine transform");

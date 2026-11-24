@@ -105,7 +105,7 @@ export default function SpectraGraphAssetInspector({
     </StudioField>
     <StudioButton size="sm" disabled={disabled||baking||!node||!bakeModel||!projectPath}
       onClick={()=>void bake()}>{baking?'Baking…':raw?'Rebake SDF':'Bake SDF'}</StudioButton>
-    <small>Closed low-poly mesh, bind pose, model-space metres. At 32³ the bake budget allows up to 512 triangles. Replaces only the baked SDF in the local graph; save to publish.</small>
+    <small>Closed mesh, bind pose, model-space metres. Up to 32,768 triangles, subject to bounded BVH traversal work. Replaces only the baked SDF in the local graph; save to publish.</small>
     <StudioField label="Import binary SDF snapshot">
       <SpectraAssetPicker assets={assets} value={sdfAsset} kinds={['sdf']}
         disabled={disabled||baking||!node} onChange={asset=>{setSdfAsset(asset);setBakeStatus('');}}/>

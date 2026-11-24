@@ -242,10 +242,57 @@ int main() {
         require(grid.samples[(16u*32+16)*32+16]<-.9f,"high resolution signed interior");
         require(!bake::bakeMeshDistanceGrid(p,indices,33,render::mat4{},grid,error)&&
                 grid.samples.size()==32768,"unsupported dimension rejected without mutation");
-        std::vector<uint32_t> oversizedWork(513u*3u,0);
-        require(!bake::bakeMeshDistanceGrid(p,oversizedWork,32,render::mat4{},grid,error)&&
-                error.find("work budget")!=std::string::npos&&grid.samples.size()==32768,
-                "high resolution work budget retained");
+        const auto previous=grid.samples;
+        bake::MeshDistanceQueryStats stats;
+        require(!bake::bakeMeshDistanceGrid(p,indices,32,render::mat4{},grid,error,&stats,10)&&
+                error.find("work budget")!=std::string::npos&&grid.samples==previous&&stats.work()==10,
+                "measured traversal budget preserves previous result");
+        // Compare the accelerated grid to the original exhaustive double
+        // distance and solid-angle winding on a nested reversed shell.
+        auto shell=p;auto shellIndices=indices;
+        for(auto v:p)shell.push_back(v*.5f);
+        for(size_t i=0;i<indices.size();i+=3){
+            shellIndices.push_back(indices[i]+8);shellIndices.push_back(indices[i+2]+8);
+            shellIndices.push_back(indices[i+1]+8);
+        }
+        require(bake::bakeMeshDistanceGrid(shell,shellIndices,11,render::mat4{},grid,error,&stats),
+                "nested shell bake");
+        using namespace bake::distance_detail;
+        std::vector<Tri> reference;
+        for(size_t i=0;i<shellIndices.size();i+=3)
+            reference.push_back({d(shell[shellIndices[i]]),d(shell[shellIndices[i+1]]),d(shell[shellIndices[i+2]])});
+        const double eps=std::max(1e-9,double(grid.spacing)*1e-7);
+        for(uint32_t z=0;z<11;++z)for(uint32_t y=0;y<11;++y)for(uint32_t x=0;x<11;++x){
+            const auto q=d(grid.origin)+D3{double(x)*grid.spacing,double(y)*grid.spacing,double(z)*grid.spacing};
+            double best=std::numeric_limits<double>::infinity(),angle=0;
+            for(const auto& t:reference)best=std::min(best,distance2(q,t));
+            double expected=std::sqrt(best);
+            if(expected<=eps)expected=0;
+            else{
+                for(const auto& t:reference)angle+=solidAngle(q,t);
+                if(std::abs(angle/12.56637061435917295385)>0.5)expected=-expected;
+            }
+            require(std::abs(grid.samples[(z*11+y)*11+x]-expected)<1e-5,
+                    "accelerated distance and winding match exhaustive reference");
+        }
+        require(grid.samples[(5*11+5)*11+5]>.49f,"opposite winding creates cavity");
+        // 64 separated closed cubes = 768 triangles; exceeds old 512
+        // triangle limit for a 32 cubed lattice without changing resolution.
+        std::vector<render::float3> many;
+        std::vector<uint32_t> manyIndices;
+        for(unsigned z=0;z<4;++z)for(unsigned y=0;y<4;++y)for(unsigned x=0;x<4;++x){
+            const uint32_t offset=uint32_t(many.size());
+            const render::float3 center{float(x)*2,float(y)*2,float(z)*2};
+            for(auto v:p)many.push_back(center+v*.4f);
+            for(auto index:indices)manyIndices.push_back(offset+index);
+        }
+        require(bake::bakeMeshDistanceGrid(many,manyIndices,32,render::mat4{},grid,error,&stats)&&
+                grid.samples.size()==32768&&stats.work()<=bake::kMeshDistanceMaxWork,
+                "768 triangle accelerated bake above old product cap");
+        require(stats.distanceTests+stats.rayTests+stats.solidAngleTests<2ull*32768*768,
+                "accelerated triangle query count below exhaustive reference");
+        require(std::any_of(grid.samples.begin(),grid.samples.end(),[](float f){return f<-.1f;}),
+                "disjoint solids have negative interior");
     }
     options.capacity=4; // burst requires five slots
     require(!sp::inspectGraphGpuEligibility(basic,options).eligible,

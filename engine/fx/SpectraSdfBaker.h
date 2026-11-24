@@ -8,9 +8,9 @@ namespace aiverse::fx {
 static_assert(bake::kMeshDistanceMaxDimension==kStaticSdfMaxDimension,
               "Baker and runtime lattice limits must agree");
 inline bool bakeStaticSdf(const FxMesh& mesh,uint32_t dimension,const render::mat4& transform,
-        StaticSdfVolume& out,std::string& error){
+        StaticSdfVolume& out,std::string& error,bake::MeshDistanceQueryStats* stats=nullptr){
     bake::MeshDistanceGrid grid;
-    if(!bake::bakeMeshDistanceGrid(mesh.pos,mesh.idx,dimension,transform,grid,error))return false;
+    if(!bake::bakeMeshDistanceGrid(mesh.pos,mesh.idx,dimension,transform,grid,error,stats))return false;
     StaticSdfVolume next;
     next.origin=grid.origin;next.spacing=grid.spacing;next.dimension=grid.dimension;
     next.samples=std::move(grid.samples);
@@ -18,10 +18,11 @@ inline bool bakeStaticSdf(const FxMesh& mesh,uint32_t dimension,const render::ma
     out=std::move(next);error.clear();return true;
 }
 inline bool bakeStaticSdfModel(const std::string& path,const render::FileReader& reader,
-        uint32_t dimension,const render::mat4& transform,StaticSdfVolume& out,std::string& error){
+        uint32_t dimension,const render::mat4& transform,StaticSdfVolume& out,std::string& error,
+        bake::MeshDistanceQueryStats* stats=nullptr){
     FxMesh mesh;
     if(!meshFromModelFile(path,reader,mesh)){error="model mesh unavailable";return false;}
-    return bakeStaticSdf(mesh,dimension,transform,out,error);
+    return bakeStaticSdf(mesh,dimension,transform,out,error,stats);
 }
 inline Json staticSdfToJson(const StaticSdfVolume& sdf){
     if(!sdf.dimension||!sdf.valid())return {};
