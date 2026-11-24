@@ -1758,7 +1758,7 @@ if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS)
     apps/editor/core/SimTools.cpp apps/editor/core/ScenarioOps.cpp apps/editor/core/SchemaOps.cpp apps/editor/core/PruneOps.cpp apps/editor/core/CampaignOps.cpp apps/editor/core/StrategicOps.cpp
     apps/editor/core/ToolchainOps.cpp apps/editor/core/WorldInspect.cpp)   # scenario_run, rules_lint, rules_schema keys
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_game aiverse_pack) # Studio history uses shared SHA-256
-    target_sources(aiverse_editor_core PRIVATE apps/editor/core/ProjectFileEdits.cpp apps/editor/core/ProjectHistoryPersistence.cpp)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/ProjectFileEdits.cpp apps/editor/core/ProjectHistoryPersistence.cpp apps/editor/core/MapHistoryPersistence.cpp)
     target_link_libraries(aiverse_editor_core PUBLIC AIVERSE::lib_nereid_water)   # erosion zone ops (NereidErosion soils)
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_i18n)   # editor messages (editorText)
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_postfx_data)   # postfx_* ops (postfx agent)

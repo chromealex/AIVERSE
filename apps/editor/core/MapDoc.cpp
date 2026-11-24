@@ -93,7 +93,7 @@ void MapDoc::reset(int w, int h) {
     path.clear();
     dirty = false;
     ++revision;
-    undo_.clear(); redo_.clear();
+    undo_.clear(); redo_.clear();historyEpoch_=newHistoryEpoch();historyPersistenceWarning_.clear();
 }
 
 std::string MapDoc::cornersPath(const std::string& mapFile, const std::string& rel) {
@@ -118,7 +118,8 @@ std::string MapDoc::cornersFileName() const {
     return "maps/" + stem + ".r16";
 }
 
-bool MapDoc::load(const std::string& file, std::string* err) {
+bool MapDoc::load(const std::string& file, std::string* err) {return loadImpl(file,err,true);}
+bool MapDoc::loadImpl(const std::string& file, std::string* err,bool restoreHistory) {
     try {
         Json j = Json::parseFile(file);
         auto read = [&](const std::string& rel, std::string& out) {
@@ -150,6 +151,7 @@ bool MapDoc::load(const std::string& file, std::string* err) {
             } else if (err) *err = derr;   // map still opens; the detail is dropped
         }
         path = file;
+        if(restoreHistory)restoreHistoryCheckpoint();
         return true;
     } catch (const std::exception& e) {
         if (err) *err = e.what();
@@ -268,7 +270,7 @@ bool MapDoc::loadJson(const Json& j, std::string* err) {
         data = std::move(d);
         dirty = false;
         ++revision;
-        undo_.clear(); redo_.clear();
+        undo_.clear(); redo_.clear();historyEpoch_=newHistoryEpoch();historyPersistenceWarning_.clear();
         return true;
     } catch (const std::exception& e) {
         if (err) *err = e.what();
@@ -463,16 +465,18 @@ bool MapDoc::save(const std::string& file, std::string* err) {
     if (!f) { if (err) *err = "cannot write " + file; path = oldPath; return false; }
     f << j.dump() << "\n";
     if (!f) { if (err) *err = "write failed"; return false; }
+    f.close();
+    if(!f){if(err)*err="cannot close map file";path=oldPath;return false;}
     dirty = false;
+    saveHistoryCheckpoint();
     return true;
 }
 
 void MapDoc::pushUndo(MapData&& before) {
     // Process-unique editor-only IDs survive stack trimming, undo and redo.
-    static std::atomic<uint64_t> next{1};
-    const uint64_t id=next.fetch_add(1,std::memory_order_relaxed);
+    const uint64_t id=nextHistoryId();
     undo_.reserve(undo_.size()+1);
-    undo_.push_back({std::move(before),id});lastHistoryId_=id;
+    undo_.push_back({std::move(before),id,{}});lastHistoryId_=id;
     const size_t snap = size_t(data.w) * size_t(data.h) * 8 + data.corners.size() * 2 + data.detail.size() * 2 + data.detailSplat.size() + 1024;
     const size_t keep = std::clamp<size_t>((size_t(256) << 20) / snap, 4, 200);
     while (undo_.size() > keep) undo_.erase(undo_.begin());
@@ -501,12 +505,12 @@ void MapDoc::beginEdit() {
 void MapDoc::undo() {
     if(compoundBefore_)throw std::logic_error("Undo during compound edit");
     if(undo_.empty())return;
-    redo_.push_back({data,undo_.back().id});data=std::move(undo_.back().data);undo_.pop_back();touched();
+    redo_.push_back({data,undo_.back().id,undo_.back().label});data=std::move(undo_.back().data);undo_.pop_back();touched();
 }
 void MapDoc::redo() {
     if(compoundBefore_)throw std::logic_error("Redo during compound edit");
     if(redo_.empty())return;
-    undo_.push_back({data,redo_.back().id});data=std::move(redo_.back().data);redo_.pop_back();touched();
+    undo_.push_back({data,redo_.back().id,redo_.back().label});data=std::move(redo_.back().data);redo_.pop_back();touched();
 }
 
 std::string MapDoc::uniqueId(const std::string& base) const {

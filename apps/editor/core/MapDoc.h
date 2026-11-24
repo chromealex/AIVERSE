@@ -200,6 +200,10 @@ public:
     bool canRedo() const { return !redo_.empty(); }
     void undo();
     void redo();
+    void setHistoryLabel(uint64_t id,const std::string& label);
+    std::string historyLabel(uint64_t id) const;
+    const std::string& historyPersistenceWarning() const {return historyPersistenceWarning_;}
+    const std::string& historyEpoch() const {return historyEpoch_;}
 
     // Checks against the rules, then a real simulation setup (catches everything the loader rejects).
     std::vector<Issue> validate(const game::Rules& rules, const Json& rulesJson) const;
@@ -211,7 +215,14 @@ private:
     void validateWorld(const game::Rules& rules, std::vector<Issue>& out) const;
     void mirror(bool point);
     void ensureLayers();
-    struct HistoryEntry {MapData data;uint64_t id=0;};
+    struct HistoryEntry {MapData data;uint64_t id=0;std::string label;};
+    bool loadImpl(const std::string& file,std::string* err,bool restoreHistory);
+    void restoreHistoryCheckpoint();
+    void saveHistoryCheckpoint();
+    static uint64_t nextHistoryId();
+    static std::string newHistoryEpoch();
+    std::string historyEpoch_=newHistoryEpoch();
+    std::string historyPersistenceWarning_;
     std::vector<HistoryEntry> undo_,redo_;
     uint64_t lastHistoryId_=0;
     std::optional<MapData> compoundBefore_;
