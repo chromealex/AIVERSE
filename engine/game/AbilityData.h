@@ -194,6 +194,9 @@ struct EffectDef {
     Fixed amount{};            // damage / heal / units / resource / distance
     Fixed amountMax{};         // random value in [amount, amountMax] (sim RNG) when `randomAmount`
     bool randomAmount = false;
+    bool useWeaponDamage = false;
+    Fixed weaponDamage{};       // factor of the caster's current effective weapon damage
+    uint16_t weaponIndex = 0;   // zero-based authored weapon slot
     Fixed percent{};           // share (0..1) for garrison / group / resource effects
     Fixed radius{};            // 0 = single target
     Fixed duration{};          // stun / buff / summon lifetime / status / temporary capture
