@@ -1882,9 +1882,9 @@
           "textEn": "HostedClient teardown, context restoration and scoped source indexing."
         },
         {
-          "name": "Texture Graph GPU — Stage 38AD (в работе)",
+          "name": "Texture Graph GPU — Stage 38AD (частично)",
           "text": "Учёт страниц без Model-указателей, поколения GPU и диагностика отложенных клиентов.",
-          "nameEn": "Texture Graph GPU — Stage 38AD (in progress)",
+          "nameEn": "Texture Graph GPU — Stage 38AD (partial)",
           "textEn": "Page accounting without Model pointers, GPU epochs and hosted retirement diagnostics."
         }
       ],
