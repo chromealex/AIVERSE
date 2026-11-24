@@ -146,7 +146,10 @@ inline bool settle(Field& f,std::uint32_t tick,SettlementActivity* activity){
     return finish();
 }
 inline bool settle(Field& f,std::uint32_t tick){return settle(f,tick,nullptr);}
-inline bool advance(World& world,std::uint32_t tick){
+// A custom field settler receives staged data and a const authoritative
+// World; it must not publish external side effects or mutate ECS.
+template<class Settler>
+inline bool advanceWithSettler(World& world,std::uint32_t tick,const Settler& settleField){
     const World& read=world;
     if(read.countExisting<Field>()>kMaxFields||
        read.countExisting<Source>()>kMaxSources)return false;
@@ -188,12 +191,17 @@ inline bool advance(World& world,std::uint32_t tick){
         field.mass[offset]=amount+s.delta;
     }
     for(auto& [entity,field]:fields){
-        (void)entity;
-        if(!settle(field,tick))return false;
+        if(!settleField(read,entity,field,tick))return false;
     }
     if(!world.prepareExistingWrite<Field>())return false;
     for(const auto& [entity,field]:fields)world.get<Field>(entity)=field;
     return true;
+}
+inline bool advance(World& world,std::uint32_t tick){
+    return advanceWithSettler(world,tick,
+        [](const World&,Entity,Field& field,std::uint32_t currentTick){
+            return settle(field,currentTick);
+        });
 }
 inline void registerPersistence(Simulation& sim){
     sim.registerPersistentComponent<Field>("granular.field",1);
