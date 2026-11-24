@@ -134,6 +134,13 @@ int main() {
     checkGraphRequirement(call("graph_save",generic).getBool("ok"),"generic native save failed");
     checkGraphRequirement(call("graph_get",generic)["result"]["graph"]==graph,"generic graph readback mismatch");
     checkGraphRequirement(call("graph_node_catalog",generic)["result"]["nodes"].isArray(),"generic native node catalog missing");
+    checkGraphRequirement(call("graph_save",generic).has("error"),"legacy create consent overwrote a published graph");
+    Json newerFx=graph;newerFx.member("parameters").set("size",Json::number(0.5));
+    generic.set("expected",graph);generic.set("graph",newerFx);
+    checkGraphRequirement(call("graph_save",generic).getBool("ok"),"matching FX original rejected");
+    checkGraphRequirement(call("graph_save",generic).has("error"),"stale FX original accepted");
+    checkGraphRequirement(call("graph_get",generic)["result"]["graph"]==newerFx,"stale FX save changed asset");
+    generic.erase("expected");generic.set("graph",graph);
     checkGraphRequirement(call("fx_graph_delete",generic).getBool("ok"),"generic fixture cleanup failed");
 
     const auto shaderDraft=Json::parse(R"({"domain":"shader","graph":{"version":1,"domain":"material","nodes":[{"id":"input","op":"input"}],"outputs":{"color":"input"}},"edits":[{"action":"add","value":{"id":"tint","op":"constant","value":[1,1,1,1]}},{"action":"setOutput","output":"color","node":"tint"}]})");
@@ -143,6 +150,20 @@ int main() {
     checkGraphRequirement(shaderEdited["result"]["graph"]["outputs"].getStr("color")=="tint","shader output not changed");
     checkGraphRequirement(shaderDraft["graph"]["nodes"].size()==1,"input draft mutated");
     checkGraphRequirement(!fs::exists(root/"shaders"),"shader draft wrote files");
+    Json shaderSave=Json::object();shaderSave.set("name",Json::string("cas_shader"));
+    shaderSave.set("graph",shaderDraft["graph"]);
+    checkGraphRequirement(call("shader_graph_set",shaderSave).getBool("ok"),"shader create failed");
+    checkGraphRequirement(call("shader_graph_set",shaderSave).has("error"),"shader blind overwrite accepted");
+    shaderSave.set("expected",shaderDraft["graph"]);shaderSave.set("graph",shaderEdited["result"]["graph"]);
+    const auto shaderFile=root/"shaders"/"cas_shader.json";
+    const auto lockPath=fs::path(shaderFile.string()+".aiverse-write-lock");
+    fs::create_directory(lockPath);
+    checkGraphRequirement(call("shader_graph_set",shaderSave).has("error"),"busy shader lock ignored");
+    fs::remove(lockPath);
+    checkGraphRequirement(call("shader_graph_set",shaderSave).getBool("ok"),"matching shader original rejected");
+    checkGraphRequirement(call("shader_graph_set",shaderSave).has("error"),"stale shader original accepted");
+    checkGraphRequirement(Json::parseFile(shaderFile.string())==shaderEdited["result"]["graph"],"stale shader save changed asset");
+    fs::remove(shaderFile);fs::remove(root/"shaders");
     auto badBatch=shaderDraft;badBatch.member("edits").push(Json::parse(R"({"action":"add","value":{"id":"tint","op":"constant"}})"));
     checkGraphRequirement(call("graph_edit",badBatch).has("error"),"duplicate ID batch accepted");
     const auto motionDraft=Json::parse(R"({"domain":"motionweave","graph":{"nodes":[{"id":"bind","kind":"bind"}],"output":"bind"},"edits":[{"action":"addState","value":{"id":"idle","output":"bind"}},{"action":"setInitial","node":"idle"},{"action":"addTransition","state":"idle","value":{"to":"idle","fade":0.2,"when":[]}}]})");
@@ -356,6 +377,19 @@ int main() {
     checkGraphRequirement(created.getBool("ok"), "valid graph was rejected");
     checkGraphRequirement(fs::exists(root/"fx"/"graphs"/"spark.vfx.json"), "graph file not created");
     checkGraphRequirement(!ws.changes.empty() && ws.changes.back().kind == editor::Change::Fx, "missing editor FX invalidation");
+
+    // Separate draft publication guards both the exact draft and the destination.
+    Json draft=Json::object();draft.set("name",Json::string("draft_cas"));draft.set("graph",graph);
+    checkGraphRequirement(call("fx_graph_draft_set",draft).getBool("ok"),"draft create failed");
+    checkGraphRequirement(call("fx_graph_draft_set",draft).has("error"),"draft blind overwrite accepted");
+    draft.set("expected",graph);draft.set("graph",newerFx);
+    checkGraphRequirement(call("fx_graph_draft_set",draft).getBool("ok"),"matching draft original rejected");
+    Json publish=Json::object();publish.set("name",Json::string("draft_cas"));publish.set("expectedDraft",graph);
+    checkGraphRequirement(call("fx_graph_draft_publish",publish).has("error"),"stale draft publication accepted");
+    publish.set("expectedDraft",newerFx);
+    checkGraphRequirement(call("fx_graph_draft_publish",publish).getBool("ok"),"matching draft publish failed");
+    checkGraphRequirement(call("fx_graph_get",publish)["graph"]==newerFx,"published draft content mismatch");
+    checkGraphRequirement(call("fx_graph_delete",publish).getBool("ok"),"published draft cleanup failed");
 
     Json name = Json::object();
     name.set("name", Json::string("spark"));
