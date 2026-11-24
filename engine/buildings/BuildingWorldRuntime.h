@@ -208,6 +208,7 @@ public:
             scene->def.instanceKey,styleId,scene->def.origin,scene->def.yaw,
             scene->domains,scene->def.stepPermille,scene->generated,scene->poses,scene->liftLayout);
         const auto id=scene->def.sceneId;
+        scene->router.setTimingEnabled(bool(graphMonitor_));
         scenes_.emplace(id,std::move(scene));
         if(error)error->clear();
         return true;
@@ -643,7 +644,9 @@ public:
     // monitor, never the world. A detached monitor is emptied on shutdown.
     void setGraphMonitor(std::shared_ptr<BuildingGraphMonitor> monitor){
         if(graphMonitor_)graphMonitor_->clear();
-        graphMonitor_=std::move(monitor);publishGraphMonitor();
+        graphMonitor_=std::move(monitor);
+        for(auto& [id,scene]:scenes_){(void)id;scene->router.setTimingEnabled(bool(graphMonitor_));}
+        publishGraphMonitor();
     }
     void publishGraphMonitor()const noexcept{
         if(!graphMonitor_||shuttingDown_)return;
@@ -995,7 +998,7 @@ private:
         s.statics.clear();
     }
     void releaseScene(Scene& s){
-        s.router={};s.statics.clear();s.leafIds.clear();s.platformIds.clear();
+        s.router={};s.router.setTimingEnabled(bool(graphMonitor_));s.statics.clear();s.leafIds.clear();s.platformIds.clear();
         s.landingIds.clear();s.liftQueue.clear();s.lease.reset();
         s.runtime.reset();s.shell.reset();s.renderer.reset();s.liftRender.clear();
         s.status=Status::Unloaded;s.removeRevision=0;s.faulted=false;
