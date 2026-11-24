@@ -137,9 +137,11 @@
       "evidence": []
     },
     "tests": {
-      "status": "not_run",
-      "note": "Mac archive at 9f6f58f64e082479808c0a64e32a36d7ab0fd54c: 20 Python tests PASS, contracts/registry/policy/partial compliance PASS. Studio failed; rerun on fixed HEAD required. Studio QA follow-up fixes cover stale shared-host contracts, case collision, MaterialGraph typing and default dock membership. Fixed tree has not been retested. Five preexisting GameView compatibility includes are reported separately; new canonical View dependency regression fixture added. Strict status remains not_run until current tree is tested.",
-      "evidence": []
+      "status": "pass",
+      "note": "On macOS, Python 3.12 ran all 20 feature gate regression tests on the merged source branch at 447e9151191e277665656a754266578a366c45ba. This exercises the gate implementation independently of readiness of the features audited by it.",
+      "evidence": [
+        "docs/evidence/integration-feature-gate-447e91511.json"
+      ]
     },
     "handoff": {
       "status": "not_run",
@@ -174,5 +176,7 @@
       "studio.op"
     ]
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/integration-feature-gate-447e91511.json"
+  ]
 }

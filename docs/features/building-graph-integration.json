@@ -259,7 +259,7 @@
   ],
   "traits": {
     "editable": true,
-    "simulation": false,
+    "simulation": true,
     "visible": true,
     "runtime": true
   },
