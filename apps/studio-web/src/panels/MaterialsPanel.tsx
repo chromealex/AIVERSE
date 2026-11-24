@@ -93,6 +93,17 @@ export default function MaterialsPanel({projectPath,previewMaterial,documentEpoc
   }catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{setPreviewing(false);}
  };
+ const repair=async(publication:string,path:string)=>{
+  if(busy||loading||!connected||!projectPath||!documentEpoch||changes>0)return;
+  setBusy(true);setError('');
+  try{
+   const response=await invoke('studio.materialPublicationRepair',{name:publication,filename:path.split('/').pop()??'',expectedProject:projectPath,expectedDocumentEpoch:documentEpoch});
+   if(!response.restored)throw Error('Metadata recovery rejected');
+   setLibrary(current=>({...current,pendingPublications:response.pendingPublications}));
+   setMessage('Original metadata restored. Refresh Assets after all missing sidecars are repaired.');
+  }catch(e){setError(e instanceof Error?e.message:String(e))}
+  finally{setBusy(false)}
+ };
  const discard=()=>{
   setDraft({});
   if(pending!==null){setName(pending);setPending(null);}
@@ -113,10 +124,10 @@ export default function MaterialsPanel({projectPath,previewMaterial,documentEpoc
   {library.publicationInspectionError&&<p role="alert" className="materials-error">Publication inspection: {library.publicationInspectionError}</p>}
   {!!library.pendingPublications?.length&&<details className="materials-warning">
    <summary>Pending material publications ({library.pendingPublications.length})</summary>
-   <p>Read-only recovery inspection. Another editor may still be publishing. No files are removed automatically.</p>
+   <p>Recovery inspection. Restore only missing metadata from recorded evidence. No files are removed automatically.</p>
    {library.pendingPublications.map(p=><div key={p.name}>
     <strong>{p.name}</strong> — {p.status==='material_committed'?'Material committed':p.status==='material_conflict'?'Material conflict':'Incomplete or active'}
-    {p.assets.map(a=><div key={a.path}>{a.path}: {!a.present?'missing texture':!a.metadataPresent?'missing metadata':!a.guidMatches?'GUID mismatch':a.hashMatches===false?'texture hash mismatch':a.hashMatches===true?'texture, hash and GUID match':'texture and GUID present; hash unverified'}</div>)}
+    {p.assets.map(a=><div key={a.path}>{a.path}: {!a.present?'missing texture':!a.metadataPresent?'missing metadata':!a.guidMatches?'GUID mismatch':a.hashMatches===false?'texture hash mismatch':a.hashMatches===true?'texture, hash and GUID match':'texture and GUID present; hash unverified'}{a.recoverable&&<StudioButton size="sm" disabled={busy||loading||!connected||!documentEpoch||changes>0} onClick={()=>void repair(p.name,a.path)}>Restore original metadata</StudioButton>}</div>)}
    </div>)}
   </details>}
   <div className="materials-main">

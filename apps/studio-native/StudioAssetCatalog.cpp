@@ -1,4 +1,5 @@
 #include "apps/editor/core/ProjectAssetWriteLock.h"
+#include "apps/studio-native/StudioMaterialPublicationJournal.h"
 #include "apps/studio-native/StudioAssetCatalog.h"
 #include "apps/studio-native/StudioContentDirectory.h"
 #if defined(AIVERSE_WINSQLITE)
@@ -187,6 +188,13 @@ StudioAssetEntry StudioAssetCatalog::inspect(const fs::path& source,bool directo
         if(!json["settings"].isObject())throw std::runtime_error("Invalid importer settings: "+e.path);
         e.guid=guid;e.settings=json["settings"];
     } else {
+        // Preserve recoverable identities instead of silently assigning a new GUID.
+        if(!directory&&e.path.starts_with("GeneratedBuildingMaterials/")){
+            for(const auto& publication:StudioMaterialPublicationJournal::inspect(project_).items())
+                for(const auto& asset:publication["assets"].items())
+                    if(asset.getStr("path")==e.path&&asset.getBool("recoverable"))
+                        throw std::runtime_error("Missing recoverable metadata; use Material Library recovery before indexing: "+e.path);
+        }
         e.guid=generateGuid();e.settings=studioDefaultSettings(e.importer);
         Json json=Json::object();
         json.set("schemaVersion",Json::number(int64_t(1)));

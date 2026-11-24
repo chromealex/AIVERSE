@@ -1741,6 +1741,14 @@ Json StudioSession::dispatchImpl(const Json& request) {
             result.set("active",Json::fromBool(!name.empty()));
             result.set("name",str(name));
             reply.set("result",std::move(result));
+        } else if (method == "studio.materialPublicationRepair") {
+            if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir||params.getStr("expectedDocumentEpoch")!=std::to_string(graphDocumentEpoch_))
+                throw std::runtime_error("Material recovery document changed; refresh Studio");
+            editor::ProjectAssetWriteLock recoveryLock(ws_.project.dir);
+            StudioMaterialPublicationJournal::restoreMissingMetadata(ws_.project.dir,params.getStr("name"),params.getStr("filename"));
+            Json result=Json::object();result.set("restored",Json::fromBool(true));
+            result.set("pendingPublications",StudioMaterialPublicationJournal::inspect(ws_.project.dir));
+            reply.set("result",std::move(result));
         } else if (method == "studio.materials" || method == "studio.materialPatch" ||
                    method == "studio.materialCreate") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");

@@ -132,6 +132,7 @@ public:
                         bool matches=false;if(present)try{matches=editor::publicationFileSha256(physical)==digest;}catch(...){}
                         check.set("hashMatches",Json::fromBool(matches));
                     }
+                    check.set("recoverable",Json::fromBool(status=="material_committed"&&present&&!metaPresent&&check.getBool("hashMatches")&&asset["metadata"].isObject()));
                     checks.push(std::move(check));
                 }
             }
