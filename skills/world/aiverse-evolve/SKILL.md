@@ -242,3 +242,6 @@ Demo `--svg FILE` exports ECS region fertility/pollution and TerraWeave live/dea
 
 ### Studio ecology stages 71–75
 Use studio.evolveState for read-only live region, plant, deadwood and soil diagnostics. History is editor-local, bounded to 240 samples. Presets use EvolvePresets.h and Inspector setProperties; custom presets currently localStorage plus JSON exchange. Time controls reuse studio.gameControl pause/resume/step for the whole local match, not a separate ecology clock. No builds/tests run yet.
+
+## Stage 77: tick-scoped legacy ecology index
+`WorldProcessGameplayHost::advanceEcology` now uses `makeIndexedEvolveForestClimateSampler` with the shared `Bvh2D` and precomputed sorted ECS extents. Rebuild per synchronous step; Area bounds and membership must remain fixed during sampling, including baseline callbacks. The public reusable `forestClimate` sampler preserves live-area semantics. Scratch is per callable, not concurrent. No persistence schema or climate formula change; build and parity acceptance pending. See docs/handoffs/world-processes-stage77-legacy-bvh-2026-11-24.md.
