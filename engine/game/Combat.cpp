@@ -574,12 +574,19 @@ void GameCore::applyEffects(Simulation& sim, Entity caster, uint8_t owner, uint1
             if (targetTagsMatch(rules_.types[w.get<Unit>(target).type].tags, ef.filter.tags, ef.filter.ignoreTags)) hits.push_back(target);
         }
         const uint32_t until = sim.tick() + uint32_t((ef.duration * int64_t(ticks)).toInt());
+        Fixed amount = ef.amount;
+        if (ef.useWeaponDamage) {
+            const auto damage = currentWeaponDamage(sim, caster, ef.weaponIndex);
+            if (!damage) continue;
+            amount = *damage * ef.weaponDamage;
+            if (amount.raw <= 0) continue;
+        }
         switch (ef.kind) {
         case EffectKind::Damage:
-            for (Entity h : hits) dealDamage(sim, h, ef.amount, ef.damageType, caster, owner);
+            for (Entity h : hits) dealDamage(sim, h, amount, ef.damageType, caster, owner);
             break;
         case EffectKind::Heal:
-            for (Entity h : hits) { Unit& hu = w.get<Unit>(h); hu.hp = fxMin(stat(sim, h, Stat::MaxHp), hu.hp + ef.amount); }
+            for (Entity h : hits) { Unit& hu = w.get<Unit>(h); hu.hp = fxMin(stat(sim, h, Stat::MaxHp), hu.hp + amount); }
             break;
         case EffectKind::Stun:
             for (Entity h : hits) if (auto* b = w.tryGet<Buffs>(h)) b->stunUntil = std::max(b->stunUntil, until);
