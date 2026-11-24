@@ -487,6 +487,16 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
             row.set("z",Json::number(int64_t(link.z)));access.push(std::move(row));
         }
         out.set("terraces",std::move(terraces));out.set("terraceAccess",std::move(access));
+        Json balconies=Json::array();for(const auto& deck:detailed.graph.balconies){
+            Json row=Json::object();row.set("socketId",string(deck.socketId));row.set("floor",Json::number(int64_t(deck.floor)));
+            row.set("x",Json::number(int64_t(deck.x)));row.set("z",Json::number(int64_t(deck.z)));
+            row.set("x0",Json::number(double(deck.x0),3));row.set("z0",Json::number(double(deck.z0),3));
+            row.set("x1",Json::number(double(deck.x1),3));row.set("z1",Json::number(double(deck.z1),3));
+            row.set("height",Json::number(double(deck.y),3));
+            row.set("support",string(deck.support==BuildingBalconySupport::Columns?"columns":"cantilever"));
+            balconies.push(std::move(row));
+        }
+        out.set("balconies",std::move(balconies));
         out.set("sockets",std::move(sockets));
         out.set("solids",Json::number(int64_t(detailed.graph.solids.size())));
         out.set("connections",Json::number(int64_t(detailed.graph.connections.size())));
@@ -767,6 +777,10 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
                 spec.set("kind",string(buildingFeatureName(feature.kind)));
                 spec.set("side",string(buildingFeatureSideName(feature.side)));
                 if(feature.wallLine>=0)spec.set("wallLine",Json::number(int64_t(feature.wallLine)));
+                if(feature.balconyDepth>0.f){
+                    spec.set("balconyDepth",Json::number(double(feature.balconyDepth),3));
+                    spec.set("balconySupport",string(feature.balconySupport==BuildingBalconySupport::Columns?"columns":"cantilever"));
+                }
                 spec.set("count",Json::number(int64_t(feature.count)));
                 spec.set("width",Json::number(double(feature.width),3));
                 spec.set("height",Json::number(double(feature.height),3));

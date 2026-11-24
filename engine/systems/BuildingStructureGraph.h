@@ -16,6 +16,7 @@ enum class BuildingFeatureKind : uint8_t {
     LargeGate, SmallGate, PersonnelDoor, SlidingRoof, Window, Stairs, Elevator
 };
 enum class BuildingFeatureSide : uint8_t { Front, Back, Left, Right };
+enum class BuildingBalconySupport : uint8_t { Cantilever, Columns };
 struct BuildingFeature {
     BuildingFeatureKind kind=BuildingFeatureKind::PersonnelDoor;
     BuildingFeatureSide side=BuildingFeatureSide::Front;
@@ -30,6 +31,9 @@ struct BuildingFeature {
     float sill=0.9f;
     // -1 = original outer envelope facade. Otherwise a room-grid line.
     int wallLine=-1;
+    // Optional deck projecting from an upper personnel door into an empty grid cell.
+    float balconyDepth=0.f;
+    BuildingBalconySupport balconySupport=BuildingBalconySupport::Cantilever;
 };
 enum class FunctionalRoofProfile : uint8_t { Flat, Gable, Shed, Barrel, Hip, Dome, Terrace, Pagoda };
 struct FunctionalBuildingRecipe {
@@ -122,6 +126,7 @@ struct BuildingGraphConnection {std::string id,from,to;uint32_t floor=0;float x=
 // Authored aperture overlap with a ground-floor room, not a clearance guarantee.
 struct BuildingExteriorAperture {std::string socketId,roomId;float start=0,end=0;};
 struct BuildingGraphTerrace {uint32_t floor=0,x=0,z=0;float x0=0,y=0,z0=0,x1=0,z1=0;};
+struct BuildingGraphBalcony {std::string socketId;uint32_t floor=0,x=0,z=0;float x0=0,y=0,z0=0,x1=0,z1=0;BuildingBalconySupport support=BuildingBalconySupport::Cantilever;};
 struct BuildingTerraceAccess {std::string socketId,roomId;uint32_t floor=0,x=0,z=0;};
 struct BuildingStructureGraph {
     std::vector<BuildingGraphSolid> solids;
@@ -132,6 +137,7 @@ struct BuildingStructureGraph {
     std::vector<BuildingExteriorAperture> exteriorApertures;
     std::vector<BuildingGraphTerrace> terraces;
     std::vector<BuildingTerraceAccess> terraceAccess;
+    std::vector<BuildingGraphBalcony> balconies;
     explicit operator bool() const noexcept {return error.empty();}
 };
 inline const char* buildingFeatureName(BuildingFeatureKind kind) {
@@ -232,6 +238,13 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
         if(uint8_t(f.side)>uint8_t(BuildingFeatureSide::Right)||f.wallLine<-1||f.wallLine>lineCount||
            (!wallFeature&&f.wallLine!=-1))
             return "Invalid facade grid line";
+        if(!finite(f.balconyDepth)||f.balconyDepth<0.f||uint8_t(f.balconySupport)>uint8_t(BuildingBalconySupport::Columns))
+            return "Invalid balcony depth or support";
+        if(f.balconyDepth>0.f&&
+           (f.kind!=BuildingFeatureKind::PersonnelDoor||f.floor==0||f.count!=1||f.position<0.f||
+            recipe.floorFootprints.empty()||f.wallLine<=0||f.wallLine>=lineCount||
+            f.balconyDepth<1.4f||f.balconyDepth>(f.balconySupport==BuildingBalconySupport::Cantilever?1.8f:3.f)))
+            return "Balcony requires one upper personnel door, explicit inner facade and position, independent floors and bounded depth";
         if(f.kind==BuildingFeatureKind::SlidingRoof){
             if(nonRectangularFootprint(recipe))return "Retractable roof requires a rectangular footprint";
             if(recipe.roofProfile!=FunctionalRoofProfile::Flat)return "Retractable roofs require the flat architectural profile";
@@ -270,7 +283,7 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
         }
         if(f.floor>=recipe.floors)return "Opening floor out of range";
         const bool window=f.kind==BuildingFeatureKind::Window;
-        if(!window&&f.floor!=0&&(!recipe.walkableSetbacks||f.kind!=BuildingFeatureKind::PersonnelDoor||f.position<0.f))
+        if(!window&&f.floor!=0&&((!recipe.walkableSetbacks&&f.balconyDepth<=0.f)||f.kind!=BuildingFeatureKind::PersonnelDoor||f.position<0.f))
             return "Upper entrances require a personnel door with explicit position on a walkable setback";
         if(!std::isfinite(f.sill)||f.sill<0.f||f.sill>4.f)return "Invalid sill";
         portals+=f.count;
@@ -515,7 +528,57 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
         float cursor=0.f;
         for(const auto& hole:row){
             const bool upperDoor=hole.value.floor>0&&hole.value.kind==BuildingFeatureKind::PersonnelDoor;
-            if(upperDoor){
+            const bool balcony=upperDoor&&hole.value.balconyDepth>0.f;
+            if(balcony){
+                const auto& f=hole.value;
+                const float center=(hole.start+hole.end)*.5f;
+                const int j=int(center/cell),l=int(line);
+                const int tx=side<2?j:(side==2?l-1:l);
+                const int tz=side<2?(side==0?l-1:l):j;
+                const float a=hole.start-.6f,b=hole.end+.6f;
+                const float normalSize=side<2?roomD:roomW;
+                if(tx<0||tz<0||tx>=int(recipe.roomsX)||tz>=int(recipe.roomsZ)||
+                   a<j*cell+.2f||b>(j+1)*cell-.2f||f.balconyDepth>normalSize-.4f){
+                    graph.error="Balcony must fit inside one recessed facade cell with side clearance";return graph;
+                }
+                for(uint32_t k=0;k<recipe.floors;++k)if(occupiedCell(tx,tz,k)){
+                    graph.error="Balcony projection requires a clear void on every floor";return graph;
+                }
+                for(const auto& prev:graph.balconies)if(prev.x==uint32_t(tx)&&prev.z==uint32_t(tz)){
+                    graph.error="Only one balcony is supported per void column";return graph;
+                }
+                // A connected deck touches the facade, with solid parapets
+                // on its three free edges. Supports remain in the void.
+                const float direction=(side==0||side==2)?-1.f:1.f;
+                const float tip=plane+direction*f.balconyDepth;
+                const float lo=std::min(plane,tip),hi=std::max(plane,tip);
+                const float y=floorTop+storey*float(f.floor)+slabThick;
+                auto prism=[&](BuildingGraphPart part,float u0,float v0,float y0,float u1,float v1,float y1){
+                    if(side<2)solid(part,u0,y0,v0,u1,y1,v1,hole.feature);
+                    else solid(part,v0,y0,u0,v1,y1,u1,hole.feature);
+                };
+                prism(BuildingGraphPart::Floor,a,lo,y-slabThick,b,hi,y);
+                constexpr float rail=.14f;
+                prism(BuildingGraphPart::Trim,a,lo,y,a+rail,hi,y+1.1f);
+                prism(BuildingGraphPart::Trim,b-rail,lo,y,b,hi,y+1.1f);
+                const float railLo=direction<0?tip:tip-rail;
+                prism(BuildingGraphPart::Trim,a,railLo,y,b,railLo+rail,y+1.1f);
+                for(float u:{a+.24f,b-.24f}){
+                    if(f.balconySupport==BuildingBalconySupport::Columns){
+                        const float v=tip-direction*.24f;
+                        prism(BuildingGraphPart::Trim,u-.12f,v-.12f,0.f,u+.12f,v+.12f,y-slabThick);
+                    }else{
+                        // Horizontal rectangular support beam seated into the host wall.
+                        const float seat=plane-direction*.18f;
+                        const float end=tip-direction*.12f;
+                        prism(BuildingGraphPart::Trim,u-.12f,std::min(seat,end),y-slabThick-.24f,
+                            u+.12f,std::max(seat,end),y-slabThick);
+                    }
+                }
+                graph.balconies.push_back({"entrance/"+std::to_string(hole.feature)+"/"+std::to_string(hole.copy),
+                    f.floor,uint32_t(tx),uint32_t(tz),side<2?a:lo,y,side<2?lo:a,side<2?b:hi,side<2?hi:b,f.balconySupport});
+            }
+            if(upperDoor&&!balcony){
                 // Every cell overlapped by the opening must have a real deck on the exterior side.
                 bool found=false;
                 for(uint32_t i=0;i<count;++i){
@@ -640,7 +703,10 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
                 else{
                     const int tx=int(room.x)+(socket.side==BuildingFeatureSide::Left?-1:socket.side==BuildingFeatureSide::Right?1:0);
                     const int tz=int(room.z)+(socket.side==BuildingFeatureSide::Front?-1:socket.side==BuildingFeatureSide::Back?1:0);
-                    if(functionalTerraceCell(recipe,tx,tz,room.floor))
+                    const bool balcony=std::any_of(graph.balconies.begin(),graph.balconies.end(),[&](const auto& deck){
+                        return deck.socketId==socket.id&&int(deck.x)==tx&&int(deck.z)==tz;
+                    });
+                    if(functionalTerraceCell(recipe,tx,tz,room.floor)||balcony)
                         graph.terraceAccess.push_back({socket.id,room.id,room.floor,uint32_t(tx),uint32_t(tz)});
                 }
             }

@@ -139,6 +139,13 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
                 else if(side=="right")f.side=BuildingFeatureSide::Right;
                 else throw JsonError(label+".side: expected front, back, left or right");
             }
+            if(j.has("balconyDepth"))f.balconyDepth=number(j["balconyDepth"],label+".balconyDepth");
+            if(j.has("balconySupport")){
+                const auto support=j.getStr("balconySupport");
+                if(support=="cantilever")f.balconySupport=BuildingBalconySupport::Cantilever;
+                else if(support=="columns")f.balconySupport=BuildingBalconySupport::Columns;
+                else throw JsonError(label+".balconySupport: expected cantilever or columns");
+            }
             if(j.has("wallLine")){
                 const auto& value=j["wallLine"];const double n=value.toDouble(-2);
                 if(!value.isNumber()||n<-1||n>6||std::floor(n)!=n)throw JsonError(label+".wallLine: expected integer -1..6");

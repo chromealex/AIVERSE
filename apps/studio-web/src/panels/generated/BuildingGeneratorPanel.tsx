@@ -391,10 +391,13 @@ export default function BuildingGeneratorPanel({
           if(entrances>32)return 'Maximum 32 total wall apertures.';
           const maxWidth=feature.kind==='large-gate'?20:feature.kind==='small-gate'?8:3;
           const isWindow=feature.kind==='window';
+          const balconyDepth=feature.balconyDepth??0;
+          const balcony=balconyDepth>0;
+          if(!Number.isFinite(balconyDepth)||balconyDepth<0||(balcony&&(feature.kind!=='personnel-door'||feature.floor===0||feature.count!==1||feature.position<0||!floorFootprints.length||(feature.wallLine??-1)<=0||balconyDepth<1.4||balconyDepth>(feature.balconySupport==='columns'?3:1.8))))return 'Projecting balcony requires one upper personnel door, an explicit recessed facade line and depth 1.4–1.8m (columns up to 3m).';
           const maxWidthForKind=isWindow?6:maxWidth;
           const storey=(asNumber(height)-asNumber(roofRise)-0.52)/asNumber(floors);
           if(!Number.isInteger(feature.floor)||feature.floor<0||feature.floor>=asNumber(floors)||
-             (!isWindow&&feature.floor!==0&&(!walkableSetbacks||feature.kind!=='personnel-door'||feature.position<0)))
+             (!isWindow&&feature.floor!==0&&((!walkableSetbacks&&!balcony)||feature.kind!=='personnel-door'||feature.position<0)))
             return 'Selected floor is invalid for the opening.';
           if(!Number.isFinite(feature.sill)||feature.sill<0||feature.sill>4)
             return 'Window sill must be within 0–4m.';
@@ -951,7 +954,7 @@ export default function BuildingGeneratorPanel({
                 }}>{active?'■':'·'}</button>;
             })}
           </div>}
-        <small className="abg__note">Click cells to add or remove rooms in the selected plan. Independent upper floors must be supported by the floor below; removed cells can form walkable terraces with parapets. To add an upper personnel door, select its floor, facade line and explicit wall position; native validation requires a deck immediately outside. The top row is Front. Custom shapes use flat roofs; select a facade grid line for openings on recessed or courtyard walls. Existing incompatible features must be edited explicitly.</small>
+        <small className="abg__note">Click cells to add or remove rooms in the selected plan. Independent upper floors must be supported by the floor below; removed cells can form walkable terraces with parapets. To add an upper personnel door, select its floor, facade line and explicit wall position; native validation requires a deck immediately outside, or a projecting balcony into a clear recessed cell. The top row is Front. Custom shapes use flat roofs; select a facade grid line for openings on recessed or courtyard walls. Existing incompatible features must be edited explicitly.</small>
         <small className="abg__note">Internal room partitions, stair and lift geometry follow the selected functional recipe. Native ECS/PHYSIS and graph owners handle dynamic traversal separately; changing setting never changes gameplay permissions.</small>
       </StudioSection>}
         </div>
@@ -1070,11 +1073,23 @@ export default function BuildingGeneratorPanel({
                   value={String(feature.spacing)} disabled={busy}
                   onChange={e=>setFeature(i,'spacing',Number(e.target.value))}/>
               </StudioField>:null}
-              {(feature.kind==='window'||(walkableSetbacks&&feature.kind==='personnel-door'))&&<StudioField label="Floor (starting at 0)" htmlFor={"abg-feature-"+i+"-floor"}>
+              {(feature.kind==='window'||((walkableSetbacks||floorFootprints.length>1)&&feature.kind==='personnel-door'))&&<StudioField label="Floor (starting at 0)" htmlFor={"abg-feature-"+i+"-floor"}>
                 <StudioInput id={"abg-feature-"+i+"-floor"} type="number" min={0} max={7} step={1}
                   value={String(feature.floor)} disabled={busy}
                   onChange={e=>setFeature(i,'floor',Number(e.target.value))}/>
               </StudioField>}
+              {feature.kind==='personnel-door'&&feature.floor>0&&floorFootprints.length>1&&<>
+                <StudioField label="Projecting balcony depth, m (0 = terrace only)" htmlFor={'abg-feature-'+i+'-balcony-depth'}>
+                  <StudioInput id={'abg-feature-'+i+'-balcony-depth'} type="number" min={0} max={3} step={.1} value={String(feature.balconyDepth??0)} disabled={busy}
+                    onChange={e=>setFeature(i,'balconyDepth',Number(e.target.value))}/>
+                </StudioField>
+                {(feature.balconyDepth??0)>0&&<StudioField label="Balcony support" htmlFor={'abg-feature-'+i+'-balcony-support'}>
+                  <StudioSelect id={'abg-feature-'+i+'-balcony-support'} value={feature.balconySupport??'cantilever'} disabled={busy}
+                    onChange={e=>setFeature(i,'balconySupport',e.target.value)}>
+                    <option value="cantilever">Cantilever beams (up to 1.8m)</option><option value="columns">Ground columns (up to 3m)</option>
+                  </StudioSelect>
+                </StudioField>}
+              </>}
               {feature.kind==='window'&&<StudioField label="Sill height, m" htmlFor={"abg-feature-"+i+"-sill"}>
                 <StudioInput id={"abg-feature-"+i+"-sill"} type="number" min={0.65} max={4} step={0.05}
                   value={String(feature.sill)} disabled={busy}
