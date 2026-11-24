@@ -2,6 +2,7 @@
 #pragma once
 #include "engine/render/TextureGen.h"
 #include "TextureGraphLiveness.h"
+#include "TextureGraphCustomCompute.h"
 #include <array>
 #include <algorithm>
 #include <cmath>
@@ -19,7 +20,7 @@ inline const char* kindName(Kind k){switch(k){case Kind::Scalar:return "scalar";
 struct Op {const char* id;Kind output;std::vector<Kind> inputs;};
 inline const std::vector<Op>& catalog(){
     static const std::vector<Op> ops={
-        {"image",Kind::Color,{}},{"imageAsset",Kind::Color,{}},{"formula",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"constant",Kind::Scalar,{}},{"color",Kind::Color,{}},{"noise",Kind::Scalar,{}},{"fbm",Kind::Scalar,{}},{"voronoi",Kind::Scalar,{}},{"gradient",Kind::Scalar,{}},{"pattern",Kind::Color,{}},{"patternMask",Kind::Scalar,{}},
+        {"image",Kind::Color,{}},{"imageAsset",Kind::Color,{}},{"formula",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"customScalar",Kind::Scalar,{Kind::Scalar,Kind::Scalar,Kind::Scalar}},{"customColor",Kind::Color,{Kind::Color,Kind::Color,Kind::Scalar}},{"constant",Kind::Scalar,{}},{"color",Kind::Color,{}},{"noise",Kind::Scalar,{}},{"fbm",Kind::Scalar,{}},{"voronoi",Kind::Scalar,{}},{"gradient",Kind::Scalar,{}},{"pattern",Kind::Color,{}},{"patternMask",Kind::Scalar,{}},
         {"add",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"multiply",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"subtract",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"min",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"max",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"invert",Kind::Scalar,{Kind::Scalar}},{"threshold",Kind::Scalar,{Kind::Scalar}},{"remap",Kind::Scalar,{Kind::Scalar}},{"blend",Kind::Scalar,{Kind::Scalar,Kind::Scalar,Kind::Scalar}},{"colorize",Kind::Color,{Kind::Scalar,Kind::Color,Kind::Color}},{"blendColor",Kind::Color,{Kind::Color,Kind::Color,Kind::Scalar}},{"blur",Kind::Scalar,{Kind::Scalar}},{"erosion",Kind::Scalar,{Kind::Scalar}},{"warp",Kind::Scalar,{Kind::Scalar,Kind::Scalar,Kind::Scalar}},{"distort",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"normal",Kind::Normal,{Kind::Scalar}},{"metallicRoughness",Kind::Packed,{Kind::Scalar,Kind::Scalar}}
     };return ops;
 }
@@ -47,7 +48,8 @@ inline constexpr size_t maxImageSourceBytes=16u*1024u*1024u;
 struct ImageSource {int width=0,height=0;std::vector<uint32_t> rgb;};
 // Trusted host must verify the exact pinned revision and obey remaining byte budget.
 using ImageResolver=std::function<ImageSource(const std::string&,const std::string&,size_t)>;
-struct Node {std::string id;const Op* info=nullptr;std::vector<size_t> inputs;Json parameters;std::shared_ptr<const ImageSource> image;};
+struct Node {std::string id;const Op* info=nullptr;std::vector<size_t> inputs;Json parameters;std::shared_ptr<const ImageSource> image;std::array<custom_compute::Program,3> custom;};
+inline bool isCustomCompute(std::string_view id){return id=="customScalar"||id=="customColor";}
 inline bool isImageSource(std::string_view id){return id=="image"||id=="imageAsset";}
 struct Program {int size=256;std::vector<Node> nodes;std::vector<size_t> order;std::map<std::string,size_t> outputs;};
 inline std::vector<std::string> formulaTokens(const std::string& expression){
@@ -98,6 +100,15 @@ inline Json properties(const std::string& id){
     if(id=="image"){field("width","integer",Json::number(int64_t(1)),1,maxEmbeddedImageSide);field("height","integer",Json::number(int64_t(1)),1,maxEmbeddedImageSide);field("rgb","image",Json::string("808080"));}
     if(id=="imageAsset"){field("asset","text",Json::string(""));field("revision","text",Json::string(""));}
     if(id=="formula")field("expression","text",Json::string("a b *"));
+    if(isCustomCompute(id)){
+        if(id=="customScalar")field("code","compute",Json::string("a b c mix"));
+        else{
+            field("red","compute",Json::string("ar br c mix"));
+            field("green","compute",Json::string("ag bg c mix"));
+            field("blue","compute",Json::string("ab bb c mix"));
+        }
+        for(const auto* key:{"p0","p1","p2","p3"})field(key,"number",Json::number(0.5),-16,16);
+    }
     if(id=="constant")field("value","number",Json::number(.5));
     if(id=="color")field("value","rgb",Json::parse("[0.5,0.5,0.5]"));
     if(id=="noise"||id=="fbm"||id=="voronoi"){
@@ -127,6 +138,7 @@ inline void validateParameters(const Node& n){
     }
     if(id=="image")(void)imagePixels(p);
     if(id=="formula")(void)formulaTokens(p.getStr("expression","a b *"));
+    if(isCustomCompute(id))for(const auto* key:{"p0","p1","p2","p3"})(void)scalar(p[key],.5f,-16,16);
     if(id=="constant")scalar(p["value"],.5f);
     if(id=="color"){require(p["value"].isArray()&&p["value"].size()==3,"color requires RGB triple");for(const auto& v:p["value"].items()){require(v.isNumber(),"RGB channel must be number");scalar(v,0);}}
     if(id=="noise"||id=="fbm"||id=="voronoi"){integer(p["period"],8,1,256);seed(p["seed"]);if(id=="fbm")integer(p["octaves"],4,1,6);}
@@ -139,18 +151,30 @@ inline void validateParameters(const Node& n){
     if(id=="normal")scalar(p["strength"],2,0,16);
 }
 inline bool neighborhoodOp(std::string_view id){return id=="blur"||id=="erosion"||id=="warp"||id=="distort";}
-inline bool requiresMaterialized(const Program& p){return std::any_of(p.nodes.begin(),p.nodes.end(),[](const Node& n){return neighborhoodOp(n.info->id)||isImageSource(n.info->id);});}
+inline bool requiresMaterialized(const Program& p){return std::any_of(p.nodes.begin(),p.nodes.end(),[](const Node& n){return neighborhoodOp(n.info->id)||isImageSource(n.info->id)||isCustomCompute(n.info->id);});}
 inline Program compileResolved(const Json& g,const ImageResolver& resolver={}){
     require(g.isObject()&&g.getInt("version")==1&&g.dump(-1).size()<=256*1024,"texture graph version 1 / 256 KiB required");
     Program p;p.size=integer(g["size"],256,8,1024);
     const auto& nodes=g["nodes"];require(nodes.isArray()&&nodes.size()>0&&nodes.size()<=64,"texture graph requires 1..64 nodes");
     require(size_t(p.size)*p.size*nodes.size()<=4194304,"texture graph pixel-node budget exceeded (reduce resolution or nodes)");
     std::map<std::string,size_t> ids;
-    size_t sourceBytes=0;
+    size_t sourceBytes=0,customInstructions=0;
     for(const auto& j:nodes.items()){
         Node n;n.id=j.getStr("id");require(safeId(n.id)&&ids.emplace(n.id,p.nodes.size()).second,"invalid or duplicate texture node ID");
         n.info=&op(j.getStr("op"));n.parameters=j.has("properties")?j["properties"]:Json::object();require(n.parameters.isObject(),"properties must be object");validateParameters(n);
         require(j["inputs"].isArray()&&j["inputs"].size()==n.info->inputs.size(),"texture input arity mismatch");
+        if(isCustomCompute(n.info->id)){
+            const bool color=std::string_view(n.info->id)=="customColor";
+            constexpr const char* keys[]={"red","green","blue"};
+            constexpr const char* defaults[]={"ar br c mix","ag bg c mix","ab bb c mix"};
+            for(size_t channel=0;channel<(color?3u:1u);++channel){
+                const auto* key=color?keys[channel]:"code";
+                require(!n.parameters.has(key)||n.parameters[key].isString(),"custom compute code must be text");
+                n.custom[channel]=custom_compute::parse(n.parameters.getStr(key,color?defaults[channel]:"a b c mix"),color);
+                customInstructions+=n.custom[channel].size();
+            }
+            require(customInstructions<=custom_compute::maxWork/(size_t(p.size)*p.size),"custom compute pixel-instruction budget exceeded");
+        }
         if(isImageSource(n.info->id)){
             ImageSource data;
             if(std::string_view(n.info->id)=="image"){
@@ -317,6 +341,8 @@ inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t
             for(size_t k=0;k<count;++k)out[k]={img.rgba[k*4]/255.f,img.rgba[k*4+1]/255.f,img.rgba[k*4+2]/255.f};continue;
         }
         const auto formula=id=="formula"?formulaTokens(q.getStr("expression","a b *")):std::vector<std::string>{};
+        const bool custom=isCustomCompute(id);
+        const std::array<float,4> params=custom?std::array<float,4>{scalar(q["p0"],.5f,-16,16),scalar(q["p1"],.5f,-16,16),scalar(q["p2"],.5f,-16,16),scalar(q["p3"],.5f,-16,16)}:std::array<float,4>{};
         const auto* imported=node.image.get();
         if(isImageSource(id))require(imported!=nullptr,"missing resolved image source");
         const float value=scalar(q["value"].isArray()?Json():q["value"],.5f);
@@ -334,6 +360,12 @@ inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t
             else if(id=="voronoi")r=gray(textureVoronoi(u,v,period,randomSeed));
             else if(id=="gradient")r=gray(axisX?u:v);
             else if(id=="formula")r=gray(evaluateFormula(formula,a(),b()));
+            else if(custom){
+                const auto& aa=input(0);const auto& bb=input(1);
+                const custom_compute::Values args={aa[0],aa[1],aa[2],bb[0],bb[1],bb[2],input(2)[0],u,v,params[0],params[1],params[2],params[3]};
+                if(id=="customScalar")r=gray(custom_compute::evaluate(node.custom[0],args));
+                else for(size_t channel=0;channel<3;++channel)r[channel]=custom_compute::evaluate(node.custom[channel],args);
+            }
             else if(isImageSource(id)){const auto p=imported->rgb[size_t(y*imported->height/n)*imported->width+x*imported->width/n];r={float((p>>16)&255u)/255.f,float((p>>8)&255u)/255.f,float(p&255u)/255.f};}
             else if(id=="add")r=gray(a()+b());else if(id=="subtract")r=gray(a()-b());else if(id=="multiply")r=gray(a()*b());
             else if(id=="min")r=gray(std::min(a(),b()));else if(id=="max")r=gray(std::max(a(),b()));else if(id=="invert")r=gray(1-a());

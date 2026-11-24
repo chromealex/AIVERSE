@@ -42,6 +42,7 @@ float cells(float2 uv,int p,uint seed){
 }
 )MSL";
     msl+=patternShader;
+    msl+=custom_compute::shaderHelpers;
     return msl;
 }
 template<class Port>
@@ -60,6 +61,17 @@ inline std::string pointwiseExpression(const Node& node,int n,Port var){
                 else{auto y=std::move(stack.back());stack.pop_back();auto x=std::move(stack.back());stack.back()=(token=="min"||token=="max")?token+"("+x+","+y+")":"("+x+token+y+")";}
             }
             expr="float3("+stack.back()+")";
+        }
+        else if(isCustomCompute(id)){
+            auto variable=[&](unsigned index)->std::string{
+                if(index<6)return var(index/3)+"."+std::string(1,"xyz"[index%3]);
+                if(index==6)return var(2)+".x";
+                if(index==7)return "uv.x";
+                if(index==8)return "uv.y";
+                return f(custom_compute::variableNames[index].data(),.5f,-16,16);
+            };
+            auto channel=[&](size_t i){return custom_compute::emit(node.custom[i],variable,[](float v){return literal(v);});};
+            expr=id=="customScalar"?"float3("+channel(0)+")":"float3("+channel(0)+","+channel(1)+","+channel(2)+")";
         }
         else if(id=="gradient")expr=q.getStr("axis","y")=="x"?"float3(uv.x)":"float3(uv.y)";
         else if(id=="noise"||id=="fbm"||id=="voronoi"){
@@ -233,13 +245,13 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
         body+="float3 value=clamp("+expr+",0.0f,1.0f);\n";
     }
     body+=output==KernelValue::Scalar?"result[tid]=value.x;":"result[tid]=float4(value,1.0f);";
-    return materializedKernel(output,types,n,body,normal||!types.empty()?std::string{}:pointwiseCommon(),isImageSource(op));
+    return materializedKernel(output,types,n,body,isCustomCompute(op)?std::string(custom_compute::shaderHelpers):normal||!types.empty()?std::string{}:pointwiseCommon(),isImageSource(op));
 }
 // Only the known pointwise operations participate. Future neighborhood,
 // sampling or side-effect operations remain materialization boundaries.
 inline bool fusionPointwise(const Node& node){
     const std::string_view id=node.info->id;
-    for(std::string_view op:{"formula","constant","color","gradient","noise","fbm","voronoi","pattern","patternMask",
+    for(std::string_view op:{"formula","customScalar","customColor","constant","color","gradient","noise","fbm","voronoi","pattern","patternMask",
         "add","subtract","multiply","min","max","invert","threshold","remap","blend","blendColor","colorize","metallicRoughness"})
         if(id==op)return true;
     return false;
@@ -276,7 +288,7 @@ inline Source compileFusionRegion(const Program& p,const FusionRegion& region,in
         // re-expands to all lanes before its consumers read it.
         if(node.info->output==Kind::Scalar)
             body+=var(index)+"=float3("+var(index)+".x);\n";
-        defined[index]=true;common|=node.inputs.empty();
+        defined[index]=true;common|=node.inputs.empty()||isCustomCompute(node.info->id);
     }
     const auto root=region.nodes.back();
     const auto output=materializedValue(p.nodes[root].info->output);
