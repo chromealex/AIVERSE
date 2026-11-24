@@ -42,7 +42,13 @@ void checkOpenings(const BuildingDef& d,const BuildingStyle& st,uint64_t seed,Ve
             // Only the panes (one of two glass materials) may sit in a window hole.
             for(const auto& part:m.parts){
                 if(part.material==glass||part.material==lit)continue;
-                StyledMesh one;one.vertices=m.vertices;one.parts={part};CHECK(!hits(one,q,-1));
+                StyledMesh one;one.vertices=m.vertices;one.parts={part};
+                if(hits(one,q,-1)){
+                    std::fprintf(stderr,"window obstruction style=%s seed=%llu yaw=%u floor=%u side=%u material=%d box=[%f,%f,%f]..[%f,%f,%f]\n",
+                        st.id.c_str(),static_cast<unsigned long long>(seed),yaw,o.floor,o.side,part.material,
+                        q.lo[0],q.lo[1],q.lo[2],q.hi[0],q.hi[1],q.hi[2]);
+                    CHECK(false);
+                }
             }
         }
     }

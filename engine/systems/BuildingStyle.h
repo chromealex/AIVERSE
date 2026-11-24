@@ -271,9 +271,21 @@ inline StyledMesh dressBuilding(const BuildingDef& d,const BuildingStyle& st,uin
         // Heavy corner blocks with the outer edge cut at 45 degrees, and a narrower cap; (a, b) = outward along x / z.
         float dpt=st.corners.depth,c=st.corners.chamfer,h=top+(d.roof?st.parapet.height:0.f)+0.25f;
         for(auto [cx,cz,sx,sz]:std::initializer_list<std::array<float,4>>{{0,0,-1,-1},{W,0,1,-1},{W,D,1,1},{0,D,-1,1}}){
-            // How far the block may reach along each wall: never over the door jambs.
-            auto reach=[&](uint32_t side,bool atStart){auto dsp=doorSpan(side,st.door.width);float len=side%2==0?W:D;
-                float room=atStart?dsp.first:len-dsp.second;return dsp.first>dsp.second?cw:std::clamp(room-0.05f,0.f,cw);};
+            // Bound inward reach on both adjacent faces against every
+            // authored opening, not only the ground-floor door. A wide
+            // chamfered corner must not cover the first/last window column.
+            auto reach=[&](uint32_t side,bool atStart){
+                const float len=side%2==0?W:D;
+                float limit=cw;
+                for(const auto& opening:local->openings){
+                    if(opening.side!=side)continue;
+                    const float pad=opening.door?st.door.width:
+                        (st.window.frame>=0?st.window.width:0.f);
+                    const float room=atStart?alongOf(opening,false):len-alongOf(opening,true);
+                    limit=std::min(limit,std::max(0.f,room-pad-0.05f));
+                }
+                return limit;
+            };
             float inX=reach(cz==0?0u:2u,cx==0),inZ=reach(cx==0?3u:1u,cz==0);   // along the x wall / the z wall
             auto ring=[&](float k,float y){std::vector<std::array<float,3>> r;
                 for(auto [a,b]:std::initializer_list<std::pair<float,float>>{{-inX+k,-inZ+k},{dpt-k,-inZ+k},{dpt-k,dpt-c},{dpt-c,dpt-k},{-inX+k,dpt-k}})r.push_back({cx+sx*a,y,cz+sz*b});return r;};

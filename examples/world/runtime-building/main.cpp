@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <fstream>
 #include <iterator>
+#include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -360,7 +361,7 @@ int main(int argc,char** argv){
         CHECK(board);send(*board,2,true);CHECK(accepted==1);
         step();step();
         if(game->lift(sim).passengerCount!=1)std::cerr<<"Lift boarding diagnostics: "<<game->buildings->lastError()<<"\n";
-    CHECK(game->lift(sim).passengerCount==1);
+        CHECK(game->lift(sim).passengerCount==1);
         const auto* passenger=sim.world().tryGetConst<BuildingLiftPassenger>(game->rider);
         CHECK(passenger&&passenger->attached&&passenger->sceneId==1);
         CHECK(game->unexpectedModuleCommands==0);
