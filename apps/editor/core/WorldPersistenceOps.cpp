@@ -9,6 +9,7 @@
 #include "engine/net/authority/Session.h"
 #include "engine/platform/ContentReader.h"
 #include "engine/world/WorldPersistenceDiagnostics.h"
+#include "engine/world/SimulationLod.h"
 #include <filesystem>
 #include <charconv>
 #include <fstream>
@@ -198,6 +199,21 @@ void registerWorldPersistenceOps(Workspace& ws){
 
     using Operation=std::function<Json(const SavedProject&,const Json&,Control*)>;
     auto jobs=std::make_shared<WorldOperatorJobs>();
+    ws.registerOp({"world_simulation_lod_set","Validate and save authored simulation LOD policy. Requires a restarted compatible simulation; changing content can invalidate existing world saves.",
+        Json::parse(R"({"type":"object","required":["config","expected"],"properties":{"config":{"type":"object"},"expected":{"type":"object"}},"additionalProperties":false})"),[&ws,jobs](const Json& p){
+            if(ws.project.dir.empty())throw std::runtime_error("open a project first");
+            if(jobs->occupied())throw std::runtime_error("world job slot occupied; poll/release it first");
+            if(!p["config"].isObject()||!p["expected"].isObject())throw std::runtime_error("config and expected objects required");
+            const auto previous=world::simulationLodConfigJson(world::readSimulationLod(ws.project.rulesJson["simulationLod"]));
+            const auto expected=world::simulationLodConfigJson(world::readSimulationLod(p["expected"]));
+            if(previous.dump(-1)!=expected.dump(-1))throw std::runtime_error("simulation LOD settings changed; reload before saving");
+            const auto next=world::simulationLodConfigJson(world::readSimulationLod(p["config"]));
+            Json args=Json::object();args.set("path",Json::string("simulationLod"));args.set("value",next);
+            const auto result=ws.call("rules_set",args,"editor");
+            if(result.has("error"))throw std::runtime_error(result.getStr("error"));
+            Json out=next;out.set("authored",Json::fromBool(true));out.set("requiresRestart",Json::fromBool(true));
+            return out;
+        }});
     std::map<std::string,Operation> operations;
     auto add=[&](const char* name,const char* desc,const char* schema,Operation fn){
         operations.emplace(name,fn);
