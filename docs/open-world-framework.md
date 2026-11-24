@@ -99,6 +99,15 @@ time, never create a duplicate body, never advance a linked active vehicle,
 reject invalid/overflowing timelines, preserve opt-out behavior and restore
 from existing save/rollback. No automatic generic ECS parking in this slice.
 
+W1.30b in progress: connect the complete cold component policy to the
+existing authoritative RegionLifecycleRuntime activation queue. Install an
+explicit guarded policy at the host-selected tick barrier; validate full
+region membership, park eligibility, wake admission and portable clocks.
+Retain queue schema, bounded transition budget, sorted head retry and
+idempotence. Acceptance includes blocked head, explicit cancellation,
+replacement, no-op, mixed region refusal, catch-up on later wake, save and
+rollback parity. No default host installation or implicit actor parking.
+
 ### Feature-first continuation queue
 
 - OW-01 next: safe explicit cold/absent lifecycle, persisted reduced simulation
