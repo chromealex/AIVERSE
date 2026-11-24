@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Mountain, RefreshCw } from 'lucide-react';
 import { invoke, onNativeEvent } from '../../bridge';
-import type { StudioSnapshot } from '../../types';
-import { StudioPanel, StudioSection, StudioField, StudioInput, StudioSelect, StudioButton, StudioIconButton, StudioAlert, StudioEmptyState, StudioBadge } from '../../ui';
+import type { StudioSnapshot, StudioCavernsPreview } from '../../types';
+import { StudioPanel, StudioSection, StudioField, StudioInput, StudioSelect, StudioButton, StudioIconButton, StudioAlert, StudioEmptyState, StudioBadge, StudioCheckbox } from '../../ui';
 
 type Stamp = { id: string; xCm: number; yCm: number; zCm: number; radiusCm: number; mode: 'carve' | 'fill' };
 type Entrance = { id: string; xCm: number; zCm: number; caveYcm: number; surfaceYcm: number; radiusCm: number };
@@ -35,6 +35,8 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
   const [pickMode,setPickMode] = useState<'surface'|'plane'>('surface');
   const [armed,setArmed] = useState(false);
   const [page,setPage] = useState(0);
+  const [preview,setPreview] = useState<StudioCavernsPreview|null>(null);
+  const [previewError,setPreviewError] = useState('');
   const epoch=useRef(0);
   const locked=useRef(false);
   const currentProject=useRef(project);
@@ -58,7 +60,7 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
     finally {locked.current=false;if(serial===epoch.current)setBusy(false);}
   }
   useEffect(()=>{
-    ++epoch.current;setDoc(null);setSelected('');setError('');setStatus('');setBusy(false);
+    ++epoch.current;setDoc(null);setSelected('');setError('');setStatus('');setBusy(false);setPreview(null);setPreviewError('');
     // Explicit refresh avoids using an earlier map or unsaved document after a switch.
     return ()=>{++epoch.current;};
   },[project,snapshot?.scene.name,snapshot?.history.canUndo,snapshot?.history.canRedo]);
@@ -73,6 +75,16 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
   const valid=fields.every(k=>form[k].trim()!=='' && Number.isSafeInteger(values[k])) &&
     fields.slice(0,3).every(k=>Math.abs(values[k])<=1000000000) && values.radiusCm>=1 && values.radiusCm<=1000000;
   const editable=Boolean(doc && project && snapshot?.mode==='edit' && !busy);
+  async function updatePreview(patch: {enabled?:boolean;isolate?:boolean;paging?:boolean} = {}){
+    if(!doc||!project||locked.current)return;
+    locked.current=true;setBusy(true);setPreviewError('');
+    const serial=epoch.current;
+    try{
+      const next=await invoke('studio.cavernsPreview',{expectedProject:project,expectedMap:map,...patch});
+      if(serial===epoch.current&&currentProject.current===project)setPreview(next);
+    }catch(e){if(serial===epoch.current&&currentProject.current===project)setPreviewError(message(e));}
+    finally{locked.current=false;if(serial===epoch.current)setBusy(false);}
+  }
   async function armScene(enable:boolean){
     if(locked.current||(!editable&&enable))return;
     locked.current=true;setBusy(true);setError('');
@@ -93,7 +105,7 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
       const next=await read(project,map);
       const snap=await invoke('studio.snapshot',{});
       if(serial===epoch.current && currentProject.current===project && snap.project.path===project){
-        setDoc(next);setSelected('');setStatus('Map edit committed. Native preview readiness is not reported.');commitSnapshot(snap);
+        setDoc(next);setSelected('');setStatus('Map edit committed. The native Scene rebuilds asynchronously.');commitSnapshot(snap);
       }
     }catch(e){if(serial===epoch.current && currentProject.current===project){setError(message(e));setDoc(null);}}
     finally{locked.current=false;if(serial===epoch.current)setBusy(false);}
@@ -114,12 +126,31 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
           <StudioButton variant="primary" disabled={!editable||!valid} onClick={()=>void edit({mode,...values})}>Apply {mode} stamp</StudioButton>
           <StudioField label="Scene picking" htmlFor="cave-pick"><StudioSelect id="cave-pick" value={pickMode} disabled={busy} onChange={e=>setPickMode(e.target.value as 'surface'|'plane')}><option value="surface">SDF surface</option><option value="plane">Depth plane (Y above)</option></StudioSelect></StudioField>
           <StudioButton variant="primary" disabled={!editable||!valid||values.radiusCm<25||values.radiusCm>6400} onClick={()=>void armScene(true)}>{armed?'Update Scene brush':'Arm Scene brush'}</StudioButton>
-          <StudioAlert title="Scene authoring">Plain left drag paints; Alt orbits, Esc disarms. Surface picks the native SDF; depth plane uses Y. A drag is one History step. Cave mesh preview is not yet connected to Studio.</StudioAlert>
+          <StudioAlert title="Scene authoring">Plain left drag paints; Alt orbits, Esc disarms. Surface picks the native SDF; depth plane uses Y. A drag is one History step. Native Scene streams nearby cave meshes.</StudioAlert>
         </StudioSection>
         <StudioSection title={'Stamps · '+doc.stamps.length}>
           {doc.stamps.slice(page*32,page*32+32).map(s=><StudioButton key={s.id} variant={selected===s.id?'primary':'secondary'} disabled={busy} onClick={()=>{setSelected(s.id);setForm({xCm:String(s.xCm),yCm:String(s.yCm),zCm:String(s.zCm),radiusCm:String(s.radiusCm)});setMode(s.mode);}}>{s.mode} #{s.id} · r {s.radiusCm} cm</StudioButton>)}
           <div className="au-row"><StudioButton disabled={page===0} onClick={()=>setPage(p=>p-1)}>Previous</StudioButton><StudioButton disabled={(page+1)*32>=doc.stamps.length} onClick={()=>setPage(p=>p+1)}>Next</StudioButton></div>
           <StudioButton variant="danger" disabled={!editable||!doc.stamps.some(s=>s.id===selected)} onClick={()=>void edit({mode:'erase',stampIdText:selected})}>Erase selected stamp</StudioButton>
+        </StudioSection>
+        <StudioSection title="Native Scene preview">
+          <StudioButton disabled={busy} onClick={()=>void updatePreview()}>Refresh preview diagnostics</StudioButton>
+          {previewError && <StudioAlert tone="warning" title="Scene unavailable">{previewError}</StudioAlert>}
+          {preview && <>
+            <StudioCheckbox label="Preview cave geometry" checked={preview.enabled} onChange={e=>void updatePreview({enabled:e.target.checked})}/>
+            <StudioCheckbox label="Isolate underground geometry" checked={preview.isolate} onChange={e=>void updatePreview({isolate:e.target.checked})}/>
+            <StudioCheckbox label="STRATA index paging (restart preview)" checked={preview.paging} onChange={e=>void updatePreview({paging:e.target.checked})}/>
+            {preview.error && <StudioAlert tone="danger" title="Native preview">{preview.error}</StudioAlert>}
+            <StudioBadge tone={preview.visible?'accent':'neutral'}>{preview.visible?'Visual owner open':'No active preview source'}</StudioBadge>
+            <div>Ready chunks: {preview.ready ?? '—'} / {preview.tracked ?? '—'}</div>
+            <div>CPU jobs: {preview.pendingCpu ?? '—'}</div>
+            <div>GPU shards: {preview.activeShards ?? '—'} active / {preview.stagedShards ?? '—'} staged</div>
+            <div>Retired scenes: {preview.retiredScenes ?? '—'}</div>
+            <div>Source bytes (active / staged / retired): {preview.activeSourceBytes ?? '—'} / {preview.stagedSourceBytes ?? '—'} / {preview.retiredSourceBytes ?? '—'}</div>
+            <div>STRATA arena bytes (active / staged / retired): {preview.activeStrataArenaBytes ?? '—'} / {preview.stagedStrataArenaBytes ?? '—'} / {preview.retiredStrataArenaBytes ?? '—'}</div>
+            <div>Page transfer bytes / deferrals: {preview.pageTransfers ?? '—'} / {preview.pageDeferrals ?? '—'}</div>
+          </>}
+          <StudioAlert title="Visual preview only">Isolation hides terrain and the composite lighting mesh; other authored models remain. Counters describe native visual residency and estimates, not gameplay collision, NavMesh or measured driver VRAM.</StudioAlert>
         </StudioSection>
         <StudioSection title="Generator · read only">
           <div>Revision: {doc.revision}</div><div>Generator: {doc.generator}</div><div>Seed: {doc.seed}</div>
@@ -128,7 +159,7 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
         <StudioSection title={'Entrances · '+doc.entrances.length}>
           {doc.entrances.slice(0,32).map(e=><div key={e.id}>#{e.id} · ({e.xCm}, {e.zCm}) · {e.caveYcm} → {e.surfaceYcm} cm</div>)}
           {doc.entrances.length>32 && <div>Showing first 32 entrances.</div>}
-          <StudioAlert title="Native diagnostics">Viewport mesh, collision, streaming and paging telemetry are not exposed by this Studio build. Settings and entrances are read only here.</StudioAlert>
+          <StudioAlert title="Authoring">Generator settings and entrances are read only here.</StudioAlert>
         </StudioSection>
       </>}
     </div>
