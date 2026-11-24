@@ -242,3 +242,7 @@ The map's `world.terraweaveForest` optionally uses the existing TerraWeave fores
 ```
 
 This excerpt goes beside the existing `world.bodies`. Up to 64 unique IDs; existing botanical presets, custom profile fields, seed and optional PBR texture families are reused. Missing species retain the built-in fallback palette. Only current authoritative trees use this catalogue; cosmetic scatter and planar placement fields do not change. No arbitrary imported mesh support, Studio/MCP authoring or GPU acceptance yet. The map reload owns model uploads/retirement; no per-tree mesh or simulation authority is added.
+
+### ARBOR-derived falling trunk collision (Stage 159)
+
+For a species in the native `planetForest` configuration, set `naturalFallBody: {"fromArbor":true,"density":600,"frictionPermille":500}` and enable `naturalFallPermille`. Define the same species ID in the map's `world.terraweaveForest.species`. The shared CPU ARBOR profile and prototype seed produce a structural trunk capsule; age/vigor, shrub factor, body flora scale and remaining wood mass at delivery determine its dimensions. The native physics shape remains frozen after creation. Explicit radiusCm/halfHeightCm and fromArbor are mutually exclusive. This approximation does not collide individual branches or leaves. Actual motion still requires the explicitly installed single-authority physics host. Compilation and acceptance pending.

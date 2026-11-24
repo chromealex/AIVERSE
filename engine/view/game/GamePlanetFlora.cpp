@@ -6,6 +6,7 @@
 #include "engine/world/TerraWeaveSphere.h"
 #include "engine/world/TerraWeaveTreePresets.h"
 #include "engine/world/TerraWeaveForestSpeciesManifest.h"
+#include "engine/world/WorldAssets.h"
 #include "engine/world/TerraWeaveDeadwoodPresentation.h"
 #include "aiverselib/world/EvolvePlanetDeadwood.h"
 #include "aiverselib/world/PlanetConsequenceOwner.h"
