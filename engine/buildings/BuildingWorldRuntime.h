@@ -11,6 +11,7 @@
 #include "engine/buildings/BuildingLiftCheckpointPersistence.h"
 #include "engine/buildings/BuildingDynamicNavSource.h"
 #include "engine/buildings/BuildingGraphOwnerAdapters.h"
+#include "engine/buildings/BuildingGraphDiagnosticsJson.h"
 #include "engine/buildings/BuildingRenderer3DScene.h"
 #include "engine/scene/SceneCollisionNamespaces.h"
 #include <algorithm>
@@ -632,6 +633,19 @@ public:
     // Defined domains can differ from currently registered owners while unloaded.
     std::optional<uint32_t> configuredGraphDomains(uint64_t id)const{
         const auto* s=find(id);if(!s)return std::nullopt;return s->domains;
+    }
+
+    // Host may copy this value into a thread-safe diagnostic publication.
+    // Unknown scene is null; no graph consumers are invoked by this read.
+    Json graphDiagnosticsSnapshot(uint64_t id)const{
+        const auto* s=find(id);if(!s)return Json{};
+        auto out=buildingGraphDiagnosticsJson(s->router.diagnostics(id));
+        out.set("sceneId",Json::string(std::to_string(id)));
+        out.set("configuredDomains",Json::number(int64_t(s->domains)));
+        out.set("sceneStatus",Json::number(int64_t(s->status)));
+        out.set("physicalRevision",Json::string(std::to_string(s->physics.revision())));
+        out.set("physicalPendingGraphs",Json::fromBool(s->physics.pendingGraphs()));
+        return out;
     }
 
     // Render-thread/barrier methods. SceneView is the existing WorldScene
