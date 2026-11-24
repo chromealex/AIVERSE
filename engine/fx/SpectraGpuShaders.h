@@ -265,6 +265,62 @@ void collideStaticSphere(thread Particle& p,float3 from,constant Uniforms& u,flo
     float vn=dot(p.velocityLife.xyz,n);
     if(vn<0.0f)p.velocityLife.xyz=(p.velocityLife.xyz-n*vn)*(1.0f-u.collisionResponse.y)-n*(vn*u.collisionResponse.x);
 }
+bool sampleSdf(device const uint* graphSources,float3 p,thread float& distance,thread float3& gradient) {
+    uint n=graphSources[4];
+    float3 origin=float3(as_type<float>(graphSources[5]),as_type<float>(graphSources[6]),as_type<float>(graphSources[7]));
+    float spacing=as_type<float>(graphSources[8]);
+    float3 q=(p-origin)/spacing;
+    if(!all(q>=float3(0))||!all(q<=float3(float(n-1u))))return false;
+    uint3 base=min(uint3(q),uint3(n-2u));
+    float3 t=q-float3(base);
+    uint i=9u+(base.z*n+base.y)*n+base.x;
+    float a=as_type<float>(graphSources[i]),b=as_type<float>(graphSources[i+1u]),c=as_type<float>(graphSources[i+n]),d=as_type<float>(graphSources[i+n+1u]);
+    i+=n*n;
+    float e=as_type<float>(graphSources[i]),f=as_type<float>(graphSources[i+1u]),g=as_type<float>(graphSources[i+n]),h=as_type<float>(graphSources[i+n+1u]);
+    distance=mix(mix(mix(a,b,t.x),mix(c,d,t.x),t.y),mix(mix(e,f,t.x),mix(g,h,t.x),t.y),t.z);
+    gradient=float3(mix(mix(b-a,d-c,t.y),mix(f-e,h-g,t.y),t.z),
+                mix(mix(c-a,d-b,t.x),mix(g-e,h-f,t.x),t.z),
+                mix(mix(e-a,f-b,t.x),mix(g-c,h-d,t.x),t.y))/spacing;
+    return true;
+}
+void collideSdf(thread Particle& p,float3 from,constant Uniforms& u,device const uint* graphSources,float dt) {
+    if(u.collisionResponse.w<0.5f||dt<=0.0f)return;
+    float3 delta=p.positionAge.xyz-from;
+    float len=length(delta),spacing=as_type<float>(graphSources[8]);
+    uint steps=uint(clamp(ceil(len/(spacing*0.5f)),1.0f,64.0f));
+    float radius=max(0.0f,p.size.x)*0.5f*u.collisionResponse.z;
+    float distance,previous=0.0f,penetration=0.0f,t=0.0f;
+    float3 normal;
+    if(!sampleSdf(graphSources,from,distance,normal))return;
+    if(distance<radius)penetration=radius-distance;
+    else {
+        bool found=false;
+        for(uint i=1u;i<=steps;++i) {
+            float next=float(i)/float(steps);
+            if(!sampleSdf(graphSources,from+delta*next,distance,normal))return;
+            if(distance<=radius) {
+                float lo=previous,hi=next;
+                for(uint j=0u;j<8u;++j) {
+                    float mid=(lo+hi)*0.5f;
+                    if(!sampleSdf(graphSources,from+delta*mid,distance,normal))return;
+                    if(distance>radius)lo=mid;else hi=mid;
+                }
+                t=lo;
+                if(!sampleSdf(graphSources,from+delta*hi,distance,normal))return;
+                found=true;break;
+            }
+            previous=next;
+        }
+        if(!found)return;
+    }
+    float norm=length(normal);
+    if(norm<=0.00001f)return;
+    normal/=norm;
+    if(penetration==0.0f&&dot(delta,normal)>=0.0f)return;
+    p.positionAge.xyz=from+delta*t+normal*(penetration+0.001f);
+    float vn=dot(p.velocityLife.xyz,normal);
+    if(vn<0.0f)p.velocityLife.xyz=(p.velocityLife.xyz-normal*vn)*(1.0f-u.collisionResponse.y)-normal*(vn*u.collisionResponse.x);
+}
 uint packColor(float4 c) {
     uint4 bytes=uint4(clamp(c,0.0f,1.0f)*255.0f+0.5f);
     return bytes.x | (bytes.y<<8) | (bytes.z<<16) | (bytes.w<<24);
@@ -371,7 +427,7 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
             dead=p.positionAge.w>=p.velocityLife.w;
             if(!dead){
                 VmParams params=stateParams[slot];VmAttributes attrs=stateAttributes[slot];
-                vmRun(vmProgram[0],1u,p,params,attrs,dt,vmErrors);collideStaticSphere(p,previousPosition,u,dt);stateAttributes[slot]=attrs;
+                vmRun(vmProgram[0],1u,p,params,attrs,dt,vmErrors);collideStaticSphere(p,previousPosition,u,dt);collideSdf(p,previousPosition,u,graphSources,dt);stateAttributes[slot]=attrs;
             }
         }
         if(dead){
@@ -466,7 +522,7 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
             VmParams params=stateParams[id];
             VmAttributes attrs=stateAttributes[id];
             vmRun(vmProgram[0],1u,p,params,attrs,dt,vmErrors);
-            collideStaticSphere(p,previousPosition,u,dt);
+            collideStaticSphere(p,previousPosition,u,dt);collideSdf(p,previousPosition,u,graphSources,dt);
             stateAttributes[id]=attrs;
         }
         particles[id]=p;
@@ -850,6 +906,62 @@ void collideStaticSphere(inout Particle p,vec3 from,float dt) {
     float vn=dot(p.velocityLife.xyz,n);
     if(vn<0.0)p.velocityLife.xyz=(p.velocityLife.xyz-n*vn)*(1.0-u.collisionResponse.y)-n*(vn*u.collisionResponse.x);
 }
+bool sampleSdf(vec3 p,out float distance,out vec3 gradient) {
+    uint n=graphSources[4];
+    vec3 origin=vec3(uintBitsToFloat(graphSources[5]),uintBitsToFloat(graphSources[6]),uintBitsToFloat(graphSources[7]));
+    float spacing=uintBitsToFloat(graphSources[8]);
+    vec3 q=(p-origin)/spacing;
+    if(!all(greaterThanEqual(q,vec3(0)))||!all(lessThanEqual(q,vec3(float(n-1u)))))return false;
+    uvec3 base=min(uvec3(q),uvec3(n-2u));
+    vec3 t=q-vec3(base);
+    uint i=9u+(base.z*n+base.y)*n+base.x;
+    float a=uintBitsToFloat(graphSources[i]),b=uintBitsToFloat(graphSources[i+1u]),c=uintBitsToFloat(graphSources[i+n]),d=uintBitsToFloat(graphSources[i+n+1u]);
+    i+=n*n;
+    float e=uintBitsToFloat(graphSources[i]),f=uintBitsToFloat(graphSources[i+1u]),g=uintBitsToFloat(graphSources[i+n]),h=uintBitsToFloat(graphSources[i+n+1u]);
+    distance=mix(mix(mix(a,b,t.x),mix(c,d,t.x),t.y),mix(mix(e,f,t.x),mix(g,h,t.x),t.y),t.z);
+    gradient=vec3(mix(mix(b-a,d-c,t.y),mix(f-e,h-g,t.y),t.z),
+                mix(mix(c-a,d-b,t.x),mix(g-e,h-f,t.x),t.z),
+                mix(mix(e-a,f-b,t.x),mix(g-c,h-d,t.x),t.y))/spacing;
+    return true;
+}
+void collideSdf(inout Particle p,vec3 from,float dt) {
+    if(u.collisionResponse.w<0.5||dt<=0.0)return;
+    vec3 delta=p.positionAge.xyz-from;
+    float len=length(delta),spacing=uintBitsToFloat(graphSources[8]);
+    uint steps=uint(clamp(ceil(len/(spacing*0.5)),1.0,64.0));
+    float radius=max(0.0,p.size.x)*0.5*u.collisionResponse.z;
+    float distance,previous=0.0,penetration=0.0,t=0.0;
+    vec3 normal;
+    if(!sampleSdf(from,distance,normal))return;
+    if(distance<radius)penetration=radius-distance;
+    else {
+        bool found=false;
+        for(uint i=1u;i<=steps;++i) {
+            float next=float(i)/float(steps);
+            if(!sampleSdf(from+delta*next,distance,normal))return;
+            if(distance<=radius) {
+                float lo=previous,hi=next;
+                for(uint j=0u;j<8u;++j) {
+                    float mid=(lo+hi)*0.5;
+                    if(!sampleSdf(from+delta*mid,distance,normal))return;
+                    if(distance>radius)lo=mid;else hi=mid;
+                }
+                t=lo;
+                if(!sampleSdf(from+delta*hi,distance,normal))return;
+                found=true;break;
+            }
+            previous=next;
+        }
+        if(!found)return;
+    }
+    float norm=length(normal);
+    if(norm<=0.00001)return;
+    normal/=norm;
+    if(penetration==0.0&&dot(delta,normal)>=0.0)return;
+    p.positionAge.xyz=from+delta*t+normal*(penetration+0.001);
+    float vn=dot(p.velocityLife.xyz,normal);
+    if(vn<0.0)p.velocityLife.xyz=(p.velocityLife.xyz-normal*vn)*(1.0-u.collisionResponse.y)-normal*(vn*u.collisionResponse.x);
+}
 uint packColor(vec4 c) {
     uvec4 bytes=uvec4(clamp(c,0.0,1.0)*255.0+0.5);
     return bytes.x | (bytes.y<<8) | (bytes.z<<16) | (bytes.w<<24);
@@ -935,7 +1047,7 @@ void main(){
             dead=p.positionAge.w>=p.velocityLife.w;
             if(!dead){
                 VmParams params=stateParams[slot];VmAttributes attrs=stateAttributes[slot];
-                vmRun(1u,p,params,attrs,dt);collideStaticSphere(p,previousPosition,dt);stateAttributes[slot]=attrs;
+                vmRun(1u,p,params,attrs,dt);collideStaticSphere(p,previousPosition,dt);collideSdf(p,previousPosition,dt);stateAttributes[slot]=attrs;
             }
         }
         if(dead){
@@ -1030,7 +1142,7 @@ void main(){
             VmParams params=stateParams[id];
             VmAttributes attrs=stateAttributes[id];
             vmRun(1u,p,params,attrs,dt);
-            collideStaticSphere(p,previousPosition,dt);
+            collideStaticSphere(p,previousPosition,dt);collideSdf(p,previousPosition,dt);
             stateAttributes[id]=attrs;
         }
         particles[id]=p;

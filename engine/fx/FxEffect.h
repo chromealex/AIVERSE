@@ -90,6 +90,7 @@
 //   "forceFields": [{ "position": [0, 1, 0], "shape": "sphere" | "cylinder", "radius": 5, "startRadius": 0, "length": 4,
 //                     "direction": [0, 0, 0], "gravity": 2, "gravityFocus": 0, "rotation": 90, "rotationAttraction": 0.5, "drag": 0 }]
 #pragma once
+#include "SpectraStaticSdfVolume.h"
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -192,6 +193,7 @@ struct FxCollision {
     bool scene = false;                         // opt-in host swept collision provider
     float staticSphereRadius=0;                // 0 disables analytic SDF obstacle
     float3 staticSphereCenter{0,0,0};           // particle simulation space, not emitter space
+    StaticSdfVolume staticSdf;
 };
 struct FxNoise {
     FxRange strength{0, 0};                     // over the lifetime

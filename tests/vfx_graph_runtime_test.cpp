@@ -120,6 +120,25 @@ int main() {
                 "analytic sphere swept response");
     }
 
+    {
+        auto volume=basic;auto& e=volume.emitters[0];
+        e.drag={0,0};e.collision.enabled=true;e.collision.ground=false;
+        auto& sdf=e.collision.staticSdf;
+        sdf.origin={-2,-2,-2};sdf.dimension=5;sdf.spacing=1;
+        for(unsigned z=0;z<5;++z)for(unsigned y=0;y<5;++y)for(unsigned x=0;x<5;++x)
+            sdf.samples.push_back(float(y)-2);
+        require(sdf.valid(),"valid static SDF volume");
+        auto eligible=sp::inspectGraphGpuEligibility(volume,options);
+        require(eligible.eligible&&eligible.gpu.staticSdf.samples.size()==125,"SDF graph GPU eligibility");
+        fx::EffectDef decoded;
+        require(fx::parseEffect(fx::effectToJson(volume),"sdf",decoded,errors)&&
+                decoded.emitters[0].collision.staticSdf.samples==sdf.samples,"SDF roundtrip");
+        render::float3 pos{0,-1,0},vel{0,-20,0};
+        require(fx::resolveStaticSdf(sdf,{0,1,0},pos,vel,.25f,1,0)&&
+                std::abs(pos.y-.25f)<.01f&&vel.y>0,"sampled SDF sweep");
+        sdf.samples.pop_back();
+        require(!sp::inspectGraphGpuEligibility(volume,options).eligible,"invalid SDF rejected");
+    }
     options.capacity=4; // burst requires five slots
     require(!sp::inspectGraphGpuEligibility(basic,options).eligible,
             "unsafe GPU pool size accepted");

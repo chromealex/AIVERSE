@@ -94,6 +94,7 @@ struct ComputeEmitterDesc {
     float staticSphereRadius=0;
     render::float3 staticSphereCenter{};
     float collisionBounce=0.5f,collisionDampen=0,collisionRadiusScale=0;
+    fx::StaticSdfVolume staticSdf;
 };
 
 bool validComputeEmitter(const ComputeEmitterDesc&, std::string* reason = nullptr);
@@ -319,7 +320,7 @@ private:
     gfx::BufferHandle killSlots_; // 4 bytes per dead physical slot, scatter mode 6
     gfx::BufferHandle aliveCounter_, gpuDrawArgs_;
     gfx::BufferHandle seedProgramParams_, stateProgramParams_, gpuVmPayload_;
-    gfx::BufferHandle graphSources_; // 4 uint32 lane selectors, compute slot 13
+    gfx::BufferHandle graphSources_; // 4 material lanes + optional immutable SDF, slot 13
     gfx::BufferHandle vmErrors_;
     gfx::BufferHandle stateAttributes_; // compute slot 11, 8 scalar VM registers/particle
     gfx::TextureHandle texture_;

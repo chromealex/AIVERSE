@@ -587,6 +587,9 @@ void ParticleSystem::Impl::stepParticle(size_t& i, float dt, bool& removed) {
                     c.staticSphereCenter,c.staticSphereRadius+rad,c.bounce,c.dampen)) {
                 p.vtot=p.vel;hit=true;
             }
+            if(c.staticSdf.dimension && dt>0 && resolveStaticSdf(c.staticSdf,previousPosition,p.pos,p.vel,rad,c.bounce,c.dampen)) {
+                p.vtot=p.vel;hit=true;
+            }
             if(c.scene && sceneCollision && dt>0) {
                 if(sceneCollisionStats.queries>=sceneCollisionBudget)++sceneCollisionStats.budgetDenied;
                 else {

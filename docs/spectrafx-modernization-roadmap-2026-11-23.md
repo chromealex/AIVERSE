@@ -338,3 +338,7 @@ CollisionModule staticSphereRadius (>0) and staticSphereCenter author a sphere o
 ## Stage 138 — sampled GPU SDF volume (in progress)
 
 Author a static bounded cubic distance lattice in simulation coordinates (3–16 samples per axis). Trilinear interpolation, bounded segment sampling and refinement, radius/normal/bounce on CPU and both compute languages. Reuse immutable material-source storage binding with a separately gated appended payload and account bytes in the existing allocation envelope. Strict GPU eligibility keeps unsupported combinations on CPU. No texture import, moving scene SDF, depth collision or GPU event claim. Source fixtures only; execution deferred.
+
+## Stage 138 — bounded sampled static SDF volume (source; QA deferred)
+
+CollisionModule staticSdf accepts an object with origin, spacing, dimension (3..16), and dimension³ distances in metres, x-fastest. CPU and both Metal/Vulkan integration paths use trilinear distance/gradient, up to 64 segment samples and 8 refinements, radius/bounce/damping. Probes require initial coverage; no extrapolation or guaranteed CCD. Existing material storage binding appends immutable SDF payload only when enabled; no new binding or ParticleState layout. Allocation accounting includes extra bytes. Strict GPU eligibility accepts one static sphere OR SDF only; unsupported combinations use CPU. No texture assets, depth buffer, dynamic scene volume or GPU feedback. Advanced JSON authoring only. Source regression fixtures authored; no build, shader compilation or tests run.

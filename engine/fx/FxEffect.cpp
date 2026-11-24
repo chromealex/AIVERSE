@@ -431,7 +431,7 @@ void parseModules(const Json& e, Reader& r, EmitterDef& d) {
     if (e.has("collision")) {
         const Json& o = e["collision"];
         if (o.type() == Json::Type::Bool) d.collision.enabled = o.boolean();
-        else module(e, r, "collision", {"height", "bounce", "dampen", "lifeLoss", "minKillSpeed", "maxKillSpeed", "ground", "planes", "radius", "scene", "staticSphereRadius", "staticSphereCenter"},
+        else module(e, r, "collision", {"height", "bounce", "dampen", "lifeLoss", "minKillSpeed", "maxKillSpeed", "ground", "planes", "radius", "scene", "staticSphereRadius", "staticSphereCenter", "staticSdf"},
                     [&](const Json& c, Reader& cr) {
             FxCollision& col = d.collision;
             col.enabled = true;
@@ -445,6 +445,33 @@ void parseModules(const Json& e, Reader& r, EmitterDef& d) {
             cr.boolean("scene", col.scene);
             cr.number("staticSphereRadius", col.staticSphereRadius, 0, 10000);
             cr.vec3("staticSphereCenter", col.staticSphereCenter);
+            if(c.has("staticSdf")) {
+                const auto& grid=c["staticSdf"];
+                Reader sr{grid,cr.where+".staticSdf",r.errors};
+                auto& sdf=col.staticSdf;
+                if(!grid.isObject())sr.fail("staticSdf","expected object");
+                else {
+                    unknownKeys(grid,{"origin","spacing","dimension","samples"},sr.where,r.errors,sr.ok);
+                    sr.vec3("origin",sdf.origin);
+                    sr.number("spacing",sdf.spacing,0.01f,1000.f);
+                    const auto& dim=grid["dimension"];
+                    const auto n=dim.integer(-1);
+                    if(!dim.isNumber()||n<3||n>16||dim.toDouble()!=double(n))
+                        sr.fail("dimension","expected integer 3..16");
+                    else sdf.dimension=uint32_t(n);
+                    const auto& samples=grid["samples"];
+                    if(!samples.isArray()||samples.size()>4096||
+                       samples.size()!=size_t(sdf.dimension)*sdf.dimension*sdf.dimension)
+                        sr.fail("samples","expected dimension cubed distances");
+                    else for(size_t i=0;i<samples.size();++i) {
+                        if(!samples[i].isNumber()||!std::isfinite(samples[i].toDouble())||
+                           std::abs(samples[i].toDouble())>100000) {sr.fail("samples","invalid distance");break;}
+                        sdf.samples.push_back(float(samples[i].toDouble()));
+                    }
+                    if(!sdf.valid())sr.fail("staticSdf","invalid bounded volume");
+                }
+                if(!sr.ok)cr.ok=false;
+            }
             cr.number("radius", col.radius, 0, 10);
             if (c.has("planes")) {
                 const Json& l = c["planes"];
@@ -749,6 +776,14 @@ void modulesToJson(const EmitterDef& d, Json& e) {
         if (c.staticSphereRadius>0) {
             o.set("staticSphereRadius",numJ(c.staticSphereRadius));
             o.set("staticSphereCenter",vecJ(c.staticSphereCenter));
+        }
+        if(c.staticSdf.dimension) {
+            Json grid=Json::object(),samples=Json::array();
+            grid.set("origin",vecJ(c.staticSdf.origin));
+            grid.set("spacing",numJ(c.staticSdf.spacing));
+            grid.set("dimension",numJ(float(c.staticSdf.dimension)));
+            for(float v:c.staticSdf.samples)samples.push(numJ(v));
+            grid.set("samples",samples);o.set("staticSdf",grid);
         }
         if (c.radius) o.set("radius", numJ(c.radius));
         if (!c.planes.empty()) {

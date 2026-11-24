@@ -60,6 +60,8 @@ bool validComputeEmitter(const ComputeEmitterDesc& d,std::string* why) {
        !finite(d.collisionDampen)||d.collisionDampen<0||d.collisionDampen>1||
        !finite(d.collisionRadiusScale)||d.collisionRadiusScale<0||d.collisionRadiusScale>10)
         return fail("invalid analytic sphere collision");
+    if(!d.staticSdf.valid()||(d.staticSdf.dimension&&d.staticSphereRadius>0))
+        return fail("invalid or combined static SDF volume");
     if(why)why->clear();
     return true;
 }
@@ -151,10 +153,11 @@ bool ComputeParticles::initCpu() {
     emitter.gravity={0,desc_.gravityY,0};
     emitter.drag={desc_.drag,desc_.drag};
     emitter.spread=0;
-    if(desc_.staticSphereRadius>0) {
+    if(desc_.staticSphereRadius>0||desc_.staticSdf.dimension) {
         emitter.collision.enabled=true;emitter.collision.ground=false;
         emitter.collision.staticSphereCenter=desc_.staticSphereCenter;
         emitter.collision.staticSphereRadius=desc_.staticSphereRadius;
+        emitter.collision.staticSdf=desc_.staticSdf;
         emitter.collision.bounce=desc_.collisionBounce;
         emitter.collision.dampen=desc_.collisionDampen;
         emitter.collision.radius=desc_.collisionRadiusScale;
@@ -185,6 +188,15 @@ bool ComputeParticles::initGpu() {
     if(materialActive && !gpu_material::compile(
         desc_.shaderGraph,desc_.graphInputs,graphMaterial,reason_,desc_.gpuBirthRandom))return false;
     const std::array<uint32_t,4> graphChannels=graphMaterial.sources;
+    std::vector<uint32_t> graphPayload(graphChannels.begin(),graphChannels.end());
+    if(desc_.staticSdf.dimension) {
+        const auto& sdf=desc_.staticSdf;
+        const auto bits=[](float v){uint32_t u;std::memcpy(&u,&v,sizeof(u));return u;};
+        graphPayload.push_back(sdf.dimension);
+        graphPayload.push_back(bits(sdf.origin.x));graphPayload.push_back(bits(sdf.origin.y));
+        graphPayload.push_back(bits(sdf.origin.z));graphPayload.push_back(bits(sdf.spacing));
+        for(float v:sdf.samples)graphPayload.push_back(bits(v));
+    }
     gpuIndirectActive_=desc_.gpuIndirect && device_->supportsGpuAuthoredIndirectDraw();
     gpuAllocationActive_=desc_.gpuOwnedAllocation&&gpuIndirectActive_;
     if(desc_.gpuOwnedAllocation&&!gpuAllocationActive_){
@@ -202,7 +214,7 @@ bool ComputeParticles::initGpu() {
     {
         auto& budget=*desc_.allocationBudget;
         budget.collect(device_->gpuCompletedFence());
-        const size_t charge=estimateGpuEmitterAllocation(cap,proceduralActive_);
+        const size_t charge=estimateGpuEmitterAllocation(cap,proceduralActive_)+(graphPayload.size()-4)*sizeof(uint32_t);
         if(!budget.reserve(charge)){++stats_.gpuAllocationBudgetDenied;reason_="SpectraFX physical GPU allocation budget exhausted";return false;}
         gpuAllocationCharge_=charge;
     }
@@ -252,8 +264,8 @@ bool ComputeParticles::initGpu() {
     liveSlots_=buffer(*device_,gfx::BufferType::Storage,cap*sizeof(uint32_t),
                       gpuAllocationActive_?initialFree.data():nullptr,
                       gpuAllocationActive_?"SpectraFX persistent GPU free stack":"SpectraFX GPU live-slot gather map");
-    graphSources_=buffer(*device_,gfx::BufferType::Storage,sizeof(graphChannels),
-                         graphChannels.data(),"SpectraFX GPU material vertex sources");
+    graphSources_=buffer(*device_,gfx::BufferType::Storage,graphPayload.size()*sizeof(uint32_t),
+                         graphPayload.data(),"SpectraFX immutable material and SDF sources");
     const uint32_t zero=0;
     const gfx::DrawIndexedIndirectCommand zeroArgs{0,1,0,0,0};
     const std::array<uint32_t,8> allocatorCounters{0,cap,0,0,0,0,0,0};
@@ -364,7 +376,7 @@ bool ComputeParticles::initGpu() {
                     + (proceduralActive_?size_t(cap)*40u+12u:size_t(cap)*(160u+6u*(wideIndices?4u:2u)))
                     +size_t(n*n*4)+2*sizeof(zero)+sizeof(zeroArgs)
                     +size_t(cap)*2*sizeof(ProgramParams)+sizeof(vmPayload)
-                    +size_t(cap)*sizeof(ProgramAttributes)+sizeof(graphChannels)
+                    +size_t(cap)*sizeof(ProgramAttributes)+graphPayload.size()*sizeof(uint32_t)
                     +(gpuAllocationActive_?size_t(cap)*20u+10u*sizeof(uint32_t):0u);
     return true;
 }
@@ -897,7 +909,7 @@ bool ComputeParticles::step(float dt) {
     Uniforms u{};
     u.gravityDt={desc_.gravityY,dt,desc_.drag,proceduralActive_?1.f:0.f};
     u.collisionSphere={desc_.staticSphereCenter.x,desc_.staticSphereCenter.y,desc_.staticSphereCenter.z,desc_.staticSphereRadius};
-    u.collisionResponse={desc_.collisionBounce,desc_.collisionDampen,desc_.collisionRadiusScale,0};
+    u.collisionResponse={desc_.collisionBounce,desc_.collisionDampen,desc_.collisionRadiusScale,desc_.staticSdf.dimension?1.f:0.f};
     u.rightSize={right_.x,right_.y,right_.z,desc_.size};
     u.up={up_.x,up_.y,up_.z,0};
     u.meta={0,desc_.capacity,count,compactCount};
@@ -1000,7 +1012,7 @@ bool ComputeParticles::replaceGpuAllocation(uint32_t next,bool empty,bool compac
     size_t candidateCharge=0;uint64_t candidateFence=0;
     if(desc_.allocationBudget){
         auto& budget=*desc_.allocationBudget;budget.collect(device_->gpuCompletedFence());
-        candidateCharge=estimateGpuEmitterAllocation(next,proceduralActive_);
+        candidateCharge=estimateGpuEmitterAllocation(next,proceduralActive_)+(desc_.staticSdf.dimension?(5+desc_.staticSdf.samples.size())*sizeof(uint32_t):0);
         if(!budget.reserve(candidateCharge)){
             ++stats_.gpuAllocationBudgetDenied;
             if(shrinking)++stats_.gpuPhysicalShrinkFailures;else{++stats_.gpuPhysicalGrowthFailures;gpuGrowthBudgetBlocked_=true;}
@@ -1247,7 +1259,7 @@ bool ComputeParticles::stepGpuAllocated(float dt){
     Uniforms u{};
     u.gravityDt={desc_.gravityY,dt,desc_.drag,proceduralActive_?1.f:0.f};
     u.collisionSphere={desc_.staticSphereCenter.x,desc_.staticSphereCenter.y,desc_.staticSphereCenter.z,desc_.staticSphereRadius};
-    u.collisionResponse={desc_.collisionBounce,desc_.collisionDampen,desc_.collisionRadiusScale,0};
+    u.collisionResponse={desc_.collisionBounce,desc_.collisionDampen,desc_.collisionRadiusScale,desc_.staticSdf.dimension?1.f:0.f};
     u.rightSize={right_.x,right_.y,right_.z,desc_.size};u.up={up_.x,up_.y,up_.z,(dt>0.f||count>0)?1.f:0.f};
     u.meta={0,cap,count,0};
     const bool cull=viewReady_&&std::all_of(viewProj_.m,viewProj_.m+16,[](float x){return std::isfinite(x);});
