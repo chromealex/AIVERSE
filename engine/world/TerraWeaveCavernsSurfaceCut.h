@@ -78,6 +78,45 @@ inline SurfaceRectCm entranceBounds(const Entrance& e) {
 inline bool overlaps(SurfaceRectCm a,SurfaceRectCm b) {
     return a.minX<b.maxX && b.minX<a.maxX && a.minZ<b.maxZ && b.minZ<a.maxZ;
 }
+// Shared CPU polygon subtraction for any existing heightfield triangle.
+// Caller supplies validated, stable-ID-ordered candidate entrances, not
+// a second terrain source. Output retains original winding and height plane.
+inline void appendCutTerrainTriangle(std::vector<CutTriangleCm>& out,
+        const CutTriangleCm& source,const std::vector<const Entrance*>& candidates,
+        unsigned sides=16,size_t maxTriangles=200000) {
+    if(sides<6||sides>32||!maxTriangles||maxTriangles>1000000)
+        throw std::invalid_argument("Caverns triangle cut limits");
+    std::vector<CutTriangleCm> pending{source};
+    for(const auto* e:candidates){
+        if(!e||e->radiusCm<=0)throw std::invalid_argument("Caverns cut candidate");
+        const auto bounds=entranceBounds(*e);
+        std::vector<CutTriangleCm> next;
+        for(const auto& t:pending){
+            const double minX=std::min({t.a.x,t.b.x,t.c.x}),maxX=std::max({t.a.x,t.b.x,t.c.x});
+            const double minZ=std::min({t.a.z,t.b.z,t.c.z}),maxZ=std::max({t.a.z,t.b.z,t.c.z});
+            if(maxX<bounds.minX||minX>=bounds.maxX||maxZ<bounds.minZ||minZ>=bounds.maxZ){
+                if(next.size()>=maxTriangles)throw std::length_error("Caverns cut triangle budget");
+                next.push_back(t);
+            }else subtractEntrance(next,t,*e,sides,maxTriangles);
+        }
+        pending.swap(next);
+    }
+    if(out.size()>maxTriangles||pending.size()>maxTriangles-out.size())
+        throw std::length_error("Caverns cut triangle budget");
+    out.insert(out.end(),pending.begin(),pending.end());
+}
+// Inspect the actual clipped plane inside a shaft footprint. A heightfield
+// hole must not expose a shaft that ends above or below that plane.
+inline bool entranceIntersectsTriangleAtHeight(const CutTriangleCm& t,
+        const Entrance& e,unsigned sides=16) {
+    std::vector<CutVertexCm> inside{t.a,t.b,t.c};
+    for(unsigned side=0;side<sides&&!inside.empty();++side)
+        inside=clipCutPolygon(inside,e,side,sides,false);
+    for(const auto& p:inside)
+        if(p.y<=double(e.caveYcm)-e.radiusCm||p.y>=double(e.surfaceYcm)+e.radiusCm)
+            return false;
+    return true;
+}
 // Requires authoritative, non-LOD patch with matching original collision and
 // render source. Geometry output retains world centimetres (double).
 // Up to 16 sides by default, 6..32 allowed; bounded result avoids OOM.
@@ -107,27 +146,10 @@ inline CutSurface cutTerrainEntrances(const terraweave::TerrainPatch& patch,
     for(size_t i=1;i<candidates.size();++i)
         if(candidates[i-1]->id==candidates[i]->id)
             throw std::invalid_argument("Caverns duplicate entrance id");
-    for(const auto& tri:patch.collision) {
-        std::vector<CutTriangleCm> pending{{toCutVertex(tri.a),toCutVertex(tri.b),toCutVertex(tri.c)}};
-        for(const Entrance* e:candidates) {
-            std::vector<CutTriangleCm> next;
-            for(const auto& t:pending) {
-                std::vector<CutVertexCm> v{t.a,t.b,t.c};
-                const auto bounds=entranceBounds(*e);
-                const double minX=std::min({t.a.x,t.b.x,t.c.x}),maxX=std::max({t.a.x,t.b.x,t.c.x});
-                const double minZ=std::min({t.a.z,t.b.z,t.c.z}),maxZ=std::max({t.a.z,t.b.z,t.c.z});
-                if(maxX<bounds.minX||minX>=bounds.maxX||
-                   maxZ<bounds.minZ||minZ>=bounds.maxZ) {
-                    if(next.size()>=maxTriangles)throw std::length_error("Caverns cut triangle budget");
-                    next.push_back(t);
-                }else subtractEntrance(next,t,*e,sides,maxTriangles);
-            }
-            pending.swap(next);
-        }
-        if(out.triangles.size()+pending.size()>maxTriangles)
-            throw std::length_error("Caverns cut triangle budget");
-        out.triangles.insert(out.triangles.end(),pending.begin(),pending.end());
-    }
+    for(const auto& tri:patch.collision)
+        appendCutTerrainTriangle(out.triangles,
+            {toCutVertex(tri.a),toCutVertex(tri.b),toCutVertex(tri.c)},
+            candidates,sides,maxTriangles);
     return out;
 }
 } // namespace aiverse::terraweave::caverns
