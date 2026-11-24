@@ -321,7 +321,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       if(replayPreset.dependencies){
         const check=await presetOp('fx_replay_preset_check',{preset:replayPreset});
         setPresetCompatibility(String(check.state??'unverified'));
-        if(check.state!=='matching')throw new Error('Replay direct resources changed or are unavailable');
+        if(check.state!=='matching')throw new Error('Replay resources changed or are unavailable');
       }
       const restored=await invokePreview({action:'replayRestore',expectedGeneration:state?.generation,
         ...(replayPreset.gpuBirthRandom===undefined?{}:{graph,gpuBirthRandom:replayPreset.gpuBirthRandom}),
@@ -628,7 +628,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       <StudioField label="Search replay presets" htmlFor="spectra-preset-search">
         <StudioInput id="spectra-preset-search" value={presetSearch} onChange={e=>setPresetSearch(e.target.value)}/>
       </StudioField>
-      {presetCompatibility&&<small>Direct resource compatibility: {presetCompatibility}</small>}
+      {presetCompatibility&&<small>Resource compatibility: {presetCompatibility}</small>}
       <StudioField label="Saved Replay Presets" htmlFor="spectra-preset-library">
         <StudioSelect id="spectra-preset-library" value={presetSelected} disabled={!active||presetLibraryBusy||busy}
           onChange={e=>setPresetSelected(e.target.value)}>

@@ -154,6 +154,27 @@ int main() {
     require(call("fx_replay_preset_get",dependencyGet)["compatibility"].getStr("state")=="changed","same-size edit not detected");
     fs::remove(texture);
     require(call("fx_replay_preset_get",dependencyGet)["compatibility"].getStr("state")=="unavailable","missing asset not detected");
+    // A glTF references a material-like JSON asset through an explicit content
+    // path and external buffers through local URIs; cycles terminate.
+    const auto modelFile=root/"content"/"ship.gltf";
+    const auto material=root/"content"/"ship.material.json";
+    const auto buffer=root/"content"/"ship.bin";
+    {std::ofstream f(modelFile);f<<R"({"asset":{"version":"2.0"},"buffers":[{"uri":"ship.bin"}],"extras":{"material":"content/ship.material.json"}})";}
+    {std::ofstream f(material);f<<R"({"model":"content/ship.gltf"})";}
+    {std::ofstream f(buffer,std::ios::binary);f<<"123";}
+    Json nestedGraph=v2;nestedGraph.set("testAsset",Json::string("content/ship.gltf"));
+    Json nestedPreset=preset;nestedPreset.set("graphSignature",Json::string(nestedGraph.dump(-1)));
+    Json nestedSave=Json::object();nestedSave.set("name",Json::string("nested"));nestedSave.set("preset",nestedPreset);
+    require(!call("fx_replay_preset_save",nestedSave).has("error"),"nested dependency save failed");
+    Json nestedGet=Json::object();nestedGet.set("name",Json::string("nested"));
+    const auto nested=call("fx_replay_preset_get",nestedGet);
+    require(nested["preset"].getInt("dependencyVersion")==2&&nested["preset"]["dependencies"].size()==3,
+            "nested manifest did not resolve unique cycle-safe dependencies");
+    require(nested["compatibility"].getStr("state")=="matching","nested baseline mismatch");
+    {std::ofstream f(buffer,std::ios::binary|std::ios::trunc);f<<"456";}
+    require(call("fx_replay_preset_get",nestedGet)["compatibility"].getStr("state")=="changed","external glTF buffer change missed");
+    {std::ofstream f(modelFile,std::ios::trunc);f<<R"({"buffers":[{"uri":"../../outside.bin"}]})";}
+    require(call("fx_replay_preset_get",nestedGet)["compatibility"].getStr("state")=="unavailable","escaping glTF URI accepted");
     getPreset.set("expectedGraphSignature",Json::string("other"));
     require(call("fx_replay_preset_get",getPreset).has("error"),"stale graph revision accepted");
     savePreset.set("name",Json::string("../escape"));

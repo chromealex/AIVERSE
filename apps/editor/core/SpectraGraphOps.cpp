@@ -9,9 +9,11 @@
 #include <cmath>
 #include <cstdint>
 #include <array>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <map>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -251,12 +253,63 @@ std::string replayFingerprint(const fs::path& file,uint64_t& budget) {
     budget-=read;
     return std::to_string(hash)+":"+std::to_string(read);
 }
-Json replayDependencies(const Json& preset,const Workspace& ws) {
+// Resolve only local glTF external buffer/image URIs. Embedded data is
+// already covered by the owning file's fingerprint. Reject unsupported
+// URI forms rather than silently claiming that they are verified.
+std::string replayLocalUri(const std::string& owner,const std::string& uri) {
+    if(uri.rfind("data:",0)==0)return {};
+    if(uri.empty()||uri.size()>512||uri.front()=='/'||
+       uri.find_first_of("\\:%?#")!=std::string::npos||
+       std::any_of(uri.begin(),uri.end(),[](unsigned char c){return c<32;}))
+        throw std::runtime_error("Unsupported replay resource URI in "+owner);
+    auto combined=(fs::path(owner).parent_path()/fs::path(uri)).lexically_normal();
+    const auto result=combined.generic_string();
+    if(result.rfind("content/",0)!=0)throw std::runtime_error("Replay resource URI escapes content");
+    return result;
+}
+void addReplayChild(std::set<std::string>& children,const std::string& child){
+    if(!child.empty())children.insert(child);
+    if(children.size()>64)throw std::runtime_error("Too many replay dependencies");
+}
+void collectReplayChildren(const fs::path& file,const std::string& owner,
+                           std::set<std::string>& children,uint64_t& parseBudget) {
+    auto ext=file.extension().string();
+    std::transform(ext.begin(),ext.end(),ext.begin(),[](unsigned char c){return char(std::tolower(c));});
+    if(ext!=".json"&&ext!=".gltf")return;
+    const auto bytes=fs::file_size(file);
+    if(bytes>1024*1024||bytes>parseBudget)
+        throw std::runtime_error("Replay dependency JSON exceeds parse budget");
+    const auto text=readFile(file);
+    if(text.size()!=bytes)throw std::runtime_error("Replay dependency changed during parse");
+    parseBudget-=bytes;
+    const auto doc=Json::parse(text);
+    collectReplayPaths(doc,children);
+    if(ext==".gltf"){
+        for(const char* key:{"buffers","images"}){
+            const auto& entries=doc[key];
+            if(entries.isNull())continue;
+            if(!entries.isArray())throw std::runtime_error("Invalid glTF dependency table");
+            for(const auto& item:entries.items()){
+                if(!item.isObject())throw std::runtime_error("Invalid glTF dependency entry");
+                if(item.has("uri")){
+                    if(!item["uri"].isString())throw std::runtime_error("Invalid glTF URI");
+                    addReplayChild(children,replayLocalUri(owner,item.getStr("uri")));
+                }
+            }
+        }
+    }
+}
+Json replayDependencies(const Json& preset,const Workspace& ws,bool recursive) {
     std::set<std::string> paths;
     collectReplayPaths(Json::parse(preset.getStr("graphSignature")),paths);
     Json manifest=Json::array();
-    uint64_t budget=kReplayDependencyBudget;
-    for(const auto& relative:paths){
+    uint64_t budget=kReplayDependencyBudget,parseBudget=8ull*1024*1024;
+    std::set<std::string> visited;
+    std::map<std::string,Json> rows;
+    while(!paths.empty()){
+        const auto relative=*paths.begin();paths.erase(paths.begin());
+        if(!visited.insert(relative).second)continue;
+        if(visited.size()>64)throw std::runtime_error("Too many replay dependencies");
         const auto file=checkedReplayDependency(ws,relative);
         Json row=Json::object();
         row.set("path",strGraph(relative));
@@ -271,18 +324,29 @@ Json replayDependencies(const Json& preset,const Workspace& ws) {
             row.set("guid",strGraph(guid));
             row.set("meta",strGraph(replayFingerprint(meta,budget)));
         }
-        manifest.push(std::move(row));
+        if(recursive){
+            std::set<std::string> children;
+            collectReplayChildren(file,relative,children,parseBudget);
+            for(const auto& child:children)if(!visited.count(child))paths.insert(child);
+            if(paths.size()+visited.size()>64)throw std::runtime_error("Too many replay dependencies");
+        }
+        rows.emplace(relative,std::move(row));
     }
+    for(auto& [path,row]:rows){(void)path;manifest.push(std::move(row));}
     return manifest;
 }
 Json replayCompatibility(const Json& preset,const Workspace& ws) {
     Json out=Json::object();
-    out.set("scope",strGraph("direct content paths and existing meta sidecars only"));
+    const auto version=preset.getInt("dependencyVersion",1);
+    out.set("scope",strGraph(version==2?"content paths, JSON references and external glTF buffer/image URIs":"direct content paths and existing meta sidecars only"));
+    if(version!=1&&version!=2){
+        out.set("state",strGraph("unavailable"));out.set("detail",strGraph("Unsupported dependency manifest version"));return out;
+    }
     if(!preset.has("dependencies")){
         out.set("state",strGraph("unverified"));return out;
     }
     try{
-        const auto current=replayDependencies(preset,ws);
+        const auto current=replayDependencies(preset,ws,version==2);
         const bool same=current.dump(-1)==preset["dependencies"].dump(-1);
         out.set("state",strGraph(same?"matching":"changed"));
         out.set("count",Json::number(int64_t(current.size())));
@@ -370,7 +434,10 @@ void registerSpectraGraphOps(Workspace& ws) {
         if(preset.has("dependencies")){
             if(replayCompatibility(preset,ws).getStr("state")!="matching")
                 throw std::runtime_error("Replay resource baseline no longer matches");
-        }else preset.set("dependencies",replayDependencies(preset,ws));
+        }else{
+            preset.set("dependencyVersion",Json::number(int64_t(2)));
+            preset.set("dependencies",replayDependencies(preset,ws,true));
+        }
         const auto bytes=preset.dump(-1);
         if(bytes.size()>kReplayMaxBytes)throw std::runtime_error("Replay preset with dependencies exceeds 64 KiB");
         const auto dir=replayDirectory(ws,true);

@@ -6,6 +6,7 @@ export interface SpectraReplayPreset {
   camera:StudioSpectraCameraSnapshot;tick:number;speed:number;loop:boolean;
   background:'dark'|'neutral'|'light'|'black';grid:boolean;axes:boolean;
   parameters:Record<string,number>;
+  dependencyVersion?:1|2;
   dependencies?:Array<{path:string;content:string;guid?:string;meta?:string}>;
   gpuBirthRandom?:boolean;
   seed?:number; // CPU backend only
@@ -48,6 +49,8 @@ export function parseSpectraReplayPreset(text:string):SpectraReplayPreset {
     if(!/^[A-Za-z_][A-Za-z0-9_]{0,47}$/.test(key)||!bounded(value,-1000000,1000000))
       throw new Error('Invalid replay scalar parameter');
   }
+  if(v.dependencyVersion!==undefined&&v.dependencyVersion!==1&&v.dependencyVersion!==2)
+    throw new Error('Unsupported replay dependency manifest version');
   if(v.dependencies!==undefined&&(!Array.isArray(v.dependencies)||v.dependencies.length>64||
     v.dependencies.some(d=>!record(d)||typeof d.path!=='string'||!d.path.startsWith('content/')||
       typeof d.content!=='string'||!/^\d+:\d+$/.test(d.content)||
