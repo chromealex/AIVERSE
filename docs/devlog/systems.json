@@ -1898,6 +1898,12 @@
           "text": "Исправление линковки теста replay на Mac без расширения зависимостей snapshot.",
           "nameEn": "Texture Graph GPU — Stage 38AF (fix, verification pending)",
           "textEn": "Fix Mac replay regression linkage without expanding snapshot dependencies."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38AG (в работе)",
+          "text": "Подключение владельца NativeRegistrar к тесту camera_client_adapter.",
+          "nameEn": "Texture Graph GPU — Stage 38AG (in progress)",
+          "textEn": "Link the existing NativeRegistrar owner to the camera client adapter fixture."
         }
       ],
       "enables": [
