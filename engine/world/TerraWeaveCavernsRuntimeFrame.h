@@ -126,7 +126,9 @@ public:
                 return physicsFinalized;
             });
         }catch(...) {
-            if(physicsFinalized)physicsBarrier_.requireRecovery();
+            // Any exception during native installation may leave a partially
+            // inserted collider or body; do not resume a mixed epoch.
+            physicsBarrier_.requireRecovery();
             throw;
         }
         if(!published&&physicsFinalized)
