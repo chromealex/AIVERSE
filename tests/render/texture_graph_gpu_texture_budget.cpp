@@ -17,6 +17,10 @@ int main(){
     check(!textureRequestBudget(7,16,16,32));
     check(!textureRequestBudget(1,0,16,32));
     check(!textureRequestBudget(1,16,0,32));
+    constexpr auto fenceOnly=textureRequestBudget(2,16,0,32,64,true);
+    check(fenceOnly.textureBytes==32&&fenceOnly.validationBytes==0&&fenceOnly.dagBudget==32);
+    check(!textureRequestBudget(2,16,16,32,64,true));
+    check(!textureRequestBudget(2,16,0,32,32,true));
     check(!textureRequestBudget(1,16,16,0));
     check(!textureRequestBudget(6,std::numeric_limits<size_t>::max(),16,32));
     check(!textureRequestBudget(1,16,16,32,maxTextureRequestBytes+1));

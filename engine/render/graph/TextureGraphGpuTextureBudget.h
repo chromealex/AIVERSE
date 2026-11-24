@@ -15,8 +15,8 @@ struct TextureRequestBudget {
 // before admitting the DAG. Excludes CPU images and driver allocation padding.
 inline constexpr TextureRequestBudget textureRequestBudget(size_t count,
         size_t imageBytes,size_t validationBytes,size_t materializedLimit,
-        size_t totalLimit=maxTextureRequestBytes)noexcept{
-    if(!count||count>maxTextureSetImages||!imageBytes||!validationBytes||
+        size_t totalLimit=maxTextureRequestBytes,bool fenceOnly=false)noexcept{
+    if(!count||count>maxTextureSetImages||!imageBytes||(!fenceOnly&&!validationBytes)||(fenceOnly&&validationBytes)||
        !materializedLimit||!totalLimit||totalLimit>maxTextureRequestBytes||
        imageBytes>totalLimit/count)return {};
     const size_t textures=count*imageBytes;

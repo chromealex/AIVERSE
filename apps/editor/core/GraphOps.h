@@ -160,19 +160,20 @@ inline void registerGraphOps(Workspace& ws) {
             Json r=Json::object();r.set("available",Json::fromBool(false));r.set("reason",Json::string("Native common presentation profile owner unavailable in this host"));return r;
         }});
     ws.registerOp({"texture_graph_gpu_preview","Queue/read native Metal or Vulkan texture preview, single bake or full PBR set; publish completed bake explicitly.",
-        Json::parse(R"({"properties":{"action":{"type":"string","enum":["start","read","publish","cancel","plan","materialTarget","applyMaterial","materialApplyStatus"]},"graph":{"type":"object"},"overrides":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"requireGpu":{"type":"boolean"},"resolution":{"type":"integer","minimum":8,"maximum":128},"bake":{"type":"boolean"},"bakeSet":{"type":"boolean"},"materialized":{"type":"boolean","description":"Opt-in experimental native materialized DAG execution"},"materializedDag":{"type":"boolean","description":"Compatibility alias for materialized"},"fusePointwise":{"type":"boolean","description":"Opt-in bounded pointwise fusion for materialized DAG; also supported in plan inspection"},"gpuTextureTransfer":{"type":"boolean","description":"Experimental GPU-resident full materialized set; actual copied mip zero is CPU-reference validated; requires native lease"},"gpuTextureMipmaps":{"type":"boolean","description":"Generate full GPU mip chain for copied textures; requires gpuTextureTransfer"},"timeoutMs":{"type":"integer","minimum":1000,"maximum":300000},"typeIndex":{"type":"integer","minimum":0,"maximum":65535},"choiceIndex":{"type":"integer","minimum":0,"maximum":65535},"materialIndex":{"type":"integer","minimum":0,"maximum":65535},"expectedVersion":{"type":"string"},"expectedModelPublication":{"type":"string"},"request":{"type":"string"},"textureName":{"type":"string"}},"required":["action"]})"),[&ws](const Json& p){
+        Json::parse(R"({"properties":{"action":{"type":"string","enum":["start","read","publish","cancel","plan","materialTarget","applyMaterial","materialApplyStatus"]},"graph":{"type":"object"},"overrides":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"requireGpu":{"type":"boolean"},"resolution":{"type":"integer","minimum":8,"maximum":128},"bake":{"type":"boolean"},"bakeSet":{"type":"boolean"},"materialized":{"type":"boolean","description":"Opt-in experimental native materialized DAG execution"},"materializedDag":{"type":"boolean","description":"Compatibility alias for materialized"},"fusePointwise":{"type":"boolean","description":"Opt-in bounded pointwise fusion for materialized DAG; also supported in plan inspection"},"gpuTextureTransfer":{"type":"boolean","description":"Experimental GPU-resident full materialized set; actual copied mip zero is CPU-reference validated; requires native lease"},"gpuTextureFenceOnly":{"type":"boolean","description":"Explicit material-only GPU completion without CPU pixel validation or PNG export; requires gpuTextureTransfer"},"gpuTextureMipmaps":{"type":"boolean","description":"Generate full GPU mip chain for copied textures; requires gpuTextureTransfer"},"timeoutMs":{"type":"integer","minimum":1000,"maximum":300000},"typeIndex":{"type":"integer","minimum":0,"maximum":65535},"choiceIndex":{"type":"integer","minimum":0,"maximum":65535},"materialIndex":{"type":"integer","minimum":0,"maximum":65535},"expectedVersion":{"type":"string"},"expectedModelPublication":{"type":"string"},"request":{"type":"string"},"textureName":{"type":"string"}},"required":["action"]})"),[&ws](const Json& p){
             if(p.getStr("action")=="plan"){
                 using namespace render::texture_graph;
                 const auto program=compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object());
-                const bool transfer=p.getBool("gpuTextureTransfer"),mipmaps=p.getBool("gpuTextureMipmaps");
+                const bool transfer=p.getBool("gpuTextureTransfer"),mipmaps=p.getBool("gpuTextureMipmaps"),fenceOnly=p.getBool("gpuTextureFenceOnly");
+                require(!fenceOnly||transfer,"fence-only mode requires GPU texture transfer");
                 require(!mipmaps||transfer,"GPU texture mipmaps require texture transfer");
                 require(!transfer||p.getBool("bakeSet"),"GPU texture transfer requires bakeSet");
                 const int n=(p.getBool("bake")||transfer)?program.size:std::min(program.size,integer(p["resolution"],32,8,gpu::maxPreviewSize));
-                const auto transferBudget=transfer?graphGpuTextureBudget(program,mipmaps,gpu::materializedBudgetBytes):gpu::TextureRequestBudget{};
+                const auto transferBudget=transfer?graphGpuTextureBudget(program,mipmaps,gpu::materializedBudgetBytes,fenceOnly):gpu::TextureRequestBudget{};
                 require(!transfer||bool(transferBudget),"GPU texture request exceeds budget or has no bindable outputs");
                 const auto budget=transfer?transferBudget.dagBudget:gpu::materializedBudgetBytes;
                 std::vector<size_t> targets;std::vector<std::string> names;
-                if(p.getBool("bakeSet"))for(const auto& [name,index]:program.outputs){names.push_back(name);targets.push_back(index);}
+                if(p.getBool("bakeSet")){for(const auto& [name,index]:program.outputs){if(fenceOnly&&!materialSlot(name))continue;names.push_back(name);targets.push_back(index);}}
                 else {const auto it=program.outputs.find(p.getStr("output"));require(it!=program.outputs.end(),"unknown plan output");names.push_back(it->first);targets.push_back(it->second);}
                 const auto sources=gpu::compileMaterializedDag(program,targets,n,budget,p.getBool("fusePointwise"),transfer);
                 const auto& plan=sources.plan;
@@ -196,6 +197,8 @@ inline void registerGraphOps(Workspace& ws) {
                 r.set("resultCapacityBytes",Json::number(int64_t(sources.resultCapacityBytes)));
                 r.set("gpuTextureTransferRequested",Json::fromBool(transfer));
                 r.set("gpuTextureMipmaps",Json::fromBool(mipmaps));
+                r.set("gpuTextureFenceOnly",Json::fromBool(fenceOnly));
+                r.set("fileExportAvailable",Json::fromBool(!fenceOnly));
                 r.set("gpuTextureReservedBytes",Json::number(int64_t(transferBudget.textureBytes)));
                 r.set("gpuTextureValidationBytes",Json::number(int64_t(transferBudget.validationBytes)));
                 r.set("gpuTextureRequestBytes",Json::number(int64_t(sources.totalBytes+transferBudget.textureBytes+transferBudget.validationBytes)));

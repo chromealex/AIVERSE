@@ -31,7 +31,7 @@ class TextureGraphGpuPreview {
     render::texture_graph::gpu::TextureRequestBudget gpuTransferBudget_;
     std::string gpuGeneration_;
     size_t gpuAcceptedTextures_=0;
-    bool gpuTransferRequested_=false,gpuTextureMipmaps_=false,gpuPublished_=false;
+    bool gpuTransferRequested_=false,gpuTextureMipmaps_=false,gpuPublished_=false,gpuFenceOnly_=false;
     gfx::BufferHandle buffer_{},scratch_{};gfx::ComputeHandle compute_{},secondCompute_{};
     // Materialized resources belong to this SAME frame-boundary owner.
     // Only successful, fence-retired requests enter the materialized idle cache.
@@ -103,7 +103,7 @@ class TextureGraphGpuPreview {
     std::vector<render::Image> setImages_;
     std::vector<std::string> setBackends_;
     size_t reusedOutputs_=0;
-    bool setIncomplete()const{return setBake_&&!published_&&setImages_.size()<setOutputs_.size();}
+    bool setIncomplete()const{return setBake_&&!published_&&setBackends_.size()<setOutputs_.size();}
     bool setPending()const{return setIncomplete()&&state_!="failed"&&state_!="cancelled";}
     using Clock=std::chrono::steady_clock;
     Clock::time_point deadline_{};
@@ -176,10 +176,11 @@ class TextureGraphGpuPreview {
     // the same compiled node reuse its validated bytes and actual backend.
     void advanceSet(){
         if(!setPending()||state_!="ready"||inFlight_)return;
-        render::Image image;image.width=image.height=size_;image.rgba=std::move(pixels_);
-        setImages_.push_back(std::move(image));setBackends_.push_back(backend_);
+        if(!gpuFenceOnly_){render::Image image;image.width=image.height=size_;image.rgba=std::move(pixels_);
+            setImages_.push_back(std::move(image));}
+        setBackends_.push_back(backend_);
         while(setIncomplete()){
-            const auto next=setImages_.size();
+            const auto next=setBackends_.size();
             // Every bindable output gets its own exclusively owned texture,
             // even if two named channels reference the same graph node.
             if(gpuTransferRequested_&&render::texture_graph::materialSlot(setOutputs_[next].first))break;
@@ -191,9 +192,9 @@ class TextureGraphGpuPreview {
         if(!setIncomplete()){
             backend_=setBackends_.front();
             for(const auto& b:setBackends_)if(b!=backend_){backend_="mixed";break;}
-            reason_="all declared outputs completed";return;
+            reason_=gpuFenceOnly_?"all material textures fence-complete; numerical parity not checked":"all declared outputs completed";return;
         }
-        const auto& next=setOutputs_[setImages_.size()];output_=next.first;target_=next.second;
+        const auto& next=setOutputs_[setBackends_.size()];output_=next.first;target_=next.second;
         received_=blocks_=scratchBytes_=0;plannedPasses_=plannedSlotBytes_=0;passes_=0;reused_=reusedBuffers_=cacheHit_=reusedScratch_=false;pixels_.clear();
         backend_="none";reason_.clear();queued_=true;state_="queued";
     }
@@ -283,12 +284,12 @@ class TextureGraphGpuPreview {
             }
             auto& sources=*matSources_;
             if(matSerial_!=serial_||(!first&&!matEncoded_))throw std::logic_error("stale materialized execution");
-            const size_t index=setBake_?setImages_.size():0;
+            const size_t index=setBake_?setBackends_.size():0;
             if(index>=sources.packs.size())throw std::logic_error("invalid materialized output ordinal");
             const auto pixels=uint32_t(sources.resultBytes/4);
             // Allocate CPU output before encoding work; failures still retain
             // any newly created handles through the owner retirement path.
-            pixels_.assign(sources.resultBytes,0);
+            if(!gpuFenceOnly_)pixels_.assign(sources.resultBytes,0);
             submittedBackend_=metal?"metal":"vulkan";
             plannedPasses_=(first?sources.plan.schedule.passes.size():0)+1;
             plannedSlotBytes_=sources.totalBytes;scratchBytes_=sources.plan.allocatedBytes;
@@ -321,6 +322,7 @@ class TextureGraphGpuPreview {
                 if(!render::texture_graph::queueGraphGpuTextureCopy(dev,gpuTransferLease_,*program_,
                         gpuGeneration_,setOutputs_[index].first,buffer_,copy,*item))
                     throw std::runtime_error("materialized GPU texture copy rejected");
+                if(gpuFenceOnly_)return; // The existing owner polls the actual submission fence.
                 auto read=std::make_shared<TextureRead>();
                 // Compare the actual destination mip zero, not a second
                 // independently packed buffer. This is validation only.
@@ -342,10 +344,10 @@ public:
         r.set("plannedSlotBytes",Json::number(int64_t(plannedSlotBytes_)));
         r.set("encodedPasses",Json::number(int64_t(passes_)));r.set("plannedScratchBytes",Json::number(int64_t(scratchBytes_)));
         r.set("bake",Json::fromBool(bake_));r.set("setBake",Json::fromBool(setBake_));
-        r.set("completedOutputs",Json::number(int64_t(published_&&setBake_?setOutputs_.size():setImages_.size())));r.set("totalOutputs",Json::number(int64_t(setOutputs_.size())));
+        r.set("completedOutputs",Json::number(int64_t(published_&&setBake_?setOutputs_.size():setBackends_.size())));r.set("totalOutputs",Json::number(int64_t(setOutputs_.size())));
         r.set("currentOutput",Json::string(output_));r.set("reusedOutputs",Json::number(int64_t(reusedOutputs_)));
         Json outputs=Json::array();for(size_t i=0;i<setBackends_.size();++i){Json row=Json::object();row.set("output",Json::string(setOutputs_[i].first));row.set("backend",Json::string(setBackends_[i]));outputs.push(row);}r.set("outputs",outputs);r.set("published",Json::fromBool(published_));
-        r.set("receivedBytes",Json::number(int64_t(received_)));r.set("totalBytes",Json::number(int64_t(size_t(size_)*size_*4)));
+        r.set("receivedBytes",Json::number(int64_t(received_)));r.set("totalBytes",Json::number(int64_t(gpuFenceOnly_?0:size_t(size_)*size_*4)));
         r.set("readbackBlocks",Json::number(int64_t(blocks_)));r.set("reusedPlan",Json::fromBool(reused_));r.set("reusedBuffers",Json::fromBool(reusedBuffers_));
         r.set("pipelineCacheHit",Json::fromBool(cacheHit_));
         r.set("pipelineCacheHits",Json::number(int64_t(std::min<uint64_t>(cacheHits_,uint64_t(std::numeric_limits<int64_t>::max())))));
@@ -366,6 +368,9 @@ public:
         r.set("retainedBufferBytes",Json::number(int64_t(matIdleBuffers_.bytes()+matBytes_+capacity_*(scratch_.valid()?2:1))));
         r.set("gpuTextureTransferRequested",Json::fromBool(gpuTransferRequested_));
         r.set("gpuTextureMipmaps",Json::fromBool(gpuTextureMipmaps_));
+        r.set("gpuTextureFenceOnly",Json::fromBool(gpuFenceOnly_));
+        r.set("gpuTextureAcceptance",Json::string(gpuFenceOnly_?"fence_only":"cpu_reference"));
+        r.set("fileExportAvailable",Json::fromBool(!gpuFenceOnly_));
         r.set("gpuTextureGeneration",Json::string(gpuGeneration_));
         r.set("gpuTextureSetReady",Json::fromBool(gpuCandidatesReady()));
         r.set("gpuTexturePublished",Json::fromBool(gpuPublished_));
@@ -385,7 +390,8 @@ public:
         if(project.empty())throw std::invalid_argument("open project first");
         auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object());
         size_t target=program.nodes.size();const bool setBake=p.getBool("bakeSet"),bake=setBake||p.getBool("bake");
-        const bool transfer=p.getBool("gpuTextureTransfer"),mipmaps=p.getBool("gpuTextureMipmaps");
+        const bool transfer=p.getBool("gpuTextureTransfer"),mipmaps=p.getBool("gpuTextureMipmaps"),fenceOnly=p.getBool("gpuTextureFenceOnly");
+        if(fenceOnly&&!transfer)throw std::invalid_argument("fence-only mode requires GPU texture transfer");
         const bool materialized=p.getBool("materialized")||p.getBool("materializedDag");
         render::texture_graph::gpu::TextureRequestBudget transferBudget;
         if(mipmaps&&!transfer)throw std::invalid_argument("GPU texture mipmaps require texture transfer");
@@ -394,12 +400,12 @@ public:
             if(!lease.alive()||!lease.device()||!lease.validFor(*lease.device()))
                 throw std::invalid_argument("GPU texture transfer requires native device lease");
             transferBudget=render::texture_graph::graphGpuTextureBudget(program,mipmaps,
-                render::texture_graph::gpu::materializedBudgetBytes);
+                render::texture_graph::gpu::materializedBudgetBytes,fenceOnly);
             if(!transferBudget)throw std::invalid_argument("GPU texture request exceeds budget or has no bindable outputs");
             gpuCandidates_.reserve(render::texture_graph::gpu::maxTextureSetImages);
         }
         auto output=p.getStr("output");
-        if(setBake){output=program.outputs.begin()->first;target=program.outputs.begin()->second;}
+        if(setBake){for(const auto& [name,index]:program.outputs){if(fenceOnly&&!render::texture_graph::materialSlot(name))continue;output=name;target=index;break;}}
         else if(!bake&&p.has("node")){for(size_t i=0;i<program.nodes.size();++i)if(program.nodes[i].id==p.getStr("node"))target=i;}
         else{auto it=program.outputs.find(output);if(it!=program.outputs.end())target=it->second;}
         if(target>=program.nodes.size())throw std::invalid_argument("unknown texture target");
@@ -409,13 +415,13 @@ public:
         deadline_=Clock::now()+std::chrono::milliseconds(timeoutMs_);
         sharedScratch_.invalidate();reusedScratch_=false;sharedScratchHits_=0;
         matRequested_=materialized;matFusion_=matRequested_&&p.getBool("fusePointwise");matReachableNodes_=matFusedNodes_=0;matFailed_=false;matNodePasses_=matPackPasses_=matPipelineHits_=0;matBufferHit_=false;
-        ++serial_;gpuTransferRequested_=transfer;gpuTextureMipmaps_=mipmaps;gpuPublished_=false;
+        ++serial_;gpuTransferRequested_=transfer;gpuTextureMipmaps_=mipmaps;gpuPublished_=false;gpuFenceOnly_=fenceOnly;
         gpuTransferLease_=transfer?lease:render::RenderDeviceLifetime::Lease{};gpuTransferBudget_=transferBudget;
         gpuAcceptedTextures_=0;gpuGeneration_=transfer?"gpu_"+std::to_string(lease.generation())+"_"+std::to_string(serial_):std::string{};
         size_=std::min(program.size,requested);target_=target;program_=std::move(program);project_=project;output_=output;bake_=bake;published_=false;setBake_=setBake;
         sourceGraph_=setBake?p["graph"]:Json();overrides_=setBake?(p.has("overrides")?p["overrides"]:Json::object()):Json();
         setOutputs_.clear();setImages_.clear();setBackends_.clear();reusedOutputs_=0;
-        if(setBake_){for(const auto& pair:program_->outputs)setOutputs_.push_back(pair);setImages_.reserve(setOutputs_.size());setBackends_.reserve(setOutputs_.size());}
+        if(setBake_){for(const auto& pair:program_->outputs)if(!gpuFenceOnly_||render::texture_graph::materialSlot(pair.first))setOutputs_.push_back(pair);setImages_.reserve(setOutputs_.size());setBackends_.reserve(setOutputs_.size());}
         plannedPasses_=plannedSlotBytes_=0;passes_=0;blocks_=received_=scratchBytes_=0;reused_=reusedBuffers_=cacheHit_=false;requireGpu_=transfer||p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=true;state_="queued";return status();
     }
     void checkProject(const std::string& project){
@@ -512,6 +518,7 @@ public:
     }
     Json publish(Workspace& ws,const Json& p){
         checkProject(ws.project.dir);
+        if(gpuFenceOnly_)throw std::runtime_error("fence-only GPU textures cannot be exported; use validated bake");
         if(!bake_||published_||state_!="ready"||p.getStr("request")!=std::to_string(serial_)||inFlight_||matRetirementPending()||setIncomplete()||project_!=ws.project.dir)
             throw std::runtime_error("no matching completed unpublished texture bake");
         Json r;
@@ -539,7 +546,13 @@ public:
             if(gpuTransferRequested_&&!published_)discard("failed","GPU texture device unhealthy");
             else if(state_=="pending")fallback("GPU device unhealthy");
         }
-        if(textureRead_){
+        if(gpuFenceOnly_&&inFlight_&&!textureRead_&&!read_&&state_=="pending"){
+            if(!fence_||dev.gpuCompletedFence()<fence_)return;
+            inFlight_=false;fence_=0;
+            if(gpuCandidates_.empty()||!render::texture_graph::graphGpuTextureCopyComplete(*gpuCandidates_.back(),dev))
+                fallback("GPU texture copy fence or ownership invalid");
+            else{++gpuAcceptedTextures_;state_="ready";backend_=submittedBackend_;reason_="GPU copy fence complete; numerical parity not checked";}
+        }else if(textureRead_){
             // A callback may be delivered before the full frame fence.
             if(!textureRead_->done||!fence_||dev.gpuCompletedFence()<fence_)return;
             auto read=std::move(textureRead_);inFlight_=false;fence_=0;

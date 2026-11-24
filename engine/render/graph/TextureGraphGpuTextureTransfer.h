@@ -16,14 +16,15 @@ inline std::string gpuGraphImageName(std::string_view generation,std::string_vie
     return "#texture-graph/"+std::string(generation)+"/"+std::string(output);
 }
 // Shared admission estimate for plan inspection and native request execution.
-inline gpu::TextureRequestBudget graphGpuTextureBudget(const Program& program,bool mipmaps,size_t materializedLimit){
+inline gpu::TextureRequestBudget graphGpuTextureBudget(const Program& program,bool mipmaps,size_t materializedLimit,bool fenceOnly=false){
     if(program.size<8||program.size>1024)return {};
     size_t count=0;
     for(const auto& [name,node]:program.outputs){(void)node;if(materialSlot(name))++count;}
     gfx::TextureDesc desc;desc.width=desc.height=program.size;desc.format=gfx::PixelFormat::RGBA8;
     desc.mipmaps=mipmaps;desc.mipLevels=mipmaps?0:1;
     return gpu::textureRequestBudget(count,gfx::estimateTextureFootprint(desc),
-        gfx::rgba8CopyLayout(program.size,program.size).bytes,materializedLimit);
+        fenceOnly?0:gfx::rgba8CopyLayout(program.size,program.size).bytes,materializedLimit,
+        gpu::maxTextureRequestBytes,fenceOnly);
 }
 // Stable storage owned by the existing native graph request. No implicit
 // destruction on a CPU deadline: retirement is the host's responsibility.
