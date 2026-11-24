@@ -584,7 +584,7 @@ inline std::vector<editor::ProjectFileEdit> studioPlanGltfRepairs(const std::fil
                 auto item=entries[i];
                 if(item.getStr("uri")!=ref.uri)throw std::runtime_error("glTF URI changed during repair planning");
                 item.set("uri",Json::string(studioRelativeGltfUri(owner,target)));
-                auto array=entries;array[i]=std::move(item);it->second.doc.set(group,std::move(array));
+                auto array=entries;array.at(i)=std::move(item);it->second.doc.set(group,std::move(array));
                 found=true;break;
             }
             if(found)break;
@@ -611,7 +611,7 @@ inline std::string studioCanonicalGltfRepair(const std::string& path,const std::
         for(size_t i=0;i<array.size();++i){
             auto item=array[i];const auto uri=item.getStr("uri");
             const auto resolved=studioGltfResourcePath(path,uri);
-            if(!resolved.empty()){item.set("uri",Json::string(resolved));array[i]=std::move(item);}
+            if(!resolved.empty()){item.set("uri",Json::string(resolved));array.at(i)=std::move(item);}
         }
         doc.set(group,std::move(array));
     }
