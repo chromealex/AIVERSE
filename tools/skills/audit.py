@@ -18,6 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 TOP = ('apps', 'engine', 'modules', 'tools', 'docs', 'libraries', 'tests', 'templates', 'skills', 'examples',
        'platform', 'plugins', 'third_party', 'games')
+MCP_PROTOCOL_METHODS = {'tools/list', 'tools/call'}
 ROOT_FILES = ('AGENTS.md', 'README.md', 'CMakeLists.txt', 'CLAUDE.md', 'CMakePresets.json')
 TICK = re.compile(r'`([^`\n]+)`')
 REG = re.compile(r'(?:registerOp\(\{|\badd\(|ed\.ws\(\)\.registerOp\(\{)"([a-z][a-z0-9_]+)"')
@@ -40,6 +41,8 @@ def path_candidates(token):
     if token.startswith('./'):
         token = token[2:]
     if any(c in token for c in '<>$') or token.startswith(('-', 'http')):
+        return None
+    if token in MCP_PROTOCOL_METHODS:
         return None
     head = token.split('/')[0]
     if token in ROOT_FILES or (head in TOP and '/' in token):
