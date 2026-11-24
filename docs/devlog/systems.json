@@ -62,6 +62,14 @@
     {
      "status": "in-progress",
      "target": null,
+     "title": "Планетарный лес: статические коллайдеры и завершение падений",
+     "titleEn": "Planetary forest: static collision and pending fall lifecycle",
+     "text": "Stage 160: обновление коллайдеров роста, переход к динамическому телу, завершение истраченных событий.",
+     "textEn": "Stage 160: growth collision updates, dynamic handoff and spent pending receipts."
+    },
+    {
+     "status": "in-progress",
+     "target": null,
      "title": "Планетарный лес: коллайдеры из скелета ARBOR",
      "titleEn": "Planetary forest: ARBOR skeleton-derived collision",
      "text": "Stage 159: точные вид и seed, размеры ствола, возраст и остаточная масса при падении.",
