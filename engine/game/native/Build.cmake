@@ -82,23 +82,31 @@ if(EXISTS "${_native_dir}/CMakeLists.txt")
 endif()
 get_property(_decls GLOBAL PROPERTY AIVERSE_NATIVE_DECLS)
 get_property(_defs GLOBAL PROPERTY AIVERSE_NATIVE_DEFS)
-file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/gen/NativeRegistry.cpp" CONTENT
-"#include \"engine/game/Native.h\"\n${_decls}
-namespace {
-// Explicit references prevent dead stripping of the module objects.
-const aiverse::game::NativeRegistrar aiverseNativeRegistrar({
-${_defs}});
-}
-")
+# The gameplay implementation owns the registrar regardless of project modules.
 target_sources(aiverse_game PRIVATE "${AIVERSE_NATIVE_ENGINE_ROOT}/engine/game/Native.cpp")
-target_sources(aiverse_native_modules INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/gen/NativeRegistry.cpp")
-target_include_directories(aiverse_native_modules INTERFACE "${AIVERSE_NATIVE_ENGINE_ROOT}")
+# An empty project needs no translation unit or static initializer. In particular,
+# a render-only program must never acquire an empty registrar dependency.
+if(_defs)
+    file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/gen/NativeRegistry.cpp" CONTENT
+    "#include \"engine/game/Native.h\"\n${_decls}
+    namespace {
+    // Explicit references prevent dead stripping of the module objects.
+    const aiverse::game::NativeRegistrar aiverseNativeRegistrar({
+    ${_defs}});
+    }
+    ")
+    target_sources(aiverse_native_modules INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/gen/NativeRegistry.cpp")
+    target_include_directories(aiverse_native_modules INTERFACE "${AIVERSE_NATIVE_ENGINE_ROOT}")
+endif()
 # Every executable of this build that links a game host gets the project's modules (deferred to the end of the
 # top-level CMakeLists, so executables declared later are included too).
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL aiverse_native_link_hosts "${CMAKE_SOURCE_DIR}")
 endmacro()
 
-set(AIVERSE_NATIVE_HOSTS aiverse_game aiverse_runtime aiverse_client_runtime aiverse_authority aiverse_editor_core aiverse_hosted_client
+# Only actual gameplay-host targets (all link aiverse_game, directly or transitively).
+# aiverse_runtime / aiverse_client_runtime are shared renderer/platform libraries:
+# geometry previews, VIVID tools and scene-only clients must not register game modules.
+set(AIVERSE_NATIVE_HOSTS aiverse_game aiverse_game_view aiverse_net_game aiverse_authority aiverse_editor_core aiverse_hosted_client
     CACHE INTERNAL "Targets whose direct users are project hosts (they receive AIVERSE::native_modules)")
 function(aiverse_native_link_hosts dir)
     get_property(targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
