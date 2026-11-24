@@ -128,11 +128,11 @@ export default function AssetTrashDialog({projectPath,onClose,onChanged}:{projec
         {!page&&!error&&<StudioSkeleton/>}
         {page&&items.length===0&&<StudioEmptyState icon={<Trash2 size={24}/>} title="No matching recovery records"/>}
         <div className="studio-trash__actions">
-          <StudioButton size="sm" disabled={busy||!!page?.recoveryPending||!items.some(r=>r.status==='retained'&&!r.historyProtected)} onClick={()=>{setSelected(items.filter(r=>r.status==='retained'&&!r.historyProtected).map(r=>r.id));setBatch(null);setConfirm(false);}}>Select eligible on page</StudioButton>
-          <StudioButton size="sm" disabled={busy||!!page?.recoveryPending||!selected.length} onClick={()=>void prepareBatch()}>Review purge ({selected.length})…</StudioButton>
+          <StudioButton size="sm" disabled={busy||!!historyReset||!!page?.recoveryPending||!items.some(r=>r.status==='retained'&&!r.historyProtected)} onClick={()=>{setSelected(items.filter(r=>r.status==='retained'&&!r.historyProtected).map(r=>r.id));setBatch(null);setConfirm(false);}}>Select eligible on page</StudioButton>
+          <StudioButton size="sm" disabled={busy||!!historyReset||!!page?.recoveryPending||!selected.length} onClick={()=>void prepareBatch()}>Review purge ({selected.length})…</StudioButton>
         </div>
         {items.map(row=><div className="studio-trash__row" key={row.id}>
-          {row.status==='retained'&&<input type="checkbox" aria-label={'Select '+(row.path??row.id)} disabled={busy||!!row.historyProtected||!!page?.recoveryPending} checked={selected.includes(row.id)}
+          {row.status==='retained'&&<input type="checkbox" aria-label={'Select '+(row.path??row.id)} disabled={busy||!!historyReset||!!row.historyProtected||!!page?.recoveryPending} checked={selected.includes(row.id)}
             onChange={e=>{setSelected(old=>e.target.checked?[...old,row.id]:old.filter(id=>id!==row.id));setBatch(null);setConfirm(false);}}/>}
           <div className="studio-trash__info">
             <strong title={row.path??row.id}>{row.path??row.id}</strong>
@@ -142,7 +142,7 @@ export default function AssetTrashDialog({projectPath,onClose,onChanged}:{projec
             {row.error&&<small role="alert">{row.error}</small>}
           </div>
           {row.status==='retained'&&<div className="studio-trash__actions">
-            <StudioButton size="sm" disabled={busy||!!page?.recoveryPending} onClick={()=>void prepare(row.id,'restore')}>Restore…</StudioButton>
+            <StudioButton size="sm" disabled={busy||!!historyReset||!!page?.recoveryPending} onClick={()=>void prepare(row.id,'restore')}>Restore…</StudioButton>
             <StudioButton size="sm" variant="danger" disabled={busy||!!row.historyProtected||!!page?.recoveryPending} onClick={()=>void prepare(row.id,'purge')}>Purge…</StudioButton>
           </div>}
         </div>)}
