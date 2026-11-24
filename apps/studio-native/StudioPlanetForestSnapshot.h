@@ -54,13 +54,14 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
         const tw::AnchoredPlant* plant=nullptr;
         int group=99;
         float distance=0,targetDistance=0;
+        int64_t cell=-1;
     };
     std::vector<RankedPlant> ranked;ranked.reserve(roots->rooted.size());
     size_t nearView=0;
     const auto cameraClip=cameraRank?camera->viewProjection():render::mat4{};
     for(const auto& plant:roots->rooted){
         RankedPlant entry;entry.plant=&plant;
-        if(cameraRank){
+        if(cameraRank||renderPopulation){
             const tw::AnchoredPlantId id{plant.anchor.speciesId,plant.anchor.plantKey};
             const auto binding=mapped.find(id);
             if(binding!=mapped.end()&&binding->second->bodyId==focusBody){
@@ -83,7 +84,9 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
                     }
                     const auto local=point-anchor;
                     const render::float3 p{float(local.x.toDouble()),float(local.y.toDouble()),float(local.z.toDouble())};
-                    const auto [group,distance,targetDistance]=camera->rank(p,float(surface.bodies[size_t(frame->body)].radius.toDouble()),cameraClip);
+                    const auto spatialFrame=wp::surfaceFrame(&surface,point);
+                    entry.cell=int64_t(spatialFrame&&spatialFrame->body==frame->body?spatialFrame->cell:frame->cell);
+                    const auto [group,distance,targetDistance]=cameraRank?camera->rank(p,float(surface.bodies[size_t(frame->body)].radius.toDouble()),cameraClip):std::tuple<int,float,float>{0,0.f,0.f};
                     const auto log=std::lower_bound(wood->ledger.logs.begin(),wood->ledger.logs.end(),id,
                         [](const auto& r,auto key){return r.id<key;});
                     const bool retired=(log!=wood->ledger.logs.end()&&log->id==id&&!log->remainingUnits)||
@@ -95,12 +98,26 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
         }
         ranked.push_back(entry);
     }
-    if(cameraRank)std::sort(ranked.begin(),ranked.end(),[](const RankedPlant& a,const RankedPlant& b){
+    if(cameraRank||renderPopulation)std::sort(ranked.begin(),ranked.end(),[](const RankedPlant& a,const RankedPlant& b){
         const auto& x=a.plant->anchor;const auto& y=b.plant->anchor;
         return std::tie(a.group,a.distance,a.targetDistance,x.speciesId,x.plantKey)<
                std::tie(b.group,b.distance,b.targetDistance,y.speciesId,y.plantKey);
     });
     if(cameraRank)out.set("viewCandidates",Json::number(int64_t(nearView)));
+    // Native population directory: every valid focused plant belongs to a
+    // surface cell, including moving physical consequences. Reserve slots
+    // across visible cells before filling the remainder by camera priority.
+    struct Chunk { size_t population=0,selected=0; int priority=99; };
+    std::map<int64_t,Chunk> chunks;
+    std::set<const tw::AnchoredPlant*> selected;
+    if(renderPopulation){
+        for(const auto& p:ranked)if(p.cell>=0){auto& c=chunks[p.cell];++c.population;c.priority=std::min(c.priority,p.group);}
+        // First cover visible cells, then use the remaining budget for detail.
+        for(const auto& p:ranked)if(p.cell>=0&&p.group==0&&selected.size()<limit){
+            auto& c=chunks.at(p.cell);if(c.selected==0){selected.insert(p.plant);++c.selected;}
+        }
+        for(const auto& p:ranked)if(p.cell>=0&&selected.size()<limit&&selected.insert(p.plant).second)++chunks.at(p.cell).selected;
+    }
     size_t fallen=0,spent=0,physical=0,rejected=0,eligible=0;
     for(const auto& rankedPlant:ranked){
         const auto& plant=*rankedPlant.plant;
@@ -119,11 +136,12 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
         fallen+=plant.fallen;spent+=isSpent;physical+=hasBody;
         if(!focusBody.empty()&&b->second->bodyId!=focusBody)continue;
         ++eligible;
-        if(rows.size()>=limit)continue;
+        if(rows.size()>=limit||(renderPopulation&&!selected.count(&plant)))continue;
         Json row=Json::object();
         row.set("species",Json::number(int64_t(id.speciesId)));row.set("key",Json::string(std::to_string(id.key)));
         row.set("body",Json::string(b->second->bodyId));row.set("cell",Json::number(int64_t(frame->cell)));
         if(cameraRank)row.set("viewPriority",Json::number(int64_t(rankedPlant.group)));
+        if(renderPopulation)row.set("renderCell",Json::number(rankedPlant.cell));
         const auto anchor=game::Surface::anchor(frame->body);
         row.set("position",xyz(b->second->plantedPosition-anchor));
         row.set("up",xyz(frame->up));row.set("east",xyz(frame->east));
@@ -173,6 +191,11 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
     out.set("rejected",Json::number(int64_t(rejected)));
     out.set("focusPlantCount",Json::number(int64_t(eligible)));
     out.set("truncated",Json::fromBool(eligible>rows.size()));
+    if(renderPopulation){
+        Json directory=Json::array();
+        for(const auto& [cell,chunk]:chunks){Json entry=Json::object();entry.set("cell",Json::number(cell));entry.set("population",Json::number(int64_t(chunk.population)));entry.set("selected",Json::number(int64_t(chunk.selected)));entry.set("priority",Json::number(int64_t(chunk.priority)));directory.push(std::move(entry));}
+        out.set("renderChunks",std::move(directory));
+    }
     out.set("plants",std::move(rows));return out;
 }
 } // namespace aiverse::studio
