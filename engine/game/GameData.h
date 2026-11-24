@@ -96,6 +96,8 @@ struct WeaponDef {
     Fixed damage = Fixed::fromInt(5);
     Fixed cooldown = Fixed::fromInt(1);
     bool preciseCooldown = false; // opt-in fractional cadence, preserving legacy timing by default
+    Fixed windup{}, backswing{}; // attack-speed-scaled seconds before release and after release
+    bool hasAttackTiming() const { return windup.raw > 0 || backswing.raw > 0; }
     uint8_t targets = kLayerGround;
     uint64_t targetTags = 0, ignoreTags = 0;
     Fixed projectileSpeed{};
