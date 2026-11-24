@@ -882,18 +882,26 @@ bool VulkanDevice::readTexturePixelAsync(TextureHandle texture,
     return true;
 }
 
-void VulkanDevice::beginFrame(int w, int h) {
-    fbW_ = w; fbH_ = h;
+void VulkanDevice::beginFrame(int w, int h) { (void)beginFrameInternal(w,h,false); }
+bool VulkanDevice::beginOffscreenFrame() {
+    if(!supportsOffscreenFrames()||recording_||inPass_)return false;
+    return beginFrameInternal(fbW_,fbH_,true);
+}
+bool VulkanDevice::beginFrameInternal(int w,int h,bool offscreen) {
+    if(!device_||!healthy_||recording_)return false;
+    offscreenFrame_=offscreen;
+    if(!offscreen){fbW_=w;fbH_=h;}
     deliverTextureReads();
     deliverPixelReads(); // previous frame-slot fence proved completion
     FrameSlot& s = slots_[size_t(slot_)];
     auto bi = vkStruct<VkCommandBufferBeginInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO);
     bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    vkBeginCommandBuffer(s.main, &bi);
+    if(vkBeginCommandBuffer(s.main,&bi)!=VK_SUCCESS){healthy_=false;offscreenFrame_=false;return false;}
     recording_ = true;
     s.scopeRecords.clear();s.scopeSubmitted=false;
     if(s.scopeTiming)vkCmdResetQueryPool(s.main,s.scopeTiming,0,ScopeTimingFrame::queryCount);
-    if (s.timing) {
+    s.timingCount=0;s.timingLabels.clear();
+    if (!offscreen && s.timing) {
         vkCmdResetQueryPool(s.main, s.timing, 0, 128);
         s.timingCount = 0;
         s.timingLabels.clear();
@@ -901,9 +909,9 @@ void VulkanDevice::beginFrame(int w, int h) {
     }
     uniformOffsets_.fill(0);
     descriptorsDirty_ = true;
-    ensureBackBuffer(std::max(1, w), std::max(1, h));
+    if(!offscreen)ensureBackBuffer(std::max(1,w),std::max(1,h));
     swapAcquired_ = false;
-    if (surface_ && w > 0 && h > 0) {
+    if (!offscreen && surface_ && w > 0 && h > 0) {
         if (w != swapForW_ || h != swapForH_) swapDirty_ = true;   // resized: the driver may not report it (X11)
         if (swapDirty_ || !swapchain_) { swapForW_ = w; swapForH_ = h; createSwapchain(); }
         for (int attempt = 0; swapchain_ && attempt < 2; ++attempt) {
@@ -912,6 +920,7 @@ void VulkanDevice::beginFrame(int w, int h) {
             if (r != VK_ERROR_OUT_OF_DATE_KHR || !createSwapchain()) break;
         }
     }
+    return true;
 }
 
 bool VulkanDevice::ensureRotatePipeline() {
@@ -1034,7 +1043,7 @@ void VulkanDevice::present() {
 
 void VulkanDevice::timestamp(const std::string& label, VkPipelineStageFlagBits stage) {
     FrameSlot& s = slots_[size_t(slot_)];
-    if (!s.timing || !recording_ || s.timingCount >= 128) return;
+    if (!s.timing || !recording_ || offscreenFrame_ || s.timingCount >= 128) return;
     vkCmdWriteTimestamp(s.main, stage, s.timing, s.timingCount++);
     s.timingLabels.push_back(label);
 }
@@ -1131,7 +1140,7 @@ void VulkanDevice::endFrame() {
     VkBuffer readback = VK_NULL_HANDLE;
     Allocation readAlloc;
     const int cw = back_.width, ch = back_.height;
-    if (capture_) {
+    if (!offscreenFrame_ && capture_) {
         createBufferObject(size_t(cw) * size_t(ch) * 4, VK_BUFFER_USAGE_TRANSFER_DST_BIT, true, readback, readAlloc);
         barrierImage(s.main, back_.image, false, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
         VkBufferImageCopy c{};
@@ -1173,7 +1182,7 @@ void VulkanDevice::endFrame() {
         if (r == VK_ERROR_OUT_OF_DATE_KHR || (r == VK_SUBOPTIMAL_KHR && swapchainChanged())) swapDirty_ = true;
         swapAcquired_ = false;
     }
-    if (capture_) {
+    if (!offscreenFrame_ && capture_) {
         vkWaitForFences(device_, 1, &s.fence, VK_TRUE, UINT64_MAX);
         std::vector<uint8_t> px(size_t(cw) * size_t(ch) * 4);
         const size_t row = size_t(cw) * 4;
@@ -1185,6 +1194,7 @@ void VulkanDevice::endFrame() {
         capture_ = nullptr;
         fn(cw, ch, std::move(px));
     }
+    offscreenFrame_=false;
     ++serial_;
     slot_ = (slot_ + 1) % kFramesInFlight;
     prepareSlot();

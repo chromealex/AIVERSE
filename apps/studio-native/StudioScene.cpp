@@ -573,6 +573,13 @@ void StudioScene::syncDocumentModels(
     }
 }
 
+Json StudioScene::textureGraphCapabilities() const {
+    const bool available=device_&&device_->gpuHealthy()&&device_->supportsCompute()&&device_->supportsOffscreenFrames();
+    Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("available",Json::fromBool(available));
+    if(device_)r.set("backend",Json::string(device_->info().backend==gfx::Backend::Metal?"metal":device_->info().backend==gfx::Backend::Vulkan?"vulkan":"unsupported"));
+    r.set("reason",Json::string(available?"Native offscreen GPU preview and validated bake":"Offscreen compute unavailable on current device"));
+    r.set("residentApply",Json::fromBool(false));return r;
+}
 Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
     if(!device_ || !deviceLifetime_ || !device_->supportsOffscreenFrames() || !device_->gpuHealthy())
         throw std::runtime_error("Studio offscreen GPU device unavailable");

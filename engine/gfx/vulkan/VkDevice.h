@@ -250,6 +250,8 @@ public:
     void abandonRetirementTokenAfterIdle(uint64_t token) override;
 
     void beginFrame(int framebufferWidth, int framebufferHeight) override;
+    bool supportsOffscreenFrames() const override { return supportsCompute(); }
+    bool beginOffscreenFrame() override;
     void endFrame() override;
     void captureNextFrame(CaptureFn fn) override { capture_ = std::move(fn); }
     bool captureTexture(TextureHandle source,CaptureFn callback) override;
@@ -452,7 +454,8 @@ private:
     uint64_t serial_ = 1, completed_ = 0;
     uint64_t nextRetirementToken_ = 1;
     std::map<uint64_t,VkFence> retirementFences_;
-    bool recording_ = false;
+    bool recording_ = false, offscreenFrame_ = false;
+    bool beginFrameInternal(int w,int h,bool offscreen);
     struct Garbage { uint64_t serial; std::function<void()> fn; };
     std::vector<Garbage> garbage_;
     CaptureFn capture_;

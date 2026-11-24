@@ -390,22 +390,16 @@ void StudioHost::ensureScene() {
 Json StudioHost::textureGraphGpu(editor::Workspace& ws,const Json& p) {
     const auto action=p.getStr("action");
     if(action=="capabilities"){
-        Json r=Json::object();r.set("ok",Json::fromBool(true));
-#if defined(__APPLE__)
-        r.set("available",Json::fromBool(textureGraphError_.empty()));
-        r.set("backend",Json::string("metal"));
-        r.set("reason",Json::string(textureGraphError_.empty()?"Native offscreen Metal preview and validated bake":textureGraphError_));
-#else
-        r.set("available",Json::fromBool(false));
-        r.set("reason",Json::string("Studio offscreen GPU frames not implemented on this backend"));
-#endif
-        r.set("residentApply",Json::fromBool(false));
-        return r;
+        try{
+            if(projectLoading_||ws.project.dir.empty())throw std::runtime_error("Open a project first");
+            if(!textureGraphError_.empty())throw std::runtime_error(textureGraphError_);
+            ensureScene();
+            return onScene([&]{return preview_->textureGraphCapabilities();});
+        }catch(const std::exception& e){
+            Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("available",Json::fromBool(false));
+            r.set("residentApply",Json::fromBool(false));r.set("reason",Json::string(e.what()));return r;
+        }
     }
-#if !defined(__APPLE__)
-    (void)ws;
-    throw std::runtime_error("Studio offscreen GPU frames not implemented on this backend");
-#else
     if(projectLoading_||ws.project.dir.empty())throw std::runtime_error("Open a project first");
     if(!textureGraphError_.empty())throw std::runtime_error(textureGraphError_);
     if(action=="start"||action=="enqueue")ensureScene();
@@ -415,7 +409,6 @@ Json StudioHost::textureGraphGpu(editor::Workspace& ws,const Json& p) {
     textureGraphScope_=ws.project.dir;
     textureGraphWork_=true;
     return result;
-#endif
 }
 void StudioHost::tickTextureGraph(const std::string& project) {
     if(!preview_||(!textureGraphWork_&&textureGraphScope_==project))return;

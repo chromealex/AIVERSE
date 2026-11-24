@@ -38,6 +38,7 @@ public:
     // The host makes the device for its native surface (Metal: CAMetalLayer; Vulkan: an HWND).
     explicit StudioScene(std::unique_ptr<gfx::Device> device);
     ~StudioScene();
+    Json textureGraphCapabilities() const;
     Json textureGraphOperation(editor::Workspace& ws,const Json& params);
     bool serviceTextureGraph(const std::string& project);
     void invalidateTextureGraphProject();
