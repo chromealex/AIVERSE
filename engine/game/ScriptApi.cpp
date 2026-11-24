@@ -6,6 +6,7 @@
 #include "ScriptInternal.h"
 #include <algorithm>
 #include "Internal.h"
+#include "UnitVitals.h"
 
 namespace aiverse::game {
 using namespace script;
@@ -1092,8 +1093,7 @@ int gSetHp(lua_State* L, Vm& vm) {
     if (!argFx(L, vm, 2, v, "hp")) return -1;
     Entity e;
     if (!unitArg(L, vm, 1, e)) { lua_pushboolean(L, 0); return 1; }
-    w.get<Unit>(e).hp = fxClamp(v, Fixed{}, m.stat(sim, e, Stat::MaxHp));
-    lua_pushboolean(L, 1);
+    lua_pushboolean(L, setUnitHp(m,sim,e,v));
     return 1;
 }
 // game.set_garrison(h, n): units inside a garrison structure (>= 0, may exceed the growth max like
@@ -1205,10 +1205,7 @@ int gSetEnergy(lua_State* L, Vm& vm) {
     if (!argFx(L, vm, 2, v, "energy")) return -1;
     Entity e;
     if (!unitArg(L, vm, 1, e)) { lua_pushboolean(L, 0); return 1; }
-    Unit& u = w.get<Unit>(e);
-    const Fixed mx = R.types[u.type].maxEnergy;
-    u.energy = fxClamp(v, Fixed{}, mx.raw > 0 ? mx : v);
-    lua_pushboolean(L, 1);
+    lua_pushboolean(L, setUnitEnergy(m,sim,e,v));
     return 1;
 }
 // game.set_stat_base(h, stat, value | nil): replaces the type's base value of a stat for this unit (techs,

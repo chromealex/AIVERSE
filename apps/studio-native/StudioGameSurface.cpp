@@ -4,6 +4,7 @@
 #include "engine/game/GameCore.h"
 #include "engine/world/WorldPersistenceDiagnostics.h"
 #include "engine/world/SimulationLod.h"
+#include "apps/studio-native/StudioRuntimeEdit.h"
 #include <algorithm>
 #include <chrono>
 #include <stdexcept>
@@ -20,11 +21,11 @@ StudioGameSurface::~StudioGameSurface() {
     lifetime_->retire();
 }
 void StudioGameSurface::start(const StudioGameLaunch& plan,const std::string& assets) {
-    error_.clear();launch_=plan;assets_=assets;matchObserved_=false;++runtimeEpoch_;
+    error_.clear();launch_=plan;assets_=assets;matchObserved_=false;runtimeDebugEdited_=false;++runtimeEpoch_;
     host_->start(*device_,plan.project,assets,lifetime_->lease(),plan.map);
     if (plan.camera) { const auto& c=*plan.camera; host_->setStartCamera(c[0],c[1],c[2],c[3],c[4]); }
 }
-void StudioGameSurface::stop() { matchObserved_=false;++runtimeEpoch_; host_->suspendInput();host_->stop();host_->collectGpuRetirements(); }
+void StudioGameSurface::stop() { matchObserved_=false;runtimeDebugEdited_=false;++runtimeEpoch_; host_->suspendInput();host_->stop();host_->collectGpuRetirements(); }
 void StudioGameSurface::setDevice(const StudioGameDevice& profile) {
     (void)profile.profile();host_->suspendInput();profile_=profile;
 }
@@ -58,7 +59,7 @@ void StudioGameSurface::frame(int w,int h,float pw,float ph,double dt,bool focus
         host_->frame(std::clamp(dt,0.0,0.1),{}, {},w,h,logical.first,logical.second,profile_.profile().touch,profile_.insets());
         device_->endFrame();
         const bool match=host_->inMatch();
-        if(match && !matchObserved_)++runtimeEpoch_;
+        if(match && !matchObserved_){++runtimeEpoch_;runtimeDebugEdited_=false;}
         matchObserved_=match;
         if (host_->quitRequested()) stop();
         if (!host_->errorText().empty()) error_=host_->errorText();
@@ -150,12 +151,40 @@ Json StudioGameSurface::entities(int offset,int limit,const std::string& query) 
     return inspector_.entities(host_->inMatch()?host_->simulation():nullptr,std::to_string(runtimeEpoch_),offset,limit,query);
 }
 Json StudioGameSurface::inspect(const std::string& epoch,const std::string& ref) {
-    return inspector_.inspect(host_->inMatch()?host_->simulation():nullptr,std::to_string(runtimeEpoch_),epoch,ref);
+    auto* sim=host_->inMatch()?host_->simulation():nullptr;
+    Json out=inspector_.inspect(sim,std::to_string(runtimeEpoch_),epoch,ref);
+    out.set("runtimeDebugEdited",Json::fromBool(runtimeDebugEdited_));
+    out.set("runtimeEditAvailable",Json::fromBool(host_->canStep()));
+    if(host_->canStep()&&sim){
+        const auto entity=editor::worldEntity(std::stoull(out.getStr("ref")));
+        out.set("runtimeFields",StudioRuntimeEdit::describe(*sim,entity));
+    }
+    return out;
+}
+Json StudioGameSurface::editRuntime(const Json& params){
+    // canStep means an editor-paused, controllable local match, not a game menu/network mirror.
+    if(!host_->canStep()||!host_->inMatch())throw std::runtime_error("Pause the local match in Studio before editing");
+    auto* sim=host_->simulation();
+    if(!sim||params.getStr("epoch")!=std::to_string(runtimeEpoch_))throw std::runtime_error("Runtime session changed");
+    const auto ref=params.getStr("ref");uint64_t packed=0;
+    if(ref.empty()||ref.size()>20)throw std::runtime_error("Invalid runtime reference");
+    const auto parsed=std::from_chars(ref.data(),ref.data()+ref.size(),packed);
+    if(parsed.ec!=std::errc{}||parsed.ptr!=ref.data()+ref.size()||!packed)throw std::runtime_error("Invalid runtime reference");
+    const auto tick=params["expectedTick"].toDouble();
+    if(!params["expectedTick"].isNumber()||!(tick>=0&&tick<=4294967295.0)||double(uint32_t(tick))!=tick)
+        throw std::runtime_error("Invalid expected tick");
+    if(!params["field"].isString()||!params["expectedRaw"].isString()||!params["value"].isString())
+        throw std::runtime_error("Invalid runtime edit parameters");
+    const auto changed=StudioRuntimeEdit::apply(*sim,editor::worldEntity(packed),uint32_t(tick),
+        params.getStr("field"),params.getStr("expectedRaw"),params.getStr("value"));
+    runtimeDebugEdited_=true;
+    Json out=Json::object();out.set("field",changed);out.set("runtimeDebugEdited",Json::fromBool(true));return out;
 }
 Json StudioGameSurface::state() const {
     Json out=Json::object();out.set("device",profile_.json());
     out.set("active",Json::fromBool(host_->active()));
     out.set("paused",Json::fromBool(host_->paused()));
+    out.set("runtimeDebugEdited",Json::fromBool(runtimeDebugEdited_));
     out.set("canControl",Json::fromBool(host_->canControl()));
     out.set("canStep",Json::fromBool(host_->canStep()));
     out.set("loading",Json::fromBool(host_->loading()));

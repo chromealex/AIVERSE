@@ -5288,6 +5288,14 @@ if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
     set_tests_properties(region_cold_store_test PROPERTIES LABELS "World;ECS")
 endif()
 
+# S4: paused runtime vital adapter, independent native fixture.
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_game)
+    add_executable(aiverse_runtime_vitals_test tests/runtime_vitals_test.cpp)
+    target_link_libraries(aiverse_runtime_vitals_test PRIVATE aiverse_game)
+    add_test(NAME runtime_vitals_test COMMAND aiverse_runtime_vitals_test)
+    set_tests_properties(runtime_vitals_test PROPERTIES LABELS "ECS;EDITOR")
+endif()
+
 # W1.4: real GameCore/NativeModule command -> shared region authority runtime.
 # Game map content comes from the normal external template package, not this repo.
 if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_game)

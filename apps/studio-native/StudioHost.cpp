@@ -1351,6 +1351,14 @@ bool StudioHost::handleHostMethod(const Json& req) {
         out.set("epoch",Json::string("0"));out.set("tick",Json::number(int64_t(0)));
         out.set("reason",Json::string("No local match is running"));return out;
     });
+    if(method=="studio.gameEdit")return answer([&] {
+        const auto& project=session_->workspace().project.dir;
+        if(project.empty()||params.getStr("expectedProject")!=project)
+            throw std::runtime_error("Runtime edit project changed");
+        if(!game_)throw std::runtime_error("No local game running");
+        // Deliberately no Workspace mutation, document.changed or generic MCP command.
+        return game_->editRuntime(params);
+    });
     if (method == "studio.gameEntities" || method == "studio.gameInspect") return answer([&] {
         // Older clients omit expectedProject. Entity Debugger always sends it.
         if(params.has("expectedProject")&&(session_->workspace().project.dir.empty()||

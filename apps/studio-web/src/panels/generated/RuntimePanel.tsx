@@ -1,5 +1,5 @@
-import { useEffect, useId, useState } from 'react';
-import type { StudioSnapshot, StudioRuntimePage, StudioRuntimeEntity, StudioRuntimeOwnership } from '../../types';
+import { useEffect, useId, useRef, useState } from 'react';
+import type { StudioSnapshot, StudioRuntimePage, StudioRuntimeEntity, StudioRuntimeOwnership, StudioRuntimeEditField } from '../../types';
 import {invoke,nativeConnected} from '../../bridge';
 import {StudioPanel,StudioSection,StudioBadge,StudioAlert,StudioEmptyState,StudioField,StudioInput,StudioButton,StudioListRow} from '../../ui';
 import './RuntimePanel.css';
@@ -21,6 +21,33 @@ function Value({value,depth=0,follow}:{value:unknown;depth?:number;follow:(ref:s
   </div>)}{entries.length>200 && <div><dt>More</dt><dd>{entries.length-200} additional fields</dd></div>}</dl>;
 }
 
+function EditableVital({field,detail,projectPath}:{field:StudioRuntimeEditField;detail:StudioRuntimeEntity;projectPath:string}){
+  const uid=useId();
+  const [draft,setDraft]=useState(String(field.value)),[pending,setPending]=useState(false);
+  const [error,setError]=useState(''),[notice,setNotice]=useState('');
+  const live=useRef(true),lock=useRef(false);
+  useEffect(()=>{live.current=true;return()=>{live.current=false}},[]);
+  const valid=/^[0-9]{1,9}(\.[0-9]{1,7})?$/.test(draft)&&Number(draft)>=field.min&&Number(draft)<=field.max;
+  async function apply(){
+    if(!valid||lock.current)return;
+    lock.current=true;setPending(true);setError('');setNotice('');
+    try{
+      const result=await invoke('studio.gameEdit',{expectedProject:projectPath,epoch:detail.epoch,ref:detail.ref,
+        expectedTick:detail.tick,field:field.id,expectedRaw:field.raw,value:draft});
+      if(live.current)setNotice('Applied: '+result.field.value);
+    }catch(e){if(live.current)setError(e instanceof Error?e.message:String(e));}
+    finally{lock.current=false;if(live.current)setPending(false);}
+  }
+  return <div className="au-stack">
+    <StudioField label={field.title} htmlFor={uid} hint={'Current '+field.value+' · allowed '+field.min+'–'+field.max}>
+      <StudioInput id={uid} inputMode="decimal" value={draft} maxLength={17} disabled={pending}
+        onChange={e=>{setDraft(e.target.value);setError('');setNotice('')}}/>
+    </StudioField>
+    <StudioButton disabled={!valid||pending||Number(draft)===field.value} onClick={()=>void apply()}>Apply to running game</StudioButton>
+    {error&&<StudioAlert tone="danger">{error}</StudioAlert>}
+    {notice&&<StudioAlert>{notice}</StudioAlert>}
+  </div>;
+}
 type Selection={epoch:string;ref:string};
 function Ownership({value}:{value:StudioRuntimeOwnership|undefined}){
   if(!value)return <StudioEmptyState title="Ownership diagnostics unavailable in this native build"/>;
@@ -76,7 +103,7 @@ function RuntimeBody({projectPath}:{projectPath:string}) {
   };
   const components=Object.entries(detail?.components??{}).filter(([name])=>name.toLowerCase().includes(componentQuery.toLowerCase()));
   const selectedRow=page?.rows.find(row=>row.ref===selected?.ref);
-  return <StudioPanel title="Runtime" className="studio-panel-runtime" subtitle="Entity Debugger · live read-only"
+  return <StudioPanel title="Runtime" className="studio-panel-runtime" subtitle="Entity Debugger · local paused edits"
     actions={<StudioBadge>{page?.active?`Tick ${page.tick}`:'Stopped'}</StudioBadge>}>
     <div className="au-stack">
       {error && <StudioAlert tone="danger">{error}</StudioAlert>}
@@ -101,6 +128,14 @@ function RuntimeBody({projectPath}:{projectPath:string}) {
             {selectedRow?.parent&&<StudioButton onClick={()=>choose(selectedRow.parent)}>Inspect parent</StudioButton>}
             {detail.ownership?.stableId&&<StudioButton onClick={()=>{setQuery('sid:'+detail.ownership!.stableId);setOffset(0)}}>Find by stable ID</StudioButton>}
             {detail.ownership?.cell&&detail.ownership.state==='live-record'&&<StudioButton onClick={()=>{setQuery('cell:'+detail.ownership!.cell!.join(','));setOffset(0)}}>Find entities in ownership cell</StudioButton>}
+          </StudioSection>
+          <StudioSection title="Runtime edits">
+            <StudioAlert tone="warning">Temporary local debugging only. Does not edit the scene or record replay commands. Stop or restart discards this session's changes.</StudioAlert>
+            {detail.runtimeDebugEdited&&<StudioBadge tone="warning">Session modified outside replay</StudioBadge>}
+            {!detail.runtimeEditAvailable?<StudioEmptyState title="Pause the local game in Studio to edit"/>:
+              !detail.runtimeFields?.length?<StudioEmptyState title="No owner-approved fields for this entity"/>:
+              detail.runtimeFields.map(field=><EditableVital key={detail.epoch+':'+detail.ref+':'+detail.tick+':'+field.id+':'+field.raw}
+                field={field} detail={detail} projectPath={projectPath}/>)}
           </StudioSection>
           <StudioSection title={`Components (${components.length}/${Object.keys(detail.components).length})`}>
             <StudioField label="Filter inspected components" htmlFor={uid+"-component"}>

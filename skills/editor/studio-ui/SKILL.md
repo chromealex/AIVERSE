@@ -74,6 +74,9 @@ Panel `simulation_profiler`, typed `studio.gameProfile` with expectedProject and
 ## Entity Debugger (S3)
 Extend the existing `runtime` panel and `StudioRuntimeInspect`; no competing inspector. `studio.gameEntities` supports exact `sid:<decimal>`, `ref:<decimal>`, `cell:<x,y,z>` alongside the existing shared query grammar. Stable IDs and ownership revisions are decimal strings; cells come from the live ledger, not scene position. Only rows in the existing runtime model are searchable; absence is not a retired/unmaterialized classification. Ownership markers are diagnostic, not proof of full identity uniqueness or collision/nav residency. Preserve legacy numeric $entity and prefer additive $entityRef string when navigating; reject unsafe numeric fallback. Bind requests to expectedProject and selection epoch, clear on project change. Native component readers/schemas stay authoritative; list component counts refer to the existing row catalogue, selected inspector includes extensions. Read only; no runtime editing or persistence mutation.
 
+## Runtime Debugger (S4)
+The existing Runtime panel exposes only owner-approved Unit HP (strictly positive, no resurrection/death shortcut) and finite configured Energy, via `studio.gameEdit`. Native requires editor-paused controllable local play, exact expectedProject/epoch/ref/tick/previous fixed raw, current domain bounds, live eligible non-dormant on-map entity; decimal input is bounded before fixed-point conversion. Shared UnitVitals setters also serve existing scripts. No arbitrary component patches, transform/ownership edits, network/MCP mutation, scene changes or deterministic replay command. Other schemas remain read-only until owners supply explicit adapters. Session is marked debug-modified. Stop/restart discards temporary session data; ordinary Keep Play Changes remains a separate explicit authoring workflow.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

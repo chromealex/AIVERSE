@@ -177,3 +177,7 @@ opt-in per native GameModule because the editor cannot reflect
 arbitrary C++ config types automatically. Native contract test:
 `ecs_static_scene_editor_contract_test` (Stage 6 source exists but
 its native run is pending).
+
+## Local paused runtime debugging (S4)
+
+Studio Runtime has a separate temporary debug path for owner-approved Unit HP and finite configured Energy. It reuses the gameplay UnitVitals setters also used by Lua and is not the persisted Inspector writeback API. The host checks the paused local session, expected project/epoch/tick and exact previous fixed-point value. The adapter refuses unsupported, dead, dormant or off-map entities and values outside current bounds. No generic native component writes are inferred from inspector schemas. Debug edits are outside the deterministic command log, mark the local session as modified and are discarded when the session stops/restarts; do not use a command-only replay to reproduce a modified session. Native module runtime mutation adapters require a separate opt-in contract. No network or remote MCP write route is added.
