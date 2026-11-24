@@ -1,3 +1,5 @@
 # Stage 117 — live diagnostic settings and lifecycle
 
 Base c9fe1f16. In progress. Extend the existing Studio-only presentation owner, not ECS or another renderer. Consolidate transient layer settings into one typed value, keep existing RPC field names and defaults, validate patches atomically, and remove positional sampling flags. Invalidate cached planet snapshots on epoch/match/control loss, project switch and map revision mismatch; prevent sampling old map for current-map overlays. Preserve planar workflows and current owner sample caps. Source regression for partial patches, invalid types and defaults. Tests deferred by owner; no main merge. Main is one site-only commit ahead at inspection; integration deferred, not silently claimed synced. Aggregate budgets and physical owner integration remain separate stages.
+
+Status: source 93313c89266233a393b11fbd88865539572b35db; prior implementation 2925bed6e496f1e5a4df8f126d15f55f820d01a1. Fixture committed, tests NOT RUN. Separate handoff records remaining work.
