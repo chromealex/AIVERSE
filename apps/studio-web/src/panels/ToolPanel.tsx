@@ -43,7 +43,7 @@ function FieldInput({ field, value, error, onChange }: { field: ToolField; value
   </label>;
 }
 
-function OpCard({ op, prefix, initiallyOpen, onDone }: { op: ToolOpInfo; prefix: string; initiallyOpen: boolean; onDone: (changed: boolean) => void }) {
+function OpCard({ op, prefix, initiallyOpen, projectPath, onDone }: { op: ToolOpInfo; prefix: string; initiallyOpen: boolean; projectPath: string; onDone: (changed: boolean) => void }) {
   const fields = useMemo(() => schemaFields(op.schema), [op.schema]);
   const [open, setOpen] = useState(initiallyOpen);
   const [more, setMore] = useState(false);
@@ -57,8 +57,9 @@ function OpCard({ op, prefix, initiallyOpen, onDone }: { op: ToolOpInfo; prefix:
     if (Object.keys(built.errors).length) return;
     setRunning(true);
     try {
-      const r = await invoke('studio.op', { op: op.name, params: built.params });
-      setResult({ ok: true, text: resultLine(r.result), value: r.result });
+      const r = await invoke('studio.op', { op: op.name, params: built.params, expectedProject: projectPath });
+      const failed = r.result !== null && typeof r.result === 'object' && 'ok' in r.result && r.result.ok === false;
+      setResult({ ok: !failed, text: resultLine(r.result), value: r.result });
       onDone(r.changed);
     } catch (e) { setResult({ ok: false, text: message(e) }); }
     finally { setRunning(false); }
@@ -103,11 +104,11 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
   const readState = useCallback(async (list: ToolOpInfo[]) => {
     const next: Record<string, unknown> = {};
     for (const op of stateOps(list, spec.state)) {
-      try { next[op.name] = (await invoke('studio.op', { op: op.name, params: {} })).result; }
+      try { next[op.name] = (await invoke('studio.op', { op: op.name, params: {}, expectedProject: projectPath })).result; }
       catch (e) { next[op.name] = { error: message(e) }; }
     }
     setState(next);
-  }, [spec]);
+  }, [spec, projectPath]);
   useEffect(() => {
     if (!projectPath) { setOps([]); setState({}); return; }
     let live = true;
@@ -144,7 +145,7 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
       {Object.entries(state).map(([name, value]) => <div key={name} className="tool__state">
         <JsonTree value={value} name={opLabel(name, spec.prefix)} open/>
       </div>)}
-      {shown.map(op => <OpCard key={op.name + projectPath} op={op} prefix={spec.prefix} initiallyOpen={spec.open.includes(op.name)} onDone={done}/>)}
+      {shown.map(op => <OpCard key={op.name + projectPath} op={op} prefix={spec.prefix} initiallyOpen={spec.open.includes(op.name)} projectPath={projectPath} onDone={done}/>)}
     </div>
     </div>
   </div>;

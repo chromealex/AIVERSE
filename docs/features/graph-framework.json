@@ -122,7 +122,12 @@
     "apps/editor/core/ShaderGraphOps.cpp",
     "apps/editor/core/SpectraGraphOps.cpp",
     "apps/editor/windows/ShaderGraphWindow.cpp",
-    "apps/editor/windows/SpectraGraphWindow.cpp"
+    "apps/editor/windows/SpectraGraphWindow.cpp",
+    "docs/shader-graph.md",
+    "docs/shader-graph-agents.md",
+    "docs/spectrafx.md",
+    "docs/ru/spectrafx.md",
+    "skills/visuals/aiverse-spectrafx/SKILL.md"
   ],
   "traits": {
     "editable": true,
@@ -168,7 +173,7 @@
     },
     "persistence": {
       "status": "not_run",
-      "note": "Stage 57 ports Stage 53/54 cooperating-writer graph asset transactions and exact original checks to Building integration; authored regressions not run.",
+      "note": "Stage 57 ports Stage 53/54 cooperating-writer graph asset transactions and exact original checks to Building integration; authored regressions not run. Stage 58 project-scoped generic operation form and Studio bridge regression authored; current API documentation updated.",
       "evidence": []
     },
     "graphs": {
@@ -203,7 +208,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F fixtures added; NOT RUN. Stage 55 source changes, execution NOT RUN. Stage 56 source changed; native and web tests NOT RUN. Stage 57 changes source, tests NOT RUN.",
+      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F fixtures added; NOT RUN. Stage 55 source changes, execution NOT RUN. Stage 56 source changed; native and web tests NOT RUN. Stage 57 changes source, tests NOT RUN. Stage 58 tests NOT RUN.",
       "evidence": []
     },
     "handoff": {

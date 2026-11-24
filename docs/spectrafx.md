@@ -136,7 +136,7 @@ project's gameplay genre. No editor GPU context is required to validate graphs.
 | `fx_graph_list` | none | All `fx/graphs/*.vfx.json`, per-file compile diagnostics |
 | `fx_graph_get` | `name` | Graph JSON, source text and validation |
 | `fx_graph_validate` | `graph` or `text` or `name`, optional `overrides` | Strict compiler errors, emitter count and textures; read-only |
-| `fx_graph_set` | `name`, `graph` or `text` | Validated file creation/update, `Change::Fx` notification |
+| `fx_graph_set` | `name`, `graph` or `text`, optional `expected` | Validated create-only or guarded replacement, `Change::Fx` notification |
 | `fx_graph_delete` | `name` | Deletes only the graph source asset |
 | `fx_graph_bake` | `name`, `effect`, optional `overrides`, `overwrite` | Compiles graph into `fx/<effect>.json` for existing `fx_preview` and legacy runtime |
 
@@ -939,7 +939,7 @@ Additional MCP actions:
   no file is written.
 - `fx_graph_draft_set`, `fx_graph_draft_get`,
   `fx_graph_draft_list`, `fx_graph_draft_publish`:
-  non-destructive authoring, validation and explicit publication.
+  non-destructive authoring, validation and explicit publication. For draft updates pass the exact original draft as `expected`; publication requires `expectedDraft` and `expected` for an existing published destination. Missing/null `expected` is create-only. Reload and reconcile on conflict.
 - Existing `fx_graph_get/set/list/validate/bake` continue
   working for both graph versions; published graphs always
   undergo strict compilation.

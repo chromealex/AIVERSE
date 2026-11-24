@@ -46,7 +46,7 @@ Use the universal editor-core tools when authoring graphs for an open game:
 
 1. `fx_graph_list` and `fx_graph_get {name}` locate and inspect versioned graph assets.
 2. `fx_graph_validate {graph|text|name, overrides?}` checks the compiled emitter definition without writing.
-3. `fx_graph_set {name, graph|text}` saves only after strict compile validation. Graph names are lowercase `a-z0-9_`; max 48 chars. Invalid sources are not saved.
+3. `fx_graph_set {name, graph|text, expected?}` saves only after strict compile validation. Missing/null expected means create-only; for replacement pass the original graph from fx_graph_get. Graph names are lowercase `a-z0-9_`; max 48 chars. Invalid sources are not saved.
 4. `fx_graph_bake {name, effect, overrides?, overwrite?}` creates `fx/<effect>.json`, consumed by the original CPU renderer and `fx_preview {effect}`. Existing baked effects are protected unless `overwrite:true`.
 5. `fx_graph_delete {name}` removes only the graph source; baked effects remain separate.
 
@@ -413,7 +413,7 @@ If the graph is incomplete, call `fx_graph_draft_set` to save
 under `fx/graphs/_drafts`; it never replaces a published graph.
 Retrieve drafts with `fx_graph_draft_list`/`fx_graph_draft_get`,
 and publish via `fx_graph_draft_publish` only after the compiler
-accepts the complete graph. Existing `fx_graph_set` remains the
+accepts the complete graph. Pass the exact `expectedDraft` and, if replacing a published graph, its exact `expected` original. Draft updates also require the original `expected` document. Reload and reconcile on conflict; do not retry blindly. Existing `fx_graph_set` remains the
 strict direct-publication path. Native tooling reuses
 `engine/fx/SpectraAuthoring.h` via the canonical
 `SpectraFX.h` include.

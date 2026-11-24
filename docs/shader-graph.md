@@ -83,7 +83,7 @@ using the existing library topological ordering implementation. No compute, cust
 - `shader_graph_catalog`: supported operations and arities.
 - `shader_graph_list`, `shader_graph_get {name}`: assets.
 - `shader_graph_validate {graph}`: validation, generated GLSL/MSL statements and cost counts.
-- `shader_graph_set {name,graph}`: validated atomic save.
+- `shader_graph_set {name,graph,expected?}`: validated guarded save. Omit `expected` or pass null only for creation; replace using the exact original graph from `shader_graph_get`. Reload after a conflict; never silently rebase.
 - `shader_graph_apply {name,target,emitter?,scope?}`: embed the saved snapshot.
 - `shader_graph_preview {name}` or `{graph}`: open in the graphical editor.
 

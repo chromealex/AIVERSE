@@ -66,6 +66,23 @@ void caveGraphCaptureWorkflow() {
         auto args=[&]{
             Json p=Json::object();p.set("scope",call("studio.snapshot")["result"]["graphDocument"]);return p;
         };
+        // Exercise guarded native Shader Graph saves through the actual Studio bridge.
+        fs::create_directories(project/"shaders");
+        const Json shader=Json::parse(R"({"version":1,"domain":"material","nodes":[{"id":"input","op":"input"}],"outputs":{"color":"input"}})");
+        std::ofstream(project/"shaders"/"guarded.json")<<shader.dump(2);
+        Json edited=shader;
+        edited.set("nodes",Json::parse(R"([{"id":"input","op":"input","position":[10,20]}])"));
+        Json save=Json::object();save.set("name",Json::string("guarded"));save.set("graph",edited);
+        const auto projectPath=session.workspace().project.dir;
+        save.set("expectedProject",Json::string(projectPath));
+        AIVERSE_TEST_CHECK(call("studio.shaderGraphSave",save).has("error"));
+        save.set("expected",shader);save.set("expectedProject",Json::string("other-project"));
+        AIVERSE_TEST_CHECK(call("studio.shaderGraphSave",save).has("error"));
+        AIVERSE_TEST_CHECK(Json::parseFile((project/"shaders"/"guarded.json").string())==shader);
+        save.set("expectedProject",Json::string(projectPath));
+        AIVERSE_TEST_CHECK(!call("studio.shaderGraphSave",save).has("error"));
+        AIVERSE_TEST_CHECK(call("studio.shaderGraphSave",save).has("error"));
+        AIVERSE_TEST_CHECK(Json::parseFile((project/"shaders"/"guarded.json").string())==edited);
         const auto original=args();const auto bytes=session.workspace().map.toJson();
         const auto undo=session.workspace().map.undoDepth();const auto dirty=session.workspace().map.dirty;
         bool registered=false;
