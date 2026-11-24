@@ -45,3 +45,7 @@ On macOS, all 58 registered titles opened in the native WKWebView via command se
 - Publishing — bilingual devlog with two actual macOS captures. `python3.12 tools/site/build.py check` reported 49 entries and zero errors. Platform evidence covers macOS WKWebView and Chrome. Native Windows is NOT RUN.
 
 Build root `/Volumes/KINGSTON/AIVERSE-builds/studio-workspace-redesign`. The audit gallery is `audit/index.html`; source-independent capture names are `panel-<id>.png` for native windows and `<width>-<id>.png` for browser previews. Next step is the green merged-tree Mac quick gate and a single squash into main.
+
+### Joint verification with SpectraFX main
+
+Main 0e7e2ddd9 added SpectraFX Library and expanded Graph during the original gate. The first candidate built and its gate was superseded during CTest. On the combined checkout all 195 web tests and 50 Python Studio contracts passed with the production bundle. All 59 registered panels rendered at 1440 and 240 CSS pixels (118 browser captures). The added Library and expanded Graph had no horizontal dock overflow at either width.
