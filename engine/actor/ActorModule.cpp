@@ -5,6 +5,9 @@
 #include "engine/core/FixedMath.h"
 #include "engine/mechanics/EcsTimedMechanics.h"
 #include "engine/world/OrientedBox.h"
+#include "engine/nav/CaveActorMotorSteering.h"
+#include "engine/world/TerraWeaveCavernsArchive.h"
+#include "engine/world/TerraWeaveCavernsVolumeCollision.h"
 #include <stdexcept>
 
 namespace aiverse::actor {
@@ -301,6 +304,49 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
         auto id=integer(b,"id",0,1,UINT32_MAX);
         if(collision_.colliders().contains(uint32_t(id))||!collision_.add({uint32_t(id),{vector(b["min"]),vector(b["max"])}}))throw JsonError("actor.collider: invalid or duplicate box");
     }
+    // Opt-in world-space cave navigation. Generate authored collision from
+    // the SAME immutable SDF, install into this EXISTING SpatialWorld before
+    // character spawn/motor setup, never create a second actor controller.
+    caveNavigation_.reset();
+    const auto& caveNavConfig=map["cavernsNavigation"];
+    if(caveNavConfig.isObject()&&caveNavConfig.getBool("enabled",false)){
+        using namespace terraweave::caverns;
+        const Json& authored=map["terraweaveCaverns"].isObject()
+            ?map["terraweaveCaverns"]:map["extra"]["terraweaveCaverns"];
+        if(!authored.isObject())
+            throw JsonError("actor.cavernsNavigation: missing authored SDF");
+        auto snapshot=std::make_shared<CaveVolumeSnapshot>(
+            caveSnapshotFromJson(authored));
+        auto indexed=std::make_shared<const CaveSnapshotSpatialIndex>(snapshot);
+        const auto& keys=caveNavConfig["collisionChunks"];
+        if(!keys.isArray()||keys.empty()||keys.size()>64)
+            throw JsonError("actor.cavernsNavigation: 1..64 collisionChunks required");
+        const uint32_t resolution=uint32_t(
+            caveNavConfig.getInt("resolution",16));
+        const int32_t spacingCm=int32_t(
+            caveNavConfig.getInt("spacingCm",100));
+        uint32_t nativeId=0x60000000u;
+        for(const auto& tuple:keys.items()){
+            if(!tuple.isArray()||tuple.size()!=3)
+                throw JsonError("actor.cavernsNavigation: chunk [x,y,z] expected");
+            const ChunkKey3 key{
+                tuple[size_t(0)].integer(),
+                tuple[size_t(1)].integer(),
+                tuple[size_t(2)].integer()};
+            auto surface=generateCaveIndexedSnapshotMesh(
+                *indexed,key,resolution,spacingCm);
+            auto collision=prepareCaveVolumeCollision(
+                surface,resolution,spacingCm,snapshot->sourceRevision);
+            if(collision.triangles.size()>65534u ||
+               collision.triangles.size()>UINT32_MAX-nativeId)
+                throw JsonError("actor.cavernsNavigation: collider id budget");
+            for(const auto& triangle:collision.triangles)
+                if(!collision_.addTriangle(nativeId++,triangle))
+                    throw JsonError("actor.cavernsNavigation: invalid native collider");
+        }
+        caveNavigation_=std::make_shared<const CaveNavigationDataProvider>(
+            std::move(indexed));
+    }
     auto buildingLoot=buildMapBuildings(map);
     const auto& spawns=map["spawns"];
     if(!spawns.isArray()||spawns.size()<sim.players().size())throw JsonError("actor.spawns: one spawn per player required");
@@ -332,6 +378,14 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
     setupVehicles(sim,map);
     setupRace(sim,rules,map);
     setupBots(sim,map);
+    if(caveNavigation_){
+        sim.registerPersistentComponent<nav::CaveRouteIntent>(
+            "caverns.route.intent",1);
+        sim.registerPersistentComponent<nav::CaveRouteFollower>(
+            "caverns.route",2);
+        // Actor's own "actor" system remains the ONLY character mover;
+        // route goals are assigned explicitly to entities by game commands.
+    }
     meleeAttacks_.clear();
     if(config_.melee.enabled){
         const auto& m=config_.melee;auto total=m.windup+m.active+m.recovery;
@@ -401,6 +455,8 @@ void ActorHost::shoot(Simulation& sim,CharacterRef p) {
 // ---------------------------------------------------------------- tick
 void ActorHost::tick(Simulation& sim) {
     auto& s=state(sim);if(s.winner)return;
+    if(caveNavigation_)
+        (void)nav::repathCaveActorRoutes(sim,*caveNavigation_,8);
     // Programmed and ordinary projectiles have already advanced in the preceding stages.
     if(config_.systems.enabled)tickSystems(sim);
     tickRoyale(sim);
@@ -448,6 +504,12 @@ void ActorHost::tick(Simulation& sim) {
             steerRoyaleBot(sim,a);
         }
         Input input=a.input;
+        if(caveNavigation_&&!a.vehicle){
+            // Feed existing motor via normal Input; never move CharacterBody
+            // directly. Explicit CaveRouteFollower opt-in only.
+            (void)nav::steerCaveActorMotor(
+                sim.world(),a.entity,input,*caveNavigation_,collision_);
+        }
         if(sim.tick()-a.lastInputTick>config_.inputTimeout){input.forward=input.right=0;input.buttons=0;input.action=Action::None;}
         if(config_.systems.enabled)actorSystems(sim,a,input);
         if(!a.vehicle){
