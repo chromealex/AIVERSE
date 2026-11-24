@@ -155,7 +155,7 @@
     },
     "studio": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification.",
+      "note": "Mac TypeScript/Vite, 218 web tests (62 graph tests), 48 contracts and native build PASS; owner live visual acceptance pending.",
       "evidence": []
     },
     "inspector": {
@@ -199,9 +199,13 @@
       "evidence": []
     },
     "tests": {
-      "status": "not_run",
-      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F fixtures added; NOT RUN. Mac QA at 3929953e: all 218 web tests including 62 graph tests, typecheck and bundle PASS; full native build/CTest incomplete. Mac QA v5 at 35bc27ec: Web 218/218, Studio contracts, typecheck, Vite and native Studio/MCP builds PASS. Native graph fixture compile failed due to ambiguous require helper; renamed test-only assertion helper after tested SHA. Retest pending. Mac QA v6 at 8f755978: full native build PASS, graph ops runtime failed when adding first state. GraphDraftEdits now initializes optional arrays explicitly, with missing transitions and malformed state collection checks; retest pending.",
-      "evidence": []
+      "status": "pass",
+      "note": "Mac QA v7, tested 59558502: full desktop Debug CTest 487 passed, 0 failures, 1 opt-in LENS skip; Python 22/22, web 218/218, Studio contracts 48/48. Scope is automated Mac QA; standalone extra suites, manual UI/refresh, cross-platform and publishing remain unverified.",
+      "evidence": [
+        "docs/evidence/feature-gate-mac-v7-python.log.txt",
+        "docs/evidence/feature-gate-mac-v7-ctest.log.txt",
+        "docs/evidence/feature-gate-mac-v7-summary.log.txt"
+      ]
     },
     "handoff": {
       "status": "not_run",
@@ -304,5 +308,8 @@
       "studio.cavernsGraphInspect"
     ]
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/feature-gate-mac-v7-python.json",
+    "docs/evidence/feature-gate-mac-v7-ctest.json"
+  ]
 }
