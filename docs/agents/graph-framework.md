@@ -371,3 +371,7 @@ Implementation: `f82db744f747226138770a949bcfb13e62613cb8`. Desktop normal test 
 ## Stage 38AJ — Mac acceptance summary (2026-11-24)
 
 Stage 38AJ Mac targeted acceptance: user supplied final CTest lines `32/32 Test #493: studio_model_picking ... Passed 0.01 sec` and `100% tests passed, 0 tests failed out of 32`. Record user-supplied summary PASS 32/32 (includes material_batches_unit in the requested run); full log, printed checkout SHA, tracked tree status and individual timing evidence were not supplied. Expected checkout was f1a2894cdf0488857a41d4e38afd9ca4dc1ed8a8; not independently established. Do not promote the feature gate: live Studio/MCP, Vulkan hardware and merged-tree Mac quick gate still NOT RUN.
+
+## Stage 38AK — MCP registry acceptance (2026-11-24)
+
+Stage 38AK: user-supplied Mac log shows aiversemcp Release build/link PASS, registered=343, required_families=13, all 13 PASS, graph manifest tool coverage without MISSING, and tools/list == mcp_registry (count, names, guiOnly metadata) PASS. This was the requested headless stdio audit (tools/mcp/audit_registry.py --feature-manifest docs/features/graph-framework.json). Expected checkout d6fbc423a56bef61e6bcaae0eb893bd20f24a0db; exact printed SHA and full log not included. Native GPU owner execution through live editor/Studio, authoring calls, Vulkan hardware and merged-tree Mac quick gate still NOT RUN. Do not promote full MCP or feature readiness based on registry alone.
