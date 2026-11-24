@@ -676,6 +676,16 @@ private:
     graph_telemetry::Watch graphWatch_;
     graph_gpu_profile::Capture graphGpuProfile_;
     TextureGraphGpuPreview textureGraphGpuPreview_;
+    struct PendingGraphMaterialApply {
+        std::string project,request;
+        size_t type=0,choice=0;
+        view::LiveAppearanceMaterialTarget target;
+    };
+    std::optional<PendingGraphMaterialApply> pendingGraphMaterialApply_;
+    std::string graphMaterialApplyProject_,graphMaterialApplyRequest_,graphMaterialApplyState_="idle",graphMaterialApplyReason_;
+    Json graphMaterialApplyStatus() const;
+    Json graphMaterialOp(const Json& p);
+    void applyQueuedGraphMaterial();
     Json graphWatchSample(const std::string& domain,const std::string& entity) const;
     void captureGraphWatch() noexcept;
     std::vector<game::ComputerPlayer> bots_;
