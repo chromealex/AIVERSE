@@ -2,6 +2,7 @@
 // with acceleration, wall sliding and unit push-out, facing, aim snap and auto-fire targeting, abilities aimed along
 // the stick, a computer pilot for bots. Integer / Fixed maths only; every loop runs in player-slot or entity order.
 #include "TopDown.h"
+#include "engine/mechanics/WeaponCadence.h"
 #include "Driving.h"
 #include "Systems.h"
 #include "Encounters.h"
@@ -653,6 +654,10 @@ void TopDown::freeFire(Simulation& sim, TopDownPilot& p, uint8_t owner) {
     for (size_t i = 0; i < t.weapons.size() && i < 4; ++i) {
         const WeaponDef& wd = t.weapons[i];
         if (c->cooldown[i].raw > 0) continue;
+        const bool precise = wd.preciseCooldown && wd.chargeTime.raw <= 0;
+        const uint32_t budget = precise ? lib::mechanics::kMaxCadenceShotsPerTick : 1;
+        for (uint32_t shotIndex = 0; shotIndex < budget && lib::mechanics::cadenceReady(c->cooldown[i]); ++shotIndex) {
+        if (precise && u.hp.raw <= 0) break;
         const Fixed range = wd.range + bonus;
         // march the line in quarter cells: the first wall ends it; the first hostile body on it is hit
         Entity hit;
@@ -680,7 +685,7 @@ void TopDown::freeFire(Simulation& sim, TopDownPilot& p, uint8_t owner) {
             });
             if (hit.valid()) end = flat(w.get<Transform>(hit).pos);
         }
-        c->cooldown[i] = wd.cooldown;
+        c->cooldown[i] = lib::mechanics::acceptCadenceShot(c->cooldown[i], wd.cooldown, precise);
         sim.emit({kEvAttack, owner, e, hit, int64_t(i), pos});
         const Fixed dmg = wd.damage * mult;
         Progression* prog = m_->progression() && m_->progression()->active() ? m_->progression() : nullptr;   // perks on free-fire shots too
@@ -709,6 +714,8 @@ void TopDown::freeFire(Simulation& sim, TopDownPilot& p, uint8_t owner) {
             w.add<Projectile>(pe, shot);
             w.add<Owner>(pe, Owner{owner});
         }
+        }
+        if (precise) c->cooldown[i] = lib::mechanics::finishWeaponCadence(c->cooldown[i]);
     }
 }
 
