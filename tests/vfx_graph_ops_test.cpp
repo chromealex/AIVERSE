@@ -134,6 +134,13 @@ int main() {
     requireGraphTest(call("graph_save",generic).getBool("ok"),"generic native save failed");
     requireGraphTest(call("graph_get",generic)["result"]["graph"]==graph,"generic graph readback mismatch");
     requireGraphTest(call("graph_node_catalog",generic)["result"]["nodes"].isArray(),"generic native node catalog missing");
+    requireGraphTest(call("graph_save",generic).has("error"),"legacy create consent overwrote a published graph");
+    Json newerFx=graph;newerFx.member("parameters").set("size",Json::number(0.5));
+    generic.set("expected",graph);generic.set("graph",newerFx);
+    requireGraphTest(call("graph_save",generic).getBool("ok"),"matching FX original rejected");
+    requireGraphTest(call("graph_save",generic).has("error"),"stale FX original accepted");
+    requireGraphTest(call("graph_get",generic)["result"]["graph"]==newerFx,"stale FX save changed asset");
+    generic.erase("expected");generic.set("graph",graph);
     requireGraphTest(call("fx_graph_delete",generic).getBool("ok"),"generic fixture cleanup failed");
 
     const auto shaderDraft=Json::parse(R"({"domain":"shader","graph":{"version":1,"domain":"material","nodes":[{"id":"input","op":"input"}],"outputs":{"color":"input"}},"edits":[{"action":"add","value":{"id":"tint","op":"constant","value":[1,1,1,1]}},{"action":"setOutput","output":"color","node":"tint"}]})");
@@ -143,6 +150,52 @@ int main() {
     requireGraphTest(shaderEdited["result"]["graph"]["outputs"].getStr("color")=="tint","shader output not changed");
     requireGraphTest(shaderDraft["graph"]["nodes"].size()==1,"input draft mutated");
     requireGraphTest(!fs::exists(root/"shaders"),"shader draft wrote files");
+    Json shaderSave=Json::object();shaderSave.set("name",Json::string("cas_shader"));
+    shaderSave.set("graph",shaderDraft["graph"]);
+    requireGraphTest(call("shader_graph_set",shaderSave).getBool("ok"),"shader create failed");
+    requireGraphTest(call("shader_graph_set",shaderSave).has("error"),"shader blind overwrite accepted");
+    shaderSave.set("expected",shaderDraft["graph"]);shaderSave.set("graph",shaderEdited["result"]["graph"]);
+    const auto shaderFile=root/"shaders"/"cas_shader.json";
+    const auto lockPath=fs::path(shaderFile.string()+".aiverse-write-lock");
+    fs::create_directory(lockPath);
+    requireGraphTest(call("shader_graph_set",shaderSave).has("error"),"busy shader lock ignored");
+    fs::remove(lockPath);
+    requireGraphTest(call("shader_graph_set",shaderSave).getBool("ok"),"matching shader original rejected");
+    requireGraphTest(call("shader_graph_set",shaderSave).has("error"),"stale shader original accepted");
+    requireGraphTest(Json::parseFile(shaderFile.string())==shaderEdited["result"]["graph"],"stale shader save changed asset");
+    // An in-project leaf alias must not bypass the shared transaction guard.
+    const auto alias=root/"shaders"/"alias_shader.json";
+    std::error_code linkError;
+    fs::create_symlink(shaderFile.filename(),alias,linkError);
+    if (!linkError) {
+        Json aliasSave=shaderSave;
+        aliasSave.set("name",Json::string("alias_shader"));
+        aliasSave.set("expected",shaderEdited["result"]["graph"]);
+        aliasSave.set("graph",shaderDraft["graph"]);
+        requireGraphTest(call("shader_graph_set",aliasSave).has("error"),"shader alias overwrite accepted");
+        requireGraphTest(fs::is_symlink(fs::symlink_status(alias)),"shader alias replaced");
+        requireGraphTest(Json::parseFile(shaderFile.string())==shaderEdited["result"]["graph"],"shader alias changed target");
+        fs::remove(alias);
+    } else {
+        // Windows hosts may not grant the privilege to create symbolic links.
+        std::cout<<"Shader symlink fixture unavailable: "<<linkError.message()<<'\n';
+#ifndef _WIN32
+        requireGraphTest(false,"could not create shader symlink fixture");
+#endif
+    }
+    fs::remove(shaderFile);fs::remove(root/"shaders");
+
+    // Deletion is a graph asset operation, never directory removal.
+    const auto directoryTarget=root/"fx"/"graphs"/"directory_target.vfx.json";
+    fs::create_directories(directoryTarget);
+    Json directoryArgs=Json::object();
+    directoryArgs.set("name",Json::string("directory_target"));
+    requireGraphTest(call("fx_graph_delete",directoryArgs).has("error"),"graph deletion accepted a directory");
+    requireGraphTest(fs::is_directory(directoryTarget),"graph deletion removed a directory");
+    directoryArgs.set("graph",graph);
+    requireGraphTest(call("fx_graph_set",directoryArgs).has("error"),"graph save accepted a directory");
+    requireGraphTest(fs::is_directory(directoryTarget),"graph save replaced a directory");
+    fs::remove(directoryTarget);
     auto badBatch=shaderDraft;badBatch.member("edits").push(Json::parse(R"({"action":"add","value":{"id":"tint","op":"constant"}})"));
     requireGraphTest(call("graph_edit",badBatch).has("error"),"duplicate ID batch accepted");
     const auto motionDraft=Json::parse(R"({"domain":"motionweave","graph":{"nodes":[{"id":"bind","kind":"bind"}],"output":"bind"},"edits":[{"action":"addState","value":{"id":"idle","output":"bind","transitions":[]}},{"action":"setInitial","node":"idle"},{"action":"addTransition","state":"idle","value":{"to":"idle","fade":0.2,"when":[]}}]})");
@@ -354,6 +407,19 @@ int main() {
     requireGraphTest(created.getBool("ok"), "valid graph was rejected");
     requireGraphTest(fs::exists(root/"fx"/"graphs"/"spark.vfx.json"), "graph file not created");
     requireGraphTest(!ws.changes.empty() && ws.changes.back().kind == editor::Change::Fx, "missing editor FX invalidation");
+
+    // Separate draft publication guards both the exact draft and the destination.
+    Json draft=Json::object();draft.set("name",Json::string("draft_cas"));draft.set("graph",graph);
+    requireGraphTest(call("fx_graph_draft_set",draft).getBool("ok"),"draft create failed");
+    requireGraphTest(call("fx_graph_draft_set",draft).has("error"),"draft blind overwrite accepted");
+    draft.set("expected",graph);draft.set("graph",newerFx);
+    requireGraphTest(call("fx_graph_draft_set",draft).getBool("ok"),"matching draft original rejected");
+    Json publish=Json::object();publish.set("name",Json::string("draft_cas"));publish.set("expectedDraft",graph);
+    requireGraphTest(call("fx_graph_draft_publish",publish).has("error"),"stale draft publication accepted");
+    publish.set("expectedDraft",newerFx);
+    requireGraphTest(call("fx_graph_draft_publish",publish).getBool("ok"),"matching draft publish failed");
+    requireGraphTest(call("fx_graph_get",publish)["graph"]==newerFx,"published draft content mismatch");
+    requireGraphTest(call("fx_graph_delete",publish).getBool("ok"),"published draft cleanup failed");
 
     Json name = Json::object();
     name.set("name", Json::string("spark"));

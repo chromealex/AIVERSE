@@ -231,3 +231,7 @@ On pinned Building Stage 36B base, the existing Caverns panel mounts CaveNativeI
 ## Stage 56 — native planetary capture port
 
 The native Studio bridge now calls the registered Caverns owner's get-only operation for planetary maps, rejects failed or changed reports before status classification, and distinguishes unsupported owner contract, absent active region and ready scoped report. The existing flat absent check and document epoch/revision, undo depth and dirty invariants remain. Current Building integration base has no Caverns owner registration; the latest owner contract was reviewed at ca55f6a84fd2b9fd1dec9ab9462efb20280e6274 but not merged. This is a bridge source port, not an operational planet generator or verified runtime. Tests NOT RUN.
+
+## Stage 57 — guarded graph save port
+
+Port Stage 53/54 native transaction, Shader/SpectraFX owners, generic graph facade and native/Studio clients. Preserve Building and Caverns typed bridge methods and existing test changes. Existing graph assets require expected original, missing expected is create-only. Draft publish requires expectedDraft and expected published target where applicable. No format changes; cooperating-writer lock only. Fixtures authored, tests NOT RUN. Full owner merge and other client audit pending.

@@ -1662,9 +1662,14 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 Json request=Json::object();
                 request.set("graph",draft);
                 if(method=="studio.shaderGraphSave") {
+                    if(params.getStr("expectedProject")!=ws_.project.dir)
+                        throw std::runtime_error("Shader Graph project changed; reload before saving");
                     const std::string name=params.getStr("name");
                     if(!validStudioShaderGraphName(name))
                         throw std::runtime_error("Invalid Shader Graph filename");
+                    if(!validStudioShaderGraphDraft(params["expected"]))
+                        throw std::runtime_error("Original Shader Graph document required; reload before saving");
+                    request.set("expected",params["expected"]);
                     request.set("name",str(name));
                 }
                 const Json raw=ws_.call(method=="studio.shaderGraphSave"?
@@ -1979,6 +1984,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
         } else if (method == "studio.op") {
             const std::string op=params.getStr("op");
             if (!studioToolAllowed(op)) throw std::runtime_error("This operation is not available in Studio panels: "+op);
+            if(params.has("expectedProject") && params.getStr("expectedProject")!=ws_.project.dir)
+                throw std::runtime_error("Studio operation project changed; reload before retrying");
             if (op.rfind("feature_readiness_",0)!=0 && ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
             if((op.starts_with("world_save_")||op=="world_job_start"||op.starts_with("world_simulation_lod_"))&&params.getStr("expectedProject")!=ws_.project.dir)
                 throw std::runtime_error("World maintenance project changed; reopen the panel");
