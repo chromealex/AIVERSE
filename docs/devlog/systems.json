@@ -1868,6 +1868,12 @@
           "text": "Защита транзакций публикации и teardown при активных читателях; сохранение pending hot reload.",
           "nameEn": "Texture Graph GPU — Stage 38AA (partial)",
           "textEn": "Preflight publication and teardown against active readers; preserve pending hot reload."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38AB (в работе)",
+          "text": "Защита от повторного входа в callback и ранняя проверка shutdown хостов.",
+          "nameEn": "Texture Graph GPU — Stage 38AB (in progress)",
+          "textEn": "Callback reentry guard and early host shutdown preflight."
         }
       ],
       "enables": [
