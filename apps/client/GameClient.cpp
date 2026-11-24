@@ -1355,11 +1355,8 @@ void GameClient::frame(gfx::Device& dev, double dt) {
             cam_ = view_.updatePlanetCamera(scene_.seconds, float(dt), fbH());
             pass.clearColor[0] = pass.clearColor[1] = pass.clearColor[2] = 0.0f;
         }
-        // View scripts run before anything uses the camera: a view.set_camera of this frame (a script framing camera
-        // that also clamps the player's drag / zoom) is the camera the world is culled, streamed and drawn with, so
-        // the world and the scripts' screen canvas (view.to_screen, view.draw) share one camera. Run after the scene
-        // pass begins, the world showed the host camera moved by input for a frame while the canvas showed the
-        // script's: the map jerked under a drag the script undoes, its screen marks stayed put.
+        // Apply view.set_camera before streaming, culling and drawing so the
+        // world and view.to_screen use the same camera in this frame.
         runViewScripts(screen_ == Screen::Playing ? float(dt) : 0.0f);
         if (worldScene_ && !planet()) {   // load / unload chunks for where the camera looks (GPU uploads: before the scene pass)
             horizonFrameTiming_.begin(dev,worldScene_.get());
