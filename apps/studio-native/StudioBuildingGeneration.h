@@ -522,6 +522,14 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
             furniture.push(std::move(row));
         }
         out.set("roomUses",std::move(roomUses));out.set("furniture",std::move(furniture));
+        Json interactionSockets=Json::array();for(const auto& item:detailed.graph.furnitureSockets){
+            Json row=Json::object();row.set("id",string(item.id));row.set("furnitureId",string(item.furnitureId));
+            row.set("roomId",string(item.roomId));row.set("floor",Json::number(int64_t(item.floor)));
+            row.set("action",string(buildingFurnitureActionName(item.action)));
+            row.set("x",Json::number(double(item.x),3));row.set("y",Json::number(double(item.y),3));row.set("z",Json::number(double(item.z),3));
+            interactionSockets.push(std::move(row));
+        }
+        out.set("furnitureSockets",std::move(interactionSockets));
         Json lights=Json::array(),decor=Json::array();
         for(const auto& item:detailed.graph.interiorLights){
             Json row=Json::object();row.set("id",string(item.id));row.set("roomId",string(item.roomId));row.set("floor",Json::number(int64_t(item.floor)));

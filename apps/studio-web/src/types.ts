@@ -271,6 +271,7 @@ export interface StudioBuildingPreview {
   roomUses?:Array<{roomId:string;use:StudioBuildingRoomUse}>;
   interiorLights?:Array<{id:string;roomId:string;floor:number;x:number;z:number;intensity:number;range:number}>;
   interiorDecor?:Array<{id:string;roomId:string;floor:number;x:number;z:number}>;
+  furnitureSockets?:Array<{id:string;furnitureId:string;roomId:string;floor:number;action:string;x:number;y:number;z:number}>;
   furniture?:Array<{id:string;roomId:string;floor:number;kind:string;x0:number;z0:number;x1:number;z1:number}>;
   roofSections?:Array<{x0:number;z0:number;x1:number;z1:number;base:number;rise:number;ridgeAlongX:boolean}>;
   terraces?:Array<{floor:number;x:number;z:number;height:number}>;

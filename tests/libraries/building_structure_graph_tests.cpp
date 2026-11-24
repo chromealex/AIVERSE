@@ -133,6 +133,11 @@ int main(){
         furnished.furnitureDensity=4;furnished.roomUses={{0,0,0,BuildingRoomUse::Bedroom}};
         const auto interior=buildFunctionalStructureGraph(furnished);CHECK(interior);
         CHECK(interior.roomUses.size()==4&&interior.furniture.size()==16);
+        CHECK(interior.furnitureSockets.size()==16);
+        for(const auto& socket:interior.furnitureSockets){
+            CHECK(!intersects(interior,socket.x,socket.y+.8f,socket.z,BuildingGraphPart::Trim));
+            CHECK(intersects(interior,socket.x,socket.y-.1f,socket.z,BuildingGraphPart::Floor));
+        }
         CHECK(interior.roomUses[0].use==BuildingRoomUse::Bedroom);
         for(const auto& item:interior.furniture){
             const auto room=std::find_if(interior.rooms.begin(),interior.rooms.end(),[&](const auto& r){return r.id==item.roomId;});

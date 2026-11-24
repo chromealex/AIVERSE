@@ -26,6 +26,11 @@ inline uint64_t buildingSceneContentIdentity(uint64_t sceneId,const std::string&
     for(const auto& edge:generated.structureGraph.connections){
         hash.str(edge.id);hash.str(edge.from);hash.str(edge.to);hash.u32(uint32_t(edge.kind));
     }
+    for(const auto& s:generated.structureGraph.furnitureSockets){
+        hash.str(s.id);hash.str(s.furnitureId);hash.str(s.roomId);hash.u32(uint32_t(s.action));
+        auto mm=[](float v){return Fixed::fromRatio(int64_t(std::llround(double(v)*1000)),1000);};
+        hash.v3(Vec3{mm(s.x),mm(s.y),mm(s.z)});hash.v3(Vec3{mm(s.targetX),mm(s.targetY),mm(s.targetZ)});
+    }
     for(const auto& [feature,floors]:liftLayout){
         hash.u32(feature);hash.u32(floors);
     }

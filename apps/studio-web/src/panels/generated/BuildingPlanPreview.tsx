@@ -56,6 +56,8 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
           fill="var(--au-accent)" fillOpacity={.55} stroke="var(--au-text)" strokeWidth={.06}><title>{item.kind} · {item.roomId}</title></rect>)}
       {(preview.interiorLights??[]).filter(i=>i.floor===selectedFloor).map(i=><circle key={i.id} cx={i.x} cy={i.z} r={.25} fill="#e8bd65" stroke="var(--au-text)" strokeWidth={.06}><title>{i.id} · {i.intensity} cd</title></circle>)}
       {(preview.interiorDecor??[]).filter(i=>i.floor===selectedFloor).map(i=><rect key={i.id} x={i.x-.12} y={i.z-.12} width={.24} height={.24} fill="var(--au-text)"><title>{i.id}</title></rect>)}
+      {(preview.furnitureSockets??[]).filter(i=>i.floor===selectedFloor).map(i=>
+        <circle key={i.id} cx={i.x} cy={i.z} r={.18} fill="none" stroke="var(--au-accent)" strokeWidth={.1}><title>{i.action} · {i.furnitureId}</title></circle>)}
       {sockets.map(socket=>{
         const [x,,z]=socket.outside;
         const isSelected=socket.socketId===selected;
@@ -80,6 +82,7 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
       <strong>Native structure plan</strong>
       <small>{preview.width.toFixed(1)} × {preview.depth.toFixed(1)} m · {preview.floors??1} floors · {sockets.length} sockets · {preview.solids??0} solids · {preview.connections??0} graph links</small>
       {!!preview.roomUses?.length&&<small>{preview.roomUses.filter(r=>r.roomId.startsWith('room/'+selectedFloor+'/')).map(r=>r.roomId.split('/').slice(2).join(',')+': '+r.use).join(' · ')}</small>}
+      {!!preview.furnitureSockets?.length&&<small>{preview.furnitureSockets.filter(s=>s.floor===selectedFloor).length} furniture interaction sockets</small>}
       {!!preview.furniture?.length&&<small>{preview.furniture.filter(f=>f.floor===selectedFloor).length} static furniture items</small>}
       {!!preview.roofSections?.length&&<small>{preview.roofSections.length} composed upper roof sections</small>}
       {!!preview.balconies?.length&&<small>{preview.balconies.filter(t=>t.floor===selectedFloor).length} projecting balconies</small>}

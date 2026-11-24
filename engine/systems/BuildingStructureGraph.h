@@ -158,6 +158,11 @@ struct BuildingRoofSection {float x0=0,z0=0,x1=0,z1=0,base=0,rise=0;bool ridgeAl
 struct BuildingGraphVisualPrism {BuildingGraphPart part;float y0,y1;std::vector<std::array<float,2>> polygon;};
 struct BuildingGraphRoomUse {std::string roomId;BuildingRoomUse use;};
 struct BuildingGraphFurniture {std::string id,roomId;uint32_t floor;BuildingFurnitureKind kind;float x0,y0,z0,x1,y1,z1;};
+enum class BuildingFurnitureAction : uint8_t { Sit, Rest, Work, Inspect, Store, Operate };
+inline const char* buildingFurnitureActionName(BuildingFurnitureAction a){
+    constexpr const char* names[]={"sit","rest","work","inspect","store","operate"};return uint8_t(a)<6?names[uint8_t(a)]:"unknown";
+}
+struct BuildingFurnitureSocket {std::string id,furnitureId,roomId;uint32_t floor;BuildingFurnitureAction action;float x,y,z,targetX,targetY,targetZ;};
 struct BuildingGraphInteriorLight {std::string id,roomId;uint32_t floor;float x,y,z,ceiling;std::array<float,3> color;float intensity,range;};
 struct BuildingGraphDecor {std::string id,roomId;uint32_t floor;float x0,y0,z0,x1,y1,z1;};
 struct BuildingStructureGraph {
@@ -175,6 +180,7 @@ struct BuildingStructureGraph {
     std::vector<std::array<float,2>> footprintPolygon;
     std::vector<BuildingGraphRoomUse> roomUses;
     std::vector<BuildingGraphFurniture> furniture;
+    std::vector<BuildingFurnitureSocket> furnitureSockets;
     std::vector<BuildingGraphInteriorLight> interiorLights;
     std::vector<BuildingGraphDecor> interiorDecor;
     explicit operator bool() const noexcept {return error.empty();}
@@ -540,6 +546,42 @@ inline void furnishFunctionalBuilding(BuildingStructureGraph& graph,const Functi
             solid.furnitureIndex=uint32_t(graph.furniture.size());
             graph.furniture.push_back({"furniture/"+room.id+"/"+std::to_string(zone),room.id,room.floor,kind,solid.x0,solid.y0,solid.z0,solid.x1,solid.y1,solid.z1});
             graph.solids.push_back(solid);
+        }
+    }
+}
+
+// One exclusive interaction socket per item. Approach is outside the
+// conservative collider, with actor-radius/headroom clearance and floor support.
+inline void buildFurnitureSockets(BuildingStructureGraph& graph){
+    using K=BuildingFurnitureKind;using A=BuildingFurnitureAction;
+    constexpr float radius=.3f,headroom=1.9f,gap=.48f;
+    for(const auto& item:graph.furniture){
+        const auto room=std::find_if(graph.rooms.begin(),graph.rooms.end(),[&](const auto& r){return r.id==item.roomId;});
+        if(room==graph.rooms.end())continue;
+        const float mx=(item.x0+item.x1)*.5f,mz=(item.z0+item.z1)*.5f;
+        const float rx=(room->x0+room->x1)*.5f,rz=(room->z0+room->z1)*.5f;
+        std::array<std::array<float,2>,4> points{{{mx,item.z0-gap},{mx,item.z1+gap},{item.x0-gap,mz},{item.x1+gap,mz}}};
+        std::stable_sort(points.begin(),points.end(),[&](auto a,auto b){
+            return std::abs(a[0]-rx)+std::abs(a[1]-rz)<std::abs(b[0]-rx)+std::abs(b[1]-rz);
+        });
+        const A action=item.kind==K::Sofa||item.kind==K::Bench?A::Sit:item.kind==K::Bed?A::Rest:
+            item.kind==K::Desk||item.kind==K::Table?A::Work:item.kind==K::Machine?A::Operate:
+            item.kind==K::Cabinet||item.kind==K::Shelf||item.kind==K::Crate?A::Store:A::Inspect;
+        for(const auto& p:points){
+            const float x=p[0],z=p[1],y=item.y0;
+            if(x-radius<room->x0+.36f||x+radius>room->x1-.36f||z-radius<room->z0+.36f||z+radius>room->z1-.36f||y+headroom>room->y1)continue;
+            bool supported=false,blocked=false;
+            for(const auto& s:graph.solids){
+                if(s.part==BuildingGraphPart::Floor&&std::abs(s.y1-y)<.002f&&x-radius>=s.x0&&x+radius<=s.x1&&z-radius>=s.z0&&z+radius<=s.z1)supported=true;
+                if(s.x0<x+radius&&s.x1>x-radius&&s.z0<z+radius&&s.z1>z-radius&&s.y0<y+headroom&&s.y1>y+.001f)blocked=true;
+            }
+            if(!supported||blocked)continue;
+            const bool overlap=std::any_of(graph.furnitureSockets.begin(),graph.furnitureSockets.end(),[&](const auto& s){
+                return s.floor==item.floor&&std::abs(s.x-x)<2*radius&&std::abs(s.z-z)<2*radius;
+            });
+            if(overlap)continue;
+            graph.furnitureSockets.push_back({"use/"+item.id,item.id,item.roomId,item.floor,action,x,y,z,mx,item.y1,mz});
+            break;
         }
     }
 }
@@ -1197,7 +1239,7 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
     }
     if(std::any_of(recipe.cornerChamfers.begin(),recipe.cornerChamfers.end(),[](float c){return c>0.f;}))
         buildingChamferDetail::apply(graph,recipe);
-    if(graph){furnishFunctionalBuilding(graph,recipe);decorateFunctionalBuilding(graph,recipe);}
+    if(graph){furnishFunctionalBuilding(graph,recipe);buildFurnitureSockets(graph);decorateFunctionalBuilding(graph,recipe);}
     return graph;
 }
 } // namespace aiverse::lib::systems
