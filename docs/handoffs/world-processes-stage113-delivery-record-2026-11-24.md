@@ -1,3 +1,5 @@
 # Stage 113 — planetary ECHO live diagnostics
 
 Base 09ce16fc. In progress. Read existing AcousticZone, Portal, Emitter, Receiver and completed-tick AcousticHearing. Show logical zone/portal graph with attenuation/direction, actual winning emitter/intensity/threshold and receiver validity, not reconstructed path or physical sound field. Canonical body-local Transform, numeric rows for unplaced entities, same-body visual edges only, bounded stable samples. Existing native Scene and typed Live switch. No propagation rerun or audio renderer. Source fixtures for directed propagation, stale hearing, cross-body and budget. Tests deferred; no main merge.
+
+Status: source f20c6b91; fixture 9561a2f624a6a6d5e7583208566f9b0df63a7c5e. Build, tests and visual acceptance NOT RUN. Next CROWD.
