@@ -673,7 +673,7 @@ void TopDown::freeFire(Simulation& sim, TopDownPilot& p, uint8_t owner) {
                 const Owner* co = w.tryGet<Owner>(cand);
                 if (!cu || !co || cu->hp.raw <= 0 || (cu->flags & kUnitOffMap)) return;
                 const UnitType& ct = m_->rules().types[cu->type];
-                if (ct.invulnerable || !m_->hostile(sim, owner, co->player) || !layerHit(wd.targets, ct.layer)) return;
+                if (ct.invulnerable || !m_->hostile(sim, owner, co->player) || !weaponTargetMatches(wd, ct.layer, ct.tags)) return;
                 const Fixed d = dist2D(w.get<Transform>(cand).pos, q);
                 if (d > ct.radius + Fixed::fromRatio(1, 4)) return;
                 if (!hit.valid() || d < bestD || (d == bestD && cand.index < hit.index)) { hit = cand; bestD = d; }
