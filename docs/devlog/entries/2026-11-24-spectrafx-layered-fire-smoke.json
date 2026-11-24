@@ -1,0 +1,42 @@
+{
+  "id": "2026-11-24-spectrafx-layered-fire-smoke",
+  "date": "2026-11-24",
+  "system": "spectrafx",
+  "title": "Объёмный дым и многослойный огонь",
+  "summary": "В SpectraFX появился пример огня с объёмным дымовым шлейфом, несколькими слоями пламени и искрами. На снятом кадре устранены заметные вертикальные полосы.",
+  "body": [
+    "Эффект собирается из газового объёма и отдельных частиц с текстурными анимациями. В редакторе его можно открыть как граф fire_smoke_v2; свечение добавляется обработкой PRISMA.",
+    "Объём поддерживает локальные источники света и более подробную сетку. Дым уходит по диагонали от очага, а пламя и искры остаются отдельными слоями."
+  ],
+  "status": "experimental",
+  "verified": "Показано в нативном Studio на macOS с Metal: снят кадр 1024×576 с объёмным дымом, огнём и искрами.",
+  "limits": "Результат экспериментальный: внутреннее освещение дыма и форма пламени пока не достигают кинематографичного качества референсов; движение эффекта ещё не оценено.",
+  "branch": "codex/spectrafx-volumetric-scene",
+  "commit": "6f45883aa",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-24-spectrafx-layered-fire-smoke/01.png",
+      "caption": "Огонь, искры и объёмный тёмный дым в нативном Metal viewport",
+      "captionEn": "Fire, sparks and volumetric dark smoke in the native Metal viewport"
+    }
+  ],
+  "links": [
+    {
+      "title": "SpectraFX",
+      "href": "docs/spectrafx.md"
+    },
+    {
+      "title": "Stage 158 handoff",
+      "href": "docs/agent-handoffs/spectrafx-stage158-layered-fire-smoke-2026-11-24.md"
+    }
+  ],
+  "author": "render",
+  "titleEn": "Volumetric smoke and layered fire",
+  "summaryEn": "SpectraFX now has a fire example with a volumetric smoke plume, layered flames and sparks. The visible vertical banding is absent from the captured frame.",
+  "bodyEn": [
+    "The effect combines a gas volume with separately animated textured particles. Open the fire_smoke_v2 graph in Studio; PRISMA adds the glow.",
+    "The volume supports local lights and a finer grid. Smoke trails diagonally from the source while flames and sparks remain separate layers."
+  ],
+  "verifiedEn": "Shown in native Studio on macOS with Metal: a 1024×576 frame captures the volumetric smoke, fire and sparks.",
+  "limitsEn": "This is experimental: internal smoke lighting and flame shape do not yet reach the cinematic quality of the references; motion has not yet been assessed."
+}
