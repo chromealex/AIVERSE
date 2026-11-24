@@ -1068,6 +1068,11 @@ Json StudioSession::historyJson() const {
 }
 Json StudioSession::dispatch(const Json& request) {
     const std::string method=request.getStr("method");
+    // Cave stroke ownership cannot cross a document switch or history mutation.
+    if(brush_.kind=="caverns"&&(method=="studio.openProject"||method=="studio.openMap"||method=="studio.newMap"||method=="studio.hubOpen"||method=="studio.hubCreate"||method=="studio.undo"||method=="studio.redo"||method=="studio.historyJump")) {
+        if(stroking_)(void)strokeEnd();
+        brush_.armed=false;
+    }
     if(method=="studio.history"||method=="studio.historyJump") {
         Json reply=Json::object();reply.set("id",request["id"]);
         try {
@@ -2514,6 +2519,9 @@ Json StudioSession::dispatchImpl(const Json& request) {
             if(params.has("caveSurface"))b.caveSurface=params.getBool("caveSurface");
             if (params.has("armed")) b.armed=params.getBool("armed")&&!ws_.project.dir.empty();
             if(b.armed&&b.kind=="caverns"){
+                if(params.getBool("armed",false)&&(params.getStr("expectedProject")!=ws_.project.dir||
+                   !params["expectedMap"].isString()||params.getStr("expectedMap")!=(ws_.map.path.empty()?"":ws_.relative(ws_.map.path))))
+                    throw std::runtime_error("Caverns brush project/map changed");
                 bool paint=false,pick=false;
                 for(const auto& op:ws_.ops()){paint|=op.name=="terraweave_caverns_paint";pick|=op.name=="terraweave_caverns_pick";}
                 if(!paint||!pick||ws_.map.data.planet())throw std::runtime_error("Caverns native flat-world backend unavailable");
