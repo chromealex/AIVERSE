@@ -85,7 +85,7 @@ inline bool stampSurfaceMotion(World& world,const game::Surface& surface,uint32_
         const auto* unit=read.tryGetConst<game::Unit>(t.source);
         const auto frame=t.enabled&&read.alive(t.source)&&tr&&
             !read.has<game::Transit>(t.source)&&
-            !(unit&&(unit->flags&(game::kUnitInHand|game::kUnitInTransit)))
+            !(unit&&(unit->flags&(game::kUnitOffMap|game::kUnitInTransit)))
             ?wp::surfaceFrame(&surface,tr->pos):std::nullopt;
         Entity target=kNullEntity;
         if(frame){
@@ -120,15 +120,25 @@ inline bool stampSurfaceMotion(World& world,const game::Surface& surface,uint32_
         histories.push_back({e,h});
     }
     if(histories.empty())return true;
-    // Stage structural additions and deposits together. Failure cannot publish
-    // only one of the history/deposit halves; World COW is the existing owner.
-    World staged=world;
-    for(const auto& [e,h]:histories){
-        if(staged.has<SurfaceTrailHistory>(e))staged.get<SurfaceTrailHistory>(e)=h;
-        else staged.add<SurfaceTrailHistory>(e,h);
+    // Structural additions use a staged World; ordinary ticks preflight
+    // both existing write pools and publish only trivial value assignments.
+    // Avoid copying the entire world on every movement sample.
+    const bool structural=std::any_of(histories.begin(),histories.end(),
+        [&](const auto& item){return !read.has<SurfaceTrailHistory>(item.first);});
+    if(structural){
+        World staged=world;
+        for(const auto& [e,h]:histories){
+            if(staged.has<SurfaceTrailHistory>(e))staged.get<SurfaceTrailHistory>(e)=h;
+            else staged.add<SurfaceTrailHistory>(e,h);
+        }
+        for(const auto& [key,c]:deposits)staged.get<Cell>(Entity::fromPacked(key))=c;
+        world=std::move(staged);
+    }else{
+        if(!world.prepareExistingWrite<SurfaceTrailHistory>())return false;
+        if(!deposits.empty()&&!world.prepareExistingWrite<Cell>())return false;
+        for(const auto& [e,h]:histories)world.get<SurfaceTrailHistory>(e)=h;
+        for(const auto& [key,c]:deposits)world.get<Cell>(Entity::fromPacked(key))=c;
     }
-    for(const auto& [key,c]:deposits)staged.get<Cell>(Entity::fromPacked(key))=c;
-    world=std::move(staged);
     return true;
 }
 } // namespace aiverse::imprint
