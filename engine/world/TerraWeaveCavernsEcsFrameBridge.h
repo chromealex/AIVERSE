@@ -53,6 +53,38 @@ public:
         requestedAuthority_=revision;
         requestedNative_=frame.stats().requestedRevision;
         frame_=&frame;
+        marker_->dirty=false; // open already captured the current restored world
+    }
+    // Explicit full reprojection for lost change history or an aggregate
+    // dirty region too large for the bounded incremental queue. Same
+    // restrictions as restore: external native owners must be retired first.
+    bool requestFullRehydrate(CaveGameplayRuntimeFrame& frame,const World& frozen,
+                              CaveDirtyBounds fallback,
+                              const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive){
+        if(frame_!=&frame||!exclusive||!exclusive())return false;
+        marker_->dirty=true;
+        return restoreAfterStateLoad(frame,frozen,fallback,exclusive);
+    }
+    // Call after native mesh/physics publication; re-capture the restored
+    // environment from the same Simulation tick before resuming readers.
+    bool finishRestore(CaveGameplayRuntimeFrame& frame,const Simulation& sim,
+                       CaveDirtyBounds environmentBounds,
+                       const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive,
+                       CaveEnvironmentCostSettings environment={}){
+        if(frame_!=&frame||needsRestore()||!frame.restoringAuthoredWorld()||
+           !exclusive||!exclusive())return false;
+        const auto* state=sim.world().resourceConst<CaveAuthorityResource>();
+        const auto stats=frame.stats();
+        if(!state||state->volume.sourceRevision!=requestedAuthority_||
+           stats.committedRevision!=requestedNative_)return false;
+        requireCaveRecipe(*state,cfg_);
+        // A false return may mean a pending subscriber retry, not failure
+        // of the publication itself. finishAuthoredRestore checks pending.
+        (void)frame.publishNavigationEnvironmentFromSimulation(
+            sim,environmentBounds,environment,true);
+        if(!frame.retryNavigationInvalidations())return false;
+        if(!exclusive())return false;
+        return frame.finishAuthoredRestore(exclusive);
     }
     // Supply all accepted changes since last capture, in command order.
     // A missed revision is NOT silently treated as a local dirty edit.
