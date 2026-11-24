@@ -173,6 +173,23 @@ NavMesh and streaming, read
 World-space resource/streaming ownership lives under
 `engine/world/TerraWeaveCaverns*.h`; presentation GPU ownership lives under
 `engine/render/TerraWeaveCaverns*.h`.
+Stage43 cave navigation owner rule: real fixed-tick ECS integration is
+opt-in via `engine/nav/CaveSimulationNavigation.h` and
+`CaveGameplayRuntimeFrame::installNavigationInSimulation`. It registers
+persisted `CaveRouteFollower` **schema v2** and `CaveRouteIntent` v1,
+deterministic bounded repath and movement systems, plus rollback invalidation.
+`engine/nav/CaveMovementPhysics.h` reuses native SpatialWorld (Fixed,
+deterministic) and optionally Box3D for server-authoritative motion; Box3D
+float queries must NOT drive cross-platform lockstep peer checksums.
+`TerraWeaveCavernsNavigationEnvironment.h` reads NEREID/PHYSIS from one
+committed frozen ECS World; water/weather changes advance an independent
+environment epoch and trigger route replanning. Route-result LRU and actual
+native NavMesh cache are derived, bounded and invalidated on SDF, water,
+physics collision, streaming and rollback events. Do not persist caches.
+The normal GameClient is visual-only, net::Server is an input relay, and
+GameCore has no default cave physics owner; install native cave pathing only
+in a real authority GameModule with a verified same-epoch collision callback.
+Do not claim full native gameplay integration until compiled and run.
 Stage42 pathfinding reuse: generic integer A*/Dijkstra/reverse FlowField
 and HPA-style region corridor implementations live in
 `engine/nav/GraphSearch.h` and `engine/nav/GraphHierarchy.h`. They accept
