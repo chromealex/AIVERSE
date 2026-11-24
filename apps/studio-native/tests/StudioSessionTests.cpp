@@ -7,6 +7,7 @@
 #include "apps/studio-native/StudioRuntimeInspect.h"
 #include "apps/studio-native/StudioMoveJournal.h"
 #include "apps/studio-native/StudioMaterialPublicationJournal.h"
+#include "apps/editor/core/ProjectAssetWriteLock.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -24,6 +25,18 @@ void projectFileRecoveryWorkflow() {
     fs::create_directories(project/"content"/"A");
     fs::create_directories(project/"content"/"B");
     fs::create_directories(project/".aiverse-cache");
+    {
+        using aiverse::editor::ProjectAssetWriteLock;
+        bool rejected=false;
+        {
+            ProjectAssetWriteLock outer(project),nested(project);
+            std::thread contender([&]{try{ProjectAssetWriteLock other(project);}catch(const std::exception&){rejected=true;}});
+            contender.join();
+            AIVERSE_TEST_CHECK(rejected);
+        }
+        ProjectAssetWriteLock reacquired(project);
+        AIVERSE_TEST_CHECK(fs::is_regular_file(project/".aiverse-cache"/"asset-writer.lock"));
+    }
     {
         studio::StudioMaterialPublicationJournal publication(project,"fixture_pending");
         const auto pending=studio::StudioMaterialPublicationJournal::inspect(project);
