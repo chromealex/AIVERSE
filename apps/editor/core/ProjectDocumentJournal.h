@@ -138,7 +138,8 @@ inline fs::path safeTarget(const fs::path& root,const std::string& relative,bool
         filename.substr(mapPrefix.size(),64).find_first_not_of("0123456789abcdef")==std::string::npos;
     if(allowCreation){
         const auto ext=rel.extension().string();
-        if(!relative.starts_with("maps/")||(ext!=".json"&&ext!=".r16"&&ext!=".splat"))
+        if(relative!=".aiverse-cache/asset-history.json"&&
+           (!relative.starts_with("maps/")||(ext!=".json"&&ext!=".r16"&&ext!=".splat")))
             throw std::runtime_error("Unsupported new save output");
     }
     fs::path p=root;
