@@ -136,3 +136,7 @@ Derive canonical navigation environment revisions from actual frozen PHYSIS grav
 ### Stage54v2c3b — IN PROGRESS
 
 Native Box3D host adapter consumes only admitted region-scoped steering against the current canonical environment lease, reuses existing oriented character motor and proxy, and leaves the single scene step to the host. Add a fixed-tick native Simulation fixture for canonical capture, scoped route, environment change, persistence and rollback, with actual PHYSIS/NEREID owner schemas. Default GameCore migration and full native GPU/GI transaction QA remain separate.
+
+### Stage55a — IN PROGRESS
+
+Restore CTest coverage of the existing Caverns fixtures, explicitly enable optional Box3D in the acceptance build, and run the existing unified runner plus native Studio/MCP and frontend checks. Record exact commit, configuration, inventory and logs. CPU/contract tests do not certify live GPU/GI publication or playable traversal; those need separate native evidence. Mac local outputs remain on KINGSTON. No merge until acceptance.
