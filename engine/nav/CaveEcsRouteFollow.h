@@ -21,6 +21,7 @@ struct CaveRouteFollower {
     std::vector<terraweave::caverns::PointCm> waypoints;
     terraweave::caverns::CaveAgentProfile agent{};
     uint64_t sourceRevision=0;
+    uint64_t environmentRevision=0;
     uint32_t current=0;
     uint32_t speedCmPerTick=25;
     bool arrived=false;
@@ -64,6 +65,7 @@ inline bool assignCaveRoute(World& world,Entity entity,
     next.waypoints=path.waypoints;
     next.agent=profile;
     next.sourceRevision=path.sourceRevision;
+    next.environmentRevision=path.environmentRevision;
     next.speedCmPerTick=speedCmPerTick;
     if(world.has<CaveRouteFollower>(entity))
         world.get<CaveRouteFollower>(entity)=std::move(next);
@@ -86,7 +88,8 @@ inline CaveRouteTickStats updateCaveRouteFollowers(
         [&](Entity entity,CaveRouteFollower& route,Transform& transform){
         if(visited++>=maxActors)return;
         if(route.arrived||route.needsRepath)return;
-        if(route.sourceRevision!=source.revision()){
+        if(route.sourceRevision!=source.revision() ||
+           route.environmentRevision!=source.environmentRevision()){
             route.needsRepath=true;++stats.stale;return;
         }
         if(route.current>=route.waypoints.size()){
