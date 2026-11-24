@@ -1046,6 +1046,11 @@ void GameView::appendGraphImageRoots(const render::Model& model,std::vector<std:
     auto scan=[&](const ModelChoice& item){
         if(item.model==&model)roots.emplace_back(item.materials);
         if(item.appearanceSnapshot&&item.appearanceSnapshot->model==&model)roots.emplace_back(item.appearanceSnapshot->materials);
+        // An attachment may use the same resident Model as another type's
+        // main choice. Its independent material indices remain roots even
+        // when the main choice no longer references those image slots.
+        for(const auto& attachment:item.attach)
+            if(attachment.model==&model)roots.emplace_back(attachment.materials);
     };
     for(const auto& look:looks_){
         for(const auto& item:look.models)scan(item);

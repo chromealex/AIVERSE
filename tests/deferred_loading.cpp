@@ -4,6 +4,7 @@
 #include <thread>
 #include <future>
 #include "engine/render/Animation.h"
+#include "engine/render/graph/TextureGraphImageReclamation.h"
 #include <stdexcept>
 using namespace aiverse;
 class FakeDevice final : public aiverse::gfx::Device {
@@ -199,6 +200,68 @@ int aiverseMain(int, char**) {
         check(!guarded.modelMutationBlocked()&&guarded.graphMaterialTarget(0,0,0)&&
               guarded.modelResources().generation()==generation,"callback guard must unwind");
         guarded.shutdown(dev);
+    }
+    // Legacy raw-index attachment roots are deliberately unpinned here:
+    // a complete explicit collector must still enumerate them. Production
+    // graph publication uses pins; this fixture injects an old-style image
+    // through the trusted transaction callback to exercise the root audit.
+    {
+        using namespace render::texture_graph;
+        render::RenderDeviceLifetime lifetime(dev);
+        game::GameView attached;
+        rules.types[0].view=Json::parse(R"({"model":"a.obj"})");
+        rules.types[1].view=Json::parse(R"({"model":"b.obj","attach":[{"model":"a.obj"}]})");
+        attached.setGpuDeviceLease(lifetime.lease());
+        attached.setDeferredLoading(true);
+        check(attached.init(dev,rules,reader),"attachment root init");
+        attached.loadType(0);
+        auto target=attached.graphMaterialTarget(0,0,0);
+        check(bool(target),"attachment source material target");
+        int slot=-1;
+        std::string error;
+        check(attached.applyGraphMaterial(0,0,target->identity,
+            [&](auto&,auto&,render::Model& model,gfx::Device& device,
+                const auto&,auto&,std::string*) {
+                check(!model.materials.empty(),"attachment source materials");
+                render::Image image;
+                image.name="#texture-graph/legacy-attachment";
+                image.proceduralGraphImage=true;
+                image.width=image.height=1;
+                gfx::TextureDesc desc;
+                desc.width=desc.height=1;
+                image.tex=device.createTexture(desc);
+                slot=int(model.images.size());
+                model.images.push_back(std::move(image));
+                model.materials[0].baseTex=slot;
+                model.markMaterialChanged();
+                return true;
+            },&error),"inject legacy graph image");
+        attached.loadType(1); // copies source model materials into attachment
+        check(attached.typeLoaded(1),"attachment host resident");
+        target=attached.graphMaterialTarget(0,0,0);
+        check(bool(target),"attachment target after copy");
+        check(attached.applyGraphMaterial(0,0,target->identity,
+            [&](auto&,auto&,render::Model& model,auto&,const auto&,auto&,std::string*) {
+                model.materials[0].baseTex=-1;
+                model.markMaterialChanged();
+                return true;
+            },&error),"detach base root");
+        target=attached.graphMaterialTarget(0,0,0);
+        check(bool(target),"attachment target before collection");
+        const GraphImageRoots proof{true,0,{},false,false};
+        const auto retained=attached.collectGraphMaterialImages(0,0,0,target->identity,proof);
+        check(retained.detached==0&&retained.live==1,"live attachment must retain legacy graph image");
+        attached.trimTypes(std::vector<bool>{true,false,false},true);
+        target=attached.graphMaterialTarget(0,0,0);
+        check(bool(target),"attachment target after trim");
+        const auto reclaimed=attached.collectGraphMaterialImages(0,0,0,target->identity,proof);
+        check(reclaimed.detached==1&&reclaimed.tombstones==1,"removed attachment permits image collection");
+        {
+            const auto read=attached.readModelOf(0);
+            check(read.valid()&&slot>=0&&read.get()->images[size_t(slot)].proceduralGraphRetired,
+                  "attachment image tombstone");
+        }
+        attached.shutdown(dev);
     }
     auto cache = std::make_shared<render::ModelTextureCache>();
     int imageReads = 0;
