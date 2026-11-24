@@ -17,6 +17,7 @@ public:
     CaveGeometrySwapOwner()=default;
     CaveGeometrySwapOwner(const CaveGeometrySwapOwner&)=delete;
     CaveGeometrySwapOwner& operator=(const CaveGeometrySwapOwner&)=delete;
+    bool emptyAndDrained()const noexcept{return !active_&&!hasStaged()&&retired_.empty();}
     bool resident()const noexcept{return active_!=nullptr;}
     bool hasStaged()const noexcept{return staged_!=nullptr || stagedEmpty_;}
     uint64_t activeRevision()const noexcept{return activeRevision_;}
@@ -33,13 +34,14 @@ public:
     bool stage(gfx::Device& dev,CaveBatchPrepared prepared,
                uint64_t renderRevision,bool enableStrata,
                size_t vertexBudget=2000000){
-        if(!vertexBudget||vertexBudget>16000000||prepared.models.empty()||stagedEmpty_)return false;
+        if((device_&&device_!=&dev)||!dev.gpuHealthy()||!vertexBudget||vertexBudget>16000000||prepared.models.empty()||stagedEmpty_)return false;
         const size_t liveOwners=retired_.size()+size_t(bool(active_))+size_t(bool(staged_));
         if(!caveCanStageScene(activeRevision_,stagedRevision_,renderRevision,
                               liveOwners,kMaxRetainedScenes))return false; // backpressure, never leak/overallocate
         // Reserve before a GPU allocation to make failure retention safe.
         if(retired_.capacity()<kMaxRetainedScenes)
             retired_.reserve(kMaxRetainedScenes);
+        device_=&dev;
         auto candidate=std::make_unique<render::GeometryScene>();
         candidate->setStrataStagingEnabled(enableStrata);
         candidate->setStrataPortableRenderingEnabled(enableStrata);
@@ -85,9 +87,7 @@ public:
         // the old GPU owner retirement slot before invoking that callback.
         if(active_ && retired_.capacity()<retired_.size()+1)
             retired_.reserve(retired_.size()+1);
-        bool committed=false;
-        try {committed=hostCommit(stagedRevision_);}
-        catch(...) {return false;}
+        const bool committed=hostCommit(stagedRevision_);
         if(!committed)return false;
         if(active_)retired_.push_back({std::move(active_),0});
         active_=std::move(staged_); // nullptr for a staged empty cave
@@ -104,23 +104,26 @@ public:
     // Stage38: graphics-owner frame boundary, OUTSIDE render passes.
     // No GPU idle wait: standard non-STRATA scenes are removed after real
     // GPU fence completion, then their model retirement tokens are polled.
-    // STRATA scenes remain quarantined for a later explicit full-idle drain.
+    // Portable STRATA scenes use the same verified fence and then release
+    // their sidecars before the model retirement queue. Diagnostic owners
+    // and unsupported fences remain on the explicit idle recovery path.
     // A zero/unsupported fence means keep the old owner alive.
     size_t collectCompletedWithoutIdle(gfx::Device& dev) {
-        if(!dev.gpuHealthy())return 0;
+        if((device_&&device_!=&dev)||!dev.gpuHealthy())return 0;
         const uint64_t completed=dev.gpuCompletedFence();
         if(!completed)return 0;
         size_t released=0;
         for(auto it=retired_.begin();it!=retired_.end();) {
             if(!it->submissionFence)
                 it->submissionFence=dev.gpuSubmissionFence();
-            if(!it->submissionFence || completed<it->submissionFence ||
-               !it->scene->deferredShutdownEligible()) {
+            if(!it->submissionFence || completed<it->submissionFence) {
                 ++it;continue;
             }
             try {
-                if(!it->scene->beginDeferredShutdown(dev)||
-                   !it->scene->pollDeferredShutdown(dev)) {
+                const bool started=it->scene->deferredShutdownEligible()
+                    ?it->scene->beginDeferredShutdown(dev)
+                    :it->scene->beginDeferredShutdownAfterFence(dev,it->submissionFence);
+                if(!started||!it->scene->pollDeferredShutdown(dev)) {
                     ++it;continue;
                 }
             }catch(...) {++it;continue;}
@@ -140,6 +143,7 @@ public:
     // Explicitly call only when renderer submissions for the old owner are
     // finished; failure must RETAIN all retired scenes for a later retry.
     bool collectAfterGpuIdle(gfx::Device& dev) {
+        if(device_&&device_!=&dev)return false;
         if(retired_.empty())return true;
         if(!dev.waitForResourceIdle())return false;
         for(auto it=retired_.begin();it!=retired_.end();) {
@@ -165,7 +169,7 @@ public:
     // Final teardown; caller must have stopped Scene draws and prove GPU idle.
     // On failure do NOT destroy this owner or its Scene pointers.
     bool shutdownAfterGpuIdle(gfx::Device& dev) {
-        if(!dev.waitForResourceIdle())return false;
+        if((device_&&device_!=&dev)||!dev.waitForResourceIdle())return false;
         // Explicitly retain any owner whose shutdown refuses the barrier.
         // No scene objects are destroyed until their shutdown returns.
         if(staged_) {
@@ -177,10 +181,13 @@ public:
             try {active_->shutdown(dev);}catch(...) {return false;}
             active_.reset();activeRevision_=0;
         }
-        return collectAfterGpuIdle(dev);
+        if(!collectAfterGpuIdle(dev))return false;
+        activeRevision_=stagedRevision_=0;device_=nullptr;
+        return true;
     }
 
 private:
+    gfx::Device* device_=nullptr;
     std::unique_ptr<render::GeometryScene> active_;
     std::unique_ptr<render::GeometryScene> staged_;
     uint64_t activeRevision_=0,stagedRevision_=0;
