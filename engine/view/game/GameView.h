@@ -135,6 +135,7 @@ struct GameScene {
     // view.entity_fx overrides (scale, opacity, colour) by entity; null = none (EntityFx.h)
     std::shared_ptr<EntityFxStore> entityFx;
     std::vector<SceneObject> objects;
+    PlanetForestVisualSnapshot planetForest;
     std::map<uint64_t, render::mat4> entityFrames; // optional final frames supplied by a native presentation host
     std::vector<std::pair<render::float3, render::float3>> roads;
     std::vector<render::float3> moveMarkers;

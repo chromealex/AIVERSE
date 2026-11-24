@@ -371,6 +371,8 @@ void GameView::drawPlanets(Renderer3D& r, const GameScene& s, double time, const
     if (blend < 0.5f) {
         const float floraFar = 260.0f;
         for (const PlanetFlora::Instance& in : planetFlora_.instances()) {
+            if(PlanetFlora::treeProto(in.proto)&&size_t(in.body)<s.planetForest.managedBodies.size()&&
+               s.planetForest.managedBodies[size_t(in.body)])continue;
             const render::Model* m = planetFlora_.proto(in.proto);
             if (!m) continue;
             const float3 pv = bodyToView(in.body, in.local);
@@ -392,6 +394,47 @@ void GameView::drawPlanets(Renderer3D& r, const GameScene& s, double time, const
             md.world = w;
             if (planetNoShadow_) md.flags |= kDrawNoCastShadow;
             r.drawModel(md);
+        }
+    }
+    if(blend<0.5f){
+        for(const auto& plant:s.planetForest.plants){
+            if(plant.body<0||size_t(plant.body)>=W.bodies.size())continue;
+            const auto* model=planetFlora_.proto(plant.proto);
+            if(!model)continue;
+            const auto center=bodyToView(plant.body,plant.local);
+            const auto d=center-eye;
+            if(dot(d,d)>260.f*260.f||occluded(plant.body,center))continue;
+            const auto U=normalize(pframe_.dirToView(plant.up));
+            const auto hint=pframe_.dirToView(plant.forward);
+            auto Z=hint-U*dot(hint,U);
+            if(dot(Z,Z)<1e-6f)continue;
+            Z=normalize(Z);
+            const auto X=normalize(cross(U,Z));
+            const float scale=plant.size*W.bodies[size_t(plant.body)].floraScale;
+            if(!(scale>0.f))continue;
+            auto position=center;
+            // ARBOR meshes have an authored root pivot, whereas a physical
+            // checkpoint describes centre of mass. Approximate that offset
+            // with the shared prototype's bind-space height.
+            if(plant.physical)position=position-U*((model->boundsMax.y+model->boundsMin.y)*.5f*scale);
+            ModelDraw md;md.model=model;
+            mat4 matrix;
+            const float3 axes[]={X*scale,U*scale,Z*scale,position};
+            for(int col=0;col<4;++col){
+                matrix.at(0,col)=axes[col].x;matrix.at(1,col)=axes[col].y;matrix.at(2,col)=axes[col].z;
+            }
+            md.world=matrix;md.tint={plant.tint.x,plant.tint.y,plant.tint.z,1};
+            if(planetNoShadow_)md.flags|=kDrawNoCastShadow;
+            md.primitiveMaterialFilter=0; // shared bark material
+            r.drawModel(md);
+            // Shared foliage geometry; vigor tint and threshold, no per-tree
+            // GPU mesh mutation or fabricated fractional leaf topology.
+            if(plant.foliage>.05f){
+                const float vigor=std::clamp(plant.foliage,0.f,1.f);
+                md.primitiveMaterialFilter=1;
+                md.tint={.75f+.25f*vigor,.45f+.55f*vigor,.55f+.45f*vigor,1};
+                r.drawModel(md);
+            }
         }
     }
     for (size_t i = 0; i < s.objects.size(); ++i) {
@@ -507,6 +550,7 @@ void sceneFromSphere(Simulation& sim, GameCore& m, const Surface& S, GameScene& 
         const int c = S.cellAt(p);
         return c >= 0 && size_t(c) < gs.vision[viewer].size() ? gs.vision[viewer][size_t(c)] : 0;
     };
+    if(!collectPlanetForestVisuals(w,S,out.planetForest))out.planetForest={};
     const uint32_t tick = sim.tick();
     w.each<Unit, Owner, Transform>([&](Entity e, Unit& u, Owner& o, Transform& t) {
         SceneObject so;

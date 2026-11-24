@@ -5,6 +5,10 @@
 #include "engine/render/TerraWeaveRockModel.h"
 #include "engine/world/TerraWeaveSphere.h"
 #include "engine/world/TerraWeaveTreePresets.h"
+#include "engine/world/TerraWeaveDeadwoodPresentation.h"
+#include "aiverselib/world/EvolvePlanetDeadwood.h"
+#include "aiverselib/world/PlanetConsequenceOwner.h"
+#include "engine/world/TerraWeaveForestHarvestEcs.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -38,6 +42,95 @@ std::vector<tw::FoliageSpecies> floraSpecies() {
             sp(7, desert | alpine, 2, 3000, 600, 1400)};                   // slab
 }
 } // namespace
+
+bool collectPlanetForestVisuals(const World& world,const Surface& surface,
+                              PlanetForestVisualSnapshot& output){
+    namespace ev=aiverse::evolve;
+    namespace wp=aiverse::lib::worldprocess;
+    const auto* roots=world.resourceConst<tw::TerraWeaveAuthorityResource>();
+    const auto* delivery=world.resourceConst<ev::PlanetRootDeliveryResource>();
+    PlanetForestVisualSnapshot next;
+    if(!roots||!delivery){output=std::move(next);return true;}
+    if(!surface.tab||roots->rooted.size()!=delivery->bindings.size()||
+       roots->rooted.size()>ev::kMaxPlanetRootBindings)return false;
+    next.managedBodies.resize(surface.bodies.size(),0);
+    std::map<tw::AnchoredPlantId,const ev::PlanetRootBinding*> bindings;
+    for(const auto& b:delivery->bindings){
+        const auto frame=wp::surfaceFrame(&surface,b.plantedPosition);
+        if(!frame||surface.bodies[size_t(frame->body)].id!=b.bodyId||
+           !bindings.emplace(b.id,&b).second)return false;
+        next.managedBodies[size_t(frame->body)]=1;
+    }
+    std::set<tw::AnchoredPlantId> dead;
+    if(const auto* ecology=world.resourceConst<tw::ForestEcologyResource>())
+        for(const auto& item:ecology->plants)if(item.dead)dead.insert(item.id);
+    const auto* wood=world.resourceConst<ev::PlanetDeadwoodResource>();
+    const auto* harvest=world.resourceConst<tw::ForestHarvestResource>();
+    std::map<tw::AnchoredPlantId,const ev::PlanetPlantFallRecord*> falls;
+    for(const auto& event:delivery->events)falls[event.fall.event.id]=&event;
+    std::map<tw::AnchoredPlantId,const wp::ConsequenceBody*> physical;
+    if(const auto* consequences=world.resourceConst<wp::PlanetConsequenceResource>())
+        for(const auto& item:consequences->bodies)
+            if(item.key.kind==wp::ConsequenceKind::Plant)
+                if(!physical.emplace(tw::AnchoredPlantId{item.key.species,item.key.source},&item).second)return false;
+    const auto asFloat=[](Vec3 p){return float3{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())};};
+    std::set<tw::AnchoredPlantId> seen;
+    for(const auto& plant:roots->rooted){
+        const tw::AnchoredPlantId id{plant.anchor.speciesId,plant.anchor.plantKey};
+        if(!id.speciesId||!id.key||!seen.insert(id).second||!bindings.contains(id))return false;
+        if(harvest&&tw::isForestHarvested(*harvest,id))continue;
+        const auto& binding=*bindings.at(id);
+        const auto frame=wp::surfaceFrame(&surface,binding.plantedPosition);
+        if(!frame)return false;
+        const auto body=frame->body;
+        const auto anchor=Surface::anchor(body);
+        const auto appearance=tw::plantAppearance(plant.environment);
+        PlanetForestVisual visual;
+        visual.species=id.speciesId;visual.key=id.key;visual.body=body;
+        // Explicit built-in fallback palette, not species asset authoring.
+        visual.proto=int((id.speciesId-1)%kTreeProtos);
+        visual.size=float(appearance.sizePermille)*.001f;
+        if(plant.anchor.roots.habit==tw::PlantHabit::Shrub)visual.size*=.25f;
+        visual.foliage=float(appearance.foliagePermille)*.001f;
+        visual.local=asFloat(binding.plantedPosition-anchor);
+        visual.up=asFloat(frame->up);visual.forward=asFloat(frame->south);
+        visual.fallen=plant.fallen;
+        if(plant.fallen||dead.contains(id)){
+            visual.foliage=0;
+            if(wood){
+                const auto state=tw::deadwoodVisualState(wood->ledger,id);
+                if(state.tier==tw::DeadwoodVisualTier::Gone)continue;
+                visual.tint={state.tintRPermille*.001f,state.tintGPermille*.001f,state.tintBPermille*.001f};
+                // Keep the trunk length and diminish thickness in draw.
+            }
+        }
+        if(plant.fallen){
+            const auto receipt=falls.find(id);
+            const auto motion=physical.find(id);
+            if(motion!=physical.end()){
+                const auto& record=*motion->second;
+                if(record.body!=binding.bodyId)return false;
+                const auto basis=fxQuaternionBasis(record.motion.rotation);
+                if(!basis)return false;
+                visual.local=asFloat(record.motion.position-anchor);
+                visual.up=asFloat(basis->up);visual.forward=asFloat(basis->forward);
+                visual.physical=true;
+            }else{
+                // Acknowledged and retired physical source stays hidden.
+                if(receipt!=falls.end()&&receipt->second->acknowledged)continue;
+                const auto direction=receipt==falls.end()?frame->east:receipt->second->fall.tangentDirection;
+                visual.up=asFloat(direction.lengthSq().raw>0?fxNormalize(direction):frame->east);
+                visual.forward=asFloat(frame->up);
+                visual.local=asFloat(surface.project(binding.plantedPosition)-anchor);
+            }
+        }
+        next.plants.push_back(visual);
+    }
+    std::sort(next.plants.begin(),next.plants.end(),[](const auto& a,const auto& b){
+        return std::tuple{a.body,a.species,a.key}<std::tuple{b.body,b.species,b.key};
+    });
+    output=std::move(next);return true;
+}
 
 bool PlanetFlora::makePrototypes(gfx::Device& dev) {
     if (!protos_.empty()) return true;

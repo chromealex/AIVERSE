@@ -97,6 +97,14 @@ uint64_t sceneLeaseFingerprint(const GameScene& s) noexcept {
     for(const auto& road:s.roads) {
         h.pos(road.first);h.pos(road.second);
     }
+    h.scalar(s.planetForest.managedBodies.size());
+    for(auto b:s.planetForest.managedBodies)h.scalar(b);
+    h.scalar(s.planetForest.plants.size());
+    for(const auto& plant:s.planetForest.plants){
+        h.scalar(plant.species);h.scalar(plant.key);h.scalar(plant.body);h.scalar(plant.proto);
+        h.pos(plant.local);h.pos(plant.up);h.pos(plant.forward);h.pos(plant.tint);
+        h.scalar(plant.size);h.scalar(plant.foliage);h.scalar(plant.fallen);h.scalar(plant.physical);
+    }
     h.scalar(s.objects.size());
     for(const auto& o:s.objects) {
         h.scalar(o.entity.packed());
@@ -1192,6 +1200,9 @@ private:
 void GameView::draw(Renderer3D& r, const GameScene& input, double time, const std::vector<uint8_t>* vision, const MapGrid& grid) {
     if(planets_.active()&&!syncSimPlanetTerrain(grid))
         throw std::logic_error("GameView: stale planetary terrain topology");
+    if(planets_.active()&&!input.planetForest.plants.empty()&&dev_&&
+       !planetFlora_.ensurePrototypes(*dev_))
+        throw std::runtime_error("GameView: planetary forest prototype upload failed");
     r.setModelLodScale(modelLodScale_);
     r.setShadowLodScale(shadowLodScale_);
     r.setReflectionCullPixels(reflectionCullPixels_);
@@ -2020,6 +2031,7 @@ void sceneFromSim(Simulation& sim, GameScene& out, float alpha, uint8_t viewer) 
     const Rules& R = m->rules();
     GameState& gs = m->state(sim);
     out.objects.clear();
+    out.planetForest={};
     out.entityFrames.clear();
     out.roads.clear();
     out.events = sim.events();
