@@ -111,6 +111,10 @@ struct Image {
     bool preserveAlphaCoverage = true;
     uint8_t alphaCoverageThreshold = 0;
     bool alphaCoverageMipmaps = false;
+    // Session-only procedural graph provenance. Retired slots remain empty
+    // tombstones: never shift or recycle an image index within a Model.
+    bool proceduralGraphImage = false;
+    bool proceduralGraphRetired = false;
 };
 
 // 60 bytes, one interleaved stream for every model (unskinned meshes leave joints/weights zero).

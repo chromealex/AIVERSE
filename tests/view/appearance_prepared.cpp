@@ -5,6 +5,7 @@
 #include "../cloth/FakeDevice.h"
 #include <string>
 #include <memory>
+#include <array>
 
 namespace aiverse::platform {
 bool readContentFile(const std::string&,std::string&){return false;}
@@ -220,6 +221,26 @@ int main() {
     }
     AIVERSE_TEST_CHECK(!publish(registry.find("character")->version,"over_budget"));
     AIVERSE_TEST_CHECK(model.images.size()==view::AppearanceAssetRegistry::maxProceduralImages);
+    // The current registry snapshot and caller-pinned earlier snapshot remain
+    // roots. A copied shader graph texture binding is a root as well.
+    render::Material shaderRoot;shaderRoot.graphTextures[0]=2;
+    std::array<std::span<const render::Material>,2> roots{bound->materials,std::span<const render::Material>(&shaderRoot,1)};
+    bool refused=false;try{registry.collectTextureGraphImages(model,device,epoch.lease(),rollback,{false,0,roots});}
+    catch(const std::exception&){refused=true;}AIVERSE_TEST_CHECK(refused&&rollback.pendingImages()==0);
+    refused=false;try{registry.collectTextureGraphImages(model,device,epoch.lease(),rollback,{true,1,roots});}
+    catch(const std::exception&){refused=true;}AIVERSE_TEST_CHECK(refused&&rollback.pendingImages()==0);
+    const auto current=registry.find("character");const auto beforeCollect=model.materialRevision;
+    const auto reclaimed=registry.collectTextureGraphImages(model,device,epoch.lease(),rollback,{true,0,roots});
+    AIVERSE_TEST_CHECK(reclaimed.detached==19&&reclaimed.live==5&&reclaimed.tombstones==19);
+    AIVERSE_TEST_CHECK(reclaimed.pendingRetirement==19&&device.textures.size()==24);
+    AIVERSE_TEST_CHECK(model.images.size()==24&&model.materialRevision!=beforeCollect);
+    AIVERSE_TEST_CHECK(model.images[0].tex.valid()&&model.images[1].tex.valid()&&model.images[2].tex.valid());
+    AIVERSE_TEST_CHECK(model.images[3].proceduralGraphRetired&&!model.images[3].tex.valid());
+    AIVERSE_TEST_CHECK(model.images[22].tex.valid()&&model.images[23].tex.valid());
+    AIVERSE_TEST_CHECK(!publish(current->version,"retirement_backpressure"));
+    AIVERSE_TEST_CHECK(rollback.drain(device)&&device.textures.size()==5);
+    AIVERSE_TEST_CHECK(publish(current->version,"after_collection"));
+    AIVERSE_TEST_CHECK(registry.find("character")->materials[0].baseTex==25&&model.images.size()==26);
     registry.clear();
     AIVERSE_TEST_CHECK(!registry.find("character"));
     // Caller-pinned snapshot remains renderable until the host detaches it

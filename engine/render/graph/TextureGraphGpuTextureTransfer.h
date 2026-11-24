@@ -57,6 +57,7 @@ inline bool queueGraphGpuTextureCopy(gfx::Device& dev,const RenderDeviceLifetime
     const auto token=dev.gpuSubmissionFence();
     if(!token||token<=dev.gpuCompletedFence())return false;
     Image image;image.name=std::move(name);image.width=image.height=program.size;
+    image.proceduralGraphImage=true;
     // Match the Model uploader: RGBA8 with shader-side colour decoding;
     // hardware sRGB would double-decode some existing material inputs.
     // Optional full GPU mip chain. No alpha-coverage/VT conversion.

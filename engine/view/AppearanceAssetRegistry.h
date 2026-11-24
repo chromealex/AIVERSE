@@ -8,6 +8,7 @@
 #include "engine/render/RenderDeviceLifetime.h"
 #include "engine/render/ModelReadLease.h"
 #include "engine/render/graph/TextureGraphGpuTextureTransfer.h"
+#include "engine/render/graph/TextureGraphImageReclamation.h"
 #include <algorithm>
 #include <cstdint>
 #include <cmath>
@@ -531,9 +532,19 @@ public:
     // Native host only: at a joined frame boundary, with the mutable Model
     // still owned by the host and no readers touching its image vector.
     // Existing snapshots keep their original image indices. New textures are
-    // append-only until the Model is retired by its existing resource owner.
-    // The per-model cap bounds repeated edits without invalidating old pins.
-    static constexpr size_t maxProceduralImages=24;
+    // append-only; explicit host-certified reclamation leaves tombstones.
+    // The per-model live and historical caps bound repeated edits.
+    static constexpr size_t maxProceduralImages=render::texture_graph::maxLiveProceduralImages;
+    // Includes every currently registered snapshot for this Model. Caller
+    // must additionally enumerate any external pins and raw material copies.
+    render::texture_graph::GraphImageReclaimResult collectTextureGraphImages(
+            render::Model& model,gfx::Device& device,const render::RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,const render::texture_graph::GraphImageRoots& external) const {
+        std::vector<std::span<const render::Material>> roots(external.extra.begin(),external.extra.end());
+        for(const auto& [key,asset]:assets_){(void)key;if(asset&&asset->model==&model)roots.emplace_back(asset->materials);}
+        return render::texture_graph::reclaimGraphImages(model,device,lease,rollback,
+            {external.complete,external.activeReaders,roots});
+    }
     bool publishTextureGraphMaterial(const std::string& key,uint64_t expectedVersion,
             uint64_t expectedModelPublication,size_t materialIndex,
             render::Model& model,gfx::Device& device,
@@ -622,11 +633,14 @@ private:
                 if(render::texture_graph::materialSlot(name))++count;
             }
             if(!count||count>6)throw std::invalid_argument("invalid bindable graph output count");
-            size_t retained=0;
-            for(const auto& image:model.images)
-                if(image.name.rfind("#texture-graph/",0)==0)++retained;
-            if(retained>maxProceduralImages||count>maxProceduralImages-retained)
-                throw std::runtime_error("procedural image budget exhausted; retire/reload Model through owner");
+            const auto stats=render::texture_graph::graphImageStats(model,rollback);
+            if(rollback.unrecoverableBatches()||stats.live>maxProceduralImages||count>maxProceduralImages-stats.live||
+               stats.pendingRetirement>maxProceduralImages-stats.live-count)
+                throw std::runtime_error("procedural image budget exhausted; collect retired images or retire/reload Model through owner");
+            const auto historical=stats.live+stats.tombstones;
+            if(historical>render::texture_graph::maxHistoricalProceduralSlots||
+               count>render::texture_graph::maxHistoricalProceduralSlots-historical)
+                throw std::runtime_error("procedural image index history exhausted; retire/reload Model through owner");
             // Preallocate the replacement snapshot before GPU allocation.
             auto next=std::make_shared<Asset>(*old);
             next->version=nextVersion;

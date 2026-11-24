@@ -46,6 +46,7 @@ inline MaterialImagePlan prepareMaterialImages(const Program& program,
             Image img;
             img.name="#texture-graph/"+std::string(generation)+"/"+name;
             img.width=src.width;img.height=src.height;img.rgba=src.rgba;
+            img.proceduralGraphImage=true;
             // Model image uploader and material shader own sampling/color
             // semantics. Do not reinterpret data maps or manufacture sRGB metadata.
             plan.entries.push_back({slot,std::move(img)});
