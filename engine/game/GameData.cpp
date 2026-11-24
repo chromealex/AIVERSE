@@ -497,6 +497,11 @@ Rules loadRules(const Json& j) {
             if (wj.has("preciseCooldown") && wj["preciseCooldown"].type() != Json::Type::Bool)
                 fail(where + " weapon " + w.id, "preciseCooldown must be a boolean");
             w.preciseCooldown = wj.getBool("preciseCooldown", false);
+            for (const char* key : {"windup", "backswing"})
+                if (wj.has(key) && (!wj[key].isNumber() || wj[key].fx().raw < 0 || wj[key].fx() > Fixed::fromInt(60)))
+                    fail(where + " weapon " + w.id, std::string(key) + " must be seconds in [0, 60]");
+            w.windup = wj.getFx("windup");
+            w.backswing = wj.getFx("backswing");
             if (w.preciseCooldown && w.cooldown.raw <= 0)
                 fail(where + " weapon " + w.id, "preciseCooldown requires positive cooldown");
             w.targets = parseLayers(wj["targets"], kLayerGround | kLayerNaval | kLayerSandOnly);
