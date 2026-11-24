@@ -254,6 +254,7 @@ private:
     bool wpLiveGravity_=false;
     std::string wpLiveAether_="off";
     bool wpLiveFracture_=false;
+    bool wpLiveMorph_=false;
     double wpLiveRefresh_=0;
     Json wpLiveSnapshot_;
     std::string wpLivePlanetProject_,wpLivePlanetMapPath_;
