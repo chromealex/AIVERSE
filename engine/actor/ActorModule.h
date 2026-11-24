@@ -10,6 +10,7 @@
 #include "engine/world/VehicleRegionTransfer.h"
 #include "engine/world/RegionMoveRequests.h"
 #include "engine/world/RegionDirtyQueue.h"
+#include "engine/world/SimulationLod.h"
 #include "engine/mechanics/Melee.h"
 #include "engine/mechanics/royale/BattleRoyale.h"
 #include "engine/systems/Gear.h"
@@ -69,6 +70,7 @@ struct Config {
     // Opt-in `fps.bots` (bots-combatant settings): map players with "bot": true use the library controller with
     // regional navmeshes, loot / heal / zone goals instead of the reference fallback bot.
     Json bots;
+    world::SimulationLodConfig simulationLod;
 };
 // Battle-royale run (empty when fps.royale is absent). Slot i-1 indexes divers / credit.
 struct RoyaleRun {
