@@ -511,6 +511,29 @@ void Workspace::registerCoreOps() {
             result.set("note", str("Registration only. Verify tools/call against the built MCP executable and active editor; compile-time capabilities and runtime dependencies may differ."));
             return result;
         });
+    add("building_graph_diagnostics", "Read actual building graph invalidation ACK state from an attached runtime owner. Returns unavailable without a provider; ACK does not mean completed graph rebuild.",
+        R"({"type":"object","properties":{"sceneId":{"type":"string","pattern":"^[1-9][0-9]{0,18}$"}},"required":["sceneId"],"additionalProperties":false})",
+        [this](const Json& p){
+            const auto raw=p.getStr("sceneId");
+            if(raw.empty()||raw.size()>19||raw[0]=='0')throw std::runtime_error("Invalid building scene ID");
+            uint64_t id=0;
+            for(char c:raw){
+                if(c<'0'||c>'9'||id>(uint64_t(INT64_MAX)-uint64_t(c-'0'))/10)
+                    throw std::runtime_error("Invalid building scene ID");
+                id=id*10+uint64_t(c-'0');
+            }
+            Json out=Json::object();
+            if(!buildingGraphDiagnosticsProvider){
+                out.set("available",Json::fromBool(false));
+                out.set("reason",str("No runtime building diagnostics provider attached"));
+                return out;
+            }
+            const auto snapshot=buildingGraphDiagnosticsProvider(id);
+            out.set("available",Json::fromBool(snapshot.isObject()));
+            if(snapshot.isObject())out.set("snapshot",snapshot);
+            else out.set("reason",str("Building scene diagnostics unavailable"));
+            return out;
+        });
     auto needProject = [this] { if (project.dir.empty()) throw std::runtime_error("no game is open: call open_game first"); };
     auto entityRef = [this](const Json& p) {
         int i = -1;
