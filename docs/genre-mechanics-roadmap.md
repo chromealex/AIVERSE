@@ -128,3 +128,7 @@ Extend shared motor-neutral ECS navigation to resolve a scoped immutable provide
 ### Stage54v2c2 — IN PROGRESS
 
 Optional native committed navigation lease set owned by each existing planetary body cohort; stage complete region set from frozen authoritative environment before native commit, expose only after all-owner success, abort/retire/rollback revoke stale access. Environment-only refresh atomically replaces leases without rebuilding collision, with explicit canonical environment epoch and immutable mappings. Existing host GI hooks remain mandatory. Add native motor admission adapter and fixture source; keep persistent lockstep paths separate. Native QA pending.
+
+### Stage54v2c3a — IN PROGRESS
+
+Derive canonical navigation environment revisions from actual frozen PHYSIS gravity/traction and NEREID water/flood/sphere state, with persistent deterministic monotonic change tracking, explicit policy version and simulation wave time. Use the actual PHYSIS grid projection and existing NEREID sphere sampling. Register a shared fixed-tick capture before scoped repath/steering and reuse unchanged providers. Native input callback reads the same committed environment state. Acceptance: static state does not churn revisions; relevant changes/restore invalidate; no native epoch in lockstep, no second environment or motor owner. Real host/native QA remains pending.
