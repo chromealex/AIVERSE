@@ -3,6 +3,7 @@
 #pragma once
 #include "TextureGraph.h"
 #include "TextureGraphDagLowering.h"
+#include "TextureGraphFusion.h"
 #include "TextureGraphKernelSource.h"
 #include "TextureGraphGpuPatterns.h"
 #include "engine/gfx/Gfx.h"
@@ -10,6 +11,7 @@
 #include <iomanip>
 #include <locale>
 #include <limits>
+#include <string_view>
 
 namespace aiverse::render::texture_graph::gpu {
 inline constexpr int maxPreviewSize=128,maxBakeSize=1024;
@@ -204,23 +206,91 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
     body+=output==KernelValue::Scalar?"result[tid]=value.x;":"result[tid]=float4(value,1.0f);";
     return materializedKernel(output,types,n,body,normal||!types.empty()?std::string{}:pointwiseCommon());
 }
+// Only the known pointwise operations participate. Future neighborhood,
+// sampling or side-effect operations remain materialization boundaries.
+inline bool fusionPointwise(const Node& node){
+    const std::string_view id=node.info->id;
+    for(std::string_view op:{"constant","color","gradient","noise","fbm","voronoi","pattern","patternMask",
+        "add","subtract","multiply","min","max","invert","threshold","remap","blend","blendColor","colorize","metallicRoughness"})
+        if(id==op)return true;
+    return false;
+}
+inline Source compileFusionRegion(const Program& p,const FusionRegion& region,int n){
+    require(!region.nodes.empty()&&region.nodes.size()<=maxFusionNodes&&region.inputs.size()<=maxFusionInputs,
+        "invalid pointwise fusion region");
+    if(region.nodes.size()==1)return compileMaterializedNode(p,region.nodes.front(),n);
+    std::vector<KernelValue> types;
+    std::vector<bool> defined(p.nodes.size());
+    auto var=[](size_t node){return "fusedNode"+std::to_string(node);};
+    std::string body="uint x=tid%n,y=tid/n;float2 uv=(float2(x,y)+0.5f)/float(n);\n";
+    for(size_t i=0;i<region.inputs.size();++i){
+        const auto dep=region.inputs[i];
+        require(dep<p.nodes.size()&&!defined[dep],"invalid fusion external input");
+        const auto type=materializedValue(p.nodes[dep].info->output);
+        types.push_back(type);defined[dep]=true;
+        const auto index=std::to_string(i);
+        body+="float3 "+var(dep)+"="+(type==KernelValue::Scalar?"float3(input"+index+"[tid])":"input"+index+"[tid].xyz")+";\n";
+    }
+    bool common=false;
+    for(auto index:region.nodes){
+        require(index<p.nodes.size()&&!defined[index],"invalid fusion node identity");
+        const auto& node=p.nodes[index];
+        require(fusionPointwise(node)&&node.inputs.size()==node.info->inputs.size(),"invalid pointwise fusion node");
+        for(size_t i=0;i<node.inputs.size();++i){
+            const auto dep=node.inputs[i];
+            require(dep<p.nodes.size()&&defined[dep]&&p.nodes[dep].info->output==node.info->inputs[i],
+                "invalid fusion dependency or kind");
+        }
+        const auto expression=pointwiseExpression(node,n,[&](size_t i){return var(node.inputs[i]);});
+        body+="float3 "+var(index)+"=clamp("+expression+",0.0f,1.0f);\n";
+        // Match the typed materialized boundary: a scalar stores X and
+        // re-expands to all lanes before its consumers read it.
+        if(node.info->output==Kind::Scalar)
+            body+=var(index)+"=float3("+var(index)+".x);\n";
+        defined[index]=true;common|=node.inputs.empty();
+    }
+    const auto root=region.nodes.back();
+    const auto output=materializedValue(p.nodes[root].info->output);
+    body+=output==KernelValue::Scalar?"result[tid]="+var(root)+".x;":"result[tid]=float4("+var(root)+",1.0f);";
+    return materializedKernel(output,types,n,body,common?pointwiseCommon():std::string{});
+}
 struct MaterializedSources {
     MaterializedDagPlan plan;
     std::vector<Source> nodes; // indexed by source node; unreachable entries empty
     std::vector<Source> packs; // target order; shared result buffer reused
     size_t resultBytes=0,totalBytes=0;
+    size_t reachableNodes=0,fusedNodes=0;
 };
 inline MaterializedSources compileMaterializedDag(const Program& p,const std::vector<size_t>& targets,
-        int n,size_t budget=materializedBudgetBytes){
-    require(n>=8&&n<=p.size&&n<=maxBakeSize,"invalid materialized resolution");
+        int n,size_t budget=materializedBudgetBytes,bool fusePointwise=false){
+    require(n>=8&&n<=p.size&&n<=maxBakeSize&&budget<=materializedBudgetBytes,"invalid materialized resolution or budget");
     MaterializedSources r;
     r.resultBytes=size_t(n)*size_t(n)*4u;
     require(r.resultBytes<budget,"materialized result exceeds budget");
-    r.plan=planMaterializedDag(p,targets,n,budget-r.resultBytes);
+    if(fusePointwise){
+        std::vector<std::vector<size_t>> edges;
+        std::vector<size_t> bytes;
+        std::vector<bool> pointwise;
+        for(const auto& node:p.nodes){
+            require(node.info!=nullptr,"invalid materialized node");
+            edges.push_back(node.inputs);
+            bytes.push_back(size_t(n)*size_t(n)*(node.info->output==Kind::Scalar?4u:16u));
+            pointwise.push_back(fusionPointwise(node));
+        }
+        const auto fusion=planPointwiseFusion(edges,p.order,targets,pointwise);
+        r.plan=lowerDagSlots(fusion.edges,p.order,targets,bytes,budget-r.resultBytes,3);
+        r.reachableNodes=fusion.reachable;r.fusedNodes=fusion.reachable-fusion.passes;
+        r.nodes.resize(p.nodes.size());
+        for(const auto& pass:r.plan.schedule.passes)
+            r.nodes[pass.pipeline]=compileFusionRegion(p,fusion.regions.at(pass.pipeline),n);
+    }else{
+        r.plan=planMaterializedDag(p,targets,n,budget-r.resultBytes);
+        r.reachableNodes=r.plan.schedule.passes.size();
+        r.nodes.resize(p.nodes.size());
+        for(const auto& pass:r.plan.schedule.passes)
+            r.nodes[pass.pipeline]=compileMaterializedNode(p,pass.pipeline,n);
+    }
     r.totalBytes=r.plan.allocatedBytes+r.resultBytes;
-    r.nodes.resize(p.nodes.size());
-    for(const auto& pass:r.plan.schedule.passes)
-        r.nodes[pass.pipeline]=compileMaterializedNode(p,pass.pipeline,n);
     for(auto target:targets)r.packs.push_back(packMaterializedKernel(materializedValue(p.nodes[target].info->output),n));
     return r;
 }
