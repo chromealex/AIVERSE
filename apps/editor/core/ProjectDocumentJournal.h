@@ -128,7 +128,8 @@ inline fs::path safeTarget(const fs::path& root,const std::string& relative){
     fs::path p=root;
     for(const auto& segment:rel){
         const auto name=segment.string();
-        if(name.empty()||name=="."||name==".."||name==".aiverse-cache"||name==".git"||
+        const bool historyCache=relative==".aiverse-cache/project-history.json"&&p==root&&name==".aiverse-cache";
+        if(name.empty()||name=="."||name==".."||(name==".aiverse-cache"&&!historyCache)||name==".git"||
            name.starts_with(".aiverse-save-")||name.find('\0')!=std::string::npos)
             throw std::runtime_error("Unsafe project document journal segment");
         p/=segment;

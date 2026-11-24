@@ -41,7 +41,10 @@ struct Project {
     Json historyStatus() const;
     bool historyStep(bool redo,const std::string& expectedVersion,std::string* err);
     ProjectHistory documentHistory;
+    std::optional<std::string> savedHistoryCheckpoint;
+    std::string historyPersistenceWarning;
     bool historyRequiresReload=false;
+    void applyHistoryTransaction(const std::vector<ProjectFileEdit>& edits,ProjectHistory next);
     std::string historyVersion() const;
     std::string rulesPath() const;
     std::vector<std::string> rulesFiles() const;   // rules.json + included files (relative to dir)

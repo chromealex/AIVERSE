@@ -44,6 +44,7 @@ namespace aiverse::editor { void registerPhysisOps(Workspace&); }
 #include "Projects.h"
 #include "ProjectFile.h"
 #include "ProjectFileEdits.h"
+#include "ProjectHistoryPersistence.h"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -187,7 +188,19 @@ bool Project::load(const std::string& d, std::string* err) {
         savedRulesText=std::move(rawRulesText);savedManifestText=std::move(manifestText);
         rulesError.clear();
         rulesDirty = manifestDirty = false;
-        documentHistory.reset();historyRequiresReload=false;
+        documentHistory=ProjectHistory{};historyRequiresReload=false;
+        savedHistoryCheckpoint.reset();historyPersistenceWarning.clear();
+        try{
+            savedHistoryCheckpoint=readProjectHistoryCheckpoint(dir);
+            if(savedHistoryCheckpoint){
+                ProjectHistoryBaseline baseline;
+                const auto root=fs::canonical(dir);
+                baseline.emplace("game.json",*savedManifestText);
+                for(size_t i=0;i<rulesOrigin.files.size();++i)
+                    baseline.emplace(fs::canonical(rulesOrigin.files[i]).lexically_relative(root).generic_string(),savedRulesText.at(i));
+                documentHistory=decodeProjectHistory(dir,*savedHistoryCheckpoint,baseline);
+            }
+        }catch(const std::exception& e){historyPersistenceWarning=e.what();}
         return true;
     } catch (const std::exception& e) {
         if (err) *err = e.what();
@@ -197,6 +210,20 @@ bool Project::load(const std::string& d, std::string* err) {
 bool Project::reloadRules() {
     try { if(actorSession()){actor::readConfig(rulesJson);rules=game::Rules{};}else rules = game::loadRules(rulesJson); rulesError.clear(); return true; }
     catch (const std::exception& e) { rulesError = e.what(); return false; }
+}
+void Project::applyHistoryTransaction(const std::vector<ProjectFileEdit>& edits,ProjectHistory next){
+    if(next.versionToken()==documentHistory.versionToken()){
+        applyProjectFileEdits(dir,edits);return;
+    }
+    auto plan=edits;
+    auto checkpoint=prepareProjectHistoryCheckpoint(dir,savedHistoryCheckpoint,next);
+    // Initialization is a safe empty baseline, even if publication fails.
+    if(!savedHistoryCheckpoint)savedHistoryCheckpoint=checkpoint.before;
+    auto bytes=checkpoint.after;
+    plan.push_back(std::move(checkpoint));
+    applyProjectFileEdits(dir,plan);
+    documentHistory=std::move(next);savedHistoryCheckpoint=std::move(bytes);
+    historyPersistenceWarning.clear();
 }
 bool Project::saveRules(std::string* err,const std::string& historyLabel) {
     try {
@@ -216,9 +243,10 @@ bool Project::saveRules(std::string* err,const std::string& historyLabel) {
             nextRaw[i]=after;nextNormalized[i]=text;
         }
         const std::string noHistory;
-        applyProjectFileEdits(dir,edits);
+        auto history=documentHistory;
+        history.record(std::vector<ProjectFileEdit>(edits),historyRequiresReload?noHistory:historyLabel);
+        applyHistoryTransaction(edits,std::move(history));
         savedRulesText=std::move(nextRaw);rulesOrigin.text=std::move(nextNormalized);
-        documentHistory.record(std::move(edits),historyRequiresReload?noHistory:historyLabel);
         rulesDirty=false;
         return true;
     } catch(const std::exception& e) {if(err)*err=e.what();return false;}
@@ -247,9 +275,10 @@ bool Project::saveManifest(std::string* err,const std::string& historyLabel) {
             edits.push_back({rulesOrigin.files[i],bytes,bytes});
         }
         const std::string noHistory;
-        applyProjectFileEdits(dir,edits);
+        auto history=documentHistory;
+        history.record(std::vector<ProjectFileEdit>(edits),tracked?historyLabel:noHistory);
+        applyHistoryTransaction(edits,std::move(history));
         savedManifestText=std::move(next);manifestDirty=false;
-        documentHistory.record(std::move(edits),tracked?historyLabel:noHistory);
         if(topology){historyRequiresReload=true;}
         return true;
     } catch(const std::exception& e){if(err)*err=e.what();return false;}
@@ -265,6 +294,8 @@ Json Project::historyStatus() const {
         row.set("done",Json::fromBool(i++<documentHistory.position()));steps.push(std::move(row));
     }
     out.set("scope",str("project"));out.set("steps",std::move(steps));
+    out.set("persistent",Json::fromBool(true));
+    if(!historyPersistenceWarning.empty())out.set("persistenceWarning",str(historyPersistenceWarning));
     out.set("position",Json::number(int64_t(documentHistory.position())));
     out.set("bytes",Json::number(int64_t(documentHistory.bytes())));
     out.set("maxSteps",Json::number(int64_t(ProjectHistory::MaxSteps)));
@@ -321,11 +352,12 @@ bool Project::historyStep(bool redo,const std::string& expectedVersion,std::stri
         game::Rules nextParsed;
         if(actorSession())actor::readConfig(nextRules);else nextParsed=game::loadRules(nextRules);
         auto nextManifestText=manifestEdit->after;
-        applyProjectFileEdits(dir,edits);
+        auto history=documentHistory;history.advance(redo);
+        applyHistoryTransaction(edits,std::move(history));
         manifest=std::move(nextManifest);rulesJson=std::move(nextRules);
         rulesOrigin=std::move(nextOrigin);savedRulesText=std::move(nextRaw);
         savedManifestText=std::move(nextManifestText);rules=std::move(nextParsed);
-        rulesError.clear();documentHistory.advance(redo);
+        rulesError.clear();
         return true;
     }catch(const std::exception& e){if(err)*err=e.what();return false;}
 }
