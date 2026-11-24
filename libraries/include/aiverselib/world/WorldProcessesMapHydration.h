@@ -33,13 +33,14 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
                                SuiteFlags requested={},ImprintTrailInstaller trails=nullptr,CrowdInstaller crowdInstaller=nullptr,
                                EvolveAreaInstaller areaInstaller=nullptr,
                                EvolveAreaHydrator areaHydrator=nullptr,
-                               GranularInstaller granularInstaller=nullptr) {
+                               GranularInstaller granularInstaller=nullptr,
+                               MorphGravityInstaller morphGravityInstaller=nullptr) {
     const Json& entities=map["entities"];
     if(!entities.isArray()) {
         if(!placed.empty())throw std::invalid_argument("World Processes: map.entities missing");
         MapHydration enabled;
         enabled.extra=requested;
-        installSuite(sim,requested,trails,crowdInstaller,areaInstaller,granularInstaller); // explicitly enabled native runtime, empty map
+        installSuite(sim,requested,trails,crowdInstaller,areaInstaller,granularInstaller,morphGravityInstaller); // explicitly enabled native runtime, empty map
         return enabled;
     }
     if(entities.size()!=placed.size())
@@ -104,7 +105,10 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
             if(extended::hasExisting(sim.world(),placed[i],kind))
                 throw std::invalid_argument("World Processes: duplicate extended ECS component");
             extendedParts.push_back({placed[i],&components[name],kind});
-            if(kind=="MorphNode")totals.extra.morph=true;
+            if(kind=="MorphNode"){
+                totals.extra.morph=true;
+                totals.extra.morphGravity|=components[name].has("gravityImpulseMilli");
+            }
             else if(kind=="CrowdAgent")totals.extra.crowd=true;
             else if(kind=="ImprintCell")totals.extra.imprint=true;
             else if(kind=="CircuitNode")totals.extra.circuit=true;
@@ -260,7 +264,10 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
     // Explicit native-module flags may also enable an empty category: its
     // producer can create ECS components after setup. An authored category
     // always enables the same system, without duplicate registration.
-    totals.extra.morph |= requested.morph;
+    totals.extra.morphGravity |= requested.morphGravity;
+    totals.extra.morph |= requested.morph||totals.extra.morphGravity;
+    if(totals.extra.morphGravity&&!morphGravityInstaller)
+        throw std::invalid_argument("World Processes: MORPH gravity needs native frame installer");
     totals.extra.crowd |= requested.crowd;
     totals.extra.imprint |= requested.imprint;
     totals.extra.circuit |= requested.circuit;
@@ -282,7 +289,7 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
     }
     // Install all seven systems in one well-defined order. The map stores no
     // duplicated runtime state; opt-in categories use portable ECS schemas.
-    installSuite(sim,totals.extra,trails,crowdInstaller,areaInstaller,granularInstaller);
+    installSuite(sim,totals.extra,trails,crowdInstaller,areaInstaller,granularInstaller,morphGravityInstaller);
     // Root ECS components precede area attachment. The same map entity
     // provides its static world X/Z; this is authoritative map configuration,
     // not merely editor gizmo metadata.
