@@ -5,6 +5,7 @@
 #include "engine/world/TerraWeaveCavernsArchive.h"
 #include "engine/world/TerraWeaveCavernsRaycast.h"
 #include <algorithm>
+#include <charconv>
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
@@ -17,6 +18,8 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
         "xCm":{"type":"integer"},"yCm":{"type":"integer"},"zCm":{"type":"integer"},
         "radiusCm":{"type":"integer","minimum":1,"maximum":1000000},
         "stampId":{"type":"integer","minimum":1},
+        "stampIdText":{"type":"string"},
+        "expectedRevision":{"type":"string"},
         "withinStroke":{"type":"boolean"}
       }
     })");
@@ -35,12 +38,28 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
                 throw std::invalid_argument("Caverns paint mode");
             const Json& original=w->map.data.extra["terraweaveCaverns"];
             auto volume=terraweave::caverns::caveSnapshotFromJson(original);
+            // Browser transports cannot safely represent every int64 ID.
+            const auto decimalId=[](const Json& value)->uint64_t {
+                if(!value.isString())throw std::invalid_argument("Caverns decimal identity required");
+                const auto s=value.str();
+                uint64_t n=0;
+                const auto parsed=std::from_chars(s.data(),s.data()+s.size(),n);
+                if(parsed.ec!=std::errc{}||parsed.ptr!=s.data()+s.size()||
+                   !n||n>uint64_t(INT64_MAX))
+                    throw std::invalid_argument("Caverns invalid decimal identity");
+                return n;
+            };
+            if(mode!="get"&&p.has("expectedRevision")&&
+               decimalId(p["expectedRevision"])!=volume.sourceRevision)
+                throw std::invalid_argument("Caverns document revision changed; refresh");
             bool changed=false;
             uint64_t stampId=0;
             std::optional<terraweave::caverns::CaveSphereStamp> affected;
             if(mode=="erase"){
-                const auto requested=p.getInt("stampId",0);
-                if(requested<=0)throw std::invalid_argument("Caverns erase stamp ID");
+                const auto legacy=p.getInt("stampId",0);
+                const uint64_t requested=p.has("stampIdText")?decimalId(p["stampIdText"]):
+                    (legacy>0?uint64_t(legacy):0);
+                if(!requested)throw std::invalid_argument("Caverns erase stamp ID");
                 auto it=std::find_if(volume.stamps.begin(),volume.stamps.end(),
                     [requested](const auto& s){return s.id==uint64_t(requested);});
                 if(it==volume.stamps.end())
@@ -87,8 +106,10 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
             Json result=Json::object();
             result.set("ok",Json::fromBool(true));
             result.set("revision",Json::number(int64_t(volume.sourceRevision)));
+            result.set("revisionText",Json::string(std::to_string(volume.sourceRevision)));
             result.set("stampCount",Json::number(int64_t(volume.stamps.size())));
-            if(stampId)result.set("stampId",Json::number(int64_t(stampId)));
+            if(stampId){result.set("stampId",Json::number(int64_t(stampId)));
+                result.set("stampIdText",Json::string(std::to_string(stampId)));}
             if(affected){
                 const auto bounds=terraweave::caverns::dirtyBoundsForStamp(*affected);
                 Json dirty=Json::object();
@@ -100,7 +121,16 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
                 dirty.set("maxZcm",Json::number(bounds.maxZ));
                 result.set("dirtyBounds",std::move(dirty));
             }
-            if(mode=="get")result.set("snapshot",terraweave::caverns::caveSnapshotToJson(volume));
+            if(mode=="get"){
+                result.set("snapshot",terraweave::caverns::caveSnapshotToJson(volume));
+                Json ids=Json::array(),entranceIds=Json::array();
+                for(const auto& s:volume.stamps)ids.push(Json::string(std::to_string(s.id)));
+                for(const auto& e:volume.entrances)entranceIds.push(Json::string(std::to_string(e.id)));
+                result.set("stampIds",std::move(ids));
+                result.set("entranceIds",std::move(entranceIds));
+                result.set("seedText",Json::string(std::to_string(volume.settings.seed)));
+                result.set("generatorVersionText",Json::string(std::to_string(volume.generatorVersion)));
+            }
             result.set("summary",Json::string(
                 "Caverns: "+std::to_string(volume.stamps.size())+
                 " SDF stamps, revision "+std::to_string(volume.sourceRevision)));
