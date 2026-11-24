@@ -69,7 +69,7 @@ struct ComputeEmitterDesc {
     // Experimental Metal-only option; no effect on existing CPU/host-gather
     // paths. Requires RHI supportsGpuAuthoredIndirectDraw().
     bool gpuIndirect = false;
-    bool gpuOwnedAllocation = false; // opt-in, requires GPU indirect; checkpoint v1 unavailable
+    bool gpuOwnedAllocation = false; // opt-in, requires GPU indirect; bounded owned checkpoint v2
     bool proceduralBillboards = false; // Metal compact records + indexed instancing
     // Experimental Metal GPU scalar VM (requires strict Stage-22 eligibility).
     // Off by default; unsupported stages/operations execute the full CPU VM.
@@ -370,6 +370,7 @@ private:
     std::deque<HistoricalCheckpoint> checkpointHistory_;
     uint64_t nextHistoricalCheckpointId_=1;
     bool restoreGpuSnapshot(const GpuCheckpoint& snapshot);
+    bool restoreOwnedGpuSnapshot(const GpuCheckpoint& snapshot);
     bool asyncCheckpointPending_ = false;
     AdaptiveCheckpointCadence checkpointCadence_{};
 };

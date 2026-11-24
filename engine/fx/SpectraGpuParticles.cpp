@@ -536,6 +536,7 @@ bool ComputeParticles::setProgramParameter(uint32_t slot,float value,
     if(gpuAllocationActive_&&affectExisting){
         reason_="GPU-owned allocation supports future birth parameters only";return false;
     }
+    if(gpuAllocationActive_&&programParams_[slot]!=value)++vmFrameRevision_;
     programParams_[slot]=value;
     if(backend_==ComputeBackend::Cpu) {
         if(affectExisting)
@@ -1107,6 +1108,7 @@ bool ComputeParticles::replaceGpuAllocation(uint32_t next,bool empty,bool compac
     retireAllocationCharge(gpuAllocationCharge_,gpuAllocationLastFence_);
     gpuAllocationCharge_=candidateCharge;gpuAllocationLastFence_=candidateFence;
     physicalCapacity_=next;
+    ++vmFrameRevision_;
     verticesReady_=false;
     return true;
 }
@@ -1263,8 +1265,10 @@ bool ComputeParticles::stepGpuAllocated(float dt){
     while(!gpuBirthEstimates_.empty()&&gpuBirthEstimates_.front().expires<=gpuAllocationClock_){
         gpuEstimatedBirths_-=gpuBirthEstimates_.front().count;gpuBirthEstimates_.pop_front();
     }
+    const bool mutateParticles=dt>0.f||count||!pendingGpuKills_.empty();
     pendingStates_.clear();pendingProgramParams_.clear();pendingGpuOwners_.clear();pendingGpuKills_.clear();
-    gpuStagingDirty_=false;verticesReady_=true;stats_.gpuVmErrorsKnown=false;++vmFrameRevision_;
+    gpuStagingDirty_=false;verticesReady_=true;stats_.gpuVmErrorsKnown=false;
+    if(mutateParticles)++vmFrameRevision_;
     stats_.alive=uint32_t(std::min<uint64_t>(cap,gpuEstimatedBirths_));
     stats_.submittedSlots=stats_.alive; // estimate, actual indirect count stays GPU-side
     drawCount_=gpuAllocationSubmitted_?cap:0;reason_.clear();
@@ -1580,7 +1584,7 @@ GpuCheckpointStatus ComputeParticles::checkpointStatus() const {
     status.stagingRecoveryPending=gpuStagingDirty_;
     status.currentRevision=vmFrameRevision_;
     status.capturedRevision=checkpointRevision_;
-    status.physicalSlots=static_cast<uint32_t>(ages_.size());
+    status.physicalSlots=gpuAllocationActive_?allocatedCapacity():static_cast<uint32_t>(ages_.size());
     status.killsAwaitingGpuFence=uint32_t(killedSlotsAwaitingFrame_.size());
     status.checkpointIntervalFrames=checkpointCadence_.intervalFrames();
     status.nextCheckpointRevision=checkpointCadence_.nextDueRevision();
@@ -1592,10 +1596,10 @@ GpuCheckpointStatus ComputeParticles::checkpointStatus() const {
     }
     status.restoreEligible=status.gpuActive && status.fresh &&
         !gpuResetDirty_ && !gpuStagingDirty_ &&
-        !status.unsentBirths && pendingKillSlots_.empty() &&
-        killedSlotsAwaitingFrame_.empty() &&
-        lastCheckpoint_.slots.size()==ages_.size() &&
-        lastCheckpoint_.remainingLifetime.size()==ages_.size();
+        !status.unsentBirths && pendingKillSlots_.empty() && pendingGpuKills_.empty() &&
+        killedSlotsAwaitingFrame_.empty() && lastCheckpoint_.gpuOwnedAllocation==gpuAllocationActive_ &&
+        lastCheckpoint_.slots.size()==status.physicalSlots &&
+        lastCheckpoint_.remainingLifetime.size()==status.physicalSlots;
     return status;
 }
 
@@ -1625,7 +1629,6 @@ bool ComputeParticles::exportRestoreCheckpoint(const std::string& identity,std::
     return encodeRestoreCheckpoint(lastCheckpoint_,identity,bytes);
 }
 bool ComputeParticles::importRestoreCheckpoint(const std::string& expectedIdentity,const std::vector<uint8_t>& bytes) {
-    if(gpuAllocationActive_)return false;
     GpuCheckpoint snapshot;
     if(!decodeRestoreCheckpoint(bytes,expectedIdentity,snapshot))return false;
     for(auto token:snapshot.sourceTokens)if(token!=0)return false;
@@ -1658,7 +1661,9 @@ bool ComputeParticles::restoreGpuSnapshot(const GpuCheckpoint& source) {
     if(!gpuActive()||!device_||!device_->gpuHealthy()||!device_->canUpdateSharedBuffers()||
        gpuResetDirty_||gpuStagingDirty_||asyncCheckpointPending_||programParamsDirty_||
        !pendingStates_.empty()||!pendingKillSlots_.empty()||!killedSlotsAwaitingFrame_.empty()||
-       !source.complete||!source.hostStateComplete)return false;
+       !source.complete||!source.hostStateComplete||source.gpuOwnedAllocation!=gpuAllocationActive_||
+       !pendingGpuKills_.empty())return false;
+    if(gpuAllocationActive_)return restoreOwnedGpuSnapshot(source);
     const auto snapshot=source;
     const size_t n=ages_.size();
     if(snapshot.slots.size()!=n||snapshot.remainingLifetime.size()!=n)return false;
@@ -1686,6 +1691,7 @@ bool ComputeParticles::restoreGpuSnapshot(const GpuCheckpoint& source) {
         attrs[i].a1={p.attributes[4],p.attributes[5],p.attributes[6],p.attributes[7]};
     }
     for(float v:snapshot.birthParameters)if(!finite(v))return false;
+    markGpuAllocationUsed();
     gpuResetDirty_=true;verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
     lastCheckpoint_={};checkpointRevision_=0;++vmFrameRevision_;
     if(!device_->updateStorageBufferChecked(states_,states.data(),n*sizeof(ParticleState))||
@@ -1708,17 +1714,103 @@ bool ComputeParticles::restoreGpuSnapshot(const GpuCheckpoint& source) {
     return true;
 }
 
+namespace {
+bool finishOwnedCheckpoint(GpuCheckpoint& result,const uint8_t* owners,const uint8_t* freeBytes,
+                           const uint8_t* aliveBytes,const uint8_t* counterBytes){
+    const size_t n=result.slots.size();
+    std::array<uint32_t,8> raw{};std::memcpy(raw.data(),counterBytes,sizeof(raw));
+    if(raw[0]>n||raw[1]!=n-raw[0]||raw[6]>raw[0]||raw[7]>raw[0]-raw[6])return false;
+    result.gpuOwnedAllocation=true;
+    result.freeSlotOrder.resize(raw[1]);result.aliveSlotOrder.resize(raw[0]);
+    if(raw[1])std::memcpy(result.freeSlotOrder.data(),freeBytes,size_t(raw[1])*4);
+    if(raw[0])std::memcpy(result.aliveSlotOrder.data(),aliveBytes,size_t(raw[0])*4);
+    result.remainingLifetime.assign(n,-1.f);result.sourceTokens.assign(n,0);
+    std::vector<uint8_t> seen(n);
+    for(uint32_t slot:result.freeSlotOrder){
+        if(slot>=n||seen[slot]++)return false;
+        result.slots[slot]={};result.slots[slot].positionAge.w=-1.f;
+    }
+    for(uint32_t slot:result.aliveSlotOrder){
+        if(slot>=n||seen[slot]++)return false;
+        uint32_t words[2]{};std::memcpy(words,owners+size_t(slot)*8,8);
+        result.sourceTokens[slot]=uint64_t(words[0])|(uint64_t(words[1])<<32);
+        auto& p=result.slots[slot];result.remainingLifetime[slot]=p.velocityLife.w-p.positionAge.w;
+    }
+    return validOwnedGpuCheckpoint(result);
+}
+}
+bool ComputeParticles::restoreOwnedGpuSnapshot(const GpuCheckpoint& source){
+    const auto snapshot=source;
+    const uint32_t n=uint32_t(snapshot.slots.size());
+    if(!n||n>kGpuCheckpointCaptureMaxSlots||n>desc_.capacity||!validOwnedGpuCheckpoint(snapshot))return false;
+    if(n!=allocatedCapacity()){
+        if(!gpuDemandGrowth_||gpuNextPhysicalCapacity(gpuInitialPhysicalCapacity(desc_.capacity),n,desc_.capacity)!=n)return false;
+        if(n<allocatedCapacity()){
+            if(!replaceGpuAllocation(n,true))return false;
+        }else if(!growGpuAllocation(n)||allocatedCapacity()!=n)return false;
+    }
+    std::vector<ParticleState> states(n);
+    std::vector<ProgramParams> params(n);
+    std::vector<ProgramAttributes> attrs(n);
+    std::vector<uint32_t> owners(size_t(n)*2);
+    std::vector<float> expiry;
+    for(uint32_t i=0;i<n;++i){
+        const auto& p=snapshot.slots[i];
+        if(snapshot.remainingLifetime[i]<=0.f){states[i].positionAge.w=-1.f;continue;}
+        states[i]={p.positionAge,p.velocityLife,p.tint,p.size};
+        std::memcpy(&params[i],p.programParams.data(),sizeof(ProgramParams));
+        std::memcpy(&attrs[i],p.attributes.data(),sizeof(ProgramAttributes));
+        owners[size_t(i)*2]=uint32_t(snapshot.sourceTokens[i]);
+        owners[size_t(i)*2+1]=uint32_t(snapshot.sourceTokens[i]>>32);
+        expiry.push_back(snapshot.remainingLifetime[i]);
+    }
+    const uint32_t alive=uint32_t(snapshot.aliveSlotOrder.size());
+    const std::array<uint32_t,8> counters{alive,n-alive,0,0,alive,alive,0,0};
+    const std::array<uint32_t,3> dispatch{std::max(1u,(alive+63u)/64u),1,1};
+    const gfx::DrawIndexedIndirectCommand noDraw{0,1,0,0,0};
+    markGpuAllocationUsed();
+    gpuResetDirty_=true;verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
+    ++gpuBirthEpoch_;++vmFrameRevision_;gpuCompactTarget_=0;gpuIdleSteps_=0;gpuEmptyProven_=false;
+    lastCheckpoint_={};checkpointRevision_=0;
+    const auto upload=[&](gfx::BufferHandle b,const void* data,size_t bytes){
+        return !bytes||device_->updateStorageBufferChecked(b,data,bytes);
+    };
+    if(!upload(states_,states.data(),n*sizeof(ParticleState))||
+       !upload(stateProgramParams_,params.data(),n*sizeof(ProgramParams))||
+       !upload(stateAttributes_,attrs.data(),n*sizeof(ProgramAttributes))||
+       !upload(gpuSourceOwners_,owners.data(),owners.size()*4)||
+       !upload(liveSlots_,snapshot.freeSlotOrder.data(),snapshot.freeSlotOrder.size()*4)||
+       !upload(gpuAliveCurrent_,snapshot.aliveSlotOrder.data(),snapshot.aliveSlotOrder.size()*4)||
+       !upload(aliveCounter_,counters.data(),sizeof(counters))||
+       !upload(gpuDispatchArgs_,dispatch.data(),sizeof(dispatch))||
+       !upload(gpuDrawArgs_,&noDraw,sizeof(noDraw))){
+        reason_="GPU-owned checkpoint restore upload failed; checked reset required";return false;
+    }
+    programParams_=snapshot.birthParameters;shaderBirthSeed_=snapshot.shaderBirthSeed;
+    shaderBirthOrdinal_=snapshot.shaderBirthOrdinal;shaderBirthSeedEnabled_=snapshot.shaderBirthSeedEnabled;
+    gpuBirthEstimates_.clear();gpuAllocationClock_=0;gpuEstimatedBirths_=alive;
+    std::sort(expiry.begin(),expiry.end());
+    for(float life:expiry){
+        if(!gpuBirthEstimates_.empty()&&gpuBirthEstimates_.back().expires==life)++gpuBirthEstimates_.back().count;
+        else gpuBirthEstimates_.push_back({life,1});
+    }
+    gpuAllocationSubmitted_=alive!=0;gpuEmptyProven_=alive==0;
+    stats_.alive=alive;stats_.gpuVmErrorsKnown=false;gpuResetDirty_=gpuStagingDirty_=false;
+    reason_.clear();return true;
+}
+
 bool ComputeParticles::captureGpuCheckpoint(GpuCheckpoint& out) {
-    out={};if(gpuAllocationActive_)return false;
+    out={};
     if(!initialized_ || backend_!=ComputeBackend::Metal || !device_ ||
        !device_->gpuHealthy() || !device_->canUpdateSharedBuffers() ||
        !states_.valid() || !stateProgramParams_.valid() ||
-       !stateAttributes_.valid() || ages_.empty() ||
+       !stateAttributes_.valid() ||
        gpuResetDirty_ || gpuStagingDirty_ ||
-       !pendingStates_.empty() || !pendingKillSlots_.empty() ||
+       !pendingStates_.empty() || !pendingKillSlots_.empty() || !pendingGpuKills_.empty() ||
         !killedSlotsAwaitingFrame_.empty())return false;
-    const size_t n=ages_.size();
-    if(n>kGpuCheckpointCaptureMaxSlots)return false;
+    const bool owned=gpuAllocationActive_;
+    const size_t n=owned?allocatedCapacity():ages_.size();
+    if(!n||n>kGpuCheckpointCaptureMaxSlots)return false;
     // A checkpoint must include all physical slots, not merely those that
     // survived the previous draw or the CPU-estimated indirect draw count.
     std::vector<ParticleState> state(n);
@@ -1751,6 +1843,15 @@ bool ComputeParticles::captureGpuCheckpoint(GpuCheckpoint& out) {
         d.attributes={attributes[i].a0.x,attributes[i].a0.y,attributes[i].a0.z,attributes[i].a0.w,
                       attributes[i].a1.x,attributes[i].a1.y,attributes[i].a1.z,attributes[i].a1.w};
     }
+    if(owned){
+        std::vector<uint8_t> owners(n*8),freeBytes(n*4),aliveBytes(n*4);
+        std::array<uint8_t,32> counters{};
+        if(!device_->readBuffer(gpuSourceOwners_,owners.data(),owners.size())||
+           !device_->readBuffer(liveSlots_,freeBytes.data(),freeBytes.size())||
+           !device_->readBuffer(gpuAliveCurrent_,aliveBytes.data(),aliveBytes.size())||
+           !device_->readBuffer(aliveCounter_,counters.data(),counters.size())||
+           !finishOwnedCheckpoint(next,owners.data(),freeBytes.data(),aliveBytes.data(),counters.data()))return false;
+    }
     next.complete=true;
     out=next;
     lastCheckpoint_=std::move(next);
@@ -1765,7 +1866,8 @@ void ComputeParticles::switchToCpu(const std::string& why) {
     // GPU frame, with no pending unsent births. A stale checkpoint must never
     // resurrect particles that have died or silently omit recent births.
     const GpuCheckpointStatus capture=checkpointStatus();
-    const bool canRestore=capture.restoreEligible;
+    const bool canRestore=capture.restoreEligible&&(!gpuAllocationActive_||
+        std::none_of(lastCheckpoint_.sourceTokens.begin(),lastCheckpoint_.sourceTokens.end(),[](uint64_t token){return token!=0;}));
     std::vector<fx::FxImportedParticle> restored;
     if(canRestore) {
         restored.reserve(lastCheckpoint_.slots.size());

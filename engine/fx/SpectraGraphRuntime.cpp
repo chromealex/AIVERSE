@@ -171,6 +171,7 @@ bool GraphRuntime::initGraph(gfx::Device* dev,const Json& graph,
     restoreIdentity_="SPFR1|"+std::to_string(actual.capacity)+"|"+std::to_string(int(actual.quality))+"|"+std::to_string(actual.gpuProgram)+"|"+std::to_string(actual.gpuMaterial)+"|"+std::to_string(actual.gpuBirthRandom)+"|"+graph.dump(-1)+"\n"+overrides.dump(-1);
     // Compact deterministic fingerprint; two independently seeded 64-bit lanes.
     uint64_t a=14695981039346656037ull,b=7809847782465536322ull;
+    if(actual.gpuOwnedAllocation)restoreIdentity_+="\nallocator=owned-v2";
     for(unsigned char c:restoreIdentity_){a=(a^c)*1099511628211ull;b=(b^c)*14029467366897019727ull;}
     restoreIdentity_="SPFR1-fingerprint|"+std::to_string(a)+"|"+std::to_string(b);
     namedParams_=std::move(schema);
