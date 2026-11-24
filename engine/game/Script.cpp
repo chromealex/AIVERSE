@@ -928,6 +928,7 @@ const std::pair<uint16_t, const char*> kSimEventNames[] = {
     {kEvBossEngaged, "boss_engaged"}, {kEvBossPhase, "boss_phase"}, {kEvBossEnraged, "boss_enraged"}, {kEvBossAdds, "boss_adds"},
     {kEvBossDefeated, "boss_defeated"}, {kEvBossWindow, "boss_window"}, {kEvTelegraphStart, "telegraph_start"},
     {kEvTelegraphStrike, "telegraph_strike"}, {kEvTelegraphEnd, "telegraph_end"},
+    {kEvAttackWindup, "attack_start"}, {kEvAttackCancelled, "attack_cancelled"}, {kEvAttackRecoveryEnd, "attack_recovery_end"},
 };
 } // namespace
 const char* simEventName(uint16_t type) {
