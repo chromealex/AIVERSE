@@ -63,7 +63,12 @@ public:
                 return fail("Duplicate or invalid physical leaf definition");
             Entry e;
             e.state.pose=pose;
-            e.state.position=pose.open?1000:0;
+            // Preserve a validated authored initial physical position,
+            // including a half-open panel; only 1000 unlocks the passage.
+            if(pose.physicalPermille>1000)
+                return fail("Invalid authored initial leaf progress");
+            e.state.position=pose.open?1000:pose.physicalPermille;
+            e.state.pose.open=e.state.position==1000;
             if(restoredPositions){
                 const auto it=restoredPositions->find(pose.socketId);
                 if(it==restoredPositions->end()||it->second>1000)
