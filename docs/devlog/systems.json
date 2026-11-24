@@ -1802,6 +1802,12 @@
           "text": "Добавлены слабые ссылки на поколение изображения и проверяемый захват GPU handle с pin. Повторно занятый слот отклоняет старую ссылку. Изолированные тесты пройдены; миграция потребителей и интеграционная проверка ожидаются.",
           "nameEn": "Texture Graph GPU — Stage 38P (partial)",
           "textEn": "Weak generation references and checked native handle acquisition with pin; stale recycled slots rejected. Isolated tests passed; consumer migration and integrated verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38Q (в работе)",
+          "text": "Проверка поколения в кэше повторного использования GPU-выходов.",
+          "nameEn": "Texture Graph GPU — Stage 38Q (in progress)",
+          "textEn": "Generation-safe incremental output receipt bindings."
         }
       ],
       "enables": [
