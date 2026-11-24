@@ -1687,6 +1687,8 @@ void StudioHost::select(double x, double y, double w, double h, const std::strin
             if(arm.getStr("project")!=ws.project.dir||arm.getStr("mapPath")!=ws.map.path||
                arm.getStr("expectedRevision")!=std::to_string(ws.map.revision))
                 throw std::runtime_error("Forest planting cancelled: document changed");
+            if(arm.getStr("sceneBody")!=worldProcessSceneBody())throw std::runtime_error("Forest action cancelled: Scene body changed");
+            if(wpLiveOptions_.live&&wpLiveOptions_.forest)throw std::runtime_error("Disable live forest before authoring");
             const auto action=arm.getStr("action","plant");
             if(action=="pick"){
                 const auto hit=onScene([&]{return preview_->forestPick(float(x),float(y),float(w),float(h),ws.project.dir,ws.map.path,ws.map.revision);});
@@ -1800,7 +1802,8 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
             if(forestPlantArm_.getStr("action")=="move"&&session_&&preview_&&!projectLoading_){
                 const auto& ws=session_->workspace();Json ghost;
                 if(forestPlantArm_.getStr("project")==ws.project.dir&&forestPlantArm_.getStr("mapPath")==ws.map.path&&
-                   forestPlantArm_.getStr("expectedRevision")==std::to_string(ws.map.revision)&&!mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift){
+                   forestPlantArm_.getStr("expectedRevision")==std::to_string(ws.map.revision)&&forestPlantArm_.getStr("sceneBody")==worldProcessSceneBody()&&
+                   !(wpLiveOptions_.live&&wpLiveOptions_.forest)&&!mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift){
                     const auto at=onScene([&]{return preview_->forestGroundPlacement(float(x),float(y),float(w),float(h),ws.map.path,ws.map.revision);});
                     if(at){ghost=forestPlantArm_;ghost.set("at",*at);}
                 }
@@ -2182,7 +2185,10 @@ bool StudioHost::handleHostMethod(const Json& req) {
                 throw std::runtime_error("Invalid planting habit");
             if(action=="move"&&(!params["key"].isNumber()||params["key"].integer()<1||params["key"].integer()>1000000000||
                params["key"].fx()!=Fixed::fromInt(params["key"].integer())))throw std::runtime_error("Invalid plant key");
-            forestPlantArm_=params;forestPlantArm_.set("project",Json::string(ws.project.dir));
+            if(wpLiveOptions_.live&&wpLiveOptions_.forest)throw std::runtime_error("Disable live forest before authoring");
+            if(mouse_.active||wpDrag_.active)throw std::runtime_error("Finish the active Scene gesture first");
+            const auto sceneBody=worldProcessSceneBody();if(sceneBody.empty())throw std::runtime_error("Wait for a current planetary Scene");
+            forestPlantArm_=params;forestPlantArm_.set("project",Json::string(ws.project.dir));forestPlantArm_.set("sceneBody",Json::string(sceneBody));
         }
         out.set("armed",Json::fromBool(forestPlantArm_.isObject()));return out;
     });
@@ -2209,6 +2215,10 @@ bool StudioHost::handleHostMethod(const Json& req) {
     });
     if(method=="studio.evolveLayer")return answer([&]{
         const auto next=wpLiveOptions_.patched(params);
+        if(next.live&&next.forest&&forestPlantArm_.isObject()){
+            forestPlantArm_=Json{};mouse_={};if(preview_)onScene([&]{preview_->setForestDragPreview(Json{});});
+            Json cancelled=Json::object();cancelled.set("cancelled",Json::fromBool(true));sendEventPayload("planetForest.planted",cancelled);
+        }
         if(next!=wpLiveOptions_){
             wpLiveOptions_=next;
             wpLiveSnapshot_=wpLiveOptions_.live&&game_&&(!game_->planetMatch()||worldProcessPlanetMapCurrent())

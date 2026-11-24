@@ -114,6 +114,7 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
     {stale&&<p className="pf-note">Document changed. Reload before applying; draft has not been overwritten.</p>}
     <p className="pf-note">Map-owned override · Undo/Redo via document history. Save the map and restart local Play. Native physics authority is configured by the host, not this panel.</p>
     {!base.moduleEnabled&&<p className="pf-note">world_processes native module is not installed in this project. Only the visual ARBOR catalogue can be edited.</p>}
+      <label className="pf-row"><span>Scene body</span><StudioSelect disabled={busy||armed||armPending||sceneBodyBusy||stale} value={sceneBody} onChange={e=>void changeSceneBody(e.target.value)}><option value="">Auto (entity selection)</option>{bodies.map(b=><option key={b} value={b}>{b}</option>)}</StudioSelect></label>
     <fieldset disabled={busy||armed||armPending} className="rules__group"><legend>Simulation</legend>
       <label className="pf-row"><span>Map override</span><input type="checkbox" checked={override} disabled={!base.moduleEnabled} onChange={e=>{setOverride(e.target.checked);if(e.target.checked&&!forest)setForest({species:[{id:1}],plants:[]});setDirty(true);}}/></label>
       <p className="pf-note">{override?'Use this map’s simulation settings':'Inherit native module rules'} · physics requested: {base.physicsRequested?'yes':'no'}</p>
@@ -137,7 +138,6 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
       <button disabled={armed||armPending||dirty||stale||!selectedPlant?.direct} onClick={()=>void arm(true,'move')}>Move selected plant in Scene</button>
       {selectedPlant&&<p className="pf-note">Selected: {selectedPlant.species}:{selectedPlant.key}{!selectedPlant.direct?' · convert marker binding to direct coordinates and Apply before moving':''}</p>}
       {armed&&<p className="pf-note">{action==='pick'?'Click a visible authored plant trunk.':action==='move'?'Click the destination or hold and drag across terrain, then release to relocate the selected plant.':'Click planetary terrain once.'} Esc cancels.</p>}
-      <label className="pf-row"><span>Scene body</span><StudioSelect disabled={busy||armed||armPending||sceneBodyBusy||stale} value={sceneBody} onChange={e=>void changeSceneBody(e.target.value)}><option value="">Auto (entity selection)</option>{bodies.map(b=><option key={b} value={b}>{b}</option>)}</StudioSelect></label>
       <fieldset disabled={armed||armPending} className="rules__group"><legend>Plant placements</legend>
       <label className="pf-row"><span>Planet / moon</span><select className="au-input" value={body} onChange={e=>setBody(e.target.value)}><option value="">All bodies</option>{bodies.map(b=><option key={b}>{b}</option>)}</select></label>
       <label className="pf-row"><span>Search markers</span><input className="au-input" value={filter} onChange={e=>setFilter(e.target.value)}/></label>

@@ -2449,7 +2449,10 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     }
     int body=-1;
     const auto explicitBody=planetSceneBodyOverride(projectPath,doc.path);
-    if(!explicitBody.empty())body=doc.data.findBody(explicitBody);
+    if(!explicitBody.empty()){
+        body=doc.data.findBody(explicitBody);
+        if(body<0||!doc.data.bodies[size_t(body)].surface()){body=-1;planetBodyOverride_.clear();}
+    }
     const int selected=studioMapEntityIndex(selectedId,doc);
     if(body<0&&selected>=0)body=doc.data.findBody(doc.data.entities[size_t(selected)].at.getStr("body"));
     if(body<0&&planetPreview_&&planetMapPath_==doc.path)body=doc.data.findBody(planetPreview_->bodyId);

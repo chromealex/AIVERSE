@@ -167,7 +167,8 @@ public:
     }
     void setForestDragPreview(Json value){forestDragPreview_=std::move(value);}
     std::string planetSceneBody(const std::string& project,const std::string& path,uint64_t revision)const{
-        return planetMode_&&planetPreview_&&planetModelProject_==project&&planetMapPath_==path&&planetRevision_==revision?planetPreview_->bodyId:std::string{};
+        return planetMode_&&planetPreview_&&planetModelProject_==project&&planetMapPath_==path&&planetRevision_==revision&&
+            (planetSceneBodyOverride(project,path).empty()||planetSceneBodyOverride(project,path)==planetPreview_->bodyId)?planetPreview_->bodyId:std::string{};
     }
     void setPlanetLiveSnapshot(Json snapshot,std::string project,std::string path,uint64_t revision,std::string layer,std::string aetherLayer){
         planetLiveSnapshot_=std::move(snapshot);planetLiveProject_=std::move(project);
