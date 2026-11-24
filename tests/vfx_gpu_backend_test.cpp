@@ -24,6 +24,9 @@ public:
     bool rejectStorageUpload=false;
     bool storageCopyAvailable=false, rejectStorageCopy=false,rejectAllocation=false;
     bool asyncReadAvailable=false;
+    uint64_t submissionFence=1,completedFence=0;
+    uint64_t gpuSubmissionFence()const override{return frame?submissionFence:0;}
+    uint64_t gpuCompletedFence()const override{return completedFence;}
     gfx::Device::BufferReadFn pendingRead;
     uint32_t readRequests=0;
     bool readBufferAsync(gfx::BufferHandle h,size_t bytes,gfx::Device::BufferReadFn cb)override{
@@ -511,6 +514,31 @@ int main() {
     check(growth.step(0.f)&&growth.stats().gpuDispatches==idleDispatches,"empty pool continued dispatching");
     growthDevice.endFrame();growth.shutdown();
     check(!growthDevice.badOrder,"physical growth encoder ordering");
+
+    // Shared budget charges old and new envelopes until completion.
+    const auto smallCharge=spectra::estimateGpuEmitterAllocation(256,false);
+    const auto largeCharge=spectra::estimateGpuEmitterAllocation(512,false);
+    auto memory=std::make_shared<spectra::GpuAllocationBudget>(smallCharge+largeCharge);
+    RecordingMetalDevice memDevice;memDevice.indirectAvailable=true;memDevice.storageCopyAvailable=true;
+    auto memConfig=growthConfig;memConfig.allocationBudget=memory;
+    spectra::ComputeParticles memA,memB;
+    check(memA.init(&memDevice,memConfig)&&memB.init(&memDevice,memConfig),"shared physical initial admission");
+    check(memory->stats().active==smallCharge*2,"shared initial charges");
+    memDevice.beginFrame(800,600);memA.setView(frameView);
+    for(int i=0;i<5;++i)check(memA.burstAt({0,2,0}),"budget burst");
+    check(memA.step(0.f)&&memA.allocatedCapacity()==256&&memA.stats().gpuAllocationBudgetDenied==1&&
+          memA.stats().gpuBudgetLimitedBirths==64,"pressure must keep old simulation running");
+    memB.shutdown(); // never used; immediate credit
+    for(int i=0;i<2;++i)check(memA.burstAt({0,2,0}),"budget regrowth burst");
+    check(memA.step(0.f)&&memA.allocatedCapacity()==512,"budget recovery growth");
+    check(memory->stats().active==largeCharge&&memory->stats().retiring==smallCharge&&
+          memory->stats().peak==smallCharge+largeCharge,"old plus candidate accounting");
+    check(!memB.init(&memDevice,memConfig),"in-flight bytes admitted twice");
+    memDevice.endFrame();memDevice.completedFence=1;memDevice.submissionFence=2;
+    check(memB.init(&memDevice,memConfig)&&memory->stats().retiring==0,"fence did not restore budget");
+    memB.shutdown();memA.shutdown();
+    check(memory->stats().charged()==0,"completed retirement leaked charge");
+    check(!memory->bind(&growthDevice),"budget accepted another Device");
 
     // Explicit hard GPU requirement never silently reports a CPU implementation.
     config.backend=ComputePreference::RequireGpu;

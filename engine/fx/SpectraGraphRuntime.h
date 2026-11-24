@@ -38,6 +38,7 @@ struct GraphRuntimeOptions {
     // Share one limiter across GraphRuntime instances using the same Device.
     // Optional, for compatibility with single-emitter users.
     std::shared_ptr<CheckpointReadbackBudget> checkpointBudget;
+    std::shared_ptr<GpuAllocationBudget> allocationBudget;
 };
 
 struct GraphGpuEligibility {

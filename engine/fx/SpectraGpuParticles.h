@@ -10,6 +10,7 @@
 #include "SpectraCheckpointExport.h"
 #include "SpectraCheckpointFile.h"
 #include "SpectraCheckpointReadbackBudget.h"
+#include "SpectraGpuAllocationBudget.h"
 #include "SpectraAdaptiveCheckpoint.h"
 #include "SpectraActiveParticlePages.h"
 #include <array>
@@ -88,6 +89,7 @@ struct ComputeEmitterDesc {
     // Optional shared readback budget; all GPU emitters on one Device should
     // share it. If absent, legacy independent checkpoint behavior is retained.
     std::shared_ptr<CheckpointReadbackBudget> checkpointBudget;
+    std::shared_ptr<GpuAllocationBudget> allocationBudget; // same Device only
 };
 
 bool validComputeEmitter(const ComputeEmitterDesc&, std::string* reason = nullptr);
@@ -147,6 +149,7 @@ struct ComputeStats {
     size_t gpuBytes = 0, uploadedBytes = 0;
     uint32_t gpuPhysicalGrowths=0,gpuPhysicalGrowthFailures=0;
     uint32_t gpuPhysicalShrinks=0,gpuPhysicalShrinkFailures=0,gpuIdleProofRequests=0;
+    uint32_t gpuAllocationBudgetDenied=0,gpuBudgetLimitedBirths=0;
     size_t gpuReclaimedBytes=0; // logical released buffer bytes, not driver residency
     size_t gpuGrowthCopiedBytes=0;
 };
@@ -274,6 +277,8 @@ private:
     bool stepGpuAllocated(float dt);
     bool growGpuAllocation(uint32_t required);
     bool replaceGpuAllocation(uint32_t next,bool empty);
+    void markGpuAllocationUsed();
+    void retireAllocationCharge(size_t bytes,uint64_t fence);
     bool shrinkEmptyGpuAllocation();
     void serviceGpuIdleReclaim(uint32_t pendingBirths);
     void bindGpuAllocationBuffers();
@@ -315,6 +320,9 @@ private:
     bool gpuAllocationActive_=false, gpuAllocationSubmitted_=false;
     uint32_t physicalCapacity_=0;
     bool gpuDemandGrowth_=false;
+    size_t gpuAllocationCharge_=0;
+    uint64_t gpuAllocationLastFence_=0;
+    bool gpuGrowthBudgetBlocked_=false;
     uint32_t gpuIdleSteps_=0;
     uint64_t gpuBirthEpoch_=0; // invalidates asynchronous empty proofs
     bool gpuEmptyProven_=false;

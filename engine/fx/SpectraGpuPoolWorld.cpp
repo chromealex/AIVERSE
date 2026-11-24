@@ -52,6 +52,14 @@ bool GpuPoolWorld::init(gfx::Device* device, PoolWorldBudgets budgets) {
     checkpointBudget_=budgets_.sharedCheckpointBudget
         ?budgets_.sharedCheckpointBudget
         :std::make_shared<CheckpointReadbackBudget>(budgets_.checkpointReadback);
+    if(budgets_.sharedAllocationBudget){
+        allocationBudget_=budgets_.sharedAllocationBudget;ownsAllocationBudget_=false;
+    }else if(!ownsAllocationBudget_||!allocationBudget_||allocationBudget_->deviceKey()!=device_){
+        allocationBudget_=std::make_shared<GpuAllocationBudget>(budgets_.maxGpuAllocationBytes);ownsAllocationBudget_=true;
+    }else allocationBudget_->setLimit(budgets_.maxGpuAllocationBytes);
+    if(device_&&!allocationBudget_->bind(device_)){
+        reason_="SpectraFX shared allocation budget belongs to another Device";cpu_.shutdown();device_=nullptr;return false;
+    }
     sourceWorldEpoch_=nextSourceWorldEpoch.fetch_add(1,std::memory_order_relaxed);
     initialized_=true;
     reason_.clear();
@@ -165,6 +173,7 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
     // A pooled Device must use ONE limiter for all its GPU groups, including
     // groups with different checkpoint cadences.
     actual.checkpointBudget=checkpointBudget_;
+    actual.allocationBudget=allocationBudget_;
     const GraphGpuEligibility eligible=inspectGraphGpuEligibility(effect,actual);
     const bool wantsGpu=options.preference!=ComputePreference::CpuOnly;
     const bool metalAvailable=device_&&device_->supportsCompute()&&
@@ -183,6 +192,7 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
     remembered.effect=effect;
     remembered.options=options;
     remembered.options.checkpointBudget.reset();
+    remembered.options.allocationBudget.reset();
     remembered.named=named;
     remembered.defaults=next.defaults;
     next.usesRuntimeParams=effect.emitters.size()==1 &&
@@ -204,22 +214,14 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
         // Retired groups (orphaned by redefinition) do not count toward the
         // unique-group budget; a fully released slot is reused in place so
         // existing binding/source group indices stay stable.
-        size_t liveGroups=0,freeSlot=gpuGroups_.size(),allocated=0;
+        size_t liveGroups=0,freeSlot=gpuGroups_.size();
         for(size_t i=0;i<gpuGroups_.size();++i) {
-            // Include retired but not yet released allocations.
-            if(gpuGroups_[i].particles){
-                const auto bytes=estimateGpuEmitterAllocation(gpuGroups_[i].particles->capacityLimit(),
-                    gpuGroups_[i].particles->proceduralBillboardsActive());
-                allocated=bytes>SIZE_MAX-allocated?SIZE_MAX:allocated+bytes;
-            }
             if(gpuGroups_[i].live())++liveGroups;
             else if(!gpuGroups_[i].particles && freeSlot==gpuGroups_.size())freeSlot=i;
         }
-        const size_t requested=estimateGpuEmitterAllocation(actual.capacity,
-            actual.proceduralBillboards&&eligible.gpu.shaderGraph.isNull());
-        const bool fitsMemory=!budgets_.maxGpuAllocationBytes||
-            (allocated<=budgets_.maxGpuAllocationBytes&&requested<=budgets_.maxGpuAllocationBytes-allocated);
-        if(liveGroups<budgets_.maxGpuGroups&&fitsMemory) {
+        // ComputeParticles reserves actual physical envelope before creating
+        // resources. One shared owner covers active and retired allocations.
+        if(liveGroups<budgets_.maxGpuGroups) {
             auto particles=std::make_unique<ComputeParticles>();
             ComputeEmitterDesc desc=eligible.gpu;
             desc.backend=ComputePreference::RequireGpu;
@@ -236,7 +238,7 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
                 return true;
             }
             reason_="GPU pool group initialization failed: "+particles->reason();
-        } else reason_=fitsMemory?"SpectraFX max unique GPU resource groups reached":"SpectraFX GPU allocation budget exhausted";
+        } else reason_="SpectraFX max unique GPU resource groups reached";
     } else if(wantsGpu) {
         reason_=!eligible.eligible?eligible.reason:
             "Metal compute or required quality unavailable for pooled GPU emitter";
@@ -584,6 +586,7 @@ bool GpuPoolWorld::beginPresentationFrame(const fx::SpectraFxView& view) {
     // Frame boundary: earlier frames' commands are committed and nothing of
     // this frame references a retired group yet.
     retireUnusedGroups();
+    if(allocationBudget_&&device_)allocationBudget_->collect(device_->gpuCompletedFence());
     frameOpen_=true;stepped_=drawn_=false;
     stats_.frameBursts=stats_.gpuDrawCalls=stats_.cpuDrawCalls=0;
     cpu_.setView(view);
@@ -924,6 +927,7 @@ PoolRecoveryManifest GpuPoolWorld::exportRecoveryManifest() const {
     // The old per-device readback scheduler belongs to the old Device.
     // Import always provisions a fresh checkpoint budget.
     manifest.budgets.sharedCheckpointBudget.reset();
+    manifest.budgets.sharedAllocationBudget.reset();
     for(const auto& [name,definition]:definitions_) {
         (void)name;
         manifest.effects.push_back(definition);
@@ -946,6 +950,7 @@ bool GpuPoolWorld::importRecoveryManifest(
     }
     PoolWorldBudgets requested=manifest.budgets;
     requested.sharedCheckpointBudget.reset();
+    requested.sharedAllocationBudget.reset();
     if(!init(recoveredDevice,requested))return false;
     for(const auto& entry:manifest.effects) {
         if(!defineCompiled(entry.name,entry.effect,entry.options,entry.named)) {

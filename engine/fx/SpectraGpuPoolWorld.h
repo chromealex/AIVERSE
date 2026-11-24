@@ -62,8 +62,10 @@ struct PoolWorldBudgets {
     // using this Device. The defaults reserve RHI room for other readbacks.
     CheckpointReadbackLimits checkpointReadback{};
     std::shared_ptr<CheckpointReadbackBudget> sharedCheckpointBudget;
-    // Aggregate conservative allocation budget; zero retains legacy behavior.
+    // Aggregate conservative physical allocation envelopes, including overlap.
+    // Zero is unlimited. Explicit external budget owns its own limit.
     size_t maxGpuAllocationBytes=0;
+    std::shared_ptr<GpuAllocationBudget> sharedAllocationBudget;
 };
 
 struct PoolCheckpointStats {
@@ -275,6 +277,7 @@ public:
     std::shared_ptr<CheckpointReadbackBudget> checkpointBudget() const {
         return checkpointBudget_;
     }
+    std::shared_ptr<GpuAllocationBudget> allocationBudget() const {return allocationBudget_;}
     const BatchWorld& cpuBatchWorld() const {return cpu_;}
     bool isGpuEffect(const std::string& effectName) const;
 private:
@@ -337,6 +340,8 @@ private:
     PoolWorldBudgets budgets_{};
     PoolWorldStats stats_{};
     std::shared_ptr<CheckpointReadbackBudget> checkpointBudget_;
+    std::shared_ptr<GpuAllocationBudget> allocationBudget_;
+    bool ownsAllocationBudget_=false;
     std::vector<Group> gpuGroups_;
     PoolResetReport resetReport_{};
     std::vector<uint8_t> resetAccepted_; // per GPU group, retained across retries

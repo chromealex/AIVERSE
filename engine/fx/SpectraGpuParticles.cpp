@@ -174,6 +174,14 @@ bool ComputeParticles::initGpu() {
     physicalCapacity_=cap;
     proceduralActive_=desc_.proceduralBillboards&&!materialActive&&
         device_->info().backend==gfx::Backend::Metal;
+    if(desc_.allocationBudget){
+        auto& budget=*desc_.allocationBudget;
+        if(!budget.bind(device_)){reason_="GPU allocation budget belongs to another Device";return false;}
+        budget.collect(device_->gpuCompletedFence());
+        const size_t charge=estimateGpuEmitterAllocation(cap,proceduralActive_);
+        if(!budget.reserve(charge)){++stats_.gpuAllocationBudgetDenied;reason_="SpectraFX physical GPU allocation budget exhausted";return false;}
+        gpuAllocationCharge_=charge;
+    }
     gpuResetDirty_=false;
     gpuStagingDirty_=false;
     const std::string allocationShader=gpuAllocationActive_?
@@ -330,6 +338,17 @@ bool ComputeParticles::initGpu() {
                     +(gpuAllocationActive_?size_t(cap)*20u+10u*sizeof(uint32_t):0u);
     return true;
 }
+void ComputeParticles::markGpuAllocationUsed(){
+    if(!gpuAllocationCharge_||!device_)return;
+    const auto fence=device_->gpuSubmissionFence();
+    gpuAllocationLastFence_=fence?std::max(gpuAllocationLastFence_,fence):GpuAllocationBudget::unknownFence;
+}
+void ComputeParticles::retireAllocationCharge(size_t bytes,uint64_t fence){
+    if(desc_.allocationBudget&&bytes){
+        desc_.allocationBudget->retire(bytes,fence);
+        if(device_)desc_.allocationBudget->collect(device_->gpuCompletedFence());
+    }
+}
 void ComputeParticles::releaseGpu() {
     checkpointHistory_.clear();
     readbackLifetime_.reset();
@@ -361,6 +380,8 @@ void ComputeParticles::releaseGpu() {
         if(indices_.valid())device_->destroyBuffer(indices_);
         if(texture_.valid())device_->destroyTexture(texture_);
     }
+    retireAllocationCharge(gpuAllocationCharge_,gpuAllocationLastFence_);
+    gpuAllocationCharge_=0;gpuAllocationLastFence_=0;gpuGrowthBudgetBlocked_=false;
     pipeline_={};vertexShader_={};compute_={};states_={};seeds_={};slots_={};
     killSlots_={};gpuSourceOwners_={};
     gpuAliveCurrent_={};gpuAliveNext_={};gpuDispatchArgs_={};
@@ -440,6 +461,7 @@ bool ComputeParticles::tryClear() {
     // A partially accepted sequence of uploads MUST NOT allow another GPU
     // simulation or a new burst until the entire reset is retried. Kill any
     // retained checkpoint immediately; a partial reset is never a snapshot.
+    markGpuAllocationUsed();
     gpuResetDirty_=true;
     ++gpuBirthEpoch_;gpuEmptyProven_=false;gpuIdleSteps_=0;
     verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
@@ -707,6 +729,7 @@ bool ComputeParticles::step(float dt) {
         reason_="SpectraFX GPU step must be before the render pass";
         return false;
     }
+    markGpuAllocationUsed();
     if(gpuAllocationActive_)return stepGpuAllocated(dt);
     // Recycle only after a successful Metal frame completion callback,
     // never just an encoded/submitted blit.
@@ -934,6 +957,18 @@ bool ComputeParticles::replaceGpuAllocation(uint32_t next,bool empty){
     const uint32_t old=physicalCapacity_;
     if(!gpuDemandGrowth_||!device_||!device_->gpuHealthy()||!device_->canUpdateSharedBuffers()||
        !next||next>desc_.capacity||(empty?next>=old:next<=old))return false;
+    // Charge the full candidate envelope before allocation, including shared
+    // constants conservatively. Keep the old envelope until GPU completion.
+    size_t candidateCharge=0;uint64_t candidateFence=0;
+    if(desc_.allocationBudget){
+        auto& budget=*desc_.allocationBudget;budget.collect(device_->gpuCompletedFence());
+        candidateCharge=estimateGpuEmitterAllocation(next,proceduralActive_);
+        if(!budget.reserve(candidateCharge)){
+            ++stats_.gpuAllocationBudgetDenied;
+            if(empty)++stats_.gpuPhysicalShrinkFailures;else{++stats_.gpuPhysicalGrowthFailures;gpuGrowthBudgetBlocked_=true;}
+            return false;
+        }
+    }
     struct Replacement {
         gfx::BufferHandle* owner;
         size_t stride;
@@ -962,6 +997,7 @@ bool ComputeParticles::replaceGpuAllocation(uint32_t next,bool empty){
         for(auto& r:replacements)if(r.fresh.valid())device_->destroyBuffer(r.fresh);
         if(counters.valid())device_->destroyBuffer(counters);
         if(indices.valid())device_->destroyBuffer(indices);
+        retireAllocationCharge(candidateCharge,candidateFence);
         if(empty)++stats_.gpuPhysicalShrinkFailures;else ++stats_.gpuPhysicalGrowthFailures;
         return false;
     };
@@ -996,6 +1032,10 @@ bool ComputeParticles::replaceGpuAllocation(uint32_t next,bool empty){
     }
     size_t copied=0;
     if(!empty){
+    // Even a partially encoded copy can retain candidate resources.
+    const auto fence=device_->gpuSubmissionFence();
+    candidateFence=fence?fence:GpuAllocationBudget::unknownFence;
+    markGpuAllocationUsed();
     copied=8*sizeof(uint32_t);
     for(auto& r:replacements)if(r.preserve){
         const size_t bytes=size_t(old)*r.stride;
@@ -1034,6 +1074,8 @@ bool ComputeParticles::replaceGpuAllocation(uint32_t next,bool empty){
         stats_.gpuGrowthCopiedBytes+=copied;
         ++stats_.gpuPhysicalGrowths;
     }
+    retireAllocationCharge(gpuAllocationCharge_,gpuAllocationLastFence_);
+    gpuAllocationCharge_=candidateCharge;gpuAllocationLastFence_=candidateFence;
     physicalCapacity_=next;
     verticesReady_=false;
     return true;
@@ -1079,7 +1121,7 @@ void ComputeParticles::serviceGpuIdleReclaim(uint32_t pendingBirths){
 }
 bool ComputeParticles::stepGpuAllocated(float dt){
     stats_.hostActiveSlotVisits=stats_.hostOccupiedPages=0;
-    const uint32_t count=uint32_t(pendingStates_.size());
+    uint32_t count=uint32_t(pendingStates_.size());
     serviceGpuIdleReclaim(count);
     if(!gpuAllocationSubmitted_&&!count&&pendingGpuKills_.empty()){
         drawCount_=0;verticesReady_=true;stats_.alive=stats_.submittedSlots=0;return true;
@@ -1090,11 +1132,22 @@ bool ComputeParticles::stepGpuAllocated(float dt){
     };
     if(count&&gpuDemandGrowth_){
         const uint32_t required=uint32_t(std::min<uint64_t>(desc_.capacity,gpuEstimatedBirths_+count));
+        gpuGrowthBudgetBlocked_=false;
         if(!growGpuAllocation(required)){
-            verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
-            reason_="GPU physical capacity growth rejected; pending births retained";return false;
+            if(!gpuGrowthBudgetBlocked_){
+                verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
+                reason_="GPU physical capacity growth rejected; pending births retained";return false;
+            }
+            // Budget pressure is not a device failure. Keep simulating all
+            // resident particles; bound staging to the existing physical pool.
+            // GPU reserve still admits only actually free slots.
+            const auto bounded=std::min(count,allocatedCapacity());
+            stats_.gpuBudgetLimitedBirths+=count-bounded;stats_.dropped+=count-bounded;
+            pendingStates_.resize(bounded);pendingGpuOwners_.resize(bounded);pendingProgramParams_.resize(bounded);
+            count=bounded;
         }
     }
+    markGpuAllocationUsed(); // replacement may have installed a new charge
     const uint32_t cap=allocatedCapacity();
     const uint32_t zero=0;
     if(!device_->updateStorageBufferChecked(vmErrors_,&zero,sizeof(zero)))return reject("GPU allocator VM counter upload rejected");
@@ -1180,6 +1233,7 @@ void ComputeParticles::draw(const fx::FxFog& fog) {
     }
     if(gpuResetDirty_ || !verticesReady_ || !pipeline_.valid() ||
        drawCount_==0)return;
+    markGpuAllocationUsed();
     DrawUniforms u{};
     std::memcpy(u.viewProj,viewProj_.m,sizeof(u.viewProj));
     u.fog[0]=fog.color.x;u.fog[1]=fog.color.y;u.fog[2]=fog.color.z;u.fog[3]=fog.density;
@@ -1211,6 +1265,7 @@ bool ComputeParticles::requestAllocationCounters(std::function<void(bool,Allocat
     if(!callback||!gpuAllocationActive_||!gpuActive()||!device_||!device_->gpuHealthy()||
        !device_->canUpdateSharedBuffers()||gpuResetDirty_||gpuStagingDirty_||
        asyncAllocationCountersPending_||!readbackLifetime_)return false;
+    markGpuAllocationUsed();
     const auto revision=vmFrameRevision_;
     const auto capacity=allocatedCapacity();
     std::weak_ptr<uint64_t> lifetime(readbackLifetime_);
