@@ -158,13 +158,27 @@ public:
     const std::set<ChunkKey3,KeyLess>& activeRimKeys()const noexcept{return activeRimKeys_;}
     uint64_t committedRimSurfaceEpoch()const noexcept{return committedRimSurfaceEpoch_;}
     const CaveSurfaceGroupPlan* rimGroup()const noexcept{return rimPlan_.get();}
+    std::shared_ptr<const CaveSurfaceGroupPlan> frozenRimGroup()const noexcept{return rimPlan_;}
+    bool rimVolumeCommitted(const CaveSurfaceGroupPlan& plan)const noexcept{
+        if(rimPlan_.get()!=&plan||committedRimSurfaceEpoch_!=plan.surfaceEpoch||
+           !snapshot_||committedRevision_!=snapshot_->sourceRevision||activeRimKeys_.size()!=rimRequests_.size())return false;
+        for(const auto& request:rimRequests_){
+            const auto* source=geometry_.catalog().find(request.key);
+            const auto it=physics_.find(request.key);
+            if(!activeRimKeys_.contains(request.key)||!source||!source->preserveExactSurface||
+               source->sourceRevision!=committedRevision_||it==physics_.end()||!it->second||
+               it->second->spatialOwner().activeRevision()!=committedRevision_||
+               it->second->boxOwner().activeRevision()!=committedRevision_)return false;
+        }
+        return true;
+    }
     // Native volume commit alone is NOT surface/GI/nav readiness. The
     // outer host proves ALL matching owners before unblocking readers.
     bool finishRimGroup(const std::function<bool(const CaveSurfaceGroupPlan&)>& ready,
                          const std::function<bool()>& exclusive){
         if(!rimBarrierClosed_||!rimPlan_||!exclusive||!exclusive()||!ready||
            committedRevision_!=stats().requestedRevision||
-           committedRimSurfaceEpoch_!=rimPlan_->surfaceEpoch||
+           !rimVolumeCommitted(*rimPlan_)||
            !ready(*rimPlan_)||!exclusive())return false;
         rimBarrierClosed_=false;return true;
     }
@@ -224,6 +238,7 @@ public:
                 }
                 if(!preparedRimMatchesGroup(*rimPlan_,rims))throw std::invalid_argument("Caverns prepared rim group mismatch");
             }
+            preparedPhysics_.reserve(candidates.size());
             for(const auto& c:candidates) {
                 auto& owner=physics_[c.dirty.key];
                 if(!owner)owner=std::make_unique<CaveVolumePhysicsStage>();
