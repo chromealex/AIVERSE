@@ -89,6 +89,46 @@ inline bool planetRimNativeBoundaryMatches(const CavePlanetFrame& frame,
     }
     return uses.size()==expected.size();
 }
+// Constrained chart-radial shaft replacement. The caller must actually
+// own and replace the isolated source section, never overlay this result
+// on a still-resident original volume. Both terrain and collar use the
+// same chart and native simulation anchor.
+inline CavePlanetNativePayload prepareCavePlanetRimPayload(
+        const CavePlanetFrame& frame,const CavePlanetCutPlan& plan,
+        const CaveVolumeSnapshot& snapshot,uint64_t entranceId,
+        std::span<const world::Triangle> isolatedChartSource,Fixed lowerPlane,
+        world::Cell ownerCell,uint64_t nativeRevision,uint32_t userData=0){
+    if(!sameCavePlanetAnchor(frame.anchor(),plan.anchor)||
+       plan.authorityRevision!=snapshot.sourceRevision||!plan.surfaceEpoch)
+        throw std::invalid_argument("Caverns planetary collar plan identity");
+    validateCavePlanetVolume(frame,snapshot);
+    const auto e=std::find_if(snapshot.entrances.begin(),snapshot.entrances.end(),
+        [&](const auto& value){return value.id==entranceId;});
+    const auto rim=std::find_if(plan.rims.begin(),plan.rims.end(),
+        [&](const auto& value){return value.entranceId==entranceId;});
+    if(e==snapshot.entrances.end()||rim==plan.rims.end()||
+       lowerPlane<Fixed::fromRatio(e->caveYcm,100)||lowerPlane>=Fixed::fromRatio(e->surfaceYcm,100))
+        throw std::invalid_argument("Caverns planetary collar entrance or plane");
+    const auto cx=double(e->xCm)/100.,cz=double(e->zCm)/100.,radius=double(e->radiusCm)/100.;
+    for(const auto& t:isolatedChartSource){
+        const bool trim=t.a.y>lowerPlane||t.b.y>lowerPlane||t.c.y>lowerPlane;
+        for(const auto& p:{t.a,t.b,t.c}){
+            frame.checkLocal(p);
+            if(trim&&std::hypot(p.x.toDouble()-cx,p.z.toDouble()-cz)>radius*1.5)
+                throw std::invalid_argument("Caverns planetary source section not isolated");
+        }
+    }
+    auto retained=trimOwnedSdfShaft(isolatedChartSource,lowerPlane);
+    const auto collar=buildCaveRimTransition(*rim,*e,retained,lowerPlane,plan.surfaceEpoch,plan.authorityRevision);
+    if(collar.triangles.size()>65534-retained.size())
+        throw std::length_error("Caverns planetary collar triangle budget");
+    retained.insert(retained.end(),collar.triangles.begin(),collar.triangles.end());
+    auto result=prepareCavePlanetNativeTriangles(frame,retained,ownerCell,nativeRevision,
+        CavePlanetFrame::metres({e->xCm,e->caveYcm,e->zCm}),userData);
+    if(!planetRimNativeBoundaryMatches(frame,*rim,result.collision.triangles))
+        throw std::invalid_argument("Caverns planetary native rim mismatch");
+    return result;
+}
 inline CavePlanetNativePayload prepareCavePlanetNativeChunk(
         const CavePlanetFrame& frame,const CaveMesh& mesh,uint32_t resolution,
         int32_t spacingCm,uint64_t nativeRevision,uint32_t userData=0){
