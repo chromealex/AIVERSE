@@ -263,6 +263,10 @@ int main() {
     require(sharedHeight.first.msl==sharedNormal.first.msl&&sharedHeight.first.glsl==sharedNormal.first.glsl,"scalar producer differs");
     require(sharedHeight.second.msl.find("height[tid]")!=std::string::npos&&sharedHeight.second.glsl.find("binding=13")!=std::string::npos,"scalar packing ABI missing");
     require(!render::texture_graph::gpu::plan(sharedTexture,0,128).twoPass&&!render::texture_graph::gpu::plan(sharedTexture,2,128,true).twoPass,"independent scalar should stay fused");
+    Json planArgs=Json::object();planArgs.set("action",Json::string("plan"));planArgs.set("graph",tex["graph"]);planArgs.set("bakeSet",Json::fromBool(true));planArgs.set("resolution",Json::number(int64_t(8)));
+    const auto materialized=call("texture_graph_gpu_preview",planArgs);
+    require(materialized.getBool("ok")&&materialized.getStr("state")=="planned"&&!materialized.getBool("executed"),"headless materialized plan missing or fabricated execution");
+    require(materialized["outputs"].size()==2&&materialized["passes"].size()>0&&materialized["slotBytes"].size()>0,"materialized schedule missing slots or outputs");
     const auto headlessGpuTexture=call("texture_graph_gpu_preview",Json::parse(R"({"action":"read"})"));
     require(headlessGpuTexture.getStr("state")=="unavailable","headless texture GPU preview fabricated");
     require(!call("texture_graph_gpu_preview",Json::parse(R"({"action":"cancel","request":"1"})")).getBool("ok"),"headless GPU cancellation fabricated");

@@ -99,7 +99,12 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
    if(action==='validate'){
     const r=await op('texture_graph_validate',{graph,overrides});if(token!==epoch.current)return;if(!object(r)||r.ok!==true)throw new Error('Native validation failed');setStatus('Native topology and work budget valid');return;
    }
-   if(action==='gpuPublish'){
+   if(action==='gpuPlan'){
+     const r=await op('texture_graph_gpu_preview',{action:'plan',graph,overrides,bakeSet:true,resolution:gpuResolution});if(token!==epoch.current)return;
+     if(!object(r)||r.ok!==true||r.state!=='planned'||r.executed!==false||!Array.isArray(r.passes)||!Array.isArray(r.slotBytes))throw new Error('Materialized DAG plan rejected');
+     setStatus('Plan only · '+String(r.resolution)+' px · '+r.passes.length+' passes · '+r.slotBytes.length+' slots · '+String(r.allocatedBytes)+' / '+String(r.budgetBytes)+' logical bytes; no GPU dispatch');return;
+    }
+    if(action==='gpuPublish'){
     if(!gpuRequest?.bake||!gpuReady||gpuRequest.source!==text||gpuRequest.overrides!==overrideText||(!gpuRequest.setBake&&gpuRequest.output!==output))throw new Error('No matching completed bake');
     const r=await op('texture_graph_gpu_preview',{action:'publish',request:gpuRequest.id,textureName});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true)throw new Error('Native GPU bake publication failed');
@@ -242,7 +247,8 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
    <label className="au-row"><input type="checkbox" checked={requireGpu} disabled={busy||disabled} onChange={e=>setRequireGpu(e.target.checked)}/> Require GPU</label>
    <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!outputs.includes(output)} onClick={()=>void run('gpuStart')}>Queue GPU preview</StudioButton><StudioButton size="sm" disabled={busy||disabled||!gpuRequest} onClick={()=>void run('gpuRead')}>Read result</StudioButton></div>
    <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!outputs.includes(output)} onClick={()=>void run('gpuBake')}>Queue full-size GPU bake</StudioButton><StudioButton size="sm" disabled={busy||disabled||!gpuReady||!textureName||gpuRequest?.source!==text||gpuRequest?.overrides!==overrideText||(!gpuRequest?.setBake&&gpuRequest?.output!==output)} onClick={()=>void run('gpuPublish')}>Publish completed bake</StudioButton></div>
-   <StudioButton size="sm" disabled={busy||disabled||!outputs.length} onClick={()=>void run('gpuBakeSet')}>Queue full-size GPU PBR set</StudioButton>
+   <StudioButton size="sm" disabled={busy||disabled||!outputs.length} onClick={()=>void run('gpuPlan')}>Analyze materialized DAG (plan only)</StudioButton>
+    <StudioButton size="sm" disabled={busy||disabled||!outputs.length} onClick={()=>void run('gpuBakeSet')}>Queue full-size GPU PBR set</StudioButton>
    <StudioButton size="sm" disabled={busy||disabled||!gpuRequest} onClick={()=>void run('gpuCancel')}>Cancel GPU request</StudioButton>
     <small>Request timeout: 60 seconds by default. Cancellation discards unpublished results; GPU retirement may still be pending.</small>
     {gpuStatus&&<small>{gpuStatus}</small>}

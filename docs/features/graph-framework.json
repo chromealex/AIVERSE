@@ -104,7 +104,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 34B in progress: typed materialized DAG slot allocation and multi-input pass lowering; no arbitrary native dispatch until shader and owner integration.",
+      "note": "Stage 34B typed DAG slot plan and headless/Studio plan-only inspection implemented; actual multi-input shader lowering and GPU execution pending.",
       "evidence": []
     },
     "architecture": {
@@ -174,7 +174,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 34A exact-source standalone C++20 pass schedule fixture PASS (GCC 14.2). Integrated native/Studio/GPU and Mac gate NOT RUN; previous isolated evidence in handoffs.",
+      "note": "Stage 34B isolated exact-source C++20 DAG lowering test PASS (GCC 14.2, -Wall -Wextra -Werror); native headless fixture, Studio typecheck/build, GPU and Mac gate NOT RUN.",
       "evidence": []
     },
     "handoff": {

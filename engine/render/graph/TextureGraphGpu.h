@@ -2,6 +2,7 @@
 // Fused pointwise DAG: no GPU-side recursive graph or per-node texture allocation.
 #pragma once
 #include "TextureGraph.h"
+#include "TextureGraphDagLowering.h"
 #include "TextureGraphGpuPatterns.h"
 #include "engine/gfx/Gfx.h"
 #include <sstream>
@@ -141,5 +142,22 @@ inline PassPlan plan(const Program& p,size_t target,int n,bool shareScalar=false
     second.glsl="layout(std430,set=0,binding=12) buffer Result { uint outputPixels[]; };\nlayout(std430,set=0,binding=13) readonly buffer Height { float height[]; };\nvoid main(){uint tid=gl_GlobalInvocationID.x;"+body+
         "uvec3 rgb=uvec3(floor(clamp(vec3(0.5f-0.5f*dx/len,0.5f+0.5f*dy/len,0.5f+0.5f/len),0.0f,1.0f)*255.0f+0.5f));outputPixels[tid]=rgb.x|(rgb.y<<8)|(rgb.z<<16)|0xff000000u;}";
     return {std::move(first),std::move(second),true,size_t(n)*n*sizeof(float)};
+}
+// CPU-side materialized execution estimate. Scalar storage uses float32;
+// RGB/packed/normal use an explicitly padded float4 (not float3 ABI).
+// The existing fused native dispatcher does NOT execute this plan yet.
+inline constexpr size_t materializedBudgetBytes=32u*1024u*1024u;
+inline MaterializedDagPlan planMaterializedDag(const Program& p,
+        const std::vector<size_t>& targets,int n,size_t budget=materializedBudgetBytes){
+    require(n>=8&&n<=p.size&&n<=maxBakeSize,"invalid materialized resolution");
+    std::vector<std::vector<size_t>> inputs;
+    std::vector<size_t> bytes;
+    inputs.reserve(p.nodes.size());bytes.reserve(p.nodes.size());
+    for(const auto& node:p.nodes){
+        require(node.info!=nullptr,"invalid materialized node");
+        inputs.push_back(node.inputs);
+        bytes.push_back(size_t(n)*size_t(n)*(node.info->output==Kind::Scalar?4u:16u));
+    }
+    return lowerDagSlots(inputs,p.order,targets,bytes,budget,3);
 }
 } // namespace aiverse::render::texture_graph::gpu
