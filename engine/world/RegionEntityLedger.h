@@ -36,7 +36,7 @@ inline void io(Archive& a,RegionEntityRecord& value) {
 class RegionEntityLedger {
 public:
     static constexpr size_t kMaxEntities=1000000;
-    static constexpr uint32_t kSchema=1;
+    static constexpr uint32_t kSchema=2;
 
     // Explicit transaction wrapper; callers must use its mutation methods.
     class Transaction;
@@ -79,7 +79,7 @@ public:
     };
 
     bool spawn(RegionEntityId id,Cell owner) {
-        if(!id || records_.contains(id) || records_.size()>=kMaxEntities ||
+        if(!id || id<=retiredFloor_ || records_.contains(id) || records_.size()>=kMaxEntities ||
            lastRevision_==std::numeric_limits<uint64_t>::max())return false;
         const auto next=lastRevision_+1;
         // New IDs allocate three map/set entries. On allocation failure,
@@ -179,12 +179,40 @@ public:
         const auto it=records_.find(id);
         return it==records_.end()?nullptr:&it->second;
     }
-    // Tombstones participate in the high-water mark. No extra allocator state
-    // is needed in a checkpoint, WAL or rollback snapshot.
+    // A compacted prefix is sealed permanently. Missing IDs at or below
+    // the floor cannot be allocated again, including previously unused gaps.
+    RegionEntityId retiredFloor()const noexcept{return retiredFloor_;}
+    uint64_t historyFloor()const noexcept{return historyFloor_;}
+    bool isRetired(RegionEntityId id)const{
+        const auto* record=find(id);
+        return record?!record->live:(id!=0&&id<=retiredFloor_);
+    }
     RegionEntityId nextIdentity()const noexcept{
-        if(records_.empty())return 1;
-        const auto high=records_.rbegin()->first;
+        const auto high=records_.empty()?retiredFloor_:std::max(retiredFloor_,records_.rbegin()->first);
         return high==UINT64_MAX?0:high+1;
+    }
+    bool sameState(const RegionEntityLedger& other)const{
+        return lastRevision_==other.lastRevision_&&retiredFloor_==other.retiredFloor_&&
+            historyFloor_==other.historyFloor_&&records_==other.records_;
+    }
+    size_t tombstoneCount()const{return records_.size()-liveIds_.size();}
+    // Exclusive checkpoint barrier on a private candidate. This is NOT a
+    // gameplay mutation or a WAL operation. Do not call inside Transaction,
+    // MutationCapture, or while observers reference this ledger. Publish
+    // only after the compacted checkpoint is durable.
+    size_t compactRetired(uint64_t through,size_t limit=kMaxEntities){
+        if(through>lastRevision_||!limit)return 0;
+        auto* capture=MutationCapture::active_;
+        if(capture&&capture->owner_==this)return 0;
+        size_t removed=0;
+        for(auto it=revisionIndex_.begin();it!=revisionIndex_.end()&&it->first<=through&&removed<limit;){
+            auto row=records_.find(it->second);
+            if(row->second.live){++it;continue;}
+            retiredFloor_=std::max(retiredFloor_,row->first);
+            historyFloor_=std::max(historyFloor_,it->first);
+            records_.erase(row);it=revisionIndex_.erase(it);++removed;
+        }
+        return removed;
     }
     uint64_t lastRevision() const {return lastRevision_;}
     size_t size() const {return records_.size();}
@@ -219,10 +247,12 @@ public:
         std::vector<std::pair<RegionEntityId,RegionEntityRecord>> changes;
         uint64_t nextRevision=0;
         bool more=false;
+        bool resetRequired=false;
     };
     ChangePage pageSince(uint64_t after,size_t limit)const {
         ChangePage page;
         page.nextRevision=after;
+        if(after<historyFloor_||after>lastRevision_){page.resetRequired=true;return page;}
         if(!limit || after==std::numeric_limits<uint64_t>::max())return page;
         auto it=revisionIndex_.upper_bound(after);
         for(;it!=revisionIndex_.end() && page.changes.size()<limit;++it) {
@@ -245,6 +275,8 @@ private:
         if(capture&&capture->owner_==this)capture->truncate(revision);
     }
     uint64_t lastRevision_=0;
+    RegionEntityId retiredFloor_=0;
+    uint64_t historyFloor_=0;
     std::map<RegionEntityId,RegionEntityRecord> records_;
     std::set<RegionEntityId> liveIds_; // never separately saved/hashed
     std::map<uint64_t,RegionEntityId> revisionIndex_; // current revision -> id
@@ -352,6 +384,7 @@ public:
         if(!budget)return false;
         if(last_>ledger.lastRevision())return false;
         const auto page=ledger.pageSince(last_,budget);
+        if(page.resetRequired)return false;
         for(const auto& [id,record]:page.changes) {
             if(!deliver(id,record))return false;
             last_=record.revision;
@@ -365,9 +398,15 @@ public:
 inline void io(Archive& a,RegionEntityLedger& ledger) {
     uint32_t schema=RegionEntityLedger::kSchema;
     a(schema);
-    if(!a.ok() || schema!=RegionEntityLedger::kSchema){a.fail();return;}
+    if(!a.ok() || (schema!=1&&schema!=RegionEntityLedger::kSchema)){a.fail();return;}
     uint64_t latest=ledger.lastRevision_;
     a(latest);
+    uint64_t retired=0,history=0;
+    if(schema>=2){
+        if(a.writing()){retired=ledger.retiredFloor_;history=ledger.historyFloor_;}
+        a(retired,history);
+    }
+    if(!a.ok()||history>latest||bool(retired)!=bool(history)){a.fail();return;}
     const uint32_t n=a.count(a.writing()?ledger.records_.size():0,29);
     if(!a.ok() || n>RegionEntityLedger::kMaxEntities){a.fail();return;}
     std::map<RegionEntityId,RegionEntityRecord> decoded;
@@ -395,6 +434,7 @@ inline void io(Archive& a,RegionEntityLedger& ledger) {
     }
     if(a.ok()) {
         ledger.lastRevision_=latest;
+        ledger.retiredFloor_=retired;ledger.historyFloor_=history;
         ledger.records_=std::move(decoded);
         ledger.liveIds_=std::move(live);
         ledger.revisionIndex_=std::move(ordered);
@@ -407,6 +447,8 @@ template<class SimulationT>
 void registerRegionEntityLedger(SimulationT& sim) {
     sim.template registerPersistentResource<RegionEntityLedger>(
         "aiverse.world.region_entity_ledger",RegionEntityLedger::kSchema);
+    sim.template registerPersistentResourceMigration<RegionEntityLedger>(
+        "aiverse.world.region_entity_ledger",1,[](Archive& a,RegionEntityLedger& ledger){io(a,ledger);});
 }
 
 } // namespace aiverse::world
