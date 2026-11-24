@@ -372,7 +372,7 @@ std::string ClientFx::graphSourceAsset(const std::string& name,bool allowGpu) {
                     }
                 }
             }catch(const std::exception& ex) {
-                std::fprintf(stderr,"SpectraFX pooled graph '%s': %s; CPU retained\\n",name.c_str(),ex.what());
+                std::fprintf(stderr,"SpectraFX pooled graph '%s': %s; CPU retained\n",name.c_str(),ex.what());
             }
         }
         return runtimeName;
@@ -484,7 +484,9 @@ void ClientFx::prepareGraphGpuFrame(Simulation& sim,const game::GameScene& scene
     finishGraphGpuFrame();
     if(graphSourceHaveTick_&&sim.tick()<graphSourceTick_)clearGraphSources();
     const bool allowed=attached_&&!planet_&&ps_.quality()>=fx::FxQuality::Medium;
-    if(!allowed&&graphPool_.ready())graphPoolResetPending_=true;
+    if(!allowed&&graphPool_.ready()&&
+       (graphGpuMirror_.size()!=0||graphPool_.stats().activeSources!=0||
+        graphPool_.stats().gpuParticlesEstimated!=0))graphPoolResetPending_=true;
     if(graphPoolResetPending_&&graphGpuSources_) {
         if(graphGpuSources_->resetForRollback())graphPoolResetPending_=false;
     }
