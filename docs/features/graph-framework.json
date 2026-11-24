@@ -126,7 +126,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35E shared optional native room topology parser and view implemented; owner DTO on PR #136; native and Studio acceptance pending.",
+      "note": "Stage 35E shared native topology parser/inspector and structural reachability comparison implemented; native DTO and actual owner panel remain in PR #136, not merged.",
       "evidence": []
     },
     "architecture": {
@@ -196,7 +196,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35E fixtures authored; verification pending.",
+      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN.",
       "evidence": []
     },
     "handoff": {
