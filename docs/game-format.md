@@ -2833,10 +2833,24 @@ explored never show resources / territory.
 "owner": "enemy", "types": [...], "max": 32}`: every matching simulation event spawns a popup at its
 position for `lifetime` seconds, rising `rise` units / s, rings / icons growing `grow` / s. `by` =
 relation of the player who caused it, `owner` = of the object it happened to, `types` = its type.
-Events: `hit`, `died`, `spawned`, `attack`, `gathered`, `delivered`, `produced`, `ability`, `cast`,
+Events: `hit`, `died`, `bounty`, `spawned`, `attack`, `gathered`, `delivered`, `produced`, `ability`, `cast`,
 `impact`, `miss`, `built`, `placed`, `trained`, `researched`, `levelup`, `captured`, `sold`,
 `upgraded`, `alert` (under attack), `status`, `area`, `claimed`, `wave`, `message`, `ping` (pings of
 the client / editor). Popups never appear in cells the local player cannot see.
+
+For hit popups, `event.critical: true` selects critical hits and `false` selects normal hits; omit it to keep both. The critical flag is the result of the existing Progression critical roll, not a second random roll. `{critical}` formats 1 or 0; `{value}` still formats final damage. Use two overlays with different styles:
+
+```json
+{"id":"critical_damage","event":{"on":"hit","critical":true,"rise":1.5},"shape":{"type":"text","text":"CRIT -{value}","size":1.4},"style":{"color":"#ff9850ff"}}
+```
+
+For actual kill rewards, `event.on: "bounty"` emits a popup per resource credited to the recipient after conversion and storage caps. `by: "own"` filters the recipient; `owner` still describes the victim. `{amount}` and `{resource}` show the actual amount and resource name. On a `died` popup, `{bounty}` lists all credited resources, while `{bounty:gold}` formats the credited gold (0 if none). `bountyResource: "gold"` restricts either event to positive credits of the selected resource. Death `{value}` and `by` retain legacy meaning (victim type and owner); choose the bounty event for recipient filtering. The death popup associates reward events in the same received event batch, using the original generation-aware victim identity. Kill rewards outside the authored type bounty (e.g. XP, score or gainKill) are not included. Critical and bounty templates are available through the existing overlay authoring interface.
+
+```json
+{"id":"gold_reward","event":{"on":"died","bountyResource":"gold"},"shape":{"type":"text","text":"+{bounty:gold} gold","size":1.1},"style":{"color":"#ffd84aff"}}
+```
+
+Simulation and view scripts expose `critical` on damage events and `bounty` events with `amount`, `resource`, `unit_type` and `victim_owner`.
 
 **Quality tiers** (renderer material quality; `AIVERSE_OVERLAYS=low|medium|high` for testing): game
 overlays are capped per overlay (48 / 192 / 1024 elements), per grid / cells shape (600 / 3000 /
