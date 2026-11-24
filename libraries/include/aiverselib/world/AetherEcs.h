@@ -88,7 +88,9 @@ inline bool addDelta(Mass& current,Mass delta){
 // Stages all three species + sources transactionally; a failed budget,
 // invalid mass or invalid active flux does not touch authoritative data.
 // Stable packed Entity ordering makes results independent of pool layout.
-inline bool advance(World& world,std::uint32_t tick){
+// Custom transport operates on staged species only; no World mutations.
+template<class Transport>
+inline bool advanceWithTransport(World& world,std::uint32_t tick,const Transport& transport){
     const World& read=world;
     if(read.countExisting<GasCell>()>kMaxCells ||
        read.countExisting<GasDuct>()>kMaxDucts ||
@@ -143,7 +145,7 @@ inline bool advance(World& world,std::uint32_t tick){
     // One ordered edge traversal for all species; skip ducts without any
     // actual transfer and allocate scratch only for species that move.
     // All cells still participate in validation, flux and tick stamping.
-    if(!lib::worldprocess::diffuseSpecies(species,flows))return false;
+    if(!transport(read,cells,enabled,species,flows))return false;
 
     std::vector<std::pair<Entity,GasFlux>> sources;
     read.eachExistingConst<GasFlux>([&](Entity e,const GasFlux& f){
@@ -173,6 +175,12 @@ inline bool advance(World& world,std::uint32_t tick){
         gas.sampledTick=tick;
     }
     return true;
+}
+inline bool advance(World& world,std::uint32_t tick){
+    return advanceWithTransport(world,tick,[](const World&,const auto&,const auto&,
+            auto& species,const auto& flows){
+        return lib::worldprocess::diffuseSpecies(species,flows);
+    });
 }
 inline void registerPersistence(Simulation& sim){
     sim.registerPersistentComponent<GasCell>("aether.gas_cell",1);
