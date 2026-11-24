@@ -804,7 +804,7 @@ Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
         if(action=="studioPbrRead")return presentation.captureStatus();
         throw std::invalid_argument("Unknown Studio graph presentation action");
     }
-    if(action=="start")return owner.start(p,ws.project.dir,lease);
+    if(action=="start")return owner.start(p,ws.project.dir,lease,editor::textureGraphImageResolver(ws));
     if(action=="read")return owner.status();
     if(action=="cancel")return owner.cancel(p,ws.project.dir);
     if(action=="publish")return owner.publish(ws,p);

@@ -14,6 +14,7 @@
 #include "engine/render/graph/TextureGraph.h"
 #include "engine/render/graph/TextureGraphTemplates.h"
 #include "engine/render/graph/TextureGraphCache.h"
+#include "engine/pack/Sha256.h"
 #include <memory>
 
 #if defined(__GNUC__)
@@ -231,8 +232,41 @@ Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::s
     Json r=okJson();r.set("path",Json::string(rel));r.set("output",Json::string(output));r.set("size",Json::number(int64_t(image.width)));return r;
 }
 
+namespace {
+struct PinnedRaster {std::string revision;render::Image image;};
+PinnedRaster readPinnedRaster(const Workspace& ws,const std::string& rel,const std::string& expected,size_t maxBytes){
+    needProject(ws);
+    const fs::path relative(rel);
+    if(rel.size()>512||rel.find('\\')!=std::string::npos||rel.find(':')!=std::string::npos||relative.is_absolute()||relative.empty()||*relative.begin()!="content")throw std::invalid_argument("image asset must be inside project content");
+    auto path=fs::canonical(ws.project.dir);
+    for(const auto& part:relative){
+        if(part==".."||part=="."||part.empty())throw std::invalid_argument("invalid image asset path");
+        path/=part;if(fs::is_symlink(path))throw std::invalid_argument("image asset symlink rejected");
+    }
+    if(!fs::is_regular_file(path))throw std::runtime_error("image asset missing");
+    const auto length=fs::file_size(path);
+    if(!length||length>16u*1024u*1024u)throw std::runtime_error("image asset exceeds 16 MiB encoded file cap");
+    std::string bytes(size_t(length),'\0');std::ifstream stream(path,std::ios::binary);
+    if(!stream.read(bytes.data(),std::streamsize(bytes.size()))||stream.peek()!=std::char_traits<char>::eof())throw std::runtime_error("image asset changed during read");
+    const auto digest=pack::sha256(bytes.data(),bytes.size());
+    PinnedRaster result;result.revision=pack::toHex(digest.data(),digest.size());
+    if(!expected.empty()&&expected!=result.revision)throw std::runtime_error("image asset revision changed; explicitly reselect or refresh source");
+    if(!render::decodeTextureGraphRaster(bytes,maxBytes/4,result.image))throw std::runtime_error("unsupported PNG/JPEG or image source exceeds decoded budget");
+    return result;
+}
+}
+render::texture_graph::ImageResolver textureGraphImageResolver(const Workspace& ws){
+    return [&ws](const std::string& path,const std::string& revision,size_t budget){
+        auto loaded=readPinnedRaster(ws,path,revision,budget);
+        render::texture_graph::ImageSource result;result.width=loaded.image.width;result.height=loaded.image.height;
+        const auto& rgba=loaded.image.rgba;result.rgb.resize(rgba.size()/4);
+        for(size_t i=0;i<result.rgb.size();++i)result.rgb[i]=(uint32_t(rgba[i*4])<<16)|(uint32_t(rgba[i*4+1])<<8)|rgba[i*4+2];
+        return result;
+    };
+}
+
 Json publishTextureGraphSet(Workspace& ws,const std::string& name,const Json& graph,const Json& overrides,const std::vector<render::Image>& images,const std::vector<std::string>& backends){
-    needProject(ws);const auto program=render::texture_graph::compile(graph,overrides);
+    needProject(ws);const auto program=render::texture_graph::compile(graph,overrides,textureGraphImageResolver(ws));
     if(images.size()!=program.outputs.size()||backends.size()!=images.size())throw std::invalid_argument("incomplete texture set");
     for(size_t i=0;i<images.size();++i){
         const auto& image=images[i];const auto& backend=backends[i];
@@ -469,6 +503,11 @@ void registerMaterialOps(Workspace& ws) {
     auto textureCache=std::make_shared<render::texture_graph::EvaluationCache>();
     const std::string graphSchema=R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"textureName":{"type":"string"},"overrides":{"type":"object"}}})";
     add("texture_graph_cache","Inspect or clear this Workspace texture evaluation cache.",R"({"properties":{"clear":{"type":"boolean"}}})",[w,textureCache](const Json& p){textureCache->selectProject(w->project.dir);if(p.getBool("clear"))textureCache->clear();return textureCache->status();});
+    add("texture_graph_image_asset","Inspect a project PNG/JPEG and return its immutable source revision and dimensions.",R"({"type":"object","properties":{"asset":{"type":"string"}},"required":["asset"]})",[w](const Json& p){
+        auto image=readPinnedRaster(*w,p.getStr("asset"),"",render::texture_graph::maxImageSourceBytes);
+        Json r=okJson();r.set("asset",Json::string(p.getStr("asset")));r.set("revision",Json::string(image.revision));
+        r.set("width",Json::number(int64_t(image.image.width)));r.set("height",Json::number(int64_t(image.image.height)));return r;
+    });
     add("texture_graph_catalog","Native typed procedural CPU node catalog.",R"({"type":"object"})",[](const Json&){return render::texture_graph::describeCatalog();});
     add("texture_graph_templates","Validated native PBR starter graph documents.",R"({"type":"object"})",[](const Json&){Json r=okJson();r.set("templates",render::texture_graph::templates());return r;});
     add("texture_graph_list","List saved texture graph documents.",R"({"type":"object"})",[graphPath](const Json&){
@@ -477,11 +516,11 @@ void registerMaterialOps(Workspace& ws) {
         std::sort(names.begin(),names.end());Json r=okJson();r.set("graphs",strs(names));return r;
     });
     add("texture_graph_get","Read saved source graph.",graphSchema,[graphPath,readGraph](const Json& p){Json r=okJson();r.set("graph",readGraph(graphPath(p.getStr("name"))));return r;});
-    add("texture_graph_validate","Validate types, topology, parameters and work budget without evaluating or writing.",graphSchema,[](const Json& p){
-        auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object());Json r=okJson();r.set("nodes",Json::number(int64_t(program.nodes.size())));r.set("size",Json::number(int64_t(program.size)));return r;
+    add("texture_graph_validate","Validate types, topology, parameters and work budget without evaluating or writing.",graphSchema,[w](const Json& p){
+        auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object(),textureGraphImageResolver(*w));Json r=okJson();r.set("nodes",Json::number(int64_t(program.nodes.size())));r.set("size",Json::number(int64_t(program.size)));return r;
     });
-    add("texture_graph_set","Save validated graph; existing source requires matching expected document. No texture bake.",graphSchema,[graphPath,readGraph,publish](const Json& p){
-        render::texture_graph::compile(p["graph"]);auto file=graphPath(p.getStr("name"));
+    add("texture_graph_set","Save validated graph; existing source requires matching expected document. No texture bake.",graphSchema,[w,graphPath,readGraph,publish](const Json& p){
+        render::texture_graph::compile(p["graph"],Json::object(),textureGraphImageResolver(*w));auto file=graphPath(p.getStr("name"));
         bool exists=fs::exists(file);
         if(exists&&(!p["expected"].isObject()||!(readGraph(file)==p["expected"])))throw std::runtime_error("texture graph changed; reload before save");
         const auto bytes=p["graph"].dump(2)+"\n";
@@ -490,7 +529,7 @@ void registerMaterialOps(Workspace& ws) {
         Json r=okJson();r.set("graph",p["graph"]);return r;
     });
     add("texture_graph_preview","Evaluate one node or output at up to 32x32, return actual RGBA8 hex without disk writes.",graphSchema,[w,textureCache](const Json& p){
-        auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object());size_t target=program.nodes.size();
+        auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object(),textureGraphImageResolver(*w));size_t target=program.nodes.size();
         if(p.has("node")){for(size_t i=0;i<program.nodes.size();++i)if(program.nodes[i].id==p.getStr("node"))target=i;}
         else {auto it=program.outputs.find(p.getStr("output"));if(it!=program.outputs.end())target=it->second;}
         textureCache->selectProject(w->project.dir);bool cacheHit=false;
@@ -499,7 +538,7 @@ void registerMaterialOps(Workspace& ws) {
         Json r=okJson();r.set("width",Json::number(int64_t(img.width)));r.set("height",Json::number(int64_t(img.height)));r.set("rgbaHex",Json::string(hex));r.set("cacheHit",Json::fromBool(cacheHit));return r;
     });
     add("texture_graph_bake","Evaluate one declared output at full resolution and publish new PNG under content/textures; never overwrite.",graphSchema,[w,textureCache](const Json& p){
-        needProject(*w);auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object());auto output=p.getStr("output"),name=p.getStr("textureName");
+        needProject(*w);auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object(),textureGraphImageResolver(*w));auto output=p.getStr("output"),name=p.getStr("textureName");
         if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture name");
         auto it=program.outputs.find(output);if(it==program.outputs.end())throw std::invalid_argument("unknown output");
         textureCache->selectProject(w->project.dir);bool cacheHit=false;
@@ -508,7 +547,7 @@ void registerMaterialOps(Workspace& ws) {
     });
 
     add("texture_graph_bake_set","Bake all declared outputs into a new named directory; stage all PNGs before publication, no overwrite of existing set.",graphSchema,[w,textureCache](const Json& p){
-        needProject(*w);const auto overrides=p.has("overrides")?p["overrides"]:Json::object();const auto program=render::texture_graph::compile(p["graph"],overrides);
+        needProject(*w);const auto overrides=p.has("overrides")?p["overrides"]:Json::object();const auto program=render::texture_graph::compile(p["graph"],overrides,textureGraphImageResolver(*w));
         std::vector<size_t> targets;for(const auto& [output,index]:program.outputs)targets.push_back(index);
         textureCache->selectProject(w->project.dir);bool cacheHit=false;
         auto images=textureCache->evaluate(program,targets,0,cacheHit);
@@ -524,7 +563,7 @@ void registerMaterialOps(Workspace& ws) {
         if(fs::is_symlink(root/"content")||fs::is_symlink(root/"content"/"textures")||fs::is_symlink(dir)||fs::is_symlink(file)||!fs::is_regular_file(file)||fs::file_size(file)>512*1024)throw std::runtime_error("invalid texture set manifest");
         const auto manifest=Json::parseFile(file.string());
         if(manifest.getInt("version")!=1)throw std::runtime_error("unsupported texture set manifest");
-        const auto program=render::texture_graph::compile(manifest["graph"],manifest["overrides"]);
+        const auto program=render::texture_graph::compile(manifest["graph"],manifest["overrides"],textureGraphImageResolver(*w));
         if(!manifest["files"].isArray()||manifest["files"].size()!=program.outputs.size())throw std::runtime_error("incomplete texture set manifest");
         const std::map<std::string,std::string> channels={{"color","texture"},{"normal","normalMap"},{"metallicRoughness","metallicRoughnessMap"},{"ao","occlusionMap"},{"emissive","emissiveMap"},{"mask","teamMask"}};
         Json material=Json::object();material.set("base",Json::string(base));

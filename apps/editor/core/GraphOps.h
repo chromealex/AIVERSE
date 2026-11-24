@@ -1,6 +1,7 @@
 // Shared graph authoring facade. Workspace domain owners retain validation and persistence.
 #pragma once
 #include "Workspace.h"
+#include "MaterialOps.h"
 #include "GraphDraftEdits.h"
 #include "GraphAssetDependencies.h"
 #include "GraphRuntimeProbe.h"
@@ -164,7 +165,7 @@ inline void registerGraphOps(Workspace& ws) {
             if(p.getStr("action")=="plan"){
                 if(p.getBool("incrementalOutputs"))throw std::invalid_argument("incremental output reuse requires a live target, not plan inspection");
                 using namespace render::texture_graph;
-                const auto program=compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object());
+                const auto program=compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object(),textureGraphImageResolver(ws));
                 const bool transfer=p.getBool("gpuTextureTransfer"),mipmaps=p.getBool("gpuTextureMipmaps"),fenceOnly=p.getBool("gpuTextureFenceOnly"),incremental=p.getBool("incremental");
                 require(!fenceOnly||transfer,"fence-only mode requires GPU texture transfer");
                 require(!mipmaps||transfer,"GPU texture mipmaps require texture transfer");

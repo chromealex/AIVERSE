@@ -5,10 +5,12 @@
 #pragma once
 #include "Workspace.h"
 #include "engine/render/Model.h"
+#include "engine/render/graph/TextureGraph.h"
 
 namespace aiverse::editor {
 
 void registerMaterialOps(Workspace& ws);
+render::texture_graph::ImageResolver textureGraphImageResolver(const Workspace& ws);
 // Native owner only: publish completed validated pixels as a new texture asset.
 Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::string& output,const render::Image& image);
 // Images/backends in native Program::outputs sorted order; trusted native owner only.

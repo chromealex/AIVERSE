@@ -216,7 +216,7 @@ void Editor::registerPlayOps() {
                     if(!current||current->identity.publication!=view::parseAppearanceIdentity(p.getStr("expectedModelPublication"))||
                        current->identity.version!=view::parseAppearanceIdentity(p.getStr("expectedVersion")))throw std::runtime_error("incremental output target changed; inspect again");
                 }
-                return textureGraphGpuPreview_.start(p,ws_.project.dir,gpuDeviceLease());
+                return textureGraphGpuPreview_.start(p,ws_.project.dir,gpuDeviceLease(),editor::textureGraphImageResolver(ws_));
             }
             if(p.getStr("action")=="read")return textureGraphGpuPreview_.status();
             if(action=="cancel"){
