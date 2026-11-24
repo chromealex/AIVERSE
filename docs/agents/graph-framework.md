@@ -239,3 +239,7 @@ Port Stage 53/54 native transaction, Shader/SpectraFX owners, generic graph faca
 ## Stage 60 — complete Caverns owner source merge
 
 Pinned Caverns integration a5ca5ae18f39cd5cc0e9908d5bd832b501c18fe4 merged with Building/Graph integration. Full-tree verification retained every non-overlapping path; 15 divergent shared paths reconciled by three-way line merge and explicit resolutions. Existing Caverns native generation, editor scene preview and planetary authoring now share the graph scope/inspection with guarded shader and FX persistence. No new evaluator or duplicate owner. Native and web execution NOT RUN; do not claim readiness.
+
+## Stage 61 — planetary inspection contract audit
+
+The read-only report adapter rejects explicit mutation replies, native-invalid body ID lengths, depth bands outside the chart, and stamp/entrance spheres crossing chart boundaries. Mirrors the native chart geometry checks for the active region; no new solver or mutation API. Corrected the previously impossible planetary fixture and added rejection cases. Full native and frontend acceptance remains pending.

@@ -44,11 +44,27 @@ test('native caps enforced even for rows outside first page',()=>{
 
 test('planet region captures preserve exact int64 identities and chart coordinates',()=>{
  const id='9007199254740993',revision='9007199254740995';
- const s=snapshot([stamp(Number(id))],[entrance(2)]);s.sourceRevision=Number(revision);
+ const s=snapshot([stamp(Number(id))],[entrance(2)]);s.sourceRevision=Number(revision);s.settings.minYcm=-3500;
  const anchor={version:1,body:'moon_1',face:5,aQ16:65536,bQ16:131072,halfExtentCm:4000};
  const r={...reply(s),planetary:true,activeRegionId:'7',planetAnchor:anchor,planetRegions:[{id:'7',anchor,revisionText:revision}],revisionText:revision,generatorVersionText:'1',seedText:'7',stampIds:[id],entranceIds:['2']};
  const data=inspectCaveReply(r);
  assert.equal(data.revision,revision);assert.equal(data.stamps[0].id,id);assert.equal(data.planet.anchor.body,'moon_1');
  assert.equal(projectCavePage(data).visible[0].id,id);
  for(const bad of [{...r,activeRegionId:'8'},{...r,stampIds:['9']},{...r,revisionText:'8'},{...r,planetRegions:[...r.planetRegions,...r.planetRegions]}])assert.throws(()=>inspectCaveReply(bad));
+});
+
+test('planet projection rejects geometrically impossible owner reports and mutation replies',()=>{
+ const anchor={version:1,body:'moon',face:0,aQ16:0,bQ16:0,halfExtentCm:4000};
+ const s=snapshot([stamp(1)],[entrance(2)]);s.settings.minYcm=-3500;
+ const r={...reply(s),changed:false,planetary:true,activeRegionId:'1',planetAnchor:anchor,planetRegions:[{id:'1',anchor,revisionText:'9'}],revisionText:'9',generatorVersionText:'1',seedText:'7',stampIds:['1'],entranceIds:['2']};
+ assert.equal(inspectCaveReply(r).planet.activeRegionId,'1');
+ for(const bad of [
+  {...s,settings:{...s.settings,minYcm:-4001}},
+  {...s,stamps:[{...s.stamps[0],xCm:3800}]},
+  {...s,entrances:[{...s.entrances[0],surfaceYcm:3800}]},
+  {...s,entrances:[{...s.entrances[0],caveYcm:-3800}]}
+ ]) assert.throws(()=>inspectCaveReply({...r,snapshot:bad}),/chart bounds/);
+ assert.throws(()=>inspectCaveReply({...r,changed:true}),/not read-only/);
+ const longAnchor={...anchor,body:'a'.repeat(129)};
+ assert.throws(()=>inspectCaveReply({...r,planetAnchor:longAnchor,planetRegions:[{id:'1',anchor:longAnchor,revisionText:'9'}]}),/planet anchor/);
 });

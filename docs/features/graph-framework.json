@@ -178,7 +178,7 @@
     },
     "graphs": {
       "status": "not_run",
-      "note": "Stage 60 combines current native Caverns owner and Building with scoped flat/planetary inspection and active-region projection in the existing Caverns panel. Native owner registration and bridge presence inspected in merged source; runtime/visual verification pending.",
+      "note": "Stage 60 combines current native Caverns owner and Building with scoped flat/planetary inspection and active-region projection in the existing Caverns panel. Native owner registration and bridge presence inspected in merged source; runtime/visual verification pending. Stage 61 aligns the inspector's chart extent checks with native validateCavePlanetBounds and rejects mutation replies.",
       "evidence": []
     },
     "performance": {
@@ -208,7 +208,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F fixtures added; NOT RUN. Stage 55 source changes, execution NOT RUN. Stage 56 source changed; native and web tests NOT RUN. Stage 57 changes source, tests NOT RUN. Stage 58 tests NOT RUN. Stage 60 merged source changes; all merged-tree execution NOT RUN.",
+      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F fixtures added; NOT RUN. Stage 55 source changes, execution NOT RUN. Stage 56 source changed; native and web tests NOT RUN. Stage 57 changes source, tests NOT RUN. Stage 58 tests NOT RUN. Stage 60 merged source changes; all merged-tree execution NOT RUN. Stage 61 additional projection fixtures authored, NOT RUN.",
       "evidence": []
     },
     "handoff": {

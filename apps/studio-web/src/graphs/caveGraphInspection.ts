@@ -39,7 +39,7 @@ export type CavePlanetRegion={id:string;anchor:CavePlanetAnchor;revision:string}
 export type CavePlanetContext={activeRegionId:string;anchor:CavePlanetAnchor;regions:readonly CavePlanetRegion[]};
 const parseAnchor=(value:unknown):CavePlanetAnchor=>{
  const a=obj(value,'planet anchor');
- if(a.version!==1||typeof a.body!=='string'||!a.body||a.body.length>256)throw new Error('Invalid planet anchor');
+ if(a.version!==1||typeof a.body!=='string'||!a.body||a.body.length>128)throw new Error('Invalid planet anchor');
  return {version:1,body:a.body,face:int(a.face,'cube face',0,5),aQ16:int(a.aQ16,'chart A',0,512*65536),
   bQ16:int(a.bQ16,'chart B',0,512*65536),halfExtentCm:int(a.halfExtentCm,'chart extent',100,15000)};
 };
@@ -89,7 +89,7 @@ export function parseCaveSnapshot(value:unknown,identity?:NativeIdentity):CaveIn
 }
 export function inspectCaveReply(value:unknown):CaveInspection{
  const r=obj(value,'Caverns get reply');
- if(r.ok!==true||r.error)throw new Error('Caverns get failed');
+ if(r.ok!==true||r.error||('changed' in r&&r.changed!==false))throw new Error('Caverns get failed or was not read-only');
  const hasIdentity=['revisionText','seedText','generatorVersionText','stampIds','entranceIds'].some(k=>k in r);
  const identity:NativeIdentity|undefined=hasIdentity?{
   revision:decimal(r.revisionText,'revisionText'),seed:decimal(r.seedText,'seedText',false),
@@ -110,6 +110,15 @@ export function inspectCaveReply(value:unknown):CaveInspection{
   if(new Set(regions.map(region=>region.id)).size!==regions.length)throw new Error('Duplicate planetary region');
   const active=regions.find(region=>region.id===activeRegionId);
   if(!active||active.revision!==data.revision||JSON.stringify(active.anchor)!==JSON.stringify(anchor))throw new Error('Active planetary region identity mismatch');
+  // Match the native chart's geometric limits. A region-local centre is
+  // insufficient: the complete sphere and both shaft ends must fit.
+  const cap=anchor.halfExtentCm;
+  const inside=(x:number,y:number,z:number,radius:number)=>radius<=cap&&
+   Math.abs(x)<=cap-radius&&Math.abs(y)<=cap-radius&&Math.abs(z)<=cap-radius;
+  if(data.settings.minYcm< -cap||data.settings.maxYcm>cap||
+     data.stamps.some(s=>!inside(s.xCm,s.yCm,s.zCm,s.radiusCm))||
+     data.entrances.some(e=>!inside(e.xCm,e.caveYcm,e.zCm,e.radiusCm)||!inside(e.xCm,e.surfaceYcm,e.zCm,e.radiusCm)))
+   throw new Error('Caverns planetary snapshot exceeds chart bounds');
   data.planet={activeRegionId,anchor,regions};
  }else if(r.planetAnchor!==undefined||r.activeRegionId!==undefined||r.planetRegions!==undefined)throw new Error('Unexpected planetary metadata');
  return data;
