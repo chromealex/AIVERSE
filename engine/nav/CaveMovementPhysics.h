@@ -8,6 +8,7 @@
 #include "engine/physics/Scene.h"
 #include <cstdint>
 #include <functional>
+#include <utility>
 #include <stdexcept>
 
 namespace aiverse::nav {
