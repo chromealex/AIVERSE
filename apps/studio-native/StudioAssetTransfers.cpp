@@ -1057,12 +1057,14 @@ TrashReview reviewTrash(const fs::path& project,const std::string& id,const std:
     }
     if(action=="restore"){
         StudioAssetCatalog catalog(project);catalog.rebuild(false);
-        const auto relative=fs::path(r.path),parent=relative.parent_path().generic_string();
+        const auto relative=fs::path(r.path);
+        const auto parent=relative.parent_path().generic_string();
         const auto live=checkedFolder(project,parent=="."?"":parent)/relative.filename();
         if(r.kind=="replacement"){
             const auto entry=catalog.byGuid(r.guid);
             if(!entry||entry->path!=r.path||entry->directory)throw std::runtime_error("Replacement target GUID/path no longer matches");
             result.liveDigest=studioAssetFileDigest(live);
+            if(result.liveDigest==r.digest)throw std::runtime_error("This version is already active");
             if(fs::file_size(studioMetaPath(live))>1024*1024)throw std::runtime_error("Target metadata exceeds recovery limit");
             result.liveMeta=editor::readProjectFileBytes(studioMetaPath(live));
             const auto m=Json::parse(result.liveMeta);

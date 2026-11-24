@@ -110,6 +110,7 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
   }
   if (method === 'studio.assetByGuid' || method === 'studio.assetMetaPatch' ||
       method === 'studio.assetFolderCreate' || method === 'studio.assetDelete' ||
+      method === 'studio.assetTrashList' || method === 'studio.assetTrashReview' || method === 'studio.assetTrashApply' ||
       method === 'studio.assetMovePreview' || method === 'studio.assetImportPreview' ||
       method === 'studio.assetTransferCommit') {
     throw Error('Project asset operations require the native AIVERSE host');

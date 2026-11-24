@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DragEvent } from 'react';
 import {
   FileAudio, Box, FileCode2, FileImage, FileText, Folder, FolderOpen,
-  Grid2X2, List, RefreshCw, Search, ChevronRight, Library, Upload, FolderPlus, X, Link2, Unlink
+  Grid2X2, List, RefreshCw, Search, ChevronRight, Library, Upload, FolderPlus, X, Link2, Unlink, Trash2
 } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import type {
@@ -17,6 +17,7 @@ import { assetKind, assetFolders, assetFileName, assetBreadcrumbs,
 import type { AssetFolder, AssetKind } from '../assetTree';
 import './AssetsPanel.css';
 import AssetImportSettings from './AssetImportSettings';
+import AssetTrashDialog from './AssetTrashDialog';
 import { StudioContextMenu, type StudioMenuItem } from '../ui';
 
 const ASSET_DRAG_MIME='application/x-aiverse-content-path';
@@ -156,6 +157,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
   const [busy,setBusy]=useState(false);
   const [addingFolder,setAddingFolder]=useState(false);
   const [folderName,setFolderName]=useState('');
+  const [trashOpen,setTrashOpen]=useState(false);
   const [renameTarget,setRenameTarget]=useState<string|null>(null);
   const [renameName,setRenameName]=useState('');
   const [deleteTarget,setDeleteTarget]=useState<{path:string;guid:string;project:string;version:string}|null>(null);
@@ -195,7 +197,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       setError(String(payload.message));
     }
   }),[reload]);
-  useEffect(()=>{setFolder('');setSelected(null);setPinnedAssetGuid(null);setSearch('');setPlan(null);setRenameTarget(null);setDeleteTarget(null);},[projectPath]);
+  useEffect(()=>{setFolder('');setSelected(null);setPinnedAssetGuid(null);setSearch('');setPlan(null);setRenameTarget(null);setDeleteTarget(null);setTrashOpen(false);},[projectPath]);
   // Command palette (# assets) reveals a file: open its folder and select it.
   useEffect(()=>{
     const reveal=(event:Event)=>{
@@ -410,6 +412,8 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       <button type="button" className="studio-assets-tool-action"
         disabled={!native||!projectPath||busy} onClick={()=>void externalImport()}
         title="Import files or folders" aria-label="Import into content"><Upload size={16}/></button>
+      <button type="button" className="studio-assets-tool-action" disabled={!native||!projectPath||busy}
+        onClick={()=>setTrashOpen(true)} title="Recover deleted assets and previous versions" aria-label="Open asset Trash"><Trash2 size={16}/></button>
       <div className="studio-assets-views" role="group" aria-label="Asset layout">
         <button type="button" aria-label="Grid view" title="Grid view"
           aria-pressed={mode==='grid'} onClick={()=>setMode('grid')}><Grid2X2 size={15}/></button>
@@ -541,6 +545,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     </div>}
     {menu&&<StudioContextMenu x={menu.x} y={menu.y} label="Asset actions"
       items={menu.background?backgroundItems():menuItems(menu)} onClose={()=>setMenu(null)}/>}
+    {trashOpen&&<AssetTrashDialog key={projectPath} projectPath={projectPath} onClose={()=>setTrashOpen(false)} onChanged={reload}/>}
     {plan&&<PreviewDialog key={plan.token} plan={plan} busy={busy}
       onCancel={()=>setPlan(null)} onCommit={decisions=>void applyTransfer(decisions)}/>}
   </section>;
