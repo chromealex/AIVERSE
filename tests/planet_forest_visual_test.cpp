@@ -56,6 +56,28 @@ int main(){
         auto newBody=oldBody;newBody.key=wp::consequenceKey(current);
         physical.bodies.push_back(newBody);world.setResource<wp::PlanetConsequenceResource>(physical);
         check(game::collectPlanetForestVisuals(world,surface,snapshot)&&snapshot.plants.size()==1&&snapshot.plants[0].physical,"exact body receipt");
+        // Consecutive confirmed physical poses, no extrapolation.
+        game::PlanetForestMotionHistory history;
+        physical.bodies.back().lastMotionTick=3;
+        world.setResource<wp::PlanetConsequenceResource>(physical);
+        check(game::collectPlanetForestVisuals(world,surface,snapshot),"first checkpoint");
+        history.interpolate(snapshot,surface,&world,1,3,0,0.f,nullptr);
+        const auto first=snapshot.plants[0].local;
+        physical.bodies.back().lastMotionTick=4;
+        physical.bodies.back().motion.position=ground+Vec3{1_fx,0_fx,0_fx};
+        physical.bodies.back().motion.rotation=*fxQuaternionAxisAngle({0_fx,0_fx,1_fx},Fixed::fromRatio(1,4));
+        world.setResource<wp::PlanetConsequenceResource>(physical);
+        check(game::collectPlanetForestVisuals(world,surface,snapshot),"second checkpoint");
+        const auto last=snapshot.plants[0].local;
+        history.interpolate(snapshot,surface,&world,1,4,0,.5f,nullptr);
+        check(std::abs(snapshot.plants[0].local.x-(first.x+last.x)*.5f)<.001f,"half tick position");
+        check(std::abs(snapshot.plants[0].up.x)>.5f&&std::abs(snapshot.plants[0].up.y)>.5f,"half tick rotation");
+        check(game::collectPlanetForestVisuals(world,surface,snapshot),"repeat current checkpoint");
+        history.interpolate(snapshot,surface,&world,1,4,0,.75f,nullptr);
+        check(std::abs(snapshot.plants[0].local.x-(first.x*.25f+last.x*.75f))<.001f,"same tick preserves endpoints");
+        check(game::collectPlanetForestVisuals(world,surface,snapshot),"restore same tick checkpoint");
+        history.interpolate(snapshot,surface,&world,2,4,0,0.f,nullptr);
+        check(std::abs(snapshot.plants[0].local.x-last.x)<.001f,"restore serial snaps");
         // Raw visible cells, not explored cells or blurred GPU fog.
         std::vector<uint8_t> vision(size_t(surface.W)*size_t(surface.H),1);
         const int rootCell=surface.cellAt(ground);

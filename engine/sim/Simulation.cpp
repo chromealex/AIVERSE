@@ -43,6 +43,7 @@ Simulation::Simulation(SimConfig cfg, std::unique_ptr<GameModule> module)
       dt_(Fixed::fromRatio(1, tickRate_)) {}
 
 void Simulation::setup(const Json& rules, const Json& map) {
+    ++stateRestoreSerial_;
     players_.clear();
     const Json& ps = map["players"];
     for (size_t i = 0; i < ps.size(); ++i) {
@@ -147,6 +148,7 @@ void Simulation::saveState(SimSnapshot& out) {
 }
 
 void Simulation::loadState(const SimSnapshot& in) {
+    ++stateRestoreSerial_;
     world_ = in.world;
     rng_ = in.rng;
     tick_ = in.tick;
@@ -237,6 +239,7 @@ bool Simulation::deserialize(const std::string& bytes, std::string* err) {
         seqByPlayer_=oldSeq;
         events_=oldEvents;
         accumulator_=oldAccumulator;
+        ++stateRestoreSerial_;
         for(auto& hook:stateRestoredHooks_)hook(*this);
         return fail(why);
     };
@@ -277,6 +280,7 @@ bool Simulation::deserialize(const std::string& bytes, std::string* err) {
                 return restore("original checksum mismatch during native ECS migration");
         } else if(checksum()!=savedChecksum)
             return restore("state checksum mismatch after loading (different rules or map?)");
+        ++stateRestoreSerial_;
         for(auto& hook:stateRestoredHooks_)hook(*this);
     } catch(const std::exception& e) {
         return restore(std::string("failed to deserialize state: ")+e.what());

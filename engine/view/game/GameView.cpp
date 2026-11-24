@@ -2054,6 +2054,7 @@ void sceneFromSim(Simulation& sim, GameScene& out, float alpha, uint8_t viewer) 
             }
         }
     if (const Surface* surf = gs.surface.get()) { sceneFromSphere(sim, *m, *surf, out, alpha, viewer); return; }   // GamePlanetView.cpp
+    out.planetForestMotion.clear();
     const Driving* drivingCars = m->driving() && m->driving()->active() ? m->driving() : nullptr;
     // The view configuration is shared by every entity of a type. Avoid
     // repeating JSON object lookups for thousands of identical scenery types.

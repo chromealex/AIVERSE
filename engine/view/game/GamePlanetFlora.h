@@ -5,12 +5,22 @@
 #pragma once
 #include "GamePlanet.h"
 #include "engine/render/Model.h"
+#include "engine/core/FixedQuaternion.h"
+#include <optional>
+#include <tuple>
 #include <memory>
 #include <map>
 #include <vector>
 
 namespace aiverse::game {
 
+// Value-only physical checkpoint, from the existing consequence owner.
+struct PlanetForestMotionSample {
+    uint32_t fallTick=0,motionTick=UINT32_MAX;
+    uint64_t revision=0;
+    Vec3 position{};
+    FixedQuaternion rotation{};
+};
 // Value-only completed simulation snapshot, no World or GPU pointers.
 struct PlanetForestVisual {
     uint32_t species=0;
@@ -20,6 +30,7 @@ struct PlanetForestVisual {
     float size=1,foliage=1,thickness=1;
     render::float3 tint{1,1,1};
     bool fallen=false,physical=false;
+    std::optional<PlanetForestMotionSample> motion;
 };
 struct PlanetForestVisualSnapshot {
     std::vector<uint8_t> managedBodies;
@@ -32,6 +43,24 @@ struct PlanetForestVisualSnapshot {
 bool collectPlanetForestVisuals(const World& world,const Surface& surface,
                               PlanetForestVisualSnapshot& output,
                               const std::vector<uint8_t>* visibility=nullptr);
+
+// Per-view presentation cache, never persisted or used as physics input.
+class PlanetForestMotionHistory {
+public:
+    void clear(){tracks_.clear();topology_.reset();source_=nullptr;tick_=UINT32_MAX;}
+    void interpolate(PlanetForestVisualSnapshot& snapshot,const Surface& surface,
+                     const void* source,uint64_t restoreSerial,uint32_t tick,uint8_t viewer,
+                     float alpha,const std::vector<uint8_t>* visibility);
+private:
+    using Key=std::tuple<int,uint32_t,uint64_t,uint32_t,uint64_t>;
+    struct Track {PlanetForestMotionSample current;std::optional<PlanetForestMotionSample> previous;};
+    std::map<Key,Track> tracks_;
+    std::weak_ptr<const SphereTables> topology_;
+    const void* source_=nullptr;
+    uint64_t restoreSerial_=0;
+    uint32_t tick_=UINT32_MAX;
+    uint8_t viewer_=0;
+};
 
 using PlanetForestModels=std::map<uint32_t,std::unique_ptr<render::Model>>;
 // CPU-only shared ARBOR recipe build; no scatter, no GPU state.

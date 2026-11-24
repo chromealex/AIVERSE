@@ -186,6 +186,8 @@ public:
     GameModule& module() { return *module_; }
     const GameModule& module() const { return *module_; }
     uint32_t tick() const { return tick_; }
+    // Local presentation/cache discontinuity; excluded from snapshots and checksum.
+    uint64_t stateRestoreSerial() const { return stateRestoreSerial_; }
     Fixed dt() const { return dt_; }
     uint32_t tickRate() const { return tickRate_; }
     const SimConfig& config() const { return cfg_; }
@@ -205,6 +207,7 @@ private:
     PersistentEcsRegistry persistentEcs_;
     Random rng_;
     uint32_t tick_ = 0;
+    uint64_t stateRestoreSerial_ = 0;
     uint32_t tickRate_ = 20;
     Fixed dt_;
     double accumulator_ = 0.0; // real-time only, never affects the simulation

@@ -143,6 +143,8 @@ bool collectPlanetForestVisuals(const World& world,const Surface& surface,
                 visual.local=asFloat(record.motion.position-anchor);
                 visual.up=asFloat(basis->up);visual.forward=asFloat(basis->forward);
                 visual.physical=true;
+                visual.motion=PlanetForestMotionSample{record.key.tick,record.lastMotionTick,
+                    record.key.revision,record.motion.position,record.motion.rotation};
             }else{
                 // Acknowledged and retired physical source stays hidden.
                 if(receipt!=falls.end()&&receipt->second->acknowledged)continue;
@@ -158,6 +160,66 @@ bool collectPlanetForestVisuals(const World& world,const Surface& surface,
         return std::tuple{a.body,a.species,a.key}<std::tuple{b.body,b.species,b.key};
     });
     output=std::move(next);return true;
+}
+
+void PlanetForestMotionHistory::interpolate(PlanetForestVisualSnapshot& snapshot,const Surface& surface,
+        const void* source,uint64_t restoreSerial,uint32_t tick,uint8_t viewer,float alpha,
+        const std::vector<uint8_t>* visibility){
+    const bool sameSource=source&&source_==source&&restoreSerial_==restoreSerial&&
+        viewer_==viewer&&surface.tab&&topology_.lock()==surface.tab;
+    const bool sameTick=sameSource&&tick_==tick;
+    const bool consecutive=sameSource&&tick_!=UINT32_MAX&&tick==tick_+1;
+    if(!sameTick&&!consecutive)clear();
+    source_=source;restoreSerial_=restoreSerial;tick_=tick;viewer_=viewer;topology_=surface.tab;
+    std::map<Key,Track> next;
+    const auto samePose=[](const auto& a,const auto& b){
+        return a.motionTick==b.motionTick&&a.position==b.position&&
+            a.rotation.x==b.rotation.x&&a.rotation.y==b.rotation.y&&
+            a.rotation.z==b.rotation.z&&a.rotation.w==b.rotation.w;
+    };
+    const auto toFloat=[](Vec3 p){return float3{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())};};
+    const auto fraction=Fixed::fromRaw(int64_t(std::clamp(std::isfinite(alpha)?alpha:1.f,0.f,1.f)*float(Fixed::kOne)));
+    for(auto& plant:snapshot.plants){
+        if(!plant.physical||!plant.motion||plant.body<0||size_t(plant.body)>=surface.bodies.size())continue;
+        const auto& sample=*plant.motion;
+        if(sample.motionTick==UINT32_MAX||sample.motionTick>tick||!surface.tab)continue;
+        const Key key{plant.body,plant.species,plant.key,sample.fallTick,sample.revision};
+        Track track{sample,{}};
+        const auto old=tracks_.find(key);
+        if(old!=tracks_.end()){
+            if(sameTick&&samePose(old->second.current,sample))track.previous=old->second.previous;
+            else if(consecutive&&old->second.current.motionTick!=UINT32_MAX&&
+                    sample.motionTick==old->second.current.motionTick+1)
+                track.previous=old->second.current;
+        }
+        if(track.previous){
+            const auto& prev=*track.previous;
+            // Both endpoints must be on the same body. In player fog,
+            // only interpolate within one currently visible canonical cell;
+            // crossing cells snaps rather than exposing a hidden trajectory.
+            bool permitted=Surface::onSphere(prev.position)&&Surface::onSphere(sample.position)&&
+                surface.bodyAt(prev.position)==plant.body&&surface.bodyAt(sample.position)==plant.body;
+            if(permitted&&viewer){
+                const int a=surface.cellAt(prev.position),b=surface.cellAt(sample.position);
+                permitted=visibility&&surface.W>0&&surface.H>0&&
+                    visibility->size()==size_t(surface.W)*size_t(surface.H)&&a>=0&&a==b&&
+                    size_t(a)<visibility->size()&&(*visibility)[size_t(a)]==2;
+            }
+            if(permitted){
+                const auto pos=fxLerpBounded(prev.position,sample.position,fraction);
+                const auto rotation=fxQuaternionSlerp(prev.rotation,sample.rotation,fraction);
+                const auto basis=rotation?fxQuaternionBasis(*rotation):std::nullopt;
+                if(pos&&basis&&Surface::onSphere(*pos)&&surface.bodyAt(*pos)==plant.body&&
+                   (!viewer||surface.cellAt(*pos)==surface.cellAt(sample.position))){
+                    plant.local=toFloat(*pos-Surface::anchor(plant.body));
+                    plant.up=toFloat(basis->up);plant.forward=toFloat(basis->forward);
+                }else track.previous.reset();
+            }else track.previous.reset();
+        }
+        next.emplace(key,std::move(track));
+    }
+    // Missing, hidden, harvested or retired plants are forgotten immediately.
+    tracks_.swap(next);
 }
 
 PlanetForestModels buildPlanetForestSpecies(const Json& manifest,const render::FileReader& reader){

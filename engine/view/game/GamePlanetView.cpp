@@ -564,8 +564,11 @@ void sceneFromSphere(Simulation& sim, GameCore& m, const Surface& S, GameScene& 
     if(!collectPlanetForestVisuals(w,S,out.planetForest,viewer?playerVision:nullptr)){
         out.planetForest={};
         if(viewer)out.planetForest.managedBodies.assign(S.bodies.size(),1);
+        out.planetForestMotion.clear();
     }
     const uint32_t tick = sim.tick();
+    out.planetForestMotion.interpolate(out.planetForest,S,&sim,sim.stateRestoreSerial(),tick,viewer,alpha,
+                                      viewer?playerVision:nullptr);
     w.each<Unit, Owner, Transform>([&](Entity e, Unit& u, Owner& o, Transform& t) {
         SceneObject so;
         so.entity = e; so.type = u.type; so.owner = o.player;
