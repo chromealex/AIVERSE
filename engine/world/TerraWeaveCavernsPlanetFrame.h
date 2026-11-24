@@ -61,7 +61,7 @@ public:
     Vec3 fromBody(Vec3 p)const{auto local=vectorFromBody(p-origin_);checkLocal(local);return local;}
     Vec3 toSimulation(Vec3 local)const{return game::Surface::anchor(body_)+toBody(local);}
     Vec3 fromSimulation(Vec3 p)const{
-        if(surface_->bodyAt(p)!=body_)throw std::invalid_argument("Caverns position belongs to another body");
+        if(!game::Surface::onSphere(p)||surface_->bodyAt(p)!=body_)throw std::invalid_argument("Caverns position belongs to another body");
         return fromBody(p-game::Surface::anchor(body_));
     }
     Vec3 toRenderWorld(Vec3 local,Fixed seconds)const{return surface_->bodyPosition(body_,seconds)+toBody(local);}
