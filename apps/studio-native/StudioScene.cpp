@@ -2193,6 +2193,11 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         lightingStatus_+=" · AETHER "+planetLiveAetherLayer_+(liveAether?" mass / duct potential":" unavailable");
         if(planetLiveSnapshot_["aether"].getBool("truncated"))lightingStatus_+=" (sample capped)";
     }
+    const bool liveCircuit=livePlanet&&planetLiveSnapshot_["circuit"].getBool("available");
+    if(livePlanet&&planetLiveSnapshot_["circuit"].isObject()){
+        lightingStatus_+=liveCircuit?" · CIRCUIT power / logic state":" · CIRCUIT unavailable";
+        if(planetLiveSnapshot_["circuit"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+    }
     const bool liveCrowd=livePlanet&&planetLiveSnapshot_["crowd"].getBool("available");
     if(livePlanet&&planetLiveSnapshot_["crowd"].isObject()){
         lightingStatus_+=liveCrowd?" · CROWD reservations / native routes":" · CROWD unavailable";
@@ -2335,6 +2340,61 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                     const float len=std::min(marker,distance*.24f);
                     renderer_.line(tip,tip-direction*len+side*(len*.45f),color);
                     renderer_.line(tip,tip-direction*len-side*(len*.45f),color);
+                }
+            }
+            if(liveCircuit){
+                const auto& data=planetLiveSnapshot_["circuit"];
+                const auto readVec=[](const Json& j)->std::optional<render::float3>{
+                    const auto& xyz=j.items();if(xyz.size()!=3)return {};
+                    return render::float3{float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
+                };
+                const float extent=std::clamp(planetPreview_->radius*.012f,.12f,1.5f);
+                const auto marker=[&](render::float3 p,float s,uint32_t color){
+                    for(const auto axis:{render::float3{s,0,0},render::float3{0,s,0},render::float3{0,0,s}})
+                        renderer_.line(p-axis,p+axis,color);
+                };
+                size_t count=0;
+                for(const auto& row:data["wires"].items()){
+                    if(count++>=512)break;
+                    if(!row.getBool("placed")||row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto a=readVec(row["a"]),b=readVec(row["b"]);if(!a||!b)continue;
+                    const auto delta=*b-*a;
+                    const auto color=!row.getBool("active")?rgba(105,115,130):row.getBool("bothPowered")?rgba(105,225,155):rgba(145,175,205);
+                    if(!row.getBool("active")){
+                        renderer_.line(*a,*a+delta*.4f,color);renderer_.line(*a+delta*.6f,*b,color);continue;
+                    }
+                    renderer_.line(*a,*b,color);
+                    const float distance=std::sqrt(dot(delta,delta));
+                    if(!row.getBool("bidirectional")&&distance>.001f){
+                        const auto dir=delta*(1.f/distance),tip=*a+delta*.6f;
+                        const auto side=normalize(cross(dir,std::abs(dir.y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
+                        const float len=std::min(extent,distance*.2f);
+                        renderer_.line(tip,tip-dir*len+side*(len*.45f),color);
+                        renderer_.line(tip,tip-dir*len-side*(len*.45f),color);
+                    }
+                }
+                for(const char* key:{"nodes","gates","switches","devices"}){
+                    count=0;const std::string kind=key;
+                    for(const auto& row:data[key].items()){
+                        if(count++>=(kind=="nodes"?256u:128u))break;
+                        if(!row.getBool("placed")||row.getStr("body")!=planetPreview_->bodyId)continue;
+                        const auto p=readVec(row["position"]);if(!p)continue;
+                        uint32_t color=rgba(110,120,135);
+                        if(row.getBool("enabled")){
+                            if(kind=="nodes"&&row.getBool("outputAvailable"))
+                                color=row.getBool("signal")?rgba(250,220,95):row.getBool("powered")?rgba(100,235,155):rgba(235,115,120);
+                            else if(kind=="gates")color=row.getBool("inputsValid")?rgba(185,145,245):rgba(235,115,120);
+                            else if(kind=="switches")color=row.getBool("closed")?rgba(250,220,95):rgba(120,180,225);
+                            else if(kind=="devices"&&row.getBool("outputAvailable")&&row.getBool("valid"))
+                                color=row.getBool("active")?rgba(100,235,155):rgba(235,115,120);
+                        }
+                        marker(*p,extent*(kind=="nodes"?1.f:.7f),color);
+                        if(kind!="nodes")for(const char* link:{"inputAPosition","inputBPosition","outputPosition","nodePosition"})
+                            if(const auto q=readVec(row[link])){
+                                const auto d=*q-*p;
+                                for(int i=0;i<4;++i)renderer_.line(*p+d*(float(i)/4),*p+d*((float(i)+.5f)/4),color);
+                            }
+                    }
                 }
             }
             if(liveCrowd){

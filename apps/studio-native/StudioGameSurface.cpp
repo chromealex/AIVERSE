@@ -11,6 +11,7 @@
 #include "apps/studio-native/StudioPlanetMorphSnapshot.h"
 #include "apps/studio-native/StudioPlanetEchoSnapshot.h"
 #include "apps/studio-native/StudioPlanetCrowdSnapshot.h"
+#include "apps/studio-native/StudioPlanetCircuitSnapshot.h"
 #include "engine/sim/Simulation.h"
 #include "engine/sim/CommonComponents.h"
 #include "engine/game/GameCore.h"
@@ -95,7 +96,7 @@ Json StudioGameSurface::worldProcessDiagnostics(int cap,const std::string& focus
     return worldProcessDiagnostics_.sample(sim?&sim->world():nullptr,
         std::to_string(runtimeEpoch_),sim?sim->tick():0,cap,focus);
 }
-Json StudioGameSurface::ecologyState(int32_t granularCellCm,bool liveGravity,bool liveAether,bool liveFracture,bool liveMorph,bool liveEcho,bool liveCrowd){
+Json StudioGameSurface::ecologyState(int32_t granularCellCm,bool liveGravity,bool liveAether,bool liveFracture,bool liveMorph,bool liveEcho,bool liveCrowd,bool liveCircuit){
     Simulation* sim=host_&&host_->inMatch()?host_->simulation():nullptr;
     Json out=Json::object(),regions=Json::array();
     out.set("active",Json::fromBool(sim!=nullptr));
@@ -115,6 +116,7 @@ Json StudioGameSurface::ecologyState(int32_t granularCellCm,bool liveGravity,boo
                 if(liveGravity)out.set("gravity",samplePlanetGravity(sim->world(),*surface,sim->tick()-1));
                 if(liveFracture)out.set("fracture",samplePlanetFracture(sim->world(),*surface,sim->tick()-1));
                 if(liveEcho)out.set("echo",samplePlanetEcho(sim->world(),*surface,sim->tick()-1));
+                if(liveCircuit)out.set("circuit",samplePlanetCircuit(sim->world(),*surface,sim->tick()-1));
                 if(liveCrowd){
                     const auto config=game->native().loadedConfiguration("world_processes");
                     out.set("crowd",samplePlanetCrowd(sim->world(),*surface,sim->tick()-1,config&&config->getBool("crowdGravitySupport"),game));
