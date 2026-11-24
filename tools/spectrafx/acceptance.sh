@@ -69,11 +69,16 @@ if stage configure cmake "${opts[@]}"; then
         aiverse_vfx_graph_tests aiverse_vfx_ecs_tests aiverse_vfx_assets_tests
         aiverse_spectrafx_retirement_tests
         aiverse_spectrafx_preview_policy_tests aiverse_vfx_gpu_tests
+        aiverse_spectrafx_entity_effects_tests aiverse_vfx_ops_tests
+        aiverse_vfx_spfx_diagnostics_test aiverse_vfx_graph_runtime_tests
+        aiverse_vfx_shared_batch_tests aiverse_vfx_cue_scheduler_tests
+        aiverse_native_registry_link_test
     )
     if [[ "$OS" == Darwin ]]; then
         targets+=(aiverse_spectrafx_metal_gpu_test aiverse_spectrafx_metal_billboard_test
                   aiverse_spectrafx_metal_rhi_test aiverse_spectrafx_metal_scene_test
-                  aiverse_spectrafx_metal_allocator_test aiverse_vfx_metal_smoke)
+                  aiverse_spectrafx_metal_allocator_test aiverse_vfx_metal_smoke
+                  aiverse_spectrafx_cpu_gpu_parity_test)
     fi
     if [[ "$OS" == Linux ]] && grep -q '^AIVERSE_VULKAN:BOOL=ON$' "$BUILD/CMakeCache.txt"; then
         targets+=(aiverse_spectrafx_vulkan_allocator_test)
@@ -92,13 +97,13 @@ if stage configure cmake "${opts[@]}"; then
     if (( target_ok )); then
         stage ctest_spectrafx ctest --test-dir "$BUILD" -C Debug -L SpectraFX --output-on-failure || true
         if [[ "$OS" == Darwin ]]; then
-            stage ctest_metal ctest --test-dir "$BUILD" -C Debug -L MetalGPU -V --output-on-failure || true
+            stage ctest_metal ctest --test-dir "$BUILD" -C Debug -L MetalGPU -R '^spectrafx_' -V --output-on-failure || true
             metal_args=("$LOG/ctest_metal.log")
             if [[ "${AIVERSE_ACCEPTANCE_REQUIRE_METAL:-0}" == 1 ]]; then
                 metal_args+=(--require-all)
             fi
             # CTest exits 0 when tests SKIP. Do not silently call this a
-            # real 3/3 GPU PASS; explicitly report each hardware result.
+            # hardware PASS; explicitly report the five required hardware results.
             stage metal_evidence python3 "$ROOT/tools/spectrafx/verify_metal_ctest.py" "${metal_args[@]}" || true
             if [[ -n "${AIVERSE_SPECTRAFX_SCENE_CAPTURE:-}" ]]; then
                 stage visual_review python3 "$ROOT/tools/spectrafx/review_frames.py" \

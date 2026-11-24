@@ -565,13 +565,13 @@ using namespace metal;
 struct Record { float x,y,z,u,v; uint rgba; float g0,g1,g2,g3; };
 struct U0 { float4x4 viewProj; float4 fog,camPos,params,right,up; };
 struct VOut { float4 pos [[position]]; float2 uv; half4 col; };
-vertex VOut vs_main(uint vertex [[vertex_id]],uint instance [[instance_id]],
+vertex VOut vs_main(uint vertexIndex [[vertex_id]],uint instance [[instance_id]],
                     device const Record* records [[buffer(0)]],
                     constant U0& u [[buffer(1)]]) {
     const Record p=records[instance];
     const float2 corners[4]={float2(-1,-1),float2(1,-1),float2(1,1),float2(-1,1)};
     const float2 uv[4]={float2(0,1),float2(1,1),float2(1,0),float2(0,0)};
-    const uint j=vertex&3u;
+    const uint j=vertexIndex&3u;
     const float3 at=float3(p.x,p.y,p.z)+p.u*(u.right.xyz*corners[j].x+u.up.xyz*corners[j].y);
     float4 c=float4(float(p.rgba&255u),float((p.rgba>>8)&255u),
                     float((p.rgba>>16)&255u),float((p.rgba>>24)&255u))/255.0f;
