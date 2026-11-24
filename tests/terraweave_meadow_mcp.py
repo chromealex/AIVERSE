@@ -49,6 +49,6 @@ if __name__ == "__main__":
         (project / "maps").mkdir()
         (project / "game.json").write_text('{"module":"game","rules":"rules.json","maps":[{"file":"maps/map.json"}]}')
         (project / "rules.json").write_text('{"types":{}}')
-        (project / "maps/map.json").write_text('{"width":16,"height":16,"entities":[]}')
+        (project / "maps/map.json").write_text('{"size":[16,16],"entities":[]}')
         verify(sys.argv[1], sys.argv[2], project)
     print("Meadow MCP authoring PASS")
