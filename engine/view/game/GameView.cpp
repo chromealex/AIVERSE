@@ -2160,7 +2160,6 @@ void sceneFromSim(Simulation& sim, GameScene& out, float alpha, uint8_t viewer) 
     w.each<Projectile, Transform>([&](Entity e, Projectile& pr, Transform& t) {
         SceneObject so;
         so.entity = e; so.isProjectile = true; so.source = pr.source;
-        so.owner=pr.owner;
         if(pr.sourceType<R.types.size())so.shooterType=pr.sourceType;
         else if(auto* su=w.tryGet<Unit>(pr.source))so.shooterType=su->type;
         so.shotWeapon=int8_t(view_adapter::projectileAppearanceSlot(R,pr));
