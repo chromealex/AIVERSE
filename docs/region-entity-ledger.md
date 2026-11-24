@@ -1348,3 +1348,44 @@ available but must not bypass required host policy. No automatic live NPC,
 vehicle or actor parking, true absence, performance claim or new serialized
 clock. See the lifecycle skill and stage29b handoff for constraints and
 deferred acceptance. Native tests NOT RUN.
+
+## W1.30b — authoritative guarded region activation queue
+
+Install `RegionLifecycleRuntime::installGuarded(sim, controller, guarded, budget)`
+at the owning native host's setup-selected simulation barrier instead of the
+pause-only `install`. `GuardedPolicy` holds the complete
+`RegionDormancyController::ColdAdvancePlan` and two read-only admission
+predicates, `mayPark` and `mayWake`, each accepting
+`(const Simulation&, Cell, std::span<const Entity>) -> bool`.
+All registered codec types must have explicit clock/catch-up or pause policy.
+The host owns the real eligibility, pin/reference/linked-group and
+collision/navmesh checks, and must order its live clocks and consumers
+around this barrier. No renderer or async streaming completion can enqueue
+authoritative requests or directly publish ECS mutations.
+
+```cpp
+// Setup: controller already has its portable component codecs registered.
+world::RegionLifecycleRuntime::GuardedPolicy guarded{
+    coldPlan, ownerMayPark, ownerMayWake
+};
+world::RegionLifecycleRuntime::installGuarded(sim, std::move(controller),
+                                               std::move(guarded), 2);
+// From validated authoritative commands or gameplay rules:
+world::RegionLifecycleRuntime::request(sim, region, false); // park
+world::RegionLifecycleRuntime::request(sim, region, true);  // wake/replace
+world::RegionLifecycleRuntime::cancel(sim, region);         // cancel, no ACK
+```
+
+The queue stays sorted by Cell and uses the existing schema 1 and applied
+counter. A rejected head blocks later requests and remains persisted;
+a later tick retries with its current authoritative time. Waking advances
+all clocked payloads to that tick before restoring. Empty or already-in-
+target-state regions are acknowledged as no-op transitions, not external
+readiness assertions. Redundant dormant requests validate their complete
+codec/clock policy without advancing it. Mixed hot/cold regions, missing
+identities, oversized groups, invalid flags and stale records are refused.
+The native manual `stepGuarded` returns completed request count and can
+write a transient blocked reason; its budget is capped at 16. Use only
+the guarded path for guarded hosts. No new save field or persistent clock,
+no default host installation, no arbitrary NPC/vehicle parking, no
+automatic region residency selector. Native acceptance NOT RUN.

@@ -99,7 +99,7 @@ time, never create a duplicate body, never advance a linked active vehicle,
 reject invalid/overflowing timelines, preserve opt-out behavior and restore
 from existing save/rollback. No automatic generic ECS parking in this slice.
 
-W1.30b in progress: connect the complete cold component policy to the
+W1.30b source implementation connects the complete cold component policy to the
 existing authoritative RegionLifecycleRuntime activation queue. Install an
 explicit guarded policy at the host-selected tick barrier; validate full
 region membership, park eligibility, wake admission and portable clocks.
