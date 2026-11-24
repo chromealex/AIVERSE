@@ -161,9 +161,14 @@ static void checkResidentTextureOwner(){
     require(!owner.publishCompletedGpuMaterial("other",request,registry,"fixture",
         old->version,old->modelPublicationGeneration,0,model,dev,epoch.lease(),rollback,&error),
         "stale project published a resident set");
-    require(owner.publishCompletedGpuMaterial("fixture",request,registry,"fixture",
-        old->version,old->modelPublicationGeneration,0,model,dev,epoch.lease(),rollback,&error),
-        "resident set could not be adopted");
+    auto live=old;auto mirror=old->materials;
+    const view::LiveAppearanceMaterialTarget stamp{old->modelPublicationGeneration,old->version,0};
+    require(owner.publishCompletedGpuSnapshot("fixture",request,live,stamp,
+        model,dev,epoch.lease(),rollback,&mirror,&error),"resident set could not be adopted by live snapshot");
+    require(live->version==old->version+1&&live->modelPublicationGeneration==old->modelPublicationGeneration&&
+        live->materials[0].occlusionTex==0&&mirror[0].occlusionTex==0&&
+        old->materials[0].occlusionTex==-1&&model.materials[0].occlusionTex==-1,
+        "live appearance snapshot or compatibility mirror was not atomically updated");
     require(owner.status().getBool("gpuTexturePublished")&&model.images.size()==2&&
         dev.textures.size()==existing&&dev.copied.contains(model.images[0].tex.id)&&
         dev.copied.contains(model.images[1].tex.id),"adoption allocated replacement GPU textures");
@@ -463,6 +468,8 @@ int main() {
     const auto headlessGpuTexture=call("texture_graph_gpu_preview",Json::parse(R"({"action":"read"})"));
     require(headlessGpuTexture.getStr("state")=="unavailable","headless texture GPU preview fabricated");
     require(!call("texture_graph_gpu_preview",Json::parse(R"({"action":"cancel","request":"1"})")).getBool("ok"),"headless GPU cancellation fabricated");
+    require(call("texture_graph_gpu_preview",Json::parse(R"({"action":"materialTarget","typeIndex":0,"choiceIndex":0,"materialIndex":0})")).getStr("state")=="unavailable","headless live material target fabricated");
+    require(!call("texture_graph_gpu_preview",Json::parse(R"({"action":"applyMaterial","request":"1","typeIndex":0,"choiceIndex":0,"materialIndex":0,"expectedVersion":"1","expectedModelPublication":"1"})")).getBool("ok"),"headless live material adoption fabricated");
 
     auto fullTexture=render::texture_graph::compile(Json::parse(R"({"version":1,"size":1024,"nodes":[{"id":"height","op":"constant","inputs":[],"properties":{"value":0.5}},{"id":"normal","op":"normal","inputs":["height"]}],"outputs":{"normal":"normal"}})"));
     const auto fullPlan=render::texture_graph::gpu::plan(fullTexture,1,1024);
