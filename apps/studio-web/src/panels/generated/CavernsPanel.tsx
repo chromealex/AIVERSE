@@ -8,18 +8,19 @@ type Stamp = { id: string; xCm: number; yCm: number; zCm: number; radiusCm: numb
 type Entrance = { id: string; xCm: number; zCm: number; caveYcm: number; surfaceYcm: number; radiusCm: number };
 type PlanetAnchor = {version:1;body:string;face:number;aQ16:number;bQ16:number;halfExtentCm:number};
 type PlanetBody = {id:string;faceSize:number;maxExtentCm:number};
-type Document = { planetary:boolean; planetAnchor?:PlanetAnchor; planetBodies:PlanetBody[]; mapRevision: string; revision: string; seed: string; generator: string; settings: Record<string, number>; stamps: Stamp[]; entrances: Entrance[] };
+type PlanetRegion = {id:string;anchor:PlanetAnchor;revisionText:string};
+type Document = { planetary:boolean; activeRegionId:string; planetRegions:PlanetRegion[]; planetAnchor?:PlanetAnchor; planetBodies:PlanetBody[]; mapRevision: string; revision: string; seed: string; generator: string; settings: Record<string, number>; stamps: Stamp[]; entrances: Entrance[] };
 const name = 'terraweave_caverns_paint';
 const decimal = (x: unknown): x is string => typeof x === 'string' && /^[0-9]+$/.test(x);
 function decode(value: unknown): Document {
-  const r = value as { planetary?:boolean;planetAnchor?:PlanetAnchor;planetBodies?:PlanetBody[];mapRevisionText?: unknown; revisionText?: unknown; seedText?: unknown; generatorVersionText?: unknown; stampIds?: unknown[]; entranceIds?: unknown[]; snapshot?: { settings?: Record<string, number>; stamps?: Omit<Stamp,'id'>[]; entrances?: Omit<Entrance,'id'>[] } };
+  const r = value as { planetary?:boolean;planetAnchor?:PlanetAnchor;planetBodies?:PlanetBody[];planetRegions?:PlanetRegion[];activeRegionId?:string;mapRevisionText?: unknown; revisionText?: unknown; seedText?: unknown; generatorVersionText?: unknown; stampIds?: unknown[]; entranceIds?: unknown[]; snapshot?: { settings?: Record<string, number>; stamps?: Omit<Stamp,'id'>[]; entrances?: Omit<Entrance,'id'>[] } };
   if (!decimal(r?.mapRevisionText) || !decimal(r.revisionText) || !decimal(r.seedText) || !decimal(r.generatorVersionText) ||
       !r.snapshot?.settings || !Array.isArray(r.snapshot.stamps) || !Array.isArray(r.snapshot.entrances) ||
       !Array.isArray(r.stampIds) || !Array.isArray(r.entranceIds) ||
       r.stampIds.length !== r.snapshot.stamps.length || r.entranceIds.length !== r.snapshot.entrances.length ||
       !r.stampIds.every(decimal) || !r.entranceIds.every(decimal)) throw new Error('Caverns native document contract unavailable. Integrate the Caverns branch.');
   const ids = r.stampIds as string[], entranceIds = r.entranceIds as string[];
-  return { planetary:r.planetary===true,planetAnchor:r.planetAnchor,planetBodies:r.planetBodies??[],mapRevision:r.mapRevisionText, revision:r.revisionText, seed:r.seedText, generator:r.generatorVersionText, settings:r.snapshot.settings,
+  return { planetary:r.planetary===true,activeRegionId:r.activeRegionId??(r.planetAnchor?'1':''),planetRegions:r.planetRegions??[],planetAnchor:r.planetAnchor,planetBodies:r.planetBodies??[],mapRevision:r.mapRevisionText, revision:r.revisionText, seed:r.seedText, generator:r.generatorVersionText, settings:r.snapshot.settings,
     stamps:r.snapshot.stamps.map((s,i)=>({...s,id:ids[i]})), entrances:r.snapshot.entrances.map((e,i)=>({...e,id:entranceIds[i]})) };
 }
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
@@ -92,7 +93,7 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
   const valid=fields.every(k=>form[k].trim()!=='' && Number.isSafeInteger(values[k])) &&
     fields.slice(0,3).every(k=>Math.abs(values[k])<=1000000000) && values.radiusCm>=1 && values.radiusCm<=1000000;
   const editable=Boolean(doc && project && snapshot?.mode==='edit' && !busy && (!doc.planetary||doc.planetAnchor));
-  const canCreate=Boolean(doc?.planetary&&!doc.planetAnchor&&project&&snapshot?.mode==='edit'&&!busy);
+  const canCreate=Boolean(doc?.planetary&&doc.planetRegions.length<32&&project&&snapshot?.mode==='edit'&&!busy&&!armed);
   const selectedBody=doc?.planetBodies.find(b=>b.id===planet.body);
   const anchorValid=!!selectedBody&&int(planet.face)&&Number(planet.face)>=0&&Number(planet.face)<=5&&[planet.a,planet.b].every(s=>s.trim()!==''&&Number.isFinite(Number(s))&&Number(s)>=0&&Number(s)<=selectedBody.faceSize)&&int(planet.extent)&&Number(planet.extent)>=100&&Number(planet.extent)<=selectedBody.maxExtentCm;
   const budgetBytes=Object.fromEntries(budgetFields.map(k=>[k,Number(budgets[k])*1048576])) as unknown as StudioCavernsBudgets;
@@ -129,16 +130,17 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
     finally{locked.current=false;setBusy(false);}
   }
   async function edit(params: Record<string,unknown>) {
-    if((!editable&&!(canCreate&&params.mode==='planet_region')) || !doc || locked.current)return;
+    const regionAction=params.mode==='planet_region'||params.mode==='planet_select_region'||params.mode==='planet_delete_region';
+    if((!editable&&!(canCreate&&params.mode==='planet_region')) || !doc || locked.current || (regionAction&&armed))return;
     locked.current=true;
     const serial=++epoch.current;
     setBusy(true);setError('');setStatus('');
     try {
-      await invoke('studio.op',{op:name,expectedProject:project,expectedMap:map,params:{...params,expectedRevision:doc.revision,expectedMapRevision:doc.mapRevision}});
+      await invoke('studio.op',{op:name,expectedProject:project,expectedMap:map,params:{...params,expectedRegionId:doc.activeRegionId,expectedRevision:doc.revision,expectedMapRevision:doc.mapRevision}});
       const next=await read(project,map);
       const snap=await invoke('studio.snapshot',{});
       if(serial===epoch.current && currentProject.current===project && snap.project.path===project){
-        setDoc(next);setSelected('');setStatus('Map edit committed. The native Scene rebuilds asynchronously.');commitSnapshot(snap);
+        setDoc(next);setSelected('');setPage(0);setPreview(null);setStatus('Map edit committed. The native Scene rebuilds asynchronously.');commitSnapshot(snap);
       }
     }catch(e){if(serial===epoch.current && currentProject.current===project){setError(message(e));setDoc(null);}}
     finally{locked.current=false;if(serial===epoch.current)setBusy(false);}
@@ -152,13 +154,17 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
       {status && <StudioAlert title="Authoring">{status}</StudioAlert>}
       {armed && <StudioButton variant="danger" disabled={busy} onClick={()=>void armScene(false)}>Disarm Scene brush</StudioButton>}
       {project && !doc && <StudioButton disabled={busy} onClick={()=>void refresh()}>Load cave document</StudioButton>}
-      {doc?.planetary && <StudioSection title="Planetary chart">
-        {doc.planetAnchor ? <StudioAlert title={doc.planetAnchor.body+' · face '+doc.planetAnchor.face}>Local tangent chart ±{doc.planetAnchor.halfExtentCm} cm. Coordinates are relative to the reference radius, not the orbit centre. Anchor immutable.</StudioAlert> : <>
+      {doc?.planetary && <StudioSection title="Planetary regions">
+        <StudioField label="Active region" htmlFor="cave-region"><StudioSelect id="cave-region" value={doc.activeRegionId} disabled={!editable||armed} onChange={e=>void edit({mode:'planet_select_region',regionId:e.target.value})}><option value="" disabled>Choose chart</option>{doc.planetRegions.map(r=><option key={r.id} value={r.id}>#{r.id} · {r.anchor.body} · face {r.anchor.face}</option>)}</StudioSelect></StudioField>
+        {doc.activeRegionId && <StudioButton variant="danger" disabled={!editable||armed} onClick={()=>{if(window.confirm('Delete the selected region and all its cave edits? You can undo this action.'))void edit({mode:'planet_delete_region',regionId:doc.activeRegionId});}}>Delete selected region</StudioButton>}
+        <div>{doc.planetRegions.length} / 32 regions · one active native preview</div>
+        {doc.planetAnchor ? <StudioAlert title={doc.planetAnchor.body+' · face '+doc.planetAnchor.face}>Local tangent chart ±{doc.planetAnchor.halfExtentCm} cm. Coordinates are relative to the reference radius, not the orbit centre. Anchor immutable.</StudioAlert> : null}
+        <>
           <StudioField label="Body" htmlFor="cave-body"><StudioSelect id="cave-body" value={planet.body} disabled={!canCreate} onChange={e=>{const b=doc.planetBodies.find(b=>b.id===e.target.value);setPlanet(p=>({...p,body:e.target.value,a:String((b?.faceSize??0)/2),b:String((b?.faceSize??0)/2),extent:String(b?.maxExtentCm??0)}));}}><option value="">Choose planet or moon</option>{doc.planetBodies.map(b=><option key={b.id} value={b.id}>{b.id}</option>)}</StudioSelect></StudioField>
           {(['face','a','b','extent'] as const).map(k=><StudioField key={k} label={k==='extent'?'Half extent (cm)':k==='face'?'Cube face (0–5)':'Face coordinate '+k} htmlFor={'planet-cave-'+k}><StudioInput id={'planet-cave-'+k} type="number" value={planet[k]} disabled={!canCreate} onChange={e=>setPlanet(p=>({...p,[k]:e.target.value}))}/></StudioField>)}
           <StudioButton variant="primary" disabled={!canCreate||!anchorValid} onClick={()=>void edit({mode:'planet_region',anchor:{version:1,body:planet.body,face:Number(planet.face),aQ16:Math.round(Number(planet.a)*65536),bQ16:Math.round(Number(planet.b)*65536),halfExtentCm:Number(planet.extent)}})}>Create chart</StudioButton>
-        </>}
-        <StudioAlert title="Local chart editor">The Scene uses the local chart axes, not a global globe camera. This is a bounded authoring region.</StudioAlert>
+        </>
+        <StudioAlert title="Local chart editor">The Scene uses the local chart axes, not a global globe camera. Only the selected region is resident in Studio; all others remain saved.</StudioAlert>
       </StudioSection>}
       {doc && (!doc.planetary||doc.planetAnchor) && <>
         <StudioSection title="SDF brush">
