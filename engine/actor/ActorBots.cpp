@@ -53,6 +53,55 @@ bool ActorHost::thinkBot(Simulation& sim,CharacterRef a) {
     if(!botHost_)return false;
     auto& s=state(sim);World& w=sim.world();auto now=sim.tick();const auto& host=*botHost_;
     lib::bots::ActorState bot;if(const auto* memory=w.tryGet<BotMemory>(a.entity);!memory||!lib::bots::loadFps(memory->bytes,bot))bot={};
+    // Only safe, noninteractive decision work can be decimated. The ordinary
+    // tick still runs every motor, collision, health and weapon system. Do
+    // not reuse held actions, and do not sleep an actor with a remembered
+    // target, active interaction, vehicle, projectile or nearby character.
+    const auto& lod=config_.simulationLod;
+    if(lod.enabled&&bot.initialized&&bot.life==a.life&&bot.slot==a.slot&&bot.lastTick<now&&
+       (bot.decision==lib::bots::ActorDecision::Idle||bot.decision==lib::bots::ActorDecision::Patrol)&&
+       !bot.target&&!a.vehicle&&!a.downed&&!a.frozen&&!a.fireHeld&&!a.blockHeld&&!a.lockTarget&&
+       a.health==100&&a.blindUntil<=now&&a.reloadUntil<=now&&a.switchUntil<=now&&a.staggerUntil<=now&&
+       a.activeAction==Action::None&&a.input.action==Action::None&&!a.input.argument&&!a.input.buttons&&
+       !s.royale.enabled&&!s.match.planted&&w.countExisting<Projectile>()==0){
+        const World& view=w;
+        const world::SpatialWorld cells(32);
+        const auto here=cells.cell(a.pos);
+        std::vector<world::Cell> observers;
+        Fixed range=fxMax(host.config.sightRange,config_.systems.interactRange);
+        range=fxMax(range,config_.melee.lockRange);
+        for(const auto& weapon:config_.weapons)range=fxMax(range,weapon.range);
+        // Conservative guard: a full interaction range plus two cells.
+        const uint64_t guard=uint64_t(range.raw/(32*Fixed::kOne))+2;
+        bool critical=false;
+        const Simulation& read=sim;
+        forEachCharacter(read,[&](ConstCharacterRef other){
+            if(other.slot==a.slot||other.health<=0)return;
+            const auto cell=cells.cell(other.pos);
+            if(!bots_[other.slot-1]||other.lastSequence)observers.push_back(cell);
+            if(world::cellDistance(cell,here)<=guard)critical=true;
+        });
+        // Interior/stair traversal and nearby loot are not decimated.
+        for(const auto& region:buildingRegions_)if(insideXZ(region.bounds,a.pos)){critical=true;break;}
+        view.eachExistingConst<Loot>([&](Entity,const Loot& item){
+            if(world::cellDistance(cells.cell(item.pos),here)<=2)critical=true;
+        });
+        view.eachExistingConst<Vehicle>([&](Entity,const Vehicle& car){
+            if(world::cellDistance(cells.cell(car.pos),here)<=2)critical=true;
+        });
+        uint64_t id=a.slot; // stable host-level slot, never an ECS index
+        if(view.resourceConst<world::RegionEntityLedger>()){
+            const auto* identity=view.tryGetConst<world::RegionStableIdentity>(a.entity);
+            id=identity?identity->id:0;
+        }
+        const auto decision=world::simulationLodDecision(lod,here,observers,id,now,critical);
+        if(!decision.due&&now-bot.lastTick<decision.period){
+            // Retain only continuous steering already present in canonical
+            // CharacterControl. No stale fire/reload/jump/interaction edge.
+            a.input.viewTick=now;a.lastInputTick=now;
+            return true;
+        }
+    }
     // Objective: wanted loot within 25 m (closest), else a point inside the next circle (spread by slot).
     std::optional<Vec3> objective;std::optional<Loot> want;Fixed best=625_fx;
     const auto* loadout=gear(sim,a.slot);
