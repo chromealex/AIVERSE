@@ -168,3 +168,7 @@ Add opt-in persisted cave occupancy and pending mouth transition distinct from r
 ### Stage57b — IN PROGRESS (multi-tick native crossing)
 
 Extend optional persisted travel state with a crossing/clearance phase and monotonic movement receipt tick. Derive approach and clearance guidance from the exact committed rim; require the existing motor's real swept segment, exterior/cave coverage and whole-capsule side classification each tick. Keep the pending region pinned until destination-side clearance and legal interior landing; do not change the route or position during approach or partial crossing. Handle return through the rim and safe cancellation, revalidate current SDF after restore; no process-local native epochs in saved data. Explicit schema v2, no old-save compatibility claim. Native host example and source regressions; live acceptance later.
+
+### Stage57c — IN PROGRESS (staged native crossing and feasible mode selection)
+
+Select supported traversal from the current committed provider, PHYSIS support, NEREID immersion and explicit project capabilities; preserve swimming hysteresis and do not grant flight. Stage the existing oriented character/velocity sweep before publishing proxy or receipt, require genuine host exterior/cave coverage for the swept envelope, classify actual capsule clearance and commit only after admission. Quarantine if an irreversible native/ECS publication fails. No extra Scene step or new saved state. Native project adoption and live QA remain separate.
