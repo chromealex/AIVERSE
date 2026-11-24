@@ -14,6 +14,7 @@
 #include "engine/world/TerraWeaveCavernsNativeNavSolver.h"
 #include "engine/nav/CaveEcsRouteFollow.h"
 #include "engine/nav/CaveSimulationNavigation.h"
+#include "engine/nav/CaveEcsSteering.h"
 #include "engine/nav/CavePathQueryCache.h"
 #include "engine/world/TerraWeaveCavernsNavigationEnvironment.h"
 #include "engine/world/TerraWeaveCavernsNativeNavMeshCache.h"
@@ -167,7 +168,7 @@ public:
         Simulation& sim,nav::CaveMovementCollision collision,
         uint32_t maxRepairsPerTick=8,uint32_t maxMovedPerTick=65536) {
         nav::CaveSimulationNavigationHooks hooks;
-        hooks.publishedSource=[this]{return navigationBus_.active();};
+        hooks.publishedSource=[this]{return gameplayNavigationSource();};
         hooks.search=[this](const std::string& algorithm,
                             const CavePathQuery& q){
             return this->findPath(algorithm,q);
@@ -177,6 +178,33 @@ public:
         hooks.maxRepairsPerTick=maxRepairsPerTick;
         hooks.maxMovedPerTick=maxMovedPerTick;
         nav::installCaveNavigationSimulation(sim,std::move(hooks));
+    }
+    // Same-epoch source for actual gameplay consumers, not visual preview.
+    // Failed native publication or undelivered navigation invalidation must
+    // suppress both movement requests and solver reads until recovered.
+    std::shared_ptr<const CaveNavigationDataProvider>
+    gameplayNavigationSource()const {
+        if(closed_||physicsBarrier_.status().recoveryRequired||
+           navigationBus_.hasPending())return nullptr;
+        return navigationBus_.active();
+    }
+    // Preferred motor-neutral integration. The actual authority has already
+    // installed its own movement system. Read positions from its ECS world,
+    // then insert repath and steering before that exact system. The frame
+    // owner must outlive all registered Simulation callbacks.
+    void installMotorNavigationInSimulation(
+        Simulation& sim,nav::CaveWorldPositionSource position,
+        const std::string& motorSystem,
+        uint32_t maxRepairsPerTick=8,uint32_t maxSteeredPerTick=65536) {
+        nav::CaveSimulationNavigationHooks hooks;
+        hooks.publishedSource=[this]{return gameplayNavigationSource();};
+        hooks.search=[this](const std::string& algorithm,const CavePathQuery& q){
+            return findPath(algorithm,q);
+        };
+        hooks.invalidateDerived=[this]{invalidateNavigationRouteCache();};
+        hooks.maxRepairsPerTick=maxRepairsPerTick;
+        nav::installCaveMotorNavigationBefore(sim,std::move(hooks),
+            std::move(position),motorSystem,maxSteeredPerTick);
     }
     // Publish the authoritative immutable ECS environment at a fixed-tick
     // owner barrier: NEREID flood and PHYSIS traction are derived read-only.
@@ -280,8 +308,7 @@ public:
     }
     CavePathResult findPath(const std::string& name,
                             const CavePathQuery& query)const {
-        if(navigationBus_.hasPending())return {};
-        const auto published=navigationBus_.active();
+        const auto published=gameplayNavigationSource();
         if(!published || published->revision()!=query.sourceRevision)
             return {};
         // Custom solvers can depend on external dynamic state not captured by
