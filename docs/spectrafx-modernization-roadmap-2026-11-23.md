@@ -350,3 +350,7 @@ Native opt-in ComputeParticles depth collision consumes a bounded 64x64 hardware
 ## Stage 139 — native GPU previous-depth collision (source; QA deferred)
 
 Native ComputeEmitterDesc::depthCollision requires RequireGpu, excludes static SDF/sphere and VM. MetalDepthCollisionHistory captures actual post-scene depth into 64x64 float storage on GPU; Renderer3D::consumeResolvedSceneDepth provides one-shot after writer pass, before post processing. Host passes snapshot to ComputeParticles::setDepthCollisionSnapshot before next step; checked GPU copy, same device, previous submission within two fences, matched projection/inverse and texture orientation. No CPU readback. Both existing compute shader languages reconstruct local surface from 3 depth samples, reject discontinuities and bounce front-to-back crossings. No automatic host wiring, graph authoring, Vulkan capture producer, continuous mesh CCD, hidden geometry or GPU events. Storage payload appended at material slot 13; uniform ABI now 352 bytes, state ABI unchanged. QA deferred.
+
+## Stage 140 — GPU collision feedback (in progress)
+
+Opt-in bounded GPU contact records from analytic sphere, sampled SDF and depth kernels, preserve VM error counter and particle ABI. Explicit async request after successful step, shared checkpoint bandwidth reservation, stale epoch cancellation, native GraphRuntime and pool APIs, bridge to existing presentation emitter event router. No gameplay events, no automatic child authoring yet. Regression source only; execution deferred.
