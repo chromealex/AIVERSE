@@ -154,6 +154,8 @@ public:
             device.waitForResourceIdle();
             runtime_.swap(candidate);
             candidate.reset();
+            authoredGraph_=graph;
+            authoredGpuBirthRandom_=opts.gpuBirthRandom;
             checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;
             checkpointWaitFrames_=0;fileImportPending_=false;importLease_.reset();exportLease_.reset();
             ready_=true;
@@ -508,6 +510,11 @@ public:
         if(!spectra::decodeTimelineCheckpoint(bytes,tick,bursts,payload)||!runtime_->importRestoreCheckpoint(payload))return false;
         timeTicks_=targetTicks_=tick;triggeredBursts_=bursts;phase_=0;replayPrepared_=false;error_.clear();return true;
     }
+    const Json& authoredGraph() const {return authoredGraph_;}
+    bool authoredGpuBirthRandom() const {return authoredGpuBirthRandom_;}
+    bool canBeginReplayTransaction() const {
+        return !checkpointRequest_&&!rollbackId_&&!fileImportPending_&&!importLease_.id&&!exportLease_.id&&!replayPending();
+    }
     uint32_t timeTicks() const {return timeTicks_;}
     bool replayReady() const {
         return replayPrepared_ && ready_ && error_.empty() &&
@@ -551,6 +558,7 @@ public:
     void stop(gfx::Device& device) {
         device.waitForResourceIdle();
         runtime_->shutdown();
+        authoredGraph_=Json::object();authoredGpuBirthRandom_=false;
         checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;
         fileImportPending_=false;importLease_.reset();exportLease_.reset();
         checkpointWaitFrames_=0;hasPendingGpuAllocationSeed_=false;pendingShaderSeedMode_=false;
@@ -584,6 +592,8 @@ private:
         error_=std::move(reason);
         return status();
     }
+    Json authoredGraph_=Json::object();
+    bool authoredGpuBirthRandom_=false;
     std::unique_ptr<spectra::GraphRuntime> runtime_=std::make_unique<spectra::GraphRuntime>();
     std::map<std::string,float> requestedParameters_;
     bool ready_=false,playing_=false,pendingRestart_=false,restartBurstPending_=false;

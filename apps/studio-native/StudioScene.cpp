@@ -575,7 +575,8 @@ void StudioScene::syncDocumentModels(
 StudioScene::~StudioScene() {
     if (device_) {
         device_->waitForResourceIdle();
-        spectraPreview_.stop(*device_); // before gfx Device and renderer are destroyed
+        discardReplayBackup();
+        spectraPreview_->stop(*device_); // before gfx Device and renderer are destroyed
         clearDocumentModels();
         lightingRuntime_.shutdown(*device_,renderer_);
         if(lightingModel_) {
@@ -1320,6 +1321,34 @@ void StudioScene::resetView() {
 // This is deliberately a *mode* on the existing render-thread-owned
 // CAMetalLayer/Vulkan surface, NOT a second graphics context or HTML frame.
 // The map is not submitted while FX authoring is active.
+// All three helpers run between native frames. Never release a runtime
+// from frame provenance sampling while an encoder is still open.
+void StudioScene::discardReplayBackup() {
+    if(!spectraReplayBackup_)return;
+    spectraReplayBackup_->stop(*device_);
+    spectraReplayBackup_.reset();
+}
+void StudioScene::rollbackReplayTransaction(const std::string& outcome,const std::string& reason) {
+    if(!spectraReplayBackup_)return;
+    spectraPreview_->stop(*device_);
+    spectraPreview_=std::move(spectraReplayBackup_);
+    camera_=replayBackupCamera_;cameraInitialized_=replayBackupCameraInitialized_;
+    tween_=replayBackupTween_;
+    fxBackground_=replayBackupBackground_;fxGrid_=replayBackupGrid_;fxAxes_=replayBackupAxes_;
+    replayOutcome_=outcome;replayError_=reason;
+    lastFrameSignature_=0;settleFrames_=30;
+}
+void StudioScene::finishReplayTransaction() {
+    if(!spectraReplayBackup_)return;
+    const auto state=spectraPreview_->command(*device_,Json::parse(R"({"action":"status"})"));
+    if(state.getBool("replayReady")){
+        discardReplayBackup();
+        replayOutcome_="committed";replayError_.clear();
+    }else if(!state.getBool("replayPending")){
+        const auto reason=state.getStr("error");
+        rollbackReplayTransaction("failed",reason.empty()?"Replay candidate failed":reason);
+    }
+}
 void StudioScene::frameSpectraDock(int framebufferWidth,int framebufferHeight) {
     if(!device_ || framebufferWidth<2 || framebufferHeight<2)return;
     // GPU updates/retirement happen between frames, before an active pass.
@@ -1331,8 +1360,8 @@ void StudioScene::frameSpectraDock(int framebufferWidth,int framebufferHeight) {
     const auto view=viewCamera();
     const float aspect=float(framebufferWidth)/float(framebufferHeight);
     const auto viewProj=view.proj(aspect,device_->info().clipDepthZeroToOne)*view.view();
-    if(spectraPreview_.active()) {
-        spectraPreview_.prepare(fx::SpectraFxView::fromCamera(
+    if(spectraPreview_->active()) {
+        spectraPreview_->prepare(fx::SpectraFxView::fromCamera(
             view,viewProj,framebufferWidth,framebufferHeight),{0,0,0});
     }
     renderer_.beginScene(view,framebufferWidth,framebufferHeight);
@@ -1371,11 +1400,11 @@ void StudioScene::frameSpectraDock(int framebufferWidth,int framebufferHeight) {
         renderer_.line({0,-.45f,0},{0,.75f,0},rgba(108,214,129));
     }
     renderer_.render(pass,&antialiasing_);
-    if(spectraPreview_.active())spectraPreview_.draw();
+    if(spectraPreview_->active())spectraPreview_->draw();
     renderer_.resolvePostFx();
     ++framesDrawn_;
     // Record the state actually used by this dock frame, before submission.
-    Json provenance=spectraPreviewCommand(Json::parse(R"({"action":"status"})"),spectraProject_);
+    Json provenance=spectraPreviewCommand(Json::parse(R"({"action":"status"})"),spectraProject_,true);
     provenance.set("projectPath",Json::string(spectraProject_));
     provenance.set("frameSerial",Json::number(int64_t(device_->frameSerial())));
     fxFrameProvenance_->emplace_back(device_->frameSerial(),std::move(provenance));
@@ -1394,14 +1423,19 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     const std::string& projectRoot=projectPath;
     // Project changes invalidate runtime particle buffers and preview input
     // so a previous project's effect can never render in the new Scene.
-    if(spectraPreview_.active() && spectraProject_!=projectRoot)
-        spectraPreview_.stop(*device_);
+    if(spectraProject_!=projectRoot){
+        discardReplayBackup();
+        if(spectraPreview_->active())spectraPreview_->stop(*device_);
+        spectraProject_=projectRoot;
+        replayAttemptGeneration_=0;replayOutcome_.clear();replayError_.clear();
+    }
     facialReady_=false;
     facialError_.clear();
     if (!device_ || framebufferWidth < 2 || framebufferHeight < 2) return;
     if(spectraDockMode_) {
         // A dedicated VFX authoring viewport, not the authored map.
         frameSpectraDock(framebufferWidth,framebufferHeight);
+        finishReplayTransaction(); // frame scope has closed its pass and submission
         return;
     }
     if(antialiasing_.pendingTargetRetirements())antialiasing_.collectRetiredTargets();
@@ -1736,7 +1770,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             lightingRevision_!=doc.revision || nereid_.configuredSurfaces()>0 ||
             (wind_.enabled && riggedInstances_>0) || day.clouds>0 || lodDiagnostics_ ||
             (lightingRuntime_.indirect && !lightingRuntime_.indirect->converged) ||
-            !thumbJobs_.empty() || spectraPreview_.needsFrame(); // native FX playback forces draw
+            !thumbJobs_.empty() || spectraPreview_->needsFrame(); // native FX playback forces draw
         if(animated || signature!=lastFrameSignature_) settleFrames_=kSettleFrames;
         lastFrameSignature_=signature;
         if(settleFrames_>0) --settleFrames_;
@@ -1746,11 +1780,11 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     // proxies/syncDocumentModels ran above: lighting needs modelInstances_ first.
     device_->beginFrame(framebufferWidth, framebufferHeight);
     StudioFrameScope scope{*device_};
-    if(spectraPreview_.active()) {
+    if(spectraPreview_->active()) {
         // Device-safe point: GPU simulation update before any encoder/pass.
         const float aspect=float(framebufferWidth)/float(framebufferHeight);
         const auto viewProj=view.proj(aspect,device_->info().clipDepthZeroToOne)*view.view();
-        spectraPreview_.prepare(fx::SpectraFxView::fromCamera(
+        spectraPreview_->prepare(fx::SpectraFxView::fromCamera(
             view,viewProj,framebufferWidth,framebufferHeight),camera_.target);
     }
     nereid_.prepare(*device_,view.eye());
@@ -1928,7 +1962,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     renderer_.render(pass,useLighting?lightingRuntime_.pipeline(post_):static_cast<PostProcess*>(&post_));
     // Renderer3D keeps the HDR scene pass open; GPU/CPU FX draw here,
     // before PRISMA resolves it and before the frame/pass are retired.
-    if(spectraPreview_.active())spectraPreview_.draw();
+    if(spectraPreview_->active())spectraPreview_->draw();
     renderer_.resolvePrisma();
     lightingRuntime_.presented();
 

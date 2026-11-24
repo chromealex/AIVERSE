@@ -79,13 +79,27 @@ public:
         tween_.active=false;
         lastFrameSignature_=0;settleFrames_=30;
     }
-    Json spectraPreviewCommand(const Json& input,const std::string& project) {
+    Json spectraPreviewCommand(const Json& input,const std::string& project,bool frameProvenance=false) {
         const auto action=input.getStr("action","status");
-        if(project!=spectraProject_ && spectraPreview_.active())
-            spectraPreview_.stop(*device_);
-        spectraProject_=project;
-        if(action!="status"&&action!="stop"&&action!="replayCancel"&&spectraPreview_.replayPending()){
-            Json out=spectraPreview_.status();
+        if(!frameProvenance){
+            if(project!=spectraProject_){
+                discardReplayBackup();
+                if(spectraPreview_->active())spectraPreview_->stop(*device_);
+                replayAttemptGeneration_=0;replayOutcome_.clear();replayError_.clear();
+            }
+            spectraProject_=project;
+            finishReplayTransaction();
+            if(action=="stop"){
+                discardReplayBackup();
+                replayAttemptGeneration_=0;replayOutcome_.clear();replayError_.clear();
+            }
+            if(action=="replayCancel"&&spectraReplayBackup_){
+                rollbackReplayTransaction("cancelled","");
+                return spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
+            }
+        }
+        if(action!="status"&&action!="stop"&&action!="replayCancel"&&(spectraReplayBackup_||spectraPreview_->replayPending())){
+            Json out=spectraPreview_->status();
             out.set("error",Json::string("Replay restore pending; cancel or wait"));
             return out;
         }
@@ -111,17 +125,35 @@ public:
             if(!input["speed"].isNumber()||input["loop"].type()!=Json::Type::Bool||
                (speed!=0.25&&speed!=0.5&&speed!=1.0&&speed!=2.0&&speed!=4.0))
                 throw std::runtime_error("Invalid replay playback settings");
-            // Optional graph replacement is transactional itself (Stage 83).
-            // A later replay validation failure does not roll that load back.
-            if(input.has("graph")){
-                Json load=Json::object();load.set("action",Json::string("load"));
-                load.set("graph",input["graph"]);load.set("gpuBirthRandom",input["gpuBirthRandom"]);
-                const auto loaded=spectraPreview_.command(*device_,load);
-                if(!loaded.getBool("ready")||!loaded.getStr("error").empty())return loaded;
-            }
+            if(!spectraPreview_->canBeginReplayTransaction())
+                throw std::runtime_error("Checkpoint or replay operation pending");
+            const Json graph=input.has("graph")?input["graph"]:spectraPreview_->authoredGraph();
+            if(!graph.isObject()||graph.getInt("version")!=2)
+                throw std::runtime_error("Replay requires a loaded Graph v2");
+            // Candidate owns its own runtime but borrows the same native Device.
+            // No live state is changed by validation or backend failure.
+            auto candidate=std::make_unique<StudioSpectraPreview>();
+            Json load=Json::object();load.set("action",Json::string("load"));
+            load.set("graph",graph);
+            load.set("gpuBirthRandom",Json::fromBool(input.has("gpuBirthRandom")?
+                input.getBool("gpuBirthRandom"):spectraPreview_->authoredGpuBirthRandom()));
+            const auto loaded=candidate->command(*device_,load);
             Json prepare=input;prepare.set("action",Json::string("replayPrepare"));
-            const auto prepared=spectraPreview_.command(*device_,prepare);
-            if(!prepared.getBool("ready")||!prepared.getStr("error").empty())return prepared;
+            const auto prepared=loaded.getBool("ready")&&loaded.getStr("error").empty()?
+                candidate->command(*device_,prepare):loaded;
+            if(!prepared.getBool("ready")||!prepared.getStr("error").empty()){
+                candidate->stop(*device_);
+                Json rejected=spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
+                rejected.set("error",Json::string(prepared.getStr("error")));
+                return rejected;
+            }
+            replayBackupCamera_=camera_;replayBackupCameraInitialized_=cameraInitialized_;
+            replayBackupTween_=tween_;
+            replayBackupBackground_=fxBackground_;replayBackupGrid_=fxGrid_;replayBackupAxes_=fxAxes_;
+            spectraReplayBackup_=std::move(spectraPreview_);
+            spectraPreview_=std::move(candidate);
+            replayAttemptGeneration_=uint64_t(prepared["generation"].integer());
+            replayOutcome_="pending";replayError_.clear();
             fxBackground_=background;fxGrid_=input.getBool("grid");fxAxes_=input.getBool("axes");
             camera_.yaw=yaw;camera_.pitch=pitch;camera_.distance=distance;
             camera_.target={x,y,z};camera_.ortho=c.getBool("ortho");cameraInitialized_=true;
@@ -169,7 +201,7 @@ public:
             camera_.target={x,y,z};camera_.ortho=c.getBool("ortho");cameraInitialized_=true;
         }
         if(action=="stage"||action=="cameraPreset"||action=="cameraRestore"||action=="status") {
-            const Json state=spectraPreview_.command(*device_,Json::parse(R"({"action":"status"})"));
+            const Json state=spectraPreview_->command(*device_,Json::parse(R"({"action":"status"})"));
             Json out=state;
             out.set("background",Json::string(fxBackground_));
             out.set("grid",Json::fromBool(fxGrid_));
@@ -183,10 +215,13 @@ public:
             camera.set("targetZ",Json::number(camera_.target.z));
             camera.set("ortho",Json::fromBool(camera_.ortho));
             out.set("camera",std::move(camera));
+            out.set("replayAttemptGeneration",Json::number(int64_t(replayAttemptGeneration_)));
+            out.set("replayOutcome",Json::string(replayOutcome_));
+            out.set("replayError",Json::string(replayError_));
             if(action!="status") {lastFrameSignature_=0;settleFrames_=30;}
             return out;
         }
-        Json result=spectraPreview_.command(*device_,input);
+        Json result=spectraPreview_->command(*device_,input);
         result.set("background",Json::string(fxBackground_));
         result.set("grid",Json::fromBool(fxGrid_));
         result.set("axes",Json::fromBool(fxAxes_));
@@ -343,7 +378,16 @@ private:
     std::map<std::string,std::vector<render::Material>> primitiveMaterials_; // per frame, per entity
     render::Model* builtinPrimitive(bool sphere);
     StudioFacialGpuPreview facialGpu_;
-    StudioSpectraPreview spectraPreview_{};
+    std::unique_ptr<StudioSpectraPreview> spectraPreview_=std::make_unique<StudioSpectraPreview>();
+    std::unique_ptr<StudioSpectraPreview> spectraReplayBackup_;
+    uint64_t replayAttemptGeneration_=0;
+    std::string replayOutcome_,replayError_;
+    render::Camera replayBackupCamera_{};
+    bool replayBackupCameraInitialized_=false,replayBackupGrid_=true,replayBackupAxes_=true;
+    std::string replayBackupBackground_;
+    void discardReplayBackup();
+    void rollbackReplayTransaction(const std::string& outcome,const std::string& reason);
+    void finishReplayTransaction();
     std::shared_ptr<std::deque<std::pair<uint64_t,Json>>> fxFrameProvenance_=std::make_shared<std::deque<std::pair<uint64_t,Json>>>();
     // Not a second gfx device: the same Scene renderer is placed in the
     // SpectraFX panel and switches between authored map and isolated FX.
@@ -413,6 +457,7 @@ private:
         float fromDistance = 0, toDistance = 0, fromYaw = 0, toYaw = 0, fromPitch = 0, toPitch = 0;
         std::chrono::steady_clock::time_point start{};
     } tween_;
+    CameraTween replayBackupTween_{};
     void startTween(render::float3 target, float distance, float yaw, float pitch);
     void stepTween();
     // Camera actually submitted/picked: clip planes follow distance, ortho keeps

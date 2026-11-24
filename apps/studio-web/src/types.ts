@@ -173,6 +173,9 @@ export interface StudioSpectraPreviewState {
   gpuSeedRetries?:number;
   replayReady?:boolean;
   replayPending?:boolean;
+  replayAttemptGeneration?:number;
+  replayOutcome?:'pending'|'committed'|'failed'|'cancelled'|'';
+  replayError?:string;
   capture?:{
     pending:boolean;ready:boolean;captureId?:number;cancelled?:boolean;
     width?:number;height?:number;mime?:'image/jpeg';

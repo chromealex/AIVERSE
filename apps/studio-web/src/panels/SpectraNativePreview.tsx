@@ -285,25 +285,32 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       const expectedGeneration=restored.generation;
       replayGeneration.current=expectedGeneration;
       setState(restored);
-      if(replayPreset.gpuBirthRandom!==undefined){
-        setGpuBirthRandom(replayPreset.gpuBirthRandom);lastLoadedGraph.current=graphSignature;
-      }
       let settled=false;
       for(let attempt=0;attempt<280;++attempt){
         if(replayCancelled.current)return;
-        const next=await invokePreview({action:'status',expectedGeneration});
+        const next=await invokePreview({action:'status'});
         if(replayCancelled.current)return;
+        if(next.replayAttemptGeneration!==expectedGeneration)
+          throw new Error('Replay operation was superseded');
+        setState(next);
+        if(next.replayOutcome==='failed'||next.replayOutcome==='cancelled')
+          throw new Error(next.replayError||'Replay restore rolled back');
+        if(next.generation!==expectedGeneration)
+          throw new Error('Replay runtime generation changed');
         if(next.gpuSeedFailed)throw new Error(next.error||'GPU seed reset failed after retry budget');
         if((next.error&&!next.gpuSeedPending)||!next.ready)
           throw new Error(next.error||'Replay backend unavailable');
         setState(next);
-        if(next.tick===replayPreset.tick&&next.replayReady){settled=true;break;}
+        if(next.tick===replayPreset.tick&&next.replayReady&&next.replayOutcome==='committed'){settled=true;break;}
         if(next.tick>replayPreset.tick)throw new Error('Replay overshot requested tick');
         await new Promise<void>(resolve=>window.setTimeout(resolve,100));
       }
       if(!settled){
         await invokePreview({action:'replayCancel',expectedGeneration}).catch(()=>{});
         throw new Error('Replay seek did not settle within the polling budget');
+      }
+      if(replayPreset.gpuBirthRandom!==undefined){
+        setGpuBirthRandom(replayPreset.gpuBirthRandom);lastLoadedGraph.current=graphSignature;
       }
       setSeek(replayPreset.tick);
       setLiveScalars({...replayPreset.parameters});
