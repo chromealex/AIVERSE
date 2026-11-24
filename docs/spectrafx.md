@@ -1,3 +1,7 @@
+## Stage 120B — Vulkan particle kernel and backend routing (in progress; QA deferred)
+
+Port existing bounded GPU VM, all allocator/host gather modes, culling/LOD and live compaction to Vulkan GLSL using the new storage/uniform ABI. Activate only on capable Vulkan devices; retain complete CPU fallback. Expanded and procedural billboard modes share the same particle ABI. Keep legacy Metal paths and graph semantics. Native Vulkan/Metal tests deferred; source implementation not a parity claim.
+
 ## Stage 120A — Vulkan allocator RHI prerequisites (source implemented; QA deferred)
 
 Add capability-gated storage-buffer/uniform compute layout (native slot 8 uniform, up to 18 storage descriptors), ordered immutable storage uploads/copies, indirect compute, ranged and blocking buffer reads with transfer budget. Preserve existing texture and push-constant layouts. No SpectraFX Vulkan activation until complete compatible shader/host routing is implemented. Native tests deferred.
