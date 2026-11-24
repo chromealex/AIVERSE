@@ -575,6 +575,7 @@ void StudioScene::syncDocumentModels(
 StudioScene::~StudioScene() {
     if (device_) {
         device_->waitForResourceIdle();
+        if(!cavernsPreview_.close(*device_))cavernsPreview_.quarantineOnFailedTeardown();
         clearDocumentModels();
         lightingRuntime_.shutdown(*device_,renderer_);
         if(lightingModel_) {
@@ -1537,6 +1538,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         return;
     }
     const auto& map = doc.data;
+    cavernsPreview_.syncDocument(*device_,doc,projectPath);
     const auto now=std::chrono::steady_clock::now();
     if(lastSeenRevision_!=doc.revision){lastSeenRevision_=doc.revision;lastDocChange_=now;}
     {
@@ -1664,7 +1666,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         constexpr int kSettleFrames=30;
         const uint64_t signature=frameSignature(framebufferWidth,framebufferHeight,doc,fpsProject,selectedId);
         // Pending Assets thumbnails render inside a drawn frame (one per frame).
-        const bool animated=continuousRedraw_ || tween_.active || modelsPending_ || !thumbJobs_.empty() ||
+        const bool animated=continuousRedraw_ || tween_.active || modelsPending_ || cavernsPreview_.needsFrame() || !thumbJobs_.empty() ||
             lightingRevision_!=doc.revision || nereid_.configuredSurfaces()>0 ||
             (wind_.enabled && riggedInstances_>0) || day.clouds>0 || lodDiagnostics_ ||
             (lightingRuntime_.indirect && !lightingRuntime_.indirect->converged) ||
@@ -1678,6 +1680,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     // proxies/syncDocumentModels ran above: lighting needs modelInstances_ first.
     device_->beginFrame(framebufferWidth, framebufferHeight);
     StudioFrameScope scope{*device_};
+    cavernsPreview_.beforeRender(*device_,brushVisible_&&brushVolume_?brushCenter_:camera_.target);
     nereid_.prepare(*device_,view.eye());
     const double opticalNow=std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
     nereid_.updateUnderwater(post_,underwaterFrameTime_>0?float(opticalNow-underwaterFrameTime_):1.f/60.f);
@@ -1705,11 +1708,11 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     // Temporary primitive preview (NOT legacy editor terrain, animation or materials).
     const float w = float(std::max(map.w, 1));
     const float h = float(std::max(map.h, 1));
-    if(lightingModel_) {
+    if(lightingModel_&&!cavernsPreview_.isolate()) {
         // Shared lit preview geometry (terrain + document proxies) owned by the lighting runtime.
         ModelDraw draw;draw.model=lightingModel_.get();renderer_.drawModel(draw);
     }
-    if(showTerrain){
+    if(showTerrain&&!cavernsPreview_.isolate()){
     if(lightingModel_) {
         // Terrain is already part of the lit preview model.
     } else if (terrain_.vb.valid() && terrain_.ib.valid()) {
@@ -1839,6 +1842,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         o.segment(x0,y0,x1,y0,w,rgba(130,181,255,220));o.segment(x1,y0,x1,y1,w,rgba(130,181,255,220));
         o.segment(x1,y1,x0,y1,w,rgba(130,181,255,220));o.segment(x0,y1,x0,y0,w,rgba(130,181,255,220));
     }
+    cavernsPreview_.draw(renderer_);
     gfx::PassDesc pass;
     pass.clearColor[0] = 0.038f; pass.clearColor[1] = 0.064f;
     pass.clearColor[2] = 0.098f; pass.clearColor[3] = 1.0f;
