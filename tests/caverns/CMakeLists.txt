@@ -5,7 +5,8 @@ foreach(cave_test IN ITEMS
         terraweave_caverns_mesh_test
         terraweave_caverns_swap_policy_test
         terraweave_caverns_owner_barrier_test
-        terraweave_caverns_preview_pacer_test)
+        terraweave_caverns_preview_pacer_test
+        terraweave_caverns_streaming_test)
     add_executable(aiverse_${cave_test}
         ${PROJECT_SOURCE_DIR}/tests/${cave_test}.cpp)
     target_include_directories(aiverse_${cave_test} PRIVATE
