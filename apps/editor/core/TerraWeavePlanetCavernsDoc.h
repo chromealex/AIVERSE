@@ -97,11 +97,11 @@ inline Json encodeRegions(const MapData& map,const RegionSet& set){
     }
     j.set("regions",std::move(items));return j;
 }
-inline Region read(const MapData& map){
+inline const Json& selectedRegionRecord(const MapData& map){
     const auto id=activeRegionId(map);
     if(id.empty())throw std::invalid_argument("Create a planetary Caverns region first");
     const auto& j=map.extra[key];
-    if(j.getInt("version",0)==1)return decodeRegion(map,j);
+    if(j.getInt("version",0)==1)return j;
     // Fast selected-chart path for scene picking; mutations validate full set.
     if(!j["regions"].isArray()||j["regions"].size()>maxRegions)
         throw std::invalid_argument("Caverns planetary region list");
@@ -114,7 +114,12 @@ inline Region read(const MapData& map){
         }
     }
     if(!selected)throw std::invalid_argument("Caverns selected region missing");
-    return decodeRegion(map,*selected);
+    return *selected;
+}
+inline Region read(const MapData& map){return decodeRegion(map,selectedRegionRecord(map));}
+inline CavePlanetAnchor readAnchor(const MapData& map){
+    auto anchor=cavePlanetAnchorFromJson(selectedRegionRecord(map)["anchor"]);
+    validateAnchor(map,anchor);return anchor;
 }
 inline Json describeRegions(const RegionSet& set){
     Json list=Json::array();
