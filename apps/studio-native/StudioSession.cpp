@@ -1893,6 +1893,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
     static const std::set<std::string> assetWrites={"studio.assetTransferCommit",
         "studio.assetTrashApply","studio.assetTrashBatchApply"};
     if(ws_.project.dir.empty()||!assetWrites.count(method))return dispatchImplCore(request);
+    if(method=="studio.assetTransferCommit"&&pendingAssetTransfer_&&
+       pendingAssetTransfer_->describe().getStr("source")=="external")return dispatchImplCore(request);
     // This wrapper is also used by explicit agent adapters; do not bypass it.
     try{
         StudioAssetHistoryPublication publication(ws_.project.dir);
@@ -3018,6 +3020,22 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             std::optional<editor::ProjectHistory::MovePlan> moveHistory;
             agentHistoryUnsafe_=true;
             Json result;
+            if(!internal){
+                StudioBatchAssetPlan staged;
+                result=pendingAssetTransfer_->apply(token,decisions,{},&moveHistory,false,&staged);
+                const auto beforeHistory=assetHistory_.version();
+                if(moveHistory){
+                    auto next=assetHistory_;
+                    const auto label=moveHistory->replacement?"Replace assets":"Import assets";
+                    next.recordMove(std::move(*moveHistory),label);
+                    studioApplyHistoryBatch(ws_.project.dir,staged.relocations,staged.documents,staged.movingResources,&assetHistory_,&next);
+                    assetHistory_=std::move(next);assetHistoryPersistenceWarning_.clear();
+                    try{StudioAssetCatalog catalog(ws_.project.dir);catalog.rebuild(false);}
+                    catch(const std::exception& e){assetHistoryPersistenceWarning_="Asset index refresh required: "+std::string(e.what());}
+                }
+                result.set("historyRecorded",Json::fromBool(assetHistory_.version()!=beforeHistory&&assetHistory_.canUndo()&&moveHistory.has_value()));
+                pendingAssetTransfer_.reset();reply.set("result",std::move(result));return reply;
+            }
             try{result=pendingAssetTransfer_->apply(token,decisions,commitHook,&moveHistory,internal);}
             catch(...){assetHistory_.reset();throw;}
             const auto beforeHistory=assetHistory_.version();
