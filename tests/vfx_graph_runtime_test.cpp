@@ -137,8 +137,26 @@ int main() {
         render::float3 pos{0,-1,0},vel{0,-20,0};
         require(fx::resolveStaticSdf(sdf,{0,1,0},pos,vel,.25f,1,0)&&
                 std::abs(pos.y-.25f)<.01f&&vel.y>0,"sampled SDF sweep");
+        // Expanded dense lattice keeps the same JSON and GPU source ABI.
+        sdf.dimension=32;sdf.spacing=.125f;sdf.origin={-2,-2,-2};sdf.samples.clear();
+        for(unsigned z=0;z<32;++z)for(unsigned y=0;y<32;++y)for(unsigned x=0;x<32;++x)
+            sdf.samples.push_back(float(y)*sdf.spacing-2);
+        require(sdf.valid()&&sdf.samples.size()==32768,"32 cubed SDF valid");
+        float distance=0;render::float3 gradient{};
+        require(sdf.sample({0,.25f,0},distance,gradient)&&
+                std::abs(distance-.25f)<1e-5f&&std::abs(gradient.y-1)<1e-5f,
+                "32 cubed SDF interpolation");
+        eligible=sp::inspectGraphGpuEligibility(volume,options);
+        require(eligible.eligible&&eligible.gpu.staticSdf.samples.size()==32768,
+                "32 cubed GPU eligibility");
+        require(fx::parseEffect(fx::effectToJson(volume),"sdf32",decoded,errors)&&
+                decoded.emitters[0].collision.staticSdf.samples==sdf.samples,
+                "32 cubed SDF roundtrip");
         sdf.samples.pop_back();
         require(!sp::inspectGraphGpuEligibility(volume,options).eligible,"invalid SDF rejected");
+        sdf.dimension=33;sdf.samples.resize(33u*33u*33u);
+        require(!sdf.valid()&&!fx::parseEffect(fx::effectToJson(volume),"sdf33",decoded,errors),
+                "oversized SDF rejected by native and JSON validation");
     }
     {
         sp::ComputeEmitterDesc desc;
@@ -203,8 +221,15 @@ int main() {
         auto reversed=indices;std::swap(reversed[0],reversed[1]);
         require(!bake::bakeMeshDistanceGrid(p,reversed,7,render::mat4{},grid,error),
                 "inconsistent winding rejected");
-        require(!bake::bakeMeshDistanceGrid(p,indices,17,render::mat4{},grid,error),
-                "unsupported volume dimension rejected");
+        require(bake::bakeMeshDistanceGrid(p,indices,32,render::mat4{},grid,error)&&
+                grid.samples.size()==32768,"32 cubed closed cube bake");
+        require(grid.samples[(16u*32+16)*32+16]<-.9f,"high resolution signed interior");
+        require(!bake::bakeMeshDistanceGrid(p,indices,33,render::mat4{},grid,error)&&
+                grid.samples.size()==32768,"unsupported dimension rejected without mutation");
+        std::vector<uint32_t> oversizedWork(513u*3u,0);
+        require(!bake::bakeMeshDistanceGrid(p,oversizedWork,32,render::mat4{},grid,error)&&
+                error.find("work budget")!=std::string::npos&&grid.samples.size()==32768,
+                "high resolution work budget retained");
     }
     options.capacity=4; // burst requires five slots
     require(!sp::inspectGraphGpuEligibility(basic,options).eligible,

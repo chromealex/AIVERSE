@@ -7,14 +7,16 @@
 #include <cstdint>
 #include <vector>
 namespace aiverse::fx {
+inline constexpr uint32_t kStaticSdfMaxDimension=32;
+inline constexpr size_t kStaticSdfMaxSamples=size_t(kStaticSdfMaxDimension)*kStaticSdfMaxDimension*kStaticSdfMaxDimension;
 struct StaticSdfVolume {
     render::float3 origin{};
     float spacing=1;
-    uint32_t dimension=0; // 0 = disabled; otherwise 3..16 inclusive
+    uint32_t dimension=0; // 0 = disabled; otherwise 3..32 inclusive
     std::vector<float> samples;
     bool valid()const {
         if(!dimension)return samples.empty();
-        if(dimension<3||dimension>16||!std::isfinite(spacing)||spacing<0.01f||spacing>1000||
+        if(dimension<3||dimension>kStaticSdfMaxDimension||!std::isfinite(spacing)||spacing<0.01f||spacing>1000||
            samples.size()!=size_t(dimension)*dimension*dimension)return false;
         for(float v:{origin.x,origin.y,origin.z})
             if(!std::isfinite(v)||std::abs(v)>1e6f||std::abs(v+spacing*(dimension-1))>1e6f)return false;
@@ -22,7 +24,7 @@ struct StaticSdfVolume {
         return true;
     }
     bool sample(render::float3 p,float& distance,render::float3& gradient)const {
-        if(dimension<3||dimension>16||spacing<=0||samples.size()!=size_t(dimension)*dimension*dimension)return false;
+        if(dimension<3||dimension>kStaticSdfMaxDimension||spacing<=0||samples.size()!=size_t(dimension)*dimension*dimension)return false;
         const auto q=(p-origin)*(1.f/spacing);
         const float max=float(dimension-1);
         if(!(q.x>=0&&q.y>=0&&q.z>=0&&q.x<=max&&q.y<=max&&q.z<=max))return false;

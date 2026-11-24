@@ -64,6 +64,7 @@ inline double solidAngle(D3 p,const Tri& t){
         la*lb*lc+dot(a,b)*lc+dot(b,c)*la+dot(c,a)*lb);
 }
 }
+inline constexpr uint32_t kMeshDistanceMaxDimension=32;
 inline constexpr uint32_t kMeshDistanceMaxTriangles=8192;
 inline constexpr uint64_t kMeshDistanceMaxWork=16ull*1024*1024;
 // Closed consistently wound triangle surfaces only. Exact seam weld; reject
@@ -75,7 +76,7 @@ inline bool bakeMeshDistanceGrid(const std::vector<render::float3>& positions,
         const render::mat4& transform,MeshDistanceGrid& output,std::string& error){
     using namespace distance_detail;
     auto fail=[&](const char* why){error=why;return false;};
-    if(dimension<4||dimension>16)return fail("SDF bake dimension must be 4..16");
+    if(dimension<4||dimension>kMeshDistanceMaxDimension)return fail("SDF bake dimension must be 4..32");
     const size_t count=indices.size()/3;
     const uint64_t nodes=uint64_t(dimension)*dimension*dimension;
     if(indices.empty()||indices.size()%3||count>kMeshDistanceMaxTriangles||

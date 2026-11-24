@@ -5,6 +5,8 @@
 #include "engine/fx/SpectraStaticSdfVolume.h"
 #include "engine/data/Json.h"
 namespace aiverse::fx {
+static_assert(bake::kMeshDistanceMaxDimension==kStaticSdfMaxDimension,
+              "Baker and runtime lattice limits must agree");
 inline bool bakeStaticSdf(const FxMesh& mesh,uint32_t dimension,const render::mat4& transform,
         StaticSdfVolume& out,std::string& error){
     bake::MeshDistanceGrid grid;

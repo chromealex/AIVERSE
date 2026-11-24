@@ -55,6 +55,16 @@ int main() {
         const auto& props=baked["graph"]["nodes"][size_t(2)]["properties"];
         require(props["staticSdf"]["samples"].size()==512&&props.getBool("ground",true)==false,"SDF and previous properties");
         require(!fs::exists(root/"fx"),"SDF edit must not publish files");
+        request.set("dimension",Json::number(int64_t(32)));
+        auto dense=call("fx_graph_edit",request);
+        require(dense.getBool("ok")&&dense["validation"].getBool("ok")&&
+                dense["graph"]["nodes"][size_t(2)]["properties"]["staticSdf"]["samples"].size()==32768,
+                "32 cubed Studio/MCP SDF bake");
+        require(!fs::exists(root/"fx"),"dense bake stays in local graph");
+        request.set("dimension",Json::number(int64_t(33)));
+        auto invalidDimension=call("fx_graph_edit",request);
+        require(invalidDimension.has("error")||!invalidDimension.getBool("ok"),"oversized bake rejected");
+        request.set("dimension",Json::number(int64_t(8)));
         request.set("model",Json::string("content/../escape.obj"));
         auto rejected=call("fx_graph_edit",request);
         require(rejected.has("error")||!rejected.getBool("ok"),"SDF traversal rejected");

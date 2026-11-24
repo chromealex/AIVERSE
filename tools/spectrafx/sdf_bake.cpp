@@ -9,7 +9,7 @@ int main(int argc,char** argv){
     try{
         if(argc!=4)throw std::runtime_error("usage: aiverse_sdf_bake MODEL DIMENSION OUT.json");
         size_t parsed=0;const auto n=std::stoul(argv[2],&parsed);
-        if(parsed!=std::string(argv[2]).size()||n<4||n>16)throw std::runtime_error("dimension must be 4..16");
+        if(parsed!=std::string(argv[2]).size()||n<4||n>bake::kMeshDistanceMaxDimension)throw std::runtime_error("dimension must be 4..32");
         const auto read=[](const std::string& path,std::string& data){
             std::ifstream f(path,std::ios::binary|std::ios::ate);
             if(!f)return false;

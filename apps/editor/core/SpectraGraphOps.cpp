@@ -934,12 +934,12 @@ void registerSpectraGraphOps(Workspace& ws) {
     // a valid graph node by node. The caller can commit via fx_graph_set or
     // preserve incomplete work using fx_graph_draft_set.
     add("fx_graph_edit",
-        "Apply a v1/v2 graph edit in memory and return the edited JSON plus compiler diagnostics. Actions: new, upgrade, add, connect, disconnect, deleteNode, setProperty, bakeSdf (closed project model, dimension 4..16); does not write files.",
+        "Apply a v1/v2 graph edit in memory and return the edited JSON plus compiler diagnostics. Actions: new, upgrade, add, connect, disconnect, deleteNode, setProperty, bakeSdf (closed project model, dimension 4..32); does not write files.",
         R"({"properties":{"name":{"type":"string"},"graph":{"type":"object"},"text":{"type":"string"},
              "action":{"type":"string"},"type":{"type":"string"},"from":{"type":"string"},
              "to":{"type":"string"},"toPort":{"type":"string"},"node":{"type":"string"},
              "property":{"type":"string"},"value":{},"draft":{"type":"boolean"},
-             "model":{"type":"string"},"dimension":{"type":"integer","minimum":4,"maximum":16},
+             "model":{"type":"string"},"dimension":{"type":"integer","minimum":4,"maximum":32},
              "expectedProjectPath":{"type":"string"}},
              "required":["action"]})", [&ws](const Json& p) {
         requireGame(ws);
@@ -991,8 +991,8 @@ void registerSpectraGraphOps(Workspace& ws) {
             const auto& dimension=p["dimension"];
             const auto d=dimension.toDouble();
             if(graph.getInt("version")!=2||!n||n->getStr("type")!="CollisionModule"||
-               !dimension.isNumber()||!std::isfinite(d)||d<4||d>16||std::floor(d)!=d)
-                throw std::runtime_error("Select a Graph v2 CollisionModule and integer dimension 4..16");
+               !dimension.isNumber()||!std::isfinite(d)||d<4||d>bake::kMeshDistanceMaxDimension||std::floor(d)!=d)
+                throw std::runtime_error("Select a Graph v2 CollisionModule and integer dimension 4..32");
             const std::string model=p.getStr("model");
             (void)checkedReplayDependency(ws,model);
             if(!render::isNativeModelFormat(model))

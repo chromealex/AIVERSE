@@ -456,11 +456,11 @@ void parseModules(const Json& e, Reader& r, EmitterDef& d) {
                     sr.number("spacing",sdf.spacing,0.01f,1000.f);
                     const auto& dim=grid["dimension"];
                     const auto n=dim.integer(-1);
-                    if(!dim.isNumber()||n<3||n>16||dim.toDouble()!=double(n))
-                        sr.fail("dimension","expected integer 3..16");
+                    if(!dim.isNumber()||n<3||n>kStaticSdfMaxDimension||dim.toDouble()!=double(n))
+                        sr.fail("dimension","expected integer 3..32");
                     else sdf.dimension=uint32_t(n);
                     const auto& samples=grid["samples"];
-                    if(!samples.isArray()||samples.size()>4096||
+                    if(!samples.isArray()||samples.size()>kStaticSdfMaxSamples||
                        samples.size()!=size_t(sdf.dimension)*sdf.dimension*sdf.dimension)
                         sr.fail("samples","expected dimension cubed distances");
                     else for(size_t i=0;i<samples.size();++i) {

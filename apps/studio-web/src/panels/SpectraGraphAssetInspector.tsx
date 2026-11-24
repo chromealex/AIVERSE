@@ -99,12 +99,12 @@ export default function SpectraGraphAssetInspector({
     <StudioField label="Lattice dimension" htmlFor="spectra-sdf-dimension">
       <StudioSelect id="spectra-sdf-dimension" value={String(bakeDimension)}
         disabled={disabled||baking} onChange={e=>setBakeDimension(Number(e.target.value))}>
-        {[4,8,12,16].map(n=><option key={n} value={n}>{n} × {n} × {n}</option>)}
+        {[4,8,12,16,24,32].map(n=><option key={n} value={n}>{n} × {n} × {n} ({(n*n*n).toLocaleString()} samples)</option>)}
       </StudioSelect>
     </StudioField>
     <StudioButton size="sm" disabled={disabled||baking||!node||!bakeModel||!projectPath}
       onClick={()=>void bake()}>{baking?'Baking…':raw?'Rebake SDF':'Bake SDF'}</StudioButton>
-    <small>Closed low-poly mesh, bind pose, model-space metres. Replaces only the baked SDF in the local graph; save to publish.</small>
+    <small>Closed low-poly mesh, bind pose, model-space metres. At 32³ the bake budget allows up to 512 triangles. Replaces only the baked SDF in the local graph; save to publish.</small>
     {bakeStatus&&<small role="status">{bakeStatus}</small>}
     {error&&<small role="alert">{error}</small>}
   </section>;
