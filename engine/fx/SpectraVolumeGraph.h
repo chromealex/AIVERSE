@@ -131,7 +131,11 @@ inline bool compilePresentationGraph(const Json& graph,const Json& overrides,Pre
         }else if(kind==4){
             if(!asset_detail::keys(p,{"pressureIterations"}))return fail("invalid VolumePressure properties");
             for(const auto& [k,v]:p.members())simulation.set(k,v);
-        }else if(kind==5)asset.set("material",p);
+        }else if(kind==5){
+            Json material=p;
+            if(p.has("lights")){asset.set("lights",p["lights"]);material.erase("lights");}
+            asset.set("material",std::move(material));
+        }
         if(at==tail)break;
         const auto it=successor.find(at);
         if(it==successor.end())return fail("unconnected volume output");

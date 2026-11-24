@@ -90,7 +90,7 @@ if(AIVERSE_BUILD_TESTS AND APPLE)
     add_test(NAME studio_spectrafx_fire_smoke
         COMMAND aiverse_studio_spectrafx_preview_tests)
     set_tests_properties(studio_spectrafx_fire_smoke PROPERTIES
-        ENVIRONMENT "AIVERSE_SPECTRA_FIRE_GRAPH_PATH=${PROJECT_SOURCE_DIR}/examples/spectrafx/fire_smoke_v2.vfx.json"
+        ENVIRONMENT "AIVERSE_SPECTRA_FIRE_GRAPH_PATH=${PROJECT_SOURCE_DIR}/examples/spectrafx/fire_smoke_v2.vfx.json;AIVERSE_SPECTRA_ENGINE_ASSETS=${PROJECT_SOURCE_DIR}/engine/assets/"
         LABELS "EDITOR;SpectraFX;GPU;Volumetrics" TIMEOUT 120
         PASS_REGULAR_EXPRESSION "Studio SpectraFX Metal preview PASS"
         FAIL_REGULAR_EXPRESSION "Studio SpectraFX Metal preview FAIL")

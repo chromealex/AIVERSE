@@ -43,6 +43,7 @@ struct GraphRuntimeOptions {
     std::shared_ptr<CheckpointReadbackBudget> checkpointBudget;
     std::shared_ptr<GpuAllocationBudget> allocationBudget;
     fx::SdfResourceReader sdfReader; // compile-time only; host owns bounded IO
+    fx::TextureLoader textureLoader; // optional presentation texture resolver for CPU graph sprites
     std::shared_ptr<SharedSdfGpuCache> sharedSdfCache;
 };
 

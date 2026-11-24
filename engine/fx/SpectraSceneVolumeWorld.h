@@ -19,6 +19,16 @@ public:
         const auto place=[&](Source& s){s.position=s.position*scale+anchor;s.radius*=scale;};
         for(auto& s:placed.sources)place(s);
         if(placed.impulse)place(*placed.impulse);
+        for(auto& light:placed.lights){light.position=light.position*scale+anchor;light.radius*=scale;}
+        RenderSettings lighting;
+        lighting.steps=std::max(64u,placed.simulation.dimension);
+        for(const auto& light:placed.lights){
+            PointLight point;
+            point.position=light.position;point.color=light.color;
+            point.radius=light.radius;point.intensity=light.intensity;
+            lighting.pointLights.push_back(point);
+        }
+        if(!lighting.valid()){error_="Invalid placed volume lighting";return false;}
         fx::StaticSdfVolume sdf;
         if(!placed.obstacle.empty()){
             if(!reader){error_="Volume obstacle requires a resource reader";return false;}
@@ -38,7 +48,8 @@ public:
         if(placed.impulse&&!next->queueImpulse(*placed.impulse,placed.impulseSeconds)){
             error_="Volume impulse rejected";return false;
         }
-        renderer_.shutdown();grid_=std::move(next);asset_=std::move(placed);anchor_=anchor;deposits_.clear();error_.clear();return true;
+        renderer_.shutdown();grid_=std::move(next);asset_=std::move(placed);settings_=std::move(lighting);
+        anchor_=anchor;deposits_.clear();error_.clear();return true;
     }
     // Transport the complete local field, not just its emitter. Existing
     // particles remain world-space; no inertial or rotational correction.
@@ -52,11 +63,14 @@ public:
         if(!next.simulation.valid())return false;
         for(auto& s:next.sources){s.position=s.position+delta;if(!s.valid())return false;}
         if(next.impulse){next.impulse->position=next.impulse->position+delta;if(!next.impulse->valid())return false;}
+        for(auto& light:next.lights){light.position=light.position+delta;if(!light.valid())return false;}
         // Transient deposits are explicitly world-space, not authored local sources.
         if(!grid_->translate(delta))return false;
-        asset_=std::move(next);anchor_=anchor;return true;
+        asset_=std::move(next);
+        for(size_t i=0;i<asset_.lights.size();++i)settings_.pointLights[i].position=asset_.lights[i].position;
+        anchor_=anchor;return true;
     }
-    void shutdown(){renderer_.shutdown();grid_.reset();asset_={};deposits_.clear();error_.clear();}
+    void shutdown(){renderer_.shutdown();grid_.reset();asset_={};settings_={};deposits_.clear();error_.clear();}
     bool step(){
         if(!grid_){error_="No volume";return false;}
         auto sources=asset_.sources;

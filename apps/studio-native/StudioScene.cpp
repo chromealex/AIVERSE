@@ -1405,6 +1405,7 @@ void StudioScene::frameSpectraDock(int framebufferWidth,int framebufferHeight) {
     if(volume!=spectraDockHdr_){
         PostFxSettings aa;aa.hdr=volume?HdrMode::On:HdrMode::Off;
         aa.effects.push_back(defaultPostFxEffect(PostFxType::Fxaa));
+        if(volume)aa.effects.push_back(defaultPostFxEffect(PostFxType::Bloom));
         antialiasing_.setSettings(std::move(aa));spectraDockHdr_=volume;
     }
     if(volume)spectraPreview_->contributeVolume(antialiasing_);

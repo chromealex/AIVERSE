@@ -10,10 +10,12 @@
 #include "engine/fx/SpectraFX.h"
 #include "engine/fx/SpectraSceneVolumetricParticles.h"
 #include "engine/render/Prisma.h"
+#include "engine/render/TextureCache.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <utility>
@@ -27,6 +29,10 @@ public:
     static constexpr uint32_t kMaxTicks=3600;
     static constexpr uint32_t kSeekTicksPerFrame=8;
     static constexpr float kStep=1.f/60.f;
+    void setTextureBases(std::string projectBase,std::string engineAssetsBase){
+        projectTextureBase_=std::move(projectBase);
+        engineTextureBase_=std::move(engineAssetsBase);
+    }
 
     // Render-thread command. Graph loads happen BETWEEN frames so retiring
     // GPU resources can settle before the new backend allocates. Commands
@@ -160,6 +166,31 @@ public:
             opts.gpuBirthRandom=input.getBool("gpuBirthRandom",false);
             opts.gpuMaterial=opts.gpuBirthRandom;
             opts.gpuProgram=true; // strict GPU VM eligibility, CPU twin otherwise
+            if(checked.particles){
+                textures_.init(device);
+                opts.textureLoader=[this](const std::string& name,fx::FxTexture& out){
+                    if(name.empty()||name.size()>512||name.find('\\')!=std::string::npos||
+                       name.find(':')!=std::string::npos||name.front()=='/')return false;
+                    const std::filesystem::path path(name);
+                    for(const auto& part:path)if(part.empty()||part=="."||part=="..")return false;
+                    const auto ext=path.extension().string();
+                    if(ext!=".png"&&ext!=".jpg"&&ext!=".jpeg"&&ext!=".tga")return false;
+                    const bool engine=name.rfind("engine/",0)==0;
+                    const std::string& base=engine?engineTextureBase_:projectTextureBase_;
+                    if(base.empty())return false;
+                    const std::string relative=engine?name.substr(7):name;
+                    std::filesystem::path file(base);std::error_code ec;
+                    for(const auto& part:std::filesystem::path(relative)){
+                        file/=part;
+                        const auto status=std::filesystem::symlink_status(file,ec);
+                        if(ec||std::filesystem::is_symlink(status))return false;
+                    }
+                    if(!std::filesystem::is_regular_file(file,ec)||ec)return false;
+                    auto tex=textures_.resolve(relative,false,base);
+                    if(!tex.valid())return false;
+                    out={tex.tex,tex.u0,tex.v0,tex.u1,tex.v1};return true;
+                };
+            }
             opts.preference=(checked.coupling.active()||checked.particleMaterial.enabled)?spectra::ComputePreference::RequireGpu:spectra::ComputePreference::Automatic;
             if(checked.particles&&!candidate->initGraph(&device,checked.particleGraph,Json::object(),opts)) {
                 const std::string reason=candidate->reason().empty()?
@@ -635,6 +666,11 @@ public:
         result.set("gpuBytes",Json::number(int64_t(gpu?stats.gpuBytes:0)));
         result.set("gpuLiveCompactions",Json::number(int64_t(gpu?stats.gpuLiveCompactions:0)));
         result.set("gpuAllocationBudgetDenied",Json::number(int64_t(gpu?stats.gpuAllocationBudgetDenied:0)));
+        if(ready_&&hasParticles_&&!runtime_->gpuActive()){
+            const auto& particles=runtime_->cpuFallback().stats();
+            result.set("particleAlive",Json::number(int64_t(particles.particles)));
+            result.set("particleDrawn",Json::number(int64_t(particles.drawn)));
+        }
         return result;
     }
     void stop(gfx::Device& device) {
@@ -642,6 +678,7 @@ public:
         volumeGrid_.reset();depthTarget_.clear();volumetricParticleDepth_=false;volumetricParticleMaterial_=false;
         coupling_={};hasParticles_=true;volumeRendered_=false;
         runtime_->shutdown();
+        textures_.shutdown();
         authoredGraph_=Json::object();authoredGpuBirthRandom_=false;authoredGpuOwnedAllocation_=false;
         checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;
         fileImportPending_=false;importLease_.reset();exportLease_.reset();
@@ -679,6 +716,8 @@ private:
     Json authoredGraph_=Json::object();
     bool authoredGpuBirthRandom_=false,authoredGpuOwnedAllocation_=false;
     std::unique_ptr<spectra::GraphRuntime> runtime_=std::make_unique<spectra::GraphRuntime>();
+    render::TextureCache textures_;
+    std::string projectTextureBase_,engineTextureBase_;
     std::unique_ptr<spectra::volume::VolumeInstance> volumeGrid_;
     spectra::VolumetricParticleDepthTarget depthTarget_;
     spectra::volume::ParticleVolumeCoupling coupling_;

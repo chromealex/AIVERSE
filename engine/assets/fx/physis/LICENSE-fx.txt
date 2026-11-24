@@ -13,6 +13,13 @@ Files (downscaled with Lanczos, converted TGA -> PNG on 2026-11-22):
                           RGB without alpha: alpha = luminance added for additive blending)
   smoke_8x8.png        <- WispySmoke01-flipbooks/WispySmoke01_8x8.tga   (1024x1024 -> 512x512, 8x8 frames)
 
+Full-resolution variants for the SpectraFX fire/smoke graph (2026-11-24):
+  fireball_full_8x8.png   <- FireBall01_8x8.tga       (1024x1024, 8x8 frames)
+  smoke_full_8x8.png      <- WispySmoke01_8x8.tga    (1024x1024, 8x8 frames)
+  flame_tall_full_16x4.png <- Flame02_16x4.tga       (2048x1024, 16x4 frames)
+The same per-frame edge fade below is applied without downscaling. FireBall01's RGB
+sheet has no source alpha; luminance supplies its alpha before the edge fade.
+
 Processing: each frame's alpha fades to 0 near its left/right (flames 18 %, others 10 %)
 and top/bottom edges so flames cut by the source frame do not show hard quad edges;
 a small alpha floor (flames 0.08) removes the faint haze around the flames.

@@ -396,6 +396,7 @@ void StudioHost::tickFx() {
                 created->setOrientationGizmo(false);
                 created->setContinuousRedraw(true);
                 created->setSpectraDockMode(true);
+                created->setSpectraEngineAssetRoot(engineRoot_+"/engine/assets/");
                 fxPreview_=std::move(created);
             });
         }

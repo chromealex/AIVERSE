@@ -52,6 +52,10 @@ float smokeDetailFactor(float3 p,float strength){
     float low=volumeNoise(p*1.7f),high=volumeNoise(p*4.7f);
     return max(0.1f,1.0f+strength*((low-0.5f)*1.4f+(high-0.5f)*0.8f));
 }
+float flameDetailFactor(float3 p){
+    float low=volumeNoise(p*2.3f),high=volumeNoise(p*6.1f);
+    return clamp((low*0.7f+high*0.3f-0.26f)*2.15f,0.0f,1.0f);
+}
 float emberSample(float3 p){return volumeHash(floor(p*8.0f));}
 float shadow(float3 p,float3 dir,float reach,float4 domain,int n,uint steps,float extinction FIELD_ARG){
     if(steps==0u||reach<=0.0f)return 1.0f;
@@ -84,12 +88,13 @@ KERNEL_BEGIN
     if(hit.y<=hit.x){WRITE_COLOR(id,background);return;}
     uint steps=uint(clamp(ceil((hit.y-hit.x)/(u.domain.w*0.5f)),1.0f,float(u.meta.w)));
     float ds=(hit.y-hit.x)/float(steps),trans=1.0f;
+    float jitter=(volumeHash(float3(float(id.x),float(id.y),0.0f))-0.5f)*0.7f;
     float3 radiance=float3(0.0f);
     for(uint i=0u;i<steps&&trans>0.0001f;++i){
-        float3 p=eye+dir*(hit.x+(float(i)+0.5f)*ds);
+        float3 p=eye+dir*(hit.x+(float(i)+0.5f+jitter)*ds);
         float2 field=fieldAt(p,u.domain,n FIELD_PASS);
         float sigma=max(0.0f,field.x)*u.smoke.w*smokeDetailFactor(p,u.limits.z);
-        float heat=max(0.0f,field.y-u.controls.x)*u.fire.w;
+        float heat=max(0.0f,field.y-u.controls.x)*u.fire.w*flameDetailFactor(p);
         if(sigma<=0.0f&&heat<=0.0f)continue;
         float tr=exp(-sigma*ds),opacity=1.0f-tr;
         float integral=sigma>1e-5f?opacity/sigma:ds;

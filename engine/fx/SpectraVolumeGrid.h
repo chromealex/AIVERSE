@@ -11,7 +11,7 @@
 
 namespace aiverse::spectra::volume {
 using render::float3;
-inline constexpr uint32_t kMaxDimension=64,kMinDimension=8,kMaxSources=16,kMaxPressureIterations=24;
+inline constexpr uint32_t kMaxDimension=96,kMinDimension=8,kMaxSources=16,kMaxPressureIterations=24;
 inline constexpr float kTick=1.f/60.f,kMaxScalar=16.f;
 inline bool finite(float3 v){return std::isfinite(v.x)&&std::isfinite(v.y)&&std::isfinite(v.z);}
 inline bool bounded(float3 v,float limit){
@@ -79,6 +79,10 @@ inline float smokeDetailFactor(float3 p,float strength){
     if(strength<=0)return 1;
     const float low=volumeNoise(p*1.7f),high=volumeNoise(p*4.7f);
     return std::max(.1f,1.f+strength*((low-.5f)*1.4f+(high-.5f)*.8f));
+}
+inline float flameDetailFactor(float3 p){
+    const float low=volumeNoise(p*2.3f),high=volumeNoise(p*6.1f);
+    return std::clamp((low*.7f+high*.3f-.26f)*2.15f,0.f,1.f);
 }
 inline float emberSample(float3 p){
     return volumeHash({std::floor(p.x*8.f),std::floor(p.y*8.f),std::floor(p.z*8.f)});
@@ -209,7 +213,7 @@ public:
             const float sigma=c.density*material.extinction*smokeDetailFactor(p,material.smokeDetail);
             const float opacity=-std::expm1(-sigma*ds);
             const float integral=sigma>1e-6f?opacity/sigma:ds;
-            const float heat=std::max(0.f,c.temperature-material.emissionThreshold)*material.emission;
+            const float heat=std::max(0.f,c.temperature-material.emissionThreshold)*material.emission*flameDetailFactor(p);
             const float ember=std::max(0.f,emberSample(p)-.999f)*1000.f*material.emberIntensity*
                 std::min(1.f,c.density)*ds;
             result.radiance=result.radiance+(material.smokeColor*opacity+material.fireColor*(heat*integral)+

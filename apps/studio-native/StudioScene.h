@@ -72,6 +72,7 @@ public:
         settleFrames_=30;
     }
     bool spectraDockMode() const {return spectraDockMode_;}
+    void setSpectraEngineAssetRoot(std::string root){spectraEngineAssetRoot_=std::move(root);}
     // Explicit native scene-host hook; publish after document activation and
     // before frame preparation. Isolated FX preview has independent data.
     bool setSpectraSceneDataRegistry(std::shared_ptr<const spectra::DataInterfaceRegistry> registry) {
@@ -87,6 +88,7 @@ public:
         lastFrameSignature_=0;settleFrames_=30;
     }
     Json spectraPreviewCommand(const Json& input,const std::string& project,bool frameProvenance=false) {
+        spectraPreview_->setTextureBases(project.empty()?std::string{}:project+"/",spectraEngineAssetRoot_);
         const auto action=input.getStr("action","status");
         if(!frameProvenance){
             if(project!=spectraProject_){
@@ -140,6 +142,7 @@ public:
             // Candidate owns its own runtime but borrows the same native Device.
             // No live state is changed by validation or backend failure.
             auto candidate=std::make_unique<StudioSpectraPreview>();
+            candidate->setTextureBases(project.empty()?std::string{}:project+"/",spectraEngineAssetRoot_);
             Json load=Json::object();load.set("action",Json::string("load"));
             load.set("graph",graph);
             load.set("gpuBirthRandom",Json::fromBool(input.has("gpuBirthRandom")?
@@ -391,6 +394,7 @@ private:
     StudioFacialGpuPreview facialGpu_;
     StudioSpectraSources spectraSources_;
     std::unique_ptr<StudioSpectraPreview> spectraPreview_=std::make_unique<StudioSpectraPreview>();
+    std::string spectraEngineAssetRoot_;
     std::unique_ptr<StudioSpectraPreview> spectraReplayBackup_;
     uint64_t replayAttemptGeneration_=0;
     std::string replayOutcome_,replayError_;

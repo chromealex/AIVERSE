@@ -9,9 +9,16 @@
 #include <optional>
 
 namespace aiverse::spectra::volume {
+struct AuthoredLight {
+    float3 position{},color{1,1,1};
+    float radius=5,intensity=0;
+    bool valid()const{return bounded(position,1e6f)&&bounded(color,64)&&color.x>=0&&color.y>=0&&color.z>=0&&
+        between(radius,.01f,1000)&&between(intensity,0,100);}
+};
 struct Asset {
     Config simulation;
     Material material;
+    std::vector<AuthoredLight> lights;
     std::vector<Source> sources;
     std::optional<Source> impulse;
     float impulseSeconds=1;
@@ -57,7 +64,7 @@ inline Json vec(float3 v){auto a=Json::array();a.push(scalar(v.x));a.push(scalar
 inline bool readAsset(const Json& root,Asset& output,std::string& error){
     using namespace asset_detail;
     const auto fail=[&](const char* reason){error=reason;return false;};
-    if(!keys(root,{"format","version","simulation","material","sources","obstacle","impulse","impulseSeconds","physisWindResponse","physisGravityBlend","attachment"})||
+    if(!keys(root,{"format","version","simulation","material","lights","sources","obstacle","impulse","impulseSeconds","physisWindResponse","physisGravityBlend","attachment"})||
        root.getStr("format")!="aiverse.spectrafx.volume"||!root["version"].isNumber()||root["version"].toDouble()!=1)
         return fail("Expected SpectraFX volume asset v1");
     Asset next;
@@ -90,6 +97,18 @@ inline bool readAsset(const Json& root,Asset& output,std::string& error){
            !number(m,"emissionThreshold",a.emissionThreshold)||
            !number(m,"smokeDetail",a.smokeDetail)||!number(m,"emberIntensity",a.emberIntensity)||
            !a.valid())return fail("Invalid volume material");
+    }
+    if(root.has("lights")){
+        const auto& lights=root["lights"];
+        if(!lights.isArray()||lights.size()>4)return fail("Invalid volume light count");
+        for(const auto& entry:lights.items()){
+            AuthoredLight light;
+            if(!keys(entry,{"position","color","radius","intensity"})||
+               !vector(entry,"position",light.position)||!vector(entry,"color",light.color)||
+               !number(entry,"radius",light.radius)||!number(entry,"intensity",light.intensity)||
+               !light.valid())return fail("Invalid volume light");
+            next.lights.push_back(light);
+        }
     }
     const auto parseSource=[](const Json& entry,Source& a){
         return keys(entry,{"position","radius","smoke","temperature","fuel","acceleration","radialAcceleration"})&&
@@ -130,13 +149,22 @@ inline Json writeAsset(const Asset& a){
     s.set("buoyancy",scalar(c.buoyancy));s.set("smokeWeight",scalar(c.smokeWeight));s.set("velocityDecay",scalar(c.velocityDecay));
     s.set("smokeDecay",scalar(c.smokeDecay));s.set("temperatureDecay",scalar(c.temperatureDecay));s.set("fuelDecay",scalar(c.fuelDecay));
     s.set("ignition",scalar(c.ignition));s.set("burnRate",scalar(c.burnRate));s.set("heatYield",scalar(c.heatYield));
-    s.set("smokeYield",scalar(c.smokeYield));s.set("maxVelocity",scalar(c.maxVelocity));root.set("simulation",std::move(s));
+    s.set("smokeYield",scalar(c.smokeYield));s.set("maxVelocity",scalar(c.maxVelocity));
+    root.set("simulation",std::move(s));
     m.set("smokeColor",vec(a.material.smokeColor));m.set("fireColor",vec(a.material.fireColor));
     m.set("extinction",scalar(a.material.extinction));m.set("emission",scalar(a.material.emission));
     m.set("emissionThreshold",scalar(a.material.emissionThreshold));
     if(a.material.smokeDetail!=0)m.set("smokeDetail",scalar(a.material.smokeDetail));
     if(a.material.emberIntensity!=0)m.set("emberIntensity",scalar(a.material.emberIntensity));
     root.set("material",std::move(m));
+    if(!a.lights.empty()){
+        Json lights=Json::array();
+        for(const auto& light:a.lights){
+            Json item=Json::object();item.set("position",vec(light.position));item.set("color",vec(light.color));
+            item.set("radius",scalar(light.radius));item.set("intensity",scalar(light.intensity));lights.push(std::move(item));
+        }
+        root.set("lights",std::move(lights));
+    }
     const auto writeSource=[](const Source& x){
         Json j=Json::object();j.set("position",vec(x.position));j.set("radius",scalar(x.radius));
         j.set("smoke",scalar(x.smoke));j.set("temperature",scalar(x.temperature));j.set("fuel",scalar(x.fuel));

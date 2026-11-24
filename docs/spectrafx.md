@@ -3619,3 +3619,26 @@ Native integration verification is recorded in
 
 
 Stage 121 exposes requested/active GPU-owned preview allocation, actual backend label, estimated alive, physical capacity, logical bytes, compaction and denial counters, replay compatibility and backend-neutral MCP eligibility aliases. No runtime verification performed. Historical sections describe earlier stage snapshots, not the current backend support matrix.
+
+## Layered fire and smoke preview (2026-11-24)
+
+`examples/spectrafx/fire_smoke_v2.vfx.json` combines a GPU gas volume with
+CPU sprite emitters in one Graph v2 asset. The volume provides transported
+smoke, combustion, depth and HDR light; flipbook particles add flame tongues,
+smoke billows and sparks. The Studio native FX dock resolves project textures
+relative to the project and `engine/fx/...` textures from the engine asset root.
+Paths must be relative image files without symlink traversal. Runtime CPU
+graphs can supply the same resolver through `GraphRuntimeOptions::textureLoader`.
+
+`VolumeOutput.lights` accepts up to four validated `{position, color, radius,
+intensity}` point lights. They move with a followed volume and illuminate the
+gas in the existing HDR raymarch. Existing assets omit the field and retain
+their earlier appearance. The example uses a 96³ grid; smaller assets retain
+the 64³ option. The FX dock enables PRISMA bloom for volume previews. The
+downloadable CC0 PHYSIS flipbooks are also available at full source resolution
+under `engine/assets/fx/physis/*_full_*`.
+
+The Metal preview was captured at 1024×576 with a light stage. The current
+effect is still an experimental look: it lacks the finely lit internal smoke
+and complex flame structure of the cinematic references. A successful native
+preview does not establish production GPU performance or Vulkan device parity.

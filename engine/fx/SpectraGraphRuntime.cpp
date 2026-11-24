@@ -311,6 +311,7 @@ bool GraphRuntime::initEffect(gfx::Device* dev,const fx::EffectDef& effect,
     // Exact original EffectDef is used here. Do not pass it through
     // ComputeParticles' simplified fallback emitter, which would discard
     // unsupported modules.
+    cpu_.setTextureLoader(options.textureLoader);
     if(!initCpu(dev,effect,options.quality))return false;
     initialized_=true;backend_=ComputeBackend::Cpu;
     return true;
