@@ -1907,9 +1907,9 @@
         },
         {
           "name": "Texture Graph GPU — Stage 38AH (Metal PASS; 31/31 по подтверждению пользователя)",
-          "text": "Исправление аппаратных Metal timestamp-маркеров после 30/31 тестов на M3 Ultra.",
+          "text": "Исправление аппаратных Metal timestamp-маркеров после 30/31 тестов на M3 Ultra. Stage 38AJ: регистрация CPU-проверки batching в CTest, подготовка 32 тестов; повторный запуск ожидается.",
           "nameEn": "Texture Graph GPU — Stage 38AH (Metal PASS; user-reported 31/31)",
-          "textEn": "Correct Metal hardware timestamp markers after 30/31 tests on M3 Ultra."
+          "textEn": "Correct Metal hardware timestamp markers after 30/31 tests on M3 Ultra. Stage 38AJ: register the CPU material batch regression in CTest and prepare a strict 32-test targeted run; native rerun pending."
         }
       ],
       "enables": [

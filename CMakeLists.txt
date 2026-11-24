@@ -3728,10 +3728,16 @@ if(AIVERSE_BUILD_HDR_TESTS AND AIVERSE_DESKTOP)
     target_link_libraries(aiverse_shadow_batches PRIVATE aiverse_runtime)
 endif()
 
-if(AIVERSE_BUILD_HDR_TESTS AND AIVERSE_DESKTOP)
+# CPU material palette regression is part of ordinary desktop CTest.
+# The visual A/B mode remains a separate manual GPU check.
+if(AIVERSE_DESKTOP AND (AIVERSE_BUILD_HDR_TESTS OR AIVERSE_BUILD_TESTS))
     add_executable(aiverse_material_batches tests/render/material_batches.cpp $<TARGET_OBJECTS:aiverse_runtime>)
     # NativeRegistry.cpp is injected for runtime executables; link its existing owner.
     target_link_libraries(aiverse_material_batches PRIVATE aiverse_runtime aiverse_game)
+    if(AIVERSE_BUILD_TESTS)
+        add_test(NAME material_batches_unit COMMAND aiverse_material_batches --unit)
+        set_tests_properties(material_batches_unit PROPERTIES LABELS "Renderer3D;TEXTURE_GRAPH" TIMEOUT 60)
+    endif()
 endif()
 
 # Split rules files from Python tools: rules_io (read / write back) and split_rules.

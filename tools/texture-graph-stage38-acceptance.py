@@ -41,6 +41,8 @@ def main():
     parser.add_argument("--backend", required=True, choices=("metal", "vulkan"))
     parser.add_argument("--config", default="Release")
     parser.add_argument("--parallel", type=int, default=4)
+    parser.add_argument("--material-batches", action="store_true",
+                        help="include the desktop CPU material batch regression (32 tests)")
     args = parser.parse_args()
     if args.parallel < 1:
         parser.error("--parallel must be positive")
@@ -49,7 +51,18 @@ def main():
         parser.error("Mac builds must be on /Volumes/KINGSTON")
     if not (build / "CMakeCache.txt").is_file():
         parser.error("configure the native build first with tests, tools, Studio and GPU acceptance enabled")
+    source = Path(__file__).resolve().parent.parent
+    cache = (build / "CMakeCache.txt").read_text(encoding="utf-8")
+    home = re.search(r"^CMAKE_HOME_DIRECTORY:INTERNAL=(.+)$", cache, re.MULTILINE)
+    if not home or Path(home.group(1)).resolve() != source:
+        parser.error("CMake cache belongs to a different source tree; use its own build directory")
+    sha = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
+    dirty = subprocess.check_output(["git", "-C", str(source), "status", "--porcelain", "--untracked-files=no"], text=True)
+    print(f"Stage 38 source SHA: {sha}; tracked tree: {'DIRTY' if dirty else 'clean'}", flush=True)
+    print(f"Build: {build}; config: {args.config}; backend: {args.backend}", flush=True)
     tests = dict(TESTS)
+    if args.material_batches:
+        tests["material_batches_unit"] = "aiverse_material_batches"
     tests["texture_graph_" + args.backend + "_gpu"] = "aiverse_texture_graph_" + args.backend + "_gpu_test"
     prefix = ["ctest", "--test-dir", str(build), "-C", args.config]
     inventory = json.loads(subprocess.check_output(prefix + ["--show-only=json-v1"], text=True))
@@ -60,14 +73,26 @@ def main():
     subprocess.run(["cmake", "--build", str(build), "--config", args.config,
                     "--parallel", str(args.parallel), "--target", *tests.values()], check=True)
     pattern = "^(" + "|".join(re.escape(name) for name in tests) + ")$"
-    env = dict(os.environ, AIVERSE_TEXTURE_GRAPH_REQUIRE_GPU_TIMINGS="1")
+    env = dict(os.environ, AIVERSE_TEXTURE_GRAPH_REQUIRE_GPU_TIMINGS="1", LC_ALL="C")
     # A skipped acceptance is not evidence. CTest may return zero for a skip.
     result = subprocess.run(prefix + ["-R", pattern, "--output-on-failure", "--no-tests=error"],
                             env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     print(result.stdout, end="")
     if result.returncode or re.search(r"\*\*\*Not Run|\*\*\*Skipped|\(Skipped\)|\(Disabled\)", result.stdout):
         return 1
-    print("Targeted Stage 38 CTest suite completed; material_batches --unit and live host checks remain separate.")
+    summary = re.search(r"100% tests passed, 0 tests failed out of (\d+)", result.stdout)
+    if not summary or int(summary.group(1)) != len(tests):
+        print(f"ERROR: expected exactly {len(tests)} passing tests", file=sys.stderr)
+        return 1
+    after = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
+    after_dirty = subprocess.check_output(["git", "-C", str(source), "status", "--porcelain", "--untracked-files=no"], text=True)
+    if after != sha or after_dirty != dirty:
+        print("ERROR: source HEAD or tracked status changed during acceptance", file=sys.stderr)
+        return 1
+    print(f"Targeted Stage 38 CTest suite completed: {len(tests)}/{len(tests)}; SHA={sha}; tracked tree={'DIRTY' if dirty else 'clean'}")
+    if not args.material_batches:
+        print("Material batch CPU regression was not selected; use --material-batches.")
+    print("Live Studio/MCP and merged-tree Mac gate remain separate.")
     return 0
 
 if __name__ == "__main__":
