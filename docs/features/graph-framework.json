@@ -89,7 +89,10 @@
     "engine/render/graph/TextureGraphSharedScratch.h",
     "tests/render/texture_graph_shared_scratch.cpp",
     "engine/render/graph/TextureGraphLiveness.h",
-    "tests/render/texture_graph_liveness.cpp"
+    "tests/render/texture_graph_liveness.cpp",
+    "tests/render/texture_graph_gpu_acceptance.h",
+    "tests/render/texture_graph_gpu_acceptance_vulkan.cpp",
+    "tests/render/texture_graph_gpu_acceptance_metal.mm"
   ],
   "traits": {
     "editable": true,
@@ -100,7 +103,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 33B in progress: dependency closure liveness plan and CPU evaluator intermediate release; GPU scheduler generalization remains separate.",
+      "note": "Stage 33B in progress: dependency closure liveness plan and CPU evaluator intermediate release; GPU scheduler generalization remains separate. Parallel native RHI acceptance fixture in progress.",
       "evidence": []
     },
     "architecture": {
