@@ -7,7 +7,9 @@
 #include "engine/world/TerraWeaveNavMeshBridge.h"
 #include "engine/world/TerraWeaveStreaming.h"
 #include "engine/world/NereidFloodVisualScene.h"
+#if __has_include(<box3d/box3d.h>)
 #include "engine/world/TerraWeaveCavernsRimWorldPublication.h"
+#endif
 #include <cstddef>
 #include <functional>
 #include <span>
@@ -116,6 +118,7 @@ inline NativeTerrainPublishResult publishNativeTerraWeaveFrameAuto(
     return status;
 }
 
+#if __has_include(<box3d/box3d.h>)
 // Alternative native driver path while a cave/terrain rim edit is pending.
 // Reconcile ECS ground and configureRimWorldFromAuthority BEFORE entering
 // this path. No simulation ticks may change the frozen authority until it
@@ -144,5 +147,6 @@ inline caverns::CaveRimWorldProgress publishNativeTerraWeaveRimFrame(
             return binding.groundReady()&&binding.publishScene(worldScene)&&nativeOwnersReady(plan);
         },cpuJobs,terrainUploadBudget,graphics);
 }
+#endif
 
 } // namespace aiverse::terraweave
