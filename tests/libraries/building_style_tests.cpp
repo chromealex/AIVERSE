@@ -97,6 +97,16 @@ int main(int argc,char** argv){
                 fingerprints.push_back(std::move(geometry));
             }
         }
+        // User's screenshot: Underwater / residence / 24x24x18 / seed 482733.
+        {
+            const auto style=readBuildingStyle(Json::parse(readFile(root+"/engine/assets/building-styles/underwater.json")),"underwater");
+            const auto result=dressStructure(style,"residence",482733,{},0,StructureSize{24.f,24.f,18.f});
+            if(result.mesh.vertices.empty())std::fprintf(stderr,"Underwater screenshot recipe: %s\n",result.fitError.c_str());
+            CHECK(!result.mesh.vertices.empty());
+            CHECK(std::abs(result.mesh.boundsMax[0]-result.mesh.boundsMin[0]-24.f)<.003f);
+            CHECK(std::abs(result.mesh.boundsMax[1]-result.mesh.boundsMin[1]-24.f)<.003f);
+            CHECK(std::abs(result.mesh.boundsMax[2]-result.mesh.boundsMin[2]-18.f)<.003f);
+        }
         // Every shipped style: openings across sizes, floors, seeds and all four quarter turns.
         for(const char* id:{"scifi","modern"}){
             auto style=readBuildingStyle(Json::parse(readFile(root+"/engine/assets/building-styles/"+id+".json")),id);

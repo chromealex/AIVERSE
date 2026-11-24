@@ -62,6 +62,8 @@ inline std::string settingId(const std::string& style) {
     // Older scifi-* and modern-* styles share the original editor family.
     // All other settings are discovered by their authored style asset ID;
     // new settings need no hardcoded Studio or genre registration.
+    // Sci-Fi / Space is a separate authored architecture, not a legacy variant.
+    if(style=="scifi-space")return style;
     if(style=="scifi"||style.rfind("scifi-",0)==0)return "scifi";
     if(style=="modern"||style.rfind("modern-",0)==0)return "modern";
     return style;

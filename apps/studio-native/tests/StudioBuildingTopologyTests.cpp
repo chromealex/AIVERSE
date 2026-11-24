@@ -9,11 +9,14 @@ int main(int argc,char** argv){
     AIVERSE_TEST_CHECK(argc==2);
     const auto catalog=studio::studioBuildingCatalog(argv[1]);
     AIVERSE_TEST_CHECK(catalog["styles"].size()>=13);
+    bool distinctSpace=false;
     for(const auto& style:catalog["styles"].items()){
+        if(style.getStr("id")=="scifi-space")distinctSpace=style.getStr("setting")=="scifi-space";
         for(const auto& slot:style["materials"].items()){
             AIVERSE_TEST_CHECK(!style["surfaces"][slot.str()].getStr("pattern").empty());
         }
     }
+    AIVERSE_TEST_CHECK(distinctSpace);
     const auto request=Json::parse(R"({"style":"scifi","slot":"hull"})");
     const auto surface=studio::studioBuildingSurfacePreview(argv[1],request);
     AIVERSE_TEST_CHECK(surface.getStr("style")=="scifi"&&surface.getStr("slot")=="hull");
