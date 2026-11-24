@@ -3,6 +3,7 @@
 // This object owns only transient snapshot/phase state and projections.
 #pragma once
 #include "PhysicalSceneHost.h"
+#include "PlanetTerrainCollision.h"
 #include "aiverselib/world/EvolvePlanetRootClimate.h"
 #include <optional>
 #include <set>
@@ -27,6 +28,8 @@ public:
     Phase phase()const{return phase_;}
     const PlanetHostStamp& stamp()const{return stamp_;}
     size_t physicsTiles()const{return physical_.granularPhysicsTiles();}
+    size_t terrainPhysicsTiles()const{return terrain_.count();}
+    physics::BodyHandle terrainHandle(int face,int x,int y)const{return terrain_.handle(face,x,y);}
     physics::BodyHandle debrisHandle(Entity member)const{return physical_.planetDebris().handle(member);}
     // Asset lifetime is explicit, after prepare and before render publication.
     bool addMorphVisual(PhysicalSceneHost::InstanceId id,gfx::Device& device,
@@ -47,21 +50,24 @@ public:
                  std::shared_ptr<const game::Surface> surface,PlanetHostStamp stamp,
                  std::span<const GranularResidentTile> tiles,
                  const std::map<uint64_t,PlanetGranularPlacement>& placements,
-                 GranularFrameBudget budget={}){
+                 GranularFrameBudget budget={},PlanetTerrainCollisionConfig terrainConfig={}){
         if(phase_!=Phase::Idle&&phase_!=Phase::Complete)return false;
-        if(!surface||!stamp.epoch||stamp.completedTick>=UINT32_MAX-1||stamp.body.empty())return false;
+        if(!surface||!surface->tab||!stamp.epoch||stamp.completedTick>=UINT32_MAX-1||stamp.body.empty())return false;
+        if(scene_&&(terrainEnabled_!=terrainConfig.enabled||surface->tab!=surface_->tab||
+           (stamp.terrainRevision==stamp_.terrainRevision&&surface->corners!=surface_->corners)))return false;
         if(scene_&&(scene_!=&scene||scene.tick()!=sceneTick_||
            stamp.epoch!=stamp_.epoch||stamp.body!=stamp_.body||
            stamp.completedTick!=stamp_.completedTick+1||stamp.terrainRevision<stamp_.terrainRevision))return false;
         const int body=surface->findBody(stamp.body);
         if(body<0||!surface->bodies[size_t(body)].hasSurface()||
            (scene_&&body!=bodyIndex_))return false;
+        if(terrainConfig.enabled&&surface->bodies[size_t(body)].faceSize>PlanetTerrainCollisionConfig::maxFaceSize)return false;
         auto frame=physical_.preparePlanetGranularBody(ecs,*surface,stamp.body,stamp.terrainRevision,
             tiles,placements,stamp.completedTick,budget);
         World snapshot=ecs;
         snapshot_=std::move(snapshot);surface_=std::move(surface);
         frame_=std::move(frame);stamp_=std::move(stamp);
-        scene_=&scene;sceneTick_=scene.tick();bodyIndex_=body;
+        scene_=&scene;sceneTick_=scene.tick();bodyIndex_=body;terrainEnabled_=terrainConfig.enabled;
         physical_.invalidateMorphPublications();
         renderDone_=false;recorded_=false;contacts_.clear();debrisStates_.clear();
         phase_=Phase::Prepared;return true;
@@ -71,6 +77,7 @@ public:
     bool publishPhysics(){
         if(phase_!=Phase::Prepared||!sceneCurrent())return false;
         phase_=Phase::Fault;
+        if(terrainEnabled_&&!terrain_.publish(*scene_,surface_,bodyIndex_,stamp_.terrainRevision))return false;
         if(!physical_.publishPhysics(*scene_,frame_))return false;
         phase_=Phase::PhysicsPublished;return true;
     }
@@ -188,6 +195,7 @@ public:
     bool resetAfterRollback(){
         if(!scene_)return phase_==Phase::Idle;
         phase_=Phase::Fault;
+        if(!terrain_.reset(*scene_))return false;
         if(device_){if(!physical_.resetAfterRollback(*scene_,*device_))return false;}
         else if(!physical_.resetPhysicsOnly(*scene_))return false;
         auto* retainedDevice=device_;
@@ -199,6 +207,7 @@ public:
             device_=nullptr;return true;
         }
         phase_=Phase::Fault;
+        if(!terrain_.reset(*scene_))return false;
         if(device_){if(!physical_.shutdownAfterIdle(*scene_,*device_))return false;}
         else if(!physical_.resetPhysicsOnly(*scene_))return false;
         clear();return true;
@@ -209,9 +218,11 @@ private:
     void clear(){
         snapshot_.reset();surface_.reset();frame_={};stamp_={};contacts_.clear();debrisStates_.clear();
         scene_=nullptr;device_=nullptr;sceneTick_=0;bodyIndex_=-1;
-        renderDone_=recorded_=false;phase_=Phase::Idle;
+        renderDone_=recorded_=terrainEnabled_=false;phase_=Phase::Idle;
     }
     PhysicalSceneHost physical_;
+    PlanetTerrainCollision terrain_;
+    bool terrainEnabled_=false;
     Phase phase_=Phase::Idle;
     PlanetHostStamp stamp_{};
     physics::Scene* scene_=nullptr;

@@ -6,8 +6,43 @@
 using namespace aiverse;
 using namespace aiverse::examples::world_processes_native;
 static void check(bool ok,const char* message){if(!ok)throw std::runtime_error(message);}
+static void checkTerrainCollision(){
+    auto base=std::make_shared<game::Surface>();
+    game::BodyDef def;def.id="terra";def.radius=Fixed::fromInt(64);def.faceSize=8;
+    base->bodies.push_back(def);def.id="moon";base->bodies.push_back(def);base->build();
+    auto edited=std::make_shared<game::Surface>(*base);
+    // Interior quad on +X; other faces and moon stay unchanged.
+    const auto& cube=base->cubeOf(0);
+    for(int y=3;y<=4;++y)for(int x=3;x<=4;++x)
+        edited->corners[size_t(cube.cornerId(0,x,y))]=16;
+    physics::Scene scene;PlanetTerrainCollision terrain;
+    check(terrain.publish(scene,base,0,0)&&terrain.count()==6,"initial spherical collision coverage");
+    const auto old=terrain.handle(0,0,0),other=terrain.handle(1,0,0);
+    const auto dir=cube.cellCenterDir(cube.cellId(0,3,3));
+    const auto start=physics::physisB3(dir*Fixed::fromInt(80));
+    const auto ray=physics::physisB3(dir*Fixed::fromInt(-30));
+    const auto before=scene.raycast(start,ray);
+    check(before.body==old,"ray hits outward terrain");
+    check(!terrain.publish(scene,edited,0,0),"reject changed geometry with same revision");
+    check(terrain.publish(scene,edited,0,1),"replace edited face");
+    const auto after=scene.raycast(start,ray);
+    check(after.body==terrain.handle(0,0,0)&&after.fraction<before.fraction,"raised physical terrain");
+    check(!scene.valid(old)&&terrain.handle(1,0,0)==other&&scene.valid(other),"unchanged tile retained");
+    check(terrain.reset(scene)&&scene.bodyCount()==0,"rollback retirement");
+    check(terrain.publish(scene,base,0,0),"rollback republish");
+    const auto restored=scene.raycast(start,ray);
+    check(restored.body!=physics::kNoBody&&std::abs(restored.fraction-before.fraction)<.0001f,"restored physical ground");
+    check(terrain.reset(scene),"shutdown terrain");
+    physics::SceneConfig limits;limits.maxBodies=6;
+    physics::Scene small(limits);PlanetTerrainCollision bounded;
+    check(bounded.publish(small,base,0,0),"bounded initial coverage");
+    const auto retained=bounded.handle(0,0,0);
+    check(!bounded.publish(small,edited,0,1)&&small.valid(retained)&&small.bodyCount()==6,"no replacement capacity preserves old geometry");
+    check(bounded.reset(small),"bounded shutdown");
+}
 int main(){
     try{
+        checkTerrainCollision();
         auto surface=std::make_shared<game::Surface>();
         game::BodyDef def;def.id="terra";def.radius=Fixed::fromInt(64);def.faceSize=8;
         surface->bodies.push_back(def);def.id="moon";surface->bodies.push_back(def);surface->build();
@@ -29,9 +64,9 @@ int main(){
         physics::Scene scene;
         PlanetProcessHost host;
         PlanetHostStamp stamp{1,0,7,"terra"};
-        check(host.prepare(scene,world,surface,stamp,tiles,placements),"prepare");
+        check(host.prepare(scene,world,surface,stamp,tiles,placements,{},PlanetTerrainCollisionConfig{true}),"prepare");
         check(!host.stepPhysics({}),"physics requires publication");
-        check(host.publishPhysics()&&host.physicsTiles()==1,"real granular collider");
+        check(host.publishPhysics()&&host.physicsTiles()==1&&host.terrainPhysicsTiles()==6,"real granular collider");
         check(!host.publishPhysics(),"duplicate publication");
         PlanetDebrisProjection debris;debris.event={member,key,7};debris.bodyId="terra";
         debris.simulationPosition=ground+surface->up(ground)*Fixed::fromInt(5);
@@ -64,13 +99,13 @@ int main(){
         check(!restorePlanetDebrisMotion(restored,invalid),"reject cross-body restore");
         check(restorePlanetDebrisMotion(restored,saved),"merge checkpoint into owner shape");
         check(host.skipRender()&&host.phase()==PlanetProcessHost::Phase::Complete,"headless finish");
-        check(!host.prepare(scene,world,surface,stamp,tiles,placements),"duplicate completed tick");
+        check(!host.prepare(scene,world,surface,stamp,tiles,placements,{},PlanetTerrainCollisionConfig{true}),"duplicate completed tick");
         world.get<granular::Field>(field).sampledTick=8;stamp.completedTick=8;
-        check(host.prepare(scene,world,surface,stamp,tiles,placements),"next frame");
+        check(host.prepare(scene,world,surface,stamp,tiles,placements,{},PlanetTerrainCollisionConfig{true}),"next frame");
         check(host.publishPhysics(),"next collision revision");
         check(host.resetAfterRollback()&&scene.bodyCount()==0,"retire projected physics");
         stamp.epoch=2;stamp.completedTick=7;world.get<granular::Field>(field).sampledTick=7;
-        check(host.prepare(scene,world,surface,stamp,tiles,placements),"restored epoch");
+        check(host.prepare(scene,world,surface,stamp,tiles,placements,{},PlanetTerrainCollisionConfig{true}),"restored epoch");
         check(host.publishPhysics()&&host.publishDebris(restored),"recreate from owner checkpoint");
         const auto restoredHandle=host.debrisHandle(member);
         Vec3 restoredLocal{};
