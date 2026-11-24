@@ -82,6 +82,8 @@ inline void installGameCoreAetherStratification(Simulation& sim){
 }
 class WorldProcessesNativeModule final:public game::NativeModule {
 public:
+    using PlanetPhysicsInstaller=void(*)(Simulation&);
+    explicit WorldProcessesNativeModule(PlanetPhysicsInstaller install=nullptr):installPhysics_(install){}
     void setup(game::GameCore& host,Simulation& sim,
                game::NativeState&,const Json& config) const override {
         // Project may enable any of the seven new systems even before
@@ -89,6 +91,12 @@ public:
         auto suite=config;
         suite.erase("planetBanks");
         suite.erase("planetForest");
+        suite.erase("planetForestPhysics");
+        if(config.has("planetForestPhysics")&&config["planetForestPhysics"].type()!=Json::Type::Bool)
+            throw std::invalid_argument("planetForestPhysics requires Boolean");
+        const bool physics=config.getBool("planetForestPhysics",false);
+        if(physics&&(!config.has("planetForest")||!installPhysics_||!sim.config().singleAuthorityPhysics))
+            throw std::invalid_argument("planetForestPhysics requires a linked single-authority native host");
         const SuiteFlags flags=suiteFlags(suite);
         if(flags.crowdGravitySupport&&!host.surface(sim))
             throw std::invalid_argument("CROWD gravity support requires planetary Surface");
@@ -109,7 +117,10 @@ public:
             installPlanetBankPipeline(host,sim,config["planetBanks"]);
         }
         if(config.has("planetForest"))installPlanetForestPipeline(host,sim,config["planetForest"]);
+        if(physics)installPhysics_(sim);
     }
+private:
+    PlanetPhysicsInstaller installPhysics_=nullptr;
 };
 inline std::unique_ptr<game::NativeModule> createWorldProcessesNativeModule(){
     return std::make_unique<WorldProcessesNativeModule>();

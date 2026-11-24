@@ -872,6 +872,50 @@ static void checkPlanetTerrainWater(){
     AIVERSE_TEST_CHECK(dry&&dry->forcing.wetContactPermille==0);
     AIVERSE_TEST_CHECK(g::samplePlanetTerrainWater(ecs,surface,pos).submerged); // restored geometry
 }
+#if defined(AIVERSE_PLANET_FOREST_PHYSICS_HOST)
+static void checkScheduledPlanetForestPhysics(){
+    const std::string root=std::string(AIVERSE_SOURCE_DIR)+"/examples/native/world_processes/planet-demo";
+    auto map=Json::parseFile(root+"/maps/planet.json");
+    auto rules=Json::parseFile(root+"/rules.json");
+    rules.set("terrain",Json::parse(R"({"model":"heightfield"})"));
+    auto& config=rules.member("nativeModules").at(0).member("config");
+    config.set("planetForest",Json::parse(R"({"growthInterval":1,"decayInterval":1,"nutrientInterval":4,"naturalFallPermille":1000,"species":[{"id":1,"matureTicks":1,"lifespanTicks":2,"naturalFallBody":{"radiusCm":15,"halfHeightCm":100}}],"plants":[{"entity":"local_slot","species":1,"key":1}]})"));
+    config.set("planetForestPhysics",Json::parse("true"));
+    auto defs=[](){return std::vector<g::NativeDefinition>{examples::planet_processes::definition()};};
+    bool rejected=false;
+    try{
+        Simulation peer(SimConfig{1,20,0,true},std::make_unique<g::GameCore>(defs()));
+        peer.setup(rules,map);
+    }catch(const std::exception&){rejected=true;}
+    AIVERSE_TEST_CHECK(rejected);
+    SimConfig authority{1,20,0,true};authority.singleAuthorityPhysics=true;
+    Simulation sim(authority,std::make_unique<g::GameCore>(defs()));
+    sim.setup(rules,map);
+    // Inject one durable consequence through the existing native owner,
+    // not a fake physics result. This isolates host scheduling from ecology cadence.
+    const auto surface=sim.world().resourceConst<g::GameState>()->surface;
+    const auto binding=sim.world().resourceConst<evolve::PlanetRootDeliveryResource>()->bindings.front();
+    const auto frame=wp::surfaceFrame(surface.get(),binding.plantedPosition);
+    AIVERSE_TEST_CHECK(frame);
+    auto roots=*sim.world().resourceConst<terraweave::TerraWeaveAuthorityResource>();
+    roots.rooted.front().fallen=true;
+    sim.world().setResource<terraweave::TerraWeaveAuthorityResource>(roots);
+    evolve::PlanetPlantFall fall;fall.event.id=binding.id;fall.event.sourceSoilRevision=1;
+    fall.bodyId=binding.bodyId;fall.plantedPosition=binding.plantedPosition;fall.tangentDirection=frame->east;
+    auto delivery=*sim.world().resourceConst<evolve::PlanetRootDeliveryResource>();
+    AIVERSE_TEST_CHECK(evolve::appendPlanetPlantFalls(delivery,std::span(&fall,1)));
+    sim.world().setResource<evolve::PlanetRootDeliveryResource>(delivery);
+    AIVERSE_TEST_CHECK(wp::deliverPlanetForestCapsule(sim.world(),*surface,fall,0,{}));
+    SimSnapshot saved;sim.saveState(saved);
+    sim.step();
+    const auto* bodies=sim.world().resourceConst<wp::PlanetConsequenceResource>();
+    AIVERSE_TEST_CHECK(bodies&&bodies->bodies.size()==1&&bodies->bodies.front().lastMotionTick==0);
+    sim.step();
+    AIVERSE_TEST_CHECK(sim.world().resourceConst<wp::PlanetConsequenceResource>()->bodies.front().lastMotionTick==1);
+    sim.loadState(saved);sim.step();
+    AIVERSE_TEST_CHECK(sim.world().resourceConst<wp::PlanetConsequenceResource>()->bodies.front().lastMotionTick==0);
+}
+#endif
 static void checkScheduledPlanetForest(){
     const std::string root=std::string(AIVERSE_SOURCE_DIR)+"/examples/native/world_processes/planet-demo";
     auto map=Json::parseFile(root+"/maps/planet.json");
@@ -1996,6 +2040,9 @@ int main(){
     checkPlanetDeadwood();
     checkPlanetNutrients();
     checkScheduledPlanetForest();
+#if defined(AIVERSE_PLANET_FOREST_PHYSICS_HOST)
+    checkScheduledPlanetForestPhysics();
+#endif
     checkPlanetTerrainWater();
     checkPlanetBankErosion();
     checkPlanetSedimentTransport();

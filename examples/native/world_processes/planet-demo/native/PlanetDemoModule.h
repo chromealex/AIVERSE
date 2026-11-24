@@ -1,6 +1,9 @@
 #pragma once
 #include "aiverselib/world/WorldProcessesNativeModule.h"
 #include "engine/physis/PhysisProjectConfig.h"
+#if defined(AIVERSE_PLANET_FOREST_PHYSICS_HOST)
+#include "aiverselib/world/WorldProcessesPlanetPhysicsHost.h"
+#endif
 #include <stdexcept>
 
 namespace aiverse::examples::planet_processes {
@@ -15,7 +18,11 @@ public:
         physis::GravitySettings settings;
         settings.baseline = {};
         sim.world().setResource<physis::GravitySettings>(settings);
+#if defined(AIVERSE_PLANET_FOREST_PHYSICS_HOST)
+        lib::worldprocess::WorldProcessesNativeModule{&lib::worldprocess::installPlanetForestPhysicsAuthority}.setup(host,sim,state,config);
+#else
         lib::worldprocess::WorldProcessesNativeModule{}.setup(host, sim, state, config);
+#endif
     }
 };
 inline std::unique_ptr<game::NativeModule> create() {

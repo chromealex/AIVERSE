@@ -99,6 +99,9 @@ struct SimConfig {
     uint32_t tickRate = 20;        // ticks per second
     uint32_t inputDelayTicks = 2;  // commands issued at tick T execute at T + delay (lockstep latency hiding)
     bool recordCommands = true;  // dedicated realtime servers may use an external bounded replay sink
+    // Host-only admission: never true on a Fixed lockstep peer. Setting it
+    // does not install any physics or make Box3D cross-platform deterministic.
+    bool singleAuthorityPhysics = false;
 };
 
 class Simulation {
