@@ -3,6 +3,7 @@
 // Meshes, GPU, SpatialWorld, Box3D and navigation are derived owners.
 // All edits run on the authoritative fixed-tick command path, never a worker.
 #include "engine/world/TerraWeaveCavernsRaycast.h"
+#include "engine/world/TerraWeaveCavernsPlanetRegion.h"
 #include "engine/sim/Simulation.h"
 #include "engine/core/Archive.h"
 #include <algorithm>
@@ -246,6 +247,10 @@ inline CaveAuthorityChange applyAuthorizedCaveStampCommand(
     (void)dirtyCaveChunks(change.bounds,cfg.resolution,cfg.spacingCm,cfg.maxDirtyChunks);
     ++next.volume.sourceRevision;change.newRevision=next.volume.sourceRevision;
     validateCaveAuthorityState(next);
+    if(const auto* planet=world.resourceConst<CavePlanetRegionResource>()){
+        if(planet->version!=1)throw std::invalid_argument("Caverns planetary region version");
+        validateCavePlanetBounds(planet->anchor,next.volume);
+    }
     world.setResource<CaveAuthorityResource>(std::move(next));
     return change;
 }
