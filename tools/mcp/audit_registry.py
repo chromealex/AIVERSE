@@ -32,7 +32,9 @@ REQUIRED = {
                       "studio_asset_trash_cleanup_review", "studio_asset_move_preview",
                       "studio_asset_move_commit", "studio_agent_history_list",
                       "studio_agent_history_step", "studio_agent_batch_preview",
-                      "studio_agent_batch_apply", "studio_history_capabilities"),
+                      "studio_agent_batch_apply", "studio_history_capabilities",
+                      "studio_owner_history", "studio_owner_history_step",
+                      "studio_save_documents", "studio_asset_history_reset_review"),
 }
 
 def main():
@@ -69,6 +71,12 @@ def main():
         print("ERROR: tools/list failed", done.stderr[-1000:], file=sys.stderr)
         return 2
     listed = {t["name"] for t in responses[2]["result"].get("tools", [])}
+    # Destructive recovery and arbitrary picker/file paths remain native only.
+    forbidden = {"studio_asset_history_reset_apply", "studio_asset_trash_purge",
+                 "studio_asset_trash_cleanup_apply", "studio_asset_import_preview"}
+    if forbidden & listed:
+        print("ERROR: native-only operations exposed:", sorted(forbidden & listed), file=sys.stderr)
+        return 2
     missing = {group: [n for n in names if n not in listed]
                for group, names in REQUIRED.items()}
     missing = {k:v for k,v in missing.items() if v}
