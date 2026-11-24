@@ -15,6 +15,16 @@
 #include <string>
 #include <utility>
 
+namespace aiverse::terraweave::caverns {
+inline void io(::aiverse::Archive& a,PointCm& p){
+    a(p.x,p.y,p.z);
+}
+inline void io(::aiverse::Archive& a,CaveAgentProfile& p){
+    a(p.traversal,p.radiusCm,p.heightCm,p.maxStepCm,
+      p.groundProbeCm,p.sampleCm,p.areaMask);
+}
+} // namespace aiverse::terraweave::caverns
+
 namespace aiverse::nav {
 struct CaveRouteIntent {
     terraweave::caverns::PointCm goal{};
@@ -40,13 +50,6 @@ struct CaveSimulationNavigationHooks {
     uint32_t maxRepairsPerTick=8;
     uint32_t maxMovedPerTick=65536;
 };
-inline void io(Archive& a,terraweave::caverns::PointCm& p){
-    a(p.x,p.y,p.z);
-}
-inline void io(Archive& a,terraweave::caverns::CaveAgentProfile& p){
-    a(p.traversal,p.radiusCm,p.heightCm,p.maxStepCm,
-      p.groundProbeCm,p.sampleCm,p.areaMask);
-}
 inline void io(Archive& a,CaveRouteFollower& p) {
     // Serialize bounded route points; avoid a corrupted/untrusted save
     // allocating an unbounded vector from a bogus length field.
