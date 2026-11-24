@@ -408,6 +408,15 @@ class AutomationTest(unittest.TestCase):
             findings = architecture_report(root, ["engine/sim/Bad.cpp"], [])["findings"]
             self.assertEqual(len(findings), 3)
             self.assertEqual(architecture_report(root, ["engine/sim/Bad.cpp"], ["engine/sim/Bad.cpp"])["findings"], [])
+            legacy = root/"engine/view/game/GameView.cpp"
+            legacy.parent.mkdir(parents=True)
+            legacy.write_text('#include "../../game/GameCore.h"\n#include "../../game/NewOwner.h"\n')
+            canonical = root/"engine/view/View.h"
+            canonical.write_text('#include "../game/GameCore.h"\n')
+            audit = architecture_report(root, ["engine/view/game/GameView.cpp", "engine/view/View.h"], [])
+            self.assertEqual(len(audit["legacy_notes"]), 1)
+            self.assertEqual(len(audit["findings"]), 2)
+            self.assertEqual(audit["legacy_notes"][0]["detail"], "../../game/GameCore.h")
             conflict = {"path":"engine/Base.h","claims":[{"branch":"a"},{"branch":"b"}]}
             self.assertEqual(conflict_plan([conflict], self.fixture()[0])[0]["action"], "coordinate_with_single_owner")
 
