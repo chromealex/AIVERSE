@@ -25,6 +25,7 @@ function parse(value:unknown,id:string):Obj{
 export function BuildingLiveGraphMonitor(){
  const [scene,setScene]=useState('1'),[active,setActive]=useState(''),[snapshot,setSnapshot]=useState<Obj|null>(null),[error,setError]=useState(''),[selected,setSelected]=useState('');
  const [domainFilter,setDomainFilter]=useState('all'),[kindFilter,setKindFilter]=useState('all'),[overlay,setOverlay]=useState(false);
+ const [layers,setLayers]=useState(15),[element,setElement]=useState('');
  useEffect(()=>{
   if(!active)return;
   let alive=true,timer:ReturnType<typeof setTimeout>|undefined;
@@ -66,11 +67,23 @@ export function BuildingLiveGraphMonitor(){
  }));
  const slowest=maximum>0?timings.find(t=>Number(t.lastNs)===maximum):undefined;
  const slowestOwner=slowest?buildingGraphOwners.find((_,i)=>(1<<i)===slowest.domain):undefined;
+ const samples=object(snapshot?.ownerTelemetry)?Object.entries(snapshot.ownerTelemetry).slice(0,17).flatMap(([name,report])=>{
+  if(!object(report))return [];
+  return ['overlayBounds','changedRoomIds','filteredLinkSample','filteredDoorSample','reservationSample','waitingTrainSample'].flatMap(field=>{
+   const values=report[field];return Array.isArray(values)?values.slice(0,128).map((value,i)=>({key:JSON.stringify([name,field,i]),label:name+' / '+field+' / '+(object(value)?String(value.id??value.block??i):String(value)),value})):[];
+  });
+ }):[];
+ const selectedElement=samples.find(s=>s.key===element);
  const toggleOverlay=async()=>{
-  try{const r=await invoke('studio.buildingGraphOverlay',{sceneId:overlay?'':active});setOverlay(r.active);}
+  try{const r=await invoke('studio.buildingGraphOverlay',{sceneId:overlay?'':active,layers});setOverlay(r.active);}
   catch(e){setError(String(e))}
  };
  useEffect(()=>{if(!overlay)return;return()=>{void invoke('studio.buildingGraphOverlay',{sceneId:''}).catch(()=>{})}},[overlay]);
+ const applyLayers=async(next:number)=>{
+  if(!next)return;
+  setLayers(next);
+  if(overlay)try{await invoke('studio.buildingGraphOverlay',{sceneId:active,layers:next});}catch(e){setError(String(e));}
+ };
  const selectedOwner=buildingGraphOwners.find(o=>o.id===selected);
  return <StudioSection title="Live graph monitor">
   <div className="au-row">
@@ -85,7 +98,9 @@ export function BuildingLiveGraphMonitor(){
    {selectedOwner&&<small>{selectedOwner.detail}</small>}
    {slowestOwner&&<small>Largest last measured callback: {slowestOwner.label} · {millis(maximum)}. Node intensity is relative to this sample, not a performance threshold.</small>}
    {timings.length>0&&<div className="au-stack"><strong>Measured invalidation callback duration</strong>{timings.map(t=><small key={String(t.domain)}>{buildingGraphOwners.find((_,i)=>(1<<i)===t.domain)?.label??String(t.domain)} · calls {String(t.calls)} · last {millis(t.lastNs)} · total {millis(t.totalNs)} · max {millis(t.maxNs)}</small>)}</div>}
-   {change&&<div className="au-stack"><strong>Last committed change · revision {String(change.revision)}</strong><small>World bounds: {String(change.min)} → {String(change.max)}</small><small>Kind {kinds[Number(change.kind)]??String(change.kind)} · feature {String(change.featureIndex)} · open {String(change.open)}</small><StudioButton size="sm" onClick={()=>void toggleOverlay()}>{overlay?'Hide bounds in Scene':'Show bounds in Scene'}</StudioButton><small>World-space AABB in authoring Scene; runtime and authoring coordinates must correspond.</small></div>}
+   {change&&<div className="au-stack"><strong>Last committed change · revision {String(change.revision)}</strong><small>World bounds: {String(change.min)} → {String(change.max)}</small><small>Kind {kinds[Number(change.kind)]??String(change.kind)} · feature {String(change.featureIndex)} · open {String(change.open)}</small><StudioButton size="sm" onClick={()=>void toggleOverlay()}>{overlay?'Hide bounds in Scene':'Show bounds in Scene'}</StudioButton><small>World-space overlays in authoring Scene; runtime and authoring coordinates must correspond. Grid and tile samples are planar projections.</small></div>}
+   <div className="au-row" style={{flexWrap:'wrap'}}>{[['Change bounds',1],['NavMesh tiles',2],['Grid cells',4],['HPA clusters',8],['Owner bounds',16]].map(([label,bit])=><label key={bit}><input type="checkbox" checked={!!(layers&Number(bit))} onChange={()=>void applyLayers(layers^Number(bit))}/>{label}</label>)}</div>
+   {samples.length>0&&<div className="au-stack"><StudioSelect aria-label="Inspect sampled graph element" value={selectedElement?.key??''} onChange={e=>setElement(e.target.value)}><option value="">Inspect sampled element</option>{samples.map(s=><option key={s.key} value={s.key}>{s.label}</option>)}</StudioSelect>{selectedElement&&<pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{JSON.stringify(selectedElement.value,null,2)}</pre>}<small>Samples refer to the latest published owner data, not editable scene entities.</small></div>}
    <div className="au-row">
     <StudioSelect aria-label="History domain filter" value={domainFilter} onChange={e=>setDomainFilter(e.target.value)}><option value="all">All domains</option>{buildingGraphOwners.map((o,i)=><option key={o.id} value={String(1<<i)}>{o.label}</option>)}</StudioSelect>
     <StudioSelect aria-label="History change filter" value={kindFilter} onChange={e=>setKindFilter(e.target.value)}><option value="all">All changes</option>{kinds.map((k,i)=><option key={k} value={String(i)}>{k}</option>)}</StudioSelect>
