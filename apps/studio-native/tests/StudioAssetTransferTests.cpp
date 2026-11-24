@@ -1596,6 +1596,47 @@ int main(){
             index.rebuild(false);AIVERSE_TEST_CHECK(index.byPath("A.png")->guid==ga);
             AIVERSE_TEST_CHECK(!fs::exists(p/".aiverse-cache"/"asset-history.dirty"));
         }
+        // S6h.3b: review-bound checkpoint reset never mutates content or Trash.
+        {
+            using namespace aiverse;using namespace aiverse::studio;
+            const auto p=fs::canonical(temp)/"DamagedAssetCheckpoint";
+            fs::create_directories(p/"content");
+            write(p/"content"/"Live.png","live");write(p/"content"/"Deleted.png","retained");
+            StudioAssetCatalog index(p);index.rebuild();
+            const auto guid=index.byPath("Deleted.png")->guid;
+            const auto deleted=studioQuarantineAsset(p,"Deleted.png",guid);
+            const auto cache=p/".aiverse-cache",checkpoint=cache/"asset-history.json",marker=cache/"asset-history.dirty";
+            write(checkpoint,"damaged checkpoint");
+            auto review=studioReviewAssetHistoryReset(p);
+            write(checkpoint,"different damaged checkpoint");
+            bool refused=false;
+            try{studioApplyAssetHistoryReset(p,review.getStr("token"));}catch(const std::runtime_error&){refused=true;}
+            AIVERSE_TEST_CHECK(refused&&read(checkpoint)=="different damaged checkpoint");
+            write(marker,"legacy fence");
+            review=studioReviewAssetHistoryReset(p);
+            AIVERSE_TEST_CHECK(review.getBool("legacyMarker"));
+            studioApplyAssetHistoryReset(p,review.getStr("token"));
+            AIVERSE_TEST_CHECK(!fs::exists(marker)&&studioLoadAssetHistoryCheckpoint(p).steps().empty());
+            AIVERSE_TEST_CHECK(read(p/"content"/"Live.png")=="live"&&read(p/deleted.files.front().to)=="retained");
+            size_t archives=0;
+            for(const auto& item:fs::directory_iterator(cache/"asset-history-recovery")){
+                ++archives;AIVERSE_TEST_CHECK(read(item.path()/"asset-history.json")=="different damaged checkpoint");
+                AIVERSE_TEST_CHECK(read(item.path()/"asset-history.dirty")=="legacy fence");
+            }
+            AIVERSE_TEST_CHECK(archives==1);
+            refused=false;
+            try{(void)studioReviewAssetHistoryReset(p);}catch(const std::runtime_error&){refused=true;}
+            AIVERSE_TEST_CHECK(refused); // healthy checkpoint cannot be discarded
+            fs::remove(checkpoint);write(marker,"marker without checkpoint");
+            review=studioReviewAssetHistoryReset(p);
+            fs::create_directory(cache/"studio-history-batch");
+            refused=false;
+            try{studioApplyAssetHistoryReset(p,review.getStr("token"));}catch(const std::runtime_error&){refused=true;}
+            AIVERSE_TEST_CHECK(refused&&!fs::exists(checkpoint));
+            fs::remove(cache/"studio-history-batch");
+            studioApplyAssetHistoryReset(p,review.getStr("token"));
+            AIVERSE_TEST_CHECK(studioLoadAssetHistoryCheckpoint(p).steps().empty()&&!fs::exists(marker));
+        }
         std::cout<<"PASS studio conflict resolution and GUID-preserving asset transfers\n";
     }catch(...){fs::remove_all(temp);throw;}
     fs::remove_all(temp);
