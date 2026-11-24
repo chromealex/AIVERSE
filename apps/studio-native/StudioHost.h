@@ -16,6 +16,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -204,8 +205,20 @@ private:
     std::string engineRoot_;
     bool htmlComposite_ = false;
     std::unique_ptr<StudioSession> session_;
-    std::unique_ptr<StudioBuildingPanelPreview> buildingPanelPreview_; // UI-thread, independent offscreen GPU owner
+    // Separate GPU owner. One outstanding camera request; no main Scene
+    // access and no UI-thread GPU readback during orbit.
+    struct BuildingPreviewJob {Json id;uint64_t token;float yaw,pitch,zoom,panX,panY;};
+    std::unique_ptr<StudioRenderThread> buildingPreviewThread_;
+    std::unique_ptr<StudioBuildingPanelPreview> buildingPanelPreview_;
+    std::mutex buildingPreviewMutex_;
+    std::optional<BuildingPreviewJob> buildingPreviewJob_;
+    std::optional<Json> buildingPreviewReply_;
     uint64_t buildingPreviewToken_=0;
+    bool buildingPreviewPending_=false,buildingPreviewActive_=false;
+    void retireBuildingPanelPreview();
+    void renderBuildingPanelFrame();
+    void publishBuildingPanelFrame();
+    Json buildingPanelFrame(const BuildingPreviewJob& job);
     std::unique_ptr<StudioScene> preview_;             // created, used and destroyed on renderThread_
     std::unique_ptr<StudioRenderThread> renderThread_;
     std::mutex renderIoMutex_;                         // guards renderInputs_ / renderOutputs_

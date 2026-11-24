@@ -114,7 +114,7 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
 StudioHost::~StudioHost() { shutdown(); }
 void StudioHost::shutdown() {
     *alive_ = false;
-    buildingPanelPreview_.reset();
+    retireBuildingPanelPreview();
     game_.reset(); // hosted client and its device retire before the native surface
     if (renderThread_) {
         // The Scene and its GPU resources are released on their owner thread, then the thread stops.
@@ -259,7 +259,7 @@ void StudioHost::openProject(const std::string& path, int64_t requestId) {
             return;
         }
     }
-    buildingPanelPreview_.reset();++buildingPreviewToken_;
+    retireBuildingPanelPreview();
     buildingGraphOverlayScene_=0;rebuildOverlay();
     session_->setBuildingGraphReader({});
     projectLoading_ = true;
@@ -402,7 +402,51 @@ void StudioHost::pollAgentRequests() {
         onScene([&] { preview_->captureFacialThumbnail((out / (id + ".png")).string(), false); });
     } catch (const std::exception&) {}
 }
+Json StudioHost::buildingPanelFrame(const BuildingPreviewJob& job){
+    // Only the Building render worker accesses its device/model.
+    if(!buildingPanelPreview_)throw std::runtime_error("No active Building panel preview");
+    std::vector<uint8_t> pixels;
+    platform_.sceneThreadScope([&]{pixels=buildingPanelPreview_->frame(job.yaw,job.pitch,job.zoom,job.panX,job.panY);});
+    const auto bytes=encodeJpeg(pixels,StudioBuildingPanelPreview::Side,StudioBuildingPanelPreview::Side,90);
+    if(bytes.empty())throw std::runtime_error("Building preview JPEG encoding failed");
+    Json result=Json::object();
+    result.set("active",Json::fromBool(true));
+    result.set("token",Json::string(std::to_string(job.token)));
+    result.set("url",Json::string("data:image/jpeg;base64,"+editor::base64Encode(bytes)));
+    return result;
+}
+void StudioHost::renderBuildingPanelFrame(){
+    std::optional<BuildingPreviewJob> job;
+    {std::lock_guard<std::mutex> lock(buildingPreviewMutex_);job=std::move(buildingPreviewJob_);buildingPreviewJob_.reset();}
+    if(!job)return;
+    Json reply=Json::object();reply.set("id",job->id);
+    try{reply.set("result",buildingPanelFrame(*job));}
+    catch(const std::exception& e){reply.set("error",Json::string(e.what()));}
+    catch(...){reply.set("error",Json::string("Unknown Building preview error"));}
+    {std::lock_guard<std::mutex> lock(buildingPreviewMutex_);buildingPreviewReply_=std::move(reply);}
+}
+void StudioHost::publishBuildingPanelFrame(){
+    std::optional<Json> reply;
+    {std::lock_guard<std::mutex> lock(buildingPreviewMutex_);reply=std::move(buildingPreviewReply_);buildingPreviewReply_.reset();}
+    if(!reply)return;
+    buildingPreviewPending_=false;
+    // A delayed reply is no longer inside its initiating WebView callback.
+    // Bridge request IDs are window-scoped; broadcast the addressed reply.
+    if(*alive_)platform_.evaluateScript("window.__aiverseReceive && window.__aiverseReceive("+reply->dump(-1)+");",false);
+}
+void StudioHost::retireBuildingPanelPreview(){
+    buildingPreviewActive_=false;
+    if(buildingPreviewThread_){
+        buildingPreviewThread_->flush();
+        buildingPreviewThread_->invoke([&]{platform_.sceneThreadScope([&]{buildingPanelPreview_.reset();});});
+        buildingPreviewThread_->stop();buildingPreviewThread_.reset();
+    }
+    publishBuildingPanelFrame();
+    buildingPreviewPending_=false;
+    ++buildingPreviewToken_;
+}
 void StudioHost::tick() {
+    publishBuildingPanelFrame();
     if (projectLoading_) return; // the background thread owns the session right now
     tickGame();
     // An empty Workspace owns an internal default MapDoc, NOT a loaded project.
@@ -1397,42 +1441,45 @@ bool StudioHost::handleHostMethod(const Json& req) {
         }
         Json out=Json::object();out.set("active",Json::fromBool(buildingGraphOverlayScene_!=0));return out;
     });
-    auto buildingFrame=[&](float yaw,float pitch,float zoom){
-        if(!buildingPanelPreview_)throw std::runtime_error("No active Building panel preview");
-        std::vector<uint8_t> pixels;
-        platform_.sceneThreadScope([&]{pixels=buildingPanelPreview_->frame(yaw,pitch,zoom);});
-        const auto bytes=encodeJpeg(pixels,StudioBuildingPanelPreview::Side,StudioBuildingPanelPreview::Side,90);
-        if(bytes.empty())throw std::runtime_error("Building preview JPEG encoding failed");
-        Json result=Json::object();
-        result.set("active",Json::fromBool(true));
-        result.set("token",Json::string(std::to_string(buildingPreviewToken_)));
-        result.set("url",Json::string("data:image/jpeg;base64,"+editor::base64Encode(bytes)));
-        return result;
-    };
     if(method=="studio.buildingPreview")return answer([&]{
-        if(projectLoading_)throw std::runtime_error("Project is loading");
+        if(projectLoading_||buildingPreviewPending_)throw std::runtime_error("Building preview is busy");
         const auto& project=session_->workspace().project.dir;
         if(project.empty())throw std::runtime_error("Open a project before preview");
         auto model=studioBuildingPreviewCpuModel(fs::path(session_->workspace().engineDir),fs::path(project),params);
-        ++buildingPreviewToken_;
-        platform_.sceneThreadScope([&]{
-            if(!buildingPanelPreview_)buildingPanelPreview_=std::make_unique<StudioBuildingPanelPreview>();
-            buildingPanelPreview_->setModel(std::move(model));
+        ++buildingPreviewToken_;buildingPreviewActive_=false;
+        if(!buildingPreviewThread_)buildingPreviewThread_=std::make_unique<StudioRenderThread>([this]{renderBuildingPanelFrame();});
+        const BuildingPreviewJob job{req["id"],buildingPreviewToken_,.65f,.42f,1.f,0.f,0.f};
+        auto result=buildingPreviewThread_->invoke([&]{
+            platform_.sceneThreadScope([&]{
+                if(!buildingPanelPreview_)buildingPanelPreview_=std::make_unique<StudioBuildingPanelPreview>();
+                buildingPanelPreview_->setModel(std::move(model));
+            });
+            return buildingPanelFrame(job);
         });
-        return buildingFrame(.65f,.42f,1.f);
+        buildingPreviewActive_=true;return result;
     });
-    if(method=="studio.buildingPreviewView")return answer([&]{
-        if(projectLoading_||params.getStr("token")!=std::to_string(buildingPreviewToken_))
-            throw std::runtime_error("Building preview is no longer current");
-        if(!params["yaw"].isNumber()||!params["pitch"].isNumber()||!params["zoom"].isNumber())
-            throw std::runtime_error("Building preview camera values required");
-        return buildingFrame(float(params["yaw"].toDouble()),float(params["pitch"].toDouble()),float(params["zoom"].toDouble()));
-    });
-    if(method=="studio.buildingPreviewStop")return answer([&]{
-        // A stale floating panel must not close another window's preview.
-        if(params.getStr("token")==std::to_string(buildingPreviewToken_)){
-            buildingPanelPreview_.reset();++buildingPreviewToken_;
+    if(method=="studio.buildingPreviewView"){
+        if(projectLoading_||!buildingPreviewActive_||!buildingPreviewThread_||
+           params.getStr("token")!=std::to_string(buildingPreviewToken_)){
+            sendError(req["id"],"Building preview is no longer current");return true;
         }
+        if(buildingPreviewPending_){sendError(req["id"],"Building preview camera is busy");return true;}
+        for(const char* key:{"yaw","pitch","zoom","panX","panY"})if(!params[key].isNumber()){
+            sendError(req["id"],"Building preview camera values required");return true;
+        }
+        BuildingPreviewJob job{req["id"],buildingPreviewToken_,float(params["yaw"].toDouble()),float(params["pitch"].toDouble()),
+            float(params["zoom"].toDouble()),float(params["panX"].toDouble()),float(params["panY"].toDouble())};
+        if(!std::isfinite(job.yaw)||!std::isfinite(job.pitch)||!std::isfinite(job.zoom)||!std::isfinite(job.panX)||!std::isfinite(job.panY)||
+           std::abs(job.yaw)>10000.f||std::abs(job.panX)>2.f||std::abs(job.panY)>2.f||job.zoom<.55f||job.zoom>2.5f){
+            sendError(req["id"],"Invalid Building preview camera");return true;
+        }
+        buildingPreviewPending_=true;
+        {std::lock_guard<std::mutex> lock(buildingPreviewMutex_);buildingPreviewJob_=std::move(job);}
+        buildingPreviewThread_->kick();
+        return true; // reply from UI tick after worker finishes
+    }
+    if(method=="studio.buildingPreviewStop")return answer([&]{
+        if(params.getStr("token")==std::to_string(buildingPreviewToken_))retireBuildingPanelPreview();
         Json result=Json::object();result.set("active",Json::fromBool(false));return result;
     });
     if (method == "studio.windowOpen" || method == "studio.windowClose" || method == "studio.windowTitle")

@@ -154,8 +154,12 @@ export default function BuildingGeneratorPanel({
   const [livePreview,setLivePreview]=useState<{token:string;url:string;key:string}|null>(null);
   const previewToken=useRef('');
   const previewScope=useRef(0);
-  const [viewCamera,setViewCamera]=useState({yaw:.65,pitch:.42,zoom:1});
-  const dragView=useRef<{x:number;y:number}|null>(null);
+  const [viewCamera,setViewCamera]=useState({yaw:.65,pitch:.42,zoom:1,panX:0,panY:0});
+  const desiredCamera=useRef(viewCamera);
+  const queuedCamera=useRef<typeof viewCamera|null>(null);
+  const cameraInFlight=useRef(false);
+  const [cameraBusy,setCameraBusy]=useState(false);
+  const dragView=useRef<{x:number;y:number;pan:boolean}|null>(null);
   const [previewBusy,setPreviewBusy]=useState(false);
   const candidateGate=useRef(new BuildingCandidateGate<StudioBuildingRequest>());
   const [page,setPage]=useState<'recipe'|'features'|'materials'|'graphs'|'runtime'>('recipe');
@@ -537,7 +541,7 @@ export default function BuildingGeneratorPanel({
 
   const previewKey=buildingDraftKey(snapshot?.project.path??'',activeCandidate?.recipe??request(asNumber(seed)));
   const previewNative3D=async()=>{
-    if(parameterError||busy||previewBusy||!nativeConnected())return;
+    if(parameterError||busy||previewBusy||cameraInFlight.current||!nativeConnected())return;
     const scope=previewScope.current;
     setPreviewBusy(true);setError('');
     try{
@@ -546,25 +550,35 @@ export default function BuildingGeneratorPanel({
       if(scope!==previewScope.current){void invoke('studio.buildingPreviewStop',{token:reply.token}).catch(()=>{});return;}
       previewToken.current=reply.token;
       setLivePreview({token:reply.token,url:reply.url,key:previewKey});
-      setViewCamera({yaw:.65,pitch:.42,zoom:1});setPage('recipe');
+      const camera={yaw:.65,pitch:.42,zoom:1,panX:0,panY:0};desiredCamera.current=camera;setViewCamera(camera);setPage('recipe');
       setStatus('Native 3D preview in Building Generator. Scene and project assets are unchanged.');
     }catch(e){if(scope===previewScope.current)setError(explain(e));}
     finally{if(scope===previewScope.current)setPreviewBusy(false);}
   };
-  const updatePreviewView=async(next:typeof viewCamera)=>{
-    if(!livePreview||previewBusy)return;
-    const scope=previewScope.current,token=livePreview.token;
-    setPreviewBusy(true);setError('');
-    try{
-      const reply=await invoke('studio.buildingPreviewView',{token,...next});
-      if(scope!==previewScope.current||previewToken.current!==token)return;
-      setLivePreview(old=>old?.token===token?{...old,url:reply.url}:old);
-      setViewCamera(next);
-    }catch(e){if(scope===previewScope.current)setError(explain(e));}
-    finally{if(scope===previewScope.current)setPreviewBusy(false);}
+  // Coalesce input to the newest desired camera while the independent
+  // GPU worker renders. At most one bridge request is outstanding.
+  const updatePreviewView=(next:typeof viewCamera)=>{
+    if(!previewToken.current||previewBusy)return;
+    desiredCamera.current=next;setViewCamera(next);queuedCamera.current=next;
+    if(cameraInFlight.current)return;
+    const scope=previewScope.current,token=previewToken.current;
+    cameraInFlight.current=true;setCameraBusy(true);
+    const pump=async()=>{
+      try{
+        while(scope===previewScope.current&&previewToken.current===token&&queuedCamera.current){
+          const camera=queuedCamera.current;queuedCamera.current=null;
+          const reply=await invoke('studio.buildingPreviewView',{token,...camera});
+          if(scope!==previewScope.current||previewToken.current!==token)return;
+          if(reply.token!==token||!reply.url)throw Error('Invalid camera preview reply');
+          setLivePreview(old=>old?.token===token?{...old,url:reply.url}:old);
+        }
+      }catch(e){if(scope===previewScope.current){queuedCamera.current=null;setError(explain(e));}}
+      finally{if(scope===previewScope.current){cameraInFlight.current=false;setCameraBusy(false);}}
+    };
+    void pump();
   };
   const closeNative3D=async()=>{
-    if(previewBusy||!livePreview)return;
+    if(previewBusy||cameraInFlight.current||!livePreview)return;
     setPreviewBusy(true);setError('');
     try{
       await invoke('studio.buildingPreviewStop',{token:livePreview.token});
@@ -574,9 +588,9 @@ export default function BuildingGeneratorPanel({
     finally{setPreviewBusy(false);}
   };
   useEffect(()=>{
-    setLivePreview(null);setPreviewBusy(false);
+    setLivePreview(null);setPreviewBusy(false);setCameraBusy(false);cameraInFlight.current=false;queuedCamera.current=null;
     return ()=>{
-      ++previewScope.current;
+      ++previewScope.current;queuedCamera.current=null;cameraInFlight.current=false;
       const token=previewToken.current;previewToken.current='';
       if(token&&nativeConnected())void invoke('studio.buildingPreviewStop',{token}).catch(()=>{});
     };
@@ -676,11 +690,11 @@ export default function BuildingGeneratorPanel({
           <StudioButton variant="secondary" loading={busy} disabled={Boolean(parameterError)||busy||!nativeConnected()}
             onClick={()=>void preview()}>Evaluate 3 seeds</StudioButton>
           <StudioButton variant="secondary" loading={previewBusy}
-            disabled={Boolean(parameterError)||busy||previewBusy||!nativeConnected()}
+            disabled={Boolean(parameterError)||busy||previewBusy||cameraBusy||!nativeConnected()}
             onClick={()=>void previewNative3D()}>
             Preview 3D
           </StudioButton>
-          {livePreview&&<StudioButton variant="secondary" disabled={previewBusy}
+          {livePreview&&<StudioButton variant="secondary" disabled={previewBusy||cameraBusy}
             onClick={()=>void closeNative3D()}>Close 3D preview</StudioButton>}
           <StudioButton variant="primary" loading={busy}
             disabled={Boolean(parameterError)||busy||!nativeConnected()}
@@ -784,21 +798,31 @@ export default function BuildingGeneratorPanel({
           </div>
           <StudioSection title="Building preview" className="abg__preview">
             {livePreview?<><div className="abg__preview-frame"
-              onPointerDown={e=>{if(!previewBusy&&e.button===0){dragView.current={x:e.clientX,y:e.clientY};e.currentTarget.setPointerCapture(e.pointerId);}}}
+              onPointerDown={e=>{if(!previewBusy&&(e.button===0||e.button===1)){e.preventDefault();dragView.current={x:e.clientX,y:e.clientY,pan:e.shiftKey||e.button===1};e.currentTarget.setPointerCapture(e.pointerId);}}}
+              onPointerMove={e=>{
+                const start=dragView.current;if(!start||previewBusy)return;
+                const dx=e.clientX-start.x,dy=e.clientY-start.y;
+                dragView.current={x:e.clientX,y:e.clientY,pan:start.pan};
+                const v=desiredCamera.current;
+                if(start.pan)updatePreviewView({...v,panX:Math.max(-2,Math.min(2,v.panX-dx*.006*v.zoom)),panY:Math.max(-2,Math.min(2,v.panY+dy*.006*v.zoom))});
+                else updatePreviewView({...v,yaw:((v.yaw+dx*.012)%6.2831853),pitch:Math.max(-1.35,Math.min(1.35,v.pitch+dy*.012))});
+              }}
+              onWheel={e=>{const v=desiredCamera.current;updatePreviewView({...v,zoom:Math.max(.55,Math.min(2.5,v.zoom*Math.exp(e.deltaY*.0015)))});}}
               onPointerCancel={()=>{dragView.current=null;}}
-              onPointerUp={e=>{const start=dragView.current;dragView.current=null;if(start&&!previewBusy)void updatePreviewView({...viewCamera,yaw:viewCamera.yaw+(e.clientX-start.x)*.012,pitch:Math.max(-1.35,Math.min(1.35,viewCamera.pitch+(e.clientY-start.y)*.012))});}}>
+              onLostPointerCapture={()=>{dragView.current=null;}}
+              onPointerUp={()=>{dragView.current=null;}}>
               <img src={livePreview.url} alt="Native generated building preview" draggable={false}/>
-              {previewBusy&&<span className="abg__preview-busy">Rendering…</span>}
+              {(previewBusy||cameraBusy)&&<span className="abg__preview-busy">Rendering…</span>}
             </div>
             <div className="abg__actions">
               <StudioButton size="sm" disabled={previewBusy} onClick={()=>void updatePreviewView({...viewCamera,yaw:viewCamera.yaw-.4})}>Rotate left</StudioButton>
               <StudioButton size="sm" disabled={previewBusy} onClick={()=>void updatePreviewView({...viewCamera,yaw:viewCamera.yaw+.4})}>Rotate right</StudioButton>
               <StudioButton size="sm" disabled={previewBusy||viewCamera.zoom<=.55} onClick={()=>void updatePreviewView({...viewCamera,zoom:Math.max(.55,viewCamera.zoom*.8)})}>Zoom in</StudioButton>
               <StudioButton size="sm" disabled={previewBusy||viewCamera.zoom>=2.5} onClick={()=>void updatePreviewView({...viewCamera,zoom:Math.min(2.5,viewCamera.zoom*1.25)})}>Zoom out</StudioButton>
-              <StudioButton size="sm" disabled={previewBusy} onClick={()=>void updatePreviewView({yaw:.65,pitch:.42,zoom:1})}>Reset view</StudioButton>
+              <StudioButton size="sm" disabled={previewBusy} onClick={()=>void updatePreviewView({yaw:.65,pitch:.42,zoom:1,panX:0,panY:0})}>Reset view</StudioButton>
             </div>
             {livePreview.key!==previewKey&&<StudioAlert tone="warning">Recipe changed. Preview 3D updates the model.</StudioAlert>}
-            <small className="abg__note">Drag to orbit; a native GPU frame is rendered when the camera changes. Main Scene remains untouched.</small></>:<StudioEmptyState title="Preview a building" description="Render the current recipe here without replacing the Scene." action={<StudioButton disabled={Boolean(parameterError)||busy||previewBusy||!nativeConnected()} onClick={()=>void previewNative3D()}>Preview 3D</StudioButton>}/>}
+            <small className="abg__note">Drag to orbit · Shift-drag or middle button to pan · wheel to zoom. The newest camera is rendered while dragging, independently of Scene.</small></>:<StudioEmptyState title="Preview a building" description="Render the current recipe here without replacing the Scene." action={<StudioButton disabled={Boolean(parameterError)||busy||previewBusy||!nativeConnected()} onClick={()=>void previewNative3D()}>Preview 3D</StudioButton>}/>}
           </StudioSection>
         </div>
       {saved&&<StudioSection title="Generated asset">

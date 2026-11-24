@@ -271,7 +271,7 @@ export interface StudioParams {
   'studio.buildingGraphOverlay': {sceneId:string;layers?:number};
   'studio.buildingInspect': StudioBuildingRequest & {routeQuery?:import('./graphs/buildingRoomTopology').BuildingRouteQuery};
   'studio.buildingPreview': StudioBuildingRequest;
-  'studio.buildingPreviewView': {token:string;yaw:number;pitch:number;zoom:number};
+  'studio.buildingPreviewView': {token:string;yaw:number;pitch:number;zoom:number;panX:number;panY:number};
   'studio.buildingPreviewStop': {token:string};
   'studio.buildingGenerate': StudioBuildingRequest;
   'studio.wind':Record<string,never>;
