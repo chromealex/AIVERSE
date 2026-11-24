@@ -25,6 +25,7 @@ struct CavePathQuery {
 struct CavePathResult {
     std::vector<PointCm> waypoints;
     uint64_t sourceRevision=0;
+    uint64_t environmentRevision=0;
     uint32_t totalCost=0;
     bool reached=false;
 };
@@ -61,8 +62,11 @@ public:
             return {}; // obsolete query cannot use an earlier world epoch
         // Do NOT invent a route here. Invoke the registered engine solver.
         auto result=it->second.solve(query,provider);
-        if(result.sourceRevision!=query.sourceRevision)
+        if(result.sourceRevision!=query.sourceRevision ||
+           (result.environmentRevision &&
+            result.environmentRevision!=provider->environmentRevision()))
             return {};
+        result.environmentRevision=provider->environmentRevision();
         return result;
     }
     size_t registeredCount()const noexcept{return solvers_.size();}
