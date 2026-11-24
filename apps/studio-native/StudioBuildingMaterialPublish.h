@@ -96,6 +96,7 @@ inline Json studioBuildingPublishMaterial(const std::filesystem::path& engine,
             Json asset=Json::object();asset.set("path",Json::string(path));
             asset.set("guid",Json::string(entry->guid));asset.set("channel",Json::string(keys[i]));
             asset.set("sha256",Json::string(editor::publicationFileSha256(folder/filenames[i])));
+            asset.set("metadata",Json::parseFile(studioMetaPath(folder/filenames[i]).string()));
             assets.push(std::move(asset));
         }
         Json result=Json::object();result.set("name",Json::string(name));
