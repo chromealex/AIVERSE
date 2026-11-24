@@ -27,7 +27,7 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
   const [armed,setArmed]=useState(false),[plantSpecies,setPlantSpecies]=useState(''),[habit,setHabit]=useState<'tree'|'shrub'>('tree');
   const baseRef=useRef<StudioPlanetForestDocument|null>(null);
   const busyRef=useRef(false);
-  function accept(d:StudioPlanetForestDocument){baseRef.current=d;setBase(d);setForest(d.forest===null?null:object(d.forest));setCatalog(d.catalog===null?null:object(d.catalog));setOverride(d.override);setDirty(false);setStale(false);setLive(null);}
+  function accept(d:StudioPlanetForestDocument){setSelectedPlant(null);baseRef.current=d;setBase(d);setForest(d.forest===null?null:object(d.forest));setCatalog(d.catalog===null?null:object(d.catalog));setOverride(d.override);setDirty(false);setStale(false);setLive(null);}
   async function reload(){busyRef.current=true;setBusy(true);setError('');try{accept(await invoke('studio.planetForest',{}));}catch(e){setError(err(e));}finally{busyRef.current=false;setBusy(false);}}
   useEffect(()=>{void reload();return ()=>{void invoke('studio.planetForestArm',{armed:false}).catch(()=>{});};},[]); // mount per project
   // Recheck the native document identity on history/document notifications.
@@ -45,13 +45,14 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
   useEffect(()=>onNativeEvent((event,payload)=>{if(event==='document.changed')void checkRevision();
     if(event==='planetForest.planted'){
       setArmed(false);const result=payload as {document?:StudioPlanetForestDocument;error?:string;selected?:{species:number;key:number;direct:boolean;body:string}};
-      if(result?.selected){setSelectedPlant(result.selected);setBody(result.selected.body);setFilter('');}
       if(result?.document){accept(result.document);onChanged();}else if(result?.error)setError(result.error);
+      if(result?.selected){setSelectedPlant(result.selected);setBody(result.selected.body);setFilter('');}
     }
   }),[]);
   async function arm(next:boolean,mode:'plant'|'pick'|'move'='plant'){
     if(!base||armPending)return;
     setArmPending(true);setError('');setAction(mode);
+    if(!next||mode==='pick')setSelectedPlant(null);
     try{const r=await invoke('studio.planetForestArm',{armed:next,mapPath:base.mapPath,expectedRevision:base.revision,
       species:mode==='move'?selectedPlant?.species:Number(plantSpecies||rows(forest?.species)[0]?.id),key:mode==='move'?selectedPlant?.key:undefined,habit,action:mode});setArmed(r.armed);}
     catch(e){setArmed(false);setError(err(e));}finally{setArmPending(false);}

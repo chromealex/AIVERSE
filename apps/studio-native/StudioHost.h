@@ -269,7 +269,7 @@ private:
     double lastCameraYaw_ = 0, lastCameraPitch_ = 0, lastCameraDistance_ = 0;
     bool lastCameraOrtho_ = false, cameraSent_ = false;
     // sceneMouse state (shells that use the neutral mapping)
-    struct { double pressX = 0, pressY = 0; bool dragged = false, move = false, stroke = false, spline = false, worldProcess = false, marquee = false, active = false; } mouse_;
+    struct { double pressX = 0, pressY = 0; bool dragged = false, move = false, stroke = false, spline = false, worldProcess = false, forest = false, marquee = false, active = false; } mouse_;
     double lastHoverTime_ = 0;
 };
 

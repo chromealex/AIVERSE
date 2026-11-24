@@ -10,6 +10,7 @@
 #include "apps/studio-native/StudioMoveJournal.h"
 #include "apps/studio-native/StudioAgentHistoryPolicy.h"
 #include "apps/studio-native/StudioAssetCatalog.h"
+#include "apps/studio-native/StudioPlanetForestDocument.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -697,6 +698,29 @@ void planetWorldProcessAuthoringWorkflow(){
     AIVERSE_TEST_CHECK(!call("studio.undo").has("error")&&!session.workspace().map.data.worldExtra.has("terraweaveForest"));
     AIVERSE_TEST_CHECK(!call("studio.redo").has("error")&&session.workspace().map.data.worldExtra.has("terraweaveForest"));
     AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
+    // Exercise relocation against a detached native document with the real forest validator.
+    {
+        editor::MapDoc copy;std::string loadError;
+        AIVERSE_TEST_CHECK(copy.loadJson(session.workspace().map.toJson(),&loadError));
+        copy.path="maps/forest-fixture.json";
+        const auto rules=Json::parse(R"({"nativeModules":[{"id":"world_processes","config":{"planetForest":{"species":[{"id":1}],"plants":[{"species":1,"key":7,"at":{"body":"terra","face":0,"x":2,"y":3}},{"species":1,"key":8,"entity":"region"}]}}}]})");
+        auto move=Json::parse(R"({"species":1,"key":7,"at":{"body":"moon","face":1,"x":2,"y":1}})");
+        move.set("mapPath",Json::string(copy.path));move.set("expectedRevision",Json::string(std::to_string(copy.revision)));
+        const auto startDepth=copy.undoDepth();
+        AIVERSE_TEST_CHECK(studio::moveStudioPlanetForest(copy,rules,move));
+        AIVERSE_TEST_CHECK(copy.undoDepth()==startDepth+1);
+        const auto changed=studio::studioPlanetForestDocument(copy,rules);
+        AIVERSE_TEST_CHECK(changed["forest"]["plants"].items()[0]["at"].getStr("body")=="moon");
+        bool rejected=false;try{studio::moveStudioPlanetForest(copy,rules,move);}catch(const std::exception&){rejected=true;}
+        AIVERSE_TEST_CHECK(rejected&&copy.undoDepth()==startDepth+1);
+        move.set("expectedRevision",Json::string(std::to_string(copy.revision)));
+        AIVERSE_TEST_CHECK(!studio::moveStudioPlanetForest(copy,rules,move)&&copy.undoDepth()==startDepth+1);
+        move.set("key",Json::number(int64_t(8)));rejected=false;
+        try{studio::moveStudioPlanetForest(copy,rules,move);}catch(const std::exception&){rejected=true;}
+        AIVERSE_TEST_CHECK(rejected&&copy.undoDepth()==startDepth+1);
+        copy.undo();AIVERSE_TEST_CHECK(!copy.data.worldExtra.has("planetForest"));
+        copy.redo();AIVERSE_TEST_CHECK(copy.data.worldExtra["planetForest"]==changed["forest"]);
+    }
     const auto inspected=call("studio.inspect",R"({"entityId":"entity:@region"})");
     AIVERSE_TEST_CHECK(!inspected.has("error"));
     bool placement=false,gravity=false;

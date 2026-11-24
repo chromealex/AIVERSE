@@ -1697,10 +1697,14 @@ void StudioHost::select(double x, double y, double w, double h, const std::strin
             if(action=="move"){
                 Json selected=arm;selected.set("expectedRevision",outcome["result"]["revision"]);
                 onScene([&]{preview_->setForestSelection(selected);});
+                Json hit=Json::object();hit.set("species",arm["species"]);hit.set("key",arm["key"]);hit.set("direct",Json::fromBool(true));hit.set("body",(*at)["body"]);
+                payload.set("selected",std::move(hit));
             }
-            payload.set("document",outcome["result"]);sendEvent("document.changed","");
+            payload.set("document",outcome["result"]);
         }catch(const std::exception& e){payload.set("error",Json::string(e.what()));}
-        sendEventPayload("planetForest.planted",payload);return;
+        sendEventPayload("planetForest.planted",payload);
+        if(payload.has("document"))sendEvent("document.changed","");
+        return;
     }
     if (projectLoading_ || !preview_) return;
     if (session_->sculptBrush().regionPick || session_->sculptBrush().armed) {
@@ -1765,7 +1769,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
         if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");
         m = {};
         m.active = true; m.pressX = x; m.pressY = y;
-        if(forestPlantArm_.isObject()&&!mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift)return;
+        if(forestPlantArm_.isObject()&&!mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift){m.forest=true;return;}
         // Explicit authored World Processes handles have priority only when
         // the clicked point is within their small screen-space hit radius.
         if(!mods.alt && !mods.command && !mods.ctrl && !mods.shift &&
@@ -1784,6 +1788,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
             if (now - lastHoverTime_ >= 0.05) { lastHoverTime_ = now; hover(x, y, w, h); }
             return;
         }
+        if(m.forest){if(std::hypot(x-m.pressX,y-m.pressY)>=5.0)m.dragged=true;return;}
         if(m.worldProcess){worldProcessDrag(1,x,y,w,h,mods.shift,mods.ctrl||mods.command);return;}
         if (m.spline) { splineDrag(1, x, y, w, h); return; }
         if (m.stroke) { terrainStroke(1, x, y, w, h); return; }
@@ -1804,6 +1809,11 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
     const auto st = m;
     m = {};
     if (!st.active) return;
+    if(st.forest){
+        if(forestPlantArm_.isObject()&&!st.dragged&&std::hypot(x-st.pressX,y-st.pressY)<5.0&&
+           !mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift)select(x,y,w,h,"replace");
+        return;
+    }
     if(st.worldProcess){worldProcessDrag(2,x,y,w,h,mods.shift,mods.ctrl||mods.command);return;}
     if (st.spline) { splineDrag(2, 0, 0, w, h); return; }
     if (st.stroke) { terrainStroke(2, 0, 0, w, h); return; }
