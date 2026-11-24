@@ -414,7 +414,60 @@ static void checkMorphGravity(){
     AIVERSE_TEST_CHECK(restored->deserialize(sim->serialize(),&error));
     AIVERSE_TEST_CHECK(restored->checksum()==sim->checksum());
 }
+static void checkAetherStratification(){
+    World ecs;
+    physis::GravitySettings gravity;gravity.baseline={Fixed{},Fixed::fromInt(-10),Fixed{}};
+    ecs.setResource<physis::GravitySettings>(gravity);
+    const auto low=ecs.create(),high=ecs.create(),duct=ecs.create();
+    Transform tr{};ecs.add<Transform>(low,tr);tr.pos.y=Fixed::fromInt(2);ecs.add<Transform>(high,tr);
+    for(auto e:{low,high})ecs.add<aether::GasCell>(e,aether::GasCell{1000,1000,1000});
+    ecs.add<aether::GasDuct>(duct,aether::GasDuct{low,high,1000,false,true});
+    ecs.enableCowSnapshots();const World initial=ecs;
+    AIVERSE_TEST_CHECK(aether::advanceWithStratification(ecs,nullptr,1));
+    const auto a=ecs.get<aether::GasCell>(low),b=ecs.get<aether::GasCell>(high);
+    AIVERSE_TEST_CHECK(a.smoke==825&&b.smoke==1175&&a.toxin==1175&&b.toxin==825);
+    AIVERSE_TEST_CHECK(a.oxygen==1000&&b.oxygen==1000);
+    AIVERSE_TEST_CHECK(aether::advanceWithStratification(ecs,nullptr,1));
+    AIVERSE_TEST_CHECK(ecs.get<aether::GasCell>(low).smoke==a.smoke);
+    ecs=initial;ecs.resource<physis::GravitySettings>()->baseline={};
+    AIVERSE_TEST_CHECK(aether::advanceWithStratification(ecs,nullptr,1));
+    AIVERSE_TEST_CHECK(ecs.get<aether::GasCell>(low).smoke==1000);
+    ecs=initial;ecs.get<aether::GasDuct>(duct).oneWay=true;
+    AIVERSE_TEST_CHECK(aether::advanceWithStratification(ecs,nullptr,1));
+    AIVERSE_TEST_CHECK(ecs.get<aether::GasCell>(low).toxin==1000);
+    ecs=initial;
+    physis::Atmosphere hot{};hot.temperature=Fixed::fromInt(100);
+    ecs.add<physis::Atmosphere>(low,hot);ecs.add<physis::Atmosphere>(high,hot);
+    AIVERSE_TEST_CHECK(aether::advanceWithStratification(ecs,nullptr,1));
+    AIVERSE_TEST_CHECK(ecs.get<aether::GasCell>(high).oxygen==1200);
+    ecs=initial;ecs.remove<Transform>(high);
+    AIVERSE_TEST_CHECK(!aether::advanceWithStratification(ecs,nullptr,1));
+    AIVERSE_TEST_CHECK(ecs.get<aether::GasCell>(low).sampledTick==UINT32_MAX);
+    ecs=initial;
+    game::Surface surface;game::BodyDef planet;
+    planet.id="terra";planet.faceSize=8;planet.radius=Fixed::fromInt(64);
+    surface.bodies.push_back(planet);planet.id="moon";surface.bodies.push_back(planet);surface.build();
+    ecs.resource<physis::GravitySettings>()->baseline={};
+    physis::GravityField g;g.mode=physis::GravityMode::Attract;
+    g.center=game::Surface::anchor(0);g.radiusMeters=Fixed::fromInt(200);
+    g.radialMagnitude=Fixed::fromInt(10);g.overrideBaseline=true;
+    ecs.add<physis::GravityField>(ecs.create(),g);
+    for(int face=0;face<6;++face){
+        const auto p=surface.cellCenter(surface.gridCell(0,face,3,3));
+        ecs.get<Transform>(low).pos=p;
+        ecs.get<Transform>(high).pos=p+surface.up(p)*Fixed::fromInt(2);
+        for(auto e:{low,high})ecs.get<aether::GasCell>(e)=aether::GasCell{1000,1000,1000};
+        AIVERSE_TEST_CHECK(aether::advanceWithStratification(ecs,&surface,uint32_t(face+1)));
+        AIVERSE_TEST_CHECK(ecs.get<aether::GasCell>(high).smoke>1000);
+        AIVERSE_TEST_CHECK(ecs.get<aether::GasCell>(high).toxin<1000);
+        AIVERSE_TEST_CHECK(ecs.get<aether::GasCell>(high).smoke+ecs.get<aether::GasCell>(low).smoke==2000);
+    }
+    ecs.get<Transform>(high).pos=surface.cellCenter(surface.gridCell(1,0,3,3));
+    AIVERSE_TEST_CHECK(!aether::advanceWithStratification(ecs,&surface,7));
+    AIVERSE_TEST_CHECK(ecs.get<aether::GasCell>(low).sampledTick==6);
+}
 int main(){
+    checkAetherStratification();
     checkMorphGravity();
     checkPlanetGranular();
     checkPlanetEvolveHydration();
