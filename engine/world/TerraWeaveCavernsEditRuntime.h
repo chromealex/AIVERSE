@@ -103,6 +103,27 @@ public:
         // Old futures remain bounded and are discarded by their epoch check.
     }
 
+    // Expand an uncommitted edit with additional owner slots on the SAME
+    // immutable source. Keep existing work; queue only newly required keys.
+    void expandPendingKeys(const std::set<ChunkKey3,KeyLess>& keys){
+        if(!snapshot_||!snapshot_->sourceRevision)
+            throw std::logic_error("Caverns missing source for slot expansion");
+        std::set<ChunkKey3,KeyLess> pending;
+        for(const auto& item:dirty_.pending(maxQueued_))pending.insert(item.key);
+        auto next=dirty_;
+        const int64_t span=int64_t(resolution_)*spacingCm_;
+        const auto limit=(kLimitCm-span)/span;
+        for(const auto& key:keys){
+            if(pending.contains(key))continue;
+            if(key.x< -limit||key.x>limit||key.y< -limit||key.y>limit||key.z< -limit||key.z>limit)
+                throw std::out_of_range("Caverns expanded slot extent");
+            next.enqueue({key.x*span,key.y*span,key.z*span,
+                (key.x+1)*span,(key.y+1)*span,(key.z+1)*span},
+                resolution_,spacingCm_,snapshot_->sourceRevision);
+        }
+        dirty_=std::move(next);
+    }
+
     // Optional explicit adapter for the Stage20 Workspace operation return.
     // The editor caller forwards its successful result after MapDoc commit;
     // this runtime object never accesses Workspace or mutable MapDoc.
