@@ -6,6 +6,7 @@
 #include <cmath>
 #include <array>
 #include <utility>
+#include <tuple>
 namespace aiverse::terraweave::caverns {
 struct CutVertexCm {double x=0,y=0,z=0;};
 struct CutTriangleCm {CutVertexCm a{},b{},c{};};
@@ -44,7 +45,12 @@ inline std::vector<CutVertexCm> clipCutPolygon(
         if(ia)out.push_back(a);
         if(ia!=ib) {
             const double denom=da-db;
-            if(denom!=0)out.push_back(cutLerp(a,b,da/denom));
+            if(denom!=0){
+                // Canonical endpoint order on a shared edge, regardless of
+                // the incident triangle's winding.
+                const bool reverse=std::tie(b.x,b.y,b.z)<std::tie(a.x,a.y,a.z);
+                out.push_back(reverse?cutLerp(b,a,db/(db-da)):cutLerp(a,b,da/denom));
+            }
         }
     }
     return out;
@@ -156,7 +162,8 @@ inline CutSurface cutTerrainEntrances(const terraweave::TerrainPatch& patch,
 // implemented, only accept a complete mouth strictly inside one tile.
 // Incompatible or potentially Fill-sealed entrances retain solid terrain.
 inline TerrainPatch cutCaveTerrainPatch(TerrainPatch patch,
-        const CaveVolumeSnapshot& snapshot,uint64_t surfaceEpoch) {
+        const CaveVolumeSnapshot& snapshot,uint64_t surfaceEpoch,
+        const std::vector<Entrance>* certifiedEntrances=nullptr) {
     if(!surfaceEpoch||patch.presentationOnly||patch.clippedSurface||
        !validTerrainPatchTopology(patch))throw std::invalid_argument("Caverns authoritative cut patch");
     patch.surfaceEpoch=surfaceEpoch;
@@ -166,9 +173,10 @@ inline TerrainPatch cutCaveTerrainPatch(TerrainPatch patch,
     std::vector<Entrance> accepted;
     size_t checks=0;
     constexpr size_t maxChecks=2000000;
-    for(const auto& e:snapshot.entrances){
+    for(const auto& e:certifiedEntrances?*certifiedEntrances:snapshot.entrances){
         const auto b=entranceBounds(e);
         if(!overlaps(tile,b))continue;
+        if(certifiedEntrances){accepted.push_back(e);continue;}
         if(b.minX<=tile.minX||b.minZ<=tile.minZ||
            b.maxX>=tile.maxX||b.maxZ>=tile.maxZ)continue;
         bool safe=true;
