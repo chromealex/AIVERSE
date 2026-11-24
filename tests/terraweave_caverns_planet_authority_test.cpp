@@ -1,5 +1,6 @@
 #include "engine/world/TerraWeaveCavernsEcsCommand.h"
 #include "engine/world/TerraWeaveCavernsPlanetBodyCut.h"
+#include "engine/world/TerraWeaveCavernsPlanetDemand.h"
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -83,9 +84,35 @@ static void checkBodyCut(const std::shared_ptr<const game::Surface>& surface){
     try{(void)certifyPlanetBodyCut(broken,surface);}catch(const std::invalid_argument&){refused=true;}
     check(refused,"missing exterior accepted");
 }
+static void checkDemand(const std::shared_ptr<const game::Surface>& surface){
+    const auto set=decodePlanetCaveMap(regions(),surface);
+    CavePlanetDemandConfig cfg;
+    const auto first=CavePlanetFrame::make(surface,set.regions.front().region.anchor);
+    const auto second=CavePlanetFrame::make(surface,set.regions.back().region.anchor);
+    std::vector<CavePlanetObserver> observers{{0,first.toSimulation({})},{0,second.toSimulation({})}};
+    auto demand=selectPlanetCaveDemand(set,surface,observers,{},{},cfg);
+    check(demand.bodies.at("planet")==std::vector<uint64_t>({2,9}),"two same-body demands");
+    check(demand.volumeSlots==16,"global slot count");
+    cfg.maxRegions=1;
+    demand=selectPlanetCaveDemand(set,surface,observers,{}, {9},cfg);
+    check(demand.bodies.at("planet")==std::vector<uint64_t>({9}),"pin priority");
+    check(demand.refused==std::vector<uint64_t>({2})&&!demand.pinnedOverflow,"budget refusal");
+    demand=selectPlanetCaveDemand(set,surface,observers,{}, {2,9},cfg);
+    check(demand.pinnedOverflow,"pinned overflow must gate host");
+    cfg.maxRegions=8;
+    const auto local=first.originBody()+first.east()*Fixed::fromInt(20);
+    observers={{0,game::Surface::anchor(0)+local}};
+    demand=selectPlanetCaveDemand(set,surface,observers,{},{},cfg);
+    check(demand.bodies.empty(),"enter hysteresis");
+    demand=selectPlanetCaveDemand(set,surface,observers,{2},{},cfg);
+    check(demand.bodies.at("planet")==std::vector<uint64_t>({2}),"leave hysteresis");
+    observers.clear();
+    check(selectPlanetCaveDemand(set,surface,observers,{2},{},cfg).bodies.empty(),"retirement demand");
+}
 int main(){
     const auto surface=makeSurface();
     checkBodyCut(surface);
+    checkDemand(surface);
     const auto old=decodePlanetCaveMap(region(99,0),surface);
     check(old.regions.size()==1&&old.regions.front().id==1,"v1 migration");
     bool refused=false;
