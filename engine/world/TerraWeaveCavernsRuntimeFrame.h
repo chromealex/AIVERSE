@@ -17,6 +17,7 @@
 #include "engine/nav/CavePathQueryCache.h"
 #include "engine/world/TerraWeaveCavernsNavigationEnvironment.h"
 #include "engine/world/TerraWeaveCavernsNativeNavMeshCache.h"
+#include "engine/world/TerraWeaveCavernsNavigationRegionCache.h"
 #include <algorithm>
 #include <map>
 #include <set>
@@ -42,6 +43,11 @@ public:
                    std::shared_ptr<const CaveNavigationDataProvider>){
                 pathCache_.invalidate();
                 nativeNavCache_.invalidate();
+            });
+        navigationBus_.subscribe(CaveNavigationConsumer::HierarchicalAStar,
+            [this](const CaveNavigationChange& change,
+                   std::shared_ptr<const CaveNavigationDataProvider> source){
+                if(regionCache_)regionCache_->refresh(change,std::move(source));
             });
     }
     // Explicit per-world entry point. Instances are single-world owners:
@@ -205,6 +211,36 @@ public:
     void invalidateNavigationRouteCache(){
         pathCache_.invalidate();
         nativeNavCache_.invalidate();
+    }
+    // Persistent loaded-region 3D topology. Compared with per-query graph
+    // regeneration, retain SDF neighbors, HPA portals and goal flow fields.
+    // Named "regional.*" backends are available after first native commit.
+    bool enableRegionalNavigation(CaveGraphGrid grid,
+                                  CaveAgentProfile profile={},
+                                  uint32_t clusterCells=8,
+                                  size_t maxFlows=8) {
+        const auto source=navigationBus_.active();
+        if(!source||navigationBus_.hasPending()||regionCache_)return false;
+        regionCache_=std::make_unique<CaveNavigationRegionCache>(
+            source,grid,profile,clusterCells,maxFlows);
+        for(const auto& entry:std::vector<std::pair<const char*,CavePathBackend>>{
+            {"regional.astar",CavePathBackend::AStar},
+            {"regional.hpa",CavePathBackend::HPAStar},
+            {"regional.flow",CavePathBackend::FlowField},
+            {"regional.hybrid",CavePathBackend::Hybrid}}) {
+            (void)pathRouter_.registerSolver(entry.first,entry.second,
+                [this,backend=entry.second](
+                    const CavePathQuery& query,
+                    std::shared_ptr<const CaveNavigationDataProvider>) {
+                    return regionCache_?regionCache_->find(query,backend):
+                                        CavePathResult{};
+                });
+        }
+        return true;
+    }
+    nav::GraphRegionCache::Stats regionalNavigationStats()const noexcept{
+        return regionCache_?regionCache_->stats():
+                            nav::GraphRegionCache::Stats{};
     }
     bool registerNativeNavMeshSolver(CaveNavConfig config,
                                      const std::string& name="navmesh") {
@@ -513,6 +549,7 @@ private:
     CavePathRouter pathRouter_;
     mutable nav::CavePathQueryCache pathCache_{};
     mutable CaveNativeNavMeshCache nativeNavCache_{};
+    std::unique_ptr<CaveNavigationRegionCache> regionCache_;
     CaveDirtyBounds navDirtyBounds_{};
     bool navDirty_=false;
     uint32_t chunkResolution_=16;
