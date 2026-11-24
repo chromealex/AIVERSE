@@ -85,7 +85,7 @@ export default function HistoryPanel({ snapshot, commitSnapshot }: {
     </div>
     <div className="history__description">
       {scope === 'map' ? 'Scene edits only. Global Undo / Redo controls the map.'
-        : scope === 'project' ? 'Saved Rules and compatible Manifest edits. Assets and map edits are separate.'
+        : scope === 'project' ? 'Saved Rules and compatible Manifest edits. Project history survives reopening; other scopes are separate.'
         : 'Importer settings, moves, renames, trash, folder creation, imports and replacement batches.'}
     </div>
     {scope !== 'map' && <div className="history__actions">
@@ -94,6 +94,7 @@ export default function HistoryPanel({ snapshot, commitSnapshot }: {
     </div>}
     {error && <StudioAlert tone="danger" className="history__alert" title="History unavailable or edit refused">{error}</StudioAlert>}
     {history?.strokeActive && <StudioAlert tone="warning" className="history__alert">Finish or cancel the active Scene stroke first.</StudioAlert>}
+    {savedHistory?.persistenceWarning && <StudioAlert tone="warning" className="history__alert" title="Saved history unavailable">{savedHistory.persistenceWarning}</StudioAlert>}
     {savedHistory?.blockedReason && <StudioAlert tone="warning" className="history__alert">{savedHistory.blockedReason}</StudioAlert>}
     {loading && <div className="history__loading"><StudioSkeleton/><StudioSkeleton width="65%"/><span role="status">Reading history…</span></div>}
     {pending && <div className="history__description" role="status">Applying history…</div>}

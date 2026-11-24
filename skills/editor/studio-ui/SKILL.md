@@ -122,6 +122,9 @@ Record linked agent actions by native map ID or ProjectHistory entry ID, scope a
 ## Agent MCP capability audit and internal moves (S6d.2)
 Use StudioAgentHistoryPolicy.h explicit policy, not suffix-based StudioToolReadOnly for agent history. studio_history_capabilities enumerates the entire live registry; unverified operations can execute but fence map-only bulk undo and disclose untracked effects even if a partial owner link exists. Agent internal move/rename requires project and asset version, existing GUIDs, independent preview token and explicit decisions. Native transfer owner revalidates dependencies and preserves GUID. No destructive/internal replace, external import or arbitrary Studio RPC. Do not claim the entire registry is audited for reversible side effects; unverified is an intentional fail-closed classification.
 
+## Persistent Project history (S6e.1)
+ProjectHistoryPersistence serializes bounded document-only steps and cursor into .aiverse-cache/project-history.json with a checksum, restricted owner paths and exact current baseline. Project::applyHistoryTransaction stages the checkpoint alongside Rules/Manifest in the existing document journal; no-op edits do not change the checkpoint. Reopen revalidates dependency sets, continuous before/after bytes and cursor, creates a fresh epoch, and reports persistenceWarning if recovery is unavailable. Do not reuse old tokens or claim Map/Assets timelines persist yet. No cross-owner atomic navigation.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

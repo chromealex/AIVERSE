@@ -602,6 +602,6 @@ export interface MetaHumanReport { pending?:boolean; detected:boolean; score:num
 export type StudioAlignMode = 'minX' | 'centerX' | 'maxX' | 'minZ' | 'centerZ' | 'maxZ' | 'distributeX' | 'distributeZ' | 'ground';
 /** Undo history: applied steps first (oldest → newest), then the redo branch; position = applied count. */
 export interface StudioHistory { steps: Array<{ label: string; done: boolean }>; position: number; version?:string; scope?:'map'; strokeActive?:boolean }
-export interface StudioProjectHistory { scope:'project'; steps: StudioHistory['steps']; position:number; version:string; strokeActive:boolean; canUndo:boolean; canRedo:boolean; bytes:number; maxBytes:number; maxSteps:number; blockedReason?:string }
+export interface StudioProjectHistory { scope:'project'; steps: StudioHistory['steps']; position:number; version:string; strokeActive:boolean; canUndo:boolean; canRedo:boolean; bytes:number; maxBytes:number; maxSteps:number; blockedReason?:string; persistent?:boolean; persistenceWarning?:string }
 
 export type StudioAssetHistory = Omit<StudioProjectHistory,'scope'> & {scope:'assets'};

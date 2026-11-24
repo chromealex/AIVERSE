@@ -199,7 +199,8 @@ void projectHistoryContract(){
     AIVERSE_TEST_CHECK(ws.project.saveManifest(&error)&&status()["steps"].size()==0);
     AIVERSE_TEST_CHECK(!ws.call("set_manifest",Json::parse(R"({"path":"name","value":"Before reopen"})")).has("error"));
     const auto stale=status().getStr("version");
-    AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error)&&status()["steps"].size()==0);
+    AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error)&&status()["steps"].size()==1);
+    AIVERSE_TEST_CHECK(status().getBool("persistent")&&status().getBool("canUndo"));
     AIVERSE_TEST_CHECK(step("undo",stale).has("error"));
     // Native route uses the exact same owner and leaves map history independent.
     studio::StudioSession session(root.string(),root.string());
@@ -215,6 +216,64 @@ void projectHistoryContract(){
     AIVERSE_TEST_CHECK(result["result"]["snapshot"]["project"].getStr("historyVersion")==result["result"].getStr("version"));
     AIVERSE_TEST_CHECK(result["result"].getStr("version")!=hs.getStr("version"));
     AIVERSE_TEST_CHECK(session.workspace().project.rulesJson["types"]["tree"]["health"]["max"].integer()==200);
+    fs::remove_all(root);
+}
+void projectHistoryPersistenceContract(){
+    using namespace aiverse;using namespace aiverse::editor;namespace fs=std::filesystem;
+    const auto root=fs::temp_directory_path()/("studio-persistent-history-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(root);
+    const auto manifest=root/"game.json",rules=root/"rules.json";
+    const auto checkpoint=root/".aiverse-cache"/"project-history.json";
+    const std::string initial=R"({"name":"Fixture","module":"game","rules":"rules.json"})";
+    const std::string originalRules=R"({"types":{"unit":{"health":{"max":100}}}})";
+    std::ofstream(manifest)<<initial;std::ofstream(rules)<<originalRules;
+    std::string error,stale,checkpointBytes;
+    {
+        Workspace ws;AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error));
+        AIVERSE_TEST_CHECK(!ws.call("rules_set",Json::parse(R"({"path":"types.unit.health.max","value":200})")).has("error"));
+        AIVERSE_TEST_CHECK(!ws.call("set_manifest",Json::parse(R"({"path":"name","value":"Edited"})")).has("error"));
+        AIVERSE_TEST_CHECK(ws.project.historyStep(false,ws.project.historyVersion(),&error));
+        stale=ws.project.historyVersion();checkpointBytes=readProjectFileBytes(checkpoint);
+    }
+    {
+        Workspace ws;AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error));
+        const auto status=ws.project.historyStatus();
+        AIVERSE_TEST_CHECK(status.getInt("position")==1&&status["steps"].size()==2);
+        AIVERSE_TEST_CHECK(status.getBool("canUndo")&&status.getBool("canRedo")&&status.getBool("persistent"));
+        AIVERSE_TEST_CHECK(ws.project.historyVersion()!=stale&&!ws.project.historyStep(true,stale,&error));
+        AIVERSE_TEST_CHECK(ws.project.historyStep(true,ws.project.historyVersion(),&error));
+        AIVERSE_TEST_CHECK(ws.project.manifest.getStr("name")=="Edited");
+        AIVERSE_TEST_CHECK(ws.project.historyStep(false,ws.project.historyVersion(),&error));
+    }
+    // External modification must not resurrect a history with a different cursor baseline.
+    const auto savedRules=readProjectFileBytes(rules);
+    std::ofstream(rules)<<savedRules<<"\n";
+    {
+        Workspace ws;AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error));
+        const auto status=ws.project.historyStatus();
+        AIVERSE_TEST_CHECK(!status.getBool("canUndo")&&!status.getBool("canRedo")&&status.has("persistenceWarning"));
+    }
+    std::ofstream(rules)<<savedRules;
+    // Corrupt checkpoint: project remains readable, no unvalidated history is exposed.
+    std::ofstream(checkpoint)<<"corrupt";
+    {
+        Workspace ws;AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error));
+        AIVERSE_TEST_CHECK(ws.project.historyStatus()["steps"].size()==0&&ws.project.historyStatus().has("persistenceWarning"));
+        AIVERSE_TEST_CHECK(!ws.call("set_manifest",Json::parse(R"({"path":"name","value":"Recovered"})")).has("error"));
+        AIVERSE_TEST_CHECK(ws.project.historyStatus().getBool("canUndo"));
+    }
+    // Interrupted publication must roll document AND history checkpoint back.
+    const auto beforeManifest=readProjectFileBytes(manifest),beforeCheckpoint=readProjectFileBytes(checkpoint);
+    {
+        ProjectDocumentJournal journal(root);
+        AIVERSE_TEST_CHECK(journal.begin({{manifest,beforeManifest,initial},{checkpoint,beforeCheckpoint,checkpointBytes}}));
+        journal.publish(0);
+    }
+    {
+        Workspace ws;AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error));
+        AIVERSE_TEST_CHECK(readProjectFileBytes(manifest)==beforeManifest&&readProjectFileBytes(checkpoint)==beforeCheckpoint);
+        AIVERSE_TEST_CHECK(ws.project.historyStatus().getBool("canUndo"));
+    }
     fs::remove_all(root);
 }
 void assetHistorySessionContract(){
@@ -1001,6 +1060,6 @@ int main() {
     AIVERSE_TEST_CHECK(openRejected);
     authoredEntityWorkflow();
     entityWorkflow();
-    mapCompoundHistoryContract();projectFileEditContract();projectDocumentJournalContract();projectOwnerSaveContract();projectHistoryContract();projectHistoryBudgetContract();assetHistorySessionContract();agentScopedHistoryContract();projectFileRecoveryWorkflow();
+    mapCompoundHistoryContract();projectFileEditContract();projectDocumentJournalContract();projectOwnerSaveContract();projectHistoryContract();projectHistoryPersistenceContract();projectHistoryBudgetContract();assetHistorySessionContract();agentScopedHistoryContract();projectFileRecoveryWorkflow();
     std::cout << "studio session contract PASS\n";
 }

@@ -9,7 +9,7 @@ const char* Checkpoint=".aiverse-cache/project-history.json";
 std::string relativePath(const fs::path& project,const fs::path& file){
     const auto root=fs::canonical(project);
     const auto rel=fs::canonical(file).lexically_relative(root).generic_string();
-    if(rel==Checkpoint)throw std::runtime_error("History cannot edit itself");
+    if(rel.starts_with(".aiverse-cache/")||rel==Checkpoint)throw std::runtime_error("History cannot edit recovery storage");
     (void)project_file_detail::safeTarget(root,rel);
     return rel;
 }
