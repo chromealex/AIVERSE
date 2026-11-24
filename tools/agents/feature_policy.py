@@ -171,9 +171,9 @@ def build_report(root, registry, changed=(), branch_claims=()):
 def readiness_errors(root, registry, selected, changed=()):
     """Strict readiness for selected manifests and their transitive prerequisites."""
     report = build_report(root, registry, changed)
-    errors = list(report["dependencies"]["errors"]) + list(report["api"]["errors"])
+    errors = list(report["errors"])
+    errors.extend("ownership overlap: " + item["path"] for item in report["ownership"]["conflicts"])
     roadmap = {row["feature"]: row for row in report["roadmap"]["links"]}
-    errors.extend(report["roadmap"]["errors"])
     states = report["dependencies"]["features"]
     visited = set()
     def visit(ident):
@@ -227,6 +227,7 @@ def main():
     parser.add_argument("--branch", action="append", default=[], help="Compare an explicit active branch ref to --base for overlap checks")
     parser.add_argument("--output", type=Path, help="Optional report file; use ignored build output")
     parser.add_argument("--require-release-ready", action="store_true", help="Exit nonzero when release has blockers")
+    parser.add_argument("--release", help="Release label; all registered manifests remain in scope")
     args = parser.parse_args()
     if args.branch and not args.base:
         parser.error("--branch requires --base")
@@ -242,6 +243,7 @@ def main():
         sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
         report = {"schema": 1, "sha": sha, "policy": policy, "readiness": readiness,
                   "release": release_report(ROOT, registry, policy, readiness)}
+        report["release"]["target"] = args.release
         output = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)
