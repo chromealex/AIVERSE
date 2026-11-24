@@ -4,7 +4,7 @@ import {StudioPanel,StudioAlert,StudioEmptyState,StudioButton,StudioSelect,Studi
 import GraphCanvas from './GraphCanvas';
 import {BuildingInspectionImport} from './BuildingStructureGraphView';
 import StrataAnalysisPanel from './StrataAnalysisPanel';
-import GraphDiagnostics from './GraphDiagnostics';
+import GraphDiagnostics from './GraphDiagnosticsPanel';
 import {AnimationConditions,AnimationParameters} from './AnimationConditions';
 import {DraftHistory} from './graphFramework';
 import type {PortRef} from './graphGeometry';
