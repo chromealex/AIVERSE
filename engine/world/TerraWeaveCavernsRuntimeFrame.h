@@ -187,6 +187,18 @@ public:
             makeCaveEnvironmentCallbacks(std::move(src),settings),
             affected,fullRebuild);
     }
+    // Convenience entry point at a real fixed-tick authority barrier.
+    // Copy-on-write ECS snapshot retains deterministic NEREID/PHYSIS data
+    // for every route query that reads this environment epoch. Call only
+    // after corresponding simulation systems have committed that tick.
+    bool publishNavigationEnvironmentFromSimulation(
+        const Simulation& sim,CaveDirtyBounds affected,
+        CaveEnvironmentCostSettings settings={},bool fullRebuild=false) {
+        const uint64_t epoch=uint64_t(sim.tick())+1;
+        auto frozen=std::make_shared<const World>(sim.world());
+        return publishNavigationEnvironment(std::move(frozen),epoch,
+                                            affected,settings,fullRebuild);
+    }
     nav::CavePathCacheStats navigationCacheStats()const noexcept {
         return pathCache_.stats();
     }
