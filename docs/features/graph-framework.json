@@ -123,7 +123,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35D common Building candidate request snapshot/gate implemented; owner panel integration staged separately from Building owner HEAD.",
+      "note": "Stage 35D common candidate capture gate implemented; actual BuildingGeneratorPanel wiring in owner-relative draft PR #136, not merged. Stage 35C Caverns native capture remains on this branch.",
       "evidence": []
     },
     "architecture": {
@@ -193,7 +193,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35D bounded gate isolated tests authored; full Studio/native acceptance pending.",
+      "note": "Stage 35D isolated Node v22.16.0 candidate gate tests 4/4 PASS, strict TypeScript 5.8.3 gate PASS, exact local Git blob identity verified on both branches. Full Studio/native/MCP/GPU/Mac gates NOT RUN.",
       "evidence": []
     },
     "handoff": {
