@@ -1751,6 +1751,14 @@
    "id": "world",
    "roadmap": [
     {
+     "id": "world-cold-component-advancement",
+     "title": "Продвижение холодного ECS-состояния",
+     "titleEn": "Cold ECS state advancement",
+     "text": "Явное продвижение сохранённых компонентов по тикам без потери стабильных ID; атомарная проверка группы и допуска при пробуждении.",
+     "textEn": "Explicit tick-based advancement of parked components with stable identities, atomic group validation and guarded wake admission.",
+     "status": "in-progress"
+    },
+    {
      "id": "world-authoritative-simulation-lod",
      "title": "LOD авторитетной симуляции",
      "titleEn": "Authoritative simulation LOD",
