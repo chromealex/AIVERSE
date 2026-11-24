@@ -233,6 +233,29 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
         const auto customId=owner.start(computed,project,lifetime.lease()).getStr("request");drain();
         const auto customStatus=owner.status();
         require(customStatus.getStr("request")==customId&&customStatus.getStr("state")=="ready"&&customStatus.getStr("backend")==expected,"custom compute GPU parity failed");
+        // Typed resource reads use materialized input fields, not fused point samples.
+        auto resources=Json::parse(R"JSON({"graph":{"version":1,"size":32,"nodes":[
+          {"id":"ramp","op":"gradient","inputs":[],"properties":{"axis":"x"}},
+          {"id":"zero","op":"constant","inputs":[],"properties":{"value":0}},
+          {"id":"red","op":"color","inputs":[],"properties":{"value":[1,0,0]}},
+          {"id":"blue","op":"color","inputs":[],"properties":{"value":[0,0,1]}},
+          {"id":"mirror","op":"customScalar","inputs":["ramp","zero","zero"],"properties":{"code":"1 u - v sampleA"}},
+          {"id":"edge","op":"customScalar","inputs":["ramp","zero","zero"],"properties":{"code":"0 v sampleA","resourceFilter":"bilinear","resourceAddress":"repeat"}},
+          {"id":"rgb","op":"customColor","inputs":["red","blue","mirror"],"properties":{"red":"u v sampleAr","green":"u v sampleC","blue":"u v sampleBb"}}
+        ],"outputs":{"height":"mirror","mask":"edge","color":"rgb"}},"requireGpu":true,"bakeSet":true,"materialized":true,"fusePointwise":true})JSON");
+        const auto resourceProgram=render::texture_graph::compile(resources["graph"]);
+        const auto mirrorIndex=resourceProgram.outputs.at("height");
+        const auto mirrorPixels=render::texture_graph::evaluate(resourceProgram,mirrorIndex);
+        const auto edgePixels=render::texture_graph::evaluate(resourceProgram,resourceProgram.outputs.at("mask"));
+        require(mirrorPixels.rgba[0]==251&&mirrorPixels.rgba[31*4]==4&&edgePixels.rgba[0]==128,"resource sampling CPU expected values");
+        require(!render::texture_graph::gpu::fusionPointwise(resourceProgram.nodes[mirrorIndex]),"resource sampling incorrectly fused");
+        auto invalidResource=resources["graph"];
+        invalidResource.member("nodes").at(4).member("properties").set("code",Json::string("u v sampleAr"));
+        bool badResource=false;try{(void)render::texture_graph::compile(invalidResource);}catch(const std::invalid_argument&){badResource=true;}
+        require(badResource,"invalid scalar resource channel accepted");
+        const auto resourceId=owner.start(resources,project,lifetime.lease()).getStr("request");drain();
+        const auto resourceStatus=owner.status();
+        require(resourceStatus.getStr("request")==resourceId&&resourceStatus.getStr("state")=="ready"&&resourceStatus.getStr("backend")==expected,"custom resource GPU parity failed");
         // Native function calls lower into ordinary typed DAG nodes. Two calls
         // share a definition but use independent parameter values and public IDs.
         auto functions=Json::parse(R"JSON({"graph":{"version":1,"size":32,

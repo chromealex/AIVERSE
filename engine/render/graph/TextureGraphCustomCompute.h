@@ -1,5 +1,5 @@
-// Restricted, deterministic pointwise expression language. No raw source,
-// arbitrary memory access, loops, recursion, resource bindings or host I/O.
+// Restricted deterministic expression language with bounded reads from typed
+// graph input fields. No raw source, arbitrary memory, writes, loops or host I/O.
 #pragma once
 #include <algorithm>
 #include <array>
@@ -14,7 +14,7 @@
 #include <vector>
 namespace aiverse::render::texture_graph::custom_compute {
 inline constexpr size_t maxInstructions=48,maxCodeBytes=1024,maxWork=64u*1024u*1024u;
-enum class Code:uint8_t {Literal,Variable,Add,Sub,Mul,Div,Min,Max,Abs,Neg,Invert,Sat,Sqrt,Fract,Sin,Cos,Step,Mix};
+enum class Code:uint8_t {Literal,Variable,Add,Sub,Mul,Div,Min,Max,Abs,Neg,Invert,Sat,Sqrt,Fract,Sin,Cos,Step,Mix,Sample};
 struct Instruction {Code code;float value=0;unsigned index=0;};
 using Program=std::vector<Instruction>;
 using Values=std::array<float,13>;
@@ -50,6 +50,22 @@ inline Program parse(const std::string& source,bool color){
             if(!color&&index<6)throw std::invalid_argument("scalar compute uses a and b, not RGB channels");
             out.push_back({Code::Variable,0,index});++depth;continue;
         }
+        // Coordinates are two stack operands (u then v). The slot/channel
+        // comes from a fixed allowlist, not user-provided shader syntax.
+        unsigned sample=9;
+        if(token=="sampleC")sample=6;
+        else if(!color){
+            if(token=="sampleA")sample=0;
+            if(token=="sampleB")sample=3;
+        }else{
+            constexpr std::array<std::string_view,6> names={"sampleAr","sampleAg","sampleAb","sampleBr","sampleBg","sampleBb"};
+            const auto it=std::find(names.begin(),names.end(),token);
+            if(it!=names.end())sample=unsigned(it-names.begin());
+        }
+        if(sample<7){
+            if(depth<2)throw std::invalid_argument("custom resource sample stack underflow");
+            --depth;out.push_back({Code::Sample,0,sample});continue;
+        }
         float value=0;
         if(numeric(token,value)){out.push_back({Code::Literal,value});++depth;continue;}
         const auto it=std::find_if(std::begin(ops),std::end(ops),[&](const Op& o){return o.name==token;});
@@ -60,12 +76,22 @@ inline Program parse(const std::string& source,bool color){
     if(depth!=1)throw std::invalid_argument("custom compute must return exactly one scalar");
     return out;
 }
+inline bool readsResources(const Program& program){
+    return std::any_of(program.begin(),program.end(),[](const Instruction& op){return op.code==Code::Sample;});
+}
+inline size_t workUnits(const Program& program){
+    size_t count=0;for(const auto& op:program)count+=op.code==Code::Sample?8u:1u;return count;
+}
 inline float limit(float x){return std::clamp(x,-16.f,16.f);}
-inline float evaluate(const Program& program,const Values& values){
+template<class Sample>
+inline float evaluate(const Program& program,const Values& values,Sample sample){
     std::array<float,maxInstructions> stack{};size_t count=0;
     for(const auto& op:program){
         if(op.code==Code::Literal){stack[count++]=op.value;continue;}
         if(op.code==Code::Variable){stack[count++]=values[op.index];continue;}
+        if(op.code==Code::Sample){
+            const float v=stack[--count],u=stack[count-1];stack[count-1]=sample(op.index,u,v);continue;
+        }
         if(op.code==Code::Mix){
             const float t=stack[--count],b=stack[--count],a=stack[count-1];
             stack[count-1]=limit(a+(b-a)*t);continue;
@@ -90,6 +116,9 @@ inline float evaluate(const Program& program,const Values& values){
     }
     return stack[0];
 }
+inline float evaluate(const Program& program,const Values& values){
+    return evaluate(program,values,[](unsigned,float,float)->float{throw std::invalid_argument("custom resource sampler required");});
+}
 // All emitted syntax belongs to this compiler. The user token text is never
 // copied into a shader. Helpers evaluate each operand once.
 inline const char* shaderHelpers=R"(
@@ -97,13 +126,21 @@ float tgCustomDiv(float a,float b){return a/(b<0.0f?-max(-b,0.001f):max(b,0.001f
 float tgCustomMix(float a,float b,float t){return a+(b-a)*t;}
 float tgCustomSqrt(float a){return sqrt(max(a,0.0f));}
 )";
-template<class Variable,class Literal>
-inline std::string emit(const Program& program,Variable variable,Literal literal){
+inline const char* resourceShaderHelpers=R"(
+float tgAddress(float v,bool repeatUV){return repeatUV?fract(v):clamp(v,0.0f,1.0f);}
+int tgAddressIndex(int x,int n,bool repeatUV){return repeatUV?((x%n)+n)%n:clamp(x,0,n-1);}
+uint tgResourceIndex(int x,int y,uint n,bool repeatUV){return uint(tgAddressIndex(y,int(n),repeatUV))*n+uint(tgAddressIndex(x,int(n),repeatUV));}
+)";
+template<class Variable,class Literal,class Sample>
+inline std::string emit(const Program& program,Variable variable,Literal literal,Sample sample){
     std::vector<std::string> stack;stack.reserve(maxInstructions);
     auto pop=[&](){auto s=std::move(stack.back());stack.pop_back();return s;};
     for(const auto& op:program){
         if(op.code==Code::Literal){stack.push_back("("+literal(op.value)+")");continue;}
         if(op.code==Code::Variable){stack.push_back(variable(op.index));continue;}
+        if(op.code==Code::Sample){
+            auto v=pop(),u=pop();stack.push_back(sample(op.index,u,v));continue;
+        }
         std::string expr;
         if(op.code==Code::Mix){auto t=pop(),b=pop(),a=pop();expr="tgCustomMix("+a+","+b+","+t+")";}
         else if(op.code==Code::Add||op.code==Code::Sub||op.code==Code::Mul||op.code==Code::Div||op.code==Code::Min||op.code==Code::Max||op.code==Code::Step){
@@ -126,5 +163,9 @@ inline std::string emit(const Program& program,Variable variable,Literal literal
         stack.push_back("clamp("+expr+",-16.0f,16.0f)");
     }
     return stack.back();
+}
+template<class Variable,class Literal>
+inline std::string emit(const Program& program,Variable variable,Literal literal){
+    return emit(program,variable,literal,[](unsigned,const std::string&,const std::string&)->std::string{throw std::invalid_argument("custom resource sampler required");});
 }
 } // namespace aiverse::render::texture_graph::custom_compute

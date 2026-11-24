@@ -135,6 +135,9 @@ inline float mapRadiance(float v,float gain,bool reinhard){
 using ImageResolver=std::function<ImageSource(const std::string&,const std::string&,size_t)>;
 struct Node {std::string id;const Op* info=nullptr;std::vector<size_t> inputs;Json parameters;std::shared_ptr<const ImageSource> image;std::array<custom_compute::Program,3> custom;};
 inline bool isCustomCompute(std::string_view id){return id=="customScalar"||id=="customColor";}
+inline bool readsCustomResources(const Node& n){
+    return std::any_of(n.custom.begin(),n.custom.end(),[](const auto& program){return custom_compute::readsResources(program);});
+}
 inline bool isExternalImageSource(std::string_view id){return id=="imageAsset"||id=="imageAssetChannel";}
 inline bool isImageSource(std::string_view id){return id=="image"||isExternalImageSource(id);}
 inline unsigned imageChannelShift(const std::string& channel){
@@ -221,6 +224,8 @@ inline Json properties(const std::string& id){
             field("blue","compute",Json::string("ab bb c mix"));
         }
         for(const auto* key:{"p0","p1","p2","p3"})field(key,"number",Json::number(0.5),-16,16);
+        options("resourceFilter","nearest",{"nearest","bilinear"});
+        options("resourceAddress","clamp",{"clamp","repeat"});
     }
     if(id=="constant")field("value","number",Json::number(.5));
     if(id=="color")field("value","rgb",Json::parse("[0.5,0.5,0.5]"));
@@ -261,7 +266,12 @@ inline void validateParameters(const Node& n){
     }
     if(id=="image")(void)imagePixels(p);
     if(id=="formula")(void)formulaTokens(p.getStr("expression","a b *"));
-    if(isCustomCompute(id))for(const auto* key:{"p0","p1","p2","p3"})(void)scalar(p[key],.5f,-16,16);
+    if(isCustomCompute(id)){
+        for(const auto* key:{"p0","p1","p2","p3"})(void)scalar(p[key],.5f,-16,16);
+        const auto filter=p.getStr("resourceFilter","nearest"),address=p.getStr("resourceAddress","clamp");
+        require((!p.has("resourceFilter")||p["resourceFilter"].isString())&&(filter=="nearest"||filter=="bilinear"),"invalid custom resource filter");
+        require((!p.has("resourceAddress")||p["resourceAddress"].isString())&&(address=="clamp"||address=="repeat"),"invalid custom resource address");
+    }
     if(id=="constant")scalar(p["value"],.5f);
     if(id=="color"){require(p["value"].isArray()&&p["value"].size()==3,"color requires RGB triple");for(const auto& v:p["value"].items()){require(v.isNumber(),"RGB channel must be number");scalar(v,0);}}
     if(id=="noise"||id=="fbm"||id=="voronoi"){integer(p["period"],8,1,256);seed(p["seed"]);if(id=="fbm")integer(p["octaves"],4,1,6);}
@@ -294,7 +304,7 @@ inline Program compileResolved(const Json& g,const ImageResolver& resolver={}){
                 const auto* key=color?keys[channel]:"code";
                 require(!n.parameters.has(key)||n.parameters[key].isString(),"custom compute code must be text");
                 n.custom[channel]=custom_compute::parse(n.parameters.getStr(key,color?defaults[channel]:"a b c mix"),color);
-                customInstructions+=n.custom[channel].size();
+                customInstructions+=custom_compute::workUnits(n.custom[channel]);
             }
             require(customInstructions<=custom_compute::maxWork/(size_t(p.size)*p.size),"custom compute pixel-instruction budget exceeded");
         }
@@ -554,6 +564,7 @@ inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t
         }
         const auto formula=id=="formula"?formulaTokens(q.getStr("expression","a b *")):std::vector<std::string>{};
         const bool custom=isCustomCompute(id);
+        const bool resourceLinear=custom&&q.getStr("resourceFilter","nearest")=="bilinear",resourceRepeat=custom&&q.getStr("resourceAddress","clamp")=="repeat";
         const std::array<float,4> params=custom?std::array<float,4>{scalar(q["p0"],.5f,-16,16),scalar(q["p1"],.5f,-16,16),scalar(q["p2"],.5f,-16,16),scalar(q["p3"],.5f,-16,16)}:std::array<float,4>{};
         const auto* imported=node.image.get();
         if(isImageSource(id))require(imported!=nullptr,"missing resolved image source");
@@ -580,8 +591,21 @@ inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t
             else if(custom){
                 const auto& aa=input(0);const auto& bb=input(1);
                 const custom_compute::Values args={aa[0],aa[1],aa[2],bb[0],bb[1],bb[2],input(2)[0],u,v,params[0],params[1],params[2],params[3]};
-                if(id=="customScalar")r=gray(custom_compute::evaluate(node.custom[0],args));
-                else for(size_t channel=0;channel<3;++channel)r[channel]=custom_compute::evaluate(node.custom[channel],args);
+                auto sample=[&](unsigned index,float su,float sv){
+                    const auto slot=index/3,channel=index%3;
+                    auto address=[&](float v){return resourceRepeat?v-std::floor(v):std::clamp(v,0.f,1.f);};
+                    auto addressIndex=[&](int v){return resourceRepeat?((v%n)+n)%n:std::clamp(v,0,n-1);};
+                    auto texel=[&](int xx,int yy){return images[node.inputs[slot]][size_t(addressIndex(yy))*n+addressIndex(xx)][channel];};
+                    const float fx=address(su)*n-(resourceLinear?.5f:0.f),fy=address(sv)*n-(resourceLinear?.5f:0.f);
+                    const int ix=int(std::floor(fx)),iy=int(std::floor(fy));
+                    if(!resourceLinear)return texel(ix,iy);
+                    const float tx=fx-ix,ty=fy-iy;
+                    const float a=texel(ix,iy),b=texel(ix+1,iy),c=texel(ix,iy+1),d=texel(ix+1,iy+1);
+                    const float lo=a+(b-a)*tx,hi=c+(d-c)*tx;
+                    return lo+(hi-lo)*ty;
+                };
+                if(id=="customScalar")r=gray(custom_compute::evaluate(node.custom[0],args,sample));
+                else for(size_t channel=0;channel<3;++channel)r[channel]=custom_compute::evaluate(node.custom[channel],args,sample);
             }
             else if(isImageSource(id)){
                 const auto v=sampleRaster(*imported,sampling,x,y,n);

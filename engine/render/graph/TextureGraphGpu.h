@@ -46,7 +46,7 @@ float cells(float2 uv,int p,uint seed){
     return msl;
 }
 template<class Port>
-inline std::string pointwiseExpression(const Node& node,int n,Port var){
+inline std::string pointwiseExpression(const Node& node,int n,Port var,std::string* resourceBody=nullptr){
     const auto& q=node.parameters;const std::string id=node.info->id;
         auto a=[&](){return var(0)+".x";};auto b=[&](){return var(1)+".x";};
         auto f=[&](const char* key,float fallback,float lo=0,float hi=1){return literal(scalar(q[key],fallback,lo,hi));};
@@ -70,7 +70,31 @@ inline std::string pointwiseExpression(const Node& node,int n,Port var){
                 if(index==8)return "uv.y";
                 return "("+f(custom_compute::variableNames[index].data(),.5f,-16,16)+")";
             };
-            auto channel=[&](size_t i){return custom_compute::emit(node.custom[i],variable,[](float v){return literal(v);});};
+            size_t sampleSerial=0;
+            auto sample=[&](unsigned index,const std::string& u,const std::string& v)->std::string{
+                require(resourceBody!=nullptr,"custom resource reads require materialized inputs");
+                const auto slot=index/3,component=index%3;
+                require(slot<node.info->inputs.size(),"invalid custom resource slot");
+                const auto tag="tgRead"+std::to_string(sampleSerial++);
+                const bool linear=q.getStr("resourceFilter","nearest")=="bilinear";
+                const std::string repeat=q.getStr("resourceAddress","clamp")=="repeat"?"true":"false";
+                auto& body=*resourceBody;
+                const std::string offset=linear?"-0.5f":"";
+                body+="float "+tag+"X=tgAddress("+u+","+repeat+")*float(n)"+offset+","+tag+"Y=tgAddress("+v+","+repeat+")*float(n)"+offset+";\n";
+                body+="int "+tag+"IX=int(floor("+tag+"X)),"+tag+"IY=int(floor("+tag+"Y));\n";
+                auto texel=[&](int dx,int dy){
+                    return "input"+std::to_string(slot)+"[tgResourceIndex("+tag+"IX+"+std::to_string(dx)+","+tag+"IY+"+std::to_string(dy)+",n,"+repeat+")]"+
+                        (node.info->inputs[slot]==Kind::Scalar?std::string{}:"."+std::string(1,"xyz"[component]));
+                };
+                if(!linear)body+="float "+tag+"="+texel(0,0)+";\n";
+                else{
+                    const auto tx=tag+"TX",ty=tag+"TY";
+                    body+="float "+tx+"="+tag+"X-float("+tag+"IX),"+ty+"="+tag+"Y-float("+tag+"IY);\n";
+                    body+="float "+tag+"=mix(mix("+texel(0,0)+","+texel(1,0)+","+tx+"),mix("+texel(0,1)+","+texel(1,1)+","+tx+"),"+ty+");\n";
+                }
+                return tag;
+            };
+            auto channel=[&](size_t i){return custom_compute::emit(node.custom[i],variable,[](float v){return literal(v);},sample);};
             expr=id=="customScalar"?"float3("+channel(0)+")":"float3("+channel(0)+","+channel(1)+","+channel(2)+")";
         }
         else if(id=="gradient")expr=q.getStr("axis","y")=="x"?"float3(uv.x)":"float3(uv.y)";
@@ -289,15 +313,16 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
             const auto i=std::to_string(j);
             body+="float3 v"+i+"="+(types[j]==KernelValue::Scalar?"float3(input"+i+"[tid])":"input"+i+"[tid].xyz")+";\n";
         }
-        const auto expr=pointwiseExpression(node,n,[](size_t j){return "v"+std::to_string(j);});
+        const auto expr=pointwiseExpression(node,n,[](size_t j){return "v"+std::to_string(j);},&body);
         body+="float3 value=clamp("+expr+",0.0f,1.0f);\n";
     }
     body+=output==KernelValue::Scalar?"result[tid]=value.x;":"result[tid]=float4(value,1.0f);";
-    return materializedKernel(output,types,n,body,isCustomCompute(op)?std::string(custom_compute::shaderHelpers):normal||!types.empty()?std::string{}:pointwiseCommon(),isImageSource(op));
+    return materializedKernel(output,types,n,body,isCustomCompute(op)?std::string(custom_compute::shaderHelpers)+(readsCustomResources(node)?custom_compute::resourceShaderHelpers:""):normal||!types.empty()?std::string{}:pointwiseCommon(),isImageSource(op));
 }
 // Only the known pointwise operations participate. Future neighborhood,
 // sampling or side-effect operations remain materialization boundaries.
 inline bool fusionPointwise(const Node& node){
+    if(readsCustomResources(node))return false;
     const std::string_view id=node.info->id;
     for(std::string_view op:{"formula","customScalar","customColor","constant","color","gradient","noise","fbm","voronoi","pattern","patternMask",
         "add","subtract","multiply","min","max","invert","threshold","remap","blend","blendColor","colorize","metallicRoughness"})
