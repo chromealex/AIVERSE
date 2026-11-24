@@ -3173,7 +3173,7 @@
     },
     {
       "id": "geometry-algorithms",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "layer": "simulation",
       "status": "cpp-foundation",
       "source": "libraries/include/aiverselib/algorithms/Geometry2D.h",
@@ -3189,7 +3189,12 @@
         "libraries/include/aiverselib/algorithms/GeometryClip.h",
         "libraries/include/aiverselib/algorithms/Voronoi.h",
         "libraries/include/aiverselib/algorithms/Geometry3D.h",
-        "libraries/include/aiverselib/algorithms/GeometryDistance.h"
+        "libraries/include/aiverselib/algorithms/GeometryDistance.h",
+        "libraries/include/aiverselib/algorithms/GeometryConvex.h",
+        "libraries/include/aiverselib/algorithms/GeometryEPA.h",
+        "libraries/include/aiverselib/algorithms/GeometryManifold.h",
+        "libraries/include/aiverselib/algorithms/GeometryContactCache.h",
+        "libraries/include/aiverselib/algorithms/GeometrySweep.h"
       ]
     }
   ]
