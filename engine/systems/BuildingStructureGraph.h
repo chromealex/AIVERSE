@@ -42,13 +42,17 @@ struct FunctionalBuildingRecipe {
     float roofRise=0.f;
     // Row-major occupancy, front to back; empty means legacy full rectangle.
     std::vector<std::string> footprint;
+    // Optional explicit masks, one per storey. Upper cells require support below.
+    std::vector<std::vector<std::string>> floorFootprints;
 };
-inline bool functionalCell(const FunctionalBuildingRecipe& r,int x,int z){
-    return x>=0&&z>=0&&x<int(r.roomsX)&&z<int(r.roomsZ)&&
-        (r.footprint.empty()||r.footprint[size_t(z)][size_t(x)]=='1');
+inline bool functionalCell(const FunctionalBuildingRecipe& r,int x,int z,uint32_t floor=0){
+    if(x<0||z<0||x>=int(r.roomsX)||z>=int(r.roomsZ)||floor>=r.floors)return false;
+    const auto& mask=r.floorFootprints.empty()?r.footprint:r.floorFootprints[floor];
+    return mask.empty()||mask[size_t(z)][size_t(x)]=='1';
 }
 inline bool nonRectangularFootprint(const FunctionalBuildingRecipe& r){
     for(const auto& row:r.footprint)if(row.find('0')!=std::string::npos)return true;
+    for(const auto& mask:r.floorFootprints)for(const auto& row:mask)if(row.find('0')!=std::string::npos)return true;
     return false;
 }
 inline const char* functionalRoofProfileName(FunctionalRoofProfile profile){
@@ -153,32 +157,42 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
     if(recipe.features.size()>24)return "Too many building properties (maximum 24)";
     if(recipe.floors<1||recipe.floors>8||recipe.roomsX<1||recipe.roomsX>6||recipe.roomsZ<1||recipe.roomsZ>6||recipe.floors*recipe.roomsX*recipe.roomsZ>128)
         return "Invalid floors or room counts";
-    if(!recipe.footprint.empty()){
-        if(recipe.footprint.size()!=recipe.roomsZ)return "Footprint row count must match roomsZ";
-        for(const auto& row:recipe.footprint)
-            if(row.size()!=recipe.roomsX||row.find_first_not_of("01")!=std::string::npos)
-                return "Footprint rows require roomsX binary cells";
+    if(!recipe.floorFootprints.empty()&&(!recipe.footprint.empty()||recipe.floorFootprints.size()!=recipe.floors))
+        return "Use either one footprint or exactly one mask per floor";
+    const auto validMask=[&](const std::vector<std::string>& mask){
+        if(mask.size()!=recipe.roomsZ)return false;
+        for(const auto& row:mask)if(row.size()!=recipe.roomsX||row.find_first_not_of("01")!=std::string::npos)return false;
+        return true;
+    };
+    if(!recipe.footprint.empty()&&!validMask(recipe.footprint))return "Invalid footprint dimensions or cells";
+    for(const auto& mask:recipe.floorFootprints)if(!validMask(mask))return "Invalid floor footprint dimensions or cells";
+    if(!recipe.footprint.empty()||!recipe.floorFootprints.empty()){
+      const uint32_t masks=recipe.floorFootprints.empty()?1:recipe.floors;
+      for(uint32_t floor=0;floor<masks;++floor){
         std::vector<std::array<int,2>> queue;
         bool left=false,right=false,front=false,back=false;
         size_t count=0;
         for(int z=0;z<int(recipe.roomsZ);++z)for(int x=0;x<int(recipe.roomsX);++x)
-            if(functionalCell(recipe,x,z)){
+            if(functionalCell(recipe,x,z,floor)){
+                if(floor&&!functionalCell(recipe,x,z,floor-1))return "Upper footprint requires occupied support below";
                 if(queue.empty())queue.push_back({x,z});
                 ++count;left|=x==0;right|=x+1==int(recipe.roomsX);
                 front|=z==0;back|=z+1==int(recipe.roomsZ);
             }
-        if(!left||!right||!front||!back)return "Footprint must occupy all four envelope extrema";
+        if(queue.empty())return "Every storey needs an occupied cell";
+        if(floor==0&&(!left||!right||!front||!back))return "Ground footprint must occupy all four envelope extrema";
         std::array<bool,36> seen{};seen[size_t(queue[0][1])*6+size_t(queue[0][0])]=true;
         for(size_t i=0;i<queue.size();++i){
             const auto c=queue[i];
             for(auto d:std::array<std::array<int,2>,4>{{{1,0},{-1,0},{0,1},{0,-1}}}){
                 const int x=c[0]+d[0],z=c[1]+d[1];
-                if(functionalCell(recipe,x,z)&&!seen[size_t(z)*6+size_t(x)]){
+                if(functionalCell(recipe,x,z,floor)&&!seen[size_t(z)*6+size_t(x)]){
                     seen[size_t(z)*6+size_t(x)]=true;queue.push_back({x,z});
                 }
             }
         }
         if(queue.size()!=count)return "Footprint cells must be edge-connected";
+      }
         if(nonRectangularFootprint(recipe)&&recipe.roofProfile!=FunctionalRoofProfile::Flat)
             return "Custom footprints currently require a flat roof";
     }
@@ -276,17 +290,19 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
     };
     const bool shaped=nonRectangularFootprint(recipe);
     const float roomW=W/float(recipe.roomsX),roomD=D/float(recipe.roomsZ);
-    const auto occupiedCell=[&](int x,int z){return functionalCell(recipe,x,z);};
-    auto occupiedPoint=[&](float x,float z){
-        return occupiedCell(int(x/roomW),int(z/roomD));
+    const bool perFloor=!recipe.floorFootprints.empty();
+    const auto occupiedCell=[&](int x,int z,uint32_t floor=0){return functionalCell(recipe,x,z,floor);};
+    const auto coreCell=[&](int x,int z){return occupiedCell(x,z,recipe.floors-1);};
+    auto occupiedPoint=[&](float x,float z,uint32_t floor){
+        return occupiedCell(int(x/roomW),int(z/roomD),floor);
     };
-    auto footprintSlab=[&](BuildingGraphPart part,float y0,float y1){
+    auto footprintSlab=[&](BuildingGraphPart part,float y0,float y1,uint32_t floor){
         if(!shaped){solid(part,0,y0,0,W,y1,D);return;}
         for(uint32_t z=0;z<recipe.roomsZ;++z)for(uint32_t x=0;x<recipe.roomsX;++x)
-            if(occupiedCell(int(x),int(z)))
+            if(occupiedCell(int(x),int(z),floor))
                 solid(part,x*roomW,y0,z*roomD,(x+1)*roomW,y1,(z+1)*roomD);
     };
-    footprintSlab(BuildingGraphPart::Floor,0,floorTop);
+    footprintSlab(BuildingGraphPart::Floor,0,floorTop,0);
     // Inter-storey slabs are cut AFTER core placement, so neither their
     // visible mesh nor the conservative collider fills a staircase/lift shaft.
     struct Hole {
@@ -295,7 +311,7 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
         float start=0,end=0;
         bool placed=false;
     };
-    std::array<std::array<std::vector<Hole>,7>,4> walls;
+    std::array<std::array<std::array<std::vector<Hole>,7>,4>,8> walls;
     const BuildingFeature* roof=nullptr;
     uint32_t roofIndex=0;
     struct VerticalCore {BuildingFeatureKind kind;uint32_t feature;
@@ -313,7 +329,7 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
             if(shaped&&(f.position<0||f.positionZ<0)){
                 bool found=false;
                 for(uint32_t z=0;z<recipe.roomsZ&&!found;++z)for(uint32_t x=0;x<recipe.roomsX&&!found;++x){
-                    if(!occupiedCell(int(x),int(z)))continue;
+                    if(!coreCell(int(x),int(z)))continue;
                     const float tx=f.position>=0?f.position:(float(x)+.5f)*roomW;
                     const float tz=f.positionZ>=0?f.positionZ:(float(z)+.5f)*roomD;
                     if(tx-f.width*.5f<x*roomW+.35f||tx+f.width*.5f>(x+1)*roomW-.35f||
@@ -333,7 +349,7 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
             }
             const uint32_t ix=std::min(uint32_t(cx/roomW),recipe.roomsX-1);
             const uint32_t iz=std::min(uint32_t(cz/roomD),recipe.roomsZ-1);
-            if(!occupiedCell(int(ix),int(iz))||x0<float(ix)*roomW+0.35f||x1>float(ix+1)*roomW-0.35f||
+            if(!coreCell(int(ix),int(iz))||x0<float(ix)*roomW+0.35f||x1>float(ix+1)*roomW-0.35f||
                z0<float(iz)*roomD+0.35f||z1>float(iz+1)*roomD-0.35f){
                 graph.error="Vertical core must fit inside one room without crossing partitions";
                 return graph;
@@ -350,11 +366,14 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
         const uint32_t side=uint32_t(f.side);
         const uint32_t outer=side==1?recipe.roomsZ:side==3?recipe.roomsX:0;
         const uint32_t line=f.wallLine<0?outer:uint32_t(f.wallLine);
-        auto& row=walls[side][line];
+        auto& row=walls[perFloor?f.floor:0][side][line];
         for(uint32_t j=0;j<f.count;++j)row.push_back({i,j,f});
     }
-    for(uint32_t side=0;side<4;++side)for(uint32_t line=0;line<=(side<2?recipe.roomsZ:recipe.roomsX);++line){
-        auto& row=walls[side][line];
+    for(uint32_t floor=0;floor<(perFloor?recipe.floors:1u);++floor)
+      for(uint32_t side=0;side<4;++side)for(uint32_t line=0;line<=(side<2?recipe.roomsZ:recipe.roomsX);++line){
+        auto& row=walls[floor][side][line];
+        const float wallBottom=perFloor?floorTop+storey*float(floor):floorTop;
+        const float wallTop=perFloor&&floor+1<recipe.floors?wallBottom+storey:H;
         const uint32_t normalCount=side<2?recipe.roomsZ:recipe.roomsX;
         const uint32_t outer=side==1||side==3?normalCount:0;
         const float plane=line==normalCount?(side<2?D:W):line*(side<2?roomD:roomW);
@@ -364,10 +383,10 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
         const float cell=side<2?roomW:roomD;
         for(uint32_t i=0;i<count;++i){
             const int l=int(line),j=int(i);
-            const bool active=side==0?occupiedCell(j,l)&&!occupiedCell(j,l-1):
-                side==1?occupiedCell(j,l-1)&&!occupiedCell(j,l):
-                side==2?occupiedCell(l,j)&&!occupiedCell(l-1,j):
-                        occupiedCell(l-1,j)&&!occupiedCell(l,j);
+            const bool active=side==0?occupiedCell(j,l,floor)&&!occupiedCell(j,l-1,floor):
+                side==1?occupiedCell(j,l-1,floor)&&!occupiedCell(j,l,floor):
+                side==2?occupiedCell(l,j,floor)&&!occupiedCell(l-1,j,floor):
+                        occupiedCell(l-1,j,floor)&&!occupiedCell(l,j,floor);
             if(!active)continue;
             const float a=i*cell,b=(i+1==count)?length:(i+1)*cell;
             if(!spans.empty()&&std::abs(spans.back()[1]-a)<.001f)spans.back()[1]=b;
@@ -475,13 +494,14 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
         };
         float cursor=0.f;
         for(const auto& hole:row){
-            wallSection(BuildingGraphPart::Wall,cursor,hole.start,floorTop,H);
+            wallSection(BuildingGraphPart::Wall,cursor,hole.start,wallBottom,wallTop);
             const bool window=hole.value.kind==BuildingFeatureKind::Window;
             const float bottom=window?floorTop+storey*float(hole.value.floor)+
                 (hole.value.floor?slabThick:0.f)+hole.value.sill:floorTop;
             const float top=bottom+hole.value.height;
-            if(window)wallSection(BuildingGraphPart::Wall,hole.start,hole.end,floorTop,bottom);
-            wallSection(BuildingGraphPart::Wall,hole.start,hole.end,top,H);
+            if(top+.15f>wallTop+.0001f){graph.error="Opening frame exceeds its storey wall";return graph;}
+            if(window)wallSection(BuildingGraphPart::Wall,hole.start,hole.end,wallBottom,bottom);
+            wallSection(BuildingGraphPart::Wall,hole.start,hole.end,top,wallTop);
             constexpr float frame=0.14f;
             wallSection(BuildingGraphPart::Trim,hole.start-frame,hole.start,bottom,top,hole.feature);
             wallSection(BuildingGraphPart::Trim,hole.end,hole.end+frame,bottom,top,hole.feature);
@@ -509,7 +529,7 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
                 hole.value.width,hole.value.height,0.f,hole.value.open,plane});
             cursor=hole.end;
         }
-        wallSection(BuildingGraphPart::Wall,cursor,length,floorTop,H);
+        wallSection(BuildingGraphPart::Wall,cursor,length,wallBottom,wallTop);
     }
     // A room is an accessible rectangular cell, not merely a decorative
     // rectangle. Real internal partitions are segmented around each opening.
@@ -525,10 +545,10 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
         const float ceiling=std::min(H-roofThickness,level+storey);
         const float lintel=std::min(bottom+2.2f,ceiling-0.2f);
         for(uint32_t z=0;z<recipe.roomsZ;++z)for(uint32_t x=0;x<recipe.roomsX;++x)
-            if(occupiedCell(int(x),int(z)))graph.rooms.push_back({roomId(f,x,z),f,x,z,float(x)*cellW,bottom,
+            if(occupiedCell(int(x),int(z),f))graph.rooms.push_back({roomId(f,x,z),f,x,z,float(x)*cellW,bottom,
                 float(z)*cellD,float(x+1)*cellW,ceiling,float(z+1)*cellD});
         for(uint32_t x=1;x<recipe.roomsX;++x)for(uint32_t z=0;z<recipe.roomsZ;++z){
-            if(!occupiedCell(int(x)-1,int(z))||!occupiedCell(int(x),int(z)))continue;
+            if(!occupiedCell(int(x)-1,int(z),f)||!occupiedCell(int(x),int(z),f))continue;
             const float at=float(x)*cellW,mid=(float(z)+0.5f)*cellD;
             const float a=mid-0.6f,c=mid+0.6f;
             solid(BuildingGraphPart::Partition,at-0.12f,bottom,float(z)*cellD,
@@ -542,7 +562,7 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
                 roomId(f,x,z),f,at,bottom,mid,1.2f,lintel-bottom});
         }
         for(uint32_t z=1;z<recipe.roomsZ;++z)for(uint32_t x=0;x<recipe.roomsX;++x){
-            if(!occupiedCell(int(x),int(z)-1)||!occupiedCell(int(x),int(z)))continue;
+            if(!occupiedCell(int(x),int(z)-1,f)||!occupiedCell(int(x),int(z),f))continue;
             const float at=float(z)*cellD,mid=(float(x)+0.5f)*cellW;
             const float a=mid-0.6f,c=mid+0.6f;
             solid(BuildingGraphPart::Partition,float(x)*cellW,bottom,at-0.12f,
@@ -601,8 +621,10 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
             bool hole=false;
             for(const auto& core:cores)
                 if(mx>core.x0&&mx<core.x1&&mz>core.z0&&mz<core.z1){hole=true;break;}
-            if(!hole&&(!shaped||occupiedPoint(mx,mz)))solid(BuildingGraphPart::Floor,xs[ix-1],y,zs[iz-1],
+            if(!hole&&(!shaped||occupiedPoint(mx,mz,floor)))solid(BuildingGraphPart::Floor,xs[ix-1],y,zs[iz-1],
                            xs[ix],y+slabThick,zs[iz]);
+            else if(perFloor&&occupiedPoint(mx,mz,floor-1)&&!occupiedPoint(mx,mz,floor))
+                solid(BuildingGraphPart::Roof,xs[ix-1],y,zs[iz-1],xs[ix],y+slabThick,zs[iz]);
         }
     }
     // Model two opposite stairs flights with a turn landing. Treads are
@@ -670,7 +692,7 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
     }
     const float roofBase=H-roofThickness;
     if(!roof){
-        footprintSlab(BuildingGraphPart::Roof,roofBase,H);
+        footprintSlab(BuildingGraphPart::Roof,roofBase,H,recipe.floors-1);
         const auto profile=recipe.roofProfile;
         if(profile==FunctionalRoofProfile::Terrace||profile==FunctionalRoofProfile::Pagoda){
             const int levels=profile==FunctionalRoofProfile::Pagoda?3:4;

@@ -34,6 +34,7 @@ struct RuntimeBuildingRequest {
     float roofRise=0.f;
     uint32_t floors=1,roomsX=1,roomsZ=1;
     std::vector<std::string> footprint;
+    std::vector<std::vector<std::string>> floorFootprints;
 };
 
 enum class RuntimeBuildingError : uint8_t {
@@ -143,7 +144,7 @@ public:
             recipe.features=request.features;
             recipe.roofProfile=request.roofProfile;recipe.roofRise=request.roofRise;
             recipe.floors=request.floors;recipe.roomsX=request.roomsX;recipe.roomsZ=request.roomsZ;
-            recipe.footprint=request.footprint;
+            recipe.footprint=request.footprint;recipe.floorFootprints=request.floorFootprints;
             return generateRecipe(request.style,recipe,request.origin,request.yaw);
         }
         const auto* kind=it->second.structureKind(request.function);
