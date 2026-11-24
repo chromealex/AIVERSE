@@ -66,3 +66,43 @@ Work on a separate branch and take **one** area at a time. Start with an ECS reg
 - Existing external project-native modules and legacy scripts were examined during the 2026-11-23 source audit. The source-specific inventory and risks are recorded in that stage's handoff, not as runtime dependencies.
 
 No compilation or integration tests were executed in this planning checkpoint. The acceptance criteria above are requirements, not results.
+
+## Source implementation continuation — 2026-11-24 (features first)
+
+W1.27 integrated the Open World and Studio branches with the pinned main base.
+The owner explicitly deferred acceptance until the remaining features are
+implemented. Keep the draft PR and all capabilities unverified. Do not confuse
+implemented persistence sources with complete OW-01 or complete Open World.
+
+W1.28 adds shared decision-cadence LOD (HOT/WARM/COLD), actual conservative
+ActorHost bot-decision integration, reused population slice arithmetic,
+configuration authoring through Workspace/MCP and Studio, and derived counters.
+Physics and authoritative state updates remain full-rate. Actual virtualized
+actor/vehicle residency, durable cold advancement and wake admission remain
+unimplemented for the actor persistence adapter.
+
+### Feature-first continuation queue
+
+- OW-01 next: safe explicit cold/absent lifecycle, persisted reduced simulation
+  for eligible NPC/vehicle groups, references and ownership across wake/eviction.
+  Preserve the existing cold store and canonical traffic population owner.
+- OW-02: real tiled navigation residency, cross-region portals and incremental
+  obstruction/link invalidation; consume existing navigation and collision APIs.
+- OW-03: extend the existing lane/junction/traffic owner with lane changing,
+  overtaking, multilevel routing, parking and emergency/public transport policies.
+- OW-04: extend existing persistent citizen/commute logic with needs, errands,
+  families, visits, workplaces and stable identity/reification.
+- OW-05: expand existing incident, witness, service and custody owners with
+  evidence, search/escalation, pursuit, arrest and transport.
+- OW-06/07: composable character traversal, cover and vehicle control/contact,
+  damage and repair; reuse shared locomotion, MotionWeave, vehicle and physics owners.
+- OW-08/09: interior portals and room occupancy, mission/cinematic coordination.
+- OW-10/11: live diagnostics and authoring, city services, reservation and jobs.
+- OW-12–16: VIVID/MotionWeave, PHYSIS/NEREID/TerraWeave, PRISMA/SpectraFX/audio,
+  command UI/phone/map, scalable authoritative network operation.
+
+The detailed acceptance criteria in the table above remain binding. Work on one
+bounded capability stage at a time; audit existing owners and external GTA2
+generic policy before adding a new system. Do not launch a separate genre runtime,
+import project-specific assets, mark W1 core, merge main, or publish success
+claims before the deferred merged-tree Mac gate.
