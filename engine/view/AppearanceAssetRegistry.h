@@ -6,7 +6,7 @@
 #include "ModelPublicationEpoch.h"
 #include "engine/render/RenderDeviceLifetime.h"
 #include "engine/render/ModelReadLease.h"
-#include "engine/render/graph/TextureGraphMaterialBinding.h"
+#include "engine/render/graph/TextureGraphGpuTextureTransfer.h"
 #include <algorithm>
 #include <cstdint>
 #include <cmath>
@@ -541,6 +541,49 @@ public:
             const render::texture_graph::Program& program,
             const std::vector<render::Image>& images,
             std::string_view generation,std::string* error=nullptr) {
+        return publishTextureGraphMaterialImpl(key,expectedVersion,expectedModelPublication,materialIndex,
+            model,device,lease,rollback,program,[&](auto& transaction,const render::Material& base){
+                auto plan=render::texture_graph::prepareMaterialImages(program,images,generation);
+                return render::texture_graph::stageMaterialImages(transaction,model,base,std::move(plan));
+            },error);
+    }
+    // Same immutable publication contract for completed GPU copies. Native
+    // caller owns the graph request and confirms output acceptance. No
+    // automatic CPU upload, raw-handle RPC, or change to host model ownership.
+    bool publishGpuTextureGraphMaterial(const std::string& key,uint64_t expectedVersion,
+            uint64_t expectedModelPublication,size_t materialIndex,
+            render::Model& model,gfx::Device& device,
+            const render::RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,
+            const render::texture_graph::Program& program,
+            std::span<render::texture_graph::GraphGpuTextureCopy* const> candidates,
+            std::string_view generation,bool acceptedByGraphOwner,std::string* error=nullptr) {
+        return publishTextureGraphMaterialImpl(key,expectedVersion,expectedModelPublication,materialIndex,
+            model,device,lease,rollback,program,[&](auto& transaction,const render::Material& base){
+                return render::texture_graph::stageCompletedGraphGpuTextures(transaction,model,base,
+                    program,generation,candidates,device,acceptedByGraphOwner);
+            },error);
+    }
+
+    void erase(const std::string& key) {
+        assets_.erase(key);
+        dirty_.erase(key);
+        dirtyGraph_.erase(key);
+        dirtyModel_.erase(key);
+    }
+    void clear() {
+        assets_.clear();dirty_.clear();dirtyGraph_.clear();dirtyModel_.clear();
+        // Serial counters intentionally survive clear(), preventing an old
+        // animated source from aliasing a new generation in a live View.
+    }
+private:
+    template<class Stage>
+    bool publishTextureGraphMaterialImpl(const std::string& key,uint64_t expectedVersion,
+            uint64_t expectedModelPublication,size_t materialIndex,
+            render::Model& model,gfx::Device& device,
+            const render::RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,
+            const render::texture_graph::Program& program,Stage&& stage,std::string* error) {
         if(error)error->clear();
         try {
             const auto it=assets_.find(key);
@@ -555,18 +598,23 @@ public:
                 throw std::runtime_error("appearance graphics owner unavailable");
             if(versionSerial_==std::numeric_limits<uint64_t>::max())
                 throw std::overflow_error("appearance version overflow");
-            auto plan=render::texture_graph::prepareMaterialImages(program,images,generation);
+            size_t count=0;
+            for(const auto& [name,node]:program.outputs){
+                (void)node;(void)render::texture_graph::outputKind(name);
+                if(render::texture_graph::materialSlot(name))++count;
+            }
+            if(!count||count>6)throw std::invalid_argument("invalid bindable graph output count");
             size_t retained=0;
             for(const auto& image:model.images)
                 if(image.name.rfind("#texture-graph/",0)==0)++retained;
-            if(retained>maxProceduralImages||plan.entries.size()>maxProceduralImages-retained)
+            if(retained>maxProceduralImages||count>maxProceduralImages-retained)
                 throw std::runtime_error("procedural image budget exhausted; retire/reload Model through owner");
             // Preallocate the replacement snapshot before GPU allocation.
             auto next=std::make_shared<Asset>(*old);
             next->version=versionSerial_+1;
             render::ModelImageUploadTransaction transaction(device,rollback,lease);
-            next->materials[materialIndex]=render::texture_graph::stageMaterialImages(
-                transaction,model,old->materials[materialIndex],std::move(plan));
+            next->materials[materialIndex]=stage(transaction,old->materials[materialIndex]);
+            if(transaction.pendingImages()!=count)throw std::logic_error("incomplete graph image transaction");
             if(!lease.validFor(device)||!device.gpuHealthy())
                 throw std::runtime_error("appearance graphics owner lost during staging");
             // No external callbacks between the image commit and publishing
@@ -582,18 +630,6 @@ public:
         }
     }
 
-    void erase(const std::string& key) {
-        assets_.erase(key);
-        dirty_.erase(key);
-        dirtyGraph_.erase(key);
-        dirtyModel_.erase(key);
-    }
-    void clear() {
-        assets_.clear();dirty_.clear();dirtyGraph_.clear();dirtyModel_.clear();
-        // Serial counters intentionally survive clear(), preventing an old
-        // animated source from aliasing a new generation in a live View.
-    }
-private:
     // Mutation is confined to the owning presentation/render thread. Stable
     // shared snapshots may be read by consumers that hold their own handles.
     std::unordered_map<std::string,Snapshot> assets_;
