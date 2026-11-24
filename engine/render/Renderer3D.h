@@ -753,6 +753,15 @@ public:
     // before starting another draw submission; no GPU resources are owned here.
     void invalidateStaticModelCache(uint64_t persistentId);
     void invalidateModelCachesFor(const Model* model);
+    // Known renderer-owned CPU roots. Never dereference a borrowed
+    // previous-scene Material pointer. False means unresolved replay/raw
+    // table references, so a complete native root certificate is forbidden.
+    // Returned spans are valid only until the next renderer mutation.
+    bool appendGraphImageRoots(const Model& model,std::vector<std::span<const Material>>& roots) const;
+    // Explicit host contract: final CPU submission and all replay/provenance
+    // consumers of the scene are finished. Invalidates the old scene only,
+    // never destroys GPU resources or waits for GPU completion.
+    bool detachCompletedGraphImageReplay() noexcept;
     // Hierarchical wind masks (WindRigShader.h). Scene wind drives every
     // rigged draw that does not supply its own vertexParameters; the debug
     // view (editors only) recolours rigged materials by part/depth/weight.
@@ -1644,7 +1653,7 @@ public:
 private:
     wind::SceneWind sceneWind_{};
     wind::WindDebugView windDebugView_ = wind::WindDebugView::Off;
-    struct WindDebugMaterials { uint64_t revision = 0; size_t count = 0; std::vector<Material> materials; };
+    struct WindDebugMaterials { const Model* model=nullptr; uint64_t revision = 0; size_t count = 0; std::vector<Material> materials; };
     std::unordered_map<const void*, WindDebugMaterials> windDebugMaterials_;
     bool applyWindRig(const ModelDraw& d);
     struct DrawItem {

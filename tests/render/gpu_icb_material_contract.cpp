@@ -43,6 +43,8 @@ int main() {
     render::GpuMaterialResourceBinding snapshot;
     check(table.resolve(ticket,snapshot) && snapshot==a,"snapshot round trip");
     check(table.matches(ticket,a),"exact staged match");
+    check(table.referencesTexture({10})&&table.referencesTexture({30})&&table.referencesTexture({40})&&table.referencesTexture({41}),"raw replay texture roots");
+    check(!table.referencesTexture({})&&!table.referencesTexture({999}),"invalid or unrelated handle not a root");
     auto changed=a;
     changed.pbrU2[7]+=0.25f;
     check(!table.matches(ticket,changed),"changed U2 rejects old ticket");
@@ -74,6 +76,7 @@ int main() {
     check(fresh.valid() && fresh.generation!=ticket.generation,"new generation ticket");
     table.reset();
     check(!table.matches(fresh,a),"shutdown resets tickets");
+    check(!table.referencesTexture({10}),"detached generation has no raw texture roots");
 
     gfx::GpuIcbVirtualMaterial material;
     material.physicalAtlas={1};material.pageTable={2};

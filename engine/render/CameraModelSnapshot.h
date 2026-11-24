@@ -38,6 +38,20 @@ public:
         entries_.clear();prepared_.clear();geometry_.clear();geometryMeshes_.clear();
         preparedDrawIds_.clear();dropped_=0;
     }
+    // Inspect owned material copies, including pre-LOD packets. Prepared
+    // attachments still borrow their source material vector; never dereference
+    // it here. The owner must detach that replay or certify it separately.
+    bool appendGraphImageRoots(const Model& model,std::vector<std::span<const Material>>& roots)const{
+        for(const auto& entry:prepared_)
+            for(const auto& attachment:entry.object.attachments)
+                if(attachment.draw.model==&model&&attachment.draw.materials)return false;
+        auto add=[&](const Entry& entry){
+            if(entry.draw.model==&model&&entry.hasMaterials)roots.emplace_back(entry.materials);
+        };
+        for(const auto& entry:entries_)add(entry);
+        for(const auto& entry:prepared_)add(entry.source);
+        return true;
+    }
     size_t size()const{return entries_.size();}
     size_t dropped()const{return dropped_;}
     size_t preparedCount()const{return prepared_.size();}

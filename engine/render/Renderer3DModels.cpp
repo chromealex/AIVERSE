@@ -1155,11 +1155,12 @@ bool Renderer3D::applyWindRig(const ModelDraw& d) {
     if (debug) {
         const void* key = d.materials ? static_cast<const void*>(d.materials) : static_cast<const void*>(d.model);
         auto& cached = windDebugMaterials_[key];
-        if (cached.revision != d.model->materialRevision || cached.count != source.size() ||
+        if (cached.model != d.model || cached.revision != d.model->materialRevision || cached.count != source.size() ||
             cached.materials.size() != source.size()) {
             cached.materials = source;
             const auto program = wind::windRigDebugGraph(windDebugView_);
             for (auto& mat : cached.materials) if (mat.shaderGraph == rigGraph) mat.shaderGraph = program;
+            cached.model = d.model;
             cached.revision = d.model->materialRevision;
             cached.count = source.size();
         }

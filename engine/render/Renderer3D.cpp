@@ -366,7 +366,9 @@ void Renderer3D::invalidateSharedMaterialState(
 
 void Renderer3D::invalidateModelCachesFor(const Model* model) {
     if (!model) return;
-    windDebugMaterials_.erase(model);
+    for(auto it=windDebugMaterials_.begin();it!=windDebugMaterials_.end();){
+        if(it->first==model||it->second.model==model)it=windDebugMaterials_.erase(it);else ++it;
+    }
     for (auto it = staticMaterialOwners_.begin(); it != staticMaterialOwners_.end();) {
         if (it->first.model == model) {
             staticMaterialOwnerBytes_ -= it->second.hashes.size() * sizeof(uint64_t);
@@ -393,6 +395,38 @@ void Renderer3D::invalidateModelCachesFor(const Model* model) {
     // A mixed-model command layout borrows every source Model pointer.
     // Asset unload must not leave any of those pointers in a layout cache.
     retireIndirectLayoutsFor(model);
+}
+
+bool Renderer3D::appendGraphImageRoots(const Model& model,std::vector<std::span<const Material>>& roots)const{
+    // Capture callbacks may retain additional external roots. Do not infer
+    // that they are finished merely because there are no current items.
+    if(capture_||modelPacketTap_||geometryPacketTap_)return false;
+    for(const auto& item:modelItems_)if(item.model==&model)return false;
+    for(const auto& command:modelSubmitted_)if(command.source.model==&model)return false;
+    for(const auto& image:model.images){
+        if(image.proceduralGraphImage&&!image.proceduralGraphRetired&&image.tex.valid()&&
+           gpuMaterialResources_.referencesTexture(image.tex))return false;
+    }
+    for(const auto& [id,packet]:staticRenderPackets_){(void)id;
+        if(packet.draw.model==&model&&!packet.materialsSnapshot.empty())roots.emplace_back(packet.materialsSnapshot);
+    }
+    for(const auto& [key,entry]:windDebugMaterials_){(void)key;
+        if(entry.model==&model&&!entry.materials.empty())roots.emplace_back(entry.materials);
+    }
+    return true;
+}
+bool Renderer3D::detachCompletedGraphImageReplay()noexcept{
+    if(capture_||modelPacketTap_||geometryPacketTap_)return false;
+    // This discards CPU replay/diagnostic references, not submitted GPU work.
+    // The existing image retirement queue still fences all previous use.
+    discardSceneSubmission();
+    customMaterialReceiver_.clear();customSurfaceReceiver_.clear();
+    modelSubmitted_.clear();trackedModels_.fill(nullptr);trackedModelCount_=0;
+    modelSubmissionTruncated_=true;modelSubmissionMainEncoded_=false;
+    gpuMaterialResources_.reset();gpuEncodedBatches_.clear();gpuEncodedCovered_.clear();
+    gpuModelCommandsReady_=false;gpuBatchPlan_.signature.clear();gpuBatchPlan_.groups.clear();
+    lastItem_=nullptr;
+    return true;
 }
 
 void Renderer3D::setPresentationTime(float seconds) {

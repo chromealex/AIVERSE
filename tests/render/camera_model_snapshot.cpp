@@ -23,6 +23,9 @@ int main(){
     nodes.clear();pose.clear();materials.clear();nodeMaterials.clear();
     draw.persistentId=999;
     size_t visits=0;
+    std::vector<std::span<const Material>> roots;
+    AIVERSE_TEST_CHECK(snapshot.appendGraphImageRoots(model,roots)&&roots.size()==1&&roots.front().size()==1);
+    Model unrelated;roots.clear();AIVERSE_TEST_CHECK(snapshot.appendGraphImageRoots(unrelated,roots)&&roots.empty());
     snapshot.forEach([&](const ModelDraw& captured){
         ++visits;
         AIVERSE_TEST_CHECK(captured.persistentId==73);
@@ -78,6 +81,10 @@ int main(){
     AIVERSE_TEST_CHECK(fallbacks==1 && preparedCount==1);
     mixed.clear();
     AIVERSE_TEST_CHECK(mixed.size()==0 && mixed.preparedCount()==0);
+    roots.clear();AIVERSE_TEST_CHECK(mixed.appendGraphImageRoots(model,roots)&&roots.empty());
+    aiverse::view::ModelAttachment borrowed;borrowed.draw.model=&model;borrowed.draw.materials=&preparedMaterial;
+    prepared.attachments.push_back(borrowed);mixed.recordPrepared(visual,prepared);
+    AIVERSE_TEST_CHECK(!mixed.appendGraphImageRoots(model,roots));mixed.clear();prepared.attachments.clear();
 
     // Geometry packets are value-owned, except for the host-owned Mesh.
     // All primitive coordinates and draw parameters survive source mutation.
