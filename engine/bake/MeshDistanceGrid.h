@@ -19,9 +19,10 @@ struct MeshDistanceGrid {
     uint32_t dimension=0;
     std::vector<float> samples; // x-fastest
 };
-inline constexpr uint32_t kMeshDistanceMaxDimension=32;
+inline constexpr uint32_t kMeshDistanceMaxDimension=128;
 inline constexpr uint32_t kMeshDistanceMaxTriangles=32768;
-inline constexpr uint64_t kMeshDistanceMaxWork=64ull*1024*1024;
+inline constexpr uint64_t kMeshDistanceMaxWork=256ull*1024*1024;
+inline constexpr uint64_t kMeshDistanceInlineWork=64ull*1024*1024;
 // Closed consistently wound triangle surfaces only. Exact seam weld; reject
 // open/nonmanifold edges and degenerate triangles. Does not prove absence of
 // self intersections or nonmanifold vertices. Nonzero winding defines solid.
@@ -31,9 +32,9 @@ inline bool bakeMeshDistanceGrid(const std::vector<render::float3>& positions,
         const render::mat4& transform,MeshDistanceGrid& output,std::string& error,
         MeshDistanceQueryStats* stats=nullptr,uint64_t workLimit=kMeshDistanceMaxWork){
     using namespace distance_detail;
-    QueryWork work;work.limit=std::min(workLimit,kMeshDistanceMaxWork);
+    QueryWork work;work.limit=std::min(workLimit,dimension<=32?kMeshDistanceInlineWork:kMeshDistanceMaxWork);
     auto fail=[&](const char* why){error=why;if(stats)*stats=work.stats;return false;};
-    if(dimension<4||dimension>kMeshDistanceMaxDimension)return fail("SDF bake dimension must be 4..32");
+    if(dimension<4||dimension>kMeshDistanceMaxDimension)return fail("SDF bake dimension must be 4..128");
     const size_t count=indices.size()/3;
     const uint64_t nodes=uint64_t(dimension)*dimension*dimension;
     if(indices.empty()||indices.size()%3||count>kMeshDistanceMaxTriangles||

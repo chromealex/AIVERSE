@@ -25,7 +25,7 @@ inline bool bakeStaticSdfModel(const std::string& path,const render::FileReader&
     return bakeStaticSdf(mesh,dimension,transform,out,error,stats);
 }
 inline Json staticSdfToJson(const StaticSdfVolume& sdf){
-    if(!sdf.dimension||!sdf.valid())return {};
+    if(!sdf.dimension||sdf.dimension>kStaticSdfInlineMaxDimension||!sdf.valid())return {};
     auto j=Json::object(),origin=Json::array(),samples=Json::array();
     for(float x:{sdf.origin.x,sdf.origin.y,sdf.origin.z})origin.push(Json::number(double(x),9));
     for(float x:sdf.samples)samples.push(Json::number(double(x),9));

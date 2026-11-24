@@ -175,6 +175,7 @@ class ComputeParticles final {
 public:
     uint32_t allocatedCapacity() const {return physicalCapacity_?physicalCapacity_:desc_.capacity;}
     uint32_t capacityLimit() const {return desc_.capacity;}
+    bool sameStaticSdf(const fx::StaticSdfVolume& sdf)const{return desc_.staticSdf.sameSamples(sdf);}
     bool demandGrowthActive() const {return gpuActive()&&gpuDemandGrowth_;}
     bool proceduralBillboardsActive() const {return gpuActive()&&proceduralActive_;}
     ComputeParticles() = default;

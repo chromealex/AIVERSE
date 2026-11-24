@@ -1,3 +1,4 @@
+#include <cstring>
 #include "SpectraGpuPoolWorld.h"
 #include "SpectraParticleProgram.h"
 #include <algorithm>
@@ -90,10 +91,20 @@ void GpuPoolWorld::shutdown() {
 std::string GpuPoolWorld::groupKey(const fx::EffectDef& effect,
                                   const GraphRuntimeOptions& options,
                                   uint32_t capacity) {
-    const std::string serialized=fx::effectToJson(effect).dump(-1);
+    const std::string serialized=fx::effectToJson(effect,false).dump(-1);
+    // A short identity avoids large JSON/CPU key storage. Exact sample
+    // equality is checked before accepting any matching group key.
+    uint64_t sdfHash=14695981039346656037ull;
+    if(effect.emitters.size()==1){
+        const auto& sdf=effect.emitters[0].collision.staticSdf;
+        const auto mix=[&](float value){uint32_t word;std::memcpy(&word,&value,sizeof(word));sdfHash=(sdfHash^word)*1099511628211ull;};
+        sdfHash=(sdfHash^sdf.dimension)*1099511628211ull;
+        mix(sdf.origin.x);mix(sdf.origin.y);mix(sdf.origin.z);mix(sdf.spacing);
+        for(float value:sdf.samples)mix(value);
+    }
     // Length prefix prevents ambiguous keys if authored shader graphs contain
     // textual substrings that resemble the policy suffix.
-    return std::to_string(serialized.size())+":"+serialized+
+    return std::to_string(serialized.size())+":"+serialized+"|sdf="+std::to_string(sdfHash)+
         "|capacity="+std::to_string(capacity)+
         "|quality="+std::to_string(unsigned(options.quality))+
         "|vm="+std::to_string(unsigned(options.gpuProgram))+
@@ -213,7 +224,8 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
     if(wantsGpu && eligible.eligible && gpuAvailable) {
         const std::string key=groupKey(effect,actual,actual.capacity);
         for(size_t i=0;i<gpuGroups_.size();++i)
-            if(gpuGroups_[i].live() && gpuGroups_[i].key==key) {
+            if(gpuGroups_[i].live() && gpuGroups_[i].key==key &&
+               gpuGroups_[i].particles->sameStaticSdf(eligible.gpu.staticSdf)) {
                 next.gpu=true;next.gpuIndex=i;
                 next.revision=nextBindingRevision_++;
                 bindings_[name]=std::move(next);

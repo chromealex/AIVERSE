@@ -194,6 +194,7 @@ struct FxCollision {
     float staticSphereRadius=0;                // 0 disables analytic SDF obstacle
     float3 staticSphereCenter{0,0,0};           // particle simulation space, not emitter space
     StaticSdfVolume staticSdf;
+    std::string staticSdfAsset; // resolved source path; required for large-volume JSON export
 };
 struct FxNoise {
     FxRange strength{0, 0};                     // over the lifetime
@@ -350,7 +351,9 @@ struct EffectDef {
 bool parseEffect(const Json& j, const std::string& where, EffectDef& out, std::vector<std::string>& errors,
                  const SdfResourceReader& sdfReader = {});
 // Writes only the fields that differ from the defaults, in a stable order (editor save, diffs).
-Json effectToJson(const EffectDef& def);
+// includeSdf=false is internal structural comparison only, not a save format.
+// High-resolution volumes require a valid source path; otherwise export throws.
+Json effectToJson(const EffectDef& def,bool includeSdf=true);
 
 bool parseColor(const Json& j, float4& out);  // "#rrggbb", "#rrggbbaa" or [r, g, b(, a)] in 0..1
 std::string colorToHex(float4 c);

@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdio>
 #include <limits>
+#include <stdexcept>
 
 namespace aiverse::fx {
 
@@ -455,6 +456,7 @@ void parseModules(const Json& e, Reader& r, EmitterDef& d, const SdfResourceRead
                     if(!validSdfResourcePath(path))sr.fail("staticSdf","unsafe SDF resource path");
                     else if(!sdfReader)sr.fail("staticSdf","external SDF requires a resource reader");
                     else if(!loadSdfBinary(path,sdfReader,sdf,error))sr.fail("staticSdf",error);
+                    else col.staticSdfAsset=path;
                 }else if(!grid.isObject())sr.fail("staticSdf","expected object or content .sdfbin path");
                 else {
                     unknownKeys(grid,{"origin","spacing","dimension","samples"},sr.where,r.errors,sr.ok);
@@ -462,11 +464,11 @@ void parseModules(const Json& e, Reader& r, EmitterDef& d, const SdfResourceRead
                     sr.number("spacing",sdf.spacing,0.01f,1000.f);
                     const auto& dim=grid["dimension"];
                     const auto n=dim.integer(-1);
-                    if(!dim.isNumber()||n<3||n>kStaticSdfMaxDimension||dim.toDouble()!=double(n))
-                        sr.fail("dimension","expected integer 3..32");
+                    if(!dim.isNumber()||n<3||n>kStaticSdfInlineMaxDimension||dim.toDouble()!=double(n))
+                        sr.fail("dimension","inline SDF requires integer 3..32; link a .sdfbin for higher resolution");
                     else sdf.dimension=uint32_t(n);
                     const auto& samples=grid["samples"];
-                    if(!samples.isArray()||samples.size()>kStaticSdfMaxSamples||
+                    if(!samples.isArray()||samples.size()>kStaticSdfInlineMaxSamples||
                        samples.size()!=size_t(sdf.dimension)*sdf.dimension*sdf.dimension)
                         sr.fail("samples","expected dimension cubed distances");
                     else for(size_t i=0;i<samples.size();++i) {
@@ -712,7 +714,7 @@ void bySpeedJ(Json& e, const char* key, const char* valueKey, const FxBySpeed& b
     e.set(key, o);
 }
 
-void modulesToJson(const EmitterDef& d, Json& e) {
+void modulesToJson(const EmitterDef& d, Json& e,bool includeSdf) {
     const EmitterDef base;
     if (!(d.aspect == base.aspect)) e.set("aspect", rangeJ(d.aspect));
     if (nonzero(d.offset)) e.set("offset", vecJ(d.offset));
@@ -783,7 +785,10 @@ void modulesToJson(const EmitterDef& d, Json& e) {
             o.set("staticSphereRadius",numJ(c.staticSphereRadius));
             o.set("staticSphereCenter",vecJ(c.staticSphereCenter));
         }
-        if(c.staticSdf.dimension) {
+        if(includeSdf&&c.staticSdf.dimension>kStaticSdfInlineMaxDimension) {
+            if(!validSdfResourcePath(c.staticSdfAsset))throw std::runtime_error("High-resolution SDF requires external asset export");
+            o.set("staticSdf",Json::string(c.staticSdfAsset));
+        }else if(includeSdf&&c.staticSdf.dimension) {
             Json grid=Json::object(),samples=Json::array();
             grid.set("origin",vecJ(c.staticSdf.origin));
             grid.set("spacing",numJ(c.staticSdf.spacing));
@@ -1003,6 +1008,12 @@ bool parseEffect(const Json& j, const std::string& where, EffectDef& out, std::v
                  const SdfResourceReader& sdfReader) {
     out = {};
     const size_t before = errors.size();
+    size_t remainingSdfBytes=kSdfEffectReadBudget;
+    SdfResourceReader boundedSdfReader;
+    if(sdfReader)boundedSdfReader=[&](const std::string& path,std::string& bytes){
+        if(!sdfReader(path,bytes)||bytes.size()>kSdfBinaryMaxBytes||bytes.size()>remainingSdfBytes)return false;
+        remainingSdfBytes-=bytes.size();return true;
+    };
     if (!j.isObject()) { errors.push_back(where + ": expected an object with \"emitters\""); return false; }
     for (auto& [k, v] : j.members())
         if (k != "emitters" && k != "comment" && k != "forceFields") errors.push_back(where + ": unknown field '" + k + "'");
@@ -1084,7 +1095,7 @@ bool parseEffect(const Json& j, const std::string& where, EffectDef& out, std::v
 
         if (e.has("sizeOverLife") && !keysIn(e["sizeOverLife"], d.sizeOverLife, 0, 1e6f)) r.fail("sizeOverLife", "expected [[t, k], ...]");
         if (e.has("color") && !colorKeys(e["color"], d.color)) r.fail("color", "expected \"#rrggbbaa\" or [[t, \"#rrggbbaa\"], ...]");
-        parseModules(e, r, d, sdfReader);
+        parseModules(e, r, d, boundedSdfReader);
         if (d.burst == 0 && d.bursts.empty() && !d.continuous()) r.fail("burst", "emitter creates no particles: set burst, bursts, rate or perMeter");
         if (d.rate.max > 0 && !d.loop && d.duration <= 0) r.fail("duration", "rate needs a duration (or \"loop\": true)");
         if (d.loop && !d.bursts.empty() && d.duration <= 0) r.fail("duration", "looping bursts repeat every \"duration\": set it");
@@ -1097,7 +1108,7 @@ bool parseEffect(const Json& j, const std::string& where, EffectDef& out, std::v
     return errors.size() == before;
 }
 
-Json effectToJson(const EffectDef& def) {
+Json effectToJson(const EffectDef& def,bool includeSdf) {
     const EmitterDef base;
     Json root = Json::object();
     Json list = Json::array();
@@ -1132,7 +1143,7 @@ Json effectToJson(const EffectDef& def) {
         e.set("sizeOverLife", keysJ(d.sizeOverLife));
         e.set("color", colorKeysJ(d.color));
         if (d.minQuality != base.minQuality) e.set("minQuality", Json::string(kQualityChoice[size_t(d.minQuality)]));
-        modulesToJson(d, e);
+        modulesToJson(d, e,includeSdf);
         list.push(e);
     }
     root.set("emitters", list);

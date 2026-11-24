@@ -70,6 +70,7 @@ GraphGpuEligibility inspectGraphGpuEligibility(
     const auto& collision=e.collision;
     const bool staticSphere=collision.enabled&&collision.staticSphereRadius>0;
     const bool staticSdf=collision.enabled&&collision.staticSdf.dimension>0;
+    if(!collision.staticSdf.valid())return reject("invalid static SDF volume");
     if(collision.enabled&&((staticSphere==staticSdf)||collision.ground||collision.scene||!collision.planes.empty()||
        collision.height!=0||collision.lifeLoss!=0||collision.minKillSpeed!=0||collision.maxKillSpeed!=0||
        !e.particleProgram.isNull()||e.drag.min!=0))
@@ -126,7 +127,7 @@ GraphGpuEligibility inspectGraphGpuEligibility(
     }
     fx::EffectDef limited;
     limited.emitters.push_back(std::move(supported));
-    if(!(fx::effectToJson(effect)==fx::effectToJson(limited)))
+    if(!(fx::effectToJson(effect,false)==fx::effectToJson(limited,false)))
         return reject("GPU v1 cannot preserve every emitter module; use the full CPU effect");
 
     result.gpu.burst=uint32_t(e.burst);
