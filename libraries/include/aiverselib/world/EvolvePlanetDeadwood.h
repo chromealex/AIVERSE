@@ -21,8 +21,7 @@ inline uint64_t planetDeadwoodTopology(const game::Surface& s){
 }
 inline void io(Archive& a,PlanetDeadwoodResource& r){
     a(r.topology,r.baselineNutrientsPermille,r.ledger);
-    if(!r.topology||r.baselineNutrientsPermille>1000||!r.ledger.water.empty()||
-       !r.ledger.microWater.empty())a.fail();
+    if(!r.topology||r.baselineNutrientsPermille>1000||!r.ledger.microWater.empty())a.fail();
 }
 inline bool initializePlanetDeadwood(World& world,const game::Surface& surface,uint32_t baseline=500){
     if(!surface.tab||baseline>1000||world.resourceConst<PlanetDeadwoodResource>()||
@@ -36,7 +35,7 @@ inline void registerPlanetDeadwoodPersistence(Simulation& sim){
 inline bool validPlanetDeadwood(const PlanetDeadwoodResource& r,const game::Surface& s){
     using namespace terraweave;
     if(r.topology!=planetDeadwoodTopology(s)||r.baselineNutrientsPermille>1000||
-       !r.ledger.water.empty()||!r.ledger.microWater.empty()||!deadwoodLedgerBalanced(r.ledger))return false;
+       !r.ledger.microWater.empty()||!deadwoodLedgerBalanced(r.ledger))return false;
     const auto validCell=[&](int64_t x,int64_t z){
         int b=-1,f=-1,i=-1,j=-1;
         return x>=0&&x<s.W&&z>=0&&z<s.H&&s.cellFace(int(z*s.W+x),b,f,i,j);
@@ -46,6 +45,7 @@ inline bool validPlanetDeadwood(const PlanetDeadwoodResource& r,const game::Surf
         if(log.xCm%stride||log.zCm%stride||!validCell(log.xCm/stride,log.zCm/stride))return false;
     }
     for(const auto& c:r.ledger.soil)if(!validCell(c.x,c.z))return false;
+    for(const auto& c:r.ledger.water)if(!validCell(c.x,c.z))return false;
     return true;
 }
 inline std::optional<std::pair<int64_t,int64_t>> planetDeadwoodAddress(

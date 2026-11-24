@@ -28,6 +28,7 @@
 #include "aiverselib/world/EvolvePlanetRootClimate.h"
 #include "aiverselib/world/EvolvePlanetRootSupport.h"
 #include "aiverselib/world/EvolvePlanetForestEcology.h"
+#include "aiverselib/world/EvolvePlanetNutrients.h"
 #include "aiverselib/world/PlanetPhysicalDelivery.h"
 #include "engine/game/PlanetTerrainWater.h"
 #include "engine/game/PlanetSeaVolume.h"
@@ -868,6 +869,50 @@ static void checkPlanetTerrainWater(){
     const auto dry=g::samplePlanetShore(ecs,raised,pos,Fixed{});
     AIVERSE_TEST_CHECK(dry&&dry->forcing.wetContactPermille==0);
     AIVERSE_TEST_CHECK(g::samplePlanetTerrainWater(ecs,surface,pos).submerged); // restored geometry
+}
+static void checkPlanetNutrients(){
+    using namespace terraweave;
+    namespace nw=aiverse::lib::nereid;
+    game::Surface surface;game::BodyDef body;body.id="terra";body.radius=64_fx;body.faceSize=8;
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    World ecs;TerraWeaveAuthorityResource roots;
+    AnchoredPlant tree;tree.anchor.speciesId=1;tree.anchor.plantKey=17;
+    tree.anchor.roots=defaultRootProfile(PlantHabit::Tree);
+    roots.rooted={tree};
+    ecs.setResource<TerraWeaveAuthorityResource>(roots);
+    ecs.setResource<evolve::PlanetRootDeliveryResource>();
+    const int cell=surface.gridCell(0,0,7,3),dest=surface.neighbor(cell,0);
+    int b=-1,f=-1,x=-1,y=-1;
+    AIVERSE_TEST_CHECK(surface.cellFace(dest,b,f,x,y)&&b==0&&f!=0);
+    std::vector<evolve::PlanetRootBinding> bindings{{{1,17},"terra",surface.cellCenter(cell)}};
+    AIVERSE_TEST_CHECK(evolve::setPlanetRootBindings(ecs,surface,bindings));
+    AIVERSE_TEST_CHECK(evolve::initializePlanetDeadwood(ecs,surface));
+    auto& ledger=ecs.resource<evolve::PlanetDeadwoodResource>()->ledger;
+    ledger.totalInitialUnits=1000;
+    ledger.soil.push_back({cell%surface.W,cell/surface.W,1000});
+    auto sea=ecs.create();
+    const auto up=surface.cellDir(cell),target=surface.cellDir(dest);
+    nw::WaterSphereComponent ocean;ocean.center=game::Surface::anchor(0);
+    ocean.surfaceRadius=70_fx;ocean.floorRadius=50_fx;ocean.currentSpeed=10_fx;
+    ocean.axis=nw::sphereCross(up,fxNormalize(target-up*target.dot(up)));
+    ecs.add<nw::WaterSphereComponent>(sea,ocean);
+    ForestNutrientCycleSettings cfg;cfg.intervalTicks=1;
+    const auto rain=[](std::string_view,Vec3){return evolve::PlanetNutrientWeather{1000,1000};};
+    const auto first=evolve::advancePlanetNutrients(ecs,surface,0,cfg,rain);
+    AIVERSE_TEST_CHECK(first&&first->absorbedUnits==2&&first->leachedUnits>0&&first->advectedUnits==0);
+    ecs.enableCowSnapshots();const World saved=ecs;
+    const auto second=evolve::advancePlanetNutrients(ecs,surface,1,cfg,rain);
+    AIVERSE_TEST_CHECK(second&&second->advectedUnits>0);
+    const auto& result=ecs.resourceConst<evolve::PlanetDeadwoodResource>()->ledger;
+    AIVERSE_TEST_CHECK(deadwoodLedgerBalanced(result));
+    AIVERSE_TEST_CHECK(std::any_of(result.water.begin(),result.water.end(),[&](const auto& c){
+        return c.x==dest%surface.W&&c.z==dest/surface.W&&c.dissolvedUnits>0;
+    }));
+    ecs=saved;
+    const auto retry=evolve::advancePlanetNutrients(ecs,surface,1,cfg,rain);
+    AIVERSE_TEST_CHECK(retry&&retry->advectedUnits==second->advectedUnits);
+    const auto duplicateSea=ecs.create();ecs.add<nw::WaterSphereComponent>(duplicateSea,ocean);
+    AIVERSE_TEST_CHECK(!evolve::advancePlanetNutrients(ecs,surface,2,cfg,rain));
 }
 static void checkPlanetDeadwood(){
     using namespace terraweave;
@@ -1859,6 +1904,7 @@ int main(){
     checkPlanetRootSupport();
     checkPlanetForestEcology();
     checkPlanetDeadwood();
+    checkPlanetNutrients();
     checkPlanetTerrainWater();
     checkPlanetBankErosion();
     checkPlanetSedimentTransport();
