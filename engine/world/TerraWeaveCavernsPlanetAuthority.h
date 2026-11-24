@@ -5,10 +5,6 @@
 namespace aiverse::terraweave::caverns {
 // Opt-in additional resource; flat world save layout remains unchanged.
 // The immutable chart is a recipe, not a transient camera transform.
-struct CavePlanetRegionResource {
-    uint32_t version=1;
-    CavePlanetAnchor anchor;
-};
 inline void io(Archive& a,CavePlanetRegionResource& r){
     a(r.version);
     if(r.version!=1){a.fail();return;}
@@ -24,17 +20,7 @@ inline bool sameCavePlanetAnchor(const CavePlanetAnchor& a,const CavePlanetAncho
     return a.bodyId==b.bodyId&&a.face==b.face&&a.a==b.a&&a.b==b.b&&a.halfExtentCm==b.halfExtentCm;
 }
 inline void validateCavePlanetVolume(const CavePlanetFrame& frame,const CaveVolumeSnapshot& snapshot){
-    const int64_t cap=frame.anchor().halfExtentCm;
-    if(snapshot.settings.minYcm< -cap||snapshot.settings.maxYcm>cap)
-        throw std::invalid_argument("Caverns planetary vertical recipe extent");
-    const auto inside=[&](PointCm p,int64_t r){
-        return r>0&&p.x>=-cap+r&&p.x<=cap-r&&p.y>=-cap+r&&p.y<=cap-r&&p.z>=-cap+r&&p.z<=cap-r;
-    };
-    for(const auto& s:snapshot.stamps)if(!inside(s.center,s.radiusCm))
-        throw std::invalid_argument("Caverns planetary stamp exceeds chart");
-    for(const auto& e:snapshot.entrances)
-        if(!inside({e.xCm,e.caveYcm,e.zCm},e.radiusCm)||!inside({e.xCm,e.surfaceYcm,e.zCm},e.radiusCm))
-            throw std::invalid_argument("Caverns planetary entrance exceeds chart");
+    validateCavePlanetBounds(frame.anchor(),snapshot);
 }
 inline Json cavePlanetAnchorToJson(const CavePlanetAnchor& anchor){
     Json out=Json::object();
