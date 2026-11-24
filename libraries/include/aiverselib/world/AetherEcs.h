@@ -4,6 +4,7 @@
 #include "engine/sim/Simulation.h"
 #include "WorldProcesses.h"
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -100,7 +101,10 @@ inline bool advance(World& world,std::uint32_t tick){
         [](Entity a,Entity b){return a.packed()<b.packed();});
     if(cells.empty())return true;
     std::map<std::uint64_t,std::size_t> indices;
-    std::vector<Mass> smoke,toxin,oxygen;
+    std::array<std::vector<Mass>,3> species;
+    auto& smoke=species[0];
+    auto& toxin=species[1];
+    auto& oxygen=species[2];
     std::vector<bool> enabled;
     smoke.reserve(cells.size());toxin.reserve(cells.size());
     oxygen.reserve(cells.size());enabled.reserve(cells.size());
@@ -136,9 +140,10 @@ inline bool advance(World& world,std::uint32_t tick){
         flows.push_back({a->second,b->second,d.maximumPerTick});
         if(!d.oneWay)flows.push_back({b->second,a->second,d.maximumPerTick});
     }
-    if(!lib::worldprocess::diffuse(smoke,flows) ||
-       !lib::worldprocess::diffuse(toxin,flows) ||
-       !lib::worldprocess::diffuse(oxygen,flows))return false;
+    // One ordered edge traversal for all species; skip ducts without any
+    // actual transfer and allocate scratch only for species that move.
+    // All cells still participate in validation, flux and tick stamping.
+    if(!lib::worldprocess::diffuseSpecies(species,flows))return false;
 
     std::vector<std::pair<Entity,GasFlux>> sources;
     read.eachExistingConst<GasFlux>([&](Entity e,const GasFlux& f){
