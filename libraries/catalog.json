@@ -3208,18 +3208,23 @@
     },
     {
       "id": "random",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "layer": "simulation",
       "status": "cpp-foundation",
       "source": "libraries/include/aiverselib/algorithms/Random.h",
       "skill": "skills/core/aiverse-random/SKILL.md",
-      "summary": "Portable PCG32 streams, seed derivation and integer sampling",
+      "summary": "Portable RNG, weighted sampling, distributions, low discrepancy and spatial sampling",
       "notes": "Explicit state; no replacement of simulation RNG.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_random",
       "runtime": "header",
       "linkDependencies": [],
-      "packageDependencies": []
+      "packageDependencies": [],
+      "dependencies": [
+        "libraries/include/aiverselib/algorithms/RandomSampling.h",
+        "libraries/include/aiverselib/algorithms/RandomSequences.h",
+        "libraries/include/aiverselib/algorithms/SpatialSampling.h"
+      ]
     }
   ]
 }
