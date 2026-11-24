@@ -1714,10 +1714,10 @@
           "textEn": "Opt-in material generation without CPU pixel readback implemented. Isolated budget test passed; integrated build and GPU verification pending."
         },
         {
-          "name": "Texture Graph GPU — Stage 38B (в работе)",
-          "text": "Общий нативный GPU owner и тонкий адаптер редактора.",
-          "nameEn": "Texture Graph GPU — Stage 38B (in progress)",
-          "textEn": "Shared native GPU owner and thin editor adapter."
+          "name": "Texture Graph GPU — Stage 38B",
+          "text": "Вынесен общий нативный GPU owner и типизированный API генерации материалов; Studio использует тот же владелец. Интегрированная сборка и аппаратная проверка ожидаются.",
+          "nameEn": "Texture Graph GPU — Stage 38B",
+          "textEn": "Shared native GPU owner and typed material generation API extracted; Studio uses the same owner. Integrated build and hardware verification pending."
         }
       ],
       "enables": [
