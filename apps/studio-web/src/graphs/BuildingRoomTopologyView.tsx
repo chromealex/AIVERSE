@@ -1,16 +1,28 @@
 import {useMemo,useState} from 'react';
 import {StudioAlert,StudioButton,StudioSection,StudioSelect} from '../ui';
 import GraphCanvas from './GraphCanvas';
-import {connectionNodeId,projectBuildingRoomTopology,roomComponentMembers,roomNodeId} from './buildingRoomTopology';
-import type {BuildingRoomTopology} from './buildingRoomTopology';
+import {connectionNodeId,parseBuildingRoute,projectBuildingRoomTopology,roomComponentMembers,roomNodeId} from './buildingRoomTopology';
+import type {BuildingRoomTopology,BuildingRouteQuery,BuildingRouteResult} from './buildingRoomTopology';
 
-export function BuildingRoomTopologyView({data,onSelectSocket}:{data:BuildingRoomTopology;onSelectSocket?:(id:string)=>void}){
+export function BuildingRoomTopologyView({data,onSelectSocket,onRoute}:{data:BuildingRoomTopology;onSelectSocket?:(id:string)=>void;onRoute?:(query:BuildingRouteQuery)=>Promise<unknown>}){
  const [floor,setFloor]=useState<number|null>(null),[selected,setSelected]=useState(''),[withoutElevators,setWithoutElevators]=useState(false),[target,setTarget]=useState('');
  const view=useMemo(()=>projectBuildingRoomTopology(data,floor),[data,floor]);
  const room=data.rooms.find(r=>roomNodeId(r)===selected);
  const edge=data.connections.find(e=>connectionNodeId(e)===selected);
  const members=room?roomComponentMembers(data,room.id,withoutElevators):[];
- const highlighted=members.map(roomNodeId);
+ const [allowStairs,setAllowStairs]=useState(true),[pending,setPending]=useState(false);
+ const [route,setRoute]=useState<{data:BuildingRoomTopology;query:BuildingRouteQuery;result?:BuildingRouteResult;error?:string}|null>(null);
+ const current=route&&route.data===data&&route.query.start===room?.id&&route.query.goal===target&&route.query.allowStairs===allowStairs&&route.query.allowElevators===!withoutElevators?route:null;
+ const currentRoute=current?.result;
+ const highlighted=currentRoute?.reachable?['room:'+currentRoute.start,...currentRoute.steps.flatMap(s=>['connection:'+s.edgeId,'room:'+s.to])]:currentRoute?[]:members.map(roomNodeId);
+ const runRoute=async()=>{
+  if(!onRoute||!room||!data.rooms.some(r=>r.id===target)||pending)return;
+  const query={start:room.id,goal:target,allowStairs,allowElevators:!withoutElevators};
+  setPending(true);setRoute(null);setFloor(null);
+  try{setRoute({data,query,result:parseBuildingRoute(await onRoute(query),query,data)});}
+  catch(e){setRoute({data,query,error:e instanceof Error?e.message:String(e)});}
+  finally{setPending(false);}
+ };
  const destination=data.rooms.find(r=>r.id===target);
  const connected=room&&destination?members.some(r=>r.id===destination.id):null;
  const active=view.nodes.some(n=>n.id===selected)?selected:'';
@@ -39,12 +51,21 @@ export function BuildingRoomTopologyView({data,onSelectSocket}:{data:BuildingRoo
      {onSelectSocket&&<StudioButton size="sm" onClick={()=>onSelectSocket(a.socketId)}>Select entrance</StudioButton>}
     </div>)}
    </div>}
-   <small>{members.length} of {data.rooms.length} rooms structurally reachable (including selected room); {data.rooms.length-members.length} outside this group.</small>
+   <small>{members.length} of {data.rooms.length} rooms structurally reachable with stairs allowed (including selected room); {data.rooms.length-members.length} outside this group.</small>
    {members.length===1&&<StudioAlert tone="warning">This room has no reachable peer under the selected policy.</StudioAlert>}
    <StudioSelect aria-label="Compare structural reachability to room" value={destination?.id??''} onChange={e=>setTarget(e.target.value)}>
     <option value="">Choose destination room</option>{data.rooms.map(r=><option key={r.id} value={r.id}>{r.id}</option>)}
    </StudioSelect>
-   {connected!==null&&<StudioAlert tone={connected?'success':'warning'}>{connected?'Connected in native authored topology.':'No authored connection under this policy.'} This is not a runtime path guarantee.</StudioAlert>}
+   {onRoute&&<div className="au-stack">
+    <StudioSelect aria-label="Route stair policy" value={allowStairs?'allow':'exclude'} onChange={e=>setAllowStairs(e.target.value==='allow')}>
+     <option value="allow">Allow stairs in route</option><option value="exclude">Exclude stairs from route</option>
+    </StudioSelect>
+    <StudioButton size="sm" disabled={!destination||pending} onClick={()=>void runRoute()}>{pending?'Inspecting route…':'Inspect native route'}</StudioButton>
+    {current?.error&&<StudioAlert tone="danger">{current.error}</StudioAlert>}
+    {currentRoute&&<StudioAlert tone={currentRoute.reachable?'success':'warning'}>{currentRoute.reachable?('Native authored route: '+currentRoute.steps.length+' transitions'):'No authored route under selected policy'}</StudioAlert>}
+    {currentRoute?.steps.map((s,i)=><small key={s.edgeId}>{i+1}. {s.from} → {s.to} · {data.connections.find(e=>e.id===s.edgeId)?.kind} · {s.edgeId}</small>)}
+   </div>}
+   {connected!==null&&<StudioAlert tone={connected?'success':'warning'}>{connected?'Connected in native authored topology with stairs allowed.':'No authored connection under this policy.'} This is not a runtime path guarantee.</StudioAlert>}
   </div>}
   {edge&&<div className="au-stack"><strong>{edge.id} · {edge.kind}</strong>
    <small>{edge.from} ↔ {edge.to}</small><small>Position {edge.position.join(', ')} m · width {edge.width} m · height {edge.height} m</small>
