@@ -55,13 +55,16 @@ struct CaveNavigationCallbacks {
     std::function<bool(PointCm,PointCm,const CaveAgentProfile&)> customLink;
     std::function<uint16_t(PointCm)> areaAt;
 };
+// Inclusive centimetre bounds; immutable, owner-published residency policy.
+using CaveResidencyCheck=std::function<bool(PointCm,PointCm)>;
 class CaveNavigationDataProvider {
 public:
     explicit CaveNavigationDataProvider(
         std::shared_ptr<const CaveSnapshotSpatialIndex> index,
-        CaveNavigationCallbacks callbacks={},uint64_t environmentRevision=0)
+        CaveNavigationCallbacks callbacks={},uint64_t environmentRevision=0,
+        CaveResidencyCheck residency={})
         :index_(std::move(index)),callbacks_(std::move(callbacks)),
-         environmentRevision_(environmentRevision){
+         environmentRevision_(environmentRevision),residency_(std::move(residency)){
         if(!index_||!index_->revision())
             throw std::invalid_argument("Caverns navigation source epoch");
     }
@@ -70,6 +73,17 @@ public:
     const CaveSnapshotSpatialIndex& sdf()const noexcept{return *index_;}
     std::shared_ptr<const CaveSnapshotSpatialIndex> indexedSource()const{
         return index_;
+    }
+    bool hasResidencyFilter()const noexcept{return bool(residency_);}
+    bool residentSegment(PointCm a,PointCm b,const CaveAgentProfile& agent)const {
+        validateProfile(agent);
+        if(!inBounds(a)||!inBounds(b))return false;
+        if(!residency_)return true;
+        const int64_t r=agent.radiusCm;
+        const int64_t support=agent.traversal==CaveTraversal::Ground?agent.groundProbeCm:0;
+        const PointCm lo{std::min(a.x,b.x)-r,std::min(a.y,b.y)-support,std::min(a.z,b.z)-r};
+        const PointCm hi{std::max(a.x,b.x)+r,std::max(a.y,b.y)+agent.heightCm,std::max(a.z,b.z)+r};
+        return inBounds(lo)&&inBounds(hi)&&residency_(lo,hi);
     }
     static void validateProfile(CaveAgentProfile p) {
         if(p.radiusCm<0||p.radiusCm>10000||
@@ -84,6 +98,7 @@ public:
     // rather than an unchecked centre-only occupancy test.
     bool clearAt(PointCm p,const CaveAgentProfile& agent)const {
         validateProfile(agent);
+        if(!residentSegment(p,p,agent))return false;
         const int64_t r=agent.radiusCm;
         constexpr std::array<std::pair<int32_t,int32_t>,9> stencil{{
             {0,0},{1,0},{-1,0},{0,1},{0,-1},
@@ -145,7 +160,7 @@ public:
     // allowed by custom algorithms but require the caller's own policy.
     bool canTraverse(PointCm a,PointCm b,
                      const CaveAgentProfile& agent)const {
-        if(!inBounds(a)||!inBounds(b))return false;
+        if(!residentSegment(a,b,agent))return false;
         if(agent.traversal==CaveTraversal::Custom&&callbacks_.customLink &&
            !callbacks_.customLink(a,b,agent))
             return false;
@@ -180,5 +195,6 @@ private:
     std::shared_ptr<const CaveSnapshotSpatialIndex> index_;
     CaveNavigationCallbacks callbacks_;
     uint64_t environmentRevision_=0;
+    CaveResidencyCheck residency_;
 };
 } // namespace aiverse::terraweave::caverns
