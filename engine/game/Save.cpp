@@ -301,6 +301,9 @@ bool GameCore::serializeState(Simulation& sim, Archive& a) {
                 p.speed <= Fixed{} || p.speed > 2000_fx || s.radius < Fixed{} || s.radius > 4_fx ||
                 s.damageScale < Fixed{} || s.damageScale > 64_fx || s.distanceLeft < Fixed{} || s.distanceLeft > 4096_fx ||
                 s.lifetimeLeft < Fixed{} || s.lifetimeLeft > 120_fx || s.age < Fixed{} || s.age > 120_fx) { a.fail(); return; }
+            if (f->arc && (p.total.raw<0 || p.travel.raw<0 || p.travel>128_fx ||
+                (p.total.raw>0 && (!s.ballistic || s.age>=p.total)) ||
+                (p.total.raw==0 && p.travel.raw!=0))) { a.fail(); return; }
             for (size_t i=0; i<s.remaining.size(); ++i) if (s.remaining[i] > f->modifiers[i].count) a.fail();
         });
     }
