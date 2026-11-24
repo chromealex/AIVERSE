@@ -67,6 +67,7 @@ export function parseBuildingRoomTopology(value:unknown,floors:number,roomsX:num
 }
 export const roomNodeId=(r:TopologyRoom)=>'room:'+r.id;
 export const connectionNodeId=(e:TopologyConnection)=>'connection:'+e.id;
+export const exteriorNodeId=(socketId:string)=>'exterior:'+socketId;
 /** Floor filtering includes actual adjacent endpoints of visible edges. No synthetic links. */
 export function projectBuildingRoomTopology(data:BuildingRoomTopology,floor:number|null=null):GraphView {
  if(floor!==null)int(floor,0,data.floors-1,'selected floor');
@@ -88,7 +89,29 @@ export function projectBuildingRoomTopology(data:BuildingRoomTopology,floor:numb
   links.push({id:JSON.stringify([e.id,0]),from:'room:'+e.from,to:n,output:'out',input:'in'},
    {id:JSON.stringify([e.id,1]),from:n,to:'room:'+e.to,output:'out',input:'in'});
  }
+ // An exterior node represents one authored aperture, never a shared outdoor
+ // navigation vertex. Links are provenance only and are not planner edges.
+ const visibleRooms=new Set(rooms.map(r=>r.id));
+ const apertures=(data.exteriorApertures??[]).filter(a=>(floor===null||floor===0)&&visibleRooms.has(a.roomId));
+ const exteriorIds=[...new Set(apertures.map(a=>a.socketId))];
+ const firstRow=Math.max(roomRows.get(0)??0,edgeRows.get(0)??0);
+ exteriorIds.forEach((socketId,i)=>{
+  const n=exteriorNodeId(socketId);
+  nodes.push({id:n,label:'Exterior · '+socketId,x:40,y:40+(firstRow+i)*100,inputs:[],outputs:[{id:'out',type:'room',multiple:true}]});
+ });
+ for(const a of apertures)links.push({id:JSON.stringify(['exterior',a.socketId,a.roomId]),from:exteriorNodeId(a.socketId),to:'room:'+a.roomId,output:'out',input:'in'});
  return {nodes,links};
+}
+/** Group diagnostics use native component labels only. Undefined means legacy
+ * report: no conclusion about the presence of authored entrance overlaps. */
+export function exteriorConnectivity(data:BuildingRoomTopology,withoutElevators=false){
+ if(data.exteriorApertures===undefined)return undefined;
+ const key=withoutElevators?'withoutElevatorsComponent':'component';
+ const entranceRooms=new Set(data.exteriorApertures.map(a=>a.roomId));
+ const groups=new Set(data.rooms.filter(r=>entranceRooms.has(r.id)).map(r=>r[key]));
+ const roomsWithoutExterior=data.rooms.filter(r=>!groups.has(r[key]));
+ return {entranceCount:new Set(data.exteriorApertures.map(a=>a.socketId)).size,
+  roomsWithoutExterior,groupsWithoutExterior:[...new Set(roomsWithoutExterior.map(r=>r[key]))].sort((a,b)=>a-b)};
 }
 export function roomComponentMembers(data:BuildingRoomTopology,roomId:string,withoutElevators=false):readonly TopologyRoom[]{
  const room=data.rooms.find(r=>r.id===roomId);if(!room)return [];
