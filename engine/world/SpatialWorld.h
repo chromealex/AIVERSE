@@ -4,6 +4,7 @@
 #include <set>
 #include <vector>
 #include <functional>
+#include <cstdint>
 
 namespace aiverse::world {
 struct Cell {
@@ -15,7 +16,7 @@ struct Bounds { Vec3 min{}, max{}; };
 bool overlaps(const Bounds& a, const Bounds& b);
 // Segment slab query, including starting inside; t is a fraction in [0,1].
 bool intersect(Vec3 start, Vec3 delta, const Bounds& box, Fixed& t, Vec3& normal);
-struct Collider { uint32_t id=0; Bounds bounds; };
+struct Collider { uint32_t id=0; Bounds bounds; uint64_t generation=0; };
 struct Hit { bool hit=false; uint32_t id=0; Fixed fraction=1_fx; Vec3 normal{}; };
 // Sparse cells; very large colliders use a bounded overflow list instead of filling millions of cells.
 class SpatialWorld {
@@ -28,6 +29,19 @@ public:
     Hit castCollider(uint32_t id,Vec3 start,Vec3 delta,Vec3 halfExtent={}) const;
     void remove(uint32_t id);
     void clear();
+    // Host-only mutation identity, not a simulation tick or persisted value.
+    // Caller holds the existing world reader/writer exclusion.
+    uint64_t mutationVersion() const noexcept { return mutationVersion_; }
+    uint64_t colliderGeneration(uint32_t id) const noexcept {
+        const auto it=colliders_.find(id);
+        return it==colliders_.end()?0:it->second.generation;
+    }
+    bool removeIfGeneration(uint32_t id,uint64_t generation) {
+        if(!generation||colliderGeneration(id)!=generation)return false;
+        remove(id);return true;
+    }
+    // For legacy full-world staging only: reject a copy if live state changed.
+    bool publishCopyIfCurrent(SpatialWorld&& candidate,uint64_t expectedVersion);
     std::vector<uint32_t> query(Bounds bounds) const;
     bool blocked(Bounds bounds)const;
     Hit cast(Vec3 start, Vec3 delta, Vec3 halfExtent={}) const;
@@ -35,6 +49,8 @@ public:
     Cell cell(Vec3 point) const;
 private:
     std::vector<Cell> cells(Bounds bounds) const;
+    static uint64_t nextMutationVersion();
+    uint64_t mutationVersion_=0;
     int cellSize_;
     std::map<uint32_t,Collider> colliders_;
     std::map<Cell,std::set<uint32_t>> index_;
