@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Brush, Spline } from 'lucide-react';
 import { invoke, onNativeEvent } from '../bridge';
+import { WorldProcessDiagnostics } from '../components/WorldProcessDiagnostics';
 import type { StudioSceneBrush, EvolveLayer, EvolveLiveState } from '../types';
 
 export type BrushKind = StudioSceneBrush['kind'];
@@ -131,7 +132,7 @@ export function EcologyLayerPicker(){
     const next=e.target.value as EvolveLayer;
     setPending(true);
     void invoke('studio.evolveLayer',{layer:next}).then(r=>{setLayer(r.layer);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));
-  }}>{(['combined','fertility','pollution','succession','durability','off'] as EvolveLayer[]).map(v=><option key={v} value={v}>{v}</option>)}</select>{error&&<span role="alert">{error}</span>}</label><label><input type="checkbox" checked={live} disabled={pending} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{live:e.target.checked}).then(r=>{setLive(r.live);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>Live 3D overlay</label><EcologyLiveMap layer={layer}/></div>;
+  }}>{(['combined','fertility','pollution','succession','durability','off'] as EvolveLayer[]).map(v=><option key={v} value={v}>{v}</option>)}</select>{error&&<span role="alert">{error}</span>}</label><label><input type="checkbox" checked={live} disabled={pending} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{live:e.target.checked}).then(r=>{setLive(r.live);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>Live 3D overlay</label><EcologyLiveMap layer={layer}/><WorldProcessDiagnostics/></div>;
 }
 export default function SceneBrushBar({ kinds }: { kinds: BrushKind[] }) {
   const [brush, setBrush] = useState<StudioSceneBrush | null>(null);
