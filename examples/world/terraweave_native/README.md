@@ -711,3 +711,27 @@ CTest `terraweave_micro_nutrient`. **Its source and CMake target
 were committed, but have NOT been built or executed in this authoring
 environment**. See [Stage70 agent handoff](../../../docs/terrain/stage-70-sparse-micro-nutrients-handoff.md)
 for exact commits, testing commands and integration gates.
+
+## Planetary Caverns: native host frame
+
+Include `engine/world/TerraWeaveCavernsPlanetRuntimeFrame.h` in a native host already owning a GameView, a Box3D Scene and a SpatialWorld in Surface simulation-anchor coordinates. Link the existing game view/models/world and optional `AIVERSE::physics` targets. Register `registerPlanetCaveMap` during simulation setup if the host does not already load this ECS resource.
+
+Construct one `CavePlanetRuntimeFrame` for the world, supplying the actual device, view, physics scene, spatial world, globally reserved `CaveColliderLeasePool`, immutable Surface and `CavePlanetRuntimeHooks`. The hooks must connect to the game's existing coverage registry, cell allocator, reader exclusion and navigation/GI transaction. Do not supply unconditional success callbacks.
+
+At the existing frame boundary, outside render passes and with simulation/physics/navigation readers paused:
+
+```cpp
+// These are existing game-owned objects/inputs, not new worlds or solvers.
+// observers: body index + simulation-anchor position, not orbit coordinates.
+// required: region IDs occupied by or needed for imminent actor movement.
+const auto progress = caves.pump(sim.world(), observers, required);
+if (progress.phase == terraweave::caverns::CavePlanetRuntimePhase::Recovery) {
+    // Keep the actual host barrier closed and recover the world.
+} else if (progress.pinsReady &&
+           caves.requiredRegionsReady(sim.world(), required)) {
+    // The existing host may resume its normal movement/physics tick.
+    // Its motor remains the sole position writer.
+}
+```
+
+Call `invalidateAfterRestore()` at the host restore boundary before another reader is admitted. On teardown, retain the owner until `shutdown()` succeeds. A body cohort whose leaf set changes needs proof that the old cave is unoccupied and its restored ground can be released safely. The host must retain its regular exterior terrain coverage. This example is a native API integration recipe, not a standalone playable map or tested traversal.
