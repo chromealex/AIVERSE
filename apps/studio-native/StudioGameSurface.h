@@ -4,6 +4,7 @@
 #include "engine/data/Json.h"
 #include "apps/studio-native/StudioGameDevice.h"
 #include "apps/studio-native/StudioRuntimeInspect.h"
+#include "apps/studio-native/StudioWorldProcessDiagnostics.h"
 
 namespace aiverse::studio {
 // Independent native surface; the authoring Scene keeps its own device/epoch.
@@ -24,6 +25,7 @@ public:
     // Keep play changes: where each map entity is now (index into the map's entities), or removed:true.
     Json mapEntityStates();
     Json ecologyState();
+    Json worldProcessDiagnostics(int cap,const std::string& focus);
 private:
     std::unique_ptr<gfx::Device> device_;
     std::unique_ptr<render::RenderDeviceLifetime> lifetime_;
@@ -33,6 +35,7 @@ private:
     StudioGameDevice profile_;
     float inputScale_=1;
     StudioRuntimeInspect inspector_;
+    StudioWorldProcessDiagnostics worldProcessDiagnostics_;
     uint64_t runtimeEpoch_=0;
     bool matchObserved_=false;
 };
