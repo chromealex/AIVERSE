@@ -235,6 +235,7 @@ void stageCreatedAsset(const fs::path& project,const std::string& path,
         record.set("guid",Json::string(Json::parse(bytes).getStr("guid")));
         record.set("directory",Json::fromBool(directory));record.set("digest",Json::string(digest));
         record.set("kind",Json::string("created"));
+        record.set("metaDigest",Json::string(studioAssetFileDigest(slot/"asset.meta")));
         {std::ofstream out(slot/"record.json",std::ios::binary);out<<record.dump(2)<<"\n";out.close();if(!out)throw std::runtime_error("Cannot write import recovery record");}
         StudioMoveJournal::syncPath(slot/"record.json");
         fs::remove_all(staging);
@@ -932,6 +933,7 @@ editor::ProjectHistory::MovePlan studioQuarantineAsset(const fs::path& project,
     recovery.set("path",Json::string(path));recovery.set("guid",Json::string(expectedGuid));
     recovery.set("directory",Json::fromBool(current->directory));
     recovery.set("digest",Json::string(plan.files.front().digest));
+    recovery.set("metaDigest",Json::string(studioAssetFileDigest(meta)));
     const auto record=folder/"record.json";
     {std::ofstream out(record,std::ios::binary);out<<recovery.dump(2)<<"\n";out.close();if(!out)throw std::runtime_error("Cannot write asset quarantine record");}
     StudioMoveJournal::syncPath(record);StudioMoveJournal::syncPath(folder);StudioMoveJournal::syncPath(root);
@@ -988,5 +990,164 @@ void studioReplayAssetReplacement(const fs::path& project,
         catch(const std::exception& e){throw std::runtime_error(std::string("Replacement recovery incomplete: ")+e.what());}
         std::rethrow_exception(failure);
     }
+}
+namespace {
+constexpr const char* trashPrefix=".aiverse-cache/studio-asset-trash/";
+std::string trashRelative(const std::string& id){
+    if(id.size()!=24||id.find_first_not_of("0123456789abcdef")!=std::string::npos)
+        throw std::runtime_error("Invalid recovery record ID");
+    return std::string(trashPrefix)+id+"/asset";
+}
+void checkTrashJournal(const fs::path& project){
+    if(existsOrSymlink(project/".aiverse-cache"/"studio-move-journal"))
+        throw std::runtime_error("A pending asset journal needs recovery; reopen the project");
+}
+struct TrashRecord {
+    std::string id,relative,path,guid,kind,role,digest,raw,meta;
+    fs::path folder;
+    bool directory=false;
+};
+TrashRecord readTrashRecord(const fs::path& project,const std::string& id,bool verify){
+    TrashRecord r;r.id=id;r.relative=trashRelative(id);r.folder=quarantineFolder(project,r.relative);
+    const auto record=r.folder/"record.json";
+    if(!fs::is_regular_file(fs::symlink_status(record))||fs::file_size(record)>65536)
+        throw std::runtime_error("Invalid recovery manifest");
+    r.raw=editor::readProjectFileBytes(record);const auto doc=Json::parse(r.raw);
+    r.path=doc.getStr("path");r.guid=doc.getStr("guid");r.kind=doc.getStr("kind","deleted");
+    r.role=doc.getStr("role");r.digest=doc.getStr("digest");r.directory=doc.getBool("directory");
+    if(!studioValidGuid(r.guid)||r.digest.size()!=64||r.digest.find_first_not_of("0123456789abcdef")!=std::string::npos||
+       (r.kind!="deleted"&&r.kind!="created"&&r.kind!="replacement")||r.path.empty()||r.path.size()>512||
+       fs::path(r.path).is_absolute()||(r.kind=="replacement"&&(r.directory||(r.role!="old"&&r.role!="new"))))
+        throw std::runtime_error("Invalid recovery record identity");
+    for(const auto& part:fs::path(r.path))validateSegment(part.string());
+    const auto payload=r.folder/"asset",meta=r.folder/"asset.meta";
+    const auto status=fs::symlink_status(payload);
+    if(r.directory?!fs::is_directory(status):!fs::is_regular_file(status))
+        throw std::runtime_error("Recovery payload missing or invalid");
+    if(r.kind!="replacement"){
+        if(!fs::is_regular_file(fs::symlink_status(meta))||fs::file_size(meta)>1024*1024)
+            throw std::runtime_error("Recovery sidecar missing or invalid");
+        r.meta=editor::readProjectFileBytes(meta);const auto m=Json::parse(r.meta);
+        if(m.getStr("guid")!=r.guid||m.getStr("importer")!=studioImporterForPath(fs::path(r.path),r.directory)||!m["settings"].isObject())
+            throw std::runtime_error("Recovery sidecar identity mismatch");
+        const auto expected=doc.getStr("metaDigest");
+        if(!expected.empty()&&studioAssetFileDigest(meta)!=expected)throw std::runtime_error("Recovery sidecar changed");
+    }else if(existsOrSymlink(meta))throw std::runtime_error("Unexpected replacement sidecar");
+    if(verify&&moveDigest(payload,r.directory)!=r.digest)throw std::runtime_error("Recovery payload changed");
+    return r;
+}
+std::string trashToken(const TrashRecord& r,const std::string& action,const std::string& liveDigest,const std::string& liveMeta){
+    pack::Sha256 hash;
+    for(const auto* value:{&r.id,&r.raw,&r.meta,&action,&liveDigest,&liveMeta}){
+        const auto size=std::to_string(value->size())+":";
+        hash.update(size.data(),size.size());hash.update(value->data(),value->size());
+    }
+    const auto digest=hash.finish();return pack::toHex(digest.data(),digest.size());
+}
+struct TrashReview {TrashRecord record;std::string liveDigest,liveMeta,token;};
+TrashReview reviewTrash(const fs::path& project,const std::string& id,const std::string& action){
+    checkTrashJournal(project);
+    if(action!="restore"&&action!="purge")throw std::runtime_error("Invalid recovery action");
+    TrashReview result;result.record=readTrashRecord(project,id,true);const auto& r=result.record;
+    // Never purge an unrecognized extra file or partially staged record.
+    for(const auto& item:fs::directory_iterator(r.folder)){
+        const auto name=item.path().filename().string();
+        if(name!="asset"&&name!="asset.meta"&&name!="record.json")
+            throw std::runtime_error("Recovery slot contains unexpected files; inspect manually");
+    }
+    if(action=="restore"){
+        StudioAssetCatalog catalog(project);catalog.rebuild(false);
+        const auto relative=fs::path(r.path),parent=relative.parent_path().generic_string();
+        const auto live=checkedFolder(project,parent=="."?"":parent)/relative.filename();
+        if(r.kind=="replacement"){
+            const auto entry=catalog.byGuid(r.guid);
+            if(!entry||entry->path!=r.path||entry->directory)throw std::runtime_error("Replacement target GUID/path no longer matches");
+            result.liveDigest=studioAssetFileDigest(live);
+            if(fs::file_size(studioMetaPath(live))>1024*1024)throw std::runtime_error("Target metadata exceeds recovery limit");
+            result.liveMeta=editor::readProjectFileBytes(studioMetaPath(live));
+            const auto m=Json::parse(result.liveMeta);
+            if(m.getStr("guid")!=r.guid||m.getStr("importer")!=entry->importer)
+                throw std::runtime_error("Replacement target sidecar changed");
+        }else if(existsOrSymlink(live)||existsOrSymlink(studioMetaPath(live))||catalog.byGuid(r.guid))
+            throw std::runtime_error("Original path or GUID is occupied");
+    }
+    result.token=trashToken(r,action,result.liveDigest,result.liveMeta);return result;
+}
+Json trashRow(const TrashRecord& r){
+    Json row=Json::object();
+    row.set("id",Json::string(r.id));row.set("path",Json::string(r.path));row.set("guid",Json::string(r.guid));
+    row.set("kind",Json::string(r.kind));row.set("role",Json::string(r.role));row.set("directory",Json::fromBool(r.directory));
+    row.set("status",Json::string("retained"));
+    // Directory sizes are intentionally not recursively enumerated by list.
+    if(!r.directory)row.set("bytes",Json::number(int64_t(std::min<std::uintmax_t>(fs::file_size(r.folder/"asset"),INT64_MAX))));
+    return row;
+}
+}
+Json studioAssetTrashList(const fs::path& project,size_t offset,size_t limit){
+    if(limit==0||limit>100||offset>10000)throw std::runtime_error("Invalid recovery page");
+    Json out=Json::object(),rows=Json::array();
+    const auto root=project/".aiverse-cache"/"studio-asset-trash";
+    std::vector<std::string> ids;bool truncated=false;
+    if(existsOrSymlink(root)){
+        if(!fs::is_directory(fs::symlink_status(root))||!fs::is_directory(fs::symlink_status(root.parent_path())))
+            throw std::runtime_error("Unsafe recovery storage");
+        for(const auto& item:fs::directory_iterator(root)){
+            if(ids.size()>=10000){truncated=true;break;}
+            const auto id=item.path().filename().string();
+            if(id.size()!=24||id.find_first_not_of("0123456789abcdef")!=std::string::npos)continue;
+            if(!fs::is_directory(item.symlink_status()))continue;
+            if(!existsOrSymlink(item.path()/"asset")&&!existsOrSymlink(item.path()/"asset.meta"))continue;
+            ids.push_back(id);
+        }
+    }
+    std::sort(ids.begin(),ids.end());
+    for(size_t i=offset;i<ids.size()&&rows.size()<limit;++i){
+        try{rows.push(trashRow(readTrashRecord(project,ids[i],false)));}
+        catch(const std::exception& e){
+            Json row=Json::object();row.set("id",Json::string(ids[i]));row.set("status",Json::string("invalid"));
+            row.set("error",Json::string(e.what()));rows.push(std::move(row));
+        }
+    }
+    out.set("items",std::move(rows));out.set("total",Json::number(int64_t(ids.size())));
+    out.set("truncated",Json::fromBool(truncated));
+    out.set("recoveryPending",Json::fromBool(existsOrSymlink(project/".aiverse-cache"/"studio-move-journal")));
+    return out;
+}
+Json studioAssetTrashReview(const fs::path& project,const std::string& id,const std::string& action){
+    const auto reviewed=reviewTrash(project,id,action);
+    Json out=trashRow(reviewed.record);
+    out.set("action",Json::string(action));out.set("token",Json::string(reviewed.token));
+    return out;
+}
+void studioAssetTrashApply(const fs::path& project,const std::string& id,const std::string& action,const std::string& expectedToken){
+    const auto reviewed=reviewTrash(project,id,action);const auto& r=reviewed.record;
+    if(expectedToken.empty()||expectedToken!=reviewed.token)throw std::runtime_error("Recovery record changed; review again");
+    if(action=="purge"){
+        // Explicit single-slot purge; never follows a live path or an unknown slot.
+        fs::remove_all(r.folder);StudioMoveJournal::syncPath(r.folder.parent_path());return;
+    }
+    editor::ProjectHistory::MovePlan plan;
+    if(r.kind!="replacement"){
+        plan.quarantine=true;plan.created=r.kind=="created";
+        plan.files.push_back({r.path,r.relative,{},r.digest,r.directory});
+        plan.files.push_back({r.path+".meta",r.relative+".meta",r.meta,{},false});
+        studioReplayAssetQuarantine(project,plan,false);return;
+    }
+    if(reviewed.liveDigest==r.digest)throw std::runtime_error("This version is already active");
+    // Save the current live version as a new recovery record before exchanging
+    // payloads. Keep the live sidecar, even if import settings changed since the
+    // original replacement. Both digests and current GUID were reviewed.
+    const auto outgoing=trashRelative(nonce());
+    const auto folder=(project/outgoing).parent_path();
+    if(!fs::create_directory(folder))throw std::runtime_error("Cannot reserve recovery version slot");
+    Json record=Json::object();record.set("kind",Json::string("replacement"));
+    record.set("path",Json::string(r.path));record.set("guid",Json::string(r.guid));
+    record.set("digest",Json::string(reviewed.liveDigest));record.set("role",Json::string("old"));
+    {std::ofstream out(folder/"record.json");out<<record.dump(2)<<"\n";out.close();if(!out)throw std::runtime_error("Cannot write recovery version record");}
+    StudioMoveJournal::syncPath(folder/"record.json");StudioMoveJournal::syncPath(folder);StudioMoveJournal::syncPath(folder.parent_path());
+    plan.replacement=true;
+    plan.files.push_back({r.path,outgoing,reviewed.liveMeta,reviewed.liveDigest,false});
+    plan.files.push_back({r.path,r.relative,{},r.digest,false});
+    studioReplayAssetReplacement(project,plan,true);
 }
 } // namespace aiverse::studio

@@ -1157,7 +1157,7 @@ Json StudioSession::dispatch(const Json& request) {
     if(stroking_){
         // The stroke owns the MapDoc transaction across frames. Only explicit
         // observational requests can enter; other edits retry after release.
-        static const std::set<std::string> reads={"studio.snapshot","studio.inspect","studio.propertiesFor","studio.history","studio.projectHistory","studio.assetHistory","studio.stats","studio.project","studio.agentInfo","studio.agentStop","studio.componentCatalog"};
+        static const std::set<std::string> reads={"studio.snapshot","studio.inspect","studio.propertiesFor","studio.history","studio.projectHistory","studio.assetHistory","studio.assetTrashList","studio.stats","studio.project","studio.agentInfo","studio.agentStop","studio.componentCatalog"};
         if(method=="studio.sceneBrush"&&request["params"].has("armed")&&!request["params"].getBool("armed",true))strokeCancel();
         else if(!reads.count(method)){
             Json reply=Json::object();reply.set("id",request["id"]);reply.set("error",str("Finish or cancel the active Scene stroke first"));return reply;
@@ -2132,6 +2132,24 @@ Json StudioSession::dispatchImpl(const Json& request) {
             detail.set("bytes",Json::number(updated.bytes));
             detail.set("settings",updated.settings);
             reply.set("result",std::move(detail));
+        } else if (method == "studio.assetTrashList" || method == "studio.assetTrashReview" || method == "studio.assetTrashApply") {
+            if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir)
+                throw std::runtime_error("Recovery project changed; reopen Trash");
+            if(method=="studio.assetTrashList"){
+                const auto offset=params.getInt("offset",0),limit=params.getInt("limit",50);
+                if(offset<0||limit<1)throw std::runtime_error("Invalid recovery page");
+                reply.set("result",studioAssetTrashList(ws_.project.dir,size_t(offset),size_t(limit)));
+            }else if(method=="studio.assetTrashReview"){
+                auto review=studioAssetTrashReview(ws_.project.dir,params.getStr("id"),params.getStr("action"));
+                review.set("version",str(assetHistoryVersion()));reply.set("result",std::move(review));
+            }else{
+                if(!params.getBool("confirmed")||params.getStr("expectedVersion")!=assetHistoryVersion())
+                    throw std::runtime_error("Confirm recovery against the current asset history");
+                studioAssetTrashApply(ws_.project.dir,params.getStr("id"),params.getStr("action"),params.getStr("token"));
+                // Cross-session operations deliberately fence the session-local stack.
+                assetHistory_.reset();pendingAssetTransfer_.reset();agentHistoryUnsafe_=true;
+                Json result=Json::object();result.set("ok",Json::fromBool(true));reply.set("result",std::move(result));
+            }
         } else if (method == "studio.assetDelete") {
             if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir||
                params.getStr("expectedVersion")!=assetHistoryVersion()||!params.getBool("confirmed"))

@@ -62,6 +62,10 @@ editor::ProjectHistory::MovePlan studioQuarantineAsset(const std::filesystem::pa
     const std::string& path,const std::string& expectedGuid,const std::function<void()>& validateReferences={});
 void studioReplayAssetQuarantine(const std::filesystem::path& project,
     const editor::ProjectHistory::MovePlan& plan,bool deleted,const std::function<void()>& validateReferences={});
+// Recovery browser: list persisted slots; review exact current identity before restore/purge.
+Json studioAssetTrashList(const std::filesystem::path& project,size_t offset,size_t limit);
+Json studioAssetTrashReview(const std::filesystem::path& project,const std::string& id,const std::string& action);
+void studioAssetTrashApply(const std::filesystem::path& project,const std::string& id,const std::string& action,const std::string& expectedToken);
 std::string studioCreateContentFolder(const std::filesystem::path& project,
                                      const std::string& parent,const std::string& name,
                                      editor::ProjectHistory::MovePlan* history=nullptr);
