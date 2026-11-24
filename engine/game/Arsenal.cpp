@@ -482,8 +482,8 @@ void Arsenal::tick(Simulation& sim) {
 void Arsenal::neutralKill(Simulation& sim, Entity victim, uint8_t killer) {
     if (!active() || !rules_.payNeutral || killer == 0 || killer == kHostileNeutral) return;
     World& w = sim.world();
-    const Unit& vu = w.get<Unit>(victim);
-    for (auto& b : m_->rules().types[vu.type].bounty) m_->addResource(sim, killer, b.res, b.value);
+    (void)w;
+    m_->payUnitBounty(sim, victim, killer);
 }
 
 } // namespace aiverse::game
