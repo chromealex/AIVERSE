@@ -56,7 +56,7 @@ ActorHost region ownership reconciles active projectile entities at the finalize
 
 Use `engine/vehicles/DurableRaceState.h` for the shared race resource codec. It preserves ordinal racer order and complete mechanics session state while mapping racer vehicle references through stable identities. The generic registry supports `registerContextualResource<T, Transfer>` for world-aware resource encoding. The actor projection policy now includes `aiverse.vehicles.race_state` even when absent. Previous experimental W1.24d checkpoints with the smaller explicit resource selection are not directly compatible with this policy; no migration has been run. Native ordinary save layout is unchanged; opt-in region ownership checksums can change when active projectiles are present.
 
-The persistent ledger retains projectile tombstones under its existing capacity limit. Long-running high-churn worlds need a separately designed retention/identity policy; do not silently recycle IDs. W1.24f adds an opt-in authoritative server loop, content-specific checks and a publication barrier; native acceptance remains outstanding. No native execution evidence yet.
+The persistent ledger retains recent projectile tombstones; W1.25d permits checkpoint-bound compaction without identity reuse. W1.24f adds an opt-in authoritative server loop, content-specific checks and a publication barrier; native acceptance remains outstanding. No native execution evidence yet.
 
 ## Authoritative server persistence (W1.24f, experimental)
 
@@ -95,6 +95,16 @@ The existing WorldAssets manifest already declares SHA-256 for each external ass
 Server enables persistence for opted-in streamed worlds using this identity. The existing CollisionStream verifies each asset again on load and records sticky read/hash failure. Persistent authority fails closed on content integrity, collision budget/preparation or navigation readiness failure; ordinary nonpersistent streaming retains its retry behavior. After successful ECS recovery, Server::pollPersistenceContent must complete the real ActorHost::readyToStep admission barrier before attaching peers or advancing a tick. CLI waits before binding listeners. No substitute Transform, collision or navigation owner is introduced. Derived navigation is invalidated after restore.
 
 Supported content is the existing hashed WorldAssets catalog and immutable rules/map. The startup audit verifies declared bytes, not every possible future semantic collision seam or arbitrary external assets outside the catalog. Files must remain immutable for the session; cached verified geometry can stay resident, while subsequent reads are checked. The audit is synchronous even with --world-background-load. No full native test or performance acceptance has run.
+
+## Tombstone compaction (W1.25d)
+
+RegionEntityLedger v2 preserves two watermarks: retiredFloor seals the identity prefix, historyFloor is the latest removed record revision. Missing IDs at or below retiredFloor are permanently unavailable (including previously unused gaps), but existing live records remain valid. nextIdentity uses the maximum of the sealed prefix and remaining records. Native resource schema v1 is explicitly migrated; the ledger archive reader also accepts v1. Old binaries cannot read v2.
+
+Only compact at a quiescent checkpoint barrier on a private candidate. UnifiedWalSession::checkpoint/queueCheckpoint accept optional compactThrough and compactLimit; zero cutoff disables compaction. The new ledger is published only after checkpoint/WAL rotation succeeds, and the authority adopts the identical compacted ledger before another tick. This does not increment gameplay revision or WAL sequence. Do not mutate the live ledger independently. No ID reuse or standalone compaction WAL frame.
+
+Before delivering incremental changes, check ChangePage::resetRequired or RegionChangeCursor::requiresBootstrap. If stale, replace the observer's projection from a full live snapshot and reset its cursor to that snapshot revision; do not just advance the cursor. since() refuses compacted history. PersistentEntityReferences classifies missing sealed IDs as retired. Older backup generations preserve their own ledger state; a fork must use its own world identity.
+
+Server checkpointWorld(retainRevisions) defaults to 65536 recent revisions. CLI --world-retain-revisions N sets the window at configured --world-checkpoint-ticks rotations; 0 removes all eligible tombstones, UINT64_MAX disables compaction. Configure periodic checkpoints for high-churn worlds. The per-ledger record cap still applies between rotations; live entity cap, full ECS snapshot memory and disk retention of old checkpoint/WAL generations remain separate concerns. No native performance or long-duration acceptance has run.
 
 ## Implementation
 
