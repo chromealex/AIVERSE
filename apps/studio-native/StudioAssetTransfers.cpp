@@ -2090,7 +2090,7 @@ StudioBatchAssetPlan studioPlanAssetMoveChain(const fs::path& project,
     return out;
 }
 // Mixed chains reuse exact-endpoint relocation and virtual identity. Model
-// transitions in this subset are limited to verified self-contained glTF/GLB.
+// versions may refer to stable, indexed local resources; graph-changing moves remain fenced.
 bool studioCanPlanMixedAssetChain(const std::vector<editor::ProjectHistory::Step>& ordered){
     if(ordered.empty()||ordered.size()>64)return false;
     const auto simple=[](const editor::ProjectHistory::MoveFile& file){
@@ -2132,7 +2132,7 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
         field("file-v1");field(std::to_string(bytes.size()));hash.update(bytes.data(),bytes.size());
         const auto digest=hash.finish();return pack::toHex(digest.data(),digest.size());
     };
-    struct LogicalMove{std::string from,to,digest;bool directory=false;std::string logicalName;};
+    struct LogicalMove{std::string from,to,digest;bool directory=false;std::string logicalName;bool version=false;};
     struct MetaCheck{std::string path,bytes;bool directory=false;};
     struct LogicalStep{
         std::vector<LogicalMove> moves;
@@ -2152,8 +2152,8 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
                 const auto live="content/"+asset.from;
                 if(plan.replacement){
                     const auto& outgoing=redo?asset:meta;const auto& incoming=redo?meta:asset;
-                    logical.moves.push_back({live,outgoing.to,outgoing.digest,false,asset.from});
-                    logical.moves.push_back({incoming.to,live,incoming.digest,false,asset.from});
+                    logical.moves.push_back({live,outgoing.to,outgoing.digest,false,asset.from,true});
+                    logical.moves.push_back({incoming.to,live,incoming.digest,false,asset.from,true});
                     logical.metaChecks.push_back({live+".meta",asset.bytes,false});
                 }else if(plan.quarantine){
                     const bool deleted=plan.created?!redo:redo;
@@ -2218,13 +2218,16 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
     std::map<std::pair<fs::path,std::string>,bool> verifiedPayloads;
     std::uintmax_t modelBytes=0;
     size_t treeEntries=0;
-    const auto verifyFile=[&](const fs::path& file,const fs::path& logical){
+    const auto verifyFile=[&](const fs::path& file,const fs::path& logical,bool version=false){
         auto ext=logical.extension().string();
         for(auto& c:ext)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         const auto importer=studioImporterForPath(logical,false);
         if(importer=="texture"||importer=="audio"||ext==".bin")return;
         if(ext!=".glb"&&ext!=".gltf")throw std::runtime_error("Unsupported mixed directory payload: "+logical.generic_string());
-        if(!verifiedPayloads.emplace(std::make_pair(file,ext),true).second)return;
+        // The same physical version can appear at a different logical owner.
+        // Cache only an identical owner and inspection policy.
+        const auto inspectionKey=ext+"|"+logical.generic_string()+(version?"|version":"|embedded");
+        if(!verifiedPayloads.emplace(std::make_pair(file,inspectionKey),true).second)return;
         const auto doc=studioReadModelJson(file,modelBytes,ext==".glb");
         if(!doc||!doc->isObject()||!(*doc)["asset"].isObject()||
            (*doc)["asset"].getStr("version")!="2.0")
@@ -2250,8 +2253,27 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
             for(const auto& entry:(*doc)[group].items()){
                 if(!entry.isObject())throw std::runtime_error("Invalid mixed model resource entry");
                 if(entry.has("uri")){
-                    if(!entry["uri"].isString()||!entry.getStr("uri").starts_with("data:"))
-                        throw std::runtime_error("Mixed model has external resource dependencies");
+                    if(!entry["uri"].isString())throw std::runtime_error("Invalid mixed model resource URI");
+                    const auto uri=entry.getStr("uri");
+                    if(uri.starts_with("data:"))continue;
+                    if(!version)throw std::runtime_error("Mixed model has external resource dependencies");
+                    // Resolve recovery bytes at the logical content owner, never
+                    // at the physical Trash slot. Until mixed graph repair is
+                    // available, require the target to retain one physical
+                    // identity over the entire coordinated relocation chain.
+                    const auto target=studioGltfResourcePath("content/"+logical.generic_string(),uri);
+                    if(target.empty())throw std::runtime_error("Unsafe external mixed model resource URI");
+                    for(const auto& endpoint:endpoints)
+                        if(batchOverlap(target,endpoint))
+                            throw std::runtime_error("External model version resource has a mixed relocation endpoint");
+                    validateHistoryContentPath(target.substr(8));
+                    const auto resource=catalog.byPath(target.substr(8));
+                    if(!resource||resource->directory||!studioValidGuid(resource->guid)||
+                       !studioSafeModelResourceFile(root,target))
+                        throw std::runtime_error("External model version resource is missing or unindexed: "+target);
+                    const auto live=liveGuids.find(resource->guid);
+                    if(live==liveGuids.end()||live->second!=target)
+                        throw std::runtime_error("External model version resource GUID changed: "+target);
                 }else if(std::string(group)=="buffers"? !binary : !entry["bufferView"].isNumber())
                     throw std::runtime_error("Mixed model resource has no embedded source");
             }
@@ -2320,7 +2342,7 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
                     if(m.to.starts_with("content/")&&!liveGuids.emplace(guid,m.to+"/"+relative).second)
                         throw std::runtime_error("Nested destination GUID collision");
                 }
-            }else if(!m.logicalName.empty())verifyFile(root/origin,fs::path(m.logicalName));
+            }else if(!m.logicalName.empty())verifyFile(root/origin,fs::path(m.logicalName),m.version);
             if(batchMetadataPath(m.from)&&batchMetadataPath(m.to)){
                 const auto meta=Json::parse(currentBytes(m.from));const auto guid=meta.getStr("guid");
                 if(!studioValidGuid(guid))throw std::runtime_error("Invalid mixed sidecar GUID");
