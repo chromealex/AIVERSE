@@ -129,6 +129,9 @@ public:
     CaveGpuUploadStats gpuUploadStats()const noexcept{
         return geometry_.uploadStats();
     }
+    CaveGeometrySwapOwner::MemoryStats gpuMemoryStats()const noexcept{
+        return geometry_.memoryStats();
+    }
     CaveEditTick pumpCpu(size_t budget=8) {
         return worker_.tick(budget);
     }
@@ -199,6 +202,7 @@ public:
             }
             stagedMeshes_=candidates;
             stagedVisualRevision_=visualRevision;
+            gpuBatchSpec_=geometryOptions;
             gpuBatch_=std::make_unique<CaveMixedLodShardBatch>(
                 std::move(planned));
         } catch(...) {
@@ -218,7 +222,7 @@ public:
            !snapshot_||!gpuBatch_->ready())return false;
         if(gpuBatchIndex_>=gpuBatch_->snapshots.size())return false;
         const auto& shard=gpuBatch_->snapshots[gpuBatchIndex_];
-        if(!geometry_.stagePlannedShard(device,shard,gpuBatch_->visual,spec))
+        if(!geometry_.stagePlannedShard(device,shard,gpuBatch_->visual,gpuBatchSpec_))
             return false; // frame budget / GPU owner pressure; retry later
         stagedShards_.push_back(shard.shard);
         ++gpuBatchIndex_;
@@ -242,7 +246,7 @@ public:
                          size_t cpuJobBudget=2,
                          CaveBatchSpec graphicsOptions={}) {
         auto tick=pumpCpu(cpuJobBudget);
-        if(!stagedRevision_ && !tick.inFlight && tick.pending &&
+        if(!stagedRevision_ && !worker_.inFlight() && tick.pending &&
            tick.ready==tick.pending) {
             // stageReady is deliberately fail-closed; callers can inspect
             // stats and retry if a GPU budget or a source validation fails.
@@ -446,6 +450,7 @@ private:
     std::vector<CaveShardKey> stagedShards_;
     std::unique_ptr<CaveMixedLodShardBatch> gpuBatch_;
     size_t gpuBatchIndex_=0;
+    CaveBatchSpec gpuBatchSpec_{};
     std::vector<ChunkKey3> preparedPhysics_;
     uint64_t stagedRevision_=0,stagedVisualRevision_=0,committedRevision_=0;
     uint64_t runtimeEpoch_=0;
