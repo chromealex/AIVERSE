@@ -1,8 +1,135 @@
+## Stage 18 — native FX snapshot capture (2026-11-23; QA deferred)
+
+The independent SpectraFX Graph GPU preview has a one-shot **Capture
+Frame** action with native RHI readback, bounded 256/512/768px JPEG
+thumbnail, Save JPEG and async capture status. There is no continuous
+GPU-to-browser bitmap streaming. The existing authenticated MCP tool
+`fx_graph_preview` supports `{"action":"capture","maxSide":512}`
+and `{"action":"captureStatus"}`, with results under
+`capture:{pending,ready,width,height,mime,image?,error?}`.
+The native host enforces 128–768px max dimension, 600 KiB JPEG,
+one in-flight capture, ten-second timeout and callback-safe
+project-switch/close behavior. No gameplay ECS writes or untrusted
+disk path. **Current source intentionally not built or tested per
+user request; previous 2/2 CTest applies to older source only.**
+Agent handoff: `docs/agent-handoffs/spectrafx-studio-stage18-native-gpu-frame-capture-2026-11-23.md`.
+
+## 2026-11-23 — SpectraFX Studio Stages 15–17 (features only; tests postponed)
+
+Added production-native preview-authoring controls to the independent
+FX viewport and existing `aiversemcp` `fx_graph_preview` tool:
+
+- **Stage 15**: `playback {speed:0.25|0.5|1|2|4,loop:boolean}`
+  uses whole fixed 1/60s simulation ticks, bounded quarter-tick
+  accumulator and native-frame restart at 3600 ticks. `stage`
+  selects `background:dark|neutral|light|black` and boolean grid/axes;
+  `cameraPreset` uses perspective/front/side/top with a separate FX
+  camera. All supported through the HTML5 Graph pane and MCP.
+- **Stage 16**: opt-in `Auto-reload graph` recompiles an immutable
+  in-memory Graph v2 after 650ms debounce. Save Draft/Publish remain
+  explicit; native compiler rejects invalid candidate graphs without
+  replacing last-good state. Successful recompilation restores Play.
+  Native backend initialization failure is a known separate hazard,
+  not a proven atomic swap.
+- **Stage 17**: `burst {count:1..8}` queues bounded native one-shot
+  emitter events (max 32 queued), `clear` defers particle reset to
+  the next native device frame. HTML5 Trigger Burst/Clear controls
+  and real burst/queue counters; no gameplay/ECS writes.
+
+Docs:
+`docs/agent-handoffs/spectrafx-studio-stage15-playback-stage-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-studio-stage16-auto-reload-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-studio-stage17-burst-events-2026-11-23.md`.
+
+**User deliberately deferred ALL testing until later.** No exact-SHA
+TypeScript/Vite/AppleClang/Metal/Windows/Vulkan/interactive GUI PASS
+has been observed for Stages 15–17. Do not describe the source
+implementation as hardware-verified. Prior 2/2 Mac CTest PASS belongs
+to an older Scene-only preview.
+
 # HTML5 Studio full functional migration
+
+## 2026-11-23 — Stage 13: independent Scene and FX GPU swapchains
+
+The SpectraFX Graph native GPU preview **NO LONGER BORROWS OR
+REPOSITIONS the map Scene drawable**. StudioHost now uses three
+`StudioSurface` values: `Scene`, `Game` and `Fx`. The native
+`Fx` viewport owns its own `StudioScene`, renderer, camera, gfx Device
+and native CAMetalLayer (macOS) / Win32 Vulkan child window (Windows).
+Both map Scene and FX are framed on the **same render-owner thread**
+using separate swapchains and can be displayed simultaneously.
+`studio.viewportRect {id:"fx"}` places ONLY the FX surface. The
+browser never draws fake particles or receives GPU handles.
+`studio.spectraPreview` and `aiversemcp fx_graph_preview` remain
+the shared playback/camera/parameter control surface, but target
+`fxPreview_` rather than the authored Scene. No native map brush,
+selection, asset drop, keyboard deletion or ECS mutation is permitted
+from the dedicated FX window. Independent map Scene camera/history
+are untouched. Both renderer/device lifetimes retire on the native
+owner thread.
+
+This supersedes Stage 11's **one shared native surface** limitation
+without replacing the established Stage 11 HTML5 dock rectangle.
+Metal CTest source now creates two real devices and captures different
+GPU frames; macOS Studio CI also compiles the full native host.
+**Full AppleClang/Metal, Windows Vulkan and WKWebView UI acceptance
+not yet observed as PASS.** Required agent handoff:
+`docs/agent-handoffs/spectrafx-studio-stage13-independent-gpu-targets-2026-11-23.md`.
+
 
 Owner scope confirmed 2026-11-20: complete full functional transfer before main merge. Do not equate a registered tab, JSON endpoint, placeholder, disabled control or source scan with feature parity. Legacy ImGui stays available until the acceptance matrix is complete. Update 2026-11-21 (stages 103–111): every registered legacy window has an HTML5 panel; the status column says how deep each one goes.
 
 Baseline: main 076139d12d9ea2380a5445f823323f4e2c096811 integrated into feature/studio-html5; tested HEAD 6e54c2e5ad743caa88daa95e4355daf313f942e4. Native app builds, 17 selected CTests pass, Python contracts 19 pass, frontend build/domain tests pass. These checks do not demonstrate functional parity. Mac UI was initially blocked by locked desktop; Stage 80 later exercised native Game interactively.
+
+## SpectraFX V2 editing update (Stage 7, 2026-11-23)
+
+The `fx_graph` HTML5 pane has a typed Curve/Gradient key editor for
+existing `Curve` and `Gradient` value nodes, in addition to the
+Data Interfaces inspector, real project Assets image picker and native
+Workspace-backed topology canvas. Static curve/gradient visualization is
+**not** a GPU particle preview. Typecheck/build and macOS/Windows
+interaction QA for the latest code remain pending on stacked draft PR #115.
+See `docs/agent-handoffs/spectrafx-studio-stage7-curve-gradient-2026-11-23.md`.
+
+## SpectraFX Stage 8 update — real native Scene preview (source only)
+
+The `fx_graph` panel now has typed Play/Pause/Step/Seek controls
+for native `studio.spectraPreview`. It loads an unsaved v2 Graph through
+native compilation, steps a real `GraphRuntime` on StudioScene's
+render thread and draws particles before PRISMA resolves the native
+Scene pass. The browser renders only controls, never fake particles.
+This does not yet create an independent embedded preview viewport or
+prove Metal/GPU image parity. Stage 8 macOS native, Windows, WebView
+and frontend checks are pending. Handoff:
+`docs/agent-handoffs/spectrafx-studio-stage8-native-preview-2026-11-23.md`.
+
+## 2026-11-23 — SpectraStudio embedded native FX preview + MCP (Stages 11–12)
+
+The latest HTML5 SpectraFX Graph panel includes a **real embedded native
+Metal/Vulkan particle viewport**: `SpectraDockViewport.tsx` reports its
+scroll-clipped CSS rect as `studio.viewportRect {id:"fx"}`. StudioHost
+repositions its existing Scene GPU surface with FX priority and switches
+StudioScene into a neutral grid stage with isolated camera, preserving the
+authored map camera and blocking all Scene entity edits. The real
+`spectra::GraphRuntime` executes on the render thread, then draws inside
+native GPU render passes. Scene and FX share one surface; concurrent
+independent rendering is NOT supported in this initial stage.
+
+`fx_graph_preview` is now in the existing `aiversemcp` tools/list,
+sharing a render-thread callback with `studio.spectraPreview`.
+Supports status/load/play/pause/step/seek/restart/parameter/stop plus
+cameraReset/cameraOrbit/cameraZoom. `load` accepts safe graphName,
+`draft:true`, or inline Graph v2. All earlier `fx_graph_*` asset CRUD,
+editor and draft MCP tools remain unchanged. Standalone MCP reports no
+native GPU viewport and does not fake frames.
+Node clipping tests, native Metal isolated dock tests and MCP discovery,
+safe path/callback tests were AUTHORED. No exact-SHA AppleClang/Metal/
+HTML5/WebView/Windows PASS has been observed for these latest changes;
+the user's prior native CTest 2/2 PASS predates the embedded viewport.
+
+Handoffs:
+`docs/agent-handoffs/spectrafx-studio-stage11-embedded-preview-2026-11-23.md`
+`docs/agent-handoffs/spectrafx-studio-stage12-mcp-camera-2026-11-23.md`
 
 ## Window inventory
 
@@ -47,8 +174,8 @@ Derived from actual AIVERSE_EDITOR_WINDOW registrations in apps/editor/windows. 
 | `scripts` | `apps/editor/windows/ScriptsWindow.cpp` | Scripts panel: Lua editor, save with syntax check, Check (108) |
 | `shader_graph` | `apps/editor/windows/ShaderGraphWindow.cpp` | Partial; native visual parity pending |
 | `spectrafx_gpu_assets` | `apps/editor/windows/SpectraFxGpuAssetsWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) |
-| `spectrafx_graph` | `apps/editor/windows/SpectraFxGraphWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110); no node-graph canvas |
-| `spectrafx_graph` | `apps/editor/windows/SpectraGraphWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110); no node-graph canvas |
+| `spectrafx_graph` | `apps/editor/windows/SpectraFxGraphWindow.cpp` | Stages 5–6 Graph v2: typed Data Interface editor, project Assets texture picker, native validation/drafts/publish, node topology canvas with drag/zoom and native add/connect/disconnect; full Niagara graph editing and GPU particle preview still pending |
+| `spectrafx_graph` | `apps/editor/windows/SpectraGraphWindow.cpp` | Stages 5–6 Graph v2: typed Data Interface editor, project Assets texture picker, native validation/drafts/publish, node topology canvas with drag/zoom and native add/connect/disconnect; full Niagara graph editing and GPU particle preview still pending |
 | `stats` | `apps/editor/windows/StatsWindow.cpp` | Statistics panel: map contents, Scene fps (110) |
 | `studio_camera_bookmarks` | `apps/editor/windows/StudioCameraBookmarksWindow.cpp` | Scene toolbar bookmarks (106) |
 | `studio_extensions` | `apps/editor/windows/StudioExtensionsWindow.cpp` | Extensions panel: editor/extensions.lua widgets, commands, Scene gizmos (111) |

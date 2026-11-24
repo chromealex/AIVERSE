@@ -195,10 +195,14 @@ public:
                 });
             if(!scheduled) {status_="Invalid GPU emission frame";return false;}
         }
+        SpectraFxGpuEnvironment fieldEnvironment=config_.environment;
+        fieldEnvironment.acceleration.x+=externalAcceleration_.x;
+        fieldEnvironment.acceleration.y+=externalAcceleration_.y;
+        fieldEnvironment.acceleration.z+=externalAcceleration_.z;
         if(twin_) {
             if(!config_.appearance.additive && sortCameraValid_)
                 slots_.evolution().setTwinSortView(sortCameraEye_,sortCameraForward_);
-            if(slots_.step(dt,config_.environment)) {
+            if(slots_.step(dt,fieldEnvironment)) {
                 if(config_.environment.reportImpacts && gpuDevice_)
                     impactFeedback_.request(*gpuDevice_,slots_);
                 return true;
@@ -207,7 +211,7 @@ public:
             suspended_=true;
             return false;
         }
-        if(slots_.step(dt,config_.environment)) {
+        if(slots_.step(dt,fieldEnvironment)) {
             // A single visible alpha particle needs no ordering. Culling
             // also suppresses sort work while particle lifetime still
             // advances on the GPU.
@@ -291,6 +295,21 @@ public:
             externalSpawnScale_=std::clamp(scale,0.0f,1.0f);
     }
 
+    // Applied equally to the Metal compute kernel and its CPU twin.
+    // Never changes the authored asset or authoritative simulation state.
+    // One sample per emitter/frame (from a host-owned read-only field).
+    bool setExternalAcceleration(float3 acceleration) {
+        const auto valid=[](float v) {
+            return std::isfinite(v) && std::abs(v)<=1000.f;
+        };
+        if(!valid(acceleration.x) || !valid(acceleration.y) ||
+           !valid(acceleration.z))return false;
+        externalAcceleration_=acceleration;
+        return true;
+    }
+    float3 origin() const {return origin_;}
+    float3 externalAcceleration() const {return externalAcceleration_;}
+
     // Update only presentation LOD; the particle state and its clock still
     // advance outside visibility to preserve safe expiry/recycling.
     void updateLod(render::float3 cameraEye) {
@@ -356,6 +375,7 @@ public:
         scheduler_.reset();
         lodSpawnScale_=1;
         externalSpawnScale_=1;
+        externalAcceleration_={0,0,0};
         lodVisible_=true;
         sortCameraValid_=false;
         twin_=false;
@@ -466,6 +486,7 @@ private:
     bool suspended_=false;
     float lodSpawnScale_=1.0f;
     float externalSpawnScale_=1.0f;
+    float3 externalAcceleration_{};
     FxQuality globalQuality_=FxQuality::High;
     bool lodVisible_=true;
     uint64_t sortedFrames_=0;

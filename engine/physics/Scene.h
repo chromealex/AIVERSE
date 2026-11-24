@@ -127,6 +127,9 @@ public:
     // Queries skip sensors unless asked; results name live handles, sorted (all hits by fraction,
     // overlaps by handle) so they do not depend on broad-phase order.
     RayHit raycast(b3Vec3 origin, b3Vec3 translation, const QueryFilter& filter = {}) const;
+    // Swept sphere, native Box3D shape query; radius 0 uses raycast.
+    // Initial overlaps without a valid normal are not depenetration results.
+    RayHit sphereCast(b3Vec3 origin,b3Vec3 translation,float radius,const QueryFilter& filter={}) const;
     std::vector<RayHit> raycastAll(b3Vec3 origin, b3Vec3 translation, const QueryFilter& filter = {}) const;
     std::vector<BodyHandle> overlapSphere(b3Vec3 centre, float radius, const QueryFilter& filter = {}) const;
     std::vector<BodyHandle> overlapBox(b3Vec3 centre, b3Vec3 halfExtents, b3Quat rotation, const QueryFilter& filter = {}) const;

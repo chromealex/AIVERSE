@@ -294,6 +294,8 @@ class StudioReferencePinZoomTests(unittest.TestCase):
         self.assertIn('min="75" max="200" step="5"', app)
         viewport = self.source("components/ViewportPlaceholder.tsx")
         self.assertIn("window.addEventListener('resize', update)", viewport)
+        self.assertIn("new ResizeObserver(update)", viewport)
+        self.assertIn("observer.observe(host)", viewport)
         self.assertIn("getBoundingClientRect()", viewport)
 
 

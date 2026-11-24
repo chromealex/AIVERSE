@@ -23,7 +23,7 @@
 
 namespace aiverse::studio {
 
-enum class StudioSurface { Scene, Game };
+enum class StudioSurface { Scene, Game, Fx };
 
 // What a shell provides. Called on the main (UI) thread only, except runInBackground's work.
 class StudioHostPlatform {
@@ -85,6 +85,10 @@ public:
     // Runs fn on the Scene render thread between its frames and waits (inline when there is none yet).
     // Shells use it for Scene surface changes, e.g. resizing the drawable.
     void runOnSceneThread(const std::function<void()>& fn) { if (renderThread_) renderThread_->invoke(fn); else fn(); }
+    // Separate dedicated FX drawable; both GPU Scenes have the same owner
+    // thread, but independent devices/swapchains and camera lifetimes.
+    void fxCameraOrbit(double dx,double dy);
+    void fxCameraZoom(double wheel);
     bool projectLoading() const { return projectLoading_; }
     bool htmlComposite() const { return htmlComposite_; }
 
@@ -178,6 +182,7 @@ private:
         std::vector<std::string> thumbnails; // Assets panel model thumbnails finished since the last frame
         uint32_t drawCalls = 0;
     };
+    void tickFx();                     // UI thread: independent native FX surface
     void tickScene();                  // UI thread: snapshot inputs, kick the render thread, publish results
     void renderSceneFrame();           // render thread: one map frame
     void publishSceneFrame(const FrameOutputs& out);
@@ -194,6 +199,12 @@ private:
     void pollAgentRequests();
     Json assetThumbnail(const std::string& path);
     Json viewportInput(const Json& input);
+    Json dispatchSpectraPreview(const Json& params);
+    uint64_t spectraDispatchSequence_=0,spectraDispatchFailed_=0;
+    uint64_t packageProjectEpoch_=0;
+    Json runSpectraPreview(const Json& params); // shared HTML5 / authenticated MCP bridge
+    void cancelSpectraCapture(); // invalidate callback state before dropping ownership
+    Json captureSpectraFrame(const Json& params); // bounded asynchronous native GPU readback
     void applyViewport(const Json& params);
     bool handleHostMethod(const Json& req); // methods the host answers itself; false: StudioSession's
     void afterSessionReply(const Json& req, const Json& reply);
@@ -220,6 +231,7 @@ private:
     void publishBuildingPanelFrame();
     Json buildingPanelFrame(const BuildingPreviewJob& job);
     std::unique_ptr<StudioScene> preview_;             // created, used and destroyed on renderThread_
+    std::unique_ptr<StudioScene> fxPreview_;           // separate GPU drawable + isolated camera; same owner render thread
     std::unique_ptr<StudioRenderThread> renderThread_;
     std::mutex renderIoMutex_;                         // guards renderInputs_ / renderOutputs_
     FrameInputs renderInputs_;
@@ -234,10 +246,25 @@ private:
     std::unique_ptr<StudioGameSurface> game_;
     Json playReview_;
     uint64_t playReviewSerial_=0;
-    NativeViewportPlacement placement_{}, gamePlacement_{};
+    NativeViewportPlacement placement_{}, gamePlacement_{}, fxPlacement_{};
+    // Independent native FX drawable/swapchain: no Scene surface reparent,
+    // no camera hijack. Both run on the existing native render owner thread.
+    bool fxSurfaceVisible_=false;
     double gameFrameTime_ = 0;
     struct AgentShot { std::string png; int w = 0, h = 0; std::atomic<bool> done{false}; };
     std::shared_ptr<AgentShot> agentShot_; // agent view_screenshot capture on its way
+    struct FxShot {
+        uint64_t id=0;
+        bool cancelled=false;
+        std::mutex mutex; // capture callback may run on GPU completion thread
+        bool done=false;
+        int width=0,height=0;
+        std::string jpeg,error;
+        Json provenance=Json::object(); // immutable at native render-owner capture scheduling
+    };
+    std::shared_ptr<FxShot> fxShot_; // one bounded in-flight FX capture per host
+    double fxShotStartedAt_=0;
+    uint64_t nextFxShotId_=1;
     bool readyEmitted_ = false, projectLoading_ = false, loadingShown_ = false, surfaceSnap_ = false;
     std::shared_ptr<bool> alive_ = std::make_shared<bool>(true); // background completions after shutdown
     double nextGizmoPoll_ = 0, nextAgentPoll_ = 0, lastSceneFrame_ = 0, sceneFrameMs_ = 0;

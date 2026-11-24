@@ -1,0 +1,11 @@
+# Stage 130 — CPU scene Data Interfaces and prepared socket emission
+
+Branch: feature/spectrafx-html5-data-interfaces-20261123
+Plan: e2a2c24233676cdc3f879bd2718e5b0e154954af
+Implementation: d7cb3c139e4e52d3bcbeb2f31f2dcc0e91a16454
+
+Implemented native SpectraPresentationSystem graph binding registration, required/fallback Data Interface sampling before attachment starts, frame-sync parameter refresh for future births without killing/restarting for sampled-value changes, and committed-event sampling. Missing required data detaches according to existing killOnDetach policy; registry is non-owning at presenter level and reset clears it. StudioSpectraSources now registers graph schemas and bindings and has shared immutable registry ownership; StudioScene exposes explicit owner-thread setSpectraSceneDataRegistry for both CPU and GPU scene paths. Project/map replacement clears it, so republish after activation. Isolated FX preview is separate. CPU samples once per source per presentation sync, not at every particle's interpolated birth position.
+
+engine/view/SpectraSocketPose.h uses existing View compiled socket identity, current rig publication and model-space prepared matrices to compose native position/direction; rejects stale epochs, invalid matrices and missing evaluated pose (static bind fallback only by explicit opt-in). No animation clock or new authoritative state. Host owns model read lease and can feed pose to GraphRuntime, pool or existing presenter resolver. Native socket selection authoring and automatic model/scene publication are not implemented here.
+
+Changed EcsVfxPresentation.h, StudioSpectraSources.h, StudioScene.h, new SpectraSocketPose.h, tests/vfx_ecs_presentation_test.cpp, existing skill and roadmap/area notes. No authored schema, GPU ABI or persistence change. Existing graph editing operations apply; no new MCP or Studio UI operation. Regression source covers required data, refresh, events, reset and pose epoch/fallback. Compilation, CTest, hardware, performance and GUI/visual QA NOT RUN per user request. No main sync/merge. Next: automatically publish actual committed environment snapshots and prepared sockets from scene hosts, then remaining collision/geometry/fluid/audio matrix.

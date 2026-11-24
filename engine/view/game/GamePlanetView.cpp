@@ -190,6 +190,26 @@ bool GameView::placeObject(const SceneObject& o, int& body, float3& ground, floa
     return true;
 }
 
+bool GameView::planetFxObjectPose(const SceneObject& o,float3& position,float3& direction) const {
+    if(o.body!=planetCam_.body() || o.body<0 || dot(o.pos,o.pos)<=1e-10f)return false;
+    int body;float3 g,up,east,south;float lift;
+    if(!placeObject(o,body,g,up,east,south,lift))return false;
+    position=g+up*lift;
+    const float len=length(o.facing);
+    direction=std::isfinite(len)&&len>1e-5f?o.facing*(1.f/len):up;
+    return std::isfinite(position.x)&&std::isfinite(position.y)&&std::isfinite(position.z)&&
+           std::isfinite(direction.x)&&std::isfinite(direction.y)&&std::isfinite(direction.z);
+}
+bool GameView::planetFxTerrain(float3 local,float& relief,float& clearance,float3& up) const {
+    const auto* surface=planets_.surface(planetCam_.body());
+    const float radius=length(local);
+    if(!surface||!std::isfinite(radius)||radius<=1e-5f)return false;
+    up=local*(1.f/radius);
+    relief=surface->heightAt(up);
+    clearance=radius-surface->radius()-relief;
+    return std::isfinite(relief)&&std::isfinite(clearance);
+}
+
 bool GameView::planetPlacement(const SceneObject& o, mat4& m) const {
     int body; float3 g, up, east, south; float lift;
     if (!placeObject(o, body, g, up, east, south, lift)) return false;

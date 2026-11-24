@@ -1,4 +1,5 @@
 #include "apps/studio-native/StudioHost.h"
+#include "apps/studio-native/StudioSpectraPackageImport.h"
 #include "apps/studio-native/StudioHumanLookDocument.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/studio-native/StudioBuildingGeneration.h"
@@ -17,29 +18,7 @@
 #include <regex>
 #include <set>
 
-// These private, header-only vendor implementations expose many static
-// entry points Studio does not use. Keep compiler diagnostics enabled
-// for our code; scope vendor-only warnings to their respective includes.
-#if defined(__clang__) || defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-function"
-#endif
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_STATIC
-#include "third_party/stb/stb_image.h"
-#if defined(__clang__) || defined(__GNUC__)
-#pragma GCC diagnostic pop
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-function"
-#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_STATIC
-#include "third_party/stb_image_write/stb_image_write.h"
-#if defined(__clang__) || defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
+#include "apps/studio-native/StudioStbCodecs.h"
 
 namespace aiverse::studio {
 namespace fs = std::filesystem;
@@ -110,18 +89,31 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
     session_->setMaterialSlotProvider([this](const std::string& asset) {
         return preview_ ? onScene([&] { return preview_->modelMaterialSlots(asset); }) : std::vector<std::string>{};
     });
+    // Workspace::toolList is the common aiversemcp discovery surface.
+    // Authenticated agent calls and HTML5 buttons use the same runtime
+    // commands, compiled graph validation and render-thread ownership.
+    session_->workspace().setSpectraPreviewHandler([this](const Json& p) {
+        return runSpectraPreview(p);
+    });
 }
 StudioHost::~StudioHost() { shutdown(); }
+void StudioHost::cancelSpectraCapture() {
+    auto shot=std::move(fxShot_);
+    if(shot){std::lock_guard<std::mutex> lock(shot->mutex);shot->cancelled=true;}
+}
 void StudioHost::shutdown() {
     *alive_ = false;
     retireBuildingPanelPreview();
+    cancelSpectraCapture();
+    if(session_)session_->workspace().setSpectraPreviewHandler({});
     game_.reset(); // hosted client and its device retire before the native surface
     if (renderThread_) {
         // The Scene and its GPU resources are released on their owner thread, then the thread stops.
-        try { renderThread_->invoke([&] { preview_.reset(); }); } catch (const std::exception&) {}
+        try { renderThread_->invoke([&] { fxPreview_.reset(); preview_.reset(); }); } catch (const std::exception&) {}
         renderThread_->stop();
         renderThread_.reset();
     }
+    fxPreview_.reset();
     preview_.reset(); // GPU resources before the native view
 }
 
@@ -263,6 +255,8 @@ void StudioHost::openProject(const std::string& path, int64_t requestId) {
     buildingGraphOverlayScene_=0;rebuildOverlay();
     session_->setBuildingGraphReader({});
     projectLoading_ = true;
+    ++packageProjectEpoch_;
+    cancelSpectraCapture(); // invalidate old project callbacks before opening
     if (game_) game_->stop();
     playReview_=Json();
     sendProjectSplash(path);
@@ -278,6 +272,9 @@ void StudioHost::openProject(const std::string& path, int64_t requestId) {
         },
         [this, alive, path, requestId, snapshot, error] {
             if (!*alive) return;
+            // Reopening the same directory is a new preview lifetime too.
+            // Invalidate on successful project open before accepting commands.
+            if(error->empty()&&fxPreview_)onScene([&]{fxPreview_.reset();});
             projectLoading_ = false;
             if (preview_) onScene([&] { preview_->resetCamera(); });
             mapSnapshot_.reset(); rulesSnapshot_.reset();
@@ -324,6 +321,11 @@ void StudioHost::gameEvent(const platform::Event& event) {
 }
 void StudioHost::surfaceDetached(StudioSurface surface) {
     if (surface == StudioSurface::Scene) { placement_ = {}; readyEmitted_ = false; }
+    else if(surface == StudioSurface::Fx) {
+        fxPlacement_={};fxSurfaceVisible_=false;
+        cancelSpectraCapture();
+        if(fxPreview_)onScene([&]{fxPreview_.reset();});
+    }
     else { gamePlacement_ = {}; if (game_) game_->suspend(); }
 }
 void StudioHost::tickGame() {
@@ -445,6 +447,62 @@ void StudioHost::retireBuildingPanelPreview(){
     buildingPreviewPending_=false;
     ++buildingPreviewToken_;
 }
+void StudioHost::tickFx() {
+    if(!fxPlacement_.visible || !platform_.surfaceDrawable(StudioSurface::Fx))return;
+    try {
+        if(!renderThread_) {
+            const char* threaded=std::getenv("AIVERSE_STUDIO_RENDER_THREAD");
+            renderThread_=std::make_unique<StudioRenderThread>(
+                [this]{renderSceneFrame();},!(threaded&&std::string(threaded)=="0"));
+        }
+        if(!fxPreview_) {
+            onScene([&] {
+                auto created=std::make_unique<StudioScene>(
+                    platform_.createDevice(StudioSurface::Fx));
+                created->setOrientationGizmo(false);
+                created->setContinuousRedraw(true);
+                created->setSpectraDockMode(true);
+                created->setSpectraEngineAssetRoot(engineRoot_+"/engine/assets/");
+                fxPreview_=std::move(created);
+            });
+        }
+        const auto& ws=session_->workspace();
+        const auto width=fxPlacement_.pixelsW,height=fxPlacement_.pixelsH;
+        // Only one native render owner; the independent FX drawable does not
+        // advance, block or copy Scene's simulation, selection or GPU device.
+        onScene([&] {
+            platform_.sceneThreadScope([&] {
+                fxPreview_->frame(width,height,ws.map,ws.map.data.worldSpace,
+                    "","",Json::object(),0,
+                    float(ws.project.rules.levelHeight.toDouble()),
+                    ws.project.dir,ws.project.rulesJson);
+            });
+        });
+    } catch(const std::exception& ex) {
+        platform_.log(std::string("AIVERSE independent FX GPU view: ")+ex.what());
+        ViewportRect hidden;NativeViewportPlacement none;
+        (void)platform_.placeSurface(StudioSurface::Fx,hidden,none);
+        fxPlacement_={};fxSurfaceVisible_=false;
+        cancelSpectraCapture();
+        try{onScene([&]{fxPreview_.reset();});}catch(const std::exception&){}
+    }
+}
+void StudioHost::fxCameraOrbit(double dx,double dy) {
+    if(!fxPreview_ || !fxPlacement_.visible)return;
+    if(!finite({dx,dy})||std::abs(dx)>250||std::abs(dy)>250)return;
+    onScene([&]{
+        if(!fxPreview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),session_->workspace().project.dir).getBool("replayPending"))
+            fxPreview_->orbit(float(dx),float(dy));
+    });
+}
+void StudioHost::fxCameraZoom(double wheel) {
+    if(!fxPreview_ || !fxPlacement_.visible)return;
+    if(!std::isfinite(wheel)||std::abs(wheel)>250)return;
+    onScene([&]{
+        if(!fxPreview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),session_->workspace().project.dir).getBool("replayPending"))
+            fxPreview_->zoom(float(wheel));
+    });
+}
 void StudioHost::tick() {
     publishBuildingPanelFrame();
     if (projectLoading_) return; // the background thread owns the session right now
@@ -487,6 +545,7 @@ void StudioHost::tick() {
     }
     tickAgentScreenshot();
     pollAgentRequests();
+    tickFx(); // dedicated native FX drawable continues even if Scene is hidden
     if (!placement_.visible || !platform_.surfaceDrawable(StudioSurface::Scene)) {
         session_->setFacialPreviewGpuStatus(false, "Native Scene viewport hidden or not drawable");
         return;
@@ -1014,6 +1073,7 @@ bool StudioHost::terrainStroke(int phase, double x, double y, double w, double h
     return ok;
 }
 bool StudioHost::placeAsset(const std::string& asset, double x, double y, double w, double h) {
+
     if (projectLoading_ || !preview_) return false;
     render::float3 at{};
     if (!onScene([&] { return preview_->groundPoint(float(x), float(y), float(w), float(h), at); })) return false;
@@ -1033,6 +1093,7 @@ bool StudioHost::placeAsset(const std::string& asset, double x, double y, double
     return true;
 }
 bool StudioHost::placeType(const std::string& type, double x, double y, double w, double h) {
+
     if (projectLoading_ || !preview_ || type.empty() || type.size() > 128) return false;
     render::float3 at{};
     if (!onScene([&] { return preview_->groundPoint(float(x), float(y), float(w), float(h), at); })) return false;
@@ -1095,8 +1156,13 @@ void StudioHost::select(double x, double y, double w, double h, const std::strin
     if (!request("studio.select", std::move(params)).has("error")) sendEvent("selection.changed", "");
 }
 void StudioHost::importDroppedFiles(const std::vector<fs::path>& files, const std::string& folder) {
-    if (files.empty() || files.size() > 64 || session_->workspace().project.dir.empty()) return;
+    if (projectLoading_ || files.empty() || files.size() > 64 || session_->workspace().project.dir.empty()) return;
     try {
+        if(std::any_of(files.begin(),files.end(),isSpectraPackagePath)){
+            if(files.size()!=1)throw std::runtime_error("Drop one VFX package at a time");
+            sendEventPayload("spectrafx.packageStaged",stageSpectraPackage(session_->workspace().project.dir,files.front()));
+            return;
+        }
         sendEventPayload("assets.importPreview", session_->previewExternalAssets(files, folder));
     } catch (const std::exception& ex) {
         Json payload = Json::object();
@@ -1109,6 +1175,9 @@ void StudioHost::importDroppedFiles(const std::vector<fs::path>& files, const st
 // Unity Scene view mapping, shared with the HTML composite path (apps/studio-web/src/panels/sceneCamera.ts):
 // LMB select (drag: marquee), Alt+LMB orbit, Alt+Command+LMB / MMB pan, RMB flythrough (WASD/QE), Alt+RMB zoom.
 void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx, double dy, double w, double h, StudioSceneMods mods) {
+    // Embedded VFX preview is *not* the game map. Its pointer input controls
+    // its isolated camera only; never pick, sculpt, paint, select, drag or
+    // delete an authored entity while this native layer belongs to FX.
     auto& m = mouse_;
     if(preview_&&onScene([&]{return preview_->caveGlobeRequested();})){
         // Globe coordinates are never passed to flat entity/terrain tools.
@@ -1292,6 +1361,278 @@ Json StudioHost::assetThumbnail(const std::string& path) {
     out.set("none", Json::fromBool(true));
     return out;
 }
+// One-shot real GPU frame snapshot. The native RHI owns the readback; an
+// immutable shared state lives until its GPU completion callback finishes.
+// JPEG encoding stays in the callback and its result is read on the host UI
+// thread. No continuous bitmap uploads, no arbitrary output file paths.
+Json StudioHost::captureSpectraFrame(const Json& params) {
+    const std::string action=params.getStr("action");
+    Json out=Json::object();
+    // Preserve the ordinary preview status envelope so the same typed
+    // Studio/MCP response can carry a capture result without resetting
+    // playback controls in React.
+    const auto respond=[&](Json capture) {
+        Json status=fxPreview_?onScene([&]{
+            return fxPreview_->spectraPreviewCommand(
+                Json::parse(R"({"action":"status"})"),
+                session_->workspace().project.dir);
+        }):Json::object();
+        status.set("capture",std::move(capture));
+        return status;
+    };
+    if(action=="captureCancel"||action=="captureStatus") {
+        const auto shot=fxShot_;
+        if(shot){
+            if(!params["captureId"].isNull()&&params["captureId"].integer(-1)!=int64_t(shot->id))throw std::runtime_error("Stale capture ID");
+            out.set("captureId",Json::number(int64_t(shot->id)));
+            if(action=="captureCancel"){
+                {std::lock_guard<std::mutex> lock(shot->mutex);shot->cancelled=true;}
+                fxShot_.reset();out.set("pending",Json::fromBool(false));out.set("ready",Json::fromBool(false));out.set("cancelled",Json::fromBool(true));return respond(std::move(out));
+            }
+        }
+        if(!shot) {
+            out.set("pending",Json::fromBool(false));
+            out.set("ready",Json::fromBool(false));
+            out.set("error",Json::string("No pending SpectraFX frame capture"));
+            return respond(std::move(out));
+        }
+        std::string jpeg,error;
+        Json provenance=Json::object();
+        int w=0,h=0;
+        bool done=false;
+        {
+            std::lock_guard<std::mutex> lock(shot->mutex);
+            done=shot->done;
+            if(done) {
+                jpeg=shot->jpeg;
+                error=shot->error;
+                provenance=shot->provenance;
+                w=shot->width;
+                h=shot->height;
+            }
+        }
+        if(!done) {
+            if(platform_.now()-fxShotStartedAt_>10.) {
+                {std::lock_guard<std::mutex> lock(shot->mutex);shot->cancelled=true;}
+                fxShot_.reset(); // callback owns its shared state until completion
+                out.set("pending",Json::fromBool(false));
+                out.set("ready",Json::fromBool(false));
+                out.set("error",Json::string("SpectraFX GPU capture timed out"));
+                return respond(std::move(out));
+            }
+            out.set("pending",Json::fromBool(true));
+            out.set("ready",Json::fromBool(false));
+            return respond(std::move(out));
+        }
+        fxShot_.reset();
+        out.set("pending",Json::fromBool(false));
+        out.set("ready",Json::fromBool(!jpeg.empty()&&error.empty()));
+        out.set("width",Json::number(int64_t(w)));
+        out.set("height",Json::number(int64_t(h)));
+        out.set("mime",Json::string("image/jpeg"));
+        out.set("provenance",std::move(provenance));
+        if(!error.empty())out.set("error",Json::string(error));
+        if(!jpeg.empty()&&error.empty())
+            out.set("image",Json::string("data:image/jpeg;base64,"+
+                editor::base64Encode(jpeg)));
+        return respond(std::move(out));
+    }
+    if(action!="capture")throw std::runtime_error("Unknown FX capture operation");
+    if(!fxPreview_ || !fxPlacement_.visible ||
+       !platform_.surfaceDrawable(StudioSurface::Fx))
+        throw std::runtime_error("Open the native SpectraFX GPU viewport before capture");
+    const Json& raw=params["maxSide"];
+    if(!raw.isNull() &&
+       (!raw.isNumber()||raw.numberLiteral().find_first_of(".eE-")!=std::string::npos||
+        raw.integer(0)<128||raw.integer(0)>768))
+        throw std::runtime_error("FX snapshot maxSide must be an integer in 128..768");
+    if(!params["requireReplayReady"].isNull() &&
+       params["requireReplayReady"].type()!=Json::Type::Bool)
+        throw std::runtime_error("requireReplayReady must be boolean");
+    const bool requireReplayReady=params.getBool("requireReplayReady");
+    const int maxSide=int(raw.isNull()?512:raw.integer());
+    if(fxShot_) {
+        std::lock_guard<std::mutex> lock(fxShot_->mutex);
+        if(!fxShot_->done && platform_.now()-fxShotStartedAt_<=10.)
+            throw std::runtime_error("An FX GPU capture is still pending");
+    }
+    if(fxShot_){std::lock_guard<std::mutex> lock(fxShot_->mutex);fxShot_->cancelled=true;}
+    auto shot=std::make_shared<FxShot>();
+    shot->id=nextFxShotId_++;
+    out.set("captureId",Json::number(int64_t(shot->id)));
+    fxShot_=shot;
+    fxShotStartedAt_=platform_.now();
+    try {
+        onScene([&] {
+            // Sample provenance on the same native render-owner that schedules readback.
+            const Json nativeStatus=fxPreview_->spectraPreviewCommand(
+                Json::parse(R"({"action":"status"})"),session_->workspace().project.dir);
+            // Check and register capture in one render-owner dispatch. No
+            // second IPC hop can interleave a simulation update here.
+            if(requireReplayReady && !nativeStatus.getBool("replayReady"))
+                throw std::runtime_error("FX replay has not reached its requested frame");
+            Json metadata=Json::object();
+            const auto requestedProject=session_->workspace().project.dir;
+            const auto requestedGeneration=nativeStatus["generation"].integer(-1);
+            const auto requestedTick=nativeStatus["tick"].integer(-1);
+            metadata.set("projectPathAtRequest",Json::string(requestedProject));
+            metadata.set("sampling",Json::string("render-owner-readback-request"));
+            metadata.set("tick",nativeStatus["tick"]);
+            metadata.set("generation",nativeStatus["generation"]);
+            metadata.set("backend",nativeStatus["backend"]);
+            metadata.set("camera",nativeStatus["camera"]);
+            metadata.set("background",nativeStatus["background"]);
+            metadata.set("gpu",nativeStatus["gpu"]);
+            metadata.set("replayReady",nativeStatus["replayReady"]);
+            metadata.set("frameSerialAtRequest",Json::number(int64_t(fxPreview_->fxFrameSerial())));
+            metadata.set("completedFrameSerialAtRequest",Json::number(int64_t(fxPreview_->fxCompletedFrameSerial())));
+            metadata.set("submissionFenceAtRequest",Json::number(int64_t(fxPreview_->fxSubmissionFence())));
+            metadata.set("completedFenceAtRequest",Json::number(int64_t(fxPreview_->fxCompletedFence())));
+            metadata.set("frameExact",Json::fromBool(false));
+            {std::lock_guard<std::mutex> lock(shot->mutex);shot->provenance=std::move(metadata);}
+            fxPreview_->captureNextFrameTagged(
+                [shot,maxSide,requireReplayReady,requestedProject,requestedGeneration,requestedTick](uint64_t capturedFrame,int w,int h,std::vector<uint8_t> rgba,Json frameMetadata) {
+                    {std::lock_guard<std::mutex> lock(shot->mutex);if(shot->cancelled)return;}
+                    const bool identityMatches=frameMetadata.isObject()&&frameMetadata.getStr("projectPath")==requestedProject&&frameMetadata["generation"].integer(-2)==requestedGeneration;
+                    {std::lock_guard<std::mutex> lock(shot->mutex);
+                     shot->provenance.set("identityMatches",Json::fromBool(identityMatches));
+                     shot->provenance.set("capturedFrameSerial",Json::number(int64_t(capturedFrame)));
+                     shot->provenance.set("gpuFrameIdentified",Json::fromBool(capturedFrame!=0&&w>0&&h>0));
+                     const bool matched=capturedFrame!=0&&w>0&&h>0&&identityMatches;
+                     if(matched){
+                         for(const char* key:{"tick","generation","backend","camera","background","grid","axes","gpu","replayReady","projectPath"})
+                             shot->provenance.set(key,frameMetadata[key]);
+                         shot->provenance.set("sampling",Json::string("matched-rendered-frame"));
+                     }
+                     shot->provenance.set("frameExact",Json::fromBool(matched));}
+                    std::string jpeg,error;
+                    int ow=0,oh=0;
+                    if(frameMetadata.isObject()&&!identityMatches)error="Capture belongs to a different graph generation or project";
+                    else if(requireReplayReady&&(!identityMatches||!frameMetadata.getBool("replayReady")||frameMetadata["tick"].integer(-2)!=requestedTick))
+                        error="Captured frame has no matching replay-ready provenance";
+                    else if(w<=0||h<=0||w>8192||h>8192||
+                       uint64_t(w)*uint64_t(h)*4>64ull*1024ull*1024ull ||
+                       rgba.size()<uint64_t(w)*uint64_t(h)*4)
+                        error="Invalid native FX GPU capture dimensions";
+                    else {
+                        const int longest=std::max(w,h);
+                        ow=std::max(1,w*maxSide/longest);
+                        oh=std::max(1,h*maxSide/longest);
+                        std::vector<uint8_t> pixels(size_t(ow)*oh*4);
+                        for(int y=0;y<oh;++y)for(int x=0;x<ow;++x) {
+                            const size_t sx=size_t(x)*w/ow,sy=size_t(y)*h/oh;
+                            const auto* p=&rgba[(sy*size_t(w)+sx)*4];
+                            auto* q=&pixels[(size_t(y)*ow+x)*4];
+                            q[0]=p[0];q[1]=p[1];q[2]=p[2];q[3]=255;
+                        }
+                        jpeg=encodeJpeg(pixels,ow,oh,80);
+                        // Bound a JSON-RPC response: 600 KiB JPEG encodes to
+                        // <= 800 KiB base64, under the 1 MiB bridge limit.
+                        if(jpeg.empty()||jpeg.size()>600u*1024u) {
+                            jpeg.clear();
+                            error="Native FX JPEG capture unavailable or too large";
+                        }
+                    }
+                    {
+                        std::lock_guard<std::mutex> lock(shot->mutex);
+                        if(shot->cancelled)return;
+                        shot->jpeg=std::move(jpeg);
+                        shot->error=std::move(error);
+                        shot->width=ow;shot->height=oh;
+                        shot->done=true;
+                    }
+                });
+        });
+    } catch(...) {
+        cancelSpectraCapture();
+        throw;
+    }
+    out.set("pending",Json::fromBool(true));
+    out.set("ready",Json::fromBool(false));
+    return respond(std::move(out));
+}
+// Both HTML5 and authenticated MCP call this on the host UI thread.
+// GPU work stays on the existing render owner; record actual dispatch time.
+Json StudioHost::runSpectraPreview(const Json& params) {
+    const auto sequence=++spectraDispatchSequence_;
+    const double started=platform_.now();
+    try {
+        Json result=dispatchSpectraPreview(params);
+        if(!result.getStr("error").empty()||!result["capture"].getStr("error").empty())
+            ++spectraDispatchFailed_;
+        Json metrics=Json::object();
+        metrics.set("sequence",Json::number(int64_t(sequence)));
+        metrics.set("action",Json::string(params.getStr("action")));
+        metrics.set("elapsedMs",Json::number(std::max(0.,platform_.now()-started)*1000.,3));
+        metrics.set("failed",Json::number(int64_t(spectraDispatchFailed_)));
+        result.set("dispatch",std::move(metrics));
+        return result;
+    } catch(...) {
+        ++spectraDispatchFailed_;
+        throw;
+    }
+}
+Json StudioHost::dispatchSpectraPreview(const Json& params) {
+    if(projectLoading_ || session_->workspace().project.dir.empty())
+        throw std::runtime_error("Open a project before SpectraFX preview");
+    if(!fxPreview_)
+        throw std::runtime_error("Show the native SpectraFX Graph preview to initialize its GPU device");
+    const std::string project=session_->workspace().project.dir;
+    if(params.has("expectedProjectPath") &&
+       (!params["expectedProjectPath"].isString()||params.getStr("expectedProjectPath")!=project))
+        throw std::runtime_error("Stale SpectraFX project");
+    const std::string action=params.getStr("action");
+    const auto current=onScene([&]{
+        return fxPreview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
+    });
+    if(current.getBool("replayPending")&&action!="status"&&action!="stop"&&action!="replayCancel")
+        throw std::runtime_error("Replay restore pending; cancel or wait");
+    if(params.has("expectedGeneration")) {
+        const auto& expected=params["expectedGeneration"];
+        if(!expected.isNumber()||expected.numberLiteral().find_first_of(".eE-")!=std::string::npos||
+           expected.integer(-1)<0)
+            throw std::runtime_error("Invalid SpectraFX expected generation");
+        if(current["generation"].integer(-2)!=expected.integer(-1))
+            throw std::runtime_error("Stale SpectraFX runtime generation");
+    }
+    if(action=="capture"||action=="captureStatus"||action=="captureCancel")
+        return captureSpectraFrame(params);
+    // Stopping and inspecting a ready runtime never require the view to
+    // remain on screen. Load/play/step/seek need a drawable to advance.
+    if(action!="status" && action!="stop" && action!="replayCancel" &&
+       (!fxPlacement_.visible || !platform_.surfaceDrawable(StudioSurface::Fx)))
+        throw std::runtime_error("Open the dedicated SpectraFX native preview viewport");
+    if(action=="cameraReset"||action=="cameraOrbit"||action=="cameraZoom") {
+        if(!fxSurfaceVisible_)throw std::runtime_error("Show the embedded FX viewport for its isolated camera");
+        if(action=="cameraReset") {
+            return onScene([&] {
+                fxPreview_->resetSpectraDockCamera();
+                return fxPreview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
+            });
+        }
+        if(action=="cameraOrbit") {
+            const double dx=params["dx"].toDouble(),dy=params["dy"].toDouble();
+            if(!params["dx"].isNumber()||!params["dy"].isNumber()||
+               !finite({dx,dy})||std::abs(dx)>250||std::abs(dy)>250)
+                throw std::runtime_error("FX cameraOrbit requires finite dx/dy within +/-250");
+            return onScene([&] {
+                fxPreview_->orbit(float(dx),float(dy));
+                return fxPreview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
+            });
+        }
+        const double amount=params["amount"].toDouble();
+        if(!params["amount"].isNumber()||!finite({amount})||std::abs(amount)>250)
+            throw std::runtime_error("FX cameraZoom amount must be finite within +/-250");
+        return onScene([&] {
+            fxPreview_->zoom(float(amount));
+            return fxPreview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
+        });
+    }
+    Json result=onScene([&]{return fxPreview_->spectraPreviewCommand(params,project);});
+    if(action=="stop"||action=="replayRestore"||(action=="load"&&result.getBool("ready")&&result.getStr("error").empty()))
+        cancelSpectraCapture();
+    return result;
+}
 void StudioHost::applyViewport(const Json& params) {
     const std::string id = params.getStr("id");
     ViewportRect rect;
@@ -1306,13 +1647,14 @@ void StudioHost::applyViewport(const Json& params) {
         else if (game_) game_->suspend();
         return;
     }
-    if (id != "scene") {
-        // Another panel's rect: the Scene view is not there.
-        ViewportRect hidden;
-        NativeViewportPlacement none;
-        if (platform_.placeSurface(StudioSurface::Scene, hidden, none)) placement_ = {};
+    if(id=="fx") {
+        NativeViewportPlacement placed;
+        if(!platform_.placeSurface(StudioSurface::Fx,rect,placed))return;
+        fxPlacement_=placed;
+        fxSurfaceVisible_=placed.visible;
         return;
     }
+    if(id!="scene")return;
     NativeViewportPlacement placed;
     if (!platform_.placeSurface(StudioSurface::Scene, rect, placed)) return;
     placement_ = placed;
@@ -1542,6 +1884,8 @@ bool StudioHost::handleHostMethod(const Json& req) {
         onScene([&] { preview_->captureFacialThumbnail(path.string()); });
         Json r = Json::object(); r.set("ok", Json::fromBool(true)); return r;
     });
+    if (method == "studio.spectraPreview")
+        return answer([&]{return runSpectraPreview(params);});
     if (method == "studio.viewportInput") return answer([&] { return viewportInput(params); });
     if (method == "studio.gameProfile") return answer([&] {
         const auto& project=session_->workspace().project.dir;
@@ -1793,6 +2137,33 @@ bool StudioHost::handleHostMethod(const Json& req) {
             sendReply(session_->dispatch(cancelled));
             return true;
         }
+    }
+    if(method=="studio.spectraPackageChoose"){
+        if(projectLoading_||session_->workspace().project.dir.empty()){
+            sendError(req["id"],"Open a project first");return true;
+        }
+        const auto project=session_->workspace().project.dir;
+        const auto epoch=packageProjectEpoch_;
+        const auto requestId=req["id"].integer();
+        auto alive=alive_;
+        platform_.chooseImportSources(project,[this,alive,project,epoch,requestId](std::vector<fs::path> sources){
+            if(!*alive)return;
+            Json reply=Json::object();reply.set("id",Json::number(requestId));
+            try{
+                if(projectLoading_||epoch!=packageProjectEpoch_||session_->workspace().project.dir!=project)
+                    throw std::runtime_error("Project changed while choosing package");
+                Json result=Json::object();
+                if(sources.empty())result.set("cancelled",Json::fromBool(true));
+                else{
+                    if(sources.size()!=1)throw std::runtime_error("Select one .aivfx package");
+                    result=stageSpectraPackage(project,sources.front());
+                    sendEventPayload("spectrafx.packageStaged",result);
+                }
+                reply.set("result",std::move(result));
+            }catch(const std::exception& e){reply.set("error",Json::string(e.what()));}
+            sendReply(reply);
+        });
+        return true;
     }
     if (method == "studio.assetImportPreview") {
         // The browser can choose a verified relative DESTINATION only. Source paths come from a native dialog.

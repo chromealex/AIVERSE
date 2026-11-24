@@ -928,6 +928,10 @@ public:
     // With a post hook: ends the scene pass, runs the effects into screenPass (left open). No-op otherwise.
     // Call after everything that belongs to the 3D scene (particles), before UI.
     void resolvePrisma(); // canonical image processing resolve; leaves UI pass open
+    // One-shot consumer of real main depth, after its writer ends, only on
+    // the offscreen post-process path. Callback must finish any compute pass.
+    using SceneDepthConsumer=std::function<void(gfx::Device&,gfx::TextureHandle,const mat4&,float3)>;
+    void consumeResolvedSceneDepth(SceneDepthConsumer fn){sceneDepthConsumer_=std::move(fn);}
     // Presentation-only camera cut / teleport / view replacement hooks.
     // Invalidating a view keeps GPU target allocations but discards all
     // previous transform and deformation history. No ECS mutation.
@@ -1824,6 +1828,8 @@ private:
     int sceneW_ = 0, sceneH_ = 0;
     PostProcess* post_ = nullptr;      // set by render() when the hook is active, cleared by resolvePrisma()
     gfx::PassDesc postOut_;
+    gfx::TextureHandle resolvedDepthSource_;
+    SceneDepthConsumer sceneDepthConsumer_;
 
     // trace tier
     bool traceWanted_ = true;

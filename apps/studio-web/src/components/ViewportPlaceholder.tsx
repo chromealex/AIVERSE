@@ -90,6 +90,7 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
     observer.observe(host);
     window.addEventListener('resize', update);
     window.addEventListener('scroll', update, true);
+    window.addEventListener('studio:viewport-reflow', update);
     document.addEventListener('visibilitychange', update);
     update();
     return () => {
@@ -100,6 +101,7 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
       stopDockDrag();
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update, true);
+      window.removeEventListener('studio:viewport-reflow', update);
       document.removeEventListener('visibilitychange', update);
       // On tab switch/unmount, remove native surface even if no further resize event occurs.
       forgetViewportRect('scene');

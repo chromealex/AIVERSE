@@ -1,0 +1,5 @@
+# Stage 96 — offline VFX transfer packages
+
+Parent `cbb53a6acdac1a3d92825b2dac9a38d5c68676ff`; branch `feature/spectrafx-html5-data-interfaces-20261123`.
+
+Added local .aivfx ZIP transfer subcommands to existing aiverse_pkg.py and Workspace/MCP fx_replay_package_export/preview/apply. Export requires matching v3 preset in native Workspace, stores recipe plus recorded asset and .meta payloads, SHA-256 checksums, bounded archive/entry sizes. Import is two phases: exact-path add/reuse/conflict plan with GUID duplicate scan and stale revision, then exclusive new-file writes with best-effort rollback on exception. No overwrite, no arbitrary ZIP extraction or network. UI exports to project/packages, previews a named package copied there, installs reviewed assets then uses Stage 95 portable preview/apply for separately saving the recipe. No file chooser/copy across project roots, no manual conflict resolution or automatic GUID remapping during payload installation yet. Catalog package lock unchanged. Python unittest authored, not executed; C++/Node builds not run. Main untouched.

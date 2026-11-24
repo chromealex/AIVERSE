@@ -10,6 +10,7 @@ test('default tree has 4 nested stacks and exactly one copy of each panel',()=>{
   const t=defaultDockTree();const s=dockStacks(t);
   assert.equal(s.length,4);
   assert.deepEqual(s.flatMap(x=>x.tabs).sort(),[...STUDIO_PANELS].sort());
+  for (const panel of STUDIO_PANELS) assert.equal(panelStack(t,panel),STUDIO_PANEL_HOME[panel]);
   assert.equal(panelStack(t,'scene'),'dock-center');
   assert.equal(panelStack(t,'assets'),'dock-bottom');
   assert.deepEqual(findDockStack(t,'dock-left')?.tabs,['hierarchy','project']);
@@ -23,7 +24,7 @@ test('move reorders within a tab stack',()=>{
 test('dragging panels across stacks retains identity',()=>{
   const t=moveTab(defaultDockTree(),'inspector','dock-bottom');
   assert.equal(panelStack(t,'inspector'),'dock-bottom');
-  assert.deepEqual([...findDockStack(t,'dock-right').tabs].sort(),STUDIO_PANELS.filter(p=>STUDIO_PANEL_HOME[p]==='dock-right'&&p!=='inspector').sort());
+  assert.deepEqual(findDockStack(t,'dock-right').tabs,findDockStack(defaultDockTree(),'dock-right').tabs.filter(id=>id!=='inspector'));
 });
 test('closing and reopening recreates a panel only once',()=>{
   let t=closeTab(defaultDockTree(),'scene');
@@ -113,14 +114,19 @@ test('moving a last tab prunes the source split and expands its neighbor',()=>{
   assert.equal(t.root.first.id,'split-body-right');
 });
 test('closing last right panels removes their obsolete split',()=>{
-  let t=defaultDockTree();
-  for(const panel of STUDIO_PANELS.filter(p=>STUDIO_PANEL_HOME[p]==='dock-right'))t=closeTab(t,panel);
+  let t=closeTab(defaultDockTree(),'inspector');
+  assert.ok(findDockStack(t,'dock-right'));
+  t=closeTab(closeTab(closeTab(t,'lighting'),'runtime'),'nereid_flow');
+  assert.ok(findDockStack(t,'dock-right'));
+  t=closeTab(closeTab(closeTab(closeTab(t,'human_appearance'),'wind'),'human_creator'),'history');
+  for(const tool of [...findDockStack(t,'dock-right').tabs]) t=closeTab(t,tool);
   assert.equal(findDockStack(t,'dock-right'),null);
   assert.equal(dockStacks(t).length,3);
 });
 test('reopening Inspector restores pruned right-hand dock',()=>{
   let t=defaultDockTree();
-  for(const panel of STUDIO_PANELS.filter(p=>STUDIO_PANEL_HOME[p]==='dock-right'))t=closeTab(t,panel);
+  for(const tool of [...findDockStack(t,'dock-right').tabs]) t=closeTab(t,tool);
+  assert.equal(findDockStack(t,'dock-right'),null);
   t=reopenTab(t,'inspector','dock-right');
   assert.equal(panelStack(t,'inspector'),'dock-right');
   assert.equal(dockStacks(t).length,4);

@@ -1,0 +1,44 @@
+{
+  "id": "2026-11-24-spectrafx-fire-smoke-plume",
+  "date": "2026-11-24",
+  "system": "spectrafx",
+  "title": "Наклонный шлейф огня и дыма",
+  "titleEn": "Angled fire and smoke plume",
+  "summary": "Огонь остаётся у источника, а плотный тёмный дым уходит по диагонали; внутри шлейфа видны редкие тлеющие точки.",
+  "summaryEn": "The fire stays near its source while a dense dark smoke plume rises diagonally, with occasional glowing embers inside.",
+  "body": [
+    "В графе два объёмных источника: один поддерживает пламя, второй формирует дым. Боковой поток, подъём нагретого газа и новые параметры материала задают форму, клубы и искры."
+  ],
+  "bodyEn": [
+    "The graph uses two volume sources: one sustains the flame, the other forms smoke. Lateral wind, buoyancy and material controls shape the plume, soft billows and embers."
+  ],
+  "status": "in-progress",
+  "verified": "Показано в нативном предпросмотре Studio на macOS с Metal; кадр снят после прогрева симуляции.",
+  "verifiedEn": "Shown in the native Studio preview on macOS with Metal; the frame was captured after simulation warm-up.",
+  "limits": "Это редактируемый эффект, а не точное повторение референса: огонь и дым пока не взаимодействуют с освещением конкретной игровой сцены. Vulkan не проверен на устройстве.",
+  "limitsEn": "This editable effect is not an exact recreation of the reference: fire and smoke have not been checked against a specific game scene’s lighting. Vulkan has not been tested on a device.",
+  "branch": "codex/spectrafx-volumetric-scene",
+  "commit": "706df45d4",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-24-spectrafx-fire-smoke-plume/01.png",
+      "caption": "Пламя у основания, диагональный тёмный дым и отдельные искры в нативном предпросмотре.",
+      "captionEn": "Flame at the source, a diagonal dark smoke plume and scattered embers in native preview."
+    }
+  ],
+  "links": [
+    {
+      "title": "Fire and smoke graph",
+      "href": "examples/spectrafx/fire_smoke_v2.vfx.json"
+    },
+    {
+      "title": "Volumetrics guide",
+      "href": "docs/spectrafx-volumetrics.md"
+    },
+    {
+      "title": "Stage 157 handoff",
+      "href": "docs/agent-handoffs/spectrafx-stage157-reference-fire-smoke-2026-11-24.md"
+    }
+  ],
+  "author": "SpectraFX"
+}

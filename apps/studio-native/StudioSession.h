@@ -21,6 +21,7 @@ class StudioSession {
 public:
     explicit StudioSession(const std::string& engineRoot, const std::string& project = {});
     Json dispatch(const Json& request);   // labels undo steps for the History panel, then dispatchImpl
+    editor::Workspace& workspace() { return ws_; }
     const editor::Workspace& workspace() const { return ws_; }
     void setBuildingGraphReader(std::function<Json(uint64_t)> reader){ws_.buildingGraphDiagnosticsProvider=std::move(reader);}
     Json buildingGraphSnapshot(uint64_t scene)const{return ws_.buildingGraphDiagnosticsProvider?ws_.buildingGraphDiagnosticsProvider(scene):Json{};}

@@ -7,6 +7,7 @@
 #include "Editor.h"
 #include "core/FxOps.h"
 #include "engine/fx/SpectraFX.h"
+#include "engine/fx/SpectraSdfFileIO.h"
 
 namespace aiverse::editor {
 
@@ -149,7 +150,7 @@ void Editor::registerFxPreviewOps() {
             fx::EffectDef compiled;
             std::vector<std::string> errors;
             const Json overrides=p.has("overrides")?p["overrides"]:Json::object();
-            if(!spectra::compileGraph(p["graph"],overrides,compiled,errors)) {
+            if(!spectra::compileGraph(p["graph"],overrides,compiled,errors,fx::projectSdfReader(ws_.project.dir))) {
                 std::string why="SpectraFX graph compile failed:";
                 for(const auto& e:errors)why+="\n"+e;
                 throw std::runtime_error(why);

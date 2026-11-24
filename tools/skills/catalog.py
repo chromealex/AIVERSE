@@ -113,7 +113,7 @@ WORKFLOWS=[
  ('aiverse-look','Lighting, post effects with phone cost, materials, model view blocks, screenshots','docs/postfx.md'),
  ('aiverse-fx','Visual effects from templates or Unity prefabs, tuning, event binding, preview','docs/particles.md'),
  ('aiverse-niagara-vfx','Legacy Niagara-style discovery alias; use the official SpectraFX workflow','docs/spectrafx.md'),
- ('aiverse-spectrafx','SpectraFX universal graphs, particle assets and ECS presentation for native games','docs/spectrafx.md'),
+ ('aiverse-spectrafx','SpectraFX universal graphs, particle assets, GPU RNG, checkpoint rollback, replay, capture and Studio/MCP authoring for native games','docs/spectrafx.md'),
  ('aiverse-prisma','PRISMA universal HDR post-processing, screen effects, volumes, camera profiles and GPU quality','docs/prisma.md'),
  ('aiverse-animation-ecs','Legacy C++ presentation ECS animation API and fixed-point root-motion handoff','engine/animation/EcsAnimationSystems.h'),
  ('aiverse-view','Genre-independent scene View: appearance, layers, visibility, packets and rendering adapters','docs/view.md'),

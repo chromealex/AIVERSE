@@ -1,4 +1,8 @@
 #include "SpectraGpuParticles.h"
+#include "SpectraVolumeParticleSortShaders.h"
+#include "SpectraVolumetricParticleShaders.h"
+#include "SpectraGpuVolumeGrid.h"
+#include "SpectraParticleVolumeShaders.h"
 #include "SpectraGpuShaders.h"
 #include "SpectraGpuFramePlan.h"
 #include "SpectraGpuProgram.h"
@@ -31,15 +35,24 @@ uint8_t byte(float x) {
 
 ComputeBackend chooseComputeBackend(gfx::Backend backend,bool computeAvailable,
                                     ComputePreference preference) {
-    if(preference==ComputePreference::CpuOnly)return ComputeBackend::Cpu;
-    // Metal is the only backend with a verified RHI compute API at the time
-    // of this implementation. Enabling Vulkan requires explicit RHI support.
-    return backend==gfx::Backend::Metal&&computeAvailable
-        ?ComputeBackend::Metal:ComputeBackend::Cpu;
+    if(preference==ComputePreference::CpuOnly||!computeAvailable)return ComputeBackend::Cpu;
+    if(backend==gfx::Backend::Metal)return ComputeBackend::Metal;
+    if(backend==gfx::Backend::Vulkan)return ComputeBackend::Vulkan;
+    return ComputeBackend::Cpu;
+}
+bool supportsSpectraCompute(const gfx::Device& device,bool ownedAllocation){
+    if(!device.supportsCompute())return false;
+    if(device.info().backend==gfx::Backend::Metal)return true;
+    if(device.info().backend!=gfx::Backend::Vulkan)return false;
+    return device.supportsStorageUniformCompute(ownedAllocation?19u:15u)&&
+        (!ownedAllocation||device.supportsGpuAuthoredIndirectDraw());
 }
 bool validComputeEmitter(const ComputeEmitterDesc& d,std::string* why) {
     const auto fail=[&](const char* msg){if(why)*why=msg;return false;};
-    if(d.capacity==0||d.capacity>4096)return fail("GPU emitter capacity must be 1..4096");
+    if(!d.volumeMaterial.valid()||(d.volumeMaterial.enabled&&
+       (d.backend!=ComputePreference::RequireGpu||d.gpuMaterial||!d.shaderGraph.isNull()||!d.graphInputs.isNull())))
+        return fail("Volumetric particles require dedicated GPU material and RequireGpu");
+    if(d.capacity==0||d.capacity>kGpuEmitterMaxSlots)return fail("GPU emitter capacity exceeds allocation safety ceiling");
     if(d.burst==0||d.burst>64)return fail("GPU emitter burst must be 1..64");
     if(d.lifetime<0.01f||d.lifetime>60.f||!finite(d.lifetime))return fail("invalid lifetime");
     if(d.speed<0.f||d.speed>500.f||!finite(d.speed))return fail("invalid speed");
@@ -47,6 +60,17 @@ bool validComputeEmitter(const ComputeEmitterDesc& d,std::string* why) {
     if(!finite(d.gravityY)||std::abs(d.gravityY)>1000.f)return fail("invalid gravity");
     if(!finite(d.drag)||d.drag<0||d.drag>50.f)return fail("invalid drag");
     if(d.burst>d.capacity)return fail("one burst exceeds available slots");
+    if(!finite(d.staticSphereRadius)||d.staticSphereRadius<0||d.staticSphereRadius>10000||
+       !finite(d.staticSphereCenter.x)||!finite(d.staticSphereCenter.y)||!finite(d.staticSphereCenter.z)||
+       std::abs(d.staticSphereCenter.x)>1e6f||std::abs(d.staticSphereCenter.y)>1e6f||std::abs(d.staticSphereCenter.z)>1e6f||
+       !finite(d.collisionBounce)||d.collisionBounce<0||d.collisionBounce>2||
+       !finite(d.collisionDampen)||d.collisionDampen<0||d.collisionDampen>1||
+       !finite(d.collisionRadiusScale)||d.collisionRadiusScale<0||d.collisionRadiusScale>10)
+        return fail("invalid analytic sphere collision");
+    if(d.depthCollision&&(d.backend!=ComputePreference::RequireGpu||d.staticSdf.dimension||d.staticSphereRadius>0||!d.particleProgram.isNull()))
+        return fail("depth collision requires native RequireGpu and no static/VM collision");
+    if(!d.staticSdf.valid()||(d.staticSdf.dimension&&d.staticSphereRadius>0))
+        return fail("invalid or combined static SDF volume");
     if(why)why->clear();
     return true;
 }
@@ -54,6 +78,9 @@ bool validComputeEmitter(const ComputeEmitterDesc& d,std::string* why) {
 bool ComputeParticles::init(gfx::Device* dev,const ComputeEmitterDesc& config) {
     shutdown();
     desc_=config;
+    shaderBirthSeedEnabled_=config.gpuBirthRandom;
+    shaderBirthSeed_=config.gpuBirthSeed;
+    shaderBirthOrdinal_=0;
     if(!validComputeEmitter(config,&reason_))return false;
     programParams_={};
     device_=dev;
@@ -68,7 +95,7 @@ bool ComputeParticles::init(gfx::Device* dev,const ComputeEmitterDesc& config) {
         } else {
             gpu_program::Payload candidate;
             vmCompatible=gpu_program::prepareForMetal(desc_.particleProgram,
-                                                       candidate,vmReason);
+                                                       candidate,vmReason,desc_.gpuBirthRandom);
         }
     }
     if(!desc_.shaderGraph.isNull() || !desc_.graphInputs.isNull()) {
@@ -79,37 +106,37 @@ bool ComputeParticles::init(gfx::Device* dev,const ComputeEmitterDesc& config) {
             gpu_material::Material material;
             std::string materialReason;
             if(!gpu_material::compile(desc_.shaderGraph,desc_.graphInputs,
-                                      material,materialReason)) {
+                                      material,materialReason,desc_.gpuBirthRandom)) {
                 vmCompatible=false;
                 vmReason=materialReason;
             }
         }
     }
-    const bool canGpu=dev&&dev->supportsCompute()&&
+    const bool canGpu=dev&&supportsSpectraCompute(*dev,desc_.gpuOwnedAllocation)&&
                       desc_.quality>=fx::FxQuality::Medium&&vmCompatible;
     const auto selected=dev
         ?chooseComputeBackend(dev->info().backend,canGpu,desc_.backend)
         :ComputeBackend::Cpu;
-    if(desc_.backend==ComputePreference::RequireGpu && selected!=ComputeBackend::Metal) {
+    if(desc_.backend==ComputePreference::RequireGpu && selected==ComputeBackend::Cpu) {
         reason_=vmReason.empty()
-            ?"Metal compute is unavailable; RequireGpu forbids CPU fallback"
+            ?"GPU compute is unavailable; RequireGpu forbids CPU fallback"
             :vmReason+"; RequireGpu forbids CPU fallback";
         device_=nullptr;return false;
     }
-    if(selected==ComputeBackend::Metal) {
+    if(selected!=ComputeBackend::Cpu) {
         if(initGpu()) {
-            backend_=ComputeBackend::Metal;initialized_=true;reason_.clear();
+            backend_=selected;initialized_=true;reason_.clear();
             return true;
         }
         const std::string gpuFailure=reason_;
         releaseGpu();
         if(desc_.backend==ComputePreference::RequireGpu) {
-            reason_="Metal GPU setup failed: "+gpuFailure;
+            reason_="GPU setup failed: "+gpuFailure;
             device_=nullptr;return false;
         }
-        reason_="Metal GPU unavailable, CPU fallback: "+gpuFailure;
+        reason_="GPU unavailable, CPU fallback: "+gpuFailure;
     } else if(desc_.backend!=ComputePreference::CpuOnly) {
-        reason_=vmReason.empty()?"Metal compute unavailable or low-tier quality; CPU fallback"
+        reason_=vmReason.empty()?"GPU compute unavailable or low-tier quality; CPU fallback"
                                 :vmReason+"; CPU fallback";
     }
     if(!initCpu()) {
@@ -135,6 +162,15 @@ bool ComputeParticles::initCpu() {
     emitter.gravity={0,desc_.gravityY,0};
     emitter.drag={desc_.drag,desc_.drag};
     emitter.spread=0;
+    if(desc_.staticSphereRadius>0||desc_.staticSdf.dimension) {
+        emitter.collision.enabled=true;emitter.collision.ground=false;
+        emitter.collision.staticSphereCenter=desc_.staticSphereCenter;
+        emitter.collision.staticSphereRadius=desc_.staticSphereRadius;
+        emitter.collision.staticSdf=desc_.staticSdf;
+        emitter.collision.bounce=desc_.collisionBounce;
+        emitter.collision.dampen=desc_.collisionDampen;
+        emitter.collision.radius=desc_.collisionRadiusScale;
+    }
     emitter.color={{0.f,{1,1,1,1}},{1.f,{1,1,1,0}}};
     if(!desc_.particleProgram.isNull())emitter.particleProgram=desc_.particleProgram;
     if(!desc_.shaderGraph.isNull())emitter.shaderGraph=desc_.shaderGraph;
@@ -147,23 +183,69 @@ bool ComputeParticles::initGpu() {
     readbackLifetime_=std::make_shared<uint64_t>(0);
     vmFrameRevision_=0;
     checkpointRevision_=0;
-    checkpointCadence_.configure(desc_.checkpointEveryFrames,desc_.adaptiveCheckpoint);
+    const bool checkpointPossible=desc_.gpuOwnedAllocation||desc_.capacity<=kGpuCheckpointCaptureMaxSlots;
+    checkpointCadence_.configure(checkpointPossible?desc_.checkpointEveryFrames:0,
+                                 checkpointPossible?desc_.adaptiveCheckpoint:AdaptiveCheckpointPolicy{});
     asyncCheckpointPending_=false;
     lastCheckpoint_={};
     if(!device_) {reason_="no RHI Device";return false;}
-    const uint32_t cap=desc_.capacity;
     gpu_program::Payload vmPayload;
-    if(!gpu_program::prepareForMetal(desc_.particleProgram,vmPayload,reason_))
+    if(!gpu_program::prepareForMetal(desc_.particleProgram,vmPayload,reason_,desc_.gpuBirthRandom))
         return false;
     gpu_material::Material graphMaterial;
     const bool materialActive=desc_.gpuMaterial&&!desc_.shaderGraph.isNull();
     if(materialActive && !gpu_material::compile(
-        desc_.shaderGraph,desc_.graphInputs,graphMaterial,reason_))return false;
+        desc_.shaderGraph,desc_.graphInputs,graphMaterial,reason_,desc_.gpuBirthRandom))return false;
     const std::array<uint32_t,4> graphChannels=graphMaterial.sources;
+    std::vector<uint32_t> graphPayload(graphChannels.begin(),graphChannels.end());
+    if(desc_.depthCollision)graphPayload.resize(4+kDepthCollisionBytes/sizeof(uint32_t),0);
+    if(desc_.staticSdf.dimension) {
+        const auto& sdf=desc_.staticSdf;
+        const auto bits=[](float v){uint32_t u;std::memcpy(&u,&v,sizeof(u));return u;};
+        graphPayload.push_back(sdf.dimension);
+        graphPayload.push_back(bits(sdf.origin.x));graphPayload.push_back(bits(sdf.origin.y));
+        graphPayload.push_back(bits(sdf.origin.z));graphPayload.push_back(bits(sdf.spacing));
+        for(float v:sdf.samples)graphPayload.push_back(bits(v));
+    }
     gpuIndirectActive_=desc_.gpuIndirect && device_->supportsGpuAuthoredIndirectDraw();
+    gpuAllocationActive_=desc_.gpuOwnedAllocation&&gpuIndirectActive_;
+    if(desc_.gpuOwnedAllocation&&!gpuAllocationActive_){
+        reason_="GPU-owned allocation requires GPU indirect drawing";return false;
+    }
+    stats_.gpuOwnedAllocation=gpuAllocationActive_;
+    gpuDemandGrowth_=gpuAllocationActive_&&device_->supportsStorageBufferCopy();
+    const uint32_t cap=gpuDemandGrowth_?gpuInitialPhysicalCapacity(desc_.capacity):desc_.capacity;
+    physicalCapacity_=cap;
+    const bool vulkan=device_->info().backend==gfx::Backend::Vulkan;
+    proceduralActive_=(desc_.proceduralBillboards||desc_.volumeMaterial.enabled)&&!materialActive&&
+        (vulkan||device_->info().backend==gfx::Backend::Metal);
+    desc_.allocationBudget=device_->acquireGpuAllocationBudget(desc_.allocationBudget);
+    if(!desc_.allocationBudget){reason_="GPU allocation budget conflicts with canonical Device ledger";return false;}
+    const bool wantSharedSdf=desc_.sharedSdfCache&&desc_.staticSdf.dimension&&!desc_.depthCollision;
+    {
+        auto& budget=*desc_.allocationBudget;
+        budget.collect(device_->gpuCompletedFence());
+        const size_t charge=estimateGpuEmitterAllocation(cap,proceduralActive_)+(wantSharedSdf?0:(graphPayload.size()-4)*sizeof(uint32_t))+(desc_.reportCollisionEvents?kGpuCollisionEventBytes-sizeof(uint32_t):0);
+        if(!budget.reserve(charge)){++stats_.gpuAllocationBudgetDenied;reason_="SpectraFX physical GPU allocation budget exhausted";return false;}
+        gpuAllocationCharge_=charge;
+    }
+    // Admit private storage first, so a too-large page can fall back to an
+    // exact-size dedicated shared buffer within the remaining ledger credit.
+    if(wantSharedSdf){
+        sharedSdfPayload_=desc_.sharedSdfCache->acquire(*device_,desc_.allocationBudget,graphPayload);
+        if(!sharedSdfPayload_){
+            ++stats_.gpuAllocationBudgetDenied;reason_="SpectraFX shared SDF admission failed";return false;
+        }
+    }
     gpuResetDirty_=false;
     gpuStagingDirty_=false;
-    compute_=device_->createCompute({shaders::kMetal,shaders::kGLSL,"SpectraFX Metal particle simulation"});
+    const std::string allocationShader=gpuAllocationActive_?
+        std::string("#define SPECTRA_GPU_OWNED_ALLOCATION 1\n")+shaders::kMetal:std::string{};
+    std::string glsl=shaders::kGLSL;
+    if(gpuAllocationActive_)glsl.insert(glsl.find('\n')+1,"#define SPECTRA_GPU_OWNED_ALLOCATION 1\n");
+    compute_=device_->createCompute({gpuAllocationActive_?allocationShader.c_str():shaders::kMetal,
+        glsl.c_str(),"SpectraFX GPU particle simulation",gfx::VulkanComputeLayout::StorageUniforms,
+        gpuAllocationActive_?19u:15u});
     if(!compute_.valid()) {reason_=device_->lastError();return false;}
 
     std::vector<ParticleState> reset(cap);
@@ -172,8 +254,11 @@ bool ComputeParticles::initGpu() {
                    reset.data(),"SpectraFX GPU particle states");
     seeds_=buffer(*device_,gfx::BufferType::Storage,cap*sizeof(ParticleState),
                   nullptr,"SpectraFX GPU particle spawn queue");
-    slots_=buffer(*device_,gfx::BufferType::Storage,cap*sizeof(uint32_t),
+    slots_=buffer(*device_,gfx::BufferType::Storage,size_t(cap)*sizeof(uint32_t)*(gpuAllocationActive_?2u:1u),
                   nullptr,"SpectraFX GPU spawn slots");
+    if(gpuAllocationActive_)
+        gpuSourceOwners_=buffer(*device_,gfx::BufferType::Storage,size_t(cap)*2*sizeof(uint32_t),
+                               nullptr,"SpectraFX GPU physical source owners");
     killSlots_=buffer(*device_,gfx::BufferType::Storage,cap*sizeof(uint32_t),
                       nullptr,"SpectraFX GPU kill indices");
     programStateCache_.assign(cap,ProgramParams{});
@@ -190,30 +275,54 @@ bool ComputeParticles::initGpu() {
                             cap*sizeof(ProgramAttributes),
                             initialAttributes.data(),
                             "SpectraFX GPU VM particle custom attributes");
+    std::vector<uint32_t> initialFree;
+    if(gpuAllocationActive_){
+        initialFree.resize(cap);
+        for(uint32_t i=0;i<cap;++i)initialFree[i]=cap-1-i;
+    }
     liveSlots_=buffer(*device_,gfx::BufferType::Storage,cap*sizeof(uint32_t),
-                      nullptr,"SpectraFX GPU live-slot gather map");
-    graphSources_=buffer(*device_,gfx::BufferType::Storage,sizeof(graphChannels),
-                         graphChannels.data(),"SpectraFX GPU material vertex sources");
+                      gpuAllocationActive_?initialFree.data():nullptr,
+                      gpuAllocationActive_?"SpectraFX persistent GPU free stack":"SpectraFX GPU live-slot gather map");
+    graphSources_=sharedSdfPayload_?sharedSdfPayload_->buffer():
+        buffer(*device_,gfx::BufferType::Storage,graphPayload.size()*sizeof(uint32_t),
+                         graphPayload.data(),"SpectraFX immutable material and SDF sources");
     const uint32_t zero=0;
     const gfx::DrawIndexedIndirectCommand zeroArgs{0,1,0,0,0};
-    aliveCounter_=buffer(*device_,gfx::BufferType::Storage,sizeof(zero),
-                         &zero,"SpectraFX GPU atomic alive count");
-    vmErrors_=buffer(*device_,gfx::BufferType::Storage,sizeof(zero),
-                     &zero,"SpectraFX GPU VM error counter");
+    const std::array<uint32_t,8> allocatorCounters{0,cap,0,0,0,0,0,0};
+    if(gpuAllocationActive_){
+        const std::array<uint32_t,3> emptyDispatch{1,1,1};
+        gpuAliveCurrent_=buffer(*device_,gfx::BufferType::Storage,size_t(cap)*sizeof(uint32_t),nullptr,"SpectraFX GPU alive list A");
+        gpuAliveNext_=buffer(*device_,gfx::BufferType::Storage,size_t(cap)*sizeof(uint32_t),nullptr,"SpectraFX GPU alive list B");
+        gpuDispatchArgs_=buffer(*device_,gfx::BufferType::Storage,sizeof(emptyDispatch),emptyDispatch.data(),"SpectraFX GPU compute dispatch arguments");
+    }
+    aliveCounter_=buffer(*device_,gfx::BufferType::Storage,
+                         gpuAllocationActive_?sizeof(allocatorCounters):sizeof(zero),
+                         gpuAllocationActive_?static_cast<const void*>(allocatorCounters.data()):static_cast<const void*>(&zero),
+                         "SpectraFX GPU atomic alive count");
+    const std::vector<uint32_t> eventStorage(desc_.reportCollisionEvents?kGpuCollisionEventBytes/4:1,0);
+    vmErrors_=buffer(*device_,gfx::BufferType::Storage,eventStorage.size()*sizeof(uint32_t),
+                     eventStorage.data(),"SpectraFX GPU diagnostics and collision events");
     gpuDrawArgs_=buffer(*device_,gfx::BufferType::Storage,sizeof(zeroArgs),
                         &zeroArgs,"SpectraFX GPU authored draw args");
     vertices_=buffer(*device_,gfx::BufferType::Storage,
-                     cap*4*sizeof(Vertex),nullptr,"SpectraFX GPU quad vertices");
+                     size_t(cap)*(proceduralActive_?1u:4u)*sizeof(Vertex),nullptr,
+                     proceduralActive_?"SpectraFX compact billboard records":"SpectraFX GPU quad vertices");
 
-    std::vector<uint16_t> idx(cap*6);
-    for(uint32_t n=0;n<cap;++n) {
-        const uint16_t i=uint16_t(n*4);
-        const size_t at=size_t(n)*6;
-        idx[at]=i;idx[at+1]=uint16_t(i+1);idx[at+2]=uint16_t(i+2);
-        idx[at+3]=i;idx[at+4]=uint16_t(i+2);idx[at+5]=uint16_t(i+3);
-    }
-    indices_=buffer(*device_,gfx::BufferType::Index,idx.size()*sizeof(uint16_t),
-                    idx.data(),"SpectraFX GPU billboard indices");
+    const bool wideIndices=!proceduralActive_&&gpuEmitterUsesWideIndices(desc_.capacity);
+    const uint32_t quadCount=proceduralActive_?1u:cap;
+    // Preserve compact indices for small groups; large groups use UInt32.
+    auto buildIndices=[&]<class Index>(){
+        std::vector<Index> idx(size_t(quadCount)*6);
+        for(uint32_t n=0;n<quadCount;++n){
+            const uint32_t i=n*4;
+            const size_t at=size_t(n)*6;
+            idx[at]=Index(i);idx[at+1]=Index(i+1);idx[at+2]=Index(i+2);
+            idx[at+3]=Index(i);idx[at+4]=Index(i+2);idx[at+5]=Index(i+3);
+        }
+        return buffer(*device_,gfx::BufferType::Index,idx.size()*sizeof(Index),
+                      idx.data(),"SpectraFX GPU billboard indices");
+    };
+    indices_=wideIndices?buildIndices.operator()<uint32_t>():buildIndices.operator()<uint16_t>();
 
     // One soft-sprite texture shared across all GPU particles in this first
     // backend. Texture atlas/mesh/ribbons remain on the existing CPU backend.
@@ -233,14 +342,58 @@ bool ComputeParticles::initGpu() {
     texture.filter=gfx::Filter::Linear;texture.label="SpectraFX GPU soft sprite";
     texture_=device_->createTexture(texture);
 
+    if(desc_.volumeMaterial.texture){
+        const auto& a=*desc_.volumeMaterial.texture;
+        if(!device_->supportsTextureDimension(gfx::TextureDimension::Texture3D)){
+            reason_="Native 3D textures unavailable";return false;
+        }
+        SparseParticleVolume sparse;
+        const bool useSparse=desc_.volumeMaterial.sparseTexture&&buildSparseParticleVolume(a,sparse);
+        const size_t charge=useSparse?sparse.bytes():a.density.size();
+        if(!desc_.allocationBudget->reserve(charge)){
+            reason_="Particle volume texture budget exhausted";return false;
+        }
+        volumeTextureCharge_=charge;
+        gfx::TextureDesc td;td.width=td.height=int(a.dimension);td.depth=int(a.dimension*a.frames);
+        td.dimension=gfx::TextureDimension::Texture3D;td.format=gfx::PixelFormat::R8;
+        td.data=a.density.data();td.filter=gfx::Filter::Linear;td.label="SpectraFX particle volume density animation";
+        if(useSparse){
+            td.width=int(sparse.atlasX*6);td.height=int(sparse.atlasY*6);td.depth=int(sparse.atlasZ*6);td.data=sparse.atlas.data();
+            gfx::TextureDesc map;map.width=int(sparse.grid*sparse.grid);map.height=int(sparse.grid*a.frames);
+            map.format=gfx::PixelFormat::RGBA8;map.filter=gfx::Filter::Nearest;map.data=sparse.map.data();
+            map.label="SpectraFX sparse volume brick indirection";volumeBrickMap_=device_->createTexture(map);
+            if(!volumeBrickMap_.valid()){reason_="Sparse particle volume map allocation failed";return false;}
+            volumeSparseControl_={float(sparse.grid),float(sparse.atlasX),float(sparse.atlasY),float(sparse.atlasZ)};
+        }
+        volumeTexture_=device_->createTexture(td);
+        if(!volumeTexture_.valid()){reason_="Particle volume texture allocation failed";return false;}
+    }
     gfx::ShaderDesc shader;
+    std::string volumeMetal,volumeFragment,volumeVertex;
     // Shader source storage must outlive createShader() on all RHI backends.
     gpu_material::Shaders materialShaders;
     if(materialActive)materialShaders=gpu_material::makeShaders(graphMaterial);
-    shader.glslVertex=materialActive?materialShaders.glslVertex.c_str():fx::shaders::kParticleVS;
-    shader.glslFragment=materialActive?materialShaders.glslFragment.c_str():fx::shaders::kParticleFS;
-    shader.msl=materialActive?materialShaders.msl.c_str():fx::shaders::kParticleMSL;
-    shader.textureSlots=1;shader.uniformSlots=1;
+    shader.glslVertex=materialActive?materialShaders.glslVertex.c_str():
+        proceduralActive_&&vulkan?shaders::kProceduralBillboardGLSLVertex:fx::shaders::kParticleVS;
+    shader.glslFragment=materialActive?materialShaders.glslFragment.c_str():
+        proceduralActive_&&vulkan?shaders::kProceduralBillboardGLSLFragment:fx::shaders::kParticleFS;
+    shader.msl=materialActive?materialShaders.msl.c_str():
+        proceduralActive_?shaders::kProceduralBillboardMetal:fx::shaders::kParticleMSL;
+    if(desc_.volumeMaterial.enabled){
+        shader.glslVertex=volumetric_particles::vertex;shader.glslFragment=volumetric_particles::fragment;
+        shader.msl=volumetric_particles::metal;
+        std::string defines;
+        if(desc_.volumeMaterial.texture)defines+="#define SPECTRA_TEXTURE_VOLUME 1\n";
+        if(volumeBrickMap_.valid())defines+="#define SPECTRA_SPARSE_VOLUME 1\n";
+        if(desc_.volumeMaterial.depthAware)defines+="#define SPECTRA_VOLUME_DEPTH 1\n";
+        if(!defines.empty()){
+            volumeMetal=defines+shader.msl;volumeFragment=defines+shader.glslFragment;
+            volumeVertex=defines+shader.glslVertex;
+            shader.msl=volumeMetal.c_str();shader.glslFragment=volumeFragment.c_str();
+            shader.glslVertex=volumeVertex.c_str();
+        }
+    }
+    shader.textureSlots=volumeBrickMap_.valid()?3:desc_.volumeMaterial.enabled&&desc_.volumeMaterial.depthAware?2:(desc_.volumeMaterial.enabled&&!desc_.volumeMaterial.texture?0:1);shader.uniformSlots=1;
     shader.label=materialActive?"SpectraFX GPU particle material":"SpectraFX GPU billboard";
     vertexShader_=device_->createShader(shader);
     if(vertexShader_.valid()) {
@@ -250,10 +403,12 @@ bool ComputeParticles::initGpu() {
         pd.attrs[1]={1,gfx::VertexFormat::Float2,12};
         pd.attrs[2]={2,gfx::VertexFormat::UByte4N,20};
         if(materialActive)pd.attrs[3]={3,gfx::VertexFormat::Float4,24};
-        pd.attrCount=materialActive?4:3;pd.stride=sizeof(Vertex);
-        pd.indexType=gfx::IndexType::UInt16;
-        pd.cull=gfx::CullMode::None;pd.blend=gfx::BlendMode::Additive;
-        pd.depthTest=true;pd.depthWrite=false;
+        pd.attrCount=proceduralActive_&&!vulkan?0:(materialActive?4:3);
+        pd.stride=proceduralActive_&&!vulkan?0:sizeof(Vertex);
+        pd.vertexPerInstance=proceduralActive_&&vulkan;
+        pd.indexType=wideIndices?gfx::IndexType::UInt32:gfx::IndexType::UInt16;
+        pd.cull=gfx::CullMode::None;pd.blend=desc_.volumeMaterial.enabled?gfx::BlendMode::Premultiplied:gfx::BlendMode::Additive;
+        pd.depthTest=!(desc_.volumeMaterial.enabled&&desc_.volumeMaterial.depthAware);pd.depthWrite=false;
         pd.label="SpectraFX GPU additive";
         pipeline_=device_->createPipeline(pd);
     }
@@ -263,11 +418,13 @@ bool ComputeParticles::initGpu() {
        !aliveCounter_.valid()||!gpuDrawArgs_.valid()||!vmErrors_.valid()||
        !seedProgramParams_.valid()||!stateProgramParams_.valid()||
        !gpuVmPayload_.valid()||!stateAttributes_.valid()||!vertices_.valid()||
-       !indices_.valid()||!texture_.valid()||!vertexShader_.valid()||!pipeline_.valid()) {
+       !indices_.valid()||!texture_.valid()||!vertexShader_.valid()||!pipeline_.valid()||
+       (gpuAllocationActive_&&(!gpuSourceOwners_.valid()||!gpuAliveCurrent_.valid()||
+           !gpuAliveNext_.valid()||!gpuDispatchArgs_.valid()))) {
         reason_="GPU resource/pipeline allocation failed: "+device_->lastError();
         return false;
     }
-    ages_.assign(cap,-1.f);
+    ages_.assign(cap,-1.f);activePages_.reset(cap);
     slotSourceTokens_.assign(cap,0);
     pendingKillSlots_.clear();
     killedSlotsAwaitingFrame_.clear();
@@ -277,26 +434,51 @@ bool ComputeParticles::initGpu() {
     pendingSlots_.reserve(cap);
     pendingProgramParams_.reserve(cap);
     aliveSlots_.reserve(cap);
-    stats_.gpuBytes=size_t(cap)*(sizeof(ParticleState)*2+3*sizeof(uint32_t)+4*sizeof(Vertex)+6*sizeof(uint16_t))
-                    +size_t(n*n*4)+2*sizeof(zero)+sizeof(zeroArgs)
+    stats_.gpuBytes=size_t(cap)*(sizeof(ParticleState)*2+3*sizeof(uint32_t))
+                    + (proceduralActive_?size_t(cap)*40u+12u:size_t(cap)*(160u+6u*(wideIndices?4u:2u)))
+                    +size_t(n*n*4)+sizeof(zero)+eventStorage.size()*sizeof(uint32_t)+sizeof(zeroArgs)
                     +size_t(cap)*2*sizeof(ProgramParams)+sizeof(vmPayload)
-                    +size_t(cap)*sizeof(ProgramAttributes)+sizeof(graphChannels);
+                    +size_t(cap)*sizeof(ProgramAttributes)+(sharedSdfPayload_?0:graphPayload.size()*sizeof(uint32_t))
+                    +(gpuAllocationActive_?size_t(cap)*20u+10u*sizeof(uint32_t):0u);
+    stats_.sharedSdfBytes=sharedSdfPayload_?sharedSdfPayload_->bytes():0;
+    stats_.sharedSdfOffsetWords=sharedSdfPayload_?sharedSdfPayload_->offsetWords():0;
+    stats_.sharedSdfPacked=sharedSdfPayload_&&sharedSdfPayload_->packed();
     return true;
 }
+void ComputeParticles::markGpuAllocationUsed(){
+    if(!gpuAllocationCharge_||!device_)return;
+    const auto fence=device_->gpuSubmissionFence();
+    gpuAllocationLastFence_=fence?std::max(gpuAllocationLastFence_,fence):GpuAllocationBudget::unknownFence;
+}
+void ComputeParticles::retireAllocationCharge(size_t bytes,uint64_t fence){
+    if(desc_.allocationBudget&&bytes){
+        desc_.allocationBudget->retire(bytes,fence);
+        if(device_)desc_.allocationBudget->collect(device_->gpuCompletedFence());
+    }
+}
 void ComputeParticles::releaseGpu() {
+    invalidateCollisionEvents();collisionReadPending_=false;
+    checkpointHistory_.clear();
     readbackLifetime_.reset();
     asyncErrorPending_=false;
+    asyncAllocationCountersPending_=false;
     asyncCheckpointPending_=false;
     if(device_) {
         if(pipeline_.valid())device_->destroyPipeline(pipeline_);
         if(vertexShader_.valid())device_->destroyShader(vertexShader_);
         if(compute_.valid())device_->destroyCompute(compute_);
+        if(volumeDragCompute_.valid())device_->destroyCompute(volumeDragCompute_);
+        if(compactAllocationCompute_.valid())device_->destroyCompute(compactAllocationCompute_);
         if(states_.valid())device_->destroyBuffer(states_);
         if(seeds_.valid())device_->destroyBuffer(seeds_);
         if(slots_.valid())device_->destroyBuffer(slots_);
+        if(gpuSourceOwners_.valid())device_->destroyBuffer(gpuSourceOwners_);
+        if(gpuAliveCurrent_.valid())device_->destroyBuffer(gpuAliveCurrent_);
+        if(gpuAliveNext_.valid())device_->destroyBuffer(gpuAliveNext_);
+        if(gpuDispatchArgs_.valid())device_->destroyBuffer(gpuDispatchArgs_);
         if(killSlots_.valid())device_->destroyBuffer(killSlots_);
         if(liveSlots_.valid())device_->destroyBuffer(liveSlots_);
-        if(graphSources_.valid())device_->destroyBuffer(graphSources_);
+        if(graphSources_.valid()&&!sharedSdfPayload_)device_->destroyBuffer(graphSources_);
         if(aliveCounter_.valid())device_->destroyBuffer(aliveCounter_);
         if(gpuDrawArgs_.valid())device_->destroyBuffer(gpuDrawArgs_);
         if(vmErrors_.valid())device_->destroyBuffer(vmErrors_);
@@ -307,16 +489,36 @@ void ComputeParticles::releaseGpu() {
         if(vertices_.valid())device_->destroyBuffer(vertices_);
         if(indices_.valid())device_->destroyBuffer(indices_);
         if(texture_.valid())device_->destroyTexture(texture_);
+        if(volumeTexture_.valid())device_->destroyTexture(volumeTexture_);
+        if(volumeBrickMap_.valid())device_->destroyTexture(volumeBrickMap_);
+        if(volumeSortCompute_.valid())device_->destroyCompute(volumeSortCompute_);
+        if(volumeSortKeys_.valid())device_->destroyBuffer(volumeSortKeys_);
+        if(volumeSortedRecords_.valid())device_->destroyBuffer(volumeSortedRecords_);
     }
-    pipeline_={};vertexShader_={};compute_={};states_={};seeds_={};slots_={};
-    killSlots_={};
+    sharedSdfPayload_.reset();stats_.sharedSdfBytes=0;stats_.sharedSdfOffsetWords=0;stats_.sharedSdfPacked=false;
+    retireAllocationCharge(gpuAllocationCharge_,gpuAllocationLastFence_);
+    retireAllocationCharge(volumeTextureCharge_,volumeTextureFence_);
+    retireAllocationCharge(volumeSortCharge_,volumeSortFence_);
+    volumeSortCompute_={};volumeSortKeys_={};volumeSortedRecords_={};
+    volumeSortCapacity_=0;volumeSortCharge_=0;volumeSortFence_=0;volumeSortReady_=false;
+    volumeBrickMap_={};volumeSparseControl_={};drawVolumeDepth_={};volumeTexture_={};volumeTextureCharge_=0;volumeTextureFence_=0;
+    volumeLightDirection_={0,1,0};volumeLightColor_={1,1,1};
+    gpuAllocationCharge_=0;gpuAllocationLastFence_=0;gpuGrowthBudgetBlocked_=false;
+    volumeDragCompute_={};
+    pipeline_={};vertexShader_={};compute_={};compactAllocationCompute_={};states_={};seeds_={};slots_={};
+    killSlots_={};gpuSourceOwners_={};
+    gpuAliveCurrent_={};gpuAliveNext_={};gpuDispatchArgs_={};
+    pendingGpuOwners_.clear();pendingGpuKills_.clear();gpuBirthEstimates_.clear();
+    gpuAllocationClock_=0;gpuEstimatedBirths_=0;gpuAllocationActive_=gpuAllocationSubmitted_=gpuCullViewUsed_=false;
+    gpuDemandGrowth_=false;physicalCapacity_=0;
+    gpuIdleSteps_=0;gpuBirthEpoch_=0;gpuEmptyProven_=false;gpuCompactTarget_=0;
     vertices_={};indices_={};texture_={};liveSlots_={};
-    aliveCounter_={};gpuDrawArgs_={};vmErrors_={};gpuIndirectActive_=false;
+    aliveCounter_={};gpuDrawArgs_={};vmErrors_={};gpuIndirectActive_=false;proceduralActive_=false;
     seedProgramParams_={};stateProgramParams_={};gpuVmPayload_={};
     stateAttributes_={};graphSources_={};
     gpuResetDirty_=false;
     gpuStagingDirty_=false;
-    ages_.clear();freeSlots_.clear();pendingStates_.clear();pendingSlots_.clear();
+    ages_.clear();activePages_.reset(0);freeSlots_.clear();pendingStates_.clear();pendingSlots_.clear();
     pendingKillSlots_.clear();killedSlotsAwaitingFrame_.clear();
     slotSourceTokens_.clear();
     pendingProgramParams_.clear();programStateCache_.clear();cpuHandles_.clear();
@@ -325,6 +527,9 @@ void ComputeParticles::releaseGpu() {
     drawCount_=0;
 }
 void ComputeParticles::shutdown() {
+    depthSnapshot_={};
+    checkpointHistory_.clear();
+    shaderBirthSeed_=0;shaderBirthOrdinal_=0;shaderBirthSeedEnabled_=false;
     cpu_.shutdown();cpuEffect_=-1;releaseGpu();device_=nullptr;
     initialized_=false;viewReady_=false;verticesReady_=false;
     drawCount_=0;
@@ -333,10 +538,37 @@ void ComputeParticles::shutdown() {
     checkpointCadence_={};
     backend_=ComputeBackend::Cpu;stats_={};reason_.clear();
 }
+bool ComputeParticles::resetGpuAllocationSeed(uint32_t seed) {
+    if(!initialized_ || backend_==ComputeBackend::Cpu) {
+        reason_="Seeded GPU allocation requires active GPU backend";
+        return false;
+    }
+    if(gpuAllocationActive_){reason_="GPU-owned slot order is nondeterministic";return false;}
+    if(!tryClear())return false;
+    // Fisher-Yates on the free-slot list. The seed controls allocation
+    // order only; GPU shader random streams are not modified.
+    uint32_t state=seed==0?0x9E3779B9u:seed;
+    for(size_t i=freeSlots_.size();i>1;--i) {
+        state^=state<<13;state^=state>>17;state^=state<<5;
+        const size_t j=size_t(state)%i;
+        std::swap(freeSlots_[i-1],freeSlots_[j]);
+    }
+    return true;
+}
+bool ComputeParticles::resetGpuShaderSeed(uint32_t seed) {
+    if(!initialized_||backend_==ComputeBackend::Cpu)return false;
+    if(!tryClear())return false;
+    shaderBirthSeed_=seed;
+    shaderBirthOrdinal_=0;
+    shaderBirthSeedEnabled_=true;
+    return true;
+}
 void ComputeParticles::clear() {
     (void)tryClear(); // preserve legacy ABI; status is available via reason()
 }
 bool ComputeParticles::tryClear() {
+    invalidateCollisionEvents();
+    depthSnapshot_={};
     if(!initialized_)return false;
     if(backend_==ComputeBackend::Cpu) {
         cpu_.clear();cpuHandles_.clear();
@@ -355,11 +587,13 @@ bool ComputeParticles::tryClear() {
     // A partially accepted sequence of uploads MUST NOT allow another GPU
     // simulation or a new burst until the entire reset is retried. Kill any
     // retained checkpoint immediately; a partial reset is never a snapshot.
+    markGpuAllocationUsed();
     gpuResetDirty_=true;
+    ++gpuBirthEpoch_;gpuEmptyProven_=false;gpuIdleSteps_=0;gpuCompactTarget_=0;
     verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
     lastCheckpoint_={};checkpointRevision_=0;
     ++vmFrameRevision_;
-    const uint32_t cap=desc_.capacity;
+    const uint32_t cap=allocatedCapacity();
     std::vector<ParticleState> empty(cap);
     for(auto& particle:empty) {
         particle.positionAge={0,0,0,-1};
@@ -375,20 +609,32 @@ bool ComputeParticles::tryClear() {
     const bool attributeOk=paramOk && device_->updateStorageBufferChecked(
         stateAttributes_,resetAttributes.data(),
         resetAttributes.size()*sizeof(ProgramAttributes));
-    if(!attributeOk) {
+    bool allocatorOk=attributeOk;
+    if(allocatorOk&&gpuAllocationActive_){
+        std::vector<uint32_t> free(cap);
+        for(uint32_t i=0;i<cap;++i)free[i]=cap-1-i;
+        const std::array<uint32_t,8> counters{0,cap,0,0,0,0,0,0};
+        const std::array<uint32_t,3> emptyDispatch{1,1,1};
+        allocatorOk=device_->updateStorageBufferChecked(liveSlots_,free.data(),free.size()*sizeof(uint32_t))&&
+            device_->updateStorageBufferChecked(aliveCounter_,counters.data(),sizeof(counters))&&
+            device_->updateStorageBufferChecked(gpuDispatchArgs_,emptyDispatch.data(),sizeof(emptyDispatch));
+    }
+    if(!allocatorOk) {
         ++stats_.gpuResetFailures;
         reason_="SpectraFX checked GPU reset rejected; previous slot ownership "
                 "retained; retry reset before any new GPU frame: "+
                 device_->lastError();
         return false;
     }
+    pendingGpuOwners_.clear();pendingGpuKills_.clear();gpuBirthEstimates_.clear();
+    gpuAllocationClock_=0;gpuEstimatedBirths_=0;gpuAllocationSubmitted_=false;
     // Only all-accepted ordered uploads may reset the CPU-owned slot mirror.
     pendingStates_.clear();pendingSlots_.clear();pendingProgramParams_.clear();
     pendingKillSlots_.clear();killedSlotsAwaitingFrame_.clear();
     std::fill(slotSourceTokens_.begin(),slotSourceTokens_.end(),0);
     programStateCache_.assign(cap,ProgramParams{});
     programParamsDirty_=false;
-    ages_.assign(cap,-1.f);
+    ages_.assign(cap,-1.f);activePages_.reset(cap);
     freeSlots_.clear();freeSlots_.reserve(cap);
     for(uint32_t i=cap;i>0;--i)freeSlots_.push_back(i-1);
     aliveSlots_.clear();
@@ -398,6 +644,12 @@ bool ComputeParticles::tryClear() {
     stats_.gpuVmErrorsKnown=false;
     gpuResetDirty_=false;
     gpuStagingDirty_=false;
+    // Reset succeeded independently of optional memory reclamation. Failure
+    // to allocate smaller buffers must not turn a completed clear into a failure.
+    if(gpuDemandGrowth_){
+        gpuEmptyProven_=true;
+        (void)shrinkEmptyGpuAllocation();
+    }
     reason_.clear();
     return true;
 }
@@ -405,6 +657,10 @@ bool ComputeParticles::setProgramParameter(uint32_t slot,float value,
                                             bool affectExisting) {
     if(!initialized_ || slot>=8 || !spectra::program::number(value) ||
        (desc_.particleProgram.isNull() && desc_.shaderGraph.isNull()))return false;
+    if(gpuAllocationActive_&&affectExisting){
+        reason_="GPU-owned allocation supports future birth parameters only";return false;
+    }
+    if(gpuAllocationActive_&&programParams_[slot]!=value)++vmFrameRevision_;
     programParams_[slot]=value;
     if(backend_==ComputeBackend::Cpu) {
         if(affectExisting)
@@ -422,8 +678,7 @@ bool ComputeParticles::setProgramParameter(uint32_t slot,float value,
             default:p.w=value;break;
             }
         };
-        for(size_t i=0;i<ages_.size();++i)
-            if(ages_[i]>0.f)write(programStateCache_[i]);
+        activePages_.forEach([&](uint32_t i){write(programStateCache_[i]);});
         for(ProgramParams& seed:pendingProgramParams_)write(seed);
         programParamsDirty_=true; // uploaded outside active render passes
     }
@@ -455,18 +710,46 @@ bool ComputeParticles::burstAt(fx::float3 position,fx::float3 direction,fx::floa
         reason_="SpectraFX GPU reset incomplete; retry checked reset";
         return false;
     }
+    if(gpuAllocationActive_){
+        if(pendingStates_.size()+desc_.burst>desc_.capacity){
+            stats_.dropped+=desc_.burst;return false; // staging budget, not observed GPU occupancy
+        }
+        for(uint32_t n=0;n<desc_.burst;++n){
+            ParticleState particle{};
+            particle.positionAge={position.x,position.y,position.z,0};
+            particle.velocityLife={normal.x*desc_.speed,normal.y*desc_.speed,normal.z*desc_.speed,desc_.lifetime};
+            particle.tint={tint.x,tint.y,tint.z,tint.w};particle.size={desc_.size,0,0,0};
+            if(shaderBirthSeedEnabled_){
+                particle.size.y=float(shaderBirthSeed_&0xffffu);particle.size.z=float(shaderBirthSeed_>>16);
+                particle.size.w=float(shaderBirthOrdinal_++&0xffffffu);
+            }
+            pendingStates_.push_back(particle);pendingGpuOwners_.push_back(sourceToken);
+            ProgramParams parameters{};
+            parameters.p0={programParams_[0],programParams_[1],programParams_[2],programParams_[3]};
+            parameters.p1={programParams_[4],programParams_[5],programParams_[6],programParams_[7]};
+            pendingProgramParams_.push_back(parameters);
+        }
+        return true; // queued requests; GPU admits up to actual free count
+    }
     if(freeSlots_.size()<desc_.burst) {
         stats_.dropped+=desc_.burst;return false;
     }
     for(uint32_t n=0;n<desc_.burst;++n) {
         const uint32_t slot=freeSlots_.back();freeSlots_.pop_back();
         ages_[slot]=desc_.lifetime;
+        activePages_.insert(slot);
         slotSourceTokens_[slot]=sourceToken;
         ParticleState particle{};
         particle.positionAge={position.x,position.y,position.z,0};
         particle.velocityLife={normal.x*desc_.speed,normal.y*desc_.speed,normal.z*desc_.speed,desc_.lifetime};
         particle.tint={tint.x,tint.y,tint.z,tint.w};
         particle.size={desc_.size,0,0,0};
+        if(shaderBirthSeedEnabled_) {
+            // Exact 16-bit float components carry the full 32-bit seed.
+            particle.size.y=float(shaderBirthSeed_&0xffffu);
+            particle.size.z=float(shaderBirthSeed_>>16);
+            particle.size.w=float(shaderBirthOrdinal_++ & 0xffffffu);
+        }
         pendingStates_.push_back(particle);pendingSlots_.push_back(slot);
         ProgramParams parameters{};
         parameters.p0={programParams_[0],programParams_[1],
@@ -480,9 +763,22 @@ bool ComputeParticles::burstAt(fx::float3 position,fx::float3 direction,fx::floa
     return true;
 }
 bool ComputeParticles::killSourceParticles(uint64_t sourceToken) {
-    if(sourceToken==0 || !initialized_ || backend_!=ComputeBackend::Metal ||
+    if(sourceToken==0 || !initialized_ || backend_==ComputeBackend::Cpu ||
        !device_ || !device_->gpuHealthy() || gpuResetDirty_ ||
        !device_->canUpdateSharedBuffers())return false;
+    if(gpuAllocationActive_){
+        if(pendingGpuKills_.size()>=256){reason_="GPU source kill queue full";return false;}
+        if(std::find(pendingGpuKills_.begin(),pendingGpuKills_.end(),sourceToken)==pendingGpuKills_.end())
+            pendingGpuKills_.push_back(sourceToken);
+        size_t write=0;
+        for(size_t i=0;i<pendingGpuOwners_.size();++i){
+            if(pendingGpuOwners_[i]==sourceToken)continue;
+            pendingGpuOwners_[write]=pendingGpuOwners_[i];pendingStates_[write]=pendingStates_[i];
+            pendingProgramParams_[write]=pendingProgramParams_[i];++write;
+        }
+        pendingGpuOwners_.resize(write);pendingStates_.resize(write);pendingProgramParams_.resize(write);
+        verticesReady_=false;return true;
+    }
     // The birth queue is an ordered zip of physical slot, seed and params.
     // Removing unsent births is safe: the GPU has never seen those slots.
     for(size_t i=pendingSlots_.size();i>0;--i) {
@@ -493,34 +789,123 @@ bool ComputeParticles::killSourceParticles(uint64_t sourceToken) {
         pendingStates_.erase(pendingStates_.begin()+at);
         pendingProgramParams_.erase(pendingProgramParams_.begin()+at);
         ages_[slot]=-1.f;slotSourceTokens_[slot]=0;
+        activePages_.erase(slot);
         freeSlots_.push_back(slot);
         ++stats_.selectivelyKilled;
     }
     // Submitted slots remain reserved until the next successful GPU compute
     // submission. They become invisible to CPU gather immediately, and
     // receive a Metal-ordered dead-state upload before the next compact pass.
-    for(uint32_t i=0;i<uint32_t(slotSourceTokens_.size());++i) {
-        if(slotSourceTokens_[i]!=sourceToken)continue;
-        slotSourceTokens_[i]=0;
-        if(ages_[i]>0.f) {
-            ages_[i]=-1.f;
-            pendingKillSlots_.push_back(i);
-            ++stats_.selectivelyKilled;
-        }
-    }
+    activePages_.forEach([&](uint32_t i){
+        if(slotSourceTokens_[i]!=sourceToken)return;
+        slotSourceTokens_[i]=0;ages_[i]=-1.f;
+        activePages_.erase(i);
+        pendingKillSlots_.push_back(i);
+        ++stats_.selectivelyKilled;
+    });
     stats_.alive=uint32_t(ages_.size()-freeSlots_.size()-
                           pendingKillSlots_.size()-
                           killedSlotsAwaitingFrame_.size());
     verticesReady_=false;
     return true;
 }
+bool ComputeParticles::setDepthCollisionSnapshot(const DepthCollisionSnapshot& snapshot) {
+    depthSnapshot_={};
+    if(!gpuActive()||!desc_.depthCollision||!device_||snapshot.device!=device_||
+       !snapshot.valid()||!device_->gpuHealthy()||!device_->canUpdateSharedBuffers())return false;
+    const uint64_t current=device_->gpuSubmissionFence();
+    if(!current||snapshot.fence>=current||current-snapshot.fence>2)return false;
+    gfx::BufferInfo info;
+    if(!device_->bufferInfo(snapshot.depth,info)||info.logicalBytes!=kDepthCollisionBytes)return false;
+    if(!device_->copyStorageBufferChecked(snapshot.depth,graphSources_,kDepthCollisionBytes,0,4*sizeof(uint32_t)))return false;
+    depthSnapshot_=snapshot;
+    return true;
+}
+void ComputeParticles::fillDepthUniforms(Uniforms& u) {
+    if(!desc_.depthCollision||!depthSnapshot_.valid())return;
+    const uint64_t current=device_->gpuSubmissionFence();
+    if(current>depthSnapshot_.fence&&current-depthSnapshot_.fence<=2) {
+        std::memcpy(u.depthViewProj,depthSnapshot_.viewProj.m,sizeof(u.depthViewProj));
+        std::memcpy(u.depthInverse,depthSnapshot_.inverseViewProj.m,sizeof(u.depthInverse));
+        u.depthControl={1.f,depthSnapshot_.zeroToOne?1.f:0.f,depthSnapshot_.topDown?1.f:0.f,depthSnapshot_.maxSurfaceEdge};
+        u.depthEye={depthSnapshot_.eye.x,depthSnapshot_.eye.y,depthSnapshot_.eye.z,0};
+    }
+    depthSnapshot_={}; // explicit resubmission each step
+}
 void ComputeParticles::setView(const fx::SpectraFxView& view) {
+    if(!view.valid()||std::memcmp(viewProj_.m,view.viewProj.m,sizeof(viewProj_.m))!=0)volumeSortReady_=false;
     if(!view.valid()) { viewReady_=false;return; }
+    if(gpuCullViewUsed_ && verticesReady_ &&
+       (std::memcmp(viewProj_.m,view.viewProj.m,sizeof(viewProj_.m))!=0 ||
+        right_.x!=view.right.x || right_.y!=view.right.y || right_.z!=view.right.z ||
+        up_.x!=view.up.x || up_.y!=view.up.y || up_.z!=view.up.z ||
+        (desc_.quality==fx::FxQuality::Medium &&
+         (viewWidth_!=view.width || viewHeight_!=view.height ||
+          eye_.x!=view.eye.x || eye_.y!=view.eye.y || eye_.z!=view.eye.z)))) {
+        verticesReady_=false; // old visible stream is not valid for a new camera
+    }
     viewProj_=view.viewProj;eye_=view.eye;right_=view.right;up_=view.up;
+    viewWidth_=view.width;viewHeight_=view.height;
     viewReady_=true;
     if(backend_==ComputeBackend::Cpu)cpu_.setView(view);
 }
-bool ComputeParticles::step(float dt) {
+bool ComputeParticles::depositIntoVolume(volume::GpuGasGrid& gas,render::float3 rates,float dt){
+    if(!gpuActive()||gpuResetDirty_||gpuStagingDirty_||!verticesReady_||
+       !finite(dt)||dt<0||!finite(rates)||!device_->gpuHealthy()||!device_->canUpdateSharedBuffers()){
+        reason_="Invalid particle deposition frame";return false;
+    }
+    if(dt==0)return true;
+    markGpuAllocationUsed();
+    if(!gas.depositParticles(*device_,states_,allocatedCapacity(),rates,std::min(dt,.1f))){
+        reason_=gas.error();return false;
+    }
+    return true;
+}
+bool ComputeParticles::stepWithVolume(float dt,volume::GpuGasGrid& gas,float dragPerSecond){
+    if(!finite(dt)||dt<0||!finite(dragPerSecond)||dragPerSecond<0||dragPerSecond>100||
+       !gpuActive()||gpuResetDirty_||!device_->gpuHealthy()||!device_->canUpdateSharedBuffers()){
+        reason_="Invalid GPU volume coupling request";return false;
+    }
+    if(dt==0||dragPerSecond==0)return step(dt);
+    const auto field=gas.view();
+    if(!field.valid()||field.device!=device_){reason_="Volume coupling requires published same-device field";return false;}
+    if(!volumeDragCompute_.valid()){
+        volumeDragCompute_=device_->createCompute({volume_coupling::metal,volume_coupling::glsl,
+            "SpectraFX particle gas drag",gfx::VulkanComputeLayout::StorageUniforms,9});
+        if(!volumeDragCompute_.valid()){reason_="Volume coupling shader unavailable";return false;}
+    }
+    struct Params {render::float4 originCell,control;std::array<uint32_t,4> meta;};
+    static_assert(sizeof(Params)==48);
+    const Params u{{field.origin.x,field.origin.y,field.origin.z,field.cellSize},
+        {1.f-std::exp(-dragPerSecond*std::min(dt,.1f)),0,0,0},{allocatedCapacity(),field.dimension,0,0}};
+    if(!device_->beginCompute(volumeDragCompute_)){reason_="Volume coupling encoder unavailable";return false;}
+    markGpuAllocationUsed();
+    device_->setComputeBuffer(0,states_);
+    device_->setComputeBuffer(1,field.cells);
+    device_->setComputeBuffer(2,field.solid);
+    device_->setComputeUniforms(&u,sizeof(u));
+    const bool accepted=device_->dispatchChecked(allocatedCapacity());
+    device_->endCompute();
+    if(accepted)++stats_.gpuDispatches;
+    // A partial frame cannot safely apply drag again on retry.
+    if(!accepted||!step(dt)){
+        gpuResetDirty_=true;verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
+        ++vmFrameRevision_;lastCheckpoint_={};checkpointRevision_=0;
+        reason_="Volume coupling frame incomplete; checked reset required";return false;
+    }
+    return true;
+}
+bool ComputeParticles::step(float dt){
+    volumeSortReady_=false;
+    if(!stepImpl(dt))return false;
+    // Simulation already accepted. A sort failure suppresses drawing rather
+    // than returning a retryable simulation error and advancing twice.
+    if(desc_.volumeMaterial.enabled&&desc_.volumeMaterial.sortBackToFront&&drawCount_&&viewReady_)
+        prepareVolumeSort();
+    return true;
+}
+bool ComputeParticles::stepImpl(float dt) {
+    collisionReadable_=false;
     if(!initialized_||!finite(dt)||dt<0)return false;
     dt=std::clamp(dt,0.f,0.1f);
     if(backend_==ComputeBackend::Cpu) {
@@ -538,10 +923,10 @@ bool ComputeParticles::step(float dt) {
         if(desc_.backend==ComputePreference::RequireGpu) {
             // Never claim a CPU backend when the caller explicitly required GPU.
             initialized_=false;verticesReady_=false;
-            reason_="Metal GPU unhealthy; RequireGpu forbids CPU fallback";
+            reason_="GPU unhealthy; RequireGpu forbids CPU fallback";
             return false;
         }
-        switchToCpu("Metal GPU reported unhealthy");
+        switchToCpu("GPU reported unhealthy");
         // Any GPU-resident particles were lost: never report a seamless step.
         return false;
     }
@@ -551,6 +936,13 @@ bool ComputeParticles::step(float dt) {
         reason_="SpectraFX GPU step must be before the render pass";
         return false;
     }
+    if(sharedSdfPayload_&&!sharedSdfPayload_->ensureUploaded()){
+        ++stats_.gpuStagingUploadFailures;verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
+        reason_="SpectraFX packed SDF upload rejected; retry before simulation";return false;
+    }
+    if(sharedSdfPayload_)sharedSdfPayload_->markUsed(); // graph source buffer is read only by simulation
+    markGpuAllocationUsed();
+    if(gpuAllocationActive_)return stepGpuAllocated(dt);
     // Recycle only after a successful Metal frame completion callback,
     // never just an encoded/submitted blit.
     const uint64_t completed=device_->completedFrameSerial();
@@ -574,15 +966,16 @@ bool ComputeParticles::step(float dt) {
     uint32_t updatePrefix=0;
     uint32_t compactCount=0; // only a CPU estimate in GPU indirect mode
     aliveSlots_.clear();
-    for(uint32_t i=0;i<uint32_t(ages_.size());++i) {
-        if(ages_[i]<=0.f)continue;
-        updatePrefix=i+1; // integrate every physical slot alive before dt
-        if(ages_[i]>dt) {
+    stats_.hostActiveSlotVisits=0;
+    stats_.hostOccupiedPages=uint32_t(activePages_.occupiedPages());
+    activePages_.forEach([&](uint32_t i){
+        ++stats_.hostActiveSlotVisits;
+        updatePrefix=i+1; // ordered occupied slots preserve GPU update prefix
+        if(ages_[i]>dt){
             ++compactCount;
-            // Preserve the existing CPU-authored gather as the fallback.
             if(!gpuIndirectActive_)aliveSlots_.push_back(i);
         }
-    }
+    });
     if(updatePrefix==0 && count==0 && pendingKillSlots_.empty() &&
        !gpuStagingDirty_ && !programParamsDirty_) {
         drawCount_=0;
@@ -626,9 +1019,9 @@ bool ComputeParticles::step(float dt) {
                 label+"): "+device_->lastError();
         return false;
     };
-    const uint32_t resetVmErrors=0;
+    const std::array<uint32_t,2> resetVmErrors{};
     if(!device_->updateStorageBufferChecked(
-            vmErrors_,&resetVmErrors,sizeof(resetVmErrors)))
+            vmErrors_,resetVmErrors.data(),desc_.reportCollisionEvents?sizeof(resetVmErrors):sizeof(uint32_t)))
         return stagingRejected("VM error counter");
     if(programParamsDirty_ || gpuStagingDirty_) {
         if(!device_->updateStorageBufferChecked(
@@ -682,19 +1075,23 @@ bool ComputeParticles::step(float dt) {
     device_->setComputeBuffer(13,graphSources_);
     device_->setComputeBuffer(14,killSlots_);
     Uniforms u{};
-    u.gravityDt={desc_.gravityY,dt,desc_.drag,0};
+    u.gravityDt={desc_.gravityY,dt,desc_.drag,proceduralActive_?1.f:0.f};
+    u.collisionSphere={desc_.staticSphereCenter.x,desc_.staticSphereCenter.y,desc_.staticSphereCenter.z,desc_.staticSphereRadius};
+    u.collisionResponse={desc_.collisionBounce,desc_.collisionDampen,desc_.collisionRadiusScale,desc_.staticSdf.dimension?float(1u+stats_.sharedSdfOffsetWords):0.f};
+    fillDepthUniforms(u);
+    u.depthEye.w=desc_.reportCollisionEvents?1.f:0.f;
     u.rightSize={right_.x,right_.y,right_.z,desc_.size};
     u.up={up_.x,up_.y,up_.z,0};
     u.meta={0,desc_.capacity,count,compactCount};
     // Scatter kill first in the SAME compute encoder as the rest of this
     // frame; each index is unique and never aliases a pending new birth.
+    bool dispatchOk=true;
     if(killCount>0) {
         u.meta[0]=6;
         u.meta[2]=killCount;
         device_->setComputeUniforms(&u,sizeof(u));
-        device_->dispatch(killCount);
-        ++stats_.gpuDispatches;
-        ++stats_.gpuKillScatterDispatches;
+        dispatchOk=device_->dispatchChecked(killCount);
+        if(dispatchOk){++stats_.gpuDispatches;++stats_.gpuKillScatterDispatches;}
         u.meta[2]=count;
     }
     // Canonical phase order: Spawn VM runs inside mode 0, Update VM
@@ -703,16 +1100,19 @@ bool ComputeParticles::step(float dt) {
     const auto frame=gpu_pipeline::plan(desc_.capacity,count,updatePrefix,
                                         compactCount,gpuIndirectActive_,
                                         mutateParticles);
-    for(uint32_t i=0;i<frame.count;++i) {
+    for(uint32_t i=0;dispatchOk&&i<frame.count;++i) {
         const auto& phase=frame.dispatches[i];
         u.meta[0]=phase.shaderMode;
         device_->setComputeUniforms(&u,sizeof(u));
-        device_->dispatch(phase.threads);
+        dispatchOk=device_->dispatchChecked(phase.threads);
+        if(!dispatchOk)break;
         ++stats_.gpuDispatches;
         if(phase.phase==gpu_pipeline::Phase::Compact)
             ++stats_.gpuCompactDispatches;
     }
     device_->endCompute();
+    if(!dispatchOk){gpuResetDirty_=true;verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
+        reason_="GPU dispatch rejected; checked reset required";return false;}
     // Only a successful ordered compute submission can consume a dirty
     // upload batch. Retrying a partial staging failure never leaks old data.
     gpuStagingDirty_=false;
@@ -729,17 +1129,19 @@ bool ComputeParticles::step(float dt) {
     pendingKillSlots_.clear();
     stats_.gpuKillFencesPending=uint32_t(killedSlotsAwaitingFrame_.size());
     // Commit CPU lifespan/free-slot changes only after GPU dispatch submission.
-    for(uint32_t i=0;i<desc_.capacity;++i) {
-        if(ages_[i]<=0.f)continue;
+    activePages_.forEach([&](uint32_t i){
+        ++stats_.hostActiveSlotVisits;
         ages_[i]-=dt;
         if(ages_[i]<=0.f){
-            ages_[i]=-1.f;slotSourceTokens_[i]=0;freeSlots_.push_back(i);
+            ages_[i]=-1.f;slotSourceTokens_[i]=0;activePages_.erase(i);freeSlots_.push_back(i);
         }
-    }
+    });
     stats_.alive=compactCount;
     drawCount_=compactCount;
     stats_.submittedSlots=drawCount_;
     verticesReady_=true;reason_.clear();
+    collisionReadable_=desc_.reportCollisionEvents&&dt>0.f;
+    collisionFrame_=device_->frameSerial();
     // Queue chunked readback only after the VM/integration/compact dispatches.
     // This is optional; never block the render loop on checkpoint collection.
     if(checkpointCadence_.due(vmFrameRevision_)) {
@@ -751,6 +1153,435 @@ bool ComputeParticles::step(float dt) {
     }
     return true;
 }
+void ComputeParticles::bindGpuAllocationBuffers(){
+    device_->setComputeBuffer(0,states_);device_->setComputeBuffer(1,seeds_);
+    device_->setComputeBuffer(2,slots_);device_->setComputeBuffer(3,vertices_);
+    device_->setComputeBuffer(4,liveSlots_);device_->setComputeBuffer(5,aliveCounter_);
+    device_->setComputeBuffer(6,gpuDrawArgs_);device_->setComputeBuffer(7,seedProgramParams_);
+    device_->setComputeBuffer(9,stateProgramParams_);device_->setComputeBuffer(10,gpuVmPayload_);
+    device_->setComputeBuffer(11,stateAttributes_);device_->setComputeBuffer(12,vmErrors_);
+    device_->setComputeBuffer(13,graphSources_);device_->setComputeBuffer(14,killSlots_);
+    device_->setComputeBuffer(15,gpuSourceOwners_);
+    device_->setComputeBuffer(16,gpuAliveCurrent_);
+    device_->setComputeBuffer(17,gpuAliveNext_);
+    device_->setComputeBuffer(18,gpuDispatchArgs_);
+}
+bool ComputeParticles::growGpuAllocation(uint32_t required){
+    const uint32_t old=physicalCapacity_;
+    if(required<=old)return true;
+    if(!gpuDemandGrowth_||!device_||!device_->gpuHealthy())return false;
+    const uint32_t next=gpuNextPhysicalCapacity(old,required,desc_.capacity);
+    if(!next||next<=old)return false;
+    return replaceGpuAllocation(next,false);
+}
+bool ComputeParticles::replaceGpuAllocation(uint32_t next,bool empty,bool compact){
+    const uint32_t old=physicalCapacity_;
+    const bool shrinking=empty||compact;
+    if(!gpuDemandGrowth_||!device_||!device_->gpuHealthy()||!device_->canUpdateSharedBuffers()||
+       !next||next>desc_.capacity||(shrinking?next>=old:next<=old))return false;
+    // Charge the full candidate envelope before allocation, including shared
+    // constants conservatively. Keep the old envelope until GPU completion.
+    size_t candidateCharge=0;uint64_t candidateFence=0;
+    if(desc_.allocationBudget){
+        auto& budget=*desc_.allocationBudget;budget.collect(device_->gpuCompletedFence());
+        candidateCharge=estimateGpuEmitterAllocation(next,proceduralActive_)+(desc_.staticSdf.dimension&&!sharedSdfPayload_?(5+desc_.staticSdf.samples.size())*sizeof(uint32_t):0)+(desc_.depthCollision?kDepthCollisionBytes:0)+(desc_.reportCollisionEvents?kGpuCollisionEventBytes-sizeof(uint32_t):0);
+        if(!budget.reserve(candidateCharge)){
+            ++stats_.gpuAllocationBudgetDenied;
+            if(shrinking)++stats_.gpuPhysicalShrinkFailures;else{++stats_.gpuPhysicalGrowthFailures;gpuGrowthBudgetBlocked_=true;}
+            return false;
+        }
+    }
+    struct Replacement {
+        gfx::BufferHandle* owner;
+        size_t stride;
+        bool preserve;
+        const char* label;
+        gfx::BufferHandle fresh{};
+    };
+    // Scratch data is regenerated this frame. Only persistent particle state,
+    // ownership, current alive list and free stack need copying.
+    Replacement replacements[]{
+        {&states_,sizeof(ParticleState),true,"SpectraFX grown states"},
+        {&seeds_,sizeof(ParticleState),false,"SpectraFX grown spawn queue"},
+        {&slots_,8,false,"SpectraFX grown spawn owners"},
+        {&gpuSourceOwners_,8,true,"SpectraFX grown physical owners"},
+        {&killSlots_,4,false,"SpectraFX grown kill indices"},
+        {&seedProgramParams_,sizeof(ProgramParams),false,"SpectraFX grown seed params"},
+        {&stateProgramParams_,sizeof(ProgramParams),true,"SpectraFX grown state params"},
+        {&stateAttributes_,sizeof(ProgramAttributes),true,"SpectraFX grown attributes"},
+        {&liveSlots_,4,true,"SpectraFX grown free stack"},
+        {&gpuAliveCurrent_,4,true,"SpectraFX grown current alive"},
+        {&gpuAliveNext_,4,false,"SpectraFX grown next alive"},
+        {&vertices_,sizeof(Vertex)*(proceduralActive_?1u:4u),false,"SpectraFX grown geometry"}
+    };
+    gfx::BufferHandle counters{},indices{};
+    const auto discard=[&](){
+        for(auto& r:replacements)if(r.fresh.valid())device_->destroyBuffer(r.fresh);
+        if(counters.valid())device_->destroyBuffer(counters);
+        if(indices.valid())device_->destroyBuffer(indices);
+        retireAllocationCharge(candidateCharge,candidateFence);
+        if(shrinking)++stats_.gpuPhysicalShrinkFailures;else ++stats_.gpuPhysicalGrowthFailures;
+        return false;
+    };
+    std::vector<uint32_t> emptyFree;
+    if(empty){
+        emptyFree.resize(next);
+        for(uint32_t i=0;i<next;++i)emptyFree[i]=next-1-i;
+    }
+    for(auto& r:replacements){
+        // Unused state is never visited by the dense alive list; births fully
+        // initialize the slot before it becomes visible to update/render.
+        const void* data=empty&&r.owner==&liveSlots_?emptyFree.data():nullptr;
+        r.fresh=buffer(*device_,gfx::BufferType::Storage,size_t(next)*r.stride,data,r.label);
+        if(!r.fresh.valid())return discard();
+    }
+    const std::array<uint32_t,8> emptyCounters{0,next,0,0,0,0,0,0};
+    counters=buffer(*device_,gfx::BufferType::Storage,sizeof(emptyCounters),empty?emptyCounters.data():nullptr,"SpectraFX replacement allocator counters");
+    if(!counters.valid())return discard();
+    const bool wide=gpuEmitterUsesWideIndices(desc_.capacity);
+    if(!proceduralActive_){
+        const auto build=[&]<class Index>(){
+            std::vector<Index> data(size_t(next)*6);
+            for(uint32_t n=0;n<next;++n){
+                const uint32_t i=n*4;const size_t at=size_t(n)*6;
+                data[at]=Index(i);data[at+1]=Index(i+1);data[at+2]=Index(i+2);
+                data[at+3]=Index(i);data[at+4]=Index(i+2);data[at+5]=Index(i+3);
+            }
+            return buffer(*device_,gfx::BufferType::Index,data.size()*sizeof(Index),data.data(),"SpectraFX grown billboard indices");
+        };
+        indices=wide?build.operator()<uint32_t>():build.operator()<uint16_t>();
+        if(!indices.valid())return discard();
+    }
+    size_t copied=0;
+    if(compact){
+        if(!compactAllocationCompute_.valid())
+            compactAllocationCompute_=device_->createCompute({shaders::kCompactAllocationMetal,shaders::kCompactAllocationGLSL,
+                "SpectraFX live allocation compaction",gfx::VulkanComputeLayout::StorageUniforms,14});
+        if(!compactAllocationCompute_.valid()||!device_->beginCompute(compactAllocationCompute_))return discard();
+        const auto fence=device_->gpuSubmissionFence();
+        candidateFence=fence?fence:GpuAllocationBudget::unknownFence;
+        markGpuAllocationUsed();
+        device_->setComputeBuffer(0,states_);
+        device_->setComputeBuffer(1,stateProgramParams_);
+        device_->setComputeBuffer(2,stateAttributes_);
+        device_->setComputeBuffer(3,gpuSourceOwners_);
+        device_->setComputeBuffer(4,gpuAliveCurrent_);
+        device_->setComputeBuffer(5,aliveCounter_);
+        device_->setComputeBuffer(6,replacements[0].fresh);
+        device_->setComputeBuffer(7,replacements[6].fresh);
+        device_->setComputeBuffer(9,replacements[7].fresh);
+        device_->setComputeBuffer(10,replacements[3].fresh);
+        device_->setComputeBuffer(11,replacements[9].fresh);
+        device_->setComputeBuffer(12,replacements[8].fresh);
+        device_->setComputeBuffer(13,counters);
+        const std::array<uint32_t,4> u{old,next,0,0};
+        device_->setComputeUniforms(u.data(),sizeof(u));
+        const bool ok=device_->dispatchChecked(next);
+        device_->endCompute();
+        if(!ok)return discard();
+        ++stats_.gpuDispatches;
+    }else if(!empty){
+    // Even a partially encoded copy can retain candidate resources.
+    const auto fence=device_->gpuSubmissionFence();
+    candidateFence=fence?fence:GpuAllocationBudget::unknownFence;
+    markGpuAllocationUsed();
+    copied=8*sizeof(uint32_t);
+    for(auto& r:replacements)if(r.preserve){
+        const size_t bytes=size_t(old)*r.stride;
+        if(!device_->copyStorageBufferChecked(*r.owner,r.fresh,bytes))return discard();
+        copied+=bytes;
+    }
+    if(!device_->copyStorageBufferChecked(aliveCounter_,counters,8*sizeof(uint32_t)))return discard();
+    // All mutations below target unpublished replacement free stack/counters.
+    // On a rejected dispatch, old allocator state is still authoritative.
+    if(!device_->beginCompute(compute_))return discard();
+    bindGpuAllocationBuffers();
+    device_->setComputeBuffer(4,replacements[8].fresh);
+    device_->setComputeBuffer(5,counters);
+    Uniforms u{};u.meta={14,next,old,0};
+    device_->setComputeUniforms(&u,sizeof(u));
+    bool ok=device_->dispatchChecked(next-old);
+    if(ok){
+        u.meta[0]=15;device_->setComputeUniforms(&u,sizeof(u));
+        ok=device_->dispatchChecked(1);
+    }
+    device_->endCompute();
+    if(!ok)return discard();
+    stats_.gpuDispatches+=2;
+    }
+    for(auto& r:replacements){device_->destroyBuffer(*r.owner);*r.owner=r.fresh;r.fresh={};}
+    device_->destroyBuffer(aliveCounter_);aliveCounter_=counters;counters={};
+    if(indices.valid()){device_->destroyBuffer(indices_);indices_=indices;indices={};}
+    size_t bytesPerSlot=0;for(const auto& r:replacements)bytesPerSlot+=r.stride;
+    if(!proceduralActive_)bytesPerSlot+=6u*(wide?4u:2u);
+    if(shrinking){
+        if(compact)++stats_.gpuLiveCompactions;
+        const size_t reclaimed=size_t(old-next)*bytesPerSlot;
+        stats_.gpuBytes-=reclaimed;stats_.gpuReclaimedBytes+=reclaimed;
+        ++stats_.gpuPhysicalShrinks;
+    }else{
+        stats_.gpuBytes+=size_t(next-old)*bytesPerSlot;
+        stats_.gpuGrowthCopiedBytes+=copied;
+        ++stats_.gpuPhysicalGrowths;
+    }
+    retireAllocationCharge(gpuAllocationCharge_,gpuAllocationLastFence_);
+    gpuAllocationCharge_=candidateCharge;gpuAllocationLastFence_=candidateFence;
+    physicalCapacity_=next;
+    ++vmFrameRevision_;
+    verticesReady_=false;
+    return true;
+}
+bool ComputeParticles::shrinkEmptyGpuAllocation(){
+    if(!gpuDemandGrowth_||!gpuEmptyProven_||gpuResetDirty_||gpuStagingDirty_||
+       !pendingStates_.empty()||!pendingGpuKills_.empty())return false;
+    const uint32_t target=gpuInitialPhysicalCapacity(desc_.capacity);
+    if(physicalCapacity_<=target)return true;
+    // Empty proof guarantees current dispatch args already describe zero
+    // alive (one guarded threadgroup). The next birth rewrites draw args.
+    return replaceGpuAllocation(target,true);
+}
+void ComputeParticles::serviceGpuIdleReclaim(uint32_t pendingBirths){
+    if(!gpuDemandGrowth_)return;
+    if(pendingBirths||!pendingGpuKills_.empty()){
+        gpuIdleSteps_=0;
+        if(pendingBirths){gpuEmptyProven_=false;gpuCompactTarget_=0;}
+        return;
+    }
+    if(gpuEmptyProven_){
+        gpuAllocationSubmitted_=false;
+        gpuBirthEstimates_.clear();gpuEstimatedBirths_=0;
+        if(physicalCapacity_>gpuInitialPhysicalCapacity(desc_.capacity)&&
+           ++gpuIdleSteps_>=kGpuIdleReclaimSteps){
+            gpuIdleSteps_=0;(void)shrinkEmptyGpuAllocation();
+        }
+        return;
+    }
+    if(gpuCompactTarget_){
+        const uint32_t target=gpuCompactTarget_;gpuCompactTarget_=0;
+        gpuIdleSteps_=0;
+        if(target<physicalCapacity_&&!gpuResetDirty_&&!gpuStagingDirty_)
+            (void)replaceGpuAllocation(target,false,true);
+        return;
+    }
+    // Sparse live pools also get a bounded proof even if conservative
+    // lifespan estimates overstate occupancy after selective kills.
+    if(!gpuAllocationSubmitted_||(gpuEstimatedBirths_&&physicalCapacity_<=gpuInitialPhysicalCapacity(desc_.capacity))){
+        gpuIdleSteps_=0;return;
+    }
+    if(++gpuIdleSteps_<kGpuIdleReclaimSteps)return;
+    gpuIdleSteps_=0;
+    const auto epoch=gpuBirthEpoch_;
+    if(requestAllocationCounters([this,epoch](bool ok,AllocationCounters observed){
+        if(ok&&epoch==gpuBirthEpoch_&&!gpuResetDirty_&&!gpuStagingDirty_&&
+           observed.alive<=physicalCapacity_&&observed.free==physicalCapacity_-observed.alive){
+            if(observed.alive==0){
+                gpuEmptyProven_=true;
+                gpuIdleSteps_=kGpuIdleReclaimSteps-1;
+            }else if(physicalCapacity_>gpuInitialPhysicalCapacity(desc_.capacity)&&
+                     observed.alive<=physicalCapacity_/4){
+                gpuCompactTarget_=gpuNextPhysicalCapacity(gpuInitialPhysicalCapacity(desc_.capacity),
+                    observed.alive*2,desc_.capacity);
+            }
+        }
+    }))++stats_.gpuIdleProofRequests;
+}
+bool ComputeParticles::stepGpuAllocated(float dt){
+    stats_.hostActiveSlotVisits=stats_.hostOccupiedPages=0;
+    uint32_t count=uint32_t(pendingStates_.size());
+    serviceGpuIdleReclaim(count);
+    if(!gpuAllocationSubmitted_&&!count&&pendingGpuKills_.empty()){
+        drawCount_=0;verticesReady_=true;stats_.alive=stats_.submittedSlots=0;return true;
+    }
+    const auto reject=[&](const char* why){
+        ++stats_.gpuStagingUploadFailures;gpuStagingDirty_=true;
+        verticesReady_=false;drawCount_=0;reason_=why;return false;
+    };
+    if(count&&gpuDemandGrowth_){
+        const uint32_t required=uint32_t(std::min<uint64_t>(desc_.capacity,gpuEstimatedBirths_+count));
+        gpuGrowthBudgetBlocked_=false;
+        if(!growGpuAllocation(required)){
+            if(!gpuGrowthBudgetBlocked_){
+                verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
+                reason_="GPU physical capacity growth rejected; pending births retained";return false;
+            }
+            // Budget pressure is not a device failure. Keep simulating all
+            // resident particles; bound staging to the existing physical pool.
+            // GPU reserve still admits only actually free slots.
+            const auto bounded=std::min(count,allocatedCapacity());
+            stats_.gpuBudgetLimitedBirths+=count-bounded;stats_.dropped+=count-bounded;
+            pendingStates_.resize(bounded);pendingGpuOwners_.resize(bounded);pendingProgramParams_.resize(bounded);
+            count=bounded;
+        }
+    }
+    markGpuAllocationUsed(); // replacement may have installed a new charge
+    const uint32_t cap=allocatedCapacity();
+    const std::array<uint32_t,2> zero{};
+    if(!device_->updateStorageBufferChecked(vmErrors_,zero.data(),desc_.reportCollisionEvents?sizeof(zero):sizeof(uint32_t)))return reject("GPU allocator VM counter upload rejected");
+    if(count){
+        std::vector<uint32_t> tokens;tokens.reserve(size_t(count)*2);
+        for(uint64_t token:pendingGpuOwners_){tokens.push_back(uint32_t(token));tokens.push_back(uint32_t(token>>32));}
+        if(!device_->updateStorageBufferChecked(seeds_,pendingStates_.data(),size_t(count)*sizeof(ParticleState))||
+           !device_->updateStorageBufferChecked(slots_,tokens.data(),tokens.size()*sizeof(uint32_t))||
+           !device_->updateStorageBufferChecked(seedProgramParams_,pendingProgramParams_.data(),size_t(count)*sizeof(ProgramParams)))
+            return reject("GPU allocator birth upload rejected");
+        stats_.uploadedBytes+=size_t(count)*(sizeof(ParticleState)+sizeof(ProgramParams)+8u);
+    }
+    if(!device_->beginCompute(compute_))return reject("GPU allocator compute begin rejected");
+    bindGpuAllocationBuffers();
+    Uniforms u{};
+    u.gravityDt={desc_.gravityY,dt,desc_.drag,proceduralActive_?1.f:0.f};
+    u.collisionSphere={desc_.staticSphereCenter.x,desc_.staticSphereCenter.y,desc_.staticSphereCenter.z,desc_.staticSphereRadius};
+    u.collisionResponse={desc_.collisionBounce,desc_.collisionDampen,desc_.collisionRadiusScale,desc_.staticSdf.dimension?float(1u+stats_.sharedSdfOffsetWords):0.f};
+    fillDepthUniforms(u);
+    u.depthEye.w=desc_.reportCollisionEvents?1.f:0.f;
+    u.rightSize={right_.x,right_.y,right_.z,desc_.size};u.up={up_.x,up_.y,up_.z,(dt>0.f||count>0)?1.f:0.f};
+    u.meta={0,cap,count,0};
+    const bool cull=viewReady_&&std::all_of(viewProj_.m,viewProj_.m+16,[](float x){return std::isfinite(x);});
+    if(cull){
+        std::memcpy(u.cullViewProj,viewProj_.m,sizeof(u.cullViewProj));
+        u.cullControl={1.f,float(viewWidth_),float(viewHeight_),0.f};
+        // High is the full-density reference. Medium reuses the existing
+        // quality distance as a soft LOD scale, never a simulation cutoff.
+        if(desc_.volumeMaterial.enabled){
+            u.cullControl.x=2.f;u.lodEye.w=desc_.volumeMaterial.boundScale();
+        }else if(desc_.quality==fx::FxQuality::Medium){
+            const float farDistance=fx::limitsFor(desc_.quality).cullDistance;
+            u.cullControl.w=farDistance;
+            u.lodEye={eye_.x,eye_.y,eye_.z,farDistance*0.25f};
+        }
+    }
+    const bool indirect=device_->supportsGpuComputeIndirect();
+    auto dispatch=[&](uint32_t mode,uint32_t threads,bool list){
+        u.meta[0]=mode;device_->setComputeUniforms(&u,sizeof(u));
+        const bool ok=list&&indirect?device_->dispatchGpuIndirect(gpuDispatchArgs_):device_->dispatchChecked(threads);
+        if(ok){++stats_.gpuDispatches;if(list&&indirect)++stats_.gpuAliveIndirectDispatches;}
+        return ok;
+    };
+    bool ok=true;
+    for(uint64_t token:pendingGpuKills_){
+        u.meta[2]=uint32_t(token);u.meta[3]=uint32_t(token>>32);
+        if(!dispatch(9,cap,true)){ok=false;break;}
+    }
+    u.meta[2]=count;u.meta[3]=0;
+    const auto frame=gpu_pipeline::gpuAllocationPlan(cap,count,dt>0.f||count>0);
+    for(uint32_t i=0;ok&&i<frame.count;++i){
+        const auto& phase=frame.dispatches[i];
+        const bool list=phase.phase==gpu_pipeline::Phase::UpdateAliveList||phase.phase==gpu_pipeline::Phase::RenderAliveList;
+        ok=dispatch(phase.shaderMode,phase.threads,list);
+        if(ok&&phase.phase==gpu_pipeline::Phase::UpdateAliveList)++stats_.gpuCompactDispatches;
+        if(ok&&phase.phase==gpu_pipeline::Phase::ReserveFreeSlots)++stats_.gpuFreeReservationDispatches;
+    }
+    device_->endCompute();
+    if(!ok){
+        // Some mutations may already have been encoded: never retry births
+        // against an uncertain allocator. Checked reset is required.
+        gpuResetDirty_=true;verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
+        reason_="GPU alive-list dispatch rejected; checked reset required";return false;
+    }
+    std::swap(gpuAliveCurrent_,gpuAliveNext_);
+    gpuCullViewUsed_=cull;
+    gpuAllocationSubmitted_|=count!=0;
+    if(count){
+        ++gpuBirthEpoch_;gpuEmptyProven_=false;gpuIdleSteps_=0;gpuCompactTarget_=0;
+        gpuBirthEstimates_.push_back({gpuAllocationClock_+desc_.lifetime,count});
+        gpuEstimatedBirths_+=count;stats_.gpuAllocationRequests+=count;
+    }
+    gpuAllocationClock_+=dt;
+    while(!gpuBirthEstimates_.empty()&&gpuBirthEstimates_.front().expires<=gpuAllocationClock_){
+        gpuEstimatedBirths_-=gpuBirthEstimates_.front().count;gpuBirthEstimates_.pop_front();
+    }
+    const bool mutateParticles=dt>0.f||count||!pendingGpuKills_.empty();
+    pendingStates_.clear();pendingProgramParams_.clear();pendingGpuOwners_.clear();pendingGpuKills_.clear();
+    gpuStagingDirty_=false;verticesReady_=true;stats_.gpuVmErrorsKnown=false;
+    if(mutateParticles)++vmFrameRevision_;
+    stats_.alive=uint32_t(std::min<uint64_t>(cap,gpuEstimatedBirths_));
+    stats_.submittedSlots=stats_.alive; // estimate, actual indirect count stays GPU-side
+    drawCount_=gpuAllocationSubmitted_?cap:0;reason_.clear();
+    collisionReadable_=desc_.reportCollisionEvents&&dt>0.f;
+    collisionFrame_=device_->frameSerial();
+    if(cap<=kGpuCheckpointCaptureMaxSlots&&checkpointCadence_.due(vmFrameRevision_)){
+        if(!asyncCheckpointPending_&&requestGpuCheckpoint())checkpointCadence_.accepted(vmFrameRevision_);
+        else checkpointCadence_.deferred(vmFrameRevision_);
+        stats_.checkpointAdaptiveBackoffs=checkpointCadence_.backoffs();
+        stats_.checkpointAdaptiveRecoveries=checkpointCadence_.recoveries();
+    }
+    return true;
+}
+bool ComputeParticles::setVolumeLight(render::float3 direction,render::float3 color){
+    if(!finite(direction)||!finite(color)||color.x<0||color.y<0||color.z<0||
+       color.x>64||color.y>64||color.z>64)return false;
+    const auto len=render::length(direction);
+    if(!finite(len)||len<1e-5f)return false;
+    volumeLightDirection_=direction*(1.f/len);volumeLightColor_=color;return true;
+}
+bool ComputeParticles::prepareVolumeSort(){
+    volumeSortReady_=false;
+    if(!gpuActive()||!desc_.volumeMaterial.enabled||!desc_.volumeMaterial.sortBackToFront||
+       !proceduralActive_||!viewReady_||!verticesReady_||gpuResetDirty_||
+       !device_->canUpdateSharedBuffers()||!device_->gpuSubmissionFence()){
+        reason_="Volume sort requires published compact records and an open prepass frame";return false;
+    }
+    if(!drawCount_){volumeSortReady_=true;return true;}
+    const uint32_t cap=allocatedCapacity();
+    const uint32_t count=gpuIndirectActive_?cap:std::min(cap,drawCount_);
+    uint32_t n=1;while(n<count)n*=2;
+    if(!volumeSortCompute_.valid()){
+        volumeSortCompute_=device_->createCompute({volume_sort::metal,volume_sort::glsl,
+            "SpectraFX volume centre depth sort",gfx::VulkanComputeLayout::StorageUniforms,9});
+        if(!volumeSortCompute_.valid()){reason_="Volume sort shader unavailable";return false;}
+    }
+    if(volumeSortCapacity_<n){
+        const size_t charge=size_t(n)*(8u+sizeof(Vertex));
+        if(!desc_.allocationBudget->reserve(charge)){reason_="Volume sort budget exhausted";return false;}
+        auto keys=buffer(*device_,gfx::BufferType::Storage,size_t(n)*8u,nullptr,"SpectraFX volume sort keys");
+        auto records=buffer(*device_,gfx::BufferType::Storage,size_t(n)*sizeof(Vertex),nullptr,"SpectraFX sorted volume records");
+        if(!keys.valid()||!records.valid()){
+            if(keys.valid())device_->destroyBuffer(keys);
+            if(records.valid())device_->destroyBuffer(records);
+            retireAllocationCharge(charge,0);reason_="Volume sort allocation failed";return false;
+        }
+        if(volumeSortKeys_.valid())device_->destroyBuffer(volumeSortKeys_);
+        if(volumeSortedRecords_.valid())device_->destroyBuffer(volumeSortedRecords_);
+        retireAllocationCharge(volumeSortCharge_,volumeSortFence_);
+        stats_.gpuBytes+=charge-volumeSortCharge_;
+        volumeSortCharge_=charge;volumeSortCapacity_=n;volumeSortFence_=0;
+        volumeSortKeys_=keys;volumeSortedRecords_=records;
+    }
+    struct Params{render::mat4 viewProj;std::array<uint32_t,4> meta,limits;};
+    static_assert(sizeof(Params)==96);
+    Params u{viewProj_,{0,n,0,0},{count,gpuIndirectActive_?1u:0u,drawCount_,0}};
+    const auto dispatch=[&](uint32_t mode,uint32_t width,uint32_t stride){
+        if(!device_->beginCompute(volumeSortCompute_))return false;
+        markGpuAllocationUsed();volumeSortFence_=std::max(volumeSortFence_,device_->gpuSubmissionFence());
+        device_->setComputeBuffer(0,vertices_);device_->setComputeBuffer(1,volumeSortKeys_);
+        device_->setComputeBuffer(2,volumeSortedRecords_);device_->setComputeBuffer(3,gpuDrawArgs_);
+        u.meta={mode,n,width,stride};device_->setComputeUniforms(&u,sizeof(u));
+        const bool ok=device_->dispatchChecked(n);device_->endCompute();
+        if(ok)++stats_.gpuDispatches;return ok;
+    };
+    bool ok=dispatch(0,0,0);
+    for(uint32_t width=2;ok&&width<=n;width*=2)
+        for(uint32_t stride=width/2;ok&&stride;stride/=2)ok=dispatch(1,width,stride);
+    if(ok)ok=dispatch(2,0,0);
+    volumeSortReady_=ok;
+    if(!ok)reason_="Volume sort dispatch rejected; draw suppressed";
+    return ok;
+}
+bool ComputeParticles::drawWithVolumeDepth(gfx::TextureHandle opaqueDepth,const fx::FxFog& fog){
+    gfx::TextureInfo info{};
+    if(!gpuActive()||!desc_.volumeMaterial.enabled||!desc_.volumeMaterial.depthAware||
+       !viewReady_||!opaqueDepth.valid()||!device_->textureInfo(opaqueDepth,info)||
+       info.format!=gfx::PixelFormat::Depth||info.width!=viewWidth_||info.height!=viewHeight_){
+        reason_="Volume depth draw requires matching detached opaque depth";return false;
+    }
+    auto inverse=viewProj_.inverse();const auto product=viewProj_*inverse;
+    for(int y=0;y<4;++y)for(int x=0;x<4;++x){
+        const auto v=product.at(y,x);
+        if(!finite(v)||std::abs(v-(x==y?1.f:0.f))>.02f){reason_="Invalid volume depth projection";return false;}
+    }
+    drawVolumeDepth_=opaqueDepth;draw(fog);drawVolumeDepth_={};
+    return stats_.drawCalls!=0||drawCount_==0;
+}
 void ComputeParticles::draw(const fx::FxFog& fog) {
     stats_.drawCalls=0;
     if(!initialized_||!viewReady_||desc_.quality==fx::FxQuality::Off)return;
@@ -759,16 +1590,60 @@ void ComputeParticles::draw(const fx::FxFog& fog) {
     }
     if(gpuResetDirty_ || !verticesReady_ || !pipeline_.valid() ||
        drawCount_==0)return;
+    if(desc_.volumeMaterial.enabled&&desc_.volumeMaterial.depthAware&&!drawVolumeDepth_.valid()){
+        reason_="Depth-aware volume draw requires detached opaque depth";return;
+    }
+    markGpuAllocationUsed();
     DrawUniforms u{};
     std::memcpy(u.viewProj,viewProj_.m,sizeof(u.viewProj));
     u.fog[0]=fog.color.x;u.fog[1]=fog.color.y;u.fog[2]=fog.color.z;u.fog[3]=fog.density;
     u.camera[0]=eye_.x;u.camera[1]=eye_.y;u.camera[2]=eye_.z;u.camera[3]=1;
     u.params[0]=1;u.params[1]=0;u.params[2]=0;u.params[3]=0;
+    if(desc_.volumeMaterial.enabled){
+        u.params[0]=desc_.volumeMaterial.density;u.params[1]=desc_.volumeMaterial.emission;
+        u.params[2]=float(desc_.volumeMaterial.steps);
+    }
+    u.right[0]=right_.x;u.right[1]=right_.y;u.right[2]=right_.z;
+    u.up[0]=up_.x;u.up[1]=up_.y;u.up[2]=up_.z;
+    if(desc_.volumeMaterial.enabled){
+        const auto& m=desc_.volumeMaterial;
+        u.params[3]=float(uint32_t(m.shape));
+        u.right[0]=m.axes.x;u.right[1]=m.axes.y;u.right[2]=m.axes.z;
+        u.up[0]=m.noiseFrequency;u.up[1]=m.noiseStrength;u.up[2]=float(m.noiseOctaves);
+        if(m.texture){u.right[3]=float(m.texture->dimension);u.camera[3]=float(m.texture->frames);}
+    }
     device_->setPipeline(pipeline_);
-    device_->setVertexBuffer(vertices_);
+    if(desc_.volumeMaterial.enabled&&desc_.volumeMaterial.sortBackToFront){
+        if(!volumeSortReady_){reason_="Volume sort not prepared for this view";return;}
+        const auto fence=device_->gpuSubmissionFence();
+        volumeSortFence_=fence?std::max(volumeSortFence_,fence):GpuAllocationBudget::unknownFence;
+        device_->setVertexBuffer(volumeSortedRecords_);
+    }else device_->setVertexBuffer(vertices_);
     device_->setIndexBuffer(indices_);
-    device_->setUniforms(0,&u,sizeof(u));
-    device_->setTexture(0,texture_);
+    if(desc_.volumeMaterial.enabled){
+        const auto& m=desc_.volumeMaterial;
+        VolumeDrawUniforms v{u,
+            {volumeLightDirection_.x,volumeLightDirection_.y,volumeLightDirection_.z,m.directIntensity},
+            {volumeLightColor_.x,volumeLightColor_.y,volumeLightColor_.z,m.ambient},
+            {float(m.shadowSteps),m.shadowStrength,m.anisotropy,0},viewProj_.inverse(),
+            {float(viewWidth_),float(viewHeight_),device_->info().clipDepthZeroToOne?1.f:2.f,device_->info().renderTargetFlipY?1.f:0.f},
+            {m.adaptiveLod?1.f:0.f,float(m.minimumSteps),m.lodSmallPixels,m.lodFullPixels},volumeSparseControl_};
+        device_->setUniforms(0,&v,sizeof(v));
+    }else device_->setUniforms(0,&u,sizeof(u));
+    if(!desc_.volumeMaterial.enabled)device_->setTexture(0,texture_);
+    else if(volumeTexture_.valid()){
+        const auto fence=device_->gpuSubmissionFence();
+        volumeTextureFence_=fence?std::max(volumeTextureFence_,fence):GpuAllocationBudget::unknownFence;
+        device_->setTexture(0,volumeTexture_);
+    }
+    if(desc_.volumeMaterial.enabled&&desc_.volumeMaterial.depthAware){
+        if(!volumeTexture_.valid())device_->setTexture(0,texture_);
+        device_->setTexture(1,drawVolumeDepth_);
+    }
+    if(volumeBrickMap_.valid()){
+        if(!desc_.volumeMaterial.depthAware)device_->setTexture(1,texture_);
+        device_->setTexture(2,volumeBrickMap_);
+    }
     if(gpuIndirectActive_) {
         // No CPU readback, and no unsafe direct-draw fallback when GPU
         // authored arguments cannot be submitted. CPU's count is only an
@@ -779,13 +1654,78 @@ void ComputeParticles::draw(const fx::FxFog& fog) {
         }
         ++stats_.gpuIndirectDraws;
     } else {
-        device_->drawIndexed(drawCount_*6);
+        if(proceduralActive_)device_->drawIndexed(6,0,0,drawCount_);
+        else device_->drawIndexed(drawCount_*6);
     }
     stats_.drawCalls=1;
 }
+bool ComputeParticles::requestAllocationCounters(std::function<void(bool,AllocationCounters)> callback){
+    if(!callback||!gpuAllocationActive_||!gpuActive()||!device_||!device_->gpuHealthy()||
+       !device_->canUpdateSharedBuffers()||gpuResetDirty_||gpuStagingDirty_||
+       asyncAllocationCountersPending_||!readbackLifetime_)return false;
+    markGpuAllocationUsed();
+    const auto revision=vmFrameRevision_;
+    const auto capacity=allocatedCapacity();
+    std::weak_ptr<uint64_t> lifetime(readbackLifetime_);
+    asyncAllocationCountersPending_=true;
+    if(!device_->readBufferAsync(aliveCounter_,8*sizeof(uint32_t),
+        [this,lifetime,revision,capacity,callback=std::move(callback)](std::vector<uint8_t> bytes) mutable{
+            if(!lifetime.lock())return;
+            asyncAllocationCountersPending_=false;
+            AllocationCounters result{};result.revision=revision;
+            bool ok=bytes.size()==8*sizeof(uint32_t);
+            if(ok){
+                std::array<uint32_t,8> raw{};
+                std::memcpy(raw.data(),bytes.data(),bytes.size());
+                result.alive=raw[0];result.free=raw[1];result.reservedBase=raw[2];result.admitted=raw[3];result.visible=raw[6];result.lodRejected=raw[7];
+                ok=result.visible<=result.alive&&result.lodRejected<=result.alive-result.visible&&result.free<=capacity&&result.alive<=capacity&&result.reservedBase<=capacity&&
+                   result.admitted<=capacity-result.reservedBase&&result.alive==capacity-result.free;
+            }
+            callback(ok,result);
+        })){
+        asyncAllocationCountersPending_=false;return false;
+    }
+    return true;
+}
+bool ComputeParticles::auditGpuAllocation(AllocationAudit& out){
+    out={};
+    if(!gpuActive()||!gpuAllocationActive_||!device_||!device_->gpuHealthy()||
+       gpuResetDirty_||gpuStagingDirty_||!device_->canUpdateSharedBuffers())return false;
+    const auto cap=allocatedCapacity();
+    std::array<uint32_t,8> raw{};
+    AllocationAudit result;
+    if(!device_->readBuffer(aliveCounter_,raw.data(),sizeof(raw))||
+       !device_->readBuffer(gpuDrawArgs_,&result.draw,sizeof(result.draw))||
+       !device_->readBuffer(vmErrors_,&result.vmErrors,sizeof(result.vmErrors)))return false;
+    if(raw[0]>cap||raw[1]!=cap-raw[0]||raw[6]>raw[0]||raw[7]>raw[0]-raw[6]||
+       raw[2]>cap||raw[3]>cap-raw[2])return false;
+    result.capacity=cap;
+    result.counters.alive=raw[0];result.counters.free=raw[1];
+    result.counters.reservedBase=raw[2];result.counters.admitted=raw[3];
+    result.counters.visible=raw[6];result.counters.lodRejected=raw[7];
+    result.counters.revision=vmFrameRevision_;
+    // Reset may leave previously published draw args unreferenced. Only
+    // validate them for a currently submitted allocator frame.
+    if(gpuAllocationSubmitted_ && (result.draw.indexCount!=(proceduralActive_?6u:raw[6]*6u)||
+       result.draw.instanceCount!=(proceduralActive_?raw[6]:1u)||
+       result.draw.firstIndex||result.draw.baseVertex||result.draw.firstInstance))return false;
+    std::vector<uint32_t> alive(raw[0]),free(raw[1]);
+    std::vector<uint32_t> owners(size_t(cap)*2);
+    if((!alive.empty()&&!device_->readBuffer(gpuAliveCurrent_,alive.data(),alive.size()*4))||
+       (!free.empty()&&!device_->readBuffer(liveSlots_,free.data(),free.size()*4))||
+       (!alive.empty()&&!device_->readBuffer(gpuSourceOwners_,owners.data(),owners.size()*4)))return false;
+    std::vector<uint8_t> seen(cap,0);
+    for(uint32_t slot:alive){
+        if(slot>=cap||seen[slot]++)return false;
+        result.liveOwners.push_back(uint64_t(owners[size_t(slot)*2])|(uint64_t(owners[size_t(slot)*2+1])<<32));
+    }
+    for(uint32_t slot:free)if(slot>=cap||seen[slot]++)return false;
+    out=std::move(result);
+    return true;
+}
 bool ComputeParticles::readGpuVmErrors(uint32_t& count) {
     stats_.gpuVmErrorsKnown=false;
-    if(!initialized_ || backend_!=ComputeBackend::Metal || !device_ ||
+    if(!initialized_ || backend_==ComputeBackend::Cpu || !device_ ||
        !vmErrors_.valid() || !device_->gpuHealthy() ||
        gpuResetDirty_ || gpuStagingDirty_ ||
        !device_->canUpdateSharedBuffers())return false;
@@ -796,9 +1736,43 @@ bool ComputeParticles::readGpuVmErrors(uint32_t& count) {
     stats_.gpuVmErrorsKnown=true;
     return true;
 }
+bool ComputeParticles::requestGpuCollisionEvents(GpuCollisionCallback callback) {
+    if(!callback||!gpuActive()||!desc_.reportCollisionEvents||!collisionReadable_||
+       collisionReadPending_||!device_||!device_->gpuHealthy()||!device_->canUpdateSharedBuffers()||
+       !readbackLifetime_||gpuResetDirty_||gpuStagingDirty_)return false;
+    const auto frame=device_->frameSerial();
+    if(frame!=collisionFrame_)return false;
+    struct Reservation {
+        std::shared_ptr<CheckpointReadbackBudget> budget;
+        size_t returned=0;
+        ~Reservation(){if(budget)budget->settle(kGpuCollisionEventBytes,1,returned);}
+    };
+    auto reserve=std::make_shared<Reservation>();
+    if(desc_.checkpointBudget&&!desc_.checkpointBudget->tryReserve(frame,kGpuCollisionEventBytes,1))
+        return false;
+    reserve->budget=desc_.checkpointBudget;
+    const auto epoch=collisionEpoch_,revision=vmFrameRevision_;
+    const auto capacity=allocatedCapacity();
+    const std::weak_ptr<uint64_t> lifetime=readbackLifetime_;
+    collisionReadPending_=true;collisionReadable_=false;
+    markGpuAllocationUsed();
+    const bool accepted=device_->readBufferAsync(vmErrors_,kGpuCollisionEventBytes,
+        [this,lifetime,reserve,epoch,revision,frame,capacity,callback=std::move(callback)](std::vector<uint8_t> bytes)mutable{
+            reserve->returned=bytes.size();
+            if(!lifetime.lock())return;
+            collisionReadPending_=false;
+            if(epoch!=collisionEpoch_||!gpuActive())return;
+            GpuCollisionBatch batch;batch.frameSerial=frame;batch.revision=revision;
+            const bool ok=decodeGpuCollisionBatch(bytes,capacity,batch);
+            callback(ok,std::move(batch));
+        });
+    if(!accepted){collisionReadPending_=false;collisionReadable_=true;}
+    return accepted;
+}
+
 bool ComputeParticles::requestGpuVmErrors(
     std::function<void(bool,uint32_t)> callback) {
-    if(!callback || !initialized_ || backend_!=ComputeBackend::Metal ||
+    if(!callback || !initialized_ || backend_==ComputeBackend::Cpu ||
        !device_ || !vmErrors_.valid() || !device_->gpuHealthy() ||
        gpuResetDirty_ || gpuStagingDirty_ ||
        !device_->canUpdateSharedBuffers() || asyncErrorPending_ ||
@@ -827,22 +1801,25 @@ bool ComputeParticles::requestGpuVmErrors(
     return true;
 }
 
+namespace {
+bool finishOwnedCheckpoint(GpuCheckpoint&,const uint8_t*,const uint8_t*,const uint8_t*,const uint8_t*);
+}
 bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) {
-    if(!initialized_ || backend_!=ComputeBackend::Metal || !device_ ||
+    if(!initialized_ || backend_==ComputeBackend::Cpu || !device_ ||
        !device_->gpuHealthy() || !device_->canUpdateSharedBuffers() ||
        !readbackLifetime_ || asyncCheckpointPending_ ||
        gpuResetDirty_ || gpuStagingDirty_ ||
        !states_.valid() || !stateProgramParams_.valid() ||
-       !stateAttributes_.valid() || ages_.empty() ||
-       !pendingStates_.empty() || !pendingKillSlots_.empty() ||
+       !stateAttributes_.valid() ||
+       !pendingStates_.empty() || !pendingKillSlots_.empty() || !pendingGpuKills_.empty() ||
         !killedSlotsAwaitingFrame_.empty())return false;
 
-    // At most eight 64 KiB chunks for the existing 4096-slot GPU backend.
-    // Every callback carries bytes from a single ordered Metal command buffer.
-    const size_t n=ages_.size();
-    const std::array<size_t,3> lengths{
-        n*sizeof(ParticleState),n*sizeof(ProgramParams),
-        n*sizeof(ProgramAttributes)
+    const bool owned=gpuAllocationActive_;
+    const size_t n=owned?allocatedCapacity():ages_.size();
+    if(!n||n>kGpuCheckpointCaptureMaxSlots)return false;
+    const std::array<size_t,7> lengths{
+        n*sizeof(ParticleState),n*sizeof(ProgramParams),n*sizeof(ProgramAttributes),
+        owned?n*8:0,owned?n*4:0,owned?n*4:0,owned?8*sizeof(uint32_t):0
     };
     constexpr size_t kChunkBytes=65536;
     size_t chunks=0;
@@ -850,9 +1827,16 @@ bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) 
     if(chunks==0 || chunks>16)return false;
 
     struct Pending {
-        std::array<std::vector<uint8_t>,3> bytes;
+        std::array<std::vector<uint8_t>,7> bytes;
+        bool owned=false;
+        size_t physicalSlots=0;
         std::vector<float> remainingLifetime;
+        std::vector<uint32_t> freeSlotOrder;
+        std::vector<uint64_t> sourceTokens;
+        std::array<float,8> birthParameters{};
         uint64_t frameRevision=0, frameSerial=0;
+        uint32_t shaderBirthSeed=0, shaderBirthOrdinal=0;
+        bool shaderBirthSeedEnabled=false;
         size_t left=0;
         bool failed=false, acceptedAll=false;
         std::function<void(bool)> completion;
@@ -866,13 +1850,18 @@ bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) 
         }
     };
     auto pending=std::make_shared<Pending>();
-    pending->remainingLifetime=ages_;
+    pending->owned=owned;pending->physicalSlots=n;
+    if(!owned){pending->remainingLifetime=ages_;pending->freeSlotOrder=freeSlots_;pending->sourceTokens=slotSourceTokens_;}
+    pending->birthParameters=programParams_;
+    pending->shaderBirthSeed=shaderBirthSeed_;
+    pending->shaderBirthOrdinal=shaderBirthOrdinal_;
+    pending->shaderBirthSeedEnabled=shaderBirthSeedEnabled_;
     pending->frameRevision=vmFrameRevision_;
     pending->frameSerial=device_->frameSerial();
     pending->completion=std::move(callback);
     pending->left=chunks;
-    for(size_t i=0;i<3;++i)pending->bytes[i].resize(lengths[i]);
-    const size_t totalBytes=lengths[0]+lengths[1]+lengths[2];
+    size_t totalBytes=0;
+    for(size_t i=0;i<lengths.size();++i){pending->bytes[i].resize(lengths[i]);totalBytes+=lengths[i];}
     if(desc_.checkpointBudget &&
        !desc_.checkpointBudget->tryReserve(
             pending->frameSerial,totalBytes,uint32_t(chunks))) {
@@ -886,12 +1875,13 @@ bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) 
     asyncCheckpointPending_=true;
     ++stats_.checkpointRequests;
 
-    const std::array<gfx::BufferHandle,3> buffers{
-        states_,stateProgramParams_,stateAttributes_
+    markGpuAllocationUsed();
+    const std::array<gfx::BufferHandle,7> buffers{
+        states_,stateProgramParams_,stateAttributes_,gpuSourceOwners_,liveSlots_,gpuAliveCurrent_,aliveCounter_
     };
     bool allAccepted=true;
     size_t acceptedChunks=0;
-    for(size_t b=0;b<3 && allAccepted;++b) {
+    for(size_t b=0;b<buffers.size() && allAccepted;++b) {
         for(size_t offset=0;offset<lengths[b];offset+=kChunkBytes) {
             const size_t length=std::min(kChunkBytes,lengths[b]-offset);
             const bool accepted=device_->readBufferRangeAsync(
@@ -912,14 +1902,21 @@ bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) 
                     if(--pending->left!=0)return;
                     asyncCheckpointPending_=false;
                     bool complete=pending->acceptedAll && !pending->failed &&
-                        gpuActive() &&
-                        pending->remainingLifetime.size()==ages_.size();
+                        gpuActive() && pending->owned==gpuAllocationActive_ &&
+                        (pending->owned||pending->remainingLifetime.size()==ages_.size());
                     if(complete) {
                         GpuCheckpoint result;
-                        const size_t total=pending->remainingLifetime.size();
+                        const size_t total=pending->physicalSlots;
                         result.slots.resize(total);
                         result.remainingLifetime=pending->remainingLifetime;
+                        result.freeSlotOrder=pending->freeSlotOrder;
+                        result.sourceTokens=pending->sourceTokens;
+                        result.birthParameters=pending->birthParameters;
+                        result.hostStateComplete=true;
                         result.frameSerial=pending->frameSerial;
+                        result.shaderBirthSeed=pending->shaderBirthSeed;
+                        result.shaderBirthOrdinal=pending->shaderBirthOrdinal;
+                        result.shaderBirthSeedEnabled=pending->shaderBirthSeedEnabled;
                         for(size_t i=0;i<total;++i) {
                             auto& dst=result.slots[i];
                             std::memcpy(&dst.positionAge,
@@ -932,13 +1929,16 @@ bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) 
                                 pending->bytes[2].data()+i*sizeof(ProgramAttributes),
                                 sizeof(ProgramAttributes));
                         }
-                        result.complete=true;
-                        // Keep a completed historical capture for diagnostics,
-                        // but ONLY same-revision state is eligible for fallback.
-                        lastCheckpoint_=std::move(result);
-                        checkpointRevision_=pending->frameRevision;
-                        ++stats_.checkpointCompleted;
-                    } else if(pending->acceptedAll) ++stats_.checkpointFailed;
+                        if(pending->owned)complete=finishOwnedCheckpoint(result,pending->bytes[3].data(),
+                            pending->bytes[4].data(),pending->bytes[5].data(),pending->bytes[6].data());
+                        if(complete){
+                            result.complete=true;
+                            lastCheckpoint_=std::move(result);
+                            checkpointRevision_=pending->frameRevision;
+                            ++stats_.checkpointCompleted;
+                        }
+                    }
+                    if(!complete&&pending->acceptedAll)++stats_.checkpointFailed;
                     if(pending->acceptedAll) {
                         checkpointCadence_.completed(complete);
                         stats_.checkpointAdaptiveBackoffs=checkpointCadence_.backoffs();
@@ -974,7 +1974,7 @@ GpuCheckpointStatus ComputeParticles::checkpointStatus() const {
     status.stagingRecoveryPending=gpuStagingDirty_;
     status.currentRevision=vmFrameRevision_;
     status.capturedRevision=checkpointRevision_;
-    status.physicalSlots=static_cast<uint32_t>(ages_.size());
+    status.physicalSlots=gpuAllocationActive_?allocatedCapacity():static_cast<uint32_t>(ages_.size());
     status.killsAwaitingGpuFence=uint32_t(killedSlotsAwaitingFrame_.size());
     status.checkpointIntervalFrames=checkpointCadence_.intervalFrames();
     status.nextCheckpointRevision=checkpointCadence_.nextDueRevision();
@@ -986,10 +1986,10 @@ GpuCheckpointStatus ComputeParticles::checkpointStatus() const {
     }
     status.restoreEligible=status.gpuActive && status.fresh &&
         !gpuResetDirty_ && !gpuStagingDirty_ &&
-        !status.unsentBirths && pendingKillSlots_.empty() &&
-        killedSlotsAwaitingFrame_.empty() &&
-        lastCheckpoint_.slots.size()==ages_.size() &&
-        lastCheckpoint_.remainingLifetime.size()==ages_.size();
+        !status.unsentBirths && pendingKillSlots_.empty() && pendingGpuKills_.empty() &&
+        killedSlotsAwaitingFrame_.empty() && lastCheckpoint_.gpuOwnedAllocation==gpuAllocationActive_ &&
+        lastCheckpoint_.slots.size()==status.physicalSlots &&
+        lastCheckpoint_.remainingLifetime.size()==status.physicalSlots;
     return status;
 }
 
@@ -1011,16 +2011,197 @@ bool ComputeParticles::exportFreshCheckpoint(
     return true;
 }
 
+bool ComputeParticles::exportRestoreCheckpoint(const std::string& identity,std::vector<uint8_t>& bytes) const {
+    const auto status=checkpointStatus();
+    if(!status.restoreEligible||status.pending||!device_||!device_->gpuHealthy())return false;
+    // External source tokens are process-local and cannot be imported safely.
+    for(auto token:lastCheckpoint_.sourceTokens)if(token!=0)return false;
+    return encodeRestoreCheckpoint(lastCheckpoint_,identity,bytes);
+}
+bool ComputeParticles::importRestoreCheckpoint(const std::string& expectedIdentity,const std::vector<uint8_t>& bytes) {
+    GpuCheckpoint snapshot;
+    if(!decodeRestoreCheckpoint(bytes,expectedIdentity,snapshot))return false;
+    for(auto token:snapshot.sourceTokens)if(token!=0)return false;
+    return restoreGpuSnapshot(snapshot);
+}
+bool ComputeParticles::restoreFreshGpuCheckpoint() {
+    const auto status=checkpointStatus();
+    if(!status.restoreEligible||status.pending||!device_||
+       !device_->gpuHealthy()||!device_->canUpdateSharedBuffers()||
+       !lastCheckpoint_.hostStateComplete)return false;
+    return restoreGpuSnapshot(lastCheckpoint_);
+}
+bool ComputeParticles::retainFreshGpuCheckpoint() {
+    const auto status=checkpointStatus();
+    if(!status.restoreEligible||status.pending||!lastCheckpoint_.hostStateComplete)return false;
+    if(checkpointHistory_.size()>=8)checkpointHistory_.pop_front();
+    checkpointHistory_.push_back({nextHistoricalCheckpointId_++,lastCheckpoint_});
+    return true;
+}
+std::vector<uint64_t> ComputeParticles::historicalGpuCheckpointIds() const {
+    std::vector<uint64_t> ids;
+    for(const auto& entry:checkpointHistory_)ids.push_back(entry.id);
+    return ids;
+}
+bool ComputeParticles::restoreHistoricalGpuCheckpoint(uint64_t id) {
+    for(const auto& entry:checkpointHistory_)if(entry.id==id)return restoreGpuSnapshot(entry.snapshot);
+    reason_="Unknown or evicted historical checkpoint";return false;
+}
+bool ComputeParticles::restoreGpuSnapshot(const GpuCheckpoint& source) {
+    invalidateCollisionEvents();
+    if(!gpuActive()||!device_||!device_->gpuHealthy()||!device_->canUpdateSharedBuffers()||
+       gpuResetDirty_||gpuStagingDirty_||asyncCheckpointPending_||programParamsDirty_||
+       !pendingStates_.empty()||!pendingKillSlots_.empty()||!killedSlotsAwaitingFrame_.empty()||
+       !source.complete||!source.hostStateComplete||source.gpuOwnedAllocation!=gpuAllocationActive_||
+       !pendingGpuKills_.empty())return false;
+    if(gpuAllocationActive_)return restoreOwnedGpuSnapshot(source);
+    const auto snapshot=source;
+    const size_t n=ages_.size();
+    if(snapshot.slots.size()!=n||snapshot.remainingLifetime.size()!=n)return false;
+    if(snapshot.sourceTokens.size()!=n||snapshot.freeSlotOrder.size()>n)return false;
+    std::vector<bool> free(n,false);
+    for(uint32_t slot:snapshot.freeSlotOrder){
+        if(slot>=n||free[slot])return false;
+        free[slot]=true;
+    }
+    std::vector<ParticleState> states(n);
+    std::vector<ProgramParams> params(n);
+    std::vector<ProgramAttributes> attrs(n);
+    for(size_t i=0;i<n;++i){
+        const auto& p=snapshot.slots[i];
+        const float remaining=snapshot.remainingLifetime[i];
+        if(!finite(remaining)||free[i]!=(remaining<=0.f))return false;
+        if(!finite(p.positionAge)||!finite(p.velocityLife)||!finite(p.tint)||!finite(p.size))return false;
+        for(float v:p.programParams)if(!finite(v))return false;
+        for(float v:p.attributes)if(!finite(v))return false;
+        states[i].positionAge=p.positionAge;states[i].velocityLife=p.velocityLife;
+        states[i].tint=p.tint;states[i].size=p.size;
+        params[i].p0={p.programParams[0],p.programParams[1],p.programParams[2],p.programParams[3]};
+        params[i].p1={p.programParams[4],p.programParams[5],p.programParams[6],p.programParams[7]};
+        attrs[i].a0={p.attributes[0],p.attributes[1],p.attributes[2],p.attributes[3]};
+        attrs[i].a1={p.attributes[4],p.attributes[5],p.attributes[6],p.attributes[7]};
+    }
+    for(float v:snapshot.birthParameters)if(!finite(v))return false;
+    markGpuAllocationUsed();
+    gpuResetDirty_=true;verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
+    lastCheckpoint_={};checkpointRevision_=0;++vmFrameRevision_;
+    if(!device_->updateStorageBufferChecked(states_,states.data(),n*sizeof(ParticleState))||
+       !device_->updateStorageBufferChecked(stateProgramParams_,params.data(),n*sizeof(ProgramParams))||
+       !device_->updateStorageBufferChecked(stateAttributes_,attrs.data(),n*sizeof(ProgramAttributes))){
+        reason_="Checkpoint restore upload failed; checked reset required";
+        return false;
+    }
+    ages_=snapshot.remainingLifetime;freeSlots_=snapshot.freeSlotOrder;
+    activePages_.reset(uint32_t(n));
+    for(uint32_t i=0;i<uint32_t(n);++i)if(ages_[i]>0.f)activePages_.insert(i);
+    slotSourceTokens_=snapshot.sourceTokens;programParams_=snapshot.birthParameters;
+    programStateCache_=std::move(params);programParamsDirty_=false;
+    shaderBirthSeed_=snapshot.shaderBirthSeed;shaderBirthOrdinal_=snapshot.shaderBirthOrdinal;
+    shaderBirthSeedEnabled_=snapshot.shaderBirthSeedEnabled;
+    aliveSlots_.clear();
+    if(!gpuIndirectActive_)for(size_t i=0;i<n;++i)if(!free[i])aliveSlots_.push_back(uint32_t(i));
+    stats_.alive=uint32_t(n-freeSlots_.size());
+    gpuResetDirty_=false;gpuStagingDirty_=false;reason_.clear();
+    return true;
+}
+
+namespace {
+bool finishOwnedCheckpoint(GpuCheckpoint& result,const uint8_t* owners,const uint8_t* freeBytes,
+                           const uint8_t* aliveBytes,const uint8_t* counterBytes){
+    const size_t n=result.slots.size();
+    std::array<uint32_t,8> raw{};std::memcpy(raw.data(),counterBytes,sizeof(raw));
+    if(raw[0]>n||raw[1]!=n-raw[0]||raw[6]>raw[0]||raw[7]>raw[0]-raw[6])return false;
+    result.gpuOwnedAllocation=true;
+    result.freeSlotOrder.resize(raw[1]);result.aliveSlotOrder.resize(raw[0]);
+    if(raw[1])std::memcpy(result.freeSlotOrder.data(),freeBytes,size_t(raw[1])*4);
+    if(raw[0])std::memcpy(result.aliveSlotOrder.data(),aliveBytes,size_t(raw[0])*4);
+    result.remainingLifetime.assign(n,-1.f);result.sourceTokens.assign(n,0);
+    std::vector<uint8_t> seen(n);
+    for(uint32_t slot:result.freeSlotOrder){
+        if(slot>=n||seen[slot]++)return false;
+        result.slots[slot]={};result.slots[slot].positionAge.w=-1.f;
+    }
+    for(uint32_t slot:result.aliveSlotOrder){
+        if(slot>=n||seen[slot]++)return false;
+        uint32_t words[2]{};std::memcpy(words,owners+size_t(slot)*8,8);
+        result.sourceTokens[slot]=uint64_t(words[0])|(uint64_t(words[1])<<32);
+        auto& p=result.slots[slot];result.remainingLifetime[slot]=p.velocityLife.w-p.positionAge.w;
+    }
+    return validOwnedGpuCheckpoint(result);
+}
+}
+bool ComputeParticles::restoreOwnedGpuSnapshot(const GpuCheckpoint& source){
+    const auto snapshot=source;
+    const uint32_t n=uint32_t(snapshot.slots.size());
+    if(!n||n>kGpuCheckpointCaptureMaxSlots||n>desc_.capacity||!validOwnedGpuCheckpoint(snapshot))return false;
+    if(n!=allocatedCapacity()){
+        if(!gpuDemandGrowth_||gpuNextPhysicalCapacity(gpuInitialPhysicalCapacity(desc_.capacity),n,desc_.capacity)!=n)return false;
+        if(n<allocatedCapacity()){
+            if(!replaceGpuAllocation(n,true))return false;
+        }else if(!growGpuAllocation(n)||allocatedCapacity()!=n)return false;
+    }
+    std::vector<ParticleState> states(n);
+    std::vector<ProgramParams> params(n);
+    std::vector<ProgramAttributes> attrs(n);
+    std::vector<uint32_t> owners(size_t(n)*2);
+    std::vector<float> expiry;
+    for(uint32_t i=0;i<n;++i){
+        const auto& p=snapshot.slots[i];
+        if(snapshot.remainingLifetime[i]<=0.f){states[i].positionAge.w=-1.f;continue;}
+        states[i]={p.positionAge,p.velocityLife,p.tint,p.size};
+        std::memcpy(&params[i],p.programParams.data(),sizeof(ProgramParams));
+        std::memcpy(&attrs[i],p.attributes.data(),sizeof(ProgramAttributes));
+        owners[size_t(i)*2]=uint32_t(snapshot.sourceTokens[i]);
+        owners[size_t(i)*2+1]=uint32_t(snapshot.sourceTokens[i]>>32);
+        expiry.push_back(snapshot.remainingLifetime[i]);
+    }
+    const uint32_t alive=uint32_t(snapshot.aliveSlotOrder.size());
+    const std::array<uint32_t,8> counters{alive,n-alive,0,0,alive,alive,0,0};
+    const std::array<uint32_t,3> dispatch{std::max(1u,(alive+63u)/64u),1,1};
+    const gfx::DrawIndexedIndirectCommand noDraw{0,1,0,0,0};
+    markGpuAllocationUsed();
+    gpuResetDirty_=true;verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
+    ++gpuBirthEpoch_;++vmFrameRevision_;gpuCompactTarget_=0;gpuIdleSteps_=0;gpuEmptyProven_=false;
+    lastCheckpoint_={};checkpointRevision_=0;
+    const auto upload=[&](gfx::BufferHandle b,const void* data,size_t bytes){
+        return !bytes||device_->updateStorageBufferChecked(b,data,bytes);
+    };
+    if(!upload(states_,states.data(),n*sizeof(ParticleState))||
+       !upload(stateProgramParams_,params.data(),n*sizeof(ProgramParams))||
+       !upload(stateAttributes_,attrs.data(),n*sizeof(ProgramAttributes))||
+       !upload(gpuSourceOwners_,owners.data(),owners.size()*4)||
+       !upload(liveSlots_,snapshot.freeSlotOrder.data(),snapshot.freeSlotOrder.size()*4)||
+       !upload(gpuAliveCurrent_,snapshot.aliveSlotOrder.data(),snapshot.aliveSlotOrder.size()*4)||
+       !upload(aliveCounter_,counters.data(),sizeof(counters))||
+       !upload(gpuDispatchArgs_,dispatch.data(),sizeof(dispatch))||
+       !upload(gpuDrawArgs_,&noDraw,sizeof(noDraw))){
+        reason_="GPU-owned checkpoint restore upload failed; checked reset required";return false;
+    }
+    programParams_=snapshot.birthParameters;shaderBirthSeed_=snapshot.shaderBirthSeed;
+    shaderBirthOrdinal_=snapshot.shaderBirthOrdinal;shaderBirthSeedEnabled_=snapshot.shaderBirthSeedEnabled;
+    gpuBirthEstimates_.clear();gpuAllocationClock_=0;gpuEstimatedBirths_=alive;
+    std::sort(expiry.begin(),expiry.end());
+    for(float life:expiry){
+        if(!gpuBirthEstimates_.empty()&&gpuBirthEstimates_.back().expires==life)++gpuBirthEstimates_.back().count;
+        else gpuBirthEstimates_.push_back({life,1});
+    }
+    gpuAllocationSubmitted_=alive!=0;gpuEmptyProven_=alive==0;
+    stats_.alive=alive;stats_.gpuVmErrorsKnown=false;gpuResetDirty_=gpuStagingDirty_=false;
+    reason_.clear();return true;
+}
+
 bool ComputeParticles::captureGpuCheckpoint(GpuCheckpoint& out) {
-    out={};
-    if(!initialized_ || backend_!=ComputeBackend::Metal || !device_ ||
+    out={};if(asyncCheckpointPending_)return false;
+    if(!initialized_ || backend_==ComputeBackend::Cpu || !device_ ||
        !device_->gpuHealthy() || !device_->canUpdateSharedBuffers() ||
        !states_.valid() || !stateProgramParams_.valid() ||
-       !stateAttributes_.valid() || ages_.empty() ||
+       !stateAttributes_.valid() ||
        gpuResetDirty_ || gpuStagingDirty_ ||
-       !pendingStates_.empty() || !pendingKillSlots_.empty() ||
+       !pendingStates_.empty() || !pendingKillSlots_.empty() || !pendingGpuKills_.empty() ||
         !killedSlotsAwaitingFrame_.empty())return false;
-    const size_t n=ages_.size();
+    const bool owned=gpuAllocationActive_;
+    const size_t n=owned?allocatedCapacity():ages_.size();
+    if(!n||n>kGpuCheckpointCaptureMaxSlots)return false;
     // A checkpoint must include all physical slots, not merely those that
     // survived the previous draw or the CPU-estimated indirect draw count.
     std::vector<ParticleState> state(n);
@@ -1034,6 +2215,13 @@ bool ComputeParticles::captureGpuCheckpoint(GpuCheckpoint& out) {
     GpuCheckpoint next;
     next.slots.resize(n);
     next.remainingLifetime=ages_;
+    next.freeSlotOrder=freeSlots_;
+    next.sourceTokens=slotSourceTokens_;
+    next.birthParameters=programParams_;
+    next.shaderBirthSeed=shaderBirthSeed_;
+    next.shaderBirthOrdinal=shaderBirthOrdinal_;
+    next.shaderBirthSeedEnabled=shaderBirthSeedEnabled_;
+    next.hostStateComplete=true;
     next.frameSerial=device_->frameSerial();
     for(size_t i=0;i<n;++i) {
         auto& d=next.slots[i];
@@ -1041,8 +2229,19 @@ bool ComputeParticles::captureGpuCheckpoint(GpuCheckpoint& out) {
         d.velocityLife=state[i].velocityLife;
         d.tint=state[i].tint;
         d.size=state[i].size;
-        std::memcpy(d.programParams.data(),&params[i],sizeof(ProgramParams));
-        std::memcpy(d.attributes.data(),&attributes[i],sizeof(ProgramAttributes));
+        d.programParams={params[i].p0.x,params[i].p0.y,params[i].p0.z,params[i].p0.w,
+                         params[i].p1.x,params[i].p1.y,params[i].p1.z,params[i].p1.w};
+        d.attributes={attributes[i].a0.x,attributes[i].a0.y,attributes[i].a0.z,attributes[i].a0.w,
+                      attributes[i].a1.x,attributes[i].a1.y,attributes[i].a1.z,attributes[i].a1.w};
+    }
+    if(owned){
+        std::vector<uint8_t> owners(n*8),freeBytes(n*4),aliveBytes(n*4);
+        std::array<uint8_t,32> counters{};
+        if(!device_->readBuffer(gpuSourceOwners_,owners.data(),owners.size())||
+           !device_->readBuffer(liveSlots_,freeBytes.data(),freeBytes.size())||
+           !device_->readBuffer(gpuAliveCurrent_,aliveBytes.data(),aliveBytes.size())||
+           !device_->readBuffer(aliveCounter_,counters.data(),counters.size())||
+           !finishOwnedCheckpoint(next,owners.data(),freeBytes.data(),aliveBytes.data(),counters.data()))return false;
     }
     next.complete=true;
     out=next;
@@ -1058,7 +2257,8 @@ void ComputeParticles::switchToCpu(const std::string& why) {
     // GPU frame, with no pending unsent births. A stale checkpoint must never
     // resurrect particles that have died or silently omit recent births.
     const GpuCheckpointStatus capture=checkpointStatus();
-    const bool canRestore=capture.restoreEligible;
+    const bool canRestore=capture.restoreEligible&&(!gpuAllocationActive_||
+        std::none_of(lastCheckpoint_.sourceTokens.begin(),lastCheckpoint_.sourceTokens.end(),[](uint64_t token){return token!=0;}));
     std::vector<fx::FxImportedParticle> restored;
     if(canRestore) {
         restored.reserve(lastCheckpoint_.slots.size());
@@ -1079,7 +2279,7 @@ void ComputeParticles::switchToCpu(const std::string& why) {
         }
     }
     // A slot intentionally queued for selective kill is not a lost particle.
-    const uint32_t owned=uint32_t(ages_.size()-freeSlots_.size()-
+    const uint32_t owned=gpuAllocationActive_?stats_.alive:uint32_t(ages_.size()-freeSlots_.size()-
                                   pendingKillSlots_.size()-
                                   killedSlotsAwaitingFrame_.size());
     releaseGpu();backend_=ComputeBackend::Cpu;

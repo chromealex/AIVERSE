@@ -1,0 +1,5 @@
+.spectra-library__toolbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.spectra-library__grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}
+.spectra-library__tile,.spectra-library__detail{display:flex;flex-direction:column;gap:6px;padding:8px;border:1px solid currentColor;border-radius:4px;overflow-wrap:anywhere}
+.spectra-library__tile small,.spectra-library__detail small{opacity:.75}
+.spectra-library__detail img{max-width:100%;max-height:240px;object-fit:contain}

@@ -1,0 +1,162 @@
+{
+  "version": 2,
+  "nodes": [
+    {
+      "id": "volume_domain",
+      "type": "VolumeDomain",
+      "position": [
+        40,
+        320
+      ],
+      "properties": {
+        "dimension": 48,
+        "origin": [
+          -7,
+          -1,
+          -5
+        ],
+        "cellSize": 0.3,
+        "wind": [
+          -0.35,
+          0.2,
+          0.1
+        ],
+        "attachment": "trail"
+      }
+    },
+    {
+      "id": "volume_source",
+      "type": "VolumeSource",
+      "position": [
+        270,
+        320
+      ],
+      "properties": {
+        "position": [
+          -4,
+          1,
+          0
+        ],
+        "radius": 0.72,
+        "smoke": 9,
+        "temperature": 22,
+        "fuel": 5,
+        "acceleration": [
+          -0.6,
+          1,
+          0
+        ],
+        "flickerHz": 1.65
+      }
+    },
+    {
+      "id": "volume_advect",
+      "type": "VolumeAdvection",
+      "position": [
+        500,
+        320
+      ],
+      "properties": {
+        "buoyancy": 1.8,
+        "smokeDecay": 0.32,
+        "temperatureDecay": 1.5
+      }
+    },
+    {
+      "id": "volume_burn",
+      "type": "VolumeCombustion",
+      "position": [
+        730,
+        320
+      ],
+      "properties": {
+        "ignition": 0.3,
+        "burnRate": 7,
+        "heatYield": 2,
+        "smokeYield": 1.5
+      }
+    },
+    {
+      "id": "volume_pressure",
+      "type": "VolumePressure",
+      "position": [
+        960,
+        320
+      ],
+      "properties": {
+        "pressureIterations": 6
+      }
+    },
+    {
+      "id": "volume_output",
+      "type": "VolumeOutput",
+      "position": [
+        1190,
+        320
+      ],
+      "properties": {
+        "smokeColor": [
+          0.32,
+          0.325,
+          0.33
+        ],
+        "fireColor": [
+          9,
+          2,
+          0.12
+        ],
+        "extinction": 1.75,
+        "emission": 1.25,
+        "emissionThreshold": 0.7,
+        "smokeDetail": 1,
+        "emberIntensity": 0,
+        "lights": [
+          {
+            "position": [
+              -4,
+              1.35,
+              0.45
+            ],
+            "color": [
+              1,
+              0.48,
+              0.17
+            ],
+            "intensity": 46,
+            "radius": 4
+          }
+        ],
+        "smokeDetailVelocity": [
+          -0.7,
+          0.8,
+          0.25
+        ]
+      }
+    }
+  ],
+  "links": [
+    {
+      "from": "volume_domain",
+      "to": "volume_source"
+    },
+    {
+      "from": "volume_source",
+      "to": "volume_advect"
+    },
+    {
+      "from": "volume_advect",
+      "to": "volume_burn"
+    },
+    {
+      "from": "volume_burn",
+      "to": "volume_pressure"
+    },
+    {
+      "from": "volume_pressure",
+      "to": "volume_output"
+    }
+  ],
+  "outputs": [
+    "volume_output"
+  ]
+}

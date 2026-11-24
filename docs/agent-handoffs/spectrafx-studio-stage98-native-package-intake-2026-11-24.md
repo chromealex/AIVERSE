@@ -1,0 +1,5 @@
+# Stage 98 — native external package intake and catalog
+
+Parent `6c830b8a78c33430447edb5d2a498c9d747fd504`; branch `feature/spectrafx-html5-data-interfaces-20261123`.
+
+Native OS file chooser and existing Assets external-drop handler recognize a single .aivfx. Stages a non-overwriting project-local package copy (regular source, size limit, ZIP magic, normalized name, no symlink package directory), then sends project-scoped event. Chooser guards project reopen epoch. HTML5 opens FX graph panel on event, chooses the staged archive and automatically previews when the native preview panel is mounted and idle. Install remains an explicit reviewed step; full ZIP manifest validation is in the existing package CLI, not the magic check. If no graph is selected or panel is not mounted, the archive remains discoverable via new fx_replay_package_list. Catalog lists local archives, not installed receipts. Stage 97 Asset Picker now uses shared indexedSpectraAssets adapter. No build or tests executed. GPU thumbnails, global standalone wizard without a selected graph, install receipts remain follow-up. Main untouched.

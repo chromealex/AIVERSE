@@ -1,0 +1,9 @@
+# Stage 129 — pooled Data Interfaces
+
+Branch: feature/spectrafx-html5-data-interfaces-20261123
+Plan: 9716c8fb2b2a4ea13e3b8bfaee3c50568c41e237
+Implementation: 61016a96390a0a5ff266735aaf0a5ebf47af45c5
+
+Fixed missing runtime integration discovered during Stage 129 source audit: GpuPoolWorld::defineGraph previously discarded validated Data Interface declarations. Now logical bindings and CPU-side recovery recipes retain them independently of physical group deduplication. Before any manual or continuous burst, sample the existing DataInterfaceRegistry at the birth position against the unchanged source/default parameter snapshot; mandatory missing data refuses the birth, optional data uses authored fallback, and successful samples reach the existing CPU/GPU parameter path. Latest sample counters available via dataInterfaceStats. Registry is non-owning and bound between frames; shutdown and successful rollback clear it, recovery requires a fresh bind. Native host controls immutable publication and owner-thread lifetime. No new world/ECS authority, renderer, authored graph schema or shader ABI.
+
+Paths: engine/fx/SpectraGpuPoolWorld.h/.cpp, tests/vfx_graph_runtime_test.cpp, existing SpectraFX skill and roadmap/area notes. Existing graph authoring/MCP schema applies without changes. Regression source covers required rejection, optional fallback, recovery declaration retention, per-source sampling and no midframe bind. Tests, compilation, Metal/Vulkan, performance and GUI QA NOT RUN per owner request. This stage is bounded source implementation only; no live Studio host data publication, socket adapter or continuous per-particle field evaluation yet. The legacy nonpooled CPU scene source still requires explicit integration. No main sync or merge. Next: close host/source integration and socket pose publication; proceed with remaining feature matrix before tests.

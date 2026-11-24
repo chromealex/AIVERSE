@@ -1228,6 +1228,12 @@
       "started": "2026-10-28",
       "includes": [
         {
+          "name": "Объёмный огонь и дым",
+          "nameEn": "Volumetric fire and smoke",
+          "text": "Граф задаёт горение, движение дыма и его тени. Движущийся источник оставляет дым в заданной области.",
+          "textEn": "A graph controls combustion, smoke motion and shadows. A moving source leaves smoke within the authored domain."
+        },
+        {
           "name": "Графы эффектов",
           "text": "Типизированный граф v2, подграфы-функции, варианты и горячая перезагрузка.",
           "nameEn": "Effect graphs",
@@ -1267,6 +1273,7 @@
       "enables": [
         "Собирать огонь, дым, взрывы и магию из графа, а не кодом.",
         "Запускать эффекты от игровых событий, не трогая детерминированную симуляцию.",
+        "Оставлять в воздухе дымовой след за движущейся сущностью.",
         "Переносить эффекты из Unity-проектов."
       ],
       "roadmap": [
@@ -1307,6 +1314,30 @@
           "titleEn": "Graph v2 in the Inspector and a verified Metal lifecycle"
         },
         {
+          "status": "done",
+          "date": "2026-11-25",
+          "target": null,
+          "title": "Объёмные частицы в игровой сцене и Studio",
+          "titleEn": "Volumetric particles in game scenes and Studio",
+          "text": "Подключить граф частиц к нативной отрисовке сцены, обработке глубины и проверенному редакторскому просмотру.",
+          "textEn": "Connect particle graphs to native scene rendering, depth handling, and verified editor previews."
+        },
+        {
+          "status": "done",
+          "date": "2026-11-25",
+          "target": null,
+          "title": "Огонь с дымом для SpectraFX",
+          "titleEn": "Fire and smoke effect for SpectraFX",
+          "text": "Добавить готовый редактируемый граф и показать его в нативном предпросмотре.",
+          "textEn": "Add an editable effect graph and show it in the native preview."
+        },
+        {
+          "status": "done",
+          "date": "2026-11-25",
+          "title": "Дымовой след движущегося источника",
+          "titleEn": "Smoke trails from moving volume sources"
+        },
+        {
           "status": "in-progress",
           "target": null,
           "title": "Полная связка GPU и CPU в продакшене",
@@ -1325,6 +1356,7 @@
       "enablesEn": [
         "Build fire, smoke, explosions and magic from a graph, not code.",
         "Trigger effects from gameplay events without touching the deterministic simulation.",
+        "Leave a smoke trail behind a moving entity.",
         "Bring effects over from Unity projects."
       ],
       "release": "3.0.0"

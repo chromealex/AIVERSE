@@ -4,35 +4,67 @@
 // lifetime, gravity, drag and size. CPU fallback reuses fx::ParticleSystem.
 // GPU simulation/vertices never round-trip to CPU during normal frames.
 #pragma once
+#include "SpectraDepthCollision.h"
+#include "SpectraGpuCollisionEvents.h"
 
 #include "ParticleSystem.h"
+#include "SpectraVolumetricParticleGraph.h"
 #include "SpectraGpuCheckpoint.h"
 #include "SpectraCheckpointExport.h"
+#include "SpectraCheckpointFile.h"
 #include "SpectraCheckpointReadbackBudget.h"
+#include "SpectraGpuAllocationBudget.h"
+#include "SpectraSharedSdfGpuCache.h"
 #include "SpectraAdaptiveCheckpoint.h"
+#include "SpectraActiveParticlePages.h"
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <deque>
 #include <memory>
 #include <string>
 #include <vector>
 
 namespace aiverse::spectra {
+namespace volume {class GpuGasGrid;}
 
 enum class ComputePreference : uint8_t {
     Automatic, CpuOnly, PreferGpu, RequireGpu
 };
-enum class ComputeBackend : uint8_t { Cpu, Metal };
+enum class ComputeBackend : uint8_t { Cpu, Metal, Vulkan };
 
 // Pure RHI selection; never assume that every Metal or Vulkan device supports
 // a particular shader. createCompute and the other resource allocations are
 // checked at runtime; Automatic/PreferGpu fall back to Cpu on any failure.
 ComputeBackend chooseComputeBackend(gfx::Backend backend, bool computeAvailable,
                                     ComputePreference preference);
+bool supportsSpectraCompute(const gfx::Device& device,bool ownedAllocation);
 
+// Allocation safety ceiling for the expanded-quad backend, not a global scene limit.
+inline constexpr uint32_t kGpuEmitterMaxSlots=262144;
+inline constexpr uint32_t kGpuCheckpointCaptureMaxSlots=4096;
+inline constexpr uint32_t kGpuPhysicalPageSlots=256;
+inline constexpr uint32_t kGpuIdleReclaimSteps=120;
+inline constexpr uint32_t gpuInitialPhysicalCapacity(uint32_t limit){return limit<kGpuPhysicalPageSlots?limit:kGpuPhysicalPageSlots;}
+inline constexpr uint32_t gpuNextPhysicalCapacity(uint32_t current,uint32_t required,uint32_t limit){
+    if(!current||current>limit||required>limit)return 0;
+    while(current<required)current=current>limit/2?limit:current*2;
+    return current;
+}
+inline constexpr uint32_t kGpuUInt16QuadMaxSlots=16384;
+inline constexpr bool gpuEmitterUsesWideIndices(uint32_t capacity){return capacity>kGpuUInt16QuadMaxSlots;}
+// Conservative buffer accounting envelope; not a driver memory measurement.
+inline constexpr size_t estimateGpuEmitterAllocation(uint32_t capacity,bool procedural=false){
+    return size_t(capacity)*(procedural?384u:512u)+65536u;
+}
+inline constexpr size_t gpuBillboardGeometryBytes(uint32_t capacity,bool procedural){
+    return procedural?size_t(capacity)*40u+12u:
+        size_t(capacity)*(160u+6u*(gpuEmitterUsesWideIndices(capacity)?4u:2u));
+}
 struct ComputeEmitterDesc {
-    uint32_t capacity = 1024;          // GPU hard limit: 4096 slots (16-bit quad indices)
+    uint32_t capacity = 1024;          // default only; ceiling is kGpuEmitterMaxSlots
     uint32_t burst = 8;                // particles per call to burstAt
     float lifetime = 0.8f;            // seconds
     float speed = 3.0f;
@@ -44,6 +76,9 @@ struct ComputeEmitterDesc {
     // Experimental Metal-only option; no effect on existing CPU/host-gather
     // paths. Requires RHI supportsGpuAuthoredIndirectDraw().
     bool gpuIndirect = false;
+    bool gpuOwnedAllocation = false; // opt-in, requires GPU indirect; bounded owned checkpoint v2
+    VolumetricParticleMaterial volumeMaterial{};
+    bool proceduralBillboards = false; // Metal compact records + indexed instancing
     // Experimental Metal GPU scalar VM (requires strict Stage-22 eligibility).
     // Off by default; unsupported stages/operations execute the full CPU VM.
     bool gpuProgram = false;
@@ -51,15 +86,25 @@ struct ComputeEmitterDesc {
     // Optional particle shaderGraph subset sharing the CPU material language.
     // Off by default, validated on the whole EffectDef before Metal routing.
     bool gpuMaterial = false;
+    bool gpuBirthRandom = false; // explicit Metal-specific random semantics
+    uint32_t gpuBirthSeed = 0;
     Json shaderGraph;
     Json graphInputs; // four vertex graphData source names
     // Opt-in async checkpoint cadence (0 = disabled). One full capture is
-    // at most 512 KiB / eight 64 KiB reads at capacity 4096.
+    // remains limited to kGpuCheckpointCaptureMaxSlots independently of simulation.
     uint32_t checkpointEveryFrames = 0;
     AdaptiveCheckpointPolicy adaptiveCheckpoint{};
     // Optional shared readback budget; all GPU emitters on one Device should
     // share it. If absent, legacy independent checkpoint behavior is retained.
     std::shared_ptr<CheckpointReadbackBudget> checkpointBudget;
+    std::shared_ptr<GpuAllocationBudget> allocationBudget; // same Device only
+    float staticSphereRadius=0;
+    render::float3 staticSphereCenter{};
+    float collisionBounce=0.5f,collisionDampen=0,collisionRadiusScale=0;
+    fx::StaticSdfVolume staticSdf;
+    bool reportCollisionEvents=false; // opt-in async visual contacts
+    bool depthCollision=false; // native GPU-only opt-in, requires RequireGpu
+    std::shared_ptr<SharedSdfGpuCache> sharedSdfCache; // optional same-Device immutable payload sharing
 };
 
 bool validComputeEmitter(const ComputeEmitterDesc&, std::string* reason = nullptr);
@@ -88,6 +133,11 @@ struct GpuCheckpointStatus {
 struct ComputeStats {
     uint32_t alive = 0, dropped = 0;
     uint32_t gpuDispatches = 0, drawCalls = 0;
+    bool gpuOwnedAllocation = false; // alive is a conservative host estimate, not readback
+    uint32_t gpuAllocationRequests=0;
+    uint32_t gpuFreeReservationDispatches=0;
+    uint32_t gpuAliveIndirectDispatches=0;
+    uint32_t hostActiveSlotVisits = 0, hostOccupiedPages = 0; // latest step, no GPU readback
     uint32_t submittedSlots = 0; // dense GPU quads published from live-slot map
     uint32_t gpuFallbacks = 0, lostOnFallback = 0;
     uint32_t recoveredOnFallback=0;
@@ -111,7 +161,16 @@ struct ComputeStats {
     bool gpuVmErrorsKnown = false; // unknown until a successful diagnostic read
     // In indirect mode submittedSlots/alive are CPU lifespan estimates;
     // exact GPU alive count stays on GPU and is used as the draw argument.
-    size_t gpuBytes = 0, uploadedBytes = 0;
+    size_t gpuBytes = 0, uploadedBytes = 0; // private bytes, excludes shared SDF payload
+    uint32_t sharedSdfOffsetWords=0;
+    bool sharedSdfPacked=false;
+    size_t sharedSdfBytes=0; // referenced bytes, not an additional private allocation
+    uint32_t gpuPhysicalGrowths=0,gpuPhysicalGrowthFailures=0;
+    uint32_t gpuPhysicalShrinks=0,gpuPhysicalShrinkFailures=0,gpuIdleProofRequests=0;
+    uint32_t gpuLiveCompactions=0;
+    uint32_t gpuAllocationBudgetDenied=0,gpuBudgetLimitedBirths=0;
+    size_t gpuReclaimedBytes=0; // logical released buffer bytes, not driver residency
+    size_t gpuGrowthCopiedBytes=0;
 };
 
 // Caller owns the Device and must release this class before destroying it.
@@ -120,6 +179,11 @@ struct ComputeStats {
 // Legacy ParticleSystem and existing RTS/FPS VFX are untouched.
 class ComputeParticles final {
 public:
+    uint32_t allocatedCapacity() const {return physicalCapacity_?physicalCapacity_:desc_.capacity;}
+    uint32_t capacityLimit() const {return desc_.capacity;}
+    bool sameStaticSdf(const fx::StaticSdfVolume& sdf)const{return desc_.staticSdf.sameSamples(sdf);}
+    bool demandGrowthActive() const {return gpuActive()&&gpuDemandGrowth_;}
+    bool proceduralBillboardsActive() const {return gpuActive()&&proceduralActive_;}
     ComputeParticles() = default;
     ~ComputeParticles() { shutdown(); }
     ComputeParticles(const ComputeParticles&) = delete;
@@ -131,22 +195,42 @@ public:
     // Checked whole-emitter reset. Metal must have an OPEN graphics frame,
     // outside encoders. Never alters CPU slot bookkeeping on upload failure.
     bool tryClear();
+    // Reproducible GPU particle-slot allocation, not cross-backend RNG parity.
+    bool resetGpuAllocationSeed(uint32_t seed);
+    bool resetGpuShaderSeed(uint32_t seed);
     bool burstAt(fx::float3 position, fx::float3 direction = {0,1,0},
                  fx::float4 tint = {1,1,1,1},uint64_t sourceToken=0);
     // Renderer-only source token. 0 means unowned one-shot particles.
     // Cancel pending births and queue an ordered GPU kill for submitted slots.
     // Slots cannot be reused until the next successful GPU step submission.
     bool killSourceParticles(uint64_t sourceToken);
+    // Set the frame view before step(); changing a previously culled view
+    // invalidates the compact geometry until the next step (dt=0 is valid).
+    // One fresh previous-frame publication per step; no CPU fallback.
+    bool setDepthCollisionSnapshot(const DepthCollisionSnapshot& snapshot);
+    void clearDepthCollisionSnapshot(){depthSnapshot_={};}
     void setView(const fx::SpectraFxView& view);
     template<class Camera>
     void setView(const Camera& camera,const render::mat4& projection,int width,int height) {
         return setView(fx::SpectraFxView::fromCamera(camera,projection,width,height));
     }
+    // Opt-in nearest-cell gas drag on existing GPU particles. Same Device,
+    // active frame, after gas step and before particle integration. No CPU fallback.
+    bool stepWithVolume(float dt,volume::GpuGasGrid& gas,float dragPerSecond);
+    // Call after a successful particle step; rates are per live particle per second.
+    bool depositIntoVolume(volume::GpuGasGrid& gas,render::float3 rates,float dt);
     bool step(float dt);                    // once per presentation frame
+    // Direction points from the particle towards the light. Linear RGB.
+    bool setVolumeLight(render::float3 direction,render::float3 color);
+    // Host must supply a separate, sampled current-frame opaque depth texture,
+    // NOT the depth attachment of the open color pass. Full viewport only.
+    // Prepare after step or camera change, before opening a graphics pass.
+    bool prepareVolumeSort();
+    bool drawWithVolumeDepth(gfx::TextureHandle opaqueDepth,const fx::FxFog& fog={});
     void draw(const fx::FxFog& fog = {});    // inside render pass
     ComputeBackend backend() const { return backend_; }
     bool ready() const { return initialized_; }
-    bool gpuActive() const { return initialized_ && backend_ == ComputeBackend::Metal; }
+    bool gpuActive() const { return initialized_ && backend_ != ComputeBackend::Cpu; }
     bool gpuIndirectActive() const { return gpuActive() && gpuIndirectActive_; }
     bool gpuProgramActive() const {
         return gpuActive() && desc_.gpuProgram && !desc_.particleProgram.isNull();
@@ -155,12 +239,39 @@ public:
     // Between completed frames only. Returns false when unavailable; failure
     // must never be interpreted as zero VM errors.
     bool readGpuVmErrors(uint32_t& count);
+    // Optional 32-byte async counter snapshot (includes exact draw and LOD counts). Results describe the captured
+    // submission, not the current frame. No mandatory per-frame readback.
+    struct AllocationCounters {
+        uint32_t alive=0,free=0,reservedBase=0,admitted=0;
+        uint64_t revision=0;
+        uint32_t visible=0; // actual draw population after frustum and LOD
+        uint32_t lodRejected=0; // in-frustum population omitted by Medium quality
+    };
+    bool requestAllocationCounters(std::function<void(bool,AllocationCounters)> callback);
+    // Blocking QA diagnostic, between completed frames only. No normal-frame
+    // readback. Checks exact partition of physical slots and draw arguments.
+    struct AllocationAudit {
+        AllocationCounters counters{};
+        uint32_t capacity=0,vmErrors=0;
+        gfx::DrawIndexedIndirectCommand draw{};
+        std::vector<uint64_t> liveOwners;
+    };
+    bool auditGpuAllocation(AllocationAudit& out);
     // Asynchronous 4-byte diagnostics. Accepted requests invoke callback
     // after a later frame; shutdown invalidates callbacks safely.
     bool requestGpuVmErrors(std::function<void(bool,uint32_t)> callback);
+    // Request exactly once after a successful step, before another step.
+    // Callback may be canceled by reset/restore/shutdown; never blocks.
+    bool requestGpuCollisionEvents(GpuCollisionCallback callback);
     // Blocking diagnostics only, between COMPLETED frames (Metal's readBuffer
     // rejects open command buffers). This is not CPU ParticleSystem import.
     bool captureGpuCheckpoint(GpuCheckpoint& out);
+    bool restoreFreshGpuCheckpoint();
+    bool exportRestoreCheckpoint(const std::string& identity,std::vector<uint8_t>& bytes) const;
+    bool importRestoreCheckpoint(const std::string& expectedIdentity,const std::vector<uint8_t>& bytes);
+    bool retainFreshGpuCheckpoint();
+    bool restoreHistoricalGpuCheckpoint(uint64_t id);
+    std::vector<uint64_t> historicalGpuCheckpointIds() const;
     // Enqueues bounded async chunks, returns false if it cannot start.
     // Callback reports whether all three buffers formed a complete snapshot.
     bool requestGpuCheckpoint(std::function<void(bool)> callback = {});
@@ -194,42 +305,100 @@ private:
     struct Uniforms {
         render::float4 gravityDt, rightSize, up;
         std::array<uint32_t,4> meta;
+        float cullViewProj[16]{};
+        render::float4 cullControl{}; // x: valid culling view; yz: viewport pixels; w: LOD far distance
+        render::float4 lodEye{}; // xyz: camera position; w: LOD near distance
+        render::float4 collisionSphere{}; // centre xyz, obstacle radius (0 disables)
+        render::float4 collisionResponse{}; // bounce, dampen, radius scale, SDF offset+1 (0 disables)
+        float depthViewProj[16]{},depthInverse[16]{};
+        render::float4 depthControl{},depthEye{};
     };
     struct DrawUniforms {
         float viewProj[16];
         float fog[4], camera[4], params[4];
+        float right[4],up[4];
     };
     static_assert(sizeof(ParticleState)==64);
     static_assert(sizeof(ProgramParams)==32);
     static_assert(sizeof(ProgramAttributes)==32);
     static_assert(sizeof(Vertex)==40);
-    static_assert(sizeof(Uniforms)==64);
-    static_assert(sizeof(DrawUniforms)==112);
+    static_assert(sizeof(Uniforms)==352);
+    static_assert(sizeof(DrawUniforms)==144);
+    struct VolumeDrawUniforms {DrawUniforms base;render::float4 lightDir,lightColor,lightControl;render::mat4 invVP;render::float4 depthControl,lodControl,sparseControl;};
+    static_assert(sizeof(VolumeDrawUniforms)==304);
 
+    bool stepImpl(float dt);
+    bool stepGpuAllocated(float dt);
+    bool growGpuAllocation(uint32_t required);
+    bool replaceGpuAllocation(uint32_t next,bool empty,bool compact=false);
+    void markGpuAllocationUsed();
+    void retireAllocationCharge(size_t bytes,uint64_t fence);
+    bool shrinkEmptyGpuAllocation();
+    void serviceGpuIdleReclaim(uint32_t pendingBirths);
+    void bindGpuAllocationBuffers();
     bool initGpu();
     bool initCpu();
     void releaseGpu();
     void switchToCpu(const std::string& why);
     gfx::Device* device_ = nullptr;
     ComputeEmitterDesc desc_;
+    DepthCollisionSnapshot depthSnapshot_{};
+    uint64_t collisionEpoch_=0,collisionFrame_=0;
+    bool collisionReadable_=false,collisionReadPending_=false;
+    void invalidateCollisionEvents(){++collisionEpoch_;collisionReadable_=false;}
+    void fillDepthUniforms(Uniforms& u);
+    // Separate shader birth stream; zero disables authored seeded randomness.
+    uint32_t shaderBirthSeed_=0, shaderBirthOrdinal_=0;
+    bool shaderBirthSeedEnabled_=false;
     ComputeBackend backend_ = ComputeBackend::Cpu;
     fx::ParticleSystem cpu_;
     int cpuEffect_ = -1;
-    gfx::ComputeHandle compute_;
+    gfx::ComputeHandle compute_,compactAllocationCompute_,volumeDragCompute_;
     gfx::ShaderHandle vertexShader_;
     gfx::PipelineHandle pipeline_;
     gfx::BufferHandle states_, seeds_, slots_, vertices_, indices_, liveSlots_;
+    gfx::BufferHandle gpuAliveCurrent_,gpuAliveNext_,gpuDispatchArgs_;
+    gfx::BufferHandle gpuSourceOwners_; // uint2 per physical slot, GPU-owned mode only
     gfx::BufferHandle killSlots_; // 4 bytes per dead physical slot, scatter mode 6
     gfx::BufferHandle aliveCounter_, gpuDrawArgs_;
     gfx::BufferHandle seedProgramParams_, stateProgramParams_, gpuVmPayload_;
-    gfx::BufferHandle graphSources_; // 4 uint32 lane selectors, compute slot 13
+    gfx::BufferHandle graphSources_; // 4 material lanes + optional immutable SDF, slot 13
+    std::shared_ptr<SharedSdfGpuPayload> sharedSdfPayload_;
     gfx::BufferHandle vmErrors_;
     gfx::BufferHandle stateAttributes_; // compute slot 11, 8 scalar VM registers/particle
-    gfx::TextureHandle texture_;
+    gfx::TextureHandle texture_,volumeTexture_,drawVolumeDepth_,volumeBrickMap_;
+    render::float4 volumeSparseControl_{};
+    gfx::ComputeHandle volumeSortCompute_{};
+    gfx::BufferHandle volumeSortKeys_{},volumeSortedRecords_{};
+    uint32_t volumeSortCapacity_=0;
+    size_t volumeSortCharge_=0;
+    uint64_t volumeSortFence_=0;
+    bool volumeSortReady_=false;
+    render::float3 volumeLightDirection_{0,1,0},volumeLightColor_{1,1,1};
+    size_t volumeTextureCharge_=0;
+    uint64_t volumeTextureFence_=0;
     std::vector<float> ages_;
+    ActiveParticlePages activePages_;
     uint32_t drawCount_ = 0; // dense vertices emitted this frame (<= alive)
     std::vector<uint32_t> freeSlots_, pendingSlots_, aliveSlots_;
     std::vector<uint32_t> pendingKillSlots_;
+    std::vector<uint64_t> pendingGpuOwners_,pendingGpuKills_;
+    struct BirthEstimate {double expires;uint32_t count;};
+    std::deque<BirthEstimate> gpuBirthEstimates_;
+    double gpuAllocationClock_=0;
+    uint64_t gpuEstimatedBirths_=0;
+    bool gpuAllocationActive_=false, gpuAllocationSubmitted_=false;
+    uint32_t physicalCapacity_=0;
+    bool gpuDemandGrowth_=false;
+    size_t gpuAllocationCharge_=0;
+    uint64_t gpuAllocationLastFence_=0;
+    bool gpuGrowthBudgetBlocked_=false;
+    uint32_t gpuIdleSteps_=0;
+    uint64_t gpuBirthEpoch_=0; // invalidates asynchronous empty proofs
+    bool gpuEmptyProven_=false;
+    uint32_t gpuCompactTarget_=0;
+    bool gpuCullViewUsed_=false; // camera-dependent compact stream
+    int viewWidth_=1,viewHeight_=1;
     struct KilledSlotAwaitingFrame {
         uint32_t slot=0;
         uint64_t submittedFrame=0;
@@ -246,15 +415,22 @@ private:
     fx::float3 eye_{}, right_{1,0,0}, up_{0,1,0};
     bool initialized_ = false, viewReady_ = false, verticesReady_ = false;
     bool gpuIndirectActive_ = false;
+    bool proceduralActive_ = false;
     bool gpuResetDirty_ = false; // failed partial GPU clear; block new births/steps
     bool gpuStagingDirty_ = false; // checked input upload failed; next step retries all input buffers
     ComputeStats stats_;
     std::string reason_;
     std::shared_ptr<uint64_t> readbackLifetime_ = std::make_shared<uint64_t>(0);
     bool asyncErrorPending_ = false;
+    bool asyncAllocationCountersPending_=false;
     uint64_t vmFrameRevision_ = 0;
     uint64_t checkpointRevision_ = 0;
     GpuCheckpoint lastCheckpoint_;
+    struct HistoricalCheckpoint {uint64_t id;GpuCheckpoint snapshot;};
+    std::deque<HistoricalCheckpoint> checkpointHistory_;
+    uint64_t nextHistoricalCheckpointId_=1;
+    bool restoreGpuSnapshot(const GpuCheckpoint& snapshot);
+    bool restoreOwnedGpuSnapshot(const GpuCheckpoint& snapshot);
     bool asyncCheckpointPending_ = false;
     AdaptiveCheckpointCadence checkpointCadence_{};
 };

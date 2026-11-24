@@ -26,6 +26,7 @@
 #include "../render/GpuOwnedMemory.h"
 #include "FxEffect.h"
 #include "SpectraFxView.h"
+#include "SpectraSceneCollision.h"
 
 namespace aiverse::render { class GpuResourceRetirement; }
 namespace aiverse::fx {
@@ -123,6 +124,10 @@ public:
     void setMeshLoader(MeshLoader l);
     // Ground height for "collision" (world y = 0 without it): GameView::heightAt in the apps.
     void setGroundHeight(std::function<float(float x, float z)> fn);
+    // Owner thread: immutable callbacks in particle simulation coordinates.
+    void setSceneCollisionRegistry(std::shared_ptr<const SceneCollisionRegistry> registry,
+                                   uint32_t maxQueries=8192);
+    SceneCollisionStats sceneCollisionStats() const;
     // Wind (world units / s^2) acting on emitters with "externalForces" (Unity wind zones).
     void setWind(float3 wind);
     // Towards the sun: shading of mesh particles (Renderer3D::lighting.sunDir).
@@ -180,6 +185,8 @@ public:
     bool alive(FxHandle h) const;                      // instance exists: emitting or still owns live particles
     void emitManual(FxHandle h);                       // fires the "manual" sub-emitters of its live particles
     void clear();                                      // everything (new match)
+    // Explicit presentation-only CPU replay seed; clears live particles and UID history.
+    void resetDeterministicSeed(uint32_t seed);
 
     // Generic camera/view packet: no dependency on an RTS or FPS camera.
     void setView(const SpectraFxView& view);

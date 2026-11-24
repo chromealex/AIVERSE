@@ -2,6 +2,7 @@
 // ImGui, MCP, native tooling and AI agents. No ImGui/RHI/ECS dependencies.
 #pragma once
 #include "VfxGraph.h"
+#include "SpectraVolumeGraph.h"
 #include <array>
 #include <map>
 #include <set>
@@ -20,9 +21,16 @@ struct NodeInfo {
 };
 inline const std::vector<NodeInfo>& nodeCatalog() {
     static const std::vector<NodeInfo> catalog{
+        {"VolumeDomain","Volumes",R"({"dimension":32,"origin":[-2,-1,-2],"cellSize":0.125})","",true},
+        {"VolumeSource","Volumes",R"({"mode":"continuous","position":[0,0,0],"radius":0.5,"smoke":3,"temperature":8,"fuel":4})","",true},
+        {"VolumeAdvection","Volumes",R"({"buoyancy":1,"smokeDecay":0.25})","",true},
+        {"VolumeCombustion","Volumes",R"({"ignition":0.5,"burnRate":3})","",true},
+        {"VolumePressure","Volumes",R"({"pressureIterations":12})","",true},
+        {"VolumeOutput","Volumes",R"({"extinction":2,"emission":1,"smokeDetail":0,"emberIntensity":0})","",true},
         {"Spawn","Pipeline",R"({"burst":16})","",false},
         {"Initialize","Pipeline",R"({"life":1,"speed":1,"size":0.4})","speed|size|life|spread",false},
         {"Update","Pipeline",R"({})","",false},
+        {"VolumetricParticleOutput","Renderers",R"({"shape":"sphere","density":2,"steps":12,"noiseStrength":0.5})","",true},
         {"SpriteOutput","Renderers",R"({"texture":"builtin:soft"})","texture|fps",false},
         {"MeshOutput","Renderers",R"({"meshes":["builtin:cube"]})","meshes",false},
         {"RibbonOutput","Renderers",R"({})","",false},
@@ -60,6 +68,7 @@ inline const std::vector<NodeInfo>& nodeCatalog() {
         {"FunctionCall","Functions",R"({"function":"identity","arguments":{"x":1}})","arguments.x",true},
         {"ParticleRead","Values",R"({"field":"ageNormalized"})","",true},
         {"InstanceParameter","Values",R"({"name":"lift"})","",true},
+        {"DataInterface","Data Interfaces",R"({"name":"wind_lift"})","",true},
         {"AgeNormalized","Values",R"({})","",true},
         {"Curve","Values",R"({"value":[[0,1],[1,0]]})","",true},
         {"Gradient","Values",R"({"value":[[0,"#ffffffff"],[1,"#ffffff00"]]})","",true},
@@ -100,7 +109,7 @@ inline const NodeInfo* findInfo(std::string_view type) {
     return nullptr;
 }
 inline bool isData(const std::string& type) {return fx::vfx2::valueNodeType(type);}
-inline bool isOutput(const std::string& type) {return fx::vfx2::isOutput(type);}
+inline bool isOutput(const std::string& type) {return type=="VolumeOutput"||type=="VolumetricParticleOutput"||fx::vfx2::isOutput(type);}
 inline Json* node(Json& graph,const std::string& id) {
     Json* nodes=graph.find("nodes");
     if(!nodes || !nodes->isArray())return nullptr;
@@ -154,6 +163,10 @@ inline bool connectExec(Json& graph,const std::string& from,
         error="invalid execution link (type or cycle)";
         return false;
     }
+    const int av=volume::stage(a->getStr("type")),bv=volume::stage(b->getStr("type"));
+    if((av>=0||bv>=0)&&(av<0||bv<0||av>bv||bv==0||(av==bv&&av!=1))){
+        error="volume execution stages must connect in order";return false;
+    }
     Json links=Json::array();
     for(const Json& link:graph["links"].items()) {
         if(!link.has("toPort") && link.getStr("to")==to)continue; // single exec input
@@ -178,6 +191,7 @@ inline bool connectData(Json& graph,const std::string& from,
         error="invalid data connection (source/type or cycle)";
         return false;
     }
+    if(volume::stage(dest->getStr("type"))>=0||dest->getStr("type")=="VolumetricParticleOutput"){error="volume data ports are not implemented";return false;}
     Json probe=Json::object();
     if(!fx::vfx2::nestedSet(probe,input,Json::number(int64_t(0)))) {
         error="invalid data property name";return false;
@@ -235,6 +249,51 @@ inline bool addNode(Json& graph,const std::string& type,std::string& newId,
     n.set("position",std::move(p));
     graph.find("nodes")->push(std::move(n));
     if(isOutput(type))graph.find("outputs")->push(Json::string(newId));
+    error.clear();
+    return true;
+}
+// Strict typed authoring for the v2 dataInterfaces root. Editor/HTML5/MCP
+// clients can modify an individual provider binding without rewriting the
+// entire graph or changing unrelated node metadata. Invalid edits are atomic.
+inline bool setDataInterfaceBinding(Json& graph,const std::string& parameter,
+                                    const Json& spec,std::string& error) {
+    if(graph.getInt("version")!=2) {
+        error="dataInterfaces require a version-2 graph";
+        return false;
+    }
+    InstanceParameterTable definitions;
+    std::vector<std::string> errors;
+    if(!loadInstanceParameterTable(graph["instanceParameters"],definitions,errors)) {
+        error=errors.empty()?"invalid instanceParameters":errors.front();
+        return false;
+    }
+    Json updated=graph["dataInterfaces"];
+    if(updated.isNull())updated=Json::object();
+    if(!updated.isObject()) {
+        error="dataInterfaces must be an object";
+        return false;
+    }
+    updated.set(parameter,spec);
+    DataInterfaceBindings validated;
+    if(!loadDataInterfaceBindings(updated,definitions,validated,errors)) {
+        error=errors.empty()?"invalid dataInterfaces declaration":errors.front();
+        return false;
+    }
+    graph.set("dataInterfaces",std::move(updated));
+    error.clear();
+    return true;
+}
+inline bool removeDataInterfaceBinding(Json& graph,const std::string& parameter,
+                                       std::string& error) {
+    if(graph.getInt("version")!=2 ||
+       !graph["dataInterfaces"].isObject() ||
+       !graph["dataInterfaces"].has(parameter)) {
+        error="no matching Data Interface binding in graph v2";
+        return false;
+    }
+    Json updated=graph["dataInterfaces"];
+    if(!updated.erase(parameter))return false;
+    graph.set("dataInterfaces",std::move(updated));
     error.clear();
     return true;
 }

@@ -773,6 +773,8 @@ endif()
 if((AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS) AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
     add_executable(aiverse_root_motion_bake tools/animation/root_motion_bake.cpp)
     target_link_libraries(aiverse_root_motion_bake PRIVATE AIVERSE::animation_ecs aiverse_zstd_dec)
+    add_executable(aiverse_sdf_bake tools/spectrafx/sdf_bake.cpp)
+    target_link_libraries(aiverse_sdf_bake PRIVATE aiverse_models aiverse_zstd_dec)
 endif()
 if(AIVERSE_BUILD_TESTS)
     add_executable(aiverse_root_motion_bake_tests tests/animation/root_motion_bake.cpp)
@@ -4348,6 +4350,23 @@ if(AIVERSE_BUILD_TESTS AND AIVERSE_PLATFORM STREQUAL "macos")
         SKIP_RETURN_CODE 77)
 endif()
 
+# Production GPU-owned allocator acceptance (Stages 110–115).
+if(AIVERSE_BUILD_TESTS AND AIVERSE_PLATFORM STREQUAL "macos")
+    add_executable(aiverse_spectrafx_metal_allocator_test
+        tests/spectrafx_metal_allocator.mm $<TARGET_OBJECTS:aiverse_runtime>)
+    target_include_directories(aiverse_spectrafx_metal_allocator_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_options(aiverse_spectrafx_metal_allocator_test PRIVATE "-fobjc-arc")
+    target_link_libraries(aiverse_spectrafx_metal_allocator_test PRIVATE
+        aiverse_runtime aiverse_fx aiverse_render2d)
+    add_test(NAME spectrafx_metal_allocator COMMAND aiverse_spectrafx_metal_allocator_test)
+    add_test(NAME spectrafx_metal_volumetric_scene
+        COMMAND aiverse_spectrafx_metal_allocator_test --volumetric-scene)
+    set_tests_properties(spectrafx_metal_allocator PROPERTIES
+        LABELS "SpectraFX;MetalGPU;RHI" SKIP_RETURN_CODE 77 TIMEOUT 300)
+    set_tests_properties(spectrafx_metal_volumetric_scene PROPERTIES
+        LABELS "SpectraFX;MetalGPU;Volumetrics" SKIP_RETURN_CODE 77 TIMEOUT 300)
+endif()
+
 # Data-driven entity effects shared by every host (table + presenter).
 if(AIVERSE_BUILD_TESTS AND AIVERSE_DESKTOP)
     add_executable(aiverse_spectrafx_entity_effects_tests
@@ -4451,7 +4470,7 @@ endif()
 if(AIVERSE_BUILD_TESTS AND TARGET aiverse_editor_core)
     add_executable(aiverse_vfx_ops_tests tests/vfx_graph_ops_test.cpp)
     target_include_directories(aiverse_vfx_ops_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-    target_link_libraries(aiverse_vfx_ops_tests PRIVATE aiverse_editor_core aiverse_fx)
+    target_link_libraries(aiverse_vfx_ops_tests PRIVATE aiverse_editor_core aiverse_fx aiverse_zstd_dec)
     add_test(NAME vfx_graph_ops COMMAND aiverse_vfx_ops_tests)
     set_tests_properties(vfx_graph_ops PROPERTIES LABELS "SpectraFX")
 endif()
@@ -4478,6 +4497,13 @@ if(AIVERSE_BUILD_TESTS)
     target_link_libraries(aiverse_vfx_gpu_tests PRIVATE aiverse_fx)
     add_test(NAME vfx_gpu_backend COMMAND aiverse_vfx_gpu_tests)
     set_tests_properties(vfx_gpu_backend PROPERTIES LABELS "SpectraFX")
+    if(TARGET aiverse_gfx_vulkan)
+        add_executable(aiverse_spectrafx_vulkan_allocator_test tests/spectrafx_vulkan_allocator.cpp)
+        target_include_directories(aiverse_spectrafx_vulkan_allocator_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+        target_link_libraries(aiverse_spectrafx_vulkan_allocator_test PRIVATE aiverse_fx aiverse_gfx_vulkan)
+        add_test(NAME spectrafx_vulkan_allocator COMMAND aiverse_spectrafx_vulkan_allocator_test)
+        set_tests_properties(spectrafx_vulkan_allocator PROPERTIES LABELS "SpectraFX;VulkanGPU;RHI" SKIP_RETURN_CODE 77 TIMEOUT 300)
+    endif()
 endif()
 
 # PHYSIS authoritative environment simulation is independent of all genre modules.
