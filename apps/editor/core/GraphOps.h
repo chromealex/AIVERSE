@@ -159,7 +159,7 @@ inline void registerGraphOps(Workspace& ws) {
             Json r=Json::object();r.set("available",Json::fromBool(false));r.set("reason",Json::string("Native common presentation profile owner unavailable in this host"));return r;
         }});
     ws.registerOp({"texture_graph_gpu_preview","Queue/read native Metal or Vulkan texture preview, single bake or full PBR set; publish completed bake explicitly.",
-        Json::parse(R"({"properties":{"action":{"type":"string","enum":["start","read","publish","cancel","plan"]},"graph":{"type":"object"},"overrides":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"requireGpu":{"type":"boolean"},"resolution":{"type":"integer","minimum":8,"maximum":128},"bake":{"type":"boolean"},"bakeSet":{"type":"boolean"},"materialized":{"type":"boolean","description":"Opt-in experimental native materialized DAG execution"},"materializedDag":{"type":"boolean","description":"Compatibility alias for materialized"},"timeoutMs":{"type":"integer","minimum":1000,"maximum":300000},"request":{"type":"string"},"textureName":{"type":"string"}},"required":["action"]})"),[&ws](const Json& p){
+        Json::parse(R"({"properties":{"action":{"type":"string","enum":["start","read","publish","cancel","plan"]},"graph":{"type":"object"},"overrides":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"requireGpu":{"type":"boolean"},"resolution":{"type":"integer","minimum":8,"maximum":128},"bake":{"type":"boolean"},"bakeSet":{"type":"boolean"},"materialized":{"type":"boolean","description":"Opt-in experimental native materialized DAG execution"},"materializedDag":{"type":"boolean","description":"Compatibility alias for materialized"},"fusePointwise":{"type":"boolean","description":"Opt-in bounded pointwise fusion for materialized DAG; also supported in plan inspection"},"timeoutMs":{"type":"integer","minimum":1000,"maximum":300000},"request":{"type":"string"},"textureName":{"type":"string"}},"required":["action"]})"),[&ws](const Json& p){
             if(p.getStr("action")=="plan"){
                 using namespace render::texture_graph;
                 const auto program=compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object());
@@ -167,7 +167,7 @@ inline void registerGraphOps(Workspace& ws) {
                 std::vector<size_t> targets;std::vector<std::string> names;
                 if(p.getBool("bakeSet"))for(const auto& [name,index]:program.outputs){names.push_back(name);targets.push_back(index);}
                 else {const auto it=program.outputs.find(p.getStr("output"));require(it!=program.outputs.end(),"unknown plan output");names.push_back(it->first);targets.push_back(it->second);}
-                const auto sources=gpu::compileMaterializedDag(program,targets,n);
+                const auto sources=gpu::compileMaterializedDag(program,targets,n,gpu::materializedBudgetBytes,p.getBool("fusePointwise"));
                 const auto& plan=sources.plan;
                 Json r=Json::object(),slots=Json::array(),passes=Json::array(),outputs=Json::array();
                 for(auto bytes:plan.schedule.slotBytes)slots.push(Json::number(int64_t(bytes)));
@@ -183,7 +183,8 @@ inline void registerGraphOps(Workspace& ws) {
                 r.set("ok",Json::fromBool(true));r.set("state",Json::string("planned"));r.set("executed",Json::fromBool(false));
                 r.set("resolution",Json::number(int64_t(n)));r.set("slotBytes",slots);r.set("passes",passes);r.set("outputs",outputs);
                 r.set("allocatedBytes",Json::number(int64_t(sources.totalBytes)));r.set("intermediateBytes",Json::number(int64_t(plan.allocatedBytes)));r.set("resultBytes",Json::number(int64_t(sources.resultBytes)));
-                r.set("nodeShaderCount",Json::number(int64_t(plan.schedule.passes.size())));r.set("packShaderCount",Json::number(int64_t(sources.packs.size())));r.set("peakLive",Json::number(int64_t(plan.peakLive)));
+                r.set("nodeShaderCount",Json::number(int64_t(plan.schedule.passes.size())));
+                r.set("reachableNodeCount",Json::number(int64_t(sources.reachableNodes)));r.set("fusionElidedPasses",Json::number(int64_t(sources.fusedNodes)));r.set("packShaderCount",Json::number(int64_t(sources.packs.size())));r.set("peakLive",Json::number(int64_t(plan.peakLive)));
                 r.set("budgetBytes",Json::number(int64_t(gpu::materializedBudgetBytes)));
                 return r;
             }
