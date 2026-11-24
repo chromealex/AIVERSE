@@ -111,7 +111,9 @@
     "tests/render/texture_graph_gpu_texture_transfer.cpp",
     "tests/render/texture_graph_gpu_copy_rhi.h",
     "tests/render/texture_graph_gpu_copy_vulkan.cpp",
-    "tests/render/texture_graph_gpu_copy_metal.mm"
+    "tests/render/texture_graph_gpu_copy_metal.mm",
+    "engine/render/graph/TextureGraphGpuTextureBudget.h",
+    "tests/render/texture_graph_gpu_texture_budget.cpp"
   ],
   "traits": {
     "editable": true,
@@ -122,7 +124,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 37A GPU-only storage-to-texture transport and fence-gated native appearance adoption implemented in source; no graph request/host call site yet. Single mip, opt-in native only. Hardware and integrated acceptance pending.",
+      "note": "Stage 37B in progress: opt-in request-local GPU texture candidates, copied-mip-zero parity, bounded combined GPU payload, native one-shot publication, optional GPU mipmaps.",
       "evidence": []
     },
     "architecture": {
