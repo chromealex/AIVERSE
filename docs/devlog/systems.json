@@ -62,6 +62,14 @@
     {
      "status": "in-progress",
      "target": null,
+     "title": "Планетарный лес: ветер и сезонная листва PHYSIS",
+     "titleEn": "Planetary forest: PHYSIS wind and seasonal canopy",
+     "text": "Stage 161D4c1: явные климатические привязки, локальный ветер в касательной системе, GPU-риг ARBOR, сезонный оттенок и сброс листвы.",
+     "textEn": "Stage 161D4c1: explicit climate anchors, tangent-space local wind, ARBOR GPU rig, seasonal tint and leaf suppression."
+    },
+    {
+     "status": "in-progress",
+     "target": null,
      "title": "Планетарный лес: объёмная Live-визуализация",
      "titleEn": "Planetary forest: live mesh visualization",
      "text": "Stage 161D4b: рост и отмирание из ECS, обнажённые корни ARBOR, стволы по физической позе.",
