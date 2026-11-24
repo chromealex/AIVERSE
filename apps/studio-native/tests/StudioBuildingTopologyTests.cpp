@@ -28,6 +28,14 @@ int main(){
         AIVERSE_TEST_CHECK(edge.getStr("from")=="room/0/0/0" && edge.getStr("to")=="room/1/0/0");
     }
     AIVERSE_TEST_CHECK(foundLift);
+    Json query=Json::object();
+    query.set("start",Json::string("room/1/0/0"));query.set("goal",Json::string("room/0/0/0"));
+    query.set("allowStairs",Json::fromBool(false));query.set("allowElevators",Json::fromBool(true));
+    const auto liftRoute=studio::studioBuildingRoute(graph,query);
+    AIVERSE_TEST_CHECK(liftRoute.getBool("reachable") && liftRoute["steps"].size()==1);
+    AIVERSE_TEST_CHECK(liftRoute["steps"].items().front().getStr("edgeId")=="vertical/0/0");
+    query.set("allowElevators",Json::fromBool(false));
+    AIVERSE_TEST_CHECK(!studio::studioBuildingRoute(graph,query).getBool("reachable"));
     BuildingFeature stair;
     stair.kind=BuildingFeatureKind::Stairs;stair.width=2.6f;stair.depth=6.6f;
     recipe.features={stair};
@@ -42,6 +50,10 @@ int main(){
         AIVERSE_TEST_CHECK(edge.getStr("socketId")=="stairs/0/0");
     }
     AIVERSE_TEST_CHECK(foundStair);
+    query.set("allowStairs",Json::fromBool(true));
+    AIVERSE_TEST_CHECK(studio::studioBuildingRoute(graph,query).getBool("reachable"));
+    query.set("allowStairs",Json::fromBool(false));
+    AIVERSE_TEST_CHECK(!studio::studioBuildingRoute(graph,query).getBool("reachable"));
     BuildingFeature gate;
     gate.kind=BuildingFeatureKind::SmallGate;gate.width=4;gate.height=2.4f;
     gate.position=8;gate.open=1;
@@ -55,6 +67,15 @@ int main(){
     const auto exterior=studio::studioBuildingTopology(graph);
     AIVERSE_TEST_CHECK(exterior["exteriorApertures"].size()==2);
     AIVERSE_TEST_CHECK(exterior.getInt("components")==2);
+    query.set("start",Json::string("room/0/1/0"));query.set("goal",Json::string("room/0/0/0"));
+    const auto passageRoute=studio::studioBuildingRoute(graph,query);
+    AIVERSE_TEST_CHECK(passageRoute.getBool("reachable") && passageRoute["steps"].size()==1);
+    query.set("goal",Json::string("room/0/1/0"));
+    AIVERSE_TEST_CHECK(studio::studioBuildingRoute(graph,query).getBool("reachable"));
+    query.set("goal",Json::string("missing"));
+    bool routeRefused=false;
+    try{(void)studio::studioBuildingRoute(graph,query);}catch(const std::runtime_error&){routeRefused=true;}
+    AIVERSE_TEST_CHECK(routeRefused);
     graph.connections.front().to="missing";
     bool refused=false;
     try{(void)studio::studioBuildingTopology(graph);}catch(const std::runtime_error&){refused=true;}
