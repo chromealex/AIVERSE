@@ -26,6 +26,9 @@ struct CavePlanetRuntimeHooks {
     // Optional managed provider publication. Existing GI/solver hooks are
     // still mandatory; prepared leases are available on the candidate.
     CavePlanetNavigationInputSource navigationInputs;
+    // Optional fallible retirement staging before the native owner removes
+    // any physics/render source. Legacy hosts may retain their own preflight.
+    std::function<bool(const std::string&,uint64_t)> prepareRetireNavigationGi;
     bool valid()const noexcept{
         return exclusive&&surfaceCell&&volumeCell&&unownedLeaf&&mayReleaseCoverage&&
             prepareNavigationGi&&commitNavigationGi&&abortNavigationGi&&retireNavigationGi;
@@ -305,9 +308,14 @@ private:
         if(!owner){recovery_=true;return false;}
         const auto revision=owner->activeRevision();
         if(!owner->closed()){
+            const bool preflight=bool(hooks_.prepareRetireNavigationGi);
+            if(preflight&&!hooks_.prepareRetireNavigationGi(body,revision))return false;
             if(!c.binding->closeCut(device_,hooks_.exclusive,[&]{
                     return hooks_.retireNavigationGi(body,revision);
-                }))return false;
+                })){
+                if(preflight&&!recoveryRequired()&&!hooks_.abortNavigationGi(body,revision))recovery_=true;
+                return false;
+            }
         }
         // If coverage release fails after close, the restored solid baseline
         // remains owned. Never advertise the retired cut as active.
