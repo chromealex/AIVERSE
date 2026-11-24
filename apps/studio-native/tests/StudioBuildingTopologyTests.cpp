@@ -28,6 +28,20 @@ int main(){
         AIVERSE_TEST_CHECK(edge.getStr("from")=="room/0/0/0" && edge.getStr("to")=="room/1/0/0");
     }
     AIVERSE_TEST_CHECK(foundLift);
+    BuildingFeature stair;
+    stair.kind=BuildingFeatureKind::Stairs;stair.width=2.6f;stair.depth=6.6f;
+    recipe.features={stair};
+    graph=buildFunctionalStructureGraph(recipe);
+    AIVERSE_TEST_CHECK(bool(graph));
+    const auto withStairs=studio::studioBuildingTopology(graph);
+    AIVERSE_TEST_CHECK(withStairs.getInt("components")==1 && withStairs.getInt("withoutElevatorsComponents")==1);
+    bool foundStair=false;
+    for(const auto& edge:withStairs["connections"].items()){
+        if(edge.getStr("kind")!="stair")continue;
+        foundStair=true;
+        AIVERSE_TEST_CHECK(edge.getStr("socketId")=="stairs/0/0");
+    }
+    AIVERSE_TEST_CHECK(foundStair);
     graph.connections.front().to="missing";
     bool refused=false;
     try{(void)studio::studioBuildingTopology(graph);}catch(const std::runtime_error&){refused=true;}

@@ -5,12 +5,14 @@ import {connectionNodeId,projectBuildingRoomTopology,roomComponentMembers,roomNo
 import type {BuildingRoomTopology} from './buildingRoomTopology';
 
 export function BuildingRoomTopologyView({data,onSelectSocket}:{data:BuildingRoomTopology;onSelectSocket?:(id:string)=>void}){
- const [floor,setFloor]=useState<number|null>(null),[selected,setSelected]=useState(''),[withoutElevators,setWithoutElevators]=useState(false);
+ const [floor,setFloor]=useState<number|null>(null),[selected,setSelected]=useState(''),[withoutElevators,setWithoutElevators]=useState(false),[target,setTarget]=useState('');
  const view=useMemo(()=>projectBuildingRoomTopology(data,floor),[data,floor]);
  const room=data.rooms.find(r=>roomNodeId(r)===selected);
  const edge=data.connections.find(e=>connectionNodeId(e)===selected);
  const members=room?roomComponentMembers(data,room.id,withoutElevators):[];
  const highlighted=members.map(roomNodeId);
+ const destination=data.rooms.find(r=>r.id===target);
+ const connected=room&&destination?members.some(r=>r.id===destination.id):null;
  const active=view.nodes.some(n=>n.id===selected)?selected:'';
  const groups=withoutElevators?data.withoutElevatorsComponents:data.components;
  return <StudioSection title="Native room connectivity">
@@ -32,6 +34,10 @@ export function BuildingRoomTopologyView({data,onSelectSocket}:{data:BuildingRoo
    <small>Bounds {room.min.join(', ')} – {room.max.join(', ')} m</small>
    <small>{members.length} of {data.rooms.length} rooms structurally reachable (including selected room); {data.rooms.length-members.length} outside this group.</small>
    {members.length===1&&<StudioAlert tone="warning">This room has no reachable peer under the selected policy.</StudioAlert>}
+   <StudioSelect aria-label="Compare structural reachability to room" value={destination?.id??''} onChange={e=>setTarget(e.target.value)}>
+    <option value="">Choose destination room</option>{data.rooms.map(r=><option key={r.id} value={r.id}>{r.id}</option>)}
+   </StudioSelect>
+   {connected!==null&&<StudioAlert tone={connected?'success':'warning'}>{connected?'Connected in native authored topology.':'No authored connection under this policy.'} This is not a runtime path guarantee.</StudioAlert>}
   </div>}
   {edge&&<div className="au-stack"><strong>{edge.id} · {edge.kind}</strong>
    <small>{edge.from} ↔ {edge.to}</small><small>Position {edge.position.join(', ')} m · width {edge.width} m · height {edge.height} m</small>

@@ -3,11 +3,13 @@
 #include <aiverselib/systems/BuildingCirculationRuntime.h>
 #include "engine/data/Json.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <set>
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <utility>
 
 namespace aiverse::studio {
 namespace buildingTopologyDetail {
