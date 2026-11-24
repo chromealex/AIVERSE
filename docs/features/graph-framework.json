@@ -110,7 +110,10 @@
     "apps/studio-web/src/types.ts",
     "apps/studio-web/src/mock.ts",
     "apps/studio-web/src/graphs/graphInspectionCapture.ts",
-    "apps/studio-web/tests/graphInspectionCapture.test.mjs"
+    "apps/studio-web/tests/graphInspectionCapture.test.mjs",
+    "apps/studio-web/src/graphs/buildingCandidateCapture.ts",
+    "apps/studio-web/tests/buildingCandidateCapture.test.mjs",
+    "apps/studio-web/src/panels/generated/BuildingGeneratorPanel.tsx"
   ],
   "traits": {
     "editable": true,
@@ -121,7 +124,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35C native read-only Caverns capture bridge, document-scope and cancellation implemented in source; Stage 35A Building inspector retained, direct owner integration pending.",
+      "note": "Stage 35C native read-only Caverns capture bridge, document-scope and cancellation implemented in source; Stage 35A Building inspector retained, direct owner integration pending. Stage 35D planned: pin exact native recipe per seed, reject retired batches, wire feature selection in Building owner panel on isolated integration branch.",
       "evidence": []
     },
     "architecture": {
