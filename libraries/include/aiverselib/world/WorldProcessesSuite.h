@@ -24,9 +24,9 @@ namespace aiverse::lib::worldprocess {
 struct SuiteFlags {
     bool morph=false,crowd=false,imprint=false,circuit=false;
     bool granular=false,evolve=false,society=false;
-    bool morphGravity=false;
+    bool morphGravity=false,aetherStratification=false;
     bool any()const {
-        return morph||crowd||imprint||circuit||granular||evolve||society||morphGravity;
+        return morph||crowd||imprint||circuit||granular||evolve||society||morphGravity||aetherStratification;
     }
 };
 inline SuiteFlags suiteFlags(const Json& json) {
@@ -37,6 +37,7 @@ inline SuiteFlags suiteFlags(const Json& json) {
             throw std::invalid_argument("World Processes suite flag must be Boolean: "+key);
         if(key=="morph")f.morph=value.boolean();
         else if(key=="morphGravity")f.morphGravity=value.boolean();
+        else if(key=="aetherStratification")f.aetherStratification=value.boolean();
         else if(key=="crowd")f.crowd=value.boolean();
         else if(key=="imprint")f.imprint=value.boolean();
         else if(key=="circuit")f.circuit=value.boolean();
@@ -53,6 +54,7 @@ using CrowdInstaller=void(*)(Simulation&);
 using EvolveAreaInstaller=void(*)(Simulation&);
 using GranularInstaller=void(*)(Simulation&);
 using MorphGravityInstaller=void(*)(Simulation&);
+using AetherStratificationInstaller=void(*)(Simulation&);
 inline void installSuite(Simulation& sim,SuiteFlags flags,ImprintTrailInstaller trails=nullptr,CrowdInstaller crowdInstaller=nullptr,EvolveAreaInstaller areas=nullptr,GranularInstaller granularInstaller=nullptr,MorphGravityInstaller morphGravityInstaller=nullptr) {
     // Order is stable across game/server/editor builds. Integrations can
     // place their own producer systems before this opt-in installation.
