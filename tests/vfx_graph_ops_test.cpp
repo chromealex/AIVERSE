@@ -300,6 +300,8 @@ int main() {
 
     auto setStart=Json::object();setStart.set("action",Json::string("start"));setStart.set("graph",tex["graph"]);setStart.set("bakeSet",Json::fromBool(true));
     require(call("texture_graph_gpu_preview",setStart).getStr("state")=="unavailable","headless GPU set owner fabricated");
+    setStart.set("materializedDag",Json::fromBool(true));
+    require(call("texture_graph_gpu_preview",setStart).getStr("state")=="unavailable","headless materialized GPU owner fabricated");
     const auto manifest=Json::parseFile((root/"content"/"textures"/"fixture_set"/"texture-set.json").string());
     require(manifest["files"].size()==2&&manifest["files"][size_t(0)].getStr("backend")=="cpu","shared texture set provenance missing");
 
