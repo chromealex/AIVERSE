@@ -495,8 +495,10 @@ public:
             it=requestedParameters_.erase(it);
         }
         if(!error_.empty())return;
+        // Hybrid particle and gas branches share the same world origin.
+        const auto particleOrigin=volumeGrid_?origin:origin+render::float3{0,1,0};
         if(restartBurstPending_) {
-            if(!runtime_->burstAt({origin.x,origin.y+1.0f,origin.z})) {
+            if(!runtime_->burstAt(particleOrigin)) {
                 playing_=false;
                 error_=runtime_->reason().empty()?"SpectraFX preview burst rejected":runtime_->reason();
                 return;
@@ -511,7 +513,7 @@ public:
         const uint32_t count=std::exchange(burstsPending_,0u);
         for(uint32_t i=0;i<count;++i) {
             if(volumeGrid_&&volumeGrid_->hasImpulse()&&!volumeGrid_->trigger()){playing_=false;error_="Volume impulse already queued; step first";return;}
-            if(hasParticles_&&!runtime_->burstAt({origin.x,origin.y+1.0f,origin.z})) {
+            if(hasParticles_&&!runtime_->burstAt(particleOrigin)) {
                 playing_=false;phase_=0;
                 error_=runtime_->reason().empty()?
                     "SpectraFX one-shot burst rejected":runtime_->reason();

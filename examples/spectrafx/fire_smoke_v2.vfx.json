@@ -33,94 +33,19 @@
       "properties": {
         "position": [
           -4,
-          -1,
+          -1.45,
           0
         ],
-        "radius": 0.38,
+        "radius": 0.47,
         "smoke": 2,
-        "temperature": 9,
-        "fuel": 5,
+        "temperature": 14,
+        "fuel": 8,
         "acceleration": [
-          0,
           2,
-          0
-        ],
-        "flickerHz": 1.3
-      }
-    },
-    {
-      "id": "volume_flame_lobe_a",
-      "type": "VolumeSource",
-      "position": [
-        360,
-        240
-      ],
-      "properties": {
-        "position": [
-          -4.25,
-          -1.2,
-          -0.26
-        ],
-        "radius": 0.25,
-        "smoke": 0.6,
-        "temperature": 12,
-        "fuel": 5,
-        "acceleration": [
-          0.5,
           3,
           0
         ],
-        "flickerHz": 2.1
-      }
-    },
-    {
-      "id": "volume_flame_lobe_b",
-      "type": "VolumeSource",
-      "position": [
-        450,
-        350
-      ],
-      "properties": {
-        "position": [
-          -3.68,
-          -0.9,
-          0.24
-        ],
-        "radius": 0.27,
-        "smoke": 0.8,
-        "temperature": 11,
-        "fuel": 5,
-        "acceleration": [
-          2.4,
-          3.5,
-          0
-        ],
-        "flickerHz": 1.7
-      }
-    },
-    {
-      "id": "volume_flame_front",
-      "type": "VolumeSource",
-      "position": [
-        550,
-        400
-      ],
-      "properties": {
-        "position": [
-          -3.9,
-          -0.65,
-          1.0
-        ],
-        "radius": 0.34,
-        "smoke": 0.2,
-        "temperature": 15,
-        "fuel": 7,
-        "acceleration": [
-          2,
-          4,
-          0
-        ],
-        "flickerHz": 2.6
+        "flickerHz": 1.65
       }
     },
     {
@@ -132,13 +57,13 @@
       ],
       "properties": {
         "position": [
-          -3.3,
-          -0.4,
+          -4,
+          -1.45,
           0
         ],
         "radius": 0.53,
         "smoke": 12,
-        "temperature": 3,
+        "temperature": 0,
         "fuel": 0,
         "acceleration": [
           8,
@@ -208,13 +133,13 @@
         "emission": 0.35,
         "emissionThreshold": 0.7,
         "smokeDetail": 1,
-        "emberIntensity": 4,
+        "emberIntensity": 0,
         "lights": [
           {
             "position": [
-              -3.8,
-              -0.7,
-              0.4
+              -4,
+              -1.15,
+              0
             ],
             "color": [
               1,
@@ -244,107 +169,6 @@
           1.15,
           0.12
         ]
-      }
-    },
-    {
-      "id": "spawn_flame",
-      "type": "Spawn",
-      "position": [
-        30,
-        750
-      ],
-      "properties": {
-        "rate": 16,
-        "duration": 4,
-        "loop": true
-      }
-    },
-    {
-      "id": "init_flame",
-      "type": "Initialize",
-      "position": [
-        280,
-        750
-      ],
-      "properties": {
-        "life": [
-          0.5,
-          0.9
-        ],
-        "speed": [
-          0.3,
-          1.4
-        ],
-        "size": [
-          1.0,
-          1.8
-        ],
-        "direction": [
-          0,
-          0.55,
-          1
-        ],
-        "spread": 32,
-        "shape": "sphere",
-        "radius": 0.75,
-        "offset": [
-          0,
-          -1,
-          -3.7
-        ],
-        "drag": 0.8,
-        "rotation": [
-          0,
-          360
-        ],
-        "spin": [
-          -80,
-          80
-        ],
-        "color": [
-          [
-            0,
-            "#ffd67500"
-          ],
-          [
-            0.12,
-            "#ffb942e0"
-          ],
-          [
-            0.5,
-            "#f47b28c8"
-          ],
-          [
-            0.85,
-            "#b9371d88"
-          ],
-          [
-            1,
-            "#8c240000"
-          ]
-        ]
-      }
-    },
-    {
-      "id": "out_flame",
-      "type": "SpriteOutput",
-      "position": [
-        530,
-        750
-      ],
-      "properties": {
-        "texture": "engine/fx/physis/fireball_full_8x8.png",
-        "frames": [
-          8,
-          8
-        ],
-        "fps": 0,
-        "startFrame": [
-          0,
-          16
-        ],
-        "blend": "alpha",
-        "align": "camera"
       }
     },
     {
@@ -387,11 +211,11 @@
         ],
         "spread": 18,
         "shape": "sphere",
-        "radius": 0.7,
+        "radius": 0.38,
         "offset": [
           0,
-          -0.35,
-          -3
+          -1.28,
+          -3.85
         ],
         "drag": 0.08,
         "rotation": [
@@ -462,7 +286,7 @@
         1090
       ],
       "properties": {
-        "rate": 12,
+        "rate": 18,
         "duration": 4,
         "loop": true
       }
@@ -476,45 +300,276 @@
       ],
       "properties": {
         "life": [
-          0.5,
-          1.2
+          1.6,
+          2.5
         ],
         "speed": [
-          1.5,
-          3.8
+          3.3,
+          4.6
         ],
         "size": [
-          0.035,
-          0.08
+          0.085,
+          0.16
         ],
         "direction": [
           0,
-          0.5,
+          0.58,
           1
         ],
-        "spread": 50,
+        "spread": 8,
         "shape": "sphere",
-        "radius": 0.4,
+        "radius": 0.16,
         "offset": [
           0,
-          -0.6,
-          -3.6
+          -1.45,
+          -4
         ],
-        "drag": 0.3,
+        "drag": 0.06,
         "color": [
           [
             0,
-            "#ffe0a0ff"
+            "#fff4c4ff"
           ],
           [
             0.55,
-            "#ff7925e0"
+            "#ffc55bff"
+          ],
+          [
+            0.85,
+            "#ff8833d8"
           ],
           [
             1,
-            "#ff2a0000"
+            "#ff481800"
           ]
         ]
+      }
+    },
+    {
+      "id": "drift_embers",
+      "type": "VelocityModule",
+      "position": [
+        440,
+        1090
+      ],
+      "properties": {
+        "space": "world",
+        "x": {
+          "curve": [
+            [
+              0.0,
+              -0.7
+            ],
+            [
+              0.0625,
+              -0.495
+            ],
+            [
+              0.125,
+              -0.0
+            ],
+            [
+              0.1875,
+              0.495
+            ],
+            [
+              0.25,
+              0.7
+            ],
+            [
+              0.3125,
+              0.495
+            ],
+            [
+              0.375,
+              0.0
+            ],
+            [
+              0.4375,
+              -0.495
+            ],
+            [
+              0.5,
+              -0.7
+            ],
+            [
+              0.5625,
+              -0.495
+            ],
+            [
+              0.625,
+              -0.0
+            ],
+            [
+              0.6875,
+              0.495
+            ],
+            [
+              0.75,
+              0.7
+            ],
+            [
+              0.8125,
+              0.495
+            ],
+            [
+              0.875,
+              0.0
+            ],
+            [
+              0.9375,
+              -0.495
+            ],
+            [
+              1.0,
+              -0.7
+            ]
+          ]
+        },
+        "y": {
+          "curve": [
+            [
+              0.0,
+              1.2
+            ],
+            [
+              0.0625,
+              0.849
+            ],
+            [
+              0.125,
+              0.0
+            ],
+            [
+              0.1875,
+              -0.849
+            ],
+            [
+              0.25,
+              -1.2
+            ],
+            [
+              0.3125,
+              -0.849
+            ],
+            [
+              0.375,
+              -0.0
+            ],
+            [
+              0.4375,
+              0.849
+            ],
+            [
+              0.5,
+              1.2
+            ],
+            [
+              0.5625,
+              0.849
+            ],
+            [
+              0.625,
+              0.0
+            ],
+            [
+              0.6875,
+              -0.849
+            ],
+            [
+              0.75,
+              -1.2
+            ],
+            [
+              0.8125,
+              -0.849
+            ],
+            [
+              0.875,
+              -0.0
+            ],
+            [
+              0.9375,
+              0.849
+            ],
+            [
+              1.0,
+              1.2
+            ]
+          ]
+        },
+        "z": {
+          "curve": [
+            [
+              0.0,
+              0.001
+            ],
+            [
+              0.0625,
+              -0.601
+            ],
+            [
+              0.125,
+              -0.85
+            ],
+            [
+              0.1875,
+              -0.602
+            ],
+            [
+              0.25,
+              -0.001
+            ],
+            [
+              0.3125,
+              0.601
+            ],
+            [
+              0.375,
+              0.85
+            ],
+            [
+              0.4375,
+              0.602
+            ],
+            [
+              0.5,
+              0.001
+            ],
+            [
+              0.5625,
+              -0.601
+            ],
+            [
+              0.625,
+              -0.85
+            ],
+            [
+              0.6875,
+              -0.602
+            ],
+            [
+              0.75,
+              -0.001
+            ],
+            [
+              0.8125,
+              0.601
+            ],
+            [
+              0.875,
+              0.85
+            ],
+            [
+              0.9375,
+              0.602
+            ],
+            [
+              1.0,
+              0.001
+            ]
+          ]
+        }
       }
     },
     {
@@ -556,30 +611,30 @@
           1.15
         ],
         "speed": [
-          0.7,
-          1.6
+          1.15,
+          1.8
         ],
         "size": [
-          1.15,
-          2.1
+          0.85,
+          1.45
         ],
         "direction": [
           0,
-          0.9,
-          0.5
+          1,
+          0.38
         ],
-        "spread": 38,
+        "spread": 18,
         "shape": "sphere",
-        "radius": 0.55,
+        "radius": 0.14,
         "offset": [
           0,
-          -1,
-          -3.8
+          -1.45,
+          -4
         ],
         "drag": 0.45,
         "aspect": [
-          1.2,
-          1.8
+          1.12,
+          1.42
         ],
         "color": [
           [
@@ -597,6 +652,24 @@
           [
             1,
             "#d3431400"
+          ]
+        ],
+        "sizeOverLife": [
+          [
+            0,
+            0.18
+          ],
+          [
+            0.22,
+            0.52
+          ],
+          [
+            0.58,
+            1
+          ],
+          [
+            1,
+            0.72
           ]
         ]
       }
@@ -626,22 +699,6 @@
   ],
   "links": [
     {
-      "from": "volume_flame_front",
-      "to": "volume_smoke"
-    },
-    {
-      "from": "volume_flame_lobe_b",
-      "to": "volume_flame_front"
-    },
-    {
-      "from": "volume_source",
-      "to": "volume_flame_lobe_a"
-    },
-    {
-      "from": "volume_flame_lobe_a",
-      "to": "volume_flame_lobe_b"
-    },
-    {
       "from": "volume_domain",
       "to": "volume_source"
     },
@@ -662,14 +719,6 @@
       "to": "volume_output"
     },
     {
-      "from": "spawn_flame",
-      "to": "init_flame"
-    },
-    {
-      "from": "init_flame",
-      "to": "out_flame"
-    },
-    {
       "from": "spawn_smoke",
       "to": "init_smoke"
     },
@@ -683,7 +732,7 @@
     },
     {
       "from": "init_embers",
-      "to": "out_embers"
+      "to": "drift_embers"
     },
     {
       "from": "spawn_tongues",
@@ -692,11 +741,18 @@
     {
       "from": "init_tongues",
       "to": "out_tongues"
+    },
+    {
+      "from": "volume_source",
+      "to": "volume_smoke"
+    },
+    {
+      "from": "drift_embers",
+      "to": "out_embers"
     }
   ],
   "outputs": [
     "volume_output",
-    "out_flame",
     "out_smoke",
     "out_embers",
     "out_tongues"
