@@ -218,11 +218,11 @@ bool GeometryScene::planStrataView(const std::string& sourceKey,
 #endif
 }
 
-void GeometryScene::retireResident(gfx::Device& dev) {
-    // STRATA index pages and temporal GPU masks have not joined the
-    // deferred native retirement queue. Avoid in-flight destruction.
+void GeometryScene::retireResident(gfx::Device& dev,bool completedSubmission) {
+    // Without a covering completed-submission fence, STRATA sidecars
+    // require the existing idle barrier before destruction.
 #if defined(AIVERSE_STRATA_STAGING_ENABLED)
-    if ((!strataPortableSources_.empty() || strataGpuMetadata_ ||
+    if (!completedSubmission && (!strataPortableSources_.empty() || strataGpuMetadata_ ||
          strataGpuCulling_) && !dev.waitForResourceIdle())
         throw std::runtime_error(
             "geometry scene: STRATA GPU resources require idle before reload");
@@ -320,6 +320,21 @@ bool GeometryScene::beginDeferredShutdown(gfx::Device& dev) {
     // No render submissions for this owner are allowed after this point.
     // Model handles are moved into a fence-backed retirement queue.
     retireResident(dev);
+    deferredShutdownStarted_=true;
+    return true;
+}
+bool GeometryScene::beginDeferredShutdownAfterFence(gfx::Device& dev,uint64_t lastUseFence) {
+    if(!lastUseFence||!dev.gpuHealthy()||dev.gpuCompletedFence()<lastUseFence)
+        return false;
+    if((strataPortableDevice_&&strataPortableDevice_!=&dev)||
+       (strataGpuDevice_&&strataGpuDevice_!=&dev))return false;
+    if(deferredShutdownStarted_)return true;
+    if(!failedStages_.empty()||strataGpuMetadata_||strataGpuCulling_||
+       strataGpuMetadataEnabled_||strataGpuCullingEnabled_)return false;
+    // The owner has detached all draws and aliases before the covering
+    // fence. Release sidecars, page reservations and borrowed aliases in
+    // the existing order; source Models still use the retirement queue.
+    retireResident(dev,true);
     deferredShutdownStarted_=true;
     return true;
 }
