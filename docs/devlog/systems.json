@@ -1808,6 +1808,12 @@
           "text": "Кэш GPU-выходов хранит слабые ссылки на поколение и отклоняет устаревшие привязки. Аппаратная проверка ожидается.",
           "nameEn": "Texture Graph GPU — Stage 38Q (partial)",
           "textEn": "Output reuse receipts use weak generation references and reject stale bindings. Hardware validation pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38R (в работе)",
+          "text": "Проверяемые привязки текстур в рендерере и GPU batching.",
+          "nameEn": "Texture Graph GPU — Stage 38R (in progress)",
+          "textEn": "Checked render-time material image resolution."
         }
       ],
       "enables": [
