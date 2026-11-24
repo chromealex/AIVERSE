@@ -108,3 +108,11 @@ Select one authored EVOLVE region on a planet and use the five visible Scene han
 Corrected Stage102/103 planet picking/cache identity: UI live MapDoc and render snapshots are distinct objects; use path/revision/body/project context instead of pointer equality, do not retain a raw snapshot pointer for drag. Periodic snapshot renewal no longer forces camera reset merely due to pointer changes.
 
 Source fixtures cover chart roundtrip, edge anchoring, symmetric resize, snap, complete bounds transaction, stale revision and Undo. Native tests/build NOT RUN. PHYSIS graphical handles, rotation/scale editing, live overlays and integration remain open.
+
+## Stage 105: planetary PHYSIS editing and transform gizmos
+
+Deselect all entities and use Move (W) to drag authored gravity centers, or Scale (R) to change the radius using the visible handle. The x-ray circle is a camera-facing radius cross-section, not a live gravity surface. Centers may lie underground. Center movement is constrained to the camera plane; orbit for the remaining depth axis. Ctrl/Cmd snaps to metres, Escape cancels. Only bounded positive-radius enabled fields in the current canonical body coordinate bucket are shown (up to 64); global uniform fields are numeric-only. Stable field ID, canonical body anchor conversion, whole-config validation, and existing revision-guarded studio.op/physis_set provide one MapDoc Undo; no live ECS mutation.
+
+Selected authored rigid models now reuse existing Scene transform gizmos for radial Y rotation and per-axis/plane/uniform scale. Preview uses the existing transform matrices and commits through studio.setProperties; authored pitch/roll remain numeric-only. Legacy marker-only objects keep surface placement editing. Scene and host guard planetary transform commits with the starting revision and hidden/locked state. Planar paths unchanged.
+
+Test source covers local/other/global field filtering, anchor conversion, unchanged unrelated field, stale and invalid requests. Build, actual interaction, screenshot and GPU acceptance NOT RUN. Live GRANULAR/IMPRINT and all-mechanic diagnostics, physical owner integration, full transform parity and cross-branch merge remain open.

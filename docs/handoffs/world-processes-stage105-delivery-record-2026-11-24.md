@@ -1,3 +1,5 @@
 # Stage 105 roadmap and delivery record
 
 Base 057b8af3. Implement bounded authored PHYSIS gravity field handles within existing native planetary Scene. Explicit no-entity selection plus Move/Scale tools, camera-plane center drag and radius handle, preview only, one physis_set revision-guarded transaction, Escape cancellation. Body-local preview coordinates map to canonical simulation anchors. Global uniform fields remain numeric-only. No runtime gravity mutation. Existing flat editing unchanged. Also inspect native authored Transform semantics; implement only compatible operations, report remaining rotation/scale and live diagnostics separately. Tests deferred; no main merge.
+
+Status: field editing 3447788a; yaw/scale gizmos df32b3ce; source fixture 54159e6f401191c92c3f695002e84bcbb42b07e4. Tests/build NOT RUN. Live visualization next.
