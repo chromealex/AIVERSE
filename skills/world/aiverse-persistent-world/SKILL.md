@@ -78,6 +78,16 @@ NativeWorldFinality returns WaitingForDurability after queueing a completed tick
 
 This is single-flight backpressure, not speculative multi-tick simulation, group commit, or background ECS serialization. The owner remains responsible for orderly stop and recovery after ambiguous writes. No async native compile, performance benchmark or crash acceptance has run.
 
+## Background world recovery (W1.25b, experimental)
+
+For an unopened managed UnifiedWalSession call `beginRecovery(dir, uuid, budget, adapters, factory, codecs, materializer, offlineValidate, resourcePolicy)`. Loading means accepted, not recovered. The owner acquires the world lifetime lock before launching a worker; it remains held through checkpoint decode, WAL replay, writer reopen and publication. No repair/truncation occurs in this path. Codecs, registry, adapters and callbacks must be immutable, worker-safe and outlive the task. Never capture a live Simulation or mutable host in worker validators.
+
+Use `recoveryProgress()` for phase, checkpoint bytes/total, accepted WAL bytes, frame count and last recovered sequence. Counters are approximate concurrent progress observations, not a transactional snapshot or percent of total recovery time. `requestRecoveryCancel()` is cooperative: checked between checkpoint read chunks, before validation and at WAL frame boundaries; a codec, digest or writer-open scan in progress may need to finish. Owner `pollRecovery(ownerValidate)` consumes the result and performs final validation before publishing; cancellation/failure discards the private state and releases the lock. close()/destruction cancels and joins before releasing worker dependencies.
+
+ActorPersistentSession captures immutable identity, seed, tick rate and player slots/teams for offline checks, then runs configured ActorHost validation and stages NativeRestartState on the owner before loading live Simulation. Server API: beginPersistenceRecovery, persistenceRecoveryProgress, cancelPersistenceRecovery, pollPersistenceRecovery. While Loading, step/poll/attach/broadcast/checkpoint are blocked. Use a new Server instance after failed or cancelled startup. CLI: add `--world-background-load` to an existing world's command; progress is printed before listeners bind. May be combined with `--world-async`. New world creation remains synchronous.
+
+Offline structural/schema checks run per replay frame; configured host-specific validation runs on the recovered final state. Checkpoint reads are chunked, but the full encoded checkpoint/private ECS and replay working set must fit memory. No hot swap of a running server or streaming external asset support yet. Native builds/tests and performance measurements have not run.
+
 ## Implementation
 
 RegionWalFrame/Reader/Writer/Transaction/Commit/Finality provide bounded CRC frames, contiguous sequences, durable append and atomic ledger replay. RegionCheckpointManifest/Publish/Load/Archive bind generation and SHA256 to checkpoint and WAL prefix. RegionWorldSessionLock provides local cooperating-process exclusivity, not distributed consensus.
