@@ -103,7 +103,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 33B in progress: dependency closure liveness plan and CPU evaluator intermediate release; GPU scheduler generalization remains separate. Parallel native RHI acceptance fixture in progress.",
+      "note": "Native real-RHI acceptance fixture authored on separate acceptance branch; shared scalar scratch implementation inherited from 33A. Parallel 33B DAG lifetime planning is not implemented on this branch.",
       "evidence": []
     },
     "architecture": {
@@ -173,7 +173,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 32A isolated cache policy PASS; Stage 33A standalone exact-blob C++20 scratch identity/invalidation fixture PASS (Linux GCC 14.2). Native graph fixture, CTest, Studio, shader/device acceptance and merged-tree Mac gate NOT RUN.",
+      "note": "Exact-blob isolated C++20 scratch test rerun locally on GCC 14.2 PASS. Opt-in real Metal/Vulkan owner fixtures authored; not compiled or executed. No full checkout/driver/Mac gate here.",
       "evidence": []
     },
     "handoff": {
