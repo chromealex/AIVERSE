@@ -165,8 +165,9 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
             <div>Terrain openings: {preview.terrainCutEntrances ?? '—'} · rejected: {preview.terrainRejectedEntrances ?? '—'}</div>
             <div>Terrain triangles: {preview.terrainTriangles ?? '—'}</div>
             <div>Sparse terrain: {preview.sparseTerrainResident ?? '—'} resident / {preview.sparseTerrainAuthored ?? '—'} authored</div>
+            <div>Sparse surface plan: {preview.sparsePlannedOpenings ?? '—'} openings · {preview.sparseCertifiedEdges ?? '—'} certified tile edges</div>
             {preview.sparseTerrainDiagnostic && <StudioAlert tone="warning" title="Sparse terrain">{preview.sparseTerrainDiagnostic}</StudioAlert>}
-            {preview.terrainCutSupported===false && <StudioAlert title="Terrain source">Legacy heightfield cuts are unavailable. Explicit sparse terrain can cut shafts strictly inside one tile; arbitrary entity mesh assets are unchanged.</StudioAlert>}
+            {preview.terrainCutSupported===false && <StudioAlert title="Terrain source">Legacy heightfield cuts are unavailable. Explicit sparse terrain uses a whole-footprint surface plan. The volume transition is not yet installed in this preview; arbitrary entity mesh assets are unchanged.</StudioAlert>}
             {preview.terrainCutDiagnostic && <StudioAlert tone="warning" title="Surface cut">{preview.terrainCutDiagnostic}</StudioAlert>}
             <div>Ready chunks: {preview.ready ?? '—'} / {preview.tracked ?? '—'}</div>
             <div>CPU jobs: {preview.pendingCpu ?? '—'}</div>
