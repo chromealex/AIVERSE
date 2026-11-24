@@ -1,6 +1,7 @@
 #pragma once
 // Opt-in module command adapter; no new network/replay transport.
 #include "engine/world/TerraWeaveCavernsEcsAuthority.h"
+#include "engine/world/TerraWeaveCavernsPlanetRegionSet.h"
 #include <functional>
 #include <optional>
 
@@ -44,5 +45,27 @@ inline std::optional<CaveAuthorityChange> applyCaveSimulationCommand(
     }catch(const std::invalid_argument&){return std::nullopt;}
      catch(const std::out_of_range&){return std::nullopt;}
      catch(const std::length_error&){return std::nullopt;}
+}
+// A native game reserves its command type and authorizes the region and
+// tool reach in simulation space. The wire is the existing ten stamp words
+// prefixed by two uint32 words for the stable region ID.
+using PlanetCaveStampPermission=std::function<bool(const World&,const Command&,
+    const CavePlanetAuthorityEntry&,const CaveStampCommand&)>;
+inline std::optional<CaveAuthorityChange> applyPlanetCaveSimulationCommand(
+    Simulation& sim,const Command& input,uint16_t commandType,
+    const PlanetCaveStampPermission& authorize){
+    if(!authorize||input.tick!=sim.tick()||input.type!=commandType||input.args.size()!=12||
+       input.args[0]<0||input.args[0]>UINT32_MAX||input.args[1]<0||input.args[1]>UINT32_MAX)
+        return std::nullopt;
+    const auto id=uint64_t(input.args[0])|(uint64_t(input.args[1])<<32);
+    const auto* entry=findPlanetCaveRegion(sim.world(),id);
+    if(!entry)return std::nullopt;
+    auto local=input;local.args.erase(local.args.begin(),local.args.begin()+2);
+    const auto decoded=decodeCaveStampCommand(local,commandType);
+    if(!decoded||!authorize(sim.world(),input,*entry,*decoded))return std::nullopt;
+    try{return applyAuthorizedPlanetCaveStampCommand(sim.world(),id,*decoded,sim.tick());}
+    catch(const std::invalid_argument&){return std::nullopt;}
+    catch(const std::out_of_range&){return std::nullopt;}
+    catch(const std::length_error&){return std::nullopt;}
 }
 } // namespace aiverse::terraweave::caverns
