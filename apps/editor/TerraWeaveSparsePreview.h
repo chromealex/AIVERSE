@@ -5,6 +5,8 @@
 #pragma once
 #include "apps/editor/core/TerraWeaveSparseOps.h"
 #include "engine/render/TerraWeaveTerrainPatchRender.h"
+#include "engine/world/TerraWeaveCavernsArchive.h"
+#include "engine/world/TerraWeaveCavernsSurfaceCut.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -31,6 +33,7 @@ public:
         authoring_.reset();
         earth_.reset();
         cachedRevision_=std::numeric_limits<uint64_t>::max();
+        caveSnapshot_.reset();cachedPath_.clear();
     }
 
     // Editor::shutdown already waits for a real GPU idle barrier. After it,
@@ -51,7 +54,7 @@ public:
     // an earlier GPU frame must NOT be destroyed immediately.
     void draw(gfx::Device& device,render::Renderer3D& renderer,
               const MapDoc& doc,int64_t cameraXcm,int64_t cameraZcm,
-              const Retire& gpuRetire) {
+              const Retire& gpuRetire,bool allowCuts=false) {
         if(!gpuRetire)
             throw std::invalid_argument("TerraWeave missing preview retirement");
         if(doc.data.planet() ||
@@ -59,7 +62,7 @@ public:
             if(authoring_)release(gpuRetire);
             return;
         }
-        if(cachedRevision_!=doc.revision || !authoring_) {
+        if(cachedRevision_!=doc.revision || cachedPath_!=doc.path || !authoring_ || allowCuts_!=allowCuts) {
             release(gpuRetire);
             const auto loaded=sparse_terrain_ops::parse(
                 doc.data.extra["terraweaveSparse"],Json::object());
@@ -74,6 +77,10 @@ public:
             author->restore(loaded.chunks);
             earth_=std::move(ground);
             authoring_=std::move(author);
+            if(allowCuts&&!doc.data.extra["terraweaveCaverns"].isNull())
+                caveSnapshot_=std::make_shared<const terraweave::caverns::CaveVolumeSnapshot>(
+                    terraweave::caverns::caveSnapshotFromJson(doc.data.extra["terraweaveCaverns"]));
+            allowCuts_=allowCuts;cachedPath_=doc.path;
             cachedRevision_=doc.revision;
         }
         if(!authoring_ || !authoring_->chunkCount())return;
@@ -115,8 +122,10 @@ public:
                 it->second.neighbors==c.tile.neighborResolution;
             if(matched)continue;
             if(uploads>=kMaxUploadsPerFrame)continue;
-            auto visual=terraweave::bakeSparseTerrainVisual(
-                *earth_,c.tile,authoring_->chunkSizeMetres());
+            auto visual=caveSnapshot_
+                ? terraweave::caverns::cutCaveTerrainPatch(
+                    terraweave::bakeEarthworksTerrainPatch(*earth_,c.tile.cell,authoring_->chunkSizeMetres(),33),*caveSnapshot_,1)
+                : terraweave::bakeSparseTerrainVisual(*earth_,c.tile,authoring_->chunkSizeMetres());
             auto model=terraweave::makeEarthworksTerrainModel(visual);
             model->path="terraweave/editor-sparse/"+
                 std::to_string(c.tile.cell.x)+"/"+
@@ -147,7 +156,7 @@ public:
                 // Scene's legacy RTS grid may still be drawn under this
                 // optional overlay. Lift VISUAL preview by 2 cm to avoid
                 // z-fighting; authored ECS soil and collider remain exact.
-                0.02f,
+                allowCuts?0.f:0.02f,
                 float(int64_t(c.tile.cell.z)*span)*0.01f
             });
             draw.flags=render::kDrawStatic;
@@ -163,6 +172,9 @@ private:
         std::array<uint32_t,4> neighbors{};
         std::unique_ptr<render::Model> gpu;
     };
+    bool allowCuts_=false;
+    std::string cachedPath_;
+    std::shared_ptr<const terraweave::caverns::CaveVolumeSnapshot> caveSnapshot_;
     uint64_t cachedRevision_=std::numeric_limits<uint64_t>::max();
     std::unique_ptr<terraweave::EarthworksLayer> earth_;
     std::unique_ptr<terraweave::SparseTerrainAuthoring> authoring_;
