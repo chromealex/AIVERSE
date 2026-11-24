@@ -158,6 +158,14 @@ public:
     // Project extension gizmos (editor/extensions.lua scene_gizmos): world-space lines, circles (screen px), points.
     struct OverlayShape { int kind = 0; render::float3 a{}, b{}; float radius = 8, thickness = 2; uint8_t r = 90, g = 180, bl = 255; std::string text; };   // kind: 1 line, 2 circle, 3 point, 4 label
     void setOverlayShapes(std::vector<OverlayShape> shapes) { overlayShapes_ = std::move(shapes); }
+    void setPlanetSceneBody(std::string project,std::string path,std::string body){
+        planetBodyProject_=std::move(project);planetBodyPath_=std::move(path);planetBodyOverride_=std::move(body);
+        forestSelection_=Json{};forestDragPreview_=Json{};clearTransformPreview();
+    }
+    std::string planetSceneBodyOverride(const std::string& project,const std::string& path)const{
+        return planetBodyProject_==project&&planetBodyPath_==path?planetBodyOverride_:std::string{};
+    }
+    void setForestDragPreview(Json value){forestDragPreview_=std::move(value);}
     std::string planetSceneBody(const std::string& project,const std::string& path,uint64_t revision)const{
         return planetMode_&&planetPreview_&&planetModelProject_==project&&planetMapPath_==path&&planetRevision_==revision?planetPreview_->bodyId:std::string{};
     }
@@ -226,7 +234,8 @@ private:
     void syncPlanetForestModels(const editor::MapDoc& doc,const std::string& projectPath);
     bool planetForestLiveCurrent(const editor::MapDoc& doc,const std::string& projectPath)const;
     void drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std::string& projectPath);
-    Json forestSelection_;
+    Json forestSelection_,forestDragPreview_;
+    std::string planetBodyProject_,planetBodyPath_,planetBodyOverride_;
     Json planetLiveSnapshot_;
     std::string planetLiveProject_,planetLivePath_,planetLiveLayer_,planetLiveAetherLayer_;
     uint64_t planetLiveRevision_=0;

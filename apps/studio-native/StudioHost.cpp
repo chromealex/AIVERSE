@@ -1678,6 +1678,7 @@ bool StudioHost::placeType(const std::string& type, double x, double y, double w
 void StudioHost::select(double x, double y, double w, double h, const std::string& mode) {
     if(forestPlantArm_.isObject()&&mode=="replace"){
         const auto arm=forestPlantArm_;forestPlantArm_=Json{};
+        if(preview_)onScene([&]{preview_->setForestDragPreview(Json{});});
         Json payload=Json::object();
         try{
             if(projectLoading_||!preview_||!session_||session_->strokeActive())
@@ -1794,7 +1795,19 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
             if (now - lastHoverTime_ >= 0.05) { lastHoverTime_ = now; hover(x, y, w, h); }
             return;
         }
-        if(m.forest){if(std::hypot(x-m.pressX,y-m.pressY)>=5.0)m.dragged=true;return;}
+        if(m.forest){
+            if(std::hypot(x-m.pressX,y-m.pressY)>=5.0)m.dragged=true;
+            if(forestPlantArm_.getStr("action")=="move"&&session_&&preview_&&!projectLoading_){
+                const auto& ws=session_->workspace();Json ghost;
+                if(forestPlantArm_.getStr("project")==ws.project.dir&&forestPlantArm_.getStr("mapPath")==ws.map.path&&
+                   forestPlantArm_.getStr("expectedRevision")==std::to_string(ws.map.revision)&&!mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift){
+                    const auto at=onScene([&]{return preview_->forestGroundPlacement(float(x),float(y),float(w),float(h),ws.map.path,ws.map.revision);});
+                    if(at){ghost=forestPlantArm_;ghost.set("at",*at);}
+                }
+                onScene([&]{preview_->setForestDragPreview(std::move(ghost));});
+            }
+            return;
+        }
         if(m.worldProcess){worldProcessDrag(1,x,y,w,h,mods.shift,mods.ctrl||mods.command);return;}
         if (m.spline) { splineDrag(1, x, y, w, h); return; }
         if (m.stroke) { terrainStroke(1, x, y, w, h); return; }
@@ -1816,7 +1829,9 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
     m = {};
     if (!st.active) return;
     if(st.forest){
-        if(forestPlantArm_.isObject()&&!st.dragged&&std::hypot(x-st.pressX,y-st.pressY)<5.0&&
+        const bool move=forestPlantArm_.getStr("action")=="move";
+        if(preview_)onScene([&]{preview_->setForestDragPreview(Json{});});
+        if(forestPlantArm_.isObject()&&(move||(!st.dragged&&std::hypot(x-st.pressX,y-st.pressY)<5.0))&&
            !mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift)select(x,y,w,h,"replace");
         return;
     }
@@ -1839,7 +1854,7 @@ bool StudioHost::sceneKey(StudioSceneKey key, bool down, StudioSceneMods mods, b
         return false;
     }
     if(key==K::Escape&&forestPlantArm_.isObject()){
-        forestPlantArm_=Json{};mouse_={};Json out=Json::object();out.set("cancelled",Json::fromBool(true));sendEventPayload("planetForest.planted",out);return true;
+        forestPlantArm_=Json{};mouse_={};if(preview_)onScene([&]{preview_->setForestDragPreview(Json{});});Json out=Json::object();out.set("cancelled",Json::fromBool(true));sendEventPayload("planetForest.planted",out);return true;
     }
     if(key==K::Escape&&wpDrag_.active){
         if(preview_)onScene([&]{preview_->cancelPlanetRegionDrag();preview_->cancelPlanetGravityDrag();});
@@ -2130,8 +2145,27 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if(game_)return game_->worldProcessDiagnostics(int(cap),params.getStr("focus"));
         Json out=Json::object();out.set("active",Json::fromBool(false));return out;
     });
+    if(method=="studio.planetSceneBody")return answer([&]{
+        if(projectLoading_||!session_||!preview_)throw std::runtime_error("Scene unavailable");
+        const auto& ws=session_->workspace();
+        if(!ws.map.data.planet())throw std::runtime_error("Planetary map required");
+        if(params.has("body")){
+            if(!params["body"].isString()||params.getStr("mapPath")!=ws.map.path||params.getStr("expectedRevision")!=std::to_string(ws.map.revision))
+                throw std::runtime_error("Reload the current planetary map");
+            if(session_->strokeActive()||brushArmed()||wpDrag_.active||mouse_.active)throw std::runtime_error("Finish the active Scene gesture first");
+            const auto body=params.getStr("body");const int bi=ws.map.data.findBody(body);
+            if(!body.empty()&&(bi<0||!ws.map.data.bodies[size_t(bi)].surface()))throw std::runtime_error("Unknown surface body");
+            const bool armed=forestPlantArm_.isObject();forestPlantArm_=Json{};
+            onScene([&]{preview_->setPlanetSceneBody(ws.project.dir,ws.map.path,body);});
+            if(armed){Json payload=Json::object();payload.set("cancelled",Json::fromBool(true));sendEventPayload("planetForest.planted",payload);}
+            wpLiveSnapshot_=Json{};wpLiveRefresh_=0;rebuildOverlay();
+        }
+        Json out=Json::object();out.set("override",Json::string(onScene([&]{return preview_->planetSceneBodyOverride(ws.project.dir,ws.map.path);})));out.set("activeBody",Json::string(worldProcessSceneBody()));
+        return out;
+    });
     if(method=="studio.planetForestArm")return answer([&]{
         Json out=Json::object();forestPlantArm_=Json{};
+        if(preview_)onScene([&]{preview_->setForestDragPreview(Json{});});
         if(!params.getBool("armed",false)&&preview_)onScene([&]{preview_->setForestSelection(Json{});});
         if(params.getBool("armed",false)){
             if(projectLoading_||!session_||!preview_||session_->strokeActive()||brushArmed())
@@ -2581,7 +2615,7 @@ void StudioHost::afterSessionReply(const Json& req, const Json& reply) {
     const std::string method = req.getStr("method");
     if(method=="studio.openProject"||method=="studio.openMap"||method=="studio.newMap"||method=="studio.hubOpen"||method=="studio.hubCreate"){
         const bool armed=forestPlantArm_.isObject();forestPlantArm_=Json{};
-        if(preview_)onScene([&]{preview_->setForestSelection(Json{});});
+        if(preview_)onScene([&]{preview_->setPlanetSceneBody("","","");});
         if(armed){Json out=Json::object();out.set("cancelled",Json::fromBool(true));sendEventPayload("planetForest.planted",out);}
     }
     if (method == "studio.select" && platform_.hasFloatingWindows()) sendEvent("selection.changed", ""); // floats follow it

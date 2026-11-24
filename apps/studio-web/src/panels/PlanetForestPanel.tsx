@@ -21,6 +21,12 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
   const [override,setOverride]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
   const [dirty,setDirty]=useState(false),[stale,setStale]=useState(false),[live,setLive]=useState<StudioPlanetForestLive|null>(null);
   const [body,setBody]=useState(''),[filter,setFilter]=useState('');
+  const [sceneBody,setSceneBody]=useState(''),[sceneBodyBusy,setSceneBodyBusy]=useState(false);
+  async function changeSceneBody(value:string){
+    if(!base)return;setSceneBodyBusy(true);setError('');
+    try{const r=await invoke('studio.planetSceneBody',{body:value,mapPath:base.mapPath,expectedRevision:base.revision});setSceneBody(r.override);setSelectedPlant(null);setLive(null);if(value)setBody(value);}
+    catch(e){setError(err(e));}finally{setSceneBodyBusy(false);}
+  }
   const [armPending,setArmPending]=useState(false);
   const [action,setAction]=useState<'plant'|'pick'|'move'>('plant');
   const [selectedPlant,setSelectedPlant]=useState<{species:number;key:number;direct:boolean;body:string}|null>(null);
@@ -28,7 +34,7 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
   const baseRef=useRef<StudioPlanetForestDocument|null>(null);
   const busyRef=useRef(false);
   function accept(d:StudioPlanetForestDocument){setSelectedPlant(null);baseRef.current=d;setBase(d);setForest(d.forest===null?null:object(d.forest));setCatalog(d.catalog===null?null:object(d.catalog));setOverride(d.override);setDirty(false);setStale(false);setLive(null);}
-  async function reload(){busyRef.current=true;setBusy(true);setError('');try{accept(await invoke('studio.planetForest',{}));}catch(e){setError(err(e));}finally{busyRef.current=false;setBusy(false);}}
+  async function reload(){busyRef.current=true;setBusy(true);setError('');try{const d=await invoke('studio.planetForest',{});accept(d);if(d.available){try{setSceneBody((await invoke('studio.planetSceneBody',{})).override);}catch{setSceneBody('');}}}catch(e){setError(err(e));}finally{busyRef.current=false;setBusy(false);}}
   useEffect(()=>{void reload();return ()=>{void invoke('studio.planetForestArm',{armed:false}).catch(()=>{});};},[]); // mount per project
   // Recheck the native document identity on history/document notifications.
   // Do not overwrite unsaved draft state, or mark our own successful Apply stale.
@@ -130,7 +136,8 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
       <button disabled={armed||armPending||dirty||stale||!plants.length} onClick={()=>void arm(true,'pick')}>Pick plant in Scene</button>
       <button disabled={armed||armPending||dirty||stale||!selectedPlant?.direct} onClick={()=>void arm(true,'move')}>Move selected plant in Scene</button>
       {selectedPlant&&<p className="pf-note">Selected: {selectedPlant.species}:{selectedPlant.key}{!selectedPlant.direct?' · convert marker binding to direct coordinates and Apply before moving':''}</p>}
-      {armed&&<p className="pf-note">{action==='pick'?'Click a visible authored plant trunk.':action==='move'?'Click destination terrain to relocate the selected plant.':'Click planetary terrain once.'} Esc cancels.</p>}
+      {armed&&<p className="pf-note">{action==='pick'?'Click a visible authored plant trunk.':action==='move'?'Click the destination or hold and drag across terrain, then release to relocate the selected plant.':'Click planetary terrain once.'} Esc cancels.</p>}
+      <label className="pf-row"><span>Scene body</span><StudioSelect disabled={busy||armed||armPending||sceneBodyBusy||stale} value={sceneBody} onChange={e=>void changeSceneBody(e.target.value)}><option value="">Auto (entity selection)</option>{bodies.map(b=><option key={b} value={b}>{b}</option>)}</StudioSelect></label>
       <fieldset disabled={armed||armPending} className="rules__group"><legend>Plant placements</legend>
       <label className="pf-row"><span>Planet / moon</span><select className="au-input" value={body} onChange={e=>setBody(e.target.value)}><option value="">All bodies</option>{bodies.map(b=><option key={b}>{b}</option>)}</select></label>
       <label className="pf-row"><span>Search markers</span><input className="au-input" value={filter} onChange={e=>setFilter(e.target.value)}/></label>
@@ -162,7 +169,7 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
       <button disabled={profiles.length>=64} onClick={()=>editCatalog({...catalog,species:[...profiles,{id:nextId(profiles,'id'),preset:'oak'}]})}>Add ARBOR profile</button>
       <button onClick={()=>editCatalog(null)}>Remove catalogue</button></>}
     </fieldset>
-    <fieldset className="rules__group"><legend>Live forest inspector</legend><button disabled={overlayRequest} onClick={()=>void setLiveOverlay(true)}>Show live forest in Scene</button><button disabled={overlayRequest} onClick={()=>void setLiveOverlay(false)}>Hide live forest overlay</button>{overlayNotice&&<p role="status" className="pf-note">{overlayNotice}</p>}<p className="pf-note">Live meshes and sampled terrain require the current saved local Play map. Select an entity on a planet/moon to change the Scene body. Disable Live before authoring forest placement; enable Scene gizmos for diagnostics. Green/red: root support; yellow: pending; orange/blue: awake/sleeping capsule; grey: spent or harvested. Shared sample budget may omit plants.</p><button onClick={()=>void sample()}>Sample completed tick</button>
+    <fieldset className="rules__group"><legend>Live forest inspector</legend><button disabled={overlayRequest} onClick={()=>void setLiveOverlay(true)}>Show live forest in Scene</button><button disabled={overlayRequest} onClick={()=>void setLiveOverlay(false)}>Hide live forest overlay</button>{overlayNotice&&<p role="status" className="pf-note">{overlayNotice}</p>}<p className="pf-note">Live meshes and sampled terrain require the current saved local Play map. Choose a Scene body above (or Auto to follow entity selection). Disable Live before authoring forest placement; enable Scene gizmos for diagnostics. Green/red: root support; yellow: pending; orange/blue: awake/sleeping capsule; grey: spent or harvested. Shared sample budget may omit plants.</p><button onClick={()=>void sample()}>Sample completed tick</button>
       {live&&!live.active&&<p className="pf-note">Start local Play with the current saved planetary map.</p>}
       {live?.active&&<><p>Tick {live.tick} · plants {live.plantCount} · dead {live.deadCount} · fallen {live.fallenCount} · spent {live.spentCount} · physical {live.physicalCount} · pending {live.pendingCount}</p>
       <p>{live.focusBody||'All bodies'} · sampled {(live.plants??[]).length} / {live.focusPlantCount??live.plantCount??0} plants; summary counts are global.</p>{live.truncated&&<p className="pf-note">Sample limited by the shared diagnostic budget.</p>}{(live.windZonesCapped||live.stormsCapped)&&<p className="pf-note">Wind field sample capped; local zones or storms omitted.</p>}

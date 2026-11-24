@@ -2448,8 +2448,10 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         planetMode_=true;planetMapPath_.clear();clearTransformPreview();
     }
     int body=-1;
+    const auto explicitBody=planetSceneBodyOverride(projectPath,doc.path);
+    if(!explicitBody.empty())body=doc.data.findBody(explicitBody);
     const int selected=studioMapEntityIndex(selectedId,doc);
-    if(selected>=0)body=doc.data.findBody(doc.data.entities[size_t(selected)].at.getStr("body"));
+    if(body<0&&selected>=0)body=doc.data.findBody(doc.data.entities[size_t(selected)].at.getStr("body"));
     if(body<0&&planetPreview_&&planetMapPath_==doc.path)body=doc.data.findBody(planetPreview_->bodyId);
     if(body<0)body=doc.data.findBody(doc.data.worldExtra.getStr("start"));
     if(body<0||!doc.data.bodies[size_t(body)].surface()){
@@ -2472,7 +2474,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         planetForestOverlayRecipe_=studioForestOverlayRecipe(doc,rules);
         planetForestOverlays_=planetPreview_?buildPlanetForestOverlays(doc,rules,body,*planetPreview_):PlanetForestOverlays{};
         planetGravityHandles_=planetPreview_?planetGravityHandles(doc,*planetPreview_):std::vector<PlanetGravityHandle>{};
-        if(changedBody){cameraInitialized_=false;clearTransformPreview();}
+        if(changedBody){cameraInitialized_=false;clearTransformPreview();forestDragPreview_=Json{};}
     }
     const auto now=std::chrono::steady_clock::now();
     if(changedDocument||planetModelProject_!=projectPath||planetModelRules_!=&rules||modelsPending_||now>=nextFileCheck_){
@@ -2626,6 +2628,28 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                 const auto model=planetForestModels_.find(plant.species);
                 if(model==planetForestModels_.end())continue;
                 render::ModelDraw draw;draw.model=model->second.get();draw.world=plant.world;
+                const bool dragging=forestDragPreview_.getStr("project")==projectPath&&forestDragPreview_.getStr("mapPath")==doc.path&&
+                    forestDragPreview_.getStr("expectedRevision")==std::to_string(doc.revision)&&
+                    forestDragPreview_.getInt("species")==int64_t(plant.species)&&forestDragPreview_.getInt("key")==int64_t(plant.key)&&
+                    forestDragPreview_["at"].getStr("body")==planetPreview_->bodyId;
+                if(dragging){
+                    const auto& at=forestDragPreview_["at"];
+                    const int face=int(at.getInt("face",-1));
+                    const auto x=at["x"].fx(),y=at["y"].fx();
+                    const int n=planetPreview_->faceSize;
+                    if(face>=0&&face<6&&x>=Fixed{}&&y>=Fixed{}&&x<=Fixed::fromInt(n)&&y<=Fixed::fromInt(n)){
+                        game::CubeSphere cube(n);const auto dir=cube.dirFromFace(face,x,y);
+                        int canonical;Fixed ca,cb;cube.faceFromDir(dir,canonical,ca,cb);
+                        Vec3 east,south;game::CubeSphere::faceTangents(canonical,dir,east,south);
+                        const auto& bodyDoc=doc.data.bodies[size_t(body)];
+                        const float height=StudioPlanetPreview::height(bodyDoc,face,float(x.toDouble()),float(y.toDouble()));
+                        const auto position=StudioPlanetPreview::f3(dir)*(planetPreview_->radius+height);
+                        const auto frame=studioForestFrame(position,StudioPlanetPreview::f3(dir),StudioPlanetPreview::f3(east));
+                        const render::float3 col{plant.world.at(0,0),plant.world.at(1,0),plant.world.at(2,0)};
+                        const float scale=std::sqrt(render::dot(col,col));
+                        if(frame){draw.world=*frame*render::mat4::scale({scale,scale,scale});draw.outline={1.f,.8f,.2f,.025f};}
+                    }
+                }
                 if(!plant.foliagePermille)draw.materialMask=&barkOnly;
                 draw.useVertexParameters=true;draw.vertexParameters={0,0,0,0};draw.maxVertexOffsetMetres=.01f;
                 if(current&&forestSelection_.getInt("species")==int64_t(plant.species)&&forestSelection_.getInt("key")==int64_t(plant.key))
