@@ -1,5 +1,6 @@
 // Standalone real SpatialWorld physical door restoration, no genre module.
 #include "engine/buildings/BuildingDualLeafOwner.h"
+#include "engine/buildings/BuildingGraphMonitor.h"
 #include <cstdio>
 #include <stdexcept>
 using namespace aiverse;
@@ -115,8 +116,28 @@ static void testGraphDiagnostics(){
     REQUIRE(router.diagnostics(77).registeredDomains==change.domains);
 }
 
+static void testGraphMonitor(){
+    BuildingGraphMonitor monitor;
+    REQUIRE(!monitor.read(12).isObject());
+    Json snapshot=Json::object();
+    snapshot.set("sceneId",Json::string("12"));
+    for(int i=0;i<40;++i){
+        snapshot.set("physicalRevision",Json::string(std::to_string(i)));
+        monitor.publish(12,snapshot);monitor.publish(12,snapshot);
+    }
+    auto result=monitor.read(12);
+    REQUIRE(result.getStr("physicalRevision")=="39");
+    REQUIRE(result["history"].size()==BuildingGraphMonitor::kHistory);
+    REQUIRE(!monitor.read(13).isObject());
+    snapshot.set("physicalRevision",Json::string("4"));
+    monitor.publish(12,snapshot);
+    REQUIRE(monitor.read(12).getStr("physicalRevision")=="4");
+    monitor.clear();REQUIRE(!monitor.read(12).isObject());
+}
+
 int main() {
     try {
+        testGraphMonitor();
         testGraphDiagnostics();
         testAuthoredSingleLeaf();
         world::SpatialWorld spatial;
