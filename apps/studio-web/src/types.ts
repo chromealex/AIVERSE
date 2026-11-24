@@ -220,7 +220,8 @@ export interface HumanStudioLightingInfo {settings:HumanStudioLightingSettings;p
 export interface HumanFaceShape {version:1;meshes:string[];values:Record<string,number>;landmarks:{from:[number,number,number];to:[number,number,number];radius:number;weight:number}[]}
 export interface HumanLookInfo {face:HumanFaceShape|null;faceSchema:{key:string;label:string;min:number;max:number}[];schema:HumanLookField[];look:HumanLook;preview:StudioFacialPreviewBinding}
 export interface StudioBuildingFunction { id: string; name: string; width: number; height: number; depth: number }
-export interface StudioBuildingStyle { id: string; name: string; setting: string; functions: StudioBuildingFunction[]; materials?: string[]; surfaces?: Record<string,{pattern:string;seed:number;resolution?:number}> }
+export type StudioBuildingRoofProfile = 'flat'|'gable'|'shed'|'barrel'|'hip'|'dome'|'terrace'|'pagoda';
+export interface StudioBuildingStyle { id: string; name: string; setting: string; functions: StudioBuildingFunction[]; materials?: string[]; recommendedRoof?:StudioBuildingRoofProfile; surfaces?: Record<string,{pattern:string;seed:number;resolution?:number}> }
 export interface StudioBuildingCatalog { styles: StudioBuildingStyle[] }
 export interface StudioBuildingSurfacePreview { style:string; slot:string; resolution:number; maps:Array<{channel:string;label:string;url:string}> }
 export type StudioBuildingFeatureKind = 'large-gate' | 'small-gate' | 'personnel-door' | 'sliding-roof' | 'window' | 'stairs' | 'elevator';
@@ -247,6 +248,7 @@ export interface StudioBuildingRequest {
   features?: StudioBuildingFeature[];
   materialBindings?: Record<string,string>; // authored style slot -> project materials.json name
   textureResolution?:128|256|512;
+  roofProfile?:StudioBuildingRoofProfile; roofRise?:number;
 }
 export interface StudioBuildingPreview {
   seed: number; triangles: number; vertices: number; materials: number;

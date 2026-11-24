@@ -12,6 +12,7 @@ int main(int argc,char** argv){
     bool distinctSpace=false;
     for(const auto& style:catalog["styles"].items()){
         if(style.getStr("id")=="scifi-space")distinctSpace=style.getStr("setting")=="scifi-space";
+        if(style.getStr("id")=="underwater")AIVERSE_TEST_CHECK(style.getStr("recommendedRoof")=="dome");
         for(const auto& slot:style["materials"].items()){
             AIVERSE_TEST_CHECK(!style["surfaces"][slot.str()].getStr("pattern").empty());
         }

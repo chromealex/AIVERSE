@@ -123,6 +123,8 @@ export default function BuildingGeneratorPanel({
   const [role,setRole]=useState('factory');
   const [mode,setMode]=useState<'features'|'preset'>('features');
   const [textureResolution,setTextureResolution]=useState<128|256|512>(256);
+  const [roofProfile,setRoofProfile]=useState<import('../../types').StudioBuildingRoofProfile>('flat');
+  const [roofRise,setRoofRise]=useState('0');
   const [features,setFeatures]=useState<StudioBuildingFeature[]>([
     makeFeature('large-gate'),
     {...makeFeature('small-gate'), side:'back',count:2},
@@ -243,6 +245,7 @@ export default function BuildingGeneratorPanel({
       setRole(item.function??'');
       setMode(item.mode??'features');
       setTextureResolution(item.textureResolution??128);
+      setRoofProfile(item.roofProfile??'flat');setRoofRise(String(item.roofRise??0));
       setWidth(String(item.width));setHeight(String(item.height));
       setDepth(String(item.depth));setSeed(String(item.seed));
       setFloors(String(item.floors??1));
@@ -271,11 +274,16 @@ export default function BuildingGeneratorPanel({
         return name+' must be between '+min+' and '+max+' metres.';
     }
     if(mode==='features'){
+      const rise=asNumber(roofRise);
+      if(!Number.isFinite(rise)||(roofProfile==='flat'?rise!==0:rise<.5||rise>Math.min(12,asNumber(height)*.45)))
+        return 'Invalid architectural roof rise (0 for flat; 0.5–12 m, at most 45% of height).';
+      if(roofProfile!=='flat'&&features.some(f=>f.kind==='sliding-roof'))
+        return 'Retractable roof requires the flat roof profile.';
       const f=asNumber(floors),rx=asNumber(roomsX),rz=asNumber(roomsZ);
       if(!Number.isInteger(f)||f<1||f>8||!Number.isInteger(rx)||rx<1||rx>6||
          !Number.isInteger(rz)||rz<1||rz>6||f*rx*rz>128)
         return 'Use 1–8 floors and 1–6 rooms per axis (maximum 128 rooms).';
-      if((asNumber(height)-0.52)/f<2.8||asNumber(width)/rx<2.5||asNumber(depth)/rz<2.5)
+      if((asNumber(height)-asNumber(roofRise)-0.52)/f<2.8||asNumber(width)/rx<2.5||asNumber(depth)/rz<2.5)
         return 'Every storey requires 2.8m height; each room at least 2.5m on each side.';
     }
     const n=asNumber(seed);
@@ -301,7 +309,7 @@ export default function BuildingGeneratorPanel({
           const roomW=asNumber(width)/asNumber(roomsX),roomD=asNumber(depth)/asNumber(roomsZ);
           if(feature.width>roomW-0.7||feature.depth>roomD-0.7)
             return 'Vertical core must fit inside one room cell.';
-          const storey=(asNumber(height)-0.52)/asNumber(floors);
+          const storey=(asNumber(height)-asNumber(roofRise)-0.52)/asNumber(floors);
           if(feature.kind==='stairs'){
             const minRun=0.9+Math.ceil((storey+0.24)/0.18/2)*0.24;
             if(feature.width<2.4||feature.depth<Math.max(5.6,minRun))
@@ -327,7 +335,7 @@ export default function BuildingGeneratorPanel({
           const maxWidth=feature.kind==='large-gate'?20:feature.kind==='small-gate'?8:3;
           const isWindow=feature.kind==='window';
           const maxWidthForKind=isWindow?6:maxWidth;
-          const storey=(asNumber(height)-0.52)/asNumber(floors);
+          const storey=(asNumber(height)-asNumber(roofRise)-0.52)/asNumber(floors);
           if(!Number.isInteger(feature.floor)||feature.floor<0||feature.floor>=asNumber(floors)||
              (!isWindow&&feature.floor!==0))
             return 'Selected floor is invalid for the opening.';
@@ -356,10 +364,12 @@ export default function BuildingGeneratorPanel({
       }
     }
     return '';
-  },[selectedStyle,selectedFunction,mode,features,width,height,depth,seed,floors,roomsX,roomsZ]);
+  },[selectedStyle,selectedFunction,mode,features,width,height,depth,seed,floors,roomsX,roomsZ,roofProfile,roofRise]);
 
   const request=(useSeed:number):StudioBuildingRequest=>({
     setting,style,function:mode==='preset'?role:'',mode,textureResolution,
+    roofProfile:mode==='features'?roofProfile:undefined,
+    roofRise:mode==='features'?asNumber(roofRise):undefined,
     features:mode==='features'?features:undefined,
     materialBindings:Object.keys(materialBindings).length?materialBindings:undefined,
     width:asNumber(width),height:asNumber(height),depth:asNumber(depth),seed:useSeed,
@@ -418,7 +428,11 @@ export default function BuildingGeneratorPanel({
     const p=presets[id];if(!p)return;
     setMode('features');setWidth(String(p.size[0]));setHeight(String(p.size[1]));setDepth(String(p.size[2]));
     setFloors(String(p.rooms[0]));setRoomsX(String(p.rooms[1]));setRoomsZ(String(p.rooms[2]));
-    setFeatures(p.features);clearGenerated();setPage('recipe');
+    setFeatures(p.features);
+    const profile=p.features.some(f=>f.kind==='sliding-roof')?'flat':selectedStyle?.recommendedRoof??'flat';
+    const rise=profile==='flat'?0:Math.min(3,Math.max(1.5,p.size[0]*.12));
+    setRoofProfile(profile);setRoofRise(String(rise));setHeight(String(p.size[1]+rise));
+    clearGenerated();setPage('recipe');
   };
   const setFeature=(index:number,key:keyof StudioBuildingFeature,value:string|number)=>{
     setFeatures(old=>old.map((f,i)=>i===index?({...f,[key]:value} as StudioBuildingFeature):f));
@@ -777,6 +791,29 @@ export default function BuildingGeneratorPanel({
             disabled={busy} onClick={randomize}/>
         </div>
       </StudioSection>
+      {mode==='features'&&<StudioSection title="Architectural roof">
+        <div className="abg__fields">
+          <StudioField label="Profile" htmlFor="abg-roof-profile">
+            <StudioSelect id="abg-roof-profile" value={roofProfile} disabled={busy}
+              onChange={e=>{
+                const value=e.target.value as typeof roofProfile;setRoofProfile(value);
+                if(value==='flat')setRoofRise('0');else if(roofProfile==='flat')setRoofRise('2');
+                clearGenerated();
+              }}>
+              {['flat','gable','shed','barrel','hip','dome','terrace','pagoda'].map(value=><option key={value} value={value}>{value}</option>)}
+            </StudioSelect>
+          </StudioField>
+          <StudioField label="Rise, m" htmlFor="abg-roof-rise">
+            <StudioInput id="abg-roof-rise" type="number" min={roofProfile==='flat'?0:.5} max={12} step={.1} value={roofRise}
+              disabled={busy||roofProfile==='flat'} onChange={setDimension(setRoofRise)}/>
+          </StudioField>
+        </div>
+        <StudioButton size="sm" disabled={busy||!selectedStyle?.recommendedRoof||(selectedStyle.recommendedRoof!=='flat'&&features.some(f=>f.kind==='sliding-roof'))}
+          onClick={()=>{const profile=selectedStyle?.recommendedRoof??'flat';const old=asNumber(roofRise);
+            const rise=profile==='flat'?0:Math.min(3,Math.max(1.5,asNumber(width)*.12));
+            setRoofProfile(profile);setRoofRise(String(rise));if(Number.isFinite(old))setHeight(String(asNumber(height)-old+rise));clearGenerated();}}>Apply setting roof · {selectedStyle?.recommendedRoof??'flat'}</StudioButton>
+        <small className="abg__note">Height includes the cap. It occupies real graph-owned roof solids above the rooms. Retractable roofs require a flat profile.</small>
+      </StudioSection>}
       {mode==='features'&&<StudioSection title="Floors and rooms">
         <div className="abg__dimensions">
           <StudioField label="Floors" htmlFor="abg-floors">

@@ -58,6 +58,20 @@ inline BuildingStyle load(const fs::path& engine,const std::string& id) {
     if(style.id!=id)throw std::runtime_error("Style id must match its file name");
     return style;
 }
+inline FunctionalRoofProfile suggestedFunctionalRoof(const BuildingStyle& style){
+    const auto* kind=style.structureKind("residence");
+    if(!kind)return FunctionalRoofProfile::Flat;
+    switch(kind->body){
+      case StructureBody::Gable:return FunctionalRoofProfile::Gable;
+      case StructureBody::Spire:case StructureBody::Facet:case StructureBody::Pyramid:return FunctionalRoofProfile::Hip;
+      case StructureBody::Barrel:case StructureBody::Greenhouse:return FunctionalRoofProfile::Barrel;
+      case StructureBody::Dome:case StructureBody::Bulb:return FunctionalRoofProfile::Dome;
+      case StructureBody::Shed:return FunctionalRoofProfile::Shed;
+      case StructureBody::Ziggurat:case StructureBody::Stacked:case StructureBody::Terrace:return FunctionalRoofProfile::Terrace;
+      case StructureBody::Pagoda:return FunctionalRoofProfile::Pagoda;
+      default:return FunctionalRoofProfile::Flat;
+    }
+}
 inline std::string settingId(const std::string& style) {
     // Older scifi-* and modern-* styles share the original editor family.
     // All other settings are discovered by their authored style asset ID;
@@ -294,6 +308,7 @@ inline Json studioBuildingCatalog(const std::filesystem::path& engine) {
             surfaces.set(material.id,std::move(surface));
         }
         s.set("materials",std::move(slots));
+        s.set("recommendedRoof",string(functionalRoofProfileName(suggestedFunctionalRoof(style))));
         s.set("surfaces",std::move(surfaces));
         s.set("functions",std::move(functions));styles.push(std::move(s));
     }
@@ -432,6 +447,8 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
             socket.set("outside",std::move(point));
             sockets.push(std::move(socket));
         }
+        out.set("roofProfile",string(functionalRoofProfileName(req.functionalRecipe.roofProfile)));
+        out.set("roofRise",Json::number(double(req.functionalRecipe.roofRise),3));
         out.set("floors",Json::number(int64_t(req.functionalRecipe.floors)));
         out.set("roomsX",Json::number(int64_t(req.functionalRecipe.roomsX)));
         out.set("roomsZ",Json::number(int64_t(req.functionalRecipe.roomsZ)));
@@ -687,6 +704,8 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
             saved.set("physicalSockets",std::move(sockets));
         }
         if(req.composeFeatures){
+            saved.set("roofProfile",string(functionalRoofProfileName(req.functionalRecipe.roofProfile)));
+            saved.set("roofRise",Json::number(double(req.functionalRecipe.roofRise),3));
             saved.set("floors",Json::number(int64_t(req.functionalRecipe.floors)));
             saved.set("roomsX",Json::number(int64_t(req.functionalRecipe.roomsX)));
             saved.set("roomsZ",Json::number(int64_t(req.functionalRecipe.roomsZ)));
