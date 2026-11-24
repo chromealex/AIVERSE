@@ -6,6 +6,8 @@ import json
 import hashlib
 import sys
 import subprocess
+import io
+from contextlib import redirect_stdout, redirect_stderr
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools/agents"))
 from evidence import validate_report, checkout_errors
@@ -19,6 +21,66 @@ from graph_inventory import inventory as graph_inventory
 spec = importlib.util.spec_from_file_location("feature_gate", Path(__file__).resolve().parents[1] / "tools/agents/check_feature.py")
 gate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gate)
+
+mcp_spec = importlib.util.spec_from_file_location("mcp_audit", Path(__file__).resolve().parents[1] / "tools/mcp/audit_registry.py")
+mcp_audit = importlib.util.module_from_spec(mcp_spec)
+mcp_spec.loader.exec_module(mcp_audit)
+
+
+class McpAuditTest(unittest.TestCase):
+    def run_audit(self, responses, flags=(), returncode=0):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        process = subprocess.CompletedProcess(
+            ["fixture"], returncode,
+            stdout="\n".join(json.dumps(r) for r in responses), stderr="")
+        with patch.object(sys, "argv", ["audit_registry.py", "fixture", *flags]), \
+             patch.object(mcp_audit.subprocess, "run", return_value=process), \
+             redirect_stdout(stdout), redirect_stderr(stderr):
+            result = mcp_audit.main()
+        return result, stdout.getvalue(), stderr.getvalue()
+
+    def responses(self):
+        names = sorted({name for group in mcp_audit.REQUIRED.values() for name in group})
+        payload = {"count": len(names), "tools": [
+            {"name": name, "guiOnly": False} for name in names]}
+        return [
+            {"id": 1, "result": {"protocolVersion": "2024-11-05"}},
+            {"id": 2, "result": {"tools": [{"name": name} for name in names]}},
+            {"id": 3, "result": {"content": [{"type": "text", "text": json.dumps(payload)}]}}
+        ]
+
+    def test_protocol_failures(self):
+        self.assertEqual(self.run_audit(self.responses())[0], 0)
+        self.assertEqual(self.run_audit(self.responses(), returncode=1)[0], 2)
+        self.assertEqual(self.run_audit(self.responses()[1:])[0], 2)
+        responses = self.responses()
+        self.assertEqual(self.run_audit(responses + [responses[1]])[0], 2)
+        responses[1]["result"]["nextCursor"] = "more"
+        self.assertEqual(self.run_audit(responses)[0], 2)
+        responses = self.responses()
+        responses[1]["result"]["tools"].append(responses[1]["result"]["tools"][0])
+        self.assertEqual(self.run_audit(responses)[0], 2)
+        responses = self.responses()
+        responses[2]["result"]["isError"] = True
+        self.assertEqual(self.run_audit(responses)[0], 2)
+
+    def test_feature_registration_gaps(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for ident, names in (("existing", ["mcp_registry"]), ("missing", ["unknown_fixture_tool"])):
+                (root / (ident + ".json")).write_text(json.dumps({
+                    "id": ident, "integrations": {"mcp_tools": names},
+                    "checks": {"mcp": {"status": "not_run"}}
+                }))
+            code, output, _ = self.run_audit(self.responses(), ["--feature-dir", folder])
+            self.assertEqual(code, 1)
+            rows = {row["id"]: row for row in (
+                json.loads(line[len("FEATURE "):]) for line in output.splitlines()
+                if line.startswith("FEATURE "))}
+            self.assertEqual(rows["existing"]["registration"], "registered")
+            self.assertEqual(rows["existing"]["runtime_verification"], "not_run")
+            self.assertEqual(rows["missing"]["missing"], ["unknown_fixture_tool"])
+
 
 class GateTest(unittest.TestCase):
     def test_evidence_and_readiness(self):
