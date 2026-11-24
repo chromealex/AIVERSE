@@ -1,0 +1,7 @@
+# Stage 57 — guarded save integration
+
+Branch feature/aiv20261124_graph_owner_inspection, draft PR #183. Parent 3691a4ad18a3b73779fbaba4a9265e640b94bb27; source commit 8528c1f3761e6d32789aaf809771c164a7af09fb. Port from Stage 54 80902238690ee3bacf9fb349c0335a1cbdf9ba27.
+
+Verified exact equality with the Stage 53 baseline 0eae050b9aff2185dbef6d34e6833fba45d9268c before porting the five native owner/facade/window files and two Studio graph panels. Added GraphAssetTransaction.h. Scoped edits in StudioSession.cpp and types.ts preserve Building/Caverns/World owner APIs, expectedMap and existing scope checks. Ported three regression blocks to tests/vfx_graph_ops_test.cpp while preserving integration-specific requireGraphTest and earlier fixture corrections. Updated graph-framework manifest and design notes.
+
+Published graph replacement requires expected original; missing expected permits create only. Draft publication checks original draft and destination. Reject leaf aliases and non-file targets. No persisted format change, no new evaluator. Lock is for cooperating writers only. Native and Studio changes committed together. Other callers, direct examples and skill/docs migration still need audit; full current Caverns native owner merge still pending. No build/typecheck/native registry/CTest/GUI verification performed. No other owner ref or main changed. Next: reconcile owner and audit all write callers, then merged-tree acceptance. 
