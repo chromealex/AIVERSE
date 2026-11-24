@@ -18,7 +18,9 @@ public:
                 return publishTextureGraphSet(ws,p.getStr("textureName"),graph,overrides,images,backends);
             },
             [&](const std::string& output,const render::Image& image){
-                return publishTextureGraphImage(ws,p.getStr("textureName"),output,image);
+                const auto format=p.getStr("format","png");
+                return format=="png"?publishTextureGraphImage(ws,p.getStr("textureName"),output,image):
+                    publishTextureGraphCompressed(ws,p.getStr("textureName"),output,image,format,p.getBool("mipmaps",true));
             });
     }
 };

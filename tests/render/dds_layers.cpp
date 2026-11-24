@@ -1,4 +1,5 @@
 #include "engine/render/DdsTexture.h"
+#include "engine/render/TextureBcEncode.h"
 #include "engine/render/TextureAsset.h"
 #include <algorithm>
 #include <cstdint>
@@ -115,6 +116,24 @@ void partialLegacyCube() {
 }
 } // namespace
 int main() {
+    {
+        using namespace aiverse::render;
+        using namespace aiverse::render::bc_encode;
+        std::vector<uint8_t> pixels(8*8*4);
+        for(size_t i=0;i<pixels.size();i+=4){pixels[i]=128;pixels[i+1]=64;pixels[i+2]=255;pixels[i+3]=255;}
+        for(auto format:{Format::BC1,Format::BC3,Format::BC4,Format::BC5}){
+            const auto encoded=encodeDds(pixels,8,8,format,false,format==Format::BC5,true);
+            CompressedImage decoded;std::string error;
+            if(!parseDdsTexture(encoded.dds,decoded,error)||decoded.levels.size()!=4||encoded.rgbaBytes!=340||encoded.payload!=size_t(7*bytes(format)))
+                throw std::runtime_error("BC export DDS mip round trip failed");
+            std::vector<uint8_t> rgba;
+            if(!decodeBlocks(decoded,0,rgba)||rgba.size()!=pixels.size()||std::abs(int(rgba[0])-128)>8)
+                throw std::runtime_error("BC export decode mismatch");
+        }
+        pixels[3]=64;
+        bool rejected=false;try{(void)encodeDds(pixels,8,8,Format::BC1,false,false,true);}catch(const std::invalid_argument&){rejected=true;}
+        if(!rejected)throw std::runtime_error("BC1 silently lost alpha");
+    }
     try {
         cubeArray();
         rgbaArray();

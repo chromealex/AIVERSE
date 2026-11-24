@@ -14,6 +14,7 @@ void registerMaterialOps(Workspace& ws);
 render::texture_graph::ImageResolver textureGraphImageResolver(const Workspace& ws);
 // Native owner only: publish completed validated pixels as a new texture asset.
 Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::string& output,const render::Image& image);
+Json publishTextureGraphCompressed(Workspace& ws,const std::string& name,const std::string& output,const render::Image& image,const std::string& format,bool mipmaps);
 Json publishTextureGraphRadiance(Workspace& ws,const std::string& name,int size,std::span<const float> rgba);
 Json publishTextureGraphEnvironment(Workspace& ws,const std::string& name,int size,std::span<const float> rgba);
 // Images/backends in native Program::outputs sorted order; trusted native owner only.

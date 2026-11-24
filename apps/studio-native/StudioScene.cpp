@@ -762,20 +762,19 @@ void StudioScene::syncDocumentModels(
                                     file/=part;const auto st=fs::symlink_status(file,ec);
                                     if(ec||fs::is_symlink(st))return -1;
                                 }
-                                // Only HDR here; the ordinary imported-material texture resolver
-                                // is a separate Studio feature. Bound both bytes and retained slots.
-                                if(file.extension()!=".exr"&&file.extension()!=".hdr")return -1;
+                                // Explicit HDR and BC DDS assets; bound encoded bytes and retained slots.
+                                if(file.extension()!=".exr"&&file.extension()!=".hdr"&&file.extension()!=".dds")return -1;
                                 if(!fs::is_regular_file(file,ec)||ec)return -1;
                                 const auto bytes=fs::file_size(file,ec);
                                 if(ec||!bytes||bytes>32u*1024u*1024u)return -1;
                                 size_t resident=0;
-                                for(const auto& image:model.images)if(image.importedLinearRadiance&&image.tex.valid())
+                                for(const auto& image:model.images)if(image.tex.valid()&&image.width>0&&image.height>0)
                                     resident+=size_t(image.width)*size_t(image.height)*8u;
                                 std::string encoded(size_t(bytes),'\0');std::ifstream stream(file,std::ios::binary);
                                 if(!stream.read(encoded.data(),std::streamsize(encoded.size()))||stream.peek()!=std::char_traits<char>::eof())return -1;
                                 render::Image image;image.name=source;
-                                if(!render::decodeMaterialImage(encoded,image)||!image.importedLinearRadiance||
-                                   resident>64u*1024u*1024u||image.sharedRadiance16f->size()*2u>64u*1024u*1024u-resident)return -1;
+                                if(!render::decodeMaterialImage(encoded,image)||(!image.importedLinearRadiance&&!image.compressed)||
+                                   resident>64u*1024u*1024u||size_t(image.width)*size_t(image.height)*8u>64u*1024u*1024u-resident)return -1;
                                 const auto slot=render::addImage(*device_,model,std::move(image));
                                 if(slot>=0)renderer_.invalidateModelCachesFor(&model);
                                 return slot;

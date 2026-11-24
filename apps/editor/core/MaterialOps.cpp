@@ -10,6 +10,8 @@
 #include <stdexcept>
 
 #include "engine/render/Model.h"
+#include "engine/render/TextureBcEncode.h"
+#include "engine/render/DdsTexture.h"
 #include "engine/render/ExrTexture.h"
 #include "engine/render/CameraExr.h"
 #include "engine/render/EnvironmentIbl.h"
@@ -265,6 +267,35 @@ Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::s
     fs::create_hard_link(temp,dest);
     ws.note({Change::Rules,0,0,-1,-1,-1,"Texture graph bake: "+rel});
     Json r=okJson();r.set("path",Json::string(rel));r.set("output",Json::string(output));r.set("size",Json::number(int64_t(image.width)));return r;
+}
+
+Json publishTextureGraphCompressed(Workspace& ws,const std::string& name,const std::string& output,const render::Image& image,const std::string& format,bool mipmaps){
+    needProject(ws);
+    using namespace render::bc_encode;
+    using render::texture_graph::Kind;
+    if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture name");
+    const auto kind=render::texture_graph::outputKind(output);
+    const auto f=parseFormat(format);
+    if(kind==Kind::Radiance||(f==Format::BC4&&kind!=Kind::Scalar)||(f==Format::BC5&&kind!=Kind::Normal))
+        throw std::invalid_argument("BC4 is scalar-only, BC5 is normal-only; radiance must remain HDR");
+    const auto encoded=encodeDds(image.rgba,image.width,image.height,f,kind==Kind::Color,kind==Kind::Normal,mipmaps);
+    render::CompressedImage check;std::string error;
+    if(!render::parseDdsTexture(encoded.dds,check,error)||check.levels.size()!=size_t(encoded.levels))throw std::runtime_error("BC DDS validation failed: "+error);
+    const auto root=fs::canonical(ws.project.dir),dir=root/"content"/"textures";
+    if(fs::is_symlink(root/"content")||fs::is_symlink(dir))throw std::runtime_error("texture destination symlink rejected");
+    fs::create_directories(dir);
+    const auto rel="content/textures/"+name+"_"+output+"_"+format+".dds";
+    const auto dest=root/rel,stage=fs::path(dest.string()+".stage");
+    if(fs::exists(dest)||fs::is_symlink(dest)||!fs::create_directory(stage))throw std::runtime_error("texture already exists or staging busy");
+    struct Cleanup{fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}}cleanup{stage};
+    const auto temp=stage/"payload";
+    {std::ofstream stream(temp,std::ios::binary);stream.write(encoded.dds.data(),std::streamsize(encoded.dds.size()));stream.close();if(!stream)throw std::runtime_error("DDS write failed");}
+    fs::create_hard_link(temp,dest);
+    ws.note({Change::Rules,0,0,-1,-1,-1,"Texture graph BC bake: "+rel});
+    Json r=okJson();r.set("path",Json::string(rel));r.set("output",Json::string(output));r.set("size",Json::number(int64_t(image.width)));
+    r.set("format",Json::string(format));r.set("compressionBackend",Json::string("cpu"));r.set("mipLevels",Json::number(int64_t(encoded.levels)));
+    r.set("compressedBytes",Json::number(int64_t(encoded.payload)));r.set("rgbaBytes",Json::number(int64_t(encoded.rgbaBytes)));
+    r.set("sRGB",Json::fromBool(kind==Kind::Color));return r;
 }
 
 namespace {
@@ -567,7 +598,7 @@ void registerMaterialOps(Workspace& ws) {
         else fs::create_hard_link(temp,file); // exclusive creation, never overwrite existing asset
     };
     auto textureCache=std::make_shared<render::texture_graph::EvaluationCache>();
-    const std::string graphSchema=R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"textureName":{"type":"string"},"overrides":{"type":"object"}}})";
+    const std::string graphSchema=R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"textureName":{"type":"string"},"overrides":{"type":"object"},"format":{"enum":["png","bc1","bc3","bc4","bc5"]},"mipmaps":{"type":"boolean"}}})";
     add("texture_graph_cache","Inspect or clear this Workspace texture evaluation cache.",R"({"properties":{"clear":{"type":"boolean"}}})",[w,textureCache](const Json& p){textureCache->selectProject(w->project.dir);if(p.getBool("clear"))textureCache->clear();return textureCache->status();});
     add("texture_graph_image_asset","Inspect a project PNG/JPEG/HDR/uncompressed EXR/DDS/KTX2 and return its immutable source revision, dimensions and format.",R"({"type":"object","properties":{"asset":{"type":"string"}},"required":["asset"]})",[w](const Json& p){
         auto image=readPinnedRaster(*w,p.getStr("asset"),"",render::texture_graph::maxImageSourceBytes);
@@ -633,7 +664,10 @@ void registerMaterialOps(Workspace& ws) {
         }
         textureCache->selectProject(w->project.dir);bool cacheHit=false;
         auto img=textureCache->evaluate(program,{it->second},0,cacheHit).front();
-        auto r=publishTextureGraphImage(*w,name,output,img);r.set("cacheHit",Json::fromBool(cacheHit));return r;
+        const auto format=p.getStr("format","png");
+        auto r=format=="png"?publishTextureGraphImage(*w,name,output,img):
+            publishTextureGraphCompressed(*w,name,output,img,format,p.getBool("mipmaps",true));
+        r.set("cacheHit",Json::fromBool(cacheHit));return r;
     });
 
     add("texture_graph_bake_environment","Bake graph radiance into a new 2:1 linear EXR lat-long environment; never overwrite.",graphSchema,[w](const Json& p){

@@ -5,6 +5,7 @@
 #include <filesystem>
 #include "Model.h"
 #include "ExrTexture.h"
+#include "DdsTexture.h"
 #include "HdrTexture.h"
 #include "../data/Json.h"
 #include "ModelClips.h"
@@ -421,7 +422,19 @@ bool decodeTextureGraphRaster(const std::string& bytes,size_t maxPixels,Image& o
 bool decodeMaterialImage(const std::string& bytes, Image& out) {
     const bool exr=bytes.size()>=4&&bytes.compare(0,4,"\x76\x2f\x31\x01",4)==0;
     const bool hdr=bytes.rfind("#?RADIANCE",0)==0||bytes.rfind("#?RGBE",0)==0;
-    if(!exr&&!hdr)return decodeImage(bytes,out);
+    if(!exr&&!hdr){
+        // Strict 2D DX10 material path retains authored BC mip chains.
+        if(bytes.size()>=148&&bytes.size()<=32u*1024u*1024u&&bytes.compare(0,4,"DDS ")==0&&bytes.compare(84,4,"DX10")==0){
+            auto ci=std::make_shared<CompressedImage>();std::string error;
+            if(!parseDdsTexture(bytes,*ci,error))return false;
+            if(ci->depth==1&&!ci->threeDimensional&&!ci->oneDimensional&&ci->arrayLayers==1&&ci->faces==1&&
+               (ci->format==BlockFormat::BC1||ci->format==BlockFormat::BC3||ci->format==BlockFormat::BC4||ci->format==BlockFormat::BC5||ci->format==BlockFormat::BC7)){
+                if(ci->width>4096||ci->height>4096||!decodeBlocks(*ci,0,out.rgba))return false;
+                out.width=ci->width;out.height=ci->height;out.compressed=std::move(ci);return true;
+            }
+        }
+        return decodeImage(bytes,out);
+    }
     if(bytes.size()>32u*1024u*1024u)return false;
     RadianceImage radiance;std::string error;
     if(!(exr?parseOpenExr(bytes,radiance,error,32u*1024u*1024u):parseRadianceHdr(bytes,radiance,error,32u*1024u*1024u)))return false;
@@ -659,6 +672,24 @@ void uploadImage(gfx::Device& dev, Image& img) {
             img.tex = dev.createTexture(td);
             img.gpuCompressed = img.tex.valid();
             if (img.tex.valid()) return;
+        }
+    }
+    // Unsupported BC formats (including BC5 normal Z reconstruction)
+    // retain authored mip levels on the decoded RGBA8 fallback.
+    if(img.compressed&&img.compressed->levels.size()>1&&!img.nearest){
+        const auto& c=*img.compressed;
+        std::vector<std::vector<uint8_t>> decoded(c.levels.size());
+        std::vector<const void*> data;std::vector<size_t> sizes;
+        size_t total=0;bool complete=true;
+        for(size_t i=0;i<decoded.size();++i){
+            const size_t bytes=size_t(levelWidth(c,int(i)))*levelHeight(c,int(i))*4u;
+            if(bytes>96u*1024u*1024u-total||!decodeBlocks(c,int(i),decoded[i])||decoded[i].size()!=bytes){complete=false;break;}
+            total+=bytes;data.push_back(decoded[i].data());sizes.push_back(bytes);
+        }
+        if(complete){
+            gfx::TextureDesc td;td.width=c.width;td.height=c.height;td.format=gfx::PixelFormat::RGBA8;
+            td.filter=gfx::Filter::Linear;td.repeat=img.repeat;td.levelCount=int(data.size());td.levelData=data.data();td.levelSize=sizes.data();td.label=img.name.c_str();
+            img.tex=dev.createTexture(td);if(img.tex.valid()){img.gpuCompressed=false;return;}
         }
     }
     const auto& pixels = img.sharedRgba ? *img.sharedRgba : img.rgba;
