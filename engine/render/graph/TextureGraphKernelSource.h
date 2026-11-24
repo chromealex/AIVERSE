@@ -1,5 +1,6 @@
 // Typed materialized compute ABI. Source generation only, no device calls.
 #pragma once
+#include "engine/gfx/BufferTextureCopy.h"
 #include <cstddef>
 #include <stdexcept>
 #include <string>
@@ -38,11 +39,28 @@ inline Source materializedKernel(KernelValue output,const std::vector<KernelValu
     glsl+="void main(){uint tid=gl_GlobalInvocationID.x;\n"+guard+body+"\n}\n";
     return {std::move(msl),{},materializedGlsl(std::move(glsl))};
 }
-inline Source packMaterializedKernel(KernelValue input,int n){
+inline Source packMaterializedKernelAt(KernelValue input,int n,const std::string& index){
     if(input==KernelValue::PackedBytes)throw std::invalid_argument("already packed");
     const std::string sample=input==KernelValue::Scalar?"float3(input0[tid])":"input0[tid].xyz";
     return materializedKernel(KernelValue::PackedBytes,{input},n,
         "uint3 rgb=uint3(floor(clamp("+sample+",0.0f,1.0f)*255.0f+0.5f));\n"
-        "result[tid]=rgb.x|(rgb.y<<8)|(rgb.z<<16)|0xff000000u;");
+        "result["+index+"]=rgb.x|(rgb.y<<8)|(rgb.z<<16)|0xff000000u;");
+}
+inline Source packMaterializedKernel(KernelValue input,int n){
+    return packMaterializedKernelAt(input,n,"tid");
+}
+// GPU transfer uses the same quantization as the tight CPU-oracle readback
+// path but writes only logical texels in the portable padded row layout.
+struct TextureTransferPack {
+    Source source;
+    gfx::BufferTextureCopy2D copy;
+    size_t bufferBytes=0;
+};
+inline TextureTransferPack packMaterializedTextureKernel(KernelValue input,int n){
+    if(n<8||n>1024)throw std::invalid_argument("invalid texture transfer extent");
+    const auto layout=gfx::rgba8CopyLayout(n,n);
+    const auto stride=std::to_string(layout.rowPitchBytes/4);
+    return {packMaterializedKernelAt(input,n,"(tid/n)*"+stride+"u+tid%n"),
+        {n,n,0,layout.rowPitchBytes},layout.bytes};
 }
 } // namespace aiverse::render::texture_graph::gpu
