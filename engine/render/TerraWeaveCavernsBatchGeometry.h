@@ -19,10 +19,41 @@ struct CaveBatchChunk {
     uint32_t resolution=16;
     int32_t spacingCm=100;
 };
+// Uses the existing STRATA index arena and device-wide ledger. Zeroed
+// policy preserves the legacy nonpaged path; source VB/IB stays resident.
+struct CaveStrataPaging {
+    size_t perSourceBytes=0,perShardBytes=0,deviceBytes=0;
+    size_t perSourceUploadBytes=0,perShardUploadBytes=0,deviceUploadBytes=0;
+    bool incremental=true;
+    bool enabled()const noexcept{return perSourceBytes||perShardBytes;}
+};
+inline void configureCaveStrata(render::GeometryScene& scene,bool enabled,
+                                CaveStrataPaging paging={}) {
+    constexpr uint64_t cap=2ull*1024*1024*1024;
+    for(auto bytes:{paging.perSourceBytes,paging.perShardBytes,paging.deviceBytes,
+                   paging.perSourceUploadBytes,paging.perShardUploadBytes,
+                   paging.deviceUploadBytes})
+        if(bytes>cap||bytes%4)throw std::invalid_argument("Caverns STRATA paging bytes");
+    if(enabled&&paging.enabled()&&
+       (!paging.perSourceBytes||!paging.perShardBytes||!paging.deviceBytes||
+        !paging.perSourceUploadBytes||!paging.perShardUploadBytes||!paging.deviceUploadBytes))
+        throw std::invalid_argument("Caverns paging requires all explicit budgets");
+    scene.setStrataStagingEnabled(enabled);
+    scene.setStrataPortableRenderingEnabled(enabled);
+    if(!enabled||!paging.enabled())return;
+    scene.setStrataStreamingIndexBudgetBytes(paging.perSourceBytes);
+    scene.setStrataStreamingSceneBudgetBytes(paging.perShardBytes);
+    scene.setStrataGlobalIndexBudgetBytes(paging.deviceBytes);
+    scene.setStrataIncrementalIndexStreamingEnabled(paging.incremental);
+    scene.setStrataStreamingUploadBudgetBytes(paging.perSourceUploadBytes);
+    scene.setStrataStreamingFrameUploadBudgetBytes(paging.perShardUploadBytes);
+    scene.setStrataGlobalFrameUploadBudgetBytes(paging.deviceUploadBytes);
+}
 struct CaveBatchSpec {
     uint32_t maxChunks=64;
     size_t maxVertices=2000000;
     bool enableStrata=false;
+    CaveStrataPaging paging{};
 };
 struct CaveBatchPrepared {
     Json manifest;
@@ -102,8 +133,7 @@ public:
         auto prepared=prepareCaveBatch(std::move(chunks),options);
         if(prepared.models.empty())return false;
         auto staged=std::make_unique<render::GeometryScene>();
-        staged->setStrataStagingEnabled(options.enableStrata);
-        staged->setStrataPortableRenderingEnabled(options.enableStrata);
+        configureCaveStrata(*staged,options.enableStrata,options.paging);
         staged->loadPrepared(device,prepared.manifest,
                              std::move(prepared.models),options.maxVertices);
         // Only after the candidate is valid, retire the previous scene.
