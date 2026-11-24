@@ -154,6 +154,17 @@ public:
     bool addStepGate(StepGate gate);
     bool readyToStep();
     bool setupComplete()const noexcept{return setupComplete_;}
+    // Non-authoritative diagnostics channels: register on setup, open on the
+    // simulation owner thread. Returned readers must use detached snapshots.
+    using DiagnosticReader=std::function<Json(uint64_t)>;
+    using DiagnosticFactory=std::function<DiagnosticReader()>;
+    bool registerDiagnosticSource(std::string name,DiagnosticFactory factory){
+        return !setupComplete_&&!name.empty()&&factory&&diagnosticSources_.emplace(std::move(name),std::move(factory)).second;
+    }
+    DiagnosticReader openDiagnosticSource(const std::string& name){
+        const auto it=diagnosticSources_.find(name);
+        return it==diagnosticSources_.end()?DiagnosticReader{}:it->second();
+    }
     // Advance by real time; returns number of ticks executed. Use alpha() for render interpolation.
     int advance(double realSeconds, int maxTicks = 8);
     double alpha() const { return accumulator_ * tickRate_; }
@@ -223,6 +234,7 @@ private:
     std::vector<SystemFn> setupCompletedHooks_;
     std::vector<StepGate> stepGates_;
     std::map<uint16_t,SharedCommandHandler> sharedCommands_;
+    std::map<std::string,DiagnosticFactory> diagnosticSources_;
     bool setupComplete_=false;
     int64_t (*profClock_)() = nullptr;
     std::vector<int64_t> profNs_;
