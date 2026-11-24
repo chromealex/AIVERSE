@@ -3,6 +3,7 @@
 // handles through the copy fence and retires any unadopted images.
 #pragma once
 #include "TextureGraphMaterialBinding.h"
+#include "TextureGraphGpuTextureBudget.h"
 #include <span>
 
 namespace aiverse::render::texture_graph {
@@ -13,6 +14,16 @@ inline std::string gpuGraphImageName(std::string_view generation,std::string_vie
                 "invalid material generation character");
     require(materialSlot(output)!=nullptr,"nonbindable texture graph output");
     return "#texture-graph/"+std::string(generation)+"/"+std::string(output);
+}
+// Shared admission estimate for plan inspection and native request execution.
+inline gpu::TextureRequestBudget graphGpuTextureBudget(const Program& program,bool mipmaps,size_t materializedLimit){
+    if(program.size<8||program.size>1024)return {};
+    size_t count=0;
+    for(const auto& [name,node]:program.outputs){(void)node;if(materialSlot(name))++count;}
+    gfx::TextureDesc desc;desc.width=desc.height=program.size;desc.format=gfx::PixelFormat::RGBA8;
+    desc.mipmaps=mipmaps;desc.mipLevels=mipmaps?0:1;
+    return gpu::textureRequestBudget(count,gfx::estimateTextureFootprint(desc),
+        gfx::rgba8CopyLayout(program.size,program.size).bytes,materializedLimit);
 }
 // Stable storage owned by the existing native graph request. No implicit
 // destruction on a CPU deadline: retirement is the host's responsibility.
@@ -47,10 +58,11 @@ inline bool queueGraphGpuTextureCopy(gfx::Device& dev,const RenderDeviceLifetime
     Image image;image.name=std::move(name);image.width=image.height=program.size;
     // Match the Model uploader: RGBA8 with shader-side colour decoding;
     // hardware sRGB would double-decode some existing material inputs.
-    // Stage 37A only supports one mip. No alpha-coverage/VT conversion.
+    // Optional full GPU mip chain. No alpha-coverage/VT conversion.
     gfx::TextureDesc desc;
     desc.width=image.width;desc.height=image.height;desc.format=gfx::PixelFormat::RGBA8;
-    desc.filter=gfx::Filter::Linear;desc.repeat=true;desc.mipLevels=1;
+    desc.filter=gfx::Filter::Linear;desc.repeat=true;
+    desc.mipmaps=copy.generateMipmaps;desc.mipLevels=copy.generateMipmaps?0:1;
     candidate.image=std::move(image);candidate.lease=lease;candidate.fence=token;
     desc.label=candidate.image.name.c_str();
     candidate.image.tex=dev.createTexture(desc);
