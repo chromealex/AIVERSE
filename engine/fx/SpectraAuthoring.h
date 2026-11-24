@@ -2,6 +2,7 @@
 // ImGui, MCP, native tooling and AI agents. No ImGui/RHI/ECS dependencies.
 #pragma once
 #include "VfxGraph.h"
+#include "SpectraVolumeGraph.h"
 #include <array>
 #include <map>
 #include <set>
@@ -20,6 +21,12 @@ struct NodeInfo {
 };
 inline const std::vector<NodeInfo>& nodeCatalog() {
     static const std::vector<NodeInfo> catalog{
+        {"VolumeDomain","Volumes",R"({"dimension":32,"origin":[-2,-1,-2],"cellSize":0.125})","",true},
+        {"VolumeSource","Volumes",R"({"position":[0,0,0],"radius":0.5,"smoke":3,"temperature":8,"fuel":4})","",true},
+        {"VolumeAdvection","Volumes",R"({"buoyancy":1,"smokeDecay":0.25})","",true},
+        {"VolumeCombustion","Volumes",R"({"ignition":0.5,"burnRate":3})","",true},
+        {"VolumePressure","Volumes",R"({"pressureIterations":12})","",true},
+        {"VolumeOutput","Volumes",R"({"extinction":2,"emission":1})","",true},
         {"Spawn","Pipeline",R"({"burst":16})","",false},
         {"Initialize","Pipeline",R"({"life":1,"speed":1,"size":0.4})","speed|size|life|spread",false},
         {"Update","Pipeline",R"({})","",false},
@@ -101,7 +108,7 @@ inline const NodeInfo* findInfo(std::string_view type) {
     return nullptr;
 }
 inline bool isData(const std::string& type) {return fx::vfx2::valueNodeType(type);}
-inline bool isOutput(const std::string& type) {return fx::vfx2::isOutput(type);}
+inline bool isOutput(const std::string& type) {return type=="VolumeOutput"||fx::vfx2::isOutput(type);}
 inline Json* node(Json& graph,const std::string& id) {
     Json* nodes=graph.find("nodes");
     if(!nodes || !nodes->isArray())return nullptr;
@@ -155,6 +162,10 @@ inline bool connectExec(Json& graph,const std::string& from,
         error="invalid execution link (type or cycle)";
         return false;
     }
+    const int av=volume::stage(a->getStr("type")),bv=volume::stage(b->getStr("type"));
+    if((av>=0||bv>=0)&&(av<0||bv<0||av>bv||bv==0||(av==bv&&av!=1))){
+        error="volume execution stages must connect in order";return false;
+    }
     Json links=Json::array();
     for(const Json& link:graph["links"].items()) {
         if(!link.has("toPort") && link.getStr("to")==to)continue; // single exec input
@@ -179,6 +190,7 @@ inline bool connectData(Json& graph,const std::string& from,
         error="invalid data connection (source/type or cycle)";
         return false;
     }
+    if(volume::stage(dest->getStr("type"))>=0){error="volume data ports are not implemented";return false;}
     Json probe=Json::object();
     if(!fx::vfx2::nestedSet(probe,input,Json::number(int64_t(0)))) {
         error="invalid data property name";return false;

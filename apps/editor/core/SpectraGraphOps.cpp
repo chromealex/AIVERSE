@@ -92,6 +92,18 @@ Json sourceGraph(const Json& p, const Workspace& ws) {
 Json graphEvaluation(const Workspace& ws,const Json& graph, const Json& overrides, fx::EffectDef* compiled = nullptr) {
     fx::EffectDef def;
     std::vector<std::string> errors;
+    if(spectra::volume::hasVolume(graph)){
+        spectra::volume::PresentationGraph result;
+        bool ok=spectra::volume::compilePresentationGraph(graph,overrides,result,errors,fx::projectSdfReader(ws.project.dir));
+        if(ok&&compiled){ok=false;errors.push_back("Legacy particle bake cannot preserve volume output");}
+        Json response=Json::object();response.set("ok",Json::fromBool(ok));response.set("errors",graphStrings(errors));
+        if(ok){response.set("volume",Json::fromBool(true));response.set("hybrid",Json::fromBool(result.particles));
+            response.set("volumeDimension",Json::number(int64_t(result.volumeAsset.simulation.dimension)));
+            response.set("emitters",Json::number(int64_t(result.particleEffect.emitters.size())));
+            response.set("gpuEligible",Json::fromBool(true));
+            response.set("gpuReason",Json::string("Volume requires native GPU; device support unverified"));}
+        return response;
+    }
     const bool ok = spectra::compileGraph(graph, overrides, def, errors,fx::projectSdfReader(ws.project.dir));
     Json response = Json::object();
     response.set("ok", Json::fromBool(ok));
@@ -983,9 +995,9 @@ void registerSpectraGraphOps(Workspace& ws) {
     // a valid graph node by node. The caller can commit via fx_graph_set or
     // preserve incomplete work using fx_graph_draft_set.
     add("fx_graph_edit",
-        "Apply a v1/v2 graph edit in memory and return the edited JSON plus compiler diagnostics. Actions: new, upgrade, add, connect, disconnect, deleteNode, setProperty, bakeSdf (closed project model, dimension 4..32), importSdf (project .sdfbin snapshot), linkSdf (persistent project .sdfbin reference); does not write files.",
+        "Apply a v1/v2 graph edit in memory and return the edited JSON plus compiler diagnostics. Actions: new, newVolume, addVolume, upgrade, add, connect, disconnect, deleteNode, setProperty, bakeSdf (closed project model, dimension 4..32), importSdf (project .sdfbin snapshot), linkSdf (persistent project .sdfbin reference); does not write files.",
         R"({"properties":{"name":{"type":"string"},"graph":{"type":"object"},"text":{"type":"string"},
-             "action":{"type":"string"},"type":{"type":"string"},"from":{"type":"string"},
+             "action":{"type":"string"},"preset":{"type":"string"},"type":{"type":"string"},"from":{"type":"string"},
              "to":{"type":"string"},"toPort":{"type":"string"},"node":{"type":"string"},
              "property":{"type":"string"},"value":{},"draft":{"type":"boolean"},
              "model":{"type":"string"},"dimension":{"type":"integer","minimum":4,"maximum":32},
@@ -995,6 +1007,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         const std::string action=p.getStr("action");
         Json graph;
         if(action=="new")graph=spectra::authoring::newGraphV2();
+        else if(action=="newVolume")graph=Json::parse(R"({"version":2,"nodes":[],"links":[],"outputs":[]})");
         else if(p.getBool("draft") && !p.has("graph") && !p.has("text"))
             graph=Json::parse(readFile(draftFile(ws,requireGraphName(p))));
         else graph=sourceGraph(p,ws);
@@ -1002,6 +1015,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         std::string added;
         bool ok=true;
         if(action=="new") {}
+        else if(action=="newVolume"||action=="addVolume")ok=spectra::volume::appendPreset(graph,p.getStr("preset","fire"),error);
         else if(action=="upgrade") {
             if(graph.getInt("version")!=1)ok=false;
             else graph.set("version",Json::number(int64_t(2)));
