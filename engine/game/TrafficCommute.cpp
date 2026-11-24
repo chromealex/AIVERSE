@@ -9,6 +9,7 @@
 // Fixed maths only, entity-index order, randomness from sim.rng().
 #include "Traffic.h"
 #include "Systems.h"
+#include "Mech.h"
 #include "../core/FixedMath.h"
 #include <algorithm>
 #include <limits>
@@ -496,6 +497,13 @@ bool Traffic::kerbSpot(Simulation& sim, const Place& pl, int dir, Fixed& along, 
     return false;
 }
 
+bool Traffic::hasLivePassengers(const World& world, Entity vehicle) {
+    const auto* drive = vehicles::driveOf(world, vehicle);
+    if (drive && (drive->driver.valid() || !drive->seats.occupants.empty())) return true;
+    const auto* transport = world.tryGetConst<Transport>(vehicle);
+    return transport && !transport->cargo.empty();
+}
+
 // His car while he is at home / at work: a real car at the kerb when a hero is around, nothing when nobody is.
 void Traffic::keepCar(Simulation& sim, TrafficStore& st, TrafficCitizen& c, const std::vector<Vec2>& foci, int& parked) {
     (void)st;
@@ -503,8 +511,7 @@ void Traffic::keepCar(Simulation& sim, TrafficStore& st, TrafficCitizen& c, cons
     const TrafficPopulationRules& pr = rules_.population;
     if (c.car.valid()) {
         if (!living(w, c.car)) { c.car = kNullEntity; return; }
-        const vehicles::VehicleDrive* dc = m_->driving() ? m_->driving()->car(sim, c.car) : nullptr;
-        if (dc && dc->driver.valid()) return;   // somebody sits in it: he finds out when he comes for it
+        if (hasLivePassengers(w, c.car)) return;
         if (!foci.empty() && nearestSq(foci, v2(w.get<Transform>(c.car).pos)) > rules_.despawn * rules_.despawn) { silentRemove(sim, c.car); c.car = kNullEntity; --parked; }
         return;
     }
