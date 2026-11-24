@@ -4,6 +4,7 @@
 #include "engine/world/TerraWeaveForestDeadwood.h"
 #include "engine/physis/Physis.h"
 #include "apps/studio-native/StudioGameSurface.h"
+#include "apps/studio-native/StudioPlanetWorldProcesses.h"
 #include "engine/sim/Simulation.h"
 #include "engine/sim/CommonComponents.h"
 #include "engine/game/GameCore.h"
@@ -81,6 +82,10 @@ void StudioGameSurface::frame(int w,int h,float pw,float ph,double dt,bool focus
 Json StudioGameSurface::worldProcessDiagnostics(int cap,const std::string& focus){
     // Restrict diagnostics to a loaded local match, no remote world inspection.
     Simulation* sim=host_&&host_->inMatch()&&host_->canControl()?host_->simulation():nullptr;
+    if(sim)if(const auto* game=dynamic_cast<const game::GameCore*>(&sim->module()))
+        if(const auto* surface=game->surface(*sim))
+            return planet_wp::sample(worldProcessDiagnostics_,sim->world(),*surface,
+                std::to_string(runtimeEpoch_),sim->tick(),cap,focus);
     return worldProcessDiagnostics_.sample(sim?&sim->world():nullptr,
         std::to_string(runtimeEpoch_),sim?sim->tick():0,cap,focus);
 }
