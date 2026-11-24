@@ -27,6 +27,9 @@ inline std::string readProjectFileBytes(const std::filesystem::path& p) {
     if(in.bad()||!in.eof()) throw std::runtime_error("Cannot read project document: "+p.string());
     return result;
 }
+// Shared filesystem publication primitives used by the Studio asset journal.
+void syncProjectFilePath(const std::filesystem::path& path);
+void renameProjectFilePath(const std::filesystem::path& source,const std::filesystem::path& target,bool replaceExisting=false);
 bool recoverProjectFileEdits(const std::filesystem::path& project);
 void applyProjectFileEdits(const std::filesystem::path& project,const std::vector<ProjectFileEdit>& edits);
 } // namespace aiverse::editor

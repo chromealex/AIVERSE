@@ -6,6 +6,7 @@
 #include "apps/studio-native/StudioContentDirectory.h"
 #include "engine/data/Json.h"
 #include "apps/studio-native/StudioAssetFileDigest.h"
+#include "apps/editor/core/ProjectFileEdits.h"
 #include <set>
 #include <filesystem>
 #include <cerrno>
@@ -27,6 +28,7 @@ struct StudioMoveJournalOperation {
     std::string from;
     std::string to;
     std::string digest={}; // required by replacement journal v3
+};
 
 class StudioMoveJournal {
 public:
@@ -40,28 +42,10 @@ public:
     // Persistence boundary for the project-local journal and renamed assets.
     // Fail closed when a filesystem cannot honor durable metadata writes.
     static void syncPath(const fs::path& path) {
-#if defined(__unix__) || defined(__APPLE__)
-        const int descriptor=::open(path.c_str(),O_RDONLY|O_NOFOLLOW);
-        if (descriptor<0)
-            throw std::runtime_error("Cannot open Studio journal sync path: "+path.string());
-        int code=0;
-#if defined(__APPLE__)
-        // F_FULLFSYNC is stronger than fsync on filesystems that implement it.
-        // Some filesystems do not implement it; ordinary fsync is the fallback.
-        code=::fcntl(descriptor,F_FULLFSYNC);
-        if (code!=0) code=::fsync(descriptor);
-#else
-        code=::fsync(descriptor);
-#endif
-        const int failure=code!=0?errno:0;
-        ::close(descriptor);
-        if (failure)
-            throw std::runtime_error("Cannot synchronize Studio journal path: "+
-                path.string()+" ("+std::strerror(failure)+")");
-#else
-        (void)path;
-        throw std::runtime_error("Studio durable journal requires a POSIX filesystem");
-#endif
+        editor::syncProjectFilePath(path);
+    }
+    static void renamePath(const fs::path& source,const fs::path& target,bool replaceExisting=false){
+        editor::renameProjectFilePath(source,target,replaceExisting);
     }
 
     void begin(const std::vector<StudioMoveJournalOperation>& operations,bool quarantine=false,bool replacement=false) {
@@ -112,7 +96,7 @@ public:
             state.set("operations",std::move(rows));
             // Manifest is published atomically before the first asset rename.
             writeFile(folder_/"pending.tmp",state.dump(2)+"\n");
-            fs::rename(folder_/"pending.tmp",folder_/"pending.json");
+            renamePath(folder_/"pending.tmp",folder_/"pending.json");
             syncPath(folder_);syncPath(cache);
         } catch (...) {
             std::error_code ec;
@@ -129,7 +113,7 @@ public:
         const fs::path material=project_/"materials.json";
         if (version==1&&fs::exists(material)) syncPath(material);
         syncPath(project_);
-        fs::rename(folder_/"pending.json",folder_/"committed.json");
+        renamePath(folder_/"pending.json",folder_/"committed.json");
         syncPath(folder_);
         std::error_code ignored;
         fs::remove_all(folder_,ignored);
@@ -192,7 +176,7 @@ public:
         // when a crash happens midway through recovery itself.
         for (auto it=steps.rbegin();it!=steps.rend();++it) {
             if (!it->moveBack) continue;
-            fs::rename(it->destination,it->source);
+            renamePath(it->destination,it->source);
             syncPath(it->source.parent_path());
             if (it->source.parent_path()!=it->destination.parent_path())
                 syncPath(it->destination.parent_path());
@@ -205,7 +189,7 @@ public:
                 throw std::runtime_error("Missing Studio material recovery backup");
             const fs::path staged=folder_/"materials.restore";
             fs::copy_file(backup,staged,fs::copy_options::overwrite_existing);
-            fs::rename(staged,material);
+            renamePath(staged,material,true);
             syncPath(material);
             syncPath(project_);
         } else {
@@ -306,7 +290,7 @@ private:
         }
         const auto move=[](const fs::path& from,const fs::path& to){
             if(fs::exists(fs::symlink_status(to)))throw std::runtime_error("Replacement recovery destination occupied");
-            fs::rename(from,to);syncPath(from.parent_path());syncPath(to.parent_path());
+            renamePath(from,to);
         };
         for(auto it=states.rbegin();it!=states.rend();++it){
             if(it->phase==2)move(it->live,it->newSlot);

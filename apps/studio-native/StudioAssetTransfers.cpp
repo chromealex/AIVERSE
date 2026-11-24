@@ -494,7 +494,7 @@ Json StudioTransferPlan::apply(const std::string& token,
         journal.begin(journalOps);
         try {
             for (const auto& operation:operations) {
-                fs::rename(operation.source,operation.destination);
+                StudioMoveJournal::renamePath(operation.source,operation.destination);
                 // Persist both directory entries before publishing the final
                 // committed marker. A power loss replays the pending journal.
                 StudioMoveJournal::syncPath(operation.source.parent_path());
@@ -809,7 +809,7 @@ void studioReplayAssetMove(const fs::path& project,
             if(!matchesMoveFile(from,plan.files[i]))
                 throw std::runtime_error("Asset changed during history replay");
             if(existsOrSymlink(to))throw std::runtime_error("Asset move destination occupied");
-            fs::rename(from,to);
+            StudioMoveJournal::renamePath(from,to);
             StudioMoveJournal::syncPath(from.parent_path());
             if(from.parent_path()!=to.parent_path())StudioMoveJournal::syncPath(to.parent_path());
         }
@@ -892,7 +892,7 @@ void studioReplayAssetQuarantine(const fs::path& project,
             const auto from=project/operations[i].from,to=project/operations[i].to;
             if(existsOrSymlink(to)||!matchesMoveFile(from,plan.files[i]))
                 throw std::runtime_error("Asset quarantine changed during replay");
-            fs::rename(from,to);
+            StudioMoveJournal::renamePath(from,to);
             StudioMoveJournal::syncPath(from.parent_path());StudioMoveJournal::syncPath(to.parent_path());
         }
         catalog.rebuild(false);
@@ -972,7 +972,7 @@ void studioReplayAssetReplacement(const fs::path& project,
             const auto from=project/op.from,to=project/op.to;
             if(existsOrSymlink(to)||studioAssetFileDigest(from)!=op.digest)
                 throw std::runtime_error("Replacement changed during publication");
-            fs::rename(from,to);
+            StudioMoveJournal::renamePath(from,to);
             StudioMoveJournal::syncPath(from.parent_path());StudioMoveJournal::syncPath(to.parent_path());
         }
         catalog.rebuild(false);
