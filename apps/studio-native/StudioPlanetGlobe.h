@@ -24,6 +24,7 @@ struct StudioPlanetGlobe {
     std::string body;
     game::CubeSphere cube;
     float scale=1;
+    Fixed radius{};
     int divisions=0;
     std::vector<std::array<render::float3,3>> triangles;
     std::vector<StudioGlobeMarker> markers;
@@ -37,7 +38,7 @@ struct StudioPlanetGlobe {
         const auto& surface=frame.surface();
         const auto& def=surface.bodies[size_t(frame.body())];
         StudioPlanetGlobe out;out.body=body;out.cube=surface.cubeOf(frame.body());
-        out.scale=previewRadius/float(def.radius.toDouble());
+        out.radius=def.radius;out.scale=previewRadius/float(def.radius.toDouble());
         out.divisions=std::min(def.faceSize,64);
         const auto point=[&](Vec3 p){return render::float3{
             float(p.x.toDouble())*out.scale,float(p.y.toDouble())*out.scale,float(p.z.toDouble())*out.scale};};
@@ -109,7 +110,7 @@ struct StudioPlanetGlobe {
         const auto dir=fxNormalize(bodyPoint);
         for(const auto& marker:markers){
             if(dir.dot(marker.up)<=Fixed{})continue;
-            const auto relative=dir*fxSqrt(marker.origin.lengthSq())-marker.origin;
+            const auto relative=dir*radius-marker.origin;
             if(fxAbs(relative.dot(marker.east))<=marker.extent&&
                fxAbs(relative.dot(marker.south))<=marker.extent){
                 hit.regionId=marker.id;break;
