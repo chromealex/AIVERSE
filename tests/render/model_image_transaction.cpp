@@ -1,6 +1,7 @@
 // Stage 112 deferred native test: rollback survives pending/failed GPU fence.
 #include "engine/render/ModelImageUploadTransaction.h"
 #include "engine/render/graph/TextureGraphImageReclamation.h"
+#include "engine/render/graph/TextureGraphNativeImageAccess.h"
 #include "engine/render/ModelResourceCache.h"
 #include "engine/render/ModelStagingTransaction.h"
 #include "engine/render/ModelAssetProvider.h"
@@ -521,6 +522,45 @@ int main(){
         published=render::Material{};
         device.idle=true;
         render::releaseModel(device,generated);
+        AIVERSE_TEST_CHECK(device.live.empty());
+    }
+
+    // A native read scope holds the actual cache reader and graph pin,
+    // not just a texture handle. The cache cannot shut down while borrowed.
+    {
+        using namespace render::texture_graph;
+        render::ModelResourceCache cache;
+        cache.bindResourceDevice(device,epoch.lease());
+        auto model=std::make_unique<render::Model>();
+        render::Material material;
+        auto image=makeImage("#texture-graph/native-read/color");
+        image.proceduralGraphImage=true;
+        pinGraphMaterialBinding(material,&render::Material::baseTex,image);
+        {
+            render::ModelImageUploadTransaction transaction(device,pool,epoch.lease());
+            material.baseTex=transaction.stage(*model,std::move(image));
+            AIVERSE_TEST_CHECK(transaction.commit()==1);
+        }
+        const auto reference=referenceGraphMaterialImage(material,&render::Material::baseTex);
+        auto* resident=cache.insertIfAbsent("graph-native-read",std::move(model));
+        material=render::Material{};
+        render::Model unrelated;
+        auto absent=NativeGraphImageRead::acquire(cache,&unrelated,reference,device,epoch.lease());
+        AIVERSE_TEST_CHECK(!absent.texture(device).valid()&&cache.activeModelReaders()==0);
+        render::RenderDeviceLifetime otherEpoch(device);
+        auto wrong=NativeGraphImageRead::acquire(cache,resident,reference,device,otherEpoch.lease());
+        AIVERSE_TEST_CHECK(!wrong.texture(device).valid()&&cache.activeModelReaders()==0);
+        auto access=NativeGraphImageRead::acquire(cache,resident,reference,device,epoch.lease());
+        AIVERSE_TEST_CHECK(access.texture(device).valid()&&cache.activeModelReaders()==1);
+        AIVERSE_TEST_CHECK(!render::graphImageUnpinned(resident->images[0].proceduralGraphPin));
+        bool blocked=false;
+        try{cache.shutdown(device);}catch(const std::logic_error&){blocked=true;}
+        AIVERSE_TEST_CHECK(blocked&&access.texture(device).valid());
+        auto moved=std::move(access);
+        AIVERSE_TEST_CHECK(!access.texture(device).valid()&&moved.texture(device).valid());
+        moved.reset();
+        AIVERSE_TEST_CHECK(cache.activeModelReaders()==0&&render::graphImageUnpinned(resident->images[0].proceduralGraphPin));
+        device.idle=true;cache.shutdown(device);
         AIVERSE_TEST_CHECK(device.live.empty());
     }
 
