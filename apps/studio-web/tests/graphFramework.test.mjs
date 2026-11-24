@@ -56,7 +56,7 @@ test('multiple named output ports have distinct anchors and follow preview posit
  assert.equal(samePort({node:'a',port:'color'},{node:'a',port:'mask'}),false);
 });
 
-import {textureLayout,duplicateTextureNode,texturePreviewKey,instantiateTextureGraph} from '../src/graphs/textureGraphAuthoring.ts';
+import {textureLayout,duplicateTextureNode,texturePreviewKey,instantiateTextureGraph,textureFunctionSpec,defineTextureFunction,addTextureFunctionCall,removeTextureFunction} from '../src/graphs/textureGraphAuthoring.ts';
 test('texture DAG layout orders dependencies and has bounded nonoverlapping positions',()=>{
  const g={nodes:['c','a','b'].map(node),links:[edge('1','a','b'),edge('2','b','c')]};
  const p=textureLayout(g);assert.ok(p.get('a')[0]<p.get('b')[0]);assert.ok(p.get('b')[0]<p.get('c')[0]);
@@ -103,4 +103,22 @@ test('saved texture graph insertion rejects dangling references and exceeded bud
  assert.throws(()=>instantiateTextureGraph({size:1024,nodes:full.nodes.slice(0,4)},src),/pixel-node/);
  assert.throws(()=>instantiateTextureGraph(target,{...src,parameters:{x:{default:0,bindings:[{node:'missing',property:'value'}]}}}),/binding/);
  assert.deepEqual(target,{nodes:[],outputs:{}});
+});
+
+test('selected texture nodes form a typed reusable function with local parameters',()=>{
+ const catalog=[{id:'constant',inputs:[],output:'scalar'},{id:'multiply',inputs:['scalar','scalar'],output:'scalar'}];
+ const graph={size:32,nodes:[{id:'external',op:'constant',inputs:[]},{id:'gain',op:'constant',inputs:[],properties:{value:.5}},{id:'result',op:'multiply',inputs:['external','gain']}],outputs:{height:'result'},parameters:{level:{default:.5,bindings:[{node:'gain',property:'value'}]}}};
+ const next=defineTextureFunction(graph,catalog,['gain','result'],'result','scale');
+ assert.deepEqual(next.functions.scale.inputs,[{id:'input_1',type:'scalar'}]);
+ assert.deepEqual(next.functions.scale.nodes[1].inputs,['input_1','gain']);
+ assert.deepEqual(next.functions.scale.parameters.level.bindings,[{node:'gain',property:'value'}]);
+ assert.equal(graph.functions,undefined);assert.equal(next.nodes.length,3);
+ const call=addTextureFunctionCall(next,catalog,'scale','value');
+ assert.deepEqual(call.graph.nodes.at(-1).inputs,['']);
+ const spec=textureFunctionSpec(call.graph,call.graph.nodes.at(-1),catalog);
+ assert.equal(spec.output,'scalar');assert.deepEqual(spec.inputs,['scalar']);
+ assert.throws(()=>removeTextureFunction(call.graph,'scale'),/instances/);
+ assert.deepEqual(removeTextureFunction(next,'scale').functions,{});
+ assert.throws(()=>defineTextureFunction(call.graph,catalog,[call.id],call.id,'nested'),/Nested/);
+ assert.throws(()=>addTextureFunctionCall({...next,size:1024},catalog,'scale','value'),/budget/);
 });
