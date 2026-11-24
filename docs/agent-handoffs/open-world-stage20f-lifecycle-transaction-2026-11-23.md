@@ -1,0 +1,3 @@
+# W1.20f — lifecycle transaction
+
+Implementation `84a61c8e53b9d47f2b063c972ee98e76d66c9459`, PR #116 Draft. ActorRegionOwnership.cpp stages ledger spawn, retire, group and solo transfers and tombstones in one copy. New identity tags are recorded for reverse removal on failure. Dirty ACK overflow is checked before publication; queue is cleared after publication. This does not roll back gameplay entity creation/destruction, and tag cleanup assumes nonthrowing ECS removal; native acceptance required. Full scan and full ledger copy remain. No native tests run. Next inspect ledger internals and replace copy with bounded transaction; audit writers and update skills/catalog. No main merge.

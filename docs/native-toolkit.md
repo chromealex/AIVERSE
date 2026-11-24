@@ -161,3 +161,7 @@ The macOS graphical target compiles. In this execution environment, macOS GUI se
 window launch before application initialization, so no successful rendered screenshot is claimed.
 Use `--auto` on a desktop session to finish visual verification. Windows/mobile/web builds of this
 new integration host remain unverified; normal builds do not enable the showcase target.
+
+### Recurring work (WorkBudget 0.2.0)
+
+`planRecurringWork(count, desiredPeriodTicks, maxVisitsPerTick=0)` computes a bounded per-tick visit count and worst revisit latency for a stable ordered set. `nextRecurringIndex(count, uint32Cursor)` advances the existing persisted owner cursor and handles wrap without dropping an item. Empty sets return no index. This is for discrete AI/economy/schedule decisions; not a replacement for a fixed simulation tick. See city population integration in docs/traffic.md. The native header has no engine dependencies.

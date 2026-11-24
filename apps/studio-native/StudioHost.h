@@ -125,6 +125,7 @@ public:
     void select(double x, double y, double w, double h, const std::string& mode);
     void selectionAction(const std::string& method);
     bool brushArmed() const;
+    bool resolveBrushPoint(double x,double y,double w,double h,render::float3& at,std::string* error=nullptr);
     bool updateBrushCursor(double x, double y, double w, double h);
     void brushAdjust(double factor, bool disarm);
     bool splineDrag(int phase, double x, double y, double w, double h);
@@ -215,6 +216,8 @@ private:
     size_t rulesSnapshotHash_ = 0;
     double nextMapSnapshot_ = 0, nextRulesCheck_ = 0;
     std::unique_ptr<StudioGameSurface> game_;
+    Json playReview_;
+    uint64_t playReviewSerial_=0;
     NativeViewportPlacement placement_{}, gamePlacement_{};
     double gameFrameTime_ = 0;
     struct AgentShot { std::string png; int w = 0, h = 0; std::atomic<bool> done{false}; };

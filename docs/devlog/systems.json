@@ -1868,6 +1868,166 @@
           "titleEn": "Building runtime: authenticated elevator commands and ECS access control",
           "text": "Командный wire protocol с проверкой длины, версии, scene/actor/sequence, проверка владельца ECS актора и физической зоны посадки; без новой сетевой системы.",
           "textEn": "Bounded command codec, server-owned ECS actor authentication and landing checks, reusing existing network/physics owners."
+        },
+        {
+          "id": "world-recurring-simulation-budget",
+          "title": "Бюджет фоновой симуляции",
+          "titleEn": "Recurring simulation budget",
+          "text": "Детерминированные порции обновлений и настройка бюджета дискретных решений населения.",
+          "textEn": "Deterministic recurring work slices and configurable population decision budget.",
+          "status": "in-progress"
+        },
+        {
+          "id": "world-cold-component-advancement",
+          "title": "Продвижение холодного ECS-состояния",
+          "titleEn": "Cold ECS state advancement",
+          "text": "Явное продвижение сохранённых компонентов по тикам без потери стабильных ID; атомарная проверка группы и допуска при пробуждении.",
+          "textEn": "Explicit tick-based advancement of parked components with stable identities, atomic group validation and guarded wake admission.",
+          "status": "in-progress"
+        },
+        {
+          "id": "world-authoritative-simulation-lod",
+          "title": "LOD авторитетной симуляции",
+          "titleEn": "Authoritative simulation LOD",
+          "text": "Детерминированная частота принятия решений по регионам и постоянным ID с приоритетом активных взаимодействий.",
+          "textEn": "Deterministic region and stable-ID decision cadence, prioritizing active interactions.",
+          "status": "in-progress"
+        },
+        {
+          "id": "world-integrated-acceptance",
+          "title": "Интеграционная проверка сохранения мира",
+          "titleEn": "Integrated world persistence acceptance",
+          "text": "Объединение с актуальным main, нативные тесты, MCP stdio и Studio; окончательная проверка на Mac.",
+          "textEn": "Integrate with current main, run native tests, MCP stdio and Studio; final Mac acceptance.",
+          "status": "in-progress"
+        },
+        {
+          "id": "world-background-operator-jobs",
+          "title": "Фоновые задачи обслуживания мира",
+          "titleEn": "Background world maintenance jobs",
+          "text": "Очередь, фактический прогресс восстановления, безопасная отмена и подтверждение результата.",
+          "textEn": "Bounded queue, actual recovery progress, safe cancellation and acknowledged results.",
+          "status": "in-progress"
+        },
+        {
+          "id": "world-persistence-tools",
+          "title": "Инструменты сохранения мира",
+          "titleEn": "World persistence tools",
+          "text": "Диагностика, проверка резервных копий и управление сохранениями через общие операции Studio/MCP.",
+          "textEn": "Diagnostics, backup verification and save maintenance through shared Studio/MCP operations.",
+          "status": "in-progress"
+        },
+        {
+          "id": "world-ledger-compaction",
+          "title": "Компактизация долгоживущего мира",
+          "titleEn": "Long-lived world compaction",
+          "text": "Ограничение накопления удалённых объектов без повторного использования идентификаторов.",
+          "textEn": "Bound retired-object accumulation without reusing persistent identities.",
+          "status": "in-progress"
+        },
+        {
+          "id": "world-streamed-persistence",
+          "title": "Сохранение потоковых миров",
+          "titleEn": "Streamed world persistence",
+          "text": "Проверка SHA-256 внешних ресурсов и барьер готовности коллизий и навигации после восстановления.",
+          "textEn": "SHA-256 external asset validation and collision/navigation readiness barrier after recovery.",
+          "status": "in-progress"
+        },
+        {
+          "id": "world-background-recovery",
+          "title": "Фоновое восстановление мира",
+          "titleEn": "Background world recovery",
+          "text": "Чтение checkpoint, восстановление WAL и отменяемая публикация на границе владельца.",
+          "textEn": "Checkpoint reading, WAL recovery and cancellable publication at the owner boundary.",
+          "status": "in-progress"
+        },
+        {
+          "id": "world-async-persistence",
+          "title": "Асинхронная запись мира",
+          "titleEn": "Asynchronous world persistence",
+          "text": "Ограниченная очередь дисковых операций, подтверждение после записи и барьер checkpoint.",
+          "textEn": "Bounded disk operation queue, durable acknowledgement and checkpoint barrier.",
+          "status": "in-progress"
+        },
+        {
+          "id": "world-authority-runtime-persistence",
+          "title": "Сохранение в авторитетном серверном цикле",
+          "titleEn": "Authoritative server persistence",
+          "text": "Создание и восстановление мира до сетевого запуска, запись подтверждённых тиков и блокировка публикации при ошибках.",
+          "textEn": "Create and recover worlds before network startup, persist finalized ticks and refuse publication on failure.",
+          "status": "in-progress"
+        },
+        {
+          "id": "world-portable-projectile-race-state",
+          "title": "Сохранение активных объектов и гонок",
+          "titleEn": "Active objects and race persistence",
+          "text": "Восстановление активных снарядов и состояния гоночной сессии с постоянными ссылками.",
+          "textEn": "Restore active projectiles and race session state with persistent references.",
+          "status": "in-progress"
+        },
+        {
+          "id": "world-portable-actor-components",
+          "title": "Восстановление связей игровых объектов",
+          "titleEn": "Restore gameplay object relationships",
+          "text": "Контекстные кодеки компонентов и восстановление связей по постоянным идентификаторам.",
+          "textEn": "Contextual component codecs and relationship restoration through persistent identities.",
+          "status": "in-progress"
+        },
+        {
+          "id": "world-stable-actor-identities",
+          "title": "Постоянные идентификаторы объектов мира",
+          "titleEn": "Persistent world object identities",
+          "text": "Независимые от ECS-индексов идентификаторы и адресация перемещений.",
+          "textEn": "Entity-index-independent identities and movement addressing.",
+          "status": "in-progress"
+        },
+        {
+          "id": "world-native-restart-state",
+          "title": "Состояние перезапуска симуляции",
+          "titleEn": "Simulation restart state",
+          "text": "Сохранение номера тика, генератора случайных чисел и очереди команд со стабильными ссылками.",
+          "textEn": "Persist simulation tick, random generator and queued commands using stable references.",
+          "status": "in-progress"
+        },
+        {
+          "id": "world-native-finalized-wal",
+          "title": "Сохранение подтверждённых тиков мира",
+          "titleEn": "Finalized world tick persistence",
+          "text": "Точный захват изменений владения сущностями на подтверждённых тиках симуляции.",
+          "textEn": "Capture exact entity ownership changes at finalized simulation ticks.",
+          "status": "in-progress"
+        },
+        {
+          "id": "world-unified-resource-wal",
+          "title": "Журнал изменений ресурсов мира",
+          "titleEn": "World resource change log",
+          "text": "Сохранение изменений выбранных ECS-ресурсов вместе с сущностями и компонентами.",
+          "textEn": "Persist changes to selected ECS resources alongside entities and components.",
+          "status": "in-progress"
+        },
+        {
+          "id": "world-unified-backup-retention",
+          "title": "Безопасное хранение поколений мира",
+          "titleEn": "Safe world generation retention",
+          "text": "Проверка резервных копий перед очисткой, защита активного поколения и управление через сессию мира.",
+          "textEn": "Verify backups before cleanup, protect the active generation and manage through the world session.",
+          "status": "in-progress"
+        },
+        {
+          "id": "world-unified-backup-catalog",
+          "title": "Каталог резервных копий мира",
+          "titleEn": "World backup catalog",
+          "text": "Перечисление поколений сохранений и проверка восстановления ECS и журнала изменений.",
+          "textEn": "Enumerate save generations and validate ECS and change-log recovery.",
+          "status": "in-progress"
+        },
+        {
+          "id": "world-ecs-region-lifecycle",
+          "title": "Жизненный цикл динамических сущностей регионов",
+          "titleEn": "Dynamic region entity lifecycle",
+          "text": "Детерминированное владение сущностями по регионам, атомарный перенос групп и сохранение; следующий этап — реальные ECS-резиденция и стриминг.",
+          "textEn": "Deterministic region ownership, atomic group transfer and persistence; live ECS residency and streaming follow.",
+          "status": "in-progress"
         }
       ],
       "core": true,
@@ -2360,6 +2520,54 @@
           "titleEn": "Shared graph editor framework",
           "text": "Общие адаптеры и полотно, с сохранением собственных форматов и выполнения каждой системы.",
           "textEn": "Shared adapters and canvas while preserving each domain's format and runtime; request cancellation implemented in source; Stage 31B native appearance registry publication implemented in source; live host wiring pending; Stage 32A bounded idle pipeline cache and draft-independent status implemented in source; Stage 33A request-local shared scalar GPU scratch implemented in source; Stage 33B CPU DAG lifetime planning implemented in source; Stage 34A bounded GPU pass scheduling implemented in source; Stage 34B typed DAG slot lowering and plan-only inspection implemented in source; Stage 34C typed materialized shader source implemented; Stage 34D opt-in native materialized execution implemented in source; Stage 35A Building Graph report adapter and offline Studio inspection implemented in source; direct owner wiring pending; hardware acceptance pending. Stage 35B in progress: bounded Caverns owner snapshot inspection and imported read-only graph; native owner integration remains separate. Stage 35B Caverns snapshot report projection and paged offline graph implemented in source; owner live wiring pending. Stage 35C in progress: document-scoped, read-only native Caverns capture and stale-response refusal with owner registration checks. Stage 35C scoped native Caverns read and unavailable/absent handling implemented in source; hardware and owner integration pending. Stage 35D in progress: native building candidate request provenance and shared graph integration in an isolated Building owner-based branch. Stage 35D shared candidate provenance gate implemented; Building owner panel wiring on isolated integration branch. Stage 35E in progress: native authored room connectivity report and shared topology inspector. Stage 35E optional native topology inspector implemented in source."
+        },
+        {
+          "id": "studio-play-review",
+          "title": "Безопасный перенос изменений из Play",
+          "titleEn": "Play Mode change review",
+          "text": "Изолированная игровая сессия, проверка исходной карты и выборочный предварительный просмотр переноса изменений.",
+          "textEn": "Isolated local session, source map revision guard and selective preview of play-to-scene changes.",
+          "status": "in-progress"
+        },
+        {
+          "id": "studio-runtime-debugger",
+          "title": "Редактирование состояния локальной игры",
+          "titleEn": "Runtime Debugger",
+          "text": "Явное редактирование разрешённых полей ECS при остановленном тике локальной игры с проверкой сессии и исходного значения.",
+          "textEn": "Explicit owner-validated ECS field edits at a paused local tick with session and expected-value checks.",
+          "status": "in-progress"
+        },
+        {
+          "id": "studio-entity-debugger",
+          "title": "Отладчик ECS-сущностей",
+          "titleEn": "Entity Debugger",
+          "text": "Расширение Runtime: точные ссылки, стабильные идентификаторы, принадлежность регионам и навигация по компонентам.",
+          "textEn": "Runtime inspection with exact references, stable identities, region ownership and component navigation.",
+          "status": "in-progress"
+        },
+        {
+          "id": "studio-simulation-profiler",
+          "title": "Профилировщик симуляции",
+          "titleEn": "Simulation Profiler",
+          "text": "Ограниченный замер реального времени тиков и систем ECS в локальной игре.",
+          "textEn": "Bounded measurement of actual tick and ECS system wall time in a local match.",
+          "status": "in-progress"
+        },
+        {
+          "id": "studio-world-explorer-live",
+          "title": "Обзор регионов живого мира",
+          "titleEn": "Live World Explorer",
+          "text": "Снимок реального игрового ECS: карта регионов по высоте, выбор ячейки и счётчики частоты решений без имитации стриминга.",
+          "textEn": "Real hosted-game ECS snapshot: height-sliced region map, cell selection and decision cadence counters without fabricated streaming metrics.",
+          "status": "in-progress"
+        },
+        {
+          "id": "studio-world-persistence-panel",
+          "title": "Управление сохранениями мира",
+          "titleEn": "World persistence panel",
+          "text": "Офлайн-диагностика регионов, контрольные точки, резервные копии и подтверждаемая очистка.",
+          "textEn": "Offline region diagnostics, checkpoints, backups and confirmed retention.",
+          "status": "in-progress"
         }
       ],
       "enablesEn": [

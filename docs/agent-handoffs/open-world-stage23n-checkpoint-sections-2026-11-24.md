@@ -1,0 +1,3 @@
+# W1.23n — checkpoint section orchestration
+
+UnifiedCheckpointSections.h connects concrete native ledger Archive to UCP1 and defines versioned adapters for entity/component/resource sections. Capture uses aggregate budget and canonical ordering; restore creates private state via factory, checks UUID/revision, decodes ledger then entities/components/resources, rebuilds references, validates and swaps output. Adapter readers own version validation and must not mutate ledger/sequence or external state. Concrete entity/component/resource adapters still needed; byte budget checked after callback allocation. No native tests run. Next concrete component section codec and entity materializer, then resource adapter and SHA256 publisher. PR #116 Draft; no main merge.

@@ -80,11 +80,11 @@ void ActorHost::damage(Simulation& sim,uint8_t source,CharacterRef target,int32_
     target.lastDamage=sim.tick();target.activeAction=Action::None;target.actionUntil=0;
     if(s.royale.enabled&&attacker&&source!=target.slot){s.royale.lastAttacker[target.slot-1]=source;s.royale.lastWeapon[target.slot-1]=uint8_t(attacker->weaponIndex+1);}
     if(attacker)++attacker->hits;
-    auto releaseVehicles=[&](uint8_t slot){for(const Entity e:vehicleEntities(sim)){auto& v=*w.tryGet<Vehicle>(e);if(v.driver==slot)v.driver=0;}};
+    auto releaseVehicles=[&](uint8_t slot){for(const Entity e:vehicleEntities(sim)){auto& v=*w.tryGet<Vehicle>(e);if(v.driver==slot){w.notifyComponentChange<Vehicle>(e);v.driver=0;}}};
     if(config_.systems.enabled&&config_.systems.knockdown&&!target.downed&&amount>=target.health) {
         bool teammate=false;
         for(size_t k=1;k<=characterCount(sim);++k){const auto a=character(sim,uint8_t(k));if(a.slot!=target.slot&&a.team==target.team&&a.health>0&&!a.downed)teammate=true;}
-        if(teammate){releaseVehicles(target.slot);target.vehicle=0;target.downed=true;target.health=30;target.bleedUntil=sim.tick()+config_.systems.bleedTicks;return;}
+        if(teammate){releaseVehicles(target.slot);w.notifyComponentChange<CharacterBody>(target.entity);target.vehicle=0;target.downed=true;target.health=30;target.bleedUntil=sim.tick()+config_.systems.bleedTicks;return;}
     }
     // The same immediate integer HP commit as the generic ECS DamageResolutionSystem.
     lib::mechanics::applyIntegerHitPointDamage(target.health,amount);
@@ -100,6 +100,7 @@ void ActorHost::damage(Simulation& sim,uint8_t source,CharacterRef target,int32_
             *gear(sim,target.slot)={};
         }
         releaseVehicles(target.slot);
+        w.notifyComponentChange<CharacterBody>(target.entity);
         target.vehicle=0;
     }
     sim.emit({2,source,{}, {},target.slot,target.pos});
@@ -108,7 +109,7 @@ void ActorHost::damage(Simulation& sim,uint8_t source,CharacterRef target,int32_
 void ActorHost::damageVehicle(Simulation& sim,uint8_t source,uint32_t vehicleId,int32_t amount) {
     auto* v=sim.world().tryGet<Vehicle>(vehicleEntity(sim,vehicleId));if(!v)return;
     v->health=std::max(0,v->health-amount);
-    if(!v->health&&v->driver){auto driver=character(sim,v->driver);v->driver=0;driver.vehicle=0;damage(sim,source,driver,1000);}
+    if(!v->health&&v->driver){auto driver=character(sim,v->driver);sim.world().notifyComponentChange<Vehicle>(vehicleEntity(sim,vehicleId));sim.world().notifyComponentChange<CharacterBody>(driver.entity);v->driver=0;driver.vehicle=0;damage(sim,source,driver,1000);}
 }
 bool ActorHost::traceShot(Simulation& sim,uint8_t source,Vec3 eye,Vec3 delta,int32_t amount,const WeaponConfig& weapon,const std::vector<HitPose>* rewind,Projectile* projectile) {
     Fixed best=1_fx;uint8_t victim=0;std::optional<HitPose> pose;
@@ -216,7 +217,10 @@ void ActorHost::action(Simulation& sim,CharacterRef a,Action kind,uint32_t argum
         if(up<=Fixed{}||up>Fixed::fromRatio(15,10))return;
         auto height=stanceHeight(a,config_.motor);Vec3 center=a.pos+Vec3{{},height/2,{}},half{config_.motor.radius,height/2,config_.motor.radius};
         if(collision_.cast(center,{{},up,{}},half).hit||collision_.cast(center+Vec3{{},up,{}},dir,half).hit)return;
-        a.pos+=Vec3{{},up,{}}+dir;a.velocity={};return;
+        a.pos+=Vec3{{},up,{}}+dir;a.velocity={};
+        if(!reportRegionMoveIfCrossed(sim,a.entity))
+            throw std::logic_error("regionOwnership: vault boundary dirty report failed");
+        return;
     }
     if(a.activeAction!=Action::None)return;
     auto begin=[&](Action action,uint32_t duration,uint32_t target){a.activeAction=action;a.actionUntil=now+duration;a.actionTarget=target;a.actionOrigin=a.pos;};
@@ -237,7 +241,11 @@ void ActorHost::action(Simulation& sim,CharacterRef a,Action kind,uint32_t argum
         if(auto* v=w.tryGet<Vehicle>(vehicleEntity(sim,a.vehicle))){
             HitPose exit=HitPose::of(a);exit.pos=v->pos+Vec3{2_fx,Fixed::fromRatio(1,10),{}};
             auto box=actorBounds(exit,config_.motor);box.min.y+=Fixed::fromRatio(1,100);if(collision_.blocked(box))return;
+            w.notifyComponentChange<CharacterBody>(a.entity);
+            w.notifyComponentChange<Vehicle>(vehicleEntity(sim,a.vehicle));
             a.pos=exit.pos;v->driver=0;a.vehicle=0;
+            if(!reportRegionMoveIfCrossed(sim,a.entity))
+                throw std::logic_error("regionOwnership: arcade exit dirty report failed");
         }
         return;
     }
@@ -264,12 +272,21 @@ void ActorHost::action(Simulation& sim,CharacterRef a,Action kind,uint32_t argum
             const auto* loadout=gear(sim,a.slot);
             if(!bag(a.bag,l.type,l.count,size_t(std::min<int64_t>(24,12+(loadout?lib::systems::gearCapacity(config_.gear,*loadout):0)))))continue;
         }
+        if(!reportRegionChange(sim,e,world::RegionDirtyKind::Retire))
+            throw std::logic_error("regionOwnership: dirty loot retire rejected");
         w.destroy(e);return;
     }
     if(vehicleInteract(sim,a))return;
     for(const Entity e:vehicleEntities(sim)){
         auto& v=*w.tryGet<Vehicle>(e);
-        if(v.health>0&&!v.driver&&!w.has<vehicles::VehicleDrive>(e)&&accessible(v.pos)){v.driver=a.slot;a.vehicle=v.id;a.pos=v.pos;return;}
+        if(v.health>0&&!v.driver&&!w.has<vehicles::VehicleDrive>(e)&&accessible(v.pos)){
+            w.notifyComponentChange<CharacterBody>(a.entity);
+            w.notifyComponentChange<Vehicle>(e);
+            v.driver=a.slot;a.vehicle=v.id;a.pos=v.pos;
+            if(!reportRegionMoveIfCrossed(sim,a.entity))
+                throw std::logic_error("regionOwnership: arcade enter dirty report failed");
+            return;
+        }
     }
     for(auto ladder:ladders_)if(inside(a.pos,ladder)){a.climbing=true;return;}
 }
@@ -300,6 +317,9 @@ void ActorHost::actorSystems(Simulation& sim,CharacterRef a,Input& input) {
         auto& v=*vp;
         if(!frozen){v.yaw+=Fixed::fromRatio(input.right,1000)*sim.dt()/4;auto delta=direction(v.yaw,{})*v.speed*Fixed::fromRatio(input.forward,1000)*sim.dt();auto hit=collision_.cast(v.pos+Vec3{{},1_fx,{}},delta,{1_fx,1_fx,2_fx});v.pos+=delta*(hit.hit?fxMax(Fixed{},hit.fraction-Fixed::fromRatio(1,100)):1_fx);v.pos.x=fxClamp(v.pos.x,-config_.worldLimit,config_.worldLimit);v.pos.z=fxClamp(v.pos.z,-config_.worldLimit,config_.worldLimit);v.velocity=delta/sim.dt();}
         a.pos=v.pos+Vec3{{},1_fx,{}};a.velocity=v.velocity;
+        if(!reportRegionMoveIfCrossed(sim,a.entity) ||
+           !reportRegionMoveIfCrossed(sim,vehicleEntity(sim,a.vehicle)))
+            throw std::logic_error("regionOwnership: arcade driver/vehicle dirty report failed");
     }
     if(frozen||a.downed||a.vehicle){if(frozen||a.downed||!canFireFromVehicle(sim,a))input.buttons&=uint32_t(Prone);else input.buttons&=uint32_t(Fire|Aim|Reload|WeaponMask);if(frozen||a.vehicle)input.forward=input.right=0;}   // passengers / gunners may shoot
 }
@@ -384,6 +404,8 @@ void ActorHost::tickSystems(Simulation& sim) {
             CharacterSnapshot fresh;fresh.slot=a.slot;fresh.team=a.team;fresh.life=a.life+1;fresh.money=a.money;fresh.kills=a.kills;fresh.lastSequence=a.lastSequence;
             fresh.pos=spawns_[a.slot-1];equipInitial(fresh);fresh.armor=c.startArmor;
             assign(a,fresh);
+            if(!reportRegionMoveIfCrossed(sim,a.entity))
+                throw std::logic_error("regionOwnership: bomb respawn dirty report failed");
             if(fresh.team==1&&!s.match.carrier)s.match.carrier=fresh.slot;
         });
         clearProjectiles(sim);resetLootAndVehicles(sim);s.history.clear();return;

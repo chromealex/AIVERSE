@@ -13,7 +13,7 @@ test('default tree has 4 nested stacks and exactly one copy of each panel',()=>{
   assert.equal(panelStack(t,'scene'),'dock-center');
   assert.equal(panelStack(t,'assets'),'dock-bottom');
   assert.deepEqual(findDockStack(t,'dock-left')?.tabs,['hierarchy','project']);
-  assert.deepEqual(findDockStack(t,'dock-bottom')?.tabs,['assets','console','agent','frame_capture','texture_resources']);
+  assert.deepEqual(findDockStack(t,'dock-bottom')?.tabs,['assets','console','agent','frame_capture','texture_resources','simulation_profiler']);
 });
 test('move reorders within a tab stack',()=>{
   const t=moveTab(defaultDockTree(),'animation','dock-center','scene');
@@ -23,7 +23,7 @@ test('move reorders within a tab stack',()=>{
 test('dragging panels across stacks retains identity',()=>{
   const t=moveTab(defaultDockTree(),'inspector','dock-bottom');
   assert.equal(panelStack(t,'inspector'),'dock-bottom');
-  assert.deepEqual(findDockStack(t,'dock-right').tabs,['human_creator','lighting','runtime','nereid_flow','human_appearance','wind','history','terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','input','overlays','branding','asset_audit','fields','physis','actor','raid','balance','fx_graph','fx_functions','modeling','anim_assets','anim_graph','anim_rig','model_anim','project_import','stats','extensions','attachments','terraweave_generator','catalog']);
+  assert.deepEqual([...findDockStack(t,'dock-right').tabs].sort(),STUDIO_PANELS.filter(p=>STUDIO_PANEL_HOME[p]==='dock-right'&&p!=='inspector').sort());
 });
 test('closing and reopening recreates a panel only once',()=>{
   let t=closeTab(defaultDockTree(),'scene');
@@ -53,13 +53,13 @@ test('window edge dock refuses the only remaining tab',()=>{
   assert.deepEqual(splitDockRoot(only,'scene','right'),normalizeDockTree(only));
 });
 test('sole tab can still dock onto another stack',()=>{
-  const base=closeTab(closeTab(closeTab(closeTab(defaultDockTree(),'assets'),'agent'),'frame_capture'),'texture_resources');
+  const base=closeTab(closeTab(closeTab(closeTab(closeTab(defaultDockTree(),'assets'),'agent'),'frame_capture'),'texture_resources'),'simulation_profiler');
   const t=splitDockStack(base,'console','dock-center','left');
   assert.equal(panelStack(t,'console')!=='dock-bottom',true);
   assert.equal(dockStacks(t).flatMap(s=>s.tabs).filter(x=>x==='console').length,1);
 });
 test('cannot split away sole tab from its own stack',()=>{
-  const base=closeTab(closeTab(closeTab(closeTab(defaultDockTree(),'assets'),'agent'),'frame_capture'),'texture_resources');
+  const base=closeTab(closeTab(closeTab(closeTab(closeTab(defaultDockTree(),'assets'),'agent'),'frame_capture'),'texture_resources'),'simulation_profiler');
   const t=splitDockStack(base,'console','dock-bottom','bottom');
   assert.deepEqual(t,base);
 });
@@ -113,24 +113,20 @@ test('moving a last tab prunes the source split and expands its neighbor',()=>{
   assert.equal(t.root.first.id,'split-body-right');
 });
 test('closing last right panels removes their obsolete split',()=>{
-  let t=closeTab(defaultDockTree(),'inspector');
-  assert.ok(findDockStack(t,'dock-right'));
-  t=closeTab(closeTab(closeTab(t,'lighting'),'runtime'),'nereid_flow');
-  assert.ok(findDockStack(t,'dock-right'));
-  t=closeTab(closeTab(closeTab(closeTab(t,'human_appearance'),'wind'),'human_creator'),'history');
-  for(const tool of ['terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','input','overlays','branding','asset_audit','fields','physis','actor','raid','balance','fx_graph','fx_functions','modeling','anim_assets','anim_graph','anim_rig','model_anim','project_import','stats','extensions','attachments'])t=closeTab(t,tool);
+  let t=defaultDockTree();
+  for(const panel of STUDIO_PANELS.filter(p=>STUDIO_PANEL_HOME[p]==='dock-right'))t=closeTab(t,panel);
   assert.equal(findDockStack(t,'dock-right'),null);
   assert.equal(dockStacks(t).length,3);
 });
 test('reopening Inspector restores pruned right-hand dock',()=>{
-  let t=closeTab(closeTab(closeTab(closeTab(closeTab(closeTab(closeTab(closeTab(defaultDockTree(),'inspector'),'lighting'),'runtime'),'nereid_flow'),'human_appearance'),'wind'),'human_creator'),'history');
-  for(const tool of ['terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','input','overlays','branding','asset_audit','fields','physis','actor','raid','balance','fx_graph','fx_functions','modeling','anim_assets','anim_graph','anim_rig','model_anim','project_import','stats','extensions','attachments'])t=closeTab(t,tool);
+  let t=defaultDockTree();
+  for(const panel of STUDIO_PANELS.filter(p=>STUDIO_PANEL_HOME[p]==='dock-right'))t=closeTab(t,panel);
   t=reopenTab(t,'inspector','dock-right');
   assert.equal(panelStack(t,'inspector'),'dock-right');
   assert.equal(dockStacks(t).length,4);
 });
 test('reopening Assets restores pruned bottom dock',()=>{
-  let t=closeTab(closeTab(closeTab(defaultDockTree(),'assets'),'console'),'agent');t=closeTab(closeTab(t,'frame_capture'),'texture_resources');
+  let t=closeTab(closeTab(closeTab(defaultDockTree(),'assets'),'console'),'agent');t=closeTab(closeTab(closeTab(t,'frame_capture'),'texture_resources'),'simulation_profiler');
   assert.equal(findDockStack(t,'dock-bottom'),null);
   t=reopenTab(t,'assets','dock-bottom');
   assert.equal(panelStack(t,'assets'),'dock-bottom');

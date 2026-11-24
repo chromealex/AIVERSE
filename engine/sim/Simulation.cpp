@@ -116,6 +116,8 @@ void Simulation::step() { (void)stepWithInput({}); }
 bool Simulation::stepWithInput(const std::function<void()>& prepareInput) {
     if(!readyToStep())return false;
     if(prepareInput)prepareInput();
+    const bool captureStep=profileWindowActive();
+    const int64_t stepStart=captureStep?profClock_():0;
     events_.clear();
 
     auto it = pending_.find(tick_);
@@ -150,6 +152,10 @@ bool Simulation::stepWithInput(const std::function<void()>& prepareInput) {
         }
     }
     ++tick_;
+    if(captureStep&&profileWindowActive()){
+        profileSteps_.push_back(profClock_()-stepStart);
+        if(profileSteps_.size()>=profileTarget_)endProfileWindow();
+    }
     return true;
 }
 

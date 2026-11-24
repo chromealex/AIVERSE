@@ -320,7 +320,7 @@ export default function BuildingGeneratorPanel({
   };
   const clearGenerated=()=>{invalidateCandidates();setSaved(null);setThumbnail('');setStatus('');};
   const setBinding=(slot:string,value:string)=>{
-    if(busy||!projectLoaded||!selectedStyle?.materials.includes(slot))return;
+    if(busy||!projectLoaded||!selectedStyle?.materials?.includes(slot))return;
     if(value&&!Object.prototype.hasOwnProperty.call(materialLibrary.library,value))return;
     setMaterialBindings(old=>{const next={...old};if(value)next[slot]=value;else delete next[slot];return next;});
     clearGenerated();
