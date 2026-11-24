@@ -1,0 +1,3 @@
+# Stage 120 — planetary terrain mutation preflight
+
+Base e795f04d. In progress. TerraWeave owner refs 2d034dd6 and 6cd16e60 still expose planar Earthworks, not a canonical mutable planet Surface. Do not invent a second terrain state or change the owner's branch. Implement read-only seam-aware corner and affected-cell footprint for the existing GRANULAR transfer target, reject inconsistent corner aliases, preserve body identity and fixed units. Add source fixture for ordinary, edge, triple-corner, cross-body and invalid surface cases; document exact owner handoff and outstanding publication/persistence. Tests deferred; no main merge.
