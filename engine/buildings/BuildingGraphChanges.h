@@ -4,6 +4,8 @@
 // graph's topology or impersonates its authoritative writer.
 #include "engine/buildings/BuildingLiftColliderOwner.h"
 #include <algorithm>
+#include <array>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -52,10 +54,12 @@ struct BuildingGraphChange {
 
 // Owner-thread diagnostic snapshot. ACK means accepted invalidation, not
 // completed async rebuild. At most the latest accepted event per scene.
+struct BuildingGraphCallbackTiming {uint64_t calls=0,totalNs=0,lastNs=0,maxNs=0;};
 struct BuildingGraphDiagnostics {
     uint32_t registeredDomains=0,requestedDomains=0,pendingDomains=0;
     uint32_t acknowledgedDomains=0,missingOwners=0,refusedDomains=0;
     uint64_t attempts=0;
+    std::array<BuildingGraphCallbackTiming,8> callbackTimings{};
     std::optional<BuildingGraphChange> lastChange;
 };
 struct BuildingGraphDispatch {
@@ -83,6 +87,7 @@ public:
     void unregisterConsumer(BuildingGraphDomain domain){
         consumers_.erase(buildingGraphBit(domain));
     }
+    void setTimingEnabled(bool enabled)noexcept{timingEnabled_=enabled;}
     uint32_t registeredDomains()const noexcept{
         uint32_t mask=0;
         for(const auto& [domain,consumer]:consumers_)if(consumer)mask|=domain;
@@ -95,6 +100,7 @@ public:
         if(it==diagnostics_.end())return out;
         out.lastChange=it->second.change;
         out.attempts=it->second.attempts;
+        out.callbackTimings=it->second.timings;
         out.requestedDomains=it->second.change.domains;
         out.pendingDomains=pendingDomains(sceneId,it->second.change.revision);
         out.acknowledgedDomains=out.requestedDomains&~out.pendingDomains;
@@ -154,7 +160,19 @@ public:
         diag.refused=0;
         for(const auto& [domain,consumer]:consumers_){
             if(!(it->second&domain))continue;
-            if(!consumer(change)){
+            bool accepted=false;
+            if(timingEnabled_){
+                const auto start=std::chrono::steady_clock::now();
+                accepted=consumer(change);
+                const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-start).count();
+                for(size_t i=0;i<8;++i)if(domain==(1u<<i)){
+                    auto& t=diag.timings[i];const auto ns=uint64_t(std::max<int64_t>(0,elapsed));
+                    if(t.calls<UINT64_MAX)++t.calls;
+                    t.lastNs=ns;t.maxNs=std::max(t.maxNs,ns);
+                    t.totalNs+=std::min(UINT64_MAX-t.totalNs,ns);break;
+                }
+            }else accepted=consumer(change);
+            if(!accepted){
                 diag.refused=domain;
                 out.error="A graph owner refused committed building invalidation";
                 return out;
@@ -185,7 +203,8 @@ public:
         }
     }
 private:
-    struct DiagnosticRecord {BuildingGraphChange change;uint64_t attempts=0;uint32_t refused=0;};
+    struct DiagnosticRecord {BuildingGraphChange change;uint64_t attempts=0;uint32_t refused=0;std::array<BuildingGraphCallbackTiming,8> timings{};};
+    bool timingEnabled_=false;
     std::map<uint64_t,DiagnosticRecord> diagnostics_;
     std::map<uint32_t,Consumer> consumers_;
     std::map<uint64_t,uint64_t> latest_;
