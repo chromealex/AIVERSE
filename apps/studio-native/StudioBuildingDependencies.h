@@ -192,4 +192,46 @@ inline Json studioBuildingStaleMaterials(const std::filesystem::path& project){
     return out;
 }
 
+// Read-only provenance lookup for a catalogued texture. A manifest is an
+// authored bake record, not proof that the current PNG bytes still match it.
+inline Json studioBuildingTextureProvenance(const std::filesystem::path& project,const Json& params){
+    namespace fs=std::filesystem;
+    const auto guid=params.getStr("guid");
+    if(project.empty()||!studioValidGuid(guid))throw std::runtime_error("Invalid texture provenance request");
+    StudioAssetCatalog catalog(project);catalog.rebuild();
+    const auto entry=catalog.byGuid(guid);
+    if(!entry||entry->directory||entry->importer!="texture")throw std::runtime_error("Unknown texture asset");
+    Json out=Json::object();out.set("guid",Json::string(guid));out.set("path",Json::string(entry->path));
+    out.set("manifestFound",Json::fromBool(false));
+    const fs::path rel(entry->path);
+    std::vector<std::string> parts;
+    for(const auto& part:rel)parts.push_back(part.string());
+    if(rel.is_absolute()||parts.size()!=3||parts[0]!="textures"||rel.extension()!=".png")return out;
+    for(const auto& part:parts)if(part.empty()||part=="."||part=="..")return out;
+    const auto root=studioContentRoot(project);
+    auto file=root;std::error_code ec;
+    for(const auto& part:parts){
+        file/=part;
+        if(fs::is_symlink(fs::symlink_status(file,ec))||ec)return out;
+    }
+    const auto manifest=file.parent_path()/"texture-set.json";
+    const auto state=fs::symlink_status(manifest,ec);
+    if(ec||!fs::is_regular_file(state)||fs::is_symlink(state))return out;
+    const auto size=fs::file_size(manifest,ec);
+    if(ec||size>512u*1024u)return out;
+    const auto doc=Json::parseFile(manifest.string());
+    if(doc.getInt("version")!=1||!doc["graph"].isObject()||!doc["files"].isArray()||doc["files"].size()>32)return out;
+    const auto expected="content/"+entry->path;
+    std::string output;size_t matches=0;
+    for(const auto& row:doc["files"].items()){
+        if(row.getStr("path")!=expected)continue;
+        output=row.getStr("output");++matches;
+    }
+    if(matches!=1||output.empty()||output.size()>64||file.stem().string()!=output)return out;
+    out.set("manifestFound",Json::fromBool(true));
+    out.set("manifestPath",Json::string(manifest.lexically_relative(root).generic_string()));
+    out.set("output",Json::string(output));out.set("graph",doc["graph"]);
+    if(doc["overrides"].isObject())out.set("overrides",doc["overrides"]);
+    return out;
+}
 } // namespace aiverse::studio
