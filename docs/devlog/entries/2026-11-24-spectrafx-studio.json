@@ -1,0 +1,40 @@
+{
+  "id": "2026-11-24-spectrafx-studio",
+  "date": "2026-11-24",
+  "system": "spectrafx",
+  "title": "Объёмные частицы в сцене и Studio",
+  "summary": "Граф объёмных частиц теперь отображается в игровой сцене и предпросмотре Studio. Частицы с учётом глубины соединяются с HDR-кадром после отрисовки геометрии.",
+  "body": [
+    "Источник SpectraSource размещает граф частиц в сцене. В редакторе тот же материал можно открыть в нативном предпросмотре; объём и частицы совместного графа отображаются через общий путь сцены."
+  ],
+  "status": "in-progress",
+  "verified": "Показано на macOS в нативном предпросмотре Studio с Metal: кадр захвачен из работающего GPU-прохода.",
+  "limits": "Пока доступны плоские сцены и неподвижная точка размещения. Отображение на планетах и Vulkan ещё не проверено.",
+  "branch": "codex/spectrafx-volumetric-scene",
+  "commit": "49e581547",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-24-spectrafx-studio/01.png",
+      "caption": "Объёмная частица в предпросмотре Studio над сеткой сцены.",
+      "captionEn": "A volumetric particle in Studio preview above the scene grid."
+    }
+  ],
+  "links": [
+    {
+      "title": "SpectraFX volumetrics",
+      "href": "docs/spectrafx-volumetrics.md"
+    },
+    {
+      "title": "Stage 155 handoff",
+      "href": "docs/agent-handoffs/spectrafx-stage155-volumetric-scene-2026-11-24.md"
+    }
+  ],
+  "author": "SpectraFX",
+  "titleEn": "Volumetric particles in scenes and Studio",
+  "summaryEn": "Volumetric particle graphs now appear in game scenes and Studio preview. Depth-aware particles join the HDR frame after geometry rendering.",
+  "bodyEn": [
+    "A SpectraSource places the particle graph in the scene. The same material opens in the native Studio preview; a combined gas and particle graph follows the shared scene rendering path."
+  ],
+  "verifiedEn": "Shown on macOS in the native Studio preview with Metal; the frame was captured from the running GPU pass.",
+  "limitsEn": "Currently limited to flat scenes and a fixed placement point. Planet scenes and Vulkan rendering have not been verified."
+}
