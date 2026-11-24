@@ -47,3 +47,5 @@ FixedQuaternion.h: bounded Q16 normalization, normalized Hamilton product, axis-
 FixedQuaternion.h adds normalized rotation inverse, shortest-arc SLERP with NLERP fallback, right-handed rotation basis conversion and look rotation (+Z forward/+Y up). Parallel up/forward rejected; approximate orthonormal basis required. No float or tests.
 
 FixedMatrix.h: row-major 3x3/4x4, column-vector convention, bounded multiply, transpose, TRS, affine point/direction transform and inverse TRS without shear. Near-zero scales rejected; no general inverse yet. Q16 only. No build/tests.
+
+FixedCurves.h: cubic Hermite and derivative, uniform Catmull–Rom, uniform cubic B-spline, sampled arc length table and distance-to-parameter lookup. Bounded Q16 coordinates, 1–4096 samples; approximate constant speed, not exact arc length. No builds/tests.
