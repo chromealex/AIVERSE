@@ -24,10 +24,12 @@ struct CavePlanetRuntimeCandidate {
     std::vector<CavePlanetNativeSlot> volume;
     // Numeric source revisions alone are not sufficient after rollback.
     bool current(const World& ecs,uint64_t epoch)const{
-        if(generation!=epoch||!cut)return false;
+        if(!generation||generation!=epoch||!cut||sources.size()!=cut->regions.size())return false;
         for(const auto& [id,source]:sources){
             const auto* entry=findPlanetCaveRegion(ecs,id);
-            if(!entry||!sameCavePlanetAnchor(entry->region.anchor,cut->regions.at(id)->anchor)||
+            const auto it=cut->regions.find(id);
+            if(!entry||!source||it==cut->regions.end()||!it->second||
+               !sameCavePlanetAnchor(entry->region.anchor,it->second->anchor)||
                caveSnapshotToJson(entry->authority.volume)!=caveSnapshotToJson(*source))return false;
         }
         return true;
@@ -79,6 +81,37 @@ inline CaveSurfaceGroupPlan refinePlanetRuntimeCut(CavePlanetCutPlan& cut,
         for(const auto& t:slot.chartTriangles)slot.bodyTriangles.push_back({body(t.a),body(t.b),body(t.c)});
     }
     return plan;
+}
+// A mesh-only edge check would miss an entirely empty (all air) boundary.
+// Verify the actual sampled SDF is solid on the outer grid, and require all
+// authored influences to fit within the interior lattice. This is a sampled
+// lattice certificate, not a proof of unsampled sub-voxel geometry.
+inline void certifyPlanetRuntimeInterior(const CavePlanetBuildRegion& r){
+    if(r.keys.empty()||!r.index||!r.snapshot)throw std::invalid_argument("Caverns missing interior");
+    const int64_t span=int64_t(r.lattice.resolution)*r.lattice.spacingCm;
+    // Do not depend on the KeyLess iteration order for the actual bounds.
+    int64_t low=0;
+    for(const auto& k:r.keys)low=std::min({low,k.x,k.y,k.z});
+    const int64_t cap=-low*span;
+    const auto inside=[&](PointCm p,int64_t radius){
+        return p.x-radius>-cap&&p.x+radius<cap&&p.y-radius>-cap&&p.y+radius<cap&&
+               p.z-radius>-cap&&p.z+radius<cap;
+    };
+    for(const auto& stamp:r.snapshot->stamps)
+        if(!inside(stamp.center,stamp.radiusCm))throw std::invalid_argument("Caverns runtime stamp outside interior lattice");
+    for(const auto& e:r.snapshot->entrances)
+        if(!inside({e.xCm,e.caveYcm,e.zCm},e.radiusCm)||
+           !inside({e.xCm,e.surfaceYcm,e.zCm},e.radiusCm))
+            throw std::invalid_argument("Caverns runtime shaft outside interior lattice");
+    const auto spacing=r.lattice.spacingCm;
+    if(cap<=0||spacing<=0||cap%spacing)throw std::invalid_argument("Caverns runtime interior grid");
+    for(int64_t u=-cap;u<=cap;u+=spacing)
+        for(int64_t v=-cap;v<=cap;v+=spacing)
+            for(const auto sign:{-1,1}){
+                const auto edge=sign*cap;
+                for(const auto p:{PointCm{edge,u,v},PointCm{u,edge,v},PointCm{u,v,edge}})
+                    if(r.index->field(p)>=0)throw std::invalid_argument("Caverns runtime boundary not solid");
+            }
 }
 inline std::vector<CavePlanetNativeSlot> preparePlanetRuntimeVolume(CavePlanetBuildRegion& region,
         const CavePlanetDemandConfig& cfg,uint64_t nativeRevision,
@@ -170,10 +203,20 @@ public:
             body->regions.emplace(id,cut);
             next.push_back({id,std::move(frame),snapshot,
                 std::make_shared<const CaveSnapshotSpatialIndex>(snapshot),std::move(cut),lattice,std::move(keys),{}});
+            certifyPlanetRuntimeInterior(next.back());
         }
         (void)certifyPlanetBodyCut(*body,surface);
         generation_=generation;nativeRevision_=nativeRevision;surface_=surface;
         plan_=std::move(body);regions_=std::move(next);region_=0;
+    }
+    bool current(const World& ecs,uint64_t generation)const{
+        if(!busy()||generation!=generation_)return false;
+        for(const auto& r:regions_){
+            const auto* entry=findPlanetCaveRegion(ecs,r.id);
+            if(!entry||!sameCavePlanetAnchor(entry->region.anchor,r.frame.anchor())||
+               caveSnapshotToJson(entry->authority.volume)!=caveSnapshotToJson(*r.snapshot))return false;
+        }
+        return true;
     }
     // Returns true only when all immutable source meshes have arrived.
     bool pump(size_t maxDispatch=2){
