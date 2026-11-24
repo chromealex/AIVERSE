@@ -29,7 +29,10 @@
     "apps/studio-web/src/mock.ts",
     "apps/studio-web/src/graphs/buildingMaterialDependencies.ts",
     "apps/studio-web/src/graphs/BuildingMaterialDependenciesView.tsx",
-    "apps/studio-web/tests/buildingMaterialDependencies.test.mjs"
+    "apps/studio-web/tests/buildingMaterialDependencies.test.mjs",
+    "apps/studio-web/src/graphs/buildingGeometryGraph.ts",
+    "apps/studio-web/src/graphs/BuildingGeometryGraphView.tsx",
+    "apps/studio-web/tests/buildingGeometryGraph.test.mjs"
   ],
   "traits": {
     "editable": true,
@@ -40,7 +43,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35H.2 owner draft editing and material/texture dependency projection; native GUID-based recorded texture bake provenance. No resolved GLB or current texture-byte proof; acceptance pending.",
+      "note": "Stage 35H.3: native geometry counts and source-level independent graph owner inventory; no runtime registration or PHYSIS/NavMesh acceptance claim.",
       "evidence": []
     },
     "architecture": {
@@ -110,7 +113,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F.1–35F.3 fixtures added; NOT RUN. Stage 35H.2 dependency fixtures registered, NOT RUN.",
+      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F.1–35F.3 fixtures added; NOT RUN. Stage 35H.2 dependency fixtures registered, NOT RUN. Stage 35H.3 geometry projection fixtures registered, NOT RUN.",
       "evidence": []
     },
     "handoff": {
