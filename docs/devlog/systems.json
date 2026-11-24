@@ -62,6 +62,14 @@
     {
      "status": "in-progress",
      "target": null,
+     "title": "Планетарный лес: падение после естественной гибели",
+     "titleEn": "Planetary forest: natural mortality fall",
+     "text": "Stage 156: опциональный порог остатка древесины, существующий root fall outbox и PHYSIS, физический владелец принимает событие.",
+     "textEn": "Stage 156: optional remaining wood threshold, existing root fall outbox and PHYSIS; physical owner consumes the event."
+    },
+    {
+     "status": "in-progress",
+     "target": null,
      "title": "Планетарный лес: интерполяция физических поз",
      "titleEn": "Planetary forest: physical pose interpolation",
      "text": "Stage 155: последовательные подтверждённые позы, без экстраполяции и с учётом rollback и видимости.",
