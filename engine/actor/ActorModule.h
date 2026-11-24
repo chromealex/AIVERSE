@@ -1,7 +1,6 @@
 #pragma once
 #include "engine/sim/Simulation.h"
 #include "engine/world/SpatialWorld.h"
-#include "engine/world/TerraWeaveCavernsPathRouter.h"
 #include <cstddef>
 #include <deque>
 #include <map>
@@ -20,10 +19,6 @@
 #include <utility>
 
 #include "../game/HostSystems.h"
-namespace aiverse::terraweave::caverns {
-class CaveNavigationDataProvider;
-class CaveNavigationRegionCache;
-}
 namespace aiverse::actor {
 constexpr uint32_t kBuildingColliderBase=0x40000000;
 constexpr uint32_t kRotatedColliderBase=0x50000000;   // triangles of map colliders with a "yaw" (12 per box)   // collider ids of map `buildings` (building-gen)
@@ -119,31 +114,6 @@ public:
     const Config& config() const { return config_; }
 
     const world::SpatialWorld& collision() const { return collision_; }
-    using CaveRouteResolver=std::function<
-        terraweave::caverns::CavePathResult(
-            const std::string&,
-            const terraweave::caverns::CavePathQuery&,
-            std::shared_ptr<const terraweave::caverns::CaveNavigationDataProvider>)>;
-    // Optional authoritative game module override for user/custom path
-    // solvers. Set between ticks after setup; no duplicate actor motor.
-    // Assign an authoritative C++ cave goal to a real ActorHost character,
-    // leaving movement and collision with the existing CharacterBody motor.
-    // Called only AFTER the actual native SpatialWorld/Box3D/cave SDF
-    // source was committed under the game's exclusive world barrier.
-    // A visual-only editor callback cannot advance actor navigation.
-    bool acceptCommittedCaveNavigation(
-        std::shared_ptr<const terraweave::caverns::CaveNavigationDataProvider>
-            published,
-        const terraweave::caverns::CaveNavigationChange& change,
-        const std::function<bool()>& exclusive);
-    bool navigateCaveActor(Simulation& sim,Entity entity,
-        terraweave::caverns::PointCm goal,
-        terraweave::caverns::CaveAgentProfile profile={},
-        std::string algorithm="astar",uint32_t speedCmPerTick=25,
-        uint32_t maxVisits=8192);
-    void setCaveRouteResolver(CaveRouteResolver resolver) {
-        caveRouteResolver_=std::move(resolver);
-    }
     void setContentReader(world::AssetReader);
     bool readyToStep(Simulation&) override;
     const world::AsyncChunkStream::Status* streamingStatus()const{return streamedCollision_?&streamedCollision_->status():nullptr;}
@@ -241,14 +211,6 @@ private:
 
     Config config_;
     world::SpatialWorld collision_;
-    // Opt-in single-motor cave steering. No second Transform mover: the
-    // existing CharacterBody + moveActor owns the authoritative position.
-    std::shared_ptr<const terraweave::caverns::CaveNavigationDataProvider>
-        caveNavigation_;
-    CaveRouteResolver caveRouteResolver_;
-    std::shared_ptr<terraweave::caverns::CaveNavigationRegionCache>
-        caveRegionCache_;
-
     std::vector<Vec3> spawns_;
     std::vector<bool> bots_;
     uint64_t contentHash_=0;
