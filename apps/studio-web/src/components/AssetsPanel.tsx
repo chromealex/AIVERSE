@@ -84,7 +84,7 @@ function PreviewDialog({plan,busy,onCancel,onCommit}:{
               <small>Ready · no conflict</small>}
             {(plan.references??[]).filter(ref=>ref.id===item.id).map((ref,index)=>
               <small key={index} className={ref.writable?'':'studio-asset-conflict-warning'}>
-                {ref.writable?'Will repair material reference: ':ref.validateOnApply?(ref.preservesDefault?'Default move preserves resource; final choices rechecked: ':ref.repairCandidate?'Will attempt transactional glTF URI repair: ':'Resource must remain resolvable; final choices checked: '):'Blocked: read-only reference: '}
+                {ref.writable?'Will repair material reference: ':ref.validateOnApply?(ref.preservesDefault?'Default move preserves resource; final choices rechecked: ':ref.repairCandidate?'Will attempt transactional resource path repair: ':'Resource must remain resolvable; final choices checked: '):'Blocked: read-only reference: '}
                 {ref.document} / {ref.owner} / {ref.field}
               </small>)}
           </div>

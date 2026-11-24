@@ -334,6 +334,36 @@ int main(){
             fs::remove(model);fs::remove(texture);fs::remove(studioMetaPath(model));fs::remove(studioMetaPath(texture));db.rebuild(false);
         }
 
+        // S6g.6.4: exact Wavefront and COLLADA text resource repair.
+        {
+            using namespace aiverse;
+            using namespace aiverse::studio;
+            const auto dir=project/"content"/"Models";
+            const auto obj=dir/"Repair.obj",mtl=dir/"Repair.mtl",dae=dir/"Repair.dae",tex=dir/"repair-texture.png";
+            const std::string objBytes="# keep comment\r\nmtllib ./Repair.mtl\r\nv 0 0 0\r\n";
+            const std::string mtlBytes="newmtl paint\r\n  map_Kd -s 1 1 1 ./repair-texture.png  \r\nmap_Pr ignored.png\r\n";
+            const std::string daeBytes="<COLLADA xmlns=\"urn:collada\"><library_images><image id=\"a\"><init_from><ref> ./repair-texture.png </ref></init_from></image></library_images></COLLADA>";
+            write(obj,objBytes);write(mtl,mtlBytes);write(dae,daeBytes);write(tex,"texture");db.rebuild();
+            auto move=StudioTransferPlan::internal(project,"Other",{"Models/repair-texture.png"});
+            std::optional<editor::ProjectHistory::MovePlan> recorded;
+            const auto result=move.apply(move.token(),{},{},&recorded,true);
+            AIVERSE_TEST_CHECK(recorded&&result.getInt("repairedResourceDocuments")==2);
+            AIVERSE_TEST_CHECK(read(mtl).find("  map_Kd -s 1 1 1 ../Other/repair-texture.png  \r\n")!=std::string::npos);
+            AIVERSE_TEST_CHECK(read(dae).find("<ref> ../Other/repair-texture.png </ref>")!=std::string::npos);
+            AIVERSE_TEST_CHECK(read(obj)==objBytes);
+            studioReplayAssetMove(project,*recorded,false);
+            AIVERSE_TEST_CHECK(read(mtl)==mtlBytes&&read(dae)==daeBytes);
+            studioReplayAssetMove(project,*recorded,true);studioReplayAssetMove(project,*recorded,false);
+            move=StudioTransferPlan::internal(project,"Other",{"Models/Repair.obj"});
+            (void)move.apply(move.token(),{},{},&recorded,true);
+            AIVERSE_TEST_CHECK(recorded&&read(project/"content"/"Other"/"Repair.obj").find("mtllib ../Models/Repair.mtl")!=std::string::npos);
+            AIVERSE_TEST_CHECK(read(mtl).find("../Models/repair-texture.png")!=std::string::npos);
+            studioReplayAssetMove(project,*recorded,false);
+            AIVERSE_TEST_CHECK(read(obj)==objBytes&&read(mtl)==mtlBytes);
+            for(const auto& path:{obj,mtl,dae,tex}){fs::remove(path);fs::remove(studioMetaPath(path));}
+            db.rebuild(false);
+        }
+
         // S6h.1: persisted quota blocks growth, not restoration or explicit purge.
         {
             using namespace aiverse;

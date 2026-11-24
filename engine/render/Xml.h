@@ -18,6 +18,7 @@ struct Element {
     std::vector<std::pair<std::string, std::string>> attrs;
     std::string text;                 // character data directly inside this element (concatenated)
     std::vector<Element> children;
+    size_t contentBegin=0,contentEnd=0; // offsets in the parser's input text
 
     const std::string* findAttr(std::string_view n) const {
         for (auto& a : attrs) if (a.first == n) return &a.second;
@@ -171,6 +172,7 @@ private:
             el.attrs.emplace_back(local(an), std::move(v));
         }
         // content
+        el.contentBegin=p_;
         while (true) {
             if (p_ >= s_.size()) fail("element <" + raw + "> is not closed");
             if (s_[p_] != '<') {
@@ -181,6 +183,7 @@ private:
                 continue;
             }
             if (startsWith("</")) {
+                el.contentEnd=p_;
                 p_ += 2;
                 const std::string close = name();
                 skipSpace();

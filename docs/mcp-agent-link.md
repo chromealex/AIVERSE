@@ -96,3 +96,6 @@ Internal move uses projected owner paths for textual glTF URI repair, including 
 
 ### S6g.6.3 — binary GLB URI repair
 Internal moves repair bounded GLB v2 JSON chunks with exact trailing chunk preservation, binary-safe history and v6 journal recovery. Models exceeding retained repair budgets are refused before mutation. Existing MCP operation and preview fields are unchanged.
+
+### S6g.6.4 — Wavefront and COLLADA repair
+Native move owner now plans supported OBJ mtllib, MTL texture and DAE leaf image paths with exact text-span edits and shared MTL conflict refusal. Existing linked preview/commit use the same owner; UTF-16/mixed XML leaf rewrites and unrepresentable Wavefront texture names are refused.

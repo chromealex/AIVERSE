@@ -2,6 +2,7 @@
 // every following chunk (header, bytes and padding) is retained verbatim.
 #pragma once
 #include "engine/data/Json.h"
+#include "engine/render/Xml.h"
 #include "apps/editor/core/ProjectFileEdits.h"
 #include <filesystem>
 #include <cstdint>
@@ -12,6 +13,9 @@
 namespace aiverse::studio {
 inline constexpr size_t StudioResourceEditBudget=8u*1024u*1024u;
 inline bool studioRepairModelExtension(const std::filesystem::path& path){
+    return path.extension()==".gltf"||path.extension()==".glb"||path.extension()==".obj"||path.extension()==".mtl"||path.extension()==".dae";
+}
+inline bool studioRepairGltfExtension(const std::filesystem::path& path){
     return path.extension()==".gltf"||path.extension()==".glb";
 }
 inline bool studioIsBinaryGlb(const std::string& bytes){
@@ -31,7 +35,7 @@ struct StudioModelRepairDocument {
     bool binary=false;
 };
 inline StudioModelRepairDocument studioDecodeModelRepair(const std::filesystem::path& path,const std::string& bytes){
-    if(!studioRepairModelExtension(path)||bytes.size()>StudioResourceEditBudget)
+    if(!studioRepairGltfExtension(path)||bytes.size()>StudioResourceEditBudget)
         throw std::runtime_error("Unsupported or oversized model repair document");
     StudioModelRepairDocument result;
     result.binary=studioIsBinaryGlb(bytes);
@@ -72,6 +76,17 @@ inline std::string studioEncodeModelRepair(const StudioModelRepairDocument& doc)
     result+=text;result+=doc.tail;return result;
 }
 inline void studioValidateModelRepairBytes(const editor::ProjectFileEdit& edit){
+    if(!studioRepairModelExtension(edit.path)||edit.before.size()>StudioResourceEditBudget||
+       edit.after.size()>StudioResourceEditBudget-edit.before.size())
+        throw std::runtime_error("Invalid resource edit budget or extension");
+    if(!studioRepairGltfExtension(edit.path)){
+        if(edit.path.extension()==".dae"){
+            for(const auto* bytes:{&edit.before,&edit.after})
+                if(render::xml::parse(render::xml::toUtf8(*bytes)).name!="COLLADA")
+                    throw std::runtime_error("Invalid DAE repair document");
+        }
+        return;
+    }
     const auto before=studioDecodeModelRepair(edit.path,edit.before),after=studioDecodeModelRepair(edit.path,edit.after);
     if(before.binary!=after.binary||before.tail!=after.tail)
         throw std::runtime_error("Model repair changed non-JSON chunks");
@@ -98,7 +113,7 @@ inline std::string studioResourceUnhex(const std::string& text){
 }
 inline Json studioEncodeResourceEdit(const editor::ProjectFileEdit& edit){
     Json row=Json::object();row.set("path",Json::string(edit.path.generic_string()));
-    if(studioIsBinaryGlb(edit.before)||studioIsBinaryGlb(edit.after)){
+    if(!studioRepairGltfExtension(edit.path)||studioIsBinaryGlb(edit.before)||studioIsBinaryGlb(edit.after)){
         row.set("encoding",Json::string("hex"));
         row.set("before",Json::string(studioResourceHex(edit.before)));
         row.set("after",Json::string(studioResourceHex(edit.after)));

@@ -8,6 +8,7 @@
 #include "engine/pack/Sha256.h"
 #include "apps/editor/core/ProjectFileEdits.h"
 #include "apps/studio-native/StudioModelRepairBytes.h"
+#include "apps/studio-native/StudioTextResourceRepair.h"
 #include <iterator>
 #include <map>
 #include <algorithm>
@@ -33,6 +34,9 @@ struct StudioAssetReference {
     std::string guid;     // empty for unresolved/legacy paths
     bool writable = false; // currently only materials.json slots support repair
     std::string uri{}; // original model resource name, native relocation validation only
+    std::string editDocument{}; // physical text owner for OBJ/MTL repair
+    size_t editLine=0;
+    std::string editSlot{};
 };
 
 inline constexpr const char* kStudioTextureFields[] = {
@@ -192,8 +196,8 @@ inline Json studioMoveReferenceImpact(const Json& transfer,
                 // promise that rewriting the source is supported.
                 row.set("validateOnApply",Json::fromBool(true));
                 row.set("preservesDefault",Json::fromBool(studioGltfRelocationSafe(ref,defaults)));
-                row.set("repairCandidate",Json::fromBool(ref.owner=="glTF resource"&&
-                    studioRepairModelExtension(std::filesystem::path(ref.document))&&
+                row.set("repairCandidate",Json::fromBool(
+                    studioRepairModelExtension(std::filesystem::path(ref.editDocument.empty()?ref.document:ref.editDocument))&&
                     (studioRelocatedReferencePath(ref.document,defaults)!=ref.document||
                      studioRelocatedReferencePath(ref.path,defaults)!=ref.path)));
             }
@@ -417,7 +421,7 @@ struct StudioDependencyCoverage{
     }
 };
 inline std::vector<StudioAssetReference> studioCollectGltfReferences(
-    const std::filesystem::path& project,const std::map<std::string,std::string>& guids,StudioDependencyCoverage* coverage=nullptr){
+    const std::filesystem::path& project,const std::map<std::string,std::string>& guids,StudioDependencyCoverage* coverage=nullptr,bool includeUnsupportedWavefront=false){
     namespace fs=std::filesystem;
     const auto root=fs::canonical(project),content=root/"content";
     std::vector<StudioAssetReference> refs;
@@ -447,16 +451,17 @@ inline std::vector<StudioAssetReference> studioCollectGltfReferences(
         auto ext=model.extension().string();
         for(auto& c:ext)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         const auto source=model.lexically_relative(root).generic_string();
-        const auto append=[&](const std::string& owner,const std::string& field,const std::string& name,const std::string& target){
+        const auto append=[&](const std::string& owner,const std::string& field,const std::string& name,const std::string& target,
+            const std::string& editDocument=std::string{},size_t editLine=0,const std::string& editSlot=std::string{}){
             if(target.empty()){
                 if(coverage&&!name.empty()){
                     if(name.starts_with("data:"))++coverage->embedded;else ++coverage->unsupportedUris;
                 }
-                return;
+                if(!includeUnsupportedWavefront||owner!="OBJ resource"||editDocument.empty())return;
             }
             const auto found=guids.find(target);
             if(refs.size()>=32768)throw std::runtime_error("Model dependency result budget exceeded");
-            refs.push_back({source,owner,field,target,found==guids.end()?std::string{}:found->second,false,name});
+            refs.push_back({source,owner,field,target,found==guids.end()?std::string{}:found->second,false,name,editDocument,editLine,editSlot});
         };
         if(ext==".dae"){
             if(coverage)++coverage->dae;
@@ -486,7 +491,7 @@ inline std::vector<StudioAssetReference> studioCollectGltfReferences(
             studioVisitWavefront(model,bytes,[&](const std::string& key,const std::string& name,size_t line){
                 if(key!="mtllib")return;
                 const auto mtl=studioObjResourcePath(source,name);
-                append("OBJ resource","line "+std::to_string(line)+" / mtllib",name,mtl);
+                append("OBJ resource","line "+std::to_string(line)+" / mtllib",name,mtl,source,line,"mtllib");
                 if(mtl.empty())return;
                 if(!studioSafeModelResourceFile(root,mtl)){if(coverage)++coverage->missingLibraries;return;}
                 bool material=false;
@@ -495,7 +500,7 @@ inline std::vector<StudioAssetReference> studioCollectGltfReferences(
                     if(!material||(slot!="map_Kd"&&slot!="map_Bump"&&slot!="map_bump"&&slot!="bump"&&slot!="norm"&&slot!="map_Ke"))return;
                     const auto split=rest.find_last_of(" \t");
                     const auto texture=split==std::string::npos?rest:rest.substr(split+1);
-                    append("OBJ resource",mtl+":"+std::to_string(row)+" / "+slot,texture,studioObjResourcePath(source,texture));
+                    append("OBJ resource",mtl+":"+std::to_string(row)+" / "+slot,texture,studioObjResourcePath(source,texture),mtl,row,slot);
                 });
             });
             continue;
@@ -556,12 +561,41 @@ inline std::vector<editor::ProjectFileEdit> studioPlanGltfRepairs(const std::fil
     namespace fs=std::filesystem;
     struct Pending{std::string before;StudioModelRepairDocument doc;};
     std::map<std::string,Pending> pending;
+    struct TextDemand{std::string original,desired;bool changed=false;};
+    std::map<std::string,std::map<std::string,TextDemand>> demands;
+    std::set<std::string> changedText;
     size_t bytes=0;
     const auto root=fs::canonical(project);
     if(moves.empty())return {};
-    for(const auto& ref:studioCollectGltfReferences(project,{})){
-        if(studioGltfRelocationSafe(ref,moves))continue;
+    for(const auto& ref:studioCollectGltfReferences(project,{},nullptr,true)){
+        const bool safe=ref.path.empty()||studioGltfRelocationSafe(ref,moves);
         const auto owner=studioRelocatedReferencePath(ref.document,moves),target=studioRelocatedReferencePath(ref.path,moves);
+        if(ref.owner=="OBJ resource"||ref.owner=="DAE resource"){
+            const auto physical=ref.editDocument.empty()?ref.document:ref.editDocument;
+            const auto key=ref.owner=="DAE resource"?ref.field:std::to_string(ref.editLine)+"/"+ref.editSlot;
+            std::string desired=ref.uri;
+            if(!safe){
+                for(const auto& move:moves)
+                    if(target==ref.path&&studioReferenceMatchesPath(ref.path,move.to,move.directory))
+                        throw std::runtime_error("Move would adopt an existing destination reference");
+                if(ref.owner=="OBJ resource"){
+                    desired=fs::path(target).lexically_relative(fs::path(owner).parent_path()).generic_string();
+                    if(desired.empty()||studioObjResourcePath(owner,desired)!=target||
+                       (ref.editSlot!="mtllib"&&desired.find_first_of(" \t\r\n")!=std::string::npos))
+                        throw std::runtime_error("Wavefront loader cannot represent repaired resource name");
+                }else desired=studioRelativeGltfUri(owner,target);
+                changedText.insert(physical);
+            }
+            // Shared MTL slots are resolved relative to each consuming OBJ.
+            // Keep every consumer's demand, including unchanged/unsupported slots.
+            auto& slots=demands[physical];
+            const auto it=slots.find(key);
+            if(it==slots.end())slots.emplace(key,TextDemand{ref.uri,desired,!safe});
+            else if(it->second.original!=ref.uri||it->second.desired!=desired)
+                throw std::runtime_error("Shared MTL requires incompatible resource paths: "+physical);
+            continue;
+        }
+        if(safe)continue;
         for(const auto& move:moves)
             if(target==ref.path&&studioReferenceMatchesPath(ref.path,move.to,move.directory))
                 throw std::runtime_error("Move would adopt an existing destination reference");
@@ -597,6 +631,28 @@ inline std::vector<editor::ProjectFileEdit> studioPlanGltfRepairs(const std::fil
     }
     std::vector<editor::ProjectFileEdit> result;
     size_t afterBytes=0;
+    for(const auto& path:changedText){
+        if(pending.size()+result.size()>=32||!studioRepairModelExtension(fs::path(path))||
+           !studioSafeModelResourceFile(root,path)||fs::file_size(root/path)>StudioResourceEditBudget/2-bytes)
+            throw std::runtime_error("Text resource repair history budget or file type");
+        auto before=editor::readProjectFileBytes(root/path);
+        if(before.size()>StudioResourceEditBudget/2-bytes)throw std::runtime_error("Text resource repair budget exceeded");
+        bytes+=before.size();
+        const auto slots=studioTextSlots(fs::path(path),before);
+        std::map<std::string,std::string> replacements;
+        for(const auto& [key,demand]:demands.at(path)){
+            if(!demand.changed)continue;
+            const auto slot=std::find_if(slots.begin(),slots.end(),[&](const auto& value){return value.key==key;});
+            if(slot==slots.end()||slot->value!=demand.original)
+                throw std::runtime_error("Text resource changed during repair planning");
+            replacements.emplace(key,fs::path(path).extension()==".dae"?studioXmlResourceEscape(demand.desired):demand.desired);
+        }
+        auto after=studioPatchTextSlots(before,slots,replacements);
+        if(after.size()>StudioResourceEditBudget/2-afterBytes)throw std::runtime_error("Text resource repair budget exceeded");
+        afterBytes+=after.size();
+        result.push_back({fs::path(path),std::move(before),std::move(after)});
+    }
+    bytes+=afterBytes;
     for(auto& [path,edit]:pending){
         auto after=studioEncodeModelRepair(edit.doc);
         // The same planner runs in both replay directions. Bound each side
@@ -607,12 +663,28 @@ inline std::vector<editor::ProjectFileEdit> studioPlanGltfRepairs(const std::fil
         afterBytes+=after.size();bytes+=after.size();
         result.push_back({fs::path(path),std::move(edit.before),std::move(after)});
     }
+    std::sort(result.begin(),result.end(),[](const auto& a,const auto& b){return a.path.generic_string()<b.path.generic_string();});
     return result;
 }
 // Replay may restore an equivalent noncanonical URI spelling and original
 // formatting. Compare normalized typed resource resolution, all other JSON
 // fields unchanged; exact source bytes are separately verified.
 inline std::string studioCanonicalGltfRepair(const std::string& path,const std::string& bytes){
+    if(!studioRepairGltfExtension(std::filesystem::path(path))){
+        const auto slots=studioTextSlots(std::filesystem::path(path),bytes);
+        std::map<std::string,std::string> normalized;
+        for(const auto& slot:slots){
+            if(std::filesystem::path(path).extension()==".dae"){
+                const auto resolved=studioDaeResourcePath(path,slot.value);
+                if(!resolved.empty())normalized.emplace(slot.key,studioXmlResourceEscape(resolved));
+            }else{
+                const auto& value=slot.value;
+                if(!value.empty()&&value.front()!='/'&&value.find_first_of(":\\")==std::string::npos)
+                    normalized.emplace(slot.key,std::filesystem::path(value).lexically_normal().generic_string());
+            }
+        }
+        return studioPatchTextSlots(bytes,slots,normalized);
+    }
     auto model=studioDecodeModelRepair(std::filesystem::path(path),bytes);
     auto& doc=model.json;
     for(const char* group:{"buffers","images"}){

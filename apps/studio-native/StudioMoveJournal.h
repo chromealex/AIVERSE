@@ -87,7 +87,7 @@ public:
                 syncPath(folder_/"materials.backup");
             }
             Json state=Json::object();
-            state.set("version",Json::number(int64_t(replacement?3:quarantine?2:resources.empty()?1:6)));
+            state.set("version",Json::number(int64_t(replacement?3:quarantine?2:resources.empty()?1:7)));
             if(!resources.empty()){
                 Json repairs=Json::array();
                 for(const auto& edit:resources){
@@ -124,7 +124,7 @@ public:
         // never reverse a committed transaction.
         const auto version=Json::parseFile((folder_/"pending.json").string())["version"].integer();
         const fs::path material=project_/"materials.json";
-        if ((version==1||version==4||version==5||version==6)&&fs::exists(material)) syncPath(material);
+        if ((version==1||version==4||version==5||version==6||version==7)&&fs::exists(material)) syncPath(material);
         syncPath(project_);
         renamePath(folder_/"pending.json",folder_/"committed.json");
         syncPath(folder_);
@@ -157,7 +157,7 @@ public:
         if(fs::file_size(pending)>64ull*1024*1024)throw std::runtime_error("Oversized Studio move journal");
         const Json state=Json::parseFile(pending.string());
         const auto version=state["version"].integer();
-        if ((version!=1&&version!=2&&version!=3&&version!=4&&version!=5&&version!=6) || !state["operations"].isArray() ||
+        if ((version!=1&&version!=2&&version!=3&&version!=4&&version!=5&&version!=6&&version!=7) || !state["operations"].isArray() ||
             state["operations"].size()>128)
             throw std::runtime_error("Invalid Studio move recovery manifest");
         if(version==3){restoreReplacement(state["operations"]);fs::remove_all(folder_);return;}
@@ -186,13 +186,13 @@ public:
                 throw std::runtime_error("Studio recovery missing both sides of a move");
             steps.push_back({source,destination,dst});
         }
-        if(version==4||version==5||version==6){
+        if(version==4||version==5||version==6||version==7){
             if(!state["resources"].isArray()||state["resources"].size()>32)throw std::runtime_error("Invalid resource repair recovery manifest");
             std::vector<editor::ProjectFileEdit> edits,reverse;
             std::vector<StudioMoveJournalOperation> moves;
             for(const auto& op:operations)moves.push_back({op.getStr("from"),op.getStr("to")});
             for(const auto& row:state["resources"].items()){
-                edits.push_back(studioDecodeResourceEdit(row,version==6));
+                edits.push_back(studioDecodeResourceEdit(row,version>=6));
             }
             validateResources(edits,moves,version>=5);
             editor::recoverProjectFileEdits(project_);
