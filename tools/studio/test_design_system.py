@@ -82,6 +82,17 @@ class StudioDesignSystemTests(unittest.TestCase):
         self.assertIn("docs/studio-visual-direction.md",skill)
 
 
+    def test_graph_module_resolution_is_case_insensitive_safe(self):
+        modules={}
+        for path in sorted((SRC/"graphs").iterdir()):
+            if not path.is_file() or path.suffix not in (".ts",".tsx"):
+                continue
+            stem=path.stem.casefold()
+            self.assertNotIn(stem,modules,f"Ambiguous TypeScript module: {path.name} vs {modules.get(stem)}")
+            modules[stem]=path.name
+        self.assertIn("graphdiagnosticspanel",modules)
+        self.assertIn("graphdiagnostics",modules)
+
     def test_root_agent_discovery_and_skill(self):
         root_agents=(ROOT/"AGENTS.md").read_text(encoding="utf-8")
         skill=(ROOT/"skills/editor/studio-ui/SKILL.md").read_text(encoding="utf-8")
