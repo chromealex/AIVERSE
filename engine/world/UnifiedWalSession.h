@@ -5,8 +5,14 @@
 #include "RegionWorldSessionLock.h"
 #include "UnifiedCheckpointRetention.h"
 #include "AsyncPersistenceIo.h"
+#include <atomic>
 namespace aiverse::world {
 class UnifiedWalSession {
+public:
+    enum class RecoveryPhase { Idle, Checkpoint, Replay, OpenWriter, AwaitingOwner, Ready, Cancelled, Failed };
+    enum class RecoveryResult { Idle, Loading, Ready, Cancelled, Failed, Busy };
+    struct RecoveryProgress {RecoveryPhase phase;uint64_t checkpointBytes,checkpointTotal,walBytes,frames,sequence;};
+private:
     RegionWorldSessionLock lock_;
     RegionWalWriter writer_;
     std::unique_ptr<UnifiedWorldReplay::State> state_;
@@ -21,6 +27,11 @@ class UnifiedWalSession {
     std::unique_ptr<UnifiedWorldReplay::State> prepared_;
     RegionCheckpointManifest preparedManifest_;
     uint64_t ticket_=0;
+    AsyncPersistenceIo recoveryIo_;
+    bool recovering_=false;
+    std::atomic<bool> cancelRecovery_{false};
+    std::atomic<RecoveryPhase> recoveryPhase_{RecoveryPhase::Idle};
+    std::atomic<uint64_t> recoveryBytes_{0},recoveryTotal_{0},recoveryWalBytes_{0},recoveryFrames_{0},recoverySequence_{0};
 public:
     using State=UnifiedWorldReplay::State;
     enum class IoResult { Idle, Pending, Busy, Committed, Checkpointed, Failed };
@@ -75,6 +86,80 @@ public:
         auto result=recoverLocked(dir/m.walName(),prefix,*checkpoint,codecs,materialize,validate,repair,resources);
         if(result==RegionWalWrite::Ok){dir_=dir;manifest_=m;managed_=true;}
         return result;
+    }
+    // One owner starts/polls/cancels. All supplied codecs, adapters and
+    // callbacks must be immutable, worker-safe, and outlive the operation.
+    // No live Simulation/host access on the worker; final validation on owner.
+    // The world lifetime lock is held continuously through publication.
+    RecoveryResult beginRecovery(const std::filesystem::path& dir,const std::array<uint8_t,16>& world,
+        size_t budget,const UnifiedCheckpointSections::Adapters& adapters,const UnifiedCheckpointSections::Factory& factory,
+        const DurableComponentCodecs& codecs,const UnifiedWorldReplay::Materializer& materialize,
+        const UnifiedWorldReplay::Validator& offlineValidate={},const DurableResourceTransaction::Policy& resources={}){
+        if(recovering_||ready_||ioPending())return RecoveryResult::Busy;
+        close();
+        recoveryBytes_=0;recoveryTotal_=0;recoveryWalBytes_=0;recoveryFrames_=0;recoverySequence_=0;
+        cancelRecovery_=false;
+        if(!budget||!factory||!materialize){recoveryPhase_=RecoveryPhase::Failed;return RecoveryResult::Failed;}
+        const auto locked=lock_.acquire(dir);
+        if(locked!=RegionWorldLockResult::Ok){
+            recoveryPhase_=RecoveryPhase::Failed;
+            return locked==RegionWorldLockResult::Busy?RecoveryResult::Busy:RecoveryResult::Failed;
+        }
+        if(!recoveryIo_.start(1)){close();recoveryPhase_=RecoveryPhase::Failed;return RecoveryResult::Failed;}
+        try{
+            dir_=dir;
+            recoveryPhase_=RecoveryPhase::Checkpoint;
+            auto submit=recoveryIo_.submit(1,1,[this,dir,world,budget,adapters,factory,&codecs,materialize,offlineValidate,resources](){
+                auto cancelled=[this]{return cancelRecovery_.load();};
+                auto validate=[&](const State& s){return !cancelled()&&(!offlineValidate||offlineValidate(s));};
+                std::unique_ptr<State> staged;RegionCheckpointManifest m;
+                auto progress=[&](uint64_t done,uint64_t total){
+                    recoveryTotal_=total;recoveryBytes_=done;return !cancelled();
+                };
+                if(!UnifiedCheckpointLoader::load(dir,world,budget,adapters,factory,staged,m,validate,progress)||cancelled())return false;
+                std::vector<uint8_t> prefix;
+                if(!UnifiedCheckpointPublisher::identity(m,prefix))return false;
+                std::ifstream in(dir/m.walName(),std::ios::binary);
+                std::vector<uint8_t> actual(prefix.size());
+                in.read(reinterpret_cast<char*>(actual.data()),actual.size());
+                if(!in||actual!=prefix)return false;
+                recoverySequence_=staged->sequence;recoveryPhase_=RecoveryPhase::Replay;
+                auto scan=RegionWalReader::scan(in,staged->sequence,[&](const RegionWalFrame& f){
+                    if(cancelled()||!UnifiedWorldReplay::apply(staged,f,codecs,materialize,validate,resources))return false;
+                    recoveryWalBytes_+=RegionWalCodec::headerSize+f.payload.size();
+                    ++recoveryFrames_;recoverySequence_=f.sequence;return !cancelled();
+                });
+                in.close();
+                if(scan.status!=RegionWalScan::End||cancelled())return false;
+                recoveryPhase_=RecoveryPhase::OpenWriter;
+                // No repair or truncation in background recovery.
+                if(writer_.open(dir/m.walName(),m.identity.sequence,false,prefix)!=RegionWalWrite::Ok||
+                   writer_.lastSequence()!=staged->sequence||cancelled())return false;
+                prepared_=std::move(staged);preparedManifest_=m;
+                recoveryPhase_=RecoveryPhase::AwaitingOwner;return true;
+            });
+            if(submit!=AsyncPersistenceIo::Submit::Accepted){close();recoveryPhase_=RecoveryPhase::Failed;return RecoveryResult::Failed;}
+            recovering_=true;return RecoveryResult::Loading;
+        }catch(...){close();recoveryPhase_=RecoveryPhase::Failed;return RecoveryResult::Failed;}
+    }
+    RecoveryProgress recoveryProgress()const noexcept{
+        return {recoveryPhase_.load(),recoveryBytes_.load(),recoveryTotal_.load(),
+            recoveryWalBytes_.load(),recoveryFrames_.load(),recoverySequence_.load()};
+    }
+    bool recovering()const{return recovering_;}
+    void requestRecoveryCancel()noexcept{cancelRecovery_=true;}
+    RecoveryResult pollRecovery(const UnifiedWorldReplay::Validator& ownerValidate={}){
+        if(!recovering_)return RecoveryResult::Idle;
+        AsyncPersistenceIo::Receipt receipt;
+        if(!recoveryIo_.take(receipt))return RecoveryResult::Loading;
+        recoveryIo_.stop();recovering_=false;
+        if(cancelRecovery_.load()){close();recoveryPhase_=RecoveryPhase::Cancelled;return RecoveryResult::Cancelled;}
+        bool ok=false;
+        try{ok=receipt.status==AsyncPersistenceIo::Status::Durable&&prepared_&&
+            (!ownerValidate||ownerValidate(*prepared_));}catch(...){}
+        if(!ok){close();recoveryPhase_=RecoveryPhase::Failed;return RecoveryResult::Failed;}
+        state_.swap(prepared_);prepared_.reset();manifest_=preparedManifest_;
+        managed_=true;ready_=true;recoveryPhase_=RecoveryPhase::Ready;return RecoveryResult::Ready;
     }
 private:
     RegionWalWrite recoverLocked(const std::filesystem::path& wal,std::span<const uint8_t> identity,const State& checkpoint,
@@ -224,6 +309,6 @@ public:
         return destinationSession.create(destination,newWorld,*recovered,adapters,budget);
     }
     const State* state()const{return ready_&&!ioPending()?state_.get():nullptr;}
-    void close(){io_.stop();async_=false;asyncBudget_=0;pending_=Pending::None;prepared_.reset();ticket_=0;ready_=false;managed_=false;writer_.close();state_.reset();lock_.close();}
+    void close(){cancelRecovery_=true;recoveryIo_.stop();recovering_=false;recoveryPhase_=RecoveryPhase::Idle;io_.stop();async_=false;asyncBudget_=0;pending_=Pending::None;prepared_.reset();ticket_=0;ready_=false;managed_=false;writer_.close();state_.reset();lock_.close();}
 };
 }
