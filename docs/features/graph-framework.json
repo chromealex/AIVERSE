@@ -240,7 +240,7 @@
     },
     "persistence": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification.",
+      "note": "Pending implementation or actual verification. Stage 38BC in progress: separately saved function assets via existing native texture graph document store, explicit pinned definition snapshots and compatibility-checked revision refresh; no implicit filesystem lookup in runtime compiler.",
       "evidence": []
     },
     "graphs": {
