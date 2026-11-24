@@ -215,7 +215,7 @@ def release_report(root, registry, policy, readiness):
 
 def branch_claim(root, base, ref):
     sha = subprocess.check_output(["git", "rev-parse", "--verify", "--end-of-options", ref + "^{commit}"], cwd=root, text=True).strip()
-    paths = subprocess.check_output(["git", "diff", "--name-only", "--no-renames", "-z", base + "..." + sha, "--"], cwd=root).decode().split("\\0")
+    paths = subprocess.check_output(["git", "diff", "--name-only", "--no-renames", "-z", base + "..." + sha, "--"], cwd=root).decode().split("\0")
     return {"agent": ref, "branch": ref, "paths": sorted(set(paths) - {""})}
 
 def main():
