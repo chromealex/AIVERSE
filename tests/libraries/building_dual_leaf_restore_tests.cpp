@@ -85,8 +85,39 @@ static void testAuthoredSingleLeaf() {
     spatial.remove(10201);
 }
 
+static void testGraphDiagnostics(){
+    BuildingGraphChangeRouter router;
+    const auto nav=buildingGraphBit(BuildingGraphDomain::Navigation);
+    const auto spatial=buildingGraphBit(BuildingGraphDomain::Spatial);
+    const auto audio=buildingGraphBit(BuildingGraphDomain::Audio);
+    bool available=false;int navCalls=0;
+    REQUIRE(router.registerConsumer(BuildingGraphDomain::Navigation,[&](const auto&){++navCalls;return true;}));
+    REQUIRE(router.registerConsumer(BuildingGraphDomain::Spatial,[&](const auto&){return available;}));
+    REQUIRE(!router.diagnostics(77).lastChange);
+    const BuildingGraphChange change{77,1,9,BuildingGraphChangeKind::ApertureChanged,
+        nav|spatial|audio,{{0_fx,0_fx,0_fx},{4_fx,3_fx,1_fx}},true};
+    REQUIRE(!router.publish(change).complete);
+    auto d=router.diagnostics(77);
+    REQUIRE(d.lastChange&&d.lastChange->featureIndex==9&&d.lastChange->open);
+    REQUIRE(d.registeredDomains==(nav|spatial)&&d.requestedDomains==(nav|spatial|audio));
+    REQUIRE(d.acknowledgedDomains==nav&&d.pendingDomains==(spatial|audio));
+    REQUIRE(d.refusedDomains==spatial&&d.missingOwners==audio&&d.attempts==1);
+    available=true;
+    REQUIRE(!router.publish(change).complete);
+    d=router.diagnostics(77);
+    REQUIRE(d.pendingDomains==audio&&d.acknowledgedDomains==(nav|spatial)&&d.attempts==2&&navCalls==1);
+    REQUIRE(router.registerConsumer(BuildingGraphDomain::Audio,[](const auto&){return true;}));
+    REQUIRE(router.publish(change).complete);
+    d=router.diagnostics(77);
+    REQUIRE(!d.pendingDomains&&d.acknowledgedDomains==change.domains&&d.attempts==3&&navCalls==1);
+    router.forgetScene(77);
+    REQUIRE(!router.diagnostics(77).lastChange);
+    REQUIRE(router.diagnostics(77).registeredDomains==change.domains);
+}
+
 int main() {
     try {
+        testGraphDiagnostics();
         testAuthoredSingleLeaf();
         world::SpatialWorld spatial;
         BuildingDualLeafOwner owner;
