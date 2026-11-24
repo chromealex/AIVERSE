@@ -156,3 +156,7 @@ Retain exact body-space triangle/material sources for leased cut, volume and ori
 ### Stage56d — IN PROGRESS (native baseline source and frame adapter)
 
 Connect the actual PlanetRenderer leaf capture to the existing native GI scene before cave publication. Opt-in host proofs reserve exact disjoint leaf IDs and material source; never overwrite external geometry or fabricate ownership. Baseline target refusal remains retryable before native commit. Capture the existing SphereViewFrame and PlanetWorld body centers by value for GI projection, provide old/new frame mapping for other registered producers. Keep native simulation anchors unchanged. Default client has no authoritative native planetary physics owner; no automatic adoption or live acceptance claimed.
+
+### Stage56e — IN PROGRESS (native volumetric locomotion)
+
+Expose an oriented 3D velocity sweep through the existing Box3D character query/plane solver, without ground snap or duplicate gravity. Admit swimming and flying route intents only against the current committed region/environment lease; sweep the same existing proxy, validate SDF segment and commit once. Swimming uses existing fixed LocomotionModes policy and actual NEREID immersion in the PHYSIS frame. Flight accepts the existing host motor's proposed velocity under route speed limits; zero gravity uses the chart frame. No extra simulation tick, second position owner or new schema. Surface transitions and default playable host integration remain separate.
