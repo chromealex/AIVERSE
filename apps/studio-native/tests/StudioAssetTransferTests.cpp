@@ -1391,6 +1391,75 @@ int main(){
             AIVERSE_TEST_CHECK(read(stationary)==final&&studioAssetFileDigest(destination/"Large.glb")==finalGlb);
             index.rebuild(false);AIVERSE_TEST_CHECK(index.byGuid(guid)->path=="C/tex.png");
         }
+        // S6f.4b.3a: payload and cursor share an outer commit boundary.
+        {
+            using namespace aiverse;using namespace aiverse::studio;
+            const auto p=fs::canonical(temp)/"AtomicAssetCursor";
+            fs::create_directories(p/"content"/"A");fs::create_directories(p/"content"/"B");
+            const auto source=p/"content"/"A"/"Paint.png",dest=p/"content"/"B"/"Paint.png";
+            write(source,"pixels");
+            StudioAssetCatalog index(p);index.rebuild();
+            const auto guid=index.byPath("A/Paint.png")->guid;
+            editor::ProjectHistory history;
+            std::optional<editor::ProjectHistory::MovePlan> recorded;
+            auto move=StudioTransferPlan::internal(p,"B",{"A/Paint.png"});
+            (void)move.apply(move.token(),{},{},&recorded,true);
+            AIVERSE_TEST_CHECK(recorded);
+            history.recordMove(std::move(*recorded),"Move paint");
+            {StudioAssetHistoryPublication publication(p);publication.save(history);}
+            const auto checkpoint=p/".aiverse-cache"/"asset-history.json";
+            const auto before=read(checkpoint);
+            auto next=history;next.advance(false);
+            const auto undo=studioPlanAssetMoveChain(p,{*history.next(false).move},false);
+            studioApplyHistoryBatch(p,undo.relocations,undo.documents,undo.movingResources,&history,&next);
+            const auto after=read(checkpoint);
+            AIVERSE_TEST_CHECK(fs::exists(source)&&!fs::exists(dest)&&before!=after);
+            AIVERSE_TEST_CHECK(studioLoadAssetHistoryCheckpoint(p).position()==0);
+            const auto redo=studioPlanAssetMoveChain(p,{*next.next(true).move},true);
+            studioApplyHistoryBatch(p,redo.relocations,redo.documents,redo.movingResources,&next,&history);
+            AIVERSE_TEST_CHECK(read(checkpoint)==before&&fs::exists(dest));
+            // Reconstruct durable journal prefixes, including the window
+            // after the inner checkpoint publication but before outer commit.
+            const auto folder=p/".aiverse-cache"/"studio-history-batch";
+            const auto hash=[](const std::string& bytes){
+                const auto h=pack::sha256(bytes.data(),bytes.size());return pack::toHex(h.data(),h.size());
+            };
+            Json body=Json::object(),moves=Json::array();
+            for(const auto& m:undo.relocations){
+                Json row=Json::object();row.set("from",Json::string(m.from));row.set("to",Json::string(m.to));
+                row.set("digest",Json::string(m.digest));row.set("directory",Json::fromBool(m.directory));moves.push(std::move(row));
+            }
+            AIVERSE_TEST_CHECK(undo.documents.empty()&&undo.movingResources.empty());
+            body.set("moves",std::move(moves));body.set("documents",Json::array());body.set("movingResources",Json::array());
+            body.set("assetCheckpointBefore",Json::string(hash(before)));
+            const auto payload=body.dump(-1);
+            Json envelope=Json::object();envelope.set("version",Json::number(int64_t(4)));
+            envelope.set("payload",Json::string(payload));envelope.set("sha256",Json::string(hash(payload)));
+            Json ready=Json::object();ready.set("transaction",Json::string(hash(payload)));ready.set("afterHash",Json::string(hash(after)));
+            for(size_t phase=0;phase<=undo.relocations.size()+2;++phase){
+                fs::create_directory(folder);write(folder/"asset-before",before);write(folder/"pending.json",envelope.dump(-1));
+                for(size_t i=0;i<std::min(phase,undo.relocations.size());++i)
+                    fs::rename(p/undo.relocations[i].from,p/undo.relocations[i].to);
+                if(phase>undo.relocations.size()){
+                    write(folder/"asset-after",after);write(folder/"asset-ready.json",ready.dump(-1));
+                    if(phase==undo.relocations.size()+2)write(checkpoint,after);
+                }
+                studioRecoverHistoryBatch(p);
+                AIVERSE_TEST_CHECK(fs::exists(dest)&&!fs::exists(source)&&read(checkpoint)==before&&!fs::exists(folder));
+                AIVERSE_TEST_CHECK(studioLoadAssetHistoryCheckpoint(p).position()==1);
+            }
+            // Metadata-only history also needs an outer checkpoint boundary.
+            index.rebuild(false);index.patchSettings(guid,"compression",Json::string("high"),&history);
+            {StudioAssetHistoryPublication publication(p);publication.save(history);}
+            const auto settings=read(dest.string()+".meta");
+            auto previous=history;previous.advance(false);
+            const auto edits=editor::reverseProjectFileEdits(history.next(false).files);
+            studioApplyHistoryBatch(p,{},edits,{},&history,&previous);
+            AIVERSE_TEST_CHECK(read(dest.string()+".meta")!=settings);
+            AIVERSE_TEST_CHECK(studioLoadAssetHistoryCheckpoint(p).position()==1);
+            studioApplyHistoryBatch(p,{},history.next(false).files,{},&previous,&history);
+            AIVERSE_TEST_CHECK(read(dest.string()+".meta")==settings&&studioLoadAssetHistoryCheckpoint(p).position()==2);
+        }
         std::cout<<"PASS studio conflict resolution and GUID-preserving asset transfers\n";
     }catch(...){fs::remove_all(temp);throw;}
     fs::remove_all(temp);
