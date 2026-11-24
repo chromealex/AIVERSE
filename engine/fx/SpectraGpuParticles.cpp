@@ -791,6 +791,18 @@ void ComputeParticles::setView(const fx::SpectraFxView& view) {
     viewReady_=true;
     if(backend_==ComputeBackend::Cpu)cpu_.setView(view);
 }
+bool ComputeParticles::depositIntoVolume(volume::GpuGasGrid& gas,render::float3 rates,float dt){
+    if(!gpuActive()||gpuResetDirty_||gpuStagingDirty_||!verticesReady_||
+       !finite(dt)||dt<0||!finite(rates)||!device_->gpuHealthy()||!device_->canUpdateSharedBuffers()){
+        reason_="Invalid particle deposition frame";return false;
+    }
+    if(dt==0)return true;
+    markGpuAllocationUsed();
+    if(!gas.depositParticles(*device_,states_,allocatedCapacity(),rates,std::min(dt,.1f))){
+        reason_=gas.error();return false;
+    }
+    return true;
+}
 bool ComputeParticles::stepWithVolume(float dt,volume::GpuGasGrid& gas,float dragPerSecond){
     if(!finite(dt)||dt<0||!finite(dragPerSecond)||dragPerSecond<0||dragPerSecond>100||
        !gpuActive()||gpuResetDirty_||!device_->gpuHealthy()||!device_->canUpdateSharedBuffers()){

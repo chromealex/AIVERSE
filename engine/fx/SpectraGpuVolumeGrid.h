@@ -3,6 +3,7 @@
 #pragma once
 #include "SpectraVolumeAsset.h"
 #include "SpectraVolumeGpuShaders.h"
+#include "SpectraParticleDepositShaders.h"
 #include "engine/gfx/Gfx.h"
 #include <array>
 #include <memory>
@@ -105,11 +106,14 @@ public:
             if(solid_.valid())device_->destroyBuffer(solid_);
             if(divergence_.valid())device_->destroyBuffer(divergence_);
             if(compute_.valid())device_->destroyCompute(compute_);
+            if(depositCompute_.valid())device_->destroyCompute(depositCompute_);
+            if(depositCounts_.valid())device_->destroyBuffer(depositCounts_);
             if(budget_&&stats_.allocatedBytes){
                 budget_->retire(stats_.allocatedBytes,lastFence_);budget_->collect(device_->gpuCompletedFence());
             }
         }
         device_=nullptr;budget_.reset();cells_={};pressure_={};solid_={};divergence_={};compute_={};
+        depositCompute_={};depositCounts_={};
         count_=0;current_=0;initialized_=false;maskUploaded_=false;impulsePending_=false;
         lastFence_=0;stats_={};mask_.clear();sources_.clear();
     }
@@ -166,6 +170,49 @@ public:
             return reject("GPU volume projection rejected");
         current_=candidate;++stats_.ticks;impulsePending_=false;error_.clear();return true;
     }
+    // Only the particle runtime may pass its private 64-byte state buffer.
+    // Scatter into scratch counts, gather into a nonpublished cell buffer.
+    // A rejected pass never changes the published gas field.
+    bool depositParticles(gfx::Device& owner,gfx::BufferHandle states,uint32_t slots,
+                          float3 rates,float seconds){
+        if(&owner!=device_||!canEncode()||!published()||!states.valid()||
+           !slots||slots>262144||!bounded(rates,100)||rates.x<0||rates.y<0||rates.z<0||
+           !between(seconds,0,.1f))return fail("Invalid particle deposition request");
+        if(seconds==0||(rates.x==0&&rates.y==0&&rates.z==0))return true;
+        if(!depositCompute_.valid()){
+            depositCompute_=device_->createCompute({deposition::metal,deposition::glsl,
+                "SpectraFX particle deposition",gfx::VulkanComputeLayout::StorageUniforms,9});
+            if(!depositCompute_.valid())return fail("Particle deposition shader unavailable");
+        }
+        if(!depositCounts_.valid()){
+            const size_t bytes=size_t(count_)*sizeof(uint32_t);
+            if(!budget_->reserve(bytes))return fail("Particle deposition allocation denied");
+            gfx::BufferDesc desc;desc.type=gfx::BufferType::Storage;desc.usage=gfx::Usage::Immutable;
+            desc.size=bytes;desc.label="SpectraFX particle deposition counts";
+            depositCounts_=device_->createBuffer(desc);
+            if(!depositCounts_.valid()){
+                budget_->retire(bytes,0);budget_->collect(device_->gpuCompletedFence());
+                return fail("Particle deposition allocation failed");
+            }
+            stats_.allocatedBytes+=bytes;
+        }
+        const uint32_t candidate=(current_+1)%3;
+        struct Params{render::float4 originCell,rates;std::array<uint32_t,4> meta;};
+        static_assert(sizeof(Params)==48);
+        Params u{{cfg_.origin.x,cfg_.origin.y,cfg_.origin.z,cfg_.cellSize},
+                 {rates.x*seconds,rates.y*seconds,rates.z*seconds,0},{0,cfg_.dimension,slots,0}};
+        for(uint32_t mode=0;mode<3;++mode){
+            if(!device_->beginCompute(depositCompute_))return fail("Particle deposition encoder rejected");
+            markUsed();u.meta[0]=mode;
+            device_->setComputeBuffer(0,states);device_->setComputeBuffer(1,cells_[current_]);
+            device_->setComputeBuffer(2,cells_[candidate]);device_->setComputeBuffer(3,solid_);
+            device_->setComputeBuffer(4,depositCounts_);device_->setComputeUniforms(&u,sizeof(u));
+            const bool ok=device_->dispatchChecked(mode==1?slots:count_);device_->endCompute();
+            if(!ok)return fail("Particle deposition dispatch rejected");
+            ++stats_.dispatches;
+        }
+        current_=candidate;error_.clear();return true;
+    }
     // Borrowed view valid until next step/reinit/shutdown. Host obtains it
     // inside the frame which consumes it, then encodes ordered render work.
     GpuVolumeView view(){
@@ -184,6 +231,7 @@ private:
         using std::swap;
         swap(device_,other.device_);swap(budget_,other.budget_);swap(cfg_,other.cfg_);
         swap(cells_,other.cells_);swap(pressure_,other.pressure_);swap(solid_,other.solid_);
+        swap(depositCounts_,other.depositCounts_);swap(depositCompute_,other.depositCompute_);
         swap(divergence_,other.divergence_);swap(compute_,other.compute_);swap(mask_,other.mask_);
         swap(sources_,other.sources_);swap(impulse_,other.impulse_);swap(impulseSeconds_,other.impulseSeconds_);
         swap(count_,other.count_);swap(current_,other.current_);swap(initialized_,other.initialized_);
@@ -240,7 +288,8 @@ private:
     std::array<gfx::BufferHandle,3> cells_{};
     std::array<gfx::BufferHandle,2> pressure_{};
     gfx::BufferHandle solid_{},divergence_{};
-    gfx::ComputeHandle compute_{};
+    gfx::ComputeHandle compute_{},depositCompute_{};
+    gfx::BufferHandle depositCounts_{};
     std::vector<uint32_t> mask_;
     std::vector<Source> sources_;
     Source impulse_{};float impulseSeconds_=0;

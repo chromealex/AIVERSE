@@ -214,6 +214,8 @@ public:
     // Opt-in nearest-cell gas drag on existing GPU particles. Same Device,
     // active frame, after gas step and before particle integration. No CPU fallback.
     bool stepWithVolume(float dt,volume::GpuGasGrid& gas,float dragPerSecond);
+    // Call after a successful particle step; rates are per live particle per second.
+    bool depositIntoVolume(volume::GpuGasGrid& gas,render::float3 rates,float dt);
     bool step(float dt);                    // once per presentation frame
     void draw(const fx::FxFog& fog = {});    // inside render pass
     ComputeBackend backend() const { return backend_; }
