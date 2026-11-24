@@ -264,7 +264,6 @@ struct MaterializedSources {
 };
 inline MaterializedSources compileMaterializedDag(const Program& p,const std::vector<size_t>& targets,
         int n,size_t budget=materializedBudgetBytes,bool fusePointwise=false,bool paddedResult=false,bool incremental=false){
-    require(!incremental||!fusePointwise,"incremental materialized mode currently requires unfused nodes");
     require(n>=8&&n<=p.size&&n<=maxBakeSize&&budget<=materializedBudgetBytes,"invalid materialized resolution or budget");
     MaterializedSources r;
     r.resultBytes=size_t(n)*size_t(n)*4u;
@@ -281,7 +280,7 @@ inline MaterializedSources compileMaterializedDag(const Program& p,const std::ve
             pointwise.push_back(fusionPointwise(node));
         }
         const auto fusion=planPointwiseFusion(edges,p.order,targets,pointwise);
-        r.plan=lowerDagSlots(fusion.edges,p.order,targets,bytes,budget-r.resultCapacityBytes,3);
+        r.plan=lowerDagSlots(fusion.edges,p.order,targets,bytes,budget-r.resultCapacityBytes,3,incremental);
         r.reachableNodes=fusion.reachable;r.fusedNodes=fusion.reachable-fusion.passes;
         r.nodes.resize(p.nodes.size());
         for(const auto& pass:r.plan.schedule.passes)

@@ -506,7 +506,10 @@ public:
         r.set("materializedFailed",Json::fromBool(matFailed_));
         r.set("materializedNodePasses",Json::number(int64_t(matNodePasses_)));
         r.set("incrementalRequested",Json::fromBool(matIncremental_));
+        // Legacy counter counts skipped materialized passes, including fused regions.
         r.set("incrementalReusedNodes",Json::number(int64_t(matReusedNodes_)));
+        r.set("incrementalReusedPasses",Json::number(int64_t(matReusedNodes_)));
+        r.set("incrementalDispatchedPasses",Json::number(int64_t(matNodePasses_)));
         r.set("fusionRequested",Json::fromBool(matFusion_));
         r.set("fusionReachableNodes",Json::number(int64_t(matReachableNodes_)));
         r.set("fusionElidedPasses",Json::number(int64_t(matFusedNodes_)));
@@ -544,8 +547,8 @@ public:
         const bool transfer=p.getBool("gpuTextureTransfer"),mipmaps=p.getBool("gpuTextureMipmaps"),fenceOnly=p.getBool("gpuTextureFenceOnly");
         if(fenceOnly&&!transfer)throw std::invalid_argument("fence-only mode requires GPU texture transfer");
         const bool materialized=p.getBool("materialized")||p.getBool("materializedDag"),incremental=p.getBool("incremental");
-        if(incremental&&(!materialized||p.getBool("fusePointwise")))
-            throw std::invalid_argument("incremental requires unfused materialized DAG");
+        if(incremental&&!materialized)
+            throw std::invalid_argument("incremental requires materialized DAG");
         if(incremental&&(!lease.alive()||!lease.device()||!lease.validFor(*lease.device())))
             throw std::invalid_argument("incremental requires native device lease");
         render::texture_graph::gpu::TextureRequestBudget transferBudget;

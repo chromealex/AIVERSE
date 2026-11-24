@@ -1,5 +1,6 @@
 #include "engine/render/graph/TextureGraphFusion.h"
 #include "engine/render/graph/TextureGraphDagLowering.h"
+#include "engine/render/graph/TextureGraphIncremental.h"
 #include <cstdlib>
 #include <iostream>
 using namespace aiverse::render::texture_graph::gpu;
@@ -37,6 +38,16 @@ int main(){
     check(fusedSlots.schedule.passes.size()==1&&fusedSlots.allocatedBytes==256);
     const auto pinnedSlots=lowerDagSlots(pin.edges,order,{1,4,1},std::vector<size_t>(5,256),4096);
     check(pinnedSlots.outputSlots[0]==pinnedSlots.outputSlots[2]&&pinnedSlots.outputSlots[0]!=pinnedSlots.outputSlots[1]);
+    // Reduced DAG retains only region roots. Their keys incorporate the
+    // entire generated kernel, including absorbed node parameters.
+    const auto retained=lowerDagSlots(barrier.edges,order,{4},std::vector<size_t>(5,256),768,3,true);
+    check(retained.schedule.passes.size()==3&&retained.allocatedBytes==768&&retained.peakLive==3);
+    auto keys=incrementalKeys(retained.schedule,[](size_t node){return std::string("kernel")+std::to_string(node);});
+    check(keys.size()==3&&incrementalDirty(keys,keys,3)==std::vector<bool>(3,false));
+    auto changed=keys;changed[0].source+=" changed absorbed node";
+    check(incrementalDirty(keys,changed,3)==std::vector<bool>(3,true));
+    changed=keys;changed[2].source+=" changed leaf region";
+    check(incrementalDirty(keys,changed,3)==std::vector<bool>({false,false,true}));
     bool invalid=false;
     try{planPointwiseFusion(chain,{1,0,2,3,4},{4},std::vector<bool>(5,true));}catch(const std::invalid_argument&){invalid=true;}
     check(invalid);

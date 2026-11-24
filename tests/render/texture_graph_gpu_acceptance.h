@@ -140,6 +140,17 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend){
         runIncremental(inc,3,0);runIncremental(inc,0,3);
         auto modified=Json::parse(inc.dump(-1).replace(inc.dump(-1).find("0.25"),4,"0.75"));
         runIncremental(modified,2,1);
+        auto fusedInc=Json::parse(R"JSON({"graph":{"version":1,"size":32,"nodes":[
+            {"id":"a","op":"constant","inputs":[],"properties":{"value":0.25}},
+            {"id":"i","op":"invert","inputs":["a"]},
+            {"id":"b","op":"constant","inputs":[],"properties":{"value":0.5}},
+            {"id":"n","op":"normal","inputs":["i"],"properties":{"strength":4}}
+        ],"outputs":{"height":"i","ao":"b","normal":"n"}},"bakeSet":true,"materialized":true,"incremental":true,"fusePointwise":true})JSON");
+        runIncremental(fusedInc,3,0);runIncremental(fusedInc,0,3);
+        const auto fusedStatus=owner.status();
+        require(fusedStatus["fusionElidedPasses"].toDouble()==1&&fusedStatus["incrementalReusedPasses"].toDouble()==3,"combined fusion/incremental counters incorrect");
+        auto fusedModified=Json::parse(fusedInc.dump(-1).replace(fusedInc.dump(-1).find("0.25"),4,"0.75"));
+        runIncremental(fusedModified,2,1);
         cancel(owner.status().getStr("request"));drain();
         const auto low=owner.enqueue(inc,project,lifetime.lease(),0).getStr("ticket");
         const auto high=owner.enqueue(modified,project,lifetime.lease(),3).getStr("ticket");
