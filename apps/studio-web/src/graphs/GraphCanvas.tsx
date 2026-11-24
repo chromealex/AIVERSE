@@ -73,11 +73,11 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
  const maxHeight=Math.max(320,...view.nodes.map(n=>n.y+(geometry.nodes.find(g=>g.id===n.id)?.height??54)+36));
  const maxWidth=Math.max(520,...view.nodes.map(n=>n.x+nodeWidth+36));
  const fit=()=>{const el=scroll.current;if(!el)return;zoomAnchor.current=null;setZoom(Math.max(.25,Math.min(2,(el.clientWidth-12)/maxWidth,(el.clientHeight-12)/maxHeight)));el.scrollLeft=0;el.scrollTop=0;};
- const portColor=(type:string)=>typedPorts?({scalar:'#e4b35b',float:'#e4b35b',color:'#78c9a0',rgb:'#78c9a0',rgba:'#78c9a0',normal:'#a5a1ff',vec3:'#a5a1ff',vector:'#a5a1ff'} as Record<string,string>)[type.toLowerCase()]??'var(--au-accent)':'var(--au-accent)';
+ const portColor=(type:string)=>typedPorts?({scalar:'#e4b35b',float:'#e4b35b',color:'#78c9a0',rgb:'#78c9a0',rgba:'#78c9a0',normal:'#a5a1ff',packed:'#d995ce',vec3:'#a5a1ff',vector:'#a5a1ff'} as Record<string,string>)[type.toLowerCase()]??'var(--au-accent)':'var(--au-accent)';
  const curve=(x1:number,y1:number,x2:number,y2:number)=>`M ${x1} ${y1} C ${x1+55} ${y1}, ${x2-55} ${y2}, ${x2} ${y2}`;
  return <div className="au-graph-workspace" onContextMenu={e=>{if(!disabled&&(commands?.length||onAddMenu)){e.preventDefault();setMenu(v=>!v)}}} onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))space.current=false;}} onKeyUp={e=>{if(e.code==='Space')space.current=false;}} onKeyDown={e=>{if(e.key==='Escape'){setMenu(false);onCancel?.();return;}if(disabled||e.defaultPrevented)return;const target=e.target as HTMLElement;if(target.closest('input,textarea,select,[contenteditable=true]'))return;if(enhancedNavigation&&e.code==='Space'&&e.target===svg.current){e.preventDefault();space.current=true;return;}const chord=(e.metaKey||e.ctrlKey?'mod+':'')+(e.shiftKey?'shift+':'')+e.key.toLowerCase();const command=commands?.find(c=>c.shortcut===chord&&!c.disabled);if(command){e.preventDefault();e.stopPropagation();setMenu(false);command.run();}}}>
  <div className="au-row" aria-label="Graph zoom">
-  <StudioButton size="sm" disabled={zoom<=.5} onClick={()=>setZoom(z=>Math.max(.5,z-.25))}>−</StudioButton>
+  <StudioButton size="sm" disabled={zoom<=(enhancedNavigation ? .25 : .5)} onClick={()=>setZoom(z=>Math.max(enhancedNavigation ? .25 : .5,z-.25))}>−</StudioButton>
   <StudioButton size="sm" onClick={()=>setZoom(1)}>{Math.round(zoom*100)}%</StudioButton>
   <StudioButton size="sm" disabled={zoom>=2} onClick={()=>setZoom(z=>Math.min(2,z+.25))}>+</StudioButton>
   {enhancedNavigation&&<StudioButton size="sm" onClick={fit}>Fit</StudioButton>}

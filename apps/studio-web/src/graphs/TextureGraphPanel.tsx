@@ -1,4 +1,5 @@
 import {useEffect,useRef,useState} from 'react';
+import type {CSSProperties} from 'react';
 import {invoke} from '../bridge';
 import {StudioAlert,StudioButton,StudioInput,StudioSelect,StudioSection} from '../ui';
 import GraphCanvas from './GraphCanvas';
@@ -40,7 +41,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
  const [templates,setTemplates]=useState<Obj[]>([]),[outputTypes,setOutputTypes]=useState<Obj>({}),[newOp,setNewOp]=useState('constant'),[pending,setPending]=useState<PortRef|null>(null);
  const [assets,setAssets]=useState<{guid:string;path:string;key:MaterialKey}[]>([]);
  const [names,setNames]=useState<string[]>([]),[catalog,setCatalog]=useState<Obj[]>([]),[selected,setSelected]=useState(''),[output,setOutput]=useState('color'),[textureName,setTextureName]=useState('');
- const [gpuRequest,setGpuRequest]=useState<{id:string;source:string;overrides:string;output:string;resolution:number;bake:boolean;setBake:boolean}|null>(null),[gpuReady,setGpuReady]=useState(false),[gpuStatus,setGpuStatus]=useState(''),[requireGpu,setRequireGpu]=useState(true),[materialized,setMaterialized]=useState(false),[fusePointwise,setFusePointwise]=useState(false),[incremental,setIncremental]=useState(false),[gpuTextureTransfer,setGpuTextureTransfer]=useState(false),[gpuTextureMipmaps,setGpuTextureMipmaps]=useState(true),[gpuTextureFenceOnly,setGpuTextureFenceOnly]=useState(false),[incrementalOutputs,setIncrementalOutputs]=useState(false),[gpuResolution,setGpuResolution]=useState(128);
+ const [gpuRequest,setGpuRequest]=useState<{id:string;source:string;overrides:string;output:string;resolution:number;bake:boolean;setBake:boolean;previewKey?:string}|null>(null),[gpuReady,setGpuReady]=useState(false),[gpuStatus,setGpuStatus]=useState(''),[requireGpu,setRequireGpu]=useState(true),[materialized,setMaterialized]=useState(false),[fusePointwise,setFusePointwise]=useState(false),[incremental,setIncremental]=useState(false),[gpuTextureTransfer,setGpuTextureTransfer]=useState(false),[gpuTextureMipmaps,setGpuTextureMipmaps]=useState(true),[gpuTextureFenceOnly,setGpuTextureFenceOnly]=useState(false),[incrementalOutputs,setIncrementalOutputs]=useState(false),[gpuResolution,setGpuResolution]=useState(128);
  const [queuePriority,setQueuePriority]=useState('1'),[queueTicket,setQueueTicket]=useState(''),[queueInfo,setQueueInfo]=useState<Obj|null>(null);
  const [queueDrafts,setQueueDrafts]=useState<Record<string,{source:string;overrides:string;output:string;resolution:number}>>({});
  const [residentReady,setResidentReady]=useState(false),[liveType,setLiveType]=useState('0'),[liveChoice,setLiveChoice]=useState('0'),[liveMaterial,setLiveMaterial]=useState('0');
@@ -64,6 +65,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
  let graph:Obj|null=null;try{const value=JSON.parse(text);if(object(value))graph=value}catch{}
  const changeText=(next:string,record=true)=>{
   if(record)history.current.push(next);
+  autoAttempt.current='';
   setText(next);setPreview(null);setAsset(null);setAssets([]);setBakedSet('');setGpuReady(false);setResidentReady(false);
  };
  const edit=(value:Obj)=>changeText(JSON.stringify(value,null,2));
@@ -127,7 +129,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
     if(!gpuRequest)throw new Error('No GPU request to cancel');
     const r=await op('texture_graph_gpu_preview',{action:'cancel',request:gpuRequest.id});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||r.request!==gpuRequest.id||r.state!=='cancelled')throw new Error('GPU cancellation rejected');
-    setAutoPreview(false);setGpuPolling(r.busy===true||r.draining===true);setGpuReady(false);setResidentReady(false);setPreview(null);setGpuStatus('cancelled'+(r.draining===true?' · waiting for GPU retirement':'')+' — '+String(r.reason??''));return;
+    setAutoPreview(false);setGpuPolling(r.busy===true||r.draining===true);if(r.busy!==true&&r.draining!==true)setGpuRequest(null);setGpuReady(false);setResidentReady(false);setPreview(null);setGpuStatus('cancelled'+(r.draining===true?' · waiting for GPU retirement':'')+' — '+String(r.reason??''));return;
    }
    if(action==='queueRead'||action==='queueCancel'||action==='queueRelease'){
      const r=await op('texture_graph_gpu_preview',{action,ticket:queueTicket,...(action==='queueRelease'?{discardResult:true}:{})});if(token!==epoch.current)return;
@@ -144,7 +146,8 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
      const r=await op('texture_graph_gpu_preview',{action:'read'});if(token!==epoch.current)return;
      if(!object(r)||r.ok!==true||r.request!==gpuRequest.id){setGpuReady(false);throw new Error('GPU request replaced or unavailable');}
      setGpuPolling(r.busy===true||r.state==='queued'||r.state==='pending');
-     const matches=gpuRequest.source===text&&gpuRequest.overrides===overrideText&&(gpuRequest.setBake||gpuRequest.output===output)&&(gpuRequest.bake||gpuRequest.resolution===gpuResolution);
+     if(r.state==='cancelled'&&r.busy!==true&&r.draining!==true)setGpuRequest(null);
+     const matches=gpuRequest.bake?gpuRequest.source===text&&gpuRequest.overrides===overrideText&&(gpuRequest.setBake||gpuRequest.output===output):gpuRequest.previewKey===semantic;
      setGpuStatus(String(r.state)+(r.draining===true?' · waiting for GPU retirement':'')+' / '+String(r.backend)+' · '+String(r.completedOutputs??0)+' / '+String(r.totalOutputs??0)+' maps · '+String(r.receivedBytes??0)+' / '+String(r.totalBytes??0)+' bytes · passes '+String(r.encodedPasses??0)+' / '+String(r.plannedPasses??0)+' · slot bytes '+String(r.plannedSlotBytes??0)+' · cached plans '+String(r.idlePipelinePlans??0)+(r.pipelineCacheHit===true?' · pipeline cache hit':'')+' · shared scratch hits '+String(r.sharedScratchHits??0)+(r.materializedRequested===true?' · materialized nodes '+String(r.materializedNodePasses??0)+(r.incrementalRequested===true?' · reused passes '+String(r.incrementalReusedPasses??r.incrementalReusedNodes??0):'')+(r.fusionRequested===true?' · fused '+String(r.fusionElidedPasses??0)+' passes':'')+' / packs '+String(r.materializedPackPasses??0)+(r.materializedFailed===true?' · fallback':'')+' · retained '+String(r.materializedIdleBytes??0)+' bytes · pipeline hits '+String(r.materializedPipelineCacheHits??0)+(r.materializedBufferCacheHit===true?' · buffer cache hit':''):'')+(r.gpuTextureTransferRequested===true?' · GPU textures '+String(r.gpuTextureAccepted??0)+(r.gpuTextureSetReady===true?' ready':'')+(r.gpuTextureMipmaps===true?' · mips':''):'')+(r.incrementalOutputsRequested===true?' · retained outputs '+(Array.isArray(r.incrementalReusedOutputs)?r.incrementalReusedOutputs.join(', '):''):'')+' — '+String(r.reason??'')+(matches?'':' · draft changed'));
      setGpuReady(matches&&r.bake===true&&r.fileExportAvailable!==false&&r.state==='ready'&&r.published!==true&&r.busy!==true);
      setPreviewKind(String(r.backend??'unknown'));
@@ -166,6 +169,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
     const r=await op('texture_graph_validate',{graph,overrides});if(token!==epoch.current)return;if(!object(r)||r.ok!==true)throw new Error('Native validation failed');setStatus('Native topology and work budget valid');return;
    }
    if(action==='queueEnqueue'){
+     setAutoPreview(false);
      const r=await op('texture_graph_gpu_preview',{action:'enqueue',graph,overrides,priority:Number(queuePriority),bakeSet:true,requireGpu:true,materialized,fusePointwise:materialized&&fusePointwise,incremental:materialized&&incremental,gpuTextureTransfer:materialized&&gpuTextureTransfer,gpuTextureFenceOnly:materialized&&gpuTextureTransfer&&gpuTextureFenceOnly,gpuTextureMipmaps:materialized&&gpuTextureTransfer&&gpuTextureMipmaps});if(token!==epoch.current)return;
      if(!object(r)||r.ok!==true||typeof r.ticket!=='string')throw new Error('GPU enqueue rejected');const ticket=r.ticket;
      setQueueDrafts(old=>({...old,[ticket]:{source:text,overrides:overrideText,output,resolution:gpuResolution}}));setQueueTicket(ticket);setStatus('Waiting GPU ticket '+ticket);return;
@@ -181,7 +185,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
     if(!object(r)||r.ok!==true)throw new Error('Native GPU bake publication failed');
     if(gpuRequest.setBake){
       if(!Array.isArray(r.files))throw new Error('Invalid set publication response');
-      setGpuReady(false);setResidentReady(false);setAssets([]);setAsset(null);setBakedSet('');
+      setGpuReady(false);setResidentReady(false);setGpuRequest(null);setAssets([]);setAsset(null);setBakedSet('');
       setStatus('Published '+r.files.length+' maps via '+String(r.backend));
       const index=await invoke('studio.assets',{});if(token!==epoch.current)return;
       const mapped:{guid:string;path:string;key:MaterialKey}[]=[];let configured=0;
@@ -196,7 +200,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
       setStatus('Published '+r.files.length+' maps via '+String(r.backend)+'; configured '+configured+' importers.');return;
     }
     if(typeof r.path!=='string'||r.output!==output)throw new Error('Invalid single-output publication response');
-    setGpuReady(false);setResidentReady(false);setStatus('Published '+r.path+' via '+String(r.backend));setAsset(null);
+    setGpuReady(false);setResidentReady(false);setGpuRequest(null);setStatus('Published '+r.path+' via '+String(r.backend));setAsset(null);
     const index=await invoke('studio.assets',{});if(token!==epoch.current)return;
     const a=index.files.find(a=>'content/'+a.path===r.path&&a.importer==='texture'&&a.guid);
     if(a?.guid){const srgb=output==='color'||output==='emissive';const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:srgb});if(token!==epoch.current)return;
@@ -210,7 +214,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
     const r=await op('texture_graph_gpu_preview',{action:'start',graph,overrides,output,requireGpu,materialized,...(reuse&&liveTarget?{incrementalOutputs:true,typeIndex:liveTarget.typeIndex,choiceIndex:liveTarget.choiceIndex,materialIndex:liveTarget.materialIndex,expectedVersion:liveTarget.expectedVersion,expectedModelPublication:liveTarget.expectedModelPublication}:{}),fusePointwise:materialized&&fusePointwise,incremental:materialized&&incremental,gpuTextureTransfer:action==='gpuBakeSet'&&materialized&&gpuTextureTransfer,gpuTextureFenceOnly:action==='gpuBakeSet'&&materialized&&gpuTextureTransfer&&gpuTextureFenceOnly,gpuTextureMipmaps:action==='gpuBakeSet'&&materialized&&gpuTextureTransfer&&gpuTextureMipmaps,resolution:gpuResolution,bake:action==='gpuBake'||action==='gpuBakeSet',bakeSet:action==='gpuBakeSet'});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||typeof r.request!=='string')throw new Error(object(r)?String(r.reason??'GPU owner unavailable'):'GPU owner unavailable');
     setGpuPolling(r.busy===true||r.state==='queued'||r.state==='pending');setPreviewKind(String(r.backend??'unknown'));
-    {setGpuRequest({id:r.request,source:text,overrides:overrideText,output,resolution:gpuResolution,bake:action==='gpuBake'||action==='gpuBakeSet',setBake:action==='gpuBakeSet'});setPreview(null);setGpuReady(false);setResidentReady(false);setLiveApply('');}
+    {setGpuRequest({id:r.request,source:text,overrides:overrideText,output,resolution:gpuResolution,bake:action==='gpuBake'||action==='gpuBakeSet',setBake:action==='gpuBakeSet',previewKey:action==='gpuStart'?semantic:undefined});setPreview(null);setGpuReady(false);setResidentReady(false);setLiveApply('');}
     
     setGpuStatus(String(r.state)+(r.draining===true?' · waiting for GPU retirement':'')+' / '+String(r.backend)+(r.setBake===true?' · '+String(r.completedOutputs)+' / '+String(r.totalOutputs)+' maps':'')+' · '+String(r.receivedBytes??0)+' / '+String(r.totalBytes??0)+' bytes · '+String(r.readbackBlocks??0)+' blocks · encoded passes '+String(r.encodedPasses??0)+(r.reusedPlan===true?' · reused plan':'')+(r.reusedBuffers===true?' · reused buffers':'')+(r.reusedScratch===true?' · shared scalar scratch':'')+' — '+String(r.reason??''));
     setGpuReady(r.bake===true&&r.fileExportAvailable!==false&&r.state==='ready'&&r.published!==true&&r.busy!==true);
@@ -270,7 +274,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
  },[active,autoPreview,gpuCaps?.available,busy,disabled,gpuPolling,gpuRequest?.bake,queueTicket,queueDrafts,semantic,catalog,projectPath]);
  const rawView=graph?projection(graph,catalog):{nodes:[],links:[]};
  const arranged=textureLayout(rawView);
- const view={...rawView,nodes:rawView.nodes.map(n=>{const row=Array.isArray(graph?.nodes)?graph.nodes.find(v=>object(v)&&v.id===n.id):null;const pos=object(row)?row.position:null;const xy=arranged.get(n.id);return Array.isArray(pos)||!xy?n:{...n,x:xy[0],y:xy[1]};})};
+ const view={...rawView,nodes:rawView.nodes.map(n=>{const row=Array.isArray(graph?.nodes)?graph.nodes.find(v=>object(v)&&v.id===n.id):null;const pos=object(row)?row.position:null;const xy=arranged.get(n.id);return (Array.isArray(pos)&&pos.length===2&&pos.every(v=>typeof v==='number'&&Number.isFinite(v)))||!xy?n:{...n,x:xy[0],y:xy[1]};})};
  const moveNodes=(positions:readonly {id:string;x:number;y:number}[])=>{
   if(!graph||!Array.isArray(graph.nodes))return;
   const byId=new Map(positions.map(p=>[p.id,p]));
@@ -301,7 +305,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
   if(object(t.properties))for(const [key,value] of Object.entries(t.properties))if(object(value))props[key]=value.default;
   edit({...graph,nodes:[...rows,{id,op:kind,inputs:Array.isArray(t.inputs)?t.inputs.map(()=> ''):[],properties:props}]});setSelected(id);setPending(null);
  };
- const duplicate=()=>{if(!graph)return;const copy=duplicateTextureNode(graph,selected);if(copy){edit(copy.graph);setSelected(copy.id);setPending(null);}};
+ const duplicate=()=>{if(!graph)return;const source=view.nodes.find(n=>n.id===selected);const copy=duplicateTextureNode(source?{...graph,nodes:rows.map(n=>n.id===selected?{...n,position:[source.x,source.y]}:n)}:graph,selected);if(copy){edit(copy.graph);setSelected(copy.id);setPending(null);}};
  const removeNode=()=>{
   if(!graph||!selected)return;const nextOutputs=object(graph.outputs)?Object.fromEntries(Object.entries(graph.outputs).filter(([,v])=>v!==selected)):{};
   edit({...graph,outputs:nextOutputs,nodes:rows.filter(n=>n.id!==selected).map(n=>({...n,inputs:Array.isArray(n.inputs)?n.inputs.map(v=>v===selected?'':v):[]}))});setSelected('');setPending(null);
@@ -325,7 +329,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
      {templates.length>0&&<StudioSelect aria-label="Native PBR template" value="" disabled={busy||disabled} onChange={e=>{const t=templates.find(t=>t.name===e.target.value);if(t&&object(t.graph)){replaceDocument(t.graph);setOriginal(null);setName('');setSelected('');setPending(null)}}}><option value="">Load native PBR template</option>{templates.map(t=><option key={String(t.name)}>{String(t.name)}</option>)}</StudioSelect>}
      <StudioButton size="sm" disabled={disabled||busy} onClick={()=>void run('catalog')}>Refresh graph / node catalog</StudioButton>
   </div>
-  <div className="tg-body" style={{"--tg-inspector-width":inspectorWidth+"px"} as React.CSSProperties}>
+  <div className="tg-body" style={{"--tg-inspector-width":inspectorWidth+"px"} as CSSProperties}>
 
    <div className="tg-main">
     <div className="tg-node-toolbar">
@@ -344,13 +348,13 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
      <div className="tg-image">{preview&&preview.source===text?<canvas ref={canvas} width={preview.width} height={preview.height} aria-label="Native texture preview"/>:<span>No preview generated</span>}</div>
        <StudioSelect aria-label="Texture output" value={output} disabled={busy||disabled} onChange={e=>{setOutput(e.target.value);setAsset(null);setPreview(null)}}>{outputs.map(n=><option key={n}>{n}</option>)}</StudioSelect>
         <StudioSelect aria-label="GPU preview resolution" value={String(gpuResolution)} disabled={busy||disabled} onChange={e=>{setGpuResolution(Number(e.target.value));setPreview(null)}}>{[32,64,128].map(n=><option key={n} value={n}>{n} × {n}</option>)}</StudioSelect>
-     <div className="au-row"><StudioButton size="sm" variant="primary" disabled={busy||disabled||!gpuCaps?.available||gpuPolling||!outputs.includes(output)} onClick={()=>void run('gpuStart')}>GPU preview</StudioButton><StudioButton size="sm" disabled={busy||disabled||!outputs.includes(output)} onClick={()=>void run('previewOutput')}>CPU preview</StudioButton></div>
+     <div className="au-row"><StudioButton size="sm" variant="primary" disabled={busy||disabled||!gpuCaps?.available||gpuPolling||!outputs.includes(output)} onClick={()=>void run('gpuStart')}>GPU preview</StudioButton><StudioButton size="sm" disabled={busy||disabled||gpuPolling||!outputs.includes(output)} onClick={()=>void run('previewOutput')}>CPU preview</StudioButton></div>
      <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!gpuRequest} onClick={()=>void run('gpuCancel')}>Cancel</StudioButton><StudioButton size="sm" disabled={busy||disabled||!gpuRequest} onClick={()=>void run('gpuRead')}>Read result</StudioButton></div>
      <label className="au-row"><input type="checkbox" checked={autoPreview} onChange={e=>{autoAttempt.current='';setAutoPreview(e.target.checked);}}/> Auto GPU preview</label>
      <label className="au-row"><input type="checkbox" checked={requireGpu} disabled={busy||disabled} onChange={e=>setRequireGpu(e.target.checked)}/> Require GPU (no fallback)</label>
      {gpuCaps&&!gpuCaps.available&&<StudioAlert tone="warning">{gpuCaps.reason||'Native GPU owner unavailable'}</StudioAlert>}
      {gpuStatus&&<small className="tg-status">{gpuStatus}</small>}
-     <StudioButton size="sm" disabled={busy||disabled||!selected} onClick={()=>void run('previewNode')}>Preview selected node (CPU)</StudioButton>
+     <StudioButton size="sm" disabled={busy||disabled||gpuPolling||!selected} onClick={()=>void run('previewNode')}>Preview selected node (CPU)</StudioButton>
     </section>
     <div className="tg-tabs" role="group" aria-label="Texture inspector">
      {(['node','outputs','parameters'] as const).map(t=><StudioButton key={t} size="sm" aria-pressed={inspectorTab===t} onClick={()=>setInspectorTab(t)}>{t==='node'?'Node':t==='outputs'?'Outputs':'Parameters'}</StudioButton>)}
@@ -414,7 +418,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
    <StudioSection title="GPU request queue">
     <small>Non-preemptive, priority 3 highest; equal priority FIFO. Read queue to select an active draft, then Read result above. Publish/apply or explicitly discard and release before the next request.</small>
     <StudioSelect aria-label="GPU queue priority" value={queuePriority} disabled={busy||disabled} onChange={e=>setQueuePriority(e.target.value)}>{[0,1,2,3].map(n=><option key={n} value={String(n)}>Priority {n}</option>)}</StudioSelect>
-    <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!gpuCaps?.available||!outputs.length} onClick={()=>void run('queueEnqueue')}>Enqueue PBR set</StudioButton><StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('queueRead')}>Read queue</StudioButton></div>
+    <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||gpuPolling||!gpuCaps?.available||!outputs.length} onClick={()=>void run('queueEnqueue')}>Enqueue PBR set</StudioButton><StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('queueRead')}>Read queue</StudioButton></div>
     <StudioInput aria-label="GPU queue ticket" value={queueTicket} disabled={busy||disabled} onChange={e=>setQueueTicket(e.target.value)}/>
     <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!queueTicket} onClick={()=>void run('queueCancel')}>Cancel ticket</StudioButton><StudioButton size="sm" disabled={busy||disabled||!queueTicket} onClick={()=>void run('queueRelease')}>Discard / release active</StudioButton></div>
     {queueInfo&&<small>Active {String(queueInfo.activeTicket||'none')} · request {String(queueInfo.activeRequest||'none')} · pending {Array.isArray(queueInfo.pending)?queueInfo.pending.filter(object).map(x=>String(x.ticket)+' (p'+String(x.priority)+')').join(', '):''} · {String(queueInfo.pendingBytes??0)} bytes · {String(queueInfo.error??'')}</small>}
