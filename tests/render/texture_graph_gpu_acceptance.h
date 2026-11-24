@@ -298,6 +298,32 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
         bool staleHdr=false;try{(void)owner.readAcceptedRadiance(project,"stale");}catch(const std::runtime_error&){staleHdr=true;}
         require(staleHdr,"stale HDR request accepted");
         cancel(rawId);drain();
+        // Fence-only native HDR texture: no CPU readback, exact lease ownership.
+        for(const auto* format:{"rgba16f","rgba32f"}){
+            const auto pixelFormat=std::string_view(format)=="rgba16f"?gfx::PixelFormat::RGBA16F:gfx::PixelFormat::RGBA32F;
+            if(!dev.supports(pixelFormat))continue;
+            auto residentHdr=hdrBake;residentHdr.set("residentRadianceFormat",Json::string(format));
+            const auto residentId=owner.start(residentHdr,project,lifetime.lease()).getStr("request");drain();
+            const auto residentStatus=owner.status();
+            require(residentStatus.getStr("state")=="ready"&&residentStatus.getStr("backend")==expected&&residentStatus.getBool("residentRadianceReady")&&residentStatus.getInt("receivedBytes")==0&&residentStatus.getInt("totalBytes")==0,"resident HDR fence-only generation failed");
+            auto texture=owner.takeResidentRadiance(dev,lifetime.lease(),project,residentId);
+            require(texture.valid(),"resident HDR ownership transfer failed");
+            auto capture=std::make_shared<gfx::TextureReadbackResult>();auto done=std::make_shared<bool>(false);
+            beginFrame();
+            const bool read=dev.readTextureAsync(texture,{},[capture,done](auto result){*capture=std::move(result);*done=true;});
+            dev.endFrame();require(read,"HDR destination diagnostic read rejected");
+            for(int i=0;i<16&&!*done;++i){require(dev.waitIdle(),"HDR readback wait failed");beginFrame();dev.endFrame();}
+            require(*done&&capture->success()&&capture->format==pixelFormat&&capture->width==16&&capture->height==16,"HDR destination readback failed");
+            const size_t bpp=pixelFormat==gfx::PixelFormat::RGBA16F?8u:16u;
+            require(capture->pixels.size()==16*16*bpp,"HDR destination byte count");
+            for(size_t i=0;i<4;++i){
+                float sample=0;
+                if(bpp==8){const uint16_t bits=uint16_t(capture->pixels[i*2])|(uint16_t(capture->pixels[i*2+1])<<8);sample=render::cameraHalfToFloat(bits);}
+                else std::memcpy(&sample,capture->pixels.data()+i*4,4);
+                require(std::abs(sample-rawHdr[i])<.001f,"HDR destination pixel mismatch");
+            }
+            require(dev.waitIdle(),"HDR texture retirement wait failed");dev.destroyTexture(texture);
+        }
         // Native function calls lower into ordinary typed DAG nodes. Two calls
         // share a definition but use independent parameter values and public IDs.
         auto functions=Json::parse(R"JSON({"graph":{"version":1,"size":32,

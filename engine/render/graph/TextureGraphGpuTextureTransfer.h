@@ -72,6 +72,23 @@ inline bool queueGraphGpuTextureCopy(gfx::Device& dev,const RenderDeviceLifetime
     candidate.encoded=dev.copyStorageBufferToTexture2D(source,candidate.image.tex,copy);
     return candidate.encoded;
 }
+inline bool queueRadianceGpuTextureCopy(gfx::Device& dev,const RenderDeviceLifetime::Lease& lease,
+        int size,gfx::PixelFormat format,gfx::BufferHandle source,const gfx::BufferTextureCopy2D& copy,
+        GraphGpuTextureCopy& candidate){
+    require(!candidate.fence&&!candidate.image.tex.valid()&&!candidate.encoded,"HDR copy candidate already used");
+    const size_t bpp=format==gfx::PixelFormat::RGBA16F?8u:format==gfx::PixelFormat::RGBA32F?16u:0u;
+    if(!bpp||copy.generateMipmaps||!lease.validFor(dev)||!dev.gpuHealthy()||!dev.supportsStorageBufferTextureCopy()||!dev.supports(format)||!source.valid())return false;
+    gfx::BufferInfo info{};
+    if(!dev.bufferInfo(source,info)||!gfx::validBufferTextureCopy2D(copy,info.logicalBytes,size,size,bpp))return false;
+    const auto token=dev.gpuSubmissionFence();if(!token||token<=dev.gpuCompletedFence())return false;
+    candidate.image.width=candidate.image.height=size;candidate.image.name="#texture-graph/radiance";
+    candidate.lease=lease;candidate.fence=token;
+    gfx::TextureDesc desc;desc.width=desc.height=size;desc.format=format;desc.mipLevels=1;
+    desc.filter=format==gfx::PixelFormat::RGBA32F?gfx::Filter::Nearest:gfx::Filter::Linear;desc.label="TextureGraph resident radiance";
+    candidate.image.tex=dev.createTexture(desc);
+    if(!candidate.image.tex.valid())return false;
+    candidate.encoded=dev.copyStorageBufferToTexture2D(source,candidate.image.tex,copy);return candidate.encoded;
+}
 inline bool graphGpuTextureCopyComplete(const GraphGpuTextureCopy& candidate,gfx::Device& dev){
     return candidate.encoded&&candidate.image.tex.valid()&&candidate.lease.validFor(dev)&&
         dev.gpuHealthy()&&candidate.fence&&dev.gpuCompletedFence()>=candidate.fence;

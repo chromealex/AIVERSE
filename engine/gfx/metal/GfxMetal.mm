@@ -718,15 +718,16 @@ public:
         const bool isRGBA = pixelFormat == MTLPixelFormatRGBA8Unorm ||
                             pixelFormat == MTLPixelFormatRGBA8Unorm_sRGB;
         const bool isHalf = pixelFormat == MTLPixelFormatRGBA16Float;
-        if ((!isBGRA && !isRGBA && !isHalf) ||
-            (isHalf ? t->fmt != PixelFormat::RGBA16F :
+        const bool isFloat = pixelFormat == MTLPixelFormatRGBA32Float;
+        if ((!isBGRA && !isRGBA && !isHalf && !isFloat) ||
+            (isFloat ? t->fmt != PixelFormat::RGBA32F : isHalf ? t->fmt != PixelFormat::RGBA16F :
              t->fmt != PixelFormat::RGBA8 && t->fmt != PixelFormat::RGBA8_sRGB))
             return false;
         const size_t width = size_t(std::max<NSUInteger>(1,
                               t->tex.width >> request.mipLevel));
         const size_t height = size_t(std::max<NSUInteger>(1,
                                t->tex.height >> request.mipLevel));
-        const size_t bpp = isHalf ? 8u : 4u;
+        const size_t bpp = isFloat ? 16u : isHalf ? 8u : 4u;
         // Align bytesPerRow for the Metal texture-to-buffer blit.
         if (width > SIZE_MAX / bpp) return false;
         const size_t packedRow = width*bpp;
@@ -1928,6 +1929,8 @@ public:
                                      const BufferTextureCopy2D& copy) override {
         auto* source=buffers_.get(from.id);
         const auto* dst=textures_.get(to.id);
+        const auto format=dst&&dst->tex?dst->tex.pixelFormat:MTLPixelFormatInvalid;
+        const size_t bpp=format==MTLPixelFormatRGBA16Float?8u:format==MTLPixelFormatRGBA32Float?16u:4u;
         if(!cmd_||enc_||compute_||gpuIcbEncoder_||!supportsStorageBufferTextureCopy()||
            !source||!source->storage||!dst||!dst->tex||dst->storage||
            dst->dimension!=TextureDimension::Texture2D||
@@ -1935,10 +1938,10 @@ public:
            (copy.generateMipmaps?(!dst->mips||dst->tex.mipmapLevelCount!=NSUInteger(maxTextureMipLevels(copy.width,copy.height,1))):dst->tex.mipmapLevelCount!=1)||
            dst->tex.framebufferOnly||
            (dst->tex.usage&MTLTextureUsageRenderTarget)||
-           (dst->tex.pixelFormat!=MTLPixelFormatRGBA8Unorm&&
-            dst->tex.pixelFormat!=MTLPixelFormatRGBA8Unorm_sRGB)||
-           !validBufferTextureCopy2D(copy,source->size,int(dst->tex.width),int(dst->tex.height))) {
-            error_="Metal: rejected storage buffer to RGBA8 texture copy";return false;
+           (format!=MTLPixelFormatRGBA8Unorm&&format!=MTLPixelFormatRGBA8Unorm_sRGB&&format!=MTLPixelFormatRGBA16Float&&format!=MTLPixelFormatRGBA32Float)||
+           (bpp!=4&&copy.generateMipmaps)||
+           !validBufferTextureCopy2D(copy,source->size,int(dst->tex.width),int(dst->tex.height),bpp)) {
+            error_="Metal: rejected storage buffer to RGBA texture copy";return false;
         }
         id<MTLBuffer> src=current(*source);
         if(!src){error_="Metal: copy source unavailable";return false;}

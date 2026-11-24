@@ -207,6 +207,7 @@ class TextureGraphGpuOwner {
     std::string project_,state_="idle",reason_,backend_="none",submittedBackend_,output_;
     std::vector<uint8_t> pixels_;
     bool queued_=false,requireGpu_=false,rawRadiance_=false;
+    size_t residentRadianceBpp_=0;
     size_t resultByteCount()const{return size_t(size_)*size_*(rawRadiance_?16u:4u);}
     bool ownsActiveResources()const{return buffer_.valid()||scratch_.valid()||compute_.valid()||secondCompute_.valid()||matSources_.has_value();}
     bool ownsResources()const{return ownsActiveResources()||idlePipelines_.size()!=0||matIdleBuffers_.bytes()!=0||matIdlePipelines_.size()!=0||!gpuCandidates_.empty();}
@@ -349,7 +350,7 @@ class TextureGraphGpuOwner {
                 const auto budget=gpuTransferRequested_?gpuTransferBudget_.dagBudget:materializedBudgetBytes;
                 if(gpuTransferRequested_&&(!gpuTransferLease_.validFor(dev)||!dev.supportsStorageBufferTextureCopy()))
                     throw std::runtime_error("GPU texture transfer requires a live native device and copy support");
-                matSources_=compileMaterializedDag(*program_,targets,size_,budget,matFusion_,gpuTransferRequested_,matIncremental_,rawRadiance_);
+                matSources_=compileMaterializedDag(*program_,targets,size_,budget,matFusion_,gpuTransferRequested_,matIncremental_,rawRadiance_,residentRadianceBpp_);
                 if(gpuTransferRequested_){
                     for(size_t i=0;i<setOutputs_.size();++i)if(render::texture_graph::materialSlot(setOutputs_[i].first)){
                         const auto kind=program_->nodes.at(targets[i]).info->output;
@@ -475,6 +476,14 @@ class TextureGraphGpuOwner {
             if(packScope)packScope->finish();
             if(dispatchScope)dispatchScope->finish();
             state_="pending";
+            if(residentRadianceBpp_){
+                gpuCandidates_.push_back(std::make_unique<GpuCopy>());
+                const auto layout=gfx::rgbaCopyLayout(size_,size_,residentRadianceBpp_);
+                const gfx::BufferTextureCopy2D copy{size_,size_,0,layout.rowPitchBytes,false,residentRadianceBpp_};
+                const auto format=residentRadianceBpp_==8?gfx::PixelFormat::RGBA16F:gfx::PixelFormat::RGBA32F;
+                if(!queueRadianceGpuTextureCopy(dev,gpuTransferLease_,size_,format,buffer_,copy,*gpuCandidates_.back()))throw std::runtime_error("HDR GPU texture copy rejected");
+                return; // fence-only; no CPU pixels, readback or reference evaluation.
+            }
             if(gpuTransferRequested_&&render::texture_graph::materialSlot(setOutputs_.at(index).first)){
                 auto candidate=std::make_unique<GpuCopy>();
                 auto* item=candidate.get();
@@ -637,9 +646,10 @@ public:
         r.set("gpuTextureFenceOnly",Json::fromBool(gpuFenceOnly_));
         r.set("gpuTextureAcceptance",Json::string(gpuFenceOnly_?"fence_only":"cpu_reference"));
         r.set("fileExportAvailable",Json::fromBool(!gpuFenceOnly_));
-        r.set("resultFormat",Json::string(rawRadiance_?"rgba32f-linear":"rgba8"));
+        r.set("resultFormat",Json::string(residentRadianceBpp_==8?"rgba16f-resident":residentRadianceBpp_==16?"rgba32f-resident":rawRadiance_?"rgba32f-linear":"rgba8"));
+        r.set("residentRadianceReady",Json::fromBool(residentRadianceBpp_&&gpuCandidatesReady()));
         r.set("gpuTextureGeneration",Json::string(gpuGeneration_));
-        r.set("gpuTextureSetReady",Json::fromBool(gpuCandidatesReady()));
+        r.set("gpuTextureSetReady",Json::fromBool(!residentRadianceBpp_&&gpuCandidatesReady()));
         r.set("gpuTexturePublished",Json::fromBool(gpuPublished_));
         r.set("gpuTextureAccepted",Json::number(int64_t(gpuAcceptedTextures_)));
         r.set("gpuTextureReservedBytes",Json::number(int64_t(gpuTransferBudget_.textureBytes)));
@@ -662,8 +672,11 @@ private:
         if(project.empty())throw std::invalid_argument("open project first");
         auto program=prepared?std::move(*prepared):render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object(),resolver);
         size_t target=program.nodes.size();const bool setBake=p.getBool("bakeSet"),bake=setBake||p.getBool("bake");
-        const bool transfer=p.getBool("gpuTextureTransfer"),mipmaps=p.getBool("gpuTextureMipmaps"),fenceOnly=p.getBool("gpuTextureFenceOnly");
-        const bool rawRadiance=bake&&!setBake&&p.getStr("output")=="radiance";
+        const auto residentFormat=p.getStr("residentRadianceFormat");
+        const size_t residentBpp=residentFormat=="rgba16f"?8u:residentFormat=="rgba32f"?16u:0u;
+        if(p.has("residentRadianceFormat")&&(!residentBpp||!bake||setBake||p.getStr("output")!="radiance"||p.getBool("gpuTextureTransfer")||p.getBool("gpuTextureMipmaps")||p.getBool("incrementalOutputs")))throw std::invalid_argument("resident HDR requires a separate radiance bake and explicit float format");
+        const bool transfer=residentBpp||p.getBool("gpuTextureTransfer"),mipmaps=p.getBool("gpuTextureMipmaps"),fenceOnly=residentBpp||p.getBool("gpuTextureFenceOnly");
+        const bool rawRadiance=!residentBpp&&bake&&!setBake&&p.getStr("output")=="radiance";
         if(setBake&&program.outputs.count("radiance")&&!fenceOnly)throw std::invalid_argument("export radiance as a separate HDR bake");
         if(rawRadiance&&(transfer||mipmaps||fenceOnly||p.getBool("incrementalOutputs")))throw std::invalid_argument("HDR raw bake does not support material texture transfer");
         if(fenceOnly&&!transfer)throw std::invalid_argument("fence-only mode requires GPU texture transfer");
@@ -703,10 +716,14 @@ private:
         render::texture_graph::gpu::TextureRequestBudget transferBudget;
         if(mipmaps&&!transfer)throw std::invalid_argument("GPU texture mipmaps require texture transfer");
         if(transfer){
-            if(!setBake||!materialized)throw std::invalid_argument("GPU texture transfer requires materialized bakeSet");
+            if((!setBake&&!residentBpp)||!materialized)throw std::invalid_argument("GPU texture transfer requires materialized bakeSet or radiance");
             if(!lease.alive()||!lease.device()||!lease.validFor(*lease.device()))
                 throw std::invalid_argument("GPU texture transfer requires native device lease");
-            if(!noop)transferBudget=render::texture_graph::graphGpuTextureBudget(program,mipmaps,
+            if(residentBpp){
+                const auto format=residentBpp==8?gfx::PixelFormat::RGBA16F:gfx::PixelFormat::RGBA32F;
+                if(!lease.device()->supports(format)||!lease.device()->supportsStorageBufferTextureCopy())throw std::invalid_argument("resident HDR format unavailable");
+                transferBudget=gpu::textureRequestBudget(1,size_t(program.size)*program.size*residentBpp,0,gpu::materializedBudgetBytes,gpu::maxTextureRequestBytes,true);
+            }else if(!noop)transferBudget=render::texture_graph::graphGpuTextureBudget(program,mipmaps,
                 render::texture_graph::gpu::materializedBudgetBytes,fenceOnly);
             if(!noop&&!transferBudget)throw std::invalid_argument("GPU texture request exceeds budget or has no bindable outputs");
             gpuCandidates_.reserve(render::texture_graph::gpu::maxTextureSetImages);
@@ -724,7 +741,7 @@ private:
         sharedScratch_.invalidate();reusedScratch_=false;sharedScratchHits_=0;
         matIncremental_=incremental;matReusedNodes_=0;matRequested_=materialized;matFusion_=matRequested_&&p.getBool("fusePointwise");matReachableNodes_=matFusedNodes_=0;matFailed_=false;matNodePasses_=matPackPasses_=matPipelineHits_=0;matBufferHit_=false;
         outputReuseTarget_=reuseTarget;pendingOutputReceipt_=std::move(receipt);reusedOutputNames_=std::move(reusedNames);outputNoop_=noop;
-        ++serial_;rawRadiance_=rawRadiance;gpuTransferRequested_=transfer;gpuTextureMipmaps_=mipmaps;gpuPublished_=false;gpuFenceOnly_=fenceOnly;
+        ++serial_;rawRadiance_=rawRadiance;residentRadianceBpp_=residentBpp;gpuTransferRequested_=transfer;gpuTextureMipmaps_=mipmaps;gpuPublished_=false;gpuFenceOnly_=fenceOnly;
         gpuTransferLease_=(transfer||incremental)?lease:render::RenderDeviceLifetime::Lease{};gpuTransferBudget_=transferBudget;
         gpuAcceptedTextures_=0;gpuGeneration_=transfer?"gpu_"+std::to_string(lease.generation())+"_"+std::to_string(serial_):std::string{};
         size_=std::min(program.size,requested);target_=target;program_=std::move(program);project_=project;output_=output;bake_=bake;published_=false;setBake_=setBake;
@@ -783,7 +800,7 @@ private:
     bool adoptCompletedGpuMaterial(const std::string& project,const std::string& request,
             gfx::Device& dev,const render::RenderDeviceLifetime::Lease& lease,
             Publish&& publish,std::string* error){
-        if(!gpuCandidatesReady()||!program_||project.empty()||project_!=project||
+        if(residentRadianceBpp_||!gpuCandidatesReady()||!program_||project.empty()||project_!=project||
            request!=std::to_string(serial_)||!gpuTransferLease_.validFor(dev)||
            !lease.validFor(dev)||lease.generation()!=gpuTransferLease_.generation()||!dev.gpuHealthy()){
             if(error)*error="no matching completed GPU texture request";return false;
@@ -896,6 +913,17 @@ protected:
     }
 public:
     bool isRadianceBake()const noexcept{return rawRadiance_;}
+    // Native-only ownership transfer after the exact covering fence. Caller
+    // retains the device lease and destroys the returned texture after use.
+    gfx::TextureHandle takeResidentRadiance(gfx::Device& dev,const RenderDeviceLifetime::Lease& lease,
+            const std::string& scope,const std::string& request){
+        require(residentRadianceBpp_&&gpuCandidatesReady()&&scope==project_&&request==std::to_string(serial_)&&
+            lease.validFor(dev)&&gpuTransferLease_.validFor(dev)&&lease.generation()==gpuTransferLease_.generation()&&gpuCandidates_.size()==1&&
+            graphGpuTextureCopyComplete(*gpuCandidates_.front(),dev),"no matching completed resident HDR texture");
+        const auto texture=gpuCandidates_.front()->image.tex;
+        gpuCandidates_.front()->image.tex={};gpuCandidates_.clear();gpuAcceptedTextures_=0;
+        published_=gpuPublished_=true;return texture;
+    }
     // Copy only accepted GPU bytes, never the CPU reference. Native caller
     // must use the owner's thread and exact request/scope identity.
     std::vector<float> readAcceptedRadiance(const std::string& scope,const std::string& request)const{

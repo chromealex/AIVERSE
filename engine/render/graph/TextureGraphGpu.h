@@ -390,12 +390,14 @@ struct MaterializedSources {
     size_t reachableNodes=0,fusedNodes=0;
 };
 inline MaterializedSources compileMaterializedDag(const Program& p,const std::vector<size_t>& targets,
-        int n,size_t budget=materializedBudgetBytes,bool fusePointwise=false,bool paddedResult=false,bool incremental=false,bool rawRadiance=false){
+        int n,size_t budget=materializedBudgetBytes,bool fusePointwise=false,bool paddedResult=false,bool incremental=false,bool rawRadiance=false,size_t residentRadianceBpp=0){
     require(n>=8&&n<=p.size&&n<=maxBakeSize&&budget<=materializedBudgetBytes,"invalid materialized resolution or budget");
     MaterializedSources r;
     if(rawRadiance)require(!paddedResult&&targets.size()==1&&targets.front()<p.nodes.size()&&p.nodes[targets.front()].info->output==Kind::Radiance,"raw HDR readback requires one radiance target");
-    r.resultBytes=size_t(n)*size_t(n)*(rawRadiance?16u:4u);
-    r.resultCapacityBytes=paddedResult?gfx::rgba8CopyLayout(n,n).bytes:r.resultBytes;
+    if(residentRadianceBpp)require(!rawRadiance&&paddedResult&&(residentRadianceBpp==8||residentRadianceBpp==16)&&targets.size()==1&&targets.front()<p.nodes.size()&&p.nodes[targets.front()].info->output==Kind::Radiance,"resident HDR requires one radiance target");
+    const size_t bpp=residentRadianceBpp?residentRadianceBpp:rawRadiance?16u:4u;
+    r.resultBytes=size_t(n)*size_t(n)*bpp;
+    r.resultCapacityBytes=paddedResult?gfx::rgbaCopyLayout(n,n,bpp).bytes:r.resultBytes;
     require(r.resultCapacityBytes>=r.resultBytes&&r.resultCapacityBytes<budget,"materialized result exceeds budget");
     // Conservatively reserve every authored image source, including unused nodes.
     for(const auto& node:p.nodes){
@@ -436,7 +438,7 @@ inline MaterializedSources compileMaterializedDag(const Program& p,const std::ve
         }
     }
     r.totalBytes=r.plan.allocatedBytes+r.resultCapacityBytes+r.imageSourceBytes;
-    for(auto target:targets)r.packs.push_back(rawRadiance?packRadianceFloatKernel(n):packMaterializedKernelAt(materializedValue(p.nodes[target].info->output),n,"tid",p.nodes[target].info->output==Kind::Radiance));
+    for(auto target:targets)r.packs.push_back(residentRadianceBpp?packRadianceTextureKernel(n,residentRadianceBpp).source:rawRadiance?packRadianceFloatKernel(n):packMaterializedKernelAt(materializedValue(p.nodes[target].info->output),n,"tid",p.nodes[target].info->output==Kind::Radiance));
     return r;
 }
 } // namespace aiverse::render::texture_graph::gpu

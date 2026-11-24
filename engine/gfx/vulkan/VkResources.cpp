@@ -815,15 +815,17 @@ bool VulkanDevice::copyStorageBufferToTexture2D(BufferHandle from,TextureHandle 
         const BufferTextureCopy2D& copy) {
     const auto* src=buffers_.get(from.id);
     auto* dst=textures_.get(to.id);
+    const size_t bpp=dst&&dst->format==PixelFormat::RGBA16F?8u:dst&&dst->format==PixelFormat::RGBA32F?16u:4u;
     if(!recording_||inPass_||activeComputeId_||!supportsStorageBufferTextureCopy()||
        !src||src->type!=BufferType::Storage||!dst||!dst->image||dst->depth||
        dst->compressed||dst->renderTarget||dst->storage||
        dst->dimension!=TextureDimension::Texture2D||dst->volumeDepth!=1||
        dst->layers!=1||dst->samples!=1||
        (copy.generateMipmaps?(!dst->generateMips||dst->levels!=maxTextureMipLevels(copy.width,copy.height,1)):dst->levels!=1)||
-       (dst->format!=PixelFormat::RGBA8&&dst->format!=PixelFormat::RGBA8_sRGB)||
-       !validBufferTextureCopy2D(copy,src->size,dst->width,dst->height)) {
-        error_="Vulkan: rejected storage buffer to RGBA8 texture copy";return false;
+       (dst->format!=PixelFormat::RGBA8&&dst->format!=PixelFormat::RGBA8_sRGB&&dst->format!=PixelFormat::RGBA16F&&dst->format!=PixelFormat::RGBA32F)||
+       (bpp!=4&&copy.generateMipmaps)||
+       !validBufferTextureCopy2D(copy,src->size,dst->width,dst->height,bpp)) {
+        error_="Vulkan: rejected storage buffer to RGBA texture copy";return false;
     }
     const VkBuffer source=resolveBuffer(from.id,serial_);
     if(!source){error_="Vulkan: copy source unavailable";return false;}
@@ -837,7 +839,7 @@ bool VulkanDevice::copyStorageBufferToTexture2D(BufferHandle from,TextureHandle 
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,uint32_t(dst->levels),0,1);
     VkBufferImageCopy region{};
     region.bufferOffset=VkDeviceSize(copy.sourceOffset);
-    region.bufferRowLength=uint32_t(copy.rowPitchBytes/4);
+    region.bufferRowLength=uint32_t(copy.rowPitchBytes/bpp);
     region.bufferImageHeight=uint32_t(copy.height);
     region.imageSubresource={VK_IMAGE_ASPECT_COLOR_BIT,0,0,1};
     region.imageExtent={uint32_t(copy.width),uint32_t(copy.height),1};
@@ -868,11 +870,11 @@ bool VulkanDevice::readTextureAsync(TextureHandle h, TextureReadbackDesc request
         return false;
     if (texture->format != PixelFormat::RGBA8 &&
         texture->format != PixelFormat::RGBA8_sRGB &&
-        texture->format != PixelFormat::RGBA16F)
+        texture->format != PixelFormat::RGBA16F && texture->format != PixelFormat::RGBA32F)
         return false;
     const int width = std::max(1, texture->width >> request.mipLevel);
     const int height = std::max(1, texture->height >> request.mipLevel);
-    const size_t bpp = texture->format == PixelFormat::RGBA16F ? 8u : 4u;
+    const size_t bpp = texture->format == PixelFormat::RGBA32F ? 16u : texture->format == PixelFormat::RGBA16F ? 8u : 4u;
     const size_t bytes = size_t(width) * size_t(height) * bpp;
     if (!bytes || bytes > (size_t(256) << 20)) return false;
     VkBuffer staging = VK_NULL_HANDLE;

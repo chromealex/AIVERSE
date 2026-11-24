@@ -61,6 +61,22 @@ struct TextureTransferPack {
     gfx::BufferTextureCopy2D copy;
     size_t bufferBytes=0;
 };
+inline TextureTransferPack packRadianceTextureKernel(int n,size_t bpp){
+    if(n<8||n>1024||(bpp!=8&&bpp!=16))throw std::invalid_argument("invalid HDR texture transfer layout");
+    const auto layout=gfx::rgbaCopyLayout(n,n,bpp);
+    const auto stride=std::to_string(layout.rowPitchBytes/bpp);
+    const std::string index="(tid/n)*"+stride+"u+tid%n";
+    Source source;
+    if(bpp==16)source=materializedKernel(KernelValue::Vector,{KernelValue::Vector},n,"result["+index+"]=float4(input0[tid].xyz,1.0f);");
+    else{
+        const std::string base="uint dst=2u*("+index+");float4 value=float4(input0[tid].xyz,1.0f);";
+        source=materializedKernel(KernelValue::PackedBytes,{KernelValue::Vector},n,
+            base+"result[dst]=as_type<uint>(half2(value.xy));result[dst+1u]=as_type<uint>(half2(value.zw));");
+        replaceShaderToken(source.glsl,"as_type<uint>(half2(value.xy))","packHalf2x16(value.xy)");
+        replaceShaderToken(source.glsl,"as_type<uint>(half2(value.zw))","packHalf2x16(value.zw)");
+    }
+    return {std::move(source),{n,n,0,layout.rowPitchBytes,false,bpp},layout.bytes};
+}
 inline TextureTransferPack packMaterializedTextureKernel(KernelValue input,int n){
     if(n<8||n>1024)throw std::invalid_argument("invalid texture transfer extent");
     const auto layout=gfx::rgba8CopyLayout(n,n);
