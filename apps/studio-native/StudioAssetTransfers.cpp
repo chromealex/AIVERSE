@@ -2394,6 +2394,8 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
             if(std::none_of(liveGuids.begin(),liveGuids.end(),[&](const auto& row){return row.second==current;}))
                 throw std::runtime_error("Mixed repair owner is unindexed");
             edit.path=physical(current);
+            if(!edit.path.lexically_relative(root).generic_string().starts_with("content/"))
+                throw std::runtime_error("Mixed model repair requires a live physical origin");
             if(!repairedOrigins.insert(edit.path).second)
                 throw std::runtime_error("Duplicate mixed physical repair owner");
         }
