@@ -370,6 +370,8 @@ void Server::collectEvents() {
         if (!placed && ev.a.valid() && w.alive(ev.a) && w.has<Transform>(ev.a)) { at = w.get<Transform>(ev.a).pos; placed = true; }
         RemoteEvent r;
         r.type = ev.type; r.player = ev.player; r.value = ev.value;
+        r.flags = ev.flags; r.resource = ev.resource; r.subjectType = ev.subjectType;
+        r.subjectOwner = ev.subjectOwner; r.subjectKey = ev.subjectKey;
         r.a = ev.a.valid() ? ev.a.index : UINT32_MAX; r.b = ev.b.valid() ? ev.b.index : UINT32_MAX;
         r.x = q64(ev.pos.x); r.z = q64(ev.pos.z);   // as the simulation gave it (0, 0: no place)
         for (Eye& e : eyes) {
@@ -555,7 +557,10 @@ void Server::broadcast() {
         if (!p.events.empty()) {   // what the simulation said since the last snapshot
             Out ev(Msg::Sim);
             ev.u32(tick); ev.u8(uint8_t(p.events.size()));
-            for (const RemoteEvent& r : p.events) { ev.u16(r.type); ev.u8(r.player); ev.u32(r.a); ev.u32(r.b); ev.u64(uint64_t(r.value)); ev.u16(r.x); ev.u16(r.z); }
+            for (const RemoteEvent& r : p.events) {
+                ev.u16(r.type); ev.u8(r.player); ev.u32(r.a); ev.u32(r.b); ev.u64(uint64_t(r.value)); ev.u16(r.x); ev.u16(r.z);
+                ev.u16(r.flags); ev.u16(r.resource); ev.u16(r.subjectType); ev.u16(r.subjectOwner); ev.u64(r.subjectKey);
+            }
             p.conn->send(ev.b);
             stats_.reliableBytes += ev.b.size(); stats_.simEvents += p.events.size();
             p.events.clear();
@@ -682,10 +687,11 @@ void Client::poll(uint64_t now) {
         case Msg::Sim: {
             (void)in.u32();
             const uint8_t n = in.u8();
-            if (!in.ok || packet.size() != 6 + size_t(n) * 23) break;
+            if (!in.ok || packet.size() != 6 + size_t(n) * 39) break;
             for (uint8_t i = 0; i < n; ++i) {
                 RemoteEvent r;
                 r.type = in.u16(); r.player = in.u8(); r.a = in.u32(); r.b = in.u32(); r.value = int64_t(in.u64()); r.x = in.u16(); r.z = in.u16();
+                r.flags = in.u16(); r.resource = in.u16(); r.subjectType = in.u16(); r.subjectOwner = in.u16(); r.subjectKey = in.u64();
                 if (simEvents_.size() < 4096) simEvents_.push_back(r);
             }
             break;
