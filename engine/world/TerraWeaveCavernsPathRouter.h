@@ -60,12 +60,26 @@ public:
         const auto provider=publication.active();
         if(!provider||provider->revision()!=query.sourceRevision)
             return {}; // obsolete query cannot use an earlier world epoch
+        if(!provider->residentSegment(query.start,query.start,query.agent)||
+           !provider->residentSegment(query.goal,query.goal,query.agent))return {};
         // Do NOT invent a route here. Invoke the registered engine solver.
         auto result=it->second.solve(query,provider);
         if(result.sourceRevision!=query.sourceRevision ||
            (result.environmentRevision &&
             result.environmentRevision!=provider->environmentRevision()))
             return {};
+        // Native smoothing and custom algorithms may bypass graph edges.
+        // Validate residency of every returned segment, including endpoint
+        // projections, before exposing a successful route to gameplay.
+        if(result.reached&&provider->hasResidencyFilter()) {
+            if(result.waypoints.empty()||result.waypoints.size()>65536)return {};
+            auto previous=query.start;
+            for(const auto& point:result.waypoints) {
+                if(!provider->residentSegment(previous,point,query.agent))return {};
+                previous=point;
+            }
+            if(!provider->residentSegment(previous,query.goal,query.agent))return {};
+        }
         result.environmentRevision=provider->environmentRevision();
         return result;
     }
