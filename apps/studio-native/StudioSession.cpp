@@ -661,7 +661,7 @@ bool StudioSession::pollAgentLink() {
         if(sameMap)for(size_t i=0;i<ws_.map.undoDepth();++i)if(ws_.map.undoId(i)>before){
             const auto id=ws_.map.undoId(i);
             if(!failed)links.emplace_back("map",std::to_string(id));
-            agentEditIds_.push_back(id);
+            if(agentEditIds_.size()<2000)agentEditIds_.push_back(id);else agentHistoryUnsafe_=true;
         }
         const auto capture=[&](const char* scope,const editor::ProjectHistory& history,uint64_t previous){
             if(!failed&&sameProject&&history.version()==previous+1&&history.canUndo()&&
@@ -969,7 +969,7 @@ Json StudioSession::agentHistoryLink(Json c) const{
         }else if(scope=="project"||scope=="assets"){
             const auto& history=scope=="project"?ws_.project.documentHistory:assetHistory_;
             version=scope=="project"?ws_.project.historyVersion():assetHistoryVersion();
-            const bool blocked=scope=="project"&&(!ws_.project.historyStatus().getBool("canUndo")&&!ws_.project.historyStatus().getBool("canRedo"));
+            const bool blocked=scope=="project"&&(ws_.project.rulesDirty||ws_.project.manifestDirty||ws_.project.historyRequiresReload||ws_.project.dir.empty());
             for(size_t i=0;i<history.steps().size();++i)if(history.steps()[i].id==id){
                 retained=true;applied=i<history.position();position=int64_t(i+1);
                 undo=!blocked&&applied&&i+1==history.position();redo=!blocked&&!applied&&i==history.position();

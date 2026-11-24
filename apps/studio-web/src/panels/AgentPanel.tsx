@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Bot, CheckCircle2, CircleAlert, MessageSquarePlus, RotateCcw, Send, Square, Wrench } from 'lucide-react';
+import { Bot, CheckCircle2, CircleAlert, MessageSquarePlus, RotateCcw, Send, Square, Wrench, Undo2, Redo2 } from 'lucide-react';
 import { invoke, onNativeEvent } from '../bridge';
-import type { StudioAgentInfo, StudioSnapshot } from '../types';
+import type { StudioAgentInfo, StudioAgentChange, StudioSnapshot } from '../types';
+import { StudioIconButton } from '../ui';
 import { agentLineKind } from './agentLogic';
 import './AgentPanel.css';
 import { StudioLoader } from '../ui';
@@ -10,7 +11,7 @@ const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 
 /**
  * In-editor agent: Claude Code driving this Studio through the aiverse MCP tools. Every map edit it makes is a
- * History step ("Agent · …") and an entry in the change list; Undo all goes back to before the conversation.
+ * Owner-native History step when supported. Each action is linked to its own scope; bulk undo is map-only.
  */
 export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: StudioSnapshot | null; commitSnapshot: (s: StudioSnapshot) => void }) {
   const projectPath = snapshot?.project.path ?? '';
@@ -19,6 +20,8 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
   const [prompt, setPrompt] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [navigating,setNavigating]=useState(false);
+  const navigation=useRef(false);
   const total = useRef(0);
   const scroller = useRef<HTMLDivElement>(null);
   const apply = useCallback((r: StudioAgentInfo, reset = false) => {
@@ -28,7 +31,7 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
     total.current = r.total;
   }, []);
   const poll = useCallback(async () => {
-    try { apply(await invoke('studio.agentInfo', { from: total.current })); setError(''); }
+    try { apply(await invoke('studio.agentInfo', { from: total.current })); }
     catch (e) { setError(message(e)); }
   }, [apply]);
   useEffect(() => { total.current = 0; setLines([]); if (projectPath) void poll(); }, [projectPath, poll]);
@@ -37,7 +40,8 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
     const t = window.setInterval(() => void poll(), 700);
     return () => window.clearInterval(t);
   }, [info?.running, poll]);
-  useEffect(() => onNativeEvent(event => { if (event === 'agent.changed') void poll(); }), [poll]);
+  useEffect(() => onNativeEvent(event => { if (event === 'agent.changed' || event === 'document.changed') void poll(); }), [poll]);
+  useEffect(() => { if(projectPath)void poll(); },[snapshot,poll,projectPath]);
   useEffect(() => { const el = scroller.current; if (el) el.scrollTop = el.scrollHeight; }, [lines.length]);
   const send = async () => {
     const text = prompt.trim();
@@ -51,10 +55,21 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
   const reset = async () => {
     try { total.current = 0; apply(await invoke('studio.agentReset', { from: 0 }), true); } catch (e) { setError(message(e)); }
   };
-  const jump = async (position: number) => {
-    if(!info?.historyVersion||info.running||position<0)return;
-    try { const r = await invoke('studio.historyJump', { position,expectedVersion:info.historyVersion }); commitSnapshot(r.snapshot);void poll(); }
-    catch (e) { setError(message(e)); }
+  const navigate = async (change?:StudioAgentChange,direction?:'undo'|'redo') => {
+    if(!info||info.running||navigation.current)return;
+    if(change&&(!change.historyId||!change.historyVersion||
+      (change.scope!=='map'&&change.scope!=='project'&&change.scope!=='assets')||
+      (direction==='undo'?!change.canUndo:!change.canRedo)))return;
+    if(!change&&(!info.historyVersion||info.startPosition<0))return;
+    navigation.current=true;setNavigating(true);setError('');
+    try{
+      const result=change
+        ? await invoke('studio.agentHistoryStep',{scope:change.scope as 'map'|'project'|'assets',
+            historyId:change.historyId!,expectedVersion:change.historyVersion!,direction:direction!})
+        : await invoke('studio.agentUndoAll',{expectedVersion:info.historyVersion!});
+      commitSnapshot(result);void poll();
+    }catch(e){setError(message(e));void poll();}
+    finally{navigation.current=false;setNavigating(false);}
   };
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(); }
@@ -62,7 +77,7 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
   if (!projectPath) return <div className="agent__empty">Open a project to work with the agent.</div>;
   const changes = info?.changes ?? [];
   const edits = changes.filter(c => c.ok);
-  const canUndoAll = !!info?.historyVersion && info.startPosition >= 0 && edits.some(c => c.undoable) && !info.running;
+  const canUndoAll = !!info?.historyVersion && info.startPosition >= 0 && edits.some(c => c.undoable) && !info.running && !navigating;
   return <div className="agent">
     <div className="agent__head">
       <Bot size={14}/>
@@ -71,8 +86,8 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
       {!!info?.port && <span className="agent__meta" title="Local agent link (aiversemcp connects here)">port {info.port}{info.clients ? ` · ${info.clients} linked` : ''}</span>}
       <span className="agent__fill"/>
       <button type="button" className="au-button au-button--sm au-button--ghost" disabled={!canUndoAll}
-        title="Undo the agent-only retained suffix; disabled if other edits or eviction make it unsafe" onClick={() => void jump(info!.startPosition)}>
-        <RotateCcw size={13}/>Undo all</button>
+        title="Undo the agent-only map suffix; other scopes must be undone individually" onClick={() => void navigate()}>
+        <RotateCcw size={13}/>Undo map run</button>
       <button type="button" className="au-button au-button--sm au-button--ghost" disabled={!!info?.running} onClick={() => void reset()} title="Start a new conversation">
         <MessageSquarePlus size={13}/>New</button>
     </div>
@@ -83,7 +98,7 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
       <div className="agent__log" ref={scroller} aria-live="polite">
         {!lines.length && <div className="agent__hint">
           Ask for a change to the open game — “put a gold mine near each start”, “make the river wider”, “add a fog of war”.
-          The agent uses the same tools as the panels; each edit is one History step you can undo.</div>}
+          Tracked edits link to Map, Project or Assets history. Undo and Redo are enabled only at the current boundary of that scope.</div>}
         {lines.map((line, i) => {
           const kind = agentLineKind(line);
           return <div key={i} className={'agent__line agent__line--' + kind}>
@@ -97,10 +112,21 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
       </div>
       {changes.length > 0 && <aside className="agent__changes">
         <b>Changes · {edits.length}</b>
-        {changes.map((c, i) => <button key={i} type="button" className={'agent__change' + (c.ok ? '' : ' is-error')}
-          disabled={!c.undoable||!info?.historyVersion||info.running} title={c.error || ('Navigate global map history to this edit · '+c.args)} onClick={() => void jump(c.position)}>
-          {c.ok ? <CheckCircle2 size={11}/> : <CircleAlert size={11}/>}<span>{c.op}</span>
-          {c.undoable && <small>#{c.position}</small>}</button>)}
+        {changes.map((c,i)=><div key={i} className={'agent__change-row'+(c.ok?'':' is-error')} title={c.error||c.args}>
+          <div className="agent__change">
+            {c.ok?<CheckCircle2 size={11}/>:<CircleAlert size={11}/>}<span title={c.op}>{c.op}</span>
+          </div>
+          <div className="agent__change-meta">
+            <small>{c.scope==='map'?'Map':c.scope==='project'?'Project':c.scope==='assets'?'Assets':'Untracked'}
+              {c.undoable?' · '+(c.applied?'Applied':'Undone'):c.ok?' · Not retained':' · Failed'}</small>
+            {c.undoable&&<div className="agent__change-actions">
+              <StudioIconButton size="sm" variant="ghost" aria-label={'Undo '+c.op} icon={<Undo2 size={13}/>}
+                disabled={navigating||!c.canUndo||!!info?.running} onClick={()=>void navigate(c,'undo')}/>
+              <StudioIconButton size="sm" variant="ghost" aria-label={'Redo '+c.op} icon={<Redo2 size={13}/>}
+                disabled={navigating||!c.canRedo||!!info?.running} onClick={()=>void navigate(c,'redo')}/>
+            </div>}
+          </div>
+        </div>)}
       </aside>}
     </div>
     <div className="agent__composer">

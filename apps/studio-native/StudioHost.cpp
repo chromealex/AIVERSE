@@ -372,6 +372,7 @@ void StudioHost::tick() {
     if (session_->workspace().project.dir.empty()) return;
     // Agent panel: tool calls from aiversemcp run here, on the main thread, between frames.
     if (session_->pollAgentLink()) {
+        sendEvent("assets.changed", "");
         sendEvent("document.changed", "");
         sendEvent("agent.changed", "");
     }
