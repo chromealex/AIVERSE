@@ -145,3 +145,57 @@ pathfinding interfaces, not copied into Caverns, and only then described as
 fully native-wired. This feature has not been compiled or runtime-tested yet
 under the feature-first workflow; see
 `docs/agent-handoffs/caverns-stage41-2026-11-24.md`.
+
+## Shared graph solvers for 3D Caverns (Stage42, 2026-11-24)
+
+The engine now has `engine/nav/GraphSearch.h` (`nav::findGraphAStar`,
+`nav::findGraphDijkstra`, `nav::buildGraphFlow`) and
+`engine/nav/GraphHierarchy.h` (`nav::findGraphHierarchical`).
+They operate over a small common graph protocol
+`size() / passable(node) / neighbors(node,vector<nav::GraphEdge>&)`, integer
+costs, fixed node IDs, deterministic tie-breaking and bounded visits. All
+generic algorithms are in `engine/nav`; no copies of A*/HPA*/Flow algorithms
+reside under `TerraWeaveCaverns*`.
+
+`TerraWeaveCavernsNavigationGraph.h` adapts the cave's true 3D ±X/±Y/±Z
+adjacency to `nav::GraphEdge`. `TerraWeaveCavernsGraphSolvers.h` constructs a
+bounded 3D query region from start/goal and agent profile, supports named
+`astar`, `hpa`, `flow`, `hybrid` backends, and returns versioned 3D cm
+waypoints. HPA uses a shared hierarchy abstraction, then fine-graph search,
+with a global fallback; Hybrid picks that route or direct A* according to
+graph size. The flow backend traces the reverse directed integration field.
+`CaveGameplayRuntimeFrame` registers these four algorithms by default,
+supports configured graph budgets, and still accepts arbitrary named custom
+C++ solver callbacks.
+
+`TerraWeaveCavernsNativeNavSolver.h` binds the existing
+`engine/nav/NavMesh.h::Mesh` to the common `CaveSharedNavSource`.
+Call `registerNativeNavMeshSolver(config)` on the owning runtime; it is
+ground/climb multilevel navigation, not a true 3D free-flight volume solver.
+The current adapter builds a native mesh on-demand per query rather than
+caching tile refreshes, so it is correct API integration but not a proven
+high-throughput production NavMesh cache.
+
+`engine/nav/CaveEcsRouteFollow.h` adds a real shared ECS
+`CaveRouteFollower` component, `assignCaveRoute(world,entity,route,...)`
+and `updateCaveRouteFollowers(world,publishedProvider,physicsCallback)`.
+All interpolation uses integer cm and `Fixed` transforms. An out-of-date
+SDF revision marks `needsRepath`; without a real same-epoch Box3D/
+SpatialWorld collision callback the follower refuses motion. The actual
+simulation authority must register this update in its fixed-tick system
+schedule and include authoritative route components in state hashing,
+serialization and replay as needed. The visual-only GameClient/Editor Play
+and lockstep relay server do not control authoritative physics movement.
+
+**Legacy distinction:** `MapGrid::astarCells`, `MapHpa.cpp`,
+`FlowField.cpp` and `MapGrid::hybridPath` remain 2D specialized engine
+implementations. They have not been rewritten/migrated to use the new
+generic 3D graph protocol; the common `engine/nav` graph solvers are newly
+shared reusable implementations and do not silently change established
+2D gameplay. A future opt-in migration can route MapGrid through common
+interfaces after behavior-equivalence QA.
+
+Stage42 is a source implementation awaiting native compilation and
+acceptance; no CMake/CTest or gameplay physics tests have been run under
+the user's features-before-tests instruction. See
+`docs/agent-handoffs/caverns-stage42-2026-11-24.md`.
