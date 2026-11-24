@@ -273,6 +273,7 @@ void ClientFx::setPlanetView(const game::GameView* view) {
         return;
     }
     if (!planet_) {
+        clearGraphSources();
         // GPU billboards currently use flat world coordinates. Disable them
         // on planet views until the body-local transform API is supported.
         if(gpuPlayback_) gpuPlayback_->reset();
