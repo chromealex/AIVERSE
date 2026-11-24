@@ -1,0 +1,3 @@
+# Stage 123 — planetary FRACTURE debris delivery
+
+Base 5062f95e. In progress. Stage durable support-loss consequences through an explicit existing host ECS owner callback, acknowledge only after successful staged commit; reject primary PHYSIS overlaps. Add optional Box3D projection of acknowledged support events using owner-supplied dynamic shape/pose, generation-safe event deduplication and selected body-local scene coordinates. Extend existing PHYSIS Box3D force adapter with explicit fixed translation to canonical simulation positions, without a second gravity solver. No authoritative float replay or automatic replacement of original colliders; host owns persistence/reconstruction and lifetime. Add regression source. Tests deferred; no main merge.
