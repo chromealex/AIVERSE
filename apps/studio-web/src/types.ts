@@ -118,6 +118,7 @@ export interface StudioGpuTexture { id: number; format: string; width: number; h
 export interface StudioCavernsBudgets { perSourceBytes:number; perShardBytes:number; deviceBytes:number; perSourceUploadBytes:number; perShardUploadBytes:number; deviceUploadBytes:number }
 export interface StudioCavernsPreview {
   budgets:StudioCavernsBudgets;
+  planetaryChart?:boolean; previewResolution?:string; previewSpacingCm?:string;
   terrainCutEntrances?:string; terrainRejectedEntrances?:string; terrainTriangles?:string;
   terrainCutDiagnostic?:string; terrainCutSupported?:boolean;
   sparseTerrainResident?:string; sparseTerrainAuthored?:string; sparseTerrainDiagnostic?:string;
