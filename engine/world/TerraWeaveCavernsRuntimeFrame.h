@@ -343,8 +343,12 @@ public:
     // require owner-side native resource retirement. Build intents are sent
     // to bounded immutable CPU workers; no GPU work starts on those threads.
     std::vector<CaveResidencyTicket> dispatchStreamingCpu(
-        ChunkKey3 cameraChunk,uint32_t resolution=16,int32_t spacingCm=100) {
+        ChunkKey3 cameraChunk,uint32_t resolution=0,int32_t spacingCm=0) {
         if(closed_||physicsBarrier_.status().recoveryRequired)return {};
+        if(!resolution)resolution=chunkResolution_;
+        if(!spacingCm)spacingCm=chunkSpacingCm_;
+        if(resolution!=chunkResolution_||spacingCm!=chunkSpacingCm_)
+            throw std::invalid_argument("Caverns streaming collision dimensions mismatch");
         setStreamCenter(cameraChunk);
         auto source=host_.sourceSnapshot();
         auto indexed=host_.indexedSnapshot();
