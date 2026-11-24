@@ -113,7 +113,10 @@
     "tests/render/texture_graph_gpu_copy_vulkan.cpp",
     "tests/render/texture_graph_gpu_copy_metal.mm",
     "engine/render/graph/TextureGraphGpuTextureBudget.h",
-    "tests/render/texture_graph_gpu_texture_budget.cpp"
+    "tests/render/texture_graph_gpu_texture_budget.cpp",
+    "engine/view/LiveAppearanceMaterialTarget.h",
+    "engine/view/game/GameLook.cpp",
+    "tests/view/live_appearance_material_target.cpp"
   ],
   "traits": {
     "editable": true,
@@ -124,7 +127,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 37B opt-in GPU-resident materialized set request lifecycle, copied mip-zero parity, lease-bound native adoption and optional GPU mip generation implemented in source. Stable live appearance host invocation and actual native acceptance pending.",
+      "note": "Stage 37C in progress: shared live snapshot material publication, stable model/appearance target identities, explicit frame-boundary editor application; preserve existing owner and rollback.",
       "evidence": []
     },
     "architecture": {
