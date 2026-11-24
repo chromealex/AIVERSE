@@ -25,6 +25,22 @@ int main() {
     editor::Workspace ws;
     ws.project.dir = root.string();
     const auto call = [&](const char* name, const Json& args) { return ws.call(name, args, "test-spectrafx"); };
+    {
+        auto args=Json::parse(R"({"asset":{"format":"aiverse.spectrafx.volume","version":1,
+            "simulation":{"dimension":8,"origin":[-1,-1,-1],"cellSize":0.25,"pressureIterations":2},
+            "sources":[{"position":[0,0,0],"radius":0.75,"smoke":10,"temperature":6,"fuel":1}]},
+            "ticks":3,"ray":{"eye":[0,0,-3],"direction":[0,0,1],"distance":8}})");
+        args.set("expectedProjectPath",Json::string(ws.project.dir));
+        auto validated=call("fx_volume_validate",args);
+        require(validated.getBool("ok")&&validated["bytes"].toDouble()>0,"native volume asset validation");
+        auto probe=call("fx_volume_probe",args);
+        require(probe.getBool("ok")&&probe.getInt("ticks")==3&&probe["density"].toDouble()>0&&
+                probe["ray"]["alpha"].toDouble()>0,"actual CPU volume diagnostic");
+        args.set("ticks",Json::number(int64_t(9)));
+        auto invalid=call("fx_volume_probe",args);
+        require(invalid.has("error")||!invalid.getBool("ok"),"probe tick cap");
+        require(!fs::exists(root/"fx"),"volume probe must not write files");
+    }
     const Json graph = Json::parse(R"JSON({
       "version":1,
       "parameters":{"size":0.35},

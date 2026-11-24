@@ -3,6 +3,7 @@
 #include "engine/fx/SpectraGraphRuntime.h"
 #include "engine/bake/MeshDistanceGrid.h"
 #include "engine/fx/SpectraSdfBinary.h"
+#include "engine/fx/SpectraVolumeAsset.h"
 #include "engine/fx/SpectraStaticSphereCollision.h"
 #include "engine/fx/SpectraTerrainCollision.h"
 #include "engine/fx/SpectraGpuPoolWorld.h"
@@ -703,6 +704,47 @@ int main() {
         });
         require(planet({{13,0,0},{8,0,0},0.5f},hit)&&
                 std::abs(hit.fraction-0.5f)<0.001f&&hit.normal.x>.99f,"radial terrain sweep");
+    }
+    {
+        namespace vol=sp::volume;
+        vol::Config config;config.dimension=8;config.origin={-1,-1,-1};config.cellSize=.25f;
+        config.pressureIterations=6;config.gravity={0,0,0};config.smokeDecay=0;
+        config.temperatureDecay=0;config.fuelDecay=0;config.velocityDecay=0;
+        config.burnRate=6;config.ignition=.1f;
+        vol::GasGrid volume;
+        require(volume.init(config)&&volume.cells().size()==512,"voxel gas allocation");
+        vol::Source source;source.position={0,0,0};source.radius=.7f;
+        source.smoke=2;source.temperature=4;source.fuel=3;source.acceleration={0,0,0};
+        require(volume.inject(source,.5f),"volumetric impulse");
+        const auto initial=volume.stats();const auto bytes=volume.memoryBytes();
+        require(initial.density>0&&initial.temperature>0&&initial.fuel>0,"injected real density and fuel");
+        require(volume.step()&&volume.tick()==1&&volume.memoryBytes()==bytes,"fixed gas step");
+        const auto after=volume.stats();
+        require(after.fuel<initial.fuel&&after.density>initial.density&&after.temperature>initial.temperature,"combustion produces smoke and heat");
+        vol::Cell sample;
+        require(volume.sample({0,0,0},sample)&&sample.density>0,"trilinear volume sample");
+        require(!volume.sample({3,0,0},sample),"outside volume is not clamped by public sampler");
+        vol::RayResult ray,clipped;
+        require(volume.march({0,0,-3},{0,0,1},8,vol::Material{},ray)&&ray.alpha>0&&ray.radiance.x>0,"volumetric ray integrates real field");
+        require(volume.march({0,0,-3},{0,0,1},1,vol::Material{},clipped)&&clipped.alpha==0,"opaque distance clips volume");
+        fx::StaticSdfVolume obstacle;obstacle.dimension=5;obstacle.origin={-2,-2,-2};obstacle.spacing=1;
+        for(unsigned z=0;z<5;++z)for(unsigned y=0;y<5;++y)for(unsigned x=0;x<5;++x)
+            obstacle.samples.push_back(float(x)-2);
+        require(volume.setObstacle(obstacle)&&volume.stats().solidCells==256,"existing SDF becomes solid mask");
+        require(volume.setSources({source})&&volume.step(),"continuous volumetric source");
+        for(size_t i=0;i<volume.cells().size();++i)if(volume.solidMask()[i])
+            require(volume.cells()[i].density==0&&volume.cells()[i].fuel==0,"solid cells remain empty");
+        require(volume.setGravity({-9.81f,0,0})&&volume.setWind({0,0,1})&&volume.step(),"world-vector gravity and wind");
+        require(volume.stats().peakSpeed<=config.maxVelocity+.001f,"bounded velocity");
+        auto invalid=config;invalid.dimension=65;
+        require(!volume.init(invalid)&&volume.cells().size()==512,"invalid config preserves existing grid");
+        vol::Asset asset;asset.simulation=config;asset.sources={source};
+        vol::Asset decoded;std::string why;
+        require(vol::readAsset(vol::writeAsset(asset),decoded,why)&&decoded.sources.size()==1,"volume asset roundtrip");
+        vol::GasGrid second;require(vol::initAsset(decoded,second,why)&&second.step()&&second.stats().density>0,"native asset runtime");
+        auto malformed=vol::writeAsset(asset);malformed.set("unknown",Json::number(int64_t(1)));
+        require(!vol::readAsset(malformed,decoded,why)&&decoded.sources.size()==1,"strict asset rejection");
+        volume.clear();require(volume.stats().density==0&&volume.tick()==0&&volume.stats().solidCells==256,"clear transient field retains obstacle");
     }
     std::cout<<"PASS SpectraFX graph GPU eligibility, strict CPU preservation and host fallback\n";
 }
