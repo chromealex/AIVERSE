@@ -124,7 +124,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 37B in progress: opt-in request-local GPU texture candidates, copied-mip-zero parity, bounded combined GPU payload, native one-shot publication, optional GPU mipmaps.",
+      "note": "Stage 37B opt-in GPU-resident materialized set request lifecycle, copied mip-zero parity, lease-bound native adoption and optional GPU mip generation implemented in source. Stable live appearance host invocation and actual native acceptance pending.",
       "evidence": []
     },
     "architecture": {
@@ -194,7 +194,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 37A actual isolated exact-blob C++20 transfer layout and padded kernel source fixture PASS on GCC 14.2 and Clang 17. Synthetic appearance ownership and opt-in real RHI copy fixtures authored NOT RUN; native build, GPU, CTest and Mac merged-tree gate pending.",
+      "note": "Stage 37B isolated exact-blob C++20 request budget policy PASS on Linux GCC 14.2 and Clang 17; synthetic resident-owner and real RHI mip fixtures authored NOT RUN. Full build/CTest, actual Metal/Vulkan, Studio and Mac merged-tree gate pending.",
       "evidence": []
     },
     "handoff": {
