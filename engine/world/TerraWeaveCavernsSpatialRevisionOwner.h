@@ -125,6 +125,31 @@ public:
         }
         return stage;
     }
+    // Retirement is staged against the same live-world version as edits.
+    // Authored SDF revision can remain unchanged when a chunk streams out.
+    Candidate prepareRetirement(const world::SpatialWorld& current,
+                                const std::vector<ChunkKey3>& keys)const {
+        if(recovery_||!revision_||keys.empty()||keys.size()>kChunkSlots)
+            throw std::invalid_argument("Caverns spatial retirement");
+        Candidate stage;
+        stage.baseWorld=&current;
+        stage.baseWorldVersion=current.mutationVersion();
+        stage.world=std::make_unique<world::SpatialWorld>(current);
+        stage.leases=leases_;
+        stage.oldRevision=stage.newRevision=revision_;
+        for(const auto& key:keys) {
+            const auto it=stage.leases.find(key);
+            if(it==stage.leases.end()||it->second.generations.size()!=it->second.count)
+                throw std::invalid_argument("Caverns unknown or duplicate retirement");
+            const auto first=firstId(it->second.slot);
+            for(uint32_t n=0;n<it->second.count;++n)
+                if(!stage.world->removeIfGeneration(first+n,it->second.generations[n]))
+                    throw std::logic_error("Caverns retirement lost collision ownership");
+            stage.leases.erase(it);
+            ++stage.changed;
+        }
+        return stage;
+    }
     // The owner must stop ALL SpatialWorld readers and writers until return.
     // It also owns coordination with Box3D/NavMesh/GPU, which are not
     // implicitly committed by this SpatialWorld-only revision switch.
@@ -132,7 +157,7 @@ public:
                  const std::function<bool()>& exclusive) {
         if(recovery_||!exclusive||!exclusive()||!candidate.world||
            candidate.oldRevision!=revision_||
-           candidate.newRevision<=revision_||candidate.baseWorld!=&active)return false;
+           candidate.newRevision<revision_||!candidate.changed||candidate.baseWorld!=&active)return false;
         if(!active.publishCopyIfCurrent(std::move(*candidate.world),candidate.baseWorldVersion))return false;
         leases_.swap(candidate.leases);
         revision_=candidate.newRevision;
