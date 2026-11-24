@@ -119,7 +119,17 @@
     "apps/studio-web/src/graphs/GraphDiagnosticsPanel.tsx",
     "apps/studio-web/src/graphs/BuildingGeometryGraphView.tsx",
     "apps/studio-web/src/graphs/buildingGeometryGraph.ts",
-    "apps/studio-web/tests/buildingGeometryGraph.test.mjs"
+    "apps/studio-web/tests/buildingGeometryGraph.test.mjs",
+    "apps/editor/core/GraphAssetTransaction.h",
+    "apps/editor/core/ShaderGraphOps.cpp",
+    "apps/editor/core/SpectraGraphOps.cpp",
+    "apps/editor/windows/ShaderGraphWindow.cpp",
+    "apps/editor/windows/SpectraGraphWindow.cpp",
+    "docs/shader-graph.md",
+    "docs/shader-graph-agents.md",
+    "docs/spectrafx.md",
+    "docs/ru/spectrafx.md",
+    "skills/visuals/aiverse-spectrafx/SKILL.md"
   ],
   "traits": {
     "editable": true,
@@ -130,9 +140,9 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Shared graph framework is implemented for five native facade domains; Building live bridge exists in separate draft PR #140, not this branch. Caverns read-only bridge is present but actual owner/planet acceptance pending. Stage 50 review records exact owner SHAs.",
+      "note": "Stage 53 guarded shader/SpectraFX owner writes and planetary Caverns scoped read/projection added. Building/Caverns merged-tree integration and verification pending.",
       "evidence": [
-        "docs/agent-handoffs/feature-gate-stage50-graph-integration-review-2026-11-24.md"
+        "docs/agent-handoffs/feature-gate-stage53-guarded-graphs-2026-11-24.md"
       ]
     },
     "architecture": {
@@ -151,7 +161,7 @@
     },
     "skill": {
       "status": "pass",
-      "note": "Registered workflow skill exists; Mac QA v7 skill_catalog, skill_routing and skill_audit PASS. Documentation and catalog unchanged by main sync. This does not prove every runtime operation.",
+      "note": "Registered workflow skill exists; Mac QA v7 skill_catalog, skill_routing and skill_audit PASS. Documentation and catalog unchanged by main sync. This does not prove every runtime operation. Stage 53 skill migration authored; updated catalog not re-executed.",
       "evidence": [
         "skills/workflow/aiverse-graph-authoring/SKILL.md",
         "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md"
@@ -176,16 +186,16 @@
     },
     "persistence": {
       "status": "not_run",
-      "note": "FX/texture save/read-back and draft/overwrite rejection covered by passing native fixtures; MotionWeave expected-document and modeling expectedRevision reviewed. Shader/FX explicit unversioned save; FX preflight non-atomic. Owner-specific reopen/GUI/concurrency acceptance remains pending.",
+      "note": "Stage 53 replaces blind shader/SpectraFX writes with native cooperating-writer lock and original-document compare; draft publication guarded. Regression fixtures authored, execution pending.",
       "evidence": [
-        "docs/agent-handoffs/feature-gate-stage50-graph-integration-review-2026-11-24.md"
+        "docs/agent-handoffs/feature-gate-stage53-guarded-graphs-2026-11-24.md"
       ]
     },
     "graphs": {
       "status": "not_run",
-      "note": "Shared read-only/editable canvas and native domain adapters reviewed; Building route callback needs typed owner bridge from PR #140. Caverns read-only bridge rejects planetary documents; actual owner capture pending.",
+      "note": "Stage 53 adds native active planetary region projection and exact decimal identities; actual owner/Studio merge pending.",
       "evidence": [
-        "docs/agent-handoffs/feature-gate-stage50-graph-integration-review-2026-11-24.md"
+        "docs/agent-handoffs/feature-gate-stage53-guarded-graphs-2026-11-24.md"
       ]
     },
     "performance": {
@@ -224,16 +234,9 @@
       ]
     },
     "tests": {
-      "status": "pass",
-      "note": "Mac v10 source be64591b, reused v7 binaries 59558502 (only site and evidence/manifest/handoff changes): 22/22 Python and 9/9 focused CTest PASS. Historical v7 full suite 487 PASS / 0 FAIL / 1 opt-in skip; full merged-tree CTest NOT RUN in v10. Scoped automated verification only. Mac v13 at 74099694: full quick CTest rerun on synced checkout using unchanged-source v7 binaries, 487 PASS / 0 FAIL / 1 opt-in skip, 977.56 seconds; evidence integrity 10/10 and partial compliance PASS. Full log retained in original archive; repository summary excerpt recorded separately.",
-      "evidence": [
-        "docs/evidence/feature-gate-mac-v10-be64591b1087-feature-gate.log.txt",
-        "docs/evidence/feature-gate-mac-v10-be64591b1087-ctest-focused.log.txt",
-        "docs/evidence/feature-gate-mac-v7-summary.log.txt",
-        "docs/agent-handoffs/feature-gate-stage45-mac-qa-2026-11-24.md",
-        "docs/evidence/feature-gate-mac-v13-74099694a317-ctest-summary.log.txt",
-        "docs/agent-handoffs/feature-gate-stage48-mac-qa-2026-11-24.md"
-      ]
+      "status": "not_run",
+      "note": "Stage 53 changes source; historical Mac v13 evidence remains in Stage 48 handoff and docs/evidence but is not current acceptance. New tests authored, execution deferred until integration.",
+      "evidence": []
     },
     "handoff": {
       "status": "pass",
@@ -343,11 +346,5 @@
       "studio.cavernsGraphInspect"
     ]
   },
-  "test_reports": [
-    "docs/evidence/feature-gate-mac-v10-be64591b1087-ctest-focused.json",
-    "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-registry.json",
-    "docs/evidence/feature-gate-mac-v10-be64591b1087-skill-audit.json",
-    "docs/evidence/feature-gate-mac-v10-be64591b1087-skill-catalog.json",
-    "docs/evidence/feature-gate-mac-v13-74099694a317-ctest-summary.json"
-  ]
+  "test_reports": []
 }
