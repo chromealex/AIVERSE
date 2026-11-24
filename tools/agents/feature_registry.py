@@ -46,6 +46,22 @@ def regressions(old, new):
                 errors.append(f"{key}: removed trait {trait}")
     return errors
 
+def integration_gaps(registry, root):
+    """List declared integration gaps, never infer runtime coverage from references."""
+    tasks = []
+    dimensions = ("native_api", "skill", "mcp", "studio", "inspector", "graphs")
+    for ident, data in sorted(registry.items()):
+        for dimension in dimensions:
+            check = data.get("checks", {}).get(dimension, {})
+            status = check.get("status", "missing")
+            if status not in ("pass", "not_applicable"):
+                tasks.append({"feature": ident, "surface": dimension, "status": status,
+                              "kind": "investigate", "note": check.get("note", "")})
+        for error in validate(data, root):
+            tasks.append({"feature": ident, "surface": "manifest", "status": "invalid",
+                          "kind": "fix_manifest", "note": error})
+    return tasks
+
 def matrix(registry):
     return {"scope": "registered manifests only; statuses are declared, not independent runtime proof",
             "count": len(registry), "features": [
@@ -57,6 +73,7 @@ def matrix(registry):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base")
+    parser.add_argument("--gaps", action="store_true", help="List declared integration gaps and invalid references")
     parser.add_argument("--graphs", action="store_true", help="Include known graph domain inventory")
     parser.add_argument("--legacy", action="store_true", help="Include catalog inventory without claiming runtime verification")
     parser.add_argument("--format", choices=["json", "markdown"], default="json")
@@ -67,6 +84,8 @@ def main():
         if args.base:
             errors.extend(regressions(baseline(ROOT, args.base), registry))
         report = matrix(registry)
+        if args.gaps:
+            report["integration_gaps"] = integration_gaps(registry, ROOT)
         if args.legacy:
             report["legacy_inventory"] = inventory(ROOT)
             errors.extend(report["legacy_inventory"]["errors"])
@@ -92,6 +111,10 @@ def main():
                 print("|---|---|---|---|---|")
                 for row in report["graph_inventory"]["graphs"]:
                     print("| " + " | ".join([row["id"], row["kind"], str(len(row["literal_mcp_matches"])), ", ".join(row["studio_matches"]) or "unknown", row["verification"]]) + " |")
+            if args.gaps:
+                print("\nIntegration audit queue (declared, not runtime proof):")
+                for task in report["integration_gaps"]:
+                    print(f"- {task['feature']} / {task['surface']}: {task['status']} — {task['note']}")
             for error in errors:
                 print("- " + error)
         return int(bool(errors))
