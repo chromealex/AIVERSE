@@ -1,0 +1,10 @@
+{
+  "sha": "be64591b1087b94fa52311bc1b3065feec6c8545",
+  "argv": [
+    "/opt/homebrew/opt/python@3.10/libexec/bin/python3",
+    "tests/feature_gate_test.py"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/feature-gate-mac-v10-be64591b1087-feature-gate.log.txt",
+  "sha256": "5db25ef01b3383be2863ece66d8b5f4de87034dd90cb69309f199ca8f21621b3"
+}
