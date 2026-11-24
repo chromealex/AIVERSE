@@ -82,7 +82,10 @@
     "engine/gfx/vulkan/VkCompute.cpp",
     "engine/render/graph/TextureGraphMaterialBinding.h",
     "engine/view/AppearanceAssetRegistry.h",
-    "tests/view/appearance_prepared.cpp"
+    "tests/view/appearance_prepared.cpp",
+    "engine/render/graph/TextureGraphPipelineCache.h",
+    "tests/render/texture_graph_pipeline_cache.cpp",
+    "CMakeLists.txt"
   ],
   "traits": {
     "editable": true,
@@ -93,7 +96,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 31B versioned native appearance registry publication and completed-set bridge implemented; actual live host wiring, zero-copy, MCP/Studio and verification pending.",
+      "note": "Stage 32A in progress: bounded idle GPU pipeline cache and draft-independent request status. Live host publication remains blocked on stable appearance identities.",
       "evidence": []
     },
     "architecture": {
