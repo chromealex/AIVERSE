@@ -495,6 +495,19 @@ Rules loadRules(const Json& j) {
             w.damage = wj.getFx("damage", w.damage);
             w.cooldown = wj.getFx("cooldown", w.cooldown);
             w.targets = parseLayers(wj["targets"], kLayerGround | kLayerNaval | kLayerSandOnly);
+            auto weaponTags = [&](const char* key) {
+                uint64_t mask = 0;
+                if (!wj.has(key)) return mask;
+                if (!wj[key].isArray()) fail(where + " weapon " + w.id, std::string(key) + " must be an array");
+                for (const auto& tag : wj[key].items()) {
+                    const uint64_t bit = tag.isString() ? r.tagMask(tag.str()) : 0;
+                    if (!bit) fail(where + " weapon " + w.id, std::string(key) + ": unknown unit tag '" + tag.str() + "'");
+                    mask |= bit;
+                }
+                return mask;
+            };
+            w.targetTags = weaponTags("targetTags");
+            w.ignoreTags = weaponTags("ignoreTags");
             if (w.targets & kLayerGround) w.targets |= kLayerSandOnly | kLayerNaval;
             w.projectileSpeed = wj.getFx("projectileSpeed");
             if (wj.has("flight")) {
