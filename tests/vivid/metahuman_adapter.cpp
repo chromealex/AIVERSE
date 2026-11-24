@@ -17,7 +17,7 @@ static int failures=0;
 static void check(bool ok,const char* what){if(!ok){std::fprintf(stderr,"FAIL: %s\n",what);++failures;}}
 int main(){
     render::Model m;
-    for(const char* n:{"root_1","pelvis_2","spine_01_3","spine_05_4","neck_01_5","neck_02_6","head_7","upperarm_correctiveRoot_l_8"})m.nodes.push_back({n});
+    for(const char* n:{"root_1","pelvis_2","spine_01_3","spine_05_4","neck_01_5","neck_02_6","head_7","upperarm_correctiveRoot_l_8"}){render::Node node{};node.name=n;m.nodes.push_back(node);}
     for(int i=0;i<60;++i){render::Node n;n.name="FACIAL_L_Joint"+std::to_string(i)+"_"+std::to_string(100+i);m.nodes.push_back(n);}
     render::MeshDef face;face.name="Ada_FaceMesh_LOD0";
     for(std::size_t i=0;i<vivid::kChannelCount-1;++i)face.morphTargetNames.push_back(std::string(vivid::channelName(vivid::Channel(i))));
@@ -49,7 +49,7 @@ int main(){
         const float angle=2.f*std::acos(std::clamp(std::fabs(pose[6].r.w),0.f,1.f));
         check(std::fabs(angle-.5f)<1e-3f,"half joint must take half the base rotation");
     }
-    render::Model plain;plain.nodes.push_back({"Hips"});render::MeshDef x;x.name="Body";plain.meshes.push_back(x);
+    render::Model plain;render::Node hips{};hips.name="Hips";plain.nodes.push_back(hips);render::MeshDef x;x.name="Body";plain.meshes.push_back(x);
     check(!vivid::adaptMetaHuman(plain).detected,"non-MetaHuman detected");
     if(const char* list=std::getenv("AIVERSE_METAHUMAN_SAMPLES")) {
         std::stringstream ss(list);std::string path;
