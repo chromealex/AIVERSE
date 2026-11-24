@@ -3,22 +3,6 @@
 #include "tests/AlwaysCheck.h"
 using namespace aiverse::render;
 int main(){
-    // A capture callback is a live CPU replay consumer. Preflight must
-    // refuse without changing the callback or touching GPU state.
-    Renderer3D renderer;
-    AIVERSE_TEST_CHECK(renderer.canDetachCompletedGraphImageReplay());
-    renderer.setModelCapture([](const ModelDraw&,const std::vector<mat4>&){});
-    AIVERSE_TEST_CHECK(!renderer.canDetachCompletedGraphImageReplay());
-    AIVERSE_TEST_CHECK(!renderer.detachCompletedGraphImageReplay());
-    AIVERSE_TEST_CHECK(!renderer.canDetachCompletedGraphImageReplay());
-    renderer.setModelCapture({});
-    renderer.setModelPacketTap([](const ModelDraw&){});
-    AIVERSE_TEST_CHECK(!renderer.canDetachCompletedGraphImageReplay());
-    renderer.setModelPacketTap({});
-    renderer.setGeometryPacketTap([](const CameraGeometryCommand&){});
-    AIVERSE_TEST_CHECK(!renderer.canDetachCompletedGraphImageReplay());
-    renderer.setGeometryPacketTap({});
-    AIVERSE_TEST_CHECK(renderer.canDetachCompletedGraphImageReplay());
     CameraModelSnapshot snapshot(1);
     Model model;
     std::vector<mat4> nodes{mat4{}};

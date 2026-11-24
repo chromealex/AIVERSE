@@ -14,6 +14,7 @@ TESTS = {
     "view_appearance_authoring": "aiverse_appearance_authoring_tests",
     "render_model_image_transaction": "aiverse_model_image_transaction_tests",
     "camera_model_snapshot": "aiverse_camera_model_snapshot_tests",
+    "camera_client_adapter": "aiverse_camera_client_adapter_tests",
     "gpu_icb_material_contract": "aiverse_gpu_icb_material_contract_test",
     "modeling_authoring": "aiverse_modeling_tests",
     "vivid_human_appearance": "aiverse_vivid_human_appearance_tests",
