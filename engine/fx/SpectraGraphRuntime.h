@@ -122,6 +122,9 @@ public:
     }
     bool stepWithVolume(float dt,volume::GpuGasGrid& gas,float drag,render::float3 deposit);
     bool step(float dt); // between beginFrame/endFrame, before scene render pass
+    bool setVolumeLight(render::float3 direction,render::float3 color){
+        return gpuActive()&&gpu_.setVolumeLight(direction,color);
+    }
     void draw(const fx::FxFog& fog = {}); // during still-open render pass
     void clear();
     // CPU-only deterministic reset. GPU/shared-world paths reject explicitly.

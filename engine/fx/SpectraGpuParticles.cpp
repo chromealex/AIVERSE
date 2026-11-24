@@ -478,6 +478,7 @@ void ComputeParticles::releaseGpu() {
     retireAllocationCharge(gpuAllocationCharge_,gpuAllocationLastFence_);
     retireAllocationCharge(volumeTextureCharge_,volumeTextureFence_);
     volumeTexture_={};volumeTextureCharge_=0;volumeTextureFence_=0;
+    volumeLightDirection_={0,1,0};volumeLightColor_={1,1,1};
     gpuAllocationCharge_=0;gpuAllocationLastFence_=0;gpuGrowthBudgetBlocked_=false;
     volumeDragCompute_={};
     pipeline_={};vertexShader_={};compute_={};compactAllocationCompute_={};states_={};seeds_={};slots_={};
@@ -1470,6 +1471,13 @@ bool ComputeParticles::stepGpuAllocated(float dt){
     }
     return true;
 }
+bool ComputeParticles::setVolumeLight(render::float3 direction,render::float3 color){
+    if(!finite(direction)||!finite(color)||color.x<0||color.y<0||color.z<0||
+       color.x>64||color.y>64||color.z>64)return false;
+    const auto len=render::length(direction);
+    if(!finite(len)||len<1e-5f)return false;
+    volumeLightDirection_=direction*(1.f/len);volumeLightColor_=color;return true;
+}
 void ComputeParticles::draw(const fx::FxFog& fog) {
     stats_.drawCalls=0;
     if(!initialized_||!viewReady_||desc_.quality==fx::FxQuality::Off)return;
@@ -1500,7 +1508,14 @@ void ComputeParticles::draw(const fx::FxFog& fog) {
     device_->setPipeline(pipeline_);
     device_->setVertexBuffer(vertices_);
     device_->setIndexBuffer(indices_);
-    device_->setUniforms(0,&u,sizeof(u));
+    if(desc_.volumeMaterial.enabled){
+        const auto& m=desc_.volumeMaterial;
+        const VolumeDrawUniforms v{u,
+            {volumeLightDirection_.x,volumeLightDirection_.y,volumeLightDirection_.z,m.directIntensity},
+            {volumeLightColor_.x,volumeLightColor_.y,volumeLightColor_.z,m.ambient},
+            {float(m.shadowSteps),m.shadowStrength,m.anisotropy,0}};
+        device_->setUniforms(0,&v,sizeof(v));
+    }else device_->setUniforms(0,&u,sizeof(u));
     if(!desc_.volumeMaterial.enabled)device_->setTexture(0,texture_);
     else if(volumeTexture_.valid()){
         const auto fence=device_->gpuSubmissionFence();

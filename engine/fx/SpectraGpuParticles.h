@@ -72,6 +72,9 @@ struct VolumetricParticleMaterial {
     render::float3 axes{1,1,1}; // radii relative to particle half-size
     float noiseFrequency=3,noiseStrength=0;
     uint32_t noiseOctaves=3;
+    uint32_t shadowSteps=4; // 0 disables self-shadowing
+    float shadowStrength=1,anisotropy=0,ambient=.35f;
+    float directIntensity=.65f;
     std::shared_ptr<const ParticleVolumeTexture> texture;
     bool valid()const{
         return std::isfinite(density)&&density>=0&&density<=100&&
@@ -80,7 +83,11 @@ struct VolumetricParticleMaterial {
             axes.x>=.1f&&axes.x<=4&&axes.y>=.1f&&axes.y<=4&&axes.z>=.1f&&axes.z<=4&&
             (shape!=VolumetricParticleShape::Sphere||(axes.x==1&&axes.y==1&&axes.z==1))&&
             std::isfinite(noiseFrequency)&&noiseFrequency>=.1f&&noiseFrequency<=32&&
-            std::isfinite(noiseStrength)&&noiseStrength>=0&&noiseStrength<=1&&noiseOctaves>=1&&noiseOctaves<=4&&(!texture||(enabled&&texture->valid()));
+            std::isfinite(noiseStrength)&&noiseStrength>=0&&noiseStrength<=1&&noiseOctaves>=1&&noiseOctaves<=4&&shadowSteps<=8&&
+            std::isfinite(shadowStrength)&&shadowStrength>=0&&shadowStrength<=8&&
+            std::isfinite(anisotropy)&&std::abs(anisotropy)<=.85f&&
+            std::isfinite(ambient)&&ambient>=0&&ambient<=4&&
+            std::isfinite(directIntensity)&&directIntensity>=0&&directIntensity<=16&&(!texture||(enabled&&texture->valid()));
     }
 };
 struct ComputeEmitterDesc {
@@ -240,6 +247,8 @@ public:
     // Call after a successful particle step; rates are per live particle per second.
     bool depositIntoVolume(volume::GpuGasGrid& gas,render::float3 rates,float dt);
     bool step(float dt);                    // once per presentation frame
+    // Direction points from the particle towards the light. Linear RGB.
+    bool setVolumeLight(render::float3 direction,render::float3 color);
     void draw(const fx::FxFog& fog = {});    // inside render pass
     ComputeBackend backend() const { return backend_; }
     bool ready() const { return initialized_; }
@@ -337,6 +346,8 @@ private:
     static_assert(sizeof(Vertex)==40);
     static_assert(sizeof(Uniforms)==352);
     static_assert(sizeof(DrawUniforms)==144);
+    struct VolumeDrawUniforms {DrawUniforms base;render::float4 lightDir,lightColor,lightControl;};
+    static_assert(sizeof(VolumeDrawUniforms)==192);
 
     bool stepGpuAllocated(float dt);
     bool growGpuAllocation(uint32_t required);
@@ -377,6 +388,7 @@ private:
     gfx::BufferHandle vmErrors_;
     gfx::BufferHandle stateAttributes_; // compute slot 11, 8 scalar VM registers/particle
     gfx::TextureHandle texture_,volumeTexture_;
+    render::float3 volumeLightDirection_{0,1,0},volumeLightColor_{1,1,1};
     size_t volumeTextureCharge_=0;
     uint64_t volumeTextureFence_=0;
     std::vector<float> ages_;
