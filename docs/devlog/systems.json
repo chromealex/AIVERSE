@@ -62,6 +62,14 @@
     {
      "status": "in-progress",
      "target": null,
+     "title": "Планетарный лес: объёмный ARBOR в Scene",
+     "titleEn": "Planetary forest: rendered ARBOR trees in Scene",
+     "text": "Stage 161D4a: общие прототипы ARBOR с тремя LOD, PBR-пакетами и сферическим размещением; ограниченный кеш GPU.",
+     "textEn": "Stage 161D4a: shared three-tier ARBOR prototypes, PBR texture sets and spherical placement; bounded GPU cache."
+    },
+    {
+     "status": "in-progress",
+     "target": null,
      "title": "Планетарный лес: выбор и перемещение в Scene",
      "titleEn": "Planetary forest: Scene selection and relocation",
      "text": "Stage 161D3: выбор стабильного species/key, подсветка, перемещение одним кликом через MapDoc, отмена и Undo.",
