@@ -1742,6 +1742,12 @@
           "text": "Нативный игровой клиент подключён к общему GPU owner и применению материалов на границе кадра. Изолированный тест прошёл; интеграционная проверка ожидается.",
           "nameEn": "Texture Graph GPU — Stage 38F",
           "textEn": "Native client connected to shared GPU owner and frame-boundary material application. Isolated test passed; integration verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38G (в работе)",
+          "text": "Измерение GPU-вычислений и переноса текстур через общий профилировщик.",
+          "nameEn": "Texture Graph GPU — Stage 38G (in progress)",
+          "textEn": "GPU compute and texture copy scopes through the shared profiler."
         }
       ],
       "enables": [
