@@ -139,6 +139,17 @@ public:
             return out;
         }
         auto& diag=diagnostics_.at(change.sceneId);
+        const auto& original=diag.change;
+        // A retry is the same committed event, not a new payload with an old
+        // revision. Otherwise the diagnostic bounds and prior ACKs are false.
+        if(change.domains!=original.domains||change.kind!=original.kind||
+           change.featureIndex!=original.featureIndex||change.open!=original.open||
+           change.bounds.min.x!=original.bounds.min.x||change.bounds.min.y!=original.bounds.min.y||
+           change.bounds.min.z!=original.bounds.min.z||change.bounds.max.x!=original.bounds.max.x||
+           change.bounds.max.y!=original.bounds.max.y||change.bounds.max.z!=original.bounds.max.z){
+            out.error="Retry does not match original committed graph change";
+            return out;
+        }
         if(diag.attempts<std::numeric_limits<uint64_t>::max())++diag.attempts;
         diag.refused=0;
         for(const auto& [domain,consumer]:consumers_){
