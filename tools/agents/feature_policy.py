@@ -163,6 +163,34 @@ def build_report(root, registry, changed=()):
     return {"dependencies": dependencies, "roadmap": roadmap, "skills": skills,
             "api": api, "ownership": ownership, "errors": errors}
 
+def readiness_errors(root, registry, selected, changed=()):
+    """Strict readiness for selected manifests and their transitive prerequisites."""
+    report = build_report(root, registry, changed)
+    errors = list(report["dependencies"]["errors"]) + list(report["api"]["errors"])
+    roadmap = {row["feature"]: row for row in report["roadmap"]["links"]}
+    errors.extend(report["roadmap"]["errors"])
+    states = report["dependencies"]["features"]
+    visited = set()
+    def visit(ident):
+        if ident in visited:
+            return
+        visited.add(ident)
+        if ident not in states:
+            errors.append(f"{ident}: missing feature")
+            return
+        state = states[ident]
+        if state["state"] != "declared_ready":
+            errors.append(f"{ident}: dependency readiness {state['state']}")
+        if ident not in roadmap:
+            errors.append(f"{ident}: missing roadmap mapping")
+        errors.extend(f"{ident}: {error}" for error in
+                      validate(registry[ident], root, ready=True, verify_git=True))
+        for dep in state["requires"]:
+            visit(dep)
+    for ident in sorted(selected):
+        visit(ident)
+    return errors
+
 def release_report(root, registry, policy, readiness):
     blockers = []
     for ident, state in sorted(policy["dependencies"]["features"].items()):
@@ -187,6 +215,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base")
     parser.add_argument("--output", type=Path, help="Optional report file; use ignored build output")
+    parser.add_argument("--require-release-ready", action="store_true", help="Exit nonzero when release has blockers")
     args = parser.parse_args()
     try:
         registry = load_registry(ROOT)
@@ -205,7 +234,8 @@ def main():
             args.output.write_text(output, encoding="utf-8")
         else:
             print(output, end="")
-        return int(bool(policy["errors"] or readiness["errors"] or policy["ownership"]["conflicts"]))
+        return int(bool(policy["errors"] or readiness["errors"] or policy["ownership"]["conflicts"] or
+                        (args.require_release_ready and report["release"]["blockers"])))
     except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as exc:
         print(f"Feature policy error: {exc}", file=sys.stderr)
         return 1
