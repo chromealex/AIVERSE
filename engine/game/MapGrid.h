@@ -2,6 +2,8 @@
 // (A* on 8-connected cells with level/ramp rules), road graph, spatial hash. Integer/fixed only.
 #pragma once
 #include <algorithm>
+#include <chrono>
+#include <limits>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -118,6 +120,14 @@ struct FlowField {
     size_t bytes() const;
 };
 
+// Opt-in, non-authoritative cumulative work counters. Not simulation state.
+struct MapPathWorkCounter {
+    uint64_t calls=0,items=0,lastNs=0,totalNs=0;
+};
+struct MapPathTelemetry {
+    uint64_t cellInvalidations=0;
+    MapPathWorkCounter flatHpa,flowFull,flowCluster;
+};
 struct MapGrid {
     int w = 0, h = 0;
     // Planet maps (world block): the cube-sphere faces of every body stacked as rows (Surface.h). Null on flat
@@ -182,6 +192,11 @@ struct MapGrid {
     int cellY(Fixed z) const { return int(z.floorInt()); }
     Vec3 cellCenter(int x, int y) const { if (surf) return surf->cellCenter(index(x, y)); return {Fixed::fromInt(x) + Fixed::fromRatio(1, 2), Fixed{}, Fixed::fromInt(y) + Fixed::fromRatio(1, 2)}; }
     void block(int x0, int y0, int fw, int fh, int delta);
+    void setPathTelemetryEnabled(bool enabled){pathTelemetryEnabled_=enabled;if(!enabled)pathTelemetry_={};}
+    const MapPathTelemetry& pathTelemetry()const noexcept{return pathTelemetry_;}
+    size_t dirtyFlatHpaClusters()const{
+        size_t count=0;for(const auto& graph:hpa_)count+=size_t(std::count(graph.dirty.begin(),graph.dirty.end(),uint8_t(1)));return count;
+    }
     void cellChanged(int x, int y);  // terrain of a cell changed at runtime (digging): refresh derived pathing data
     void invalidatePathing() { clearanceDirty = true; for (auto& G : hpa_) { std::fill(G.dirty.begin(), G.dirty.end(), uint8_t(1)); G.anyDirty = true; } for (auto& n : nav_) n.mesh.markAllDirty(); }   // after loading a save
     bool areaBuildable(int x0, int y0, int fw, int fh) const;  // ground, no-build-free, unblocked, flat
@@ -280,6 +295,17 @@ struct MapGrid {
     void enableSphereHeights(Fixed levelHeight);
 
 private:
+    bool pathTelemetryEnabled_=false;
+    MapPathTelemetry pathTelemetry_{};
+    using TelemetryClock=std::chrono::steady_clock;
+    TelemetryClock::time_point pathWorkStart()const{return pathTelemetryEnabled_?TelemetryClock::now():TelemetryClock::time_point{};}
+    void recordPathWork(MapPathWorkCounter& work,size_t items,TelemetryClock::time_point start){
+        if(!pathTelemetryEnabled_)return;
+        const auto add=[](uint64_t a,uint64_t b){return a+std::min(std::numeric_limits<uint64_t>::max()-a,b);};
+        work.calls=add(work.calls,1);work.items=add(work.items,uint64_t(items));
+        work.lastNs=uint64_t(std::max<int64_t>(0,std::chrono::duration_cast<std::chrono::nanoseconds>(TelemetryClock::now()-start).count()));
+        work.totalNs=add(work.totalNs,work.lastNs);
+    }
     bool findPathSphere(Vec3 from, Vec3 to, uint8_t layer, std::vector<Vec3>& out, int maxNodes, int clear, bool soft);
     bool astarSphere(int s, int g, uint8_t layer, int maxNodes, std::vector<int>& cells);
     bool lineWalkableSphere(int a, int b, uint8_t layer) const;
