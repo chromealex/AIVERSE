@@ -32,7 +32,7 @@ bool parseWorldId(const std::string& text,std::array<uint8_t,16>& out){
 int main(int argc,char** argv) {
     try {
         std::string project="examples/fps/arena",admissionFile,audience,worldDir,worldId;
-        uint16_t port=27100;uint32_t ticks=0,checkpointTicks=0;bool loopbackOnly=false,worldAsync=false,backgroundLoad=false;
+        uint16_t port=27100;uint32_t ticks=0,checkpointTicks=0;uint64_t retainRevisions=65536;bool loopbackOnly=false,worldAsync=false,backgroundLoad=false;
         for(int i=1;i<argc;++i) {
             std::string arg=argv[i];
             if(arg=="--project"&&i+1<argc)project=argv[++i];
@@ -43,11 +43,15 @@ int main(int argc,char** argv) {
             else if(arg=="--world-background-load")backgroundLoad=true;
             else if(arg=="--world-dir"&&i+1<argc)worldDir=argv[++i];
             else if(arg=="--world-id"&&i+1<argc)worldId=argv[++i];
+            else if(arg=="--world-retain-revisions"&&i+1<argc){
+                std::string value=argv[++i];auto [end,err]=std::from_chars(value.data(),value.data()+value.size(),retainRevisions);
+                if(err!=std::errc{}||end!=value.data()+value.size())throw std::runtime_error("invalid world retention revision count");
+            }
             else if((arg=="--port"||arg=="--ticks"||arg=="--world-checkpoint-ticks")&&i+1<argc) {
                 std::string value=argv[++i];uint32_t n=0;auto [end,err]=std::from_chars(value.data(),value.data()+value.size(),n);
                 if(err!=std::errc{}||end!=value.data()+value.size()||(arg=="--port"&&(n==0||n>=65535)))throw std::runtime_error("invalid numeric argument");
                 if(arg=="--port")port=uint16_t(n);else if(arg=="--ticks")ticks=n;else checkpointTicks=n;
-            } else throw std::runtime_error("usage: aiverse_fps_server --project DIR [--port 27100] [--ticks N] [--loopback] [--admission-file FILE --audience MATCH] [--world-dir DIR --world-id 32HEX [--world-checkpoint-ticks N] [--world-async] [--world-background-load]]");
+            } else throw std::runtime_error("usage: aiverse_fps_server --project DIR [--port 27100] [--ticks N] [--loopback] [--admission-file FILE --audience MATCH] [--world-dir DIR --world-id 32HEX [--world-checkpoint-ticks N] [--world-retain-revisions N] [--world-async] [--world-background-load]]");
         }
         if(audience.size()>128)throw std::runtime_error("match audience exceeds 128 bytes");
         if(admissionFile.empty()!=audience.empty())throw std::runtime_error("admission file and match audience must be specified together");
@@ -149,7 +153,7 @@ int main(int argc,char** argv) {
                     accumulated=server.persistencePending()?step:0;break;
                 }
                 accumulated-=step;
-                if(checkpointTicks&&server.finalizedTick()%checkpointTicks==0&&!server.checkpointWorld())
+                if(checkpointTicks&&server.finalizedTick()%checkpointTicks==0&&!server.checkpointWorld(retainRevisions))
                     throw std::runtime_error("persistent checkpoint refused; restart/recovery required");
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
