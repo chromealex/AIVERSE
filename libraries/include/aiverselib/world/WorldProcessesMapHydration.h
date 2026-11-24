@@ -32,13 +32,14 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
                                const std::vector<Entity>& placed,
                                SuiteFlags requested={},ImprintTrailInstaller trails=nullptr,CrowdInstaller crowdInstaller=nullptr,
                                EvolveAreaInstaller areaInstaller=nullptr,
-                               EvolveAreaHydrator areaHydrator=nullptr) {
+                               EvolveAreaHydrator areaHydrator=nullptr,
+                               GranularInstaller granularInstaller=nullptr) {
     const Json& entities=map["entities"];
     if(!entities.isArray()) {
         if(!placed.empty())throw std::invalid_argument("World Processes: map.entities missing");
         MapHydration enabled;
         enabled.extra=requested;
-        installSuite(sim,requested,trails,crowdInstaller,areaInstaller); // explicitly enabled native runtime, empty map
+        installSuite(sim,requested,trails,crowdInstaller,areaInstaller,granularInstaller); // explicitly enabled native runtime, empty map
         return enabled;
     }
     if(entities.size()!=placed.size())
@@ -281,7 +282,7 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
     }
     // Install all seven systems in one well-defined order. The map stores no
     // duplicated runtime state; opt-in categories use portable ECS schemas.
-    installSuite(sim,totals.extra,trails,crowdInstaller,areaInstaller);
+    installSuite(sim,totals.extra,trails,crowdInstaller,areaInstaller,granularInstaller);
     // Root ECS components precede area attachment. The same map entity
     // provides its static world X/Z; this is authoritative map configuration,
     // not merely editor gizmo metadata.
