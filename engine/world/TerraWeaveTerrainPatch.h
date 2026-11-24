@@ -31,6 +31,11 @@ struct TerrainPatch {
     // Mesh vertices are local to the chunk; the owner can build the RHI
     // Model using the SAME heights and triangle ordering.
     size_t triangleCount() const {return collision.size();}
+    // Derived topology, not a second height authority. A cut patch uses
+    // its exact triangle soup for both rendering and native collision.
+    bool clippedSurface=false;
+    uint64_t surfaceEpoch=0;
+    std::vector<RectCm> surfaceHoles; // conservative X/Z nav exclusion bounds
 };
 
 inline TerrainPatch bakeEarthworksTerrainPatch(
@@ -97,11 +102,20 @@ inline TerrainPatch bakeEarthworksTerrainPatch(
     return out;
 }
 
+inline bool validTerrainPatchTopology(const TerrainPatch& patch) {
+    if(patch.resolution<2||patch.resolution>129)return false;
+    if(patch.clippedSurface)return patch.surfaceEpoch&&!patch.presentationOnly&&
+        !patch.surfaceHoles.empty()&&!patch.collision.empty()&&patch.collision.size()<=65534;
+    return patch.surfaceHoles.empty()&&patch.collision.size()==size_t(patch.resolution-1)*size_t(patch.resolution-1)*2;
+}
+
 struct TerrainCollisionRange {
     world::Cell cell{};
     uint32_t firstId=0;
     uint32_t count=0;
     uint64_t revision=0;
+    std::vector<uint64_t> generations;
+    bool clippedSurface=false;
 };
 
 // Transactionally replace the terrain triangles owned by this adapter.
@@ -123,9 +137,7 @@ public:
         if(patch.presentationOnly)
             throw std::invalid_argument(
                 "TerraWeave visual LOD cannot replace authoritative collision");
-        if(patch.resolution<2 || patch.resolution>129 ||
-           count!=size_t(patch.resolution-1u)*
-                  size_t(patch.resolution-1u)*2u)
+        if(!validTerrainPatchTopology(patch))
             throw std::invalid_argument("TerraWeave invalid terrain topology");
         const uint64_t limit=uint64_t(firstId)+count;
         for(const auto& [tile,old]:active_) {
@@ -134,7 +146,10 @@ public:
             if(uint64_t(firstId)<b && a<limit)
                 throw std::invalid_argument("TerraWeave overlapping terrain collider ranges");
         }
+        if(owner_&&owner_!=&spatial)throw std::logic_error("TerraWeave collision world mismatch");
         const auto old=active_.find(patch.cell);
+        if(old!=active_.end()&&!owns(spatial,old->second))
+            throw std::logic_error("TerraWeave collision lease changed");
         // Do not steal a foreign actor collider ID.
         for(uint64_t i=firstId;i<limit;++i) {
             const bool owned=old!=active_.end() &&
@@ -150,25 +165,54 @@ public:
             if(!world::SpatialWorld::validTriangle(patch.collision[i]))
                 throw std::invalid_argument("TerraWeave collision triangle rejected");
         auto next=active_;
-        next.insert_or_assign(patch.cell,TerrainCollisionRange{
-            patch.cell,firstId,uint32_t(count),patch.sourceRevision});
-        if(old!=active_.end())
-            for(uint64_t i=old->second.firstId;
-                i<uint64_t(old->second.firstId)+old->second.count;++i)
-                spatial.remove(uint32_t(i));
-        for(size_t i=0;i<count;++i)
-            if(!spatial.addTriangle(firstId+uint32_t(i),patch.collision[i]))
-                throw std::logic_error("TerraWeave prevalidated collision triangle rejected");
-        active_.swap(next);
+        auto& lease=next.insert_or_assign(patch.cell,TerrainCollisionRange{
+            patch.cell,firstId,uint32_t(count),patch.sourceRevision,{},patch.clippedSurface}).first->second;
+        lease.generations.resize(count);
+        const auto install=[&](world::SpatialWorld& target){
+            if(old!=active_.end())for(size_t i=0;i<old->second.count;++i)
+                if(!target.removeIfGeneration(old->second.firstId+uint32_t(i),old->second.generations[i]))
+                    throw std::logic_error("TerraWeave collision lease changed");
+            for(size_t i=0;i<count;++i){
+                const uint32_t id=firstId+uint32_t(i);
+                if(!target.addTriangle(id,patch.collision[i]))
+                    throw std::logic_error("TerraWeave prevalidated collision triangle rejected");
+                lease.generations[i]=target.colliderGeneration(id);
+            }
+        };
+        // Topology changes can alter the count/range. Stage in an isolated
+        // copy and conditionally exchange the canonical world; caller holds
+        // reader exclusion. Ordinary terrain preserves its existing path.
+        if(patch.clippedSurface||(old!=active_.end()&&old->second.clippedSurface)){
+            const auto version=spatial.mutationVersion();
+            auto candidate=spatial;
+            install(candidate);
+            if(!spatial.publishCopyIfCurrent(std::move(candidate),version))
+                throw std::logic_error("TerraWeave collision world changed before cut commit");
+        }else install(spatial);
+        active_.swap(next);owner_=&spatial;
     }
     void unload(world::SpatialWorld& spatial,world::Cell cell) {
         const auto it=active_.find(cell);
         if(it==active_.end())return;
-        const uint64_t first=it->second.firstId,last=first+it->second.count;
-        active_.erase(it);
-        for(uint64_t i=first;i<last;++i)spatial.remove(uint32_t(i));
+        if(owner_!=&spatial||!owns(spatial,it->second))throw std::logic_error("TerraWeave retire lease changed");
+        const auto& lease=it->second;
+        if(lease.clippedSurface){
+            const auto version=spatial.mutationVersion();auto candidate=spatial;
+            for(size_t i=0;i<lease.count;++i)
+                if(!candidate.removeIfGeneration(lease.firstId+uint32_t(i),lease.generations[i]))
+                    throw std::logic_error("TerraWeave cut retire lease changed");
+            if(!spatial.publishCopyIfCurrent(std::move(candidate),version))throw std::logic_error("TerraWeave cut retire world changed");
+        }else for(size_t i=0;i<lease.count;++i)
+            if(!spatial.removeIfGeneration(lease.firstId+uint32_t(i),lease.generations[i]))throw std::logic_error("TerraWeave retire lease changed");
+        active_.erase(it);if(active_.empty())owner_=nullptr;
     }
 private:
+    static bool owns(const world::SpatialWorld& spatial,const TerrainCollisionRange& range){
+        if(range.generations.size()!=range.count)return false;
+        for(size_t i=0;i<range.count;++i)if(!range.generations[i]||spatial.colliderGeneration(range.firstId+uint32_t(i))!=range.generations[i])return false;
+        return true;
+    }
+    world::SpatialWorld* owner_=nullptr;
     std::map<world::Cell,TerrainCollisionRange> active_;
 };
 
