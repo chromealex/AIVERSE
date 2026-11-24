@@ -150,6 +150,21 @@ int main() {
         sp::DepthCollisionSnapshot invalid;
         require(!invalid.valid(),"unpublished depth rejected");
     }
+    {
+        std::vector<uint8_t> bytes(sp::kGpuCollisionEventBytes,0);
+        auto put=[&](size_t i,uint32_t v){std::memcpy(bytes.data()+4*i,&v,4);};
+        auto putFloat=[&](size_t i,float f){uint32_t v;std::memcpy(&v,&f,4);put(i,v);};
+        put(1,1);putFloat(2,2);putFloat(5,1);put(8,2);put(9,7);
+        sp::GpuCollisionBatch batch;
+        require(sp::decodeGpuCollisionBatch(bytes,8,batch)&&batch.events.size()==1&&
+                batch.events[0].normal.x==1&&batch.events[0].kind==sp::GpuCollisionKind::Sdf,
+                "bounded collision record decode");
+        fx::SpectraFxEmitterEventRouter router;
+        require(sp::publishGpuCollisionBatch(batch,1,router)==1&&router.pending()==1,
+                "visual event router publication");
+        put(9,8);
+        require(!sp::decodeGpuCollisionBatch(bytes,8,batch),"out of range slot rejected");
+    }
     options.capacity=4; // burst requires five slots
     require(!sp::inspectGraphGpuEligibility(basic,options).eligible,
             "unsafe GPU pool size accepted");

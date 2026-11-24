@@ -27,6 +27,7 @@ struct GraphRuntimeOptions {
     bool gpuOwnedAllocation = false; // opt-in GPU-authored compaction/draw on capable Metal or Vulkan
     // Opt-in bounded GPU VM. Unsupported programs use exact CPU effects.
     bool gpuProgram = false;
+    bool reportCollisionEvents=false;
     // Strict opt-in: only pure, bounded particle-domain shaderGraph nodes.
     // Arbitrary shader/material graphs remain on the original CPU backend.
     bool gpuMaterial = false;
@@ -140,6 +141,9 @@ public:
     bool readGpuVmErrors(uint32_t& count) { return gpu_.readGpuVmErrors(count); }
     // Accepted async diagnostic requests callback on a later device frame.
     // Callbacks are cancelled if the GPU runtime shuts down beforehand.
+    bool requestGpuCollisionEvents(GpuCollisionCallback callback){
+        return useComputeWrapper_&&gpu_.requestGpuCollisionEvents(std::move(callback));
+    }
     bool requestGpuVmErrors(std::function<void(bool,uint32_t)> callback) {
         return useComputeWrapper_ &&
             gpu_.requestGpuVmErrors(std::move(callback));

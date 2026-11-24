@@ -274,6 +274,7 @@ public:
     // Enqueue only inside an open Device graphics frame, outside encoders.
     // The callback runs on the RHI owner thread after GPU completion and
     // reports transport completeness (not freshness of a later revision).
+    bool requestGpuCollisionEvents(size_t groupIndex,GpuCollisionCallback callback);
     bool requestGpuCheckpoint(size_t groupIndex,
                               std::function<void(bool)> completion={});
     // Copies an existing CURRENT-revision GPU checkpoint for one pooled

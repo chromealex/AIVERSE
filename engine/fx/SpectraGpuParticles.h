@@ -5,6 +5,7 @@
 // GPU simulation/vertices never round-trip to CPU during normal frames.
 #pragma once
 #include "SpectraDepthCollision.h"
+#include "SpectraGpuCollisionEvents.h"
 
 #include "ParticleSystem.h"
 #include "SpectraGpuCheckpoint.h"
@@ -96,6 +97,7 @@ struct ComputeEmitterDesc {
     render::float3 staticSphereCenter{};
     float collisionBounce=0.5f,collisionDampen=0,collisionRadiusScale=0;
     fx::StaticSdfVolume staticSdf;
+    bool reportCollisionEvents=false; // opt-in async visual contacts
     bool depthCollision=false; // native GPU-only opt-in, requires RequireGpu
 };
 
@@ -236,6 +238,9 @@ public:
     // Asynchronous 4-byte diagnostics. Accepted requests invoke callback
     // after a later frame; shutdown invalidates callbacks safely.
     bool requestGpuVmErrors(std::function<void(bool,uint32_t)> callback);
+    // Request exactly once after a successful step, before another step.
+    // Callback may be canceled by reset/restore/shutdown; never blocks.
+    bool requestGpuCollisionEvents(GpuCollisionCallback callback);
     // Blocking diagnostics only, between COMPLETED frames (Metal's readBuffer
     // rejects open command buffers). This is not CPU ParticleSystem import.
     bool captureGpuCheckpoint(GpuCheckpoint& out);
@@ -313,6 +318,9 @@ private:
     gfx::Device* device_ = nullptr;
     ComputeEmitterDesc desc_;
     DepthCollisionSnapshot depthSnapshot_{};
+    uint64_t collisionEpoch_=0;
+    bool collisionReadable_=false,collisionReadPending_=false;
+    void invalidateCollisionEvents(){++collisionEpoch_;collisionReadable_=false;}
     void fillDepthUniforms(Uniforms& u);
     // Separate shader birth stream; zero disables authored seeded randomness.
     uint32_t shaderBirthSeed_=0, shaderBirthOrdinal_=0;

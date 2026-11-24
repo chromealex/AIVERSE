@@ -217,7 +217,7 @@ bool ComputeParticles::initGpu() {
     {
         auto& budget=*desc_.allocationBudget;
         budget.collect(device_->gpuCompletedFence());
-        const size_t charge=estimateGpuEmitterAllocation(cap,proceduralActive_)+(graphPayload.size()-4)*sizeof(uint32_t);
+        const size_t charge=estimateGpuEmitterAllocation(cap,proceduralActive_)+(graphPayload.size()-4)*sizeof(uint32_t)+(desc_.reportCollisionEvents?kGpuCollisionEventBytes-sizeof(uint32_t):0);
         if(!budget.reserve(charge)){++stats_.gpuAllocationBudgetDenied;reason_="SpectraFX physical GPU allocation budget exhausted";return false;}
         gpuAllocationCharge_=charge;
     }
@@ -282,8 +282,9 @@ bool ComputeParticles::initGpu() {
                          gpuAllocationActive_?sizeof(allocatorCounters):sizeof(zero),
                          gpuAllocationActive_?static_cast<const void*>(allocatorCounters.data()):static_cast<const void*>(&zero),
                          "SpectraFX GPU atomic alive count");
-    vmErrors_=buffer(*device_,gfx::BufferType::Storage,sizeof(zero),
-                     &zero,"SpectraFX GPU VM error counter");
+    const std::vector<uint32_t> eventStorage(desc_.reportCollisionEvents?kGpuCollisionEventBytes/4:1,0);
+    vmErrors_=buffer(*device_,gfx::BufferType::Storage,eventStorage.size()*sizeof(uint32_t),
+                     eventStorage.data(),"SpectraFX GPU diagnostics and collision events");
     gpuDrawArgs_=buffer(*device_,gfx::BufferType::Storage,sizeof(zeroArgs),
                         &zeroArgs,"SpectraFX GPU authored draw args");
     vertices_=buffer(*device_,gfx::BufferType::Storage,
@@ -377,7 +378,7 @@ bool ComputeParticles::initGpu() {
     aliveSlots_.reserve(cap);
     stats_.gpuBytes=size_t(cap)*(sizeof(ParticleState)*2+3*sizeof(uint32_t))
                     + (proceduralActive_?size_t(cap)*40u+12u:size_t(cap)*(160u+6u*(wideIndices?4u:2u)))
-                    +size_t(n*n*4)+2*sizeof(zero)+sizeof(zeroArgs)
+                    +size_t(n*n*4)+sizeof(zero)+eventStorage.size()*sizeof(uint32_t)+sizeof(zeroArgs)
                     +size_t(cap)*2*sizeof(ProgramParams)+sizeof(vmPayload)
                     +size_t(cap)*sizeof(ProgramAttributes)+graphPayload.size()*sizeof(uint32_t)
                     +(gpuAllocationActive_?size_t(cap)*20u+10u*sizeof(uint32_t):0u);
@@ -395,6 +396,7 @@ void ComputeParticles::retireAllocationCharge(size_t bytes,uint64_t fence){
     }
 }
 void ComputeParticles::releaseGpu() {
+    invalidateCollisionEvents();collisionReadPending_=false;
     checkpointHistory_.clear();
     readbackLifetime_.reset();
     asyncErrorPending_=false;
@@ -490,6 +492,7 @@ void ComputeParticles::clear() {
     (void)tryClear(); // preserve legacy ABI; status is available via reason()
 }
 bool ComputeParticles::tryClear() {
+    invalidateCollisionEvents();
     depthSnapshot_={};
     if(!initialized_)return false;
     if(backend_==ComputeBackend::Cpu) {
@@ -771,6 +774,7 @@ void ComputeParticles::setView(const fx::SpectraFxView& view) {
     if(backend_==ComputeBackend::Cpu)cpu_.setView(view);
 }
 bool ComputeParticles::step(float dt) {
+    collisionReadable_=false;
     if(!initialized_||!finite(dt)||dt<0)return false;
     dt=std::clamp(dt,0.f,0.1f);
     if(backend_==ComputeBackend::Cpu) {
@@ -879,9 +883,9 @@ bool ComputeParticles::step(float dt) {
                 label+"): "+device_->lastError();
         return false;
     };
-    const uint32_t resetVmErrors=0;
+    const std::array<uint32_t,2> resetVmErrors{};
     if(!device_->updateStorageBufferChecked(
-            vmErrors_,&resetVmErrors,sizeof(resetVmErrors)))
+            vmErrors_,resetVmErrors.data(),desc_.reportCollisionEvents?sizeof(resetVmErrors):sizeof(uint32_t)))
         return stagingRejected("VM error counter");
     if(programParamsDirty_ || gpuStagingDirty_) {
         if(!device_->updateStorageBufferChecked(
@@ -939,6 +943,7 @@ bool ComputeParticles::step(float dt) {
     u.collisionSphere={desc_.staticSphereCenter.x,desc_.staticSphereCenter.y,desc_.staticSphereCenter.z,desc_.staticSphereRadius};
     u.collisionResponse={desc_.collisionBounce,desc_.collisionDampen,desc_.collisionRadiusScale,desc_.staticSdf.dimension?1.f:0.f};
     fillDepthUniforms(u);
+    u.depthEye.w=desc_.reportCollisionEvents?1.f:0.f;
     u.rightSize={right_.x,right_.y,right_.z,desc_.size};
     u.up={up_.x,up_.y,up_.z,0};
     u.meta={0,desc_.capacity,count,compactCount};
@@ -999,6 +1004,7 @@ bool ComputeParticles::step(float dt) {
     drawCount_=compactCount;
     stats_.submittedSlots=drawCount_;
     verticesReady_=true;reason_.clear();
+    collisionReadable_=desc_.reportCollisionEvents&&dt>0.f;
     // Queue chunked readback only after the VM/integration/compact dispatches.
     // This is optional; never block the render loop on checkpoint collection.
     if(checkpointCadence_.due(vmFrameRevision_)) {
@@ -1041,7 +1047,7 @@ bool ComputeParticles::replaceGpuAllocation(uint32_t next,bool empty,bool compac
     size_t candidateCharge=0;uint64_t candidateFence=0;
     if(desc_.allocationBudget){
         auto& budget=*desc_.allocationBudget;budget.collect(device_->gpuCompletedFence());
-        candidateCharge=estimateGpuEmitterAllocation(next,proceduralActive_)+(desc_.staticSdf.dimension?(5+desc_.staticSdf.samples.size())*sizeof(uint32_t):0)+(desc_.depthCollision?kDepthCollisionBytes:0);
+        candidateCharge=estimateGpuEmitterAllocation(next,proceduralActive_)+(desc_.staticSdf.dimension?(5+desc_.staticSdf.samples.size())*sizeof(uint32_t):0)+(desc_.depthCollision?kDepthCollisionBytes:0)+(desc_.reportCollisionEvents?kGpuCollisionEventBytes-sizeof(uint32_t):0);
         if(!budget.reserve(candidateCharge)){
             ++stats_.gpuAllocationBudgetDenied;
             if(shrinking)++stats_.gpuPhysicalShrinkFailures;else{++stats_.gpuPhysicalGrowthFailures;gpuGrowthBudgetBlocked_=true;}
@@ -1272,8 +1278,8 @@ bool ComputeParticles::stepGpuAllocated(float dt){
     }
     markGpuAllocationUsed(); // replacement may have installed a new charge
     const uint32_t cap=allocatedCapacity();
-    const uint32_t zero=0;
-    if(!device_->updateStorageBufferChecked(vmErrors_,&zero,sizeof(zero)))return reject("GPU allocator VM counter upload rejected");
+    const std::array<uint32_t,2> zero{};
+    if(!device_->updateStorageBufferChecked(vmErrors_,zero.data(),desc_.reportCollisionEvents?sizeof(zero):sizeof(uint32_t)))return reject("GPU allocator VM counter upload rejected");
     if(count){
         std::vector<uint32_t> tokens;tokens.reserve(size_t(count)*2);
         for(uint64_t token:pendingGpuOwners_){tokens.push_back(uint32_t(token));tokens.push_back(uint32_t(token>>32));}
@@ -1290,6 +1296,7 @@ bool ComputeParticles::stepGpuAllocated(float dt){
     u.collisionSphere={desc_.staticSphereCenter.x,desc_.staticSphereCenter.y,desc_.staticSphereCenter.z,desc_.staticSphereRadius};
     u.collisionResponse={desc_.collisionBounce,desc_.collisionDampen,desc_.collisionRadiusScale,desc_.staticSdf.dimension?1.f:0.f};
     fillDepthUniforms(u);
+    u.depthEye.w=desc_.reportCollisionEvents?1.f:0.f;
     u.rightSize={right_.x,right_.y,right_.z,desc_.size};u.up={up_.x,up_.y,up_.z,(dt>0.f||count>0)?1.f:0.f};
     u.meta={0,cap,count,0};
     const bool cull=viewReady_&&std::all_of(viewProj_.m,viewProj_.m+16,[](float x){return std::isfinite(x);});
@@ -1351,6 +1358,7 @@ bool ComputeParticles::stepGpuAllocated(float dt){
     stats_.alive=uint32_t(std::min<uint64_t>(cap,gpuEstimatedBirths_));
     stats_.submittedSlots=stats_.alive; // estimate, actual indirect count stays GPU-side
     drawCount_=gpuAllocationSubmitted_?cap:0;reason_.clear();
+    collisionReadable_=desc_.reportCollisionEvents&&dt>0.f;
     if(cap<=kGpuCheckpointCaptureMaxSlots&&checkpointCadence_.due(vmFrameRevision_)){
         if(!asyncCheckpointPending_&&requestGpuCheckpoint())checkpointCadence_.accepted(vmFrameRevision_);
         else checkpointCadence_.deferred(vmFrameRevision_);
@@ -1472,6 +1480,39 @@ bool ComputeParticles::readGpuVmErrors(uint32_t& count) {
     stats_.gpuVmErrorsKnown=true;
     return true;
 }
+bool ComputeParticles::requestGpuCollisionEvents(GpuCollisionCallback callback) {
+    if(!callback||!gpuActive()||!desc_.reportCollisionEvents||!collisionReadable_||
+       collisionReadPending_||!device_||!device_->gpuHealthy()||!device_->canUpdateSharedBuffers()||
+       !readbackLifetime_||gpuResetDirty_||gpuStagingDirty_)return false;
+    const auto frame=device_->frameSerial();
+    struct Reservation {
+        std::shared_ptr<CheckpointReadbackBudget> budget;
+        size_t returned=0;
+        ~Reservation(){if(budget)budget->settle(kGpuCollisionEventBytes,1,returned);}
+    };
+    auto reserve=std::make_shared<Reservation>();
+    if(desc_.checkpointBudget&&!desc_.checkpointBudget->tryReserve(frame,kGpuCollisionEventBytes,1))
+        return false;
+    reserve->budget=desc_.checkpointBudget;
+    const auto epoch=collisionEpoch_,revision=vmFrameRevision_;
+    const auto capacity=allocatedCapacity();
+    const std::weak_ptr<uint64_t> lifetime=readbackLifetime_;
+    collisionReadPending_=true;collisionReadable_=false;
+    markGpuAllocationUsed();
+    const bool accepted=device_->readBufferAsync(vmErrors_,kGpuCollisionEventBytes,
+        [this,lifetime,reserve,epoch,revision,frame,capacity,callback=std::move(callback)](std::vector<uint8_t> bytes)mutable{
+            reserve->returned=bytes.size();
+            if(!lifetime.lock())return;
+            collisionReadPending_=false;
+            if(epoch!=collisionEpoch_||!gpuActive())return;
+            GpuCollisionBatch batch;batch.frameSerial=frame;batch.revision=revision;
+            const bool ok=decodeGpuCollisionBatch(bytes,capacity,batch);
+            callback(ok,std::move(batch));
+        });
+    if(!accepted){collisionReadPending_=false;collisionReadable_=true;}
+    return accepted;
+}
+
 bool ComputeParticles::requestGpuVmErrors(
     std::function<void(bool,uint32_t)> callback) {
     if(!callback || !initialized_ || backend_==ComputeBackend::Cpu ||
@@ -1750,6 +1791,7 @@ bool ComputeParticles::restoreHistoricalGpuCheckpoint(uint64_t id) {
     reason_="Unknown or evicted historical checkpoint";return false;
 }
 bool ComputeParticles::restoreGpuSnapshot(const GpuCheckpoint& source) {
+    invalidateCollisionEvents();
     if(!gpuActive()||!device_||!device_->gpuHealthy()||!device_->canUpdateSharedBuffers()||
        gpuResetDirty_||gpuStagingDirty_||asyncCheckpointPending_||programParamsDirty_||
        !pendingStates_.empty()||!pendingKillSlots_.empty()||!killedSlotsAwaitingFrame_.empty()||

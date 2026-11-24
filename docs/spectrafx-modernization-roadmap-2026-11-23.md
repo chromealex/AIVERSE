@@ -354,3 +354,7 @@ Native ComputeEmitterDesc::depthCollision requires RequireGpu, excludes static S
 ## Stage 140 — GPU collision feedback (in progress)
 
 Opt-in bounded GPU contact records from analytic sphere, sampled SDF and depth kernels, preserve VM error counter and particle ABI. Explicit async request after successful step, shared checkpoint bandwidth reservation, stale epoch cancellation, native GraphRuntime and pool APIs, bridge to existing presentation emitter event router. No gameplay events, no automatic child authoring yet. Regression source only; execution deferred.
+
+## Stage 140 — bounded GPU collision feedback (source; QA deferred)
+
+Native ComputeEmitterDesc and GraphRuntimeOptions reportCollisionEvents opt in to a bounded append-only visual contact buffer (64 records per step, count includes dropped). Both Metal/Vulkan integration paths capture corrected particle centre, normal, collision kind and historical slot, using the existing diagnostics storage binding, preserving VM error word zero. Request explicitly once after a successful step using ComputeParticles, GraphRuntime or stepped GpuPoolWorld group; async readback uses existing shared checkpoint reservation, cancels on reset/restore/shutdown. Decoded batch can publish into existing SpectraFxEmitterEventRouter Impact links; no authoritative events or stable per-source attribution. No automatic child authoring or readback scheduling; host controls routing. CPU fallback does not synthesize GPU records. Regression source only; no build/shader/CTest run.

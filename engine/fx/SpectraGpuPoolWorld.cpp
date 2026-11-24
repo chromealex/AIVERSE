@@ -95,6 +95,7 @@ std::string GpuPoolWorld::groupKey(const fx::EffectDef& effect,
         "|capacity="+std::to_string(capacity)+
         "|quality="+std::to_string(unsigned(options.quality))+
         "|vm="+std::to_string(unsigned(options.gpuProgram))+
+        "|collisionEvents="+std::to_string(unsigned(options.reportCollisionEvents))+
         "|material="+std::to_string(unsigned(options.gpuMaterial))+
         "|indirect="+std::to_string(unsigned(options.gpuIndirect))+
         "|procedural="+std::to_string(unsigned(options.proceduralBillboards))+
@@ -984,6 +985,12 @@ bool GpuPoolWorld::importRecoveryManifest(
     return true;
 }
 
+bool GpuPoolWorld::requestGpuCollisionEvents(size_t groupIndex,GpuCollisionCallback callback){
+    if(!initialized_||presentationBlocked()||!frameOpen_||!stepped_||
+       groupIndex>=gpuGroups_.size()||!gpuGroups_[groupIndex].live()||
+       !gpuGroups_[groupIndex].stepOk)return false;
+    return gpuGroups_[groupIndex].particles->requestGpuCollisionEvents(std::move(callback));
+}
 bool GpuPoolWorld::requestGpuCheckpoint(
     size_t groupIndex,std::function<void(bool)> completion) {
     if(!initialized_ || presentationBlocked() ||
