@@ -29,6 +29,7 @@ struct CavePathResult {
     uint64_t environmentRevision=0;
     uint32_t totalCost=0;
     bool reached=false;
+    uint64_t scopeId=0;
 };
 // Validate exact endpoints and every segment, including native smoothing.
 // Keep historical flat, nonresident route projection behavior unchanged.
@@ -96,12 +97,13 @@ public:
            !provider->residentSegment(query.goal,query.goal,query.agent))return {};
         // Do NOT invent a route here. Invoke the registered engine solver.
         auto result=it->second.solve(query,provider);
-        if(result.sourceRevision!=query.sourceRevision ||
+        if((result.scopeId&&result.scopeId!=provider->scopeId())||result.sourceRevision!=query.sourceRevision ||
            (result.environmentRevision &&
             result.environmentRevision!=provider->environmentRevision()))
             return {};
         if(!caveRouteSegmentsValid(query,result,*provider,it->second.kind==CavePathBackend::NavMesh))return {};
         result.environmentRevision=provider->environmentRevision();
+        result.scopeId=provider->scopeId();
         return result;
     }
     size_t registeredCount()const noexcept{return solvers_.size();}

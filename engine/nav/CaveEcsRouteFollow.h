@@ -69,7 +69,7 @@ inline bool assignCaveRoute(World& world,Entity entity,
     const terraweave::caverns::CavePathResult& path,
     terraweave::caverns::CaveAgentProfile profile,
     uint32_t speedCmPerTick) {
-    if(!world.alive(entity)||!path.reached||!path.sourceRevision||
+    if(!world.alive(entity)||!path.reached||!path.sourceRevision||path.scopeId!=caveRouteScope(world,entity)||
        path.waypoints.empty()||path.waypoints.size()>65536||
        !std::all_of(path.waypoints.begin(),path.waypoints.end(),validCaveRoutePoint)||
        !speedCmPerTick||speedCmPerTick>10000)

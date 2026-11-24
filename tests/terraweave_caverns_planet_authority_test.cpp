@@ -3,7 +3,7 @@
 #include "engine/world/TerraWeaveCavernsPlanetDemand.h"
 #include "engine/world/TerraWeaveCavernsPlanetMotion.h"
 #include "engine/world/TerraWeaveCavernsPlanetNavigation.h"
-#include "engine/world/TerraWeaveCavernsGraphSolvers.h"
+#include "engine/world/TerraWeaveCavernsPlanetEcsNavigation.h"
 #include "engine/world/TerraWeaveCavernsNavigationGraph.h"
 #include "engine/world/TerraWeaveCavernsPathRouter.h"
 #include <iostream>
@@ -243,6 +243,8 @@ static void checkOrientedNavigation(const std::shared_ptr<const game::Surface>& 
     auto& request=ecs.get<nav::CaveSteeringRequest>(entity);
     request.valid=true;request.sourceRevision=wall->revision();request.environmentRevision=wall->environmentRevision();
     check(!nav::caveMotorRequest(ecs,entity,*foreign),"equal epochs wrong region refused");
+    const auto foreignRoute=router.queryWithProvider("astar",query,foreign);
+    check(foreignRoute.reached&&!nav::assignCaveRoute(ecs,entity,foreignRoute,agent,25),"foreign route result refused");
     (void)nav::prepareScopedCaveSteering(ecs,[foreign](const World&,Entity){return foreign;},position);
     check(ecs.get<nav::CaveRouteFollower>(entity).needsRepath,"wrong region forces repath");
     check(!ecs.get<nav::CaveSteeringRequest>(entity).valid,"wrong region clears request");

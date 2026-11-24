@@ -176,7 +176,7 @@ inline CaveRepathTickStats repathCaveEntities(
                 else result.waypoints.push_back(request.goal);
             }
         }
-        if(!result.reached||result.sourceRevision!=request.sourceRevision||
+        if(!result.reached||result.scopeId!=provider->scopeId()||result.sourceRevision!=request.sourceRevision||
            result.environmentRevision!=provider->environmentRevision()||
            result.waypoints.empty()||result.waypoints.size()>65536||
            !std::all_of(result.waypoints.begin(),result.waypoints.end(),validCaveRoutePoint)){
