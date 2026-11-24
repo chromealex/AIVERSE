@@ -167,13 +167,11 @@ public:
                 candidate.reset();
                 return transferStatus(reason);
             }
-            std::unique_ptr<spectra::volume::GpuGasGrid> candidateVolume;
-            std::unique_ptr<spectra::volume::GpuVolumeRenderer> candidateRenderer;
+            std::unique_ptr<spectra::volume::VolumeInstance> candidateVolume;
             if(checked.volume){
                 if(!spectra::volume::supportsVolumeRender(device))return transferStatus("Native GPU volume HDR unavailable");
-                candidateVolume=std::make_unique<spectra::volume::GpuGasGrid>();
-                candidateRenderer=std::make_unique<spectra::volume::GpuVolumeRenderer>();
-                if(!candidateVolume->initAsset(device,checked.volumeAsset,snapshotReader))
+                candidateVolume=std::make_unique<spectra::volume::VolumeInstance>();
+                if(!candidateVolume->init(device,checked.volumeAsset,{},snapshotReader))
                     return transferStatus(candidateVolume->error());
             }
             // Commit only after initialization succeeded. Both instances use
@@ -181,8 +179,8 @@ public:
             device.waitForResourceIdle();
             runtime_.swap(candidate);
             candidate.reset();
-            volumeRenderer_=std::move(candidateRenderer);volumeGrid_=std::move(candidateVolume);
-            volumeMaterial_=checked.volumeAsset.material;hasParticles_=checked.particles;volumeRendered_=false;
+            volumeGrid_=std::move(candidateVolume);
+            hasParticles_=checked.particles;volumeRendered_=false;
             authoredGraph_=graph;
             authoredGpuBirthRandom_=opts.gpuBirthRandom;
             authoredGpuOwnedAllocation_=opts.gpuOwnedAllocation;
@@ -296,13 +294,15 @@ public:
             return status();
         }
         if(action=="burst") {
-            if(!hasParticles_)return transferStatus("Volume-only graph uses continuous sources; particle burst unavailable");
+            if(!hasParticles_&&(!volumeGrid_||!volumeGrid_->hasImpulse()))return transferStatus("No impulse source or particle branch");
             const auto& raw=input["count"];
             if(!raw.isNull() &&
                (!raw.isNumber() || raw.numberLiteral().find_first_of(".eE-")!=std::string::npos ||
                 raw.integer(0)<1 || raw.integer(0)>8))
                 return errorStatus("Burst count must be an integer from 1 to 8");
             const auto requested=uint32_t(raw.isNull()?1:raw.integer());
+            if(volumeGrid_&&volumeGrid_->hasImpulse()&&requested!=1)return transferStatus("Volume impulse count must be one");
+            if(volumeGrid_&&volumeGrid_->hasImpulse()&&burstsPending_)return transferStatus("Volume impulse already pending");
             if(burstsPending_+requested>32)
                 return errorStatus("SpectraFX preview burst queue is full");
             burstsPending_+=requested;
@@ -415,7 +415,7 @@ public:
         }
         if(pendingClear_) {
             hasPendingGpuAllocationSeed_=false;
-            if(volumeGrid_&&!volumeGrid_->clear()){playing_=false;error_=volumeGrid_->error();return;}
+            if(volumeGrid_&&!volumeGrid_->clear(false)){playing_=false;error_=volumeGrid_->error();return;}
             if(hasParticles_)runtime_->clear();
             pendingClear_=false;
         }
@@ -441,7 +441,7 @@ public:
             timeTicks_=0;
         }
         if(pendingRestart_) {
-            if(volumeGrid_&&!volumeGrid_->clear()){playing_=false;error_=volumeGrid_->error();return;}
+            if(volumeGrid_&&!volumeGrid_->clear(true)){playing_=false;error_=volumeGrid_->error();return;}
             if(hasParticles_)runtime_->clear();
             timeTicks_=0;
             pendingRestart_=false;
@@ -472,7 +472,8 @@ public:
         // The queue is bounded and consumed only inside the device frame.
         const uint32_t count=std::exchange(burstsPending_,0u);
         for(uint32_t i=0;i<count;++i) {
-            if(!runtime_->burstAt({origin.x,origin.y+1.0f,origin.z})) {
+            if(volumeGrid_&&volumeGrid_->hasImpulse()&&!volumeGrid_->trigger()){playing_=false;error_="Volume impulse already queued; step first";return;}
+            if(hasParticles_&&!runtime_->burstAt({origin.x,origin.y+1.0f,origin.z})) {
                 playing_=false;phase_=0;
                 error_=runtime_->reason().empty()?
                     "SpectraFX one-shot burst rejected":runtime_->reason();
@@ -531,13 +532,12 @@ public:
     void contributeVolume(render::Prisma& post){
         if(!hasVolume())return;
         post.setSceneHdrContributor([this](gfx::Device& device,const render::PostFrame& frame,
-            gfx::TextureHandle color,gfx::TextureHandle depth){
-            if(!volumeGrid_||!volumeRenderer_)return gfx::TextureHandle{};
-            auto out=volumeRenderer_->draw(device,*volumeGrid_,frame,color,depth,volumeMaterial_);
-            volumeRendered_=out.valid();
-            if(!out.valid())error_=volumeRenderer_->error();
-            return out;
-        });
+            gfx::TextureHandle color,gfx::TextureHandle depth){return drawVolume(device,frame,color,depth);});
+    }
+    gfx::TextureHandle drawVolume(gfx::Device& device,const render::PostFrame& frame,gfx::TextureHandle color,gfx::TextureHandle depth){
+        if(!volumeGrid_||!volumeGrid_->published())return {};
+        auto out=volumeGrid_->draw(device,frame,color,depth);volumeRendered_=out.valid();
+        if(!out.valid())error_=volumeGrid_->error();return out;
     }
     bool needsFrame() const {
         return ready_ && (fileImportPending_ || checkpointRequest_ || rollbackId_ || playing_ || pendingRestart_ || hasPendingGpuAllocationSeed_ ||
@@ -606,8 +606,9 @@ public:
         result.set("volume",Json::fromBool(bool(volumeGrid_)));
         result.set("hybrid",Json::fromBool(bool(volumeGrid_)&&hasParticles_));
         result.set("volumeRendered",Json::fromBool(volumeRendered_));
-        result.set("volumeDimension",Json::number(int64_t(volumeGrid_?volumeGrid_->config().dimension:0)));
-        result.set("volumeBytes",Json::number(int64_t(volumeGrid_?volumeGrid_->stats().allocatedBytes+volumeRenderer_->allocatedBytes():0)));
+        result.set("volumeImpulse",Json::fromBool(volumeGrid_&&volumeGrid_->hasImpulse()));
+        result.set("volumeDimension",Json::number(int64_t(volumeGrid_?volumeGrid_->grid()->config().dimension:0)));
+        result.set("volumeBytes",Json::number(int64_t(volumeGrid_?volumeGrid_->bytes():0)));
         const auto gpu=ready_&&runtime_->gpuActive();
         const auto& stats=runtime_->gpuStats();
         result.set("alive",Json::number(int64_t(ready_?stats.alive:0)));
@@ -622,7 +623,7 @@ public:
     }
     void stop(gfx::Device& device) {
         device.waitForResourceIdle();
-        volumeRenderer_.reset();volumeGrid_.reset();hasParticles_=true;volumeRendered_=false;
+        volumeGrid_.reset();hasParticles_=true;volumeRendered_=false;
         runtime_->shutdown();
         authoredGraph_=Json::object();authoredGpuBirthRandom_=false;authoredGpuOwnedAllocation_=false;
         checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;
@@ -661,9 +662,7 @@ private:
     Json authoredGraph_=Json::object();
     bool authoredGpuBirthRandom_=false,authoredGpuOwnedAllocation_=false;
     std::unique_ptr<spectra::GraphRuntime> runtime_=std::make_unique<spectra::GraphRuntime>();
-    std::unique_ptr<spectra::volume::GpuGasGrid> volumeGrid_;
-    std::unique_ptr<spectra::volume::GpuVolumeRenderer> volumeRenderer_;
-    spectra::volume::Material volumeMaterial_{};
+    std::unique_ptr<spectra::volume::VolumeInstance> volumeGrid_;
     bool hasParticles_=true,volumeRendered_=false;
     std::map<std::string,float> requestedParameters_;
     bool ready_=false,playing_=false,pendingRestart_=false,restartBurstPending_=false;

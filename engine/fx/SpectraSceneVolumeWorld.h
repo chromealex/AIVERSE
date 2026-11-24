@@ -11,7 +11,7 @@ namespace aiverse::spectra::volume {
 class VolumeInstance final {
 public:
     bool init(gfx::Device& device,const Asset& asset,float3 anchor={},const fx::SdfResourceReader& reader={}){
-        if(!bounded(anchor,1e6f)){error_="Invalid volume anchor";return false;}
+        if(!supportsVolumeRender(device)||!bounded(anchor,1e6f)){error_="Invalid volume anchor";return false;}
         Asset placed=asset;placed.simulation.origin=placed.simulation.origin+anchor;
         for(auto& s:placed.sources)s.position=s.position+anchor;
         if(placed.impulse)placed.impulse->position=placed.impulse->position+anchor;
@@ -77,6 +77,7 @@ public:
     static constexpr size_t capacity=4;
     void clear(){entries_.clear();error_.clear();}
     bool active()const{return !entries_.empty();}
+    bool renderable()const{for(const auto& [id,e]:entries_)if(e.instance->published())return true;return false;}
     const std::string& error()const{return error_;}
     size_t size()const{return entries_.size();}
     size_t bytes()const{size_t n=0;for(const auto& [id,e]:entries_)n+=e.instance->bytes();return n;}

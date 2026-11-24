@@ -1975,7 +1975,13 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         renderer_.lighting.sunDir={std::cos(e)*std::sin(a),std::sin(e),std::cos(e)*std::cos(a)};
         renderer_.lighting.sunColor=skyShot_->sunColor;renderer_.lighting.sunIntensity=1.3f;
     }
-    if(spectraPreview_->hasVolume())spectraPreview_->contributeVolume(post_);
+    if(spectraPreview_->hasVolume()||spectraSources_.hasVolumes()){
+        post_.setSceneHdrContributor([this](gfx::Device& d,const render::PostFrame& f,gfx::TextureHandle c,gfx::TextureHandle z){
+            auto scene=spectraSources_.composeVolumes(d,f,c,z);
+            auto preview=spectraPreview_->drawVolume(d,f,scene.valid()?scene:c,z);
+            return preview.valid()?preview:scene;
+        });
+    }
     renderer_.render(pass,useLighting?lightingRuntime_.pipeline(post_):static_cast<PostProcess*>(&post_));
     // Renderer3D keeps the HDR scene pass open; GPU/CPU FX draw here,
     // before PRISMA resolves it and before the frame/pass are retired.

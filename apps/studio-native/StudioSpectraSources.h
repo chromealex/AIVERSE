@@ -25,6 +25,7 @@ public:
         gpuPresenter_.reset();gpuMirror_.clear();gpuPool_.shutdown();gpuDefinitions_.clear();
         presenter_.reset();mirror_.clear();
         particles_.shutdown();textures_.shutdown();
+        volumeWorld_.clear();volumeDefinitions_.clear();volumeOnly_.clear();
         definitions_.clear();schemas_.clear();project_.clear();mapPath_.clear();error_.clear();
         dataRegistry_.reset();externalRegistry_=false;
         collisionRegistry_.reset();
@@ -50,9 +51,11 @@ private:
 public:
     bool animated() const{
         return ready_&&(mirror_.size()!=0||particles_.stats().particles>0||
-            gpuMirror_.size()!=0||gpuPool_.stats().gpuParticlesEstimated>0||gpuPool_.stats().cpuParticles>0);
+            gpuMirror_.size()!=0||gpuPool_.stats().gpuParticlesEstimated>0||gpuPool_.stats().cpuParticles>0||volumeWorld_.active());
     }
     const std::string& error()const{return error_;}
+    bool hasVolumes()const{return volumeWorld_.renderable();}
+    gfx::TextureHandle composeVolumes(gfx::Device& d,const render::PostFrame& f,gfx::TextureHandle color,gfx::TextureHandle depth){return volumeWorld_.compose(d,f,color,depth);}
     void synchronize(gfx::Device& device,const editor::MapDoc& doc,const std::string& project,
                      const std::set<std::string>& hidden,
                      float levelHeight=1.5f,bool showTerrain=true,
@@ -62,6 +65,7 @@ public:
             project_=project;mapPath_=doc.path;
         }
         if(project.empty()||doc.data.worldSpace||doc.data.planet()){
+            volumeWorld_.clear();
             if(ready_){mirror_.clear();gpuMirror_.clear();}
             if(!externalRegistry_)installRegistry({});
             collisionRegistry_.reset();particles_.setSceneCollisionRegistry({});
@@ -84,6 +88,7 @@ public:
         revision_=doc.revision;hidden_=hidden;
         fieldLevelHeight_=levelHeight;fieldShowTerrain_=showTerrain;
         std::vector<lib::mechanics::SpectraSourceSnapshot> rows,gpuRows;
+        std::vector<spectra::volume::SceneVolumeSource> volumes;
         std::set<std::string> seen;
         error_.clear();
         for(size_t i=0;i<doc.data.entities.size()&&rows.size()+gpuRows.size()<65536;++i){
@@ -105,17 +110,26 @@ public:
                 }
                 const auto transform=editor::authoredLocalTransform(entity);
                 const auto p=transform.position;
+                if(auto it=volumeDefinitions_.find(source.effect);it!=volumeDefinitions_.end()){
+                    if(source.scale.raw!=(1_fx).raw){error_="Volume scene source requires unit scale";continue;}
+                    volumes.push_back({identity,source.effect,source.revision,{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())},&it->second});
+                    if(volumeOnly_.count(source.effect))continue;
+                }
                 lib::mechanics::SpectraSourceSnapshot row{identity,source,{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())},{0,1,0}};
                 if(source.scale.raw==(1_fx).raw&&gpuDefinitions_.count(source.effect))gpuRows.push_back(std::move(row));
                 else rows.push_back(std::move(row));
             }catch(const std::exception& e){error_=e.what();}
         }
+        volumeWorld_.synchronize(device,volumes,fx::projectSdfReader(project_));
+        if(!volumeWorld_.error().empty())error_=volumeWorld_.error();
         mirror_.sync(rows);gpuMirror_.sync(gpuRows);
         // Retain loaded definitions while their detached particles fade.
         // Definition count is bounded for this document session.
     }
     void prepare(const fx::SpectraFxView& view,float dt){
         if(!ready_||!view.valid())return;
+        volumeWorld_.step(dt);
+        if(!volumeWorld_.error().empty())error_=volumeWorld_.error();
         particles_.setView(view);
         presenter_->sync(mirror_.world(),lib::mechanics::SpectraSourceMirror::resolve);
         if(!presenter_->dataInterfaceError().empty())error_=presenter_->dataInterfaceError();
@@ -189,11 +203,16 @@ private:
         if(!read("fx/graphs/"+name+".vfx.json",text)||text.size()>512*1024){
             error_="Missing or oversized SpectraFX graph: "+name;return false;
         }
-        const auto graph=Json::parse(text);
-        fx::EffectDef def;std::vector<std::string> errors;
-        if(graph.getInt("version")!=2||!spectra::compileGraph(graph,Json::object(),def,errors,fx::projectSdfReader(project_))){
+        auto graph=Json::parse(text);
+        spectra::volume::PresentationGraph compiled;std::vector<std::string> errors;
+        if(graph.getInt("version")!=2||!spectra::volume::compilePresentationGraph(graph,Json::object(),compiled,errors,fx::projectSdfReader(project_))){
             error_=errors.empty()?"Invalid SpectraFX graph: "+name:errors.front();return false;
         }
+        if(compiled.volume){
+            if(!compiled.particles){volumeDefinitions_[name]=std::move(compiled.volumeAsset);volumeOnly_.insert(name);schemas_[name]={};definitions_.insert(name);return true;}
+            graph=compiled.particleGraph;
+        }
+        auto& def=compiled.particleEffect;
         spectra::InstanceParameterTable named;
         if(!spectra::loadInstanceParameterTable(graph["instanceParameters"],named,errors)){
             error_=errors.empty()?"Invalid SpectraFX parameter schema":errors.front();return false;
@@ -204,6 +223,7 @@ private:
         }
         schemas_[name]=std::move(named);
         definitions_.insert(name);
+        if(compiled.volume)volumeDefinitions_[name]=std::move(compiled.volumeAsset);
         // CPU definition always remains available for incompatible devices,
         // unscaled-only GPU policy failures and nonunit authored instances.
         if(gpuPresenter_){
@@ -247,6 +267,9 @@ private:
     bool gpuFrameOpen_=false,externalRegistry_=false;
     float fieldLevelHeight_=0;
     bool fieldShowTerrain_=false;
+    spectra::volume::SceneVolumeWorld volumeWorld_;
+    std::map<std::string,spectra::volume::Asset> volumeDefinitions_;
+    std::set<std::string> volumeOnly_;
     std::set<std::string> definitions_,gpuDefinitions_,hidden_;
     std::map<std::string,spectra::InstanceParameterTable> schemas_;
     std::string project_,mapPath_,error_;
