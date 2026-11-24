@@ -228,6 +228,7 @@ Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::s
     if(!stbi_write_png_to_func([](void* ctx,void* data,int size){static_cast<std::string*>(ctx)->append(static_cast<const char*>(data),size_t(size));},&png,image.width,image.height,4,image.rgba.data(),image.width*4)||png.empty())throw std::runtime_error("PNG encode failed");
     const auto temp=stage/"payload";
     {std::ofstream stream(temp,std::ios::binary);stream.write(png.data(),std::streamsize(png.size()));stream.close();if(!stream)throw std::runtime_error("PNG write failed");}
+    Json evidence=Json::array(),record=Json::object();record.set("file",Json::string("payload"));record.set("sha256",Json::string(publicationFileSha256(temp)));evidence.push(record);journal.evidence(evidence);
     fs::create_hard_link(temp,dest);
     journal.finish();
     ws.note({Change::Rules,0,0,-1,-1,-1,"Texture graph bake: "+rel});
@@ -263,6 +264,10 @@ Json publishTextureGraphSet(Workspace& ws,const std::string& name,const Json& gr
         // Cooperating publishers share the exclusive stage directory.
         // No promise against an external process creating an empty destination.
         if(fs::exists(dest)||fs::is_symlink(dest))throw std::runtime_error("destination appeared during bake");
+        Json evidence=Json::array();
+        auto recordFile=[&](const std::string& file){Json record=Json::object();record.set("file",Json::string(file));record.set("sha256",Json::string(publicationFileSha256(stage/file)));evidence.push(record);};
+        for(const auto& [output,index]:program.outputs){(void)index;recordFile(output+".png");}
+        recordFile("texture-set.json");journal.evidence(evidence);
         fs::rename(stage,dest);
         journal.finish();
         ws.note({Change::Rules,0,0,-1,-1,-1,"Texture graph set: "+name});

@@ -114,7 +114,15 @@ int main() {
         const auto pending=call("texture_graph_publications_get",Json::object());
         requireGraphTest(pending["publications"].size()==1,"texture intent not reported");
         requireGraphTest(pending["publications"][size_t(0)].getStr("status")=="incomplete_or_active","wrong pending status");
-        intent.finish();
+        fs::create_directories(root/"content"/"textures");
+        const auto file=root/"content"/"textures"/"fixture_color.png";
+        {std::ofstream out(file,std::ios::binary);out<<"abc";}
+        Json files=Json::array(),record=Json::object();record.set("file",Json::string("payload"));
+        record.set("sha256",Json::string("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"));files.push(record);intent.evidence(files);
+        requireGraphTest(call("texture_graph_publications_get",Json::object())["publications"][size_t(0)].getStr("status")=="destination_matches_evidence","hash verification failed");
+        {std::ofstream out(file,std::ios::binary|std::ios::trunc);out<<"changed";}
+        requireGraphTest(call("texture_graph_publications_get",Json::object())["publications"][size_t(0)].getStr("status")=="destination_evidence_mismatch","changed bytes accepted");
+        fs::remove(file);intent.finish();
         requireGraphTest(call("texture_graph_publications_get",Json::object())["publications"].size()==0,"completed intent retained");
     }
     {

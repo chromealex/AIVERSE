@@ -1,6 +1,8 @@
 #pragma once
 // Owner-side publication intent. Inspection never mutates or removes assets.
 #include "engine/data/Json.h"
+#include "PublicationIntegrity.h"
+#include <set>
 #include "engine/render/graph/TextureGraph.h"
 #include <filesystem>
 #include <fstream>
@@ -32,6 +34,12 @@ public:
             fs::rename(dir_/"intent.tmp",dir_/"intent.json");
         }catch(...){finish();throw;}
     }
+    void evidence(const Json& files){
+        namespace fs=std::filesystem;
+        std::ofstream stream(dir_/"files.tmp",std::ios::binary);stream<<files.dump(2)<<"\n";stream.close();
+        if(!stream)throw std::runtime_error("Cannot write publication evidence");
+        fs::rename(dir_/"files.tmp",dir_/"files.json");
+    }
     void finish() noexcept {std::error_code ec;std::filesystem::remove_all(dir_,ec);}
     static Json inspect(const Path& project){
         namespace fs=std::filesystem;
@@ -55,6 +63,23 @@ public:
                     row.set("destination",Json::string(dest.lexically_relative(project).generic_string()));
                     row.set("stagePresent",Json::fromBool(fs::exists(stage)||fs::is_symlink(stage)));
                     row.set("status",Json::string(published?"destination_present_unverified":"incomplete_or_active"));
+                    const auto evidence=entry.path()/"files.json";
+                    if(published&&!fs::is_symlink(evidence)&&fs::is_regular_file(evidence)&&fs::file_size(evidence)<=16384){
+                        const auto expected=Json::parseFile(evidence.string());
+                        bool valid=expected.isArray()&&expected.size()>0&&expected.size()<=10;
+                        std::set<std::string> seen;
+                        if(valid)for(const auto& item:expected.items()){
+                            const auto fileName=item.getStr("file"),digest=item.getStr("sha256");
+                            bool allowed=!set?fileName=="payload":fileName=="texture-set.json";
+                            if(set&&!allowed&&fileName.size()>4&&fileName.ends_with(".png"))
+                                allowed=validOutput(fileName.substr(0,fileName.size()-4));
+                            if(!allowed||!seen.insert(fileName).second||digest.size()!=64){valid=false;break;}
+                            try{if(publicationFileSha256(set?dest/fileName:dest)!=digest)valid=false;}catch(...){valid=false;}
+                        }
+                        if(set&&(!seen.count("texture-set.json")||seen.size()<2))valid=false;
+                        if(!set&&seen.size()!=1)valid=false;
+                        row.set("status",Json::string(valid?"destination_matches_evidence":"destination_evidence_mismatch"));
+                    }
                 }
             }catch(...){}
             rows.push(std::move(row));

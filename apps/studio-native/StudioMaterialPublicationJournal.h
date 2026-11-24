@@ -5,6 +5,7 @@
 #include "apps/studio-native/StudioContentDirectory.h"
 #include "apps/studio-native/StudioMaterialValidation.h"
 #include "engine/data/Json.h"
+#include "apps/editor/core/PublicationIntegrity.h"
 #include <fstream>
 #include <filesystem>
 #include <stdexcept>
@@ -73,7 +74,13 @@ public:
                     }catch(...){}
                     Json check=Json::object();check.set("path",Json::string(rel));
                     check.set("present",Json::fromBool(present));check.set("metadataPresent",Json::fromBool(metaPresent));
-                    check.set("guidMatches",Json::fromBool(guidMatches));checks.push(std::move(check));
+                    check.set("guidMatches",Json::fromBool(guidMatches));
+                    const auto digest=asset.getStr("sha256");
+                    if(digest.size()==64){
+                        bool matches=false;if(present)try{matches=editor::publicationFileSha256(physical)==digest;}catch(...){}
+                        check.set("hashMatches",Json::fromBool(matches));
+                    }
+                    checks.push(std::move(check));
                 }
             }
             row.set("assets",std::move(checks));rows.push(std::move(row));
