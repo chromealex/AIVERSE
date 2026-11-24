@@ -7,9 +7,10 @@ import {projectBuildingInspection} from './buildingGraphInspection';
 interface Props {
  recipe:unknown;inspection:unknown;
  onSelectFeature?:(index:number)=>void;
+ onRoute?:(query:import('./buildingRoomTopology').BuildingRouteQuery)=>Promise<unknown>;
 }
 // Owner panel passes its exact request and native inspect response together.
-export function BuildingStructureGraphView({recipe,inspection,onSelectFeature}:Props){
+export function BuildingStructureGraphView({recipe,inspection,onSelectFeature,onRoute}:Props){
  const result=useMemo(()=>{
   try{return {data:projectBuildingInspection(recipe,inspection),error:''};}
   catch(e){return {data:null,error:e instanceof Error?e.message:String(e)};}
@@ -33,7 +34,7 @@ export function BuildingStructureGraphView({recipe,inspection,onSelectFeature}:P
   </div>}
   {feature!==null&&onSelectFeature&&<StudioButton size="sm" onClick={()=>onSelectFeature(feature)}>Select source feature</StudioButton>}
   <StudioAlert>Recipe links represent socket provenance, not live navigation. Material bindings are authored references, not resolved by native inspection.</StudioAlert>
-  {data.topology?<BuildingRoomTopologyView data={data.topology} onSelectSocket={onSelectFeature?(id=>{const s=data.sockets.find(item=>item.id===id);if(s)onSelectFeature(s.featureIndex)}):undefined}/>:data.mode==='features'&&<StudioAlert>Room topology unavailable in this owner report (legacy count-only response).</StudioAlert>}
+  {data.topology?<BuildingRoomTopologyView data={data.topology} onRoute={onRoute} onSelectSocket={onSelectFeature?(id=>{const s=data.sockets.find(item=>item.id===id);if(s)onSelectFeature(s.featureIndex)}):undefined}/>:data.mode==='features'&&<StudioAlert>Room topology unavailable in this owner report (legacy count-only response).</StudioAlert>}
  </StudioSection>;
 }
 
