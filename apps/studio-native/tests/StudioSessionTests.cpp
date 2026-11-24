@@ -48,6 +48,18 @@ void projectFileRecoveryWorkflow() {
         publication.finish();
         AIVERSE_TEST_CHECK(studio::StudioMaterialPublicationJournal::inspect(project).size()==0);
     }
+    {
+        studio::StudioMaterialPublicationJournal publication(project,"isolated",true);
+        fs::create_directory(publication.stage());
+        std::ofstream(publication.stage()/"base-color.png")<<"staged";
+        const auto slot=studio::StudioMaterialPublicationJournal::quarantineIsolated(project,"isolated");
+        AIVERSE_TEST_CHECK(fs::is_regular_file(project/".aiverse-cache"/"material-publications-quarantine"/slot/"journal"/"stage"/"base-color.png"));
+        AIVERSE_TEST_CHECK(!fs::exists(publication.stage()));
+        studio::StudioMaterialPublicationJournal exposed(project,"exposed",true);
+        exposed.beginExposure();
+        bool rejected=false;try{(void)studio::StudioMaterialPublicationJournal::quarantineIsolated(project,"exposed");}catch(...){rejected=true;}
+        AIVERSE_TEST_CHECK(rejected);exposed.finish();
+    }
     std::ofstream(project/"game.json") << R"({"name":"Recovery fixture","module":"game","rules":"rules.json"})";
     std::ofstream(project/"rules.json") << R"({"types":{"unit":{"health":{"max":100}}}})";
     std::ofstream(project/"Fixture.aiverse") << R"({"format":1,"name":"Recovery fixture","manifest":"game.json"})";

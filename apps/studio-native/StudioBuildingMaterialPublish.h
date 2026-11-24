@@ -44,11 +44,11 @@ inline Json studioBuildingPublishMaterial(const std::filesystem::path& engine,
     if(!fs::exists(state))fs::create_directory(parent);
     const auto folder=parent/name;
     // Exclusive reservation; no overwriting a previous asset or following a link.
-    StudioMaterialPublicationJournal journal(project,name);
-    if(!fs::create_directory(folder)) {
-        journal.finish();
+    if(fs::exists(folder)||fs::is_symlink(folder)||fs::exists(studioMetaPath(folder))||fs::is_symlink(studioMetaPath(folder)))
         throw std::runtime_error("Material asset folder already exists; choose another name");
-    }
+    StudioMaterialPublicationJournal journal(project,name,true);
+    const auto stage=journal.stage();
+    if(!fs::create_directory(stage))throw std::runtime_error("Material staging busy");
     try{
         StudioAssetCatalog catalog(project);
         catalog.rebuild();
@@ -80,12 +80,17 @@ inline Json studioBuildingPublishMaterial(const std::filesystem::path& engine,
             const auto pixels=generateBuildingSurface(source.surfacePattern,source.id,source.surfaceSeed,
                 kBuildingSurfaceChannels[i],resolution);
             const auto bytes=building::encodeBuildingPngRgba(pixels.rgba,pixels.width,pixels.height);
-            std::ofstream stream(folder/filenames[i],std::ios::binary);
+            std::ofstream stream(stage/filenames[i],std::ios::binary);
             if(!stream||!stream.write(reinterpret_cast<const char*>(bytes.data()),std::streamsize(bytes.size())))
                 throw std::runtime_error("Cannot write generated texture");
             stream.close();
             if(!stream)throw std::runtime_error("Cannot finish generated texture");
         }
+        // Once exposure starts, failures retain all evidence and content.
+        if(fs::exists(folder)||fs::is_symlink(folder)||fs::exists(studioMetaPath(folder))||fs::is_symlink(studioMetaPath(folder)))
+            throw std::runtime_error("Material destination appeared");
+        journal.beginExposure();
+        fs::rename(stage,folder);
         catalog.rebuild();
         for(size_t i=0;i<kBuildingSurfaceChannels.size();++i){
             if(!guids[i].empty())continue;
@@ -111,12 +116,8 @@ inline Json studioBuildingPublishMaterial(const std::filesystem::path& engine,
         journal.finish();
         return result;
     }catch(...){
-        // Only our exclusively reserved folder and its catalog sidecar.
-        ec.clear();fs::remove_all(folder,ec);
-        ec.clear();fs::remove(studioMetaPath(folder),ec);
-        try{StudioAssetCatalog repair(project);repair.rebuild();}catch(...){}
-        // Keep the journal when cleanup cannot be established.
-        if(!fs::exists(folder)&&!fs::exists(studioMetaPath(folder)))journal.finish();
+        // Do not erase a folder after an ambiguous material commit or expose
+        // partial assets by cleanup. Pending journal remains available.
         throw;
     }
 }

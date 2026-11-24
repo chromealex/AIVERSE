@@ -26,13 +26,46 @@ class StudioMaterialPublicationJournal {
         return journals;
     }
 public:
-    StudioMaterialPublicationJournal(const std::filesystem::path& project,const std::string& name) {
+    StudioMaterialPublicationJournal(const std::filesystem::path& project,const std::string& name,bool isolated=false) {
         namespace fs=std::filesystem;
         if(!validStudioMaterialName(name))throw std::runtime_error("Invalid publication journal name");
         const auto parent=root(project);fs::create_directories(parent);dir_=parent/name;
         if(!fs::create_directory(dir_))throw std::runtime_error("Publication already pending; inspect recovery journal");
-        try { write("intent.json",Json::parse(R"({"version":1,"kind":"building-material"})")); }
+        try { Json intent=Json::parse(R"({"version":1,"kind":"building-material"})");if(isolated)intent.set("version",Json::number(int64_t(2)));write("intent.json",intent); }
         catch(...) { finish();throw; }
+    }
+    std::filesystem::path stage() const {return dir_/"stage";}
+    void beginExposure(){write("exposure.json",Json::parse(R"({"started":true})"));}
+    static std::string quarantineIsolated(const std::filesystem::path& project,const std::string& name){
+        namespace fs=std::filesystem;
+        editor::ProjectAssetWriteLock lock(project);
+        if(!validStudioMaterialName(name))throw std::runtime_error("Invalid material publication identity");
+        const auto active=root(project)/name,intent=active/"intent.json",exposure=active/"exposure.json";
+        if(fs::is_symlink(active)||!fs::is_directory(active)||fs::is_symlink(intent)||!fs::is_regular_file(intent)||fs::file_size(intent)>4096)
+            throw std::runtime_error("Invalid material publication journal");
+        const auto doc=Json::parseFile(intent.string());
+        if(doc.getInt("version")!=2||doc.getStr("kind")!="building-material"||fs::exists(exposure)||fs::is_symlink(exposure))
+            throw std::runtime_error("Publication may have exposed assets; manual review required");
+        const auto content=project/"content",parent=content/"GeneratedBuildingMaterials",dest=parent/name;
+        if(fs::is_symlink(content)||fs::is_symlink(parent)||fs::exists(dest)||fs::is_symlink(dest)||fs::exists(studioMetaPath(dest))||fs::is_symlink(studioMetaPath(dest)))
+            throw std::runtime_error("Material content destination already exists");
+        const auto library=project/"materials.json";
+        if(fs::is_symlink(library))throw std::runtime_error("Unsafe material library");
+        if(fs::exists(library)){
+            if(!fs::is_regular_file(library)||fs::file_size(library)>16*1024*1024)throw std::runtime_error("Invalid material library");
+            const auto materials=Json::parseFile(library.string())["materials"];
+            if(!materials.isObject()||materials.has(name))throw std::runtime_error("Material already exists or library invalid");
+        }
+        const auto archive=root(project).parent_path()/"material-publications-quarantine";
+        if(fs::is_symlink(archive))throw std::runtime_error("Unsafe material quarantine");
+        fs::create_directories(archive);
+        for(unsigned i=0;i<10000;++i){
+            const auto slot=archive/(name+"-"+std::to_string(i));
+            if(!fs::create_directory(slot))continue;
+            try{fs::rename(active,slot/"journal");return slot.filename().string();}
+            catch(...){std::error_code ec;fs::remove(slot,ec);throw;}
+        }
+        throw std::runtime_error("Material quarantine exhausted");
     }
     void candidate(const Json& material) { write("candidate.json",material); }
     void assets(const Json& entries) { write("assets.json",entries); }
