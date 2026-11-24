@@ -1686,6 +1686,16 @@ void GameCore::hashState(Simulation& sim, Hasher& h) {
         if (auto* cp = w.tryGet<Capture>(e)) { h.fx(cp->progress); h.u32(cp->team); }
         if (mechOn(sim)) hashMech(sim, h, e);
     });
+    if (!rules_.modifierGroups.empty()) {
+        h.u32(0x47525031u);
+        w.each<Buffs>([&](Entity e, Buffs& buffs) {
+            h.u64(e.packed()); h.u32(uint32_t(buffs.list.size())); h.u32(buffs.stunUntil);
+            for (const auto& bf : buffs.list) {
+                h.u32(uint32_t(bf.stat)); h.fx(bf.add); h.fx(bf.mul);
+                h.u32(bf.until); h.u32(bf.sourceType); h.u32(bf.stackingGroup);
+            }
+        });
+    }
     if (mechOn(sim)) hashMechGlobal(sim, h);
     h.u32(uint32_t(w.count<Projectile>()));
     w.each<Projectile, Transform>([&](Entity e, Projectile&, Transform& t) { h.u64(e.packed()); h.v3(t.pos); });
