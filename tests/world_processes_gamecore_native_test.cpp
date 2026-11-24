@@ -1,6 +1,7 @@
 // Actual GameCore map fixture proving native module ECS hydration via mapPlaced().
 #include "aiverselib/world/WorldProcessesNativeModule.h"
 #include "aiverselib/world/WorldProcessGravity.h"
+#include "aiverselib/world/EvolveSurfaceEcology.h"
 #include <array>
 #include "engine/data/JsonCompose.h"
 #include "tests/AlwaysCheck.h"
@@ -213,10 +214,60 @@ static void checkPlanetCrowdSlots(){
         [&](Entity e){return e!=a;},pass);
     AIVERSE_TEST_CHECK(excluded&&excluded->intents.size()==2&&excluded->intents[0].agent==b);
 }
+static void checkPlanetEvolveRegions(){
+    game::Surface surface;
+    game::BodyDef planet;planet.id="terra";planet.faceSize=8;planet.radius=Fixed::fromInt(64);
+    surface.bodies.push_back(planet);planet.id="moon";surface.bodies.push_back(planet);
+    surface.build();
+    const int start=surface.gridCell(0,0,7,3),seam=surface.neighbor(start,0);
+    AIVERSE_TEST_CHECK(seam>=0);
+    int body=0,face=0,x=0,y=0;
+    AIVERSE_TEST_CHECK(surface.cellFace(seam,body,face,x,y)&&body==0&&face!=0);
+    const auto origin=surface.cellCenter(start);
+    const auto neighbor=surface.cellCenter(seam);
+    const auto moon=surface.cellCenter(surface.gridCell(1,face,x,y));
+    World ecs;
+    const auto first=ecs.create(),second=ecs.create(),remote=ecs.create();
+    evolve::Region r{};r.fertility=300000000;r.pollution=400000000;
+    ecs.add<evolve::Region>(first,r);
+    r.fertility=100000000;ecs.add<evolve::Region>(second,r);
+    r.fertility=50000000;ecs.add<evolve::Region>(remote,r);
+    evolve::Area local{0,0,3000,3000,true};
+    AIVERSE_TEST_CHECK(evolve::setSurfaceArea(ecs,surface,first,origin,local));
+    AIVERSE_TEST_CHECK(evolve::setSurfaceArea(ecs,surface,second,neighbor,local));
+    AIVERSE_TEST_CHECK(evolve::setSurfaceArea(ecs,surface,remote,moon,local));
+    AIVERSE_TEST_CHECK(!ecs.has<evolve::Area>(first));
+    evolve::SurfaceRegionIndex index;
+    AIVERSE_TEST_CHECK(index.build(ecs,surface));
+    std::vector<Entity> ids;
+    index.query(ecs,surface,neighbor,[&](Entity e,const evolve::Region&){ids.push_back(e);});
+    AIVERSE_TEST_CHECK((ids==std::vector<Entity>{first,second}));
+    ids.clear();
+    index.query(ecs,surface,moon,[&](Entity e,const evolve::Region&){ids.push_back(e);});
+    AIVERSE_TEST_CHECK((ids==std::vector<Entity>{remote}));
+    terraweave::ForestEcologyClimate baseline{};
+    baseline.sunPermille=900;baseline.nutrientsPermille=800;
+    const auto climate=evolve::sampleSurfaceEcology(ecs,surface,index,neighbor,baseline);
+    AIVERSE_TEST_CHECK(climate.nutrientsPermille==100&&climate.sunPermille==800);
+    AIVERSE_TEST_CHECK(climate.waterPermille==baseline.waterPermille);
+    ecs.get<evolve::Region>(second).enabled=false;
+    AIVERSE_TEST_CHECK(evolve::sampleSurfaceEcology(ecs,surface,index,neighbor,baseline).nutrientsPermille==300);
+    // Bounds are snapshotted; rebuild after structural edits/rollback.
+    ecs.enableCowSnapshots();const World before=ecs;
+    ecs.get<evolve::SurfaceArea>(first).local.enabled=false;
+    AIVERSE_TEST_CHECK(index.build(ecs,surface));
+    AIVERSE_TEST_CHECK(evolve::sampleSurfaceEcology(ecs,surface,index,neighbor,baseline).nutrientsPermille==800);
+    ecs=before;AIVERSE_TEST_CHECK(index.build(ecs,surface));
+    AIVERSE_TEST_CHECK(evolve::sampleSurfaceEcology(ecs,surface,index,neighbor,baseline).nutrientsPermille==300);
+    auto f=wp::surfaceFrame(&surface,origin);AIVERSE_TEST_CHECK(f);
+    const auto zero=evolve::surfaceRegionOffset(surface,*f,*f);
+    AIVERSE_TEST_CHECK(zero&&zero->x.raw==0&&zero->y.raw==0);
+}
 int main(){
     checkPlanetGravity();
     checkPlanetImprint();
     checkPlanetCrowdSlots();
+    checkPlanetEvolveRegions();
     const Json map=mapWithProcesses();
     auto sim=make(map,true),peer=make(map,true);
     auto zone=placed(*sim,1),gas=placed(*sim,2);
