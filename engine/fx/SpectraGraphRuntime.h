@@ -119,6 +119,7 @@ public:
     void setView(const Camera& camera,const render::mat4& projection,int width,int height) {
         return setView(fx::SpectraFxView::fromCamera(camera,projection,width,height));
     }
+    bool stepWithVolume(float dt,volume::GpuGasGrid& gas,float drag,render::float3 deposit);
     bool step(float dt); // between beginFrame/endFrame, before scene render pass
     void draw(const fx::FxFog& fog = {}); // during still-open render pass
     void clear();

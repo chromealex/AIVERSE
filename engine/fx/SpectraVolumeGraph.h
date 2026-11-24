@@ -21,11 +21,18 @@ inline bool hasVolume(const Json& graph){
     for(const auto& n:graph["nodes"].items())if(stage(n.getStr("type"))>=0)return true;
     return false;
 }
+struct ParticleVolumeCoupling {
+    float drag=0;
+    float3 deposit{};
+    bool active()const{return drag>0||deposit.x>0||deposit.y>0||deposit.z>0;}
+    bool valid()const{return between(drag,0,100)&&bounded(deposit,100)&&deposit.x>=0&&deposit.y>=0&&deposit.z>=0;}
+};
 struct PresentationGraph {
     bool particles=false,volume=false;
     Json particleGraph;
     fx::EffectDef particleEffect;
     Asset volumeAsset;
+    ParticleVolumeCoupling coupling;
 };
 inline bool compilePresentationGraph(const Json& graph,const Json& overrides,PresentationGraph& output,
         std::vector<std::string>& errors,const fx::SdfResourceReader& reader={}){
@@ -91,8 +98,14 @@ inline bool compilePresentationGraph(const Json& graph,const Json& overrides,Pre
         const int kind=types.at(at);const auto& p=volumes.at(at)["properties"];
         if(kind!=1&&!uniqueStages.insert(kind).second)return fail("duplicate volume stage");
         if(kind==0){
-            if(!asset_detail::keys(p,{"dimension","origin","cellSize","gravity","wind","obstacle"}))return fail("invalid VolumeDomain properties");
-            for(const auto& [k,v]:p.members())if(k=="obstacle")asset.set(k,v);else simulation.set(k,v);
+            if(!asset_detail::keys(p,{"dimension","origin","cellSize","gravity","wind","obstacle","particleDrag","particleDeposit"}))return fail("invalid VolumeDomain properties");
+            if(!asset_detail::number(p,"particleDrag",next.coupling.drag)||
+               !asset_detail::vector(p,"particleDeposit",next.coupling.deposit)||!next.coupling.valid())
+                return fail("invalid particle volume coupling");
+            for(const auto& [k,v]:p.members()){
+                if(k=="obstacle")asset.set(k,v);
+                else if(k!="particleDrag"&&k!="particleDeposit")simulation.set(k,v);
+            }
         }else if(kind==1){
             Json source=p;
             const auto mode=p.getStr("mode","continuous");
@@ -136,6 +149,7 @@ inline bool compilePresentationGraph(const Json& graph,const Json& overrides,Pre
         if(!fx::compileSpectraGraph(next.particleGraph,overrides,next.particleEffect,errors,reader))return false;
         next.particles=true;
     }else{
+        if(next.coupling.active())return fail("particle volume coupling requires a particle branch");
         if(outputs.size()||links.size())return fail("invalid particle branch");
         for(const auto& [k,v]:graph.members()){
             if(k=="version"||k=="nodes"||k=="links"||k=="outputs"||k=="metadata"||k=="description")continue;

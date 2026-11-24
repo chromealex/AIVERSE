@@ -450,6 +450,15 @@ void GraphRuntime::setView(const fx::SpectraFxView& view) {
     if(useComputeWrapper_)gpu_.setView(view);
     else cpu_.setView(view);
 }
+bool GraphRuntime::stepWithVolume(float dt,volume::GpuGasGrid& gas,float drag,render::float3 deposit){
+    if(!initialized_||sharedWorld_||!useComputeWrapper_||!gpu_.gpuActive()){
+        reason_="Particle volume coupling requires dedicated GPU runtime";return false;
+    }
+    const bool success=gpu_.stepWithVolume(dt,gas,drag)&&gpu_.depositIntoVolume(gas,deposit,dt);
+    backend_=gpu_.backend();initialized_=gpu_.ready();
+    if(!success)reason_=gpu_.reason();else reason_.clear();
+    return success;
+}
 bool GraphRuntime::step(float dt) {
     if(!initialized_)return false;
     if(sharedWorld_)return true; // host calls sharedWorld_->update(dt) exactly once

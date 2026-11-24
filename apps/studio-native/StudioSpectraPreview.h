@@ -159,7 +159,7 @@ public:
             opts.gpuBirthRandom=input.getBool("gpuBirthRandom",false);
             opts.gpuMaterial=opts.gpuBirthRandom;
             opts.gpuProgram=true; // strict GPU VM eligibility, CPU twin otherwise
-            opts.preference=spectra::ComputePreference::Automatic;
+            opts.preference=checked.coupling.active()?spectra::ComputePreference::RequireGpu:spectra::ComputePreference::Automatic;
             if(checked.particles&&!candidate->initGraph(&device,checked.particleGraph,Json::object(),opts)) {
                 const std::string reason=candidate->reason().empty()?
                     "SpectraFX preview backend unavailable":candidate->reason();
@@ -180,6 +180,7 @@ public:
             runtime_.swap(candidate);
             candidate.reset();
             volumeGrid_=std::move(candidateVolume);
+            coupling_=checked.coupling;
             hasParticles_=checked.particles;volumeRendered_=false;
             authoredGraph_=graph;
             authoredGpuBirthRandom_=opts.gpuBirthRandom;
@@ -500,7 +501,7 @@ public:
         stepsPending_=0;
         for(uint32_t i=0;i<ticks;++i) {
             if(volumeGrid_&&!volumeGrid_->step()){playing_=false;phase_=0;error_=volumeGrid_->error();break;}
-            if(hasParticles_&&!runtime_->step(kStep)) {
+            if(hasParticles_&&!(coupling_.active()?runtime_->stepWithVolume(kStep,*volumeGrid_->grid(),coupling_.drag,coupling_.deposit):runtime_->step(kStep))) {
                 playing_=false;phase_=0;
                 ready_=bool(volumeGrid_)||runtime_->backend()==spectra::ComputeBackend::Cpu ||
                        runtime_->gpuActive();
@@ -605,6 +606,7 @@ public:
         result.set("error",Json::string(error_));
         result.set("gpu",Json::fromBool(ready_&&(runtime_->gpuActive()||bool(volumeGrid_))));
         result.set("volume",Json::fromBool(bool(volumeGrid_)));
+        result.set("volumeCoupling",Json::fromBool(coupling_.active()));
         result.set("hybrid",Json::fromBool(bool(volumeGrid_)&&hasParticles_));
         result.set("volumeRendered",Json::fromBool(volumeRendered_));
         result.set("volumeImpulse",Json::fromBool(volumeGrid_&&volumeGrid_->hasImpulse()));
@@ -624,7 +626,7 @@ public:
     }
     void stop(gfx::Device& device) {
         device.waitForResourceIdle();
-        volumeGrid_.reset();hasParticles_=true;volumeRendered_=false;
+        volumeGrid_.reset();coupling_={};hasParticles_=true;volumeRendered_=false;
         runtime_->shutdown();
         authoredGraph_=Json::object();authoredGpuBirthRandom_=false;authoredGpuOwnedAllocation_=false;
         checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;
@@ -664,6 +666,7 @@ private:
     bool authoredGpuBirthRandom_=false,authoredGpuOwnedAllocation_=false;
     std::unique_ptr<spectra::GraphRuntime> runtime_=std::make_unique<spectra::GraphRuntime>();
     std::unique_ptr<spectra::volume::VolumeInstance> volumeGrid_;
+    spectra::volume::ParticleVolumeCoupling coupling_;
     bool hasParticles_=true,volumeRendered_=false;
     std::map<std::string,float> requestedParameters_;
     bool ready_=false,playing_=false,pendingRestart_=false,restartBurstPending_=false;
