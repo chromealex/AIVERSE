@@ -155,10 +155,10 @@ function WorldPersistenceBody({projectPath}:{projectPath:string}) {
       }
       throw new Error('Panel closed; job retained for rediscovery');
     }catch(e){
-      if(id&&alive.current){
+      if(alive.current){
         // Do not resubmit on an ambiguous RPC failure. Rediscover retained slot.
         setDetached(true);
-        try{setJobState(await jobOp<StudioWorldJob>('world_job_status',{id},projectPath));}catch{}
+        try{const existing=await jobOp<StudioWorldJob>('world_job_status',id?{id}:{},projectPath);setJobState(existing.state==='idle'?null:existing);}catch{}
       }
       throw e;
     }
