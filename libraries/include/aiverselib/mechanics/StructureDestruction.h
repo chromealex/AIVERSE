@@ -47,15 +47,28 @@ inline bool touching(const world::Bounds& a,const world::Bounds& b,Fixed tol){
 inline Fixed boxDistance(const world::Bounds& b,Vec3 p){Vec3 q{fxClamp(p.x,b.min.x,b.max.x),fxClamp(p.y,b.min.y,b.max.y),fxClamp(p.z,b.min.z,b.max.z)};return (q-p).length();}
 inline void grow(std::optional<world::Bounds>& d,const world::Bounds& b){if(!d){d=b;return;}
     d->min={fxMin(d->min.x,b.min.x),fxMin(d->min.y,b.min.y),fxMin(d->min.z,b.min.z)};d->max={fxMax(d->max.x,b.max.x),fxMax(d->max.y,b.max.y),fxMax(d->max.z,b.max.z)};}
-// Pieces connected (through face contacts) to an anchored piece.
-inline std::set<int64_t> supportedPieces(const StructureState& s,Fixed tol){
-    std::set<int64_t> seen;std::vector<int64_t> stack;for(auto& [id,p]:s.pieces)if(p.anchored){seen.insert(id);stack.push_back(id);}
-    while(!stack.empty()){auto id=stack.back();stack.pop_back();const auto& a=s.pieces.at(id).box;
-        for(auto& [oid,o]:s.pieces)if(!seen.contains(oid)&&touching(a,o.box,tol)){seen.insert(oid);stack.push_back(oid);}}
+// Generic support traversal: a terminal piece can be supported without
+// transmitting support. Contact and load-bearing classification belong to
+// the caller; the original all-pieces policy remains the default.
+template<class Transmits,class Contact>
+inline std::set<int64_t> supportedPieces(const StructureState& s,Fixed tol,Transmits transmits,Contact contact){
+    std::set<int64_t> seen;std::vector<int64_t> stack;
+    for(const auto& [id,p]:s.pieces)if(p.anchored&&transmits(p)){seen.insert(id);stack.push_back(id);}
+    while(!stack.empty()){
+        const auto id=stack.back();stack.pop_back();const auto& a=s.pieces.at(id);
+        for(const auto& [oid,o]:s.pieces)if(!seen.contains(oid)&&contact(a,o,tol)){
+            seen.insert(oid);if(transmits(o))stack.push_back(oid);
+        }
+    }
     return seen;
 }
+inline std::set<int64_t> supportedPieces(const StructureState& s,Fixed tol){
+    return supportedPieces(s,tol,[](const StructurePiece&){return true;},
+        [](const StructurePiece& a,const StructurePiece& b,Fixed t){return touching(a.box,b.box,t);});
+}
 
-inline std::optional<StructureReport> stepStructure(const StructureConfig& c,StructureState& state,uint32_t tick,Fixed dt,std::span<const StructureDamage> damage){
+template<class Support>
+inline std::optional<StructureReport> stepStructureWithSupport(const StructureConfig& c,StructureState& state,uint32_t tick,Fixed dt,std::span<const StructureDamage> damage,Support support){
     if(!valid(c)||!policyDtOk(dt)||!policyTickOk(state.initialized,state.lastTick,tick)||!valid(state)||damage.size()>kPolicyMaxCommands)return std::nullopt;
     std::vector<StructureDamage> hits(damage.begin(),damage.end());std::sort(hits.begin(),hits.end(),[](auto& a,auto& b){return a.id<b.id;});
     for(std::size_t i=0;i<hits.size();++i)if(hits[i].id<=0||(i&&hits[i].id==hits[i-1].id)||hits[i].amount<0||hits[i].radius<=Fixed{}||!policyBounded(hits[i].center)||!policyBounded(hits[i].impulse,kPolicyMaxSpeed))return std::nullopt;
@@ -88,7 +101,7 @@ inline std::optional<StructureReport> stepStructure(const StructureConfig& c,Str
             if(p.health<=0)removePiece(id,StructureEventKind::Destroyed,h.impulse);
         }
     }
-    if(c.collapseUnsupported&&!r.removed.empty()){auto keep=supportedPieces(s,c.contactTolerance);std::vector<int64_t> fall;for(auto& [id,p]:s.pieces)if(!keep.contains(id))fall.push_back(id);
+    if(c.collapseUnsupported&&!r.removed.empty()){auto keep=support(s,c.contactTolerance,r);std::vector<int64_t> fall;for(auto& [id,p]:s.pieces)if(!keep.contains(id))fall.push_back(id);
         for(auto id:fall)removePiece(id,StructureEventKind::Collapsed,{});}
     // Debris: gravity, ground contact with bounce, rest and lifetime.
     std::vector<int64_t> expired;
@@ -101,6 +114,9 @@ inline std::optional<StructureReport> stepStructure(const StructureConfig& c,Str
     }
     for(auto id:expired){r.events.push_back({StructureEventKind::DebrisExpired,s.debris.at(id).piece,id});s.debris.erase(id);}
     state=std::move(s);return r;
+}
+inline std::optional<StructureReport> stepStructure(const StructureConfig& c,StructureState& state,uint32_t tick,Fixed dt,std::span<const StructureDamage> damage){
+    return stepStructureWithSupport(c,state,tick,dt,damage,[](const StructureState& s,Fixed tol,const StructureReport&){return supportedPieces(s,tol);});
 }
 inline void io(Archive& a,StructurePiece& p){a(p.id,p.box.min,p.box.max,p.health,p.armor,p.anchored,p.fractureX,p.fractureY,p.fractureZ,p.fractureThreshold);}
 inline void io(Archive& a,DebrisBody& d){a(d.id,d.piece,d.box.min,d.box.max,d.velocity,d.spawnTick,d.resting);}

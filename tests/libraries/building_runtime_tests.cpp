@@ -86,7 +86,7 @@ int main(int argc,char** argv) {
         RuntimeBuildingRequest damageRequest;damageRequest.style="scifi";
         damageRequest.composeFeatures=true;damageRequest.size={16,8,12};
         const auto initial=generator.generate(damageRequest);CHECK(initial);
-        auto damage=aiverse::building::beginBuildingDestruction(initial.structureGraph);
+        auto damage=aiverse::building::beginBuildingDestruction(initial.structureGraph,nullptr,aiverse::building::BuildingSupportMode::DamageOnly);
         CHECK(damage&&damage->structure.pieces.size()==initial.structureGraph.solids.size());
         const auto previous=damage->structure.pieces.size();
         aiverse::lib::mechanics::StructureDamage hit;
@@ -104,6 +104,34 @@ int main(int argc,char** argv) {
         CHECK(!aiverse::building::stageBuildingDestruction(restored,1,Fixed::fromRatio(1,60),{}));
         CHECK(aiverse::building::commitBuildingDestruction(*damage,*frame));
         CHECK(!aiverse::building::commitBuildingDestruction(*damage,*frame));
+        // A minimal supported stack: roof and upper wall fall when the
+        // only load-bearing wall is removed; terminal glass cannot bridge.
+        using namespace aiverse::building;
+        using Part=BuildingGraphPart;
+        BuildingStructureGraph stack;
+        stack.solids={{Part::Floor,0,0,0,8,.24f,8},
+            {Part::Wall,1,.24f,1,1.36f,3,5},
+            {Part::Roof,1,3,1,5,3.28f,5},
+            {Part::Wall,3,3.28f,2,3.36f,6,4},
+            {Part::WindowPane,1.5f,.24f,1,1.55f,3,5}};
+        auto supported=beginBuildingDestruction(stack);CHECK(supported);
+        CHECK(buildingSupportedPieces(supported->structure,supported->sources).size()==5);
+        aiverse::lib::mechanics::StructureDamage cut;
+        cut.id=1;cut.center={Fixed::fromRatio(118,100),Fixed::fromRatio(16,10),Fixed::fromRatio(3,1)};
+        cut.radius=Fixed::fromRatio(2,1);cut.amount=10000;
+        auto collapse=stageBuildingDestruction(*supported,1,Fixed::fromRatio(1,60),std::span<const aiverse::lib::mechanics::StructureDamage>(&cut,1));
+        CHECK(collapse);
+        CHECK(std::any_of(collapse->events.begin(),collapse->events.end(),[](const auto& e){
+            return e.kind==aiverse::lib::mechanics::StructureEventKind::Collapsed&&e.piece==4;
+        }));
+        CHECK(!collapse->next.structure.pieces.contains(4));
+        CHECK(buildingSupportedPieces(collapse->next.structure,collapse->next.sources).size()==collapse->next.structure.pieces.size());
+        BuildingStructureGraph glassBridge;
+        glassBridge.solids={{Part::Floor,0,0,0,4,.24f,4},
+            {Part::WindowPane,1,.24f,1,1.05f,3,3},
+            {Part::Roof,1,3,1,3,3.28f,3}};
+        CHECK(!beginBuildingDestruction(glassBridge));
+        CHECK(beginBuildingDestruction(glassBridge,nullptr,BuildingSupportMode::DamageOnly));
         generator.clear();
         CHECK(generator.styleCount()==0);
         CHECK(generator.generate(sized).error==RuntimeBuildingError::UnknownStyle);
