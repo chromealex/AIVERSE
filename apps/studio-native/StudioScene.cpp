@@ -575,7 +575,9 @@ void StudioScene::syncDocumentModels(
 StudioScene::~StudioScene() {
     if (device_) {
         device_->waitForResourceIdle();
-        if(!cavernsPreview_.close(*device_))cavernsPreview_.quarantineOnFailedTeardown();
+        try {
+            if(!cavernsPreview_.close(*device_))cavernsPreview_.quarantineOnFailedTeardown();
+        }catch(...) {cavernsPreview_.quarantineOnFailedTeardown();}
         clearDocumentModels();
         lightingRuntime_.shutdown(*device_,renderer_);
         if(lightingModel_) {
