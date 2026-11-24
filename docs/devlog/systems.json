@@ -62,6 +62,14 @@
     {
      "status": "in-progress",
      "target": null,
+     "title": "Планетарный лес: Studio и Inspector",
+     "titleEn": "Planetary forest: Studio and Inspector",
+     "text": "Stage 161A: редактирование карты, общий валидатор профилей и экологии, выбор существующих маркеров, диагностика живого ECS.",
+     "textEn": "Stage 161A: map authoring, shared profile/ecology validation, existing marker selection, live ECS diagnostics."
+    },
+    {
+     "status": "in-progress",
+     "target": null,
      "title": "Планетарный лес: статические коллайдеры и завершение падений",
      "titleEn": "Planetary forest: static collision and pending fall lifecycle",
      "text": "Stage 160: обновление коллайдеров роста, переход к динамическому телу, завершение истраченных событий.",
