@@ -80,7 +80,7 @@ bool ActorHost::reportRegionMoveIfCrossed(Simulation& sim,Entity entity) {
 
 std::vector<uint32_t> ActorHost::portableDerivedResourceTypes(){
     return {aiverse::detail::componentTypeId<RegionIdentityIndex>(),aiverse::detail::componentTypeId<RegionSeatIndex>(),
-        aiverse::detail::componentTypeId<world::RegionOwnershipDiagnostics>(),aiverse::detail::componentTypeId<CharacterIndex>()};
+        aiverse::detail::componentTypeId<world::RegionOwnershipDiagnostics>(),aiverse::detail::componentTypeId<world::SimulationLodDiagnostics>(),aiverse::detail::componentTypeId<CharacterIndex>()};
 }
 
 void ActorHost::invalidateRegionOwnershipCaches(Simulation& sim) {
@@ -92,6 +92,7 @@ void ActorHost::invalidateRegionOwnershipCaches(Simulation& sim) {
     ecs.eraseResource<RegionSeatIndex>();
     ecs.eraseResource<RegionIdentityIndex>();
     ecs.eraseResource<world::RegionOwnershipDiagnostics>();
+    ecs.eraseResource<world::SimulationLodDiagnostics>();
     ecs.resetComponentChanges<CharacterBody>();
     ecs.resetComponentChanges<Vehicle>();
     ecs.resetComponentChanges<Loot>();
