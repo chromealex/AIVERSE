@@ -96,8 +96,54 @@ bool Server::enablePersistence(const std::filesystem::path& directory,const std:
     }catch(...){}
     persistenceFailed_=true;return false;
 }
+Server::RecoveryStatus Server::beginPersistenceRecovery(const std::filesystem::path& directory,
+    const std::array<uint8_t,16>& uuid,size_t budget,bool async){
+    if(persistence_||persistenceFailed_||!persistenceSupported_||simulation_.tick()!=0||!peers_.empty())return RecoveryStatus::Busy;
+    try{
+        persistence_=std::make_unique<actor::ActorPersistentSession>(simulation_,module(),
+            "aiverse.actor.portable.v1:"+std::to_string(content_),budget);
+        const auto result=persistence_->beginRecovery(directory,uuid,async);
+        if(result==actor::ActorPersistentSession::RecoveryResult::Loading){
+            recoveringPersistence_=true;return RecoveryStatus::Loading;
+        }
+        persistenceFailed_=true;
+        return result==actor::ActorPersistentSession::RecoveryResult::Busy?RecoveryStatus::Busy:RecoveryStatus::Failed;
+    }catch(...){persistenceFailed_=true;return RecoveryStatus::Failed;}
+}
+Server::RecoveryStatus Server::pollPersistenceRecovery(){
+    if(!recoveringPersistence_)return RecoveryStatus::Idle;
+    try{
+        const auto result=persistence_->pollRecovery();
+        using R=actor::ActorPersistentSession::RecoveryResult;
+        if(result==R::Loading)return RecoveryStatus::Loading;
+        recoveringPersistence_=false;
+        if(result==R::Ready)return RecoveryStatus::Ready;
+        persistenceFailed_=true;
+        return result==R::Cancelled?RecoveryStatus::Cancelled:RecoveryStatus::Failed;
+    }catch(...){recoveringPersistence_=false;persistenceFailed_=true;return RecoveryStatus::Failed;}
+}
+Server::RecoveryProgress Server::persistenceRecoveryProgress()const{
+    if(!persistence_)return {"idle"};
+    const auto p=persistence_->recoveryProgress();
+    using Phase=world::UnifiedWalSession::RecoveryPhase;
+    const char* phase="idle";
+    switch(p.phase){
+        case Phase::Checkpoint:phase="checkpoint";break;
+        case Phase::Replay:phase="wal";break;
+        case Phase::OpenWriter:phase="open-writer";break;
+        case Phase::AwaitingOwner:phase="awaiting-owner";break;
+        case Phase::Ready:phase="ready";break;
+        case Phase::Cancelled:phase="cancelled";break;
+        case Phase::Failed:phase="failed";break;
+        default:break;
+    }
+    return {phase,p.checkpointBytes,p.checkpointTotal,p.walBytes,p.frames,p.sequence};
+}
+void Server::cancelPersistenceRecovery(){
+    if(recoveringPersistence_)persistence_->cancelRecovery();
+}
 bool Server::checkpointWorld(){
-    if(!persistence_||persistenceFailed_||inputsStaged_)return false;
+    if(!persistence_||persistenceFailed_||recoveringPersistence_||inputsStaged_)return false;
     if(persistence_->checkpoint())return true;
     persistenceFailed_=true;
     for(auto& peer:peers_)peer.conn->close();
@@ -117,11 +163,11 @@ bool Server::pollWorldCheckpoint(){
 }
 bool Server::occupied(uint8_t slot) const {for(const auto& p:peers_)if(p.slot==slot&&p.conn->state()!=ConnState::Closed)return true;return false;}
 bool Server::attach(uint8_t slot,std::unique_ptr<Conn> conn) {
-    if(persistenceFailed_||(persistence_&&persistence_->tickPending())||!conn||slot==0||slot>module().characterCount(simulation_)||occupied(slot))return false;
+    if(persistenceFailed_||recoveringPersistence_||(persistence_&&persistence_->tickPending())||!conn||slot==0||slot>module().characterCount(simulation_)||occupied(slot))return false;
     Peer peer;peer.slot=slot;peer.conn=std::move(conn);peer.lastReceived=module().character(std::as_const(simulation_),slot).lastSequence;peers_.push_back(std::move(peer));return true;
 }
 void Server::poll(uint64_t now) {
-    if(persistenceFailed_)return;
+    if(persistenceFailed_||recoveringPersistence_)return;
     if(persistence_&&persistence_->tickPending()){
         for(auto& p:peers_)p.conn->update(now);
         return; // no gameplay reads or input acknowledgements from an uncommitted tick
@@ -157,7 +203,7 @@ void Server::poll(uint64_t now) {
     }else ++it;
 }
 bool Server::step() {
-    if(persistenceFailed_)return false;
+    if(persistenceFailed_||recoveringPersistence_)return false;
     if(!pollWorldCheckpoint())return false;
     const bool awaiting=persistence_&&persistence_->tickPending();
     if(!awaiting&&!module().readyToStep(simulation_))return false;
@@ -190,7 +236,7 @@ bool Server::step() {
     return true;
 }
 void Server::broadcast() {
-    if(persistenceFailed_||(persistence_&&(!publishingFinalized_||simulation_.tick()!=persistence_->finalizedTick())))return;
+    if(persistenceFailed_||recoveringPersistence_||(persistence_&&(!publishingFinalized_||simulation_.tick()!=persistence_->finalizedTick())))return;
     const auto actors=module().snapshots(simulation_);
     world::SpatialWorld index(64);
     const auto projectiles=module().projectiles(simulation_);const auto loot=module().loot(simulation_);const auto vehicles=module().vehicles(simulation_);
