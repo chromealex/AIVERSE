@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Building2, Dices, RefreshCw, WandSparkles } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../../bridge';
 import type {
@@ -13,10 +13,13 @@ import {
 } from '../../ui';
 import BuildingMaterialEditor from './BuildingMaterialEditor';
 import BuildingPlanPreview from './BuildingPlanPreview';
+import {BuildingStructureGraphView} from '../../graphs/BuildingStructureGraphView';
+import {BuildingCandidateGate,buildingDraftKey} from '../../graphs/buildingCandidateCapture';
+import type {BuildingCandidateTicket} from '../../graphs/buildingCandidateCapture';
 import type { MaterialLibrary } from '../materialSchema';
 import './BuildingGeneratorPanel.css';
 
-type Candidate = { seed:number; data?:StudioBuildingPreview; error?:string };
+type Candidate = { seed:number; batch:number; scope:string; recipe:StudioBuildingRequest; data?:StudioBuildingPreview; error?:string };
 const explain = (error:unknown) => error instanceof Error ? error.message : String(error);
 const settingLabel = (id:string) => ({
   'medieval-fantasy':'Medieval Fantasy',
@@ -88,6 +91,8 @@ export default function BuildingGeneratorPanel({
   const [readingRecipe,setReadingRecipe]=useState(false);
   const [livePreview,setLivePreview]=useState(false);
   const [previewBusy,setPreviewBusy]=useState(false);
+  const candidateGate=useRef(new BuildingCandidateGate<StudioBuildingRequest>());
+  const featureRoot=useRef<HTMLDivElement>(null);
 
   const regeneratedThisSession=useRef(new Set<string>());
   useEffect(()=>{
@@ -270,7 +275,29 @@ export default function BuildingGeneratorPanel({
     width:asNumber(width),height:asNumber(height),depth:asNumber(depth),seed:useSeed,
     floors:asNumber(floors),roomsX:asNumber(roomsX),roomsZ:asNumber(roomsZ)
   });
-  const clearGenerated=()=>{setVariants([]);setSelectedSeed(null);setSaved(null);setThumbnail('');setStatus('');};
+  // A seed is not a request identity. Include all authoring inputs and the project.
+  const draftKey=buildingDraftKey(snapshot?.project.path??'',request(asNumber(seed)));
+  const invalidateCandidates=useCallback(()=>{
+    if(candidateGate.current.invalidate())setBusy(false);
+    setVariants([]);setSelectedSeed(null);
+  },[]);
+  useLayoutEffect(()=>{invalidateCandidates();},[draftKey,invalidateCandidates]);
+  useEffect(()=>{
+    const off=onNativeEvent(event=>{
+      if(event==='workspace.changed'||event==='project.splash'||event==='project.loading')
+        invalidateCandidates();
+    });
+    return ()=>{off();candidateGate.current.invalidate();};
+  },[invalidateCandidates]);
+  const visibleVariants=variants.filter(item=>item.scope===draftKey);
+  const activeCandidate=visibleVariants.find(item=>item.seed===selectedSeed&&item.data);
+  const focusFeature=(index:number)=>{
+    if(!activeCandidate||mode!=='features'||!Number.isInteger(index)||index<0||index>=features.length)return;
+    const target=featureRoot.current?.querySelector<HTMLElement>('#abg-feature-'+index+'-kind');
+    target?.scrollIntoView({behavior:'smooth',block:'center'});
+    target?.focus();
+  };
+  const clearGenerated=()=>{invalidateCandidates();setSaved(null);setThumbnail('');setStatus('');};
   const changeSetting=(value:string)=>{
     const first=styles.find(item=>item.setting===value);
     setSetting(value);setStyle(first?.id??'');setRole(first?.functions[0]?.id??'');
@@ -411,8 +438,7 @@ export default function BuildingGeneratorPanel({
       showPanel('scene');
       await new Promise<void>(resolve=>requestAnimationFrame(()=>
         requestAnimationFrame(()=>resolve())));
-      const chosen=selectedSeed??asNumber(seed);
-      const reply=await invoke('studio.buildingPreview',request(chosen));
+      const reply=await invoke('studio.buildingPreview',activeCandidate?.recipe??request(asNumber(seed)));
       if(!reply.active)throw Error('Native 3D preview was not activated');
       setLivePreview(true);
       setStatus('Temporary 3D model displayed in native Scene. Orbit, pan and zoom there; no GLB or GUID was created.');
@@ -438,30 +464,37 @@ export default function BuildingGeneratorPanel({
   },[snapshot?.project.path]);
 
   const preview=async()=>{
-    if(parameterError||busy)return;
+    if(parameterError||busy||!nativeConnected())return;
     setBusy(true);setError('');setStatus('');setSaved(null);setThumbnail('');
+    setVariants([]);setSelectedSeed(null);
     const first=asNumber(seed);
+    let ticket:BuildingCandidateTicket<StudioBuildingRequest>|undefined;
     try{
-      const choices=await Promise.all([first,first+1,first+2].map(async current=>{
+      const captured=candidateGate.current.begin(draftKey,[first,first+1,first+2].map(request));
+      ticket=captured;
+      const choices=await Promise.all(captured.requests.map(async (recipe):Promise<Candidate>=>{
+        const base={seed:recipe.seed,batch:captured.id,scope:captured.scope,recipe};
         try{
-          return {seed:current,data:await invoke('studio.buildingInspect',request(current))} as Candidate;
-        }catch(e){return {seed:current,error:explain(e)} as Candidate;}
+          const data=await invoke('studio.buildingInspect',recipe);
+          if(data.seed!==recipe.seed)throw Error('Native inspection seed does not match captured request');
+          return {...base,data};
+        }catch(e){return {...base,error:explain(e)};}
       }));
+      if(!candidateGate.current.isCurrent(captured))return;
       setVariants(choices);
       const firstGood=choices.find(x=>x.data);
       setSelectedSeed(firstGood?.seed??null);
       if(!firstGood)setError('No feasible building variant for these dimensions. Change the size or style.');
       else setStatus('Three seed candidates evaluated from real procedural mesh geometry.');
-    }catch(e){setError(explain(e));}
-    finally{setBusy(false);}
+    }catch(e){if(!ticket||candidateGate.current.isCurrent(ticket))setError(explain(e));}
+    finally{if(!ticket||candidateGate.current.finish(ticket))setBusy(false);}
   };
 
   const generate=async()=>{
     if(parameterError||busy)return;
     setBusy(true);setError('');setStatus('');setSaved(null);setThumbnail('');
     try{
-      const chosen=selectedSeed??asNumber(seed);
-      const result=await invoke('studio.buildingGenerate',request(chosen));
+      const result=await invoke('studio.buildingGenerate',activeCandidate?.recipe??request(asNumber(seed)));
       setSaved(result);setStatus('New GLB saved to Assets with persistent GUID.');
       void reloadRecipes().catch(()=>{});
       // Existing browser windows can refresh their Assets lists on demand.
@@ -630,18 +663,15 @@ export default function BuildingGeneratorPanel({
           clearGenerated();
         }}/>
       </StudioSection>
-      {selectedSeed!==null&&variants.some(item=>item.seed===selectedSeed&&item.data?.sockets)&&
-        <StudioSection title="Generated layout and physical openings">
-          {variants.filter(item=>item.seed===selectedSeed&&item.data?.sockets)
-            .map(item=><BuildingPlanPreview key={item.seed} preview={item.data!}
-              onSelectFeature={index=>{
-                const target=document.getElementById('abg-feature-'+index+'-kind');
-                target?.scrollIntoView({behavior:'smooth',block:'center'});
-                target?.focus();
-              }}/>)}
-        </StudioSection>}
+      {activeCandidate?.data&&<StudioSection title="Generated layout and structure">
+        {activeCandidate.data.sockets&&<BuildingPlanPreview
+          key={'plan:'+activeCandidate.batch+':'+activeCandidate.seed}
+          preview={activeCandidate.data} onSelectFeature={focusFeature}/>}
+        <BuildingStructureGraphView key={'graph:'+activeCandidate.batch+':'+activeCandidate.seed}
+          recipe={activeCandidate.recipe} inspection={activeCandidate.data} onSelectFeature={focusFeature}/>
+      </StudioSection>}
       {mode==='features'&&<StudioSection title="Functional properties">
-        <div className="abg__property-list">
+        <div className="abg__property-list" ref={featureRoot}>
           {features.map((feature,i)=><div className="abg__property" key={i}>
             <div className="abg__property-header">
               <strong>{propertyLabels[feature.kind]}</strong>
@@ -758,7 +788,7 @@ export default function BuildingGeneratorPanel({
       </StudioSection>
       <StudioSection title="Variants">
         <div className="abg__actions">
-          <StudioButton variant="secondary" loading={busy} disabled={Boolean(parameterError)||busy}
+          <StudioButton variant="secondary" loading={busy} disabled={Boolean(parameterError)||busy||!nativeConnected()}
             onClick={()=>void preview()}>Evaluate 3 seeds</StudioButton>
           <StudioButton variant="secondary" loading={previewBusy}
             disabled={Boolean(parameterError)||busy||previewBusy||!nativeConnected()}
@@ -773,8 +803,8 @@ export default function BuildingGeneratorPanel({
             <WandSparkles size={15}/> Generate GLB
           </StudioButton>
         </div>
-        {variants.length>0&&<div className="abg__candidates" role="group" aria-label="Generated building candidates">
-          {variants.map(candidate=><button type="button" key={candidate.seed}
+        {visibleVariants.length>0&&<div className="abg__candidates" role="group" aria-label="Generated building candidates">
+          {visibleVariants.map(candidate=><button type="button" key={candidate.batch+':'+candidate.seed}
             className={'abg__candidate'+(candidate.seed===selectedSeed?' abg__candidate--active':'')}
             disabled={busy||!candidate.data}
             aria-pressed={candidate.seed===selectedSeed}

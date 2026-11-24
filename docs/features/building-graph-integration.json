@@ -25,7 +25,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35D planned; integration verification pending.",
+      "note": "Stage 35D owner panel source wired to exact captured native candidate request/response and shared GraphCanvas; no new native generator.",
       "evidence": []
     },
     "architecture": {
@@ -40,7 +40,7 @@
     },
     "skill": {
       "status": "not_run",
-      "note": "Stage 35D planned; integration verification pending.",
+      "note": "Shared graph-authoring skill updated on separate graph branch; reconcile before integration.",
       "evidence": []
     },
     "mcp": {
@@ -95,7 +95,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35D planned; integration verification pending.",
+      "note": "Isolated exact-source candidate gate tests 4/4 PASS; strict gate TS PASS. Full owner panel/Studio typecheck, native operation and visual acceptance NOT RUN.",
       "evidence": []
     },
     "handoff": {
