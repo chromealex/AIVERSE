@@ -1,5 +1,6 @@
 #pragma once
 #include "Vehicles.h"
+#include "engine/mechanics/VehiclePersistence.h"
 #include "engine/world/DurableComponentCodecs.h"
 
 namespace aiverse::vehicles {
