@@ -167,7 +167,7 @@ def conflict_plan(conflicts, registry):
 
 def architecture_report(root, changed, exceptions):
     """Conservative changed-file guard. Findings require review, not automatic ECS proof."""
-    findings = []
+    findings, legacy_notes = [], []
     excluded = set(exceptions)
     if not all(repo_path(p) for p in excluded):
         raise ValueError("architecture exceptions must be exact repository paths")
@@ -193,12 +193,19 @@ def architecture_report(root, changed, exceptions):
                        for value in (include, candidate)):
                     finding(line, "shared engine must not depend on editor or genre host", include)
                 if rel.startswith("engine/view/") and any(re.search(r"(^|/)engine/game(/|$)", value) for value in (include, candidate)):
-                    finding(line, "canonical View cannot depend on game owner", include)
+                    if rel in ("engine/view/game/GameView.cpp", "engine/view/game/GameView.h"):
+                        # The architecture contract explicitly identifies GameView as legacy
+                        # compatibility, not the canonical shared View. Keep the debt visible.
+                        legacy_notes.append({"path": rel, "line": line, "detail": include,
+                                             "rule": "legacy GameView compatibility dependency; do not extend"})
+                    else:
+                        finding(line, "canonical View cannot depend on game owner", include)
             if re.search(r'\b(?:if|switch)\s*\([^;]*(?:\bisFps\s*\(|\bisRts\s*\(|\b(?:module|genre)\s*==\s*"(?:rts|fps)")', text):
                 finding(line, "genre-specific branching requires architecture review", text.strip()[:300])
             if rel.startswith(("engine/sim/", "engine/core/")) and re.search(r'\b(?:rand|srand)\s*\(', text):
                 finding(line, "authoritative simulation randomness requires deterministic owner", text.strip()[:300])
-    return {"findings": findings, "scope": "lexical include, genre and deterministic-RNG checks; not ECS semantic verification"}
+    return {"findings": findings, "legacy_notes": legacy_notes,
+            "scope": "lexical include, genre and deterministic-RNG checks; not ECS semantic verification"}
 
 def feature_history(root, ident, limit=30):
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", ident) or not 1 <= limit <= 200:
