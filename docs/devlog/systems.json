@@ -1732,10 +1732,10 @@
           "textEn": "Bounded asynchronous GPU request queue with priorities, cancellation and explicit result release. Isolated test passed; integrated verification pending."
         },
         {
-          "name": "Texture Graph GPU — Stage 38E (в работе)",
-          "text": "Безопасное освобождение процедурных текстур после проверки всех ссылок.",
-          "nameEn": "Texture Graph GPU — Stage 38E (in progress)",
-          "textEn": "Safe procedural image reclamation after complete reference enumeration."
+          "name": "Texture Graph GPU — Stage 38E (частично)",
+          "text": "Добавлен нативный механизм освобождения текстур с сохранением индексов и диагностикой. Автоматический сбор в игровом хосте и тестирование ещё предстоят.",
+          "nameEn": "Texture Graph GPU — Stage 38E (partial)",
+          "textEn": "Native stable-index image reclamation and diagnostics implemented. Automatic game-host collection and tests remain pending."
         }
       ],
       "enables": [
