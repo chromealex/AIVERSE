@@ -395,7 +395,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         graph_asset::Transaction draftTx(draftFile(ws,name),ws.project.dir);
         const fs::path draft=draftTx.target();
         const Json doc=Json::parse(readFile(draft));
-        if(!p["expectedDraft"].isObject() || !(doc==p["expectedDraft"]))
+        if(!p["expectedDraft"].isObject() || !graph_asset::sameDocument(doc,p["expectedDraft"]))
             throw std::runtime_error("Draft changed; reload before publishing");
         Json response=graphEvaluation(doc,Json::object());
         response.set("name",Json::string(name));

@@ -6,7 +6,7 @@
 #include "apps/editor/core/TerraWeaveSparseOps.h"
 #include "engine/render/TerraWeaveTerrainPatchRender.h"
 #include "engine/world/TerraWeaveCavernsArchive.h"
-#include "engine/world/TerraWeaveCavernsOwnedRimGroup.h"
+#include "engine/world/TerraWeaveCavernsRimTransition.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>

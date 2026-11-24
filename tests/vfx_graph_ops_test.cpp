@@ -147,7 +147,9 @@ int main() {
     shaderSave.set("graph",shaderDraft["graph"]);
     requireGraphTest(call("shader_graph_set",shaderSave).getBool("ok"),"shader create failed");
     requireGraphTest(call("shader_graph_set",shaderSave).has("error"),"shader blind overwrite accepted");
-    shaderSave.set("expected",shaderDraft["graph"]);shaderSave.set("graph",shaderEdited["result"]["graph"]);
+    // A browser round trip reorders both the graph and its nested node keys.
+    shaderSave.set("expected",Json::parse(R"({"outputs":{"color":"input"},"nodes":[{"op":"input","id":"input"}],"domain":"material","version":1})"));
+    shaderSave.set("graph",shaderEdited["result"]["graph"]);
     const auto shaderFile=root/"shaders"/"cas_shader.json";
     const auto lockPath=fs::path(shaderFile.string()+".aiverse-write-lock");
     fs::create_directory(lockPath);

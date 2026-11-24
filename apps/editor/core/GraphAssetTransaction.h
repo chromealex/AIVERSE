@@ -4,12 +4,35 @@
 // the file. This is not an external-editor or network-filesystem guarantee.
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include "Workspace.h"
 
 namespace aiverse::editor::graph_asset {
 namespace fs = std::filesystem;
+
+// Web clients can reorder object members when returning an original document.
+inline bool sameDocument(const Json& original, const Json& expected) {
+    if (original.isObject() && expected.isObject()) {
+        if (original.size() != expected.size()) return false;
+        std::map<std::string_view, const Json*> fields;
+        for (const auto& [key, value] : expected.members()) fields.emplace(key, &value);
+        for (const auto& [key, value] : original.members()) {
+            const auto it = fields.find(key);
+            if (it == fields.end() || !sameDocument(value, *it->second)) return false;
+        }
+        return true;
+    }
+    if (original.isArray() && expected.isArray()) {
+        if (original.size() != expected.size()) return false;
+        for (size_t i = 0; i < original.size(); ++i)
+            if (!sameDocument(original[i], expected[i])) return false;
+        return true;
+    }
+    return original == expected;
+}
 
 class Transaction {
 public:
@@ -42,7 +65,7 @@ public:
             throw std::runtime_error("expected must be the original graph object or null for create");
         const bool exists = fs::exists(target_);
         if (exists) {
-            if (!expected.isObject() || !(load() == expected))
+            if (!expected.isObject() || !sameDocument(load(), expected))
                 throw std::runtime_error("Graph changed or already exists; reload before saving");
         } else if (expected.isObject()) {
             throw std::runtime_error("Graph was removed; reload before saving");
