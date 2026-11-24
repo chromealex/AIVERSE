@@ -227,6 +227,9 @@ Explicit restore uses staged native quarantine/replacement relocation and clears
 ## Reviewed damaged Asset checkpoint reset (S6h.3b)
 Trash recovery uses native-only assetHistoryResetReview/Apply with expected project, review token, exact owner version and confirmation. Archive checkpoint/dirty-marker bytes before publishing an empty checkpoint through the existing document journal. Retire legacy marker only after commit; interrupted retirement requires explicit retry. Refuse healthy checkpoint, unsafe paths and active transaction journals; never infer or reconstruct missing history and never delete content/Trash. Demo mode refuses. No archive auto-cleanup or MCP mutation exposure.
 
+## Linked owner history and atomic save (S6i.3)
+Discover `studio_owner_history` with exact expectedProject; use its owner version for individual `studio_owner_history_step` and combined ownerVersion plus mapPath for `studio_save_documents`. Require confirmed=true; stop hosted agent for navigation. Route to existing native dispatch, never synthesize a new edit for history navigation. Save is conservatively unverified for conversation bulk Undo. Damaged checkpoint review is read-only; apply/reset, permanent purge and external picker stay native-only. Extend registry audit and explicit history policy when adding linked tools. Registration/fixtures do not imply runtime acceptance.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web
