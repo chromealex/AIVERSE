@@ -2,6 +2,7 @@
 // All graph compilation is CPU-only and presentation-only (SpectraFX graph v1).
 // Legacy fx/*.json and fx_preview continue to work; fx_graph_bake bridges them.
 #include "Workspace.h"
+#include "GraphAssetTransaction.h"
 #include "FxOps.h"
 #include "engine/fx/SpectraFX.h"
 #include "engine/fx/SpectraAuthoring.h"
@@ -190,8 +191,8 @@ void registerSpectraGraphOps(Workspace& ws) {
         return graphEvaluation(sourceGraph(p, ws), p.has("overrides") ? p["overrides"] : Json::object());
     });
 
-    add("fx_graph_set", "Create or replace fx/graphs/<name>.vfx.json after strict SpectraFX compiler validation; legacy effects are not changed.",
-        R"({"properties":{"name":{"type":"string"},"graph":{"type":"object"},"text":{"type":"string"}},"required":["name"]})",
+    add("fx_graph_set", "Create or guarded replace fx/graphs/<name>.vfx.json after strict validation; existing assets require expected original graph.",
+        R"({"properties":{"name":{"type":"string"},"graph":{"type":"object"},"text":{"type":"string"},"expected":{"type":["object","null"]}},"required":["name"]})",
         [&ws](const Json& p) {
         requireGame(ws);
         const std::string name = requireGraphName(p);
@@ -201,8 +202,9 @@ void registerSpectraGraphOps(Workspace& ws) {
         response.set("name", strGraph(name));
         if (!response.getBool("ok")) return response; // never overwrite a valid graph with invalid input
         const std::string content = graph.dump(2) + "\n";
-        const bool existed = fs::exists(graphFile(ws, name));
-        writeFile(graphFile(ws, name), content);
+        graph_asset::Transaction tx(graphFile(ws,name));
+        const bool existed=tx.checkExpected(p,[&]{return Json::parse(readFile(tx.target()));});
+        tx.replace(content,1024*1024);
         noteGraph(ws, (existed ? "SpectraFX graph updated: " : "SpectraFX graph created: ") + name);
         response.set("summary", strGraph((existed ? "Updated " : "Created ") + graphFile(ws, name).generic_string()));
         return response;
@@ -212,8 +214,9 @@ void registerSpectraGraphOps(Workspace& ws) {
         R"({"properties":{"name":{"type":"string"}},"required":["name"]})", [&ws](const Json& p) {
         requireGame(ws);
         const std::string name = requireGraphName(p);
+        graph_asset::Transaction tx(graphFile(ws,name));
         std::error_code ec;
-        if (!fs::remove(graphFile(ws, name), ec)) {
+        if (!fs::remove(tx.target(), ec)) {
             if (ec) throw std::runtime_error("cannot delete SpectraFX graph: " + ec.message());
             throw std::runtime_error("SpectraFX graph not found: " + name);
         }
@@ -322,7 +325,7 @@ void registerSpectraGraphOps(Workspace& ws) {
 
     add("fx_graph_draft_set",
         "Save an incomplete SpectraFX graph in fx/graphs/_drafts/<name>.vfx.json without changing published assets. Return compiler diagnostics but do not reject disconnected drafts.",
-        R"({"properties":{"name":{"type":"string"},"graph":{"type":"object"},"text":{"type":"string"}},"required":["name"]})",
+        R"({"properties":{"name":{"type":"string"},"graph":{"type":"object"},"text":{"type":"string"},"expected":{"type":["object","null"]}},"required":["name"]})",
         [&ws](const Json& p) {
         requireGame(ws);
         const std::string name=requireGraphName(p);
@@ -333,7 +336,9 @@ void registerSpectraGraphOps(Workspace& ws) {
            !doc["nodes"].isArray() || doc["nodes"].size()>256 ||
            !doc["links"].isArray() || doc["links"].size()>512)
             throw std::runtime_error("draft must be a bounded v1/v2 graph object");
-        writeFile(draftFile(ws,name),doc.dump(2)+"\n");
+        graph_asset::Transaction tx(draftFile(ws,name));
+        tx.checkExpected(p,[&]{return Json::parse(readFile(tx.target()));});
+        tx.replace(doc.dump(2)+"\n",1024*1024);
         noteGraph(ws,"SpectraFX draft saved: "+name);
         Json response=Json::object();
         response.set("name",Json::string(name));
@@ -383,16 +388,21 @@ void registerSpectraGraphOps(Workspace& ws) {
 
     add("fx_graph_draft_publish",
         "Validate a draft and publish to fx/graphs/<name>.vfx.json; invalid drafts remain private and never replace the working asset.",
-        R"({"properties":{"name":{"type":"string"}},"required":["name"]})",
+        R"({"properties":{"name":{"type":"string"},"expected":{"type":["object","null"]},"expectedDraft":{"type":"object"}},"required":["name","expectedDraft"]})",
         [&ws](const Json& p) {
         requireGame(ws);
         const std::string name=requireGraphName(p);
-        const fs::path draft=draftFile(ws,name);
+        graph_asset::Transaction draftTx(draftFile(ws,name));
+        const fs::path draft=draftTx.target();
         const Json doc=Json::parse(readFile(draft));
+        if(!p["expectedDraft"].isObject() || !(doc==p["expectedDraft"]))
+            throw std::runtime_error("Draft changed; reload before publishing");
         Json response=graphEvaluation(doc,Json::object());
         response.set("name",Json::string(name));
         if(!response.getBool("ok"))return response;
-        writeFile(graphFile(ws,name),doc.dump(2)+"\n");
+        graph_asset::Transaction tx(graphFile(ws,name));
+        tx.checkExpected(p,[&]{return Json::parse(readFile(tx.target()));});
+        tx.replace(doc.dump(2)+"\n",1024*1024);
         std::error_code ec;
         fs::remove(draft,ec); // publication succeeds even if cleanup fails
         noteGraph(ws,"SpectraFX draft published: "+name);
