@@ -1,3 +1,4 @@
+#include "engine/mechanics/WeaponCadence.h"
 #include "engine/sim/PresentationEventQueue.h"
 #include <aiverselib/systems/EngineMechanics.h>
 #include <aiverselib/systems/Configured.h>
@@ -8,6 +9,39 @@
 using namespace aiverse;using namespace aiverse::lib::systems;
 #define CHECK(x) do{if(!(x)){std::cerr<<"failed "<<__LINE__<<": "<<#x<<'\n';std::exit(1);}}while(false)
 int main(){
+    {
+        using namespace aiverse::lib::mechanics;
+        // Integer-ratio test values are exactly representable in 16.16.
+        const Fixed elapsed=Fixed::fromRatio(1,8), period=Fixed::fromRatio(3,16);
+        Fixed remaining{};uint32_t count=0;
+        for(int tick=0;tick<=48;++tick){
+            remaining=advanceWeaponCadence(remaining,elapsed,true);
+            for(uint32_t shot=0;shot<kMaxCadenceShotsPerTick&&cadenceReady(remaining);++shot){
+                remaining=acceptCadenceShot(remaining,period,true);++count;
+            }
+            remaining=finishWeaponCadence(remaining);
+        }
+        CHECK(count==33); // t=0 through t=6, inclusive
+        remaining=Fixed{};
+        const Fixed fast=Fixed::fromRatio(1,32);
+        remaining=acceptCadenceShot(remaining,fast,true);
+        remaining=advanceWeaponCadence(remaining,elapsed,true);
+        count=0;
+        while(cadenceReady(remaining)){remaining=acceptCadenceShot(remaining,fast,true);++count;}
+        CHECK(count==4);
+        remaining=advanceWeaponCadence(Fixed::fromRatio(1,32),elapsed,true);
+        CHECK(remaining.raw<0);
+        remaining=finishWeaponCadence(remaining);
+        CHECK(remaining.raw==0);
+        CHECK(advanceWeaponCadence(remaining,elapsed,true).raw==0);
+        CHECK(advanceWeaponCadence(fast,elapsed,false).raw==0);
+        CHECK(acceptCadenceShot(-fast,period,false)==period);
+        auto rules=game::loadRules(Json::parse(R"({"types":{"unit":{"weapons":[{"cooldown":0.125,"preciseCooldown":true}]}}})"));
+        CHECK(rules.types.front().weapons.front().preciseCooldown);
+        bool rejected=false;
+        try{(void)game::loadRules(Json::parse(R"({"types":{"unit":{"weapons":[{"cooldown":0,"preciseCooldown":true}]}}})"));}catch(const std::runtime_error&){rejected=true;}
+        CHECK(rejected);
+    }
     {
         using namespace game;
         Simulation grouped({},std::make_unique<GameCore>());
