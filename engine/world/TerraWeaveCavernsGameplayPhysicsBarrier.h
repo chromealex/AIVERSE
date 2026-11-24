@@ -58,8 +58,9 @@ public:
         status_.phase=CavePhysicsCommitPhase::Installing;
         std::vector<Pair> installed;
         installed.reserve(owners.size());
+        try {
         for(const auto owner:owners) {
-            if(!owner.spatial->installCandidate(spatial,revision)) {
+            if(!exclusive()||!owner.spatial->installCandidate(spatial,revision)) {
                 rollback(installed,spatial,boxScene,revision);
                 return false;
             }
@@ -70,25 +71,35 @@ public:
             }
             ++status_.installedPairs;
         }
+        }catch(...){
+            // An exception may originate inside a native insertion before
+            // its candidate-installed flag is set. Roll back known leases,
+            // then quarantine rather than assuming the unknown call was clean.
+            try{rollback(installed,spatial,boxScene,revision);}catch(...){}
+            requireRecovery();throw;
+        }
+        if(!exclusive()){
+            requireRecovery();return false;
+        }
         // Irreversible section. Real host must be able to enter explicit
         // recovery when Scene::destroy fails. A false return here MUST NOT
         // be followed by more sim steps with inconsistent scene epochs.
         status_.phase=CavePhysicsCommitPhase::Retiring;
         for(const auto owner:installed) {
-            if(!owner.box->finalizeInstalled(boxScene,revision)) {
+            if(!exclusive()||!owner.box->finalizeInstalled(boxScene,revision)) {
                 status_.phase=CavePhysicsCommitPhase::RecoveryRequired;
                 status_.recoveryRequired=true;
                 return false;
             }
         }
         for(const auto owner:installed) {
-            if(!owner.spatial->finalizeInstalled(spatial,revision)) {
+            if(!exclusive()||!owner.spatial->finalizeInstalled(spatial,revision)) {
                 status_.phase=CavePhysicsCommitPhase::RecoveryRequired;
                 status_.recoveryRequired=true;
                 return false;
             }
         }
-        if(!view.navigation.commit(revision)) {
+        if(!exclusive()||!view.navigation.commit(revision)) {
             status_.phase=CavePhysicsCommitPhase::RecoveryRequired;
             status_.recoveryRequired=true;
             return false;
