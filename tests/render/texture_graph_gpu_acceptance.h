@@ -1,6 +1,6 @@
 // Exercise the production native preview owner with a real RHI, not a simulated backend.
 #pragma once
-#include "apps/editor/core/TextureGraphGpuPreview.h"
+#include "engine/render/graph/TextureGraphGpuOwner.h"
 #include <chrono>
 #include <cstdio>
 #include <stdexcept>
@@ -8,7 +8,7 @@
 
 namespace aiverse::tests {
 inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend){
-    editor::TextureGraphGpuPreview owner;
+    render::texture_graph::TextureGraphGpuOwner owner;
     const std::string project="texture-graph-rhi-fixture";
     const char* expected=backend==gfx::Backend::Metal?"metal":"vulkan";
     auto require=[](bool ok,const char* what){if(!ok)throw std::runtime_error(what);};
