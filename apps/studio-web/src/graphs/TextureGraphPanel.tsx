@@ -4,7 +4,7 @@ import {invoke} from '../bridge';
 import {StudioAlert,StudioButton,StudioInput,StudioSelect,StudioSection} from '../ui';
 import GraphCanvas from './GraphCanvas';
 import {validateTopology,DraftHistory} from './graphFramework';
-import {textureLayout,duplicateTextureNode,texturePreviewKey,instantiateTextureGraph,textureFunctionLibrary,textureFunctionSpec,defineTextureFunction,addTextureFunctionCall,removeTextureFunction} from './textureGraphAuthoring';
+import {textureLayout,duplicateTextureNode,texturePreviewKey,instantiateTextureGraph,textureFunctionLibrary,textureFunctionSpec,defineTextureFunction,addTextureFunctionCall,removeTextureFunction,checkFunctionDraft} from './textureGraphAuthoring';
 import type {GraphView,NodeView,Link} from './graphFramework';
 import type {PortRef} from './graphGeometry';
 import type {MaterialKey,FieldValue} from '../panels/materialSchema';
@@ -387,7 +387,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
  const outputs=graph&&object(graph.outputs)?Object.keys(graph.outputs):[];
  const rows=graph&&Array.isArray(graph.nodes)?graph.nodes.filter(object):[];
  const copySubgraph=()=>{const ids=new Set(selectedIds);setSnippet(rows.filter(n=>ids.has(String(n.id))).map(n=>JSON.parse(JSON.stringify(n)) as Obj));setStatus('Copied subgraph; external inputs will need reconnecting');};
- const pasteSubgraph=()=>{if(!graph||!snippet.length||rows.length+snippet.length>64)return;const used=new Set(rows.map(n=>String(n.id))),ids=new Map<string,string>();for(const n of snippet){let i=1;while(used.has('sub_'+i))i++;const id='sub_'+i;used.add(id);ids.set(String(n.id),id);}const nodes=snippet.map(n=>({...n,id:ids.get(String(n.id)),inputs:Array.isArray(n.inputs)?n.inputs.map(v=>ids.get(String(v))??''):[],position:undefined}));edit({...graph,nodes:[...rows,...nodes]});setSelection([...ids.values()]);setSelected([...ids.values()].at(-1)??'');};
+ const pasteSubgraph=()=>{if(!graph||!snippet.length||rows.length+snippet.length>64)return;const used=new Set(rows.map(n=>String(n.id))),ids=new Map<string,string>();for(const n of snippet){let i=1;while(used.has('sub_'+i))i++;const id='sub_'+i;used.add(id);ids.set(String(n.id),id);}const nodes=snippet.map(n=>({...n,id:ids.get(String(n.id)),inputs:Array.isArray(n.inputs)?n.inputs.map(v=>ids.get(String(v))??''):[],position:undefined}));const next={...graph,nodes:[...rows,...nodes]};try{if(next.nodes.some(n=>n.op==='function'))checkFunctionDraft(next);}catch(e){setError(e instanceof Error?e.message:String(e));return;}edit(next);setSelection([...ids.values()]);setSelected([...ids.values()].at(-1)??'');};
  const current=rows.find(n=>n.id===selected);
  const spec=graph&&current?textureFunctionSpec(graph,current,catalog):undefined;
  const functionLibrary=graph?textureFunctionLibrary(graph):{};
@@ -397,7 +397,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
  const functionEdit=(action:()=>void)=>{try{setError('');action();}catch(e){setError(e instanceof Error?e.message:String(e));}};
  const captureFunction=()=>functionEdit(()=>{if(!graph)return;edit(defineTextureFunction(graph,catalog,selectedIds.length?selectedIds:[selected],selected,functionName));setFunctionChoice(functionName);setFunctionOutput('value');setFunctionName('');setStatus('Function definition created; original nodes preserved.');});
  const insertFunction=()=>functionEdit(()=>{if(!graph)return;const call=addTextureFunctionCall(graph,catalog,functionChoice,functionOutput);edit(call.graph);setSelected(call.id);setSelection([call.id]);setPending(null);setStatus('Function instance added. Connect its inputs.');});
- const deleteFunction=()=>functionEdit(()=>{if(!graph)return;edit(removeTextureFunction(graph,functionChoice));setFunctionChoice('');setFunctionOutput('');});
+ const deleteFunction=()=>functionEdit(()=>{if(!graph)return;edit(removeTextureFunction(graph,functionChoice));setClipboard(null);setSnippet([]);setFunctionChoice('');setFunctionOutput('');});
  const setFunctionArgument=(key:string,raw:string)=>functionEdit(()=>{if(!current||typeof current.id!=='string'||!object(current.properties))return;const value=JSON.parse(raw);if(value===null)throw new Error('Function parameter cannot be null');patchNode(current.id,{properties:{...current.properties,arguments:{...(object(current.properties.arguments)?current.properties.arguments:{}),[key]:value}}});});
  const patchNode=(id:string,patch:Obj)=>{if(graph)edit({...graph,nodes:rows.map(n=>n.id===id?{...n,...patch}:n)});};
  const connect=(from:string,to:string,slot:number)=>{
@@ -415,13 +415,13 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
   if(object(t.properties))for(const [key,value] of Object.entries(t.properties))if(object(value))props[key]=value.default;
   edit({...graph,nodes:[...rows,{id,op:kind,inputs:Array.isArray(t.inputs)?t.inputs.map(()=> ''):[],properties:props}]});setSelected(id);setPending(null);
  };
- const duplicate=()=>{if(!graph)return;const source=view.nodes.find(n=>n.id===selected);const copy=duplicateTextureNode(source?{...graph,nodes:rows.map(n=>n.id===selected?{...n,position:[source.x,source.y]}:n)}:graph,selected);if(copy){edit(copy.graph);setSelected(copy.id);setPending(null);}};
+ const duplicate=()=>{if(!graph)return;const source=view.nodes.find(n=>n.id===selected);const copy=duplicateTextureNode(source?{...graph,nodes:rows.map(n=>n.id===selected?{...n,position:[source.x,source.y]}:n)}:graph,selected);if(copy){try{if(rows.some(n=>n.op==='function'))checkFunctionDraft(copy.graph);}catch(e){setError(e instanceof Error?e.message:String(e));return;}edit(copy.graph);setSelected(copy.id);setSelection([copy.id]);setPending(null);}};
  const copyNode=()=>{if(!current)return;setClipboard(JSON.parse(JSON.stringify(current)) as Obj);setStatus('Copied node '+selected);};
  const pasteNode=()=>{if(!graph||!clipboard||typeof clipboard.op!=='string'||rows.length>=64)return;
   let i=1;while(rows.some(n=>n.id===clipboard.op+'_'+i))i++;
   const id=clipboard.op+'_'+i,copy=JSON.parse(JSON.stringify(clipboard)) as Obj;
   const inputs=Array.isArray(copy.inputs)?copy.inputs.map(v=>rows.some(n=>n.id===v)?v:''):[];
-  edit({...graph,nodes:[...rows,{...copy,id,inputs,position:undefined}]});setSelected(id);setPending(null);
+  const next={...graph,nodes:[...rows,{...copy,id,inputs,position:undefined}]};try{if(next.nodes.some(n=>n.op==='function'))checkFunctionDraft(next);}catch(e){setError(e instanceof Error?e.message:String(e));return;}edit(next);setSelected(id);setSelection([id]);setPending(null);
  };
  const removeNode=()=>{
   if(!graph||!selected)return;const nextOutputs=object(graph.outputs)?Object.fromEntries(Object.entries(graph.outputs).filter(([,v])=>v!==selected)):{};

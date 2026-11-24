@@ -102,7 +102,7 @@ export function textureFunctionSpec(graph:Obj,node:Obj,catalog:Obj[]):Obj|undefi
  if(typeof output!=='string'||!textureKinds.has(output))return;
  return {id:'function',label:p.function+' / '+p.output,inputs:def.inputs.map(v=>(v as Obj).type),inputNames:def.inputs.map(v=>(v as Obj).id),output,properties:{},parameters:obj(def.parameters)?def.parameters:{}};
 }
-function checkFunctionDraft(graph:Obj):void {
+export function checkFunctionDraft(graph:Obj):void {
  const library=textureFunctionLibrary(graph),nodes=rows(graph.nodes);
  if(Object.keys(library).length>16||nodes.length>64)throw new Error('Texture function definition or node limit exceeded');
  let expanded=0;

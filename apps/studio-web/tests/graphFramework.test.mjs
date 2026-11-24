@@ -56,7 +56,7 @@ test('multiple named output ports have distinct anchors and follow preview posit
  assert.equal(samePort({node:'a',port:'color'},{node:'a',port:'mask'}),false);
 });
 
-import {textureLayout,duplicateTextureNode,texturePreviewKey,instantiateTextureGraph,textureFunctionSpec,defineTextureFunction,addTextureFunctionCall,removeTextureFunction} from '../src/graphs/textureGraphAuthoring.ts';
+import {textureLayout,duplicateTextureNode,texturePreviewKey,instantiateTextureGraph,textureFunctionSpec,defineTextureFunction,addTextureFunctionCall,removeTextureFunction,checkFunctionDraft} from '../src/graphs/textureGraphAuthoring.ts';
 test('texture DAG layout orders dependencies and has bounded nonoverlapping positions',()=>{
  const g={nodes:['c','a','b'].map(node),links:[edge('1','a','b'),edge('2','b','c')]};
  const p=textureLayout(g);assert.ok(p.get('a')[0]<p.get('b')[0]);assert.ok(p.get('b')[0]<p.get('c')[0]);
@@ -121,4 +121,12 @@ test('selected texture nodes form a typed reusable function with local parameter
  assert.deepEqual(removeTextureFunction(next,'scale').functions,{});
  assert.throws(()=>defineTextureFunction(call.graph,catalog,[call.id],call.id,'nested'),/Nested/);
  assert.throws(()=>addTextureFunctionCall({...next,size:1024},catalog,'scale','value'),/budget/);
+});
+
+test('function clipboard drafts cannot reference a deleted definition or bypass expanded limits',()=>{
+ const graph={size:32,nodes:[{id:'call',op:'function',inputs:[],properties:{function:'missing',output:'value'}}]};
+ assert.throws(()=>checkFunctionDraft(graph),/Missing function definition/);
+ const body=Array.from({length:33},(_,i)=>({id:'n'+i,op:'constant',inputs:[]}));
+ const calls={...graph,functions:{missing:{nodes:body}},nodes:[...graph.nodes,{...graph.nodes[0],id:'call2'}]};
+ assert.throws(()=>checkFunctionDraft(calls),/budget/);
 });
