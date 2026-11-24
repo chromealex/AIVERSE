@@ -32,14 +32,34 @@ def main():
     parser.add_argument("binary")
     parser.add_argument("--engine")
     parser.add_argument("--feature-manifest", action="append", type=Path, default=[])
+    parser.add_argument("--feature-dir", type=Path, help="Audit every manifest in this directory")
     args = parser.parse_args()
-    feature_tools = set()
-    for path in args.feature_manifest:
+    features = {}
+    paths = list(args.feature_manifest)
+    if args.feature_dir is not None:
+        if not args.feature_dir.is_dir():
+            parser.error("feature directory does not exist")
+        discovered = sorted(args.feature_dir.glob("*.json"))
+        if not discovered:
+            parser.error("feature directory contains no manifests")
+        paths.extend(discovered)
+    for path in paths:
         try:
-            names = json.loads(path.read_text(encoding="utf-8"))["integrations"]["mcp_tools"]
-            if not isinstance(names, list) or not all(isinstance(n, str) and n for n in names):
-                raise ValueError("invalid mcp_tools")
-            feature_tools.update(names)
+            data = json.loads(path.read_text(encoding="utf-8"))
+            ident = data["id"]
+            if not isinstance(ident, str) or ident != path.stem:
+                raise ValueError("feature id must match filename")
+            names = data["integrations"]["mcp_tools"]
+            if not isinstance(names, list) or not all(isinstance(n, str) and n.strip() for n in names) or len(set(names)) != len(names):
+                raise ValueError("invalid or duplicate mcp_tools")
+            status = data["checks"]["mcp"]["status"]
+            if status not in ("pass", "fail", "not_run", "not_applicable"):
+                raise ValueError("invalid MCP check status")
+            if status == "pass" and not names:
+                raise ValueError("MCP pass requires tool references")
+            if ident in features:
+                raise ValueError("duplicate feature id")
+            features[ident] = (status, set(names))
         except (OSError, ValueError, KeyError, TypeError) as exc:
             parser.error(f"{path}: {exc}")
     cmd = [args.binary, "--no-editor", "--port", "0"]
@@ -91,10 +111,6 @@ def main():
     print(f"registered={len(listed)}, required_families={len(REQUIRED)}")
     for group, names in REQUIRED.items():
         print(f"{'FAIL' if group in missing else 'PASS'} {group}: {', '.join(names)}")
-    if feature_tools - listed:
-        missing["feature_manifest"] = sorted(feature_tools - listed)
-    if missing:
-        print("MISSING:", json.dumps(missing, sort_keys=True))
     # This is a real tools/call smoke check, not merely static source matching.
     response = responses.get(3, {})
     result = response.get("result")
@@ -130,6 +146,18 @@ def main():
         print("ERROR: missing guiOnly metadata", file=sys.stderr)
         return 2
     print("PASS tools/list == mcp_registry (count, names, guiOnly metadata)")
+    for ident, (status, names) in sorted(features.items()):
+        absent = sorted(names - listed)
+        if absent:
+            missing["feature:" + ident] = absent
+        registration = ("missing" if absent else "registered") if names else (
+            "not_applicable" if status == "not_applicable" else "undeclared")
+        print("FEATURE", json.dumps({"id": ident, "declared_status": status,
+                                     "registration": registration,
+                                     "tools": sorted(names), "missing": absent,
+                                     "runtime_verification": "not_run"}, sort_keys=True))
+    if missing:
+        print("MISSING:", json.dumps(missing, sort_keys=True))
     print("NOTE: authoring and GPU validation still need dedicated per-system tests.")
     return 1 if missing else 0
 
