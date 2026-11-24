@@ -100,7 +100,9 @@ public:
             }
             Entry entry;
             entry.pose=pose;
-            entry.visualOpening=pose.open?Fixed::fromInt(1):Fixed{};
+            // Initial appearance follows the real authored/rollback progress,
+            // not the binary traversal flag (only 1000 unlocks passage).
+            entry.visualOpening=Fixed::fromRatio(pose.physicalPermille,1000);
             entry.asset.socketId=pose.socketId;
             entry.asset.slidesAlongX=dx>=dz;
             entry.asset.halfTravel=(entry.asset.slidesAlongX?dx:dz)/2;
