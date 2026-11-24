@@ -1,3 +1,4 @@
+#include "engine/sim/PresentationEventQueue.h"
 #include <aiverselib/systems/EngineMechanics.h>
 #include <aiverselib/systems/Configured.h>
 #include <aiverselib/systems/Persistence.h>
@@ -7,6 +8,18 @@
 using namespace aiverse;using namespace aiverse::lib::systems;
 #define CHECK(x) do{if(!(x)){std::cerr<<"failed "<<__LINE__<<": "<<#x<<'\n';std::exit(1);}}while(false)
 int main(){
+    {
+        PresentationEventQueue<int> local;
+        CHECK(local.drain().empty());
+        local.push(0,1);local.push(0,2);local.push(1,3);
+        CHECK(local.drain()==std::vector<int>({1,2,3}));CHECK(local.drain().empty());
+        PresentationEventQueue<int> net(true);
+        net.push(0,10);net.push(1,20);net.push(2,30);
+        CHECK(net.drain(1)==std::vector<int>({10}));CHECK(net.drain(1).empty());
+        net.rewind(1);net.push(1,21);net.push(1,22);net.push(2,31);
+        CHECK(net.drain(2)==std::vector<int>({21,22}));
+        net.push(1,99);CHECK(net.drain(3)==std::vector<int>({31}));CHECK(net.drain(3).empty());
+    }
     Simulation sim({},std::make_unique<game::GameCore>());
     sim.setup(Json::parse(R"({"victory":"noUnits","statuses":{"slow":{"mods":[{"stat":"speed","mul":0.5}]}},"types":{"unit":{"health":{"max":100},"move":{"speed":4}}}})"),Json::parse(R"({"size":[8,8],"players":[{"name":"A","team":1},{"name":"B","team":2}],"terrain":{"rows":["........","........","........","........","........","........","........","........"]},"entities":[{"type":"unit","owner":1,"pos":[2,2]},{"type":"unit","owner":2,"pos":[6,6]}]})"));
     Entity unit;sim.world().each<game::Unit>([&](Entity e,auto&){if(!unit.valid())unit=e;});CHECK(unit.valid());
