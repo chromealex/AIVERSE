@@ -51,6 +51,16 @@ inline int64_t thermalBias(const Sample& a,const Sample& b,const StratificationS
     const auto mean=(*a.temperature+*b.temperature)*Fixed::fromRatio(1,2);
     return ((mean-Fixed::fromInt(s.referenceCelsius))*s.thermalPerDegree).toInt();
 }
+// Shared signed head using canonical stable endpoint order, including Fixed
+// rounding. Both the transport and read-only diagnostics use this policy.
+inline Mass effectiveHead(size_t kind,const Sample& a,const Sample& b,Mass from,Mass to,
+        bool forward,const StratificationSettings& settings){
+    const auto buoyancy=std::clamp<int64_t>(
+        settings.buoyancyPermille[kind]+thermalBias(a,b,settings),-1000,1000);
+    const auto magnitude=(riseFactor(forward?a:b,forward?b:a)*buoyancy).toInt();
+    const auto bias=forward?magnitude:-magnitude;
+    return from-to+((from+to)/2)*bias/1000;
+}
 } // namespace stratification_detail
 inline bool advanceWithStratification(World& world,const game::Surface* surface,
         uint32_t tick,const StratificationSettings& settings={}){
@@ -75,19 +85,7 @@ inline bool advanceWithStratification(World& world,const game::Surface* surface,
         return wp::diffuseSpeciesWithHead(species,flows,
             [&](size_t kind,wp::Flow f,Mass from,Mass to)->std::optional<Mass>{
                 const auto& a=*samples[f.from];const auto& b=*samples[f.to];
-                const auto buoyancy=std::clamp<int64_t>(
-                    settings.buoyancyPermille[kind]+stratification_detail::thermalBias(a,b,settings),
-                    -1000,1000);
-                // Opposite directions get opposite heads; no double transfer
-                // on a bidirectional duct. Starting masses <= 1e9.
-                // Canonical endpoint order avoids asymmetry from Fixed
-                // rounding on reversed vectors at equilibrium.
-                const bool forward=f.from<f.to;
-                const auto magnitude=(stratification_detail::riseFactor(
-                    forward?a:b,forward?b:a)*buoyancy).toInt();
-                const auto bias=forward?magnitude:-magnitude;
-                const Mass mean=(from+to)/2;
-                return from-to+mean*bias/1000;
+                return stratification_detail::effectiveHead(kind,a,b,from,to,f.from<f.to,settings);
             });
     });
 }

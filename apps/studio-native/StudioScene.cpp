@@ -2188,6 +2188,11 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         if(liveGravity)lightingStatus_+=" · effective PHYSIS gravity (cyan inward, orange outward, violet tangent, grey zero)";
         else lightingStatus_+=" · live PHYSIS gravity unavailable (budget/context)";
     }
+    const bool liveAether=livePlanet&&planetLiveAetherLayer_!="off"&&planetLiveSnapshot_["aether"].getBool("available");
+    if(livePlanet&&planetLiveSnapshot_["aether"].isObject()){
+        lightingStatus_+=" · AETHER "+planetLiveAetherLayer_+(liveAether?" mass / duct potential":" unavailable");
+        if(planetLiveSnapshot_["aether"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+    }
     const bool liveEvolve=livePlanet&&planetLiveLayer_!="off"&&planetLiveSnapshot_["evolve"].isObject();
     if(liveEvolve){
         lightingStatus_+=" · live EVOLVE "+planetLiveLayer_+" tick "+std::to_string(planetLiveSnapshot_["evolve"].getInt("sampleTick"));
@@ -2268,6 +2273,48 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                         renderer_.line(end,end-direction*(len*.25f)-side*(len*.14f),color);
                     }
                     break;
+                }
+            }
+            if(liveAether){
+                const auto& data=planetLiveSnapshot_["aether"];
+                const size_t species=planetLiveAetherLayer_=="toxin"?1:planetLiveAetherLayer_=="oxygen"?2:0;
+                const auto readVec=[](const Json& j)->std::optional<render::float3>{
+                    const auto& xyz=j.items();if(xyz.size()!=3)return {};
+                    return render::float3{float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
+                };
+                const auto color=species==1?rgba(150,245,85):species==2?rgba(100,205,255):rgba(230,180,245);
+                const float marker=std::clamp(planetPreview_->radius*.012f,.12f,1.8f);
+                size_t count=0;
+                for(const auto& row:data["cells"].items()){
+                    if(count++>=256)break;
+                    if(row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto p=readVec(row["position"]);
+                    if(!p||row["mass"].size()!=3)continue;
+                    const float mass=std::max(0.f,float(row["mass"][species].toDouble()));
+                    const float extent=marker*(.4f+std::clamp(float(std::log1p(mass)/std::log(1000000001.)),0.f,1.f));
+                    const auto c=mass>0?color:rgba(115,125,140);
+                    for(const auto axis:{render::float3{extent,0,0},render::float3{0,extent,0},render::float3{0,0,extent}})
+                        renderer_.line(*p-axis,*p+axis,c);
+                }
+                count=0;
+                for(const auto& row:data["ducts"].items()){
+                    if(count++>=512)break;
+                    if(row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto a=readVec(row["a"]),b=readVec(row["b"]);
+                    if(!a||!b)continue;
+                    const auto delta=*b-*a;
+                    const float distance=std::sqrt(dot(delta,delta));
+                    if(distance<.001f)continue;
+                    const auto amount=row.getBool("potentialAvailable")&&row["potential"].size()==3?
+                        row["potential"][species].integer():0;
+                    renderer_.line(*a,*b,amount?color:rgba(105,115,130));
+                    if(!amount)continue;
+                    const auto direction=delta*(amount>0?1.f/distance:-1.f/distance);
+                    const auto tip=(*a+*b)*.5f;
+                    const auto side=normalize(cross(direction,std::abs(direction.y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
+                    const float len=std::min(marker,distance*.24f);
+                    renderer_.line(tip,tip-direction*len+side*(len*.45f),color);
+                    renderer_.line(tip,tip-direction*len-side*(len*.45f),color);
                 }
             }
             if(liveEvolve){

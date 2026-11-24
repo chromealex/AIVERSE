@@ -6,6 +6,7 @@
 #include "apps/studio-native/StudioGameSurface.h"
 #include "apps/studio-native/StudioPlanetWorldProcesses.h"
 #include "apps/studio-native/StudioPlanetLiveSnapshot.h"
+#include "apps/studio-native/StudioPlanetAetherSnapshot.h"
 #include "engine/sim/Simulation.h"
 #include "engine/sim/CommonComponents.h"
 #include "engine/game/GameCore.h"
@@ -90,7 +91,7 @@ Json StudioGameSurface::worldProcessDiagnostics(int cap,const std::string& focus
     return worldProcessDiagnostics_.sample(sim?&sim->world():nullptr,
         std::to_string(runtimeEpoch_),sim?sim->tick():0,cap,focus);
 }
-Json StudioGameSurface::ecologyState(int32_t granularCellCm,bool liveGravity){
+Json StudioGameSurface::ecologyState(int32_t granularCellCm,bool liveGravity,bool liveAether){
     Simulation* sim=host_&&host_->inMatch()?host_->simulation():nullptr;
     Json out=Json::object(),regions=Json::array();
     out.set("active",Json::fromBool(sim!=nullptr));
@@ -108,6 +109,12 @@ Json StudioGameSurface::ecologyState(int32_t granularCellCm,bool liveGravity){
                 out.set("imprint",samplePlanetImprint(sim->world(),*surface,sim->tick()-1));
                 out.set("evolve",samplePlanetEvolve(sim->world(),*surface,sim->tick()-1));
                 if(liveGravity)out.set("gravity",samplePlanetGravity(sim->world(),*surface,sim->tick()-1));
+                if(liveAether){
+                    auto policy=AetherDiagnosticPolicy::Unknown;
+                    if(const auto config=game->native().loadedConfiguration("world_processes"))
+                        policy=config->getBool("aetherStratification")?AetherDiagnosticPolicy::Stratified:AetherDiagnosticPolicy::Diffusion;
+                    out.set("aether",samplePlanetAether(sim->world(),*surface,sim->tick()-1,policy));
+                }
                 if(granularCellCm>0)
                     out.set("granular",samplePlanetGranular(sim->world(),*surface,sim->tick()-1,granularCellCm));
             }
