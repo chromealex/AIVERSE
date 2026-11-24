@@ -6,6 +6,7 @@
 #include "engine/fx/SpectraFX.h"
 #include "engine/fx/SpectraAuthoring.h"
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -121,6 +122,94 @@ Json graphEvaluation(const Json& graph, const Json& overrides, fx::EffectDef* co
     }
     return response;
 }
+// Project content assets, not arbitrary filesystem paths. Reject symlinks
+// at every owned component, including the destination file.
+constexpr size_t kReplayMaxBytes=65536;
+constexpr size_t kReplayMaxEntries=256;
+constexpr const char* kReplaySuffix=".spectra-replay.json";
+void requireReplayProject(const Workspace& ws,const Json& p) {
+    requireGame(ws);
+    if(p.has("expectedProjectPath")&&(!p["expectedProjectPath"].isString()||
+        p.getStr("expectedProjectPath")!=ws.project.dir))
+        throw std::runtime_error("Stale replay project");
+}
+fs::file_status replayFileStatus(const fs::path& path) {
+    std::error_code ec;
+    const auto status=fs::symlink_status(path,ec);
+    if(ec&&ec!=std::errc::no_such_file_or_directory)
+        throw std::runtime_error("Cannot inspect replay storage");
+    if(fs::is_symlink(status))throw std::runtime_error("Replay storage cannot use symlinks");
+    return status;
+}
+fs::path replayDirectory(const Workspace& ws,bool create) {
+    fs::path dir=fs::path(ws.project.dir);
+    if(!fs::is_directory(dir))throw std::runtime_error("Invalid project directory");
+    for(const char* part:{"content","spectrafx","replays"}){
+        dir/=part;
+        auto st=replayFileStatus(dir);
+        if(!fs::exists(st)){
+            if(!create)return {};
+            fs::create_directory(dir);
+            st=replayFileStatus(dir);
+        }
+        if(!fs::is_directory(st))throw std::runtime_error("Invalid replay directory");
+    }
+    return dir;
+}
+void validateReplayPreset(const Json& p,const Workspace& ws) {
+    if(!p.isObject()||p.getStr("format")!="aiverse.spectrafx.replay"||p.getInt("version",-1)!=1||
+       !p["projectPath"].isString()||p.getStr("projectPath")!=ws.project.dir||
+       !p["graphSignature"].isString()||p.getStr("graphSignature").empty())
+        throw std::runtime_error("Invalid replay preset format or project identity");
+    const auto graph=Json::parse(p.getStr("graphSignature"));
+    if(!graph.isObject()||graph.getInt("version")!=2)
+        throw std::runtime_error("Replay signature must contain Graph v2");
+    auto bounded=[](const Json& v,double lo,double hi){
+        return v.isNumber()&&std::isfinite(v.toDouble())&&v.toDouble()>=lo&&v.toDouble()<=hi;
+    };
+    auto integer=[&](const Json& v,double hi){
+        return bounded(v,0,hi)&&std::floor(v.toDouble())==v.toDouble();
+    };
+    const auto speed=p["speed"].toDouble();
+    const auto bg=p.getStr("background");
+    if(!integer(p["tick"],3600)||!p["speed"].isNumber()||
+       (speed!=0.25&&speed!=0.5&&speed!=1&&speed!=2&&speed!=4)||
+       p["loop"].type()!=Json::Type::Bool||p["grid"].type()!=Json::Type::Bool||
+       p["axes"].type()!=Json::Type::Bool||(bg!="dark"&&bg!="neutral"&&bg!="light"&&bg!="black"))
+        throw std::runtime_error("Invalid replay timeline or stage");
+    const auto& camera=p["camera"];
+    if(!camera.isObject()||!bounded(camera["yaw"],-1000,1000)||
+       !bounded(camera["pitch"],-1.56,1.56)||!bounded(camera["distance"],0.01,100000)||
+       !bounded(camera["targetX"],-1000000,1000000)||!bounded(camera["targetY"],-1000000,1000000)||
+       !bounded(camera["targetZ"],-1000000,1000000)||camera["ortho"].type()!=Json::Type::Bool)
+        throw std::runtime_error("Invalid replay camera");
+    if((p.has("gpuBirthRandom")&&p["gpuBirthRandom"].type()!=Json::Type::Bool)||
+       (p.has("seed")&&!integer(p["seed"],2147483647.0))||
+       (p.has("gpuAllocationSeed")&&!integer(p["gpuAllocationSeed"],2147483647.0))||
+       (p.has("gpuShaderSeed")&&!integer(p["gpuShaderSeed"],4294967295.0))||
+       int(p.has("seed"))+int(p.has("gpuAllocationSeed"))+int(p.has("gpuShaderSeed"))>1)
+        throw std::runtime_error("Invalid replay seed mode");
+    const auto& params=p["parameters"];
+    if(!params.isObject()||params.size()>8)throw std::runtime_error("Invalid replay parameters");
+    for(const auto& [name,value]:params.members()){
+        const auto& spec=graph["instanceParameters"][name];
+        if(name.empty()||name.size()>48||
+           name.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_")!=std::string::npos||
+           (name[0]>='0'&&name[0]<='9')||!bounded(value,-1000000,1000000)||
+           !spec.isObject()||!spec["min"].isNumber()||!spec["max"].isNumber()||
+           value.toDouble()<spec["min"].toDouble()||value.toDouble()>spec["max"].toDouble())
+            throw std::runtime_error("Invalid replay scalar: "+name);
+    }
+}
+Json readReplayPreset(const fs::path& file,const Workspace& ws) {
+    if(!fs::is_regular_file(replayFileStatus(file))||fs::file_size(file)>kReplayMaxBytes)
+        throw std::runtime_error("Missing or oversized replay preset");
+    const auto bytes=readFile(file);
+    if(bytes.size()>kReplayMaxBytes)throw std::runtime_error("Replay preset exceeds 64 KiB");
+    auto preset=Json::parse(bytes);
+    validateReplayPreset(preset,ws);
+    return preset;
+}
 void noteGraph(Workspace& ws, const std::string& text) {
     // Existing editor live-reload watcher subscribes to Change::Fx.
     ws.note({Change::Fx, 0, 0, -1, -1, -1, text});
@@ -131,6 +220,72 @@ void registerSpectraGraphOps(Workspace& ws) {
     auto add = [&ws](const char* name, const char* description, const char* schema, Workspace::OpFn fn) {
         ws.registerOp({name, description, Json::parse(schema), std::move(fn)});
     };
+
+    add("fx_replay_preset_list","List named project Replay Presets in content/spectrafx/replays; bounded metadata only.",
+        R"({"properties":{"expectedProjectPath":{"type":"string"}}})",[&ws](const Json& p){
+        requireReplayProject(ws,p);
+        const auto dir=replayDirectory(ws,false);
+        Json entries=Json::array();
+        std::vector<std::string> names;
+        if(!dir.empty())for(const auto& entry:fs::directory_iterator(dir)){
+            if(!fs::is_regular_file(entry.symlink_status()))continue;
+            const auto file=entry.path().filename().string();
+            const std::string suffix=kReplaySuffix;
+            if(file.size()<=suffix.size()||file.compare(file.size()-suffix.size(),suffix.size(),suffix)!=0)continue;
+            const auto name=file.substr(0,file.size()-suffix.size());
+            if(validFxName(name)&&name!="fx")names.push_back(name);
+            if(names.size()>kReplayMaxEntries)throw std::runtime_error("Replay library exceeds 256 entries");
+        }
+        std::sort(names.begin(),names.end());
+        for(const auto& name:names){
+            Json row=Json::object();row.set("name",strGraph(name));
+            try{
+                const auto preset=readReplayPreset(dir/(name+kReplaySuffix),ws);
+                row.set("tick",preset["tick"]);row.set("ok",Json::fromBool(true));
+            }catch(const std::exception& e){row.set("ok",Json::fromBool(false));row.set("error",strGraph(e.what()));}
+            entries.push(std::move(row));
+        }
+        Json out=Json::object();out.set("presets",std::move(entries));return out;
+    });
+    add("fx_replay_preset_get","Read a named replay preset; optionally require an exact authored graph signature.",
+        R"({"properties":{"name":{"type":"string"},"expectedProjectPath":{"type":"string"},"expectedGraphSignature":{"type":"string"}},"required":["name"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);const auto name=requireGraphName(p);
+        const auto dir=replayDirectory(ws,false);
+        if(dir.empty())throw std::runtime_error("Replay library is empty");
+        const auto preset=readReplayPreset(dir/(name+kReplaySuffix),ws);
+        if(p.has("expectedGraphSignature")&&(!p["expectedGraphSignature"].isString()||
+           p.getStr("expectedGraphSignature")!=preset.getStr("graphSignature")))
+            throw std::runtime_error("Replay graph revision mismatch");
+        Json out=Json::object();out.set("name",strGraph(name));out.set("preset",preset);return out;
+    });
+    add("fx_replay_preset_save","Create an immutable named replay preset asset. Existing names are never overwritten.",
+        R"({"properties":{"name":{"type":"string"},"preset":{"type":"object"},"expectedProjectPath":{"type":"string"}},"required":["name","preset"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);const auto name=requireGraphName(p);
+        const auto bytes=p["preset"].dump(-1);
+        if(bytes.size()>kReplayMaxBytes)throw std::runtime_error("Replay preset exceeds 64 KiB");
+        validateReplayPreset(p["preset"],ws);
+        const auto dir=replayDirectory(ws,true);
+        const auto file=dir/(name+kReplaySuffix);
+        if(fs::exists(replayFileStatus(file)))throw std::runtime_error("Replay name already exists");
+        size_t count=0;
+        for(const auto& entry:fs::directory_iterator(dir)){
+            const auto n=entry.path().filename().string();const std::string suffix=kReplaySuffix;
+            if(n.size()>suffix.size()&&n.compare(n.size()-suffix.size(),suffix.size(),suffix)==0)++count;
+        }
+        if(count>=kReplayMaxEntries)throw std::runtime_error("Replay library is full");
+        const auto temp=dir/(name+".aiverse-tmp");
+        if(fs::exists(replayFileStatus(temp)))throw std::runtime_error("Replay temporary file already exists");
+        try{
+            writeFile(temp,bytes);
+            if(fs::exists(replayFileStatus(file)))throw std::runtime_error("Replay name already exists");
+            fs::rename(temp,file);
+        }catch(...){std::error_code ec;fs::remove(temp,ec);throw;}
+        Json out=Json::object();out.set("name",strGraph(name));
+        out.set("path",strGraph("spectrafx/replays/"+name+kReplaySuffix));
+        return out;
+    });
 
     add("fx_graph_list", "List SpectraFX graphs (fx/graphs/*.vfx.json) with compiler diagnostics and emitter counts.",
         R"({"properties":{}})", [&ws](const Json&) {

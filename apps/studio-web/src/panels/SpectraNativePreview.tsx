@@ -64,6 +64,10 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [splitPosition,setSplitPosition]=useState(50);
   const [lockedCamera,setLockedCamera]=useState<StudioSpectraCameraSnapshot|null>(null);
   const [replayPreset,setReplayPreset]=useState<SpectraReplayPreset|null>(null);
+  const [presetName,setPresetName]=useState('');
+  const [presetEntries,setPresetEntries]=useState<Array<{name:string;tick?:number;ok:boolean}>>([]);
+  const [presetSelected,setPresetSelected]=useState('');
+  const [presetLibraryBusy,setPresetLibraryBusy]=useState(false);
   const [liveScalars,setLiveScalars]=useState<Record<string,number>>({});
   const [replayRestoring,setReplayRestoring]=useState(false);
   const replayCancelled=useRef(false);
@@ -238,6 +242,42 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       camera:{...state.camera},tick:state.tick,speed:state.speed,
       loop:state.loop,background:state.background,grid:state.grid,axes:state.axes,
       graphSignature,projectPath,gpuBirthRandom});
+  };
+  const presetOp=async(op:string,params:Record<string,unknown>={})=>{
+    const response=await invoke('studio.op',{op,params:{...params,expectedProjectPath:projectPath}});
+    if(!mounted.current)throw new Error('SpectraFX preview closed');
+    return response.result as Record<string,unknown>;
+  };
+  const refreshPresetLibrary=async()=>{
+    const result=await presetOp('fx_replay_preset_list');
+    if(!Array.isArray(result.presets))throw new Error('Invalid replay library response');
+    setPresetEntries(result.presets.filter((entry):entry is {name:string;tick?:number;ok:boolean}=>
+      !!entry&&typeof entry==='object'&&typeof entry.name==='string'&&typeof entry.ok==='boolean'));
+  };
+  useEffect(()=>{
+    if(active)void refreshPresetLibrary().catch(e=>{if(mounted.current)setError(message(e));});
+  },[active,projectPath]);
+  const saveNamedPreset=async()=>{
+    if(!replayPreset||presetLibraryBusy||!active||!(/^[a-z0-9_]{1,48}$/).test(presetName)||presetName==='fx')return;
+    setPresetLibraryBusy(true);setError('');
+    try{
+      await presetOp('fx_replay_preset_save',{name:presetName,preset:replayPreset});
+      await refreshPresetLibrary();setPresetSelected(presetName);
+    }catch(e){setError(message(e));}finally{setPresetLibraryBusy(false);}
+  };
+  const selectNamedPreset=async()=>{
+    if(!presetSelected||presetLibraryBusy||!active)return;
+    setPresetLibraryBusy(true);setError('');
+    try{
+      const result=await presetOp('fx_replay_preset_get',{name:presetSelected,expectedGraphSignature:graphSignature});
+      const preset=parseSpectraReplayPreset(JSON.stringify(result.preset));
+      if(preset.projectPath!==projectPath||preset.graphSignature!==graphSignature)
+        throw new Error('Replay project or graph revision mismatch');
+      setReplayPreset(preset);
+      setReplaySeed(preset.seed===undefined?'':String(preset.seed));
+      setGpuAllocationSeed(preset.gpuAllocationSeed===undefined?'':String(preset.gpuAllocationSeed));
+      setGpuShaderSeed(preset.gpuShaderSeed===undefined?'':String(preset.gpuShaderSeed));
+    }catch(e){setError(message(e));}finally{setPresetLibraryBusy(false);}
   };
   const exportReplayPreset=()=>{
     if(!replayPreset)return;
@@ -575,6 +615,20 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         disabled={busy||capturePending} onChange={e=>{
           void importReplayPreset(e.target.files?.[0]);e.target.value='';
         }}/></label>
+      <StudioField label="Saved Replay Presets" htmlFor="spectra-preset-library">
+        <StudioSelect id="spectra-preset-library" value={presetSelected} disabled={!active||presetLibraryBusy||busy}
+          onChange={e=>setPresetSelected(e.target.value)}>
+          <option value="">Select saved preset…</option>
+          {presetEntries.map(p=><option key={p.name} value={p.name} disabled={!p.ok}>{p.name}{p.ok?' · tick '+p.tick:' · incompatible'}</option>)}
+        </StudioSelect>
+      </StudioField>
+      <StudioButton size="sm" disabled={!active||!presetSelected||presetLibraryBusy||busy} onClick={()=>void selectNamedPreset()}>Load saved preset</StudioButton>
+      <StudioButton size="sm" disabled={!active||presetLibraryBusy||busy} onClick={()=>void refreshPresetLibrary().catch(e=>setError(message(e)))}>Refresh presets</StudioButton>
+      <StudioField label="New preset name" htmlFor="spectra-preset-name">
+        <StudioInput id="spectra-preset-name" value={presetName} onChange={e=>setPresetName(e.target.value)}/>
+      </StudioField>
+      <StudioButton size="sm" disabled={!active||!replayPreset||presetLibraryBusy||busy||!(/^[a-z0-9_]{1,48}$/).test(presetName)||presetName==='fx'}
+        onClick={()=>void saveNamedPreset()}>Save to project Assets</StudioButton>
       {replayRestoring&&<small>Restoring native replay; waiting for simulation tick…</small>}
       {replayPreset&&<small>Preset tick {replayPreset.tick} · {replayPreset.speed}× ·
         camera and stage stored in memory</small>}

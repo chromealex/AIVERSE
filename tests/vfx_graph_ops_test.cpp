@@ -126,6 +126,24 @@ int main() {
     require(call("fx_graph_preview",previewStatus).has("error"),
             "detached Studio preview must not be callable from standalone MCP");
 
+    Json preset=Json::parse(R"JSON({"format":"aiverse.spectrafx.replay","version":1,"tick":25,"speed":1,"loop":false,"grid":true,"axes":true,"background":"dark","camera":{"yaw":0,"pitch":0,"distance":6,"targetX":0,"targetY":1,"targetZ":0,"ortho":false},"parameters":{}})JSON");
+    preset.set("projectPath",Json::string(root.string()));
+    Json v2=graph;v2.set("version",Json::number(int64_t(2)));
+    preset.set("graphSignature",Json::string(v2.dump(-1)));
+    Json savePreset=Json::object();savePreset.set("name",Json::string("first"));savePreset.set("preset",preset);
+    require(!call("fx_replay_preset_save",savePreset).has("error"),"replay asset save failed");
+    require(fs::exists(root/"content"/"spectrafx"/"replays"/"first.spectra-replay.json"),"missing replay content asset");
+    require(call("fx_replay_preset_save",savePreset).has("error"),"replay history overwritten");
+    require(call("fx_replay_preset_list",Json::object())["presets"].size()==1,"replay listing failed");
+    Json getPreset=Json::object();getPreset.set("name",Json::string("first"));
+    require(call("fx_replay_preset_get",getPreset)["preset"].getInt("tick")==25,"replay read failed");
+    getPreset.set("expectedGraphSignature",Json::string("other"));
+    require(call("fx_replay_preset_get",getPreset).has("error"),"stale graph revision accepted");
+    savePreset.set("name",Json::string("../escape"));
+    require(call("fx_replay_preset_save",savePreset).has("error"),"unsafe replay name accepted");
+    savePreset.set("name",Json::string("second"));savePreset.set("expectedProjectPath",Json::string("other"));
+    require(call("fx_replay_preset_save",savePreset).has("error"),"stale project accepted");
+
     Json bake = Json::object();
     bake.set("name", Json::string("spark"));
     bake.set("effect", Json::string("spark_baked"));
