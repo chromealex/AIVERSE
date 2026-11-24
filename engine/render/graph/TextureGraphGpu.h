@@ -52,6 +52,15 @@ inline std::string pointwiseExpression(const Node& node,int n,Port var){
         std::string expr;
         if(id=="constant")expr="float3("+f("value",.5f)+")";
         else if(id=="color")expr="float3("+literal(scalar(q["value"][size_t(0)],0))+","+literal(scalar(q["value"][size_t(1)],0))+","+literal(scalar(q["value"][size_t(2)],0))+")";
+        else if(id=="formula"){
+            std::vector<std::string> stack;
+            for(const auto& token:formulaTokens(q.getStr("expression","a b *"))){
+                if(token=="a"||token=="b"||token=="0"||token=="1"||token=="0.5")stack.push_back(token=="a"?a():token=="b"?b():token=="0"?"0.0f":token=="1"?"1.0f":"0.5f");
+                else if(token=="abs"||token=="invert")stack.back()=token=="abs"?"abs("+stack.back()+")":"(1.0f-"+stack.back()+")";
+                else{auto y=std::move(stack.back());stack.pop_back();auto x=std::move(stack.back());stack.back()=(token=="min"||token=="max")?token+"("+x+","+y+")":"("+x+token+y+")";}
+            }
+            expr="float3("+stack.back()+")";
+        }
         else if(id=="gradient")expr=q.getStr("axis","y")=="x"?"float3(uv.x)":"float3(uv.y)";
         else if(id=="noise"||id=="fbm"||id=="voronoi"){
             const auto period=std::to_string(integer(q["period"],8,1,256));
@@ -189,7 +198,13 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
     std::string body;
     const bool normal=std::string(node.info->id)=="normal";
     const std::string_view op=node.info->id;
-    if(neighborhoodOp(op)){
+    if(op=="image"){
+        const auto pixels=imagePixels(node.parameters);
+        const auto w=std::to_string(integer(node.parameters["width"],1,1,32)),h=std::to_string(integer(node.parameters["height"],1,1,32));
+        body="uint x=tid%n,y=tid/n;uint index=(y*"+h+"u/n)*"+w+"u+x*"+w+"u/n;uint rgb=0u;switch(index){\n";
+        for(size_t i=0;i<pixels.size();++i)body+="case "+std::to_string(i)+"u:rgb="+std::to_string(pixels[i])+"u;break;\n";
+        body+="default:break;}float3 value=float3(float((rgb>>16u)&255u),float((rgb>>8u)&255u),float(rgb&255u))/255.0f;\n";
+    }else if(neighborhoodOp(op)){
         body="int x=int(tid%n),y=int(tid/n),side=int(n);\n";
         if(op=="blur"||op=="erosion"){
             const auto radius=std::to_string(integer(node.parameters["radius"],1,1,4));
@@ -225,7 +240,7 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
 // sampling or side-effect operations remain materialization boundaries.
 inline bool fusionPointwise(const Node& node){
     const std::string_view id=node.info->id;
-    for(std::string_view op:{"constant","color","gradient","noise","fbm","voronoi","pattern","patternMask",
+    for(std::string_view op:{"formula","constant","color","gradient","noise","fbm","voronoi","pattern","patternMask",
         "add","subtract","multiply","min","max","invert","threshold","remap","blend","blendColor","colorize","metallicRoughness"})
         if(id==op)return true;
     return false;
