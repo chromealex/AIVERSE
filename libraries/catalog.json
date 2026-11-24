@@ -3223,7 +3223,25 @@
       "dependencies": [
         "libraries/include/aiverselib/algorithms/RandomSampling.h",
         "libraries/include/aiverselib/algorithms/RandomSequences.h",
-        "libraries/include/aiverselib/algorithms/SpatialSampling.h"
+        "libraries/include/aiverselib/algorithms/SpatialSampling.h",
+        "libraries/include/aiverselib/algorithms/BlueNoise.h"
+      ]
+    },
+    {
+      "id": "noise",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-foundation",
+      "source": "libraries/include/aiverselib/algorithms/Noise.h",
+      "skill": "skills/core/aiverse-noise/SKILL.md",
+      "summary": "Deterministic periodic value and cellular noise",
+      "notes": "Legacy GenNoise unchanged.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_noise",
+      "runtime": "header",
+      "linkDependencies": [],
+      "packageDependencies": [
+        "random"
       ]
     }
   ]
