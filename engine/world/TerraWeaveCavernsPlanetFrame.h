@@ -4,18 +4,12 @@
 // Surface's simulation anchor is distinct from the orbit/render centre.
 #include "engine/game/Surface.h"
 #include "engine/core/FixedMath.h"
-#include "engine/world/TerraWeaveCaverns.h"
+#include "engine/world/TerraWeaveCavernsPlanetRegion.h"
 #include <memory>
 #include <string>
 #include <stdexcept>
 
 namespace aiverse::terraweave::caverns {
-struct CavePlanetAnchor {
-    std::string bodyId;
-    int32_t face=0;
-    Fixed a{},b{};
-    int32_t halfExtentCm=800;
-};
 class CavePlanetFrame {
 public:
     static CavePlanetFrame make(std::shared_ptr<const game::Surface> surface,
