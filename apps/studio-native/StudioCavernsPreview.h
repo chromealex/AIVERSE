@@ -3,6 +3,7 @@
 // Caverns streaming, STRATA/GeometryScene and fence retirement pipeline.
 // Never mutates MapDoc, gameplay ECS, collision or navigation.
 #include "apps/editor/core/MapDoc.h"
+#include "apps/editor/core/TerraWeavePlanetCavernsDoc.h"
 #include "engine/world/TerraWeaveCavernsArchive.h"
 #include "engine/world/TerraWeaveCavernsClientVisualHost.h"
 #if defined(AIVERSE_STRATA_STAGING_ENABLED)
@@ -64,22 +65,29 @@ public:
         if(!enabled_)return;
         // Snapshot identity includes actual document bytes on every new
         // immutable MapDoc capture (also catches same-revision Undo/Redo).
-        const bool contextChanged=project!=project_||doc.path!=map_;
+        const bool contextChanged=project!=project_||doc.path!=map_||planetary_!=doc.data.planet();
         if(contextChanged){
             if(!close(device)){error_="Previous Caverns preview retirement refused";return;}
-            project_=project;map_=doc.path;
+            project_=project;map_=doc.path;planetary_=doc.data.planet();
         }
-        if(doc.data.planet()||doc.data.extra["terraweaveCaverns"].isNull()){
+        if(doc.data.extra[planetary_?editor::planet_caves::key:"terraweaveCaverns"].isNull()){
             if(owner_&&!close(device))error_="Caverns preview retirement refused";
             return;
         }
         try{
-            const auto& authored=doc.data.extra["terraweaveCaverns"];
+            const auto& authored=doc.data.extra[planetary_?editor::planet_caves::key:"terraweaveCaverns"];
             if(seenDoc_!=&doc||seenRevision_!=doc.revision||!owner_){
                 const auto bytes=authored.dump(-1);
                 if(bytes!=document_||!owner_){
-                    auto source=std::make_shared<const terraweave::caverns::CaveVolumeSnapshot>(
-                        terraweave::caverns::caveSnapshotFromJson(authored));
+                    namespace cave=terraweave::caverns;
+                    auto region=planetary_?std::optional{editor::planet_caves::read(doc.data)}:std::nullopt;
+                    const auto anchorBytes=region?cave::cavePlanetAnchorToJson(region->anchor).dump(-1):std::string{};
+                    if(owner_&&anchorBytes!=chartIdentity_){
+                        if(!close(device))throw std::runtime_error("Caverns chart retirement refused");
+                    }
+                    chartIdentity_=anchorBytes;
+                    auto source=std::make_shared<const cave::CaveVolumeSnapshot>(
+                        region?region->volume:cave::caveSnapshotFromJson(authored));
                     if(!owner_){
                         terraweave::caverns::StreamSettings stream;
                         stream.radiusXZ=1;stream.radiusY=1;stream.maxResident=64; // 27 camera slots or up to 64 exact rim slots
@@ -90,6 +98,13 @@ public:
                         if(paging_)spec.paging=budget_;
                         owner_->setGraphicsOptions(spec);
                         owner_->open(source);
+                        if(region){
+                            // Four slots per axis, with a reserved gradient halo.
+                            resolution_=8;spacingCm_=std::max(1,region->anchor.halfExtentCm/24);
+                            std::set<cave::ChunkKey3,cave::KeyLess> keys;
+                            for(int z=-2;z<2;++z)for(int y=-2;y<2;++y)for(int x=-2;x<2;++x)keys.insert({x,y,z});
+                            owner_->setChartPreviewDemand(std::move(keys));
+                        }
                     }else if(owner_->opened())owner_->replaceSnapshot(source);
                     else owner_->open(source);
                     authoredSnapshot_=source;rimPlan_.reset();rejectedRim_.reset();rimError_.clear();
@@ -105,6 +120,7 @@ public:
     // a conservative lower plane between the authored cave end and actual
     // lowest mouth vertex. Unsupported shaft topology falls back to solid.
     void syncRimGroup(std::shared_ptr<const Group> plan){
+        if(planetary_)return;
         if(plan&&plan->rims.empty())plan.reset();
         if(!owner_||!authoredSnapshot_)return;
         if(plan==rimPlan_|| (plan&&plan==rejectedRim_))return;
@@ -147,7 +163,7 @@ public:
                 throw std::invalid_argument("Caverns preview focus");
             const auto cm=[](float x){return int64_t(std::llround(std::clamp(double(x),-9990000.,9990000.)*100.));};
             Point p{cm(focus.x),cm(focus.y),cm(focus.z)};
-            owner_->beforeRender(device,p);
+            owner_->beforeRender(device,p,resolution_,spacingCm_);
             error_.clear();
         }catch(const std::exception& e){
             if(rimPlan_){rejectedRim_=rimPlan_;rimError_=e.what();rimPlan_.reset();
@@ -165,7 +181,7 @@ public:
     void draw(render::Renderer3D& renderer){if(visible())owner_->draw(renderer);}
     bool close(gfx::Device& device) {
         if(owner_&&!owner_->closeAfterGpuIdle(device))return false;
-        owner_.reset();authoredSnapshot_.reset();rimPlan_.reset();rejectedRim_.reset();rimError_.clear();seenDoc_=nullptr;seenRevision_=0;document_.clear();error_.clear();failed_=false;
+        owner_.reset();authoredSnapshot_.reset();rimPlan_.reset();rejectedRim_.reset();rimError_.clear();seenDoc_=nullptr;seenRevision_=0;document_.clear();chartIdentity_.clear();resolution_=16;spacingCm_=100;error_.clear();failed_=false;
         return true;
     }
     // Last resort on a failed GPU-idle proof during device destruction:
@@ -176,7 +192,8 @@ public:
         const auto boolean=[&](const char* key,bool value){out.set(key,Json::fromBool(value));};
         const auto count=[&](const char* key,uint64_t n){out.set(key,Json::string(std::to_string(n)));};
         boolean("enabled",enabled_);boolean("isolate",isolate_);boolean("paging",paging_);
-        boolean("visible",visible());boolean("visualOnly",true);
+        boolean("visible",visible());boolean("visualOnly",true);boolean("planetaryChart",planetary_);
+        count("previewResolution",resolution_);count("previewSpacingCm",spacingCm_);
         out.set("error",Json::string(error_));
         boolean("rimGroupReady",rimPlan_&&rimReady(rimPlan_));
         boolean("rimGroupPending",rimPlan_&&!rimReady(rimPlan_));
@@ -208,6 +225,9 @@ private:
     const editor::MapDoc* seenDoc_=nullptr; // identity only, never dereferenced
     uint64_t seenRevision_=0;
     std::string project_,map_,document_,error_;
+    std::string chartIdentity_;
+    uint32_t resolution_=16;int32_t spacingCm_=100;
+    bool planetary_=false;
     bool enabled_=true,isolate_=false,paging_=false,failed_=false;
 };
 } // namespace aiverse::studio
