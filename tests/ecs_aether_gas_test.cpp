@@ -60,7 +60,7 @@ static void checkActiveSpeciesDiffusion(){
         }
         std::vector<wp::Flow> flows;
         for(size_t i=0;i<n*5;++i)
-            flows.push_back({next()%n,next()%n,wp::I(next()%120)});
+            flows.push_back({size_t(next()%n),size_t(next()%n),wp::I(next()%120)});
         auto expected=fields;
         for(auto& field:expected)AIVERSE_TEST_CHECK(wp::diffuse(field,flows));
         auto sum=[](const auto& field){wp::I total=0;for(auto m:field)total+=m;return total;};
