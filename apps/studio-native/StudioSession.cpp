@@ -603,7 +603,59 @@ Json StudioSession::agentLinkedCall(const std::string& name,const Json& args){
                 row.set("studioLinkOnly",Json::fromBool(op.studioLinkOnly));rows.push(std::move(row));
             }
             out.set("operations",std::move(rows));out.set("bulkUndo",str("map-only"));
-            out.set("coordinatedBatch",str("map-project-assets-disjoint-relocations"));return out;
+            out.set("coordinatedBatch",str("map-project-assets-validated-relocation-chains"));
+            out.set("atomicSave",Json::fromBool(true));out.set("assetCursorJournal",num(5));
+            out.set("mapCheckpointVersion",num(2));out.set("nativeOnlyRecoveryReset",Json::fromBool(true));
+            out.set("nativeOnlyPermanentPurge",Json::fromBool(true));return out;
+        }
+        if(name=="studio_owner_history"||name=="studio_owner_history_step"||
+           name=="studio_save_documents"||name=="studio_asset_history_reset_review"){
+            if(ws_.project.dir.empty()||args.getStr("expectedProject")!=ws_.project.dir)
+                throw std::runtime_error("Linked Studio project changed");
+            if(name=="studio_owner_history"){
+                syncHistoryLabels();
+                Json out=Json::object();
+                out.set("project",str(ws_.project.dir));out.set("mapPath",str(ws_.map.path));
+                out.set("ownerVersion",str(batchOwnerVersion()));
+                auto map=historyJson();
+                map.set("canUndo",Json::fromBool(ws_.map.canUndo()&&!stroking_));
+                map.set("canRedo",Json::fromBool(ws_.map.canRedo()&&!stroking_));
+                out.set("map",std::move(map));out.set("projectHistory",ws_.project.historyStatus());
+                out.set("assets",assetHistoryJson());
+                out.set("mapDirty",Json::fromBool(ws_.map.dirty));
+                out.set("rulesDirty",Json::fromBool(ws_.project.rulesDirty));
+                out.set("manifestDirty",Json::fromBool(ws_.project.manifestDirty));
+                out.set("saveAvailable",Json::fromBool(!ws_.map.path.empty()&&!stroking_));
+                out.set("hostedAgentRunning",Json::fromBool(agentRun_.running()));
+                return out;
+            }
+            if(name=="studio_asset_history_reset_review"){
+                auto out=studioReviewAssetHistoryReset(ws_.project.dir);
+                out.set("version",str(assetHistoryVersion()));out.set("applyNativeOnly",Json::fromBool(true));return out;
+            }
+            if(!args.getBool("confirmed")||stroking_)throw std::runtime_error("Confirm the operation outside an active Scene stroke");
+            Json request=Json::object();request.set("id",num(1));request.set("params",args);
+            if(name=="studio_save_documents"){
+                if(ws_.map.path.empty()||args.getStr("expectedMap")!=ws_.map.path||
+                   args.getStr("expectedOwnerVersion")!=batchOwnerVersion())
+                    throw std::runtime_error("Linked map or owner version changed; refresh owner history");
+                request.set("method",str("studio.save"));
+            }else{
+                if(agentRun_.running())throw std::runtime_error("Stop the hosted agent before history navigation");
+                const auto scope=args.getStr("scope"),direction=args.getStr("direction");
+                if(direction!="undo"&&direction!="redo")throw std::runtime_error("Invalid history direction");
+                if(scope=="map"){
+                    if(args.getStr("expectedVersion")!=historyVersion())throw std::runtime_error("Map history changed");
+                    request.set("method",str(direction=="redo"?"studio.redo":"studio.undo"));
+                }else if(scope=="project"||scope=="assets"){
+                    request.set("method",str(scope=="project"?"studio.projectHistoryStep":"studio.assetHistoryStep"));
+                }else throw std::runtime_error("Invalid history owner");
+            }
+            const auto result=dispatch(request);
+            if(result.has("error"))throw std::runtime_error(result.getStr("error"));
+            if(name=="studio_owner_history_step"){agentHistoryUnsafe_=true;agentBatchFenced_=true;}
+            Json out=Json::object();out.set("ok",Json::fromBool(true));
+            out.set("ownerVersion",str(batchOwnerVersion()));return out;
         }
         if(name=="studio_agent_history_list"||name=="studio_agent_history_step"||
            name=="studio_agent_batch_preview"||name=="studio_agent_batch_apply"){
@@ -857,7 +909,7 @@ bool StudioSession::pollAgentLink() {
         if(!agentBatchOwnerVersion_.empty()&&agentBatchOwnerVersion_!=batchOwnerVersion())agentBatchFenced_=true;
         const Json result=agentLinkedCall(name,args);
         agentBatchOwnerVersion_=batchOwnerVersion();
-        if(name=="studio_agent_history_step"||name=="studio_agent_batch_apply"){
+        if(name=="studio_agent_history_step"||name=="studio_agent_batch_apply"||name=="studio_owner_history_step"){
             const bool ownerChanged=ws_.map.historyMark()!=before||ws_.project.documentHistory.version()!=projectBefore||
                 assetHistory_.version()!=assetBefore;
             // A navigation is not a new edit. Preserve the original links
@@ -1895,9 +1947,6 @@ Json StudioSession::dispatch(const Json& request) {
     return reply;
 }
 Json StudioSession::dispatchImpl(const Json& request) {
-    const auto method=request.getStr("method");
-    // These three staged owners publish their own paired-cursor batch.
-    // Keep the legacy dirty-marker wrapper only for operations not yet staged.
     return dispatchImplCore(request);
 }
 Json StudioSession::dispatchImplCore(const Json& request) {
