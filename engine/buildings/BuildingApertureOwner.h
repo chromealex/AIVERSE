@@ -82,22 +82,23 @@ inline bool buildingAuthoredAperturePoses(
             y0=H-0.28f;y1=H;
         }else{
             y0=0.24f;y1=y0+socket.height;
-            // Socket X/Z is one metre OUTSIDE the facade.
+            // The graph owns the local facade plane, including courtyard walls.
+            const float plane=buildingSocketWallPlane(socket,W,D);
             switch(socket.side){
                 case BuildingFeatureSide::Front:
                     x0=socket.x-socket.width*0.5f;
                     x1=socket.x+socket.width*0.5f;
-                    z0=0;z1=0.36f;break;
+                    z0=plane;z1=plane+0.36f;break;
                 case BuildingFeatureSide::Back:
                     x0=socket.x-socket.width*0.5f;
                     x1=socket.x+socket.width*0.5f;
-                    z0=D-0.36f;z1=D;break;
+                    z0=plane-0.36f;z1=plane;break;
                 case BuildingFeatureSide::Left:
-                    x0=0;x1=0.36f;
+                    x0=plane;x1=plane+0.36f;
                     z0=socket.z-socket.width*0.5f;
                     z1=socket.z+socket.width*0.5f;break;
                 case BuildingFeatureSide::Right:
-                    x0=W-0.36f;x1=W;
+                    x0=plane-0.36f;x1=plane;
                     z0=socket.z-socket.width*0.5f;
                     z1=socket.z+socket.width*0.5f;break;
             }

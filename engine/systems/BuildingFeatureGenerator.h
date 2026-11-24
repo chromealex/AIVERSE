@@ -81,6 +81,14 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
         if(std::string(key)=="roomsX")recipe.roomsX=uint32_t(n);
         else recipe.roomsZ=uint32_t(n);
     }
+    if(json.has("footprint")){
+        const auto& rows=json["footprint"];
+        if(!rows.isArray()||rows.size()>6)throw JsonError(path+".footprint: expected up to six binary rows");
+        for(const auto& row:rows.items()){
+            if(!row.isString()||row.str().size()>6)throw JsonError(path+".footprint: invalid row");
+            recipe.footprint.push_back(row.str());
+        }
+    }
     if(json.has("features")){
         const auto& list=json["features"];
         if(!list.isArray())throw JsonError(path+".features: expected array");
@@ -113,6 +121,11 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
                 else if(side=="left")f.side=BuildingFeatureSide::Left;
                 else if(side=="right")f.side=BuildingFeatureSide::Right;
                 else throw JsonError(label+".side: expected front, back, left or right");
+            }
+            if(j.has("wallLine")){
+                const auto& value=j["wallLine"];const double n=value.toDouble(-2);
+                if(!value.isNumber()||n<-1||n>6||std::floor(n)!=n)throw JsonError(label+".wallLine: expected integer -1..6");
+                f.wallLine=int(n);
             }
             if(j.has("count")){
                 const float count=number(j["count"],label+".count");

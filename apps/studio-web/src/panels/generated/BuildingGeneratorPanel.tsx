@@ -146,6 +146,7 @@ export default function BuildingGeneratorPanel({
   const [role,setRole]=useState('factory');
   const [mode,setMode]=useState<'features'|'preset'>('features');
   const [textureResolution,setTextureResolution]=useState<128|256|512>(256);
+  const [uniqueAtlas,setUniqueAtlas]=useState(false);
   const [roofProfile,setRoofProfile]=useState<import('../../types').StudioBuildingRoofProfile>('flat');
   const [roofRise,setRoofRise]=useState('0');
   const [features,setFeatures]=useState<StudioBuildingFeature[]>([
@@ -160,6 +161,8 @@ export default function BuildingGeneratorPanel({
   const [floors,setFloors]=useState('1');
   const [roomsX,setRoomsX]=useState('1');
   const [roomsZ,setRoomsZ]=useState('1');
+  const [footprint,setFootprint]=useState<string[]>([]);
+  const shaped=footprint.some(row=>row.includes('0'));
   const [seed,setSeed]=useState('482733');
   const [selectedSeed,setSelectedSeed]=useState<number|null>(null);
   const [variants,setVariants]=useState<Candidate[]>([]);
@@ -267,12 +270,12 @@ export default function BuildingGeneratorPanel({
       setSetting(selected.setting);setStyle(selected.id);
       setRole(item.function??'');
       setMode(item.mode??'features');
-      setTextureResolution(item.textureResolution??128);
+      setTextureResolution(item.textureResolution??128);setUniqueAtlas(item.uniqueAtlas??false);
       setRoofProfile(item.roofProfile??'flat');setRoofRise(String(item.roofRise??0));
       setWidth(String(item.width));setHeight(String(item.height));
       setDepth(String(item.depth));setSeed(String(item.seed));
       setFloors(String(item.floors??1));
-      setRoomsX(String(item.roomsX??1));setRoomsZ(String(item.roomsZ??1));
+      setRoomsX(String(item.roomsX??1));setRoomsZ(String(item.roomsZ??1));setFootprint(item.footprint??[]);
       setFeatures((item.features??[]).map(f=>({...makeFeature(f.kind),...f})));
       setMaterialBindings(item.materialBindings??{});
       clearGenerated();
@@ -306,6 +309,23 @@ export default function BuildingGeneratorPanel({
       if(!Number.isInteger(f)||f<1||f>8||!Number.isInteger(rx)||rx<1||rx>6||
          !Number.isInteger(rz)||rz<1||rz>6||f*rx*rz>128)
         return 'Use 1–8 floors and 1–6 rooms per axis (maximum 128 rooms).';
+      if(shaped){
+        if(roofProfile!=='flat'||features.some(f=>f.kind==='sliding-roof'))return 'Custom footprint requires a flat roof without a retractable panel.';
+        if(footprint.length!==rz||footprint.some(row=>row.length!==rx||!/^[01]+$/.test(row)))return 'Footprint grid does not match room dimensions.';
+        const cells=footprint.flatMap((row,z)=>[...row].flatMap((v,x)=>v==='1'?[[x,z]]:[]));
+        if(!cells.some(([x])=>x===0)||!cells.some(([x])=>x===rx-1)||!cells.some(([,z])=>z===0)||!cells.some(([,z])=>z===rz-1))
+          return 'Occupied cells must touch all four bounding sides.';
+        const seen=new Set<string>(),queue=[cells[0]];
+        seen.add(cells[0].join(','));
+        for(let i=0;i<queue.length;i++){
+          const [x,z]=queue[i];
+          for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
+            const a=x+dx,b=z+dz,key=a+','+b;
+            if(footprint[b]?.[a]==='1'&&!seen.has(key)){seen.add(key);queue.push([a,b]);}
+          }
+        }
+        if(seen.size!==cells.length)return 'All footprint cells must be connected along an edge.';
+      }
       if((asNumber(height)-asNumber(roofRise)-0.52)/f<2.8||asNumber(width)/rx<2.5||asNumber(depth)/rz<2.5)
         return 'Every storey requires 2.8m height; each room at least 2.5m on each side.';
     }
@@ -375,9 +395,15 @@ export default function BuildingGeneratorPanel({
             if(feature.position-span*0.5<0.72||feature.position+span*0.5>sideLength-0.72)
               return 'Exact opening position is outside its usable wall.';
           }
-          const info=used[feature.side]??{width:0,count:0};
-          info.width+=feature.width*feature.count;info.count+=feature.count;
-          used[feature.side]=info;
+          const line=feature.wallLine??-1;
+          if(!Number.isInteger(line)||line<-1||line>((feature.side==='front'||feature.side==='back')?asNumber(roomsZ):asNumber(roomsX)))
+            return 'Invalid facade grid line.';
+          // Native graph checks individual exposed spans and exact placement.
+          if(line<0&&!shaped){
+            const info=used[feature.side]??{width:0,count:0};
+            info.width+=feature.width*feature.count;info.count+=feature.count;
+            used[feature.side]=info;
+          }
         }
       }
       for(const [side,info] of Object.entries(used)){
@@ -387,16 +413,17 @@ export default function BuildingGeneratorPanel({
       }
     }
     return '';
-  },[selectedStyle,selectedFunction,mode,features,width,height,depth,seed,floors,roomsX,roomsZ,roofProfile,roofRise]);
+  },[selectedStyle,selectedFunction,mode,features,width,height,depth,seed,floors,roomsX,roomsZ,roofProfile,roofRise,footprint,shaped]);
 
   const request=(useSeed:number):StudioBuildingRequest=>({
-    setting,style,function:mode==='preset'?role:'',mode,textureResolution,
+    setting,style,function:mode==='preset'?role:'',mode,textureResolution,uniqueAtlas,
     roofProfile:mode==='features'?roofProfile:undefined,
     roofRise:mode==='features'?asNumber(roofRise):undefined,
     features:mode==='features'?features:undefined,
     materialBindings:Object.keys(materialBindings).length?materialBindings:undefined,
     width:asNumber(width),height:asNumber(height),depth:asNumber(depth),seed:useSeed,
-    floors:asNumber(floors),roomsX:asNumber(roomsX),roomsZ:asNumber(roomsZ)
+    floors:asNumber(floors),roomsX:asNumber(roomsX),roomsZ:asNumber(roomsZ),
+    footprint:mode==='features'&&footprint.length?footprint:undefined
   });
   // A seed is not a request identity. Include all authoring inputs and the project.
   const draftKey=buildingDraftKey(snapshot?.project.path??'',request(asNumber(seed)));
@@ -451,7 +478,7 @@ export default function BuildingGeneratorPanel({
     const p=presets[id];if(!p)return;
     setMode('features');setWidth(String(p.size[0]));setHeight(String(p.size[1]));setDepth(String(p.size[2]));
     setFloors(String(p.rooms[0]));setRoomsX(String(p.rooms[1]));setRoomsZ(String(p.rooms[2]));
-    setFeatures(p.features);
+    setFeatures(p.features);setFootprint([]);
     const profile=p.features.some(f=>f.kind==='sliding-roof')?'flat':selectedStyle?.recommendedRoof??'flat';
     const rise=profile==='flat'?0:Math.min(3,Math.max(1.5,p.size[0]*.12));
     setRoofProfile(profile);setRoofRise(String(rise));setHeight(String(p.size[1]+rise));
@@ -845,13 +872,42 @@ export default function BuildingGeneratorPanel({
           </StudioField>
           <StudioField label="Rooms X" htmlFor="abg-rooms-x">
             <StudioInput id="abg-rooms-x" type="number" min={1} max={6} step={1} value={roomsX}
-              onChange={setDimension(setRoomsX)} disabled={busy}/>
+              onChange={e=>{setRoomsX(e.target.value);setFootprint([]);clearGenerated();}} disabled={busy}/>
           </StudioField>
           <StudioField label="Rooms Z" htmlFor="abg-rooms-z">
             <StudioInput id="abg-rooms-z" type="number" min={1} max={6} step={1} value={roomsZ}
-              onChange={setDimension(setRoomsZ)} disabled={busy}/>
+              onChange={e=>{setRoomsZ(e.target.value);setFootprint([]);clearGenerated();}} disabled={busy}/>
           </StudioField>
         </div>
+        <StudioField label="Footprint preset" htmlFor="abg-footprint-preset">
+          <StudioSelect id="abg-footprint-preset" value="" disabled={busy} onChange={e=>{
+            const patterns:Record<string,string[]>={L:['100','100','111'],T:['111','010','010'],U:['101','101','111'],H:['101','111','101'],courtyard:['111','101','111']};
+            if(e.target.value==='rect')setFootprint([]);
+            else if(patterns[e.target.value]){
+              const rows=patterns[e.target.value];setRoomsX('3');setRoomsZ('3');setFootprint(rows);
+              setRoofProfile('flat');setRoofRise('0');
+            }
+            clearGenerated();
+          }}>
+            <option value="">Choose a starting contour…</option><option value="rect">Rectangle</option>
+            <option value="L">L shape</option><option value="T">T shape</option><option value="U">U shape</option>
+            <option value="H">H shape</option><option value="courtyard">Courtyard</option>
+          </StudioSelect>
+        </StudioField>
+        {Number.isInteger(asNumber(roomsX))&&asNumber(roomsX)>=1&&asNumber(roomsX)<=6&&Number.isInteger(asNumber(roomsZ))&&asNumber(roomsZ)>=1&&asNumber(roomsZ)<=6&&
+          <div className="abg__footprint-grid" style={{gridTemplateColumns:'repeat('+roomsX+', minmax(32px, 1fr))'}}>
+            {Array.from({length:asNumber(roomsZ)*asNumber(roomsX)},(_,i)=>{
+              const x=i%asNumber(roomsX),z=Math.floor(i/asNumber(roomsX));
+              const active=footprint[z]?.[x]!=='0';
+              return <button type="button" key={i} className={'abg__footprint-cell'+(active?' is-active':'')} aria-pressed={active}
+                aria-label={'Room cell '+(x+1)+', '+(z+1)} disabled={busy} onClick={()=>{
+                  const rows=footprint.length?footprint.slice():Array.from({length:asNumber(roomsZ)},()=> '1'.repeat(asNumber(roomsX)));
+                  rows[z]=rows[z].slice(0,x)+(active?'0':'1')+rows[z].slice(x+1);
+                  setFootprint(rows);clearGenerated();
+                }}>{active?'■':'·'}</button>;
+            })}
+          </div>}
+        <small className="abg__note">Click cells to add or remove rooms on every storey. The top row is Front. Custom shapes use flat roofs; select a facade grid line for openings on recessed or courtyard walls. Existing incompatible features must be edited explicitly.</small>
         <small className="abg__note">Internal room partitions, stair and lift geometry follow the selected functional recipe. Native ECS/PHYSIS and graph owners handle dynamic traversal separately; changing setting never changes gameplay permissions.</small>
       </StudioSection>}
         </div>
@@ -933,8 +989,14 @@ export default function BuildingGeneratorPanel({
               </StudioField>
               {!['sliding-roof','stairs','elevator'].includes(feature.kind)&&<StudioField label="Wall" htmlFor={"abg-feature-"+i+"-side"}>
                 <StudioSelect id={"abg-feature-"+i+"-side"} value={feature.side} disabled={busy}
-                  onChange={e=>setFeature(i,'side',e.target.value)}>
+                  onChange={e=>{setFeatures(old=>old.map((f,j)=>j===i?{...f,side:e.target.value as StudioBuildingFeature['side'],wallLine:-1}:f));clearGenerated();}}>
                   {['front','back','left','right'].map(side=><option key={side} value={side}>{side}</option>)}
+                </StudioSelect>
+              </StudioField>}
+              {!['sliding-roof','stairs','elevator'].includes(feature.kind)&&<StudioField label="Facade grid line" htmlFor={'abg-feature-'+i+'-wall-line'}>
+                <StudioSelect id={'abg-feature-'+i+'-wall-line'} value={String(feature.wallLine??-1)} disabled={busy} onChange={e=>setFeature(i,'wallLine',Number(e.target.value))}>
+                  <option value={-1}>Outer envelope (default)</option>
+                  {Array.from({length:Math.max(0,Math.min(5,((feature.side==='front'||feature.side==='back')?asNumber(roomsZ):asNumber(roomsX))-1))},(_,k)=><option key={k+1} value={k+1}>Interior grid line {k+1}</option>)}
                 </StudioSelect>
               </StudioField>}
               {!['sliding-roof','stairs','elevator'].includes(feature.kind)&&<StudioField label="Count" htmlFor={"abg-feature-"+i+"-count"}>
@@ -999,11 +1061,16 @@ export default function BuildingGeneratorPanel({
             <option value={128}>128 × 128 · Compact</option><option value={256}>256 × 256 · Standard</option><option value={512}>512 × 512 · Detailed</option>
           </StudioSelect>
         </StudioField>
-        <small className="abg__note">Applies to preview and exported GLB; imported project texture sizes are unchanged.</small>
+        <StudioField label="Texture layout" htmlFor="abg-texture-layout">
+          <StudioSelect id="abg-texture-layout" value={uniqueAtlas?'unique':'tiled'} disabled={busy} onChange={e=>{setUniqueAtlas(e.target.value==='unique');clearGenerated();}}>
+            <option value="tiled">Tiled material maps</option><option value="unique">Unique UV atlas (up to 2048)</option>
+          </StudioSelect>
+        </StudioField>
+        <small className="abg__note">Unique atlas bakes procedural materials into four shared maps with separate triangle charts. Imported textures and UV rotation are not supported in this mode. Tiled mode preserves original texture detail. Applies to preview and exported GLB.</small>
       </StudioSection>
       <BuildingSurfacePreview key={(snapshot?.project.path??'')+':'+(selectedStyle?.id??'')} style={selectedStyle} visible={page==='materials'} resolution={textureResolution} projectLoaded={projectLoaded} onPublished={()=>{void invoke('studio.materials',{}).then(setMaterialLibrary).catch(e=>setError(explain(e)));}}/>
       <StudioSection title="Architectural material bindings">
-        <p className="abg__note">Each patterned style slot automatically generates Base Color, Metallic/Roughness and Normal maps in native preview and GLB. Project Assets override individual channels; no imported texture is required.</p>
+        <p className="abg__note">Each patterned style slot automatically generates Base Color, Metallic/Roughness, Normal and AO maps in native preview and GLB. Project Assets override individual channels; no imported texture is required.</p>
         <div className="abg__fields">
           {(selectedStyle?.materials??[]).map(slot=><StudioField key={slot}
             label={slot} hint={selectedStyle?.surfaces?.[slot]?.pattern?'Generated · '+selectedStyle.surfaces[slot].pattern+' · '+textureResolution+' × '+textureResolution:'Authored style factors / texture references'} htmlFor={'abg-material-binding-'+slot}>

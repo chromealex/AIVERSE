@@ -229,6 +229,7 @@ export type StudioBuildingFeatureSide = 'front' | 'back' | 'left' | 'right';
 export interface StudioBuildingFeature {
   kind: StudioBuildingFeatureKind;
   side: StudioBuildingFeatureSide;
+  wallLine?:number; // -1 outer envelope; otherwise zero-based facade grid line
   count: number;
   width: number;
   height: number;
@@ -244,16 +245,18 @@ export interface StudioBuildingRequest {
   setting: string; style: string; function: string;
   width: number; height: number; depth: number; seed: number;
   floors?: number; roomsX?: number; roomsZ?: number;
+  footprint?:string[];
   mode?: 'features' | 'preset';
   features?: StudioBuildingFeature[];
   materialBindings?: Record<string,string>; // authored style slot -> project materials.json name
   textureResolution?:128|256|512;
+  uniqueAtlas?:boolean;
   roofProfile?:StudioBuildingRoofProfile; roofRise?:number;
 }
 export interface StudioBuildingPreview {
   seed: number; triangles: number; vertices: number; materials: number;
   width: number; height: number; depth: number;
-  solids?:number; connections?:number; floors?:number; roomsX?:number; roomsZ?:number;
+  solids?:number; connections?:number; floors?:number; roomsX?:number; roomsZ?:number; footprint?:string[];
   geometry?:import('./graphs/buildingGeometryGraph').BuildingGeometryReport;
   route?:import('./graphs/buildingRoomTopology').BuildingRouteResult;
   topology?: {exteriorApertures?:import('./graphs/buildingRoomTopology').TopologyExteriorAperture[];version:1;rooms:import('./graphs/buildingRoomTopology').TopologyRoom[];connections:import('./graphs/buildingRoomTopology').TopologyConnection[];components:number;withoutElevatorsComponents:number};

@@ -94,6 +94,7 @@ struct Request {
     std::string style,kind;
     uint64_t seed=1;
     int textureResolution=0; // zero uses authored per-material quality
+    bool uniqueAtlas=false;
     StructureSize dimensions{};
     bool composeFeatures=false;
     FunctionalBuildingRecipe functionalRecipe{};
@@ -117,6 +118,10 @@ inline Request request(const Json& params) {
         const auto& value=params["textureResolution"];const double n=value.toDouble(-1);
         if(!value.isNumber()||(n!=128&&n!=256&&n!=512))throw std::runtime_error("Texture resolution must be 128, 256 or 512");
         req.textureResolution=int(n);
+    }
+    if(params.has("uniqueAtlas")){
+        if(params["uniqueAtlas"].type()!=Json::Type::Bool)throw std::runtime_error("uniqueAtlas must be boolean");
+        req.uniqueAtlas=params.getBool("uniqueAtlas");
     }
     const auto positive=[&](const char* field){
         const Json& v=params[field];
@@ -367,6 +372,7 @@ inline std::unique_ptr<render::Model> studioBuildingPreviewCpuModel(
     const auto req=request(params);
     auto built=produce(engine,req);
     applyProjectMaterials(project,req,built);
+    if(req.uniqueAtlas)return building::runtimeAtlasBuildingModel(built,"studio/generated-building-preview");
     // No asset index write when all material maps use generated PBR.
     // An explicit imported GUID may use the existing project's catalog.
     std::unique_ptr<StudioAssetCatalog> catalog;
@@ -459,6 +465,8 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
         out.set("floors",Json::number(int64_t(req.functionalRecipe.floors)));
         out.set("roomsX",Json::number(int64_t(req.functionalRecipe.roomsX)));
         out.set("roomsZ",Json::number(int64_t(req.functionalRecipe.roomsZ)));
+        Json footprint=Json::array();for(const auto& row:req.functionalRecipe.footprint)footprint.push(string(row));
+        out.set("footprint",std::move(footprint));
         out.set("sockets",std::move(sockets));
         out.set("solids",Json::number(int64_t(detailed.graph.solids.size())));
         out.set("connections",Json::number(int64_t(detailed.graph.connections.size())));
@@ -617,7 +625,10 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
             textureDependencies.emplace(guid,std::move(dependency));
             return true;
         };
-        glb.add(model.mesh,req.composeFeatures?"building-recipe":req.kind);
+        if(req.uniqueAtlas){
+            const auto atlas=buildUniqueBuildingAtlas(model.mesh);
+            glb.addAtlas(atlas,req.composeFeatures?"building-recipe":req.kind);
+        }else glb.add(model.mesh,req.composeFeatures?"building-recipe":req.kind);
         glb.write(temp.string());
         if(!fs::is_regular_file(temp)||fs::file_size(temp)<32)
             throw std::runtime_error("Building GLB export produced an invalid file");
@@ -630,6 +641,7 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
         saved.set("function",string(req.composeFeatures?"":req.kind));
         saved.set("seed",Json::number(int64_t(req.seed)));
         if(req.textureResolution)saved.set("textureResolution",Json::number(int64_t(req.textureResolution)));
+        if(req.uniqueAtlas)saved.set("uniqueAtlas",Json::fromBool(true));
         if(!req.materialBindings.empty()){
             Json bindings=Json::object();
             for(const auto& [slot,name]:req.materialBindings)
@@ -675,21 +687,22 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
                     y0=H-.28f;y1=H;
                 }else{
                     y0=.24f;y1=y0+aperture.height;
+                    const float plane=buildingSocketWallPlane(aperture,W,D);
                     switch(aperture.side){
                         case BuildingFeatureSide::Front:
                             x0=aperture.x-aperture.width*.5f;
                             x1=aperture.x+aperture.width*.5f;
-                            z0=0.f;z1=.36f;break;
+                            z0=plane;z1=plane+.36f;break;
                         case BuildingFeatureSide::Back:
                             x0=aperture.x-aperture.width*.5f;
                             x1=aperture.x+aperture.width*.5f;
-                            z0=D-.36f;z1=D;break;
+                            z0=plane-.36f;z1=plane;break;
                         case BuildingFeatureSide::Left:
-                            x0=0.f;x1=.36f;
+                            x0=plane;x1=plane+.36f;
                             z0=aperture.z-aperture.width*.5f;
                             z1=aperture.z+aperture.width*.5f;break;
                         case BuildingFeatureSide::Right:
-                            x0=W-.36f;x1=W;
+                            x0=plane-.36f;x1=plane;
                             z0=aperture.z-aperture.width*.5f;
                             z1=aperture.z+aperture.width*.5f;break;
                     }
@@ -716,6 +729,10 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
             saved.set("floors",Json::number(int64_t(req.functionalRecipe.floors)));
             saved.set("roomsX",Json::number(int64_t(req.functionalRecipe.roomsX)));
             saved.set("roomsZ",Json::number(int64_t(req.functionalRecipe.roomsZ)));
+            if(!req.functionalRecipe.footprint.empty()){
+                Json footprint=Json::array();for(const auto& row:req.functionalRecipe.footprint)footprint.push(string(row));
+                saved.set("footprint",std::move(footprint));
+            }
         }
         if(req.composeFeatures){
             Json features=Json::array();
@@ -723,6 +740,7 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
                 Json spec=Json::object();
                 spec.set("kind",string(buildingFeatureName(feature.kind)));
                 spec.set("side",string(buildingFeatureSideName(feature.side)));
+                if(feature.wallLine>=0)spec.set("wallLine",Json::number(int64_t(feature.wallLine)));
                 spec.set("count",Json::number(int64_t(feature.count)));
                 spec.set("width",Json::number(double(feature.width),3));
                 spec.set("height",Json::number(double(feature.height),3));

@@ -19,6 +19,41 @@ static bool intersects(const BuildingStructureGraph& g,float x,float y,float z,
 }
 int main(){
     try{
+        for(const auto& rows:std::vector<std::vector<std::string>>{
+            {"100","100","111"},{"111","010","010"},{"101","101","111"},
+            {"101","111","101"},{"111","101","111"}}){
+            FunctionalBuildingRecipe shape;shape.width=24;shape.depth=24;shape.height=10;
+            shape.floors=2;shape.roomsX=shape.roomsZ=3;shape.footprint=rows;
+            const auto graph=buildFunctionalStructureGraph(shape);CHECK(graph);
+            size_t active=0;
+            for(int z=0;z<3;++z)for(int x=0;x<3;++x){
+                const bool present=rows[size_t(z)][size_t(x)]=='1';active+=present?1:0;
+                const float cx=(x+.5f)*8,cz=(z+.5f)*8;
+                CHECK(intersects(graph,cx,.12f,cz,BuildingGraphPart::Floor)==present);
+                CHECK(intersects(graph,cx,5.f,cz,BuildingGraphPart::Floor)==present);
+                CHECK(intersects(graph,cx,9.9f,cz,BuildingGraphPart::Roof)==present);
+            }
+            CHECK(graph.rooms.size()==active*2);
+            for(const auto& edge:graph.connections){
+                bool from=false,to=false;
+                for(const auto& room:graph.rooms){from|=room.id==edge.from;to|=room.id==edge.to;}
+                CHECK(from&&to);
+            }
+        }
+        FunctionalBuildingRecipe courtyard;courtyard.width=24;courtyard.depth=24;courtyard.height=8;
+        courtyard.roomsX=courtyard.roomsZ=3;courtyard.footprint={"111","101","111"};
+        BuildingFeature courtDoor;courtDoor.side=BuildingFeatureSide::Back;courtDoor.wallLine=1;
+        courtDoor.position=12;courtDoor.width=1.2f;courtDoor.height=2.4f;courtDoor.open=1;
+        courtyard.features={courtDoor};
+        const auto court=buildFunctionalStructureGraph(courtyard);CHECK(court);
+        CHECK(court.sockets.size()==1&&std::abs(court.sockets[0].wallPlane-8)<.001f);
+        CHECK(std::abs(court.sockets[0].z-9)<.001f);
+        CHECK(!intersects(court,12,1,7.8f,BuildingGraphPart::Wall));
+        CHECK(intersects(court,9,1,7.8f,BuildingGraphPart::Wall));
+        CHECK(court.exteriorApertures.size()==1&&court.exteriorApertures[0].roomId=="room/0/1/0");
+        courtyard.features[0].position=3;CHECK(!buildFunctionalStructureGraph(courtyard));
+        FunctionalBuildingRecipe disconnected;disconnected.roomsX=disconnected.roomsZ=3;
+        disconnected.footprint={"100","010","001"};CHECK(!buildFunctionalStructureGraph(disconnected));
         FunctionalBuildingRecipe r;
         r.width=24;r.height=14;r.depth=18;r.floors=2;r.roomsX=2;r.roomsZ=2;
         BuildingFeature gate;gate.kind=BuildingFeatureKind::LargeGate;gate.width=4.5f;
