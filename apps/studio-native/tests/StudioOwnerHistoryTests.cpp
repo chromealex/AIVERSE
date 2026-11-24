@@ -1,5 +1,6 @@
 #include "apps/editor/core/ProjectHistory.h"
 #include "apps/studio-native/StudioAgentHistoryPolicy.h"
+#include "apps/studio-native/StudioHistoryCoordinator.h"
 #include "tests/TestCheck.h"
 #include <iostream>
 using namespace aiverse::editor;
@@ -34,4 +35,36 @@ int main(){
     AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("rules_get"))=="read");
     AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("studio_asset_move_commit"))=="assets");
     std::cout<<"PASS explicit agent policy\n";
+    using namespace aiverse::studio;
+    std::map<std::string,HistoryBatchOwner> owners={
+        {"map",{{"user","m1","m2"},3}},{"project",{{"p1"},1}},{"assets",{{"a1"},1}}
+    };
+    const std::vector<HistoryBatchStep> links={{"map","m1"},{"project","p1"},{"assets","a1"},{"map","m2"}};
+    const auto undo=planHistoryBatch(links,owners,false);
+    AIVERSE_TEST_CHECK(undo.front().id=="m2"&&undo.back().id=="m1");
+    owners["map"].position=1;owners["project"].position=0;owners["assets"].position=0;
+    const auto redo=planHistoryBatch(links,owners,true);
+    AIVERSE_TEST_CHECK(redo.front().id=="m1"&&redo.back().id=="m2");
+    owners["map"].ids.insert(owners["map"].ids.begin()+2,"manual");
+    bool rejected=false;
+    try{(void)planHistoryBatch(links,owners,true);}catch(const std::runtime_error&){rejected=true;}
+    AIVERSE_TEST_CHECK(rejected);
+    std::cout<<"PASS cross-owner batch boundaries and intervening edit refusal\n";
+    namespace fs=std::filesystem;
+    const auto root=fs::temp_directory_path()/("studio-batch-chain-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directory(root);
+    const auto file=root/"data.json";
+    std::ofstream(file)<<"a";
+    HistoryFileBatch batch;batch.append({{file,"a","b"}});batch.append({{file,"b","c"}});
+    const auto plan=batch.plan();
+    AIVERSE_TEST_CHECK(plan.size()==1&&plan[0].before=="a"&&plan[0].after=="c");
+    rejected=false;
+    try{batch.append({{file,"wrong","d"}});}catch(const std::runtime_error&){rejected=true;}
+    AIVERSE_TEST_CHECK(rejected);
+    std::ofstream(file)<<"external";
+    rejected=false;
+    try{(void)batch.plan();}catch(const std::runtime_error&){rejected=true;}
+    AIVERSE_TEST_CHECK(rejected);
+    fs::remove_all(root);
+    std::cout<<"PASS merged file chain and external conflict refusal\n";
 }

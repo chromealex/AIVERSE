@@ -584,7 +584,8 @@ Json StudioSession::agentLinkedCall(const std::string& name,const Json& args){
                 Json row=Json::object();row.set("name",str(op.name));row.set("policy",str(studioAgentHistoryPolicy(op.name)));
                 row.set("guiOnly",Json::fromBool(op.guiOnly));rows.push(std::move(row));
             }
-            out.set("operations",std::move(rows));out.set("bulkUndo",str("map-only"));return out;
+            out.set("operations",std::move(rows));out.set("bulkUndo",str("map-only"));
+            out.set("coordinatedBatch",str("map-project-asset-metadata"));return out;
         }
         if(name=="studio_asset_move_preview"||name=="studio_asset_move_commit"){
             if(ws_.project.dir.empty()||args.getStr("expectedProject")!=ws_.project.dir||

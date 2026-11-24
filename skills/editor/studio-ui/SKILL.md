@@ -131,6 +131,9 @@ Native StudioAssetHistoryPublication holds a per-project advisory lock and write
 ## Persistent Map history (S6e.3)
 MapDoc persists its undo and redo snapshots and native labels at successful map save boundaries, not on each brush dab. MapHistoryPersistence uses an editor-only exact MapData codec (little-endian hex layers, float bit patterns, player/entity/road state, six-face planet layers, extras) with a checksummed bounded checkpoint per map in the map directory's .aiverse-cache. The baseline includes saved map bytes and decoded terrain sidecars. A per-map advisory lock and durable dirty marker fence interrupted saves; restore only when the exact saved baseline matches, with fresh history IDs and epoch. Save As starts an independent timeline and clears body sidecar names. Invalid checkpoint leaves the saved map open and reports a warning. Unsaved edits are deliberately not restored; legacy map and sidecar writes are not an atomic multi-file transaction. Keep this distinction explicit.
 
+## Coordinated history (S6f.1)
+StudioHistoryCoordinator validates exact ordered owner boundaries (max 64) and merges consecutive existing-file byte transitions. Agent batch preview binds all three history versions and step identities; intervening changes, untracked calls, failed potential mutations, partial application and unsupported move plans refuse. Apply stages MapDoc and Project copies, validates metadata identity and all file baselines, publishes project documents, project checkpoint and metadata in ONE ProjectDocumentJournal transaction, then swaps staged live owners. Asset checkpoint uses existing post-commit marker; map edits remain unsaved. Do not call this a durable global transaction across saved map/asset timeline or claim support for file moves, imports, deletes, replacements. Keep legacy map-only undo and individual history actions separate.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

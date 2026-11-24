@@ -426,11 +426,52 @@ void agentScopedHistoryContract(){
         params.set("name",Json::string(name));params.set("arguments",arguments);request.set("params",std::move(params));
         return exchange(request);
     };
+    // Mixed agent batch on all three owners. No file write occurs until
+    // the complete staged plan has passed exact baseline validation.
+    const auto texture=root/"content"/"BatchTexture.png";
+    std::ofstream(texture)<<"texture";
+    {studio::StudioAssetCatalog index(root);index.rebuild();}
+    const auto originalName=session.workspace().map.data.name;
+    AIVERSE_TEST_CHECK(!agent("map_set",Json::parse(R"({"path":"name","value":"Batch scene"})")).has("error"));
     AIVERSE_TEST_CHECK(!agent("rules_set",Json::parse(R"({"path":"types.unit.health.max","value":200})")).has("error"));
     auto assets=agent("studio_asset_history",Json::object());
+    Json patch=Json::object();patch.set("expectedProject",assets["project"]);patch.set("expectedVersion",assets["version"]);
+    {studio::StudioAssetCatalog index(root);index.rebuild(false);patch.set("guid",Json::string(index.byPath("BatchTexture.png")->guid));}
+    patch.set("key",Json::string("compression"));patch.set("value",Json::string("high"));
+    AIVERSE_TEST_CHECK(!agent("studio_asset_meta_patch",patch).has("error"));
+    const auto applyBatch=[&](const Json& preview,const std::string& token,bool confirmed){
+        Json request=Json::object(),params=Json::object();
+        request.set("id",Json::number(int64_t(8)));request.set("method",Json::string("studio.agentBatchApply"));
+        params.set("direction",preview["direction"]);params.set("token",Json::string(token));params.set("confirmed",Json::fromBool(confirmed));
+        request.set("params",std::move(params));return session.dispatch(request);
+    };
+    auto reviewed=info()["batchUndo"];
+    AIVERSE_TEST_CHECK(reviewed.getBool("available")&&reviewed["steps"].size()==3);
+    AIVERSE_TEST_CHECK(applyBatch(reviewed,"stale",true).has("error"));
+    AIVERSE_TEST_CHECK(applyBatch(reviewed,reviewed.getStr("token"),false).has("error"));
+    const auto rulesBytes=editor::readProjectFileBytes(root/"rules.json");
+    std::ofstream(root/"rules.json",std::ios::binary|std::ios::app)<<"\n";
+    AIVERSE_TEST_CHECK(applyBatch(reviewed,reviewed.getStr("token"),true).has("error"));
+    AIVERSE_TEST_CHECK(session.workspace().map.data.name=="Batch scene");
+    AIVERSE_TEST_CHECK(session.workspace().project.rulesJson["types"]["unit"]["health"]["max"].integer()==200);
+    AIVERSE_TEST_CHECK(Json::parseFile(texture.string()+".meta")["settings"].getStr("compression")=="high");
+    std::ofstream(root/"rules.json",std::ios::binary|std::ios::trunc)<<rulesBytes;
+    AIVERSE_TEST_CHECK(!applyBatch(reviewed,reviewed.getStr("token"),true).has("error"));
+    AIVERSE_TEST_CHECK(session.workspace().map.data.name==originalName);
+    AIVERSE_TEST_CHECK(session.workspace().project.rulesJson["types"]["unit"]["health"]["max"].integer()==100);
+    AIVERSE_TEST_CHECK(Json::parseFile(texture.string()+".meta")["settings"].getStr("compression")=="auto");
+    reviewed=info()["batchRedo"];
+    AIVERSE_TEST_CHECK(reviewed.getBool("available")&&!applyBatch(reviewed,reviewed.getStr("token"),true).has("error"));
+    AIVERSE_TEST_CHECK(session.workspace().map.data.name=="Batch scene");
+    reviewed=info()["batchUndo"];
+    AIVERSE_TEST_CHECK(!applyBatch(reviewed,reviewed.getStr("token"),true).has("error"));
+    AIVERSE_TEST_CHECK(!call(R"({"id":9,"method":"studio.agentReset","params":{}})").has("error"));
+    AIVERSE_TEST_CHECK(!agent("rules_set",Json::parse(R"({"path":"types.unit.health.max","value":200})")).has("error"));
+    assets=agent("studio_asset_history",Json::object());
     Json folder=Json::object();folder.set("expectedProject",assets["project"]);folder.set("expectedVersion",assets["version"]);
     folder.set("parent",Json::string(""));folder.set("name",Json::string("AgentFolder"));
     AIVERSE_TEST_CHECK(!agent("studio_asset_folder_create",folder).has("error"));
+    AIVERSE_TEST_CHECK(!info()["batchUndo"].getBool("available")); // move plan not supported in file-only batch
     AIVERSE_TEST_CHECK(agent("studio_asset_folder_create",folder).has("error")); // stale owner version
     auto changes=info()["changes"];
     Json projectEdit,assetEdit;
