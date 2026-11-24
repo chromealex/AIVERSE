@@ -484,7 +484,9 @@ void registerMaterialOps(Workspace& ws) {
         render::texture_graph::compile(p["graph"]);auto file=graphPath(p.getStr("name"));
         bool exists=fs::exists(file);
         if(exists&&(!p["expected"].isObject()||!(readGraph(file)==p["expected"])))throw std::runtime_error("texture graph changed; reload before save");
-        publish(file,p["graph"].dump(2)+"\n",exists,&p["expected"]);
+        const auto bytes=p["graph"].dump(2)+"\n";
+        if(bytes.size()>256*1024)throw std::invalid_argument("saved texture graph exceeds 256 KiB file limit");
+        publish(file,bytes,exists,&p["expected"]);
         Json r=okJson();r.set("graph",p["graph"]);return r;
     });
     add("texture_graph_preview","Evaluate one node or output at up to 32x32, return actual RGBA8 hex without disk writes.",graphSchema,[w,textureCache](const Json& p){

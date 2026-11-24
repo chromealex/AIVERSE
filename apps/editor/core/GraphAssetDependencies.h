@@ -79,6 +79,23 @@ inline Json resolve(const std::string& family,const Json& source,const std::stri
             bool found=false;for(const auto& m:source["materials"].items())if(m.getStr("id")==id){found=true;break;}
             add(n.getStr("id"),"local-material",id,found?"embedded":"native-validation-required");
         }
+    }else if(family=="texture"){
+        auto safe=[](const std::string& s){return !s.empty()&&s.size()<=64&&s.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")==std::string::npos;};
+        const auto& links=source["functionLinks"];
+        if(!links.isNull()&&(!links.isObject()||links.size()>16))issue("invalid-texture-function-links","functionLinks");
+        else for(const auto& [alias,link]:links.members()){
+            const auto name=link.getStr("asset"),definition=link.getStr("definition");
+            if(!safe(alias)||!safe(name)||!safe(definition)||!source["functions"][alias].isObject()){
+                issue("invalid-texture-function-link",alias);continue;
+            }
+            asset(alias,"texture-function-asset","texturegraphs/"+name+".json");
+        }
+        for(const auto& n:source["nodes"].items())if(n.getStr("op")=="function"){
+            const auto fn=n["properties"].getStr("function");
+            const bool found=safe(fn)&&source["functions"][fn].isObject();
+            add(n.getStr("id"),"embedded-texture-function",fn,found?"embedded":"missing");
+            if(!found)issue("missing-texture-function",n.getStr("id"));
+        }
     }else if(family=="spectrafx"){
         for(const auto& n:source["nodes"].items()){
             const auto id=n.getStr("id");const auto& p=n["properties"];
