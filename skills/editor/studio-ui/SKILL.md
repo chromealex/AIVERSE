@@ -215,6 +215,9 @@ Studio Save/Save As now holds the per-map advisory lock and stages the Map histo
 ## Atomic Asset history navigation (S6f.4b.3a)
 Individual and coordinated Asset Undo/Redo use outer studio-history-batch journal v4, with a verified existing Asset checkpoint, retained before image, and transaction-bound after image published before the outer commit. Metadata-only navigation uses a zero-relocation v4 batch. Hold the cooperating asset-history lock and refuse stale checkpoint or dirty marker. Recovery restores the checkpoint and payload; v1–v3 journals remain readable. New asset mutations still use legacy dirty-marker recording; do not claim full atomicity of imports/delete/move recording. No native or fault-injection test execution yet.
 
+## Atomic recording of staged Asset mutations (S6f.4b.3b.1)
+Metadata patch, folder creation, reversible deletion, external import and replacement prepare detached history and payload operations, then publish via paired-cursor outer journal v4/v5. v5 distinguishes absent checkpoint from empty existing bytes; recovery may remove a first checkpoint only after a valid readiness marker and exact after bytes. Do not bypass the owner. Internal move/rename with material repair and explicit Trash operations retain the legacy dirty-marker path. Private staged recovery records may survive rejection; never auto-purge. No new MCP endpoint.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web
