@@ -15,7 +15,7 @@
 #include <string_view>
 
 namespace aiverse::render::texture_graph::gpu {
-inline constexpr int maxPreviewSize=128,maxBakeSize=1024;
+inline constexpr int maxPreviewSize=256,maxBakeSize=1024;
 inline constexpr size_t readbackBlockBytes=64*1024;
 inline std::string literal(float v){
     std::ostringstream s;s.imbue(std::locale::classic());

@@ -22,7 +22,7 @@ export function textureLayout(view:GraphView):Map<string,[number,number]> {
 }
 export function duplicateTextureNode(graph:Obj,id:string):{graph:Obj;id:string}|null {
  const nodes=rows(graph.nodes),source=nodes.find(n=>n.id===id);
- if(!source||nodes.length>=32||typeof source.op!=='string')return null;
+ if(!source||nodes.length>=64||typeof source.op!=='string')return null;
  let i=1;while(nodes.some(n=>n.id===source.op+'_'+i))i++;
  const copyId=source.op+'_'+i;
  const pos=Array.isArray(source.position)?source.position:[30,30];

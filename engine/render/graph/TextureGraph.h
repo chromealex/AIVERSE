@@ -129,7 +129,7 @@ inline bool requiresMaterialized(const Program& p){return std::any_of(p.nodes.be
 inline Program compileResolved(const Json& g){
     require(g.isObject()&&g.getInt("version")==1&&g.dump(-1).size()<=256*1024,"texture graph version 1 / 256 KiB required");
     Program p;p.size=integer(g["size"],256,8,1024);
-    const auto& nodes=g["nodes"];require(nodes.isArray()&&nodes.size()>0&&nodes.size()<=32,"texture graph requires 1..32 nodes");
+    const auto& nodes=g["nodes"];require(nodes.isArray()&&nodes.size()>0&&nodes.size()<=64,"texture graph requires 1..64 nodes");
     require(size_t(p.size)*p.size*nodes.size()<=4194304,"texture graph pixel-node budget exceeded (reduce resolution or nodes)");
     std::map<std::string,size_t> ids;
     for(const auto& j:nodes.items()){
@@ -161,7 +161,7 @@ inline Json resolveParameters(const Json& source,const Json& overrides=Json::obj
     require(defs.isNull()||(defs.isObject()&&defs.size()<=32),"invalid texture parameter declarations");
     for(const auto& [name,value]:overrides.members()){(void)value;require(defs.has(name),"unknown texture override");}
     Json resolved=source;resolved.erase("parameters");
-    require(resolved["nodes"].isArray()&&resolved["nodes"].size()<=32,"invalid texture nodes");
+    require(resolved["nodes"].isArray()&&resolved["nodes"].size()<=64,"invalid texture nodes");
     std::map<std::string,size_t> ids;for(size_t i=0;i<resolved["nodes"].size();++i)ids.emplace(resolved["nodes"][i].getStr("id"),i);
     std::map<std::pair<std::string,std::string>,bool> bound;
     for(const auto& [name,def]:defs.members()){

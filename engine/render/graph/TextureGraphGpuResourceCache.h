@@ -15,7 +15,7 @@ public:
     RetiredBufferSet(const RetiredBufferSet&)=delete;
     RetiredBufferSet& operator=(const RetiredBufferSet&)=delete;
     static bool admissible(const std::vector<size_t>& layout,size_t budget){
-        if(layout.empty()||layout.size()>33)return false;
+        if(layout.empty()||layout.size()>65)return false;
         size_t total=0;
         for(auto n:layout){if(!n||n>budget-total)return false;total+=n;}
         return true;

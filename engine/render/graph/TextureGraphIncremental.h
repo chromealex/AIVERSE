@@ -17,7 +17,7 @@ struct IncrementalNodeKey {
 template<class SourceFor>
 std::vector<IncrementalNodeKey> incrementalKeys(const PassSchedule& schedule,SourceFor sourceFor){
     if(schedule.passes.size()!=schedule.slotBytes.size()||schedule.passes.empty()||
-       schedule.passes.size()>32||!schedule.externalReady.empty())return {};
+       schedule.passes.size()>64||!schedule.externalReady.empty())return {};
     std::vector<IncrementalNodeKey> keys;keys.reserve(schedule.passes.size());
     size_t used=0;
     for(const auto& pass:schedule.passes){
@@ -36,7 +36,7 @@ std::vector<IncrementalNodeKey> incrementalKeys(const PassSchedule& schedule,Sou
 inline std::vector<bool> incrementalDirty(const std::vector<IncrementalNodeKey>& previous,
         const std::vector<IncrementalNodeKey>& current,size_t count){
     std::vector<bool> dirty(count,true);
-    if(previous.size()!=count||current.size()!=count||count>32)return dirty;
+    if(previous.size()!=count||current.size()!=count||count>64)return dirty;
     for(size_t i=0;i<count;++i){
         bool changed=!(previous[i]==current[i]);
         for(auto input:current[i].inputs){

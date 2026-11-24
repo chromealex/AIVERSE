@@ -8,8 +8,8 @@ int main(){
     check(meta.valid());
     auto bad=meta;bad.root="noise";check(!bad.valid());
     bad=meta;bad.members={"root","root"};check(!bad.valid());
-    bad=meta;bad.ordinal=32;check(!bad.valid());
-    bad=meta;bad.slot=32;check(!bad.valid());
+    bad=meta;bad.ordinal=64;check(!bad.valid());
+    bad=meta;bad.slot=64;check(!bad.valid());
     bad=meta;bad.slotBytes=0;check(!bad.valid());
     bad=meta;bad.members.clear();check(!bad.valid());
     bad=meta;bad.members.insert(bad.members.begin(),std::string(129,'x'));check(!bad.valid());

@@ -4,7 +4,7 @@
 namespace aiverse::render::texture_graph {
 inline Json templates(){
     struct Recipe {const char* name;const char* pattern;double metallic,lo,hi,strength;};
-    const Recipe recipes[]={{"metal","metal",1,.2,.65,1},{"stone","noise",0,.55,.95,3},{"wood","wood",0,.4,.8,2},{"brick","brick",0,.6,.95,4},{"earth","noise",0,.7,1,2},{"fabric","checker",0,.65,.95,1}};
+    const Recipe recipes[]={{"metal","metal",1,.2,.65,1},{"stone","noise",0,.55,.95,3},{"wood","wood",0,.4,.8,2},{"brick","brick",0,.6,.95,4},{"earth","noise",0,.7,1,2},{"fabric","checker",0,.65,.95,1},{"ceramic_tiles","tiles",0,.15,.6,1},{"metal_panels","panels",1,.25,.8,2},{"sci_fi_hex","hex",.7,.25,.75,2},{"scales","scales",0,.4,.85,3},{"rubber","solid",0,.7,.9,.5},{"dotted_surface","dots",0,.45,.9,1},{"striped_surface","stripes",0,.3,.7,1}};
     Json out=Json::array();
     for(const auto& recipe:recipes){
         auto g=Json::parse(R"({"version":1,"size":256,"nodes":[{"id":"color","op":"pattern","inputs":[],"properties":{}},{"id":"height","op":"fbm","inputs":[],"properties":{"period":16,"seed":1,"octaves":4}},{"id":"normal","op":"normal","inputs":["height"],"properties":{}},{"id":"rough","op":"remap","inputs":["height"],"properties":{}},{"id":"metal","op":"constant","inputs":[],"properties":{}},{"id":"packed","op":"metallicRoughness","inputs":["rough","metal"]},{"id":"ao","op":"constant","inputs":[],"properties":{"value":1}}],"outputs":{"color":"color","height":"height","normal":"normal","roughness":"rough","metallic":"metal","metallicRoughness":"packed","ao":"ao"}})");

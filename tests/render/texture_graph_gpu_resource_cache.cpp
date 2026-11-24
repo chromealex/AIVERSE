@@ -18,7 +18,8 @@ int main(){
     pool.clear(destroy);check(pool.bytes()==0&&destroyed.back()==6);
     pool.put({{8},{7}},24,destroy);pool.abandon();check(pool.bytes()==0&&destroyed.back()==6);
     check(!RetiredBufferSet<int>::admissible({0},24));
-    check(!RetiredBufferSet<int>::admissible(std::vector<size_t>(34,1),128));
+    check(RetiredBufferSet<int>::admissible(std::vector<size_t>(65,1),128));
+    check(!RetiredBufferSet<int>::admissible(std::vector<size_t>(66,1),128));
     check(!RetiredBufferSet<int>::admissible({24,1},24));
     std::cout<<"PASS: exact layout, exclusive take, replacement, budget, clear, abandon\n";
 }

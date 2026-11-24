@@ -12,7 +12,7 @@ struct TextureGroupScope {
     std::string root;
     std::vector<std::string> members;
     bool valid()const noexcept{
-        if(ordinal>=32||slot>=32||!slotBytes||members.empty()||members.size()>8||
+        if(ordinal>=64||slot>=64||!slotBytes||members.empty()||members.size()>8||
            root.empty()||root!=members.back())return false;
         for(size_t i=0;i<members.size();++i){
             if(members[i].empty()||members[i].size()>128)return false;
