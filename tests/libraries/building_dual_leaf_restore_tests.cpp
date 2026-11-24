@@ -88,6 +88,7 @@ static void testAuthoredSingleLeaf() {
 
 static void testGraphDiagnostics(){
     BuildingGraphChangeRouter router;
+    router.setTimingEnabled(true);
     const auto nav=buildingGraphBit(BuildingGraphDomain::Navigation);
     const auto spatial=buildingGraphBit(BuildingGraphDomain::Spatial);
     const auto audio=buildingGraphBit(BuildingGraphDomain::Audio);
@@ -103,6 +104,7 @@ static void testGraphDiagnostics(){
     REQUIRE(d.registeredDomains==(nav|spatial)&&d.requestedDomains==(nav|spatial|audio));
     REQUIRE(d.acknowledgedDomains==nav&&d.pendingDomains==(spatial|audio));
     REQUIRE(d.refusedDomains==spatial&&d.missingOwners==audio&&d.attempts==1);
+    REQUIRE(d.callbackTimings[0].calls==1&&d.callbackTimings[1].calls==1&&d.callbackTimings[6].calls==0);
     available=true;
     REQUIRE(!router.publish(change).complete);
     d=router.diagnostics(77);
@@ -111,6 +113,8 @@ static void testGraphDiagnostics(){
     REQUIRE(router.publish(change).complete);
     d=router.diagnostics(77);
     REQUIRE(!d.pendingDomains&&d.acknowledgedDomains==change.domains&&d.attempts==3&&navCalls==1);
+    REQUIRE(d.callbackTimings[0].calls==1&&d.callbackTimings[1].calls==2&&d.callbackTimings[6].calls==1);
+    REQUIRE(d.callbackTimings[1].totalNs>=d.callbackTimings[1].maxNs);
     router.forgetScene(77);
     REQUIRE(!router.diagnostics(77).lastChange);
     REQUIRE(router.diagnostics(77).registeredDomains==change.domains);
