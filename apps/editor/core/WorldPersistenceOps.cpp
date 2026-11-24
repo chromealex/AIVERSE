@@ -180,6 +180,22 @@ const char* backupStatus(wd::UnifiedBackupStatus status){
 }
 }
 void registerWorldPersistenceOps(Workspace& ws){
+    // Generic project settings; actual authoritative adoption is by the
+    // simulation host at setup. Existing rules_merge/rules_save own edits.
+    ws.registerOp({"world_simulation_lod_get","Inspect normalized shared simulation LOD settings; does not claim live adoption.",
+        Json::parse(R"({"type":"object","properties":{},"additionalProperties":false})"),[&ws](const Json&){
+            if(ws.project.dir.empty())throw std::runtime_error("open a project first");
+            Json result=world::simulationLodConfigJson(world::readSimulationLod(ws.project.rulesJson["simulationLod"]));
+            result.set("authored",Json::fromBool(ws.project.rulesJson.has("simulationLod")));
+            result.set("requiresRestart",Json::fromBool(true));
+            return result;
+        }});
+    ws.registerOp({"world_simulation_lod_validate","Validate a simulation LOD configuration using the shared native parser; no mutation.",
+        Json::parse(R"({"type":"object","required":["config"],"properties":{"config":{"type":"object"}},"additionalProperties":false})"),[](const Json& p){
+            if(!p["config"].isObject())throw std::runtime_error("config object required");
+            return world::simulationLodConfigJson(world::readSimulationLod(p["config"]));
+        }});
+
     using Operation=std::function<Json(const SavedProject&,const Json&,Control*)>;
     auto jobs=std::make_shared<WorldOperatorJobs>();
     std::map<std::string,Operation> operations;
