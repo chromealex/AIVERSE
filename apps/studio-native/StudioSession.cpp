@@ -14,6 +14,9 @@
 #include "apps/studio-native/StudioAssetUsage.h"
 #include "apps/studio-native/StudioTools.h"
 #include "apps/studio-native/StudioAgentHistoryPolicy.h"
+#include "apps/studio-native/StudioHistoryCoordinator.h"
+#include "apps/editor/core/ProjectHistoryPersistence.h"
+#include "engine/pack/Sha256.h"
 #include "engine/view/AttachmentLayout.h"
 #include "apps/studio-native/StudioMoveJournal.h"
 #include "apps/editor/EditorSceneNodes.h"
@@ -526,7 +529,7 @@ Json StudioSession::saveMapAs(const std::string& path) {
 }
 Json StudioSession::openProject(const std::string& path) {
     strokeCancel();brush_.armed=false;
-    agentHistoryUnsafe_=true;
+    agentHistoryUnsafe_=true;agentBatchFenced_=true;
     if (path.empty()) throw std::runtime_error("Project path is empty");
     const auto directory=recoveredProjectDir(ws_,path);
     std::string error;
@@ -760,6 +763,8 @@ bool StudioSession::pollAgentLink() {
         if((edit&&(policy!="map"||links.empty()||std::any_of(links.begin(),links.end(),[](const auto& l){return l.first!="map";})))||
            (failed&&(!readOnly||ownerChanged))||!sameMap||ws_.project.dir!=agentHistoryProject_||ws_.map.path!=agentHistoryMap_)
             agentHistoryUnsafe_=true;
+        if(!sameMap||(failed&&(!readOnly||ownerChanged))||
+           (edit&&(links.empty()||policy=="unverified"||std::any_of(links.begin(),links.end(),[&](const auto& l){return l.first!=policy;}))))agentBatchFenced_=true;
         if(edit||failed){
             const auto add=[&](const std::string& scope,const std::string& historyId){
                 Json c=Json::object();c.set("op",str(name));c.set("args",str(clipText(args.dump(-1),160)));
@@ -773,7 +778,7 @@ bool StudioSession::pollAgentLink() {
                 for(const auto& [scope,historyId]:links)add(scope,historyId);
                 if(policy=="unverified"||std::any_of(links.begin(),links.end(),[&](const auto& l){return l.first!=policy;}))add("untracked","");
             }
-            if(agentChanges_.size()>2000){agentChanges_.eraseAt(0);agentHistoryUnsafe_=true;}
+            if(agentChanges_.size()>2000){agentChanges_.eraseAt(0);agentHistoryUnsafe_=true;agentBatchFenced_=true;}
         }
         agentServer_.send(m.client,reply(id,result).dump(-1));
     }
@@ -1036,6 +1041,112 @@ bool StudioSession::agentCanUndoAll() const{
     for(size_t i=0;i<agentEditIds_.size();++i)if(ws_.map.undoId(agentStartIds_.size()+i)!=agentEditIds_[i])return false;
     return true;
 }
+Json StudioSession::agentBatchPreview(bool redo) const{
+    Json result=Json::object(),rows=Json::array();
+    result.set("direction",str(redo?"redo":"undo"));
+    result.set("available",Json::fromBool(false));
+    try{
+        if(ws_.project.dir.empty()||stroking_||agentRun_.running()||agentBatchFenced_)
+            throw std::runtime_error("Stop the agent and use a fully tracked conversation");
+        std::map<std::string,HistoryBatchOwner> owners;
+        auto& map=owners["map"];
+        map.position=ws_.map.undoDepth();
+        for(size_t i=0;i<ws_.map.undoDepth();++i)map.ids.push_back(std::to_string(ws_.map.undoId(i)));
+        for(size_t i=ws_.map.redoDepth();i>0;--i)map.ids.push_back(std::to_string(ws_.map.redoId(i-1)));
+        const auto collect=[&](const char* scope,const editor::ProjectHistory& history){
+            auto& owner=owners[scope];owner.position=history.position();
+            for(const auto& step:history.steps())owner.ids.push_back(step.id);
+        };
+        collect("project",ws_.project.documentHistory);collect("assets",assetHistory_);
+        std::vector<HistoryBatchStep> links;
+        for(const auto& change:agentChanges_.items()){
+            if(!change.getBool("ok")){
+                if(std::string(studioAgentHistoryPolicy(change.getStr("op")))!="read")throw std::runtime_error("Conversation includes a failed potentially mutating call");
+                continue;
+            }
+            const auto scope=change.getStr("scope"),id=change.getStr("historyId");
+            const auto resolved=agentHistoryLink(change);
+            if(!resolved.getBool("undoable")||change.getStr("sourceProject")!=ws_.project.dir)
+                throw std::runtime_error("Conversation includes untracked, evicted or foreign edits");
+            if(resolved.getBool("applied")==redo)throw std::runtime_error("All tracked edits must be "+std::string(redo?"undone":"applied")+" before batch navigation");
+            if(scope=="project"&&(ws_.project.rulesDirty||ws_.project.manifestDirty||ws_.project.historyRequiresReload))
+                throw std::runtime_error("Save project documents before batch navigation");
+            if(scope=="assets"){
+                const auto it=std::find_if(assetHistory_.steps().begin(),assetHistory_.steps().end(),[&](const auto& e){return e.id==id;});
+                if(it==assetHistory_.steps().end()||it->move||it->files.size()!=1)
+                    throw std::runtime_error("Batch currently supports asset metadata only; file moves require individual navigation");
+            }
+            links.push_back({scope,id});
+        }
+        const auto plan=planHistoryBatch(links,owners,redo);
+        for(const auto& step:plan){
+            Json row=Json::object();row.set("scope",str(step.scope));row.set("historyId",str(step.id));rows.push(std::move(row));
+        }
+        result.set("steps",rows);
+        result.set("mapVersion",str(historyVersion()));
+        result.set("projectVersion",str(ws_.project.historyVersion()));
+        result.set("assetVersion",str(assetHistoryVersion()));
+        result.set("available",Json::fromBool(true));
+        const auto bytes=result.dump(-1);const auto hash=pack::sha256(bytes.data(),bytes.size());
+        result.set("token",str(pack::toHex(hash.data(),hash.size())));
+    }catch(const std::exception& e){result.set("reason",str(e.what()));}
+    return result;
+}
+void StudioSession::applyAgentBatch(bool redo,const std::string& expectedToken){
+    const auto preview=agentBatchPreview(redo);
+    if(!preview.getBool("available")||expectedToken.empty()||preview.getStr("token")!=expectedToken)
+        throw std::runtime_error("Batch preview changed or unavailable: "+preview.getStr("reason"));
+    // Stage all owner state before touching the filesystem. A single existing-
+    // file journal covers project documents, project checkpoint and sidecars.
+    std::optional<editor::MapDoc> stagedMap;
+    std::optional<editor::Project> stagedProject;
+    std::optional<editor::ProjectHistory> stagedAssets;
+    std::unique_ptr<StudioAssetCatalog> catalog;
+    HistoryFileBatch files;
+    for(const auto& row:preview["steps"].items()){
+        const auto scope=row.getStr("scope");
+        if(scope=="map"){
+            if(!stagedMap)stagedMap.emplace(ws_.map);
+            if(redo)stagedMap->redo();else stagedMap->undo();
+        }else if(scope=="project"){
+            if(!stagedProject)stagedProject.emplace(ws_.project);
+            files.append(stagedProject->stageHistoryStep(redo));
+        }else if(scope=="assets"){
+            if(!stagedAssets){stagedAssets.emplace(assetHistory_);catalog=std::make_unique<StudioAssetCatalog>(ws_.project.dir);}
+            const auto& entry=stagedAssets->next(redo);
+            if(entry.move||entry.files.size()!=1)throw std::runtime_error("Unsupported batch asset plan");
+            const auto edits=redo?entry.files:editor::reverseProjectFileEdits(entry.files);
+            catalog->validateMetadataEdit(edits.front());files.append(edits);
+            stagedAssets->advance(redo);
+        }else throw std::runtime_error("Unknown batch owner");
+    }
+    auto plan=files.plan(); // validate EVERY exact on-disk baseline before writes
+    std::unique_ptr<StudioAssetHistoryPublication> publication;
+    if(stagedAssets)publication=std::make_unique<StudioAssetHistoryPublication>(ws_.project.dir);
+    try{
+        if(stagedProject){
+            auto checkpoint=editor::prepareProjectHistoryCheckpoint(ws_.project.dir,ws_.project.savedHistoryCheckpoint,stagedProject->documentHistory);
+            if(!ws_.project.savedHistoryCheckpoint)ws_.project.savedHistoryCheckpoint=checkpoint.before;
+            stagedProject->savedHistoryCheckpoint=checkpoint.after;stagedProject->historyPersistenceWarning.clear();
+            plan.push_back(std::move(checkpoint));
+        }
+        editor::applyProjectFileEdits(ws_.project.dir,plan);
+    }catch(...){
+        if(publication)finishAssetHistoryPublication(*publication,false);
+        throw;
+    }
+    // Publish the prepared in-memory owners only after the file commit.
+    if(stagedProject)ws_.project=std::move(*stagedProject);
+    if(stagedMap)ws_.map=std::move(*stagedMap);
+    if(stagedAssets){
+        assetHistory_=std::move(*stagedAssets);
+        finishAssetHistoryPublication(*publication,true);
+        try{catalog->rebuild(false);}
+        catch(const std::exception& e){assetHistoryPersistenceWarning_="Asset index refresh required: "+std::string(e.what());}
+    }
+    pendingAssetTransfer_.reset();agentAssetTransfer_.reset();agentAssetTransferGuids_.clear();
+    syncHistoryLabels();clearSelection();dropOrdinalFlags();agentHistoryUnsafe_=true;
+}
 Json StudioSession::agentHistoryLink(Json c) const{
     const auto scope=c.getStr("scope"),id=c.getStr("historyId");
     bool retained=false,applied=false,undo=false,redo=false;int64_t position=-1;
@@ -1074,7 +1185,7 @@ Json StudioSession::agentRequest(const std::string& method, const Json& params) 
     else if(method=="studio.agentReset"){
         if(agentRun_.running())throw std::runtime_error("Stop the agent first");
         agentSession_.clear();agentLines_.clear();agentChanges_=Json::array();agentRunStart_=-1;
-        agentStartIds_.clear();agentEditIds_.clear();agentHistoryUnsafe_=false;
+        agentStartIds_.clear();agentEditIds_.clear();agentHistoryUnsafe_=false;agentBatchFenced_=false;
         agentAssetTransfer_.reset();agentAssetTransferGuids_.clear();
     } else if(method=="studio.agentStart"){
         const std::string prompt=params.getStr("prompt");
@@ -1086,7 +1197,7 @@ Json StudioSession::agentRequest(const std::string& method, const Json& params) 
         syncHistoryLabels();
         if(agentSession_.empty()||agentRunStart_<0){
             agentRunStart_=int64_t(undoLabels_.size());agentStartIds_.clear();agentEditIds_.clear();
-            agentHistoryProject_=ws_.project.dir;agentHistoryMap_=ws_.map.path;agentHistoryUnsafe_=false;
+            agentHistoryProject_=ws_.project.dir;agentHistoryMap_=ws_.map.path;agentHistoryUnsafe_=false;agentBatchFenced_=false;
             for(size_t i=0;i<ws_.map.undoDepth();++i)agentStartIds_.push_back(ws_.map.undoId(i));
         }
         const fs::path dir=fs::path(ws_.logsDir())/"studio-agent";
@@ -1147,6 +1258,7 @@ Json StudioSession::agentRequest(const std::string& method, const Json& params) 
     out.set("changes",std::move(changes));
     out.set("startPosition",num(canUndoAll?int64_t(agentStartIds_.size()):-1));
     out.set("historyVersion",str(historyVersion()));
+    out.set("batchUndo",agentBatchPreview(false));out.set("batchRedo",agentBatchPreview(true));
     static const std::string cli=editor::agentCliPath("claude-code");   // a login-shell lookup: once per run of Studio
     out.set("cli",str(cli));
     out.set("mcp",Json::fromBool(!mcpTool_.empty()));
@@ -1342,7 +1454,7 @@ Json StudioSession::assetHistoryJson() const {
 Json StudioSession::dispatch(const Json& request) {
     const std::string method=request.getStr("method");
     const bool switching=method=="studio.openProject"||method=="studio.openMap"||method=="studio.newMap"||method=="studio.hubOpen"||method=="studio.hubCreate";
-    if(switching){strokeCancel();brush_.armed=false;agentHistoryUnsafe_=true;}
+    if(switching){strokeCancel();brush_.armed=false;agentHistoryUnsafe_=true;agentBatchFenced_=true;}
     if(stroking_){
         // The stroke owns the MapDoc transaction across frames. Only explicit
         // observational requests can enter; other edits retry after release.
@@ -1351,6 +1463,21 @@ Json StudioSession::dispatch(const Json& request) {
         else if(!reads.count(method)){
             Json reply=Json::object();reply.set("id",request["id"]);reply.set("error",str("Finish or cancel the active Scene stroke first"));return reply;
         }
+    }
+    if(method=="studio.agentBatchPreview"||method=="studio.agentBatchApply"){
+        Json reply=Json::object();reply.set("id",request["id"]);
+        try{
+            if(!request.isObject()||!request["id"].isNumber())throw std::runtime_error("Invalid request envelope");
+            const auto& p=request["params"];const auto direction=p.getStr("direction");
+            if(direction!="undo"&&direction!="redo")throw std::runtime_error("Invalid batch direction");
+            if(method=="studio.agentBatchPreview")reply.set("result",agentBatchPreview(direction=="redo"));
+            else{
+                if(!p.getBool("confirmed"))throw std::runtime_error("Confirm the reviewed agent history batch");
+                applyAgentBatch(direction=="redo",p.getStr("token"));
+                reply.set("result",snapshot());
+            }
+        }catch(const std::exception& e){reply.set("error",str(e.what()));}
+        return reply;
     }
     if(method=="studio.agentHistoryStep"||method=="studio.agentUndoAll"){
         Json reply=Json::object();reply.set("id",request["id"]);

@@ -158,6 +158,9 @@ private:
     std::vector<uint64_t> agentStartIds_,agentEditIds_;
     std::string agentHistoryProject_,agentHistoryMap_;
     bool agentHistoryUnsafe_=false;
+    bool agentBatchFenced_=false;
+    Json agentBatchPreview(bool redo) const;
+    void applyAgentBatch(bool redo,const std::string& expectedToken);
     struct AgentShot { int client; Json id; };
     std::vector<AgentShot> agentShots_;
     SceneBrush brush_;
