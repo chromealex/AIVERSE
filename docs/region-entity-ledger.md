@@ -1318,3 +1318,33 @@ or vehicle/character offscreen advancement. The candidate copy/serialization
 audit scans total parked payload; native execution and performance remain
 unverified. See the region lifecycle skill and
 `docs/agent-handoffs/open-world-stage29a-cold-advancement-2026-11-24.md`.
+
+## W1.29b — complete component policy and guarded parking
+
+`RegionDormancyController::ColdAdvancePlan` declares an explicit advance or
+pause policy for each registered parkable component. Register a type once;
+aliases of the same type are rejected. A plan may describe heterogeneous
+entities but must cover every parked blob on every selected entity.
+
+`parkGroupGuarded(world, ledger, store, entities, cell, currentTick, plan,
+admit, error)` validates the live group, portable clock equality and policy
+coverage before delegating the structural mutation to the existing parking
+owner. The read-only predicate receives a stable-ID ordered entity span and
+must check completeness of linked groups, references, pins, in-flight actions
+and owner-specific safety constraints.
+
+`advanceGroup(world, ledger, store, entities, cell, targetTick, plan, error)`
+preflights all selected components before invoking any catch-up callback.
+Work is ordered by stable ID and portable codec name, with one private store
+candidate, portable timestamp roundtrip and aggregate archive budget audit.
+`advanceAndWakeGroup` with the same complete plan and read-only admission
+predicate publishes the candidate only after successful wake. Same-tick
+advancement is a no-op. The single-component W1.29a overloads reuse this
+implementation. Component policies must be independent, deterministic and
+side-effect-free; this does not provide a coupled multi-component solver.
+
+The archive envelope remains schema 1. Ordinary pause-only APIs remain
+available but must not bypass required host policy. No automatic live NPC,
+vehicle or actor parking, true absence, performance claim or new serialized
+clock. See the lifecycle skill and stage29b handoff for constraints and
+deferred acceptance. Native tests NOT RUN.
