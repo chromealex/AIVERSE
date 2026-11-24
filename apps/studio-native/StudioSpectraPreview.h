@@ -3,6 +3,7 @@
 // depth-tested draw. Browser only sends bounded authoring/control requests.
 // No ImGui, no game/ECS mutation and no second GPU device.
 #pragma once
+#include "StudioSpectraTransferLease.h"
 #include "engine/fx/SpectraGraphRuntime.h"
 #include "engine/fx/SpectraCheckpointTimelineFile.h"
 #include "engine/fx/SpectraFX.h"
@@ -29,62 +30,62 @@ public:
     Json command(gfx::Device& device,const Json& input) {
         const std::string action=input.getStr("action","status");
         const auto now=std::chrono::steady_clock::now();
-        if(importTransferId_&&!fileImportPending_&&now-importTouched_>std::chrono::seconds(30)){importTransferId_=0;fileImport_.clear();}
-        if(exportTransferId_&&now-exportTouched_>std::chrono::seconds(30)){exportTransferId_=0;fileExport_.clear();}
+        importLease_.expire(now,fileImportPending_);
+        exportLease_.expire(now);
         if(action=="status")return status();
         const auto transferId=input["transferId"].integer(-1);
         if(action=="checkpointFileCancel"){
-            if(transferId>0&&uint64_t(transferId)==importTransferId_){fileImport_.clear();fileImportPending_=false;importTransferId_=0;}
-            else if(transferId>0&&uint64_t(transferId)==exportTransferId_){fileExport_.clear();exportTransferId_=0;}
+            if(transferId>0&&uint64_t(transferId)==importLease_.id){importLease_.reset();fileImportPending_=false;}
+            else if(transferId>0&&uint64_t(transferId)==exportLease_.id){exportLease_.reset();}
             else return transferStatus("Unknown transfer ID");
             return transferStatus();
         }
         if(action=="checkpointFileRead"){
-            if(transferId<=0||uint64_t(transferId)!=exportTransferId_)return transferStatus("Stale export transfer ID");
+            if(transferId<=0||uint64_t(transferId)!=exportLease_.id)return transferStatus("Stale export transfer ID");
             const auto offset=input["offset"].integer(-1);
-            if(offset<0||uint64_t(offset)>fileExport_.size())return transferStatus("Invalid checkpoint offset");
-            exportTouched_=now;
+            if(offset<0||uint64_t(offset)>=exportLease_.bytes.size())return transferStatus("Invalid checkpoint offset");
+            exportLease_.touched=now;
             static constexpr char hex[]="0123456789abcdef";
             std::string chunk;
-            const size_t end=std::min(fileExport_.size(),size_t(offset)+size_t(32768));
-            for(size_t i=size_t(offset);i<end;++i){chunk+=hex[fileExport_[i]>>4];chunk+=hex[fileExport_[i]&15];}
-            Json out=transferStatus();out.set("fileChunk",Json::string(chunk));out.set("fileSize",Json::number(int64_t(fileExport_.size())));return out;
+            const size_t end=std::min(exportLease_.bytes.size(),size_t(offset)+size_t(32768));
+            for(size_t i=size_t(offset);i<end;++i){chunk+=hex[exportLease_.bytes[i]>>4];chunk+=hex[exportLease_.bytes[i]&15];}
+            Json out=transferStatus();out.set("fileChunk",Json::string(chunk));out.set("fileSize",Json::number(int64_t(exportLease_.bytes.size())));return out;
         }
         if(action=="checkpointFileBegin"){
             if(!ready_||playing_||checkpointRequest_||rollbackId_||fileImportPending_)return transferStatus("Checkpoint requires settled paused preview");
-            if(importTransferId_)return transferStatus("Import transfer already active");
-            if(exportTransferId_)return transferStatus("Export transfer active");
-            fileImport_.clear();importTransferId_=nextTransferId_++;importTouched_=now;
-            Json out=transferStatus();out.set("transferId",Json::number(int64_t(importTransferId_)));return out;
+            if(importLease_.id)return transferStatus("Import transfer already active");
+            if(exportLease_.id)return transferStatus("Export transfer active");
+            importLease_.bytes.clear();importLease_.id=nextTransferId_++;importLease_.touched=now;
+            Json out=transferStatus();out.set("transferId",Json::number(int64_t(importLease_.id)));return out;
         }
         if(action=="checkpointFileAppend"){
-            if(fileImportPending_||transferId<=0||uint64_t(transferId)!=importTransferId_)return transferStatus("Stale or pending import transfer");
+            if(fileImportPending_||transferId<=0||uint64_t(transferId)!=importLease_.id)return transferStatus("Stale or pending import transfer");
             const auto chunk=input.getStr("chunk");
-            if(chunk.empty()||chunk.size()>65536||chunk.size()%2||fileImport_.size()+chunk.size()/2>spectra::kRestoreCheckpointMaxBytes+sizeof(spectra::TimelineCheckpointHeader))return transferStatus("Invalid checkpoint chunk size");
-            if(input["offset"].integer(-1)!=int64_t(fileImport_.size()))return transferStatus("Checkpoint chunk offset mismatch");
+            if(chunk.empty()||chunk.size()>65536||chunk.size()%2||importLease_.bytes.size()+chunk.size()/2>spectra::kRestoreCheckpointMaxBytes+sizeof(spectra::TimelineCheckpointHeader))return transferStatus("Invalid checkpoint chunk size");
+            if(input["offset"].integer(-1)!=int64_t(importLease_.bytes.size()))return transferStatus("Checkpoint chunk offset mismatch");
             auto digit=[](char c)->int{return c>='0'&&c<='9'?c-'0':c>='a'&&c<='f'?c-'a'+10:-1;};
             std::vector<uint8_t> decoded;
             for(size_t i=0;i<chunk.size();i+=2){int a=digit(chunk[i]),b=digit(chunk[i+1]);if(a<0||b<0)return transferStatus("Invalid checkpoint hex");decoded.push_back(uint8_t(a*16+b));}
-            importTouched_=now;
-            fileImport_.insert(fileImport_.end(),decoded.begin(),decoded.end());return transferStatus();
+            importLease_.touched=now;
+            importLease_.bytes.insert(importLease_.bytes.end(),decoded.begin(),decoded.end());return transferStatus();
         }
         if(action=="checkpointFileExport"){
-            if(exportTransferId_)return transferStatus("Export transfer already active");
-            if(importTransferId_)return transferStatus("Import transfer active");
-            if(!exportTimelineCheckpoint(fileExport_))return transferStatus("Save a fresh paused checkpoint first");
-            exportTransferId_=nextTransferId_++;exportTouched_=now;
-            Json out=transferStatus();out.set("transferId",Json::number(int64_t(exportTransferId_)));out.set("fileSize",Json::number(int64_t(fileExport_.size())));return out;
+            if(exportLease_.id)return transferStatus("Export transfer already active");
+            if(importLease_.id)return transferStatus("Import transfer active");
+            if(!exportTimelineCheckpoint(exportLease_.bytes))return transferStatus("Save a fresh paused checkpoint first");
+            exportLease_.id=nextTransferId_++;exportLease_.touched=now;
+            Json out=transferStatus();out.set("transferId",Json::number(int64_t(exportLease_.id)));out.set("fileSize",Json::number(int64_t(exportLease_.bytes.size())));return out;
         }
         if(action=="checkpointFileImport"){
-            if(transferId<=0||uint64_t(transferId)!=importTransferId_)return transferStatus("Stale import transfer ID");
-            if(fileImport_.empty()||fileImportPending_||checkpointRequest_||rollbackId_||playing_)return transferStatus("Import requires paused preview and uploaded bytes");
+            if(transferId<=0||uint64_t(transferId)!=importLease_.id)return transferStatus("Stale import transfer ID");
+            if(importLease_.bytes.empty()||fileImportPending_||checkpointRequest_||rollbackId_||playing_)return transferStatus("Import requires paused preview and uploaded bytes");
             fileImportPending_=true;return transferStatus();
         }
         if(action=="checkpointCancel"){
-            checkpointRequest_=false;rollbackId_=0;checkpointWaitFrames_=0;fileImportPending_=false;fileImport_.clear();importTransferId_=0;
+            checkpointRequest_=false;rollbackId_=0;checkpointWaitFrames_=0;fileImportPending_=false;importLease_.reset();
             error_.clear();return status();
         }
-        if((checkpointRequest_||rollbackId_||fileImportPending_||importTransferId_)&&action!="stop")
+        if((checkpointRequest_||rollbackId_||fileImportPending_||importLease_.id)&&action!="stop")
             return transferStatus("Checkpoint operation pending; cancel or wait");
 
         if(action=="playback") {
@@ -123,7 +124,7 @@ public:
             // preview. GPU resources are retired while NO pass is open.
             device.waitForResourceIdle();
             runtime_.shutdown();
-            checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;fileImportPending_=false;fileImport_.clear();fileExport_.clear();importTransferId_=exportTransferId_=0;
+            checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;fileImportPending_=false;importLease_.reset();exportLease_.reset();
             spectra::GraphRuntimeOptions opts;
             opts.capacity=1024;
             opts.gpuBirthRandom=input.getBool("gpuBirthRandom",false);
@@ -324,7 +325,7 @@ public:
     void prepare(const fx::SpectraFxView& view,render::float3 origin) {
         if(!ready_ || !view.valid())return;
         runtime_.setView(view);
-        if(fileImportPending_){fileImportPending_=false;importTransferId_=0;auto bytes=std::move(fileImport_);fileImport_.clear();if(!importTimelineCheckpoint(bytes))error_="Checkpoint file restore rejected";return;}
+        if(fileImportPending_){fileImportPending_=false;auto bytes=std::move(importLease_.bytes);importLease_.reset();if(!importTimelineCheckpoint(bytes))error_="Checkpoint file restore rejected";return;}
         if(rollbackId_){
             const auto id=std::exchange(rollbackId_,uint64_t(0));
             if(!runtime_.restoreHistoricalGpuCheckpoint(id)){error_="GPU checkpoint restore rejected";return;}
@@ -516,7 +517,7 @@ public:
         device.waitForResourceIdle();
         runtime_.shutdown();
         checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;
-        fileImportPending_=false;fileImport_.clear();fileExport_.clear();importTransferId_=exportTransferId_=0;
+        fileImportPending_=false;importLease_.reset();exportLease_.reset();
         checkpointWaitFrames_=0;hasPendingGpuAllocationSeed_=false;pendingShaderSeedMode_=false;
         gpuSeedFailed_=false;gpuSeedRetryCount_=0;replayPrepared_=false;restartBurstPending_=false;
         ready_=false;playing_=false;pendingRestart_=false;
@@ -553,9 +554,8 @@ private:
     bool hasPendingGpuAllocationSeed_=false;
     bool pendingShaderSeedMode_=false;
     std::map<uint64_t,std::pair<uint32_t,uint32_t>> checkpointTicks_;
-    std::vector<uint8_t> fileImport_,fileExport_;
-    uint64_t nextTransferId_=1,importTransferId_=0,exportTransferId_=0;
-    std::chrono::steady_clock::time_point importTouched_{},exportTouched_{};
+    SpectraTransferLease importLease_,exportLease_;
+    uint64_t nextTransferId_=1;
     bool fileImportPending_=false;
     bool checkpointRequest_=false;
     uint32_t checkpointWaitFrames_=0;

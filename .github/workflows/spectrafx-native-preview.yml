@@ -60,8 +60,8 @@ jobs:
       - name: Compile real Scene GPU fixture and codecs diagnostics target
         run: |
           cmake --build build/spectrafx-studio-preview --parallel 4 \
-            --target aiverse_studio aiverse_studio_spectrafx_preview_tests aiverse_studio_image_codecs_tests aiverse_vfx_ops_tests aiverse_studio_viewport_layout_tests
+            --target aiverse_studio aiverse_studio_spectrafx_preview_tests aiverse_studio_image_codecs_tests aiverse_vfx_ops_tests aiverse_studio_viewport_layout_tests aiverse_studio_spectra_transfer_tests
       - name: Execute hardware GPU preview and image codec warning contracts
         run: |
           ctest --test-dir build/spectrafx-studio-preview \
-            -R '^(studio_spectrafx_preview|studio_image_codecs|vfx_graph_ops|studio_viewport_layout)$' --output-on-failure --no-tests=error
+            -R '^(studio_spectrafx_preview|studio_image_codecs|vfx_graph_ops|studio_viewport_layout|studio_spectra_transfer)$' --output-on-failure --no-tests=error
