@@ -376,7 +376,7 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
                     field.set("step",Json::number(0.01,2));location.push(std::move(field));
                 }
                 components.push(component("SurfacePlacement","Planet placement",location,
-                    "Canonical authored body/face coordinates. Numeric editing only; Scene is not a planet viewport."));
+                    "Canonical authored body/face coordinates. Scene surface move or numeric editing."));
             }
             components.push(component("Transform","Transform",transform));
             // Mesh Renderer: authored StaticModel (editable) or the type's view (read-only).
@@ -3209,7 +3209,13 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 auto candidate=ws_.map.data.entities[size_t(index)];
                 Json at=candidate.at;
                 if(!at.isObject())throw std::runtime_error("Missing canonical planet placement");
-                if(key=="body"){
+                if(key=="placement"){
+                    if(!value.isObject()||!value["body"].isString()||!value["face"].isNumber()||
+                       value["face"].fx()!=Fixed::fromInt(value["face"].integer())||
+                       value["face"].integer(-1)<0||value["face"].integer(-1)>5)
+                        throw std::runtime_error("Invalid complete planet placement");
+                    for(const char* axis:{"body","face","x","y"})at.set(axis,value[axis]);
+                }else if(key=="body"){
                     if(!value.isString())throw std::runtime_error("Expected planet body ID");
                     at.set(key,value);
                 }else if(key=="face"){

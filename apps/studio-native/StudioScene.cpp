@@ -196,8 +196,8 @@ StudioScene::StudioScene(std::unique_ptr<gfx::Device> device)
     camera_.pitch = 0.85f;
     camera_.yaw = 0.55f;
 }
-void StudioScene::setTransformTool(TransformTool tool) { tool_ = tool; drag_ = TransformDrag{}; }
-void StudioScene::clearTransformPreview() { drag_ = TransformDrag{}; }
+void StudioScene::setTransformTool(TransformTool tool) { tool_ = tool; clearTransformPreview(); }
+void StudioScene::clearTransformPreview() { drag_ = TransformDrag{}; planetDragId_.clear(); planetDragPlacement_=Json{}; planetDragOriginal_=Json{}; }
 void StudioScene::releasePreviewModel(render::Model& model) {
     // Retire CPU packets/layouts before the Model and its geometry disappear.
     renderer_.invalidateModelCachesFor(&model);
@@ -593,6 +593,8 @@ StudioScene::~StudioScene() {
         }
         for (auto* primitive:{&builtinCube_,&builtinSphere_})
             if (*primitive) { releasePreviewModel(**primitive); primitive->reset(); }
+        if (planetTerrain_.vb.valid()) device_->destroyBuffer(planetTerrain_.vb);
+        if (planetTerrain_.ib.valid()) device_->destroyBuffer(planetTerrain_.ib);
         if (terrain_.vb.valid()) device_->destroyBuffer(terrain_.vb);
         if (terrain_.ib.valid()) device_->destroyBuffer(terrain_.ib);
         if (thumbColor_.valid()) device_->destroyTexture(thumbColor_);
@@ -626,6 +628,8 @@ std::string StudioScene::pick(float x, float y, float width, float height,
     // Never route its clicks to unrelated MapDoc entities underneath.
     if (materialMode_ || facialMode_ || !cameraInitialized_ ||
         !viewCamera().screenRay(x,y,width,height,origin,direction)) return {};
+    if(map.data.planet())return planetMode_&&planetPreview_&&planetDoc_==&map&&planetRevision_==map.revision?
+        planetPreview_->pick(origin,direction,hidden_,locked_):std::string{};
     // Pick the oriented cube mesh that Renderer3D actually draws, not its
     // expanded axis-aligned bounding box. Empty rotated corners are unpickable.
     auto proxies=studioDocumentProxies(map,fpsProject,terrainLevelHeight_);
@@ -644,6 +648,7 @@ std::vector<std::string> StudioScene::idsInRect(float x0,float y0,float x1,float
                                                      const editor::MapDoc& map,bool fpsProject) const {
     std::vector<std::string> out;
     if(materialMode_||!cameraInitialized_||width<2||height<2)return out;
+    if(map.data.planet())return out; // planetary marquee is not implemented
     const float lx=std::min(x0,x1),hx=std::max(x0,x1),ly=std::min(y0,y1),hy=std::max(y0,y1);
     const auto view=viewCamera();
     for(const auto& proxy:studioDocumentProxies(map,fpsProject,terrainLevelHeight_)) {
@@ -657,11 +662,12 @@ std::vector<std::string> StudioScene::idsInRect(float x0,float y0,float x1,float
 }
 bool StudioScene::groundPoint(float x,float y,float width,float height,float3& out) const {
     float3 o,d;
-    if(!cameraInitialized_||!viewCamera().screenRay(x,y,width,height,o,d)||std::fabs(d.y)<1e-5f)return false;
+    if(planetMode_||!cameraInitialized_||!viewCamera().screenRay(x,y,width,height,o,d)||std::fabs(d.y)<1e-5f)return false;
     const float t=-o.y/d.y; if(!(t>0)||!std::isfinite(t))return false;
     out=o+d*t; return true;
 }
 void StudioScene::frameAll(const editor::MapDoc& map,bool fpsProject) {
+    if(map.data.planet()){if(planetPreview_)startTween({},std::max(2.f,planetPreview_->extent*3.f),camera_.yaw,camera_.pitch);return;}
     const auto proxies=studioDocumentProxies(map,fpsProject,terrainLevelHeight_);
     float3 lo{1e30f,1e30f,1e30f},hi{-1e30f,-1e30f,-1e30f};
     for(const auto& p:proxies){lo={std::min(lo.x,p.boundsMin.x),std::min(lo.y,p.boundsMin.y),std::min(lo.z,p.boundsMin.z)};
@@ -812,7 +818,7 @@ void StudioScene::handleAxes(float3 out[3]) const {
     for(int a=0;a<3;++a)out[a]=local?selectedAxes_[a]:float3{a==0?1.f:0.f,a==1?1.f:0.f,a==2?1.f:0.f};
 }
 int StudioScene::transformGizmoHit(float x,float y,float width,float height) const {
-    if(materialMode_||!gizmosVisible_||tool_==TransformTool::View||!selectedPivotValid_||width<4||height<4)return -1;
+    if(planetMode_||materialMode_||!gizmosVisible_||tool_==TransformTool::View||!selectedPivotValid_||width<4||height<4)return -1;
     if(selectedIsLight_&&tool_!=TransformTool::Move)return -1;
     const auto view=viewCamera();
     float3 axes[3];handleAxes(axes);
@@ -843,6 +849,15 @@ int StudioScene::transformGizmoHit(float x,float y,float width,float height) con
     return best;
 }
 bool StudioScene::beginTransformDrag(float x,float y,float width,float height) {
+    if(planetMode_){
+        if(!planetPreview_||tool_!=TransformTool::Move||selectedId_.empty()||selection_.size()>1)return false;
+        float3 o,d;if(!viewCamera().screenRay(x,y,width,height,o,d))return false;
+        if(planetPreview_->pick(o,d,hidden_,locked_)!=selectedId_)return false;
+        const auto at=planetPreview_->placements.find(selectedId_);
+        if(at==planetPreview_->placements.end())return false;
+        planetDragId_=selectedId_;planetDragOriginal_=at->second;planetDragPlacement_=Json{};
+        tween_.active=false;return true;
+    }
     const int axis=transformGizmoHit(x,y,width,height);
     if(axis<0)return false;
     const auto view=viewCamera();
@@ -874,6 +889,12 @@ bool StudioScene::beginTransformDrag(float x,float y,float width,float height) {
     return true;
 }
 void StudioScene::updateTransformDrag(float x,float y,float width,float height,bool invertSnap) {
+    if(!planetDragId_.empty()){
+        float3 o,d;planetDragPlacement_=Json{};
+        if(planetPreview_&&viewCamera().screenRay(x,y,width,height,o,d))
+            if(auto at=planetPreview_->groundPlacement(o,d))planetDragPlacement_=std::move(*at);
+        return;
+    }
     if(drag_.axis<0)return;
     const bool snap=snapEnabled_!=invertSnap;
     drag_.snapping=snap;
@@ -957,6 +978,7 @@ render::mat4 StudioScene::dragPreview() const {
     return mat4::translate(p)*basis*mat4::scale(k)*basisT*mat4::translate(p*-1.0f);
 }
 std::string StudioScene::transformCaption() const {
+    if(!planetDragId_.empty())return planetDragPlacement_.isObject()?"Surface move · face "+std::to_string(planetDragPlacement_.getInt("face")):"Surface move · no hit";
     if(drag_.axis<0)return {};
     static const char* names[7]={"X","Y","Z","XYZ","YZ","XZ","XY"};
     char text[96];
@@ -969,6 +991,12 @@ std::string StudioScene::transformCaption() const {
     return text;
 }
 std::optional<StudioScene::TransformCommit> StudioScene::endTransformDrag() {
+    if(!planetDragId_.empty()){
+        TransformCommit c;c.id=planetDragId_;c.tool=TransformTool::Move;
+        c.surfacePlacement=planetDragPlacement_;
+        const bool changed=c.surfacePlacement.isObject()&&c.surfacePlacement!=planetDragOriginal_;
+        clearTransformPreview();if(changed)return c;return std::nullopt;
+    }
     if(drag_.axis<0)return std::nullopt;
     TransformCommit c;c.id=drag_.id;c.tool=drag_.tool;c.axis=drag_.axis;
     if(drag_.tool==TransformTool::Move)c.move=drag_.moveOffset;
@@ -1279,6 +1307,13 @@ void StudioScene::move(float right, float up, float forward) {
 }
 void StudioScene::focusSelected(const editor::MapDoc& map,bool fpsProject,
                                       const std::string& selectedId) {
+    if(map.data.planet()){
+        if(planetPreview_)for(const auto& p:planetPreview_->markers)if(p.id==selectedId){
+            const auto dir=normalize(p.center);
+            startTween(p.center,std::max(3.f,p.half.x*8.f),std::atan2(dir.x,dir.z),std::asin(std::clamp(dir.y,-1.f,1.f)));break;
+        }
+        return;
+    }
     for (const auto& instance:modelInstances_) {
         if (instance.id!=selectedId || !instance.model) continue;
         const auto lo=instance.model->boundsMin,hi=instance.model->boundsMax;
@@ -1526,6 +1561,13 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         renderer_.resolvePostFx();
 
         return;
+    }
+    if(doc.data.planet()){
+        framePlanet(framebufferWidth,framebufferHeight,doc,selectedId);return;
+    }
+    if(planetMode_){
+        planetMode_=false;planetPreview_.reset();planetDoc_=nullptr;cameraInitialized_=false;sceneCacheValid_=false;
+        lightingRevision_=std::numeric_limits<uint64_t>::max();clearTransformPreview();
     }
     const auto& map = doc.data;
     const auto now=std::chrono::steady_clock::now();
@@ -1854,6 +1896,71 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     // StudioFrameScope ends the pass and frame, including on exceptions.
 }
+void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,const std::string& selectedId){
+    const bool entering=!planetMode_;
+    if(entering){
+        if(!lightingRuntime_.shutdown(*device_,renderer_)||!device_->waitForResourceIdle())return;
+        clearDocumentModels();sceneCacheValid_=false;cameraInitialized_=false;
+        if(lightingModel_){renderer_.invalidateModelCachesFor(lightingModel_.get());releaseModel(*device_,*lightingModel_);lightingModel_.reset();}
+        planetMode_=true;planetDoc_=nullptr;clearTransformPreview();
+    }
+    int body=-1;
+    const int selected=studioMapEntityIndex(selectedId,doc);
+    if(selected>=0)body=doc.data.findBody(doc.data.entities[size_t(selected)].at.getStr("body"));
+    if(body<0&&planetPreview_&&planetDoc_==&doc)body=doc.data.findBody(planetPreview_->bodyId);
+    if(body<0)body=doc.data.findBody(doc.data.worldExtra.getStr("start"));
+    if(body<0||!doc.data.bodies[size_t(body)].surface()){
+        body=-1;for(size_t i=0;i<doc.data.bodies.size();++i)if(doc.data.bodies[i].surface()){body=int(i);break;}
+    }
+    const bool changedBody=!planetPreview_||planetDoc_!=&doc||body<0||
+        planetPreview_->bodyId!=doc.data.bodies[size_t(body)].id;
+    if(changedBody||planetRevision_!=doc.revision){
+        auto next=StudioPlanetPreview::build(doc,body);
+        Mesh replacement;
+        if(next)replacement=next->mesh.upload(*device_);
+        if(!device_->waitForResourceIdle())return;
+        if(planetTerrain_.vb.valid())device_->destroyBuffer(planetTerrain_.vb);
+        if(planetTerrain_.ib.valid())device_->destroyBuffer(planetTerrain_.ib);
+        planetTerrain_=replacement;planetPreview_=std::move(next);planetDoc_=&doc;planetRevision_=doc.revision;
+        if(changedBody){cameraInitialized_=false;clearTransformPreview();}
+    }
+    if(!cameraInitialized_){
+        camera_.target={};camera_.distance=planetPreview_?std::max(2.f,planetPreview_->extent*3.f):16.f;
+        camera_.yaw=.55f;camera_.pitch=.35f;camera_.ortho=false;tween_.active=false;cameraInitialized_=true;
+    }
+    stepTween();selectedId_=selectedId;selectedPivotValid_=false;selectedBoxValid_=false;
+    device_->beginFrame(width,height);StudioFrameScope scope{*device_};
+    renderThumbnail();
+    const auto view=viewCamera();renderer_.beginScene(view,width,height);
+    renderer_.setSceneSelectionOutline(true);renderer_.lighting=Lighting{};renderer_.lighting.fogDensity=0;
+    lightingStatus_="Planet authoring preview · markers and coarse surface";
+    if(planetPreview_&&planetTerrain_.vb.valid()&&planetTerrain_.ib.valid()){
+        renderer_.drawMesh(planetTerrain_,mat4{},{1,1,1,1},kDrawNoCastShadow);
+        for(const auto& marker:planetPreview_->markers){
+            if(hidden_.count(marker.id))continue;
+            const auto world=mat4::translate(marker.center)*mat4::scale(marker.half*2.f);
+            if(marker.id==selectedId||selection_.count(marker.id))
+                renderer_.drawSelectionMesh(cube_,world,marker.color,{.25f,.62f,1.f,1.f});
+            else renderer_.drawMesh(cube_,world,marker.color,kDrawNoCastShadow);
+        }
+        if(planetDragPlacement_.isObject()){
+            game::CubeSphere cube(planetPreview_->faceSize);
+            const auto dir=StudioPlanetPreview::f3(cube.dirFromFace(int(planetDragPlacement_.getInt("face")),
+                planetDragPlacement_["x"].fx(),planetDragPlacement_["y"].fx()));
+            const auto eye=view.eye();
+            // Display a ray-hit preview, not a committed entity.
+            const float t=planetPreview_->terrainHit(eye,normalize(dir*planetPreview_->radius-eye));
+            if(std::isfinite(t)){
+                const auto hit=eye+normalize(dir*planetPreview_->radius-eye)*t;
+                renderer_.drawMesh(cube_,mat4::translate(hit+dir*.6f)*mat4::scale({.6f,.6f,.6f}),{.25f,.9f,.8f,1},kDrawNoCastShadow);
+            }
+        }
+    }
+    if(orientationGizmo_&&gizmosVisible_)drawOrientationGizmo(view,width,height);
+    gfx::PassDesc pass;pass.clearColor[0]=.038f;pass.clearColor[1]=.064f;pass.clearColor[2]=.098f;pass.clearColor[3]=1;
+    renderer_.render(pass,&antialiasing_);renderer_.resolvePostFx();++framesDrawn_;
+}
+
 void StudioScene::rebuildProxyDraws(const editor::MapDoc& doc) {
     std::set<std::string> withModel;
     for(const auto& instance:modelInstances_)withModel.insert(instance.id);

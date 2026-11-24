@@ -17,6 +17,7 @@
 #include <optional>
 #include "apps/studio-native/StudioModelPicking.h"
 #include "apps/studio-native/StudioDocumentVisuals.h"
+#include "apps/studio-native/StudioPlanetPreview.h"
 #include "apps/studio-native/StudioAuthoredLights.h"
 #include "apps/editor/core/MapDoc.h"
 #include "engine/gfx/Gfx.h"
@@ -110,9 +111,9 @@ public:
     // invertSnap: Ctrl/Cmd held flips the snap setting for this drag step.
     void updateTransformDrag(float x, float y, float width, float height, bool invertSnap);
     struct TransformCommit { std::string id; TransformTool tool = TransformTool::Move; int axis = -1;
-        render::float3 move{}; float degrees = 0; float factor = 1; };
+        render::float3 move{}; float degrees = 0; float factor = 1; Json surfacePlacement; };
     std::optional<TransformCommit> endTransformDrag();
-    bool transformDragActive() const { return drag_.axis >= 0; }
+    bool transformDragActive() const { return drag_.axis >= 0 || !planetDragId_.empty(); }
     void clearTransformPreview();
     std::string transformCaption() const; // "Move X +1.25" while dragging, else empty
     // Scene model streaming after a project/map opens: models load within a per-frame
@@ -144,7 +145,7 @@ public:
     // World point -> view point (same units as pick / groundPoint); false when behind the camera.
     bool projectPoint(render::float3 world, float width, float height, render::float2& out) const;
     void setBrushCursor(bool visible, render::float3 center, float radius) { brushVisible_=visible; brushCenter_=center; brushRadius_=radius; }
-    void resetCamera() { lightingRevision_ = std::numeric_limits<uint64_t>::max(); cameraInitialized_ = false; terrainRevision_ = std::numeric_limits<uint64_t>::max(); clearDocumentModels(); }
+    void resetCamera() { lightingRevision_ = std::numeric_limits<uint64_t>::max(); cameraInitialized_ = false; planetRevision_=std::numeric_limits<uint64_t>::max(); terrainRevision_ = std::numeric_limits<uint64_t>::max(); clearDocumentModels(); }
     // Frames actually drawn / skipped because nothing visible changed (diagnostics).
     uint64_t framesDrawn() const { return framesDrawn_; }
     uint64_t framesSkipped() const { return framesSkipped_; }
@@ -174,6 +175,15 @@ private:
     render::Mesh cube_;
     render::Mesh studioCyclorama_;
     render::Mesh terrain_;
+    render::Mesh planetTerrain_;
+    std::optional<StudioPlanetPreview> planetPreview_;
+    const editor::MapDoc* planetDoc_=nullptr;
+    uint64_t planetRevision_=std::numeric_limits<uint64_t>::max();
+    bool planetMode_=false;
+    std::string planetDragId_;
+    Json planetDragOriginal_,planetDragPlacement_;
+    void framePlanet(int width,int height,const editor::MapDoc& doc,const std::string& selectedId);
+
     std::unique_ptr<render::Model> materialSphere_;
     // Built-in Mesh Renderer primitives (StaticModel.asset "" / builtin:cube / builtin:sphere).
     std::unique_ptr<render::Model> builtinCube_, builtinSphere_;

@@ -689,6 +689,15 @@ void StudioHost::moveEnd() {
     const auto commit = onScene([&] { return preview_->endTransformDrag(); });
     lastActionCaption_.clear();
     sendEvent("viewport.action", "");
+    if(commit&&commit->surfacePlacement.isObject()){
+        Json params=Json::object();params.set("entityId",Json::string(commit->id));
+        params.set("componentId",Json::string("SurfacePlacement"));
+        params.set("key",Json::string("placement"));params.set("value",commit->surfacePlacement);
+        const auto outcome=request("studio.setProperty",params);
+        if(outcome.has("error"))platform_.log("AIVERSE planet move: "+outcome.getStr("error"));
+        else sendEvent("document.changed","");
+        return;
+    }
     using Tool = StudioScene::TransformTool;
     const bool unchanged = !commit ||
         (commit->tool == Tool::Move && std::abs(commit->move.x) + std::abs(commit->move.y) + std::abs(commit->move.z) < 1e-4f) ||
