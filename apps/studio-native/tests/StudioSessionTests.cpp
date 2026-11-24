@@ -74,6 +74,13 @@ void caveGraphCaptureWorkflow() {
         edited.set("nodes",Json::parse(R"([{"id":"input","op":"input","position":[10,20]}])"));
         Json save=Json::object();save.set("name",Json::string("guarded"));save.set("graph",edited);
         const auto projectPath=session.workspace().project.dir;
+        Json debug=Json::parse(R"({"op":"graph_debug_session","params":{"action":"status"}})");
+        AIVERSE_TEST_CHECK(call("studio.op",debug).has("error"));
+        debug.set("expectedProject",Json::string("other-project"));
+        AIVERSE_TEST_CHECK(call("studio.op",debug).has("error"));
+        debug.set("expectedProject",Json::string(projectPath));
+        const auto debugReply=call("studio.op",debug);
+        AIVERSE_TEST_CHECK(!debugReply.has("error") && !debugReply["result"].getBool("changed"));
         save.set("expectedProject",Json::string(projectPath));
         AIVERSE_TEST_CHECK(call("studio.shaderGraphSave",save).has("error"));
         save.set("expected",shader);save.set("expectedProject",Json::string("other-project"));

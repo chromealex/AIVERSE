@@ -19,7 +19,7 @@ export default function GraphDebugSessionPanel({domain,graph,projectPath,disable
   const token=epoch.current;
   try{
    const params={action,...(action==='start'?{domain,graph}:action==='status'?{}:{session:report?.session}),...extra};
-   const r=(await invoke('studio.op',{op:'graph_debug_session',params})).result;
+   const r=(await invoke('studio.op',{op:'graph_debug_session',params,expectedProject:projectPath})).result;
    if(token!==epoch.current)return;
    if(!object(r)||r.ok!==true||typeof r.active!=='boolean'||r.liveAttached!==false||r.gpuMeasured!==false)throw new Error(object(r)?String(r.error??'Invalid debugger response'):'Debugger unavailable');
    setReport(r);if(action==='start')setSource(graph);else if(!r.active)setSource(null);
@@ -52,6 +52,6 @@ export default function GraphDebugSessionPanel({domain,graph,projectPath,disable
   {frames.length>0&&<StudioSelect aria-label="Debug history frame" value={String(frame)} onChange={e=>setFrame(Number(e.target.value))}>{frames.map((f,i)=><option key={i} value={i}>Step {String(f.sequence)}</option>)}</StudioSelect>}
   {current&&own&&source&&domain==='motionweave'&&<div style={{height:260,display:'flex',flexDirection:'column'}}><GraphCanvas view={animationProjection(source,'pose')} highlighted={Array.isArray(current.activeProgram)?current.activeProgram.filter((id):id is string=>typeof id==='string'):[]} selected="" label="Isolated debugger pose program" disabled onSelect={()=>{}} onMove={()=>{}}/></div>}
   {current&&<pre>{JSON.stringify(current,null,2)}</pre>}
-  {own&&source&&domain==='motionweave'&&typeof report?.session==='string'&&<GraphExecutionProfilePanel session={report.session} step={Number(report.step??0)} source={source} disabled={disabled||busy}/> }
+  {own&&source&&domain==='motionweave'&&typeof report?.session==='string'&&<GraphExecutionProfilePanel projectPath={projectPath} session={report.session} step={Number(report.step??0)} source={source} disabled={disabled||busy}/> }
  </StudioSection>;
 }

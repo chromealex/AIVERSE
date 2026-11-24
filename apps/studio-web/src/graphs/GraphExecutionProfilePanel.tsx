@@ -7,17 +7,17 @@ import type {GraphObject} from './nativeGraphAdapters';
 
 const phases=['sync','update','evaluate'] as const;
 type Phase=typeof phases[number];
-export default function GraphExecutionProfilePanel({session,step,source,disabled}:{session:string;step:number;source:GraphObject;disabled:boolean}){
+export default function GraphExecutionProfilePanel({session,step,source,disabled,projectPath}:{projectPath:string;session:string;step:number;source:GraphObject;disabled:boolean}){
  const [report,setReport]=useState<GraphObject|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const [phase,setPhase]=useState<Phase>('evaluate'),[showJson,setShowJson]=useState(false);
  const epoch=useRef(0),lock=useRef(false);
  useEffect(()=>{epoch.current++;lock.current=false;setReport(null);setError('');setBusy(false);
- return()=>{epoch.current++;lock.current=false};},[session]);
+ return()=>{epoch.current++;lock.current=false};},[session,projectPath]);
  const run=async(action:string)=>{
-  if(lock.current||disabled||!session)return;lock.current=true;setBusy(true);setError('');
+  if(lock.current||disabled||!session||!projectPath)return;lock.current=true;setBusy(true);setError('');
   const token=epoch.current;
   try{
-   const r=(await invoke('studio.op',{op:'graph_debug_session',params:{action,session}})).result;
+   const r=(await invoke('studio.op',{op:'graph_debug_session',params:{action,session},expectedProject:projectPath})).result;
    if(token!==epoch.current)return;
    if(!object(r)||r.session!==session||typeof r.available!=='boolean')throw new Error('Invalid profile response');
    setReport(r);
