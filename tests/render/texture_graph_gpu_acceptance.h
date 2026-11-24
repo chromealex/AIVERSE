@@ -187,7 +187,10 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend){
         const auto aoIndex=live->materials[0].occlusionTex,normalIndex=live->materials[0].normalTex;
         require(aoIndex>=0&&normalIndex>=0&&materialModel.images.size()==2,"initial texture bindings missing");
         const auto aoHandle=materialModel.images[size_t(aoIndex)].tex;
-        auto altered=Json::parse(residentGraph.dump(-1).replace(residentGraph.dump(-1).find("\"strength\":4")+11,1,"8"));
+        auto altered=Json::parse(R"JSON({"version":1,"size":32,"nodes":[
+            {"id":"h","op":"gradient","inputs":[],"properties":{"axis":"x"}},
+            {"id":"n","op":"normal","inputs":["h"],"properties":{"strength":8}}
+        ],"outputs":{"ao":"h","height":"h","normal":"n"}})JSON");
         const auto partial=startTarget(altered);drain();
         auto partialStatus=owner.status();
         require(partialStatus["incrementalReusedOutputs"].size()==1&&partialStatus["materializedPackPasses"].toDouble()==1,

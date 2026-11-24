@@ -65,6 +65,9 @@ class TextureGraphGpuOwner {
         uint64_t epoch=0;
         view::LiveAppearanceMaterialTarget target;
         gpu::OutputKeys keys,names;
+        struct Binding {int index=-1;gfx::TextureHandle handle{};};
+        std::map<std::string,Binding> bindings;
+        uint64_t modelMaterialRevision=0;
     };
     std::optional<OutputReceipt> lastOutputReceipt_,pendingOutputReceipt_;
     std::optional<view::LiveAppearanceMaterialTarget> outputReuseTarget_;
@@ -596,18 +599,19 @@ public:
                 throw std::invalid_argument("incremental outputs require incremental materialized fence-only GPU set");
             const view::LiveAppearanceMaterialTarget stamp{view::parseAppearanceIdentity(p.getStr("expectedModelPublication")),
                 view::parseAppearanceIdentity(p.getStr("expectedVersion")),size_t(render::texture_graph::integer(p["materialIndex"],-1,0,65535))};
-            if(!p.has("materialIndex")||!stamp.publication||!stamp.nextVersion())throw std::invalid_argument("incremental outputs require exact live target");
+            if(!p["materialIndex"].isNumber()||!stamp.publication||!stamp.nextVersion())throw std::invalid_argument("incremental outputs require exact live target");
             reuseTarget=stamp;
             if(serial_==~uint64_t{0})throw std::overflow_error("GPU texture identity exhausted");
             auto keys=outputKeys(program,mipmaps,p.getBool("fusePointwise"));
             if(!keys.empty()){
-                OutputReceipt next{project,lease.generation(),stamp,std::move(keys),{}};
+                OutputReceipt next;next.scope=project;next.epoch=lease.generation();next.target=stamp;next.keys=std::move(keys);
                 const bool matching=lastOutputReceipt_&&lastOutputReceipt_->scope==project&&lastOutputReceipt_->epoch==lease.generation()&&sameTarget(lastOutputReceipt_->target,stamp);
                 const auto generation="gpu_"+std::to_string(lease.generation())+"_"+std::to_string(serial_+1);
                 for(const auto& [name,key]:next.keys){(void)key;
-                    if(matching&&gpu::unchangedOutput(lastOutputReceipt_->keys,next.keys,name)&&lastOutputReceipt_->names.contains(name)){
+                    if(matching&&gpu::unchangedOutput(lastOutputReceipt_->keys,next.keys,name)&&lastOutputReceipt_->names.contains(name)&&lastOutputReceipt_->bindings.contains(name)){
                         const auto& image=lastOutputReceipt_->names.at(name);reusedNames.emplace(name,image);next.names.emplace(name,image);program.outputs.erase(name);
                     }else next.names.emplace(name,gpuGraphImageName(generation,name));
+                    next.bindings.emplace(name,OutputReceipt::Binding{});
                 }
                 receipt=std::move(next);
             }
@@ -744,11 +748,16 @@ public:
                !dev.gpuHealthy()||!gpuCandidatesReady()||project_!=project||request!=std::to_string(serial_)){
                 if(error)*error="incremental output target changed";return false;
             }
+            if(!reusedOutputNames_.empty()&&(!lastOutputReceipt_||lastOutputReceipt_->modelMaterialRevision!=model.materialRevision)){
+                lastOutputReceipt_.reset();if(error)*error="incremental output model revision changed; regenerate";return false;
+            }
             for(const auto& [name,expected]:reusedOutputNames_){
                 const auto slot=materialSlot(name);const int index=slot?live->materials[target.material].*slot:-1;
-                if(index<0||size_t(index)>=model.images.size()||model.images[size_t(index)].name!=expected||
+                const auto binding=lastOutputReceipt_->bindings.find(name);
+                if(binding==lastOutputReceipt_->bindings.end()||binding->second.index!=index||index<0||size_t(index)>=model.images.size()||
+                   model.images[size_t(index)].tex!=binding->second.handle||model.images[size_t(index)].name!=expected||
                    !model.images[size_t(index)].proceduralGraphImage||model.images[size_t(index)].proceduralGraphRetired||!model.images[size_t(index)].tex.valid()){
-                    if(error)*error="incremental output binding changed";return false;
+                    lastOutputReceipt_.reset();if(error)*error="incremental output binding changed; regenerate";return false;
                 }
             }
             if(outputNoop_){published_=gpuPublished_=true;reason_="unchanged material; no publication mutation";return true;}
@@ -758,7 +767,16 @@ public:
                 return view::AppearanceAssetRegistry::publishGpuTextureGraphSnapshot(live,target,model,dev,lease,
                     rollback,program,copies,generation,true,mirror,why);
             },error);
-        if(ok&&pendingOutputReceipt_){pendingOutputReceipt_->target.version=live->version;lastOutputReceipt_=std::move(pendingOutputReceipt_);}
+        if(ok&&pendingOutputReceipt_){
+            auto& next=*pendingOutputReceipt_;next.target.version=live->version;next.modelMaterialRevision=model.materialRevision;
+            bool valid=true;
+            for(auto& [name,binding]:next.bindings){
+                const auto slot=materialSlot(name);const int index=slot?live->materials[target.material].*slot:-1;
+                if(index<0||size_t(index)>=model.images.size()||model.images[size_t(index)].name!=next.names.at(name)||!model.images[size_t(index)].tex.valid()){valid=false;break;}
+                binding={index,model.images[size_t(index)].tex};
+            }
+            if(valid)lastOutputReceipt_=std::move(pendingOutputReceipt_);else lastOutputReceipt_.reset();
+        }
         return ok;
     }
 protected:

@@ -129,7 +129,8 @@
     "apps/client/GameClient.h",
     "apps/client/GameClient.cpp",
     "engine/view/RuntimeTextureGraphTask.h",
-    "engine/render/graph/TextureGraphOutputReuse.h"
+    "engine/render/graph/TextureGraphOutputReuse.h",
+    "tests/render/texture_graph_output_reuse.cpp"
   ],
   "traits": {
     "editable": true,
