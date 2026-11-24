@@ -1,6 +1,7 @@
 #pragma once
 #include "engine/sim/Simulation.h"
 #include "engine/world/SpatialWorld.h"
+#include "engine/world/TerraWeaveCavernsPathRouter.h"
 #include <cstddef>
 #include <deque>
 #include <map>
@@ -115,6 +116,16 @@ public:
     const Config& config() const { return config_; }
 
     const world::SpatialWorld& collision() const { return collision_; }
+    using CaveRouteResolver=std::function<
+        terraweave::caverns::CavePathResult(
+            const std::string&,
+            const terraweave::caverns::CavePathQuery&,
+            std::shared_ptr<const terraweave::caverns::CaveNavigationDataProvider>)>;
+    // Optional authoritative game module override for user/custom path
+    // solvers. Set between ticks after setup; no duplicate actor motor.
+    void setCaveRouteResolver(CaveRouteResolver resolver) {
+        caveRouteResolver_=std::move(resolver);
+    }
     void setContentReader(world::AssetReader);
     bool readyToStep(Simulation&) override;
     const world::AsyncChunkStream::Status* streamingStatus()const{return streamedCollision_?&streamedCollision_->status():nullptr;}
@@ -216,6 +227,7 @@ private:
     // existing CharacterBody + moveActor owns the authoritative position.
     std::shared_ptr<const terraweave::caverns::CaveNavigationDataProvider>
         caveNavigation_;
+    CaveRouteResolver caveRouteResolver_;
 
     std::vector<Vec3> spawns_;
     std::vector<bool> bots_;
