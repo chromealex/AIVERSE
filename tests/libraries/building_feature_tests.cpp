@@ -178,9 +178,18 @@ int main(int argc,char** argv){
         request.features=recipe.features;
         auto viaRuntime=runtime.generate(request);
         CHECK(viaRuntime);
-        CHECK(sameGeometry(viaRuntime.building,modernVariant.building));
+        // Runtime static geometry excludes moving panels/platforms: the
+        // authoritative dynamic owners publish them separately. Compare the
+        // exact static projection, not the complete offline export mesh.
+        const auto staticModern=generateFunctionalBuilding(modern,recipe,{},0,false,false);
+        const auto staticScifi=generateFunctionalBuilding(scifi,recipe,{},0,false,false);
+        CHECK(staticModern&&staticScifi);
+        CHECK(sameGeometry(viaRuntime.building,staticModern.building));
+        CHECK(viaRuntime.building.boxes==staticModern.building.boxes);
+        CHECK(staticModern.building.mesh.triangles()<modernVariant.building.mesh.triangles());
         auto viaRecipe=runtime.generateRecipe("scifi",recipe);
-        CHECK(viaRecipe&&sameGeometry(viaRecipe.building,opened.building));
+        CHECK(viaRecipe&&sameGeometry(viaRecipe.building,staticScifi.building));
+        CHECK(viaRecipe.building.boxes==staticScifi.building.boxes);
 
         // Contradictory features are REJECTED (never overlap two doors).
         auto impossible=recipe;

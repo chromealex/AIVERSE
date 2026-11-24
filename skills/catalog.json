@@ -605,13 +605,13 @@
     },
     {
       "id": "aiverse-building-alien-civilization",
-      "package": "building-style",
+      "package": null,
       "path": "skills/world/aiverse-building-alien-civilization/SKILL.md",
       "domain": "gameplay",
       "summary": "Alien Civilization setting: neutral building massing, architectural grammar, decorations, PBR material maps",
       "side": "presentation",
-      "runtime": "header",
-      "target": "AIVERSE::lib_building_style",
+      "runtime": "none",
+      "target": null,
       "dependencies": [
         "aiverse-building-style"
       ],
@@ -633,13 +633,13 @@
     },
     {
       "id": "aiverse-building-ancient-civilizations",
-      "package": "building-style",
+      "package": null,
       "path": "skills/world/aiverse-building-ancient-civilizations/SKILL.md",
       "domain": "gameplay",
       "summary": "Ancient Civilizations portable building grammar, authored material PBR texture patterns and facade decorations",
       "side": "presentation",
-      "runtime": "header",
-      "target": "AIVERSE::lib_building_style",
+      "runtime": "none",
+      "target": null,
       "dependencies": [
         "aiverse-building-style"
       ],
@@ -662,13 +662,13 @@
     },
     {
       "id": "aiverse-building-asian-historical",
-      "package": "building-style",
+      "package": null,
       "path": "skills/world/aiverse-building-asian-historical/SKILL.md",
       "domain": "gameplay",
       "summary": "Asian Historical procedural architectural forms, 128x128 PBR surface textures, material palettes and decorations",
       "side": "presentation",
-      "runtime": "header",
-      "target": "AIVERSE::lib_building_style",
+      "runtime": "none",
+      "target": null,
       "dependencies": [
         "aiverse-building-style"
       ],
@@ -691,13 +691,13 @@
     },
     {
       "id": "aiverse-building-cyberpunk",
-      "package": "building-style",
+      "package": null,
       "path": "skills/world/aiverse-building-cyberpunk/SKILL.md",
       "domain": "gameplay",
       "summary": "Cyberpunk setting: neutral building massing, architectural grammar, decorations, PBR material maps",
       "side": "presentation",
-      "runtime": "header",
-      "target": "AIVERSE::lib_building_style",
+      "runtime": "none",
+      "target": null,
       "dependencies": [
         "aiverse-building-style"
       ],
@@ -719,13 +719,13 @@
     },
     {
       "id": "aiverse-building-dark-fantasy",
-      "package": "building-style",
+      "package": null,
       "path": "skills/world/aiverse-building-dark-fantasy/SKILL.md",
       "domain": "gameplay",
       "summary": "Dark Fantasy building architecture grammar, deterministic PBR maps, materials, decorations and neutral structural silhouettes",
       "side": "presentation",
-      "runtime": "header",
-      "target": "AIVERSE::lib_building_style",
+      "runtime": "none",
+      "target": null,
       "dependencies": [
         "aiverse-building-style"
       ],
@@ -787,13 +787,13 @@
     },
     {
       "id": "aiverse-building-medieval-fantasy",
-      "package": "building-style",
+      "package": null,
       "path": "skills/world/aiverse-building-medieval-fantasy/SKILL.md",
       "domain": "gameplay",
       "summary": "Medieval Fantasy building architecture grammar, deterministic PBR maps, materials, decorations and neutral structural silhouettes",
       "side": "presentation",
-      "runtime": "header",
-      "target": "AIVERSE::lib_building_style",
+      "runtime": "none",
+      "target": null,
       "dependencies": [
         "aiverse-building-style"
       ],
@@ -816,13 +816,13 @@
     },
     {
       "id": "aiverse-building-modern",
-      "package": "building-style",
+      "package": null,
       "path": "skills/world/aiverse-building-modern/SKILL.md",
       "domain": "gameplay",
       "summary": "Modern / Contemporary portable building grammar, authored material PBR texture patterns and facade decorations",
       "side": "presentation",
-      "runtime": "header",
-      "target": "AIVERSE::lib_building_style",
+      "runtime": "none",
+      "target": null,
       "dependencies": [
         "aiverse-building-style"
       ],
@@ -845,13 +845,13 @@
     },
     {
       "id": "aiverse-building-post-apocalypse",
-      "package": "building-style",
+      "package": null,
       "path": "skills/world/aiverse-building-post-apocalypse/SKILL.md",
       "domain": "gameplay",
       "summary": "Post-Apocalypse portable building grammar, authored material PBR texture patterns and facade decorations",
       "side": "presentation",
-      "runtime": "header",
-      "target": "AIVERSE::lib_building_style",
+      "runtime": "none",
+      "target": null,
       "dependencies": [
         "aiverse-building-style"
       ],
@@ -874,13 +874,13 @@
     },
     {
       "id": "aiverse-building-scifi-space",
-      "package": "building-style",
+      "package": null,
       "path": "skills/world/aiverse-building-scifi-space/SKILL.md",
       "domain": "gameplay",
       "summary": "Sci-Fi / Space setting: neutral building massing, architectural grammar, decorations, PBR material maps",
       "side": "presentation",
-      "runtime": "header",
-      "target": "AIVERSE::lib_building_style",
+      "runtime": "none",
+      "target": null,
       "dependencies": [
         "aiverse-building-style"
       ],
@@ -902,13 +902,13 @@
     },
     {
       "id": "aiverse-building-solarpunk",
-      "package": "building-style",
+      "package": null,
       "path": "skills/world/aiverse-building-solarpunk/SKILL.md",
       "domain": "gameplay",
       "summary": "Solarpunk procedural architectural forms, 128x128 PBR surface textures, material palettes and decorations",
       "side": "presentation",
-      "runtime": "header",
-      "target": "AIVERSE::lib_building_style",
+      "runtime": "none",
+      "target": null,
       "dependencies": [
         "aiverse-building-style"
       ],
@@ -931,13 +931,13 @@
     },
     {
       "id": "aiverse-building-steampunk",
-      "package": "building-style",
+      "package": null,
       "path": "skills/world/aiverse-building-steampunk/SKILL.md",
       "domain": "gameplay",
       "summary": "Steampunk building architecture grammar, deterministic PBR maps, materials, decorations and neutral structural silhouettes",
       "side": "presentation",
-      "runtime": "header",
-      "target": "AIVERSE::lib_building_style",
+      "runtime": "none",
+      "target": null,
       "dependencies": [
         "aiverse-building-style"
       ],
@@ -1003,13 +1003,13 @@
     },
     {
       "id": "aiverse-building-underwater",
-      "package": "building-style",
+      "package": null,
       "path": "skills/world/aiverse-building-underwater/SKILL.md",
       "domain": "gameplay",
       "summary": "Underwater procedural architectural forms, 128x128 PBR surface textures, material palettes and decorations",
       "side": "presentation",
-      "runtime": "header",
-      "target": "AIVERSE::lib_building_style",
+      "runtime": "none",
+      "target": null,
       "dependencies": [
         "aiverse-building-style"
       ],

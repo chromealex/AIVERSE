@@ -279,6 +279,24 @@ def skill_path(skill):
     if len(hits)!=1:raise ValueError('skill folder not found exactly once: '+skill)
     return hits[0].relative_to(ROOT).as_posix()
 
+# Recipes that reuse existing engine owners, not independent CMake packages.
+SHARED_RECIPES = [
+    ("aiverse-building-alien-civilization", "Alien Civilization setting: neutral building massing, architectural grammar, decorations, PBR material maps", "engine/assets/building-styles/alien-civilization.json", "presentation", ["aiverse-building-style"], ["building","architecture","alien-civilization","texture","PBR","facade","style","здание","сеттинг"]),
+    ("aiverse-building-ancient-civilizations", "Ancient Civilizations portable building grammar, authored material PBR texture patterns and facade decorations", "engine/assets/building-styles/ancient-civilizations.json", "presentation", ["aiverse-building-style"], ["building","ancient-civilizations","architecture","facade","materials","PBR","surface","texture","сеттинг","здание"]),
+    ("aiverse-building-asian-historical", "Asian Historical procedural architectural forms, 128x128 PBR surface textures, material palettes and decorations", "engine/assets/building-styles/asian-historical.json", "presentation", ["aiverse-building-style"], ["building","asian-historical","architecture","style","PBR","surface","texture","decor","здание","сеттинг"]),
+    ("aiverse-building-cyberpunk", "Cyberpunk setting: neutral building massing, architectural grammar, decorations, PBR material maps", "engine/assets/building-styles/cyberpunk.json", "presentation", ["aiverse-building-style"], ["building","architecture","cyberpunk","texture","PBR","facade","style","здание","сеттинг"]),
+    ("aiverse-building-dark-fantasy", "Dark Fantasy building architecture grammar, deterministic PBR maps, materials, decorations and neutral structural silhouettes", "engine/assets/building-styles/dark-fantasy.json", "presentation", ["aiverse-building-style"], ["buildings","architecture","dark-fantasy","procedural","materials","PBR","textures","decor","здания","архитектура"]),
+    ("aiverse-building-medieval-fantasy", "Medieval Fantasy building architecture grammar, deterministic PBR maps, materials, decorations and neutral structural silhouettes", "engine/assets/building-styles/medieval-fantasy.json", "presentation", ["aiverse-building-style"], ["buildings","architecture","medieval-fantasy","procedural","materials","PBR","textures","decor","здания","архитектура"]),
+    ("aiverse-building-modern", "Modern / Contemporary portable building grammar, authored material PBR texture patterns and facade decorations", "engine/assets/building-styles/modern.json", "presentation", ["aiverse-building-style"], ["building","modern","architecture","facade","materials","PBR","surface","texture","сеттинг","здание"]),
+    ("aiverse-building-post-apocalypse", "Post-Apocalypse portable building grammar, authored material PBR texture patterns and facade decorations", "engine/assets/building-styles/post-apocalypse.json", "presentation", ["aiverse-building-style"], ["building","post-apocalypse","architecture","facade","materials","PBR","surface","texture","сеттинг","здание"]),
+    ("aiverse-building-scifi-space", "Sci-Fi / Space setting: neutral building massing, architectural grammar, decorations, PBR material maps", "engine/assets/building-styles/scifi-space.json", "presentation", ["aiverse-building-style"], ["building","architecture","scifi-space","texture","PBR","facade","style","здание","сеттинг"]),
+    ("aiverse-building-solarpunk", "Solarpunk procedural architectural forms, 128x128 PBR surface textures, material palettes and decorations", "engine/assets/building-styles/solarpunk.json", "presentation", ["aiverse-building-style"], ["building","solarpunk","architecture","style","PBR","surface","texture","decor","здание","сеттинг"]),
+    ("aiverse-building-steampunk", "Steampunk building architecture grammar, deterministic PBR maps, materials, decorations and neutral structural silhouettes", "engine/assets/building-styles/steampunk.json", "presentation", ["aiverse-building-style"], ["buildings","architecture","steampunk","procedural","materials","PBR","textures","decor","здания","архитектура"]),
+    ("aiverse-building-underwater", "Underwater procedural architectural forms, 128x128 PBR surface textures, material palettes and decorations", "engine/assets/building-styles/underwater.json", "presentation", ["aiverse-building-style"], ["building","underwater","architecture","style","PBR","surface","texture","decor","здание","сеттинг"]),
+    ("aiverse-persistent-world", "Durable world ledger WAL, checkpoints, recovery, retention and backup forks", "engine/world/PersistentWorldSession.h", "simulation", [], ["persistence","wal","checkpoint","recovery","backup","world fork","сохранение","восстановление"]),
+    ("aiverse-region-lifecycle", "Shared deterministic region identity, atomic vehicle groups, ECS change journals, sparse undo transactions, admission and ownership diagnostics; authoritative decision LOD", "engine/world/RegionEntityLedger.h", "simulation", [], ["region","world","streaming","ledger","ecs","tombstone","journal","change tracking","undo log","dirty-only","ownership diagnostics","delta","revision","rollback","hot","cold","регион","стриминг","сущность","журнал","simulation LOD","decision cadence","hot warm cold","simulation budget","LOD симуляции"]),
+]
+
 def generate():
     entries=[]
     packages=json.loads((ROOT/'libraries/catalog.json').read_text(encoding='utf-8'))['packages']
@@ -313,13 +331,18 @@ def generate():
         summary='Immutable SharedRef and StaticRef ECS configs, prefab dedup, snapshots and multi-world scene integration',
         side='tools',runtime='none',target=None,dependencies=[],backendDependencies=[],
         source='engine/sim/SharedStaticComponents.h'))
+    for name,summary,source,side,deps,keywords in SHARED_RECIPES:
+        entries.append(dict(id=name,package=None,path=skill_path(name),domain='gameplay',
+            summary=summary,side=side,runtime='none',target=None,dependencies=deps,
+            backendDependencies=[],requiresOwner=None,source=source))
     for name,summary,source in WORKFLOWS:
         entries.append(dict(id=name,package=None,path=skill_path(name),domain='workflow',summary=summary,
             side='tools',runtime='none',target=None,dependencies=[],backendDependencies=[],source=source))
     # Search words of the policy packages live next to their registration script (tools/skills/policy_packages.py).
     policy_aliases=json.loads((ROOT/'tools/skills/policy_aliases.json').read_text(encoding='utf-8')) if (ROOT/'tools/skills/policy_aliases.json').is_file() else {}
+    shared_keywords={name:keywords for name,_,_,_,_,keywords in SHARED_RECIPES}
     for entry in entries:
-        entry['keywords']=(ALIASES.get(entry['id'],'')+' '+WORKFLOW_ALIASES.get(entry['id'],'')+' '+policy_aliases.get(entry['id'],'')).split()
+        entry['keywords']=shared_keywords.get(entry['id'], []) + (ALIASES.get(entry['id'],'')+' '+WORKFLOW_ALIASES.get(entry['id'],'')+' '+policy_aliases.get(entry['id'],'')).split()
         entry['contentPackages']=skill_packages(entry['path'])
     return dict(schema=1,skills=sorted(entries,key=lambda e:e['id']))
 
