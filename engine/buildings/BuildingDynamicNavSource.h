@@ -28,7 +28,8 @@ public:
     template<class ApertureOwner>
     bool synchronize(const ApertureOwner& owner,
                      const world::SpatialWorld& spatial,
-                     std::string* error=nullptr){
+                     std::string* error=nullptr,
+                     const std::vector<world::Bounds>& verifiedExtra={}){
         if(!owner.attached()){
             if(error)*error="Aperture owner is not attached";
             return false;
@@ -59,6 +60,7 @@ public:
         // choose a route through the physical gap between moving leaves.
         for(const auto& pose:owner.poses())
             if(!pose.open)updated.push_back(pose.bounds);
+        updated.insert(updated.end(),verifiedExtra.begin(),verifiedExtra.end());
         blockers_=std::move(updated);
         if(error)error->clear();
         return true;

@@ -52,6 +52,7 @@ public:
         };
         if(!sceneId_||!authenticatedClient||!cmd.actorId||!cmd.sequence||
            !ownsActor_||!atLanding_||!scene_.attached()||scene_.faulted()||
+           !scene_.doors().enabled()||
            cmd.sceneId!=sceneId_||yaw_>3||width_<=0||depth_<=0)
             return fail("Unavailable scene or unauthenticated actor command");
         const Entity actor=Entity::fromPacked(cmd.actorId);

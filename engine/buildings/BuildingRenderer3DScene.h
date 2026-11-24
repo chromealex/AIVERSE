@@ -3,6 +3,7 @@
 // The server/Simulation never uploads models or writes renderer state.
 // The existing render::RenderDeviceLifetime and gfx::Device own GPU epochs.
 #include "engine/buildings/BuildingDualLeafGameSession.h"
+#include "engine/buildings/BuildingLiftRenderState.h"
 #include "engine/render/Renderer3D.h"
 #include "engine/render/RenderDeviceLifetime.h"
 #include "engine/world/SpatialWorld.h"
@@ -35,7 +36,8 @@ public:
                     render::RenderDeviceLifetime::Lease deviceLease,
                     BuildingDualLeafGameSession& session,
                     uint64_t instanceNamespace,std::string* error=nullptr,
-                    render::Model* shell=nullptr,Vec3 shellOrigin={}){
+                    render::Model* shell=nullptr,Vec3 shellOrigin={},
+                    BuildingLiftRenderState* lifts=nullptr){
         auto fail=[&](const std::string& why){
             if(error)*error=why;
             return false;
@@ -51,6 +53,10 @@ public:
             models_.push_back(&model);
             return true;
         });
+        if(lifts&&!lifts->forEachCpuModel([&](render::Model& model){
+            if(!unique.insert(&model).second||unique.size()>192u)return false;
+            models_.push_back(&model);return true;
+        })){models_.clear();return fail("Invalid lift CPU Models");}
         if(shell&&unique.insert(shell).second)models_.push_back(shell);
         else if(shell){models_.clear();return fail("Duplicate shell Model");}
         if(!gathered||models_.empty()){
@@ -62,7 +68,7 @@ public:
         session_=&session;
         deviceLease_=std::move(deviceLease);
         namespace_=instanceNamespace;
-        shell_=shell;shellOrigin_=shellOrigin;
+        shell_=shell;shellOrigin_=shellOrigin;lifts_=lifts;
         status_=Status::CleanupRequired;
         // Keep the movable aperture models independent of rigid merge,
         // automatic LOD and pooled GPU geometry. CPU models remain owned
@@ -147,6 +153,20 @@ public:
             },&drawError);
         if(!accepted)return fail(drawError.empty()?
             "Renderer3D refused committed aperture pose":drawError);
+        if(lifts_&&!lifts_->submit([&](const render::Model& model,
+                    const std::string& key,Vec3 position,uint32_t yaw){
+            const uint64_t id=renderIdentity(key,254);
+            if(!identities.emplace(id,std::make_pair(key,uint8_t(254))).second)return false;
+            const auto relative=world::relativeTo(position,origin,cellSize);
+            render::ModelDraw command{};
+            command.model=&model;command.persistentId=id;command.staticPacketRevision=0;
+            // buildingLocalToWorld yaw 1 maps +X to +Z, opposite rotateY.
+            command.world=render::mat4::translate({
+                float(relative.x.toDouble()),float(relative.y.toDouble()),
+                float(relative.z.toDouble())})*
+                render::mat4::rotateY(-float(yaw)*1.57079632679f);
+            renderer.drawModel(command);return true;
+        }))return fail("Renderer3D refused committed lift pose");
         if(error)error->clear();
         return true;
     }
@@ -175,7 +195,7 @@ public:
         }
         models_.clear();
         device_=nullptr;renderer_=nullptr;session_=nullptr;
-        namespace_=0;shell_=nullptr;shellOrigin_={};
+        namespace_=0;shell_=nullptr;shellOrigin_={};lifts_=nullptr;
         deviceLease_={};
         status_=Status::Detached;
         if(error)error->clear();
@@ -205,6 +225,7 @@ private:
     uint64_t namespace_=0;
     std::vector<render::Model*> models_;
     render::Model* shell_=nullptr;
+    BuildingLiftRenderState* lifts_=nullptr;
     Vec3 shellOrigin_{};
 };
 } // namespace aiverse::building
