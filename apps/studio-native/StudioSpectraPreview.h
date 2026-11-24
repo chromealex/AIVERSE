@@ -4,6 +4,7 @@
 // No ImGui, no game/ECS mutation and no second GPU device.
 #pragma once
 #include "StudioSpectraTransferLease.h"
+#include "StudioSpectraIdentity.h"
 #include "engine/fx/SpectraGraphRuntime.h"
 #include "engine/fx/SpectraCheckpointTimelineFile.h"
 #include "engine/fx/SpectraFX.h"
@@ -56,7 +57,7 @@ public:
             if(!ready_||playing_||checkpointRequest_||rollbackId_||fileImportPending_)return transferStatus("Checkpoint requires settled paused preview");
             if(importLease_.id)return transferStatus("Import transfer already active");
             if(exportLease_.id)return transferStatus("Export transfer active");
-            importLease_.bytes.clear();importLease_.id=nextTransferId_++;importLease_.touched=now;
+            importLease_.bytes.clear();importLease_.id=nextSpectraIdentity();importLease_.touched=now;
             Json out=transferStatus();out.set("transferId",Json::number(int64_t(importLease_.id)));return out;
         }
         if(action=="checkpointFileAppend"){
@@ -74,7 +75,7 @@ public:
             if(exportLease_.id)return transferStatus("Export transfer already active");
             if(importLease_.id)return transferStatus("Import transfer active");
             if(!exportTimelineCheckpoint(exportLease_.bytes))return transferStatus("Save a fresh paused checkpoint first");
-            exportLease_.id=nextTransferId_++;exportLease_.touched=now;
+            exportLease_.id=nextSpectraIdentity();exportLease_.touched=now;
             Json out=transferStatus();out.set("transferId",Json::number(int64_t(exportLease_.id)));out.set("fileSize",Json::number(int64_t(exportLease_.bytes.size())));return out;
         }
         if(action=="checkpointFileImport"){
@@ -161,7 +162,7 @@ public:
             gpuSeedFailed_=false;gpuSeedRetryCount_=0;
             backend_=runtime_->gpuActive()?"Metal GPU":"CPU (full effect)";
             error_.clear();
-            ++generation_;
+            generation_=nextSpectraIdentity();
             return status();
         }
         if(!ready_)return errorStatus("Load a valid graph before preview playback");
@@ -534,7 +535,7 @@ public:
         burstsPending_=triggeredBursts_=0;
         requestedParameters_.clear();
         backend_.clear();error_.clear();
-        ++generation_;
+        generation_=nextSpectraIdentity();
     }
 private:
     // Transport responses carry request-local errors without poisoning the
@@ -563,12 +564,11 @@ private:
     bool pendingShaderSeedMode_=false;
     std::map<uint64_t,std::pair<uint32_t,uint32_t>> checkpointTicks_;
     SpectraTransferLease importLease_,exportLease_;
-    uint64_t nextTransferId_=1;
     bool fileImportPending_=false;
     bool checkpointRequest_=false;
     uint32_t checkpointWaitFrames_=0;
     uint64_t rollbackId_=0;
-    uint64_t generation_=1;
+    uint64_t generation_=nextSpectraIdentity();
     std::string backend_,error_;
 };
 

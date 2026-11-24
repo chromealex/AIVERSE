@@ -248,6 +248,9 @@ void StudioHost::openProject(const std::string& path, int64_t requestId) {
         },
         [this, alive, path, requestId, snapshot, error] {
             if (!*alive) return;
+            // Reopening the same directory is a new preview lifetime too.
+            // Invalidate on successful project open before accepting commands.
+            if(error->empty()&&fxPreview_)onScene([&]{fxPreview_.reset();});
             projectLoading_ = false;
             if (preview_) onScene([&] { preview_->resetCamera(); });
             mapSnapshot_.reset(); rulesSnapshot_.reset();

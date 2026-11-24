@@ -84,14 +84,14 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     lastLoadedGraph.current='';
   },[projectPath]);
   useEffect(()=>{
-    if(!active || !state?.ready||busy)return;
+    if(!active||busy)return;
     let closed=false,inFlight=false;
     const timer=setInterval(()=>{
       if(closed||inFlight)return;
       inFlight=true;
       void invokePreview({action:'status'}).then(next=>{
         if(!closed)setState(next);
-      }).catch(e=>{if(!closed)setError(message(e));}).finally(()=>{inFlight=false;});
+      }).catch(e=>{if(!closed&&state?.ready)setError(message(e));}).finally(()=>{inFlight=false;});
     },500);
     return()=>{closed=true;clearInterval(timer);};
   },[active,state?.ready,projectPath,busy]);
@@ -112,7 +112,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       // Remember an attempted invalid revision so it does not enter an
       // infinite loop while the user edits another node.
       lastLoadedGraph.current=graphSignature;
-      void invokePreview({action:'load',graph,gpuBirthRandom}).then(async next=>{
+      void invokePreview({action:'load',graph,gpuBirthRandom,expectedGeneration:state.generation}).then(async next=>{
         if(closed)return;
         if(!next.ready || next.error) {
           setState(next);
@@ -265,7 +265,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     try{
       let expectedGeneration=state?.generation;
       if(replayPreset.gpuBirthRandom!==undefined){
-        const loaded=await invokePreview({action:'load',graph,gpuBirthRandom:replayPreset.gpuBirthRandom});
+        const loaded=await invokePreview({action:'load',graph,gpuBirthRandom:replayPreset.gpuBirthRandom,expectedGeneration});
         if(loaded.error||!loaded.ready)throw new Error(loaded.error||'Replay graph reload failed');
         expectedGeneration=loaded.generation;
         setGpuBirthRandom(replayPreset.gpuBirthRandom);lastLoadedGraph.current=graphSignature;
@@ -330,7 +330,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     setBusy(true);setError('');
     try{
       const result=await invokePreview({action,...options,
-        ...(state?.ready&&action!=='status'?{expectedGeneration:state.generation}:{})});
+        ...(state&&action!=='status'?{expectedGeneration:state.generation}:{})});
       if(action==='load'&&result.ready&&!result.error)
         lastLoadedGraph.current=graphSignature;
       if(action==='stop')lastLoadedGraph.current='';
@@ -354,14 +354,14 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         throw new Error('Invalid checkpoint size');
       const bytes=new Uint8Array(first.fileSize);
       for(let offset=0;offset<bytes.length;offset+=32768){
-        const next=await invokePreview({action:'checkpointFileRead',offset,transferId});
+        const next=await invokePreview({action:'checkpointFileRead',offset,transferId,expectedGeneration:state?.generation});
         const hex=next.fileChunk??'';
         if(next.error||next.fileSize!==bytes.length||hex.length!==2*Math.min(32768,bytes.length-offset)||!/^[0-9a-f]+$/.test(hex))throw new Error(next.error||'Invalid checkpoint chunk');
         for(let i=0;i<hex.length;i+=2)bytes[offset+i/2]=parseInt(hex.slice(i,i+2),16);
       }
       const url=URL.createObjectURL(new Blob([bytes],{type:'application/octet-stream'}));
       const a=document.createElement('a');a.href=url;a.download='spectrafx.spft';a.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
-    }catch(e){setError(message(e));}finally{if(transferId)await invokePreview({action:'checkpointFileCancel',transferId}).catch(()=>{});setBusy(false);}
+    }catch(e){setError(message(e));}finally{if(transferId)await invokePreview({action:'checkpointFileCancel',transferId,expectedGeneration:state?.generation}).catch(()=>{});setBusy(false);}
   };
   const importCheckpointFile=async(file:File)=>{
     let transferId:number|undefined;
@@ -374,13 +374,13 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       transferId=begin.transferId;
       for(let offset=0;offset<bytes.length;offset+=32768){
         const chunk=Array.from(bytes.subarray(offset,offset+32768),b=>b.toString(16).padStart(2,'0')).join('');
-        const next=await invokePreview({action:'checkpointFileAppend',offset,chunk,transferId});
+        const next=await invokePreview({action:'checkpointFileAppend',offset,chunk,transferId,expectedGeneration:state?.generation});
         if(next.error)throw new Error(next.error);
       }
-      const result=await invokePreview({action:'checkpointFileImport',transferId});
+      const result=await invokePreview({action:'checkpointFileImport',transferId,expectedGeneration:state?.generation});
       setState(result);if(result.error)throw new Error(result.error);
       transferId=undefined; // Native queue owns the uploaded bytes.
-    }catch(e){if(transferId)await invokePreview({action:'checkpointFileCancel',transferId}).catch(()=>{});setError(message(e));}finally{setBusy(false);}
+    }catch(e){if(transferId)await invokePreview({action:'checkpointFileCancel',transferId,expectedGeneration:state?.generation}).catch(()=>{});setError(message(e));}finally{setBusy(false);}
   };
   const launch=async()=>{
     // Actual graph validation and device eligibility occur in StudioScene.

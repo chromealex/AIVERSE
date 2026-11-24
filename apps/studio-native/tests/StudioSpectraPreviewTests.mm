@@ -149,8 +149,11 @@ int aiverseMain(int,char**) { @autoreleasepool {
         require(reloaded.getBool("ready"),"preview reload failed");
         const auto replacement=scene.spectraPreviewCommand(load,"");
         require(replacement.getBool("ready")&&replacement.getInt("tick")==0&&
-                replacement.getInt("generation")==reloaded.getInt("generation")+1,
+                replacement["generation"].integer()>reloaded["generation"].integer(),
                 "successful candidate replacement did not commit a new generation");
+        const auto independentIdentity=mapScene.spectraPreviewCommand(action("status"),"");
+        require(independentIdentity["generation"].integer()!=replacement["generation"].integer(),
+                "independent preview reused a runtime generation");
         const auto switched=scene.spectraPreviewCommand(action("status"),"different-project");
         require(!switched.getBool("ready"),"status exposed old project runtime");
         scene.setSpectraDockMode(false);

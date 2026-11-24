@@ -1,10 +1,17 @@
 #include "apps/studio-native/StudioSpectraTransferLease.h"
+#include "apps/studio-native/StudioSpectraIdentity.h"
+#include <set>
 #include "tests/TestCheck.h"
 #include <iostream>
 using namespace aiverse::studio;
 using namespace std::chrono_literals;
 
 int main() {
+    std::set<uint64_t> identities;
+    for(int i=0;i<4096;++i) {
+        const auto id=nextSpectraIdentity();
+        AIVERSE_TEST_CHECK(id>0 && id<=9007199254740991ULL && identities.insert(id).second);
+    }
     SpectraTransferLease lease;
     const auto start=SpectraTransferLease::TimePoint{};
     AIVERSE_TEST_CHECK(!lease.expire(start+60s));
