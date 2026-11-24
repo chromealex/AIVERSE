@@ -1004,6 +1004,8 @@ void registerSpectraGraphOps(Workspace& ws) {
             if(input.peek()!=std::char_traits<char>::eof())throw std::runtime_error("SDF binary size changed");
             fx::StaticSdfVolume sdf;
             if(!fx::decodeSdfBinary(bytes,sdf,&error))throw std::runtime_error("SDF import: "+error);
+            if(action=="importSdf"&&sdf.dimension>fx::kStaticSdfInlineMaxDimension)
+                throw std::runtime_error("High-resolution SDF must be linked, not imported inline");
             Json props=(*n)["properties"];
             if(!props.isObject())props=Json::object();
             props.set("staticSdf",action=="linkSdf"?Json::string(asset):fx::staticSdfToJson(sdf));
@@ -1015,7 +1017,7 @@ void registerSpectraGraphOps(Workspace& ws) {
             const auto& dimension=p["dimension"];
             const auto d=dimension.toDouble();
             if(graph.getInt("version")!=2||!n||n->getStr("type")!="CollisionModule"||
-               !dimension.isNumber()||!std::isfinite(d)||d<4||d>bake::kMeshDistanceMaxDimension||std::floor(d)!=d)
+               !dimension.isNumber()||!std::isfinite(d)||d<4||d>fx::kStaticSdfInlineMaxDimension||std::floor(d)!=d)
                 throw std::runtime_error("Select a Graph v2 CollisionModule and integer dimension 4..32");
             const std::string model=p.getStr("model");
             (void)checkedReplayDependency(ws,model);

@@ -170,9 +170,44 @@ int main() {
         sdf.samples.pop_back();
         require(!sp::inspectGraphGpuEligibility(volume,options).eligible,"invalid SDF rejected");
         require(!fx::encodeSdfBinary(sdf,bytes)&&bytes.size()==131108,"invalid encode preserves output");
-        sdf.dimension=33;sdf.samples.resize(33u*33u*33u);
-        require(!sdf.valid()&&!fx::parseEffect(fx::effectToJson(volume),"sdf33",decoded,errors),
-                "oversized SDF rejected by native and JSON validation");
+        // High-resolution dense data is binary-only, with exact samples
+        // and a bounded external reference in the authored JSON.
+        for(uint32_t n:{64u,128u}){
+            sdf.dimension=n;sdf.origin={-2,-2,-2};sdf.spacing=.0625f;
+            sdf.samples.resize(size_t(n)*n*n);
+            for(uint32_t z=0;z<n;++z)for(uint32_t y=0;y<n;++y)for(uint32_t x=0;x<n;++x)
+                sdf.samples[(size_t(z)*n+y)*n+x]=float(y)*sdf.spacing-2;
+            require(sdf.valid()&&fx::encodeSdfBinary(sdf,bytes)&&
+                    bytes.size()==36+4*size_t(n)*n*n&&uint8_t(bytes[4])==2,
+                    "high-resolution SDFB v2 encode");
+            require(fx::decodeSdfBinary(bytes,restored,&error)&&restored.sameSamples(sdf),
+                    "high-resolution exact binary roundtrip");
+            float distance=0;render::float3 gradient{};
+            require(restored.sample({0,.25f,0},distance,gradient)&&
+                    std::abs(distance-.25f)<1e-5f&&std::abs(gradient.y-1)<1e-5f,
+                    "high-resolution native sampling");
+            require(sp::inspectGraphGpuEligibility(volume,options).eligible,
+                    "high-resolution GPU schema eligibility");
+            bool exportRejected=false;
+            try{(void)fx::effectToJson(volume);}catch(const std::runtime_error&){exportRejected=true;}
+            require(exportRejected,"unlinked dense export rejected");
+            e.collision.staticSdfAsset="content/test.sdfbin";
+            const auto external=fx::effectToJson(volume);
+            require(external.dump(-1).size()<4096,"compact effect serialization");
+            require(!fx::parseEffect(external,"noReader",decoded,errors),"external requires reader");
+            require(fx::parseEffect(external,"highResolution",decoded,errors,
+                [&](const std::string& path,std::string& out){
+                    if(path!="content/test.sdfbin")return false;out=bytes;return true;
+                })&&decoded.emitters[0].collision.staticSdf.sameSamples(sdf),
+                "external high-resolution effect roundtrip");
+            e.collision.staticSdfAsset.clear();
+        }
+        sdf.dimension=129;
+        require(!sdf.valid()&&!fx::encodeSdfBinary(sdf,bytes),
+                "oversized native volume rejected");
+        auto inlineTooLarge=Json::parse(R"({"emitters":[{"burst":1,"collision":{"ground":false,"staticSdf":{"origin":[0,0,0],"spacing":1,"dimension":64,"samples":[]}}}]})");
+        require(!fx::parseEffect(inlineTooLarge,"oversizedInline",decoded,errors),
+                "high-resolution inline JSON rejected");
     }
     {
         sp::ComputeEmitterDesc desc;
@@ -240,7 +275,7 @@ int main() {
         require(bake::bakeMeshDistanceGrid(p,indices,32,render::mat4{},grid,error)&&
                 grid.samples.size()==32768,"32 cubed closed cube bake");
         require(grid.samples[(16u*32+16)*32+16]<-.9f,"high resolution signed interior");
-        require(!bake::bakeMeshDistanceGrid(p,indices,33,render::mat4{},grid,error)&&
+        require(!bake::bakeMeshDistanceGrid(p,indices,129,render::mat4{},grid,error)&&
                 grid.samples.size()==32768,"unsupported dimension rejected without mutation");
         const auto previous=grid.samples;
         bake::MeshDistanceQueryStats stats;

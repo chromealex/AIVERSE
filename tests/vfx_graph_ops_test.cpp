@@ -89,6 +89,19 @@ int main() {
                 reopened["graph"]["nodes"][size_t(2)]["properties"].getStr("staticSdf")=="content/test.sdfbin",
                 "persistent link reopens without inline samples");
         fs::remove_all(root/"fx");
+        volume.dimension=64;volume.samples.assign(64u*64u*64u,-.25f);
+        require(fx::encodeSdfBinary(volume,bytes),"encode external 64 cubed");
+        std::ofstream denseBinary(root/"content"/"dense.sdfbin",std::ios::binary);
+        denseBinary.write(bytes.data(),std::streamsize(bytes.size()));denseBinary.close();
+        import.set("sdfAsset",Json::string("content/dense.sdfbin"));
+        auto denseLink=call("fx_graph_edit",import);
+        require(denseLink.getBool("ok")&&denseLink["validation"].getBool("ok")&&
+                denseLink["graph"].dump(-1).size()<4096,"high-resolution link stays compact");
+        import.set("action",Json::string("importSdf"));
+        auto denseImport=call("fx_graph_edit",import);
+        require(denseImport.has("error")||!denseImport.getBool("ok"),"high-resolution inline import denied");
+        require(!fs::exists(root/"fx"),"dense link/import does not publish");
+        import.set("action",Json::string("linkSdf"));
         import.set("sdfAsset",Json::string("content/../test.sdfbin"));
         auto badImport=call("fx_graph_edit",import);
         require(badImport.has("error")||!badImport.getBool("ok"),"SDF import traversal denied");

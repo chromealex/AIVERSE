@@ -203,9 +203,9 @@ void sharedSdf(gfx::Device& d){
     auto cache=std::make_shared<SharedSdfGpuCache>(d);
     auto cfg=config(256,false);
     cfg.sharedSdfCache=cache;cfg.allocationBudget=budget;
-    cfg.staticSdf.dimension=8;cfg.staticSdf.spacing=1;
-    cfg.staticSdf.origin={-4,-4,-4};cfg.staticSdf.samples.assign(512,1.f);
-    const size_t bytes=(9+512)*sizeof(uint32_t);
+    cfg.staticSdf.dimension=128;cfg.staticSdf.spacing=.0625f;
+    cfg.staticSdf.origin={-4,-4,-4};cfg.staticSdf.samples.assign(128u*128u*128u,1.f);
+    const size_t bytes=(9+128u*128u*128u)*sizeof(uint32_t);
     const auto privateCharge=estimateGpuEmitterAllocation(256,false);
     ComputeParticles a,b,c;
     require(a.init(&d,cfg)&&b.init(&d,cfg),"two SDF emitters initialize");
