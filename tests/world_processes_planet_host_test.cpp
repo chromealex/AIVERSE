@@ -122,6 +122,13 @@ static void checkConsequenceOwner(){
     world.add<Transform>(member,tr);world.add<fracture::Member>(member,fracture::Member{false,true,true});
     fracture::Event event{member,fracture::collapseEventKey(member,7),7};
     world.add<fracture::Collapse>(member,fracture::Collapse{event.key,7,fracture::Delivery::Pending});
+    physics::Scene scene;PlanetSourcePublisher sources;
+    PlanetSourceCollider source;source.key={wp::ConsequenceKind::Structure,member.packed(),0};
+    source.desc.motion=physics::Motion::Static;
+    source.desc.position=physics::physisB3(tr.pos-game::Surface::anchor(0));
+    const World original=world;
+    check(sources.publish(scene,world,surface,"terra",std::span(&source,1))&&sources.count()==1,"source standing collider");
+    const auto standing=sources.handle(source.key);
     const auto owner=[&](World&,const auto& delivery)->std::optional<wp::ConsequenceBody>{
         wp::ConsequenceBody record;record.motion.position=delivery.frame.origin+surface.up(tr.pos)*2_fx;
         return record; // fixture has no source collider
@@ -130,9 +137,11 @@ static void checkConsequenceOwner(){
         [](World&,const auto&)->std::optional<wp::ConsequenceBody>{return {};}),"durable consequence");
     check(fracture::planetCollapseReceipt(world,event),"ack after record");
     const auto key=wp::consequenceKey(event);
-    physics::Scene scene;PlanetConsequencePublisher pub;
+    PlanetConsequencePublisher pub;
     check(pub.publish(scene,world,surface,"terra")&&pub.count()==1,"spawn durable body");
     const auto handle=pub.handle(key);
+    check(sources.publish(scene,world,surface,"terra",std::span(&source,1))&&sources.count()==0&&!scene.valid(standing),"retire source on durable consequence");
+    check(wp::planetSourceRetired(world,source.key,"terra"),"source visual suppressed");
     check(pub.publish(scene,world,surface,"terra")&&pub.handle(key)==handle,"idempotent body");
     scene.step();
     std::vector<wp::ConsequenceCheckpoint> state;
@@ -142,6 +151,9 @@ static void checkConsequenceOwner(){
     check(pub.reset(scene)&&scene.bodyCount()==0,"reset body");
     check(pub.publish(scene,world,surface,"terra")&&pub.count()==1,"restore checkpoint");
     check(pub.reset(scene),"shutdown owner");
+    check(sources.publish(scene,original,surface,"terra",std::span(&source,1))&&sources.count()==1,"rollback restores standing source");
+    check(!wp::planetSourceRetired(original,source.key,"terra"),"rollback restores visibility");
+    check(sources.reset(scene)&&scene.bodyCount()==0,"source shutdown");
 }
 int main(){
     try{

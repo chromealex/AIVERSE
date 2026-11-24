@@ -352,3 +352,7 @@ Pass a complete per-tick `span<PlanetMorphCollisionRequest>` to the final Planet
 ### Stage 142: moving MORPH node proxies and contact routing
 
 Optional final `nodeProxies` prepare argument specifies stable instance/node IDs and sphere shape. Nodes follow their canonical completed-tick model frame as kinematic spheres with stable handles; no self-contacts and no additional PHYSIS acceleration. Static mesh requests may supply a representative contactNode. Host builds contact maps automatically and coalesces repeated target/opposite identity begins for two ticks. This conservative debounce may suppress legitimate rapid impacts and is reset on rollback; authoritative replay must use recorded quantized inputs. No dynamic compound rigid body, actual soft body, or full contact manifold tracking. Tests authored, NOT RUN.
+
+### Stage 146: source representation switch
+
+Pass complete per-body `PlanetSourceCollider` requests to the final `PlanetProcessHost::prepare` parameter. Source identities are existing FRACTURE entity IDs or EVOLVE species/plant IDs. Only colliders owned by this publisher are removed. Call `drawSourceOrConsequence` instead of drawing the original asset independently; explicitly supply standing/fallen model draws and body-relative asset offset. Durable records/receipts suppress the standing representation; rollback recreates it. No automatic GameCore Unit deletion or third-party renderer hooks. Tests authored, NOT RUN.

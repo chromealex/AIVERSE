@@ -7,6 +7,7 @@
 #include "PlanetMorphCollision.h"
 #include "PlanetMorphNodeProxies.h"
 #include "PlanetConsequencePublisher.h"
+#include "PlanetSourcePublisher.h"
 #include "aiverselib/world/EvolvePlanetRootClimate.h"
 #include <optional>
 #include <set>
@@ -30,6 +31,8 @@ public:
     enum class Phase { Idle, Prepared, PhysicsPublished, PhysicsStepped, Complete, Fault };
     Phase phase()const{return phase_;}
     const PlanetHostStamp& stamp()const{return stamp_;}
+    size_t sourceColliderCount()const{return sources_.count();}
+    physics::BodyHandle sourceHandle(PlanetSourcePublisher::Key key)const{return sources_.handle(key);}
     size_t consequenceCount()const{return consequences_.count();}
     physics::BodyHandle consequenceHandle(const PlanetConsequencePublisher::Key& key)const{return consequences_.handle(key);}
     size_t physicsTiles()const{return physical_.granularPhysicsTiles();}
@@ -62,7 +65,8 @@ public:
                  const std::map<uint64_t,PlanetGranularPlacement>& placements,
                  GranularFrameBudget budget={},PlanetTerrainCollisionConfig terrainConfig={},
                  std::span<const PlanetMorphCollisionRequest> morphColliders={},
-                 std::span<const PlanetMorphNodeProxyRequest> nodeProxies={}){
+                 std::span<const PlanetMorphNodeProxyRequest> nodeProxies={},
+                 std::span<const PlanetSourceCollider> sources={}){
         if(phase_!=Phase::Idle&&phase_!=Phase::Complete)return false;
         if(!surface||!surface->tab||!stamp.epoch||stamp.completedTick>=UINT32_MAX-1||stamp.body.empty())return false;
         if(scene_&&(terrainEnabled_!=terrainConfig.enabled||surface->tab!=surface_->tab||
@@ -97,9 +101,17 @@ public:
             if(!node)return false;
             nodes.push_back(std::move(*node));
         }
+        if(sources.size()>lib::worldprocess::kMaxConsequences)return false;
+        std::set<PlanetSourcePublisher::Key> sourceKeys;
+        for(const auto& source:sources){
+            if(!sourceKeys.insert(source.key).second||!lib::worldprocess::validPlanetSourceBinding(ecs,*surface,source.key,stamp.body))return false;
+            for(const auto& request:morphColliders)if(source.key.kind==lib::worldprocess::ConsequenceKind::Structure&&source.key.source==request.owner.packed())return false;
+            for(const auto& request:nodeProxies)if(source.key.kind==lib::worldprocess::ConsequenceKind::Structure&&source.key.source==request.owner.packed())return false;
+        }
+        std::vector<PlanetSourceCollider> sourceCopy(sources.begin(),sources.end());
         World snapshot=ecs;
         snapshot_=std::move(snapshot);surface_=std::move(surface);
-        frame_=std::move(frame);morphPrepared_=std::move(prepared);nodePrepared_=std::move(nodes);stamp_=std::move(stamp);
+        frame_=std::move(frame);morphPrepared_=std::move(prepared);nodePrepared_=std::move(nodes);sourcePrepared_=std::move(sourceCopy);stamp_=std::move(stamp);
         scene_=&scene;sceneTick_=scene.tick();bodyIndex_=body;terrainEnabled_=terrainConfig.enabled;terrainConfig_=std::move(terrainConfig);
         physical_.invalidateMorphPublications();
         renderDone_=false;recorded_=false;contacts_.clear();debrisStates_.clear();consequenceStates_.clear();
@@ -115,6 +127,9 @@ public:
         if(!morphCollision_.publish(*scene_,std::move(morphPrepared_)))return false;
         if(!morphNodes_.publish(*scene_,nodePrepared_))return false;
         if(!consequences_.publish(*scene_,*snapshot_,*surface_,stamp_.body))return false;
+        // Both representations may overlap only during this serialized
+        // publication barrier; failure faults before any physical step.
+        if(!sources_.publish(*scene_,*snapshot_,*surface_,stamp_.body,sourcePrepared_))return false;
         phase_=Phase::PhysicsPublished;return true;
     }
     bool publishDebris(const PlanetDebrisProjection& request){
@@ -258,6 +273,35 @@ public:
         return snapshot_&&device_&&renderDone_&&phase_!=Phase::Fault&&phase_!=Phase::Idle&&
             physical_.attachPlanetMorphVisual(id,draw,game::Surface::anchor(bodyIndex_),translation);
     }
+    // The asset owner calls this INSTEAD OF its ordinary source draw.
+    // Acknowledged source disappears even when its debris is retired.
+    // Explicit replacement model and body-to-model offset; no asset guessing.
+    bool drawSourceOrConsequence(render::Renderer3D& renderer,PlanetSourcePublisher::Key key,
+            const render::ModelDraw& standing,const render::ModelDraw& fallen,
+            const render::mat4& modelFromBody={},render::float3 translation={})const{
+        using namespace lib::worldprocess;
+        if(!snapshot_||!renderDone_||phase_==Phase::Fault||phase_==Phase::Idle||
+           !validPlanetSourceBinding(*snapshot_,*surface_,key,stamp_.body))return false;
+        if(!planetSourceRetired(*snapshot_,key,stamp_.body)){
+            if(!standing.model)return false;
+            renderer.drawModel(standing);return true;
+        }
+        const auto* resource=snapshot_->resourceConst<PlanetConsequenceResource>();
+        if(!resource)return true;
+        for(const auto& record:resource->bodies){
+            if(record.body!=stamp_.body||consequenceSource(record.key)!=key)continue;
+            if(!fallen.model)return false;
+            auto motion=record.motion;
+            for(const auto& state:consequenceStates_)if(state.key==record.key){motion=state.motion;break;}
+            auto matrix=consequenceModelMatrix(motion,game::Surface::anchor(bodyIndex_),modelFromBody,translation);
+            if(!matrix)return false;
+            auto draw=fallen;draw.world=*matrix;
+            draw.persistentId=0;draw.staticPacketRevision=0;draw.staticCache=nullptr;
+            draw.flags&=~render::kDrawStatic;
+            renderer.drawModel(draw);
+        }
+        return true;
+    }
     bool drawGranular(render::Renderer3D& renderer,render::float3 translation={})const{
         if(!device_||!renderDone_||phase_==Phase::Fault||phase_==Phase::Idle)return false;
         physical_.drawGranular(renderer,{1,1,1,1},0,translation);return true;
@@ -267,7 +311,7 @@ public:
     bool resetAfterRollback(){
         if(!scene_)return phase_==Phase::Idle;
         phase_=Phase::Fault;
-        if(!terrain_.reset(*scene_)||!morphCollision_.reset(*scene_)||!morphNodes_.reset(*scene_)||!consequences_.reset(*scene_))return false;
+        if(!terrain_.reset(*scene_)||!morphCollision_.reset(*scene_)||!morphNodes_.reset(*scene_)||!consequences_.reset(*scene_)||!sources_.reset(*scene_))return false;
         if(device_){if(!physical_.resetAfterRollback(*scene_,*device_))return false;}
         else if(!physical_.resetPhysicsOnly(*scene_))return false;
         auto* retainedDevice=device_;
@@ -279,7 +323,7 @@ public:
             device_=nullptr;return true;
         }
         phase_=Phase::Fault;
-        if(!terrain_.reset(*scene_)||!morphCollision_.reset(*scene_)||!morphNodes_.reset(*scene_)||!consequences_.reset(*scene_))return false;
+        if(!terrain_.reset(*scene_)||!morphCollision_.reset(*scene_)||!morphNodes_.reset(*scene_)||!consequences_.reset(*scene_)||!sources_.reset(*scene_))return false;
         if(device_){if(!physical_.shutdownAfterIdle(*scene_,*device_))return false;}
         else if(!physical_.resetPhysicsOnly(*scene_))return false;
         clear();return true;
@@ -288,7 +332,7 @@ private:
     bool sceneCurrent()const{return scene_&&scene_->tick()==sceneTick_;}
     void finish(){if(phase_==Phase::PhysicsStepped&&renderDone_&&recorded_)phase_=Phase::Complete;}
     void clear(){
-        snapshot_.reset();surface_.reset();frame_={};morphPrepared_.clear();nodePrepared_.clear();contactDebounce_.reset();stamp_={};contacts_.clear();debrisStates_.clear();consequenceStates_.clear();
+        snapshot_.reset();surface_.reset();frame_={};morphPrepared_.clear();nodePrepared_.clear();sourcePrepared_.clear();contactDebounce_.reset();stamp_={};contacts_.clear();debrisStates_.clear();consequenceStates_.clear();
         scene_=nullptr;device_=nullptr;sceneTick_=0;bodyIndex_=-1;
         renderDone_=recorded_=terrainEnabled_=false;terrainConfig_={};phase_=Phase::Idle;
     }
@@ -297,6 +341,8 @@ private:
     PlanetMorphCollisionPublisher morphCollision_;
     PlanetMorphNodePublisher morphNodes_;
     PlanetConsequencePublisher consequences_;
+    PlanetSourcePublisher sources_;
+    std::vector<PlanetSourceCollider> sourcePrepared_;
     std::vector<PlanetConsequencePublisher::Checkpoint> consequenceStates_;
     MorphContactDebounce contactDebounce_;
     std::vector<PlanetMorphNodeProxy> nodePrepared_;
