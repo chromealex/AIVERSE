@@ -692,3 +692,6 @@ Demo `--svg FILE` exports ECS region fertility/pollution and TerraWeave live/dea
 
 ### Studio ecology stages 71–75
 Use studio.evolveState for read-only live region, plant, deadwood and soil diagnostics. History is editor-local, bounded to 240 samples. Presets use EvolvePresets.h and Inspector setProperties; custom presets currently localStorage plus JSON exchange. Time controls reuse studio.gameControl pause/resume/step for the whole local match, not a separate ecology clock. No builds/tests run yet.
+
+## Shared optional work scheduling (Stage 82)
+Use `WorldProcessEntityBudget.h` for one owner-scoped, stable-ID, wake-aware advisory refresh queue shared by EVOLVE, CROWD and SOCIETY. `WorldProcessBudgetedQueries.h` provides budgeted read-only Crowd/Society reports over the existing query API. Authoritative SimulationLod.h policy and runtime WorkBudget are the owners; do not duplicate scheduling, skip mandatory simulation work, or use render cameras as authority. Each consumer has its own state; commit staged next state and outputs together; no automatic persistence or Studio registration. See docs/handoffs/world-processes-stage82-shared-entity-reports-2026-11-24.md.
