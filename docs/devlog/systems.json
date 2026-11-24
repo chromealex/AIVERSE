@@ -2149,6 +2149,14 @@
    ],
    "roadmap": [
     {
+     "id": "studio-world-persistence-panel",
+     "title": "Управление сохранениями мира",
+     "titleEn": "World persistence panel",
+     "text": "Офлайн-диагностика регионов, контрольные точки, резервные копии и подтверждаемая очистка.",
+     "textEn": "Offline region diagnostics, checkpoints, backups and confirmed retention.",
+     "status": "in-progress"
+    },
+    {
      "status": "in-progress",
      "target": null,
      "title": "Studio на Windows",
