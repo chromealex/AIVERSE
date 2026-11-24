@@ -19,13 +19,23 @@ Use this skill when modifying or consuming real-world ECS regional ownership, st
 
 ## Persistent identity allocation (W1.24c)
 
-Use `RegionEntityLedger::nextIdentity()` to allocate a nonzero monotonic ID at the authoritative spawn/bind barrier. It derives the high-water mark from ledger records including tombstones, so no second allocator resource or archive field is needed. Zero means exhausted. Never derive a stable ID from Entity::packed(), index or generation; old stored stable tags remain valid.
+Use `RegionEntityLedger::nextIdentity()` to allocate a nonzero monotonic ID at the authoritative spawn/bind barrier. It derives the high-water mark from remaining records and the persisted sealed identity prefix. Zero means exhausted. Never derive a stable ID from Entity::packed(), index or generation; old stored stable tags remain valid.
 
 ActorHost assigns new identities in semantic order (character slot, vehicle/loot object ID), keeps existing tags and maintains a derived bidirectional runtime-handle/identity index for destruction notifications. Clear the index on restoration; full reconciliation remains the default. The experimental candidate-only path requires a valid prior index and complete notifications.
 
 Use `PersistentEntityReferences::rebuild` and `resolve` to translate stable IDs to current live handles. RegionMoveRequests v2 persists stable IDs; v1 ActorHost keys equal the historic stored tags and migrate through the registry with binding validation. DirtyQueue keys are runtime observation handles plus one, NOT persistent IDs; drain them before portable restart and never interpret them as ledger identity.
 
 Production portable actor restoration still requires explicit component/resource codecs and materialization policy; do not enable it solely because region ownership and movement addressing now use stable IDs.
+
+## Tombstone compaction (W1.25d)
+
+RegionEntityLedger v2 preserves two watermarks: retiredFloor seals the identity prefix, historyFloor is the latest removed record revision. Missing IDs at or below retiredFloor are permanently unavailable (including previously unused gaps), but existing live records remain valid. nextIdentity uses the maximum of the sealed prefix and remaining records. Native resource schema v1 is explicitly migrated; the ledger archive reader also accepts v1. Old binaries cannot read v2.
+
+Only compact at a quiescent checkpoint barrier on a private candidate. UnifiedWalSession::checkpoint/queueCheckpoint accept optional compactThrough and compactLimit; zero cutoff disables compaction. The new ledger is published only after checkpoint/WAL rotation succeeds, and the authority adopts the identical compacted ledger before another tick. This does not increment gameplay revision or WAL sequence. Do not mutate the live ledger independently. No ID reuse or standalone compaction WAL frame.
+
+Before delivering incremental changes, check ChangePage::resetRequired or RegionChangeCursor::requiresBootstrap. If stale, replace the observer's projection from a full live snapshot and reset its cursor to that snapshot revision; do not just advance the cursor. since() refuses compacted history. PersistentEntityReferences classifies missing sealed IDs as retired. Older backup generations preserve their own ledger state; a fork must use its own world identity.
+
+Server checkpointWorld(retainRevisions) defaults to 65536 recent revisions. CLI --world-retain-revisions N sets the window at configured --world-checkpoint-ticks rotations; 0 removes all eligible tombstones, UINT64_MAX disables compaction. Configure periodic checkpoints for high-churn worlds. The per-ledger record cap still applies between rotations; live entity cap, full ECS snapshot memory and disk retention of old checkpoint/WAL generations remain separate concerns. No native performance or long-duration acceptance has run.
 
 ## Consume changed region state incrementally
 
