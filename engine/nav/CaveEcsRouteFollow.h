@@ -17,6 +17,12 @@
 #include <vector>
 
 namespace aiverse::nav {
+// Persistent coordinate domain, not a process-local publication epoch.
+struct CaveRouteScope {uint64_t id=0;};
+inline uint64_t caveRouteScope(const World& world,Entity entity){
+    const auto* scope=world.tryGetConst<CaveRouteScope>(entity);
+    return scope?scope->id:0;
+}
 struct CaveRouteFollower {
     std::vector<terraweave::caverns::PointCm> waypoints;
     terraweave::caverns::CaveAgentProfile agent{};
@@ -96,6 +102,7 @@ inline CaveRouteTickStats updateCaveRouteFollowers(
         [&](Entity entity,CaveRouteFollower& route,Transform& transform){
         if(visited++>=maxActors)return;
         if(route.arrived||route.needsRepath)return;
+        if(caveRouteScope(world,entity)!=source.scopeId()){route.needsRepath=true;++stats.stale;return;}
         if(route.sourceRevision!=source.revision() ||
            route.environmentRevision!=source.environmentRevision()){
             route.needsRepath=true;++stats.stale;return;

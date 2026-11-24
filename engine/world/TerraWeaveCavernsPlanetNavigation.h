@@ -41,7 +41,7 @@ struct CavePlanetNavigationLease {
     std::shared_ptr<const CaveNavigationDataProvider> provider;
     bool matches(uint64_t region,uint64_t epoch,uint64_t native,
             uint64_t source,uint64_t environment)const noexcept{
-        return provider&&regionId==region&&generation==epoch&&nativeRevision==native&&
+        return provider&&provider->scopeId()==region&&regionId==region&&generation==epoch&&nativeRevision==native&&
             provider->revision()==source&&provider->environmentRevision()==environment;
     }
 };
@@ -49,7 +49,7 @@ inline std::shared_ptr<const CaveNavigationDataProvider> makeResidentCavePlanetN
         CavePlanetFrame frame,std::shared_ptr<const CaveSnapshotSpatialIndex> index,
         std::shared_ptr<const World> frozen,uint64_t environmentRevision,
         CavePlanetNavigationCoverage coverage,CavePhysisCellMapper mapper,
-        CaveEnvironmentCostSettings settings={},CaveNavigationCallbacks policies={}){
+        CaveEnvironmentCostSettings settings={},CaveNavigationCallbacks policies={},uint64_t scopeId=0){
     if(!index||!frozen||!environmentRevision||!mapper||policies.submerged||policies.traversalCost)
         throw std::invalid_argument("Caverns planetary navigation environment owner");
     CaveEnvironmentCoordinates coords;
@@ -61,6 +61,6 @@ inline std::shared_ptr<const CaveNavigationDataProvider> makeResidentCavePlanetN
     return makeCavePlanetNavigationProvider(std::move(frame),std::move(index),std::move(frozen),
         environmentRevision,std::move(policies),[coverage](PointCm lo,PointCm hi){
             return coverage.contains(lo,hi);
-        });
+        },scopeId);
 }
 } // namespace aiverse::terraweave::caverns

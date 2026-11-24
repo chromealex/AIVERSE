@@ -54,7 +54,7 @@ struct CavePlanetRuntimeCandidate {
         auto provider=makeResidentCavePlanetNavigation(std::move(frame),
             std::make_shared<const CaveSnapshotSpatialIndex>(source->second),
             std::move(frozen),environmentRevision,coverage->second,std::move(mapper),
-            settings,std::move(policies));
+            settings,std::move(policies),region);
         return CavePlanetNavigationLease{region,generation,nativeRevision,std::move(provider)};
     }
     bool current(const World& ecs,uint64_t epoch)const{

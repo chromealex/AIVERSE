@@ -69,12 +69,13 @@ public:
     explicit CaveNavigationDataProvider(
         std::shared_ptr<const CaveSnapshotSpatialIndex> index,
         CaveNavigationCallbacks callbacks={},uint64_t environmentRevision=0,
-        CaveResidencyCheck residency={})
+        CaveResidencyCheck residency={},uint64_t scopeId=0)
         :index_(std::move(index)),callbacks_(std::move(callbacks)),
-         environmentRevision_(environmentRevision),residency_(std::move(residency)){
+         environmentRevision_(environmentRevision),residency_(std::move(residency)),scopeId_(scopeId){
         if(!index_||!index_->revision())
             throw std::invalid_argument("Caverns navigation source epoch");
     }
+    uint64_t scopeId()const noexcept{return scopeId_;}
     uint64_t revision()const noexcept{return index_->revision();}
     uint64_t environmentRevision()const noexcept{return environmentRevision_;}
     const CaveSnapshotSpatialIndex& sdf()const noexcept{return *index_;}
@@ -267,5 +268,6 @@ private:
     CaveNavigationCallbacks callbacks_;
     uint64_t environmentRevision_=0;
     CaveResidencyCheck residency_;
+    uint64_t scopeId_=0;
 };
 } // namespace aiverse::terraweave::caverns

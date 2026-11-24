@@ -55,6 +55,10 @@ inline std::optional<terraweave::caverns::PointCm> readCaveTransformPosition(
     if(!validCaveRoutePoint(p))return std::nullopt;
     return p;
 }
+using CaveScopedNavSource=std::function<std::shared_ptr<const terraweave::caverns::CaveNavigationDataProvider>(const World&,Entity)>;
+using CaveScopedRouteSearch=std::function<terraweave::caverns::CavePathResult(
+    const std::string&,const terraweave::caverns::CavePathQuery&,
+    std::shared_ptr<const terraweave::caverns::CaveNavigationDataProvider>)>;
 struct CaveSimulationNavigationHooks {
     CavePublishedNavSource publishedSource;
     CaveRouteSearch search;
@@ -63,7 +67,10 @@ struct CaveSimulationNavigationHooks {
     uint32_t maxRepairsPerTick=8;
     uint32_t maxMovedPerTick=65536;
     CaveWorldPositionSource position; // defaults to the shared Transform reader
+    CaveScopedNavSource scopedSource;
+    CaveScopedRouteSearch scopedSearch;
 };
+inline void io(Archive& a,CaveRouteScope& s){a(s.id);if(!s.id)a.fail();}
 inline void io(Archive& a,CaveRouteFollower& p) {
     // Serialize bounded route points; avoid a corrupted/untrusted save
     // allocating an unbounded vector from a bogus length field.
@@ -112,6 +119,7 @@ inline bool assignCaveGoal(
     if(world.has<CaveRouteFollower>(entity))
         world.get<CaveRouteFollower>(entity)=std::move(route);
     else world.add<CaveRouteFollower>(entity,std::move(route));
+    world.remove<CaveRouteScope>(entity);
     return true;
 }
 // Functions below write to existing shared ECS components only; no separate
@@ -120,15 +128,20 @@ inline CaveRepathTickStats repathCaveEntities(
     Simulation& sim,
     const CaveSimulationNavigationHooks& hooks) {
     CaveRepathTickStats stats;
-    if(!hooks.publishedSource||!hooks.search||!hooks.maxRepairsPerTick)return stats;
-    const auto provider=hooks.publishedSource();
-    if(!provider||!provider->revision())return stats;
+    const bool scoped=bool(hooks.scopedSource);
+    if(!hooks.maxRepairsPerTick||(scoped?!hooks.scopedSearch:(!hooks.publishedSource||!hooks.search)))return stats;
+    const auto flat=scoped?nullptr:hooks.publishedSource();
+    if(!scoped&&(!flat||!flat->revision()))return stats;
     World& world=sim.world();
     const uint32_t tick=sim.tick();
     world.each<CaveRouteIntent,CaveRouteFollower>(
         [&](Entity entity,CaveRouteIntent& intent,CaveRouteFollower& route){
         if(!intent.active||stats.attempted>=hooks.maxRepairsPerTick)
             return;
+        const auto provider=scoped?hooks.scopedSource(world,entity):flat;
+        if(!provider||!provider->revision()||provider->scopeId()!=caveRouteScope(world,entity)){
+            route.needsRepath=true;++stats.unavailable;return;
+        }
         // Force a stale route to be re-planned in a bounded stable order.
         if(route.sourceRevision!=provider->revision() ||
            route.environmentRevision!=provider->environmentRevision()){
@@ -155,7 +168,14 @@ inline CaveRepathTickStats repathCaveEntities(
         request.agent=route.agent;
         request.sourceRevision=provider->revision();
         request.maxVisits=intent.maxVisits;
-        auto result=hooks.search(intent.algorithm,request);
+        auto result=scoped?hooks.scopedSearch(intent.algorithm,request,provider):hooks.search(intent.algorithm,request);
+        if(scoped&&result.reached){
+            if(result.waypoints.empty()||!terraweave::caverns::caveRouteSegmentsValid(request,result,*provider))result.reached=false;
+            else if(result.waypoints.back()!=request.goal){
+                if(result.waypoints.size()>=65536)result.reached=false;
+                else result.waypoints.push_back(request.goal);
+            }
+        }
         if(!result.reached||result.sourceRevision!=request.sourceRevision||
            result.environmentRevision!=provider->environmentRevision()||
            result.waypoints.empty()||result.waypoints.size()>65536||
@@ -189,13 +209,14 @@ inline CaveRepathTickStats repathCaveEntities(
 inline void installCaveRepathSimulation(
     Simulation& sim,CaveSimulationNavigationHooks hooks,
     std::optional<size_t> beforeSystem=std::nullopt) {
-    if(!hooks.publishedSource||!hooks.search||!hooks.maxRepairsPerTick||
-       hooks.maxRepairsPerTick>65536)
+    if((hooks.scopedSource?(!hooks.scopedSearch||!hooks.position):(!hooks.publishedSource||!hooks.search))||
+       !hooks.maxRepairsPerTick||hooks.maxRepairsPerTick>65536)
         throw std::invalid_argument("Caverns missing repath owner");
     sim.registerPersistentComponent<CaveRouteFollower>(
         "caverns.route",2);
     sim.registerPersistentComponent<CaveRouteIntent>(
         "caverns.route.intent",1);
+    if(hooks.scopedSource)sim.registerPersistentComponent<CaveRouteScope>("caverns.route.scope",1);
     Simulation::SystemFn repath=[hooks](Simulation& state){
         (void)repathCaveEntities(state,hooks);
     };
@@ -209,7 +230,7 @@ inline void installCaveRepathSimulation(
 }
 inline void installCaveNavigationSimulation(
     Simulation& sim,CaveSimulationNavigationHooks hooks){
-    if(!hooks.publishedSource||!hooks.search||!hooks.collision ||
+    if(hooks.scopedSource||!hooks.publishedSource||!hooks.search||!hooks.collision ||
        !hooks.maxRepairsPerTick||hooks.maxRepairsPerTick>65536||
        !hooks.maxMovedPerTick||hooks.maxMovedPerTick>65536)
         throw std::invalid_argument("Caverns Simulation requires native nav/physics owners");

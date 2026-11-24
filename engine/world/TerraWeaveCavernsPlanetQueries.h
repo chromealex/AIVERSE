@@ -34,7 +34,7 @@ inline CavePlanetGravitySample sampleCavePlanetGravity(const CavePlanetFrame& fr
 inline std::shared_ptr<const CaveNavigationDataProvider> makeCavePlanetNavigationProvider(
         CavePlanetFrame frame,std::shared_ptr<const CaveSnapshotSpatialIndex> index,
         std::shared_ptr<const World> frozen,uint64_t environmentRevision,
-        CaveNavigationCallbacks callbacks,CaveResidencyCheck nativeResidency){
+        CaveNavigationCallbacks callbacks,CaveResidencyCheck nativeResidency,uint64_t scopeId=0){
     if(!index||!frozen||!environmentRevision||!nativeResidency)
         throw std::invalid_argument("Caverns planetary navigation owner proof");
     validateCavePlanetVolume(frame,index->snapshot());
@@ -48,7 +48,7 @@ inline std::shared_ptr<const CaveNavigationDataProvider> makeCavePlanetNavigatio
     return std::make_shared<const CaveNavigationDataProvider>(std::move(index),std::move(callbacks),
         environmentRevision,[frame,nativeResidency=std::move(nativeResidency)](PointCm lo,PointCm hi){
             return frame.contains(lo)&&frame.contains(hi)&&nativeResidency(lo,hi);
-        });
+        },scopeId);
 }
 class CavePlanetQueries {
 public:

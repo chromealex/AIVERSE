@@ -46,6 +46,13 @@ inline bool assignCaveMotorGoal(
     else ecs.add<CaveSteeringRequest>(e,CaveSteeringRequest{});
     return true;
 }
+inline bool assignScopedCaveMotorGoal(World& ecs,Entity e,uint64_t scope,
+    terraweave::caverns::PointCm goal,terraweave::caverns::CaveAgentProfile profile,
+    std::string algorithm="astar",uint32_t speedCmPerTick=25,uint32_t maxVisits=8192){
+    if(!scope||!assignCaveMotorGoal(ecs,e,goal,profile,std::move(algorithm),speedCmPerTick,maxVisits))return false;
+    ecs.add<CaveRouteScope>(e,CaveRouteScope{scope});
+    return true;
+}
 inline bool cancelCaveMotorGoal(World& ecs,Entity e) {
     auto* intent=ecs.tryGet<CaveRouteIntent>(e);
     if(!intent)return false;
@@ -81,7 +88,7 @@ inline const CaveSteeringRequest* caveMotorRequest(
     const auto* request=ecs.tryGetConst<CaveSteeringRequest>(e);
     const auto* route=ecs.tryGetConst<CaveRouteFollower>(e);
     const auto* intent=ecs.tryGetConst<CaveRouteIntent>(e);
-    if(!request||!request->valid||!route||route->needsRepath||route->arrived||
+    if(caveRouteScope(ecs,e)!=published.scopeId()||!request||!request->valid||!route||route->needsRepath||route->arrived||
        (intent&&!intent->active)||
        request->sourceRevision!=published.revision()||
        request->environmentRevision!=published.environmentRevision()||
@@ -93,13 +100,12 @@ inline const CaveSteeringRequest* caveMotorRequest(
 // budget or no longer carrying a route. Fixed-tick rotation avoids starving
 // the tail of the component pool. The existing motor must treat no valid
 // request as no cave steering. No cached component pointers across ticks.
-inline size_t prepareCaveSteering(
-    World& ecs,
-    const terraweave::caverns::CaveNavigationDataProvider& published,
+inline size_t prepareScopedCaveSteering(
+    World& ecs,const CaveScopedNavSource& source,
     const CaveWorldPositionSource& authoritativePosition,
     uint32_t maxEntities=65536,uint64_t rotation=0) {
     using namespace terraweave::caverns;
-    if(!authoritativePosition||!maxEntities||maxEntities>65536)
+    if(!source||!authoritativePosition||!maxEntities||maxEntities>65536)
         throw std::invalid_argument("Caverns missing motor position source/budget");
     clearCaveSteering(ecs);
     const size_t total=ecs.countExisting<CaveSteeringRequest>();
@@ -111,6 +117,9 @@ inline size_t prepareCaveSteering(
         const auto* intent=ecs.tryGetConst<CaveRouteIntent>(entity);
         if(!ptr||(intent&&!intent->active))return;
         auto& route=*ptr;
+        const auto provider=source(ecs,entity);
+        if(!provider||provider->scopeId()!=caveRouteScope(ecs,entity)){route.needsRepath=true;return;}
+        const auto& published=*provider;
         if(route.sourceRevision!=published.revision()||
            route.environmentRevision!=published.environmentRevision()){
             route.needsRepath=true;return;
@@ -158,6 +167,14 @@ inline size_t prepareCaveSteering(
     return budget;
 }
 inline size_t prepareCaveSteering(
+    World& ecs,const terraweave::caverns::CaveNavigationDataProvider& published,
+    const CaveWorldPositionSource& position,uint32_t maxEntities=65536,uint64_t rotation=0){
+    const auto borrowed=std::shared_ptr<const terraweave::caverns::CaveNavigationDataProvider>(
+        std::shared_ptr<const terraweave::caverns::CaveNavigationDataProvider>{},&published);
+    return prepareScopedCaveSteering(ecs,[borrowed](const World&,Entity){return borrowed;},
+        position,maxEntities,rotation);
+}
+inline size_t prepareCaveSteering(
     World& ecs,
     const terraweave::caverns::CaveNavigationDataProvider& published,
     const CavePositionSource& position,uint32_t maxEntities=65536) {
@@ -188,6 +205,14 @@ inline void installCaveSteeringSystem(
     installCaveSteeringSystem(sim,std::move(published),
         adaptCavePositionSource(std::move(position)),maxEntities);
 }
+inline void installScopedCaveSteeringSystem(Simulation& sim,CaveScopedNavSource source,
+    CaveWorldPositionSource position,uint32_t maxEntities,size_t beforeSystem){
+    if(!source||!position||!maxEntities||maxEntities>65536)throw std::invalid_argument("Caverns scoped steering install");
+    sim.registerPersistentComponent<CaveSteeringRequest>("caverns.steering.request",1);
+    sim.insertSystem(beforeSystem,"caverns.navigation.intent",[source,position,maxEntities](Simulation& state){
+        (void)prepareScopedCaveSteering(state.world(),source,position,maxEntities,uint64_t(state.tick())*maxEntities);
+    });
+}
 // Preferred host setup: attach exactly once, AFTER the existing motor
 // has been registered. Insert repath -> steering immediately BEFORE it.
 // No Transform mover, actor dependency or implicit motor implementation.
@@ -195,7 +220,7 @@ inline void installCaveMotorNavigationBefore(
     Simulation& sim,CaveSimulationNavigationHooks hooks,
     CaveWorldPositionSource position,const std::string& motorSystem,
     uint32_t maxEntities=65536) {
-    if(!hooks.publishedSource||!hooks.search||!position||
+    if((hooks.scopedSource?!hooks.scopedSearch:(!hooks.publishedSource||!hooks.search))||!position||
        !hooks.maxRepairsPerTick||hooks.maxRepairsPerTick>65536||
        !maxEntities||maxEntities>65536||motorSystem.empty())
         throw std::invalid_argument("Caverns motor navigation setup");
@@ -214,7 +239,9 @@ inline void installCaveMotorNavigationBefore(
     if(!index)throw std::invalid_argument("Caverns motor system not found");
     hooks.position=position;
     const auto source=hooks.publishedSource;
+    const auto scoped=hooks.scopedSource;
     installCaveRepathSimulation(sim,std::move(hooks),*index);
-    installCaveSteeringSystem(sim,source,std::move(position),maxEntities,*index+1);
+    if(scoped)installScopedCaveSteeringSystem(sim,scoped,std::move(position),maxEntities,*index+1);
+    else installCaveSteeringSystem(sim,source,std::move(position),maxEntities,*index+1);
 }
 } // namespace aiverse::nav
