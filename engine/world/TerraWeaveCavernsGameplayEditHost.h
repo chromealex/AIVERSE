@@ -133,7 +133,7 @@ public:
     // regenerated in this edit epoch (including removed entrances).
     bool configureRimGroup(std::shared_ptr<const CaveSurfaceGroupPlan> plan,
             std::vector<CaveOwnedRimRequest> requests,
-            const std::function<bool()>& exclusive){
+            const std::function<bool()>& exclusive,bool expandRequiredSlots=false){
         if(!snapshot_||!plan||!exclusive||!exclusive()||stagedRevision_||gpuBatch_||
            committedRevision_==snapshot_->sourceRevision||plan->authorityRevision!=authoredRevision_||
            !plan->surfaceEpoch||plan->surfaceEpoch<=committedRimSurfaceEpoch_||
@@ -144,14 +144,21 @@ public:
         for(const auto& request:requests){
             const auto [plane,inserted]=planes.emplace(request.entranceId,request.lowerPlane);
             if((!inserted&&plane->second!=request.lowerPlane)||!keys.insert(request.key).second||
-               std::find(dirty.begin(),dirty.end(),request.key)==dirty.end()||
+               (!expandRequiredSlots&&std::find(dirty.begin(),dirty.end(),request.key)==dirty.end())||
                std::none_of(plan->rims.begin(),plan->rims.end(),[&](const auto& rim){return rim.entranceId==request.entranceId;}))return false;
             // Never steal an externally streamed native slot.
             if(geometry_.catalog().find(request.key)&&!physics_.contains(request.key))return false;
         }
         if(planes.size()!=plan->rims.size())return false;
-        for(const auto& key:activeRimKeys_)
-            if(std::find(dirty.begin(),dirty.end(),key)==dirty.end())return false;
+        for(const auto& key:activeRimKeys_){
+            if(!expandRequiredSlots&&std::find(dirty.begin(),dirty.end(),key)==dirty.end())return false;
+            keys.insert(key);
+        }
+        if(expandRequiredSlots){
+            for(const auto& key:keys)if(geometry_.catalog().find(key)&&!physics_.contains(key))return false;
+            if(!exclusive())return false;
+            worker_.expandPendingKeys(keys);
+        }
         rimPlan_=std::move(plan);rimRequests_=std::move(requests);
         rimBarrierClosed_=true;return true;
     }
