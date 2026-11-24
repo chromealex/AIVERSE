@@ -532,6 +532,21 @@ effects stay unchanged. Tracers travel to the event target in 90–240 ms, respe
 visible source/target objects, and are capped at 512 simultaneous streaks. They
 use the existing RHI triangle/line renderer on flat terrain and planets.
 
+### Per-weapon projectile models
+
+In a unit type's `view`, define `projectiles` keyed by the weapon's authored ID:
+
+```json
+{
+  "projectiles": {
+    "bow": {"model":"models/arrow.glb","forward":"+z","scale":0.45},
+    "rocket": {"model":"models/rocket.glb","forward":"+x","clip":"flight","clipSpeed":1.2,"scale":0.7,"tint":[1,0.7,0.3,1]}
+  }
+}
+```
+
+A string path is shorthand for a model with default settings. `forward` names the model's longitudinal axis (default +x; any signed Cartesian axis is accepted). The model is oriented along the simulated displacement, including pitch on ballistic arcs. On planets the orientation uses radial up. `scale` is a uniform multiplier of original model units; if absent the existing `projectileScale` value applies. Zero hides it. Optional `tint` is linear RGB or RGBA (0–1). `clip` names an imported looping animation; `clipSpeed` scales its presentation clock. Without a clip the bind pose is drawn. Imported materials and textures are retained. Missing/invalid assets fall back to the built-in projectile ball; a missing clip warns and uses bind pose. The same shared model cache, streaming and hot-reload owner is used; projectile assets are retained while their type is resident. Custom models follow the simulated height instead of retaining the legacy muzzle-height offset. Source type and weapon slot are resolved from the projectile itself, including progression variants and dead shooters. This is presentation only, not a collision-size or projectile physics setting.
+
 ### Team colour from territory
 
 Optional `view.teamFromTerritory: true` selects the team-material colour from the territory cell under the entity's simulation position. It applies to models and team-tinted sprites on flat and spherical maps; owner 0 uses the neutral palette. Outside a valid territory grid it falls back to the entity owner. Default is false. This is presentation only: command ownership, selection, diplomacy, production and simulation hashes are unchanged. Useful for fixed buildings whose production owner follows their occupied ground independently of an original region command anchor.
