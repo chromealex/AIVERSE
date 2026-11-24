@@ -1275,6 +1275,11 @@
      "textEn": "Add an editable effect graph and show it in the native preview."
     },
     {
+      "status": "in-progress",
+      "title": "Дымовой след движущегося источника",
+      "titleEn": "Smoke trails from moving volume sources"
+    },
+    {
      "status": "in-progress",
      "target": null,
      "title": "Полная связка GPU и CPU в продакшене",
