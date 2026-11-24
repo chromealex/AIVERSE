@@ -358,8 +358,23 @@ struct TeleportBack { Vec3 home{}; uint32_t at = 0; Entity caster = kNullEntity;
 struct Transit { int16_t from = 0, to = 0; uint32_t depart = 0, arrive = 0; Vec3 fromWorld{}, toWorld{}; Vec3 arrival{}; };
 struct Squad { Fixed reinforceTimer{}; bool reinforcing = false; };
 
-struct Buff { Stat stat = Stat::Damage; Fixed add{}; Fixed mul = Fixed::fromInt(1); uint32_t until = 0; uint16_t sourceType = kNoType; };
+struct Buff { Stat stat = Stat::Damage; Fixed add{}; Fixed mul = Fixed::fromInt(1); uint32_t until = 0; uint16_t sourceType = kNoType; uint16_t stackingGroup = 0; };
 struct Buffs { std::vector<Buff> list; uint32_t stunUntil = 0; };
+
+// Grouped modifiers retain distinct strengths until their own expiration. Equal
+// modifiers from the same type are interchangeable; refreshing extends their lifetime.
+inline void upsertTimedBuff(Buffs& buffs, const Buff& incoming) {
+    for (auto& current : buffs.list) {
+        if (current.stat != incoming.stat || current.sourceType != incoming.sourceType ||
+            current.stackingGroup != incoming.stackingGroup) continue;
+        if (!incoming.stackingGroup) { current = incoming; return; }
+        if (current.add == incoming.add && current.mul == incoming.mul) {
+            if (incoming.until > current.until) current.until = incoming.until;
+            return;
+        }
+    }
+    buffs.list.push_back(incoming);
+}
 struct AbilityState { uint32_t readyAt[8] = {}; uint8_t charges[8] = {}; uint32_t chargeAt[8] = {}; bool init = false; uint32_t busyUntil = 0; };
 // A running status effect (unit, structure or player).
 struct StatusInst {
