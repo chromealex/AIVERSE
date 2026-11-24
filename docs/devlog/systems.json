@@ -1876,9 +1876,9 @@
           "textEn": "Callback reentry guard and early host shutdown preflight."
         },
         {
-          "name": "Texture Graph GPU — Stage 38AC (в работе)",
+          "name": "Texture Graph GPU — Stage 38AC (частично)",
           "text": "Безопасное завершение HostedClient, восстановление контекста и scoped индексация источников.",
-          "nameEn": "Texture Graph GPU — Stage 38AC (in progress)",
+          "nameEn": "Texture Graph GPU — Stage 38AC (partial)",
           "textEn": "HostedClient teardown, context restoration and scoped source indexing."
         }
       ],
