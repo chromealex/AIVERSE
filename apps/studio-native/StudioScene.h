@@ -31,6 +31,7 @@
 #include "engine/render/RenderDeviceLifetime.h"
 #include "apps/studio-native/StudioFacialGpuPreview.h"
 #include "apps/studio-native/StudioCavernsPreview.h"
+#include "apps/studio-native/StudioPlanetGlobe.h"
 #include "engine/render/NativePresentationRetirement.h"
 #include "apps/editor/TerraWeaveSparsePreview.h"
 
@@ -49,6 +50,10 @@ public:
                const std::string& projectPath = {}, const Json& rules = Json::object(),
                const StudioFacialPreviewBinding* facialBinding=nullptr);
     void captureNextFrame(gfx::Device::CaptureFn callback) { lastFrameSignature_=0; device_->captureNextFrame(std::move(callback)); }
+    void setCaveGlobe(std::string body,const std::string& project,const std::string& map);
+    bool caveGlobeRequested()const noexcept{return !globeBody_.empty();}
+    Json pickCaveGlobe(float x,float y,float width,float height,const editor::MapDoc& doc,
+                       const std::string& project)const;
     Json cavernsPreview(const Json& input) {
         if(input.has("enabled")||input.has("isolate")||input.has("paging")||input.has("budgets")) {
             if(!device_||!cavernsPreview_.configure(*device_,input))
@@ -56,6 +61,9 @@ public:
             lastFrameSignature_=0;planetCutDrawn_=false;
         }
         auto result=cavernsPreview_.stats();
+        result.set("globeBody",Json::string(globeBody_));
+        result.set("globeReady",Json::fromBool(globeReady_));
+        result.set("globeError",Json::string(globeError_));
         const auto shown=planetCutDrawn_&&planetCutPlan_?planetCutPlan_->acceptedEntrances.size():size_t(0);
         result.set("terrainCutEntrances",Json::string(std::to_string(terrainCutStats_.cutEntrances+shown)));
         result.set("terrainRejectedEntrances",Json::string(std::to_string(terrainCutStats_.rejectedEntrances-
@@ -202,6 +210,13 @@ private:
     render::Mesh studioCyclorama_;
     render::Mesh terrain_;
     render::Mesh planetCutTerrain_;
+    render::Mesh globeMesh_;
+    std::optional<StudioPlanetGlobe> globe_;
+    std::string globeBody_,globeProject_,globeMap_,globeError_;
+    const editor::MapDoc* globeDoc_=nullptr; // identity only
+    uint64_t globeRevision_=0;
+    bool globeReady_=false;
+    void renderCaveGlobe(int width,int height,const editor::MapDoc& doc);
     std::shared_ptr<const terraweave::caverns::CaveSurfaceGroupPlan> planetCutPlan_;
     const editor::MapDoc* planetTerrainDoc_=nullptr; // identity only
     std::string planetTerrainProject_,planetCutError_;
