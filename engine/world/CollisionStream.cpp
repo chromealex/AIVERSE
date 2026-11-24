@@ -51,7 +51,12 @@ CollisionStream::CollisionStream(const Json& manifest,AssetReader reader,
     auto verified=assets_.verifiedReader(reader);
     stream_=std::make_unique<AsyncChunkStream>(assets_.limits,assets_.stagingBytes,assets_.maxJobs,[this,verified](Cell cell){
         const auto& asset=assets_.chunks.at(cell);std::string bytes;
-        if(!verified(asset.file,bytes))throw JsonError("world.collision: read/hash failure: "+asset.file);
+        bool valid=false;
+        try{valid=verified(asset.file,bytes);}catch(...){}
+        if(!valid){
+            contentIntegrityFailed_.store(true);
+            throw JsonError("world.collision: read/hash failure: "+asset.file);
+        }
         auto result=std::make_shared<Prepared>();result->collision=readChunkCollision(Json::parse(bytes),assets_.cellSize);
         // Conservative allowance for shape/index nodes plus CPU data; no GPU allocation here.
         size_t cost=sizeof(Prepared)+result->collision.terrain.heights.capacity()*sizeof(Fixed);
