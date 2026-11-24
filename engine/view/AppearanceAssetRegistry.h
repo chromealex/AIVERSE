@@ -4,6 +4,7 @@
 #include "AppearanceAuthoringService.h"
 #include "AppearanceChoiceAuthoring.h"
 #include "ModelPublicationEpoch.h"
+#include "LiveAppearanceMaterialTarget.h"
 #include "engine/render/RenderDeviceLifetime.h"
 #include "engine/render/ModelReadLease.h"
 #include "engine/render/graph/TextureGraphGpuTextureTransfer.h"
@@ -565,6 +566,26 @@ public:
             },error);
     }
 
+    // Hosts already owning a live immutable Snapshot need no temporary
+    // registry or replacement Model. Caller resolves the resident Model and
+    // joins all CPU readers before calling, just as for registry publication.
+    // A compatibility material mirror is optional; it is staged before the
+    // image commit and swapped together with the actual live snapshot.
+    static bool publishGpuTextureGraphSnapshot(Snapshot& live,const LiveAppearanceMaterialTarget& target,
+            render::Model& model,gfx::Device& device,
+            const render::RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,
+            const render::texture_graph::Program& program,
+            std::span<render::texture_graph::GraphGpuTextureCopy* const> candidates,
+            std::string_view generation,bool acceptedByGraphOwner,
+            std::vector<render::Material>* materialMirror=nullptr,std::string* error=nullptr) {
+        return publishTextureGraphSnapshotImpl(live,target,target.nextVersion(),model,device,lease,
+            rollback,program,[&](auto& transaction,const render::Material& base){
+                return render::texture_graph::stageCompletedGraphGpuTextures(transaction,model,base,
+                    program,generation,candidates,device,acceptedByGraphOwner);
+            },materialMirror,error);
+    }
+
     void erase(const std::string& key) {
         assets_.erase(key);
         dirty_.erase(key);
@@ -578,26 +599,23 @@ public:
     }
 private:
     template<class Stage>
-    bool publishTextureGraphMaterialImpl(const std::string& key,uint64_t expectedVersion,
-            uint64_t expectedModelPublication,size_t materialIndex,
-            render::Model& model,gfx::Device& device,
+    static bool publishTextureGraphSnapshotImpl(Snapshot& live,const LiveAppearanceMaterialTarget& target,
+            uint64_t nextVersion,render::Model& model,gfx::Device& device,
             const render::RenderDeviceLifetime::Lease& lease,
             render::ModelImageRollbackPool& rollback,
-            const render::texture_graph::Program& program,Stage&& stage,std::string* error) {
+            const render::texture_graph::Program& program,Stage&& stage,
+            std::vector<render::Material>* materialMirror,std::string* error) {
         if(error)error->clear();
         try {
-            const auto it=assets_.find(key);
-            if(it==assets_.end()||dirty(key))
-                throw std::invalid_argument("appearance missing or dirty");
-            const auto old=it->second;
-            if(!expectedVersion||old->version!=expectedVersion||
-               !expectedModelPublication||old->modelPublicationGeneration!=expectedModelPublication||
-               old->model!=&model||materialIndex>=old->materials.size())
+            const auto old=live;
+            if(!old||old->model!=&model||
+               !target.matches(old->modelPublicationGeneration,old->version,old->materials.size())||
+               nextVersion<=old->version)
                 throw std::invalid_argument("appearance publication identity changed");
             if(!lease.validFor(device)||!device.gpuHealthy())
                 throw std::runtime_error("appearance graphics owner unavailable");
-            if(versionSerial_==std::numeric_limits<uint64_t>::max())
-                throw std::overflow_error("appearance version overflow");
+            if(materialMirror==&model.materials)
+                throw std::invalid_argument("cannot overwrite shared Model base materials");
             size_t count=0;
             for(const auto& [name,node]:program.outputs){
                 (void)node;(void)render::texture_graph::outputKind(name);
@@ -611,23 +629,47 @@ private:
                 throw std::runtime_error("procedural image budget exhausted; retire/reload Model through owner");
             // Preallocate the replacement snapshot before GPU allocation.
             auto next=std::make_shared<Asset>(*old);
-            next->version=versionSerial_+1;
+            next->version=nextVersion;
             render::ModelImageUploadTransaction transaction(device,rollback,lease);
-            next->materials[materialIndex]=stage(transaction,old->materials[materialIndex]);
+            next->materials[target.material]=stage(transaction,old->materials[target.material]);
             if(transaction.pendingImages()!=count)throw std::logic_error("incomplete graph image transaction");
             if(!lease.validFor(device)||!device.gpuHealthy())
                 throw std::runtime_error("appearance graphics owner lost during staging");
+            std::vector<render::Material> mirror;
+            if(materialMirror)mirror=next->materials;
             // No external callbacks between the image commit and publishing
             // the preallocated snapshot. Old indices and graph epoch survive.
             transaction.commit();
             model.markMaterialChanged();
-            it->second=std::move(next);
-            ++versionSerial_;
+            if(materialMirror)materialMirror->swap(mirror);
+            live=std::move(next);
             return true;
         }catch(const std::exception& ex) {
             if(error)*error=ex.what();
             return false;
         }
+    }
+
+    template<class Stage>
+    bool publishTextureGraphMaterialImpl(const std::string& key,uint64_t expectedVersion,
+            uint64_t expectedModelPublication,size_t materialIndex,
+            render::Model& model,gfx::Device& device,
+            const render::RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,
+            const render::texture_graph::Program& program,Stage&& stage,std::string* error) {
+        if(error)error->clear();
+        const auto it=assets_.find(key);
+        if(it==assets_.end()||dirty(key)){
+            if(error)*error="appearance missing or dirty";return false;
+        }
+        if(versionSerial_==std::numeric_limits<uint64_t>::max()){
+            if(error)*error="appearance version overflow";return false;
+        }
+        const bool ok=publishTextureGraphSnapshotImpl(it->second,
+            {expectedModelPublication,expectedVersion,materialIndex},versionSerial_+1,
+            model,device,lease,rollback,program,std::forward<Stage>(stage),nullptr,error);
+        if(ok)++versionSerial_;
+        return ok;
     }
 
     // Mutation is confined to the owning presentation/render thread. Stable
