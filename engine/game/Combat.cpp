@@ -166,7 +166,8 @@ void GameCore::sysWeapons(Simulation& sim) {
             }
         } boundary{c};
         for (size_t i = 0; i < t.weapons.size() && i < 4; ++i)
-            c.cooldown[i] = advanceWeaponCadence(c.cooldown[i], dt * atkSpeed, t.weapons[i].preciseCooldown);
+            if (!t.weapons[i].preciseCooldown)
+                c.cooldown[i] = advanceWeaponCadence(c.cooldown[i], dt * atkSpeed, false);
         if (u.flags & (kUnitUnderConstruction | kUnitDisabled | kUnitInHand)) return;
         if (auto* b = w.tryGet<Buffs>(e); b && b->stunUntil > sim.tick()) return;
         if (rules_.advancedEffects && (statusFlags(sim, e) & (kStStun | kStDisarm))) return;
