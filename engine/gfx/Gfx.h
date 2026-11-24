@@ -20,6 +20,7 @@
 //   * vertex buffer: one interleaved stream; GLSL attribute location = VertexAttr::location,
 //     MSL [[attribute(location)]] via [[stage_in]] at buffer(0).
 #pragma once
+#include "BufferTextureCopy.h"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -785,6 +786,14 @@ public:
     virtual SamplerHandle createSampler(const SamplerDesc&) { return {}; }
     virtual void destroySampler(SamplerHandle) {}
     virtual bool updateTextureRegion(TextureHandle, const TextureUploadDesc&) { return false; }
+    // Optional GPU-only transfer: copy the full level zero of an ordinary,
+    // single-mip RGBA8/RGBA8_sRGB 2D sampled texture from a Storage buffer.
+    // Inside a recording frame, outside encoders. Raw bytes, no conversion.
+    // Source offset/row pitch follow BufferTextureCopy2D. Caller keeps both
+    // resources live until the covering GPU fence has actually completed.
+    // True means encoded, not completed. Unsupported devices do no work.
+    virtual bool supportsStorageBufferTextureCopy() const { return false; }
+    virtual bool copyStorageBufferToTexture2D(BufferHandle,TextureHandle,const BufferTextureCopy2D&) { return false; }
     virtual bool bindTextureView(int, TextureViewHandle, SamplerHandle = {}) { return false; }
     // CPU-only RHI metadata lookup; no readback, synchronization or texture
     // sampling. Unsupported providers return false and leave out unchanged.
