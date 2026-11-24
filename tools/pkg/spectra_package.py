@@ -204,9 +204,102 @@ def guid_locations(root, wanted):
     return found
 
 
-def plan_package(project, package):
+LEAF_TYPES = {".png", ".jpg", ".jpeg", ".tga", ".webp", ".hdr", ".exr",
+              ".dds", ".ktx", ".ktx2", ".rtex", ".bmp", ".wav", ".ogg"}
+
+
+def rewrite_graph(value, mapping):
+    if isinstance(value, str):
+        return mapping.get(value, value)
+    if isinstance(value, list):
+        return [rewrite_graph(v, mapping) for v in value]
+    if isinstance(value, dict):
+        return {k: rewrite_graph(v, mapping) for k, v in value.items()}
+    return value
+
+
+def contains_path(value, needle):
+    if isinstance(value, str):
+        return value == needle
+    if isinstance(value, list):
+        return any(contains_path(v, needle) for v in value)
+    if isinstance(value, dict):
+        return any(contains_path(v, needle) for v in value.values())
+    return False
+
+
+def relocate_leaf_payloads(root, portable, payloads, guids, overrides):
+    """Exact-byte leaf reuse only. Never rewrite nested asset documents."""
+    require(isinstance(overrides, dict) and len(overrides) <= 64, "Invalid package selections")
+    require(all(isinstance(v, str) and re.fullmatch(r"[0-9a-f]{32}", v)
+                for v in overrides.values()), "Invalid selected GUID")
+    recipe = portable["recipe"]
+    deps = {row["path"]: row for row in recipe["dependencies"]}
+    require(all(p in deps and Path(p).suffix.lower() in LEAF_TYPES for p in overrides),
+            "Selection must identify a package leaf dependency")
+    has_nested = any(Path(p).suffix.lower() not in LEAF_TYPES for p in deps)
+    require(not overrides or not has_nested, "Manual reuse requires a leaf-only package")
+    if has_nested:
+        return portable, payloads, guids, {}
+    found = guid_locations(root, set(guids) | set(overrides.values()))
+    mapping, new_guids, metas = {}, {}, {}
+    for old, dep in deps.items():
+        selected = overrides.get(old, dep.get("guid"))
+        locations = found.get(selected, [])
+        explicit = old in overrides
+        if not explicit and (len(locations) != 1 or locations[0] == old):
+            continue
+        try:
+            require(len(locations) == 1, "Selected GUID missing or ambiguous: " + old)
+            target = locations[0]
+            require(Path(target).suffix.lower() == Path(old).suffix.lower(), "Selected asset format differs")
+            require(read_bounded(safe_path(root, target), len(payloads[old])) == payloads[old],
+                    "Selected asset bytes differ: " + old)
+            require(old + ".meta" in payloads, "Source importer metadata is unavailable")
+            target_meta = read_bounded(safe_path(root, target + ".meta"), 65536)
+            before = json.loads(payloads[old + ".meta"])
+            after = json.loads(target_meta)
+            require(before.pop("guid", None) == dep.get("guid") and after.pop("guid", None) == selected,
+                    "Selected metadata identity differs")
+            require(before == after, "Selected importer settings differ: " + old)
+            require(contains_path(json.loads(recipe["graphSignature"]), old),
+                    "Dependency is not a direct graph reference")
+        except (ValueError, OSError, KeyError, TypeError):
+            if explicit:
+                raise
+            continue  # ordinary plan reports the unresolved GUID conflict
+        mapping[old] = target
+        new_guids[old] = selected
+        metas[old] = target_meta
+    if not mapping:
+        return portable, payloads, guids, {}
+    destinations = [mapping.get(p, p) for p in deps]
+    require(len({p.casefold() for p in destinations}) == len(destinations), "Reuse destinations collide")
+    rebuilt, new_payloads = [], {}
+    for old, dep in deps.items():
+        target = mapping.get(old, old)
+        row = dict(dep, path=target)
+        new_payloads[target] = payloads[old]
+        if old in mapping:
+            row.update(guid=new_guids[old], meta=fnv(metas[old]))
+            new_payloads[target + ".meta"] = metas[old]
+        elif old + ".meta" in payloads:
+            new_payloads[target + ".meta"] = payloads[old + ".meta"]
+        rebuilt.append(row)
+    graph = json.loads(recipe["graphSignature"])
+    recipe = dict(recipe, graphSignature=compact(rewrite_graph(graph, mapping)).decode("utf-8"),
+                  dependencies=sorted(rebuilt, key=lambda r: r["path"]))
+    portable = dict(portable, recipe=recipe)
+    require(len(compact(portable)) <= MAX_RECIPE, "Remapped recipe exceeds size limit")
+    _, guids = recipe_files(recipe)
+    return portable, new_payloads, guids, mapping
+
+
+def plan_package(project, package, overrides=None):
     root = root_dir(project)
     portable, payloads, guids = load_package(root, package)
+    overrides = {} if overrides is None else overrides
+    portable, payloads, guids, mapping = relocate_leaf_payloads(root, portable, payloads, guids, overrides)
     found = guid_locations(root, guids)
     conflicts = {p for g, p in guids.items() if any(q != p for q in found.get(g, []))}
     rows = []
@@ -222,13 +315,14 @@ def plan_package(project, package):
             state = "path_conflict" if meta is not None and meta.exists() and p + ".meta" not in payloads else "add"
         rows.append({"path": p, "state": state, "sha256": sha(data)})
     state = "ready" if all(r["state"] in ("add", "reuse") for r in rows) else "conflict"
-    revision = sha(compact({"project": str(root), "portable": portable, "rows": rows}))
-    return {"state": state, "planRevision": revision, "files": rows, "portable": portable}, payloads
+    revision = sha(compact({"project": str(root), "portable": portable, "rows": rows, "overrides": overrides}))
+    return {"state": state, "planRevision": revision, "files": rows, "portable": portable,
+            "remapped": mapping}, payloads
 
 
-def apply_package(project, package, revision):
+def apply_package(project, package, revision, overrides=None):
     root = root_dir(project)
-    plan, payloads = plan_package(root, package)
+    plan, payloads = plan_package(root, package, overrides)
     require(plan["state"] == "ready" and revision == plan["planRevision"], "Stale or conflicting package plan")
     created = []
     try:

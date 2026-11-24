@@ -748,20 +748,24 @@ void registerSpectraGraphOps(Workspace& ws) {
             throw std::runtime_error("Package export requires matching manifest v3");
         return runPackageTool(ws.engineDir,{"fx-package-export",name,package,"--project",ws.project.dir});
     });
-    add("fx_replay_package_preview","Preview project-local .aivfx package payload installation (no writes).",
-        R"({"properties":{"package":{"type":"string"},"expectedProjectPath":{"type":"string"}},"required":["package"]})",
+    add("fx_replay_package_preview","Preview project-local .aivfx package payload installation; reuse maps original content paths to selected target GUIDs.",
+        R"({"properties":{"package":{"type":"string"},"reuse":{"type":"object"},"expectedProjectPath":{"type":"string"}},"required":["package"]})",
         [&ws](const Json& p){
         requireReplayProject(ws,p);const auto package=requireGraphName(p,"package");
-        return runPackageTool(ws.engineDir,{"fx-package-preview",package,"--project",ws.project.dir});
+        const auto reuse=p.has("reuse")?p["reuse"].dump(-1):"{}";
+        if(reuse.size()>16384)throw std::runtime_error("Package reuse selection too large");
+        return runPackageTool(ws.engineDir,{"fx-package-preview",package,"--project",ws.project.dir,"--reuse",reuse});
     });
     add("fx_replay_package_apply","Install reviewed missing payloads without overwriting; returns portable recipe for separate verified preset import.",
-        R"({"properties":{"package":{"type":"string"},"planRevision":{"type":"string"},"expectedProjectPath":{"type":"string"}},"required":["package","planRevision"]})",
+        R"({"properties":{"package":{"type":"string"},"planRevision":{"type":"string"},"reuse":{"type":"object"},"expectedProjectPath":{"type":"string"}},"required":["package","planRevision"]})",
         [&ws](const Json& p){
         requireReplayProject(ws,p);const auto package=requireGraphName(p,"package");
         const auto revision=p.getStr("planRevision");
         if(revision.size()!=64||revision.find_first_not_of("0123456789abcdef")!=std::string::npos)
             throw std::runtime_error("Invalid package revision");
-        return runPackageTool(ws.engineDir,{"fx-package-apply",package,revision,"--project",ws.project.dir});
+        const auto reuse=p.has("reuse")?p["reuse"].dump(-1):"{}";
+        if(reuse.size()>16384)throw std::runtime_error("Package reuse selection too large");
+        return runPackageTool(ws.engineDir,{"fx-package-apply",package,revision,"--project",ws.project.dir,"--reuse",reuse});
     });
     add("fx_replay_preset_save","Create an immutable named replay preset asset. Existing names are never overwritten.",
         R"({"properties":{"name":{"type":"string"},"preset":{"type":"object"},"expectedProjectPath":{"type":"string"}},"required":["name","preset"]})",

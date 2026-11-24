@@ -615,8 +615,8 @@ def main(argv=None) -> int:
     s.add_argument('--refresh', action='store_true'); s.add_argument('--cached', action='store_true')
     s = sub.add_parser('create'); s.add_argument('ref'); s.add_argument('folder', type=Path)
     s = sub.add_parser('fx-package-export'); s.add_argument('preset'); s.add_argument('package'); s.add_argument('--project', type=Path, required=True)
-    s = sub.add_parser('fx-package-preview'); s.add_argument('package'); s.add_argument('--project', type=Path, required=True)
-    s = sub.add_parser('fx-package-apply'); s.add_argument('package'); s.add_argument('revision'); s.add_argument('--project', type=Path, required=True)
+    s = sub.add_parser('fx-package-preview'); s.add_argument('package'); s.add_argument('--project', type=Path, required=True); s.add_argument('--reuse', default='{}')
+    s = sub.add_parser('fx-package-apply'); s.add_argument('package'); s.add_argument('revision'); s.add_argument('--project', type=Path, required=True); s.add_argument('--reuse', default='{}')
     for k in sub.choices.values():
         k.add_argument('--json', action='store_true', default=argparse.SUPPRESS)
     a = ap.parse_args(argv)
@@ -644,8 +644,8 @@ def run(a, log):
         if a.cmd == 'fx-package-export':
             return fx.export_package(a.project, a.preset, a.package)
         if a.cmd == 'fx-package-preview':
-            return fx.plan_package(a.project, a.package)[0]
-        return fx.apply_package(a.project, a.package, a.revision)
+            return fx.plan_package(a.project, a.package, json.loads(a.reuse))[0]
+        return fx.apply_package(a.project, a.package, a.revision, json.loads(a.reuse))
     if a.cmd == 'search':
         return cmd_search(a)
     if a.cmd == 'templates':

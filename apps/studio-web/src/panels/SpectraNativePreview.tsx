@@ -11,6 +11,8 @@ import type { SpectraPixelDiff } from './spectraPixelDiff';
 import { parseSpectraReplayPreset } from './spectraReplayPreset';
 import type { SpectraReplayPreset } from './spectraReplayPreset';
 import { SpectraCommandQueue } from './spectraCommandQueue';
+import SpectraAssetPicker from './SpectraAssetPicker';
+import type { SpectraIndexedAsset } from './SpectraAssetPicker';
 
 type Action='status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'playback'|'burst'|'clear';
 const message=(e:unknown)=>e instanceof Error?e.message:String(e);
@@ -72,7 +74,9 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [relocationPlan,setRelocationPlan]=useState<{source:string;state:string;planRevision?:string;detail?:string;changes:Array<{from:string;to:string;state:string;detail?:string}>}|null>(null);
   const [presetLibraryBusy,setPresetLibraryBusy]=useState(false);
   const [packageName,setPackageName]=useState('');
-  const [packagePlan,setPackagePlan]=useState<{name:string;state:string;planRevision:string;files:Array<{path:string;state:string}>}|null>(null);
+  const [packagePlan,setPackagePlan]=useState<{name:string;state:string;planRevision:string;files:Array<{path:string;state:string}>;remapped:Record<string,string>}|null>(null);
+  const [packageReuse,setPackageReuse]=useState<Record<string,string>>({});
+  const [packageAssets,setPackageAssets]=useState<SpectraIndexedAsset[]>([]);
   const [portableImport,setPortableImport]=useState<{portable:Record<string,unknown>;state:string;planRevision?:string;detail?:string;changes:Array<{from:string;to:string;state:string;detail?:string}>}|null>(null);
   const [liveScalars,setLiveScalars]=useState<Record<string,number>>({});
   const [replayRestoring,setReplayRestoring]=useState(false);
@@ -362,14 +366,20 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         setPresetCompatibility('Package saved: '+String(result.path));
       }else if(action==='preview'){
         setPackagePlan(null);
-        const result=await presetOp('fx_replay_package_preview',{package:packageName});
+        const result=await presetOp('fx_replay_package_preview',{package:packageName,reuse:packageReuse});
+        const assets=await invoke('studio.assets',{});
+        // The authoritative native catalog supplies GUIDs; path hints are not trusted by the installer.
+        const rows=(assets as unknown as {assets?:unknown;entries?:unknown;files?:unknown});
+        const raw=rows.assets??rows.entries??rows.files??[];
+        setPackageAssets(Array.isArray(raw)?raw.filter(a=>a&&typeof a.guid==='string'&&typeof a.path==='string').map(a=>({guid:a.guid,path:a.path,name:String(a.name??a.path),kind:String(a.kind??a.type??'asset')})):[]);
         if(typeof result.state!=='string'||typeof result.planRevision!=='string'||!Array.isArray(result.files))
           throw new Error('Invalid package plan');
         setPackagePlan({name:packageName,state:result.state,planRevision:result.planRevision,
+          remapped:(result.remapped??{}) as Record<string,string>,
           files:result.files.filter((r):r is {path:string;state:string}=>!!r&&typeof r.path==='string'&&typeof r.state==='string')});
       }else{
         if(packagePlan?.name!==packageName||packagePlan.state!=='ready')return;
-        const result=await presetOp('fx_replay_package_apply',{package:packageName,planRevision:packagePlan.planRevision});
+        const result=await presetOp('fx_replay_package_apply',{package:packageName,planRevision:packagePlan.planRevision,reuse:packageReuse});
         setPackagePlan(null);
         const envelope=result.portable as Record<string,unknown>;
         const plan=await presetOp('fx_replay_preset_portable_preview',{portable:envelope});
@@ -765,15 +775,27 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         <StudioButton size="sm" disabled={presetLibraryBusy} onClick={()=>setPortableImport(null)}>Discard import</StudioButton>
       </div>}
       <StudioField label="VFX package name (packages/*.aivfx)" htmlFor="spectra-package-name">
-        <StudioInput id="spectra-package-name" value={packageName} onChange={e=>{setPackageName(e.target.value);setPackagePlan(null);}}/>
+        <StudioInput id="spectra-package-name" value={packageName} onChange={e=>{setPackageName(e.target.value);setPackagePlan(null);setPackageReuse({});}}/>
       </StudioField>
       <StudioButton size="sm" disabled={!active||busy||presetLibraryBusy||!validPackageName||!presetSelected}
         onClick={()=>void runReplayPackage('export')}>Export VFX package</StudioButton>
       <StudioButton size="sm" disabled={!active||busy||presetLibraryBusy||!validPackageName}
         onClick={()=>void runReplayPackage('preview')}>Preview package in project</StudioButton>
+      {Object.keys(packageReuse).length>0&&<div className="spectra-native__hint">
+        {Object.entries(packageReuse).map(([path,guid])=><div key={path}><small>{path} → {guid}</small></div>)}
+        <StudioButton size="sm" disabled={presetLibraryBusy||busy} onClick={()=>{setPackageReuse({});setPackagePlan(null);}}>Clear reuse selections</StudioButton>
+      </div>}
       {packagePlan&&<div className="spectra-native__hint">
         <small>Package: {packagePlan.state}</small>
-        {packagePlan.files.map(f=><div key={f.path}><small>{f.state}: {f.path}</small></div>)}
+        {Object.entries(packagePlan.remapped).map(([from,to])=><div key={from}><small>Reused: {from} → {to}</small></div>)}
+        {packagePlan.files.map(f=><div key={f.path}><small>{f.state}: {f.path}</small>
+          {f.state.endsWith('conflict')&&/\.(png|jpe?g|tga|webp|hdr|exr|dds|ktx2?|rtex|bmp|wav|ogg)$/i.test(f.path)&&
+            <SpectraAssetPicker assets={packageAssets} value={packageReuse[f.path]?{guid:packageReuse[f.path]}:null}
+              disabled={busy||presetLibraryBusy} onChange={asset=>{
+                setPackageReuse(old=>({...old,[f.path]:asset.guid}));setPackagePlan(null);
+                setPresetCompatibility('Asset selected; preview package again before installing');
+              }}/>}
+        </div>)}
         <StudioButton size="sm" disabled={busy||presetLibraryBusy||packagePlan.state!=='ready'}
           onClick={()=>void runReplayPackage('apply')}>Install reviewed assets</StudioButton>
       </div>}
