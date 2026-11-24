@@ -105,8 +105,14 @@ public:
         if(patch.cell.y!=0 || patch.resolution<2 || patch.resolution>129 ||
            patch.cellSizeMetres<=0)
             throw std::invalid_argument("GI TerraWeave patch layout");
-        const size_t expected=size_t(patch.resolution-1u)*
-                              size_t(patch.resolution-1u)*2u;
+        size_t expected=size_t(patch.resolution-1u)*size_t(patch.resolution-1u)*2u;
+        if constexpr(requires{patch.clippedSurface;patch.surfaceEpoch;}){
+            if(patch.clippedSurface){
+                if(!patch.surfaceEpoch||patch.collision.empty()||patch.collision.size()>65534)
+                    throw std::invalid_argument("GI TerraWeave clipped patch topology");
+                expected=patch.collision.size();
+            }
+        }
         if(patch.collision.size()!=expected)
             throw std::invalid_argument("GI TerraWeave patch collision triangle count");
         std::vector<render::StaticShadowGeometry::Triangle> triangles;
