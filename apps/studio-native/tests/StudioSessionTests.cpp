@@ -91,6 +91,85 @@ void projectOwnerSaveContract(){
     AIVERSE_TEST_CHECK(ws.project.manifest.getStr("name")=="Fixture"&&readProjectFileBytes(manifest)==manifestBytes+"\n");
     fs::remove_all(root);
 }
+void projectHistoryContract(){
+    using namespace aiverse;using namespace aiverse::editor;namespace fs=std::filesystem;
+    const auto root=fs::temp_directory_path()/("studio-project-history-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(root);
+    const auto manifest=root/"game.json",rules=root/"rules.json",extra=root/"extra.json";
+    const std::string m=R"({ "name": "Fixture", "module": "game", "rules": "rules.json" })";
+    const std::string r=R"({ "include": ["extra.json"], "types": {"unit": {"health":{"max":100}}} })";
+    const std::string e=R"({ "types": {"tree": {"health":{"max":100}}} })";
+    std::ofstream(manifest)<<m;std::ofstream(rules)<<r;std::ofstream(extra)<<e;
+    Workspace ws;std::string error;
+    AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error));
+    ws.map.reset(16,16);ws.map.beginEdit();ws.map.data.name="independent map edit";
+    const auto mapMark=ws.map.historyMark(),mapRevision=ws.map.revision;
+    auto status=[&]{return ws.call("project_history_status",Json::object());};
+    auto step=[&](const char* direction,const std::string& version){
+        Json p=Json::object();p.set("direction",Json::string(direction));p.set("expectedVersion",Json::string(version));
+        return ws.call("project_history_step",p);
+    };
+    auto edit=Json::parse(R"({"path":"types.tree.health.max","value":200})");
+    AIVERSE_TEST_CHECK(!ws.call("rules_set",edit).has("error"));
+    const auto editedExtra=readProjectFileBytes(extra);
+    AIVERSE_TEST_CHECK(!ws.call("set_manifest",Json::parse(R"({"path":"name","value":"Edited"})")).has("error"));
+    auto s=status();AIVERSE_TEST_CHECK(s["position"].integer()==2&&s["steps"].size()==2);
+    AIVERSE_TEST_CHECK(step("undo","stale").has("error"));
+    const auto version=s.getStr("version");
+    std::ofstream(rules)<<r<<"\n";
+    AIVERSE_TEST_CHECK(step("undo",version).has("error"));
+    AIVERSE_TEST_CHECK(status().getStr("version")==version&&ws.project.manifest.getStr("name")=="Edited");
+    std::ofstream(rules)<<r;
+    AIVERSE_TEST_CHECK(!step("undo",version).has("error"));
+    AIVERSE_TEST_CHECK(readProjectFileBytes(manifest)==m&&readProjectFileBytes(extra)==editedExtra);
+    AIVERSE_TEST_CHECK(!step("undo",status().getStr("version")).has("error"));
+    AIVERSE_TEST_CHECK(readProjectFileBytes(extra)==e&&readProjectFileBytes(rules)==r);
+    AIVERSE_TEST_CHECK(ws.project.rulesJson["types"]["tree"]["health"]["max"].integer()==100);
+    AIVERSE_TEST_CHECK(!step("redo",status().getStr("version")).has("error"));
+    AIVERSE_TEST_CHECK(readProjectFileBytes(extra)==editedExtra);
+    const auto beforeNoop=status().getStr("version");
+    AIVERSE_TEST_CHECK(!ws.call("rules_set",edit).has("error"));
+    AIVERSE_TEST_CHECK(status().getStr("version")==beforeNoop&&status().getBool("canRedo"));
+    AIVERSE_TEST_CHECK(!step("redo",status().getStr("version")).has("error"));
+    AIVERSE_TEST_CHECK(ws.project.manifest.getStr("name")=="Edited");
+    AIVERSE_TEST_CHECK(ws.map.historyMark()==mapMark&&ws.map.revision==mapRevision&&ws.map.data.name=="independent map edit");
+    AIVERSE_TEST_CHECK(!step("undo",status().getStr("version")).has("error"));
+    AIVERSE_TEST_CHECK(!ws.call("set_manifest",Json::parse(R"({"path":"name","value":"Branch"})")).has("error"));
+    AIVERSE_TEST_CHECK(!status().getBool("canRedo")&&status()["position"].integer()==2);
+    // Untracked owner writes are barriers, rather than misleading selective undo.
+    ws.project.manifest.set("name",Json::string("Other owner"));
+    AIVERSE_TEST_CHECK(ws.project.saveManifest(&error)&&status()["steps"].size()==0);
+    AIVERSE_TEST_CHECK(!ws.call("set_manifest",Json::parse(R"({"path":"name","value":"Before reopen"})")).has("error"));
+    const auto stale=status().getStr("version");
+    AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error)&&status()["steps"].size()==0);
+    AIVERSE_TEST_CHECK(step("undo",stale).has("error"));
+    // Native route uses the exact same owner and leaves map history independent.
+    studio::StudioSession session(root.string(),root.string());
+    auto call=[&](const char* json){return session.dispatch(Json::parse(json));};
+    AIVERSE_TEST_CHECK(!call(R"({"id":1,"method":"studio.rulesSet","params":{"path":"types.tree.health.max","value":300}})").has("error"));
+    const auto hs=call(R"({"id":2,"method":"studio.projectHistory","params":{}})")["result"];
+    AIVERSE_TEST_CHECK(hs.getStr("scope")=="project"&&hs.getBool("canUndo"));
+    Json req=Json::parse(R"({"id":3,"method":"studio.projectHistoryStep","params":{"direction":"undo"}})");
+    req.find("params")->set("expectedVersion",Json::string(hs.getStr("version")));
+    const auto result=session.dispatch(req);
+    AIVERSE_TEST_CHECK(!result.has("error")&&result["result"]["snapshot"].isObject());
+    AIVERSE_TEST_CHECK(session.workspace().project.rulesJson["types"]["tree"]["health"]["max"].integer()==200);
+    fs::remove_all(root);
+}
+void projectHistoryBudgetContract(){
+    using namespace aiverse::editor;
+    ProjectHistory history;
+    for(size_t i=0;i<ProjectHistory::MaxSteps+10;++i)
+        history.record({{"fixture.json",std::to_string(i),std::to_string(i+1)}},"Edit");
+    AIVERSE_TEST_CHECK(history.steps().size()==ProjectHistory::MaxSteps&&history.position()==ProjectHistory::MaxSteps);
+    history.advance(false);const auto version=history.version();
+    history.record({{"fixture.json","same","same"}},"No-op");
+    AIVERSE_TEST_CHECK(history.version()==version&&history.canRedo());
+    history.record({{"fixture.json","before","branch"}},"Branch");
+    AIVERSE_TEST_CHECK(!history.canRedo()&&history.steps().size()==ProjectHistory::MaxSteps);
+    history.record({{"fixture.json",std::string(ProjectHistory::MaxBytes,'x'),"large"}},"Oversize");
+    AIVERSE_TEST_CHECK(history.steps().empty()&&history.bytes()==0);
+}
 void projectFileRecoveryWorkflow() {
     using namespace aiverse;
     namespace fs=std::filesystem;
@@ -729,6 +808,6 @@ int main() {
     AIVERSE_TEST_CHECK(openRejected);
     authoredEntityWorkflow();
     entityWorkflow();
-    mapCompoundHistoryContract();projectFileEditContract();projectOwnerSaveContract();projectFileRecoveryWorkflow();
+    mapCompoundHistoryContract();projectFileEditContract();projectOwnerSaveContract();projectHistoryContract();projectHistoryBudgetContract();projectFileRecoveryWorkflow();
     std::cout << "studio session contract PASS\n";
 }

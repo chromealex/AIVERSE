@@ -214,9 +214,10 @@ bool Project::saveRules(std::string* err,const std::string& historyLabel) {
             edits.push_back({parts[i].first,before,after});
             nextRaw[i]=after;nextNormalized[i]=text;
         }
+        const std::string noHistory;
         applyProjectFileEdits(dir,edits);
         savedRulesText=std::move(nextRaw);rulesOrigin.text=std::move(nextNormalized);
-        documentHistory.record(std::move(edits),historyRequiresReload?std::string{}:historyLabel);
+        documentHistory.record(std::move(edits),historyRequiresReload?noHistory:historyLabel);
         rulesDirty=false;
         return true;
     } catch(const std::exception& e) {if(err)*err=e.what();return false;}
@@ -244,9 +245,10 @@ bool Project::saveManifest(std::string* err,const std::string& historyLabel) {
             const auto& bytes=savedRulesText.at(i);
             edits.push_back({rulesOrigin.files[i],bytes,bytes});
         }
+        const std::string noHistory;
         applyProjectFileEdits(dir,edits);
         savedManifestText=std::move(next);manifestDirty=false;
-        documentHistory.record(std::move(edits),tracked?historyLabel:std::string{});
+        documentHistory.record(std::move(edits),tracked?historyLabel:noHistory);
         if(topology){historyRequiresReload=true;}
         return true;
     } catch(const std::exception& e){if(err)*err=e.what();return false;}

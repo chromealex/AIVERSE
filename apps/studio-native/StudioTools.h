@@ -84,7 +84,7 @@ inline bool studioToolAllowed(const std::string& op) {
 // Ops that never change the project or the map: the panel runs them without an undo step or a
 // document refresh.
 inline bool studioToolReadOnly(const std::string& op) {
-    if(op=="simulation_budget_plan"||op=="terraweave_caverns_pick")return true;
+    if(op=="simulation_budget_plan"||op=="terraweave_caverns_pick"||op=="project_history_status")return true;
     if(op=="world_save_page"||op=="world_save_backups"||op=="world_save_retention_preview"||op=="world_job_status"||op=="world_simulation_lod_get"||op=="world_simulation_lod_validate")return true;
     static const char* suffixes[] = {"_get", "_list", "_info", "_types", "_network", "_catalog", "_templates",
                                      "_presets", "_validate", "_ascii", "_estimate", "_api", "_read", "_check",

@@ -86,6 +86,9 @@ Use the existing MapDoc owner, not a second undo stack. Synchronous compound ope
 ## Cross-frame stroke history (S6b)
 One CompoundEdit is owned by the Scene stroke from press to release. No history entry until commit; invalid dab, explicit cancellation, document switch and hidden/detached Scene cancel and restore the before-image. Other authoring requests and linked agent calls are refused during the stroke rather than folded into it. Agent history links resolve retained native IDs, send the current version, and Undo all requires an uninterrupted retained agent-only suffix. This is still map history; never claim reversibility of file or rules mutations.
 
+## Saved project document history (S6c.2)
+Project owns a separate bounded history (64 entries / 16 MiB of retained plan payload). Only explicit rules_set/merge/delete and compatible set_manifest saves are labelled; other changed owner saves clear the stack, and rules-source/module changes require reopening. No-op saves preserve redo. Use project_history_status/project_history_step or native studio.projectHistory/studio.projectHistoryStep with direction and exact expectedVersion. Target bytes are composed and validated using the owner loaders before applying the reversible file plan. MapDoc history is not navigated. Asset changes, topology changes, crash durability and cross-scope agent Undo all remain outside coverage. UI integration must provide explicit scope and use one-step navigation, not simulate a multi-file jump by issuing unreviewed commands.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

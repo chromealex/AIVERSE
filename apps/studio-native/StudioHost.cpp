@@ -79,7 +79,7 @@ const std::set<std::string>& documentChangingMethods() {
         "studio.renderLightingSet", "studio.lightingSet", "studio.lightAdd", "studio.lightUpdate", "studio.lightDelete",
         "studio.materialPatch", "studio.materialCreate", "studio.setProperties", "studio.componentAdd",
         "studio.componentRemove", "studio.entityMove", "studio.entitiesDelete", "studio.entitiesDuplicate",
-        "studio.assetPlace", "studio.entityFlags", "studio.rulesSet", "studio.entitiesAlign", "studio.historyJump"};
+        "studio.assetPlace", "studio.entityFlags", "studio.rulesSet", "studio.entitiesAlign", "studio.historyJump", "studio.projectHistoryStep"};
     return methods;
 }
 } // namespace
