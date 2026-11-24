@@ -5,7 +5,10 @@ import unittest
 import json
 import hashlib
 import sys
+import subprocess
+from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools/agents"))
+from evidence import validate_report
 from audit_compliance import covered_paths
 from feature_registry import regressions, matrix, load_registry
 from new_feature import scaffold
@@ -60,6 +63,45 @@ class GateTest(unittest.TestCase):
             self.assertTrue(gate.validate(data, root))
             data["checks"]["tests"].update(status="pass", evidence=["../proof.txt"])
             self.assertTrue(gate.validate(data, root, True))
+    def test_ready_cli_requires_git_provenance(self):
+        with tempfile.TemporaryDirectory() as folder:
+            manifest = Path(folder) / "manifest.json"
+            manifest.write_text("{}")
+            for flags, strict in (([], False), (["--ready"], True)):
+                with patch.object(sys, "argv", ["check_feature.py", str(manifest), *flags]):
+                    with patch.object(gate, "validate", return_value=[]) as validate:
+                        self.assertEqual(gate.main(), 0)
+                        validate.assert_called_once_with({}, ready=strict, verify_git=strict)
+
+    def test_git_evidence_staleness(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            def git(*args):
+                return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
+            git("init", "-q")
+            git("config", "user.name", "Fixture")
+            git("config", "user.email", "fixture@example.invalid")
+            source = root / "source.py"
+            source.write_text("version = 1\n")
+            git("add", ".")
+            git("commit", "-qm", "source")
+            sha = git("rev-parse", "HEAD")
+            log = root / "docs/evidence/test.log.txt"
+            log.parent.mkdir(parents=True)
+            log.write_text("fixture")
+            report = dict(sha=sha, argv=["test"], exit_code=0,
+                          log="docs/evidence/test.log.txt",
+                          sha256=hashlib.sha256(log.read_bytes()).hexdigest())
+            git("add", ".")
+            git("commit", "-qm", "evidence only")
+            self.assertEqual(validate_report(report, root, True), [])
+            source.write_text("version = 2\n")
+            git("add", ".")
+            git("commit", "-qm", "source changed")
+            self.assertEqual(validate_report(report, root, False), [])
+            self.assertTrue(any("tested tree differs" in error
+                                for error in validate_report(report, root, True)))
+
     def test_coverage(self):
         changed = {"engine/a.cpp", "apps/studio-web/a.ts", "docs/a.md"}
         self.assertEqual(len(covered_paths(changed, {})), 2)
