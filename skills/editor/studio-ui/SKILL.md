@@ -194,6 +194,9 @@ Mixed exact-endpoint directory moves/quarantine and self-contained glTF/GLB vers
 ## Stable external model versions (S6f.3.4b.1)
 Mixed replacement Undo/Redo accepts glTF/GLB local buffer/image URIs only if their logical content target is a safe indexed regular file with a live GUID and no overlapping relocation endpoint anywhere in the chain. Inspect both versions, including recovery bytes. External model relocations, dependency changes across relocation endpoints, extension topology and mixed URI repair remain unsupported. Do not bypass this fence via the existing ordinary repair planner.
 
+## Projected local model dependencies (S6f.3.4b.2a)
+Supersedes the stable-only version boundary above: resolve local glTF/GLB resource slots at every complete logical step using virtual live GUIDs and physical payload occupancy. Same model bytes must keep the same target GUID as their owner and resources relocate. Unmanaged incoming references, unsupported model formats, extensions, nested endpoints and mixed URI rewrites remain fenced. Existing journal v3 is unchanged.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web
