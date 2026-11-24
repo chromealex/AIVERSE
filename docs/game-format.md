@@ -138,6 +138,20 @@ editor reads it. Details: docs/editor-world-tree.md § Game hooks.
 
 Set `"preciseCooldown": true` on a weapon with a positive `cooldown` in seconds. The shared fixed-point cadence policy carries a crossed-zero remainder into the next accepted shot and permits multiple targeted shots during one simulation tick. It discards unused credit at the tick boundary (idle, invalid target, stun, or blocked fire) and limits each weapon to 32 accepted shots per tick. Accuracy is subject to the existing fixed-point simulation timestep and that safety budget. Charged weapons retain their existing charging gate and are limited to one shot per tick. Without the opt-in, old timing remains unchanged. The existing Combat cooldown array stores the next remaining time; precise weapon slots are also included in the checksum. Targeted combat and TopDown free-fire share one pre-movement cadence advance for opt-in slots. Arsenal has one shared hand cooldown across weapon selection and uses the same policy, with finite ammo and held-fire burst limits; a queued single tap authorizes one shot. Its opt-in save extension is tagged ACW1 and legacy Arsenal saves without precise weapons retain their old layout. Native ECS Weapon Launch can opt in with `WeaponParametersComponent.firePeriod` (positive seconds); the owner persists and hashes `WeaponStateComponent.remainingCooldown`. A single native intent authorizes the current tick's burst; zero period keeps integer `fireInterval`. ActorModule's separate FPS firing adapter remains integer-based.
 
+### Weapon-scaled damage and healing
+
+Damage and heal effects can use `weaponDamage` instead of a fixed `amount` or `percent`. It is a nonnegative multiplier (0–1000) of the selected weapon's authored damage times the caster's current authoritative Damage stat. Optional `weaponIndex` selects an authored weapon slot, zero-based (default 0; not the implicitly equipped/triggering weapon). Example:
+
+```json
+{"type":"damage","weaponDamage":1.5,"radius":4,"affects":"enemies"}
+```
+
+```json
+{"type":"heal","weaponDamage":0.5,"weaponIndex":1,"affects":"allies"}
+```
+
+The effect is resolved when applied, not when cast or launched; tech, hero, buff, status, native and progression modifiers in the existing stat pipeline therefore affect delayed payloads too. The existing effect context scale (chain falloff) multiplies the result once. Target-specific armor, class bonuses, height and hit RNG are not part of this source amount; normal target damage resolution still applies afterward. If the caster entity or selected weapon no longer exists, the scaled effect does nothing rather than falling back to an invented stat. Status ticks use the caster entity already supplied by their effect context. Native code can query `GameHost::currentWeaponDamage(sim,caster,slot)` (optional Fixed). No new mutable state or save format.
+
 ### Multishot weapon targeting
 
 Set `extraTargets` to an integer 0–16 on a targeted weapon. One accepted attack selects the primary enemy plus up to that many distinct secondary enemies at release. Secondary selection uses contact distance and stable Entity handle as tie-breaker; the ordinary weapon layer/tag/range/sensor restrictions remain in effect. Optional `extraTargetTags` and `extraIgnoreTags` further constrain only secondary targets. For example:
