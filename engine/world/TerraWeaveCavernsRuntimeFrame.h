@@ -411,7 +411,8 @@ public:
         const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive,
         const StreamBuildCommit& actualNativeCommit) {
         const auto it=readyStreamBuilds_.find(ticket.key);
-        if(ticket.action!=CaveResidencyAction::Build ||
+        if(closed_||physicsBarrier_.status().recoveryRequired||
+           ticket.action!=CaveResidencyAction::Build ||
            !exclusive || !exclusive() || !actualNativeCommit ||
            it==readyStreamBuilds_.end() ||
            !residency_.current(ticket) ||
@@ -424,9 +425,10 @@ public:
             return false;
         const auto navigationBounds=navigationChunkBounds(
             ticket.key,publishedMesh.resolution,publishedMesh.spacingCm);
-        if(!actualNativeCommit(ticket,it->second.mesh,
-                               it->second.collisionMesh))return false;
         try {
+            if(!actualNativeCommit(ticket,it->second.mesh,
+                                   it->second.collisionMesh))return false;
+            if(!exclusive())throw std::logic_error("Caverns stream build lost exclusion");
             // Match the already-published GPU/physics/nav revision with
             // committed CPU source and seam-residency metadata.
             host_.registerCommittedMesh(std::move(publishedMesh),
@@ -435,8 +437,10 @@ public:
             physicsBarrier_.requireRecovery();
             throw;
         }
-        if(!residency_.acknowledge(ticket))
+        if(!residency_.acknowledge(ticket)) {
+            physicsBarrier_.requireRecovery();
             throw std::logic_error("Caverns streaming build ACK refused after native commit");
+        }
         readyStreamBuilds_.erase(it);
         // Streaming may alter passable topology at the SAME authored SDF
         // revision. Consumers rebuild local routes/flow seeds/cluster borders.
@@ -448,7 +452,8 @@ public:
         const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive,
         const StreamRetireCommit& actualNativeCommit) {
         const auto it=pendingRetires_.find(ticket.key);
-        if(ticket.action!=CaveResidencyAction::Retire ||
+        if(closed_||physicsBarrier_.status().recoveryRequired||
+           ticket.action!=CaveResidencyAction::Retire ||
            !exclusive || !exclusive() || !actualNativeCommit ||
            it==pendingRetires_.end() || !residency_.current(ticket) ||
            it->second.generation!=ticket.generation ||
@@ -457,7 +462,9 @@ public:
         // Actual host must retire previous GeometryScene source/Box3D body/
         // SpatialWorld range/NavMesh at an exclusive owner barrier. Never
         // use an empty/dummy callback as proof of full retirement.
+        try {
         if(!actualNativeCommit(ticket))return false;
+        if(!exclusive())throw std::logic_error("Caverns stream retire lost exclusion");
         // The native owner has removed the old source. Forget its committed
         // catalog entry and loaded-neighbor seam certification; do not
         // forget a pending edit or a shard still in GPU staging.
@@ -473,6 +480,10 @@ public:
         (void)navigationBus_.invalidateResidency(
             navigationChunkBounds(ticket.key,chunkResolution_,chunkSpacingCm_));
         return true;
+        } catch(...) {
+            physicsBarrier_.requireRecovery();
+            throw;
+        }
     }
 
     bool acceptStreaming(CaveResidencyTicket ticket){
