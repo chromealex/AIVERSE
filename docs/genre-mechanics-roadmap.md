@@ -124,3 +124,7 @@ Extend the shared SDF provider with deterministic gravity-oriented ground cleara
 ### Stage54v2c1 — IN PROGRESS
 
 Extend shared motor-neutral ECS navigation to resolve a scoped immutable provider per entity and persist stable region ID separately, preserving flat schemas. Search and steering use matching scope and canonical SDF/environment epochs; native residency remains a separate host admission fence, never a process-local lockstep epoch. Provide deterministic planetary region source capture and chart position/goal adapters. Test source for same-revision region separation and shared graph solvers. Native host commit/GI integration and QA remain follow-up.
+
+### Stage54v2c2 — IN PROGRESS
+
+Optional native committed navigation lease set owned by each existing planetary body cohort; stage complete region set from frozen authoritative environment before native commit, expose only after all-owner success, abort/retire/rollback revoke stale access. Environment-only refresh atomically replaces leases without rebuilding collision, with explicit canonical environment epoch and immutable mappings. Existing host GI hooks remain mandatory. Add native motor admission adapter and fixture source; keep persistent lockstep paths separate. Native QA pending.
