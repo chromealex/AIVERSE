@@ -14,6 +14,7 @@ import { SpectraCommandQueue } from './spectraCommandQueue';
 import SpectraAssetPicker from './SpectraAssetPicker';
 import type { SpectraIndexedAsset } from './SpectraAssetPicker';
 import { indexedSpectraAssets } from './spectraStudioAssetIndex';
+import { rememberLibraryFrame } from './spectraLibraryStore';
 
 type Action='status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'playback'|'burst'|'clear';
 const message=(e:unknown)=>e instanceof Error?e.message:String(e);
@@ -21,11 +22,12 @@ interface Props {
   graph:SpectraGraphV2;
   projectPath:string;
   disabled?:boolean;
+  libraryAsset?:{name:string;draft:boolean};
 }
 /** Independent native FX swapchain on the shared Studio render-owner thread.
  * The map Scene renders separately; React does not generate GPU particles.
  */
-export default function SpectraNativePreview({graph,projectPath,disabled=false}:Props){
+export default function SpectraNativePreview({graph,projectPath,disabled=false,libraryAsset}:Props){
   const [state,setState]=useState<StudioSpectraPreviewState|null>(null);
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
@@ -53,6 +55,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   };
   const graphSignature=useMemo(()=>JSON.stringify(graph),[graph]);
   const lastLoadedGraph=useRef('');
+  const loadedFrameIdentity=useRef<{signature:string;generation:number}|null>(null);
+  const pendingLibraryFrame=useRef<{name:string;draft:boolean;signature:string;generation:number}|null>(null);
   const reloadBusy=useRef(false);
   const [seek,setSeek]=useState(0);
   const [burstCount,setBurstCount]=useState(1);
@@ -106,7 +110,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     setCompareA('');setCompareB('');setCaptureSlot(null);
     setPixelDiff(null);setDiffError('');
     setCaptureMetaA(null);setCaptureMetaB(null);pendingMeta.current=null;setLockedCamera(null);setReplayPreset(null);setLiveScalars({});setReplaySeed('');setGpuAllocationSeed('');
-    lastLoadedGraph.current='';
+    lastLoadedGraph.current='';loadedFrameIdentity.current=null;pendingLibraryFrame.current=null;
   },[projectPath]);
   useEffect(()=>{
     if(!active||busy)return;
@@ -144,6 +148,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
           setError(next.error||'Native graph reload rejected');
           return;
         }
+        if(typeof next.generation==='number')loadedFrameIdentity.current={signature:graphSignature,generation:next.generation};
         let result=next;
         if(wasPlaying)result=await invokePreview({action:'play',expectedGeneration:next.generation});
         if(!closed){setState(result);setSeek(result.tick);}
@@ -179,6 +184,10 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
            capture.image.startsWith('data:image/jpeg;base64,') &&
            capture.image.length<=900000) {
           setCaptureImage(capture.image);
+          const library=pendingLibraryFrame.current;
+          if(library&&capture.provenance?.generation===library.generation)
+            rememberLibraryFrame(projectPath,library.name,library.draft,library.signature,capture.image);
+          pendingLibraryFrame.current=null;
           if(captureSlot==='A'){setCompareA(capture.image);setCaptureMetaA({...pendingMeta.current,native:capture.provenance??null});}
           if(captureSlot==='B'){setCompareB(capture.image);setCaptureMetaB({...pendingMeta.current,native:capture.provenance??null});}
           setCaptureSlot(null);
@@ -517,6 +526,9 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const captureFrame=async(slot:'A'|'B'|null=null)=>{
     if(!active||busy||disabled||capturePending||!state?.ready)return;
     setBusy(true);setCaptureError('');setCaptureSlot(slot);
+    pendingLibraryFrame.current=libraryAsset&&loadedFrameIdentity.current?.signature===graphSignature&&
+      loadedFrameIdentity.current.generation===state.generation?
+      {...libraryAsset,signature:graphSignature,generation:loadedFrameIdentity.current.generation}:null;
     pendingMeta.current={graphSignature,projectPath,tick:state.tick,
       backend:state.backend,camera:state.camera??null,snapshotMaxSide:captureSide,
       capturedAt:new Date().toISOString()};
@@ -542,9 +554,11 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     try{
       const result=await invokePreview({action,...options,
         ...(state&&action!=='status'?{expectedGeneration:state.generation}:{})});
-      if(action==='load'&&result.ready&&!result.error)
+      if(action==='load'&&result.ready&&!result.error){
         lastLoadedGraph.current=graphSignature;
-      if(action==='stop')lastLoadedGraph.current='';
+        if(typeof result.generation==='number')loadedFrameIdentity.current={signature:graphSignature,generation:result.generation};
+      }
+      if(action==='stop'){lastLoadedGraph.current='';loadedFrameIdentity.current=null;}
       setState(result);
       setSeek(result.tick);
       if(result.error)setError(result.error);

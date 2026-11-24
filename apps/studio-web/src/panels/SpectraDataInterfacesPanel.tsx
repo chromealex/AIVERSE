@@ -10,6 +10,7 @@ import {
 import SpectraGraphCanvas from './SpectraGraphCanvas';
 import SpectraCurveEditor from './SpectraCurveEditor';
 import SpectraNativePreview from './SpectraNativePreview';
+import { takeLibraryGraph } from './spectraLibraryStore';
 import SpectraIndexedGraphAssetInspector from './SpectraIndexedGraphAssetInspector';
 import { createBlankGraph, createBurstStarter, nextUnusedGraphName } from './spectraStarterModel';
 import './SpectraDataInterfacesPanel.css';
@@ -118,6 +119,16 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
     }catch(e){setError(errorText(e));}
     finally{setBusy(false);}
   };
+  useEffect(()=>{
+    if(busy||!projectPath)return;
+    const receive=()=>{
+      const request=takeLibraryGraph(projectPath);
+      if(request)void openAsset({name:request.name,draft:request.draft,valid:true});
+    };
+    receive();
+    window.addEventListener('spectrafx:library-open',receive);
+    return()=>window.removeEventListener('spectrafx:library-open',receive);
+  },[projectPath,busy,dirty,selectedName,pinned]);
   const makeGraph=async(starter:boolean)=>{
     const name=newName.trim();
     if(!safeGraphName(name)){setError('Graph name: 1–48 lowercase letters, digits, underscore.');return;}
@@ -269,6 +280,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
             {diagnostics(validation)} {validation.emitters!==undefined&&' · '+String(validation.emitters)+' emitter(s)'}
           </StudioAlert>}
           <SpectraNativePreview key={projectPath} graph={graph} projectPath={projectPath}
+            libraryAsset={selected&&!dirty?{name:selected.name,draft:selected.draft}:undefined}
             disabled={busy}/>
           <StudioSection title="Graph Nodes & Links">
             <SpectraGraphCanvas graph={graph} disabled={busy}
