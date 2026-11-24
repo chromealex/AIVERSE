@@ -19,6 +19,7 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
   const [override,setOverride]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
   const [dirty,setDirty]=useState(false),[stale,setStale]=useState(false),[live,setLive]=useState<StudioPlanetForestLive|null>(null);
   const [body,setBody]=useState(''),[filter,setFilter]=useState('');
+  const [armed,setArmed]=useState(false),[plantSpecies,setPlantSpecies]=useState(''),[habit,setHabit]=useState<'tree'|'shrub'>('tree');
   const baseRef=useRef<StudioPlanetForestDocument|null>(null);
   const busyRef=useRef(false);
   function accept(d:StudioPlanetForestDocument){baseRef.current=d;setBase(d);setForest(d.forest===null?null:object(d.forest));setCatalog(d.catalog===null?null:object(d.catalog));setOverride(d.override);setDirty(false);setStale(false);setLive(null);}
@@ -36,7 +37,18 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
     }catch{setStale(true);}
   }
   useEffect(()=>{void checkRevision();},[historyVersion]);
-  useEffect(()=>onNativeEvent(event=>{if(event==='document.changed')void checkRevision();}),[]);
+  useEffect(()=>onNativeEvent((event,payload)=>{if(event==='document.changed')void checkRevision();
+    if(event==='planetForest.planted'){
+      setArmed(false);const result=payload as {document?:StudioPlanetForestDocument;error?:string};
+      if(result?.document){accept(result.document);onChanged();}else if(result?.error)setError(result.error);
+    }
+  }),[]);
+  async function arm(next:boolean){
+    if(!base)return;
+    try{const r=await invoke('studio.planetForestArm',{armed:next,mapPath:base.mapPath,expectedRevision:base.revision,
+      species:Number(plantSpecies||rows(forest?.species)[0]?.id),habit});setArmed(r.armed);}
+    catch(e){setArmed(false);setError(err(e));}
+  }
   function editForest(next:ForestRecord|null){setForest(next);setOverride(next!==null);setDirty(true);}
   function editCatalog(next:ForestRecord|null){setCatalog(next);setDirty(true);}
   async function apply(){if(!base)return;busyRef.current=true;setBusy(true);setError('');try{
@@ -47,7 +59,7 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
   if(!base)return <section className="rules__form">{error||'Loading planet forest…'} <button onClick={()=>void reload()}>Reload</button></section>;
   if(!base.available)return <section className="rules__form">Planetary map required. <button onClick={()=>void reload()}>Reload</button></section>;
   const species=rows(forest?.species),plants=rows(forest?.plants),weather=rows(forest?.weather),profiles=rows(catalog?.species);
-  const bodies=[...new Set(base.markers.map(m=>m.placement.body))];
+  const bodies=base.bodies??[...new Set(base.markers.map(m=>m.placement.body))];
   const markers=base.markers.filter(m=>!body||m.placement.body===body);
   const patch=(key:string,i:number,p:ForestRecord)=>forest&&editForest(patchRow(forest,key,i,p));
   const markerPicker=(value:unknown,change:(v:string)=>void)=><select className="au-input" value={String(value??'')} onChange={e=>change(e.target.value)}>
@@ -75,10 +87,13 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
       <button disabled={species.length>=64} onClick={()=>editForest({...forest,species:[...species,{id:nextId(species,'id')}]})}>Add species</button>
     </fieldset>
     <fieldset disabled={busy} className="rules__group"><legend>Rooted plants</legend>
+      <label className="pf-row"><span>Plant species</span><select className="au-input" value={plantSpecies||String(species[0]?.id??'')} onChange={e=>setPlantSpecies(e.target.value)}>{species.map((s,i)=><option key={i} value={String(s.id)}>{String(s.id)}</option>)}</select></label>
+      <label className="pf-row"><span>Plant habit</span><select className="au-input" value={habit} onChange={e=>setHabit(e.target.value as 'tree'|'shrub')}><option>tree</option><option>shrub</option></select></label>
+      <button disabled={!armed&&(dirty||stale||!species.length)} onClick={()=>void arm(!armed)}>{armed?'Cancel planting':'Plant in Scene'}</button>{armed&&<p className="pf-note">Click planetary terrain once. Esc cancels. Save pending draft changes before planting.</p>}
       <label className="pf-row"><span>Planet / moon</span><select className="au-input" value={body} onChange={e=>setBody(e.target.value)}><option value="">All bodies</option>{bodies.map(b=><option key={b}>{b}</option>)}</select></label>
       <label className="pf-row"><span>Search markers</span><input className="au-input" value={filter} onChange={e=>setFilter(e.target.value)}/></label>
-      {plants.map((row,i)=>({row,i})).filter(({row})=>(!body||base.markers.find(m=>m.id===row.entity)?.placement.body===body)&&String(row.entity??'').toLowerCase().includes(filter.toLowerCase())).map(({row,i})=><details key={i}><summary>{String(row.entity??'Unbound')} · {String(row.species)}:{String(row.key)}</summary>
-        <label className="pf-row"><span>Surface marker</span>{markerPicker(row.entity,v=>patch('plants',i,{entity:v}))}</label>
+      {plants.map((row,i)=>({row,i})).filter(({row})=>(!body||(object(row.at).body??base.markers.find(m=>m.id===row.entity)?.placement.body)===body)&&String(row.entity??object(row.at).body??'').toLowerCase().includes(filter.toLowerCase())).map(({row,i})=><details key={i}><summary>{String(row.entity??(row.at?object(row.at).body+' / '+object(row.at).face:'Unbound'))} · {String(row.species)}:{String(row.key)}</summary>
+        {row.at?<p>Surface: {String(object(row.at).body)} · face {String(object(row.at).face)} · {String(object(row.at).x)}, {String(object(row.at).y)}</p>:<label className="pf-row"><span>Surface marker</span>{markerPicker(row.entity,v=>patch('plants',i,{entity:v}))}</label>}
         <label className="pf-row"><span>Species</span><select className="au-input" value={String(row.species??'')} onChange={e=>patch('plants',i,{species:Number(e.target.value)})}><option value="">Choose species</option>{species.map((r,j)=><option key={j} value={String(r.id)}>{String(r.id)}</option>)}</select></label>
         <Numbers data={row} specs={[['key','Stable plant key',1,1,1000000000],['ageTicks','Initial age (ticks; blank = mature)',0,0,1000000000]]} change={p=>patch('plants',i,p)}/>
         <label className="pf-row"><span>Habit</span><select className="au-input" value={String(row.habit??'tree')} onChange={e=>patch('plants',i,{habit:e.target.value})}><option>tree</option><option>shrub</option></select></label>

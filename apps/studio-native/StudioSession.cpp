@@ -1914,6 +1914,7 @@ std::string StudioSession::historyLabel(const std::string& method, const Json& p
         {"studio.lightingSet","Edit lighting"},{"studio.renderLightingSet","Edit render lighting"},
         {"studio.nereidFlowSet","Edit water"},{"studio.keepPlayChanges","Keep play changes"},{"studio.entitiesAlign","Align"},{"studio.newMap","New map"}};
     for(const auto& [m,label]:names)if(method==m)return label;
+    if(method=="studio.planetForestPlant")return "Plant on planet";
     if(method=="studio.planetForestSet")return "Edit planetary forest";
     if(method=="studio.worldProcessAreaBatchMove")return "Move EVOLVE region group";
     if(method=="studio.worldProcessAreaBatchResize")return "Resize EVOLVE region group";
@@ -3567,10 +3568,11 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             reply.set("result", propertiesFor(params.getStr("entityId")));
         } else if (method == "studio.inspect") {
             reply.set("result", inspectorFor(params.getStr("entityId")));
-        } else if(method=="studio.planetForest"||method=="studio.planetForestSet"){
+        } else if(method=="studio.planetForest"||method=="studio.planetForestSet"||method=="studio.planetForestPlant"){
             if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
             if(method=="studio.planetForestSet")
                 editStudioPlanetForest(ws_.map,ws_.project.rulesJson,params);
+            if(method=="studio.planetForestPlant")placeStudioPlanetForest(ws_.map,ws_.project.rulesJson,params);
             reply.set("result",studioPlanetForestDocument(ws_.map,ws_.project.rulesJson));
         } else if (method == "studio.rules" || method == "studio.rulesSet") {
             // Rules form: unit types as written (own fields) and resolved (with "extends").

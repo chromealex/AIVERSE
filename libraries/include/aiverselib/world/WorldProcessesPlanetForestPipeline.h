@@ -255,7 +255,7 @@ inline PlanetForestPipelineConfig installPlanetForestPipeline(game::GameCore& co
     std::map<uint32_t,ForestEcologySpecies> policies;
     for(const auto& policy:cfg.species)policies.emplace(policy.speciesId,policy);
     const auto& authored=core.matchMap()["entities"];
-    if(!authored.isArray()||authored.size()!=core.mapPlaced().size())
+    if((!authored.isArray()&&!authored.isNull())||authored.size()!=core.mapPlaced().size())
         throw std::invalid_argument("planetForest map identity");
     std::map<std::string,Entity> entities;
     for(size_t i=0;i<authored.size();++i){
@@ -264,6 +264,20 @@ inline PlanetForestPipelineConfig installPlanetForestPipeline(game::GameCore& co
             throw std::invalid_argument("planetForest duplicate entity id");
     }
     const auto point=[&](const Json& item){
+        if(item.has("at")){
+            if(item.has("entity"))throw std::invalid_argument("planetForest at and entity are exclusive");
+            const auto& at=item["at"];
+            const int bi=surface->findBody(at.getStr("body"));
+            const auto face=at["face"].integer(-1);
+            if(!at.isObject()||bi<0||!surface->bodies[size_t(bi)].hasSurface()||!at["face"].isNumber()||
+               face<0||face>5||at["face"].fx()!=Fixed::fromInt(face)||!at["x"].isNumber()||!at["y"].isNumber())
+                throw std::invalid_argument("planetForest invalid surface placement");
+            const auto& body=surface->bodies[size_t(bi)];
+            const auto x=at["x"].fx(),y=at["y"].fx(),n=Fixed::fromInt(body.faceSize);
+            if(x<Fixed{}||y<Fixed{}||x>n||y>n)throw std::invalid_argument("planetForest face coordinate out of range");
+            const auto dir=surface->cubeOf(bi).dirFromFace(int(face),x,y);
+            return std::pair{body.id,surface->project(game::Surface::anchor(bi)+dir*body.radius)};
+        }
         const auto id=item.getStr("entity");
         if(!entities.contains(id)||!world.alive(entities.at(id)))
             throw std::invalid_argument("planetForest unresolved marker");

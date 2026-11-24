@@ -78,7 +78,7 @@ const std::set<std::string>& documentChangingMethods() {
     static const std::set<std::string> methods = {
         "studio.openMap", "studio.newMap", "studio.entityCreate", "studio.entityDelete", "studio.entityDuplicate",
         "studio.setProperty", "studio.save", "studio.undo", "studio.redo", "studio.nereidFlowSet",
-        "studio.planetForestSet", "studio.renderLightingSet", "studio.lightingSet", "studio.lightAdd", "studio.lightUpdate", "studio.lightDelete",
+        "studio.planetForestPlant", "studio.planetForestSet", "studio.renderLightingSet", "studio.lightingSet", "studio.lightAdd", "studio.lightUpdate", "studio.lightDelete",
         "studio.materialPatch", "studio.materialCreate", "studio.setProperties", "studio.componentAdd",
         "studio.componentRemove", "studio.entityMove", "studio.entitiesDelete", "studio.entitiesDuplicate",
         "studio.assetPlace", "studio.worldProcessAreaSet", "studio.worldProcessAreaBatchMove", "studio.worldProcessAreaBatchResize", "studio.entityFlags", "studio.rulesSet", "studio.entitiesAlign", "studio.historyJump",
@@ -1670,6 +1670,25 @@ bool StudioHost::placeType(const std::string& type, double x, double y, double w
     return true;
 }
 void StudioHost::select(double x, double y, double w, double h, const std::string& mode) {
+    if(forestPlantArm_.isObject()&&mode=="replace"){
+        const auto arm=forestPlantArm_;forestPlantArm_=Json{};
+        Json payload=Json::object();
+        try{
+            if(projectLoading_||!preview_||!session_||session_->strokeActive())
+                throw std::runtime_error("Scene planting unavailable");
+            const auto& ws=session_->workspace();
+            if(arm.getStr("project")!=ws.project.dir||arm.getStr("mapPath")!=ws.map.path||
+               arm.getStr("expectedRevision")!=std::to_string(ws.map.revision))
+                throw std::runtime_error("Forest planting cancelled: document changed");
+            const auto at=onScene([&]{return preview_->forestGroundPlacement(float(x),float(y),float(w),float(h),ws.map.path,ws.map.revision);});
+            if(!at)throw std::runtime_error("No current planetary surface hit");
+            Json params=arm;params.set("at",*at);
+            const auto outcome=request("studio.planetForestPlant",params);
+            if(outcome.has("error"))throw std::runtime_error(outcome.getStr("error"));
+            payload.set("document",outcome["result"]);sendEvent("document.changed","");
+        }catch(const std::exception& e){payload.set("error",Json::string(e.what()));}
+        sendEventPayload("planetForest.planted",payload);return;
+    }
     if (projectLoading_ || !preview_) return;
     if (session_->sculptBrush().regionPick || session_->sculptBrush().armed) {
         // Human Creator: a face blend region choice, or a sculpt brush stroke on the character.
@@ -1733,6 +1752,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
         if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");
         m = {};
         m.active = true; m.pressX = x; m.pressY = y;
+        if(forestPlantArm_.isObject()&&!mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift)return;
         // Explicit authored World Processes handles have priority only when
         // the clicked point is within their small screen-space hit radius.
         if(!mods.alt && !mods.command && !mods.ctrl && !mods.shift &&
@@ -1779,7 +1799,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
     const std::string mode = mods.command ? "toggle" : mods.shift ? "add" : "replace";
     if (st.marquee) { marqueeEnd(st.pressX, st.pressY, x, y, w, h, mode); return; }
     if (st.dragged || std::hypot(x - st.pressX, y - st.pressY) >= 5.0) return;
-    if (gizmoAt(x, y, w, h)) return;
+    if (!forestPlantArm_.isObject()&&gizmoAt(x, y, w, h)) return;
     select(x, y, w, h, mode);
 }
 void StudioHost::sceneWheel(double amount) { zoom(amount); }
@@ -1788,6 +1808,9 @@ bool StudioHost::sceneKey(StudioSceneKey key, bool down, StudioSceneMods mods, b
     if (!down) {
         if (key == K::V) { setPivotSnap(false); return true; }
         return false;
+    }
+    if(key==K::Escape&&forestPlantArm_.isObject()){
+        forestPlantArm_=Json{};mouse_={};Json out=Json::object();out.set("cancelled",Json::fromBool(true));sendEventPayload("planetForest.planted",out);return true;
     }
     if(key==K::Escape&&wpDrag_.active){
         if(preview_)onScene([&]{preview_->cancelPlanetRegionDrag();preview_->cancelPlanetGravityDrag();});
@@ -2077,6 +2100,23 @@ bool StudioHost::handleHostMethod(const Json& req) {
             throw std::invalid_argument("Diagnostic focus must be an entity reference string");
         if(game_)return game_->worldProcessDiagnostics(int(cap),params.getStr("focus"));
         Json out=Json::object();out.set("active",Json::fromBool(false));return out;
+    });
+    if(method=="studio.planetForestArm")return answer([&]{
+        Json out=Json::object();forestPlantArm_=Json{};
+        if(params.getBool("armed",false)){
+            if(projectLoading_||!session_||!preview_||session_->strokeActive()||brushArmed())
+                throw std::runtime_error("Finish the active Scene tool first");
+            const auto& ws=session_->workspace();
+            if(!ws.map.data.planet()||params.getStr("mapPath")!=ws.map.path||
+               params.getStr("expectedRevision")!=std::to_string(ws.map.revision))
+                throw std::runtime_error("Reload the current forest document");
+            if(!params["species"].isNumber()||params["species"].integer()<1||params["species"].integer()>1000000||
+               params["species"].fx()!=Fixed::fromInt(params["species"].integer())||
+               (params.getStr("habit")!="tree"&&params.getStr("habit")!="shrub"))
+                throw std::runtime_error("Invalid planting species/habit");
+            forestPlantArm_=params;forestPlantArm_.set("project",Json::string(ws.project.dir));
+        }
+        out.set("armed",Json::fromBool(forestPlantArm_.isObject()));return out;
     });
     if(method=="studio.planetForestLive")return answer([&]{
         if(game_&&worldProcessPlanetMapCurrent())return game_->planetForestState();

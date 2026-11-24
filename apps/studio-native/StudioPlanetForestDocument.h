@@ -31,7 +31,8 @@ inline Json studioPlanetForestDocument(const editor::MapDoc& doc,const Json& rul
         row.set("placement",e.at);markers.push(std::move(row));
     }
     Json presets=Json::array();for(const auto& preset:terraweave::botanicalTreePresets())presets.push(Json::string(std::string(preset.name)));
-    out.set("presets",std::move(presets));out.set("markers",std::move(markers));return out;
+    Json bodies=Json::array();for(const auto& b:doc.data.bodies)if(b.surface())bodies.push(Json::string(b.id));
+    out.set("bodies",std::move(bodies));out.set("presets",std::move(presets));out.set("markers",std::move(markers));return out;
 }
 inline void validateStudioPlanetForest(const editor::MapDoc& doc,const Json& rules,
         const Json& forest,const Json& catalog){
@@ -61,6 +62,17 @@ inline void validateStudioPlanetForest(const editor::MapDoc& doc,const Json& rul
     const auto cfg=wp::parsePlanetForestConfig(effective,map);
     const auto integer=[](const Json& j,const char* k,int64_t d,int64_t lo,int64_t hi){return wp::planetBankInteger(j,k,d,lo,hi);};
     const auto marker=[&](const Json& item){
+        if(item.has("at")){
+            const auto& at=item["at"];const int bi=doc.data.findBody(at.getStr("body"));
+            const auto face=at["face"].integer(-1);
+            if(item.has("entity")||!at.isObject()||bi<0||!doc.data.bodies[size_t(bi)].surface()||
+               !at["face"].isNumber()||face<0||face>5||at["face"].fx()!=Fixed::fromInt(face)||
+               !at["x"].isNumber()||!at["y"].isNumber())throw std::invalid_argument("Invalid forest surface placement");
+            const auto n=Fixed::fromInt(doc.data.bodies[size_t(bi)].faceSize);
+            if(at["x"].fx()<Fixed{}||at["y"].fx()<Fixed{}||at["x"].fx()>n||at["y"].fx()>n)
+                throw std::invalid_argument("Forest surface coordinate out of range");
+            return;
+        }
         if(!item.isObject()||!item["entity"].isString())throw std::invalid_argument("Missing plant/weather marker");
         const int i=doc.findEntity(item.getStr("entity"));
         if(i<0)throw std::invalid_argument("Unresolved plant/weather marker: "+item.getStr("entity"));
@@ -104,5 +116,26 @@ inline bool editStudioPlanetForest(editor::MapDoc& doc,const Json& rules,const J
     if(catalog.isNull())next.erase("terraweaveForest");else next.set("terraweaveForest",catalog);
     if(next==doc.data.worldExtra)return false;
     doc.beginEdit();doc.data.worldExtra=std::move(next);doc.touched();return true;
+}
+// One click = one complete validated MapDoc transaction. No synthetic entity.
+inline void placeStudioPlanetForest(editor::MapDoc& doc,const Json& rules,const Json& params){
+    if(params.getStr("mapPath")!=doc.path||params.getStr("expectedRevision")!=std::to_string(doc.revision))
+        throw std::invalid_argument("Stale forest planting request");
+    const auto state=studioPlanetForestDocument(doc,rules);
+    auto forest=state["forest"];
+    if(!forest.isObject())throw std::invalid_argument("Configure forest species first");
+    const auto species=lib::worldprocess::planetBankInteger(params,"species",0,1,1000000);
+    if(!species)throw std::invalid_argument("Choose species");
+    const auto habit=params.getStr("habit","tree");
+    if(habit!="tree"&&habit!="shrub")throw std::invalid_argument("Invalid habit");
+    std::set<uint64_t> used;
+    for(const auto& row:forest["plants"].items())used.insert(uint64_t(row.getInt("key")));
+    uint64_t key=1;while(used.contains(key))++key;
+    Json plant=Json::object();plant.set("species",Json::number(species));plant.set("key",Json::number(int64_t(key)));
+    plant.set("habit",Json::string(habit));plant.set("at",params["at"]);
+    auto plants=forest["plants"];if(!plants.isArray())throw std::invalid_argument("Invalid plants array");
+    plants.push(std::move(plant));forest.set("plants",std::move(plants));
+    Json patch=params;patch.set("forest",forest);patch.set("catalog",state["catalog"]);
+    editStudioPlanetForest(doc,rules,patch);
 }
 } // namespace aiverse::studio

@@ -671,6 +671,12 @@ std::vector<std::string> StudioScene::idsInRect(float x0,float y0,float x1,float
 bool StudioScene::caveScreenRay(float x,float y,float width,float height,float3& origin,float3& direction)const {
     return cameraInitialized_&&width>1&&height>1&&viewCamera().screenRay(x,y,width,height,origin,direction);
 }
+std::optional<Json> StudioScene::forestGroundPlacement(float x,float y,float w,float h,const std::string& path,uint64_t revision)const{
+    if(!planetMode_||!planetPreview_||!cameraInitialized_||planetMapPath_!=path||planetRevision_!=revision||
+       w<2||h<2||x<0||y<0||x>w||y>h)return {};
+    float3 o,d;if(!viewCamera().screenRay(x,y,w,h,o,d))return {};
+    return planetPreview_->groundPlacement(o,d);
+}
 bool StudioScene::groundPoint(float x,float y,float width,float height,float3& out) const {
     float3 o,d;
     if(planetMode_||!cameraInitialized_||!viewCamera().screenRay(x,y,width,height,o,d)||std::fabs(d.y)<1e-5f)return false;

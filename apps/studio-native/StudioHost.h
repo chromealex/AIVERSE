@@ -251,6 +251,7 @@ private:
     double wpHitX_=0,wpHitY_=0;
     std::size_t wpHitOrdinal_=0;
     Json wpNumericPreview_;
+    Json forestPlantArm_; // one-shot, bound to project/map/revision
     StudioWorldProcessLiveOptions wpLiveOptions_;
     double wpLiveRefresh_=0;
     Json wpLiveSnapshot_;
