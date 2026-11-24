@@ -7,7 +7,7 @@ import { fuzzyScore } from '../commandSearch';
 import './RulesPanel.css';
 
 /** Rules: unit types as a form of known fields (validated by the game loader on every write). */
-export default function RulesPanel({ projectPath, onChanged }: { projectPath: string; onChanged: () => void }) {
+export default function RulesPanel({ projectPath, historyVersion, onChanged }: { projectPath: string; historyVersion?: string; onChanged: () => void }) {
   const [rules, setRules] = useState<StudioRules | null>(null);
   const [typeId, setTypeId] = useState('');
   const [query, setQuery] = useState('');
@@ -16,12 +16,12 @@ export default function RulesPanel({ projectPath, onChanged }: { projectPath: st
   const [raw, setRaw] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
-    setRules(null); setError('');
+    setRules(null); setError(''); setRaw(null);
     if (!projectPath) return;
     void invoke('studio.rules', {}).then(r => { if (live) { setRules(r); setTypeId(id => id && id in r.types ? id : Object.keys(r.types)[0] ?? ''); } })
       .catch(e => { if (live) setError(e instanceof Error ? e.message : String(e)); });
     return () => { live = false; };
-  }, [projectPath]);
+  }, [projectPath, historyVersion]);
   const ids = useMemo(() => {
     const all = Object.keys(rules?.types ?? {});
     if (!query.trim()) return all;

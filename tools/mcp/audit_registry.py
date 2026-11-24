@@ -23,6 +23,18 @@ REQUIRED = {
     "geometry": ("geometry_catalog", "strata_capabilities"),
     "human": ("human_schema", "human_create"),
     "mcp": ("mcp_registry",),
+    "simulation": ("simulation_budget_plan",),
+    "studio_assets": ("studio_asset_history", "studio_asset_catalog", "studio_asset_meta_patch",
+                      "studio_asset_folder_create", "studio_asset_dependencies",
+                      "studio_asset_recovery_storage", "studio_asset_trash_list",
+                      "studio_asset_trash_restore_review", "studio_asset_trash_restore",
+                      "studio_asset_delete", "studio_asset_recovery_quota_set",
+                      "studio_asset_trash_cleanup_review", "studio_asset_move_preview",
+                      "studio_asset_move_commit", "studio_agent_history_list",
+                      "studio_agent_history_step", "studio_agent_batch_preview",
+                      "studio_agent_batch_apply", "studio_history_capabilities",
+                      "studio_owner_history", "studio_owner_history_step",
+                      "studio_save_documents", "studio_asset_history_reset_review"),
 }
 
 def main():
@@ -38,6 +50,8 @@ def main():
         {"jsonrpc":"2.0","method":"notifications/initialized","params":{}},
         {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}},
         {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"mcp_registry","arguments":{}}},
+        *[{"jsonrpc":"2.0","id":100+i,"method":"tools/call","params":{"name":name,"arguments":{}}}
+          for i,name in enumerate(REQUIRED["studio_assets"])],
     ]
     try:
         done = subprocess.run(cmd, input="\n".join(map(json.dumps, requests))+"\n",
@@ -57,6 +71,12 @@ def main():
         print("ERROR: tools/list failed", done.stderr[-1000:], file=sys.stderr)
         return 2
     listed = {t["name"] for t in responses[2]["result"].get("tools", [])}
+    # Destructive recovery and arbitrary picker/file paths remain native only.
+    forbidden = {"studio_asset_history_reset_apply", "studio_asset_trash_purge",
+                 "studio_asset_trash_cleanup_apply", "studio_asset_import_preview"}
+    if forbidden & listed:
+        print("ERROR: native-only operations exposed:", sorted(forbidden & listed), file=sys.stderr)
+        return 2
     missing = {group: [n for n in names if n not in listed]
                for group, names in REQUIRED.items()}
     missing = {k:v for k,v in missing.items() if v}
@@ -86,6 +106,15 @@ def main():
     if any(not isinstance(t.get("guiOnly"), bool) for t in registry.values()):
         print("ERROR: missing guiOnly metadata", file=sys.stderr)
         return 2
+    for i,name in enumerate(REQUIRED["studio_assets"]):
+        if not registry.get(name, {}).get("studioLinkOnly"):
+            print("ERROR: missing Studio link restriction:", name, file=sys.stderr)
+            return 2
+        result = responses.get(100+i, {}).get("result", {})
+        if not result.get("isError") or not any("Requires an authenticated HTML5 Studio agent link" in item.get("text","") for item in result.get("content",[])):
+            print("ERROR: standalone Studio operation did not refuse:", name, file=sys.stderr)
+            return 2
+    print("PASS Studio linked-only metadata and standalone refusal")
     print("PASS tools/list == mcp_registry (count, names, guiOnly metadata)")
     print("NOTE: authoring and GPU validation still need dedicated per-system tests.")
     return 1 if missing else 0

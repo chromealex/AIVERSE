@@ -1,11 +1,15 @@
 #include "apps/studio-native/StudioSession.h"
 #include "apps/editor/AuthoringComponents.h"
+#include "apps/editor/core/ProjectFileEdits.h"
+#include "apps/editor/core/ProjectDocumentJournal.h"
 #include "tests/TestCheck.h"
 #include "apps/studio-native/StudioGameLaunch.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/studio-native/StudioGameDevice.h"
 #include "apps/studio-native/StudioRuntimeInspect.h"
 #include "apps/studio-native/StudioMoveJournal.h"
+#include "apps/studio-native/StudioAgentHistoryPolicy.h"
+#include "apps/studio-native/StudioAssetCatalog.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -15,6 +19,612 @@
 #include <chrono>
 
 namespace {
+void mapCompoundHistoryContract(){
+    using namespace aiverse::editor;
+    MapDoc map;map.reset(8,8);
+    for(int i=0;i<200;++i){map.beginEdit();map.data.name=std::to_string(i);}
+    AIVERSE_TEST_CHECK(map.undoDepth()==200);
+    const auto oldest=map.undoId(0),mark=map.historyMark();
+    map.undo();
+    const auto before=map.data.name;const auto redo=map.redoId(0);const bool dirty=map.dirty;
+    {
+        MapDoc::CompoundEdit batch(map);
+        for(int i=0;i<250;++i){map.beginEdit();map.data.name="partial";}
+    }
+    AIVERSE_TEST_CHECK(map.data.name==before&&map.dirty==dirty&&map.undoDepth()==199&&map.redoId(0)==redo);
+    {
+        MapDoc::CompoundEdit batch(map);
+        for(int i=0;i<250;++i){map.beginEdit();map.data.name="committed";}
+        batch.commit();
+    }
+    AIVERSE_TEST_CHECK(map.undoDepth()==200&&map.redoDepth()==0&&map.historyMark()>mark);
+    const auto id=map.undoId(199);
+    map.undo();AIVERSE_TEST_CHECK(map.data.name==before&&map.redoId(0)==id);
+    map.redo();AIVERSE_TEST_CHECK(map.data.name=="committed"&&map.undoId(199)==id);
+    map.beginEdit();map.data.name="trimmed";
+    AIVERSE_TEST_CHECK(map.undoDepth()==200&&map.undoId(0)!=oldest&&map.undoId(199)>id);
+}
+void mapHistoryPersistenceContract(){
+    using namespace aiverse;using namespace aiverse::editor;namespace fs=std::filesystem;
+    const auto root=fs::temp_directory_path()/("studio-map-history-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(root/"maps");
+    const auto file=(root/"maps"/"scene.json").string();
+    MapDoc doc;doc.reset(8,8);std::string error;
+    DocEntity entity;entity.id="unit";entity.type="unit";entity.x=1.2345678f;entity.z=2.3456789f;
+    doc.data.entities.push_back(entity);
+    doc.data.corners.assign(81,0);doc.data.corners[3]=-321;
+    doc.data.detailScale=2;doc.data.detail.assign(17*17,0);doc.data.detail[8]=-1023;
+    doc.data.detailSplat.assign(17*17*4,0);doc.data.detailSplat[11]=217;
+    doc.data.extra.set("custom",Json::parse(R"({"future":{"id":"test"}})"));
+    {
+        MapDoc::CompoundEdit stroke(doc);
+        doc.beginEdit();doc.data.entities[0].x=5.6789123f;
+        doc.beginEdit();doc.data.cells[0]='~';doc.data.corners[3]=999;
+        doc.data.detail[8]=2047;doc.data.detailSplat[11]=3;
+        stroke.commit();
+    }
+    doc.setHistoryLabel(doc.undoId(0),"Terrain stroke");
+    doc.beginEdit();doc.data.name="Second";
+    doc.setHistoryLabel(doc.undoId(1),"Rename map");
+    doc.undo();
+    const auto epoch=doc.historyEpoch();const auto previousId=doc.undoId(0);
+    AIVERSE_TEST_CHECK(doc.save(file,&error)&&doc.historyPersistenceWarning().empty());
+    MapDoc reopened;
+    AIVERSE_TEST_CHECK(reopened.load(file,&error)&&reopened.historyPersistenceWarning().empty());
+    AIVERSE_TEST_CHECK(reopened.undoDepth()==1&&reopened.redoDepth()==1);
+    AIVERSE_TEST_CHECK(reopened.historyEpoch()!=epoch&&reopened.undoId(0)!=previousId);
+    AIVERSE_TEST_CHECK(reopened.historyLabel(reopened.undoId(0))=="Terrain stroke");
+    AIVERSE_TEST_CHECK(reopened.historyLabel(reopened.redoId(0))=="Rename map");
+    reopened.undo();
+    AIVERSE_TEST_CHECK(reopened.data.entities[0].x==1.2345678f&&reopened.data.entities[0].z==2.3456789f);
+    AIVERSE_TEST_CHECK(reopened.data.cells[0]=='.'&&reopened.data.corners[3]==-321);
+    AIVERSE_TEST_CHECK(reopened.data.detail[8]==-1023&&reopened.data.detailSplat[11]==217);
+    AIVERSE_TEST_CHECK(reopened.data.extra["custom"]["future"].getStr("id")=="test");
+    reopened.redo();reopened.redo();
+    AIVERSE_TEST_CHECK(reopened.data.name=="Second");
+    AIVERSE_TEST_CHECK(reopened.save(file,&error));
+    const auto cache=root/"maps"/".aiverse-cache";
+    fs::path checkpoint;
+    for(const auto& item:fs::directory_iterator(cache))
+        if(item.path().extension()==".json")checkpoint=item.path();
+    AIVERSE_TEST_CHECK(!checkpoint.empty());
+    const auto saved=readProjectFileBytes(file);
+    std::ofstream(file,std::ios::binary|std::ios::app)<<"\n";
+    MapDoc changed;
+    AIVERSE_TEST_CHECK(changed.load(file,&error)&&!changed.canUndo()&&!changed.historyPersistenceWarning().empty());
+    std::ofstream(file,std::ios::binary|std::ios::trunc)<<saved;
+    // A dirty marker refuses even a byte-identical saved map.
+    const auto marker=cache/(checkpoint.stem().string()+".dirty");
+    std::ofstream(marker)<<"interrupted";
+    AIVERSE_TEST_CHECK(changed.load(file,&error)&&!changed.canUndo()&&!changed.historyPersistenceWarning().empty());
+    fs::remove(marker);
+    AIVERSE_TEST_CHECK(changed.load(file,&error)&&changed.canUndo());
+    // Save As must not inherit a timeline pointing to the old terrain sidecars.
+    const auto copy=(root/"maps"/"copy.json").string();
+    AIVERSE_TEST_CHECK(changed.save(copy,&error)&&!changed.canUndo()&&!changed.canRedo());
+    AIVERSE_TEST_CHECK(changed.load(copy,&error)&&!changed.canUndo());
+    // Planet snapshots carry all six faces, independent detail, extras and file names.
+    MapDoc planet;
+    AIVERSE_TEST_CHECK(planet.loadJson(Json::parse(R"({"name":"Planet","world":{"bodies":[{"id":"earth","faceSize":4,"kind":"planet"}]}})"),&error));
+    auto& body=planet.data.bodies.front();
+    body.cells[3]='R';body.corners[5]=-90;
+    body.detailScale=1;body.detail.assign(6*5*5,0);body.detail[11]=-123;
+    body.faceExtra[4].set("custom",Json::string("retained"));
+    planet.beginEdit();planet.data.bodies[0].cells[3]='.';planet.data.bodies[0].detail[11]=222;
+    const auto worldFile=(root/"maps"/"planet.json").string();
+    AIVERSE_TEST_CHECK(planet.save(worldFile,&error)&&planet.historyPersistenceWarning().empty());
+    MapDoc world;AIVERSE_TEST_CHECK(world.load(worldFile,&error)&&world.canUndo());
+    world.undo();
+    AIVERSE_TEST_CHECK(world.data.bodies[0].cells[3]=='R'&&world.data.bodies[0].corners[5]==-90);
+    AIVERSE_TEST_CHECK(world.data.bodies[0].detail[11]==-123&&world.data.bodies[0].faceExtra[4].getStr("custom")=="retained");
+    // World-space documents preserve authored extension blocks, too.
+    MapDoc authored;
+    AIVERSE_TEST_CHECK(authored.loadJson(Json::parse(R"({"name":"Scene","colliders":[],"spawns":[],"custom":{"value":7}})"),&error));
+    authored.beginEdit();authored.data.extra.set("custom",Json::parse(R"({"value":8})"));
+    const auto authoredFile=(root/"maps"/"authored.json").string();
+    AIVERSE_TEST_CHECK(authored.save(authoredFile,&error));
+    MapDoc authoredReopen;AIVERSE_TEST_CHECK(authoredReopen.load(authoredFile,&error)&&authoredReopen.canUndo());
+    authoredReopen.undo();AIVERSE_TEST_CHECK(authoredReopen.data.worldSpace&&authoredReopen.data.extra["custom"].getInt("value")==7);
+    fs::remove_all(root);
+}
+void projectFileEditContract(){
+    using namespace aiverse::editor;namespace fs=std::filesystem;
+    const auto root=fs::temp_directory_path()/("studio-project-files-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(root);
+    const auto a=root/"a.json",b=root/"b.json";
+    std::ofstream(a)<<"before A";std::ofstream(b)<<"before B";
+    const std::vector<ProjectFileEdit> edits={{a,"before A","after A"},{b,"before B","after B"}};
+    std::ofstream(b)<<"external B";
+    bool refused=false;try{applyProjectFileEdits(root,edits);}catch(const std::exception&){refused=true;}
+    AIVERSE_TEST_CHECK(refused&&readProjectFileBytes(a)=="before A"&&readProjectFileBytes(b)=="external B");
+    std::ofstream(b)<<"before B";
+    applyProjectFileEdits(root,edits);
+    AIVERSE_TEST_CHECK(readProjectFileBytes(a)=="after A"&&readProjectFileBytes(b)=="after B");
+    applyProjectFileEdits(root,reverseProjectFileEdits(edits));
+    AIVERSE_TEST_CHECK(readProjectFileBytes(a)=="before A"&&readProjectFileBytes(b)=="before B");
+    // Unchanged dependency is still checked; it must not be overwritten.
+    std::ofstream(b)<<"external B";
+    refused=false;try{applyProjectFileEdits(root,{{a,"before A","after A"},{b,"before B","before B"}});}catch(const std::exception&){refused=true;}
+    AIVERSE_TEST_CHECK(refused&&readProjectFileBytes(a)=="before A");
+    fs::remove_all(root);
+}
+void projectDocumentJournalContract(){
+    using namespace aiverse::editor;namespace fs=std::filesystem;
+    const auto root=fs::temp_directory_path()/("studio-doc-journal-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(root);
+    const auto a=root/"game.json",b=root/"rules.json",dep=root/"include.json";
+    const std::string beforeA=R"({"name":"Before","rules":"rules.json"})",afterA=R"({"name":"After","rules":"rules.json"})";
+    const std::string beforeB=R"({"types":{"unit":{"health":{"max":100}}}})",afterB=R"({"types":{"unit":{"health":{"max":200}}}})";
+    std::ofstream(a)<<beforeA;std::ofstream(b)<<beforeB;std::ofstream(dep)<<"dependency";
+    const std::vector<ProjectFileEdit> edits={{a,beforeA,afterA},{b,beforeB,afterB},{dep,"dependency","dependency"}};
+    const auto folder=root/".aiverse-cache"/"project-document-journal";
+    for(size_t count=0;count<=edits.size();++count){
+        {
+            ProjectDocumentJournal journal(root);AIVERSE_TEST_CHECK(journal.begin(edits));
+            for(size_t i=0;i<count;++i)journal.publish(i);
+            // Destruction without commit simulates interrupted process publication.
+        }
+        AIVERSE_TEST_CHECK(recoverProjectFileEdits(root));
+        AIVERSE_TEST_CHECK(readProjectFileBytes(a)==beforeA&&readProjectFileBytes(b)==beforeB&&!fs::exists(folder));
+        AIVERSE_TEST_CHECK(!recoverProjectFileEdits(root));
+    }
+    {
+        ProjectDocumentJournal journal(root);AIVERSE_TEST_CHECK(journal.begin(edits));journal.publish(0);
+    }
+    std::ofstream(dep)<<"external";
+    bool refused=false;
+    try{(void)recoverProjectFileEdits(root);}catch(const std::runtime_error&){refused=true;}
+    AIVERSE_TEST_CHECK(refused&&readProjectFileBytes(a)==afterA&&readProjectFileBytes(dep)=="external"&&fs::exists(folder));
+    std::ofstream(dep)<<"dependency";
+    AIVERSE_TEST_CHECK(recoverProjectFileEdits(root)&&readProjectFileBytes(a)==beforeA);
+    {
+        ProjectDocumentJournal journal(root);AIVERSE_TEST_CHECK(journal.begin(edits));journal.publish(0);
+    }
+    std::ofstream(folder/"1.before",std::ios::binary|std::ios::trunc)<<"corrupt backup";
+    refused=false;
+    try{(void)recoverProjectFileEdits(root);}catch(const std::runtime_error&){refused=true;}
+    AIVERSE_TEST_CHECK(refused&&readProjectFileBytes(a)==afterA);
+    std::ofstream(folder/"1.before",std::ios::binary|std::ios::trunc)<<beforeB;
+    // Project owner recovery happens before parsing manifest/rules.
+    Project project;std::string error;
+    AIVERSE_TEST_CHECK(project.load(root.string(),&error)&&project.manifest.getStr("name")=="Before");
+    AIVERSE_TEST_CHECK(project.rulesJson["types"]["unit"]["health"]["max"].integer()==100);
+    {
+        ProjectDocumentJournal journal(root);AIVERSE_TEST_CHECK(journal.begin(edits));
+        for(size_t i=0;i<edits.size();++i)journal.publish(i);
+        // Simulate a durable commit marker left behind before cleanup.
+        fs::rename(folder/"pending.json",folder/"committed.json");
+    }
+    AIVERSE_TEST_CHECK(!recoverProjectFileEdits(root));
+    AIVERSE_TEST_CHECK(readProjectFileBytes(a)==afterA&&readProjectFileBytes(b)==afterB&&!fs::exists(folder));
+    applyProjectFileEdits(root,reverseProjectFileEdits(edits));
+    AIVERSE_TEST_CHECK(readProjectFileBytes(a)==beforeA&&readProjectFileBytes(b)==beforeB);
+    ProjectHistory other;
+    AIVERSE_TEST_CHECK(project.documentHistory.versionToken()!=other.versionToken());
+    fs::remove_all(root);
+}
+void projectOwnerSaveContract(){
+    using namespace aiverse;using namespace aiverse::editor;namespace fs=std::filesystem;
+    const auto root=fs::temp_directory_path()/("studio-project-owner-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(root);
+    const auto manifest=root/"game.json",rules=root/"rules.json",extra=root/"extra.json";
+    const std::string manifestBytes=R"({ "name": "Fixture", "module": "game", "rules": "rules.json" })";
+    const std::string rulesBytes=R"({ "include": ["extra.json"], "types": {"unit": {"health":{"max":100}}} })";
+    const std::string extraBytes=R"({ "types": {"tree": {"health":{"max":100}}} })";
+    std::ofstream(manifest)<<manifestBytes;std::ofstream(rules)<<rulesBytes;std::ofstream(extra)<<extraBytes;
+    Workspace ws;std::string error;
+    AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error));
+    AIVERSE_TEST_CHECK(ws.project.saveRules(&error)&&ws.project.saveManifest(&error));
+    AIVERSE_TEST_CHECK(readProjectFileBytes(manifest)==manifestBytes&&readProjectFileBytes(rules)==rulesBytes&&readProjectFileBytes(extra)==extraBytes);
+    const auto original=ws.project.rulesJson.dump();
+    std::ofstream(extra)<<extraBytes<<"\n";
+    const auto edit=Json::parse(R"({"path":"types.unit.health.max","value":200})");
+    AIVERSE_TEST_CHECK(ws.call("rules_set",edit).has("error"));
+    AIVERSE_TEST_CHECK(ws.project.rulesJson.dump()==original&&!ws.project.rulesDirty&&ws.changes.empty());
+    AIVERSE_TEST_CHECK(readProjectFileBytes(rules)==rulesBytes&&readProjectFileBytes(extra)==extraBytes+"\n");
+    std::ofstream(extra)<<extraBytes;
+    AIVERSE_TEST_CHECK(!ws.call("rules_set",edit).has("error"));
+    AIVERSE_TEST_CHECK(ws.project.rulesJson["types"]["unit"]["health"]["max"].integer()==200);
+    AIVERSE_TEST_CHECK(readProjectFileBytes(extra)==extraBytes);
+    AIVERSE_TEST_CHECK(ws.changes.size()==1);
+    std::ofstream(manifest)<<manifestBytes<<"\n";
+    AIVERSE_TEST_CHECK(ws.call("set_manifest",Json::parse(R"({"path":"name","value":"New name"})")).has("error"));
+    AIVERSE_TEST_CHECK(ws.project.manifest.getStr("name")=="Fixture"&&readProjectFileBytes(manifest)==manifestBytes+"\n");
+    fs::remove_all(root);
+}
+void projectHistoryContract(){
+    using namespace aiverse;using namespace aiverse::editor;namespace fs=std::filesystem;
+    const auto root=fs::temp_directory_path()/("studio-project-history-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(root);
+    const auto manifest=root/"game.json",rules=root/"rules.json",extra=root/"extra.json";
+    const std::string m=R"({ "name": "Fixture", "module": "game", "rules": "rules.json" })";
+    const std::string r=R"({ "include": ["extra.json"], "types": {"unit": {"health":{"max":100}}} })";
+    const std::string e=R"({ "types": {"tree": {"health":{"max":100}}} })";
+    std::ofstream(manifest)<<m;std::ofstream(rules)<<r;std::ofstream(extra)<<e;
+    Workspace ws;std::string error;
+    AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error));
+    ws.map.reset(16,16);ws.map.beginEdit();ws.map.data.name="independent map edit";
+    const auto mapMark=ws.map.historyMark(),mapRevision=ws.map.revision;
+    auto status=[&]{return ws.call("project_history_status",Json::object());};
+    auto step=[&](const char* direction,const std::string& version){
+        Json p=Json::object();p.set("direction",Json::string(direction));p.set("expectedVersion",Json::string(version));
+        return ws.call("project_history_step",p);
+    };
+    auto edit=Json::parse(R"({"path":"types.tree.health.max","value":200})");
+    AIVERSE_TEST_CHECK(!ws.call("rules_set",edit).has("error"));
+    const auto editedExtra=readProjectFileBytes(extra);
+    AIVERSE_TEST_CHECK(!ws.call("set_manifest",Json::parse(R"({"path":"name","value":"Edited"})")).has("error"));
+    auto s=status();AIVERSE_TEST_CHECK(s["position"].integer()==2&&s["steps"].size()==2);
+    AIVERSE_TEST_CHECK(step("undo","stale").has("error"));
+    const auto version=s.getStr("version");
+    std::ofstream(rules)<<r<<"\n";
+    AIVERSE_TEST_CHECK(step("undo",version).has("error"));
+    AIVERSE_TEST_CHECK(status().getStr("version")==version&&ws.project.manifest.getStr("name")=="Edited");
+    std::ofstream(rules)<<r;
+    AIVERSE_TEST_CHECK(!step("undo",version).has("error"));
+    AIVERSE_TEST_CHECK(readProjectFileBytes(manifest)==m&&readProjectFileBytes(extra)==editedExtra);
+    AIVERSE_TEST_CHECK(!step("undo",status().getStr("version")).has("error"));
+    AIVERSE_TEST_CHECK(readProjectFileBytes(extra)==e&&readProjectFileBytes(rules)==r);
+    AIVERSE_TEST_CHECK(ws.project.rulesJson["types"]["tree"]["health"]["max"].integer()==100);
+    AIVERSE_TEST_CHECK(!step("redo",status().getStr("version")).has("error"));
+    AIVERSE_TEST_CHECK(readProjectFileBytes(extra)==editedExtra);
+    const auto beforeNoop=status().getStr("version");
+    AIVERSE_TEST_CHECK(!ws.call("rules_set",edit).has("error"));
+    AIVERSE_TEST_CHECK(status().getStr("version")==beforeNoop&&status().getBool("canRedo"));
+    AIVERSE_TEST_CHECK(!step("redo",status().getStr("version")).has("error"));
+    AIVERSE_TEST_CHECK(ws.project.manifest.getStr("name")=="Edited");
+    AIVERSE_TEST_CHECK(ws.map.historyMark()==mapMark&&ws.map.revision==mapRevision&&ws.map.data.name=="independent map edit");
+    AIVERSE_TEST_CHECK(!step("undo",status().getStr("version")).has("error"));
+    AIVERSE_TEST_CHECK(!ws.call("set_manifest",Json::parse(R"({"path":"name","value":"Branch"})")).has("error"));
+    AIVERSE_TEST_CHECK(!status().getBool("canRedo")&&status()["position"].integer()==2);
+    // Untracked owner writes are barriers, rather than misleading selective undo.
+    ws.project.manifest.set("name",Json::string("Other owner"));
+    AIVERSE_TEST_CHECK(ws.project.saveManifest(&error)&&status()["steps"].size()==0);
+    AIVERSE_TEST_CHECK(!ws.call("set_manifest",Json::parse(R"({"path":"name","value":"Before reopen"})")).has("error"));
+    const auto stale=status().getStr("version");
+    AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error)&&status()["steps"].size()==1);
+    AIVERSE_TEST_CHECK(status().getBool("persistent")&&status().getBool("canUndo"));
+    AIVERSE_TEST_CHECK(step("undo",stale).has("error"));
+    // Native route uses the exact same owner and leaves map history independent.
+    studio::StudioSession session(root.string(),root.string());
+    auto call=[&](const char* json){return session.dispatch(Json::parse(json));};
+    AIVERSE_TEST_CHECK(!call(R"({"id":1,"method":"studio.rulesSet","params":{"path":"types.tree.health.max","value":300}})").has("error"));
+    const auto hs=call(R"({"id":2,"method":"studio.projectHistory","params":{}})")["result"];
+    AIVERSE_TEST_CHECK(hs.getStr("scope")=="project"&&hs.getBool("canUndo"));
+    AIVERSE_TEST_CHECK(call(R"({"id":4,"method":"studio.snapshot","params":{}})")["result"]["project"].getStr("historyVersion")==hs.getStr("version"));
+    Json req=Json::parse(R"({"id":3,"method":"studio.projectHistoryStep","params":{"direction":"undo"}})");
+    req.find("params")->set("expectedVersion",Json::string(hs.getStr("version")));
+    const auto result=session.dispatch(req);
+    AIVERSE_TEST_CHECK(!result.has("error")&&result["result"]["snapshot"].isObject());
+    AIVERSE_TEST_CHECK(result["result"]["snapshot"]["project"].getStr("historyVersion")==result["result"].getStr("version"));
+    AIVERSE_TEST_CHECK(result["result"].getStr("version")!=hs.getStr("version"));
+    AIVERSE_TEST_CHECK(session.workspace().project.rulesJson["types"]["tree"]["health"]["max"].integer()==200);
+    fs::remove_all(root);
+}
+void projectHistoryPersistenceContract(){
+    using namespace aiverse;using namespace aiverse::editor;namespace fs=std::filesystem;
+    const auto root=fs::temp_directory_path()/("studio-persistent-history-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(root);
+    const auto manifest=root/"game.json",rules=root/"rules.json";
+    const auto checkpoint=root/".aiverse-cache"/"project-history.json";
+    const std::string initial=R"({"name":"Fixture","module":"game","rules":"rules.json"})";
+    const std::string originalRules=R"({"types":{"unit":{"health":{"max":100}}}})";
+    std::ofstream(manifest)<<initial;std::ofstream(rules)<<originalRules;
+    std::string error,stale,checkpointBytes;
+    {
+        Workspace ws;AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error));
+        AIVERSE_TEST_CHECK(!ws.call("rules_set",Json::parse(R"({"path":"types.unit.health.max","value":200})")).has("error"));
+        AIVERSE_TEST_CHECK(!ws.call("set_manifest",Json::parse(R"({"path":"name","value":"Edited"})")).has("error"));
+        AIVERSE_TEST_CHECK(ws.project.historyStep(false,ws.project.historyVersion(),&error));
+        stale=ws.project.historyVersion();checkpointBytes=readProjectFileBytes(checkpoint);
+    }
+    {
+        Workspace ws;AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error));
+        const auto status=ws.project.historyStatus();
+        AIVERSE_TEST_CHECK(status.getInt("position")==1&&status["steps"].size()==2);
+        AIVERSE_TEST_CHECK(status.getBool("canUndo")&&status.getBool("canRedo")&&status.getBool("persistent"));
+        AIVERSE_TEST_CHECK(ws.project.historyVersion()!=stale&&!ws.project.historyStep(true,stale,&error));
+        AIVERSE_TEST_CHECK(ws.project.historyStep(true,ws.project.historyVersion(),&error));
+        AIVERSE_TEST_CHECK(ws.project.manifest.getStr("name")=="Edited");
+        AIVERSE_TEST_CHECK(ws.project.historyStep(false,ws.project.historyVersion(),&error));
+    }
+    // External modification must not resurrect a history with a different cursor baseline.
+    const auto savedRules=readProjectFileBytes(rules);
+    std::ofstream(rules)<<savedRules<<"\n";
+    {
+        Workspace ws;AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error));
+        const auto status=ws.project.historyStatus();
+        AIVERSE_TEST_CHECK(!status.getBool("canUndo")&&!status.getBool("canRedo")&&status.has("persistenceWarning"));
+    }
+    std::ofstream(rules)<<savedRules;
+    // Corrupt checkpoint: project remains readable, no unvalidated history is exposed.
+    std::ofstream(checkpoint)<<"corrupt";
+    {
+        Workspace ws;AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error));
+        AIVERSE_TEST_CHECK(ws.project.historyStatus()["steps"].size()==0&&ws.project.historyStatus().has("persistenceWarning"));
+        AIVERSE_TEST_CHECK(!ws.call("set_manifest",Json::parse(R"({"path":"name","value":"Recovered"})")).has("error"));
+        AIVERSE_TEST_CHECK(ws.project.historyStatus().getBool("canUndo"));
+    }
+    // Interrupted publication must roll document AND history checkpoint back.
+    const auto beforeManifest=readProjectFileBytes(manifest),beforeCheckpoint=readProjectFileBytes(checkpoint);
+    {
+        ProjectDocumentJournal journal(root);
+        AIVERSE_TEST_CHECK(journal.begin({{manifest,beforeManifest,initial},{checkpoint,beforeCheckpoint,checkpointBytes}}));
+        journal.publish(0);
+    }
+    {
+        Workspace ws;AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error));
+        AIVERSE_TEST_CHECK(readProjectFileBytes(manifest)==beforeManifest&&readProjectFileBytes(checkpoint)==beforeCheckpoint);
+        AIVERSE_TEST_CHECK(ws.project.historyStatus().getBool("canUndo"));
+    }
+    fs::remove_all(root);
+}
+void assetHistorySessionContract(){
+    using namespace aiverse;namespace fs=std::filesystem;
+    const auto root=fs::temp_directory_path()/("studio-asset-history-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(root/"content");
+    std::ofstream(root/"game.json")<<R"({"name":"Fixture","module":"game","rules":"rules.json"})";
+    std::ofstream(root/"rules.json")<<R"({"types":{"unit":{"health":{"max":100}}}})";
+    std::ofstream(root/"content"/"Texture.png")<<"texture";
+    studio::StudioSession session(root.string(),root.string());
+    auto call=[&](const char* json){return session.dispatch(Json::parse(json));};
+    const auto assets=call(R"({"id":1,"method":"studio.assets","params":{}})");
+    AIVERSE_TEST_CHECK(!assets.has("error")&&assets["result"]["files"].size()==1);
+    const auto guid=assets["result"]["files"][0].getStr("guid");
+    Json patch=Json::parse(R"({"id":2,"method":"studio.assetMetaPatch","params":{"key":"compression","value":"high"}})");
+    patch.find("params")->set("guid",Json::string(guid));
+    AIVERSE_TEST_CHECK(!session.dispatch(patch).has("error"));
+    const auto h=call(R"({"id":3,"method":"studio.assetHistory","params":{}})")["result"];
+    AIVERSE_TEST_CHECK(h.getStr("scope")=="assets"&&h.getBool("canUndo")&&h["position"].integer()==1);
+    AIVERSE_TEST_CHECK(!call(R"({"id":4,"method":"studio.assetHistoryStep","params":{"direction":"undo","expectedVersion":"stale"}})").has("result"));
+    Json req=Json::parse(R"({"id":5,"method":"studio.assetHistoryStep","params":{"direction":"undo"}})");
+    req.find("params")->set("expectedVersion",Json::string(h.getStr("version")));
+    const auto result=session.dispatch(req);
+    AIVERSE_TEST_CHECK(!result.has("error")&&result["result"].getBool("canRedo"));
+    AIVERSE_TEST_CHECK(result["result"]["snapshot"]["project"].getStr("assetHistoryVersion")==result["result"].getStr("version"));
+    AIVERSE_TEST_CHECK(Json::parseFile((root/"content"/"Texture.png.meta").string())["settings"].getStr("compression")=="auto");
+    session.openProject(root.string());
+    const auto restored=call(R"({"id":6,"method":"studio.assetHistory","params":{}})")["result"];
+    AIVERSE_TEST_CHECK(restored["steps"].size()==1&&restored.getBool("canRedo")&&restored.getBool("persistent"));
+    AIVERSE_TEST_CHECK(restored.getStr("version")!=result["result"].getStr("version"));
+    req.find("params")->set("direction",Json::string("redo"));
+    req.find("params")->set("expectedVersion",Json::string(restored.getStr("version")));
+    AIVERSE_TEST_CHECK(!session.dispatch(req).has("error"));
+    AIVERSE_TEST_CHECK(Json::parseFile((root/"content"/"Texture.png.meta").string())["settings"].getStr("compression")=="high");
+    fs::remove_all(root);
+}
+void agentScopedHistoryContract(){
+    using namespace aiverse;namespace fs=std::filesystem;
+    const auto root=fs::temp_directory_path()/("studio-agent-scopes-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(root/"content");
+    std::ofstream(root/"game.json")<<R"({"name":"Fixture","module":"game","rules":"rules.json"})";
+    std::ofstream(root/"rules.json")<<R"({"types":{"unit":{"health":{"max":100}}}})";
+    studio::StudioSession session(root.string(),root.string());
+    auto call=[&](const char* text){return session.dispatch(Json::parse(text));};
+    auto info=[&]{
+        const auto result=call(R"({"id":1,"method":"studio.agentInfo","params":{}})");
+        AIVERSE_TEST_CHECK(!result.has("error"));return result["result"];
+    };
+    const auto initial=info();const int port=int(initial.getInt("port"));
+    std::string token;AIVERSE_TEST_CHECK(editor::net::readAgentToken(port,token));
+    editor::net::LineClient client;AIVERSE_TEST_CHECK(client.connect(port));
+    auto exchange=[&](const Json& request){
+        AIVERSE_TEST_CHECK(client.send(request.dump(-1)));
+        std::string line;
+        for(int i=0;i<100;++i){
+            session.pollAgentLink();
+            if(client.recv(line,10))return Json::parse(line)["result"];
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        throw std::runtime_error("Agent link fixture timed out");
+    };
+    Json hello=Json::object();hello.set("id",Json::number(int64_t(1)));hello.set("method",Json::string("hello"));hello.set("token",Json::string(token));
+    AIVERSE_TEST_CHECK(exchange(hello).getBool("ok"));
+    auto agent=[&](const std::string& name,const Json& arguments){
+        Json request=Json::object(),params=Json::object();
+        request.set("id",Json::number(int64_t(2)));request.set("method",Json::string("call"));
+        params.set("name",Json::string(name));params.set("arguments",arguments);request.set("params",std::move(params));
+        return exchange(request);
+    };
+    // Mixed agent batch on all three owners. No file write occurs until
+    // the complete staged plan has passed exact baseline validation.
+    const auto texture=root/"content"/"BatchTexture.png";
+    std::ofstream(texture)<<"texture";
+    {studio::StudioAssetCatalog index(root);index.rebuild();}
+    const auto originalName=session.workspace().map.data.name;
+    AIVERSE_TEST_CHECK(!agent("map_set",Json::parse(R"({"path":"name","value":"Batch scene"})")).has("error"));
+    AIVERSE_TEST_CHECK(!agent("rules_set",Json::parse(R"({"path":"types.unit.health.max","value":200})")).has("error"));
+    auto assets=agent("studio_asset_history",Json::object());
+    Json patch=Json::object();patch.set("expectedProject",assets["project"]);patch.set("expectedVersion",assets["version"]);
+    {studio::StudioAssetCatalog index(root);index.rebuild(false);patch.set("guid",Json::string(index.byPath("BatchTexture.png")->guid));}
+    patch.set("key",Json::string("compression"));patch.set("value",Json::string("high"));
+    AIVERSE_TEST_CHECK(!agent("studio_asset_meta_patch",patch).has("error"));
+    const auto applyBatch=[&](const Json& preview,const std::string& token,bool confirmed){
+        Json request=Json::object(),params=Json::object();
+        request.set("id",Json::number(int64_t(8)));request.set("method",Json::string("studio.agentBatchApply"));
+        params.set("direction",preview["direction"]);params.set("token",Json::string(token));params.set("confirmed",Json::fromBool(confirmed));
+        request.set("params",std::move(params));return session.dispatch(request);
+    };
+    auto reviewed=info()["batchUndo"];
+    AIVERSE_TEST_CHECK(reviewed.getBool("available")&&reviewed["steps"].size()==3);
+    AIVERSE_TEST_CHECK(applyBatch(reviewed,"stale",true).has("error"));
+    AIVERSE_TEST_CHECK(applyBatch(reviewed,reviewed.getStr("token"),false).has("error"));
+    const auto rulesBytes=editor::readProjectFileBytes(root/"rules.json");
+    std::ofstream(root/"rules.json",std::ios::binary|std::ios::app)<<"\n";
+    AIVERSE_TEST_CHECK(applyBatch(reviewed,reviewed.getStr("token"),true).has("error"));
+    AIVERSE_TEST_CHECK(session.workspace().map.data.name=="Batch scene");
+    AIVERSE_TEST_CHECK(session.workspace().project.rulesJson["types"]["unit"]["health"]["max"].integer()==200);
+    AIVERSE_TEST_CHECK(Json::parseFile(texture.string()+".meta")["settings"].getStr("compression")=="high");
+    std::ofstream(root/"rules.json",std::ios::binary|std::ios::trunc)<<rulesBytes;
+    AIVERSE_TEST_CHECK(!applyBatch(reviewed,reviewed.getStr("token"),true).has("error"));
+    AIVERSE_TEST_CHECK(session.workspace().map.data.name==originalName);
+    AIVERSE_TEST_CHECK(session.workspace().project.rulesJson["types"]["unit"]["health"]["max"].integer()==100);
+    AIVERSE_TEST_CHECK(Json::parseFile(texture.string()+".meta")["settings"].getStr("compression")=="auto");
+    reviewed=info()["batchRedo"];
+    AIVERSE_TEST_CHECK(reviewed.getBool("available")&&!applyBatch(reviewed,reviewed.getStr("token"),true).has("error"));
+    AIVERSE_TEST_CHECK(session.workspace().map.data.name=="Batch scene");
+    reviewed=info()["batchUndo"];
+    AIVERSE_TEST_CHECK(!applyBatch(reviewed,reviewed.getStr("token"),true).has("error"));
+    AIVERSE_TEST_CHECK(!call(R"({"id":9,"method":"studio.agentReset","params":{}})").has("error"));
+    AIVERSE_TEST_CHECK(!agent("rules_set",Json::parse(R"({"path":"types.unit.health.max","value":200})")).has("error"));
+    assets=agent("studio_asset_history",Json::object());
+    Json folder=Json::object();folder.set("expectedProject",assets["project"]);folder.set("expectedVersion",assets["version"]);
+    folder.set("parent",Json::string(""));folder.set("name",Json::string("AgentFolder"));
+    AIVERSE_TEST_CHECK(!agent("studio_asset_folder_create",folder).has("error"));
+    reviewed=info()["batchUndo"];
+    AIVERSE_TEST_CHECK(reviewed.getBool("available")&&reviewed["steps"].size()==2);
+    AIVERSE_TEST_CHECK(!applyBatch(reviewed,reviewed.getStr("token"),true).has("error"));
+    AIVERSE_TEST_CHECK(!fs::exists(root/"content"/"AgentFolder"));
+    AIVERSE_TEST_CHECK(session.workspace().project.rulesJson["types"]["unit"]["health"]["max"].integer()==100);
+    reviewed=info()["batchRedo"];
+    AIVERSE_TEST_CHECK(reviewed.getBool("available")&&!applyBatch(reviewed,reviewed.getStr("token"),true).has("error"));
+    AIVERSE_TEST_CHECK(fs::exists(root/"content"/"AgentFolder"));
+    AIVERSE_TEST_CHECK(agent("studio_asset_folder_create",folder).has("error")); // stale owner version
+    auto changes=info()["changes"];
+    Json projectEdit,assetEdit;
+    for(const auto& change:changes.items()){
+        if(change.getStr("scope")=="project")projectEdit=change;
+        if(change.getStr("scope")=="assets")assetEdit=change;
+    }
+    AIVERSE_TEST_CHECK(projectEdit.getBool("canUndo")&&assetEdit.getBool("canUndo"));
+    AIVERSE_TEST_CHECK(info().getInt("startPosition",-1)==-1);
+    auto step=[&](const Json& edit,const std::string& direction,const std::string& version){
+        Json request=Json::object(),params=Json::object();
+        request.set("id",Json::number(int64_t(3)));request.set("method",Json::string("studio.agentHistoryStep"));
+        params.set("scope",edit["scope"]);params.set("historyId",edit["historyId"]);
+        params.set("direction",Json::string(direction));params.set("expectedVersion",Json::string(version));
+        request.set("params",std::move(params));return session.dispatch(request);
+    };
+    AIVERSE_TEST_CHECK(step(projectEdit,"undo","stale").has("error"));
+    AIVERSE_TEST_CHECK(!step(projectEdit,"undo",projectEdit.getStr("historyVersion")).has("error"));
+    AIVERSE_TEST_CHECK(session.workspace().project.rulesJson["types"]["unit"]["health"]["max"].integer()==100);
+    AIVERSE_TEST_CHECK(!step(assetEdit,"undo",assetEdit.getStr("historyVersion")).has("error"));
+    AIVERSE_TEST_CHECK(!fs::exists(root/"content"/"AgentFolder"));
+    changes=info()["changes"];
+    for(const auto& change:changes.items())if(change.getStr("scope")=="assets")assetEdit=change;
+    AIVERSE_TEST_CHECK(assetEdit.getBool("canRedo"));
+    AIVERSE_TEST_CHECK(!step(assetEdit,"redo",assetEdit.getStr("historyVersion")).has("error"));
+    AIVERSE_TEST_CHECK(fs::exists(root/"content"/"AgentFolder"));
+    // Registry inventory uses explicit classifications, never name suffix guesses.
+    AIVERSE_TEST_CHECK(std::string(studio::studioAgentHistoryPolicy("fake_get"))=="unverified");
+    AIVERSE_TEST_CHECK(std::string(studio::studioAgentHistoryPolicy("heightmap_export"))=="unverified");
+    AIVERSE_TEST_CHECK(std::string(studio::studioAgentHistoryPolicy("rules_get"))=="read");
+    const auto capabilities=agent("studio_history_capabilities",Json::object());
+    bool foundMove=false;
+    for(const auto& item:capabilities["operations"].items())
+        if(item.getStr("name")=="studio_asset_move_commit")foundMove=item.getStr("policy")=="assets";
+    AIVERSE_TEST_CHECK(foundMove&&capabilities.getStr("bulkUndo")=="map-only");
+    fs::create_directory(root/"content"/"Destination");
+    studio::StudioAssetCatalog catalog(root);catalog.rebuild();
+    const auto guid=catalog.byPath("AgentFolder")->guid;
+    assets=agent("studio_asset_history",Json::object());
+    Json move=Json::object(),guids=Json::array();guids.push(Json::string(guid));
+    move.set("guids",std::move(guids));move.set("destination",Json::string("Destination"));
+    move.set("expectedProject",assets["project"]);move.set("expectedVersion",assets["version"]);
+    const auto browser=call(R"({"id":10,"method":"studio.assetMovePreview","params":{"paths":["AgentFolder"],"destination":"Destination"}})");
+    AIVERSE_TEST_CHECK(!browser.has("error"));
+    const auto preview=agent("studio_asset_move_preview",move);
+    AIVERSE_TEST_CHECK(!preview.has("error")&&preview.getStr("token")!=browser["result"].getStr("token"));
+    Json commit=Json::object();commit.set("expectedProject",assets["project"]);commit.set("expectedVersion",assets["version"]);
+    commit.set("token",browser["result"]["token"]);
+    commit.set("decisions",Json::parse(R"([{"id":0,"action":"import"}])"));
+    AIVERSE_TEST_CHECK(agent("studio_asset_move_commit",commit).has("error"));
+    commit.set("token",preview["token"]);
+    commit.set("decisions",Json::array());
+    AIVERSE_TEST_CHECK(agent("studio_asset_move_commit",commit).has("error"));
+    commit.set("decisions",Json::parse(R"([{"id":0,"action":"import"}])"));
+    const auto moved=agent("studio_asset_move_commit",commit);
+    AIVERSE_TEST_CHECK(!moved.has("error")&&moved.getBool("historyRecorded"));
+    AIVERSE_TEST_CHECK(fs::exists(root/"content"/"Destination"/"AgentFolder"));
+    changes=info()["changes"];Json moveEdit;
+    for(const auto& change:changes.items())if(change.getStr("op")=="studio_asset_move_commit"&&change.getStr("scope")=="assets")moveEdit=change;
+    AIVERSE_TEST_CHECK(moveEdit.getBool("canUndo"));
+    AIVERSE_TEST_CHECK(!step(moveEdit,"undo",moveEdit.getStr("historyVersion")).has("error"));
+    AIVERSE_TEST_CHECK(fs::exists(root/"content"/"AgentFolder"));
+    // S6i.2: linked exact history navigation does not append a new edit.
+    assets=agent("studio_asset_history",Json::object());
+    Json linked=Json::object();linked.set("expectedProject",assets["project"]);
+    auto linkedHistory=agent("studio_agent_history_list",linked);
+    AIVERSE_TEST_CHECK(linkedHistory["items"].isArray());
+    Json currentMove;
+    for(const auto& row:linkedHistory["items"].items())
+        if(row.getStr("historyId")==moveEdit.getStr("historyId"))currentMove=row;
+    AIVERSE_TEST_CHECK(currentMove.getBool("canRedo"));
+    Json navigate=linked;navigate.set("scope",Json::string("assets"));
+    navigate.set("historyId",currentMove["historyId"]);navigate.set("expectedVersion",currentMove["historyVersion"]);
+    navigate.set("direction",Json::string("redo"));
+    AIVERSE_TEST_CHECK(agent("studio_agent_history_step",navigate).has("error"));
+    navigate.set("confirmed",Json::fromBool(true));
+    AIVERSE_TEST_CHECK(agent("studio_agent_history_step",navigate).getBool("ok"));
+    AIVERSE_TEST_CHECK(fs::exists(root/"content"/"Destination"/"AgentFolder"));
+    AIVERSE_TEST_CHECK(agent("studio_agent_history_step",navigate).has("error"));
+    const auto linkedAfter=agent("studio_agent_history_list",linked);
+    AIVERSE_TEST_CHECK(linkedAfter.getInt("total")==linkedHistory.getInt("total"));
+    for(const auto& row:linkedAfter["items"].items())
+        if(row.getStr("historyId")==moveEdit.getStr("historyId"))currentMove=row;
+    navigate.set("direction",Json::string("undo"));navigate.set("expectedVersion",currentMove["historyVersion"]);
+    AIVERSE_TEST_CHECK(agent("studio_agent_history_step",navigate).getBool("ok"));
+    AIVERSE_TEST_CHECK(fs::exists(root/"content"/"AgentFolder"));
+    // S6i: authenticated linked readback, confirmed reversible delete, restore
+    // and quota CAS. No arbitrary path or permanent purge adapter.
+    assets=agent("studio_asset_history",Json::object());
+    Json recovery=Json::object();recovery.set("expectedProject",assets["project"]);
+    AIVERSE_TEST_CHECK(!agent("studio_asset_recovery_storage",recovery).has("error"));
+    const auto trash=agent("studio_asset_trash_list",recovery);
+    AIVERSE_TEST_CHECK(trash["items"].isArray());
+    Json deps=recovery;deps.set("guid",Json::string(guid));deps.set("depth",Json::number(int64_t(16)));
+    AIVERSE_TEST_CHECK(agent("studio_asset_dependencies",deps)["items"].isArray());
+    deps.set("guid",Json::string("../outside"));
+    AIVERSE_TEST_CHECK(agent("studio_asset_dependencies",deps).has("error"));
+    Json deletion=recovery;deletion.set("guid",Json::string(guid));deletion.set("expectedVersion",assets["version"]);
+    AIVERSE_TEST_CHECK(agent("studio_asset_delete",deletion).has("error")&&fs::exists(root/"content"/"AgentFolder"));
+    deletion.set("confirmed",Json::fromBool(true));
+    const auto deleted=agent("studio_asset_delete",deletion);
+    AIVERSE_TEST_CHECK(!deleted.has("error")&&deleted.getBool("historyRecorded")&&!fs::exists(root/"content"/"AgentFolder"));
+    Json restore=recovery;restore.set("id",Json::string(fs::path(deleted.getStr("backup")).parent_path().filename().string()));
+    const auto restoreReview=agent("studio_asset_trash_restore_review",restore);
+    AIVERSE_TEST_CHECK(!restoreReview.has("error")&&!restoreReview.getStr("token").empty());
+    restore.set("token",restoreReview["token"]);restore.set("expectedVersion",restoreReview["version"]);
+    AIVERSE_TEST_CHECK(agent("studio_asset_trash_restore",restore).has("error"));
+    restore.set("confirmed",Json::fromBool(true));
+    AIVERSE_TEST_CHECK(!agent("studio_asset_trash_restore",restore).has("error")&&fs::exists(root/"content"/"AgentFolder"));
+    Json quota=recovery;quota.set("expectedMiB",Json::number(int64_t(0)));quota.set("quotaMiB",Json::number(int64_t(8)));
+    AIVERSE_TEST_CHECK(agent("studio_asset_recovery_quota_set",quota).getInt("quotaMiB")==8);
+    AIVERSE_TEST_CHECK(agent("studio_asset_recovery_quota_set",quota).has("error"));
+    AIVERSE_TEST_CHECK(agent("studio_asset_trash_purge",restore).has("error"));
+    const auto owners=agent("studio_owner_history",recovery);
+    AIVERSE_TEST_CHECK(!owners.has("error")&&owners["map"].isObject()&&owners["assets"].isObject());
+    AIVERSE_TEST_CHECK(!owners.getStr("ownerVersion").empty());
+    Json navigation=recovery;navigation.set("scope",Json::string("map"));
+    navigation.set("direction",Json::string("undo"));navigation.set("expectedVersion",Json::string("stale"));
+    navigation.set("confirmed",Json::fromBool(true));
+    AIVERSE_TEST_CHECK(agent("studio_owner_history_step",navigation).has("error"));
+    Json save=recovery;save.set("expectedMap",owners["mapPath"]);
+    save.set("expectedOwnerVersion",Json::string("stale"));save.set("confirmed",Json::fromBool(true));
+    AIVERSE_TEST_CHECK(agent("studio_save_documents",save).has("error"));
+    save.set("expectedOwnerVersion",owners["ownerVersion"]);save.set("confirmed",Json::fromBool(false));
+    AIVERSE_TEST_CHECK(agent("studio_save_documents",save).has("error"));
+    AIVERSE_TEST_CHECK(agent("studio_asset_history_reset_review",recovery).has("error")); // healthy history
+    AIVERSE_TEST_CHECK(agent("studio_asset_history_reset_apply",recovery).has("error")); // native-only
+
+    client.close();session.openProject(root.string());
+    AIVERSE_TEST_CHECK(step(assetEdit,"undo",assetEdit.getStr("historyVersion")).has("error"));
+    fs::remove_all(root);
+}
+void projectHistoryBudgetContract(){
+    using namespace aiverse::editor;
+    ProjectHistory history;
+    for(size_t i=0;i<ProjectHistory::MaxSteps+10;++i)
+        history.record({{"fixture.json",std::to_string(i),std::to_string(i+1)}},"Edit");
+    AIVERSE_TEST_CHECK(history.steps().size()==ProjectHistory::MaxSteps&&history.position()==ProjectHistory::MaxSteps);
+    history.advance(false);const auto version=history.version();
+    history.record({{"fixture.json","same","same"}},"No-op");
+    AIVERSE_TEST_CHECK(history.version()==version&&history.canRedo());
+    history.record({{"fixture.json","before","branch"}},"Branch");
+    AIVERSE_TEST_CHECK(!history.canRedo()&&history.steps().size()==ProjectHistory::MaxSteps);
+    history.record({{"fixture.json",std::string(ProjectHistory::MaxBytes,'x'),"large"}},"Oversize");
+    AIVERSE_TEST_CHECK(history.steps().empty()&&history.bytes()==0);
+}
 void projectFileRecoveryWorkflow() {
     using namespace aiverse;
     namespace fs=std::filesystem;
@@ -506,6 +1116,9 @@ void authoredEntityWorkflow() {
        const size_t depth=session.workspace().map.undoDepth();
        std::string err;
        AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err));
+       AIVERSE_TEST_CHECK(session.strokeActive()&&session.workspace().map.undoDepth()==depth);
+       AIVERSE_TEST_CHECK(call("studio.undo").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.history")["result"].getBool("strokeActive"));
        AIVERSE_TEST_CHECK(session.strokeDab(8,4,&err) && session.strokeDab(12,4,&err));
        AIVERSE_TEST_CHECK(session.strokeEnd(&err));
        AIVERSE_TEST_CHECK(session.workspace().map.undoDepth()==depth+1);
@@ -520,6 +1133,14 @@ void authoredEntityWorkflow() {
        const auto steps2=call("studio.history")["result"]["steps"];
        AIVERSE_TEST_CHECK(steps2[steps2.size()-1].getStr("label")=="Scatter objects");
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && session.workspace().map.data.entities.size()==entities);
+       const auto beforeCancel=session.workspace().map.toJson();
+       const auto redoBefore=session.workspace().map.redoDepth();
+       AIVERSE_TEST_CHECK(session.strokeBegin(5,5,&err));
+       AIVERSE_TEST_CHECK(session.strokeCancel()&&!session.strokeActive());
+       AIVERSE_TEST_CHECK(session.workspace().map.toJson()==beforeCancel&&session.workspace().map.redoDepth()==redoBefore);
+       AIVERSE_TEST_CHECK(session.strokeBegin(5,5,&err));
+       AIVERSE_TEST_CHECK(!session.strokeDab(1e20,0,&err)&&!session.strokeActive());
+       AIVERSE_TEST_CHECK(session.workspace().map.toJson()==beforeCancel&&session.workspace().map.redoDepth()==redoBefore);
        // Path tool without a road type refuses to start.
        call("studio.sceneBrush",R"({"kind":"road","roadType":""})");
        AIVERSE_TEST_CHECK(!session.strokeBegin(5,5,&err) && !err.empty());
@@ -533,6 +1154,9 @@ void authoredEntityWorkflow() {
        const std::string type0=doc.data.entities[0].type;
        const size_t count=doc.data.entities.size(),depth=doc.undoDepth();
        const std::string body=std::string(R"({"entities":[{"index":0,"type":")")+type0+R"(","x":7.5,"z":9.25},{"index":999,"type":"__nope__","x":1,"z":1},{"index":0,"removed":false}]})";
+       auto dry=Json::parse(body);dry.set("dryRun",Json::fromBool(true));
+       const auto preview=call("studio.keepPlayChanges",dry.dump().c_str());
+       AIVERSE_TEST_CHECK(!preview.has("error") && preview["result"]["moved"].integer()==1 && doc.undoDepth()==depth);
        const auto kept=call("studio.keepPlayChanges",body.c_str());
        AIVERSE_TEST_CHECK(!kept.has("error") && kept["result"]["moved"].integer()==1 && kept["result"]["skipped"].integer()==1 && kept["result"]["removed"].integer()==0);
        AIVERSE_TEST_CHECK(doc.data.entities[0].x==7.5f && doc.data.entities[0].z==9.25f && doc.data.entities.size()==count && doc.undoDepth()==depth+1);
@@ -713,6 +1337,9 @@ void entityWorkflow() {
         const auto plan=studio::studioGameLaunch(session.workspace(),true);
         AIVERSE_TEST_CHECK(plan.map && *plan.map==0);
         AIVERSE_TEST_CHECK(plan.project==session.workspace().project.dir);
+        AIVERSE_TEST_CHECK(studio::studioPlaySourceMatches(plan,session.workspace()));
+        auto stalePlan=plan;++stalePlan.sourceRevision;
+        AIVERSE_TEST_CHECK(!studio::studioPlaySourceMatches(stalePlan,session.workspace()));
         AIVERSE_TEST_CHECK(!studio::studioGameLaunch(session.workspace(),false).map);
         const auto catalog=call("studio.entityCatalog");
         AIVERSE_TEST_CHECK(catalog["result"].getBool("mapEntities"));
@@ -837,6 +1464,6 @@ int main() {
     planetWorldProcessAuthoringWorkflow();
     authoredEntityWorkflow();
     entityWorkflow();
-    projectFileRecoveryWorkflow();
+    mapCompoundHistoryContract();mapHistoryPersistenceContract();projectFileEditContract();projectDocumentJournalContract();projectOwnerSaveContract();projectHistoryContract();projectHistoryPersistenceContract();projectHistoryBudgetContract();assetHistorySessionContract();agentScopedHistoryContract();projectFileRecoveryWorkflow();
     std::cout << "studio session contract PASS\n";
 }

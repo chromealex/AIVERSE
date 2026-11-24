@@ -48,24 +48,40 @@ export interface StudioAssetList {
   folders?: StudioAsset[];
   root?: 'content';
 }
+export type StudioTrashAction = 'restore' | 'purge';
+export interface StudioTrashEntry {
+  id:string; status:'retained'|'invalid'; path?:string; guid?:string;
+  kind?:'deleted'|'created'|'replacement'; role?:string; directory?:boolean; bytes?:number; slotBytes?:number; historyProtected?:boolean; error?:string;
+}
+export interface StudioRecoveryStorage {trashBytes:number;checkpointBytes:number;journalBytes:number;quotaMiB:number;overQuota:boolean;warning:boolean;availableBytes:number}
+export interface StudioTrashPage {items:StudioTrashEntry[];total:number;truncated:boolean;recoveryPending:boolean;recoveryReason?:string;historyWarning?:string;storage?:StudioRecoveryStorage;storageError?:string}
+export interface StudioAssetHistoryResetReview {token:string;version:string;reason:string;checkpointBytes:number;legacyMarker:boolean}
+export interface StudioTrashReview extends StudioTrashEntry {action:StudioTrashAction;token:string;version:string}
+export interface StudioTrashBatchReview {items:StudioTrashEntry[];bytes:number;token:string;version:string}
+export interface StudioTrashBatchResult {ok:boolean;removed:string[];failedId?:string;error?:string}
 export interface StudioAssetTransferItem {
   id: number; name: string; from: string; to: string; directory: boolean;
-  conflict: string; guid: string | null;
+  conflict: string; guid: string | null; replacementAvailable?: boolean;
 }
 export interface StudioAssetTransferPlan {
   token: string; source: 'internal' | 'external'; items: StudioAssetTransferItem[];
   references?: Array<{ id: number; document: string; owner: string; field: string;
-    from: string; to: string; writable: boolean }>;
+    from: string; to: string; writable: boolean; validateOnApply?:boolean; preservesDefault?:boolean; repairCandidate?:boolean }>;
 }
 export type StudioAssetConflictAction =
   'import' | 'skip' | 'keep-both' | 'replace' | 'new-guid';
 export interface StudioAssetTransferResult {
+  historyRecorded?: boolean;
   files: string[]; issues: Array<{name: string; message: string}>;
   repairedMaterialReferences?: number;
+  repairedResourceDocuments?: number;
 }
+export interface StudioDependencyCoverage {gltf:number;glb:number;obj:number;dae:number;opaqueGlb:number;unsupportedModels:number;symlinks:number;unsupportedUris:number;missingLibraries:number;embedded:number;complete:boolean;note:string}
+export interface StudioDependencyPage {items:StudioAssetReference[];token:string;total:number;incoming:number;outgoing:number;unresolved:number;coverage:StudioDependencyCoverage;depth:number;path:string;guid:string}
 export interface StudioAssetReference {
   document: string; owner: string; field: string; path: string;
   guid: string; writable: boolean;
+  direction?: 'incoming' | 'outgoing'; depth?: number; cycle?: boolean;
 }
 export interface StudioAssetDetail extends StudioAsset {
   importer: string; guid: string; directory: boolean; settings: Record<string,unknown>;
@@ -80,7 +96,7 @@ export interface StudioShaderGraphDocument {
   nodes: number; samples: number;
 }
 export interface StudioSnapshot {
-  project: { name: string; path: string; dirty: boolean };
+  project: { name: string; path: string; dirty: boolean; historyVersion?: string; assetHistoryVersion?: string };
   scene: { name: string; entities: StudioEntity[] };
   selectedId: string | null;
   /** Whole selection, primary (selectedId) last. */
@@ -97,13 +113,14 @@ export interface StudioSnapshot {
 export interface RenderLightingSettings { version: 1; indirect: 'off'|'cpu'|'auto'|'gpu'; direct: 'legacy'|'luma'; quality: 'balanced'|'high'|'ultra'; probes: number; layers: number; spacing: number; samples: number; distance: number; cpuBudgetMs: number }
 export interface StudioEntityCatalog { types: Array<{id: string; name: string}>; mapEntities: boolean }
 export interface StudioProjectState { maps: Array<{file: string; title: string}>; currentMap: string; canCreateMap: boolean; maxMapSize: number }
-export interface StudioRuntimeRow {ref:string; name:string; kind:string; owner:number; parent:string; health:number; components:string[]}
+export interface StudioRuntimeOwnership {state:'untracked'|'invalid-tag'|'ledger-unavailable'|'missing-record'|'retired'|'live-record'; stableId?:string; cell?:[number,number,number];revision?:string;dormantMarker:boolean}
+export interface StudioRuntimeRow {ref:string; name:string; kind:string; owner:number; parent:string; health:number; components:string[];ownership?:StudioRuntimeOwnership}
 export interface StudioRuntimePage {active:boolean; epoch:string; tick:number; rows:StudioRuntimeRow[]; total:number}
-export interface StudioRuntimeEntity {ref:string; epoch:string; tick:number; components:Record<string,unknown>; stats?:Record<string,unknown>}
+export interface StudioRuntimeEditField {id:'hp'|'energy';title:string;raw:string;value:number;min:number;max:number}
+export interface StudioRuntimeEntity {ref:string; epoch:string; tick:number; components:Record<string,unknown>; stats?:Record<string,unknown>;ownership?:StudioRuntimeOwnership;componentSchemas?:Record<string,unknown>;runtimeEditAvailable?:boolean;runtimeFields?:StudioRuntimeEditField[];runtimeDebugEdited?:boolean}
 export interface StudioGameDeviceChrome { corner:number; cutout?:{x:number;y:number;width:number;height:number;radius:number}; insets:{left:number;top:number;right:number;bottom:number} }
 export interface StudioGameDevice { id:string; landscape:boolean; safeArea:boolean; width:number; height:number; touch:boolean; chrome?:StudioGameDeviceChrome }
 export interface StudioGameDeviceOption { id:string; name:string; group:string }
-export interface StudioGameState { device:StudioGameDevice; paused: boolean; canControl: boolean; canStep: boolean; active: boolean; loading: boolean; progress: number; inMatch: boolean; tick: number; error: string }
 export interface EvolveLiveRegion { id:string; minXcm:number; minZcm:number; maxXcm:number; maxZcm:number; fertility:number; pollution:number; succession:number; durability:number }
 export interface PlanetLiveProcessSummary {sampleTick:number;truncated:boolean;rejected:number;cells:unknown[]}
 export interface PlanetEvolveLiveRegion {id:string;body:string;fertility:number;pollution:number;succession:number;durability:number;chartClipped:boolean;edges:(number[]|null)[][]}
@@ -158,10 +175,12 @@ export type WorldProcessDiagnostics = {active:false} | {
   lanes:Record<'evolve'|'crowd'|'society',WorldProcessDiagnosticLane>;
 };
 export type EvolveLayer = 'combined' | 'fertility' | 'pollution' | 'succession' | 'durability' | 'off';
-export type StudioMethod = 'studio.worldProcessDiagnostics' | 'studio.evolveState' | 'studio.evolveLayer' | 'studio.worldProcessAreaPreview' | 'studio.worldProcessGroupPivot' | 'studio.worldProcessAreaBatchResize' | 'studio.renderLighting' | 'studio.renderLightingSet' | 'studio.nereidFlow' | 'studio.nereidFlowSet' | 'studio.gameEntities' | 'studio.gameInspect' | 'studio.gameDevices' | 'studio.gameDevice' | 'studio.gameControl' | 'studio.gameStart' | 'studio.gameStop' | 'studio.gameState' | 'studio.project' | 'studio.newMap' | 'studio.openMap' | 'studio.saveAs' | 'studio.entityCatalog' | 'studio.entityCreate' | 'studio.entityDelete' | 'studio.entityDuplicate' | 'studio.snapshot' | 'studio.propertiesFor' | 'studio.inspect' | 'studio.componentCatalog' | 'studio.componentAdd' | 'studio.componentRemove' | 'studio.setProperties' | 'studio.entitiesDelete' | 'studio.entitiesDuplicate' | 'studio.entityFlags' | 'studio.assetPlace' | 'studio.rules' | 'studio.rulesSet' | 'studio.windowOpen' | 'studio.windowClose' | 'studio.windowBroadcast' | 'studio.windowTitle' | 'studio.buildInfo' | 'studio.buildToolchain' | 'studio.buildStart' | 'studio.buildLog' | 'studio.buildEstimate' | 'studio.buildReveal' | 'studio.entitiesAlign' | 'studio.history' | 'studio.historyJump' | 'studio.ops' | 'studio.op' | 'studio.agentInfo' | 'studio.sceneBrush' | 'studio.splineEdit' | 'studio.hub' | 'studio.hubTemplates' | 'studio.hubOpen' | 'studio.hubCreate' | 'studio.stats' | 'studio.gpuStats' | 'studio.keepPlayChanges' | 'studio.extensions' | 'studio.extensionAction' | 'studio.extensionCreate' | 'studio.attachmentsGet' | 'studio.attachmentsSet' | 'studio.agentStart' | 'studio.agentStop' | 'studio.agentReset' | 'studio.inputGet' | 'studio.inputSet' | 'studio.assetAudit' | 'studio.assetThumbnail' | 'studio.assetUsage' | 'studio.entityMove' | 'studio.select' | 'studio.setProperty' | 'studio.save' | 'studio.undo' | 'studio.redo' | 'studio.viewportRect' | 'studio.viewportInput' | 'studio.openProject' | 'studio.assets' | 'studio.assetByGuid' | 'studio.assetReferences' | 'studio.assetMetaPatch' | 'studio.assetFolderCreate' | 'studio.assetMovePreview' | 'studio.assetImportPreview' | 'studio.assetTransferCommit' | 'studio.lighting' | 'studio.lightingSet' | 'studio.lightAdd' | 'studio.lightUpdate' | 'studio.lightDelete' | 'studio.materials' | 'studio.materialPatch' | 'studio.materialCreate' | 'studio.materialPreview' | 'studio.shaderGraphs' | 'studio.shaderGraphGet' | 'studio.shaderGraphValidate' | 'studio.shaderGraphSave' | 'studio.shaderGraphCatalog' | 'studio.facialRigList' | 'studio.facialRigGet' | 'studio.facialRigValidate' | 'studio.facialRigSave' | 'studio.facialPreviewBind' | 'studio.facialPreviewControls' | 'studio.facialPreviewInfo' | 'studio.humanAppearanceInfo' | 'studio.humanAppearanceApply' | 'studio.humanAppearanceSave' | 'studio.humanAppearanceLoad' | 'studio.humanAppearanceList' | 'studio.humanAppearanceFromAsset' | 'studio.humanWardrobeFromAsset' | 'studio.humanPreviewAnimation' | 'studio.humanStudioLighting' | 'studio.humanFaceFitScan' | 'studio.humanHeadBodyImport' | 'studio.humanWardrobeInfo' | 'studio.humanCharacterBuild' | 'studio.humanCharacterBuildStatus' | 'studio.wind' | 'studio.windSet' | 'studio.humanAppearanceThumbnails' | 'studio.humanLookCapture' | 'studio.humanCamera' | 'studio.humanCompare' | 'studio.humanRuler' | 'studio.humanClipList' | 'studio.humanClipAdd' | 'studio.humanClipRemove' | 'studio.humanMakeupAlign' | 'studio.humanTryOn' | 'studio.humanPlaceInGame' | 'studio.humanPackageList' | 'studio.humanPackageExport' | 'studio.humanPackageImport' | 'studio.humanFacePick' | 'studio.humanSculpt' | 'studio.humanSculptStroke' | 'studio.humanSculptUndo' | 'studio.humanCreatorInfo' | 'studio.humanCreatorSet' | 'studio.humanCreatorPreset' | 'studio.humanCreatorUndo' | 'studio.humanCreatorRedo' | 'studio.humanCreatorRoute' | 'studio.humanCreatorRig' | 'studio.humanCreatorSkin' | 'studio.humanCreatorNew' | 'studio.humanCreatorSave' | 'studio.humanCreatorLoad' | 'studio.humanCreatorList' | 'studio.humanCreatorPreview' | 'studio.humanMetaHuman';
-export interface StudioSceneBrush { armed: boolean; kind: 'terrain' | 'paint' | 'tiles' | 'field' | 'objects' | 'road' | 'river';
+export interface StudioPlayReview {token:string;tick:number;moved:number;amounts:number;removed:number;skipped:number}
+export interface StudioGameState { device:StudioGameDevice; epoch?:string;canReviewPlayChanges?:boolean;runtimeDebugEdited?:boolean; paused: boolean; canControl: boolean; canStep: boolean; active: boolean; loading: boolean; progress: number; inMatch: boolean; tick: number; error: string }
+export type StudioMethod = 'studio.worldProcessDiagnostics' | 'studio.evolveState' | 'studio.evolveLayer' | 'studio.worldProcessAreaPreview' | 'studio.worldProcessGroupPivot' | 'studio.worldProcessAreaBatchResize' | 'studio.renderLighting' | 'studio.renderLightingSet' | 'studio.nereidFlow' | 'studio.nereidFlowSet' | 'studio.gameEntities' | 'studio.gameInspect' | 'studio.gameDevices' | 'studio.gameDevice' | 'studio.gameControl' | 'studio.gameStart' | 'studio.gameStop' | 'studio.gameState' | 'studio.project' | 'studio.newMap' | 'studio.openMap' | 'studio.saveAs' | 'studio.entityCatalog' | 'studio.entityCreate' | 'studio.entityDelete' | 'studio.entityDuplicate' | 'studio.snapshot' | 'studio.propertiesFor' | 'studio.inspect' | 'studio.componentCatalog' | 'studio.componentAdd' | 'studio.componentRemove' | 'studio.setProperties' | 'studio.entitiesDelete' | 'studio.entitiesDuplicate' | 'studio.entityFlags' | 'studio.assetPlace' | 'studio.rules' | 'studio.rulesSet' | 'studio.windowOpen' | 'studio.windowClose' | 'studio.windowBroadcast' | 'studio.windowTitle' | 'studio.buildInfo' | 'studio.buildToolchain' | 'studio.buildStart' | 'studio.buildLog' | 'studio.buildEstimate' | 'studio.buildReveal' | 'studio.entitiesAlign' | 'studio.history' | 'studio.historyJump' | 'studio.ops' | 'studio.op' | 'studio.agentInfo' | 'studio.sceneBrush' | 'studio.splineEdit' | 'studio.hub' | 'studio.hubTemplates' | 'studio.hubOpen' | 'studio.hubCreate' | 'studio.stats' | 'studio.gpuStats' | 'studio.keepPlayChanges' | 'studio.extensions' | 'studio.extensionAction' | 'studio.extensionCreate' | 'studio.attachmentsGet' | 'studio.attachmentsSet' | 'studio.agentStart' | 'studio.agentStop' | 'studio.agentReset' | 'studio.inputGet' | 'studio.inputSet' | 'studio.assetAudit' | 'studio.assetThumbnail' | 'studio.assetUsage' | 'studio.entityMove' | 'studio.select' | 'studio.setProperty' | 'studio.save' | 'studio.undo' | 'studio.redo' | 'studio.viewportRect' | 'studio.viewportInput' | 'studio.openProject' | 'studio.assets' | 'studio.assetByGuid' | 'studio.assetReferences' | 'studio.assetMetaPatch' | 'studio.assetFolderCreate' | 'studio.assetMovePreview' | 'studio.assetImportPreview' | 'studio.assetTransferCommit' | 'studio.lighting' | 'studio.lightingSet' | 'studio.lightAdd' | 'studio.lightUpdate' | 'studio.lightDelete' | 'studio.materials' | 'studio.materialPatch' | 'studio.materialCreate' | 'studio.materialPreview' | 'studio.shaderGraphs' | 'studio.shaderGraphGet' | 'studio.shaderGraphValidate' | 'studio.shaderGraphSave' | 'studio.shaderGraphCatalog' | 'studio.facialRigList' | 'studio.facialRigGet' | 'studio.facialRigValidate' | 'studio.facialRigSave' | 'studio.facialPreviewBind' | 'studio.facialPreviewControls' | 'studio.facialPreviewInfo' | 'studio.humanAppearanceInfo' | 'studio.humanAppearanceApply' | 'studio.humanAppearanceSave' | 'studio.humanAppearanceLoad' | 'studio.humanAppearanceList' | 'studio.humanAppearanceFromAsset' | 'studio.humanWardrobeFromAsset' | 'studio.humanPreviewAnimation' | 'studio.humanStudioLighting' | 'studio.humanFaceFitScan' | 'studio.humanHeadBodyImport' | 'studio.humanWardrobeInfo' | 'studio.humanCharacterBuild' | 'studio.humanCharacterBuildStatus' | 'studio.wind' | 'studio.windSet' | 'studio.humanAppearanceThumbnails' | 'studio.humanLookCapture' | 'studio.humanCamera' | 'studio.humanCompare' | 'studio.humanRuler' | 'studio.humanClipList' | 'studio.humanClipAdd' | 'studio.humanClipRemove' | 'studio.humanMakeupAlign' | 'studio.humanTryOn' | 'studio.humanPlaceInGame' | 'studio.humanPackageList' | 'studio.humanPackageExport' | 'studio.humanPackageImport' | 'studio.humanFacePick' | 'studio.humanSculpt' | 'studio.humanSculptStroke' | 'studio.humanSculptUndo' | 'studio.humanCreatorInfo' | 'studio.humanCreatorSet' | 'studio.humanCreatorPreset' | 'studio.humanCreatorUndo' | 'studio.humanCreatorRedo' | 'studio.humanCreatorRoute' | 'studio.humanCreatorRig' | 'studio.humanCreatorSkin' | 'studio.humanCreatorNew' | 'studio.humanCreatorSave' | 'studio.humanCreatorLoad' | 'studio.humanCreatorList' | 'studio.humanCreatorPreview' | 'studio.humanMetaHuman' | 'studio.gameProfile' | 'studio.gameRegions' | 'studio.gameEdit' | 'studio.projectHistory' | 'studio.projectHistoryStep' | 'studio.assetHistory' | 'studio.assetHistoryStep' | 'studio.agentHistoryStep' | 'studio.agentUndoAll' | 'studio.agentBatchPreview' | 'studio.agentBatchApply' | 'studio.previewPlayChanges' | 'studio.assetDependencyPage' | 'studio.assetDelete' | 'studio.assetRecoveryQuota' | 'studio.assetTrashBatchReview' | 'studio.assetTrashBatchApply' | 'studio.assetHistoryResetReview' | 'studio.assetHistoryResetApply' | 'studio.assetTrashList' | 'studio.assetTrashReview' | 'studio.assetTrashApply';
+export interface StudioSceneBrush { armed: boolean; kind: 'terrain' | 'paint' | 'tiles' | 'field' | 'objects' | 'road' | 'river' | 'caverns';
   op: 'raise' | 'lower' | 'smooth' | 'flatten' | 'noise' | 'erode'; radius: number; strength: number; layer: number; tile: string; field: string;
-  fieldMode: 'set' | 'add' | 'max' | 'erase'; value: number; type: string; owner: number; count: number; spread: number; roadType: string; width: number }
+  fieldMode: 'set' | 'add' | 'max' | 'erase'; value: number; type: string; owner: number; count: number; spread: number; roadType: string; width: number; caveMode?: 'carve'|'fill'; caveY?: number; caveSurface?: boolean }
 export interface StudioStats { map: string; width: number; height: number; entities: number; players: number; roads: number; ruleTypes: number;
   undoSteps: number; dirty: boolean; sceneFrameMs: number; sceneFrames: number;
   types: Array<{ type: string; count: number }>; owners: Array<{ owner: number; name: string; count: number }> }
@@ -177,9 +196,69 @@ export interface StudioTemplate { id: string; name: string; description: string;
   source?: 'engine' | 'catalog'; official?: boolean; version?: string; size?: number; preview?: string }
 export interface StudioHub { recent: Array<{ dir: string; name: string; lastOpened: number; exists: boolean }>;
   templates: StudioTemplate[]; defaultLocation: string }
-export interface StudioAgentChange { op: string; args: string; ok: boolean; undoable: boolean; position: number; error?: string }
+export interface StudioAgentChange { op: string; args: string; ok: boolean; undoable: boolean; position: number; error?: string;
+  scope?:'map'|'project'|'assets'|'untracked'; historyId?:string; historyVersion?:string; applied?:boolean; canUndo?:boolean; canRedo?:boolean }
+export interface StudioAgentBatch {direction:'undo'|'redo';available:boolean;reason?:string;token?:string;steps?:Array<{scope:'map'|'project'|'assets';historyId:string}>}
 export interface StudioAgentInfo { lines: string[]; total: number; running: boolean; port: number; clients: number; changes: StudioAgentChange[];
-  startPosition: number; cli: string; mcp: boolean; conversation: boolean; result?: string }
+  startPosition: number; historyVersion?:string; batchUndo?:StudioAgentBatch; batchRedo?:StudioAgentBatch; cli: string; mcp: boolean; conversation: boolean; result?: string }
+// World maintenance uses decimal strings for uint64 values, never JS numbers.
+export interface StudioWorldRegion {cell:[number,number,number];live:number;materialized:number}
+export interface StudioWorldStatus {
+  mode:'offline';tick:number;sequence:string;generation:string;revision:string;
+  historyFloor:string;retiredFloor:string;nextIdentity:string;
+  live:number;tombstones:number;capacity:number;materialized:number;
+  ledgerArchiveBytes:string;checkpointBytes:string;regionCount:number;
+  regionsTruncated:boolean;regions:StudioWorldRegion[];error?:string;
+}
+/** Read-only snapshot of the hosted Game ECS, never a finalized disk save. */
+export type StudioGameProfile =
+  {available:false;epoch:string;reason:string} |
+  {available:true;epoch:string;active:boolean;paused:boolean;target:number;tick:number;tickRate:number;
+    historyMs:number[];totalMs:number;systemsMs:number;systemCount:number;
+    rows:Array<{index:number;name:string;totalMs:number}>};
+export type StudioSimulationLodDiagnostics =
+  {available:false} | {available:true;tick:number;hot:number;warm:number;cold:number;executed:number;deferred:number};
+export type StudioLiveWorldRegions =
+  {active:boolean;available:false;epoch:string;tick:number;reason:string} |
+  (Pick<StudioWorldStatus,'revision'|'historyFloor'|'retiredFloor'|'nextIdentity'|'live'|'tombstones'|'capacity'|'materialized'|'ledgerArchiveBytes'|'regionCount'|'regionsTruncated'|'regions'> &
+  {active:true;available:true;epoch:string;tick:number;durabilityKnown:false;simulationLod:StudioSimulationLodDiagnostics});
+export interface StudioWorldBackup {
+  generation:string;active:boolean;status:string;sequence?:string;revision?:string;
+}
+export interface StudioWorldRetention {
+  valid:boolean;overBudget:boolean;retainedBytes:string;removeGenerations:string[];
+}
+export interface StudioWorldCleanup extends StudioWorldRetention {
+  ok:boolean;removed:string[];failedGeneration:string;
+}
+export interface StudioWorldPage {
+  revision:string;historyFloor:string;bootstrap:boolean;resetRequired:boolean;more:boolean;next:string;
+  records:Array<{id:string;revision:string;cell:[number,number,number];live:boolean}>;
+}
+export interface StudioWorldJob {
+  state:'idle'|'running'|'succeeded'|'failed'|'cancelled';
+  id?:string;project?:string;operation?:string;phase?:string;
+  cancelRequested?:boolean;cancelAllowed?:boolean;error?:string;result?:unknown;
+  progress?:{checkpointBytes?:string;checkpointTotal?:string;walBytes?:string;frames?:string;sequence?:string;assetsRead?:string;assetsTotal?:string};
+}
+export interface StudioSimulationLodConfig {
+  enabled:boolean;hotCells:number;warmCells:number;warmTicks:number;coldTicks:number;
+}
+export interface StudioSimulationLodSettings extends StudioSimulationLodConfig {
+  authored:boolean;requiresRestart:boolean;
+}
+export interface StudioWorldOps {
+  world_save_list:{params:Record<string,never>;result:{worlds:string[]}};
+  world_save_create:{params:{world:string;seed:string};result:StudioWorldStatus};
+  world_save_status:{params:{world:string;seed:string};result:StudioWorldStatus};
+  world_save_checkpoint:{params:{world:string;seed:string;retainRevisions:string};result:StudioWorldStatus};
+  world_save_backups:{params:{world:string;seed:string;verify:boolean};result:{complete:boolean;backups:StudioWorldBackup[]}};
+  world_save_retention_preview:{params:{world:string;seed:string;keepPrevious:string;maxBytes:string};result:StudioWorldRetention};
+  world_save_retention_apply:{params:{world:string;seed:string;keepPrevious:string;maxBytes:string;expectedGenerations:string[]};result:StudioWorldCleanup};
+  world_save_fork:{params:{world:string;seed:string;generation:string;newWorld:string};result:{ok:boolean;world:string}};
+  world_save_page:{params:{world:string;seed:string;after:string;limit:string;bootstrap:boolean;expectedRevision:string};result:StudioWorldPage};
+}
+
 export interface StudioToolOp { name: string; description: string; schema: unknown; readOnly: boolean }
 export interface StudioInputControl { device: string; code: string | number; deviceIndex?: number }
 export interface StudioInputAsset {
@@ -218,8 +297,11 @@ export interface StudioParams {
   'studio.gameStart': {entry: 'map' | 'menu'; fromScene?: boolean};
   'studio.gameStop': Record<string,never>;
   'studio.gameState': Record<string,never>;
-  'studio.gameEntities': {offset:number;limit:number;query:string};
-  'studio.gameInspect': {epoch:string;ref:string};
+  'studio.gameProfile': {expectedProject:string;action:'status'|'start'|'stop';steps?:number};
+  'studio.gameRegions': {expectedProject:string};
+  'studio.gameEntities': {offset:number;limit:number;query:string;expectedProject?:string};
+  'studio.gameInspect': {epoch:string;ref:string;expectedProject?:string};
+  'studio.gameEdit': {expectedProject:string;epoch:string;ref:string;expectedTick:number;field:StudioRuntimeEditField['id'];expectedRaw:string;value:string};
   'studio.gameDevices': Record<string,never>;
   'studio.gameDevice': Pick<StudioGameDevice,'id'|'landscape'|'safeArea'>;
   'studio.gameControl': {action:'pause'|'resume'|'step'|'restart'|'checkpointSave'|'checkpointRestore'|'speed1'|'speed2'|'speed5'|'speed10'|'speed25'|'speed50'|'speed100'};
@@ -299,13 +381,17 @@ export interface StudioParams {
   'studio.buildInfo': Record<string,never>;
   'studio.entitiesAlign': { entityIds: string[]; mode: StudioAlignMode };
   'studio.history': Record<string,never>;
+  'studio.projectHistory': Record<string,never>;
+  'studio.projectHistoryStep': { direction: 'undo' | 'redo'; expectedVersion: string };
+  'studio.assetHistory': Record<string,never>;
+  'studio.assetHistoryStep': { direction: 'undo' | 'redo'; expectedVersion: string };
   'studio.assetThumbnail': { path: string };
   'studio.assetUsage': { path?: string };
-  'studio.historyJump': { position: number };
+  'studio.historyJump': { position: number; expectedVersion?:string };
   /** Tool panel ops (Terrain, Roads, PostFX, ...) with their JSON schemas. */
   'studio.ops': { panel: string };
   /** Run one Workspace op of a tool panel (validated, undoable like an agent edit). */
-  'studio.op': { op: string; params: Record<string, unknown> };
+  'studio.op': { op: string; params: Record<string, unknown>; expectedProject?: string; expectedMap?: string };
   'studio.inputGet': Record<string,never>;
   'studio.inputSet': { asset: StudioInputAsset };
   'studio.assetAudit': Record<string,never>;
@@ -314,7 +400,11 @@ export interface StudioParams {
   'studio.worldProcessDiagnostics': {budget:number;focus?:string};
   'studio.evolveState': Record<string, never>;
   'studio.evolveLayer': {layer?: EvolveLayer;live?:boolean;granularCellCm?:number;liveGravity?:boolean;aetherLayer?:AetherLayer;liveFracture?:boolean;liveMorph?:boolean;liveEcho?:boolean;liveCrowd?:boolean;liveCircuit?:boolean;liveSociety?:boolean};
-  'studio.sceneBrush': Partial<StudioSceneBrush>;
+  'studio.agentHistoryStep': { scope:'map'|'project'|'assets';historyId:string;expectedVersion:string;direction:'undo'|'redo' };
+  'studio.agentUndoAll': {expectedVersion:string};
+  'studio.agentBatchPreview': {direction:'undo'|'redo'};
+  'studio.agentBatchApply': {direction:'undo'|'redo';token:string;confirmed:boolean};
+  'studio.sceneBrush': Partial<StudioSceneBrush> & { expectedProject?: string; expectedMap?: string };
   'studio.splineEdit': { kind: '' | 'road' | 'river' };
   'studio.hub': Record<string,never>;
   'studio.hubTemplates': { all?: boolean; query?: string; refresh?: boolean };
@@ -322,7 +412,8 @@ export interface StudioParams {
   'studio.hubCreate': { template: string; name: string };
   'studio.stats': Record<string,never>;
   'studio.gpuStats': { textures?: boolean };
-  'studio.keepPlayChanges': { removeDead?: boolean };
+  'studio.previewPlayChanges': {expectedProject:string;positions:boolean;amounts:boolean;removeDead:boolean};
+  'studio.keepPlayChanges': {expectedProject:string;token:string};
   'studio.extensions': Record<string,never>;
   'studio.extensionAction': { id: string; value?: string | number | boolean };
   'studio.extensionCreate': Record<string,never>;
@@ -345,10 +436,20 @@ export interface StudioParams {
   'studio.openProject': Record<string, never>;
   'studio.assets': Record<string, never>;
   'studio.assetByGuid': { guid: string };
-  'studio.assetReferences': Record<string, never>;
+  'studio.assetReferences': { path?: string; depth?: number };
+  'studio.assetDependencyPage': {expectedProject:string;path:string;depth:number;direction:'all'|'incoming'|'outgoing';offset:number;limit:number;expectedToken?:string};
   'studio.assetMetaPatch': {guid:string;key:string;value:string|number|boolean};
   'studio.assetFolderCreate': { parent: string; name: string };
-  'studio.assetMovePreview': { paths: string[]; destination: string };
+  'studio.assetDelete': { path:string; guid:string; expectedProject:string; expectedVersion:string; confirmed:boolean };
+  'studio.assetRecoveryQuota': { expectedProject:string;expectedMiB:number;quotaMiB:number };
+  'studio.assetHistoryResetReview': {expectedProject:string};
+  'studio.assetHistoryResetApply': {expectedProject:string;token:string;expectedVersion:string;confirmed:boolean};
+  'studio.assetTrashList': { expectedProject:string;offset:number;limit:number };
+  'studio.assetTrashBatchReview': {expectedProject:string;ids:string[]};
+  'studio.assetTrashBatchApply': {expectedProject:string;ids:string[];token:string;expectedVersion:string;confirmed:boolean};
+  'studio.assetTrashReview': { expectedProject:string;id:string;action:StudioTrashAction };
+  'studio.assetTrashApply': { expectedProject:string;id:string;action:StudioTrashAction;token:string;expectedVersion:string;confirmed:boolean };
+  'studio.assetMovePreview': { paths: string[]; destination: string; newName?: string };
   'studio.assetImportPreview': { destination: string };
   'studio.assetTransferCommit': { token: string; decisions: Array<{id:number;action:StudioAssetConflictAction}> };
   'studio.materials': Record<string, never>;
@@ -390,8 +491,11 @@ export interface StudioResult {
   'studio.gameStart': StudioGameState;
   'studio.gameStop': StudioGameState;
   'studio.gameState': StudioGameState;
+  'studio.gameProfile': StudioGameProfile;
+  'studio.gameRegions': StudioLiveWorldRegions;
   'studio.gameEntities': StudioRuntimePage;
   'studio.gameInspect': StudioRuntimeEntity;
+  'studio.gameEdit': {field:StudioRuntimeEditField;runtimeDebugEdited:true};
   'studio.gameDevices': StudioGameDeviceOption[];
   'studio.gameDevice': StudioGameState;
   'studio.gameControl': StudioGameState;
@@ -470,6 +574,10 @@ export interface StudioResult {
   'studio.buildInfo': StudioBuildInfo;
   'studio.entitiesAlign': StudioSnapshot;
   'studio.history': StudioHistory;
+  'studio.projectHistory': StudioProjectHistory;
+  'studio.projectHistoryStep': StudioProjectHistory & { snapshot: StudioSnapshot };
+  'studio.assetHistory': StudioAssetHistory;
+  'studio.assetHistoryStep': StudioAssetHistory & { snapshot: StudioSnapshot };
   'studio.assetThumbnail': { url?: string; pending?: boolean; none?: boolean };
   'studio.assetUsage': { path?: string; mentions?: Array<{ file: string; line: number; text: string }>; unused?: string[]; scannedFiles?: number };
   'studio.historyJump': StudioHistory & { snapshot: StudioSnapshot };
@@ -481,6 +589,10 @@ export interface StudioResult {
   'studio.worldProcessDiagnostics': WorldProcessDiagnostics;
   'studio.evolveState': EvolveLiveState;
   'studio.evolveLayer': {layer: EvolveLayer;live:boolean;granularCellCm?:number;liveGravity?:boolean;aetherLayer?:AetherLayer;liveFracture?:boolean;liveMorph?:boolean;liveEcho?:boolean;liveCrowd?:boolean;liveCircuit?:boolean;liveSociety?:boolean};
+  'studio.agentHistoryStep': StudioSnapshot;
+  'studio.agentUndoAll': StudioSnapshot;
+  'studio.agentBatchPreview': StudioAgentBatch;
+  'studio.agentBatchApply': StudioSnapshot;
   'studio.sceneBrush': StudioSceneBrush;
   'studio.hub': StudioHub;
   'studio.hubTemplates': { templates: StudioTemplate[]; error?: string };
@@ -494,6 +606,7 @@ export interface StudioResult {
   'studio.extensionCreate': StudioExtensions;
   'studio.attachmentsGet': StudioAttachmentsResult;
   'studio.attachmentsSet': StudioAttachmentsResult;
+  'studio.previewPlayChanges': StudioPlayReview;
   'studio.keepPlayChanges': { moved: number; amounts: number; removed: number; skipped: number; snapshot: StudioSnapshot };
   'studio.agentStart': StudioAgentInfo;
   'studio.agentStop': StudioAgentInfo;
@@ -511,8 +624,18 @@ export interface StudioResult {
   'studio.assets': StudioAssetList;
   'studio.assetByGuid': StudioAssetDetail;
   'studio.assetReferences': StudioAssetReference[];
+  'studio.assetDependencyPage': StudioDependencyPage;
   'studio.assetMetaPatch': StudioAssetDetail;
   'studio.assetFolderCreate': { path: string };
+  'studio.assetDelete': { path:string; backup:string; historyRecorded:boolean };
+  'studio.assetRecoveryQuota': StudioRecoveryStorage;
+  'studio.assetHistoryResetReview': StudioAssetHistoryResetReview;
+  'studio.assetHistoryResetApply': {ok:boolean};
+  'studio.assetTrashList': StudioTrashPage;
+  'studio.assetTrashBatchReview': StudioTrashBatchReview;
+  'studio.assetTrashBatchApply': StudioTrashBatchResult;
+  'studio.assetTrashReview': StudioTrashReview;
+  'studio.assetTrashApply': {ok:boolean};
   'studio.assetMovePreview': StudioAssetTransferPlan;
   'studio.assetImportPreview': StudioAssetTransferPlan | { cancelled: true };
   'studio.assetTransferCommit': StudioAssetTransferResult;
@@ -569,4 +692,7 @@ export interface MetaHumanReport { pending?:boolean; detected:boolean; score:num
   rig?: { halfJoints:number; twistJoints:number; jawJoint:boolean; eyeJoints:boolean } }
 export type StudioAlignMode = 'minX' | 'centerX' | 'maxX' | 'minZ' | 'centerZ' | 'maxZ' | 'distributeX' | 'distributeZ' | 'ground';
 /** Undo history: applied steps first (oldest → newest), then the redo branch; position = applied count. */
-export interface StudioHistory { steps: Array<{ label: string; done: boolean }>; position: number }
+export interface StudioHistory { steps: Array<{ label: string; done: boolean }>; position: number; version?:string; scope?:'map'; strokeActive?:boolean; persistent?:boolean; persistenceWarning?:string }
+export interface StudioProjectHistory { scope:'project'; steps: StudioHistory['steps']; position:number; version:string; strokeActive:boolean; canUndo:boolean; canRedo:boolean; bytes:number; maxBytes:number; maxSteps:number; blockedReason?:string; persistent?:boolean; persistenceWarning?:string }
+
+export type StudioAssetHistory = Omit<StudioProjectHistory,'scope'> & {scope:'assets'};

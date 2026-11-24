@@ -116,11 +116,13 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
     throw Error('Editing map lights requires the native AIVERSE host');
   }
   if (method === 'studio.assetByGuid' || method === 'studio.assetMetaPatch' ||
-      method === 'studio.assetFolderCreate' ||
+      method === 'studio.assetFolderCreate' || method === 'studio.assetDelete' ||
+      method === 'studio.assetHistoryResetReview' || method === 'studio.assetHistoryResetApply' || method === 'studio.assetRecoveryQuota' || method === 'studio.assetTrashBatchReview' || method === 'studio.assetTrashBatchApply' || method === 'studio.assetTrashList' || method === 'studio.assetTrashReview' || method === 'studio.assetTrashApply' ||
       method === 'studio.assetMovePreview' || method === 'studio.assetImportPreview' ||
       method === 'studio.assetTransferCommit') {
     throw Error('Project asset operations require the native AIVERSE host');
   }
+  if (method === 'studio.assetDependencyPage') throw new Error('Dependency pages require a native project');
   if (method === 'studio.assetReferences') {
     // Demo cannot inspect an actual project's materials/rules.
     return [];
@@ -153,10 +155,12 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
   if (method === 'studio.ops') return { panel: String((params as { panel?: string })?.panel ?? ''), ops: [] } as StudioResult['studio.ops'];
   if (method === 'studio.op' && String((params as { op?: string })?.op ?? '').startsWith('package_')) return mockPackageOp(params as StudioParams['studio.op']) as StudioResult['studio.op'];
   if (method === 'studio.op' || method === 'studio.inputGet' || method === 'studio.inputSet' || method === 'studio.assetAudit' ||
-    method === 'studio.agentInfo' || method === 'studio.sceneBrush' || method === 'studio.splineEdit' || method === 'studio.stats' || method === 'studio.gpuStats' || method === 'studio.keepPlayChanges' || method === 'studio.extensions' || method === 'studio.extensionAction' || method === 'studio.extensionCreate' || method === 'studio.attachmentsGet' || method === 'studio.attachmentsSet' || method === 'studio.agentStart' || method === 'studio.agentStop' || method === 'studio.agentReset')
+    method === 'studio.agentInfo' || method === 'studio.agentHistoryStep' || method === 'studio.agentUndoAll' || method === 'studio.agentBatchPreview' || method === 'studio.agentBatchApply' || method === 'studio.sceneBrush' || method === 'studio.splineEdit' || method === 'studio.stats' || method === 'studio.gpuStats' || method === 'studio.keepPlayChanges' || method === 'studio.extensions' || method === 'studio.extensionAction' || method === 'studio.extensionCreate' || method === 'studio.attachmentsGet' || method === 'studio.attachmentsSet' || method === 'studio.agentStart' || method === 'studio.agentStop' || method === 'studio.agentReset')
     throw new Error('Open the native Studio');
   if (method === 'studio.history') return { steps: [], position: 0 } as StudioResult['studio.history'];
-  if (method === 'studio.historyJump' || method === 'studio.entitiesAlign') throw new Error('Open the native Studio');
+  if (method === 'studio.projectHistory') return { scope:'project', steps:[], position:0, version:'', strokeActive:false, canUndo:false, canRedo:false, bytes:0, maxBytes:16777216, maxSteps:64, blockedReason:'Project history requires the native Studio' };
+  if (method === 'studio.assetHistory') return { scope:'assets', steps:[], position:0, version:'', strokeActive:false, canUndo:false, canRedo:false, bytes:0, maxBytes:16777216, maxSteps:64, blockedReason:'Asset history requires the native Studio' };
+  if (method === 'studio.assetHistoryStep' || method === 'studio.projectHistoryStep' || method === 'studio.historyJump' || method === 'studio.entitiesAlign') throw new Error('Open the native Studio');
   if (method === 'studio.componentCatalog') return [
     { id: 'MeshRenderer', title: 'Mesh Renderer', group: 'Rendering', hint: 'Model and material slots', action: 'native', available: false, reason: 'Already on this entity' },
     { id: 'Light', title: 'Point Light', group: 'Rendering', hint: 'Adds a light entity at this position', action: 'light', available: true },

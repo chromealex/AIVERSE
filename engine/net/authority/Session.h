@@ -3,6 +3,11 @@
 #include "engine/actor/ActorModule.h"
 #include "engine/net/SnapshotDelta.h"
 #include <deque>
+#include <filesystem>
+#include <array>
+#include <optional>
+
+namespace aiverse::actor { class ActorPersistentSession; }
 
 namespace aiverse::net::authority {
 constexpr uint32_t kProtocol=6;   // 6: RaceView in snapshots
@@ -28,6 +33,26 @@ struct SnapshotStats{uint64_t packets=0,bytes=0,fullBytes=0,fullPackets=0;};
 class Server {
 public:
     Server(const Json& rules,const Json& map,uint64_t seed=1,world::AssetReader reader={});
+    ~Server();
+    // Enable before attaching any connection; create and resume are explicit.
+    bool enablePersistence(const std::filesystem::path& directory,const std::array<uint8_t,16>& uuid,
+                           bool resume,size_t budget=64u*1024u*1024u,bool async=false);
+    enum class RecoveryStatus { Idle, Loading, Ready, Cancelled, Failed, Busy };
+    struct RecoveryProgress {std::string phase;uint64_t checkpointBytes=0,checkpointTotal=0,walBytes=0,frames=0,sequence=0;};
+    RecoveryStatus beginPersistenceRecovery(const std::filesystem::path& directory,
+        const std::array<uint8_t,16>& uuid,size_t budget=64u*1024u*1024u,bool async=false);
+    RecoveryStatus pollPersistenceRecovery();
+    RecoveryProgress persistenceRecoveryProgress()const;
+    void cancelPersistenceRecovery();
+    // Required startup gate for persistent streamed worlds. No ticks or
+    // peers before the restored positions' collision/navigation are ready.
+    bool pollPersistenceContent();
+    const std::string& persistenceContentError()const{return persistenceContentError_;}
+    bool persistenceFailed()const{return persistenceFailed_;}
+    bool checkpointWorld(uint64_t retainRevisions=65536);
+    bool pollWorldCheckpoint();
+    bool persistencePending()const;
+    uint32_t finalizedTick()const;
     bool attach(uint8_t slot,std::unique_ptr<Conn> connection);
     void poll(uint64_t now);
     bool step();
@@ -43,6 +68,14 @@ private:
     uint64_t content_=0,rejected_=0;
     SnapshotStats stats_;
     std::vector<Peer> peers_;
+    std::unique_ptr<actor::ActorPersistentSession> persistence_;
+    std::string persistenceIdentity_,persistenceContentError_;
+    std::optional<world::WorldAssets> persistenceAssets_;
+    world::AssetReader persistenceReader_;
+    bool contentPending_=false;
+    bool verifyPersistenceContent();
+    void failPersistenceContent(std::string);
+    bool persistenceFailed_=false,inputsStaged_=false,persistenceSupported_=false,publishingFinalized_=false,recoveringPersistence_=false;
 };
 class Client {
 public:

@@ -1,0 +1,7 @@
+# W1.27 — interrupted integration checkpoint (2026-11-24)
+
+Area W1. Source Open World e15f2bc403bdd68e87d8ee04742850e298b0cb2e; Studio b1dc375064e17773d56afa4e863667b40b9bef16; latest main 71aa5c93afa5993c4e45ba39f1bf5454343389ea. Created this isolated integration branch from exact main and PR #134 (Open World -> integration, NOT main). GitHub reports mergeable=false. World branch is 567 commits ahead / 42 behind main; common changed files since aec89ef435aba457ebeec24ef196f62a2fbb611d are CMakeLists.txt, apps/editor/core/Workspace.cpp, docs/devlog/systems.json, skills/catalog.json. Studio's own delta since 7351e960b1245cbf89a85e831addac3b7eeb8985 is 12 files; do not replace main with the older Studio tree.
+
+User redirected to the remaining capability roadmap (OW-02 onward). W1 integration is handed back pending feature-first work, not merged or accepted. Neither source branch was changed. No native compilation, CTest, Mac quick gate, MCP smoke or Studio acceptance run. No matching PR workflow runs returned for the two source HEADs. No main merge.
+
+Next integration agent: resolve the four shared paths semantically (preserve main's Warcraft III test registration, MCP registry, roadmap and skill additions; preserve W1 additions); merge only Studio delta and reconcile single world_persistence allowlist. Audit component schemas, cursor semantics and compile/link issues; run required Mac merged-tree quick gate on KINGSTON. No successful readiness claim.

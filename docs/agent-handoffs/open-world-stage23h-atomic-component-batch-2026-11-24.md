@@ -1,0 +1,3 @@
+# W1.23h — atomic component batches
+
+DurableComponentCodecs.h adds ordered Upsert/Remove records, typed idempotent removers and custom setRemover, restoreBatch with staged World and rebuilt reference map. Limits 1M records, 128 MiB aggregate payload, 16 MiB per chunk. Remove requires current schema version and empty payload. Callbacks must not mutate identity/allocator/external state; final rebuild checks consistency but does not enforce callback contract. No cross-schema validators or disk encoding yet. Full World copy costs memory; native tests not run. Next bounded record wire codec and WAL integration. PR #116 Draft; no main merge.

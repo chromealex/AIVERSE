@@ -218,7 +218,12 @@
    "where": "main",
    "tagline": "Живая среда: ветер, огонь, земля",
    "essence": "Поля природы в ECS: ветер, огонь, землетрясения и нагрузки на конструкции, которые реагируют друг на друга.",
-   "cover": {"src": "docs/devlog/media/systems/physis-tornado.jpg", "caption": "PHYSIS: смерч идёт по долине, поднимая пыль и обломки", "captionEn": "PHYSIS: a tornado crossing the valley, raising dust and debris", "approved": true},
+   "cover": {
+    "src": "docs/devlog/media/systems/physis-tornado.jpg",
+    "caption": "PHYSIS: смерч идёт по долине, поднимая пыль и обломки",
+    "captionEn": "PHYSIS: a tornado crossing the valley, raising dust and debris",
+    "approved": true
+   },
    "coverBrief": "Момент, где среда действует сама: пожар, который гонит ветер по траве, или постройка, ломающаяся от нагрузки. Видимые последствия, не тепловая карта отладки.",
    "article": "docs/physis.md",
    "started": "2026-11-18",
@@ -307,7 +312,14 @@
      "titleEn": "Build and tests in CI",
      "textEn": "Per the docs, compilation and CTest are not yet confirmed on this line."
     },
-    {"status": "done", "date": "2026-11-22", "title": "Параллельное обновление сетки и стриминг больших миров", "text": "Шаг сетки делится между потоками с тем же результатом бит в бит (около ×6,6 на 8 потоках); вдали от якорей чанки замирают, и на больших картах считается только нужное.", "titleEn": "Parallel grid updates and streaming for large worlds", "textEn": "The grid step is split across threads with a bit-identical result (about ×6.6 on 8 threads); chunks far from anchors freeze, so large maps only simulate what matters."},
+    {
+     "status": "done",
+     "date": "2026-11-22",
+     "title": "Параллельное обновление сетки и стриминг больших миров",
+     "text": "Шаг сетки делится между потоками с тем же результатом бит в бит (около ×6,6 на 8 потоках); вдали от якорей чанки замирают, и на больших картах считается только нужное.",
+     "titleEn": "Parallel grid updates and streaming for large worlds",
+     "textEn": "The grid step is split across threads with a bit-identical result (about ×6.6 on 8 threads); chunks far from anchors freeze, so large maps only simulate what matters."
+    },
     {
      "status": "done",
      "title": "Подключение к TerraWeave, NEREID, растительности, VFX и звуку",
@@ -316,15 +328,28 @@
      "textEn": "Wind and wildfire drive SpectraFX, audio and TerraWeave grass; “Live nature” shows in the editor Scene view.",
      "date": "2026-11-21"
     },
-    {"status": "done", "date": "2026-11-22", "title": "Смерчи", "text": "Смерч из данных карты: маршрут или блуждание, вихрь в ветре PHYSIS, огонь, обломки, урон; воронка, звук, ветер в траве и волнение воды.", "titleEn": "Tornadoes", "textEn": "Tornadoes from map data: a path or a wander, a vortex in PHYSIS wind, fire, debris, damage; a funnel, sound, wind in the grass and choppy water."},
-    {"status": "in-progress", "title": "Огненные и водяные смерчи, размытие земли", "text": "Смерч затягивает пожар и становится огненным вихрем (поджог, угли, жар), слабеет и гаснет над водой, водяной смерч на озере, размытый след на суше. В ветке, ждёт слияния; рельеф пока не опускается.", "titleEn": "Fire whirls, waterspouts, scoured ground", "textEn": "A tornado draws a wildfire in and becomes a fire whirl (ignition, embers, heat), weakens and is quenched over water, waterspouts on lakes, a scoured track on land. On a branch, awaiting merge; terrain is not lowered yet."},
     {
-      "status": "planned",
-      "target": null,
-      "title": "Реалистичный огонь",
-      "text": "Сейчас пожар и огненный вихрь рисуются анимированными текстурами пламени. Дальше: ядро вихря без видимых краёв частиц, чёткость вблизи, искры и угли, огонь мельче клеток PHYSIS.",
-      "titleEn": "Realistic fire",
-      "textEn": "Ground fire and fire whirls now use animated flame textures. Next: a whirl core without visible particle edges, sharp close-ups, sparks and embers, fire finer than PHYSIS cells."
+     "status": "done",
+     "date": "2026-11-22",
+     "title": "Смерчи",
+     "text": "Смерч из данных карты: маршрут или блуждание, вихрь в ветре PHYSIS, огонь, обломки, урон; воронка, звук, ветер в траве и волнение воды.",
+     "titleEn": "Tornadoes",
+     "textEn": "Tornadoes from map data: a path or a wander, a vortex in PHYSIS wind, fire, debris, damage; a funnel, sound, wind in the grass and choppy water."
+    },
+    {
+     "status": "in-progress",
+     "title": "Огненные и водяные смерчи, размытие земли",
+     "text": "Смерч затягивает пожар и становится огненным вихрем (поджог, угли, жар), слабеет и гаснет над водой, водяной смерч на озере, размытый след на суше. В ветке, ждёт слияния; рельеф пока не опускается.",
+     "titleEn": "Fire whirls, waterspouts, scoured ground",
+     "textEn": "A tornado draws a wildfire in and becomes a fire whirl (ignition, embers, heat), weakens and is quenched over water, waterspouts on lakes, a scoured track on land. On a branch, awaiting merge; terrain is not lowered yet."
+    },
+    {
+     "status": "planned",
+     "target": null,
+     "title": "Реалистичный огонь",
+     "text": "Сейчас пожар и огненный вихрь рисуются анимированными текстурами пламени. Дальше: ядро вихря без видимых краёв частиц, чёткость вблизи, искры и угли, огонь мельче клеток PHYSIS.",
+     "titleEn": "Realistic fire",
+     "textEn": "Ground fire and fire whirls now use animated flame textures. Next: a whirl core without visible particle edges, sharp close-ups, sparks and embers, fire finer than PHYSIS cells."
     }
    ],
    "taglineEn": "A living environment: wind, fire, earth",
@@ -616,20 +641,20 @@
      "textEn": "A Nanite-style debug view: clusters, LOD depth, error, materials."
     },
     {
-      "status": "done",
-      "date": "2026-11-22",
-      "title": "Готовая иерархия на диске",
-      "text": "aiverse_strata_cook: загрузка 4 сфер по миллиону треугольников — 1,2 с на телефоне вместо минут построения.",
-      "titleEn": "Cooked hierarchy on disk",
-      "textEn": "aiverse_strata_cook: four million-triangle spheres load in 1.2 s on a phone instead of minutes of building."
+     "status": "done",
+     "date": "2026-11-22",
+     "title": "Готовая иерархия на диске",
+     "text": "aiverse_strata_cook: загрузка 4 сфер по миллиону треугольников — 1,2 с на телефоне вместо минут построения.",
+     "titleEn": "Cooked hierarchy on disk",
+     "textEn": "aiverse_strata_cook: four million-triangle spheres load in 1.2 s on a phone instead of minutes of building."
     },
     {
-      "status": "done",
-      "date": "2026-11-22",
-      "title": "60 fps на Galaxy A05s",
-      "text": "20 сфер по миллиону треугольников, GLES, бюджет 60 тыс. треугольников, PSS 437 МБ; Vulkan — 48 fps.",
-      "titleEn": "60 fps on a Galaxy A05s",
-      "textEn": "20 million-triangle spheres, GLES, 60 k triangle budget, PSS 437 MB; Vulkan 48 fps."
+     "status": "done",
+     "date": "2026-11-22",
+     "title": "60 fps на Galaxy A05s",
+     "text": "20 сфер по миллиону треугольников, GLES, бюджет 60 тыс. треугольников, PSS 437 МБ; Vulkan — 48 fps.",
+     "titleEn": "60 fps on a Galaxy A05s",
+     "textEn": "20 million-triangle spheres, GLES, 60 k triangle budget, PSS 437 MB; Vulkan 48 fps."
     },
     {
      "status": "in-progress",
@@ -821,7 +846,14 @@
      "textEn": "An ECS scene camera can work like the game follow camera: angle, distance, smoothing, velocity lead, speed zoom and bounds come from a follow block in cameras.json, presets included. The Studio cameras window applies a preset in one pick, and the MCP tool lens_camera_presets lists presets for agents. The planet camera became one of the system's bodies — an orbit over a sphere.",
      "date": "2026-11-22"
     },
-    {"status": "in-progress", "target": null, "title": "Камера от третьего лица для персонажей", "titleEn": "Third-person camera for characters", "text": "Камера-штанга с плечом, обходом препятствий и стеком профилей становится телом LENS и включается в FPS-клиенте; прицел из камеры сводится к лучу персонажа.", "textEn": "The boom camera with a shoulder, obstacle avoidance and a profile stack becomes a LENS body and runs in the FPS client; the camera crosshair converges on the character's ray."}
+    {
+     "status": "in-progress",
+     "target": null,
+     "title": "Камера от третьего лица для персонажей",
+     "titleEn": "Third-person camera for characters",
+     "text": "Камера-штанга с плечом, обходом препятствий и стеком профилей становится телом LENS и включается в FPS-клиенте; прицел из камеры сводится к лучу персонажа.",
+     "textEn": "The boom camera with a shoulder, obstacle avoidance and a profile stack becomes a LENS body and runs in the FPS client; the camera crosshair converges on the character's ray."
+    }
    ],
    "taglineEn": "Cameras and cinematic frames",
    "essenceEn": "Camera scenes as data: several cameras, frame scheduling, image capture and authoring through MCP and Studio.",
@@ -1891,7 +1923,169 @@
     "caption": "Город агента: сплайновые дороги, переходы, кварталы",
     "captionEn": "A city by an agent: spline roads, crossings, blocks",
     "approved": false
-   }
+   },
+   "roadmap": [
+    {
+     "id": "world-recurring-simulation-budget",
+     "title": "Бюджет фоновой симуляции",
+     "titleEn": "Recurring simulation budget",
+     "text": "Детерминированные порции обновлений и настройка бюджета дискретных решений населения.",
+     "textEn": "Deterministic recurring work slices and configurable population decision budget.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-cold-component-advancement",
+     "title": "Продвижение холодного ECS-состояния",
+     "titleEn": "Cold ECS state advancement",
+     "text": "Явное продвижение сохранённых компонентов по тикам без потери стабильных ID; атомарная проверка группы и допуска при пробуждении.",
+     "textEn": "Explicit tick-based advancement of parked components with stable identities, atomic group validation and guarded wake admission.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-authoritative-simulation-lod",
+     "title": "LOD авторитетной симуляции",
+     "titleEn": "Authoritative simulation LOD",
+     "text": "Детерминированная частота принятия решений по регионам и постоянным ID с приоритетом активных взаимодействий.",
+     "textEn": "Deterministic region and stable-ID decision cadence, prioritizing active interactions.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-integrated-acceptance",
+     "title": "Интеграционная проверка сохранения мира",
+     "titleEn": "Integrated world persistence acceptance",
+     "text": "Объединение с актуальным main, нативные тесты, MCP stdio и Studio; окончательная проверка на Mac.",
+     "textEn": "Integrate with current main, run native tests, MCP stdio and Studio; final Mac acceptance.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-background-operator-jobs",
+     "title": "Фоновые задачи обслуживания мира",
+     "titleEn": "Background world maintenance jobs",
+     "text": "Очередь, фактический прогресс восстановления, безопасная отмена и подтверждение результата.",
+     "textEn": "Bounded queue, actual recovery progress, safe cancellation and acknowledged results.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-persistence-tools",
+     "title": "Инструменты сохранения мира",
+     "titleEn": "World persistence tools",
+     "text": "Диагностика, проверка резервных копий и управление сохранениями через общие операции Studio/MCP.",
+     "textEn": "Diagnostics, backup verification and save maintenance through shared Studio/MCP operations.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-ledger-compaction",
+     "title": "Компактизация долгоживущего мира",
+     "titleEn": "Long-lived world compaction",
+     "text": "Ограничение накопления удалённых объектов без повторного использования идентификаторов.",
+     "textEn": "Bound retired-object accumulation without reusing persistent identities.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-streamed-persistence",
+     "title": "Сохранение потоковых миров",
+     "titleEn": "Streamed world persistence",
+     "text": "Проверка SHA-256 внешних ресурсов и барьер готовности коллизий и навигации после восстановления.",
+     "textEn": "SHA-256 external asset validation and collision/navigation readiness barrier after recovery.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-background-recovery",
+     "title": "Фоновое восстановление мира",
+     "titleEn": "Background world recovery",
+     "text": "Чтение checkpoint, восстановление WAL и отменяемая публикация на границе владельца.",
+     "textEn": "Checkpoint reading, WAL recovery and cancellable publication at the owner boundary.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-async-persistence",
+     "title": "Асинхронная запись мира",
+     "titleEn": "Asynchronous world persistence",
+     "text": "Ограниченная очередь дисковых операций, подтверждение после записи и барьер checkpoint.",
+     "textEn": "Bounded disk operation queue, durable acknowledgement and checkpoint barrier.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-authority-runtime-persistence",
+     "title": "Сохранение в авторитетном серверном цикле",
+     "titleEn": "Authoritative server persistence",
+     "text": "Создание и восстановление мира до сетевого запуска, запись подтверждённых тиков и блокировка публикации при ошибках.",
+     "textEn": "Create and recover worlds before network startup, persist finalized ticks and refuse publication on failure.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-portable-projectile-race-state",
+     "title": "Сохранение активных объектов и гонок",
+     "titleEn": "Active objects and race persistence",
+     "text": "Восстановление активных снарядов и состояния гоночной сессии с постоянными ссылками.",
+     "textEn": "Restore active projectiles and race session state with persistent references.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-portable-actor-components",
+     "title": "Восстановление связей игровых объектов",
+     "titleEn": "Restore gameplay object relationships",
+     "text": "Контекстные кодеки компонентов и восстановление связей по постоянным идентификаторам.",
+     "textEn": "Contextual component codecs and relationship restoration through persistent identities.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-stable-actor-identities",
+     "title": "Постоянные идентификаторы объектов мира",
+     "titleEn": "Persistent world object identities",
+     "text": "Независимые от ECS-индексов идентификаторы и адресация перемещений.",
+     "textEn": "Entity-index-independent identities and movement addressing.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-native-restart-state",
+     "title": "Состояние перезапуска симуляции",
+     "titleEn": "Simulation restart state",
+     "text": "Сохранение номера тика, генератора случайных чисел и очереди команд со стабильными ссылками.",
+     "textEn": "Persist simulation tick, random generator and queued commands using stable references.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-native-finalized-wal",
+     "title": "Сохранение подтверждённых тиков мира",
+     "titleEn": "Finalized world tick persistence",
+     "text": "Точный захват изменений владения сущностями на подтверждённых тиках симуляции.",
+     "textEn": "Capture exact entity ownership changes at finalized simulation ticks.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-unified-resource-wal",
+     "title": "Журнал изменений ресурсов мира",
+     "titleEn": "World resource change log",
+     "text": "Сохранение изменений выбранных ECS-ресурсов вместе с сущностями и компонентами.",
+     "textEn": "Persist changes to selected ECS resources alongside entities and components.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-unified-backup-retention",
+     "title": "Безопасное хранение поколений мира",
+     "titleEn": "Safe world generation retention",
+     "text": "Проверка резервных копий перед очисткой, защита активного поколения и управление через сессию мира.",
+     "textEn": "Verify backups before cleanup, protect the active generation and manage through the world session.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-unified-backup-catalog",
+     "title": "Каталог резервных копий мира",
+     "titleEn": "World backup catalog",
+     "text": "Перечисление поколений сохранений и проверка восстановления ECS и журнала изменений.",
+     "textEn": "Enumerate save generations and validate ECS and change-log recovery.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-ecs-region-lifecycle",
+     "title": "Жизненный цикл динамических сущностей регионов",
+     "titleEn": "Dynamic region entity lifecycle",
+     "text": "Детерминированное владение сущностями по регионам, атомарный перенос групп и сохранение; следующий этап — реальные ECS-резиденция и стриминг.",
+     "textEn": "Deterministic region ownership, atomic group transfer and persistence; live ECS residency and streaming follow.",
+     "status": "in-progress"
+    }
+   ]
   },
   {
    "id": "planets",
@@ -1905,12 +2099,54 @@
    "essence": "Планеты на кубе-сфере с орбитами и генератор рельефа: эрозия, реки, биомы и честные стартовые позиции.",
    "essenceEn": "Cube-sphere planets with orbits and a terrain generator: erosion, rivers, biomes and fair starting positions.",
    "roadmap": [
-     {"status": "done", "date": "2026-11-22", "title": "Берега из генератора", "titleEn": "Coasts from the generator", "text": "Моря и озёра строит генератор карт, без квадратных водоёмов.", "textEn": "Seas and lakes come from the map generator, no square lakes."},
-     {"status": "done", "date": "2026-11-22", "title": "Рельеф и флора TerraWeave", "titleEn": "TerraWeave terrain and flora", "text": "Высоты, биомы и растения планеты считает TerraWeave.", "textEn": "TerraWeave computes the planet's heights, biomes and plants."},
-     {"status": "done", "date": "2026-11-22", "title": "Море NEREID", "titleEn": "NEREID sea", "text": "Волны, цвет по глубине и пена у берега.", "textEn": "Waves, colour by depth and coast foam."},
-     {"status": "done", "date": "2026-11-22", "title": "Водоёмы NEREID на сферах", "titleEn": "NEREID water bodies on spheres", "text": "Глубина, течение, волны, плавучесть и всплески по радиусу.", "textEn": "Radial depth, current, waves, buoyancy and splashes."},
-     {"status": "planned", "target": null, "title": "Дрейф по течению", "titleEn": "Drift with the current", "text": "Корабли и обломки сносит течением моря.", "textEn": "The sea's current carries ships and wrecks."},
-     {"status": "planned", "target": null, "title": "Одни волны в симуляции и на экране", "titleEn": "One wave model for simulation and screen", "text": "Корабль качается на тех же волнах, что видны.", "textEn": "A ship rides the same waves that are drawn."}
+    {
+     "status": "done",
+     "date": "2026-11-22",
+     "title": "Берега из генератора",
+     "titleEn": "Coasts from the generator",
+     "text": "Моря и озёра строит генератор карт, без квадратных водоёмов.",
+     "textEn": "Seas and lakes come from the map generator, no square lakes."
+    },
+    {
+     "status": "done",
+     "date": "2026-11-22",
+     "title": "Рельеф и флора TerraWeave",
+     "titleEn": "TerraWeave terrain and flora",
+     "text": "Высоты, биомы и растения планеты считает TerraWeave.",
+     "textEn": "TerraWeave computes the planet's heights, biomes and plants."
+    },
+    {
+     "status": "done",
+     "date": "2026-11-22",
+     "title": "Море NEREID",
+     "titleEn": "NEREID sea",
+     "text": "Волны, цвет по глубине и пена у берега.",
+     "textEn": "Waves, colour by depth and coast foam."
+    },
+    {
+     "status": "done",
+     "date": "2026-11-22",
+     "title": "Водоёмы NEREID на сферах",
+     "titleEn": "NEREID water bodies on spheres",
+     "text": "Глубина, течение, волны, плавучесть и всплески по радиусу.",
+     "textEn": "Radial depth, current, waves, buoyancy and splashes."
+    },
+    {
+     "status": "planned",
+     "target": null,
+     "title": "Дрейф по течению",
+     "titleEn": "Drift with the current",
+     "text": "Корабли и обломки сносит течением моря.",
+     "textEn": "The sea's current carries ships and wrecks."
+    },
+    {
+     "status": "planned",
+     "target": null,
+     "title": "Одни волны в симуляции и на экране",
+     "titleEn": "One wave model for simulation and screen",
+     "text": "Корабль качается на тех же волнах, что видны.",
+     "textEn": "A ship rides the same waves that are drawn."
+    }
    ],
    "includes": [
     {
@@ -2239,6 +2475,86 @@
    ],
    "roadmap": [
     {
+     "id": "studio-linked-asset-mcp",
+     "title": "MCP для ассетов и восстановления",
+     "titleEn": "Linked asset and recovery MCP",
+     "text": "S6i: чтение графа, корзины и квот; обратимое удаление по GUID, подтверждённое восстановление, явные границы необратимых операций.",
+     "textEn": "S6i: graph, trash and quota readback; GUID-based reversible deletion, confirmed restore, linked agent-owned history navigation and explicit availability metadata.",
+     "status": "in-progress"
+    },
+    {
+     "id": "studio-recovery-storage-quota",
+     "title": "Квоты восстановления Studio",
+     "titleEn": "Studio recovery storage quotas",
+     "text": "S6h: учёт сохранённых данных и журналов, проектный лимит, защита восстановления и явная очистка без автоудаления.",
+     "textEn": "S6h: account retained data and journals, project budget, history-protected reviewed batch purge and staging-space preflight without automatic deletion.",
+     "status": "in-progress"
+    },
+    {
+     "id": "studio-asset-dependency-graph",
+     "title": "Граф зависимостей ассетов",
+     "titleEn": "Asset dependency graph",
+     "text": "S6g: точные ссылки в картах и ресурсы glTF, прямые и обратные зависимости, безопасный предварительный просмотр; без автоматической перезаписи неизвестных зависимостей.",
+     "textEn": "S6g.6.5: streaming large GLB repair, compact JSON-prefix history, tail identity and durable staged publication.",
+     "status": "in-progress"
+    },
+    {
+     "id": "studio-map-history-transactions",
+     "title": "Транзакции и история редактора",
+     "titleEn": "Editor history and transactions",
+     "text": "Атомарные составные изменения карты, устойчивые метки истории и защита от устаревших переходов.",
+     "textEn": "S6f.3.4a: mixed exact-endpoint directory chains, nested GUID checks and self-contained glTF/GLB version transitions; external-resource topology fenced.",
+     "status": "in-progress"
+    },
+    {
+     "id": "studio-play-review",
+     "title": "Безопасный перенос изменений из Play",
+     "titleEn": "Play Mode change review",
+     "text": "Изолированная игровая сессия, проверка исходной карты и выборочный предварительный просмотр переноса изменений.",
+     "textEn": "Isolated local session, source map revision guard and selective preview of play-to-scene changes.",
+     "status": "in-progress"
+    },
+    {
+     "id": "studio-runtime-debugger",
+     "title": "Редактирование состояния локальной игры",
+     "titleEn": "Runtime Debugger",
+     "text": "Явное редактирование разрешённых полей ECS при остановленном тике локальной игры с проверкой сессии и исходного значения.",
+     "textEn": "Explicit owner-validated ECS field edits at a paused local tick with session and expected-value checks.",
+     "status": "in-progress"
+    },
+    {
+     "id": "studio-entity-debugger",
+     "title": "Отладчик ECS-сущностей",
+     "titleEn": "Entity Debugger",
+     "text": "Расширение Runtime: точные ссылки, стабильные идентификаторы, принадлежность регионам и навигация по компонентам.",
+     "textEn": "Runtime inspection with exact references, stable identities, region ownership and component navigation.",
+     "status": "in-progress"
+    },
+    {
+     "id": "studio-simulation-profiler",
+     "title": "Профилировщик симуляции",
+     "titleEn": "Simulation Profiler",
+     "text": "Ограниченный замер реального времени тиков и систем ECS в локальной игре.",
+     "textEn": "Bounded measurement of actual tick and ECS system wall time in a local match.",
+     "status": "in-progress"
+    },
+    {
+     "id": "studio-world-explorer-live",
+     "title": "Обзор регионов живого мира",
+     "titleEn": "Live World Explorer",
+     "text": "Снимок реального игрового ECS: карта регионов по высоте, выбор ячейки и счётчики частоты решений без имитации стриминга.",
+     "textEn": "Real hosted-game ECS snapshot: height-sliced region map, cell selection and decision cadence counters without fabricated streaming metrics.",
+     "status": "in-progress"
+    },
+    {
+     "id": "studio-world-persistence-panel",
+     "title": "Управление сохранениями мира",
+     "titleEn": "World persistence panel",
+     "text": "Офлайн-диагностика регионов, контрольные точки, резервные копии и подтверждаемая очистка.",
+     "textEn": "Offline region diagnostics, checkpoints, backups and confirmed retention.",
+     "status": "in-progress"
+    },
+    {
      "status": "in-progress",
      "target": null,
      "title": "Studio на Windows",
@@ -2460,7 +2776,8 @@
    ],
    "roadmap": [
     {
-     "status": "done", "date": "2026-11-23",
+     "status": "done",
+     "date": "2026-11-23",
      "target": null,
      "title": "Один экран загрузки во всех проектах",
      "titleEn": "One loading screen in every project",
@@ -2529,7 +2846,13 @@
    "nameEn": "Rendering and materials",
    "doc": "docs/models.md",
    "roadmap": [
-    {"status": "in-progress", "title": "3D-объекты в интерфейсе", "text": "Вывод объектов сцены и отдельно анимированных моделей в элементы UI через внеэкранную текстуру.", "titleEn": "3D objects in UI", "textEn": "Render scene objects and independently animated models into UI elements through an offscreen texture."}
+    {
+     "status": "in-progress",
+     "title": "3D-объекты в интерфейсе",
+     "text": "Вывод объектов сцены и отдельно анимированных моделей в элементы UI через внеэкранную текстуру.",
+     "titleEn": "3D objects in UI",
+     "textEn": "Render scene objects and independently animated models into UI elements through an offscreen texture."
+    }
    ]
   },
   {
@@ -2592,9 +2915,16 @@
     "Save and replay matches bit for bit: everything runs on fixed point and ticks."
    ],
    "roadmap": [
-    {"status": "in-progress", "title": "Строительная сетка", "text": "Координаты и привязка ячеек, поворот footprint и проверка размещения через общую библиотеку construction.", "titleEn": "Construction grid", "textEn": "Cell coordinates and snapping, rotated footprints and placement checks through the shared construction library."},
     {
-     "status": "done", "date": "2026-11-23",
+     "status": "in-progress",
+     "title": "Строительная сетка",
+     "text": "Координаты и привязка ячеек, поворот footprint и проверка размещения через общую библиотеку construction.",
+     "titleEn": "Construction grid",
+     "textEn": "Cell coordinates and snapping, rotated footprints and placement checks through the shared construction library."
+    },
+    {
+     "status": "done",
+     "date": "2026-11-23",
      "target": null,
      "title": "Новые движения персонажа",
      "titleEn": "New character moves",
@@ -2602,7 +2932,8 @@
      "textEn": "Dash with air charges, wall run and slide, grapple (pull and swing), glide and dropping through one-way platforms in the shared movement machine. Done in a branch, waiting for the merge into main."
     },
     {
-     "status": "done", "date": "2026-11-23",
+     "status": "done",
+     "date": "2026-11-23",
      "target": null,
      "title": "Новые движения в FPS с предсказанием",
      "titleEn": "New moves in the FPS with prediction",
@@ -2610,7 +2941,8 @@
      "textEn": "A rules \"locomotion\" block moves characters through the movement machine; the client predicts the modes and reconciles with the server, saves and checksums change only with the block."
     },
     {
-     "status": "done", "date": "2026-11-23",
+     "status": "done",
+     "date": "2026-11-23",
      "target": null,
      "title": "Пакеты для пробелов реестра возможностей",
      "titleEn": "Packages for the capability gaps",

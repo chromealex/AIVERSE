@@ -24,6 +24,7 @@ import engineLogo from '../../../engine/assets/branding/mark.png';
 import NestedDockWorkspace from './components/NestedDockWorkspace';
 import StudioMenuBar, { type StudioMenu } from './components/StudioMenuBar';
 import { LEGACY_WINDOWS_NOT_MIGRATED } from './legacyWindows';
+import { windowPanelGroups } from './windowGroups';
 import WelcomeTour, { tourSeen } from './components/WelcomeTour';
 import ProjectHub from './components/ProjectHub';
 import ProjectSplash from './components/ProjectSplash';
@@ -77,7 +78,7 @@ export default function App() {
   const [loading, clearLoading] = useProjectLoading();
   // Requests answered while the native side opens a project are expected, not errors.
   useEffect(() => { if (error === 'Project is loading') setError(''); }, [error]);
-  useEffect(() => { if (!game?.active) resetLive(); }, [game?.active]); // live refs belong to one session
+  useEffect(() => { resetLive(); }, [game?.active,game?.epoch]); // live refs belong to one session
   const [connected] = useState(nativeConnected);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(() => !tourSeen());
@@ -474,30 +475,32 @@ export default function App() {
       { id: 'prefs', label: 'Preferences…', separator: true, onSelect: () => setSettingsOpen(true) },
     ] },
     { id: 'window', label: 'Window', items: () => {
-      const byTitle = (a: StudioPanel, b: StudioPanel) => STUDIO_PANEL_TITLES[a].localeCompare(STUDIO_PANEL_TITLES[b]);
       const isOpen = (panel: StudioPanel) => panelStack(dock, panel) !== null || !!floatOwner(floating, panel);
       const toggle = (panel: StudioPanel) => floatOwner(floating, panel) ? dockHere(panel)
         : setDock(t => panelStack(t, panel) !== null ? closeTab(t, panel) : reopenTab(t, panel, STUDIO_PANEL_HOME[panel]));
-      const openPanels = STUDIO_PANELS.filter(isOpen).sort(byTitle);
-      const otherPanels = STUDIO_PANELS.filter(panel => !isOpen(panel)).sort(byTitle);
       return [
-      { id: 'ws', label: 'Workspaces', caption: true, onSelect: () => {} },
-      ...WORKSPACES.map(id => ({ id: 'ws-' + id, label: WORKSPACE_INFO[id].title, shortcut: menuShortcut(WORKSPACE_INFO[id].key),
-        checked: workspace === id, onSelect: () => switchWorkspace(id) })),
-      { id: 'reset', label: 'Reset ' + WORKSPACE_INFO[workspace].title + ' Layout', separator: true, onSelect: () => setDock(workspaceDockTree(workspace)) },
-      ...(!FLOAT && floating.length ? [{ id: 'dock-floating', label: 'Dock All Floating Windows (' + floating.length + ')',
-        onSelect: () => { for (const item of floating) void invoke('studio.windowClose', { window: item.key }).catch(console.warn); } }] : []),
-      { id: 'palette', label: 'Command Palette…', shortcut: menuShortcut('K'), onSelect: () => setPalette('') },
-      { id: 'tour', label: 'Welcome Tour…', onSelect: () => setTourOpen(true) },
-      { id: 'open-cap', label: 'Open', caption: true, separator: true, onSelect: () => {} },
-      ...openPanels.map(panel => ({ id: 'panel-' + panel, label: STUDIO_PANEL_TITLES[panel], checked: true, onSelect: () => toggle(panel) })),
-      { id: 'more-cap', label: 'Panels', caption: true, separator: true, onSelect: () => {} },
-      ...otherPanels.map(panel => ({ id: 'panel-' + panel, label: STUDIO_PANEL_TITLES[panel], onSelect: () => toggle(panel) })),
-      ...(LEGACY_WINDOWS_NOT_MIGRATED.length ? [{ id: 'legacy', label: 'Legacy editor — not migrated yet', caption: true, separator: true, onSelect: () => {} }] : []),
-      ...LEGACY_WINDOWS_NOT_MIGRATED.map(w => {
-        const area = legacyWorkspace(w.id);
-        return { id: 'legacy-' + w.id, label: w.title + (area ? '  ·  ' + WORKSPACE_INFO[area].title : ''), disabled: true, onSelect: () => {} };
-      }),
+        { id: 'workspaces', label: 'Workspaces', onSelect: () => {}, children:
+          WORKSPACES.map(id => ({ id: 'ws-' + id, label: WORKSPACE_INFO[id].title,
+            shortcut: menuShortcut(WORKSPACE_INFO[id].key), checked: workspace === id, onSelect: () => switchWorkspace(id) })) },
+        { id: 'reset', label: 'Reset ' + WORKSPACE_INFO[workspace].title + ' Layout', onSelect: () => setDock(workspaceDockTree(workspace)) },
+        ...(!FLOAT && floating.length ? [{ id: 'dock-floating', label: 'Dock All Floating Windows (' + floating.length + ')',
+          onSelect: () => { for (const item of floating) void invoke('studio.windowClose', { window: item.key }).catch(console.warn); } }] : []),
+        { id: 'palette', label: 'Command Palette…', shortcut: menuShortcut('K'), onSelect: () => setPalette('') },
+        { id: 'tour', label: 'Welcome Tour…', onSelect: () => setTourOpen(true) },
+        { id: 'panels-cap', label: 'Panels', caption: true, separator: true, onSelect: () => {} },
+        ...windowPanelGroups().map(group => ({
+          id: 'group-' + group.id, label: group.title, onSelect: () => {},
+          children: group.panels.map(panel => ({
+            id: 'panel-' + panel, label: STUDIO_PANEL_TITLES[panel], checked: isOpen(panel), onSelect: () => toggle(panel)
+          })),
+        })),
+        ...(LEGACY_WINDOWS_NOT_MIGRATED.length ? [{
+          id: 'legacy', label: 'Legacy editor — not migrated yet', separator: true, onSelect: () => {},
+          children: LEGACY_WINDOWS_NOT_MIGRATED.map(w => {
+            const area = legacyWorkspace(w.id);
+            return { id: 'legacy-' + w.id, label: w.title + (area ? '  ·  ' + WORKSPACE_INFO[area].title : ''), disabled: true, onSelect: () => {} };
+          }),
+        }] : []),
     ]; } },
   ];
 
@@ -510,7 +513,7 @@ export default function App() {
   const paletteEntries = useMemo<CommandEntry[]>(() => {
     const out: CommandEntry[] = [];
     for (const menu of menus) for (const item of menu.items()) {
-      if (item.caption || item.id.startsWith('legacy-') || item.id.startsWith('panel-') || item.id.startsWith('ws-') || item.id === 'palette') continue;
+      if (item.caption || item.children || item.id.startsWith('legacy-') || item.id.startsWith('panel-') || item.id.startsWith('ws-') || item.id === 'palette') continue;
       out.push({ id: 'menu:' + menu.id + ':' + item.id, kind: 'command', title: item.label, hint: menu.label,
         shortcut: item.shortcut, disabled: item.disabled, run: item.onSelect });
     }

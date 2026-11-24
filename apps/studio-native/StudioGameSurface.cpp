@@ -18,7 +18,11 @@
 #include "engine/sim/Simulation.h"
 #include "engine/sim/CommonComponents.h"
 #include "engine/game/GameCore.h"
+#include "engine/world/WorldPersistenceDiagnostics.h"
+#include "engine/world/SimulationLod.h"
+#include "apps/studio-native/StudioRuntimeEdit.h"
 #include <algorithm>
+#include <chrono>
 #include <stdexcept>
 
 namespace aiverse::studio {
@@ -33,11 +37,11 @@ StudioGameSurface::~StudioGameSurface() {
     lifetime_->retire();
 }
 void StudioGameSurface::start(const StudioGameLaunch& plan,const std::string& assets) {
-    error_.clear();launch_=plan;assets_=assets;matchObserved_=false;++runtimeEpoch_;worldProcessDiagnostics_.reset();
+    error_.clear();launch_=plan;assets_=assets;matchObserved_=false;runtimeDebugEdited_=false;++runtimeEpoch_;worldProcessDiagnostics_.reset();
     host_->start(*device_,plan.project,assets,lifetime_->lease(),plan.map);
     if (plan.camera) { const auto& c=*plan.camera; host_->setStartCamera(c[0],c[1],c[2],c[3],c[4]); }
 }
-void StudioGameSurface::stop() { matchObserved_=false;++runtimeEpoch_;worldProcessDiagnostics_.reset(); host_->suspendInput();host_->stop();host_->collectGpuRetirements(); }
+void StudioGameSurface::stop() { matchObserved_=false;runtimeDebugEdited_=false;++runtimeEpoch_;worldProcessDiagnostics_.reset(); host_->suspendInput();host_->stop();host_->collectGpuRetirements(); }
 void StudioGameSurface::setDevice(const StudioGameDevice& profile) {
     (void)profile.profile();host_->suspendInput();profile_=profile;
 }
@@ -80,7 +84,7 @@ void StudioGameSurface::frame(int w,int h,float pw,float ph,double dt,bool focus
         host_->frame(std::clamp(dt,0.0,0.1),{}, {},w,h,logical.first,logical.second,profile_.profile().touch,profile_.insets());
         device_->endFrame();
         const bool match=host_->inMatch();
-        if(match && !matchObserved_)++runtimeEpoch_;
+        if(match && !matchObserved_){++runtimeEpoch_;runtimeDebugEdited_=false;}
         if(!match&&matchObserved_)worldProcessDiagnostics_.reset();
         matchObserved_=match;
         if (host_->quitRequested()) stop();
@@ -256,6 +260,9 @@ Json StudioGameSurface::ecologyState(const StudioWorldProcessLiveOptions& option
     out.set("plants",std::move(plants));out.set("weather",std::move(weather));
     out.set("regions",std::move(regions));return out;
 }
+bool StudioGameSurface::canReview(const editor::Workspace& ws) const {
+    return host_->canStep()&&studioPlaySourceMatches(launch_,ws)&&host_->currentMapIndex()==launch_.map;
+}
 Json StudioGameSurface::mapEntityStates() {
     Simulation* sim=host_ && host_->inMatch()?host_->simulation():nullptr;
     auto* mod=sim?dynamic_cast<game::GameCore*>(&sim->module()):nullptr;
@@ -280,16 +287,101 @@ Json StudioGameSurface::mapEntityStates() {
     Json r=Json::object();r.set("entities",std::move(out));r.set("tick",Json::number(int64_t(sim->tick())));
     return r;
 }
+// Explicit operator snapshot, not a per-frame scan or a durable-save claim.
+Json StudioGameSurface::regions() const {
+    const Simulation* sim=host_->inMatch()?host_->simulation():nullptr;
+    Json out=Json::object();
+    const auto* ledger=sim?sim->world().resourceConst<world::RegionEntityLedger>():nullptr;
+    if(ledger) {
+        out=world::ledgerStatus(*ledger,sim->world());
+        if(out.has("error"))throw std::runtime_error(out.getStr("error"));
+        out.set("durabilityKnown",Json::fromBool(false));
+        out.set("simulationLod",world::simulationLodDiagnosticsJson(sim->world().resourceConst<world::SimulationLodDiagnostics>()));
+    }else{
+        out.set("reason",Json::string(sim?"Region ownership is not enabled in this match":"No local match is running"));
+    }
+    out.set("active",Json::fromBool(sim!=nullptr));
+    out.set("available",Json::fromBool(ledger!=nullptr));
+    out.set("epoch",Json::string(std::to_string(runtimeEpoch_)));
+    out.set("tick",Json::number(int64_t(sim?sim->tick():0)));
+    return out;
+}
+Json StudioGameSurface::profile(const std::string& action,uint32_t steps) {
+    Json out=Json::object();
+    out.set("epoch",Json::string(std::to_string(runtimeEpoch_)));
+    auto* sim=host_->inMatch()&&host_->canControl()?host_->simulation():nullptr;
+    out.set("available",Json::fromBool(sim!=nullptr));
+    if(!sim){
+        if(action!="status")throw std::runtime_error("Profiling requires a controllable local match");
+        out.set("reason",Json::string("Start a controllable local match"));return out;
+    }
+    if(action=="start"){
+        const auto clock=[]()->int64_t{return std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();};
+        if(!sim->beginProfileWindow(clock,steps))throw std::runtime_error("Profiler is busy or capture size invalid");
+    }else if(action=="stop")sim->endProfileWindow();
+    out.set("active",Json::fromBool(sim->profileWindowActive()));
+    out.set("target",Json::number(int64_t(sim->profileWindowTarget())));
+    out.set("tick",Json::number(int64_t(sim->tick())));
+    out.set("tickRate",Json::number(int64_t(sim->tickRate())));
+    out.set("paused",Json::fromBool(host_->paused()));
+    Json history=Json::array(),rows=Json::array();
+    double totalMs=0,systemsMs=0;
+    for(const auto ns:sim->profileStepTimes()){
+        const double ms=double(ns)/1000000.0;history.push(Json::number(ms,6));totalMs+=ms;
+    }
+    // Return the first 256 systems in schedule order. Sum covers all registered systems.
+    const auto count=sim->profileWindowTarget()?sim->systemCount():size_t(0);
+    for(size_t i=0;i<count;++i){
+        const double ms=double(sim->systemTime(i))/1000000.0;systemsMs+=ms;
+        if(i>=256)continue;
+        Json row=Json::object();row.set("index",Json::number(int64_t(i)));
+        row.set("name",Json::string(sim->systemName(i)));row.set("totalMs",Json::number(ms,6));rows.push(std::move(row));
+    }
+    out.set("historyMs",std::move(history));out.set("rows",std::move(rows));
+    out.set("systemCount",Json::number(int64_t(count)));
+    out.set("totalMs",Json::number(totalMs,6));out.set("systemsMs",Json::number(systemsMs,6));
+    return out;
+}
 Json StudioGameSurface::entities(int offset,int limit,const std::string& query) {
     return inspector_.entities(host_->inMatch()?host_->simulation():nullptr,std::to_string(runtimeEpoch_),offset,limit,query);
 }
 Json StudioGameSurface::inspect(const std::string& epoch,const std::string& ref) {
-    return inspector_.inspect(host_->inMatch()?host_->simulation():nullptr,std::to_string(runtimeEpoch_),epoch,ref);
+    auto* sim=host_->inMatch()?host_->simulation():nullptr;
+    Json out=inspector_.inspect(sim,std::to_string(runtimeEpoch_),epoch,ref);
+    out.set("runtimeDebugEdited",Json::fromBool(runtimeDebugEdited_));
+    out.set("runtimeEditAvailable",Json::fromBool(host_->canStep()));
+    if(host_->canStep()&&sim){
+        const auto entity=editor::worldEntity(std::stoull(out.getStr("ref")));
+        out.set("runtimeFields",StudioRuntimeEdit::describe(*sim,entity));
+    }
+    return out;
+}
+Json StudioGameSurface::editRuntime(const Json& params){
+    // canStep means an editor-paused, controllable local match, not a game menu/network mirror.
+    if(!host_->canStep()||!host_->inMatch())throw std::runtime_error("Pause the local match in Studio before editing");
+    auto* sim=host_->simulation();
+    if(!sim||params.getStr("epoch")!=std::to_string(runtimeEpoch_))throw std::runtime_error("Runtime session changed");
+    const auto ref=params.getStr("ref");uint64_t packed=0;
+    if(ref.empty()||ref.size()>20)throw std::runtime_error("Invalid runtime reference");
+    const auto parsed=std::from_chars(ref.data(),ref.data()+ref.size(),packed);
+    if(parsed.ec!=std::errc{}||parsed.ptr!=ref.data()+ref.size()||!packed)throw std::runtime_error("Invalid runtime reference");
+    const auto tick=params["expectedTick"].toDouble();
+    if(!params["expectedTick"].isNumber()||!(tick>=0&&tick<=4294967295.0)||double(uint32_t(tick))!=tick)
+        throw std::runtime_error("Invalid expected tick");
+    if(!params["field"].isString()||!params["expectedRaw"].isString()||!params["value"].isString())
+        throw std::runtime_error("Invalid runtime edit parameters");
+    const auto changed=StudioRuntimeEdit::apply(*sim,editor::worldEntity(packed),uint32_t(tick),
+        params.getStr("field"),params.getStr("expectedRaw"),params.getStr("value"));
+    runtimeDebugEdited_=true;
+    Json out=Json::object();out.set("field",changed);out.set("runtimeDebugEdited",Json::fromBool(true));return out;
 }
 Json StudioGameSurface::state() const {
     Json out=Json::object();out.set("device",profile_.json());
     out.set("active",Json::fromBool(host_->active()));
+    out.set("epoch",Json::string(std::to_string(runtimeEpoch_)));
     out.set("paused",Json::fromBool(host_->paused()));
+    out.set("runtimeDebugEdited",Json::fromBool(runtimeDebugEdited_));
     out.set("canControl",Json::fromBool(host_->canControl()));
     out.set("canStep",Json::fromBool(host_->canStep()));
     out.set("loading",Json::fromBool(host_->loading()));

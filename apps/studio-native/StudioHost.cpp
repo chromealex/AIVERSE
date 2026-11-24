@@ -81,7 +81,8 @@ const std::set<std::string>& documentChangingMethods() {
         "studio.planetForestSet", "studio.renderLightingSet", "studio.lightingSet", "studio.lightAdd", "studio.lightUpdate", "studio.lightDelete",
         "studio.materialPatch", "studio.materialCreate", "studio.setProperties", "studio.componentAdd",
         "studio.componentRemove", "studio.entityMove", "studio.entitiesDelete", "studio.entitiesDuplicate",
-        "studio.assetPlace", "studio.worldProcessAreaSet", "studio.worldProcessAreaBatchMove", "studio.worldProcessAreaBatchResize", "studio.entityFlags", "studio.rulesSet", "studio.entitiesAlign", "studio.historyJump"};
+        "studio.assetPlace", "studio.worldProcessAreaSet", "studio.worldProcessAreaBatchMove", "studio.worldProcessAreaBatchResize", "studio.entityFlags", "studio.rulesSet", "studio.entitiesAlign", "studio.historyJump",
+        "studio.projectHistoryStep", "studio.assetMetaPatch", "studio.assetHistoryStep", "studio.assetTransferCommit", "studio.assetDelete", "studio.assetFolderCreate", "studio.assetTrashApply", "studio.assetHistoryResetApply", "studio.agentHistoryStep", "studio.agentUndoAll", "studio.agentBatchApply"};
     return methods;
 }
 } // namespace
@@ -234,10 +235,12 @@ void StudioHost::webReady() {
 // models in with a per-frame budget. requestId < 0: --project / last project.
 void StudioHost::openProject(const std::string& path, int64_t requestId) {
     if (projectLoading_) return;
+    session_->strokeCancel();mouse_={};
     projectLoading_ = true;
     if (game_) game_->stop();
     wpLiveSnapshot_=Json();wpLivePlanetProject_.clear();wpLivePlanetMapPath_.clear();wpLivePlanetRevision_=0;wpLiveRefresh_=0;
     rebuildOverlay();
+    playReview_=Json();
     sendProjectSplash(path);
     sendLoading("project", "Opening " + fs::path(path).filename().string(), 0, 0);
     StudioSession* session = session_.get();
@@ -287,7 +290,7 @@ bool StudioHost::confirmClose() {
 
 // ---------------------------------------------------------------- tick
 Json StudioHost::gameState() {
-    if (game_) return game_->state();
+    if (game_) {auto out=game_->state();out.set("canReviewPlayChanges",Json::fromBool(game_->canReview(session_->workspace())));return out;}
     auto out = Json::parse(R"({"paused":false,"canControl":false,"canStep":false,"active":false,"loading":false,"progress":0,"inMatch":false,"tick":0,"error":""})");
     out.set("device", StudioGameDevice{}.json());
     return out;
@@ -296,7 +299,7 @@ void StudioHost::gameEvent(const platform::Event& event) {
     if (game_ && platform_.surfaceDrawable(StudioSurface::Game)) game_->event(event);
 }
 void StudioHost::surfaceDetached(StudioSurface surface) {
-    if (surface == StudioSurface::Scene) { placement_ = {}; readyEmitted_ = false; }
+    if (surface == StudioSurface::Scene) { if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");mouse_={};placement_ = {}; readyEmitted_ = false; }
     else { gamePlacement_ = {}; if (game_) game_->suspend(); }
 }
 void StudioHost::tickGame() {
@@ -396,6 +399,7 @@ void StudioHost::tick() {
     if (session_->workspace().project.dir.empty()) return;
     // Agent panel: tool calls from aiversemcp run here, on the main thread, between frames.
     if (session_->pollAgentLink()) {
+        sendEvent("assets.changed", "");
         sendEvent("document.changed", "");
         sendEvent("agent.changed", "");
     }
@@ -620,6 +624,7 @@ void StudioHost::failScene(const std::string& message) {
     sendEvent("viewport.error", message);
     readyEmitted_ = false;
     placement_.visible = false;
+    if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");mouse_={};
     {
         ViewportRect hidden;
         NativeViewportPlacement none;
@@ -803,19 +808,31 @@ void StudioHost::selectionAction(const std::string& method) {
     sendEvent("selection.changed", "");
 }
 // Ring under the cursor while the Scene brush is armed (radius; river: half its width; road: a dot).
+bool StudioHost::resolveBrushPoint(double x,double y,double w,double h,render::float3& at,std::string* error) {
+    if(!preview_||x<0||y<0||w<2||h<2||x>=w||y>=h)return false;
+    if(session_->sceneBrush().kind!="caverns")
+        return onScene([&]{return preview_->groundPoint(float(x),float(y),float(w),float(h),at);});
+    render::float3 origin{},direction{};
+    if(!onScene([&]{return preview_->caveScreenRay(float(x),float(y),float(w),float(h),origin,direction);}))return false;
+    double px=0,py=0,pz=0;
+    if(!session_->caveBrushPoint(origin.x,origin.y,origin.z,direction.x,direction.y,direction.z,px,py,pz,error))return false;
+    at={float(px),float(py),float(pz)};return true;
+}
 bool StudioHost::updateBrushCursor(double x, double y, double w, double h) {
     if (!preview_) return false;
     const auto& b = session_->sceneBrush();
     render::float3 at{};
-    if (!b.armed || x < 0 || y < 0 || !onScene([&] { return preview_->groundPoint(float(x), float(y), float(w), float(h), at); })) {
+    if (!b.armed || !resolveBrushPoint(x,y,w,h,at)) {
         onScene([&] { preview_->setBrushCursor(false, {}, 0); });
         return b.armed;
     }
     const float r = b.kind == "road" ? 0.6f : b.kind == "river" ? float(b.width * 0.5) : float(b.radius);
-    onScene([&] { preview_->setBrushCursor(true, at, r); });
+    onScene([&] { preview_->setBrushCursor(true, at, r,b.kind=="caverns",b.caveMode=="fill"); });
     return true;
 }
 void StudioHost::brushAdjust(double factor, bool disarm) {
+    if(projectLoading_)return;
+    if(disarm&&session_->strokeCancel()){mouse_={};sendEvent("document.changed", "");}
     const auto& b = session_->sceneBrush();
     Json params = Json::object();
     if (disarm) params.set("armed", Json::fromBool(false));
@@ -1597,10 +1614,17 @@ bool StudioHost::terrainStroke(int phase, double x, double y, double w, double h
         return true;
     }
     render::float3 at{};
-    if (!onScene([&] { return preview_->groundPoint(float(x), float(y), float(w), float(h), at); })) return phase != 0;
-    updateBrushCursor(x, y, w, h);
-    const bool ok = phase == 0 ? session_->strokeBegin(at.x, at.z, &error) : session_->strokeDab(at.x, at.z, &error);
-    if (!ok && !error.empty()) report();
+    if (!resolveBrushPoint(x,y,w,h,at,&error)) {
+        if(!error.empty())report();
+        onScene([&]{preview_->setBrushCursor(false,{},0);});
+        return phase != 0;
+    }
+    const auto& brush=session_->sceneBrush();
+    const float radius=brush.kind=="road"?.6f:brush.kind=="river"?float(brush.width*.5):float(brush.radius);
+    onScene([&]{preview_->setBrushCursor(true,at,radius,brush.kind=="caverns",brush.caveMode=="fill");});
+    const bool ok = phase == 0 ? session_->strokeBegin(at.x, at.z, &error,at.y) : session_->strokeDab(at.x, at.z, &error,at.y);
+    if (phase==0&&ok)sendEvent("document.changed", ""); // History controls observe stroke ownership immediately.
+    if (!ok && !error.empty()) {report();if(!session_->strokeActive())sendEvent("document.changed", "");}
     return ok;
 }
 bool StudioHost::placeAsset(const std::string& asset, double x, double y, double w, double h) {
@@ -1706,6 +1730,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
     }
     if (button == 2) { if (phase == 1) pan(dx, dy); return; }
     if (phase == 0) {
+        if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");
         m = {};
         m.active = true; m.pressX = x; m.pressY = y;
         // Explicit authored World Processes handles have priority only when
@@ -1715,7 +1740,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
         // Spline handles (Roads / Water "Edit nodes"): LMB on a handle drags it.
         if (!mods.alt && splineDrag(0, x, y, w, h)) { m.spline = true; return; }
         // Scene brush armed: plain LMB paints; Alt still orbits.
-        if (!mods.alt && brushArmed()) { m.stroke = terrainStroke(0, x, y, w, h); if (m.stroke) return; }
+        if (!mods.alt && brushArmed()) { m.stroke = terrainStroke(0, x, y, w, h); if (m.stroke||session_->sceneBrush().kind=="caverns") { if(!m.stroke)m.active=false;return; } }
         // Plain LMB on a handle starts a Move / Rotate / Scale drag (Unity W/E/R tools).
         m.move = !mods.alt && moveBegin(x, y, w, h);
         return;
@@ -1894,7 +1919,7 @@ void StudioHost::applyViewport(const Json& params) {
     NativeViewportPlacement placed;
     if (!platform_.placeSurface(StudioSurface::Scene, rect, placed)) return;
     placement_ = placed;
-    if (!placement_.visible) readyEmitted_ = false;
+    if (!placement_.visible) {readyEmitted_ = false;if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");mouse_={};}
 }
 Json StudioHost::viewportInput(const Json& input) {
     const std::string kind = input.getStr("kind");
@@ -2183,7 +2208,47 @@ bool StudioHost::handleHostMethod(const Json& req) {
         Json r = Json::object(); r.set("ok", Json::fromBool(true)); return r;
     });
     if (method == "studio.viewportInput") return answer([&] { return viewportInput(params); });
+    if (method == "studio.gameProfile") return answer([&] {
+        const auto& project=session_->workspace().project.dir;
+        if(project.empty()||params.getStr("expectedProject")!=project)
+            throw std::runtime_error("Simulation Profiler project changed");
+        const auto action=params.getStr("action");
+        if(action!="status"&&action!="start"&&action!="stop")throw std::runtime_error("Invalid profiler action");
+        uint32_t steps=0;
+        if(action=="start"){
+            const auto n=params["steps"].toDouble();
+            if(!params["steps"].isNumber()||!(n>=1&&n<=120)||double(int(n))!=n)
+                throw std::runtime_error("Invalid profile capture size");
+            steps=uint32_t(n);
+        }
+        if(game_)return game_->profile(action,steps);
+        if(action!="status")throw std::runtime_error("No local match is running");
+        Json out=Json::object();out.set("available",Json::fromBool(false));
+        out.set("epoch",Json::string("0"));out.set("reason",Json::string("No local match is running"));return out;
+    });
+    if (method == "studio.gameRegions") return answer([&] {
+        const auto& project=session_->workspace().project.dir;
+        if(project.empty()||params.getStr("expectedProject")!=project)
+            throw std::runtime_error("World Explorer project changed; refresh the panel");
+        if(game_)return game_->regions();
+        Json out=Json::object();
+        out.set("active",Json::fromBool(false));out.set("available",Json::fromBool(false));
+        out.set("epoch",Json::string("0"));out.set("tick",Json::number(int64_t(0)));
+        out.set("reason",Json::string("No local match is running"));return out;
+    });
+    if(method=="studio.gameEdit")return answer([&] {
+        const auto& project=session_->workspace().project.dir;
+        if(project.empty()||params.getStr("expectedProject")!=project)
+            throw std::runtime_error("Runtime edit project changed");
+        if(!game_)throw std::runtime_error("No local game running");
+        // Deliberately no Workspace mutation, document.changed or generic MCP command.
+        return game_->editRuntime(params);
+    });
     if (method == "studio.gameEntities" || method == "studio.gameInspect") return answer([&] {
+        // Older clients omit expectedProject. Entity Debugger always sends it.
+        if(params.has("expectedProject")&&(session_->workspace().project.dir.empty()||
+            params.getStr("expectedProject")!=session_->workspace().project.dir))
+            throw std::runtime_error("Runtime inspection project changed");
         if (method == "studio.gameEntities") {
             if (!params["offset"].isNumber() || !params["limit"].isNumber() || !params["query"].isString() ||
                 params["offset"].toDouble() < 0 || params["offset"].toDouble() > 10000000 ||
@@ -2196,16 +2261,38 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if (!game_) throw std::runtime_error("No game is running");
         return game_->inspect(params.getStr("epoch"), params.getStr("ref"));
     });
+    if(method=="studio.previewPlayChanges")return answer([&] {
+        playReview_=Json();
+        if(!game_||!game_->canReview(session_->workspace()))
+            throw std::runtime_error("Pause a local saved-map session with unchanged source before reviewing changes");
+        if(params.getStr("expectedProject")!=session_->workspace().project.dir)
+            throw std::runtime_error("Play review project changed");
+        for(const char* flag:{"positions","amounts","removeDead"})
+            if(params[flag].type()!=Json::Type::Bool)throw std::runtime_error("Invalid play review options");
+        const auto states=game_->mapEntityStates();
+        Json p=Json::object(),r=Json::object();
+        p.set("entities",states["entities"]);p.set("positions",params["positions"]);
+        p.set("amounts",params["amounts"]);p.set("removeDead",params["removeDead"]);p.set("dryRun",Json::fromBool(true));
+        r.set("id",req["id"]);r.set("method",Json::string("studio.keepPlayChanges"));r.set("params",p);
+        const auto preview=session_->dispatch(r);
+        if(preview.has("error"))throw std::runtime_error(preview.getStr("error"));
+        const auto token=std::to_string(++playReviewSerial_);
+        playReview_.set("token",Json::string(token));playReview_.set("epoch",game_->state()["epoch"]);
+        playReview_.set("states",states);p.erase("dryRun");playReview_.set("params",p);
+        auto out=preview["result"];out.set("token",Json::string(token));out.set("tick",states["tick"]);return out;
+    });
     if (method == "studio.keepPlayChanges") {
-        // The running game's map entities (positions, amounts, removed) go to the map as one History step.
+        // Only a reviewed native capture may be committed; never trust browser entity rows.
         Json reply = Json::object();
         reply.set("id", req["id"]);
         try {
-            if (!game_) throw std::runtime_error("No game is running");
-            const auto states = game_->mapEntityStates();
-            Json r = Json::object(), p = Json::object();
-            p.set("entities", states["entities"]);
-            p.set("removeDead", Json::fromBool(params.getBool("removeDead")));
+            const auto review=std::move(playReview_);playReview_=Json();
+            if(!game_||!game_->canReview(session_->workspace())||
+                params.getStr("expectedProject")!=session_->workspace().project.dir||
+                params.getStr("token").empty()||params.getStr("token")!=review.getStr("token")||
+                game_->state()["epoch"]!=review["epoch"]||game_->mapEntityStates()!=review["states"])
+                throw std::runtime_error("Play review expired; capture a new preview");
+            Json r=Json::object(),p=review["params"];
             r.set("id", req["id"]); r.set("method", Json::string("studio.keepPlayChanges")); r.set("params", p);
             reply = session_->dispatch(r);
             if (!reply.has("error")) sendEvent("document.changed", "");
@@ -2232,6 +2319,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
             }
             ensureGame();
             wpLiveSnapshot_=Json();wpLivePlanetProject_.clear();wpLivePlanetMapPath_.clear();wpLivePlanetRevision_=0;wpLiveRefresh_=0;
+            playReview_=Json();
             game_->start(plan, engineRoot_ + "/engine/assets");
             if(plan.map){
                 wpLivePlanetProject_=plan.project;
@@ -2241,12 +2329,22 @@ bool StudioHost::handleHostMethod(const Json& req) {
             rebuildOverlay();
             gameFrameTime_ = 0;
         } else if (method == "studio.gameStop" && game_) {
-            game_->stop();wpLiveSnapshot_=Json();wpLivePlanetMapPath_.clear();rebuildOverlay();
-        }
-        else if (method == "studio.gameControl") {
+            playReview_=Json();game_->stop();wpLiveSnapshot_=Json();wpLivePlanetMapPath_.clear();rebuildOverlay();
+        } else if (method == "studio.gameControl") {
             if (!game_) throw std::runtime_error("No game is running");
-            game_->control(params.getStr("action"));
-            if(params.getStr("action")=="restart"||params.getStr("action")=="checkpointRestore"){
+            playReview_=Json();
+            const auto action=params.getStr("action");
+            if(action=="restart"){
+                if(!game_->state().getBool("active"))throw std::runtime_error("Start a game before restarting");
+                const auto old=game_->launchPlan();
+                auto plan=studioGameLaunch(session_->workspace(),old.map.has_value());
+                plan.camera=old.camera;
+                game_->start(plan,engineRoot_+"/engine/assets");gameFrameTime_=0;
+                wpLivePlanetProject_=plan.project;
+                wpLivePlanetMapPath_=plan.map?session_->workspace().map.path:std::string{};
+                wpLivePlanetRevision_=plan.map?session_->workspace().map.revision:0;
+            }else game_->control(action);
+            if(action=="restart"||action=="checkpointRestore"){
                 wpLiveSnapshot_=Json();wpLiveRefresh_=0;rebuildOverlay();
             }
         }
@@ -2407,6 +2505,7 @@ void StudioHost::afterSessionReply(const Json& req, const Json& reply) {
         mapSnapshot_.reset(); rulesSnapshot_.reset();
     }
     if (method == "studio.materialPreview") sendEvent("material.preview", req["params"].getStr("name"));
+    if(method=="studio.assetMetaPatch"||method=="studio.assetHistoryStep"||method=="studio.assetTransferCommit"||method=="studio.assetDelete"||method=="studio.assetFolderCreate"||method=="studio.assetTrashApply"||method=="studio.assetHistoryResetApply"||method=="studio.agentBatchApply"||(method=="studio.agentHistoryStep"&&req["params"].getStr("scope")=="assets"))sendEvent("assets.changed", "");
     if (documentChangingMethods().count(method) || (method == "studio.op" && reply["result"].getBool("changed")))
         sendEvent("document.changed", "");
 }

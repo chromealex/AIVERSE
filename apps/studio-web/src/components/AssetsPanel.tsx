@@ -1,15 +1,15 @@
 import { copyText } from '../clipboard';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import {
   FileAudio, Box, FileCode2, FileImage, FileText, Folder, FolderOpen,
-  Grid2X2, List, RefreshCw, Search, ChevronRight, Library, Upload, FolderPlus, X, Link2, Unlink
+  Grid2X2, List, RefreshCw, Search, ChevronRight, Library, Upload, FolderPlus, X, Link2, Unlink, Trash2
 } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import type {
   StudioAsset, StudioAssetList, StudioAssetTransferPlan,
-  StudioAssetConflictAction, StudioAssetTransferItem
+  StudioAssetConflictAction, StudioAssetTransferItem, StudioDependencyPage
 } from '../types';
 import AssetThumb from './AssetThumb';
 import { assetKind, assetFolders, assetFileName, assetBreadcrumbs,
@@ -17,6 +17,7 @@ import { assetKind, assetFolders, assetFileName, assetBreadcrumbs,
 import type { AssetFolder, AssetKind } from '../assetTree';
 import './AssetsPanel.css';
 import AssetImportSettings from './AssetImportSettings';
+import AssetTrashDialog from './AssetTrashDialog';
 import { StudioContextMenu, type StudioMenuItem } from '../ui';
 
 const ASSET_DRAG_MIME='application/x-aiverse-content-path';
@@ -47,7 +48,7 @@ function choicesFor(item:StudioAssetTransferItem,source:StudioAssetTransferPlan[
   if(!collision)return ACTIONS.filter(a=>a.value==='import'||a.value==='skip');
   return ACTIONS.filter(a=>{
     if(a.value==='skip'||a.value==='keep-both')return true;
-    if(a.value==='replace')return source==='external' && !item.directory && collision.includes('name');
+    if(a.value==='replace')return source==='external' && !item.directory && item.replacementAvailable===true;
     if(a.value==='new-guid')return source==='external' && !item.directory && !collision.includes('name');
     return false;
   });
@@ -61,7 +62,9 @@ function PreviewDialog({plan,busy,onCancel,onCommit}:{
   const [selected,setSelected]=useState<Record<number,StudioAssetConflictAction>>(()=>Object.fromEntries(
     plan.items.map(item=>[item.id,item.conflict?'skip':'import'])));
   const pending=plan.items.filter(item=>selected[item.id]!=='skip').length;
-  const blocked=(plan.references??[]).filter(ref=>!ref.writable && selected[ref.id]!=='skip');
+  const mixedReplacement=plan.items.some(item=>selected[item.id]==='replace')&&plan.items.some(item=>selected[item.id]!=='replace'&&selected[item.id]!=='skip');
+  const blocked=(plan.references??[]).filter(ref=>!ref.writable&&!ref.validateOnApply&&selected[ref.id]!=='skip');
+  const resourceChecks=(plan.references??[]).filter(ref=>ref.validateOnApply&&selected[ref.id]!=='skip');
   return <div className="studio-asset-dialog-overlay">
     <section className="studio-asset-dialog" role="dialog" aria-modal="true"
       aria-label="Resolve asset import and move conflicts">
@@ -81,7 +84,7 @@ function PreviewDialog({plan,busy,onCancel,onCommit}:{
               <small>Ready · no conflict</small>}
             {(plan.references??[]).filter(ref=>ref.id===item.id).map((ref,index)=>
               <small key={index} className={ref.writable?'':'studio-asset-conflict-warning'}>
-                {ref.writable?'Will repair material reference: ':'Blocked: read-only reference: '}
+                {ref.writable?'Will repair material reference: ':ref.validateOnApply?(ref.preservesDefault?'Default move preserves resource; final choices rechecked: ':ref.repairCandidate?'Will attempt transactional resource path repair: ':'Resource must remain resolvable; final choices checked: '):'Blocked: read-only reference: '}
                 {ref.document} / {ref.owner} / {ref.field}
               </small>)}
           </div>
@@ -98,9 +101,11 @@ function PreviewDialog({plan,busy,onCancel,onCommit}:{
       </div>
       <footer>
         <span>{pending} of {plan.items.length} selected
-          {blocked.length>0?' · '+blocked.length+' read-only reference(s) block this move':''}</span>
+          {mixedReplacement?' · Apply replacements separately from new imports.':''}
+          {blocked.length>0?' · '+blocked.length+' read-only reference(s) block this move':''}
+          {resourceChecks.length>0?' · Native resource checks before commit':''}</span>
         <button type="button" disabled={busy} onClick={onCancel}>Cancel</button>
-        <button type="button" disabled={busy||blocked.length>0} className="studio-asset-confirm"
+        <button type="button" disabled={busy||blocked.length>0||mixedReplacement} className="studio-asset-confirm"
           onClick={()=>onCommit(plan.items.map(item=>({id:item.id,action:selected[item.id]||'skip'})))}>
           {busy?'Applying…':'Apply decisions'}
         </button>
@@ -133,10 +138,30 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
   // Usage: files no project data names (filter) and "Find References" for one asset.
   const [unusedOnly,setUnusedOnly]=useState(false);
   const [unused,setUnused]=useState<Set<string>|null>(null);
-  const [mentions,setMentions]=useState<{path:string;rows:Array<{file:string;line:number;text:string}>}|null>(null);
+  const [mentions,setMentions]=useState<{path:string;project:string;rows:Array<{file:string;line:number;text:string}>;graph:StudioDependencyPage|null;graphError:string}|null>(null);
+  const [referencePage,setReferencePage]=useState(0);
+  const [referenceDirection,setReferenceDirection]=useState<'incoming'|'outgoing'>('incoming');
+  const referenceRequest=useRef(0);
+  const [referenceLoading,setReferenceLoading]=useState(false);
   const findReferences=async(path:string)=>{
-    try{const r=await invoke('studio.assetUsage',{path});setMentions({path,rows:r.mentions??[]});}
-    catch(e){setError(String(e instanceof Error?e.message:e))}
+    const request=++referenceRequest.current;
+    setReferenceLoading(true);
+    const [usage,graph]=await Promise.allSettled([invoke('studio.assetUsage',{path}),invoke('studio.assetDependencyPage',{expectedProject:projectPath,path,depth:16,direction:'incoming',offset:0,limit:50})]);
+    if(request!==referenceRequest.current)return;
+    setReferencePage(0);setReferenceDirection('incoming');setReferenceLoading(false);
+    if(usage.status==='rejected')setError(String(usage.reason));
+    setMentions({path,project:projectPath,rows:usage.status==='fulfilled'?usage.value.mentions??[]:[],
+      graph:graph.status==='fulfilled'?graph.value:null,graphError:graph.status==='rejected'?String(graph.reason):''});
+  };
+  const loadReferencePage=async(direction:'incoming'|'outgoing',page:number)=>{
+    if(!mentions?.graph||referenceLoading)return;
+    const request=++referenceRequest.current, snapshot=mentions;
+    setReferenceLoading(true);
+    try{
+      const graph=await invoke('studio.assetDependencyPage',{expectedProject:projectPath,path:snapshot.path,depth:16,direction,offset:page*50,limit:50,expectedToken:snapshot.graph!.token});
+      if(request===referenceRequest.current){setMentions({...snapshot,graph,graphError:''});setReferenceDirection(direction);setReferencePage(page);}
+    }catch(e){if(request===referenceRequest.current)setMentions({...snapshot,graphError:String(e)});}
+    finally{if(request===referenceRequest.current)setReferenceLoading(false);}
   };
   const toggleUnused=async()=>{
     if(unusedOnly){setUnusedOnly(false);return;}
@@ -154,6 +179,10 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
   const [busy,setBusy]=useState(false);
   const [addingFolder,setAddingFolder]=useState(false);
   const [folderName,setFolderName]=useState('');
+  const [trashOpen,setTrashOpen]=useState(false);
+  const [renameTarget,setRenameTarget]=useState<string|null>(null);
+  const [renameName,setRenameName]=useState('');
+  const [deleteTarget,setDeleteTarget]=useState<{path:string;guid:string;project:string;version:string}|null>(null);
   const [plan,setPlan]=useState<StudioAssetTransferPlan|null>(null);
   const [refreshToken,setRefreshToken]=useState(0);
   // Folder tree width: drag the divider (persisted), double-click resets.
@@ -177,7 +206,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
   const native=nativeConnected();
   const reload=useCallback(()=>setRefreshToken(t=>t+1),[]);
   useEffect(()=>onNativeEvent((event,payload)=>{
-    if(event==='workspace.changed')reload();
+    if(event==='workspace.changed'||event==='assets.changed')reload();
     if(event==='assets.importPreview' && payload &&
        typeof payload==='object' && 'token' in payload && 'items' in payload){
       const candidate=payload as StudioAssetTransferPlan;
@@ -190,7 +219,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       setError(String(payload.message));
     }
   }),[reload]);
-  useEffect(()=>{setFolder('');setSelected(null);setPinnedAssetGuid(null);setSearch('');setPlan(null);},[projectPath]);
+  useEffect(()=>{setFolder('');setSelected(null);setPinnedAssetGuid(null);setSearch('');setPlan(null);setRenameTarget(null);setDeleteTarget(null);setTrashOpen(false);setMentions(null);setReferenceLoading(false);++referenceRequest.current;},[projectPath]);
   // Command palette (# assets) reveals a file: open its folder and select it.
   useEffect(()=>{
     const reveal=(event:Event)=>{
@@ -262,6 +291,39 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     }catch(e){setError(String(e instanceof Error?e.message:e))}
     finally{setBusy(false)}
   };
+  const reviewDelete=async(path:string)=>{
+    if(!native||!projectPath||busy)return;
+    const entry=[...catalog.files,...(catalog.folders??[])].find(item=>item.path===path);
+    if(!entry?.guid){setError('Refresh Assets before deleting');return;}
+    setBusy(true);setError('');
+    try{
+      const h=await invoke('studio.assetHistory',{});
+      if(!h.version||h.strokeActive)throw new Error('Finish the active stroke and refresh asset history');
+      setDeleteTarget({path,guid:entry.guid,project:projectPath,version:h.version});
+    }catch(e){setError(String(e instanceof Error?e.message:e))}
+    finally{setBusy(false)}
+  };
+  const deleteAsset=async()=>{
+    if(!deleteTarget||busy||deleteTarget.project!==projectPath)return;
+    setBusy(true);setError('');setMessage('');
+    try{
+      const r=await invoke('studio.assetDelete',{path:deleteTarget.path,guid:deleteTarget.guid,
+        expectedProject:deleteTarget.project,expectedVersion:deleteTarget.version,confirmed:true});
+      setDeleteTarget(null);setSelected(null);setPinnedAssetGuid(null);
+      setMessage('Moved to recovery storage: '+r.path+(r.historyRecorded?' · Undo in History / Assets':' · Recovery: '+r.backup));
+      reload();
+    }catch(e){setDeleteTarget(null);setError(String(e instanceof Error?e.message:e))}
+    finally{setBusy(false)}
+  };
+  const previewRename=async()=>{
+    if(!native||!projectPath||busy||!renameTarget||!renameName.trim())return;
+    setBusy(true);setError('');setMessage('');
+    try{
+      const result=await invoke('studio.assetMovePreview',{paths:[renameTarget],destination:'',newName:renameName.trim()});
+      setRenameTarget(null);setPlan(result);
+    }catch(e){setError(String(e instanceof Error?e.message:e))}
+    finally{setBusy(false)}
+  };
   const applyTransfer=async(decisions:Array<{id:number;action:StudioAssetConflictAction}>)=>{
     if(!plan||busy)return;
     setBusy(true);setError('');
@@ -271,7 +333,9 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       setMessage(response.files.length+' asset(s) processed'+
         (response.repairedMaterialReferences
           ? ' · '+response.repairedMaterialReferences+' material reference(s) repaired' : '')+
-        (response.issues.length?' · '+response.issues.length+' issue(s)':''));
+        (response.repairedResourceDocuments?' · '+response.repairedResourceDocuments+' model document(s) repaired':'')+
+        (response.issues.length?' · '+response.issues.length+' issue(s)':'')+
+        (response.files.length&&response.historyRecorded===false?' · Not retained in asset history':''));
       if(response.issues.length)setError(response.issues.map(x=>x.name+': '+x.message).join('; '));
       reload();
     }catch(e){setError(String(e instanceof Error?e.message:e))}
@@ -328,9 +392,11 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     target.directory
       ?{id:'open',label:'Open Folder',icon:<FolderOpen size={13}/>,onSelect:()=>goTo(target.path)}
       :{id:'settings',label:'Import Settings',icon:<Library size={13}/>,disabled:!native,onSelect:()=>setSelected(target.path)},
+    {id:'delete',label:'Move to Trash…',disabled:!native||!projectPath||busy,onSelect:()=>void reviewDelete(target.path)},
+    {id:'rename',label:'Rename…',disabled:!native||!projectPath||busy,onSelect:()=>{setRenameTarget(target.path);setRenameName(assetFileName(target.path));}},
     {id:'copy',label:'Copy Path',icon:<Search size={13}/>,onSelect:()=>copyPath(target.path)},
-    ...(target.directory?[]:[{id:'refs',label:'Find References',icon:<Link2 size={13}/>,disabled:!native||!projectPath,
-      onSelect:()=>void findReferences(target.path)} as StudioMenuItem]),
+    {id:'refs',label:'Find References',icon:<Link2 size={13}/>,disabled:!native||!projectPath,
+      onSelect:()=>void findReferences(target.path)},
     {id:'folder',label:'New Folder Here',icon:<FolderPlus size={13}/>,separator:true,disabled:!native||!projectPath||busy,
       onSelect:()=>{if(target.directory)goTo(target.path);setAddingFolder(true)}},
     {id:'import',label:'Import Into Here…',icon:<Upload size={13}/>,disabled:!native||!projectPath||busy,
@@ -369,6 +435,8 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       <button type="button" className="studio-assets-tool-action"
         disabled={!native||!projectPath||busy} onClick={()=>void externalImport()}
         title="Import files or folders" aria-label="Import into content"><Upload size={16}/></button>
+      <button type="button" className="studio-assets-tool-action" disabled={!native||!projectPath||busy}
+        onClick={()=>setTrashOpen(true)} title="Recover deleted assets and previous versions" aria-label="Open asset Trash"><Trash2 size={16}/></button>
       <div className="studio-assets-views" role="group" aria-label="Asset layout">
         <button type="button" aria-label="Grid view" title="Grid view"
           aria-pressed={mode==='grid'} onClick={()=>setMode('grid')}><Grid2X2 size={15}/></button>
@@ -388,6 +456,23 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
         onChange={event=>setFolderName(event.target.value)} placeholder="Folder name"/>
       <button type="submit" disabled={!folderName.trim()||busy}>Create</button>
       <button type="button" onClick={()=>{setAddingFolder(false);setFolderName('')}}>Cancel</button>
+    </form>}
+    {deleteTarget&&<div className="studio-asset-dialog-overlay" data-native-overlay>
+      <section className="studio-asset-dialog" role="dialog" aria-modal="true" aria-label="Confirm asset deletion">
+        <header><div><h3>Move to Trash?</h3><p>{'content/'+deleteTarget.path}</p></div></header>
+        <p>The asset and metadata move to project recovery storage. Undo is available in History / Assets if retained. Known map, rules and material references block deletion.</p>
+        <footer><button type="button" disabled={busy} onClick={()=>setDeleteTarget(null)}>Cancel</button>
+          <button type="button" className="studio-asset-confirm" disabled={busy} onClick={()=>void deleteAsset()}>{busy?'Moving…':'Move to Trash'}</button></footer>
+      </section>
+    </div>}
+    {renameTarget&&<form className="studio-assets-create-folder" onSubmit={event=>{
+      event.preventDefault();void previewRename();
+    }}>
+      <span title={renameTarget}>Rename {assetFileName(renameTarget)}</span>
+      <input autoFocus aria-label="New asset filename" value={renameName}
+        onChange={event=>setRenameName(event.target.value)} placeholder="Name (keep file extension)"/>
+      <button type="submit" disabled={!renameName.trim()||busy||renameName.trim()===assetFileName(renameTarget)}>Review</button>
+      <button type="button" disabled={busy} onClick={()=>setRenameTarget(null)}>Cancel</button>
     </form>}
     {creatingMaterial&&<form className="studio-assets-create-folder" onSubmit={event=>{
       event.preventDefault();void createMaterial();
@@ -467,7 +552,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
             </div>}
       </div>
       {selectedAsset&&native&&<AssetImportSettings key={selectedAsset.guid||selectedAsset.path}
-        asset={selectedAsset} locked={pinnedAssetGuid!==null}
+        asset={selectedAsset} refreshToken={refreshToken} locked={pinnedAssetGuid!==null}
         onToggleLock={toggleAssetPin} onClose={()=>{setSelected(null);setPinnedAssetGuid(null)}}
         onSaved={reload} onError={setError}/>}
     </div>
@@ -476,13 +561,41 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       <span className="studio-assets-current">{selected?
         'content/'+selected:search?'Search in content/':folder?'content/'+folder:'content/'}</span>
     </footer>
-    {mentions&&<div className="studio-assets-refs" role="dialog" aria-label={'References to '+mentions.path} data-native-overlay>
-      <header><Link2 size={13}/><b>content/{mentions.path}</b><span>{mentions.rows.length?mentions.rows.length+' mention(s)':'not named by any project file'}</span>
-        <button type="button" aria-label="Close" onClick={()=>setMentions(null)}><X size={13}/></button></header>
-      <ul>{mentions.rows.map((r,i)=><li key={i}><code>{r.file}:{r.line}</code><span>{r.text}</span></li>)}</ul>
+    {mentions&&mentions.project===projectPath&&<div className="studio-assets-refs" role="dialog" aria-label={'References to '+mentions.path} data-native-overlay>
+      <header><Link2 size={13}/><b>content/{mentions.path}</b><span>Asset dependencies</span>
+        <button type="button" aria-label="Close" onClick={()=>{++referenceRequest.current;setMentions(null);setReferenceLoading(false);}}><X size={13}/></button></header>
+      <div className="studio-assets-dependency-body">
+        {mentions.graphError?<><p role="alert">Dependency graph unavailable: {mentions.graphError}</p><button type="button" disabled={referenceLoading} onClick={()=>void findReferences(mentions.path)}>Refresh graph</button></>:<>
+          <div className="studio-assets-dependency-tabs">
+            {(['incoming','outgoing'] as const).map(direction=><button key={direction} type="button"
+              aria-pressed={referenceDirection===direction} disabled={referenceLoading} onClick={()=>void loadReferencePage(direction,0)}>
+              {direction==='incoming'?'Used by':'Depends on'} ({direction==='incoming'?mentions.graph?.incoming??0:mentions.graph?.outgoing??0})
+            </button>)}
+          </div>
+          <ul>{(mentions.graph?.items??[]).map((r,i)=>{
+            const endpoint=referenceDirection==='incoming'?r.document:r.path;
+            const path=endpoint.startsWith('content/')?endpoint.slice(8):'';
+            const canNavigate=!!path&&catalog.files.some(asset=>asset.path===path);
+            return <li key={i}>
+              {canNavigate?<button type="button" onClick={()=>void findReferences(path)} title={'Inspect '+endpoint}>{endpoint}</button>:<code>{endpoint}</code>}
+              <span title={r.document+' · '+r.field}>Hop {r.depth??1} · {r.field}{r.cycle?' · Cycle closing edge':''}{referenceDirection==='outgoing'&&!r.guid?' · No indexed GUID':''}</span>
+            </li>;
+          })}</ul>
+          <div className="studio-assets-dependency-tabs">
+            <button type="button" disabled={referenceLoading||referencePage===0} onClick={()=>void loadReferencePage(referenceDirection,referencePage-1)}>Previous</button>
+            <span>Page {referencePage+1}</span>
+            <button type="button" disabled={referenceLoading||(referencePage+1)*50>=(mentions.graph?.total??0)} onClick={()=>void loadReferencePage(referenceDirection,referencePage+1)}>Next</button>
+          </div>
+          {mentions.graph&&<><p>Known edges up to 16 hops · {mentions.graph.unresolved} unresolved GUID occurrences. Cycle labels mark closing edges.</p>
+          <p>Scanned models: {mentions.graph.coverage.gltf} glTF · {mentions.graph.coverage.glb} GLB · {mentions.graph.coverage.obj} OBJ · {mentions.graph.coverage.dae} DAE. Coverage gaps: {mentions.graph.coverage.opaqueGlb} opaque GLB, {mentions.graph.coverage.unsupportedModels} other models, {mentions.graph.coverage.unsupportedUris} unsupported URIs, {mentions.graph.coverage.missingLibraries} missing MTL, {mentions.graph.coverage.symlinks} symlinks.</p><p>{mentions.graph.coverage.note}</p></>}
+        </>}
+        <h4>Text mentions ({mentions.rows.length})</h4>
+        <ul>{mentions.rows.map((r,i)=><li key={i}><code>{r.file}:{r.line}</code><span>{r.text}</span></li>)}</ul>
+      </div>
     </div>}
     {menu&&<StudioContextMenu x={menu.x} y={menu.y} label="Asset actions"
       items={menu.background?backgroundItems():menuItems(menu)} onClose={()=>setMenu(null)}/>}
+    {trashOpen&&<AssetTrashDialog key={projectPath} projectPath={projectPath} onClose={()=>setTrashOpen(false)} onChanged={reload}/>}
     {plan&&<PreviewDialog key={plan.token} plan={plan} busy={busy}
       onCancel={()=>setPlan(null)} onCommit={decisions=>void applyTransfer(decisions)}/>}
   </section>;

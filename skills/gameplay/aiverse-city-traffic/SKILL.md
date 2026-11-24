@@ -17,3 +17,29 @@ Behaviour and format: `docs/traffic.md`. Simulation: `engine/game/Traffic.*`, `e
 Host: the traffic simulation is a system of `engine/game` (GameCore, the one host for every project).
 
 Game-specific type ids or variable names never go into `engine/game`: put them in rules data or the game's `native/`.
+
+## Population decision budget
+
+Optional rules `traffic.population.updatePeriodTicks` (0 = two seconds at simulation tick rate, 1..36000 explicit) and `maxUpdatesPerTick` (0 = automatic, 1..200000 explicit) tune the existing recurring population scan. Use `simulation_budget_plan` with count, periodTicks and maxVisitsPerTick to see actual maximum revisit latency. The cap may intentionally miss the desired period; do not interpret it as a guaranteed two-second reaction. No additional mutable owner or save fields. Mandatory physics and live movement are unchanged. Keep actual project rules in data; no genre-specific host or duplicate city implementation. Native and MCP acceptance pending.
+## W1.30a — virtual journey deadline catch-up
+
+Enable the existing root `simulationLod` policy in project rules (for
+example `"simulationLod":{"enabled":true}`). No new rule key or store is
+introduced. Traffic uses its existing persisted citizen record, ID/index,
+`left`, `eta`, leg, stop and school fields. Already virtual pedestrian,
+car and bus journeys without a materialized body or parked car advance
+over expired legs using each saved arrival tick as the next departure.
+The owner bounds this to five transitions, rejects invalid timelines or
+overflow, and then uses the existing materialization path for a remaining
+leg. Held citizens, active bodies, linked parked cars, and live bus
+passengers stay with their existing owners. No extra RNG, physics or
+spawn inside catch-up. The existing population polling budget is unchanged.
+
+The default-disabled policy retains the one-leg-per-poll behavior and
+ordinary valid trip timing. Both paths share checked deadline calculation;
+an unrepresentable trip now fails instead of wrapping the 32-bit tick.
+Rules edits change persistence content identity; use the existing
+Simulation LOD authoring operation and restart with compatible state.
+This is canonical virtual journey advancement, not general ECS component
+parking, true absence of arbitrary vehicles, full citizen-schedule
+catch-up, or a proven performance improvement. Native acceptance NOT RUN.

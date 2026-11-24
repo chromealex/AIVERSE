@@ -137,7 +137,7 @@ inline bool initializePlanetSeaVolume(World& world,const Surface& surface,Entity
     if(level<columns->minimumLevel||level>kMaxRadiusCm)return false;
     const auto volume=columns->volume(level);
     if(!volume)return false;
-    world.add<PlanetSeaVolumeComponent>(e,{volume,0});
+    world.add<PlanetSeaVolumeComponent>(e,PlanetSeaVolumeComponent{volume,0});
     world.get<WaterSphereComponent>(e).surfaceRadius=Fixed::fromRatio(level,100);
     return true;
 }
