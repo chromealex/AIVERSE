@@ -1,0 +1,53 @@
+name: Caverns Stage55 acceptance
+on:
+  push:
+    branches: [integration/caverns-studio-stage54c-20261124]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: caverns-stage55-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install native dependencies
+        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build libx11-dev libegl-dev libgles-dev libvulkan-dev xvfb
+      - name: Enable optional physics and record build configuration
+        run: |
+          cmake -S . -B build/caverns-stage55 -DCMAKE_BUILD_TYPE=Debug -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_ENABLE_PHYSICS=ON -DAIVERSE_BUILD_EDITOR=ON -DAIVERSE_BUILD_STUDIO_HTML5=OFF -DAIVERSE_FETCH_TEMPLATES=OFF
+          ctest --test-dir build/caverns-stage55 -N > build/caverns-stage55/inventory.txt
+          grep -q 'terraweave_caverns_planet_collision' build/caverns-stage55/inventory.txt
+          grep -q 'terraweave_caverns_editor_test' build/caverns-stage55/inventory.txt
+      - name: Unified runner (focused Caverns contracts)
+        run: xvfb-run -a bash run-tests.sh --build-dir build/caverns-stage55 --filter 'caverns' --jobs 4
+      - name: Preserve native diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: caverns-native-${{ github.sha }}
+          path: |
+            build/caverns-stage55/inventory.txt
+            build/caverns-stage55/test-reports/
+            build/caverns-stage55/CMakeCache.txt
+            build/caverns-stage55/CMakeFiles/CMakeConfigureLog.yaml
+  studio-web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Studio frontend contracts
+        working-directory: apps/studio-web
+        run: |
+          npm install --no-audit --no-fund
+          npm run typecheck
+          npm run test:web
+          npm run build

@@ -5420,3 +5420,8 @@ if(AIVERSE_BUILD_TESTS)
         set_tests_properties(warcraft3_importer_python PROPERTIES LABELS "TOOLS;IMPORT")
     endif()
 endif()
+
+# Stage55: full native Caverns fixtures use the same CTest entry point.
+if(AIVERSE_BUILD_TESTS AND AIVERSE_DESKTOP AND NOT EMSCRIPTEN)
+    include(tests/caverns/IntegrationTests.cmake)
+endif()
