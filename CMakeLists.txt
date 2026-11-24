@@ -1673,6 +1673,8 @@ if(AIVERSE_BUILD_CLIENT)
     elseif(AIVERSE_PLATFORM STREQUAL "android")
         add_library(main SHARED apps/client/main.cpp)
         target_link_libraries(main PRIVATE aiverse_client_runtime aiverse_game_view aiverse_i18n AIVERSE::InputFlow)
+        # Android game client is SHARED, not covered by the executable host scan.
+        target_link_libraries(main PRIVATE AIVERSE::native_modules)
         target_link_libraries(main PRIVATE aiverse_game_audio)
         # Keep ANativeActivity_onCreate from the glue library.
         set_target_properties(main PROPERTIES LINK_FLAGS "-u ANativeActivity_onCreate")
