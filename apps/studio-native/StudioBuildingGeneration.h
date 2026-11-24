@@ -383,6 +383,30 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
         out.set("sockets",std::move(sockets));
         out.set("solids",Json::number(int64_t(detailed.graph.solids.size())));
         out.set("connections",Json::number(int64_t(detailed.graph.connections.size())));
+        // Counts of authored geometry and generated preview AABBs only.
+        // Dynamic runtime owners can omit panels/platforms from static boxes.
+        Json geometry=Json::object(),parts=Json::object();
+        const std::pair<BuildingGraphPart,const char*> categories[]={
+            {BuildingGraphPart::Floor,"floor"},{BuildingGraphPart::Wall,"wall"},
+            {BuildingGraphPart::Trim,"trim"},{BuildingGraphPart::DoorLeaf,"door-leaf"},
+            {BuildingGraphPart::Roof,"roof"},{BuildingGraphPart::RoofPanel,"roof-panel"},
+            {BuildingGraphPart::WindowPane,"window-pane"},{BuildingGraphPart::Partition,"partition"},
+            {BuildingGraphPart::StairTread,"stair-tread"},{BuildingGraphPart::StairLanding,"stair-landing"},
+            {BuildingGraphPart::ElevatorPlatform,"elevator-platform"},{BuildingGraphPart::ElevatorGuide,"elevator-guide"}
+        };
+        size_t movable=0;
+        for(const auto& [kind,name]:categories){
+            const auto count=std::count_if(detailed.graph.solids.begin(),detailed.graph.solids.end(),[&](const auto& solid){return solid.part==kind;});
+            parts.set(name,Json::number(int64_t(count)));
+            if(kind==BuildingGraphPart::DoorLeaf||kind==BuildingGraphPart::RoofPanel||kind==BuildingGraphPart::ElevatorPlatform)
+                movable+=size_t(count);
+        }
+        geometry.set("version",Json::number(int64_t(1)));
+        geometry.set("parts",std::move(parts));
+        geometry.set("previewBoxes",Json::number(int64_t(detailed.building.boxes.size())));
+        geometry.set("movableParts",Json::number(int64_t(movable)));
+        geometry.set("staticParts",Json::number(int64_t(detailed.graph.solids.size()-movable)));
+        out.set("geometry",std::move(geometry));
         out.set("topology",studioBuildingTopology(detailed.graph));
         if(params.has("routeQuery"))out.set("route",studioBuildingRoute(detailed.graph,params["routeQuery"]));
     }
