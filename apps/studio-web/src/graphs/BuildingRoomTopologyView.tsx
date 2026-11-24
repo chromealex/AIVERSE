@@ -1,7 +1,7 @@
 import {useMemo,useState} from 'react';
 import {StudioAlert,StudioButton,StudioSection,StudioSelect} from '../ui';
 import GraphCanvas from './GraphCanvas';
-import {connectionNodeId,parseBuildingRoute,projectBuildingRoomTopology,roomComponentMembers,roomNodeId} from './buildingRoomTopology';
+import {connectionNodeId,exteriorConnectivity,exteriorNodeId,parseBuildingRoute,projectBuildingRoomTopology,roomComponentMembers,roomNodeId} from './buildingRoomTopology';
 import type {BuildingRoomTopology,BuildingRouteQuery,BuildingRouteResult} from './buildingRoomTopology';
 
 export function BuildingRoomTopologyView({data,onSelectSocket,onRoute}:{data:BuildingRoomTopology;onSelectSocket?:(id:string)=>void;onRoute?:(query:BuildingRouteQuery)=>Promise<unknown>}){
@@ -10,11 +10,14 @@ export function BuildingRoomTopologyView({data,onSelectSocket,onRoute}:{data:Bui
  const room=data.rooms.find(r=>roomNodeId(r)===selected);
  const edge=data.connections.find(e=>connectionNodeId(e)===selected);
  const members=room?roomComponentMembers(data,room.id,withoutElevators):[];
+ const exterior=useMemo(()=>exteriorConnectivity(data,withoutElevators),[data,withoutElevators]);
+ const selectedApertures=(data.exteriorApertures??[]).filter(a=>exteriorNodeId(a.socketId)===selected);
+ const [showExteriorGaps,setShowExteriorGaps]=useState(false);
  const [allowStairs,setAllowStairs]=useState(true),[pending,setPending]=useState(false);
  const [route,setRoute]=useState<{data:BuildingRoomTopology;query:BuildingRouteQuery;result?:BuildingRouteResult;error?:string}|null>(null);
  const current=route&&route.data===data&&route.query.start===room?.id&&route.query.goal===target&&route.query.allowStairs===allowStairs&&route.query.allowElevators===!withoutElevators?route:null;
  const currentRoute=current?.result;
- const highlighted=currentRoute?.reachable?['room:'+currentRoute.start,...currentRoute.steps.flatMap(s=>['connection:'+s.edgeId,'room:'+s.to])]:currentRoute?[]:members.map(roomNodeId);
+ const highlighted=currentRoute?.reachable?['room:'+currentRoute.start,...currentRoute.steps.flatMap(s=>['connection:'+s.edgeId,'room:'+s.to])]:currentRoute?[]:showExteriorGaps?(exterior?.roomsWithoutExterior??[]).map(roomNodeId):selectedApertures.length?[selected,...selectedApertures.map(a=>'room:'+a.roomId)]:members.map(roomNodeId);
  const runRoute=async()=>{
   if(!onRoute||!room||!data.rooms.some(r=>r.id===target)||pending)return;
   const query={start:room.id,goal:target,allowStairs,allowElevators:!withoutElevators};
@@ -37,9 +40,14 @@ export function BuildingRoomTopologyView({data,onSelectSocket,onRoute}:{data:Bui
    </StudioSelect>
   </div>
   <small>{data.rooms.length} rooms · {data.connections.length} authored transitions · {groups} connected groups · {view.nodes.length} visible nodes</small>
+  {exterior===undefined?<small>Exterior aperture data unavailable in this report.</small>:<div className="au-stack">
+   <small>{exterior.entranceCount} authored exterior entrances · {exterior.groupsWithoutExterior.length} room groups without entrance overlap · stairs allowed</small>
+   {exterior.entranceCount===0?<StudioAlert tone="warning">No authored exterior entrance overlaps reported.</StudioAlert>:exterior.roomsWithoutExterior.length>0&&<StudioAlert tone="warning">{exterior.roomsWithoutExterior.length} rooms belong to native groups with no authored entrance overlap under the selected connectivity policy.</StudioAlert>}
+   <StudioButton size="sm" disabled={!exterior.roomsWithoutExterior.length&&!showExteriorGaps} onClick={()=>{setShowExteriorGaps(!showExteriorGaps);setRoute(null);setSelected('');setFloor(null)}}>{showExteriorGaps?'Clear exterior diagnostics':'Highlight groups without entrance'}</StudioButton>
+  </div>}
   {groups>1&&<StudioAlert tone="warning">Disconnected room groups under the selected structural policy. Select a room to inspect its reachable group.</StudioAlert>}
   <div style={{height:340,display:'flex',flexDirection:'column',minWidth:0}}>
-   <GraphCanvas view={view} label="Native authored room and transition topology" selected={active} highlighted={highlighted} readOnly onSelect={setSelected} onMove={()=>{}}/>
+   <GraphCanvas view={view} label="Native authored room and transition topology" selected={active} highlighted={highlighted} readOnly onSelect={id=>{setShowExteriorGaps(false);setSelected(id)}} onMove={()=>{}}/>
   </div>
   {room&&<div className="au-stack"><strong>{room.id}</strong>
    <small>Floor {room.floor+1} · grid {room.x+1}, {room.z+1}</small>
@@ -66,6 +74,15 @@ export function BuildingRoomTopologyView({data,onSelectSocket,onRoute}:{data:Bui
     {currentRoute?.steps.map((s,i)=><small key={s.edgeId}>{i+1}. {s.from} → {s.to} · {data.connections.find(e=>e.id===s.edgeId)?.kind} · {s.edgeId}</small>)}
    </div>}
    {connected!==null&&<StudioAlert tone={connected?'success':'warning'}>{connected?'Connected in native authored topology with stairs allowed.':'No authored connection under this policy.'} This is not a runtime path guarantee.</StudioAlert>}
+  </div>}
+  {selectedApertures.length>0&&<div className="au-stack">
+   <strong>{selectedApertures[0].socketId} · authored exterior entrance</strong>
+   <small>{selectedApertures.length} overlapping ground-floor rooms. These links are not routing shortcuts.</small>
+   {selectedApertures.map(a=><div key={a.roomId} className="au-row">
+    <small>{a.roomId} · {(a.end-a.start).toFixed(2)} m overlap</small>
+    <StudioButton size="sm" onClick={()=>setSelected('room:'+a.roomId)}>Inspect room</StudioButton>
+   </div>)}
+   {onSelectSocket&&<StudioButton size="sm" onClick={()=>onSelectSocket(selectedApertures[0].socketId)}>Select source entrance</StudioButton>}
   </div>}
   {edge&&<div className="au-stack"><strong>{edge.id} · {edge.kind}</strong>
    <small>{edge.from} ↔ {edge.to}</small><small>Position {edge.position.join(', ')} m · width {edge.width} m · height {edge.height} m</small>
