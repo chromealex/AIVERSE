@@ -1738,3 +1738,20 @@ boarding/motion/exit, graph ACK gate, persistent mid-trip checkpoint
 and independent scene lifecycle. Focused CI also typechecks the source.
 No successful native execution or GPU result is claimed yet. Handoff:
 docs/agent-handoffs/buildings-stage-23v7.md.
+
+## Stage 23W.1 — verified standalone CPU checks
+
+Linux arm64 job 138236694049 at ab090304 failed compiling WorldScene
+due to wallSection receiving a side integer instead of BuildingGraphPart,
+a nonportable std::min integer overload in lift movement, and unused col
+in the surface generator. The lift min fix already exists from 23V.3;
+23W.1 fixes the two remaining exact source diagnostics and adds wall
+sill/lintel/pane geometry assertions.
+
+Executed standalone building_surface_pattern_tests and
+building_structure_graph_tests with GCC 14.2 and Clang 17, C++20,
+-O1 -Wall -Wextra -Werror -pedantic, using Git blob SHA-verified copies
+of the relevant repository files and exact proposed edits. Both suites
+PASS on both compilers. These are CPU tests only, not GLB/GPU or
+native Simulation/PHYSIS/Replica/Studio execution.
+Handoff: docs/agent-handoffs/buildings-stage-23w1.md.

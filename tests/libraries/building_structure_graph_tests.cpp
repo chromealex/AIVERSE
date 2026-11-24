@@ -62,6 +62,16 @@ int main(){
         }
         CHECK(panes==2&&slabs==2);
         CHECK(!intersects(a,7.f,2.f,0.15f,BuildingGraphPart::Wall));
+        // Wall bands below/above windows and above entrances must remain
+        // structural Wall solids, never opaque fill over the clear opening.
+        CHECK(intersects(a,7.f,5.f,0.15f,BuildingGraphPart::Wall));
+        for(const auto& socket:a.sockets){
+            if(socket.kind!=BuildingFeatureKind::Window)continue;
+            CHECK(intersects(a,0.18f,socket.y-0.2f,socket.z,BuildingGraphPart::Wall));
+            CHECK(!intersects(a,0.18f,socket.y+0.5f,socket.z,BuildingGraphPart::Wall));
+            CHECK(intersects(a,0.18f,socket.y+0.5f,socket.z,BuildingGraphPart::WindowPane));
+            CHECK(intersects(a,0.18f,socket.y+socket.height+0.2f,socket.z,BuildingGraphPart::Wall));
+        }
         CHECK(!intersects(a,13.f,13.86f,10.f,BuildingGraphPart::Roof));
         CHECK(!intersects(a,13.f,13.86f,10.f,BuildingGraphPart::RoofPanel));
         auto bad=r;bad.floors=7;CHECK(!buildFunctionalStructureGraph(bad));

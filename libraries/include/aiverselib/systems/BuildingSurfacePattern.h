@@ -45,7 +45,7 @@ inline int buildingSurfaceHeight(
     x=(x%128+128)%128;y=(y%128+128)%128;
     const int coarse=int(buildingSurfacePixelHash(seed,x/8,y/8)&31u);
     const int grain=int(buildingSurfacePixelHash(seed,x,y)&31u)-15;
-    const int row=y/16,col=(x+((row&1)?8:0))/16;
+    const int row=y/16;
     if(pattern=="brick")return (y%16<2||(x+((row&1)?8:0))%16<2)
         ?24:151+coarse+grain/2;
     if(pattern=="stone")return (y%32<2||x%32<2)
