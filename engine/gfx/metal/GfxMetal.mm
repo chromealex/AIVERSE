@@ -1925,6 +1925,9 @@ public:
     bool supportsStorageBufferTextureCopy() const override {
         return supportsCompute() && gpuHealthy();
     }
+    bool supportsHdrTextureMipGeneration(PixelFormat f) const override {
+        return f==PixelFormat::RGBA16F&&supportsStorageBufferTextureCopy()&&supports(f);
+    }
     bool copyStorageBufferToTexture2D(BufferHandle from,TextureHandle to,
                                      const BufferTextureCopy2D& copy) override {
         auto* source=buffers_.get(from.id);
@@ -1939,7 +1942,7 @@ public:
            dst->tex.framebufferOnly||
            (dst->tex.usage&MTLTextureUsageRenderTarget)||
            (format!=MTLPixelFormatRGBA8Unorm&&format!=MTLPixelFormatRGBA8Unorm_sRGB&&format!=MTLPixelFormatRGBA16Float&&format!=MTLPixelFormatRGBA32Float)||
-           (bpp!=4&&copy.generateMipmaps)||
+           (bpp!=4&&copy.generateMipmaps&&!supportsHdrTextureMipGeneration(dst->fmt))||
            !validBufferTextureCopy2D(copy,source->size,int(dst->tex.width),int(dst->tex.height),bpp)) {
             error_="Metal: rejected storage buffer to RGBA texture copy";return false;
         }

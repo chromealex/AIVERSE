@@ -729,7 +729,7 @@ TextureHandle VulkanDevice::createTexture(const TextureDesc& d) {
     else if (d.levelCount > 0 && d.levelData) t.levels = d.levelCount;
     else if (d.mipLevels > 0) t.levels = d.mipLevels;
     else if (d.mipmaps && !t.depth && !d.renderTarget &&
-             d.format != PixelFormat::RGBA16F && d.format != PixelFormat::RGBA32F) {
+             d.format != PixelFormat::RGBA32F && (d.format!=PixelFormat::RGBA16F||supportsHdrTextureMipGeneration(d.format))) {
         VkFormatProperties fp;
         vkGetPhysicalDeviceFormatProperties(gpu_, t.vkFormat, &fp);
         const auto need = VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT |
@@ -811,6 +811,12 @@ TextureHandle VulkanDevice::createTexture(const TextureDesc& d) {
 
 // GPU storage writes -> transfer read -> sampled image. Keep the ordinary
 // texture's shader-readable layout contract; no CPU staging or mapping.
+bool VulkanDevice::supportsHdrTextureMipGeneration(PixelFormat f) const {
+    if(f!=PixelFormat::RGBA16F||!supportsStorageBufferTextureCopy()||!supports(f))return false;
+    VkFormatProperties fp{};vkGetPhysicalDeviceFormatProperties(gpu_,VK_FORMAT_R16G16B16A16_SFLOAT,&fp);
+    constexpr auto need=VK_FORMAT_FEATURE_BLIT_SRC_BIT|VK_FORMAT_FEATURE_BLIT_DST_BIT|VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+    return (fp.optimalTilingFeatures&need)==need;
+}
 bool VulkanDevice::copyStorageBufferToTexture2D(BufferHandle from,TextureHandle to,
         const BufferTextureCopy2D& copy) {
     const auto* src=buffers_.get(from.id);
@@ -823,7 +829,7 @@ bool VulkanDevice::copyStorageBufferToTexture2D(BufferHandle from,TextureHandle 
        dst->layers!=1||dst->samples!=1||
        (copy.generateMipmaps?(!dst->generateMips||dst->levels!=maxTextureMipLevels(copy.width,copy.height,1)):dst->levels!=1)||
        (dst->format!=PixelFormat::RGBA8&&dst->format!=PixelFormat::RGBA8_sRGB&&dst->format!=PixelFormat::RGBA16F&&dst->format!=PixelFormat::RGBA32F)||
-       (bpp!=4&&copy.generateMipmaps)||
+       (bpp!=4&&copy.generateMipmaps&&!supportsHdrTextureMipGeneration(dst->format))||
        !validBufferTextureCopy2D(copy,src->size,dst->width,dst->height,bpp)) {
         error_="Vulkan: rejected storage buffer to RGBA texture copy";return false;
     }

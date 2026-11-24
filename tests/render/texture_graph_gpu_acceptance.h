@@ -303,19 +303,22 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
             const auto pixelFormat=std::string_view(format)=="rgba16f"?gfx::PixelFormat::RGBA16F:gfx::PixelFormat::RGBA32F;
             if(!dev.supports(pixelFormat))continue;
             auto residentHdr=hdrBake;residentHdr.set("residentRadianceFormat",Json::string(format));
+            const bool hdrMips=dev.supportsHdrTextureMipGeneration(pixelFormat);residentHdr.set("gpuTextureMipmaps",Json::fromBool(hdrMips));
             const auto residentId=owner.start(residentHdr,project,lifetime.lease()).getStr("request");drain();
             const auto residentStatus=owner.status();
             require(residentStatus.getStr("state")=="ready"&&residentStatus.getStr("backend")==expected&&residentStatus.getBool("residentRadianceReady")&&residentStatus.getInt("receivedBytes")==0&&residentStatus.getInt("totalBytes")==0,"resident HDR fence-only generation failed");
             auto texture=owner.takeResidentRadiance(dev,lifetime.lease(),project,residentId);
             require(texture.valid(),"resident HDR ownership transfer failed");
+            gfx::TextureInfo hdrInfo;require(dev.textureInfo(texture,hdrInfo)&&hdrInfo.mipLevels==(hdrMips?5:1),"resident HDR mip allocation mismatch");
             auto capture=std::make_shared<gfx::TextureReadbackResult>();auto done=std::make_shared<bool>(false);
             beginFrame();
-            const bool read=dev.readTextureAsync(texture,{},[capture,done](auto result){*capture=std::move(result);*done=true;});
+            gfx::TextureReadbackDesc hdrRead;hdrRead.mipLevel=hdrMips?2:0;
+            const bool read=dev.readTextureAsync(texture,hdrRead,[capture,done](auto result){*capture=std::move(result);*done=true;});
             dev.endFrame();require(read,"HDR destination diagnostic read rejected");
             for(int i=0;i<16&&!*done;++i){require(dev.waitIdle(),"HDR readback wait failed");beginFrame();dev.endFrame();}
-            require(*done&&capture->success()&&capture->format==pixelFormat&&capture->width==16&&capture->height==16,"HDR destination readback failed");
+            require(*done&&capture->success()&&capture->format==pixelFormat&&capture->width==(hdrMips?4:16)&&capture->height==(hdrMips?4:16),"HDR destination readback failed");
             const size_t bpp=pixelFormat==gfx::PixelFormat::RGBA16F?8u:16u;
-            require(capture->pixels.size()==16*16*bpp,"HDR destination byte count");
+            require(capture->pixels.size()==size_t(hdrMips?4:16)*(hdrMips?4:16)*bpp,"HDR destination byte count");
             for(size_t i=0;i<4;++i){
                 float sample=0;
                 if(bpp==8){const uint16_t bits=uint16_t(capture->pixels[i*2])|(uint16_t(capture->pixels[i*2+1])<<8);sample=render::cameraHalfToFloat(bits);}

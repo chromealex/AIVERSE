@@ -213,6 +213,7 @@ public:
     void updateTexture(TextureHandle h, int x, int y, int w, int h2, const void* pixels, int rowPitchBytes) override;
     bool updateTextureRegion(TextureHandle h, const TextureUploadDesc& u) override;
     bool supportsStorageBufferTextureCopy() const override { return supportsCompute() && gpuHealthy(); }
+    bool supportsHdrTextureMipGeneration(PixelFormat) const override;
     bool copyStorageBufferToTexture2D(BufferHandle,TextureHandle,const BufferTextureCopy2D&) override;
     bool textureInfo(TextureHandle h, TextureInfo& out) const override;
     void destroyTexture(TextureHandle h) override;

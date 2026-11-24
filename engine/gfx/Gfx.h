@@ -788,13 +788,14 @@ public:
     virtual bool updateTextureRegion(TextureHandle, const TextureUploadDesc&) { return false; }
     // Optional GPU-only transfer: copy the full level zero of an ordinary,
     // RGBA8/RGBA8_sRGB or RGBA16F/RGBA32F 2D sampled texture from a Storage buffer.
-    // Float copies currently require a single mip. For RGBA8, a requested
+    // RGBA16F mip generation requires explicit backend capability; RGBA32F is single mip. A requested
     // full mip chain must be allocated for generation; reject incomplete chains.
     // Inside a recording frame, outside encoders. Raw bytes, no conversion.
     // Source offset/row pitch follow BufferTextureCopy2D. Caller keeps both
     // resources live until the covering GPU fence has actually completed.
     // True means encoded, not completed. Unsupported devices do no work.
     virtual bool supportsStorageBufferTextureCopy() const { return false; }
+    virtual bool supportsHdrTextureMipGeneration(PixelFormat) const { return false; }
     virtual bool copyStorageBufferToTexture2D(BufferHandle,TextureHandle,const BufferTextureCopy2D&) { return false; }
     virtual bool bindTextureView(int, TextureViewHandle, SamplerHandle = {}) { return false; }
     // CPU-only RHI metadata lookup; no readback, synchronization or texture

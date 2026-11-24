@@ -479,7 +479,7 @@ class TextureGraphGpuOwner {
             if(residentRadianceBpp_){
                 gpuCandidates_.push_back(std::make_unique<GpuCopy>());
                 const auto layout=gfx::rgbaCopyLayout(size_,size_,residentRadianceBpp_);
-                const gfx::BufferTextureCopy2D copy{size_,size_,0,layout.rowPitchBytes,false,residentRadianceBpp_};
+                const gfx::BufferTextureCopy2D copy{size_,size_,0,layout.rowPitchBytes,gpuTextureMipmaps_,residentRadianceBpp_};
                 const auto format=residentRadianceBpp_==8?gfx::PixelFormat::RGBA16F:gfx::PixelFormat::RGBA32F;
                 if(!queueRadianceGpuTextureCopy(dev,gpuTransferLease_,size_,format,buffer_,copy,*gpuCandidates_.back()))throw std::runtime_error("HDR GPU texture copy rejected");
                 return; // fence-only; no CPU pixels, readback or reference evaluation.
@@ -674,7 +674,7 @@ private:
         size_t target=program.nodes.size();const bool setBake=p.getBool("bakeSet"),bake=setBake||p.getBool("bake");
         const auto residentFormat=p.getStr("residentRadianceFormat");
         const size_t residentBpp=residentFormat=="rgba16f"?8u:residentFormat=="rgba32f"?16u:0u;
-        if(p.has("residentRadianceFormat")&&(!residentBpp||!bake||setBake||p.getStr("output")!="radiance"||p.getBool("gpuTextureTransfer")||p.getBool("gpuTextureMipmaps")||p.getBool("incrementalOutputs")))throw std::invalid_argument("resident HDR requires a separate radiance bake and explicit float format");
+        if(p.has("residentRadianceFormat")&&(!residentBpp||!bake||setBake||p.getStr("output")!="radiance"||p.getBool("gpuTextureTransfer")||p.getBool("incrementalOutputs")))throw std::invalid_argument("resident HDR requires a separate radiance bake and explicit float format");
         const bool transfer=residentBpp||p.getBool("gpuTextureTransfer"),mipmaps=p.getBool("gpuTextureMipmaps"),fenceOnly=residentBpp||p.getBool("gpuTextureFenceOnly");
         const bool rawRadiance=!residentBpp&&bake&&!setBake&&p.getStr("output")=="radiance";
         if(setBake&&program.outputs.count("radiance")&&!fenceOnly)throw std::invalid_argument("export radiance as a separate HDR bake");
@@ -722,7 +722,9 @@ private:
             if(residentBpp){
                 const auto format=residentBpp==8?gfx::PixelFormat::RGBA16F:gfx::PixelFormat::RGBA32F;
                 if(!lease.device()->supports(format)||!lease.device()->supportsStorageBufferTextureCopy())throw std::invalid_argument("resident HDR format unavailable");
-                transferBudget=gpu::textureRequestBudget(1,size_t(program.size)*program.size*residentBpp,0,gpu::materializedBudgetBytes,gpu::maxTextureRequestBytes,true);
+                if(mipmaps&&!lease.device()->supportsHdrTextureMipGeneration(format))throw std::invalid_argument("resident HDR mip generation unavailable for this format");
+                gfx::TextureDesc desc;desc.width=desc.height=program.size;desc.format=format;desc.mipmaps=mipmaps;desc.mipLevels=mipmaps?0:1;
+                transferBudget=gpu::textureRequestBudget(1,gfx::estimateTextureFootprint(desc),0,gpu::materializedBudgetBytes,gpu::maxTextureRequestBytes,true);
             }else if(!noop)transferBudget=render::texture_graph::graphGpuTextureBudget(program,mipmaps,
                 render::texture_graph::gpu::materializedBudgetBytes,fenceOnly);
             if(!noop&&!transferBudget)throw std::invalid_argument("GPU texture request exceeds budget or has no bindable outputs");

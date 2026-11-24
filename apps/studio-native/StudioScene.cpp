@@ -44,7 +44,10 @@ struct StudioScene::GraphPresentation {
     std::unique_ptr<Model> sample;
     Snapshot sampleAppearance;
     std::unique_ptr<Renderer3D> sampleRenderer;
-    gfx::TextureHandle color{},depth{},environment{};
+    gfx::TextureHandle color{},depth{},environment{},residentHdr{};
+    std::shared_ptr<Capture> hdrCapture;
+    std::string residentHdrRequest;
+    int residentHdrMipCount=0;
     std::string environmentPath;
     float environmentYaw=0.f,environmentIntensity=1.f;
     std::shared_ptr<Capture> capture;
@@ -121,6 +124,8 @@ struct StudioScene::GraphPresentation {
         if(color.valid())dev.destroyTexture(color);
         if(depth.valid())dev.destroyTexture(depth);
         if(environment.valid())dev.destroyTexture(environment);
+        if(residentHdr.valid())dev.destroyTexture(residentHdr);
+        residentHdr={};residentHdrRequest.clear();residentHdrMipCount=0;hdrCapture.reset();
         environment={};environmentPath.clear();color={};depth={};(void)rollback.drain(dev);
     }
     static Json info(const Snapshot& s,size_t index){
@@ -738,7 +743,10 @@ Json StudioScene::textureGraphCapabilities() const {
     r.set("residentApply",Json::fromBool(false));
     r.set("studioResidentApply",Json::fromBool(available&&device_->supportsStorageBufferTextureCopy()));
     r.set("studioPbrPreview",Json::fromBool(available&&device_->supportsStorageBufferTextureCopy()));
-    r.set("studioPbrEnvironment",Json::fromBool(available&&device_->maxFragmentTextureSlots()>=14&&device_->supports(gfx::PixelFormat::RGBA16F)));return r;
+    r.set("studioPbrEnvironment",Json::fromBool(available&&device_->maxFragmentTextureSlots()>=14&&device_->supports(gfx::PixelFormat::RGBA16F)));
+    r.set("studioResidentHdr16",Json::fromBool(available&&device_->supportsStorageBufferTextureCopy()&&device_->supports(gfx::PixelFormat::RGBA16F)));
+    r.set("studioResidentHdr32",Json::fromBool(available&&device_->supportsStorageBufferTextureCopy()&&device_->supports(gfx::PixelFormat::RGBA32F)));
+    r.set("studioResidentHdrMips",Json::fromBool(available&&device_->supportsHdrTextureMipGeneration(gfx::PixelFormat::RGBA16F)));return r;
 }
 Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
     if(!device_ || !deviceLifetime_ || !device_->supportsOffscreenFrames() || !device_->gpuHealthy())
@@ -755,6 +763,64 @@ Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
     if(action.rfind("studio",0)==0){
         if(!graphPresentation_)graphPresentation_=std::make_unique<GraphPresentation>();
         auto& presentation=*graphPresentation_;
+        if(action=="studioHdrAdopt"){
+            if(!device_->waitForResourceIdle())throw std::runtime_error("resident HDR replacement retirement failed");
+            auto candidate=owner.takeResidentRadiance(*device_,lease,ws.project.dir,p.getStr("request"));
+            gfx::TextureInfo info;
+            if(!device_->textureInfo(candidate,info)){device_->destroyTexture(candidate);throw std::runtime_error("resident HDR metadata unavailable");}
+            if(presentation.residentHdr.valid())device_->destroyTexture(presentation.residentHdr);
+            presentation.residentHdr=candidate;presentation.residentHdrRequest=p.getStr("request");presentation.residentHdrMipCount=info.mipLevels;presentation.hdrCapture.reset();
+            Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("state",Json::string("resident"));r.set("request",Json::string(presentation.residentHdrRequest));
+            r.set("mipLevels",Json::number(int64_t(info.mipLevels)));r.set("size",Json::number(int64_t(info.width)));return r;
+        }
+        if(action=="studioHdrRelease"){
+            if(presentation.residentHdr.valid()){
+                if(!device_->waitForResourceIdle())throw std::runtime_error("resident HDR retirement failed");
+                device_->destroyTexture(presentation.residentHdr);
+            }
+            presentation.residentHdr={};presentation.residentHdrRequest.clear();presentation.residentHdrMipCount=0;presentation.hdrCapture.reset();
+            Json r=Json::object();r.set("ok",Json::fromBool(true));return r;
+        }
+        if(action=="studioHdrCapture"){
+            if(!presentation.residentHdr.valid()||p.getStr("request")!=presentation.residentHdrRequest)throw std::runtime_error("no matching resident HDR texture");
+            const int mip=render::texture_graph::integer(p["mip"],0,0,presentation.residentHdrMipCount-1);
+            gfx::TextureInfo info;if(!device_->textureInfo(presentation.residentHdr,info))throw std::runtime_error("resident HDR metadata unavailable");
+            if(std::max(1,info.width>>mip)>128||std::max(1,info.height>>mip)>128)throw std::runtime_error("choose a mip of at most 128 pixels for diagnostic capture");
+            if(presentation.hdrCapture&&presentation.hdrCapture->state=="pending")throw std::runtime_error("HDR diagnostic capture pending");
+            auto capture=std::make_shared<GraphPresentation::Capture>();
+            gfx::TextureReadbackDesc rd;rd.mipLevel=mip;
+            if(!device_->beginOffscreenFrame())throw std::runtime_error("HDR diagnostic frame unavailable");
+            bool encoded=false;
+            try{encoded=device_->readTextureAsync(presentation.residentHdr,rd,[capture](auto result){
+                try{
+                    const size_t bpp=result.format==gfx::PixelFormat::RGBA16F?8u:result.format==gfx::PixelFormat::RGBA32F?16u:0u;
+                    if(!result.success()||!bpp||result.width>128||result.height>128||result.pixels.size()!=size_t(result.width)*result.height*bpp)throw std::runtime_error("invalid HDR diagnostic pixels");
+                    capture->width=result.width;capture->height=result.height;capture->hex.reserve(size_t(result.width)*result.height*8);
+                    for(size_t i=0;i<size_t(result.width)*result.height;++i)for(size_t c=0;c<4;++c){
+                        float v=1.f;
+                        if(c!=3){const size_t at=i*bpp+c*(bpp/4);
+                            if(bpp==8)v=render::cameraHalfToFloat(uint16_t(result.pixels[at])|(uint16_t(result.pixels[at+1])<<8));
+                            else std::memcpy(&v,result.pixels.data()+at,4);
+                            if(!std::isfinite(v))throw std::runtime_error("nonfinite HDR diagnostic sample");
+                            v=render::texture_graph::mapRadiance(v,1.f,true);
+                        }
+                        const auto byte=uint8_t(std::lround(std::clamp(v,0.f,1.f)*255.f));
+                        capture->hex+="0123456789abcdef"[byte>>4];capture->hex+="0123456789abcdef"[byte&15];
+                    }
+                    capture->state="ready";
+                }catch(const std::exception& e){capture->state="failed";capture->error=e.what();}
+            });}catch(...){device_->endFrame();throw;}
+            device_->endFrame();
+            if(!encoded)throw std::runtime_error("HDR diagnostic readback rejected");
+            presentation.hdrCapture=capture;
+            Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("state",Json::string("pending"));return r;
+        }
+        if(action=="studioHdrRead"){
+            if(p.getStr("request")!=presentation.residentHdrRequest||!presentation.hdrCapture)throw std::runtime_error("no matching HDR diagnostic capture");
+            const auto& capture=*presentation.hdrCapture;
+            Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("state",Json::string(capture.state));r.set("error",Json::string(capture.error));
+            if(capture.state=="ready"){r.set("width",Json::number(int64_t(capture.width)));r.set("height",Json::number(int64_t(capture.height)));r.set("rgbaHex",Json::string(capture.hex));}return r;
+        }
         if(action=="studioModelTargets"){
             Json list=Json::array();
             for(auto& [path,model]:documentModels_)if(model&&model->materials.size()){
@@ -882,7 +948,8 @@ bool StudioScene::serviceTextureGraph(const std::string& project) {
     if(graphPresentation_){
         auto& p=*graphPresentation_;
         if(p.capture&&p.capture->state=="pending"&&std::chrono::steady_clock::now()>p.capture->deadline){p.capture->state="failed";p.capture->error="Native PBR capture timed out";}
-        more=p.draw||(p.capture&&p.capture->state=="pending")||p.rollback.pendingImages()!=0;
+        if(p.hdrCapture&&p.hdrCapture->state=="pending"&&std::chrono::steady_clock::now()>p.hdrCapture->deadline){p.hdrCapture->state="failed";p.hdrCapture->error="HDR diagnostic capture timed out";}
+        more=p.draw||(p.capture&&p.capture->state=="pending")||(p.hdrCapture&&p.hdrCapture->state=="pending")||p.rollback.pendingImages()!=0;
     }
     return textureGraph_->needsFrame()||more;
 }
