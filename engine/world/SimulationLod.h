@@ -70,6 +70,17 @@ struct SimulationLodDecision {
     uint32_t period=1;
     bool due=true;
 };
+// Shared scalar-distance policy for hosts with non-Cartesian topology.
+// Distances are expressed in the caller's canonical cell-sized units;
+// absent/unresolved observers must be handled by the caller as HOT.
+inline SimulationLodDecision simulationLodDecisionForDistance(const SimulationLodConfig& c,
+    uint64_t distance,uint64_t stableId,uint32_t tick,bool critical=false)noexcept{
+    if(!c.enabled||!c.valid()||critical||!stableId||tick==0||distance<=c.hotCells)return {};
+    const bool warm=distance<=c.warmCells;
+    const auto period=warm?c.warmTicks:c.coldTicks;
+    return {warm?SimulationLodTier::Warm:SimulationLodTier::Cold,period,
+        tick%period==stableId%period};
+}
 // Use authoritative simulation observers, never render cameras or the
 // asynchronously loaded asset set. An absent observer/identity fails hot.
 // No independent clock or RNG: reconstruct exactly after save and rollback.
@@ -82,10 +93,7 @@ inline SimulationLodDecision simulationLodDecision(const SimulationLodConfig& c,
         distance=std::min(distance,cellDistance(position,focus));
         if(distance<=c.hotCells)return {};
     }
-    const bool warm=distance<=c.warmCells;
-    const auto period=warm?c.warmTicks:c.coldTicks;
-    return {warm?SimulationLodTier::Warm:SimulationLodTier::Cold,period,
-        tick%period==stableId%period};
+    return simulationLodDecisionForDistance(c,distance,stableId,tick,critical);
 }
 // Deterministic fair round-robin batch size for owners that already persist
 // their own cursor (e.g. virtual population). No global state or new identity.
