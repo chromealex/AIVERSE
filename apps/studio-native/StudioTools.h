@@ -23,7 +23,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
     static const std::vector<StudioToolGroup> groups = {
         {"terrain", {"map_info", "terrain_sculpt", "terrain_level", "terrain_height", "terrain_heights", "terrain_paint",
                      "terrain_paint_material", "terrain_material", "terrain_detail", "heightmap_import", "heightmap_export"}},
-        {"caverns", {"terraweave_caverns_paint"}},
+        {"caverns", {"terraweave_caverns_paint","terraweave_caverns_pick"}},
         {"water", {"water_types", "water_network", "water_set", "water_delete", "water_shores", "water_bake", "nereid_water_state"}},
         {"roads", {"simulation_budget_plan", "road_types", "road_network", "road_add", "road_delete", "road_node_set", "road_edge_set", "road_split",
                    "road_toggle", "road_type_set", "road_stop_set", "road_driveway_set"}},
@@ -84,7 +84,7 @@ inline bool studioToolAllowed(const std::string& op) {
 // Ops that never change the project or the map: the panel runs them without an undo step or a
 // document refresh.
 inline bool studioToolReadOnly(const std::string& op) {
-    if(op=="simulation_budget_plan")return true;
+    if(op=="simulation_budget_plan"||op=="terraweave_caverns_pick")return true;
     if(op=="world_save_page"||op=="world_save_backups"||op=="world_save_retention_preview"||op=="world_job_status"||op=="world_simulation_lod_get"||op=="world_simulation_lod_validate")return true;
     static const char* suffixes[] = {"_get", "_list", "_info", "_types", "_network", "_catalog", "_templates",
                                      "_presets", "_validate", "_ascii", "_estimate", "_api", "_read", "_check",
