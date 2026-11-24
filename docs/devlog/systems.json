@@ -2415,7 +2415,7 @@
           "title": "Граф зависимостей ассетов",
           "titleEn": "Asset dependency graph",
           "text": "S6g: точные ссылки в картах и ресурсы glTF, прямые и обратные зависимости, безопасный предварительный просмотр; без автоматической перезаписи неизвестных зависимостей.",
-          "textEn": "S6g.4: GLB and Wavefront OBJ/MTL dependencies, coordinated URI-preserving multi-selection preview and native relocation validation.",
+          "textEn": "S6g.5: additional typed asset readers, bounded native dependency pages and explicit coverage diagnostics.",
           "status": "in-progress"
         },
         {
