@@ -5,6 +5,7 @@
 #include "MorphModelStream.h"
 #include "MorphBox3DContactBridge.h"
 #include "GranularWorldIntegration.h"
+#include "PlanetGranularIntegration.h"
 #include "GranularTerraWeaveTransfer.h"
 #include <cstdint>
 #include <map>
@@ -88,6 +89,15 @@ public:
             std::uint32_t completedTick,GranularFrameBudget budget={}) const {
         return prepareGranularFrame(ecs,soil,residency,
                                    placements,completedTick,budget);
+    }
+
+    GranularPreparedFrame preparePlanetGranular(
+            const World& ecs,const game::Surface& surface,uint64_t terrainRevision,
+            std::span<const GranularResidentTile> residency,
+            const std::map<uint64_t,PlanetGranularPlacement>& placements,
+            uint32_t completedTick,GranularFrameBudget budget={}) const {
+        return preparePlanetGranularFrame(ecs,surface,terrainRevision,residency,
+                                          placements,completedTick,budget);
     }
 
     bool publishPhysics(physics::Scene& scene,

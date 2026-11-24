@@ -1,6 +1,7 @@
 // Actual GameCore map fixture proving native module ECS hydration via mapPlaced().
 #include "aiverselib/world/WorldProcessesNativeModule.h"
 #include "aiverselib/world/WorldProcessGravity.h"
+#include "aiverselib/world/PlanetProcessGeometry.h"
 #include "aiverselib/world/SurfaceGravitySupport.h"
 #include "aiverselib/world/GranularPlanetTerrainTransfer.h"
 #include "aiverselib/world/CircuitSurfaceWiring.h"
@@ -478,6 +479,42 @@ static void checkPlanetSoilTransfer(){
     ecs=before;
     AIVERSE_TEST_CHECK(ecs.get<Field>(field).mass[8]==80&&ecs.resourceConst<PlanetSoilFixture>()->moon==2000);
 }
+static void checkPlanetProcessGeometry(){
+    game::Surface surface;
+    game::BodyDef body;body.id="terra";body.faceSize=8;body.radius=Fixed::fromInt(64);
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    World ecs;const auto field=ecs.create(),trace=ecs.create();
+    Transform t{};t.pos=surface.cellCenter(surface.gridCell(0,0,7,3));
+    ecs.add<Transform>(field,t);ecs.add<Transform>(trace,t);
+    granular::Field f;f.width=3;f.height=2;f.capacity=100;
+    f.mass={0,0,0,100,100,100};f.solid.assign(6,0);f.sampledTick=7;
+    ecs.add<granular::Field>(field,f);
+    imprint::Cell c;c.footprint=50;c.sampledTick=7;ecs.add<imprint::Cell>(trace,c);
+    granular::SurfaceFieldPlacement place{t.pos,1000,0};
+    const auto tops=wp::planetGranularTops(ecs,surface,field,place,200,0,0,3,2,7);
+    AIVERSE_TEST_CHECK(tops&&tops->size()==3);
+    int b=0,face=0,x=0,y=0;
+    AIVERSE_TEST_CHECK(surface.cellFace(tops->back().cell,b,face,x,y)&&b==0&&face!=0);
+    for(const auto& q:*tops){
+        AIVERSE_TEST_CHECK(q.body==0&&q.row==1);
+        for(const auto& p:q.vertices)AIVERSE_TEST_CHECK(surface.bodyAt(p)==0);
+        AIVERSE_TEST_CHECK(q.normal.dot(surface.up(q.vertices[0])).raw>0);
+    }
+    size_t shared=0;
+    for(auto a:(*tops)[0].vertices)for(auto b:(*tops)[1].vertices)if(a==b)++shared;
+    AIVERSE_TEST_CHECK(shared==2);
+    const auto overlay=wp::planetImprintQuad(ecs,surface,trace,7);
+    AIVERSE_TEST_CHECK(overlay&&overlay->footprint==50&&overlay->geometry.body==0);
+    AIVERSE_TEST_CHECK(!wp::planetImprintQuad(ecs,surface,trace,8));
+    AIVERSE_TEST_CHECK(!wp::planetGranularTops(ecs,surface,field,place,200,0,0,3,2,8));
+    t.pos=surface.cellCenter(surface.gridCell(1,0,7,3));
+    ecs.get<Transform>(field)=t;ecs.get<Transform>(trace)=t;
+    AIVERSE_TEST_CHECK(!wp::planetGranularTops(ecs,surface,field,place,200,0,0,3,2,7));
+    place.origin=t.pos;
+    const auto moon=wp::planetGranularTops(ecs,surface,field,place,200,0,0,3,2,7);
+    AIVERSE_TEST_CHECK(moon&&moon->size()==3&&moon->front().body==1);
+    AIVERSE_TEST_CHECK(wp::planetImprintQuad(ecs,surface,trace,7)->geometry.body==1);
+}
 static void checkPlanetGranular(){
     game::Surface surface;
     game::BodyDef planet;planet.id="terra";planet.faceSize=8;planet.radius=Fixed::fromInt(64);
@@ -789,6 +826,7 @@ int main(){
     checkAetherStratification();
     checkMorphGravity();
     checkPlanetSoilTransfer();
+    checkPlanetProcessGeometry();
     checkPlanetGranular();
     checkPlanetEvolveHydration();
     checkPlanetGravitySupport();
