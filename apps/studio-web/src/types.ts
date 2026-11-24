@@ -248,6 +248,7 @@ export interface StudioBuildingRequest {
   features?: StudioBuildingFeature[];
   materialBindings?: Record<string,string>; // authored style slot -> project materials.json name
   textureResolution?:128|256|512;
+  uniqueAtlas?:boolean;
   roofProfile?:StudioBuildingRoofProfile; roofRise?:number;
 }
 export interface StudioBuildingPreview {

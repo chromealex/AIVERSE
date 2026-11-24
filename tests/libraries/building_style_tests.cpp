@@ -156,6 +156,22 @@ int main(int argc,char** argv){
             CHECK(material["normalTexture"].isObject());
             CHECK(material["occlusionTexture"].isObject());
         }
+        // Small explicit two-triangle mesh: separate UV charts, identical original geometry,
+        // four common images and unchanged authored material factors.
+        StyledMesh atlasInput;atlasInput.materials.push_back(a.materials.front());
+        auto& atlasMat=atlasInput.materials.front();
+        atlasMat.uvScale={1,1};atlasMat.uvOffset={0,0};atlasMat.uvRotation=0;
+        atlasMat.textures={};atlasMat.surfacePattern="brick";atlasMat.surfaceResolution=128;
+        atlasInput.vertices={{{0,0,0},{0,1,0},{0,0}},{{1,0,0},{0,1,0},{1,0}},{{0,0,1},{0,1,0},{0,1}}};
+        atlasInput.parts.push_back({0,{0,1,2,0,1,2}});
+        auto atlas=buildUniqueBuildingAtlas(atlasInput),again=buildUniqueBuildingAtlas(atlasInput);
+        CHECK(atlas.charts==2&&atlas.mesh.vertices.size()==6&&atlas.mesh.triangles()==2);
+        CHECK(atlas.maps[0].rgba==again.maps[0].rgba);
+        CHECK(atlas.mesh.vertices[0].uv[0]!=atlas.mesh.vertices[3].uv[0]||
+              atlas.mesh.vertices[0].uv[1]!=atlas.mesh.vertices[3].uv[1]);
+        for(const auto& v:atlas.mesh.vertices)for(float uv:v.uv)CHECK(uv>0&&uv<1);
+        buildingExport::Glb atlasGlb;atlasGlb.addAtlas(atlas,"unique-atlas");
+        CHECK(Json::parse("["+atlasGlb.images+"]").size()==4);
         CHECK(a.vertices.size()==b.vertices.size()&&a.parts.size()==b.parts.size()&&a.materials==b.materials);
         for(size_t i=0;i<a.vertices.size();++i)for(int k=0;k<3;++k)CHECK(a.vertices[i].pos[k]==b.vertices[i].pos[k]);
         bool differs=false,palette=false;

@@ -94,6 +94,7 @@ struct Request {
     std::string style,kind;
     uint64_t seed=1;
     int textureResolution=0; // zero uses authored per-material quality
+    bool uniqueAtlas=false;
     StructureSize dimensions{};
     bool composeFeatures=false;
     FunctionalBuildingRecipe functionalRecipe{};
@@ -117,6 +118,10 @@ inline Request request(const Json& params) {
         const auto& value=params["textureResolution"];const double n=value.toDouble(-1);
         if(!value.isNumber()||(n!=128&&n!=256&&n!=512))throw std::runtime_error("Texture resolution must be 128, 256 or 512");
         req.textureResolution=int(n);
+    }
+    if(params.has("uniqueAtlas")){
+        if(params["uniqueAtlas"].type()!=Json::Type::Bool)throw std::runtime_error("uniqueAtlas must be boolean");
+        req.uniqueAtlas=params.getBool("uniqueAtlas");
     }
     const auto positive=[&](const char* field){
         const Json& v=params[field];
@@ -367,6 +372,7 @@ inline std::unique_ptr<render::Model> studioBuildingPreviewCpuModel(
     const auto req=request(params);
     auto built=produce(engine,req);
     applyProjectMaterials(project,req,built);
+    if(req.uniqueAtlas)return building::runtimeAtlasBuildingModel(built,"studio/generated-building-preview");
     // No asset index write when all material maps use generated PBR.
     // An explicit imported GUID may use the existing project's catalog.
     std::unique_ptr<StudioAssetCatalog> catalog;
@@ -617,7 +623,10 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
             textureDependencies.emplace(guid,std::move(dependency));
             return true;
         };
-        glb.add(model.mesh,req.composeFeatures?"building-recipe":req.kind);
+        if(req.uniqueAtlas){
+            const auto atlas=buildUniqueBuildingAtlas(model.mesh);
+            glb.addAtlas(atlas,req.composeFeatures?"building-recipe":req.kind);
+        }else glb.add(model.mesh,req.composeFeatures?"building-recipe":req.kind);
         glb.write(temp.string());
         if(!fs::is_regular_file(temp)||fs::file_size(temp)<32)
             throw std::runtime_error("Building GLB export produced an invalid file");
@@ -630,6 +639,7 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
         saved.set("function",string(req.composeFeatures?"":req.kind));
         saved.set("seed",Json::number(int64_t(req.seed)));
         if(req.textureResolution)saved.set("textureResolution",Json::number(int64_t(req.textureResolution)));
+        if(req.uniqueAtlas)saved.set("uniqueAtlas",Json::fromBool(true));
         if(!req.materialBindings.empty()){
             Json bindings=Json::object();
             for(const auto& [slot,name]:req.materialBindings)

@@ -3,6 +3,7 @@
 // No rendering backend, process invocation or Studio dependencies.
 #include <engine/systems/BuildingStructure.h>
 #include "engine/buildings/BuildingPngEncoder.h"
+#include "engine/buildings/BuildingTextureAtlas.h"
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
@@ -32,6 +33,7 @@ struct Glb{
     TextureReader textureReader;
     std::map<std::string,int> cachedTextures;
     bool usesUvTransform=false;
+    std::array<int,4> activeAtlas{-1,-1,-1,-1};
     int texture(const std::string& guid){
         if(guid.empty())return -1;
         if(auto it=cachedTextures.find(guid);it!=cachedTextures.end())
@@ -60,6 +62,7 @@ struct Glb{
         return id;
     }
     int generatedTexture(const StyleMaterial& source,int channel){
+        if(activeAtlas[size_t(channel)]>=0)return activeAtlas[size_t(channel)];
         if(source.surfacePattern.empty())return -1;
         const std::string key="surface:"+source.id+":"+
             source.surfacePattern+":"+
@@ -161,6 +164,21 @@ struct Glb{
         }
         sep(materials);materials+=root.dump(-1);
         return nMat++;
+    }
+    void addAtlas(const BuildingAtlas& atlas,const std::string& name){
+        for(size_t i=0;i<atlas.maps.size();++i){
+            const auto& map=atlas.maps[i];
+            const auto bytes=aiverse::building::encodeBuildingPngRgba(map.rgba,map.width,map.height);
+            while(bin.size()%4)bin.push_back(0);
+            const size_t off=bin.size();bin.insert(bin.end(),bytes.begin(),bytes.end());
+            sep(views);views+="{\"buffer\":0,\"byteOffset\":"+std::to_string(off)+",\"byteLength\":"+std::to_string(bytes.size())+"}";
+            const int viewId=nView++,id=int(cachedTextures.size());
+            sep(images);images+="{\"bufferView\":"+std::to_string(viewId)+",\"mimeType\":\"image/png\"}";
+            sep(textures);textures+="{\"source\":"+std::to_string(id)+"}";
+            cachedTextures.emplace("unique-atlas:"+std::to_string(id),id);activeAtlas[i]=id;
+        }
+        try{add(atlas.mesh,name);}catch(...){activeAtlas.fill(-1);throw;}
+        activeAtlas.fill(-1);
     }
     void add(const StyledMesh& m,const std::string& name){
         if(m.vertices.empty())return;

@@ -146,6 +146,7 @@ export default function BuildingGeneratorPanel({
   const [role,setRole]=useState('factory');
   const [mode,setMode]=useState<'features'|'preset'>('features');
   const [textureResolution,setTextureResolution]=useState<128|256|512>(256);
+  const [uniqueAtlas,setUniqueAtlas]=useState(false);
   const [roofProfile,setRoofProfile]=useState<import('../../types').StudioBuildingRoofProfile>('flat');
   const [roofRise,setRoofRise]=useState('0');
   const [features,setFeatures]=useState<StudioBuildingFeature[]>([
@@ -267,7 +268,7 @@ export default function BuildingGeneratorPanel({
       setSetting(selected.setting);setStyle(selected.id);
       setRole(item.function??'');
       setMode(item.mode??'features');
-      setTextureResolution(item.textureResolution??128);
+      setTextureResolution(item.textureResolution??128);setUniqueAtlas(item.uniqueAtlas??false);
       setRoofProfile(item.roofProfile??'flat');setRoofRise(String(item.roofRise??0));
       setWidth(String(item.width));setHeight(String(item.height));
       setDepth(String(item.depth));setSeed(String(item.seed));
@@ -390,7 +391,7 @@ export default function BuildingGeneratorPanel({
   },[selectedStyle,selectedFunction,mode,features,width,height,depth,seed,floors,roomsX,roomsZ,roofProfile,roofRise]);
 
   const request=(useSeed:number):StudioBuildingRequest=>({
-    setting,style,function:mode==='preset'?role:'',mode,textureResolution,
+    setting,style,function:mode==='preset'?role:'',mode,textureResolution,uniqueAtlas,
     roofProfile:mode==='features'?roofProfile:undefined,
     roofRise:mode==='features'?asNumber(roofRise):undefined,
     features:mode==='features'?features:undefined,
@@ -999,11 +1000,16 @@ export default function BuildingGeneratorPanel({
             <option value={128}>128 × 128 · Compact</option><option value={256}>256 × 256 · Standard</option><option value={512}>512 × 512 · Detailed</option>
           </StudioSelect>
         </StudioField>
-        <small className="abg__note">Applies to preview and exported GLB; imported project texture sizes are unchanged.</small>
+        <StudioField label="Texture layout" htmlFor="abg-texture-layout">
+          <StudioSelect id="abg-texture-layout" value={uniqueAtlas?'unique':'tiled'} disabled={busy} onChange={e=>{setUniqueAtlas(e.target.value==='unique');clearGenerated();}}>
+            <option value="tiled">Tiled material maps</option><option value="unique">Unique UV atlas (up to 2048)</option>
+          </StudioSelect>
+        </StudioField>
+        <small className="abg__note">Unique atlas bakes procedural materials into four shared maps with separate triangle charts. Imported textures and UV rotation are not supported in this mode. Tiled mode preserves original texture detail. Applies to preview and exported GLB.</small>
       </StudioSection>
       <BuildingSurfacePreview key={(snapshot?.project.path??'')+':'+(selectedStyle?.id??'')} style={selectedStyle} visible={page==='materials'} resolution={textureResolution} projectLoaded={projectLoaded} onPublished={()=>{void invoke('studio.materials',{}).then(setMaterialLibrary).catch(e=>setError(explain(e)));}}/>
       <StudioSection title="Architectural material bindings">
-        <p className="abg__note">Each patterned style slot automatically generates Base Color, Metallic/Roughness and Normal maps in native preview and GLB. Project Assets override individual channels; no imported texture is required.</p>
+        <p className="abg__note">Each patterned style slot automatically generates Base Color, Metallic/Roughness, Normal and AO maps in native preview and GLB. Project Assets override individual channels; no imported texture is required.</p>
         <div className="abg__fields">
           {(selectedStyle?.materials??[]).map(slot=><StudioField key={slot}
             label={slot} hint={selectedStyle?.surfaces?.[slot]?.pattern?'Generated · '+selectedStyle.surfaces[slot].pattern+' · '+textureResolution+' × '+textureResolution:'Authored style factors / texture references'} htmlFor={'abg-material-binding-'+slot}>

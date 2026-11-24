@@ -3,6 +3,7 @@
 // Materials and their texture GUIDs are one atomic resource. The existing
 // Assets importer resolves Images; this layer does no file or GPU IO.
 #include "engine/buildings/RuntimeBuildingModel.h"
+#include "engine/buildings/BuildingTextureAtlas.h"
 #include <array>
 #include <functional>
 #include <map>
@@ -143,6 +144,24 @@ inline std::unique_ptr<render::Model> runtimeTexturedBuildingModel(
     auto model=runtimeBuildingModel(building,name);
     if(!bindBuildingStyleMaterials(*model,building.mesh.materials,
                                    resolve,error))return {};
+    return model;
+}
+// Shared atlas path for native Model preview, identical pixels and UVs to GLB.
+inline std::unique_ptr<render::Model> runtimeAtlasBuildingModel(
+    const StyledStructure& building,const std::string& name="procedural-building-atlas"){
+    auto atlas=lib::systems::buildUniqueBuildingAtlas(building.mesh);
+    StyledStructure visual;visual.mesh=std::move(atlas.mesh);
+    auto model=runtimeBuildingModel(visual,name);
+    for(auto& source:atlas.maps){
+        render::Image image;image.name="building-atlas-"+std::to_string(model->images.size());
+        image.width=source.width;image.height=source.height;image.rgba=std::move(source.rgba);
+        model->images.push_back(std::move(image));
+    }
+    for(size_t i=0;i<visual.mesh.materials.size();++i){
+        auto m=authoredBuildingMaterial(visual.mesh.materials[i]);
+        m.baseTex=0;m.mrTex=1;m.normalTex=2;m.occlusionTex=3;
+        model->materials[i]=std::move(m);
+    }
     return model;
 }
 } // namespace aiverse::building
