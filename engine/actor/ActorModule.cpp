@@ -319,7 +319,7 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
             caveSnapshotFromJson(authored));
         auto indexed=std::make_shared<const CaveSnapshotSpatialIndex>(snapshot);
         const auto& keys=caveNavConfig["collisionChunks"];
-        if(!keys.isArray()||keys.empty()||keys.size()>64)
+        if(!keys.isArray()||keys.size()==0||keys.size()>64)
             throw JsonError("actor.cavernsNavigation: 1..64 collisionChunks required");
         const uint32_t resolution=uint32_t(
             caveNavConfig.getInt("resolution",16));
@@ -504,13 +504,13 @@ void ActorHost::tick(Simulation& sim) {
             steerRoyaleBot(sim,a);
         }
         Input input=a.input;
+        if(sim.tick()-a.lastInputTick>config_.inputTimeout){input.forward=input.right=0;input.buttons=0;input.action=Action::None;}
         if(caveNavigation_&&!a.vehicle){
-            // Feed existing motor via normal Input; never move CharacterBody
-            // directly. Explicit CaveRouteFollower opt-in only.
+            // Apply route steering AFTER stale network input is cleared;
+            // the existing moveActor motor alone owns character motion.
             (void)nav::steerCaveActorMotor(
                 sim.world(),a.entity,input,*caveNavigation_,collision_);
         }
-        if(sim.tick()-a.lastInputTick>config_.inputTimeout){input.forward=input.right=0;input.buttons=0;input.action=Action::None;}
         if(config_.systems.enabled)actorSystems(sim,a,input);
         if(!a.vehicle){
             if(config_.locomotion)moveActorModes(a,*sim.world().tryGet<LocomotionBody>(a.entity),input,config_.motor,*config_.locomotion,collision_,sim.dt(),config_.worldLimit);
