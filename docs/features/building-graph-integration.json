@@ -50,7 +50,16 @@
     "apps/studio-native/StudioGameSurface.cpp",
     "apps/studio-native/StudioSession.h",
     "apps/studio-native/StudioHost.h",
-    "apps/studio-native/StudioHost.cpp"
+    "apps/studio-native/StudioHost.cpp",
+    "engine/nav/NavMesh.h",
+    "engine/game/MapGrid.h",
+    "engine/game/MapGrid.cpp",
+    "engine/game/MapHpa.cpp",
+    "engine/game/FlowField.cpp",
+    "engine/buildings/BuildingGraphOwnerAdapters.h",
+    "engine/buildings/BuildingTransportZoneGraphAdapters.h",
+    "engine/buildings/BuildingPhysisSceneBinding.h",
+    "tests/tests_navmesh.inc"
   ],
   "traits": {
     "editable": true,
@@ -61,7 +70,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35H.6 optional measured owner callback timing, generic detached simulation diagnostic channel, HostedClient-to-Workspace binding, native Scene bounds overlay and history filters. Source implementation only; runtime and visual acceptance pending.",
+      "note": "Stage 35H.7 actual NavMesh refresh telemetry automatically published for monitored regional meshes; opt-in flat MapGrid HPA/flow counters and room/road/zone/PHYSIS owner getters available via optional provider. No per-building attribution of global grid work, rail telemetry, or universal completion claim.",
       "evidence": []
     },
     "architecture": {
@@ -131,7 +140,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F.1–35F.3 fixtures added; NOT RUN. Stage 35H.2 dependency fixtures registered, NOT RUN. Stage 35H.3 geometry projection fixtures registered, NOT RUN. Stage 35H.4 native router and world example fixtures authored; NOT RUN. Stage 35H.5 monitor fixtures and example assertions authored, NOT RUN. Stage 35H.6 timing fixture extended; NOT RUN.",
+      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F.1–35F.3 fixtures added; NOT RUN. Stage 35H.2 dependency fixtures registered, NOT RUN. Stage 35H.3 geometry projection fixtures registered, NOT RUN. Stage 35H.4 native router and world example fixtures authored; NOT RUN. Stage 35H.5 monitor fixtures and example assertions authored, NOT RUN. Stage 35H.6 timing fixture extended; NOT RUN. Stage 35H.7 native nav/PHYSIS/example assertions authored; NOT RUN.",
       "evidence": []
     },
     "handoff": {
