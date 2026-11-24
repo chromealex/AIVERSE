@@ -2824,6 +2824,21 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                params["quotaMiB"].numberLiteral()!=std::to_string(quota))
                 throw std::runtime_error("Recovery quota requires integer MiB");
             reply.set("result",studioSetRecoveryQuota(ws_.project.dir,expected,quota));
+        } else if(method=="studio.assetHistoryResetReview"||method=="studio.assetHistoryResetApply"){
+            if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir)
+                throw std::runtime_error("Recovery project changed; reopen Trash");
+            if(method=="studio.assetHistoryResetReview"){
+                auto result=studioReviewAssetHistoryReset(ws_.project.dir);
+                result.set("version",str(assetHistoryVersion()));reply.set("result",std::move(result));
+            }else{
+                if(!params.getBool("confirmed")||params.getStr("expectedVersion")!=assetHistoryVersion())
+                    throw std::runtime_error("Confirm history reset against the current owner");
+                studioApplyAssetHistoryReset(ws_.project.dir,params.getStr("token"));
+                assetHistory_=editor::ProjectHistory{};assetHistoryPersistenceWarning_.clear();
+                pendingAssetTransfer_.reset();agentAssetTransfer_.reset();agentAssetTransferGuids_.clear();
+                agentHistoryUnsafe_=true;agentBatchFenced_=true;
+                Json result=Json::object();result.set("ok",Json::fromBool(true));reply.set("result",std::move(result));
+            }
         } else if(method=="studio.assetTrashBatchReview"||method=="studio.assetTrashBatchApply"){
             if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir)
                 throw std::runtime_error("Recovery project changed; reopen Trash");
@@ -2855,7 +2870,9 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                     row.set("historyProtected",Json::fromBool(std::binary_search(protectedIds.begin(),protectedIds.end(),row.getStr("id"))));
                     rows.push(std::move(row));
                 }
-                result.set("items",std::move(rows));reply.set("result",std::move(result));
+                result.set("items",std::move(rows));
+                if(!assetHistoryPersistenceWarning_.empty())result.set("historyWarning",str(assetHistoryPersistenceWarning_));
+                reply.set("result",std::move(result));
             }else if(method=="studio.assetTrashReview"){
                 if(params.getStr("action")=="purge"){
                     const auto protectedIds=studioProtectedTrashIds(assetHistory_);
