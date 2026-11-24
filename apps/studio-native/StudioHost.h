@@ -226,6 +226,7 @@ private:
     std::deque<std::pair<float, uint32_t>> frameHistory_;
     std::vector<StudioScene::OverlayShape> extShapes_;
     uint64_t buildingGraphOverlayScene_=0;
+    uint32_t buildingGraphOverlayLayers_=1;
     Json splineCache_;
     std::string splineDrag_, lastActionCaption_, hoverId_, pendingProject_;
     unsigned lightingStatusTicks_ = 0;
