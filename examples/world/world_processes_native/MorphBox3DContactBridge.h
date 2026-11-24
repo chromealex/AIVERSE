@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <tuple>
 #include <span>
 #include <vector>
 
@@ -113,6 +114,47 @@ inline bool collectMorphContactInputs(
     result.swap(staged);
     return true;
 }
+
+// Bounded conservative debounce for repeated contact-begins, including
+// mesh replacement. Identity is the generation-safe target node + the
+// opposite mapped node or still-live native handle. This is not contact
+// manifold persistence: distinct impacts inside the window coalesce.
+class MorphContactDebounce {
+public:
+    bool filter(std::vector<MorphContactInput>& inputs,
+                const std::map<physics::BodyHandle,Entity>& nodes,uint32_t tick,
+                uint32_t window=2){
+        if(window>32||inputs.size()>8192||tick==UINT32_MAX)return false;
+        auto next=history_;
+        for(auto it=next.begin();it!=next.end();){
+            if(it->second>tick)return false;
+            if(tick-it->second>window)it=next.erase(it);else ++it;
+        }
+        std::vector<MorphContactInput> accepted;accepted.reserve(inputs.size());
+        // Stable ordering even for several begin events on a single pair:
+        // keep the strongest quantized impact, then lexicographic tie.
+        std::sort(inputs.begin(),inputs.end(),[](const auto& a,const auto& b){
+            const auto strength=[](const auto& x){return x.dx*x.dx+x.dy*x.dy+x.dz*x.dz;};
+            if(strength(a)!=strength(b))return strength(a)>strength(b);
+            return std::tuple{a.target.packed(),a.other,a.body,a.dx,a.dy,a.dz}<
+                   std::tuple{b.target.packed(),b.other,b.body,b.dx,b.dy,b.dz};
+        });
+        for(const auto& input:inputs){
+            if(input.applyTick!=tick)return false;
+            const auto other=nodes.find(input.other);
+            const Key key{input.target.packed(),other!=nodes.end(),
+                other==nodes.end()?uint64_t(input.other):other->second.packed()};
+            if(next.contains(key))continue;
+            if(next.size()>=32768)return false;
+            next.emplace(key,tick);accepted.push_back(input);
+        }
+        history_=std::move(next);inputs.swap(accepted);return true;
+    }
+    void reset(){history_.clear();}
+private:
+    using Key=std::tuple<uint64_t,bool,uint64_t>;
+    std::map<Key,uint32_t> history_;
+};
 
 // Commit only on a fixed simulation tick barrier AFTER inputs are recorded.
 // Validation preflight makes a rejected batch leave the ECS untouched.

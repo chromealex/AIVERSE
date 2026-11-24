@@ -89,11 +89,36 @@ static void checkMorphCollisionPublication(){
     check(!publisher.publish(scene,{mesh,other})&&scene.valid(next)&&scene.bodyCount()==2,"MORPH atomic capacity reject");
     check(publisher.reset(scene)&&scene.bodyCount()==0,"MORPH rollback retire");
 }
+static void checkMorphNodeProxies(){
+    physics::Scene scene;PlanetMorphNodePublisher nodes;
+    World world;const auto owner=world.create(),node=world.create(),other=world.create();
+    PlanetMorphNodeProxy proxy;proxy.request.instance=1;proxy.request.owner=owner;
+    proxy.request.node=node;proxy.request.radius=.25f;proxy.target={0,2,0};
+    check(nodes.publish(scene,{proxy}),"MORPH node proxy");
+    const auto handle=nodes.handle(1,node);
+    proxy.target={1,2,0};
+    check(nodes.publish(scene,{proxy})&&nodes.handle(1,node)==handle,"stable moving proxy");
+    scene.step();
+    check(std::abs(scene.position(handle).x-1)<.05f,"proxy follows target");
+    std::map<physics::BodyHandle,Entity> mapping;std::map<uint64_t,Entity> owners;
+    check(nodes.appendContactBindings(mapping,owners)&&mapping.at(handle)==node&&owners.at(node.packed())==owner,"automatic contact binding");
+    MorphContactDebounce debounce;
+    std::vector<MorphContactInput> inputs{{node,handle,77,8,2,0,0},{node,handle,77,8,3,0,0}};
+    check(debounce.filter(inputs,mapping,8)&&inputs.size()==1&&inputs[0].dx==3,"duplicate contact coalesced");
+    inputs={{node,999,77,9,4,0,0}};
+    check(debounce.filter(inputs,mapping,9)&&inputs.empty(),"replacement handle debounced");
+    inputs={{node,999,77,11,4,0,0}};
+    check(debounce.filter(inputs,mapping,11)&&inputs.size()==1,"later impact accepted");
+    proxy.request.radius=.5f;
+    check(!nodes.publish(scene,{proxy})&&scene.valid(handle),"shape change requires retirement");
+    check(nodes.reset(scene)&&scene.bodyCount()==0,"proxy rollback retirement");
+}
 int main(){
     try{
         checkTerrainCollision();
         checkStreamedTerrain();
         checkMorphCollisionPublication();
+        checkMorphNodeProxies();
         auto surface=std::make_shared<game::Surface>();
         game::BodyDef def;def.id="terra";def.radius=Fixed::fromInt(64);def.faceSize=8;
         surface->bodies.push_back(def);def.id="moon";surface->bodies.push_back(def);surface->build();

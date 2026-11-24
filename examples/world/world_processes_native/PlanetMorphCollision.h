@@ -18,10 +18,12 @@ struct PlanetMorphCollisionRequest {
     MorphModelStreamConfig config{};
     float friction=.5f;
     uint32_t userData=0;
+    Entity contactNode=kNullEntity; // optional representative node for static mesh contacts
 };
 struct PlanetMorphPreparedCollider {
     uint64_t id=0;
     physics::BodyDesc desc;
+    Entity owner=kNullEntity,contactNode=kNullEntity;
 };
 inline std::optional<PlanetMorphPreparedCollider> preparePlanetMorphCollider(
         const World& world,const game::Surface& surface,std::string_view body,
@@ -42,7 +44,8 @@ inline std::optional<PlanetMorphPreparedCollider> preparePlanetMorphCollider(
         if(!morphVertexDisplacement(world,bind,request.config,delta))return {};
         positions[bind.vertex]+=delta;
     }
-    PlanetMorphPreparedCollider result;result.id=request.id;
+    if(request.contactNode.valid()&&!morph::planetModelNodeCurrent(world,*frame,request.contactNode,tick))return {};
+    PlanetMorphPreparedCollider result;result.id=request.id;result.owner=request.owner;result.contactNode=request.contactNode;
     auto& d=result.desc;d.motion=physics::Motion::Static;d.shape=physics::ShapeKind::Mesh;
     d.friction=request.friction;d.userData=request.userData;
     const auto anchor=game::Surface::anchor(frame->frame.body);
@@ -83,9 +86,9 @@ public:
             if(!p.id||next.contains(p.id))return false;
             const auto old=entries_.find(p.id);
             auto handle=physics::kNoBody;
-            if(old!=entries_.end()&&same(old->second.desc,p.desc))handle=old->second.handle;
+            if(old!=entries_.end()&&old->second.owner==p.owner&&old->second.contactNode==p.contactNode&&same(old->second.desc,p.desc))handle=old->second.handle;
             else create.push_back(p.id);
-            next.emplace(p.id,Entry{handle,std::move(p.desc)});
+            next.emplace(p.id,Entry{handle,std::move(p.desc),p.owner,p.contactNode});
         }
         if(create.size()>scene.maxBodies()-scene.bodyCount())return false;
         std::vector<physics::BodyHandle> created;created.reserve(create.size());
@@ -103,6 +106,17 @@ public:
         }
         entries_=std::move(next);scene_=&scene;return true;
     }
+    bool appendContactBindings(std::map<physics::BodyHandle,Entity>& nodes,
+                               std::map<uint64_t,Entity>& owners)const{
+        for(const auto& [id,e]:entries_){
+            if(!e.contactNode.valid())continue;
+            const auto [n,inserted]=nodes.emplace(e.handle,e.contactNode);
+            if(!inserted&&n->second!=e.contactNode)return false;
+            const auto [o,added]=owners.emplace(e.contactNode.packed(),e.owner);
+            if(!added&&o->second!=e.owner)return false;
+        }
+        return true;
+    }
     bool reset(physics::Scene& scene){
         if(scene_&&scene_!=&scene)return false;
         for(const auto& [id,e]:entries_)if(scene.valid(e.handle))scene.destroy(e.handle);
@@ -116,7 +130,7 @@ private:
         for(size_t i=0;i<a.vertices.size();++i)if(!eq(a.vertices[i],b.vertices[i]))return false;
         return true;
     }
-    struct Entry {physics::BodyHandle handle;physics::BodyDesc desc;};
+    struct Entry {physics::BodyHandle handle;physics::BodyDesc desc;Entity owner,contactNode;};
     std::map<uint64_t,Entry> entries_;
     physics::Scene* scene_=nullptr;
 };
