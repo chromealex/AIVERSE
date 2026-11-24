@@ -155,15 +155,21 @@ export default function BuildingGeneratorPanel({
   const candidateGate=useRef(new BuildingCandidateGate<StudioBuildingRequest>());
   const [page,setPage]=useState<'recipe'|'features'|'materials'|'graphs'|'runtime'>('recipe');
   const focusId=useRef('');
+  const workspaceRoot=useRef<HTMLDivElement>(null);
+  const findControl=(id:string)=>workspaceRoot.current?.querySelector<HTMLElement>('#'+CSS.escape(id));
   useLayoutEffect(()=>{
-    if(!focusId.current)return;
-    const target=document.getElementById(focusId.current);
+    if(!focusId.current){
+      const body=workspaceRoot.current?.closest('.au-panel__body');
+      if(body)body.scrollTop=0;
+      return;
+    }
+    const target=findControl(focusId.current);
     focusId.current='';
     target?.scrollIntoView({block:'center'});
     target?.focus();
   },[page]);
   const focusOn=(next:typeof page,id:string)=>{
-    if(next===page){const target=document.getElementById(id);target?.scrollIntoView({block:'center'});target?.focus();return;}
+    if(next===page){const target=findControl(id);target?.scrollIntoView({block:'center'});target?.focus();return;}
     focusId.current=id;setPage(next);
   };
   const focusMaterial=(slot:string)=>focusOn('materials','abg-material-binding-'+slot);
@@ -648,7 +654,7 @@ export default function BuildingGeneratorPanel({
           </StudioButton>
         </div>
     </div>}>
-    <div className="au-stack abg__root">
+    <div className="au-stack abg__root" ref={workspaceRoot}>
       {!nativeConnected()&&<StudioAlert tone="warning">Open native AIVERSE Studio to generate and save 3D models. Browser demo cannot write project assets.</StudioAlert>}
       {error&&<StudioAlert tone="danger" title="Generator error">{error}</StudioAlert>}
       {status&&!error&&<StudioAlert tone="success">{status}</StudioAlert>}

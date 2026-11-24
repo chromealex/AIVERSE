@@ -1,10 +1,31 @@
 #include "apps/studio-native/StudioBuildingTopology.h"
+#include "apps/studio-native/StudioBuildingGeneration.h"
 #include "tests/TestCheck.h"
 #include <iostream>
 #include <stdexcept>
 using namespace aiverse;
 using namespace aiverse::lib::systems;
-int main(){
+int main(int argc,char** argv){
+    AIVERSE_TEST_CHECK(argc==2);
+    const auto catalog=studio::studioBuildingCatalog(argv[1]);
+    AIVERSE_TEST_CHECK(catalog["styles"].size()>=13);
+    for(const auto& style:catalog["styles"].items()){
+        for(const auto& slot:style["materials"].items()){
+            AIVERSE_TEST_CHECK(!style["surfaces"][slot.str()].getStr("pattern").empty());
+        }
+    }
+    const auto request=Json::parse(R"({"style":"scifi","slot":"hull"})");
+    const auto surface=studio::studioBuildingSurfacePreview(argv[1],request);
+    AIVERSE_TEST_CHECK(surface.getStr("style")=="scifi"&&surface.getStr("slot")=="hull");
+    AIVERSE_TEST_CHECK(surface["maps"].size()==3);
+    AIVERSE_TEST_CHECK(surface==studio::studioBuildingSurfacePreview(argv[1],request));
+    for(const auto& map:surface["maps"].items())
+        AIVERSE_TEST_CHECK(map.getStr("url").rfind("data:image/png;base64,iVBORw0KGgo",0)==0);
+    bool invalidSurface=false;
+    try{(void)studio::studioBuildingSurfacePreview(argv[1],Json::parse(R"({"style":"scifi","slot":"missing"})"));}
+    catch(const std::exception&){invalidSurface=true;}
+    AIVERSE_TEST_CHECK(invalidSurface);
+
     FunctionalBuildingRecipe recipe;
     recipe.width=16;recipe.height=8;recipe.depth=12;
     recipe.floors=2;recipe.roomsX=2;recipe.roomsZ=1;
