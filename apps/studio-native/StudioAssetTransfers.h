@@ -27,6 +27,7 @@ struct StudioTransferDecision {
     int id=0;
     std::string action; // import, skip, keep-both, replace, new-guid
 };
+struct StudioBatchAssetPlan;
 class StudioTransferPlan {
 public:
     static StudioTransferPlan external(const std::filesystem::path& project,
@@ -41,7 +42,8 @@ public:
     // dependent material writes can fail and trigger filesystem rollback.
     Json apply(const std::string& token,const std::vector<StudioTransferDecision>& decisions,
                const std::function<void()>& beforeCommit = {},
-               std::optional<editor::ProjectHistory::MovePlan>* history = nullptr,bool repairResources=false);
+               std::optional<editor::ProjectHistory::MovePlan>* history = nullptr,bool repairResources=false,
+               StudioBatchAssetPlan* staged=nullptr);
     const std::string& token()const{return token_;}
 private:
     static StudioTransferPlan plan(const std::filesystem::path& project,
