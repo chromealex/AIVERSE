@@ -1,6 +1,7 @@
 // Same VFX presenter consumes data-only ECS components in unrelated game styles.
 #include <aiverselib/mechanics/SpectraFX.h>
 #include <aiverselib/mechanics/SpectraSourceMirror.h>
+#include "engine/fx/SpectraScenePoolEmission.h"
 #include <algorithm>
 #include <iostream>
 #include <map>
@@ -119,7 +120,18 @@ static void mirrorScenario(){
     presenter.sync(mirror.world(),lg::SpectraSourceMirror::resolve);
     check(presenter.activeAttachments()==0,"mirror clear retained attachments");
 }
+static void poolPolicyScenario(){
+    spectra::PoolContinuousEmission policy;
+    check(!spectra::readScenePoolEmission(Json::object(),policy),"legacy graph silently opted into pooled bursts");
+    const auto graph=Json::parse(R"({"scenePoolEmission":{"burstsPerSecond":8,"maxBurstsPerFrame":2}})");
+    check(spectra::readScenePoolEmission(graph,policy)&&policy.burstsPerSecond==8&&policy.maxBurstsPerFrame==2,"explicit pool policy missing");
+    bool rejected=false;
+    try{spectra::readScenePoolEmission(Json::parse(R"({"scenePoolEmission":{"burstsPerSecond":-1}})"),policy);}
+    catch(const std::exception&){rejected=true;}
+    check(rejected,"invalid pooled policy accepted");
+}
 int main() {
+    poolPolicyScenario();
     mirrorScenario();
     scenario<SpaceUnit>();
     scenario<RacingVehicle>();

@@ -1782,6 +1782,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     // proxies/syncDocumentModels ran above: lighting needs modelInstances_ first.
     device_->beginFrame(framebufferWidth, framebufferHeight);
     StudioFrameScope scope{*device_};
+    struct SpectraPoolFrameGuard { StudioSpectraSources& sources; ~SpectraPoolFrameGuard(){sources.finish();} } spectraPoolScope{spectraSources_};
     if(spectraPreview_->active()) {
         // Device-safe point: GPU simulation update before any encoder/pass.
         const float aspect=float(framebufferWidth)/float(framebufferHeight);
@@ -1972,6 +1973,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     if(spectraPreview_->active())spectraPreview_->draw();
     spectraSources_.draw();
     renderer_.resolvePrisma();
+    spectraSources_.finish();
     lightingRuntime_.presented();
 
     if(lodDiagnostics_&&++diagnosticFrames_%120==0){

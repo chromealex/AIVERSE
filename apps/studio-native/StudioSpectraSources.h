@@ -3,6 +3,8 @@
 #pragma once
 #include "libraries/include/aiverselib/mechanics/SpectraSourceMirror.h"
 #include "engine/fx/SpectraFX.h"
+#include "engine/fx/SpectraScenePoolEmission.h"
+#include "libraries/include/aiverselib/mechanics/SpectraGpuAttachmentEcsAdapter.h"
 #include "engine/fx/FxModelMesh.h"
 #include "engine/render/TextureCache.h"
 #include "apps/studio-native/StudioDocumentIds.h"
@@ -17,13 +19,16 @@ class StudioSpectraSources {
 public:
     void shutdown(){
         if(presenter_)presenter_->reset();
+        finish();
+        gpuPresenter_.reset();gpuMirror_.clear();gpuPool_.shutdown();gpuDefinitions_.clear();
         presenter_.reset();mirror_.clear();
         particles_.shutdown();textures_.shutdown();
         definitions_.clear();project_.clear();mapPath_.clear();error_.clear();
         revision_=UINT64_MAX;ready_=false;
     }
     bool animated() const{
-        return ready_&&(mirror_.size()!=0||particles_.stats().particles>0);
+        return ready_&&(mirror_.size()!=0||particles_.stats().particles>0||
+            gpuMirror_.size()!=0||gpuPool_.stats().gpuParticlesEstimated>0||gpuPool_.stats().cpuParticles>0);
     }
     const std::string& error()const{return error_;}
     void synchronize(gfx::Device& device,const editor::MapDoc& doc,const std::string& project,
@@ -36,10 +41,10 @@ public:
         // Only rebuild source declarations on a document revision or visibility change.
         if(revision_==doc.revision&&hidden_==hidden)return;
         revision_=doc.revision;hidden_=hidden;
-        std::vector<lib::mechanics::SpectraSourceSnapshot> rows;
-        std::set<std::string> activeNames,seen;
+        std::vector<lib::mechanics::SpectraSourceSnapshot> rows,gpuRows;
+        std::set<std::string> seen;
         error_.clear();
-        for(size_t i=0;i<doc.data.entities.size()&&rows.size()<2048;++i){
+        for(size_t i=0;i<doc.data.entities.size()&&rows.size()+gpuRows.size()<2048;++i){
             const auto& entity=doc.data.entities[i];
             const auto& value=entity.extra["components"]["SpectraSource"];
             if(!value.isObject()||!entity.at.isNull())continue;
@@ -52,13 +57,14 @@ public:
                 if(entity.id.empty())identity+=":"+std::to_string(doc.revision);
                 if(!ready_&&!initialize(device))return;
                 if(!define(source.effect))continue;
-                activeNames.insert(source.effect);
                 const auto transform=editor::authoredLocalTransform(entity);
                 const auto p=transform.position;
-                rows.push_back({identity,source,{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())},{0,1,0}});
+                lib::mechanics::SpectraSourceSnapshot row{identity,source,{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())},{0,1,0}};
+                if(source.scale.raw==(1_fx).raw&&gpuDefinitions_.count(source.effect))gpuRows.push_back(std::move(row));
+                else rows.push_back(std::move(row));
             }catch(const std::exception& e){error_=e.what();}
         }
-        mirror_.sync(rows);
+        mirror_.sync(rows);gpuMirror_.sync(gpuRows);
         // Retain loaded definitions while their detached particles fade.
         // Definition count is bounded for this document session.
     }
@@ -67,8 +73,17 @@ public:
         particles_.setView(view);
         presenter_->sync(mirror_.world(),lib::mechanics::SpectraSourceMirror::resolve);
         particles_.update(dt);
+        if(gpuPresenter_&&gpuPool_.ready()){
+            if(!gpuPool_.beginPresentationFrame(view)){error_=gpuPool_.reason();return;}
+            gpuFrameOpen_=true;
+            if(!gpuPresenter_->sync(gpuMirror_.world(),lib::mechanics::SpectraSourceMirror::resolve)){
+                error_=gpuPresenter_->reason();finish();return;
+            }
+            if(!gpuPool_.step(dt)){error_=gpuPool_.reason();finish();}
+        }
     }
-    void draw(){if(ready_)particles_.render({});}
+    void draw(){if(ready_)particles_.render({});if(gpuFrameOpen_)gpuPool_.draw();}
+    void finish(){if(gpuFrameOpen_){gpuPool_.endPresentationFrame();gpuFrameOpen_=false;}}
 private:
     bool initialize(gfx::Device& device){
         textures_.init(device);
@@ -84,6 +99,10 @@ private:
         });
         if(!particles_.init(&device)){error_=particles_.lastError();textures_.shutdown();return false;}
         presenter_=std::make_unique<lib::mechanics::SpectraPresentationSystem>(particles_);
+        spectra::PoolWorldBudgets budgets;
+        budgets.maxGpuGroups=16;budgets.maxGroupCapacity=1024;budgets.maxSources=4096;
+        if(gpuPool_.init(&device,budgets))
+            gpuPresenter_=std::make_unique<spectra::GpuEcsAttachmentPresenter>(gpuPool_);
         ready_=true;return true;
     }
     std::filesystem::path safeFile(const std::string& path)const{
@@ -120,13 +139,32 @@ private:
             error_=errors.empty()?"Invalid SpectraFX graph: "+name:errors.front();return false;
         }
         if(particles_.define(name,def)<0){error_="Cannot define SpectraFX graph: "+name;return false;}
-        definitions_.insert(name);return true;
+        definitions_.insert(name);
+        // CPU definition always remains available for incompatible devices,
+        // unscaled-only GPU policy failures and nonunit authored instances.
+        if(gpuPresenter_){
+            try{
+                spectra::PoolContinuousEmission emission;
+                spectra::GraphRuntimeOptions options;
+                options.preference=spectra::ComputePreference::RequireGpu;options.gpuProgram=true;
+                if(spectra::readScenePoolEmission(graph,emission)&&
+                   spectra::inspectGraphGpuEligibility(def,options).eligible&&
+                   gpuPool_.defineGraph(name,graph,Json::object(),options)&&
+                   gpuPool_.isGpuEffect(name)&&gpuPresenter_->bindEffect(name,emission))
+                    gpuDefinitions_.insert(name);
+            }catch(const std::exception& e){error_=e.what();}
+        }
+        return true;
     }
     render::TextureCache textures_;
     fx::ParticleSystem particles_;
     lib::mechanics::SpectraSourceMirror mirror_;
     std::unique_ptr<lib::mechanics::SpectraPresentationSystem> presenter_;
-    std::set<std::string> definitions_,hidden_;
+    spectra::GpuPoolWorld gpuPool_;
+    lib::mechanics::SpectraSourceMirror gpuMirror_;
+    std::unique_ptr<spectra::GpuEcsAttachmentPresenter> gpuPresenter_;
+    bool gpuFrameOpen_=false;
+    std::set<std::string> definitions_,gpuDefinitions_,hidden_;
     std::string project_,mapPath_,error_;
     uint64_t revision_=UINT64_MAX;
     bool ready_=false;
