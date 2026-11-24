@@ -655,6 +655,9 @@ std::vector<std::string> StudioScene::idsInRect(float x0,float y0,float x1,float
     }
     return out;
 }
+bool StudioScene::caveScreenRay(float x,float y,float width,float height,float3& origin,float3& direction)const {
+    return cameraInitialized_&&width>1&&height>1&&viewCamera().screenRay(x,y,width,height,origin,direction);
+}
 bool StudioScene::groundPoint(float x,float y,float width,float height,float3& out) const {
     float3 o,d;
     if(!cameraInitialized_||!viewCamera().screenRay(x,y,width,height,o,d)||std::fabs(d.y)<1e-5f)return false;
