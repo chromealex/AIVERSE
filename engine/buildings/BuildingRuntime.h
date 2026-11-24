@@ -23,6 +23,7 @@
 #include "engine/buildings/BuildingStairMotor.h"
 #include "engine/buildings/BuildingNavSource.h"
 #include "engine/buildings/BuildingGraphChanges.h"
+#include "engine/buildings/BuildingGraphDiagnosticsJson.h"
 #include "engine/buildings/BuildingApertureOwner.h"
 #include "engine/buildings/BuildingDynamicNavSource.h"
 #include "engine/buildings/BuildingGraphOwnerAdapters.h"
