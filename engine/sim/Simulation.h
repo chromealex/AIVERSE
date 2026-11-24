@@ -33,6 +33,10 @@ struct SimEvent {
     Entity a = kNullEntity, b = kNullEntity;
     int64_t value = 0;
     Vec3 pos{};
+    uint16_t flags = 0;         // module-defined flags, do not overload value
+    uint16_t resource = UINT16_MAX;
+    uint16_t subjectType = UINT16_MAX, subjectOwner = UINT16_MAX;
+    uint64_t subjectKey = UINT64_MAX; // stable source-side entity identity even after despawn/mirroring
 };
 
 struct PlayerInfo {
