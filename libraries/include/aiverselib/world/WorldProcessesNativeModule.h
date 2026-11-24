@@ -8,6 +8,7 @@
 #include "EvolveSurfaceRegions.h"
 #include "GranularSurfaceField.h"
 #include "MorphPhysisGravity.h"
+#include "AetherPhysisStratification.h"
 #include "engine/game/GameCore.h"
 #include "engine/game/Native.h"
 #include <cstdint>
@@ -70,6 +71,13 @@ inline void installGameCoreMorphGravity(Simulation& sim){
         if(host)(void)morph::advanceWithPhysisGravity(current.world(),host->surface(current),current.tick());
     });
 }
+inline void installGameCoreAetherStratification(Simulation& sim){
+    aether::registerPersistence(sim);
+    sim.addSystem("aether.transport",[](Simulation& current){
+        const auto* host=dynamic_cast<const game::GameCore*>(&current.module());
+        if(host)(void)aether::advanceWithStratification(current.world(),host->surface(current),current.tick());
+    });
+}
 class WorldProcessesNativeModule final:public game::NativeModule {
 public:
     void setup(game::GameCore& host,Simulation& sim,
@@ -83,7 +91,8 @@ public:
             host.surface(sim)?&evolve::registerSurfaceAreaPersistence:nullptr,
             host.surface(sim)?&hydrateGameCoreSurfaceArea:nullptr,
             host.surface(sim)?&installGameCoreSurfaceGranular:nullptr,
-            &installGameCoreMorphGravity);
+            &installGameCoreMorphGravity,
+            &installGameCoreAetherStratification);
     }
 };
 inline std::unique_ptr<game::NativeModule> createWorldProcessesNativeModule(){
