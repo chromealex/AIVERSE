@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools/agents"))
 from evidence import validate_report, checkout_errors
 from audit_compliance import covered_paths
 from feature_registry import regressions, matrix, load_registry, owner_readiness
+from feature_policy import dependency_report, roadmap_report, api_report, ownership_report
 from new_feature import scaffold
 from legacy_inventory import inventory
 from capability_inventory import capability_id, source_operations
@@ -240,6 +241,34 @@ class GateTest(unittest.TestCase):
             records, errors = read_coverage(root, {"render:shader"}, verify_git=False)
             self.assertFalse(records)
             self.assertTrue(any("digest" in error for error in errors))
+
+    def test_feature_policy_dependencies_and_conflicts(self):
+        checks = {key: {"status": "pass"} for key in gate.DIMENSIONS}
+        registry = {"base": {"checks": checks}, "child": {"checks": checks}}
+        policies = {"base": {"requires": [], "roadmap": {"system": "core", "id": "base"},
+                             "api_paths": ["engine/Base.h"]},
+                    "child": {"requires": ["base"], "roadmap": None, "api_paths": []}}
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            with patch("feature_policy.validate", return_value=[]):
+                report = dependency_report(registry, policies, root)
+                self.assertEqual(report["order"], ["base", "child"])
+                self.assertEqual(report["features"]["child"]["state"], "declared_ready")
+                policies["base"]["requires"] = ["child"]
+                self.assertTrue(any("cycle" in e for e in dependency_report(registry, policies, root)["errors"]))
+                policies["base"]["requires"] = []
+                registry["base"] = {"checks": {}}
+                report = dependency_report(registry, policies, root)
+                self.assertEqual(report["features"]["child"]["state"], "blocked")
+                self.assertEqual(report["features"]["child"]["blocked_by"], ["base"])
+        roadmap = roadmap_report(registry, policies, [{"id": "core", "roadmap": [{"id": "base", "status": "done"}]}])
+        self.assertTrue(any("pending" in e for e in roadmap["errors"]))
+        self.assertEqual(roadmap["unmapped"], ["child"])
+        self.assertTrue(api_report(policies, {"engine/Base.h"})["errors"])
+        self.assertFalse(api_report(policies, {"engine/Base.h", "docs/features/base.json"})["errors"])
+        overlap = ownership_report([{"agent": "a", "branch": "one", "paths": ["engine/Base.h"]},
+                                    {"agent": "b", "branch": "two", "paths": ["engine/Base.h"]}])
+        self.assertEqual(overlap["conflicts"][0]["path"], "engine/Base.h")
 
     def test_coverage(self):
         changed = {"engine/a.cpp", "apps/studio-web/a.ts", "docs/a.md"}
