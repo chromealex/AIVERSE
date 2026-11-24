@@ -8,6 +8,7 @@
 #include "engine/world/TerraWeaveCavernsWorldResidency.h"
 #include "engine/world/TerraWeaveCavernsStreamJobs.h"
 #include "engine/render/TerraWeaveCavernsShardGpuHost.h"
+#include "engine/world/TerraWeaveCavernsOwnedRimGroup.h"
 #include <algorithm>
 #include <cstdint>
 #include <map>
@@ -61,7 +62,32 @@ public:
         cancelPendingVisualBatch();
         ready_.clear();
         pendingRetire_.clear();
+        if(previewRimPlan_)setPreviewRimGroup({},{});
     }
+    // Studio only: use an exact bounded group instead of camera demand.
+    // Caller shares the very same immutable CPU terrain plan with its
+    // surface preview; no second GeometryScene or additive collar draw.
+    void setPreviewRimGroup(std::shared_ptr<const CaveSurfaceGroupPlan> plan,
+            const std::map<uint64_t,Fixed>& lowerPlanes,uint32_t resolution=16,int32_t spacingCm=100){
+        if(plan==previewRimPlan_)return;
+        if(!index_)throw std::logic_error("Caverns rim preview requires open world");
+        std::vector<CaveOwnedRimRequest> requests;
+        std::set<ChunkKey3,KeyLess> keys;
+        if(plan){
+            requests=selectOwnedRimRequests(*plan,index_->snapshot(),lowerPlanes,resolution,spacingCm);
+            if(requests.empty())throw std::invalid_argument("Caverns empty preview rim group");
+            for(const auto& r:requests)keys.insert(r.key);
+        }
+        cancelPendingVisualBatch();
+        residency_.setExplicitVisualDemand(plan?std::optional{keys}:std::nullopt);
+        ready_.clear();pendingRetire_.clear();
+        previewRimPlan_=std::move(plan);previewRimRequests_=std::move(requests);
+        previewRimKeys_=std::move(keys);previewRimCommitted_=false;previewDemandChanging_=true;
+    }
+    bool previewRimReady(const CaveSurfaceGroupPlan& plan)const noexcept{
+        return previewRimPlan_.get()==&plan&&previewRimCommitted_&&!previewDemandChanging_;
+    }
+    bool previewDemandChanging()const noexcept{return previewDemandChanging_;}
     // CPU jobs may finish in any order. GPU publication stays owner-thread
     // and is frame-admitted by the complete-shard geometry host.
     void beforeRender(gfx::Device& device,PointCm focus,
@@ -132,6 +158,12 @@ public:
             if(!current)cancelPendingVisualBatch();
         }
         if(!visualBatch_ && !ready_.empty()){
+            if(previewRimPlan_){
+                if(previewRimCommitted_)return;
+                for(const auto& key:previewRimKeys_){const auto it=ready_.find(key);if(it==ready_.end()||!residency_.current(it->second.ticket))return;}
+                // Wait for unrelated old sources to actually retire.
+                for(const auto& key:geometry_.catalog().committedKeys())if(!previewRimKeys_.contains(key))return;
+            }
             std::vector<CaveBatchChunk> candidates;
             std::vector<CaveResidencyTicket> tickets;
             for(const auto& [key,result]:ready_){
@@ -150,10 +182,29 @@ public:
                 tickets.push_back(result.ticket);
             }
             if(!candidates.empty()){
+                if(previewRimPlan_){
+                    std::map<uint64_t,CaveOwnedRimGroupRequest> groups;
+                    for(const auto& r:previewRimRequests_){auto& g=groups[r.entranceId];g.entranceId=r.entranceId;g.lowerPlane=r.lowerPlane;g.keys.push_back(r.key);}
+                    for(const auto& [id,group]:groups){
+                        (void)id;std::vector<CaveCertifiedChunk> sources;
+                        for(const auto& key:group.keys){
+                            const auto it=std::find_if(candidates.begin(),candidates.end(),[&](const auto& c){return c.mesh.key==key;});
+                            if(it==candidates.end())throw std::logic_error("Caverns missing preview rim slot");
+                            sources.push_back({it->mesh,it->resolution,it->spacingCm,it->sourceRevision,it->revision});
+                        }
+                        auto owned=prepareOwnedRimGroup(sources,group,*previewRimPlan_,index_->snapshot());
+                        for(auto& slot:owned.slots){
+                            auto it=std::find_if(candidates.begin(),candidates.end(),[&](const auto& c){return c.mesh.key==slot.candidate.mesh.key;});
+                            if(it==candidates.end())throw std::logic_error("Caverns missing transformed preview slot");
+                            it->mesh=std::move(slot.candidate.mesh);it->preserveExactSurface=true;
+                        }
+                    }
+                }
                 auto grouped=groupCaveEditsByShard(candidates,
                                                   geometry_.catalog().config());
                 auto plan=planCaveMixedLodShardBatch(
                     geometry_.catalog(),grouped,visualRevision_+1);
+                if(!plan.ready()&&previewRimPlan_)throw std::runtime_error("Caverns preview rim LOD certificate refused");
                 if(plan.ready()){
                     ++visualRevision_;
                     batchTickets_=std::move(tickets);
@@ -192,6 +243,12 @@ public:
             batchTickets_.clear();
             stagedShards_.clear();
             batchCursor_=0;
+            if(previewRimPlan_){previewRimCommitted_=true;previewDemandChanging_=false;}
+        }
+        if(previewDemandChanging_&&!previewRimPlan_){
+            bool exact=false;
+            for(const auto& key:geometry_.catalog().committedKeys())if(geometry_.catalog().find(key)->preserveExactSurface){exact=true;break;}
+            if(!exact)previewDemandChanging_=false;
         }
     }
     void cancelPendingVisualBatch(){
@@ -202,7 +259,7 @@ public:
         stagedShards_.clear();
         batchCursor_=0;
     }
-    void draw(render::Renderer3D& renderer){geometry_.draw(renderer);}
+    void draw(render::Renderer3D& renderer){if(!previewDemandChanging_)geometry_.draw(renderer);}
     bool closeAfterGpuIdle(gfx::Device& dev){
         workers_.drain();
         cancelPendingVisualBatch();
@@ -224,6 +281,10 @@ public:
     }
     CaveResidencyStats streaming()const{return residency_.stats();}
 private:
+    std::shared_ptr<const CaveSurfaceGroupPlan> previewRimPlan_;
+    std::vector<CaveOwnedRimRequest> previewRimRequests_;
+    std::set<ChunkKey3,KeyLess> previewRimKeys_;
+    bool previewRimCommitted_=false,previewDemandChanging_=false;
     CaveBatchSpec graphicsOptions_{};
     CaveWorldResidency residency_;
     CaveWorldStreamJobs workers_;
