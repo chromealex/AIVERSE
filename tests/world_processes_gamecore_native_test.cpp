@@ -7,6 +7,7 @@
 #include <array>
 #include "engine/data/JsonCompose.h"
 #include "tests/AlwaysCheck.h"
+#include "examples/native/world_processes/planet-demo/native/PlanetDemoModule.h"
 #include <cstdint>
 #include <iostream>
 #include <memory>
@@ -526,7 +527,71 @@ static void checkPlanetStudioDiagnostics(){
     const auto plane=owner.sample(&ecs,"2",1,64,ref);
     AIVERSE_TEST_CHECK(!plane.has("topology"));
 }
+static void checkAuthoredPlanetDemo(){
+    const std::string root=std::string(AIVERSE_SOURCE_DIR)+"/examples/native/world_processes/planet-demo";
+    const Json map=Json::parseFile(root+"/maps/planet.json");
+    const Json rules=Json::parseFile(root+"/rules.json");
+    const auto create=[&](){
+        std::vector<g::NativeDefinition> defs{examples::planet_processes::definition()};
+        auto s=std::make_unique<Simulation>(SimConfig{1,20,0,true},
+            std::make_unique<g::GameCore>(std::move(defs)));
+        s->setup(rules,map);return s;
+    };
+    auto sim=create(),peer=create();
+    const auto station=placed(*sim,0),receiver=placed(*sim,1),links=placed(*sim,2);
+    const auto walker=placed(*sim,3),slot=placed(*sim,4),eco=placed(*sim,6),moon=placed(*sim,7);
+    const auto& host=static_cast<const g::GameCore&>(sim->module());
+    const auto* surface=host.surface(*sim);
+    AIVERSE_TEST_CHECK(surface);
+    const auto& w=sim->world();
+    AIVERSE_TEST_CHECK(w.countExisting<physis::GravityField>()==2);
+    AIVERSE_TEST_CHECK(w.get<echo::AcousticPortal>(links).to==receiver);
+    AIVERSE_TEST_CHECK(w.get<fracture::Bond>(links).first==station);
+    AIVERSE_TEST_CHECK(w.get<aether::GasDuct>(links).to==receiver);
+    AIVERSE_TEST_CHECK(w.has<morph::GravityBinding>(walker));
+    AIVERSE_TEST_CHECK(w.has<crowd::Agent>(walker)&&w.has<crowd::Slot>(slot));
+    AIVERSE_TEST_CHECK(w.has<imprint::Cell>(slot)&&w.has<circuit::Node>(receiver));
+    AIVERSE_TEST_CHECK(w.has<granular::Field>(eco)&&w.has<granular::Field>(moon));
+    AIVERSE_TEST_CHECK(w.has<evolve::SurfaceArea>(eco)&&!w.has<evolve::Area>(eco));
+    AIVERSE_TEST_CHECK(w.has<society::Person>(receiver));
+    const auto gravity=[&](Entity e,int body){
+        const auto pos=w.get<Transform>(e).pos;
+        const auto frame=wp::surfaceFrame(surface,pos);
+        AIVERSE_TEST_CHECK(frame&&frame->body==body);
+        const auto sample=wp::sampleGravity(w,*frame,pos);
+        AIVERSE_TEST_CHECK(wp::granularGravityAxis(sample.local)==wp::GravityAxis::Down);
+        return sample.local.y;
+    };
+    AIVERSE_TEST_CHECK(gravity(eco,0)<gravity(moon,1));
+    AIVERSE_TEST_CHECK(sim->checksum()==peer->checksum());
+    for(int i=0;i<5;++i){
+        sim->step();peer->step();
+        AIVERSE_TEST_CHECK(sim->checksum()==peer->checksum());
+    }
+    AIVERSE_TEST_CHECK(w.get<echo::AcousticHearing>(receiver).intensity==75);
+    AIVERSE_TEST_CHECK(!w.get<fracture::Member>(receiver).detached);
+    AIVERSE_TEST_CHECK(w.get<aether::GasCell>(receiver).smoke>0);
+    AIVERSE_TEST_CHECK(w.get<aether::GasCell>(station).smoke+w.get<aether::GasCell>(receiver).smoke==250);
+    AIVERSE_TEST_CHECK(w.get<morph::Node>(walker).y<0);
+    AIVERSE_TEST_CHECK(w.get<crowd::Agent>(walker).allocated==slot);
+    AIVERSE_TEST_CHECK(w.get<imprint::Cell>(slot).footprint>0);
+    AIVERSE_TEST_CHECK(w.get<circuit::Node>(receiver).powered);
+    AIVERSE_TEST_CHECK(w.get<granular::Field>(eco).mass[2]+w.get<granular::Field>(eco).mass[3]==400);
+    AIVERSE_TEST_CHECK(w.get<granular::Field>(moon).mass[2]+w.get<granular::Field>(moon).mass[3]==400);
+    AIVERSE_TEST_CHECK(w.get<evolve::Region>(eco).fertility>500000000);
+    AIVERSE_TEST_CHECK((w.get<society::Person>(receiver).knowledge&1)!=0);
+    auto restored=create();std::string error;
+    AIVERSE_TEST_CHECK(restored->deserialize(sim->serialize(),&error));
+    AIVERSE_TEST_CHECK(restored->checksum()==sim->checksum());
+    sim->world().enableCowSnapshots();
+    SimSnapshot snapshot;sim->saveState(snapshot);
+    sim->step();restored->step();
+    AIVERSE_TEST_CHECK(restored->checksum()==sim->checksum());
+    sim->loadState(snapshot);sim->step();
+    AIVERSE_TEST_CHECK(restored->checksum()==sim->checksum());
+}
 int main(){
+    checkAuthoredPlanetDemo();
     checkPlanetStudioDiagnostics();
     checkCircuitSurfaceWiring();
     checkAetherStratification();

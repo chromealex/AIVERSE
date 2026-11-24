@@ -1,0 +1,389 @@
+{
+  "world": {
+    "start": "terra",
+    "bodies": [
+      {
+        "id": "terra",
+        "kind": "planet",
+        "radius": 64,
+        "faceSize": 32
+      },
+      {
+        "id": "moon",
+        "kind": "moon",
+        "radius": 32,
+        "faceSize": 16
+      }
+    ]
+  },
+  "players": [
+    {
+      "start": {
+        "body": "terra",
+        "face": 0,
+        "x": 8,
+        "y": 8
+      }
+    },
+    {
+      "start": {
+        "body": "moon",
+        "face": 0,
+        "x": 8,
+        "y": 8
+      }
+    }
+  ],
+  "physis": {
+    "enabled": true,
+    "grid": {
+      "originX": 0,
+      "originZ": 0,
+      "width": 1,
+      "height": 1,
+      "cellSizeMeters": 1,
+      "seed": 97
+    },
+    "climate": {
+      "baseTemperature": 20,
+      "baseHumidity": 0.5
+    },
+    "enableGravityFields": true,
+    "gravityFields": [
+      {
+        "id": "terra_gravity",
+        "center": [
+          8192,
+          0,
+          0
+        ],
+        "mode": "Attract",
+        "radiusMeters": 256,
+        "radialMagnitude": 12,
+        "overrideBaseline": true
+      },
+      {
+        "id": "moon_gravity",
+        "center": [
+          12288,
+          0,
+          0
+        ],
+        "mode": "Attract",
+        "radiusMeters": 128,
+        "radialMagnitude": 3,
+        "overrideBaseline": true
+      }
+    ]
+  },
+  "entities": [
+    {
+      "id": "station",
+      "type": "marker",
+      "owner": 1,
+      "at": {
+        "body": "terra",
+        "face": 0,
+        "x": 13,
+        "y": 16
+      },
+      "components": {
+        "EchoZone": {
+          "enabled": true
+        },
+        "EchoEmitter": {
+          "zone": "station",
+          "intensity": 100,
+          "enabled": true
+        },
+        "FractureMember": {
+          "anchored": true
+        },
+        "AetherGasCell": {
+          "smoke": 250,
+          "toxin": 0,
+          "oxygen": 500,
+          "enabled": true
+        },
+        "CircuitNode": {
+          "supply": 200,
+          "demand": 0,
+          "drive": true,
+          "enabled": true
+        },
+        "SocietyPerson": {
+          "knowledgeHex": "0000000000000001",
+          "credibility": 1000,
+          "acceptance": 250000,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "receiver",
+      "type": "marker",
+      "owner": 1,
+      "at": {
+        "body": "terra",
+        "face": 0,
+        "x": 16,
+        "y": 16
+      },
+      "components": {
+        "EchoZone": {
+          "enabled": true
+        },
+        "EchoReceiver": {
+          "zone": "receiver",
+          "threshold": 30,
+          "enabled": true
+        },
+        "FractureMember": {
+          "anchored": false
+        },
+        "AetherGasCell": {
+          "smoke": 0,
+          "toxin": 0,
+          "oxygen": 500,
+          "enabled": true
+        },
+        "CircuitNode": {
+          "supply": 0,
+          "demand": 30,
+          "drive": false,
+          "enabled": true
+        },
+        "SocietyPerson": {
+          "knowledgeHex": "0000000000000000",
+          "credibility": 1000,
+          "acceptance": 250000,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "links",
+      "type": "marker",
+      "owner": 1,
+      "at": {
+        "body": "terra",
+        "face": 0,
+        "x": 14,
+        "y": 18
+      },
+      "components": {
+        "EchoPortal": {
+          "from": "station",
+          "to": "receiver",
+          "loss": 25,
+          "bidirectional": true,
+          "enabled": true
+        },
+        "FractureBond": {
+          "first": "station",
+          "second": "receiver",
+          "strength": 100,
+          "damage": 0,
+          "enabled": true
+        },
+        "AetherDuct": {
+          "from": "station",
+          "to": "receiver",
+          "maximumPerTick": 10,
+          "oneWay": false,
+          "enabled": true
+        },
+        "CircuitWire": {
+          "from": "station",
+          "to": "receiver",
+          "bidirectional": true,
+          "enabled": true
+        },
+        "SocietyContact": {
+          "source": "station",
+          "target": "receiver",
+          "trust": 800,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "walker",
+      "type": "walker",
+      "owner": 1,
+      "at": {
+        "body": "terra",
+        "face": 0,
+        "x": 20,
+        "y": 16
+      },
+      "components": {
+        "CrowdAgent": {
+          "x": 0,
+          "z": 0,
+          "goalX": 0,
+          "goalZ": 0,
+          "radius": 20,
+          "speed": 20,
+          "enabled": true
+        },
+        "MorphNode": {
+          "restX": 0,
+          "restY": 0,
+          "restZ": 0,
+          "drag": 0,
+          "anchored": false,
+          "enabled": true,
+          "gravityImpulseMilli": 1000,
+          "gravityRelative": false
+        }
+      }
+    },
+    {
+      "id": "local_slot",
+      "type": "marker",
+      "owner": 1,
+      "at": {
+        "body": "terra",
+        "face": 0,
+        "x": 23,
+        "y": 16
+      },
+      "components": {
+        "CrowdSlot": {
+          "x": 0,
+          "z": 0,
+          "enabled": true
+        },
+        "ImprintCell": {
+          "footprint": 0,
+          "scent": 0,
+          "residue": 0,
+          "footprintFade": 0,
+          "scentFade": 0,
+          "residueFade": 0,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "control",
+      "type": "marker",
+      "owner": 1,
+      "at": {
+        "body": "terra",
+        "face": 0,
+        "x": 20,
+        "y": 19
+      },
+      "components": {
+        "CrowdPreference": {
+          "agent": "walker",
+          "slot0": "moon_slot",
+          "slot1": "local_slot",
+          "slot2": "",
+          "slot3": "",
+          "enabled": true
+        },
+        "ImprintDeposit": {
+          "cell": "local_slot",
+          "footprint": 30,
+          "scent": 10,
+          "residue": 0,
+          "enabled": true
+        },
+        "EvolvePressure": {
+          "region": "ecology",
+          "wear": 0,
+          "recovery": 0,
+          "enrichment": 50,
+          "consumption": 0,
+          "contamination": 0,
+          "purification": 0,
+          "growth": 10,
+          "regression": 0,
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "ecology",
+      "type": "marker",
+      "owner": 1,
+      "at": {
+        "body": "terra",
+        "face": 0,
+        "x": 28,
+        "y": 16
+      },
+      "components": {
+        "EvolveRegion": {
+          "durability": 1000000000,
+          "fertility": 500000000,
+          "succession": 0,
+          "pollution": 0,
+          "enabled": true
+        },
+        "EvolveArea": {
+          "halfWidthCm": 800,
+          "halfDepthCm": 500,
+          "enabled": true
+        },
+        "GranularField": {
+          "width": 2,
+          "height": 2,
+          "capacity": 1000,
+          "mass": [
+            400,
+            0,
+            0,
+            0
+          ],
+          "solid": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "enabled": true
+        }
+      }
+    },
+    {
+      "id": "moon_slot",
+      "type": "marker",
+      "owner": 2,
+      "at": {
+        "body": "moon",
+        "face": 0,
+        "x": 12,
+        "y": 8
+      },
+      "components": {
+        "CrowdSlot": {
+          "x": 0,
+          "z": 0,
+          "enabled": true
+        },
+        "GranularField": {
+          "width": 2,
+          "height": 2,
+          "capacity": 1000,
+          "mass": [
+            400,
+            0,
+            0,
+            0
+          ],
+          "solid": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "enabled": true
+        }
+      }
+    }
+  ]
+}
