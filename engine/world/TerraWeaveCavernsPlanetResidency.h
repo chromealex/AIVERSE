@@ -6,8 +6,8 @@
 
 namespace aiverse::terraweave::caverns {
 // Game/world owner holds this registry; no new scheduler or physics world.
-// PlanetRenderer currently allows one cut plan per body, hence one chart
-// owner per body until multi-chart surface ownership is implemented.
+// One owner per body, now accepting a complete disjoint multi-chart plan.
+// Never open a second native owner for another chart on the same body.
 class CavePlanetResidency {
     using Owners=std::map<std::string,std::unique_ptr<CavePlanetNativeOwner>>;
 public:
