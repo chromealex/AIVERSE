@@ -1790,6 +1790,12 @@
           "text": "Добавлен учёт ссылок рендерера и LENS, автоматическое переиспользование при подтверждении внешних ссылок. По умолчанию выключено; интеграционная проверка ожидается.",
           "nameEn": "Texture Graph GPU — Stage 38N (partial)",
           "textEn": "Renderer and LENS root inspection, opt-in certified automatic slot recycling. Default off; integrated verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38O (в работе)",
+          "text": "Единая проверка ссылок для ручного и автоматического освобождения GPU-изображений; безопасный отказ при незавершённых транзакциях.",
+          "nameEn": "Texture Graph GPU — Stage 38O (in progress)",
+          "textEn": "Unify explicit and automatic root inspection; refuse collection during active transactions."
         }
       ],
       "enables": [
