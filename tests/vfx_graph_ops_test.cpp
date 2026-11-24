@@ -79,8 +79,125 @@ static void checkMaterializedOwner(){
     require(!owner.status().getBool("busy")&&dev.buffers.empty()&&dev.pipelines.empty(),"failed dispatch fence did not retire");
     owner.shutdownAfterIdle(dev);
 }
+// Fake readback bytes only exercise the request lifetime and exact destination
+// acceptance gate. Real shader/copy/mip execution needs the native GPU fixture.
+struct ResidentTextureFixture : DagFixtureDevice {
+    TextureReadFn pendingTexture;
+    gfx::TextureHandle readTarget{};
+    std::set<uint32_t> copied;
+    size_t copyCount=0;
+    bool rejectCopy=false,mipRequested=false;
+    bool supportsStorageBufferTextureCopy()const override{return true;}
+    bool bufferInfo(gfx::BufferHandle h,gfx::BufferInfo& out)const override{
+        const auto it=buffers.find(h.id);if(it==buffers.end())return false;
+        out={it->second.size(),1};return true;
+    }
+    bool textureInfo(gfx::TextureHandle h,gfx::TextureInfo& out)const override{
+        const auto it=textures.find(h.id);if(it==textures.end())return false;
+        out={it->second.w,it->second.h,gfx::PixelFormat::RGBA8};return true;
+    }
+    bool copyStorageBufferToTexture2D(gfx::BufferHandle from,gfx::TextureHandle to,
+            const gfx::BufferTextureCopy2D& copy)override{
+        const auto it=buffers.find(from.id);auto t=textures.find(to.id);
+        if(rejectCopy||it==buffers.end()||t==textures.end()||
+           !gfx::validBufferTextureCopy2D(copy,it->second.size(),t->second.w,t->second.h))return false;
+        mipRequested|=copy.generateMipmaps;copied.insert(to.id);++copyCount;return true;
+    }
+    bool readTextureAsync(gfx::TextureHandle h,gfx::TextureReadbackDesc desc,TextureReadFn fn)override{
+        if(pendingTexture||desc.mipLevel!=0||desc.arrayLayer!=0||!copied.contains(h.id)||!textures.contains(h.id))return false;
+        readTarget=h;pendingTexture=std::move(fn);return true;
+    }
+    void deliverTexture(bool valid=true){
+        const auto& t=textures.at(readTarget.id);
+        gfx::TextureReadbackResult result;
+        result.width=t.w;result.height=t.h;result.format=gfx::PixelFormat::RGBA8;
+        result.pixels.assign(size_t(t.w)*t.h*4u,255);
+        if(!valid)result.pixels[0]=0;
+        auto fn=std::move(pendingTexture);pendingTexture={};fn(std::move(result));
+    }
+    bool waitForResourceIdle()override{return true;}
+};
+static void checkResidentTextureOwner(){
+    ResidentTextureFixture dev;
+    render::RenderDeviceLifetime epoch(dev);
+    editor::TextureGraphGpuPreview owner;
+    const auto args=Json::parse(R"({"action":"start","materialized":true,"fusePointwise":true,
+        "gpuTextureTransfer":true,"gpuTextureMipmaps":true,"bakeSet":true,
+        "graph":{"version":1,"size":8,"nodes":[{"id":"a","op":"constant","inputs":[],"properties":{"value":1}}],
+        "outputs":{"ao":"a","height":"a","mask":"a"}}})");
+    bool refused=false;
+    try{owner.start(args,"fixture");}catch(const std::invalid_argument&){refused=true;}
+    require(refused,"resident request accepted without native lease");
+    auto started=owner.start(args,"fixture",epoch.lease());
+    owner.tick(dev,"fixture");
+    require(bool(dev.pendingTexture)&&!dev.pending&&dev.copyCount==1&&dev.mipRequested,
+            "resident owner did not validate copied texture");
+    dev.deliverTexture();owner.tick(dev,"fixture");
+    require(owner.status().getInt("gpuTextureAccepted")==0&&owner.status().getBool("busy"),
+            "accepted texture before its frame fence");
+    dev.completed=dev.submitted;++dev.submitted;
+    owner.tick(dev,"fixture");owner.tick(dev,"fixture");
+    require(bool(dev.pendingTexture)&&dev.copyCount==2&&dev.textures.size()==2,
+            "duplicate bindable output failed to get its own GPU texture");
+    dev.deliverTexture();dev.completed=dev.submitted;++dev.submitted;
+    owner.tick(dev,"fixture");
+    const auto ready=owner.status();
+    require(ready.getBool("gpuTextureSetReady")&&!ready.getBool("busy")&&
+            ready.getInt("gpuTextureAccepted")==2&&ready.getInt("completedOutputs")==3,
+            "resident set not accepted atomically");
+    require(ready.getInt("reusedOutputs")==1,"nonbindable duplicate did not reuse accepted bytes");
+    refused=false;
+    try{owner.start(args,"fixture",epoch.lease());}catch(const std::runtime_error&){refused=true;}
+    require(refused,"unadopted resident set silently replaced");
+    render::Model model;model.materials.resize(1);
+    view::AppearanceAssetRegistry registry;
+    view::AppearanceAssetRegistry::Asset asset;asset.model=&model;asset.materials=model.materials;
+    require(registry.publishPrepared("fixture",asset),"fixture appearance missing");
+    const auto old=registry.find("fixture");
+    render::ModelImageRollbackPool rollback;
+    std::string error;
+    const auto request=started.getStr("request");
+    const auto existing=dev.textures.size();
+    require(!owner.publishCompletedGpuMaterial("other",request,registry,"fixture",
+        old->version,old->modelPublicationGeneration,0,model,dev,epoch.lease(),rollback,&error),
+        "stale project published a resident set");
+    require(owner.publishCompletedGpuMaterial("fixture",request,registry,"fixture",
+        old->version,old->modelPublicationGeneration,0,model,dev,epoch.lease(),rollback,&error),
+        "resident set could not be adopted");
+    require(owner.status().getBool("gpuTexturePublished")&&model.images.size()==2&&
+        dev.textures.size()==existing&&dev.copied.contains(model.images[0].tex.id)&&
+        dev.copied.contains(model.images[1].tex.id),"adoption allocated replacement GPU textures");
+    require(!owner.publishCompletedGpuMaterial("fixture",request,registry,"fixture",
+        old->version,old->modelPublicationGeneration,0,model,dev,epoch.lease(),rollback,&error),
+        "resident set published twice");
+    // Cancel a second request before its callback or fence is complete.
+    started=owner.start(args,"fixture",epoch.lease());owner.tick(dev,"fixture");
+    require(bool(dev.pendingTexture)&&dev.textures.size()==existing+1,"second resident request missing");
+    Json cancel=Json::object();cancel.set("request",started["request"]);
+    owner.cancel(cancel,"fixture");dev.deliverTexture();owner.tick(dev,"fixture");
+    require(owner.status().getBool("busy")&&dev.textures.size()==existing+1,
+        "cancel destroyed a resident texture before completion");
+    dev.completed=dev.submitted;++dev.submitted;owner.tick(dev,"fixture");
+    require(!owner.status().getBool("busy")&&dev.textures.size()==existing,
+        "cancel did not retire candidate without touching adopted images");
+    // Strict GPU mode rejects actual copied bytes that disagree with CPU.
+    owner.start(args,"fixture",epoch.lease());owner.tick(dev,"fixture");
+    dev.deliverTexture(false);dev.completed=dev.submitted;++dev.submitted;
+    owner.tick(dev,"fixture");
+    require(owner.status().getStr("state")=="failed"&&!owner.status().getBool("gpuTextureSetReady")&&
+        dev.textures.size()==existing,"copy parity failure fell back or leaked candidate");
+    // A partially created destination remains owned until its copy fence.
+    dev.rejectCopy=true;owner.start(args,"fixture",epoch.lease());owner.tick(dev,"fixture");
+    require(owner.status().getStr("state")=="failed"&&owner.status().getBool("draining")&&
+        dev.textures.size()==existing+1,"partial GPU copy failure lost retirement");
+    dev.completed=dev.submitted;owner.tick(dev,"fixture");
+    require(!owner.status().getBool("busy")&&dev.textures.size()==existing,"partial copy did not retire");
+    owner.shutdownAfterIdle(dev);registry.clear();render::releaseModel(dev,model);
+    require(dev.textures.empty()&&dev.buffers.empty()&&dev.pipelines.empty(),"resident fixture leaked resources");
+}
 int main() {
     checkMaterializedOwner();
+    checkResidentTextureOwner();
     {
         using namespace render::texture_graph;
         const auto p=compile(Json::parse(R"({"version":1,"size":8,"nodes":[{"id":"c","op":"color","inputs":[],"properties":{"value":[1,0,0]}},{"id":"s","op":"constant","inputs":[],"properties":{"value":0.5}}],"outputs":{"color":"c","height":"s","ao":"s"}})"));
