@@ -150,6 +150,7 @@ void EffectParser::delivery(const std::string& where, const Json& j, DeliveryDef
     if (j.has("flight")) {
         d.flight = parseProjectileFlight(j["flight"], where + " flight");
         if (d.arc && (d.arcHeight < Fixed{} || d.arcHeight > 128_fx)) fail(where, "flight arcHeight must be in [0,128]");
+        if (d.arc && d.flight.arc) fail(where, "delivery.arc and flight.arc are alternative trajectory definitions");
         if (d.arc && (d.flight.gravity.raw || d.flight.verticalSpeed.raw)) fail(where, "arc and flight gravity/verticalSpeed are alternative trajectory definitions");
         if (d.speed <= Fixed{} || d.speed > Fixed::fromInt(1024)) fail(where, "flight speed must be in (0,1024]");
     }
