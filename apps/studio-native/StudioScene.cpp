@@ -1761,7 +1761,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     stepTween();
     const auto view=viewCamera();
-    spectraSources_.synchronize(*device_,doc,projectRoot,hidden_);
+    spectraSources_.synchronize(*device_,doc,projectRoot,hidden_,levelHeight,showTerrain,&nereid_.scene());
     {
         // Redraw only when something visible changed (like an editor viewport with
         // Realtime off), plus settle frames for temporal effects and a 1 s heartbeat.

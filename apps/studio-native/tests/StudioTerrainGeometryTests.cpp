@@ -1,4 +1,5 @@
 #include "apps/studio-native/StudioTerrainGeometry.h"
+#include "apps/studio-native/StudioSpectraFields.h"
 #include "tests/TestCheck.h"
 #include <cmath>
 #include <iostream>
@@ -20,9 +21,17 @@ int main() {
     AIVERSE_TEST_CHECK(terrainPreviewColor('.')!=terrainPreviewColor('~'));
     AIVERSE_TEST_CHECK(terrainPreviewColor('~')!=terrainPreviewColor('#'));
     for (const auto& v:mesh.vertices()) AIVERSE_TEST_CHECK(v.nrm.y>0.1f);
+    auto fields=buildStudioSpectraFields(d,1.5f,true,nullptr);
+    float field=0;
+    AIVERSE_TEST_CHECK(fields->sample("terraweave","height",{0.5f,0,0.5f},field)&&std::abs(field-0.5f)<0.001f);
+    AIVERSE_TEST_CHECK(fields->sample("terraweave","clearance",{0.5f,2,0.5f},field)&&std::abs(field-1.5f)<0.001f);
+    AIVERSE_TEST_CHECK(!fields->sample("terraweave","height",{-1,0,0},field));
+    AIVERSE_TEST_CHECK(!fields->sample("physis","wind_x",{0,0,0},field));
+    AIVERSE_TEST_CHECK(!buildStudioSpectraFields(d,1.5f,false,nullptr)->sample("terraweave","height",{0,0,0},field));
     d.bodies.emplace_back();
     MeshBuilder planet;
     AIVERSE_TEST_CHECK(buildTerrainPreview(d,planet).quads==0);
+    AIVERSE_TEST_CHECK(!buildStudioSpectraFields(d,1.5f,true,nullptr)->sample("terraweave","height",{0,0,0},field));
     d.bodies.clear();
     d.corners.clear();
     d.levels={2,2,2,2};

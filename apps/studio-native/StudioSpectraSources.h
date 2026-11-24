@@ -8,6 +8,7 @@
 #include "engine/fx/FxModelMesh.h"
 #include "engine/render/TextureCache.h"
 #include "apps/studio-native/StudioDocumentIds.h"
+#include "apps/studio-native/StudioSpectraFields.h"
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -24,33 +25,56 @@ public:
         presenter_.reset();mirror_.clear();
         particles_.shutdown();textures_.shutdown();
         definitions_.clear();schemas_.clear();project_.clear();mapPath_.clear();error_.clear();
-        dataRegistry_.reset();
+        dataRegistry_.reset();externalRegistry_=false;
         revision_=UINT64_MAX;ready_=false;
     }
     // Render owner only, between frames. Shared ownership prevents dangling
     // callbacks when a host publishes a fresh immutable registry.
     bool setDataInterfaceRegistry(std::shared_ptr<const spectra::DataInterfaceRegistry> registry){
+        const bool external=bool(registry);
+        if(!installRegistry(std::move(registry)))return false;
+        externalRegistry_=external;
+        if(!external)revision_=UINT64_MAX;
+        return true;
+    }
+private:
+    bool installRegistry(std::shared_ptr<const spectra::DataInterfaceRegistry> registry){
         if(gpuFrameOpen_)return false;
         if(gpuPool_.ready()&&!gpuPool_.setDataInterfaceRegistry(registry.get()))return false;
         if(presenter_)presenter_->setDataInterfaceRegistry(registry.get());
         dataRegistry_=std::move(registry);
         return true;
     }
+public:
     bool animated() const{
         return ready_&&(mirror_.size()!=0||particles_.stats().particles>0||
             gpuMirror_.size()!=0||gpuPool_.stats().gpuParticlesEstimated>0||gpuPool_.stats().cpuParticles>0);
     }
     const std::string& error()const{return error_;}
     void synchronize(gfx::Device& device,const editor::MapDoc& doc,const std::string& project,
-                     const std::set<std::string>& hidden){
+                     const std::set<std::string>& hidden,
+                     float levelHeight=1.5f,bool showTerrain=true,
+                     const world::NereidWaterScene* water=nullptr){
         if(project!=project_||doc.path!=mapPath_){
             device.waitForResourceIdle();shutdown();
             project_=project;mapPath_=doc.path;
         }
-        if(project.empty()||doc.data.worldSpace||doc.data.planet())return;
-        // Only rebuild source declarations on a document revision or visibility change.
-        if(revision_==doc.revision&&hidden_==hidden)return;
+        if(project.empty()||doc.data.worldSpace||doc.data.planet()){
+            if(ready_){mirror_.clear();gpuMirror_.clear();}
+            if(!externalRegistry_)installRegistry({});
+            revision_=UINT64_MAX;
+            return;
+        }
+        // Rebuild authored snapshots only with document/terrain changes.
+        const bool fieldChanged=revision_!=doc.revision||fieldLevelHeight_!=levelHeight||
+                                fieldShowTerrain_!=showTerrain;
+        if(fieldChanged && !externalRegistry_) {
+            auto next=buildStudioSpectraFields(doc.data,levelHeight,showTerrain,water);
+            if(!installRegistry(std::move(next)))return;
+        }
+        if(!fieldChanged&&hidden_==hidden)return;
         revision_=doc.revision;hidden_=hidden;
+        fieldLevelHeight_=levelHeight;fieldShowTerrain_=showTerrain;
         std::vector<lib::mechanics::SpectraSourceSnapshot> rows,gpuRows;
         std::set<std::string> seen;
         error_.clear();
@@ -206,7 +230,9 @@ private:
     spectra::GpuPoolWorld gpuPool_;
     lib::mechanics::SpectraSourceMirror gpuMirror_;
     std::unique_ptr<spectra::GpuEcsAttachmentPresenter> gpuPresenter_;
-    bool gpuFrameOpen_=false;
+    bool gpuFrameOpen_=false,externalRegistry_=false;
+    float fieldLevelHeight_=0;
+    bool fieldShowTerrain_=false;
     std::set<std::string> definitions_,gpuDefinitions_,hidden_;
     std::map<std::string,spectra::InstanceParameterTable> schemas_;
     std::string project_,mapPath_,error_;
