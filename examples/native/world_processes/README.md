@@ -74,3 +74,6 @@ with their existing host owners.
 implementations awaiting compilation and validation; tests were
 deliberately postponed. Refer to the Stage11–16 handoffs for the
 actual completion boundaries.
+
+## Integrated planet example
+See [planet-demo](planet-demo/README.md) for the authored two-body project with all ten mechanics and explicit PHYSIS gravity. Native smoke source is registered; tests remain NOT RUN.
