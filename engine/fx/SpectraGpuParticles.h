@@ -86,6 +86,7 @@ struct VolumetricParticleMaterial {
     uint32_t shadowSteps=4; // 0 disables self-shadowing
     float shadowStrength=1,anisotropy=0,ambient=.35f;
     float directIntensity=.65f;
+    bool sparseTexture=true; // automatically fall back to dense if bricks cost more
     std::shared_ptr<const ParticleVolumeTexture> texture;
     bool valid()const{
         return std::isfinite(density)&&density>=0&&density<=100&&
@@ -363,8 +364,8 @@ private:
     static_assert(sizeof(Vertex)==40);
     static_assert(sizeof(Uniforms)==352);
     static_assert(sizeof(DrawUniforms)==144);
-    struct VolumeDrawUniforms {DrawUniforms base;render::float4 lightDir,lightColor,lightControl;render::mat4 invVP;render::float4 depthControl,lodControl;};
-    static_assert(sizeof(VolumeDrawUniforms)==288);
+    struct VolumeDrawUniforms {DrawUniforms base;render::float4 lightDir,lightColor,lightControl;render::mat4 invVP;render::float4 depthControl,lodControl,sparseControl;};
+    static_assert(sizeof(VolumeDrawUniforms)==304);
 
     bool stepImpl(float dt);
     bool stepGpuAllocated(float dt);
@@ -405,7 +406,8 @@ private:
     std::shared_ptr<SharedSdfGpuPayload> sharedSdfPayload_;
     gfx::BufferHandle vmErrors_;
     gfx::BufferHandle stateAttributes_; // compute slot 11, 8 scalar VM registers/particle
-    gfx::TextureHandle texture_,volumeTexture_,drawVolumeDepth_;
+    gfx::TextureHandle texture_,volumeTexture_,drawVolumeDepth_,volumeBrickMap_;
+    render::float4 volumeSparseControl_{};
     gfx::ComputeHandle volumeSortCompute_{};
     gfx::BufferHandle volumeSortKeys_{},volumeSortedRecords_{};
     uint32_t volumeSortCapacity_=0;

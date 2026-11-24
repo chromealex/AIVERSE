@@ -347,13 +347,24 @@ bool ComputeParticles::initGpu() {
         if(!device_->supportsTextureDimension(gfx::TextureDimension::Texture3D)){
             reason_="Native 3D textures unavailable";return false;
         }
-        if(!desc_.allocationBudget->reserve(a.density.size())){
+        SparseParticleVolume sparse;
+        const bool useSparse=desc_.volumeMaterial.sparseTexture&&buildSparseParticleVolume(a,sparse);
+        const size_t charge=useSparse?sparse.bytes():a.density.size();
+        if(!desc_.allocationBudget->reserve(charge)){
             reason_="Particle volume texture budget exhausted";return false;
         }
-        volumeTextureCharge_=a.density.size();
+        volumeTextureCharge_=charge;
         gfx::TextureDesc td;td.width=td.height=int(a.dimension);td.depth=int(a.dimension*a.frames);
         td.dimension=gfx::TextureDimension::Texture3D;td.format=gfx::PixelFormat::R8;
         td.data=a.density.data();td.filter=gfx::Filter::Linear;td.label="SpectraFX particle volume density animation";
+        if(useSparse){
+            td.width=int(sparse.atlasX*6);td.height=int(sparse.atlasY*6);td.depth=int(sparse.atlasZ*6);td.data=sparse.atlas.data();
+            gfx::TextureDesc map;map.width=int(sparse.grid*sparse.grid);map.height=int(sparse.grid*a.frames);
+            map.format=gfx::PixelFormat::RGBA8;map.filter=gfx::Filter::Nearest;map.data=sparse.map.data();
+            map.label="SpectraFX sparse volume brick indirection";volumeBrickMap_=device_->createTexture(map);
+            if(!volumeBrickMap_.valid()){reason_="Sparse particle volume map allocation failed";return false;}
+            volumeSparseControl_={float(sparse.grid),float(sparse.atlasX),float(sparse.atlasY),float(sparse.atlasZ)};
+        }
         volumeTexture_=device_->createTexture(td);
         if(!volumeTexture_.valid()){reason_="Particle volume texture allocation failed";return false;}
     }
@@ -373,6 +384,7 @@ bool ComputeParticles::initGpu() {
         shader.msl=volumetric_particles::metal;
         std::string defines;
         if(desc_.volumeMaterial.texture)defines+="#define SPECTRA_TEXTURE_VOLUME 1\n";
+        if(volumeBrickMap_.valid())defines+="#define SPECTRA_SPARSE_VOLUME 1\n";
         if(desc_.volumeMaterial.depthAware)defines+="#define SPECTRA_VOLUME_DEPTH 1\n";
         if(!defines.empty()){
             volumeMetal=defines+shader.msl;volumeFragment=defines+shader.glslFragment;
@@ -381,7 +393,7 @@ bool ComputeParticles::initGpu() {
             shader.glslVertex=volumeVertex.c_str();
         }
     }
-    shader.textureSlots=desc_.volumeMaterial.enabled&&desc_.volumeMaterial.depthAware?2:(desc_.volumeMaterial.enabled&&!desc_.volumeMaterial.texture?0:1);shader.uniformSlots=1;
+    shader.textureSlots=volumeBrickMap_.valid()?3:desc_.volumeMaterial.enabled&&desc_.volumeMaterial.depthAware?2:(desc_.volumeMaterial.enabled&&!desc_.volumeMaterial.texture?0:1);shader.uniformSlots=1;
     shader.label=materialActive?"SpectraFX GPU particle material":"SpectraFX GPU billboard";
     vertexShader_=device_->createShader(shader);
     if(vertexShader_.valid()) {
@@ -478,6 +490,7 @@ void ComputeParticles::releaseGpu() {
         if(indices_.valid())device_->destroyBuffer(indices_);
         if(texture_.valid())device_->destroyTexture(texture_);
         if(volumeTexture_.valid())device_->destroyTexture(volumeTexture_);
+        if(volumeBrickMap_.valid())device_->destroyTexture(volumeBrickMap_);
         if(volumeSortCompute_.valid())device_->destroyCompute(volumeSortCompute_);
         if(volumeSortKeys_.valid())device_->destroyBuffer(volumeSortKeys_);
         if(volumeSortedRecords_.valid())device_->destroyBuffer(volumeSortedRecords_);
@@ -488,7 +501,7 @@ void ComputeParticles::releaseGpu() {
     retireAllocationCharge(volumeSortCharge_,volumeSortFence_);
     volumeSortCompute_={};volumeSortKeys_={};volumeSortedRecords_={};
     volumeSortCapacity_=0;volumeSortCharge_=0;volumeSortFence_=0;volumeSortReady_=false;
-    drawVolumeDepth_={};volumeTexture_={};volumeTextureCharge_=0;volumeTextureFence_=0;
+    volumeBrickMap_={};volumeSparseControl_={};drawVolumeDepth_={};volumeTexture_={};volumeTextureCharge_=0;volumeTextureFence_=0;
     volumeLightDirection_={0,1,0};volumeLightColor_={1,1,1};
     gpuAllocationCharge_=0;gpuAllocationLastFence_=0;gpuGrowthBudgetBlocked_=false;
     volumeDragCompute_={};
@@ -1614,7 +1627,7 @@ void ComputeParticles::draw(const fx::FxFog& fog) {
             {volumeLightColor_.x,volumeLightColor_.y,volumeLightColor_.z,m.ambient},
             {float(m.shadowSteps),m.shadowStrength,m.anisotropy,0},viewProj_.inverse(),
             {float(viewWidth_),float(viewHeight_),device_->info().clipDepthZeroToOne?1.f:2.f,device_->info().renderTargetFlipY?1.f:0.f},
-            {m.adaptiveLod?1.f:0.f,float(m.minimumSteps),m.lodSmallPixels,m.lodFullPixels}};
+            {m.adaptiveLod?1.f:0.f,float(m.minimumSteps),m.lodSmallPixels,m.lodFullPixels},volumeSparseControl_};
         device_->setUniforms(0,&v,sizeof(v));
     }else device_->setUniforms(0,&u,sizeof(u));
     if(!desc_.volumeMaterial.enabled)device_->setTexture(0,texture_);
@@ -1626,6 +1639,10 @@ void ComputeParticles::draw(const fx::FxFog& fog) {
     if(desc_.volumeMaterial.enabled&&desc_.volumeMaterial.depthAware){
         if(!volumeTexture_.valid())device_->setTexture(0,texture_);
         device_->setTexture(1,drawVolumeDepth_);
+    }
+    if(volumeBrickMap_.valid()){
+        if(!desc_.volumeMaterial.depthAware)device_->setTexture(1,texture_);
+        device_->setTexture(2,volumeBrickMap_);
     }
     if(gpuIndirectActive_) {
         // No CPU readback, and no unsafe direct-draw fallback when GPU

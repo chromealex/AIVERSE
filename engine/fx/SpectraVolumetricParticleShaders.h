@@ -6,7 +6,7 @@ inline constexpr const char* metal=R"MSL(
 #include <metal_stdlib>
 using namespace metal;
 struct Record {float x,y,z,u,v;uint rgba;float g0,g1,g2,g3;};
-struct U0 {float4x4 viewProj;float4 fog,camPos,params,right,up,lightDir,lightColor,lightControl;float4x4 invVP;float4 depthControl,lodControl;};
+struct U0 {float4x4 viewProj;float4 fog,camPos,params,right,up,lightDir,lightColor,lightControl;float4x4 invVP;float4 depthControl,lodControl,sparseControl;};
 
 float hashVolume(float3 p){return fract(sin(dot(p,float3(127.1f,311.7f,74.7f)))*43758.5453f);}
 float noiseVolume(float3 p){
@@ -73,9 +73,25 @@ float lodFactor(float3 center,float radius,constant U0& u){
  float pixels=radius*max(length(rowX-ndc.x*rowW)*u.depthControl.x,length(rowY-ndc.y*rowW)*u.depthControl.y)/minW;
  return smoothstep(u.lodControl.z,u.lodControl.w,pixels);
 }
+#if SPECTRA_SPARSE_VOLUME
+float sparseSample(float3 texel,float frame,constant U0& u,texture3d<float> densityTexture,sampler densitySampler,texture2d<float,access::read> brickMap){
+ uint m=uint(u.sparseControl.x);float3 p=texel-0.5f;
+ uint3 brick=min(uint3(p/4.0f),uint3(m-1));
+ float4 raw=brickMap.read(uint2(brick.y*m+brick.x,uint(frame)*m+brick.z));
+ uint3 rgb=uint3(round(raw.rgb*255.0f));uint id=rgb.x+(rgb.y<<8)+(rgb.z<<16);
+ if(id==0u)return 0.0f;
+ --id;uint ax=uint(u.sparseControl.y),ay=uint(u.sparseControl.z);
+ float3 base=float3(id%ax,id/ax%ay,id/(ax*ay))*6.0f;
+ float3 at=base+p-float3(brick)*4.0f+1.5f;
+ return densityTexture.sample(densitySampler,at/(u.sparseControl.yzw*6.0f),level(0)).r;
+}
+#endif
 float sampleDensity(float3 q,VOut in,constant U0& u
 #if SPECTRA_TEXTURE_VOLUME
  ,texture3d<float> densityTexture,sampler densitySampler
+#endif
+#if SPECTRA_SPARSE_VOLUME
+ ,texture2d<float,access::read> brickMap
 #endif
 ){
   float density=volumeDensity(q,in.sphere.xyz,int(u.params.w),u.up.xyz)*u.params.x*in.color.a;
@@ -84,8 +100,13 @@ float sampleDensity(float3 q,VOut in,constant U0& u
   float3 uv=clamp(q/float3(1.0f,int(u.params.w)==3?2.0f:1.0f,1.0f)*0.5f+0.5f,0.0f,1.0f);
   float3 texel=uv*(n-1.0f)+0.5f;
   float f=clamp(in.age,0.0f,1.0f)*(frames-1.0f),a=floor(f),b=min(a+1.0f,frames-1.0f);
+#if SPECTRA_SPARSE_VOLUME
+  float va=sparseSample(texel,a,u,densityTexture,densitySampler,brickMap);
+  float vb=sparseSample(texel,b,u,densityTexture,densitySampler,brickMap);
+#else
   float va=densityTexture.sample(densitySampler,float3(texel.xy/n,(texel.z+a*n)/(n*frames)),level(0)).r;
   float vb=densityTexture.sample(densitySampler,float3(texel.xy/n,(texel.z+b*n)/(n*frames)),level(0)).r;
+#endif
   density*=mix(va,vb,f-a);
 #endif
  return density;
@@ -97,6 +118,9 @@ float phaseHG(float cosTheta,float g){
 fragment half4 fs_main(VOut in [[stage_in]],constant U0& u [[buffer(1)]]
 #if SPECTRA_TEXTURE_VOLUME
  ,texture3d<float> densityTexture [[texture(0)]],sampler densitySampler [[sampler(0)]]
+#endif
+#if SPECTRA_SPARSE_VOLUME
+ ,texture2d<float,access::read> brickMap [[texture(2)]]
 #endif
 #if SPECTRA_VOLUME_DEPTH
  ,depth2d<float,access::read> sceneDepth [[texture(1)]]
@@ -137,6 +161,9 @@ fragment half4 fs_main(VOut in [[stage_in]],constant U0& u [[buffer(1)]]
 #if SPECTRA_TEXTURE_VOLUME
  ,densityTexture,densitySampler
 #endif
+#if SPECTRA_SPARSE_VOLUME
+ ,brickMap
+#endif
  );
   if(density<=0.0f)continue;
   float alpha=1.0f-exp(-density*ds);
@@ -153,6 +180,9 @@ fragment half4 fs_main(VOut in [[stage_in]],constant U0& u [[buffer(1)]]
 #if SPECTRA_TEXTURE_VOLUME
     ,densityTexture,densitySampler
 #endif
+#if SPECTRA_SPARSE_VOLUME
+ ,brickMap
+#endif
     )*dl;
    }
   }
@@ -167,7 +197,7 @@ fragment half4 fs_main(VOut in [[stage_in]],constant U0& u [[buffer(1)]]
 }
 )MSL";
 inline constexpr const char* vertex=R"GLSL(
-layout(std140) uniform U0 {mat4 u_viewProj;vec4 u_fog;vec4 u_camPos;vec4 u_params;vec4 u_right;vec4 u_up;vec4 u_lightDir;vec4 u_lightColor;vec4 u_lightControl;mat4 u_invVP;vec4 u_depthControl;vec4 u_lodControl;};
+layout(std140) uniform U0 {mat4 u_viewProj;vec4 u_fog;vec4 u_camPos;vec4 u_params;vec4 u_right;vec4 u_up;vec4 u_lightDir;vec4 u_lightColor;vec4 u_lightControl;mat4 u_invVP;vec4 u_depthControl;vec4 u_lodControl;vec4 u_sparseControl;};
 layout(location=0) in vec3 a_pos;
 layout(location=1) in vec2 a_size;
 layout(location=2) in vec4 a_col;
@@ -223,10 +253,13 @@ void main(){
 )GLSL";
 inline constexpr const char* fragment=R"GLSL(
 precision highp float;
-layout(std140) uniform U0 {mat4 u_viewProj;vec4 u_fog;vec4 u_camPos;vec4 u_params;vec4 u_right;vec4 u_up;vec4 u_lightDir;vec4 u_lightColor;vec4 u_lightControl;mat4 u_invVP;vec4 u_depthControl;vec4 u_lodControl;};
+layout(std140) uniform U0 {mat4 u_viewProj;vec4 u_fog;vec4 u_camPos;vec4 u_params;vec4 u_right;vec4 u_up;vec4 u_lightDir;vec4 u_lightColor;vec4 u_lightControl;mat4 u_invVP;vec4 u_depthControl;vec4 u_lodControl;vec4 u_sparseControl;};
 in highp vec3 v_world;flat in highp vec4 v_sphere;flat in highp vec4 v_color;flat in highp float v_age;
 #if SPECTRA_TEXTURE_VOLUME
 uniform highp sampler3D tex0;
+#endif
+#if SPECTRA_SPARSE_VOLUME
+uniform highp sampler2D tex2;
 #endif
 #if SPECTRA_VOLUME_DEPTH
 uniform highp sampler2D tex1;
@@ -273,6 +306,19 @@ float lodFactor(vec3 center,float radius){
  float pixels=radius*max(length(rowX-ndc.x*rowW)*u_depthControl.x,length(rowY-ndc.y*rowW)*u_depthControl.y)/minW;
  return smoothstep(u_lodControl.z,u_lodControl.w,pixels);
 }
+#if SPECTRA_SPARSE_VOLUME
+float sparseSample(vec3 texel,float frame){
+ uint m=uint(u_sparseControl.x);vec3 p=texel-0.5;
+ uvec3 brick=min(uvec3(p/4.0),uvec3(m-1u));
+ vec4 raw=texelFetch(tex2,ivec2(brick.y*m+brick.x,uint(frame)*m+brick.z),0);
+ uvec3 rgb=uvec3(round(raw.rgb*255.0));uint id=rgb.x+(rgb.y<<8)+(rgb.z<<16);
+ if(id==0u)return 0.0;
+ --id;uint ax=uint(u_sparseControl.y),ay=uint(u_sparseControl.z);
+ vec3 base=vec3(id%ax,id/ax%ay,id/(ax*ay))*6.0;
+ vec3 at=base+p-vec3(brick)*4.0+1.5;
+ return textureLod(tex0,at/(u_sparseControl.yzw*6.0),0.0).r;
+}
+#endif
 float sampleDensity(vec3 q){
   float density=volumeDensity(q,v_sphere.xyz,int(u_params.w),u_up.xyz)*u_params.x*v_color.a;
 #if SPECTRA_TEXTURE_VOLUME
@@ -280,8 +326,12 @@ float sampleDensity(vec3 q){
   vec3 uv=clamp(q/vec3(1.0,int(u_params.w)==3?2.0:1.0,1.0)*0.5+0.5,0.0,1.0);
   vec3 texel=uv*(n-1.0)+0.5;
   float f=clamp(v_age,0.0,1.0)*(frames-1.0),a=floor(f),b=min(a+1.0,frames-1.0);
+#if SPECTRA_SPARSE_VOLUME
+  float va=sparseSample(texel,a),vb=sparseSample(texel,b);
+#else
   float va=textureLod(tex0,vec3(texel.xy/n,(texel.z+a*n)/(n*frames)),0.0).r;
   float vb=textureLod(tex0,vec3(texel.xy/n,(texel.z+b*n)/(n*frames)),0.0).r;
+#endif
   density*=mix(va,vb,f-a);
 #endif
  return density;
