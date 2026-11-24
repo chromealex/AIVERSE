@@ -99,7 +99,9 @@
     "engine/render/graph/TextureGraphMaterializedDispatch.h",
     "tests/render/texture_graph_materialized_dispatch.cpp",
     "engine/render/graph/TextureGraphGpuResourceCache.h",
-    "tests/render/texture_graph_gpu_resource_cache.cpp"
+    "tests/render/texture_graph_gpu_resource_cache.cpp",
+    "engine/render/graph/TextureGraphFusion.h",
+    "tests/render/texture_graph_fusion.cpp"
   ],
   "traits": {
     "editable": true,
@@ -110,7 +112,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 36A canonical typed planner/compiler and native owner reconciled; exact-layout retired buffer cache and exact-source pipeline reuse wired in source; native acceptance pending.",
+      "note": "Stage 36B in progress: bounded conservative pointwise fusion using canonical typed slot planner and shared kernel expression compiler; explicit opt-in for GPU execution.",
       "evidence": []
     },
     "architecture": {
