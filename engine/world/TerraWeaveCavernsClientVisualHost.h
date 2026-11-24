@@ -64,6 +64,13 @@ public:
         pendingRetire_.clear();
         if(previewRimPlan_)setPreviewRimGroup({},{});
     }
+    // Bounded chart inspector: use existing streaming jobs without requesting
+    // any chunk outside the authored region. Set once after opening a host.
+    void setChartPreviewDemand(std::set<ChunkKey3,KeyLess> keys){
+        if(!index_||previewRimPlan_||geometry_.catalog().committedKeys().size())
+            throw std::logic_error("Caverns chart demand requires new visual host");
+        residency_.setExplicitVisualDemand(std::move(keys));
+    }
     // Studio only: use an exact bounded group instead of camera demand.
     // Caller shares the very same immutable CPU terrain plan with its
     // surface preview; no second GeometryScene or additive collar draw.
