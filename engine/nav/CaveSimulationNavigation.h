@@ -191,7 +191,8 @@ inline void installCaveNavigationSimulation(
         const auto current=source();
         state.world().eachExisting<CaveRouteFollower>(
             [&](Entity,CaveRouteFollower& route){
-                if(!current||route.sourceRevision!=current->revision())
+                if(!current||route.sourceRevision!=current->revision()||
+                   route.environmentRevision!=current->environmentRevision())
                     route.needsRepath=true;
             });
     });
