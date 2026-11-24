@@ -1,5 +1,6 @@
 #include "apps/studio-native/StudioAssetCatalog.h"
 #include "apps/studio-native/StudioAssetTransfers.h"
+#include "apps/studio-native/StudioAssetReferences.h"
 #include "tests/TestCheck.h"
 #include <chrono>
 #include <filesystem>
@@ -168,6 +169,54 @@ int main(){
         AIVERSE_TEST_CHECK(read(project/"content"/"Models"/"Rollback.png")=="collision");
         AIVERSE_TEST_CHECK(read(project/"content"/"Other"/"Rollback.png")=="rollback-pixels");
 
+        // A large payload is represented by a digest, not retained bytes.
+        fs::create_directories(project/"content"/"LargeTree"/"Empty");
+        const auto large=project/"content"/"LargeTree"/"Large.bin";
+        {
+            std::ofstream out(large,std::ios::binary);
+            const std::string chunk(1024*1024,'x');
+            for(int i=0;i<17;++i)out.write(chunk.data(),chunk.size());
+        }
+        db.rebuild();
+        const auto treeGuid=db.byPath("LargeTree")->guid;
+        const auto largeGuid=db.byPath("LargeTree/Large.bin")->guid;
+        auto tree=StudioTransferPlan::internal(project,"Other",{"LargeTree"});
+        std::optional<aiverse::editor::ProjectHistory::MovePlan> treeHistory;
+        const auto treeResult=tree.apply(tree.token(),{}, {},&treeHistory);
+        AIVERSE_TEST_CHECK(treeResult["files"].size()==1&&treeHistory&&treeHistory->files.size()==2);
+        AIVERSE_TEST_CHECK(treeHistory->files[0].directory&&treeHistory->files[0].bytes.empty()&&treeHistory->files[0].digest.size()==64);
+        aiverse::editor::ProjectHistory stack;
+        stack.recordMove(std::move(*treeHistory),"Tree move");
+        AIVERSE_TEST_CHECK(stack.canUndo()&&stack.bytes()<1024*1024);
+        fs::create_directory(project/"content"/"Other"/"LargeTree"/"Unexpected");
+        bool treeRefused=false;
+        try{aiverse::studio::studioReplayAssetMove(project,*stack.next(false).move,false);}
+        catch(const std::runtime_error&){treeRefused=true;}
+        AIVERSE_TEST_CHECK(treeRefused);
+        fs::remove(project/"content"/"Other"/"LargeTree"/"Unexpected");
+        aiverse::studio::studioReplayAssetMove(project,*stack.next(false).move,false);stack.advance(false);
+        db.rebuild();
+        AIVERSE_TEST_CHECK(db.byGuid(treeGuid)->path=="LargeTree"&&db.byGuid(largeGuid)->path=="LargeTree/Large.bin");
+        AIVERSE_TEST_CHECK(fs::is_directory(project/"content"/"LargeTree"/"Empty"));
+        aiverse::studio::studioReplayAssetMove(project,*stack.next(true).move,true);stack.advance(true);
+        auto rename=StudioTransferPlan::rename(project,"Other/LargeTree","RenamedTree");
+        std::optional<aiverse::editor::ProjectHistory::MovePlan> renameHistory;
+        AIVERSE_TEST_CHECK(rename.describe()["items"][0].getStr("to")=="Other/RenamedTree");
+        AIVERSE_TEST_CHECK(rename.apply(rename.token(),{}, {},&renameHistory)["files"].size()==1&&renameHistory);
+        db.rebuild();AIVERSE_TEST_CHECK(db.byGuid(largeGuid)->path=="Other/RenamedTree/Large.bin");
+        aiverse::studio::studioReplayAssetMove(project,*renameHistory,false);
+        db.rebuild();AIVERSE_TEST_CHECK(db.byGuid(largeGuid)->path=="Other/LargeTree/Large.bin");
+        bool extensionRefused=false;
+        try{(void)StudioTransferPlan::rename(project,"Other/Ship.glb","Ship.png");}
+        catch(const std::runtime_error&){extensionRefused=true;}
+        AIVERSE_TEST_CHECK(extensionRefused);
+        // Saved maps other than the open map are checked for path references.
+        fs::create_directories(project/"maps");
+        write(project/"maps"/"other.json",R"({"model":"content/Other/LargeTree/Large.bin"})");
+        bool referenceRefused=false;
+        try{aiverse::studio::studioCheckMapAssetPaths(project,aiverse::Json::object(),aiverse::Json::object(),aiverse::Json::object(),{{"Other/LargeTree",true}});}
+        catch(const std::runtime_error&){referenceRefused=true;}
+        AIVERSE_TEST_CHECK(referenceRefused);
         std::cout<<"PASS studio conflict resolution and GUID-preserving asset transfers\n";
     }catch(...){fs::remove_all(temp);throw;}
     fs::remove_all(temp);

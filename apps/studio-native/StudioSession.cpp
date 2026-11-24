@@ -1182,29 +1182,16 @@ Json StudioSession::dispatch(const Json& request) {
                     const auto check=[&]{
                         StudioAssetCatalog catalog(ws_.project.dir);catalog.rebuild(false);
                         const auto refs=studioCollectAssetReferences(editor::loadMaterialLibrary(ws_),ws_.project.rulesJson,catalog.all());
-                        const auto mapText=ws_.map.toJson().dump(-1);
-                        const auto rulesText=ws_.project.rulesJson.dump(-1);
+                        std::vector<std::pair<std::string,bool>> paths;
                         for(size_t i=0;i<entry.move->files.size();i+=2){
                             const auto& f=entry.move->files[i];
-                            auto affected=[&](const std::string& value,const std::string& path){
-                                return value==path||(f.directory&&value.starts_with(path+"/"));
-                            };
+                            paths.emplace_back(f.from,f.directory);paths.emplace_back(f.to,f.directory);
                             for(const auto& ref:refs)
-                                if(!ref.writable&&(affected(ref.path,"content/"+f.from)||affected(ref.path,"content/"+f.to)))
+                                if(!ref.writable&&(ref.path=="content/"+f.from||ref.path=="content/"+f.to||
+                                    (f.directory&&(ref.path.starts_with("content/"+f.from+"/")||ref.path.starts_with("content/"+f.to+"/")))))
                                     throw std::runtime_error("Asset move history blocked by rules reference: "+ref.owner);
-                            for(const auto& path:{f.from,f.to}){
-                                for(const auto& value:{path,"content/"+path}){
-                                    const auto literal=Json::string(value).dump(-1);
-                                    const auto prefix=f.directory?Json::string(value+"/").dump(-1):std::string{};
-                                    const auto matches=[&](const std::string& document){
-                                        return document.find(literal)!=std::string::npos||
-                                            (!prefix.empty()&&document.find(prefix.substr(0,prefix.size()-1))!=std::string::npos);
-                                    };
-                                    if(matches(mapText)||matches(rulesText))
-                                        throw std::runtime_error("Asset move history blocked by a current map/rules path reference: "+value);
-                                }
-                            }
                         }
+                        studioCheckMapAssetPaths(ws_.project.dir,ws_.map.toJson(),ws_.project.rulesJson,ws_.project.manifest,paths);
                     };
                     studioReplayAssetMove(ws_.project.dir,*entry.move,redo,check);
                 }else{
@@ -2196,6 +2183,16 @@ Json StudioSession::dispatchImpl(const Json& request) {
                             reference.getStr("owner")+" / "+reference.getStr("field")+
                             " cannot yet be rewritten safely. Skip the item or edit its rules origin first.");
                 }
+            }
+            if(currentPlan.getStr("source")=="internal"){
+                std::vector<std::pair<std::string,bool>> paths;
+                for(const auto& item:currentPlan["items"].items()){
+                    const int id=int(item["id"].integer());
+                    std::string action=item.getStr("conflict").empty()?"import":"skip";
+                    for(const auto& d:decisions)if(d.id==id)action=d.action;
+                    if(action!="skip")paths.emplace_back(item.getStr("from"),item.getBool("directory"));
+                }
+                studioCheckMapAssetPaths(ws_.project.dir,ws_.map.toJson(),ws_.project.rulesJson,ws_.project.manifest,paths);
             }
             // Preload material document before touching assets, so malformed
             // JSON cannot trigger a partially completed internal move.

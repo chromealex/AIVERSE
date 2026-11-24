@@ -98,6 +98,9 @@ Use StudioAssetCatalog::patchSettings and native owner-generated exact .meta pla
 ## Bounded internal asset move history (S6c.4b)
 Use StudioTransferPlan::apply with optional native MovePlan capture; record actual final paths (including keep-both), exact bytes for regular files and their existing sidecars, and materials.json before/after. Undo/redo reuses StudioMoveJournal and the catalog owner, validates exact source bytes, GUID/path/importer, vacant destinations, matching material baseline and known read-only/current map/rules path references. No request-supplied move plans. Folder, oversized, unsupported topology or failed transfers are barriers, not silently undoable. No unified history or new standalone MCP endpoint. Do not claim complete reference graph, arbitrary rename UI, import/delete recovery or durable recovery beyond the existing move journal.
 
+## Folder and large-file move history (S6c.4b.2)
+Reuse pack::Sha256 for streaming regular-file / deterministic folder tree digests (relative paths, entry type, size, file bytes; includes empty directories and child sidecars). Retain exact root sidecar/material bytes, not payload copies. Rename uses existing preview/decision/commit route with one validated filename; file extension unchanged. Native map/rules reference fence includes current map, manifest-listed maps and bounded saved JSON maps under maps/; refusal rather than rewriting unsupported dependencies. Keep folder/payload limits and known script/encoded/binary dependency gaps explicit. Do not treat SHA-256 as a lock against concurrent external writers.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

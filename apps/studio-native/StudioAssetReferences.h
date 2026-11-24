@@ -5,8 +5,12 @@
 #include "apps/studio-native/StudioAssetCatalog.h"
 #include "engine/data/Json.h"
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
+#include <filesystem>
+#include <fstream>
+#include <stdexcept>
 
 namespace aiverse::studio {
 
@@ -133,6 +137,65 @@ inline Json studioMoveReferenceImpact(const Json& transfer,
     return result;
 }
 
+// Conservative fence for authored map/rules paths, including folder descendants.
+// Material slots use the separate writable owner. This is not a dynamic script
+// or binary dependency resolver.
+inline bool studioDocumentNamesAsset(const Json& document,const std::string& path,bool directory){
+    if(document.isString()){
+        const auto value=document.str();
+        for(const auto& name:{path,"content/"+path})
+            if(value==name||(directory&&value.starts_with(name+"/")))return true;
+    }else if(document.isArray()){
+        for(const auto& value:document.items())if(studioDocumentNamesAsset(value,path,directory))return true;
+    }else if(document.isObject()){
+        for(const auto& [key,value]:document.members()){
+            (void)key;if(studioDocumentNamesAsset(value,path,directory))return true;
+        }
+    }
+    return false;
+}
+inline void studioCheckMapAssetPaths(const std::filesystem::path& project,
+    const Json& currentMap,const Json& rules,const Json& manifest,
+    const std::vector<std::pair<std::string,bool>>& paths){
+    namespace fs=std::filesystem;
+    auto check=[&](const Json& doc,const std::string& label){
+        for(const auto& [path,directory]:paths)
+            if(studioDocumentNamesAsset(doc,path,directory))
+                throw std::runtime_error("Asset move blocked by "+label+" reference: "+path);
+    };
+    if(paths.empty())return;
+    check(currentMap,"current map");check(rules,"rules");
+    const auto root=fs::canonical(project);
+    std::set<fs::path> maps;
+    const auto add=[&](const fs::path& path){
+        if(maps.size()>=512)throw std::runtime_error("Too many map documents to validate asset move");
+        const auto canonical=fs::canonical(path);
+        const auto relative=canonical.lexically_relative(root);
+        if(relative.empty()||relative.is_absolute()||*relative.begin()==".."||
+           !fs::is_regular_file(fs::symlink_status(path)))
+            throw std::runtime_error("Unsafe saved map dependency");
+        maps.insert(canonical);
+    };
+    for(const auto& map:manifest["maps"].items()){
+        const auto file=map.getStr("file");
+        if(!file.empty())add(root/file);
+    }
+    const auto folder=root/"maps";
+    if(fs::exists(folder)){
+        if(!fs::is_directory(fs::symlink_status(folder)))throw std::runtime_error("Unsafe maps folder");
+        for(const auto& entry:fs::recursive_directory_iterator(folder)){
+            const auto status=entry.symlink_status();
+            if(fs::is_symlink(status))throw std::runtime_error("Symlink in maps folder");
+            if(fs::is_regular_file(status)&&entry.path().extension()==".json")add(entry.path());
+        }
+    }
+    std::uintmax_t bytes=0;
+    for(const auto& map:maps){
+        const auto size=fs::file_size(map);
+        if(size>64ull*1024*1024-bytes)throw std::runtime_error("Saved map validation budget exceeded");
+        bytes+=size;check(Json::parseFile(map.string()),map.lexically_relative(root).generic_string());
+    }
+}
 inline Json studioReferenceGraphJson(const std::vector<StudioAssetReference>& refs) {
     Json result = Json::array();
     for (const auto& ref : refs) {
