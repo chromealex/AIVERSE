@@ -160,7 +160,11 @@ void MapGrid::hpaRefresh(HpaGraph& G) {
         if (cy > 0) rebuild[size_t(c - G.cw)] = 1;
         if (cy + 1 < G.ch) rebuild[size_t(c + G.cw)] = 1;
     }
-    for (int c = 0; c < n; ++c) if (rebuild[size_t(c)]) {hpaCluster(G, c);++rebuilt;}
+    if(pathTelemetryEnabled_){pathTelemetry_.lastHpaClusterIds.clear();pathTelemetry_.lastHpaLayer=G.layer;}
+    for (int c = 0; c < n; ++c) if (rebuild[size_t(c)]) {
+        hpaCluster(G, c);++rebuilt;
+        if(pathTelemetryEnabled_&&pathTelemetry_.lastHpaClusterIds.size()<128)pathTelemetry_.lastHpaClusterIds.push_back(c);
+    }
     std::fill(G.dirty.begin(), G.dirty.end(), 0);
     recordPathWork(pathTelemetry_.flatHpa,rebuilt,workStart);
 }
