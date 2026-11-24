@@ -459,3 +459,55 @@ This is an actual common WorldScene::draw integration path,
 but no specific packaged game executable has attached it yet.
 No C++, CTest, GPU visual or Metal/Vulkan/GLES tests were run.
 Handoff: docs/agent-handoffs/building-renderer3d-stage23s-2026-11-24.md.
+
+## Stage 23V: one common world registry
+
+During native GameModule::setup (not in a renderer or genre module),
+define all stable building instance keys in the existing sealed
+SceneCollisionNamespaces catalog. Then install:
+
+```cpp
+auto buildings = building::BuildingWorldRuntime::install(
+    sim, spatial, namespaces, projectReservedBuildingCommandId,
+    building::BuildingWorldRuntime::commonOwnerPolicy(), &error);
+building::BuildingWorldRuntime::Definition d;
+d.sceneId = stableSceneId;
+d.instanceKey = "instances/settlement/building-a";
+d.origin = buildingOrigin;
+d.regionalNavigation = &existingDedicatedBuildingRegionMesh;
+d.authorize = authorizedActorInteraction;
+d.reachable = physicalInteractionRange;
+d.canUnload = actorsAndRoutesEvacuated;
+if (!buildings || !buildings->define(std::move(d),generator,styleId,recipe,&error))
+    throw std::runtime_error(error);
+```
+
+Retain buildings in the real native host. The post-setup hook loads
+initial scenes after PHYSIS; no manual building tick. The registry
+reserves collision IDs and publishes static/dynamic geometry to the
+same SpatialWorld. The regional native mesh builds/refreshes using its
+existing nav::Mesh implementation; configure other real graph owners
+in Definition::graphOwners (grid/HPA/flow, transport, zone, audio etc).
+
+For local input, makeCommand(sceneId,socketId,actor,player,open) returns
+an existing Simulation Command; submit it via Simulation::submit.
+For server ingress, submitAuthenticated(authenticatedSlot, command)
+stamps the slot derived from the existing transport, rejects unauthorized
+actor entities, and queues for Simulation. The project must reserve the
+command type and negotiate the current commandEpoch with clients. Do not
+attach this authoritative checkpoint-recovery path to deterministic
+lockstep replay: restoration invalidates pre-restore command epochs
+and cancels queued/in-flight aperture movement. Elevator recipes still
+require the separate circulation scene owner.
+
+On the render owner's frame boundary, call
+prepareGraphics(id, device, renderer, deviceLifetime.lease(), worldScene).
+WorldScene::draw automatically submits the uploaded shell and leaves.
+Before unload or restoration, retireGraphics(id, worldScene); retry
+if the existing GPU idle gate refuses. Then unload(id) or reconcile().
+The latter reuses the saved scene collection, validates content and
+namespace identity, rebuilds collision and graph state and only then
+unblocks Simulation. On final shutdown stop the simulation and graphics
+owners first, call shutdown(), then release the registry. The game
+continues to own its actor/cargo transforms, extent and movement policy.
+No compile/run/real GPU result is asserted for this stage.

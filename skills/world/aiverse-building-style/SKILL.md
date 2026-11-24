@@ -1649,3 +1649,29 @@ Handoff:
   active CI HEAD. Native compilation and tests remain unverified; apply
   only after inspecting the running jobs and reconciling newer changes.
 - Handoff: docs/agent-handoffs/building-stage23u2-aperture-consistency-2026-11-24.md.
+
+## Stage 23V — shared multi-scene native world integration
+
+Use engine/buildings/BuildingWorldRuntime.h, not manual parallel
+owners or an obsolete genre module. The native game installs one
+registry during GameModule::setup, reserves one project command type,
+defines authored scenes with the generator/recipe, and supplies the
+existing SpatialWorld, sealed SceneCollisionNamespaces, actual actor
+ownership/range policy, graph consumers and unload gate. The post-setup
+hook loads initially active scenes and registers a single stable scene-ID
+fixed tick after PHYSIS. Dynamic load/unload uses the same registry at a
+structural barrier. Regional nav refresh is acknowledged only after
+actual mesh refresh; other graph domains use existing-owner callbacks.
+The existing Command wire transports scene/epoch/socket ordinal and
+open/close; the authenticated transport stamps the player slot, and
+graph domains come exclusively from server config. Render owner
+uploads shell + leaf PBR Models and WorldScene can draw multiple
+independent building IDs. GPU retirement must complete before unloading
+or rebuilding the scene. On authoritative save/restore, retire GPU
+leases, reset external graph epoch caches, then reconcile. Old command
+epochs and in-flight motion are explicitly canceled on recovery.
+Do not claim deterministic lockstep rollback or elevator persistence:
+elevator recipes must still use the circulation owner; managed runtime
+refuses them rather than spawning a missing platform. No C++ or GPU
+PASS is claimed until actual CI evidence. Handoff: docs/agent-handoffs/
+building-stage23v2-common-world-runtime-2026-11-24.md.

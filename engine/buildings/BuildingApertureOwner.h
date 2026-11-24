@@ -48,66 +48,66 @@ inline bool buildingAuthoredAperturePoses(
     auto fail=[&](const char* msg){if(error)*error=msg;return false;};
     if(!generated||!generated.structureGraph||yaw>3)
         return fail("Invalid generated aperture scene");
-        const float W=generated.building.constructionSize.width;
-        const float H=generated.building.constructionSize.height;
-        const float D=generated.building.constructionSize.depth;
-        if(!(W>0&&H>0&&D>0))return fail("Invalid construction dimensions");
-        std::map<std::string,BuildingAperturePose> staged;
-        for(const auto& socket:generated.structureGraph.sockets){
-            if(!buildingOperableAperture(socket.kind))continue;
-            if(socket.id.empty()||staged.contains(socket.id))
-                return fail("Missing or duplicate aperture socket");
-            BuildingAperturePose pose;
-            pose.socketId=socket.id;
-            pose.featureIndex=socket.featureIndex;
-            pose.kind=socket.kind;
-            // The authored functional recipe may start a door partially
-            // open. Its physical AABB and graph-facing open flag must agree
-            // with the quantized progress used on the first motion tick.
-            if(!std::isfinite(socket.open)||socket.open<0.f||socket.open>1.f)
-                return fail("Invalid initial aperture progress");
-            pose.physicalPermille=uint16_t(std::clamp(
-                int(std::lround(socket.open*1000.f)),0,1000));
-            pose.open=pose.physicalPermille==1000;
-            pose.revision=1;
-            // Store the original full-width slab as the closed reference.
-            // This owner models one translating physical slab; use the
-            // independent dual-leaf owner for paired sliding panels.
-            float x0=0,y0=0,z0=0,x1=0,y1=0,z1=0;
-            if(socket.kind==BuildingFeatureKind::SlidingRoof){
-                x0=socket.x-socket.width*0.5f;
-                x1=socket.x+socket.width*0.5f;
-                z0=socket.z-socket.depth*0.5f;
-                z1=socket.z+socket.depth*0.5f;
-                y0=H-0.28f;y1=H;
-            }else{
-                y0=0.24f;y1=y0+socket.height;
-                // Socket X/Z is one metre OUTSIDE the facade.
-                switch(socket.side){
-                    case BuildingFeatureSide::Front:
-                        x0=socket.x-socket.width*0.5f;
-                        x1=socket.x+socket.width*0.5f;
-                        z0=0;z1=0.36f;break;
-                    case BuildingFeatureSide::Back:
-                        x0=socket.x-socket.width*0.5f;
-                        x1=socket.x+socket.width*0.5f;
-                        z0=D-0.36f;z1=D;break;
-                    case BuildingFeatureSide::Left:
-                        x0=0;x1=0.36f;
-                        z0=socket.z-socket.width*0.5f;
-                        z1=socket.z+socket.width*0.5f;break;
-                    case BuildingFeatureSide::Right:
-                        x0=W-0.36f;x1=W;
-                        z0=socket.z-socket.width*0.5f;
-                        z1=socket.z+socket.width*0.5f;break;
-                }
+    const float W=generated.building.constructionSize.width;
+    const float H=generated.building.constructionSize.height;
+    const float D=generated.building.constructionSize.depth;
+    if(!(W>0&&H>0&&D>0))return fail("Invalid construction dimensions");
+    std::map<std::string,BuildingAperturePose> staged;
+    for(const auto& socket:generated.structureGraph.sockets){
+        if(!buildingOperableAperture(socket.kind))continue;
+        if(socket.id.empty()||staged.contains(socket.id))
+            return fail("Missing or duplicate aperture socket");
+        BuildingAperturePose pose;
+        pose.socketId=socket.id;
+        pose.featureIndex=socket.featureIndex;
+        pose.kind=socket.kind;
+        // The authored functional recipe may start a door partially
+        // open. Its physical AABB and graph-facing open flag must agree
+        // with the quantized progress used on the first motion tick.
+        if(!std::isfinite(socket.open)||socket.open<0.f||socket.open>1.f)
+            return fail("Invalid initial aperture progress");
+        pose.physicalPermille=uint16_t(std::clamp(
+            int(std::lround(socket.open*1000.f)),0,1000));
+        pose.open=pose.physicalPermille==1000;
+        pose.revision=1;
+        // Store the original full-width slab as the closed reference.
+        // This owner models one translating physical slab; use the
+        // independent dual-leaf owner for paired sliding panels.
+        float x0=0,y0=0,z0=0,x1=0,y1=0,z1=0;
+        if(socket.kind==BuildingFeatureKind::SlidingRoof){
+            x0=socket.x-socket.width*0.5f;
+            x1=socket.x+socket.width*0.5f;
+            z0=socket.z-socket.depth*0.5f;
+            z1=socket.z+socket.depth*0.5f;
+            y0=H-0.28f;y1=H;
+        }else{
+            y0=0.24f;y1=y0+socket.height;
+            // Socket X/Z is one metre OUTSIDE the facade.
+            switch(socket.side){
+                case BuildingFeatureSide::Front:
+                    x0=socket.x-socket.width*0.5f;
+                    x1=socket.x+socket.width*0.5f;
+                    z0=0;z1=0.36f;break;
+                case BuildingFeatureSide::Back:
+                    x0=socket.x-socket.width*0.5f;
+                    x1=socket.x+socket.width*0.5f;
+                    z0=D-0.36f;z1=D;break;
+                case BuildingFeatureSide::Left:
+                    x0=0;x1=0.36f;
+                    z0=socket.z-socket.width*0.5f;
+                    z1=socket.z+socket.width*0.5f;break;
+                case BuildingFeatureSide::Right:
+                    x0=W-0.36f;x1=W;
+                    z0=socket.z-socket.width*0.5f;
+                    z1=socket.z+socket.width*0.5f;break;
             }
-            const Vec3 a=buildingLocalToWorld(x0,y0,z0,W,D,origin,yaw);
-            const Vec3 b=buildingLocalToWorld(x1,y1,z1,W,D,origin,yaw);
-            pose.bounds={{fxMin(a.x,b.x),fxMin(a.y,b.y),fxMin(a.z,b.z)},
-                           {fxMax(a.x,b.x),fxMax(a.y,b.y),fxMax(a.z,b.z)}};
-            staged.emplace(socket.id,std::move(pose));
         }
+        const Vec3 a=buildingLocalToWorld(x0,y0,z0,W,D,origin,yaw);
+        const Vec3 b=buildingLocalToWorld(x1,y1,z1,W,D,origin,yaw);
+        pose.bounds={{fxMin(a.x,b.x),fxMin(a.y,b.y),fxMin(a.z,b.z)},
+                       {fxMax(a.x,b.x),fxMax(a.y,b.y),fxMax(a.z,b.z)}};
+        staged.emplace(socket.id,std::move(pose));
+    }
     std::vector<BuildingAperturePose> result;
     result.reserve(staged.size());
     for(auto& [id,pose]:staged){

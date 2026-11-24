@@ -34,7 +34,8 @@ public:
     bool initialize(gfx::Device& device,render::Renderer3D& renderer,
                     render::RenderDeviceLifetime::Lease deviceLease,
                     BuildingDualLeafGameSession& session,
-                    uint64_t instanceNamespace,std::string* error=nullptr){
+                    uint64_t instanceNamespace,std::string* error=nullptr,
+                    render::Model* shell=nullptr,Vec3 shellOrigin={}){
         auto fail=[&](const std::string& why){
             if(error)*error=why;
             return false;
@@ -50,6 +51,8 @@ public:
             models_.push_back(&model);
             return true;
         });
+        if(shell&&unique.insert(shell).second)models_.push_back(shell);
+        else if(shell){models_.clear();return fail("Duplicate shell Model");}
         if(!gathered||models_.empty()){
             models_.clear();
             return fail("Missing, duplicate or excessive dual-leaf CPU Models");
@@ -59,6 +62,7 @@ public:
         session_=&session;
         deviceLease_=std::move(deviceLease);
         namespace_=instanceNamespace;
+        shell_=shell;shellOrigin_=shellOrigin;
         status_=Status::CleanupRequired;
         // Keep the movable aperture models independent of rigid merge,
         // automatic LOD and pooled GPU geometry. CPU models remain owned
@@ -100,6 +104,19 @@ public:
            renderer_!=&renderer||!session_||cellSize<=0)
             return fail("Building render owner not resident or GPU epoch changed");
         std::map<uint64_t,std::pair<std::string,uint8_t>> identities;
+        if(shell_){
+            // Static geometry was generated in yawed scene-local metres.
+            const auto relative=world::relativeTo(shellOrigin_,origin,cellSize);
+            const auto id=renderIdentity("",255);
+            identities.emplace(id,std::make_pair(std::string{},uint8_t(255)));
+            render::ModelDraw command{};
+            command.model=shell_;command.persistentId=id;
+            command.staticPacketRevision=0;
+            command.world=render::mat4::translate({
+                float(relative.x.toDouble()),float(relative.y.toDouble()),
+                float(relative.z.toDouble())});
+            renderer.drawModel(command);
+        }
         std::string drawError;
         const bool accepted=session_->submit(
             std::min<uint32_t>(renderDtMs,350u),
@@ -158,7 +175,7 @@ public:
         }
         models_.clear();
         device_=nullptr;renderer_=nullptr;session_=nullptr;
-        namespace_=0;
+        namespace_=0;shell_=nullptr;shellOrigin_={};
         deviceLease_={};
         status_=Status::Detached;
         if(error)error->clear();
@@ -187,5 +204,7 @@ private:
     render::RenderDeviceLifetime::Lease deviceLease_;
     uint64_t namespace_=0;
     std::vector<render::Model*> models_;
+    render::Model* shell_=nullptr;
+    Vec3 shellOrigin_{};
 };
 } // namespace aiverse::building

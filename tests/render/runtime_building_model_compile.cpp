@@ -42,3 +42,10 @@ static_assert(std::is_same_v<
     decltype(std::declval<aiverse::building::BuildingRenderer3DScene&>().draw(
         std::declval<aiverse::render::Renderer3D&>(),aiverse::world::Cell{},int{},uint32_t{})),
     bool>);
+
+#include "engine/buildings/BuildingWorldRuntime.h"
+static_assert(std::is_same_v<decltype(aiverse::building::BuildingWorldRuntime::install(
+    std::declval<aiverse::Simulation&>(),std::declval<aiverse::world::SpatialWorld&>(),
+    std::declval<aiverse::scene::SceneCollisionNamespaces&>(),uint16_t{},
+    std::declval<aiverse::building::BuildingWorldRuntime::OwnsActor>())),
+    std::shared_ptr<aiverse::building::BuildingWorldRuntime>>);

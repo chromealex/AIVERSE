@@ -49,6 +49,13 @@ public:
         const std::shared_ptr<building::BuildingRenderer3DScene>& owner){
         buildingRenderOwner_=owner;
     }
+    // Independent generated scene instances use the same WorldScene draw.
+    void setBuildingRenderOwner(uint64_t sceneId,
+        const std::shared_ptr<building::BuildingRenderer3DScene>& owner){
+        if(!sceneId)return;
+        if(owner)buildingRenderOwners_[sceneId]=owner;
+        else buildingRenderOwners_.erase(sceneId);
+    }
     void setBuildingRenderElapsedMs(uint32_t elapsedMs){
         buildingRenderElapsedMs_=std::min<uint32_t>(elapsedMs,350u);
     }
@@ -326,6 +333,7 @@ private:
     std::map<Cell,std::shared_ptr<Prepared>> resident_;
     std::unique_ptr<AsyncChunkStream> stream_;
     std::weak_ptr<building::BuildingRenderer3DScene> buildingRenderOwner_;
+    std::map<uint64_t,std::weak_ptr<building::BuildingRenderer3DScene>> buildingRenderOwners_;
     uint32_t buildingRenderElapsedMs_=16;
     std::string buildingDrawError_;
     NereidWaterScene nereidWater_;

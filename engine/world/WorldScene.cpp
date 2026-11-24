@@ -804,11 +804,20 @@ void WorldScene::draw(render::Renderer3D& renderer,Cell origin,int size) {
     // Optional common ECS building aperture presentation. The world
     // renderer receives only a borrowed owner and never updates physics.
     buildingDrawError_.clear();
-    if(auto owner=buildingRenderOwner_.lock()){
-        if(!owner->draw(renderer,origin,size,buildingRenderElapsedMs_,
-                        &buildingDrawError_) &&
-           buildingDrawError_.empty())
-            buildingDrawError_="Building Renderer3D draw rejected";
+    std::set<const building::BuildingRenderer3DScene*> drawnBuildings;
+    auto drawBuilding=[&](const auto& weak){
+        if(auto owner=weak.lock()){
+            if(!drawnBuildings.insert(owner.get()).second)return;
+            std::string issue;
+            if(!owner->draw(renderer,origin,size,buildingRenderElapsedMs_,&issue)
+               &&buildingDrawError_.empty())
+                buildingDrawError_=issue.empty()?"Building Renderer3D draw rejected":issue;
+        }
+    };
+    drawBuilding(buildingRenderOwner_);
+    for(auto it=buildingRenderOwners_.begin();it!=buildingRenderOwners_.end();){
+        if(it->second.expired())it=buildingRenderOwners_.erase(it);
+        else{drawBuilding(it->second);++it;}
     }
 
 }
@@ -817,6 +826,7 @@ void WorldScene::shutdown(gfx::Device& device) {
     // BuildingRenderer3DScene::shutdown outside an active graphics pass,
     // then detach its authoritative session. Weak references are dropped.
     buildingRenderOwner_.reset();
+    buildingRenderOwners_.clear();
     buildingDrawError_.clear();
     // Join streamed CPU preparation before releasing Model ownership.
     stream_->shutdown([&](Cell cell){
