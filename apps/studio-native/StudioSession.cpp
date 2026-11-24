@@ -510,21 +510,36 @@ void StudioSession::refreshMaterialPreview() {
     previewMaterialFactors_=resolved;
     ++previewMaterialRevision_;
 }
+namespace {
+void saveStudioDocuments(editor::Workspace& ws,const std::string& file,bool addToGame){
+    auto map=ws.map;
+    auto project=ws.project;
+    auto edits=map.stageSave(project.dir,file,true);
+    if(addToGame){
+        const auto relative=std::filesystem::path(map.path).lexically_relative(std::filesystem::canonical(project.dir)).generic_string();
+        bool listed=false;
+        for(const auto& item:project.manifest["maps"].items())if(item.getStr("file")==relative)listed=true;
+        if(!listed){
+            if(!project.manifest["maps"].isArray())project.manifest.set("maps",Json::array());
+            Json row=Json::object();row.set("file",str(relative));row.set("title",str(map.data.name));
+            project.manifest.find("maps")->push(std::move(row));project.manifestDirty=true;
+        }
+    }
+    auto projectEdits=project.stageDirtySave();
+    edits.insert(edits.end(),projectEdits.begin(),projectEdits.end());
+    // The journal validates all targets and rejects duplicates, including
+    // absent outputs. HistoryFileBatch is intentionally existing-files only.
+    const auto historyLock=map.beginStagedSave();
+    editor::applyProjectFileEdits(project.dir,edits);
+    map.finishStagedSave();
+    ws.map=std::move(map);ws.project=std::move(project);
+    ws.log("studio","Saved map and project documents together");
+}
+}
 Json StudioSession::saveMapAs(const std::string& path) {
     if(stroking_)throw std::runtime_error("Finish the active Scene stroke before saving");
-    if (ws_.project.dir.empty() || path.empty()) throw std::runtime_error("Open a project and choose a map file");
-    namespace fs=std::filesystem;
-    const auto root=fs::weakly_canonical(ws_.project.dir);
-    const auto target=fs::weakly_canonical(path);
-    const auto relative=target.lexically_relative(root);
-    if (relative.empty() || relative.is_absolute() || *relative.begin()!="maps" || target.extension()!=".json")
-        throw std::runtime_error("Choose a .json map inside the current project maps folder");
-    Json args=Json::object();args.set("file",str(target.string()));args.set("addToGame",Json::fromBool(true));
-    const auto result=ws_.call("map_save",args,"studio");
-    if (result.has("error")) throw std::runtime_error(result.getStr("error"));
-    std::string error;
-    if (ws_.project.rulesDirty && !ws_.project.saveRules(&error)) throw std::runtime_error(error);
-    if (ws_.project.manifestDirty && !ws_.project.saveManifest(&error)) throw std::runtime_error(error);
+    if(ws_.project.dir.empty()||path.empty())throw std::runtime_error("Open a project and choose a map file");
+    saveStudioDocuments(ws_,path,true);
     return snapshot();
 }
 Json StudioSession::openProject(const std::string& path) {
@@ -3225,26 +3240,8 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             }
             reply.set("result",snapshot());
         } else if (method == "studio.save") {
-            if(ws_.project.rulesDirty||ws_.project.manifestDirty){
-                if(stroking_)throw std::runtime_error("Finish the active Scene stroke before saving");
-                // Existing map and project documents are prepared by detached
-                // owners. Do not publish a partial save on unsupported topology.
-                auto map=ws_.map;
-                auto project=ws_.project;
-                HistoryFileBatch files;
-                files.append(map.stageExistingSave(project.dir));
-                files.append(project.stageDirtySave());
-                const auto plan=files.plan();
-                const auto historyLock=map.beginStagedSave();
-                editor::applyProjectFileEdits(project.dir,plan);
-                map.finishStagedSave();
-                ws_.map=std::move(map);
-                ws_.project=std::move(project);
-                ws_.log("studio","Saved map and project documents together");
-            }else{
-                const Json r=ws_.call("map_save",Json::object(),"studio");
-                if(r.has("error"))throw std::runtime_error(r.getStr("error"));
-            }
+            if(stroking_)throw std::runtime_error("Finish the active Scene stroke before saving");
+            saveStudioDocuments(ws_,ws_.map.path,false);
             reply.set("result", snapshot());
         } else if (method == "studio.undo") {
             if (!ws_.map.canUndo()) throw std::runtime_error("Nothing to undo");
