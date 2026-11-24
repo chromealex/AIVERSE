@@ -45,6 +45,8 @@ public:
         nav::Mesh* regionalNavigation=nullptr;
         BuildingNavSourceOptions navOptions{};
         std::map<BuildingGraphDomain,BuildingGraphChangeRouter::Consumer> graphOwners;
+        // Optional detached, read-only owner-thread reports. No rebuild is triggered.
+        std::map<std::string,std::function<Json()>> graphTelemetry;
         // In lockstep, every external graph consumer must be synchronous
         // and rebuild from restored deterministic state, not wall time.
         std::function<bool()> resetDerivedGraphs;
@@ -215,6 +217,7 @@ public:
             scene->domains,scene->def.stepPermille,scene->generated,scene->poses,scene->liftLayout);
         const auto id=scene->def.sceneId;
         scene->router.setTimingEnabled(bool(graphMonitor_));
+        if(scene->def.regionalNavigation)scene->def.regionalNavigation->setRefreshTelemetryEnabled(bool(graphMonitor_));
         scenes_.emplace(id,std::move(scene));
         if(error)error->clear();
         return true;
@@ -651,7 +654,8 @@ public:
     void setGraphMonitor(std::shared_ptr<BuildingGraphMonitor> monitor){
         if(graphMonitor_)graphMonitor_->clear();
         graphMonitor_=std::move(monitor);
-        for(auto& [id,scene]:scenes_){(void)id;scene->router.setTimingEnabled(bool(graphMonitor_));}
+        for(auto& [id,scene]:scenes_){(void)id;scene->router.setTimingEnabled(bool(graphMonitor_));
+            if(scene->def.regionalNavigation)scene->def.regionalNavigation->setRefreshTelemetryEnabled(bool(graphMonitor_));}
         publishGraphMonitor();
     }
     void publishGraphMonitor()const noexcept{
@@ -669,6 +673,33 @@ public:
         out.set("sceneStatus",Json::number(int64_t(s->status)));
         out.set("physicalRevision",Json::string(std::to_string(s->physics.revision())));
         out.set("physicalPendingGraphs",Json::fromBool(s->physics.pendingGraphs()));
+        Json telemetry=Json::object();
+        if(s->def.regionalNavigation&&s->def.regionalNavigation->built()){
+            const auto& mesh=*s->def.regionalNavigation;
+            Json nav=Json::object();
+            nav.set("revision",Json::string(std::to_string(mesh.revision())));
+            nav.set("dirty",Json::fromBool(mesh.dirty()));
+            nav.set("tileCount",Json::number(int64_t(mesh.tileCount())));
+            if(!mesh.dirty())nav.set("rectangleCount",Json::number(int64_t(mesh.rectCount())));
+            if(const auto& work=mesh.lastRefreshTelemetry()){
+                Json r=Json::object(),ids=Json::array();
+                r.set("revision",Json::string(std::to_string(work->revision)));
+                r.set("elapsedNs",Json::string(std::to_string(work->elapsedNs)));
+                r.set("rebuiltTiles",Json::number(int64_t(work->rebuiltTiles)));
+                r.set("portalTiles",Json::number(int64_t(work->portalTiles)));
+                r.set("rectangles",Json::number(int64_t(work->rectangles)));
+                for(auto tile:work->tileIds)ids.push(Json::number(int64_t(tile)));
+                r.set("tileIds",std::move(ids));
+                nav.set("lastSuccessfulRefresh",std::move(r));
+            }
+            telemetry.set("navmesh",std::move(nav));
+        }
+        size_t published=0;
+        for(const auto& [name,read]:s->def.graphTelemetry){
+            if(!read||name.empty()||name=="navmesh"||name.size()>64||published>=16)continue;
+            try{auto value=read();if(value.isObject()&&value.dump(-1).size()<=16384){telemetry.set(name,std::move(value));++published;}}catch(...){}
+        }
+        out.set("ownerTelemetry",std::move(telemetry));
         return out;
     }
 
