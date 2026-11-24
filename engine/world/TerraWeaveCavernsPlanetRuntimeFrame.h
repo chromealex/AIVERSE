@@ -52,6 +52,7 @@ public:
         if(!surface_||!surface_->tab||!hooks_.valid())throw std::invalid_argument("Caverns runtime host hooks");
         // Validate configuration before attaching the native draw hook.
         (void)selectPlanetCaveDemand(CavePlanetAuthoritySet{},surface_,{},{},{},config_);
+        if(view_.hasPlanetCaveDraw())throw std::logic_error("Caverns native draw owner already installed");
         residency_.attach(view_);
     }
     CavePlanetRuntimeFrame(const CavePlanetRuntimeFrame&)=delete;
@@ -214,7 +215,7 @@ private:
         auto* owner=residency_.find(body);
         if(!owner){recovery_=true;return false;}
         const auto revision=owner->activeRevision();
-        if(!owner->closed()||c.binding->baseline().solidReady()){
+        if(!owner->closed()){
             if(!c.binding->closeCut(device_,hooks_.exclusive,[&]{
                     return hooks_.retireNavigationGi(body,revision);
                 }))return false;
