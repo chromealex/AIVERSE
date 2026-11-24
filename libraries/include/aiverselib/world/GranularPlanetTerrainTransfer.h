@@ -99,10 +99,10 @@ inline std::optional<PlanetSoilTransferResult> transferPlanetSoil(
     const auto target=planPlanetSoilTransfer(world,surface,request,completedTick);
     if(!target)return {};
     const World& read=world;
-    const auto& field=read.get<Field>(request.field);
+    const auto& field=*read.tryGetConst<Field>(request.field);
     const auto i=size_t(request.row)*field.width+request.column;
     const auto before=field.mass[i];
-    const auto origin=read.get<Transform>(request.field).pos;
+    const auto origin=read.tryGetConst<Transform>(request.field)->pos;
     World staged=read;
     const std::optional<PlanetSoilOwnerChange> receipt=
         std::forward<TerrainOwner>(owner)(staged,*target);

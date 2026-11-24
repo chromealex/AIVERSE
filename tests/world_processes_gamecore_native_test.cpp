@@ -321,7 +321,7 @@ static void checkPlanetSoilTransfer(){
     game::BodyDef body;body.id="terra";body.faceSize=8;body.radius=Fixed::fromInt(64);
     surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
     World ecs;
-    ecs.setResource<PlanetSoilFixture>({});
+    ecs.setResource<PlanetSoilFixture>(PlanetSoilFixture{});
     const auto field=ecs.create();
     Transform tr{};tr.pos=surface.cellCenter(surface.gridCell(0,0,7,3));
     ecs.add<Transform>(field,tr);
@@ -346,7 +346,7 @@ static void checkPlanetSoilTransfer(){
     AIVERSE_TEST_CHECK(fill&&fill->afterMass==30&&fill->terrain.movedVolumeCm3==50);
     AIVERSE_TEST_CHECK(ecs.resourceConst<PlanetSoilFixture>()->terra==1050);
     AIVERSE_TEST_CHECK(before.resourceConst<PlanetSoilFixture>()->terra==1000);
-    AIVERSE_TEST_CHECK(before.get<Field>(field).mass[8]==80);
+    AIVERSE_TEST_CHECK(before.tryGetConst<Field>(field)->mass[8]==80);
     AIVERSE_TEST_CHECK(!transferPlanetSoil(ecs,surface,req,7,owner)); // stale revision
     req.direction=PlanetSoilDirection::Dig;req.maximumVolumeCm3=100;req.expectedTerrainRevision=5;
     const auto dig=transferPlanetSoil(ecs,surface,req,7,owner);
@@ -614,7 +614,7 @@ static void checkAuthoredPlanetDemo(){
     const auto& host=static_cast<const g::GameCore&>(sim->module());
     const auto* surface=host.surface(*sim);
     AIVERSE_TEST_CHECK(surface);
-    const auto& w=sim->world();
+    auto& w=sim->world();
     AIVERSE_TEST_CHECK(w.countExisting<physis::GravityField>()==2);
     AIVERSE_TEST_CHECK(w.get<echo::AcousticPortal>(links).to==receiver);
     AIVERSE_TEST_CHECK(w.get<fracture::Bond>(links).first==station);
