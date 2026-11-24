@@ -2847,6 +2847,12 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
     add_executable(aiverse_ecs_native_persistence_test tests/ecs_native_persistence_test.cpp)
     target_link_libraries(aiverse_ecs_native_persistence_test PRIVATE aiverse_engine)
     add_test(NAME ecs_native_persistence_test COMMAND aiverse_ecs_native_persistence_test)
+    add_executable(aiverse_terraweave_caverns_planet_authority_test
+        tests/terraweave_caverns_planet_authority_test.cpp)
+    target_link_libraries(aiverse_terraweave_caverns_planet_authority_test PRIVATE aiverse_game)
+    add_test(NAME terraweave_caverns_planet_authority
+        COMMAND aiverse_terraweave_caverns_planet_authority_test)
+    set_tests_properties(terraweave_caverns_planet_authority PROPERTIES LABELS "TerraWeave;Caverns;ECS;CPU")
     add_executable(aiverse_ecs_cross_genre_timed_mechanics_test
         tests/ecs_cross_genre_timed_mechanics_test.cpp)
     target_link_libraries(aiverse_ecs_cross_genre_timed_mechanics_test PRIVATE
