@@ -133,6 +133,32 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
         require(fs["completedOutputs"].toDouble()==2,"missing filter or image result");
         for(const auto& row:fs["outputs"].items())require(row.getStr("backend")==expected,"filter or image CPU fallback");
         std::printf("TextureGraph filter/formula/image parity accepted: %s\n",expected);
+        // Native function calls lower into ordinary typed DAG nodes. Two calls
+        // share a definition but use independent parameter values and public IDs.
+        auto functions=Json::parse(R"JSON({"graph":{"version":1,"size":32,
+          "functions":{"scale":{"inputs":[{"id":"x","type":"scalar"}],"nodes":[
+            {"id":"factor","op":"constant","inputs":[],"properties":{"value":0.5}},
+            {"id":"product","op":"multiply","inputs":["x","factor"]}],
+            "outputs":{"value":"product"},"parameters":{"gain":{"default":0.5,"bindings":[{"node":"factor","property":"value"}]}}}},
+          "nodes":[{"id":"source","op":"constant","inputs":[],"properties":{"value":0.8}},
+            {"id":"first","op":"function","inputs":["source"],"properties":{"function":"scale","output":"value","arguments":{"gain":0.25}}},
+            {"id":"second","op":"function","inputs":["source"],"properties":{"function":"scale","output":"value","arguments":{"gain":0.75}}}],
+          "outputs":{"height":"first","roughness":"second"}},"requireGpu":true,"bakeSet":true,"materialized":true})JSON");
+        const auto program=render::texture_graph::compile(functions["graph"]);
+        require(program.nodes.size()==5&&program.nodes[program.outputs.at("height")].id=="first"&&program.nodes[program.outputs.at("roughness")].id=="second","function call identities lost");
+        const auto firstPixels=render::texture_graph::evaluate(program,program.outputs.at("height"));
+        const auto secondPixels=render::texture_graph::evaluate(program,program.outputs.at("roughness"));
+        require(firstPixels.rgba[0]==51&&secondPixels.rgba[0]==153,"function instance parameters not independent");
+        auto invalid=functions["graph"];
+        invalid.member("functions").member("scale").member("inputs").at(0).set("type",Json::string("color"));
+        bool invalidFunctionRejected=false;
+        try{(void)render::texture_graph::compile(invalid);}catch(const std::invalid_argument&){invalidFunctionRejected=true;}
+        require(invalidFunctionRejected,"function type mismatch accepted");
+        const auto functionId=owner.start(functions,project).getStr("request");drain();
+        const auto fnStatus=owner.status();
+        require(fnStatus.getStr("request")==functionId&&fnStatus.getStr("state")=="ready"&&fnStatus.getStr("backend")==expected&&fnStatus["completedOutputs"].toDouble()==2,"native function GPU acceptance failed");
+        for(const auto& row:fnStatus["outputs"].items())require(row.getStr("backend")==expected,"native function CPU fallback");
+        std::printf("TextureGraph function instance parity accepted: %s\\n",expected);
         // Exercise the public native material API with the same RHI and owner.
         // A missing lease must not enqueue work or replace the last result.
         auto residentGraph=Json::parse(R"JSON({"version":1,"size":32,"nodes":[
