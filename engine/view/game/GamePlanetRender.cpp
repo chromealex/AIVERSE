@@ -93,6 +93,9 @@ void PlanetRenderer::shutdown(gfx::Device& dev) {
     dev_ = nullptr;
 }
 
+uint64_t PlanetRenderer::caveSurfaceCutWatermark(int body)const noexcept {
+    return body>=0&&size_t(body)<bodies_.size()?bodies_[size_t(body)].caveCutWatermark:0;
+}
 uint64_t PlanetRenderer::caveSurfaceCutEpoch(int body)const noexcept {
     return body>=0&&size_t(body)<bodies_.size()?bodies_[size_t(body)].caveCutEpoch:0;
 }
