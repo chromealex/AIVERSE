@@ -1,3 +1,5 @@
+> **SUPERSEDED by Stage45 architectural correction (2026-11-24).** The ActorHost-specific code below was intentionally reverted from the feature branch. It is historical context only, NOT an active integration contract. Do not reintroduce ActorModule/ActorHost modifications or `CaveActorMotorSteering.h`. Use generic `engine/nav/CaveEcsSteering.h`, `engine/nav/CaveSimulationNavigation.h` (repath-only installation), and `engine/world/TerraWeaveCavernsSpatialRevisionOwner.h`. See `docs/agent-handoffs/caverns-stage45-2026-11-24.md`.
+
 # TerraWeave Caverns — Stage44 ActorHost single-motor + persistent graph regions handoff (2026-11-24)
 
 ## Provenance
