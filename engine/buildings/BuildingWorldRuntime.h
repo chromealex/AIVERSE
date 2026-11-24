@@ -704,7 +704,24 @@ public:
                 r.set("rebuiltTiles",Json::number(int64_t(work->rebuiltTiles)));
                 r.set("portalTiles",Json::number(int64_t(work->portalTiles)));
                 r.set("rectangles",Json::number(int64_t(work->rectangles)));
-                for(auto tile:work->tileIds)ids.push(Json::number(int64_t(tile)));
+                Json footprints=Json::array();
+                const auto& cfg=mesh.config();
+                const double cell=cfg.cell.toDouble();
+                for(auto tile:work->tileIds){
+                    ids.push(Json::number(int64_t(tile)));
+                    if(tile>=mesh.tileCount()||mesh.dirty()||work->revision!=mesh.revision())continue;
+                    const auto t=mesh.tileInfo(tile);
+                    const double x=cfg.originX.toDouble()+t.x0*cell,z=cfg.originZ.toDouble()+t.z0*cell;
+                    Json row=Json::object(),lo=Json::array(),hi=Json::array();
+                    row.set("id",Json::string(std::to_string(tile)));
+                    for(double v:{x,s->bounds.min.y.toDouble(),z})lo.push(Json::number(v,6));
+                    for(double v:{x+t.w*cell,s->bounds.min.y.toDouble(),z+t.d*cell})hi.push(Json::number(v,6));
+                    row.set("min",std::move(lo));row.set("max",std::move(hi));
+                    footprints.push(std::move(row));
+                }
+                nav.set("overlayKind",Json::string("nav-tiles"));
+                nav.set("overlayScope",Json::string("last successful refresh tile footprints at scene base, not polygon surfaces"));
+                nav.set("overlayBounds",std::move(footprints));
                 r.set("tileIds",std::move(ids));
                 nav.set("lastSuccessfulRefresh",std::move(r));
             }
