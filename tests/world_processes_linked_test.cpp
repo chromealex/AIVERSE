@@ -1,5 +1,7 @@
 // Linked map-authoring -> authoritative ECS references across all 3 systems.
 #include "aiverselib/world/WorldProcessesMapHydration.h"
+#include "aiverselib/world/EvolveSimulationLod.h"
+#include <array>
 #include "tests/AlwaysCheck.h"
 #include <iostream>
 #include <memory>
@@ -57,7 +59,44 @@ template<int N>std::unique_ptr<Simulation> make(const Json& map,bool cow=false){
     if(cow)sim->world().enableCowSnapshots();
     return sim;
 }
+static void checkRegionLod(){
+    World ecs;
+    const auto area=ecs.create(),missing=ecs.create(),disabled=ecs.create();
+    ecs.add<evolve::Region>(area,evolve::Region{});
+    ecs.add<evolve::Region>(missing,evolve::Region{});
+    auto off=evolve::Region{};off.enabled=false;
+    ecs.add<evolve::Region>(disabled,off);
+    AIVERSE_TEST_CHECK(evolve::setArea(ecs,area,{-1000,-1000,1000,1000,true}));
+    world::SimulationLodConfig cfg{true,0,2,4,16};
+    const auto bounds=evolve::extents(ecs).front();
+    std::array<world::Cell,1> observers{{{-1,100,-1}}};
+    auto d=evolve::regionWorkDecision(cfg,bounds,observers,1000,1);
+    AIVERSE_TEST_CHECK(d.tier==world::SimulationLodTier::Hot&&d.due);
+    // maxX/maxZ are exclusive: cell 0 lies just outside.
+    observers[0]={0,0,0};
+    d=evolve::regionWorkDecision(cfg,bounds,observers,1000,1);
+    AIVERSE_TEST_CHECK(d.tier==world::SimulationLodTier::Warm&&d.period==4);
+    observers[0]={30,0,30};
+    unsigned due=0;
+    for(uint32_t tick=1;tick<=16;++tick){
+        d=evolve::regionWorkDecision(cfg,bounds,observers,1000,tick);
+        AIVERSE_TEST_CHECK(d.tier==world::SimulationLodTier::Cold&&d.period==16);
+        if(d.due)++due;
+    }
+    AIVERSE_TEST_CHECK(due==1);
+    std::array<world::Cell,2> multiple{{{30,0,30},{-1,100,-1}}};
+    AIVERSE_TEST_CHECK(evolve::regionWorkDecision(cfg,bounds,multiple,1000,1).due);
+    AIVERSE_TEST_CHECK(evolve::regionWorkDecision(cfg,bounds,observers,1000,1,true).due);
+    AIVERSE_TEST_CHECK(evolve::regionWorkDecision(cfg,bounds,{},1000,1).due);
+    AIVERSE_TEST_CHECK(evolve::regionWorkDecision(cfg,bounds,observers,0,1).due);
+    const auto plan=evolve::planRegionWork(ecs,cfg,observers,1000,1);
+    AIVERSE_TEST_CHECK(plan.regions.size()==2&&plan.diagnostics.hot==1&&plan.diagnostics.cold==1);
+    AIVERSE_TEST_CHECK(plan.regions[0].region.packed()<plan.regions[1].region.packed());
+    AIVERSE_TEST_CHECK(plan.diagnostics.executed+plan.diagnostics.deferred==2);
+    AIVERSE_TEST_CHECK(ecs.get<evolve::Region>(area).sampledTick==UINT32_MAX);
+}
 int main(){
+    checkRegionLod();
     auto portal=wl::defaults("EchoPortal");
     AIVERSE_TEST_CHECK(wl::validate("EchoPortal",portal));
     AIVERSE_TEST_CHECK(!wl::edit("EchoPortal","enabled",Json::fromBool(true),portal));
