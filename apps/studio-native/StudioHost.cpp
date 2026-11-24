@@ -96,7 +96,7 @@ const std::set<std::string>& documentChangingMethods() {
         "studio.openMap", "studio.newMap", "studio.entityCreate", "studio.entityDelete", "studio.entityDuplicate",
         "studio.setProperty", "studio.save", "studio.undo", "studio.redo", "studio.nereidFlowSet",
         "studio.renderLightingSet", "studio.lightingSet", "studio.lightAdd", "studio.lightUpdate", "studio.lightDelete",
-        "studio.materialPatch", "studio.materialCreate", "studio.setProperties", "studio.componentAdd",
+        "studio.materialPatch", "studio.materialCreate", "studio.buildingPublishMaterial", "studio.setProperties", "studio.componentAdd",
         "studio.componentRemove", "studio.entityMove", "studio.entitiesDelete", "studio.entitiesDuplicate",
         "studio.assetPlace", "studio.entityFlags", "studio.rulesSet", "studio.entitiesAlign", "studio.historyJump"};
     return methods;
