@@ -31,12 +31,16 @@
 #include "engine/render/RenderDeviceLifetime.h"
 #include "apps/studio-native/StudioFacialGpuPreview.h"
 
+namespace aiverse::editor { class Workspace; class TextureGraphGpuPreview; }
 namespace aiverse::studio {
 class StudioScene final {
 public:
     // The host makes the device for its native surface (Metal: CAMetalLayer; Vulkan: an HWND).
     explicit StudioScene(std::unique_ptr<gfx::Device> device);
     ~StudioScene();
+    Json textureGraphOperation(editor::Workspace& ws,const Json& params);
+    bool serviceTextureGraph(const std::string& project);
+    void invalidateTextureGraphProject();
     StudioScene(const StudioScene&) = delete;
     StudioScene& operator=(const StudioScene&) = delete;
     void frame(int framebufferWidth, int framebufferHeight, const editor::MapDoc& doc,
@@ -163,6 +167,7 @@ public:
 private:
     std::unique_ptr<gfx::Device> device_;
     std::unique_ptr<render::RenderDeviceLifetime> deviceLifetime_;
+    std::unique_ptr<editor::TextureGraphGpuPreview> textureGraph_;
     render::Renderer3D renderer_;
     world::NereidManifestHost nereid_;
     double underwaterFrameTime_=0;

@@ -1,5 +1,6 @@
 #include "apps/editor/AuthoringWater.h"
 #include "apps/studio-native/StudioScene.h"
+#include "apps/editor/core/TextureGraphGpuPreview.h"
 #include "apps/studio-native/StudioFont6x11.h"
 #include "engine/render/CameraPng.h"
 #include "apps/studio-native/StudioLightingPreview.h"
@@ -572,9 +573,50 @@ void StudioScene::syncDocumentModels(
     }
 }
 
+Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
+    if(!device_ || !deviceLifetime_ || !device_->supportsOffscreenFrames() || !device_->gpuHealthy())
+        throw std::runtime_error("Studio offscreen GPU device unavailable");
+    if(ws.project.dir.empty())throw std::runtime_error("Open a project first");
+    const auto action=p.getStr("action");
+    // Studio document models do not use the legacy editor appearance registry.
+    if(action=="materialTarget"||action=="applyMaterial"||action=="materialApplyStatus"||
+       p.getBool("gpuTextureTransfer")||p.getBool("gpuTextureFenceOnly")||
+       p.getBool("incrementalOutputs")||p.getBool("gpuTextureMipmaps"))
+        throw std::runtime_error("Studio resident material application is not available; use validated GPU bake and assign PNGs");
+    if(!textureGraph_)textureGraph_=std::make_unique<editor::TextureGraphGpuPreview>();
+    auto& owner=*textureGraph_;
+    owner.checkProject(ws.project.dir);
+    const auto lease=deviceLifetime_->lease();
+    if(action=="start")return owner.start(p,ws.project.dir,lease);
+    if(action=="read")return owner.status();
+    if(action=="cancel")return owner.cancel(p,ws.project.dir);
+    if(action=="publish")return owner.publish(ws,p);
+    if(action=="enqueue")return owner.enqueue(p,ws.project.dir,lease,render::texture_graph::integer(p["priority"],1,0,3));
+    if(action=="queueRead")return owner.queueStatus();
+    if(action=="queueCancel")return owner.cancelTicket(p.getStr("ticket"),ws.project.dir);
+    if(action=="queueRelease")return owner.releaseTicket(p.getStr("ticket"),ws.project.dir,p.getBool("discardResult"));
+    throw std::invalid_argument("unknown Studio GPU preview action");
+}
+void StudioScene::invalidateTextureGraphProject() {
+    if(textureGraph_)textureGraph_->checkProject("");
+}
+bool StudioScene::serviceTextureGraph(const std::string& project) {
+    if(!textureGraph_)return false;
+    textureGraph_->checkProject(project);
+    if(!device_->beginOffscreenFrame())throw std::runtime_error("Studio GPU offscreen frame unavailable");
+    try { textureGraph_->tick(*device_,project); }
+    catch(...) {device_->endFrame();throw;}
+    device_->endFrame();
+    return textureGraph_->needsFrame();
+}
 StudioScene::~StudioScene() {
     if (device_) {
-        device_->waitForResourceIdle();
+        const bool idle=device_->waitForResourceIdle();
+        if(textureGraph_){
+            if(idle||!device_->gpuHealthy())textureGraph_->shutdownAfterIdle(*device_);
+            else std::fprintf(stderr,"Studio Texture Graph: idle barrier failed; GPU pools left to device teardown\n");
+            textureGraph_.reset();
+        }
         clearDocumentModels();
         lightingRuntime_.shutdown(*device_,renderer_);
         if(lightingModel_) {

@@ -188,7 +188,12 @@
     "tests/render/geometry_page_owners.cpp",
     "tests/render/device_epoch.cpp",
     "tests/render/camera_client_adapter.cpp",
-    "apps/studio-web/src/graphs/TextureGraphPanel.css"
+    "apps/studio-web/src/graphs/TextureGraphPanel.css",
+    "apps/studio-native/StudioScene.h",
+    "apps/studio-native/StudioScene.cpp",
+    "apps/studio-native/StudioSession.h",
+    "apps/studio-native/StudioHost.h",
+    "apps/studio-native/StudioHost.cpp"
   ],
   "traits": {
     "editable": true,
@@ -224,7 +229,7 @@
     },
     "studio": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification. Stage 38AL: native Studio launch user-reported; stale web bundle lacked graph button. Fresh npm build failed with 9 TS errors. Rename diagnostic component to avoid case-insensitive extensionless resolution collision; explicitly type effective material as MaterialData. Full rebuild pending. Stage 38AM: separate material workspaces, graph canvas with side inspector and preview, automatic catalog/read polling and advanced controls collapsed. Native Studio owner still missing; UI not built or visually verified.",
+      "note": "Pending implementation or actual verification. Stage 38AL: native Studio launch user-reported; stale web bundle lacked graph button. Fresh npm build failed with 9 TS errors. Rename diagnostic component to avoid case-insensitive extensionless resolution collision; explicitly type effective material as MaterialData. Full rebuild pending. Stage 38AM: separate material workspaces, graph canvas with side inspector and preview, automatic catalog/read polling and advanced controls collapsed. Native Studio owner still missing; UI not built or visually verified. Stage 38AN: register native Studio GPU provider, schedule existing owner through Scene render thread using Metal offscreen frames independent of visible viewport. Preview, bake, queue and publication paths authored; resident material application and Windows/Vulkan offscreen explicitly unavailable. Added capability query and offscreen GPU regression; NOT RUN.",
       "evidence": []
     },
     "inspector": {

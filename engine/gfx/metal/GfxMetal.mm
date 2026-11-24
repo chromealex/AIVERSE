@@ -2025,7 +2025,14 @@ public:
         return true;
     }
 
-    void beginFrame(int w, int h) override {
+    void beginFrame(int w, int h) override { beginFrameInternal(w,h,true); }
+    bool supportsOffscreenFrames() const override { return true; }
+    bool beginOffscreenFrame() override {
+        if(cmd_ || !gpuHealthy()) return false;
+        beginFrameInternal(fbW_>0?fbW_:64,fbH_>0?fbH_:64,false);
+        return cmd_ != nil;
+    }
+    void beginFrameInternal(int w,int h,bool present) {
         fbW_ = w; fbH_ = h;
         dispatch_semaphore_wait(frameSemaphore_, DISPATCH_TIME_FOREVER);
         deliverBufferReads();
@@ -2039,7 +2046,7 @@ public:
         // BEFORE commandBuffer creation; beginning in the fixture callback
         // would be too late for the already-created command buffer.
         maybeStartGpuTrace();
-        if (modelCounterEnabled_) {
+        if (present && modelCounterEnabled_) {
             std::fill(std::begin(modelCounterMarked_), std::end(modelCounterMarked_), false);
             modelCounterCurrent_ = nil;
             if (@available(macOS 11.0, iOS 14.0, *)) {
@@ -2060,15 +2067,15 @@ public:
         gpuEncodedIcbCursor_[frame_ % kFramesInFlight] = 0;
         uniformPage_=uniformOffset_=0;
         gpuIcbInstanceUploadedBytes_ = 0;
-        layer_.drawableSize = CGSizeMake(w, h);
+        if(present) layer_.drawableSize = CGSizeMake(w, h);
         // Opt-in late drawable acquisition (AIVERSE_METAL_LATE_DRAWABLE=1): the
         // drawable is taken at the first screen pass, after offscreen passes and
         // the game's CPU work. Default stays here: on the owner's Mac it showed no
         // gain and one run measured ~8 ms vs ~4 ms frames (2026-11-21, unresolved).
         drawable_ = nil;
-        drawablePending_ = true;
-        if (!lateDrawable_) acquireDrawable();
-        if (!depth_ || int(depth_.width) != w || int(depth_.height) != h) {
+        drawablePending_ = present;
+        if (present && !lateDrawable_) acquireDrawable();
+        if (present && (!depth_ || int(depth_.width) != w || int(depth_.height) != h)) {
             MTLTextureDescriptor* td = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float
                 width:NSUInteger(w) height:NSUInteger(h) mipmapped:NO];
             td.usage = MTLTextureUsageRenderTarget;
@@ -2076,6 +2083,12 @@ public:
             depth_ = [device_ newTextureWithDescriptor:td];
         }
         cmd_ = [queue_ commandBuffer];
+        if(!cmd_){
+            dispatch_semaphore_signal(frameSemaphore_);
+            drawable_=nil;drawablePending_=false;
+            gpuHealthy_->store(false);
+            return;
+        }
         __block dispatch_semaphore_t sem = frameSemaphore_;
         [cmd_ addCompletedHandler:^(id<MTLCommandBuffer>) { dispatch_semaphore_signal(sem); }];
         const uint64_t gpuToken = frame_;
@@ -2101,7 +2114,7 @@ public:
                 std::fprintf(stderr, "[metal] command buffer failed: %s\\n", description);
             }
             if(completed.status==MTLCommandBufferStatusCompleted) {
-                timing->store((completed.GPUEndTime-completed.GPUStartTime)*1000);
+                if(present) timing->store((completed.GPUEndTime-completed.GPUStartTime)*1000);
                 // Only a completed queue submission may release quarantined
                 // geometry spans. One Metal queue orders all model uploads
                 // and draws; atomically publish the highest completed frame.

@@ -822,6 +822,12 @@ protected:
         published_=true;pixels_.clear();setImages_.clear();r.set("backend",Json::string(backend_));r.set("request",Json::string(std::to_string(serial_)));return r;
     }
 public:
+    // Native tools stop scheduling empty frames once no work can advance.
+    bool needsFrame() const {
+        return requestBusy() || (project_.empty() && ownsResources()) ||
+            (!pendingRequests_.pending().empty() && queueTicket_.empty() &&
+             !(state_=="ready"&&!published_));
+    }
     // Called at owner frame boundary, no active encoder. Read callback
     // owns only its bytes and is delivered on the owner thread.
     void tick(gfx::Device& dev,const std::string& project,graph_gpu_profile::Capture* profile=nullptr){

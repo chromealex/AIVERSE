@@ -1034,7 +1034,11 @@ public:
 
     // Frame (driven by the platform layer)
     virtual void beginFrame(int framebufferWidth, int framebufferHeight) = 0;
-    virtual void endFrame() = 0; // presents
+    // Optional command frame without swapchain acquire/present for native tools.
+    // Same device and owner thread; successful begin must be paired with endFrame.
+    virtual bool supportsOffscreenFrames() const { return false; }
+    virtual bool beginOffscreenFrame() { return false; }
+    virtual void endFrame() = 0; // presents if a drawable was acquired
     // Tools (editor screenshots, MCP): deliver the next presented frame as top-down RGBA8.
     // The callback may run one or two frames later; it always runs on the main thread.
     using CaptureFn = std::function<void(int w, int h, std::vector<uint8_t> rgba)>;

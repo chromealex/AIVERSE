@@ -49,8 +49,9 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState('');
  const [inspectorTab,setInspectorTab]=useState<'node'|'outputs'|'parameters'>('node');
  const [gpuPolling,setGpuPolling]=useState(false),[previewKind,setPreviewKind]=useState('');
+ const [gpuCaps,setGpuCaps]=useState<{available:boolean;residentApply:boolean;reason:string}|null>(null);
  const epoch=useRef(0),lock=useRef(false),canvas=useRef<HTMLCanvasElement>(null);
- useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setOverrideText('{}');setBakedSet('');setGpuRequest(null);setGpuPolling(false);setPreviewKind('');setQueueTicket('');setQueueInfo(null);setQueueDrafts({});setGpuReady(false);setResidentReady(false);setLiveTarget(null);setLiveApply('');setGpuStatus('');setText(JSON.stringify(template,null,2));setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
+ useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setOverrideText('{}');setBakedSet('');setGpuRequest(null);setGpuPolling(false);setPreviewKind('');setGpuCaps(null);setQueueTicket('');setQueueInfo(null);setQueueDrafts({});setGpuReady(false);setResidentReady(false);setLiveTarget(null);setLiveApply('');setGpuStatus('');setText(JSON.stringify(template,null,2));setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
  return()=>{epoch.current++;lock.current=false};},[projectPath]);
  useEffect(()=>{const c=canvas.current;if(!c||!preview||preview.source!==text)return;
  const bytes=new Uint8ClampedArray(preview.hex.length/2);for(let i=0;i<bytes.length;i++)bytes[i]=parseInt(preview.hex.slice(i*2,i*2+2),16);
@@ -62,9 +63,10 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
   if(lock.current||disabled||!projectPath)return;lock.current=true;setBusy(true);setError('');setStatus('');const token=epoch.current;
   try{
    if(action==='catalog'){
-    const [c,l,t]=await Promise.all([op('texture_graph_catalog'),op('texture_graph_list'),op('texture_graph_templates')]);
+    const [c,l,t,caps]=await Promise.all([op('texture_graph_catalog'),op('texture_graph_list'),op('texture_graph_templates'),op('texture_graph_gpu_preview',{action:'capabilities'})]);
     if(token!==epoch.current)return;
     if(!object(c)||!Array.isArray(c.nodes)||!object(l)||!Array.isArray(l.graphs))throw new Error('Catalog unavailable');
+    setGpuCaps({available:object(caps)&&caps.available===true,residentApply:object(caps)&&caps.residentApply===true,reason:object(caps)?String(caps.reason??''):'GPU capability unavailable'});
     setCatalog(c.nodes.filter(object));setOutputTypes(object(c.outputTypes)?c.outputTypes:{});setTemplates(object(t)&&Array.isArray(t.templates)?t.templates.filter(object):[]);setNames(l.graphs.filter((x):x is string=>typeof x==='string'));return;
    }
    if(action==='load'){
@@ -301,9 +303,10 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
      <div className="tg-image">{preview&&preview.source===text?<canvas ref={canvas} width={preview.width} height={preview.height} aria-label="Native texture preview"/>:<span>No preview generated</span>}</div>
        <StudioSelect aria-label="Texture output" value={output} disabled={busy||disabled} onChange={e=>{setOutput(e.target.value);setAsset(null);setPreview(null)}}>{outputs.map(n=><option key={n}>{n}</option>)}</StudioSelect>
         <StudioSelect aria-label="GPU preview resolution" value={String(gpuResolution)} disabled={busy||disabled} onChange={e=>{setGpuResolution(Number(e.target.value));setPreview(null)}}>{[32,64,128].map(n=><option key={n} value={n}>{n} × {n}</option>)}</StudioSelect>
-     <div className="au-row"><StudioButton size="sm" variant="primary" disabled={busy||disabled||gpuPolling||!outputs.includes(output)} onClick={()=>void run('gpuStart')}>GPU preview</StudioButton><StudioButton size="sm" disabled={busy||disabled||!outputs.includes(output)} onClick={()=>void run('previewOutput')}>CPU preview</StudioButton></div>
+     <div className="au-row"><StudioButton size="sm" variant="primary" disabled={busy||disabled||!gpuCaps?.available||gpuPolling||!outputs.includes(output)} onClick={()=>void run('gpuStart')}>GPU preview</StudioButton><StudioButton size="sm" disabled={busy||disabled||!outputs.includes(output)} onClick={()=>void run('previewOutput')}>CPU preview</StudioButton></div>
      <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!gpuRequest} onClick={()=>void run('gpuCancel')}>Cancel</StudioButton><StudioButton size="sm" disabled={busy||disabled||!gpuRequest} onClick={()=>void run('gpuRead')}>Read result</StudioButton></div>
      <label className="au-row"><input type="checkbox" checked={requireGpu} disabled={busy||disabled} onChange={e=>setRequireGpu(e.target.checked)}/> Require GPU (no fallback)</label>
+     {gpuCaps&&!gpuCaps.available&&<StudioAlert tone="warning">{gpuCaps.reason||'Native GPU owner unavailable'}</StudioAlert>}
      {gpuStatus&&<small className="tg-status">{gpuStatus}</small>}
      <StudioButton size="sm" disabled={busy||disabled||!selected} onClick={()=>void run('previewNode')}>Preview selected node (CPU)</StudioButton>
     </section>
@@ -337,8 +340,8 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
    {status&&<StudioAlert>{status}</StudioAlert>}{error&&<StudioAlert tone="danger">{error}</StudioAlert>}
    <div className="tg-bake-row">
       <StudioInput aria-label="New texture name" value={textureName} disabled={busy||disabled} onChange={e=>setTextureName(e.target.value)}/>
-    <StudioButton size="sm" variant="primary" disabled={busy||disabled||!outputs.length||gpuPolling} onClick={()=>void run('gpuBakeSet')}>GPU PBR bake</StudioButton>
-    <StudioButton size="sm" disabled={busy||disabled||!outputs.includes(output)||gpuPolling} onClick={()=>void run('gpuBake')}>GPU output bake</StudioButton>
+    <StudioButton size="sm" variant="primary" disabled={busy||disabled||!gpuCaps?.available||!outputs.length||gpuPolling} onClick={()=>void run('gpuBakeSet')}>GPU PBR bake</StudioButton>
+    <StudioButton size="sm" disabled={busy||disabled||!gpuCaps?.available||!outputs.includes(output)||gpuPolling} onClick={()=>void run('gpuBake')}>GPU output bake</StudioButton>
     <StudioButton size="sm" disabled={busy||disabled||!gpuReady||!textureName||gpuRequest?.source!==text||gpuRequest?.overrides!==overrideText||(!gpuRequest?.setBake&&gpuRequest?.output!==output)} onClick={()=>void run('gpuPublish')}>Publish GPU bake</StudioButton>
       <StudioButton disabled={busy||disabled||!textureName||!outputs.includes(output)} onClick={()=>void run('bake')}>Bake selected output to new PNG</StudioButton>
   <StudioButton disabled={busy||disabled||!textureName||!outputs.length} onClick={()=>void run('bakeSet')}>Bake all outputs</StudioButton>
@@ -351,25 +354,25 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
    <label className="au-row"><input type="checkbox" checked={materialized} disabled={busy||disabled} onChange={e=>setMaterialized(e.target.checked)}/> Experimental materialized GPU DAG (default: fused)</label>
    <label className="au-row"><input type="checkbox" checked={fusePointwise} disabled={busy||disabled||!materialized} onChange={e=>setFusePointwise(e.target.checked)}/> Experimental pointwise pass fusion</label>
    <label className="au-row"><input type="checkbox" checked={incremental} disabled={busy||disabled||!materialized} onChange={e=>setIncremental(e.target.checked)}/> Incremental GPU passes (dedicated slots)</label>
-   <label className="au-row"><input type="checkbox" checked={gpuTextureTransfer} disabled={busy||disabled||!materialized} onChange={e=>setGpuTextureTransfer(e.target.checked)}/> Experimental GPU-resident PBR set (GPU required)</label>
+   <label className="au-row"><input type="checkbox" checked={gpuTextureTransfer} disabled={busy||disabled||!materialized||!gpuCaps?.residentApply} onChange={e=>setGpuTextureTransfer(e.target.checked)}/> Experimental GPU-resident PBR set (GPU required)</label>
    <label className="au-row"><input type="checkbox" checked={gpuTextureMipmaps} disabled={busy||disabled||!materialized||!gpuTextureTransfer} onChange={e=>setGpuTextureMipmaps(e.target.checked)}/> Generate GPU mipmaps</label>
    <label className="au-row"><input type="checkbox" checked={incrementalOutputs} disabled={busy||disabled||!materialized||!incremental||!gpuTextureTransfer||!gpuTextureFenceOnly} onChange={e=>setIncrementalOutputs(e.target.checked)}/> Reuse unchanged published outputs (direct live material set)</label>
    <label className="au-row"><input type="checkbox" checked={gpuTextureFenceOnly} disabled={busy||disabled||!materialized||!gpuTextureTransfer} onChange={e=>setGpuTextureFenceOnly(e.target.checked)}/> Fence-only material generation (no CPU parity or PNG export)</label>
-   <StudioSection title="Apply GPU textures to resident editor material">
+   {gpuCaps?.residentApply?<StudioSection title="Apply GPU textures to resident editor material">
     <small>Session-only appearance override. Load the scene model first. Inspect the exact model choice and material, then apply an accepted GPU-resident set. No project asset is changed.</small>
     <div className="au-row"><StudioInput aria-label="Resident model type index" value={liveType} onChange={e=>{setLiveType(e.target.value);setLiveTarget(null)}} disabled={busy||disabled}/><StudioInput aria-label="Resident model choice index" value={liveChoice} onChange={e=>{setLiveChoice(e.target.value);setLiveTarget(null)}} disabled={busy||disabled}/><StudioInput aria-label="Resident material index" value={liveMaterial} onChange={e=>{setLiveMaterial(e.target.value);setLiveTarget(null)}} disabled={busy||disabled}/></div>
     <small>Type index / choice index / material index</small>
     <div className="au-row"><StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('gpuMaterialTarget')}>Inspect live material</StudioButton><StudioButton size="sm" disabled={busy||disabled||!liveTarget||!residentReady||gpuRequest?.source!==text||gpuRequest?.overrides!==overrideText} onClick={()=>void run('gpuMaterialApply')}>Apply GPU set</StudioButton><StudioButton size="sm" disabled={busy||disabled||!gpuRequest} onClick={()=>void run('gpuMaterialStatus')}>Read apply status</StudioButton></div>
     {liveTarget&&<small>{liveTarget.modelPath} · {liveTarget.materialName||'unnamed material'} · revision {liveTarget.expectedVersion} · procedural images {liveTarget.proceduralLiveImages} / 24 · retired slots {liveTarget.proceduralTombstones} · host pending retirement {liveTarget.pendingImageRetirement} · auto collection {liveTarget.automaticCollectionEnabled?`enabled (${liveTarget.automaticCollectionDetached} detached, ${liveTarget.automaticCollectionDeferred} deferred)`:"requires native root certification"} · slot recycling {liveTarget.automaticRecyclingEnabled?"enabled":"disabled"}</small>}
     {liveApply&&<small>{liveApply}</small>}
-   </StudioSection>
+   </StudioSection>:<small>Resident model application is not available in this host. Publish validated GPU bakes and assign their assets instead.</small>}
    {materialized&&gpuTextureTransfer&&<small>Full set bake only. Default validates copied pixels. Fence-only mode generates bindable maps without CPU parity or export. Apply to a material or cancel before starting another resident set.</small>}
    <StudioButton size="sm" disabled={busy||disabled||!outputs.length} onClick={()=>void run('gpuPlan')}>Analyze materialized DAG (plan only)</StudioButton>
     <StudioButton size="sm" disabled={busy||disabled||!outputs.length} onClick={()=>void run('gpuBakeSet')}>Queue full-size GPU PBR set</StudioButton>
    <StudioSection title="GPU request queue">
     <small>Non-preemptive, priority 3 highest; equal priority FIFO. Read queue to select an active draft, then Read result above. Publish/apply or explicitly discard and release before the next request.</small>
     <StudioSelect aria-label="GPU queue priority" value={queuePriority} disabled={busy||disabled} onChange={e=>setQueuePriority(e.target.value)}>{[0,1,2,3].map(n=><option key={n} value={String(n)}>Priority {n}</option>)}</StudioSelect>
-    <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!outputs.length} onClick={()=>void run('queueEnqueue')}>Enqueue PBR set</StudioButton><StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('queueRead')}>Read queue</StudioButton></div>
+    <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!gpuCaps?.available||!outputs.length} onClick={()=>void run('queueEnqueue')}>Enqueue PBR set</StudioButton><StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('queueRead')}>Read queue</StudioButton></div>
     <StudioInput aria-label="GPU queue ticket" value={queueTicket} disabled={busy||disabled} onChange={e=>setQueueTicket(e.target.value)}/>
     <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!queueTicket} onClick={()=>void run('queueCancel')}>Cancel ticket</StudioButton><StudioButton size="sm" disabled={busy||disabled||!queueTicket} onClick={()=>void run('queueRelease')}>Discard / release active</StudioButton></div>
     {queueInfo&&<small>Active {String(queueInfo.activeTicket||'none')} · request {String(queueInfo.activeRequest||'none')} · pending {Array.isArray(queueInfo.pending)?queueInfo.pending.filter(object).map(x=>String(x.ticket)+' (p'+String(x.priority)+')').join(', '):''} · {String(queueInfo.pendingBytes??0)} bytes · {String(queueInfo.error??'')}</small>}

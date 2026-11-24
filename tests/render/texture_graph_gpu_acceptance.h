@@ -9,15 +9,16 @@
 #include <thread>
 
 namespace aiverse::tests {
-inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend){
+inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool offscreen=false){
     render::RenderDeviceLifetime lifetime(dev);
     render::texture_graph::TextureGraphGpuOwner owner;
     const std::string project="texture-graph-rhi-fixture";
     const char* expected=backend==gfx::Backend::Metal?"metal":"vulkan";
     graph_gpu_profile::Capture profile;
     auto require=[](bool ok,const char* what){if(!ok)throw std::runtime_error(what);};
+    auto beginFrame=[&]{if(offscreen)require(dev.beginOffscreenFrame(),"offscreen frame rejected");else dev.beginFrame(64,64);};
     auto frame=[&]{
-        dev.beginFrame(64,64);
+        beginFrame();
         try{owner.tick(dev,project,&profile);}catch(...){dev.endFrame();throw;}
         dev.endFrame();
         // Deliberate test-only barrier; owner itself remains asynchronous.
@@ -52,7 +53,7 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend){
         if(backend==gfx::Backend::Vulkan){
             constexpr uint64_t firstTag=0x12345678,abandonedTag=0x12345679;
             require(!dev.beginGpuScope(firstTag),"scope began outside frame");
-            dev.beginFrame(64,64);
+            beginFrame();
             const bool supported=dev.beginGpuScope(firstTag);
             if(supported){
                 const bool nested=dev.beginGpuScope(abandonedTag);

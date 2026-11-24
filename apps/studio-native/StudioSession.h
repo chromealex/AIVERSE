@@ -88,6 +88,13 @@ public:
     // Scene owns model loading). Without it, slots come from authored overrides.
     using MaterialSlotProvider=std::function<std::vector<std::string>(const std::string& asset)>;
     void setMaterialSlotProvider(MaterialSlotProvider provider) { materialSlots_=std::move(provider); }
+    using TextureGraphGpuProvider=std::function<Json(editor::Workspace&,const Json&)>;
+    void setTextureGraphGpuProvider(TextureGraphGpuProvider provider) {
+        Json schema=Json::object();
+        for(const auto& op:ws_.ops())if(op.name=="texture_graph_gpu_preview"){schema=op.schema;break;}
+        ws_.registerOp({"texture_graph_gpu_owner_preview","Native Studio GPU preview and validated bake owner",
+            std::move(schema),[this,provider=std::move(provider)](const Json& p){return provider(ws_,p);},true});
+    }
     Json previewExternalAssets(const std::vector<std::filesystem::path>& files,
                                const std::string& destination); // native picker ONLY
 private:

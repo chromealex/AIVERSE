@@ -175,6 +175,9 @@ private:
         std::vector<std::string> thumbnails; // Assets panel model thumbnails finished since the last frame
         uint32_t drawCalls = 0;
     };
+    void ensureScene();
+    Json textureGraphGpu(editor::Workspace& ws,const Json& params);
+    void tickTextureGraph(const std::string& project);
     void tickScene();                  // UI thread: snapshot inputs, kick the render thread, publish results
     void renderSceneFrame();           // render thread: one map frame
     void publishSceneFrame(const FrameOutputs& out);
@@ -204,6 +207,8 @@ private:
     std::unique_ptr<StudioSession> session_;
     std::unique_ptr<StudioScene> preview_;             // created, used and destroyed on renderThread_
     std::unique_ptr<StudioRenderThread> renderThread_;
+    bool textureGraphWork_=false;
+    std::string textureGraphScope_,textureGraphError_;
     std::mutex renderIoMutex_;                         // guards renderInputs_ / renderOutputs_
     FrameInputs renderInputs_;
     FrameOutputs renderOutputs_;
