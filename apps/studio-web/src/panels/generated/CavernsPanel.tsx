@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Mountain, RefreshCw } from 'lucide-react';
-import { invoke } from '../../bridge';
+import { invoke, onNativeEvent } from '../../bridge';
 import type { StudioSnapshot } from '../../types';
 import { StudioPanel, StudioSection, StudioField, StudioInput, StudioSelect, StudioButton, StudioIconButton, StudioAlert, StudioEmptyState, StudioBadge } from '../../ui';
 
@@ -32,6 +32,8 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
   const [mode,setMode] = useState<'carve'|'fill'>('carve');
   const [form,setForm] = useState({xCm:'0',yCm:'-500',zCm:'0',radiusCm:'400'});
   const [selected,setSelected] = useState('');
+  const [pickMode,setPickMode] = useState<'surface'|'plane'>('surface');
+  const [armed,setArmed] = useState(false);
   const [page,setPage] = useState(0);
   const epoch=useRef(0);
   const locked=useRef(false);
@@ -60,10 +62,27 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
     // Explicit refresh avoids using an earlier map or unsaved document after a switch.
     return ()=>{++epoch.current;};
   },[project,snapshot?.scene.name,snapshot?.history.canUndo,snapshot?.history.canRedo]);
+  useEffect(()=>onNativeEvent((event,payload)=>{
+    if(event==='brush.changed' && payload && typeof payload==='object'){
+      const b=payload as {armed?:boolean;kind?:string};
+      setArmed(b.armed===true&&b.kind==='caverns');
+    }
+    if(event==='document.changed'){setDoc(null);setSelected('');}
+  }),[]);
   const values=Object.fromEntries(fields.map(k=>[k,Number(form[k])])) as Record<typeof fields[number],number>;
   const valid=fields.every(k=>form[k].trim()!=='' && Number.isSafeInteger(values[k])) &&
     fields.slice(0,3).every(k=>Math.abs(values[k])<=1000000000) && values.radiusCm>=1 && values.radiusCm<=1000000;
   const editable=Boolean(doc && project && snapshot?.mode==='edit' && !busy);
+  async function armScene(enable:boolean){
+    if(locked.current||(!editable&&enable))return;
+    locked.current=true;setBusy(true);setError('');
+    try{
+      const b=await invoke('studio.sceneBrush',enable?{kind:'caverns',armed:true,expectedProject:project,expectedMap:map,
+        radius:values.radiusCm/100,caveMode:mode,caveY:values.yCm/100,caveSurface:pickMode==='surface'}:{armed:false});
+      setArmed(b.armed&&b.kind==='caverns');
+    }catch(e){setError(message(e));}
+    finally{locked.current=false;setBusy(false);}
+  }
   async function edit(params: Record<string,unknown>) {
     if(!editable || !doc || locked.current)return;
     locked.current=true;
@@ -86,13 +105,16 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
       {!project && <StudioEmptyState icon={<Mountain size={22}/>} title="Open a project" description="Author signed-centimetre cave volume stamps."/>}
       {error && <StudioAlert tone="danger" title="Caverns">{error}</StudioAlert>}
       {status && <StudioAlert title="Authoring">{status}</StudioAlert>}
+      {armed && <StudioButton variant="danger" disabled={busy} onClick={()=>void armScene(false)}>Disarm Scene brush</StudioButton>}
       {project && !doc && <StudioButton disabled={busy} onClick={()=>void refresh()}>Load cave document</StudioButton>}
       {doc && <>
         <StudioSection title="SDF brush">
           <StudioField label="Operation" htmlFor="cave-mode"><StudioSelect id="cave-mode" value={mode} disabled={!editable} onChange={e=>setMode(e.target.value as 'carve'|'fill')}><option value="carve">Carve — create void</option><option value="fill">Fill — solid material</option></StudioSelect></StudioField>
           {fields.map(k=><StudioField key={k} label={k==='radiusCm'?'Radius (cm)':k[0].toUpperCase()+' (cm)'} htmlFor={'cave-'+k}><StudioInput id={'cave-'+k} type="number" step={1} value={form[k]} disabled={!editable} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}/></StudioField>)}
           <StudioButton variant="primary" disabled={!editable||!valid} onClick={()=>void edit({mode,...values})}>Apply {mode} stamp</StudioButton>
-          <StudioAlert title="Coordinate authoring">Edits use world centimetres, not viewport picks. Fill takes precedence over carve. Use the common Undo/Redo controls.</StudioAlert>
+          <StudioField label="Scene picking" htmlFor="cave-pick"><StudioSelect id="cave-pick" value={pickMode} disabled={busy} onChange={e=>setPickMode(e.target.value as 'surface'|'plane')}><option value="surface">SDF surface</option><option value="plane">Depth plane (Y above)</option></StudioSelect></StudioField>
+          <StudioButton variant="primary" disabled={!editable||!valid||values.radiusCm<25||values.radiusCm>6400} onClick={()=>void armScene(true)}>{armed?'Update Scene brush':'Arm Scene brush'}</StudioButton>
+          <StudioAlert title="Scene authoring">Plain left drag paints; Alt orbits, Esc disarms. Surface picks the native SDF; depth plane uses Y. A drag is one History step. Cave mesh preview is not yet connected to Studio.</StudioAlert>
         </StudioSection>
         <StudioSection title={'Stamps · '+doc.stamps.length}>
           {doc.stamps.slice(page*32,page*32+32).map(s=><StudioButton key={s.id} variant={selected===s.id?'primary':'secondary'} disabled={busy} onClick={()=>{setSelected(s.id);setForm({xCm:String(s.xCm),yCm:String(s.yCm),zCm:String(s.zCm),radiusCm:String(s.radiusCm)});setMode(s.mode);}}>{s.mode} #{s.id} · r {s.radiusCm} cm</StudioButton>)}
