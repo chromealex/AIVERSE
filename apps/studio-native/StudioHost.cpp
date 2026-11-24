@@ -2539,6 +2539,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
 void StudioHost::afterSessionReply(const Json& req, const Json& reply) {
     if (reply.has("error")) return;
     const std::string method = req.getStr("method");
+    if(method=="studio.openProject"||method=="studio.openMap"||method=="studio.newMap"||method=="studio.hubOpen"||method=="studio.hubCreate")forestPlantArm_=Json{};
     if (method == "studio.select" && platform_.hasFloatingWindows()) sendEvent("selection.changed", ""); // floats follow it
     if (preview_ && (method == "studio.openMap" || method == "studio.newMap")) {
         onScene([&] { preview_->resetCamera(); });

@@ -24,7 +24,7 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
   const busyRef=useRef(false);
   function accept(d:StudioPlanetForestDocument){baseRef.current=d;setBase(d);setForest(d.forest===null?null:object(d.forest));setCatalog(d.catalog===null?null:object(d.catalog));setOverride(d.override);setDirty(false);setStale(false);setLive(null);}
   async function reload(){busyRef.current=true;setBusy(true);setError('');try{accept(await invoke('studio.planetForest',{}));}catch(e){setError(err(e));}finally{busyRef.current=false;setBusy(false);}}
-  useEffect(()=>{void reload();},[]); // mount per project
+  useEffect(()=>{void reload();return ()=>{void invoke('studio.planetForestArm',{armed:false}).catch(()=>{});};},[]); // mount per project
   // Recheck the native document identity on history/document notifications.
   // Do not overwrite unsaved draft state, or mark our own successful Apply stale.
   async function checkRevision(){
@@ -71,13 +71,13 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
     {stale&&<p className="pf-note">Document changed. Reload before applying; draft has not been overwritten.</p>}
     <p className="pf-note">Map-owned override · Undo/Redo via document history. Save the map and restart local Play. Native physics authority is configured by the host, not this panel.</p>
     {!base.moduleEnabled&&<p className="pf-note">world_processes native module is not installed in this project. Only the visual ARBOR catalogue can be edited.</p>}
-    <fieldset disabled={busy} className="rules__group"><legend>Simulation</legend>
+    <fieldset disabled={busy||armed} className="rules__group"><legend>Simulation</legend>
       <label className="pf-row"><span>Map override</span><input type="checkbox" checked={override} disabled={!base.moduleEnabled} onChange={e=>{setOverride(e.target.checked);if(e.target.checked&&!forest)setForest({species:[{id:1}],plants:[]});setDirty(true);}}/></label>
       <p className="pf-note">{override?'Use this map’s simulation settings':'Inherit native module rules'} · physics requested: {base.physicsRequested?'yes':'no'}</p>
       {override&&forest&&<Numbers data={forest} specs={cadence} change={p=>editForest({...forest,...p})}/>}
     </fieldset>
     {override&&forest&&<>
-    <fieldset disabled={busy} className="rules__group"><legend>Ecology species</legend>
+    <fieldset disabled={busy||armed} className="rules__group"><legend>Ecology species</legend>
       {species.map((row,i)=><details key={i} open={i===0}><summary>Species {String(row.id??i+1)}</summary>
         <Numbers data={row} specs={ecology} change={p=>patch('species',i,p)}/>
         <label className="pf-row"><span>Collision</span><select className="au-input" value={!row.naturalFallBody?'none':object(row.naturalFallBody).fromArbor?'arbor':'capsule'} onChange={e=>editForest({...forest,species:species.map((r,j)=>j===i?collisionMode(r,e.target.value):r)})}><option value="none">None / external owner</option><option value="arbor">ARBOR trunk</option><option value="capsule">Manual capsule</option></select></label>
@@ -92,7 +92,7 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
       <button disabled={!armed&&(dirty||stale||!species.length)} onClick={()=>void arm(!armed)}>{armed?'Cancel planting':'Plant in Scene'}</button>{armed&&<p className="pf-note">Click planetary terrain once. Esc cancels. Save pending draft changes before planting.</p>}
       <label className="pf-row"><span>Planet / moon</span><select className="au-input" value={body} onChange={e=>setBody(e.target.value)}><option value="">All bodies</option>{bodies.map(b=><option key={b}>{b}</option>)}</select></label>
       <label className="pf-row"><span>Search markers</span><input className="au-input" value={filter} onChange={e=>setFilter(e.target.value)}/></label>
-      {plants.map((row,i)=>({row,i})).filter(({row})=>(!body||(object(row.at).body??base.markers.find(m=>m.id===row.entity)?.placement.body)===body)&&String(row.entity??object(row.at).body??'').toLowerCase().includes(filter.toLowerCase())).map(({row,i})=><details key={i}><summary>{String(row.entity??(row.at?object(row.at).body+' / '+object(row.at).face:'Unbound'))} · {String(row.species)}:{String(row.key)}</summary>
+      {plants.map((row,i)=>({row,i})).filter(({row})=>(!body||(object(row.at).body??base.markers.find(m=>m.id===row.entity)?.placement.body)===body)&&String(row.entity??object(row.at).body??'').toLowerCase().includes(filter.toLowerCase())).map(({row,i})=><details key={i}><summary>{String(row.entity??(row.at?String(object(row.at).body)+' / '+String(object(row.at).face):'Unbound'))} · {String(row.species)}:{String(row.key)}</summary>
         {row.at?<p>Surface: {String(object(row.at).body)} · face {String(object(row.at).face)} · {String(object(row.at).x)}, {String(object(row.at).y)}</p>:<label className="pf-row"><span>Surface marker</span>{markerPicker(row.entity,v=>patch('plants',i,{entity:v}))}</label>}
         <label className="pf-row"><span>Species</span><select className="au-input" value={String(row.species??'')} onChange={e=>patch('plants',i,{species:Number(e.target.value)})}><option value="">Choose species</option>{species.map((r,j)=><option key={j} value={String(r.id)}>{String(r.id)}</option>)}</select></label>
         <Numbers data={row} specs={[['key','Stable plant key',1,1,1000000000],['ageTicks','Initial age (ticks; blank = mature)',0,0,1000000000]]} change={p=>patch('plants',i,p)}/>

@@ -677,6 +677,13 @@ void planetWorldProcessAuthoringWorkflow(){
         request.set("method",Json::string(method));request.set("params",Json::parse(params));return session.dispatch(request);
     };
     const auto forest=call("studio.planetForest");
+    Json badPlant=Json::object();badPlant.set("mapPath",forest["result"]["mapPath"]);
+    badPlant.set("expectedRevision",forest["result"]["revision"]);
+    badPlant.set("species",Json::number(int64_t(1)));badPlant.set("habit",Json::string("tree"));
+    badPlant.set("at",Json::parse(R"({"body":"terra","face":0,"x":2,"y":3})"));
+    const auto beforePlant=session.workspace().map.undoDepth();
+    AIVERSE_TEST_CHECK(call("studio.planetForestPlant",badPlant.dump(-1).c_str()).has("error"));
+    AIVERSE_TEST_CHECK(session.workspace().map.undoDepth()==beforePlant);
     AIVERSE_TEST_CHECK(!forest.has("error")&&forest["result"].getBool("available"));
     Json forestPatch=Json::object();forestPatch.set("mapPath",forest["result"]["mapPath"]);
     forestPatch.set("expectedRevision",forest["result"]["revision"]);
