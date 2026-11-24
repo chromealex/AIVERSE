@@ -1,4 +1,4 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {invoke,onNativeEvent} from '../bridge';
 import type {StudioPlanetForestDocument,StudioPlanetForestLive} from '../types';
 import {object,rows,patchRow,removeRow,nextId,collisionMode,type ForestRecord} from './planetForestSchema';
@@ -19,17 +19,30 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
   const [override,setOverride]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
   const [dirty,setDirty]=useState(false),[stale,setStale]=useState(false),[live,setLive]=useState<StudioPlanetForestLive|null>(null);
   const [body,setBody]=useState(''),[filter,setFilter]=useState('');
-  function accept(d:StudioPlanetForestDocument){setBase(d);setForest(d.forest===null?null:object(d.forest));setCatalog(d.catalog===null?null:object(d.catalog));setOverride(d.override);setDirty(false);setStale(false);setLive(null);}
-  async function reload(){setBusy(true);setError('');try{accept(await invoke('studio.planetForest',{}));}catch(e){setError(err(e));}finally{setBusy(false);}}
+  const baseRef=useRef<StudioPlanetForestDocument|null>(null);
+  const busyRef=useRef(false);
+  function accept(d:StudioPlanetForestDocument){baseRef.current=d;setBase(d);setForest(d.forest===null?null:object(d.forest));setCatalog(d.catalog===null?null:object(d.catalog));setOverride(d.override);setDirty(false);setStale(false);setLive(null);}
+  async function reload(){busyRef.current=true;setBusy(true);setError('');try{accept(await invoke('studio.planetForest',{}));}catch(e){setError(err(e));}finally{busyRef.current=false;setBusy(false);}}
   useEffect(()=>{void reload();},[]); // mount per project
-  useEffect(()=>{if(base)setStale(true);},[historyVersion]); // do not discard a pending draft
-  useEffect(()=>onNativeEvent(event=>{if(event==='document.changed'){setStale(true);setLive(null);}}),[]);
+  // Recheck the native document identity on history/document notifications.
+  // Do not overwrite unsaved draft state, or mark our own successful Apply stale.
+  async function checkRevision(){
+    if(!baseRef.current||busyRef.current)return;
+    try{const d=await invoke('studio.planetForest',{}),current=baseRef.current;
+      if(!busyRef.current&&current&&(d.mapPath!==current.mapPath||d.revision!==current.revision||
+         JSON.stringify(d.forest)!==JSON.stringify(current.forest)||JSON.stringify(d.catalog)!==JSON.stringify(current.catalog))){
+        setStale(true);setLive(null);
+      }
+    }catch{setStale(true);}
+  }
+  useEffect(()=>{void checkRevision();},[historyVersion]);
+  useEffect(()=>onNativeEvent(event=>{if(event==='document.changed')void checkRevision();}),[]);
   function editForest(next:ForestRecord|null){setForest(next);setOverride(next!==null);setDirty(true);}
   function editCatalog(next:ForestRecord|null){setCatalog(next);setDirty(true);}
-  async function apply(){if(!base)return;setBusy(true);setError('');try{
+  async function apply(){if(!base)return;busyRef.current=true;setBusy(true);setError('');try{
     const d=await invoke('studio.planetForestSet',{mapPath:base.mapPath,expectedRevision:base.revision,forest:override?forest:null,catalog});
     accept(d);onChanged();
-  }catch(e){setError(err(e));}finally{setBusy(false);}}
+  }catch(e){setError(err(e));}finally{busyRef.current=false;setBusy(false);}}
   async function sample(){setError('');try{setLive(await invoke('studio.planetForestLive',{}));}catch(e){setError(err(e));}}
   if(!base)return <section className="rules__form">{error||'Loading planet forest…'} <button onClick={()=>void reload()}>Reload</button></section>;
   if(!base.available)return <section className="rules__form">Planetary map required. <button onClick={()=>void reload()}>Reload</button></section>;
@@ -38,7 +51,7 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
   const markers=base.markers.filter(m=>!body||m.placement.body===body);
   const patch=(key:string,i:number,p:ForestRecord)=>forest&&editForest(patchRow(forest,key,i,p));
   const markerPicker=(value:unknown,change:(v:string)=>void)=><select className="au-input" value={String(value??'')} onChange={e=>change(e.target.value)}>
-    <option value="">Choose existing surface marker</option>{value&&!base.markers.some(m=>m.id===value)&&<option value={String(value)}>Missing: {String(value)}</option>}
+    <option value="">Choose existing surface marker</option>{Boolean(value)&&!base.markers.some(m=>m.id===value)&&<option value={String(value)}>Missing: {String(value)}</option>}
     {base.markers.map(m=><option key={m.id} value={m.id}>{m.id} · {m.placement.body} / {m.placement.face}</option>)}</select>;
   return <section className="rules__form pf">
     <div className="pf-toolbar"><h3>Planet forest</h3><button disabled={busy} onClick={()=>void reload()}>{dirty?'Discard & reload':'Reload'}</button><button disabled={busy||!dirty||stale} onClick={()=>void apply()}>Apply to map</button></div>
