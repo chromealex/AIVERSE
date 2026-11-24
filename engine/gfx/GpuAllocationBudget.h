@@ -37,7 +37,7 @@ public:
     }
     bool reserve(size_t bytes){
         const size_t total=stats_.charged();
-        if(!bytes||bytes>std::numeric_limits<size_t>::max()-total||
+        if(closed_||!bytes||bytes>std::numeric_limits<size_t>::max()-total||
            (stats_.limit&&(total>stats_.limit||bytes>stats_.limit-total))){
             ++stats_.denied;return false;
         }
@@ -54,5 +54,22 @@ private:
     bool closed_=false;
     GpuAllocationBudgetStats stats_{};
     std::map<uint64_t,size_t> retired_;
+};
+// Scoped temporary staging reservation. On successful encoding the
+// charge moves to the fence-retiring list; otherwise destructor releases it.
+class GpuTransferReservation final {
+public:
+    GpuTransferReservation(GpuAllocationBudget& budget,size_t bytes)
+        :budget_(budget),bytes_(budget.reserve(bytes)?bytes:0){}
+    ~GpuTransferReservation(){if(bytes_)budget_.retire(bytes_,0);}
+    GpuTransferReservation(const GpuTransferReservation&)=delete;
+    GpuTransferReservation& operator=(const GpuTransferReservation&)=delete;
+    explicit operator bool()const{return bytes_!=0;}
+    void submitted(uint64_t fence){
+        if(bytes_){budget_.retire(bytes_,fence?fence:GpuAllocationBudget::unknownFence);bytes_=0;}
+    }
+private:
+    GpuAllocationBudget& budget_;
+    size_t bytes_=0;
 };
 } // namespace aiverse::gfx

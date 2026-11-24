@@ -418,6 +418,8 @@ public:
         if(!b || !b->storage || !cmd_ || enc_ || compute_ ||
            gpuIcbEncoder_ || !gpuHealthy_->load() || !data || size==0 ||
            offset>b->size || size>b->size-offset)return false;
+        GpuTransferReservation charge(transientGpuBudget(),size);
+        if(!charge){error_="Metal: GPU transfer budget exhausted";return false;}
         id<MTLBuffer> upload=[device_ newBufferWithBytes:data length:size
                                                options:MTLResourceStorageModeShared];
         if(!upload) {
@@ -432,7 +434,7 @@ public:
         }
         [blit copyFromBuffer:upload sourceOffset:0
                    toBuffer:b->bufs[0] destinationOffset:offset size:size];
-        [blit endEncoding];
+        [blit endEncoding];charge.submitted(gpuSubmissionFence());
         return true;
     }
     bool supportsStorageBufferCopy() const override {return true;}
@@ -703,12 +705,14 @@ public:
     bool computeDispatchSucceeded() const override { return computeDispatchSucceeded_; }
     void endCompute() override { if(compute_){[compute_ endEncoding];compute_=nil;} }
     bool readBuffer(BufferHandle h,void* data,size_t size) override {
-        auto* b=buffers_.get(h.id);if(cmd_||!b||!data||size>b->size)return false;
+        auto* b=buffers_.get(h.id);if(cmd_||!b||!data||!size||size>b->size)return false;
+        GpuTransferReservation charge(transientGpuBudget(),size);if(!charge)return false;
         id<MTLBuffer> dst=[device_ newBufferWithLength:size options:MTLResourceStorageModeShared];
         if(!dst)return false;
         id<MTLCommandBuffer> cb=[queue_ commandBuffer];id<MTLBlitCommandEncoder> blit=[cb blitCommandEncoder];
+        if(!cb||!blit)return false;
         [blit copyFromBuffer:current(*b) sourceOffset:0 toBuffer:dst destinationOffset:0 size:size];[blit endEncoding];
-        [cb commit];[cb waitUntilCompleted];if(cb.status==MTLCommandBufferStatusError)return false;
+        [cb commit];[cb waitUntilCompleted];if(cb.status!=MTLCommandBufferStatusCompleted)return false;
         memcpy(data,dst.contents,size);return true;
     }
     struct BufferRead {std::vector<uint8_t> bytes;BufferReadFn callback;std::atomic<bool> ready{false};};
@@ -762,6 +766,8 @@ public:
         if (height == 0 || gpuRow > (size_t(256)<<20)/height)
             return false;
         const size_t gpuBytes = gpuRow*height;
+        GpuTransferReservation charge(transientGpuBudget(),gpuBytes);
+        if(!charge){error_="Metal: GPU transfer budget exhausted";return false;}
         id<MTLBuffer> target = [device_ newBufferWithLength:gpuBytes
                                                 options:MTLResourceStorageModeShared];
         if (!target) { error_ = "Metal: texture readback staging buffer allocation failed"; return false; }
@@ -773,7 +779,7 @@ public:
                      sourceSize:MTLSizeMake(width,height,1)
                        toBuffer:target destinationOffset:0
          destinationBytesPerRow:gpuRow destinationBytesPerImage:gpuBytes];
-        [blit endEncoding];
+        [blit endEncoding];charge.submitted(gpuSubmissionFence());
         auto read = std::make_shared<TextureRead>();
         read->callback = std::move(callback);
         read->result.format = t->fmt;
@@ -805,11 +811,13 @@ public:
     bool readBufferAsync(BufferHandle h,size_t size,BufferReadFn callback) override {
         auto* b=buffers_.get(h.id);
         if(!cmd_||enc_||compute_||gpuIcbEncoder_||!gpuHealthy_->load()||!b||!size||size>b->size||size>65536||!callback||bufferReads_.size()>=32)return false;
+        GpuTransferReservation charge(transientGpuBudget(),size);
+        if(!charge){error_="Metal: GPU transfer budget exhausted";return false;}
         id<MTLBuffer> dst=[device_ newBufferWithLength:size options:MTLResourceStorageModeShared];if(!dst)return false;
         auto read=std::make_shared<BufferRead>();read->bytes.resize(size);read->callback=std::move(callback);
         id<MTLBlitCommandEncoder> blit=[cmd_ blitCommandEncoder];
         if(!blit)return false;
-        [blit copyFromBuffer:current(*b) sourceOffset:0 toBuffer:dst destinationOffset:0 size:size];[blit endEncoding];
+        [blit copyFromBuffer:current(*b) sourceOffset:0 toBuffer:dst destinationOffset:0 size:size];[blit endEncoding];charge.submitted(gpuSubmissionFence());
         [cmd_ addCompletedHandler:^(id<MTLCommandBuffer> cb){
             if(cb.status!=MTLCommandBufferStatusCompleted)read->bytes.clear();else memcpy(read->bytes.data(),dst.contents,size);
             read->ready.store(true,std::memory_order_release);
@@ -822,6 +830,8 @@ public:
         if(!cmd_||enc_||compute_||gpuIcbEncoder_||!gpuHealthy_->load()||!b||!size||offset>b->size||
            size>b->size-offset||size>65536||!callback||
            bufferReads_.size()>=32)return false;
+        GpuTransferReservation charge(transientGpuBudget(),size);
+        if(!charge){error_="Metal: GPU transfer budget exhausted";return false;}
         id<MTLBuffer> dst=[device_ newBufferWithLength:size
                              options:MTLResourceStorageModeShared];
         if(!dst)return false;
@@ -832,7 +842,7 @@ public:
         if(!blit)return false;
         [blit copyFromBuffer:current(*b) sourceOffset:offset
                   toBuffer:dst destinationOffset:0 size:size];
-        [blit endEncoding];
+        [blit endEncoding];charge.submitted(gpuSubmissionFence());
         [cmd_ addCompletedHandler:^(id<MTLCommandBuffer> cb){
             if(cb.status!=MTLCommandBufferStatusCompleted)read->bytes.clear();
             else memcpy(read->bytes.data(),dst.contents,size);
@@ -978,6 +988,8 @@ public:
             ((w * kFloatBytes + 255u) / 256u) * 256u;
         const NSUInteger allocation = rowBytes * hgt;
         if (allocation > 64u * 1024u * 1024u) return false;
+        GpuTransferReservation charge(transientGpuBudget(),allocation);
+        if(!charge){error_="Metal: GPU transfer budget exhausted";return false;}
         id<MTLBuffer> dst =
             [device_ newBufferWithLength:allocation
                                  options:MTLResourceStorageModeShared];
@@ -995,7 +1007,7 @@ public:
                     toBuffer:dst destinationOffset:0
         destinationBytesPerRow:rowBytes
       destinationBytesPerImage:allocation];
-        [blit endEncoding];
+        [blit endEncoding];charge.submitted(gpuSubmissionFence());
         [cmd_ addCompletedHandler:^(id<MTLCommandBuffer> completed) {
             if (completed.status != MTLCommandBufferStatusCompleted) {
                 read->bytes.clear();
@@ -1050,6 +1062,8 @@ public:
         const NSUInteger rowBytes=((w*4u+255u)/256u)*256u;
         const NSUInteger length=rowBytes*hgt;
         if (length > 64u*1024u*1024u) return false;
+        GpuTransferReservation charge(transientGpuBudget(),length);
+        if(!charge){error_="Metal: GPU transfer budget exhausted";return false;}
         id<MTLBuffer> dst=[device_ newBufferWithLength:length
                                options:MTLResourceStorageModeShared];
         if (!dst) return false;
@@ -1066,7 +1080,7 @@ public:
                      toBuffer:dst destinationOffset:0
          destinationBytesPerRow:rowBytes
        destinationBytesPerImage:length];
-        [blit endEncoding];
+        [blit endEncoding];charge.submitted(gpuSubmissionFence());
         [cmd_ addCompletedHandler:^(id<MTLCommandBuffer> completed) {
             if (completed.status != MTLCommandBufferStatusCompleted)
                 read->bytes.clear();
@@ -1991,6 +2005,7 @@ public:
         // arbitrary offscreen viewport widths, not just the test's 128 px.
         const size_t pitch = ((w * 4u + 255u) / 256u) * 256u;
         if (hgt > SIZE_MAX / pitch) return false;
+        GpuTransferReservation charge(transientGpuBudget(),pitch*hgt);if(!charge)return false;
         id<MTLBuffer> buffer = [device_ newBufferWithLength:pitch * hgt
                             options:MTLResourceStorageModeShared];
         if (!buffer) return false;
@@ -2029,6 +2044,7 @@ public:
     void beginFrame(int w, int h) override {
         fbW_ = w; fbH_ = h;
         dispatch_semaphore_wait(frameSemaphore_, DISPATCH_TIME_FOREVER);
+        (void)transientGpuBudget();
         deliverBufferReads();
         deliverDepthReads();
         deliverColorReads();

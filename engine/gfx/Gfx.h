@@ -752,6 +752,10 @@ public:
         }
         return allocationBudget_;
     }
+    // Separate headroom for temporary upload/readback buffers. Zero unlimited;
+    // lowering below outstanding usage denies new transfers until completion.
+    void setGpuTransferBudget(size_t bytes){transferBudget_.setLimit(bytes);}
+    GpuAllocationBudgetStats gpuTransferBudgetStats(){return transientGpuBudget().stats();}
     // One shared timing collection owner per graphics Device. Components
     // subscribe instead of independently draining takeGpuTimings().
     // All router calls remain on this Device's render owner thread.
@@ -1182,10 +1186,14 @@ public:
     }
 
 protected:
+    GpuAllocationBudget& transientGpuBudget(){
+        transferBudget_.collect(gpuCompletedFence());return transferBudget_;
+    }
     int fbW_ = 0, fbH_ = 0;
 private:
     GpuTimingRouter gpuTimingRouter_{};
     std::shared_ptr<GpuAllocationBudget> allocationBudget_;
+    GpuAllocationBudget transferBudget_{};
 };
 
 // Backend factories. `nativeSurface` is backend specific:
