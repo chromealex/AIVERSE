@@ -70,6 +70,32 @@ float shadow(float3 p,float3 dir,float reach,float4 domain,int n,uint steps,floa
     }
     return exp(-tau);
 }
+// Integrate the low-frequency gas field at receiver resolution. Sparse
+// self-shadow samples would print separate slices of the plume onto the floor.
+float receiverVisibility(float3 p,float3 dir,float reach,float4 domain,int n,uint quality,
+                         float extinction,float detail,float3 offset FIELD_ARG){
+    float2 hit=intersectBox(p,dir,domain.xyz,domain.xyz+float3(domain.w*float(n)),reach);
+    if(hit.y<=hit.x)return 1.0f;
+    float segment=hit.y-hit.x;
+    uint count=uint(clamp(ceil(segment/domain.w),1.0f,float(quality*16u)));
+    float ds=segment/float(count);
+    float3 axis=abs(dir.y)<0.9f?float3(0,1,0):float3(1,0,0);
+    float3 side=normalize(cross(dir,axis)),up=cross(side,dir);
+    float tau=0.0f;
+    for(uint i=0u;i<count;++i){
+        float t=hit.x+(float(i)+0.5f)*ds;
+        // Four symmetric taps approximate a growing light footprint.
+        float radius=domain.w*0.35f+t*0.045f;
+        float3 q=p+dir*t;
+        float density=0.25f*(fieldAt(q+side*radius,domain,n FIELD_PASS).x+
+                             fieldAt(q-side*radius,domain,n FIELD_PASS).x+
+                             fieldAt(q+up*radius,domain,n FIELD_PASS).x+
+                             fieldAt(q-up*radius,domain,n FIELD_PASS).x);
+        if(density>0.0f)tau+=density*extinction*ds*smokeDetailFactor(q-offset,detail*0.25f);
+        if(tau>10.0f)break;
+    }
+    return exp(-tau);
+}
 KERNEL_BEGIN
     if(id.x>=u.meta.x||id.y>=u.meta.y)return;
     float4 background=READ_COLOR(id);
@@ -88,7 +114,7 @@ KERNEL_BEGIN
     reach=depth<0.99999f?min(reach,u.camera.z):u.camera.z;
     int n=int(u.meta.z);
     if(depth<0.99999f&&u.sun.w>0.0f&&u.limits.x>0.0f){
-        float visibility=shadow(end,u.sun.xyz,u.controls.z,u.domain,n,uint(u.limits.x)*2u,u.smoke.w,u.limits.z,u.detailOffset.xyz FIELD_PASS);
+        float visibility=receiverVisibility(end,u.sun.xyz,u.controls.z,u.domain,n,uint(u.limits.x),u.smoke.w,u.limits.z,u.detailOffset.xyz FIELD_PASS);
         float directShare=u.sun.w/(1.0f+u.controls.y+u.sun.w);
         background.rgb*=1.0f-directShare*(1.0f-visibility);
     }
