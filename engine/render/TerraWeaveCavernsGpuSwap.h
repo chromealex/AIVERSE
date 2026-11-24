@@ -18,6 +18,23 @@ public:
     CaveGeometrySwapOwner(const CaveGeometrySwapOwner&)=delete;
     CaveGeometrySwapOwner& operator=(const CaveGeometrySwapOwner&)=delete;
     bool emptyAndDrained()const noexcept{return !active_&&!hasStaged()&&retired_.empty();}
+    struct MemoryStats {
+        uint64_t activeSourceBytes=0,stagedSourceBytes=0,retiredSourceBytes=0;
+        uint64_t activeStrataArenaBytes=0,stagedStrataArenaBytes=0,retiredStrataArenaBytes=0;
+        uint64_t activePageTransfers=0,activePageDeferrals=0;
+        size_t liveScenes=0;
+    };
+    MemoryStats memoryStats()const noexcept {
+        MemoryStats out;
+        out.activeSourceBytes=activeBytes_;out.stagedSourceBytes=stagedBytes_;
+        if(active_){const auto& s=active_->stats();out.activeStrataArenaBytes=s.strataStreamingArenaBytes;
+            out.activePageTransfers=s.strataStreamFrameGpuTransferBytes;
+            out.activePageDeferrals=s.strataStreamFrameDeferrals;++out.liveScenes;}
+        if(staged_){out.stagedStrataArenaBytes=staged_->stats().strataStreamingArenaBytes;++out.liveScenes;}
+        for(const auto& entry:retired_){out.retiredSourceBytes+=entry.sourceBytes;
+            out.retiredStrataArenaBytes+=entry.scene->stats().strataStreamingArenaBytes;++out.liveScenes;}
+        return out;
+    }
     bool resident()const noexcept{return active_!=nullptr;}
     bool hasStaged()const noexcept{return staged_!=nullptr || stagedEmpty_;}
     uint64_t activeRevision()const noexcept{return activeRevision_;}
@@ -41,6 +58,12 @@ public:
         // Reserve before a GPU allocation to make failure retention safe.
         if(retired_.capacity()<kMaxRetainedScenes)
             retired_.reserve(kMaxRetainedScenes);
+        uint64_t sourceBytes=0;
+        for(const auto& [name,model]:prepared.models){
+            (void)name;if(!model)return false;
+            sourceBytes+=uint64_t(model->vertices.size())*sizeof(render::ModelVertex)+
+                         uint64_t(model->indices.size())*sizeof(uint32_t);
+        }
         device_=&dev;
         auto candidate=std::make_unique<render::GeometryScene>();
         configureCaveStrata(*candidate,enableStrata,paging);
@@ -50,11 +73,12 @@ public:
         } catch(...) {
             // A partially uploaded source may retain GPU retirement tokens.
             // Keep it alive for explicit idle/shutdown in collectAfterGpuIdle.
-            retired_.push_back({std::move(candidate),0});
+            retired_.push_back({std::move(candidate),0,sourceBytes});
             throw;
         }
-        if(staged_)retired_.push_back({std::move(staged_),0});
+        if(staged_)retired_.push_back({std::move(staged_),0,stagedBytes_});
         staged_=std::move(candidate);
+        stagedBytes_=sourceBytes;
         stagedRevision_=renderRevision;
         return true;
     }
@@ -71,7 +95,8 @@ public:
         // gameplay callback can commit physics, so activation is noexcept.
         if(retired_.capacity()<kMaxRetainedScenes)
             retired_.reserve(kMaxRetainedScenes);
-        if(staged_)retired_.push_back({std::move(staged_),0});
+        if(staged_)retired_.push_back({std::move(staged_),0,stagedBytes_});
+        stagedBytes_=0;
         stagedEmpty_=true;
         stagedRevision_=renderRevision;
         return true;
@@ -88,8 +113,9 @@ public:
             retired_.reserve(retired_.size()+1);
         const bool committed=hostCommit(stagedRevision_);
         if(!committed)return false;
-        if(active_)retired_.push_back({std::move(active_),0});
+        if(active_)retired_.push_back({std::move(active_),0,activeBytes_});
         active_=std::move(staged_); // nullptr for a staged empty cave
+        activeBytes_=std::exchange(stagedBytes_,0);
         activeRevision_=stagedRevision_;
         stagedEmpty_=false;
         stagedRevision_=0;
@@ -161,8 +187,8 @@ public:
         if(!staged_)return false;
         // Moving the already-counted staged owner to retirement does not
         // increase the total number of live GPU owners.
-        retired_.push_back({std::move(staged_),0});
-        stagedRevision_=0;
+        retired_.push_back({std::move(staged_),0,stagedBytes_});
+        stagedRevision_=0;stagedBytes_=0;
         return true;
     }
     // Final teardown; caller must have stopped Scene draws and prove GPU idle.
@@ -173,12 +199,12 @@ public:
         // No scene objects are destroyed until their shutdown returns.
         if(staged_) {
             try {staged_->shutdown(dev);}catch(...) {return false;}
-            staged_.reset();stagedRevision_=0;
+            staged_.reset();stagedRevision_=0;stagedBytes_=0;
         }
         stagedEmpty_=false;
         if(active_) {
             try {active_->shutdown(dev);}catch(...) {return false;}
-            active_.reset();activeRevision_=0;
+            active_.reset();activeRevision_=0;activeBytes_=0;
         }
         if(!collectAfterGpuIdle(dev))return false;
         activeRevision_=stagedRevision_=0;device_=nullptr;
@@ -190,10 +216,12 @@ private:
     std::unique_ptr<render::GeometryScene> active_;
     std::unique_ptr<render::GeometryScene> staged_;
     uint64_t activeRevision_=0,stagedRevision_=0;
+    uint64_t activeBytes_=0,stagedBytes_=0;
     bool stagedEmpty_=false;
     struct RetiredScene {
         std::unique_ptr<render::GeometryScene> scene;
         uint64_t submissionFence=0; // captured at frame owner collection
+        uint64_t sourceBytes=0; // conservative estimate retained until owner drains
     };
     std::vector<RetiredScene> retired_;
 };
