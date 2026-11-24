@@ -321,6 +321,7 @@ void ClientFx::shutdownGraphPool() {
 void ClientFx::clearGraphSources() {
     finishGraphGpuFrame();
     if(graphPool_.ready()) {
+        graphPool_.discardCollisionChildren();
         graphPool_.setDataInterfaceRegistry(nullptr);
         graphPoolResetPending_=true;
     }
@@ -365,6 +366,7 @@ std::string ClientFx::graphSourceAsset(const std::string& name,bool allowGpu) {
                    spectra::scenePoolDataCoverageCompatible(graph,emission)) {
                     spectra::GraphRuntimeOptions options;
                     options.preference=spectra::ComputePreference::RequireGpu;
+                    options.routePoolCollisionChildren=true;
                     options.gpuProgram=true;options.gpuIndirect=true;options.proceduralBillboards=true;
                     options.gpuOwnedAllocation=graph.getBool("sceneGpuAllocation",false);
                     options.capacity=16384;
@@ -375,7 +377,7 @@ std::string ClientFx::graphSourceAsset(const std::string& name,bool allowGpu) {
                            n<1||n>65536)throw std::runtime_error("Invalid scenePoolCapacity");
                         options.capacity=uint32_t(n);
                     }
-                    if(spectra::inspectGraphGpuEligibility(effect,options).eligible) {
+                    if(spectra::inspectPoolGraphGpuEligibility(effect,options).eligible) {
                         if(!graphPool_.ready()) {
                             spectra::PoolWorldBudgets budgets;
                             budgets.maxGpuGroups=64;budgets.maxGroupCapacity=65536;
@@ -542,6 +544,7 @@ void ClientFx::update(Simulation& sim, const game::GameScene& scene, const rende
     if(!graphSourcesPrepared_)presentGraphSources(sim,scene,cam);
     graphSourcesPrepared_=false;
     if(graphSources_)graphSources_->sync(graphSourceMirror_.world(),lib::mechanics::SpectraSourceMirror::resolve);
+    if(graphPoolOpen_&&!graphPoolResetPending_)graphPool_.drainCollisionChildren(ps_);
     ps_.update(dt);
     static const bool dbg = std::getenv("AIVERSE_FX_DEBUG") != nullptr;
     static int frames = 0;

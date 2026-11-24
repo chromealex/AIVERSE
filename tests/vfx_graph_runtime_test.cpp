@@ -165,6 +165,25 @@ int main() {
         put(9,8);
         require(!sp::decodeGpuCollisionBatch(bytes,8,batch),"out of range slot rejected");
     }
+    {
+        auto parent=basic;
+        auto& emitter=parent.emitters[0];
+        emitter.drag={0,0};
+        emitter.collision.enabled=true;emitter.collision.ground=false;
+        emitter.collision.staticSphereRadius=1;
+        emitter.subEmitters.push_back({fx::FxSubEvent::Collision,"sparks",1});
+        auto poolOptions=options;poolOptions.routePoolCollisionChildren=true;
+        std::string child;
+        require(!sp::inspectGraphGpuEligibility(parent,poolOptions).eligible,
+                "dedicated graph does not silently strip collision child");
+        auto eligibility=sp::inspectPoolGraphGpuEligibility(parent,poolOptions,&child);
+        require(eligibility.eligible&&eligibility.gpu.reportCollisionEvents&&child=="sparks",
+                "pooled collision child opt-in");
+        require(parent.emitters[0].subEmitters.size()==1,"CPU fallback retains authored child");
+        emitter.subEmitters[0].chance=.5f;
+        require(!sp::inspectPoolGraphGpuEligibility(parent,poolOptions,&child).eligible&&child.empty(),
+                "unsupported chance remains CPU");
+    }
     options.capacity=4; // burst requires five slots
     require(!sp::inspectGraphGpuEligibility(basic,options).eligible,
             "unsafe GPU pool size accepted");

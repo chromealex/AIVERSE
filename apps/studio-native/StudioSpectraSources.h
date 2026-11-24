@@ -64,6 +64,7 @@ public:
             if(ready_){mirror_.clear();gpuMirror_.clear();}
             if(!externalRegistry_)installRegistry({});
             collisionRegistry_.reset();particles_.setSceneCollisionRegistry({});
+            gpuPool_.discardCollisionChildren();
             revision_=UINT64_MAX;
             return;
         }
@@ -117,6 +118,8 @@ public:
         particles_.setView(view);
         presenter_->sync(mirror_.world(),lib::mechanics::SpectraSourceMirror::resolve);
         if(!presenter_->dataInterfaceError().empty())error_=presenter_->dataInterfaceError();
+        if(gpuPool_.ready()&&gpuMirror_.size())gpuPool_.drainCollisionChildren(particles_);
+        else gpuPool_.discardCollisionChildren();
         particles_.update(dt);
         if(gpuPresenter_&&gpuPool_.ready()){
             if(!gpuPool_.beginPresentationFrame(view)){error_=gpuPool_.reason();return;}
@@ -207,6 +210,7 @@ private:
                 spectra::PoolContinuousEmission emission;
                 spectra::GraphRuntimeOptions options;
                 options.preference=spectra::ComputePreference::RequireGpu;options.gpuProgram=true;
+                options.routePoolCollisionChildren=true;
                 options.proceduralBillboards=true;options.gpuIndirect=true;
                 // Opt-in until native GPU allocator parity/overflow tests pass.
                 options.gpuOwnedAllocation=graph.getBool("sceneGpuAllocation",false);
@@ -221,7 +225,7 @@ private:
                     options.capacity=uint32_t(slots);
                 }
                 if(spectra::readScenePoolEmission(graph,emission)&&
-                   spectra::inspectGraphGpuEligibility(def,options).eligible&&
+                   spectra::inspectPoolGraphGpuEligibility(def,options).eligible&&
                    gpuPool_.defineGraph(name,graph,Json::object(),options)&&
                    gpuPool_.isGpuEffect(name)&&gpuPresenter_->bindEffect(name,emission))
                     gpuDefinitions_.insert(name);

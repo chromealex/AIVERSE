@@ -28,6 +28,7 @@ struct GraphRuntimeOptions {
     // Opt-in bounded GPU VM. Unsupported programs use exact CPU effects.
     bool gpuProgram = false;
     bool reportCollisionEvents=false;
+    bool routePoolCollisionChildren=false; // only GpuPoolWorld consumes this policy
     // Strict opt-in: only pure, bounded particle-domain shaderGraph nodes.
     // Arbitrary shader/material graphs remain on the original CPU backend.
     bool gpuMaterial = false;

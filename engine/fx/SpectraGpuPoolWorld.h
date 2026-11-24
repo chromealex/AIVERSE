@@ -137,6 +137,29 @@ struct PoolRecoveryManifest {
     std::vector<PoolRecoveryEffect> effects;
 };
 
+// Pooled-only approximation: one unconditional collision child, no inherited
+// attributes. Dedicated GraphRuntime still rejects authored sub-emitters.
+inline GraphGpuEligibility inspectPoolGraphGpuEligibility(const fx::EffectDef& effect,
+        GraphRuntimeOptions options,std::string* child=nullptr) {
+    if(child)child->clear();
+    if(!options.routePoolCollisionChildren||effect.emitters.size()!=1||effect.emitters[0].subEmitters.empty())
+        return inspectGraphGpuEligibility(effect,options);
+    const auto& e=effect.emitters[0];
+    if(e.collision.enabled&&e.subEmitters.size()==1){
+        const auto& sub=e.subEmitters.front();
+        if(sub.on==fx::FxSubEvent::Collision&&sub.chance==1.f&&
+           !sub.inheritColor&&!sub.inheritSize&&!sub.inheritRotation&&!sub.inheritLifetime&&!sub.inheritDuration&&
+           fx::vfxgraph_detail::nameOk(sub.effect)){
+            auto gpu=effect;gpu.emitters[0].subEmitters.clear();
+            options.reportCollisionEvents=true;
+            auto result=inspectGraphGpuEligibility(gpu,options);
+            if(result.eligible&&child)*child=sub.effect;
+            return result;
+        }
+    }
+    return inspectGraphGpuEligibility(effect,options);
+}
+
 struct PoolWorldStats {
     uint32_t gpuGroups = 0, cpuDefinitions = 0;
     uint32_t activeSources=0;
@@ -148,6 +171,7 @@ struct PoolWorldStats {
     uint64_t pressureHeldFrames=0;
     uint32_t sourceCapacity=0;
     uint64_t selectiveKillRequests=0;
+    uint64_t collisionChildRequests=0,collisionChildrenPlayed=0,collisionChildrenDropped=0;
     uint32_t submittedBursts = 0, rejectedBursts = 0, frameBursts = 0;
     uint32_t cpuDrawCalls = 0, gpuDrawCalls = 0;
     uint32_t cpuParticles = 0, gpuParticlesEstimated = 0;
@@ -275,6 +299,9 @@ public:
     // The callback runs on the RHI owner thread after GPU completion and
     // reports transport completeness (not freshness of a later revision).
     bool requestGpuCollisionEvents(size_t groupIndex,GpuCollisionCallback callback);
+    // After primary view setup, before host CPU update. One-shot visual children only.
+    size_t drainCollisionChildren(fx::ParticleSystem& particles,size_t maxChildren=32);
+    void discardCollisionChildren();
     bool requestGpuCheckpoint(size_t groupIndex,
                               std::function<void(bool)> completion={});
     // Copies an existing CURRENT-revision GPU checkpoint for one pooled
@@ -328,6 +355,8 @@ private:
         bool retired=false;
         uint64_t retireToken=0;
         bool live() const {return particles && !retired;}
+        std::string collisionChild;
+        std::shared_ptr<GpuCollisionBatch> collisionInbox; // one completed batch, weak callback lease
     };
     void retireUnusedGroups();
     bool defineCompiled(const std::string& name,const fx::EffectDef& effect,

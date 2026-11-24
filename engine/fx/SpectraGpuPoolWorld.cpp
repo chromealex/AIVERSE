@@ -96,6 +96,7 @@ std::string GpuPoolWorld::groupKey(const fx::EffectDef& effect,
         "|quality="+std::to_string(unsigned(options.quality))+
         "|vm="+std::to_string(unsigned(options.gpuProgram))+
         "|collisionEvents="+std::to_string(unsigned(options.reportCollisionEvents))+
+        "|collisionChildren="+std::to_string(unsigned(options.routePoolCollisionChildren))+
         "|material="+std::to_string(unsigned(options.gpuMaterial))+
         "|indirect="+std::to_string(unsigned(options.gpuIndirect))+
         "|procedural="+std::to_string(unsigned(options.proceduralBillboards))+
@@ -177,7 +178,8 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
     // groups with different checkpoint cadences.
     actual.checkpointBudget=checkpointBudget_;
     actual.allocationBudget=allocationBudget_;
-    const GraphGpuEligibility eligible=inspectGraphGpuEligibility(effect,actual);
+    std::string collisionChild;
+    const GraphGpuEligibility eligible=inspectPoolGraphGpuEligibility(effect,actual,&collisionChild);
     const bool wantsGpu=options.preference!=ComputePreference::CpuOnly;
     const bool gpuAvailable=device_&&supportsSpectraCompute(*device_,actual.gpuOwnedAllocation)&&
         actual.quality>=fx::FxQuality::Medium;
@@ -234,6 +236,9 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
                 if(freeSlot==gpuGroups_.size())
                     gpuGroups_.push_back({key,std::move(particles)});
                 else gpuGroups_[freeSlot]=Group{key,std::move(particles)};
+                auto& created=gpuGroups_[freeSlot];
+                created.collisionChild=std::move(collisionChild);
+                if(!created.collisionChild.empty())created.collisionInbox=std::make_shared<GpuCollisionBatch>();
                 next.revision=nextBindingRevision_++;
                 bindings_[name]=std::move(next);
                 definitions_[name]=remembered;
@@ -630,6 +635,7 @@ void GpuPoolWorld::retireUnusedGroups() {
             if(gpuGroups_[i].live() && !used[i]) {
                 gpuGroups_[i].retired=true;
                 gpuGroups_[i].stepOk=false;
+                gpuGroups_[i].collisionInbox.reset();
             }
         stats_.gpuGroups=uint32_t(std::count_if(gpuGroups_.begin(),gpuGroups_.end(),
             [](const Group& group){return group.live();}));
@@ -810,6 +816,7 @@ bool GpuPoolWorld::step(float dt) {
     stepped_=true;
     cpu_.update(dt);
     bool allOk=true;
+    size_t childRequests=0;
     // Checkpoint cadence is per GPU group. Rotating the simulation submission
     // order gives later groups a chance when the shared readback budget fills.
     const size_t groupCount=gpuGroups_.size();
@@ -822,6 +829,12 @@ bool GpuPoolWorld::step(float dt) {
         if(!group.stepOk) {
             allOk=false;
             reason_="GPU pool group step: "+group.particles->reason();
+        } else if(dt>0&&childRequests<8&&!group.collisionChild.empty()) {
+            if(!group.collisionInbox)group.collisionInbox=std::make_shared<GpuCollisionBatch>();
+            const std::weak_ptr<GpuCollisionBatch> inbox=group.collisionInbox;
+            if(group.particles->requestGpuCollisionEvents([inbox](bool ok,GpuCollisionBatch batch){
+                if(auto target=inbox.lock();ok&&target)*target=std::move(batch);
+            })) {++childRequests;++stats_.collisionChildRequests;}
         }
     }
     stats_.gpuParticlesEstimated=0;
@@ -865,6 +878,7 @@ bool GpuPoolWorld::resetForRollback() {
         resetAccepted_.assign(gpuGroups_.size(),0u);
         resetReport_.groupsAccepted=0;
     }
+    discardCollisionChildren();
     resetReport_.retryRequired=true;
     resetReport_.groupCount=uint32_t(gpuGroups_.size());
     resetReport_.failedGroup=std::numeric_limits<uint32_t>::max();
@@ -983,6 +997,54 @@ bool GpuPoolWorld::importRecoveryManifest(
     }
     reason_.clear();
     return true;
+}
+
+void GpuPoolWorld::discardCollisionChildren(){
+    for(auto& group:gpuGroups_)group.collisionInbox.reset();
+}
+size_t GpuPoolWorld::drainCollisionChildren(fx::ParticleSystem& particles,size_t maxChildren){
+    if(!initialized_||presentationBlocked()||!device_)return 0;
+    size_t budget=std::min<size_t>(maxChildren,32),played=0;
+    fx::SpectraFxCommandQueue commands(32);
+    fx::SpectraFxEmitterEventRouter router;
+    const auto frame=device_->frameSerial();
+    for(size_t i=0;i<gpuGroups_.size();++i){
+        auto& group=gpuGroups_[i];
+        if(!group.live()||!group.collisionInbox||group.collisionChild.empty())continue;
+        auto batch=std::move(*group.collisionInbox);*group.collisionInbox={};
+        if(batch.events.empty())continue;
+        stats_.collisionChildrenDropped+=batch.dropped;
+        if(!budget||frame<batch.frameSerial||frame-batch.frameSerial>4){
+            stats_.collisionChildrenDropped+=batch.events.size();continue;
+        }
+        // Only a bounded one-shot child asset. Missing, looping, or recursive
+        // authored children are rejected rather than creating persistent FX.
+        const auto id=particles.effect(group.collisionChild);
+        const auto* def=particles.def(id);
+        if(!def||def->emitters.empty()||std::any_of(def->emitters.begin(),def->emitters.end(),
+            [](const fx::EmitterDef& e){return e.loop||e.ringBuffer||!e.subEmitters.empty();})){
+            stats_.collisionChildrenDropped+=batch.events.size();continue;
+        }
+        const uint64_t key=i+1;
+        router.link(key,fx::SpectraFxEmitterEvent::Impact,{0,group.collisionChild,1,true});
+        const size_t count=std::min(budget,batch.events.size());
+        for(size_t j=0;j<count;++j){
+            fx::SpectraFxEmitterEventRecord event;
+            event.emitterKey=key;event.type=fx::SpectraFxEmitterEvent::Impact;
+            event.position=batch.events[j].position;
+            // CPU authored collision child orientation: own +Y, not velocity.
+            event.direction={0,1,0};
+            if(router.publish(event))--budget;
+        }
+        stats_.collisionChildrenDropped+=batch.events.size()-count;
+        router.drain(commands,count);
+        router.unlink(key);
+    }
+    commands.flush(particles);
+    played=commands.stats().played;
+    stats_.collisionChildrenPlayed+=played;
+    stats_.collisionChildrenDropped+=commands.stats().failed;
+    return played;
 }
 
 bool GpuPoolWorld::requestGpuCollisionEvents(size_t groupIndex,GpuCollisionCallback callback){
