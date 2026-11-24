@@ -158,6 +158,9 @@ Use authenticated Studio MCP studio_asset_history to obtain project/version, cat
 ## Linked conversation history navigation (S6i.2)
 Registry exposes studioLinkOnly independently of guiOnly. Use studio_agent_history_list to inspect actual retained conversation links and exact owner versions; studio_agent_history_step requires scope/id/direction/version/confirmation. Batch preview/apply reuse the same owner coordinator and token. Hosted agent must be stopped; external authenticated client may navigate, no arbitrary owner jump or new edit row is synthesized. Successful navigation preserves original links for redo; failures that change owners fence batch. Standalone audit checks explicit link-only metadata and actual fallback refusal for listed Studio tools. No claim of complete runtime parity without built tests.
 
+## Model format coverage (S6g.4)
+The existing model resource graph now scans GLB v2 JSON chunks without reading BIN chunks, and Wavefront OBJ mtllib + supported MTL map slots using the engine's OBJ-relative resolution. Opaque non-GLB placeholders remain outside coverage. Model-resource preview rows identify final native validation rather than treating every multi-selection as an unconditional blocker. Native owner still rejects any changed supported URI resolution before journal publication; no source URI rewrite or arbitrary format coverage is promised.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

@@ -63,7 +63,8 @@ function PreviewDialog({plan,busy,onCancel,onCommit}:{
     plan.items.map(item=>[item.id,item.conflict?'skip':'import'])));
   const pending=plan.items.filter(item=>selected[item.id]!=='skip').length;
   const mixedReplacement=plan.items.some(item=>selected[item.id]==='replace')&&plan.items.some(item=>selected[item.id]!=='replace'&&selected[item.id]!=='skip');
-  const blocked=(plan.references??[]).filter(ref=>!ref.writable && selected[ref.id]!=='skip');
+  const blocked=(plan.references??[]).filter(ref=>!ref.writable&&!ref.validateOnApply&&selected[ref.id]!=='skip');
+  const resourceChecks=(plan.references??[]).filter(ref=>ref.validateOnApply&&selected[ref.id]!=='skip');
   return <div className="studio-asset-dialog-overlay">
     <section className="studio-asset-dialog" role="dialog" aria-modal="true"
       aria-label="Resolve asset import and move conflicts">
@@ -83,7 +84,7 @@ function PreviewDialog({plan,busy,onCancel,onCommit}:{
               <small>Ready · no conflict</small>}
             {(plan.references??[]).filter(ref=>ref.id===item.id).map((ref,index)=>
               <small key={index} className={ref.writable?'':'studio-asset-conflict-warning'}>
-                {ref.writable?'Will repair material reference: ':'Blocked: read-only reference: '}
+                {ref.writable?'Will repair material reference: ':ref.validateOnApply?(ref.preservesDefault?'Default move preserves resource; final choices rechecked: ':'Resource must remain resolvable; final choices checked: '):'Blocked: read-only reference: '}
                 {ref.document} / {ref.owner} / {ref.field}
               </small>)}
           </div>
@@ -101,7 +102,8 @@ function PreviewDialog({plan,busy,onCancel,onCommit}:{
       <footer>
         <span>{pending} of {plan.items.length} selected
           {mixedReplacement?' · Apply replacements separately from new imports.':''}
-          {blocked.length>0?' · '+blocked.length+' read-only reference(s) block this move':''}</span>
+          {blocked.length>0?' · '+blocked.length+' read-only reference(s) block this move':''}
+          {resourceChecks.length>0?' · Native resource checks before commit':''}</span>
         <button type="button" disabled={busy} onClick={onCancel}>Cancel</button>
         <button type="button" disabled={busy||blocked.length>0||mixedReplacement} className="studio-asset-confirm"
           onClick={()=>onCommit(plan.items.map(item=>({id:item.id,action:selected[item.id]||'skip'})))}>

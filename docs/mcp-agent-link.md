@@ -81,3 +81,6 @@ All require authenticated Studio and expectedProject from `studio_asset_history`
 
 ### S6i.2 — linked conversation history navigation
 `mcp_registry` now reports `studioLinkOnly` independently of `guiOnly`; linked capability inventory carries the same flag. External authenticated clients use `studio_agent_history_list` with expectedProject and optional offset/limit, then `studio_agent_history_step` with scope, historyId, direction, expectedVersion and confirmed=true. Batch uses `studio_agent_batch_preview` and `studio_agent_batch_apply` with exact direction/token and confirmation. Hosted agent must be stopped; existing owner boundaries remain authoritative. History navigation is not a new edit. Standalone audit explicitly checks fallback refusal. Permanent purge and external picker remain native-only.
+
+### S6g.4 — GLB and Wavefront dependencies
+Dependency queries include GLB external JSON resources and OBJ material libraries/MTL texture slots actually read by the engine. Multi-item move preview distinguishes final native resource validation from unconditional read-only document blockers; commit validates actual destinations including selected conflict decisions. No URI rewrite.

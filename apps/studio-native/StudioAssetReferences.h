@@ -12,6 +12,10 @@
 #include <vector>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
+#include <optional>
+#include <cstdint>
+#include <cstring>
 #include <stdexcept>
 
 namespace aiverse::studio {
@@ -23,7 +27,7 @@ struct StudioAssetReference {
     std::string path;     // runtime-compatible project-relative path
     std::string guid;     // empty for unresolved/legacy paths
     bool writable = false; // currently only materials.json slots support repair
-    std::string uri{}; // original glTF URI, native relocation validation only
+    std::string uri{}; // original model resource name, native relocation validation only
 };
 
 inline constexpr const char* kStudioTextureFields[] = {
@@ -111,10 +115,11 @@ inline bool studioReferenceMatchesPath(const std::string& value,const std::strin
     return value==path||(directory&&value.starts_with(path+"/"));
 }
 inline bool studioIsGltfResourceReference(const StudioAssetReference& ref){
-    return ref.document.starts_with("content/")&&ref.owner=="glTF resource";
+    return ref.document.starts_with("content/")&&(ref.owner=="glTF resource"||ref.owner=="OBJ resource");
 }
 struct StudioReferenceRelocation {std::string from,to;bool directory=false;};
 inline std::string studioGltfResourcePath(const std::string& source,const std::string& uri);
+inline std::string studioObjResourcePath(const std::string& source,const std::string& name);
 inline std::string studioRelocatedReferencePath(const std::string& path,
     const std::vector<StudioReferenceRelocation>& moves){
     for(const auto& move:moves)
@@ -136,7 +141,8 @@ inline bool studioGltfRelocationSafe(const StudioAssetReference& ref,
     if(ref.uri.empty())return false;
     if(std::filesystem::path(owner).parent_path()!=std::filesystem::path(ref.document).parent_path()&&
        (ref.uri.find("..")!=std::string::npos||ref.uri.find('%')!=std::string::npos))return false;
-    return studioGltfResourcePath(owner,ref.uri)==target;
+    const auto resolved=ref.owner=="OBJ resource"?studioObjResourcePath(owner,ref.uri):studioGltfResourcePath(owner,ref.uri);
+    return resolved==target;
 }
 // Resolve the set of known dependencies affected by an internal move.
 // This is a preview, not a rename executor. Exact paths and folder descendants
@@ -144,6 +150,10 @@ inline bool studioGltfRelocationSafe(const StudioAssetReference& ref,
 inline Json studioMoveReferenceImpact(const Json& transfer,
     const std::vector<StudioAssetReference>& references) {
     Json result=Json::array();
+    std::vector<StudioReferenceRelocation> defaults;
+    for(const auto& item:transfer["items"].items())
+        if(item["from"].isString()&&item["to"].isString()&&item.getStr("conflict").empty())
+            defaults.push_back({"content/"+item.getStr("from"),"content/"+item.getStr("to"),item.getBool("directory")});
     for (const auto& item:transfer["items"].items()) {
         if (!item["id"].isNumber() || !item["from"].isString() ||
             !item["to"].isString()) continue;
@@ -169,6 +179,13 @@ inline Json studioMoveReferenceImpact(const Json& transfer,
             row.set("from",Json::string(ref.path));
             row.set("to",Json::string(targetMoves?destination+ref.path.substr(source.size()):ref.path));
             row.set("writable",Json::fromBool(ref.writable));
+            if(gltf){
+                // Exact selected paths (including keep-both names) are checked
+                // by the native transfer owner. A resource row is never a
+                // promise that rewriting the source is supported.
+                row.set("validateOnApply",Json::fromBool(true));
+                row.set("preservesDefault",Json::fromBool(studioGltfRelocationSafe(ref,defaults)));
+            }
             result.push(std::move(row));
         }
     }
@@ -266,6 +283,86 @@ inline std::string studioGltfResourcePath(const std::string& source,const std::s
     if(!result.starts_with("content/")||result.size()<=8||result.ends_with("/"))return {};
     return result;
 }
+// The OBJ loader uses the original model directory for both mtllib and
+// texture paths, and does not percent-decode names.
+inline std::string studioObjResourcePath(const std::string& source,const std::string& name){
+    if(name.empty()||name.size()>8192||name.front()=='/'||name.find_first_of(":\\")!=std::string::npos)return {};
+    for(unsigned char c:name)if(c<32||c==127)return {};
+    const auto path=(std::filesystem::path(source).parent_path()/name).lexically_normal().generic_string();
+    if(!path.starts_with("content/")||path.size()<=8||path.ends_with("/"))return {};
+    return path;
+}
+inline bool studioSafeModelResourceFile(const std::filesystem::path& root,const std::string& path){
+    namespace fs=std::filesystem;
+    auto cursor=root;
+    for(const auto& part:fs::path(path)){
+        cursor/=part;
+        const auto status=fs::symlink_status(cursor);
+        if(!fs::exists(status))return false;
+        if(fs::is_symlink(status))throw std::runtime_error("Symlink in model dependency path");
+    }
+    if(!fs::is_regular_file(fs::symlink_status(cursor)))throw std::runtime_error("Invalid model dependency file");
+    return true;
+}
+inline void studioAccountModelJson(std::uintmax_t size,std::uintmax_t& bytes){
+    if(size>16ull*1024*1024||size>64ull*1024*1024-bytes)
+        throw std::runtime_error("Model dependency byte budget exceeded");
+    bytes+=size;
+}
+// GLB v2: stream the JSON chunk, never load BIN payloads. Non-GLB opaque
+// files remain outside coverage (some legacy projects have placeholder models).
+inline std::optional<Json> studioReadModelJson(const std::filesystem::path& path,
+    std::uintmax_t& bytes,bool binary){
+    namespace fs=std::filesystem;
+    const auto size=fs::file_size(path);
+    if(!binary){studioAccountModelJson(size,bytes);return Json::parseFile(path.string());}
+    std::ifstream input(path,std::ios::binary);
+    if(!input)throw std::runtime_error("Cannot read GLB dependency");
+    unsigned char header[12]{};
+    input.read(reinterpret_cast<char*>(header),12);
+    const auto count=input.gcount();
+    if(count<4||std::memcmp(header,"glTF",4)!=0){
+        // Runtime also accepts a text JSON model regardless of extension.
+        input.clear();input.seekg(0);
+        char first=0;
+        while(input.get(first)&&std::isspace(static_cast<unsigned char>(first))){}
+        if(first!='{')return std::nullopt;
+        studioAccountModelJson(size,bytes);return Json::parseFile(path.string());
+    }
+    const auto le=[](const unsigned char* p){
+        return uint32_t(p[0])|(uint32_t(p[1])<<8)|(uint32_t(p[2])<<16)|(uint32_t(p[3])<<24);
+    };
+    if(count!=12||le(header+4)!=2||uint64_t(le(header+8))!=size||size<20)
+        throw std::runtime_error("Invalid GLB dependency header");
+    unsigned char chunk[8]{};
+    input.read(reinterpret_cast<char*>(chunk),8);
+    if(input.gcount()!=8||le(chunk+4)!=0x4e4f534a||!le(chunk)||le(chunk)%4||uint64_t(le(chunk))>size-20)
+        throw std::runtime_error("Invalid GLB JSON chunk");
+    const auto length=le(chunk);studioAccountModelJson(length,bytes);
+    std::string json(length,'\0');
+    input.read(json.data(),static_cast<std::streamsize>(length));
+    if(input.gcount()!=static_cast<std::streamsize>(length))throw std::runtime_error("Truncated GLB JSON chunk");
+    return Json::parse(json);
+}
+inline std::string studioWavefrontTrim(const std::string& s){
+    const auto start=s.find_first_not_of(" \t\r"),end=s.find_last_not_of(" \t\r");
+    return start==std::string::npos?std::string{}:s.substr(start,end-start+1);
+}
+template<class Visitor>
+inline void studioVisitWavefront(const std::filesystem::path& path,std::uintmax_t& bytes,Visitor&& visitor){
+    studioAccountModelJson(std::filesystem::file_size(path),bytes);
+    std::ifstream input(path,std::ios::binary);
+    if(!input)throw std::runtime_error("Cannot read Wavefront dependency");
+    std::string line;size_t index=0;
+    while(std::getline(input,line)){
+        ++index;if(line.size()>1024*1024)throw std::runtime_error("Wavefront dependency line budget exceeded");
+        line=studioWavefrontTrim(line);
+        if(line.empty()||line.front()=='#')continue;
+        std::istringstream stream(line);std::string key,rest;stream>>key;std::getline(stream,rest);
+        visitor(key,studioWavefrontTrim(rest),index);
+    }
+    if(input.bad())throw std::runtime_error("Cannot finish Wavefront dependency read");
+}
 inline std::vector<StudioAssetReference> studioCollectGltfReferences(
     const std::filesystem::path& project,const std::map<std::string,std::string>& guids){
     namespace fs=std::filesystem;
@@ -284,20 +381,43 @@ inline std::vector<StudioAssetReference> studioCollectGltfReferences(
         if(!fs::is_regular_file(status))continue;
         auto ext=it->path().extension().string();
         for(auto& c:ext)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        if(ext!=".gltf")continue;
+        if(ext!=".gltf"&&ext!=".glb"&&ext!=".obj")continue;
         if(models.size()>=2048)throw std::runtime_error("glTF dependency file budget exceeded");
         models.push_back(it->path());
     }
     std::sort(models.begin(),models.end());
     std::uintmax_t bytes=0;
     for(const auto& model:models){
-        const auto size=fs::file_size(model);
-        if(size>16ull*1024*1024||size>64ull*1024*1024-bytes)
-            throw std::runtime_error("glTF dependency byte budget exceeded");
-        bytes+=size;
-        const auto doc=Json::parseFile(model.string());
-        if(!doc.isObject())throw std::runtime_error("Invalid glTF dependency document");
+        auto ext=model.extension().string();
+        for(auto& c:ext)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         const auto source=model.lexically_relative(root).generic_string();
+        const auto append=[&](const std::string& owner,const std::string& field,const std::string& name,const std::string& target){
+            if(target.empty())return;
+            const auto found=guids.find(target);
+            if(refs.size()>=32768)throw std::runtime_error("Model dependency result budget exceeded");
+            refs.push_back({source,owner,field,target,found==guids.end()?std::string{}:found->second,false,name});
+        };
+        if(ext==".obj"){
+            studioVisitWavefront(model,bytes,[&](const std::string& key,const std::string& name,size_t line){
+                if(key!="mtllib")return;
+                const auto mtl=studioObjResourcePath(source,name);
+                append("OBJ resource","line "+std::to_string(line)+" / mtllib",name,mtl);
+                if(mtl.empty()||!studioSafeModelResourceFile(root,mtl))return;
+                bool material=false;
+                studioVisitWavefront(root/mtl,bytes,[&](const std::string& slot,const std::string& rest,size_t row){
+                    if(slot=="newmtl"){material=true;return;}
+                    if(!material||(slot!="map_Kd"&&slot!="map_Bump"&&slot!="map_bump"&&slot!="bump"&&slot!="norm"&&slot!="map_Ke"))return;
+                    const auto split=rest.find_last_of(" \t");
+                    const auto texture=split==std::string::npos?rest:rest.substr(split+1);
+                    append("OBJ resource",mtl+":"+std::to_string(row)+" / "+slot,texture,studioObjResourcePath(source,texture));
+                });
+            });
+            continue;
+        }
+        const auto parsed=studioReadModelJson(model,bytes,ext==".glb");
+        if(!parsed)continue;
+        const auto& doc=*parsed;
+        if(!doc.isObject())throw std::runtime_error("Invalid glTF dependency document");
         for(const char* group:{"buffers","images"}){
             if(doc.has(group)&&!doc[group].isArray())throw std::runtime_error("Invalid glTF resource array");
             size_t index=0;
@@ -307,9 +427,7 @@ inline std::vector<StudioAssetReference> studioCollectGltfReferences(
                 if(!item["uri"].isString())throw std::runtime_error("Invalid glTF resource URI");
                 const auto path=studioGltfResourcePath(source,item.getStr("uri"));
                 if(path.empty())continue;
-                const auto found=guids.find(path);
-                if(refs.size()>=32768)throw std::runtime_error("glTF dependency result budget exceeded");
-                refs.push_back({source,"glTF resource",field,path,found==guids.end()?std::string{}:found->second,false,item.getStr("uri")});
+                append("glTF resource",field,item.getStr("uri"),path);
             }
         }
     }
@@ -332,7 +450,7 @@ inline void studioCheckGltfRelocations(const std::filesystem::path& project,
     if(moves.empty())return;
     for(const auto& ref:studioCollectGltfReferences(project,{}))
         if(!studioGltfRelocationSafe(ref,moves))
-            throw std::runtime_error("Asset move would change glTF URI resolution: "+ref.document+" "+ref.field);
+            throw std::runtime_error("Asset move would change model resource resolution: "+ref.document+" "+ref.field);
 }
 inline void studioCheckMapAssetPaths(const std::filesystem::path& project,
     const Json& currentMap,const Json& rules,const Json& manifest,

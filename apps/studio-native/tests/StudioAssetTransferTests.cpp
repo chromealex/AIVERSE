@@ -132,6 +132,41 @@ int main(){
             fs::remove_all(project/"content"/"Pack");fs::remove(studioMetaPath(project/"content"/"Pack"));db.rebuild(false);
         }
 
+        // S6g.4: GLB JSON-only scan and actual OBJ-relative MTL texture semantics.
+        {
+            using namespace aiverse;
+            using namespace aiverse::studio;
+            fs::create_directories(project/"content"/"Formats"/"mtl");
+            const auto dir=project/"content"/"Formats";
+            std::string json=R"({"asset":{"version":"2.0"},"images":[{"uri":"tex.png"},{"bufferView":0}]})";
+            while(json.size()%4)json+=' ';
+            std::string glb="glTF";
+            const auto u32=[&](uint32_t x){for(int i=0;i<4;++i)glb+=static_cast<char>((x>>(8*i))&255);};
+            u32(2);u32(static_cast<uint32_t>(20+json.size()+12));u32(static_cast<uint32_t>(json.size()));u32(0x4e4f534a);
+            glb+=json;u32(4);u32(0x004e4942);glb.append(4,'\0');
+            write(dir/"scene.glb",glb);write(dir/"mesh.obj","mtllib mtl/a.mtl\nv 0 0 0\n");
+            write(dir/"mtl"/"a.mtl","newmtl mat\nmap_Kd -s 1 1 1 tex.png\nmap_Pr ignored.png\n");
+            write(dir/"tex.png","texture");db.rebuild();
+            const auto refs=studioCollectGltfReferences(project,studioReferenceGuids(db.all()));
+            AIVERSE_TEST_CHECK(studioAssetDependencyEdges(refs,"Formats/tex.png",false).size()==2);
+            AIVERSE_TEST_CHECK(studioAssetDependencyEdges(refs,"Formats/mtl/a.mtl",false).size()==1);
+            AIVERSE_TEST_CHECK(studioAssetDependencyEdges(refs,"Formats/ignored.png",false).empty());
+            const auto move=StudioTransferPlan::internal(project,"Other",{"Formats/scene.glb","Formats/tex.png"});
+            const auto impact=studioMoveReferenceImpact(move.describe(),refs);
+            AIVERSE_TEST_CHECK(impact.size()>=2&&impact[0].getBool("validateOnApply"));
+            bool refused=false;try{studioCheckGltfRelocations(project,{{"content/Formats/tex.png","content/Other/tex.png",false}});}
+            catch(const std::runtime_error&){refused=true;}
+            AIVERSE_TEST_CHECK(refused);
+            // Complete folder relocation preserves the model-relative resource names.
+            auto rename=StudioTransferPlan::rename(project,"Formats","FormatsMoved");
+            AIVERSE_TEST_CHECK(studioMoveReferenceImpact(rename.describe(),refs).size()==0);
+            std::optional<editor::ProjectHistory::MovePlan> recorded;
+            (void)rename.apply(rename.token(),{},{},&recorded);
+            AIVERSE_TEST_CHECK(recorded&&fs::exists(project/"content"/"FormatsMoved"/"tex.png"));
+            studioReplayAssetMove(project,*recorded,false);
+            fs::remove_all(dir);fs::remove(studioMetaPath(dir));db.rebuild(false);
+        }
+
         // S6h.1: persisted quota blocks growth, not restoration or explicit purge.
         {
             using namespace aiverse;
