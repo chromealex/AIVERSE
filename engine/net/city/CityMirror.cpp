@@ -102,6 +102,8 @@ void Mirror::showEvents() {
     for (const RemoteEvent& r : remote) {
         SimEvent e;
         e.type = r.type; e.player = r.player; e.value = r.value;
+        e.flags = r.flags; e.resource = r.resource; e.subjectType = r.subjectType;
+        e.subjectOwner = r.subjectOwner; e.subjectKey = r.subjectKey;
         e.a = r.a == UINT32_MAX ? kNullEntity : localOf(r.a);
         e.b = r.b == UINT32_MAX ? kNullEntity : localOf(r.b);
         e.pos = Vec3{cell(r.x), Fixed{}, cell(r.z)};
