@@ -1751,6 +1751,14 @@
    "id": "world",
    "roadmap": [
     {
+     "id": "world-integrated-acceptance",
+     "title": "Интеграционная проверка сохранения мира",
+     "titleEn": "Integrated world persistence acceptance",
+     "text": "Объединение с актуальным main, нативные тесты, MCP stdio и Studio; окончательная проверка на Mac.",
+     "textEn": "Integrate with current main, run native tests, MCP stdio and Studio; final Mac acceptance.",
+     "status": "in-progress"
+    },
+    {
      "id": "world-background-operator-jobs",
      "title": "Фоновые задачи обслуживания мира",
      "titleEn": "Background world maintenance jobs",
