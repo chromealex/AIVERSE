@@ -1,3 +1,4 @@
+#include "apps/studio-native/StudioPlanetLiveBudget.h"
 #include "apps/studio-native/StudioWorldProcessLiveOptions.h"
 #include "apps/studio-native/StudioPlanetLiveSnapshot.h"
 #include "apps/studio-native/StudioPlanetAetherSnapshot.h"
@@ -1255,7 +1256,25 @@ static void checkWorldProcessLiveOptions(){
         AIVERSE_TEST_CHECK(rejected&&next.live&&next.society);
     }
 }
+static void checkPlanetLiveBudget(){
+    AIVERSE_TEST_CHECK(studio::planetLiveShare(4096,11)*11<=4096);
+    AIVERSE_TEST_CHECK(studio::planetLiveOwnerLimit(256,1)==256&&studio::planetLiveOwnerLimit(256,11)==23);
+    studio::PlanetLiveLineBudget lines(5);
+    lines.beginLayer(2);AIVERSE_TEST_CHECK(lines.take()&&lines.take()&&!lines.take());
+    lines.beginLayer(4);AIVERSE_TEST_CHECK(lines.take()&&lines.take()&&lines.take()&&!lines.take()&&lines.dropped==2);
+    Json layer=Json::object(),rows=Json::array();
+    for(int i=0;i<12;++i){Json row=Json::object();row.set("id",Json::number(int64_t(i)));row.set("text",Json::string(std::string(80,'x')));rows.push(std::move(row));}
+    layer.set("first",rows);layer.set("second",rows);layer.set("count",Json::number(int64_t(24)));
+    const auto original=layer;
+    AIVERSE_TEST_CHECK(studio::fitPlanetLiveLayer(layer,480));
+    AIVERSE_TEST_CHECK(layer.dump(-1).size()<=480&&layer.getBool("payloadTruncated")&&layer.getInt("count")==24);
+    AIVERSE_TEST_CHECK(layer["first"].size()>0&&layer["second"].size()>0);
+    AIVERSE_TEST_CHECK(layer["first"][size_t(0)].getInt("id")==0&&layer["second"][size_t(0)].getInt("id")==0);
+    auto repeat=original;AIVERSE_TEST_CHECK(studio::fitPlanetLiveLayer(repeat,480)&&repeat==layer);
+    auto tiny=original;AIVERSE_TEST_CHECK(!studio::fitPlanetLiveLayer(tiny,1));
+}
 int main(){
+    checkPlanetLiveBudget();
     checkWorldProcessLiveOptions();
     checkAuthoredPlanetDemo();
     checkPlanetStudioDiagnostics();

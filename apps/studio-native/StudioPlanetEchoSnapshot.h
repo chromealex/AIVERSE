@@ -11,11 +11,11 @@
 
 namespace aiverse::studio {
 inline Json samplePlanetEcho(const World& ecs,const game::Surface& surface,
-        uint32_t completedTick,size_t zoneLimit=256,size_t portalLimit=512,size_t receiverLimit=256){
+        uint32_t completedTick,size_t zoneLimit=256,size_t portalLimit=512,size_t receiverLimit=256,size_t emitterLimit=256){
     namespace wp=lib::worldprocess;
     Json out=Json::object(),zones=Json::array(),portals=Json::array(),emitters=Json::array(),receivers=Json::array();
     zoneLimit=std::min(zoneLimit,size_t(256));portalLimit=std::min(portalLimit,size_t(512));
-    receiverLimit=std::min(receiverLimit,size_t(256));
+    receiverLimit=std::min(receiverLimit,size_t(256));emitterLimit=std::min(emitterLimit,size_t(256));
     const auto zoneCount=ecs.countExisting<echo::AcousticZone>(),portalCount=ecs.countExisting<echo::AcousticPortal>();
     const auto emitterCount=ecs.countExisting<echo::AcousticEmitter>(),receiverCount=ecs.countExisting<echo::AcousticReceiver>();
     const bool capped=zoneCount>echo::kMaxZones||portalCount>echo::kMaxPortals||emitterCount>echo::kMaxEmitters||
@@ -77,6 +77,7 @@ inline Json samplePlanetEcho(const World& ecs,const game::Surface& surface,
             if(p.intensity<0||p.intensity>echo::kMaxIntensity){++rejected;continue;}
             Json row=Json::object();row.set("id",id(e));row.set("zone",id(p.zone));row.set("intensity",Json::number(p.intensity));
             row.set("enabled",Json::fromBool(p.enabled));row.set("active",Json::fromBool(p.enabled&&p.intensity>0&&activeZone(p.zone)));
+            if(emitters.size()>=emitterLimit){truncated=true;break;}
             putPosition(row,locate(e));emitters.push(std::move(row));
         }
         for(auto e:ordered.template operator()<echo::AcousticReceiver>()){

@@ -6,6 +6,7 @@
 #include "apps/studio-native/StudioGameSurface.h"
 #include "apps/studio-native/StudioPlanetWorldProcesses.h"
 #include "apps/studio-native/StudioPlanetLiveSnapshot.h"
+#include "apps/studio-native/StudioPlanetLiveBudget.h"
 #include "apps/studio-native/StudioPlanetAetherSnapshot.h"
 #include "apps/studio-native/StudioPlanetFractureSnapshot.h"
 #include "apps/studio-native/StudioPlanetMorphSnapshot.h"
@@ -123,29 +124,40 @@ Json StudioGameSurface::ecologyState(const StudioWorldProcessLiveOptions& option
             for(const char* key:{"regions","plants","weather","logs","soil"})
                 out.set(key,Json::array());
             if(host_->canControl()&&sim->tick()>0){
-                out.set("imprint",samplePlanetImprint(sim->world(),*surface,sim->tick()-1));
-                out.set("evolve",samplePlanetEvolve(sim->world(),*surface,sim->tick()-1));
-                if(options.gravity)out.set("gravity",samplePlanetGravity(sim->world(),*surface,sim->tick()-1));
-                if(options.fracture)out.set("fracture",samplePlanetFracture(sim->world(),*surface,sim->tick()-1));
-                if(options.echo)out.set("echo",samplePlanetEcho(sim->world(),*surface,sim->tick()-1));
-                if(options.circuit)out.set("circuit",samplePlanetCircuit(sim->world(),*surface,sim->tick()-1));
-                if(options.society)out.set("society",samplePlanetSociety(sim->world(),*surface,sim->tick()-1));
-                if(options.crowd){
-                    const auto config=game->native().loadedConfiguration("world_processes");
-                    out.set("crowd",samplePlanetCrowd(sim->world(),*surface,sim->tick()-1,config&&config->getBool("crowdGravitySupport"),game));
+                const bool ecology=!options.live||options.layer!="off";
+                const bool granular=options.granularCellCm>0;
+                const size_t layers=size_t(ecology)*2+granular+options.gravity+options.fracture+
+                    options.echo+options.circuit+options.society+options.crowd+options.morph+(options.aetherLayer!="off");
+                if(layers){
+                    PlanetLivePayloadBudget budget(layers);
+                    const auto cap=[&](size_t n){return budget.ownerLimit(n);};
+                    const auto tick=sim->tick()-1;
+                    if(ecology){
+                        budget.add(out,"imprint",samplePlanetImprint(sim->world(),*surface,tick,cap(1024)));
+                        budget.add(out,"evolve",samplePlanetEvolve(sim->world(),*surface,tick,cap(64)));
+                    }
+                    if(options.gravity)budget.add(out,"gravity",samplePlanetGravity(sim->world(),*surface,tick));
+                    if(options.fracture)budget.add(out,"fracture",samplePlanetFracture(sim->world(),*surface,tick,cap(256),cap(512)));
+                    if(options.echo)budget.add(out,"echo",samplePlanetEcho(sim->world(),*surface,tick,cap(256),cap(512),cap(256),cap(256)));
+                    if(options.circuit)budget.add(out,"circuit",samplePlanetCircuit(sim->world(),*surface,tick,cap(256),cap(512),cap(128)));
+                    if(options.society)budget.add(out,"society",samplePlanetSociety(sim->world(),*surface,tick,cap(256),cap(512),cap(128)));
+                    if(options.crowd){
+                        const auto config=game->native().loadedConfiguration("world_processes");
+                        budget.add(out,"crowd",samplePlanetCrowd(sim->world(),*surface,tick,config&&config->getBool("crowdGravitySupport"),game,cap(256),cap(512),cap(2048)));
+                    }
+                    if(options.morph){
+                        const auto config=game->native().loadedConfiguration("world_processes");
+                        budget.add(out,"morph",samplePlanetMorph(sim->world(),*surface,tick,config&&config->getBool("morphGravity"),cap(256),cap(512)));
+                    }
+                    if(options.aetherLayer!="off"){
+                        auto policy=AetherDiagnosticPolicy::Unknown;
+                        if(const auto config=game->native().loadedConfiguration("world_processes"))
+                            policy=config->getBool("aetherStratification")?AetherDiagnosticPolicy::Stratified:AetherDiagnosticPolicy::Diffusion;
+                        budget.add(out,"aether",samplePlanetAether(sim->world(),*surface,tick,policy,cap(256),cap(512)));
+                    }
+                    if(granular)budget.add(out,"granular",samplePlanetGranular(sim->world(),*surface,tick,options.granularCellCm,cap(512)));
+                    budget.finish(out);
                 }
-                if(options.morph){
-                    const auto config=game->native().loadedConfiguration("world_processes");
-                    out.set("morph",samplePlanetMorph(sim->world(),*surface,sim->tick()-1,config&&config->getBool("morphGravity")));
-                }
-                if(options.aetherLayer!="off"){
-                    auto policy=AetherDiagnosticPolicy::Unknown;
-                    if(const auto config=game->native().loadedConfiguration("world_processes"))
-                        policy=config->getBool("aetherStratification")?AetherDiagnosticPolicy::Stratified:AetherDiagnosticPolicy::Diffusion;
-                    out.set("aether",samplePlanetAether(sim->world(),*surface,sim->tick()-1,policy));
-                }
-                if(options.granularCellCm>0)
-                    out.set("granular",samplePlanetGranular(sim->world(),*surface,sim->tick()-1,options.granularCellCm));
             }
             return out;
         }

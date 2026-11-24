@@ -1,5 +1,6 @@
 #include "apps/editor/AuthoringWater.h"
 #include "apps/studio-native/StudioScene.h"
+#include "apps/studio-native/StudioPlanetLiveBudget.h"
 #include "apps/studio-native/StudioFont6x11.h"
 #include "engine/render/CameraPng.h"
 #include "apps/studio-native/StudioLightingPreview.h"
@@ -2181,6 +2182,8 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         planetLiveSnapshot_.getStr("topology")=="planet"&&
         !planetLivePath_.empty()&&planetLivePath_==doc.path&&
         planetLiveProject_==projectPath&&planetLiveRevision_==doc.revision&&!doc.dirty;
+    if(livePlanet&&(planetLiveSnapshot_["diagnosticBudget"]["trimmedLayers"].size()||planetLiveSnapshot_["diagnosticBudget"]["omittedLayers"].size()))
+        lightingStatus_+=" · Live payload budget reached";
     const bool liveImprint=livePlanet&&planetLiveLayer_!="off"&&planetLiveSnapshot_["imprint"].isObject();
     const bool liveGranular=livePlanet&&planetLiveLayer_!="off"&&planetLiveSnapshot_["granular"].getBool("available");
     const bool liveGravity=livePlanet&&planetLiveSnapshot_["gravity"].getBool("available");
@@ -2264,7 +2267,13 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
             for(const auto& line:planetProcessOverlays_.lines)
                 if((!liveGravity||!line.owner.empty())&&(line.owner.empty()||!hidden_.count(line.owner)))
                     renderer_.line(line.a,line.b,line.color);
+            PlanetLiveLineBudget liveLineBudget;
+            const size_t liveLineShare=planetLiveShare(kPlanetLiveLines,size_t(liveGravity)+size_t(liveAether)+size_t(liveSociety)+size_t(liveCircuit)+size_t(liveCrowd)+size_t(liveEcho)+size_t(liveMorph)+size_t(liveFracture)+size_t(liveEvolve)+size_t(liveGranular)+size_t(liveImprint));
+            const auto liveLine=[&](render::float3 a,render::float3 b,uint32_t color){
+                if(liveLineBudget.take())renderer_.line(a,b,color);
+            };
             if(liveGravity){
+                liveLineBudget.beginLayer(liveLineShare);
                 // Effective gravity replaces authored per-field arrows in this
                 // view. Length is an indicative clamped display scale only.
                 const auto readVec=[](const Json& j)->std::optional<render::float3>{
@@ -2287,8 +2296,8 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                             const auto side=normalize(cross(*up,axis));
                             const auto center=*ground+*up*lift;
                             const float extent=std::clamp(radius*.012f,.1f,1.5f);
-                            renderer_.line(center-axis*extent,center+axis*extent,rgba(160,174,185));
-                            renderer_.line(center-side*extent,center+side*extent,rgba(160,174,185));
+                            liveLine(center-axis*extent,center+axis*extent,rgba(160,174,185));
+                            liveLine(center-side*extent,center+side*extent,rgba(160,174,185));
                             continue;
                         }
                         const auto direction=normalize(*acc);
@@ -2298,14 +2307,15 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                         const auto end=start+direction*len;
                         const auto side=normalize(cross(direction,std::abs(direction.y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
                         const auto color=kind=="inward"?rgba(80,225,255):kind=="outward"?rgba(255,170,80):rgba(205,145,255);
-                        renderer_.line(start,end,color);
-                        renderer_.line(end,end-direction*(len*.25f)+side*(len*.14f),color);
-                        renderer_.line(end,end-direction*(len*.25f)-side*(len*.14f),color);
+                        liveLine(start,end,color);
+                        liveLine(end,end-direction*(len*.25f)+side*(len*.14f),color);
+                        liveLine(end,end-direction*(len*.25f)-side*(len*.14f),color);
                     }
                     break;
                 }
             }
             if(liveAether){
+                liveLineBudget.beginLayer(liveLineShare);
                 const auto& data=planetLiveSnapshot_["aether"];
                 const size_t species=planetLiveAetherLayer_=="toxin"?1:planetLiveAetherLayer_=="oxygen"?2:0;
                 const auto readVec=[](const Json& j)->std::optional<render::float3>{
@@ -2324,7 +2334,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                     const float extent=marker*(.4f+std::clamp(float(std::log1p(mass)/std::log(1000000001.)),0.f,1.f));
                     const auto c=mass>0?color:rgba(115,125,140);
                     for(const auto axis:{render::float3{extent,0,0},render::float3{0,extent,0},render::float3{0,0,extent}})
-                        renderer_.line(*p-axis,*p+axis,c);
+                        liveLine(*p-axis,*p+axis,c);
                 }
                 count=0;
                 for(const auto& row:data["ducts"].items()){
@@ -2337,17 +2347,18 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                     if(distance<.001f)continue;
                     const auto amount=row.getBool("potentialAvailable")&&row["potential"].size()==3?
                         row["potential"][species].integer():0;
-                    renderer_.line(*a,*b,amount?color:rgba(105,115,130));
+                    liveLine(*a,*b,amount?color:rgba(105,115,130));
                     if(!amount)continue;
                     const auto direction=delta*(amount>0?1.f/distance:-1.f/distance);
                     const auto tip=(*a+*b)*.5f;
                     const auto side=normalize(cross(direction,std::abs(direction.y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
                     const float len=std::min(marker,distance*.24f);
-                    renderer_.line(tip,tip-direction*len+side*(len*.45f),color);
-                    renderer_.line(tip,tip-direction*len-side*(len*.45f),color);
+                    liveLine(tip,tip-direction*len+side*(len*.45f),color);
+                    liveLine(tip,tip-direction*len-side*(len*.45f),color);
                 }
             }
             if(liveSociety){
+                liveLineBudget.beginLayer(liveLineShare);
                 const auto& data=planetLiveSnapshot_["society"];
                 const auto readVec=[](const Json& j)->std::optional<render::float3>{
                     const auto& xyz=j.items();if(xyz.size()!=3)return {};
@@ -2356,7 +2367,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                 const float extent=std::clamp(planetPreview_->radius*.012f,.12f,1.5f);
                 const auto marker=[&](render::float3 p,float s,uint32_t color){
                     for(const auto axis:{render::float3{s,0,0},render::float3{0,s,0},render::float3{0,0,s}})
-                        renderer_.line(p-axis,p+axis,color);
+                        liveLine(p-axis,p+axis,color);
                 };
                 size_t count=0;
                 for(const auto& row:data["contacts"].items()){
@@ -2368,15 +2379,15 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                     const bool eligible=row.getBool("eligibleNow");
                     const auto color=eligible?rgba(uint8_t(155-65*trust),uint8_t(180+65*trust),160):rgba(120,125,145);
                     if(!eligible){
-                        renderer_.line(*a,*a+delta*.4f,color);renderer_.line(*a+delta*.6f,*b,color);
-                    }else renderer_.line(*a,*b,color);
+                        liveLine(*a,*a+delta*.4f,color);liveLine(*a+delta*.6f,*b,color);
+                    }else liveLine(*a,*b,color);
                     const float distance=std::sqrt(dot(delta,delta));
                     if(distance>.001f){
                         const auto dir=delta*(1.f/distance),tip=*a+delta*.65f;
                         const auto side=normalize(cross(dir,std::abs(dir.y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
                         const float len=std::min(extent,distance*.2f);
-                        renderer_.line(tip,tip-dir*len+side*(len*.45f),color);
-                        renderer_.line(tip,tip-dir*len-side*(len*.45f),color);
+                        liveLine(tip,tip-dir*len+side*(len*.45f),color);
+                        liveLine(tip,tip-dir*len-side*(len*.45f),color);
                     }
                 }
                 for(const char* key:{"people","messages","triggers"}){
@@ -2397,12 +2408,13 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                         marker(*p,extent*scale,color);
                         if(const auto q=readVec(row["personPosition"])){
                             const auto d=*q-*p;
-                            for(int i=0;i<4;++i)renderer_.line(*p+d*(float(i)/4),*p+d*((float(i)+.5f)/4),color);
+                            for(int i=0;i<4;++i)liveLine(*p+d*(float(i)/4),*p+d*((float(i)+.5f)/4),color);
                         }
                     }
                 }
             }
             if(liveCircuit){
+                liveLineBudget.beginLayer(liveLineShare);
                 const auto& data=planetLiveSnapshot_["circuit"];
                 const auto readVec=[](const Json& j)->std::optional<render::float3>{
                     const auto& xyz=j.items();if(xyz.size()!=3)return {};
@@ -2411,7 +2423,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                 const float extent=std::clamp(planetPreview_->radius*.012f,.12f,1.5f);
                 const auto marker=[&](render::float3 p,float s,uint32_t color){
                     for(const auto axis:{render::float3{s,0,0},render::float3{0,s,0},render::float3{0,0,s}})
-                        renderer_.line(p-axis,p+axis,color);
+                        liveLine(p-axis,p+axis,color);
                 };
                 size_t count=0;
                 for(const auto& row:data["wires"].items()){
@@ -2421,16 +2433,16 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                     const auto delta=*b-*a;
                     const auto color=!row.getBool("active")?rgba(105,115,130):row.getBool("bothPowered")?rgba(105,225,155):rgba(145,175,205);
                     if(!row.getBool("active")){
-                        renderer_.line(*a,*a+delta*.4f,color);renderer_.line(*a+delta*.6f,*b,color);continue;
+                        liveLine(*a,*a+delta*.4f,color);liveLine(*a+delta*.6f,*b,color);continue;
                     }
-                    renderer_.line(*a,*b,color);
+                    liveLine(*a,*b,color);
                     const float distance=std::sqrt(dot(delta,delta));
                     if(!row.getBool("bidirectional")&&distance>.001f){
                         const auto dir=delta*(1.f/distance),tip=*a+delta*.6f;
                         const auto side=normalize(cross(dir,std::abs(dir.y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
                         const float len=std::min(extent,distance*.2f);
-                        renderer_.line(tip,tip-dir*len+side*(len*.45f),color);
-                        renderer_.line(tip,tip-dir*len-side*(len*.45f),color);
+                        liveLine(tip,tip-dir*len+side*(len*.45f),color);
+                        liveLine(tip,tip-dir*len-side*(len*.45f),color);
                     }
                 }
                 for(const char* key:{"nodes","gates","switches","devices"}){
@@ -2452,12 +2464,13 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                         if(kind!="nodes")for(const char* link:{"inputAPosition","inputBPosition","outputPosition","nodePosition"})
                             if(const auto q=readVec(row[link])){
                                 const auto d=*q-*p;
-                                for(int i=0;i<4;++i)renderer_.line(*p+d*(float(i)/4),*p+d*((float(i)+.5f)/4),color);
+                                for(int i=0;i<4;++i)liveLine(*p+d*(float(i)/4),*p+d*((float(i)+.5f)/4),color);
                             }
                     }
                 }
             }
             if(liveCrowd){
+                liveLineBudget.beginLayer(liveLineShare);
                 const auto& data=planetLiveSnapshot_["crowd"];
                 const auto readVec=[](const Json& j)->std::optional<render::float3>{
                     const auto& xyz=j.items();if(xyz.size()!=3)return {};
@@ -2466,7 +2479,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                 const float extent=std::clamp(planetPreview_->radius*.012f,.12f,1.5f);
                 const auto marker=[&](render::float3 p,float s,uint32_t color){
                     for(const auto axis:{render::float3{s,0,0},render::float3{0,s,0},render::float3{0,0,s}})
-                        renderer_.line(p-axis,p+axis,color);
+                        liveLine(p-axis,p+axis,color);
                 };
                 const auto lifted=[&](render::float3 p){return p+normalize(p)*extent*.4f;};
                 size_t count=0;
@@ -2491,19 +2504,20 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                     marker(pos,extent,color);
                     if(row.getBool("reservationValid"))if(const auto dst=readVec(row["reservationPosition"])){
                         const auto d=lifted(*dst)-pos;
-                        for(int i=0;i<6;++i)renderer_.line(pos+d*(float(i)/6),pos+d*((float(i)+.5f)/6),rgba(255,195,80));
+                        for(int i=0;i<6;++i)liveLine(pos+d*(float(i)/6),pos+d*((float(i)+.5f)/6),rgba(255,195,80));
                     }
                     if(const auto goal=readVec(row["goal"]))marker(lifted(*goal),extent*.6f,rgba(235,160,255));
                     std::optional<render::float3> previous=pos;
                     for(const auto& point:row["route"].items()){
                         const auto q=readVec(point);if(!q){previous.reset();continue;}
                         const auto next=lifted(*q);
-                        if(previous)renderer_.line(*previous,next,rgba(110,230,160));
+                        if(previous)liveLine(*previous,next,rgba(110,230,160));
                         previous=next;
                     }
                 }
             }
             if(liveEcho){
+                liveLineBudget.beginLayer(liveLineShare);
                 const auto& data=planetLiveSnapshot_["echo"];
                 const auto readVec=[](const Json& j)->std::optional<render::float3>{
                     const auto& xyz=j.items();if(xyz.size()!=3)return {};
@@ -2512,7 +2526,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                 const float extent=std::clamp(planetPreview_->radius*.012f,.12f,1.5f);
                 const auto marker=[&](render::float3 p,float s,uint32_t color){
                     for(const auto axis:{render::float3{s,0,0},render::float3{0,s,0},render::float3{0,0,s}})
-                        renderer_.line(p-axis,p+axis,color);
+                        liveLine(p-axis,p+axis,color);
                 };
                 size_t count=0;
                 for(const auto& row:data["portals"].items()){
@@ -2523,17 +2537,17 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                     const auto color=row.getBool("active")?rgba(uint8_t(110+145*loss),uint8_t(205-95*loss),230):rgba(105,115,130);
                     const auto delta=*b-*a;
                     if(!row.getBool("active")){
-                        renderer_.line(*a,*a+delta*.4f,color);renderer_.line(*a+delta*.6f,*b,color);continue;
+                        liveLine(*a,*a+delta*.4f,color);liveLine(*a+delta*.6f,*b,color);continue;
                     }
-                    renderer_.line(*a,*b,color);
+                    liveLine(*a,*b,color);
                     const float distance=std::sqrt(dot(delta,delta));
                     if(!row.getBool("bidirectional")&&distance>.001f){
                         const auto dir=delta*(1.f/distance);
                         const auto tip=*a+delta*.6f;
                         const auto side=normalize(cross(dir,std::abs(dir.y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
                         const float len=std::min(extent,distance*.2f);
-                        renderer_.line(tip,tip-dir*len+side*(len*.45f),color);
-                        renderer_.line(tip,tip-dir*len-side*(len*.45f),color);
+                        liveLine(tip,tip-dir*len+side*(len*.45f),color);
+                        liveLine(tip,tip-dir*len-side*(len*.45f),color);
                     }
                 }
                 for(const char* key:{"zones","emitters","receivers"}){
@@ -2554,13 +2568,14 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                             if(audible)if(const auto src=readVec(row["sourcePosition"])){
                                 const auto delta=*src-*p;
                                 // Dashed winner relation, never a portal path.
-                                for(int i=0;i<8;++i)renderer_.line(*p+delta*(float(i)/8),*p+delta*((float(i)+.5f)/8),rgba(110,220,155));
+                                for(int i=0;i<8;++i)liveLine(*p+delta*(float(i)/8),*p+delta*((float(i)+.5f)/8),rgba(110,220,155));
                             }
                         }
                     }
                 }
             }
             if(liveMorph){
+                liveLineBudget.beginLayer(liveLineShare);
                 const auto& data=planetLiveSnapshot_["morph"];
                 const auto readVec=[](const Json& j)->std::optional<render::float3>{
                     const auto& xyz=j.items();if(xyz.size()!=3)return {};
@@ -2574,7 +2589,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                     const auto a=readVec(row["a"]),b=readVec(row["b"]);if(!a||!b)continue;
                     const auto stiffness=std::clamp(float(row.getInt("stiffness"))/1000.f,0.f,1.f);
                     const auto color=row.getBool("enabled")?rgba(uint8_t(115+120*stiffness),120,230):rgba(105,115,130);
-                    renderer_.line(*a,*b,color);
+                    liveLine(*a,*b,color);
                 }
                 count=0;
                 for(const auto& row:data["nodes"].items()){
@@ -2582,14 +2597,15 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                     if(!row.getBool("projected")||row.getStr("body")!=planetPreview_->bodyId)continue;
                     const auto p=readVec(row["position"]),r=readVec(row["restPosition"]);if(!p||!r)continue;
                     const auto color=!row.getBool("enabled")?rgba(110,120,135):row.getBool("anchored")?rgba(90,220,255):rgba(110,230,155);
-                    renderer_.line(*r,*p,rgba(255,195,85));
+                    liveLine(*r,*p,rgba(255,195,85));
                     for(const auto axis:{render::float3{extent,0,0},render::float3{0,extent,0},render::float3{0,0,extent}}){
-                        renderer_.line(*p-axis,*p+axis,color);
-                        renderer_.line(*r-axis*.45f,*r+axis*.45f,rgba(170,175,185));
+                        liveLine(*p-axis,*p+axis,color);
+                        liveLine(*r-axis*.45f,*r+axis*.45f,rgba(170,175,185));
                     }
                 }
             }
             if(liveFracture){
+                liveLineBudget.beginLayer(liveLineShare);
                 const auto& data=planetLiveSnapshot_["fracture"];
                 const auto readVec=[](const Json& j)->std::optional<render::float3>{
                     const auto& xyz=j.items();if(xyz.size()!=3)return {};
@@ -2607,8 +2623,8 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                     const auto color=!row.getBool("enabled")?rgba(100,110,125):severed?rgba(255,75,75):
                         !row.getBool("activeSupportEdge")?rgba(155,115,175):rgba(uint8_t(90+165*fraction),uint8_t(220-120*fraction),85);
                     if(severed||!row.getBool("activeSupportEdge")){
-                        renderer_.line(*a,*a+delta*.42f,color);renderer_.line(*a+delta*.58f,*b,color);
-                    }else renderer_.line(*a,*b,color);
+                        liveLine(*a,*a+delta*.42f,color);liveLine(*a+delta*.58f,*b,color);
+                    }else liveLine(*a,*b,color);
                 }
                 count=0;
                 for(const auto& row:data["members"].items()){
@@ -2618,15 +2634,16 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                     const auto color=row.getBool("detached")?rgba(255,80,100):row.getBool("broken")?rgba(255,155,60):
                         row.getBool("anchored")?rgba(85,220,255):rgba(110,225,125);
                     for(const auto axis:{render::float3{extent,0,0},render::float3{0,extent,0},render::float3{0,0,extent}})
-                        renderer_.line(*p-axis,*p+axis,color);
+                        liveLine(*p-axis,*p+axis,color);
                     if(row["collapse"].getStr("delivery")=="pending"||row["natureFracture"].getStr("delivery")=="pending"){
                         const float e=extent*1.6f;
-                        renderer_.line(*p+render::float3{-e,0,-e},*p+render::float3{e,0,e},rgba(255,230,90));
-                        renderer_.line(*p+render::float3{-e,0,e},*p+render::float3{e,0,-e},rgba(255,230,90));
+                        liveLine(*p+render::float3{-e,0,-e},*p+render::float3{e,0,e},rgba(255,230,90));
+                        liveLine(*p+render::float3{-e,0,e},*p+render::float3{e,0,-e},rgba(255,230,90));
                     }
                 }
             }
             if(liveEvolve){
+                liveLineBudget.beginLayer(liveLineShare);
                 size_t count=0;
                 for(const auto& row:planetLiveSnapshot_["evolve"]["regions"].items()){
                     if(count>=64)break;
@@ -2647,7 +2664,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                             const auto& xyz=point.items();
                             if(xyz.size()!=3){previous.reset();continue;}
                             const render::float3 current{float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
-                            if(previous)renderer_.line(*previous,current,color);
+                            if(previous)liveLine(*previous,current,color);
                             previous=current;
                         }
                     }
@@ -2655,6 +2672,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                 }
             }
             if(liveGranular){
+                liveLineBudget.beginLayer(liveLineShare);
                 size_t count=0;
                 for(const auto& row:planetLiveSnapshot_["granular"]["cells"].items()){
                     if(count>=512)break;
@@ -2671,11 +2689,12 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                     if(!valid)continue;
                     const float fill=std::clamp(float(row.getInt("mass"))/float(std::max<int64_t>(1,row.getInt("capacity"))),0.f,1.f);
                     const auto color=rgba(uint8_t(150+105*fill),uint8_t(105+85*fill),uint8_t(65+45*fill));
-                    for(size_t i=0;i<4;++i)renderer_.line(points[i],points[(i+1)%4],color);
+                    for(size_t i=0;i<4;++i)liveLine(points[i],points[(i+1)%4],color);
                     ++count;
                 }
             }
             if(liveImprint){
+                liveLineBudget.beginLayer(liveLineShare);
                 // Snapshot contains canonical, already body-local vertices.
                 // Draw read-only outlines, not another physical mesh or collider.
                 size_t count=0;
@@ -2694,10 +2713,11 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                     if(!valid)continue;
                     const auto f=row.getInt("footprint"),s=row.getInt("scent"),r=row.getInt("residue");
                     const auto color=f>=s&&f>=r?rgba(255,190,90):s>=r?rgba(105,215,255):rgba(215,130,255);
-                    for(size_t i=0;i<4;++i)renderer_.line(points[i],points[(i+1)%4],color);
+                    for(size_t i=0;i<4;++i)liveLine(points[i],points[(i+1)%4],color);
                     ++count;
                 }
             }
+            if(liveLineBudget.dropped)lightingStatus_+=" · Live line budget reached";
             if(const auto it=planetPreview_->modelFrames.find(selectedId);it!=planetPreview_->modelFrames.end()){
                 const auto origin=it->second.transformPoint({});
                 const float length=std::clamp(planetPreview_->radius*.045f,1.f,12.f);
