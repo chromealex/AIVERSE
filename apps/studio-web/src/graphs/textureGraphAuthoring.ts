@@ -13,8 +13,10 @@ export function textureLayout(view:GraphView):Map<string,[number,number]> {
  for(const id of ids){const k=rank.get(id)!;const g=groups.get(k)??[];g.push(id);groups.set(k,g);}
  const out=new Map<string,[number,number]>();let col=0;
  for(const [,group] of [...groups].sort((a,b)=>a[0]-b[0])){
-  group.forEach((id,i)=>{const c=col+Math.floor(i/4);out.set(id,[24+(c%10)*190,24+Math.floor(c/10)*480+(i%4)*112]);});
-  col+=Math.ceil(group.length/4);
+  const perColumn=view.nodes.some(n=>n.thumbnail)?3:4;
+  const pitch=perColumn===3?174:112,band=perColumn===3?540:480;
+  group.forEach((id,i)=>{const c=col+Math.floor(i/perColumn);out.set(id,[24+(c%10)*190,24+Math.floor(c/10)*band+(i%perColumn)*pitch]);});
+  col+=Math.ceil(group.length/perColumn);
  }
  return out;
 }

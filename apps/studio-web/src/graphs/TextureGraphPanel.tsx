@@ -54,9 +54,10 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
  const [gpuCaps,setGpuCaps]=useState<{available:boolean;residentApply:boolean;reason:string}|null>(null);
  const [autoPreview,setAutoPreview]=useState(true),[search,setSearch]=useState(''),[showSearch,setShowSearch]=useState(false),[inspectorWidth,setInspectorWidth]=useState(300),[expanded,setExpanded]=useState(false);
  const searchInput=useRef<HTMLInputElement>(null),workspace=useRef<HTMLElement>(null);
+ const [clipboard,setClipboard]=useState<Obj|null>(null),[thumbnails,setThumbnails]=useState<{key:string;images:Record<string,string>}>({key:'',images:{}});
  const history=useRef(new DraftHistory(JSON.stringify(template,null,2),64)),autoAttempt=useRef('');
  const epoch=useRef(0),lock=useRef(false),canvas=useRef<HTMLCanvasElement>(null);
- useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setOverrideText('{}');setBakedSet('');setGpuRequest(null);setGpuPolling(false);setPreviewKind('');setGpuCaps(null);setQueueTicket('');setQueueInfo(null);setQueueDrafts({});setGpuReady(false);setResidentReady(false);setLiveTarget(null);setLiveApply('');setGpuStatus('');history.current=new DraftHistory(JSON.stringify(template,null,2),64);autoAttempt.current='';setText(history.current.current());setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
+ useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setOverrideText('{}');setBakedSet('');setGpuRequest(null);setGpuPolling(false);setPreviewKind('');setGpuCaps(null);setQueueTicket('');setQueueInfo(null);setQueueDrafts({});setGpuReady(false);setResidentReady(false);setLiveTarget(null);setLiveApply('');setGpuStatus('');history.current=new DraftHistory(JSON.stringify(template,null,2),64);autoAttempt.current='';setClipboard(null);setThumbnails({key:'',images:{}});setText(history.current.current());setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
  return()=>{epoch.current++;lock.current=false};},[projectPath]);
  useEffect(()=>{const c=canvas.current;if(!c||!preview||preview.source!==text)return;
  const bytes=new Uint8ClampedArray(preview.hex.length/2);for(let i=0;i<bytes.length;i++)bytes[i]=parseInt(preview.hex.slice(i*2,i*2+2),16);
@@ -73,6 +74,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
  const undo=()=>{if(history.current.canUndo()){changeText(history.current.undo(),false);setSelected('');setPending(null);}};
  const redo=()=>{if(history.current.canRedo()){changeText(history.current.redo(),false);setSelected('');setPending(null);}};
  const semantic=graph?texturePreviewKey(graph,overrideText,output,gpuResolution,[requireGpu,materialized,fusePointwise,incremental]):'';
+ const thumbnailKey=graph?texturePreviewKey(graph,overrideText,'nodes',32,[]):'';
  const openSearch=()=>{setShowSearch(true);setSearch('');};
  useEffect(()=>{if(showSearch)searchInput.current?.focus();},[showSearch]);
  useEffect(()=>{if(!active)setExpanded(false);},[active]);
@@ -223,6 +225,22 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
       setPreview({hex:r.rgbaHex,width:r.width,height:r.height,source:text});
     }return;
    }
+   if(action==='nodeThumbnails'){
+    const images:Record<string,string>={};
+    const nodes=Array.isArray(graph.nodes)?graph.nodes.filter(object):[];
+    setStatus('Generating CPU node thumbnails…');
+    for(const n of nodes){
+      if(token!==epoch.current)return;
+      if(typeof n.id!=='string')continue;
+      const r=await op('texture_graph_preview',{graph,overrides,node:n.id});if(token!==epoch.current)return;
+      if(!object(r)||r.ok!==true||typeof r.width!=='number'||typeof r.height!=='number'||!Number.isInteger(r.width)||!Number.isInteger(r.height)||r.width<8||r.height<8||r.width>32||r.height>32||typeof r.rgbaHex!=='string'||r.rgbaHex.length!==r.width*r.height*8||!/^[0-9a-f]+$/.test(r.rgbaHex))throw new Error('Invalid native thumbnail for '+n.id);
+      const c=document.createElement('canvas');c.width=r.width;c.height=r.height;
+      const bytes=new Uint8ClampedArray(r.rgbaHex.length/2);for(let i=0;i<bytes.length;i++)bytes[i]=parseInt(r.rgbaHex.slice(i*2,i*2+2),16);
+      const ctx=c.getContext('2d');if(!ctx)throw new Error('Canvas unavailable');
+      ctx.putImageData(new ImageData(bytes,r.width,r.height),0,0);images[n.id]=c.toDataURL('image/png');
+    }
+    setThumbnails({key:thumbnailKey,images});setStatus('Generated '+Object.keys(images).length+' CPU node thumbnails');return;
+   }
    if(action==='previewNode'||action==='previewOutput'){
     setAutoPreview(false);setPreview(null);setPreviewKind('CPU');
     const r=await op('texture_graph_preview',{graph,overrides,...(action==='previewNode'?{node:selected}:{output})});if(token!==epoch.current)return;
@@ -272,7 +290,8 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
   const timer=setTimeout(()=>{autoAttempt.current=semantic;void run('gpuStart');},500);
   return()=>clearTimeout(timer);
  },[active,autoPreview,gpuCaps?.available,busy,disabled,gpuPolling,gpuRequest?.bake,queueTicket,queueDrafts,semantic,catalog,projectPath]);
- const rawView=graph?projection(graph,catalog):{nodes:[],links:[]};
+ const projected=graph?projection(graph,catalog):{nodes:[],links:[]};
+ const rawView={...projected,nodes:projected.nodes.map(n=>({...n,thumbnail:thumbnails.key===thumbnailKey?thumbnails.images[n.id]:undefined}))};
  const arranged=textureLayout(rawView);
  const view={...rawView,nodes:rawView.nodes.map(n=>{const row=Array.isArray(graph?.nodes)?graph.nodes.find(v=>object(v)&&v.id===n.id):null;const pos=object(row)?row.position:null;const xy=arranged.get(n.id);return (Array.isArray(pos)&&pos.length===2&&pos.every(v=>typeof v==='number'&&Number.isFinite(v)))||!xy?n:{...n,x:xy[0],y:xy[1]};})};
  const moveNodes=(positions:readonly {id:string;x:number;y:number}[])=>{
@@ -306,6 +325,13 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
   edit({...graph,nodes:[...rows,{id,op:kind,inputs:Array.isArray(t.inputs)?t.inputs.map(()=> ''):[],properties:props}]});setSelected(id);setPending(null);
  };
  const duplicate=()=>{if(!graph)return;const source=view.nodes.find(n=>n.id===selected);const copy=duplicateTextureNode(source?{...graph,nodes:rows.map(n=>n.id===selected?{...n,position:[source.x,source.y]}:n)}:graph,selected);if(copy){edit(copy.graph);setSelected(copy.id);setPending(null);}};
+ const copyNode=()=>{if(!current)return;setClipboard(JSON.parse(JSON.stringify(current)) as Obj);setStatus('Copied node '+selected);};
+ const pasteNode=()=>{if(!graph||!clipboard||typeof clipboard.op!=='string'||rows.length>=32)return;
+  let i=1;while(rows.some(n=>n.id===clipboard.op+'_'+i))i++;
+  const id=clipboard.op+'_'+i,copy=JSON.parse(JSON.stringify(clipboard)) as Obj;
+  const inputs=Array.isArray(copy.inputs)?copy.inputs.map(v=>rows.some(n=>n.id===v)?v:''):[];
+  edit({...graph,nodes:[...rows,{...copy,id,inputs,position:undefined}]});setSelected(id);setPending(null);
+ };
  const removeNode=()=>{
   if(!graph||!selected)return;const nextOutputs=object(graph.outputs)?Object.fromEntries(Object.entries(graph.outputs).filter(([,v])=>v!==selected)):{};
   edit({...graph,outputs:nextOutputs,nodes:rows.filter(n=>n.id!==selected).map(n=>({...n,inputs:Array.isArray(n.inputs)?n.inputs.map(v=>v===selected?'':v):[]}))});setSelected('');setPending(null);
@@ -333,12 +359,12 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
 
    <div className="tg-main">
     <div className="tg-node-toolbar">
-     <div className="tg-edit-actions"><StudioButton size="sm" disabled={busy||disabled||!history.current.canUndo()} onClick={undo}>Undo</StudioButton><StudioButton size="sm" disabled={busy||disabled||!history.current.canRedo()} onClick={redo}>Redo</StudioButton><StudioButton size="sm" disabled={busy||disabled||!selected||rows.length>=32} onClick={duplicate}>Duplicate</StudioButton><StudioButton size="sm" disabled={busy||disabled||!rows.length} onClick={autoLayout}>Auto layout</StudioButton><StudioButton size="sm" disabled={busy||disabled||rows.length>=32} onClick={openSearch}>+ Search node</StudioButton></div>
+     <div className="tg-edit-actions"><StudioButton size="sm" disabled={busy||disabled||!history.current.canUndo()} onClick={undo}>Undo</StudioButton><StudioButton size="sm" disabled={busy||disabled||!history.current.canRedo()} onClick={redo}>Redo</StudioButton><StudioButton size="sm" disabled={busy||disabled||!selected||rows.length>=32} onClick={duplicate}>Duplicate</StudioButton><StudioButton size="sm" disabled={busy||disabled||!selected} onClick={copyNode}>Copy</StudioButton><StudioButton size="sm" disabled={busy||disabled||!clipboard||rows.length>=32} onClick={pasteNode}>Paste</StudioButton><StudioButton size="sm" disabled={busy||disabled||!rows.length} onClick={autoLayout}>Auto layout</StudioButton><StudioButton size="sm" disabled={busy||disabled||rows.length>=32} onClick={openSearch}>+ Search node</StudioButton><StudioButton size="sm" disabled={busy||disabled||gpuPolling||!rows.length} onClick={()=>void run("nodeThumbnails")}>CPU thumbnails</StudioButton>{thumbnails.key===thumbnailKey&&Object.keys(thumbnails.images).length>0&&<StudioButton size="sm" onClick={()=>setThumbnails({key:"",images:{}})}>Hide thumbnails</StudioButton>}</div>
        {graph&&catalog.length>0&&<div className="au-row"><StudioSelect aria-label="Node type" value={newOp} disabled={busy||disabled} onChange={e=>setNewOp(e.target.value)}>{catalog.map(n=><option key={String(n.id)}>{String(n.id)}</option>)}</StudioSelect><StudioButton size="sm" disabled={busy||disabled||rows.length>=32} onClick={()=>addNode()}>Add node</StudioButton><StudioButton size="sm" disabled={busy||disabled||!selected} onClick={removeNode}>Remove node</StudioButton></div>}
      <small>{rows.length} nodes · {outputs.length} outputs</small>
      {showSearch&&<div className="tg-search"><input ref={searchInput} aria-label="Search node catalog" placeholder="Search nodes…" value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setShowSearch(false);}}/><StudioButton size="sm" onClick={()=>setShowSearch(false)}>Close</StudioButton><div className="tg-search-results">{catalog.filter(n=>[n.id,n.output,n.description].some(v=>String(v??'').toLowerCase().includes(search.toLowerCase()))).map(n=><StudioButton key={String(n.id)} size="sm" disabled={busy||disabled||rows.length>=32} onClick={()=>{addNode(String(n.id));setShowSearch(false);}}>{String(n.id)} · {String(n.output??'')}</StudioButton>)}</div></div>}
     </div>
-      {catalog.length>0&&<div className="tg-canvas"><GraphCanvas view={view} selected={selected} label="Texture DAG" disabled={busy||disabled} onSelect={setSelected} pendingOutput={pending} onOutput={p=>setPending(p)} onInput={p=>{if(pending)connect(pending.node,p.node,Number(p.port))}} onCancel={()=>setPending(null)} enhancedNavigation typedPorts onAddMenu={openSearch} commands={[{id:"add",label:"Search nodes",shortcut:"shift+a",run:openSearch},{id:"undo",label:"Undo",shortcut:"mod+z",disabled:!history.current.canUndo(),run:undo},{id:"redo",label:"Redo",shortcut:"mod+shift+z",disabled:!history.current.canRedo(),run:redo},{id:"duplicate",label:"Duplicate",shortcut:"mod+d",disabled:!selected||rows.length>=32,run:duplicate},{id:"layout",label:"Auto layout",run:autoLayout},{id:"delete",label:"Remove",shortcut:"delete",disabled:!selected,run:removeNode}]} onMove={(id,x,y)=>moveNodes([{id,x,y}])}/></div>}
+      {catalog.length>0&&<div className="tg-canvas"><GraphCanvas view={view} selected={selected} label="Texture DAG" disabled={busy||disabled} onSelect={setSelected} pendingOutput={pending} onOutput={p=>setPending(p)} onInput={p=>{if(pending)connect(pending.node,p.node,Number(p.port))}} onCancel={()=>setPending(null)} enhancedNavigation typedPorts onAddMenu={openSearch} commands={[{id:"add",label:"Search nodes",shortcut:"shift+a",run:openSearch},{id:"undo",label:"Undo",shortcut:"mod+z",disabled:!history.current.canUndo(),run:undo},{id:"redo",label:"Redo",shortcut:"mod+shift+z",disabled:!history.current.canRedo(),run:redo},{id:"duplicate",label:"Duplicate",shortcut:"mod+d",disabled:!selected||rows.length>=32,run:duplicate},{id:"copy",label:"Copy",shortcut:"mod+c",disabled:!selected,run:copyNode},{id:"paste",label:"Paste",shortcut:"mod+v",disabled:!clipboard||rows.length>=32,run:pasteNode},{id:"layout",label:"Auto layout",run:autoLayout},{id:"delete",label:"Remove",shortcut:"delete",disabled:!selected,run:removeNode}]} onMove={(id,x,y)=>moveNodes([{id,x,y}])}/></div>}
     {!catalog.length&&<div className="tg-empty">Loading native node catalog. Use Refresh if it is unavailable.</div>}
    </div>
    <aside className="tg-inspector" style={{width:inspectorWidth,maxWidth:"100%",boxSizing:"border-box"}}>

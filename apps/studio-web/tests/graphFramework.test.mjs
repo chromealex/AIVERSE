@@ -75,3 +75,8 @@ test('texture preview key ignores coordinates but includes parameters and output
  assert.notEqual(key(g),key({nodes:[{...g.nodes[0],properties:{value:2}}]}));
  assert.notEqual(key(g),texturePreviewKey(g,'{}','normal',128,[true]));
 });
+
+test('thumbnail geometry reserves an extra 72 pixels without moving ports',()=>{
+ const n=node('a'),a=graphGeometry({nodes:[n],links:[]}),b=graphGeometry({nodes:[{...n,thumbnail:'data:image/png;base64,AA'}],links:[]});
+ assert.equal(b.nodes[0].height,a.nodes[0].height+72);assert.deepEqual(a.ports,b.ports);
+});

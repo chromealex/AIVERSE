@@ -1,6 +1,6 @@
 /** Shared authoring projection only. Domain adapters own storage and evaluation. */
 export interface Port { id: string; type: string; multiple?: boolean }
-export interface NodeView { id: string; label: string; x: number; y: number; inputs: readonly Port[]; outputs: readonly Port[] }
+export interface NodeView { id: string; label: string; x: number; y: number; inputs: readonly Port[]; outputs: readonly Port[]; thumbnail?:string }
 export interface Link { id: string; from: string; output: string; to: string; input: string }
 export interface GraphView { nodes: readonly NodeView[]; links: readonly Link[] }
 export interface GraphPolicy { cycles: 'allow' | 'reject'; compatible?: (output: Port, input: Port) => boolean }

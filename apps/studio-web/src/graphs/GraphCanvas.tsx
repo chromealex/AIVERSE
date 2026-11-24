@@ -132,6 +132,8 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
     {heat&&Number.isFinite(heat[node.id])&&heat[node.id]>0&&<rect x="1.5" y="1.5" width="127" height={height-3} rx="6" fill="var(--au-accent)" opacity={0.1+0.55*Math.min(1,heat[node.id])} pointerEvents="none"/>}
     {highlighted?.includes(node.id)&&<text x="118" y="15" textAnchor="end" fill="var(--au-text)" fontSize="10">●</text>}
     <text x="10" y="15" fill="var(--au-text)" fontSize="11">{node.id}</text>
+    {node.thumbnail&&<image href={node.thumbnail} x="35" y={height-86} width="60" height="60" preserveAspectRatio="xMidYMid meet" style={{imageRendering:"pixelated"}} pointerEvents="none"/>}
+    {node.thumbnail&&<text x="65" y={height-17} textAnchor="middle" fill="var(--au-text-muted)" fontSize="8">CPU</text>}
     <text x="10" y={height-5} fill="var(--au-text-soft)" fontSize="10">{node.label}</text>
     {geometry.ports.filter(p=>p.node===node.id).map(p=><g key={p.direction+':'+p.port}>{typedPorts&&<text x={p.direction==='input'?9:nodeWidth-9} y={p.y-node.y+3} textAnchor={p.direction==='input'?'start':'end'} fill={portColor(p.type)} fontSize="9" pointerEvents="none">{p.direction==='input'?p.port+': '+p.type:p.type}</text>}<circle key={p.direction+':'+p.port}
      cx={p.x-node.x} cy={p.y-node.y} r="5" role={p.direction==='output'?(onOutput?'button':undefined):(onInput?'button':undefined)} tabIndex={disabled||readOnly||!(p.direction==='output'?onOutput:onInput)?-1:0}
