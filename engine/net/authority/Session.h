@@ -36,6 +36,13 @@ public:
     // Enable before attaching any connection; create and resume are explicit.
     bool enablePersistence(const std::filesystem::path& directory,const std::array<uint8_t,16>& uuid,
                            bool resume,size_t budget=64u*1024u*1024u,bool async=false);
+    enum class RecoveryStatus { Idle, Loading, Ready, Cancelled, Failed, Busy };
+    struct RecoveryProgress {std::string phase;uint64_t checkpointBytes=0,checkpointTotal=0,walBytes=0,frames=0,sequence=0;};
+    RecoveryStatus beginPersistenceRecovery(const std::filesystem::path& directory,
+        const std::array<uint8_t,16>& uuid,size_t budget=64u*1024u*1024u,bool async=false);
+    RecoveryStatus pollPersistenceRecovery();
+    RecoveryProgress persistenceRecoveryProgress()const;
+    void cancelPersistenceRecovery();
     bool persistenceFailed()const{return persistenceFailed_;}
     bool checkpointWorld();
     bool pollWorldCheckpoint();
@@ -57,7 +64,7 @@ private:
     SnapshotStats stats_;
     std::vector<Peer> peers_;
     std::unique_ptr<actor::ActorPersistentSession> persistence_;
-    bool persistenceFailed_=false,inputsStaged_=false,persistenceSupported_=false,publishingFinalized_=false;
+    bool persistenceFailed_=false,inputsStaged_=false,persistenceSupported_=false,publishingFinalized_=false,recoveringPersistence_=false;
 };
 class Client {
 public:
