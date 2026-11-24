@@ -2573,6 +2573,9 @@ if(AIVERSE_BUILD_TESTS)
     add_executable(aiverse_library_tests tests/libraries/tests.cpp)
     target_link_libraries(aiverse_library_tests PRIVATE AIVERSE::libraries)
     add_test(NAME aiverse_library_tests COMMAND aiverse_library_tests)
+    add_executable(aiverse_library_noise_tests tests/libraries/noise_tests.cpp)
+    target_link_libraries(aiverse_library_noise_tests PRIVATE AIVERSE::lib_noise)
+    add_test(NAME library_noise COMMAND aiverse_library_noise_tests)
 endif()
 
 # Meta-game policies: CPU-only tests, usable independently of a game or GPU.

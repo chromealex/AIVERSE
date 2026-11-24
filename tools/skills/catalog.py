@@ -20,6 +20,7 @@ def load_meta():
 
 # Search vocabulary is routing metadata, not another copy of skill instructions.
 ALIASES = {
+ 'aiverse-noise':'noise worley tileable gradient fbm fractal turbulence ridged derivatives',
  'aiverse-world-processes':'world processes deterministic ecs world systems mechanics universal processes игровые мир процессы экосистем общие механики',
  'aiverse-echo':'echo acoustics hearing sound portal zone acoustic npc ear noise звук слышимость шум акустика порталы зоны',
  'aiverse-fracture':'fracture structural support collapse bond breaking destruction damage разрушение обрушение опоры балки связи',

@@ -2422,6 +2422,26 @@
       "contentPackages": []
     },
     {
+      "id": "aiverse-geometry-algorithms",
+      "package": "geometry-algorithms",
+      "path": "skills/core/aiverse-geometry-algorithms/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Planar geometry, triangulation, Voronoi, 3D ray and primitive distance/overlap queries",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_geometry_algorithms",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/algorithms/Geometry2D.h",
+      "keywords": [
+        "polygon",
+        "hull",
+        "intersection"
+      ],
+      "contentPackages": []
+    },
+    {
       "id": "aiverse-gpu-batching",
       "package": null,
       "path": "skills/visuals/aiverse-gpu-batching/SKILL.md",
@@ -3745,6 +3765,34 @@
       "contentPackages": []
     },
     {
+      "id": "aiverse-noise",
+      "package": "noise",
+      "path": "skills/core/aiverse-noise/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Deterministic periodic value, gradient, cellular and fractal noise with derivatives",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_noise",
+      "dependencies": [
+        "aiverse-random"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/algorithms/Noise.h",
+      "keywords": [
+        "noise",
+        "worley",
+        "tileable",
+        "gradient",
+        "fbm",
+        "fractal",
+        "turbulence",
+        "ridged",
+        "derivatives"
+      ],
+      "contentPackages": []
+    },
+    {
       "id": "aiverse-object-interactions",
       "package": "object-interactions",
       "path": "skills/gameplay/aiverse-object-interactions/SKILL.md",
@@ -4591,6 +4639,26 @@
         "семафор",
         "блок",
         "станция"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-random",
+      "package": "random",
+      "path": "skills/core/aiverse-random/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Deterministic PCG32 and integer sampling",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_random",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/algorithms/Random.h",
+      "keywords": [
+        "random",
+        "pcg",
+        "sampling"
       ],
       "contentPackages": []
     },
@@ -7665,68 +7733,6 @@
       "backendDependencies": [],
       "source": "docs/studio-design-system.md",
       "keywords": [],
-      "contentPackages": []
-    },
-    {
-      "id": "aiverse-geometry-algorithms",
-      "package": "geometry-algorithms",
-      "path": "skills/core/aiverse-geometry-algorithms/SKILL.md",
-      "domain": "gameplay",
-      "summary": "Planar geometry, triangulation, Voronoi, 3D ray and primitive distance/overlap queries",
-      "side": "simulation",
-      "runtime": "header",
-      "target": "AIVERSE::lib_geometry_algorithms",
-      "dependencies": [],
-      "backendDependencies": [],
-      "requiresOwner": null,
-      "source": "libraries/include/aiverselib/algorithms/Geometry2D.h",
-      "keywords": [
-        "polygon",
-        "hull",
-        "intersection"
-      ],
-      "contentPackages": []
-    },
-    {
-      "id": "aiverse-random",
-      "package": "random",
-      "path": "skills/core/aiverse-random/SKILL.md",
-      "domain": "gameplay",
-      "summary": "Deterministic PCG32 and integer sampling",
-      "side": "simulation",
-      "runtime": "header",
-      "target": "AIVERSE::lib_random",
-      "dependencies": [],
-      "backendDependencies": [],
-      "requiresOwner": null,
-      "source": "libraries/include/aiverselib/algorithms/Random.h",
-      "keywords": [
-        "random",
-        "pcg",
-        "sampling"
-      ],
-      "contentPackages": []
-    },
-    {
-      "id": "aiverse-noise",
-      "package": "noise",
-      "path": "skills/core/aiverse-noise/SKILL.md",
-      "domain": "gameplay",
-      "summary": "Deterministic periodic value and cellular noise",
-      "side": "simulation",
-      "runtime": "header",
-      "target": "AIVERSE::lib_noise",
-      "dependencies": [
-        "aiverse-random"
-      ],
-      "backendDependencies": [],
-      "requiresOwner": null,
-      "source": "libraries/include/aiverselib/algorithms/Noise.h",
-      "keywords": [
-        "noise",
-        "worley",
-        "tileable"
-      ],
       "contentPackages": []
     }
   ]
