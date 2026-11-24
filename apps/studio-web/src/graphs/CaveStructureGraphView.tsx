@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {invoke,nativeConnected,onNativeEvent} from '../bridge';
 import type {StudioGraphDocumentScope} from '../types';
-import {GraphInspectionGate,graphScopeKey,validateCaveCapture} from './graphInspectionCapture';
+import {GraphInspectionGate,graphScopeKey,parseGraphDocumentScope,validateCaveCapture} from './graphInspectionCapture';
 import {StudioAlert,StudioButton,StudioSection,StudioSelect,StudioTextarea} from '../ui';
 import GraphCanvas from './GraphCanvas';
 import {caveEntryId,inspectCaveReply,projectCavePage} from './caveGraphInspection';
@@ -80,7 +80,10 @@ function ScopedCaveNativeInspection({scope}:{scope:StudioGraphDocumentScope}){
 }
 export function CaveNativeInspection({scope}:{scope?:StudioGraphDocumentScope}){
  if(!scope||!nativeConnected())return <StudioAlert>Native document identity unavailable. Import an owner report below, or open a compatible native Studio.</StudioAlert>;
- return <ScopedCaveNativeInspection key={graphScopeKey(scope)} scope={scope}/>;
+ try{
+  const checked=parseGraphDocumentScope(scope);
+  return <ScopedCaveNativeInspection key={graphScopeKey(checked)} scope={checked}/>;
+ }catch(e){return <StudioAlert tone="danger">{e instanceof Error?e.message:String(e)}</StudioAlert>;}
 }
 export function CaveInspectionImport(){
  const [raw,setRaw]=useState(''),[data,setData]=useState<CaveInspection|null>(null),[error,setError]=useState('');
