@@ -19,7 +19,7 @@ type CaveIdentity=number|string;
 type NativeIdentity={revision:string;seed:string;generator:string;stamps:string[];entrances:string[]};
 const decimal=(v:unknown,label:string,positive=true):string=>{
  if(typeof v!=='string'||!/^(0|[1-9][0-9]{0,19})$/.test(v)||(positive&&v==='0')||
-    (v.length===20&&v>'18446744073709551615'))throw new Error('Invalid '+label);
+    (v.length>19||(v.length===19&&v>'9223372036854775807')))throw new Error('Invalid '+label);
  return v;
 };
 const exact=(value:unknown,label:string,positive=true,wire?:string):CaveIdentity=>{
