@@ -106,7 +106,12 @@ def main():
     failures = 0
     for path in args.manifest:
         try:
-            errors = validate(json.loads(path.read_text(encoding="utf-8")), ready=args.ready, verify_git=args.ready)
+            data = json.loads(path.read_text(encoding="utf-8"))
+            errors = validate(data, ready=args.ready, verify_git=args.ready)
+            if args.ready and not errors and isinstance(data, dict) and data.get("id"):
+                from feature_registry import load_registry
+                from feature_policy import readiness_errors
+                errors.extend(readiness_errors(ROOT, load_registry(ROOT), {data["id"]}))
         except (OSError, ValueError) as exc:
             errors = [str(exc)]
         for error in errors:
