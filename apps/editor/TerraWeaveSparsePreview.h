@@ -6,7 +6,7 @@
 #include "apps/editor/core/TerraWeaveSparseOps.h"
 #include "engine/render/TerraWeaveTerrainPatchRender.h"
 #include "engine/world/TerraWeaveCavernsArchive.h"
-#include "engine/world/TerraWeaveCavernsSurfaceCut.h"
+#include "engine/world/TerraWeaveCavernsSurfaceGroup.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -25,6 +25,9 @@ public:
     using Retire=std::function<void(std::unique_ptr<render::Model>&)>;
     size_t residentCount() const{return models_.size();}
     size_t authoredCount()const{return authoring_?authoring_->chunkCount():0;}
+    const std::string& surfaceGroupDiagnostic()const noexcept{return groupDiagnostic_;}
+    size_t certifiedSurfaceEdges()const noexcept{return group_?group_->certifiedEdges:0;}
+    size_t plannedSurfaceOpenings()const noexcept{return group_?group_->acceptedEntrances.size():0;}
 
     void release(const Retire& retire) {
         if(!retire)throw std::invalid_argument("TerraWeave preview missing GPU retirement owner");
@@ -33,7 +36,7 @@ public:
         authoring_.reset();
         earth_.reset();
         cachedRevision_=std::numeric_limits<uint64_t>::max();
-        caveSnapshot_.reset();cachedPath_.clear();
+        caveSnapshot_.reset();cachedPath_.clear();group_.reset();groupCells_.clear();groupDiagnostic_.clear();
     }
 
     // Editor::shutdown already waits for a real GPU idle barrier. After it,
@@ -47,6 +50,7 @@ public:
         models_.clear();
         authoring_.reset();earth_.reset();
         cachedRevision_=std::numeric_limits<uint64_t>::max();
+        caveSnapshot_.reset();cachedPath_.clear();group_.reset();groupCells_.clear();groupDiagnostic_.clear();
     }
 
     // Called AFTER Renderer3D::beginScene and BEFORE Renderer3D::render.
@@ -108,6 +112,20 @@ public:
         if(candidates.size()>kMaxVisible)candidates.resize(kMaxVisible);
         std::set<world::Cell> needed;
         for(const auto& c:candidates)needed.insert(c.tile.cell);
+        const bool grouped=caveSnapshot_&&!caveSnapshot_->entrances.empty()&&!needed.empty();
+        if(grouped&&groupCells_!=needed){
+            // A fresh visible set needs a whole-footprint plan. Do not
+            // submit any partially uploaded cut group to the draw list.
+            for(auto& [key,entry]:models_){(void)key;if(entry.gpu)gpuRetire(entry.gpu);}
+            models_.clear();group_.reset();groupDiagnostic_.clear();
+            try{
+                const std::vector<world::Cell> pins(needed.begin(),needed.end());
+                group_=std::make_unique<terraweave::caverns::CaveSurfaceGroupPlan>(
+                    terraweave::caverns::planCaveSurfaceGroup(*earth_,*caveSnapshot_,pins,
+                        authoring_->chunkSizeMetres(),33,1));
+            }catch(const std::exception& e){groupDiagnostic_=e.what();}
+            groupCells_=needed;
+        }
         for(auto it=models_.begin();it!=models_.end();) {
             if(!needed.contains(it->first)){
                 gpuRetire(it->second.gpu);
@@ -117,18 +135,25 @@ public:
         size_t uploads=0;
         for(const auto& c:candidates) {
             auto it=models_.find(c.tile.cell);
-            const uint32_t effective=caveSnapshot_?(c.tile.flat?2u:33u):c.tile.resolution;
+            const bool clipped=group_&&group_->patches.at(c.tile.cell).clippedSurface;
+            const uint32_t effective=caveSnapshot_?((c.tile.flat&&!clipped)?2u:33u):c.tile.resolution;
             const auto neighbors=caveSnapshot_?std::array<uint32_t,4>{}:c.tile.neighborResolution;
             const bool matched=it!=models_.end() &&
                 it->second.resolution==effective &&
                 it->second.neighbors==neighbors;
             if(matched)continue;
             if(uploads>=kMaxUploadsPerFrame)continue;
-            auto visual=caveSnapshot_
-                ? terraweave::caverns::cutCaveTerrainPatch(
-                    terraweave::bakeEarthworksTerrainPatch(*earth_,c.tile.cell,authoring_->chunkSizeMetres(),c.tile.flat?2u:33u),*caveSnapshot_,1)
+            // On rejected group preflight use solid ground everywhere,
+            // not independent per-tile cuts. Flat uncut tiles stay quads.
+            auto visual=clipped?group_->patches.at(c.tile.cell):caveSnapshot_
+                ? terraweave::bakeEarthworksTerrainPatch(*earth_,c.tile.cell,authoring_->chunkSizeMetres(),effective)
                 : terraweave::bakeSparseTerrainVisual(*earth_,c.tile,authoring_->chunkSizeMetres());
             auto model=terraweave::makeEarthworksTerrainModel(visual);
+            if(!model){
+                if(it!=models_.end()&&it->second.gpu)gpuRetire(it->second.gpu);
+                ModelEntry entry;entry.resolution=effective;entry.neighbors=neighbors;
+                models_.insert_or_assign(c.tile.cell,std::move(entry));++uploads;continue;
+            }
             model->path="terraweave/editor-sparse/"+
                 std::to_string(c.tile.cell.x)+"/"+
                 std::to_string(c.tile.cell.z)+"/"+
@@ -148,6 +173,7 @@ public:
             models_.insert_or_assign(c.tile.cell,std::move(entry));
             ++uploads;
         }
+        if(group_&&models_.size()!=needed.size())return;
         for(const auto& c:candidates) {
             const auto found=models_.find(c.tile.cell);
             if(found==models_.end() || !found->second.gpu)continue;
@@ -174,6 +200,9 @@ private:
         std::array<uint32_t,4> neighbors{};
         std::unique_ptr<render::Model> gpu;
     };
+    std::unique_ptr<terraweave::caverns::CaveSurfaceGroupPlan> group_;
+    std::set<world::Cell> groupCells_;
+    std::string groupDiagnostic_;
     bool allowCuts_=false;
     std::string cachedPath_;
     std::shared_ptr<const terraweave::caverns::CaveVolumeSnapshot> caveSnapshot_;
