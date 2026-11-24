@@ -70,7 +70,11 @@ void caveGraphCaptureWorkflow() {
         const auto undo=session.workspace().map.undoDepth();const auto dirty=session.workspace().map.dirty;
         bool registered=false;
         for(const auto& op:session.workspace().ops())registered|=op.name=="terraweave_caverns_paint"&&!op.guiOnly;
-        const auto r=call("studio.cavernsGraphInspect",original);
+        Json reordered=Json::object();
+        for(const auto* key:{"revision","epoch","mapPath","projectPath"})
+            reordered.set(key,original["scope"][key]);
+        Json wireParams=Json::object();wireParams.set("scope",reordered);
+        const auto r=call("studio.cavernsGraphInspect",wireParams);
         AIVERSE_TEST_CHECK(!r.has("error"));
         AIVERSE_TEST_CHECK(r["result"].getStr("status")==(registered?"ready":"unavailable"));
         if(registered){

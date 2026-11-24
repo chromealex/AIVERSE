@@ -1954,7 +1954,13 @@ Json StudioSession::dispatchImpl(const Json& request) {
             // Narrow get-only capability; never expose the mixed paint operation via this route.
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
             const Json scope=graphDocumentScope();
-            if (!params.isObject() || params.size()!=1 || !(params["scope"]==scope))
+            const Json& supplied=params["scope"];
+            // The native web bridge can serialize object members in a different order.
+            if (!params.isObject() || params.size()!=1 || !supplied.isObject() ||
+                supplied.size()!=scope.size() ||
+                !std::all_of(scope.members().begin(),scope.members().end(),[&](const auto& field){
+                    return supplied[field.first]==field.second;
+                }))
                 throw std::runtime_error("Caverns inspection document changed; refresh Studio");
             Json out=Json::object();
             out.set("scope",scope);
