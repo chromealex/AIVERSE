@@ -28,6 +28,26 @@ inline CavePlanetGravitySample sampleCavePlanetGravity(const CavePlanetFrame& fr
     }
     return out;
 }
+// Existing A*/HPA*/flow providers run in chart centimetres. Every sampled
+// ground point consults the same frozen PHYSIS world; non-ground modes keep
+// their existing policies. Caller supplies an actual native residency proof.
+inline std::shared_ptr<const CaveNavigationDataProvider> makeCavePlanetNavigationProvider(
+        CavePlanetFrame frame,std::shared_ptr<const CaveSnapshotSpatialIndex> index,
+        std::shared_ptr<const World> frozen,uint64_t environmentRevision,
+        CaveNavigationCallbacks callbacks,CaveResidencyCheck nativeResidency){
+    if(!index||!frozen||!environmentRevision||!nativeResidency)
+        throw std::invalid_argument("Caverns planetary navigation owner proof");
+    validateCavePlanetVolume(frame,index->snapshot());
+    auto prior=std::move(callbacks.groundSupportAllowed);
+    callbacks.groundSupportAllowed=[frame,frozen,prior=std::move(prior)](PointCm p){
+        return frame.contains(p)&&(!prior||prior(p))&&
+            sampleCavePlanetGravity(frame,*frozen,p).groundedChartCompatible;
+    };
+    return std::make_shared<const CaveNavigationDataProvider>(std::move(index),std::move(callbacks),
+        environmentRevision,[frame,nativeResidency=std::move(nativeResidency)](PointCm lo,PointCm hi){
+            return frame.contains(lo)&&frame.contains(hi)&&nativeResidency(lo,hi);
+        });
+}
 class CavePlanetQueries {
 public:
     CavePlanetQueries(CavePlanetFrame frame,std::shared_ptr<const CaveSnapshotSpatialIndex> index)
