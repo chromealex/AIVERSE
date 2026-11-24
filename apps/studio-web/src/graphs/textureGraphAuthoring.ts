@@ -135,6 +135,7 @@ export function defineTextureFunction(graph:Obj,catalog:Obj[],ids:readonly strin
  if(Object.hasOwn(library,name))throw new Error('Function name already exists');
  const all=rows(graph.nodes),selected=new Set(ids),body=all.filter(n=>selected.has(String(n.id)));
  if(!body.length||body.length!==selected.size||!selected.has(resultId))throw new Error('Select function body and result node');
+ if(body.some(n=>n.op==='function'))throw new Error('Nested function definitions are not supported');
  const formal:Obj[]=[],external=new Map<string,string>(),reserved=new Set(body.map(n=>String(n.id)));
  const nodes=body.map(n=>{
   const spec=textureFunctionSpec(graph,n,catalog);

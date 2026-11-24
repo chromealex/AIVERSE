@@ -128,7 +128,7 @@ test('function clipboard drafts cannot reference a deleted definition or bypass 
  assert.throws(()=>checkFunctionDraft(graph),/Missing function definition/);
  const body=Array.from({length:33},(_,i)=>({id:'n'+i,op:'constant',inputs:[]}));
  const calls={...graph,functions:{missing:{nodes:body}},nodes:[...graph.nodes,{...graph.nodes[0],id:'call2'}]};
- assert.throws(()=>checkFunctionDraft(calls),/budget/);
+ assert.throws(()=>checkFunctionDraft(calls),/node limit/);
 });
 
 test('standalone function assets link pinned snapshots and refresh compatible revisions',()=>{
