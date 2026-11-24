@@ -1,6 +1,7 @@
 #include "apps/studio-native/StudioTerrainGeometry.h"
 #include "apps/studio-native/StudioPlanetPreview.h"
 #include "apps/studio-native/StudioPlanetProcessOverlays.h"
+#include "apps/studio-native/StudioPlanetRegionEditing.h"
 #include "tests/TestCheck.h"
 #include <cmath>
 #include <iostream>
@@ -65,6 +66,28 @@ int main() {
     size_t regionLines=0,gravityLines=0;
     for(const auto& line:overlay.lines){if(line.owner.empty())++gravityLines;else ++regionLines;}
     AIVERSE_TEST_CHECK(regionLines==64&&gravityLines>0);
+    PlanetRegionChart chart;chart.owner="entity:@front";chart.body="terra";
+    chart.radius=Fixed::fromInt(64);
+    game::CubeSphere sphere(8);
+    chart.up=sphere.dirFromFace(0,Fixed::fromInt(7),Fixed::fromInt(3));
+    game::CubeSphere::faceTangents(0,chart.up,chart.east,chart.south);
+    chart.area={100,-200,300,200,true};
+    const auto direction=planet_overlay_detail::regionDirection(chart.up,chart.east,chart.south,
+        chart.radius,Fixed::fromInt(12),Fixed::fromInt(3));
+    AIVERSE_TEST_CHECK(direction);
+    const auto coords=planetRegionCoordinates(chart,*direction);
+    AIVERSE_TEST_CHECK(coords&&fxAbs(coords->x-Fixed::fromInt(12))<Fixed::fromRatio(1,10));
+    AIVERSE_TEST_CHECK(fxAbs(coords->y-Fixed::fromInt(3))<Fixed::fromRatio(1,10));
+    auto edited=planetRegionDragArea(chart,PlanetRegionHandle::East,{Fixed::fromInt(8),{}},false,false);
+    AIVERSE_TEST_CHECK(edited&&edited->centerXcm-edited->halfWidthCm==-200);
+    AIVERSE_TEST_CHECK(edited->centerXcm+edited->halfWidthCm==800);
+    edited=planetRegionDragArea(chart,PlanetRegionHandle::East,{Fixed::fromInt(8),{}},true,false);
+    AIVERSE_TEST_CHECK(edited&&edited->centerXcm==100&&edited->halfWidthCm==700);
+    edited=planetRegionDragArea(chart,PlanetRegionHandle::Center,
+        {Fixed::fromRatio(24,10),Fixed::fromRatio(-36,10)},false,true);
+    AIVERSE_TEST_CHECK(edited&&edited->centerXcm==200&&edited->centerZcm==-400);
+    const auto payload=planetRegionEditPayload(chart,*edited,42);
+    AIVERSE_TEST_CHECK(payload.getInt("expectedRevision")==42&&payload["value"].getInt("offsetZcm")==-400);
     std::cout<<"StudioTerrainGeometry PASS\n";
     editor::MapDoc blank;blank.reset(32,32);render::MeshBuilder noSurface;
     AIVERSE_TEST_CHECK(buildTerrainPreview(blank.data,noSurface).quads==0);

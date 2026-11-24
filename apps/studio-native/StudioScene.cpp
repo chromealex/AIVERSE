@@ -635,7 +635,7 @@ std::string StudioScene::pick(float x, float y, float width, float height,
     // Never route its clicks to unrelated MapDoc entities underneath.
     if (materialMode_ || facialMode_ || !cameraInitialized_ ||
         !viewCamera().screenRay(x,y,width,height,origin,direction)) return {};
-    if(map.data.planet())return planetMode_&&planetPreview_&&planetDoc_==&map&&planetRevision_==map.revision?
+    if(map.data.planet())return planetMode_&&planetPreview_&&planetMapPath_==map.path&&planetRevision_==map.revision?
         planetPreview_->pick(origin,direction,hidden_,locked_,modelInstances_):std::string{};
     // Pick the oriented cube mesh that Renderer3D actually draws, not its
     // expanded axis-aligned bounding box. Empty rotated corners are unpickable.
@@ -1573,7 +1573,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         framePlanet(framebufferWidth,framebufferHeight,doc,selectedId,projectPath,rules);return;
     }
     if(planetMode_){
-        planetMode_=false;planetPreview_.reset();planetDoc_=nullptr;cameraInitialized_=false;sceneCacheValid_=false;
+        planetMode_=false;planetPreview_.reset();planetMapPath_.clear();cameraInitialized_=false;sceneCacheValid_=false;
         lightingRevision_=std::numeric_limits<uint64_t>::max();clearTransformPreview();
     }
     const auto& map = doc.data;
@@ -1903,13 +1903,13 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     // StudioFrameScope ends the pass and frame, including on exceptions.
 }
-bool StudioScene::beginPlanetRegionDrag(const std::string& id,float x,float y,float width,float height){
+bool StudioScene::beginPlanetRegionDrag(const editor::MapDoc& doc,const std::string& id,float x,float y,float width,float height){
     cancelPlanetRegionDrag();
-    if(!planetMode_||!planetPreview_||!planetDoc_||!gizmosVisible_||
-       hidden_.count(id)||locked_.count(id)||planetDoc_->revision!=planetRevision_)return false;
-    const auto chart=planetRegionChart(*planetDoc_,*planetPreview_,id);
+    if(!planetMode_||!planetPreview_||planetMapPath_!=doc.path||!gizmosVisible_||
+       hidden_.count(id)||locked_.count(id)||doc.revision!=planetRevision_)return false;
+    const auto chart=planetRegionChart(doc,*planetPreview_,id);
     if(!chart)return false;
-    const auto& body=planetDoc_->data.bodies[size_t(planetDoc_->data.findBody(chart->body))];
+    const auto& body=doc.data.bodies[size_t(doc.data.findBody(chart->body))];
     const auto view=viewCamera();
     const float lift=std::clamp(planetPreview_->radius*.009f,.25f,3.f);
     float best=11.f;std::optional<PlanetRegionHandle> hit;
@@ -1928,12 +1928,12 @@ bool StudioScene::beginPlanetRegionDrag(const std::string& id,float x,float y,fl
     planetRegionDrag_=PlanetRegionDrag{*chart,*hit,planetRevision_,{}};
     return true;
 }
-std::optional<Json> StudioScene::updatePlanetRegionDrag(float x,float y,float width,float height,
+std::optional<Json> StudioScene::updatePlanetRegionDrag(const editor::MapDoc& doc,float x,float y,float width,float height,
         bool symmetric,bool snap,bool finish){
     if(!planetRegionDrag_)return {};
     auto& drag=*planetRegionDrag_;drag.candidate.reset();
-    if(planetMode_&&planetPreview_&&planetDoc_&&planetRevision_==drag.revision&&
-       planetDoc_->revision==drag.revision&&planetPreview_->bodyId==drag.chart.body&&
+    if(planetMode_&&planetPreview_&&planetMapPath_==doc.path&&planetRevision_==drag.revision&&
+       doc.revision==drag.revision&&planetPreview_->bodyId==drag.chart.body&&
        selectedId_==drag.chart.owner&&!locked_.count(drag.chart.owner)&&!hidden_.count(drag.chart.owner)){
         float3 o,d;
         if(viewCamera().screenRay(x,y,width,height,o,d)){
@@ -1948,7 +1948,12 @@ std::optional<Json> StudioScene::updatePlanetRegionDrag(float x,float y,float wi
     }
     std::optional<Json> out;
     if(finish){
-        if(drag.candidate)out=planetRegionEditPayload(drag.chart,*drag.candidate,drag.revision);
+        if(drag.candidate){
+            const auto& a=drag.chart.area;const auto& b=*drag.candidate;
+            if(a.centerXcm!=b.centerXcm||a.centerZcm!=b.centerZcm||
+               a.halfWidthCm!=b.halfWidthCm||a.halfDepthCm!=b.halfDepthCm)
+                out=planetRegionEditPayload(drag.chart,b,drag.revision);
+        }
         cancelPlanetRegionDrag();
     }
     return out;
@@ -2004,17 +2009,17 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         if(!lightingRuntime_.shutdown(*device_,renderer_)||!device_->waitForResourceIdle())return;
         clearDocumentModels();sceneCacheValid_=false;cameraInitialized_=false;
         if(lightingModel_){renderer_.invalidateModelCachesFor(lightingModel_.get());releaseModel(*device_,*lightingModel_);lightingModel_.reset();}
-        planetMode_=true;planetDoc_=nullptr;clearTransformPreview();
+        planetMode_=true;planetMapPath_.clear();clearTransformPreview();
     }
     int body=-1;
     const int selected=studioMapEntityIndex(selectedId,doc);
     if(selected>=0)body=doc.data.findBody(doc.data.entities[size_t(selected)].at.getStr("body"));
-    if(body<0&&planetPreview_&&planetDoc_==&doc)body=doc.data.findBody(planetPreview_->bodyId);
+    if(body<0&&planetPreview_&&planetMapPath_==doc.path)body=doc.data.findBody(planetPreview_->bodyId);
     if(body<0)body=doc.data.findBody(doc.data.worldExtra.getStr("start"));
     if(body<0||!doc.data.bodies[size_t(body)].surface()){
         body=-1;for(size_t i=0;i<doc.data.bodies.size();++i)if(doc.data.bodies[i].surface()){body=int(i);break;}
     }
-    const bool changedBody=!planetPreview_||planetDoc_!=&doc||body<0||
+    const bool changedBody=!planetPreview_||planetMapPath_!=doc.path||planetModelProject_!=projectPath||body<0||
         planetPreview_->bodyId!=doc.data.bodies[size_t(body)].id;
     const bool changedDocument=changedBody||planetRevision_!=doc.revision;
     if(changedDocument){
@@ -2025,7 +2030,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         if(!changedBody && planetRevision_!=doc.revision)clearTransformPreview();
         if(planetTerrain_.vb.valid())device_->destroyBuffer(planetTerrain_.vb);
         if(planetTerrain_.ib.valid())device_->destroyBuffer(planetTerrain_.ib);
-        planetTerrain_=replacement;planetPreview_=std::move(next);planetDoc_=&doc;planetRevision_=doc.revision;
+        planetTerrain_=replacement;planetPreview_=std::move(next);planetMapPath_=doc.path;planetRevision_=doc.revision;
         planetProcessOverlays_=planetPreview_?buildPlanetProcessOverlays(doc,body,*planetPreview_):PlanetProcessOverlays{};
         if(changedBody){cameraInitialized_=false;clearTransformPreview();}
     }

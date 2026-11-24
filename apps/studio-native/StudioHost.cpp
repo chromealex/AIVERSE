@@ -1113,11 +1113,11 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
             if(session_->selectedObjectIds().size()>1)return false;
             const auto id=session_->selectedObjectId();
             if(session_->lockedIds().contains(id)||session_->hiddenIds().contains(id))return false;
-            if(!onScene([&]{return preview_->beginPlanetRegionDrag(id,float(x),float(y),float(w),float(h));}))return false;
+            if(!onScene([&]{return preview_->beginPlanetRegionDrag(map,id,float(x),float(y),float(w),float(h));}))return false;
             wpDrag_.active=true;wpDrag_.component="PlanetEvolveArea";return true;
         }
         if(!wpDrag_.active||wpDrag_.component!="PlanetEvolveArea")return false;
-        auto params=onScene([&]{return preview_->updatePlanetRegionDrag(
+        auto params=onScene([&]{return preview_->updatePlanetRegionDrag(map,
             float(x),float(y),float(w),float(h),symmetric,snap,phase==2);});
         if(phase==2){
             wpDrag_={};

@@ -89,6 +89,17 @@ void planetWorldProcessAuthoringWorkflow(){
     AIVERSE_TEST_CHECK(call("studio.setProperty",R"({"entityId":"entity:@region","componentId":"SurfacePlacement","key":"placement","value":{"body":"terra","face":2,"x":999,"y":1}})").has("error"));
     AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
     AIVERSE_TEST_CHECK(session.workspace().map.data.entities[0].at==oldPlacement);
+    const auto oldArea=session.workspace().map.data.entities[0].extra["components"]["EvolveArea"];
+    const auto rev=session.workspace().map.revision;
+    const auto bounds=std::string(R"({"entityId":"entity:@region","componentId":"EvolveArea","key":"bounds","expectedRevision":)")+std::to_string(rev)+
+        R"(,"value":{"offsetXcm":100,"offsetZcm":-200,"halfWidthCm":300,"halfDepthCm":400}})";
+    AIVERSE_TEST_CHECK(!call("studio.worldProcessAreaSet",bounds.c_str()).has("error"));
+    const auto& updated=session.workspace().map.data.entities[0].extra["components"]["EvolveArea"];
+    AIVERSE_TEST_CHECK(updated.getInt("offsetXcm")==100&&updated.getInt("offsetZcm")==-200);
+    AIVERSE_TEST_CHECK(updated.getInt("halfWidthCm")==300&&updated.getInt("halfDepthCm")==400);
+    AIVERSE_TEST_CHECK(call("studio.worldProcessAreaSet",bounds.c_str()).has("error"));
+    AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
+    AIVERSE_TEST_CHECK(session.workspace().map.data.entities[0].extra["components"]["EvolveArea"]==oldArea);
     AIVERSE_TEST_CHECK(!call("studio.setProperty",R"({"entityId":"entity:@region","componentId":"EvolveArea","key":"offsetXcm","value":-250})").has("error"));
     AIVERSE_TEST_CHECK(session.workspace().map.data.entities[0].extra["components"]["EvolveArea"].getInt("offsetXcm")==-250);
     AIVERSE_TEST_CHECK(!call("studio.setProperty",R"({"entityId":"entity:@region","componentId":"MorphNode","key":"gravityRelative","value":false})").has("error"));

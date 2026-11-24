@@ -135,8 +135,8 @@ public:
                                        const editor::MapDoc& map, bool fpsProject) const;
     // Ray through (x, y) onto the ground plane y = 0 (asset drops).
     bool groundPoint(float x, float y, float width, float height, render::float3& out) const;
-    bool beginPlanetRegionDrag(const std::string& id,float x,float y,float width,float height);
-    std::optional<Json> updatePlanetRegionDrag(float x,float y,float width,float height,bool symmetric,bool snap,bool finish);
+    bool beginPlanetRegionDrag(const editor::MapDoc& doc,const std::string& id,float x,float y,float width,float height);
+    std::optional<Json> updatePlanetRegionDrag(const editor::MapDoc& doc,float x,float y,float width,float height,bool symmetric,bool snap,bool finish);
     void cancelPlanetRegionDrag(){planetRegionDrag_.reset();}
     // Material slot names of a loaded content model (for the Inspector's Mesh Renderer).
     std::vector<std::string> modelMaterialSlots(const std::string& asset) const;
@@ -187,7 +187,7 @@ private:
         uint64_t revision=0; std::optional<evolve::Area> candidate; };
     std::optional<PlanetRegionDrag> planetRegionDrag_;
     void drawPlanetRegionHandles(const render::Camera& view,int width,int height,const editor::MapDoc& doc);
-    const editor::MapDoc* planetDoc_=nullptr;
+    std::string planetMapPath_;
     uint64_t planetRevision_=std::numeric_limits<uint64_t>::max();
     bool planetMode_=false;
     std::string planetDragId_;
