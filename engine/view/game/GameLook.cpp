@@ -120,6 +120,11 @@ const Model* GameView::modelOf(uint16_t type, size_t choice) const {
     return type < looks_.size() && choice < looks_[type].models.size() ? looks_[type].models[choice].model : nullptr;
 }
 
+const Model* GameView::projectileModelOf(uint16_t type,size_t weapon) const {
+    if(type>=looks_.size()||weapon>=looks_[type].projectiles.size())return nullptr;
+    return looks_[type].projectiles[weapon].model;
+}
+
 GameView::TypeLook::GroundShadow GameView::parseGroundShadow(const Json& gs) {
     TypeLook::GroundShadow S;
     if (!gs.isObject() || !gs["image"].isString()) return S;
