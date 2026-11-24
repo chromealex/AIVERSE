@@ -11,6 +11,50 @@ using namespace aiverse;using namespace aiverse::lib::systems;
 int main(){
     {
         using namespace aiverse::lib::mechanics;
+        AttackTimingState phase;
+        const Entity target{4,1};
+        beginAttackWindup(phase,target,Fixed::fromRatio(1,4));
+        CHECK(phase.phase==AttackPhase::Windup);
+        CHECK(!advanceAttackPhase(phase,Fixed::fromRatio(1,8)));
+        CHECK(cancelAttackWindup(phase)&&phase.phase==AttackPhase::Idle);
+        beginAttackWindup(phase,target,Fixed::fromRatio(1,4));
+        CHECK(advanceAttackPhase(phase,Fixed::fromRatio(1,4)));
+        commitAttackRelease(phase,Fixed::fromRatio(3,8));
+        CHECK(phase.phase==AttackPhase::Recovery&&!cancelAttackWindup(phase));
+        CHECK(advanceAttackPhase(phase,Fixed::fromRatio(3,8)));
+    }
+    {
+        using namespace aiverse::lib::mechanics;
+        Simulation timed(SimConfig{31,8,0,true},std::make_unique<game::GameCore>());
+        timed.setup(Json::parse(R"({"victory":"noUnits","types":{"shooter":{"health":{"max":100},"weapons":[{"range":8,"damage":10,"cooldown":0.125,"windup":0.25,"backswing":0.375}]},"target":{"health":{"max":100}}}})"),Json::parse(R"({"size":[8,8],"players":[{"name":"A","team":1},{"name":"B","team":2}],"terrain":{"rows":["........","........","........","........","........","........","........","........"]},"entities":[{"type":"shooter","owner":1,"pos":[2,2]},{"type":"target","owner":2,"pos":[4,2]}]})"));
+        Entity shooter,target;
+        timed.world().each<game::Unit>([&](Entity e,auto&){if(timed.world().has<game::Combat>(e))shooter=e;else target=e;});
+        CHECK(shooter.valid()&&target.valid());
+        auto combat=[&]()->game::Combat&{return timed.world().get<game::Combat>(shooter);};
+        auto hp=[&]{return timed.world().get<game::Unit>(target).hp;};
+        auto event=[&](uint16_t type){int count=0;for(const auto& e:timed.events())if(e.a==shooter&&e.type==type)++count;return count;};
+        combat().target=target;combat().autoTarget=false;
+        const auto initialHp=hp();
+        timed.step();CHECK(event(game::kEvAttackWindup)==1&&event(game::kEvAttack)==0&&hp()==initialHp);
+        CHECK(combat().attackTiming[0].phase==AttackPhase::Windup&&combat().cooldown[0].raw==0);
+        auto bytes=timed.serialize();auto hash=timed.checksum();CHECK(!bytes.empty());
+        timed.world().get<game::Buffs>(shooter).stunUntil=timed.tick()+1;
+        timed.step();CHECK(event(game::kEvAttackCancelled)==1&&event(game::kEvAttack)==0&&hp()==initialHp);
+        CHECK(combat().attackTiming[0].phase==AttackPhase::Idle&&combat().cooldown[0].raw==0);
+        std::string error;CHECK(timed.deserialize(bytes,&error)&&timed.checksum()==hash);
+        CHECK(combat().attackTiming[0].phase==AttackPhase::Windup);
+        timed.step();CHECK(event(game::kEvAttack)==0&&hp()==initialHp);
+        timed.step();CHECK(event(game::kEvAttack)==1&&hp()<initialHp);
+        CHECK(combat().attackTiming[0].phase==AttackPhase::Recovery);
+        auto afterHit=hp();timed.step();CHECK(hp()==afterHit&&event(game::kEvAttackWindup)==0);
+        timed.step();CHECK(hp()==afterHit&&event(game::kEvAttackWindup)==0);
+        timed.step();CHECK(event(game::kEvAttackRecoveryEnd)==1&&hp()==afterHit);
+        for(const char* invalid:{R"({"types":{"unit":{"weapons":[{"windup":-1}]}}})",R"({"types":{"unit":{"weapons":[{"backswing":"slow"}]}}})",R"({"types":{"unit":{"weapons":[{"windup":61}]}}})"}){
+            bool rejected=false;try{(void)game::loadRules(Json::parse(invalid));}catch(const std::runtime_error&){rejected=true;}CHECK(rejected);
+        }
+    }
+    {
+        using namespace aiverse::lib::mechanics;
         // Integer-ratio test values are exactly representable in 16.16.
         const Fixed elapsed=Fixed::fromRatio(1,8), period=Fixed::fromRatio(3,16);
         Fixed remaining{};uint32_t count=0;
