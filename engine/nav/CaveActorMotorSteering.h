@@ -4,6 +4,7 @@
 // selects a normal actor::Input for the existing authoritative moveActor /
 // moveActorModes motor. An explicit ActorHost opt-in calls this before motor.
 #include "engine/nav/CaveSimulationNavigation.h"
+#include "engine/world/TerraWeaveCavernsGraphSolvers.h"
 #include "engine/actor/ActorComponents.h"
 #include "engine/core/FixedMath.h"
 #include <cstdint>
@@ -81,5 +82,65 @@ inline bool steerCaveActorMotor(
     input.forward=1000;
     input.right=0;
     return true;
+}
+
+// Repath happens IN the existing ActorHost's authoritative actor tick,
+// BEFORE the native character motor. It reads CharacterBody (not Transform)
+// and cannot create a second movement owner.
+inline CaveRepathTickStats repathCaveActorRoutes(
+    Simulation& sim,
+    const terraweave::caverns::CaveNavigationDataProvider& provider,
+    uint32_t budget=8) {
+    using namespace terraweave::caverns;
+    CaveRepathTickStats out;
+    sim.world().each<CaveRouteIntent,CaveRouteFollower,actor::CharacterBody>(
+        [&](Entity entity,CaveRouteIntent& intent,CaveRouteFollower& route,
+            actor::CharacterBody& body) {
+        (void)entity;
+        if(!intent.active||out.attempted>=budget||body.vehicle)return;
+        if(route.sourceRevision!=provider.revision()||
+           route.environmentRevision!=provider.environmentRevision()){
+            if(!route.needsRepath)intent.repathNotBeforeTick=sim.tick();
+            route.needsRepath=true;
+        }
+        if(!route.needsRepath||sim.tick()<intent.repathNotBeforeTick)return;
+        CavePathBackend backend=CavePathBackend::AStar;
+        if(intent.algorithm=="hpa")backend=CavePathBackend::HPAStar;
+        else if(intent.algorithm=="flow")backend=CavePathBackend::FlowField;
+        else if(intent.algorithm=="hybrid")backend=CavePathBackend::Hybrid;
+        else if(intent.algorithm!="astar"){
+            ++out.unavailable;return; // custom engines supply own actor hook
+        }
+        ++out.attempted;
+        const auto cm=[](Fixed f)->int64_t {
+            return f.raw*100/Fixed::kOne;
+        };
+        CavePathQuery request;
+        request.start={cm(body.pos.x),cm(body.pos.y),cm(body.pos.z)};
+        request.goal=intent.goal;
+        request.agent=route.agent;
+        request.sourceRevision=provider.revision();
+        request.maxVisits=intent.maxVisits;
+        auto path=solveCaveGraph(request,
+            std::shared_ptr<const CaveNavigationDataProvider>(
+                &provider,[](const CaveNavigationDataProvider*){}),
+            backend);
+        if(!path.reached || path.waypoints.empty()){
+            ++out.failed;
+            if(intent.attempts<UINT32_MAX)++intent.attempts;
+            const auto delay=std::max(1u,intent.retryTicks);
+            intent.repathNotBeforeTick=sim.tick()>UINT32_MAX-delay
+                ?UINT32_MAX:sim.tick()+delay;
+            return;
+        }
+        route.waypoints=std::move(path.waypoints);
+        route.sourceRevision=provider.revision();
+        route.environmentRevision=provider.environmentRevision();
+        route.current=0;
+        route.arrived=false;route.needsRepath=false;
+        intent.attempts=0;intent.repathNotBeforeTick=sim.tick();
+        ++out.assigned;
+    });
+    return out;
 }
 } // namespace aiverse::nav
