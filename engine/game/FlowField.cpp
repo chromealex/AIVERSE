@@ -159,12 +159,14 @@ void MapGrid::flowValidate(FlowField& f) {
 }
 
 void MapGrid::flowBuildFull(FlowField& f) {
+    const auto workStart=pathWorkStart();
     if (f.clear > 0 && clearanceDirty) updateClearance();
     std::vector<std::pair<int32_t, uint32_t>> sd;
     for (int32_t s : f.seeds) sd.push_back({s, 0u});
     flowLocal(-1, sd, f.layer, f.clear, f.value);
     f.dir.assign(f.value.size(), int8_t(-2));
     f.built = true;
+    recordPathWork(pathTelemetry_.flowFull,1,workStart);
 }
 
 // Abstract level: D[node] = cost from an HPA* entrance to the goal area. Seeded from the goal clusters, then a
@@ -295,11 +297,13 @@ int MapGrid::flowBlock(FlowField& f, int c) {
         f.blockCluster.push_back(c);
         f.blockVal.emplace_back(); f.blockDir.emplace_back(); f.blockSeedHash.push_back(0); f.blockStamp.push_back(0); f.blockBuilt.push_back(0);
     }
+    const auto workStart=pathWorkStart();
     flowLocal(c, sd, f.layer, 0, f.blockVal[size_t(b)]);
     f.blockDir[size_t(b)].assign(f.blockVal[size_t(b)].size(), int8_t(-2));
     f.blockSeedHash[size_t(b)] = hash;
     f.blockBuilt[size_t(b)] = flowStamp_;
     f.blockStamp[size_t(b)] = f.stamp;
+    recordPathWork(pathTelemetry_.flowCluster,1,workStart);
     return b;
 }
 
