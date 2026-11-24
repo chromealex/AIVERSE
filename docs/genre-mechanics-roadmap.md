@@ -76,3 +76,7 @@ IN PROGRESS — planetary chart cut/collar preflight on the existing Caverns own
 ### Stage54q — IN PROGRESS
 
 Connect the certified coarse chart cut to the existing exact collar owner and stage the replacement surface in Studio. Acceptance: a single immutable refined chart plan, Q16 grid and exterior boundary certificate, bounded demand restored on refusal, revision-safe same-frame draw selection, original solid surface on failure, no new physics or gameplay owner. Register regression source in the existing Studio test target. Native GPU/CPU and frontend acceptance remains pending.
+
+### Stage54r — IN PROGRESS
+
+Full bounded local chart volume, preserving non-rim slots during paired preview. Acceptance: chart-covering <=64 slot lattice with bounded presentation field, camera-distance per-slot LOD with hysteresis, exact rim slots forced to finest LOD, complete same-revision chart batch and conservative finest-lattice fallback on incompatible contours. No new authority, no gameplay field change; regression source and handoff required. Native/hardware acceptance pending.
