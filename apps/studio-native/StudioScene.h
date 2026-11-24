@@ -224,6 +224,7 @@ private:
     // CPU triangles from the same successful upload used by the Scene.
     std::optional<render::MeshBuilder> planetLiveTerrainCpu_;
     bool planetLiveTerrainVisible_=false;
+    float planetAuthoredOccluderRadius_=0.f,planetLiveOccluderRadius_=0.f;
     const render::MeshBuilder* visiblePlanetTerrain()const{
         return planetLiveTerrainVisible_&&planetLiveTerrainCpu_?&*planetLiveTerrainCpu_:nullptr;
     }

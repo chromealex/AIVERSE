@@ -586,11 +586,43 @@ void StudioScene::syncDocumentModels(
     }
 }
 
+// The preview terrain is a closed cube-sphere shell. A sphere contained
+// inside all its triangle planes is a conservative occluder even with relief.
+static float studioPlanetInnerRadius(const render::MeshBuilder& mesh){
+    const auto& vertices=mesh.vertices();const auto& indices=mesh.indices();
+    if(indices.empty()||indices.size()%3)return 0.f;
+    float inner=std::numeric_limits<float>::infinity();
+    for(size_t i=0;i<indices.size();i+=3){
+        if(indices[i]>=vertices.size()||indices[i+1]>=vertices.size()||indices[i+2]>=vertices.size())return 0.f;
+        const auto a=vertices[indices[i]].pos,b=vertices[indices[i+1]].pos,c=vertices[indices[i+2]].pos;
+        const auto n=render::cross(b-a,c-a);const float len=std::sqrt(render::dot(n,n));
+        if(!std::isfinite(len)||len<=1e-8f)return 0.f;
+        const float distance=std::abs(render::dot(n,a))/len;
+        if(!std::isfinite(distance))return 0.f;
+        inner=std::min(inner,distance);
+    }
+    return std::isfinite(inner)?std::max(0.f,inner*.995f-.01f):0.f;
+}
+static bool studioPlanetOccludesSphere(const render::Camera& view,render::float3 center,float bound,float inner){
+    if(!(inner>0.f&&bound>=0.f))return false;
+    const auto eye=view.eye();
+    if(view.ortho){
+        const auto axis=render::normalize(eye-view.target);
+        const float along=render::dot(center,axis);
+        const auto perpendicular=center-axis*along;
+        return along+bound<0.f&&std::sqrt(render::dot(perpendicular,perpendicular))+bound<inner;
+    }
+    const auto toCenter=center-eye;
+    const float e=std::sqrt(render::dot(eye,eye)),d=std::sqrt(render::dot(toCenter,toCenter));
+    if(!(e>inner&&d>bound&&d-bound>std::sqrt(e*e-inner*inner)))return false;
+    const float angle=std::acos(std::clamp(render::dot(toCenter,eye*(-1.f))/(d*e),-1.f,1.f));
+    return angle+std::asin(std::clamp(bound/d,0.f,1.f))<std::asin(std::clamp(inner/e,0.f,1.f));
+}
 void StudioScene::clearLivePlanetTerrain(){
     if(planetLiveTerrain_.vb.valid())device_->destroyBuffer(planetLiveTerrain_.vb);
     if(planetLiveTerrain_.ib.valid())device_->destroyBuffer(planetLiveTerrain_.ib);
     planetLiveTerrain_={};planetLiveTerrainGrid_=Json{};
-    planetLiveTerrainCpu_.reset();planetLiveTerrainVisible_=false;
+    planetLiveTerrainCpu_.reset();planetLiveTerrainVisible_=false;planetLiveOccluderRadius_=0.f;
 }
 bool StudioScene::syncLivePlanetTerrain(const editor::MapDoc& doc,const std::string& projectPath){
     const auto& layer=planetLiveSnapshot_["forestTerrain"];
@@ -609,6 +641,7 @@ bool StudioScene::syncLivePlanetTerrain(const editor::MapDoc& doc,const std::str
         return false;
     }
     clearLivePlanetTerrain();planetLiveTerrain_=next;planetLiveTerrainGrid_=grid;
+    planetLiveOccluderRadius_=studioPlanetInnerRadius(*mesh);
     planetLiveTerrainCpu_=std::move(mesh);return true;
 }
 void StudioScene::clearPlanetForestFarMesh(){
@@ -821,7 +854,8 @@ void StudioScene::drawPlanetForestFarChunks(const Json& rows,float flora,int wid
     const auto eye=view.eye();
     struct Candidate { int64_t cell; bool horizon; float distance; size_t bytes; };
     std::vector<Candidate> order;
-    size_t frustumRejected=0;
+    size_t frustumRejected=0,horizonRejected=0;
+    const float inner=planetLiveTerrainVisible_?planetLiveOccluderRadius_:planetAuthoredOccluderRadius_;
     constexpr size_t gpuBudget=64u*1024u*1024u;
     // Each proxy is six vertices and twelve uint32 indices. Use the actual
     // CPU upload vertex type and a conservative overhead per resident chunk.
@@ -847,9 +881,9 @@ void StudioScene::drawPlanetForestFarChunks(const Json& rows,float flora,int wid
             if(a*center.x+b*center.y+c*center.z+d+std::abs(a)*half.x+std::abs(b)*half.y+std::abs(c)*half.z+pad<0)outside=true;
         }
         if(outside){++frustumRejected;continue;}
+        if(studioPlanetOccludesSphere(view,center,std::sqrt(render::dot(half,half)),inner)){++horizonRejected;continue;}
         const auto delta=center-eye;
-        // Horizon is a priority only: authored/live relief may expose a
-        // silhouette behind the reference sphere. Never falsely cull it.
+        // Non-occluded back-facing relief remains eligible, at lower priority.
         const bool behind=render::dot(center,view.ortho?eye-view.target:eye-center)<0.f;
         order.push_back({cell,behind,render::dot(delta,delta),chunkRows.size()*proxyBytes+4096u});
     }
@@ -881,22 +915,23 @@ void StudioScene::drawPlanetForestFarChunks(const Json& rows,float flora,int wid
     constexpr size_t maxUploadsPerFrame=16;
     size_t residentBytes=0;
     for(const auto& [cell,chunk]:planetForestFarChunks_)residentBytes+=chunk.bytes;
-    std::vector<int64_t> drawCells;
+    std::vector<int64_t> drawCells,pendingCells;
     for(const auto& candidate:order){
         const auto cell=candidate.cell;if(!resident.count(cell))continue;
         const auto& chunkRows=requested.at(cell);
         auto found=planetForestFarChunks_.find(cell);
         if(found==planetForestFarChunks_.end()||!(found->second.rows==chunkRows)||found->second.scale!=flora){
-            if(uploads>=maxUploadsPerFrame||!acquireIdle()){++pending;continue;}
-            const size_t previous=found==planetForestFarChunks_.end()?0:found->second.bytes;
-            // Reserve space for the new allocation while the old one is live.
+            if(uploads>=maxUploadsPerFrame||!acquireIdle()){++pending;pendingCells.push_back(cell);continue;}
+            // Prefer allocating the replacement before releasing the old mesh.
             if(candidate.bytes>gpuBudget-std::min(gpuBudget,residentBytes)){
+                // If temporary double allocation cannot fit, free only this
+                // obsolete mesh and use the current-tick fallback until retry.
                 if(found!=planetForestFarChunks_.end()){
                     if(found->second.mesh.vb.valid())device_->destroyBuffer(found->second.mesh.vb);
                     if(found->second.mesh.ib.valid())device_->destroyBuffer(found->second.mesh.ib);
-                    residentBytes-=previous;planetForestFarChunks_.erase(found);
+                    residentBytes-=found->second.bytes;planetForestFarChunks_.erase(found);
                 }
-                if(candidate.bytes>gpuBudget-std::min(gpuBudget,residentBytes)){++pending;continue;}
+                if(candidate.bytes>gpuBudget-std::min(gpuBudget,residentBytes)){++pending;pendingCells.push_back(cell);continue;}
             }
             render::MeshBuilder builder;
             for(const auto& row:chunkRows.items()){
@@ -924,7 +959,7 @@ void StudioScene::drawPlanetForestFarChunks(const Json& rows,float flora,int wid
             if(!next.vb.valid()||!next.ib.valid()){
                 if(next.vb.valid())device_->destroyBuffer(next.vb);
                 if(next.ib.valid())device_->destroyBuffer(next.ib);
-                ++pending;continue;
+                ++pending;pendingCells.push_back(cell);continue;
             }
             auto& chunk=planetForestFarChunks_[cell];
             if(chunk.mesh.vb.valid())device_->destroyBuffer(chunk.mesh.vb);
@@ -939,8 +974,30 @@ void StudioScene::drawPlanetForestFarChunks(const Json& rows,float flora,int wid
     }
     // Do not destroy or upload a chunk after submitting a draw for it.
     for(const auto cell:drawCells)renderer_.drawMesh(planetForestFarChunks_.at(cell).mesh,render::mat4{},{1,1,1,1},render::kDrawNoCastShadow);
+    // A stale chunk can contain harvested plants or newly promoted detail.
+    // Never draw it while a rebuild is pending. Draw bounded, current-tick
+    // tangent proxies using the already resident primitive instead.
+    size_t pendingProxies=0;
+    constexpr size_t maxPendingProxies=2048;
+    for(const auto cell:pendingCells){
+        for(const auto& row:requested.at(cell).items()){
+            if(pendingProxies>=maxPendingProxies)break;
+            const auto p=studioForestVec(row["position"]),up=studioForestVec(row["up"]),east=studioForestVec(row["east"]);
+            const auto size=row.getInt("sizePermille");
+            if(!p||!up||!east||size<=0||size>1000)continue;
+            const auto frame=studioForestFrame(*p,*up,*east);if(!frame)continue;
+            const float h=flora*float(size)*.001f*(row.getBool("shrub")?1.5f:6.f);
+            const float cover=float(std::clamp<int64_t>(row.getInt("foliagePermille"),0,1000))*.001f;
+            const float w=h*(.035f+.24f*cover);
+            const render::float4 color=cover>0.f?render::float4{.13f,.31f,.10f,1}:render::float4{.27f,.15f,.08f,1};
+            renderer_.drawMesh(cube_,*frame*render::mat4::translate({0,h*.5f,0})*render::mat4::scale({w*2,h,w*2}),color,render::kDrawNoCastShadow);
+            ++pendingProxies;
+        }
+        if(pendingProxies>=maxPendingProxies)break;
+    }
     lightingStatus_+=" · far forest proxies "+std::to_string(drawn)+" · resident chunks "+std::to_string(drawCells.size())+"/"+std::to_string(requested.size());
-    lightingStatus_+=" · frustum rejected "+std::to_string(frustumRejected)+" · budget rejected "+std::to_string(budgetRejected)+" · estimated GPU KiB "+std::to_string(residentBytes/1024);
+    if(pendingProxies)lightingStatus_+=" · temporary proxies "+std::to_string(pendingProxies);
+    lightingStatus_+=" · frustum rejected "+std::to_string(frustumRejected)+" · horizon rejected "+std::to_string(horizonRejected)+" · budget rejected "+std::to_string(budgetRejected)+" · estimated GPU KiB "+std::to_string(residentBytes/1024);
     if(pending)lightingStatus_+=" · pending far chunks "+std::to_string(pending);
 }
 void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std::string& projectPath,int width,int height){
@@ -2646,6 +2703,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         if(planetTerrain_.vb.valid())device_->destroyBuffer(planetTerrain_.vb);
         if(planetTerrain_.ib.valid())device_->destroyBuffer(planetTerrain_.ib);
         planetTerrain_=replacement;planetPreview_=std::move(next);planetMapPath_=doc.path;planetRevision_=doc.revision;
+        planetAuthoredOccluderRadius_=planetPreview_?studioPlanetInnerRadius(planetPreview_->mesh):0.f;
         planetProcessOverlays_=planetPreview_?buildPlanetProcessOverlays(doc,body,*planetPreview_):PlanetProcessOverlays{};
         planetForestOverlayRecipe_=studioForestOverlayRecipe(doc,rules);
         planetForestOverlays_=planetPreview_?buildPlanetForestOverlays(doc,rules,body,*planetPreview_):PlanetForestOverlays{};
