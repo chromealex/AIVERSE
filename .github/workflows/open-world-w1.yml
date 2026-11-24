@@ -59,7 +59,7 @@ jobs:
           cmake -S . -B build/open-world-w1 -DCMAKE_BUILD_TYPE=Debug \
             -DAIVERSE_BUILD_TESTS=ON \
             -DAIVERSE_BUILD_EDITOR=OFF \
-            -DAIVERSE_BUILD_TOOLS=OFF \
+            -DAIVERSE_BUILD_TOOLS=ON \
             -DAIVERSE_FETCH_TEMPLATES=OFF \
             2>&1 | tee w1-configure.log
       - name: Build all W1 source and integration fixtures
@@ -78,6 +78,7 @@ jobs:
             aiverse_actor_region_admission_test \
             aiverse_race_region_respawn_gate_test \
             aiverse_region_dirty_queue_test \
+            aiverse_fps_tests aiverse_world_operator_jobs_tests aiversemcp \
             2>&1 | tee w1-build.log
       - name: Run all W1 tests with explicit no-tests-error
         shell: bash
@@ -85,7 +86,7 @@ jobs:
           set -euo pipefail
           ctest --test-dir build/open-world-w1 --output-on-failure \
             --no-tests=error \
-            -R '^(region_entity_ledger_test|region_ecs_bridge_test|region_cold_store_test|region_gamecore_integration_test|vehicle_region_group_test|actor_vehicle_region_group_test|actor_region_position_test|actor_region_lifecycle_test|actor_region_admission_test|race_region_respawn_gate_test|region_dirty_queue_test)$' \
+            -R '^(region_entity_ledger_test|region_ecs_bridge_test|region_cold_store_test|region_gamecore_integration_test|vehicle_region_group_test|actor_vehicle_region_group_test|actor_region_position_test|actor_region_lifecycle_test|actor_region_admission_test|race_region_respawn_gate_test|region_dirty_queue_test|authority_world_persistence|world_operator_jobs|world_persistence_mcp_stdio)$' \
             2>&1 | tee w1-ctest.log
       - name: Archive native evidence including failures
         if: always()
