@@ -45,7 +45,7 @@ void registerShaderGraphOps(Workspace& ws) {
     ws.registerOp({"shader_graph_set","Validate and atomically save shaders/<name>.json. Existing assets require expected original graph; missing expected means create-only. Applying is separate.",schema,[&ws](const Json& p){
         const auto r=result(p["graph"]);const auto path=graphPath(ws,p.getStr("name"));
         const auto text=p["graph"].dump(2)+"\n";if(text.size()>256*1024)throw std::runtime_error("graph exceeds 256 KiB");
-        graph_asset::Transaction tx(path);
+        graph_asset::Transaction tx(path,ws.project.dir);
         tx.checkExpected(p,[&]{return load(ws,p.getStr("name"));});
         tx.replace(text,256*1024);return r;
     }});
