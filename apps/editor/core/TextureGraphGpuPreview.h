@@ -3,6 +3,7 @@
 #include "engine/render/graph/TextureGraphGpu.h"
 #include "engine/render/graph/TextureGraphPipelineCache.h"
 #include "engine/render/graph/TextureGraphSharedScratch.h"
+#include "engine/render/graph/TextureGraphPassSchedule.h"
 #include <limits>
 #include "engine/render/graph/TextureGraphMaterialBinding.h"
 #include "engine/view/AppearanceAssetRegistry.h"
@@ -35,6 +36,7 @@ class TextureGraphGpuPreview {
         idlePipelines_.clear([&](auto& e){destroyPair(dev,e.first,e.second);});
     }
     size_t capacity_=0,received_=0,blocks_=0,scratchBytes_=0;
+    size_t plannedPasses_=0,plannedSlotBytes_=0;
     int passes_=0;bool reused_=false,reusedBuffers_=false,inFlight_=false,bake_=false,published_=false,setBake_=false;
     Json sourceGraph_,overrides_;
     std::vector<std::pair<std::string,size_t>> setOutputs_;
@@ -100,7 +102,7 @@ class TextureGraphGpuPreview {
             reason_="all declared outputs completed";return;
         }
         const auto& next=setOutputs_[setImages_.size()];output_=next.first;target_=next.second;
-        received_=blocks_=scratchBytes_=0;passes_=0;reused_=reusedBuffers_=cacheHit_=reusedScratch_=false;pixels_.clear();
+        received_=blocks_=scratchBytes_=0;plannedPasses_=plannedSlotBytes_=0;passes_=0;reused_=reusedBuffers_=cacheHit_=reusedScratch_=false;pixels_.clear();
         backend_="none";reason_.clear();queued_=true;state_="queued";
     }
     // One range in flight, with exact offset and length. No graphics stalls.
@@ -118,6 +120,8 @@ public:
         r.set("busy",Json::fromBool(active()||inFlight_));
         r.set("draining",Json::fromBool(inFlight_&&(state_=="cancelled"||state_=="failed")));
         r.set("timeoutMs",Json::number(int64_t(timeoutMs_)));
+        r.set("plannedPasses",Json::number(int64_t(plannedPasses_)));
+        r.set("plannedSlotBytes",Json::number(int64_t(plannedSlotBytes_)));
         r.set("encodedPasses",Json::number(int64_t(passes_)));r.set("plannedScratchBytes",Json::number(int64_t(scratchBytes_)));
         r.set("bake",Json::fromBool(bake_));r.set("setBake",Json::fromBool(setBake_));
         r.set("completedOutputs",Json::number(int64_t(published_&&setBake_?setOutputs_.size():setImages_.size())));r.set("totalOutputs",Json::number(int64_t(setOutputs_.size())));
@@ -156,7 +160,7 @@ public:
         sourceGraph_=setBake?p["graph"]:Json();overrides_=setBake?(p.has("overrides")?p["overrides"]:Json::object()):Json();
         setOutputs_.clear();setImages_.clear();setBackends_.clear();reusedOutputs_=0;
         if(setBake_){for(const auto& pair:program_->outputs)setOutputs_.push_back(pair);setImages_.reserve(setOutputs_.size());setBackends_.reserve(setOutputs_.size());}
-        passes_=0;blocks_=received_=scratchBytes_=0;reused_=reusedBuffers_=cacheHit_=false;requireGpu_=p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=true;state_="queued";return status();
+        plannedPasses_=plannedSlotBytes_=0;passes_=0;blocks_=received_=scratchBytes_=0;reused_=reusedBuffers_=cacheHit_=false;requireGpu_=p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=true;state_="queued";return status();
     }
     void checkProject(const std::string& project){
         if(!project_.empty()&&project_!=project){discard("cancelled","project changed");project_.clear();}
@@ -286,8 +290,25 @@ public:
             const auto scalarTarget=std::string(node.info->id)=="normal"?node.inputs[0]:target_;
             reusedScratch_=sharedScratch_.begin({serial_,scalarTarget,size_,vulkan});
         }else if(plan.twoPass)sharedScratch_.invalidate();
-        if((!reusedScratch_&&!dispatch(compute_,plan.twoPass?scratch_:buffer_,{}))||
-            (plan.twoPass&&!dispatch(secondCompute_,buffer_,scratch_))){fallback("GPU dispatch rejected");return;}
+        using namespace render::texture_graph::gpu;
+        PassSchedule schedule;
+        schedule.slotBytes={bytes};
+        if(plan.twoPass||scratch_.valid())schedule.slotBytes.push_back(bytes);
+        if(plan.twoPass){
+            if(reusedScratch_)schedule.externalReady={1};
+            else schedule.passes.push_back({0,1,{}});
+            schedule.passes.push_back({1,0,{1}});
+        }else schedule.passes.push_back({0,0,{}});
+        plannedPasses_=schedule.passes.size();
+        plannedSlotBytes_=bytes*schedule.slotBytes.size();
+        const auto encoded=encodePassSchedule(schedule,8u*1024u*1024u,[&](const ScheduledPass& pass){
+            const auto pipeline=pass.pipeline==0?compute_:secondCompute_;
+            const auto output=pass.output==0?buffer_:scratch_;
+            const auto input=pass.inputs.empty()?gfx::BufferHandle{}:
+                (pass.inputs.front()==0?buffer_:scratch_);
+            return dispatch(pipeline,output,input);
+        });
+        if(!encoded.complete){fallback("GPU pass schedule or dispatch rejected");return;}
         pixels_.assign(bytes,0);state_="pending";
         if(!queueRange(dev))fallback("GPU readback request rejected");
     }

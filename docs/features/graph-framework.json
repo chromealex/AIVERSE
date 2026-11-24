@@ -102,7 +102,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 34A in progress: bounded explicit compute pass scheduling with initialized resource validation and dispatch failure propagation.",
+      "note": "Stage 34A explicit bounded GPU pass schedule integrated into existing native fused/two-pass paths; arbitrary DAG lowering and hardware acceptance pending.",
       "evidence": []
     },
     "architecture": {
@@ -172,7 +172,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 32A/33A standalone policy evidence retained in handoffs; Stage 33B standalone exact-source C++20 DAG liveness fixture PASS (Linux GCC 14.2); integrated parity fixture, CTest, native/Studio/GPU and Mac gate NOT RUN.",
+      "note": "Stage 34A exact-source standalone C++20 pass schedule fixture PASS (GCC 14.2). Integrated native/Studio/GPU and Mac gate NOT RUN; previous isolated evidence in handoffs.",
       "evidence": []
     },
     "handoff": {
