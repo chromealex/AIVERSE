@@ -54,7 +54,7 @@ export default function MaterialGraphPanel({name,material,draft,projectPath,disa
   {fields.map(f=><PropertyField key={f.key} property={f} disabled={disabled||busy} onChange={v=>onEdit(f.key,v)}/>)}
   <small>Dependency view of the material draft; edit channels using the existing asset picker. Shader evaluation remains in Shader Graph.</small>
   </StudioSection></div>
-  <div hidden={mode!=='texture'}><TextureGraphPanel active={mode==='texture'} projectPath={projectPath} disabled={disabled||busy} onEdit={onEdit}/></div>
+  {mode==='texture'&&<TextureGraphPanel projectPath={projectPath} disabled={disabled||busy} onEdit={onEdit}/>}
   <div hidden={mode!=='quick'} className="material-quick-view">
   <StudioSection title="Generate texture">
    <StudioSelect aria-label="Pattern" disabled={busy||disabled} value={recipe.pattern} onChange={e=>setRecipe(r=>({...r,pattern:e.target.value}))}>{patterns.map(p=><option key={p}>{p}</option>)}</StudioSelect>

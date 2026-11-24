@@ -41,3 +41,5 @@
 .tg-expanded{position:fixed;inset:0;z-index:1000;overflow:auto;background:var(--au-canvas)}
 .tg-expanded .tg-main,.tg-expanded .tg-inspector{height:calc(100vh - 130px);max-height:none}
 @media(max-width:680px){.tg-body{grid-template-columns:minmax(0,1fr)}.tg-inspector{width:100%!important}.tg-expanded .tg-main{height:460px}}
+
+.tg-pbr-controls{display:grid;gap:4px}.tg-pbr-controls label{display:grid;grid-template-columns:64px minmax(0,1fr);align-items:center;gap:5px}.tg-pbr-controls input{min-width:0;width:100%}.tg-image canvas{touch-action:none}
