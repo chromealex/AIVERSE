@@ -35,6 +35,23 @@ int main() {
         const terraweave::caverns::CavePlanetAnchor anchor{
             body.id,0,Fixed::fromInt(32),Fixed::fromInt(32),1000};
         auto region=pc::create(map,anchor);
+        map.extra.set(pc::key,pc::encode(map,region));
+        auto regions=pc::readRegions(map);
+        AIVERSE_TEST_CHECK(regions.active==1&&regions.next==2&&regions.regions.size()==1);
+        auto second=anchor;second.a=Fixed::fromInt(4);second.b=Fixed::fromInt(4);second.halfExtentCm=100;
+        AIVERSE_TEST_CHECK(pc::addRegion(map,regions,pc::create(map,second))==2);
+        AIVERSE_TEST_CHECK(regions.active==2&&regions.regions.size()==2);
+        bool overlap=false;
+        try{(void)pc::addRegion(map,regions,pc::create(map,anchor));}
+        catch(const std::invalid_argument&){overlap=true;}
+        AIVERSE_TEST_CHECK(overlap&&regions.next==3);
+        map.extra.set(pc::key,pc::encodeRegions(map,regions));
+        const auto restoredRegions=pc::readRegions(map);
+        AIVERSE_TEST_CHECK(restoredRegions.active==2&&restoredRegions.next==3);
+        AIVERSE_TEST_CHECK(pc::read(map).anchor.a==second.a);
+        regions.active=1;
+        map.extra.set(pc::key,pc::encodeRegions(map,regions));
+        AIVERSE_TEST_CHECK(pc::read(map).anchor.a==anchor.a);
         const auto frame=pc::frameForDocument(map,anchor);
         const auto patch=pc::captureLocalSurface(map,anchor,7);
         AIVERSE_TEST_CHECK(!patch.cells.empty());
