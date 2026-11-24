@@ -101,6 +101,7 @@ StudioSession::StudioSession(const std::string& engineRoot, const std::string& p
         // A project opened from the CLI follows the same content policy as
         // projects chosen through the native Open Project panel.
         (void)studioContentRoot(ws_.project.dir);
+        loadAssetHistory();
     }
 }
 int StudioSession::indexFor(const std::string& id) const {
@@ -532,7 +533,7 @@ Json StudioSession::openProject(const std::string& path) {
     if (!ws_.openGame(directory, &error))
         throw std::runtime_error(error.empty() ? "Unable to open project" : error);
     (void)studioContentRoot(ws_.project.dir);
-    pendingAssetTransfer_.reset();assetHistory_.reset();
+    pendingAssetTransfer_.reset();loadAssetHistory();
     clearSelection();hidden_.clear();locked_.clear();
     facialPreview_.reset(); // project identity may change; never reuse prior GUID
     previewMaterialName_.clear();
@@ -721,7 +722,12 @@ bool StudioSession::pollAgentLink() {
         if(name=="open_game"||name=="open_project"||name=="create_game"||name=="create_project")assetHistory_.reset();
         const auto assetProjectBefore=ws_.project.dir;
         const Json result=agentLinkedCall(name,args);
-        if(assetProjectBefore!=ws_.project.dir)assetHistory_.reset();
+        if(assetProjectBefore!=ws_.project.dir){
+            // The legacy open route bypasses the Studio journal recovery.
+            // Never attach persisted history until native project open.
+            assetHistory_=editor::ProjectHistory{};
+            assetHistoryPersistenceWarning_="Reopen through Studio to load saved asset history";
+        }
         const bool failed=result.has("error");
         const bool sameProject=assetProjectBefore==ws_.project.dir;
         const bool sameMap=sameProject&&sourceMap==ws_.map.path;
@@ -1293,6 +1299,21 @@ Json StudioSession::historyJson() const {
 std::string StudioSession::assetHistoryVersion() const {
     return ws_.project.dir+"|assets|"+assetHistory_.versionToken();
 }
+void StudioSession::loadAssetHistory(){
+    assetHistory_=editor::ProjectHistory{};assetHistoryPersistenceWarning_.clear();
+    try{assetHistory_=studioLoadAssetHistoryCheckpoint(ws_.project.dir);}
+    catch(const std::exception& e){assetHistoryPersistenceWarning_=e.what();}
+}
+void StudioSession::finishAssetHistoryPublication(StudioAssetHistoryPublication& publication,bool success) noexcept{
+    try{
+        if(success)publication.save(assetHistory_);
+        else if(!publication.cancelUnchanged(assetHistory_)){
+            assetHistoryPersistenceWarning_="Asset operation did not complete; saved history fenced until next checkpoint";
+            return;
+        }
+        assetHistoryPersistenceWarning_.clear();
+    }catch(const std::exception& e){assetHistoryPersistenceWarning_=e.what();}
+}
 Json StudioSession::assetHistoryJson() const {
     Json out=Json::object(),steps=Json::array();
     size_t i=0;
@@ -1301,6 +1322,8 @@ Json StudioSession::assetHistoryJson() const {
         row.set("done",Json::fromBool(i++<assetHistory_.position()));steps.push(std::move(row));
     }
     out.set("scope",str("assets"));out.set("steps",std::move(steps));
+    out.set("persistent",Json::fromBool(true));
+    if(!assetHistoryPersistenceWarning_.empty())out.set("persistenceWarning",str(assetHistoryPersistenceWarning_));
     out.set("position",Json::number(int64_t(assetHistory_.position())));
     out.set("bytes",Json::number(int64_t(assetHistory_.bytes())));
     out.set("maxSteps",Json::number(int64_t(editor::ProjectHistory::MaxSteps)));
@@ -1361,6 +1384,7 @@ Json StudioSession::dispatch(const Json& request) {
     }
     if(method=="studio.assetHistory"||method=="studio.assetHistoryStep"){
         Json reply=Json::object();reply.set("id",request["id"]);
+        std::unique_ptr<StudioAssetHistoryPublication> publication;
         try {
             if(!request.isObject()||!request["id"].isNumber())throw std::runtime_error("Invalid request envelope");
             if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
@@ -1373,6 +1397,7 @@ Json StudioSession::dispatch(const Json& request) {
                 if(direction!="undo"&&direction!="redo")throw std::runtime_error("Invalid asset history direction");
                 const bool redo=direction=="redo";
                 const auto& entry=assetHistory_.next(redo);
+                publication=std::make_unique<StudioAssetHistoryPublication>(ws_.project.dir);
                 if(entry.move&&entry.move->replacement){
                     studioReplayAssetReplacement(ws_.project.dir,*entry.move,redo);
                 }else if(entry.move&&entry.move->quarantine){
@@ -1411,11 +1436,15 @@ Json StudioSession::dispatch(const Json& request) {
                     catalog.applyMetadataEdit(plan.front());
                 }
                 assetHistory_.advance(redo);agentHistoryUnsafe_=true;
+                finishAssetHistoryPublication(*publication,true);publication.reset();
             }
             auto result=assetHistoryJson();
             if(step)result.set("snapshot",snapshot());
             reply.set("result",std::move(result));
-        }catch(const std::exception& e){reply.set("error",str(e.what()));}
+        }catch(const std::exception& e){
+            if(publication)finishAssetHistoryPublication(*publication,false);
+            reply.set("error",str(e.what()));
+        }
         return reply;
     }
     if(method=="studio.projectHistory"||method=="studio.projectHistoryStep"){
@@ -1461,6 +1490,19 @@ Json StudioSession::dispatch(const Json& request) {
     return reply;
 }
 Json StudioSession::dispatchImpl(const Json& request) {
+    const auto method=request.getStr("method");
+    static const std::set<std::string> assetWrites={"studio.assetMetaPatch","studio.assetFolderCreate","studio.assetTransferCommit",
+        "studio.assetDelete","studio.assetTrashApply"};
+    if(ws_.project.dir.empty()||!assetWrites.count(method))return dispatchImplCore(request);
+    // This wrapper is also used by explicit agent adapters; do not bypass it.
+    try{
+        StudioAssetHistoryPublication publication(ws_.project.dir);
+        auto reply=dispatchImplCore(request);
+        finishAssetHistoryPublication(publication,!reply.has("error"));
+        return reply;
+    }catch(const std::exception& e){Json reply=Json::object();reply.set("id",request["id"]);reply.set("error",str(e.what()));return reply;}
+}
+Json StudioSession::dispatchImplCore(const Json& request) {
     Json reply = Json::object();
     reply.set("id", request["id"]);
     try {

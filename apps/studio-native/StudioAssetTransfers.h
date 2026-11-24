@@ -5,6 +5,7 @@
 #include "apps/studio-native/StudioAssetCatalog.h"
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -65,8 +66,20 @@ void studioReplayAssetQuarantine(const std::filesystem::path& project,
 // Persistent asset timeline, separate from the recovery payload store.
 // A durable dirty marker fences interrupted publication; restore only exact
 // verified content/material/recovery-slot state, never infer missing history.
-void studioBeginAssetHistoryCheckpoint(const std::filesystem::path& project);
-void studioSaveAssetHistoryCheckpoint(const std::filesystem::path& project,const editor::ProjectHistory& history);
+class StudioAssetHistoryPublication {
+public:
+    explicit StudioAssetHistoryPublication(const std::filesystem::path& project);
+    ~StudioAssetHistoryPublication();
+    StudioAssetHistoryPublication(const StudioAssetHistoryPublication&)=delete;
+    StudioAssetHistoryPublication& operator=(const StudioAssetHistoryPublication&)=delete;
+    void save(const editor::ProjectHistory& history);
+    // Rejected calls preserve the previous checkpoint only if the entire
+    // owner timeline and filesystem state are still exactly the same.
+    bool cancelUnchanged(const editor::ProjectHistory& history);
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
 editor::ProjectHistory studioLoadAssetHistoryCheckpoint(const std::filesystem::path& project);
 // Recovery browser: list persisted slots; review exact current identity before restore/purge.
 Json studioAssetTrashList(const std::filesystem::path& project,size_t offset,size_t limit);

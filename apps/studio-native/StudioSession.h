@@ -99,6 +99,7 @@ private:
     Json snapshot() const;
     Json buildRequest(const std::string& method, const Json& params);
     Json dispatchImpl(const Json& request);
+    Json dispatchImplCore(const Json& request);
     // History panel: a label per MapDoc undo / redo snapshot (MapDoc keeps only snapshots).
     std::vector<std::string> undoLabels_, redoLabels_;
     std::map<uint64_t,std::string> historyLabelsById_;
@@ -140,6 +141,9 @@ private:
     std::string agentAssetTransferVersion_;
     std::map<std::string,std::string> agentAssetTransferGuids_;
     editor::ProjectHistory assetHistory_;
+    std::string assetHistoryPersistenceWarning_;
+    void loadAssetHistory();
+    void finishAssetHistoryPublication(StudioAssetHistoryPublication& publication,bool success) noexcept;
     std::string assetHistoryVersion() const;
     Json assetHistoryJson() const;
     StudioWindState wind_;

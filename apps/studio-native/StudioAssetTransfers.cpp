@@ -1,6 +1,7 @@
 #include "apps/studio-native/StudioAssetTransfers.h"
 #include "apps/studio-native/StudioContentDirectory.h"
 #include "apps/studio-native/StudioMoveJournal.h"
+#include "apps/editor/core/ProjectDocumentJournal.h"
 #include "engine/pack/Sha256.h"
 #include <algorithm>
 #include <fstream>
@@ -1189,8 +1190,8 @@ void validateHistoryContentPath(const std::string& value,bool meta=false){
     }else validateSegment(path.filename().string());
 }
 void validateHistorySlot(const fs::path& project,const std::string& value,bool meta=false){
-    const std::string payload=meta?value.substr(0,value.size()-5):value;
     if(meta&&!value.ends_with(".meta"))throw std::runtime_error("Invalid recovery sidecar path");
+    const std::string payload=meta?value.substr(0,value.size()-5):value;
     (void)quarantineFolder(project,payload);
 }
 void validateHistoryMove(const fs::path& project,const AssetHistory::MovePlan& plan){
@@ -1324,13 +1325,13 @@ AssetHistory decodeAssetHistory(const fs::path& project,const std::string& text)
     return history;
 }
 }
-void studioBeginAssetHistoryCheckpoint(const fs::path& project){
+static void beginAssetHistoryCheckpoint(const fs::path& project){
     checkTrashJournal(project);
     const auto cache=assetHistoryCache(project,true),marker=cache/"asset-history.dirty";
     writeAssetCheckpoint(marker,"Asset history publication in progress\n");
     StudioMoveJournal::syncPath(cache);StudioMoveJournal::syncPath(cache.parent_path());
 }
-void studioSaveAssetHistoryCheckpoint(const fs::path& project,const AssetHistory& history){
+static void saveAssetHistoryCheckpoint(const fs::path& project,const AssetHistory& history){
     const auto cache=assetHistoryCache(project,true),marker=cache/"asset-history.dirty";
     if(!fs::is_regular_file(fs::symlink_status(marker)))throw std::runtime_error("Missing asset history publication marker");
     checkTrashJournal(project);
@@ -1340,8 +1341,31 @@ void studioSaveAssetHistoryCheckpoint(const fs::path& project,const AssetHistory
     StudioMoveJournal::renamePath(tmp,target,true);
     fs::remove(marker);StudioMoveJournal::syncPath(cache);
 }
+struct StudioAssetHistoryPublication::Impl {
+    fs::path project;
+    editor::project_file_detail::Lock lock;
+    explicit Impl(const fs::path& p):project(p),lock(assetHistoryCache(p,true)/"asset-history.lock"){}
+};
+StudioAssetHistoryPublication::StudioAssetHistoryPublication(const fs::path& project):impl_(std::make_unique<Impl>(project)){
+    beginAssetHistoryCheckpoint(project);
+}
+StudioAssetHistoryPublication::~StudioAssetHistoryPublication()=default;
+void StudioAssetHistoryPublication::save(const AssetHistory& history){saveAssetHistoryCheckpoint(impl_->project,history);}
+bool StudioAssetHistoryPublication::cancelUnchanged(const AssetHistory& history){
+    const auto cache=assetHistoryCache(impl_->project,true);
+    const auto target=cache/"asset-history.json";
+    if(!existsOrSymlink(target)&&history.steps().empty()){
+        save(history);return true;
+    }
+    if(!fs::is_regular_file(fs::symlink_status(target))||fs::file_size(target)>AssetCheckpointMaxBytes||
+       editor::readProjectFileBytes(target)!=encodeAssetHistory(impl_->project,history))return false;
+    checkTrashJournal(impl_->project);
+    fs::remove(cache/"asset-history.dirty");StudioMoveJournal::syncPath(cache);return true;
+}
 AssetHistory studioLoadAssetHistoryCheckpoint(const fs::path& project){
     const auto cache=assetHistoryCache(project,false);
+    if(!existsOrSymlink(cache))return {};
+    editor::project_file_detail::Lock lock(cache/"asset-history.lock");
     if(existsOrSymlink(cache/"asset-history.dirty"))
         throw std::runtime_error("Interrupted asset history publication; recovery payloads remain in Trash");
     const auto path=cache/"asset-history.json";
