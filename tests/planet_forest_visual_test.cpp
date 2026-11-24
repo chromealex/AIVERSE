@@ -78,6 +78,20 @@ int main(){
         check(game::collectPlanetForestVisuals(world,surface,snapshot),"restore same tick checkpoint");
         history.interpolate(snapshot,surface,&world,2,4,0,0.f,nullptr);
         check(std::abs(snapshot.plants[0].local.x-last.x)<.001f,"restore serial snaps");
+        // Restricted interpolation must never bridge cells through fog.
+        game::PlanetForestMotionHistory restricted;
+        std::vector<uint8_t> allVisible(size_t(surface.W)*size_t(surface.H),2);
+        check(game::collectPlanetForestVisuals(world,surface,snapshot,&allVisible),"restricted first pose");
+        restricted.interpolate(snapshot,surface,&world,2,4,1,1.f,&allVisible);
+        physical.bodies.back().lastMotionTick=5;
+        physical.bodies.back().motion.position=surface.cellCenter(surface.gridCell(0,1,3,3));
+        world.setResource<wp::PlanetConsequenceResource>(physical);
+        check(game::collectPlanetForestVisuals(world,surface,snapshot,&allVisible),"restricted next pose");
+        const auto crossCell=snapshot.plants[0].local;
+        restricted.interpolate(snapshot,surface,&world,2,5,1,0.f,&allVisible);
+        check(std::abs(snapshot.plants[0].local.x-crossCell.x)<.001f&&
+              std::abs(snapshot.plants[0].local.y-crossCell.y)<.001f&&
+              std::abs(snapshot.plants[0].local.z-crossCell.z)<.001f,"restricted cross-cell snap");
         // Raw visible cells, not explored cells or blurred GPU fog.
         std::vector<uint8_t> vision(size_t(surface.W)*size_t(surface.H),1);
         const int rootCell=surface.cellAt(ground);
