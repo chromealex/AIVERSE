@@ -527,6 +527,7 @@ public:
         auto payload=p.dump(-1);
         if(payload.size()>gpu::TextureRequestQueue::maxPayloadBytes)throw std::invalid_argument("texture queue payload exceeds cap");
         auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object(),resolver);
+        if(program.outputs.count("radiance")&&!(p.getBool("gpuTextureFenceOnly")&&p.getBool("gpuTextureTransfer")))throw std::invalid_argument("HDR export uses CPU EXR bake; queue supports normalized sets only");
         const auto bytes=imageSourceBytes(program);
         if(bytes>maxQueuedImageBytes-queuedImageBytes_)throw std::invalid_argument("texture queue image snapshot budget exceeded");
         const auto id=pendingRequests_.push(std::move(payload),priority);
@@ -642,6 +643,7 @@ private:
         auto program=prepared?std::move(*prepared):render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object(),resolver);
         size_t target=program.nodes.size();const bool setBake=p.getBool("bakeSet"),bake=setBake||p.getBool("bake");
         const bool transfer=p.getBool("gpuTextureTransfer"),mipmaps=p.getBool("gpuTextureMipmaps"),fenceOnly=p.getBool("gpuTextureFenceOnly");
+        if(bake&&((setBake&&program.outputs.count("radiance")&&!fenceOnly)||(!setBake&&p.getStr("output")=="radiance")))throw std::invalid_argument("HDR export uses CPU EXR bake; GPU RGBA8 bake cannot publish radiance");
         if(fenceOnly&&!transfer)throw std::invalid_argument("fence-only mode requires GPU texture transfer");
         const bool materialized=p.getBool("materialized")||p.getBool("materializedDag")||render::texture_graph::requiresMaterialized(program),incremental=p.getBool("incremental");
         if(incremental&&!materialized)

@@ -11,6 +11,7 @@
 
 #include "engine/render/Model.h"
 #include "engine/render/ExrTexture.h"
+#include "engine/render/CameraExr.h"
 #include "engine/render/TextureGen.h"
 #include "engine/render/graph/TextureGraph.h"
 #include "engine/render/graph/TextureGraphContainerSource.h"
@@ -215,7 +216,7 @@ void saveMaterialLibrary(Workspace& ws, const Json& lib, const std::string& what
 Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::string& output,const render::Image& image){
     needProject(ws);
     if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture name");
-    (void)render::texture_graph::outputKind(output);
+    if(render::texture_graph::outputKind(output)==render::texture_graph::Kind::Radiance)throw std::invalid_argument("radiance must be exported as EXR");
     if(image.width<8||image.width>1024||image.height!=image.width||image.rgba.size()!=size_t(image.width)*image.height*4)
         throw std::invalid_argument("invalid completed texture image");
     const auto root=fs::canonical(ws.project.dir),dir=root/"content"/"textures";
@@ -299,6 +300,7 @@ render::texture_graph::ImageResolver textureGraphImageResolver(const Workspace& 
 
 Json publishTextureGraphSet(Workspace& ws,const std::string& name,const Json& graph,const Json& overrides,const std::vector<render::Image>& images,const std::vector<std::string>& backends){
     needProject(ws);const auto program=render::texture_graph::compile(graph,overrides,textureGraphImageResolver(ws));
+    if(program.outputs.count("radiance"))throw std::invalid_argument("mixed HDR/PNG sets require separate EXR export");
     if(images.size()!=program.outputs.size()||backends.size()!=images.size())throw std::invalid_argument("incomplete texture set");
     for(size_t i=0;i<images.size();++i){
         const auto& image=images[i];const auto& backend=backends[i];
@@ -588,10 +590,27 @@ void registerMaterialOps(Workspace& ws) {
         for(auto v:img.rgba){hex+="0123456789abcdef"[v>>4];hex+="0123456789abcdef"[v&15];}
         Json r=okJson();r.set("width",Json::number(int64_t(img.width)));r.set("height",Json::number(int64_t(img.height)));r.set("rgbaHex",Json::string(hex));r.set("cacheHit",Json::fromBool(cacheHit));return r;
     });
-    add("texture_graph_bake","Evaluate one declared output at full resolution and publish new PNG under content/textures; never overwrite.",graphSchema,[w,textureCache](const Json& p){
+    add("texture_graph_bake","Evaluate one declared output at full resolution and publish new PNG or linear HALF EXR under content/textures; never overwrite.",graphSchema,[w,textureCache](const Json& p){
         needProject(*w);auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object(),textureGraphImageResolver(*w));auto output=p.getStr("output"),name=p.getStr("textureName");
         if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture name");
         auto it=program.outputs.find(output);if(it==program.outputs.end())throw std::invalid_argument("unknown output");
+        if(output=="radiance"){
+            const auto rgba=render::texture_graph::evaluateRadiance(program,it->second);
+            std::vector<uint8_t> exr;
+            if(!render::cameraEncodeExrFloat(program.size,program.size,rgba,exr))throw std::runtime_error("EXR encode failed");
+            const auto root=fs::canonical(w->project.dir),dir=root/"content"/"textures";
+            if(fs::is_symlink(root/"content")||fs::is_symlink(dir))throw std::runtime_error("texture destination symlink rejected");
+            fs::create_directories(dir);
+            const std::string rel="content/textures/"+name+"_radiance.exr";
+            const auto dest=root/rel,stage=fs::path(dest.string()+".stage");
+            if(fs::exists(dest)||fs::is_symlink(dest)||!fs::create_directory(stage))throw std::runtime_error("EXR already exists or staging busy");
+            struct Cleanup {fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}} cleanup{stage};
+            const auto temp=stage/"payload";
+            {std::ofstream stream(temp,std::ios::binary);stream.write(reinterpret_cast<const char*>(exr.data()),std::streamsize(exr.size()));stream.close();if(!stream)throw std::runtime_error("EXR write failed");}
+            fs::create_hard_link(temp,dest);
+            w->note({Change::Rules,0,0,-1,-1,-1,"Texture graph HDR bake: "+rel});
+            Json r=okJson();r.set("path",Json::string(rel));r.set("output",Json::string(output));r.set("size",Json::number(int64_t(program.size)));r.set("format",Json::string("exr-rgba16f"));r.set("backend",Json::string("cpu"));return r;
+        }
         textureCache->selectProject(w->project.dir);bool cacheHit=false;
         auto img=textureCache->evaluate(program,{it->second},0,cacheHit).front();
         auto r=publishTextureGraphImage(*w,name,output,img);r.set("cacheHit",Json::fromBool(cacheHit));return r;
@@ -599,6 +618,7 @@ void registerMaterialOps(Workspace& ws) {
 
     add("texture_graph_bake_set","Bake all declared outputs into a new named directory; stage all PNGs before publication, no overwrite of existing set.",graphSchema,[w,textureCache](const Json& p){
         needProject(*w);const auto overrides=p.has("overrides")?p["overrides"]:Json::object();const auto program=render::texture_graph::compile(p["graph"],overrides,textureGraphImageResolver(*w));
+        if(program.outputs.count("radiance"))throw std::invalid_argument("Export radiance separately as EXR before baking normalized PBR outputs");
         std::vector<size_t> targets;for(const auto& [output,index]:program.outputs)targets.push_back(index);
         textureCache->selectProject(w->project.dir);bool cacheHit=false;
         auto images=textureCache->evaluate(program,targets,0,cacheHit);

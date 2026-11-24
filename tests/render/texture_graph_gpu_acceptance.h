@@ -274,6 +274,21 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
         const auto namedId=owner.start(named,project,lifetime.lease()).getStr("request");drain();
         const auto namedStatus=owner.status();
         require(namedStatus.getStr("request")==namedId&&namedStatus.getStr("state")=="ready"&&namedStatus.getStr("backend")==expected,"named resource GPU parity failed");
+        // HDR values remain signed float through arithmetic, with explicit tone map.
+        auto hdrGraph=Json::parse(R"JSON({"graph":{"version":1,"size":16,"nodes":[
+          {"id":"light","op":"hdrConstant","inputs":[],"properties":{"radiance":[4,2,-1]}},
+          {"id":"gain","op":"hdrExposure","inputs":["light"],"properties":{"ev":1}},
+          {"id":"sum","op":"hdrAdd","inputs":["gain","light"]},
+          {"id":"display","op":"hdrToneMap","inputs":["sum"],"properties":{"ev":-1,"mapping":"reinhard"}}
+        ],"outputs":{"radiance":"sum","color":"display"}},"requireGpu":true,"materialized":true,"fusePointwise":true,"output":"radiance","resolution":16})JSON");
+        const auto hdrProgram=render::texture_graph::compile(hdrGraph["graph"]);
+        const auto rawHdr=render::texture_graph::evaluateRadiance(hdrProgram,hdrProgram.outputs.at("radiance"));
+        require(rawHdr[0]==12&&rawHdr[1]==6&&rawHdr[2]==-3&&rawHdr[3]==1,"linear HDR values clipped");
+        const auto hdrDisplay=render::texture_graph::evaluate(hdrProgram,hdrProgram.outputs.at("color"));
+        require(hdrDisplay.rgba[0]==219&&hdrDisplay.rgba[1]==191&&hdrDisplay.rgba[2]==0,"HDR tone mapping mismatch");
+        const auto hdrPreviewId=owner.start(hdrGraph,project,lifetime.lease()).getStr("request");drain();
+        const auto hdrPreviewStatus=owner.status();
+        require(hdrPreviewStatus.getStr("request")==hdrPreviewId&&hdrPreviewStatus.getStr("state")=="ready"&&hdrPreviewStatus.getStr("backend")==expected,"HDR materialized preview parity failed");
         // Native function calls lower into ordinary typed DAG nodes. Two calls
         // share a definition but use independent parameter values and public IDs.
         auto functions=Json::parse(R"JSON({"graph":{"version":1,"size":32,

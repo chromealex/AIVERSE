@@ -86,7 +86,7 @@ export function instantiateTextureGraph(target:Obj,source:Obj):{graph:Obj;ids:st
 }
 
 const safeTextureId=(v:unknown):v is string=>typeof v==='string'&&/^[A-Za-z0-9_-]{1,64}$/.test(v);
-const textureKinds=new Set(['scalar','color','normal','packed']);
+const textureKinds=new Set(['scalar','color','normal','packed','radiance']);
 const copyJson=<T>(x:T):T=>JSON.parse(JSON.stringify(x)) as T;
 export function textureFunctionLibrary(graph:Obj):Obj {
  return obj(graph.functions)?graph.functions:{};
@@ -272,13 +272,14 @@ export function makeTextureFunctionAsset(graph:Obj,catalog:Obj[],name:string):Ob
   const id='asset_input_'+i,scalarId=id+'_scalar';
   if(input.type==='scalar')nodes.push({id,op:'constant',inputs:[],properties:{value:.5}});
   else if(input.type==='color')nodes.push({id,op:'color',inputs:[],properties:{value:[.5,.5,.5]}});
+  else if(input.type==='radiance')nodes.push({id,op:'hdrConstant',inputs:[],properties:{radiance:[1,1,1]}});
   else if(input.type==='normal'||input.type==='packed'){
    nodes.push({id:scalarId,op:'constant',inputs:[],properties:{value:.5}});
    nodes.push(input.type==='normal'?{id,op:'normal',inputs:[scalarId]}:{id,op:'metallicRoughness',inputs:[scalarId,scalarId]});
   }else throw new Error('Unsupported function input kind');
   args.push(id);
  });
- const channels:Record<string,string>={scalar:'height',color:'color',normal:'normal',packed:'metallicRoughness'};
+ const channels:Record<string,string>={scalar:'height',color:'color',normal:'normal',packed:'metallicRoughness',radiance:'radiance'};
  return Object.keys(def.outputs).sort().map(output=>{
   const call:Obj={id:'asset_result',op:'function',inputs:args,properties:{function:name,output,arguments:{}}};
   const kind=textureFunctionSpec(graph,call,catalog)?.output;
@@ -324,7 +325,7 @@ export function textureImageDependencyPaths(graph:Obj):string[] {
  const documents=[graph,...Object.values(textureFunctionLibrary(graph)).filter(obj)];
  const paths=new Set<string>();
  for(const doc of documents){
-  for(const node of rows(doc.nodes))if(node.op==='imageAsset'||node.op==='imageAssetChannel'){
+  for(const node of rows(doc.nodes))if(node.op==='imageAsset'||node.op==='imageAssetChannel'||node.op==='hdrAsset'){
    const p=node.properties;
    if(!obj(p)||typeof p.asset!=='string'||!p.asset||typeof p.revision!=='string'||! /^[0-9a-f]{64}$/.test(p.revision))throw new Error('Unpinned image dependency');
    paths.add(p.asset);
@@ -342,7 +343,7 @@ export function refreshTextureImagePins(graph:Obj,revisions:ReadonlyMap<string,s
  let changed=false;
  const update=(doc:Obj):Obj=>{
   const nodes=rows(doc.nodes).map(n=>{
-   if(n.op!=='imageAsset'&&n.op!=='imageAssetChannel')return n;
+   if(n.op!=='imageAsset'&&n.op!=='imageAssetChannel'&&n.op!=='hdrAsset')return n;
    const p=n.properties as Obj,revision=revisions.get(String(p.asset))!;
    if(p.revision===revision)return n;
    changed=true;return {...n,properties:{...p,revision}};
@@ -360,7 +361,7 @@ export function textureLinkedSnapshot(graph:Obj,alias:string):string {
  const normalized=Object.fromEntries(Object.entries(closure).sort(([x],[y])=>x.localeCompare(y)).map(([key,def])=>{
   if(!obj(def))throw new Error('Invalid linked definition');
   return [key,{...def,nodes:rows(def.nodes).map(n=>{
-   if((n.op!=='imageAsset'&&n.op!=='imageAssetChannel')||!obj(n.properties))return n;
+   if((n.op!=='imageAsset'&&n.op!=='imageAssetChannel'&&n.op!=='hdrAsset')||!obj(n.properties))return n;
    const {revision:_,...properties}=n.properties;return {...n,properties};
   })}];
  }));

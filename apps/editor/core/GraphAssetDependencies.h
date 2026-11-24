@@ -90,8 +90,8 @@ inline Json resolve(const std::string& family,const Json& source,const std::stri
             }
             asset(alias,"texture-function-asset","texturegraphs/"+name+".json");
         }
-        for(const auto& n:source["nodes"].items())if(n.getStr("op")=="imageAsset"||n.getStr("op")=="imageAssetChannel")asset(n.getStr("id"),"texture-image-asset",n["properties"].getStr("asset"));
-        for(const auto& [name,def]:source["functions"].members())for(const auto& n:def["nodes"].items())if(n.getStr("op")=="imageAsset"||n.getStr("op")=="imageAssetChannel")asset(name+"/"+n.getStr("id"),"texture-image-asset",n["properties"].getStr("asset"));
+        for(const auto& n:source["nodes"].items())if(n.getStr("op")=="imageAsset"||n.getStr("op")=="imageAssetChannel"||n.getStr("op")=="hdrAsset")asset(n.getStr("id"),"texture-image-asset",n["properties"].getStr("asset"));
+        for(const auto& [name,def]:source["functions"].members())for(const auto& n:def["nodes"].items())if(n.getStr("op")=="imageAsset"||n.getStr("op")=="imageAssetChannel"||n.getStr("op")=="hdrAsset")asset(name+"/"+n.getStr("id"),"texture-image-asset",n["properties"].getStr("asset"));
         const auto& defs=source["functions"];std::map<std::string,int> mark;
         std::function<void(const Json&,const std::string&,size_t)> walk;
         walk=[&](const Json& graph,const std::string& prefix,size_t depth){

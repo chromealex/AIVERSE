@@ -39,11 +39,13 @@ inline Source materializedKernel(KernelValue output,const std::vector<KernelValu
     glsl+="void main(){uint tid=gl_GlobalInvocationID.x;\n"+guard+body+"\n}\n";
     return {std::move(msl),{},materializedGlsl(std::move(glsl))};
 }
-inline Source packMaterializedKernelAt(KernelValue input,int n,const std::string& index){
+inline Source packMaterializedKernelAt(KernelValue input,int n,const std::string& index,bool radiancePreview=false){
     if(input==KernelValue::PackedBytes)throw std::invalid_argument("already packed");
     const std::string sample=input==KernelValue::Scalar?"float3(input0[tid])":"input0[tid].xyz";
+    const std::string exposed="max("+sample+",float3(0.0f))";
+    const std::string display=radiancePreview?"("+exposed+"/(float3(1.0f)+"+exposed+"))":sample;
     return materializedKernel(KernelValue::PackedBytes,{input},n,
-        "uint3 rgb=uint3(floor(clamp("+sample+",0.0f,1.0f)*255.0f+0.5f));\n"
+        "uint3 rgb=uint3(floor(clamp("+display+",0.0f,1.0f)*255.0f+0.5f));\n"
         "result["+index+"]=rgb.x|(rgb.y<<8)|(rgb.z<<16)|0xff000000u;");
 }
 inline Source packMaterializedKernel(KernelValue input,int n){

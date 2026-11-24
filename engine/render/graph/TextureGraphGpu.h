@@ -51,7 +51,16 @@ inline std::string pointwiseExpression(const Node& node,int n,Port var,std::stri
         auto a=[&](){return var(0)+".x";};auto b=[&](){return var(1)+".x";};
         auto f=[&](const char* key,float fallback,float lo=0,float hi=1){return literal(scalar(q[key],fallback,lo,hi));};
         std::string expr;
-        if(id=="constant")expr="float3("+f("value",.5f)+")";
+        if(id=="hdrConstant")expr="float3("+literal(scalar(q["radiance"][0],1,-65504,65504))+","+literal(scalar(q["radiance"][1],1,-65504,65504))+","+literal(scalar(q["radiance"][2],1,-65504,65504))+")";
+        else if(id=="hdrFromColor")expr=var(0);
+        else if(id=="hdrAdd"||id=="hdrMultiply")expr="("+var(0)+(id=="hdrAdd"?"+":"*")+var(1)+")";
+        else if(id=="hdrExposure")expr="("+var(0)+"*"+literal(std::ldexp(1.f,integer(q["ev"],0,-12,12)))+")";
+        else if(id=="hdrBlend")expr="mix("+var(0)+","+var(1)+","+var(2)+".x)";
+        else if(id=="hdrToneMap"){
+            const auto exposed="max("+var(0)+"*"+literal(std::ldexp(1.f,integer(q["ev"],0,-12,12)))+",float3(0.0f))";
+            expr=q.getStr("mapping","reinhard")=="reinhard"?"("+exposed+"/(float3(1.0f)+"+exposed+"))":exposed;
+        }
+        else if(id=="constant")expr="float3("+f("value",.5f)+")";
         else if(id=="color")expr="float3("+literal(scalar(q["value"][size_t(0)],0))+","+literal(scalar(q["value"][size_t(1)],0))+","+literal(scalar(q["value"][size_t(2)],0))+")";
         else if(id=="formula"){
             std::vector<std::string> stack;
@@ -256,7 +265,7 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
             };
             level(sampling.a,"mipA");
             if(sampling.blend>0){level(sampling.b,"mipB");body+="float4 raw=mix(mipA,mipB,"+literal(sampling.blend)+");";}else body+="float4 raw=mipA;";
-            if(node.image->hdr()&&!isBufferSource(op)){
+            if(node.image->hdr()&&!isBufferSource(op)&&op!="hdrAsset"){
                 const auto gain=literal(std::ldexp(1.f,integer(node.parameters["hdrExposure"],0,-12,12)));
                 body+="float3 exposed=max(raw.xyz*"+gain+",float3(0.0f));";
                 body+=node.parameters.getStr("hdrMapping","reinhard")=="reinhard"?"float3 mapped=exposed/(float3(1.0f)+exposed);":"float3 mapped=min(exposed,float3(1.0f));";
@@ -273,7 +282,7 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
             const auto gain=literal(std::ldexp(1.f,integer(node.parameters["hdrExposure"],0,-12,12)));
             const bool reinhard=node.parameters.getStr("hdrMapping","reinhard")=="reinhard";
             body+="float4 raw=input0[index];";
-            if(isBufferSource(op))body+="float3 mapped=raw.xyz;";
+            if(isBufferSource(op)||op=="hdrAsset")body+="float3 mapped=raw.xyz;";
             else{
                 body+="float3 exposed=max(raw.xyz*"+gain+",float3(0.0f));";
                 body+=reinhard?"float3 mapped=exposed/(float3(1.0f)+exposed);":"float3 mapped=min(exposed,float3(1.0f));";
@@ -318,7 +327,7 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
             body+="float3 v"+i+"="+(types[j]==KernelValue::Scalar?"float3(input"+i+"[tid])":"input"+i+"[tid].xyz")+";\n";
         }
         const auto expr=pointwiseExpression(node,n,[](size_t j){return "v"+std::to_string(j);},&body);
-        body+="float3 value=clamp("+expr+",0.0f,1.0f);\n";
+        body+="float3 value=clamp("+expr+(node.info->output==Kind::Radiance?",-65504.0f,65504.0f);\n":",0.0f,1.0f);\n");
     }
     body+=output==KernelValue::Scalar?"result[tid]=value.x;":"result[tid]=float4(value,1.0f);";
     return materializedKernel(output,types,n,body,isCustomCompute(op)?std::string(custom_compute::shaderHelpers)+(readsCustomResources(node)?custom_compute::resourceShaderHelpers:""):normal||!types.empty()?std::string{}:pointwiseCommon(),isImageSource(op));
@@ -326,7 +335,7 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
 // Only the known pointwise operations participate. Future neighborhood,
 // sampling or side-effect operations remain materialization boundaries.
 inline bool fusionPointwise(const Node& node){
-    if(readsCustomResources(node))return false;
+    if(readsCustomResources(node)||node.info->output==Kind::Radiance||std::string_view(node.info->id)=="hdrToneMap")return false;
     const std::string_view id=node.info->id;
     for(std::string_view op:{"formula","customScalar","customColor","constant","color","gradient","noise","fbm","voronoi","pattern","patternMask",
         "add","subtract","multiply","min","max","invert","threshold","remap","blend","blendColor","colorize","metallicRoughness"})
@@ -426,7 +435,7 @@ inline MaterializedSources compileMaterializedDag(const Program& p,const std::ve
         }
     }
     r.totalBytes=r.plan.allocatedBytes+r.resultCapacityBytes+r.imageSourceBytes;
-    for(auto target:targets)r.packs.push_back(packMaterializedKernel(materializedValue(p.nodes[target].info->output),n));
+    for(auto target:targets)r.packs.push_back(packMaterializedKernelAt(materializedValue(p.nodes[target].info->output),n,"tid",p.nodes[target].info->output==Kind::Radiance));
     return r;
 }
 } // namespace aiverse::render::texture_graph::gpu

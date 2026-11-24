@@ -14,13 +14,13 @@
 #include <memory>
 
 namespace aiverse::render::texture_graph {
-enum class Kind { Scalar, Color, Normal, Packed };
+enum class Kind { Scalar, Color, Normal, Packed, Radiance };
 using Pixel=std::array<float,3>;
-inline const char* kindName(Kind k){switch(k){case Kind::Scalar:return "scalar";case Kind::Color:return "color";case Kind::Normal:return "normal";default:return "packed";}}
+inline const char* kindName(Kind k){switch(k){case Kind::Scalar:return "scalar";case Kind::Color:return "color";case Kind::Normal:return "normal";case Kind::Radiance:return "radiance";default:return "packed";}}
 struct Op {const char* id;Kind output;std::vector<Kind> inputs;};
 inline const std::vector<Op>& catalog(){
     static const std::vector<Op> ops={
-        {"image",Kind::Color,{}},{"imageAsset",Kind::Color,{}},{"imageAssetChannel",Kind::Scalar,{}},{"bufferScalar",Kind::Scalar,{}},{"bufferColor",Kind::Color,{}},{"formula",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"customScalar",Kind::Scalar,{Kind::Scalar,Kind::Scalar,Kind::Scalar}},{"customColor",Kind::Color,{Kind::Color,Kind::Color,Kind::Scalar}},{"constant",Kind::Scalar,{}},{"color",Kind::Color,{}},{"noise",Kind::Scalar,{}},{"fbm",Kind::Scalar,{}},{"voronoi",Kind::Scalar,{}},{"gradient",Kind::Scalar,{}},{"pattern",Kind::Color,{}},{"patternMask",Kind::Scalar,{}},
+        {"image",Kind::Color,{}},{"imageAsset",Kind::Color,{}},{"imageAssetChannel",Kind::Scalar,{}},{"hdrAsset",Kind::Radiance,{}},{"hdrConstant",Kind::Radiance,{}},{"hdrFromColor",Kind::Radiance,{Kind::Color}},{"hdrAdd",Kind::Radiance,{Kind::Radiance,Kind::Radiance}},{"hdrMultiply",Kind::Radiance,{Kind::Radiance,Kind::Radiance}},{"hdrExposure",Kind::Radiance,{Kind::Radiance}},{"hdrBlend",Kind::Radiance,{Kind::Radiance,Kind::Radiance,Kind::Scalar}},{"hdrToneMap",Kind::Color,{Kind::Radiance}},{"bufferScalar",Kind::Scalar,{}},{"bufferColor",Kind::Color,{}},{"formula",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"customScalar",Kind::Scalar,{Kind::Scalar,Kind::Scalar,Kind::Scalar}},{"customColor",Kind::Color,{Kind::Color,Kind::Color,Kind::Scalar}},{"constant",Kind::Scalar,{}},{"color",Kind::Color,{}},{"noise",Kind::Scalar,{}},{"fbm",Kind::Scalar,{}},{"voronoi",Kind::Scalar,{}},{"gradient",Kind::Scalar,{}},{"pattern",Kind::Color,{}},{"patternMask",Kind::Scalar,{}},
         {"add",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"multiply",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"subtract",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"min",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"max",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"invert",Kind::Scalar,{Kind::Scalar}},{"threshold",Kind::Scalar,{Kind::Scalar}},{"remap",Kind::Scalar,{Kind::Scalar}},{"blend",Kind::Scalar,{Kind::Scalar,Kind::Scalar,Kind::Scalar}},{"colorize",Kind::Color,{Kind::Scalar,Kind::Color,Kind::Color}},{"blendColor",Kind::Color,{Kind::Color,Kind::Color,Kind::Scalar}},{"blur",Kind::Scalar,{Kind::Scalar}},{"erosion",Kind::Scalar,{Kind::Scalar}},{"warp",Kind::Scalar,{Kind::Scalar,Kind::Scalar,Kind::Scalar}},{"distort",Kind::Scalar,{Kind::Scalar,Kind::Scalar}},{"normal",Kind::Normal,{Kind::Scalar}},{"metallicRoughness",Kind::Packed,{Kind::Scalar,Kind::Scalar}}
     };return ops;
 }
@@ -39,6 +39,7 @@ inline bool safeId(const std::string& id){return !id.empty()&&id.size()<=64&&id.
 inline const Op& op(const std::string& id){for(const auto& o:catalog())if(id==o.id)return o;throw std::invalid_argument("unknown texture graph operation: "+id);}
 inline Kind outputKind(const std::string& name){
     if(name=="color"||name=="emissive")return Kind::Color;
+    if(name=="radiance")return Kind::Radiance;
     if(name=="normal")return Kind::Normal;
     if(name=="metallicRoughness")return Kind::Packed;
     if(name=="height"||name=="roughness"||name=="metallic"||name=="ao"||name=="mask")return Kind::Scalar;
@@ -138,7 +139,7 @@ inline bool isCustomCompute(std::string_view id){return id=="customScalar"||id==
 inline bool readsCustomResources(const Node& n){
     return std::any_of(n.custom.begin(),n.custom.end(),[](const auto& program){return custom_compute::readsResources(program);});
 }
-inline bool isExternalImageSource(std::string_view id){return id=="imageAsset"||id=="imageAssetChannel";}
+inline bool isExternalImageSource(std::string_view id){return id=="imageAsset"||id=="imageAssetChannel"||id=="hdrAsset";}
 inline bool isBufferSource(std::string_view id){return id=="bufferScalar"||id=="bufferColor";}
 inline bool isImageSource(std::string_view id){return id=="image"||isExternalImageSource(id)||isBufferSource(id);}
 inline ImageSource bufferSource(const std::string& id,const Json& q,size_t budget){
@@ -262,6 +263,9 @@ inline Json properties(const std::string& id){
         field("mipBias","number",Json::number(0.0),-8,8);
     }
     if(id=="imageAssetChannel")options("channel","alpha",{"red","green","blue","alpha"});
+    if(id=="hdrConstant")field("radiance","json",Json::parse("[1,1,1]"));
+    if(id=="hdrExposure"||id=="hdrToneMap")field("ev","integer",Json::number(int64_t(0)),-12,12);
+    if(id=="hdrToneMap")options("mapping","reinhard",{"reinhard","clamp"});
     if(isBufferSource(id))field("values","json",Json::parse(id=="bufferScalar"?"[0,0.5,1]":"[[0,0,0],[0.5,0.5,0.5],[1,1,1]]"));
     if(id=="formula")field("expression","text",Json::string("a b *"));
     if(isCustomCompute(id)){
@@ -313,6 +317,9 @@ inline void validateParameters(const Node& n){
         require(!p.has("channel")||p["channel"].isString(),"image asset channel must be text");
         (void)imageChannelShift(p.getStr("channel","alpha"));
     }
+    if(id=="hdrConstant"&&p.has("radiance")){require(p["radiance"].isArray()&&p["radiance"].size()==3,"HDR constant requires RGB triple");for(const auto& v:p["radiance"].items()){require(v.isNumber(),"HDR channel must be numeric");(void)scalar(v,1,-65504,65504);}}
+    if(id=="hdrExposure"||id=="hdrToneMap")(void)integer(p["ev"],0,-12,12);
+    if(id=="hdrToneMap")require(!p.has("mapping")||(p["mapping"].isString()&&(p.getStr("mapping")=="reinhard"||p.getStr("mapping")=="clamp")),"invalid tone map");
     if(id=="image")(void)imagePixels(p);
     if(id=="formula")(void)formulaTokens(p.getStr("expression","a b *"));
     if(isCustomCompute(id)){
@@ -333,7 +340,7 @@ inline void validateParameters(const Node& n){
     if(id=="normal")scalar(p["strength"],2,0,16);
 }
 inline bool neighborhoodOp(std::string_view id){return id=="blur"||id=="erosion"||id=="warp"||id=="distort";}
-inline bool requiresMaterialized(const Program& p){return std::any_of(p.nodes.begin(),p.nodes.end(),[](const Node& n){return neighborhoodOp(n.info->id)||isImageSource(n.info->id)||isCustomCompute(n.info->id);});}
+inline bool requiresMaterialized(const Program& p){return std::any_of(p.nodes.begin(),p.nodes.end(),[](const Node& n){return neighborhoodOp(n.info->id)||isImageSource(n.info->id)||isCustomCompute(n.info->id)||n.info->output==Kind::Radiance||std::string_view(n.info->id)=="hdrToneMap";});}
 inline Program compileResolved(const Json& g,const ImageResolver& resolver={}){
     require(g.isObject()&&g.getInt("version")==1&&g.dump(-1).size()<=256*1024,"texture graph version 1 / 256 KiB required");
     Program p;p.size=integer(g["size"],256,8,1024);
@@ -386,6 +393,7 @@ inline Program compileResolved(const Json& g,const ImageResolver& resolver={}){
                     w=std::max(1,w/2);h=std::max(1,h/2);
                 }
             }else require(data.mips.empty(),"resolver must return base image or authored mip chain");
+            if(std::string_view(n.info->id)=="hdrAsset")require(data.hdr(),"hdrAsset requires a linear HDR source");
             if(data.hdr()){
                 require(data.rgb.empty()&&data.hasAlpha&&data.rgba32f.size()==texels*4,"invalid HDR snapshot layout");
                 for(float v:data.rgba32f)require(std::isfinite(v)&&std::abs(v)<=65504.f,"invalid HDR snapshot value");
@@ -489,8 +497,8 @@ inline Json expandFunctions(const Json& source){
         std::map<std::string,bool> bodyIds;
         for(const auto& f:def["inputs"].items()){
             const auto id=f.getStr("id"),type=f.getStr("type");
-            require(safeId(id)&&(type=="scalar"||type=="color"||type=="normal"||type=="packed"),"invalid texture formal input");
-            const auto kind=type=="scalar"?Kind::Scalar:type=="color"?Kind::Color:type=="normal"?Kind::Normal:Kind::Packed;
+            require(safeId(id)&&(type=="scalar"||type=="color"||type=="normal"||type=="packed"||type=="radiance"),"invalid texture formal input");
+            const auto kind=type=="scalar"?Kind::Scalar:type=="color"?Kind::Color:type=="normal"?Kind::Normal:type=="radiance"?Kind::Radiance:Kind::Packed;
             require(local.emplace(id,kind).second,"duplicate texture formal input");
         }
         for(const auto& row:def["nodes"].items()){
@@ -511,7 +519,7 @@ inline Json expandFunctions(const Json& source){
                 const auto& child=definition(row);
                 for(const auto& f:child["inputs"].items()){
                     const auto type=f.getStr("type");
-                    expected.push_back(type=="scalar"?Kind::Scalar:type=="color"?Kind::Color:type=="normal"?Kind::Normal:Kind::Packed);
+                    expected.push_back(type=="scalar"?Kind::Scalar:type=="color"?Kind::Color:type=="normal"?Kind::Normal:type=="radiance"?Kind::Radiance:Kind::Packed);
                 }
             }else expected=op(row.getStr("op")).inputs;
             require(row["inputs"].isArray()&&row["inputs"].size()==expected.size(),"texture function input arity mismatch");
@@ -597,7 +605,7 @@ inline Program compile(const Json& g,const Json& overrides=Json::object(),const 
 inline float clamp(float x){return std::clamp(x,0.f,1.f);}
 inline Pixel gray(float x){return {x,x,x};}
 inline Pixel mix(Pixel a,Pixel b,float t){return {a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t};}
-inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t>& targets,int resolution=0){
+inline std::vector<std::vector<Pixel>> evaluateFields(const Program& p,const std::vector<size_t>& targets,int resolution=0){
     const int n=resolution?resolution:p.size;require(!targets.empty()&&targets.size()<=9&&n>=8&&n<=p.size,"invalid texture evaluation target or resolution");
     for(auto target:targets)require(target<p.nodes.size(),"invalid target");
     std::vector<std::vector<Pixel>> images(p.nodes.size());
@@ -629,6 +637,8 @@ inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t
         const int period=integer(q["period"],8,1,256),octaves=id=="fbm"?integer(q["octaves"],4,1,6):1;const auto randomSeed=seed(q["seed"]);
         const float strength=scalar(q["strength"],2,0,16),low=scalar(q["low"],0),high=scalar(q["high"],1),threshold=scalar(q["threshold"],.5f);
         const bool axisX=q.getStr("axis","y")=="x";
+        const Pixel hdrColor=id=="hdrConstant"?Pixel{scalar(q["radiance"][0],1,-65504,65504),scalar(q["radiance"][1],1,-65504,65504),scalar(q["radiance"][2],1,-65504,65504)}:Pixel{};
+        const float evGain=(id=="hdrExposure"||id=="hdrToneMap")?std::ldexp(1.f,integer(q["ev"],0,-12,12)):1.f;
         const Pixel color=id=="color"?Pixel{scalar(q["value"][0],0),scalar(q["value"][1],0),scalar(q["value"][2],0)}:Pixel{};
         for(int y=0;y<n;++y)for(int x=0;x<n;++x){
             const size_t k=size_t(y)*n+x;const float u=(x+.5f)/n,v=(y+.5f)/n;
@@ -636,6 +646,12 @@ inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t
             auto a=[&](){return input(0)[0];};auto b=[&](){return input(1)[0];};
             Pixel r{};
             if(id=="constant")r=gray(value);else if(id=="color")r=color;
+            else if(id=="hdrConstant")r=hdrColor;
+            else if(id=="hdrFromColor")r=input(0);
+            else if(id=="hdrExposure")for(size_t c=0;c<3;++c)r[c]=input(0)[c]*evGain;
+            else if(id=="hdrAdd"||id=="hdrMultiply")for(size_t c=0;c<3;++c)r[c]=id=="hdrAdd"?input(0)[c]+input(1)[c]:input(0)[c]*input(1)[c];
+            else if(id=="hdrBlend")r=mix(input(0),input(1),input(2)[0]);
+            else if(id=="hdrToneMap")for(size_t c=0;c<3;++c)r[c]=mapRadiance(input(0)[c],evGain,q.getStr("mapping","reinhard")=="reinhard");
             else if(id=="noise"||id=="fbm")r=gray(textureNoise(u,v,period,octaves,randomSeed));
             else if(id=="voronoi")r=gray(textureVoronoi(u,v,period,randomSeed));
             else if(id=="gradient")r=gray(axisX?u:v);
@@ -662,7 +678,8 @@ inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t
             else if(isImageSource(id)){
                 const auto v=sampleRaster(*imported,sampling,x,y,n);
                 auto mapped=[&](unsigned c){return c==3?clamp(v[3]):hdr?mapRadiance(v[c],hdrGain,reinhard):v[c];};
-                if(id=="imageAssetChannel")r=gray(mapped(imageShift==24?3:2-imageShift/8));
+                if(id=="hdrAsset")r={v[0],v[1],v[2]};
+                else if(id=="imageAssetChannel")r=gray(mapped(imageShift==24?3:2-imageShift/8));
                 else r={mapped(0),mapped(1),mapped(2)};
             }
             else if(id=="add")r=gray(a()+b());else if(id=="subtract")r=gray(a()-b());else if(id=="multiply")r=gray(a()*b());
@@ -689,22 +706,44 @@ inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t
                 const float dx=(h(x+1,y)-h(x-1,y))*strength*n/256.f,dy=(h(x,y+1)-h(x,y-1))*strength*n/256.f;
                 const float len=std::sqrt(dx*dx+dy*dy+1);r={.5f-.5f*dx/len,.5f+.5f*dy/len,.5f+.5f/len};
             }
-            for(float& c:r)c=clamp(c);out[k]=r;
+            for(float& c:r)c=node.info->output==Kind::Radiance?std::clamp(c,-65504.f,65504.f):clamp(c);out[k]=r;
         }
         // All pixels (including neighborhood samples) have been consumed.
         for(auto dep:step.releaseAfter)std::vector<Pixel>{}.swap(images[dep]);
     }
-    std::vector<Image> result;result.reserve(targets.size());
-    for(auto target:targets){Image img;img.width=img.height=n;img.name="generated:texture-graph";img.rgba.resize(count*4,255);
-        for(size_t i=0;i<count;++i)for(size_t c=0;c<3;++c)img.rgba[i*4+c]=uint8_t(std::lround(clamp(images[target][i][c])*255.f));
-        result.push_back(std::move(img));}
+    std::vector<std::vector<Pixel>> result;result.reserve(targets.size());
+    for(auto target:targets)result.push_back(images[target]);
     return result;
+}
+// Display preview only: HDR targets use a fixed Reinhard display mapping.
+// Raw export and native HDR upload use evaluateRadiance instead.
+inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t>& targets,int resolution=0){
+    const int n=resolution?resolution:p.size;const size_t count=size_t(n)*n;
+    auto fields=evaluateFields(p,targets,resolution);
+    std::vector<Image> result;result.reserve(targets.size());
+    for(size_t t=0;t<targets.size();++t){
+        Image img;img.width=img.height=n;img.name="generated:texture-graph";img.rgba.resize(count*4,255);
+        const bool hdr=p.nodes[targets[t]].info->output==Kind::Radiance;
+        for(size_t i=0;i<count;++i)for(size_t c=0;c<3;++c){
+            const float x=fields[t][i][c];
+            img.rgba[i*4+c]=uint8_t(std::lround((hdr?mapRadiance(x,1.f,true):clamp(x))*255.f));
+        }
+        result.push_back(std::move(img));
+    }
+    return result;
+}
+inline std::vector<float> evaluateRadiance(const Program& p,size_t target,int resolution=0){
+    require(target<p.nodes.size()&&p.nodes[target].info->output==Kind::Radiance,"raw export requires radiance target");
+    const auto field=evaluateFields(p,{target},resolution);
+    std::vector<float> rgba;rgba.reserve(field.front().size()*4);
+    for(const auto& rgb:field.front())rgba.insert(rgba.end(),{rgb[0],rgb[1],rgb[2],1.f});
+    return rgba;
 }
 inline Image evaluate(const Program& p,size_t target,int resolution=0){return std::move(evaluateMany(p,{target},resolution).front());
 }
 inline Json describeCatalog(){
     Json r=Json::object(),nodes=Json::array();
     for(const auto& o:catalog()){Json n=Json::object(),inputs=Json::array();n.set("id",Json::string(o.id));n.set("output",Json::string(kindName(o.output)));for(auto k:o.inputs)inputs.push(Json::string(kindName(k)));n.set("inputs",inputs);n.set("properties",properties(o.id));nodes.push(n);}
-    r.set("ok",Json::fromBool(true));r.set("nodes",nodes);r.set("outputs",Json::parse(R"(["color","normal","height","roughness","metallic","metallicRoughness","ao","emissive","mask"])"));Json outputTypes=Json::object();for(const auto& v:r["outputs"].items())outputTypes.set(v.str(),Json::string(kindName(outputKind(v.str()))));r.set("outputTypes",outputTypes);return r;
+    r.set("ok",Json::fromBool(true));r.set("nodes",nodes);r.set("outputs",Json::parse(R"(["color","normal","height","roughness","metallic","metallicRoughness","ao","emissive","mask","radiance"])"));Json outputTypes=Json::object();for(const auto& v:r["outputs"].items())outputTypes.set(v.str(),Json::string(kindName(outputKind(v.str()))));r.set("outputTypes",outputTypes);return r;
 }
 } // namespace aiverse::render::texture_graph
