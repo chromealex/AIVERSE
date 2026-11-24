@@ -1,0 +1,128 @@
+{
+  "schema": 1,
+  "id": "building-graph-integration",
+  "owner": "studio",
+  "changed_paths": [
+    "apps/studio-web/src/graphs/GraphCanvas.tsx",
+    "apps/studio-web/src/graphs/GraphCanvas.css",
+    "apps/studio-web/src/graphs/graphFramework.ts",
+    "apps/studio-web/src/graphs/graphGeometry.ts",
+    "apps/studio-web/src/graphs/graphSelection.ts",
+    "apps/studio-web/src/graphs/buildingGraphInspection.ts",
+    "apps/studio-web/src/graphs/BuildingStructureGraphView.tsx",
+    "apps/studio-web/src/graphs/buildingCandidateCapture.ts",
+    "apps/studio-web/tests/buildingCandidateCapture.test.mjs",
+    "apps/studio-web/tests/buildingGraphInspection.test.mjs",
+    "apps/studio-web/src/panels/generated/BuildingGeneratorPanel.tsx",
+    "apps/studio-web/package.json"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": false,
+    "visible": true,
+    "runtime": false
+  },
+  "checks": {
+    "implementation": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "architecture": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "native_api": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "skill": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "mcp": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "headless": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "handoff": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "documentation": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [],
+    "mcp_tools": [],
+    "studio_panels": [
+      "building_generator"
+    ],
+    "studio_methods": [
+      "studio.buildingInspect"
+    ]
+  },
+  "test_reports": []
+}
