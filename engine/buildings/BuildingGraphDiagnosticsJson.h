@@ -14,6 +14,18 @@ inline Json buildingGraphDiagnosticsJson(const BuildingGraphDiagnostics& d){
     mask("missingOwners",d.missingOwners);mask("refusedDomains",d.refusedDomains);
     out.set("attempts",Json::string(std::to_string(d.attempts)));
     out.set("rebuildCompletionKnown",Json::fromBool(false));
+    Json timings=Json::array();
+    for(size_t i=0;i<d.callbackTimings.size();++i){
+        const auto& t=d.callbackTimings[i];if(!t.calls)continue;
+        Json row=Json::object();
+        row.set("domain",Json::number(int64_t(1u<<i)));
+        row.set("calls",Json::string(std::to_string(t.calls)));
+        row.set("lastNs",Json::string(std::to_string(t.lastNs)));
+        row.set("totalNs",Json::string(std::to_string(t.totalNs)));
+        row.set("maxNs",Json::string(std::to_string(t.maxNs)));
+        timings.push(std::move(row));
+    }
+    out.set("callbackTimings",std::move(timings));
     if(d.lastChange){
         const auto& c=*d.lastChange;
         Json change=Json::object();
