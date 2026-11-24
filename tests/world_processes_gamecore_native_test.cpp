@@ -1612,6 +1612,34 @@ static void checkGameCorePlanetTerrainPersistence(){
     sim->loadState(rollback);
     AIVERSE_TEST_CHECK(sim->checksum()==initialHash&&w.resourceConst<g::GameState>()->surface==base);
 }
+static void checkScheduledPlanetBanks(){
+    namespace nw=aiverse::lib::nereid;
+    const std::string root=std::string(AIVERSE_SOURCE_DIR)+"/examples/native/world_processes/planet-demo";
+    auto map=Json::parseFile(root+"/maps/planet.json");
+    auto rules=Json::parseFile(root+"/rules.json");
+    rules.set("terrain",Json::parse(R"({"model":"heightfield"})"));
+    auto& terra=map.member("world").member("bodies").at(0);
+    terra.set("seaLevel",Json::number(int64_t(4)));
+    terra.set("nereid",Json::parse(R"({"current":5,"conserveVolume":true})"));
+    rules.member("nativeModules").at(0).member("config").set("planetBanks",Json::parse(
+        R"({"intervalTicks":2,"banks":[{"entity":"local_slot","soil":0}],"foundations":["station"]})"));
+    std::vector<g::NativeDefinition> defs{examples::planet_processes::definition()};
+    Simulation sim(SimConfig{1,20,0,true},std::make_unique<g::GameCore>(std::move(defs)));
+    sim.setup(rules,map);
+    const auto bank=placed(sim,4);
+    AIVERSE_TEST_CHECK(sim.world().has<nw::PlanetBankSoilComponent>(bank));
+    sim.step();
+    const auto* first=sim.world().resourceConst<wp::PlanetBankPipelineState>();
+    AIVERSE_TEST_CHECK(first&&first->lastSuccess==0&&first->successfulBatches==1);
+    SimSnapshot saved;sim.saveState(saved);
+    sim.step();
+    AIVERSE_TEST_CHECK(sim.world().resourceConst<wp::PlanetBankPipelineState>()->successfulBatches==1);
+    sim.step();
+    AIVERSE_TEST_CHECK(sim.world().resourceConst<wp::PlanetBankPipelineState>()->lastSuccess==2);
+    const auto hash=sim.checksum();
+    sim.loadState(saved);sim.step();sim.step();
+    AIVERSE_TEST_CHECK(sim.checksum()==hash);
+}
 static void checkAuthoredPlanetDemo(){
     const std::string root=std::string(AIVERSE_SOURCE_DIR)+"/examples/native/world_processes/planet-demo";
     const Json map=Json::parseFile(root+"/maps/planet.json");
@@ -1733,6 +1761,7 @@ int main(){
     checkPlanetLiveBudget();
     checkWorldProcessLiveOptions();
     checkAuthoredPlanetDemo();
+    checkScheduledPlanetBanks();
     checkGameCorePlanetTerrainPersistence();
     checkPlanetStudioDiagnostics();
     checkCircuitSurfaceWiring();

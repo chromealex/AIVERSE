@@ -9,6 +9,7 @@
 #include "GranularSurfaceField.h"
 #include "MorphPhysisGravity.h"
 #include "AetherPhysisStratification.h"
+#include "WorldProcessesPlanetBankPipeline.h"
 #include "engine/game/GameCore.h"
 #include "engine/game/Native.h"
 #include <cstdint>
@@ -84,7 +85,9 @@ public:
                game::NativeState&,const Json& config) const override {
         // Project may enable any of the seven new systems even before
         // adding its first authored component. Unknown/typed flags fail fast.
-        const SuiteFlags flags=suiteFlags(config);
+        auto suite=config;
+        suite.erase("planetBanks");
+        const SuiteFlags flags=suiteFlags(suite);
         if(flags.crowdGravitySupport&&!host.surface(sim))
             throw std::invalid_argument("CROWD gravity support requires planetary Surface");
         const CrowdInstaller crowdInstaller=host.surface(sim)?
@@ -98,6 +101,7 @@ public:
             host.surface(sim)?&installGameCoreSurfaceGranular:nullptr,
             &installGameCoreMorphGravity,
             &installGameCoreAetherStratification);
+        if(config.has("planetBanks"))installPlanetBankPipeline(host,sim,config["planetBanks"]);
     }
 };
 inline std::unique_ptr<game::NativeModule> createWorldProcessesNativeModule(){
