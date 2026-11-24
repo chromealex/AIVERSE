@@ -188,18 +188,26 @@
     },
     "dependencies": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification.",
+      "note": "No declared prerequisite cycle or unknown manifest dependency in v10 policy; actual native Building/Caverns owner bridge acceptance remains pending.",
       "evidence": []
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Mac v10/v13 native Workspace fixture: six CPU probe frames, particles present, liveAttached/gpuMeasured false, unbounded probe rejected; unavailable live/GUI/GPU operations do not fabricate execution. No claim of live GPU or all owner-specific runtime parity.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-stage49-acceptance-2026-11-24.md",
+        "tests/vfx_graph_ops_test.cpp",
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-ctest-focused.log.txt"
+      ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Documented concrete disposable SpectraFX graph validation, dependency query, save/readback and CPU probe example from actual passing native Workspace fixture. Other owner examples and visual publishing not certified.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-stage49-acceptance-2026-11-24.md",
+        "tests/vfx_graph_ops_test.cpp",
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-ctest-focused.log.txt"
+      ]
     },
     "tests": {
       "status": "pass",
