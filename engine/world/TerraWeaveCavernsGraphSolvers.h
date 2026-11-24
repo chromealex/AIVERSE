@@ -30,7 +30,7 @@ inline CavePathResult solveCaveGraph(
     CavePathBackend backend,CaveGraphSolverSettings settings={}) {
     CavePathResult result;result.sourceRevision=query.sourceRevision;
     if(!data||data->revision()!=query.sourceRevision||
-       !query.maxVisits||!settings.cellCm||settings.cellCm>10000||
+       !query.maxVisits||settings.cellCm<10||settings.cellCm>10000||
        !settings.maxNodes||settings.maxNodes>1048576||
        !settings.hpaClusterCells||settings.hpaClusterCells>64||
        settings.regionMarginCells<0||settings.regionMarginCells>128)
