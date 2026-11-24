@@ -389,6 +389,47 @@ bool VulkanDevice::updateSharedBufferChecked(BufferHandle h, const void* data,
     return updateBufferChecked(h, data, size, offset);
 }
 
+// Checked storage writes never rename a GPU-owned buffer. Main-command
+// ordering and explicit barriers cover compute, indirect, and vertex reads.
+bool VulkanDevice::updateStorageBufferChecked(BufferHandle h,const void* data,size_t size,size_t offset){
+    auto* b=buffers_.get(h.id);
+    if(!healthy_||!recording_||inPass_||activeComputeId_||!b||b->type!=BufferType::Storage||
+       b->host||!data||!size||((size|offset)&3u)||offset>b->size||size>b->size-offset)return false;
+    GpuTransferReservation charge(transientGpuBudget(),size);if(!charge)return false;
+    VkBuffer src=VK_NULL_HANDLE;Allocation alloc{};
+    if(!createBufferObject(size,VK_BUFFER_USAGE_TRANSFER_SRC_BIT,true,src,alloc))return false;
+    const VkBuffer dst=resolveBuffer(h.id,serial_);
+    if(!dst||!alloc.mapped){vkDestroyBuffer(device_,src,nullptr);memory_.release(alloc);return false;}
+    std::memcpy(alloc.mapped,data,size);
+    VkCommandBuffer cb=slots_[size_t(slot_)].main;
+    auto before=vkStruct<VkMemoryBarrier>(VK_STRUCTURE_TYPE_MEMORY_BARRIER);
+    before.srcAccessMask=VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT;
+    before.dstAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;
+    vkCmdPipelineBarrier(cb,VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,VK_PIPELINE_STAGE_TRANSFER_BIT,0,1,&before,0,nullptr,0,nullptr);
+    VkBufferCopy region{0,offset,size};vkCmdCopyBuffer(cb,src,dst,1,&region);
+    auto after=vkStruct<VkMemoryBarrier>(VK_STRUCTURE_TYPE_MEMORY_BARRIER);
+    after.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;after.dstAccessMask=VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT;
+    vkCmdPipelineBarrier(cb,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,0,1,&after,0,nullptr,0,nullptr);
+    deferDestroy([this,src,alloc]() mutable{vkDestroyBuffer(device_,src,nullptr);memory_.release(alloc);});
+    charge.submitted(gpuSubmissionFence());return true;
+}
+bool VulkanDevice::copyStorageBufferChecked(BufferHandle source,BufferHandle target,size_t bytes,size_t so,size_t to){
+    auto* a=buffers_.get(source.id);auto* b=buffers_.get(target.id);
+    if(!healthy_||!recording_||inPass_||activeComputeId_||!a||!b||a==b||a->host||b->host||
+       a->type!=BufferType::Storage||b->type!=BufferType::Storage||!bytes||((bytes|so|to)&3u)||
+       so>a->size||bytes>a->size-so||to>b->size||bytes>b->size-to)return false;
+    auto src=resolveBuffer(source.id,serial_),dst=resolveBuffer(target.id,serial_);if(!src||!dst)return false;
+    VkCommandBuffer cb=slots_[size_t(slot_)].main;
+    auto before=vkStruct<VkMemoryBarrier>(VK_STRUCTURE_TYPE_MEMORY_BARRIER);
+    before.srcAccessMask=VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT;
+    before.dstAccessMask=VK_ACCESS_TRANSFER_READ_BIT|VK_ACCESS_TRANSFER_WRITE_BIT;
+    vkCmdPipelineBarrier(cb,VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,VK_PIPELINE_STAGE_TRANSFER_BIT,0,1,&before,0,nullptr,0,nullptr);
+    VkBufferCopy region{so,to,bytes};vkCmdCopyBuffer(cb,src,dst,1,&region);
+    auto after=vkStruct<VkMemoryBarrier>(VK_STRUCTURE_TYPE_MEMORY_BARRIER);
+    after.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;after.dstAccessMask=VK_ACCESS_MEMORY_READ_BIT|VK_ACCESS_MEMORY_WRITE_BIT;
+    vkCmdPipelineBarrier(cb,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,0,1,&after,0,nullptr,0,nullptr);
+    return true;
+}
 bool VulkanDevice::updateBufferChecked(BufferHandle h, const void* data,
                                        size_t size, size_t offset) {
     VBuffer* b = buffers_.get(h.id);

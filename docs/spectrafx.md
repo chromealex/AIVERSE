@@ -1,4 +1,4 @@
-## Stage 120A — Vulkan allocator RHI prerequisites (in progress; QA deferred)
+## Stage 120A — Vulkan allocator RHI prerequisites (source implemented; QA deferred)
 
 Add capability-gated storage-buffer/uniform compute layout (native slot 8 uniform, up to 18 storage descriptors), ordered immutable storage uploads/copies, indirect compute, ranged and blocking buffer reads with transfer budget. Preserve existing texture and push-constant layouts. No SpectraFX Vulkan activation until complete compatible shader/host routing is implemented. Native tests deferred.
 

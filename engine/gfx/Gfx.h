@@ -581,12 +581,13 @@ struct ShaderDesc {
 // Vulkan shader resource ABI. Other backends keep their native slot contracts.
 // TextureResources: storage images 0..3, sampled images 4..11, buffers 12..15,
 // uniform buffer 16. BufferPushConstants: buffers 0..7, <=128 push bytes.
-enum class VulkanComputeLayout : uint8_t { TextureResources, BufferPushConstants };
+enum class VulkanComputeLayout : uint8_t { TextureResources, BufferPushConstants, StorageUniforms };
 struct ComputeDesc {
     const char* msl=nullptr;
     const char* glsl=nullptr;
     const char* label=nullptr;
     VulkanComputeLayout vulkanLayout=VulkanComputeLayout::TextureResources;
+    uint32_t storageUniformSlots=19; // slots [0,N), binding 8 reserved for uniform block
 };
 
 struct VertexAttr {
@@ -914,6 +915,7 @@ public:
     // Storage buffers persist across frames; updateBuffer uploads in queue order.
     // Commands are between beginFrame/endFrame and outside render passes.
     virtual bool supportsCompute() const { return false; }
+    virtual bool supportsStorageUniformCompute(uint32_t) const {return false;}
     virtual ComputeHandle createCompute(const ComputeDesc&) { return {}; }
     virtual void destroyCompute(ComputeHandle) {}
     virtual bool beginCompute(ComputeHandle) { return false; }

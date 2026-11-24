@@ -331,7 +331,7 @@ bool VulkanDevice::waitIdle() {
     // The GPU is idle, so pending texture readbacks can be delivered on
     // the owner thread, before their staging allocations are released.
     for(auto& slot:slots_)completeTextureCaptures(slot,true);
-    collectGarbage();
+    deliverComputeReadbacks();collectGarbage();
     return true;
 }
 
@@ -804,6 +804,7 @@ bool VulkanDevice::waitForSubmittedGpuWork() {
         return false;
     }
     if (serial_ > 0) completed_ = std::max(completed_,serial_-1);
+    deliverComputeReadbacks();
     collectGarbage(); // uses real GPU-idle confirmation, not CPU frame age
     return true;
 }

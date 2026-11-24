@@ -104,7 +104,7 @@ struct VCompute {
     VkPipeline pipeline = VK_NULL_HANDLE;
     VkDescriptorSetLayout descriptorLayout = VK_NULL_HANDLE;
     VkPipelineLayout layout = VK_NULL_HANDLE;
-    bool bufferPushConstants = false;
+    bool bufferPushConstants = false,storageUniforms=false;
     uint32_t bufferBindings = 4;
 };
 struct VTextureView { VkImageView native = VK_NULL_HANDLE; uint32_t parentId = 0; };
@@ -180,6 +180,7 @@ public:
         gpuProps_.limits.maxComputeWorkGroupInvocations >= 64 &&
         gpuProps_.limits.maxComputeWorkGroupSize[0] >= 64; }
     bool supportsStorageTexture(PixelFormat,TextureDimension) const override;
+    bool supportsStorageUniformCompute(uint32_t slots) const override;
     ComputeHandle createCompute(const ComputeDesc&) override;
     void destroyCompute(ComputeHandle) override;
     bool beginCompute(ComputeHandle) override;
@@ -189,6 +190,11 @@ public:
     void setComputeUniforms(const void*,size_t) override;
     void dispatch(uint32_t,uint32_t) override;
     bool dispatchChecked(uint32_t,uint32_t=1) override;
+    bool supportsGpuComputeIndirect() const override{return supportsCompute();}
+    bool dispatchGpuIndirect(BufferHandle,size_t=0) override;
+    bool dispatchInternal(uint32_t,uint32_t,BufferHandle,size_t);
+    bool readBuffer(BufferHandle,void*,size_t) override;
+    bool readBufferRangeAsync(BufferHandle,size_t,size_t,BufferReadFn) override;
     bool readBufferAsync(BufferHandle,size_t,BufferReadFn) override;
     void endCompute() override;
     bool supportsTextureViews() const override { return true; }
@@ -200,6 +206,10 @@ public:
     void updateBuffer(BufferHandle h, const void* data, size_t size, size_t offset) override;
     bool updateSharedBufferChecked(BufferHandle h, const void* data,
                                    size_t size, size_t offset) override;
+    bool updateStorageBufferChecked(BufferHandle,const void*,size_t,size_t=0) override;
+    bool supportsStorageBufferCopy() const override{return supportsCompute();}
+    bool copyStorageBufferChecked(BufferHandle,BufferHandle,size_t,size_t=0,size_t=0) override;
+    bool canUpdateSharedBuffers()const override{return !inPass_&&!activeComputeId_;}
     bool bufferInfo(BufferHandle h, BufferInfo& out) const override;
     void destroyBuffer(BufferHandle h) override;
     BufferUpdateStats bufferUpdateStats(BufferHandle h) override;
@@ -532,7 +542,7 @@ private:
     uint32_t activeComputeId_ = 0;
     std::array<TextureHandle,4> computeStorage_{};
     std::array<TextureHandle,8> computeSampled_{};
-    std::array<BufferHandle,8> computeBuffers_{};
+    std::array<BufferHandle,32> computeBuffers_{};
     bool computeStateValid_ = false;
     std::vector<uint8_t> computeUniforms_;
 };
