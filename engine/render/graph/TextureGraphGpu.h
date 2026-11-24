@@ -68,7 +68,7 @@ inline std::string pointwiseExpression(const Node& node,int n,Port var){
                 if(index==6)return var(2)+".x";
                 if(index==7)return "uv.x";
                 if(index==8)return "uv.y";
-                return f(custom_compute::variableNames[index].data(),.5f,-16,16);
+                return "("+f(custom_compute::variableNames[index].data(),.5f,-16,16)+")";
             };
             auto channel=[&](size_t i){return custom_compute::emit(node.custom[i],variable,[](float v){return literal(v);});};
             expr=id=="customScalar"?"float3("+channel(0)+")":"float3("+channel(0)+","+channel(1)+","+channel(2)+")";

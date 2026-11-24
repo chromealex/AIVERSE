@@ -447,7 +447,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
  const outputs=graph&&object(graph.outputs)?Object.keys(graph.outputs):[];
  const rows=graph&&Array.isArray(graph.nodes)?graph.nodes.filter(object):[];
  const copySubgraph=()=>{const ids=new Set(selectedIds);setSnippet(rows.filter(n=>ids.has(String(n.id))).map(n=>JSON.parse(JSON.stringify(n)) as Obj));setStatus('Copied subgraph; external inputs will need reconnecting');};
- const pasteSubgraph=()=>{if(!graph||!snippet.length||rows.length+snippet.length>64)return;const used=new Set(rows.map(n=>String(n.id))),ids=new Map<string,string>();for(const n of snippet){let i=1;while(used.has('sub_'+i))i++;const id='sub_'+i;used.add(id);ids.set(String(n.id),id);}const nodes=snippet.map(n=>({...n,id:ids.get(String(n.id)),inputs:Array.isArray(n.inputs)?n.inputs.map(v=>ids.get(String(v))??''):[],position:undefined}));const next={...graph,nodes:[...rows,...nodes]};try{if(next.nodes.some(n=>n.op==='function'))checkFunctionDraft(next);}catch(e){setError(e instanceof Error?e.message:String(e));return;}edit(next);setSelection([...ids.values()]);setSelected([...ids.values()].at(-1)??'');};
+ const pasteSubgraph=()=>{if(!graph||!snippet.length||rows.length+snippet.length>64)return;const used=new Set(rows.map(n=>String(n.id))),ids=new Map<string,string>();for(const n of snippet){let i=1;while(used.has('sub_'+i))i++;const id='sub_'+i;used.add(id);ids.set(String(n.id),id);}const nodes:Obj[]=snippet.map(n=>({...n,id:ids.get(String(n.id)),inputs:Array.isArray(n.inputs)?n.inputs.map(v=>ids.get(String(v))??''):[],position:undefined}));const next={...graph,nodes:[...rows,...nodes]};try{if(next.nodes.some(n=>n.op==='function'))checkFunctionDraft(next);}catch(e){setError(e instanceof Error?e.message:String(e));return;}edit(next);setSelection([...ids.values()]);setSelected([...ids.values()].at(-1)??'');};
  const current=rows.find(n=>n.id===selected);
  const spec=graph&&current?textureFunctionSpec(graph,current,catalog):undefined;
  const functionLibrary=graph?textureFunctionLibrary(graph):{};
@@ -483,7 +483,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
   let i=1;while(rows.some(n=>n.id===clipboard.op+'_'+i))i++;
   const id=clipboard.op+'_'+i,copy=JSON.parse(JSON.stringify(clipboard)) as Obj;
   const inputs=Array.isArray(copy.inputs)?copy.inputs.map(v=>rows.some(n=>n.id===v)?v:''):[];
-  const next={...graph,nodes:[...rows,{...copy,id,inputs,position:undefined}]};try{if(next.nodes.some(n=>n.op==='function'))checkFunctionDraft(next);}catch(e){setError(e instanceof Error?e.message:String(e));return;}edit(next);setSelected(id);setSelection([id]);setPending(null);
+  const next={...graph,nodes:[...rows,{...copy,id,inputs,position:undefined} as Obj]};try{if(next.nodes.some(n=>n.op==='function'))checkFunctionDraft(next);}catch(e){setError(e instanceof Error?e.message:String(e));return;}edit(next);setSelected(id);setSelection([id]);setPending(null);
  };
  const removeNode=()=>{
   if(!graph||!selected)return;const nextOutputs=object(graph.outputs)?Object.fromEntries(Object.entries(graph.outputs).filter(([,v])=>v!==selected)):{};
