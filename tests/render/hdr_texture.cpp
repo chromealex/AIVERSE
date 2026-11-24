@@ -122,6 +122,18 @@ void rleAndOrientation() {
 }
 void environmentConvolution(){
     using namespace render::environment_ibl;
+    require(radicalInverse(0)==0.f&&radicalInverse(1)==.5f&&radicalInverse(2)==.25f,"Hammersley radical inverse");
+    const auto glossy=ggxDirection(1.f/3.f,.5f,.25f),rough=ggxDirection(1.f,.5f,.25f);
+    require(glossy.direction.z>.9f&&std::abs(rough.direction.z)<.00001f&&rough.weight<.00001f,"GGX roughness distribution");
+    require(ggxDirection(1.f,.75f,.25f).weight==0.f,"GGX below horizon rejection");
+    // At roughness=1, reflected GGX directions have uniform solid-angle
+    // density. NdotL-weighted mean of cos(theta) tends to 2/3.
+    float moment=0.f,weight=0.f;
+    for(int i=0;i<specularSamples;++i){
+        const auto q=ggxDirection(1.f,(i+.5f)/specularSamples,radicalInverse(uint32_t(i)));
+        moment+=q.direction.z*q.weight;weight+=q.weight;
+    }
+    require(weight>0.f&&std::abs(moment/weight-2.f/3.f)<.002f,"GGX normalized hemisphere moment");
     std::string pixels;pixel(pixels,128,64,32,130);pixel(pixels,128,64,32,130);
     render::RadianceImage image;std::string error;
     const auto encoded=hdr("-Y 1 +X 2",pixels);

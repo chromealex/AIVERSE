@@ -463,7 +463,8 @@ void main() {
     vec3 R = reflect(-V, n);
     vec3 env = mix(mix(ground, sky, clamp(R.y * 0.5 + 0.5, 0.0, 1.0)), amb, rough);
 #if defined(AIVERSE_MODEL_ENVIRONMENT)
-    float band=rough*3.0,lo=floor(band);
+    // GGX prefilter bands use perceptual roughness (0, 1/3, 2/3, 1).
+    float band=clamp(rough,0.0,1.0)*3.0,lo=floor(band);
     env=mix(environmentBand(R,lo),environmentBand(R,min(lo+1.0,3.0)),fract(band))*ambientVisibility;
 #endif
     vec3 ambSpec = env * (F0 * AB.x + AB.y);
@@ -1158,7 +1159,8 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     float3 R = reflect(-V, n);
     float3 env = mix(mix(ground, sky, clamp(R.y * 0.5 + 0.5, 0.0, 1.0)), amb, rough);
 #if defined(AIVERSE_MODEL_ENVIRONMENT)
-    float band=rough*3.0f,lo=floor(band);
+    // GGX prefilter bands use perceptual roughness (0, 1/3, 2/3, 1).
+    float band=clamp(rough,0.0f,1.0f)*3.0f,lo=floor(band);
     env=mix(environmentBand(tex13,s13,environment,R,lo),environmentBand(tex13,s13,environment,R,min(lo+1.0f,3.0f)),fract(band))*ambientVisibility;
 #endif
     float3 ambSpec = env * (F0 * AB.x + AB.y);
