@@ -26,10 +26,11 @@ size_t releaseBelow(size_t threshold,uint32_t percentage) {
 
 bool GpuPoolWorld::init(gfx::Device* device, PoolWorldBudgets budgets) {
     shutdown();
-    budgets.maxGpuGroups=std::min<uint32_t>(budgets.maxGpuGroups,64);
-    budgets.maxGroupCapacity=std::clamp<uint32_t>(budgets.maxGroupCapacity,1,4096);
-    budgets.maxBurstsPerFrame=std::min<uint32_t>(budgets.maxBurstsPerFrame,4096);
-    budgets.maxSources=std::clamp<uint32_t>(budgets.maxSources,1,65536);
+    // Safety ceilings, not preallocated storage. Admission also checks bytes.
+    budgets.maxGpuGroups=std::min<uint32_t>(budgets.maxGpuGroups,4096);
+    budgets.maxGroupCapacity=std::clamp<uint32_t>(budgets.maxGroupCapacity,1,kGpuEmitterMaxSlots);
+    budgets.maxBurstsPerFrame=std::min<uint32_t>(budgets.maxBurstsPerFrame,262144);
+    budgets.maxSources=std::clamp<uint32_t>(budgets.maxSources,1,1048576);
     if(budgets.loadShedding.enabled) {
         budgets.loadShedding.recoverBelowPercent=
             std::clamp<uint32_t>(
@@ -201,12 +202,20 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
         // Retired groups (orphaned by redefinition) do not count toward the
         // unique-group budget; a fully released slot is reused in place so
         // existing binding/source group indices stay stable.
-        size_t liveGroups=0,freeSlot=gpuGroups_.size();
+        size_t liveGroups=0,freeSlot=gpuGroups_.size(),allocated=0;
         for(size_t i=0;i<gpuGroups_.size();++i) {
+            // Include retired but not yet released allocations.
+            if(gpuGroups_[i].particles){
+                const auto bytes=estimateGpuEmitterAllocation(gpuGroups_[i].particles->allocatedCapacity());
+                allocated=bytes>SIZE_MAX-allocated?SIZE_MAX:allocated+bytes;
+            }
             if(gpuGroups_[i].live())++liveGroups;
             else if(!gpuGroups_[i].particles && freeSlot==gpuGroups_.size())freeSlot=i;
         }
-        if(liveGroups<budgets_.maxGpuGroups) {
+        const size_t requested=estimateGpuEmitterAllocation(actual.capacity);
+        const bool fitsMemory=!budgets_.maxGpuAllocationBytes||
+            (allocated<=budgets_.maxGpuAllocationBytes&&requested<=budgets_.maxGpuAllocationBytes-allocated);
+        if(liveGroups<budgets_.maxGpuGroups&&fitsMemory) {
             auto particles=std::make_unique<ComputeParticles>();
             ComputeEmitterDesc desc=eligible.gpu;
             desc.backend=ComputePreference::RequireGpu;
@@ -223,7 +232,7 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
                 return true;
             }
             reason_="GPU pool group initialization failed: "+particles->reason();
-        } else reason_="SpectraFX max unique GPU resource groups reached";
+        } else reason_=fitsMemory?"SpectraFX max unique GPU resource groups reached":"SpectraFX GPU allocation budget exhausted";
     } else if(wantsGpu) {
         reason_=!eligible.eligible?eligible.reason:
             "Metal compute or required quality unavailable for pooled GPU emitter";

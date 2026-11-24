@@ -136,8 +136,14 @@ int main() {
     std::string reason;
     check(spectra::validComputeEmitter(config,&reason),"default config invalid");
     auto invalid=config;
-    invalid.capacity=4097;
-    check(!spectra::validComputeEmitter(invalid,&reason),"unsafe >4096 vertex/index capacity accepted");
+    invalid.capacity=65536;
+    check(spectra::validComputeEmitter(invalid,&reason),"large group descriptor rejected");
+    check(!spectra::gpuEmitterUsesWideIndices(16384)&&spectra::gpuEmitterUsesWideIndices(16385),"wide index boundary");
+    invalid.capacity=spectra::kGpuEmitterMaxSlots;
+    check(spectra::validComputeEmitter(invalid,&reason),"maximum supported descriptor rejected");
+    invalid.capacity=spectra::kGpuEmitterMaxSlots+1;
+    check(!spectra::validComputeEmitter(invalid,&reason),"allocation safety ceiling bypassed");
+    check(spectra::estimateGpuEmitterAllocation(65536)>size_t(32)*1024*1024,"allocation estimate missing overhead");
     invalid=config; invalid.burst=0;
     check(!spectra::validComputeEmitter(invalid,&reason),"zero burst accepted");
     invalid=config; invalid.lifetime=-3;

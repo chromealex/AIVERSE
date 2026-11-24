@@ -44,7 +44,7 @@ public:
         std::vector<lib::mechanics::SpectraSourceSnapshot> rows,gpuRows;
         std::set<std::string> seen;
         error_.clear();
-        for(size_t i=0;i<doc.data.entities.size()&&rows.size()+gpuRows.size()<2048;++i){
+        for(size_t i=0;i<doc.data.entities.size()&&rows.size()+gpuRows.size()<65536;++i){
             const auto& entity=doc.data.entities[i];
             const auto& value=entity.extra["components"]["SpectraSource"];
             if(!value.isObject()||!entity.at.isNull())continue;
@@ -89,6 +89,7 @@ public:
     void draw(){if(ready_)particles_.render({});if(gpuFrameOpen_)gpuPool_.draw();}
     void finish(){if(gpuFrameOpen_){gpuPool_.endPresentationFrame();gpuFrameOpen_=false;}}
 private:
+    static constexpr uint32_t kStudioMaxGroupSlots=65536;
     bool initialize(gfx::Device& device){
         textures_.init(device);
         particles_.setFileReader([this](const std::string& path,std::string& out){return read(path,out);});
@@ -104,7 +105,9 @@ private:
         if(!particles_.init(&device)){error_=particles_.lastError();textures_.shutdown();return false;}
         presenter_=std::make_unique<lib::mechanics::SpectraPresentationSystem>(particles_);
         spectra::PoolWorldBudgets budgets;
-        budgets.maxGpuGroups=16;budgets.maxGroupCapacity=1024;budgets.maxSources=4096;
+        budgets.maxGpuGroups=256;budgets.maxGroupCapacity=kStudioMaxGroupSlots;budgets.maxSources=65536;
+        budgets.maxBurstsPerFrame=16384;
+        budgets.maxGpuAllocationBytes=512ull*1024*1024;
         if(gpuPool_.init(&device,budgets))
             gpuPresenter_=std::make_unique<spectra::GpuEcsAttachmentPresenter>(gpuPool_);
         ready_=true;return true;
@@ -132,7 +135,7 @@ private:
     }
     bool define(const std::string& name){
         if(definitions_.count(name))return true;
-        if(definitions_.size()>=128){error_="SpectraFX scene definition limit reached";return false;}
+        if(definitions_.size()>=4096){error_="SpectraFX scene definition limit reached";return false;}
         std::string text;
         if(!read("fx/graphs/"+name+".vfx.json",text)||text.size()>512*1024){
             error_="Missing or oversized SpectraFX graph: "+name;return false;
@@ -157,6 +160,16 @@ private:
                 spectra::PoolContinuousEmission emission;
                 spectra::GraphRuntimeOptions options;
                 options.preference=spectra::ComputePreference::RequireGpu;options.gpuProgram=true;
+                // Small default groups; opt in to larger allocations per graph.
+                const auto& poolCapacity=graph["scenePoolCapacity"];
+                options.capacity=16384;
+                if(!poolCapacity.isNull()){
+                    const auto slots=poolCapacity.integer(-1);
+                    if(!poolCapacity.isNumber()||poolCapacity.numberLiteral().find_first_of(".eE-")!=std::string::npos||
+                       slots<1||slots>kStudioMaxGroupSlots)
+                        throw std::runtime_error("Invalid scenePoolCapacity");
+                    options.capacity=uint32_t(slots);
+                }
                 if(spectra::readScenePoolEmission(graph,emission)&&
                    spectra::inspectGraphGpuEligibility(def,options).eligible&&
                    gpuPool_.defineGraph(name,graph,Json::object(),options)&&

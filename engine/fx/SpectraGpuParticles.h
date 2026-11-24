@@ -33,8 +33,17 @@ enum class ComputeBackend : uint8_t { Cpu, Metal };
 ComputeBackend chooseComputeBackend(gfx::Backend backend, bool computeAvailable,
                                     ComputePreference preference);
 
+// Allocation safety ceiling for the expanded-quad backend, not a global scene limit.
+inline constexpr uint32_t kGpuEmitterMaxSlots=262144;
+inline constexpr uint32_t kGpuCheckpointCaptureMaxSlots=4096;
+inline constexpr uint32_t kGpuUInt16QuadMaxSlots=16384;
+inline constexpr bool gpuEmitterUsesWideIndices(uint32_t capacity){return capacity>kGpuUInt16QuadMaxSlots;}
+// Conservative buffer accounting envelope; not a driver memory measurement.
+inline constexpr size_t estimateGpuEmitterAllocation(uint32_t capacity){
+    return size_t(capacity)*512u+65536u;
+}
 struct ComputeEmitterDesc {
-    uint32_t capacity = 1024;          // GPU hard limit: 4096 slots (16-bit quad indices)
+    uint32_t capacity = 1024;          // default only; ceiling is kGpuEmitterMaxSlots
     uint32_t burst = 8;                // particles per call to burstAt
     float lifetime = 0.8f;            // seconds
     float speed = 3.0f;
@@ -58,7 +67,7 @@ struct ComputeEmitterDesc {
     Json shaderGraph;
     Json graphInputs; // four vertex graphData source names
     // Opt-in async checkpoint cadence (0 = disabled). One full capture is
-    // at most 512 KiB / eight 64 KiB reads at capacity 4096.
+    // remains limited to kGpuCheckpointCaptureMaxSlots independently of simulation.
     uint32_t checkpointEveryFrames = 0;
     AdaptiveCheckpointPolicy adaptiveCheckpoint{};
     // Optional shared readback budget; all GPU emitters on one Device should
@@ -124,6 +133,7 @@ struct ComputeStats {
 // Legacy ParticleSystem and existing RTS/FPS VFX are untouched.
 class ComputeParticles final {
 public:
+    uint32_t allocatedCapacity() const {return desc_.capacity;}
     ComputeParticles() = default;
     ~ComputeParticles() { shutdown(); }
     ComputeParticles(const ComputeParticles&) = delete;

@@ -52,7 +52,7 @@ struct PoolLoadSheddingPolicy {
 
 struct PoolWorldBudgets {
     uint32_t maxGpuGroups = 16;        // unique compiled graph + backend policy
-    uint32_t maxGroupCapacity = 1024;  // each ComputeParticles resource (1..4096)
+    uint32_t maxGroupCapacity = 1024;  // configurable allocation per group
     uint32_t maxBurstsPerFrame = 256;  // global presentation submission limit
     uint32_t maxSources = 4096;        // live per-source emitter handles
     PoolLoadSheddingPolicy loadShedding{};
@@ -62,6 +62,8 @@ struct PoolWorldBudgets {
     // using this Device. The defaults reserve RHI room for other readbacks.
     CheckpointReadbackLimits checkpointReadback{};
     std::shared_ptr<CheckpointReadbackBudget> sharedCheckpointBudget;
+    // Aggregate conservative allocation budget; zero retains legacy behavior.
+    size_t maxGpuAllocationBytes=0;
 };
 
 struct PoolCheckpointStats {

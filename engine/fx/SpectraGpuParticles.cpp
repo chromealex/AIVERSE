@@ -39,7 +39,7 @@ ComputeBackend chooseComputeBackend(gfx::Backend backend,bool computeAvailable,
 }
 bool validComputeEmitter(const ComputeEmitterDesc& d,std::string* why) {
     const auto fail=[&](const char* msg){if(why)*why=msg;return false;};
-    if(d.capacity==0||d.capacity>4096)return fail("GPU emitter capacity must be 1..4096");
+    if(d.capacity==0||d.capacity>kGpuEmitterMaxSlots)return fail("GPU emitter capacity exceeds allocation safety ceiling");
     if(d.burst==0||d.burst>64)return fail("GPU emitter burst must be 1..64");
     if(d.lifetime<0.01f||d.lifetime>60.f||!finite(d.lifetime))return fail("invalid lifetime");
     if(d.speed<0.f||d.speed>500.f||!finite(d.speed))return fail("invalid speed");
@@ -150,7 +150,8 @@ bool ComputeParticles::initGpu() {
     readbackLifetime_=std::make_shared<uint64_t>(0);
     vmFrameRevision_=0;
     checkpointRevision_=0;
-    checkpointCadence_.configure(desc_.checkpointEveryFrames,desc_.adaptiveCheckpoint);
+    checkpointCadence_.configure(desc_.capacity<=kGpuCheckpointCaptureMaxSlots?desc_.checkpointEveryFrames:0,
+                                 desc_.capacity<=kGpuCheckpointCaptureMaxSlots?desc_.adaptiveCheckpoint:AdaptiveCheckpointPolicy{});
     asyncCheckpointPending_=false;
     lastCheckpoint_={};
     if(!device_) {reason_="no RHI Device";return false;}
@@ -208,15 +209,20 @@ bool ComputeParticles::initGpu() {
     vertices_=buffer(*device_,gfx::BufferType::Storage,
                      cap*4*sizeof(Vertex),nullptr,"SpectraFX GPU quad vertices");
 
-    std::vector<uint16_t> idx(cap*6);
-    for(uint32_t n=0;n<cap;++n) {
-        const uint16_t i=uint16_t(n*4);
-        const size_t at=size_t(n)*6;
-        idx[at]=i;idx[at+1]=uint16_t(i+1);idx[at+2]=uint16_t(i+2);
-        idx[at+3]=i;idx[at+4]=uint16_t(i+2);idx[at+5]=uint16_t(i+3);
-    }
-    indices_=buffer(*device_,gfx::BufferType::Index,idx.size()*sizeof(uint16_t),
-                    idx.data(),"SpectraFX GPU billboard indices");
+    const bool wideIndices=gpuEmitterUsesWideIndices(cap);
+    // Preserve compact indices for small groups; large groups use UInt32.
+    auto buildIndices=[&]<class Index>(){
+        std::vector<Index> idx(size_t(cap)*6);
+        for(uint32_t n=0;n<cap;++n){
+            const uint32_t i=n*4;
+            const size_t at=size_t(n)*6;
+            idx[at]=Index(i);idx[at+1]=Index(i+1);idx[at+2]=Index(i+2);
+            idx[at+3]=Index(i);idx[at+4]=Index(i+2);idx[at+5]=Index(i+3);
+        }
+        return buffer(*device_,gfx::BufferType::Index,idx.size()*sizeof(Index),
+                      idx.data(),"SpectraFX GPU billboard indices");
+    };
+    indices_=wideIndices?buildIndices.operator()<uint32_t>():buildIndices.operator()<uint16_t>();
 
     // One soft-sprite texture shared across all GPU particles in this first
     // backend. Texture atlas/mesh/ribbons remain on the existing CPU backend.
@@ -254,7 +260,7 @@ bool ComputeParticles::initGpu() {
         pd.attrs[2]={2,gfx::VertexFormat::UByte4N,20};
         if(materialActive)pd.attrs[3]={3,gfx::VertexFormat::Float4,24};
         pd.attrCount=materialActive?4:3;pd.stride=sizeof(Vertex);
-        pd.indexType=gfx::IndexType::UInt16;
+        pd.indexType=wideIndices?gfx::IndexType::UInt32:gfx::IndexType::UInt16;
         pd.cull=gfx::CullMode::None;pd.blend=gfx::BlendMode::Additive;
         pd.depthTest=true;pd.depthWrite=false;
         pd.label="SpectraFX GPU additive";
@@ -280,7 +286,7 @@ bool ComputeParticles::initGpu() {
     pendingSlots_.reserve(cap);
     pendingProgramParams_.reserve(cap);
     aliveSlots_.reserve(cap);
-    stats_.gpuBytes=size_t(cap)*(sizeof(ParticleState)*2+3*sizeof(uint32_t)+4*sizeof(Vertex)+6*sizeof(uint16_t))
+    stats_.gpuBytes=size_t(cap)*(sizeof(ParticleState)*2+3*sizeof(uint32_t)+4*sizeof(Vertex)+6*(wideIndices?sizeof(uint32_t):sizeof(uint16_t)))
                     +size_t(n*n*4)+2*sizeof(zero)+sizeof(zeroArgs)
                     +size_t(cap)*2*sizeof(ProgramParams)+sizeof(vmPayload)
                     +size_t(cap)*sizeof(ProgramAttributes)+sizeof(graphChannels);
@@ -873,9 +879,9 @@ bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) 
        !pendingStates_.empty() || !pendingKillSlots_.empty() ||
         !killedSlotsAwaitingFrame_.empty())return false;
 
-    // At most eight 64 KiB chunks for the existing 4096-slot GPU backend.
-    // Every callback carries bytes from a single ordered Metal command buffer.
+    // Checkpoint v1/readback quotas are independent of simulation capacity.
     const size_t n=ages_.size();
+    if(n>kGpuCheckpointCaptureMaxSlots)return false;
     const std::array<size_t,3> lengths{
         n*sizeof(ParticleState),n*sizeof(ProgramParams),
         n*sizeof(ProgramAttributes)
@@ -1163,6 +1169,7 @@ bool ComputeParticles::captureGpuCheckpoint(GpuCheckpoint& out) {
        !pendingStates_.empty() || !pendingKillSlots_.empty() ||
         !killedSlotsAwaitingFrame_.empty())return false;
     const size_t n=ages_.size();
+    if(n>kGpuCheckpointCaptureMaxSlots)return false;
     // A checkpoint must include all physical slots, not merely those that
     // survived the previous draw or the CPU-estimated indirect draw count.
     std::vector<ParticleState> state(n);
