@@ -448,10 +448,7 @@ void GameCore::applyEffect(Simulation& sim, const EffectDef& e, int list, int in
     case EffectKind::Buff: {
         const uint32_t until = tick + fxTicks(e.duration, sim.tickRate());
         for (Entity h : targets()) if (auto* b = w.tryGet<Buffs>(h)) {
-            Buff nb{e.mod.stat, e.mod.add, e.mod.mul, until, ctx.sourceType};
-            bool found = false;
-            for (auto& x : b->list) if (x.stat == nb.stat && x.sourceType == nb.sourceType) { x = nb; found = true; }
-            if (!found) b->list.push_back(nb);
+            upsertTimedBuff(*b, {e.mod.stat, e.mod.add, e.mod.mul, until, ctx.sourceType, e.mod.stackingGroup});
         }
         break;
     }
