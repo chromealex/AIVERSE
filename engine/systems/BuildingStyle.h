@@ -66,6 +66,19 @@ struct StructureKind{
     // Role-authored façade rhythm and roof scale for primary architecture.
     float facadeBay=4.f,facadeStorey=3.1f,glazingFraction=.65f,profileRoofScale=1.f;
 };
+enum class InteriorForm : uint8_t { Plain, Layered, Monumental, Ribbed, Faceted, Organic, Pressure };
+enum class InteriorSupport : uint8_t { Legs, Trestle, Buttress, Pipe, Rail, Pedestal, Organic, Salvage, Column, Plinth, Sled };
+enum class InteriorFixture : uint8_t { Panel, Lantern, Ring, Strip, Cage, Orb, Layered };
+enum class InteriorDecor : uint8_t { Plain, Vessel, Crystal, Gauge, Terminal, Plant, Relic, Stack };
+struct BuildingInteriorGrammar {
+    InteriorForm form=InteriorForm::Plain;
+    InteriorSupport support=InteriorSupport::Legs;
+    InteriorFixture fixture=InteriorFixture::Panel;
+    InteriorDecor decor=InteriorDecor::Plain;
+    int finish=-1,frame=-1,accent=-1,emitter=-1;
+    StyleRgb lightTint{1,1,1};
+    float lightGain=1;
+};
 struct BuildingStyle{
     std::string id,name;
     std::vector<StyleMaterial> materials;
@@ -92,6 +105,7 @@ struct BuildingStyle{
     struct Ribs{int material=-1;float width=0.18f,depth=0.25f,chance=0;StyleLight light;}ribs;            // vertical fins between window columns
     struct Sign{int material=-1,frame=-1;float chance=0,width=0.6f,depth=0.45f;StyleRange height{0.4f,0.7f};}sign;   // vertical light sign on a corner
     // Proportions a setting implies (ribbon windows, tall floors); applyBuildingStyle() writes them into a BuildingDef.
+    BuildingInteriorGrammar interiorGrammar;
     struct Proportions{bool window=false,door=false,floorHeight=false;uint32_t minFloors=1,maxFloors=10;Fixed windowWidth,windowHeight,windowSill,windowSpacing,doorWidth,doorHeight,floor;}proportions;
 };
 // Writes the style's proportions into the definition; keeps the definition unchanged when the result would not
@@ -544,7 +558,7 @@ inline BuildingStyle readBuildingStyle(const Json& j,const std::string& path="st
     auto allow=[](const Json& o,const std::string& p,std::initializer_list<const char*> keys){
         if(!o.isObject())throw JsonError(p+": expected object");
         for(const auto& [k,v]:o.members()){(void)v;if(std::none_of(keys.begin(),keys.end(),[&](const char* n){return k==n;}))throw JsonError(p+": unknown key '"+k+"'");}};
-    allow(j,path,{"id","name","materials","palettes","shell","interior","roof","panels","base","band","corners","window","door","parapet","roofBlocks","props","ribs","sign","proportions","crown","skirt","buttresses","pipes","hazard","structure","structures"});
+    allow(j,path,{"id","name","materials","palettes","shell","interior","roof","panels","base","band","corners","window","door","parapet","roofBlocks","props","ribs","sign","proportions","crown","skirt","buttresses","pipes","hazard","structure","structures","interiorGrammar"});
     BuildingStyle s;s.id=j["id"].str();s.name=j["name"].str(s.id);
     if(s.id.empty())throw JsonError(path+".id: expected string");
     auto num=[](const Json& v,const std::string& p){if(!v.isNumber())throw JsonError(p+": expected number");return float(v.fx().toDouble());};
@@ -644,6 +658,25 @@ inline BuildingStyle readBuildingStyle(const Json& j,const std::string& path="st
             s.palettes.push_back(pal);}}
     s.shell=mat(j,"shell",path);s.interior=mat(j,"interior",path);s.roof=mat(j,"roof",path);
     if(s.shell<0||s.interior<0||s.roof<0)throw JsonError(path+": shell, interior and roof materials are required");
+    if(j.has("interiorGrammar")){
+        const auto p=path+".interiorGrammar";const auto& o=j["interiorGrammar"];
+        allow(o,p,{"form","support","fixture","decor","finish","frame","accent","emitter","lightTint","lightGain"});
+        auto choice=[&](const char* key,std::initializer_list<const char*> names){
+            if(!o.has(key))return 0;
+            const auto name=o[key].str();int i=0;for(auto n:names){if(name==n)return i;++i;}
+            throw JsonError(p+"."+key+": unknown interior grammar choice");
+        };
+        auto& g=s.interiorGrammar;
+        g.form=InteriorForm(choice("form",{"plain","layered","monumental","ribbed","faceted","organic","pressure"}));
+        g.support=InteriorSupport(choice("support",{"legs","trestle","buttress","pipe","rail","pedestal","organic","salvage","column","plinth","sled"}));
+        g.fixture=InteriorFixture(choice("fixture",{"panel","lantern","ring","strip","cage","orb","layered"}));
+        g.decor=InteriorDecor(choice("decor",{"plain","vessel","crystal","gauge","terminal","plant","relic","stack"}));
+        g.finish=mat(o,"finish",p);g.frame=mat(o,"frame",p);g.accent=mat(o,"accent",p);g.emitter=mat(o,"emitter",p);
+        if(o.has("lightTint"))g.lightTint=rgb(o["lightTint"],p+".lightTint");
+        get(o,"lightGain",g.lightGain,p);
+        for(float c:g.lightTint)if(!std::isfinite(c)||c<0||c>1)throw JsonError(p+".lightTint: expected 0..1");
+        if(!std::isfinite(g.lightGain)||g.lightGain<.25f||g.lightGain>2.f)throw JsonError(p+".lightGain: expected .25..2");
+    }
     if(j.has("panels")){auto p=path+".panels";const auto& o=j["panels"];allow(o,p,{"material","accent","accentChance","size","gap","depth"});
         s.panels.material=mat(o,"material",p);s.panels.accent=mat(o,"accent",p);get(o,"accentChance",s.panels.accentChance,p);get(o,"gap",s.panels.gap,p);range(o,"depth",s.panels.depth,p);
         if(o.has("size")){const auto& a=o["size"];if(!a.isArray()||a.size()!=2)throw JsonError(p+".size: expected [width, height]");s.panels.width=num(a[0],p+".size[0]");s.panels.height=num(a[1],p+".size[1]");}}

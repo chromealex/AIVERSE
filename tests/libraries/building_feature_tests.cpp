@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <fstream>
 #include <sstream>
+#include <set>
 #include <stdexcept>
 using namespace aiverse;
 using namespace aiverse::lib::systems;
@@ -38,6 +39,26 @@ int main(int argc,char** argv){
         const std::string root=argc>1?argv[1]:".";
         const auto scifi=readBuildingStyle(Json::parse(readFile(root+"/engine/assets/building-styles/scifi.json")));
         const auto modern=readBuildingStyle(Json::parse(readFile(root+"/engine/assets/building-styles/modern.json")));
+        // Visual grammar must vary while geometry bounds and interaction
+        // placement remain style-independent.
+        FunctionalBuildingRecipe interior;interior.width=24;interior.depth=24;interior.height=8;
+        interior.roomsX=interior.roomsZ=2;interior.interiorProfile=BuildingInteriorProfile::Office;
+        interior.furnitureDensity=4;interior.interiorLighting=true;interior.interiorDecor=true;
+        std::set<std::string> signatures;
+        for(const char* id:{"medieval-fantasy","dark-fantasy","steampunk","cyberpunk","scifi-space","alien-civilization","post-apocalypse","modern","ancient-civilizations","asian-historical","solarpunk","underwater"}){
+            const auto style=readBuildingStyle(Json::parse(readFile(root+"/engine/assets/building-styles/"+id+".json")));
+            buildingStyleDetail::Mesher m(style.materials.size());
+            buildingInteriorDetail::Form f{m,0,0,0,1.4f,.8f,.8f};
+            buildingInteriorDetail::furniture(f,style,BuildingFurnitureKind::Desk,style.interior,style.shell,style.roof);
+            std::string signature;
+            for(const auto& v:m.v){for(float p:v.pos)signature+=std::to_string(p)+",";CHECK(v.pos[0]>=-.001f&&v.pos[0]<=1.401f&&v.pos[1]>=-.001f&&v.pos[1]<=.801f&&v.pos[2]>=-.001f&&v.pos[2]<=.801f);}
+            buildingInteriorDetail::Form fixture{m,0,0,0,.44f,.16f,.44f};
+            buildingInteriorDetail::fixture(fixture,style,style.shell,style.roof);
+            for(const auto& v:m.v)for(float p:v.pos)signature+=std::to_string(p)+",";
+            CHECK(signatures.insert(signature).second);
+            const auto result=generateFunctionalBuilding(style,interior);
+            CHECK(result&&result.graph.furniture.size()==16&&result.graph.furnitureSockets.size()==16);
+        }
         FunctionalBuildingRecipe composed;composed.width=24;composed.depth=24;composed.height=12;
         composed.roomsX=composed.roomsZ=3;composed.footprint={"111","101","111"};
         composed.roofProfile=FunctionalRoofProfile::Gable;composed.roofRise=2;

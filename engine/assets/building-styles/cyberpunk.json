@@ -1106,5 +1106,21 @@
       "glazingFraction": 0.584,
       "profileRoofScale": 0.92
     }
+  },
+  "interiorGrammar": {
+    "form": "faceted",
+    "support": "rail",
+    "fixture": "strip",
+    "decor": "terminal",
+    "finish": "inside",
+    "frame": "seam",
+    "accent": "accent",
+    "emitter": "light",
+    "lightTint": [
+      0.66,
+      0.85,
+      1
+    ],
+    "lightGain": 1.25
   }
 }

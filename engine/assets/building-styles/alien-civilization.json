@@ -1066,5 +1066,21 @@
       "glazingFraction": 0.321,
       "profileRoofScale": 1.38
     }
+  },
+  "interiorGrammar": {
+    "form": "organic",
+    "support": "organic",
+    "fixture": "orb",
+    "decor": "crystal",
+    "finish": "inside",
+    "frame": "hull",
+    "accent": "accent",
+    "emitter": "light",
+    "lightTint": [
+      0.65,
+      1,
+      0.82
+    ],
+    "lightGain": 1
   }
 }

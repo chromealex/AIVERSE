@@ -1037,5 +1037,21 @@
       "glazingFraction": 0.277,
       "profileRoofScale": 1.438
     }
+  },
+  "interiorGrammar": {
+    "form": "layered",
+    "support": "trestle",
+    "fixture": "lantern",
+    "decor": "vessel",
+    "finish": "inside",
+    "frame": "plate",
+    "accent": "accent",
+    "emitter": "light",
+    "lightTint": [
+      1,
+      0.72,
+      0.4
+    ],
+    "lightGain": 0.85
   }
 }

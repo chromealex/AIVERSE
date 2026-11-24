@@ -1069,5 +1069,21 @@
       "glazingFraction": 0.161,
       "profileRoofScale": 1.438
     }
+  },
+  "interiorGrammar": {
+    "form": "monumental",
+    "support": "column",
+    "fixture": "lantern",
+    "decor": "relic",
+    "finish": "inside",
+    "frame": "hull",
+    "accent": "accent",
+    "emitter": "light",
+    "lightTint": [
+      1,
+      0.82,
+      0.54
+    ],
+    "lightGain": 0.85
   }
 }

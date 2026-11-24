@@ -1058,5 +1058,21 @@
       "glazingFraction": 0.569,
       "profileRoofScale": 0.977
     }
+  },
+  "interiorGrammar": {
+    "form": "organic",
+    "support": "sled",
+    "fixture": "ring",
+    "decor": "plant",
+    "finish": "inside",
+    "frame": "plate",
+    "accent": "accent",
+    "emitter": "light",
+    "lightTint": [
+      0.88,
+      1,
+      0.76
+    ],
+    "lightGain": 1.1
   }
 }

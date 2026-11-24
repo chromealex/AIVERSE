@@ -1075,5 +1075,21 @@
       "glazingFraction": 0.416,
       "profileRoofScale": 0.977
     }
+  },
+  "interiorGrammar": {
+    "form": "ribbed",
+    "support": "pipe",
+    "fixture": "cage",
+    "decor": "gauge",
+    "finish": "plate",
+    "frame": "pipe",
+    "accent": "accent",
+    "emitter": "light",
+    "lightTint": [
+      1,
+      0.76,
+      0.48
+    ],
+    "lightGain": 0.95
   }
 }

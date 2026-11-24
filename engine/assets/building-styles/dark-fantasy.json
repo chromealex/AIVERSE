@@ -1037,5 +1037,21 @@
       "glazingFraction": 0.219,
       "profileRoofScale": 1.6
     }
+  },
+  "interiorGrammar": {
+    "form": "monumental",
+    "support": "buttress",
+    "fixture": "cage",
+    "decor": "crystal",
+    "finish": "inside",
+    "frame": "trim",
+    "accent": "warn",
+    "emitter": "light",
+    "lightTint": [
+      0.72,
+      0.57,
+      1
+    ],
+    "lightGain": 0.65
   }
 }

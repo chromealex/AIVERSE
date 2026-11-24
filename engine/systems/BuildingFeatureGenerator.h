@@ -6,6 +6,7 @@
 // CPU-only; callable by both native Studio and shipping game code.
 #include "BuildingStructureGraph.h"
 #include "BuildingStructure.h"
+#include "BuildingInteriorGrammar.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -413,29 +414,9 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
             // geometry. Collision deliberately reserves the entire footprint.
             const int finish=style.interior>=0?style.interior:hull;
             const int detail=style.panels.accent>=0?style.panels.accent:trim;
-            using K=BuildingFurnitureKind;
             const float x=solid.x0,y=solid.y0,z=solid.z0,X=solid.x1,Y=solid.y1,Z=solid.z1;
-            const float w=X-x,d=Z-z,h=Y-y;
-            auto box=[&](int mat,float a,float b,float c,float A,float B,float C){
-                mesh.box(mat,x+w*a,y+h*b,z+d*c,x+w*A,y+h*B,z+d*C);
-            };
-            if(item.kind==K::Desk||item.kind==K::Table||item.kind==K::Bench){
-                box(finish,0,.86f,0,1,1,1);
-                for(float a:{.04f,.84f})for(float c:{.06f,.8f})box(detail,a,0,c,a+.12f,.86f,c+.14f);
-            }else if(item.kind==K::Bed){
-                box(detail,0,0,0,1,.43f,1);box(finish,.04f,.43f,.04f,.96f,.67f,.96f);
-                box(detail,.04f,.67f,.06f,.96f,.82f,.28f);box(finish,0,.43f,0,1,1,.07f);
-            }else if(item.kind==K::Sofa){
-                box(finish,0,0,0,1,.48f,1);box(detail,0,.48f,0,1,1,.19f);
-                box(detail,0,.48f,.19f,.12f,.78f,1);box(detail,.88f,.48f,.19f,1,.78f,1);
-            }else if(item.kind==K::Shelf){
-                for(float a:{0.f,.9f})box(detail,a,0,0,a+.1f,1,1);
-                for(float b:{0.f,.3f,.6f,.94f})box(finish,0,b,0,1,b+.06f,1);
-            }else{
-                box(finish,0,0,0,1,.9f,1);box(detail,0,.9f,0,1,1,1);
-                if(item.kind==K::Machine)box(dark,.1f,.3f,0,.9f,.65f,.05f);
-                else box(detail,.2f,.4f,0,.8f,.46f,.04f);
-            }
+            buildingInteriorDetail::Form form{mesh,x,y,z,X-x,Y-y,Z-z};
+            buildingInteriorDetail::furniture(form,style,item.kind,finish,detail,dark);
             addBox(material,x,y,z,X,Y,Z,true,false);
             continue;
         }
@@ -452,16 +433,14 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
     }
     for(const auto& light:graph.interiorLights){
         const int glow=sm.glow>=0?sm.glow:trim;
-        mesh.box(trim,light.x-.22f,light.ceiling-.08f,light.z-.22f,light.x+.22f,light.ceiling,light.z+.22f);
-        mesh.box(glow,light.x-.17f,light.ceiling-.16f,light.z-.17f,light.x+.17f,light.ceiling-.08f,light.z+.17f);
+        buildingInteriorDetail::Form form{mesh,light.x-.22f,light.ceiling-.16f,light.z-.22f,.44f,.16f,.44f};
+        buildingInteriorDetail::fixture(form,style,trim,glow);
         const auto pos=buildingDetail::turn(Vec3{fcoord(light.x),fcoord(light.y),fcoord(light.z)},yaw,fcoord(W),fcoord(D))+origin;
-        result.building.lights.push_back({light.id,{float(pos.x.toDouble()),float(pos.y.toDouble()),float(pos.z.toDouble())},light.color,light.intensity,light.range});
+        result.building.lights.push_back({light.id,{float(pos.x.toDouble()),float(pos.y.toDouble()),float(pos.z.toDouble())},{light.color[0]*style.interiorGrammar.lightTint[0],light.color[1]*style.interiorGrammar.lightTint[1],light.color[2]*style.interiorGrammar.lightTint[2]},light.intensity*style.interiorGrammar.lightGain,light.range});
     }
     for(const auto& item:graph.interiorDecor){
-        const float cx=(item.x0+item.x1)*.5f,cz=(item.z0+item.z1)*.5f;
-        mesh.box(trim,item.x0,item.y0,item.z0,item.x1,item.y0+.07f,item.z1);
-        mesh.box(dark,cx-.045f,item.y0+.07f,cz-.045f,cx+.045f,item.y1-.07f,cz+.045f);
-        mesh.box(style.panels.accent>=0?style.panels.accent:trim,item.x0,item.y1-.07f,item.z0,item.x1,item.y1,item.z1);
+        buildingInteriorDetail::Form form{mesh,item.x0,item.y0,item.z0,item.x1-item.x0,item.y1-item.y0,item.z1-item.z0};
+        buildingInteriorDetail::decor(form,style,trim,style.panels.accent>=0?style.panels.accent:trim);
     }
     for(const auto& socket:graph.sockets){
         BuildingFeatureAnchor anchor;

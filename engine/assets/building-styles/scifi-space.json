@@ -1063,5 +1063,21 @@
       "glazingFraction": 0.402,
       "profileRoofScale": 0.977
     }
+  },
+  "interiorGrammar": {
+    "form": "faceted",
+    "support": "pedestal",
+    "fixture": "ring",
+    "decor": "terminal",
+    "finish": "inside",
+    "frame": "plate",
+    "accent": "accent",
+    "emitter": "light",
+    "lightTint": [
+      0.82,
+      0.93,
+      1
+    ],
+    "lightGain": 1.15
   }
 }
