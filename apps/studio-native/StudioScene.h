@@ -48,7 +48,7 @@ public:
                const StudioFacialPreviewBinding* facialBinding=nullptr);
     void captureNextFrame(gfx::Device::CaptureFn callback) { lastFrameSignature_=0; device_->captureNextFrame(std::move(callback)); }
     Json cavernsPreview(const Json& input) {
-        if(input.has("enabled")||input.has("isolate")||input.has("paging")) {
+        if(input.has("enabled")||input.has("isolate")||input.has("paging")||input.has("budgets")) {
             if(!device_||!cavernsPreview_.configure(*device_,input))
                 throw std::runtime_error("Caverns preview GPU retirement refused");
             lastFrameSignature_=0;
