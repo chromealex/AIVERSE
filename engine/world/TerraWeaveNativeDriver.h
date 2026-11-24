@@ -7,6 +7,7 @@
 #include "engine/world/TerraWeaveNavMeshBridge.h"
 #include "engine/world/TerraWeaveStreaming.h"
 #include "engine/world/NereidFloodVisualScene.h"
+#include "engine/world/TerraWeaveCavernsRimWorldPublication.h"
 #include <cstddef>
 #include <functional>
 #include <span>
@@ -113,6 +114,35 @@ inline NativeTerrainPublishResult publishNativeTerraWeaveFrameAuto(
         navError,terrainUploadBudget,forceRehydrate);
     if(planOut)*planOut=std::move(plan);
     return status;
+}
+
+// Alternative native driver path while a cave/terrain rim edit is pending.
+// Reconcile ECS ground and configureRimWorldFromAuthority BEFORE entering
+// this path. No simulation ticks may change the frozen authority until it
+// finishes. Ordinary publishNativeTerraWeaveFrame must not run concurrently.
+inline caverns::CaveRimWorldProgress publishNativeTerraWeaveRimFrame(
+        const World& ecs,NativeTerraWeaveWorldBinding& binding,
+        TerrainMutationCoordinator& terrain,world::WorldScene& worldScene,
+        caverns::CaveGameplayRuntimeFrame& caves,caverns::CaveTerrainSurfaceBinding& rimBinding,
+        gfx::Device& device,physics::Scene& box,world::SpatialWorld& spatial,
+        nav::Mesh& surfaceNav,const EarthworksNavSource& surfaceNavSource,
+        caverns::CaveNavConfig caveNav,caverns::CaveGameplayEditHost::TerrainHeight height,
+        const caverns::CaveGameplayEditHost::ColliderIdAllocator& caveIds,
+        const TerrainMutationCoordinator::ColliderIdForCell& terrainIds,uint64_t visualRevision,
+        const caverns::CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive,
+        const std::function<bool(const caverns::CaveSurfaceGroupPlan&)>& nativeOwnersReady,
+        size_t cpuJobs=2,size_t terrainUploadBudget=2,caverns::CaveBatchSpec graphics={}){
+    const auto* resource=ecs.resourceConst<TerraWeaveAuthorityResource>();
+    if(!resource||!binding.initialized()||binding.loadedStateRevision()!=resource->stateRevision||
+       !nativeOwnersReady||!exclusive||!exclusive()){
+        caves.quarantineRimPublication();
+        throw std::logic_error("TerraWeave rim driver requires frozen reconciled world");
+    }
+    return caverns::advanceRimWorldPublication(caves,rimBinding,terrain,device,box,spatial,
+        surfaceNav,surfaceNavSource,caveNav,std::move(height),caveIds,terrainIds,
+        visualRevision,exclusive,[&](const caverns::CaveSurfaceGroupPlan& plan){
+            return binding.groundReady()&&binding.publishScene(worldScene)&&nativeOwnersReady(plan);
+        },cpuJobs,terrainUploadBudget,graphics);
 }
 
 } // namespace aiverse::terraweave
