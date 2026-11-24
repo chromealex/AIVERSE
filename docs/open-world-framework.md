@@ -81,13 +81,23 @@ Physics and authoritative state updates remain full-rate. Actual virtualized
 actor/vehicle residency, durable cold advancement and wake admission remain
 unimplemented for the actor persistence adapter.
 
-W1.29a provides a single-type native cold catch-up API. W1.29b is in progress:
+W1.29a provides a single-type native cold catch-up API. W1.29b has source implementation:
 explicit park eligibility at the authoritative tick, complete per-component
 clock/pause policy coverage, and transactional multi-type advancement/wake.
 Acceptance requires denied and incomplete groups to leave hot/cold state
 unchanged, deterministic stable-ID/component ordering, codec roundtrip of
 clocks, unchanged repeated-tick state, and fresh-save/COW continuation.
 No automatic ActorHost parking or new persistence schema in this stage.
+
+W1.30a in progress: integrate existing canonical TrafficCitizen virtual
+journeys with tick-based deadline catch-up when root simulationLod is enabled.
+Preserve existing identity, serialized fields, population cursor, live
+pedestrian/vehicle and bus ownership. Catch up only already virtual trips
+with no materialized body or parked car, using existing destination and
+commute policies. Acceptance: overdue multi-leg trips keep original elapsed
+time, never create a duplicate body, never advance a linked active vehicle,
+reject invalid/overflowing timelines, preserve opt-out behavior and restore
+from existing save/rollback. No automatic generic ECS parking in this slice.
 
 ### Feature-first continuation queue
 
