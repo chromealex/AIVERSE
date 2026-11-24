@@ -137,6 +137,23 @@ int main() {
     require(call("fx_replay_preset_list",Json::object())["presets"].size()==1,"replay listing failed");
     Json getPreset=Json::object();getPreset.set("name",Json::string("first"));
     require(call("fx_replay_preset_get",getPreset)["preset"].getInt("tick")==25,"replay read failed");
+    Json checkPreset=Json::object();checkPreset.set("preset",call("fx_replay_preset_get",getPreset)["preset"]);
+    require(call("fx_replay_preset_check",checkPreset).getStr("state")=="matching","empty direct manifest mismatch");
+    const auto texture=root/"content"/"spark.png";
+    {std::ofstream f(texture,std::ios::binary);f<<"abc";}
+    {std::ofstream f(texture.string()+".meta");f<<R"({"guid":"0123456789abcdef0123456789abcdef"})";}
+    Json dependencyGraph=v2;dependencyGraph.set("testAsset",Json::string("content/spark.png"));
+    Json dependencyPreset=preset;dependencyPreset.set("graphSignature",Json::string(dependencyGraph.dump(-1)));
+    Json dependencySave=Json::object();dependencySave.set("name",Json::string("with_asset"));dependencySave.set("preset",dependencyPreset);
+    require(!call("fx_replay_preset_save",dependencySave).has("error"),"dependency preset save failed");
+    Json dependencyGet=Json::object();dependencyGet.set("name",Json::string("with_asset"));
+    const auto baseline=call("fx_replay_preset_get",dependencyGet);
+    require(baseline["compatibility"].getStr("state")=="matching","resource baseline mismatch");
+    require(baseline["preset"]["dependencies"][size_t(0)].getStr("guid")=="0123456789abcdef0123456789abcdef","GUID not recorded");
+    {std::ofstream f(texture,std::ios::binary|std::ios::trunc);f<<"xyz";}
+    require(call("fx_replay_preset_get",dependencyGet)["compatibility"].getStr("state")=="changed","same-size edit not detected");
+    fs::remove(texture);
+    require(call("fx_replay_preset_get",dependencyGet)["compatibility"].getStr("state")=="unavailable","missing asset not detected");
     getPreset.set("expectedGraphSignature",Json::string("other"));
     require(call("fx_replay_preset_get",getPreset).has("error"),"stale graph revision accepted");
     savePreset.set("name",Json::string("../escape"));

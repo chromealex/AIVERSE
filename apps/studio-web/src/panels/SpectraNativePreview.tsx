@@ -67,6 +67,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [presetName,setPresetName]=useState('');
   const [presetEntries,setPresetEntries]=useState<Array<{name:string;tick?:number;ok:boolean}>>([]);
   const [presetSelected,setPresetSelected]=useState('');
+  const [presetSearch,setPresetSearch]=useState('');
+  const [presetCompatibility,setPresetCompatibility]=useState('');
   const [presetLibraryBusy,setPresetLibraryBusy]=useState(false);
   const [liveScalars,setLiveScalars]=useState<Record<string,number>>({});
   const [replayRestoring,setReplayRestoring]=useState(false);
@@ -236,6 +238,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       setError('GPU allocation seed must be integer 0..2147483647 and cannot be combined with CPU seed');return;
     }
     if(gpuShaderSeed!==''&&(!Number.isInteger(Number(gpuShaderSeed))||Number(gpuShaderSeed)<0||Number(gpuShaderSeed)>4294967295||replaySeed!==''||gpuAllocationSeed!=='')){setError('GPU shader seed must be uint32 and independent');return;}
+    setPresetCompatibility('Not checked · in-memory recipe');
     setReplayPreset({format:'aiverse.spectrafx.replay',version:1,parameters:{...liveScalars},...(replaySeed!==''?{seed:Number(replaySeed)}:{}),
       ...(gpuShaderSeed!==''?{gpuShaderSeed:Number(gpuShaderSeed)}:{}),
       ...(gpuAllocationSeed!==''?{gpuAllocationSeed:Number(gpuAllocationSeed)}:{}),
@@ -274,6 +277,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       if(preset.projectPath!==projectPath||preset.graphSignature!==graphSignature)
         throw new Error('Replay project or graph revision mismatch');
       setReplayPreset(preset);
+      const compatibility=result.compatibility as {state?:string}|undefined;
+      setPresetCompatibility(compatibility?.state??'unverified');
       setReplaySeed(preset.seed===undefined?'':String(preset.seed));
       setGpuAllocationSeed(preset.gpuAllocationSeed===undefined?'':String(preset.gpuAllocationSeed));
       setGpuShaderSeed(preset.gpuShaderSeed===undefined?'':String(preset.gpuShaderSeed));
@@ -313,6 +318,11 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     try{
       replayCancelled.current=false;
       replayGeneration.current=undefined;
+      if(replayPreset.dependencies){
+        const check=await presetOp('fx_replay_preset_check',{preset:replayPreset});
+        setPresetCompatibility(String(check.state??'unverified'));
+        if(check.state!=='matching')throw new Error('Replay direct resources changed or are unavailable');
+      }
       const restored=await invokePreview({action:'replayRestore',expectedGeneration:state?.generation,
         ...(replayPreset.gpuBirthRandom===undefined?{}:{graph,gpuBirthRandom:replayPreset.gpuBirthRandom}),
         camera:replayPreset.camera,tick:replayPreset.tick,parameters:replayPreset.parameters,
@@ -615,11 +625,15 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
         disabled={busy||capturePending} onChange={e=>{
           void importReplayPreset(e.target.files?.[0]);e.target.value='';
         }}/></label>
+      <StudioField label="Search replay presets" htmlFor="spectra-preset-search">
+        <StudioInput id="spectra-preset-search" value={presetSearch} onChange={e=>setPresetSearch(e.target.value)}/>
+      </StudioField>
+      {presetCompatibility&&<small>Direct resource compatibility: {presetCompatibility}</small>}
       <StudioField label="Saved Replay Presets" htmlFor="spectra-preset-library">
         <StudioSelect id="spectra-preset-library" value={presetSelected} disabled={!active||presetLibraryBusy||busy}
           onChange={e=>setPresetSelected(e.target.value)}>
           <option value="">Select saved preset…</option>
-          {presetEntries.map(p=><option key={p.name} value={p.name} disabled={!p.ok}>{p.name}{p.ok?' · tick '+p.tick:' · incompatible'}</option>)}
+          {presetEntries.filter(p=>p.name.includes(presetSearch.toLowerCase().trim())||p.name===presetSelected).map(p=><option key={p.name} value={p.name} disabled={!p.ok}>{p.name}{p.ok?' · tick '+p.tick:' · incompatible'}</option>)}
         </StudioSelect>
       </StudioField>
       <StudioButton size="sm" disabled={!active||!presetSelected||presetLibraryBusy||busy} onClick={()=>void selectNamedPreset()}>Load saved preset</StudioButton>

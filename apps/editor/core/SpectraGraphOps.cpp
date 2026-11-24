@@ -7,6 +7,8 @@
 #include "engine/fx/SpectraAuthoring.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -201,6 +203,94 @@ void validateReplayPreset(const Json& p,const Workspace& ws) {
             throw std::runtime_error("Invalid replay scalar: "+name);
     }
 }
+// Bounded direct content dependencies. FNV-1a detects changes, not authenticity.
+constexpr uint64_t kReplayDependencyBudget=128ull*1024*1024;
+void collectReplayPaths(const Json& value,std::set<std::string>& paths,unsigned depth=0) {
+    if(depth>64)throw std::runtime_error("Replay graph nesting limit exceeded");
+    if(value.isString()){
+        const auto text=value.str();
+        if(text.rfind("content/",0)==0){
+            paths.insert(text);
+            if(paths.size()>64)throw std::runtime_error("Too many replay dependencies");
+        }
+    }else if(value.isArray()){
+        for(const auto& item:value.items())collectReplayPaths(item,paths,depth+1);
+    }else if(value.isObject()){
+        for(const auto& [key,item]:value.members()){(void)key;collectReplayPaths(item,paths,depth+1);}
+    }
+}
+fs::path checkedReplayDependency(const Workspace& ws,const std::string& relative) {
+    if(relative.rfind("content/",0)!=0||relative.size()>520||
+       relative.find('\\')!=std::string::npos||relative.find(':')!=std::string::npos||
+       std::any_of(relative.begin(),relative.end(),[](unsigned char c){return c<32;}))
+        throw std::runtime_error("Unsafe replay resource path");
+    fs::path path=ws.project.dir;
+    for(const auto& part:fs::path(relative)){
+        if(part.empty()||part=="."||part=="..")throw std::runtime_error("Unsafe replay resource component");
+        path/=part;
+        (void)replayFileStatus(path);
+    }
+    if(!fs::is_regular_file(replayFileStatus(path)))throw std::runtime_error("Missing replay resource: "+relative);
+    return path;
+}
+std::string replayFingerprint(const fs::path& file,uint64_t& budget) {
+    const auto size=fs::file_size(file);
+    if(size>budget)throw std::runtime_error("Replay dependency byte budget exceeded");
+    std::ifstream input(file,std::ios::binary);
+    if(!input)throw std::runtime_error("Cannot read replay dependency");
+    std::array<char,16384> buffer{};
+    uint64_t hash=14695981039346656037ULL,read=0;
+    while(input){
+        input.read(buffer.data(),std::streamsize(buffer.size()));
+        const auto count=uint64_t(input.gcount());
+        if(count>budget-read)throw std::runtime_error("Replay dependency byte budget exceeded");
+        for(size_t i=0;i<count;++i){hash^=static_cast<unsigned char>(buffer[i]);hash*=1099511628211ULL;}
+        read+=count;
+    }
+    if(input.bad()||read!=size)throw std::runtime_error("Replay dependency changed during read");
+    budget-=read;
+    return std::to_string(hash)+":"+std::to_string(read);
+}
+Json replayDependencies(const Json& preset,const Workspace& ws) {
+    std::set<std::string> paths;
+    collectReplayPaths(Json::parse(preset.getStr("graphSignature")),paths);
+    Json manifest=Json::array();
+    uint64_t budget=kReplayDependencyBudget;
+    for(const auto& relative:paths){
+        const auto file=checkedReplayDependency(ws,relative);
+        Json row=Json::object();
+        row.set("path",strGraph(relative));
+        row.set("content",strGraph(replayFingerprint(file,budget)));
+        const auto meta=fs::path(file.string()+".meta");
+        if(fs::is_regular_file(replayFileStatus(meta))){
+            if(fs::file_size(meta)>65536)throw std::runtime_error("Oversized asset metadata");
+            const auto metadata=Json::parse(readFile(meta));
+            const auto guid=metadata.getStr("guid");
+            if(guid.size()!=32||guid.find_first_not_of("0123456789abcdef")!=std::string::npos)
+                throw std::runtime_error("Invalid asset GUID for "+relative);
+            row.set("guid",strGraph(guid));
+            row.set("meta",strGraph(replayFingerprint(meta,budget)));
+        }
+        manifest.push(std::move(row));
+    }
+    return manifest;
+}
+Json replayCompatibility(const Json& preset,const Workspace& ws) {
+    Json out=Json::object();
+    out.set("scope",strGraph("direct content paths and existing meta sidecars only"));
+    if(!preset.has("dependencies")){
+        out.set("state",strGraph("unverified"));return out;
+    }
+    try{
+        const auto current=replayDependencies(preset,ws);
+        const bool same=current.dump(-1)==preset["dependencies"].dump(-1);
+        out.set("state",strGraph(same?"matching":"changed"));
+        out.set("count",Json::number(int64_t(current.size())));
+    }catch(const std::exception& e){
+        out.set("state",strGraph("unavailable"));out.set("detail",strGraph(e.what()));
+    }
+    return out;
+}
 Json readReplayPreset(const fs::path& file,const Workspace& ws) {
     if(!fs::is_regular_file(replayFileStatus(file))||fs::file_size(file)>kReplayMaxBytes)
         throw std::runtime_error("Missing or oversized replay preset");
@@ -242,6 +332,7 @@ void registerSpectraGraphOps(Workspace& ws) {
             try{
                 const auto preset=readReplayPreset(dir/(name+kReplaySuffix),ws);
                 row.set("tick",preset["tick"]);row.set("ok",Json::fromBool(true));
+                row.set("hasDependencies",Json::fromBool(preset.has("dependencies")));
             }catch(const std::exception& e){row.set("ok",Json::fromBool(false));row.set("error",strGraph(e.what()));}
             entries.push(std::move(row));
         }
@@ -257,15 +348,31 @@ void registerSpectraGraphOps(Workspace& ws) {
         if(p.has("expectedGraphSignature")&&(!p["expectedGraphSignature"].isString()||
            p.getStr("expectedGraphSignature")!=preset.getStr("graphSignature")))
             throw std::runtime_error("Replay graph revision mismatch");
-        Json out=Json::object();out.set("name",strGraph(name));out.set("preset",preset);return out;
+        Json out=Json::object();out.set("name",strGraph(name));out.set("preset",preset);
+        out.set("compatibility",replayCompatibility(preset,ws));return out;
+    });
+    add("fx_replay_preset_check","Check current direct project content dependencies against a recorded replay manifest; legacy presets are unverified.",
+        R"({"properties":{"preset":{"type":"object"},"expectedProjectPath":{"type":"string"}},"required":["preset"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);
+        if(p["preset"].dump(-1).size()>kReplayMaxBytes)throw std::runtime_error("Replay preset exceeds 64 KiB");
+        validateReplayPreset(p["preset"],ws);
+        return replayCompatibility(p["preset"],ws);
     });
     add("fx_replay_preset_save","Create an immutable named replay preset asset. Existing names are never overwritten.",
         R"({"properties":{"name":{"type":"string"},"preset":{"type":"object"},"expectedProjectPath":{"type":"string"}},"required":["name","preset"]})",
         [&ws](const Json& p){
         requireReplayProject(ws,p);const auto name=requireGraphName(p);
-        const auto bytes=p["preset"].dump(-1);
-        if(bytes.size()>kReplayMaxBytes)throw std::runtime_error("Replay preset exceeds 64 KiB");
-        validateReplayPreset(p["preset"],ws);
+        Json preset=p["preset"];
+        if(preset.dump(-1).size()>kReplayMaxBytes)throw std::runtime_error("Replay preset exceeds 64 KiB");
+        validateReplayPreset(preset,ws);
+        // Preserve existing baselines; never silently bless a changed resource.
+        if(preset.has("dependencies")){
+            if(replayCompatibility(preset,ws).getStr("state")!="matching")
+                throw std::runtime_error("Replay resource baseline no longer matches");
+        }else preset.set("dependencies",replayDependencies(preset,ws));
+        const auto bytes=preset.dump(-1);
+        if(bytes.size()>kReplayMaxBytes)throw std::runtime_error("Replay preset with dependencies exceeds 64 KiB");
         const auto dir=replayDirectory(ws,true);
         const auto file=dir/(name+kReplaySuffix);
         if(fs::exists(replayFileStatus(file)))throw std::runtime_error("Replay name already exists");
