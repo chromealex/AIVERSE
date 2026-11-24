@@ -100,14 +100,9 @@ public:
                         owner_->setGraphicsOptions(spec);
                         owner_->open(source);
                         if(region){
-                            // Four slots per axis, with a reserved gradient halo.
-                            resolution_=8;spacingCm_=std::max(1,region->anchor.halfExtentCm/24);
-                            // Exact Q16 chunk spans require spacing divisible by 25
-                            // at resolution 8. Tiny charts keep ordinary preview only.
-                            if(spacingCm_>=25)spacingCm_=(spacingCm_/25)*25;
-                            std::set<cave::ChunkKey3,cave::KeyLess> keys;
-                            for(int z=-2;z<2;++z)for(int y=-2;y<2;++y)for(int x=-2;x<2;++x)keys.insert({x,y,z});
-                            owner_->setChartPreviewDemand(std::move(keys));
+                            auto lattice=cave::caveChartPreviewLattice(region->anchor.halfExtentCm);
+                            resolution_=lattice.resolution;spacingCm_=lattice.spacingCm;
+                            owner_->setChartPreviewDemand(std::move(lattice.keys),lattice.halfExtentCm);
                         }
                     }else if(owner_->opened())owner_->replaceSnapshot(source);
                     else owner_->open(source);
@@ -229,6 +224,8 @@ public:
         if(owner_){
             const auto r=owner_->streaming();const auto g=owner_->gpuStats();const auto m=owner_->gpuMemoryStats();
             count("sourceRevision",owner_->sourceRevision());count("tracked",r.tracked);count("ready",r.ready);
+            count("chartSlots",owner_->chartSlots());count("exactChartSlots",owner_->exactChartSlots());
+            boolean("chartLodFallback",owner_->chartLodFallback());
             count("pendingCpu",owner_->pendingCpu());count("retirePending",r.retirePending);
             count("activeShards",g.activeShards);count("stagedShards",g.pendingShards);count("retiredScenes",g.retiredScenes);
             count("activeSourceBytes",m.activeSourceBytes);count("stagedSourceBytes",m.stagedSourceBytes);
