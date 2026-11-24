@@ -47,6 +47,22 @@ public:
         std::map<BuildingGraphDomain,BuildingGraphChangeRouter::Consumer> graphOwners;
         // Optional detached, read-only owner-thread reports. No rebuild is triggered.
         std::map<std::string,std::function<Json()>> graphTelemetry;
+        // Register a real owner and its diagnostic reader together. Existing
+        // bare callback registrations remain supported; no guessed owner type.
+        bool bindGraphOwner(BuildingGraphDomain domain,std::string name,
+            BuildingGraphChangeRouter::Consumer consumer,std::function<Json()> telemetry){
+            const auto bit=buildingGraphBit(domain);
+            if(!bit||(bit&(bit-1))||(bit&~kBuildingGraphAll)||!consumer||!telemetry||
+               name.empty()||name=="navmesh"||name.size()>64||graphOwners.contains(domain)||
+               graphTelemetry.contains(name)||graphTelemetry.size()>=16)return false;
+            graphOwners.emplace(domain,std::move(consumer));
+            graphTelemetry.emplace(std::move(name),std::move(telemetry));return true;
+        }
+        // For another reader in an already-composed domain (road + rail).
+        bool bindGraphTelemetry(std::string name,std::function<Json()> telemetry){
+            if(name.empty()||name=="navmesh"||name.size()>64||!telemetry||graphTelemetry.size()>=16)return false;
+            return graphTelemetry.emplace(std::move(name),std::move(telemetry)).second;
+        }
         // In lockstep, every external graph consumer must be synchronous
         // and rebuild from restored deterministic state, not wall time.
         std::function<bool()> resetDerivedGraphs;
