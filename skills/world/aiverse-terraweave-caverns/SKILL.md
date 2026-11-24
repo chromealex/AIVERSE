@@ -811,3 +811,8 @@ Continue in `integration/caverns-studio-stage54c-20261124`. Planet MapDoc author
 ## Stage54q — paired coarse planetary chart preview
 - Studio's `refinePlanetChartRim` converts the existing frozen cut into one chart-only storage patch, refines its exact grid rim and checks exterior edges. Never use this as native leaf or Earthworks authority.
 - The Studio scene keeps the solid baseline and a separately staged cut mesh; selects the cut only when the same immutable plan is ready in the existing collar visual host. Explicit chart demand is restored on refusal/clear; rim requests outside the bounded chart are refused. Q16-aligned lattice and only rim slots are supported in paired mode. No native or visual acceptance run.
+
+## Stage54r — bounded full chart visual volume
+- `caveChartPreviewLattice` covers the full supported Studio chart with at most 64 padded slots, Q16-compatible spans, and a presentation-only positive-inside box intersection. No gameplay field is modified. Base sampling is bounded rather than a quality guarantee.
+- Chart residency requests every slot even with paired mouths. Camera-distance LOD is per slot, with hysteresis and exact collar slots at LOD0. All chart tickets are rebuilt together on changed LOD map; same authored epoch stays visible until a full new batch is certified. Mixed seam refusal tries the same-epoch finest meshes without altering exact collars; if that fails, refuse the batch. No independent solver/renderer.
+- Studio reports chart and exact slot counts and active fallback status. CPU/native/Metal/frontend validation pending. See Stage54r handoff.
