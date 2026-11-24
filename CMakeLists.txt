@@ -4882,7 +4882,7 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
         target_compile_definitions(aiverse_terraweave_native_micro_physics_compile_test
             PRIVATE AIVERSE_TERRAWEAVE_SMOKE_WITH_PHYSICS=1)
         target_link_libraries(aiverse_terraweave_native_micro_physics_compile_test
-            PRIVATE aiverse_models aiverse_world aiverse_zstd_dec AIVERSE::physics)
+            PRIVATE aiverse_client_runtime aiverse_models aiverse_world aiverse_zstd_dec AIVERSE::physics)
         target_compile_options(aiverse_terraweave_native_micro_physics_compile_test
             PRIVATE $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-UNDEBUG>)
         add_test(NAME terraweave_native_micro_physics_compile
