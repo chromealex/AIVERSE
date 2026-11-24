@@ -63,14 +63,17 @@ public:
         ready_.clear();
         pendingRetire_.clear();
         if(previewRimPlan_)setPreviewRimGroup({},{});
+        if(chartDemand_)previewDemandChanging_=true;
     }
     // Bounded chart inspector: use existing streaming jobs without requesting
     // any chunk outside the authored region. Set once after opening a host.
-    void setChartPreviewDemand(std::set<ChunkKey3,KeyLess> keys){
+    void setChartPreviewDemand(std::set<ChunkKey3,KeyLess> keys,int32_t capCm=0){
         if(!index_||previewRimPlan_||geometry_.catalog().committedKeys().size())
             throw std::logic_error("Caverns chart demand requires new visual host");
+        if(capCm<0||capCm>15000)throw std::invalid_argument("Caverns chart cap");
         residency_.setExplicitVisualDemand(keys);
-        chartDemand_=std::move(keys);
+        chartDemand_=std::move(keys);chartCapCm_=capCm;
+        chartLods_.clear();previewDemandChanging_=true;
     }
     // Studio only: use an exact bounded group instead of camera demand.
     // Caller shares the very same immutable CPU terrain plan with its
@@ -91,17 +94,19 @@ public:
             }
         }
         cancelPendingVisualBatch();
-        residency_.setExplicitVisualDemand(plan?std::optional{keys}:chartDemand_);
+        residency_.setExplicitVisualDemand(chartDemand_?chartDemand_:plan?std::optional{keys}:std::nullopt);
+        chartLods_.clear();
         ready_.clear();pendingRetire_.clear();
         previewRimPlan_=std::move(plan);previewRimRequests_=std::move(requests);
         previewRimKeys_=std::move(keys);previewRimCommitted_=false;previewDemandChanging_=true;
     }
     bool previewRimReady(const CaveSurfaceGroupPlan& plan)const noexcept{
         if(!index_||previewRimPlan_.get()!=&plan||!previewRimCommitted_||previewDemandChanging_||
-           geometry_.catalog().size()!=previewRimKeys_.size())return false;
+           geometry_.catalog().size()!=(chartDemand_?chartDemand_->size():previewRimKeys_.size()))return false;
         for(const auto& key:previewRimKeys_){
             const auto* source=geometry_.catalog().find(key);
-            if(!source||!source->preserveExactSurface||source->sourceRevision!=index_->revision()||!residency_.ready(key))return false;
+            if(!source||!source->preserveExactSurface||source->sourceRevision!=index_->revision()||
+               (!chartDemand_&&!residency_.ready(key)))return false;
         }
         return true;
     }
@@ -112,12 +117,22 @@ public:
                       uint32_t resolution=16,int32_t spacingCm=100) {
         if(!index_)return;
         (void)geometry_.collectCompletedWithoutIdle(device);
-        residency_.center(caveStreamingChunkAt(focus,resolution,spacingCm));
+        const auto camera=caveStreamingChunkAt(focus,resolution,spacingCm);
+        residency_.center(camera);
+        if(chartDemand_){
+            auto lods=caveChartPreviewLods(*chartDemand_,previewRimKeys_,camera,chartLods_);
+            if(lods!=chartLods_){
+                cancelPendingVisualBatch();
+                residency_.setExplicitVisualLods(lods);
+                chartLods_=std::move(lods);ready_.clear();pendingRetire_.clear();
+                // Keep the previous complete chart during camera-only updates.
+            }
+        }
         const auto requests=residency_.pump();
         for(const auto& ticket:requests) {
             if(ticket.action==CaveResidencyAction::Build){
                 if(!workers_.dispatch(ticket,index_->frozenSnapshot(),
-                                      resolution,spacingCm,index_))
+                                      resolution,spacingCm,index_,chartCapCm_))
                     (void)residency_.fail(ticket);
             }else {
                 // No visual retirement here until the full source replacement
@@ -176,11 +191,11 @@ public:
             if(!current)cancelPendingVisualBatch();
         }
         if(!visualBatch_ && !ready_.empty()){
-            if(previewRimPlan_){
-                if(previewRimCommitted_)return;
-                for(const auto& key:previewRimKeys_){const auto it=ready_.find(key);if(it==ready_.end()||!residency_.current(it->second.ticket))return;}
-                // Wait for unrelated old sources to actually retire.
-                for(const auto& key:geometry_.catalog().committedKeys())if(!previewRimKeys_.contains(key))return;
+            if(chartDemand_||previewRimPlan_){
+                if(!chartDemand_&&previewRimCommitted_)return;
+                const auto& wanted=chartDemand_?*chartDemand_:previewRimKeys_;
+                for(const auto& key:wanted){const auto it=ready_.find(key);if(it==ready_.end()||!residency_.current(it->second.ticket))return;}
+                for(const auto& key:geometry_.catalog().committedKeys())if(!wanted.contains(key))return;
             }
             std::vector<CaveBatchChunk> candidates;
             std::vector<CaveResidencyTicket> tickets;
@@ -218,11 +233,26 @@ public:
                         }
                     }
                 }
-                auto grouped=groupCaveEditsByShard(candidates,
-                                                  geometry_.catalog().config());
-                auto plan=planCaveMixedLodShardBatch(
-                    geometry_.catalog(),grouped,visualRevision_+1);
-                if(!plan.ready()&&previewRimPlan_)throw std::runtime_error("Caverns preview rim LOD certificate refused");
+                const auto planBatch=[&](){
+                    return planCaveMixedLodShardBatch(geometry_.catalog(),
+                        groupCaveEditsByShard(candidates,geometry_.catalog().config()),visualRevision_+1);
+                };
+                CaveMixedLodShardBatch plan;
+                bool fallback=false;
+                try{plan=planBatch();}
+                catch(const std::invalid_argument&){if(!chartDemand_)throw;fallback=true;}
+                if(chartDemand_&&(fallback||!plan.ready())){
+                    // All chart slots have finest meshes from this same epoch.
+                    // Preserve exact collar slots, never fabricate a seam.
+                    for(auto& c:candidates)if(!c.preserveExactSurface){
+                        const auto& result=ready_.at(c.mesh.key);
+                        c.mesh=result.collisionMesh;c.resolution=resolution;c.spacingCm=spacingCm;
+                    }
+                    plan=planBatch();fallback=true;
+                }
+                if(!plan.ready()&&(previewRimPlan_||chartDemand_))
+                    throw std::runtime_error("Caverns chart/rim LOD certificate refused");
+                if(chartDemand_)chartFallbackPending_=fallback;
                 if(plan.ready()){
                     ++visualRevision_;
                     batchTickets_=std::move(tickets);
@@ -262,8 +292,9 @@ public:
             stagedShards_.clear();
             batchCursor_=0;
             if(previewRimPlan_){previewRimCommitted_=true;previewDemandChanging_=false;}
+            if(chartDemand_){chartFallbackActive_=chartFallbackPending_;previewDemandChanging_=false;}
         }
-        if(previewDemandChanging_&&!previewRimPlan_){
+        if(previewDemandChanging_&&!previewRimPlan_&&!chartDemand_){
             bool exact=false;
             for(const auto& key:geometry_.catalog().committedKeys())if(geometry_.catalog().find(key)->preserveExactSurface){exact=true;break;}
             if(!exact)previewDemandChanging_=false;
@@ -283,6 +314,7 @@ public:
         cancelPendingVisualBatch();
         if(!geometry_.shutdownAfterGpuIdle(dev))return false;
         index_.reset();ready_.clear();pendingRetire_.clear();chartDemand_.reset();
+        chartLods_.clear();chartCapCm_=0;chartFallbackActive_=chartFallbackPending_=false;
         previewRimPlan_.reset();previewRimRequests_.clear();previewRimKeys_.clear();
         previewRimCommitted_=false;previewDemandChanging_=false;
         residency_.setExplicitVisualDemand(std::nullopt);
@@ -301,8 +333,14 @@ public:
                                    c.minYcm+1,c.maxYcm-1);
     }
     CaveResidencyStats streaming()const{return residency_.stats();}
+    size_t chartSlots()const noexcept{return chartDemand_?chartDemand_->size():0;}
+    size_t exactChartSlots()const noexcept{return chartDemand_?previewRimKeys_.size():0;}
+    bool chartLodFallback()const noexcept{return chartFallbackActive_;}
 private:
     std::optional<std::set<ChunkKey3,KeyLess>> chartDemand_;
+    std::map<ChunkKey3,uint32_t,KeyLess> chartLods_;
+    int32_t chartCapCm_=0;
+    bool chartFallbackActive_=false,chartFallbackPending_=false;
     std::shared_ptr<const CaveSurfaceGroupPlan> previewRimPlan_;
     std::vector<CaveOwnedRimRequest> previewRimRequests_;
     std::set<ChunkKey3,KeyLess> previewRimKeys_;
