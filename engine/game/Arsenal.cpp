@@ -2,6 +2,7 @@
 // (projectile programs launched at a point, hit-scan for speed 0), crates on the map (ammo, money, health, gun shop),
 // money for kills and the price of dying. Fixed maths only; every loop runs in player-slot or entity-index order.
 #include "Arsenal.h"
+#include "engine/mechanics/WeaponCadence.h"
 #include "Systems.h"
 #include "../core/Archive.h"
 #include "../core/FixedMath.h"
@@ -119,6 +120,7 @@ void Arsenal::setup(Simulation& sim, GameHost& m, const Json& rulesJson) {
     for (auto& t : m.rules().types) ids.push_back(t.id);
     for (auto& r : m.rules().resources) res.push_back(r.id);
     rules_ = parse(rulesJson["arsenal"], ids, res);
+    preciseCadence_ = false;
     if (!active()) return;
     if (!m.topDown() || !m.topDown()->active()) throw std::runtime_error("arsenal: needs the 'topDown' block (the hero carries the weapons)");
     const auto& types = m.rules().types;
@@ -127,8 +129,10 @@ void Arsenal::setup(Simulation& sim, GameHost& m, const Json& rulesJson) {
         for (size_t t = 0; t < types.size(); ++t)
             for (size_t i = 0; i < types[t].weapons.size() && i < 127; ++i)
                 if (types[t].weapons[i].id == a.weapon) { a.index[t] = int16_t(i); break; }
-        for (uint16_t h : m.topDown()->rules().heroTypes)
+        for (uint16_t h : m.topDown()->rules().heroTypes) {
             if (a.index[h] < 0) throw std::runtime_error("arsenal.weapons: hero type '" + types[h].id + "' has no weapon '" + a.weapon + "'");
+            preciseCadence_ |= types[h].weapons[size_t(a.index[h])].preciseCooldown;
+        }
     }
     for (auto& p : rules_.pickups) p.respawnTicks = uint32_t((p.respawnSeconds * int64_t(sim.tickRate())).toInt());
     auto& st = sim.world().setResource<ArsenalStore>();
@@ -142,6 +146,7 @@ void Arsenal::hash(Simulation& sim, Hasher& h) const {
     h.u32(uint32_t(st->hands.size()));
     for (auto& a : st->hands) {
         h.u64(a.hero.packed()); h.i32(a.current); h.u32(a.readyAt);
+        if (preciseCadence_) h.fx(a.preciseRemaining);
         h.u32(uint32_t(a.ammo.size())); for (int32_t n : a.ammo) h.i32(n);
         if (rules_.aimWindup) { h.u32(a.aimActive); h.u32(a.aimTrigger); h.u32(a.aimPending); h.i32(a.aimSlot); h.u32(a.aimUntil); }
     }
@@ -152,6 +157,11 @@ void Arsenal::hash(Simulation& sim, Hasher& h) const {
 void Arsenal::io(Simulation& sim, Archive& a) {
     auto* st = store(sim);
     if (!st) return;
+    if (preciseCadence_) {
+        uint32_t marker = 0x41435731u; // ACW1: fractional hand cooldown extension
+        a(marker);
+        if (marker != 0x41435731u) { a.fail(); return; }
+    }
     uint32_t n = uint32_t(st->hands.size());
     aiverse::io(a, n);
     if (!a.writing()) { if (n > 256) { a.fail(); return; } st->hands.assign(n, {}); }
@@ -161,6 +171,7 @@ void Arsenal::io(Simulation& sim, Archive& a) {
         if (!a.writing()) { if (k > 32) { a.fail(); return; } hd.ammo.assign(k, 0); }
         for (auto& x : hd.ammo) a(x);
         a(hd.aimActive, hd.aimTrigger, hd.aimPending, hd.aimSlot, hd.aimUntil);
+        if (preciseCadence_) { a(hd.preciseRemaining); if (hd.preciseRemaining.raw < 0) { a.fail(); return; } }
     }
     n = uint32_t(st->crates.size());
     aiverse::io(a, n);
@@ -195,6 +206,7 @@ void Arsenal::loadout(Simulation& sim, ArsenalHand& h, Entity hero, uint8_t play
     }
     h.hero = hero;
     h.readyAt = sim.tick();
+    h.preciseRemaining = Fixed{};
 }
 
 bool Arsenal::command(Simulation& sim, const Command& cmd) {
@@ -376,10 +388,10 @@ void Arsenal::fire(Simulation& sim, ArsenalHand& h, Entity hero, uint8_t player)
         h.aimTrigger=trigger;h.aimActive=aiming;
         trigger=trigger||h.aimPending;
         if(trigger&&sim.tick()<h.aimUntil)return;
-        if(trigger&&sim.tick()>=h.readyAt)h.aimPending=false;
+        if(trigger&&sim.tick()>=h.readyAt&&h.preciseRemaining.raw<=0)h.aimPending=false;
     }
     }
-    if (!trigger || sim.tick() < h.readyAt) return;
+    if (!trigger || sim.tick() < h.readyAt || h.preciseRemaining.raw > 0) return;
     if (size_t(h.current) >= h.ammo.size() || h.ammo[size_t(h.current)] == 0) { fallBack(h); return; }
     Unit& u = w.get<Unit>(hero);
     if (u.flags & (kUnitDisabled | kUnitInHand)) return;
@@ -397,9 +409,21 @@ void Arsenal::fire(Simulation& sim, ArsenalHand& h, Entity hero, uint8_t player)
     dir = snap(sim, hero, player, dir, range);
     u.facing = dir;
     const Fixed atkSpeed = fxMax(m_->stat(sim, hero, Stat::AttackSpeed), Fixed::fromRatio(1, 10));
-    const int64_t cd = ((wd.cooldown / atkSpeed) * int64_t(sim.tickRate())).toInt();
-    h.readyAt = sim.tick() + uint32_t(std::max<int64_t>(1, cd));
-    if (h.ammo[size_t(h.current)] > 0) --h.ammo[size_t(h.current)];
+    const bool precise = wd.preciseCooldown && preciseCadence_;
+    const bool held = pilot.input.fire || (pilot.input.aim && td->rules().aimFires);
+    const uint32_t budget = precise && held ? lib::mechanics::kMaxCadenceShotsPerTick : 1;
+    const size_t slot = size_t(h.current);
+    for (uint32_t shot = 0; shot < budget && h.ammo[slot] != 0 &&
+         (!precise || lib::mechanics::cadenceReady(h.preciseRemaining)); ++shot) {
+    if (precise) {
+        h.preciseRemaining = lib::mechanics::acceptCadenceShot(h.preciseRemaining, wd.cooldown, true);
+        h.readyAt = sim.tick() + 1;
+    } else {
+        const int64_t cd = ((wd.cooldown / atkSpeed) * int64_t(sim.tickRate())).toInt();
+        h.readyAt = sim.tick() + uint32_t(std::max<int64_t>(1, cd));
+        h.preciseRemaining = Fixed{};
+    }
+    if (h.ammo[slot] > 0) --h.ammo[slot];
     const Fixed damage = wd.damage * m_->stat(sim, hero, Stat::Damage);
     sim.emit({kEvAttack, player, hero, kNullEntity, int64_t(wi), pos + dir * (t.radius + Fixed::fromRatio(15, 100))});   // at the muzzle: the flash and the sound
     const int32_t base = TopDown::angleOf(dir);
@@ -421,7 +445,8 @@ void Arsenal::fire(Simulation& sim, ArsenalHand& h, Entity hero, uint8_t player)
         w.add<Projectile>(p, pr);
         w.add<Owner>(p, Owner{player});
     }
-    if (h.ammo[size_t(h.current)] == 0) fallBack(h);
+    }
+    if (h.ammo[slot] == 0) fallBack(h);
 }
 
 // ================================================================= per tick
@@ -444,8 +469,13 @@ void Arsenal::tick(Simulation& sim) {
         const Entity hero = h.hero;
         if (!w.alive(hero) || w.get<Unit>(hero).hp.raw <= 0 || hero != td->heroOf(sim, uint8_t(pl))) continue;
         if (auto* c = w.tryGet<Combat>(hero)) { c->target = kNullEntity; c->autoTarget = false; }   // the hand fires, not the unit's weapon system
-        if (m_->driving() && m_->driving()->isDriving(sim, hero)) continue;   // at the wheel the fire button is the handbrake
-        fire(sim, h, hero, uint8_t(pl));
+        if (preciseCadence_) {
+            const Fixed speed = fxMax(m_->stat(sim, hero, Stat::AttackSpeed), Fixed::fromRatio(1, 10));
+            h.preciseRemaining = lib::mechanics::advanceWeaponCadence(h.preciseRemaining, sim.dt() * speed, true);
+        }
+        if (!m_->driving() || !m_->driving()->isDriving(sim, hero))
+            fire(sim, h, hero, uint8_t(pl)); // at the wheel the fire button is the handbrake
+        if (preciseCadence_) h.preciseRemaining = lib::mechanics::finishWeaponCadence(h.preciseRemaining);
     }
 }
 
