@@ -352,6 +352,7 @@ std::string ClientFx::graphSourceAsset(const std::string& name,bool allowGpu) {
         spectra::volume::PresentationGraph compiled;
         std::vector<std::string> errors;
         if(!spectra::volume::compilePresentationGraph(graph,Json::object(),compiled,errors,platform::readContentFile))return {};
+        if(compiled.particleMaterial.enabled){std::fprintf(stderr,"SpectraFX volumetric particles need dedicated scene routing\\n");return {};}
         if(compiled.volume){
             if(!compiled.particles){graphVolumeAssets_[name]=std::move(compiled.volumeAsset);return {};}
             graph=compiled.particleGraph;

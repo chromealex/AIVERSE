@@ -30,6 +30,7 @@ inline const std::vector<NodeInfo>& nodeCatalog() {
         {"Spawn","Pipeline",R"({"burst":16})","",false},
         {"Initialize","Pipeline",R"({"life":1,"speed":1,"size":0.4})","speed|size|life|spread",false},
         {"Update","Pipeline",R"({})","",false},
+        {"VolumetricParticleOutput","Renderers",R"({"shape":"sphere","density":2,"steps":12,"noiseStrength":0.5})","",true},
         {"SpriteOutput","Renderers",R"({"texture":"builtin:soft"})","texture|fps",false},
         {"MeshOutput","Renderers",R"({"meshes":["builtin:cube"]})","meshes",false},
         {"RibbonOutput","Renderers",R"({})","",false},
@@ -108,7 +109,7 @@ inline const NodeInfo* findInfo(std::string_view type) {
     return nullptr;
 }
 inline bool isData(const std::string& type) {return fx::vfx2::valueNodeType(type);}
-inline bool isOutput(const std::string& type) {return type=="VolumeOutput"||fx::vfx2::isOutput(type);}
+inline bool isOutput(const std::string& type) {return type=="VolumeOutput"||type=="VolumetricParticleOutput"||fx::vfx2::isOutput(type);}
 inline Json* node(Json& graph,const std::string& id) {
     Json* nodes=graph.find("nodes");
     if(!nodes || !nodes->isArray())return nullptr;
@@ -190,7 +191,7 @@ inline bool connectData(Json& graph,const std::string& from,
         error="invalid data connection (source/type or cycle)";
         return false;
     }
-    if(volume::stage(dest->getStr("type"))>=0){error="volume data ports are not implemented";return false;}
+    if(volume::stage(dest->getStr("type"))>=0||dest->getStr("type")=="VolumetricParticleOutput"){error="volume data ports are not implemented";return false;}
     Json probe=Json::object();
     if(!fx::vfx2::nestedSet(probe,input,Json::number(int64_t(0)))) {
         error="invalid data property name";return false;

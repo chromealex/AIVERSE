@@ -8,6 +8,7 @@ import './SpectraGraphCanvas.css';
 
 interface CatalogNode {type:string;group:string;ports:string[]}
 const volumeFields:Record<string,Record<string,unknown>>={
+  VolumetricParticleOutput:{shape:'sphere',axes:[1,1,1],density:2,emission:0,steps:12,noiseFrequency:3,noiseStrength:0,noiseOctaves:3,shadowSteps:4,shadowStrength:1,anisotropy:0,ambient:0.35,directIntensity:0.65,depthAware:false,sortBackToFront:true,adaptiveLod:true,minimumSteps:4,lodSmallPixels:8,lodFullPixels:96,sparseTexture:true,densityTexture:''},
   VolumeDomain:{dimension:32,origin:[-2,-1,-2],cellSize:0.125,gravity:[0,-9.81,0],wind:[0,0,0],obstacle:'',particleDrag:0,particleDeposit:[0,0,0],physisWindResponse:0,physisGravityBlend:0,attachment:'world'},
   VolumeSource:{mode:'continuous',position:[0,0,0],radius:0.5,smoke:3,temperature:8,fuel:4,acceleration:[0,2,0],radialAcceleration:0,duration:1},
   VolumeAdvection:{buoyancy:1,smokeWeight:0.1,velocityDecay:0.15,smokeDecay:0.25,temperatureDecay:0.6,fuelDecay:0.05,maxVelocity:20},
@@ -49,7 +50,7 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
   const edges=useMemo(()=>visualEdges(graph),[graph]);
   const nodes=graph.nodes;
   const chosen=nodes.find(n=>n.id===selectedNode);
-  const isVolumeNode=chosen?.type.startsWith('Volume')??false;
+  const isVolumeNode=(chosen?.type.startsWith('Volume')??false)||chosen?.type==='VolumetricParticleOutput';
   const fields=chosen?volumeFields[chosen.type]??{}:{};
   const fieldDefault=fields[volumeProperty];
   const hasVolume=nodes.some(n=>n.type==='VolumeOutput');
@@ -205,12 +206,12 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
         </StudioField>
         {Array.isArray(fieldDefault)?<div className="spectra-canvas__connect">
           {volumeVector.map((v,i)=><StudioField key={i} label={['X / R','Y / G','Z / B'][i]}><StudioInput type="number" step="any" value={v} disabled={disabled||working} onChange={e=>setVolumeVector(old=>old.map((x,j)=>j===i?e.target.value:x))}/></StudioField>)}
-        </div>:volumeProperty==='attachment'?<StudioField label="Volume attachment"><StudioSelect value={volumeValue} onChange={e=>setVolumeValue(e.target.value)}><option value="world">World fixed</option><option value="follow">Follow source</option></StudioSelect></StudioField>:volumeProperty==='mode'?<StudioField label="Emission mode"><StudioSelect value={volumeValue} onChange={e=>setVolumeValue(e.target.value)}><option value="continuous">Continuous</option><option value="impulse">Impulse</option></StudioSelect></StudioField>:
+        </div>:typeof fieldDefault==='boolean'?<StudioField label="Enabled"><StudioSelect value={volumeValue} onChange={e=>setVolumeValue(e.target.value)}><option value="true">Yes</option><option value="false">No</option></StudioSelect></StudioField>:volumeProperty==='shape'?<StudioField label="Volume shape"><StudioSelect value={volumeValue} onChange={e=>setVolumeValue(e.target.value)}>{['sphere','ellipsoid','box','capsule'].map(x=><option key={x} value={x}>{x}</option>)}</StudioSelect></StudioField>:volumeProperty==='attachment'?<StudioField label="Volume attachment"><StudioSelect value={volumeValue} onChange={e=>setVolumeValue(e.target.value)}><option value="world">World fixed</option><option value="follow">Follow source</option></StudioSelect></StudioField>:volumeProperty==='mode'?<StudioField label="Emission mode"><StudioSelect value={volumeValue} onChange={e=>setVolumeValue(e.target.value)}><option value="continuous">Continuous</option><option value="impulse">Impulse</option></StudioSelect></StudioField>:
         <StudioField label={volumeProperty==='obstacle'?'Project SDF path (content/*.sdfbin)':'Value'}>
           <StudioInput type={typeof fieldDefault==='number'?'number':'text'} step={typeof fieldDefault==='number'?'any':undefined} value={volumeValue} onChange={e=>setVolumeValue(e.target.value)} disabled={disabled||working||!volumeProperty}/>
         </StudioField>}
         <StudioButton size="sm" disabled={disabled||working||!volumeProperty} onClick={()=>{
-          const value=Array.isArray(fieldDefault)?volumeVector.map(Number):typeof fieldDefault==='number'?Number(volumeValue):volumeValue;
+          const value=Array.isArray(fieldDefault)?volumeVector.map(Number):typeof fieldDefault==='number'?Number(volumeValue):typeof fieldDefault==='boolean'?volumeValue==='true':volumeValue;
           if((Array.isArray(value)&&value.some((x,i)=>!Number.isFinite(x)||volumeVector[i].trim()===''))||(typeof value==='number'&&(!Number.isFinite(value)||volumeValue.trim()===''))){onError('Invalid volume value');return;}
           void execute({action:'setProperty',node:chosen.id,property:volumeProperty,value});
         }}>Apply volume property</StudioButton>

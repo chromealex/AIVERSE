@@ -1,13 +1,14 @@
 // Trusted project root supplied by host; untrusted resource path validated.
 #pragma once
 #include "SpectraSdfBinary.h"
+#include "SpectraVolumetricParticleGraph.h"
 #include <filesystem>
 #include <fstream>
 namespace aiverse::fx {
 inline SdfResourceReader projectSdfReader(std::filesystem::path root){
     return [root=std::move(root)](const std::string& path,std::string& out){
         namespace fs=std::filesystem;
-        if(root.empty()||!validSdfResourcePath(path))return false;
+        if(root.empty()||(!validSdfResourcePath(path)&&!spectra::validParticleVolumeTexturePath(path)))return false;
         std::error_code ec;
         auto file=root;
         for(const auto& component:fs::path(path)){

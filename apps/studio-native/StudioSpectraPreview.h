@@ -145,6 +145,8 @@ public:
             std::vector<std::string> errors;
             if(!spectra::volume::compilePresentationGraph(graph,Json::object(),checked,errors,snapshotReader))
                 return transferStatus(errors.empty()?"SpectraFX graph validation failed":errors.front());
+            if(checked.particleMaterial.enabled&&checked.particleMaterial.depthAware)
+                return transferStatus("Depth-aware particle preview requires detached opaque depth integration");
             // Allocate a candidate while the last-known-good instance remains
             // intact. The render owner is between frames, with no open pass.
             device.waitForResourceIdle();
@@ -159,7 +161,7 @@ public:
             opts.gpuBirthRandom=input.getBool("gpuBirthRandom",false);
             opts.gpuMaterial=opts.gpuBirthRandom;
             opts.gpuProgram=true; // strict GPU VM eligibility, CPU twin otherwise
-            opts.preference=checked.coupling.active()?spectra::ComputePreference::RequireGpu:spectra::ComputePreference::Automatic;
+            opts.preference=(checked.coupling.active()||checked.particleMaterial.enabled)?spectra::ComputePreference::RequireGpu:spectra::ComputePreference::Automatic;
             if(checked.particles&&!candidate->initGraph(&device,checked.particleGraph,Json::object(),opts)) {
                 const std::string reason=candidate->reason().empty()?
                     "SpectraFX preview backend unavailable":candidate->reason();

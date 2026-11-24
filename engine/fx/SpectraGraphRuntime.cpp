@@ -179,7 +179,16 @@ bool GraphRuntime::initGraph(gfx::Device* dev,const Json& graph,
         if(!options.sdfReader(path,bytes)||bytes.size()>fx::kSdfBinaryMaxBytes)return false;
         sdfDependencies.emplace(path,bytes);return true;
     };
-    if(!fx::compileSpectraGraph(graph,overrides,compiled,errors_,reader)) {
+    GraphRuntimeOptions actual=options;
+    Json lowered;
+    if(!lowerVolumetricParticleGraph(graph,lowered,actual.volumeMaterial,errors_,reader)){
+        reason_=errors_.front();return false;
+    }
+    if(actual.volumeMaterial.enabled){
+        if(options.preference==ComputePreference::CpuOnly){reason_="Volumetric particles require GPU";return false;}
+        actual.preference=ComputePreference::RequireGpu;
+    }
+    if(!fx::compileSpectraGraph(lowered,overrides,compiled,errors_,reader)) {
         reason_="SpectraFX graph compilation failed";
         return false;
     }
@@ -187,11 +196,10 @@ bool GraphRuntime::initGraph(gfx::Device* dev,const Json& graph,
         ((options.gpuProgram && !compiled.emitters[0].particleProgram.isNull()) ||
          (options.gpuMaterial && !compiled.emitters[0].shaderGraph.isNull()));
     if(!schema.empty() && !canServeNamedOnGpu &&
-       options.preference==ComputePreference::RequireGpu) {
+       actual.preference==ComputePreference::RequireGpu) {
         reason_="runtime instance parameters need an enabled GPU VM program; RequireGpu rejected";
         return false;
     }
-    GraphRuntimeOptions actual=options;
     if(!schema.empty() && !canServeNamedOnGpu)
         actual.preference=ComputePreference::CpuOnly;
     if(!initEffect(dev,compiled,actual))return false;

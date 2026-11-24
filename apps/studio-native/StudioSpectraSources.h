@@ -214,6 +214,7 @@ private:
         if(graph.getInt("version")!=2||!spectra::volume::compilePresentationGraph(graph,Json::object(),compiled,errors,fx::projectSdfReader(project_))){
             error_=errors.empty()?"Invalid SpectraFX graph: "+name:errors.front();return false;
         }
+        if(compiled.particleMaterial.enabled){error_="Volumetric particles need dedicated scene routing";return false;}
         if(compiled.volume){
             if(!compiled.particles){volumeDefinitions_[name]=std::move(compiled.volumeAsset);volumeOnly_.insert(name);schemas_[name]={};definitions_.insert(name);return true;}
             graph=compiled.particleGraph;

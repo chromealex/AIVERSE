@@ -3,6 +3,7 @@
 #pragma once
 #include "SpectraVolumeAsset.h"
 #include "VfxGraph.h"
+#include "SpectraVolumetricParticleGraph.h"
 #include <map>
 #include <set>
 #include <string_view>
@@ -33,13 +34,16 @@ struct PresentationGraph {
     fx::EffectDef particleEffect;
     Asset volumeAsset;
     ParticleVolumeCoupling coupling;
+    VolumetricParticleMaterial particleMaterial;
 };
 inline bool compilePresentationGraph(const Json& graph,const Json& overrides,PresentationGraph& output,
         std::vector<std::string>& errors,const fx::SdfResourceReader& reader={}){
     errors.clear();
     PresentationGraph next;
     if(!hasVolume(graph)){
-        if(!fx::compileSpectraGraph(graph,overrides,next.particleEffect,errors,reader))return false;
+        Json lowered;
+        if(!lowerVolumetricParticleGraph(graph,lowered,next.particleMaterial,errors,reader)||
+           !fx::compileSpectraGraph(lowered,overrides,next.particleEffect,errors,reader))return false;
         next.particles=true;next.particleGraph=graph;output=std::move(next);return true;
     }
     const auto fail=[&](const std::string& why){errors.push_back("volume graph: "+why);return false;};
@@ -146,7 +150,9 @@ inline bool compilePresentationGraph(const Json& graph,const Json& overrides,Pre
         if(!outputs.size())return fail("particle nodes require a particle output");
         next.particleGraph=graph;next.particleGraph.set("nodes",nodes);
         next.particleGraph.set("links",links);next.particleGraph.set("outputs",outputs);
-        if(!fx::compileSpectraGraph(next.particleGraph,overrides,next.particleEffect,errors,reader))return false;
+        Json lowered;
+        if(!lowerVolumetricParticleGraph(next.particleGraph,lowered,next.particleMaterial,errors,reader)||
+           !fx::compileSpectraGraph(lowered,overrides,next.particleEffect,errors,reader))return false;
         next.particles=true;
     }else{
         if(next.coupling.active())return fail("particle volume coupling requires a particle branch");

@@ -92,16 +92,18 @@ Json sourceGraph(const Json& p, const Workspace& ws) {
 Json graphEvaluation(const Workspace& ws,const Json& graph, const Json& overrides, fx::EffectDef* compiled = nullptr) {
     fx::EffectDef def;
     std::vector<std::string> errors;
-    if(spectra::volume::hasVolume(graph)){
+    if(spectra::volume::hasVolume(graph)||spectra::hasVolumetricParticles(graph)){
         spectra::volume::PresentationGraph result;
         bool ok=spectra::volume::compilePresentationGraph(graph,overrides,result,errors,fx::projectSdfReader(ws.project.dir));
         if(ok&&compiled){ok=false;errors.push_back("Legacy particle bake cannot preserve volume output");}
         Json response=Json::object();response.set("ok",Json::fromBool(ok));response.set("errors",graphStrings(errors));
-        if(ok){response.set("volume",Json::fromBool(true));response.set("hybrid",Json::fromBool(result.particles));
+        if(ok){response.set("volume",Json::fromBool(result.volume));response.set("volumetricParticles",Json::fromBool(result.particleMaterial.enabled));response.set("hybrid",Json::fromBool(result.volume&&result.particles));
             response.set("volumeDimension",Json::number(int64_t(result.volumeAsset.simulation.dimension)));
             response.set("emitters",Json::number(int64_t(result.particleEffect.emitters.size())));
-            response.set("gpuEligible",Json::fromBool(true));
-            response.set("gpuReason",Json::string("Volume requires native GPU; device support unverified"));}
+            spectra::GraphRuntimeOptions opts;opts.preference=spectra::ComputePreference::RequireGpu;opts.gpuProgram=true;opts.volumeMaterial=result.particleMaterial;
+            const auto eligibility=spectra::inspectGraphGpuEligibility(result.particleEffect,opts);
+            response.set("gpuEligible",Json::fromBool(!result.particleMaterial.enabled||eligibility.eligible));
+            response.set("gpuReason",Json::string(result.particleMaterial.enabled&&!eligibility.eligible?eligibility.reason:"Volume requires native GPU; device support unverified"));}
         return response;
     }
     const bool ok = spectra::compileGraph(graph, overrides, def, errors,fx::projectSdfReader(ws.project.dir));

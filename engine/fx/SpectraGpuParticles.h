@@ -8,7 +8,7 @@
 #include "SpectraGpuCollisionEvents.h"
 
 #include "ParticleSystem.h"
-#include "SpectraParticleVolumeTexture.h"
+#include "SpectraVolumetricParticleGraph.h"
 #include "SpectraGpuCheckpoint.h"
 #include "SpectraCheckpointExport.h"
 #include "SpectraCheckpointFile.h"
@@ -63,46 +63,6 @@ inline constexpr size_t gpuBillboardGeometryBytes(uint32_t capacity,bool procedu
     return procedural?size_t(capacity)*40u+12u:
         size_t(capacity)*(160u+6u*(gpuEmitterUsesWideIndices(capacity)?4u:2u));
 }
-enum class VolumetricParticleShape : uint8_t { Sphere, Ellipsoid, Box, Capsule };
-struct VolumetricParticleMaterial {
-    bool enabled=false;
-    float density=2,emission=0;
-    uint32_t steps=12;
-    VolumetricParticleShape shape=VolumetricParticleShape::Sphere;
-    render::float3 axes{1,1,1}; // radii relative to particle half-size
-    float noiseFrequency=3,noiseStrength=0;
-    uint32_t noiseOctaves=3;
-    bool adaptiveLod=true;
-    uint32_t minimumSteps=4;
-    float lodSmallPixels=8,lodFullPixels=96;
-    float boundScale()const{
-        const float m=std::max(axes.x,std::max(axes.y,axes.z));
-        if(shape==VolumetricParticleShape::Box)return std::sqrt(axes.x*axes.x+axes.y*axes.y+axes.z*axes.z);
-        if(shape==VolumetricParticleShape::Capsule)return m+axes.y;
-        return m;
-    }
-    bool sortBackToFront=true; // per-emitter centre-depth ordering, not exact OIT
-    bool depthAware=false; // requires detached current-frame depth texture at draw
-    uint32_t shadowSteps=4; // 0 disables self-shadowing
-    float shadowStrength=1,anisotropy=0,ambient=.35f;
-    float directIntensity=.65f;
-    bool sparseTexture=true; // automatically fall back to dense if bricks cost more
-    std::shared_ptr<const ParticleVolumeTexture> texture;
-    bool valid()const{
-        return std::isfinite(density)&&density>=0&&density<=100&&
-            std::isfinite(emission)&&emission>=0&&emission<=16&&steps>=4&&steps<=32&&minimumSteps>=4&&minimumSteps<=steps&&
-            std::isfinite(lodSmallPixels)&&std::isfinite(lodFullPixels)&&lodSmallPixels>=1&&lodFullPixels>lodSmallPixels&&lodFullPixels<=4096&&uint32_t(shape)<=3&&
-            std::isfinite(axes.x)&&std::isfinite(axes.y)&&std::isfinite(axes.z)&&
-            axes.x>=.1f&&axes.x<=4&&axes.y>=.1f&&axes.y<=4&&axes.z>=.1f&&axes.z<=4&&
-            (shape!=VolumetricParticleShape::Sphere||(axes.x==1&&axes.y==1&&axes.z==1))&&
-            std::isfinite(noiseFrequency)&&noiseFrequency>=.1f&&noiseFrequency<=32&&
-            std::isfinite(noiseStrength)&&noiseStrength>=0&&noiseStrength<=1&&noiseOctaves>=1&&noiseOctaves<=4&&shadowSteps<=8&&
-            std::isfinite(shadowStrength)&&shadowStrength>=0&&shadowStrength<=8&&
-            std::isfinite(anisotropy)&&std::abs(anisotropy)<=.85f&&
-            std::isfinite(ambient)&&ambient>=0&&ambient<=4&&
-            std::isfinite(directIntensity)&&directIntensity>=0&&directIntensity<=16&&(!texture||(enabled&&texture->valid()));
-    }
-};
 struct ComputeEmitterDesc {
     uint32_t capacity = 1024;          // default only; ceiling is kGpuEmitterMaxSlots
     uint32_t burst = 8;                // particles per call to burstAt
