@@ -68,7 +68,7 @@ public:
         int layer=0; std::string tile, field, fieldMode="add"; double value=1;
         std::string type; int owner=0, count=1; double spread=1;
         std::string roadType; double width=6;
-        std::string caveMode="carve"; double caveY=-5,caveDepth=2; bool caveSurface=true;
+        std::string caveMode="carve",caveRegionId; double caveY=-5,caveDepth=2; bool caveSurface=true;
     };
     const SceneBrush& sceneBrush() const noexcept { return brush_; }
     // Spline editing (Roads / Water panels): "road" or "river" shows the network's handles in the Scene;
