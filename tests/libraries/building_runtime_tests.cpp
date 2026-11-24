@@ -1,6 +1,7 @@
 // Portable runtime building generator smoke/regression. No Studio, GPU or GLB
 // exporter in the tested dependency graph. Packageable native game API.
 #include <engine/systems/RuntimeBuildingGenerator.h>
+#include <engine/buildings/BuildingDestructionAdapter.h>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
@@ -80,6 +81,29 @@ int main(int argc,char** argv) {
         } else {
             CHECK(!first.message.empty());
         }
+        // Native building damage adapter: speculative tick does not mutate
+        // the owner, fragments retain source lineage, and archive roundtrips.
+        RuntimeBuildingRequest damageRequest;damageRequest.style="scifi";
+        damageRequest.composeFeatures=true;damageRequest.size={16,8,12};
+        const auto initial=generator.generate(damageRequest);CHECK(initial);
+        auto damage=aiverse::building::beginBuildingDestruction(initial.structureGraph);
+        CHECK(damage&&damage->structure.pieces.size()==initial.structureGraph.solids.size());
+        const auto previous=damage->structure.pieces.size();
+        aiverse::lib::mechanics::StructureDamage hit;
+        hit.id=1;hit.center={Fixed::fromRatio(8,1),Fixed::fromRatio(2,1),Fixed::fromRatio(18,100)};
+        hit.radius=Fixed::fromRatio(3,2);hit.amount=220;
+        auto frame=aiverse::building::stageBuildingDestruction(*damage,1,Fixed::fromRatio(1,60),std::span<const aiverse::lib::mechanics::StructureDamage>(&hit,1));
+        CHECK(frame&&damage->structure.pieces.size()==previous);
+        CHECK(!frame->removed.empty()&&!frame->next.structure.debris.empty());
+        CHECK(frame->next.structure.lastTick==1);
+        for(const auto& piece:frame->added)CHECK(piece.source.sourceId>0);
+        CHECK(aiverse::building::validBuildingDestruction(frame->next));
+        std::string save;Archive write(&save);write(frame->next);CHECK(write.ok());
+        aiverse::building::BuildingDestructionState restored;Archive read(save);read(restored);
+        CHECK(read.ok()&&read.remaining()==0&&restored.fingerprint==damage->fingerprint);
+        CHECK(!aiverse::building::stageBuildingDestruction(restored,1,Fixed::fromRatio(1,60),{}));
+        CHECK(aiverse::building::commitBuildingDestruction(*damage,*frame));
+        CHECK(!aiverse::building::commitBuildingDestruction(*damage,*frame));
         generator.clear();
         CHECK(generator.styleCount()==0);
         CHECK(generator.generate(sized).error==RuntimeBuildingError::UnknownStyle);
