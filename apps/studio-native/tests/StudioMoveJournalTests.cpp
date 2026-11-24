@@ -328,6 +328,64 @@ int main() {
             catch(const std::exception&){refused=true;}
             expect(refused,"Save As silently overwrote an occupied map");
         }
+        // S6f.4b.2: history checkpoint and map/terrain data have one
+        // durable commit point, including the first checkpoint creation.
+        {
+            using namespace aiverse::editor;
+            const auto p=fs::canonical(project)/"AtomicMapHistory";
+            fs::create_directories(p/"maps");
+            const auto file=p/"maps"/"scene.json";
+            MapDoc live;live.reset(16,16);live.data.name="Before";
+            live.beginEdit();live.data.name="After";
+            live.setHistoryLabel(live.historyMark(),"Rename scene");
+            auto staged=live;
+            auto edits=staged.stageSave(p,file.string(),true);
+            fs::path checkpoint;
+            {
+                const auto lock=staged.lockAtomicSave();
+                auto history=staged.stageHistoryCheckpoint(edits);checkpoint=history.path;
+                expect(history.createOnly,"First checkpoint must be created atomically");
+                edits.push_back(std::move(history));
+                for(size_t phase=0;phase<=edits.size();++phase){
+                    ProjectDocumentJournal journal(p);
+                    expect(journal.begin(edits),"Cannot stage atomic map history");
+                    for(size_t i=0;i<phase;++i)journal.publish(i);
+                    expect(journal.recover(),"Cannot recover atomic map history");
+                    expect(!fs::exists(file)&&!fs::exists(checkpoint),"Partial new map history survived rollback");
+                }
+                applyProjectFileEdits(p,edits);staged.finishAtomicSave();
+            }
+            MapDoc reopened;std::string error;
+            expect(reopened.load(file.string(),&error)&&error.empty(),"Cannot reopen atomic map");
+            expect(reopened.historyPersistenceWarning().empty()&&reopened.canUndo(),"Atomic map history did not restore");
+            expect(reopened.historyLabel(reopened.undoId(0))=="Rename scene","History label lost");
+            reopened.undo();expect(reopened.data.name=="Before"&&reopened.canRedo(),"Restored undo failed");
+            const auto oldMap=readFile(file),oldHistory=readFile(checkpoint);
+            auto next=reopened;
+            auto update=next.stageExistingSave(p);
+            {
+                const auto lock=next.lockAtomicSave();
+                update.push_back(next.stageHistoryCheckpoint(update));
+                expect(!update.back().createOnly,"Existing checkpoint misclassified");
+                for(size_t phase=0;phase<=update.size();++phase){
+                    ProjectDocumentJournal journal(p);expect(journal.begin(update),"Cannot stage checkpoint update");
+                    for(size_t i=0;i<phase;++i)journal.publish(i);
+                    expect(journal.recover(),"Cannot recover checkpoint update");
+                    expect(readFile(file)==oldMap&&readFile(checkpoint)==oldHistory,"Map/checkpoint rollback mismatch");
+                }
+                applyProjectFileEdits(p,update);next.finishAtomicSave();
+            }
+            error.clear();
+            expect(reopened.load(file.string(),&error)&&error.empty()&&reopened.canRedo(),
+                "Redo cursor did not survive atomic save");
+            reopened.redo();expect(reopened.data.name=="After","Restored redo failed");
+            const auto beforeExternal=readFile(file);
+            writeFile(file,beforeExternal+"\n");
+            bool refused=false;
+            try{auto copy=reopened;(void)copy.stageExistingSave(p);}
+            catch(const std::exception&){refused=true;}
+            expect(refused&&readFile(file)==beforeExternal+"\n","External map change was not fenced");
+        }
         fs::remove_all(project);
         std::cout<<"PASS studio persistent move recovery and collision safety\n";
     } catch (...) {
