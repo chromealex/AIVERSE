@@ -180,8 +180,13 @@ std::vector<terraweave::caverns::CavePlanetSurfaceSlot> PlanetRenderer::captureC
     return out;
 }
 bool PlanetRenderer::clearCaveSurfaceCut(int body,const std::function<bool()>& exclusive){
+    if(body<0||size_t(body)>=bodies_.size()||bodies_[size_t(body)].caveCutAggregate)return false;
+    return clearCaveBodyCut(body,caveSurfaceCutEpoch(body),exclusive);
+}
+bool PlanetRenderer::clearCaveBodyCut(int body,uint64_t expectedEpoch,const std::function<bool()>& exclusive){
     if(!dev_||body<0||size_t(body)>=bodies_.size()||!exclusive||!exclusive())return false;
     auto& b=bodies_[size_t(body)];
+    if(b.caveCutEpoch!=expectedEpoch)return false;
     if(!b.caveCutEpoch)return true;
     if(!dev_->waitForResourceIdle()||!exclusive())return false;
     for(auto& c:b.chunks){
@@ -189,19 +194,28 @@ bool PlanetRenderer::clearCaveSurfaceCut(int body,const std::function<bool()>& e
         if(c.caveIb.valid())dev_->destroyBuffer(c.caveIb);
         c.caveVb={};c.caveIb={};c.caveIndices=0;c.caveCut=false;c.caveDescendant=false;
     }
-    b.caveCutEpoch=0;return true;
+    b.caveCutEpoch=0;b.caveCutAggregate=false;return true;
 }
 bool PlanetRenderer::installCaveSurfaceCut(int body,const terraweave::caverns::CavePlanetCutPlan& plan,
         const std::function<bool()>& exclusive,const std::function<bool()>& nativeOwnersReady){
     namespace cave=terraweave::caverns;
+    if(body<0||size_t(body)>=bodies_.size()||bodies_[size_t(body)].caveCutAggregate)return false;
+    auto aggregate=cave::singlePlanetBodyCut(std::make_shared<const cave::CavePlanetCutPlan>(plan));
+    if(!installCaveBodyCut(body,aggregate,caveSurfaceCutEpoch(body),exclusive,nativeOwnersReady))return false;
+    bodies_[size_t(body)].caveCutAggregate=false;return true;
+}
+bool PlanetRenderer::installCaveBodyCut(int body,const terraweave::caverns::CavePlanetBodyCutPlan& plan,
+        uint64_t expectedEpoch,const std::function<bool()>& exclusive,const std::function<bool()>& nativeOwnersReady){
+    namespace cave=terraweave::caverns;
     if(!dev_||body<0||size_t(body)>=bodies_.size()||!exclusive||!exclusive()||
-       !nativeOwnersReady||plan.anchor.bodyId!=world_.bodies[size_t(body)].id||
-       plan.surfaceRevision!=caveSurfaceRevision_||!plan.surfaceEpoch||plan.slots.empty()||plan.slots.size()>64)return false;
+       !nativeOwnersReady||plan.bodyId!=world_.bodies[size_t(body)].id||
+       plan.surfaceRevision!=caveSurfaceRevision_||!plan.surfaceEpoch)return false;
     auto& b=bodies_[size_t(body)];const auto& pb=world_.bodies[size_t(body)];
-    if(!b.surf||plan.surfaceEpoch<=b.caveCutWatermark)return false;
+    if(!b.surf||b.caveCutEpoch!=expectedEpoch||plan.surfaceEpoch<=b.caveCutWatermark)return false;
+    const auto slots=cave::collectPlanetBodyCutSlots(plan);
     if(!dev_->waitForResourceIdle()||!exclusive())return false;
     std::vector<cave::CavePlanetSurfaceSlotKey> keys;
-    for(const auto& [key,slot]:plan.slots){(void)slot;keys.push_back(key);}
+    for(const auto& [key,slot]:slots){(void)slot;keys.push_back(key);}
     const auto original=captureCaveSurfaceSlots(body,keys);
     const auto sameTriangle=[](const world::Triangle& a,const world::Triangle& b){return a.a==b.a&&a.b==b.b&&a.c==b.c;};
     struct Staged{size_t index;gfx::BufferHandle vb,ib;uint32_t count=0;};
@@ -211,7 +225,7 @@ bool PlanetRenderer::installCaveSurfaceCut(int body,const terraweave::caverns::C
     const auto asFloat=[](Vec3 p){return float3{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())};};
     try{
         for(const auto& captured:original){
-            const auto& slot=plan.slots.at(captured.key);
+            const auto& slot=*slots.at(captured.key).slot;
             if(slot.originalBody.size()!=captured.bodyTriangles.size()||
                !std::equal(slot.originalBody.begin(),slot.originalBody.end(),captured.bodyTriangles.begin(),sameTriangle)||
                slot.bodyTriangles.size()>65534){discard();return false;}
@@ -287,7 +301,7 @@ bool PlanetRenderer::installCaveSurfaceCut(int body,const terraweave::caverns::C
         for(auto& c:b.chunks)if(c.child>=0&&c.face==leaf.face&&c.x0<=leaf.x0&&c.y0<=leaf.y0&&
             c.x0+c.size>=leaf.x0+leaf.size&&c.y0+c.size>=leaf.y0+leaf.size)c.caveDescendant=true;
     }
-    b.caveCutEpoch=plan.surfaceEpoch;b.caveCutWatermark=plan.surfaceEpoch;return true;
+    b.caveCutEpoch=plan.surfaceEpoch;b.caveCutWatermark=plan.surfaceEpoch;b.caveCutAggregate=true;return true;
 }
 
 void PlanetRenderer::freeChunk(gfx::Device& dev, Chunk& c) {
