@@ -306,10 +306,11 @@ void StudioHost::surfaceDetached(StudioSurface surface) {
 void StudioHost::tickGame() {
     const double now = platform_.now(), dt = gameFrameTime_ > 0 ? now - gameFrameTime_ : 0;
     gameFrameTime_ = now;
-    if (!game_) return;
+    if (!game_) {session_->setBuildingGraphReader({});return;}
     if (!gamePlacement_.visible || !platform_.surfaceDrawable(StudioSurface::Game)) { game_->suspend(); return; }
     game_->frame(gamePlacement_.pixelsW, gamePlacement_.pixelsH, float(gamePlacement_.width), float(gamePlacement_.height),
                  dt, platform_.gameFocused());
+    session_->setBuildingGraphReader(game_->buildingGraphReader());
 }
 void StudioHost::tickAgentScreenshot() {
     if (agentShot_) {
@@ -1416,11 +1417,13 @@ bool StudioHost::handleHostMethod(const Json& req) {
                 plan.camera = std::array<float, 5>{cam.target.x, cam.target.z, cam.distance, float(cam.pitch * 57.29578), float(cam.yaw * 57.29578)};
             }
             ensureGame();
+            session_->setBuildingGraphReader({});
             game_->start(plan, engineRoot_ + "/engine/assets");
             gameFrameTime_ = 0;
-        } else if (method == "studio.gameStop" && game_) game_->stop();
+        } else if (method == "studio.gameStop" && game_) {session_->setBuildingGraphReader({});game_->stop();}
         else if (method == "studio.gameControl") {
             if (!game_) throw std::runtime_error("No game is running");
+            if(params.getStr("action")=="restart")session_->setBuildingGraphReader({});
             game_->control(params.getStr("action"));
         }
         return gameState();
@@ -1591,7 +1594,7 @@ void StudioHost::handleMessage(const std::string& json) {
     try {
         if (handleHostMethod(req)) return;
         const std::string method = req.getStr("method");
-        if (game_ && (method == "studio.openMap" || method == "studio.newMap")) game_->stop();
+        if (game_ && (method == "studio.openMap" || method == "studio.newMap")) {session_->setBuildingGraphReader({});game_->stop();}
         if (projectLoading_ && method != "studio.viewportRect") { sendError(req["id"], "Project is loading"); return; }
         Json reply;
         if (method == "studio.assetThumbnail" && req["id"].isNumber()) {
