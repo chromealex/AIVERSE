@@ -405,6 +405,17 @@ int main() {
         require(radial && world::publishSpectraWater(registry,radial),"sphere publication");
         require(registry.sample("nereid","depth",{8,0,0},value)&&value==2,"radial depth");
         require(registry.sample("nereid","up_x",{8,0,0},value)&&value==1,"radial up");
+        const Vec3 anchor{Fixed::fromInt(8192),Fixed{},Fixed{}};
+        sphere.center=anchor;
+        water.add<lib::nereid::WaterSphereComponent>(water.create(),sphere);
+        auto other=sphere;other.center={Fixed::fromInt(12288),Fixed{},Fixed{}};
+        other.priority=100;
+        water.add<lib::nereid::WaterSphereComponent>(water.create(),other);
+        auto local=live.publish(water,3,9,region,world::SpectraWaterGeometry::Sphere,Fixed{},anchor,anchor);
+        require(local && local->sample("nereid","depth",{8,0,0},value)&&value==2,
+                "body-local depth ignores other high-priority planets");
+        require(local->sample("nereid","surface_x",{8,0,0},value)&&value==10,
+                "water surface point translated to body-local space");
         require(world::publishSpectraWater(registry,{})&&!registry.sample("nereid","depth",{8,0,0},value),"water unload");
         auto height=std::make_shared<terraweave::AuthoredWorldHeightSnapshot>(10);
         height->setTile(world::Cell{0,0,0},{2,{200,200,200,200}});

@@ -1,12 +1,16 @@
 // Shared bounded world-space sampling lattice for visual Data Interfaces.
 #pragma once
 #include "engine/render/Math3D.h"
-#include "engine/core/Fixed.h"
+#include "engine/core/Archive.h"
 #include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 namespace aiverse::world {
+inline bool validSpectraFieldOffset(Vec3 p) {
+    constexpr int64_t limit=10000000LL*Fixed::kOne;
+    return p.x.raw>=-limit&&p.x.raw<=limit&&p.y.raw>=-limit&&p.y.raw<=limit&&p.z.raw>=-limit&&p.z.raw<=limit;
+}
 struct SpectraFieldRegion {
     static constexpr size_t kMaxSamples=4096;
     render::float3 origin{};

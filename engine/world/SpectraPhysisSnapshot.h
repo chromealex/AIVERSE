@@ -19,10 +19,10 @@ public:
     // One region per host publication. Invalid regions / uninitialized PHYSIS
     // return null; never publish a half-filled snapshot. Capture after ECS jobs.
     static std::shared_ptr<const SpectraPhysisSnapshot> capture(
-            const World& world, const SpectraPhysisRegion& region) {
+            const World& world, const SpectraPhysisRegion& region,Vec3 simulationOffset={}) {
         const auto* state=world.resourceConst<physis::State>();
         const size_t count=region.count();
-        if(!state || !count)return {};
+        if(!state || !count || !validSpectraFieldOffset(simulationOffset))return {};
         auto result=std::shared_ptr<SpectraPhysisSnapshot>(new SpectraPhysisSnapshot);
         result->region_=region;
         result->tick_=state->tick;
@@ -32,7 +32,7 @@ public:
                 for(unsigned x=0;x<region.dimensions[0];++x) {
                     physis::NatureFieldSample value;
                     const auto p=region.point(x,y,z);
-                    const Vec3 point{p[0],p[1],p[2]};
+                    const Vec3 point=Vec3{p[0],p[1],p[2]}+simulationOffset;
                     if(!physis::sampleNatureField(world,point,value) ||
                        value.tick!=result->tick_)return {};
                     result->samples_.push_back(value);

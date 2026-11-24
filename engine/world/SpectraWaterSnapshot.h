@@ -5,6 +5,7 @@
 #include "engine/world/nereid/NereidQueryIndex.h"
 #include "engine/world/nereid/NereidSphereWater.h"
 #include <memory>
+#include <optional>
 #include <vector>
 namespace aiverse::world {
 enum class SpectraWaterGeometry { Plane, Sphere };
@@ -22,9 +23,12 @@ public:
     // publish separate provider names for each geometry.
     static std::shared_ptr<const SpectraWaterSnapshot> capture(
         const World& world,const SpectraFieldRegion& region,
-        SpectraWaterGeometry geometry,uint64_t tick,Fixed seconds={}) {
+        SpectraWaterGeometry geometry,uint64_t tick,Fixed seconds={},
+        Vec3 simulationOffset={},std::optional<Vec3> sphereCenter={}) {
         const size_t count=region.count();
-        if(!count || (geometry!=SpectraWaterGeometry::Plane &&
+        if(!count || !validSpectraFieldOffset(simulationOffset) ||
+           (sphereCenter && !validSpectraFieldOffset(*sphereCenter)) ||
+           (geometry!=SpectraWaterGeometry::Plane &&
                       geometry!=SpectraWaterGeometry::Sphere))return {};
         auto out=std::shared_ptr<SpectraWaterSnapshot>(new SpectraWaterSnapshot);
         out->region_=region;out->tick_=tick;out->samples_.reserve(count);
@@ -35,20 +39,21 @@ public:
             for(unsigned y=0;y<region.dimensions[1];++y)
                 for(unsigned x=0;x<region.dimensions[0];++x) {
                     const auto p=region.point(x,y,z);
-                    const Vec3 at{p[0],p[1],p[2]};
+                    const Vec3 at=Vec3{p[0],p[1],p[2]}+simulationOffset;
                     Sample v;
                     if(plane) {
                         const auto s=plane->sample(at);
                         if(s.found) {
                             v.found=true;v.submerged=s.submerged;
-                            v.surface={at.x,s.surfaceY,at.z};
+                            v.surface=Vec3{at.x,s.surfaceY,at.z}-simulationOffset;
                             v.up={Fixed{},Fixed::fromInt(1),Fixed{}};
                             v.flow=s.flow;v.depth=s.depth;v.thickness=s.surfaceY-s.bottomY;
                         }
                     } else {
-                        const auto s=lib::nereid::sampleSphereWater(world,at,seconds);
+                        const auto s=lib::nereid::sampleSphereWaterFiltered(world,at,seconds,
+                            sphereCenter?&*sphereCenter:nullptr);
                         if(s.found) {
-                            v.found=true;v.submerged=s.submerged;v.surface=s.surfacePoint;
+                            v.found=true;v.submerged=s.submerged;v.surface=s.surfacePoint-simulationOffset;
                             v.up=s.up;v.flow=s.flow;v.depth=s.depth;
                             v.thickness=s.surfaceRadius-s.floorRadius;
                         }

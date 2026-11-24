@@ -187,6 +187,7 @@ void ClientFx::shutdown() {
 void ClientFx::startMatch(Simulation& sim, uint8_t viewer, const game::GameView& view, const game::MapGrid& grid) {
     clearGraphSources();
     graphSources_.reset();graphSourceAssets_.clear();
+    graphView_=&view;graphGrid_=&grid;
     ps_.clear();
     bridge_.setHeightFn([&view, &grid](float x, float z) { return view.heightAt(grid, x, z); });
     ps_.setGroundHeight([&view, &grid](float x, float z) { return view.heightAt(grid, x, z); });   // "collision" module
@@ -248,6 +249,7 @@ void ClientFx::startMatch(Simulation& sim, uint8_t viewer, const game::GameView&
 void ClientFx::stopMatch() {
     clearGraphSources();
     graphSources_.reset();graphSourceAssets_.clear();
+    graphView_=nullptr;graphGrid_=nullptr;
     if(entityInbox_) {entityInbox_->active=false;entityInbox_.reset();}
     entities_.reset(true);
     lightBuf_.clear();
@@ -266,7 +268,7 @@ void ClientFx::stopMatch() {
 
 void ClientFx::setPlanetView(const game::GameView* view) {
     if (!view || !view->planetMode()) {
-        if (planet_) { ps_.setViewSpace(nullptr); ps_.setUpFunction({}); ps_.setAltitudeFunction({}); bridge_.setPlaceFn({}); }
+        if (planet_) { clearGraphSources(); ps_.setViewSpace(nullptr); ps_.setUpFunction({}); ps_.setAltitudeFunction({}); bridge_.setPlaceFn({}); }
         planet_ = nullptr;
         return;
     }
@@ -280,7 +282,7 @@ void ClientFx::setPlanetView(const game::GameView* view) {
         ps_.setAltitudeFunction([this](fx::float3 p) { return planet_->planetFxAltitude(p); });
         bridge_.setPlaceFn([this](fx::float3 sim, float lift, fx::float3& out, fx::float3& up) { return planet_->planetFxPlace(sim, lift, out, up); });
     }
-    if (view->planetFxBody() != planetBody_) { ps_.clear(); planetBody_ = view->planetFxBody(); }   // another body: its own space
+    if (view->planetFxBody() != planetBody_) { clearGraphSources(); ps_.clear(); planetBody_ = view->planetFxBody(); }   // another body: its own space
     space_ = view->planetFxSpace();
     ps_.setViewSpace(&space_);
 }
@@ -289,6 +291,7 @@ void ClientFx::clearGraphSources() {
     if(graphSources_)graphSources_->reset();
     graphSourceMirror_.clear();
     liveFields_.clear();
+    graphRegistry_.reset();
     graphSourceHaveTick_=false;
     // Explicit epoch boundary even if replacement sim has the same tick.
     if(++graphSourceEpoch_==0)graphSourceEpoch_=1;
@@ -322,9 +325,7 @@ std::string ClientFx::graphSourceAsset(const std::string& name) {
 
 void ClientFx::presentGraphSources(Simulation& sim,const game::GameScene& scene,
                                     const render::Camera& camera) {
-    // GameScene currently renders planetary effects in body-local space.
-    // Do not feed global PHYSIS/NEREID coordinates into that particle system.
-    if(planet_||!attached_) {
+    if(!attached_) {
         if(graphSourceHaveTick_||graphSourceMirror_.size())clearGraphSources();
         return;
     }
@@ -340,26 +341,67 @@ void ClientFx::presentGraphSources(Simulation& sim,const game::GameScene& scene,
         if(!object.entity.valid()||!object.visible||object.blip||!world.alive(object.entity))continue;
         const auto* source=world.tryGetConst<lib::mechanics::SpectraSourceComponent>(object.entity);
         if(!source||!source->enabled||source->effect.empty())continue;
+        auto position=object.pos,direction=object.facing;
+        if(planet_&&!planet_->planetFxObjectPose(object,position,direction))continue;
+        if(!std::isfinite(position.x)||!std::isfinite(position.y)||!std::isfinite(position.z))continue;
         auto resolved=*source;
         resolved.effect=graphSourceAsset(source->effect);
         if(resolved.effect.empty())continue;
-        rows.push_back({std::to_string(object.entity.packed()),std::move(resolved),object.pos,object.facing});
+        rows.push_back({std::to_string(object.entity.packed()),std::move(resolved),position,direction});
     }
     graphSourceMirror_.sync(rows);
     if(rows.empty()) {
         graphSources_->setDataInterfaceRegistry(nullptr);
-        liveFields_.clear();
+        liveFields_.clear();graphRegistry_.reset();
     } else {
         // Quantized observer region limits cost and avoids a new capture for
         // every interpolated camera movement in the same committed tick.
         aiverse::world::SpectraFieldRegion region;
         region.spacing=32.f;region.dimensions={9,5,9};
         const auto snap=[](float v){return std::floor(v/32.f)*32.f;};
-        region.origin={snap(camera.target.x)-128.f,snap(camera.target.y)-64.f,
-                       snap(camera.target.z)-128.f};
-        const auto registry=liveFields_.publish(world,graphSourceEpoch_,sim.tick(),region,
-                                                aiverse::world::SpectraWaterGeometry::Plane);
-        graphSources_->setDataInterfaceRegistry(registry.get());
+        const auto target=planet_?space_.inverse().transformPoint(camera.target):camera.target;
+        region.origin={snap(target.x)-128.f,snap(target.y)-64.f,snap(target.z)-128.f};
+        const Vec3 offset=planet_?game::Surface::anchor(planetBody_):Vec3{};
+        const auto geometry=planet_?aiverse::world::SpectraWaterGeometry::Sphere:
+                                    aiverse::world::SpectraWaterGeometry::Plane;
+        const Fixed seconds=Fixed::fromRatio(sim.tick(),std::max<uint32_t>(1,sim.tickRate()));
+        const auto registry=liveFields_.publish(world,graphSourceEpoch_,sim.tick(),region,geometry,
+            planet_?seconds:Fixed{},offset,planet_?std::optional<Vec3>(offset):std::nullopt);
+        // CPU presenter samples at the exact prepared source pose. Copy only
+        // those terrain values; never retain a GameView or grid in a callback.
+        struct TerrainValue {float height=0,clearance=0;render::float3 up{0,1,0};};
+        using TerrainMap=std::map<std::array<float,3>,TerrainValue>;
+        auto terrain=std::make_shared<TerrainMap>();
+        for(const auto& row:rows) {
+            const auto p=row.position;
+            TerrainValue v;
+            if(planet_) {
+                if(!planet_->planetFxTerrain(p,v.height,v.clearance,v.up))continue;
+            } else {
+                if(!graphView_||!graphGrid_||graphGrid_->sphere()||
+                   p.x<0||p.z<0||p.x>graphGrid_->w||p.z>graphGrid_->h)continue;
+                v.height=graphView_->heightAt(*graphGrid_,p.x,p.z);
+                v.clearance=p.y-v.height;
+                if(!std::isfinite(v.height)||!std::isfinite(v.clearance))continue;
+            }
+            terrain->emplace(std::array<float,3>{p.x,p.y,p.z},v);
+        }
+        auto combined=registry?std::make_shared<spectra::DataInterfaceRegistry>(*registry):
+                               std::make_shared<spectra::DataInterfaceRegistry>();
+        combined->bind("terraweave",[terrain](std::string_view channel,render::float3 p,float& out){
+            const auto it=terrain->find({p.x,p.y,p.z});
+            if(it==terrain->end())return false;
+            const auto& v=it->second;
+            if(channel=="height")out=v.height;
+            else if(channel=="clearance")out=v.clearance;
+            else if(channel=="up_x")out=v.up.x;
+            else if(channel=="up_y")out=v.up.y;
+            else if(channel=="up_z")out=v.up.z;
+            else return false;
+            return true;
+        });
+        graphSources_->setDataInterfaceRegistry(combined.get());
+        graphRegistry_=std::move(combined);
     }
     graphSources_->sync(graphSourceMirror_.world(),lib::mechanics::SpectraSourceMirror::resolve);
     graphSourceTick_=sim.tick();graphSourceHaveTick_=true;

@@ -158,6 +158,9 @@ private:
     bool attached_ = false;
     std::vector<fx::FxPointLight> lightBuf_;
     bool preparedLightsValid_ = false;
+    const game::GameView* graphView_=nullptr;
+    const game::MapGrid* graphGrid_=nullptr;
+    std::shared_ptr<const spectra::DataInterfaceRegistry> graphRegistry_;
     const game::GameView* planet_ = nullptr;   // planet maps: the view placing effects (null on flat maps)
     int planetBody_ = -1;
     render::mat4 space_;

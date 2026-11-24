@@ -14,24 +14,26 @@ public:
     // Invalid publication clears the current registry, never reuses stale data.
     Registry publish(const World& world,uint64_t sourceEpoch,uint64_t tick,
                      const SpectraFieldRegion& region,SpectraWaterGeometry geometry,
-                     Fixed seconds={}) {
-        if(!sourceEpoch||!region.count()||
+                     Fixed seconds={},Vec3 simulationOffset={},std::optional<Vec3> sphereCenter={}) {
+        if(!sourceEpoch||!region.count()||!validSpectraFieldOffset(simulationOffset)||
+           (sphereCenter&&!validSpectraFieldOffset(*sphereCenter))||
            (geometry!=SpectraWaterGeometry::Plane&&geometry!=SpectraWaterGeometry::Sphere)){
             clear();return {};
         }
         if(registry_&&sourceEpoch==epoch_&&tick==tick_&&geometry==geometry_&&
-           seconds==seconds_&&sameRegion(region,region_))return registry_;
+           seconds==seconds_&&simulationOffset==offset_&&sphereCenter==sphereCenter_&&sameRegion(region,region_))return registry_;
         auto next=std::make_shared<spectra::DataInterfaceRegistry>();
         if(world.resourceConst<physis::State>()) {
-            auto weather=SpectraPhysisSnapshot::capture(world,region);
+            auto weather=SpectraPhysisSnapshot::capture(world,region,simulationOffset);
             if(weather)publishSpectraPhysis(*next,std::move(weather));
         }
         // The canonical planar sampler also handles flood resources, so
         // publish even when no ordinary water body is present.
-        auto water=SpectraWaterSnapshot::capture(world,region,geometry,tick,seconds);
+        auto water=SpectraWaterSnapshot::capture(world,region,geometry,tick,seconds,simulationOffset,sphereCenter);
         if(water)publishSpectraWater(*next,std::move(water));
         registry_=std::move(next);
         epoch_=sourceEpoch;tick_=tick;region_=region;geometry_=geometry;seconds_=seconds;
+        offset_=simulationOffset;sphereCenter_=sphereCenter;
         return registry_;
     }
     void clear(){registry_.reset();epoch_=tick_=0;}
@@ -48,5 +50,7 @@ private:
     SpectraFieldRegion region_{};
     SpectraWaterGeometry geometry_=SpectraWaterGeometry::Plane;
     Fixed seconds_{};
+    Vec3 offset_{};
+    std::optional<Vec3> sphereCenter_;
 };
 }
