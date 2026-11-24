@@ -1289,3 +1289,32 @@ outside the configured world limit is rejected before changing
 result yet; the new test is written but not executed. W1 remains
 partial and the PR Draft. Hosted macOS CI, even when completed,
 must be supplemented by the merged-tree Mac/KINGSTON quick suite.
+
+## W1.29a — native cold advancement
+
+`RegionDormancyController::advanceGroup<T>` advances one named, already
+registered component type for an explicitly supplied dormant group. The
+component's own portable Archive schema must contain its last simulated tick.
+The caller passes an authoritative target tick, a read-only clock accessor and
+a deterministic `bool(T&, RegionEntityId, uint64_t from, uint64_t to)`
+catch-up function. The callback must be pure, preserve reference fields and
+domain invariants, and record the target tick in the component. Rewind,
+duplicate members, stale ledger revisions, codec mismatch, refused policy
+and persistence-budget violations are rejected before publication. The
+controller stages updates in stable-ID order and verifies timestamp roundtrip.
+Same-tick retries do not modify serialized state.
+
+`advanceAndWakeGroup<T>` accepts an additional read-only admission predicate
+`bool(const World&, Cell, std::span<const Entity>)`. The host must supply a
+complete linked group and verify collision/navigation readiness as applicable.
+Catch-up is staged privately and the original parked store is replaced only
+after the existing wake succeeds. This is a single-component transaction;
+other parked components must be safe to pause. Existing plain wake remains
+unchanged for legacy pause-only consumers. Do not bypass required catch-up.
+
+No new persistence schema, ActorHost dependency, simulation clock or second
+cold store. No automatic parking, lifecycle scheduling, true absent entities
+or vehicle/character offscreen advancement. The candidate copy/serialization
+audit scans total parked payload; native execution and performance remain
+unverified. See the region lifecycle skill and
+`docs/agent-handoffs/open-world-stage29a-cold-advancement-2026-11-24.md`.
