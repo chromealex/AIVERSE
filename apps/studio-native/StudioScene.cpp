@@ -620,7 +620,8 @@ void StudioScene::clearPlanetForestModels(){
 }
 bool StudioScene::planetForestLiveCurrent(const editor::MapDoc& doc,const std::string& projectPath)const{
     return planetPreview_&&planetLiveSnapshot_.getBool("active")&&planetLiveSnapshot_.getStr("topology")=="planet"&&
-        planetLiveSnapshot_["forest"].getBool("active")&&planetLiveProject_==projectPath&&
+        planetLiveSnapshot_["forest"].getBool("active")&&
+        (planetLiveSnapshot_["forest"].getStr("focusBody").empty()||planetLiveSnapshot_["forest"].getStr("focusBody")==planetPreview_->bodyId)&&planetLiveProject_==projectPath&&
         planetLivePath_==doc.path&&planetLiveRevision_==doc.revision&&!doc.dirty;
 }
 namespace {
@@ -2556,7 +2557,11 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         if(planetLiveSnapshot_["aether"].getBool("truncated"))lightingStatus_+=" (sample capped)";
     }
     const bool liveForest=planetForestLiveCurrent(doc,projectPath);
-    if(liveForest)lightingStatus_+=useLiveTerrain?" · completed-tick terrain":" · authored terrain fallback (live unavailable)";
+    if(liveForest){
+        lightingStatus_+=useLiveTerrain?" · completed-tick terrain":" · authored terrain fallback (live unavailable)";
+        if(useLiveTerrain)lightingStatus_+=" · surface grid step "+std::to_string(planetLiveTerrainGrid_.getInt("step"));
+        lightingStatus_+=" · "+std::to_string(planetLiveSnapshot_["forest"]["plants"].size())+"/"+std::to_string(planetLiveSnapshot_["forest"].getInt("focusPlantCount"))+" sampled plants";
+    }
     if(planetForestModelsPending_)lightingStatus_+=" · ARBOR prototypes loading";
     if(!planetForestRejectedModels_.empty()||!planetForestRejectedRoots_.empty()||!planetForestRejectedLogs_.empty())lightingStatus_+=" · ARBOR preview budget or upload rejection";
     if(!liveForest&&planetForestOverlays_.plants)lightingStatus_+=" · authored forest: ARBOR skeleton / root footprint / capsule recipe";

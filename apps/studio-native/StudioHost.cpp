@@ -320,7 +320,7 @@ void StudioHost::tickGame() {
     invalidate();
     if(wpLiveOptions_.live && now-wpLiveRefresh_>=.25){
         wpLiveRefresh_=now;
-        wpLiveSnapshot_=game_->planetMatch()&&!worldProcessPlanetMapCurrent()?Json():game_->ecologyState(wpLiveOptions_,worldProcessSceneBody());
+        wpLiveSnapshot_=game_->planetMatch()&&!worldProcessPlanetMapCurrent()?Json():game_->ecologyState(wpLiveOptions_,wpLiveOptions_.forest?worldProcessSceneBody():std::string{});
         rebuildOverlay();
     }
 }
@@ -2153,7 +2153,13 @@ bool StudioHost::handleHostMethod(const Json& req) {
         out.set("armed",Json::fromBool(forestPlantArm_.isObject()));return out;
     });
     if(method=="studio.planetForestLive")return answer([&]{
-        if(game_&&worldProcessPlanetMapCurrent())return game_->planetForestState(worldProcessSceneBody());
+        if(game_&&worldProcessPlanetMapCurrent()){
+            const auto body=worldProcessSceneBody();
+            if(wpLiveOptions_.live&&wpLiveOptions_.forest&&game_->planetSnapshotCurrent(wpLiveSnapshot_)&&
+               wpLiveSnapshot_["forest"].getBool("active")&&wpLiveSnapshot_["forest"].getStr("focusBody")==body)
+                return wpLiveSnapshot_["forest"];
+            return game_->planetForestState(body);
+        }
         Json out=Json::object();out.set("active",Json::fromBool(false));return out;
     });
     if(method=="studio.evolveState")return answer([&]{
@@ -2172,7 +2178,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if(next!=wpLiveOptions_){
             wpLiveOptions_=next;
             wpLiveSnapshot_=wpLiveOptions_.live&&game_&&(!game_->planetMatch()||worldProcessPlanetMapCurrent())
-                ?game_->ecologyState(wpLiveOptions_,worldProcessSceneBody()):Json();
+                ?game_->ecologyState(wpLiveOptions_,wpLiveOptions_.forest?worldProcessSceneBody():std::string{}):Json();
             wpLiveRefresh_=platform_.now();
             rebuildOverlay();
         }

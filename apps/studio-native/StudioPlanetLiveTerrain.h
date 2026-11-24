@@ -40,7 +40,7 @@ inline std::optional<render::MeshBuilder> buildStudioLivePlanetTerrain(const Jso
        !std::isfinite(radius)||std::abs(radius-authored.radius)>.0001||
        !grid["corners"].isArray()||grid["corners"].size()!=size_t(6)*side*side)return {};
     const auto& values=grid["corners"].items();
-    for(const auto& v:values)if(!v.isNumber()||v.integer()<-32768||v.integer()>32767||v.fx()!=Fixed::fromInt(v.integer()))return {};
+    for(const auto& v:values)if(!v.isNumber()||v.integer()<-32768||v.integer()>32767||v.fx()!=Fixed::fromInt(v.integer())||radius+double(v.integer())/16.<=.01)return {};
     game::CubeSphere cube(n);render::MeshBuilder mesh;
     const auto point=[&](int f,int x,int y){
         const float height=float(values[(size_t(f)*side+y)*side+x].integer())/16.f;
