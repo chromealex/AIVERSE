@@ -334,7 +334,7 @@ class TextureGraphGpuOwner {
                     const auto& source=sources.nodes.at(node);
                     std::string key=metal?source.msl:source.glsl;
                     const auto& authored=program_->nodes.at(node);
-                    if(std::string_view(authored.info->id)=="image")key+=authored.parameters.dump(-1);
+                    if(isImageSource(authored.info->id))key+=authored.parameters.dump(-1);
                     return key;
                 });
                 matLayout_=sources.plan.schedule.slotBytes;
@@ -418,9 +418,9 @@ class TextureGraphGpuOwner {
                     }catch(...){groupScope.reset();}
                     size_t inputCount=pass.inputs.size();
                     const auto& node=program_->nodes.at(pass.pipeline);
-                    if(std::string_view(node.info->id)=="image"){
-                        if(inputCount!=0)return false;
-                        const auto data=imagePixels(node.parameters);
+                    if(isImageSource(node.info->id)){
+                        if(inputCount!=0||!node.image)return false;
+                        const auto& data=node.image->rgb;
                         const size_t bytes=data.size()*sizeof(uint32_t);
                         if(bytes>sources.imageSourceBytes-matImageBytes_)return false;
                         gfx::BufferDesc desc;desc.type=gfx::BufferType::Storage;desc.usage=gfx::Usage::Immutable;
@@ -616,15 +616,17 @@ public:
             if(!bake_){std::string hex;hex.reserve(pixels_.size()*2);for(auto v:pixels_){hex+="0123456789abcdef"[v>>4];hex+="0123456789abcdef"[v&15];}r.set("rgbaHex",Json::string(hex));}
         }return r;
     }
-    Json start(const Json& p,const std::string& project,render::RenderDeviceLifetime::Lease lease={}){
+    Json start(const Json& p,const std::string& project,render::RenderDeviceLifetime::Lease lease={},const ImageResolver& resolver={}){
         if(!queuePromoting_&&(!queueTicket_.empty()||!pendingRequests_.pending().empty()))throw std::runtime_error("texture queue owns scheduling; release active ticket first");
         if(queued_||inFlight_||matRetirementPending()||state_=="pending"||setPending())throw std::runtime_error("previous GPU texture request still active");
         if(!gpuCandidates_.empty()||(outputNoop_&&state_=="ready"&&!published_))throw std::runtime_error("publish or cancel the previous GPU texture set, then retire it");
         if(project.empty())throw std::invalid_argument("open project first");
-        auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object());
+        auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object(),resolver);
         size_t target=program.nodes.size();const bool setBake=p.getBool("bakeSet"),bake=setBake||p.getBool("bake");
         const bool transfer=p.getBool("gpuTextureTransfer"),mipmaps=p.getBool("gpuTextureMipmaps"),fenceOnly=p.getBool("gpuTextureFenceOnly");
         if(fenceOnly&&!transfer)throw std::invalid_argument("fence-only mode requires GPU texture transfer");
+        const bool externalImages=std::any_of(program.nodes.begin(),program.nodes.end(),[](const Node& n){return std::string_view(n.info->id)=="imageAsset";});
+        if(externalImages&&(p.getBool("incremental")||p.getBool("incrementalOutputs")))throw std::invalid_argument("external image snapshots require nonincremental GPU generation");
         const bool materialized=p.getBool("materialized")||p.getBool("materializedDag")||render::texture_graph::requiresMaterialized(program),incremental=p.getBool("incremental");
         if(incremental&&!materialized)
             throw std::invalid_argument("incremental requires materialized DAG");

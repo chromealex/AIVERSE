@@ -198,8 +198,9 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
     std::string body;
     const bool normal=std::string(node.info->id)=="normal";
     const std::string_view op=node.info->id;
-    if(op=="image"){
-        const auto w=std::to_string(integer(node.parameters["width"],1,1,maxEmbeddedImageSide)),h=std::to_string(integer(node.parameters["height"],1,1,maxEmbeddedImageSide));
+    if(isImageSource(op)){
+        require(node.image!=nullptr,"missing resolved image source");
+        const auto w=std::to_string(node.image->width),h=std::to_string(node.image->height);
         types.push_back(KernelValue::PackedBytes);
         body="uint x=tid%n,y=tid/n;uint index=(y*"+h+"u/n)*"+w+"u+x*"+w+"u/n;uint rgb=input0[index];float3 value=float3(float((rgb>>16u)&255u),float((rgb>>8u)&255u),float(rgb&255u))/255.0f;\n";
     }else if(neighborhoodOp(op)){
@@ -232,7 +233,7 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
         body+="float3 value=clamp("+expr+",0.0f,1.0f);\n";
     }
     body+=output==KernelValue::Scalar?"result[tid]=value.x;":"result[tid]=float4(value,1.0f);";
-    return materializedKernel(output,types,n,body,normal||!types.empty()?std::string{}:pointwiseCommon(),op=="image");
+    return materializedKernel(output,types,n,body,normal||!types.empty()?std::string{}:pointwiseCommon(),isImageSource(op));
 }
 // Only the known pointwise operations participate. Future neighborhood,
 // sampling or side-effect operations remain materialization boundaries.
@@ -300,9 +301,9 @@ inline MaterializedSources compileMaterializedDag(const Program& p,const std::ve
     // Conservatively reserve every authored image source, including unused nodes.
     for(const auto& node:p.nodes){
         require(node.info!=nullptr,"invalid materialized node");
-        if(std::string_view(node.info->id)!="image")continue;
-        const auto w=integer(node.parameters["width"],1,1,maxEmbeddedImageSide),h=integer(node.parameters["height"],1,1,maxEmbeddedImageSide);
-        const size_t bytes=size_t(w)*h*sizeof(uint32_t);
+        if(!isImageSource(node.info->id))continue;
+        require(node.image!=nullptr,"missing resolved image source");
+        const size_t bytes=node.image->rgb.size()*sizeof(uint32_t);
         require(bytes<=budget-r.resultCapacityBytes-r.imageSourceBytes,"image source exceeds materialized budget");
         r.imageSourceBytes+=bytes;
     }

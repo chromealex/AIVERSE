@@ -399,6 +399,22 @@ bool ModelTextureCache::read(const std::string& path, const FileReader& reader, 
     return true;
 }
 
+bool decodeTextureGraphRaster(const std::string& bytes,size_t maxPixels,Image& out){
+    if(bytes.size()<8||bytes.size()>16u*1024u*1024u)return false;
+    const bool png=bytes.compare(0,8,"\x89PNG\r\n\x1a\n",8)==0;
+    const bool jpeg=uint8_t(bytes[0])==0xff&&uint8_t(bytes[1])==0xd8;
+    if(!png&&!jpeg)return false;
+    const auto* data=reinterpret_cast<const stbi_uc*>(bytes.data());
+    int w=0,h=0,n=0;
+    if(!stbi_info_from_memory(data,int(bytes.size()),&w,&h,&n)||w<=0||h<=0||w>4096||h>4096||size_t(w)*h>maxPixels)return false;
+    const int expectedW=w,expectedH=h;
+    auto* pixels=stbi_load_from_memory(data,int(bytes.size()),&w,&h,&n,4);
+    if(!pixels)return false;
+    std::unique_ptr<stbi_uc,decltype(&stbi_image_free)> guard(pixels,&stbi_image_free);
+    if(w!=expectedW||h!=expectedH)return false;
+    out.width=w;out.height=h;out.rgba.assign(pixels,pixels+size_t(w)*h*4);
+    return true;
+}
 bool decodeImage(const std::string& bytes, Image& out) {
     if (isKtx2(bytes)) {
         auto ci = std::make_shared<CompressedImage>();

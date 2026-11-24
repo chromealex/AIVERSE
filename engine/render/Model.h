@@ -446,6 +446,8 @@ bool decodeDds(const std::string& bytes, Image& out);
 
 // PNG / JPEG / TGA from memory into RGBA8. Returns false on failure.
 bool decodeImage(const std::string& bytes, Image& out);
+// Bounded standard raster decode; refuses non-PNG/JPEG and preflights extent before allocation.
+bool decodeTextureGraphRaster(const std::string& bytes, size_t maxPixels, Image& out);
 
 // Builds a model from named procedural parts (one node per part). Colors of the builder are
 // treated as sRGB and converted to linear vertex colors.

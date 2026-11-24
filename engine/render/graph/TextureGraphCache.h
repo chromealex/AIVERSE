@@ -34,6 +34,7 @@ public:
         // Validate even on hit; keys include actual resolved program, not a lossy hash.
         require(!targets.empty()&&targets.size()<=9&&size>=8&&size<=p.size,"invalid cache evaluation");
         for(auto t:targets)require(t<p.nodes.size(),"invalid cache target");
+        if(std::any_of(p.nodes.begin(),p.nodes.end(),[](const Node& n){return std::string_view(n.info->id)=="imageAsset";})){hit=false;increment(misses_);return evaluateMany(p,targets,size);}
         auto k=key(p,targets,size);
         for(auto it=entries_.begin();it!=entries_.end();++it)if(it->key==k){
             auto result=it->images;entries_.splice(entries_.begin(),entries_,it);
