@@ -1,6 +1,7 @@
 #include "engine/world/TerraWeaveCavernsEcsCommand.h"
 #include "engine/world/TerraWeaveCavernsPlanetBodyCut.h"
 #include "engine/world/TerraWeaveCavernsPlanetDemand.h"
+#include "engine/world/TerraWeaveCavernsPlanetMotion.h"
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -109,10 +110,40 @@ static void checkDemand(const std::shared_ptr<const game::Surface>& surface){
     observers.clear();
     check(selectPlanetCaveDemand(set,surface,observers,{2},{},cfg).bodies.empty(),"retirement demand");
 }
+static void checkPlanetMotion(const std::shared_ptr<const game::Surface>& surface){
+    World world;
+    physis::GravitySettings settings;settings.baseline={};
+    world.setResource<physis::GravitySettings>(settings);
+    physis::GravityField field;field.mode=physis::GravityMode::Attract;
+    field.center=game::Surface::anchor(0);field.radiusMeters=200_fx;field.radialMagnitude=20_fx;
+    const auto entity=world.create();world.add<physis::GravityField>(entity,field);
+    for(int face=0;face<6;++face){
+        const CavePlanetAnchor anchor{"planet",face,8_fx,8_fx,800};
+        const auto frame=CavePlanetFrame::make(surface,anchor);
+        const auto basis=cavePlanetMotionBasis(frame,world,frame.toSimulation({}));
+        check(basis.groundedCompatible&&basis.up.dot(frame.up())>Fixed::fromRatio(99,100),"radial motion up");
+        check(basis.magnitude>9_fx&&basis.magnitude<11_fx,"radial magnitude");
+        lib::mechanics::MotionState state;
+        lib::mechanics::MotionConfig cfg;
+        const auto falling=stepCavePlanetMotion(basis,cfg,state,{},1,Fixed::fromRatio(1,20));
+        check(falling.has_value()&&state.velocity.dot(basis.up)<Fixed{},"radial acceleration");
+        world.get<physis::GravityField>(entity).mode=physis::GravityMode::Repel;
+        const auto inverted=cavePlanetMotionBasis(frame,world,frame.toSimulation({}));
+        check(inverted.groundedCompatible&&inverted.up.dot(frame.up())<Fixed::fromRatio(-99,100),"inverted support");
+        world.get<physis::GravityField>(entity).mode=physis::GravityMode::Attract;
+    }
+    const auto frame=CavePlanetFrame::make(surface,{"planet",0,8_fx,8_fx,800});
+    world.get<physis::GravityField>(entity).enabled=false;
+    const auto zero=cavePlanetMotionBasis(frame,world,frame.toSimulation({}));
+    lib::mechanics::MotionState state;
+    check(!zero.groundedCompatible&&!stepCavePlanetMotion(zero,{},state,{},1,Fixed::fromRatio(1,20)),"zero gravity refuses grounded motor");
+    check(!state.initialized,"refused step mutated state");
+}
 int main(){
     const auto surface=makeSurface();
     checkBodyCut(surface);
     checkDemand(surface);
+    checkPlanetMotion(surface);
     const auto old=decodePlanetCaveMap(region(99,0),surface);
     check(old.regions.size()==1&&old.regions.front().id==1,"v1 migration");
     bool refused=false;
