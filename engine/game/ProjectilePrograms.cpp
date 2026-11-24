@@ -101,7 +101,16 @@ void GameCore::initProjectileProgram(Simulation& sim, Projectile& p, Vec3 start)
     const auto* surface=sim.world().resource<GameState>()->surface.get();
     Vec3 toward=surface ? fxNormalize(surface->tangent(start,p.aim-start)) : direction(p.aim-start);
     projectile::initialize(p.program,p.speed,*f,toward);
-    if(p.effList>=0) {
+    if (f->arc) {
+        const World& world=sim.world();
+        if (world.alive(p.target) && world.has<Unit>(p.target) && world.has<Transform>(p.target))
+            p.aim=lift(sim,world.get<Transform>(p.target).pos,Fixed::fromRatio(6,10));
+        else p.aim=lift(sim,p.aim,Fixed::fromRatio(6,10));
+        const Fixed distance=surface ? surface->groundDist(start,p.aim) : dist2D(start,p.aim);
+        const auto arc=projectile::fitTargetArc(*f,distance,p.speed);
+        p.total=arc.duration; p.travel=arc.peak;
+        projectile::initializeArcBallisticFallback(p.program,arc);
+    } else if(p.effList>=0) {
         const auto& d=rules_.payloads[size_t(p.effList)][size_t(p.effIndex)].delivery;
         if(d.arc) {
             const Fixed distance=surface ? surface->groundDist(start,p.aim) : dist2D(start,p.aim);
@@ -129,11 +138,25 @@ void GameCore::sysProjectilePrograms(Simulation& sim, const std::vector<Entity>&
         const auto& f=*def; auto& s=p.program;
         Vec3 position=w.get<Transform>(entity).pos, previous=position;
         const bool spatial=surface || s.ballistic;
+        bool fitted=f.arc && p.total.raw>0;
+        const projectile::FittedArc arc{p.total,p.travel};
         auto up=[&](Vec3 at){return surface ? surface->up(at) : Vec3{Fixed{},1_fx,Fixed{}};};
         auto toward=[&](Vec3 at,Vec3 to){return surface ? fxNormalize(surface->tangent(at,to-at)) : direction(to-at);};
         auto distance=[&](Vec3 a,Vec3 b){return surface ? surface->groundDist(a,b) : dist2D(a,b);};
         auto centreOf=[&](Entity e){return lift(sim,w.get<Transform>(e).pos,Fixed::fromRatio(6,10));};
         auto endpoint=[&](Vec3 at,Fixed dt){
+            if (fitted) {
+                if (dt>=arc.duration-s.age) return p.aim;
+                const auto step=projectile::targetArcStep(arc,s.age,dt);
+                Vec3 next=at+(p.aim-at)*step.fraction;
+                if (surface) {
+                    const auto body=surface->bodyAt(at);
+                    const Fixed altitude=surface->altitude(at)+
+                        (surface->altitude(p.aim)-surface->altitude(at))*step.fraction+step.heightCorrection;
+                    next=surface->toShell(next,surface->bodies[size_t(body)].radius+altitude);
+                } else next.y+=step.heightCorrection;
+                return next;
+            }
             Vec3 next=at+projectile::displacement(s,p.speed,up(at),dt);
             if(surface) {
                 const auto body=surface->bodyAt(at);
@@ -167,12 +190,14 @@ void GameCore::sysProjectilePrograms(Simulation& sim, const std::vector<Entity>&
             return wall ? fxMin(*wall,hi) : hi;
         };
         bool alive=true;
-        if (s.lifetimeLeft<=Fixed{} || s.distanceLeft<=Fixed{} || s.direction.lengthSq()==Fixed{}) alive=false;
+        if (s.lifetimeLeft<=Fixed{} || s.distanceLeft<=Fixed{} ||
+            (!fitted && s.direction.lengthSq()==Fixed{})) alive=false;
+        if (fitted && surface && surface->bodyAt(position)!=surface->bodyAt(p.aim)) alive=false;
         auto eligible = [&](Entity target) {
             if (target==p.source || !w.alive(target) || !w.has<Unit>(target) || !w.has<Transform>(target) || !w.has<Owner>(target) || seen(s,target)) return false;
             if(surface && surface->bodyAt(w.get<Transform>(target).pos)!=surface->bodyAt(position))return false;
             const auto& u=w.get<Unit>(target);
-            if (u.hp<=Fixed{}) return false;
+            if (u.hp<=Fixed{} || (f.arc && (u.flags & kUnitOffMap))) return false;
             if (p.effList>=0) return filterOk(sim,rules_.payloads[size_t(p.effList)][size_t(p.effIndex)].filter,target,p.owner,p.source);
             const uint8_t owner=w.get<Owner>(target).player;
             // kLayerHitsNeutral (arsenal free fire): passive neutral bodies (parked cars) stop the shot too
@@ -186,6 +211,7 @@ void GameCore::sysProjectilePrograms(Simulation& sim, const std::vector<Entity>&
             projectile::split(s,p.speed,f,i,up(at),[&](projectile::Branch branch){
                 Projectile child=p;child.program=std::move(branch.state);child.speed=branch.speed;
                 child.target=kNullEntity;child.start=at;child.aim=at+child.program.direction*child.program.distanceLeft;
+                if (f.arc) { child.total={}; child.travel={}; }
                 spawns.push_back({std::move(child),at});
             });
         };
@@ -206,6 +232,7 @@ void GameCore::sysProjectilePrograms(Simulation& sim, const std::vector<Entity>&
             if(!branch)return false;
             Projectile child=p;child.program=std::move(branch->state);child.speed=branch->speed;
             child.target=branch->target;child.start=at;child.aim=centreOf(child.target);
+            if (f.arc) { child.total={}; child.travel={}; }
             spawns.push_back({std::move(child),at});return true;
         };
         auto impact = [&](const Projectile& shot, Entity target, Vec3 at) {
@@ -253,10 +280,24 @@ void GameCore::sysProjectilePrograms(Simulation& sim, const std::vector<Entity>&
             }
         };
         bool spent=false;   // the flight ended at a wall or at its range without a direct hit
+        bool arcLanded=false;
+        auto landArc=[&] {
+            // A fitted endpoint is reached only if the sweep was not blocked.
+            // A non-homing target that has moved away is not magically hit.
+            Entity victim=kNullEntity;
+            if (eligible(p.target) && projectile::magnitude(centreOf(p.target)-position)<=
+                s.radius+fxMax(Fixed::fromRatio(6,10),rules_.types[w.get<Unit>(p.target).type].radius))
+                victim=p.target;
+            if (victim.valid() && s.hit.size()<256) s.hit.push_back(victim);
+            impact(p,victim,position);
+            arcLanded=true; alive=false;
+        };
         Fixed timeLeft=fxMin(sim.dt(),s.lifetimeLeft);
         while (alive && timeLeft>Fixed{}) {
             // Stop exactly at the next timed Split so children start at its actual location.
+            if (fitted && s.age>=arc.duration) { landArc(); break; }
             Fixed slice=projectile::sliceTime(s,p.speed,timeLeft,spatial);
+            if (fitted) slice=fxMin(slice,arc.duration-s.age);
             if(surface) slice=fxMin(slice,fxMax(Fixed::fromRaw(1),surface->cellSize(surface->bodyAt(position))/4/(p.speed+fxAbs(s.verticalSpeed)+1_fx)));
             for (size_t i=0;i<s.cursor;++i) {
                 const auto& m=f.modifiers[i];
@@ -265,15 +306,25 @@ void GameCore::sysProjectilePrograms(Simulation& sim, const std::vector<Entity>&
                 else slice=fxMin(slice,m.after-s.age);
             }
             if (f.homing && eligible(p.target)) {
-                Vec3 heading=toward(position,centreOf(p.target));
+                const Vec3 aim=centreOf(p.target);
+                Vec3 heading=toward(position,aim);
                 if (heading.lengthSq()>Fixed{}) s.direction=heading;
+                if (fitted) p.aim=aim;
+            }
+            if (fitted) {
+                // A moving target can require a larger horizontal velocity.
+                // Use bounded chords even during catch-up guidance.
+                const Fixed left=arc.duration-s.age;
+                const Fixed speed=distance(position,p.aim)/left;
+                slice=fxMin(slice,projectile::sliceTime(s,fxMax(p.speed,speed),slice,true));
             }
             Vec3 delta=endpoint(position,slice)-position;
             Fixed fullLength=spatial?projectile::magnitude(delta):p.speed*slice,length=fxMin(s.distanceLeft,fullLength);
             if (length<=Fixed{}) {
                 position+=delta;transport(position,slice);
                 s.lifetimeLeft=fxMax(Fixed{},s.lifetimeLeft-slice);s.age+=slice;timeLeft-=slice;
-                if(s.lifetimeLeft<=Fixed{})alive=false;
+                if (fitted && s.age>=arc.duration) { position=p.aim; landArc(); }
+                else if(s.lifetimeLeft<=Fixed{})alive=false;
                 continue;
             }
             Vec3 heading=spatial?projectile::unit(delta):s.direction;
@@ -311,6 +362,7 @@ void GameCore::sysProjectilePrograms(Simulation& sim, const std::vector<Entity>&
                 if (replaced) { alive=false; break; }
                 bool pass=projectile::pass(s,f);
                 if (!pass || s.distanceLeft<=Fixed{} || s.lifetimeLeft<=Fixed{}) { alive=false; break; }
+                if (fitted) { fitted=false; p.total={}; p.travel={}; }
                 continue;
             }
             if(building.distance){
@@ -324,14 +376,16 @@ void GameCore::sysProjectilePrograms(Simulation& sim, const std::vector<Entity>&
             transport(position,slice);
             s.distanceLeft=fxMax(Fixed{},s.distanceLeft-finish);
             s.lifetimeLeft=fxMax(Fixed{},s.lifetimeLeft-slice); s.age+=slice; timeLeft-=slice;
-            if (wall || s.distanceLeft<=Fixed{} || s.lifetimeLeft<=Fixed{}) { alive=false; spent=true; }
+            if (fitted && !wall && finish==fullLength && s.age>=arc.duration) {
+                position=p.aim; landArc();
+            } else if (wall || s.distanceLeft<=Fixed{} || s.lifetimeLeft<=Fixed{}) { alive=false; spent=true; }
             if (alive) for (size_t i=0;i<s.cursor;++i) {
                 const auto& m=f.modifiers[i];
                 if (m.kind==ProjectileModKind::Split && m.timed && !(s.consumed&(1u<<i)) && s.age>=m.after) split(i,position);
             }
         }
         // free fire (arsenal, kLayerFreeFire): a splash weapon goes off where its flight ends (a rocket into a wall)
-        if (spent && p.effList<0 && p.splash>Fixed{} && (p.layers&kLayerFreeFire) && p.sourceType<rules_.types.size() && p.weapon>=0) {
+        if (!arcLanded && spent && p.effList<0 && p.splash>Fixed{} && (p.layers&kLayerFreeFire) && p.sourceType<rules_.types.size() && p.weapon>=0) {
             const auto& wd=rules_.types[p.sourceType].weapons[size_t(p.weapon)];
             std::vector<Entity> splash;
             gs.hash.query(position,p.splash+maxRadius,[&](Entity t) {
@@ -340,7 +394,7 @@ void GameCore::sysProjectilePrograms(Simulation& sim, const std::vector<Entity>&
             std::sort(splash.begin(),splash.end(),[](Entity a,Entity b){return a.index<b.index;});
             for (Entity t:splash) dealDamage(sim,t,p.damage*s.damageScale,p.damageType,p.source,p.owner,&wd);
         }
-        if (!alive && (spent || p.splash>Fixed{}) && p.effList<0 && (p.layers&kLayerFreeFire) && p.weapon>=0)
+        if (!alive && (arcLanded || spent || p.splash>Fixed{}) && p.effList<0 && (p.layers&kLayerFreeFire) && p.weapon>=0)
             sim.emit({kEvShotEnd,p.owner,p.source,kNullEntity,int64_t(p.weapon),position});   // sparks at the wall, the rocket's blast (fx / audio "end")
         if (w.alive(entity) && w.has<Projectile>(entity)) {
             w.get<Projectile>(entity)=std::move(p);
