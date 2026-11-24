@@ -13,6 +13,7 @@ export function BuildingGeometryGraphView({geometry,solids}:{geometry:unknown;so
    <GraphCanvas view={result.view} label="Building geometry and independent runtime graph owners" selected={selected} readOnly onSelect={setSelected} onMove={()=>{}}/>
   </div>
   {owner&&<StudioAlert>{owner.detail} Source-level integration inventory; live registration unknown.</StudioAlert>}
+  {selected==='physics'&&<StudioAlert>Existing runtime scene binding mirrors committed collision bodies; this view does not instantiate or inspect a physics scene.</StudioAlert>}
   {selected==='boxes'&&<StudioAlert>Generated preview AABBs are not active PHYSIS bodies. Runtime scene ownership and actual contacts are not inspected.</StudioAlert>}
   {selected==='movable'&&<StudioAlert>Door leaves, roof panels and elevator platforms have separate runtime ownership; preview may include initial poses.</StudioAlert>}
   <details><summary>Native solid categories</summary>{Object.entries(result.report.parts).map(([kind,n])=><div key={kind}>{kind}: {n}</div>)}</details>
