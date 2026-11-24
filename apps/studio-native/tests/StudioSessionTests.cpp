@@ -541,6 +541,33 @@ void agentScopedHistoryContract(){
     AIVERSE_TEST_CHECK(moveEdit.getBool("canUndo"));
     AIVERSE_TEST_CHECK(!step(moveEdit,"undo",moveEdit.getStr("historyVersion")).has("error"));
     AIVERSE_TEST_CHECK(fs::exists(root/"content"/"AgentFolder"));
+    // S6i: authenticated linked readback, confirmed reversible delete, restore
+    // and quota CAS. No arbitrary path or permanent purge adapter.
+    assets=agent("studio_asset_history",Json::object());
+    Json recovery=Json::object();recovery.set("expectedProject",assets["project"]);
+    AIVERSE_TEST_CHECK(!agent("studio_asset_recovery_storage",recovery).has("error"));
+    const auto trash=agent("studio_asset_trash_list",recovery);
+    AIVERSE_TEST_CHECK(trash["items"].isArray());
+    Json deps=recovery;deps.set("guid",Json::string(guid));deps.set("depth",Json::number(int64_t(16)));
+    AIVERSE_TEST_CHECK(agent("studio_asset_dependencies",deps)["items"].isArray());
+    deps.set("guid",Json::string("../outside"));
+    AIVERSE_TEST_CHECK(agent("studio_asset_dependencies",deps).has("error"));
+    Json deletion=recovery;deletion.set("guid",Json::string(guid));deletion.set("expectedVersion",assets["version"]);
+    AIVERSE_TEST_CHECK(agent("studio_asset_delete",deletion).has("error")&&fs::exists(root/"content"/"AgentFolder"));
+    deletion.set("confirmed",Json::fromBool(true));
+    const auto deleted=agent("studio_asset_delete",deletion);
+    AIVERSE_TEST_CHECK(!deleted.has("error")&&deleted.getBool("historyRecorded")&&!fs::exists(root/"content"/"AgentFolder"));
+    Json restore=recovery;restore.set("id",Json::string(fs::path(deleted.getStr("backup")).parent_path().filename().string()));
+    const auto restoreReview=agent("studio_asset_trash_restore_review",restore);
+    AIVERSE_TEST_CHECK(!restoreReview.has("error")&&!restoreReview.getStr("token").empty());
+    restore.set("token",restoreReview["token"]);restore.set("expectedVersion",restoreReview["version"]);
+    AIVERSE_TEST_CHECK(agent("studio_asset_trash_restore",restore).has("error"));
+    restore.set("confirmed",Json::fromBool(true));
+    AIVERSE_TEST_CHECK(!agent("studio_asset_trash_restore",restore).has("error")&&fs::exists(root/"content"/"AgentFolder"));
+    Json quota=recovery;quota.set("expectedMiB",Json::number(int64_t(0)));quota.set("quotaMiB",Json::number(int64_t(8)));
+    AIVERSE_TEST_CHECK(agent("studio_asset_recovery_quota_set",quota).getInt("quotaMiB")==8);
+    AIVERSE_TEST_CHECK(agent("studio_asset_recovery_quota_set",quota).has("error"));
+    AIVERSE_TEST_CHECK(agent("studio_asset_trash_purge",restore).has("error"));
     client.close();session.openProject(root.string());
     AIVERSE_TEST_CHECK(step(assetEdit,"undo",assetEdit.getStr("historyVersion")).has("error"));
     fs::remove_all(root);

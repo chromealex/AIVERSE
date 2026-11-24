@@ -587,6 +587,83 @@ Json StudioSession::agentLinkedCall(const std::string& name,const Json& args){
             out.set("operations",std::move(rows));out.set("bulkUndo",str("map-only"));
             out.set("coordinatedBatch",str("map-project-assets-disjoint-relocations"));return out;
         }
+        // Explicit allowlist; never translate arbitrary tool names to browser RPC.
+        if(name=="studio_asset_dependencies"||name=="studio_asset_recovery_storage"||
+           name=="studio_asset_trash_list"||name=="studio_asset_trash_restore_review"||
+           name=="studio_asset_trash_restore"||name=="studio_asset_delete"||
+           name=="studio_asset_recovery_quota_set"||name=="studio_asset_trash_cleanup_review"){
+            if(ws_.project.dir.empty()||args.getStr("expectedProject")!=ws_.project.dir)
+                throw std::runtime_error("Linked Studio project changed");
+            const auto integer=[&](const char* key,int64_t fallback,int64_t min,int64_t max){
+                if(!args.has(key))return fallback;
+                const auto value=args.getInt(key,-1);
+                if(!args[key].isNumber()||args[key].numberLiteral()!=std::to_string(value)||value<min||value>max)
+                    throw std::runtime_error(std::string("Invalid integer argument: ")+key);
+                return value;
+            };
+            Json params=Json::object();params.set("expectedProject",str(ws_.project.dir));
+            const auto invoke=[&](const char* method,const Json& input){
+                Json request=Json::object();request.set("id",num(int64_t(1)));
+                request.set("method",str(method));request.set("params",input);
+                const auto response=dispatchImpl(request);
+                if(response.has("error"))throw std::runtime_error(response.getStr("error"));
+                return response["result"];
+            };
+            const auto selected=[&]{
+                if(!args["guid"].isString()||!studioValidGuid(args.getStr("guid")))
+                    throw std::runtime_error("Select an existing asset GUID");
+                StudioAssetCatalog catalog(ws_.project.dir);catalog.rebuild(false);
+                const auto entry=catalog.byGuid(args.getStr("guid"));
+                if(!entry)throw std::runtime_error("Asset GUID not found");
+                return *entry;
+            };
+            if(name=="studio_asset_dependencies"){
+                const auto entry=selected();
+                const auto offset=integer("offset",0,0,65536),limit=integer("limit",50,1,100);
+                params.set("path",str(entry.path));
+                if(args.has("depth"))params.set("depth",num(integer("depth",1,1,16)));
+                const auto refs=invoke("studio.assetReferences",params);
+                Json out=Json::object(),rows=Json::array();
+                for(size_t i=size_t(offset);i<refs.size()&&rows.size()<size_t(limit);++i)rows.push(refs[i]);
+                out.set("items",std::move(rows));out.set("total",num(int64_t(refs.size())));
+                out.set("guid",str(entry.guid));out.set("path",str(entry.path));
+                out.set("version",str(assetHistoryVersion()));
+                return out;
+            }
+            if(name=="studio_asset_recovery_storage")return studioRecoveryStorage(ws_.project.dir);
+            if(name=="studio_asset_trash_list"){
+                params.set("offset",num(integer("offset",0,0,10000)));
+                params.set("limit",num(integer("limit",50,1,100)));
+                return invoke("studio.assetTrashList",params);
+            }
+            if(name=="studio_asset_trash_cleanup_review"){
+                params.set("ids",args["ids"]);return invoke("studio.assetTrashBatchReview",params);
+            }
+            if(name=="studio_asset_recovery_quota_set"){
+                if(!args.has("expectedMiB")||!args.has("quotaMiB"))throw std::runtime_error("Both quota values are required");
+                params.set("expectedMiB",num(integer("expectedMiB",0,0,1048576)));
+                params.set("quotaMiB",num(integer("quotaMiB",0,0,1048576)));
+                return invoke("studio.assetRecoveryQuota",params);
+            }
+            if(name=="studio_asset_trash_restore_review"){
+                params.set("id",args["id"]);params.set("action",str("restore"));
+                return invoke("studio.assetTrashReview",params);
+            }
+            if(!args.getBool("confirmed")||args.getStr("expectedVersion")!=assetHistoryVersion())
+                throw std::runtime_error("Explicit confirmation and current asset history version required");
+            params.set("confirmed",Json::fromBool(true));params.set("expectedVersion",args["expectedVersion"]);
+            if(name=="studio_asset_delete"){
+                const auto entry=selected();
+                params.set("guid",str(entry.guid));params.set("path",str(entry.path));
+                const auto result=invoke("studio.assetDelete",params);
+                agentAssetTransfer_.reset();agentAssetTransferGuids_.clear();
+                return result;
+            }
+            params.set("id",args["id"]);params.set("token",args["token"]);params.set("action",str("restore"));
+            const auto result=invoke("studio.assetTrashApply",params);
+            agentAssetTransfer_.reset();agentAssetTransferGuids_.clear();
+            return result;
+        }
         if(name=="studio_asset_move_preview"||name=="studio_asset_move_commit"){
             if(ws_.project.dir.empty()||args.getStr("expectedProject")!=ws_.project.dir||
                args.getStr("expectedVersion")!=assetHistoryVersion())

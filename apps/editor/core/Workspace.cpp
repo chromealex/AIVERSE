@@ -851,6 +851,30 @@ void Workspace::registerCoreOps() {
     add("studio_asset_move_commit","Apply a reviewed linked Studio internal move using its token and explicit non-destructive decisions.",
         R"({"type":"object","properties":{"expectedProject":{"type":"string"},"expectedVersion":{"type":"string"},"token":{"type":"string"},"decisions":{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"action":{"type":"string","enum":["import","keep-both","skip"]}},"required":["id","action"]}}},"required":["expectedProject","expectedVersion","token","decisions"]})",
         [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    add("studio_asset_dependencies","Read known direct or multi-hop dependency edges by existing GUID, paginated.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"guid":{"type":"string"},"depth":{"type":"integer","minimum":1,"maximum":16},"offset":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":100}},"required":["expectedProject","guid"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    add("studio_asset_recovery_storage","Read linked Studio logical recovery storage and quota.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"}},"required":["expectedProject"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    add("studio_asset_trash_list","Read paginated recovery records and retained-history protection.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"offset":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":100}},"required":["expectedProject"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    add("studio_asset_trash_restore_review","Review exact recovery record identity for restore only.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"id":{"type":"string"}},"required":["expectedProject","id"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    add("studio_asset_trash_restore","Restore a reviewed recovery record. Clears asset history; requires explicit confirmation.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"id":{"type":"string"},"token":{"type":"string"},"expectedVersion":{"type":"string"},"confirmed":{"type":"boolean"}},"required":["expectedProject","id","token","expectedVersion","confirmed"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    add("studio_asset_delete","Move an existing GUID to reversible project trash. Requires confirmation and current asset history.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"guid":{"type":"string"},"expectedVersion":{"type":"string"},"confirmed":{"type":"boolean"}},"required":["expectedProject","guid","expectedVersion","confirmed"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    add("studio_asset_recovery_quota_set","Set retained trash quota in MiB with expected old value; zero means unlimited.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"expectedMiB":{"type":"integer","minimum":0,"maximum":1048576},"quotaMiB":{"type":"integer","minimum":0,"maximum":1048576}},"required":["expectedProject","expectedMiB","quotaMiB"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    add("studio_asset_trash_cleanup_review","Review selected history-unprotected recovery slots for cleanup. Permanent purge remains native UI only.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"ids":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":50}},"required":["expectedProject","ids"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
     // ---------------------------------------------------------------- rules
     add("rules_get", "Read rules.json or a part of it by path (e.g. 'types.footman', 'resources', 'triggers[0]'). No path = whole file. "
         "Rules split over files (rules.json \"include\") read as one document; \"extends\" entries are shown as written, "

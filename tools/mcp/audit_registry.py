@@ -24,6 +24,12 @@ REQUIRED = {
     "human": ("human_schema", "human_create"),
     "mcp": ("mcp_registry",),
     "simulation": ("simulation_budget_plan",),
+    "studio_assets": ("studio_asset_history", "studio_asset_catalog", "studio_asset_dependencies",
+                      "studio_asset_recovery_storage", "studio_asset_trash_list",
+                      "studio_asset_trash_restore_review", "studio_asset_trash_restore",
+                      "studio_asset_delete", "studio_asset_recovery_quota_set",
+                      "studio_asset_trash_cleanup_review", "studio_asset_move_preview",
+                      "studio_asset_move_commit"),
 }
 
 def main():

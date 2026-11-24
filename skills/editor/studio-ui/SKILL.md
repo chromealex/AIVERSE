@@ -152,6 +152,9 @@ Asset Trash lists logical bytes of the full recovery store (including unlisted s
 ## History-protected cleanup (S6h.2)
 Trash rows report logical payload and complete slot bytes (folders included). Batch review accepts 1–50 distinct slot IDs and refuses every slot mentioned by retained Undo/Redo, including redo tail. It binds canonical project, history epoch/version, sorted IDs, exact reviewed record and payload digest, and byte totals. Confirmed apply revalidates the full set and each slot, reports removed IDs and first failure; irreversible cleanup is not an atomic transaction. Single-slot restore/purge retains its existing explicit history-invalidating behavior. Staging checks available logical source bytes plus 16 MiB reserve before each native staged import/replacement; not a physical reservation or full peak-disk guarantee.
 
+## Linked dependency and recovery tools (S6i.1)
+Use authenticated Studio MCP studio_asset_history to obtain project/version, catalog for GUIDs, studio_asset_dependencies for paged known edges (optional depth 1–16). Recovery storage and Trash list are read-only. studio_asset_delete is reversible and requires existing GUID, current version and confirmed=true; native dependency checks remain authoritative. Restore uses studio_asset_trash_restore_review then studio_asset_trash_restore with exact id/token/version and confirmed=true; this clears history. Quota setter requires expectedMiB. Cleanup review is read-only; permanent purge stays in native UI. Do not expose external picker paths, arbitrary browser RPC or claim untracked restore/quota changes are undoable.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web
