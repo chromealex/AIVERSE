@@ -5,6 +5,7 @@
 #include "engine/world/TerraWeaveCavernsNavigationAdapters.h"
 #include "engine/world/TerraWeaveCavernsPathRouter.h"
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <memory>
