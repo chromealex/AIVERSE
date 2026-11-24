@@ -339,3 +339,11 @@ advancement does not write the store. Existing pause-only and single-type
 APIs are not a way to bypass a required complete policy. No automatic host
 integration, true absence or performance claim yet. Schema 1 unchanged.
 Native builds and tests NOT RUN; see stage29b handoff.
+## W1.30a — reuse the existing population owner
+
+Traffic's opt-in virtual trip deadline catch-up (root simulationLod.enabled)
+uses its own existing persisted TrafficCitizen records and clocks, not
+RegionColdStore copies of those records. See the city-traffic skill and
+docs/traffic.md. Do not park occupied vehicles or duplicate population
+identity. Generic guarded RegionLifecycleRuntime queue integration and
+host-specific park eligibility are separate follow-up work. NOT RUN.

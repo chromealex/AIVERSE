@@ -89,7 +89,7 @@ unchanged, deterministic stable-ID/component ordering, codec roundtrip of
 clocks, unchanged repeated-tick state, and fresh-save/COW continuation.
 No automatic ActorHost parking or new persistence schema in this stage.
 
-W1.30a in progress: integrate existing canonical TrafficCitizen virtual
+W1.30a source implementation integrates existing canonical TrafficCitizen virtual
 journeys with tick-based deadline catch-up when root simulationLod is enabled.
 Preserve existing identity, serialized fields, population cursor, live
 pedestrian/vehicle and bus ownership. Catch up only already virtual trips
