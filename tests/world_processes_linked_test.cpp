@@ -142,9 +142,56 @@ static void checkRegionBudget(){
     plan.regions.push_back(plan.regions.back());
     AIVERSE_TEST_CHECK(!evolve::prepareRegionBudget(plan,state,2));
 }
+static void checkRegionPriority(){
+    World ecs;
+    const auto urgent=ecs.create(),normal=ecs.create(),later=ecs.create(),absent=ecs.create();
+    evolve::RegionWorkPlan plan;
+    plan.regions={{urgent,{world::SimulationLodTier::Cold,16,false}},
+                  {normal,{}},{later,{}}};
+    std::sort(plan.regions.begin(),plan.regions.end(),[](const auto& a,const auto& b){
+        return a.region.packed()<b.region.packed();
+    });
+    evolve::RegionBudgetState state;
+    const std::array<Entity,3> wake{urgent,urgent,absent};
+    plan.diagnostics.tick=1;
+    auto batch=evolve::prepareRegionBudget(plan,state,evolve::RegionBudgetOptions{0,wake});
+    AIVERSE_TEST_CHECK(batch&&batch->woken==1&&batch->ignoredWake==1);
+    AIVERSE_TEST_CHECK(batch->remaining==3&&batch->urgentRemaining==1);
+    state=batch->next;
+    plan.diagnostics.tick=2;
+    batch=evolve::prepareRegionBudget(plan,state,1);
+    AIVERSE_TEST_CHECK(batch&&batch->urgentSelected==1&&batch->selected[0].region==urgent);
+    AIVERSE_TEST_CHECK(batch->selected[0].firstDueTick==1&&batch->selected[0].urgent);
+    state=batch->next;
+    // Repeated forced wake cannot consume the next reserved ordinary slot.
+    const std::array<Entity,1> repeated{urgent};
+    plan.diagnostics.tick=3;
+    batch=evolve::prepareRegionBudget(plan,state,evolve::RegionBudgetOptions{1,repeated});
+    AIVERSE_TEST_CHECK(batch&&batch->urgentSelected==0&&batch->urgentRemaining==1);
+    AIVERSE_TEST_CHECK(batch->selected[0].region!=urgent);
+    const auto ordinary=batch->selected[0].region;
+    state=batch->next;
+    plan.diagnostics.tick=4;
+    batch=evolve::prepareRegionBudget(plan,state,1);
+    AIVERSE_TEST_CHECK(batch&&batch->urgentSelected==1&&batch->selected[0].firstDueTick==3);
+    state=batch->next;
+    plan.diagnostics.tick=5;
+    batch=evolve::prepareRegionBudget(plan,state,evolve::RegionBudgetOptions{1,repeated});
+    AIVERSE_TEST_CHECK(batch&&batch->urgentSelected==0);
+    AIVERSE_TEST_CHECK(batch->selected[0].region!=ordinary&&batch->selected[0].region!=urgent);
+    state=batch->next;
+    plan.diagnostics.tick=6;
+    plan.regions.erase(std::remove_if(plan.regions.begin(),plan.regions.end(),
+        [&](const auto& x){return x.region==urgent;}),plan.regions.end());
+    batch=evolve::prepareRegionBudget(plan,state,evolve::RegionBudgetOptions{1,repeated});
+    AIVERSE_TEST_CHECK(batch&&batch->removed==1&&batch->ignoredWake==1&&batch->urgentRemaining==0);
+    const std::array<Entity,1> invalid{kNullEntity};
+    AIVERSE_TEST_CHECK(!evolve::prepareRegionBudget(plan,state,evolve::RegionBudgetOptions{1,invalid}));
+}
 int main(){
     checkRegionLod();
     checkRegionBudget();
+    checkRegionPriority();
     auto portal=wl::defaults("EchoPortal");
     AIVERSE_TEST_CHECK(wl::validate("EchoPortal",portal));
     AIVERSE_TEST_CHECK(!wl::edit("EchoPortal","enabled",Json::fromBool(true),portal));
