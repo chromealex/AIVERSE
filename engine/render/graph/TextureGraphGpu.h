@@ -106,9 +106,28 @@ float cells(float2 uv,int p,uint seed){
 // Explicit two-pass plan for a terminal neighborhood operation. Scratch
 // contains one float per pixel, reused by the second pass, never quantized.
 struct PassPlan {Source first,second;bool twoPass=false;size_t scratchBytes=0;};
-inline PassPlan plan(const Program& p,size_t target,int n){
+// Only a scalar output that is also the input of the declared normal
+// output benefits from materializing the shared float-height closure.
+inline bool sharesNormalInput(const Program& p,size_t target){
+    const auto normal=p.outputs.find("normal");
+    return target<p.nodes.size()&&normal!=p.outputs.end()&&
+        p.nodes[target].info->output==Kind::Scalar&&
+        p.nodes[normal->second].inputs[0]==target;
+}
+inline PassPlan plan(const Program& p,size_t target,int n,bool shareScalar=false){
     require(target<p.nodes.size(),"invalid GPU target");
-    if(std::string(p.nodes[target].info->id)!="normal")return {compile(p,target,n),{},false,0};
+    if(std::string(p.nodes[target].info->id)!="normal"){
+        if(!shareScalar||!sharesNormalInput(p,target))return {compile(p,target,n),{},false,0};
+        auto first=compile(p,target,n,true);
+        if(first.msl.empty())return {std::move(first),{},false,0};
+        const std::string body="const uint n="+std::to_string(n)+"u;if(tid>=n*n)return;uint v=uint(floor(clamp(height[tid],0.0f,1.0f)*255.0f+0.5f));";
+        Source second;
+        second.msl="#include <metal_stdlib>\nusing namespace metal;\nkernel void cs_main(device uint* output [[buffer(0)]],device const float* height [[buffer(1)]],uint tid [[thread_position_in_grid]]){"+body+
+            "output[tid]=v|(v<<8)|(v<<16)|0xff000000u;}";
+        second.glsl="layout(std430,set=0,binding=12) buffer Result { uint outputPixels[]; };\nlayout(std430,set=0,binding=13) readonly buffer Height { float height[]; };\nvoid main(){uint tid=gl_GlobalInvocationID.x;"+body+
+            "outputPixels[tid]=v|(v<<8)|(v<<16)|0xff000000u;}";
+        return {std::move(first),std::move(second),true,size_t(n)*n*sizeof(float)};
+    }
     auto first=compile(p,p.nodes[target].inputs[0],n,true);
     if(first.msl.empty())return {std::move(first),{},false,0};
     const auto strength=literal(scalar(p.nodes[target].parameters["strength"],2,0,16));
