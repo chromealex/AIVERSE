@@ -9,6 +9,24 @@ using namespace aiverse;using namespace aiverse::lib::systems;
 #define CHECK(x) do{if(!(x)){std::cerr<<"failed "<<__LINE__<<": "<<#x<<'\n';std::exit(1);}}while(false)
 int main(){
     {
+        using namespace game;
+        WeaponDef weapon;weapon.targets=kLayerGround;weapon.targetTags=1|2;weapon.ignoreTags=4;
+        CHECK(weaponTargetMatches(weapon,kLayerGround,1));
+        CHECK(weaponTargetMatches(weapon,kLayerGround,2));
+        CHECK(!weaponTargetMatches(weapon,kLayerGround,0));
+        CHECK(!weaponTargetMatches(weapon,kLayerGround,1|4));
+        CHECK(!weaponTargetMatches(weapon,kLayerAir,1));
+        CHECK(targetTagsMatch(4,0,0));
+        CHECK(!targetTagsMatch(4,0,4));
+        auto rules=loadRules(Json::parse(R"({"types":{"shooter":{"weapons":[{"targetTags":["organic"],"ignoreTags":["immune"]}]},"target":{"tags":["organic","immune"]}}})"));
+        const auto& wd=rules.types[size_t(rules.findType("shooter"))].weapons.front();
+        CHECK(wd.targetTags==rules.tagMask("organic"));
+        CHECK(wd.ignoreTags==rules.tagMask("immune"));
+        bool rejected=false;
+        try{(void)loadRules(Json::parse(R"({"types":{"shooter":{"weapons":[{"ignoreTags":["unknown"]}]}}})"));}catch(const std::runtime_error&){rejected=true;}
+        CHECK(rejected);
+    }
+    {
         PresentationEventQueue<int> local;
         CHECK(local.drain().empty());
         local.push(0,1);local.push(0,2);local.push(1,3);
