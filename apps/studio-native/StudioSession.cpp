@@ -334,9 +334,11 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
                 std::array<double,3>{0.0,studioFacingToYaw(e.extra["facing"].toDouble(0)),0.0};
             const auto scale=authored?editor::authoredScale3(e):std::array<double,3>{1.0,1.0,1.0};
             const bool water=comps.has("NereidWater");
-            transform.push(numericProp("x","Position X",Json::number(double(e.x),4)));
-            transform.push(numericProp("y","Position Y",authored?Json::number(comps["Transform"]["y"].toDouble(0),4):Json::number(ground,4)));
-            transform.push(numericProp("z","Position Z",Json::number(double(e.z),4)));
+            if(e.at.isNull()){
+                transform.push(numericProp("x","Position X",Json::number(double(e.x),4)));
+                transform.push(numericProp("y","Position Y",authored?Json::number(comps["Transform"]["y"].toDouble(0),4):Json::number(ground,4)));
+                transform.push(numericProp("z","Position Z",Json::number(double(e.z),4)));
+            }
             const char* rotKeys[3]={"rotationX","rotationY","rotationZ"};
             const char* rotLabels[3]={"Rotation X","Rotation Y","Rotation Z"};
             const char* scaleKeys[3]={"scaleX","scaleY","scaleZ"};
@@ -354,11 +356,27 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
                 transform.push(sc);
             }
             if(!e.at.isNull()){
-                Json location=Json::array();
-                for(const auto* key:{"body","face","x","y"})
-                    location.push(readOnly(genericField(key,e.at[key])));
+                Json location=Json::array(),bodyOptions=Json::array();
+                for(const auto& body:ws_.map.data.bodies)if(body.surface()){
+                    Json option=Json::object();
+                    option.set("label",str(body.id));option.set("value",str(body.id));
+                    bodyOptions.push(std::move(option));
+                }
+                Json bodyField=prop("body","Body","text",str(e.at.getStr("body")));
+                bodyField.set("options",std::move(bodyOptions));
+                location.push(std::move(bodyField));
+                auto face=numericProp("face","Cube face",Json::number(e.at.getInt("face",0)),true);
+                face.set("min",Json::number(int64_t(0)));face.set("max",Json::number(int64_t(5)));
+                face.set("step",Json::number(int64_t(1)));location.push(std::move(face));
+                const int bi=ws_.map.data.findBody(e.at.getStr("body"));
+                const int n=bi>=0?ws_.map.data.bodies[size_t(bi)].faceSize:0;
+                for(const char* key:{"x","y"}){
+                    auto field=numericProp(key,key[0]=='x'?"Face X (cells)":"Face Y (cells)",e.at[key]);
+                    field.set("min",Json::number(int64_t(0)));field.set("max",Json::number(int64_t(n)));
+                    field.set("step",Json::number(0.01,2));location.push(std::move(field));
+                }
                 components.push(component("SurfacePlacement","Planet placement",location,
-                    "Canonical authored body and face coordinates. Planet Scene handles are not available in this viewport."));
+                    "Canonical authored body/face coordinates. Numeric editing only; Scene is not a planet viewport."));
             }
             components.push(component("Transform","Transform",transform));
             // Mesh Renderer: authored StaticModel (editable) or the type's view (read-only).
@@ -3026,7 +3044,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 } else throw std::runtime_error("This component cannot be added here");
             } else {
                 const char* id=componentId=="MeshRenderer"?"StaticModel":componentId.c_str();
-                if(componentId=="Transform"||componentId=="Unit"||componentId=="NereidWater")
+                if(componentId=="Transform"||componentId=="SurfacePlacement"||componentId=="Unit"||componentId=="NereidWater")
                     throw std::runtime_error(componentId+" cannot be removed");
                 // Deleting a target component must not silently leave a
                 // linked World Process referencing the same stable map ID.
@@ -3179,6 +3197,50 @@ Json StudioSession::dispatchImpl(const Json& request) {
             const std::string key = params.getStr("key");
             const Json& value = params["value"];
             const std::string componentId=params.getStr("componentId");
+            if(componentId=="SurfacePlacement"){
+                if(!ws_.map.data.planet()||entityId.compare(0,7,"entity:")!=0||
+                   locked_.contains(entityId)||hidden_.contains(entityId))
+                    throw std::runtime_error("Planet placement requires an editable planet entity");
+                const int index=indexFor(entityId);
+                auto candidate=ws_.map.data.entities[size_t(index)];
+                Json at=candidate.at;
+                if(!at.isObject())throw std::runtime_error("Missing canonical planet placement");
+                if(key=="body"){
+                    if(!value.isString())throw std::runtime_error("Expected planet body ID");
+                    at.set(key,value);
+                }else if(key=="face"){
+                    if(!value.isNumber()||value.integer(-1)<0||value.integer(-1)>5||
+                       value.fx()!=Fixed::fromInt(value.integer()))
+                        throw std::runtime_error("Expected cube face integer 0..5");
+                    at.set(key,value);
+                }else if(key=="x"||key=="y"){
+                    if(!value.isNumber()||!std::isfinite(value.toDouble()))
+                        throw std::runtime_error("Expected finite face coordinate");
+                    at.set(key,value);
+                }else throw std::runtime_error("Unknown planet placement property");
+                const int bi=ws_.map.data.findBody(at.getStr("body"));
+                if(bi<0||!ws_.map.data.bodies[size_t(bi)].surface())
+                    throw std::runtime_error("Unknown body or body has no surface");
+                const double n=ws_.map.data.bodies[size_t(bi)].faceSize;
+                for(const char* axis:{"x","y"}){
+                    const double v=at[axis].toDouble(NAN);
+                    if(!at[axis].isNumber()||!std::isfinite(v))
+                        throw std::runtime_error("Missing finite face coordinate");
+                    if(key=="body"&&(v<0||v>n))at.set(axis,Json::number(std::clamp(v,0.,n),4));
+                    else if(v<0||v>n)throw std::runtime_error("Face coordinate outside body grid");
+                }
+                if(at.getInt("face",-1)<0||at.getInt("face",-1)>5)
+                    throw std::runtime_error("Invalid cube face");
+                if(at!=candidate.at){
+                    candidate.at=std::move(at);
+                    candidate.x=float(candidate.at["x"].toDouble());
+                    candidate.z=float(candidate.at["y"].toDouble());
+                    ws_.map.beginEdit();
+                    ws_.map.data.entities[size_t(index)]=std::move(candidate);
+                    ws_.map.touched();
+                }
+                reply.set("result",snapshot());return reply;
+            }
             if(lib::worldprocess::authoring::supports(componentId) ||
                lib::worldprocess::linked::supports(componentId) ||
                lib::worldprocess::extended::supports(componentId) ||
