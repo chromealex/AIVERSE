@@ -182,6 +182,9 @@ Binary GLB above 1 MiB uses exact before/after JSON prefixes, tail length and SH
 ## Ordinary move-chain coordination (S6f.3.1)
 An agent batch made of ordinary asset moves can now compose exact-endpoint chains (A→B→C) from retained file/sidecar identities before mutation. Stationary resource snapshots are joined by exact intermediate bytes and checked against the net projected graph; compact GLB tails remain verified. Coordinated journal v2 serializes binary-safe snapshots and streams compact resources during publication/rollback. Existing v1 reading remains. Nested endpoints, ambiguous cycles, moved-owner byte repairs, mixed overlapping Trash/replacement/metadata and interleaved map/rules changes remain fenced. No new MCP action; linked batch preview/apply use the same native path.
 
+## Moving-owner chain coordination (S6f.3.2)
+Ordinary asset chains now simulate each recorded directional digest using virtual repair overlays on initial file/tree identities. Resource edits follow physical identity across exact-endpoint folder/file moves and compose exact intermediate bytes. Validate the net projected graph before publication. Journal v3 relocates initial bytes, publishes final stationary and moved resources once, and verifies normalized original payload identities during recovery before reversing moves. Includes compact GLB. Nested relocation endpoints, ambiguous cycles, mixed dependent Trash/replacement/metadata, and interleaved map/rules changes remain fenced.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

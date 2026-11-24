@@ -105,3 +105,6 @@ Binary GLB above 1 MiB uses compact JSON-prefix history and verified streamed ta
 
 ### S6f.3.1 — ordinary move chains
 Linked agent batch apply now plans ordinary exact-endpoint move chains and stationary resource repairs together; compact GLB snapshots use coordinated journal v2. Mixed dependent Trash/replacement, moved-owner repairs, nested endpoints and ambiguous cycles remain fenced. Existing preview token still fences owner history versions, with filesystem validation on apply.
+
+### S6f.3.2 — moving-owner repair chains
+Existing linked agent batch apply supports ordinary exact-endpoint chains with changed moved model/file/tree digests. Virtual repair overlays validate the original physical identity and intermediate recorded bytes; journal v3 publishes final edits and recovers partial publication using reverse overlays. Nested endpoints and mixed dependent operations remain fenced.

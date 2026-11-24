@@ -1033,6 +1033,81 @@ int main(){
             catch(const std::runtime_error&){refused=true;}
             AIVERSE_TEST_CHECK(refused&&fs::exists(p/"content"/"C"/"tex.png"));
         }
+        // S6f.3.2: moving a directory changes its model bytes and tree digest
+        // at each logical step. The batch writes only the final resource bytes.
+        {
+            using namespace aiverse;using namespace aiverse::studio;
+            const auto p=temp/"MovingRepairChain";
+            for(const auto& dir:{"A/Pack","B","C/Deep"})fs::create_directories(p/"content"/dir);
+            const auto source=p/"content"/"A"/"Pack";
+            const auto destination=p/"content"/"C"/"Deep"/"Pack";
+            const std::string original="{ \"images\": [{\"uri\":\"../tex.png\"}] }\n";
+            write(p/"content"/"A"/"tex.png","texture");write(source/"Scene.gltf",original);
+            const auto doc=Json::parse(R"({"images":[{"uri":"../tex.png"}],"buffers":[{"byteLength":2097152}]})");
+            std::string tail;studioGlbAppendU32(tail,2u*1024u*1024u);studioGlbAppendU32(tail,0x004e4942);
+            tail.append(2u*1024u*1024u,'\xa3');
+            write(source/"Large.glb",studioEncodeGlbPrefix(doc,tail.size())+tail);
+            const auto originalGlb=studioAssetFileDigest(source/"Large.glb");
+            StudioAssetCatalog index(p);index.rebuild();
+            const auto guid=index.byPath("A/Pack")->guid;
+            std::optional<editor::ProjectHistory::MovePlan> first,second;
+            auto move=StudioTransferPlan::internal(p,"B",{"A/Pack"});
+            (void)move.apply(move.token(),{},{},&first,true);
+            move=StudioTransferPlan::internal(p,"C/Deep",{"B/Pack"});
+            (void)move.apply(move.token(),{},{},&second,true);
+            AIVERSE_TEST_CHECK(first&&second&&first->resourceEdits.size()==2&&second->resourceEdits.size()==2);
+            AIVERSE_TEST_CHECK(!first->files[0].digestAfter.empty()&&!second->files[0].digestAfter.empty());
+            const auto final=read(destination/"Scene.gltf"),finalGlb=studioAssetFileDigest(destination/"Large.glb");
+            const auto undo=studioPlanAssetMoveChain(p,{*second,*first},false);
+            AIVERSE_TEST_CHECK(undo.relocations.size()==4&&undo.documents.empty()&&undo.movingResources.size()==2);
+            for(const auto& resource:undo.movingResources)
+                AIVERSE_TEST_CHECK(resource.destination.starts_with("content/A/Pack/"));
+            const auto folder=p/".aiverse-cache"/"studio-history-batch";
+            Json body=Json::object(),moves=Json::array(),resources=Json::array();
+            for(const auto& m:undo.relocations){
+                Json row=Json::object();row.set("from",Json::string(m.from));row.set("to",Json::string(m.to));
+                row.set("digest",Json::string(m.digest));row.set("directory",Json::fromBool(m.directory));moves.push(std::move(row));
+            }
+            for(const auto& resource:undo.movingResources){
+                auto row=studioEncodeResourceEdit(resource.edit);row.set("destination",Json::string(resource.destination));
+                resources.push(std::move(row));
+            }
+            body.set("moves",std::move(moves));body.set("documents",Json::array());body.set("movingResources",std::move(resources));
+            const auto payload=body.dump(-1);const auto hash=pack::sha256(payload.data(),payload.size());
+            Json envelope=Json::object();envelope.set("version",Json::number(int64_t(3)));
+            envelope.set("payload",Json::string(payload));envelope.set("sha256",Json::string(pack::toHex(hash.data(),hash.size())));
+            // Interrupt at every rename boundary, then after one of the
+            // final edits and after all final edits. Recover exact bytes.
+            for(size_t phase=0;phase<=undo.relocations.size()+2;++phase){
+                fs::create_directory(folder);write(folder/"pending.json",envelope.dump(-1));
+                for(size_t i=0;i<std::min(phase,undo.relocations.size());++i){
+                    const auto& m=undo.relocations[i];fs::rename(p/m.from,p/m.to);
+                }
+                if(phase>undo.relocations.size()){
+                    std::vector<editor::ProjectFileEdit> edits;
+                    for(size_t i=0;i<phase-undo.relocations.size();++i){
+                        auto edit=undo.movingResources[i].edit;
+                        edit.path=fs::canonical(p/undo.movingResources[i].destination);
+                        edits.push_back(std::move(edit));
+                    }
+                    StudioMoveJournal(p).applyResources(edits,true);
+                }
+                studioRecoverHistoryBatch(p);
+                AIVERSE_TEST_CHECK(!fs::exists(folder)&&!fs::exists(source));
+                AIVERSE_TEST_CHECK(read(destination/"Scene.gltf")==final&&studioAssetFileDigest(destination/"Large.glb")==finalGlb);
+            }
+            studioApplyHistoryBatch(p,undo.relocations,undo.documents,undo.movingResources);
+            AIVERSE_TEST_CHECK(read(source/"Scene.gltf")==original&&studioAssetFileDigest(source/"Large.glb")==originalGlb);
+            index.rebuild(false);AIVERSE_TEST_CHECK(index.byGuid(guid)->path=="A/Pack");
+            const auto redo=studioPlanAssetMoveChain(p,{*first,*second},true);
+            studioApplyHistoryBatch(p,redo.relocations,redo.documents,redo.movingResources);
+            AIVERSE_TEST_CHECK(read(destination/"Scene.gltf")==final&&studioAssetFileDigest(destination/"Large.glb")==finalGlb);
+            index.rebuild(false);AIVERSE_TEST_CHECK(index.byGuid(guid)->path=="C/Deep/Pack");
+            write(destination/"Scene.gltf",final+"\n");
+            bool rejected=false;try{(void)studioPlanAssetMoveChain(p,{*second,*first},false);}
+            catch(const std::runtime_error&){rejected=true;}
+            AIVERSE_TEST_CHECK(rejected&&fs::exists(destination));
+        }
         std::cout<<"PASS studio conflict resolution and GUID-preserving asset transfers\n";
     }catch(...){fs::remove_all(temp);throw;}
     fs::remove_all(temp);

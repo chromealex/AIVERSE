@@ -1856,7 +1856,8 @@ void checkFinalBatchPayloads(const fs::path& root,const BatchTimeline& timeline,
         if(studioResourceMatches(edit.path,edit))continue;
         if(!studioResourceMatches(edit.path,edit,true))
             throw std::runtime_error("Moving resource recovery conflict: "+edit.path.string());
-        std::swap(edit.before,edit.after);reverse.emplace(edit.path,std::move(edit));
+        std::swap(edit.before,edit.after);
+        const auto path=edit.path;reverse.emplace(path,std::move(edit));
     }
     for(const auto& [rel,expected]:timeline.phases.back()){
         const auto path=batchPath(root,rel);
@@ -2010,7 +2011,8 @@ StudioBatchAssetPlan studioPlanAssetMoveChain(const fs::path& project,
             if(it==overlay.end()){
                 if(!studioResourceMatches(edit.path,edit))
                     throw std::runtime_error("Resource chain initial bytes changed");
-                overlay.emplace(edit.path,std::move(edit));
+                const auto originalPath=edit.path;
+                overlay.emplace(originalPath,std::move(edit));
             }else{
                 if(it->second.after!=edit.before||it->second.tailDigest!=edit.tailDigest||
                    it->second.tailBytes!=edit.tailBytes)
