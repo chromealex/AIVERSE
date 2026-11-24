@@ -18,6 +18,7 @@
 #include "aiverselib/world/SurfaceGravitySupport.h"
 #include "aiverselib/world/PlanetCharacterGravityFrame.h"
 #include "aiverselib/world/GranularPlanetTerrainTransfer.h"
+#include "aiverselib/world/GranularPlanetSoilGeometry.h"
 #include "aiverselib/world/CircuitSurfaceWiring.h"
 #include "apps/studio-native/StudioPlanetWorldProcesses.h"
 #include "aiverselib/world/EvolveSurfaceEcology.h"
@@ -589,6 +590,38 @@ static void checkPlanetTerrainFootprint(){
     surface.corners[surface.bodies[0].cornerBase+size_t(alias)]=1;
     AIVERSE_TEST_CHECK(!planetTerrainFootprint(surface,0,cornerCell));
     AIVERSE_TEST_CHECK(planetTerrainFootprint(surface,1,surface.gridCell(1,0,7,7)));
+}
+static void checkPlanetSoilGeometry(){
+    using namespace granular;
+    game::Surface surface;
+    game::BodyDef def;def.id="terra";def.radius=Fixed::fromInt(64);def.faceSize=8;
+    surface.bodies.push_back(def);def.id="moon";surface.bodies.push_back(def);surface.build();
+    const auto original=surface.corners;
+    for(const auto xy:std::array<std::array<int,2>,3>{{{3,3},{7,3},{7,7}}}){
+        PlanetSoilTarget target;
+        target.body=0;target.bodyId="terra";target.surfaceCell=surface.gridCell(0,0,xy[0],xy[1]);
+        const auto footprint=wp::planetTerrainFootprint(surface,0,target.surfaceCell);
+        AIVERSE_TEST_CHECK(footprint);
+        target.footprint=*footprint;target.volumeBudgetCm3=UINT64_MAX;
+        const auto fill=previewPlanetSoilGeometry(surface,target,1,-100,100);
+        AIVERSE_TEST_CHECK(fill&&fill->movedVolumeCm3>0&&fill->surface->tab==surface.tab);
+        AIVERSE_TEST_CHECK(surface.corners==original&&fill->affectedCells==footprint->affectedCells);
+        for(const auto& corner:footprint->corners)
+            for(int i=0;i<corner.aliasCount;++i)
+                AIVERSE_TEST_CHECK(fill->surface->corners[size_t(corner.aliases[size_t(i)])]==1);
+        for(size_t i=surface.bodies[1].cornerBase;i<original.size();++i)
+            AIVERSE_TEST_CHECK(fill->surface->corners[i]==original[i]);
+        AIVERSE_TEST_CHECK(!previewPlanetSoilGeometry(*fill->surface,target,1,-100,100)); // stale footprint
+        target.volumeBudgetCm3=fill->movedVolumeCm3-1;
+        AIVERSE_TEST_CHECK(!previewPlanetSoilGeometry(surface,target,1,-100,100));
+        target.volumeBudgetCm3=fill->movedVolumeCm3;
+        AIVERSE_TEST_CHECK(!previewPlanetSoilGeometry(surface,target,1,-100,0));
+        const auto next=wp::planetTerrainFootprint(*fill->surface,0,target.surfaceCell);
+        AIVERSE_TEST_CHECK(next);
+        target.footprint=*next;target.direction=PlanetSoilDirection::Dig;
+        const auto dig=previewPlanetSoilGeometry(*fill->surface,target,1,-100,100);
+        AIVERSE_TEST_CHECK(dig&&dig->movedVolumeCm3==fill->movedVolumeCm3&&dig->surface->corners==original);
+    }
 }
 static void checkPlanetSoilTransfer(){
     using namespace granular;
@@ -1449,6 +1482,7 @@ int main(){
     checkPlanetLiveEcho();
     checkPlanetTerrainFootprint();
     checkPlanetSoilTransfer();
+    checkPlanetSoilGeometry();
     checkPlanetCollapseDelivery();
     checkPlanetLiveFracture();
     checkPlanetMorphModelFrame();
