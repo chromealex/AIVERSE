@@ -1,3 +1,7 @@
+## Current runtime update — stages 116–121 (2026-11-24)
+
+The graph ComputeParticles runtime now has source implementations for Metal and capability-gated Vulkan, GPU-owned alive/free lists with demand growth and live shrink/compaction, a canonical per-Device allocation ledger, separate checked staging transfer budget and exact owned allocator checkpoint v2. Native compilation and hardware QA are deferred; do not claim parity or performance. CPU fallback remains the full authored effect. In Studio choose GPU-owned allocator and Load graph, or use `fx_graph_preview` with `{"action":"load","graphName":"...","gpuOwnedAllocation":true}`. Status reports actual backend, requested/active allocator, estimated alive, physical slots, logical bytes and budget denials. Legacy Metal eligibility fields remain schema-only aliases; prefer gpuEligible/gpuVmEligible. GPU-owned slot order is nondeterministic: use gpuShaderSeed, not gpuAllocationSeed. Checkpoint capture remains capped at 4096 physical slots and bounded by configured readback quotas. Device ledger covers ComputeParticles allocations, not entire driver VRAM. Unsupported Vulkan hardware and graph operations fall back to CPU; RequireGpu rejects. Historical sections below retain their original stage context.
+
 ---
 name: aiverse-spectrafx
 description: Author and integrate AIVERSE SpectraFX visual effects: versioned graphs, asset variants, ECS source components, event bindings, CPU fallback, editor previews and eventual GPU backends.

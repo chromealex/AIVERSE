@@ -1,4 +1,4 @@
-## Stage 121 — Studio / MCP / skills integration audit (in progress; QA deferred)
+## Stage 121 — Studio / MCP / skills integration audit (source implemented; QA deferred)
 
 Expose GPU-owned allocator opt-in in real native preview and replay recipes, report actual Metal/Vulkan/CPU backend and estimated versus physical diagnostics, extend MCP schema and preserve legacy eligibility keys. Audit remaining limitations honestly. No native, shader, JS or hardware tests until owner requests QA.
 
@@ -3616,3 +3616,6 @@ volumes and viewport timing. Public graph-v1 assets remain supported.
 
 Native integration verification is recorded in
 `docs/agent-handoffs/inspector-spectrafx-main-2026-11-20.md`.
+
+
+Stage 121 exposes requested/active GPU-owned preview allocation, actual backend label, estimated alive, physical capacity, logical bytes, compaction and denial counters, replay compatibility and backend-neutral MCP eligibility aliases. No runtime verification performed. Historical sections describe earlier stage snapshots, not the current backend support matrix.

@@ -138,6 +138,10 @@ public:
             load.set("graph",graph);
             load.set("gpuBirthRandom",Json::fromBool(input.has("gpuBirthRandom")?
                 input.getBool("gpuBirthRandom"):spectraPreview_->authoredGpuBirthRandom()));
+            if(input.has("gpuOwnedAllocation")&&input["gpuOwnedAllocation"].type()!=Json::Type::Bool)
+                throw std::runtime_error("gpuOwnedAllocation must be boolean");
+            load.set("gpuOwnedAllocation",Json::fromBool(input.has("gpuOwnedAllocation")?
+                input.getBool("gpuOwnedAllocation"):spectraPreview_->authoredGpuOwnedAllocation()));
             const auto loaded=candidate->command(*device_,load);
             Json prepare=input;prepare.set("action",Json::string("replayPrepare"));
             const auto prepared=loaded.getBool("ready")&&loaded.getStr("error").empty()?

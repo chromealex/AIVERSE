@@ -9,9 +9,10 @@ export interface SpectraReplayPreset {
   dependencyVersion?:1|2|3;
   dependencies?:Array<{path:string;content:string;guid?:string;meta?:string}>;
   gpuBirthRandom?:boolean;
+  gpuOwnedAllocation?:boolean;
   seed?:number; // CPU backend only
   gpuShaderSeed?:number;
-  gpuAllocationSeed?:number; // Metal slot ordering only
+  gpuAllocationSeed?:number; // host-owned GPU slot ordering only
 }
 const record=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const bounded=(v:unknown,min:number,max:number):v is number=>
@@ -35,6 +36,8 @@ export function parseSpectraReplayPreset(text:string):SpectraReplayPreset {
      !bounded(c.targetY,-1000000,1000000)||!bounded(c.targetZ,-1000000,1000000)||
      typeof c.ortho!=='boolean')throw new Error('Invalid replay camera');
   if(v.gpuBirthRandom!==undefined&&typeof v.gpuBirthRandom!=='boolean')throw new Error('Invalid GPU random mode');
+  if(v.gpuOwnedAllocation!==undefined&&typeof v.gpuOwnedAllocation!=='boolean')throw new Error('Invalid GPU allocator mode');
+  if(v.gpuOwnedAllocation===true&&v.gpuAllocationSeed!==undefined)throw new Error('GPU-owned allocation has nondeterministic slot ordering');
   if(v.seed!==undefined && (!bounded(v.seed,0,2147483647)||!Number.isInteger(v.seed)))
     throw new Error('Invalid CPU replay seed');
   if(v.gpuAllocationSeed!==undefined && (!bounded(v.gpuAllocationSeed,0,2147483647)||!Number.isInteger(v.gpuAllocationSeed)))

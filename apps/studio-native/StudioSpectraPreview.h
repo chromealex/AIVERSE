@@ -138,6 +138,10 @@ public:
             auto candidate=std::make_unique<spectra::GraphRuntime>();
             spectra::GraphRuntimeOptions opts;
             opts.capacity=1024;
+            if(input.has("gpuOwnedAllocation")&&input["gpuOwnedAllocation"].type()!=Json::Type::Bool)
+                return transferStatus("gpuOwnedAllocation must be boolean");
+            opts.gpuOwnedAllocation=input.getBool("gpuOwnedAllocation",false);
+            opts.gpuIndirect=opts.gpuOwnedAllocation;
             opts.gpuBirthRandom=input.getBool("gpuBirthRandom",false);
             opts.gpuMaterial=opts.gpuBirthRandom;
             opts.gpuProgram=true; // strict GPU VM eligibility, CPU twin otherwise
@@ -156,6 +160,7 @@ public:
             candidate.reset();
             authoredGraph_=graph;
             authoredGpuBirthRandom_=opts.gpuBirthRandom;
+            authoredGpuOwnedAllocation_=opts.gpuOwnedAllocation;
             checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;
             checkpointWaitFrames_=0;fileImportPending_=false;importLease_.reset();exportLease_.reset();
             ready_=true;
@@ -172,7 +177,7 @@ public:
             requestedParameters_.clear();
             hasPendingGpuAllocationSeed_=false;
             gpuSeedFailed_=false;gpuSeedRetryCount_=0;
-            backend_=runtime_->gpuActive()?"Metal GPU":"CPU (full effect)";
+            backend_=runtime_->gpuActive()?(runtime_->backend()==spectra::ComputeBackend::Vulkan?"Vulkan GPU":"Metal GPU"):"CPU (full effect)";
             error_.clear();
             generation_=nextSpectraIdentity();
             return status();
@@ -233,7 +238,7 @@ public:
                 const Json& seed=input["gpuShaderSeed"];
                 if(!seed.isNumber()||seed.numberLiteral().find_first_of(".eE-")!=std::string::npos||seed.integer(-1)<0||seed.integer(-1)>4294967295LL)
                     return transferStatus("GPU shader seed must be uint32");
-                if(!runtime_->gpuActive())return transferStatus("GPU shader seed requires Metal GPU backend");
+                if(!runtime_->gpuActive())return transferStatus("GPU shader seed requires an active GPU backend");
                 pendingGpuAllocationSeed_=uint32_t(seed.integer());
                 pendingShaderSeedMode_=true;hasPendingGpuAllocationSeed_=true;
                 gpuSeedRetryCount_=0;gpuSeedFailed_=false;
@@ -244,7 +249,9 @@ public:
                    seed.integer(-1)<0 || seed.integer(-1)>2147483647)
                     return transferStatus("GPU allocation seed must be integer 0..2147483647");
                 if(!runtime_->gpuActive())
-                    return transferStatus("GPU allocation seed requires Metal GPU backend");
+                    return transferStatus("GPU allocation seed requires an active GPU backend");
+                if(runtime_->gpuStats().gpuOwnedAllocation)
+                    return transferStatus("GPU-owned slot order is nondeterministic; use GPU shader seed instead");
                 pendingShaderSeedMode_=false;
                 pendingGpuAllocationSeed_=uint32_t(seed.integer());
                 gpuSeedRetryCount_=0;
@@ -512,6 +519,7 @@ public:
     }
     const Json& authoredGraph() const {return authoredGraph_;}
     bool authoredGpuBirthRandom() const {return authoredGpuBirthRandom_;}
+    bool authoredGpuOwnedAllocation() const {return authoredGpuOwnedAllocation_;}
     bool canBeginReplayTransaction() const {
         return !checkpointRequest_&&!rollbackId_&&!fileImportPending_&&!importLease_.id&&!exportLease_.id&&!replayPending();
     }
@@ -552,13 +560,22 @@ public:
         result.set("generation",Json::number(int64_t(generation_)));
         result.set("error",Json::string(error_));
         result.set("gpu",Json::fromBool(ready_&&runtime_->gpuActive()));
-        result.set("alive",Json::number(int64_t(ready_?runtime_->gpuStats().alive:0)));
+        const auto gpu=ready_&&runtime_->gpuActive();
+        const auto& stats=runtime_->gpuStats();
+        result.set("alive",Json::number(int64_t(ready_?stats.alive:0)));
+        result.set("gpuOwnedAllocationRequested",Json::fromBool(ready_&&authoredGpuOwnedAllocation_));
+        result.set("gpuOwnedAllocation",Json::fromBool(gpu&&stats.gpuOwnedAllocation));
+        result.set("aliveEstimated",Json::fromBool(gpu&&stats.gpuOwnedAllocation));
+        result.set("gpuAllocatedCapacity",Json::number(int64_t(gpu?runtime_->gpuAllocatedCapacity():0)));
+        result.set("gpuBytes",Json::number(int64_t(gpu?stats.gpuBytes:0)));
+        result.set("gpuLiveCompactions",Json::number(int64_t(gpu?stats.gpuLiveCompactions:0)));
+        result.set("gpuAllocationBudgetDenied",Json::number(int64_t(gpu?stats.gpuAllocationBudgetDenied:0)));
         return result;
     }
     void stop(gfx::Device& device) {
         device.waitForResourceIdle();
         runtime_->shutdown();
-        authoredGraph_=Json::object();authoredGpuBirthRandom_=false;
+        authoredGraph_=Json::object();authoredGpuBirthRandom_=false;authoredGpuOwnedAllocation_=false;
         checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;
         fileImportPending_=false;importLease_.reset();exportLease_.reset();
         checkpointWaitFrames_=0;hasPendingGpuAllocationSeed_=false;pendingShaderSeedMode_=false;
@@ -593,7 +610,7 @@ private:
         return status();
     }
     Json authoredGraph_=Json::object();
-    bool authoredGpuBirthRandom_=false;
+    bool authoredGpuBirthRandom_=false,authoredGpuOwnedAllocation_=false;
     std::unique_ptr<spectra::GraphRuntime> runtime_=std::make_unique<spectra::GraphRuntime>();
     std::map<std::string,float> requestedParameters_;
     bool ready_=false,playing_=false,pendingRestart_=false,restartBurstPending_=false;

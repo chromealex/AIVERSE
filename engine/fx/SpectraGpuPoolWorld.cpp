@@ -995,7 +995,7 @@ bool GpuPoolWorld::exportFreshCheckpoint(
     }
     const auto& group=gpuGroups_[groupIndex];
     if(!group.live() || !group.particles->gpuActive()) {
-        if(error)*error="SpectraFX checkpoint group has no Metal GPU simulation";
+        if(error)*error="SpectraFX checkpoint group has no active GPU simulation";
         return false;
     }
     return group.particles->exportFreshCheckpoint(bytes,maxBytes,error);

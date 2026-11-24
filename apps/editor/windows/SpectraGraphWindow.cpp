@@ -114,7 +114,7 @@ private:
             const auto eligibility=spectra::inspectGraphGpuEligibility(result);
             gpuEligible_=eligibility.eligible;
             gpuReason_=eligibility.eligible
-                ? "Metal compute subset compatible (device check still required)"
+                ? "GPU compute subset compatible (device check still required)"
                 : eligibility.reason;
             spectra::GraphRuntimeOptions vmOptions;
             vmOptions.gpuProgram=true;
@@ -243,7 +243,7 @@ private:
         }
         const auto result=ed.ws().call("fx_graph_preview",request);
         if(checkResult(result)) {
-            message_=gpu?"Metal GPU preview queued (strict subset)."
+            message_=gpu?"GPU preview queued (strict subset)."
                         :"CPU preview in Scene.";
             ed.focusWindow(result.getStr("view","scene"));
         }
@@ -292,7 +292,7 @@ private:
         ImGui::BeginDisabled(!valid_);
         if(ImGui::Button("Предпросмотр"))preview(ed,false);
         ImGui::SameLine();
-        if(ImGui::Button("Metal GPU"))preview(ed,true);
+        if(ImGui::Button("GPU"))preview(ed,true);
         ImGui::EndDisabled();
         ImGui::SameLine();
         ImGui::BeginDisabled(!ed.spectraGpuPreviewActive());
@@ -942,7 +942,7 @@ private:
             }
         }
         ImGui::Separator();
-        if(ImGui::CollapsingHeader("Metal GPU timeline",ImGuiTreeNodeFlags_DefaultOpen)) {
+        if(ImGui::CollapsingHeader("GPU timeline",ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Text("Visual simulation time: %.3f s",
                         ed.spectraGpuPreviewVisualSeconds());
             ImGui::Text("Queued forward steps: %u / 300",
@@ -984,13 +984,13 @@ private:
             ImGui::SameLine();
             if(ImGui::Button("Restart GPU") &&
                !ed.restartSpectraGpuPreview())
-                message_="No active Metal GPU preview to restart";
+                message_="No active GPU preview to restart";
             ImGui::EndDisabled();
             if(!ed.spectraGpuPreviewLastError().empty())
                 ui::toneText(ui::Tone::Error,"%s",
                     ed.spectraGpuPreviewLastError().c_str());
         }
-        if(ImGui::CollapsingHeader("Metal GPU checkpoint — live",ImGuiTreeNodeFlags_DefaultOpen)) {
+        if(ImGui::CollapsingHeader("GPU checkpoint — live",ImGuiTreeNodeFlags_DefaultOpen)) {
             const auto* pool=ed.spectraGpuTelemetry();
             if(pool!=gpuPrivacyPool_) {
                 gpuPrivacyPool_=pool;
@@ -1151,7 +1151,7 @@ private:
                                     gpuCheckpointGroup_!=0);
                 if(ImGui::Button("Freeze & capture preview group 0")) {
                     if(!ed.requestSpectraGpuPreviewCheckpoint())
-                        message_="Metal GPU preview is not active";
+                        message_="GPU preview is not active";
                 }
                 ImGui::EndDisabled();
                 if(!ed.spectraGpuCaptureNote().empty())
@@ -1226,13 +1226,13 @@ private:
             }
         }
         ImGui::Text("CPU emitters: %d",emitters_);
-        ImGui::Text("Metal GPU subset: %s",gpuEligible_?"compatible":"CPU fallback");
+        ImGui::Text("GPU subset: %s",gpuEligible_?"compatible":"CPU fallback");
         if(!gpuReason_.empty())ImGui::TextWrapped("%s",gpuReason_.c_str());
         ImGui::Text("Metal scalar VM (opt-in): %s",gpuVmEligible_?"compatible":"CPU fallback");
         if(!gpuVmReason_.empty())ImGui::TextWrapped("%s",gpuVmReason_.c_str());
         ImGui::TextWrapped("V2: типизированные math/dataflow узлы, "
                            "модули FxEffect и функции компилируются в CPU. "
-                           "Metal GPU доступен только для совместимого billboard-подмножества.");
+                           "GPU доступен только для совместимого billboard-подмножества.");
     }
 
     float gpuAdvanceSeconds_=0.5f;

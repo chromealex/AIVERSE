@@ -161,6 +161,8 @@ export interface StudioSpectraPreviewState {
   ready:boolean;playing:boolean;gpu:boolean;backend:string;
   tick:number;targetTick:number;timeSeconds:number;
   generation:number;alive:number;error:string;
+  gpuOwnedAllocationRequested?:boolean;gpuOwnedAllocation?:boolean;aliveEstimated?:boolean;
+  gpuAllocatedCapacity?:number;gpuBytes?:number;gpuLiveCompactions?:number;gpuAllocationBudgetDenied?:number;
   speed:number;loop:boolean;
   bursts:number;queuedBursts:number;clearing:boolean;
   checkpoints?:Array<{id:number;tick:number}>;
@@ -210,6 +212,7 @@ export interface StudioParams {
     offset?:number;chunk?:string;transferId?:number;
     captureId?:number;
     gpuBirthRandom?:boolean;
+    gpuOwnedAllocation?:boolean;
     requireReplayReady?:boolean;
     gpuAllocationSeed?:number;
     speed?:number;loop?:boolean;count?:number;maxSide?:number;

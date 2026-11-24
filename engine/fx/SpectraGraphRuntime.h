@@ -24,13 +24,13 @@ struct GraphRuntimeOptions {
     uint32_t capacity = 1024; // GPU-only slots; not a CPU EffectDef particle budget
     bool gpuIndirect = false;
     bool proceduralBillboards = false;
-    bool gpuOwnedAllocation = false; // opt-in GPU-authored compaction/draw, Metal only
-    // Opt-in Stage-22 bounded Metal VM. Unsupported programs use exact CPU effects.
+    bool gpuOwnedAllocation = false; // opt-in GPU-authored compaction/draw on capable Metal or Vulkan
+    // Opt-in bounded GPU VM. Unsupported programs use exact CPU effects.
     bool gpuProgram = false;
     // Strict opt-in: only pure, bounded particle-domain shaderGraph nodes.
     // Arbitrary shader/material graphs remain on the original CPU backend.
     bool gpuMaterial = false;
-    bool gpuBirthRandom = false; // explicit Metal-specific random semantics
+    bool gpuBirthRandom = false; // explicit GPU birth-random semantics
     uint32_t gpuBirthSeed = 0;
     // Nonblocking checkpoint requests every N submitted GPU frames (0=off).
     uint32_t checkpointEveryFrames = 0;
@@ -129,6 +129,7 @@ public:
     }
     bool usesSharedBatchWorld() const { return sharedWorld_ != nullptr; }
     const ComputeStats& gpuStats() const { return gpu_.stats(); }
+    uint32_t gpuAllocatedCapacity() const { return gpuActive()?gpu_.allocatedCapacity():0u; }
     // Diagnostic readback, only between completed Metal frames. Returns false
     // when GPU is unavailable; never treats missing results as zero errors.
     bool readGpuVmErrors(uint32_t& count) { return gpu_.readGpuVmErrors(count); }

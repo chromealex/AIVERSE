@@ -33,6 +33,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
   const [busy,setBusy]=useState(false);
   const [autoReload,setAutoReload]=useState(false);
   const [gpuBirthRandom,setGpuBirthRandom]=useState(false);
+  const [gpuOwnedAllocation,setGpuOwnedAllocation]=useState(false);
   const [reloadCycle,setReloadCycle]=useState(0);
   const mounted=useRef(false);
   const commandQueue=useRef(new SpectraCommandQueue());
@@ -141,7 +142,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
       // Remember an attempted invalid revision so it does not enter an
       // infinite loop while the user edits another node.
       lastLoadedGraph.current=graphSignature;
-      void invokePreview({action:'load',graph,gpuBirthRandom,expectedGeneration:state.generation}).then(async next=>{
+      void invokePreview({action:'load',graph,gpuBirthRandom,gpuOwnedAllocation,expectedGeneration:state.generation}).then(async next=>{
         if(closed)return;
         if(!next.ready || next.error) {
           setState(next);
@@ -251,6 +252,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
   };
   const saveReplayPreset=()=>{
     if(!state?.ready||!state.camera)return;
+    if(state.gpuOwnedAllocationRequested&&gpuAllocationSeed!==''){setError('GPU-owned slot order is nondeterministic; use GPU shader seed');return;}
     if(replaySeed!==''&&(!Number.isInteger(Number(replaySeed))||Number(replaySeed)<0||Number(replaySeed)>2147483647)){
       setError('CPU replay seed must be integer 0..2147483647');return;
     }
@@ -264,7 +266,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
       ...(gpuAllocationSeed!==''?{gpuAllocationSeed:Number(gpuAllocationSeed)}:{}),
       camera:{...state.camera},tick:state.tick,speed:state.speed,
       loop:state.loop,background:state.background,grid:state.grid,axes:state.axes,
-      graphSignature,projectPath,gpuBirthRandom});
+      graphSignature,projectPath,gpuBirthRandom,gpuOwnedAllocation:!!state.gpuOwnedAllocationRequested});
   };
   const presetOp=async(op:string,params:Record<string,unknown>={})=>{
     const response=await invoke('studio.op',{op,params:{...params,expectedProjectPath:projectPath}});
@@ -474,6 +476,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
       }
       const restored=await invokePreview({action:'replayRestore',expectedGeneration:state?.generation,
         ...(replayPreset.gpuBirthRandom===undefined?{}:{graph,gpuBirthRandom:replayPreset.gpuBirthRandom}),
+        gpuOwnedAllocation:replayPreset.gpuOwnedAllocation??false,
         camera:replayPreset.camera,tick:replayPreset.tick,parameters:replayPreset.parameters,
         background:replayPreset.background,grid:replayPreset.grid,axes:replayPreset.axes,
         speed:replayPreset.speed,loop:replayPreset.loop,
@@ -511,6 +514,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
       if(replayPreset.gpuBirthRandom!==undefined){
         setGpuBirthRandom(replayPreset.gpuBirthRandom);lastLoadedGraph.current=graphSignature;
       }
+      setGpuOwnedAllocation(replayPreset.gpuOwnedAllocation??false);
       setSeek(replayPreset.tick);
       setLiveScalars({...replayPreset.parameters});
     }catch(e){if(!replayCancelled.current)setError(message(e));}
@@ -552,7 +556,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
     const request={...libraryAsset,signature:graphSignature};
     let generation:number|undefined;
     try{
-      const loaded=await invokePreview({action:'load',graph,gpuBirthRandom,expectedGeneration:state.generation});
+      const loaded=await invokePreview({action:'load',graph,gpuBirthRandom,gpuOwnedAllocation,expectedGeneration:state.generation});
       if(!loaded.ready||loaded.error||typeof loaded.generation!=='number')
         throw new Error(loaded.error||'Native graph load failed');
       generation=loaded.generation;
@@ -581,7 +585,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
   };
 
   const command=async(action:Action,options:Partial<{
-    graph:Record<string,unknown>;gpuBirthRandom:boolean;checkpointId:number;tick:number;name:string;value:number;play:boolean;amount:number;dx:number;dy:number;
+    graph:Record<string,unknown>;gpuBirthRandom:boolean;gpuOwnedAllocation:boolean;checkpointId:number;tick:number;name:string;value:number;play:boolean;amount:number;dx:number;dy:number;
     background:'dark'|'neutral'|'light'|'black';grid:boolean;axes:boolean;
     preset:'perspective'|'front'|'side'|'top';speed:number;loop:boolean;count:number
   }>={})=>{
@@ -645,7 +649,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
   };
   const launch=async()=>{
     // Actual graph validation and device eligibility occur in StudioScene.
-    await command('load',{graph,gpuBirthRandom});
+    await command('load',{graph,gpuBirthRandom,gpuOwnedAllocation});
   };
   const setLiveValue=async()=>{
     const numeric=Number(value);
@@ -734,6 +738,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
         onClick={()=>void launch()}><Eye size={14}/> Load graph</StudioButton>
       <StudioCheckbox label="GPU birth random (applies on Load)" checked={gpuBirthRandom} disabled={!active||busy}
         onChange={e=>setGpuBirthRandom(e.target.checked)}/>
+      <StudioCheckbox label="GPU-owned allocator (applies on Load)" checked={gpuOwnedAllocation} disabled={!active||busy}
+        onChange={e=>setGpuOwnedAllocation(e.target.checked)}/>
       <StudioCheckbox label="Auto-reload graph" checked={autoReload} disabled={!active||busy}
         onChange={e=>setAutoReload(e.target.checked)}/>
       <StudioButton size="sm" disabled={!active||!state?.ready||busy}
@@ -979,6 +985,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
         {state?.ready?state.backend:'Preview not loaded'}
       </StudioBadge>
       <span>{state?.ready?(state.playing?'Playing':'Paused'):'No active runtime'}</span>
+      {state?.gpuOwnedAllocationRequested&&<span>{state.gpuOwnedAllocation?'GPU-owned allocator':'GPU-owned requested; unavailable'}</span>}
+      {state?.gpu&&<span>Alive {state.aliveEstimated?'~':''}{state.alive} · Capacity {state.gpuAllocatedCapacity??0} · {(state.gpuBytes??0)/1024|0} KiB</span>}
       <span>Tick {state?.tick??0} / 3600</span>
       <span>Bursts {state?.bursts??0}
         {state?.queuedBursts?' · queued '+state.queuedBursts:''}

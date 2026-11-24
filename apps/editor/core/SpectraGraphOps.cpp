@@ -108,6 +108,9 @@ Json graphEvaluation(const Json& graph, const Json& overrides, fx::EffectDef* co
         // device might still lack Metal compute, or shader setup might fail.
         const auto eligibility = spectra::inspectGraphGpuEligibility(def);
         response.set("metalGpuEligible", Json::fromBool(eligibility.eligible));
+        response.set("gpuEligible", Json::fromBool(eligibility.eligible));
+        response.set("gpuReason",strGraph(eligibility.eligible
+            ?"Bounded GPU schema compatible; device/runtime still unverified":eligibility.reason));
         response.set("metalGpuReason", strGraph(eligibility.eligible
             ? "Metal compute subset compatible; device/runtime still unverified"
             : eligibility.reason));
@@ -119,6 +122,9 @@ Json graphEvaluation(const Json& graph, const Json& overrides, fx::EffectDef* co
         const bool authoredVm=def.emitters.size()==1 &&
                              !def.emitters[0].particleProgram.isNull();
         response.set("metalVmEligible",Json::fromBool(authoredVm && vm.eligible));
+        response.set("gpuVmEligible",Json::fromBool(authoredVm && vm.eligible));
+        response.set("gpuVmReason",strGraph(!authoredVm?"effect has no per-particle VM program":
+            vm.eligible?"Bounded GPU VM schema eligible; device execution not verified":vm.reason));
         response.set("metalVmReason",strGraph(!authoredVm
             ? "effect has no per-particle VM program"
             : vm.eligible
@@ -190,6 +196,8 @@ void validateReplayPreset(const Json& p,const Workspace& ws) {
        !bounded(camera["targetZ"],-1000000,1000000)||camera["ortho"].type()!=Json::Type::Bool)
         throw std::runtime_error("Invalid replay camera");
     if((p.has("gpuBirthRandom")&&p["gpuBirthRandom"].type()!=Json::Type::Bool)||
+       (p.has("gpuOwnedAllocation")&&p["gpuOwnedAllocation"].type()!=Json::Type::Bool)||
+       (p.getBool("gpuOwnedAllocation",false)&&p.has("gpuAllocationSeed"))||
        (p.has("seed")&&!integer(p["seed"],2147483647.0))||
        (p.has("gpuAllocationSeed")&&!integer(p["gpuAllocationSeed"],2147483647.0))||
        (p.has("gpuShaderSeed")&&!integer(p["gpuShaderSeed"],4294967295.0))||
@@ -596,7 +604,7 @@ Json publishReplayPreset(const Workspace& ws,const std::string& name,const Json&
 Json portableReplayRecipe(const Json& source) {
     Json recipe=Json::object();
     for(const char* field:{"format","version","graphSignature","camera","tick","speed","loop",
-        "background","grid","axes","parameters","gpuBirthRandom","seed","gpuShaderSeed",
+        "background","grid","axes","parameters","gpuBirthRandom","gpuOwnedAllocation","seed","gpuShaderSeed",
         "gpuAllocationSeed","dependencyVersion","dependencies"})
         if(source.has(field))recipe.set(field,source[field]);
     return recipe;
@@ -1109,6 +1117,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         "clear (GPU-safe deferred reset), capture (maxSide 128..768), "
         "captureStatus (one bounded native JPEG readback, not a stream), replayRestore, replayCancel. "
         "For load use a graph object or graphName with draft=true for a private draft. "
+        "Optional gpuOwnedAllocation enables GPU-authored lists and demand-grown buffers on supported devices. "
         "Optional expectedProjectPath and expectedGeneration reject stale commands. "
         "The preview is presentation only; no game ECS writes or offscreen fake renders. "
         "Requires the native Studio GPU viewport to be visible; standalone MCP "
@@ -1117,7 +1126,7 @@ void registerSpectraGraphOps(Workspace& ws) {
             "graph":{"type":"object"},"graphName":{"type":"string"},
             "expectedProjectPath":{"type":"string"},"expectedGeneration":{"type":"integer","minimum":0},
             "camera":{"type":"object"},"parameters":{"type":"object"},"seed":{"type":"integer"},
-            "gpuShaderSeed":{"type":"integer"},"gpuAllocationSeed":{"type":"integer"},"gpuBirthRandom":{"type":"boolean"},
+            "gpuShaderSeed":{"type":"integer"},"gpuAllocationSeed":{"type":"integer"},"gpuBirthRandom":{"type":"boolean"},"gpuOwnedAllocation":{"type":"boolean"},
             "draft":{"type":"boolean"},"tick":{"type":"integer","minimum":0,"maximum":3600},
             "play":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"number"},
             "dx":{"type":"number"},"dy":{"type":"number"},"amount":{"type":"number"},
