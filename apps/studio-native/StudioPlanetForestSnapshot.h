@@ -3,8 +3,10 @@
 #include "aiverselib/world/EvolvePlanetDeadwood.h"
 #include "aiverselib/world/PlanetConsequenceOwner.h"
 #include "engine/world/TerraWeaveForestHarvestEcs.h"
+#include "apps/studio-native/StudioPlanetForestWeather.h"
 namespace aiverse::studio {
-inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surface,uint32_t tick,size_t limit=128){
+inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surface,uint32_t tick,size_t limit=128,
+        const std::vector<evolve::PlanetWeatherMapping>& weather={}){
     limit=std::min(limit,size_t(128));
     namespace tw=terraweave;namespace ev=evolve;namespace wp=lib::worldprocess;
     Json out=Json::object(),rows=Json::array();
@@ -35,6 +37,8 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
         const auto old=current.find(id);
         if(old==current.end()||ev::planetFallKey(old->second->fall)<ev::planetFallKey(r.fall))current[id]=&r;
     }
+    const bool localWindAllowed=ecs.countExisting<physis::WindZone>()<=1024&&ecs.countExisting<physis::WindShelter>()<=1024;
+    out.set("windZonesCapped",Json::fromBool(!localWindAllowed));
     size_t fallen=0,spent=0,physical=0,rejected=0;
     for(const auto& plant:roots->rooted){
         const tw::AnchoredPlantId id{plant.anchor.speciesId,plant.anchor.plantKey};
@@ -57,6 +61,7 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
         const auto anchor=game::Surface::anchor(frame->body);
         row.set("position",xyz(b->second->plantedPosition-anchor));
         row.set("up",xyz(frame->up));row.set("east",xyz(frame->east));
+        try{studioForestWeatherSample(row,ecs,surface,*frame,b->second->plantedPosition,weather,localWindAllowed);}catch(const std::exception&){++rejected;}
         row.set("habit",Json::string(plant.anchor.roots.habit==tw::PlantHabit::Shrub?"shrub":plant.anchor.roots.habit==tw::PlantHabit::Tree?"tree":"grass"));
         try{
             const auto appearance=tw::plantAppearance(plant.environment);

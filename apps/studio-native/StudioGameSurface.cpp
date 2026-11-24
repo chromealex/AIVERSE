@@ -97,7 +97,11 @@ Json StudioGameSurface::planetForestState(){
     Simulation* sim=host_&&host_->inMatch()&&host_->canControl()?host_->simulation():nullptr;
     if(sim&&sim->tick()>0)if(const auto* game=dynamic_cast<const game::GameCore*>(&sim->module()))
         if(const auto* surface=game->surface(*sim))
-            return sampleStudioPlanetForest(sim->world(),*surface,sim->tick()-1);
+            {
+                const auto config=game->native().loadedConfiguration("world_processes");
+                const auto weather=studioForestWeatherMappings(sim->world(),*surface,config?*config:Json{},game->matchMap());
+                return sampleStudioPlanetForest(sim->world(),*surface,sim->tick()-1,128,weather);
+            }
     Json out=Json::object();out.set("active",Json::fromBool(false));return out;
 }
 Json StudioGameSurface::worldProcessDiagnostics(int cap,const std::string& focus){
@@ -155,7 +159,11 @@ Json StudioGameSurface::ecologyState(const StudioWorldProcessLiveOptions& option
                     if(options.fracture)budget.add(out,"fracture",samplePlanetFracture(sim->world(),*surface,tick,cap(256),cap(512)));
                     if(options.echo)budget.add(out,"echo",samplePlanetEcho(sim->world(),*surface,tick,cap(256),cap(512),cap(256),cap(256)));
                     if(options.circuit)budget.add(out,"circuit",samplePlanetCircuit(sim->world(),*surface,tick,cap(256),cap(512),cap(128)));
-                    if(options.forest)budget.add(out,"forest",sampleStudioPlanetForest(sim->world(),*surface,tick,cap(128)));
+                    if(options.forest){
+                        const auto config=game->native().loadedConfiguration("world_processes");
+                        const auto weather=studioForestWeatherMappings(sim->world(),*surface,config?*config:Json{},game->matchMap());
+                        budget.add(out,"forest",sampleStudioPlanetForest(sim->world(),*surface,tick,cap(128),weather));
+                    }
                     if(options.society)budget.add(out,"society",samplePlanetSociety(sim->world(),*surface,tick,cap(256),cap(512),cap(128)));
                     if(options.crowd){
                         const auto config=game->native().loadedConfiguration("world_processes");

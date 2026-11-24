@@ -203,6 +203,8 @@ private:
     std::string planetForestModelProject_;
     std::map<uint32_t,std::unique_ptr<render::Model>> planetForestModels_;
     std::set<uint32_t> planetForestRejectedModels_;
+    std::map<uint32_t,bool> planetForestEvergreen_;
+    std::map<std::pair<uint32_t,int>,std::vector<render::Material>> planetForestSeasonMaterials_;
     using ForestRootModelKey=std::tuple<uint32_t,bool,uint32_t>;
     std::map<ForestRootModelKey,std::unique_ptr<render::Model>> planetForestRootModels_;
     std::set<ForestRootModelKey> planetForestRejectedRoots_;

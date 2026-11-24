@@ -3,6 +3,7 @@
 #include "apps/studio-native/StudioPlanetLiveBudget.h"
 #include "engine/render/TerraWeaveModelAdapter.h"
 #include "engine/render/TerraWeaveRootModel.h"
+#include "engine/render/TerraWeaveArborWind.h"
 #include "engine/render/TerraWeaveBotanicalForest.h"
 #include "engine/world/TerraWeaveForestSpeciesManifest.h"
 #include "apps/studio-native/StudioFont6x11.h"
@@ -589,7 +590,7 @@ void StudioScene::clearPlanetForestModels(){
     if(device_)for(auto& [key,model]:planetForestRootModels_)if(model)releasePreviewModel(*model);
     if(device_&&planetForestLogModel_)releasePreviewModel(*planetForestLogModel_);
     planetForestRootModels_.clear();planetForestRejectedRoots_.clear();planetForestLogModel_.reset();planetForestLogRejected_=false;
-    planetForestModels_.clear();planetForestRejectedModels_.clear();
+    planetForestModels_.clear();planetForestRejectedModels_.clear();planetForestEvergreen_.clear();planetForestSeasonMaterials_.clear();
     planetForestModelBytes_=0;planetForestModelCatalog_=Json{};planetForestModelProject_.clear();planetForestModelsPending_=false;
 }
 bool StudioScene::planetForestLiveCurrent(const editor::MapDoc& doc,const std::string& projectPath)const{
@@ -675,7 +676,8 @@ void StudioScene::syncPlanetForestModels(const editor::MapDoc& doc,const std::st
         try{
             const auto recipe=world::parseForestSpeciesRecipe(def);
             tw::TreeLodSettings settings;settings.mesh=recipe.mesh;
-            model=tw::makeArborTreeLodModel(recipe.profile,recipe.seed,settings);
+            std::vector<int32_t> owners;
+            model=tw::makeArborTreeLodModel(recipe.profile,recipe.seed,settings,&owners);
             if(!model||model->vertices.size()>1000000||model->indices.size()>6000000)
                 throw std::length_error("Studio forest prototype geometry budget");
             if(recipe.preset&&!dir.empty()&&world::safeAssetPath(dir)){
@@ -707,6 +709,10 @@ void StudioScene::syncPlanetForestModels(const editor::MapDoc& doc,const std::st
                 tw::applyBotanicalTexture(*model,0,dir,std::string(recipe.preset->barkMaterial),read);
                 tw::applyBotanicalTexture(*model,1,dir,std::string(recipe.preset->leafMaterial),read);
             }
+            // Existing shared GPU branch hierarchy; explicit per-draw tangent wind.
+            const render::wind::WindMaskLibrary masks;
+            const auto atlas=render::wind::WindMaskAtlas::fromLibrary(masks);
+            tw::applyArborWind(*model,tw::generateTree(recipe.profile,recipe.seed,tw::TreeLOD::High),owners,render::wind::WindProfile{},masks,atlas);
             size_t bytes=model->vertices.size()*sizeof(render::ModelVertex)+model->indices.size()*sizeof(uint32_t);
             for(auto& image:model->images){
                 bytes+=size_t(image.width)*size_t(image.height)*8u; // conservative mip estimate
@@ -716,7 +722,7 @@ void StudioScene::syncPlanetForestModels(const editor::MapDoc& doc,const std::st
             model->path=projectPath+"/"+model->path;
             render::prepareModelUpload(*model);
             if(!render::uploadModel(*device_,*model,false,false))throw std::runtime_error("Studio forest model upload");
-            planetForestModels_.emplace(id,std::move(model));planetForestModelBytes_+=bytes;
+            planetForestModels_.emplace(id,std::move(model));planetForestEvergreen_[id]=tw::treeIsEvergreen(recipe.profile);planetForestModelBytes_+=bytes;
         }catch(const std::exception&){
             if(model)releasePreviewModel(*model);
             planetForestRejectedModels_.insert(id);
@@ -753,6 +759,8 @@ void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std
     const auto& scale=doc.data.bodies[size_t(index)].meta["visual"]["flora"]["scale"];
     const float flora=scale.isNumber()?std::clamp(float(scale.toDouble()),.001f,10.f):.06f;
     static const std::vector<uint8_t> barkOnly{1,0};
+    planetForestSeasonMaterials_.clear();
+    const auto tick=uint64_t(planetLiveSnapshot_["forest"].getInt("tick",0));
     size_t rendered=0,missing=0;
     for(const auto& row:planetLiveSnapshot_["forest"]["plants"].items()){
         if(row.getStr("body")!=planetPreview_->bodyId||row.getBool("spent"))continue;
@@ -781,7 +789,40 @@ void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std
         if(model!=planetForestModels_.end()){
             render::ModelDraw draw;draw.model=model->second.get();
             draw.world=*frame*render::mat4::scale({factor,factor,factor});
-            if(row.getBool("dead")||row.getInt("foliagePermille",0)==0)draw.materialMask=&barkOnly;
+            const auto foliage=row.getInt("foliagePermille",0);
+            int season=10;
+            if(row["seasonPermille"].isNumber())season=int(std::clamp<int64_t>((row.getInt("seasonPermille")+1000)*10/2000,0,10));
+            const bool evergreen=planetForestEvergreen_.count(id)&&planetForestEvergreen_.at(id);
+            // Preview mapping of the actual PHYSIS seasonal signal, not an
+            // independent climate or calendar. Quantized materials shared per species.
+            if(row.getBool("dead")||foliage==0||(!evergreen&&season==0))draw.materialMask=&barkOnly;
+            if(season<10&&model->second->materials.size()>1){
+                const auto materialKey=std::make_pair(id,season);
+                auto it=planetForestSeasonMaterials_.find(materialKey);
+                if(it==planetForestSeasonMaterials_.end()){
+                    auto materials=model->second->materials;
+                    const float cold=1.f-float(season)*.1f;
+                    auto& leaf=materials[1];
+                    if(evergreen){leaf.baseColor.x*=1.f-.10f*cold;leaf.baseColor.y*=1.f-.20f*cold;}
+                    else{leaf.baseColor.x=std::min(1.f,leaf.baseColor.x*(1.f+.65f*cold));leaf.baseColor.y*=1.f-.58f*cold;leaf.baseColor.z*=1.f-.65f*cold;}
+                    it=planetForestSeasonMaterials_.emplace(materialKey,std::move(materials)).first;
+                }
+                draw.materials=&it->second;
+            }
+            // WindRig uses model-local displacement. The snapshot already
+            // projects PHYSIS into this tree's tangent frame (metres/sec).
+            render::wind::WindDrawParams wind;
+            if(!row.getBool("dead")&&row["windLocal"].isArray()&&row["windLocal"].size()==2){
+                const auto& v=row["windLocal"].items();
+                wind.windX=float(v[0].toDouble())*.035f;
+                wind.windZ=float(v[1].toDouble())*.035f;
+                const auto key=std::stoull(row.getStr("key","0"));
+                constexpr double tau=6.283185307179586;
+                wind.phase=float(std::fmod(tau*double(tick%7680)/120.+double(key%1000)*.001*tau,tau*64.));
+                wind.gust=0.f; // actual local PHYSIS gust already included
+            }
+            draw.useVertexParameters=true;draw.vertexParameters=render::wind::windRigVertexParameters(wind);
+            draw.maxVertexOffsetMetres=std::max(.01f,render::wind::windRigMaxOffsetMetres(wind)*factor);
             renderer_.drawModel(draw);++rendered;
         }else ++missing;
         if(const auto tier=studioForestRootTier(row);tier){
@@ -2536,6 +2577,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                 if(model==planetForestModels_.end())continue;
                 render::ModelDraw draw;draw.model=model->second.get();draw.world=plant.world;
                 if(!plant.foliagePermille)draw.materialMask=&barkOnly;
+                draw.useVertexParameters=true;draw.vertexParameters={0,0,0,0};draw.maxVertexOffsetMetres=.01f;
                 if(current&&forestSelection_.getInt("species")==int64_t(plant.species)&&forestSelection_.getInt("key")==int64_t(plant.key))
                     draw.outline={1.f,.8f,.2f,.025f};
                 renderer_.drawModel(draw);
