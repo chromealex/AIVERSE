@@ -45,3 +45,5 @@ FixedInterpolation.h extends existing engine math with clamped Q16 lerp (scalar/
 FixedQuaternion.h: bounded Q16 normalization, normalized Hamilton product, axis-angle in turns, shortest-hemisphere NLERP and vector rotation. Invalid/near-zero inputs return nullopt. Uses existing FixedMath; no float. No build/tests.
 
 FixedQuaternion.h adds normalized rotation inverse, shortest-arc SLERP with NLERP fallback, right-handed rotation basis conversion and look rotation (+Z forward/+Y up). Parallel up/forward rejected; approximate orthonormal basis required. No float or tests.
+
+FixedMatrix.h: row-major 3x3/4x4, column-vector convention, bounded multiply, transpose, TRS, affine point/direction transform and inverse TRS without shear. Near-zero scales rejected; no general inverse yet. Q16 only. No build/tests.
