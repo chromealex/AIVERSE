@@ -3,6 +3,7 @@
 #pragma once
 #include "apps/studio-native/StudioTerrainGeometry.h"
 #include "engine/fx/SpectraDataInterfaces.h"
+#include "engine/fx/SpectraTerrainCollision.h"
 #include "engine/world/NereidWaterScene.h"
 #include "engine/world/nereid/NereidWaterSystems.h"
 #include <memory>
@@ -55,6 +56,16 @@ public:
         value=result;return true;
     }
 };
+
+inline std::shared_ptr<const fx::SceneCollisionRegistry> buildStudioSpectraCollisions(
+        const editor::MapData& map,float levelHeight,bool showTerrain) {
+    auto registry=std::make_shared<fx::SceneCollisionRegistry>();
+    if(showTerrain)if(auto terrain=StudioSpectraTerrainSnapshot::capture(map,levelHeight))
+        registry->bind(1,fx::makeTerrainSweep([terrain](render::float3 p,fx::TerrainCollisionSample& s){
+            s.up={0,1,0};return terrain->sample("clearance",p,s.clearance);
+        }));
+    return registry;
+}
 
 inline std::shared_ptr<const spectra::DataInterfaceRegistry> buildStudioSpectraFields(
         const editor::MapData& map,float levelHeight,bool showTerrain,

@@ -19,4 +19,15 @@ inline SceneCollisionRegistry::Sweep makeBox3DPointSweep(
         return true;
     };
 }
+// Sphere query uses the actual Box3D convex proxy, not a ray offset heuristic.
+inline SceneCollisionRegistry::Sweep makeBox3DSphereSweep(
+        const physics::Scene& scene,physics::QueryFilter filter={}) {
+    return [&scene,filter](const SceneCollisionQuery& q,SceneCollisionHit& h){
+        const auto d=q.to-q.from;
+        const auto hit=scene.sphereCast({q.from.x,q.from.y,q.from.z},{d.x,d.y,d.z},q.radius,filter);
+        if(hit.body==physics::kNoBody)return false;
+        h.fraction=hit.fraction;h.normal={hit.normal.x,hit.normal.y,hit.normal.z};
+        return true;
+    };
+}
 }

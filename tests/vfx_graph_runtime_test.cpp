@@ -1,6 +1,7 @@
 // SpectraFX graph-v1 host routing: conservative GPU subset or lossless CPU.
 // No FPS/RTS imports, RHI mock or real device required for these checks.
 #include "engine/fx/SpectraGraphRuntime.h"
+#include "engine/fx/SpectraTerrainCollision.h"
 #include "engine/fx/SpectraGpuPoolWorld.h"
 #include "engine/world/SpectraPhysisSnapshot.h"
 #include "engine/world/SpectraWaterSnapshot.h"
@@ -457,6 +458,21 @@ int main() {
         require(particles.size()==1&&particles[0].pos.x<0&&particles[0].vel.x<0&&
                 ps.sceneCollisionStats().hits==1,"actual CPU particle swept collision");
         ps.shutdown();
+    }
+    {
+        auto plane=fx::makeTerrainSweep([](render::float3 p,fx::TerrainCollisionSample& s){
+            s.clearance=p.y;s.up={0,1,0};return true;
+        });
+        fx::SceneCollisionHit hit;
+        require(plane({{0,3,0},{0,-3,0},0.5f},hit)&&
+                std::abs(hit.fraction-2.5f/6.f)<0.001f,"swept terrain radius");
+        auto planet=fx::makeTerrainSweep([](render::float3 p,fx::TerrainCollisionSample& s){
+            const float length=render::length(p);
+            if(length<=1e-5f)return false;
+            s.clearance=length-10.f;s.up=p*(1.f/length);return true;
+        });
+        require(planet({{13,0,0},{8,0,0},0.5f},hit)&&
+                std::abs(hit.fraction-0.5f)<0.001f&&hit.normal.x>.99f,"radial terrain sweep");
     }
     std::cout<<"PASS SpectraFX graph GPU eligibility, strict CPU preservation and host fallback\n";
 }

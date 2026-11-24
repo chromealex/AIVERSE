@@ -5,6 +5,7 @@
 #include "engine/fx/FxModelMesh.h"
 #include "engine/fx/VfxGraph.h"
 #include "engine/fx/SpectraScenePoolEmission.h"
+#include "engine/fx/SpectraTerrainCollision.h"
 #include "engine/platform/Platform.h"
 #include "engine/game/GameCore.h"
 
@@ -189,6 +190,21 @@ void ClientFx::startMatch(Simulation& sim, uint8_t viewer, const game::GameView&
     clearGraphSources();shutdownGraphPool();
     graphSources_.reset();graphSourceAssets_.clear();
     graphView_=&view;graphGrid_=&grid;
+    // Read only the published GameView surface during the owner-thread FX
+    // update. No capture survives stopMatch, no secondary physics world.
+    auto collisions=std::make_shared<fx::SceneCollisionRegistry>();
+    collisions->bind(1,fx::makeTerrainSweep([this](render::float3 p,fx::TerrainCollisionSample& s){
+        if(planet_) {
+            float relief=0;
+            return planet_->planetFxTerrain(p,relief,s.clearance,s.up);
+        }
+        if(!graphView_||!graphGrid_||graphGrid_->sphere()||
+           p.x<0||p.z<0||p.x>graphGrid_->w||p.z>graphGrid_->h)return false;
+        const float height=graphView_->heightAt(*graphGrid_,p.x,p.z);
+        s.clearance=p.y-height;s.up={0,1,0};
+        return std::isfinite(s.clearance);
+    }));
+    ps_.setSceneCollisionRegistry(std::move(collisions));
     ps_.clear();
     bridge_.setHeightFn([&view, &grid](float x, float z) { return view.heightAt(grid, x, z); });
     ps_.setGroundHeight([&view, &grid](float x, float z) { return view.heightAt(grid, x, z); });   // "collision" module
@@ -250,6 +266,7 @@ void ClientFx::startMatch(Simulation& sim, uint8_t viewer, const game::GameView&
 void ClientFx::stopMatch() {
     clearGraphSources();shutdownGraphPool();
     graphSources_.reset();graphSourceAssets_.clear();
+    ps_.setSceneCollisionRegistry({});
     graphView_=nullptr;graphGrid_=nullptr;
     if(entityInbox_) {entityInbox_->active=false;entityInbox_.reset();}
     entities_.reset(true);

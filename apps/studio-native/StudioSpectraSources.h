@@ -26,6 +26,7 @@ public:
         particles_.shutdown();textures_.shutdown();
         definitions_.clear();schemas_.clear();project_.clear();mapPath_.clear();error_.clear();
         dataRegistry_.reset();externalRegistry_=false;
+        collisionRegistry_.reset();
         revision_=UINT64_MAX;ready_=false;
     }
     // Render owner only, between frames. Shared ownership prevents dangling
@@ -62,6 +63,7 @@ public:
         if(project.empty()||doc.data.worldSpace||doc.data.planet()){
             if(ready_){mirror_.clear();gpuMirror_.clear();}
             if(!externalRegistry_)installRegistry({});
+            collisionRegistry_.reset();particles_.setSceneCollisionRegistry({});
             revision_=UINT64_MAX;
             return;
         }
@@ -71,6 +73,10 @@ public:
         if(fieldChanged && !externalRegistry_) {
             auto next=buildStudioSpectraFields(doc.data,levelHeight,showTerrain,water);
             if(!installRegistry(std::move(next)))return;
+        }
+        if(fieldChanged){
+            collisionRegistry_=buildStudioSpectraCollisions(doc.data,levelHeight,showTerrain);
+            particles_.setSceneCollisionRegistry(collisionRegistry_);
         }
         if(!fieldChanged&&hidden_==hidden)return;
         revision_=doc.revision;hidden_=hidden;
@@ -138,6 +144,7 @@ private:
             return fx::meshFromModelFile(path,[this](const std::string& p,std::string& bytes){return read(p,bytes);},out);
         });
         if(!particles_.init(&device)){error_=particles_.lastError();textures_.shutdown();return false;}
+        particles_.setSceneCollisionRegistry(collisionRegistry_);
         presenter_=std::make_unique<lib::mechanics::SpectraPresentationSystem>(particles_);
         spectra::PoolWorldBudgets budgets;
         budgets.maxGpuGroups=256;budgets.maxGroupCapacity=kStudioMaxGroupSlots;budgets.maxSources=65536;
@@ -223,6 +230,7 @@ private:
         return true;
     }
     std::shared_ptr<const spectra::DataInterfaceRegistry> dataRegistry_;
+    std::shared_ptr<const fx::SceneCollisionRegistry> collisionRegistry_;
     render::TextureCache textures_;
     fx::ParticleSystem particles_;
     lib::mechanics::SpectraSourceMirror mirror_;

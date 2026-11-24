@@ -28,6 +28,12 @@ int main() {
     AIVERSE_TEST_CHECK(!fields->sample("terraweave","height",{-1,0,0},field));
     AIVERSE_TEST_CHECK(!fields->sample("physis","wind_x",{0,0,0},field));
     AIVERSE_TEST_CHECK(!buildStudioSpectraFields(d,1.5f,false,nullptr)->sample("terraweave","height",{0,0,0},field));
+    auto collision=buildStudioSpectraCollisions(d,1.5f,true);
+    fx::SceneCollisionHit hit;
+    fx::SceneCollisionStats collisionStats;
+    AIVERSE_TEST_CHECK(collision->sweep({{1,3,1},{1,-1,1},0.25f},hit,collisionStats));
+    AIVERSE_TEST_CHECK(std::abs(hit.fraction-0.4375f)<0.001f);
+    AIVERSE_TEST_CHECK(!buildStudioSpectraCollisions(d,1.5f,false)->sweep({{1,3,1},{1,-1,1},0},hit,collisionStats));
     d.bodies.emplace_back();
     MeshBuilder planet;
     AIVERSE_TEST_CHECK(buildTerrainPreview(d,planet).quads==0);
