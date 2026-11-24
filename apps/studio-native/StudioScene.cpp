@@ -590,6 +590,7 @@ void StudioScene::clearLivePlanetTerrain(){
     if(planetLiveTerrain_.vb.valid())device_->destroyBuffer(planetLiveTerrain_.vb);
     if(planetLiveTerrain_.ib.valid())device_->destroyBuffer(planetLiveTerrain_.ib);
     planetLiveTerrain_={};planetLiveTerrainGrid_=Json{};
+    planetLiveTerrainCpu_.reset();planetLiveTerrainVisible_=false;
 }
 bool StudioScene::syncLivePlanetTerrain(const editor::MapDoc& doc,const std::string& projectPath){
     const auto& layer=planetLiveSnapshot_["forestTerrain"];
@@ -597,9 +598,9 @@ bool StudioScene::syncLivePlanetTerrain(const editor::MapDoc& doc,const std::str
        layer.getInt("tick",-1)!=planetLiveSnapshot_["forest"].getInt("tick",-2)||
        layer["grid"].getStr("body")!=planetPreview_->bodyId)return false;
     const auto& grid=layer["grid"];
-    if(grid==planetLiveTerrainGrid_&&planetLiveTerrain_.vb.valid()&&planetLiveTerrain_.ib.valid())return true;
+    if(grid==planetLiveTerrainGrid_&&planetLiveTerrainCpu_&&planetLiveTerrain_.vb.valid()&&planetLiveTerrain_.ib.valid())return true;
     const int bi=doc.data.findBody(planetPreview_->bodyId);if(bi<0)return false;
-    const auto mesh=buildStudioLivePlanetTerrain(grid,doc.data.bodies[size_t(bi)],*planetPreview_);
+    auto mesh=buildStudioLivePlanetTerrain(grid,doc.data.bodies[size_t(bi)],*planetPreview_);
     if(!mesh||!device_->waitForResourceIdle())return false;
     auto next=mesh->upload(*device_);
     if(!next.vb.valid()||!next.ib.valid()){
@@ -607,7 +608,8 @@ bool StudioScene::syncLivePlanetTerrain(const editor::MapDoc& doc,const std::str
         if(next.ib.valid())device_->destroyBuffer(next.ib);
         return false;
     }
-    clearLivePlanetTerrain();planetLiveTerrain_=next;planetLiveTerrainGrid_=grid;return true;
+    clearLivePlanetTerrain();planetLiveTerrain_=next;planetLiveTerrainGrid_=grid;
+    planetLiveTerrainCpu_=std::move(mesh);return true;
 }
 void StudioScene::clearPlanetForestModels(){
     if(device_)for(auto& [id,model]:planetForestModels_)if(model)releasePreviewModel(*model);
@@ -935,7 +937,7 @@ std::string StudioScene::pick(float x, float y, float width, float height,
     if (materialMode_ || facialMode_ || !cameraInitialized_ ||
         !viewCamera().screenRay(x,y,width,height,origin,direction)) return {};
     if(map.data.planet())return planetMode_&&planetPreview_&&planetMapPath_==map.path&&planetRevision_==map.revision?
-        planetPreview_->pick(origin,direction,hidden_,locked_,modelInstances_):std::string{};
+        planetPreview_->pick(origin,direction,hidden_,locked_,modelInstances_,visiblePlanetTerrain()):std::string{};
     // Pick the oriented cube mesh that Renderer3D actually draws, not its
     // expanded axis-aligned bounding box. Empty rotated corners are unpickable.
     auto proxies=studioDocumentProxies(map,fpsProject,terrainLevelHeight_);
@@ -1203,7 +1205,7 @@ bool StudioScene::beginTransformDrag(float x,float y,float width,float height) {
     if(planetMode_&&tool_==TransformTool::Move){
         if(!gizmosVisible_||!planetPreview_||tool_!=TransformTool::Move||selectedId_.empty()||selection_.size()>1)return false;
         float3 o,d;if(!viewCamera().screenRay(x,y,width,height,o,d))return false;
-        if(planetPreview_->pick(o,d,hidden_,locked_,modelInstances_)!=selectedId_)return false;
+        if(planetPreview_->pick(o,d,hidden_,locked_,modelInstances_,visiblePlanetTerrain())!=selectedId_)return false;
         const auto at=planetPreview_->placements.find(selectedId_);
         if(at==planetPreview_->placements.end())return false;
         planetTransformRevision_=planetRevision_;
@@ -1245,7 +1247,7 @@ void StudioScene::updateTransformDrag(float x,float y,float width,float height,b
     if(!planetDragId_.empty()){
         float3 o,d;planetDragPlacement_=Json{};
         if(planetPreview_&&viewCamera().screenRay(x,y,width,height,o,d))
-            if(auto at=planetPreview_->groundPlacement(o,d))planetDragPlacement_=std::move(*at);
+            if(auto at=planetPreview_->groundPlacement(o,d,visiblePlanetTerrain()))planetDragPlacement_=std::move(*at);
         return;
     }
     if(drag_.axis<0)return;
@@ -2272,7 +2274,7 @@ bool StudioScene::beginPlanetRegionDrag(const editor::MapDoc& doc,const std::str
         float2 p;if(!point||!view.worldToScreen(*point,width,height,p))continue;
         float3 o,d;if(!view.screenRay(p.x,p.y,width,height,o,d))continue;
         const float distance=dot(*point-o,d);
-        if(planetPreview_->terrainHit(o,d)+.05f<distance)continue;
+        if(planetPreview_->terrainHit(o,d,visiblePlanetTerrain())+.05f<distance)continue;
         const float error=std::hypot(x-p.x,y-p.y);
         if(error<best){best=error;hit=handle;}
     }
@@ -2289,7 +2291,7 @@ std::optional<Json> StudioScene::updatePlanetRegionDrag(const editor::MapDoc& do
        selectedId_==drag.chart.owner&&!locked_.count(drag.chart.owner)&&!hidden_.count(drag.chart.owner)){
         float3 o,d;
         if(viewCamera().screenRay(x,y,width,height,o,d)){
-            const float t=planetPreview_->terrainHit(o,d);
+            const float t=planetPreview_->terrainHit(o,d,visiblePlanetTerrain());
             if(std::isfinite(t)){
                 const auto direction=normalize(o+d*t);
                 const auto local=planetRegionCoordinates(drag.chart,
@@ -2322,7 +2324,7 @@ void StudioScene::drawPlanetRegionHandles(const render::Camera& view,int width,i
     const auto visible=[&](float3 p,float2& screen){
         if(!view.worldToScreen(p,float(width),float(height),screen))return false;
         float3 o,d;if(!view.screenRay(screen.x,screen.y,float(width),float(height),o,d))return false;
-        return planetPreview_->terrainHit(o,d)+.05f>=dot(p-o,d);
+        return planetPreview_->terrainHit(o,d,visiblePlanetTerrain())+.05f>=dot(p-o,d);
     };
     for(auto handle:{PlanetRegionHandle::West,PlanetRegionHandle::East,PlanetRegionHandle::North,
                      PlanetRegionHandle::South,PlanetRegionHandle::Center}){
@@ -2494,7 +2496,8 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         planetModelProject_=projectPath;planetModelRules_=&rules;
         nextFileCheck_=now+std::chrono::seconds(1);
     }
-    const bool useLiveTerrain=syncLivePlanetTerrain(doc,projectPath);
+    const bool useLiveTerrain=syncLivePlanetTerrain(doc,projectPath)&&planetTerrain_.vb.valid()&&planetTerrain_.ib.valid();
+    planetLiveTerrainVisible_=useLiveTerrain;
     syncPlanetForestModels(doc,projectPath);
     if(!cameraInitialized_){
         camera_.target={};camera_.distance=planetPreview_?std::max(2.f,planetPreview_->extent*3.f):16.f;
@@ -2519,7 +2522,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
             float2 screen;float3 o,d;
             if(view.worldToScreen(selectedPivot_,float(width),float(height),screen)&&
                view.screenRay(screen.x,screen.y,float(width),float(height),o,d)&&
-               planetPreview_->terrainHit(o,d)+.3f>=dot(selectedPivot_-o,d)){
+               planetPreview_->terrainHit(o,d,visiblePlanetTerrain())+.3f>=dot(selectedPivot_-o,d)){
                 selectedPivotValid_=true;selectedAxesValid_=true;
                 for(int i=0;i<3;++i)selectedAxes_[i]=normalize(frame->second.transformDir({i==0?1.f:0.f,i==1?1.f:0.f,i==2?1.f:0.f}));
                 if(tool_==TransformTool::Rotate){
@@ -3250,7 +3253,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                 planetDragPlacement_["x"].fx(),planetDragPlacement_["y"].fx()));
             const auto eye=view.eye();
             // Display a ray-hit preview, not a committed entity.
-            const float t=planetPreview_->terrainHit(eye,normalize(dir*planetPreview_->radius-eye));
+            const float t=planetPreview_->terrainHit(eye,normalize(dir*planetPreview_->radius-eye),visiblePlanetTerrain());
             if(std::isfinite(t)){
                 const auto hit=eye+normalize(dir*planetPreview_->radius-eye)*t;
                 renderer_.drawMesh(cube_,mat4::translate(hit+dir*.6f)*mat4::scale({.6f,.6f,.6f}),{.25f,.9f,.8f,1},kDrawNoCastShadow);

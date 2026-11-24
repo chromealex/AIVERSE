@@ -131,9 +131,10 @@ struct StudioPlanetPreview {
         return out;
     }
     // Ray intersects the exact preview mesh triangles, including occlusion.
-    float terrainHit(render::float3 origin,render::float3 direction)const{
+    float terrainHit(render::float3 origin,render::float3 direction,const render::MeshBuilder* renderedTerrain=nullptr)const{
         float nearest=std::numeric_limits<float>::infinity();
-        const auto& v=mesh.vertices();const auto& idx=mesh.indices();
+        const auto& geometry=renderedTerrain?*renderedTerrain:mesh;
+        const auto& v=geometry.vertices();const auto& idx=geometry.indices();
         for(size_t i=0;i+2<idx.size();i+=3){
             const auto a=v[idx[i]].pos,b=v[idx[i+1]].pos,c=v[idx[i+2]].pos;
             const auto e=b-a,f=c-a,h=render::cross(direction,f);
@@ -148,8 +149,8 @@ struct StudioPlanetPreview {
         }
         return nearest;
     }
-    std::optional<Json> groundPlacement(render::float3 origin,render::float3 direction)const{
-        const float t=terrainHit(origin,direction);
+    std::optional<Json> groundPlacement(render::float3 origin,render::float3 direction,const render::MeshBuilder* renderedTerrain=nullptr)const{
+        const float t=terrainHit(origin,direction,renderedTerrain);
         if(!std::isfinite(t))return {};
         const auto p=origin+direction*t;
         if(render::dot(p,p)<1e-6f)return {};
@@ -163,8 +164,8 @@ struct StudioPlanetPreview {
     }
     std::string pick(render::float3 origin,render::float3 direction,
                      const std::set<std::string>& hidden,const std::set<std::string>& locked,
-                     const std::vector<StudioModelPickInstance>& models={})const{
-        float closest=terrainHit(origin,direction);std::string id;
+                     const std::vector<StudioModelPickInstance>& models={},const render::MeshBuilder* renderedTerrain=nullptr)const{
+        float closest=terrainHit(origin,direction,renderedTerrain);std::string id;
         std::set<std::string> replaced;
         for(const auto& model:models){
             if(!model.model)continue;

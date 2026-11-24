@@ -221,6 +221,12 @@ private:
     render::Mesh planetTerrain_;
     render::Mesh planetLiveTerrain_;
     Json planetLiveTerrainGrid_;
+    // CPU triangles from the same successful upload used by the Scene.
+    std::optional<render::MeshBuilder> planetLiveTerrainCpu_;
+    bool planetLiveTerrainVisible_=false;
+    const render::MeshBuilder* visiblePlanetTerrain()const{
+        return planetLiveTerrainVisible_&&planetLiveTerrainCpu_?&*planetLiveTerrainCpu_:nullptr;
+    }
     void clearLivePlanetTerrain();
     bool syncLivePlanetTerrain(const editor::MapDoc& doc,const std::string& projectPath);
     std::optional<StudioPlanetPreview> planetPreview_;
