@@ -20,6 +20,11 @@ def load_meta():
 
 # Search vocabulary is routing metadata, not another copy of skill instructions.
 ALIASES = {
+ 'aiverse-geometry-algorithms':'polygon hull intersection',
+ 'aiverse-random':'random pcg sampling',
+ 'aiverse-spatial':'spatial grid hash bvh quadtree octree nearest radius segment пространство сетка дерево',
+ 'aiverse-persistent-world':'persistence wal checkpoint recovery backup world fork сохранение восстановление',
+ 'aiverse-region-lifecycle':'region world streaming ledger ecs tombstone journal change tracking undo log dirty-only ownership diagnostics delta revision rollback hot cold регион стриминг сущность журнал simulation LOD decision cadence simulation budget',
  'aiverse-noise':'noise worley tileable gradient fbm fractal turbulence ridged derivatives billow vector domain warp curl jacobian simplex skew lattice batch aos soa sampling simd sse2 avx2 neon',
  'aiverse-world-processes':'world processes deterministic ecs world systems mechanics universal processes игровые мир процессы экосистем общие механики',
  'aiverse-echo':'echo acoustics hearing sound portal zone acoustic npc ear noise звук слышимость шум акустика порталы зоны',
@@ -322,6 +327,13 @@ def generate():
         summary='Immutable SharedRef and StaticRef ECS configs, prefab dedup, snapshots and multi-world scene integration',
         side='tools',runtime='none',target=None,dependencies=[],backendDependencies=[],
         source='engine/sim/SharedStaticComponents.h'))
+    for name,summary,source,side in (
+        ('aiverse-spatial','Generic integer spatial grids, hashes, BVH and trees','libraries/include/aiverselib/algorithms/Spatial.h','tools'),
+        ('aiverse-persistent-world','Durable world ledger WAL, checkpoints, recovery, retention and backup forks','engine/world/PersistentWorldSession.h','simulation'),
+        ('aiverse-region-lifecycle','Shared deterministic region identity, atomic vehicle groups, ECS change journals, sparse undo transactions, admission and ownership diagnostics; authoritative decision LOD','engine/world/RegionEntityLedger.h','simulation')):
+        entries.append(dict(id=name,package=None,path=skill_path(name),domain='gameplay',
+            summary=summary,side=side,runtime='none',target=None,
+            dependencies=[],backendDependencies=[],requiresOwner=None,source=source))
     # Native World Processes are opt-in ECS capabilities, not library packages.
     # Gameplay recipes have runtime=none: do NOT invent a CMake library per
     # skill or pull Box3D/PHYSIS/TerraWeave into unrelated games.

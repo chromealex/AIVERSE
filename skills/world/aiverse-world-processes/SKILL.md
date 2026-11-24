@@ -252,7 +252,7 @@ owners and positions. The normal opt-in native project example and
 Do not claim the new headers/Studio components compile or pass CTest,
 sanitizers, Mac GUI or merged-tree `./run-tests.sh --quick`: they have
 not been verified yet. See the complete stage handoffs in
-`docs/handoffs/world-processes-stage11-*-` through Stage16.
+`docs/handoffs/world-processes-stage11-*` through Stage16.
 Functional limitations: graphical soft-body mesh skinning, actual
 Box3D impact/collapse, global RVO/NavMesh, full SPH granular physics,
 real sound HRTF, terrain re-meshing, and game-specific NPC social
@@ -429,7 +429,7 @@ and next steps are in:
 `apps/studio-native/StudioWorldProcessesGizmos.h` provides a **read-only
 MapDoc → StudioScene::OverlayShape** projector for the ten system areas.
 It is integrated in existing
-`apps/studio-native/StudioHost.cpp::rebuildOverlay` and uses native
+`apps/studio-native/StudioHost.cpp` and uses native
 Renderer3D's already-implemented gizmo line/circle/point/label drawing,
 alongside the normal extensions and spline handlers. No new plugin
 window, JS rendering pass, Entity ID substitution, or ECS mutation.
