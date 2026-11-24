@@ -2533,6 +2533,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     if(livePlanet&&planetLiveSnapshot_["forest"].isObject()){
         lightingStatus_+=liveForest?" · live forest roots / actual capsule poses":" · live forest unavailable";
         if(planetLiveSnapshot_["forest"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+        if(planetLiveSnapshot_["forest"].getBool("stormsCapped")||planetLiveSnapshot_["forest"].getBool("windZonesCapped"))lightingStatus_+=" · wind field capped";
     }
     const bool liveSociety=livePlanet&&planetLiveSnapshot_["society"].getBool("available");
     if(livePlanet&&planetLiveSnapshot_["society"].isObject()){

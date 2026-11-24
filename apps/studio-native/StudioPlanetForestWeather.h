@@ -4,6 +4,7 @@
 #include "aiverselib/world/WorldProcessesPlanetForestPipeline.h"
 #include "engine/physis/PhysisWind.h"
 #include "engine/physis/PhysisClimate.h"
+#include "engine/physis/PhysisStorm.h"
 
 namespace aiverse::studio {
 inline std::vector<evolve::PlanetWeatherMapping> studioForestWeatherMappings(
@@ -39,9 +40,32 @@ inline std::vector<evolve::PlanetWeatherMapping> studioForestWeatherMappings(
     }catch(const std::exception&){return {};}
     return result;
 }
+// Presentation adapter for PHYSIS's existing planar vortex law. Radius is
+// the canonical surface arc, vertical distance is radial altitude. The
+// radial/tangential velocity is expressed at the queried surface point.
+// No global-XZ reinterpretation and no cross-body or antipodal wind.
+inline Vec3 studioPlanetStormWind(const game::Surface& surface,
+        const lib::worldprocess::SurfaceFrame& frame,Vec3 position,
+        const physis::StormEvent& event,uint64_t tick){
+    const auto center=lib::worldprocess::surfaceFrame(&surface,event.center);
+    if(!center||center->body!=frame.body||!physis::stormActive(event,tick))return {};
+    const auto turns=game::sphereArcTurns(center->up,frame.up);
+    if(turns>=Fixed::fromRatio(499,1000))return {};
+    const auto arc=turns*game::kFxTwoPi*surface.bodies[size_t(frame.body)].radius;
+    if(arc>=event.outerRadiusMeters)return {};
+    const auto dy=surface.altitude(position)-surface.altitude(event.center);
+    auto local=event;local.center={};
+    const auto influence=physis::stormContribution(local,{arc,dy,Fixed{}},tick);
+    if(!arc.raw)return frame.up*influence.wind.y;
+    const auto outward=game::sphereTangentToward(frame.up,center->up)*Fixed::fromInt(-1);
+    if(!outward.lengthSq().raw)return {};
+    const auto swirl=fxNormalize(Vec3{outward.y*frame.up.z-outward.z*frame.up.y,
+        outward.z*frame.up.x-outward.x*frame.up.z,outward.x*frame.up.y-outward.y*frame.up.x});
+    return outward*influence.wind.x+frame.up*influence.wind.y+swirl*influence.wind.z;
+}
 inline void studioForestWeatherSample(Json& row,const World& ecs,const game::Surface& surface,
         const lib::worldprocess::SurfaceFrame& frame,Vec3 position,
-        const std::vector<evolve::PlanetWeatherMapping>& mappings,bool localWindAllowed){
+        const std::vector<evolve::PlanetWeatherMapping>& mappings,bool localWindAllowed,bool stormsAllowed){
     const auto* state=ecs.resourceConst<physis::State>();if(!state)return;
     const evolve::PlanetWeatherMapping* best=nullptr;Fixed nearest{};
     const auto body=surface.bodies[size_t(frame.body)].id;
@@ -75,6 +99,19 @@ inline void studioForestWeatherSample(Json& row,const World& ecs,const game::Sur
             wind=wind*(1_fx-fxClamp(shelter.attenuation,Fixed{},1_fx)*weight);
         });
         available=true;
+    }
+    if(stormsAllowed){
+        Vec3 stormWind{};
+        ecs.eachExistingConst<physis::StormEvent>([&](Entity,const physis::StormEvent& event){
+            stormWind=stormWind+studioPlanetStormWind(surface,frame,position,event,state->tick);
+        });
+        const auto stormCap=200_fx;
+        stormWind={fxClamp(stormWind.x,-stormCap,stormCap),fxClamp(stormWind.y,-stormCap,stormCap),fxClamp(stormWind.z,-stormCap,stormCap)};
+        wind=wind+stormWind;
+        Json storm=Json::array();
+        storm.push(Json::number(stormWind.dot(east).toDouble(),3));
+        storm.push(Json::number(stormWind.dot(south).toDouble(),3));
+        row.set("stormWindLocal",std::move(storm));available=true;
     }
     if(available){
         // Clamp visual tangent speed to the existing ARBOR wind range.

@@ -39,6 +39,8 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
     }
     const bool localWindAllowed=ecs.countExisting<physis::WindZone>()<=1024&&ecs.countExisting<physis::WindShelter>()<=1024;
     out.set("windZonesCapped",Json::fromBool(!localWindAllowed));
+    const bool stormsAllowed=ecs.countExisting<physis::StormEvent>()<=1024;
+    out.set("stormsCapped",Json::fromBool(!stormsAllowed));
     size_t fallen=0,spent=0,physical=0,rejected=0;
     for(const auto& plant:roots->rooted){
         const tw::AnchoredPlantId id{plant.anchor.speciesId,plant.anchor.plantKey};
@@ -61,7 +63,7 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
         const auto anchor=game::Surface::anchor(frame->body);
         row.set("position",xyz(b->second->plantedPosition-anchor));
         row.set("up",xyz(frame->up));row.set("east",xyz(frame->east));
-        try{studioForestWeatherSample(row,ecs,surface,*frame,b->second->plantedPosition,weather,localWindAllowed);}catch(const std::exception&){++rejected;}
+        try{studioForestWeatherSample(row,ecs,surface,*frame,b->second->plantedPosition,weather,localWindAllowed,stormsAllowed);}catch(const std::exception&){++rejected;}
         row.set("habit",Json::string(plant.anchor.roots.habit==tw::PlantHabit::Shrub?"shrub":plant.anchor.roots.habit==tw::PlantHabit::Tree?"tree":"grass"));
         try{
             const auto appearance=tw::plantAppearance(plant.environment);
