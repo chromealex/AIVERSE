@@ -120,3 +120,6 @@ Existing linked batch planner resolves local glTF/GLB buffer and image URIs in o
 
 ### S6f.3.4b.2a — projected local model dependencies
 The mixed exact-endpoint planner now resolves typed glTF/GLB external resources against virtual content occupancy after each complete step, including paired file moves, directory moves and model version exchange. A surviving physical model must keep its resource GUID per slot. Unmanaged owners and other formats retain conservative reference fences. Mixed URI repairs, nested relocation roots and unknown model extensions remain fenced. No new MCP action.
+
+### S6f.3.4b.2b — mixed typed URI replay
+Existing mixed batch planner now accepts recorded glTF/GLB URI repairs, including stationary and moving owners, compact GLB prefix snapshots and importer settings in the same history chain. Directional digests, byte continuity, unchanged non-URI JSON and per-slot target GUIDs are checked before journal publication. Other repair formats, unknown extensions, nested relocation roots and model edits originating/ending in Trash remain fenced. No new MCP action or journal version.
