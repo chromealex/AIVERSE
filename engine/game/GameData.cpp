@@ -182,6 +182,20 @@ Rules loadRules(const Json& j) {
     if (needsExtends(j)) return loadRules(resolveExtends(j));   // "extends" / "abstract" entries (engine/data/JsonCompose.h)
     if (j.has("designs")) return loadRules(expandDesigns(j));   // agent-mech UD
     Rules r;
+    if (j.has("minUnitSpeed")) {
+        if (!j["minUnitSpeed"].isNumber() || j["minUnitSpeed"].fx().raw < 0)
+            throw std::runtime_error("minUnitSpeed: expected nonnegative number");
+        r.hasMinUnitSpeed = true;
+        r.minUnitSpeed = j["minUnitSpeed"].fx();
+    }
+    if (j.has("maxUnitSpeed")) {
+        if (!j["maxUnitSpeed"].isNumber() || j["maxUnitSpeed"].fx().raw < 0)
+            throw std::runtime_error("maxUnitSpeed: expected nonnegative number");
+        r.hasMaxUnitSpeed = true;
+        r.maxUnitSpeed = j["maxUnitSpeed"].fx();
+    }
+    if (r.hasMinUnitSpeed && r.hasMaxUnitSpeed && r.minUnitSpeed > r.maxUnitSpeed)
+        throw std::runtime_error("minUnitSpeed must not exceed maxUnitSpeed");
     if (j.has("ai")) {
         if (!j["ai"].isObject()) throw std::runtime_error("ai: expected object");
         const auto controller = j["ai"].getStr("controller", "builtin");
