@@ -760,7 +760,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
           {[1,2,4,8].map(n=><option value={n} key={n}>{n}×</option>)}
         </StudioSelect>
       </StudioField>
-      <StudioButton size="sm" variant="primary" disabled={!active||!state?.ready||busy}
+      <StudioButton size="sm" variant="primary" disabled={!active||!state?.ready||busy||!!(state.volume&&!state.hybrid)}
         onClick={()=>void command('burst',{count:burstCount})}>
         Trigger Burst
       </StudioButton>
@@ -807,11 +807,11 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
         <StudioInput id="spectra-gpu-seed" type="number" min={0} max={2147483647} step={1}
           value={gpuAllocationSeed} onChange={e=>setGpuAllocationSeed(e.target.value)}/>
       </StudioField>
-      <StudioButton size="sm" disabled={!state?.gpu||state.playing||busy||state.checkpointPending} onClick={()=>void invokePreview({action:'checkpointSave',expectedGeneration:state?.generation}).then(setState).catch(e=>setError(message(e)))}>Save GPU checkpoint</StudioButton>
+      <StudioButton size="sm" disabled={!state?.gpu||state.volume||state.playing||busy||state.checkpointPending} onClick={()=>void invokePreview({action:'checkpointSave',expectedGeneration:state?.generation}).then(setState).catch(e=>setError(message(e)))}>Save GPU checkpoint</StudioButton>
       {state?.checkpointPending&&<><small>Checkpoint pending ({state.checkpointWaitFrames??0}/240 frames)</small><StudioButton size="sm" onClick={()=>void invokePreview({action:'checkpointCancel',expectedGeneration:state?.generation}).then(setState).catch(e=>setError(message(e)))}>Cancel checkpoint</StudioButton></>}
       {(state?.checkpoints??[]).map(cp=><StudioButton key={cp.id} size="sm" disabled={busy||!!state?.playing||!!state?.checkpointPending} onClick={()=>void invokePreview({action:'checkpointRestore',checkpointId:cp.id,expectedGeneration:state?.generation}).then(setState).catch(e=>setError(message(e)))}>Restore tick {cp.tick} (#{cp.id})</StudioButton>)}
-      <StudioButton size="sm" disabled={busy||!state?.gpu||state.playing||state.checkpointPending} onClick={()=>void exportCheckpointFile()}>Export checkpoint file</StudioButton>
-      <label>Import checkpoint <input type="file" accept=".spft" disabled={busy||!state?.gpu||state.playing||state.checkpointPending} onChange={e=>{const file=e.target.files?.[0];if(file)void importCheckpointFile(file);e.target.value='';}}/></label>
+      <StudioButton size="sm" disabled={busy||!state?.gpu||state.volume||state.playing||state.checkpointPending} onClick={()=>void exportCheckpointFile()}>Export checkpoint file</StudioButton>
+      <label>Import checkpoint <input type="file" accept=".spft" disabled={busy||!state?.gpu||state.volume||state.playing||state.checkpointPending} onChange={e=>{const file=e.target.files?.[0];if(file)void importCheckpointFile(file);e.target.value='';}}/></label>
       <StudioField label="Metal shader seed (optional)" htmlFor="spectra-shader-seed">
         <StudioInput id="spectra-shader-seed" type="number" min={0} max={4294967295} step={1} value={gpuShaderSeed} onChange={e=>setGpuShaderSeed(e.target.value)}/>
       </StudioField>
@@ -986,7 +986,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
       </StudioBadge>
       <span>{state?.ready?(state.playing?'Playing':'Paused'):'No active runtime'}</span>
       {state?.gpuOwnedAllocationRequested&&<span>{state.gpuOwnedAllocation?'GPU-owned allocator':'GPU-owned requested; unavailable'}</span>}
-      {state?.gpu&&<span>Alive {state.aliveEstimated?'~':''}{state.alive} · Capacity {state.gpuAllocatedCapacity??0} · {(state.gpuBytes??0)/1024|0} KiB</span>}
+      {state?.volume&&<span>Volume {state.volumeDimension}³ · {((state.volumeBytes??0)/1048576).toFixed(2)} MiB · {state.volumeRendered?'HDR submitted':'HDR not submitted'} · Replay unavailable</span>}
+      {state?.gpu&&(!state.volume||state.hybrid)&&<span>Alive {state.aliveEstimated?'~':''}{state.alive} · Capacity {state.gpuAllocatedCapacity??0} · {(state.gpuBytes??0)/1024|0} KiB</span>}
       <span>Tick {state?.tick??0} / 3600</span>
       <span>Bursts {state?.bursts??0}
         {state?.queuedBursts?' · queued '+state.queuedBursts:''}

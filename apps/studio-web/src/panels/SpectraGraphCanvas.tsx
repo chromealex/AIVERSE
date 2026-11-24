@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { GitBranch, Maximize2, Plus, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 import { invoke } from '../bridge';
-import { StudioButton, StudioField, StudioSelect } from '../ui';
+import { StudioButton, StudioField, StudioSelect, StudioInput } from '../ui';
 import { graphV2, type SpectraGraphV2 } from './spectraDataInterfaceModel';
 import { connectionParams, moveGraphNode, nodePoint, visualEdges } from './spectraGraphCanvasModel';
 import './SpectraGraphCanvas.css';
@@ -27,6 +27,9 @@ const nativeFxEdit=async(params:Record<string,unknown>):Promise<SpectraGraphV2>=
 export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}:Props) {
   const [catalog,setCatalog]=useState<CatalogNode[]>([]);
   const [nodeType,setNodeType]=useState('DataInterface');
+  const [volumePreset,setVolumePreset]=useState('fire');
+  const [volumeProperty,setVolumeProperty]=useState('');
+  const [volumeValue,setVolumeValue]=useState('');
   const [selectedNode,setSelectedNode]=useState('');
   const [from,setFrom]=useState('');
   const [to,setTo]=useState('');
@@ -37,6 +40,9 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
   const edges=useMemo(()=>visualEdges(graph),[graph]);
   const nodes=graph.nodes;
   const chosen=nodes.find(n=>n.id===selectedNode);
+  const isVolumeNode=chosen?.type.startsWith('Volume')??false;
+  const hasVolume=nodes.some(n=>n.type==='VolumeOutput');
+  useEffect(()=>{setVolumeProperty('');setVolumeValue('');},[selectedNode]);
   const dest=nodes.find(n=>n.id===to);
   const ports=catalog.find(x=>x.type===dest?.type)?.ports??[];
   const width=Math.max(1200,...nodes.map((n,i)=>nodePoint(n,i).x+240));
@@ -89,6 +95,16 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
         onClick={()=>void execute({action:'add',type:nodeType})}><Plus size={14}/> Add node</StudioButton>
       <StudioButton variant="danger" size="sm" disabled={disabled||working||!selectedNode}
         onClick={()=>void execute({action:'deleteNode',node:selectedNode})}><Trash2 size={14}/> Delete selected</StudioButton>
+      <StudioField label="Volume preset">
+        <StudioSelect value={volumePreset} onChange={e=>setVolumePreset(e.target.value)}>
+          <option value="fire">Fire</option><option value="smoke">Smoke</option>
+          <option value="magic">Magic</option><option value="fog">Fog</option>
+        </StudioSelect>
+      </StudioField>
+      <StudioButton size="sm" disabled={disabled||working||hasVolume}
+        onClick={()=>void execute({action:'addVolume',preset:volumePreset})}>Add volume branch</StudioButton>
+      <StudioButton size="sm" disabled={disabled||working}
+        onClick={()=>{if(window.confirm('Replace the current unsaved graph with a volume-only preset?'))void execute({action:'newVolume',preset:volumePreset});}}>New volume graph</StudioButton>
       <span className="spectra-canvas__spacer"/>
       <StudioButton size="sm" variant="ghost" onClick={()=>setZoom(z=>Math.max(0.5,z-0.1))}><ZoomOut size={14}/></StudioButton>
       <span className="spectra-canvas__zoom">{Math.round(zoom*100)}%</span>
@@ -164,7 +180,25 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
     </div>
     {chosen&&<div className="spectra-canvas__selected">
       <strong>{chosen.type}: {chosen.id}</strong>
-      <code>{JSON.stringify(chosen.properties??{})}</code>
+      {isVolumeNode?<div>
+        <StudioField label="Volume property">
+          <StudioSelect value={volumeProperty} onChange={e=>{
+            const k=e.target.value;setVolumeProperty(k);
+            setVolumeValue(k?JSON.stringify(chosen.properties?.[k]??null):'');
+          }}>
+            <option value="">Choose a property…</option>
+            {Object.keys(chosen.properties??{}).map(k=><option key={k} value={k}>{k}</option>)}
+          </StudioSelect>
+        </StudioField>
+        <StudioField label="Value (JSON number, vector or string)">
+          <StudioInput value={volumeValue} onChange={e=>setVolumeValue(e.target.value)} disabled={disabled||working||!volumeProperty}/>
+        </StudioField>
+        <StudioButton size="sm" disabled={disabled||working||!volumeProperty} onClick={()=>{
+          try{const value:unknown=JSON.parse(volumeValue);void execute({action:'setProperty',node:chosen.id,property:volumeProperty,value});}
+          catch{onError('Invalid JSON property value');}
+        }}>Apply volume property</StudioButton>
+        <small>Native validation on save/preview. Reload to apply authored changes.</small>
+      </div>:<code>{JSON.stringify(chosen.properties??{})}</code>}
     </div>}
     <p className="spectra-canvas__hint">Drag nodes to arrange them. Connections and new nodes use the native SpectraFX graph editor; save changes in the parent Graph panel. This canvas does not simulate or draw GPU particles.</p>
   </div>;

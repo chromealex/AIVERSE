@@ -3,7 +3,7 @@
 #include "engine/fx/SpectraGraphRuntime.h"
 #include "engine/bake/MeshDistanceGrid.h"
 #include "engine/fx/SpectraSdfBinary.h"
-#include "engine/fx/SpectraVolumeAsset.h"
+#include "engine/fx/SpectraVolumeGraph.h"
 #include "engine/fx/SpectraStaticSphereCollision.h"
 #include "engine/fx/SpectraTerrainCollision.h"
 #include "engine/fx/SpectraGpuPoolWorld.h"
@@ -745,6 +745,24 @@ int main() {
         auto malformed=vol::writeAsset(asset);malformed.set("unknown",Json::number(int64_t(1)));
         require(!vol::readAsset(malformed,decoded,why)&&decoded.sources.size()==1,"strict asset rejection");
         volume.clear();require(volume.stats().density==0&&volume.tick()==0&&volume.stats().solidCells==256,"clear transient field retains obstacle");
+    }
+    {
+        namespace vol=sp::volume;
+        auto pure=Json::parse(R"({"version":2,"nodes":[],"links":[],"outputs":[]})");
+        std::string error;vol::PresentationGraph compiled;
+        require(vol::appendPreset(pure,"fire",error)&&vol::compilePresentationGraph(pure,Json::object(),compiled,errors)&&
+                compiled.volume&&!compiled.particles&&compiled.volumeAsset.sources.size()==1,"volume graph compiler");
+        require(!fx::compileSpectraGraph(pure,Json::object(),basic,errors),"legacy particle compiler rejects volume");
+        auto broken=pure;broken.set("links",Json::array());
+        require(!vol::compilePresentationGraph(broken,Json::object(),compiled,errors)&&compiled.volume,"disconnected graph rejected atomically");
+        auto hybrid=graph();hybrid.set("version",Json::number(int64_t(2)));
+        // Existing v1 fixture already has a compatible exec chain and output.
+        if(!hybrid.has("outputs")){auto out=Json::array();out.push(Json::string("output"));hybrid.set("outputs",out);}
+        require(vol::appendPreset(hybrid,"smoke",error)&&vol::compilePresentationGraph(hybrid,Json::object(),compiled,errors)&&
+                compiled.volume&&compiled.particles&&!compiled.particleEffect.emitters.empty(),"hybrid graph compiler");
+        Json cross=Json::object();cross.set("from",Json::string("spawn"));cross.set("to",Json::string("volume_source"));
+        hybrid.find("links")->push(cross);
+        require(!vol::compilePresentationGraph(hybrid,Json::object(),compiled,errors),"cross-domain execution rejected");
     }
     std::cout<<"PASS SpectraFX graph GPU eligibility, strict CPU preservation and host fallback\n";
 }

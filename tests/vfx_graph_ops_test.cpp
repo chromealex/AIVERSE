@@ -130,6 +130,19 @@ int main() {
         require(rejected.has("error")||!rejected.getBool("ok"),"SDF traversal rejected");
     }
 
+    {
+        auto req=Json::parse(R"({"action":"newVolume","preset":"magic"})");
+        auto created=call("fx_graph_edit",req);
+        require(created.getBool("ok")&&created["validation"].getBool("ok"),"new volume graph through Workspace");
+        Json save=Json::object();save.set("name",Json::string("volume_magic"));save.set("graph",created["graph"]);
+        require(call("fx_graph_set",save).getBool("ok"),"publish volume graph");
+        Json name=Json::object();name.set("name",Json::string("volume_magic"));
+        auto reopened=call("fx_graph_get",name);
+        require(reopened["validation"].getBool("ok")&&reopened["graph"]==created["graph"],"reopen volume graph");
+        name.set("effect",Json::string("volume_legacy"));
+        require(!call("fx_graph_bake",name).getBool("ok")&&!fs::exists(root/"fx"/"volume_legacy.json"),"legacy bake rejects volume");
+        Json remove=Json::object();remove.set("name",Json::string("volume_magic"));call("fx_graph_delete",remove);
+    }
     Json create = Json::object();
     create.set("name", Json::string("spark"));
     create.set("graph", graph);
