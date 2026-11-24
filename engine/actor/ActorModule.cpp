@@ -461,6 +461,24 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
     });
     sim.addSystem("actor",[this](Simulation& s){tick(s);});
 }
+bool ActorHost::acceptCommittedCaveNavigation(
+    std::shared_ptr<const terraweave::caverns::CaveNavigationDataProvider>
+        published,
+    const terraweave::caverns::CaveNavigationChange& change,
+    const std::function<bool()>& exclusive) {
+    if(!caveNavigation_||!published||!exclusive||!exclusive()||
+       change.toRevision!=published->revision()||
+       (change.fromRevision!=caveNavigation_->revision() &&
+        change.fromRevision!=change.toRevision))
+        return false;
+    // Refresh derived regional adjacency/portals first, so a failure keeps
+    // the old actor route source rather than exposing a new SDF and stale
+    // cached graph at once. Native collision must ALREADY be published.
+    if(caveRegionCache_)
+        caveRegionCache_->refresh(change,published);
+    caveNavigation_=std::move(published);
+    return true;
+}
 bool ActorHost::navigateCaveActor(
     Simulation& sim,Entity entity,
     terraweave::caverns::PointCm goal,
