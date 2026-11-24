@@ -270,6 +270,37 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
         require(owner.queueStatus().getStr("activeTicket")==low,"next ticket not promoted");drain();
         owner.releaseTicket(low,project,true);drain();
         require(owner.queueStatus().getStr("activeTicket").empty(),"queue result not released");
+        // A pinned external image is eligible for incremental execution.
+        auto extInc=external;extInc.set("incremental",Json::fromBool(true));
+        auto runExternal=[&](const Json& input,const render::texture_graph::ImageResolver& resolve,int dispatched,int reused){
+            owner.start(input,project,lifetime.lease(),resolve);drain();const auto s=owner.status();
+            require(s.getStr("state")=="ready"&&s.getStr("backend")==expected,"external incremental GPU request failed");
+            require(s["materializedNodePasses"].toDouble()==dispatched&&s["incrementalReusedNodes"].toDouble()==reused,"incorrect external image incremental reuse");
+        };
+        runExternal(extInc,resolveImage,1,0);runExternal(extInc,resolveImage,0,1);
+        auto revised=extInc;revised.member("graph").member("nodes").at(0).member("properties").set("revision",Json::string(std::string(64,'b')));
+        const render::texture_graph::ImageResolver resolveRevised=[](const std::string& path,const std::string& revision,size_t budget){
+            if(path!="content/source.png"||revision!=std::string(64,'b')||budget<512u*512u*4u)throw std::invalid_argument("fixture revision mismatch");
+            render::texture_graph::ImageSource source;source.width=source.height=512;source.rgb.assign(512u*512u,0x00ff00u);return source;
+        };
+        runExternal(revised,resolveRevised,1,0);
+        cancel(owner.status().getStr("request"));drain();
+        // Snapshot must survive resolver lifetime and not reread a changed file.
+        int resolutions=0;bool sourceAvailable=true;
+        const render::texture_graph::ImageResolver queueResolver=[&](const std::string& path,const std::string& revision,size_t budget){
+            ++resolutions;if(!sourceAvailable)throw std::runtime_error("fixture source removed after enqueue");
+            return resolveImage(path,revision,budget);
+        };
+        const auto externalTicket=owner.enqueue(extInc,project,lifetime.lease(),3,queueResolver).getStr("ticket");
+        const auto removedTicket=owner.enqueue(extInc,project,lifetime.lease(),0,queueResolver).getStr("ticket");
+        require(resolutions==2&&owner.queueStatus()["pendingImageBytes"].toDouble()==2*512*512*4,"queued source snapshot accounting failed");
+        owner.cancelTicket(removedTicket,project);
+        require(owner.queueStatus()["pendingImageBytes"].toDouble()==512*512*4,"cancelled queue snapshot retained");
+        sourceAvailable=false;
+        frame();require(owner.queueStatus().getStr("activeTicket")==externalTicket,"external queue promotion failed");drain();
+        require(resolutions==2&&owner.queueStatus()["pendingImageBytes"].toDouble()==0&&owner.status().getStr("state")=="ready"&&owner.status().getStr("backend")==expected,"queued external snapshot lost or reread");
+        owner.releaseTicket(externalTicket,project,true);drain();
+
         // Real GPU candidates adopt into an actual immutable appearance.
         // Keep the old snapshot pinned across a partial publication.
         render::Model materialModel;materialModel.materials.resize(1);
