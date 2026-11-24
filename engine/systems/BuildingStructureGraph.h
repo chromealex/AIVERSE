@@ -51,7 +51,13 @@ inline const char* buildingFurnitureName(BuildingFurnitureKind p){
     constexpr const char* names[]={"sofa","bed","desk","table","cabinet","bench","counter","machine","shelf","crate"};
     return uint8_t(p)<10?names[uint8_t(p)]:"unknown";
 }
-struct BuildingRoomUseOverride {uint32_t floor=0,x=0,z=0;BuildingRoomUse use=BuildingRoomUse::Empty;};
+struct BuildingRoomUseOverride {
+    uint32_t floor=0,x=0,z=0;BuildingRoomUse use=BuildingRoomUse::Empty;
+    // Legacy aggregate initialization still explicitly overrides use.
+    // -1 inherits the building default; boolean overrides are 0 or 1.
+    bool overrideUse=true;
+    int8_t furnitureDensity=-1,lighting=-1,decor=-1;
+};
 enum class BuildingDamageKind : uint8_t { Wall, Window, Roof };
 inline const char* buildingDamageKindName(BuildingDamageKind kind){
     switch(kind){case BuildingDamageKind::Wall:return "wall";case BuildingDamageKind::Window:return "window";case BuildingDamageKind::Roof:return "roof";}
@@ -82,6 +88,10 @@ struct FunctionalBuildingRecipe {
     std::vector<BuildingRoomUseOverride> roomUses;
     std::vector<BuildingDamageZone> damageZones;
 };
+inline const BuildingRoomUseOverride* functionalRoomOverride(const FunctionalBuildingRecipe& r,uint32_t floor,uint32_t x,uint32_t z){
+    for(const auto& edit:r.roomUses)if(edit.floor==floor&&edit.x==x&&edit.z==z)return &edit;
+    return nullptr;
+}
 inline bool functionalCell(const FunctionalBuildingRecipe& r,int x,int z,uint32_t floor=0){
     if(x<0||z<0||x>=int(r.roomsX)||z>=int(r.roomsZ)||floor>=r.floors)return false;
     const auto& mask=r.floorFootprints.empty()?r.footprint:r.floorFootprints[floor];
@@ -303,7 +313,8 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
     for(size_t i=0;i<recipe.roomUses.size();++i){
         const auto& edit=recipe.roomUses[i];
         if(edit.floor>=recipe.floors||edit.x>=recipe.roomsX||edit.z>=recipe.roomsZ||
-           uint8_t(edit.use)>uint8_t(BuildingRoomUse::Empty)||!functionalCell(recipe,int(edit.x),int(edit.z),edit.floor))
+           (edit.overrideUse&&uint8_t(edit.use)>uint8_t(BuildingRoomUse::Empty))||
+           edit.furnitureDensity< -1||edit.furnitureDensity>4||edit.lighting< -1||edit.lighting>1||edit.decor< -1||edit.decor>1||!functionalCell(recipe,int(edit.x),int(edit.z),edit.floor))
             return "Room use override references an invalid or absent room";
         for(size_t j=0;j<i;++j)if(edit.floor==recipe.roomUses[j].floor&&edit.x==recipe.roomUses[j].x&&edit.z==recipe.roomUses[j].z)
             return "Duplicate room use override";
@@ -515,7 +526,9 @@ inline void furnishFunctionalBuilding(BuildingStructureGraph& graph,const Functi
             case BuildingInteriorProfile::Mixed: use=BuildingRoomUse(h%8);break;
             default:break;
         }
-        for(const auto& edit:recipe.roomUses)if(edit.floor==room.floor&&edit.x==room.x&&edit.z==room.z)use=edit.use;
+        const auto* edit=functionalRoomOverride(recipe,room.floor,room.x,room.z);
+        if(edit&&edit->overrideUse)use=edit->use;
+        const uint32_t density=edit&&edit->furnitureDensity>=0?uint32_t(edit->furnitureDensity):recipe.furnitureDensity;
         if(vertical||entrance||terrace)use=BuildingRoomUse::Circulation;
         graph.roomUses.push_back({room.id,use});
         if(use==BuildingRoomUse::Circulation||use==BuildingRoomUse::Empty)continue;
@@ -539,7 +552,7 @@ inline void furnishFunctionalBuilding(BuildingStructureGraph& graph,const Functi
             case BuildingRoomUse::Retail:kinds={K::Counter,K::Shelf,K::Table,K::Shelf};break;
             default:continue;
         }
-        for(uint32_t i=0;i<recipe.furnitureDensity;++i){
+        for(uint32_t i=0;i<density;++i){
             const uint32_t zone=(i+uint32_t(h&3u))%4;
             const auto& q=zones[zone];const auto kind=kinds[i];
             float w=1.f,d=.6f,height=.85f;
@@ -667,7 +680,10 @@ inline bool applyBuildingDamage(BuildingStructureGraph& graph,const FunctionalBu
 
 // Fixtures are attached to real ceiling slabs; decor sits on static furniture.
 inline void decorateFunctionalBuilding(BuildingStructureGraph& graph,const FunctionalBuildingRecipe& recipe){
-    if(recipe.interiorLighting)for(const auto& room:graph.rooms){
+    if(recipe.interiorProfile==BuildingInteriorProfile::None)return;
+    for(const auto& room:graph.rooms){
+        const auto* edit=functionalRoomOverride(recipe,room.floor,room.x,room.z);
+        if(!(edit&&edit->lighting>=0?edit->lighting!=0:recipe.interiorLighting))continue;
         const bool vertical=std::any_of(graph.connections.begin(),graph.connections.end(),[&](const auto& e){
             return e.kind!=BuildingConnectionKind::Passage&&(e.from==room.id||e.to==room.id);
         });
@@ -695,11 +711,13 @@ inline void decorateFunctionalBuilding(BuildingStructureGraph& graph,const Funct
                 std::clamp(w*d/float(nx*nz)*3.f,35.f,220.f),std::clamp(std::max(w/nx,d/nz),3.f,12.f)});
         }
     }
-    if(recipe.interiorDecor)for(const auto& item:graph.furniture){
+    for(const auto& item:graph.furniture){
         if(item.kind!=BuildingFurnitureKind::Desk&&item.kind!=BuildingFurnitureKind::Table&&item.kind!=BuildingFurnitureKind::Counter)continue;
         const float x=(item.x0+item.x1)*.5f,z=(item.z0+item.z1)*.5f,y=item.y1;
         const auto room=std::find_if(graph.rooms.begin(),graph.rooms.end(),[&](const auto& r){return r.id==item.roomId;});
         if(room==graph.rooms.end()||y+.3f>room->y1-.3f)continue;
+        const auto* edit=functionalRoomOverride(recipe,room->floor,room->x,room->z);
+        if(!(edit&&edit->decor>=0?edit->decor!=0:recipe.interiorDecor))continue;
         graph.interiorDecor.push_back({"decor/"+item.id,item.roomId,item.floor,x-.13f,y,z-.11f,x+.13f,y+.28f,z+.11f});
     }
 }

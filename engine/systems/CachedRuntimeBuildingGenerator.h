@@ -20,7 +20,7 @@ inline std::string buildingGeometryCacheKey(const RuntimeBuildingRequest& r){
     mask(r.footprint);k.number(r.floorFootprints.size());for(const auto& m:r.floorFootprints)mask(m);
     k.number(r.walkableSetbacks);for(float v:r.cornerChamfers)k.real(v);
     k.number(uint8_t(r.interiorProfile));k.number(r.furnitureDensity);k.number(r.interiorLighting);k.number(r.interiorDecor);
-    k.number(r.roomUses.size());for(const auto& u:r.roomUses){k.number(u.floor);k.number(u.x);k.number(u.z);k.number(uint8_t(u.use));}
+    k.number(r.roomUses.size());for(const auto& u:r.roomUses){k.number(u.floor);k.number(u.x);k.number(u.z);k.number(uint8_t(u.use));k.number(u.overrideUse);k.number(uint8_t(u.furnitureDensity));k.number(uint8_t(u.lighting));k.number(uint8_t(u.decor));}
     k.number(r.damageZones.size());for(const auto& d:r.damageZones){k.number(uint8_t(d.kind));for(float v:d.minimum)k.real(v);for(float v:d.maximum)k.real(v);}
     k.number(r.generateVisualLods);return k.take();
 }

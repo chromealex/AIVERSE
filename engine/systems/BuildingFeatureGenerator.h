@@ -127,10 +127,23 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
                 if(!v.isNumber()||n<0||n>7||std::floor(n)!=n)throw JsonError(path+".roomUses: invalid cell index");
                 return uint32_t(n);};
             edit.floor=index("floor");edit.x=index("x");edit.z=index("z");
-            bool found=false;
-            for(int i=0;i<=int(BuildingRoomUse::Empty);++i)if(item.getStr("use")==buildingRoomUseName(BuildingRoomUse(i))){
-                edit.use=BuildingRoomUse(i);found=true;break;}
-            if(!found)throw JsonError(path+".roomUses: unknown room use");
+            edit.overrideUse=item.has("use")&&item.getStr("use")!="auto";
+            if(item.has("use")&&!item["use"].isString())throw JsonError(path+".roomUses: use must be a string");
+            if(edit.overrideUse){
+                bool found=false;
+                for(int i=0;i<=int(BuildingRoomUse::Empty);++i)if(item.getStr("use")==buildingRoomUseName(BuildingRoomUse(i))){
+                    edit.use=BuildingRoomUse(i);found=true;break;}
+                if(!found)throw JsonError(path+".roomUses: unknown room use");
+            }
+            if(item.has("furnitureDensity")){
+                const auto& v=item["furnitureDensity"];const double n=v.toDouble(-1);
+                if(!v.isNumber()||n<0||n>4||std::floor(n)!=n)throw JsonError(path+".roomUses: invalid furniture density");
+                edit.furnitureDensity=int8_t(n);
+            }
+            for(const char* key:{"lighting","decor"})if(item.has(key)){
+                if(item[key].type()!=Json::Type::Bool)throw JsonError(path+".roomUses: expected boolean");
+                (std::string(key)=="lighting"?edit.lighting:edit.decor)=item.getBool(key)?1:0;
+            }
             recipe.roomUses.push_back(edit);
         }
     }

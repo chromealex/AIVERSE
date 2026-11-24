@@ -12,6 +12,7 @@ interface Props {
 export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
   const [selected,setSelected]=useState('');
   const [floor,setFloor]=useState(0);
+  const [selectedInterior,setSelectedInterior]=useState('');
   const selectedFloor=Math.min(floor,Math.max(0,(preview.floors??1)-1));
   const mask=preview.floorFootprints?.[selectedFloor]??preview.footprint;
   const sockets=(preview.sockets??[]).filter(s=>s.floor===undefined||s.floor===selectedFloor);
@@ -20,8 +21,12 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
   const sx=-margin,sz=-margin;
   const planWidth=width+margin*2,planDepth=depth+margin*2;
   const selectedSocket=sockets.find(s=>s.socketId===selected);
+  const selectedFurniture=preview.furniture?.find(item=>item.id===selectedInterior&&item.floor===selectedFloor);
+  const selectedLight=preview.interiorLights?.find(item=>item.id===selectedInterior&&item.floor===selectedFloor);
+  const selectedInteraction=preview.furnitureSockets?.find(item=>item.id===selectedInterior&&item.floor===selectedFloor);
+  const inspect=(id:string)=>({role:'button',tabIndex:0,onClick:()=>setSelectedInterior(id),onKeyDown:(e:import('react').KeyboardEvent<SVGElement>)=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSelectedInterior(id);}}});
   return <div className="abg__plan">
-    {(preview.floors??1)>1&&<label>Plan floor <select value={selectedFloor} onChange={e=>{setFloor(Number(e.target.value));setSelected('');}}>{Array.from({length:preview.floors??1},(_,i)=><option key={i} value={i}>{i}</option>)}</select></label>}
+    {(preview.floors??1)>1&&<label>Plan floor <select value={selectedFloor} onChange={e=>{setFloor(Number(e.target.value));setSelected('');setSelectedInterior('');}}>{Array.from({length:preview.floors??1},(_,i)=><option key={i} value={i}>{i}</option>)}</select></label>}
     <svg role="img" aria-label="Generated building footprint, rooms and actual opening anchors"
       viewBox={`${sx} ${sz} ${planWidth} ${planDepth}`}
       preserveAspectRatio="xMidYMid meet">
@@ -52,12 +57,12 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
           <rect x={r.x0} y={r.z0} width={r.x1-r.x0} height={r.z1-r.z0} fill="none" stroke="var(--au-accent)" strokeDasharray=".3 .2" strokeWidth={.13}/>
         </g>)}
       {(preview.furniture??[]).filter(item=>item.floor===selectedFloor).map(item=>
-        <rect key={item.id} x={item.x0} y={item.z0} width={item.x1-item.x0} height={item.z1-item.z0}
-          fill="var(--au-accent)" fillOpacity={.55} stroke="var(--au-text)" strokeWidth={.06}><title>{item.kind} · {item.roomId}</title></rect>)}
-      {(preview.interiorLights??[]).filter(i=>i.floor===selectedFloor).map(i=><circle key={i.id} cx={i.x} cy={i.z} r={.25} fill="#e8bd65" stroke="var(--au-text)" strokeWidth={.06}><title>{i.id} · {i.intensity} cd</title></circle>)}
+        <rect key={item.id} {...inspect(item.id)} aria-label={item.kind+" "+item.id} x={item.x0} y={item.z0} width={item.x1-item.x0} height={item.z1-item.z0}
+          fill="var(--au-accent)" fillOpacity={selectedInterior===item.id ? .9 : .55} stroke="var(--au-text)" strokeWidth={.06}><title>{item.kind} · {item.roomId}</title></rect>)}
+      {(preview.interiorLights??[]).filter(i=>i.floor===selectedFloor).map(i=><circle key={i.id} {...inspect(i.id)} aria-label={i.id} cx={i.x} cy={i.z} r={selectedInterior===i.id ? .38 : .25} fill="#e8bd65" stroke="var(--au-text)" strokeWidth={.06}><title>{i.id} · {i.intensity} cd</title></circle>)}
       {(preview.interiorDecor??[]).filter(i=>i.floor===selectedFloor).map(i=><rect key={i.id} x={i.x-.12} y={i.z-.12} width={.24} height={.24} fill="var(--au-text)"><title>{i.id}</title></rect>)}
       {(preview.furnitureSockets??[]).filter(i=>i.floor===selectedFloor).map(i=>
-        <circle key={i.id} cx={i.x} cy={i.z} r={.18} fill="none" stroke="var(--au-accent)" strokeWidth={.1}><title>{i.action} · {i.furnitureId}</title></circle>)}
+        <circle key={i.id} {...inspect(i.id)} aria-label={i.action+" "+i.id} cx={i.x} cy={i.z} r={selectedInterior===i.id ? .3 : .18} fill="none" stroke="var(--au-accent)" strokeWidth={.1}><title>{i.action} · {i.furnitureId}</title></circle>)}
       {(preview.removedDamage??[]).map((r,i)=>
         <rect key={'damage-'+i} x={r.minimum[0]} y={r.minimum[2]} width={Math.max(.1,r.maximum[0]-r.minimum[0])}
           height={Math.max(.1,r.maximum[2]-r.minimum[2])} fill="#c16b50" fillOpacity={.35} stroke="#c16b50" strokeWidth={.1}>
@@ -92,6 +97,9 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
       {!!preview.roofSections?.length&&<small>{preview.roofSections.length} composed upper roof sections</small>}
       {!!preview.balconies?.length&&<small>{preview.balconies.filter(t=>t.floor===selectedFloor).length} projecting balconies</small>}
       {!!(preview.terraces?.length||preview.balconies?.length)&&<small>{(preview.terraces??[]).filter(t=>t.floor===selectedFloor).length} terrace cells · {(preview.terraceAccess??[]).filter(t=>t.floor===selectedFloor).length} authored terrace access links</small>}
+      {selectedFurniture&&<small>Furniture: {selectedFurniture.kind} · {selectedFurniture.roomId} · {(selectedFurniture.x1-selectedFurniture.x0).toFixed(2)} × {(selectedFurniture.z1-selectedFurniture.z0).toFixed(2)} m · {(preview.furnitureSockets??[]).filter(s=>s.furnitureId===selectedFurniture.id).map(s=>s.action).join(', ')||'no interaction sockets'}</small>}
+      {selectedLight&&<small>Light: {selectedLight.roomId} · {selectedLight.intensity.toFixed(1)} cd · {selectedLight.range.toFixed(1)} m range</small>}
+      {selectedInteraction&&<small>Interaction: {selectedInteraction.action} · {selectedInteraction.furnitureId} · Y {selectedInteraction.y.toFixed(2)} m</small>}
       {selectedSocket&&<small>Selected: {selectedSocket.socketId} ({selectedSocket.kind}) · opening {selectedSocket.width.toFixed(1)}m, {Math.round(selectedSocket.open*100)}% initial open</small>}
       <small>Click an opening marker to edit its functional property. This is a top-down inspector; the real textured 3D asset appears in the native model thumbnail and Scene viewport after generation.</small>
     </div>

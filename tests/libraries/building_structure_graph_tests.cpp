@@ -139,6 +139,18 @@ int main(){
             CHECK(intersects(interior,socket.x,socket.y-.1f,socket.z,BuildingGraphPart::Floor));
         }
         CHECK(interior.roomUses[0].use==BuildingRoomUse::Bedroom);
+        auto customized=furnished;
+        customized.roomUses[0].furnitureDensity=0;
+        customized.roomUses[0].lighting=1;
+        customized.roomUses[0].decor=0;
+        auto customInterior=buildFunctionalStructureGraph(customized);CHECK(customInterior);
+        const auto roomId=customInterior.roomUses[0].roomId;
+        CHECK(customInterior.furniture.size()==12);
+        CHECK(std::none_of(customInterior.furniture.begin(),customInterior.furniture.end(),[&](const auto& i){return i.roomId==roomId;}));
+        CHECK(!customInterior.interiorLights.empty());
+        CHECK(std::all_of(customInterior.interiorLights.begin(),customInterior.interiorLights.end(),[&](const auto& i){return i.roomId==roomId;}));
+        customized.roomUses[0].furnitureDensity=5;
+        CHECK(!buildFunctionalStructureGraph(customized));
         for(const auto& item:interior.furniture){
             const auto room=std::find_if(interior.rooms.begin(),interior.rooms.end(),[&](const auto& r){return r.id==item.roomId;});
             CHECK(room!=interior.rooms.end());

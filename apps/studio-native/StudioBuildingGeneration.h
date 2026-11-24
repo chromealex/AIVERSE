@@ -553,6 +553,7 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
             row.set("floor",Json::number(int64_t(item.floor)));row.set("kind",string(buildingFurnitureName(item.kind)));
             row.set("x0",Json::number(double(item.x0),3));row.set("z0",Json::number(double(item.z0),3));
             row.set("x1",Json::number(double(item.x1),3));row.set("z1",Json::number(double(item.z1),3));
+            row.set("y0",Json::number(double(item.y0),3));row.set("y1",Json::number(double(item.y1),3));
             furniture.push(std::move(row));
         }
         out.set("roomUses",std::move(roomUses));out.set("furniture",std::move(furniture));
@@ -577,6 +578,7 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
         for(const auto& item:detailed.graph.interiorLights){
             Json row=Json::object();row.set("id",string(item.id));row.set("roomId",string(item.roomId));row.set("floor",Json::number(int64_t(item.floor)));
             row.set("x",Json::number(double(item.x),3));row.set("z",Json::number(double(item.z),3));
+            row.set("y",Json::number(double(item.y),3));
             row.set("intensity",Json::number(double(item.intensity),3));row.set("range",Json::number(double(item.range),3));lights.push(std::move(row));
         }
         for(const auto& item:detailed.graph.interiorDecor){
@@ -866,7 +868,11 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
                 Json uses=Json::array();for(const auto& edit:req.functionalRecipe.roomUses){
                     Json row=Json::object();row.set("floor",Json::number(int64_t(edit.floor)));
                     row.set("x",Json::number(int64_t(edit.x)));row.set("z",Json::number(int64_t(edit.z)));
-                    row.set("use",string(buildingRoomUseName(edit.use)));uses.push(std::move(row));
+                    if(edit.overrideUse)row.set("use",string(buildingRoomUseName(edit.use)));
+                    if(edit.furnitureDensity>=0)row.set("furnitureDensity",Json::number(int64_t(edit.furnitureDensity)));
+                    if(edit.lighting>=0)row.set("lighting",Json::fromBool(edit.lighting!=0));
+                    if(edit.decor>=0)row.set("decor",Json::fromBool(edit.decor!=0));
+                    uses.push(std::move(row));
                 }
                 saved.set("roomUses",std::move(uses));
             }

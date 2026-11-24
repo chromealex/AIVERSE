@@ -172,6 +172,7 @@ export default function BuildingGeneratorPanel({
   const [interiorLighting,setInteriorLighting]=useState(false);
   const [interiorDecor,setInteriorDecor]=useState(false);
   const [roomUses,setRoomUses]=useState<NonNullable<StudioBuildingRequest['roomUses']>>([]);
+  const [interiorCell,setInteriorCell]=useState('0:0');
   const [editFloor,setEditFloor]=useState(0);
   const shaped=footprint.some(row=>row.includes('0'))||floorFootprints.some(mask=>mask.some(row=>row.includes('0')));
   const editingMask=floorFootprints.length?floorFootprints[editFloor]??[]:footprint;
@@ -1059,24 +1060,51 @@ export default function BuildingGeneratorPanel({
                 {Array.from({length:asNumber(floors)},(_,i)=><option key={i} value={i}>Floor {i}</option>)}
               </StudioSelect>
             </StudioField>
-            <div className="abg__fields">
-              {Array.from({length:asNumber(roomsX)*asNumber(roomsZ)},(_,i)=>{
-                const x=i%asNumber(roomsX),z=Math.floor(i/asNumber(roomsX));
-                if((floorFootprints[editFloor]??footprint)[z]?.[x]==='0')return null;
-                const chosen=roomUses.find(r=>r.floor===editFloor&&r.x===x&&r.z===z);
-                return <StudioField key={i} label={'Room '+(x+1)+', '+(z+1)} htmlFor={'abg-room-use-'+i}>
-                  <StudioSelect id={'abg-room-use-'+i} value={chosen?.use??'auto'} disabled={busy} onChange={e=>{
-                    const use=e.target.value;setRoomUses(old=>{
-                      const next=old.filter(r=>r.floor!==editFloor||r.x!==x||r.z!==z);
-                      if(use!=='auto')next.push({floor:editFloor,x,z,use:use as NonNullable<StudioBuildingRequest['roomUses']>[number]['use']});
-                      return next;
-                    });clearGenerated();
-                  }}>
-                    {['auto','lounge','bedroom','kitchen','office','meeting','workshop','storage','retail','circulation','empty'].map(use=><option key={use} value={use}>{use}</option>)}
+            {(()=>{
+              const cells=Array.from({length:asNumber(roomsX)*asNumber(roomsZ)},(_,i)=>({x:i%asNumber(roomsX),z:Math.floor(i/asNumber(roomsX))})).filter(({x,z})=>(floorFootprints[editFloor]??footprint)[z]?.[x]!=='0');
+              const cell=cells.find(c=>c.x+':'+c.z===interiorCell)??cells[0];
+              if(!cell)return <small>No occupied rooms on this floor.</small>;
+              const {x,z}=cell;
+              const chosen=roomUses.find(r=>r.floor===editFloor&&r.x===x&&r.z===z);
+              type RoomEdit=NonNullable<StudioBuildingRequest['roomUses']>[number];
+              const patch=(change:Partial<RoomEdit>)=>{
+                setRoomUses(old=>{
+                  const prior=old.find(r=>r.floor===editFloor&&r.x===x&&r.z===z);
+                  const next=old.filter(r=>r.floor!==editFloor||r.x!==x||r.z!==z);
+                  const value={floor:editFloor,x,z,...prior,...change};
+                  if(value.use!==undefined||value.furnitureDensity!==undefined||value.lighting!==undefined||value.decor!==undefined)next.push(value);
+                  return next;
+                });clearGenerated();
+              };
+              const tri=(value:boolean|undefined)=>value===undefined?'inherit':value?'on':'off';
+              const fromTri=(value:string)=>value==='inherit'?undefined:value==='on';
+              return <div className="au-stack">
+                <StudioField label="Select room" htmlFor="abg-interior-cell">
+                  <StudioSelect id="abg-interior-cell" value={x+':'+z} disabled={busy} onChange={e=>setInteriorCell(e.target.value)}>
+                    {cells.map(c=><option key={c.x+':'+c.z} value={c.x+':'+c.z}>Room {c.x+1}, {c.z+1}{roomUses.some(r=>r.floor===editFloor&&r.x===c.x&&r.z===c.z)?' · edited':''}</option>)}
                   </StudioSelect>
-                </StudioField>;
-              })}
-            </div>
+                </StudioField>
+                <div className="abg__fields">
+                  <StudioField label="Room use" htmlFor="abg-room-use">
+                    <StudioSelect id="abg-room-use" value={chosen?.use??'auto'} disabled={busy} onChange={e=>patch({use:e.target.value==='auto'?undefined:e.target.value as RoomEdit['use']})}>
+                      {['auto','lounge','bedroom','kitchen','office','meeting','workshop','storage','retail','circulation','empty'].map(use=><option key={use} value={use}>{use}</option>)}
+                    </StudioSelect>
+                  </StudioField>
+                  <StudioField label="Room furniture limit" htmlFor="abg-room-density">
+                    <StudioSelect id="abg-room-density" value={chosen?.furnitureDensity===undefined?'inherit':String(chosen.furnitureDensity)} disabled={busy} onChange={e=>patch({furnitureDensity:e.target.value==='inherit'?undefined:Number(e.target.value)})}>
+                      <option value="inherit">Inherit ({furnitureDensity})</option>{[0,1,2,3,4].map(n=><option key={n} value={n}>{n}</option>)}
+                    </StudioSelect>
+                  </StudioField>
+                  <StudioField label="Room lighting" htmlFor="abg-room-light">
+                    <StudioSelect id="abg-room-light" value={tri(chosen?.lighting)} disabled={busy} onChange={e=>patch({lighting:fromTri(e.target.value)})}><option value="inherit">Inherit</option><option value="on">On</option><option value="off">Off</option></StudioSelect>
+                  </StudioField>
+                  <StudioField label="Room decor" htmlFor="abg-room-decor">
+                    <StudioSelect id="abg-room-decor" value={tri(chosen?.decor)} disabled={busy} onChange={e=>patch({decor:fromTri(e.target.value)})}><option value="inherit">Inherit</option><option value="on">On</option><option value="off">Off</option></StudioSelect>
+                  </StudioField>
+                </div>
+                <StudioButton variant="secondary" disabled={busy||!chosen} onClick={()=>patch({use:undefined,furnitureDensity:undefined,lighting:undefined,decor:undefined})}>Reset selected room</StudioButton>
+              </div>;
+            })()}
           </>}
         </>}
         <small className="abg__note">Static procedural furniture uses style materials and physical bounds. Small rooms may remain empty to preserve circulation.</small>
