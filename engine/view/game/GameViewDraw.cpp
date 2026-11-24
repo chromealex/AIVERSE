@@ -22,6 +22,36 @@ float3 GameView::nodeWorldPos(const EntityAnim& st, const ModelChoice& ch, int n
     return st.drawn.transformPoint(local);
 }
 
+bool GameView::effectNodeOf(Entity e, const std::string& node, mat4& frame) const {
+    if (!e.valid()) return false;
+    const auto it=anims_.find(e.packed());
+    if(it==anims_.end())return false;
+    const auto& st=it->second;
+    if(!st.initialized || st.type>=looks_.size() || !st.last.visible ||
+       st.seen+1<frame_ || st.choice<0 || size_t(st.choice)>=looks_[st.type].models.size())return false;
+    const auto& choice=looks_[st.type].models[size_t(st.choice)];
+    if(!choice.model)return false;
+    frame=st.drawn;
+    if(node!="origin") {
+        const int index=choice.model->findNode(node);
+        if(index<0)return false;
+        if(size_t(index)<st.world.size())frame=frame*st.world[size_t(index)];
+        else if(size_t(index)<choice.model->bindWorld.size())frame=frame*choice.model->bindWorld[size_t(index)];
+        else return false;
+    }
+    if(planets_.active()) {
+        if(st.last.body!=planetCam_.body())return false;
+        const auto p=frame.transformPoint({0,0,0});
+        const auto local=pframe_.dirToWorld(p-bodyToView(st.last.body,{0,0,0}));
+        for(int col=0;col<3;++col) {
+            const auto axis=pframe_.dirToWorld({frame.at(0,col),frame.at(1,col),frame.at(2,col)});
+            frame.at(0,col)=axis.x;frame.at(1,col)=axis.y;frame.at(2,col)=axis.z;
+        }
+        frame.at(0,3)=local.x;frame.at(1,3)=local.y;frame.at(2,3)=local.z;
+    }
+    return true;
+}
+
 bool GameView::muzzleOf(Entity e, float3& pos, float3& dir) const {
     if (!e.valid()) return false;
     auto it = anims_.find(e.packed());
