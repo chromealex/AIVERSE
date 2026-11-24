@@ -1,3 +1,7 @@
+## Stage 119 — GPU-owned allocator checkpoints (in progress; QA deferred)
+
+Extend the existing bounded presentation checkpoint capture and restore path with exact GPU alive/free slot order and source ownership; preserve live particle state, VM params/attributes and RNG. Version 2 restore file adds alive order without breaking v1; external process-local owner tokens still rejected on file import/export. Keep asynchronous budgets and 4096-slot checkpoint ceiling independent of simulation capacity. Freshness follows particle mutation, not camera-only redraw. No authoritative ECS state.
+
 ## Stage 118 — bounded temporary GPU transfer memory (source implemented; QA deferred)
 
 Separate Device-wide transfer envelope from persistent allocation ledger so candidate migration cannot consume all mandatory upload headroom. Charge checked storage uploads, buffer and full texture/color/depth readback staging before allocation; retain accepted asynchronous transfers through completed GPU fences, release unencoded failures immediately. Explicit native limit, zero unlimited, pressure returns checked failure without device loss. No driver-wide allocation claim. Native Device setGpuTransferBudget/gpuTransferBudgetStats configure and inspect this independent ledger. Checked storage uploads, buffer reads, full texture/depth/color reads are covered; legacy unchecked uploads, pixel probes, drawable capture and unrelated native driver allocations are not covered. Too-small configured limit can reject a required staging sequence; callers must provision transfer headroom.
