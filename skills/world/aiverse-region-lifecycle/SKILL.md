@@ -253,3 +253,50 @@ derived ECS resources, excluded from durable projection, cleared by the
 region restore hook. Read them through the live editor world_regions_status
 simulationLod field; absence is unavailable, not zero measured work.
 No build, test, performance measurement or cross-host parity has been run.
+
+## W1.29a — explicit dormant-component catch-up (native source)
+
+Use the existing `RegionDormancyController::advanceGroup<T>` for a group of
+parked ECS entities that all own the named, registered component. Its
+portable component codec must already include the owner's last simulated
+tick. Supply the actual authoritative target tick; the controller does not
+own a separate clock or read wall time.
+
+```cpp
+// NeedsState is an example of a domain-owned, portable component.
+// Every member must be dormant, registered and in the expected Cell.
+const auto clock = [](const NeedsState& s) -> uint64_t { return s.lastTick; };
+const auto catchUp = [](NeedsState& s, world::RegionEntityId id,
+                        uint64_t from, uint64_t to) -> bool {
+    return advanceNeedsDeterministically(s, id, from, to);
+};
+if (!controller.advanceGroup<NeedsState>(ecs, ledger, cold, group,
+        cell, "myproject.needs", authoritativeTick, clock, catchUp, &error)) {
+    // No partial cold-store update; handle refusal through the owner.
+}
+```
+
+The domain policy updates the component's lastTick to the target and must
+be pure, bounded, deterministic and preserve references/invariants. The
+controller checks monotonic time, stable IDs, owner revisions, codec
+version/type, duplicate members and serialized byte limits. Same tick is a
+no-op. The target timestamp must roundtrip through the codec. Stable-ID
+order is independent of input order. It never creates or destroys entities,
+moves positions, runs physics or calls an offscreen traffic solver.
+
+For a single clock-bearing component type, use
+`advanceAndWakeGroup<T>(ecs, ledger, cold, group, cell, component,
+targetTick, clock, catchUp, admit, &error)`. The read-only `admit`
+predicate accepts `(const World&, Cell, std::span<const Entity>)` and
+must verify all required host readiness and linked group eligibility.
+The caller supplies the complete linked group. No speculative catch-up
+is published if admission or wake fails. Other parked component types
+must be safe to pause; a multi-type transaction is not provided yet.
+Do not use ordinary wakeGroup to bypass catch-up of opted-in components.
+
+Existing cold-store Archive schema 1 is unchanged. No new rules block,
+MCP command, Studio control, automatic actor/vehicle parking, or true
+entity absence. Candidate copy/audit costs scale with total parked
+payload; not an every-entity/every-tick fast path. Native tests and
+cross-host acceptance NOT RUN. See
+`docs/agent-handoffs/open-world-stage29a-cold-advancement-2026-11-24.md`.
