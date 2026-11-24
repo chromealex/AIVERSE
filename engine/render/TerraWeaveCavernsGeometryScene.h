@@ -67,6 +67,7 @@ inline Json caveGeometrySceneManifest(ChunkKey3 key,uint64_t generatorVersion,
     position.push(Json::number(double(key.y)*double(span)*scale));
     position.push(Json::number(double(key.z)*double(span)*scale));
     Json instance=Json::object();
+    instance.set("id",Json::string(caveGeometrySourceKey(key,generatorVersion,revision)));
     instance.set("model",Json::string(caveGeometrySourceKey(key,generatorVersion,revision)));
     instance.set("position",std::move(position));
     instance.set("strata",Json::fromBool(enableStrata));
@@ -76,6 +77,7 @@ inline Json caveGeometrySceneManifest(ChunkKey3 key,uint64_t generatorVersion,
     strata.set("select",Json::string("all"));
     Json hlod=Json::object();hlod.set("enabled",Json::fromBool(false));
     Json scene=Json::object();
+    scene.set("version",Json::number(int64_t(1)));
     scene.set("instances",std::move(instances));
     scene.set("strata",std::move(strata));
     scene.set("hlod",std::move(hlod));

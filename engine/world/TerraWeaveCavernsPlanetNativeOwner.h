@@ -195,13 +195,13 @@ public:
                 const auto name="planet-cave/"+std::to_string(slot.id.region)+"/"+std::to_string(ordinal++);
                 const auto origin=p.simulationOrigin-anchor;
                 Json pos=Json::array();for(auto v:{origin.x,origin.y,origin.z})pos.push(Json::number(v.toDouble()));
-                Json inst=Json::object();inst.set("model",Json::string(name));inst.set("position",std::move(pos));
+                Json inst=Json::object();inst.set("id",Json::string(name));inst.set("model",Json::string(name));inst.set("position",std::move(pos));
                 inst.set("strata",Json::fromBool(false));instances.push(std::move(inst));
                 batch.vertexCount+=p.model->vertices.size();batch.triangleCount+=p.model->indices.size()/3;
                 batch.models.emplace(name,std::move(p.model));
             }
             if(batch.vertexCount>2000000){cancel();return false;}
-            batch.manifest=Json::object();batch.manifest.set("instances",std::move(instances));
+            batch.manifest=Json::object();batch.manifest.set("version",Json::number(int64_t(1)));batch.manifest.set("instances",std::move(instances));
             Json off=Json::object();off.set("enabled",Json::fromBool(false));
             batch.manifest.set("strata",off);batch.manifest.set("hlod",off);
             const bool ok=batch.models.empty()?geometry_.stageEmpty(nativeRevision):

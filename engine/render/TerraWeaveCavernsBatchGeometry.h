@@ -97,6 +97,7 @@ inline CaveBatchPrepared prepareCaveBatch(
         pos.push(Json::number(double(c.mesh.key.y)*double(span)/100.));
         pos.push(Json::number(double(c.mesh.key.z)*double(span)/100.));
         Json instance=Json::object();
+        instance.set("id",Json::string(key));
         instance.set("model",Json::string(key));
         instance.set("position",std::move(pos));
         instance.set("strata",Json::fromBool(options.enableStrata&&!c.preserveExactSurface));
@@ -114,6 +115,7 @@ inline CaveBatchPrepared prepareCaveBatch(
     Json hlod=Json::object();
     hlod.set("enabled",Json::fromBool(false));
     out.manifest=Json::object();
+    out.manifest.set("version",Json::number(int64_t(1)));
     out.manifest.set("instances",std::move(instances));
     out.manifest.set("strata",std::move(strata));
     out.manifest.set("hlod",std::move(hlod));

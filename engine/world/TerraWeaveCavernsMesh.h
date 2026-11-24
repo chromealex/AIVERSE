@@ -74,6 +74,17 @@ inline CaveMesh generateCaveMeshSampled(const Settings& s,ChunkKey3 key,uint32_t
             float(len?-gy/len:1),float(len?-gz/len:0)};
     };
     auto emit=[&](MeshVertex a,MeshVertex b,MeshVertex c){
+        // Interpolation is rounded to integer centimetres above. Distinct
+        // tetrahedron edges can therefore land on the same point (or line).
+        // Omit zero-area facets from the shared visual/collision source.
+        const auto cm=[](MeshVertex v){return std::array<int64_t,3>{
+            int64_t(std::llround(double(v.x)*100.)),
+            int64_t(std::llround(double(v.y)*100.)),
+            int64_t(std::llround(double(v.z)*100.))};};
+        const auto pa=cm(a),pb=cm(b),pc=cm(c);
+        const int64_t cmUx=pb[0]-pa[0],cmUy=pb[1]-pa[1],cmUz=pb[2]-pa[2];
+        const int64_t cmVx=pc[0]-pa[0],cmVy=pc[1]-pa[1],cmVz=pc[2]-pa[2];
+        if(cmUy*cmVz==cmUz*cmVy && cmUz*cmVx==cmUx*cmVz && cmUx*cmVy==cmUy*cmVx)return;
         const double ux=b.x-a.x,uy=b.y-a.y,uz=b.z-a.z;
         const double vx=c.x-a.x,vy=c.y-a.y,vz=c.z-a.z;
         const double facing=(uy*vz-uz*vy)*a.nx+(uz*vx-ux*vz)*a.ny+(ux*vy-uy*vx)*a.nz;
