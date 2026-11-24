@@ -1,5 +1,6 @@
 #include "MaterialOps.h"
 #include "GraphAssetTransaction.h"
+#include "TexturePublicationJournal.h"
 
 #include <algorithm>
 #include <cmath>
@@ -219,13 +220,16 @@ Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::s
     fs::create_directories(dir);
     const std::string rel="content/textures/"+name+"_"+output+".png";
     const auto dest=root/rel,stage=fs::path(dest.string()+".stage");
-    if(fs::exists(dest)||fs::is_symlink(dest)||!fs::create_directory(stage))throw std::runtime_error("texture already exists or staging busy");
+    if(fs::exists(dest)||fs::is_symlink(dest))throw std::runtime_error("texture already exists");
+    TexturePublicationJournal journal(root,name,output);
+    if(!fs::create_directory(stage)){journal.finish();throw std::runtime_error("texture staging busy");}
     struct Cleanup {fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}} cleanup{stage};
     std::string png;
     if(!stbi_write_png_to_func([](void* ctx,void* data,int size){static_cast<std::string*>(ctx)->append(static_cast<const char*>(data),size_t(size));},&png,image.width,image.height,4,image.rgba.data(),image.width*4)||png.empty())throw std::runtime_error("PNG encode failed");
     const auto temp=stage/"payload";
     {std::ofstream stream(temp,std::ios::binary);stream.write(png.data(),std::streamsize(png.size()));stream.close();if(!stream)throw std::runtime_error("PNG write failed");}
     fs::create_hard_link(temp,dest);
+    journal.finish();
     ws.note({Change::Rules,0,0,-1,-1,-1,"Texture graph bake: "+rel});
     Json r=okJson();r.set("path",Json::string(rel));r.set("output",Json::string(output));r.set("size",Json::number(int64_t(image.width)));return r;
 }
@@ -242,7 +246,9 @@ Json publishTextureGraphSet(Workspace& ws,const std::string& name,const Json& gr
         const auto root=fs::canonical(ws.project.dir),dir=root/"content"/"textures";
         if(fs::is_symlink(root/"content")||fs::is_symlink(dir))throw std::runtime_error("texture directory symlink rejected");
         fs::create_directories(dir);const auto dest=dir/name,stage=dir/("."+name+".stage");
-        if(fs::exists(dest)||fs::is_symlink(dest)||!fs::create_directory(stage))throw std::runtime_error("texture set exists or staging busy");
+        if(fs::exists(dest)||fs::is_symlink(dest))throw std::runtime_error("texture set exists");
+        TexturePublicationJournal journal(root,name,"");
+        if(!fs::create_directory(stage)){journal.finish();throw std::runtime_error("texture set staging busy");}
         struct Cleanup {fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}} cleanup{stage};
         Json files=Json::array();size_t i=0;
         for(const auto& [output,index]:program.outputs){
@@ -258,6 +264,7 @@ Json publishTextureGraphSet(Workspace& ws,const std::string& name,const Json& gr
         // No promise against an external process creating an empty destination.
         if(fs::exists(dest)||fs::is_symlink(dest))throw std::runtime_error("destination appeared during bake");
         fs::rename(stage,dest);
+        journal.finish();
         ws.note({Change::Rules,0,0,-1,-1,-1,"Texture graph set: "+name});
         Json r=okJson();r.set("files",files);r.set("size",Json::number(int64_t(program.size)));r.set("manifest",Json::string("content/textures/"+name+"/texture-set.json"));return r;
 
@@ -469,6 +476,7 @@ void registerMaterialOps(Workspace& ws) {
         if(overwrite)fs::rename(temp,file);
         else fs::create_hard_link(temp,file); // exclusive creation, never overwrite existing asset
     };
+    add("texture_graph_publications_get","Inspect pending CPU/GPU texture publication intents; never delete or repair assets.",R"({"type":"object","additionalProperties":false})",[w](const Json&){needProject(*w);Json r=okJson();r.set("publications",TexturePublicationJournal::inspect(fs::canonical(w->project.dir)));return r;});
     auto textureCache=std::make_shared<render::texture_graph::EvaluationCache>();
     const std::string graphSchema=R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"textureName":{"type":"string"},"overrides":{"type":"object"}}})";
     add("texture_graph_cache","Inspect or clear this Workspace texture evaluation cache.",R"({"properties":{"clear":{"type":"boolean"}}})",[w,textureCache](const Json& p){textureCache->selectProject(w->project.dir);if(p.getBool("clear"))textureCache->clear();return textureCache->status();});

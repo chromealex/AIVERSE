@@ -2,6 +2,7 @@
 // No GPU or genre module required. Uses the same Workspace::call entry as MCP.
 #include "apps/editor/core/Workspace.h"
 #include "apps/editor/core/TextureGraphGpuPreview.h"
+#include "apps/editor/core/TexturePublicationJournal.h"
 #include "cloth/FakeDevice.h"
 #include <set>
 #include "engine/render/graph/GraphTelemetry.h"
@@ -108,6 +109,14 @@ int main() {
     editor::Workspace ws;
     ws.project.dir = root.string();
     const auto call = [&](const char* name, const Json& args) { return ws.call(name, args, "test-spectrafx"); };
+    {
+        editor::TexturePublicationJournal intent(root,"fixture","color");
+        const auto pending=call("texture_graph_publications_get",Json::object());
+        requireGraphTest(pending["publications"].size()==1,"texture intent not reported");
+        requireGraphTest(pending["publications"][size_t(0)].getStr("status")=="incomplete_or_active","wrong pending status");
+        intent.finish();
+        requireGraphTest(call("texture_graph_publications_get",Json::object())["publications"].size()==0,"completed intent retained");
+    }
     {
         auto material=Json::parse(R"({"name":"fixture_material","material":{"roughness":0.5},"createOnly":true})");
         requireGraphTest(call("material_set",material).getBool("ok"),"create-only material failed");

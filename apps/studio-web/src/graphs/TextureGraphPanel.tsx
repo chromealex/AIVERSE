@@ -69,6 +69,7 @@ export default function TextureGraphPanel({documentEpoch,projectPath,disabled,on
     const r=await op('texture_graph_material_variant',{textureName:bakedSet,materialName:variantName,base:baseMaterial});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true)throw new Error('Native material variant creation failed');setStatus('Created inherited material '+variantName+'; refresh Materials.');return;
    }
+   if(action==='publications'){const r=await op('texture_graph_publications_get');if(token===epoch.current)setStatus(JSON.stringify(r));return;}
    if(action==='cache'||action==='clearCache'){const r=await op('texture_graph_cache',{clear:action==='clearCache'});if(token===epoch.current)setStatus(JSON.stringify(r));return;}
    if(action==='gpuCancel'){
     if(!gpuRequest)throw new Error('No GPU request to cancel');
@@ -237,6 +238,7 @@ export default function TextureGraphPanel({documentEpoch,projectPath,disabled,on
    {graph&&object(graph.parameters)&&Object.entries(graph.parameters).map(([k,v])=><div className="au-row" key={k}><small>{k}: {JSON.stringify(object(v)?v.default:v)}</small><StudioButton size="sm" disabled={busy||disabled} onClick={()=>{if(!graph)return;const next={...(object(graph.parameters)?graph.parameters:{})};delete next[k];edit({...graph,parameters:next})}}>Remove</StudioButton></div>)}
    <textarea aria-label="Instance overrides JSON" rows={4} value={overrideText} disabled={busy||disabled} onChange={e=>{setOverrideText(e.target.value);setPreview(null);setAssets([]);setAsset(null);setBakedSet('')}}/>
    <div className="au-row"><StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('cache')}>Cache status</StudioButton><StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('clearCache')}>Clear cache</StudioButton></div>
+    <StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('publications')}>Inspect pending publications</StudioButton>
   </StudioSection>
   <textarea aria-label="Texture graph JSON" value={text} disabled={busy||disabled} rows={12} onChange={e=>{setText(e.target.value);setPreview(null);setAsset(null);setAssets([]);setPending(null)}}/>
   <StudioSelect aria-label="Texture output" value={output} disabled={busy||disabled} onChange={e=>{setOutput(e.target.value);setAsset(null);setPreview(null)}}>{outputs.map(n=><option key={n}>{n}</option>)}</StudioSelect>
