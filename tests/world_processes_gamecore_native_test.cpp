@@ -5,6 +5,7 @@
 #include "apps/studio-native/StudioPlanetEchoSnapshot.h"
 #include "apps/studio-native/StudioPlanetCrowdSnapshot.h"
 #include "apps/studio-native/StudioPlanetCircuitSnapshot.h"
+#include "apps/studio-native/StudioPlanetSocietySnapshot.h"
 // Actual GameCore map fixture proving native module ECS hydration via mapPlaced().
 #include "aiverselib/world/WorldProcessesNativeModule.h"
 #include "aiverselib/world/WorldProcessGravity.h"
@@ -1006,6 +1007,52 @@ static void checkAetherStratification(){
     AIVERSE_TEST_CHECK(!aether::advanceWithStratification(ecs,&surface,7));
     AIVERSE_TEST_CHECK(ecs.get<aether::GasCell>(low).sampledTick==6);
 }
+static void checkPlanetLiveSociety(){
+    using aiverse::studio::samplePlanetSociety;
+    game::Surface surface;game::BodyDef body;body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    World ecs;
+    const auto a=ecs.create(),b=ecs.create(),c=ecs.create(),ab=ecs.create(),bc=ecs.create(),blocked=ecs.create();
+    const auto message=ecs.create(),trigger=ecs.create();
+    const auto place=[&](Entity e,int bi,int x){
+        Transform t{};t.pos=surface.cellCenter(surface.gridCell(bi,0,x,3));ecs.add<Transform>(e,t);
+    };
+    place(a,0,2);place(b,0,4);place(c,1,2);place(message,0,2);place(trigger,1,2);
+    for(auto e:{a,b,c})ecs.add<society::Person>(e,society::Person{});
+    ecs.add<society::Contact>(ab,society::Contact{a,b,1000,true});
+    ecs.add<society::Contact>(bc,society::Contact{b,c,1000,true});
+    ecs.add<society::Contact>(blocked,society::Contact{a,c,100,true});
+    constexpr society::Mask topic=(society::Mask(1)<<63)|society::Mask(1);
+    ecs.add<society::Message>(message,society::Message{a,topic,true});
+    society::NpcTrigger t{};t.person=c;t.topics=topic;t.actionId=42;
+    ecs.add<society::NpcTrigger>(trigger,t);
+    AIVERSE_TEST_CHECK(society::advance(ecs,7)&&society::updateNpcTriggers(ecs,7));
+    const auto first=samplePlanetSociety(ecs,surface,7);
+    AIVERSE_TEST_CHECK(first.getBool("available")&&first["people"].size()==3);
+    AIVERSE_TEST_CHECK(first.getInt("eligibleContacts")==2&&first.getInt("crossBody")==2);
+    AIVERSE_TEST_CHECK(first["people"][size_t(1)].getStr("knowledge")==std::to_string(topic));
+    AIVERSE_TEST_CHECK(first["people"][size_t(1)].getInt("topicCount")==2);
+    AIVERSE_TEST_CHECK(first["people"][size_t(2)].getStr("knowledge")=="0");
+    AIVERSE_TEST_CHECK(!first["contacts"][size_t(2)].getBool("eligibleNow"));
+    AIVERSE_TEST_CHECK(first["contacts"][size_t(1)].getStr("sourceOnlyTopics")==std::to_string(topic));
+    AIVERSE_TEST_CHECK(!first["contacts"][size_t(1)].getBool("placed"));
+    AIVERSE_TEST_CHECK(first["messages"][size_t(0)].getStr("topics")==std::to_string(topic));
+    AIVERSE_TEST_CHECK(first.getInt("activeTriggers")==0);
+    AIVERSE_TEST_CHECK(society::advance(ecs,8)&&society::updateNpcTriggers(ecs,8));
+    const auto second=samplePlanetSociety(ecs,surface,8);
+    AIVERSE_TEST_CHECK(second["people"][size_t(2)].getStr("knowledge")==std::to_string(topic));
+    AIVERSE_TEST_CHECK(second.getInt("activeTriggers")==1&&second.getInt("firedTriggers")==1);
+    AIVERSE_TEST_CHECK(second["triggers"][size_t(0)].getInt("transition")==1);
+    AIVERSE_TEST_CHECK(second["triggers"][size_t(0)].getInt("changedTick")==8);
+    const auto stale=samplePlanetSociety(ecs,surface,9);
+    AIVERSE_TEST_CHECK(stale.getInt("staleOutputs")==4&&!stale["triggers"][size_t(0)].getBool("outputAvailable"));
+    AIVERSE_TEST_CHECK(society::advance(ecs,9)&&society::updateNpcTriggers(ecs,9));
+    const auto third=samplePlanetSociety(ecs,surface,9);
+    AIVERSE_TEST_CHECK(third.getInt("activeTriggers")==0&&third.getInt("firedTriggers")==1);
+    AIVERSE_TEST_CHECK(ecs.get<society::NpcTrigger>(trigger).transition==1);
+    const auto cap=samplePlanetSociety(ecs,surface,9,1);
+    AIVERSE_TEST_CHECK(cap.getBool("truncated")&&cap["people"].size()==1);
+}
 static void checkPlanetLiveCircuit(){
     using aiverse::studio::samplePlanetCircuit;
     game::Surface surface;game::BodyDef body;body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
@@ -1197,6 +1244,7 @@ int main(){
     checkPlanetStudioDiagnostics();
     checkCircuitSurfaceWiring();
     checkPlanetLiveCircuit();
+    checkPlanetLiveSociety();
     checkAetherStratification();
     checkPlanetLiveAether();
     checkMorphGravity();
