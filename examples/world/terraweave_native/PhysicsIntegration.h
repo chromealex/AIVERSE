@@ -100,4 +100,14 @@ publishObstructionsAfterPhysics(
         stableWaterIdForEcs,policy);
 }
 
+// Use in the project's existing native motor system, not as a second ECS
+// system. The project owns proxy state, real exterior motor/coverage and
+// the position component. The Cave host handles the exclusive dispatch.
+template<class Target>
+inline terraweave::caverns::CavePlanetDispatchResult dispatchPlanetCaveActor(
+        terraweave::caverns::CavePlanetNativeHost<Target>& host,Simulation& sim,Entity entity,
+        const physics::CharacterParams& params,physics::CharacterState& state,
+        physics::BodyHandle proxy,const terraweave::caverns::CavePlanetMotorDispatchInput& input){
+    return host.dispatchMotor(sim,entity,params,state,proxy,input);
+}
 } // namespace aiverse::examples::terraweave_native

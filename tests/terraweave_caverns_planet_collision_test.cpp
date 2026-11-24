@@ -99,6 +99,19 @@ static void checkTravelPins(){
     check(cancelCavePlanetCrossing(world,actor,[](const auto&,auto,const auto&){return true;})&&
           cavePlanetTravelPins(world).contains(9),"exit cancel preserves occupancy");
 }
+static void checkNativeDispatchGuard(){
+    World world;const auto a=world.create(),b=world.create();
+    CavePlanetMotorTickGuard guard;
+    check(guard.claim(4,10,a,1),"first motor dispatch");
+    check(!guard.claim(4,10,a,2),"same entity duplicate");
+    check(!guard.claim(4,10,b,1),"same proxy duplicate");
+    check(!guard.claim(4,11,b,2),"simulation advanced without physics");
+    check(guard.claim(4,10,b,2),"distinct actor same tick");
+    check(guard.claim(5,11,a,1),"next physics tick");
+    check(!guard.claim(4,10,a,1),"old physics tick refused");
+    guard.reset();
+    check(guard.claim(1,2,a,1),"synchronized restore clears derived receipt");
+}
 static void checkTravelModeSelection(){
     CavePlanetTraversalCapabilities caps;
     auto choose=[&](CaveTraversal current,bool support,bool ground,bool swim,bool fly,bool wet,std::optional<Fixed> depth){
@@ -304,6 +317,7 @@ int main(){
     checkTravelRim();
     checkTravelReceipts();
     checkTravelModeSelection();
+    checkNativeDispatchGuard();
     checkTravelPins();
     checkOrientedMotor();
     checkCandidateIdentity();
