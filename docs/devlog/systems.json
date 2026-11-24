@@ -62,6 +62,14 @@
     {
      "status": "in-progress",
      "target": null,
+     "title": "Планетарный лес: интерполяция физических поз",
+     "titleEn": "Planetary forest: physical pose interpolation",
+     "text": "Stage 155: последовательные подтверждённые позы, без экстраполяции и с учётом rollback и видимости.",
+     "textEn": "Stage 155: consecutive confirmed poses, no extrapolation, with rollback and visibility guards."
+    },
+    {
+     "status": "in-progress",
+     "target": null,
      "title": "Планетарный лес: авторские виды ARBOR",
      "titleEn": "Planetary forest: authored ARBOR species",
      "text": "Stage 154: общая схема видов TerraWeave, пользовательские профили и текстуры, привязка по ID.",
