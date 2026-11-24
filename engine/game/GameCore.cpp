@@ -1,5 +1,6 @@
 // Setup, commands, shared queries and state hashing for the generic RTS module.
 #include "Internal.h"
+#include "engine/mechanics/WeaponCadence.h"
 #include "../data/JsonCompose.h"
 #include "InitialVars.h"
 #include "MapRules.h"
@@ -98,6 +99,20 @@ void GameCore::setup(Simulation& sim, const Json& rulesIn, const Json& map) {
     if (rules_.fidelity) sim.addSystem("fidelity", [this](Simulation& s) { sysFidelity(s); });    // Fidelity.cpp
     sim.addSystem("targeting", [this](Simulation& s) { sysTargeting(s); });
     if (fieldOps_->active()) sim.addSystem("fieldops", [this](Simulation& s) { fieldOps_->tick(s); });   // FieldOps.cpp (games with field operations only)
+    // Fractional cadence advances once before either movement/free-fire or
+    // targeted weapons can consume it. Legacy slots retain their old update order.
+    bool preciseWeapons = false;
+    for (const auto& type : rules_.types)
+        for (const auto& weapon : type.weapons) preciseWeapons |= weapon.preciseCooldown;
+    if (preciseWeapons) sim.addSystem("weapon.cadence", [this](Simulation& s) {
+        s.world().each<Combat, Unit>([&](Entity e, Combat& combat, Unit& unit) {
+            const auto& weapons = rules_.types[unit.type].weapons;
+            const Fixed elapsed = s.dt() * fxMax(stat(s, e, Stat::AttackSpeed), Fixed::fromRatio(1, 10));
+            for (size_t i = 0; i < weapons.size() && i < 4; ++i)
+                if (weapons[i].preciseCooldown)
+                    combat.cooldown[i] = lib::mechanics::advanceWeaponCadence(combat.cooldown[i], elapsed, true);
+        });
+    });
     sim.addSystem("movement", [this](Simulation& s) { sysMovement(s); });
     if (state(sim).surface) sim.addSystem("transit", [this](Simulation& s) { sysTransit(s); });
     sim.addSystem("weapons", [this](Simulation& s) { sysWeapons(s); });
