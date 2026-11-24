@@ -12,13 +12,9 @@ with tempfile.TemporaryDirectory(prefix='rts-meta-native-') as tmp:
     (src / 'engine/game').mkdir(parents=True)
     native.mkdir(parents=True)
     # Isolate the link contract: real Build.cmake and meta, minimal sim host types.
-    (src / 'engine/game/Native.cpp').write_text('''#include "engine/game/Native.h"
-namespace aiverse::game {
-namespace { std::vector<NativeDefinition>& all() { static std::vector<NativeDefinition> v; return v; } }
-NativeRegistrar::NativeRegistrar(std::vector<NativeDefinition> d) { for (auto& x : d) all().push_back(std::move(x)); }
-std::vector<NativeDefinition> compiledNativeModules() { return all(); }
-}
-''')
+    # Compile the actual isolated registrar against the minimal host interface.
+    (src / 'engine/game/Native.cpp').write_text('')
+    (src / 'engine/game/NativeRegistrar.cpp').write_bytes((engine / 'engine/game/NativeRegistrar.cpp').read_bytes())
     (src / 'engine/game/Native.h').write_text('''#pragma once
 #include <memory>
 #include <string>
@@ -65,6 +61,7 @@ int main() { return metaProbe()==7 && aiverse::game::compiledNativeModules().siz
     (src / 'CMakeLists.txt').write_text(f'''cmake_minimum_required(VERSION 3.22)
 project(NativeMeta LANGUAGES CXX)
 add_subdirectory("{engine.as_posix()}/engine/meta" meta)
+add_library(aiverse_engine INTERFACE)
 add_library(aiverse_game STATIC stub.cpp)
 target_include_directories(aiverse_game PUBLIC "${{CMAKE_CURRENT_SOURCE_DIR}}")
 include("{engine.as_posix()}/engine/game/native/Build.cmake")
