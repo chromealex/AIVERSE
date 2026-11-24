@@ -346,6 +346,49 @@ struct Model {
     void finalize();
 };
 
+// Shared render-time resolution under the existing joined Model reader
+// contract. Ordinary imported images and legacy untracked graph images retain
+// their index semantics; tracked procedural images require the original pin.
+// The material itself retains that pin for the duration of the draw.
+inline constexpr size_t proceduralMaterialChannel(int Material::* slot) noexcept {
+    return slot==&Material::baseTex?0:slot==&Material::normalTex?1:
+           slot==&Material::mrTex?2:slot==&Material::occlusionTex?3:
+           slot==&Material::emissiveTex?4:slot==&Material::teamTex?5:6;
+}
+inline const Image* resolveMaterialImageIndex(const Model& model,int index,
+        const GraphImagePin* original=nullptr) noexcept {
+    if(index<0||size_t(index)>=model.images.size())return nullptr;
+    const auto& image=model.images[size_t(index)];
+    if(image.proceduralGraphRetired)return nullptr;
+    if(image.proceduralGraphPin&&(!original||!*original||
+       original->owner_before(image.proceduralGraphPin)||
+       image.proceduralGraphPin.owner_before(*original)))return nullptr;
+    return &image;
+}
+inline const Image* resolveMaterialImage(const Model& model,const Material& material,
+        int Material::* slot) noexcept {
+    const auto channel=proceduralMaterialChannel(slot);
+    if(channel>=6)return nullptr;
+    const auto* pin=material.proceduralGraphPins?&(*material.proceduralGraphPins)[channel]:nullptr;
+    return resolveMaterialImageIndex(model,material.*slot,pin);
+}
+inline gfx::TextureHandle resolvedMaterialTexture(const Model& model,const Material& material,
+        int Material::* slot,gfx::TextureHandle fallback={}) noexcept {
+    const auto* image=resolveMaterialImage(model,material,slot);
+    return image&&image->tex.valid()?image->tex:fallback;
+}
+// Shader Graph sampler slots have no procedural generation pin in their
+// current ABI. Never sample a tracked graph image through a naked index.
+inline gfx::TextureHandle resolvedGraphSourceTexture(const Model& model,const Material& material,
+        size_t slot,gfx::TextureHandle fallback={}) noexcept {
+    const auto* image=slot<4?resolveMaterialImageIndex(model,material.graphTextures[slot]):nullptr;
+    return image&&image->tex.valid()?image->tex:fallback;
+}
+inline gfx::TextureHandle resolvedMaterialAlphaCoverage(const Model& model,const Material& material) noexcept {
+    const auto* image=resolveMaterialImage(model,material,&Material::baseTex);
+    return image?image->virtualAlphaMask:gfx::TextureHandle{};
+}
+
 using FileReader = std::function<bool(const std::string& path, std::string& out)>;
 
 // Loads .gltf / .glb / .obj / .fbx by extension. Throws std::runtime_error with a readable message

@@ -1429,7 +1429,7 @@ void Renderer3D::renderCurrentFrameReactiveMask(
                 if (it.mat->team != TeamMode::BaseAlpha &&
                     it.mat->baseTex >= 0 &&
                     size_t(it.mat->baseTex) < it.model->images.size()) {
-                    const auto t=it.model->images[size_t(it.mat->baseTex)].tex;
+                    const auto t=resolvedMaterialTexture(*it.model,*it.mat,&Material::baseTex);
                     if (t.valid()) base=t;
                 }
                 dev_->setUniforms(0,&u,sizeof u);
@@ -1560,7 +1560,7 @@ void Renderer3D::renderCurrentFrameReactiveMask(
             if (it.mat->team != TeamMode::BaseAlpha &&
                 it.mat->baseTex >= 0 &&
                 size_t(it.mat->baseTex) < it.model->images.size()) {
-                const auto t=it.model->images[size_t(it.mat->baseTex)].tex;
+                const auto t=resolvedMaterialTexture(*it.model,*it.mat,&Material::baseTex);
                 if (t.valid()) base=t;
             }
             dev_->setTexture(1,base);
@@ -2000,7 +2000,7 @@ void Renderer3D::renderObjectMotionVectors(PostProcess& post) {
                 gfx::TextureHandle base=white_;
                 if (it.mat->baseTex >= 0 &&
                     size_t(it.mat->baseTex) < it.model->images.size()) {
-                    auto tex=it.model->images[size_t(it.mat->baseTex)].tex;
+                    auto tex=resolvedMaterialTexture(*it.model,*it.mat,&Material::baseTex);
                     if (tex.valid()) base=tex;
                 }
                 dev_->setTexture(1,base);

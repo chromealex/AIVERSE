@@ -701,6 +701,10 @@ public:
                                     const Material& material,
                                     ModelVirtualTextureBinding& out) const {
         out = {};
+        // A custom resolver must not resurrect a retired or stale tracked
+        // base slot through its external VT domain.
+        if(material.baseTex>=0&&size_t(material.baseTex)<model.images.size()&&
+           !resolveMaterialImage(model,material,&Material::baseTex))return false;
         if (!modelVirtualTextureResolver_ ||
             !modelVirtualTextureResolver_(model,material,out) ||
             !out.valid()) {

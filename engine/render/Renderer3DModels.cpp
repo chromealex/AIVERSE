@@ -87,24 +87,19 @@ inline std::array<gfx::TextureHandle,4> gpuGraphSourceTextures(
     if (!material.shaderGraph) return result;
     const size_t count=std::min(size_t(4),material.shaderGraph->textures.size());
     for(size_t i=0;i<count;++i) {
-        const int index=material.graphTextures[i];
-        result[i]=index>=0 && size_t(index)<model.images.size() &&
-            model.images[size_t(index)].tex.valid() ?
-            model.images[size_t(index)].tex : white;
+        result[i]=resolvedGraphSourceTexture(model,material,i,white);
     }
     return result;
 }
 inline std::array<gfx::TextureHandle,6> gpuPbrSourceTextures(
     const Model& model, const Material& mt, gfx::TextureHandle white,
     gfx::TextureHandle black, gfx::TextureHandle flatNormal) {
-    const auto tex=[&](int image, gfx::TextureHandle fallback) {
-        return image>=0 && size_t(image)<model.images.size() &&
-               model.images[size_t(image)].tex.valid() ?
-               model.images[size_t(image)].tex : fallback;
+    const auto tex=[&](int Material::* slot,gfx::TextureHandle fallback){
+        return resolvedMaterialTexture(model,mt,slot,fallback);
     };
-    return {tex(mt.baseTex,white),tex(mt.mrTex,white),
-            tex(mt.normalTex,flatNormal),tex(mt.occlusionTex,white),
-            tex(mt.emissiveTex,white),tex(mt.teamTex,black)};
+    return {tex(&Material::baseTex,white),tex(&Material::mrTex,white),
+            tex(&Material::normalTex,flatNormal),tex(&Material::occlusionTex,white),
+            tex(&Material::emissiveTex,white),tex(&Material::teamTex,black)};
 }
 
 constexpr size_t kJointFloats = size_t(kMaxPaletteJoints) * 12; // 3 rows of vec4 per joint
@@ -133,10 +128,7 @@ void fillModelMaskProvenance(
         const Model& model,const Material& material) {
     result.maskedMaterial=material.alpha==AlphaMode::Mask;
     if(!result.maskedMaterial)return;
-    if(material.baseTex>=0 &&
-       std::size_t(material.baseTex)<model.images.size())
-        result.maskBaseTexture=
-            model.images[std::size_t(material.baseTex)].tex;
+    result.maskBaseTexture=resolvedMaterialTexture(model,material,&Material::baseTex);
     result.maskAlpha=material.baseColor.w;
     result.maskCutoff=material.alphaCutoff;
     result.maskUvOffset=material.uvOffset;
@@ -485,8 +477,7 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
     const uint32_t studioShaderBits = (geometryMainView_ && (phase == 1 || phase == 2) && studioDebugMode_ >= 2)
                                     ? uint32_t(studioDebugMode_) << 17 : 0u;
     const auto* candidateGraph=it.mat->shaderGraph&&int(matQuality_)>=it.mat->shaderGraph->minQuality?it.mat->shaderGraph.get():nullptr;
-    const bool availableAlphaR8=mask&&it.mat->baseTex>=0&&size_t(it.mat->baseTex)<it.model->images.size()&&
-        it.model->images[size_t(it.mat->baseTex)].virtualAlphaMask.valid();
+    const bool availableAlphaR8=mask&&resolvedMaterialAlphaCoverage(*it.model,*it.mat).valid();
     const bool allowVirtual=giPhase&&!materialPalette;
     ModelVirtualTextureBinding vtBinding;
     const bool availableVirtual=allowVirtual&&resolveModelVirtualTexture(*it.model,*it.mat,vtBinding);
@@ -2087,8 +2078,8 @@ bool Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count,
     // changed the texture/uniform state. Always refresh this opt-in borrow.
     const Material& mt = *it.mat;
     const auto* candidateGraph=mt.shaderGraph&&int(matQuality_)>=mt.shaderGraph->minQuality?mt.shaderGraph.get():nullptr;
-    const bool availableAlphaR8=mt.alpha==AlphaMode::Mask&&(phase!=3||selectionMaskPass_)&&mt.baseTex>=0&&
-        size_t(mt.baseTex)<it.model->images.size()&&it.model->images[size_t(mt.baseTex)].virtualAlphaMask.valid();
+    const bool availableAlphaR8=mt.alpha==AlphaMode::Mask&&(phase!=3||selectionMaskPass_)&&
+        resolvedMaterialAlphaCoverage(*it.model,mt).valid();
     const bool materialPalette=phase==1&&(instancePalette||it.paletteMaterials);
     const bool allowVirtual=(phase==1||phase==2)&&!materialPalette;
     const bool dynamicGi=(phase==1||phase==2)&&dynamicGiAtlas_.valid();
@@ -2166,23 +2157,22 @@ bool Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count,
     }
     if (materialStateChanged || newModel) {
         const int graphTextureSlot=sampling.graphSlot;
-        auto tex = [&](int idx, gfx::TextureHandle def) {
-            return idx >= 0 && idx < int(it.model->images.size()) && it.model->images[size_t(idx)].tex.valid() ? it.model->images[size_t(idx)].tex : def;
+        auto tex = [&](int Material::* slot,gfx::TextureHandle def){
+            return resolvedMaterialTexture(*it.model,mt,slot,def);
         };
-        dev_->setTexture(1, tex(mt.baseTex, white_));
-        if (mt.alpha == AlphaMode::Mask && mt.baseTex >= 0 &&
-            size_t(mt.baseTex) < it.model->images.size() &&
-            sampling.alphaR8) {
-            const auto coverage = it.model->images[size_t(mt.baseTex)].virtualAlphaMask;
-            if (coverage.valid()) dev_->setTexture(15,coverage);
+        dev_->setTexture(1,tex(&Material::baseTex,white_));
+        if(mt.alpha==AlphaMode::Mask&&sampling.alphaR8){
+            const auto coverage=resolvedMaterialAlphaCoverage(*it.model,mt);
+            if(coverage.valid())dev_->setTexture(15,coverage);
         }
-        if(activeGraph)for(size_t i=0;i<activeGraph->textures.size();++i)dev_->setTexture(graphTextureSlot+int(i),tex(mt.graphTextures[i],white_));
-        if (phase != 0) {
-            dev_->setTexture(2, tex(mt.mrTex, white_));
-            dev_->setTexture(3, tex(mt.normalTex, flatNormal_));
-            dev_->setTexture(4, tex(mt.occlusionTex, white_));
-            dev_->setTexture(5, tex(mt.emissiveTex, white_));
-            dev_->setTexture(6, tex(mt.teamTex, black_));
+        if(activeGraph)for(size_t i=0;i<activeGraph->textures.size();++i)
+            dev_->setTexture(graphTextureSlot+int(i),resolvedGraphSourceTexture(*it.model,mt,i,white_));
+        if(phase!=0){
+            dev_->setTexture(2,tex(&Material::mrTex,white_));
+            dev_->setTexture(3,tex(&Material::normalTex,flatNormal_));
+            dev_->setTexture(4,tex(&Material::occlusionTex,white_));
+            dev_->setTexture(5,tex(&Material::emissiveTex,white_));
+            dev_->setTexture(6,tex(&Material::teamTex,black_));
         }
     }
     // Resolve every submission, not just on material pointer changes:
@@ -2709,9 +2699,7 @@ void Renderer3D::prepareGpuModelDraws() {
         // GPU PBR ICB supports opaque models and masked models whose
         // exact R8 alpha is bound at tex15 in the argument buffer.
         // Other alpha materials keep their ordinary CPU path.
-        const bool alphaCoverage = it.mat->baseTex >= 0 &&
-            size_t(it.mat->baseTex) < it.model->images.size() &&
-            it.model->images[size_t(it.mat->baseTex)].virtualAlphaMask.valid();
+        const bool alphaCoverage=resolvedMaterialAlphaCoverage(*it.model,*it.mat).valid();
         if (it.mat->alpha != AlphaMode::Opaque &&
             !(it.mat->alpha == AlphaMode::Mask && alphaCoverage))
             continue;
@@ -3133,11 +3121,8 @@ void Renderer3D::prepareGpuModelDraws() {
                         virtualDescriptor.params[1]=binding.gutterPixels;
                         virtualDescriptor.params[2]=float(uint32_t(binding.addressU));
                         virtualDescriptor.params[3]=float(uint32_t(binding.addressV));
-                        if (item.mat->alpha==AlphaMode::Mask &&
-                            item.mat->baseTex>=0 &&
-                            size_t(item.mat->baseTex)<item.model->images.size())
-                            virtualDescriptor.alphaCoverage=item.model->images[
-                                size_t(item.mat->baseTex)].virtualAlphaMask;
+                        if(item.mat->alpha==AlphaMode::Mask)
+                            virtualDescriptor.alphaCoverage=resolvedMaterialAlphaCoverage(*item.model,*item.mat);
                     }
                     gfx::GpuIcbPbrMaterial ordinaryDescriptor;
                     if (pbrMode) {
@@ -3248,11 +3233,8 @@ void Renderer3D::prepareGpuModelDraws() {
                 group.usesVirtualTexture = vtEnabled[indices[first]] != 0;
                 group.virtualTexture = vtBindings[indices[first]];
                 const auto& firstModel = modelItems_[indices[first]];
-                if (firstModel.mat->alpha == AlphaMode::Mask &&
-                    firstModel.mat->baseTex >= 0 &&
-                    size_t(firstModel.mat->baseTex) < firstModel.model->images.size())
-                    group.alphaCoverage = firstModel.model->images[
-                        size_t(firstModel.mat->baseTex)].virtualAlphaMask;
+                if(firstModel.mat->alpha==AlphaMode::Mask)
+                    group.alphaCoverage=resolvedMaterialAlphaCoverage(*firstModel.model,*firstModel.mat);
                 if (materialMode || pbrMode) {
                     // First ticket is retained for legacy introspection;
                     // execution validates every per-item resource snapshot.
@@ -4002,10 +3984,8 @@ void Renderer3D::renderModels(int phase) {
                 const bool usesVt=resolveModelVirtualTexture(
                     *item.model,*item.mat,current);
                 gfx::TextureHandle alpha;
-                if (item.mat->alpha == AlphaMode::Mask &&
-                    item.mat->baseTex >= 0 &&
-                    size_t(item.mat->baseTex) < item.model->images.size())
-                    alpha=item.model->images[size_t(item.mat->baseTex)].virtualAlphaMask;
+                if(item.mat->alpha==AlphaMode::Mask)
+                    alpha=resolvedMaterialAlphaCoverage(*item.model,*item.mat);
                 GpuMaterialResourceBinding live;
                 live.virtualTextureEnabled = usesVt;
                 if (usesVt) live.virtualTexture = current;

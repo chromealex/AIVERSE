@@ -46,26 +46,14 @@ inline bool equivalentGpuMaterial(const Model& ma, const Material& a,
             m.sssStrength, m.sssColor.x, m.sssColor.y, m.sssColor.z, m.sssScale, m.sssThickness, m.humanProfile.x, m.humanProfile.y, m.eyeOptics.x, m.eyeOptics.y, m.eyeOptics.z, m.eyeOptics.w);
     };
     if (state(a) != state(b)) return false;
-    auto texture = [](const Model& model, int slot) -> uint32_t {
-        return slot >= 0 && size_t(slot) < model.images.size()
-            ? model.images[size_t(slot)].tex.id : 0;
-    };
-    const int ta[] = {a.baseTex, a.mrTex, a.normalTex, a.occlusionTex, a.emissiveTex, a.teamTex};
-    const int tb[] = {b.baseTex, b.mrTex, b.normalTex, b.occlusionTex, b.emissiveTex, b.teamTex};
-    for (size_t i = 0; i < 6; ++i)
-        if (texture(ma, ta[i]) != texture(mb, tb[i])) return false;
-    // A reduced VT base image can have a different full-resolution R8
-    // alpha mask despite otherwise equivalent material parameters.
-    const auto alphaTexture = [](const Model& model,const Material& material) {
-        return material.baseTex >= 0 &&
-               size_t(material.baseTex) < model.images.size() ?
-               model.images[size_t(material.baseTex)].virtualAlphaMask.id : 0u;
-    };
-    if (alphaTexture(ma,a) != alphaTexture(mb,b)) return false;
-    if (a.shaderGraph) {
-        for (size_t i = 0; i < a.shaderGraph->textures.size() && i < 4; ++i)
-            if (texture(ma, a.graphTextures[i]) != texture(mb, b.graphTextures[i])) return false;
-    }
+    for(auto slot:{&Material::baseTex,&Material::mrTex,&Material::normalTex,
+                   &Material::occlusionTex,&Material::emissiveTex,&Material::teamTex})
+        if(resolvedMaterialTexture(ma,a,slot)!=resolvedMaterialTexture(mb,b,slot))return false;
+    // A reduced VT base image can have a different full-resolution R8 mask.
+    if(resolvedMaterialAlphaCoverage(ma,a)!=resolvedMaterialAlphaCoverage(mb,b))return false;
+    if(a.shaderGraph)
+        for(size_t i=0;i<a.shaderGraph->textures.size()&&i<4;++i)
+            if(resolvedGraphSourceTexture(ma,a,i)!=resolvedGraphSourceTexture(mb,b,i))return false;
     return true;
 }
 
@@ -106,16 +94,13 @@ inline uint64_t gpuMaterialStateHash(const Model& model, const Material& m) {
     f(m.sssThickness);
     f(m.humanProfile.x); f(m.humanProfile.y);
     f(m.eyeOptics.x); f(m.eyeOptics.y); f(m.eyeOptics.z); f(m.eyeOptics.w);
-    auto texture = [&](int index) {
-        u(index >= 0 && size_t(index) < model.images.size()
-            ? model.images[size_t(index)].tex.id : 0);
-    };
-    for (int t : {m.baseTex, m.mrTex, m.normalTex, m.occlusionTex, m.emissiveTex, m.teamTex}) texture(t);
-    u(m.baseTex >= 0 && size_t(m.baseTex) < model.images.size() ?
-        model.images[size_t(m.baseTex)].virtualAlphaMask.id : 0u);
-    if (m.shaderGraph)
-        for (size_t i = 0; i < m.shaderGraph->textures.size() && i < 4; ++i)
-            texture(m.graphTextures[i]);
+    for(auto slot:{&Material::baseTex,&Material::mrTex,&Material::normalTex,
+                   &Material::occlusionTex,&Material::emissiveTex,&Material::teamTex})
+        u(resolvedMaterialTexture(model,m,slot).id);
+    u(resolvedMaterialAlphaCoverage(model,m).id);
+    if(m.shaderGraph)
+        for(size_t i=0;i<m.shaderGraph->textures.size()&&i<4;++i)
+            u(resolvedGraphSourceTexture(model,m,i).id);
     return hash;
 }
 
