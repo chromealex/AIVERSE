@@ -68,4 +68,9 @@ b3Capsule characterCapsule(const CharacterParams& params);
 // position unchanged and zero the velocity.
 void stepCharacter(b3WorldId world, const CharacterParams& params, CharacterState& state, const CharacterInput& input,
                    float dt, Pushes* out = nullptr, BodyHandle self = kNoBody);
+// Same motor in a caller-selected orthonormal frame. local +Y is support up;
+// yaw/input are frame-local; position, velocity and pushes remain world-space.
+// Caller supplies gravity magnitude in params. No independent gravity policy.
+bool stepCharacterOriented(b3WorldId world,const CharacterParams& params,CharacterState& state,
+    const CharacterInput& input,float dt,b3Quat localToWorld,Pushes* out=nullptr,BodyHandle self=kNoBody);
 }
