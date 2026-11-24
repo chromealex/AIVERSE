@@ -1,0 +1,30 @@
+# Building Graph / Shared Graph Framework — Stage 35E — 2026-11-24
+
+Branch: integration/building-graph-stage35d-20261124. Owner-relative draft PR #136 (target feature/aiv20261123_building-grammar).
+Previous Stage 35D common handoff: d36a1be1f8833a11f20fc12b7ee02f2fb379d36d. Previous owner-relative handoff: a489d927f0f32d6ec1b32d933002bd089effeb23.
+Planning: common 034630ddc9fbb9cfe34771def2b5ad58f76a6063; owner-relative 9759da5c1276aaa9ecfc6109aca018b68d9573e4.
+Common topology implementation a6b41e8001d12244d340cb6d9f3211bd9be6bffa; common comparison/compatibility fixture 2cf0decc341bebf6441bad1f212e3e6d0bf31cc4.
+Native owner integration 14077db5103e16ba31222fe794157af33bcc1c41; stair fixture and exact shared blob reconciliation 579167963092b914cccc1004c3c8647634b24113.
+Building owner head observed at start: 98e2720d6350ea05e6b25fde8dfc9991b1976e79, newer than integration branch's original base 69255900c472171f6fad0685c440791274ed8545. StudioBuildingGeneration.h and BuildingStructureGraph.h were verified identical between original integration and observed newer owner; BuildingCirculationRuntime.h has newer changes, its route API and policy were inspected and match. No owner or main ref changed. Reconcile newer owner before merge.
+
+Implemented:
+- Optional topology version 1 on existing native studio.buildingInspect functional report. Existing seed/count/socket fields and preset/legacy shapes preserved. Export exact StructureGraph room IDs, floor/cell indices and local bounds; actual connection IDs, endpoints, kind, local position, width and height. Vertical stair/lift records reference matching native sockets using the existing shared token, not fabricated endpoints.
+- Native component partitions for all authored links and excluding elevators, using existing planBuildingRoomRoute with requireAvailableLift=false; no new navigation solver. Graph caps 128 rooms, 512 connections and 256 sockets. At most two bounded pairwise passes (worst O(rooms^2) planner calls; no performance claim).
+- Shared BuildingRoomTopologyView renders actual authored topology, filter by floor retaining neighboring endpoints, selection/details for rooms/transitions, highlight native component and compare two rooms for structural reachability. Selection of vertical socket focuses existing owner feature form. Browser validates counts, identities, bounds, endpoints, socket references and local partition consistency; it consumes native group labels, not an independent pathfinder or verification of all possible reachability. Legacy count-only reports are explicitly labeled. All links remain shown even under no-elevator diagnostic policy; selected elevator is identified as excluded.
+- Exterior door/gate sockets are still shown in the existing recipe/socket graph. Native StructureGraph currently has no explicit exterior-room endpoints, so no exterior adjacency is invented. No runtime door/lift availability, collision/clearance, actor movement, NavMesh or reachable-path certification; no project writes, new bridge route, new native generator or genre dependency.
+
+Changed common paths: apps/studio-web/src/graphs/buildingRoomTopology.ts, BuildingRoomTopologyView.tsx, buildingGraphInspection.ts, BuildingStructureGraphView.tsx; apps/studio-web/tests/buildingRoomTopology.test.mjs, buildingGraphInspection.test.mjs; apps/studio-web/package.json; docs/agents/graph-framework.md; skills/workflow/aiverse-graph-authoring/SKILL.md; docs/devlog/systems.json; docs/features/graph-framework.json.
+Owner-relative additional paths: apps/studio-native/StudioBuildingTopology.h, StudioBuildingGeneration.h, CMakeLists.txt, tests/StudioBuildingTopologyTests.cpp; apps/studio-web/src/types.ts; docs/features/building-graph-integration.json. Shared paths copied by exact blob SHA, no divergent source implementations.
+
+Actual verification this turn:
+- Node v22.16.0 command node --experimental-strip-types --test tests/buildingRoomTopology.test.mjs tests/buildingGraphInspection.test.mjs: 10/10 PASS, 0 failures. Covers native identities, floor filtering, component policy, malformed data, isolated group, prior socket/legacy/preset behavior and optional topology through the owner response.
+- TypeScript 5.8.3: tsc --noEmit --strict --noUnusedLocals --noUnusedParameters --allowImportingTsExtensions --target ES2022 --module ESNext --moduleResolution bundler src/graphs/buildingRoomTopology.ts src/graphs/buildingGraphInspection.ts src/graphs/graphFramework.ts: PASS.
+- Scratch copies of all five full source/test files matched GitHub blob hashes at the implementation refs on both branches:
+  apps/studio-web/src/graphs/buildingRoomTopology.ts: 9567e16b496951af869d99f8d505a633228bc45f
+  apps/studio-web/src/graphs/buildingGraphInspection.ts: ec056b3028525f6b724b1c8fd36ea43f92be9b5d
+  apps/studio-web/src/graphs/graphFramework.ts: 34c83212a3f944ca7a603fd0a688c85e74fe7132
+  apps/studio-web/tests/buildingRoomTopology.test.mjs: baf494a8ffd26bd8c20e5f4a5623b5505f381fbc
+  apps/studio-web/tests/buildingGraphInspection.test.mjs: 6cc84b0b0217b87aa4afb1230b8e5605479f1352
+- Native StudioBuildingTopologyTests fixture authored for disconnected floors, native lift-only and stair connections, refusal of unknown endpoint; NOT RUN. Full checkout unavailable: git ls-remote failed DNS for github.com. Full native/CMake/CTest, actual native bridge report, full React Studio typecheck/build, WebView capture, MCP registry and feature gate, Mac/GPU gate NOT RUN. Test status in manifest remains not_run (repository evidence gate not satisfied). No readiness claim.
+
+Next: coordinate with Building owner to expose real authored exterior-room aperture endpoints (including openings spanning room boundaries), then add explicit native route-inspection query for exact start/goal and policy with edge IDs from the existing planner. Validate current native owner code and both PRs after integration; retain single canonical shared files and union test lists/roadmap. Do not infer physical traversability from structural reachability. No main merge before mandatory gates.
