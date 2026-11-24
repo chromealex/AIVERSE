@@ -85,7 +85,13 @@ public:
         previewRimKeys_=std::move(keys);previewRimCommitted_=false;previewDemandChanging_=true;
     }
     bool previewRimReady(const CaveSurfaceGroupPlan& plan)const noexcept{
-        return previewRimPlan_.get()==&plan&&previewRimCommitted_&&!previewDemandChanging_;
+        if(!index_||previewRimPlan_.get()!=&plan||!previewRimCommitted_||previewDemandChanging_||
+           geometry_.catalog().size()!=previewRimKeys_.size())return false;
+        for(const auto& key:previewRimKeys_){
+            const auto* source=geometry_.catalog().find(key);
+            if(!source||!source->preserveExactSurface||source->sourceRevision!=index_->revision()||!residency_.ready(key))return false;
+        }
+        return true;
     }
     bool previewDemandChanging()const noexcept{return previewDemandChanging_;}
     // CPU jobs may finish in any order. GPU publication stays owner-thread
