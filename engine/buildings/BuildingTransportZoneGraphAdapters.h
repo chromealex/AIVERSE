@@ -4,6 +4,7 @@
 // Owner supplies physically committed access policy for each edge.
 #include "engine/buildings/BuildingGraphChanges.h"
 #include "engine/game/MapGrid.h"
+#include "engine/data/Json.h"
 #include <aiverselib/strategy/ZoneGraph.h>
 #include <algorithm>
 #include <cstddef>
@@ -50,6 +51,9 @@ public:
             for(uint16_t j:source_->adj[i])
                 if(policy_(static_cast<uint16_t>(i),j))
                     next.adj[i].push_back(j);
+        sourceLinks_=0;activeLinks_=0;
+        for(const auto& row:source_->adj)sourceLinks_+=row.size();
+        for(const auto& row:next.adj)activeLinks_+=row.size();
         filtered_=std::move(next);
         revision_=revision;
         if(error)error->clear();
@@ -61,12 +65,20 @@ public:
                    rebuild(change.revision);
         };
     }
+    Json telemetry()const{
+        Json j=Json::object();j.set("revision",Json::string(std::to_string(revision_)));
+        j.set("nodes",Json::number(int64_t(filtered_.nodes.size())));
+        j.set("sourceDirectedLinks",Json::number(int64_t(sourceLinks_)));
+        j.set("activeDirectedLinks",Json::number(int64_t(activeLinks_)));
+        j.set("filteredDirectedLinks",Json::number(int64_t(sourceLinks_-activeLinks_)));return j;
+    }
     const game::RoadGraph& graph()const noexcept{return filtered_;}
     uint64_t revision()const noexcept{return revision_;}
 private:
     const game::RoadGraph* source_=nullptr; // existing owner retains lifetime
     CanTraverse policy_;
     game::RoadGraph filtered_;
+    size_t sourceLinks_=0,activeLinks_=0;
     uint64_t revision_=0;
 };
 
@@ -96,6 +108,7 @@ public:
             if(error)*error="Filtered ZoneGraph failed structural validation";
             return false;
         }
+        sourceDoors_=source_->doors.size();
         filtered_=std::move(next);
         revision_=revision;
         if(error)error->clear();
@@ -107,12 +120,20 @@ public:
                    rebuild(change.revision);
         };
     }
+    Json telemetry()const{
+        Json j=Json::object();j.set("revision",Json::string(std::to_string(revision_)));
+        j.set("zones",Json::number(int64_t(filtered_.zones.size())));
+        j.set("sourceDoors",Json::number(int64_t(sourceDoors_)));
+        j.set("activeDoors",Json::number(int64_t(filtered_.doors.size())));
+        j.set("filteredDoors",Json::number(int64_t(sourceDoors_-filtered_.doors.size())));return j;
+    }
     const lib::strategy::ZoneGraph& graph()const noexcept{return filtered_;}
     uint64_t revision()const noexcept{return revision_;}
 private:
     const lib::strategy::ZoneGraph* source_=nullptr;
     CanTraverse policy_;
     lib::strategy::ZoneGraph filtered_;
+    size_t sourceDoors_=0;
     uint64_t revision_=0;
 };
 
