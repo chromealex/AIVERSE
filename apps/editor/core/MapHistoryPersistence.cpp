@@ -198,6 +198,17 @@ HistoryLocation location(const std::string& path,bool create){
     const auto key=digest(map.filename().generic_string());
     return {cache,cache/("map-history-"+key+".json"),cache/("map-history-"+key+".lock"),cache/("map-history-"+key+".dirty")};
 }
+// v2 binds exact file bytes, not the pre-serialization floating point state.
+std::string fileFingerprint(const std::string& path,const std::map<fs::path,std::string>& hashes){
+    const auto parent=fs::absolute(path).lexically_normal().parent_path();
+    Json rows=Json::array();
+    for(const auto& [file,hash]:hashes){
+        Json row=Json::object();
+        row.set("path",Json::string(file.lexically_relative(parent).generic_string()));
+        row.set("sha256",Json::string(hash));rows.push(std::move(row));
+    }
+    return project_file_detail::digest(rows.dump(-1));
+}
 std::string fingerprint(const std::string& path,const MapData& loaded){
     using namespace project_file_detail;
     const auto p=fs::path(path);
@@ -232,6 +243,51 @@ std::shared_ptr<void> MapDoc::beginHistorySave(const std::string& file){
     write(loc.dirty,"Map save in progress\n");sync(loc.cache);sync(loc.cache.parent_path());
     return lock;
 }
+std::shared_ptr<void> MapDoc::lockAtomicSave(){
+    using namespace project_file_detail;
+    if(compoundBefore_)throw std::runtime_error("Cannot save active compound edit");
+    const auto loc=location(path,true);
+    auto lock=std::make_shared<Lock>(loc.lock);
+    if(journalExists(loc.dirty))throw std::runtime_error("Legacy interrupted map save; recover or save with legacy owner first");
+    return lock;
+}
+ProjectFileEdit MapDoc::stageHistoryCheckpoint(const std::vector<ProjectFileEdit>& mapEdits){
+    using namespace project_file_detail;
+    if(!savedFileBaselineValid_||compoundBefore_)throw std::runtime_error("Missing staged map baseline");
+    const auto loc=location(path,false);
+    if(journalExists(loc.dirty))throw std::runtime_error("Interrupted legacy map save");
+    // Every retained output hash must be represented in the same plan.
+    for(const auto& [file,hash]:savedFileHashes_){
+        const auto it=std::find_if(mapEdits.begin(),mapEdits.end(),[&](const auto& e){return e.path==file;});
+        if(it==mapEdits.end()||digest(it->after)!=hash)
+            throw std::runtime_error("Map checkpoint output does not match staged files");
+    }
+    if(undo_.size()+redo_.size()>200)throw std::runtime_error("Map history step limit");
+    Json body=Json::object(),undo=Json::array(),redo=Json::array();
+    body.set("baseline",Json::string(fileFingerprint(path,savedFileHashes_)));
+    size_t bytes=0;
+    const auto append=[&](Json& rows,const std::vector<HistoryEntry>& stack){
+        for(const auto& e:stack){
+            auto snapshot=encode(e.data).dump(-1);
+            if(snapshot.size()>MaxBytes-bytes)throw std::runtime_error("Map history snapshot budget exceeded");
+            bytes+=snapshot.size();
+            Json row=Json::object();row.set("label",Json::string(e.label));
+            row.set("snapshot",Json::string(std::move(snapshot)));rows.push(std::move(row));
+        }
+    };
+    append(undo,undo_);append(redo,redo_);
+    body.set("undo",std::move(undo));body.set("redo",std::move(redo));
+    const auto payload=body.dump(-1);budget(payload.size());
+    Json envelope=Json::object();envelope.set("version",Json::number(int64_t(2)));
+    envelope.set("sha256",Json::string(digest(payload)));
+    envelope.set("payload",Json::string(payload));
+    auto after=envelope.dump(-1);budget(after.size());
+    const bool exists=journalExists(loc.file);
+    if(exists&&(!fs::is_regular_file(fs::symlink_status(loc.file))||fs::file_size(loc.file)>MaxBytes))
+        throw std::runtime_error("Unsafe map history checkpoint");
+    auto before=exists?readProjectFileBytes(loc.file):std::string{};
+    return {loc.file,std::move(before),std::move(after),{},0,!exists};
+}
 void MapDoc::saveHistoryCheckpoint(){
     using namespace project_file_detail;
     historyPersistenceWarning_.clear();
@@ -243,6 +299,7 @@ void MapDoc::saveHistoryCheckpoint(){
         // Read the actual published map and its sidecars, not rounded live state.
         MapDoc saved;std::string error;
         if(!saved.loadImpl(path,&error,false)||!error.empty())throw std::runtime_error("Cannot verify saved map: "+error);
+        savedFileHashes_=saved.savedFileHashes_;savedFileBaselineValid_=saved.savedFileBaselineValid_;
         Json body=Json::object(),undo=Json::array(),redo=Json::array();
         body.set("baseline",Json::string(fingerprint(path,saved.data)));
         size_t bytes=0;
@@ -278,9 +335,12 @@ void MapDoc::restoreHistoryCheckpoint(){
             throw std::runtime_error("Unsafe or oversized map history checkpoint");
         const auto envelope=Json::parse(readProjectFileBytes(loc.file));
         const auto payload=envelope.getStr("payload");
-        if(envelope.getInt("version")!=1||digest(payload)!=envelope.getStr("sha256"))throw std::runtime_error("Map history checksum mismatch");
+        const auto version=envelope.getInt("version");
+        if((version!=1&&version!=2)||digest(payload)!=envelope.getStr("sha256"))throw std::runtime_error("Map history checksum mismatch");
         const auto body=Json::parse(payload);
-        if(body.getStr("baseline")!=fingerprint(path,data))throw std::runtime_error("Saved map or terrain sidecars changed; history unavailable");
+        if(version==2&&!savedFileBaselineValid_)throw std::runtime_error("Incomplete map file baseline");
+        const auto baseline=version==1?fingerprint(path,data):fileFingerprint(path,savedFileHashes_);
+        if(body.getStr("baseline")!=baseline)throw std::runtime_error("Saved map or terrain sidecars changed; history unavailable");
         array(body["undo"],200);array(body["redo"],200);
         if(body["undo"].size()+body["redo"].size()>200)throw std::runtime_error("Map history step limit");
         std::vector<HistoryEntry> undo,redo;size_t bytes=0;
