@@ -70,6 +70,34 @@ public:
         pendingRetires_.clear();
         syncStreamingEditPins();
     }
+    // Owner boundary after Simulation restore, never inside the restore hook.
+    // Hold readers paused until native publication and environment rebuild.
+    void restoreAuthoredWorld(CaveDirtyBounds fallback,
+                              std::shared_ptr<const CaveVolumeSnapshot> snapshot,
+                              size_t budget,
+                              const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive) {
+        if(closed_||physicsBarrier_.status().recoveryRequired||
+           !exclusive||!exclusive())throw std::logic_error("Caverns restore requires exclusive world");
+        restoring_=true;
+        try {
+            navigationBus_.resetForRestore();
+            invalidateNavigationRouteCache();
+            host_.restoreAuthoredSnapshot(fallback,std::move(snapshot),
+                                          chunkResolution_,chunkSpacingCm_,budget);
+            readyStreamBuilds_.clear();pendingRetires_.clear();
+            navDirty_=true;navDirtyBounds_=fallback;
+            syncStreamingEditPins();
+        }catch(...) {physicsBarrier_.requireRecovery();throw;}
+    }
+    bool finishAuthoredRestore(const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive) {
+        const auto s=host_.stats();
+        if(!restoring_||closed_||physicsBarrier_.status().recoveryRequired||
+           !exclusive||!exclusive()||!s.requestedRevision||
+           s.requestedRevision!=s.committedRevision||navigationBus_.hasPending()||
+           !navigationBus_.active())return false;
+        restoring_=false;return true;
+    }
+    bool restoringAuthoredWorld()const noexcept{return restoring_;}
     bool onAuthoringOperation(const Json& response,
                              std::shared_ptr<const CaveVolumeSnapshot> snapshot) {
         if(closed_||physicsBarrier_.status().recoveryRequired)return false;
@@ -189,7 +217,7 @@ public:
     // suppress both movement requests and solver reads until recovered.
     std::shared_ptr<const CaveNavigationDataProvider>
     gameplayNavigationSource()const {
-        if(closed_||physicsBarrier_.status().recoveryRequired||
+        if(closed_||restoring_||physicsBarrier_.status().recoveryRequired||
            navigationBus_.hasPending())return nullptr;
         return navigationBus_.active();
     }
@@ -335,7 +363,7 @@ public:
     }
     void disableAdaptiveStreamLod(){residency_.disableDistanceLod();}
     std::vector<CaveResidencyTicket> pumpStreaming() {
-        if(closed_||physicsBarrier_.status().recoveryRequired)return {};
+        if(closed_||restoring_||physicsBarrier_.status().recoveryRequired)return {};
         syncStreamingEditPins();
         return residency_.pump();
     }
@@ -344,7 +372,7 @@ public:
     // to bounded immutable CPU workers; no GPU work starts on those threads.
     std::vector<CaveResidencyTicket> dispatchStreamingCpu(
         ChunkKey3 cameraChunk,uint32_t resolution=0,int32_t spacingCm=0) {
-        if(closed_||physicsBarrier_.status().recoveryRequired)return {};
+        if(closed_||restoring_||physicsBarrier_.status().recoveryRequired)return {};
         if(!resolution)resolution=chunkResolution_;
         if(!spacingCm)spacingCm=chunkSpacingCm_;
         if(resolution!=chunkResolution_||spacingCm!=chunkSpacingCm_)
@@ -376,7 +404,7 @@ public:
     // via publishStreamBuild or publishOwnedStreamRetire. Old generations are discarded.
     std::vector<CaveStreamCpuResult> pollStreamingCpu(
         CaveStreamJobStats* telemetry=nullptr) {
-        if(closed_||physicsBarrier_.status().recoveryRequired)return {};
+        if(closed_||restoring_||physicsBarrier_.status().recoveryRequired)return {};
         auto results=streamJobs_.poll(telemetry);
         results.erase(std::remove_if(results.begin(),results.end(),
             [this](const CaveStreamCpuResult& r){
@@ -421,7 +449,7 @@ public:
         const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive,
         const StreamBuildCommit& actualNativeCommit) {
         const auto it=readyStreamBuilds_.find(ticket.key);
-        if(closed_||physicsBarrier_.status().recoveryRequired||
+        if(closed_||restoring_||physicsBarrier_.status().recoveryRequired||
            ticket.action!=CaveResidencyAction::Build ||
            !exclusive || !exclusive() || !actualNativeCommit ||
            it==readyStreamBuilds_.end() ||
@@ -468,7 +496,7 @@ public:
         const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive,
         const StreamRetireCommit& retireNavigation,CaveBatchSpec spec={}) {
         const auto it=pendingRetires_.find(ticket.key);
-        if(closed_||physicsBarrier_.status().recoveryRequired||
+        if(closed_||restoring_||physicsBarrier_.status().recoveryRequired||
            ticket.action!=CaveResidencyAction::Retire||!exclusive||!exclusive()||
            !retireNavigation||it==pendingRetires_.end()||!residency_.current(ticket)||
            it->second.generation!=ticket.generation||
@@ -495,7 +523,7 @@ public:
         const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive,
         const StreamRetireCommit& actualNativeCommit) {
         const auto it=pendingRetires_.find(ticket.key);
-        if(closed_||physicsBarrier_.status().recoveryRequired||
+        if(closed_||restoring_||physicsBarrier_.status().recoveryRequired||
            ticket.action!=CaveResidencyAction::Retire ||
            host_.physicsStages().contains(ticket.key)||
            !exclusive || !exclusive() || !actualNativeCommit ||
@@ -560,7 +588,7 @@ public:
             throw std::logic_error("Caverns chunk dimensions fixed by frame constructor");
     }
     void drawCommitted(render::Renderer3D& renderer){
-        if(!closed_&&!physicsBarrier_.status().recoveryRequired)host_.draw(renderer);
+        if(!closed_&&!restoring_&&!physicsBarrier_.status().recoveryRequired)host_.draw(renderer);
     }
     size_t collectGpuCompletedWithoutIdle(gfx::Device& device){
         return host_.collectGpuCompletedWithoutIdle(device);
@@ -679,6 +707,7 @@ private:
     std::map<ChunkKey3,uint64_t,KeyLess> editPins_;
     CaveGameplayEditHost host_;
     bool closed_=false;
+    bool restoring_=false;
     CaveGameplayPhysicsBarrier physicsBarrier_;
 };
 } // namespace aiverse::terraweave::caverns
