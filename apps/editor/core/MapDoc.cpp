@@ -153,7 +153,7 @@ bool MapDoc::loadImpl(const std::string& file, std::string* err,bool restoreHist
                 if (!dj || !dj->isObject() || dj->has("blob") || !dj->has("file")) continue;
                 std::string bytes;
                 if (read(dj->getStr("file"), bytes)) dj->set("blob", Json::string(std::move(bytes)));
-                else if (err) *err = "world body detail: cannot read '" + dj->getStr("file") + "' (dropped)";
+                else {complete=false;if(err)*err="world body detail: cannot read '"+dj->getStr("file")+"' (dropped)";}
             }
         if (!loadJson(j, err)) return false;
         // visual detail heightmap (+ splat): kept as int16 / RGBA8 for editing, written back by save()
@@ -164,7 +164,7 @@ bool MapDoc::loadImpl(const std::string& file, std::string* err,bool restoreHist
             if (game::terrain::loadMapDetail(j, read, ds, sp, &derr)) {
                 data.detailScale = ds.k; data.detail = game::terrain::detailToInt16(ds); data.detailSplat = std::move(sp);
                 data.detailFile = dj.getStr("file");
-            } else if (err) *err = derr;   // map still opens; the detail is dropped
+            } else {complete=false;if(err)*err=derr;} // map still opens; the detail is dropped
         }
         path = file;
         savedFileHashes_=std::move(hashes);savedFileBaselineValid_=complete&&(!err||err->empty());
@@ -530,6 +530,7 @@ bool MapDoc::save(const std::string& file, std::string* err) {
     std::shared_ptr<void> historyLock;
     try{historyLock=beginHistorySave(file);}
     catch(const std::exception& e){if(err)*err=e.what();return false;}
+    savedFileBaselineValid_=false; // legacy save may fail after writing a sidecar
     for (auto [a, b] : data.roads) // roads need ids on their endpoints
         for (int i : {a, b}) if (data.entities[size_t(i)].id.empty()) data.entities[size_t(i)].id = uniqueId(data.entities[size_t(i)].type);
     const std::string oldPath = path, oldCorners = data.cornersFile;
