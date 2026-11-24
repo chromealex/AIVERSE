@@ -89,7 +89,9 @@
     "engine/render/graph/TextureGraphSharedScratch.h",
     "tests/render/texture_graph_shared_scratch.cpp",
     "engine/render/graph/TextureGraphLiveness.h",
-    "tests/render/texture_graph_liveness.cpp"
+    "tests/render/texture_graph_liveness.cpp",
+    "engine/render/graph/TextureGraphPassSchedule.h",
+    "tests/render/texture_graph_pass_schedule.cpp"
   ],
   "traits": {
     "editable": true,
@@ -100,7 +102,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 33B CPU dependency lifetime plan integrated in source; isolated exact-blob planner fixture PASS. General GPU scheduling and hardware acceptance pending.",
+      "note": "Stage 34A in progress: bounded explicit compute pass scheduling with initialized resource validation and dispatch failure propagation.",
       "evidence": []
     },
     "architecture": {
