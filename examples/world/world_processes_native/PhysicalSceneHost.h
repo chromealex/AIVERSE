@@ -45,7 +45,7 @@ public:
     bool updateMorphVisuals(const World& ecs) {
         for(auto& [id,stream]:morphVisuals_){
             (void)id;
-            if(!stream->update(ecs))return false;
+            if(!stream->planetary()&&!stream->update(ecs))return false;
         }
         return true;
     }

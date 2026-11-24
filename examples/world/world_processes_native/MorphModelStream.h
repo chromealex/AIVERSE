@@ -116,9 +116,10 @@ public:
     // asset layouts need an explicit owner conversion, not a guessed basis.
     bool updatePlanet(const World& world,const game::Surface& surface,Entity owner,
                       std::string_view body,int32_t unitsPerMetre,uint32_t completedTick){
+        planetMode_=true;
         invalidatePublication();
         const auto frame=morph::resolvePlanetModelFrame(world,surface,owner,body,unitsPerMetre);
-        if(!frame||!ready()||!rigidIdentityModel()||
+        if(!frame||!ready()||device_->info().backend!=gfx::Backend::Metal||!rigidIdentityModel()||
            std::abs(config_.metresPerUnit*float(unitsPerMetre)-1.f)>1e-4f){
             error_="MORPH: incompatible planetary model frame or units";return false;
         }
@@ -126,7 +127,7 @@ public:
             if(bind.weight[i]&&!morph::planetModelNodeCurrent(world,*frame,bind.node[i],completedTick)){
                 error_="MORPH: stale or mismatched planetary influence";return false;
             }
-        if(!update(world))return false;
+        if(!updateInternal(world))return false;
         planetFrame_=*frame;
         return true;
     }
@@ -135,7 +136,7 @@ public:
     bool attachPlanet(render::ModelDraw& draw,Vec3 bodyAnchor,
                       render::float3 renderTranslation={})const{
         if(!planetFrame_||bodyAnchor!=game::Surface::anchor(planetFrame_->frame.body)||
-           draw.nodeWorld||draw.pose||draw.baked||draw.staticCache)return false;
+           draw.nodeWorld||draw.pose||draw.baked||draw.staticCache||(draw.flags&render::kDrawStatic))return false;
         const auto& frame=planetFrame_->frame;
         const auto asFloat=[](Vec3 v){return render::float3{float(v.x.toDouble()),float(v.y.toDouble()),float(v.z.toDouble())};};
         const auto p=asFloat(frame.origin-bodyAnchor)+renderTranslation;
@@ -156,7 +157,13 @@ public:
     }
     void invalidatePublication(){published_=false;planetFrame_.reset();}
 
+    bool planetary()const noexcept{return planetMode_;}
     bool update(const World& world) {
+        if(planetMode_){invalidatePublication();error_="MORPH: planetary stream requires updatePlanet";return false;}
+        return updateInternal(world);
+    }
+private:
+    bool updateInternal(const World& world) {
         invalidatePublication();
         if(!ready()||!device_->gpuHealthy()||
            !device_->canUpdateSharedBuffers()||
@@ -235,8 +242,9 @@ public:
     // Attach immediately after update() and before drawModel/render. The
     // renderer preserves the normal PBR, skin, morph, shadow and outline
     // passes; only this instance's vertex stream is replaced.
+public:
     bool attach(render::ModelDraw& draw)const {
-        return !planetFrame_&&attachInternal(draw);
+        return !planetMode_&&attachInternal(draw);
     }
 private:
     bool attachInternal(render::ModelDraw& draw)const {
@@ -274,7 +282,7 @@ public:
         device_->destroyBuffer(buffer_);
         device_=nullptr;model_=nullptr;buffer_={};
         base_.clear();output_.clear();indices_.clear();bindings_.clear();
-        invalidatePublication();lastFrame_=0;lastOffset_=0;
+        invalidatePublication();planetMode_=false;lastFrame_=0;lastOffset_=0;
         return true;
     }
 private:
@@ -284,7 +292,7 @@ private:
     MorphModelStreamConfig config_{};
     std::uint64_t modelRevision_=0,lastFrame_=0;
     float lastOffset_=0;
-    bool published_=false;
+    bool published_=false,planetMode_=false;
     std::optional<morph::PlanetModelFrame> planetFrame_;
     std::vector<render::ModelVertex> base_,output_;
     std::vector<std::uint32_t> indices_;
