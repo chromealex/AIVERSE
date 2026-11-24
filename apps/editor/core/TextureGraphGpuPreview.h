@@ -43,7 +43,8 @@ class TextureGraphGpuPreview {
     std::string matCacheProject_;
     uint64_t matLastFence_=0;
     size_t matPipelineHits_=0;
-    bool matBufferHit_=false;
+    bool matBufferHit_=false,matFusion_=false;
+    size_t matReachableNodes_=0,matFusedNodes_=0;
     bool activePlanAccepted_=false,cacheHit_=false;
     uint64_t cacheHits_=0;
     render::texture_graph::gpu::SharedScalarScratch sharedScratch_;
@@ -196,7 +197,8 @@ class TextureGraphGpuPreview {
                 std::vector<size_t> targets;
                 if(setBake_){for(const auto& pair:setOutputs_)targets.push_back(pair.second);}
                 else targets.push_back(target_);
-                matSources_=compileMaterializedDag(*program_,targets,size_);
+                matSources_=compileMaterializedDag(*program_,targets,size_,materializedBudgetBytes,matFusion_);
+                matReachableNodes_=matSources_->reachableNodes;matFusedNodes_=matSources_->fusedNodes;
                 matSerial_=serial_;
                 auto& sources=*matSources_;
                 matLayout_=sources.plan.schedule.slotBytes;
@@ -297,6 +299,9 @@ public:
         r.set("materializedRequested",Json::fromBool(matRequested_));
         r.set("materializedFailed",Json::fromBool(matFailed_));
         r.set("materializedNodePasses",Json::number(int64_t(matNodePasses_)));
+        r.set("fusionRequested",Json::fromBool(matFusion_));
+        r.set("fusionReachableNodes",Json::number(int64_t(matReachableNodes_)));
+        r.set("fusionElidedPasses",Json::number(int64_t(matFusedNodes_)));
         r.set("materializedPackPasses",Json::number(int64_t(matPackPasses_)));
         r.set("materializedBufferCacheHit",Json::fromBool(matBufferHit_));
         r.set("materializedPipelineCacheHits",Json::number(int64_t(matPipelineHits_)));
@@ -324,7 +329,7 @@ public:
         timeoutMs_=render::texture_graph::integer(p["timeoutMs"],60000,1000,300000);
         deadline_=Clock::now()+std::chrono::milliseconds(timeoutMs_);
         sharedScratch_.invalidate();reusedScratch_=false;sharedScratchHits_=0;
-        matRequested_=p.getBool("materialized")||p.getBool("materializedDag");matFailed_=false;matNodePasses_=matPackPasses_=matPipelineHits_=0;matBufferHit_=false;
+        matRequested_=p.getBool("materialized")||p.getBool("materializedDag");matFusion_=matRequested_&&p.getBool("fusePointwise");matReachableNodes_=matFusedNodes_=0;matFailed_=false;matNodePasses_=matPackPasses_=matPipelineHits_=0;matBufferHit_=false;
         ++serial_;size_=std::min(program.size,requested);target_=target;program_=std::move(program);project_=project;output_=output;bake_=bake;published_=false;setBake_=setBake;
         sourceGraph_=setBake?p["graph"]:Json();overrides_=setBake?(p.has("overrides")?p["overrides"]:Json::object()):Json();
         setOutputs_.clear();setImages_.clear();setBackends_.clear();reusedOutputs_=0;
