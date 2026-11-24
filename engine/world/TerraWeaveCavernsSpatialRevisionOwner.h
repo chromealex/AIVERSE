@@ -25,6 +25,7 @@ struct CaveSpatialChunk {
 struct CaveSpatialLease {
     uint8_t slot=0;
     uint32_t count=0;
+    std::vector<uint64_t> generations;
 };
 class CaveSpatialRevisionOwner {
 public:
@@ -34,7 +35,8 @@ public:
     struct Candidate {
         std::unique_ptr<world::SpatialWorld> world;
         std::map<ChunkKey3,CaveSpatialLease,KeyLess> leases;
-        uint64_t oldRevision=0,newRevision=0;
+        uint64_t oldRevision=0,newRevision=0,baseWorldVersion=0;
+        const world::SpatialWorld* baseWorld=nullptr;
         size_t changed=0;
     };
     uint64_t revision()const noexcept{return revision_;}
@@ -66,8 +68,11 @@ public:
                     throw std::runtime_error("Caverns initial spatial insert");
                 ++inserted;
             }
-            leases_.emplace(chunk.key,CaveSpatialLease{
-                slot,uint32_t(prepared.triangles.size())});
+            CaveSpatialLease lease{slot,uint32_t(prepared.triangles.size()),{}};
+            lease.generations.reserve(inserted);
+            for(uint32_t n=0;n<inserted;++n)
+                lease.generations.push_back(active.colliderGeneration(start+n));
+            leases_.emplace(chunk.key,std::move(lease));
             revision_=sourceRevision;
         } catch(...) {
             for(uint32_t n=0;n<inserted;++n)active.remove(start+n);
@@ -81,6 +86,8 @@ public:
            changed.empty()||changed.size()>kChunkSlots)
             throw std::invalid_argument("Caverns spatial staging epoch");
         Candidate stage;
+        stage.baseWorld=&current;
+        stage.baseWorldVersion=current.mutationVersion();
         stage.world=std::make_unique<world::SpatialWorld>(current);
         stage.leases=leases_;
         stage.oldRevision=revision_;
@@ -96,8 +103,11 @@ public:
                 ?allocateSlot(stage.leases):it->second.slot;
             const uint32_t start=firstId(slot);
             if(it!=stage.leases.end()) {
+                if(it->second.generations.size()!=it->second.count)
+                    throw std::logic_error("Caverns malformed collision lease");
                 for(uint32_t n=0;n<it->second.count;++n)
-                    stage.world->remove(start+n);
+                    if(!stage.world->removeIfGeneration(start+n,it->second.generations[n]))
+                        throw std::logic_error("Caverns collision lease no longer owns ID");
             }
             for(uint32_t n=0;n<prepared.triangles.size();++n) {
                 if(stage.world->colliders().contains(start+n)||
@@ -106,8 +116,11 @@ public:
             }
             // Empty surfaces keep their slot until a separate explicit
             // retirement decision; no other chunk can steal live IDs.
-            stage.leases[chunk.key]={
-                slot,uint32_t(prepared.triangles.size())};
+            CaveSpatialLease lease{slot,uint32_t(prepared.triangles.size()),{}};
+            lease.generations.reserve(lease.count);
+            for(uint32_t n=0;n<lease.count;++n)
+                lease.generations.push_back(stage.world->colliderGeneration(start+n));
+            stage.leases[chunk.key]=std::move(lease);
             ++stage.changed;
         }
         return stage;
@@ -119,9 +132,8 @@ public:
                  const std::function<bool()>& exclusive) {
         if(recovery_||!exclusive||!exclusive()||!candidate.world||
            candidate.oldRevision!=revision_||
-           candidate.newRevision<=revision_)return false;
-        using std::swap;
-        swap(active,*candidate.world);
+           candidate.newRevision<=revision_||candidate.baseWorld!=&active)return false;
+        if(!active.publishCopyIfCurrent(std::move(*candidate.world),candidate.baseWorldVersion))return false;
         leases_.swap(candidate.leases);
         revision_=candidate.newRevision;
         candidate.world.reset();
