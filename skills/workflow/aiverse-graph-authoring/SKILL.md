@@ -92,3 +92,5 @@ Stage 35D: use `BuildingCandidateGate` to capture immutable JSON-wire Building r
 
 
 Stage 35E: inspect optional buildingInspect.topology version 1 using parseBuildingRoomTopology and BuildingRoomTopologyView. Use only returned rooms, connections, vertical socket IDs and native component labels. All-links and no-elevator groups are structural diagnostics, not a live traversability guarantee. Never infer exterior-door endpoints or reconstruct adjacency from room grid dimensions. Legacy reports remain count-only.
+
+Stage 35F Building Graph: reuse buildingRoomTopology.ts and BuildingRoomTopologyView. Project native exteriorApertures as one non-routing node per entrance socket and use native component labels for groups without entrance overlaps; missing field means unknown. Use the optional owner callback to studio.buildingInspect routeQuery {start,goal,allowStairs,allowElevators}, validate ordered native edges and highlight the returned path. Never calculate a second route in WebView, infer physical clearance or route through exterior nodes. Imported reports are offline; native owner wiring is separate until integration.
