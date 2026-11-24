@@ -23,7 +23,13 @@
     "apps/studio-web/src/types.ts",
     "apps/studio-native/tests/StudioBuildingTopologyTests.cpp",
     "apps/studio-native/CMakeLists.txt",
-    "libraries/include/aiverselib/systems/BuildingStructureGraph.h"
+    "libraries/include/aiverselib/systems/BuildingStructureGraph.h",
+    "apps/studio-native/StudioBuildingDependencies.h",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-web/src/mock.ts",
+    "apps/studio-web/src/graphs/buildingMaterialDependencies.ts",
+    "apps/studio-web/src/graphs/BuildingMaterialDependenciesView.tsx",
+    "apps/studio-web/tests/buildingMaterialDependencies.test.mjs"
   ],
   "traits": {
     "editable": true,
@@ -34,7 +40,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35F.3: native exterior aperture overlap, explicit native room route inspection and shared GraphCanvas exterior nodes/group diagnostics implemented; acceptance pending.",
+      "note": "Stage 35H.2 owner draft editing and material/texture dependency projection; native GUID-based recorded texture bake provenance. No resolved GLB or current texture-byte proof; acceptance pending.",
       "evidence": []
     },
     "architecture": {
@@ -104,7 +110,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F.1–35F.3 fixtures added; NOT RUN.",
+      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F.1–35F.3 fixtures added; NOT RUN. Stage 35H.2 dependency fixtures registered, NOT RUN.",
       "evidence": []
     },
     "handoff": {
@@ -130,7 +136,8 @@
       "building_generator"
     ],
     "studio_methods": [
-      "studio.buildingInspect"
+      "studio.buildingInspect",
+      "studio.buildingTextureProvenance"
     ]
   },
   "test_reports": []
