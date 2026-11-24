@@ -16,3 +16,6 @@ All printed PASS. No claim of whole-engine or GPU acceptance. Full frontend/nati
 
 ## Next
 On Mac, use a clean checkout of final handoff HEAD with submodules initialized and run bash tools/texture-graph-stage38bg-mac.sh. Return QA archive printed at exit; fix actual compiler errors/warnings before advancing. Then open printed Studio app and verify graph edit/function asset link/refresh, external PNG, custom expression, PBR view and HDRI with capture evidence; separate Vulkan hardware and merged-tree acceptance.
+
+## Mac QA round 1
+User log confirms clean checkout 319bcd8923df95ad3e69464fa8974cc51663a576, macOS arm64, CMake 3.27.8, Node 22.23.4, npm install PASS. TypeScript failed at TextureGraphPanel.tsx(534,379) TS1005: missing closing JSX expression brace on onPointerMove. Fixed handler closure; no other changes to behavior. Web typecheck rerun and all downstream native/GPU/MCP tests remain pending. Reuse existing checkout (git fetch, checkout new SHA), not a new clone.
