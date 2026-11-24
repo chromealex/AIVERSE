@@ -53,7 +53,99 @@ const ea::AcousticHearing& hearing(const Simulation& sim){
     AIVERSE_TEST_CHECK(output);
     return *output;
 }
+// Compare the new shared graph solver against the unchanged single-source
+// reference kernel. Fixed integer generator, not simulation RNG state.
+static void checkMultiSourceParity(){
+    namespace wp=aiverse::lib::worldprocess;
+    uint64_t rng=0x1234abcd5678ef90ULL;
+    auto next=[&](){rng=rng*6364136223846793005ULL+1;return rng>>32;};
+    for(unsigned trial=0;trial<64;++trial){
+        const size_t n=1+next()%32;
+        lib::WeightedGraph graph(n);
+        std::vector<wp::AcousticEdge> edges;
+        for(size_t i=0;i<n*5;++i){
+            const size_t a=next()%n,b=next()%n;
+            const auto loss=int64_t(next()%11);
+            graph[a].push_back({b,uint64_t(loss)});
+            edges.push_back({a,b,loss});
+        }
+        std::vector<lib::WeightedSeed> seeds;
+        std::vector<int64_t> best(n,-1);
+        std::vector<uint64_t> owners(n,0);
+        const size_t count=trial%9;
+        for(size_t i=0;i<count;++i){
+            const size_t zone=next()%n;
+            const int64_t intensity=1+int64_t(next()%30);
+            const uint64_t id=100-i;
+            seeds.push_back({zone,uint64_t(ea::kMaxIntensity-intensity),id});
+            const auto reference=wp::audibility(n,zone,intensity,edges);
+            for(size_t v=0;v<n;++v){
+                const auto value=reference[v];
+                if(value>0&&(value>best[v]||(value==best[v]&&id<owners[v]))){
+                    best[v]=value;owners[v]=id;
+                }
+            }
+        }
+        const auto actual=lib::multiSourceDijkstra(graph,seeds,ea::kMaxIntensity-1);
+        AIVERSE_TEST_CHECK(actual);
+        std::reverse(seeds.begin(),seeds.end());
+        const auto reversed=lib::multiSourceDijkstra(graph,seeds,ea::kMaxIntensity-1);
+        AIVERSE_TEST_CHECK(reversed&&actual->distance==reversed->distance&&actual->sourceId==reversed->sourceId);
+        for(size_t v=0;v<n;++v){
+            if(best[v]<0)AIVERSE_TEST_CHECK(actual->distance[v]==lib::kInfiniteCost);
+            else{
+                AIVERSE_TEST_CHECK(actual->distance[v]==uint64_t(ea::kMaxIntensity-best[v]));
+                AIVERSE_TEST_CHECK(actual->sourceId[v]==owners[v]);
+            }
+        }
+    }
+    // Equal cost through zero-cost cycles, inclusive cutoff and overflow guard.
+    lib::WeightedGraph graph(4);
+    graph[0]={{1,0},{2,7},{3,8}};graph[1]={{0,0}};
+    const std::vector<lib::WeightedSeed> seeds{{0,0,20},{1,0,10}};
+    const auto result=lib::multiSourceDijkstra(graph,seeds,7);
+    AIVERSE_TEST_CHECK(result&&result->sourceId[0]==10&&result->sourceId[1]==10);
+    AIVERSE_TEST_CHECK(result->distance[2]==7&&result->sourceId[2]==10);
+    AIVERSE_TEST_CHECK(result->distance[3]==lib::kInfiniteCost);
+    graph[0].push_back({4,0});
+    AIVERSE_TEST_CHECK(!lib::multiSourceDijkstra(graph,seeds,7));
+    graph[0].pop_back();
+    AIVERSE_TEST_CHECK(!lib::multiSourceDijkstra(graph,{{4,0,1}},7));
+    AIVERSE_TEST_CHECK(!lib::multiSourceDijkstra(graph,{{0,8,1}},7));
+    graph[0]={{1,lib::kInfiniteCost-1}};graph[1].clear();
+    const auto huge=lib::multiSourceDijkstra(graph,{{0,2,1}});
+    AIVERSE_TEST_CHECK(huge&&huge->distance[1]==lib::kInfiniteCost);
+}
+static void checkDirectedCutoff(){
+    World ecs;
+    const auto a=ecs.create(),b=ecs.create(),c=ecs.create();
+    for(auto e:{a,b,c})ecs.add<ea::AcousticZone>(e);
+    auto p=ecs.create();
+    ecs.add<ea::AcousticPortal>(p,ea::AcousticPortal{a,b,10,false,true});
+    auto q=ecs.create();
+    ecs.add<ea::AcousticPortal>(q,ea::AcousticPortal{b,c,5,false,true});
+    auto em=ecs.create();
+    ecs.add<ea::AcousticEmitter>(em,ea::AcousticEmitter{a,15,true});
+    std::vector<Entity> receivers;
+    for(auto zone:{a,b,c}){
+        auto e=ecs.create();receivers.push_back(e);
+        ecs.add<ea::AcousticReceiver>(e,ea::AcousticReceiver{zone,0,true});
+        ecs.add<ea::AcousticHearing>(e);
+    }
+    AIVERSE_TEST_CHECK(ea::propagate(ecs,1));
+    AIVERSE_TEST_CHECK(ecs.get<ea::AcousticHearing>(receivers[0]).intensity==15);
+    AIVERSE_TEST_CHECK(ecs.get<ea::AcousticHearing>(receivers[1]).intensity==5);
+    AIVERSE_TEST_CHECK(ecs.get<ea::AcousticHearing>(receivers[2]).valid);
+    AIVERSE_TEST_CHECK(!ecs.get<ea::AcousticHearing>(receivers[2]).audible);
+    ecs.get<ea::AcousticEmitter>(em).zone=c;
+    AIVERSE_TEST_CHECK(ea::propagate(ecs,2));
+    AIVERSE_TEST_CHECK(!ecs.get<ea::AcousticHearing>(receivers[0]).audible);
+    AIVERSE_TEST_CHECK(!ecs.get<ea::AcousticHearing>(receivers[1]).audible);
+    AIVERSE_TEST_CHECK(ecs.get<ea::AcousticHearing>(receivers[2]).source==em);
+}
 int main(){
+    checkMultiSourceParity();
+    checkDirectedCutoff();
     auto a=make<1>();
     auto b=make<2>(true);
     for(int i=0;i<4;++i){a->step();b->step();}
