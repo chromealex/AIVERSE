@@ -1,3 +1,7 @@
+## Stage 119B — owned asynchronous checkpoint capture (in progress; QA deferred)
+
+Reuse existing chunked capture, shared readback budget, cadence and callback lifetime. Capture seven streams for owned allocation, exact partition metadata, validate revision and mode; no publication after partial enqueue or invalid data. Register production checkpoint fixture for history, disk v2 and async completion. Native tests remain deferred.
+
 ## Stage 119A — GPU-owned allocator checkpoint format and blocking capture/restore (source implemented; async pending; QA deferred)
 
 Extend the existing bounded presentation checkpoint capture and restore path with exact GPU alive/free slot order and source ownership; preserve live particle state, VM params/attributes and RNG. Version 2 restore file adds alive order without breaking v1; external process-local owner tokens still rejected on file import/export. Keep asynchronous budgets and 4096-slot checkpoint ceiling independent of simulation capacity. Freshness follows particle mutation, not camera-only redraw. No authoritative ECS state.
