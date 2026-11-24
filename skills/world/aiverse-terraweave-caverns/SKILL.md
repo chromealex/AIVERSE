@@ -918,3 +918,8 @@ Enable `AIVERSE_ENABLE_PHYSICS=ON` and `AIVERSE_BUILD_CAVERNS_PLANET_DEMO=ON` on
 ## Stage58d1 — portal and swim demo scenarios
 
 The optional native demo accepts `--portal` for authored shaft entry → chamber A* route → return → physical exit, and `--swim` for a separate submerged chamber using actual NEREID sphere water and the shared swim policy. Each uses the same dispatch/Scene, persistent journey phase and locomotion state. Portal motion proves committed region and all finest terrain leaves in its conservative swept envelope; geometry certification or missing coverage refuses rather than creating a fake opening. `--frames N` combines with either scenario. The demo retains fixed view/one bounded patch and scripted controls. These are new source scenarios, not validated runtime evidence. Dynamic frame and synchronized native restore remain pending.
+
+
+## Stage58d2 — moving planet view
+
+`--moving-view` combines with chamber, portal or swim. Surface owns actual star/planet orbit; the demo follows the body and publishes a discrete translation/rotation of the LENS view origin every 30 simulation ticks while resident. Rendering, body-attached lamp, sun direction, GI geometry and focus use the same frozen frame and time. GI history is fully invalidated per rebase; fixed bounded CPU probe lattice, not continuous scrolling. `exactCavePlanetGiBaselineRemap` maps unleased host baseline vertices directly from canonical body-fixed source, refuses unknown/ambiguous vertices, and never accumulates inverse float drift. ECS checksum, physics tick and SpatialWorld mutation identity must remain unchanged. `--frames N` also requires at least one rebase in moving mode. Source-only, no live acceptance yet.

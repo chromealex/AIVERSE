@@ -16,6 +16,8 @@ using namespace aiverse::terraweave::caverns;
 namespace {
 constexpr uint64_t regionId=1;
 constexpr int tickRate=60;
+constexpr int planetBody=1;
+constexpr int starBody=0;
 constexpr uint64_t mouthId=1;
 enum class Scenario:uint8_t { Chamber,Portal,Swim };
 enum class Journey:uint8_t { Enter,Explore,Return,Exit,Done };
@@ -29,8 +31,11 @@ CavePlanetDemandConfig demand(){
 void require(bool ok,const char* message){if(!ok)throw std::runtime_error(message);}
 std::shared_ptr<const game::Surface> makeSurface(){
     auto s=std::make_shared<game::Surface>();game::BodyDef body;
+    game::BodyDef star;star.id="star";star.kind=game::BodyKind::Star;star.radius=8_fx;
     body.id=anchor.bodyId;body.radius=100_fx;body.faceSize=256;
-    s->bodies.push_back(body);s->build();return s;
+    body.parent=starBody;body.orbitRadius=1000_fx;body.orbitPeriod=60_fx;
+    s->bodies.push_back(star);s->bodies.push_back(body);s->startBody=planetBody;
+    s->build();return s;
 }
 Json authoredMap(Scenario scenario){
     CaveVolumeSnapshot volume;
@@ -77,7 +82,7 @@ struct DemoModule final:GameModule {
         physis::GravitySettings gravity;gravity.baseline=scenario==Scenario::Swim?frame.up()*(-10_fx):Vec3{};
         sim.world().setResource<physis::GravitySettings>(gravity);
         if(scenario==Scenario::Swim){
-            lib::nereid::WaterSphereComponent sea;sea.center=game::Surface::anchor(0);
+            lib::nereid::WaterSphereComponent sea;sea.center=game::Surface::anchor(planetBody);
             sea.surfaceRadius=100_fx;sea.floorRadius=90_fx;
             sim.world().add<lib::nereid::WaterSphereComponent>(sim.world().create(),sea);
         }
@@ -113,6 +118,10 @@ struct Demo {
     render::GiMainCpuBridge gi;
     render::SphereViewFrame viewFrame;
     CavePlanetGiProject project;
+    std::map<uint64_t,CavePlanetGiCanonicalChunk> baselineSources;
+    double renderSeconds=0;
+    uint32_t lastRebaseTick=0,rebaseCount=0;
+    bool movingView=false;
     std::unique_ptr<physics::Scene> box;
     world::SpatialWorld spatial;
     CaveColliderLeasePool pool{1,1000000};
@@ -135,7 +144,55 @@ struct Demo {
         if(!failed)std::fprintf(stderr,"[caverns-demo] FAIL %s\n",reason);
         failed=true;stopping=true;platform::requestQuit();
     }
-    render::float3 renderPosition(Vec3 p)const{return project(anchor.bodyId,p-game::Surface::anchor(0));}
+    render::float3 renderPosition(Vec3 p)const{return project(anchor.bodyId,p-game::Surface::anchor(planetBody));}
+    static render::float3 floatVec(Vec3 p){return {float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())};}
+    render::SphereViewFrame makeViewFrame(double seconds,uint32_t serial)const{
+        const auto& planet=view.planets().world();
+        render::SphereViewFrame result;
+        const auto right=floatVec(frame->east()),up=floatVec(frame->up()),back=floatVec(frame->south());
+        const float angle=(serial%2)?0.15f:0.f;
+        const auto cosine=std::cos(angle),sine=std::sin(angle);
+        result.right=right*cosine+back*sine;result.up=up;result.back=back*cosine-right*sine;
+        // Follow the actual orbit center and periodically rebase the local
+        // frame origin within the CPU probe lattice. Simulation never moves.
+        result.origin=planet.center(planetBody,seconds)+floatVec(frame->originBody())+
+            right*((serial%2)?0.5f:0.f);
+        return result;
+    }
+    render::float3 lampPosition(const CavePlanetGiProject& p)const{
+        return p(anchor.bodyId,frame->toBody({0_fx,-3_fx,0_fx}));
+    }
+    bool publishFrameLighting(const CavePlanetGiProject& p,const CavePlanetGiViewFrame& captured){
+        render::GiMovingLight lamp;lamp.key=1;lamp.position=lampPosition(p);lamp.radius=8;lamp.intensity=4;
+        lamp.color={1,.8f,.55f};
+        render::GiEnvironmentLight environment;
+        environment.sunDirection=render::normalize(captured.centers.at("star")-captured.centers.at(anchor.bodyId));
+        environment.sunIntensity=.7f;
+        return gi.publishLights({lamp})&&gi.publishEnvironment(environment);
+    }
+    void updateMovingFrame(){
+        if(!movingView||!host->runtime().regionReady(sim->world(),regionId)||
+           sim->tick()-lastRebaseTick<30)return;
+        const auto hash=sim->checksum(),physicsTick=box->tick(),spatialRevision=spatial.mutationVersion();
+        const auto nextSerial=rebaseCount+1;
+        const double nextTime=double(sim->tick())/tickRate;
+        const auto nextView=makeViewFrame(nextTime,nextSerial);
+        const auto captured=CavePlanetGiViewFrame::capture(view.planets().world(),nextView,nextTime);
+        auto nextProject=captured.projector();
+        auto remap=exactCavePlanetGiBaselineRemap(project,nextProject,baselineSources);
+        require(host->reprojectGi(renderer,nextProject,remap),"reproject shared GI frame");
+        // Geometry is already published: a later lighting failure must stop
+        // the world, not present a mixed frame or retry against stale inputs.
+        try{
+            require(publishFrameLighting(nextProject,captured),"publish rebased lights");
+            require(sim->checksum()==hash&&box->tick()==physicsTick&&
+                spatial.mutationVersion()==spatialRevision,"render rebase mutated gameplay");
+        }catch(...){host->runtime().quarantineNativeMotion();throw;}
+        viewFrame=nextView;project.swap(nextProject);renderSeconds=nextTime;
+        lastRebaseTick=sim->tick();rebaseCount=nextSerial;
+        std::fprintf(stdout,"[caverns-demo] REBASE serial=%u seconds=%.3f tick=%u\n",
+            rebaseCount,renderSeconds,sim->tick());
+    }
     void init(gfx::Device& dev){
         device=&dev;exclusive=true;
         surface=makeSurface();frame=CavePlanetFrame::make(surface,anchor);
@@ -148,14 +205,16 @@ struct Demo {
         game::TerrainLook look;look.smooth=false;
         for(size_t i=0;i<8;++i){look.hasColor[i]=true;look.color[i]=soil;}
         view.planets().init(dev,look,[](const std::string& name,std::string& out){return platform::readContentFile(name,out);},"engine/assets");
-        game::PlanetWorld planet;planet.sim=surface;
+        game::PlanetWorld planet;planet.sim=surface;planet.start=planetBody;
+        game::PlanetBody star;star.id="star";star.kind=game::PlanetBody::Kind::Star;star.radius=8;
+        planet.bodies.push_back(star);
         game::PlanetBody body;body.id=anchor.bodyId;body.radius=100;body.faceSize=256;body.style=0;
+        body.parent=starBody;body.orbitRadius=1000;body.period=60;
         body.corners=surface->corners;body.flags.resize(size_t(6)*256*256,game::kCellGround);
         planet.bodies.push_back(std::move(body));view.planets().setWorld(planet);
-        const auto floatVec=[](Vec3 p){return render::float3{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())};};
-        viewFrame.origin=floatVec(frame->originBody());viewFrame.right=floatVec(frame->east());
-        viewFrame.up=floatVec(frame->up());viewFrame.back=floatVec(frame->south());
-        project=CavePlanetGiViewFrame::capture(planet,viewFrame,0).projector();
+        viewFrame=makeViewFrame(0,0);
+        const auto initialFrame=CavePlanetGiViewFrame::capture(view.planets().world(),viewFrame,0);
+        project=initialFrame.projector();
         // The demo intentionally owns just the bounded cave-area surface
         // patch. No other static terrain producer exists in this Scene.
         keys=view.planets().selectCaveSurfaceSlots(*frame,scenario==Scenario::Portal?SurfaceRectCm{-250,-250,250,250}:SurfaceRectCm{-1,-1,1,1});
@@ -174,17 +233,17 @@ struct Demo {
         render::GiMainCpuConfig giConfig;giConfig.origin={-3,-7,-3};giConfig.spacing=1;
         giConfig.nx=7;giConfig.ny=7;giConfig.nz=7;giConfig.samples=16;
         require(gi.initialize(dev,giConfig),"initialize CPU GI");
-        const auto originals=view.planets().captureCaveSurfaceSlots(0,keys);
+        const auto originals=view.planets().captureCaveSurfaceSlots(planetBody,keys);
         for(const auto& leaf:originals){
             std::vector<render::StaticShadowGeometry::Triangle> triangles;
             for(const auto& t:leaf.bodyTriangles)triangles.push_back({project(anchor.bodyId,t.a),
                 project(anchor.bodyId,t.b),project(anchor.bodyId,t.c),0});
-            giScene.replaceChunk(surfaceIds.at(leaf.key),std::move(triangles),{soil});
+            const auto id=surfaceIds.at(leaf.key);
+            baselineSources.emplace(id,CavePlanetGiCanonicalChunk{anchor.bodyId,leaf.bodyTriangles});
+            giScene.replaceChunk(id,std::move(triangles),{soil});
         }
         require(giScene.publish(gi).published,"publish actual baseline GI");
-        render::GiMovingLight lamp;lamp.key=1;lamp.position={0,-3,0};lamp.radius=8;lamp.intensity=4;
-        lamp.color={1,.8f,.55f};
-        require(gi.publishLights({lamp})&&gi.publishEnvironment({}),"GI lights");
+        require(publishFrameLighting(project,initialFrame),"GI lights");
         CavePlanetGiBindings bindings;
         bindings.surfaceId=[this](const std::string& b,const auto& key)->std::optional<uint64_t>{
             if(b!=anchor.bodyId||!surfaceIds.contains(key))return {};
@@ -277,7 +336,8 @@ struct Demo {
         try{
             const auto p=position(sim->world(),module->actor);
             require(bool(p),"missing actor position");
-            const std::array<CavePlanetObserver,1> observers{{{0,*p}}};
+            updateMovingFrame();
+            const std::array<CavePlanetObserver,1> observers{{{planetBody,*p}}};
             const auto progress=host->beforeFrame(sim->world(),renderer,observers,{regionId},4);
             if(progress.phase==CavePlanetRuntimePhase::Recovery||progress.phase==CavePlanetRuntimePhase::Refused)
                 throw std::runtime_error(progress.diagnostic);
@@ -321,6 +381,7 @@ struct Demo {
                     frames,sim->tick(),progress.residentRegions,int(progress.phase));}
             if(maxFrames&&frames>=maxFrames){
                 if(!arrived)fail("route did not arrive within frame budget");
+                else if(movingView&&!rebaseCount)fail("moving view did not publish a rebase");
                 else{stopping=true;platform::requestQuit();}
             }
         }catch(const std::exception& ex){fail(ex.what());}
@@ -330,11 +391,11 @@ struct Demo {
         if(!initialized)return;
         ++frames;
         render::Camera cam;cam.target=renderPosition(*position(sim->world(),module->actor));
-        cam.distance=1.4f;cam.pitch=.25f;cam.yaw=.8f;
+        cam.distance=1.4f;cam.pitch=.25f;cam.yaw=.8f+(movingView?float(renderSeconds)*.15f:0.f);
         renderer.beginScene(cam,dev.framebufferWidth(),dev.framebufferHeight());
-        view.planets().draw(renderer,viewFrame,0,0,0);
-        view.drawPlanetCaves(renderer,viewFrame,0);
-        render::PointLight lamp;lamp.pos={0,-3,0};lamp.radius=8;lamp.intensity=4;
+        view.planets().draw(renderer,viewFrame,renderSeconds,planetBody,0);
+        view.drawPlanetCaves(renderer,viewFrame,renderSeconds);
+        render::PointLight lamp;lamp.pos=lampPosition(project);lamp.radius=8;lamp.intensity=4;
         lamp.color={1,.8f,.55f};renderer.lights.add(lamp);
         if(!host->recoveryRequired())(void)host->bindIndirect(renderer);
         else renderer.clearDynamicGiOverlay();
@@ -370,6 +431,7 @@ int aiverseMain(int argc,char** argv){
         if(arg=="--frames"&&i+1<argc)demo->maxFrames=unsigned(std::strtoul(argv[++i],nullptr,10));
         else if(arg=="--portal")demo->scenario=Scenario::Portal;
         else if(arg=="--swim")demo->scenario=Scenario::Swim;
+        else if(arg=="--moving-view")demo->movingView=true;
         else{std::fprintf(stderr,"Unknown argument: %s\n",arg.c_str());return 2;}
     }
     platform::AppConfig cfg;cfg.title="AIVERSE Caverns — native chamber";cfg.width=1280;cfg.height=800;

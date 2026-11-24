@@ -59,4 +59,37 @@ struct CavePlanetGiViewFrame {
         };
     }
 };
+// Exact host-owned baseline reprojection: the current projected vertices
+// are matched to the original fixed body vertices, never inverse-transformed
+// from float. This avoids accumulated drift before a later cave lease.
+struct CavePlanetGiCanonicalChunk {
+    std::string body;
+    std::vector<world::Triangle> triangles;
+};
+inline CavePlanetGiOtherProject exactCavePlanetGiBaselineRemap(
+        const CavePlanetGiProject& previous,const CavePlanetGiProject& next,
+        const std::map<uint64_t,CavePlanetGiCanonicalChunk>& chunks){
+    if(!previous||!next||chunks.empty())throw std::invalid_argument("Caverns exact GI baseline source");
+    using Key=std::array<float,3>;
+    struct Vertex {Vec3 source;render::float3 target;};
+    std::map<uint64_t,std::map<Key,Vertex>> mapping;
+    const auto key=[](render::float3 p){return Key{p.x,p.y,p.z};};
+    const auto finite=[](render::float3 p){return std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z);};
+    size_t count=0;
+    for(const auto& [id,chunk]:chunks){
+        if(!id||chunk.body.empty()||chunk.triangles.empty()||chunk.triangles.size()>262144-count)
+            throw std::invalid_argument("Caverns exact GI baseline budget");
+        count+=chunk.triangles.size();auto& vertices=mapping[id];
+        for(const auto& triangle:chunk.triangles)for(const auto p:{triangle.a,triangle.b,triangle.c}){
+            const auto a=previous(chunk.body,p),b=next(chunk.body,p);
+            if(!finite(a)||!finite(b))throw std::invalid_argument("Caverns exact GI nonfinite projection");
+            const auto [it,added]=vertices.emplace(key(a),Vertex{p,b});
+            if(!added&&it->second.source!=p)throw std::invalid_argument("Caverns exact GI ambiguous vertex");
+        }
+    }
+    return [mapping=std::move(mapping),key,finite](uint64_t id,render::float3 p){
+        if(!finite(p))throw std::invalid_argument("Caverns exact GI invalid vertex");
+        return mapping.at(id).at(key(p)).target;
+    };
+}
 } // namespace aiverse::terraweave::caverns

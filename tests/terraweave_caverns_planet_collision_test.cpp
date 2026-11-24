@@ -119,6 +119,22 @@ static void checkTravelPins(){
     check(cancelCavePlanetCrossing(world,actor,[](const auto&,auto,const auto&){return true;})&&
           cavePlanetTravelPins(world).contains(9),"exit cancel preserves occupancy");
 }
+static void checkExactGiBaselineRemap(){
+    const CavePlanetGiProject old=[](const std::string&,Vec3 p){
+        return render::float3{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())};
+    };
+    const CavePlanetGiProject next=[old](const std::string& b,Vec3 p){
+        const auto q=old(b,p);return render::float3{q.z+1,q.y-2,-q.x};
+    };
+    const world::Triangle triangle{{0_fx,0_fx,0_fx},{1_fx,0_fx,0_fx},{0_fx,0_fx,1_fx}};
+    const auto remap=exactCavePlanetGiBaselineRemap(old,next,{{7,{"planet",{triangle}}}});
+    const auto p=remap(7,old("planet",triangle.b)),expected=next("planet",triangle.b);
+    check(p.x==expected.x&&p.y==expected.y&&p.z==expected.z,"exact canonical GI rebase");
+    bool refused=false;try{(void)remap(8,{});}catch(const std::out_of_range&){refused=true;}
+    check(refused,"unowned GI chunk refused");
+    refused=false;try{(void)remap(7,{20,20,20});}catch(const std::out_of_range&){refused=true;}
+    check(refused,"unknown baseline vertex refused");
+}
 static void checkNativeDispatchGuard(){
     World world;const auto a=world.create(),b=world.create();
     CavePlanetMotorTickGuard guard;
@@ -339,6 +355,7 @@ int main(){
     checkTravelReceipts();
     checkTravelModeSelection();
     checkNativeDispatchGuard();
+    checkExactGiBaselineRemap();
     checkTravelPins();
     checkOrientedMotor();
     checkCandidateIdentity();
