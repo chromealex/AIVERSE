@@ -38,7 +38,7 @@ Stat parseStat(const std::string& s, bool* ok = nullptr);
 
 // lerp (statuses): the final value moves toward 1 by the summed lerp of all statuses (BW Lerp(totalDef, 1, suppress))
 // floor (statuses): the product of the holder's status multipliers on this stat stays >= floor (BW Slowdown2 1/3)
-struct StatMod { Stat stat = Stat::Damage; Fixed add{}; Fixed mul = Fixed::fromInt(1); Fixed lerp{}; Fixed floor{}; };
+struct StatMod { Stat stat = Stat::Damage; Fixed add{}; Fixed mul = Fixed::fromInt(1); Fixed lerp{}; Fixed floor{}; uint16_t stackingGroup = 0; };
 
 // What a modifier applies to: types with any of `tags`, or one `type`, or everything.
 struct ModTarget { uint64_t tags = 0; uint16_t type = kNoType; bool all = false; };
@@ -581,6 +581,8 @@ struct TrapDef {
 
 struct ProgressionRules;   // ProgressionData.h
 struct Rules {
+    // One-based IDs for opt-in strongest-wins timed stat modifier groups.
+    std::vector<std::string> modifierGroups;
     // Optional final movement speed bounds; absent keys preserve legacy behavior.
     bool hasMinUnitSpeed = false, hasMaxUnitSpeed = false;
     Fixed minUnitSpeed{}, maxUnitSpeed{};
