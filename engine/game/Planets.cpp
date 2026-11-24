@@ -4,6 +4,7 @@
 #include "Internal.h"
 #include "PlanetSurfaceState.h"
 #include "PlanetTerrainWater.h"
+#include "PlanetSeaVolume.h"
 #include "engine/core/FixedMath.h"
 #include "engine/world/nereid/NereidSphereInteractions.h"
 #include <algorithm>
@@ -43,6 +44,7 @@ bool GameCore::stagePlanetTerrain(World& staged,const Surface& expected,
     // inherited from the canonical source, never from untrusted candidate.
     auto next=std::make_shared<Surface>(expected);
     next->corners=candidate.corners;
+    if(!reconcilePlanetSeaVolumes(staged,expected,*next))return false;
     auto* gs=staged.resource<GameState>();
     bindPlanetSurface(*gs,std::move(next),expectedRevision+1);
     gs->grid.enableSphereHeights(rules_.levelHeight);
@@ -279,7 +281,7 @@ void GameCore::setupWorld(Simulation& sim, const Json& map) {
     // NEREID seas (opt-in per body, "nereid": true | {...}): one WaterSphereComponent entity per sea, so
     // probes on units (native modules, scripts) get radial depth, buoyancy and the current. Maps without the
     // key register nothing (saves and checksums unchanged).
-    bool nereid = false;
+    bool nereid = false, conservedSea = false;
     for (size_t bi = 0; bi < surf->bodies.size(); ++bi) {
         const Json& nj = items[bi]["nereid"];
         if (!(nj.isObject() || nj.boolean(false))) continue;
@@ -308,8 +310,15 @@ void GameCore::setupWorld(Simulation& sim, const Json& map) {
             nw::addSphereWaterInteractionSystem(sim, "nereid.sphere.interaction");
             nereid = true;
         }
-        lib::nereid::spawnWaterSpheres(sim.world(),
+        const auto seas=lib::nereid::spawnWaterSpheres(sim.world(),
             {lib::nereid::waterSphereFromJson(nj, Surface::anchor(int(bi)), b.radius + b.seaLevel, where)});
+        if(nj.isObject()&&nj.getBool("conserveVolume")){
+            if(!rules_.terrain.heightfield())
+                throw std::runtime_error(where+": conserveVolume requires heightfield terrain");
+            if(!conservedSea){registerPlanetSeaVolumePersistence(sim);conservedSea=true;}
+            if(!initializePlanetSeaVolume(sim.world(),*surf,seas.front()))
+                throw std::runtime_error(where+": invalid conserved sea (wet volume, <=128 face size, no gameplay waves)");
+        }
     }
     std::shared_ptr<const Surface> cs = surf;
     gs.surface = cs;

@@ -28,6 +28,7 @@
 #include "aiverselib/world/EvolvePlanetRootClimate.h"
 #include "aiverselib/world/EvolvePlanetRootSupport.h"
 #include "engine/game/PlanetTerrainWater.h"
+#include "engine/game/PlanetSeaVolume.h"
 #include "aiverselib/world/NereidPlanetBankErosion.h"
 #include "aiverselib/world/NereidPlanetSedimentTransport.h"
 #include <array>
@@ -733,6 +734,37 @@ static void checkPlanetLiveFracture(){
     const auto cap=samplePlanetFracture(ecs,surface,8,1);
     AIVERSE_TEST_CHECK(cap.getBool("truncated")&&cap["members"].size()==1&&cap.getInt("pending")==1);
     AIVERSE_TEST_CHECK(!samplePlanetFracture(ecs,surface,UINT32_MAX).getBool("available"));
+}
+static void checkPlanetSeaVolume(){
+    namespace nw=aiverse::lib::nereid;
+    game::Surface surface;game::BodyDef body;body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    World ecs;const auto sea=ecs.create(),moon=ecs.create();
+    nw::WaterSphereComponent ocean;ocean.center=game::Surface::anchor(0);
+    ocean.surfaceRadius=Fixed::fromInt(70);ocean.floorRadius=Fixed::fromInt(50);
+    ecs.add<nw::WaterSphereComponent>(sea,ocean);
+    ocean.center=game::Surface::anchor(1);ecs.add<nw::WaterSphereComponent>(moon,ocean);
+    AIVERSE_TEST_CHECK(g::initializePlanetSeaVolume(ecs,surface,sea));
+    AIVERSE_TEST_CHECK(g::initializePlanetSeaVolume(ecs,surface,moon));
+    const auto target=ecs.get<g::PlanetSeaVolumeComponent>(sea).targetCm3;
+    AIVERSE_TEST_CHECK(target>0);
+    ecs.enableCowSnapshots();const World before=ecs;
+    auto raised=surface;
+    std::fill(raised.corners.begin(),raised.corners.begin()+ptrdiff_t(surface.bodies[1].cornerBase),int16_t(32));
+    AIVERSE_TEST_CHECK(g::reconcilePlanetSeaVolumes(ecs,surface,raised));
+    const auto level=ecs.get<nw::WaterSphereComponent>(sea).surfaceRadius;
+    AIVERSE_TEST_CHECK(level>Fixed::fromInt(70)&&ecs.get<nw::WaterSphereComponent>(moon).surfaceRadius==Fixed::fromInt(70));
+    const auto solution=g::solvePlanetSeaVolume(raised,0,Fixed::fromInt(50),target);
+    AIVERSE_TEST_CHECK(solution&&solution->radius==level&&solution->representedCm3+
+        ecs.get<g::PlanetSeaVolumeComponent>(sea).unresolvedCm3==target);
+    AIVERSE_TEST_CHECK(g::reconcilePlanetSeaVolumes(ecs,raised,surface));
+    AIVERSE_TEST_CHECK(ecs.get<nw::WaterSphereComponent>(sea).surfaceRadius==Fixed::fromInt(70));
+    AIVERSE_TEST_CHECK(ecs.get<g::PlanetSeaVolumeComponent>(sea).unresolvedCm3==0);
+    ecs=before;AIVERSE_TEST_CHECK(ecs.get<nw::WaterSphereComponent>(sea).surfaceRadius==Fixed::fromInt(70));
+    auto lowered=surface;
+    std::fill(lowered.corners.begin(),lowered.corners.begin()+ptrdiff_t(surface.bodies[1].cornerBase),int16_t(-32));
+    AIVERSE_TEST_CHECK(g::reconcilePlanetSeaVolumes(ecs,surface,lowered));
+    AIVERSE_TEST_CHECK(ecs.get<nw::WaterSphereComponent>(sea).surfaceRadius<Fixed::fromInt(70));
 }
 static void checkPlanetSedimentTransport(){
     namespace nw=aiverse::lib::nereid;
@@ -1710,6 +1742,7 @@ int main(){
     checkPlanetTerrainWater();
     checkPlanetBankErosion();
     checkPlanetSedimentTransport();
+    checkPlanetSeaVolume();
     checkPlanetLiveFracture();
     checkPlanetMorphModelFrame();
     checkPlanetMorphContactFrame();
