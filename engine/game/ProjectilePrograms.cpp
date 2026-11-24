@@ -177,7 +177,9 @@ void GameCore::sysProjectilePrograms(Simulation& sim, const std::vector<Entity>&
             const uint8_t owner=w.get<Owner>(target).player;
             // kLayerHitsNeutral (arsenal free fire): passive neutral bodies (parked cars) stop the shot too
             const bool foe=hostile(sim,p.owner,owner) || ((p.layers&kLayerHitsNeutral) && owner==0 && !rules_.types[u.type].invulnerable);
-            return foe && layerHit(p.layers,rules_.types[u.type].layer);
+            const auto& tt = rules_.types[u.type];
+            const auto* wd = projectileWeapon(p);
+            return foe && layerHit(p.layers,tt.layer) && (!wd || targetTagsMatch(tt.tags, wd->targetTags, wd->ignoreTags));
         };
         // Split preserves the source prefix; only children activate the remaining suffix.
         auto split = [&](size_t i, Vec3 at) {
