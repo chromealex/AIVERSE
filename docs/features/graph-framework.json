@@ -174,7 +174,7 @@
     },
     "persistence": {
       "status": "not_run",
-      "note": "Stage 57 ports Stage 53/54 cooperating-writer graph asset transactions and exact original checks to Building integration; authored regressions not run. Stage 58 project-scoped generic operation form and Studio bridge regression authored; current API documentation updated. Stage 67 invalidates Native Editor GPU preview and profile on Workspace project reopen, and isolated debugger on lifetime change. GPU retirement remains owner-driven; execution NOT RUN.",
+      "note": "Stage 57 ports Stage 53/54 cooperating-writer graph asset transactions and exact original checks to Building integration; authored regressions not run. Stage 58 project-scoped generic operation form and Studio bridge regression authored; current API documentation updated. Stage 67 invalidates Native Editor GPU preview and profile on Workspace project reopen, and isolated debugger on lifetime change. GPU retirement remains owner-driven; execution NOT RUN. Stage 68 serializes native material_set/delete read-modify-write under shared graph asset lock; create-only graph variants and Studio creation use locked existence checks; existing patch cannot recreate a deleted material. Tests NOT RUN.",
       "evidence": []
     },
     "graphs": {

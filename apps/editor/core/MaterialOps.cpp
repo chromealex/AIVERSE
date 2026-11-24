@@ -1,4 +1,5 @@
 #include "MaterialOps.h"
+#include "GraphAssetTransaction.h"
 
 #include <algorithm>
 #include <cmath>
@@ -194,19 +195,17 @@ Json loadMaterialLibrary(const Workspace& ws) {
     }
 }
 
+static void saveMaterialLibraryLocked(Workspace& ws, const graph_asset::Transaction& tx, const Json& lib, const std::string& what) {
+    Json doc=Json::object();
+    if(fs::exists(tx.target())) doc=Json::parseFile(tx.target().string());
+    if(!doc.isObject()) throw std::runtime_error("Invalid material library");
+    doc.set("materials",lib);
+    tx.replace(doc.dump(2)+"\n",16*1024*1024);
+    ws.note({Change::Rules,0,0,-1,-1,-1,what});
+}
 void saveMaterialLibrary(Workspace& ws, const Json& lib, const std::string& what) {
-    Json doc = Json::object();
-    doc.set("materials", lib);
-    const fs::path f = fs::path(ws.project.dir) / "materials.json";
-    {
-        std::ofstream o(f.string() + ".tmp", std::ios::binary);
-        o << doc.dump(2) << "\n";
-        if (!o) throw std::runtime_error("cannot write " + f.string());
-    }
-    std::error_code ec;
-    fs::rename(f.string() + ".tmp", f, ec);
-    if (ec) throw std::runtime_error("cannot write " + f.string() + ": " + ec.message());
-    ws.note({Change::Rules, 0, 0, -1, -1, -1, what});   // views rebuild with the library
+    graph_asset::Transaction tx(fs::path(ws.project.dir)/"materials.json",ws.project.dir);
+    saveMaterialLibraryLocked(ws,tx,lib,what);
 }
 
 Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::string& output,const render::Image& image){
@@ -326,12 +325,15 @@ void registerMaterialOps(Workspace& ws) {
             " merge: true keeps the existing keys and changes only the given ones.",
         R"J({"properties": {"name": {"type": "string", "description": "e.g. steel, rusty_iron, team_cloth"},
             "material": {"type": "object", "description": "material keys (see description)"},
-            "merge": {"type": "boolean"}}, "required": ["name", "material"]})J", [w](const Json& p) {
+            "merge": {"type": "boolean"}, "createOnly": {"type":"boolean"}, "requireExisting":{"type":"boolean"}}, "required": ["name", "material"]})J", [w](const Json& p) {
             needProject(*w);
             const std::string name = p.getStr("name");
             if (name.empty() || name.find_first_of(" \t/\\\"") != std::string::npos) throw std::runtime_error("material name must be one word (letters, digits, _ -)");
             Json mat = p["material"];
+            graph_asset::Transaction tx(fs::path(w->project.dir)/"materials.json",w->project.dir);
             Json lib = loadMaterialLibrary(*w);
+            if(p.getBool("createOnly")&&lib.has(name))throw std::runtime_error("Material already exists");
+            if(p.getBool("requireExisting")&&!lib[name].isObject())throw std::runtime_error("Material no longer exists");
             if (p.getBool("merge") && lib[name].isObject()) {
                 Json cur = lib[name];
                 for (const auto& [k, v] : mat.members()) cur.set(k, v);
@@ -348,7 +350,7 @@ void registerMaterialOps(Workspace& ws) {
                     !fs::exists(gameFile(*w, mat.getStr(k)))) warnings.push_back(std::string(k) + " '" + mat.getStr(k) + "' does not exist yet");
             const bool existed = lib.has(name);
             lib.set(name, mat);
-            saveMaterialLibrary(*w, lib, std::string(existed ? "Материал изменён: " : "Материал создан: ") + name);
+            saveMaterialLibraryLocked(*w, tx, lib, std::string(existed ? "Материал изменён: " : "Материал создан: ") + name);
             Json r = okJson();
             r.set("summary", Json::string(std::string(existed ? "Материал изменён: " : "Материал создан: ") + name));
             r.set("warnings", strs(warnings));
@@ -359,6 +361,7 @@ void registerMaterialOps(Workspace& ws) {
         R"({"properties": {"name": {"type": "string"}, "force": {"type": "boolean"}}, "required": ["name"]})", [w](const Json& p) {
             needProject(*w);
             const std::string name = p.getStr("name");
+            graph_asset::Transaction tx(fs::path(w->project.dir)/"materials.json",w->project.dir);
             Json lib = loadMaterialLibrary(*w);
             if (!lib.has(name)) throw std::runtime_error("no library material '" + name + "'");
             std::vector<std::string> users;
@@ -372,7 +375,7 @@ void registerMaterialOps(Workspace& ws) {
             for (const auto& [k, v] : lib.members()) if (k != name && usesMaterial(v, name)) users.push_back("material " + k);
             if (!users.empty() && !p.getBool("force")) throw std::runtime_error("material '" + name + "' is used by " + users[0] + (users.size() > 1 ? " and others" : "") + " (force: true deletes it anyway)");
             lib.erase(name);
-            saveMaterialLibrary(*w, lib, "Материал удалён: " + name);
+            saveMaterialLibraryLocked(*w, tx, lib, "Материал удалён: " + name);
             Json r = okJson();
             r.set("usedBy", strs(users));
             return r;
@@ -537,7 +540,7 @@ void registerMaterialOps(Workspace& ws) {
         const auto lib=loadMaterialLibrary(*w);
         if(lib.has(name)||!lib[base].isObject())throw std::runtime_error("variant name exists or base material missing");
         // Reuse the native library writer, not a separate runtime material format.
-        Json args=Json::object();args.set("name",Json::string(name));args.set("material",material);
+        Json args=Json::object();args.set("name",Json::string(name));args.set("material",material);args.set("createOnly",Json::fromBool(true));
         auto r=w->call("material_set",args,"texture-graph");
         if(r.getBool("ok"))r.set("note",Json::string("Baked variant; configure texture importer metadata separately. Existing material library owner concurrency applies."));
         return r;

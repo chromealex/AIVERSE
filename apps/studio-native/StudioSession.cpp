@@ -1205,7 +1205,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     if(editor::loadMaterialLibrary(ws_).has(published))
                         throw std::runtime_error("Material already exists");
                     Json request=Json::object();request.set("name",str(published));
-                    request.set("material",material);
+                    request.set("material",material);request.set("createOnly",Json::fromBool(true));
                     const auto saved=ws_.call("material_set",request,"studio");
                     if(saved.has("error"))throw std::runtime_error(saved.getStr("error"));
                 });
@@ -1759,7 +1759,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 if (preset=="glass") material.set("doubleSided",Json::fromBool(true));
                 Json request=Json::object();
                 request.set("name",str(name));
-                request.set("material",std::move(material));
+                request.set("material",std::move(material));request.set("createOnly",Json::fromBool(true));
                 const Json saved=ws_.call("material_set",request,"studio");
                 if (saved.has("error")) throw std::runtime_error(saved.getStr("error"));
             } else if (method == "studio.materialPatch") {
@@ -1830,7 +1830,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 Json request=Json::object();
                 request.set("name",str(name));
                 request.set("material",std::move(validatedPatch));
-                request.set("merge",Json::fromBool(true));
+                request.set("merge",Json::fromBool(true));request.set("requireExisting",Json::fromBool(true));
                 // material_set validates keys/base and writes materials.json atomically.
                 // Unlike MapDoc edits this is immediate disk save without Undo:
                 // explicit Apply is required in the frontend.

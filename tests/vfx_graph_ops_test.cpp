@@ -108,6 +108,19 @@ int main() {
     editor::Workspace ws;
     ws.project.dir = root.string();
     const auto call = [&](const char* name, const Json& args) { return ws.call(name, args, "test-spectrafx"); };
+    {
+        auto material=Json::parse(R"({"name":"fixture_material","material":{"roughness":0.5},"createOnly":true})");
+        requireGraphTest(call("material_set",material).getBool("ok"),"create-only material failed");
+        requireGraphTest(call("material_set",material).has("error"),"create-only overwrote existing material");
+        const auto file=root/"materials.json";const auto before=Json::parseFile(file.string());
+        const auto lock=fs::path(file.string()+".aiverse-write-lock");fs::create_directory(lock);
+        requireGraphTest(call("material_delete",Json::parse(R"({"name":"fixture_material"})")).has("error"),"material delete ignored writer lock");
+        requireGraphTest(Json::parseFile(file.string())==before,"busy writer modified material library");
+        fs::remove(lock);
+        requireGraphTest(call("material_delete",Json::parse(R"({"name":"fixture_material"})")).getBool("ok"),"material delete failed");
+        material.set("createOnly",Json::fromBool(false));material.set("requireExisting",Json::fromBool(true));
+        requireGraphTest(call("material_set",material).has("error"),"patch recreated deleted material");
+    }
     const Json graph = Json::parse(R"JSON({
       "version":1,
       "parameters":{"size":0.35},
