@@ -130,6 +130,7 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
     throw new Error('Interactive building 3D preview requires native AIVERSE Studio');
   if (method === 'studio.buildingRegenerate')
     throw new Error('Regenerating building assets requires native AIVERSE Studio');
+  if (method === 'studio.buildingGraphOverlay') throw Error('Native graph overlay unavailable in mock');
   if (method === 'studio.buildingTextureProvenance') throw Error('Native texture provenance unavailable in mock');
   if (method === 'studio.buildingInspect' || method === 'studio.buildingGenerate')
     throw new Error('Generated building meshes require native AIVERSE Studio');
