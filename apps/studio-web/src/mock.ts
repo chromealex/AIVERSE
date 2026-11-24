@@ -128,7 +128,7 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
   if (method === 'studio.buildingStaleMaterials')
     return {stale: []} as StudioResult['studio.buildingStaleMaterials'];
   if (method === 'studio.buildingPreview' ||
-      method === 'studio.buildingPreviewStop')
+      method === 'studio.buildingPreviewStop' || method === 'studio.buildingPreviewView')
     throw new Error('Interactive building 3D preview requires native AIVERSE Studio');
   if (method === 'studio.buildingRegenerate')
     throw new Error('Regenerating building assets requires native AIVERSE Studio');

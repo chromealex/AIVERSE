@@ -74,6 +74,7 @@ public:
 struct StudioSceneMods { bool shift = false, ctrl = false, alt = false, command = false; }; // command: Cmd on macOS, Ctrl on Windows
 enum class StudioSceneKey { Other, A, D, E, F, Q, R, S, V, W, Left, Right, Up, Down, Home, Delete, Escape, BracketLeft, BracketRight };
 
+class StudioBuildingPanelPreview;
 class StudioHost {
 public:
     StudioHost(StudioHostPlatform& platform, const std::string& engineRoot, bool htmlComposite);
@@ -203,6 +204,8 @@ private:
     std::string engineRoot_;
     bool htmlComposite_ = false;
     std::unique_ptr<StudioSession> session_;
+    std::unique_ptr<StudioBuildingPanelPreview> buildingPanelPreview_; // UI-thread, independent offscreen GPU owner
+    uint64_t buildingPreviewToken_=0;
     std::unique_ptr<StudioScene> preview_;             // created, used and destroyed on renderThread_
     std::unique_ptr<StudioRenderThread> renderThread_;
     std::mutex renderIoMutex_;                         // guards renderInputs_ / renderOutputs_

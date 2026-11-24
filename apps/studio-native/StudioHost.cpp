@@ -2,6 +2,7 @@
 #include "apps/studio-native/StudioHumanLookDocument.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/studio-native/StudioBuildingGeneration.h"
+#include "apps/studio-native/StudioBuildingPanelPreview.h"
 #include "apps/studio-native/StudioTerrainGeometry.h"
 #include "apps/editor/core/BrandingOps.h"
 #include "apps/editor/core/BuildTool.h"
@@ -113,6 +114,7 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
 StudioHost::~StudioHost() { shutdown(); }
 void StudioHost::shutdown() {
     *alive_ = false;
+    buildingPanelPreview_.reset();
     game_.reset(); // hosted client and its device retire before the native surface
     if (renderThread_) {
         // The Scene and its GPU resources are released on their owner thread, then the thread stops.
@@ -257,6 +259,7 @@ void StudioHost::openProject(const std::string& path, int64_t requestId) {
             return;
         }
     }
+    buildingPanelPreview_.reset();++buildingPreviewToken_;
     buildingGraphOverlayScene_=0;rebuildOverlay();
     session_->setBuildingGraphReader({});
     projectLoading_ = true;
@@ -1394,34 +1397,43 @@ bool StudioHost::handleHostMethod(const Json& req) {
         }
         Json out=Json::object();out.set("active",Json::fromBool(buildingGraphOverlayScene_!=0));return out;
     });
-    if(method=="studio.buildingPreview")return answer([&]{
-        if(!preview_)throw std::runtime_error("Open the native Scene viewport");
-        const auto& project=session_->workspace().project.dir;
-        if(project.empty())throw std::runtime_error("Open a project before preview");
-        // CPU-only source generation; the actual Model is uploaded and
-        // owned by StudioScene on its existing render thread.
-        auto model=studioBuildingPreviewCpuModel(
-            fs::path(session_->workspace().engineDir),fs::path(project),
-            params);
-        std::string error;
-        const bool ok=onScene([&]{
-            return preview_->setBuildingPreview(std::move(model),&error);
-        });
-        if(!ok)throw std::runtime_error(error);
+    auto buildingFrame=[&](float yaw,float pitch,float zoom){
+        if(!buildingPanelPreview_)throw std::runtime_error("No active Building panel preview");
+        std::vector<uint8_t> pixels;
+        platform_.sceneThreadScope([&]{pixels=buildingPanelPreview_->frame(yaw,pitch,zoom);});
+        const auto bytes=encodeJpeg(pixels,StudioBuildingPanelPreview::Side,StudioBuildingPanelPreview::Side,90);
+        if(bytes.empty())throw std::runtime_error("Building preview JPEG encoding failed");
         Json result=Json::object();
         result.set("active",Json::fromBool(true));
+        result.set("token",Json::string(std::to_string(buildingPreviewToken_)));
+        result.set("url",Json::string("data:image/jpeg;base64,"+editor::base64Encode(bytes)));
         return result;
+    };
+    if(method=="studio.buildingPreview")return answer([&]{
+        if(projectLoading_)throw std::runtime_error("Project is loading");
+        const auto& project=session_->workspace().project.dir;
+        if(project.empty())throw std::runtime_error("Open a project before preview");
+        auto model=studioBuildingPreviewCpuModel(fs::path(session_->workspace().engineDir),fs::path(project),params);
+        ++buildingPreviewToken_;
+        platform_.sceneThreadScope([&]{
+            if(!buildingPanelPreview_)buildingPanelPreview_=std::make_unique<StudioBuildingPanelPreview>();
+            buildingPanelPreview_->setModel(std::move(model));
+        });
+        return buildingFrame(.65f,.42f,1.f);
+    });
+    if(method=="studio.buildingPreviewView")return answer([&]{
+        if(projectLoading_||params.getStr("token")!=std::to_string(buildingPreviewToken_))
+            throw std::runtime_error("Building preview is no longer current");
+        if(!params["yaw"].isNumber()||!params["pitch"].isNumber()||!params["zoom"].isNumber())
+            throw std::runtime_error("Building preview camera values required");
+        return buildingFrame(float(params["yaw"].toDouble()),float(params["pitch"].toDouble()),float(params["zoom"].toDouble()));
     });
     if(method=="studio.buildingPreviewStop")return answer([&]{
-        if(!preview_)throw std::runtime_error("Scene viewport not available");
-        std::string error;
-        const bool ok=onScene([&]{
-            return preview_->setBuildingPreview({},&error);
-        });
-        if(!ok)throw std::runtime_error(error);
-        Json result=Json::object();
-        result.set("active",Json::fromBool(false));
-        return result;
+        // A stale floating panel must not close another window's preview.
+        if(params.getStr("token")==std::to_string(buildingPreviewToken_)){
+            buildingPanelPreview_.reset();++buildingPreviewToken_;
+        }
+        Json result=Json::object();result.set("active",Json::fromBool(false));return result;
     });
     if (method == "studio.windowOpen" || method == "studio.windowClose" || method == "studio.windowTitle")
         return answer([&] { return platform_.windowRequest(method, params); });

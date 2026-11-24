@@ -46,8 +46,8 @@ export AIVERSE_STUDIO_WEB_DIST="$OUT/web"
 run studio-python python3 -m unittest discover -s tools/studio -p "test_*.py" -v
 # Keep the existing Debug configuration, compiler, architecture and CMake cache.
 run configure cmake -S "$ROOT" -B "$BUILD_DIR" -DAIVERSE_BUILD_STUDIO_HTML5=ON -DAIVERSE_BUILD_EDITOR=ON -DAIVERSE_BUILD_TOOLS=ON -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_STUDIO_WEB_DIST="$OUT/web"
-run studio-build cmake --build "$BUILD_DIR" --target aiverse_studio aiverse_studio_building_topology_tests aiverse_studio_session_tests aiverse_library_building_style_tests --parallel "$JOBS"
-run studio-ctest ctest --test-dir "$BUILD_DIR" --config Debug --no-tests=error --output-on-failure --output-junit "$REPORT/studio-ctest.xml" -R "^(studio_building_topology|studio_session|studio_bridge|studio_material_schema|library_building_style)$"
+run studio-build cmake --build "$BUILD_DIR" --target aiverse_studio aiverse_studio_building_topology_tests aiverse_studio_session_tests aiverse_library_building_style_tests aiverse_studio_building_preview_tests --parallel "$JOBS"
+run studio-ctest ctest --test-dir "$BUILD_DIR" --config Debug --no-tests=error --output-on-failure --output-junit "$REPORT/studio-ctest.xml" -R "^(studio_building_topology|studio_session|studio_bridge|studio_material_schema|library_building_style|studio_building_preview)$"
 APP="$BUILD_DIR/apps/studio-native/AiverseStudioHTML5.app"
 test -x "$APP/Contents/MacOS/AiverseStudioHTML5"
 echo "Automated Stage 37 checks PASS. Live owner MCP and visual QA NOT RUN."

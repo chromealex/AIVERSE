@@ -150,7 +150,11 @@ export default function BuildingGeneratorPanel({
   const [savedRecipes,setSavedRecipes]=useState<string[]>([]);
   const [sourceRecipe,setSourceRecipe]=useState('');
   const [readingRecipe,setReadingRecipe]=useState(false);
-  const [livePreview,setLivePreview]=useState(false);
+  const [livePreview,setLivePreview]=useState<{token:string;url:string;key:string}|null>(null);
+  const previewToken=useRef('');
+  const previewScope=useRef(0);
+  const [viewCamera,setViewCamera]=useState({yaw:.65,pitch:.42,zoom:1});
+  const dragView=useRef<{x:number;y:number}|null>(null);
   const [previewBusy,setPreviewBusy]=useState(false);
   const candidateGate=useRef(new BuildingCandidateGate<StudioBuildingRequest>());
   const [page,setPage]=useState<'recipe'|'features'|'materials'|'graphs'|'runtime'>('recipe');
@@ -513,38 +517,51 @@ export default function BuildingGeneratorPanel({
     };
   },[projectLoaded,snapshot?.project.path,autoRegenerate]);
 
+  const previewKey=buildingDraftKey(snapshot?.project.path??'',activeCandidate?.recipe??request(asNumber(seed)));
   const previewNative3D=async()=>{
     if(parameterError||busy||previewBusy||!nativeConnected())return;
+    const scope=previewScope.current;
     setPreviewBusy(true);setError('');
     try{
-      // Opening the shared Scene panel mounts the native viewport. Give
-      // its layout/viewport registration an opportunity to complete.
-      showPanel('scene');
-      await new Promise<void>(resolve=>requestAnimationFrame(()=>
-        requestAnimationFrame(()=>resolve())));
       const reply=await invoke('studio.buildingPreview',activeCandidate?.recipe??request(asNumber(seed)));
-      if(!reply.active)throw Error('Native 3D preview was not activated');
-      setLivePreview(true);
-      setStatus('Temporary 3D model displayed in native Scene. Orbit, pan and zoom there; no GLB or GUID was created.');
-    }catch(e){setError(explain(e));}
-    finally{setPreviewBusy(false);}
+      if(!reply.active||!reply.url||!reply.token)throw Error('Native Building panel preview unavailable');
+      if(scope!==previewScope.current){void invoke('studio.buildingPreviewStop',{token:reply.token}).catch(()=>{});return;}
+      previewToken.current=reply.token;
+      setLivePreview({token:reply.token,url:reply.url,key:previewKey});
+      setViewCamera({yaw:.65,pitch:.42,zoom:1});setPage('recipe');
+      setStatus('Native 3D preview in Building Generator. Scene and project assets are unchanged.');
+    }catch(e){if(scope===previewScope.current)setError(explain(e));}
+    finally{if(scope===previewScope.current)setPreviewBusy(false);}
+  };
+  const updatePreviewView=async(next:typeof viewCamera)=>{
+    if(!livePreview||previewBusy)return;
+    const scope=previewScope.current,token=livePreview.token;
+    setPreviewBusy(true);setError('');
+    try{
+      const reply=await invoke('studio.buildingPreviewView',{token,...next});
+      if(scope!==previewScope.current||previewToken.current!==token)return;
+      setLivePreview(old=>old?.token===token?{...old,url:reply.url}:old);
+      setViewCamera(next);
+    }catch(e){if(scope===previewScope.current)setError(explain(e));}
+    finally{if(scope===previewScope.current)setPreviewBusy(false);}
   };
   const closeNative3D=async()=>{
-    if(previewBusy||!nativeConnected())return;
+    if(previewBusy||!livePreview)return;
     setPreviewBusy(true);setError('');
     try{
-      await invoke('studio.buildingPreviewStop',{});
-      setLivePreview(false);
+      await invoke('studio.buildingPreviewStop',{token:livePreview.token});
+      previewToken.current='';setLivePreview(null);
       setStatus('Temporary 3D preview released.');
     }catch(e){setError(explain(e));}
     finally{setPreviewBusy(false);}
   };
   useEffect(()=>{
-    // An old project's preview must not remain shown when the workspace
-    // changes. The native Studio GPU owner validates its retirement.
-    setLivePreview(false);
-    if(nativeConnected())
-      void invoke('studio.buildingPreviewStop',{}).catch(()=>{});
+    setLivePreview(null);setPreviewBusy(false);
+    return ()=>{
+      ++previewScope.current;
+      const token=previewToken.current;previewToken.current='';
+      if(token&&nativeConnected())void invoke('studio.buildingPreviewStop',{token}).catch(()=>{});
+    };
   },[snapshot?.project.path]);
 
   const preview=async()=>{
@@ -643,7 +660,7 @@ export default function BuildingGeneratorPanel({
           <StudioButton variant="secondary" loading={previewBusy}
             disabled={Boolean(parameterError)||busy||previewBusy||!nativeConnected()}
             onClick={()=>void previewNative3D()}>
-            Preview 3D in Scene
+            Preview 3D
           </StudioButton>
           {livePreview&&<StudioButton variant="secondary" disabled={previewBusy}
             onClick={()=>void closeNative3D()}>Close 3D preview</StudioButton>}
@@ -667,6 +684,8 @@ export default function BuildingGeneratorPanel({
         {id:'graphs',label:'Graphs'},{id:'runtime',label:'Runtime'}
       ]}/>
       <div className="abg__page au-stack" hidden={page!=='recipe'}>
+        <div className="abg__recipe-layout">
+          <div className="abg__recipe-controls au-stack">
         <div className="abg__recipe-grid">
       <StudioSection title="Building recipe">
         <div className="abg__fields">
@@ -737,6 +756,26 @@ export default function BuildingGeneratorPanel({
         </div>
         <small className="abg__note">Internal room partitions, stair and lift geometry follow the selected functional recipe. Native ECS/PHYSIS and graph owners handle dynamic traversal separately; changing setting never changes gameplay permissions.</small>
       </StudioSection>}
+        </div>
+          </div>
+          <StudioSection title="Building preview" className="abg__preview">
+            {livePreview?<><div className="abg__preview-frame"
+              onPointerDown={e=>{if(!previewBusy&&e.button===0){dragView.current={x:e.clientX,y:e.clientY};e.currentTarget.setPointerCapture(e.pointerId);}}}
+              onPointerCancel={()=>{dragView.current=null;}}
+              onPointerUp={e=>{const start=dragView.current;dragView.current=null;if(start&&!previewBusy)void updatePreviewView({...viewCamera,yaw:viewCamera.yaw+(e.clientX-start.x)*.012,pitch:Math.max(-1.35,Math.min(1.35,viewCamera.pitch+(e.clientY-start.y)*.012))});}}>
+              <img src={livePreview.url} alt="Native generated building preview" draggable={false}/>
+              {previewBusy&&<span className="abg__preview-busy">Rendering…</span>}
+            </div>
+            <div className="abg__actions">
+              <StudioButton size="sm" disabled={previewBusy} onClick={()=>void updatePreviewView({...viewCamera,yaw:viewCamera.yaw-.4})}>Rotate left</StudioButton>
+              <StudioButton size="sm" disabled={previewBusy} onClick={()=>void updatePreviewView({...viewCamera,yaw:viewCamera.yaw+.4})}>Rotate right</StudioButton>
+              <StudioButton size="sm" disabled={previewBusy||viewCamera.zoom<=.55} onClick={()=>void updatePreviewView({...viewCamera,zoom:Math.max(.55,viewCamera.zoom*.8)})}>Zoom in</StudioButton>
+              <StudioButton size="sm" disabled={previewBusy||viewCamera.zoom>=2.5} onClick={()=>void updatePreviewView({...viewCamera,zoom:Math.min(2.5,viewCamera.zoom*1.25)})}>Zoom out</StudioButton>
+              <StudioButton size="sm" disabled={previewBusy} onClick={()=>void updatePreviewView({yaw:.65,pitch:.42,zoom:1})}>Reset view</StudioButton>
+            </div>
+            {livePreview.key!==previewKey&&<StudioAlert tone="warning">Recipe changed. Preview 3D updates the model.</StudioAlert>}
+            <small className="abg__note">Drag to orbit; a native GPU frame is rendered when the camera changes. Main Scene remains untouched.</small></>:<StudioEmptyState title="Preview a building" description="Render the current recipe here without replacing the Scene." action={<StudioButton disabled={Boolean(parameterError)||busy||previewBusy||!nativeConnected()} onClick={()=>void previewNative3D()}>Preview 3D</StudioButton>}/>}
+          </StudioSection>
         </div>
       {saved&&<StudioSection title="Generated asset">
         <div className="abg__saved">
@@ -915,7 +954,7 @@ export default function BuildingGeneratorPanel({
                 :<small>{candidate.error??'Unavailable'}</small>}
             </button>)}
         </div>}
-        <small className="abg__note">Variant evaluation measures native CPU geometry and reports real sockets. Use Preview 3D in Scene for the native Renderer3D model without writing an Asset. Generate GLB only when ready to persist the model.</small>
+        <small className="abg__note">Variant evaluation measures native CPU geometry and reports real sockets. Use Preview 3D for the native Renderer3D model without writing an Asset. Generate GLB only when ready to persist the model.</small>
       </StudioSection>}
 
         {!activeCandidate?.data&&<StudioEmptyState title="Evaluate a building first" description="Evaluate 3 seeds to inspect the actual native geometry, rooms and routes. No graph is fabricated before evaluation."/>}
