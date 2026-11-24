@@ -29,6 +29,7 @@ public:
     void reset(std::shared_ptr<const CaveNavigationDataProvider> next) {
         auto view=std::make_shared<const CaveNavigationGridView>(
             next,grid_,agent_);
+        sourceForCluster_=view;
         graphCache_.build(*view,[this](uint32_t n){
             return clusterOf(n);
         });
@@ -80,6 +81,7 @@ public:
             return result;
         const auto cell=[this](PointCm p)->CaveGraphCell{
             const auto project=[this](int64_t v,int64_t origin,uint32_t size){
+                (void)size;
                 return int32_t(floorDiv(v-origin,grid_.cellCm));
             };
             return {project(p.x,grid_.origin.x,grid_.width),
