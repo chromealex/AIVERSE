@@ -28,7 +28,7 @@ inline CavePlanetBodyCutSlots collectPlanetBodyCutSlots(const CavePlanetBodyCutP
        plan.regions.empty()||plan.regions.size()>kMaxPlanetCaveRegions)
         throw std::invalid_argument("Caverns body cut identity");
     CavePlanetBodyCutSlots result;
-    size_t sourceCount=0,resultCount=0;
+    size_t sourceCount=0,resultCount=0,rimVertices=0;
     for(const auto& [id,p]:plan.regions){
         if(!id||!p||p->anchor.bodyId!=plan.bodyId||p->surfaceRevision!=plan.surfaceRevision||
            p->surfaceEpoch!=plan.surfaceEpoch||!p->authorityRevision||p->slots.empty()||
@@ -37,9 +37,12 @@ inline CavePlanetBodyCutSlots collectPlanetBodyCutSlots(const CavePlanetBodyCutP
         std::set<uint64_t> mouths(p->accepted.begin(),p->accepted.end());
         if(mouths.size()!=p->accepted.size()||mouths.contains(0))
             throw std::invalid_argument("Caverns body cut mouth IDs");
-        for(const auto& rim:p->rims)
-            if(!mouths.erase(rim.entranceId)||rim.ring.size()<3||rim.ring.size()>8192)
-                throw std::invalid_argument("Caverns body cut rim identity");
+        for(const auto& rim:p->rims){
+            if(!mouths.erase(rim.entranceId)||rim.ring.size()<3||rim.ring.size()>8192||
+               rim.ring.size()>32768-rimVertices)
+                throw std::invalid_argument("Caverns body cut rim identity or budget");
+            rimVertices+=rim.ring.size();
+        }
         for(const auto& [key,slot]:p->slots){
             if(key!=slot.key||key.face<0||key.face>=6||key.x<0||key.z<0||
                key.size<=0||key.level<0||slot.originalBody.empty()||
