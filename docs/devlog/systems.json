@@ -62,6 +62,14 @@
     {
      "status": "in-progress",
      "target": null,
+     "title": "Планетарный лес: живой рельеф и выборка активного тела",
+     "titleEn": "Planetary forest: live terrain and active body sampling",
+     "text": "Stage 161D4c3: ограниченный снимок высот Surface, отдельный GPU-меш, приоритет активного тела.",
+     "textEn": "Stage 161D4c3: bounded Surface height snapshot, separate GPU mesh, active body priority."
+    },
+    {
+     "status": "in-progress",
+     "target": null,
      "title": "Планетарный лес: обновление материалов и штормовой ветер",
      "titleEn": "Planetary forest: texture refresh and storm presentation",
      "text": "Stage 161D4c2: отслеживание PBR-файлов, видовые материалы брёвен, PHYSIS штормы в касательной системе, частичная сезонная прозрачность.",
