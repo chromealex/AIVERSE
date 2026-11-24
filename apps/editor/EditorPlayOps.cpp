@@ -89,7 +89,7 @@ void Editor::registerPlayOps() {
             return r;
         });
     add("texture_graph_gpu_owner_preview","Queue, read or publish native texture GPU preview/bake/set; CPU fallback unless requireGpu.",
-        R"({"properties":{"action":{"type":"string","enum":["start","read","publish","cancel"]},"graph":{"type":"object"},"overrides":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"requireGpu":{"type":"boolean"},"resolution":{"type":"integer","minimum":8,"maximum":128},"bake":{"type":"boolean"},"bakeSet":{"type":"boolean"},"materializedDag":{"type":"boolean","description":"Experimental early-pack materialized execution for bakeSet only; fused fallback is reported."},"timeoutMs":{"type":"integer","minimum":1000,"maximum":300000},"request":{"type":"string"},"textureName":{"type":"string"}},"required":["action"]})",
+        R"({"properties":{"action":{"type":"string","enum":["start","read","publish","cancel"]},"graph":{"type":"object"},"overrides":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"requireGpu":{"type":"boolean"},"resolution":{"type":"integer","minimum":8,"maximum":128},"bake":{"type":"boolean"},"bakeSet":{"type":"boolean"},"materialized":{"type":"boolean","description":"Opt-in experimental native materialized DAG execution"},"materializedDag":{"type":"boolean","description":"Compatibility alias for materialized"},"timeoutMs":{"type":"integer","minimum":1000,"maximum":300000},"request":{"type":"string"},"textureName":{"type":"string"}},"required":["action"]})",
         [this](const Json& p){
             if(!dev_)throw std::runtime_error("native graphics owner unavailable");
             textureGraphGpuPreview_.checkProject(ws_.project.dir);

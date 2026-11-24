@@ -1,11 +1,13 @@
 // SpectraFX editor/MCP graph authoring end-to-end regression.
 // No GPU or genre module required. Uses the same Workspace::call entry as MCP.
 #include "apps/editor/core/Workspace.h"
+#include "apps/editor/core/TextureGraphGpuPreview.h"
+#include "cloth/FakeDevice.h"
+#include <set>
 #include "engine/render/graph/GraphTelemetry.h"
 #include "engine/render/graph/GraphWatch.h"
 #include "engine/render/graph/GraphGpuProfile.h"
 #include "engine/render/graph/TextureGraphGpu.h"
-#include "engine/render/graph/TextureGraphGpuDag.h"
 #include "engine/render/graph/TextureGraphMaterialBinding.h"
 #include "engine/fx/SpectraFX.h"
 #include <chrono>
@@ -21,7 +23,64 @@ static void require(bool yes, const char* reason) {
     if (!yes) throw std::runtime_error(reason);
 }
 
+// A synthetic readback fixture verifies only scheduling and owner lifecycle,
+// not actual shader execution. The authored scalar graph evaluates to white.
+struct DagFixtureDevice : FakeDevice {
+    std::set<uint32_t> pipelines;
+    BufferReadFn pending;
+    size_t readBytes=0;
+    uint64_t completed=0,submitted=1;
+    bool reject=false;
+    DagFixtureDevice(){info_.backend=gfx::Backend::Vulkan;computeEnabled=true;beginFrame(1,1);}
+    uint64_t gpuSubmissionFence()const override{return submitted;}
+    uint64_t gpuCompletedFence()const override{return completed;}
+    gfx::ComputeHandle createCompute(const gfx::ComputeDesc& d)override{
+        auto h=FakeDevice::createCompute(d);if(h.valid())pipelines.insert(h.id);return h;
+    }
+    void destroyCompute(gfx::ComputeHandle h)override{pipelines.erase(h.id);}
+    bool dispatchChecked(uint32_t x,uint32_t y=1)override{
+        if(reject)return false;dispatch(x,y);return true;
+    }
+    bool readBufferRangeAsync(gfx::BufferHandle h,size_t offset,size_t size,BufferReadFn fn)override{
+        if(pending||!buffers.contains(h.id)||offset+size>buffers.at(h.id).size())return false;
+        pending=std::move(fn);readBytes=size;return true;
+    }
+    void deliver(){auto fn=std::move(pending);pending={};fn(std::vector<uint8_t>(readBytes,255));}
+};
+static void checkMaterializedOwner(){
+    DagFixtureDevice dev;
+    editor::TextureGraphGpuPreview owner;
+    const auto args=Json::parse(R"({"action":"start","materialized":true,"requireGpu":true,"bakeSet":true,"graph":{"version":1,"size":8,"nodes":[{"id":"a","op":"constant","inputs":[],"properties":{"value":1}},{"id":"b","op":"multiply","inputs":["a","a"]}],"outputs":{"ao":"a","height":"b","roughness":"a"}}})");
+    owner.start(args,"fixture");owner.tick(dev,"fixture");
+    require(owner.status().getInt("materializedNodePasses")==2&&owner.status().getInt("materializedPackPasses")==1&&bool(dev.pending),"materialized owner did not encode DAG and first pack");
+    require(!dev.buffers.empty()&&!dev.pipelines.empty(),"materialized resources not retained for pending read");
+    dev.deliver();owner.tick(dev,"fixture");owner.tick(dev,"fixture");
+    require(owner.status().getInt("materializedNodePasses")==2&&owner.status().getInt("materializedPackPasses")==2&&bool(dev.pending),"second output recomputed shared DAG");
+    dev.deliver();owner.tick(dev,"fixture");
+    auto status=owner.status();
+    require(status.getStr("state")=="ready"&&status.getInt("completedOutputs")==3&&status.getInt("reusedOutputs")==1,"materialized output set failed");
+    require(status.getBool("busy")&&status.getInt("materializedIdleBytes")==0&&!dev.buffers.empty(),"cache accepted before completed GPU fence");
+    dev.completed=dev.submitted;owner.tick(dev,"fixture");
+    status=owner.status();
+    require(!status.getBool("busy")&&status.getInt("materializedIdleBytes")>0&&status.getInt("materializedIdlePipelines")>0,"completed materialized cache not retained");
+    ++dev.submitted;
+    auto started=owner.start(args,"fixture");owner.tick(dev,"fixture");
+    require(owner.status().getBool("materializedBufferCacheHit")&&owner.status().getInt("materializedPipelineCacheHits")>0,"matching retired GPU cache not reused");
+    Json cancel=Json::object();cancel.set("request",started["request"]);
+    owner.cancel(cancel,"fixture");
+    require(owner.status().getBool("draining")&&!dev.buffers.empty(),"cancel freed in-flight GPU storage");
+    dev.deliver();owner.tick(dev,"fixture");
+    require(owner.status().getBool("busy")&&!dev.buffers.empty(),"cancel retired before completed GPU fence");
+    dev.completed=dev.submitted;owner.tick(dev,"fixture");
+    require(!owner.status().getBool("busy")&&dev.buffers.empty()&&dev.pipelines.empty(),"cancel did not retire materialized storage");
+    ++dev.submitted;dev.reject=true;owner.start(args,"fixture");owner.tick(dev,"fixture");
+    require(owner.status().getStr("state")=="failed"&&owner.status().getBool("draining")&&!dev.buffers.empty(),"partial dispatch rejection lost retirement");
+    dev.completed=dev.submitted;owner.tick(dev,"fixture");
+    require(!owner.status().getBool("busy")&&dev.buffers.empty()&&dev.pipelines.empty(),"failed dispatch fence did not retire");
+    owner.shutdownAfterIdle(dev);
+}
 int main() {
+    checkMaterializedOwner();
     {
         using namespace render::texture_graph;
         const auto p=compile(Json::parse(R"({"version":1,"size":8,"nodes":[{"id":"c","op":"color","inputs":[],"properties":{"value":[1,0,0]}},{"id":"s","op":"constant","inputs":[],"properties":{"value":0.5}}],"outputs":{"color":"c","height":"s","ao":"s"}})"));
@@ -258,35 +317,26 @@ int main() {
         require(normalPlan.first.glsl.find("floatBitsToUint")!=std::string::npos&&normalPlan.second.glsl.find("binding=13")!=std::string::npos,"normal plan ABI missing");
     }
     const auto sharedTexture=render::texture_graph::compile(Json::parse(R"({"version":1,"size":128,"nodes":[{"id":"h","op":"gradient","inputs":[]},{"id":"n","op":"normal","inputs":["h"]},{"id":"r","op":"constant","inputs":[]}],"outputs":{"height":"h","normal":"n","roughness":"r"}})"));
+    const auto materializedSources=render::texture_graph::gpu::compileMaterializedDag(sharedTexture,{0,1,2},128);
+    require(materializedSources.nodes.size()==3&&materializedSources.packs.size()==3,"materialized sources missing");
+    require(materializedSources.nodes[0].msl.find("float* result [[buffer(0)]]")!=std::string::npos,"scalar producer ABI incorrect");
+    require(materializedSources.nodes[1].glsl.find("input0[y*n+(x+1u)%n]")!=std::string::npos&&materializedSources.nodes[1].glsl.find("vec4 result[]")!=std::string::npos,"normal materialized shader missing");
+    require(materializedSources.totalBytes==materializedSources.plan.allocatedBytes+128u*128u*4u,"materialized pack buffer budget missing");
+    const auto blendTexture=render::texture_graph::compile(Json::parse(R"({"version":1,"size":8,"nodes":[{"id":"a","op":"color","inputs":[],"properties":{"value":[0,0,0]}},{"id":"b","op":"color","inputs":[],"properties":{"value":[1,1,1]}},{"id":"t","op":"constant","inputs":[]},{"id":"mix","op":"blendColor","inputs":["a","b","t"]}],"outputs":{"color":"mix"}})"));
+    const auto multiSource=render::texture_graph::gpu::compileMaterializedDag(blendTexture,{3},8);
+    require(multiSource.nodes[3].msl.find("float* input2 [[buffer(3)]]")!=std::string::npos&&multiSource.nodes[3].glsl.find("mix(v0,v1,v2.x)")!=std::string::npos,"multi-input expression or binding missing");
+    require(multiSource.packs[0].glsl.find("0xff000000u")!=std::string::npos,"RGBA8 pack missing");
     const auto sharedHeight=render::texture_graph::gpu::plan(sharedTexture,0,128,true);
     const auto sharedNormal=render::texture_graph::gpu::plan(sharedTexture,1,128,true);
     require(sharedHeight.twoPass&&sharedNormal.twoPass&&sharedHeight.scratchBytes==sharedNormal.scratchBytes,"shared scalar plan missing");
     require(sharedHeight.first.msl==sharedNormal.first.msl&&sharedHeight.first.glsl==sharedNormal.first.glsl,"scalar producer differs");
     require(sharedHeight.second.msl.find("height[tid]")!=std::string::npos&&sharedHeight.second.glsl.find("binding=13")!=std::string::npos,"scalar packing ABI missing");
     require(!render::texture_graph::gpu::plan(sharedTexture,0,128).twoPass&&!render::texture_graph::gpu::plan(sharedTexture,2,128,true).twoPass,"independent scalar should stay fused");
-    const auto materialized=render::texture_graph::compile(Json::parse(R"({
-        "version":1,"size":128,"nodes":[
-        {"id":"h","op":"fbm","inputs":[],"properties":{"period":8,"octaves":3,"seed":17}},
-        {"id":"c0","op":"color","inputs":[],"properties":{"value":[0.1,0.2,0.3]}},
-        {"id":"c1","op":"color","inputs":[],"properties":{"value":[0.9,0.7,0.5]}},
-        {"id":"color","op":"colorize","inputs":["h","c0","c1"]},
-        {"id":"rough","op":"invert","inputs":["h"]},
-        {"id":"packed","op":"metallicRoughness","inputs":["rough","h"]},
-        {"id":"normal","op":"normal","inputs":["h"]}],
-        "outputs":{"color":"color","height":"h","roughness":"rough","metallicRoughness":"packed","normal":"normal","mask":"h"}})"));
-    const std::vector<size_t> dagTargets{3,0,4,5,6,0};
-    const auto dag=render::texture_graph::gpu::compileMaterializedDag(materialized,dagTargets,128);
-    require(dag.ready()&&dag.nodeKernels.size()==7&&dag.slots.slotCount<=8,"materialized DAG plan incomplete");
-    for(size_t i=0;i<dag.slots.steps.size();++i){
-        const auto& step=dag.slots.steps[i];const auto& source=dag.nodeKernels[i];
-        require(!source.msl.empty()&&!source.glsl.empty(),"missing node kernel");
-        require(step.inputSlots.size()==materialized.nodes[step.node].inputs.size(),"input ABI count");
-        if(step.node==0)require(step.packOutputIndices==std::vector<size_t>({1,5}),"duplicate target fanout lost");
-        if(step.node==3)require(source.glsl.find("binding=15")!=std::string::npos&&source.msl.find("mix(v1,v2,v0.x)")!=std::string::npos,"three-port colorize lowering failed");
-        if(step.node==6)require(source.glsl.find("src0[((y+1u)%n)*n+x].x")!=std::string::npos,"normal neighborhood lowering failed");
-        if(step.node==5)require(source.msl.find("float3(1.0f,v0.x,v1.x)")!=std::string::npos,"packed PBR channels incorrect");
-    }
-    require(!render::texture_graph::gpu::compileMaterializedDag(materialized,dagTargets,128,1024).ready(),"overbudget source plan accepted");
+    Json planArgs=Json::object();planArgs.set("action",Json::string("plan"));planArgs.set("graph",tex["graph"]);planArgs.set("bakeSet",Json::fromBool(true));planArgs.set("resolution",Json::number(int64_t(8)));
+    const auto materialized=call("texture_graph_gpu_preview",planArgs);
+    require(materialized.getBool("ok")&&materialized.getStr("state")=="planned"&&!materialized.getBool("executed"),"headless materialized plan missing or fabricated execution");
+    require(materialized["outputs"].size()==2&&materialized["passes"].size()>0&&materialized["slotBytes"].size()>0,"materialized schedule missing slots or outputs");
+    require(materialized.getInt("packShaderCount")==2&&materialized.getInt("resultBytes")==8*8*4,"materialized source metadata missing");
     const auto headlessGpuTexture=call("texture_graph_gpu_preview",Json::parse(R"({"action":"read"})"));
     require(headlessGpuTexture.getStr("state")=="unavailable","headless texture GPU preview fabricated");
     require(!call("texture_graph_gpu_preview",Json::parse(R"({"action":"cancel","request":"1"})")).getBool("ok"),"headless GPU cancellation fabricated");
@@ -300,8 +350,6 @@ int main() {
 
     auto setStart=Json::object();setStart.set("action",Json::string("start"));setStart.set("graph",tex["graph"]);setStart.set("bakeSet",Json::fromBool(true));
     require(call("texture_graph_gpu_preview",setStart).getStr("state")=="unavailable","headless GPU set owner fabricated");
-    setStart.set("materializedDag",Json::fromBool(true));
-    require(call("texture_graph_gpu_preview",setStart).getStr("state")=="unavailable","headless materialized GPU owner fabricated");
     const auto manifest=Json::parseFile((root/"content"/"textures"/"fixture_set"/"texture-set.json").string());
     require(manifest["files"].size()==2&&manifest["files"][size_t(0)].getStr("backend")=="cpu","shared texture set provenance missing");
 

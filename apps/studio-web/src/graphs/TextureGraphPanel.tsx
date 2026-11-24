@@ -38,7 +38,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
  const [templates,setTemplates]=useState<Obj[]>([]),[outputTypes,setOutputTypes]=useState<Obj>({}),[newOp,setNewOp]=useState('constant'),[pending,setPending]=useState<PortRef|null>(null);
  const [assets,setAssets]=useState<{guid:string;path:string;key:MaterialKey}[]>([]);
  const [names,setNames]=useState<string[]>([]),[catalog,setCatalog]=useState<Obj[]>([]),[selected,setSelected]=useState(''),[output,setOutput]=useState('color'),[textureName,setTextureName]=useState('');
- const [gpuRequest,setGpuRequest]=useState<{id:string;source:string;overrides:string;output:string;resolution:number;bake:boolean;setBake:boolean}|null>(null),[gpuReady,setGpuReady]=useState(false),[gpuStatus,setGpuStatus]=useState(''),[requireGpu,setRequireGpu]=useState(false),[gpuResolution,setGpuResolution]=useState(32);
+ const [gpuRequest,setGpuRequest]=useState<{id:string;source:string;overrides:string;output:string;resolution:number;bake:boolean;setBake:boolean}|null>(null),[gpuReady,setGpuReady]=useState(false),[gpuStatus,setGpuStatus]=useState(''),[requireGpu,setRequireGpu]=useState(false),[materialized,setMaterialized]=useState(false),[gpuResolution,setGpuResolution]=useState(32);
  const [preview,setPreview]=useState<{hex:string;width:number;height:number;source:string}|null>(null),[asset,setAsset]=useState<{guid:string;path:string;key:MaterialKey}|null>(null);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState('');
  const epoch=useRef(0),lock=useRef(false),canvas=useRef<HTMLCanvasElement>(null);
@@ -81,7 +81,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
      const r=await op('texture_graph_gpu_preview',{action:'read'});if(token!==epoch.current)return;
      if(!object(r)||r.ok!==true||r.request!==gpuRequest.id){setGpuReady(false);throw new Error('GPU request replaced or unavailable');}
      const matches=gpuRequest.source===text&&gpuRequest.overrides===overrideText&&(gpuRequest.setBake||gpuRequest.output===output)&&(gpuRequest.bake||gpuRequest.resolution===gpuResolution);
-     setGpuStatus(String(r.state)+(r.draining===true?' · waiting for GPU retirement':'')+' / '+String(r.backend)+' · '+String(r.completedOutputs??0)+' / '+String(r.totalOutputs??0)+' maps · '+String(r.receivedBytes??0)+' / '+String(r.totalBytes??0)+' bytes · cached plans '+String(r.idlePipelinePlans??0)+(r.pipelineCacheHit===true?' · pipeline cache hit':'')+' · shared scratch hits '+String(r.sharedScratchHits??0) +(r.materializedRequested===true?' · '+String(r.executionMode)+' · materialized '+String(r.materializedCompletedOutputs??0)+' maps / '+String(r.materializedEncodedPasses??0)+' passes'+(r.materializedFallbackReason?' · fallback: '+String(r.materializedFallbackReason):''):'')+' — '+String(r.reason??'')+(matches?'':' · draft changed'));
+     setGpuStatus(String(r.state)+(r.draining===true?' · waiting for GPU retirement':'')+' / '+String(r.backend)+' · '+String(r.completedOutputs??0)+' / '+String(r.totalOutputs??0)+' maps · '+String(r.receivedBytes??0)+' / '+String(r.totalBytes??0)+' bytes · passes '+String(r.encodedPasses??0)+' / '+String(r.plannedPasses??0)+' · slot bytes '+String(r.plannedSlotBytes??0)+' · cached plans '+String(r.idlePipelinePlans??0)+(r.pipelineCacheHit===true?' · pipeline cache hit':'')+' · shared scratch hits '+String(r.sharedScratchHits??0)+(r.materializedRequested===true?' · materialized nodes '+String(r.materializedNodePasses??0)+' / packs '+String(r.materializedPackPasses??0)+(r.materializedFailed===true?' · fallback':'')+' · retained '+String(r.materializedIdleBytes??0)+' bytes · pipeline hits '+String(r.materializedPipelineCacheHits??0)+(r.materializedBufferCacheHit===true?' · buffer cache hit':''):'')+' — '+String(r.reason??'')+(matches?'':' · draft changed'));
      setGpuReady(matches&&r.bake===true&&r.state==='ready'&&r.published!==true&&r.busy!==true);
      if(matches&&r.state==='ready'&&r.bake!==true){
        if(typeof r.width!=='number'||typeof r.height!=='number'||!Number.isInteger(r.width)||!Number.isInteger(r.height)||r.width<8||r.height<8||r.width>128||r.height>128||typeof r.rgbaHex!=='string'||r.rgbaHex.length!==r.width*r.height*8||!/^[0-9a-f]+$/.test(r.rgbaHex))throw new Error('Invalid GPU preview payload');
@@ -99,7 +99,12 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
    if(action==='validate'){
     const r=await op('texture_graph_validate',{graph,overrides});if(token!==epoch.current)return;if(!object(r)||r.ok!==true)throw new Error('Native validation failed');setStatus('Native topology and work budget valid');return;
    }
-   if(action==='gpuPublish'){
+   if(action==='gpuPlan'){
+     const r=await op('texture_graph_gpu_preview',{action:'plan',graph,overrides,bakeSet:true,resolution:gpuResolution});if(token!==epoch.current)return;
+     if(!object(r)||r.ok!==true||r.state!=='planned'||r.executed!==false||!Array.isArray(r.passes)||!Array.isArray(r.slotBytes))throw new Error('Materialized DAG plan rejected');
+     setStatus('Plan only · '+String(r.resolution)+' px · '+r.passes.length+' passes · '+r.slotBytes.length+' slots · '+String(r.allocatedBytes)+' / '+String(r.budgetBytes)+' logical bytes including result buffer · '+String(r.nodeShaderCount)+' node / '+String(r.packShaderCount)+' pack shaders; no GPU dispatch');return;
+    }
+    if(action==='gpuPublish'){
     if(!gpuRequest?.bake||!gpuReady||gpuRequest.source!==text||gpuRequest.overrides!==overrideText||(!gpuRequest.setBake&&gpuRequest.output!==output))throw new Error('No matching completed bake');
     const r=await op('texture_graph_gpu_preview',{action:'publish',request:gpuRequest.id,textureName});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true)throw new Error('Native GPU bake publication failed');
@@ -127,13 +132,12 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
       if(patched.guid!==a.guid||patched.settings.sRGB!==srgb)throw new Error('Importer color-space verification failed');const key=channels[output];if(key)setAsset({guid:a.guid,path:a.path,key});}
     return;
    }
-   if(action==='gpuStart'||action==='gpuBake'||action==='gpuBakeSet'||action==='gpuDagSet'){
-    const isSet=action==='gpuBakeSet'||action==='gpuDagSet';
-    const r=await op('texture_graph_gpu_preview',{action:'start',graph,overrides,output,requireGpu,resolution:gpuResolution,bake:action==='gpuBake'||isSet,bakeSet:isSet,materializedDag:action==='gpuDagSet'});if(token!==epoch.current)return;
+   if(action==='gpuStart'||action==='gpuBake'||action==='gpuBakeSet'){
+    const r=await op('texture_graph_gpu_preview',{action:'start',graph,overrides,output,requireGpu,materialized,resolution:gpuResolution,bake:action==='gpuBake'||action==='gpuBakeSet',bakeSet:action==='gpuBakeSet'});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||typeof r.request!=='string')throw new Error(object(r)?String(r.reason??'GPU owner unavailable'):'GPU owner unavailable');
-    {setGpuRequest({id:r.request,source:text,overrides:overrideText,output,resolution:gpuResolution,bake:action==='gpuBake'||isSet,setBake:isSet});setPreview(null);setGpuReady(false);}
+    {setGpuRequest({id:r.request,source:text,overrides:overrideText,output,resolution:gpuResolution,bake:action==='gpuBake'||action==='gpuBakeSet',setBake:action==='gpuBakeSet'});setPreview(null);setGpuReady(false);}
     
-    setGpuStatus(String(r.state)+(r.draining===true?' · waiting for GPU retirement':'')+' / '+String(r.backend)+(r.setBake===true?' · '+String(r.completedOutputs)+' / '+String(r.totalOutputs)+' maps':'')+' · '+String(r.receivedBytes??0)+' / '+String(r.totalBytes??0)+' bytes · '+String(r.readbackBlocks??0)+' blocks · encoded passes '+String(r.encodedPasses??0)+(r.reusedPlan===true?' · reused plan':'')+(r.reusedBuffers===true?' · reused buffers':'')+(r.reusedScratch===true?' · shared scalar scratch':'') +(r.materializedRequested===true?' · '+String(r.executionMode)+' · materialized '+String(r.materializedCompletedOutputs??0)+' maps / '+String(r.materializedEncodedPasses??0)+' passes'+(r.materializedFallbackReason?' · fallback: '+String(r.materializedFallbackReason):''):'')+' — '+String(r.reason??''));
+    setGpuStatus(String(r.state)+(r.draining===true?' · waiting for GPU retirement':'')+' / '+String(r.backend)+(r.setBake===true?' · '+String(r.completedOutputs)+' / '+String(r.totalOutputs)+' maps':'')+' · '+String(r.receivedBytes??0)+' / '+String(r.totalBytes??0)+' bytes · '+String(r.readbackBlocks??0)+' blocks · encoded passes '+String(r.encodedPasses??0)+(r.reusedPlan===true?' · reused plan':'')+(r.reusedBuffers===true?' · reused buffers':'')+(r.reusedScratch===true?' · shared scalar scratch':'')+' — '+String(r.reason??''));
     setGpuReady(r.bake===true&&r.state==='ready'&&r.published!==true&&r.busy!==true);
     if(r.state==='ready'&&r.bake!==true){
       if(typeof r.width!=='number'||typeof r.height!=='number'||!Number.isInteger(r.width)||!Number.isInteger(r.height)||r.width<8||r.height<8||r.width>128||r.height>128||typeof r.rgbaHex!=='string'||r.rgbaHex.length!==r.width*r.height*8||!/^[0-9a-f]+$/.test(r.rgbaHex))throw new Error('Invalid GPU preview payload');
@@ -241,10 +245,11 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
    <small>Native Metal / Vulkan compute, 128×128 maximum. CPU-reference checked; pattern and two-pass normal source supported. Rejected work falls back unless GPU is required. Full-size single-output and PBR set bakes use native readback; CPU set bake remains available.</small>
    <StudioSelect aria-label="GPU preview resolution" value={String(gpuResolution)} disabled={busy||disabled} onChange={e=>{setGpuResolution(Number(e.target.value));setPreview(null)}}>{[32,64,128].map(n=><option key={n} value={n}>{n} × {n}</option>)}</StudioSelect>
    <label className="au-row"><input type="checkbox" checked={requireGpu} disabled={busy||disabled} onChange={e=>setRequireGpu(e.target.checked)}/> Require GPU</label>
+   <label className="au-row"><input type="checkbox" checked={materialized} disabled={busy||disabled} onChange={e=>setMaterialized(e.target.checked)}/> Experimental materialized GPU DAG (default: fused)</label>
    <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!outputs.includes(output)} onClick={()=>void run('gpuStart')}>Queue GPU preview</StudioButton><StudioButton size="sm" disabled={busy||disabled||!gpuRequest} onClick={()=>void run('gpuRead')}>Read result</StudioButton></div>
    <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!outputs.includes(output)} onClick={()=>void run('gpuBake')}>Queue full-size GPU bake</StudioButton><StudioButton size="sm" disabled={busy||disabled||!gpuReady||!textureName||gpuRequest?.source!==text||gpuRequest?.overrides!==overrideText||(!gpuRequest?.setBake&&gpuRequest?.output!==output)} onClick={()=>void run('gpuPublish')}>Publish completed bake</StudioButton></div>
-   <StudioButton size="sm" disabled={busy||disabled||!outputs.length} onClick={()=>void run('gpuBakeSet')}>Queue full-size GPU PBR set</StudioButton>
-   <StudioButton size="sm" disabled={busy||disabled||!outputs.length} onClick={()=>void run('gpuDagSet')}>Queue experimental materialized GPU PBR set</StudioButton>
+   <StudioButton size="sm" disabled={busy||disabled||!outputs.length} onClick={()=>void run('gpuPlan')}>Analyze materialized DAG (plan only)</StudioButton>
+    <StudioButton size="sm" disabled={busy||disabled||!outputs.length} onClick={()=>void run('gpuBakeSet')}>Queue full-size GPU PBR set</StudioButton>
    <StudioButton size="sm" disabled={busy||disabled||!gpuRequest} onClick={()=>void run('gpuCancel')}>Cancel GPU request</StudioButton>
     <small>Request timeout: 60 seconds by default. Cancellation discards unpublished results; GPU retirement may still be pending.</small>
     {gpuStatus&&<small>{gpuStatus}</small>}

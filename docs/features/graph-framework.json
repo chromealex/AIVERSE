@@ -92,14 +92,12 @@
     "tests/render/texture_graph_liveness.cpp",
     "engine/render/graph/TextureGraphPassSchedule.h",
     "tests/render/texture_graph_pass_schedule.cpp",
-    "engine/render/graph/TextureGraphGpuSlots.h",
-    "tests/render/texture_graph_gpu_slots.cpp",
-    "engine/render/graph/TextureGraphGpuDag.h",
-    "engine/render/graph/TextureGraphGpuNodeAbi.h",
-    "tests/render/texture_graph_gpu_node_abi.cpp",
-    "apps/editor/core/TextureGraphGpuExecution.h",
-    "engine/render/graph/TextureGraphGpuStepState.h",
-    "tests/render/texture_graph_gpu_step_state.cpp",
+    "engine/render/graph/TextureGraphDagLowering.h",
+    "tests/render/texture_graph_dag_lowering.cpp",
+    "engine/render/graph/TextureGraphKernelSource.h",
+    "tests/render/texture_graph_kernel_source.cpp",
+    "engine/render/graph/TextureGraphMaterializedDispatch.h",
+    "tests/render/texture_graph_materialized_dispatch.cpp",
     "engine/render/graph/TextureGraphGpuResourceCache.h",
     "tests/render/texture_graph_gpu_resource_cache.cpp"
   ],
@@ -112,7 +110,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 36A in progress: reconcile parent typed lowering and compiler with native executor; exact-layout retired GPU storage pool and bounded pipeline reuse.",
+      "note": "Stage 36A canonical typed planner/compiler and native owner reconciled; exact-layout retired buffer cache and exact-source pipeline reuse wired in source; native acceptance pending.",
       "evidence": []
     },
     "architecture": {
@@ -182,7 +180,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35B exact-blob standalone C++20 StepFence policy PASS (GCC 14.2.0); integrated headless refusal fixture authored NOT RUN. Native executor compilation, GPU dispatch/retirement/parity, full CTest, Studio, MCP audit and Mac gate NOT RUN.",
+      "note": "Stage 36A isolated exact-blob C++20 resource-cache policy PASS on Linux GCC 14.2. Integrated synthetic owner fixture extended NOT RUN. Native full build, GPU, Studio, CTest and Mac gate NOT RUN.",
       "evidence": []
     },
     "handoff": {
