@@ -258,15 +258,16 @@ struct MaterializedSources {
     MaterializedDagPlan plan;
     std::vector<Source> nodes; // indexed by source node; unreachable entries empty
     std::vector<Source> packs; // target order; shared result buffer reused
-    size_t resultBytes=0,totalBytes=0;
+    size_t resultBytes=0,resultCapacityBytes=0,totalBytes=0;
     size_t reachableNodes=0,fusedNodes=0;
 };
 inline MaterializedSources compileMaterializedDag(const Program& p,const std::vector<size_t>& targets,
-        int n,size_t budget=materializedBudgetBytes,bool fusePointwise=false){
+        int n,size_t budget=materializedBudgetBytes,bool fusePointwise=false,bool paddedResult=false){
     require(n>=8&&n<=p.size&&n<=maxBakeSize&&budget<=materializedBudgetBytes,"invalid materialized resolution or budget");
     MaterializedSources r;
     r.resultBytes=size_t(n)*size_t(n)*4u;
-    require(r.resultBytes<budget,"materialized result exceeds budget");
+    r.resultCapacityBytes=paddedResult?gfx::rgba8CopyLayout(n,n).bytes:r.resultBytes;
+    require(r.resultCapacityBytes>=r.resultBytes&&r.resultCapacityBytes<budget,"materialized result exceeds budget");
     if(fusePointwise){
         std::vector<std::vector<size_t>> edges;
         std::vector<size_t> bytes;
@@ -278,19 +279,19 @@ inline MaterializedSources compileMaterializedDag(const Program& p,const std::ve
             pointwise.push_back(fusionPointwise(node));
         }
         const auto fusion=planPointwiseFusion(edges,p.order,targets,pointwise);
-        r.plan=lowerDagSlots(fusion.edges,p.order,targets,bytes,budget-r.resultBytes,3);
+        r.plan=lowerDagSlots(fusion.edges,p.order,targets,bytes,budget-r.resultCapacityBytes,3);
         r.reachableNodes=fusion.reachable;r.fusedNodes=fusion.reachable-fusion.passes;
         r.nodes.resize(p.nodes.size());
         for(const auto& pass:r.plan.schedule.passes)
             r.nodes[pass.pipeline]=compileFusionRegion(p,fusion.regions.at(pass.pipeline),n);
     }else{
-        r.plan=planMaterializedDag(p,targets,n,budget-r.resultBytes);
+        r.plan=planMaterializedDag(p,targets,n,budget-r.resultCapacityBytes);
         r.reachableNodes=r.plan.schedule.passes.size();
         r.nodes.resize(p.nodes.size());
         for(const auto& pass:r.plan.schedule.passes)
             r.nodes[pass.pipeline]=compileMaterializedNode(p,pass.pipeline,n);
     }
-    r.totalBytes=r.plan.allocatedBytes+r.resultBytes;
+    r.totalBytes=r.plan.allocatedBytes+r.resultCapacityBytes;
     for(auto target:targets)r.packs.push_back(packMaterializedKernel(materializedValue(p.nodes[target].info->output),n));
     return r;
 }
