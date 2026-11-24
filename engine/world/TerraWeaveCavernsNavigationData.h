@@ -54,6 +54,8 @@ struct CaveNavigationCallbacks {
     std::function<uint32_t(PointCm,CaveTraversal)> traversalCost;
     std::function<bool(PointCm,PointCm,const CaveAgentProfile&)> customLink;
     std::function<uint16_t(PointCm)> areaAt;
+    // Optional compatibility with local chart support axis (e.g. PHYSIS).
+    std::function<bool(PointCm)> groundSupportAllowed;
 };
 // Inclusive centimetre bounds; immutable, owner-published residency policy.
 using CaveResidencyCheck=std::function<bool(PointCm,PointCm)>;
@@ -123,7 +125,8 @@ public:
         validateProfile(agent);
         // Ground requires a solid voxel/surface below the actor footprint.
         // A flying/swimming actor is handled by a separate traversal policy.
-        if(!inBounds(p)||index_->field(p)<=0)return false;
+        if(!inBounds(p)||index_->field(p)<=0||
+           (callbacks_.groundSupportAllowed&&!callbacks_.groundSupportAllowed(p)))return false;
         for(int32_t depth=agent.sampleCm;depth<=agent.groundProbeCm;
             depth+=agent.sampleCm) {
             PointCm down{p.x,p.y-depth,p.z};
