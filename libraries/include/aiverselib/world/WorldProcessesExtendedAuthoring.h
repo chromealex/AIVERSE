@@ -123,6 +123,10 @@ inline bool edit(std::string_view id,std::string_view key,const Json& v,
     }
     if(!validate(id,doc,error))return false;
     Json next=doc;
+    if(id=="EvolveArea"&&(key=="offsetXcm"||key=="offsetZcm")){
+        if(!next.has("offsetXcm"))next.set("offsetXcm",Json::number(int64_t(0)));
+        if(!next.has("offsetZcm"))next.set("offsetZcm",Json::number(int64_t(0)));
+    }
     if(id=="MorphNode"&&key=="gravityRelative"&&!next.has("gravityImpulseMilli"))
         next.set("gravityImpulseMilli",Json::number(int64_t(0)));
     next.set(std::string(key),v);
