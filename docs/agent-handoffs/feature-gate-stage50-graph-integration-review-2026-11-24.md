@@ -1,0 +1,27 @@
+# Stage 50 — graph ownership and integration review
+
+Reviewed Feature Gate/Graph Framework 3999064f16185f6b493504c8c8f19f8c256eeb86; owner Building integration fba029bdb9f61fe5eb3707345c682eb81b05d9c7 (draft PR #140), Caverns integration bbb05d0d9ad36958b64e77f1873c45cb302fde03. Main comparison base 2be780abdf5fa93844472f34e07e4c6dabae8935. PR #114 was closed without merge; the old feature/aiv20261123_building-grammar ref no longer resolves. Use the active integration PR #140 instead. No engine source modifications or new test execution in this stage.
+
+## Architecture and owner boundaries
+
+- GraphCanvas.tsx emits selection/move/port callbacks, consumes GraphView and has a readOnly presentation mode. NativeGraphPanel, ModelGraphPanel and GraphOps delegate validation/edits to Workspace/native owners rather than running a second graph compiler in WebView.
+- GraphOps.h domains: shader, spectrafx, motionweave, modeling, texture. graph_edit applies bounded in-memory drafts and returns native validation; graph_save revalidates and forwards native concurrency guards. The facade is not a complete runtime or universal authoring API for every catalog graph domain.
+- Save contract differs by owner: shader/SpectraFX explicit unversioned consent; SpectraFX panel additionally performs a read-back preflight, explicitly documented as non-atomic. MotionWeave uses expected original document; modeling uses expectedRevision; texture uses expected-document on overwrite. Do not certify concurrent-editor safety for shader/SpectraFX. Preserve owner-specific formats and do not create duplicate browser persistence.
+- Existing native Workspace test vfx_graph_ops covers concrete FX and texture save/read-back, conflict rejection, draft immutability, typed edits and bounded headless execution. Mac v13 archive logs/ctest-full.log additionally shows PASS for modeling_authoring, animation_graphs, shader_graph, studio_session, studio_shader_graph_draft, studio_material_schema, texture_graph_pipeline_cache, shared_scratch, liveness, pass_schedule, dag_lowering, kernel_source and materialized_dispatch. These results are not proof of actual GUI Inspector interaction or all owner bridges.
+- Feature Gate's native module host fix preserves module registration in gameplay hosts and avoids renderer-only injection. Existing fixture native_project_build passed. The trusted policy changes still need integrator approval; lexical architecture guard alone does not establish complete ECS ownership.
+
+## Concrete owner integration blockers
+
+Building: at Feature Gate HEAD, StudioSession.cpp and types.ts lack studio.buildingInspect. BuildingRoomTopologyView.tsx exposes an optional onRoute callback and validates owner reply. At Building owner HEAD fba029bd, StudioSession.cpp dispatches studio.buildingInspect to studioBuildingInspect; types.ts declares the typed method with routeQuery. Owner PR #140 explicitly says validation-only, full Graph Framework/Studio reconciliation pending. Do not invent a duplicate bridge or merge a stale branch over the shared Studio files. Acceptance: preserve current owner handler and typed bridge, candidate/document identity, geometry and topology data, route callback, stale reply rejection, native route diagnostics, and actual Studio interaction.
+
+Caverns: Feature Gate HEAD StudioSession.cpp implements studio.cavernsGraphInspect with scope equality, registered owner detection, get-only native terraweave_caverns_paint call, and dirty/undo invariants. It explicitly returns unsupported for planet documents. Confirm the latest owner route/schema and planetary support against Caverns integration HEAD; do not claim planet parity or actual owner integration from fallback tests. Acceptance: real native owner on supported map, ready/absent/unavailable/unsupported distinction, read-only document invariants, correct graph projection, stale scope rejection and visual check.
+
+## Shared-file overlap preflight (GitHub compare)
+
+Building owner: 277 returned paths, 30 intersect the Feature Gate diff. Shared high-risk paths include CMakeLists.txt, Workspace.cpp, StudioSession.cpp/.h, StudioTools.h, package.json, nestedDock.ts, StudioPanelRenderer.tsx, types.ts, GraphCanvas.tsx/.css, graphFramework.ts, graphGeometry.ts, graphSelection.ts, building inspection/projection components and their tests, docs/devlog/systems.json, skills/catalog.json, GameCore.h, PhysisAuthoring.h.
+
+Caverns owner: 300 returned paths, 14 intersect the Feature Gate diff. AGENTS.md, CMakeLists.txt, Editor.cpp/.h, Workspace.cpp, StudioGameLaunch.h, StudioSession.cpp/.h, StudioTools.h, StudioSessionTests.cpp, nestedDock.ts, StudioPanelRenderer.tsx, types.ts, docs/devlog/systems.json. The compare response reaches GitHub's file-list limit; the list is a lower bound, not a complete conflict analysis. For both owners inspect three-way diffs on full checkouts; shared-path overlap does not prove merge conflict.
+
+## Decision
+
+Do not bulk mark architecture, implementation, native_api, MCP, Studio, Inspector, persistence, graphs, dependencies, performance, platforms or publishing PASS based on source presence/automated tests alone. Record this reviewed scope in manifests; no status promotions in this stage. Coordinate Building PR #140 with Graph Framework PR #120; retain independent Caverns owner acceptance. Integration merge order and any new source changes require merged-tree evidence. No main merge.
