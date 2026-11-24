@@ -27,8 +27,9 @@ public:
         if(!enabled_)error_.clear();
         return true;
     }
-    void beforeRender(gfx::Device& device,const editor::MapDoc& doc,
-                      const std::string& project,render::float3 focus) {
+    // Before beginFrame: map transitions may need an explicit idle barrier.
+    void syncDocument(gfx::Device& device,const editor::MapDoc& doc,
+                      const std::string& project) {
         if(!enabled_)return;
         // Snapshot identity includes actual document bytes on every new
         // immutable MapDoc capture (also catches same-revision Undo/Redo).
@@ -66,7 +67,12 @@ public:
                 }
                 seenDoc_=&doc;seenRevision_=doc.revision;
             }
-            if(failed_)return;
+        }catch(const std::exception& e){failed_=true;error_=e.what();}
+    }
+    // Inside frame but before any pass, where the RHI exposes real fences.
+    void beforeRender(gfx::Device& device,render::float3 focus) {
+        if(!visible())return;
+        try{
             if(!std::isfinite(focus.x)||!std::isfinite(focus.y)||!std::isfinite(focus.z))
                 throw std::invalid_argument("Caverns preview focus");
             const auto cm=[](float x){return int64_t(std::llround(std::clamp(double(x),-9990000.,9990000.)*100.));};
