@@ -44,6 +44,89 @@ void mapCompoundHistoryContract(){
     map.beginEdit();map.data.name="trimmed";
     AIVERSE_TEST_CHECK(map.undoDepth()==200&&map.undoId(0)!=oldest&&map.undoId(199)>id);
 }
+void mapHistoryPersistenceContract(){
+    using namespace aiverse;using namespace aiverse::editor;namespace fs=std::filesystem;
+    const auto root=fs::temp_directory_path()/("studio-map-history-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(root/"maps");
+    const auto file=(root/"maps"/"scene.json").string();
+    MapDoc doc;doc.reset(8,8);std::string error;
+    DocEntity entity;entity.id="unit";entity.type="unit";entity.x=1.2345678f;entity.z=2.3456789f;
+    doc.data.entities.push_back(entity);
+    doc.data.corners.assign(81,0);doc.data.corners[3]=-321;
+    doc.data.detailScale=2;doc.data.detail.assign(17*17,0);doc.data.detail[8]=-1023;
+    doc.data.detailSplat.assign(17*17*4,0);doc.data.detailSplat[11]=217;
+    doc.data.extra.set("custom",Json::parse(R"({"future":{"id":"test"}})"));
+    {
+        MapDoc::CompoundEdit stroke(doc);
+        doc.beginEdit();doc.data.entities[0].x=5.6789123f;
+        doc.beginEdit();doc.data.cells[0]='~';doc.data.corners[3]=999;
+        doc.data.detail[8]=2047;doc.data.detailSplat[11]=3;
+        stroke.commit();
+    }
+    doc.setHistoryLabel(doc.undoId(0),"Terrain stroke");
+    doc.beginEdit();doc.data.name="Second";
+    doc.setHistoryLabel(doc.undoId(1),"Rename map");
+    doc.undo();
+    const auto epoch=doc.historyEpoch();const auto previousId=doc.undoId(0);
+    AIVERSE_TEST_CHECK(doc.save(file,&error)&&doc.historyPersistenceWarning().empty());
+    MapDoc reopened;
+    AIVERSE_TEST_CHECK(reopened.load(file,&error)&&reopened.historyPersistenceWarning().empty());
+    AIVERSE_TEST_CHECK(reopened.undoDepth()==1&&reopened.redoDepth()==1);
+    AIVERSE_TEST_CHECK(reopened.historyEpoch()!=epoch&&reopened.undoId(0)!=previousId);
+    AIVERSE_TEST_CHECK(reopened.historyLabel(reopened.undoId(0))=="Terrain stroke");
+    AIVERSE_TEST_CHECK(reopened.historyLabel(reopened.redoId(0))=="Rename map");
+    reopened.undo();
+    AIVERSE_TEST_CHECK(reopened.data.entities[0].x==1.2345678f&&reopened.data.entities[0].z==2.3456789f);
+    AIVERSE_TEST_CHECK(reopened.data.cells[0]=='.'&&reopened.data.corners[3]==-321);
+    AIVERSE_TEST_CHECK(reopened.data.detail[8]==-1023&&reopened.data.detailSplat[11]==217);
+    AIVERSE_TEST_CHECK(reopened.data.extra["custom"]["future"].getStr("id")=="test");
+    reopened.redo();reopened.redo();
+    AIVERSE_TEST_CHECK(reopened.data.name=="Second");
+    AIVERSE_TEST_CHECK(reopened.save(file,&error));
+    const auto cache=root/"maps"/".aiverse-cache";
+    fs::path checkpoint;
+    for(const auto& item:fs::directory_iterator(cache))
+        if(item.path().extension()==".json")checkpoint=item.path();
+    AIVERSE_TEST_CHECK(!checkpoint.empty());
+    const auto saved=readProjectFileBytes(file);
+    std::ofstream(file,std::ios::binary|std::ios::app)<<"\n";
+    MapDoc changed;
+    AIVERSE_TEST_CHECK(changed.load(file,&error)&&!changed.canUndo()&&!changed.historyPersistenceWarning().empty());
+    std::ofstream(file,std::ios::binary|std::ios::trunc)<<saved;
+    // A dirty marker refuses even a byte-identical saved map.
+    const auto marker=cache/(checkpoint.stem().string()+".dirty");
+    std::ofstream(marker)<<"interrupted";
+    AIVERSE_TEST_CHECK(changed.load(file,&error)&&!changed.canUndo()&&!changed.historyPersistenceWarning().empty());
+    fs::remove(marker);
+    AIVERSE_TEST_CHECK(changed.load(file,&error)&&changed.canUndo());
+    // Save As must not inherit a timeline pointing to the old terrain sidecars.
+    const auto copy=(root/"maps"/"copy.json").string();
+    AIVERSE_TEST_CHECK(changed.save(copy,&error)&&!changed.canUndo()&&!changed.canRedo());
+    AIVERSE_TEST_CHECK(changed.load(copy,&error)&&!changed.canUndo());
+    // Planet snapshots carry all six faces, independent detail, extras and file names.
+    MapDoc planet;
+    AIVERSE_TEST_CHECK(planet.loadJson(Json::parse(R"({"name":"Planet","world":{"bodies":[{"id":"earth","faceSize":4,"kind":"planet"}]}})"),&error));
+    auto& body=planet.data.bodies.front();
+    body.cells[3]='R';body.corners[5]=-90;
+    body.detailScale=1;body.detail.assign(6*5*5,0);body.detail[11]=-123;
+    body.faceExtra[4].set("custom",Json::string("retained"));
+    planet.beginEdit();planet.data.bodies[0].cells[3]='.';planet.data.bodies[0].detail[11]=222;
+    const auto worldFile=(root/"maps"/"planet.json").string();
+    AIVERSE_TEST_CHECK(planet.save(worldFile,&error)&&planet.historyPersistenceWarning().empty());
+    MapDoc world;AIVERSE_TEST_CHECK(world.load(worldFile,&error)&&world.canUndo());
+    world.undo();
+    AIVERSE_TEST_CHECK(world.data.bodies[0].cells[3]=='R'&&world.data.bodies[0].corners[5]==-90);
+    AIVERSE_TEST_CHECK(world.data.bodies[0].detail[11]==-123&&world.data.bodies[0].faceExtra[4].getStr("custom")=="retained");
+    // World-space documents preserve authored extension blocks, too.
+    MapDoc authored;
+    AIVERSE_TEST_CHECK(authored.loadJson(Json::parse(R"({"name":"Scene","colliders":[],"spawns":[],"custom":{"value":7}})"),&error));
+    authored.beginEdit();authored.data.extra.set("custom",Json::parse(R"({"value":8})"));
+    const auto authoredFile=(root/"maps"/"authored.json").string();
+    AIVERSE_TEST_CHECK(authored.save(authoredFile,&error));
+    MapDoc authoredReopen;AIVERSE_TEST_CHECK(authoredReopen.load(authoredFile,&error)&&authoredReopen.canUndo());
+    authoredReopen.undo();AIVERSE_TEST_CHECK(authoredReopen.data.worldSpace&&authoredReopen.data.extra["custom"].getInt("value")==7);
+    fs::remove_all(root);
+}
 void projectFileEditContract(){
     using namespace aiverse::editor;namespace fs=std::filesystem;
     const auto root=fs::temp_directory_path()/("studio-project-files-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
@@ -1066,6 +1149,6 @@ int main() {
     AIVERSE_TEST_CHECK(openRejected);
     authoredEntityWorkflow();
     entityWorkflow();
-    mapCompoundHistoryContract();projectFileEditContract();projectDocumentJournalContract();projectOwnerSaveContract();projectHistoryContract();projectHistoryPersistenceContract();projectHistoryBudgetContract();assetHistorySessionContract();agentScopedHistoryContract();projectFileRecoveryWorkflow();
+    mapCompoundHistoryContract();mapHistoryPersistenceContract();projectFileEditContract();projectDocumentJournalContract();projectOwnerSaveContract();projectHistoryContract();projectHistoryPersistenceContract();projectHistoryBudgetContract();assetHistorySessionContract();agentScopedHistoryContract();projectFileRecoveryWorkflow();
     std::cout << "studio session contract PASS\n";
 }

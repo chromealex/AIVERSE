@@ -229,7 +229,7 @@ std::shared_ptr<void> MapDoc::beginHistorySave(const std::string& file){
     const auto loc=location(file,true);
     auto lock=std::make_shared<Lock>(loc.lock);
     if(journalExists(loc.dirty)&&!fs::is_regular_file(fs::symlink_status(loc.dirty)))throw std::runtime_error("Unsafe map history marker");
-    write(loc.dirty,"Map save in progress\\n");sync(loc.cache);sync(loc.cache.parent_path());
+    write(loc.dirty,"Map save in progress\n");sync(loc.cache);sync(loc.cache.parent_path());
     return lock;
 }
 void MapDoc::saveHistoryCheckpoint(){

@@ -1,5 +1,6 @@
 #include "apps/editor/core/DocumentLightIdentity.h"
 #include "MapDoc.h"
+#include "ProjectFileEdits.h"
 #include "TerrainOps.h"
 #include <cstring>
 #include "engine/view/game/GameTerrainDetail.h"
@@ -471,6 +472,22 @@ bool MapDoc::save(const std::string& file, std::string* err) {
     if (!f) { if (err) *err = "write failed"; return false; }
     f.close();
     if(!f){if(err)*err="cannot close map file";path=oldPath;return false;}
+    // The history marker cannot be retired before the actual map and any
+    // referenced terrain sidecars have reached the filesystem flush boundary.
+    try{
+        auto flush=[&](const Json& terrain){
+            const auto corners=terrain.getStr("cornersFile");
+            if(!corners.empty())syncProjectFilePath(cornersPath(file,corners));
+            const auto& detail=terrain["detail"];
+            for(const char* key:{"file","splat"}){
+                const auto name=detail.getStr(key);
+                if(!name.empty())syncProjectFilePath(cornersPath(file,name));
+            }
+        };
+        flush(j["terrain"]);
+        for(const auto& body:j["world"]["bodies"].items())flush(body["terrain"]);
+        syncProjectFilePath(file);syncProjectFilePath(fs::absolute(file).parent_path());
+    }catch(const std::exception& e){if(err)*err=e.what();path=oldPath;return false;}
     dirty = false;
     if(saveAs){undo_.clear();redo_.clear();historyEpoch_=newHistoryEpoch();}
     saveHistoryCheckpoint();
