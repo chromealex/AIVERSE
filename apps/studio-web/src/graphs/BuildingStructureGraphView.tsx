@@ -40,7 +40,7 @@ export function BuildingStructureGraphView({recipe,inspection,onSelectFeature,on
   {feature!==null&&renderFeatureEditor?.(feature)}
   {active.startsWith('binding:')&&renderMaterialInspector?.(active.slice(8))}
   <StudioAlert>Recipe links represent socket provenance, not live navigation. Material bindings are authored references, not resolved by native inspection.</StudioAlert>
-  {data.mode==='features'&&data.solids!==null&&inspection&&typeof inspection==='object'&&'geometry' in inspection&&<BuildingGeometryGraphView geometry={inspection.geometry} solids={data.solids}/>}
+  {data.mode==='features'&&data.solids!==null&&typeof inspection==='object'&&inspection!==null&&'geometry' in inspection&&<BuildingGeometryGraphView geometry={inspection.geometry} solids={data.solids}/>}
   {data.topology?<BuildingRoomTopologyView data={data.topology} onRoute={onRoute} onSelectSocket={onSelectFeature?(id=>{const s=data.sockets.find(item=>item.id===id);if(s)onSelectFeature(s.featureIndex)}):undefined}/>:data.mode==='features'&&<StudioAlert>Room topology unavailable in this owner report (legacy count-only response).</StudioAlert>}
  </StudioSection>;
 }
