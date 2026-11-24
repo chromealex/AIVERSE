@@ -536,3 +536,18 @@ For regional nav, route returns explicit native same-floor corridors and
 stair/lift actions. canBoardLift requires actual open landing colliders
 and acknowledged graph state; use the game's existing stair/actor motor
 to execute vertical segments. No second graph or network channel.
+
+## Stage 23V.6: generic Replica server
+
+Use the existing admitted net::replica::Server, not an FPS session.
+Reserve a reliable message channel for building Command payloads and
+another for building scene state. In the host's existing onMessage
+dispatcher, call BuildingReplicaBridge::receive(slot,channel,payload)
+only when handles(channel) is true. The bridge decodes the bounded
+existing Command format, stamps the real slot and queues the shared
+Simulation command. Use bridge.send(server,admittedSlot,sceneId)
+after a completed authoritative tick for interested authorized peers.
+Clients receive scene content identity, epoch, tick, aperture state and
+lift snapshots through BuildingReplicaView; presentation may use these
+only as read-only authoritative samples. The game retains its transport
+admission and interest ownership; no automatic broadcast of passengers.

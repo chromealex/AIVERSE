@@ -325,7 +325,7 @@ public:
             const auto hash=all->contentHashes.find(id);
             if(!s||state.sceneId!=id||hash==all->contentHashes.end()||
                hash->second!=s->contentHash||
-               liftState->scenes.contains(id)!=!s->liftLayout.empty())
+               (liftState->scenes.contains(id)!=(!s->liftLayout.empty())))
                 return fail(error,"Restored building content identity differs");
         }
         for(const auto& [id,s]:scenes_){
@@ -410,6 +410,22 @@ public:
         c.args={int64_t(id),int64_t(epoch_),int64_t(feature),int64_t(floor)};
         return c;
     }
+    // Transport copies only the last graph-acknowledged ECS revision.
+    // Content identity and socket order are stable across peers.
+    bool captureApertureState(uint64_t id,BuildingEcsWorldState& out,
+                              uint64_t& contentHash)const{
+        const auto* s=find(id);
+        const auto* all=sim_->world().resourceConst<BuildingEcsSceneCollection>();
+        if(!s||!all||!ready()||s->status!=Status::Active||
+           s->physics.pendingGraphs())return false;
+        const auto it=all->scenes.find(id);
+        if(it==all->scenes.end()||!it->second.graphAcknowledged||
+           it->second.revision!=s->physics.revision())return false;
+        out=it->second;contentHash=s->contentHash;return true;
+    }
+    bool hasLifts(uint64_t id)const{
+        const auto* s=find(id);return s&&!s->liftLayout.empty();
+    }
     bool captureLiftSnapshot(uint64_t id,uint64_t serverTick,
                      std::vector<uint8_t>& out,std::string* error=nullptr)const{
         const auto* s=find(id);
@@ -452,12 +468,16 @@ public:
     bool retireActor(Entity actor,std::string* error=nullptr){
         if(!sim_->world().alive(actor)||!ready())
             return fail(error,"Actor retirement requires an active world");
+        // Check every scene before releasing a passenger in any of them.
+        for(const auto& [id,s]:scenes_){
+            (void)id;
+            if(s->status==Status::Active&&s->physics.pendingGraphs())
+                return fail(error,"Building graph update pending");
+        }
         for(auto& [id,s]:scenes_){
             (void)id;
-            if(s->status!=Status::Active)continue;
-            if(s->physics.pendingGraphs())
-                return fail(error,"Building graph update pending");
-            if(s->circulation.scene().host().riderBindings().contains(actor.packed())&&
+            if(s->status==Status::Active&&
+               s->circulation.scene().host().riderBindings().contains(actor.packed())&&
                !s->circulation.prepareActorRetirement(actor,error))return false;
         }
         for(auto& [id,s]:scenes_){
@@ -549,8 +569,9 @@ public:
         shuttingDown_=true;
         for(const auto& [id,s]:scenes_){
             (void)id;
-            if(!graphicsDetached(*s)||!ownsPhysical(*s))
-                return fail(error,"Building world still has GPU or foreign collider leases");
+            if(!graphicsDetached(*s)||!ownsPhysical(*s)||
+               !s->circulation.scene().host().riderBindings().empty())
+                return fail(error,"Building world still has passengers, GPU or foreign collider leases");
         }
         for(auto& [id,s]:scenes_){(void)id;if(!dropPhysical(*s,error))return false;}
         if(auto* all=collection()){all->scenes.clear();all->contentHashes.clear();}
@@ -884,8 +905,11 @@ private:
         const auto include=[&](const world::Bounds& b){
             if(!haveBounds){affected=b;haveBounds=true;}else expand(affected,b);
         };
+        if(after.lifts.size()!=before.lifts.size())return false;
         for(const auto& [feature,saved]:after.lifts){
-            const auto& old=before.lifts.at(feature).state;
+            const auto previous=before.lifts.find(feature);
+            if(previous==before.lifts.end())return false;
+            const auto& old=previous->second.state;
             const auto& now=saved.state;
             if(old.phase==now.phase&&old.platformYmm==now.platformYmm&&
                old.passengerCount==now.passengerCount&&old.currentFloor==now.currentFloor)continue;

@@ -1707,3 +1707,22 @@ The registry is an opt-in authoritative checkpoint integration, not a
 deterministic lockstep rollback engine. External graph consumers and
 game movement still own their policies; native C++/GPU/network acceptance
 has not yet been run. Handoff: docs/agent-handoffs/buildings-stage-23v5.md.
+
+### Stage 23V.6 — existing generic authoritative network transport
+
+BuildingReplicaBridge uses the existing net::replica::Server message
+channels and existing Command binary format. Register two project-owned
+channels, route the admitted Server::onMessage(slot,channel,payload)
+to bridge.receive, and send confirmed state with bridge.send to explicit
+authorized peers only. Exact command length/counts are validated before
+decode; authenticated slot overrides any client-authored player field.
+The state frame includes scene/command epoch/content hash/tick/revision,
+all aperture progress and existing lift snapshot. BuildingReplicaView
+rejects stale or mismatched content before exposing read-only state.
+It never grants physical access. The host still owns admission, interest,
+connection lifecycle, and graphics presentation of remote replicas.
+
+BuildingPhysicalExtent now has centreOffset for feet-based transforms;
+schema v2 explicitly migrates v1 to a zero offset. Restored lift rider
+maps are validated against the decoded ECS passenger generations before
+persistent load commits. Handoff: docs/agent-handoffs/buildings-stage-23v6.md.

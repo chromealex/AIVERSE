@@ -18,9 +18,12 @@ namespace aiverse::building {
 struct BuildingPhysicalExtent {
     Vec3 halfExtents{};
     bool blocksBuildingMotion=true;
+    // Transform.pos can be actor feet or body origin; express the real
+    // world-space centre of the axis-aligned physical extent explicitly.
+    Vec3 centreOffset{};
 };
 inline void io(Archive& archive,BuildingPhysicalExtent& volume){
-    archive(volume.halfExtents,volume.blocksBuildingMotion);
+    archive(volume.halfExtents,volume.blocksBuildingMotion,volume.centreOffset);
 }
 
 
@@ -28,7 +31,11 @@ inline void io(Archive& archive,BuildingPhysicalExtent& volume){
 // Game-specific ECS body schemas can still provide alternate probes.
 inline void registerBuildingPhysicalExtentPersistence(Simulation& sim){
     sim.registerPersistentComponent<BuildingPhysicalExtent>(
-        "building.physical_extent",1);
+        "building.physical_extent",2);
+    sim.registerPersistentComponentMigration<BuildingPhysicalExtent>(
+        "building.physical_extent",1,[](Archive& a,BuildingPhysicalExtent& v){
+            a(v.halfExtents,v.blocksBuildingMotion);v.centreOffset={};
+        });
 }
 
 inline bool buildingEcsSweptOccupied(
@@ -43,7 +50,7 @@ inline bool buildingEcsSweptOccupied(
             if(!local||volume.halfExtents.x<=Fixed{}||
                volume.halfExtents.y<=Fixed{}||
                volume.halfExtents.z<=Fixed{})return;
-            const Vec3 centre=local->pos;
+            const Vec3 centre=local->pos+volume.centreOffset;
             const world::Bounds box{
                 centre-volume.halfExtents,centre+volume.halfExtents};
             if(world::overlaps(first,box)||world::overlaps(second,box))

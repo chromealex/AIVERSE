@@ -41,3 +41,4 @@
 #include "engine/buildings/BuildingWorldRuntime.h"
 #include "engine/buildings/BuildingLiftCheckpointPersistence.h"
 #include "engine/buildings/BuildingLiftRenderState.h"
+#include "engine/buildings/BuildingReplicaBridge.h"
