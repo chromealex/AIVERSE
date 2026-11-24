@@ -40,8 +40,10 @@ class TextureGraphGpuOwner {
         if(queueScope_.empty()||queueScope_!=scope)return;
         if(!queueLease_.validFor(dev)||!dev.gpuHealthy()){
             pendingRequests_.clear();queueError_="texture queue device epoch expired or unhealthy";
-            if(!queueRequest_.empty()&&!published_&&state_!="cancelled"&&state_!="failed"){
-                discard("failed","texture queue device epoch expired or unhealthy");abandon();
+            if(!queueRequest_.empty()){
+                if(!published_&&state_!="cancelled"&&state_!="failed")
+                    discard("failed","texture queue device epoch expired or unhealthy");
+                abandon(); // never retire old-epoch handles through the replacement device
             }
             return;
         }
