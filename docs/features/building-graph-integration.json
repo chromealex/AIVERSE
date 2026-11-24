@@ -32,7 +32,16 @@
     "apps/studio-web/tests/buildingMaterialDependencies.test.mjs",
     "apps/studio-web/src/graphs/buildingGeometryGraph.ts",
     "apps/studio-web/src/graphs/BuildingGeometryGraphView.tsx",
-    "apps/studio-web/tests/buildingGeometryGraph.test.mjs"
+    "apps/studio-web/tests/buildingGeometryGraph.test.mjs",
+    "engine/buildings/BuildingGraphChanges.h",
+    "engine/buildings/BuildingGraphDiagnosticsJson.h",
+    "engine/buildings/BuildingWorldRuntime.h",
+    "engine/buildings/BuildingRuntime.h",
+    "tests/libraries/building_dual_leaf_restore_tests.cpp",
+    "examples/world/runtime-building/main.cpp",
+    "apps/editor/core/Workspace.h",
+    "apps/editor/core/Workspace.cpp",
+    "tools/mcp/audit_registry.py"
   ],
   "traits": {
     "editable": true,
@@ -43,7 +52,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35H.3: native geometry counts and source-level independent graph owner inventory; no runtime registration or PHYSIS/NavMesh acceptance claim.",
+      "note": "Stage 35H.4 native per-scene graph invalidation snapshot, exact committed retry payload, detached JSON and MCP provider contract. Actual Studio/game host provider attachment pending.",
       "evidence": []
     },
     "architecture": {
@@ -63,7 +72,7 @@
     },
     "mcp": {
       "status": "not_run",
-      "note": "Stage 35D planned; integration verification pending.",
+      "note": "building_graph_diagnostics registered in Workspace source; no-provider returns unavailable. Built MCP audit and live host publication NOT RUN.",
       "evidence": []
     },
     "studio": {
@@ -113,7 +122,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F.1–35F.3 fixtures added; NOT RUN. Stage 35H.2 dependency fixtures registered, NOT RUN. Stage 35H.3 geometry projection fixtures registered, NOT RUN.",
+      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F.1–35F.3 fixtures added; NOT RUN. Stage 35H.2 dependency fixtures registered, NOT RUN. Stage 35H.3 geometry projection fixtures registered, NOT RUN. Stage 35H.4 native router and world example fixtures authored; NOT RUN.",
       "evidence": []
     },
     "handoff": {
@@ -134,7 +143,9 @@
   },
   "integrations": {
     "skills": [],
-    "mcp_tools": [],
+    "mcp_tools": [
+      "building_graph_diagnostics"
+    ],
     "studio_panels": [
       "building_generator"
     ],
