@@ -1,0 +1,5 @@
+# Stage 46 — noise composition delivery (in progress)
+
+Branch: `feature/world-processes-stage31-bidirectional-handles`; starting HEAD `53a3bbe6a9599073ab1253c7fbd48cf9e4849a21`; main `71aa5c93afa5993c4e45ba39f1bf5454343389ea` is an ancestor. Continue existing algorithms/noise ownership; no new package or engine solver.
+
+Scope: signed Billow fractal mode, deterministic independent vector samples with Jacobian rows, bounded periodic domain warping with derivative chain rule, 2D/3D curl from scalar/vector potentials. Reuse Stage 45 `NoiseSample` and fractal evaluator. Legacy GenNoise stays unchanged. Acceptance: exact period shifts for all samples where coordinates are valid, deterministic seeds, zero-strength identity, finite-difference agreement within fixed-point error, invalid bounds rejected, checked arithmetic, no heap. Update native API, skill and catalog, existing noise fixture and handoff. No authoring surface, save format, ECS state or visual publishing applies to pure arithmetic. Simplex and SIMD remain separate follow-up work.
