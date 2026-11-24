@@ -1,8 +1,8 @@
 #pragma once
 // Authoritative binary gate / roof-hatch collision owner for generated
 // buildings. Uses the EXISTING SpatialWorld and revisioned graph router.
-// Partial opening animation is presentation only: traversal is granted only
-// after the blocking collider was removed from the committed physics world.
+// The authored fraction and stepped motion share one physical AABB formula.
+// Graph traversal is authorized only at the fully open, acknowledged endpoint.
 #include "engine/buildings/BuildingGraphChanges.h"
 #include <aiverselib/systems/RuntimeBuildingGenerator.h>
 #include <cmath>
@@ -67,16 +67,18 @@ public:
             e.pose.featureIndex=socket.featureIndex;
             e.pose.kind=socket.kind;
             // The authored functional recipe may start a door partially
-            // open (0..1). It stays collision-blocked unless fully open;
-            // retain the initial physical fraction for dual-panel owners.
+            // open. Its physical AABB and graph-facing open flag must agree
+            // with the quantized progress used on the first motion tick.
+            if(!std::isfinite(socket.open)||socket.open<0.f||socket.open>1.f)
+                return fail("Invalid initial aperture progress");
             e.pose.physicalPermille=uint16_t(std::clamp(
                 int(std::lround(socket.open*1000.f)),0,1000));
             e.pose.open=e.pose.physicalPermille==1000;
             e.pose.revision=1;
             e.colliderId=it->second;
-            // Treat each aperture as one conservative full-width closed
-            // barrier. Sliding leaves remain a renderer concern; both
-            // halves have identical binary accessibility.
+            // Store the original full-width slab as the closed reference.
+            // This owner models one translating physical slab; use the
+            // independent dual-leaf owner for paired sliding panels.
             float x0=0,y0=0,z0=0,x1=0,y1=0,z1=0;
             if(socket.kind==BuildingFeatureKind::SlidingRoof){
                 x0=socket.x-socket.width*0.5f;
@@ -114,11 +116,17 @@ public:
         }
         if(staged.size()!=colliderIds.size())
             return fail("Collider IDs contain unknown or unsupported aperture sockets");
+        // SpatialWorld::add replaces an existing ID. Verify every lease
+        // (including currently open sockets) before publishing anything.
+        for(uint32_t id:seen)
+            if(spatial.colliders().contains(id))
+                return fail("Aperture collider ID is already owned");
         std::vector<uint32_t> inserted;
         for(const auto& [id,e]:staged){
             (void)id;
             if(e.pose.open)continue;
-            if(!spatial.add({e.colliderId,e.pose.bounds})){
+            if(!spatial.add({e.colliderId,
+                physicalBounds(e.pose.bounds,e.pose.physicalPermille)})){
                 for(uint32_t rollback:inserted)spatial.remove(rollback);
                 return fail("Could not publish initial aperture collision");
             }
@@ -150,30 +158,38 @@ public:
             out.error="Invalid aperture or graph domains";return out;
         }
         auto& e=it->second;
-        if(e.pose.open==open){
+        const uint16_t previous=e.pose.physicalPermille;
+        const uint16_t target=open?1000:0;
+        const auto before=physicalBounds(e.pose.bounds,previous);
+        const auto found=spatial.colliders().find(e.colliderId);
+        if(previous==1000 ? found!=spatial.colliders().end() :
+           found==spatial.colliders().end()||
+           !sameBounds(found->second.bounds,before)){
+            out.error="Aperture collider lost ownership";return out;
+        }
+        if(previous==target){
             out.collisionCommitted=true;out.graphsAcknowledged=true;
             out.revision=revision_;return out;
         }
-        if(!open&&obstruction_(e.pose.bounds)){
+        // Closing from a partially open authored pose is NOT a no-op.
+        // Invalidate the old physical position as well as the opening.
+        const auto affected=previous==1000?e.pose.bounds:
+            unionBounds(before,e.pose.bounds);
+        if(!open&&obstruction_(affected)){
             out.error="Authoritative obstruction sensor blocks closure";return out;
         }
         if(open){
-            // The entry was registered by this owner. Refuse publication if
-            // another subsystem has externally removed its collider.
-            if(!spatial.colliders().contains(e.colliderId)){
-                out.error="Aperture collider lost ownership";return out;
-            }
             spatial.remove(e.colliderId);
         }else if(!spatial.add({e.colliderId,e.pose.bounds})){
             out.error="Could not install closed aperture collider";return out;
         }
         e.pose.open=open;
-        e.pose.physicalPermille=open?1000:0;
+        e.pose.physicalPermille=target;
         e.pose.revision=++revision_;
         pendingChange_=BuildingGraphChange{
             sceneId_,revision_,e.pose.featureIndex,
             BuildingGraphChangeKind::ApertureChanged,
-            domains,e.pose.bounds,open};
+            domains,affected,open};
         out.collisionCommitted=true;
         out.revision=revision_;
         const auto dispatch=router.publish(*pendingChange_);
@@ -205,7 +221,8 @@ public:
             return false;
         }
         auto it=entries_.find(socketId);
-        if(it==entries_.end()||it->second.pose.open==open){
+        if(it==entries_.end()||
+           it->second.pose.physicalPermille==(open?1000:0)){
             if(error)*error="Invalid aperture or already at requested endpoint";
             return false;
         }

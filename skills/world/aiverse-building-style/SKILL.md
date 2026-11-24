@@ -1633,3 +1633,19 @@ is still Draft and based on feature/aiv20261122_building_styles, not
 main. Do not claim release or merge readiness until the above passes.
 Handoff:
 `docs/agent-handoffs/building-stage23u1-final-hardening-2026-11-24.md`.
+
+## Stage 23U.2 — single-slab authored progress consistency (candidate)
+
+- A partially opened single slab must publish the same physical AABB on
+  attach, motion, and navigation readback. Check endpoints using
+  physicalPermille, not just the binary open flag. A direct close from
+  partial progress must move back to 0, perform obstruction checking,
+  and invalidate the old and closed extents. Reject pre-owned collider
+  IDs before attaching even for an initially open socket.
+- Extend the existing real SpatialWorld regression to exercise initial
+  half-open single-slab state, closing in ticks, obstruction, direct
+  closing, fully open removal and occupied ID rejection.
+- The candidate is deliberately prepared without advancing PR #114's
+  active CI HEAD. Native compilation and tests remain unverified; apply
+  only after inspecting the running jobs and reconciling newer changes.
+- Handoff: docs/agent-handoffs/building-stage23u2-aperture-consistency-2026-11-24.md.

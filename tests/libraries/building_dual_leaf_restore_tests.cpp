@@ -7,8 +7,87 @@ using namespace aiverse::building;
 #define REQUIRE(x) do {if(!(x)) throw std::runtime_error(\
     std::string(__FILE__)+":"+std::to_string(__LINE__)+": " #x);}while(false)
 
+// Minimal CPU geometry/socket fixture: exercise the real aperture owner
+// and SpatialWorld without a style file or GPU dependency.
+static void testAuthoredSingleLeaf() {
+    using namespace aiverse::lib::systems;
+    RuntimeBuildingResult generated;
+    generated.building.mesh.vertices.emplace_back();
+    generated.building.constructionSize.width=16.f;
+    generated.building.constructionSize.height=8.f;
+    generated.building.constructionSize.depth=12.f;
+    BuildingGraphSocket socket;
+    socket.id="entrance/0/0";
+    socket.kind=BuildingFeatureKind::SmallGate;
+    socket.side=BuildingFeatureSide::Front;
+    socket.x=8.f;
+    socket.width=4.f;
+    socket.height=3.f;
+    socket.open=0.5f;
+    generated.structureGraph.sockets.push_back(socket);
+    world::SpatialWorld spatial;
+    BuildingApertureOwner owner;
+    BuildingGraphChangeRouter graphs;
+    const auto domains=buildingGraphBit(BuildingGraphDomain::Navigation);
+    REQUIRE(graphs.registerConsumer(BuildingGraphDomain::Navigation,
+        [](const BuildingGraphChange& c){return c.sceneId==45&&c.revision>0;}));
+    const std::map<std::string,uint32_t> ids{{socket.id,10201}};
+    bool blocked=false;
+    const auto obstruction=[&](const world::Bounds&){return blocked;};
+    const Vec3 origin{0_fx,0_fx,0_fx};
+    std::string error;
+    auto attach=[&](){return owner.attach(generated,spatial,45,origin,0,
+        ids,obstruction,&error);};
+    auto same=[](const world::Bounds& a,const world::Bounds& b){
+        return a.min.x==b.min.x&&a.min.y==b.min.y&&a.min.z==b.min.z&&
+               a.max.x==b.max.x&&a.max.y==b.max.y&&a.max.z==b.max.z;
+    };
+    REQUIRE(attach());
+    const auto pose=owner.poses().at(0);
+    REQUIRE(pose.physicalPermille==500&&!pose.open);
+    const auto initial=spatial.colliders().at(10201).bounds;
+    REQUIRE(initial.min.x==pose.bounds.min.x+2_fx);
+    REQUIRE(same(initial,owner.closedColliderBounds().at(10201)));
+    // An initially half-open door can close, not just open.
+    REQUIRE(owner.beginMotion(socket.id,false,domains,&error));
+    blocked=true;
+    REQUIRE(!owner.advanceMotion(spatial,graphs,100).collisionCommitted);
+    REQUIRE(same(initial,spatial.colliders().at(10201).bounds));
+    blocked=false;
+    for(int i=0;i<5;++i){
+        const auto step=owner.advanceMotion(spatial,graphs,100);
+        REQUIRE(step.collisionCommitted&&step.graphsAcknowledged);
+    }
+    REQUIRE(owner.poses().at(0).physicalPermille==0);
+    REQUIRE(same(pose.bounds,spatial.colliders().at(10201).bounds));
+    REQUIRE(owner.setOpen(socket.id,true,spatial,graphs,domains).graphsAcknowledged);
+    REQUIRE(spatial.colliders().empty());
+    owner.detach(spatial);
+    graphs.forgetScene(45);
+    REQUIRE(attach());
+    blocked=true;
+    REQUIRE(!owner.setOpen(socket.id,false,spatial,graphs,domains).collisionCommitted);
+    REQUIRE(owner.poses().at(0).physicalPermille==500);
+    blocked=false;
+    const auto close=owner.setOpen(socket.id,false,spatial,graphs,domains);
+    REQUIRE(close.collisionCommitted&&close.graphsAcknowledged);
+    REQUIRE(owner.poses().at(0).physicalPermille==0);
+    owner.detach(spatial);
+    REQUIRE(spatial.colliders().empty());
+
+    // An already-owned collider ID cannot be overwritten, even if its
+    // requested initial aperture would be fully open.
+    REQUIRE(spatial.add({10201,pose.bounds}));
+    generated.structureGraph.sockets[0].open=1.f;
+    REQUIRE(!attach());
+    REQUIRE(!owner.attached());
+    REQUIRE(same(pose.bounds,spatial.colliders().at(10201).bounds));
+    spatial.remove(10201);
+}
+
 int main() {
     try {
+        testAuthoredSingleLeaf();
         world::SpatialWorld spatial;
         BuildingDualLeafOwner owner;
         BuildingAperturePose pose;
@@ -56,7 +135,7 @@ int main() {
         REQUIRE(acknowledgements==1);
 
         // The geometry must not be rewritten when an actor obstructs
-        // the sweep. The physical progress remains at 600.
+        // the sweep. The newly restored physical progress remains at 500.
         owner.detach(spatial);
         const auto blocked=[](const world::Bounds&,const world::Bounds&,
                               uint32_t,uint32_t){return true;};
@@ -70,7 +149,7 @@ int main() {
         REQUIRE(spatial.colliders().size()==2);
         owner.detach(spatial);
         REQUIRE(spatial.colliders().empty());
-        std::puts("building dual-leaf authored/zero-revision rollback: PASS");
+        std::puts("building single/dual-leaf authored/zero-revision rollback: PASS");
         return 0;
     }catch(const std::exception& e){
         std::fprintf(stderr,"building dual-leaf rollback: FAIL %s\n",e.what());
