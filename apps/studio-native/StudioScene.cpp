@@ -2193,6 +2193,11 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         lightingStatus_+=" · AETHER "+planetLiveAetherLayer_+(liveAether?" mass / duct potential":" unavailable");
         if(planetLiveSnapshot_["aether"].getBool("truncated"))lightingStatus_+=" (sample capped)";
     }
+    const bool liveFracture=livePlanet&&planetLiveSnapshot_["fracture"].getBool("available");
+    if(livePlanet&&planetLiveSnapshot_["fracture"].isObject()){
+        lightingStatus_+=liveFracture?" · FRACTURE live structural state":" · FRACTURE unavailable";
+        if(planetLiveSnapshot_["fracture"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+    }
     const bool liveEvolve=livePlanet&&planetLiveLayer_!="off"&&planetLiveSnapshot_["evolve"].isObject();
     if(liveEvolve){
         lightingStatus_+=" · live EVOLVE "+planetLiveLayer_+" tick "+std::to_string(planetLiveSnapshot_["evolve"].getInt("sampleTick"));
@@ -2315,6 +2320,43 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                     const float len=std::min(marker,distance*.24f);
                     renderer_.line(tip,tip-direction*len+side*(len*.45f),color);
                     renderer_.line(tip,tip-direction*len-side*(len*.45f),color);
+                }
+            }
+            if(liveFracture){
+                const auto& data=planetLiveSnapshot_["fracture"];
+                const auto readVec=[](const Json& j)->std::optional<render::float3>{
+                    const auto& xyz=j.items();if(xyz.size()!=3)return {};
+                    return render::float3{float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
+                };
+                const float extent=std::clamp(planetPreview_->radius*.014f,.15f,2.f);
+                size_t count=0;
+                for(const auto& row:data["bonds"].items()){
+                    if(count++>=512)break;
+                    if(row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto a=readVec(row["a"]),b=readVec(row["b"]);if(!a||!b)continue;
+                    const auto fraction=std::clamp(float(row.getInt("damage"))/float(std::max<int64_t>(1,row.getInt("strength"))),0.f,1.f);
+                    const auto delta=*b-*a;
+                    const bool severed=fraction>=1.f;
+                    const auto color=!row.getBool("enabled")?rgba(100,110,125):severed?rgba(255,75,75):
+                        !row.getBool("activeSupportEdge")?rgba(155,115,175):rgba(uint8_t(90+165*fraction),uint8_t(220-120*fraction),85);
+                    if(severed||!row.getBool("activeSupportEdge")){
+                        renderer_.line(*a,*a+delta*.42f,color);renderer_.line(*a+delta*.58f,*b,color);
+                    }else renderer_.line(*a,*b,color);
+                }
+                count=0;
+                for(const auto& row:data["members"].items()){
+                    if(count++>=256)break;
+                    if(row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto p=readVec(row["position"]);if(!p)continue;
+                    const auto color=row.getBool("detached")?rgba(255,80,100):row.getBool("broken")?rgba(255,155,60):
+                        row.getBool("anchored")?rgba(85,220,255):rgba(110,225,125);
+                    for(const auto axis:{render::float3{extent,0,0},render::float3{0,extent,0},render::float3{0,0,extent}})
+                        renderer_.line(*p-axis,*p+axis,color);
+                    if(row["collapse"].getStr("delivery")=="pending"||row["natureFracture"].getStr("delivery")=="pending"){
+                        const float e=extent*1.6f;
+                        renderer_.line(*p+render::float3{-e,0,-e},*p+render::float3{e,0,e},rgba(255,230,90));
+                        renderer_.line(*p+render::float3{-e,0,e},*p+render::float3{e,0,-e},rgba(255,230,90));
+                    }
                 }
             }
             if(liveEvolve){

@@ -253,6 +253,7 @@ private:
     int32_t wpGranularCellCm_=0;
     bool wpLiveGravity_=false;
     std::string wpLiveAether_="off";
+    bool wpLiveFracture_=false;
     double wpLiveRefresh_=0;
     Json wpLiveSnapshot_;
     std::string wpLivePlanetProject_,wpLivePlanetMapPath_;

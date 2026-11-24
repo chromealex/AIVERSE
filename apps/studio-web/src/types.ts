@@ -114,7 +114,10 @@ export type AetherLayer = 'off'|'smoke'|'toxin'|'oxygen';
 export interface PlanetAetherLiveCell {id:string;body:string;position:number[];mass:number[];sourceRate:number[]}
 export interface PlanetAetherLiveDuct {id:string;body:string;from:string;to:string;a:number[];b:number[];oneWay:boolean;cap:number;potentialAvailable:boolean;head?:number[];bias?:number[];potential?:number[]}
 export interface PlanetAetherLiveState {available:boolean;sampleTick:number;policy:'unknown'|'diffusion'|'stratified';gravityCapped:boolean;cellCount:number;ductCount:number;fluxCount:number;truncated:boolean;rejected:number;crossBody:number;omittedDucts:number;cells:PlanetAetherLiveCell[];ducts:PlanetAetherLiveDuct[]}
-export interface EvolveLiveState {aether?:PlanetAetherLiveState;gravity?:PlanetGravityLiveState;evolve?:PlanetEvolveLiveState;topology?:'planet';epoch?:string;imprint?:PlanetLiveProcessSummary;granular?:PlanetLiveProcessSummary & {available:boolean;cellSizeCm:number;fieldCount:number;tiles:number};logs?:{x:number;z:number;ratio:number}[];soil?:{x:number;z:number;units:string}[];absorbedUnits?:string;respiredUnits?:string;active:boolean;tick?:number;regions:EvolveLiveRegion[];plantCount?:number;plants?:{id:string;x:number;z:number;fallen:boolean;dead?:boolean;recruited?:boolean;mature?:boolean;ageTicks?:string;matureTicks?:string;shadeStress?:string;floodStress?:string;droughtStress?:string}[];weather?:{x:number;z:number;size:number;rain:number;temperature:number;wetness:number}[]}
+export interface PlanetFractureLiveMember {id:string;body:string;position:number[];anchored:boolean;broken:boolean;detached:boolean;collapse?:{delivery:string;key:string;tick:number};natureFracture?:{delivery:string;key:string;climateTick:string};stress?:{climateTick:string;windLoadN:number;bendingMomentNm:number;normalizedLoad:number;accumulatedDamage:number;fractured:boolean}}
+export interface PlanetFractureLiveBond {id:string;body:string;first:string;second:string;a:number[];b:number[];strength:number;damage:number;enabled:boolean;activeSupportEdge:boolean}
+export interface PlanetFractureLiveState {available:boolean;sampleTick:number;memberCount:number;bondCount:number;anchored:number;broken:number;detached:number;pending:number;truncated:boolean;rejected:number;crossBody:number;omittedBonds:number;members:PlanetFractureLiveMember[];bonds:PlanetFractureLiveBond[]}
+export interface EvolveLiveState {fracture?:PlanetFractureLiveState;aether?:PlanetAetherLiveState;gravity?:PlanetGravityLiveState;evolve?:PlanetEvolveLiveState;topology?:'planet';epoch?:string;imprint?:PlanetLiveProcessSummary;granular?:PlanetLiveProcessSummary & {available:boolean;cellSizeCm:number;fieldCount:number;tiles:number};logs?:{x:number;z:number;ratio:number}[];soil?:{x:number;z:number;units:string}[];absorbedUnits?:string;respiredUnits?:string;active:boolean;tick?:number;regions:EvolveLiveRegion[];plantCount?:number;plants?:{id:string;x:number;z:number;fallen:boolean;dead?:boolean;recruited?:boolean;mature?:boolean;ageTicks?:string;matureTicks?:string;shadeStress?:string;floodStress?:string;droughtStress?:string}[];weather?:{x:number;z:number;size:number;rain:number;temperature:number;wetness:number}[]}
 export type WorldProcessDiagnosticLane = {available:false;error:string} | {
   available:true;tick:number;hot:number;warm:number;cold:number;executed:number;deferred:number;
   budget:number;selected:number;pending:number;urgent:number;urgentSelected:number;queued:number;removed:number;
@@ -284,7 +287,7 @@ export interface StudioParams {
   'studio.agentInfo': { from?: number };
   'studio.worldProcessDiagnostics': {budget:number;focus?:string};
   'studio.evolveState': Record<string, never>;
-  'studio.evolveLayer': {layer?: EvolveLayer;live?:boolean;granularCellCm?:number;liveGravity?:boolean;aetherLayer?:AetherLayer};
+  'studio.evolveLayer': {layer?: EvolveLayer;live?:boolean;granularCellCm?:number;liveGravity?:boolean;aetherLayer?:AetherLayer;liveFracture?:boolean};
   'studio.sceneBrush': Partial<StudioSceneBrush>;
   'studio.splineEdit': { kind: '' | 'road' | 'river' };
   'studio.hub': Record<string,never>;
@@ -451,7 +454,7 @@ export interface StudioResult {
   'studio.agentInfo': StudioAgentInfo;
   'studio.worldProcessDiagnostics': WorldProcessDiagnostics;
   'studio.evolveState': EvolveLiveState;
-  'studio.evolveLayer': {layer: EvolveLayer;live:boolean;granularCellCm?:number;liveGravity?:boolean;aetherLayer?:AetherLayer};
+  'studio.evolveLayer': {layer: EvolveLayer;live:boolean;granularCellCm?:number;liveGravity?:boolean;aetherLayer?:AetherLayer;liveFracture?:boolean};
   'studio.sceneBrush': StudioSceneBrush;
   'studio.hub': StudioHub;
   'studio.hubTemplates': { templates: StudioTemplate[]; error?: string };
