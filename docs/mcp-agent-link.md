@@ -129,3 +129,6 @@ Studio `studio.save` with dirty Rules or Manifest stages the existing map and em
 
 ### S6f.4b.1 — creation-aware Studio save
 Native Save and Save As use one creation-aware document journal transaction for map JSON, emitted terrain files, dirty Rules/Manifest and Project history checkpoint. Journal v2 distinguishes absent outputs from empty files and retains v1 recovery compatibility. New map destinations and sidecars must be vacant, with existing safe parent directories under maps/. Save As adds its map to the manifest in the same transaction. Map/asset cursor checkpoint atomicity and standalone map_save integration remain outstanding. No new MCP action.
+
+### S6f.4b.2 — atomic Map history checkpoint
+Studio Save/Save As now stages the Map history checkpoint v2 with map JSON, terrain files, dirty Project documents and Project history. v2 binds the exact SHA-256 set of saved map/sidecar bytes; v1 checkpoints remain readable. Existing loaded map/sidecar hashes must match before staging; removed sidecars are guarded but not deleted. Legacy interrupted-save markers fence atomic save. Asset history checkpoint and standalone map_save remain separate. No new MCP action.
