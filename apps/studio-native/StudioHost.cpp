@@ -1969,6 +1969,16 @@ bool StudioHost::handleHostMethod(const Json& req) {
         result.set("custom",Json::fromBool(wpCustomPivot_));
         return result;
     });
+    if(method=="studio.worldProcessDiagnostics")return answer([&]{
+        const auto cap=params.has("budget")?params["budget"].integer(-1):64;
+        if((params.has("budget")&&(!params["budget"].isNumber()||
+            params["budget"].fx()!=Fixed::fromInt(cap)))||cap<0||cap>512)
+            throw std::invalid_argument("Diagnostic budget must be an integer 0..512");
+        if(params.has("focus")&&params["focus"].type()!=Json::Type::String)
+            throw std::invalid_argument("Diagnostic focus must be an entity reference string");
+        if(game_)return game_->worldProcessDiagnostics(int(cap),params.getStr("focus"));
+        Json out=Json::object();out.set("active",Json::fromBool(false));return out;
+    });
     if(method=="studio.evolveState")return answer([&]{
         if(game_)return game_->ecologyState();
         Json out=Json::object();out.set("active",Json::fromBool(false));
