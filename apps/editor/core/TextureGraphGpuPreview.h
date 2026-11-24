@@ -403,7 +403,7 @@ public:
         }else if(inFlight_&&!read_&&fence_&&dev.gpuCompletedFence()>=fence_&&dev.gpuHealthy())release(dev);
         if(matRetirementPending()&&!retireMaterialized(dev))return;
         if(!matSources_&&!inFlight_&&(project_.empty()||state_=="cancelled"||state_=="failed"||
-            (matCacheDevice_&&matCacheProject_!=project_)||(queued_&&!matRequested_)))clearMatIdle(dev);
+            (matCacheDevice_&&matCacheProject_!=project_)||matFailed_||(queued_&&!matRequested_)))clearMatIdle(dev);
         if(project_.empty()&&!inFlight_&&ownsResources())release(dev);
         if(setBake_&&state_=="failed"){setImages_.clear();setBackends_.clear();}
         if(setPending()&&state_=="ready"&&!inFlight_){advanceSet();if(!setPending()&&matSources_)retireMaterialized(dev);return;}
