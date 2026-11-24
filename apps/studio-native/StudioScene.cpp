@@ -1544,6 +1544,10 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     const auto& map = doc.data;
     cavernsPreview_.syncDocument(*device_,doc,projectPath);
+    const bool planetaryChart=map.planet()&&!map.extra[editor::planet_caves::key].isNull();
+    const auto chartIdentity=planetaryChart?map.extra[editor::planet_caves::key]["anchor"].dump(-1):std::string{};
+    const bool chartChanged=chartIdentity!=planetChartIdentity_;
+    if(chartChanged){planetChartIdentity_=chartIdentity;cameraInitialized_=false;sceneCacheValid_=false;terrainRevision_=std::numeric_limits<uint64_t>::max();lightingRevision_=terrainRevision_;}
     const auto now=std::chrono::steady_clock::now();
     if(lastSeenRevision_!=doc.revision){lastSeenRevision_=doc.revision;lastDocChange_=now;}
     {
@@ -1571,13 +1575,18 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         }
     }
     const auto& proxies=proxies_;
-    const bool showTerrain=showTerrain_;
+    const bool showTerrain=planetaryChart||showTerrain_;
+    const bool sparseTerrain=!map.planet()&&!map.extra["terraweaveSparseTerrain"].isNull();
+    auto retireSparse=[&](auto& model){if(model)renderer_.invalidateModelCachesFor(model.get());sparseTerrainRetirement_.retireModel(*device_,model);};
+    (void)sparseTerrainRetirement_.collectWithoutIdle(*device_);
+    if((!sparseTerrain||sparseTerrainProject_!=projectPath)&&sparseTerrainPreview_.residentCount())sparseTerrainPreview_.release(retireSparse);
+    sparseTerrainProject_=projectPath;
     snapPivots_.clear();
     // Same pivot as the Move gizmo: bottom centre (lights: centre).
     for (const auto& proxy:proxies) if (!hidden_.count(proxy.id))
         snapPivots_.push_back({proxy.id,proxy.light?proxy.center:float3{proxy.center.x,proxy.boundsMin.y,proxy.center.z}});
 
-    const bool caveAuthored=!map.extra["terraweaveCaverns"].isNull()&&!map.planet();
+    const bool caveAuthored=planetaryChart||(!map.extra["terraweaveCaverns"].isNull()&&!map.planet());
     (void)terrainRetirement_.collectWithoutIdle(*device_);
     if (terrainRevision_ != doc.revision || terrainLevelHeight_ != levelHeight ||
         terrainWasShown_!=showTerrain || terrainCavernsAuthored_!=caveAuthored) {
@@ -1591,7 +1600,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         TerrainPreviewStats cutStats;
         Mesh replacement{};
         if(showTerrain){
-            cutStats=buildTerrainPreview(map,source,levelHeight);
+            cutStats=planetaryChart?buildPlanetChartPreview(map,source,doc.revision):buildTerrainPreview(map,source,levelHeight);
             if(!source.empty()){
                 replacement=source.upload(*device_);
                 if(!replacement.vb.valid()||!replacement.ib.valid()){
@@ -1611,7 +1620,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         terrainRevision_=doc.revision;
     }
     const Json& settings=lightingSettings_;
-    const bool useLighting=useLighting_;
+    const bool useLighting=useLighting_&&!planetaryChart;
     const auto& activeLights=activeLights_;
     Lighting environment;
     const auto& day=day_;
@@ -1633,7 +1642,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         }
         lightingRevision_=doc.revision;
         lightingStatus_="Preview geometry · GI: off · Direct: standard";
-        if(useLighting || fpsProject) {
+        if(!planetaryChart&&(useLighting || fpsProject)) {
             std::set<std::string> modelIds;
             for(const auto& instance:modelInstances_)modelIds.insert(instance.id);
             lightingModel_=studioLightingPreview(doc,fpsProject,levelHeight,modelIds,
@@ -1674,7 +1683,10 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     if (!cameraInitialized_ || lastMapWidth_ != map.w || lastMapHeight_ != map.h) {
         camera_.target = {map.w * .5f, 0.0f, map.h * .5f};
         camera_.distance = std::clamp(float(std::max(map.w, map.h)) * 1.4f, 16.0f, 100000.0f);
-        if(fpsProject && lightingModel_) {
+        if(planetaryChart){
+            const auto cap=map.extra[editor::planet_caves::key]["anchor"].getInt("halfExtentCm",400);
+            camera_.target={0,0,0};camera_.distance=std::clamp(float(cap)*.035f,3.f,100000.f);
+        }else if(fpsProject && lightingModel_) {
             const auto lo=lightingModel_->boundsMin,hi=lightingModel_->boundsMax;
             camera_.target=(lo+hi)*.5f;
             camera_.distance=std::clamp(std::max({hi.x-lo.x,hi.y-lo.y,hi.z-lo.z})*1.4f,16.f,100000.f);
@@ -1747,7 +1759,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         renderer_.lights.setNightGlow(day.night*1.5f);
         renderer_.lights.setClouds(day.clouds,.6f,16.f,0,0);
     }
-    if(!lightingRuntime_.direct || !lightingRuntime_.direct->enabled)
+    if(!planetaryChart&&(!lightingRuntime_.direct || !lightingRuntime_.direct->enabled))
         for(const auto& light:activeLights)renderer_.lights.add(light);
     lightingRuntime_.update(*device_,renderer_,camera_.target);
     if(lightingRuntime_.indirect || lightingRuntime_.direct)lightingStatus_=lightingRuntime_.status();
@@ -1773,9 +1785,9 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     const int xStep = std::max(1, map.w / 48);
     const int zStep = std::max(1, map.h / 48);
-    for (int x=0; !fpsProject && x<=map.w; x+=xStep)
+    for (int x=0; !planetaryChart && !fpsProject && x<=map.w; x+=xStep)
         renderer_.line({float(x),.01f,0},{float(x),.01f,h},rgba(55,84,109,120));
-    for (int z=0; !fpsProject && z<=map.h; z+=zStep)
+    for (int z=0; !planetaryChart && !fpsProject && z<=map.h; z+=zStep)
         renderer_.line({0,.01f,float(z)},{w,.01f,float(z)},rgba(55,84,109,120));
 
     } // external/Terra surface suppresses the default plane and grid
@@ -1783,7 +1795,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     selectedId_=selectedId;
     selectedPivotValid_=false;
     selectedBoxValid_=false;
-    for(auto& cached:proxyDraws_) {
+    if(!planetaryChart)for(auto& cached:proxyDraws_) {
         const auto& entity=proxies[cached.proxy];
         if(hidden_.count(entity.id))continue;
         const bool dragged=!drag_.id.empty() && entity.id==drag_.id;
@@ -1832,7 +1844,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     riggedInstances_=0; riggedParts_=0;
     const double windSeconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-windClock_).count();
-    for(const auto& instance:modelInstances_) {
+    if(!planetaryChart)for(const auto& instance:modelInstances_) {
         if(hidden_.count(instance.id))continue;
         render::ModelDraw draw;
         draw.model=instance.model;
@@ -1865,10 +1877,10 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             }
         }
     }
-    nereid_.draw(renderer_);
+    if(!planetaryChart)nereid_.draw(renderer_);
     // Editor gizmos for authored lights; actual light contribution is passed through
     // Renderer3D::lights, not faked with an overlay screenshot.
-    for(const auto& light:activeLights) {
+    if(!planetaryChart)for(const auto& light:activeLights) {
         const auto at=light.pos;
         const float extent=std::clamp(light.radius*.08f,.2f,2.f);
         const uint32_t color=rgba(245,200,100);
