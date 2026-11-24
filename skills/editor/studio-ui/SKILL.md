@@ -179,6 +179,9 @@ OBJ mtllib and renderer-supported MTL texture slots are repaired with exact line
 ## Streaming GLB repair (S6g.6.5)
 Binary GLB above 1 MiB uses exact before/after JSON prefixes, tail length and SHA-256. Stream tail in 64 KiB blocks; validate chunk structure, baseline and staged bytes before atomic replacement. Journal v8 retains compact snapshots and rolls back at the actual resource path. Existing small/full history stays readable. Aggregate 4 MiB prefix/text per direction, 32 documents and GLB uint32 total length remain limits. Disk staging requires a temporary full output file (no retained geometry copies); check free space before rename and publication, no hard reservation. Undo refuses changed tail. Generic project file journal refuses compact edits.
 
+## Ordinary move-chain coordination (S6f.3.1)
+An agent batch made of ordinary asset moves can now compose exact-endpoint chains (A→B→C) from retained file/sidecar identities before mutation. Stationary resource snapshots are joined by exact intermediate bytes and checked against the net projected graph; compact GLB tails remain verified. Coordinated journal v2 serializes binary-safe snapshots and streams compact resources during publication/rollback. Existing v1 reading remains. Nested endpoints, ambiguous cycles, moved-owner byte repairs, mixed overlapping Trash/replacement/metadata and interleaved map/rules changes remain fenced. No new MCP action; linked batch preview/apply use the same native path.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

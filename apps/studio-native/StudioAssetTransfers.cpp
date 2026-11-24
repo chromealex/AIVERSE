@@ -1795,8 +1795,8 @@ void validateBatchDocuments(const fs::path& root,const BatchTimeline& timeline,
         if(!unique.insert(rel).second)throw std::runtime_error("Duplicate coordinated document");
         if(!edit.tailDigest.empty()||edit.tailBytes){
             if(!rel.starts_with("content/")||!studioStreamingResource(edit))throw std::runtime_error("Invalid coordinated streaming resource");
-            studioValidateModelRepairBytes(edit);
         }
+        if(rel.starts_with("content/")&&studioRepairModelExtension(edit.path))studioValidateModelRepairBytes(edit);
         for(const auto& [endpoint,identity]:timeline.initial){
             (void)identity;if(batchOverlap(rel,endpoint))throw std::runtime_error("Document overlaps relocation; navigate separately");
         }
@@ -1898,6 +1898,7 @@ StudioBatchAssetPlan studioPlanAssetMoveChain(const fs::path& project,
     validateBatchDocuments(root,timeline,out.documents);
     auto retained=out.documents;
     for(auto& edit:retained)edit.path=edit.path.lexically_relative(root);
+    std::sort(retained.begin(),retained.end(),[](const auto& a,const auto& b){return a.path.generic_string()<b.path.generic_string();});
     const auto generated=studioPlanGltfRepairs(root,net,&retained);
     if(generated.size()!=retained.size())throw std::runtime_error("Coordinated resource repair set changed");
     for(size_t i=0;i<retained.size();++i){

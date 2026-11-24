@@ -102,3 +102,6 @@ Native move owner now plans supported OBJ mtllib, MTL texture and DAE leaf image
 
 ### S6g.6.5 — streaming large GLB repair
 Binary GLB above 1 MiB uses compact JSON-prefix history and verified streamed tail publication through journal v8. Existing linked internal move automatically uses the same owner. Temporary disk space, JSON-prefix budget and GLB format limits remain explicit; no large text/other model streaming or coordinated repaired batch yet.
+
+### S6f.3.1 — ordinary move chains
+Linked agent batch apply now plans ordinary exact-endpoint move chains and stationary resource repairs together; compact GLB snapshots use coordinated journal v2. Mixed dependent Trash/replacement, moved-owner repairs, nested endpoints and ambiguous cycles remain fenced. Existing preview token still fences owner history versions, with filesystem validation on apply.
