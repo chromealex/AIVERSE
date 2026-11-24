@@ -6,7 +6,7 @@
 #include "apps/editor/core/TerraWeaveSparseOps.h"
 #include "engine/render/TerraWeaveTerrainPatchRender.h"
 #include "engine/world/TerraWeaveCavernsArchive.h"
-#include "engine/world/TerraWeaveCavernsSurfaceGroup.h"
+#include "engine/world/TerraWeaveCavernsOwnedRimGroup.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -134,8 +134,9 @@ public:
             try{
                 const std::vector<world::Cell> pins(needed.begin(),needed.end());
                 group_=std::make_shared<terraweave::caverns::CaveSurfaceGroupPlan>(
-                    terraweave::caverns::planCaveSurfaceGroup(*earth_,*caveSnapshot_,pins,
-                        authoring_->chunkSizeMetres(),33,1));
+                    terraweave::caverns::refineSurfaceGroupForRimGrid(
+                        terraweave::caverns::planCaveSurfaceGroup(*earth_,*caveSnapshot_,pins,
+                            authoring_->chunkSizeMetres(),33,1),16,100));
             }catch(const std::exception& e){groupDiagnostic_=e.what();}
             groupCells_=needed;
         }
