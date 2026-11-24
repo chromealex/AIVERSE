@@ -2395,6 +2395,14 @@
       ],
       "roadmap": [
         {
+          "id": "studio-map-history-transactions",
+          "title": "Транзакции и история редактора",
+          "titleEn": "Editor history and transactions",
+          "text": "Атомарные составные изменения карты, устойчивые метки истории и защита от устаревших переходов.",
+          "textEn": "Atomic compound map edits, stable history labels and stale history navigation guards.",
+          "status": "in-progress"
+        },
+        {
           "id": "studio-play-review",
           "title": "Безопасный перенос изменений из Play",
           "titleEn": "Play Mode change review",
