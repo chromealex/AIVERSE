@@ -749,7 +749,7 @@ Json StudioSession::sceneBrushJson() const {
     o.set("value",Json::number(b.value,3));o.set("type",str(b.type));o.set("owner",num(int64_t(b.owner)));
     o.set("count",num(int64_t(b.count)));o.set("spread",Json::number(b.spread,3));
     o.set("roadType",str(b.roadType));o.set("width",Json::number(b.width,3));
-    o.set("caveMode",str(b.caveMode));o.set("caveY",Json::number(b.caveY,3));o.set("caveSurface",Json::fromBool(b.caveSurface));
+    o.set("caveMode",str(b.caveMode));o.set("caveY",Json::number(b.caveY,3));o.set("caveSurface",Json::fromBool(b.caveSurface));o.set("caveDepth",Json::number(b.caveDepth,3));
     return o;
 }
 bool StudioSession::caveBrushPoint(double ox,double oy,double oz,double dx,double dy,double dz,
@@ -759,7 +759,7 @@ bool StudioSession::caveBrushPoint(double ox,double oy,double oz,double dx,doubl
     if(!std::isfinite(length)||length<1e-8||!std::isfinite(ox)||!std::isfinite(oy)||!std::isfinite(oz)||
        std::abs(ox)>1e7||std::abs(oy)>1e7||std::abs(oz)>1e7)return false;
     dx/=length;dy/=length;dz/=length;
-    if(!brush_.caveSurface){
+    if(!brush_.caveSurface&&brush_.caveMode!="shaft"){
         if(std::abs(dy)<1e-8)return false;
         const double t=(brush_.caveY-oy)/dy;
         if(t<=0||t>500)return false;
@@ -774,6 +774,7 @@ bool StudioSession::caveBrushPoint(double ox,double oy,double oz,double dx,doubl
     Json p=Json::object();
     p.set("xCm",num(std::llround(ox*100)));p.set("yCm",num(std::llround(oy*100)));p.set("zCm",num(std::llround(oz*100)));
     p.set("dxQ20",num(std::llround(dx*(1<<20))));p.set("dyQ20",num(std::llround(dy*(1<<20))));p.set("dzQ20",num(std::llround(dz*(1<<20))));
+    if(brush_.caveMode=="shaft")p.set("planetSurface",Json::fromBool(true));
     const auto r=ws_.call("terraweave_caverns_pick",p,"editor");
     if(r.has("error")){if(error)*error=r.getStr("error");return false;}
     if(!r.getBool("hit",false))return false;
@@ -809,7 +810,9 @@ bool StudioSession::strokeDab(double x, double z, std::string* error,double y) {
            std::abs(x)>1e7||std::abs(y)>1e7||std::abs(z)>1e7||strokeDabs_>=256){
             if(error)*error="Caverns stroke limit or coordinate extent";return false;
         }
-        op="terraweave_caverns_paint";p.set("mode",str(b.caveMode));
+        if(b.caveMode=="shaft"&&strokeDabs_>0)return true;
+        op="terraweave_caverns_paint";p.set("mode",str(b.caveMode=="shaft"?"planet_entrance":b.caveMode));
+        if(b.caveMode=="shaft")p.set("depthCm",num(std::llround(b.caveDepth*100)));
         p.set("xCm",num(std::llround(x*100)));p.set("yCm",num(std::llround(y*100)));
         p.set("zCm",num(std::llround(z*100)));p.set("radiusCm",num(std::llround(b.radius*100)));
     }
@@ -2532,9 +2535,10 @@ Json StudioSession::dispatchImpl(const Json& request) {
             if (params.has("spread")) b.spread=number("spread",0,32);
             if (params.has("roadType")) b.roadType=text("roadType");
             if (params.has("width")) b.width=number("width",1,200);
-            if(params.has("caveMode")){const auto mode=params.getStr("caveMode");if(mode!="carve"&&mode!="fill")throw std::runtime_error("Unknown cave brush mode");b.caveMode=mode;}
+            if(params.has("caveMode")){const auto mode=params.getStr("caveMode");if(mode!="carve"&&mode!="fill"&&mode!="shaft")throw std::runtime_error("Unknown cave brush mode");b.caveMode=mode;}
             if(params.has("caveY"))b.caveY=number("caveY",-10000000,10000000);
             if(params.has("caveSurface"))b.caveSurface=params.getBool("caveSurface");
+            if(params.has("caveDepth"))b.caveDepth=number("caveDepth",.01,10000);
             if (params.has("armed")) b.armed=params.getBool("armed")&&!ws_.project.dir.empty();
             if(b.armed&&b.kind=="caverns"){
                 if(params.getBool("armed",false)&&(params.getStr("expectedProject")!=ws_.project.dir||
@@ -2544,6 +2548,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 for(const auto& op:ws_.ops()){paint|=op.name=="terraweave_caverns_paint";pick|=op.name=="terraweave_caverns_pick";}
                 if(!paint||!pick)throw std::runtime_error("Caverns native backend unavailable");
                 if(ws_.map.data.planet())(void)editor::planet_caves::read(ws_.map.data);
+                else if(b.caveMode=="shaft")throw std::runtime_error("Planetary chart required for shaft brush");
             }
             brush_=std::move(next);
             if(brush_.armed)splineEdit_.clear();
