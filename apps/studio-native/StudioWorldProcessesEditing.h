@@ -32,6 +32,7 @@ inline render::float3 point(const editor::DocEntity& entity,float y=.35f){
 inline std::vector<Handle> handles(const editor::MapDoc& map,
                                    std::string_view selected) {
     std::vector<Handle> out;
+    if(map.data.planet())return out;
     std::string id(selected);
     if(id.rfind("entity:@",0)==0)id.erase(0,8);
     if(id.empty())return out;
@@ -182,7 +183,7 @@ inline EdgeSnap snapNeighborEdge(const editor::MapDoc& map,
 inline bool groupCentroid(const editor::MapDoc& map,
                           const std::vector<std::string>& selected,
                           render::float3& result){
-    if(selected.size()<2||selected.size()>256)return false;
+    if(map.data.planet()||selected.size()<2||selected.size()>256)return false;
     long double x=0,z=0;
     std::set<std::string> seen;
     for(const auto& stable:selected){
