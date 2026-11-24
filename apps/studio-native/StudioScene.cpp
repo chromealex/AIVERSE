@@ -2193,6 +2193,11 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         lightingStatus_+=" · AETHER "+planetLiveAetherLayer_+(liveAether?" mass / duct potential":" unavailable");
         if(planetLiveSnapshot_["aether"].getBool("truncated"))lightingStatus_+=" (sample capped)";
     }
+    const bool liveCrowd=livePlanet&&planetLiveSnapshot_["crowd"].getBool("available");
+    if(livePlanet&&planetLiveSnapshot_["crowd"].isObject()){
+        lightingStatus_+=liveCrowd?" · CROWD reservations / native routes":" · CROWD unavailable";
+        if(planetLiveSnapshot_["crowd"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+    }
     const bool liveEcho=livePlanet&&planetLiveSnapshot_["echo"].getBool("available");
     if(livePlanet&&planetLiveSnapshot_["echo"].isObject()){
         lightingStatus_+=liveEcho?" · ECHO acoustic graph / hearing":" · ECHO unavailable";
@@ -2330,6 +2335,52 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                     const float len=std::min(marker,distance*.24f);
                     renderer_.line(tip,tip-direction*len+side*(len*.45f),color);
                     renderer_.line(tip,tip-direction*len-side*(len*.45f),color);
+                }
+            }
+            if(liveCrowd){
+                const auto& data=planetLiveSnapshot_["crowd"];
+                const auto readVec=[](const Json& j)->std::optional<render::float3>{
+                    const auto& xyz=j.items();if(xyz.size()!=3)return {};
+                    return render::float3{float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
+                };
+                const float extent=std::clamp(planetPreview_->radius*.012f,.12f,1.5f);
+                const auto marker=[&](render::float3 p,float s,uint32_t color){
+                    for(const auto axis:{render::float3{s,0,0},render::float3{0,s,0},render::float3{0,0,s}})
+                        renderer_.line(p-axis,p+axis,color);
+                };
+                const auto lifted=[&](render::float3 p){return p+normalize(p)*extent*.4f;};
+                size_t count=0;
+                for(const auto& row:data["slots"].items()){
+                    if(count++>=512)break;
+                    if(!row.getBool("placed")||row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto p=readVec(row["position"]);if(!p)continue;
+                    const auto n=row.getInt("occupancy");
+                    const auto color=!row.getBool("enabled")?rgba(110,120,135):n>1?rgba(255,80,90):n?rgba(255,195,80):rgba(100,210,255);
+                    marker(lifted(*p),extent*.75f,color);
+                }
+                count=0;
+                for(const auto& row:data["agents"].items()){
+                    if(count++>=256)break;
+                    if(!row.getBool("placed")||row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto p=readVec(row["position"]);if(!p)continue;
+                    const auto pos=lifted(*p);
+                    const auto support=row["support"].getStr("status");
+                    const auto color=!row.getBool("enabled")?rgba(110,120,135):
+                        !support.empty()&&support!="supported"?rgba(255,105,100):
+                        row.getBool("moving")?rgba(100,235,155):rgba(170,195,255);
+                    marker(pos,extent,color);
+                    if(row.getBool("reservationValid"))if(const auto dst=readVec(row["reservationPosition"])){
+                        const auto d=lifted(*dst)-pos;
+                        for(int i=0;i<6;++i)renderer_.line(pos+d*(float(i)/6),pos+d*((float(i)+.5f)/6),rgba(255,195,80));
+                    }
+                    if(const auto goal=readVec(row["goal"]))marker(lifted(*goal),extent*.6f,rgba(235,160,255));
+                    std::optional<render::float3> previous=pos;
+                    for(const auto& point:row["route"].items()){
+                        const auto q=readVec(point);if(!q){previous.reset();continue;}
+                        const auto next=lifted(*q);
+                        if(previous)renderer_.line(*previous,next,rgba(110,230,160));
+                        previous=next;
+                    }
                 }
             }
             if(liveEcho){
