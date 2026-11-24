@@ -139,6 +139,12 @@ public:
         if(impulsePending_){impulse.position=impulse.position+delta;if(!impulse.valid())return false;}
         cfg_=next;sources_=std::move(sources);impulse_=impulse;return true;
     }
+    bool translateQueuedImpulse(float3 delta){
+        if(!impulsePending_)return true;
+        Source moved=impulse_;moved.position=moved.position+delta;
+        if(!moved.valid())return false;
+        impulse_=moved;return true;
+    }
     bool setWind(float3 v){if(!ready()||!bounded(v,100))return false;cfg_.wind=v;return true;}
     bool setGravity(float3 v){if(!ready()||!bounded(v,100))return false;cfg_.gravity=v;return true;}
     // One queued impulse applied after transport/reaction on next accepted tick.

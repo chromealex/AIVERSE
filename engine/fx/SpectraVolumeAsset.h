@@ -15,6 +15,7 @@ struct AuthoredLight {
     bool valid()const{return bounded(position,1e6f)&&bounded(color,64)&&color.x>=0&&color.y>=0&&color.z>=0&&
         between(radius,.01f,1000)&&between(intensity,0,100);}
 };
+inline bool validAttachment(const std::string& mode){return mode=="world"||mode=="follow"||mode=="trail";}
 struct Asset {
     Config simulation;
     Material material;
@@ -71,7 +72,7 @@ inline bool readAsset(const Json& root,Asset& output,std::string& error){
     if(root.has("attachment")){
         if(!root["attachment"].isString())return fail("Invalid volume attachment");
         next.attachment=root["attachment"].str();
-        if(next.attachment!="world"&&next.attachment!="follow")return fail("Invalid volume attachment");
+        if(!validAttachment(next.attachment))return fail("Invalid volume attachment");
     }
     if(!number(root,"physisWindResponse",next.physisWindResponse)||
        !number(root,"physisGravityBlend",next.physisGravityBlend)||

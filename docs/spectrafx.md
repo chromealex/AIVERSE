@@ -3642,3 +3642,15 @@ The Metal preview was captured at 1024×576 with a light stage. The current
 effect is still an experimental look: it lacks the finely lit internal smoke
 and complex flame structure of the cinematic references. A successful native
 preview does not establish production GPU performance or Vulkan device parity.
+
+## Smoke trails from moving entities
+
+Select **Moving smoke trail** in the Studio graph editor to create this preset.
+
+Set the volume graph's `VolumeDomain.attachment` to `"trail"` and attach the graph to a
+moving `SpectraSource` entity. Source positions and volume lights follow its translation.
+Previously emitted smoke continues to advect and dissipate in the original world-space
+grid. Choose the domain origin and extent to cover the route: after a source moves
+outside the grid, only the part of its injection radius overlapping the grid contributes.
+Changing the source revision recreates the field. `world` keeps the original placement;
+`follow` carries the entire field. See [the example graph](../examples/spectrafx/moving_smoke_trail.vfx.json).

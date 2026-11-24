@@ -13,7 +13,7 @@ namespace aiverse::spectra::volume {
 class VolumeInstance final {
 public:
     bool init(gfx::Device& device,const Asset& asset,float3 anchor={},const fx::SdfResourceReader& reader={},float scale=1.f){
-        if(!between(scale,.001f,100.f)||(asset.attachment!="world"&&asset.attachment!="follow")||!supportsVolumeRender(device)||!bounded(anchor,1e6f)||!between(asset.physisWindResponse,0,20)||!between(asset.physisGravityBlend,0,1)){error_="Invalid volume anchor or GPU backend";return false;}
+        if(!between(scale,.001f,100.f)||!validAttachment(asset.attachment)||!supportsVolumeRender(device)||!bounded(anchor,1e6f)||!between(asset.physisWindResponse,0,20)||!between(asset.physisGravityBlend,0,1)){error_="Invalid volume anchor or GPU backend";return false;}
         Asset placed=asset;placed.simulation.origin=placed.simulation.origin*scale+anchor;
         placed.simulation.cellSize*=scale;
         const auto place=[&](Source& s){s.position=s.position*scale+anchor;s.radius*=scale;};
@@ -51,21 +51,22 @@ public:
         renderer_.shutdown();grid_=std::move(next);asset_=std::move(placed);settings_=std::move(lighting);
         anchor_=anchor;deposits_.clear();error_.clear();return true;
     }
-    // Transport the complete local field, not just its emitter. Existing
-    // particles remain world-space; no inertial or rotational correction.
+    // A trail moves injection and lights within the original grid. Follow carries the whole field.
     bool follow(float3 anchor){
-        if(asset_.attachment!="follow")return true;
+        if(asset_.attachment=="world")return true;
         if(!grid_||!bounded(anchor,1e6f))return false;
         const auto delta=anchor-anchor_;
         if(delta.x==0&&delta.y==0&&delta.z==0)return true;
         auto next=asset_;
-        next.simulation.origin=next.simulation.origin+delta;
+        if(next.attachment=="follow")next.simulation.origin=next.simulation.origin+delta;
         if(!next.simulation.valid())return false;
         for(auto& s:next.sources){s.position=s.position+delta;if(!s.valid())return false;}
         if(next.impulse){next.impulse->position=next.impulse->position+delta;if(!next.impulse->valid())return false;}
         for(auto& light:next.lights){light.position=light.position+delta;if(!light.valid())return false;}
         // Transient deposits are explicitly world-space, not authored local sources.
-        if(!grid_->translate(delta))return false;
+        if(next.attachment=="follow"){
+            if(!grid_->translate(delta))return false;
+        }else if(!grid_->translateQueuedImpulse(delta))return false;
         asset_=std::move(next);
         for(size_t i=0;i<asset_.lights.size();++i)settings_.pointLights[i].position=asset_.lights[i].position;
         anchor_=anchor;return true;

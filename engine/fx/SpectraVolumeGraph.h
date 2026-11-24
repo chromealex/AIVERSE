@@ -177,7 +177,7 @@ inline bool appendPreset(Json& graph,std::string_view preset,std::string& error)
     if(graph.getInt("version")!=2||!graph["nodes"].isArray()||!graph["links"].isArray()||
        !graph["outputs"].isArray()||hasVolume(graph)||graph["nodes"].size()>250||graph["links"].size()>507||
        graph["outputs"].size()>=16){error="Graph cannot admit a volume branch";return false;}
-    if(preset!="fire"&&preset!="smoke"&&preset!="magic"&&preset!="fog"&&preset!="explosion"){
+    if(preset!="fire"&&preset!="smoke"&&preset!="magic"&&preset!="fog"&&preset!="explosion"&&preset!="trail"){
         error="Unknown volume preset";return false;
     }
     Json next=graph;auto* nodes=next.find("nodes");auto* links=next.find("links");auto* outputs=next.find("outputs");
@@ -193,11 +193,13 @@ inline bool appendPreset(Json& graph,std::string_view preset,std::string& error)
         if(!previous.empty()){Json l=Json::object();l.set("from",Json::string(previous));l.set("to",Json::string(id));links->push(l);}
         previous=id;
     };
-    add("VolumeDomain","domain",Json::parse(R"({"dimension":32,"origin":[-2,-1,-2],"cellSize":0.125})"),40);
+    Json domain=Json::parse(R"({"dimension":32,"origin":[-2,-1,-2],"cellSize":0.125})");
+    if(preset=="trail")domain=Json::parse(R"({"attachment":"trail","dimension":48,"origin":[-7,-2,-7],"cellSize":0.3})");
+    add("VolumeDomain","domain",domain,40);
     Json source=Json::parse(R"({"position":[0,0,0],"radius":0.55,"smoke":3,"temperature":12,"fuel":8,"acceleration":[0,3,0]})");
     Json combustion=Json::parse(R"({"ignition":0.3,"burnRate":6,"heatYield":2,"smokeYield":0.5})");
     Json material=Json::parse(R"({"smokeColor":[0.35,0.36,0.4],"fireColor":[6,1.4,0.15],"extinction":2,"emission":1,"emissionThreshold":0.4})");
-    if(preset=="smoke"||preset=="fog"){
+    if(preset=="smoke"||preset=="fog"||preset=="trail"){
         source.set("temperature",Json::number(int64_t(preset=="fog"?0:1)));
         source.set("fuel",Json::number(int64_t(0)));source.set("smoke",Json::number(int64_t(8)));
         material.set("emission",Json::number(int64_t(0)));combustion.set("burnRate",Json::number(int64_t(0)));

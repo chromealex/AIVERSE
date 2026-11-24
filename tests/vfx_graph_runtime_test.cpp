@@ -775,6 +775,9 @@ int main() {
         namespace vol=sp::volume;
         auto pure=Json::parse(R"({"version":2,"nodes":[],"links":[],"outputs":[]})");
         std::string error;vol::PresentationGraph compiled;
+        auto trail=pure;
+        require(vol::appendPreset(trail,"trail",error)&&vol::compilePresentationGraph(trail,Json::object(),compiled,errors)&&
+                compiled.volumeAsset.attachment=="trail"&&compiled.volumeAsset.sources.size()==1,"moving trail graph preset");
         require(vol::appendPreset(pure,"fire",error)&&vol::compilePresentationGraph(pure,Json::object(),compiled,errors)&&
                 compiled.volume&&!compiled.particles&&compiled.volumeAsset.sources.size()==1,"volume graph compiler");
         require(!fx::compileSpectraGraph(pure,Json::object(),basic,errors),"legacy particle compiler rejects volume");

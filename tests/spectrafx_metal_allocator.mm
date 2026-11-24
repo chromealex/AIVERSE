@@ -462,6 +462,31 @@ void volumetricParticleScene(gfx::Device& d){
     }
     require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"volumetric scene GPU completion");
     world.clear();
+    // Follow the same ECS identity across two cells without resetting the gas.
+    namespace vol=aiverse::spectra::volume;
+    vol::Asset trail;trail.attachment="trail";
+    trail.simulation.dimension=8;trail.simulation.cellSize=1;
+    trail.simulation.origin={-2.5f,-2.5f,-2.5f};trail.simulation.pressureIterations=0;
+    trail.simulation.wind={};trail.simulation.gravity={};
+    vol::Source nozzle;nozzle.radius=.49f;nozzle.smoke=30;nozzle.temperature=0;nozzle.acceleration={};
+    trail.sources={nozzle};vol::SceneVolumeSource moving;
+    moving.asset=&trail;moving.identity="moving";moving.effect="trail";
+    vol::SceneVolumeWorld trailWorld;
+    vol::GpuVolumeView field;
+    for(int x:{0,2}){
+        Frame frame(d);moving.anchor.x=float(x);
+        trailWorld.synchronize(d,{moving},{});trailWorld.step(vol::kTick);
+        require(trailWorld.error().empty(),"moving trail step");
+        field=trailWorld.view("moving");
+    }
+    require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"trail GPU completion");
+    require(field.valid()&&field.tick==2&&field.origin.x==-2.5f,"trail retains grid and tick");
+    std::vector<vol::GpuCell> trailCells(512);
+    require(d.readBuffer(field.cells,trailCells.data(),trailCells.size()*sizeof(vol::GpuCell)),"trail readback");
+    const size_t start=(2u*8+2)*8+2;
+    require(trailCells[start].fields.x>.4f&&trailCells[start+2].fields.x>.4f&&trailCells[start+1].fields.x<.01f,
+            "old and new source positions both contain smoke");
+    trailWorld.clear();
     auto hybridGraph=graph;std::string error;std::vector<std::string> errors;
     spectra::volume::PresentationGraph hybrid;
     require(spectra::volume::appendPreset(hybridGraph,"smoke",error)&&
