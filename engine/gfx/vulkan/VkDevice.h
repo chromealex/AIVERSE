@@ -190,6 +190,7 @@ public:
     void dispatch(uint32_t,uint32_t) override;
     bool dispatchChecked(uint32_t,uint32_t=1) override;
     bool readBufferAsync(BufferHandle,size_t,BufferReadFn) override;
+    bool readBufferRangeAsync(BufferHandle,size_t,size_t,BufferReadFn) override;
     void endCompute() override;
     bool supportsTextureViews() const override { return true; }
     bool supportsTextureDimension(TextureDimension d) const override {

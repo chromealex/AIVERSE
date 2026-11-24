@@ -122,10 +122,12 @@ aiverse_native_link(ID online LIBRARIES aiverse_net aiverse_plugins)
 `AIVERSE::native_modules`. That target is project code above the engine: it carries the module objects, the generated
 `NativeRegistry.cpp` (one `aiverse::game::NativeRegistrar` with every module of the project) and every library the
 modules use (`aiverse_native_use_libraries`, `_mechanics`, `_bots`, `_session`, `_meta`, `_link`). At the end of
-configuration every executable that links a game host (`aiverse_game`, `aiverse_runtime`, `aiverse_client_runtime`,
-`aiverse_authority`, `aiverse_editor_core`, `aiverse_hosted_client`) links `AIVERSE::native_modules`; engine targets
-never link library packages (docs/architecture-layers.md). A binary without modules gets an empty
-`compiledNativeModules()`. `aiverse_native_use_grpc` runs
+configuration every executable that directly links a game host (`aiverse_game`, `aiverse_game_view`,
+`aiverse_authority`, `aiverse_editor_core`, `aiverse_hosted_client`) links `AIVERSE::native_modules`.
+Standalone presentation/platform users of `aiverse_runtime` or `aiverse_client_runtime` alone do not
+receive project objects or the generated registry. The Android game client (a shared library) links
+the native modules explicitly; the scene-only client does not. Engine targets never link library packages
+(docs/architecture-layers.md). A game host without modules gets an empty `compiledNativeModules()`. `aiverse_native_use_grpc` runs
 `aiverse_protobuf_generate(... GRPC)` on the module target (`NO_STUBS`: messages only; no `PROTOS`: only the link) and
 links `aiverse_grpc`. Developer tools and tests of the project can be plain `add_executable` targets in the same file.
 

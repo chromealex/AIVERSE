@@ -58,6 +58,27 @@ void Simulation::setup(const Json& rules, const Json& map) {
     physis::autoInstallFromMap(*this, map);
 #endif
     persistentEcs_.seal();
+    setupComplete_=true;
+    auto completed=std::move(setupCompletedHooks_);
+    for(auto& hook:completed)hook(*this);
+}
+
+bool Simulation::registerSharedCommandHandler(uint16_t type,SharedCommandHandler handler){
+    return !setupComplete_&&type!=0&&handler&&
+           sharedCommands_.emplace(type,std::move(handler)).second;
+}
+bool Simulation::addSetupCompletedHook(SystemFn fn){
+    if(setupComplete_||!fn)return false;
+    setupCompletedHooks_.push_back(std::move(fn));return true;
+}
+bool Simulation::addStepGate(StepGate gate){
+    if(setupComplete_||!gate)return false;
+    stepGates_.push_back(std::move(gate));return true;
+}
+bool Simulation::readyToStep(){
+    if(!module_->readyToStep(*this))return false;
+    for(auto& gate:stepGates_)if(!gate(*this))return false;
+    return true;
 }
 
 PlayerInfo* Simulation::player(uint8_t slot) {
@@ -90,8 +111,13 @@ void Simulation::present(std::vector<SimEvent> events) {
         if (sys.name.size() >= 8 && sys.name.compare(sys.name.size() - 8, 8, ".collect") == 0) sys.fn(*this);
 }
 
-void Simulation::step() {
-    if(!module_->readyToStep(*this))return;
+void Simulation::step() { (void)stepWithInput({}); }
+
+bool Simulation::stepWithInput(const std::function<void()>& prepareInput) {
+    if(!readyToStep())return false;
+    if(prepareInput)prepareInput();
+    const bool captureStep=profileWindowActive();
+    const int64_t stepStart=captureStep?profClock_():0;
     events_.clear();
 
     auto it = pending_.find(tick_);
@@ -103,7 +129,9 @@ void Simulation::step() {
             return a.player != b.player ? a.player < b.player : a.seq < b.seq;
         });
         for (auto& c : cmds) {
-            module_->applyCommand(*this, c);
+            const auto shared=sharedCommands_.find(c.type);
+            if(shared!=sharedCommands_.end())shared->second(*this,c);
+            else module_->applyCommand(*this, c);
             if (cfg_.recordCommands) executed_.push_back(std::move(c));
         }
         world_.flush();
@@ -124,6 +152,11 @@ void Simulation::step() {
         }
     }
     ++tick_;
+    if(captureStep&&profileWindowActive()){
+        profileSteps_.push_back(profClock_()-stepStart);
+        if(profileSteps_.size()>=profileTarget_)endProfileWindow();
+    }
+    return true;
 }
 
 int Simulation::advance(double realSeconds, int maxTicks) {

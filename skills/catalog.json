@@ -604,6 +604,149 @@
       "contentPackages": []
     },
     {
+      "id": "aiverse-building-alien-civilization",
+      "package": null,
+      "path": "skills/world/aiverse-building-alien-civilization/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Alien Civilization setting: neutral building massing, architectural grammar, decorations, PBR material maps",
+      "side": "presentation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/alien-civilization.json",
+      "keywords": [
+        "building",
+        "architecture",
+        "alien-civilization",
+        "texture",
+        "PBR",
+        "facade",
+        "style",
+        "здание",
+        "сеттинг"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-building-ancient-civilizations",
+      "package": null,
+      "path": "skills/world/aiverse-building-ancient-civilizations/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Ancient Civilizations portable building grammar, authored material PBR texture patterns and facade decorations",
+      "side": "presentation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/ancient-civilizations.json",
+      "keywords": [
+        "building",
+        "ancient-civilizations",
+        "architecture",
+        "facade",
+        "materials",
+        "PBR",
+        "surface",
+        "texture",
+        "сеттинг",
+        "здание"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-building-asian-historical",
+      "package": null,
+      "path": "skills/world/aiverse-building-asian-historical/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Asian Historical procedural architectural forms, 128x128 PBR surface textures, material palettes and decorations",
+      "side": "presentation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/asian-historical.json",
+      "keywords": [
+        "building",
+        "asian-historical",
+        "architecture",
+        "style",
+        "PBR",
+        "surface",
+        "texture",
+        "decor",
+        "здание",
+        "сеттинг"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-building-cyberpunk",
+      "package": null,
+      "path": "skills/world/aiverse-building-cyberpunk/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Cyberpunk setting: neutral building massing, architectural grammar, decorations, PBR material maps",
+      "side": "presentation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/cyberpunk.json",
+      "keywords": [
+        "building",
+        "architecture",
+        "cyberpunk",
+        "texture",
+        "PBR",
+        "facade",
+        "style",
+        "здание",
+        "сеттинг"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-building-dark-fantasy",
+      "package": null,
+      "path": "skills/world/aiverse-building-dark-fantasy/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Dark Fantasy building architecture grammar, deterministic PBR maps, materials, decorations and neutral structural silhouettes",
+      "side": "presentation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/dark-fantasy.json",
+      "keywords": [
+        "buildings",
+        "architecture",
+        "dark-fantasy",
+        "procedural",
+        "materials",
+        "PBR",
+        "textures",
+        "decor",
+        "здания",
+        "архитектура"
+      ],
+      "contentPackages": []
+    },
+    {
       "id": "aiverse-building-gen",
       "package": "building-gen",
       "path": "skills/world/aiverse-building-gen/SKILL.md",
@@ -639,6 +782,269 @@
         "окно",
         "комнат",
         "интерьер"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-building-medieval-fantasy",
+      "package": null,
+      "path": "skills/world/aiverse-building-medieval-fantasy/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Medieval Fantasy building architecture grammar, deterministic PBR maps, materials, decorations and neutral structural silhouettes",
+      "side": "presentation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/medieval-fantasy.json",
+      "keywords": [
+        "buildings",
+        "architecture",
+        "medieval-fantasy",
+        "procedural",
+        "materials",
+        "PBR",
+        "textures",
+        "decor",
+        "здания",
+        "архитектура"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-building-modern",
+      "package": null,
+      "path": "skills/world/aiverse-building-modern/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Modern / Contemporary portable building grammar, authored material PBR texture patterns and facade decorations",
+      "side": "presentation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/modern.json",
+      "keywords": [
+        "building",
+        "modern",
+        "architecture",
+        "facade",
+        "materials",
+        "PBR",
+        "surface",
+        "texture",
+        "сеттинг",
+        "здание"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-building-post-apocalypse",
+      "package": null,
+      "path": "skills/world/aiverse-building-post-apocalypse/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Post-Apocalypse portable building grammar, authored material PBR texture patterns and facade decorations",
+      "side": "presentation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/post-apocalypse.json",
+      "keywords": [
+        "building",
+        "post-apocalypse",
+        "architecture",
+        "facade",
+        "materials",
+        "PBR",
+        "surface",
+        "texture",
+        "сеттинг",
+        "здание"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-building-scifi-space",
+      "package": null,
+      "path": "skills/world/aiverse-building-scifi-space/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Sci-Fi / Space setting: neutral building massing, architectural grammar, decorations, PBR material maps",
+      "side": "presentation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/scifi-space.json",
+      "keywords": [
+        "building",
+        "architecture",
+        "scifi-space",
+        "texture",
+        "PBR",
+        "facade",
+        "style",
+        "здание",
+        "сеттинг"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-building-solarpunk",
+      "package": null,
+      "path": "skills/world/aiverse-building-solarpunk/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Solarpunk procedural architectural forms, 128x128 PBR surface textures, material palettes and decorations",
+      "side": "presentation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/solarpunk.json",
+      "keywords": [
+        "building",
+        "solarpunk",
+        "architecture",
+        "style",
+        "PBR",
+        "surface",
+        "texture",
+        "decor",
+        "здание",
+        "сеттинг"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-building-steampunk",
+      "package": null,
+      "path": "skills/world/aiverse-building-steampunk/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Steampunk building architecture grammar, deterministic PBR maps, materials, decorations and neutral structural silhouettes",
+      "side": "presentation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/steampunk.json",
+      "keywords": [
+        "buildings",
+        "architecture",
+        "steampunk",
+        "procedural",
+        "materials",
+        "PBR",
+        "textures",
+        "decor",
+        "здания",
+        "архитектура"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-building-style",
+      "package": "building-style",
+      "path": "skills/world/aiverse-building-style/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Shared procedural building architecture grammar, 12 authored visual settings, seeded palettes, 16 CPU PBR surface patterns (actual albedo/MR/normal texture maps), GLB and Renderer3D integration, neutral ECS functional structures",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_building_style",
+      "dependencies": [
+        "aiverse-building-gen"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "engine/systems/BuildingStyle.h",
+      "keywords": [
+        "building",
+        "style",
+        "setting",
+        "sci-fi",
+        "scifi",
+        "facade",
+        "cladding",
+        "mesh",
+        "look",
+        "glb",
+        "city",
+        "стиль",
+        "сеттинг",
+        "сайфай",
+        "фасад",
+        "облицовк",
+        "здани",
+        "застройк",
+        "город",
+        "вид",
+        "architecture",
+        "settings",
+        "medieval",
+        "fantasy",
+        "steampunk",
+        "cyberpunk",
+        "alien",
+        "post-apocalypse",
+        "modern",
+        "ancient",
+        "asian",
+        "solarpunk",
+        "underwater",
+        "PBR",
+        "procedural",
+        "textures",
+        "архитектура",
+        "сеттинги",
+        "материалы",
+        "текстуры"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-building-underwater",
+      "package": null,
+      "path": "skills/world/aiverse-building-underwater/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Underwater procedural architectural forms, 128x128 PBR surface textures, material palettes and decorations",
+      "side": "presentation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [
+        "aiverse-building-style"
+      ],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/assets/building-styles/underwater.json",
+      "keywords": [
+        "building",
+        "underwater",
+        "architecture",
+        "style",
+        "PBR",
+        "surface",
+        "texture",
+        "decor",
+        "здание",
+        "сеттинг"
       ],
       "contentPackages": []
     },
@@ -2258,6 +2664,21 @@
       "contentPackages": []
     },
     {
+      "id": "aiverse-graph-authoring",
+      "package": null,
+      "path": "skills/workflow/aiverse-graph-authoring/SKILL.md",
+      "domain": "workflow",
+      "summary": "Shared Studio graph canvas and domain adapters without duplicate graph execution",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "source": "docs/agents/graph-framework.md",
+      "keywords": [],
+      "contentPackages": []
+    },
+    {
       "id": "aiverse-graphs",
       "package": "graphs",
       "path": "skills/core/aiverse-graphs/SKILL.md",
@@ -3402,6 +3823,21 @@
       "contentPackages": []
     },
     {
+      "id": "aiverse-new-feature",
+      "package": null,
+      "path": "skills/workflow/aiverse-new-feature/SKILL.md",
+      "domain": "workflow",
+      "summary": "Plan, implement and verify feature evidence and integration readiness",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "source": "docs/agents/feature-contract.md",
+      "keywords": [],
+      "contentPackages": []
+    },
+    {
       "id": "aiverse-new-mechanic",
       "package": null,
       "path": "skills/workflow/aiverse-new-mechanic/SKILL.md",
@@ -3648,6 +4084,31 @@
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/app/Performance.h",
       "keywords": [],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-persistent-world",
+      "package": null,
+      "path": "skills/world/aiverse-persistent-world/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Durable world ledger WAL, checkpoints, recovery, retention and backup forks",
+      "side": "simulation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/world/PersistentWorldSession.h",
+      "keywords": [
+        "persistence",
+        "wal",
+        "checkpoint",
+        "recovery",
+        "backup",
+        "world fork",
+        "сохранение",
+        "восстановление"
+      ],
       "contentPackages": []
     },
     {
@@ -4313,6 +4774,48 @@
       "requiresOwner": null,
       "source": "tools/libraries/project_checks.py",
       "keywords": [],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-region-lifecycle",
+      "package": null,
+      "path": "skills/world/aiverse-region-lifecycle/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Shared deterministic region identity, atomic vehicle groups, ECS change journals, sparse undo transactions, admission and ownership diagnostics; authoritative decision LOD",
+      "side": "simulation",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "engine/world/RegionEntityLedger.h",
+      "keywords": [
+        "region",
+        "world",
+        "streaming",
+        "ledger",
+        "ecs",
+        "tombstone",
+        "journal",
+        "change tracking",
+        "undo log",
+        "dirty-only",
+        "ownership diagnostics",
+        "delta",
+        "revision",
+        "rollback",
+        "hot",
+        "cold",
+        "регион",
+        "стриминг",
+        "сущность",
+        "журнал",
+        "simulation LOD",
+        "decision cadence",
+        "hot warm cold",
+        "simulation budget",
+        "LOD симуляции"
+      ],
       "contentPackages": []
     },
     {
@@ -6573,7 +7076,7 @@
       "package": "work-budget",
       "path": "skills/core/aiverse-work-budget/SKILL.md",
       "domain": "gameplay",
-      "summary": "Deterministic round-robin work with operation budgets",
+      "summary": "Deterministic round-robin work and recurring decision budgets",
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_work_budget",

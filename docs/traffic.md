@@ -78,6 +78,12 @@ by a game's native module without the RTS module. Tests: `aiverse_tests traffic_
   snapshots. Fixed maths, entity-index order, randomness from the simulation RNG only. Games without the block keep
   their checksums and save layout.
 
+### Recurring population update budget
+
+The existing population scheduler supports optional `traffic.population.updatePeriodTicks` (0 or absent: two seconds at simulation tick rate; 1..36000 explicit) and `maxUpdatesPerTick` (0 or absent: automatic; 1..200000 explicit). It uses `lib::runtime::planRecurringWork` and the existing saved citizen cursor. For an unchanged ordered set of N citizens, it visits ceil(N / periodTicks) per tick, limited by the configured cap; actual worst revisit is ceil(N / visitsPerTick). If the cap is too small the desired period is not met. The `simulation_budget_plan` MCP/Studio operation previews these values without changing rules.
+
+Example: 200000 citizens, 60 Hz, target 120 ticks, cap 1000 gives 1000 visits/tick and a 200-tick maximum revisit interval. This bounds population decision visits only; it does not bound full tick time, parking bookkeeping, pathfinding, or vehicle physics. Defaults preserve the historical visit order except for safe cursor rollover at uint32 exhaustion; no new serialized fields. Change rules only at normal project/simulation setup boundaries.
+
 ## The living city: incidents and services
 
 `engine/game/TrafficCity.cpp`. Things happen, and the service that answers that kind of thing sends a vehicle.
@@ -329,3 +335,26 @@ routes and people waiting at the stops, emergency call-outs that answer events (
 the wounded) and chases, protected left-turn phases, pedestrians entering buildings, crossings in the middle of a
 block, traffic on non-tile maps (road graph from `roads` / splines). Long buses on a one-cell lane round a small
 island get through but slowly; give such junctions a wider ring or keep `parkingLanes` 0 there.
+
+## W1.30a — virtual journey deadline catch-up
+
+Enable the existing root `simulationLod` policy in project rules (for
+example `"simulationLod":{"enabled":true}`). No new rule key or store is
+introduced. Traffic uses its existing persisted citizen record, ID/index,
+`left`, `eta`, leg, stop and school fields. Already virtual pedestrian,
+car and bus journeys without a materialized body or parked car advance
+over expired legs using each saved arrival tick as the next departure.
+The owner bounds this to five transitions, rejects invalid timelines or
+overflow, and then uses the existing materialization path for a remaining
+leg. Held citizens, active bodies, linked parked cars, and live bus
+passengers stay with their existing owners. No extra RNG, physics or
+spawn inside catch-up. The existing population polling budget is unchanged.
+
+The default-disabled policy retains the one-leg-per-poll behavior and
+ordinary valid trip timing. Both paths share checked deadline calculation;
+an unrepresentable trip now fails instead of wrapping the 32-bit tick.
+Rules edits change persistence content identity; use the existing
+Simulation LOD authoring operation and restart with compatible state.
+This is canonical virtual journey advancement, not general ECS component
+parking, true absence of arbitrary vehicles, full citizen-schedule
+catch-up, or a proven performance improvement. Native acceptance NOT RUN.

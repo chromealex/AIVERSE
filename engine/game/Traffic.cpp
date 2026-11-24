@@ -2,6 +2,7 @@
 // the bot driver of each traffic car, and the pedestrians. Fixed maths only; every loop runs in entity-index order,
 // randomness only from sim.rng().
 #include "Traffic.h"
+#include "engine/world/SimulationLod.h"
 #include "TrafficRoads.h"
 #include "Systems.h"
 #include "TrafficPriority.h"
@@ -321,6 +322,7 @@ void Traffic::setup(Simulation& sim, GameHost& m, const Json& rulesJson, const J
     if (mapBlock.type() == Json::Type::Bool && !mapBlock.boolean(true)) return;   // this map has no traffic
     rules_ = parse(rulesJson["traffic"], ids, sim.tickRate());
     if (!active()) return;
+    coldTripCatchUp_ = world::readSimulationLod(rulesJson["simulationLod"]).enabled;
     Driving* drv = m.driving();
     std::vector<std::pair<std::string, const std::vector<TrafficWeighted>*>> fleets = {{"cars", &rules_.cars}, {"buses", &rules_.buses}, {"emergency", &rules_.emergency}};
     for (auto& sv : rules_.services) fleets.push_back({"services." + sv.id, &sv.types});

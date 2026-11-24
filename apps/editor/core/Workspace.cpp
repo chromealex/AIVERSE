@@ -1,12 +1,15 @@
 #include "ModelingOps.h"
 #include "Workspace.h"
+#include <aiverselib/runtime/WorkBudget.h>
 #include "ShaderGraphOps.h"
+#include "GraphOps.h"
+#include "FeatureGateOps.h"
 #include "AnimationOps.h"
 #include "GeometryOps.h"
 #include "engine/actor/ActorModule.h"
 #include "ScenarioOps.h"
 #include "SchemaOps.h"
-namespace aiverse::editor { void registerFpsOps(Workspace& ws); }
+namespace aiverse::editor { void registerFpsOps(Workspace& ws); void registerWorldPersistenceOps(Workspace& ws); }
 #ifdef AIVERSE_BATTLE_OPS
 namespace aiverse::editor { void registerBattleNetOps(Workspace& ws); }   // agent-net-mobile
 #endif
@@ -46,6 +49,7 @@ namespace aiverse::editor { void registerPhysisOps(Workspace&); }
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -223,7 +227,7 @@ bool Project::saveManifest(std::string* err) {
 // ================================================================= workspace
 
 void registerLensOps(Workspace& ws);
-Workspace::Workspace() { registerLensOps(*this); registerGeometryOps(*this); registerModelingOps(*this); registerAnimationOps(*this); registerShaderGraphOps(*this); registerFpsOps(*this); registerCoreOps(); registerPortOps(*this); registerPackageOps(*this); registerTileOps(*this); registerTerrainOps(*this); registerGenOps(*this); registerDataOps(*this); registerBalanceOps(*this); registerLightOps(*this); registerPhysisOps(*this); registerFxOps(*this); registerOverlayOps(*this); registerBrandingOps(*this); registerPlanetOps(*this); registerScenarioOps(*this); registerCampaignOps(*this); registerSchemaOps(*this); registerMaterialOps(*this); registerPostFxOps(*this); registerScriptOps(*this); registerToolchainOps(*this); registerNativeBuildOps(*this); registerStrategicOps(*this); registerUiOps(*this); registerFieldOps(*this); registerRaidOps(*this); registerRouteOps(*this); registerRoadOps(*this); registerWaterOps(*this); registerWizardOps(*this); registerLightBakeOps(*this); registerHumanCreatorOps(*this);
+Workspace::Workspace() { registerLensOps(*this); registerGeometryOps(*this); registerModelingOps(*this); registerAnimationOps(*this); registerShaderGraphOps(*this); registerFpsOps(*this); registerWorldPersistenceOps(*this); registerCoreOps(); registerPortOps(*this); registerPackageOps(*this); registerTileOps(*this); registerTerrainOps(*this); registerGenOps(*this); registerDataOps(*this); registerBalanceOps(*this); registerLightOps(*this); registerPhysisOps(*this); registerFxOps(*this); registerOverlayOps(*this); registerBrandingOps(*this); registerPlanetOps(*this); registerScenarioOps(*this); registerCampaignOps(*this); registerSchemaOps(*this); registerMaterialOps(*this); registerPostFxOps(*this); registerScriptOps(*this); registerToolchainOps(*this); registerNativeBuildOps(*this); registerStrategicOps(*this); registerUiOps(*this); registerFieldOps(*this); registerRaidOps(*this); registerRouteOps(*this); registerRoadOps(*this); registerWaterOps(*this); registerWizardOps(*this); registerLightBakeOps(*this); registerHumanCreatorOps(*this); registerGraphOps(*this);
 #ifdef AIVERSE_BATTLE_OPS
     registerBattleNetOps(*this);
 #endif
@@ -463,6 +467,7 @@ bool Workspace::openGame(const std::string& idOrDir, std::string* err) {
     std::error_code ec;
     dir = fs::weakly_canonical(dir, ec).string();
     if (!project.load(dir, err)) return false;
+    buildingGraphDiagnosticsProvider={}; // never expose the previous project's runtime
     {   // recent projects (shared with aiversemcp); the engine's own templates aren't user projects
         const std::string tpl = fs::weakly_canonical(fs::path(gamesDir()), ec).string();
         const bool isTemplate = dir.rfind(tpl, 0) == 0;
@@ -510,6 +515,94 @@ void Workspace::registerCoreOps() {
             result.set("guiOnlyCount", Json::number(int64_t(guiOnly)));
             result.set("note", str("Registration only. Verify tools/call against the built MCP executable and active editor; compile-time capabilities and runtime dependencies may differ."));
             return result;
+        });
+    add("building_graph_diagnostics", "Read actual building graph invalidation ACK state from an attached runtime owner. Returns unavailable without a provider; ACK does not mean completed graph rebuild.",
+        R"({"type":"object","properties":{"sceneId":{"type":"string","pattern":"^[1-9][0-9]{0,18}$"}},"required":["sceneId"],"additionalProperties":false})",
+        [this](const Json& p){
+            const auto raw=p.getStr("sceneId");
+            if(raw.empty()||raw.size()>19||raw[0]=='0')throw std::runtime_error("Invalid building scene ID");
+            uint64_t id=0;
+            for(char c:raw){
+                if(c<'0'||c>'9'||id>(uint64_t(INT64_MAX)-uint64_t(c-'0'))/10)
+                    throw std::runtime_error("Invalid building scene ID");
+                id=id*10+uint64_t(c-'0');
+            }
+            Json out=Json::object();
+            if(!buildingGraphDiagnosticsProvider){
+                out.set("available",Json::fromBool(false));
+                out.set("reason",str("No runtime building diagnostics provider attached"));
+                return out;
+            }
+            const auto snapshot=buildingGraphDiagnosticsProvider(id);
+            out.set("available",Json::fromBool(snapshot.isObject()));
+            if(snapshot.isObject())out.set("snapshot",snapshot);
+            else out.set("reason",str("Building scene diagnostics unavailable"));
+            return out;
+        });
+    add("feature_readiness_get", "Read an existing engine readiness report snapshot; not live verification.",
+        R"({"type":"object","additionalProperties":false})",
+        [this](const Json&) { return featureReadinessSnapshot(*this); });
+    add("feature_readiness_query", "Page feature readiness snapshot sections: features, tasks, dependencies, blockers and schedule.",
+        R"({"type":"object","properties":{"section":{"enum":["features","tasks","dependencies","blockers","schedule"]},"owner":{"type":"string"},"feature":{"type":"string"},"kind":{"type":"string"},"offset":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":200}},"additionalProperties":false})",
+        [this](const Json& p) { return featureReadinessQuery(*this,p); });
+    add("feature_readiness_status_get", "Inspect report-generation job status without opening a game.",
+        R"({"type":"object","additionalProperties":false})",
+        [this](const Json&) {
+            Json out=Json::object();
+            out.set("busy", Json::fromBool(building()));
+            out.set("label",str(runLabel()));
+            out.set("runCount",num(int64_t(runCount())));
+            out.set("exitCode",num(int64_t(buildResult())));
+            return out;
+        });
+    add("feature_readiness_refresh", "Queue the fixed local feature policy report generator. Does not build, test or mutate a project.",
+        R"({"type":"object","additionalProperties":false})",
+        [this](const Json&) {
+            if (building()) throw std::runtime_error("Another background job is running");
+            if (engineDir.empty()) throw std::runtime_error("Engine root is unavailable");
+            const auto script=fs::absolute(fs::path(engineDir)/"tools/agents/feature_policy.py");
+            const auto output=fs::absolute(fs::path(engineDir)/"logs/feature-readiness.json");
+            if (!fs::is_regular_file(script)) throw std::runtime_error("Feature policy script unavailable");
+            const char* env=std::getenv("AIVERSE_PYTHON");
+#if defined(_WIN32)
+            const std::string python=env&&*env?env:"python";
+#else
+            const std::string python=env&&*env?env:"python3";
+#endif
+            auto safeArg=[](const std::string& value) {
+                if (value.find_first_of("\r\n")!=std::string::npos) throw std::runtime_error("Unsupported newline in tool argument");
+#if defined(_WIN32)
+                if (value.find_first_of("\"%!^&|<>")!=std::string::npos) throw std::runtime_error("Unsupported command character");
+#endif
+                return shellQuote(value);
+            };
+            const std::string command=safeArg(python)+" "+safeArg(script.string())+" --base origin/main --output "+safeArg(output.string());
+            const int count=runCount();
+            startCommand(command,"Feature readiness report","feature-readiness");
+            Json out=Json::object();
+            out.set("queued",Json::fromBool(true));
+            out.set("runCount",num(int64_t(count)));
+            return out;
+        });
+    add("simulation_budget_plan", "Calculate deterministic recurring decision visits per tick and maximum revisit latency. Pure planning only; does not change rules or live simulation.",
+        R"({"type":"object","properties":{"count":{"type":"integer","minimum":0,"maximum":2000000000},"periodTicks":{"type":"integer","minimum":1,"maximum":36000},"maxVisitsPerTick":{"type":"integer","minimum":0,"maximum":2000000000}},"required":["count","periodTicks"],"additionalProperties":false})",
+        [](const Json& p){
+            auto read=[&](const char* key,uint32_t maximum,uint32_t minimum,bool required){
+                if(!p.has(key)&&!required)return uint32_t(0);
+                const auto& v=p[key];
+                if(!v.isNumber()||v.fx().raw%Fixed::kOne||v.integer()<minimum||uint64_t(v.integer())>maximum)
+                    throw std::runtime_error(std::string("invalid simulation budget field: ")+key);
+                return uint32_t(v.integer());
+            };
+            const auto count=read("count",2000000000,0,true);
+            const auto period=read("periodTicks",36000,1,true);
+            const auto cap=read("maxVisitsPerTick",2000000000,0,false);
+            const auto plan=lib::runtime::planRecurringWork(count,period,cap);
+            Json out=Json::object();
+            out.set("visitsPerTick",Json::number(int64_t(plan.visitsPerTick)));
+            out.set("maxRevisitTicks",Json::number(int64_t(plan.maxRevisitTicks)));
+            out.set("meetsPeriod",Json::fromBool(plan.meetsPeriod));
+            return out;
         });
     auto needProject = [this] { if (project.dir.empty()) throw std::runtime_error("no game is open: call open_game first"); };
     auto entityRef = [this](const Json& p) {
@@ -1488,6 +1581,7 @@ void Workspace::registerCoreOps() {
     gui("play_start", "Play-test the open map inside the editor window (bots on all sides unless 'human' is set). The user watches live.",
         R"({"properties": {"speed": {"type": "number"}, "human": {"type": "integer", "description": "player slot controlled by the user, 0 = bots only"}, "device": {"type": "string"}}})");
     gui("play_stop", "Stop the play-test and return to editing.", "{}");
+    gui("region_ownership_diagnostics", "Read last successful live region ownership reconciliation; requires running editor simulation.", "{}");
     gui("play_status", "Current play-test state: time, players, resources, units, result.", "{}");
     gui("play_units", "Live objects of the running play-test: id (for play_command), map name, type, owner, position, hp, orders, statuses. "
         "Filter by owner / type; at most 'limit' (default 200).",

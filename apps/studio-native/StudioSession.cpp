@@ -10,6 +10,10 @@
 #include "apps/editor/EditorWorldEdit.h"
 #include "apps/studio-native/StudioContentDirectory.h"
 #include "apps/studio-native/StudioAssetCatalog.h"
+#include "apps/studio-native/StudioBuildingGeneration.h"
+#include "apps/studio-native/StudioBuildingMaterialPublish.h"
+#include "apps/studio-native/StudioBuildingDependencies.h"
+#include "apps/studio-native/StudioBuildingRegeneration.h"
 #include "apps/studio-native/StudioAssetReferences.h"
 #include "apps/studio-native/StudioAssetUsage.h"
 #include "apps/studio-native/StudioTools.h"
@@ -407,6 +411,14 @@ Json StudioSession::setMeshRenderer(int index,const std::string& key,const Json&
     }
     return snapshot();
 }
+Json StudioSession::graphDocumentScope() const {
+    Json scope=Json::object();
+    scope.set("projectPath",str(ws_.project.dir));
+    scope.set("mapPath",str(ws_.map.path));
+    scope.set("epoch",str(std::to_string(graphDocumentEpoch_)));
+    scope.set("revision",str(std::to_string(ws_.map.revision)));
+    return scope;
+}
 Json StudioSession::snapshot() const {
     Json result = Json::object();
     Json project = Json::object();
@@ -414,6 +426,7 @@ Json StudioSession::snapshot() const {
     project.set("path", str(ws_.project.dir));
     project.set("dirty", Json::fromBool(ws_.map.dirty || ws_.project.rulesDirty || ws_.project.manifestDirty));
     result.set("project", std::move(project));
+    if (!ws_.project.dir.empty()) result.set("graphDocument",graphDocumentScope());
     Json scene = Json::object();
     scene.set("name", str(ws_.map.data.name));
     Json rows = Json::array();
@@ -523,6 +536,7 @@ Json StudioSession::openProject(const std::string& path) {
     if (!ws_.openGame(directory, &error))
         throw std::runtime_error(error.empty() ? "Unable to open project" : error);
     (void)studioContentRoot(ws_.project.dir);
+    ++graphDocumentEpoch_; // reopening the same project is a different document lifetime
     pendingAssetTransfer_.reset();
     clearSelection();hidden_.clear();locked_.clear();
     facialPreview_.reset(); // project identity may change; never reuse prior GUID
@@ -634,7 +648,7 @@ namespace {
 bool brushPathKind(const std::string& k){return k=="road"||k=="river";}
 const char* brushLabel(const std::string& k){
     return k=="terrain"?"Terrain brush":k=="paint"?"Paint terrain":k=="tiles"?"Paint tiles":k=="field"?"Paint field":
-           k=="objects"?"Scatter objects":k=="road"?"Draw road":k=="river"?"Draw river":"Brush";
+           k=="objects"?"Scatter objects":k=="road"?"Draw road":k=="river"?"Draw river":k=="caverns"?"Caverns brush":"Brush";
 }
 }
 StudioLuaContext StudioSession::luaContext() const {
@@ -744,12 +758,36 @@ Json StudioSession::sceneBrushJson() const {
     o.set("value",Json::number(b.value,3));o.set("type",str(b.type));o.set("owner",num(int64_t(b.owner)));
     o.set("count",num(int64_t(b.count)));o.set("spread",Json::number(b.spread,3));
     o.set("roadType",str(b.roadType));o.set("width",Json::number(b.width,3));
+    o.set("caveMode",str(b.caveMode));o.set("caveY",Json::number(b.caveY,3));o.set("caveSurface",Json::fromBool(b.caveSurface));
     return o;
 }
-bool StudioSession::strokeDab(double x, double z, std::string* error) {
+bool StudioSession::caveBrushPoint(double ox,double oy,double oz,double dx,double dy,double dz,
+                                  double& x,double& y,double& z,std::string* error){
+    if(!brush_.armed||brush_.kind!="caverns"||ws_.project.dir.empty())return false;
+    const double length=std::sqrt(dx*dx+dy*dy+dz*dz);
+    if(!std::isfinite(length)||length<1e-8||!std::isfinite(ox)||!std::isfinite(oy)||!std::isfinite(oz)||
+       std::abs(ox)>1e7||std::abs(oy)>1e7||std::abs(oz)>1e7)return false;
+    dx/=length;dy/=length;dz/=length;
+    if(!brush_.caveSurface){
+        if(std::abs(dy)<1e-8)return false;
+        const double t=(brush_.caveY-oy)/dy;
+        if(t<=0||t>500)return false;
+        x=ox+dx*t;y=brush_.caveY;z=oz+dz*t;
+        return std::abs(x)<=1e7&&std::abs(z)<=1e7;
+    }
+    Json p=Json::object();
+    p.set("xCm",num(std::llround(ox*100)));p.set("yCm",num(std::llround(oy*100)));p.set("zCm",num(std::llround(oz*100)));
+    p.set("dxQ20",num(std::llround(dx*(1<<20))));p.set("dyQ20",num(std::llround(dy*(1<<20))));p.set("dzQ20",num(std::llround(dz*(1<<20))));
+    const auto r=ws_.call("terraweave_caverns_pick",p,"editor");
+    if(r.has("error")){if(error)*error=r.getStr("error");return false;}
+    if(!r.getBool("hit",false))return false;
+    x=r.getInt("xCm")/100.;y=r.getInt("yCm")/100.;z=r.getInt("zCm")/100.;
+    return true;
+}
+bool StudioSession::strokeDab(double x, double z, std::string* error,double y) {
     if(!stroking_)return false;
     const auto& b=brush_;
-    const double d=std::hypot(x-strokeX_,z-strokeY_);
+    const double d=b.kind=="caverns"?std::hypot(x-strokeX_,y-strokeHeight_,z-strokeY_):std::hypot(x-strokeX_,z-strokeY_);
     if(brushPathKind(b.kind)){
         // Path tools: a point every two cells; the op runs once on release.
         if(d<2.0 && strokePoints_.size()>0)return true;
@@ -770,16 +808,25 @@ bool StudioSession::strokeDab(double x, double z, std::string* error) {
         p.set("radius",num(int64_t(std::lround(b.radius))));}
     else if(b.kind=="field"){op="field_paint";p.set("id",str(b.field));p.set("x",num(int64_t(std::floor(x))));p.set("z",num(int64_t(std::floor(z))));
         p.set("radius",num(int64_t(std::lround(b.radius))));p.set("value",Json::number(b.value,3));p.set("mode",str(b.fieldMode));}
+    else if(b.kind=="caverns"){
+        if(!std::isfinite(x)||!std::isfinite(y)||!std::isfinite(z)||
+           std::abs(x)>1e7||std::abs(y)>1e7||std::abs(z)>1e7||strokeDabs_>=256){
+            if(error)*error="Caverns stroke limit or coordinate extent";return false;
+        }
+        op="terraweave_caverns_paint";p.set("mode",str(b.caveMode));
+        p.set("xCm",num(std::llround(x*100)));p.set("yCm",num(std::llround(y*100)));
+        p.set("zCm",num(std::llround(z*100)));p.set("radiusCm",num(std::llround(b.radius*100)));
+    }
     else if(b.kind=="objects"){op="entity_place";p.set("type",str(b.type));p.set("owner",num(int64_t(b.owner)));
         p.set("x",Json::number(x,3));p.set("z",Json::number(z,3));
         if(b.count>1){p.set("count",num(int64_t(b.count)));p.set("spread",Json::number(b.spread,3));}}
     else {if(error)*error="Unknown brush";return false;}
     const Json r=ws_.call(op,p,"editor");   // "editor": no Console line per dab; one line per stroke at the end
     if(r.has("error")){if(error)*error=r.getStr("error");return false;}
-    strokeX_=x;strokeY_=z;++strokeDabs_;
+    strokeX_=x;strokeY_=z;strokeHeight_=y;++strokeDabs_;
     return true;
 }
-bool StudioSession::strokeBegin(double x, double z, std::string* error) {
+bool StudioSession::strokeBegin(double x, double z, std::string* error,double y) {
     if(!brush_.armed||ws_.project.dir.empty())return false;
     const auto& b=brush_;
     if((b.kind=="tiles"&&b.tile.empty())||(b.kind=="field"&&b.field.empty())||(b.kind=="objects"&&b.type.empty())||(b.kind=="road"&&b.roadType.empty())){
@@ -789,7 +836,7 @@ bool StudioSession::strokeBegin(double x, double z, std::string* error) {
     syncHistoryLabels();
     strokeDepth_=ws_.map.undoDepth();stroking_=true;strokeDabs_=0;strokePoints_=Json::array();
     strokeX_=x+1e9;strokeY_=z+1e9;   // the first dab always applies
-    if(!strokeDab(x,z,error)){stroking_=false;return false;}
+    if(!strokeDab(x,z,error,y)){stroking_=false;return false;}
     return true;
 }
 bool StudioSession::strokeEnd(std::string* error) {
@@ -1035,6 +1082,11 @@ Json StudioSession::historyJson() const {
 }
 Json StudioSession::dispatch(const Json& request) {
     const std::string method=request.getStr("method");
+    // Cave stroke ownership cannot cross a document switch or history mutation.
+    if(brush_.kind=="caverns"&&(method=="studio.openProject"||method=="studio.openMap"||method=="studio.newMap"||method=="studio.hubOpen"||method=="studio.hubCreate"||method=="studio.undo"||method=="studio.redo"||method=="studio.historyJump")) {
+        if(stroking_)(void)strokeEnd();
+        brush_.armed=false;
+    }
     if(method=="studio.history"||method=="studio.historyJump") {
         Json reply=Json::object();reply.set("id",request["id"]);
         try {
@@ -1082,6 +1134,66 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     params.set("index",num(int64_t(node.ref.index)));found=true;break;
                 }
             if(!found)throw std::runtime_error("Light entity no longer exists");
+        }
+        // Procedural building assets: native-only computation and bounded project writes.
+        // Browser requests supply data, never executable commands or filesystem paths.
+        if(method=="studio.buildingSurfacePreview") {
+            reply.set("result",studioBuildingSurfacePreview(ws_.engineDir,params));
+            return reply;
+        }
+        if(method=="studio.buildingCatalog") {
+            reply.set("result",studioBuildingCatalog(ws_.engineDir));
+            return reply;
+        }
+        if(method=="studio.buildingTextureProvenance") {
+            reply.set("result",studioBuildingTextureProvenance(ws_.project.dir,params));
+            return reply;
+        }
+        if(method=="studio.buildingInspect") {
+            reply.set("result",studioBuildingInspect(ws_.engineDir,params));
+            return reply;
+        }
+        if(method=="studio.buildingStaleMaterials") {
+            reply.set("result",studioBuildingStaleMaterials(ws_.project.dir));
+            return reply;
+        }
+        if(method=="studio.buildingRecipes") {
+            if(ws_.project.dir.empty())throw std::runtime_error("Open a project");
+            reply.set("result",studioBuildingRecipes(ws_.project.dir));
+            return reply;
+        }
+        if(method=="studio.buildingReadRecipe") {
+            if(ws_.project.dir.empty())throw std::runtime_error("Open a project");
+            reply.set("result",studioBuildingReadRecipe(
+                ws_.engineDir,ws_.project.dir,params.getStr("recipe")));
+            return reply;
+        }
+        if(method=="studio.buildingRegenerate") {
+            if(ws_.project.dir.empty())
+                throw std::runtime_error("Open a project before regeneration");
+            reply.set("result",studioBuildingRegenerate(
+                ws_.engineDir,ws_.project.dir,params.getStr("recipe")));
+            return reply;
+        }
+        if(method=="studio.buildingPublishMaterial") {
+            if(ws_.project.dir.empty())throw std::runtime_error("Open a project");
+            const auto name=params.getStr("name");
+            if(!validStudioMaterialName(name)||editor::loadMaterialLibrary(ws_).has(name))
+                throw std::runtime_error("Invalid or existing material name");
+            auto result=studioBuildingPublishMaterial(ws_.engineDir,ws_.project.dir,params,
+                [&](const std::string& published,const Json& material){
+                    if(editor::loadMaterialLibrary(ws_).has(published))
+                        throw std::runtime_error("Material already exists");
+                    Json request=Json::object();request.set("name",str(published));
+                    request.set("material",material);
+                    const auto saved=ws_.call("material_set",request,"studio");
+                    if(saved.has("error"))throw std::runtime_error(saved.getStr("error"));
+                });
+            reply.set("result",std::move(result));return reply;
+        }
+        if(method=="studio.buildingGenerate") {
+            reply.set("result",studioBuildingGenerate(ws_.engineDir,ws_.project.dir,params));
+            return reply;
         }
         if (method == "studio.hubTemplates") {   // StudioHost runs this off the UI thread; kept for other hosts
             reply.set("result",hubTemplatesJson(ws_.engineDir,params));
@@ -1647,6 +1759,18 @@ Json StudioSession::dispatchImpl(const Json& request) {
                         validatedPatch.set(key,std::move(color));
                         continue;
                     }
+                    if (key=="uvScale"||key=="uvOffset"){
+                        if(!value.isString())
+                            throw std::runtime_error("UV transform requires 'u,v' values");
+                        const auto pair=parseStudioUvPair(value.str());
+                        if(!pair)
+                            throw std::runtime_error("UV transform requires two bounded finite numbers");
+                        Json uv=Json::array();
+                        for(double component:*pair)
+                            uv.push(Json::number(component,6));
+                        validatedPatch.set(key,std::move(uv));
+                        continue;
+                    }
                     if (studioMaterialTextureKey(key)) {
                         if (!value.isString())
                             throw std::runtime_error("Texture reference must be an asset GUID");
@@ -1801,6 +1925,32 @@ Json StudioSession::dispatchImpl(const Json& request) {
             const Json current = ws_.call("light_list",Json::object(),"studio");
             if (current.has("error")) throw std::runtime_error(current.getStr("error"));
             reply.set("result",current);
+        } else if (method == "studio.cavernsGraphInspect") {
+            // Narrow get-only capability; never expose the mixed paint operation via this route.
+            if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
+            const Json scope=graphDocumentScope();
+            if (!params.isObject() || params.size()!=1 || !(params["scope"]==scope))
+                throw std::runtime_error("Caverns inspection document changed; refresh Studio");
+            Json out=Json::object();
+            out.set("scope",scope);
+            const bool registered=std::any_of(ws_.ops().begin(),ws_.ops().end(),[](const auto& op){
+                return op.name=="terraweave_caverns_paint" && !op.guiOnly;
+            });
+            if (!registered) out.set("status",str("unavailable"));
+            else if (ws_.map.data.planet()) out.set("status",str("unsupported"));
+            else if (static_cast<const Json&>(ws_.map.data.extra)["terraweaveCaverns"].isNull())
+                out.set("status",str("absent"));
+            else {
+                const size_t undo=ws_.map.undoDepth();
+                const bool dirty=ws_.map.dirty;
+                Json input=Json::object();input.set("mode",str("get"));
+                const Json report=ws_.call("terraweave_caverns_paint",input,"editor");
+                if (report.has("error")) throw std::runtime_error(report.getStr("error"));
+                if (!(scope==graphDocumentScope()) || undo!=ws_.map.undoDepth() || dirty!=ws_.map.dirty)
+                    throw std::runtime_error("Caverns read violated document scope");
+                out.set("status",str("ready"));out.set("report",report);
+            }
+            reply.set("result",std::move(out));
         } else if (method == "studio.ops") {
             // Tool panel (Terrain, Roads, PostFX, ...): its Workspace ops with their JSON schemas.
             const StudioToolGroup* group=studioToolGroup(params.getStr("panel"));
@@ -1819,14 +1969,24 @@ Json StudioSession::dispatchImpl(const Json& request) {
         } else if (method == "studio.op") {
             const std::string op=params.getStr("op");
             if (!studioToolAllowed(op)) throw std::runtime_error("This operation is not available in Studio panels: "+op);
+            if (op.rfind("feature_readiness_",0)!=0 && ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
+            if((op.starts_with("world_save_")||op=="world_job_start"||op.starts_with("world_simulation_lod_"))&&params.getStr("expectedProject")!=ws_.project.dir)
+                throw std::runtime_error("World maintenance project changed; reopen the panel");
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
+            if((op=="terraweave_caverns_paint"||op=="terraweave_caverns_pick") && (params.getStr("expectedProject")!=ws_.project.dir ||
+               !params["expectedMap"].isString() || params.getStr("expectedMap")!=(ws_.map.path.empty()?"":ws_.relative(ws_.map.path))))
+                throw std::runtime_error("Caverns project/map changed; refresh the panel");
             const Json input=params["params"].isObject()?params["params"]:Json::object();
+            if(op=="terraweave_caverns_paint" && input.getStr("mode")!="get" &&
+               (!input["expectedRevision"].isString() || input.getBool("withinStroke",false)))
+                throw std::runtime_error("Caverns Studio edit requires revision and its own undo step");
             const bool wasDirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
             const size_t depth=ws_.map.undoDepth(),entityCount=ws_.map.data.entities.size();
             const Json result=ws_.call(op,input,"studio");
             if (result.has("error")) throw std::runtime_error(result.getStr("error"));
             const bool dirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
-            const bool changed=!studioToolReadOnly(op)||ws_.map.undoDepth()!=depth||dirty!=wasDirty;
+            const bool readOnly=studioToolReadOnly(op)||(op=="terraweave_caverns_paint"&&input.getStr("mode")=="get");
+            const bool changed=!readOnly||ws_.map.undoDepth()!=depth||dirty!=wasDirty;
             if (ws_.map.data.entities.size()!=entityCount) { clearSelection(); dropOrdinalFlags(); }
             Json out=Json::object();
             out.set("op",str(op));out.set("result",result);out.set("changed",Json::fromBool(changed));
@@ -2174,6 +2334,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 if (result.has("error")) throw std::runtime_error(result.getStr("error"));
                 ws_.map.touched();
             }
+            ++graphDocumentEpoch_;
             clearSelection();hidden_.clear();locked_.clear();previewMaterialName_.clear();refreshMaterialPreview();
             reply.set("result",snapshot());
         } else if (method == "studio.entityCatalog") {
@@ -2383,18 +2544,20 @@ Json StudioSession::dispatchImpl(const Json& request) {
             const Json& states=params["entities"];
             if (!states.isArray() || states.size()>200000) throw std::runtime_error("Invalid play state");
             const bool removeDead=params.getBool("removeDead");
-            auto& d=ws_.map.data;
+            const bool positions=params.getBool("positions",true),amountsEnabled=params.getBool("amounts",true);
+            const bool dryRun=params.getBool("dryRun");
+            auto staged=ws_.map.data;auto& d=staged;
             std::vector<size_t> dead;
             int moved=0,amounts=0,skipped=0;
             bool begun=false;
-            auto begin=[&]{if(!begun){ws_.map.beginEdit();begun=true;}};
+            auto begin=[&]{begun=true;};
             for (const auto& st:states.items()) {
                 const int64_t i=st["index"].integer(-1);
                 if (i<0 || i>=int64_t(d.entities.size())) {++skipped;continue;}
                 auto& e=d.entities[size_t(i)];
                 if (st.getBool("removed")) { if(removeDead)dead.push_back(size_t(i)); continue; }
                 if (st.has("type") && st.getStr("type")!=e.type) {++skipped;continue;}
-                if (st["x"].isNumber() && st["z"].isNumber()) {
+                if (positions&&st["x"].isNumber() && st["z"].isNumber()) {
                     const float x=float(st["x"].toDouble()),z=float(st["z"].toDouble());
                     if (std::isfinite(x)&&std::isfinite(z)&&std::hypot(x-e.x,z-e.z)>0.01f) {
                         begin();e.x=x;e.z=z;
@@ -2406,7 +2569,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                         ++moved;
                     }
                 }
-                if (st["amount"].isNumber()) {
+                if (amountsEnabled&&st["amount"].isNumber()) {
                     const float a=float(st["amount"].toDouble());
                     // A map entity without an amount uses its type's default: only a real change is kept.
                     const float current=e.amount>=0?e.amount:float(st["defaultAmount"].toDouble(double(a)));
@@ -2416,6 +2579,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
             int removed=0;
             if (!dead.empty()) {
                 std::sort(dead.rbegin(),dead.rend());
+                dead.erase(std::unique(dead.begin(),dead.end()),dead.end());
                 begin();
                 for (size_t idx:dead) {
                     // Roads are entity index pairs: drop the ones that end here, shift the rest.
@@ -2428,12 +2592,15 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     d.entities.erase(d.entities.begin()+long(idx));
                     ++removed;
                 }
-                clearSelection();dropOrdinalFlags();
             }
-            if (begun) { ws_.map.touched(); ws_.log("studio","Keep play changes: "+std::to_string(moved)+" moved, "+std::to_string(amounts)+" amounts, "+std::to_string(removed)+" removed"); }
+            if(begun&&!dryRun){
+                ws_.map.beginEdit();ws_.map.data=std::move(staged);
+                if(removed){clearSelection();dropOrdinalFlags();}
+                ws_.map.touched();ws_.log("studio","Keep play changes: "+std::to_string(moved)+" moved, "+std::to_string(amounts)+" amounts, "+std::to_string(removed)+" removed");
+            }
             Json out=Json::object();
             out.set("moved",num(int64_t(moved)));out.set("amounts",num(int64_t(amounts)));out.set("removed",num(int64_t(removed)));
-            out.set("skipped",num(int64_t(skipped)));out.set("snapshot",snapshot());
+            out.set("skipped",num(int64_t(skipped)));if(!dryRun)out.set("snapshot",snapshot());
             reply.set("result",std::move(out));
         } else if (method == "studio.splineEdit") {
             // Roads / Water panels: show node handles in the Scene ("road" | "river" | "" off).
@@ -2444,8 +2611,9 @@ Json StudioSession::dispatchImpl(const Json& request) {
             reply.set("result",splineHandles());
         } else if (method == "studio.sceneBrush") {
             // Arm / disarm the Scene brush and set its tool and settings (session only).
-            auto& b=brush_;
-            static const std::set<std::string> kinds={"terrain","paint","tiles","field","objects","road","river"};
+            if(stroking_)throw std::runtime_error("Finish the active Scene stroke first");
+            auto next=brush_;auto& b=next;
+            static const std::set<std::string> kinds={"terrain","paint","tiles","field","objects","road","river","caverns"};
             static const std::set<std::string> ops={"raise","lower","smooth","flatten","noise","erode"};
             static const std::set<std::string> modes={"set","add","max","erase"};
             auto number=[&](const char* k,double lo,double hi){const double v=params[k].toDouble();
@@ -2466,7 +2634,20 @@ Json StudioSession::dispatchImpl(const Json& request) {
             if (params.has("spread")) b.spread=number("spread",0,32);
             if (params.has("roadType")) b.roadType=text("roadType");
             if (params.has("width")) b.width=number("width",1,200);
-            if (params.has("armed")) { b.armed=params.getBool("armed")&&!ws_.project.dir.empty(); if (b.armed) splineEdit_.clear(); }
+            if(params.has("caveMode")){const auto mode=params.getStr("caveMode");if(mode!="carve"&&mode!="fill")throw std::runtime_error("Unknown cave brush mode");b.caveMode=mode;}
+            if(params.has("caveY"))b.caveY=number("caveY",-10000000,10000000);
+            if(params.has("caveSurface"))b.caveSurface=params.getBool("caveSurface");
+            if (params.has("armed")) b.armed=params.getBool("armed")&&!ws_.project.dir.empty();
+            if(b.armed&&b.kind=="caverns"){
+                if(params.getBool("armed",false)&&(params.getStr("expectedProject")!=ws_.project.dir||
+                   !params["expectedMap"].isString()||params.getStr("expectedMap")!=(ws_.map.path.empty()?"":ws_.relative(ws_.map.path))))
+                    throw std::runtime_error("Caverns brush project/map changed");
+                bool paint=false,pick=false;
+                for(const auto& op:ws_.ops()){paint|=op.name=="terraweave_caverns_paint";pick|=op.name=="terraweave_caverns_pick";}
+                if(!paint||!pick||ws_.map.data.planet())throw std::runtime_error("Caverns native flat-world backend unavailable");
+            }
+            brush_=std::move(next);
+            if(brush_.armed)splineEdit_.clear();
             reply.set("result",sceneBrushJson());
         } else if (method == "studio.agentInfo" || method == "studio.agentStart" || method == "studio.agentStop" || method == "studio.agentReset") {
             reply.set("result", agentRequest(method, params));

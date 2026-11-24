@@ -198,6 +198,57 @@ StudioScene::StudioScene(std::unique_ptr<gfx::Device> device)
 }
 void StudioScene::setTransformTool(TransformTool tool) { tool_ = tool; drag_ = TransformDrag{}; }
 void StudioScene::clearTransformPreview() { drag_ = TransformDrag{}; }
+bool StudioScene::setBuildingPreview(
+    std::unique_ptr<render::Model> next,std::string* error){
+    // Called only by StudioHost::onScene outside GPU passes.
+    if(!device_ || !deviceLifetime_ ||
+       !deviceLifetime_->lease().validFor(*device_)){
+        if(error)*error="Studio building preview GPU device unavailable";
+        return false;
+    }
+    if(buildingPreview_){
+        // Never invalidate a Model still retained in in-flight draw packets.
+        if(!device_->waitForResourceIdle()){
+            if(error)*error="Building preview GPU retirement barrier failed";
+            return false;
+        }
+        releasePreviewModel(*buildingPreview_);
+        buildingPreview_.reset();
+        buildingPreviewGpuReady_=false;
+    }
+    if(next){
+        next->batching.mergeRigid=false;
+        next->batching.autoLod=false;
+        next->batching.geometryPoolPolicy=
+            render::Model::Batching::GeometryPoolPolicy::Dedicated;
+        render::prepareModelUpload(*next);
+        if(!render::uploadModel(*device_,*next,true,false)){
+            if(!device_->waitForResourceIdle()){
+                // Keep a failed partial upload alive until another verified
+                // GPU-safe cleanup call; no CPU Model can dangle on failure.
+                buildingPreview_=std::move(next);
+                buildingPreviewGpuReady_=false;
+                if(error)*error="Building preview upload failed and GPU retirement is pending";
+                return false;
+            }
+            releasePreviewModel(*next);
+            if(error)*error="Building preview model GPU upload failed";
+            return false;
+        }
+        const auto min=next->boundsMin,max=next->boundsMax;
+        camera_.target={(min.x+max.x)*.5f,(min.y+max.y)*.5f,
+                        (min.z+max.z)*.5f};
+        const auto extent=max-min;
+        camera_.distance=std::max({extent.x,extent.y,extent.z,1.f})*1.9f;
+        camera_.yaw=.55f;camera_.pitch=.45f;camera_.ortho=false;
+        tween_.active=false;cameraInitialized_=true;
+        buildingPreview_=std::move(next);
+        buildingPreviewGpuReady_=true;
+    }
+    lastFrameSignature_=0;
+    if(error)error->clear();
+    return true;
+}
 void StudioScene::releasePreviewModel(render::Model& model) {
     // Retire CPU packets/layouts before the Model and its geometry disappear.
     renderer_.invalidateModelCachesFor(&model);
@@ -576,6 +627,7 @@ StudioScene::~StudioScene() {
     if (device_) {
         device_->waitForResourceIdle();
         clearDocumentModels();
+        if(buildingPreview_){releasePreviewModel(*buildingPreview_);buildingPreview_.reset();}
         lightingRuntime_.shutdown(*device_,renderer_);
         if(lightingModel_) {
             renderer_.invalidateModelCachesFor(lightingModel_.get());
@@ -624,7 +676,7 @@ std::string StudioScene::pick(float x, float y, float width, float height,
     float3 origin{}, direction{};
     // Facial preview is an imported Model, not an object in the active map.
     // Never route its clicks to unrelated MapDoc entities underneath.
-    if (materialMode_ || facialMode_ || !cameraInitialized_ ||
+    if (materialMode_ || facialMode_ || buildingPreview_ || !cameraInitialized_ ||
         !viewCamera().screenRay(x,y,width,height,origin,direction)) return {};
     // Pick the oriented cube mesh that Renderer3D actually draws, not its
     // expanded axis-aligned bounding box. Empty rotated corners are unpickable.
@@ -654,6 +706,9 @@ std::vector<std::string> StudioScene::idsInRect(float x0,float y0,float x1,float
         if(p.x>=lx&&p.x<=hx&&p.y>=ly&&p.y<=hy)out.push_back(proxy.id);
     }
     return out;
+}
+bool StudioScene::caveScreenRay(float x,float y,float width,float height,float3& origin,float3& direction)const {
+    return cameraInitialized_&&width>1&&height>1&&viewCamera().screenRay(x,y,width,height,origin,direction);
 }
 bool StudioScene::groundPoint(float x,float y,float width,float height,float3& out) const {
     float3 o,d;
@@ -789,12 +844,18 @@ void StudioScene::drawBrushCursor(const Camera& view,int width,int height) {
     const float w=std::max(1.5f,std::min(W,H)*0.002f);
     constexpr int N=48;
     float2 prev{};bool prevOk=false;
-    for(int i=0;i<=N;++i){
-        const float a=float(i)/N*6.2831853f;
-        const float3 p{brushCenter_.x+std::cos(a)*brushRadius_,brushCenter_.y+0.05f,brushCenter_.z+std::sin(a)*brushRadius_};
-        float2 s;const bool ok=view.worldToScreen(p,W,H,s);
-        if(ok&&prevOk)o.segment(prev.x,prev.y,s.x,s.y,w,rgba(120,200,255,220));
-        prev=s;prevOk=ok;
+    const uint32_t ink=brushVolume_&&brushFill_?rgba(255,175,100,220):rgba(120,200,255,220);
+    for(int plane=0;plane<(brushVolume_?3:1);++plane){
+        prevOk=false;
+        for(int i=0;i<=N;++i){
+            const float a=float(i)/N*6.2831853f;
+            const float u=std::cos(a)*brushRadius_,v=std::sin(a)*brushRadius_;
+            const float3 offset=plane==0?float3{u,brushVolume_?0.f:.05f,v}:
+                                plane==1?float3{u,v,0}:float3{0,u,v};
+            float2 s;const bool ok=view.worldToScreen(brushCenter_+offset,W,H,s);
+            if(ok&&prevOk)o.segment(prev.x,prev.y,s.x,s.y,w,ink);
+            prev=s;prevOk=ok;
+        }
     }
     float2 c;
     if(brushVisible_&&view.worldToScreen(brushCenter_,W,H,c)){o.segment(c.x-4,c.y,c.x+4,c.y,w,rgba(120,200,255,220));o.segment(c.x,c.y-4,c.x,c.y+4,w,rgba(120,200,255,220));}
@@ -1331,6 +1392,29 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     if (renderer_.pendingProgramRetirements()) renderer_.collectRetiredPrograms();
     if (renderer_.pendingTargetRetirements()) renderer_.collectRetiredTargets();
     if (renderer_.hasPendingModelPipelineJobs()) renderer_.pollPendingModelPipelineJobs();
+    // This is a native isolated 3D preview. Existing Scene viewport
+    // orbit/zoom/pan operate on camera_ and never mutate the project.
+    if(buildingPreview_ && buildingPreviewGpuReady_){
+        lastFrameSignature_=0; // redraw while interactive camera is active
+        device_->beginFrame(framebufferWidth,framebufferHeight);
+        StudioFrameScope scope{*device_};
+        renderer_.beginScene(viewCamera(),framebufferWidth,framebufferHeight);
+        renderer_.clearDynamicGiOverlay();
+        renderer_.lighting=render::Lighting{};
+        renderer_.lighting.sunIntensity=1.25f;
+        renderer_.lighting.skyColor={.43f,.5f,.61f};
+        renderer_.lighting.groundColor={.25f,.27f,.29f};
+        renderer_.lighting.fogDensity=0;
+        render::ModelDraw draw;
+        draw.model=buildingPreview_.get();
+        renderer_.drawModel(draw);
+        gfx::PassDesc pass;
+        pass.clearColor[0]=.065f;pass.clearColor[1]=.08f;
+        pass.clearColor[2]=.11f;pass.clearColor[3]=1.f;
+        renderer_.render(pass,&antialiasing_);
+        renderer_.resolvePostFx();
+        return;
+    }
     const bool materialRequested = !previewName.empty() && previewFactors.isObject();
     const bool facialRequested = facialBinding.bound() && !materialRequested;
     // Those previews draw every frame; the map view redraws once they end.

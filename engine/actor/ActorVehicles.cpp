@@ -12,6 +12,7 @@
 #include "engine/mechanics/VehicleDrive.h"
 #include "engine/core/FixedMath.h"
 #include <algorithm>
+#include <set>
 namespace aiverse::actor {
 using namespace lib::mechanics;
 namespace vs = vehicles;
@@ -48,12 +49,16 @@ public:
     void placed(Entity e,vs::VehicleDrive& d) override {
         Vehicle* v=w_.tryGet<Vehicle>(e);if(!v)return;
         v->pos=d.controller.position;v->yaw=d.controller.yaw;v->velocity=d.controller.velocity;
+        if(!m_.reportRegionMoveIfCrossed(sim_,e))
+            throw std::logic_error("regionOwnership: typed vehicle move report failed");
         const auto* type=m_.drive_.type(d.type);if(!type)return;
         const auto count=int64_t(m_.characterCount(sim_));
         for(auto [seat,actor]:d.seats.occupants){
             if(actor<=0||actor>count)continue;auto a=m_.character(sim_,uint8_t(actor));
             for(const auto& s:type->seats.seats)if(s.id==seat)a.pos=vehicleWorldPoint(d.controller,s.entry)+Vec3{{},Fixed::fromRatio(1,2),{}};
             a.velocity=d.controller.velocity;a.grounded=true;
+            if(!m_.reportRegionMoveIfCrossed(sim_,a.entity))
+                throw std::logic_error("regionOwnership: typed passenger move report failed");
         }
     }
     void damage(Entity victim,Fixed amount,Entity,uint8_t) override {
@@ -74,6 +79,8 @@ public:
         auto& v=*w_.tryGet<Vehicle>(car);auto a=m_.character(sim_,uint8_t(i+1));
         const auto* seat=driverSeat(m_.drive_.type(d.type)->seats);
         v.pos=d.controller.position;v.yaw=d.controller.yaw;v.velocity={};
+        w_.notifyComponentChange<CharacterBody>(a.entity);
+        w_.notifyComponentChange<Vehicle>(car);
         d.seats.occupants[seat->id]=a.slot;d.seats.team=a.team;d.seats.locked=true;d.driver=a.entity;d.player=a.slot;
         a.vehicle=v.id;a.velocity={};a.pos=vehicleWorldPoint(d.controller,seat->entry)+Vec3{{},Fixed::fromRatio(1,2),{}};v.driver=a.slot;
         return i<m_.bots_.size()&&m_.bots_[i];
@@ -85,10 +92,15 @@ public:
         const Vehicle* v=w_.tryGet<Vehicle>(car);return (v&&v->health<=0)||d.controller.position.y< -50_fx;
     }
     void respawned(size_t,Entity car,vs::VehicleDrive& d) override {
+        w_.notifyComponentChange<Vehicle>(car);
         if(Vehicle* v=w_.tryGet<Vehicle>(car)){v->pos=d.controller.position;v->yaw=d.controller.yaw;v->velocity={};if(v->health<=0)v->health=Vehicle{}.health;}
+        if(!m_.reportRegionMoveIfCrossed(sim_,car))
+            throw std::logic_error("regionOwnership: race car respawn report failed");
         const auto count=int64_t(m_.characterCount(sim_));const auto& type=*m_.drive_.type(d.type);
         for(auto [seat,actor]:d.seats.occupants)for(const auto& s:type.seats.seats)if(s.id==seat&&actor>=1&&actor<=count){
-            auto a=m_.character(sim_,uint8_t(actor));a.pos=vehicleWorldPoint(d.controller,s.entry)+Vec3{{},Fixed::fromRatio(1,2),{}};a.velocity={};}
+            auto a=m_.character(sim_,uint8_t(actor));w_.notifyComponentChange<CharacterBody>(a.entity);a.pos=vehicleWorldPoint(d.controller,s.entry)+Vec3{{},Fixed::fromRatio(1,2),{}};a.velocity={};
+            if(!m_.reportRegionMoveIfCrossed(sim_,a.entity))
+                throw std::logic_error("regionOwnership: race passenger respawn report failed");}
     }
     int32_t raceOver(int64_t winner) override {   // the race decides the round
         auto& s=m_.state(sim_);
@@ -126,6 +138,203 @@ void ActorHost::setupVehicles(Simulation& sim,const Json& map) {
         vs::addVehicle(w,entities[i],*t,v.pos,v.yaw);
     }
 }
+world::RegionPositionReader ActorHost::regionPositionReader() {
+    return [](const World& world,Entity entity)->std::optional<Vec3> {
+        // ActorHost already owns these authoritative positions. Do not add
+        // a second Transform that could drift from real vehicle/actor state.
+        if(const auto* actor=world.tryGetConst<CharacterBody>(entity))
+            return actor->pos;
+        if(const auto* vehicle=world.tryGetConst<Vehicle>(entity))
+            return vehicle->pos;
+        if(const auto* loot=world.tryGetConst<Loot>(entity))
+            return loot->pos;
+        if(const auto* projectile=world.tryGetConst<Projectile>(entity))
+            return projectile->pos;
+        return world::regionTransformPosition(world,entity);
+    };
+}
+
+bool ActorHost::transferVehicleRegion(Simulation& sim,Entity vehicle,
+                                     world::Cell from,world::Cell to,
+                                     std::string* error) {
+    auto reject=[&](const char* reason) {
+        if(error)*error=reason;
+        return false;
+    };
+    auto& ecs=sim.world();
+    const auto* ledger=ecs.resourceConst<world::RegionEntityLedger>();
+    const auto* car=ecs.tryGetConst<Vehicle>(vehicle);
+    if(!ledger || !car)return reject("world-space region ownership or vehicle is unavailable");
+    // A transfer only publishes ownership after the existing host gate has
+    // admitted collision and derived navigation. Never step into unloaded
+    // geometry, and never let an async camera decide authoritative ownership.
+    if(!readyToStep(sim))return reject("destination collision/navigation is not ready");
+    if(streamManifest_.getBool("async")) {
+        if(!streamedCollision_)return reject("collision streaming reader missing");
+        const auto pos=car->pos;
+        const world::Bounds required{
+            pos-Vec3{2_fx,2_fx,2_fx},pos+Vec3{2_fx,2_fx,2_fx}};
+        if(!streamedCollision_->covers(required))
+            return reject("destination vehicle bounds are not collision resident");
+    }
+    if(world::SpatialWorld(32).cell(car->pos)!=to)
+        return reject("vehicle has not reached the destination region");
+    const auto seatMap=[this,&sim](int64_t actor)->Entity {
+        if(actor<=0 || actor>int64_t(characterCount(sim)) || actor>UINT8_MAX)
+            return kNullEntity;
+        return characterEntity(sim,uint8_t(actor));
+    };
+    // Read-only preflight avoids copy-on-write ledger detach on failure.
+    world::VehicleRegionGroup group;
+    if(!world::VehicleRegionTransfer::gather(ecs,vehicle,seatMap,group,error))
+        return false;
+    for(Entity member:group.members) {
+        const auto* tag=ecs.tryGetConst<world::RegionStableIdentity>(member);
+        if(!tag || !tag->id)return reject("vehicle group member lacks stable region identity");
+        const auto* record=ledger->find(tag->id);
+        if(!record || !record->live || record->owner!=from)
+            return reject("vehicle group has stale or conflicting region owners");
+    }
+    auto* mutableLedger=ecs.resource<world::RegionEntityLedger>();
+    return world::VehicleRegionTransfer::transfer(
+        ecs,*mutableLedger,vehicle,seatMap,from,to,regionPositionReader(),error);
+}
+
+bool ActorHost::typedRegionMoveGroup(const Simulation& sim,Entity car,
+                                     std::vector<Entity>& out,
+                                     std::string* error)const {
+    auto refuse=[&](const char* why){
+        if(error)*error=why;
+        return false;
+    };
+    const World& ecs=sim.world();
+    const auto* state=ecs.tryGetConst<Vehicle>(car);
+    const auto* drive=ecs.tryGetConst<vs::VehicleDrive>(car);
+    if(!state || !drive)
+        return refuse("typed car requires Vehicle and VehicleDrive");
+    const auto* definition=drive_.type(drive->type);
+    if(!definition)return refuse("typed car has no registered controller definition");
+    if(!vs::valid(*drive))
+        return refuse("invalid typed vehicle controller or seats");
+    if(drive->driver.valid() &&
+       (drive->player==0 || drive->player>characterCount(sim) ||
+        characterEntity(sim,drive->player)!=drive->driver))
+        return refuse("typed driver slot does not match ECS Entity");
+    world::VehicleRegionGroup group;
+    if(!vehicleRegionGroup(sim,car,group,error))return false;
+    // The typed vehicle's seat map is the authoritative passenger list.
+    // Reject incomplete links and seats without definitions before any move.
+    std::set<int64_t> assigned;
+    std::set<uint64_t> expectedHandles{car.packed()};
+    for(const auto& [seat,slot]:drive->seats.occupants) {
+        auto found=std::find_if(definition->seats.seats.begin(),
+                                definition->seats.seats.end(),
+                                [seat](const auto& item){return item.id==seat;});
+        if(found==definition->seats.seats.end() || slot<=0 ||
+           slot>int64_t(characterCount(sim)) || !assigned.insert(slot).second)
+            return refuse("missing or duplicated typed car seat definition");
+        const Entity passenger=characterEntity(sim,uint8_t(slot));
+        expectedHandles.insert(passenger.packed());
+        const auto* body=ecs.tryGetConst<CharacterBody>(passenger);
+        if(!body || body->vehicle!=state->id)
+            return refuse("seat passenger is not bound to this car");
+    }
+    if(drive->driver.valid() &&
+       !expectedHandles.contains(drive->driver.packed()))
+        return refuse("typed driver is not represented by a real seat");
+    for(Entity member:group.members)
+        if(!expectedHandles.contains(member.packed()))
+            return refuse("extra reverse-linked occupant is absent from seat map");
+    if(group.members.size()!=expectedHandles.size())
+        return refuse("typed car seat group has missing or duplicate ECS links");
+    // The legacy ActorHost character backlink must never introduce a hidden
+    // occupant omitted from the shared seat inventory.
+    bool hidden=false;
+    ecs.eachExistingConst<CharacterBody>(
+        [&](Entity e,const CharacterBody& body) {
+            if(body.vehicle==state->id &&
+               std::find(group.members.begin(),group.members.end(),e)==
+                   group.members.end())hidden=true;
+        });
+    if(hidden)return refuse("typed car is missing an occupied actor");
+    // Driver reverse components are optional for ActorHost seat manifests.
+    // A reverse component for another car was already rejected by gather().
+    out=std::move(group.members);
+    return true;
+}
+
+bool ActorHost::placeTypedRegionMove(Simulation& sim,Entity car,Vec3 destination,
+                                    std::string* error) {
+    auto refuse=[&](const char* why){
+        if(error)*error=why;
+        return false;
+    };
+    std::vector<Entity> members;
+    if(!typedRegionMoveGroup(sim,car,members,error))return false;
+    auto& ecs=sim.world();
+    const auto* current=ecs.tryGetConst<vs::VehicleDrive>(car);
+    const auto* definition=current?drive_.type(current->type):nullptr;
+    if(!definition)return refuse("missing controller before typed move commit");
+    // Preserve yaw/gear/lastTick, reset wheel/flight motion through the
+    // existing shared authoritative respawn function.
+    auto controller=current->controller;
+    lib::mechanics::respawnVehicle(definition->def,controller,destination,
+                                   controller.yaw);
+    if(!lib::mechanics::valid(controller))
+        return refuse("destination cannot be represented by vehicle state");
+    auto* vehicle=ecs.tryGet<Vehicle>(car);
+    auto* drive=ecs.tryGet<vs::VehicleDrive>(car);
+    if(!vehicle || !drive)return refuse("typed vehicle destroyed before commit");
+    drive->controller=controller;
+    vehicle->pos=controller.position;
+    vehicle->yaw=controller.yaw;
+    vehicle->velocity=controller.velocity;
+    // Keep existing seat assignments and authoritative character data.
+    // Reposition each occupied seat from the controller's new world frame,
+    // just as VehicleWorld::placed does during normal vehicle stepping.
+    for(const auto& [seat,slot]:drive->seats.occupants) {
+        const auto it=std::find_if(definition->seats.seats.begin(),
+                                   definition->seats.seats.end(),
+                                   [seat](const auto& s){return s.id==seat;});
+        const Entity occupant=characterEntity(sim,uint8_t(slot));
+        if(auto* body=ecs.tryGet<CharacterBody>(occupant)) {
+            body->pos=lib::mechanics::vehicleWorldPoint(
+                controller,it->entry)+Vec3{{},Fixed::fromRatio(1,2),{}};
+            body->velocity=controller.velocity;
+            body->grounded=true;
+        }
+    }
+    // The shared VehicleOccupant component is owned by the generic vehicle
+    // subsystem; its pose must not lag one tick behind teleportation.
+    for(Entity occupant:members) {
+        if(occupant==car)continue;
+        if(auto* back=ecs.tryGet<vs::VehicleOccupant>(occupant)) {
+            back->vehicle=car;
+            back->type=drive->type;
+            back->position=controller.position;
+            back->yaw=controller.yaw;
+            back->speed=lib::mechanics::vehicleForwardSpeed(controller);
+            back->deck=drive->deck;
+        }
+    }
+    return true;
+}
+
+bool ActorHost::vehicleRegionGroup(const Simulation& sim,Entity vehicle,
+                                   world::VehicleRegionGroup& out,
+                                   std::string* error) const {
+    const auto& ecs=sim.world();
+    return world::VehicleRegionTransfer::gather(
+        ecs,vehicle,
+        [this,&sim](int64_t seatActor)->Entity {
+            // World-space seat manifests use player slot numbers. Resolve
+            // through CharacterIndex; never cast seat slots to Entity handles.
+            if(seatActor<=0 || seatActor>int64_t(characterCount(sim)) ||
+               seatActor>UINT8_MAX)return kNullEntity;
+            return characterEntity(sim,uint8_t(seatActor));
+        },out,error);
+}
+
 bool ActorHost::canFireFromVehicle(Simulation& sim,const CharacterRef& a) const {
     auto* run=vehicleDrive(sim,a.vehicle);if(!run)return false;
     const auto* type=drive_.type(run->type);if(!type)return false;auto seat=vehicleSeatOf(run->seats,a.slot);
@@ -176,12 +385,23 @@ void ActorHost::tickVehicles(Simulation& sim,std::span<const vs::RacePedals> rac
         if(auto report=stepVehicleSeats(seats,run.seats,now,run.controller,std::span<const VehicleSeatRequest>(requests),clear)){
             for(const auto& e:report->events){
                 if(e.actor<=0||e.actor>count)continue;auto a=character(sim,uint8_t(e.actor));
-                if(e.kind==VehicleEventKind::SeatEntered){a.vehicle=v->id;a.velocity={};}
+                if(e.kind==VehicleEventKind::SeatEntered){
+                    w.notifyComponentChange<CharacterBody>(a.entity);
+                    w.notifyComponentChange<Vehicle>(entity);
+                    a.vehicle=v->id;a.velocity={};
+                }
             }
-            for(const auto& x:report->exits){auto a=character(sim,uint8_t(x.actor));a.vehicle=0;a.pos=x.position;a.velocity=run.controller.velocity;
+            for(const auto& x:report->exits){auto a=character(sim,uint8_t(x.actor));
+                w.notifyComponentChange<CharacterBody>(a.entity);
+                w.notifyComponentChange<Vehicle>(entity);
+                a.vehicle=0;a.pos=x.position;a.velocity=run.controller.velocity;
+                if(!reportRegionMoveIfCrossed(sim,a.entity))
+                    throw std::logic_error("regionOwnership: typed seat exit dirty report failed");
                 if(v->health<=0)damage(sim,0,a,1000);}
         }
-        auto driver=vehicleDriver(seats,run.seats);v->driver=uint8_t(driver);
+        auto driver=vehicleDriver(seats,run.seats);
+        if(v->driver!=uint8_t(driver))w.notifyComponentChange<Vehicle>(entity);
+        v->driver=uint8_t(driver);
         run.player=uint8_t(driver);run.driver=driver?characterEntity(sim,uint8_t(driver)):kNullEntity;
     }
     VehicleWorld host(*this,sim);

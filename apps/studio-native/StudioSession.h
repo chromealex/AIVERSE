@@ -22,6 +22,8 @@ public:
     explicit StudioSession(const std::string& engineRoot, const std::string& project = {});
     Json dispatch(const Json& request);   // labels undo steps for the History panel, then dispatchImpl
     const editor::Workspace& workspace() const { return ws_; }
+    void setBuildingGraphReader(std::function<Json(uint64_t)> reader){ws_.buildingGraphDiagnosticsProvider=std::move(reader);}
+    Json buildingGraphSnapshot(uint64_t scene)const{return ws_.buildingGraphDiagnosticsProvider?ws_.buildingGraphDiagnosticsProvider(scene):Json{};}
     int selectedEntityIndex() const;
     const std::string& selectedObjectId() const { return selected_; }
     // Multi-selection (primary = selectedObjectId(), always last) and editor-only
@@ -68,6 +70,7 @@ public:
         int layer=0; std::string tile, field, fieldMode="add"; double value=1;
         std::string type; int owner=0, count=1; double spread=1;
         std::string roadType; double width=6;
+        std::string caveMode="carve"; double caveY=-5; bool caveSurface=true;
     };
     const SceneBrush& sceneBrush() const noexcept { return brush_; }
     // Spline editing (Roads / Water panels): "road" or "river" shows the network's handles in the Scene;
@@ -75,8 +78,9 @@ public:
     const std::string& splineEdit() const noexcept { return splineEdit_; }
     Json splineHandles();   // {handles:[{id,x,z}], segments:[[x0,z0,x1,z1],...]}
     bool splineMove(const std::string& id, double x, double z, std::string* error);
-    bool strokeBegin(double x, double z, std::string* error);
-    bool strokeDab(double x, double z, std::string* error);
+    bool caveBrushPoint(double ox,double oy,double oz,double dx,double dy,double dz,double& x,double& y,double& z,std::string* error);
+    bool strokeBegin(double x, double z, std::string* error,double y=0);
+    bool strokeDab(double x, double z, std::string* error,double y=0);
     bool strokeEnd(std::string* error = nullptr);
     // Stats panel: the host reports the Scene's frame time (ms, smoothed) and its frame count.
     void setSceneFrameStats(double ms, uint64_t frames) { sceneFrameMs_=ms; sceneFrames_=frames; }
@@ -92,6 +96,8 @@ public:
                                const std::string& destination); // native picker ONLY
 private:
     Json snapshot() const;
+    Json graphDocumentScope() const;
+    uint64_t graphDocumentEpoch_=1;
     Json buildRequest(const std::string& method, const Json& params);
     Json dispatchImpl(const Json& request);
     // History panel: a label per MapDoc undo / redo snapshot (MapDoc keeps only snapshots).
@@ -146,7 +152,7 @@ private:
     Json sceneBrushJson() const;
     Json strokePoints_=Json::array(); int strokeDabs_=0;
     double sceneFrameMs_=0; uint64_t sceneFrames_=0;
-    size_t strokeDepth_=0; bool stroking_=false; double strokeX_=0, strokeY_=0;   // History position when the current conversation started (Undo all)
+    size_t strokeDepth_=0; bool stroking_=false; double strokeX_=0, strokeY_=0, strokeHeight_=0;   // History position when the current conversation started (Undo all)
     Json agentRequest(const std::string& method, const Json& params);
 };
 Json hubTemplatesJson(const std::string& engineDir, const Json& params);

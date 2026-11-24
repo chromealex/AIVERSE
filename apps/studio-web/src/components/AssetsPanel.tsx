@@ -177,7 +177,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
   const native=nativeConnected();
   const reload=useCallback(()=>setRefreshToken(t=>t+1),[]);
   useEffect(()=>onNativeEvent((event,payload)=>{
-    if(event==='workspace.changed')reload();
+    if(event==='workspace.changed'||event==='ui.assetsChanged')reload();
     if(event==='assets.importPreview' && payload &&
        typeof payload==='object' && 'token' in payload && 'items' in payload){
       const candidate=payload as StudioAssetTransferPlan;
@@ -190,6 +190,10 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       setError(String(payload.message));
     }
   }),[reload]);
+  useEffect(()=>{
+    window.addEventListener('studio:assets-changed',reload);
+    return ()=>window.removeEventListener('studio:assets-changed',reload);
+  },[reload]);
   useEffect(()=>{setFolder('');setSelected(null);setPinnedAssetGuid(null);setSearch('');setPlan(null);},[projectPath]);
   // Command palette (# assets) reveals a file: open its folder and select it.
   useEffect(()=>{

@@ -106,6 +106,17 @@ public:
     Simulation(SimConfig cfg, std::unique_ptr<GameModule> module);
 
     void setup(const Json& rules, const Json& map);
+    // Long-lived storage selection is independent of rollback registration.
+    auto persistentSchemas()const{return persistentEcs_.schemas();}
+    bool capturePersistentSchema(const std::string& id,PersistentEcsRegistry::LoadedHash::Chunk& out)const {
+        return persistentEcs_.captureSchema(world_,id,out);
+    }
+    // Offline staged World only; live simulation restoration must use the
+    // host's normal restore barrier and invalidate derived state.
+    bool restorePersistentSchemas(World& staged,const std::vector<PersistentEcsRegistry::LoadedHash::Chunk>& chunks)const {
+        if(&staged==&world_)return false;
+        return persistentEcs_.restoreSchemas(staged,chunks);
+    }
     template<class T> void registerPersistentComponent(std::string id,uint32_t version=1) {
         persistentEcs_.registerComponent<T>(world_,std::move(id),version);
     }
@@ -142,6 +153,29 @@ public:
 
     // Advance exactly one fixed tick.
     void step();
+    // Atomically check readiness before network/replay input is injected.
+    // Callback runs exactly once only when the fixed tick can execute.
+    bool stepWithInput(const std::function<void()>& prepareInput);
+    // Shared, opt-in engine extensions register during GameModule::setup.
+    // The chosen command ID must be reserved by the project's command catalog.
+    using SharedCommandHandler=std::function<void(Simulation&,const Command&)>;
+    using StepGate=std::function<bool(Simulation&)>;
+    bool registerSharedCommandHandler(uint16_t type,SharedCommandHandler handler);
+    bool addSetupCompletedHook(SystemFn fn);
+    bool addStepGate(StepGate gate);
+    bool readyToStep();
+    bool setupComplete()const noexcept{return setupComplete_;}
+    // Non-authoritative diagnostics channels: register on setup, open on the
+    // simulation owner thread. Returned readers must use detached snapshots.
+    using DiagnosticReader=std::function<Json(uint64_t)>;
+    using DiagnosticFactory=std::function<DiagnosticReader()>;
+    bool registerDiagnosticSource(std::string name,DiagnosticFactory factory){
+        return !setupComplete_&&!name.empty()&&factory&&diagnosticSources_.emplace(std::move(name),std::move(factory)).second;
+    }
+    DiagnosticReader openDiagnosticSource(const std::string& name){
+        const auto it=diagnosticSources_.find(name);
+        return it==diagnosticSources_.end()?DiagnosticReader{}:it->second();
+    }
     // Advance by real time; returns number of ticks executed. Use alpha() for render interpolation.
     int advance(double realSeconds, int maxTicks = 8);
     double alpha() const { return accumulator_ * tickRate_; }
@@ -160,15 +194,29 @@ public:
     std::string serialize();
     bool deserialize(const std::string& bytes, std::string* err = nullptr);
 
-    void addSystem(std::string name, SystemFn fn) { systems_.push_back({std::move(name), std::move(fn)}); }
+    void addSystem(std::string name, SystemFn fn) { invalidateProfileWindow(); systems_.push_back({std::move(name), std::move(fn)}); }
     void insertSystem(size_t at, std::string name, SystemFn fn) {
+        invalidateProfileWindow();
         systems_.insert(systems_.begin() + std::ptrdiff_t(std::min(at, systems_.size())), System{std::move(name), std::move(fn)});
     }
     // Replaces every system's function by wrap(name, fn) (e.g. a gate that skips gameplay systems).
-    template <class F> void wrapSystems(F&& wrap) { for (auto& s : systems_) s.fn = wrap(s.name, std::move(s.fn)); }
+    template <class F> void wrapSystems(F&& wrap) { invalidateProfileWindow(); for (auto& s : systems_) s.fn = wrap(s.name, std::move(s.fn)); }
     // Profiling (tools only, never affects the simulation): with a clock set, step() adds each system's
     // wall time (clock units, e.g. ns) to systemTime(i).
-    void setProfileClock(int64_t (*clock)()) { profClock_ = clock; profNs_.assign(systems_.size(), 0); }
+    void setProfileClock(int64_t (*clock)()) { invalidateProfileWindow(); profClock_ = clock; profNs_.assign(systems_.size(), 0); }
+    // Owner-thread tooling only. Bounded capture shares the existing timing clock;
+    // never replace a running headless profiler. History counts completed steps,
+    // not tick subtraction (rollback can change the simulation tick).
+    static constexpr uint32_t kMaxProfileSteps=120;
+    bool beginProfileWindow(int64_t (*clock)(),uint32_t steps) {
+        if(profClock_||!clock||!steps||steps>kMaxProfileSteps)return false;
+        profNs_.assign(systems_.size(),0);profileSteps_.clear();profileSteps_.reserve(steps);
+        profileTarget_=steps;profClock_=clock;return true;
+    }
+    void endProfileWindow() { if(profileWindowActive())profClock_=nullptr; }
+    bool profileWindowActive() const { return profileTarget_!=0&&profClock_!=nullptr; }
+    uint32_t profileWindowTarget() const { return profileTarget_; }
+    const std::vector<int64_t>& profileStepTimes() const { return profileSteps_; }
     size_t systemCount() const { return systems_.size(); }
     const std::string& systemName(size_t i) const { return systems_[i].name; }
     int64_t systemTime(size_t i) const { return i < profNs_.size() ? profNs_[i] : 0; }
@@ -181,6 +229,11 @@ public:
     World& world() { return world_; }
     const World& world() const { return world_; }
     Random& rng() { return rng_; }
+    const Random& rng() const { return rng_; }
+    // Read-only restart metadata at a quiescent authoritative boundary.
+    // Durable adapters must translate Entity handles in pending commands.
+    const std::map<uint32_t,std::vector<Command>>& pendingCommands()const{return pending_;}
+    const std::map<uint8_t,uint32_t>& commandSequences()const{return seqByPlayer_;}
     GameModule& module() { return *module_; }
     const GameModule& module() const { return *module_; }
     uint32_t tick() const { return tick_; }
@@ -188,6 +241,7 @@ public:
     uint32_t tickRate() const { return tickRate_; }
     const SimConfig& config() const { return cfg_; }
     std::vector<PlayerInfo>& players() { return players_; }
+    const std::vector<PlayerInfo>& players() const { return players_; }
     PlayerInfo* player(uint8_t slot);
     bool allied(uint8_t a, uint8_t b);
     const std::vector<SimEvent>& events() const { return events_; }       // events of the last tick
@@ -208,8 +262,18 @@ private:
     double accumulator_ = 0.0; // real-time only, never affects the simulation
     std::vector<System> systems_;
     std::vector<SystemFn> stateRestoredHooks_;
+    std::vector<SystemFn> setupCompletedHooks_;
+    std::vector<StepGate> stepGates_;
+    std::map<uint16_t,SharedCommandHandler> sharedCommands_;
+    std::map<std::string,DiagnosticFactory> diagnosticSources_;
+    bool setupComplete_=false;
     int64_t (*profClock_)() = nullptr;
     std::vector<int64_t> profNs_;
+    uint32_t profileTarget_=0;
+    std::vector<int64_t> profileSteps_;
+    void invalidateProfileWindow() {
+        if(profileTarget_){endProfileWindow();profileTarget_=0;profileSteps_.clear();profNs_.clear();}
+    }
     std::map<uint32_t, std::vector<Command>> pending_;
     std::vector<Command> executed_;
     std::vector<SimEvent> events_;

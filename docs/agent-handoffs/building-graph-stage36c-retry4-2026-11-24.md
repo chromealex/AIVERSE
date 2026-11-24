@@ -1,0 +1,5 @@
+# Stage 36C — fourth Mac build repair
+
+User build(9).log: previous race, policy, building runtime/export and gRPC targets link without previous warnings. Full native build FAIL at 68%; CTest NOT RUN. Seven errors (six references to stale rider fields, one mixed-type auto declaration) and one aggregate initialization warning. Exact tested SHA not printed in log.
+
+Fix 611fae953a0b42de62eea404db6e9e0bfebe5d8b uses canonical fromYmm/toYmm endpoints and preserves the 1200 mm travel guard with an overflow-safe unsigned distance check. Revision guard and ECS authority unchanged. Fix fbae18f9a98884b16da7f5b2a8078e7fce3d3ddf declares wire magic as uint32_t and version/flags as uint16_t, preserving decode order and protocol. Fix 7ae587fc39bb977918b821f270e0eac6c83d7394 explicitly initializes rollback vector and committed flag. Manifest at 1e9bbbe9173a1180ebe723c0753e1eab8ba095e2. Git readback PASS; native compile and CTest post-fix NOT RUN. Continue same KINGSTON incremental quick gate; no main merge, no suppressed warnings.

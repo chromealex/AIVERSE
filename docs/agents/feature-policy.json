@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "features": {
+    "feature-gate": {
+      "requires": [],
+      "roadmap": {
+        "system": "agents",
+        "id": "feature-gate"
+      },
+      "api_paths": [
+        "apps/editor/core/FeatureGateOps.h",
+        "tools/agents/check_feature.py",
+        "tools/agents/feature_policy.py"
+      ]
+    },
+    "graph-framework": {
+      "requires": [],
+      "roadmap": {
+        "system": "studio",
+        "id": "graph-framework"
+      },
+      "api_paths": [
+        "apps/editor/core/GraphOps.h",
+        "apps/studio-web/src/graphs/graphFramework.ts"
+      ]
+    }
+  },
+  "claims": []
+}

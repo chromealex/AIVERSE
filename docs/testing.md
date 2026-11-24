@@ -7,7 +7,7 @@ cd /path/to/AIVERSE
 ./run-tests.sh
 ```
 
-The script configures a dedicated `build/all-tests` CMake tree, builds the
+The script configures a dedicated CMake tree (local macOS: `/Volumes/KINGSTON/AIVERSE-builds/<worktree>/all-tests`; other platforms and hosted GitHub Actions: `build/all-tests`), builds the
 default target including all registered test executables, runs **every CTest
 test** (without `-R`), and then runs the separate suites registered in
 `tests/extra-test-suites.txt`. Those include ECS standalone tests, the
@@ -19,7 +19,7 @@ It stops at the first configure/build failure rather than reporting a missing
 CTest executable as a runtime failure. If tests fail, it continues through
 remaining registered suites, aggregates failures and returns exit code 1.
 The real command/output of every stage is logged under
-`build/all-tests/test-reports/<UTC-timestamp>-<pid>/`; `summary.txt`,
+`<build-dir>/test-reports/<UTC-timestamp>-<pid>/`; `summary.txt`,
 `build.log`, `ctest.log`, `ctest.xml`, and `extra-*.log` are retained.
 
 ## Usage
@@ -30,11 +30,10 @@ The real command/output of every stage is logged under
 | `./run-tests.sh --quick` | Build and run all CTest, omit standalone suites |
 | `./run-tests.sh --no-build` | Reuse previously built executables, rerun full tests |
 | `./run-tests.sh --filter '^(fps|ecs_.*)$'` | Target selected CTest; skip standalone |
-| `./run-tests.sh --build-dir build/ecs-test` | Use the existing CMake directory |
+| `./run-tests.sh --build-dir /Volumes/KINGSTON/AIVERSE-builds/my-task/debug` | Use an existing external CMake directory on Mac |
 | `./run-tests.sh --jobs 4 --ctest-jobs 2` | Limit compilation/test concurrency |
 
-The default full mode deliberately runs expensive suites and may create extra
-builds under the OS temporary directory for ECS ON/OFF parity. It is a local
+Local macOS requires a mounted, writable KINGSTON volume; the runner rejects build directories resolving outside it and sets `TMPDIR` inside the external build directory. It does not migrate or delete old caches. The default full mode deliberately runs expensive suites and may create extra builds using the temporary directory for ECS ON/OFF parity. It is a local
 desktop runner: mobile device smoke, GPU visual screenshots, Steam SDK and web
 browser end-to-end checks remain platform-specific CI tasks, **not** implicitly
 executed by one Mac. Do not claim those passed based on this runner.

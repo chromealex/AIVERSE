@@ -1,0 +1,278 @@
+{
+  "schema": 1,
+  "id": "building-graph-integration",
+  "owner": "studio",
+  "changed_paths": [
+    "apps/studio-web/src/graphs/GraphCanvas.tsx",
+    "apps/studio-web/src/graphs/GraphCanvas.css",
+    "apps/studio-web/src/graphs/graphFramework.ts",
+    "apps/studio-web/src/graphs/graphGeometry.ts",
+    "apps/studio-web/src/graphs/graphSelection.ts",
+    "apps/studio-web/src/graphs/buildingGraphInspection.ts",
+    "apps/studio-web/src/graphs/BuildingStructureGraphView.tsx",
+    "apps/studio-web/src/graphs/buildingCandidateCapture.ts",
+    "apps/studio-web/tests/buildingCandidateCapture.test.mjs",
+    "apps/studio-web/tests/buildingGraphInspection.test.mjs",
+    "apps/studio-web/src/panels/generated/BuildingGeneratorPanel.tsx",
+    "apps/studio-web/package.json",
+    "apps/studio-web/src/graphs/buildingRoomTopology.ts",
+    "apps/studio-web/src/graphs/BuildingRoomTopologyView.tsx",
+    "apps/studio-web/tests/buildingRoomTopology.test.mjs",
+    "apps/studio-native/StudioBuildingTopology.h",
+    "apps/studio-native/StudioBuildingGeneration.h",
+    "apps/studio-web/src/types.ts",
+    "apps/studio-native/tests/StudioBuildingTopologyTests.cpp",
+    "apps/studio-native/CMakeLists.txt",
+    "engine/systems/BuildingStructureGraph.h",
+    "apps/studio-native/StudioBuildingDependencies.h",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-web/src/mock.ts",
+    "apps/studio-web/src/graphs/buildingMaterialDependencies.ts",
+    "apps/studio-web/src/graphs/BuildingMaterialDependenciesView.tsx",
+    "apps/studio-web/tests/buildingMaterialDependencies.test.mjs",
+    "apps/studio-web/src/graphs/buildingGeometryGraph.ts",
+    "apps/studio-web/src/graphs/BuildingGeometryGraphView.tsx",
+    "apps/studio-web/tests/buildingGeometryGraph.test.mjs",
+    "engine/buildings/BuildingGraphChanges.h",
+    "engine/buildings/BuildingGraphDiagnosticsJson.h",
+    "engine/buildings/BuildingWorldRuntime.h",
+    "engine/buildings/BuildingRuntime.h",
+    "tests/libraries/building_dual_leaf_restore_tests.cpp",
+    "examples/world/runtime-building/main.cpp",
+    "apps/editor/core/Workspace.h",
+    "apps/editor/core/Workspace.cpp",
+    "tools/mcp/audit_registry.py",
+    "engine/buildings/BuildingGraphMonitor.h",
+    "apps/studio-native/StudioTools.h",
+    "apps/studio-web/src/graphs/BuildingLiveGraphMonitor.tsx",
+    "engine/sim/Simulation.h",
+    "apps/studio-native/StudioGameSurface.h",
+    "apps/studio-native/StudioGameSurface.cpp",
+    "apps/studio-native/StudioSession.h",
+    "apps/studio-native/StudioHost.h",
+    "apps/studio-native/StudioHost.cpp",
+    "engine/nav/NavMesh.h",
+    "engine/game/MapGrid.h",
+    "engine/game/MapGrid.cpp",
+    "engine/game/MapHpa.cpp",
+    "engine/game/FlowField.cpp",
+    "engine/buildings/BuildingGraphOwnerAdapters.h",
+    "engine/buildings/BuildingTransportZoneGraphAdapters.h",
+    "engine/buildings/BuildingPhysisSceneBinding.h",
+    "tests/tests_navmesh.inc",
+    "skills/world/aiverse-building-style/SKILL.md",
+    ".github/workflows/building-style-focused.yml",
+    "engine/systems/BuildingStyle.h",
+    "tests/world/region_entity_ledger_test.cpp",
+    "CMakeLists.txt",
+    "tests/world/race_region_respawn_gate_test.cpp",
+    "tests/libraries/policy_mechanics_batch3.inc",
+    "tests/libraries/policy_mechanics_batch4.inc",
+    "engine/grpc/CMakeLists.txt",
+    "tests/libraries/building_runtime_tests.cpp",
+    "tools/buildings/building_style_export.cpp",
+    "engine/buildings/BuildingLiftEcsBridge.h",
+    "engine/buildings/BuildingLiftReplication.h",
+    "engine/actor/ActorRegionOwnership.cpp",
+    "engine/systems/BuildingCirculationRuntime.h",
+    "engine/systems/BuildingFeatureGenerator.h",
+    "engine/systems/BuildingRouteExecutor.h",
+    "engine/systems/BuildingStructure.h",
+    "engine/systems/BuildingSurfacePattern.h",
+    "engine/systems/RuntimeBuildingGenerator.h",
+    "docs/building-functional-recipes.md",
+    "docs/building-runtime-circulation.md",
+    "docs/building-settings.md",
+    "docs/building-style.md",
+    "engine/buildings/BuildingApertureOwner.h",
+    "engine/buildings/BuildingCirculationHost.h",
+    "engine/buildings/BuildingCirculationScene.h",
+    "engine/buildings/BuildingGlbWriter.h",
+    "engine/buildings/BuildingLiftDoorOwner.h",
+    "engine/buildings/BuildingLiftPlatformModel.h",
+    "engine/buildings/BuildingNavMeshBridge.h",
+    "engine/buildings/BuildingStairMotor.h",
+    "engine/buildings/RuntimeBuildingModel.h",
+    "libraries/include/aiverselib/systems/BuildingCirculationRuntime.h",
+    "libraries/include/aiverselib/systems/BuildingFeatureGenerator.h",
+    "libraries/include/aiverselib/systems/BuildingRouteExecutor.h",
+    "libraries/include/aiverselib/systems/BuildingStructure.h",
+    "libraries/include/aiverselib/systems/BuildingStructureGraph.h",
+    "libraries/include/aiverselib/systems/BuildingStyle.h",
+    "libraries/include/aiverselib/systems/BuildingSurfacePattern.h",
+    "libraries/include/aiverselib/systems/RuntimeBuildingGenerator.h",
+    "examples/world/runtime-building/README.md",
+    "libraries/catalog.json",
+    "skills/catalog.json",
+    "skills/world/aiverse-building-ancient-civilizations/SKILL.md",
+    "skills/world/aiverse-building-dark-fantasy/SKILL.md",
+    "skills/world/aiverse-building-medieval-fantasy/SKILL.md",
+    "skills/world/aiverse-building-modern/SKILL.md",
+    "skills/world/aiverse-building-post-apocalypse/SKILL.md",
+    "skills/world/aiverse-building-steampunk/SKILL.md",
+    "tests/libraries/building_feature_tests.cpp",
+    "tests/libraries/building_structure_graph_tests.cpp",
+    "tests/libraries/building_style_tests.cpp",
+    "tests/libraries/building_surface_pattern_tests.cpp",
+    "tests/vivid/metahuman_adapter.cpp",
+    "engine/vehicles/DurableVehicleComponents.h",
+    "engine/game/native/Build.cmake",
+    "tests/native_project_build.py",
+    "docs/native-modules.md",
+    "apps/editor/PhysisAuthoring.h",
+    "tests/physis_authoring_test.cpp",
+    "tests/physis_field_authoring_test.cpp",
+    "tests/vfx_graph_ops_test.cpp",
+    "run-tests.sh",
+    "tests/test_unified_runner.py",
+    "docs/testing.md",
+    "tools/skills/catalog.py",
+    "tests/skills/catalog_test.py",
+    "skills/editor/studio-ui/SKILL.md",
+    "skills/workflow/aiverse-mcp-coverage/SKILL.md",
+    "tests/libraries/gameplay_tests.cpp",
+    "apps/editor/core/GraphDraftEdits.h",
+    "engine/buildings/BuildingLiftCommands.h",
+    "tools/studio/verify_building_integration_mac.sh",
+    "tools/mcp/test_building_diagnostics_stdio.py",
+    "apps/studio-native/StudioGameLaunch.h",
+    "apps/studio-web/src/panels/generated/BuildingGeneratorPanel.css",
+    "engine/assets/building-styles/scifi.json",
+    "engine/assets/building-styles/medieval-fantasy.json",
+    "engine/assets/building-styles/dark-fantasy.json",
+    "engine/assets/building-styles/steampunk.json",
+    "engine/assets/building-styles/cyberpunk.json",
+    "engine/assets/building-styles/scifi-space.json",
+    "engine/assets/building-styles/alien-civilization.json",
+    "engine/assets/building-styles/post-apocalypse.json",
+    "engine/assets/building-styles/modern.json",
+    "engine/assets/building-styles/ancient-civilizations.json",
+    "engine/assets/building-styles/asian-historical.json",
+    "engine/assets/building-styles/solarpunk.json",
+    "engine/assets/building-styles/underwater.json",
+    "apps/studio-native/StudioBuildingPanelPreview.h",
+    "apps/studio-native/tests/StudioBuildingPreviewTests.cpp",
+    "tests/studio/BuildingGenerationTests.cpp",
+    "engine/buildings/BuildingMaterialAssets.h",
+    "apps/studio-native/StudioBuildingRegeneration.h"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": false,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "not_run",
+      "note": "Stage 35I layered native Scene projection of committed bounds, last NavMesh tile footprints, flat grid/HPA samples and optional owner bounds, plus read-only sampled element inspection. MCP existing diagnostics returns JSON report. Road/Zone/Rail world geometry and full visual acceptance remain pending.",
+      "evidence": []
+    },
+    "architecture": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "native_api": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "skill": {
+      "status": "not_run",
+      "note": "Building style skill exists in skills/catalog.json; shared graph-authoring skill updated on common branch. Catalog generator/audit not yet executed.",
+      "evidence": []
+    },
+    "mcp": {
+      "status": "not_run",
+      "note": "HostedClient local simulation diagnostic reader attached to Workspace; building_graph_diagnostics available for worlds installing BuildingWorldRuntime, pending built verification. Stage 37 automated runner completion reported by user: standalone registry and negative/no-owner calls succeeded per runner control flow; full logs not supplied. Attached live owner NOT RUN.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending. Stage 37 native app build and selected automated Studio checks succeeded per runner completion. Real WKWebView visual/interaction acceptance NOT RUN. Stage 38 user screenshots show excessive full-width forms and large empty dependency graphs. Reorganize workspace into Recipe/Features/Materials/Graphs/Runtime tabs, keep actions always visible and source controls focusable, present truthful empty graph state. Original scifi style had no surface patterns; author PBR patterns and seed per slot; expose native catalog surface metadata and test actual generated pixels. User requires textures generated with building; existing native preview and GLB writer use same generator; no new GPU or file owner. NOT RUN after changes. Stage 38 texture preview uses bounded native style/slot selection and actual same-generator PNG maps; no browser mock, no project file writes. All 13 shipped style JSON files checked for nonempty pattern on every slot. GLB serializer regression inspects actual embedded PNG buffer signatures and three glTF material channels. Native/TS build and visual review NOT RUN. Stage 38 updated workspace and generated PBR preview compiled; selected native tests passed. Real user visual inspection of revised workspace still pending. Stage 39 independent Mac Metal demand-driven panel preview using dedicated offscreen Renderer3D, native camera orbit/zoom and returned rendered frames; main Scene camera and document not changed, no GLB or continuous readback. Windows explicitly unavailable pending backend. Added GPU orbit fixture and runner integration. Native build/actual frame/visual QA NOT RUN. Stage 40 separate preview GPU worker, asynchronous addressed camera replies on UI tick, one in-flight request with latest-camera coalescing, continuous drag orbit, pan and wheel zoom, independent Scene; no native surface swap or idle continuous rendering. Mac capture FPS and Windows backend not verified; tests deferred. Stage 40 native catalog recommended roof, explicit profile/rise UI and saved recipe round-trip, starting layouts adopt setting roof without reducing room height. Retractable apertures remain flat and validated. Not run.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_run",
+      "note": "Stage 36A shared geometry source and fixture synchronized to common branch at 153d70605b9347a925daaba7fb0fd797ccf490c9; full merge pending.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "headless": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F.1–35F.3 fixtures added; NOT RUN. Stage 35H.2 dependency fixtures registered, NOT RUN. Stage 35H.3 geometry projection fixtures registered, NOT RUN. Stage 35H.4 native router and world example fixtures authored; NOT RUN. Stage 35H.5 monitor fixtures and example assertions authored, NOT RUN. Stage 35H.6 timing fixture extended; NOT RUN. Stage 35H.7 native nav/PHYSIS/example assertions authored; NOT RUN. Stage 35H.8 example registration assertion authored, NOT RUN. Stage 36A exact Git blobs 388dd1b51ec2c91ff1c6835239a519a1a011144e and 44b4b9844dd9a2ab8d73c5068897d76e3b7f2074 verified with git hash-object and executed on Node v22.16.0: 2/2 geometry tests PASS. Full native/HTML5/CI acceptance pending. Stage 36C user Mac quick build FAIL at BuildingStyle.h:13: stale BuildingGen.h include; CTest not reached. Rebuild pending. Stage 36C retry build(7).log: Building feature/style/runtime/export targets link successfully; full native build FAIL at 37% due to duplicate changes local in region_entity_ledger_test and missing aiverse_world link in region_ecs_bridge_test. CTest not reached. Stage 36C build(8).log: region ledger and ECS bridge link successfully; build fails at 49% on missing vehicleHash declaration in race region fixture. Seven aggregate initializer warnings and three inactive gRPC TLS archive objects (each reported twice); CTest not reached. Warning cleanup also addresses six Building warnings from build(7).log. Stage 36C build(9).log: previous race, policy, building runtime/export and gRPC targets linked without prior diagnostics. Full build FAIL at 68%, CTest NOT RUN: six stale rider displacement field references and mixed-type auto declaration in lift decoder; ActorRegionOwnership aggregate warning. Repair pending rebuild. Stage 36C next native build: WorldScene.cpp fails to resolve library-side BuildingCirculationRuntime.h from engine runtime target. Move complete eight-header Building dependency closure into engine/systems, update consumers, catalogs and CI; no engine-to-library dependency permitted. Full native verification pending. Stage 36C retry 5: added focused CI syntax-only standalone checks for nine engine Building system headers and the NavMesh bridge, with only the repository include root; no compiler execution or Mac CTest evidence yet. User build(20261124-081657).log reaches 85% but exits with failure: WorldScene.cpp still sees the old aiverselib/systems/BuildingCirculationRuntime.h include (already changed in be631ce2; exact tested SHA absent). Two VIVID fixture aggregate initialization warnings fixed by value-initializing Node then setting name. CTest NOT RUN; post-fix native build pending. Stage 36C retry 7 user build(20261124-082140).log: relocated Building targets and VIVID MetaHuman fixture rebuilt/linked without warnings. Full native build FAIL at 82%: two missing lm::io overloads in DurableVehicleComponents.h for VehicleState and VehicleSeatState, 50 overload candidate notes, zero warnings. Add direct canonical VehiclePersistence.h include; no codec/wire change. CTest NOT RUN; exact tested SHA not in log. Stage 36C retry 8 user Mac quick build FAIL at 85%: aiverse_camera_client_adapter_tests links generated NativeRegistry.cpp but lacks NativeRegistrar definition in aiverse_game. Correct deferred native host classification (game_view instead of generic runtime/client_runtime), explicitly link actual Android game shared client, add CMake configure regression for game versus render-only targets; CTest and post-fix build NOT RUN. Stage 36C retry 9 user incremental build excerpt reaches 89%, reports two tautological-negation warnings in PhysisAuthoring.h. Both edits use unified MapDoc::data.extra; replace impossible worldSpace checks with actual object-storage checks, simplify identical read branches, add malformed-storage transactional regressions for both map modes and frozen-baseline transform. Full build outcome and CTest unknown; post-fix checks NOT RUN. Stage 36C retry 10 user quick build excerpt reaches 94%; eight ambiguous require calls in vfx_graph_ops_test.cpp due to texture_graph::require, and four output-file failures due to ENOSPC. Rename local test assertion helper and every call, preserving assertions and production API. CTest NOT RUN; exact tested SHA and full diagnostics unavailable. Mac needs verified writable KINGSTON build storage with free space before retry. Stage 36C retry 11: local macOS unified test runner defaults to KINGSTON per-worktree, rejects missing mount/internal paths before build, and sets external TMPDIR. Added missing-mount fake-tool regression. Hosted GitHub Actions retains portable default. Smoke and native checks NOT RUN. Stage 36D user CTest on KINGSTON all-tests-v2: 471 passed, 9 failed, 1 skipped out of 481; 1121.96 s; supplied log lacks exact SHA and build warnings. Correct shared skill recipe registration and panel/protocol audit notation, and align feature runtime regression with deliberate dynamic-panel exclusion. Post-fix tests NOT RUN. Stage 36D next repair: placement fixture now supplies its required territory owner; graph draft initializes absent array keys before Json::member; lift handling accepts valid Entity{0,0} through command, host checkpoints and wire, rejects invalid packed entity. Existing native example explicitly checks zero handle. Added failure diagnostics. Post-fix tests NOT RUN. Stage 36D style repair: limit chamfered corner inward reach against all window and door spans; retain opening regression and emit exact failed style/seed/yaw/floor/material/AABB. Source-based candidate for window obstruction, not confirmed root until native rerun. No Mac compile or CTest after fixes. Stage 36D repair batch 1 user Mac KINGSTON all-tests-v2 targeted run: configure/build PASS, 7/9 targeted tests PASS, library_building_style, vfx_graph_ops, skill_routing, skill_audit, building_native_world_replica, library_building_features, aiverse_gameplay_tests. Remaining lockstep example target>first because fixture constructed spectator (controlled slots empty, prediction window zero); use local player 1, late player 2 and assert predicted tick count. skill_catalog stale: building-style summary and aliases differed from generator; synchronize source metadata and generated catalog, preserve existing vocabulary. Post-fix native tests NOT RUN. Stage 36D targeted retry 2 Mac log: configure/build PASS, building_native_world_lockstep PASS (6.30 s), skill_catalog FAIL stale. Reconstructed all 286 generated entries from current source metadata: no field differences in the comparison (contentPackages retained from checked-in catalog), but two native world skill entries were out of canonical ID order, shifting 29 positions. Sort entire generated artifact by ID, add precise stale-catalog diagnostics. Post-fix native Python/CTest NOT RUN. Stage 36D full user Mac quick gate report 20261124-124522-42201: configure/build/CTest PASS (3/3), 480 passed, zero failed, 1 skipped of 481, 1071.62 s. All nine original failures passed in this full run. Expected checkout f58606d4ea992468a1e3c8e50d8a880a308117c9 from previous command, but pasted excerpt does not print tested SHA. lens_metal_frame is opt-in: tests/render/lens_metal_frame.cpp returns 77 when AIVERSE_LENS_METAL_VALIDATE is unset; actual GPU frame acceptance pending. Formal manifest PASS remains not_run until provenance report and applicable feature gates collected; do not confuse green local quick with merged-tree main acceptance. Stage 36D final user Mac opt-in LENS Metal test: checkout e93b9639f1078b3fd1e3627a893f5075ce8e8b19 explicitly printed, documentation-only changes since expected full-suite checkout. AIVERSE_LENS_METAL_VALIDATE=1 ctest --test-dir all-tests-v2 --config Debug --no-tests=error -R '^lens_metal_frame$' --output-on-failure: 1/1 PASS, test 6.16 s, total 6.28 s. Combined user evidence covers 481/481 registered cases across the full quick suite and separate opt-in GPU test; not one single 481-pass invocation. No strict evidence provenance report or merged-main gate yet; formal feature acceptance remains pending. Stage 37: add focused incremental Mac Studio acceptance runner using existing KINGSTON CMake cache, npm test:web and production Vite, native topology/session/bridge/material schema, real MCP registry and standalone valid/invalid diagnostics calls; logs external. Automated checks NOT RUN after authoring; live attached owner and visual QA remain separate. Stage 37 user Mac log reaches HTML5 Studio link step (100% objects); 54 warning diagnostics in excerpt: 3 repeated StudioGameLaunch aggregate warnings, 8 vendor aggregate warnings, 42 vendor unused-static-function warnings, 1 vendor sprintf deprecation. No compiler errors visible; link completion and Studio CTest absent. Value-initialize launch plan and set project explicitly, scope diagnostic exceptions to private STB includes only, preserve codecs and production warnings. Post-fix native build/CTest NOT RUN. Stage 37 user Mac console reports selected Studio CTest 4/4 PASS (studio_building_topology 0.05 s, studio_bridge 0.19 s, studio_material_schema 0.20 s, studio_session 0.69 s; total 1.16 s) and Automated Stage 37 checks PASS. Runner final marker requires preceding standalone MCP registry/diagnostic smoke, web tests, TypeScript/Vite, Python tests, configure, native app build and selected CTest to succeed. Full detailed logs and exact tested SHA not included; post-fix warning count unknown. Combined historical evidence covers 485 distinct CTest cases across multiple runs, not all Studio CTest cases. Live attached owner and visual QA explicitly NOT RUN; strict provenance and merged-tree checks pending. Stage 38 add native catalog/all-slot procedural surface coverage and actual PNG preview repeatability/rejection checks to registered Studio topology test; runner now also builds and runs GLB texture regression in library_building_style. Scroll resets per tab and focus scoped to local Building panel. Post-fix build/tests NOT RUN. Stage 38 user Mac runner exit 0, report all-tests-v2/stage37-studio/reports/20261124T134326Z-11797: 5/5 CTest PASS, zero failures, total 16.81 s; library_building_style 8.02 s, studio_building_topology 4.10 s, studio_bridge 0.20 s, studio_material_schema 0.19 s, studio_session 4.26 s. Native generated PNG and embedded GLB map regression passed; runner final marker also establishes preceding MCP standalone registry/diagnostic smoke, npm tests, typecheck/Vite, Python tests and native app build succeeded. Expected source 14c312afc20f2405a573f4b0a85ec3c805c36a2a (exact tested SHA not printed in excerpt). Full regression suite not rerun after Stage 38 code changes. Visual QA and live owner MCP explicitly NOT RUN; strict provenance pending. Stage 39 screenshot reports floating attachments. Replace broad AABB bearing with visible triangle support, freeze pre-form triangle range, contact actual curved hull underside, correct swept-hull Z origin, portal support centre, sloped vent backing and tower clamp-before-position. Add tapered roof regression. Exact screenshot root not proven; native/visual retest pending. Stage 39 new explicit data-driven primary silhouette profiles for twelve settings; original Sci-Fi armoured grammar retained. Replaces legacy main block for authored profiles, removes incompatible copied external props/modules, uses attached facade panels and coarse collision on closed silhouette. Tests authored for geometry fingerprint diversity and deterministic roles; exact sized fit, visual quality and functional architectural variation remain pending. NOT RUN. Stage 39: fix Studio catalog grouping of scifi-space as separate setting; add explicit sized Underwater residence screenshot recipe regression. No Mac compile or CTest executed. Functional room-shell architecture remains unchanged; separate profile expansion required for walkable buildings without altering physical apertures. Stage 40 functional exterior wall relief inside original structural solids; physical graph and collision preserved, legacy original Sci-Fi unchanged. New regression across 12 settings; not run. Full functional roof profiles pending. Stage 40 bounded 128/256/512 texture generation, periodic bilinear sampling and fine noise, normalized higher-resolution normals, shared GLB/runtime cache identity; cylindrical UVs no longer collapse to a single texel. Legacy pad beacons now mount within actual chamfered upper ring, including backing when glow is absent. Added resolution regressions; not run. Stage 40 Studio 128/256/512 texture quality round-trips through recipe, preview/export, regeneration; budget 128 MiB generated pixels. Six editable functional starting layouts. Not run. Stage 40 functional roofs: explicit graph-owned gable/shed/barrel/hip/dome/terrace/pagoda cap, reserve rise inside final height, conservative per-cell roof collision and matching sloped mesh, existing rooms/apertures unchanged relative to core height, reject incompatible retractable roof. Native runtime request and recipe reader updated. Studio serialization/UI follow; tests not run. Stage 40 role-authored facade bay/storey spacing, glazing fraction, roof scale and attached cornices in closed architecture; all values bounded. Compare explicit residence geometry across settings, not arbitrary catalog ordering. Tests deferred. Stage 40 twelve styles now eight authored roles each, 96 total plus original Sci-Fi presets. Add offscreen Vulkan path for Windows, mixed-case material binding keys, catalog role and texture-quality regressions, register surface pattern CTest and extend KINGSTON focused gate to functional/runtime cases. Stage 40 build/CTest/GPU and visual QA NOT RUN.",
+      "evidence": []
+    },
+    "handoff": {
+      "status": "not_run",
+      "note": "Stage 35G shared source reconciliation recorded; owner branch unavailable, final integration pending.",
+      "evidence": []
+    },
+    "documentation": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Stage 35D planned; integration verification pending.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-building-style"
+    ],
+    "mcp_tools": [
+      "building_graph_diagnostics"
+    ],
+    "studio_panels": [
+      "building_generator"
+    ],
+    "studio_methods": [
+      "studio.buildingInspect",
+      "studio.buildingTextureProvenance",
+      "studio.buildingGraphOverlay",
+      "studio.buildingSurfacePreview",
+      "studio.buildingPreview",
+      "studio.buildingPreviewView",
+      "studio.buildingPreviewStop"
+    ]
+  },
+  "test_reports": []
+}

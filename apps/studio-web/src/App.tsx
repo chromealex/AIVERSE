@@ -76,7 +76,7 @@ export default function App() {
   const [loading, clearLoading] = useProjectLoading();
   // Requests answered while the native side opens a project are expected, not errors.
   useEffect(() => { if (error === 'Project is loading') setError(''); }, [error]);
-  useEffect(() => { if (!game?.active) resetLive(); }, [game?.active]); // live refs belong to one session
+  useEffect(() => { resetLive(); }, [game?.active,game?.epoch]); // live refs belong to one session
   const [connected] = useState(nativeConnected);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(() => !tourSeen());

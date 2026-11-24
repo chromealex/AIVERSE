@@ -1,0 +1,178 @@
+{
+  "schema": 1,
+  "id": "feature-gate",
+  "owner": "agents",
+  "changed_paths": [
+    "AGENTS.md",
+    "tools/agents/check_feature.py",
+    "tools/agents/audit_compliance.py",
+    "tools/agents/feature_manifest.schema.json",
+    "tools/skills/catalog.py",
+    "skills/catalog.json",
+    "skills/workflow/aiverse-new-feature/SKILL.md",
+    "tests/feature_gate_test.py",
+    "tests/extra-test-suites.txt",
+    ".github/workflows/feature-gate.yml",
+    "docs/agents/feature-contract.md",
+    "docs/devlog/systems.json",
+    "tools/agents/check_integrations.py",
+    "tools/mcp/audit_registry.py",
+    "tools/agents/check_contracts.py",
+    "docs/agents/contracts/release-site.md",
+    "docs/agents/contracts/architecture-common.md",
+    "docs/agents/contracts/world-ownership.md",
+    "docs/agents/contracts/workflow-parallel.md",
+    "docs/agents/contracts/studio-contract.md",
+    "docs/agents/contracts/render-contract.md",
+    "docs/agents/contracts/build-testing.md",
+    "docs/agents/contracts/reuse-skills.md",
+    "docs/agents/contracts/mcp-contract.md",
+    "docs/agents/contracts/index.json",
+    "tools/agents/evidence.py",
+    "tools/agents/feature_registry.py",
+    "tools/agents/new_feature.py",
+    "tools/agents/legacy_inventory.py",
+    "docs/agents/legacy-integration-map.json",
+    "tools/agents/capability_inventory.py",
+    "tools/agents/graph_inventory.py",
+    "docs/agents/graph-inventory.json",
+    "tools/agents/capability_coverage.py",
+    "docs/evidence/capability-coverage.json",
+    "tools/agents/feature_policy.py",
+    "docs/agents/feature-policy.json",
+    "apps/editor/core/FeatureGateOps.h",
+    "apps/editor/core/Workspace.cpp",
+    "apps/studio-native/StudioTools.h",
+    "apps/studio-web/src/nestedDock.ts",
+    "apps/studio-web/src/panels/StudioPanelRenderer.tsx",
+    "apps/studio-web/src/panels/FeatureReadinessPanel.tsx",
+    "apps/studio-native/StudioSession.cpp",
+    "docs/handoff/studio-html5/feature-readiness-stage20-21-2026-11-24.md",
+    "tools/agents/feature_automation.py",
+    "tools/agents/feature_api.py",
+    "docs/agents/feature-automation.json",
+    "docs/handoff/studio-html5/feature-readiness-stage24-36-2026-11-24.md",
+    "tools/studio/test_design_system.py",
+    "tools/studio/test_build_config.py",
+    "tools/studio/test_content_layout.py",
+    "tools/studio/test_reference_pin_zoom.py",
+    "tools/studio/test_scene_tools.py",
+    "apps/studio-web/tests/nested-dock.mjs"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": false,
+    "visible": true,
+    "runtime": false
+  },
+  "checks": {
+    "implementation": {
+      "status": "not_run",
+      "note": "Stages 24–36 source implementation added: automatic report refresh, paginated MCP, standalone Clang API audit, unregistered integration scaffolds, skill review, deterministic scheduling and assignment export, local/fetched branch discovery and conflict proposals, declared impact closure, explicit release scope, read-only dependency graph, lexical architecture review, history and task context. Verification pending; external agent dispatch, semantic ECS proof, ABI guarantees and remote worktree discovery are not claimed.",
+      "evidence": []
+    },
+    "architecture": {
+      "status": "not_run",
+      "note": "Pending actual execution and integration review.",
+      "evidence": []
+    },
+    "native_api": {
+      "status": "not_run",
+      "note": "Native Workspace readiness query and fixed local report generation implemented in source; build and runtime validation pending.",
+      "evidence": []
+    },
+    "skill": {
+      "status": "not_run",
+      "note": "Pending actual execution and integration review.",
+      "evidence": []
+    },
+    "mcp": {
+      "status": "not_run",
+      "note": "Four readiness operations declared; actual built MCP registry and tools/call NOT RUN.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_run",
+      "note": "Opt-in regeneration, job status, dependency graph and assignment proposals implemented in source; typecheck, build and visual validation pending.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Pending actual execution and integration review.",
+      "evidence": []
+    },
+    "headless": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "not_run",
+      "note": "Pending actual execution and integration review.",
+      "evidence": []
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Mac archive at 9f6f58f64e082479808c0a64e32a36d7ab0fd54c: 20 Python tests PASS, contracts/registry/policy/partial compliance PASS. Studio failed; rerun on fixed HEAD required. Studio QA follow-up fixes cover stale shared-host contracts, case collision, MaterialGraph typing and default dock membership. Fixed tree has not been retested. Five preexisting GameView compatibility includes are reported separately; new canonical View dependency regression fixture added. Strict status remains not_run until current tree is tested.",
+      "evidence": []
+    },
+    "handoff": {
+      "status": "not_run",
+      "note": "Pending actual execution and integration review.",
+      "evidence": []
+    },
+    "documentation": {
+      "status": "not_run",
+      "note": "Pending actual execution and integration review.",
+      "evidence": []
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Read-only engine readiness report/dashboard implemented in source; native build, real MCP, Studio UI and publishing verification pending.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-new-feature"
+    ],
+    "mcp_tools": [
+      "feature_readiness_get",
+      "feature_readiness_query",
+      "feature_readiness_status_get",
+      "feature_readiness_refresh"
+    ],
+    "studio_panels": [
+      "feature_readiness"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
+  },
+  "test_reports": []
+}

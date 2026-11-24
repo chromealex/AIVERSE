@@ -1,0 +1,67 @@
+// Focused, platform-free PBR image generation contract for all building settings.
+// Compiles with C++20 and libraries/include only; no gfx, ECS or Box3D device.
+#include <engine/systems/BuildingSurfacePattern.h>
+#include <array>
+#include <cstdint>
+#include <cstdio>
+#include <stdexcept>
+#include <string>
+using namespace aiverse::lib::systems;
+#define REQUIRE(x) do {if(!(x))throw std::runtime_error(std::string(__FILE__)+":"+std::to_string(__LINE__)+": " #x);}while(false)
+int main(){
+    try{
+        REQUIRE(!validBuildingSurfacePattern("unknown"));
+        REQUIRE(validBuildingSurfacePattern(""));
+        for(const auto name:kBuildingSurfacePatterns){
+            const auto a=generateBuildingSurface(name,"hull",421u,BuildingSurfaceChannel::BaseColor);
+            const auto b=generateBuildingSurface(name,"hull",421u,BuildingSurfaceChannel::BaseColor);
+            const auto m=generateBuildingSurface(name,"hull",421u,BuildingSurfaceChannel::MetallicRoughness);
+            const auto n=generateBuildingSurface(name,"hull",421u,BuildingSurfaceChannel::Normal);
+            const auto ao=generateBuildingSurface(name,"hull",421u,BuildingSurfaceChannel::Occlusion);
+            REQUIRE(ao.rgba.size()==a.rgba.size());
+            REQUIRE(ao.rgba==generateBuildingSurface(name,"hull",421u,BuildingSurfaceChannel::Occlusion).rgba);
+            REQUIRE(a.width==128 && a.height==128);
+            REQUIRE(a.rgba.size()==128u*128u*4u);
+            REQUIRE(a.rgba==b.rgba);
+            REQUIRE(n.rgba.size()==a.rgba.size());
+            REQUIRE(m.rgba.size()==a.rgba.size());
+            bool nonFlat=false;
+            for(size_t i=0;i<a.rgba.size();i+=4){
+                REQUIRE(a.rgba[i+3]==255u);
+                REQUIRE(m.rgba[i+3]==255u);
+                REQUIRE(m.rgba[i]==255u);
+                REQUIRE(m.rgba[i+2]==255u);
+                REQUIRE(n.rgba[i+2]==255u);
+                REQUIRE(n.rgba[i+3]==255u);
+                REQUIRE(ao.rgba[i]>=64u&&ao.rgba[i]==ao.rgba[i+1]&&ao.rgba[i]==ao.rgba[i+2]&&ao.rgba[i+3]==255u);
+                if(i>0 && a.rgba[i]!=a.rgba[0])nonFlat=true;
+            }
+            REQUIRE(nonFlat);
+            // Same semantic material with different seeded authoring
+            // produces a distinct image for nonuniform, seed-dependent patterns.
+            const auto changed=generateBuildingSurface(name,"hull",422u,BuildingSurfaceChannel::BaseColor);
+            REQUIRE(changed.rgba.size()==a.rgba.size());
+            REQUIRE(changed.rgba!=a.rgba);
+        }
+        const auto brickAo=generateBuildingSurface("brick","hull",421u,BuildingSurfaceChannel::Occlusion);
+        REQUIRE(brickAo.rgba[0]<brickAo.rgba[(8u*128u+8u)*4u]);
+        REQUIRE(generateBuildingSurface("brick","hull",1u,static_cast<BuildingSurfaceChannel>(255)).rgba.empty());
+        for(int size:{256,512}){
+            const auto p=generateBuildingSurface("brick","hull",421u,BuildingSurfaceChannel::BaseColor,size);
+            REQUIRE(p.width==size&&p.height==size&&p.rgba.size()==size_t(size)*size*4u);
+            REQUIRE(p.rgba==generateBuildingSurface("brick","hull",421u,BuildingSurfaceChannel::BaseColor,size).rgba);
+            const auto normal=generateBuildingSurface("brick","hull",421u,BuildingSurfaceChannel::Normal,size);
+            REQUIRE(normal.rgba.size()==p.rgba.size());
+            const auto ao=generateBuildingSurface("brick","hull",421u,BuildingSurfaceChannel::Occlusion,size);
+            REQUIRE(ao.rgba.size()==p.rgba.size());
+            REQUIRE(buildingSurfaceSample("brick",0,15,421u,size)==buildingSurfaceSample("brick",size,15,421u,size));
+        }
+        REQUIRE(generateBuildingSurface("brick","hull",1u,BuildingSurfaceChannel::BaseColor,1024).rgba.empty());
+        REQUIRE(generateBuildingSurface("unsupported","hull",1u,BuildingSurfaceChannel::BaseColor).rgba.empty());
+        std::puts("building surface pattern contracts: PASS (16 patterns, 4 PBR maps)");
+        return 0;
+    }catch(const std::exception& e){
+        std::fprintf(stderr,"building surface pattern contracts: FAIL %s\n",e.what());
+        return 1;
+    }
+}
