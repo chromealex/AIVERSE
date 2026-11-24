@@ -494,6 +494,11 @@ Rules loadRules(const Json& j) {
             w.minRange = wj.getFx("minRange");
             w.damage = wj.getFx("damage", w.damage);
             w.cooldown = wj.getFx("cooldown", w.cooldown);
+            if (wj.has("preciseCooldown") && wj["preciseCooldown"].type() != Json::Type::Bool)
+                fail(where + " weapon " + w.id, "preciseCooldown must be a boolean");
+            w.preciseCooldown = wj.getBool("preciseCooldown", false);
+            if (w.preciseCooldown && w.cooldown.raw <= 0)
+                fail(where + " weapon " + w.id, "preciseCooldown requires positive cooldown");
             w.targets = parseLayers(wj["targets"], kLayerGround | kLayerNaval | kLayerSandOnly);
             auto weaponTags = [&](const char* key) {
                 uint64_t mask = 0;
