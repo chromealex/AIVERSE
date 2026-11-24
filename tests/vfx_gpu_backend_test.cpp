@@ -521,6 +521,7 @@ int main() {
     auto memory=std::make_shared<spectra::GpuAllocationBudget>(smallCharge+largeCharge);
     RecordingMetalDevice memDevice;memDevice.indirectAvailable=true;memDevice.storageCopyAvailable=true;
     auto memConfig=growthConfig;memConfig.allocationBudget=memory;
+    memConfig.backend=spectra::ComputePreference::RequireGpu;
     spectra::ComputeParticles memA,memB;
     check(memA.init(&memDevice,memConfig)&&memB.init(&memDevice,memConfig),"shared physical initial admission");
     check(memory->stats().active==smallCharge*2,"shared initial charges");
