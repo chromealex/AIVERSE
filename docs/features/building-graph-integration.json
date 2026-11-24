@@ -41,7 +41,10 @@
     "examples/world/runtime-building/main.cpp",
     "apps/editor/core/Workspace.h",
     "apps/editor/core/Workspace.cpp",
-    "tools/mcp/audit_registry.py"
+    "tools/mcp/audit_registry.py",
+    "engine/buildings/BuildingGraphMonitor.h",
+    "apps/studio-native/StudioTools.h",
+    "apps/studio-web/src/graphs/BuildingLiveGraphMonitor.tsx"
   ],
   "traits": {
     "editable": true,
@@ -52,7 +55,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35H.4 native per-scene graph invalidation snapshot, exact committed retry payload, detached JSON and MCP provider contract. Actual Studio/game host provider attachment pending.",
+      "note": "Stage 35H.5 opt-in owner-barrier graph monitor, bounded snapshot history and HTML5 live polling. Runtime example opts in; production Studio/game-process attachment remains pending.",
       "evidence": []
     },
     "architecture": {
@@ -72,7 +75,7 @@
     },
     "mcp": {
       "status": "not_run",
-      "note": "building_graph_diagnostics registered in Workspace source; no-provider returns unavailable. Built MCP audit and live host publication NOT RUN.",
+      "note": "Workspace weak monitor attachment and existing read-only building_graph_diagnostics op; actual production host connection and built MCP audit not verified.",
       "evidence": []
     },
     "studio": {
@@ -122,7 +125,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F.1–35F.3 fixtures added; NOT RUN. Stage 35H.2 dependency fixtures registered, NOT RUN. Stage 35H.3 geometry projection fixtures registered, NOT RUN. Stage 35H.4 native router and world example fixtures authored; NOT RUN.",
+      "note": "Stage 35E Node 22.16.0 isolated exact-blob buildingRoomTopology and buildingGraphInspection tests: 10/10 PASS; strict TypeScript 5.8.3 with exact graphFramework source PASS. Native fixture authored but NOT RUN; full CMake/CTest, React/Studio typecheck/build, actual owner bridge, visual QA, MCP, Mac/GPU gates NOT RUN. Stage 35F.1–35F.3 fixtures added; NOT RUN. Stage 35H.2 dependency fixtures registered, NOT RUN. Stage 35H.3 geometry projection fixtures registered, NOT RUN. Stage 35H.4 native router and world example fixtures authored; NOT RUN. Stage 35H.5 monitor fixtures and example assertions authored, NOT RUN.",
       "evidence": []
     },
     "handoff": {
