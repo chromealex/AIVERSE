@@ -2986,6 +2986,16 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             StudioBatchAssetPlan staged;
             std::optional<editor::ProjectHistory::MovePlan> moveHistory;
             auto result=pendingAssetTransfer_->apply(token,decisions,{},&moveHistory,internal,&staged);
+            if(internal&&moveHistory){
+                std::vector<std::pair<std::string,bool>> paths;
+                for(size_t i=0;i<moveHistory->files.size();i+=2){
+                    const auto& f=moveHistory->files[i];
+                    paths.emplace_back(f.from,f.directory);paths.emplace_back(f.to,f.directory);
+                }
+                // Include the actual keep-both destinations, not only preview
+                // sources. Do not adopt unresolved map/rules references.
+                studioCheckMapAssetPaths(ws_.project.dir,ws_.map.toJson(),ws_.project.rulesJson,ws_.project.manifest,paths,false);
+            }
             const auto beforeHistory=assetHistory_.version();
             if(moveHistory){
                 auto next=assetHistory_;
