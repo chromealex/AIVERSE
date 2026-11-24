@@ -75,7 +75,10 @@ void GameView::handleEvents(const GameScene& s) {
         const uint64_t key = ev.a.packed();
         auto it = anims_.find(key);
         switch (ev.type) {
+            case kEvAttackWindup:
             case kEvAttack: {
+                const bool windup = ev.type == kEvAttackWindup;
+                const uint8_t bit = ev.value >= 0 && ev.value < 4 ? uint8_t(1u << ev.value) : 0;
                 if (!objectsIndexed) {
                     objects.reserve(s.objects.size());
                     for (const auto& o : s.objects)
@@ -88,7 +91,9 @@ void GameView::handleEvents(const GameScene& s) {
                 const auto& a = *source->second; const auto& b = *target->second;
                 if (!a.visible || !b.visible || a.type >= looks_.size() || a.body != b.body) break;
                 EntityAnim& st = anims_[key];
-                st.eventAge[kProcEvAttack] = 0;
+                if (windup || !(st.pendingAttackWindups & bit)) st.eventAge[kProcEvAttack] = 0;
+                if (windup) st.pendingAttackWindups |= bit;
+                else st.pendingAttackWindups &= uint8_t(~bit);
                 float3 dir = b.pos - a.pos;
                 if (a.body >= 0) {
                     int body; float3 ground, up, east, south; float lift;
@@ -96,7 +101,14 @@ void GameView::handleEvents(const GameScene& s) {
                         dir = {dot(dir, east), dot(dir, up), dot(dir, south)};
                 }
                 st.attackDirection = dir;
-                if (looks_[a.type].tracer && tracers_.size() < 512) tracers_.push_back({a, b});
+                if (!windup && looks_[a.type].tracer && tracers_.size() < 512) tracers_.push_back({a, b});
+                break;
+            }
+            case kEvAttackCancelled: {
+                if (it != anims_.end() && ev.value >= 0 && ev.value < 4) {
+                    it->second.pendingAttackWindups &= uint8_t(~(1u << ev.value));
+                    if (!it->second.pendingAttackWindups) it->second.eventAge[kProcEvAttack] = 1e9f;
+                }
                 break;
             }
             case kEvHit: if (it != anims_.end()) it->second.eventAge[kProcEvHit] = 0; break;
