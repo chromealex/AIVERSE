@@ -85,6 +85,28 @@ static void checkOrientedMotor(){
     check(!physics::stepCharacterOriented(scene.world(),params,state,{},scene.dt(),{{0,0,0},0}),"invalid quaternion refused");
     check(state.position.x==before.x&&state.position.y==before.y&&state.position.z==before.z,"invalid orientation moved character");
 }
+static void checkVolumeSweep(){
+    physics::Scene scene;
+    physics::BodyDesc ceiling;ceiling.motion=physics::Motion::Static;
+    ceiling.shape=physics::ShapeKind::Box;ceiling.size={10,1,10};ceiling.position={0,3,0};
+    check(scene.create(ceiling)!=physics::kNoBody,"volume ceiling");
+    physics::CharacterParams params;physics::CharacterState state;
+    const auto proxy=scene.createCharacter(params,state.position);
+    check(proxy!=physics::kNoBody,"volume proxy");
+    for(int i=0;i<40;++i){
+        check(physics::sweepCharacterVelocityOriented(scene.world(),params,state,{0,3,0},scene.dt(),
+            b3Quat_identity,proxy),"vertical volume sweep");
+        check(scene.moveCharacterOriented(proxy,state,b3Quat_identity),"volume proxy update");
+        scene.step();
+    }
+    check(state.position.y>.1f&&state.position.y<.8f&&!state.grounded,"ceiling blocks volume sweep");
+    CavePlanetMotorIntent intent;intent.traversal=CaveTraversal::Flying;
+    intent.speedCmPerTick=10;intent.simulationDestination={0_fx,1_fx,0_fx};
+    const auto v=cavePlanetVolumeVelocity(intent,{}, {0_fx,10_fx,0_fx},Fixed::fromRatio(1,10),10_fx);
+    check(v&&v->y<=1_fx&&v->y>Fixed::fromRatio(9,10),"volume route speed cap");
+    intent.traversal=CaveTraversal::Ground;
+    check(!cavePlanetVolumeVelocity(intent,{}, {},Fixed::fromRatio(1,10),10_fx),"ground refuses volume adapter");
+}
 static void checkDrive(){
     CavePlanetMotorIntent intent;
     intent.speedCmPerTick=10;
@@ -208,6 +230,7 @@ int main(){
     checkGiViewProjection();
     checkGiPublication();
     checkDrive();
+    checkVolumeSweep();
     checkOrientedMotor();
     checkCandidateIdentity();
     check(!CavePlanetRuntimeHooks{}.valid(),"missing host hooks must refuse");
