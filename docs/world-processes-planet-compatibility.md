@@ -1,0 +1,36 @@
+# World Processes: plane, planet, moon and PHYSIS gravity contract
+
+User requirement, 2026-11-24: all World Processes capabilities must support flat worlds and planetary surfaces, and consume PHYSIS gravity where physically applicable. This is a delivery requirement, not a claim that all adapters already work. Preserve existing plane checksums and legacy opt-in behavior.
+
+## Shared coordinates and authority
+
+- Use canonical GameCore Surface/CubeSphere (engine/game/Surface.h, Sphere.h, docs/planets.md), including body IDs, seam-aware neighbors, tangent frames, radial up, projection and ground distance. Never infer a planetary ground location by dropping Y or flattening six faces into one XZ rectangle.
+- A body-local simulation position includes Surface::anchor(body). Render/orbit world position is not a substitute. Authored map placement uses at {body,face,x,y}; explicit links remain generation-safe Entity references. Separate bodies never interact through spatial proximity or coincident face coordinates; intentional graph links/transit are explicit owner policy.
+- New shared WorldProcessSurfaceFrame.h adapts the existing surface and planar frame. Body-aware distance is a chord, not a geodesic or nav route length. Surface::offset/neighbor owns face seam steps; use the existing topology, not a second cube-sphere.
+- PHYSIS owns gravityAt, GravitySettings and GravityField; PHYSIS fields are expressed in metres, acceleration m/s^2. Host resolves unit conversion and reference frame, not the render camera. Surface radial up is a geometric direction, not automatically the actual gravity vector. Default PHYSIS is uniform -Y; planetary radial fields must be explicitly authored/configured by the PHYSIS/game owner. Attract/Repel field weight fades with distance and overrideBaseline blends rather than replacing baseline at every point. Configure/calibrate zero baseline or body-specific fields as appropriate; do not synthesize another gravity solver here.
+- WorldProcessGravity.h projects the sampled vector into a local frame. GRANULAR optional gravity-aware step reuses canonical settlement and quantizes the in-plane vector to a cardinal direction; zero/dead-zone holds mass. MORPH exposes local Force conversion with explicit impulse scale. These opt-in APIs are not automatically installed in the suite; native host must choose the gravity-aware path instead of legacy step, configure frames/units/fields, and retain save/rollback semantics.
+- Box3D uses existing engine/physics/PhysisBox3D.h applyPhysisToBody before Scene::step; it subtracts built-in world gravity from PHYSIS acceleration. Do not apply both full gravity force and adapter, do not feed float physics into Fixed authority implicitly. FRACTURE support is a graph; PHYSIS NatureStress intentionally excludes gravity loading to avoid double load, actual weight/stress modeling is a separate owner contract. NEREID/TerraWeave remain canonical for water/soil.
+
+## Per-mechanic remaining work and status
+
+| System | Topology / spatial adaptation | Gravity / environment | Status |
+|---|---|---|---|
+| ECHO | Zone/portal graph already coordinate-neutral; spherical automatic zone localization, portal authoring and distance checks must use body/face-aware APIs | Acoustic gameplay attenuation has no direct gravity term; PHYSIS atmosphere may supply explicit attenuation later | Graph path neutral, end-to-end planet authoring/localization not verified |
+| FRACTURE | Support graph independent of surface; body/structure membership for generated bonds and planet-local collider/mesh pose | PHYSIS stress input and Box3D gravity owner for physical collapse; no duplicate weight solver | Local support cache implemented; planet physical delivery not verified |
+| AETHER | Explicit duct graph neutral; atmospheric cells and spatial generation need body/seam IDs, no accidental cross-body diffusion | Density/buoyancy/stratification require explicit PHYSIS pressure/thermal policy; existing equal-volume diffusion unchanged | Graph neutral only |
+| GRANULAR | Canonical local 2D field can orient to local frame; TerraWeave transfer/mesh/collision patch mapping and neighboring patches across face seams still needed | Opt-in PHYSIS directional step (2D cardinal projection, no acceleration magnitude/rate or out-of-plane transport) | Gravity API authored, host/suite/terrain/renderer integration pending |
+| IMPRINT | Replace XZ tracking and search with body-aware surface/chord distance and canonical cell links; across seams and transit handling | PHYSIS wind/rain/surface can affect erosion via explicit producer; not direct gravity | Pending |
+| MORPH | 3D body-local node graph already orientation-neutral; real rigid/render local frames and contact transforms must be supplied | Opt-in local impulse conversion from PHYSIS, scale/tick policy and producer scheduling pending | Adapter authored, not auto-wired |
+| EVOLVE | Area authoring/hydration/BVH currently XZ, needs planetary body/face regions and seam-aware queries; TerraWeave ecology sampling uses real surface topology | Indirect PHYSIS climate/terrain effects, not a new gravity/vegetation solver | Pending |
+| CROWD | Existing Agent/Slot/Route XZ movement requires body-aware route, same-body avoidance and tangent-plane stepping through Surface/MapGrid/NavMesh owners | Locomotion/physics owns grounding, slope and radial gravity; do not use 2D avoidance as gravity solver | Pending |
+| CIRCUIT | Explicit graph neutral; automatic proximity/wiring must use body-aware distance and authored cross-body links | No direct gravity term | Graph neutral, planet authoring pending |
+| SOCIETY | Explicit graph neutral; spatial reports/contact discovery use canonical positions, same-body distance | No direct gravity term | Graph neutral, planetary diagnostics pending |
+
+## Acceptance / sequence
+
+1. Finish shared surface locator and body-aware diagnostics/authoring. Verify planes, all six cube faces, face seams/corners, multiple bodies with identical face coordinates and transit; unknown/star/no-surface inputs fail safely.
+2. Implement IMPRINT/CROWD/EVOLVE spatial adapters through existing Surface/MapGrid/NavMesh and TerraWeave, then granular patch/terrain/render/physics integration and gravity-aware native setup. Do not silently treat a planetary map as flat. Existing authored EVOLVE area hydration currently requires pos array and is not planet-ready.
+3. Validate PHYSIS radial attraction, repulsion, zero gravity, tilted/uniform field, multiple body centers, changes between ticks, fixed-point units, source budgets and rollback. Verify actual Box3D integration without duplicate gravity; include real planet project/Studio scenes. Add skill and applicable native API/MCP/Studio integration per owner; do not claim standalone adapter proves end-to-end support.
+4. Run focused tests, existing plane checksums, actual planet save/load/rollback and merged-tree native Mac gate. All tests presently NOT RUN; do not merge based on code inspection.
+
+Original optimization stages 89–91 remain (IMPRINT, MORPH, CIRCUIT); their planet/gravity work is part of acceptance, not a separate optional backlog.
