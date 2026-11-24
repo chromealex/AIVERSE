@@ -118,6 +118,7 @@ private:
         gfx::BufferHandle caveVb,caveIb;
         uint32_t caveIndices=0;
         bool caveCut=false,caveDescendant=false;
+        uint64_t caveRegion=0; // body-level leaf ownership while cut is active
     };
     struct Body {
         std::unique_ptr<PlanetSurface> surf;
