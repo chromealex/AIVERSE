@@ -122,14 +122,13 @@ class TextureGraphGpuPreview {
                 std::vector<size_t> targets;
                 for(const auto& row:setOutputs_)targets.push_back(row.second);
                 auto plan=render::texture_graph::gpu::compileMaterializedDag(*program_,targets,size_);
-                dagPlannedBytes_=plan.slots.requiredBytes;
-                if(!plan.ready())dagFallbackReason_=plan.reason;
-                else dag_.begin(dev,std::move(plan),size_,targets.size());
+                dagPlannedBytes_=plan.totalBytes;
+                dag_.begin(dev,std::move(plan),size_,std::move(targets),project_);
             }catch(const std::exception& e){dagFallbackReason_=e.what();}
         }else dag_.tick(dev,program_?&*program_:nullptr);
         if(dag_.busy())return;
         dagMode_=false;
-        if(state_=="failed"||state_=="cancelled")return;
+        if(state_=="failed"||state_=="cancelled"){dag_.clearIdle(dev);return;}
         if(dag_.state()==DagState::Ready){
             auto images=dag_.takeResults();
             if(images.size()!=setOutputs_.size()){
@@ -144,6 +143,7 @@ class TextureGraphGpuPreview {
             }
         }
         if(dagFallbackReason_.empty())dagFallbackReason_=dag_.reason();
+        dag_.clearIdle(dev);
         // No accepted materialized result survives a failed attempt.
         // Restart the original fused GPU route; its requireGpu guard still
         // controls whether CPU evaluation is ever permitted.
@@ -172,6 +172,10 @@ public:
         r.set("materializedReadbackBlocks",Json::number(int64_t(dag_.blocks())));
         r.set("materializedPlannedBytes",Json::number(int64_t(dagPlannedBytes_)));
         r.set("materializedAllocatedBytes",Json::number(int64_t(dag_.allocatedBytes())));
+        r.set("materializedIdleBytes",Json::number(int64_t(dag_.idleBytes())));
+        r.set("materializedBufferCacheHit",Json::fromBool(dag_.bufferHit()));
+        r.set("materializedPipelineCacheHits",Json::number(int64_t(dag_.pipelineHits())));
+        r.set("materializedIdlePipelines",Json::number(int64_t(dag_.idlePipelineCount())));
         r.set("timeoutMs",Json::number(int64_t(timeoutMs_)));
         r.set("plannedPasses",Json::number(int64_t(plannedPasses_)));
         r.set("plannedSlotBytes",Json::number(int64_t(plannedSlotBytes_)));
@@ -270,6 +274,7 @@ public:
         // Request-wide monotonic deadline, evaluated at owner frame boundaries.
         if(active()&&Clock::now()>=deadline_)discard("failed","GPU texture request timed out");
         if(dagMode_){tickDag(dev);return;}
+        if(queued_||project_.empty()||!dev.gpuHealthy())dag_.clearIdle(dev);
         if(ownsResources()&&!dev.gpuHealthy()){
             abandon();
             if(state_=="pending")fallback("GPU device unhealthy");
