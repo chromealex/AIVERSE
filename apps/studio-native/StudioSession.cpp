@@ -1560,6 +1560,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 Json request=Json::object();
                 request.set("graph",draft);
                 if(method=="studio.shaderGraphSave") {
+                    if(params.getStr("expectedProject")!=ws_.project.dir)
+                        throw std::runtime_error("Shader Graph project changed; reload before saving");
                     const std::string name=params.getStr("name");
                     if(!validStudioShaderGraphName(name))
                         throw std::runtime_error("Invalid Shader Graph filename");
@@ -1866,6 +1868,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
         } else if (method == "studio.op") {
             const std::string op=params.getStr("op");
             if (!studioToolAllowed(op)) throw std::runtime_error("This operation is not available in Studio panels: "+op);
+            if(params.has("expectedProject") && params.getStr("expectedProject")!=ws_.project.dir)
+                throw std::runtime_error("Studio operation project changed; reload before retrying");
             if (op.rfind("feature_readiness_",0)!=0 && ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
             const Json input=params["params"].isObject()?params["params"]:Json::object();
             const bool wasDirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
