@@ -671,7 +671,7 @@ VkPipeline VulkanDevice::pipelineFor(
     stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT; stages[0].module = vert; stages[0].pName = "main";
     stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT; stages[1].module = frag; stages[1].pName = "main";
 
-    VkVertexInputBindingDescription bind{0, d.stride, VK_VERTEX_INPUT_RATE_VERTEX};
+    VkVertexInputBindingDescription bind{0, d.stride, d.vertexPerInstance?VK_VERTEX_INPUT_RATE_INSTANCE:VK_VERTEX_INPUT_RATE_VERTEX};
     VkVertexInputAttributeDescription attrs[8];
     const int ac = std::min(d.attrCount, 8);
     for (int i = 0; i < ac; ++i) attrs[i] = {d.attrs[i].location, 0, attrFormat(d.attrs[i].format, uscaled_), d.attrs[i].offset};

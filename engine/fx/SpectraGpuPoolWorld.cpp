@@ -174,8 +174,7 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
     actual.allocationBudget=allocationBudget_;
     const GraphGpuEligibility eligible=inspectGraphGpuEligibility(effect,actual);
     const bool wantsGpu=options.preference!=ComputePreference::CpuOnly;
-    const bool metalAvailable=device_&&device_->supportsCompute()&&
-        device_->info().backend==gfx::Backend::Metal &&
+    const bool gpuAvailable=device_&&supportsSpectraCompute(*device_,actual.gpuOwnedAllocation)&&
         actual.quality>=fx::FxQuality::Medium;
     Binding next;
     for(const auto& [paramName,definition]:named) {
@@ -197,7 +196,7 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
         (!effect.emitters[0].particleProgram.isNull() ||
          !effect.emitters[0].shaderGraph.isNull());
 
-    if(wantsGpu && eligible.eligible && metalAvailable) {
+    if(wantsGpu && eligible.eligible && gpuAvailable) {
         const std::string key=groupKey(effect,actual,actual.capacity);
         for(size_t i=0;i<gpuGroups_.size();++i)
             if(gpuGroups_[i].live() && gpuGroups_[i].key==key) {
@@ -239,7 +238,7 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
         } else reason_="SpectraFX max unique GPU resource groups reached";
     } else if(wantsGpu) {
         reason_=!eligible.eligible?eligible.reason:
-            "Metal compute or required quality unavailable for pooled GPU emitter";
+            "GPU compute or required quality unavailable for pooled GPU emitter";
     }
 
     if(options.preference==ComputePreference::RequireGpu) {
@@ -1026,9 +1025,7 @@ bool GpuPoolWorld::gpuGroupSummary(
 PoolCheckpointStats GpuPoolWorld::checkpointStats() const {
     PoolCheckpointStats result;
     if(checkpointBudget_)result.budget=checkpointBudget_->stats();
-    result.gpuDeviceHealthKnown=device_ &&
-        device_->info().backend==gfx::Backend::Metal &&
-        device_->supportsCompute();
+    result.gpuDeviceHealthKnown=device_&&supportsSpectraCompute(*device_,false);
     if(result.gpuDeviceHealthKnown)
         result.gpuDeviceHealthy=device_->gpuHealthy();
     for(const auto& group:gpuGroups_) {

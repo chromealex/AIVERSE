@@ -622,6 +622,7 @@ struct PipelineDesc {
     PixelFormat additionalColorFormats[3] = {
         PixelFormat::RGBA8, PixelFormat::RGBA8, PixelFormat::RGBA8
     };
+    bool vertexPerInstance=false; // optional single binding instance-rate stream
 };
 
 // Default: render to the screen. With targets: render into textures (both must match in size).

@@ -239,24 +239,22 @@ bool GraphRuntime::initEffect(gfx::Device* dev,const fx::EffectDef& effect,
     shutdown();
     const GraphGpuEligibility eligibility=inspectGraphGpuEligibility(effect,options);
     const bool requestedGpu=options.preference!=ComputePreference::CpuOnly;
-    const bool canMetal=dev &&
-        chooseComputeBackend(dev->info().backend,dev->supportsCompute(),
-                             options.preference)==ComputeBackend::Metal;
-    if(requestedGpu && eligibility.eligible && canMetal &&
+    const bool canCompute=dev&&supportsSpectraCompute(*dev,options.gpuOwnedAllocation);
+    if(requestedGpu && eligibility.eligible && canCompute &&
        options.quality>=fx::FxQuality::Medium) {
         if(gpu_.init(dev,eligibility.gpu) && gpu_.gpuActive()) {
             useComputeWrapper_=true;
-            backend_=ComputeBackend::Metal;
+            backend_=gpu_.backend();
             initialized_=true;
             reason_.clear();
             return true;
         }
-        reason_="SpectraFX Metal initialization failed: "+gpu_.reason();
+        reason_="SpectraFX GPU initialization failed: "+gpu_.reason();
         gpu_.shutdown();
     } else if(requestedGpu && !eligibility.eligible) {
         reason_=eligibility.reason;
     } else if(requestedGpu) {
-        reason_="Metal compute unavailable or GPU quality is below Medium";
+        reason_="GPU compute unavailable or GPU quality is below Medium";
     } else {
         reason_="CPU explicitly selected";
     }

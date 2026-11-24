@@ -31,11 +31,17 @@ uint8_t byte(float x) {
 
 ComputeBackend chooseComputeBackend(gfx::Backend backend,bool computeAvailable,
                                     ComputePreference preference) {
-    if(preference==ComputePreference::CpuOnly)return ComputeBackend::Cpu;
-    // Metal is the only backend with a verified RHI compute API at the time
-    // of this implementation. Enabling Vulkan requires explicit RHI support.
-    return backend==gfx::Backend::Metal&&computeAvailable
-        ?ComputeBackend::Metal:ComputeBackend::Cpu;
+    if(preference==ComputePreference::CpuOnly||!computeAvailable)return ComputeBackend::Cpu;
+    if(backend==gfx::Backend::Metal)return ComputeBackend::Metal;
+    if(backend==gfx::Backend::Vulkan)return ComputeBackend::Vulkan;
+    return ComputeBackend::Cpu;
+}
+bool supportsSpectraCompute(const gfx::Device& device,bool ownedAllocation){
+    if(!device.supportsCompute())return false;
+    if(device.info().backend==gfx::Backend::Metal)return true;
+    if(device.info().backend!=gfx::Backend::Vulkan)return false;
+    return device.supportsStorageUniformCompute(ownedAllocation?19u:15u)&&
+        (!ownedAllocation||device.supportsGpuAuthoredIndirectDraw());
 }
 bool validComputeEmitter(const ComputeEmitterDesc& d,std::string* why) {
     const auto fail=[&](const char* msg){if(why)*why=msg;return false;};
@@ -88,31 +94,31 @@ bool ComputeParticles::init(gfx::Device* dev,const ComputeEmitterDesc& config) {
             }
         }
     }
-    const bool canGpu=dev&&dev->supportsCompute()&&
+    const bool canGpu=dev&&supportsSpectraCompute(*dev,desc_.gpuOwnedAllocation)&&
                       desc_.quality>=fx::FxQuality::Medium&&vmCompatible;
     const auto selected=dev
         ?chooseComputeBackend(dev->info().backend,canGpu,desc_.backend)
         :ComputeBackend::Cpu;
-    if(desc_.backend==ComputePreference::RequireGpu && selected!=ComputeBackend::Metal) {
+    if(desc_.backend==ComputePreference::RequireGpu && selected==ComputeBackend::Cpu) {
         reason_=vmReason.empty()
-            ?"Metal compute is unavailable; RequireGpu forbids CPU fallback"
+            ?"GPU compute is unavailable; RequireGpu forbids CPU fallback"
             :vmReason+"; RequireGpu forbids CPU fallback";
         device_=nullptr;return false;
     }
-    if(selected==ComputeBackend::Metal) {
+    if(selected!=ComputeBackend::Cpu) {
         if(initGpu()) {
-            backend_=ComputeBackend::Metal;initialized_=true;reason_.clear();
+            backend_=selected;initialized_=true;reason_.clear();
             return true;
         }
         const std::string gpuFailure=reason_;
         releaseGpu();
         if(desc_.backend==ComputePreference::RequireGpu) {
-            reason_="Metal GPU setup failed: "+gpuFailure;
+            reason_="GPU setup failed: "+gpuFailure;
             device_=nullptr;return false;
         }
-        reason_="Metal GPU unavailable, CPU fallback: "+gpuFailure;
+        reason_="GPU unavailable, CPU fallback: "+gpuFailure;
     } else if(desc_.backend!=ComputePreference::CpuOnly) {
-        reason_=vmReason.empty()?"Metal compute unavailable or low-tier quality; CPU fallback"
+        reason_=vmReason.empty()?"GPU compute unavailable or low-tier quality; CPU fallback"
                                 :vmReason+"; CPU fallback";
     }
     if(!initCpu()) {
@@ -167,14 +173,15 @@ bool ComputeParticles::initGpu() {
     gpuIndirectActive_=desc_.gpuIndirect && device_->supportsGpuAuthoredIndirectDraw();
     gpuAllocationActive_=desc_.gpuOwnedAllocation&&gpuIndirectActive_;
     if(desc_.gpuOwnedAllocation&&!gpuAllocationActive_){
-        reason_="GPU-owned allocation requires Metal indirect drawing";return false;
+        reason_="GPU-owned allocation requires GPU indirect drawing";return false;
     }
     stats_.gpuOwnedAllocation=gpuAllocationActive_;
     gpuDemandGrowth_=gpuAllocationActive_&&device_->supportsStorageBufferCopy();
     const uint32_t cap=gpuDemandGrowth_?gpuInitialPhysicalCapacity(desc_.capacity):desc_.capacity;
     physicalCapacity_=cap;
+    const bool vulkan=device_->info().backend==gfx::Backend::Vulkan;
     proceduralActive_=desc_.proceduralBillboards&&!materialActive&&
-        device_->info().backend==gfx::Backend::Metal;
+        (vulkan||device_->info().backend==gfx::Backend::Metal);
     desc_.allocationBudget=device_->acquireGpuAllocationBudget(desc_.allocationBudget);
     if(!desc_.allocationBudget){reason_="GPU allocation budget conflicts with canonical Device ledger";return false;}
     {
@@ -188,8 +195,11 @@ bool ComputeParticles::initGpu() {
     gpuStagingDirty_=false;
     const std::string allocationShader=gpuAllocationActive_?
         std::string("#define SPECTRA_GPU_OWNED_ALLOCATION 1\n")+shaders::kMetal:std::string{};
+    std::string glsl=shaders::kGLSL;
+    if(gpuAllocationActive_)glsl.insert(glsl.find('\n')+1,"#define SPECTRA_GPU_OWNED_ALLOCATION 1\n");
     compute_=device_->createCompute({gpuAllocationActive_?allocationShader.c_str():shaders::kMetal,
-                                     shaders::kGLSL,"SpectraFX Metal particle simulation"});
+        glsl.c_str(),"SpectraFX GPU particle simulation",gfx::VulkanComputeLayout::StorageUniforms,
+        gpuAllocationActive_?19u:15u});
     if(!compute_.valid()) {reason_=device_->lastError();return false;}
 
     std::vector<ParticleState> reset(cap);
@@ -288,8 +298,10 @@ bool ComputeParticles::initGpu() {
     // Shader source storage must outlive createShader() on all RHI backends.
     gpu_material::Shaders materialShaders;
     if(materialActive)materialShaders=gpu_material::makeShaders(graphMaterial);
-    shader.glslVertex=materialActive?materialShaders.glslVertex.c_str():fx::shaders::kParticleVS;
-    shader.glslFragment=materialActive?materialShaders.glslFragment.c_str():fx::shaders::kParticleFS;
+    shader.glslVertex=materialActive?materialShaders.glslVertex.c_str():
+        proceduralActive_&&vulkan?shaders::kProceduralBillboardGLSLVertex:fx::shaders::kParticleVS;
+    shader.glslFragment=materialActive?materialShaders.glslFragment.c_str():
+        proceduralActive_&&vulkan?shaders::kProceduralBillboardGLSLFragment:fx::shaders::kParticleFS;
     shader.msl=materialActive?materialShaders.msl.c_str():
         proceduralActive_?shaders::kProceduralBillboardMetal:fx::shaders::kParticleMSL;
     shader.textureSlots=1;shader.uniformSlots=1;
@@ -302,8 +314,9 @@ bool ComputeParticles::initGpu() {
         pd.attrs[1]={1,gfx::VertexFormat::Float2,12};
         pd.attrs[2]={2,gfx::VertexFormat::UByte4N,20};
         if(materialActive)pd.attrs[3]={3,gfx::VertexFormat::Float4,24};
-        pd.attrCount=proceduralActive_?0:(materialActive?4:3);
-        pd.stride=proceduralActive_?0:sizeof(Vertex);
+        pd.attrCount=proceduralActive_&&!vulkan?0:(materialActive?4:3);
+        pd.stride=proceduralActive_&&!vulkan?0:sizeof(Vertex);
+        pd.vertexPerInstance=proceduralActive_&&vulkan;
         pd.indexType=wideIndices?gfx::IndexType::UInt32:gfx::IndexType::UInt16;
         pd.cull=gfx::CullMode::None;pd.blend=gfx::BlendMode::Additive;
         pd.depthTest=true;pd.depthWrite=false;
@@ -418,8 +431,8 @@ void ComputeParticles::shutdown() {
     backend_=ComputeBackend::Cpu;stats_={};reason_.clear();
 }
 bool ComputeParticles::resetGpuAllocationSeed(uint32_t seed) {
-    if(!initialized_ || backend_!=ComputeBackend::Metal) {
-        reason_="Seeded GPU allocation requires active Metal backend";
+    if(!initialized_ || backend_==ComputeBackend::Cpu) {
+        reason_="Seeded GPU allocation requires active GPU backend";
         return false;
     }
     if(gpuAllocationActive_){reason_="GPU-owned slot order is nondeterministic";return false;}
@@ -435,7 +448,7 @@ bool ComputeParticles::resetGpuAllocationSeed(uint32_t seed) {
     return true;
 }
 bool ComputeParticles::resetGpuShaderSeed(uint32_t seed) {
-    if(!initialized_||backend_!=ComputeBackend::Metal)return false;
+    if(!initialized_||backend_==ComputeBackend::Cpu)return false;
     if(!tryClear())return false;
     shaderBirthSeed_=seed;
     shaderBirthOrdinal_=0;
@@ -640,7 +653,7 @@ bool ComputeParticles::burstAt(fx::float3 position,fx::float3 direction,fx::floa
     return true;
 }
 bool ComputeParticles::killSourceParticles(uint64_t sourceToken) {
-    if(sourceToken==0 || !initialized_ || backend_!=ComputeBackend::Metal ||
+    if(sourceToken==0 || !initialized_ || backend_==ComputeBackend::Cpu ||
        !device_ || !device_->gpuHealthy() || gpuResetDirty_ ||
        !device_->canUpdateSharedBuffers())return false;
     if(gpuAllocationActive_){
@@ -720,10 +733,10 @@ bool ComputeParticles::step(float dt) {
         if(desc_.backend==ComputePreference::RequireGpu) {
             // Never claim a CPU backend when the caller explicitly required GPU.
             initialized_=false;verticesReady_=false;
-            reason_="Metal GPU unhealthy; RequireGpu forbids CPU fallback";
+            reason_="GPU unhealthy; RequireGpu forbids CPU fallback";
             return false;
         }
-        switchToCpu("Metal GPU reported unhealthy");
+        switchToCpu("GPU reported unhealthy");
         // Any GPU-resident particles were lost: never report a seamless step.
         return false;
     }
@@ -873,13 +886,13 @@ bool ComputeParticles::step(float dt) {
     u.meta={0,desc_.capacity,count,compactCount};
     // Scatter kill first in the SAME compute encoder as the rest of this
     // frame; each index is unique and never aliases a pending new birth.
+    bool dispatchOk=true;
     if(killCount>0) {
         u.meta[0]=6;
         u.meta[2]=killCount;
         device_->setComputeUniforms(&u,sizeof(u));
-        device_->dispatch(killCount);
-        ++stats_.gpuDispatches;
-        ++stats_.gpuKillScatterDispatches;
+        dispatchOk=device_->dispatchChecked(killCount);
+        if(dispatchOk){++stats_.gpuDispatches;++stats_.gpuKillScatterDispatches;}
         u.meta[2]=count;
     }
     // Canonical phase order: Spawn VM runs inside mode 0, Update VM
@@ -888,16 +901,19 @@ bool ComputeParticles::step(float dt) {
     const auto frame=gpu_pipeline::plan(desc_.capacity,count,updatePrefix,
                                         compactCount,gpuIndirectActive_,
                                         mutateParticles);
-    for(uint32_t i=0;i<frame.count;++i) {
+    for(uint32_t i=0;dispatchOk&&i<frame.count;++i) {
         const auto& phase=frame.dispatches[i];
         u.meta[0]=phase.shaderMode;
         device_->setComputeUniforms(&u,sizeof(u));
-        device_->dispatch(phase.threads);
+        dispatchOk=device_->dispatchChecked(phase.threads);
+        if(!dispatchOk)break;
         ++stats_.gpuDispatches;
         if(phase.phase==gpu_pipeline::Phase::Compact)
             ++stats_.gpuCompactDispatches;
     }
     device_->endCompute();
+    if(!dispatchOk){gpuResetDirty_=true;verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
+        reason_="GPU dispatch rejected; checked reset required";return false;}
     // Only a successful ordered compute submission can consume a dirty
     // upload batch. Retrying a partial staging failure never leaks old data.
     gpuStagingDirty_=false;
@@ -1038,7 +1054,8 @@ bool ComputeParticles::replaceGpuAllocation(uint32_t next,bool empty,bool compac
     size_t copied=0;
     if(compact){
         if(!compactAllocationCompute_.valid())
-            compactAllocationCompute_=device_->createCompute({shaders::kCompactAllocationMetal,nullptr,"SpectraFX live allocation compaction"});
+            compactAllocationCompute_=device_->createCompute({shaders::kCompactAllocationMetal,shaders::kCompactAllocationGLSL,
+                "SpectraFX live allocation compaction",gfx::VulkanComputeLayout::StorageUniforms,14});
         if(!compactAllocationCompute_.valid()||!device_->beginCompute(compactAllocationCompute_))return discard();
         const auto fence=device_->gpuSubmissionFence();
         candidateFence=fence?fence:GpuAllocationBudget::unknownFence;
@@ -1383,7 +1400,7 @@ bool ComputeParticles::auditGpuAllocation(AllocationAudit& out){
 }
 bool ComputeParticles::readGpuVmErrors(uint32_t& count) {
     stats_.gpuVmErrorsKnown=false;
-    if(!initialized_ || backend_!=ComputeBackend::Metal || !device_ ||
+    if(!initialized_ || backend_==ComputeBackend::Cpu || !device_ ||
        !vmErrors_.valid() || !device_->gpuHealthy() ||
        gpuResetDirty_ || gpuStagingDirty_ ||
        !device_->canUpdateSharedBuffers())return false;
@@ -1396,7 +1413,7 @@ bool ComputeParticles::readGpuVmErrors(uint32_t& count) {
 }
 bool ComputeParticles::requestGpuVmErrors(
     std::function<void(bool,uint32_t)> callback) {
-    if(!callback || !initialized_ || backend_!=ComputeBackend::Metal ||
+    if(!callback || !initialized_ || backend_==ComputeBackend::Cpu ||
        !device_ || !vmErrors_.valid() || !device_->gpuHealthy() ||
        gpuResetDirty_ || gpuStagingDirty_ ||
        !device_->canUpdateSharedBuffers() || asyncErrorPending_ ||
@@ -1429,7 +1446,7 @@ namespace {
 bool finishOwnedCheckpoint(GpuCheckpoint&,const uint8_t*,const uint8_t*,const uint8_t*,const uint8_t*);
 }
 bool ComputeParticles::requestGpuCheckpoint(std::function<void(bool)> callback) {
-    if(!initialized_ || backend_!=ComputeBackend::Metal || !device_ ||
+    if(!initialized_ || backend_==ComputeBackend::Cpu || !device_ ||
        !device_->gpuHealthy() || !device_->canUpdateSharedBuffers() ||
        !readbackLifetime_ || asyncCheckpointPending_ ||
        gpuResetDirty_ || gpuStagingDirty_ ||
@@ -1815,7 +1832,7 @@ bool ComputeParticles::restoreOwnedGpuSnapshot(const GpuCheckpoint& source){
 
 bool ComputeParticles::captureGpuCheckpoint(GpuCheckpoint& out) {
     out={};if(asyncCheckpointPending_)return false;
-    if(!initialized_ || backend_!=ComputeBackend::Metal || !device_ ||
+    if(!initialized_ || backend_==ComputeBackend::Cpu || !device_ ||
        !device_->gpuHealthy() || !device_->canUpdateSharedBuffers() ||
        !states_.valid() || !stateProgramParams_.valid() ||
        !stateAttributes_.valid() ||

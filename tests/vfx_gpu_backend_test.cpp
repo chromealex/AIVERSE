@@ -88,6 +88,8 @@ public:
     void destroyPipeline(gfx::PipelineHandle)override{}
     const std::string& lastError() const override{return error;}
     bool supportsCompute()const override{return availableCompute;}
+    bool extendedComputeAvailable=false;
+    bool supportsStorageUniformCompute(uint32_t slots)const override{return extendedComputeAvailable&&slots<=19;}
     bool supportsGpuAuthoredIndirectDraw() const override {return indirectAvailable;}
     bool drawIndexedGpuIndirect(gfx::BufferHandle handle,size_t offset)override{
         if(!pass||handle.id!=indirectArgsHandle||offset!=0)badOrder=true;
@@ -175,8 +177,8 @@ int main() {
           "Metal without compute did not fall back");
     check(chooseComputeBackend(gfx::Backend::GLES3,true,ComputePreference::Automatic)==ComputeBackend::Cpu,
           "GLES3 illegally selected Metal backend");
-    check(chooseComputeBackend(gfx::Backend::Vulkan,true,ComputePreference::Automatic)==ComputeBackend::Cpu,
-          "Vulkan GPU path is not implemented yet");
+    check(chooseComputeBackend(gfx::Backend::Vulkan,true,ComputePreference::Automatic)==ComputeBackend::Vulkan,
+          "capable Vulkan backend was not selected");
     check(chooseComputeBackend(gfx::Backend::GL33,true,ComputePreference::Automatic)==ComputeBackend::Cpu,
           "GL33 GPU path is not implemented yet");
     check(chooseComputeBackend(gfx::Backend::Metal,true,ComputePreference::CpuOnly)==ComputeBackend::Cpu,
@@ -556,6 +558,16 @@ int main() {
           "second live ledger accepted");
     implicitA.shutdown();implicitB.shutdown();
     check(canonical->stats().charged()==0,"canonical shutdown leaked charge");
+
+    RecordingMetalDevice vkMock;vkMock.description.backend=gfx::Backend::Vulkan;
+    vkMock.indirectAvailable=true;vkMock.storageCopyAvailable=true;
+    auto vkConfig=growthConfig;vkConfig.backend=ComputePreference::RequireGpu;
+    check(!emitter.init(&vkMock,vkConfig),"Vulkan without extended descriptor layout accepted");
+    vkMock.extendedComputeAvailable=true;
+    check(emitter.init(&vkMock,vkConfig)&&emitter.backend()==ComputeBackend::Vulkan,"capable Vulkan recording route");
+    vkMock.beginFrame(800,600);emitter.setView(frameView);
+    check(emitter.burstAt({0,2,0})&&emitter.step(0.f),"Vulkan allocator host dispatch");
+    vkMock.endFrame();emitter.shutdown();
 
     // Explicit hard GPU requirement never silently reports a CPU implementation.
     config.backend=ComputePreference::RequireGpu;

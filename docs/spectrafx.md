@@ -1,4 +1,4 @@
-## Stage 120B — Vulkan particle kernel and backend routing (in progress; QA deferred)
+## Stage 120B — Vulkan particle kernel and backend routing (source implemented; QA deferred)
 
 Port existing bounded GPU VM, all allocator/host gather modes, culling/LOD and live compaction to Vulkan GLSL using the new storage/uniform ABI. Activate only on capable Vulkan devices; retain complete CPU fallback. Expanded and procedural billboard modes share the same particle ABI. Keep legacy Metal paths and graph semantics. Native Vulkan/Metal tests deferred; source implementation not a parity claim.
 

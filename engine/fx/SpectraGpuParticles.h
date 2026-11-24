@@ -27,13 +27,14 @@ namespace aiverse::spectra {
 enum class ComputePreference : uint8_t {
     Automatic, CpuOnly, PreferGpu, RequireGpu
 };
-enum class ComputeBackend : uint8_t { Cpu, Metal };
+enum class ComputeBackend : uint8_t { Cpu, Metal, Vulkan };
 
 // Pure RHI selection; never assume that every Metal or Vulkan device supports
 // a particular shader. createCompute and the other resource allocations are
 // checked at runtime; Automatic/PreferGpu fall back to Cpu on any failure.
 ComputeBackend chooseComputeBackend(gfx::Backend backend, bool computeAvailable,
                                     ComputePreference preference);
+bool supportsSpectraCompute(const gfx::Device& device,bool ownedAllocation);
 
 // Allocation safety ceiling for the expanded-quad backend, not a global scene limit.
 inline constexpr uint32_t kGpuEmitterMaxSlots=262144;
@@ -196,7 +197,7 @@ public:
     void draw(const fx::FxFog& fog = {});    // inside render pass
     ComputeBackend backend() const { return backend_; }
     bool ready() const { return initialized_; }
-    bool gpuActive() const { return initialized_ && backend_ == ComputeBackend::Metal; }
+    bool gpuActive() const { return initialized_ && backend_ != ComputeBackend::Cpu; }
     bool gpuIndirectActive() const { return gpuActive() && gpuIndirectActive_; }
     bool gpuProgramActive() const {
         return gpuActive() && desc_.gpuProgram && !desc_.particleProgram.isNull();
