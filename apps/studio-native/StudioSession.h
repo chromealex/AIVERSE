@@ -92,6 +92,8 @@ public:
                                const std::string& destination); // native picker ONLY
 private:
     Json snapshot() const;
+    Json graphDocumentScope() const;
+    uint64_t graphDocumentEpoch_=1;
     Json buildRequest(const std::string& method, const Json& params);
     Json dispatchImpl(const Json& request);
     // History panel: a label per MapDoc undo / redo snapshot (MapDoc keeps only snapshots).

@@ -1,4 +1,7 @@
-import {useMemo,useState} from 'react';
+import {useEffect,useMemo,useRef,useState} from 'react';
+import {invoke,nativeConnected,onNativeEvent} from '../bridge';
+import type {StudioGraphDocumentScope} from '../types';
+import {GraphInspectionGate,graphScopeKey,validateCaveCapture} from './graphInspectionCapture';
 import {StudioAlert,StudioButton,StudioSection,StudioSelect,StudioTextarea} from '../ui';
 import GraphCanvas from './GraphCanvas';
 import {caveEntryId,inspectCaveReply,projectCavePage} from './caveGraphInspection';
@@ -37,6 +40,47 @@ export function CaveStructureGraphView({data}:{data:CaveInspection}){
   </div>}
   <StudioAlert>Authored input provenance only. Fill wins over overlapping carve in the native field. Edges do not represent connected caves, walkable paths, live chunks, mesh or collision.</StudioAlert>
  </StudioSection>;
+}
+type NativeCaptureState =
+ | {kind:'idle'|'loading'|'invalidated'}
+ | {kind:'unavailable'|'unsupported'|'absent'|'error';message:string}
+ | {kind:'ready';data:CaveInspection};
+/** Request-scoped capture of the current native MapDoc, not a continuous live stream. */
+function ScopedCaveNativeInspection({scope}:{scope:StudioGraphDocumentScope}){
+ const gate=useRef(new GraphInspectionGate());
+ const [state,setState]=useState<NativeCaptureState>({kind:'idle'});
+ useEffect(()=>{
+  const invalidate=()=>{gate.current.invalidate();setState({kind:'invalidated'});};
+  const off=onNativeEvent(event=>{
+   if(event==='document.changed'||event==='workspace.changed'||event==='project.loading'||event==='project.splash')invalidate();
+  });
+  return ()=>{off();gate.current.invalidate();};
+ },[]);
+ const read=async()=>{
+  const ticket=gate.current.begin(scope);setState({kind:'loading'});
+  try{
+   const r=await invoke('studio.cavernsGraphInspect',{scope:ticket.scope});
+   if(!gate.current.isCurrent(ticket))return;
+   const result=validateCaveCapture(ticket.scope,r);
+   if(result.status==='ready')setState({kind:'ready',data:inspectCaveReply(result.report)});
+   else if(result.status==='absent')setState({kind:'absent',message:'No authored Caverns snapshot in this map.'});
+   else if(result.status==='unsupported')setState({kind:'unsupported',message:'Caverns are not supported on this map type.'});
+   else setState({kind:'unavailable',message:'The native Caverns owner operation is not registered in this build.'});
+  }catch(e){
+   if(gate.current.isCurrent(ticket))setState({kind:'error',message:e instanceof Error?e.message:String(e)});
+  }finally{gate.current.finish(ticket);}
+ };
+ return <StudioSection title="Native Caverns snapshot">
+  <small>Captured map: {scope.mapPath||'Unsaved map'} · document revision {scope.revision}. Read-only, not continuous runtime telemetry.</small>
+  <StudioButton size="sm" disabled={state.kind==='loading'} onClick={()=>void read()}>{state.kind==='loading'?'Reading…':'Read current map'}</StudioButton>
+  {state.kind==='invalidated'&&<StudioAlert>Document changed. Read the current map again.</StudioAlert>}
+  {'message' in state&&<StudioAlert tone={state.kind==='error'?'danger':'neutral'}>{state.message}</StudioAlert>}
+  {state.kind==='ready'&&<CaveStructureGraphView data={state.data}/>}
+ </StudioSection>;
+}
+export function CaveNativeInspection({scope}:{scope?:StudioGraphDocumentScope}){
+ if(!scope||!nativeConnected())return <StudioAlert>Native document identity unavailable. Import an owner report below, or open a compatible native Studio.</StudioAlert>;
+ return <ScopedCaveNativeInspection key={graphScopeKey(scope)} scope={scope}/>;
 }
 export function CaveInspectionImport(){
  const [raw,setRaw]=useState(''),[data,setData]=useState<CaveInspection|null>(null),[error,setError]=useState('');

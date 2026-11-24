@@ -407,6 +407,14 @@ Json StudioSession::setMeshRenderer(int index,const std::string& key,const Json&
     }
     return snapshot();
 }
+Json StudioSession::graphDocumentScope() const {
+    Json scope=Json::object();
+    scope.set("projectPath",str(ws_.project.dir));
+    scope.set("mapPath",str(ws_.map.path));
+    scope.set("epoch",str(std::to_string(graphDocumentEpoch_)));
+    scope.set("revision",str(std::to_string(ws_.map.revision)));
+    return scope;
+}
 Json StudioSession::snapshot() const {
     Json result = Json::object();
     Json project = Json::object();
@@ -414,6 +422,7 @@ Json StudioSession::snapshot() const {
     project.set("path", str(ws_.project.dir));
     project.set("dirty", Json::fromBool(ws_.map.dirty || ws_.project.rulesDirty || ws_.project.manifestDirty));
     result.set("project", std::move(project));
+    if (!ws_.project.dir.empty()) result.set("graphDocument",graphDocumentScope());
     Json scene = Json::object();
     scene.set("name", str(ws_.map.data.name));
     Json rows = Json::array();
@@ -523,6 +532,7 @@ Json StudioSession::openProject(const std::string& path) {
     if (!ws_.openGame(directory, &error))
         throw std::runtime_error(error.empty() ? "Unable to open project" : error);
     (void)studioContentRoot(ws_.project.dir);
+    ++graphDocumentEpoch_; // reopening the same project is a different document lifetime
     pendingAssetTransfer_.reset();
     clearSelection();hidden_.clear();locked_.clear();
     facialPreview_.reset(); // project identity may change; never reuse prior GUID
@@ -1801,6 +1811,32 @@ Json StudioSession::dispatchImpl(const Json& request) {
             const Json current = ws_.call("light_list",Json::object(),"studio");
             if (current.has("error")) throw std::runtime_error(current.getStr("error"));
             reply.set("result",current);
+        } else if (method == "studio.cavernsGraphInspect") {
+            // Narrow get-only capability; never expose the mixed paint operation via this route.
+            if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
+            const Json scope=graphDocumentScope();
+            if (!params.isObject() || params.size()!=1 || !(params["scope"]==scope))
+                throw std::runtime_error("Caverns inspection document changed; refresh Studio");
+            Json out=Json::object();
+            out.set("scope",scope);
+            const bool registered=std::any_of(ws_.ops().begin(),ws_.ops().end(),[](const auto& op){
+                return op.name=="terraweave_caverns_paint" && !op.guiOnly;
+            });
+            if (!registered) out.set("status",str("unavailable"));
+            else if (ws_.map.data.planet()) out.set("status",str("unsupported"));
+            else if (static_cast<const Json&>(ws_.map.data.extra)["terraweaveCaverns"].isNull())
+                out.set("status",str("absent"));
+            else {
+                const size_t undo=ws_.map.undoDepth();
+                const bool dirty=ws_.map.dirty;
+                Json input=Json::object();input.set("mode",str("get"));
+                const Json report=ws_.call("terraweave_caverns_paint",input,"editor");
+                if (report.has("error")) throw std::runtime_error(report.getStr("error"));
+                if (!(scope==graphDocumentScope()) || undo!=ws_.map.undoDepth() || dirty!=ws_.map.dirty)
+                    throw std::runtime_error("Caverns read violated document scope");
+                out.set("status",str("ready"));out.set("report",report);
+            }
+            reply.set("result",std::move(out));
         } else if (method == "studio.ops") {
             // Tool panel (Terrain, Roads, PostFX, ...): its Workspace ops with their JSON schemas.
             const StudioToolGroup* group=studioToolGroup(params.getStr("panel"));
@@ -2174,6 +2210,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 if (result.has("error")) throw std::runtime_error(result.getStr("error"));
                 ws_.map.touched();
             }
+            ++graphDocumentEpoch_;
             clearSelection();hidden_.clear();locked_.clear();previewMaterialName_.clear();refreshMaterialPreview();
             reply.set("result",snapshot());
         } else if (method == "studio.entityCatalog") {

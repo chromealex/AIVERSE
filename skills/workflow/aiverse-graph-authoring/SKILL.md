@@ -83,3 +83,6 @@ Stage 35A: use projectBuildingInspection and BuildingStructureGraphView with the
 
 
 Stage 35B: for Caverns use `terraweave_caverns_paint {mode:get}` from the actual owner branch. `inspectCaveReply` checks the complete archive v1, safe integer identity, exact revision and stamp count; use `CaveStructureGraphView` with one immutable checked report, remount on project/map/request identity. The imported-report inspector is explicitly unverified; paging does not truncate the source. Do not derive cave connectivity, navigation, runtime mesh or collision from authored stamps or entrances. Live integration must wait for owner registration and reject stale/late data. All edits remain MapDoc-owned.
+
+
+Stage 35C: in compatible native Studio use `studio.cavernsGraphInspect {scope: snapshot.graphDocument}`. It is an explicitly get-only bridge, not a new MCP mutation. Handle unavailable/unsupported/absent without fabricating a graph; validate scope then parse ready.report via inspectCaveReply. Keep the decimal-string document epoch and revision exact; invalidate request tickets on document/workspace/project changes and remount. This is a captured authored snapshot, not a continuous runtime stream. Keep native brush edits with the Caverns owner. Do not merge an unrelated owner branch merely for this UI.

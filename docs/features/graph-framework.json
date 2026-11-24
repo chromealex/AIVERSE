@@ -121,7 +121,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35B Caverns v1 owner response inspection and paged read-only graph implemented in source; Stage 35A Building Graph inspection retained. Live owner wiring and native acceptance pending. Stage 35C planned: native fixed get-only capture, map identity and request cancellation; Building owner remains separate.",
+      "note": "Stage 35C native read-only Caverns capture bridge, document-scope and cancellation implemented in source; Stage 35A Building inspector retained, direct owner integration pending.",
       "evidence": []
     },
     "architecture": {
@@ -191,7 +191,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35B isolated Node v22.16.0 caveGraphInspection tests 4/4 PASS on exact adapter and fixture blob hashes; TypeScript 5.8.3 strict adapter check PASS against extracted unchanged GraphView/NodeView/Link/Port declarations. Full Studio suite, React typecheck/build, native Caverns operation, MCP and Mac/GPU gates NOT RUN.",
+      "note": "Stage 35C fixtures authored; exact isolated verification pending. Full native, Studio and GPU gates NOT RUN.",
       "evidence": []
     },
     "handoff": {
@@ -291,7 +291,8 @@
       "studio.assets",
       "studio.materials",
       "studio.materialPatch",
-      "studio.assetByGuid"
+      "studio.assetByGuid",
+      "studio.cavernsGraphInspect"
     ]
   },
   "test_reports": []
