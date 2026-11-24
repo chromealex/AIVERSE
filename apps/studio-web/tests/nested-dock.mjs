@@ -17,13 +17,13 @@ test('default tree has 4 nested stacks and exactly one copy of each panel',()=>{
 });
 test('move reorders within a tab stack',()=>{
   const t=moveTab(defaultDockTree(),'animation','dock-center','scene');
-  assert.deepEqual(findDockStack(t,'dock-center').tabs,['animation','scene','game','materials','facial_rig','shader_graph','rules','build','scripts','snapshot_diff']);
+  assert.deepEqual(findDockStack(t,'dock-center').tabs,['animation','scene','game','materials','facial_rig','shader_graph','rules','build','scripts','snapshot_diff','feature_readiness']);
   assert.equal(findDockStack(t,'dock-center').active,'animation');
 });
 test('dragging panels across stacks retains identity',()=>{
   const t=moveTab(defaultDockTree(),'inspector','dock-bottom');
   assert.equal(panelStack(t,'inspector'),'dock-bottom');
-  assert.deepEqual(findDockStack(t,'dock-right').tabs,['human_creator','lighting','runtime','nereid_flow','human_appearance','wind','history','terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','input','overlays','branding','asset_audit','fields','physis','actor','raid','balance','fx_graph','fx_functions','modeling','anim_assets','anim_graph','anim_rig','model_anim','project_import','stats','extensions','attachments']);
+  assert.deepEqual(findDockStack(t,'dock-right').tabs,['human_creator','lighting','runtime','nereid_flow','human_appearance','wind','history','terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','input','overlays','branding','asset_audit','fields','physis','actor','raid','balance','fx_graph','fx_functions','modeling','anim_assets','anim_graph','anim_rig','model_anim','project_import','stats','extensions','attachments','terraweave_generator','catalog']);
 });
 test('closing and reopening recreates a panel only once',()=>{
   let t=closeTab(defaultDockTree(),'scene');
