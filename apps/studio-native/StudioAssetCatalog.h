@@ -34,7 +34,8 @@ public:
     std::optional<StudioAssetEntry> byGuid(const std::string& guid) const;
     std::optional<StudioAssetEntry> byPath(const std::string& path) const;
     StudioAssetEntry patchSettings(const std::string& guid,
-                                   const std::string& key,const Json& value,editor::ProjectHistory* history=nullptr);
+                                   const std::string& key,const Json& value,editor::ProjectHistory* history=nullptr,
+                                   std::vector<editor::ProjectFileEdit>* staged=nullptr);
     // Native owner-generated plan only. Validates GUID/path/importer and exact bytes.
     StudioAssetEntry applyMetadataEdit(const editor::ProjectFileEdit& edit);
     // Validate identity and sidecar location without publishing bytes.
