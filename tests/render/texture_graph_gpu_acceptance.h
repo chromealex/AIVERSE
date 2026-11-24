@@ -221,6 +221,27 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend){
             require(scopes.contains("texture-graph-fused-dispatch")&&scopes.contains("texture-graph-materialized-dispatch")&&
                 scopes.contains("texture-graph-texture-copy"),"strict GPU scope evidence missing");
         }else if(scopes.empty())std::printf("GPU scope timing unavailable; no GPU timing evidence\n");
+        // A new capture selects detail rather than nested aggregate timers.
+        profile.start(dev.info(),project,true);
+        auto detail=fusedInc;detail.set("incremental",Json::fromBool(false));
+        const auto detailedId=owner.start(detail,project,lifetime.lease()).getStr("request");
+        drain();
+        require(owner.status().getStr("state")=="ready"&&owner.status()["materializedNodePasses"].toDouble()==3,"detailed capture changed execution");
+        const auto detailed=profile.report();bool group=false,fusedGroup=false,pack=false;
+        for(const auto& row:detailed["samples"].items()){
+            require(row.getStr("request")==detailedId,"detailed capture request mismatch");
+            const auto scope=row.getStr("scope");
+            require(scope!="texture-graph-materialized-dispatch","nested aggregate scope in detail mode");
+            if(scope=="texture-graph-materialized-group"){
+                group=true;const auto& members=row["groupMembers"];
+                require(members.isArray()&&members.size()>0&&members.size()<=8&&
+                    members[members.size()-1].str()==row.getStr("groupRoot"),"group membership evidence invalid");
+                fusedGroup|=members.size()>1;
+            }else if(scope=="texture-graph-output-pack")pack=true;
+        }
+        std::printf("TextureGraph region scope evidence: %s\n",detailed.dump(-1).c_str());
+        if(const auto* strict=std::getenv("AIVERSE_TEXTURE_GRAPH_REQUIRE_GPU_TIMINGS");strict&&std::string_view(strict)=="1")
+            require(group&&fusedGroup&&pack,"strict detailed GPU timing evidence missing");
         result=0;
     }catch(const std::exception& e){std::fprintf(stderr,"FAIL texture graph RHI: %s\n",e.what());}
     if(dev.waitIdle())owner.shutdownAfterIdle(dev);
