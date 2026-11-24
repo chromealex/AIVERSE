@@ -132,6 +132,36 @@ public:
         }
         return true;
     }
+    // Move an already published leaf and its exact native handles/lease.
+    // No Box3D or SpatialWorld mutation, allocation, or duplicate collider.
+    bool canTransferSolidLeafTo(const CavePlanetSurfaceSlotKey& key,
+            const CavePlanetBaselineCollision& dest)const{
+        if(this==&dest||&box_!=&dest.box_||&spatial_!=&dest.spatial_||&pool_!=&dest.pool_||
+           recoveryRequired()||dest.recoveryRequired()||!solidReady())return false;
+        const auto it=entries_.find(key);
+        if(it==entries_.end()||dest.entries_.contains(key))return false;
+        if(dest.phase_!=Phase::Empty&&(!dest.solidReady()||dest.body_!=body_||
+           dest.surfaceRevision_!=surfaceRevision_))return false;
+        if(dest.entries_.size()>=64)return false;
+        for(const auto& [other,e]:dest.entries_){
+            if(e.original.cell==it->second.original.cell||
+               (key.face==other.face&&int64_t(key.x)<int64_t(other.x)+other.size&&
+                int64_t(other.x)<int64_t(key.x)+key.size&&int64_t(key.z)<int64_t(other.z)+other.size&&
+                int64_t(other.z)<int64_t(key.z)+key.size))return false;
+        }
+        return true;
+    }
+    bool transferSolidLeafTo(const CavePlanetSurfaceSlotKey& key,
+            CavePlanetBaselineCollision& dest,const Exclusive& exclusive){
+        if(!exclusive||!exclusive()||!canTransferSolidLeafTo(key,dest))return false;
+        const int body=body_;const auto revision=surfaceRevision_;
+        auto node=entries_.extract(key);
+        const auto inserted=dest.entries_.insert(std::move(node));
+        if(!inserted.inserted){phase_=Phase::Recovery;dest.phase_=Phase::Recovery;return false;}
+        dest.body_=body;dest.surfaceRevision_=revision;dest.phase_=Phase::Solid;
+        if(entries_.empty()){body_=-1;surfaceRevision_=0;phase_=Phase::Empty;}
+        return true;
+    }
     // Called by the native owner's real originalsRetired callback, under
     // the same exclusion. IDs remain reserved for restoration.
     bool retireForCut(const Exclusive& exclusive){

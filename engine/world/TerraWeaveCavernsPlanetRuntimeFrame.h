@@ -32,8 +32,10 @@ struct CavePlanetRuntimeHooks {
     // Optional baseline GI producer; refusal is transient and must occur
     // before irreversible native staging (candidate retained for retry).
     std::function<bool(const CavePlanetBodyCutPlan&)> ensureBaselineGi;
+    // Optional paired loan/return from an actual exterior collision owner.
+    CavePlanetCollisionBinding::BaselineTransfer borrowExteriorBaseline,returnExteriorBaseline;
     bool valid()const noexcept{
-        return exclusive&&surfaceCell&&volumeCell&&unownedLeaf&&mayReleaseCoverage&&
+        return bool(borrowExteriorBaseline)==bool(returnExteriorBaseline)&&exclusive&&surfaceCell&&volumeCell&&unownedLeaf&&mayReleaseCoverage&&
             prepareNavigationGi&&commitNavigationGi&&abortNavigationGi&&retireNavigationGi;
     }
 };
@@ -346,7 +348,9 @@ private:
         // remains owned. Never advertise the retired cut as active.
         c.active.reset();
         if(!hooks_.exclusive()||!hooks_.mayReleaseCoverage(*c.coverage)||
-           !c.binding->shutdownBaseline(hooks_.exclusive))return false;
+           !(hooks_.returnExteriorBaseline?
+               c.binding->returnBaseline(*c.coverage,hooks_.returnExteriorBaseline,hooks_.exclusive):
+               c.binding->shutdownBaseline(hooks_.exclusive)))return false;
         if(!residency_.eraseClosed(body)){recovery_=true;return false;}
         cohorts_.erase(it);return true;
     }
@@ -372,7 +376,9 @@ private:
         }
         auto& c=it->second;
         if(c.binding->baseline().phase()==CavePlanetBaselineCollision::Phase::Empty){
-            if(!c.binding->initializeBaseline(*candidate.cut,
+            if(hooks_.borrowExteriorBaseline){
+                if(!c.binding->adoptBaseline(*candidate.cut,hooks_.borrowExteriorBaseline,hooks_.exclusive))return false;
+            }else if(!c.binding->initializeBaseline(*candidate.cut,
                 [&](const auto& key){return hooks_.surfaceCell(body,key);},
                 [&](const auto& key){return hooks_.unownedLeaf(body,key);},hooks_.exclusive))
                 throw std::runtime_error("Caverns baseline preparation refused");

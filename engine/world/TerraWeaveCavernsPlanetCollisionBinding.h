@@ -41,6 +41,36 @@ public:
         if(!baseline_.recoveryRequired())(void)baseline_.shutdown(exclusive);
         return false;
     }
+    using BaselineTransfer=std::function<bool(const CavePlanetBodyCutPlan&,CavePlanetBaselineCollision&)>;
+    // Exterior owner lends actual solid leaves under the same barrier.
+    bool adoptBaseline(const CavePlanetBodyCutPlan& plan,const BaselineTransfer& transfer,const Exclusive& exclusive){
+        if(recoveryRequired()||!exclusive||!exclusive()||!transfer||owner_.staged()||
+           owner_.activeRevision()||baseline_.phase()!=CavePlanetBaselineCollision::Phase::Empty||
+           plan.bodyId!=owner_.frame().anchor().bodyId||
+           planet_.caveSurfaceRevision()!=plan.surfaceRevision)return false;
+        try{
+            if(!transfer(plan,baseline_)){
+                if(baseline_.phase()!=CavePlanetBaselineCollision::Phase::Empty)recovery_=true;
+                return false;
+            }
+            if(!baseline_.solidReady()||!matchesBaseline(plan)){recovery_=true;return false;}
+            return true;
+        }catch(...){recovery_=true;throw;}
+    }
+    bool returnBaseline(const CavePlanetBodyCutPlan& plan,const BaselineTransfer& transfer,const Exclusive& exclusive){
+        if(recoveryRequired()||!exclusive||!exclusive()||!transfer||owner_.staged()||
+           owner_.activeRevision()||!activeLeases_.empty()||!pendingLeases_.empty()||
+           !baseline_.solidReady()||!matchesBaseline(plan))return false;
+        const auto count=baseline_.size();
+        try{
+            if(!transfer(plan,baseline_)){
+                if(baseline_.size()!=count)recovery_=true;
+                return false;
+            }
+            if(baseline_.phase()!=CavePlanetBaselineCollision::Phase::Empty){recovery_=true;return false;}
+            return true;
+        }catch(...){recovery_=true;throw;}
+    }
     // The host supplies current ECS state; no stale region revision is
     // allowed to stage or commit. Rollback must cancel pending work and
     // rebuild plans from the restored snapshot, even at equal revisions.

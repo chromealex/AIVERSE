@@ -9,6 +9,24 @@
 using namespace aiverse;
 using namespace aiverse::terraweave::caverns;
 static void check(bool ok,const char* why){if(!ok)throw std::runtime_error(why);}
+static void checkBaselineTransfer(){
+    physics::Scene box;world::SpatialWorld spatial;CaveColliderLeasePool pool(20000,100);
+    CavePlanetBaselineCollision exterior(box,spatial,pool),interior(box,spatial,pool);
+    const auto p=[](int x,int z){return Vec3{Fixed::fromInt(x),10_fx,Fixed::fromInt(z)};};
+    CavePlanetSurfaceSlot slot{{2,0,0,1,0},{{p(0,0),p(0,2),p(2,0)}}};
+    const auto exclusive=[](){return true;};
+    check(exterior.prepare(0,7,std::span<const CavePlanetSurfaceSlot>(&slot,1),
+        [](const auto&){return world::Cell{0,100,0};},[](const auto&){return true;},exclusive)&&
+        exterior.publish(exclusive),"exterior baseline published");
+    const auto mutation=spatial.mutationVersion();
+    check(!exterior.transferSolidLeafTo(slot.key,interior,[]{return false;}),"transfer requires barrier");
+    check(exterior.transferSolidLeafTo(slot.key,interior,exclusive)&&interior.solidReady()&&
+        exterior.phase()==CavePlanetBaselineCollision::Phase::Empty,"transfer actual solid leaf");
+    check(box.bodyCount()==1&&pool.allocations()==1&&spatial.mutationVersion()==mutation,"no native duplicate or rebuild");
+    check(interior.retireForCut(exclusive)&&interior.prepareRestore(exclusive)&&interior.publish(exclusive),"restore borrowed baseline");
+    check(interior.transferSolidLeafTo(slot.key,exterior,exclusive)&&exterior.solidReady(),"return restored leaf");
+    check(exterior.shutdown(exclusive)&&box.bodyCount()==0&&pool.allocations()==0,"exterior owns final retirement");
+}
 static void checkCandidateIdentity(){
     World ecs;
     CavePlanetAuthoritySet set;
@@ -322,6 +340,7 @@ int main(){
     checkTravelPins();
     checkOrientedMotor();
     checkCandidateIdentity();
+    checkBaselineTransfer();
     check(!CavePlanetRuntimeHooks{}.valid(),"missing host hooks must refuse");
     physics::Scene box;
     world::SpatialWorld spatial;

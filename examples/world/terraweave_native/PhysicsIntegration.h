@@ -5,6 +5,7 @@
 #include "examples/world/terraweave_native/Integration.h"
 #include "engine/world/TerraWeaveNereidObstacleBridge.h"
 #include "engine/world/TerraWeaveCavernsPlanetNativeHost.h"
+#include "engine/world/TerraWeaveCavernsPlanetExteriorCollision.h"
 #include <functional>
 #include <span>
 #include <set>
