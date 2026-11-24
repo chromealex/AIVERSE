@@ -25,7 +25,7 @@ int aiverseMain(int argc,char** argv){
             if(first[i]!=second[i]||first[i+1]!=second[i+1]||first[i+2]!=second[i+2])++changed;
             if(first[i]!=first[0]||first[i+1]!=first[1]||first[i+2]!=first[2])++nonflat;
         }
-        if(changed<100||nonflat<100)throw std::runtime_error("missing geometry or camera response");
+        if(changed<100||nonflat<100)throw std::runtime_error("missing geometry or camera response: changed="+std::to_string(changed)+", nonflat="+std::to_string(nonflat));
         std::cout<<"Building panel native GPU orbit PASS, changed pixels="<<changed<<"\n";return 0;
     }catch(const std::exception& e){std::cerr<<e.what()<<"\n";return 1;}
 }

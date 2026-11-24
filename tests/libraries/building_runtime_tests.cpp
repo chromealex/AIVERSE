@@ -117,7 +117,7 @@ int main(int argc,char** argv) {
             {Part::Wall,1,.24f,1,1.36f,3,5},
             {Part::Roof,1,3,1,5,3.28f,5},
             {Part::Wall,3,3.28f,2,3.36f,6,4},
-            {Part::WindowPane,1.5f,.24f,1,1.55f,3,5}};
+            {Part::WindowPane,1.45f,.24f,1,1.50f,3,5}};
         auto supported=beginBuildingDestruction(stack);CHECK(supported);
         CHECK(buildingSupportedPieces(supported->structure,supported->sources).size()==5);
         aiverse::lib::mechanics::StructureDamage cut;

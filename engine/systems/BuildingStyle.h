@@ -718,8 +718,12 @@ inline BuildingStyle readBuildingStyle(const Json& j,const std::string& path="st
             StructureKind k;k.id=id;
             get(o,"facadeBay",k.facadeBay,p);get(o,"facadeStorey",k.facadeStorey,p);
             get(o,"glazingFraction",k.glazingFraction,p);get(o,"profileRoofScale",k.profileRoofScale,p);
-            if(k.facadeBay<1.2f||k.facadeBay>12.f||k.facadeStorey<2.5f||k.facadeStorey>8.f||
-               k.glazingFraction<.15f||k.glazingFraction>.85f||k.profileRoofScale<.4f||k.profileRoofScale>1.6f)
+            // Json numbers are Q16 values; decimal endpoints such as 0.15 and
+            // 0.85 can land one quantum outside their nominal float bounds.
+            constexpr float q16=1.f/65536.f;
+            auto inRange=[&](float value,float lo,float hi){return value>=lo-q16&&value<=hi+q16;};
+            if(!inRange(k.facadeBay,1.2f,12.f)||!inRange(k.facadeStorey,2.5f,8.f)||
+               !inRange(k.glazingFraction,.15f,.85f)||!inRange(k.profileRoofScale,.4f,1.6f))
                 throw JsonError(p+": architectural facade/roof parameters outside supported bounds");
             if(o.has("body")){
                 if(!o["body"].isString())throw JsonError(p+".body: expected architectural profile");
