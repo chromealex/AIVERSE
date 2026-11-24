@@ -2,6 +2,7 @@
 // exporter in the tested dependency graph. Packageable native game API.
 #include <engine/systems/RuntimeBuildingGenerator.h>
 #include <engine/systems/CachedRuntimeBuildingGenerator.h>
+#include <engine/systems/BuildingInstances.h>
 #include <engine/systems/BuildingSurfaceCache.h>
 #include <engine/buildings/BuildingDestructionAdapter.h>
 #include <cstdio>
@@ -153,6 +154,21 @@ int main(int argc,char** argv) {
         CHECK(p2!=p0&&surfaces.stats().evictions==1);
         CHECK(surfaces.get("bad","desk",4,BuildingSurfaceChannel::Normal,128)->rgba.empty());
         CHECK(surfaces.stats().entries==1);
+        CachedRuntimeBuildingGenerator instanceCache;
+        CHECK(instanceCache.registerStyleJson(buffer.str()));
+        RuntimeBuildingRequest inst;inst.style="scifi";inst.composeFeatures=true;inst.size={16,8,12};
+        auto templateA=acquireBuildingInstanceTemplate(instanceCache,inst,1,1,1);CHECK(templateA);
+        inst.origin.x=Fixed::fromInt(90);inst.yaw=1;
+        auto templateB=acquireBuildingInstanceTemplate(instanceCache,inst,1,1,1);CHECK(templateB);
+        CHECK(templateA.local==templateB.local&&templateA.modelKey==templateB.modelKey);
+        auto templateC=acquireBuildingInstanceTemplate(instanceCache,inst,1,1,2);CHECK(templateC);
+        CHECK(templateC.modelKey!=templateB.modelKey);
+        BuildingPlacedInstance placed;
+        CHECK(placeBuildingInstance(templateB,{2,inst.origin,inst.yaw},placed));
+        const auto direct=generator.generate(inst);CHECK(direct);
+        CHECK(placed.boxes==direct.building.boxes&&placed.gates==direct.building.gates);
+        CHECK(!placeBuildingInstance(templateB,{0,inst.origin,inst.yaw},placed));
+        CHECK(placed.placement.id==2);
         generator.clear();
         CHECK(generator.styleCount()==0);
         CHECK(generator.generate(sized).error==RuntimeBuildingError::UnknownStyle);
