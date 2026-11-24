@@ -1,6 +1,7 @@
 // Actual GameCore map fixture proving native module ECS hydration via mapPlaced().
 #include "aiverselib/world/WorldProcessesNativeModule.h"
 #include "aiverselib/world/WorldProcessGravity.h"
+#include "aiverselib/world/GranularPlanetTerrainTransfer.h"
 #include "aiverselib/world/CircuitSurfaceWiring.h"
 #include "apps/studio-native/StudioPlanetWorldProcesses.h"
 #include "aiverselib/world/EvolveSurfaceEcology.h"
@@ -308,6 +309,76 @@ static void checkPlanetEvolveHydration(){
     AIVERSE_TEST_CHECK(restored->deserialize(sim->serialize(),&error));
     AIVERSE_TEST_CHECK(restored->checksum()==sim->checksum());
 }
+// Test double for the terrain owner only. No production terrain state or
+// mutation API is implied by this fixture.
+struct PlanetSoilFixture {
+    uint64_t revision=4;
+    int64_t terra=1000,moon=2000;
+};
+static void checkPlanetSoilTransfer(){
+    using namespace granular;
+    game::Surface surface;
+    game::BodyDef body;body.id="terra";body.faceSize=8;body.radius=Fixed::fromInt(64);
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    World ecs;
+    ecs.setResource<PlanetSoilFixture>({});
+    const auto field=ecs.create();
+    Transform tr{};tr.pos=surface.cellCenter(surface.gridCell(0,0,7,3));
+    ecs.add<Transform>(field,tr);
+    Field grains;grains.width=3;grains.height=3;grains.capacity=100;
+    grains.mass.assign(9,0);grains.solid.assign(9,0);grains.mass[8]=80;grains.sampledTick=7;
+    ecs.add<Field>(field,grains);
+    PlanetSoilRequest req{field,"terra",2,2,1000,PlanetSoilDirection::Fill,50,4};
+    const auto target=planPlanetSoilTransfer(ecs,surface,req,7);
+    AIVERSE_TEST_CHECK(target&&target->body==0&&target->face!=0&&target->volumeBudgetCm3==50);
+    auto owner=[](World& staged,const PlanetSoilTarget& t)->std::optional<PlanetSoilOwnerChange>{
+        auto* soil=staged.resource<PlanetSoilFixture>();
+        if(soil->revision!=t.expectedTerrainRevision)return {};
+        auto& amount=t.body==0?soil->terra:soil->moon;
+        const auto moved=t.volumeBudgetCm3;
+        if(t.direction==PlanetSoilDirection::Dig&&uint64_t(amount)<moved)return {};
+        amount+=t.direction==PlanetSoilDirection::Fill?int64_t(moved):-int64_t(moved);
+        const auto old=soil->revision++;
+        return PlanetSoilOwnerChange{old,soil->revision,moved};
+    };
+    ecs.enableCowSnapshots();const World before=ecs;
+    const auto fill=transferPlanetSoil(ecs,surface,req,7,owner);
+    AIVERSE_TEST_CHECK(fill&&fill->afterMass==30&&fill->terrain.movedVolumeCm3==50);
+    AIVERSE_TEST_CHECK(ecs.resourceConst<PlanetSoilFixture>()->terra==1050);
+    AIVERSE_TEST_CHECK(before.resourceConst<PlanetSoilFixture>()->terra==1000);
+    AIVERSE_TEST_CHECK(before.get<Field>(field).mass[8]==80);
+    AIVERSE_TEST_CHECK(!transferPlanetSoil(ecs,surface,req,7,owner)); // stale revision
+    req.direction=PlanetSoilDirection::Dig;req.maximumVolumeCm3=100;req.expectedTerrainRevision=5;
+    const auto dig=transferPlanetSoil(ecs,surface,req,7,owner);
+    AIVERSE_TEST_CHECK(dig&&dig->afterMass==100&&dig->terrain.movedVolumeCm3==70);
+    AIVERSE_TEST_CHECK(ecs.resourceConst<PlanetSoilFixture>()->terra==980);
+    ecs=before;req.direction=PlanetSoilDirection::Fill;req.maximumVolumeCm3=50;req.expectedTerrainRevision=4;
+    auto invalidOwner=[](World& staged,const PlanetSoilTarget& t)->std::optional<PlanetSoilOwnerChange>{
+        staged.resource<PlanetSoilFixture>()->terra=0;
+        return PlanetSoilOwnerChange{4,5,t.volumeBudgetCm3+1};
+    };
+    AIVERSE_TEST_CHECK(!transferPlanetSoil(ecs,surface,req,7,invalidOwner));
+    AIVERSE_TEST_CHECK(ecs.resourceConst<PlanetSoilFixture>()->terra==1000&&ecs.get<Field>(field).mass[8]==80);
+    auto noop=[](World& staged,const PlanetSoilTarget&)->std::optional<PlanetSoilOwnerChange>{
+        staged.resource<PlanetSoilFixture>()->terra=0;
+        return PlanetSoilOwnerChange{4,4,0};
+    };
+    AIVERSE_TEST_CHECK(transferPlanetSoil(ecs,surface,req,7,noop));
+    AIVERSE_TEST_CHECK(ecs.resourceConst<PlanetSoilFixture>()->terra==1000);
+    AIVERSE_TEST_CHECK(!planPlanetSoilTransfer(ecs,surface,req,8));
+    req.row=1;AIVERSE_TEST_CHECK(!planPlanetSoilTransfer(ecs,surface,req,7));req.row=2;
+    ecs.get<Transform>(field).pos=tr.pos+surface.up(tr.pos)*Fixed::fromInt(2);
+    AIVERSE_TEST_CHECK(!planPlanetSoilTransfer(ecs,surface,req,7));
+    ecs.get<Transform>(field).pos=surface.cellCenter(surface.gridCell(1,0,7,3));
+    AIVERSE_TEST_CHECK(!planPlanetSoilTransfer(ecs,surface,req,7)); // stale body
+    req.expectedBody="moon";
+    const auto lunar=transferPlanetSoil(ecs,surface,req,7,owner);
+    AIVERSE_TEST_CHECK(lunar&&lunar->target.body==1&&lunar->target.face!=0);
+    AIVERSE_TEST_CHECK(ecs.resourceConst<PlanetSoilFixture>()->terra==1000);
+    AIVERSE_TEST_CHECK(ecs.resourceConst<PlanetSoilFixture>()->moon==2050);
+    ecs=before;
+    AIVERSE_TEST_CHECK(ecs.get<Field>(field).mass[8]==80&&ecs.resourceConst<PlanetSoilFixture>()->moon==2000);
+}
 static void checkPlanetGranular(){
     game::Surface surface;
     game::BodyDef planet;planet.id="terra";planet.faceSize=8;planet.radius=Fixed::fromInt(64);
@@ -596,6 +667,7 @@ int main(){
     checkCircuitSurfaceWiring();
     checkAetherStratification();
     checkMorphGravity();
+    checkPlanetSoilTransfer();
     checkPlanetGranular();
     checkPlanetEvolveHydration();
     checkPlanetGravity();
