@@ -3,6 +3,7 @@
 #include "aiverselib/world/WorldProcessReportJobs.h"
 #include "engine/sim/CommonComponents.h"
 #include "engine/data/Json.h"
+#include <array>
 #include <charconv>
 #include <limits>
 #include <stdexcept>
@@ -16,6 +17,8 @@ class StudioWorldProcessDiagnostics {
         lib::worldprocess::EntityBudgetState crowd,society;
     };
     States states_{};
+    std::array<lib::worldprocess::EntityBudgetState,3> spatialStates_{};
+    bool spatialMode_=false;
     Json cached_;
     std::string epoch_,focus_;
     int cap_=0;
@@ -81,12 +84,67 @@ class StudioWorldProcessDiagnostics {
         return out;
     }
 public:
-    void reset(){states_={};cached_=Json();epoch_.clear();focus_.clear();cap_=0;tick_.reset();}
+    void reset(){states_={};spatialStates_={};spatialMode_=false;cached_=Json();epoch_.clear();focus_.clear();cap_=0;tick_.reset();}
+    static std::optional<Entity> focusEntity(const std::string& focus){return parseFocus(focus);}
+    // Spatial owner supplies a pure distance decision, never a flattened
+    // legacy position. Keep the same advisory queue and visit cap.
+    template<class Decide>
+    Json sampleSpatial(const World& ecs,std::string epoch,uint32_t tick,int cap,
+                       const std::string& focus,bool resolved,Json focusInfo,
+                       const Decide& decide){
+        if(cap<0||cap>512||focus.size()>20)throw std::invalid_argument("Diagnostic budget/focus out of bounds");
+        (void)parseFocus(focus);
+        if(!spatialMode_||epoch_!=epoch||focus_!=focus||cap_!=cap||(tick_&&tick<*tick_))reset();
+        if(tick_&&tick==*tick_)return cached_;
+        namespace wp=lib::worldprocess;
+        const world::SimulationLodConfig cfg{true,4,16,4,16};
+        auto next=spatialStates_;
+        Json lanes=Json::object();
+        struct SampleRow{Entity entity;uint32_t requestedTick,sampleTick;};
+        auto prepare=[&]<class Component>(const char* name,size_t slot,size_t limit){
+            if(ecs.countExisting<Component>()>limit){lanes.set(name,unavailable("Entity limit exceeded"));return;}
+            wp::EntityWorkPlan plan;
+            auto& d=plan.diagnostics;d.tick=tick;
+            ecs.eachExistingConst<Component>([&](Entity e,const Component& value){
+                if(!ecs.alive(e)||!value.enabled||!valid(value))return;
+                const auto lod=resolved?decide(e,value,cfg):world::SimulationLodDecision{};
+                plan.entities.push_back({e,lod});
+                switch(lod.tier){
+                    case world::SimulationLodTier::Hot:++d.hot;break;
+                    case world::SimulationLodTier::Warm:++d.warm;break;
+                    case world::SimulationLodTier::Cold:++d.cold;break;
+                }
+                if(lod.due)++d.executed;else ++d.deferred;
+            });
+            std::sort(plan.entities.begin(),plan.entities.end(),[](const auto& a,const auto& b){
+                return a.entity.packed()<b.entity.packed();
+            });
+            auto batch=wp::prepareEntityBudget(plan,spatialStates_[slot],{size_t(cap),{}},limit);
+            if(!batch){lanes.set(name,unavailable("Invalid spatial report plan"));return;}
+            std::vector<SampleRow> rows;
+            rows.reserve(batch->selected.size());
+            for(const auto& p:batch->selected)rows.push_back({p.entity,p.firstDueTick,tick});
+            lanes.set(name,lane(*batch,d,rows,false,cap,[](const auto& p){return p.entity;}));
+            next[slot]=std::move(batch->next);
+        };
+        prepare.template operator()<evolve::Region>("evolve",0,evolve::kMaxRegions);
+        prepare.template operator()<crowd::Agent>("crowd",1,crowd::kMaxAgents);
+        prepare.template operator()<society::Person>("society",2,society::kMaxPeople);
+        Json out=Json::object();out.set("active",Json::fromBool(true));
+        out.set("epoch",Json::string(epoch));out.set("tick",Json::number(int64_t(tick)));
+        out.set("observerAvailable",Json::fromBool(resolved));
+        out.set("cellSizeCm",Json::number(int64_t(kCellCm)));
+        out.set("config",world::simulationLodConfigJson(cfg));out.set("lanes",std::move(lanes));
+        out.set("topology",Json::string("planet"));out.set("focusSurface",std::move(focusInfo));
+        cached_=out;spatialStates_=std::move(next);spatialMode_=true;
+        epoch_=std::move(epoch);focus_=focus;cap_=cap;tick_=tick;
+        return out;
+    }
     Json sample(const World* ecs,std::string epoch,uint32_t tick,int cap,const std::string& focus){
         if(cap<0||cap>512||focus.size()>20)throw std::invalid_argument("Diagnostic budget/focus out of bounds");
         const auto entity=parseFocus(focus);
         if(!ecs){reset();Json out=Json::object();out.set("active",Json::fromBool(false));return out;}
-        if(epoch_!=epoch||focus_!=focus||cap_!=cap||(tick_&&tick<*tick_))reset();
+        if(spatialMode_||epoch_!=epoch||focus_!=focus||cap_!=cap||(tick_&&tick<*tick_))reset();
         if(tick_&&tick==*tick_)return cached_;
         namespace wp=lib::worldprocess;
         const world::SimulationLodConfig cfg{true,4,16,4,16};
