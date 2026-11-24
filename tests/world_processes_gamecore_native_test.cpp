@@ -1,5 +1,6 @@
 #include "apps/studio-native/StudioPlanetLiveSnapshot.h"
 #include "apps/studio-native/StudioPlanetAetherSnapshot.h"
+#include "apps/studio-native/StudioPlanetFractureSnapshot.h"
 // Actual GameCore map fixture proving native module ECS hydration via mapPlaced().
 #include "aiverselib/world/WorldProcessesNativeModule.h"
 #include "aiverselib/world/WorldProcessGravity.h"
@@ -512,6 +513,46 @@ static void checkPlanetSoilTransfer(){
     ecs=before;
     AIVERSE_TEST_CHECK(ecs.get<Field>(field).mass[8]==80&&ecs.resourceConst<PlanetSoilFixture>()->moon==2000);
 }
+static void checkPlanetLiveFracture(){
+    using aiverse::studio::samplePlanetFracture;
+    game::Surface surface;game::BodyDef body;body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    World ecs;
+    const auto root=ecs.create(),child=ecs.create(),moon=ecs.create(),bond=ecs.create(),cross=ecs.create();
+    Transform tr{};tr.pos=surface.cellCenter(surface.gridCell(0,0,3,3));ecs.add<Transform>(root,tr);
+    tr.pos=surface.cellCenter(surface.gridCell(0,0,4,3));ecs.add<Transform>(child,tr);
+    tr.pos=surface.cellCenter(surface.gridCell(1,0,3,3));ecs.add<Transform>(moon,tr);
+    ecs.add<fracture::Member>(root,fracture::Member{true,false,false});
+    ecs.add<fracture::Member>(child,fracture::Member{});
+    ecs.add<fracture::Member>(moon,fracture::Member{true,false,false});
+    ecs.add<fracture::Collapse>(child,fracture::Collapse{});
+    ecs.add<fracture::Bond>(bond,fracture::Bond{root,child,100,25,true});
+    ecs.add<fracture::Bond>(cross,fracture::Bond{root,moon,100,0,true});
+    AIVERSE_TEST_CHECK(fracture::advance(ecs,7));
+    const auto before=samplePlanetFracture(ecs,surface,7);
+    AIVERSE_TEST_CHECK(before.getBool("available")&&before["members"].size()==3);
+    AIVERSE_TEST_CHECK(before["bonds"].size()==1&&before.getInt("crossBody")==1);
+    AIVERSE_TEST_CHECK(before["bonds"][size_t(0)].getInt("damage")==25&&before["bonds"][size_t(0)].getBool("activeSupportEdge"));
+    ecs.get<fracture::Bond>(bond).damage=100;
+    AIVERSE_TEST_CHECK(fracture::advance(ecs,8));
+    physis::NatureStressOutputComponent stress;stress.valid=true;stress.sampledClimateTick=123;
+    stress.normalizedLoad=Fixed::fromInt(2);stress.accumulatedDamage=Fixed::fromRatio(1,2);
+    ecs.add<physis::NatureStressOutputComponent>(child,stress);
+    const auto after=samplePlanetFracture(ecs,surface,8);
+    AIVERSE_TEST_CHECK(after.getInt("detached")==1&&after.getInt("pending")==1);
+    AIVERSE_TEST_CHECK(!after["bonds"][size_t(0)].getBool("activeSupportEdge"));
+    bool found=false;
+    for(const auto& row:after["members"].items())if(row.getStr("id")==std::to_string(child.packed())){
+        found=true;AIVERSE_TEST_CHECK(row.getStr("body")=="terra"&&row.getBool("detached"));
+        AIVERSE_TEST_CHECK(row["collapse"].getStr("delivery")=="pending"&&row["collapse"].getInt("tick")==8);
+        AIVERSE_TEST_CHECK(row["stress"].getStr("climateTick")=="123");
+    }
+    AIVERSE_TEST_CHECK(found);
+    AIVERSE_TEST_CHECK(ecs.get<fracture::Collapse>(child).delivery==fracture::Delivery::Pending);
+    const auto cap=samplePlanetFracture(ecs,surface,8,1);
+    AIVERSE_TEST_CHECK(cap.getBool("truncated")&&cap["members"].size()==1&&cap.getInt("pending")==1);
+    AIVERSE_TEST_CHECK(!samplePlanetFracture(ecs,surface,UINT32_MAX).getBool("available"));
+}
 static void checkPlanetCollapseDelivery(){
     game::Surface surface;game::BodyDef body;
     body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
@@ -991,6 +1032,7 @@ int main(){
     checkMorphGravity();
     checkPlanetSoilTransfer();
     checkPlanetCollapseDelivery();
+    checkPlanetLiveFracture();
     checkPlanetMorphContactFrame();
     checkPlanetProcessGeometry();
     checkPlanetGranular();
