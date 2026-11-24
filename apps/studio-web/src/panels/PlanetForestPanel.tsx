@@ -21,6 +21,7 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
   const [override,setOverride]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
   const [dirty,setDirty]=useState(false),[stale,setStale]=useState(false),[live,setLive]=useState<StudioPlanetForestLive|null>(null);
   const [body,setBody]=useState(''),[filter,setFilter]=useState('');
+  const [armPending,setArmPending]=useState(false);
   const [armed,setArmed]=useState(false),[plantSpecies,setPlantSpecies]=useState(''),[habit,setHabit]=useState<'tree'|'shrub'>('tree');
   const baseRef=useRef<StudioPlanetForestDocument|null>(null);
   const busyRef=useRef(false);
@@ -46,10 +47,11 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
     }
   }),[]);
   async function arm(next:boolean){
-    if(!base)return;
+    if(!base||armPending)return;
+    setArmPending(true);setError('');
     try{const r=await invoke('studio.planetForestArm',{armed:next,mapPath:base.mapPath,expectedRevision:base.revision,
       species:Number(plantSpecies||rows(forest?.species)[0]?.id),habit});setArmed(r.armed);}
-    catch(e){setArmed(false);setError(err(e));}
+    catch(e){setArmed(false);setError(err(e));}finally{setArmPending(false);}
   }
   function editForest(next:ForestRecord|null){setForest(next);setOverride(next!==null);setDirty(true);}
   function editCatalog(next:ForestRecord|null){setCatalog(next);setDirty(true);}
@@ -91,18 +93,18 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
     </>;
   }
   return <section className="rules__form pf">
-    <div className="pf-toolbar"><h3>Planet forest</h3><button disabled={busy||armed} onClick={()=>void reload()}>{dirty?'Discard & reload':'Reload'}</button><button disabled={busy||armed||!dirty||stale} onClick={()=>void apply()}>Apply to map</button></div>
+    <div className="pf-toolbar"><h3>Planet forest</h3><button disabled={busy||armed||armPending} onClick={()=>void reload()}>{dirty?'Discard & reload':'Reload'}</button><button disabled={busy||armed||armPending||!dirty||stale} onClick={()=>void apply()}>Apply to map</button></div>
     {error&&<div className="rules__error" role="alert">{error}</div>}
     {stale&&<p className="pf-note">Document changed. Reload before applying; draft has not been overwritten.</p>}
     <p className="pf-note">Map-owned override · Undo/Redo via document history. Save the map and restart local Play. Native physics authority is configured by the host, not this panel.</p>
     {!base.moduleEnabled&&<p className="pf-note">world_processes native module is not installed in this project. Only the visual ARBOR catalogue can be edited.</p>}
-    <fieldset disabled={busy||armed} className="rules__group"><legend>Simulation</legend>
+    <fieldset disabled={busy||armed||armPending} className="rules__group"><legend>Simulation</legend>
       <label className="pf-row"><span>Map override</span><input type="checkbox" checked={override} disabled={!base.moduleEnabled} onChange={e=>{setOverride(e.target.checked);if(e.target.checked&&!forest)setForest({species:[{id:1}],plants:[]});setDirty(true);}}/></label>
       <p className="pf-note">{override?'Use this map’s simulation settings':'Inherit native module rules'} · physics requested: {base.physicsRequested?'yes':'no'}</p>
       {override&&forest&&<Numbers data={forest} specs={cadence} change={p=>editForest({...forest,...p})}/>}
     </fieldset>
     {override&&forest&&<>
-    <fieldset disabled={busy||armed} className="rules__group"><legend>Ecology species</legend>
+    <fieldset disabled={busy||armed||armPending} className="rules__group"><legend>Ecology species</legend>
       {species.map((row,i)=><details key={i} open={i===0}><summary>Species {String(row.id??i+1)}</summary>
         <Numbers data={row} specs={ecology} change={p=>patch('species',i,p)}/>
         <label className="pf-row"><span>Collision</span><select className="au-input" value={!row.naturalFallBody?'none':object(row.naturalFallBody).fromArbor?'arbor':'capsule'} onChange={e=>editForest({...forest,species:species.map((r,j)=>j===i?collisionMode(r,e.target.value):r)})}><option value="none">None / external owner</option><option value="arbor">ARBOR trunk</option><option value="capsule">Manual capsule</option></select></label>
@@ -112,10 +114,10 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
       <button disabled={species.length>=64} onClick={()=>editForest({...forest,species:[...species,{id:nextId(species,'id')}]})}>Add species</button>
     </fieldset>
     <fieldset disabled={busy} className="rules__group"><legend>Rooted plants</legend>
-      <label className="pf-row"><span>Plant species</span><select disabled={armed} className="au-input" value={plantSpecies||String(species[0]?.id??'')} onChange={e=>setPlantSpecies(e.target.value)}>{species.map((s,i)=><option key={i} value={String(s.id)}>{String(s.id)}</option>)}</select></label>
-      <label className="pf-row"><span>Plant habit</span><select disabled={armed} className="au-input" value={habit} onChange={e=>setHabit(e.target.value as 'tree'|'shrub')}><option>tree</option><option>shrub</option></select></label>
-      <button disabled={!armed&&(dirty||stale||!species.length)} onClick={()=>void arm(!armed)}>{armed?'Cancel planting':'Plant in Scene'}</button>{armed&&<p className="pf-note">Click planetary terrain once. Esc cancels. Save pending draft changes before planting.</p>}
-      <fieldset disabled={armed} className="rules__group"><legend>Plant placements</legend>
+      <label className="pf-row"><span>Plant species</span><select disabled={armed||armPending} className="au-input" value={plantSpecies||String(species[0]?.id??'')} onChange={e=>setPlantSpecies(e.target.value)}>{species.map((s,i)=><option key={i} value={String(s.id)}>{String(s.id)}</option>)}</select></label>
+      <label className="pf-row"><span>Plant habit</span><select disabled={armed||armPending} className="au-input" value={habit} onChange={e=>setHabit(e.target.value as 'tree'|'shrub')}><option>tree</option><option>shrub</option></select></label>
+      <button disabled={armPending||(!armed&&(dirty||stale||!species.length))} onClick={()=>void arm(!armed)}>{armed?'Cancel planting':'Plant in Scene'}</button>{armed&&<p className="pf-note">Click planetary terrain once. Esc cancels. Save pending draft changes before planting.</p>}
+      <fieldset disabled={armed||armPending} className="rules__group"><legend>Plant placements</legend>
       <label className="pf-row"><span>Planet / moon</span><select className="au-input" value={body} onChange={e=>setBody(e.target.value)}><option value="">All bodies</option>{bodies.map(b=><option key={b}>{b}</option>)}</select></label>
       <label className="pf-row"><span>Search markers</span><input className="au-input" value={filter} onChange={e=>setFilter(e.target.value)}/></label>
       {plants.map((row,i)=>({row,i})).filter(({row})=>(!body||(object(row.at).body??base.markers.find(m=>m.id===row.entity)?.placement.body)===body)&&String(row.entity??object(row.at).body??'').toLowerCase().includes(filter.toLowerCase())).map(({row,i})=><details key={i}><summary>{String(row.entity??(row.at?String(object(row.at).body)+' / '+String(object(row.at).face):'Unbound'))} · {String(row.species)}:{String(row.key)}</summary>
@@ -125,16 +127,18 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
         <label className="pf-row"><span>Habit</span><select className="au-input" value={String(row.habit??'tree')} onChange={e=>patch('plants',i,{habit:e.target.value})}><option>tree</option><option>shrub</option></select></label>
         <button onClick={()=>editForest(removeRow(forest,'plants',i))}>Remove plant</button>
       </details>)}
+      <button disabled={!bodies.length||!species.length||plants.length>=4096} onClick={()=>editForest({...forest,plants:[...plants,{at:{body:body||bodies[0],face:0,x:0,y:0},species:species[0].id,key:nextId(plants,'key'),habit:'tree'}]})}>Add plant by coordinates</button>
       <button disabled={!markers.length||!species.length||plants.length>=4096} onClick={()=>editForest({...forest,plants:[...plants,{entity:markers[0].id,species:species[0].id,key:nextId(plants,'key'),habit:'tree'}]})}>Add plant at marker</button>
       </fieldset>
     </fieldset>
-    <fieldset disabled={busy||armed} className="rules__group"><legend>PHYSIS weather mappings</legend>
+    <fieldset disabled={busy||armed||armPending} className="rules__group"><legend>PHYSIS weather mappings</legend>
       {weather.map((row,i)=><details key={i}><summary>{String(row.entity??object(row.at).body??'Unbound')}</summary>{placementEditor('weather',row,i)}<Numbers data={row} specs={[['x','Climate cell X',0,-1000000,1000000],['z','Climate cell Z',0,-1000000,1000000],['coverageMetres','Coverage (m)',32,1,4096]]} change={p=>patch('weather',i,p)}/><button onClick={()=>editForest(removeRow(forest,'weather',i))}>Remove mapping</button></details>)}
+      <button disabled={!bodies.length} onClick={()=>editForest({...forest,weather:[...weather,{at:{body:body||bodies[0],face:0,x:0,y:0},x:0,z:0,coverageMetres:32}]})}>Add mapping by coordinates</button>
       <button disabled={!markers.length} onClick={()=>editForest({...forest,weather:[...weather,{entity:markers[0].id,x:0,z:0,coverageMetres:32}]})}>Add mapping</button>
     </fieldset></>}
-    <fieldset disabled={busy||armed} className="rules__group"><legend>ARBOR visual catalogue</legend>
+    <fieldset disabled={busy||armed||armPending} className="rules__group"><legend>ARBOR visual catalogue</legend>
       {!catalog?<button onClick={()=>editCatalog({species:[{id:1,preset:'oak'}]})}>Create catalogue</button>:<>
-      <div className="pf-row"><span>Botanical textures (content folder)</span><AssetReferencePicker folderMode label="botanical texture folder" disabled={busy||armed} value={String(catalog.botanicalTextures??'')} onChange={value=>editCatalog({...catalog,botanicalTextures:value})}/></div>
+      <div className="pf-row"><span>Botanical textures (content folder)</span><AssetReferencePicker folderMode label="botanical texture folder" disabled={busy||armed||armPending} value={String(catalog.botanicalTextures??'')} onChange={value=>editCatalog({...catalog,botanicalTextures:value})}/></div>
       {profiles.map((row,i)=><details key={i}><summary>ARBOR {String(row.id??i+1)} · {String(row.preset??row.shape??'custom')}</summary>
         <label className="pf-row"><span>Preset</span><select className="au-input" value={String(row.preset??'')} onChange={e=>editCatalog(patchRow(catalog,'species',i,{preset:e.target.value||undefined}))}><option value="">Custom</option>{(base.presets??[]).map(p=><option key={p}>{p}</option>)}</select></label>
         <Numbers data={row} specs={profile} change={p=>editCatalog(patchRow(catalog,'species',i,p))}/>

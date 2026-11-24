@@ -64,7 +64,7 @@ export default function AssetReferencePicker({
     ...(list.folders??[]).map(item=>normalized(item.path)),
     ...assetFolders(list.files).map(item=>item.path)
   ].filter((path):path is string=>Boolean(path)));
-  const folders = [...folderPaths(catalog)].filter(path=>path.toLowerCase().includes(search.toLowerCase())).sort((a,b)=>a.localeCompare(b)).slice(0,500);
+  const folders = useMemo(()=>folderMode?[...folderPaths(catalog)].filter(path=>path.toLowerCase().includes(search.toLowerCase())).sort((a,b)=>a.localeCompare(b)).slice(0,500):[],[folderMode,catalog,search]);
 
   useEffect(() => {
     if (!open) return;
@@ -99,6 +99,7 @@ export default function AssetReferencePicker({
     if (disabled || folderMode || !permitted(asset)) return;
     if (!asset.guid) { setError('Asset is missing a GUID. Refresh the project Assets catalog.'); return; }
     onChange(asset.guid);
+    setError('');
     setOpen(false);
   };
   const drop = (event: DragEvent<HTMLElement>) => {
@@ -121,6 +122,7 @@ export default function AssetReferencePicker({
       }
       if (resolved && permitted(resolved) && resolved.guid) {
         onChange(resolved.guid);
+        setError('');
         setOpen(false);
       } else setError('Dropped asset is not present in project/content or has an incompatible type.');
     }).catch(cause => setError(String(cause instanceof Error ? cause.message : cause)));
@@ -139,7 +141,7 @@ export default function AssetReferencePicker({
         placeholder={folderMode?'Default (drop a folder or texture)':'None (drop an asset)'} title={value} disabled={disabled}/>
       <button type="button" disabled={disabled} title="Choose from Assets" aria-label={'Choose '+label}
         onClick={() => { setSearch(''); setOpen(true); }}><FolderSearch size={16}/></button>
-      {allowClear && value && !value.startsWith('builtin:') && <button type="button" disabled={disabled} onClick={() => onChange('')}
+      {allowClear && value && !value.startsWith('builtin:') && <button type="button" disabled={disabled} onClick={() => {setError('');onChange('');}}
         aria-label={'Clear '+label}><X size={14}/></button>}
     </div>
     {error && !open && <p role="alert">{error}</p>}
