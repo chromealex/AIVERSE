@@ -79,7 +79,21 @@ public:
         for(const auto& [key,item]:items_)if(!item.leases.empty())
             throw std::logic_error("Caverns explicit visual demand cannot override leases");
         explicitDemand_=std::move(demand);
+        explicitLods_.clear();
         for(auto& [key,item]:items_){(void)key;item.generation=nextGeneration();item.ready=false;item.building=false;item.retiring=false;}
+    }
+    // Explicit visual chart: invalidate the complete LOD epoch together.
+    void setExplicitVisualLods(std::map<ChunkKey3,uint32_t,KeyLess> lods){
+        if(!explicitDemand_||lods.size()!=explicitDemand_->size())
+            throw std::invalid_argument("Caverns explicit LOD coverage");
+        for(const auto& [key,lod]:lods)
+            if(!explicitDemand_->contains(key)||lod>4)
+                throw std::invalid_argument("Caverns explicit LOD key or level");
+        explicitLods_=std::move(lods);
+        for(auto& [key,item]:items_){
+            (void)key;item.generation=nextGeneration();item.ready=false;
+            item.building=false;item.retiring=false;
+        }
     }
     void enableDistanceLod(CaveDistanceLodSettings settings={}) {
         validateCaveDistanceLod(settings);
@@ -203,8 +217,9 @@ public:
             const uint64_t dz=uint64_t(key.z>=center_.z?
                 key.z-center_.z:center_.z-key.z);
             const uint64_t distance=std::max({dx,dy,dz});
-            const uint32_t desiredLod=adaptiveLod_
-                ?caveDistanceLod(distance,item.lod,distanceLod_):lod_;
+            const auto overrideLod=explicitLods_.find(key);
+            const uint32_t desiredLod=overrideLod!=explicitLods_.end()?overrideLod->second:
+                adaptiveLod_?caveDistanceLod(distance,item.lod,distanceLod_):lod_;
             if(item.lod!=desiredLod){
                 item.generation=nextGeneration();
                 item.building=false;
@@ -297,6 +312,7 @@ private:
         return it->second;
     }
     std::optional<std::set<ChunkKey3,KeyLess>> explicitDemand_;
+    std::map<ChunkKey3,uint32_t,KeyLess> explicitLods_;
     StreamSettings settings_;
     ChunkKey3 center_{};
     uint64_t revision_=0,nextGeneration_=0,nextLease_=0;
