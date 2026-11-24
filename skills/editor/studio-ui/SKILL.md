@@ -224,6 +224,9 @@ Use staged StudioTransferPlan::apply with no live commit callback for internal M
 ## Transactional Trash restore and protected cleanup (S6h.3a)
 Explicit restore uses staged native quarantine/replacement relocation and clears the previous Asset cursor in the same outer journal v4/v5 transaction. Single and batch purge both refuse retained Undo/Redo slots and validate the persistent checkpoint under the asset lock; unprotected purge preserves history. UI disables protected purge and displays the native recoveryReason when available. Purge remains irreversible, with partial failure possible. Legacy dirty markers are fenced, not automatically discarded. No new MCP endpoint or full native verification.
 
+## Reviewed damaged Asset checkpoint reset (S6h.3b)
+Trash recovery uses native-only assetHistoryResetReview/Apply with expected project, review token, exact owner version and confirmation. Archive checkpoint/dirty-marker bytes before publishing an empty checkpoint through the existing document journal. Retire legacy marker only after commit; interrupted retirement requires explicit retry. Refuse healthy checkpoint, unsafe paths and active transaction journals; never infer or reconstruct missing history and never delete content/Trash. Demo mode refuses. No archive auto-cleanup or MCP mutation exposure.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web
