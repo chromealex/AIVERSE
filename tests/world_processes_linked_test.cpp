@@ -2,6 +2,7 @@
 #include "aiverselib/world/WorldProcessesMapHydration.h"
 #include "aiverselib/world/EvolveSimulationLod.h"
 #include "aiverselib/world/EvolveRegionWorkBudget.h"
+#include "aiverselib/world/WorldProcessBudgetedQueries.h"
 #include <array>
 #include "tests/AlwaysCheck.h"
 #include <iostream>
@@ -188,10 +189,48 @@ static void checkRegionPriority(){
     const std::array<Entity,1> invalid{kNullEntity};
     AIVERSE_TEST_CHECK(!evolve::prepareRegionBudget(plan,state,evolve::RegionBudgetOptions{1,invalid}));
 }
+static void checkSharedReports(){
+    namespace wp=aiverse::lib::worldprocess;
+    World ecs;
+    auto near=ecs.create(),far=ecs.create(),person=ecs.create();
+    crowd::Agent a{};a.x=-1;a.z=-1;
+    ecs.add<crowd::Agent>(near,a);
+    a.x=30000;a.z=30000;ecs.add<crowd::Agent>(far,a);
+    society::Person p{};p.knowledge=17;
+    ecs.add<society::Person>(person,p);
+    world::SimulationLodConfig cfg{true,0,2,4,16};
+    const std::array<world::Cell,1> observers{{{-1,100,-1}}};
+    const std::array<Entity,1> wake{far};
+    wp::EntityBudgetState crowdState,societyState;
+    const auto first=wp::prepareCrowdReports(ecs,cfg,observers,1000,1,
+        crowdState,{1,wake});
+    AIVERSE_TEST_CHECK(first&&first->samples.size()==1);
+    AIVERSE_TEST_CHECK(first->samples[0].entity==far&&first->scheduling.urgentSelected==1);
+    AIVERSE_TEST_CHECK(first->lod.hot==1&&first->lod.cold==1);
+    crowdState=first->scheduling.next;
+    const auto second=wp::prepareCrowdReports(ecs,cfg,observers,1000,2,
+        crowdState,{1,{}});
+    AIVERSE_TEST_CHECK(second&&second->samples[0].entity==near);
+    AIVERSE_TEST_CHECK(second->samples[0].requestedTick==1&&second->samples[0].sampleTick==2);
+    const auto unknown=[](Entity)->std::optional<world::Cell>{return std::nullopt;};
+    const auto social=wp::prepareSocietyReports(ecs,cfg,observers,1,
+        societyState,{1,{}},unknown);
+    AIVERSE_TEST_CHECK(social&&social->lod.hot==1&&social->samples.size()==1);
+    AIVERSE_TEST_CHECK(social->samples[0].entity==person&&social->samples[0].value.knowledge==17);
+    AIVERSE_TEST_CHECK(ecs.get<crowd::Agent>(near).sampledTick==UINT32_MAX);
+    AIVERSE_TEST_CHECK(ecs.get<society::Person>(person).sampledTick==UINT32_MAX);
+    societyState=social->scheduling.next;
+    const auto remote=[](Entity)->std::optional<world::Cell>{return world::Cell{300,0,300};};
+    const std::array<Entity,1> socialWake{person};
+    const auto forced=wp::prepareSocietyReports(ecs,cfg,observers,2,
+        societyState,{1,socialWake},remote);
+    AIVERSE_TEST_CHECK(forced&&forced->lod.cold==1&&forced->scheduling.urgentSelected==1);
+}
 int main(){
     checkRegionLod();
     checkRegionBudget();
     checkRegionPriority();
+    checkSharedReports();
     auto portal=wl::defaults("EchoPortal");
     AIVERSE_TEST_CHECK(wl::validate("EchoPortal",portal));
     AIVERSE_TEST_CHECK(!wl::edit("EchoPortal","enabled",Json::fromBool(true),portal));
