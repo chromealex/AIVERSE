@@ -49,25 +49,33 @@ public:
         if(!staged_||revision!=stagedRevision_||installed_)return false;
         for(size_t i=0;i<staged_->size();++i)
             if(spatial.colliders().contains(stagedId_+uint32_t(i)))return false;
+        if(!owns(spatial,activeId_,activeGenerations_))return false;
+        stagedGenerations_.clear();
+        stagedGenerations_.reserve(staged_->size());
         size_t inserted=0;
         try {
             for(const auto& tri:*staged_) {
                 if(!spatial.addTriangle(stagedId_+uint32_t(inserted),tri))
                     throw std::runtime_error("Caverns staged SpatialWorld insert");
+                stagedGenerations_.push_back(spatial.colliderGeneration(stagedId_+uint32_t(inserted)));
                 ++inserted;
             }
         }catch(...) {
             for(size_t i=0;i<inserted;++i)
-                spatial.remove(stagedId_+uint32_t(i));
-            return false;
+                if(!spatial.removeIfGeneration(stagedId_+uint32_t(i),stagedGenerations_[i]))
+                    throw std::logic_error("Caverns collision rollback lost ownership");
+            stagedGenerations_.clear();
+            throw;
         }
         installed_=true;
         return true;
     }
     bool revertCandidate(world::SpatialWorld& spatial,uint64_t revision) {
         if(!installed_||revision!=stagedRevision_||!staged_)return false;
-        for(size_t i=0;i<staged_->size();++i)
-            spatial.remove(stagedId_+uint32_t(i));
+        if(!owns(spatial,stagedId_,stagedGenerations_))return false;
+        for(size_t i=0;i<stagedGenerations_.size();++i)
+            if(!spatial.removeIfGeneration(stagedId_+uint32_t(i),stagedGenerations_[i]))return false;
+        stagedGenerations_.clear();
         installed_=false;
         return true;
     }
@@ -75,12 +83,12 @@ public:
     // full no-reader barrier. Only old resource retirement occurs here.
     bool finalizeInstalled(world::SpatialWorld& spatial,uint64_t revision) {
         if(!installed_||revision!=stagedRevision_||!staged_)return false;
-        for(size_t i=0;i<activeCount_;++i)
-            if(!spatial.colliders().contains(activeId_+uint32_t(i)))return false;
-        for(size_t i=0;i<staged_->size();++i)
-            if(!spatial.colliders().contains(stagedId_+uint32_t(i)))return false;
-        for(size_t i=0;i<activeCount_;++i)
-            spatial.remove(activeId_+uint32_t(i));
+        if(!owns(spatial,activeId_,activeGenerations_)||
+           !owns(spatial,stagedId_,stagedGenerations_))return false;
+        for(size_t i=0;i<activeGenerations_.size();++i)
+            if(!spatial.removeIfGeneration(activeId_+uint32_t(i),activeGenerations_[i]))return false;
+        activeGenerations_.swap(stagedGenerations_);
+        stagedGenerations_.clear();
         activeId_=stagedId_;
         activeCount_=staged_->size();
         activeRevision_=stagedRevision_;
@@ -102,12 +110,23 @@ public:
     }
     void unload(world::SpatialWorld& spatial){
         if(installed_)throw std::logic_error("Caverns cannot unload installed candidate");
-        for(size_t i=0;i<activeCount_;++i)
-            spatial.remove(activeId_+uint32_t(i));
+        if(!owns(spatial,activeId_,activeGenerations_))
+            throw std::logic_error("Caverns collision unload lost ownership");
+        for(size_t i=0;i<activeGenerations_.size();++i)
+            if(!spatial.removeIfGeneration(activeId_+uint32_t(i),activeGenerations_[i]))
+                throw std::logic_error("Caverns collision unload lost ownership");
+        activeGenerations_.clear();
         activeId_=0;activeCount_=0;activeRevision_=0;
         staged_.reset();stagedRevision_=0;stagedId_=0;
     }
 private:
+    static bool owns(const world::SpatialWorld& spatial,uint32_t first,
+                     const std::vector<uint64_t>& generations) noexcept {
+        for(size_t i=0;i<generations.size();++i)
+            if(!generations[i]||spatial.colliderGeneration(first+uint32_t(i))!=generations[i])return false;
+        return true;
+    }
+    std::vector<uint64_t> activeGenerations_,stagedGenerations_;
     uint32_t activeId_=0,stagedId_=0;
     size_t activeCount_=0;
     bool installed_=false;
