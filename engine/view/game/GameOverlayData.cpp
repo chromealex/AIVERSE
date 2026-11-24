@@ -499,7 +499,7 @@ void parseEvent(const Rules& R, const Json& j, OverlayDef& d, const std::string&
         return;
     }
     if (!j.isObject()) fail(where, "expected an event name or {\"on\": ...}");
-    onlyKeys(j, {"on", "lifetime", "rise", "grow", "spread", "by", "owner", "types", "max"}, where);
+    onlyKeys(j, {"on", "lifetime", "rise", "grow", "spread", "by", "owner", "types", "max", "critical", "bountyResource"}, where);
     if (!j.has("on")) fail(where, "needs \"on\": event name(s)");
     for (auto& s : strings(j["on"], where + ".on")) {
         uint16_t k = overlayEventKind(s);
@@ -518,7 +518,20 @@ void parseEvent(const Rules& R, const Json& j, OverlayDef& d, const std::string&
         else if (k == "owner") d.event.on = parseRelations(v, w);
         else if (k == "types") parseTypes(R, v, d.event.types, w);
         else if (k == "max") d.event.max = std::clamp(int(number(v, w)), 1, 512);
+        else if (k == "critical") {
+            if (v.type() != Json::Type::Bool) fail(w, "expected boolean");
+            d.event.critical = v.boolean(false) ? 1 : 0;
+        } else if (k == "bountyResource") {
+            if (!v.isString()) fail(w, "expected resource ID");
+            d.event.bountyResource = R.findResource(v.str());
+            if (d.event.bountyResource < 0) fail(w, "unknown resource '" + v.str() + "'");
+        }
     }
+    if (d.event.critical >= 0 && (d.event.kinds.size() != 1 || d.event.kinds.front() != kEvHit))
+        fail(where, "critical requires event on: hit");
+    if (d.event.bountyResource >= 0)
+        for (uint16_t kind : d.event.kinds) if (kind != kEvDied && kind != kEvBounty)
+            fail(where, "bountyResource requires died or bounty events");
     d.hasEvent = true;
 }
 
@@ -616,7 +629,7 @@ render::float4 parseOverlayColor(const Json& j, const std::string& where, bool* 
 namespace {
 struct EvName { const char* name; uint16_t kind; };
 const EvName kEvents[] = {
-    {"hit", kEvHit}, {"died", kEvDied}, {"spawned", kEvSpawned}, {"attack", kEvAttack}, {"gathered", kEvGathered},
+    {"hit", kEvHit}, {"died", kEvDied}, {"bounty", kEvBounty}, {"spawned", kEvSpawned}, {"attack", kEvAttack}, {"gathered", kEvGathered},
     {"delivered", kEvDelivered}, {"produced", kEvProduced}, {"ability", kEvAbility}, {"cast", kEvCastStart}, {"impact", kEvImpact},
     {"miss", kEvMiss}, {"built", kEvBuildDone}, {"placed", kEvBuildPlaced}, {"trained", kEvTrainDone}, {"researched", kEvResearched},
     {"levelup", kEvLevelUp}, {"captured", kEvCaptured}, {"sold", kEvSold}, {"upgraded", kEvUpgraded}, {"alert", kEvAlert},
