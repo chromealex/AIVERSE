@@ -69,7 +69,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [presetSelected,setPresetSelected]=useState('');
   const [presetSearch,setPresetSearch]=useState('');
   const [presetCompatibility,setPresetCompatibility]=useState('');
-  const [relocationPlan,setRelocationPlan]=useState<{state:string;detail?:string;changes:Array<{from:string;to:string;state:string;detail?:string}>}|null>(null);
+  const [relocationPlan,setRelocationPlan]=useState<{source:string;state:string;planRevision?:string;detail?:string;changes:Array<{from:string;to:string;state:string;detail?:string}>}|null>(null);
   const [presetLibraryBusy,setPresetLibraryBusy]=useState(false);
   const [liveScalars,setLiveScalars]=useState<Record<string,number>>({});
   const [replayRestoring,setReplayRestoring]=useState(false);
@@ -291,10 +291,23 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
     try{
       const result=await presetOp('fx_replay_preset_relocate_preview',{name:presetSelected});
       if(typeof result.state!=='string'||!Array.isArray(result.changes))throw new Error('Invalid relocation plan');
-      setRelocationPlan({state:result.state,detail:typeof result.detail==='string'?result.detail:undefined,
+      setRelocationPlan({source:presetSelected,state:result.state,planRevision:typeof result.planRevision==='string'?result.planRevision:undefined,detail:typeof result.detail==='string'?result.detail:undefined,
         changes:result.changes.filter((r):r is {from:string;to:string;state:string;detail?:string}=>
           !!r&&typeof r.from==='string'&&typeof r.to==='string'&&typeof r.state==='string')});
     }catch(e){setError(message(e));}finally{setPresetLibraryBusy(false);}
+  };
+  const applyPresetRelocation=async()=>{
+    if(!active||presetLibraryBusy||busy||!relocationPlan||relocationPlan.state!=='ready'||
+       relocationPlan.source!==presetSelected||!relocationPlan.planRevision||
+       !(/^[a-z0-9_]{1,48}$/).test(presetName)||presetName==='fx'||presetName===presetSelected)return;
+    setPresetLibraryBusy(true);setError('');
+    try{
+      await presetOp('fx_replay_preset_relocate_apply',{name:relocationPlan.source,newName:presetName,
+        planRevision:relocationPlan.planRevision});
+      setRelocationPlan(null);
+      await refreshPresetLibrary();setPresetSelected(presetName);
+      setPresetCompatibility('Relocated copy saved; source unchanged');
+    }catch(e){setError(message(e));setRelocationPlan(null);}finally{setPresetLibraryBusy(false);}
   };
   const exportReplayPreset=()=>{
     if(!replayPreset)return;
@@ -662,6 +675,9 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       </StudioField>
       <StudioButton size="sm" disabled={!active||!replayPreset||presetLibraryBusy||busy||!(/^[a-z0-9_]{1,48}$/).test(presetName)||presetName==='fx'}
         onClick={()=>void saveNamedPreset()}>Save to project Assets</StudioButton>
+      {relocationPlan?.state==='ready'&&<StudioButton size="sm"
+        disabled={!active||presetLibraryBusy||busy||!relocationPlan.planRevision||!(/^[a-z0-9_]{1,48}$/).test(presetName)||presetName==='fx'||presetName===presetSelected}
+        onClick={()=>void applyPresetRelocation()}>Save relocated copy with new name</StudioButton>}
       {replayRestoring&&<small>Restoring native replay; waiting for simulation tick…</small>}
       {replayPreset&&<small>Preset tick {replayPreset.tick} · {replayPreset.speed}× ·
         camera and stage stored in memory</small>}

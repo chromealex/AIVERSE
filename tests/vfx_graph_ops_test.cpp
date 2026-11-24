@@ -215,8 +215,21 @@ int main() {
             "read-only relocation changed stored preset");
     Json movedCheck=Json::object();movedCheck.set("preset",plan["candidate"]);
     require(call("fx_replay_preset_check",movedCheck).getStr("state")=="matching","candidate dependency closure mismatch");
+    Json applyPlan=movedGet;
+    applyPlan.set("newName",Json::string("relocation_v2"));
+    applyPlan.set("planRevision",Json::string("stale"));
+    require(call("fx_replay_preset_relocate_apply",applyPlan).has("error"),"stale plan applied");
+    applyPlan.set("planRevision",plan["planRevision"]);
+    require(!call("fx_replay_preset_relocate_apply",applyPlan).has("error"),"relocated preset publication failed");
+    Json newGet=Json::object();newGet.set("name",Json::string("relocation_v2"));
+    require(call("fx_replay_preset_get",newGet)["compatibility"].getStr("state")=="matching","published relocation mismatch");
+    require(call("fx_replay_preset_relocate_apply",applyPlan).has("error"),"relocated preset overwritten");
+    require(call("fx_replay_preset_get",movedGet)["preset"].getStr("graphSignature")==movedGraph.dump(-1),
+            "relocation apply modified source");
     {std::ofstream f(movedFrom,std::ios::binary);f<<"pixels";}
     {std::ofstream f(movedFrom.string()+".meta");f<<moveMeta;}
+    applyPlan.set("newName",Json::string("relocation_v3"));
+    require(call("fx_replay_preset_relocate_apply",applyPlan).has("error"),"conflicting plan applied");
     require(call("fx_replay_preset_relocate_preview",movedGet).getStr("state")=="conflict",
             "duplicate GUID accepted");
     getPreset.set("expectedGraphSignature",Json::string("other"));

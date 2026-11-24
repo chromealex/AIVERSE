@@ -556,7 +556,38 @@ Json replayRelocationPlan(const Json& preset,const Workspace& ws) {
         return out;
     }
     out.set("state",strGraph(mapping.empty()?"matching":"ready"));
+    // Opaque revision is a stale-plan detector, not an authentication token.
+    const auto sourceBytes=preset.dump(-1),candidateBytes=candidate.dump(-1);
+    uint64_t revision=14695981039346656037ULL;
+    for(const auto* bytes:{&sourceBytes,&candidateBytes}){
+        for(unsigned char ch:*bytes){revision^=ch;revision*=1099511628211ULL;}
+        revision^=255;revision*=1099511628211ULL;
+    }
+    out.set("planRevision",strGraph(std::to_string(revision)));
     out.set("candidate",std::move(candidate));
+    return out;
+}
+Json publishReplayPreset(const Workspace& ws,const std::string& name,const Json& preset) {
+    const auto bytes=preset.dump(-1);
+    if(bytes.size()>kReplayMaxBytes)throw std::runtime_error("Replay preset with dependencies exceeds 64 KiB");
+    const auto dir=replayDirectory(ws,true);
+    const auto file=dir/(name+kReplaySuffix);
+    if(fs::exists(replayFileStatus(file)))throw std::runtime_error("Replay name already exists");
+    size_t count=0;
+    for(const auto& entry:fs::directory_iterator(dir)){
+        const auto n=entry.path().filename().string();const std::string suffix=kReplaySuffix;
+        if(n.size()>suffix.size()&&n.compare(n.size()-suffix.size(),suffix.size(),suffix)==0)++count;
+    }
+    if(count>=kReplayMaxEntries)throw std::runtime_error("Replay library is full");
+    const auto temp=dir/(name+".aiverse-tmp");
+    if(fs::exists(replayFileStatus(temp)))throw std::runtime_error("Replay temporary file already exists");
+    try{
+        writeFile(temp,bytes);
+        if(fs::exists(replayFileStatus(file)))throw std::runtime_error("Replay name already exists");
+        fs::rename(temp,file);
+    }catch(...){std::error_code ec;fs::remove(temp,ec);throw;}
+    Json out=Json::object();out.set("name",strGraph(name));
+    out.set("path",strGraph("spectrafx/replays/"+name+kReplaySuffix));
     return out;
 }
 void noteGraph(Workspace& ws, const std::string& text) {
@@ -626,6 +657,24 @@ void registerSpectraGraphOps(Workspace& ws) {
         if(dir.empty())throw std::runtime_error("Replay library is empty");
         return replayRelocationPlan(readReplayPreset(dir/(name+kReplaySuffix),ws),ws);
     });
+    add("fx_replay_preset_relocate_apply","Recompute a reviewed GUID relocation plan and publish a new immutable preset. Does not modify the source graph, source preset or resources.",
+        R"({"properties":{"name":{"type":"string"},"newName":{"type":"string"},"planRevision":{"type":"string"},"expectedProjectPath":{"type":"string"}},"required":["name","newName","planRevision"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);
+        const auto name=requireGraphName(p),newName=requireGraphName(p,"newName");
+        if(name==newName)throw std::runtime_error("Choose a new replay preset name");
+        const auto dir=replayDirectory(ws,false);
+        if(dir.empty())throw std::runtime_error("Replay library is empty");
+        const auto plan=replayRelocationPlan(readReplayPreset(dir/(name+kReplaySuffix),ws),ws);
+        if(plan.getStr("state")!="ready"||!p["planRevision"].isString()||
+           p.getStr("planRevision")!=plan.getStr("planRevision"))
+            throw std::runtime_error("Replay relocation plan is stale or has conflicts; preview again");
+        const auto& candidate=plan["candidate"];
+        validateReplayPreset(candidate,ws);
+        auto out=publishReplayPreset(ws,newName,candidate);
+        out.set("source",strGraph(name));
+        return out;
+    });
     add("fx_replay_preset_save","Create an immutable named replay preset asset. Existing names are never overwritten.",
         R"({"properties":{"name":{"type":"string"},"preset":{"type":"object"},"expectedProjectPath":{"type":"string"}},"required":["name","preset"]})",
         [&ws](const Json& p){
@@ -641,27 +690,7 @@ void registerSpectraGraphOps(Workspace& ws) {
             preset.set("dependencyVersion",Json::number(int64_t(3)));
             preset.set("dependencies",replayDependencies(preset,ws,3));
         }
-        const auto bytes=preset.dump(-1);
-        if(bytes.size()>kReplayMaxBytes)throw std::runtime_error("Replay preset with dependencies exceeds 64 KiB");
-        const auto dir=replayDirectory(ws,true);
-        const auto file=dir/(name+kReplaySuffix);
-        if(fs::exists(replayFileStatus(file)))throw std::runtime_error("Replay name already exists");
-        size_t count=0;
-        for(const auto& entry:fs::directory_iterator(dir)){
-            const auto n=entry.path().filename().string();const std::string suffix=kReplaySuffix;
-            if(n.size()>suffix.size()&&n.compare(n.size()-suffix.size(),suffix.size(),suffix)==0)++count;
-        }
-        if(count>=kReplayMaxEntries)throw std::runtime_error("Replay library is full");
-        const auto temp=dir/(name+".aiverse-tmp");
-        if(fs::exists(replayFileStatus(temp)))throw std::runtime_error("Replay temporary file already exists");
-        try{
-            writeFile(temp,bytes);
-            if(fs::exists(replayFileStatus(file)))throw std::runtime_error("Replay name already exists");
-            fs::rename(temp,file);
-        }catch(...){std::error_code ec;fs::remove(temp,ec);throw;}
-        Json out=Json::object();out.set("name",strGraph(name));
-        out.set("path",strGraph("spectrafx/replays/"+name+kReplaySuffix));
-        return out;
+        return publishReplayPreset(ws,name,preset);
     });
 
     add("fx_graph_list", "List SpectraFX graphs (fx/graphs/*.vfx.json) with compiler diagnostics and emitter counts.",
