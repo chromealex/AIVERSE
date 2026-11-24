@@ -28,6 +28,7 @@
 #include "aiverselib/world/EvolvePlanetRootClimate.h"
 #include "aiverselib/world/EvolvePlanetRootSupport.h"
 #include "engine/game/PlanetTerrainWater.h"
+#include "aiverselib/world/NereidPlanetBankErosion.h"
 #include <array>
 #include "engine/data/JsonCompose.h"
 #include "tests/AlwaysCheck.h"
@@ -731,6 +732,30 @@ static void checkPlanetLiveFracture(){
     const auto cap=samplePlanetFracture(ecs,surface,8,1);
     AIVERSE_TEST_CHECK(cap.getBool("truncated")&&cap["members"].size()==1&&cap.getInt("pending")==1);
     AIVERSE_TEST_CHECK(!samplePlanetFracture(ecs,surface,UINT32_MAX).getBool("available"));
+}
+static void checkPlanetBankErosion(){
+    namespace nw=aiverse::lib::nereid;
+    game::Surface surface;game::BodyDef body;body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
+    surface.bodies.push_back(body);surface.build();
+    World ecs;const auto sea=ecs.create();
+    nw::WaterSphereComponent ocean;ocean.center=game::Surface::anchor(0);
+    ocean.surfaceRadius=Fixed::fromInt(70);ocean.floorRadius=Fixed::fromInt(50);ocean.currentSpeed=Fixed::fromInt(20);
+    ecs.add<nw::WaterSphereComponent>(sea,ocean);
+    nw::PlanetBankSoilComponent bank;bank.bodyId="terra";bank.surfaceCell=surface.gridCell(0,0,7,7);
+    bank.waterBody=sea;bank.soil=nw::ShoreSoil::Sand;bank.demand100=-100;
+    const auto cut=nw::planPlanetBankErosion(ecs,surface,bank,0,7,16,Fixed{});
+    AIVERSE_TEST_CHECK(cut&&cut->geometry&&cut->geometry->heightDelta16<0);
+    AIVERSE_TEST_CHECK(cut->bank.suspendedCm3==cut->geometry->movedVolumeCm3);
+    AIVERSE_TEST_CHECK(!nw::planPlanetBankErosion(ecs,*cut->geometry->surface,cut->bank,1,7,16,Fixed{}));
+    auto deposition=cut->bank;deposition.demand100=-cut->geometry->heightDelta16*100;
+    deposition.erosionCarryMilliCm=deposition.depositionCarryMilliCm=0;
+    ecs.get<nw::WaterSphereComponent>(sea).currentSpeed={};
+    const auto fill=nw::planPlanetBankErosion(ecs,*cut->geometry->surface,deposition,1,8,16,Fixed{});
+    AIVERSE_TEST_CHECK(fill&&fill->geometry&&fill->geometry->surface->corners==surface.corners);
+    AIVERSE_TEST_CHECK(fill->bank.suspendedCm3==0&&fill->geometry->movedVolumeCm3==cut->geometry->movedVolumeCm3);
+    deposition.suspendedCm3=1;
+    const auto limited=nw::planPlanetBankErosion(ecs,*cut->geometry->surface,deposition,1,8,16,Fixed{});
+    AIVERSE_TEST_CHECK(limited&&!limited->geometry&&limited->bank.suspendedCm3==1);
 }
 static void checkPlanetTerrainWater(){
     namespace nw=aiverse::lib::nereid;
@@ -1645,6 +1670,7 @@ int main(){
     checkPlanetFoundationLoss();
     checkPlanetRootSupport();
     checkPlanetTerrainWater();
+    checkPlanetBankErosion();
     checkPlanetLiveFracture();
     checkPlanetMorphModelFrame();
     checkPlanetMorphContactFrame();
