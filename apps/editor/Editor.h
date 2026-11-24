@@ -265,6 +265,28 @@ public:
 
     // camera of the Scene window (agents fly it with view_focus)
     render::Camera sceneCam;
+    // Caverns brush hover preview, authored by TerrainWindow on the UI thread.
+    // Consumed by drawEditOverlays3D on the same editor frame.
+    struct CavernsBrushPreview {
+        bool visible=false;
+        render::float3 position{};
+        float radiusMetres=0.0f;
+        bool fill=false;
+    } cavernsBrushPreview;
+    struct CavernsBuildStats {
+        size_t pending=0,prepared=0,inFlight=0;
+        size_t gpuActive=0,gpuStaged=0,gpuRetired=0,gpuRemaining=0;
+        uint64_t gpuPreviewRevision=0,gpuRetryAfterFrame=0;
+        size_t gpuUploadFailures=0,gpuRetainedStrata=0;
+        uint64_t gpuFrameBytes=0,gpuRejectedBytes=0,gpuRejectedPressure=0;
+        uint64_t authorEpoch=0;
+        bool visualCommitConnected=false;
+        std::string diagnostic;
+    } cavernsBuildStats;
+    // Visual-only GPU cave preview. Gameplay colliders/nav remain unchanged.
+    bool cavernsVisualPreviewEnabled=false;
+
+
     void focusScene(float x, float z, float distance = -1);
     // planet maps (world block): the Scene camera is the view's orbit camera; picking returns a body point
     bool planetMap() const { return view_.planetMode(); }
@@ -481,6 +503,10 @@ public:
     std::vector<PlaySample> playHistory;
 
 private:
+    // Unpublished CPU-only generation. Pointer keeps the bridge's async worker
+    // state out of this header and is retired with the Editor lifecycle.
+    class CavernsEditHost;
+    std::unique_ptr<CavernsEditHost> cavernsEditHost_;
     void drawMenuBar();
     void drawWindowItems(const std::string& group);
     void drawTopBarControls();   // breadcrumb, play controls, MCP pill (inside the main menu bar)
@@ -497,6 +523,7 @@ private:
     void buildEditScene(game::GameScene& out) const;
     void drawEditOverlays3D();
     void applyChanges();
+    void updateCavernsAuthoring(); // owner-thread MapDoc / Undo observer
     void pollVisualAssets(double dt); // editor-owned asset watcher, independent of windows
     bool convertVisualModelSource(const std::string& source);
     void pollAgentLink();

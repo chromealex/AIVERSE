@@ -258,6 +258,10 @@ if(AIVERSE_ENABLE_PHYSICS)
     add_subdirectory(engine/physics)
 endif()
 add_subdirectory(engine/meta)
+# Small, portable Caverns CPU tests, independent of optional Box3D/RHI.
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
+    add_subdirectory(tests/caverns)
+endif()
 
 # The one gameplay host: grid systems (units, orders, economy, combat, garrisons, AI) and, on world-space maps, actor systems
 add_library(aiverse_game STATIC

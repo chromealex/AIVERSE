@@ -105,3 +105,224 @@ prints where the units ended up)
 See the table in the agent-flowfield report / `docs/planets.md`. On flat 256² / 1024² and a faceSize-128 planet the
 order tick drops from hundreds or thousands of ms (one search per unit) to a few ms; total path time falls by 2-40x;
 the remaining tick cost is local avoidance in the crowd, not pathing.
+
+## TerraWeave Caverns: shared navigation inputs (Stage41, 2026-11-24)
+
+The cave SDF is an **authoritative geometry source**, not another pathfinding
+algorithm. `CaveNavigationDataProvider` in
+`engine/world/TerraWeaveCavernsNavigationData.h` evaluates deterministic
+clearance, floor support, flooded state, area cost and directed transitions
+from one published immutable cave snapshot. The agent profile selects ground,
+flight, swimming, climbing or custom policies, with external same-epoch
+NEREID/PHYSIS/ECS callbacks where required.
+
+`CaveNavigationGridView` provides a bounded integer 3D graph (signed X/Y/Z,
+stable node IDs, six face neighbors and 3D HPA cluster portals). This graph
+can feed *existing* A*, HPA*, Flow Fields or Hybrid solvers through an engine
+adapter, or an independently registered custom solver. The goal is reuse:
+Caverns itself never contains a second A*/Dijkstra/flow-field implementation.
+
+`CaveSharedNavSource` directly exposes `nav::Source`'s multilevel spans and
+links for the existing `nav::Mesh` algorithm, from the SAME shared data
+provider. Free-flying or 3D-swimming agents must use a true 3D graph; a
+2.5D ground NavMesh should not silently represent free flight.
+
+`CaveNavigationPublication` announces revisioned half-open dirty SDF bounds
+*after* the real all-owner game commit. It has explicit consumer IDs for
+A*, HPA*, Flow Field, NavMesh, Hybrid and Custom. Stream-in/out notifications
+also invalidate derived graph topology at an unchanged SDF revision.
+`CaveNavigationInvalidation.h` converts those events into 3D grid ranges,
+HPA cluster ranges and the existing `nav::Mesh::markDirty` columns.
+`CavePathRouter` calls a registered engine/custom callback and rejects
+queries against the wrong SDF revision or pending invalidations.
+
+**Integration boundary:** the current `game::MapGrid::findPath`,
+`hybridPath`, `flowAcquire`, and HPA* implementations are bound to
+`MapGrid`'s 2D path-layer cells. Stage41 provides the 3D graph and
+registration API but does not yet refactor those exact implementations to
+accept a generic cave 3D graph. They should be adapted via shared engine
+pathfinding interfaces, not copied into Caverns, and only then described as
+fully native-wired. This feature has not been compiled or runtime-tested yet
+under the feature-first workflow; see
+`docs/agent-handoffs/caverns-stage41-2026-11-24.md`.
+
+## Shared graph solvers for 3D Caverns (Stage42, 2026-11-24)
+
+The engine now has `engine/nav/GraphSearch.h` (`nav::findGraphAStar`,
+`nav::findGraphDijkstra`, `nav::buildGraphFlow`) and
+`engine/nav/GraphHierarchy.h` (`nav::findGraphHierarchical`).
+They operate over a small common graph protocol
+`size() / passable(node) / neighbors(node,vector<nav::GraphEdge>&)`, integer
+costs, fixed node IDs, deterministic tie-breaking and bounded visits. All
+generic algorithms are in `engine/nav`; no copies of A*/HPA*/Flow algorithms
+reside under `TerraWeaveCaverns*`.
+
+`TerraWeaveCavernsNavigationGraph.h` adapts the cave's true 3D ±X/±Y/±Z
+adjacency to `nav::GraphEdge`. `TerraWeaveCavernsGraphSolvers.h` constructs a
+bounded 3D query region from start/goal and agent profile, supports named
+`astar`, `hpa`, `flow`, `hybrid` backends, and returns versioned 3D cm
+waypoints. HPA uses a shared hierarchy abstraction, then fine-graph search,
+with a global fallback; Hybrid picks that route or direct A* according to
+graph size. The flow backend traces the reverse directed integration field.
+`CaveGameplayRuntimeFrame` registers these four algorithms by default,
+supports configured graph budgets, and still accepts arbitrary named custom
+C++ solver callbacks.
+
+`TerraWeaveCavernsNativeNavSolver.h` binds the existing
+`engine/nav/NavMesh.h::Mesh` to the common `CaveSharedNavSource`.
+Call `registerNativeNavMeshSolver(config)` on the owning runtime; it is
+ground/climb multilevel navigation, not a true 3D free-flight volume solver.
+The current adapter builds a native mesh on-demand per query rather than
+caching tile refreshes, so it is correct API integration but not a proven
+high-throughput production NavMesh cache.
+
+`engine/nav/CaveEcsRouteFollow.h` adds a real shared ECS
+`CaveRouteFollower` component, `assignCaveRoute(world,entity,route,...)`
+and `updateCaveRouteFollowers(world,publishedProvider,physicsCallback)`.
+All interpolation uses integer cm and `Fixed` transforms. An out-of-date
+SDF revision marks `needsRepath`; without a real same-epoch Box3D/
+SpatialWorld collision callback the follower refuses motion. The actual
+simulation authority must register this update in its fixed-tick system
+schedule and include authoritative route components in state hashing,
+serialization and replay as needed. The visual-only GameClient/Editor Play
+and lockstep relay server do not control authoritative physics movement.
+
+**Legacy distinction:** `MapGrid::astarCells`, `MapHpa.cpp`,
+`FlowField.cpp` and `MapGrid::hybridPath` remain 2D specialized engine
+implementations. They have not been rewritten/migrated to use the new
+generic 3D graph protocol; the common `engine/nav` graph solvers are newly
+shared reusable implementations and do not silently change established
+2D gameplay. A future opt-in migration can route MapGrid through common
+interfaces after behavior-equivalence QA.
+
+Stage42 is a source implementation awaiting native compilation and
+acceptance; no CMake/CTest or gameplay physics tests have been run under
+the user's features-before-tests instruction. See
+`docs/agent-handoffs/caverns-stage42-2026-11-24.md`.
+
+## Caverns Stage43: authoritative ECS route lifecycle and environment epochs
+
+An actual game or simulated authority can opt into
+`engine/nav/CaveSimulationNavigation.h` during `GameModule::setup` using
+`CaveGameplayRuntimeFrame::installNavigationInSimulation`. This registers
+persistent `CaveRouteFollower` **schema v2**, `CaveRouteIntent` v1,
+`caverns.navigation.repath` and `caverns.navigation.follow` as ordered
+`Simulation::addSystem` fixed-tick systems and a rollback restore hook.
+`assignCaveGoal` writes a goal and backend name into a real ECS entity.
+Deterministic repath uses at most the configured number of entities per
+simulation tick, with per-agent cooldown and bounded solver visits. On source
+or environment epoch changes the agent marks `needsRepath`, and on stale
+native collision it does not cross the obstacle. The host MUST provide a
+same-epoch native collision callback; GameClient visual previews cannot do so.
+
+`engine/nav/CaveMovementPhysics.h` provides an optional adapter to the
+game's real `SpatialWorld::cast/blocked` (deterministic `Fixed`) and
+`physics::Scene::raycast/overlapCapsule` (Box3D float, SERVER-AUTHORITY ONLY,
+not deterministic across independent lockstep clients). Either way it uses
+the original native collision owners, not a duplicate cave physics scene.
+
+`engine/world/TerraWeaveCavernsNavigationEnvironment.h` provides
+read-only NEREID `lib::nereid::sampleWater` and PHYSIS
+`physis::environmentAt` callbacks from a copied immutable ECS World
+snapshot. Swim passability follows published water state; snow, wetness and
+ice affect integer traction costs. `CaveNavigationPublication` now tracks
+`environmentRevision` independently of authored SDF `sourceRevision`,
+and `CaveGameplayRuntimeFrame::publishNavigationEnvironmentFromSimulation`
+allows a fixed-tick owner to publish that immutable state with dirty bounds.
+All such notifications invalidate the derived solver caches.
+
+`engine/nav/CavePathQueryCache.h` memoizes successful A*/HPA/Flow/Hybrid
+route results with bounded LRU (256 entries / 8MiB default) and a key
+including source revision, environment epoch, solver, endpoints, full agent
+profile and visit budget; `Custom` solvers bypass this cache. Native
+`CaveNativeNavMeshCache` reuses the actual nav::Mesh build across queries
+within an identical SDF/environment epoch and agent/config tuple (max four
+instances by default). A failed physics step, new SDF, water/weather epoch,
+stream residency update, rollback or graph-policy change invalidates
+relevant cache data. These are NONAUTHORITATIVE derived structures and never
+belong in the game checksum.
+
+The default `GameCore` is not modified to unconditionally install cave
+navigation, since many projects and the Editor Play presentation do not
+own a compatible native physical collision epoch. Explicit opt-in from
+the ACTUAL game authority is required; any route/component saves created
+with schema v1 require an explicit migration to v2. Stage43 source changes
+have not been compiled or runtime-tested under the features-first policy;
+see `docs/agent-handoffs/caverns-stage43-2026-11-24.md`.
+
+## Caverns Stage44 — ActorHost single motor and persistent 3D regions
+
+`engine/actor/ActorModule.cpp` now supports explicit
+`map.cavernsNavigation.enabled` on a world-space game using
+`actor::ActorHost`. With an authored `terraweaveCaverns` SDF and
+1..64 bounded `cavernsNavigation.collisionChunks` triplets, the owning
+host generates initial full-resolution cave meshes, derives triangles
+through `prepareCaveVolumeCollision`, and adds them to its **existing**
+`SpatialWorld collision_` before character spawn and motor setup.
+No additional CharacterBody/Transform motor or genre-specific physics
+world is created. Native Box3D and live Carve/Fill collision replacement
+require the Stage35 exclusive owner publication path separately.
+
+`nav::assignCaveActorGoal(world,actor,goal,profile,backend,speed,budget)`
+and `ActorHost::navigateCaveActor(sim,actor,...)` write the same persistent
+Stage43 `CaveRouteIntent` and `CaveRouteFollower` into actual
+`actor::CharacterBody` entities (not the Transform-only follower).
+In the **existing** ActorHost fixed-tick character loop,
+`repathCaveActorRoutes` selects an integer-revision route; the
+`steerCaveActorMotor` adapter converts the next waypoint into a normal
+`actor::Input` before `moveActor` or `moveActorModes`. Only the
+original character motor advances physical state, preserving collision,
+gravity, stance and weapon action semantics. A map without the explicit
+opt-in retains existing ActorHost and FPS bots unchanged.
+`ActorHost::setCaveRouteResolver` permits a named custom C++ solver
+callback over an owned frozen SDF source; no NavMesh inheritance needed.
+
+`engine/nav/GraphRegionCache.h` is a **shared reusable derived cache**
+of deterministic graph passability, adjacency and HPA portal edges.
+`refresh(graph,dirtyNodeIDs)` re-samples the affected nodes and
+rebuilds outgoing portals for their corresponding clusters; a caller
+includes a one-cell halo for incoming links. The cache keeps bounded
+complete reverse Dijkstra/Flow integrations per goal with LRU reuse,
+discarding them when the graph changes. It uses existing
+`nav::findGraphDijkstra`, not a cave-specific solver clone. Full
+incremental shortest-path repair inside an affected flow field is
+**not** implemented yet: after a dirty event the next query rebuilds
+that goal field. `CaveNavigationRegionCache` adapts this reusable
+cache to signed centimetre 3D cave cells and half-open SDF dirty
+bounds. `CaveGameplayRuntimeFrame::enableRegionalNavigation` registers
+`regional.astar`, `regional.hpa`, `regional.flow`,
+`regional.hybrid`. An optional `map.cavernsNavigation.region`
+lets ActorHost reuse those paths without a full SDF graph build
+per route; fallback is the Stage42 bounded general 3D search.
+
+`ActorHost::acceptCommittedCaveNavigation(provider,change,exclusive)`
+may switch to a new immutable source and refresh regional data **only
+after** the actual native SpatialWorld collision change has been
+published under a held readers/simulation barrier. This API does not
+itself replace Box3D or GPU owners. Both authored and environment
+revisions remain authoritative repath constraints.
+
+Stage44 source commits are not proof of compilation, gameplay parity or
+all-owner rollback. Native builds and test campaigns remain deferred by
+the user's features-first request. See
+`docs/agent-handoffs/caverns-stage44-2026-11-24.md`.
+
+## Stage45 architecture correction — ActorHost coupling retired (2026-11-24)
+
+The Stage44 ActorHost-specific native cave integration documented above was **reverted** in the feature branch after review of the engine's genre-neutral architecture. Do not use it as a current API. Both `engine/actor/ActorModule.h` and `engine/actor/ActorModule.cpp` were returned to their pre-Stage44 content; `CaveActorMotorSteering.h` and ActorHost-specific collision catalog/commit headers were deleted.
+
+Use these **common C++ interfaces** instead:
+
+- `engine/world/TerraWeaveCavernsSpatialRevisionOwner.h` owns bounded versioned cave collision leases in an existing `world::SpatialWorld`; staged changes use an independent complete snapshot and an exclusive-owner publish barrier. It does not import ActorHost or assert any automatic Box3D, NavMesh, or GPU publication.
+- `engine/nav/CaveSimulationNavigation.h::installCaveRepathSimulation` opts into the authoritative ECS route-intent/persistence/replanning systems **without installing a movement controller**.
+- `engine/nav/CaveEcsSteering.h::prepareCaveSteering` takes a shared ECS entity-position callback and produces a versioned `CaveSteeringRequest`; a project's existing walking/flying/swimming/vehicle motor consumes it. `installCaveSteeringSystem` is an optional fixed-tick producer. Only the selected motor mutates physical position; do not also install the direct Transform follower for the same entity.
+
+Every algorithm still consumes the immutable Cave SDF provider, not a genre-specific entity representation. See `docs/agent-handoffs/caverns-stage45-2026-11-24.md`. These changes are committed source awaiting native build/verification.
+
+## Stage46 — motor-neutral ECS integration (2026-11-24)
+
+Use `nav::installCaveMotorNavigationBefore(sim, hooks, position, motorSystem, maxEntities)` from `engine/nav/CaveEcsSteering.h` after the real movement system is registered, or `CaveGameplayRuntimeFrame::installMotorNavigationInSimulation`. The installer inserts repath and steering in that order immediately before the uniquely named existing motor and rejects duplicate navigation installation. No actor module, new motor, or position/velocity writer is created. `CaveWorldPositionSource` reads an optional signed-centimetre point from the current const ECS World and entity; do not capture component pointers across rollback. `readCaveTransformPosition` is the default for direct Transform following only; custom positions need no Transform component or collision callback for route search. Actual movement/contact checks remain with the motor.
+
+Use `assignCaveMotorGoal` on an already authorized command/tick to create the route intent, follower and steering request; `cancelCaveMotorGoal` clears intent, `reportCaveMotorBlocked` invalidates the request and queues repath on matching epochs. Consume `caveMotorRequest` only after the producer has run this tick and only against the same committed provider. A missing request means no cave steering. Dynamic-obstacle cache invalidation remains the existing authority's responsibility. Each tick clears old requests, including those outside the rotating deterministic steering budget, missing route, canceled goal, and unavailable published source. Both SDF and environment revisions must match, and waypoint count and coordinates are bounded. If the budget is below entity count, only that tick's selected slots receive movement intent. Restoration invalidates derived caches without rewriting restored persistent route/intent/request bytes; the next tick validates epochs before movement. The component schema versions are unchanged. The authoritative runtime accessor `gameplayNavigationSource()` refuses reads while closed, quarantined or pending nav invalidations. This is an opt-in generic host integration API, not proof of a game-specific motor connection or native world publication. Never use the visual-only preview or lockstep relay as gameplay authority.
+
+Native compile, save/replay, actual motor, physics and GPU acceptance: NOT RUN (features-first sequence). See `docs/agent-handoffs/caverns-stage46-2026-11-24.md`.

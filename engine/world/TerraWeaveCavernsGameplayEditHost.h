@@ -1,0 +1,458 @@
+#pragma once
+// TerraWeave Caverns Stage34: genre-independent live edit preparation host.
+// A brush edit -> versioned SDF -> worker meshes -> native collision/nav
+// shadow sources -> GPU shard staging. A separate EXCLUSIVE owner barrier
+// remains mandatory for gameplay publication; Box3D Scene::create is live.
+// Never report committed gameplay just because CPU/GPU preparation completed.
+#include "engine/world/TerraWeaveCavernsEditRuntime.h"
+#include "engine/world/TerraWeaveCavernsVolumePhysicsStage.h"
+#include "engine/world/TerraWeaveCavernsAuthoredNavStage.h"
+#include "engine/render/TerraWeaveCavernsShardGpuHost.h"
+#include <algorithm>
+#include <cstdint>
+#include <functional>
+#include <map>
+#include <set>
+#include <memory>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
+namespace aiverse::terraweave::caverns {
+
+struct CaveGameplayEditStats {
+    size_t dirty=0,workers=0,cpuReady=0,gpuPending=0,gpuRetired=0;
+    uint64_t requestedRevision=0,stagedRevision=0,committedRevision=0;
+    bool prepared=false;
+};
+
+// Owner callback runs between physics ticks and outside render passes.
+// Must quiesce ALL readers and implement real all-or-none publication of
+// SpatialWorld, Box3D and Navigation before reporting success.
+// NOTE: existing Stage26 shadows are NOT globally rollback-safe; a host
+// without a genuine transaction must return false and keep old gameplay.
+struct CaveGameplayCommitView {
+    const std::vector<CavePreparedEdit>& meshes;
+    const std::vector<CaveShardSnapshot>& visualShards;
+    std::map<ChunkKey3,std::unique_ptr<CaveVolumePhysicsStage>,KeyLess>& physics;
+    CaveAuthoredNavStage& navigation;
+    const CaveVolumeSnapshot& snapshot;
+    uint64_t visualRevision;
+};
+
+class CaveGameplayEditHost {
+public:
+    using ColliderIdAllocator=std::function<uint32_t(ChunkKey3,size_t)>;
+    using TerrainHeight=CaveNavSource::Height;
+    using CommitOwners=std::function<bool(const CaveGameplayCommitView&)>;
+
+    explicit CaveGameplayEditHost(uint32_t resolution=16,
+                                  int32_t spacingCm=100,
+                                  CaveShardConfig shardConfig={},
+                                  size_t dirtyBudget=1024,
+                                  size_t workers=2)
+        :worker_(resolution,spacingCm,dirtyBudget,workers),
+         geometry_(shardConfig) {}
+
+    CaveGameplayEditHost(const CaveGameplayEditHost&)=delete;
+    CaveGameplayEditHost& operator=(const CaveGameplayEditHost&)=delete;
+
+    // World authoring event. Caller supplies the exact resulting snapshot
+    // and affected SDF bounds (for Undo, union of old/new influences).
+    // A new version invalidates all not-yet-committed resource preparation.
+    void edited(CaveDirtyBounds bounds,
+                std::shared_ptr<const CaveVolumeSnapshot> source) {
+        if(!source||!source->sourceRevision)
+            throw std::invalid_argument("Caverns missing game edit snapshot");
+        // Saved MapDoc Undo may restore an older sourceRevision. Native jobs
+        // need a strictly increasing runtime epoch independent of saved JSON.
+        if(runtimeEpoch_==UINT64_MAX)
+            throw std::overflow_error("Caverns game edit epoch overflow");
+        auto copy=std::make_shared<CaveVolumeSnapshot>(*source);
+        canonicalizeCaveSnapshot(*copy);
+        const uint64_t next=std::max(runtimeEpoch_,copy->sourceRevision);
+        if(next==UINT64_MAX)
+            throw std::overflow_error("Caverns game edit revision overflow");
+        copy->sourceRevision=next+1;
+        cancelPending();
+        worker_.invalidate(bounds,copy);
+        snapshot_=std::move(copy);
+        runtimeEpoch_=snapshot_->sourceRevision;
+    }
+
+    // Full sparse rebuild of the edit-owned native projection. External
+    // streamed owners must first retire their leases via their own barrier.
+    void restoreAuthoredSnapshot(CaveDirtyBounds fallback,
+                                 std::shared_ptr<const CaveVolumeSnapshot> source,
+                                 uint32_t resolution,int32_t spacingCm,size_t budget) {
+        if(!source||!source->sourceRevision||runtimeEpoch_==UINT64_MAX)
+            throw std::invalid_argument("Caverns restore snapshot");
+        auto keys=geometry_.catalog().committedKeys();
+        for(const auto& key:keys)
+            if(!physics_.contains(key))
+                throw std::logic_error("Caverns external stream lease requires explicit restore");
+        for(const auto& key:worker_.dirtyKeys())keys.insert(key);
+        if(keys.empty())
+            for(const auto& key:dirtyCaveChunks(fallback,resolution,spacingCm,budget))
+                keys.insert(key);
+        if(keys.size()>budget)throw std::length_error("Caverns restore resident budget");
+        auto copy=std::make_shared<CaveVolumeSnapshot>(*source);
+        canonicalizeCaveSnapshot(*copy);
+        const auto next=std::max(runtimeEpoch_,copy->sourceRevision);
+        if(next==UINT64_MAX)throw std::overflow_error("Caverns restore epoch");
+        copy->sourceRevision=next+1;
+        cancelPending();
+        worker_.invalidateKeys(keys,copy);
+        snapshot_=std::move(copy);runtimeEpoch_=snapshot_->sourceRevision;
+    }
+
+    bool consumeAuthoringOperation(const Json& result,
+                                   std::shared_ptr<const CaveVolumeSnapshot> source) {
+        if(!source || !result.isObject()||
+           !result.getBool("ok",false)||
+           !result["dirtyBounds"].isObject())return false;
+        if(result.getInt("revision",0)!=int64_t(source->sourceRevision))
+            throw std::invalid_argument("Caverns authoring operation revision mismatch");
+        const Json& b=result["dirtyBounds"];
+        edited({b.getInt("minXcm"),b.getInt("minYcm"),b.getInt("minZcm"),
+                b.getInt("maxXcm"),b.getInt("maxYcm"),b.getInt("maxZcm")},
+               std::move(source));
+        return true;
+    }
+
+    // Optional game-owner budget: stage a full cross-shard batch over
+    // several pre-render frames. The final owner barrier publishes all
+    // staged shards at once; CPU physics/NavMesh shadows remain pending.
+    void setGpuUploadLimits(CaveGpuUploadLimits limits){
+        geometry_.setUploadLimits(limits);
+    }
+    CaveGpuUploadStats gpuUploadStats()const noexcept{
+        return geometry_.uploadStats();
+    }
+    CaveGeometrySwapOwner::MemoryStats gpuMemoryStats()const noexcept{
+        return geometry_.memoryStats();
+    }
+    CaveEditTick pumpCpu(size_t budget=8) {
+        return worker_.tick(budget);
+    }
+
+    // Owner pre-render / between-steps operation. Stages ALL affected cave
+    // collision meshes, one authored NavMesh and all modified GPU shards.
+    // Must not call while the graphics device has an open render pass.
+    // Global collider ID allocator must reserve disjoint ranges across
+    // ALL resident engine publishers before staging.
+    bool stageReady(gfx::Device& device,
+                    const world::SpatialWorld& spatial,
+                    CaveNavConfig navConfig,TerrainHeight terrainHeight,
+                    const ColliderIdAllocator& colliderIds,
+                    uint64_t visualRevision,
+                    CaveBatchSpec geometryOptions={}) {
+        if(!snapshot_ || !visualRevision || stagedRevision_)return false;
+        // Stage38 pacing: a single consistent batch is prepared once, then
+        // its GPU shard uploads advance under the configured frame budget.
+        if(gpuBatch_)
+            return pumpGpuBatch(device,visualRevision,geometryOptions);
+        if(!colliderIds || !terrainHeight)return false;
+        const auto candidates=worker_.certifiedCandidates();
+        if(candidates.empty())return false;
+        const uint64_t sourceRevision=snapshot_->sourceRevision;
+        for(const auto& c:candidates)
+            if(c.candidate.sourceRevision!=sourceRevision ||
+               c.dirty.sourceRevision!=sourceRevision)return false;
+        // Prepare-only native physics. No Box3D body is created here.
+        try {
+            for(const auto& c:candidates) {
+                auto& owner=physics_[c.dirty.key];
+                if(!owner)owner=std::make_unique<CaveVolumePhysicsStage>();
+                const auto collision=prepareCaveVolumeCollision(
+                    c.candidate.mesh,c.candidate.resolution,
+                    c.candidate.spacingCm,sourceRevision);
+                const uint32_t firstId=colliderIds(c.dirty.key,
+                                                    collision.triangles.size());
+                if(!owner->prepare(c.candidate.mesh,c.candidate.resolution,
+                                   c.candidate.spacingCm,sourceRevision,
+                                   firstId,spatial))
+                    throw std::runtime_error("Caverns collision stage refused");
+                preparedPhysics_.push_back(c.dirty.key);
+            }
+            if(!navigation_.prepare(worker_.indexedSnapshot(),navConfig,
+                                    std::move(terrainHeight)))
+                throw std::runtime_error("Caverns authored navigation stage refused");
+            std::vector<CaveBatchChunk> chunks;
+            chunks.reserve(candidates.size());
+            for(const auto& item:candidates) {
+                CaveBatchChunk chunk;
+                chunk.mesh=item.candidate.mesh;
+                chunk.revision=item.candidate.renderRevision;
+                chunk.sourceRevision=item.candidate.sourceRevision;
+                chunk.generatorVersion=snapshot_->generatorVersion;
+                chunk.resolution=item.candidate.resolution;
+                chunk.spacingCm=item.candidate.spacingCm;
+                chunks.push_back(std::move(chunk));
+            }
+            const auto groups=groupCaveEditsByShard(
+                chunks,geometry_.catalog().config());
+            auto planned=planCaveMixedLodShardBatch(
+                geometry_.catalog(),groups,visualRevision);
+            if(!planned.ready()){
+                if(!planned.visual.rebuild.empty())
+                    (void)worker_.requestLodRepairs(planned.visual.rebuild);
+                throw std::runtime_error(
+                    "Caverns mixed LOD requires same-snapshot repair");
+            }
+            stagedMeshes_=candidates;
+            stagedVisualRevision_=visualRevision;
+            gpuBatchSpec_=geometryOptions;
+            gpuBatch_=std::make_unique<CaveMixedLodShardBatch>(
+                std::move(planned));
+        } catch(...) {
+            cancelPending();
+            throw;
+        }
+        // First upload is admitted now; subsequent shards are admitted by
+        // later owner frames without redoing collision or nav preparation.
+        return pumpGpuBatch(device,visualRevision,geometryOptions);
+    }
+
+    // Resume one prospective GPU shard upload. No mixed-epoch publish;
+    // all shards remain invisible until commitAtOwnerBarrier is called.
+    bool pumpGpuBatch(gfx::Device& device,uint64_t visualRevision,
+                      CaveBatchSpec spec={}) {
+        if(!gpuBatch_||stagedVisualRevision_!=visualRevision ||
+           !snapshot_||!gpuBatch_->ready())return false;
+        if(gpuBatchIndex_>=gpuBatch_->snapshots.size())return false;
+        const auto& shard=gpuBatch_->snapshots[gpuBatchIndex_];
+        if(!geometry_.stagePlannedShard(device,shard,gpuBatch_->visual,gpuBatchSpec_))
+            return false; // frame budget / GPU owner pressure; retry later
+        stagedShards_.push_back(shard.shard);
+        ++gpuBatchIndex_;
+        if(gpuBatchIndex_==gpuBatch_->snapshots.size()){
+            stagedRevision_=snapshot_->sourceRevision;
+            gpuBatch_.reset();gpuBatchIndex_=0;
+            return true;
+        }
+        return false;
+    }
+
+    // Typical game-owner frame hook, after an authored event, outside an
+    // active render pass: advance CPU jobs and stage the full matching
+    // geometry/collision/nav resources automatically once ready. It does not
+    // run or fake the later exclusive game-world commit.
+    CaveEditTick advance(gfx::Device& device,
+                         const world::SpatialWorld& spatial,
+                         CaveNavConfig navConfig,TerrainHeight terrainHeight,
+                         const ColliderIdAllocator& colliderIds,
+                         uint64_t nextVisualRevision,
+                         size_t cpuJobBudget=2,
+                         CaveBatchSpec graphicsOptions={}) {
+        auto tick=pumpCpu(cpuJobBudget);
+        if(!stagedRevision_ && !worker_.inFlight() && tick.pending &&
+           tick.ready==tick.pending) {
+            // stageReady is deliberately fail-closed; callers can inspect
+            // stats and retry if a GPU budget or a source validation fails.
+            (void)stageReady(device,spatial,navConfig,std::move(terrainHeight),
+                             colliderIds,nextVisualRevision,graphicsOptions);
+        }
+        return tick;
+    }
+
+    // No implicit success callback: the host must actually own a quiescent,
+    // rollback-safe physical/nav commit. In particular, the Stage26 Box3D
+    // create+destroy procedure is not by itself a global atomic transaction.
+    // The callback is invoked before visual activation, with old GPU scene
+    // still visible. If false, gameplay dirty queue remains outstanding.
+    bool commitAtOwnerBarrier(const CommitOwners& commitOwners) {
+        if(!stagedRevision_||!snapshot_||!commitOwners ||
+           snapshot_->sourceRevision!=stagedRevision_ ||
+           !navigation_.staged(stagedRevision_) ||
+           preparedPhysics_.size()!=stagedMeshes_.size())return false;
+        for(const auto& key:preparedPhysics_){
+            const auto it=physics_.find(key);
+            if(it==physics_.end()||!it->second->prepared(stagedRevision_))
+                return false;
+        }
+        const bool accepted=worker_.publishReady([&](const auto& current){
+            if(current.size()!=stagedMeshes_.size())return false;
+            for(size_t i=0;i<current.size();++i)
+                if(current[i].dirty.key!=stagedMeshes_[i].dirty.key ||
+                   current[i].dirty.serial!=stagedMeshes_[i].dirty.serial ||
+                   current[i].candidate.renderRevision!=
+                       stagedMeshes_[i].candidate.renderRevision)
+                    return false;
+            return geometry_.activateGroup(stagedShards_,
+                [&](const std::vector<CaveShardSnapshot>& shards) {
+                    return commitOwners(CaveGameplayCommitView{
+                        current,shards,physics_,navigation_,*snapshot_,
+                        stagedVisualRevision_});
+                });
+        });
+        if(!accepted)return false;
+        committedRevision_=stagedRevision_;
+        stagedRevision_=stagedVisualRevision_=0;
+        stagedMeshes_.clear();
+        stagedShards_.clear();
+        preparedPhysics_.clear();
+        return true;
+    }
+
+    void cancelPending() {
+        for(const auto& key:stagedShards_)(void)geometry_.cancel(key);
+        stagedShards_.clear();
+        for(const auto& key:preparedPhysics_) {
+            const auto it=physics_.find(key);
+            if(it!=physics_.end())(void)it->second->abort(stagedRevision_
+                ?stagedRevision_:(snapshot_?snapshot_->sourceRevision:0));
+        }
+        preparedPhysics_.clear();
+        if(snapshot_&&navigation_.staged(snapshot_->sourceRevision))
+            (void)navigation_.abort(snapshot_->sourceRevision);
+        stagedMeshes_.clear();
+        gpuBatch_.reset();gpuBatchIndex_=0;
+        stagedRevision_=stagedVisualRevision_=0;
+    }
+
+    void registerCommittedMesh(CaveCertifiedChunk mesh,
+                               uint64_t generatorVersion) {
+        CaveBatchChunk source;
+        source.mesh=mesh.mesh;
+        source.generatorVersion=generatorVersion;
+        source.revision=mesh.renderRevision;
+        source.sourceRevision=mesh.sourceRevision;
+        source.resolution=mesh.resolution;
+        source.spacingCm=mesh.spacingCm;
+        if(!geometry_.registerCommittedSource(source))
+            throw std::invalid_argument("Caverns committed mesh registration refused");
+        worker_.registerResident(std::move(mesh));
+    }
+
+    // The edit host owns these leases, so external bookkeeping cannot
+    // discard them. Stage the replacement visual shard first, then retire
+    // the exact native leases inside its real activation callback.
+    bool retireOwnedChunk(gfx::Device& device,physics::Scene& scene,
+                          world::SpatialWorld& spatial,ChunkKey3 key,
+                          uint64_t expectedRenderRevision,
+                          uint64_t nextRenderRevision,
+                          const std::function<bool()>& exclusive,
+                          const std::function<bool()>& retireNavigation,
+                          CaveBatchSpec spec={}) {
+        if(!exclusive||!exclusive()||!retireNavigation||!expectedRenderRevision)
+            return false;
+        const auto it=physics_.find(key);
+        if(it==physics_.end()||!it->second)return false;
+        const auto dirty=worker_.dirtyKeys();
+        if(std::find(dirty.begin(),dirty.end(),key)!=dirty.end())return false;
+        auto& box=it->second->boxOwner();
+        auto& collision=it->second->spatialOwner();
+        if(!box.canRetire(scene)||!collision.canRetire(spatial))return false;
+        const auto* old=geometry_.catalog().find(key);
+        if(!old||old->revision!=expectedRenderRevision)return false;
+        const auto shard=caveShardFor(key,geometry_.catalog().config());
+        if(!geometry_.stageVisualRetire(device,key,expectedRenderRevision,
+                                       nextRenderRevision,spec))return false;
+        bool nativeChanged=false;
+        const bool committed=geometry_.activate(shard,[&](const auto&){
+            if(!exclusive()||!box.canRetire(scene)||!collision.canRetire(spatial))
+                return false;
+            // False means the nav callback made no live changes.
+            if(!retireNavigation())return false;
+            nativeChanged=true;
+            if(!exclusive())throw std::logic_error("Caverns lost retirement exclusion");
+            box.unload(scene);
+            collision.unload(spatial);
+            return true;
+        });
+        if(!committed){
+            if(nativeChanged)throw std::logic_error("Caverns GPU retirement failed after native mutation");
+            (void)geometry_.cancel(shard);
+            return false;
+        }
+        (void)worker_.forgetResident(key);
+        physics_.erase(it);
+        return true;
+    }
+
+    // Called only after external streaming retirement truly removed the
+    // GPU source, Box3D body, SpatialWorld IDs and relevant nav ownership.
+    // Forgetting a pending edited chunk is forbidden by residency leases.
+    bool forgetCommittedMesh(ChunkKey3 key,uint64_t renderRevision) {
+        // Owned native resources must use retireOwnedChunk instead.
+        if(physics_.contains(key))return false;
+        if(!renderRevision || !geometry_.forgetCommittedSource(key,renderRevision))
+            return false;
+        (void)worker_.forgetResident(key);
+        return true;
+    }
+
+    void draw(render::Renderer3D& renderer){geometry_.draw(renderer);}
+    size_t collectGpuCompletedWithoutIdle(gfx::Device& device){
+        return geometry_.collectCompletedWithoutIdle(device);
+    }
+    bool collectAfterGpuIdle(gfx::Device& device){
+        return geometry_.collectAfterGpuIdle(device);
+    }
+    bool hasActivePhysics()const noexcept {
+        for(const auto& [key,owner]:physics_) {
+            (void)key;
+            if(owner&&(owner->spatialOwner().activeRevision()||
+                       owner->boxOwner().activeRevision()||
+                       owner->spatialOwner().candidateInstalled()||
+                       owner->boxOwner().candidateInstalled()))return true;
+        }
+        return false;
+    }
+    // All readers must already be stopped, and pending work canceled.
+    // Preflight every owner before irreversible retirement begins.
+    bool releaseOwnedPhysics(physics::Scene& scene,world::SpatialWorld& spatial) {
+        for(const auto& [key,owner]:physics_) {
+            (void)key;
+            if(!owner||!owner->boxOwner().canRetire(scene)||
+               !owner->spatialOwner().canRetire(spatial))return false;
+        }
+        for(auto& [key,owner]:physics_) {
+            (void)key;
+            owner->boxOwner().unload(scene);
+            owner->spatialOwner().unload(spatial);
+        }
+        physics_.clear();
+        return true;
+    }
+    bool shutdownAfterGpuIdle(gfx::Device& device){
+        if(hasActivePhysics())return false;
+        cancelPending();
+        worker_.drain();
+        return geometry_.shutdownAfterGpuIdle(device);
+    }
+    CaveGameplayEditStats stats()const {
+        const auto gpu=geometry_.stats();
+        return {worker_.dirtyCount(),worker_.inFlight(),worker_.preparedCount(),
+                gpu.pendingShards,gpu.retiredScenes,
+                snapshot_?snapshot_->sourceRevision:0,
+                stagedRevision_,committedRevision_,stagedRevision_!=0};
+    }
+    std::vector<ChunkKey3> pendingEditKeys()const{return worker_.dirtyKeys();}
+    std::shared_ptr<const CaveVolumeSnapshot> sourceSnapshot()const {
+        return snapshot_;
+    }
+    std::shared_ptr<const CaveSnapshotSpatialIndex> indexedSnapshot()const {
+        return worker_.indexedSnapshot();
+    }
+    const CaveAuthoredNavStage& navigation()const noexcept{return navigation_;}
+    const CaveShardGpuHost& geometry()const noexcept{return geometry_;}
+    const std::map<ChunkKey3,std::unique_ptr<CaveVolumePhysicsStage>,KeyLess>&
+    physicsStages()const noexcept{return physics_;}
+private:
+    CaveEditRuntimeBridge worker_;
+    CaveShardGpuHost geometry_;
+    CaveAuthoredNavStage navigation_;
+    std::map<ChunkKey3,std::unique_ptr<CaveVolumePhysicsStage>,KeyLess> physics_;
+    std::shared_ptr<const CaveVolumeSnapshot> snapshot_;
+    std::vector<CavePreparedEdit> stagedMeshes_;
+    std::vector<CaveShardKey> stagedShards_;
+    std::unique_ptr<CaveMixedLodShardBatch> gpuBatch_;
+    size_t gpuBatchIndex_=0;
+    CaveBatchSpec gpuBatchSpec_{};
+    std::vector<ChunkKey3> preparedPhysics_;
+    uint64_t stagedRevision_=0,stagedVisualRevision_=0,committedRevision_=0;
+    uint64_t runtimeEpoch_=0;
+};
+} // namespace aiverse::terraweave::caverns

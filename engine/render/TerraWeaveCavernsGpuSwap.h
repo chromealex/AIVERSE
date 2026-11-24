@@ -1,0 +1,228 @@
+#pragma once
+// TerraWeave Caverns Stage24: graphics owner-controlled GeometryScene handoff.
+// No GPU resources are released merely because a newer cave mesh exists.
+// STRATA and Renderer3D are both routed through ONE GeometryScene::draw.
+// Physics/NavMesh commit is a mandatory host callback, NOT performed here.
+#include "engine/render/TerraWeaveCavernsEditPresentation.h"
+#include "engine/render/TerraWeaveCavernsSwapPolicy.h"
+#include <cstdint>
+#include <memory>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+namespace aiverse::terraweave::caverns {
+class CaveGeometrySwapOwner {
+public:
+    static constexpr size_t kMaxRetainedScenes=8;
+    CaveGeometrySwapOwner()=default;
+    CaveGeometrySwapOwner(const CaveGeometrySwapOwner&)=delete;
+    CaveGeometrySwapOwner& operator=(const CaveGeometrySwapOwner&)=delete;
+    bool emptyAndDrained()const noexcept{return !active_&&!hasStaged()&&retired_.empty();}
+    struct MemoryStats {
+        uint64_t activeSourceBytes=0,stagedSourceBytes=0,retiredSourceBytes=0;
+        uint64_t activeStrataArenaBytes=0,stagedStrataArenaBytes=0,retiredStrataArenaBytes=0;
+        uint64_t activePageTransfers=0,activePageDeferrals=0;
+        size_t liveScenes=0;
+    };
+    MemoryStats memoryStats()const noexcept {
+        MemoryStats out;
+        out.activeSourceBytes=activeBytes_;out.stagedSourceBytes=stagedBytes_;
+        if(active_){const auto& s=active_->stats();out.activeStrataArenaBytes=s.strataStreamingArenaBytes;
+            out.activePageTransfers=s.strataStreamFrameGpuTransferBytes;
+            out.activePageDeferrals=s.strataStreamFrameDeferrals;++out.liveScenes;}
+        if(staged_){out.stagedStrataArenaBytes=staged_->stats().strataStreamingArenaBytes;++out.liveScenes;}
+        for(const auto& entry:retired_){out.retiredSourceBytes+=entry.sourceBytes;
+            out.retiredStrataArenaBytes+=entry.scene->stats().strataStreamingArenaBytes;++out.liveScenes;}
+        return out;
+    }
+    bool resident()const noexcept{return active_!=nullptr;}
+    bool hasStaged()const noexcept{return staged_!=nullptr || stagedEmpty_;}
+    uint64_t activeRevision()const noexcept{return activeRevision_;}
+    uint64_t stagedRevision()const noexcept{return stagedRevision_;}
+    size_t retiredCount()const noexcept{return retired_.size();}
+    size_t pendingGpuOwners()const noexcept{
+        return retired_.size()+size_t(bool(staged_));
+    }
+    // Called only on graphics owner outside any render pass. Stages actual
+    // CPU models through GeometryScene's GPU upload/loadPrepared pipeline.
+    // Old active scene is untouched. If an upload throws, failed GeometryScene
+    // is retained for explicit safe teardown; never destroy a potentially
+    // GPU-owning scene when the device's idle barrier is unavailable.
+    bool stage(gfx::Device& dev,CaveBatchPrepared prepared,
+               uint64_t renderRevision,bool enableStrata,
+               size_t vertexBudget=2000000,CaveStrataPaging paging={}){
+        if((device_&&device_!=&dev)||!dev.gpuHealthy()||!vertexBudget||vertexBudget>16000000||prepared.models.empty()||stagedEmpty_)return false;
+        const size_t liveOwners=retired_.size()+size_t(bool(active_))+size_t(bool(staged_));
+        if(!caveCanStageScene(activeRevision_,stagedRevision_,renderRevision,
+                              liveOwners,kMaxRetainedScenes))return false; // backpressure, never leak/overallocate
+        // Reserve before a GPU allocation to make failure retention safe.
+        if(retired_.capacity()<kMaxRetainedScenes)
+            retired_.reserve(kMaxRetainedScenes);
+        uint64_t sourceBytes=0;
+        for(const auto& [name,model]:prepared.models){
+            (void)name;if(!model)return false;
+            sourceBytes+=uint64_t(model->vertices.size())*sizeof(render::ModelVertex)+
+                         uint64_t(model->indices.size())*sizeof(uint32_t);
+        }
+        device_=&dev;
+        auto candidate=std::make_unique<render::GeometryScene>();
+        configureCaveStrata(*candidate,enableStrata,paging);
+        try {
+            candidate->loadPrepared(dev,prepared.manifest,
+                                    std::move(prepared.models),vertexBudget);
+        } catch(...) {
+            // A partially uploaded source may retain GPU retirement tokens.
+            // Keep it alive for explicit idle/shutdown in collectAfterGpuIdle.
+            retired_.push_back({std::move(candidate),0,sourceBytes});
+            throw;
+        }
+        if(staged_)retired_.push_back({std::move(staged_),0,stagedBytes_});
+        staged_=std::move(candidate);
+        stagedBytes_=sourceBytes;
+        stagedRevision_=renderRevision;
+        return true;
+    }
+    // Full-Fill or all-solid/no-surface result: stage a DELETE without
+    // uploading a dummy GeometryScene. The old active draw remains until
+    // the same external owner barrier approves collision and nav retirement.
+    bool stageEmpty(uint64_t renderRevision) {
+        const size_t liveOwners=retired_.size()+size_t(bool(active_))+
+                                size_t(bool(staged_));
+        if(!caveCanStageScene(activeRevision_,stagedRevision_,
+                              renderRevision,liveOwners,kMaxRetainedScenes)||
+           stagedEmpty_)return false;
+        // Preallocate the eventual active retirement slot BEFORE any
+        // gameplay callback can commit physics, so activation is noexcept.
+        if(retired_.capacity()<kMaxRetainedScenes)
+            retired_.reserve(kMaxRetainedScenes);
+        if(staged_)retired_.push_back({std::move(staged_),0,stagedBytes_});
+        stagedBytes_=0;
+        stagedEmpty_=true;
+        stagedRevision_=renderRevision;
+        return true;
+    }
+    // Host callback must guarantee all affected graphics + collision/nav
+    // owners have staged compatible revisions and that coordinated visibility
+    // swap succeeded at the owner barrier. A false result retains old draw.
+    template<class Commit>
+    bool activate(Commit&& hostCommit) {
+        if(!hasStaged()||!caveCanActivateScene(activeRevision_,stagedRevision_))return false;
+        // Host callbacks may irreversibly publish native physics. Reserve
+        // the old GPU owner retirement slot before invoking that callback.
+        if(active_ && retired_.capacity()<retired_.size()+1)
+            retired_.reserve(retired_.size()+1);
+        const bool committed=hostCommit(stagedRevision_);
+        if(!committed)return false;
+        if(active_)retired_.push_back({std::move(active_),0,activeBytes_});
+        active_=std::move(staged_); // nullptr for a staged empty cave
+        activeBytes_=std::exchange(stagedBytes_,0);
+        activeRevision_=stagedRevision_;
+        stagedEmpty_=false;
+        stagedRevision_=0;
+        return true;
+    }
+    // Draw only the active GeometryScene. Never additionally submit the same
+    // chunk through the old CutTerrainResident or CaveGeometrySceneResident.
+    void draw(render::Renderer3D& renderer) {
+        if(active_)active_->draw(renderer);
+    }
+    // Stage38: graphics-owner frame boundary, OUTSIDE render passes.
+    // No GPU idle wait: standard non-STRATA scenes are removed after real
+    // GPU fence completion, then their model retirement tokens are polled.
+    // Portable STRATA scenes use the same verified fence and then release
+    // their sidecars before the model retirement queue. Diagnostic owners
+    // and unsupported fences remain on the explicit idle recovery path.
+    // A zero/unsupported fence means keep the old owner alive.
+    size_t collectCompletedWithoutIdle(gfx::Device& dev) {
+        if((device_&&device_!=&dev)||!dev.gpuHealthy())return 0;
+        const uint64_t completed=dev.gpuCompletedFence();
+        if(!completed)return 0;
+        size_t released=0;
+        for(auto it=retired_.begin();it!=retired_.end();) {
+            if(!it->submissionFence)
+                it->submissionFence=dev.gpuSubmissionFence();
+            if(!it->submissionFence || completed<it->submissionFence) {
+                ++it;continue;
+            }
+            try {
+                const bool started=it->scene->deferredShutdownEligible()
+                    ?it->scene->beginDeferredShutdown(dev)
+                    :it->scene->beginDeferredShutdownAfterFence(dev,it->submissionFence);
+                if(!started||!it->scene->pollDeferredShutdown(dev)) {
+                    ++it;continue;
+                }
+            }catch(...) {++it;continue;}
+            it=retired_.erase(it);
+            ++released;
+        }
+        return released;
+    }
+    size_t retainedStrataOwners()const noexcept{
+        size_t count=0;
+        for(const auto& entry:retired_)
+            if(!entry.scene->deferredShutdownEligible())++count;
+        return count;
+    }
+
+    // No active-GPU scene disposal without actual device idle proof.
+    // Explicitly call only when renderer submissions for the old owner are
+    // finished; failure must RETAIN all retired scenes for a later retry.
+    bool collectAfterGpuIdle(gfx::Device& dev) {
+        if(device_&&device_!=&dev)return false;
+        if(retired_.empty())return true;
+        if(!dev.waitForResourceIdle())return false;
+        for(auto it=retired_.begin();it!=retired_.end();) {
+            try {
+                it->scene->shutdown(dev);
+                it=retired_.erase(it);
+            }catch(...) {
+                return false;
+            }
+        }
+        return true;
+    }
+    // Cancels staging but does not release GPU resources. Retire via above.
+    bool cancelStage() {
+        if(stagedEmpty_){stagedEmpty_=false;stagedRevision_=0;return true;}
+        if(!staged_)return false;
+        // Moving the already-counted staged owner to retirement does not
+        // increase the total number of live GPU owners.
+        retired_.push_back({std::move(staged_),0,stagedBytes_});
+        stagedRevision_=0;stagedBytes_=0;
+        return true;
+    }
+    // Final teardown; caller must have stopped Scene draws and prove GPU idle.
+    // On failure do NOT destroy this owner or its Scene pointers.
+    bool shutdownAfterGpuIdle(gfx::Device& dev) {
+        if((device_&&device_!=&dev)||!dev.waitForResourceIdle())return false;
+        // Explicitly retain any owner whose shutdown refuses the barrier.
+        // No scene objects are destroyed until their shutdown returns.
+        if(staged_) {
+            try {staged_->shutdown(dev);}catch(...) {return false;}
+            staged_.reset();stagedRevision_=0;stagedBytes_=0;
+        }
+        stagedEmpty_=false;
+        if(active_) {
+            try {active_->shutdown(dev);}catch(...) {return false;}
+            active_.reset();activeRevision_=0;activeBytes_=0;
+        }
+        if(!collectAfterGpuIdle(dev))return false;
+        activeRevision_=stagedRevision_=0;device_=nullptr;
+        return true;
+    }
+
+private:
+    gfx::Device* device_=nullptr;
+    std::unique_ptr<render::GeometryScene> active_;
+    std::unique_ptr<render::GeometryScene> staged_;
+    uint64_t activeRevision_=0,stagedRevision_=0;
+    uint64_t activeBytes_=0,stagedBytes_=0;
+    bool stagedEmpty_=false;
+    struct RetiredScene {
+        std::unique_ptr<render::GeometryScene> scene;
+        uint64_t submissionFence=0; // captured at frame owner collection
+        uint64_t sourceBytes=0; // conservative estimate retained until owner drains
+    };
+    std::vector<RetiredScene> retired_;
+};
+} // namespace aiverse::terraweave::caverns
