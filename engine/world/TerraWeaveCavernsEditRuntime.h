@@ -267,7 +267,7 @@ public:
     // all-owner commit. If false, prepared CPU state and dirty markers remain.
     // All loaded-neighbor seams must be certified before invoking the host.
     template<class HostCommit>
-    bool publishReady(HostCommit&& hostCommit) {
+    bool publishReady(HostCommit&& hostCommit,bool propagateNativeFailure=false) {
         if(running_.size() || prepared_.empty() ||
            prepared_.size()!=dirty_.size())return false;
         std::vector<CavePreparedEdit> candidates;
@@ -292,7 +292,7 @@ public:
         // Throwing is treated as failure: NEVER ACK dirty edits.
         bool committed=false;
         try {committed=hostCommit(candidates);}
-        catch(const std::exception&){return false;}
+        catch(...){if(propagateNativeFailure)throw;return false;}
         if(!committed)return false;
         gate_=std::move(prospective);
         for(const auto& candidate:candidates){
