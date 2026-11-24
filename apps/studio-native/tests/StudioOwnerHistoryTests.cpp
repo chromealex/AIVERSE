@@ -38,6 +38,14 @@ int main(){
     AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("studio_asset_history_reset_review"))=="read");
     AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("studio_save_documents"))=="unverified");
     AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("studio_owner_history_step"))=="unverified");
+    AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("planet_forest_get"))=="read");
+    for(const auto* op:{"planet_forest_set","planet_forest_plant","planet_forest_move","planet_forest_remove"})
+        AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy(op))=="map");
+    for(const auto* op:{"studio_planet_forest_live","studio_planet_scene_get"})
+        AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy(op))=="read"&&aiverse::studio::studioPlanetViewAgentOperation(op));
+    for(const auto* op:{"studio_planet_scene_body_set","studio_planet_scene_camera_set"})
+        AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy(op))=="view"&&aiverse::studio::studioPlanetViewAgentOperation(op));
+    AIVERSE_TEST_CHECK(!aiverse::studio::studioPlanetViewAgentOperation("studio.planetForestSet"));
     std::cout<<"PASS explicit agent policy\n";
     using namespace aiverse::studio;
     std::map<std::string,HistoryBatchOwner> owners={

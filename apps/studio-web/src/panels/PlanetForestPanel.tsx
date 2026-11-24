@@ -49,6 +49,12 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
   }
   useEffect(()=>{void checkRevision();},[historyVersion]);
   useEffect(()=>onNativeEvent((event,payload)=>{if(event==='document.changed')void checkRevision();
+    if(event==='planetScene.bodyChanged'){
+      const next=payload as {override?:string;mapPath?:string;revision?:string};
+      if(baseRef.current&&next?.mapPath===baseRef.current.mapPath&&next.revision===baseRef.current.revision&&typeof next.override==='string'){
+        setSceneBody(next.override);setSelectedPlant(null);setLive(null);if(next.override)setBody(next.override);
+      }
+    }
     if(event==='planetForest.planted'){
       setArmed(false);const result=payload as {document?:StudioPlanetForestDocument;error?:string;selected?:{species:number;key:number;direct:boolean;body:string}};
       if(result?.document){accept(result.document);onChanged();}else if(result?.error)setError(result.error);

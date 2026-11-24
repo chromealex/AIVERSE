@@ -870,13 +870,15 @@ Json StudioHost::planetSceneBodyRequest(const Json& params){
         if(params.has("body")){
             if(!params["body"].isString()||params.getStr("mapPath")!=ws.map.path||params.getStr("expectedRevision")!=std::to_string(ws.map.revision))
                 throw std::runtime_error("Reload the current planetary map");
-            if(session_->strokeActive()||brushArmed()||wpDrag_.active||mouse_.active)throw std::runtime_error("Finish the active Scene gesture first");
+            if(session_->strokeActive()||brushArmed()||wpDrag_.active||mouse_.active||onScene([&]{return preview_->transformDragActive();}))throw std::runtime_error("Finish the active Scene gesture first");
             const auto body=params.getStr("body");const int bi=ws.map.data.findBody(body);
             if(!body.empty()&&(bi<0||!ws.map.data.bodies[size_t(bi)].surface()))throw std::runtime_error("Unknown surface body");
             const bool armed=forestPlantArm_.isObject();forestPlantArm_=Json{};
             onScene([&]{preview_->setPlanetSceneBody(ws.project.dir,ws.map.path,body);});
             if(armed){Json payload=Json::object();payload.set("cancelled",Json::fromBool(true));sendEventPayload("planetForest.planted",payload);}
             wpLiveSnapshot_=Json{};wpLiveRefresh_=0;rebuildOverlay();
+            Json event=Json::object();event.set("override",Json::string(body));event.set("mapPath",Json::string(ws.map.path));event.set("revision",Json::string(std::to_string(ws.map.revision)));
+            sendEventPayload("planetScene.bodyChanged",event);
         }
         Json out=Json::object();out.set("override",Json::string(onScene([&]{return preview_->planetSceneBodyOverride(ws.project.dir,ws.map.path);})));out.set("activeBody",Json::string(worldProcessSceneBody()));
         return out;
