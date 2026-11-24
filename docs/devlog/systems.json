@@ -1778,6 +1778,12 @@
           "text": "Добавлены опциональные замеры отдельных вычислительных групп с идентификаторами узлов. Изолированные тесты пройдены; аппаратные замеры ожидаются.",
           "nameEn": "Texture Graph GPU — Stage 38L",
           "textEn": "Optional per-compute-region timings with authored node IDs. Isolated tests passed; hardware measurements pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38M (в работе)",
+          "text": "Vulkan scoped timestamps без синхронного ожидания GPU.",
+          "nameEn": "Texture Graph GPU — Stage 38M (in progress)",
+          "textEn": "Vulkan scoped timestamps without synchronous GPU waits."
         }
       ],
       "enables": [
