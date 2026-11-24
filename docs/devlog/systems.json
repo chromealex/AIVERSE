@@ -1762,10 +1762,10 @@
           "textEn": "Incremental final textures preserve unchanged bindings and publish only changed textures. Isolated policy test passed."
         },
         {
-          "name": "Texture Graph GPU — Stage 38J (в работе)",
-          "text": "Автоматический сбор процедурных текстур с удержанием ссылок в копиях материалов.",
-          "nameEn": "Texture Graph GPU — Stage 38J (in progress)",
-          "textEn": "Automatic procedural image collection with material-copy lifetime pins."
+          "name": "Texture Graph GPU — Stage 38J (частично)",
+          "text": "Добавлены неизменяемые токены привязок и автоматический сбор при явном подтверждении ссылок нативным хостом. Сбор по умолчанию отключён; изолированные тесты пройдены.",
+          "nameEn": "Texture Graph GPU — Stage 38J (partial)",
+          "textEn": "Immutable material binding pins and automatic sweep with native host root certification. Disabled by default; isolated tests passed."
         }
       ],
       "enables": [
