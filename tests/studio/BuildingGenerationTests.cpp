@@ -37,7 +37,7 @@ int main(int argc,char** argv){
             for(const auto& entry:catalog["styles"].items())
                 if(entry.getStr("id")==id){
                     CHECK(entry.getStr("setting")==id);
-                    CHECK(entry["functions"].size()==4);
+                    CHECK(entry["functions"].size()>=8);
                     CHECK(entry["materials"].size()>=16);
                     present=true;break;
                 }

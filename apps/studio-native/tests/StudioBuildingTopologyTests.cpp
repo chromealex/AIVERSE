@@ -13,11 +13,14 @@ int main(int argc,char** argv){
     for(const auto& style:catalog["styles"].items()){
         if(style.getStr("id")=="scifi-space")distinctSpace=style.getStr("setting")=="scifi-space";
         if(style.getStr("id")=="underwater")AIVERSE_TEST_CHECK(style.getStr("recommendedRoof")=="dome");
+        if(style.getStr("id")!="scifi")AIVERSE_TEST_CHECK(style["functions"].size()>=8);
         for(const auto& slot:style["materials"].items()){
             AIVERSE_TEST_CHECK(!style["surfaces"][slot.str()].getStr("pattern").empty());
         }
     }
     AIVERSE_TEST_CHECK(distinctSpace);
+    const auto binding=studio::buildingStudioDetail::request(Json::parse(R"({"style":"scifi","function":"factory","width":24,"height":12,"depth":18,"seed":42,"materialBindings":{"hazardY":"YellowPaint"}})"));
+    AIVERSE_TEST_CHECK(binding.materialBindings.at("hazardY")=="YellowPaint");
     const auto request=Json::parse(R"({"style":"scifi","slot":"hull"})");
     const auto surface=studio::studioBuildingSurfacePreview(argv[1],request);
     AIVERSE_TEST_CHECK(surface.getStr("style")=="scifi"&&surface.getStr("slot")=="hull");

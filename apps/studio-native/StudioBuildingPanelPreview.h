@@ -1,9 +1,12 @@
 #pragma once
 // Independent, demand-driven native Renderer3D preview. No document, main
-// Scene camera, drawable, project writes or continuous frame streaming.
+// Scene camera, drawable or project writes. Only requested frames are rendered.
 #include "engine/render/Renderer3D.h"
 #include "engine/render/Model.h"
 #include "engine/render/RenderDeviceLifetime.h"
+#if defined(_WIN32)
+#include "engine/gfx/vulkan/Vulkan.h"
+#endif
 #include <algorithm>
 #include <cmath>
 #include <memory>
@@ -17,8 +20,13 @@ public:
     StudioBuildingPanelPreview() {
 #if defined(__APPLE__)
         device_=gfx::createMetalDevice(nullptr);
+#elif defined(_WIN32)
+        gfx::VulkanWindow offscreen;
+        std::string error;
+        device_=gfx::createVulkanDevice(offscreen,&error);
+        if(!device_)throw std::runtime_error("Building offscreen Vulkan device: "+error);
 #else
-        throw std::runtime_error("Independent Building GPU preview is currently available on macOS Metal");
+        throw std::runtime_error("Independent Building GPU preview backend unavailable");
 #endif
         if(!device_)throw std::runtime_error("Building preview device unavailable");
         lease_=std::make_unique<render::RenderDeviceLifetime>(*device_);

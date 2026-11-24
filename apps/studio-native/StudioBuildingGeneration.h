@@ -38,6 +38,13 @@ inline bool safeId(const std::string& id) {
     for(unsigned char c:id)if(!((c>='a'&&c<='z')||(c>='0'&&c<='9')||c=='-'||c=='_'))return false;
     return true;
 }
+// Material IDs are catalog keys, not filesystem components. Existing styles
+// include hazardY/glassLit and project libraries allow capital letters.
+inline bool safeMaterialId(const std::string& id){
+    if(id.empty()||id.size()>64)return false;
+    for(unsigned char c:id)if(!((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')||c=='-'||c=='_'))return false;
+    return true;
+}
 inline fs::path stylesDirectory(const fs::path& engine) {
     if(engine.empty())throw std::runtime_error("Engine content is not configured");
     const auto dir=engine/"engine"/"assets"/"building-styles";
@@ -128,7 +135,7 @@ inline Request request(const Json& params) {
         if(!bindings.isObject()||bindings.members().size()>64)
             throw std::runtime_error("Material overrides must be an object of at most 64 slots");
         for(const auto& [slot,name]:bindings.members()){
-            if(!safeId(slot)||!name.isString()||!safeId(name.str()))
+            if(!safeMaterialId(slot)||!name.isString()||!safeMaterialId(name.str()))
                 throw std::runtime_error("Invalid style material slot or project material identifier");
             req.materialBindings.emplace(slot,name.str());
         }

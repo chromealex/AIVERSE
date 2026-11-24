@@ -2974,6 +2974,9 @@ if(AIVERSE_BUILD_TESTS)
     add_executable(aiverse_library_building_feature_tests tests/libraries/building_feature_tests.cpp)
     target_link_libraries(aiverse_library_building_feature_tests PRIVATE AIVERSE::lib_building_style)
     add_test(NAME library_building_features COMMAND aiverse_library_building_feature_tests ${PROJECT_SOURCE_DIR})
+    add_executable(aiverse_building_surface_pattern_tests tests/libraries/building_surface_pattern_tests.cpp)
+    target_link_libraries(aiverse_building_surface_pattern_tests PRIVATE AIVERSE::lib_building_style)
+    add_test(NAME library_building_surface_patterns COMMAND aiverse_building_surface_pattern_tests)
 endif()
 # Pure StructureGraph: functional layout without engine, renderer, material
 # catalog or Studio dependencies; standalone C++20 compilation contract.
