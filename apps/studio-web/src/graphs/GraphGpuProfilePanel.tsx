@@ -13,7 +13,7 @@ export default function GraphGpuProfilePanel({projectPath}:{projectPath:string})
   if(lock.current||!projectPath)return;
   lock.current=true;setBusy(true);setError('');const token=epoch.current;
   try{
-   const r=(await invoke('studio.op',{op:'graph_gpu_profile',params:{action}})).result;
+   const r=(await invoke('studio.op',{op:'graph_gpu_profile',params:{action},expectedProject:projectPath})).result;
    if(token!==epoch.current)return;
    if(!object(r)||typeof r.available!=='boolean')throw new Error('Invalid GPU profile response');
    setReport(r);

@@ -20,7 +20,7 @@ export default function GraphLiveSnapshotPanel({domain,projectPath}:{domain:'mot
   lock.current=true;setBusy(true);setError('');setSnapshot(null);
   const token=epoch.current;
   try{
-   const r=(await invoke('studio.op',{op:'graph_live_snapshot',params:{domain,...(domain==='motionweave'?{entity,captureHistory}:{})}})).result;
+   const r=(await invoke('studio.op',{op:'graph_live_snapshot',params:{domain,...(domain==='motionweave'?{entity,captureHistory}:{})},expectedProject:projectPath})).result;
    if(token!==epoch.current)return;
    if(!object(r)||r.domain!==domain||typeof r.available!=='boolean')throw new Error('Invalid live snapshot response');
    setSnapshot(r);
@@ -32,7 +32,7 @@ export default function GraphLiveSnapshotPanel({domain,projectPath}:{domain:'mot
   lock.current=true;setBusy(true);setError('');
   const token=epoch.current;
   try{
-   const r=(await invoke('studio.op',{op:'graph_live_watch',params:{action,...(action==='start'?{domain,entity:domain==='spectrafx'?'preview':entity}:{})}})).result;
+   const r=(await invoke('studio.op',{op:'graph_live_watch',params:{action,...(action==='start'?{domain,entity:domain==='spectrafx'?'preview':entity}:{})},expectedProject:projectPath})).result;
    if(token!==epoch.current)return;
    if(!object(r)||typeof r.available!=='boolean')throw new Error('Invalid watch response');
    setWatch(r);setFrame(Math.max(0,Array.isArray(r.frames)?r.frames.length-1:0));
@@ -43,7 +43,7 @@ export default function GraphLiveSnapshotPanel({domain,projectPath}:{domain:'mot
   if(lock.current||!projectPath||! /^[0-9]{1,20}$/.test(entity))return;
   lock.current=true;setBusy(true);setError('');const token=epoch.current;
   try{
-   const r=(await invoke('studio.op',{op:'graph_live_profile',params:{action,entity}})).result;
+   const r=(await invoke('studio.op',{op:'graph_live_profile',params:{action,entity},expectedProject:projectPath})).result;
    if(token!==epoch.current)return;
    if(!object(r)||typeof r.available!=='boolean')throw new Error('Invalid live profile response');
    setProfile(r);

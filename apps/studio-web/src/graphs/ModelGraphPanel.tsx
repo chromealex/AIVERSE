@@ -12,8 +12,8 @@ import type {Positioned} from './graphSelection';
 import {modelProjection,connectModelParent,modelingReply,object,replaceAnimationEntry,animationProjection,connectAnimationPose,addAnimationTransition,geometryProjection,connectGeometryOperand,setGeometryBoolean,moveGeometryModifier,geometryModifierKinds,addGeometryModifier,removeGeometryModifier,modelMaterialIds,bindModelMaterial} from './nativeGraphAdapters';
 import type {GraphObject} from './nativeGraphAdapters';
 
-const op=async(name:string,params:GraphObject={})=>(await invoke('studio.op',{op:name,params})).result;
 export default function ModelGraphPanel({projectPath}:{projectPath:string}){
+ const op=async(name:string,params:GraphObject={})=>(await invoke('studio.op',{op:name,params,expectedProject:projectPath})).result;
  const [names,setNames]=useState<string[]>([]),[name,setName]=useState('');
  const [original,setOriginal]=useState<GraphObject|null>(null),[draft,setDraft]=useState<GraphObject|null>(null);
  const [revision,setRevision]=useState(0),[mode,setMode]=useState<'model'|'geometry'|'pose'|'states'>('model');

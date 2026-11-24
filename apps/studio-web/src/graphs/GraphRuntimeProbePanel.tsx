@@ -5,17 +5,17 @@ import {object,animationProjection} from './nativeGraphAdapters';
 import GraphCanvas from './GraphCanvas';
 import type {GraphObject} from './nativeGraphAdapters';
 
-export default function GraphRuntimeProbePanel({domain,graph,disabled}:{domain:'motionweave'|'spectrafx';graph:GraphObject;disabled:boolean}){
+export default function GraphRuntimeProbePanel({domain,graph,disabled,projectPath}:{projectPath:string;domain:'motionweave'|'spectrafx';graph:GraphObject;disabled:boolean}){
  const [steps,setSteps]=useState(30),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [sample,setSample]=useState<{graph:GraphObject;domain:string;report:GraphObject}|null>(null);
  const [frame,setFrame]=useState(0),epoch=useRef(0),lock=useRef(false);
- useEffect(()=>()=>{epoch.current++;lock.current=false},[]);
+ useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setSample(null);setError('');return()=>{epoch.current++;lock.current=false};},[projectPath,domain]);
  const run=async()=>{
-  if(lock.current||disabled||!Number.isInteger(steps)||steps<1||steps>60)return;
+  if(lock.current||disabled||!projectPath||!Number.isInteger(steps)||steps<1||steps>60)return;
   lock.current=true;setBusy(true);setError('');setSample(null);
   const token=epoch.current;
   try{
-   const r=(await invoke('studio.op',{op:'graph_runtime_probe',params:{domain,graph,steps}})).result;
+   const r=(await invoke('studio.op',{op:'graph_runtime_probe',params:{domain,graph,steps},expectedProject:projectPath})).result;
    if(token!==epoch.current)return;
    if(!object(r)||r.ok!==true||r.domain!==domain||r.liveAttached!==false||r.gpuMeasured!==false||!Array.isArray(r.frames)||r.frames.length>60||!r.frames.every(object))
     throw new Error(object(r)?JSON.stringify(r.errors??r.error??'Unexpected native probe response'):'Probe unavailable');

@@ -162,7 +162,7 @@
     },
     "studio": {
       "status": "not_run",
-      "note": "Existing Caverns panel mounts native scoped capture and offline import without a second panel; actual native GUI acceptance pending. Stage 64 scopes isolated debugger and profiler Studio operations to the expected project; native bridge regression authored, NOT RUN.",
+      "note": "Existing Caverns panel mounts native scoped capture and offline import without a second panel; actual native GUI acceptance pending. Stage 64 scopes isolated debugger and profiler Studio operations to the expected project; native bridge regression authored, NOT RUN. Stage 65 scopes graph runtime, modeling, texture and material panel operations to the active project; native runtime operations require scope and optional asset metadata scope is checked. Tests NOT RUN.",
       "evidence": []
     },
     "inspector": {

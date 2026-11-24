@@ -2007,8 +2007,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
             if(params.has("expectedProject") && params.getStr("expectedProject")!=ws_.project.dir)
                 throw std::runtime_error("Studio operation project changed; reload before retrying");
             if (op.rfind("feature_readiness_",0)!=0 && ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
-            if(op=="graph_debug_session" && params.getStr("expectedProject")!=ws_.project.dir)
-                throw std::runtime_error("Graph debugger project changed; reopen the panel");
+            if((op=="graph_debug_session"||op=="graph_runtime_probe"||op=="graph_live_snapshot"||op=="graph_live_watch"||op=="graph_live_profile"||op=="graph_gpu_profile") && params.getStr("expectedProject")!=ws_.project.dir)
+                throw std::runtime_error("Graph runtime project changed; reopen the panel");
             if((op.starts_with("world_save_")||op=="world_job_start"||op.starts_with("world_simulation_lod_"))&&params.getStr("expectedProject")!=ws_.project.dir)
                 throw std::runtime_error("World maintenance project changed; reopen the panel");
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
@@ -2111,6 +2111,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
             r.set("folders",std::move(folders));
             reply.set("result", std::move(r));
         } else if (method == "studio.assetMetaPatch") {
+            if(params.has("expectedProject") && params.getStr("expectedProject")!=ws_.project.dir)
+                throw std::runtime_error("Asset metadata project changed; refresh the panel");
             if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
             const std::string guid=params.getStr("guid");
             const std::string key=params.getStr("key");

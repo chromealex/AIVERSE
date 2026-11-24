@@ -76,6 +76,12 @@ void caveGraphCaptureWorkflow() {
         const auto projectPath=session.workspace().project.dir;
         Json debug=Json::parse(R"({"op":"graph_debug_session","params":{"action":"status"}})");
         AIVERSE_TEST_CHECK(call("studio.op",debug).has("error"));
+        for(const char* op:{"graph_runtime_probe","graph_live_snapshot","graph_live_watch","graph_live_profile","graph_gpu_profile"}) {
+            Json stale=Json::object();stale.set("op",Json::string(op));stale.set("params",Json::object());
+            AIVERSE_TEST_CHECK(call("studio.op",stale).has("error"));
+            stale.set("expectedProject",Json::string("other-project"));
+            AIVERSE_TEST_CHECK(call("studio.op",stale).has("error"));
+        }
         debug.set("expectedProject",Json::string("other-project"));
         AIVERSE_TEST_CHECK(call("studio.op",debug).has("error"));
         debug.set("expectedProject",Json::string(projectPath));

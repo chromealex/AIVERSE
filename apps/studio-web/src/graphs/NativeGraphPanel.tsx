@@ -143,7 +143,7 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
   {draft?<><GraphCanvas view={view} selected={active} selection={selection} onSelection={setSelection} label={domain+' graph'}
    disabled={busy} pendingOutput={pending} onOutput={setPending} onInput={connect} onCancel={()=>setPending(null)}
    onSelect={id=>setSelection(id?[id]:[])} onMove={(id,x,y)=>move([{id,x,y}])} onMoveGroup={move}/>
-   <GraphRuntimeProbePanel domain={domain} graph={draft} disabled={busy}/>
+   <GraphRuntimeProbePanel projectPath={projectPath} domain={domain} graph={draft} disabled={busy}/>
    <GraphLiveSnapshotPanel domain={domain} projectPath={projectPath}/>
    <GraphDebugSessionPanel domain={domain} graph={draft} projectPath={projectPath} disabled={busy}/>
    <GraphDiagnostics view={view} policy={fx?{cycles:'reject',cycleGroups:['exec','data']}:{cycles:mode==='states'?'allow':'reject'}}/>

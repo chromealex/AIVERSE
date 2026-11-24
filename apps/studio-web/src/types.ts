@@ -452,7 +452,7 @@ export interface StudioParams {
   'studio.assets': Record<string, never>;
   'studio.assetByGuid': { guid: string };
   'studio.assetReferences': Record<string, never>;
-  'studio.assetMetaPatch': {guid:string;key:string;value:string|number|boolean};
+  'studio.assetMetaPatch': {guid:string;key:string;value:string|number|boolean;expectedProject?:string};
   'studio.assetFolderCreate': { parent: string; name: string };
   'studio.assetMovePreview': { paths: string[]; destination: string };
   'studio.assetImportPreview': { destination: string };

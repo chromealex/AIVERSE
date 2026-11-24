@@ -10,8 +10,8 @@ import {materialGraph,textureRecipeParams,textureChannelForOutput} from './mater
 import type {TextureRecipe,TextureOutput} from './materialGraph';
 
 const object=(x:unknown):x is Record<string,unknown>=>!!x&&typeof x==='object'&&!Array.isArray(x);
-const op=async(name:string,params:Record<string,unknown>={})=>(await invoke('studio.op',{op:name,params})).result;
 export default function MaterialGraphPanel({name,material,draft,projectPath,disabled,onEdit}:{name:string;material:MaterialData;draft:MaterialPatch;projectPath:string;disabled:boolean;onEdit:(key:MaterialKey,value:FieldValue)=>void}){
+ const op=async(name:string,params:Record<string,unknown>={})=>(await invoke('studio.op',{op:name,params,expectedProject:projectPath})).result;
  const [selected,setSelected]=useState(''),[patterns,setPatterns]=useState<string[]>([]);
  const [recipe,setRecipe]=useState<TextureRecipe>({pattern:'',output:'color',seed:1,size:256,scale:8,name:''});
  const [error,setError]=useState(''),[status,setStatus]=useState(''),[busy,setBusy]=useState(false);
