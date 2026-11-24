@@ -43,6 +43,8 @@ public:
     bool recoveryRequired()const noexcept{return barrier_.status().recoveryRequired;}
     bool ready()const noexcept{return activeRevision_&&!blocked_&&!recoveryRequired()&&planet_&&planet_->caveSurfaceCutEpoch(frame_.body())==surfaceEpoch();}
     bool staged()const noexcept{return pendingRevision_!=0;}
+    bool closed()const noexcept{return !activeRevision_&&!pendingRevision_&&!blocked_&&!recoveryRequired()&&
+        physics_.empty()&&geometry_.emptyAndDrained()&&!device_&&!spatial_&&!box_&&!planet_;}
     size_t residentSlots()const noexcept{return activeSlots_.size();}
     size_t residentRegions()const noexcept{return activePlan_?activePlan_->regions.size():0;}
     uint64_t regionAuthorityRevision(uint64_t id)const noexcept{
