@@ -173,6 +173,29 @@ NavMesh and streaming, read
 World-space resource/streaming ownership lives under
 `engine/world/TerraWeaveCaverns*.h`; presentation GPU ownership lives under
 `engine/render/TerraWeaveCaverns*.h`.
+Stage44 cave actor integration: the canonical world-space ActorHost
+uses `actor::CharacterBody` and its existing `moveActor/moveActorModes`
+controller, NOT a standalone `Transform` mover. Caverns must steer its
+ordinary `actor::Input` through
+`engine/nav/CaveActorMotorSteering.h`; never install the Stage43
+Transform-position follower on the same actor. Opt-in authored
+`map.cavernsNavigation` generates collision meshes from one frozen SDF
+and installs their triangles in ActorHost's EXISTING
+`world::SpatialWorld` before spawn. Goal assignment
+`ActorHost::navigateCaveActor` writes persistent shared ECS navigation
+components. Additional named custom resolvers can be injected via
+`ActorHost::setCaveRouteResolver`, using an owning immutable SDF source.
+Live Carve/Fill must be published through actual native collision owners
+before `ActorHost::acceptCommittedCaveNavigation` is called under exclusive
+simulation/readers barrier; the initial map collision insertion does NOT
+prove dynamic physics and Box3D updates.
+Reusable incremental regional adjacency and HPA portal caches, with
+complete per-goal Flow field LRU invalidated on edits, live in
+`engine/nav/GraphRegionCache.h` and feed
+`engine/world/TerraWeaveCavernsNavigationRegionCache.h`.
+Do not duplicate pathfinders in ActorHost, Caverns, FPS or RTS modules.
+Read `docs/agent-handoffs/caverns-stage44-2026-11-24.md` and update
+the skill and handoff per stage. No native build/tests performed yet.
 Stage43 cave navigation owner rule: real fixed-tick ECS integration is
 opt-in via `engine/nav/CaveSimulationNavigation.h` and
 `CaveGameplayRuntimeFrame::installNavigationInSimulation`. It registers
