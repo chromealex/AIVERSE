@@ -99,7 +99,9 @@
     "tests/render/texture_graph_gpu_node_abi.cpp",
     "apps/editor/core/TextureGraphGpuExecution.h",
     "engine/render/graph/TextureGraphGpuStepState.h",
-    "tests/render/texture_graph_gpu_step_state.cpp"
+    "tests/render/texture_graph_gpu_step_state.cpp",
+    "engine/render/graph/TextureGraphGpuResourceCache.h",
+    "tests/render/texture_graph_gpu_resource_cache.cpp"
   ],
   "traits": {
     "editable": true,
@@ -110,7 +112,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35B experimental early-pack materialized native executor integrated in source behind explicit bakeSet opt-in; fused fallback and existing publication owner preserved. Parent pinned-output plan/source lowering requires reconciliation. Native build and runtime acceptance pending.",
+      "note": "Stage 36A in progress: reconcile parent typed lowering and compiler with native executor; exact-layout retired GPU storage pool and bounded pipeline reuse.",
       "evidence": []
     },
     "architecture": {
