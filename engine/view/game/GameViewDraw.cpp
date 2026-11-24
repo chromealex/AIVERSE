@@ -394,7 +394,8 @@ void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o,
     EntityAnim& ps = anims_[key];
     ps.seen = frame_;
     if(o.shooterType<looks_.size())ps.type=o.shooterType;
-    ps.phase+=std::max(0.f,dt);
+    const float step=std::max(0.f,dt);
+    ps.phase+=step;
     if (!ps.launched) {
         ps.launched = true;
         ps.launch = {0, 0, 0};
