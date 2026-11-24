@@ -153,6 +153,11 @@ public:
         }
         return true;
     }
+    // Owner has paused all readers. Drop future-timeline notifications and
+    // callbacks retaining ECS snapshots; keep subscriptions for full rebuild.
+    void resetForRestore() noexcept {
+        pending_.clear();active_.reset();callbacks_={};residency_={};
+    }
     bool hasPending()const noexcept{return !pending_.empty();}
     uint64_t activeRevision()const noexcept{
         return active_?active_->revision():0;
