@@ -1408,6 +1408,10 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         const render::Camera renderCam = prisma_.jitteredCamera(cam_,renderW,renderH);
         // SpectraFX GPU simulation is encoded before the scene pass.
         fx_.setPlanetView(planet() ? &view_ : nullptr);
+        const auto graphViewProj=renderCam.proj(float(renderW)/float(std::max(1,int(renderH))),
+                                              dev.info().clipDepthZeroToOne)*renderCam.view();
+        fx_.prepareGraphGpuFrame(*sim_,scene_,renderCam,graphViewProj,int(renderW),int(renderH),
+            screen_ == Screen::Playing || screen_ == Screen::Over ? float(dt) : 0.f);
         fx_.prepareGpuFrame(screen_ == Screen::Playing || screen_ == Screen::Over
                                 ? float(std::clamp(dt,0.0,0.1)) : 0.0f,cam_);
         if (view_.strataDebugInset() && !mapLoading_) {

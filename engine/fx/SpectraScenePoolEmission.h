@@ -27,4 +27,17 @@ inline bool readScenePoolEmission(const Json& graph,PoolContinuousEmission& out)
     candidate.maxBurstsPerFrame=uint32_t(max);
     out=candidate;return true;
 }
+// Current live terrain registry is exact-source-position only. Distance
+// births interpolate along the travelled segment; never silently substitute
+// missing terrain data at those intermediate positions.
+inline bool scenePoolDataCoverageCompatible(const Json& graph,const PoolContinuousEmission& policy) {
+    if(policy.metresPerBurst<=0.f)return true;
+    const auto& bindings=graph["dataInterfaces"];
+    if(!bindings.isObject())return bindings.isNull();
+    for(const auto& [name,binding]:bindings.members()) {
+        (void)name;
+        if(binding.getStr("provider")=="terraweave")return false;
+    }
+    return true;
+}
 }

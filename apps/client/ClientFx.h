@@ -19,6 +19,7 @@ public:
     void update(Simulation&, const game::GameScene&, const render::Camera&, const render::mat4&, int, int, float) {}
     void addLights(render::LightSystem&) {}
     void prepareGpuFrame(float, const render::Camera&) {}
+    void prepareGraphGpuFrame(Simulation&,const game::GameScene&,const render::Camera&,const render::mat4&,int,int,float) {}
     void renderGpu(const render::mat4&, const render::Camera&) {}
     void render(const render::Lighting&) {}
     void renderPrepared(const render::Camera3D&, const render::mat4&, int, int, const render::Lighting&) {}
@@ -47,6 +48,7 @@ public:
 #include "engine/fx/GameFx.h"
 #include "engine/world/SpectraLiveFields.h"
 #include "libraries/include/aiverselib/mechanics/SpectraSourceMirror.h"
+#include "libraries/include/aiverselib/mechanics/SpectraGpuAttachmentEcsAdapter.h"
 #include "engine/view/game/GameView.h"
 
 namespace aiverse::client {
@@ -79,6 +81,8 @@ public:
     // Opt-in SpectraFX GPU effects: call once before Renderer3D::beginScene,
     // inside beginFrame and outside all GPU render/compute passes.
     void prepareGpuFrame(float dt,const render::Camera& camera);
+    void prepareGraphGpuFrame(Simulation& sim,const game::GameScene& scene,
+        const render::Camera& camera,const render::mat4& viewProj,int width,int height,float dt);
     // Draw GPU-owned billboards in the still open scene pass, after render().
     void renderGpu(const render::mat4& viewProj, const render::Camera& camera);
     // After Renderer3D::render(): draws into the still open main pass.
@@ -136,9 +140,11 @@ private:
     };
     bool ensureGpuPlayback(gfx::Device& dev);
     void presentEntityEffects(Simulation& sim, const game::GameScene& scene, float dt);
-    void presentGraphSources(Simulation& sim,const game::GameScene& scene,const render::Camera& camera);
+    void presentGraphSources(Simulation& sim,const game::GameScene& scene,const render::Camera& camera,bool allowGpu=false);
+    void finishGraphGpuFrame();
+    void shutdownGraphPool();
     void clearGraphSources();
-    std::string graphSourceAsset(const std::string& name);
+    std::string graphSourceAsset(const std::string& name,bool allowGpu);
     int entityRule(uint64_t key, const std::vector<std::string>& selectors);
     fx::SpectraFxEntityEffects entities_;
     std::unordered_map<uint64_t,int> entityRules_;
@@ -150,6 +156,11 @@ private:
     lib::mechanics::SpectraSourceMirror graphSourceMirror_;
     std::unique_ptr<lib::mechanics::SpectraPresentationSystem> graphSources_;
     std::map<std::string,std::string> graphSourceAssets_;
+    spectra::GpuPoolWorld graphPool_;
+    lib::mechanics::SpectraSourceMirror graphGpuMirror_;
+    std::unique_ptr<spectra::GpuEcsAttachmentPresenter> graphGpuSources_;
+    std::map<std::string,spectra::InstanceParameterTable> graphGpuSchemas_;
+    bool graphPoolOpen_=false,graphPoolResetPending_=false,graphSourcesPrepared_=false;
     uint64_t graphSourceEpoch_=1;
     uint64_t graphSourceTick_=0;
     bool graphSourceHaveTick_=false;

@@ -130,6 +130,12 @@ static void poolPolicyScenario(){
     try{spectra::readScenePoolEmission(Json::parse(R"({"scenePoolEmission":{"burstsPerSecond":-1}})"),policy);}
     catch(const std::exception&){rejected=true;}
     check(rejected,"invalid pooled policy accepted");
+    auto terrain=Json::parse(R"({"dataInterfaces":{"height":{"provider":"terraweave"}}})");
+    check(spectra::scenePoolDataCoverageCompatible(terrain,policy),"rate births use exact source position");
+    policy.metresPerBurst=1.f;
+    check(!spectra::scenePoolDataCoverageCompatible(terrain,policy),"distance terrain births require continuous coverage");
+    auto weather=Json::parse(R"({"dataInterfaces":{"wind":{"provider":"physis"}}})");
+    check(spectra::scenePoolDataCoverageCompatible(weather,policy),"weather has spatial coverage");
 }
 static void parameterScenario(){
     lg::SpectraSourceComponent a,b;
