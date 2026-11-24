@@ -1269,6 +1269,14 @@
     {
      "status": "in-progress",
      "target": null,
+     "title": "Огонь с дымом для SpectraFX",
+     "titleEn": "Fire and smoke effect for SpectraFX",
+     "text": "Добавить готовый редактируемый граф и показать его в нативном предпросмотре.",
+     "textEn": "Add an editable effect graph and show it in the native preview."
+    },
+    {
+     "status": "in-progress",
+     "target": null,
      "title": "Полная связка GPU и CPU в продакшене",
      "titleEn": "Full GPU and CPU integration in production"
     },
