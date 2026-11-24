@@ -62,6 +62,14 @@
     {
      "status": "in-progress",
      "target": null,
+     "title": "Планетарный лес: выбор и перемещение в Scene",
+     "titleEn": "Planetary forest: Scene selection and relocation",
+     "text": "Stage 161D3: выбор стабильного species/key, подсветка, перемещение одним кликом через MapDoc, отмена и Undo.",
+     "textEn": "Stage 161D3: stable species/key picking, highlighting, one-click relocation via MapDoc, cancellation and Undo."
+    },
+    {
+     "status": "in-progress",
+     "target": null,
      "title": "Планетарный лес: live-диагностика ECS",
      "titleEn": "Planetary forest: completed-tick ECS diagnostics",
      "text": "Stage 161D2b: положения корней и физических капсул из авторитетного снимка, переключатель Live, общие лимиты.",
