@@ -758,6 +758,11 @@ public:
     virtual bool updateStorageBufferChecked(BufferHandle,const void*,size_t,size_t=0) {
         return false;
     }
+    // Ordered GPU-to-GPU storage copy in the current frame, outside encoders.
+    // Both resources must survive encoded work even if handles are retired.
+    // True is encode acceptance, not completion. Unsupported backends refuse.
+    virtual bool supportsStorageBufferCopy() const { return false; }
+    virtual bool copyStorageBufferChecked(BufferHandle,BufferHandle,size_t,size_t=0,size_t=0) { return false; }
     virtual void destroyBuffer(BufferHandle h) = 0;
     // Optional per-buffer diagnostics. No GPU stall/readback, and never
     // authoritatively measures GPU memory bandwidth or execution.

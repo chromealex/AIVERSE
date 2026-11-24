@@ -37,6 +37,13 @@ ComputeBackend chooseComputeBackend(gfx::Backend backend, bool computeAvailable,
 // Allocation safety ceiling for the expanded-quad backend, not a global scene limit.
 inline constexpr uint32_t kGpuEmitterMaxSlots=262144;
 inline constexpr uint32_t kGpuCheckpointCaptureMaxSlots=4096;
+inline constexpr uint32_t kGpuPhysicalPageSlots=256;
+inline constexpr uint32_t gpuInitialPhysicalCapacity(uint32_t limit){return limit<kGpuPhysicalPageSlots?limit:kGpuPhysicalPageSlots;}
+inline constexpr uint32_t gpuNextPhysicalCapacity(uint32_t current,uint32_t required,uint32_t limit){
+    if(!current||current>limit||required>limit)return 0;
+    while(current<required)current=current>limit/2?limit:current*2;
+    return current;
+}
 inline constexpr uint32_t kGpuUInt16QuadMaxSlots=16384;
 inline constexpr bool gpuEmitterUsesWideIndices(uint32_t capacity){return capacity>kGpuUInt16QuadMaxSlots;}
 // Conservative buffer accounting envelope; not a driver memory measurement.
@@ -137,6 +144,8 @@ struct ComputeStats {
     // In indirect mode submittedSlots/alive are CPU lifespan estimates;
     // exact GPU alive count stays on GPU and is used as the draw argument.
     size_t gpuBytes = 0, uploadedBytes = 0;
+    uint32_t gpuPhysicalGrowths=0,gpuPhysicalGrowthFailures=0;
+    size_t gpuGrowthCopiedBytes=0;
 };
 
 // Caller owns the Device and must release this class before destroying it.
@@ -145,7 +154,9 @@ struct ComputeStats {
 // Legacy ParticleSystem and existing RTS/FPS VFX are untouched.
 class ComputeParticles final {
 public:
-    uint32_t allocatedCapacity() const {return desc_.capacity;}
+    uint32_t allocatedCapacity() const {return physicalCapacity_?physicalCapacity_:desc_.capacity;}
+    uint32_t capacityLimit() const {return desc_.capacity;}
+    bool demandGrowthActive() const {return gpuActive()&&gpuDemandGrowth_;}
     bool proceduralBillboardsActive() const {return gpuActive()&&proceduralActive_;}
     ComputeParticles() = default;
     ~ComputeParticles() { shutdown(); }
@@ -258,6 +269,8 @@ private:
     static_assert(sizeof(DrawUniforms)==144);
 
     bool stepGpuAllocated(float dt);
+    bool growGpuAllocation(uint32_t required);
+    void bindGpuAllocationBuffers();
     bool initGpu();
     bool initCpu();
     void releaseGpu();
@@ -294,6 +307,8 @@ private:
     double gpuAllocationClock_=0;
     uint64_t gpuEstimatedBirths_=0;
     bool gpuAllocationActive_=false, gpuAllocationSubmitted_=false;
+    uint32_t physicalCapacity_=0;
+    bool gpuDemandGrowth_=false;
     bool gpuCullViewUsed_=false; // camera-dependent compact stream
     int viewWidth_=1,viewHeight_=1;
     struct KilledSlotAwaitingFrame {

@@ -22,6 +22,14 @@ public:
     bool availableCompute=true,healthy=true,frame=false,pass=false,computing=false,badOrder=false;
     bool indirectAvailable=false,indirectAccepted=true;
     bool rejectStorageUpload=false;
+    bool storageCopyAvailable=false, rejectStorageCopy=false;
+    size_t copiedStorageBytes=0;
+    bool supportsStorageBufferCopy()const override{return storageCopyAvailable;}
+    bool copyStorageBufferChecked(gfx::BufferHandle src,gfx::BufferHandle dst,size_t size,size_t=0,size_t=0)override{
+        if(!frame||pass||computing||!src.valid()||!dst.valid()||!size)badOrder=true;
+        if(rejectStorageCopy)return false;
+        copiedStorageBytes+=size;return !badOrder;
+    }
     uint32_t next=1,lastMode=99,lastDrawCount=0,liveSlotHandle=0;
     uint32_t indirectArgsHandle=0,indirectCalls=0;
     std::array<float,8> lodUniforms{};
@@ -435,6 +443,32 @@ int main() {
     check(lod.step(0.f)&&lodDevice.lodUniforms[4]==frameView.eye.x,"LOD eye recull failed");
     lodDevice.endFrame();lod.shutdown();
     check(!lodDevice.badOrder,"GPU-owned LOD encoder ordering");
+
+    check(spectra::gpuInitialPhysicalCapacity(16)==16&&spectra::gpuInitialPhysicalCapacity(65536)==256,"initial physical page policy");
+    check(spectra::gpuNextPhysicalCapacity(256,257,65536)==512&&
+          spectra::gpuNextPhysicalCapacity(512,900,900)==900&&
+          spectra::gpuNextPhysicalCapacity(512,901,900)==0,"physical growth bounds");
+    RecordingMetalDevice growthDevice;growthDevice.indirectAvailable=true;growthDevice.storageCopyAvailable=true;
+    spectra::ComputeParticles growth;
+    auto growthConfig=cullConfig;growthConfig.capacity=1024;growthConfig.burst=64;
+    check(growth.init(&growthDevice,growthConfig)&&growth.demandGrowthActive(),"physical growth init");
+    check(growth.allocatedCapacity()==256&&growth.capacityLimit()==1024,"physical allocation eagerly maxed");
+    auto initialBytes=growth.stats().gpuBytes;
+    growth.setView(frameView);growthDevice.beginFrame(800,600);
+    for(int i=0;i<4;++i)check(growth.burstAt({0,2,0}),"initial page burst");
+    check(growth.step(0.f)&&growth.allocatedCapacity()==256,"initial page fill");
+    check(growth.burstAt({0,2,0}),"growth burst");
+    growthDevice.rejectStorageCopy=true;
+    check(!growth.step(0.f)&&growth.allocatedCapacity()==256&&growth.stats().gpuPhysicalGrowthFailures==1,
+          "failed replacement lost old physical capacity");
+    growthDevice.rejectStorageCopy=false;growthDevice.stages.clear();
+    check(growth.step(0.f)&&growth.allocatedCapacity()==512&&growth.stats().gpuPhysicalGrowths==1,
+          "physical growth retry failed");
+    check(growthDevice.stages==std::vector<uint32_t>({14,15,10,8,11,13,12,5}),"growth publish ordering");
+    check(growth.stats().gpuBytes>initialBytes&&growth.stats().gpuGrowthCopiedBytes==growthDevice.copiedStorageBytes,
+          "growth accounting");
+    growthDevice.endFrame();growth.shutdown();
+    check(!growthDevice.badOrder,"physical growth encoder ordering");
 
     // Explicit hard GPU requirement never silently reports a CPU implementation.
     config.backend=ComputePreference::RequireGpu;

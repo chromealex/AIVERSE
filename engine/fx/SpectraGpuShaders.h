@@ -227,6 +227,23 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
     // Counters: alive, free, reserved base, admitted, work, next alive, visible, LOD rejected.
     // Kill marks entries in the old list; only update returns their slots.
     // Thus a killed slot cannot be reused while it is still in the input list.
+    // Growth writes the unpublished replacement free stack, then publishes
+    // its free count in a separate ordered dispatch. Old physical IDs survive.
+    if(u.meta.x==14u){
+        uint old=u.meta.z;
+        if(old<u.meta.y&&id<u.meta.y-old){
+            uint freeCount=min(atomic_load_explicit(&aliveCounter[1],memory_order_relaxed),old);
+            liveSlots[freeCount+id]=u.meta.y-1u-id;
+        }
+        return;
+    }
+    if(u.meta.x==15u){
+        if(id==0u&&u.meta.z<u.meta.y){
+            uint freeCount=min(atomic_load_explicit(&aliveCounter[1],memory_order_relaxed),u.meta.z);
+            atomic_store_explicit(&aliveCounter[1],freeCount+u.meta.y-u.meta.z,memory_order_relaxed);
+        }
+        return;
+    }
     if(u.meta.x==9u){
         uint count=min(atomic_load_explicit(&aliveCounter[0],memory_order_relaxed),u.meta.y);
         if(id<count){

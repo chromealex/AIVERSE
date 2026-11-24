@@ -435,6 +435,19 @@ public:
         [blit endEncoding];
         return true;
     }
+    bool supportsStorageBufferCopy() const override {return true;}
+    bool copyStorageBufferChecked(BufferHandle src,BufferHandle dst,size_t bytes,size_t srcOffset=0,size_t dstOffset=0) override {
+        auto* a=buffers_.get(src.id);auto* b=buffers_.get(dst.id);
+        if(!a||!b||src.id==dst.id||!a->storage||!b->storage||!cmd_||enc_||compute_||gpuIcbEncoder_||
+           !gpuHealthy_->load()||!bytes||((bytes|srcOffset|dstOffset)&3u)||
+           srcOffset>a->size||bytes>a->size-srcOffset||dstOffset>b->size||bytes>b->size-dstOffset)return false;
+        id<MTLBlitCommandEncoder> blit=[cmd_ blitCommandEncoder];
+        if(!blit)return false;
+        // cmd_ uses queue commandBuffer (retained references). Both MTLBuffers
+        // stay alive until this and any earlier referencing command buffers finish.
+        [blit copyFromBuffer:a->bufs[0] sourceOffset:srcOffset toBuffer:b->bufs[0] destinationOffset:dstOffset size:bytes];
+        [blit endEncoding];return true;
+    }
     void updateBuffer(BufferHandle h, const void* data, size_t size, size_t offset) override {
         auto* b = buffers_.get(h.id);
         if (!b) return;

@@ -208,7 +208,7 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
         for(size_t i=0;i<gpuGroups_.size();++i) {
             // Include retired but not yet released allocations.
             if(gpuGroups_[i].particles){
-                const auto bytes=estimateGpuEmitterAllocation(gpuGroups_[i].particles->allocatedCapacity(),
+                const auto bytes=estimateGpuEmitterAllocation(gpuGroups_[i].particles->capacityLimit(),
                     gpuGroups_[i].particles->proceduralBillboardsActive());
                 allocated=bytes>SIZE_MAX-allocated?SIZE_MAX:allocated+bytes;
             }
