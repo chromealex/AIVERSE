@@ -47,7 +47,8 @@ std::vector<tw::FoliageSpecies> floraSpecies() {
 } // namespace
 
 bool collectPlanetForestVisuals(const World& world,const Surface& surface,
-                              PlanetForestVisualSnapshot& output){
+                              PlanetForestVisualSnapshot& output,
+                              const std::vector<uint8_t>* visibility){
     namespace ev=aiverse::evolve;
     namespace wp=aiverse::lib::worldprocess;
     const auto* roots=world.resourceConst<tw::TerraWeaveAuthorityResource>();
@@ -56,7 +57,19 @@ bool collectPlanetForestVisuals(const World& world,const Surface& surface,
     if(!roots||!delivery){output=std::move(next);return true;}
     if(!surface.tab||roots->rooted.size()!=delivery->bindings.size()||
        roots->rooted.size()>ev::kMaxPlanetRootBindings)return false;
-    next.managedBodies.resize(surface.bodies.size(),0);
+    // In restricted views, the opt-in owner suppresses cosmetic tree scatter
+    // on every body, even with zero roots. Dynamic binding counts must not
+    // toggle static scenery on a visible part of an otherwise unseen body.
+    next.managedBodies.resize(surface.bodies.size(),visibility?1:0);
+    const bool validVision=!visibility||(surface.W>0&&surface.H>0&&
+        visibility->size()==size_t(surface.W)*size_t(surface.H));
+    if(!validVision){output=std::move(next);return true;}
+    const auto visible=[&](Vec3 p){
+        if(!visibility)return true;
+        if(!Surface::onSphere(p))return false;
+        const int cell=surface.cellAt(p);
+        return cell>=0&&size_t(cell)<visibility->size()&&(*visibility)[size_t(cell)]==2;
+    };
     std::map<tw::AnchoredPlantId,const ev::PlanetRootBinding*> bindings;
     for(const auto& b:delivery->bindings){
         const auto frame=wp::surfaceFrame(&surface,b.plantedPosition);
@@ -95,6 +108,7 @@ bool collectPlanetForestVisuals(const World& world,const Surface& surface,
         const auto body=frame->body;
         const auto anchor=Surface::anchor(body);
         const auto appearance=tw::plantAppearance(plant.environment);
+        Vec3 visibilityPosition=binding.plantedPosition;
         PlanetForestVisual visual;
         visual.species=id.speciesId;visual.key=id.key;visual.body=body;
         // Explicit built-in fallback palette, not species asset authoring.
@@ -124,6 +138,7 @@ bool collectPlanetForestVisuals(const World& world,const Surface& surface,
                 if(record.body!=binding.bodyId)return false;
                 const auto basis=fxQuaternionBasis(record.motion.rotation);
                 if(!basis)return false;
+                visibilityPosition=record.motion.position;
                 visual.local=asFloat(record.motion.position-anchor);
                 visual.up=asFloat(basis->up);visual.forward=asFloat(basis->forward);
                 visual.physical=true;
@@ -136,7 +151,7 @@ bool collectPlanetForestVisuals(const World& world,const Surface& surface,
                 visual.local=asFloat(surface.project(binding.plantedPosition)-anchor);
             }
         }
-        next.plants.push_back(visual);
+        if(visible(visibilityPosition))next.plants.push_back(visual);
     }
     std::sort(next.plants.begin(),next.plants.end(),[](const auto& a,const auto& b){
         return std::tuple{a.body,a.species,a.key}<std::tuple{b.body,b.species,b.key};

@@ -24,8 +24,13 @@ struct PlanetForestVisualSnapshot {
     std::vector<uint8_t> managedBodies;
     std::vector<PlanetForestVisual> plants;
 };
+// Null visibility = unrestricted native/spectator view. Non-null is the raw
+// canonical stacked-grid vision (0 unknown, 1 explored, 2 currently visible).
+// Missing/malformed restricted vision publishes no current plant records.
+// No last-seen history is retained by this value-only snapshot.
 bool collectPlanetForestVisuals(const World& world,const Surface& surface,
-                              PlanetForestVisualSnapshot& output);
+                              PlanetForestVisualSnapshot& output,
+                              const std::vector<uint8_t>* visibility=nullptr);
 
 class PlanetFlora {
 public:

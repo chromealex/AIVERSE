@@ -548,11 +548,18 @@ void sceneFromSphere(Simulation& sim, GameCore& m, const Surface& S, GameScene& 
         if (S.bodyAt(prev) != body) return c;
         return lerp(toF(prev - Surface::anchor(body)), c, alpha);
     };
+    const std::vector<uint8_t> missingVision;
+    const auto* playerVision=viewer<gs.vision.size()?&gs.vision[viewer]:&missingVision;
     auto visibleAt = [&](Vec3 p) -> uint8_t {
         const int c = S.cellAt(p);
-        return c >= 0 && size_t(c) < gs.vision[viewer].size() ? gs.vision[viewer][size_t(c)] : 0;
+        return c >= 0 && size_t(c) < playerVision->size() ? (*playerVision)[size_t(c)] : 0;
     };
-    if(!collectPlanetForestVisuals(w,S,out.planetForest))out.planetForest={};
+    // Filter before the GameScene lease, not by blurred GPU fog or camera.
+    // A malformed owner snapshot must not restore cosmetic trees in fog.
+    if(!collectPlanetForestVisuals(w,S,out.planetForest,viewer?playerVision:nullptr)){
+        out.planetForest={};
+        if(viewer)out.planetForest.managedBodies.assign(S.bodies.size(),1);
+    }
     const uint32_t tick = sim.tick();
     w.each<Unit, Owner, Transform>([&](Entity e, Unit& u, Owner& o, Transform& t) {
         SceneObject so;
