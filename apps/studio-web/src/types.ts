@@ -247,6 +247,7 @@ export interface StudioBuildingRequest {
   floors?: number; roomsX?: number; roomsZ?: number;
   footprint?:string[];
   floorFootprints?:string[][];
+  walkableSetbacks?:boolean;
   mode?: 'features' | 'preset';
   features?: StudioBuildingFeature[];
   materialBindings?: Record<string,string>; // authored style slot -> project materials.json name
@@ -258,6 +259,8 @@ export interface StudioBuildingPreview {
   seed: number; triangles: number; vertices: number; materials: number;
   width: number; height: number; depth: number;
   solids?:number; connections?:number; floors?:number; roomsX?:number; roomsZ?:number; footprint?:string[]; floorFootprints?:string[][];
+  terraces?:Array<{floor:number;x:number;z:number;height:number}>;
+  terraceAccess?:Array<{socketId:string;roomId:string;floor:number;x:number;z:number}>;
   geometry?:import('./graphs/buildingGeometryGraph').BuildingGeometryReport;
   route?:import('./graphs/buildingRoomTopology').BuildingRouteResult;
   topology?: {exteriorApertures?:import('./graphs/buildingRoomTopology').TopologyExteriorAperture[];version:1;rooms:import('./graphs/buildingRoomTopology').TopologyRoom[];connections:import('./graphs/buildingRoomTopology').TopologyConnection[];components:number;withoutElevatorsComponents:number};

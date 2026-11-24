@@ -475,6 +475,18 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
         Json floorMasks=Json::array();for(const auto& mask:req.functionalRecipe.floorFootprints){
             Json rows=Json::array();for(const auto& row:mask)rows.push(string(row));floorMasks.push(std::move(rows));}
         out.set("floorFootprints",std::move(floorMasks));
+        Json terraces=Json::array(),access=Json::array();
+        for(const auto& deck:detailed.graph.terraces){
+            Json row=Json::object();row.set("floor",Json::number(int64_t(deck.floor)));
+            row.set("x",Json::number(int64_t(deck.x)));row.set("z",Json::number(int64_t(deck.z)));
+            row.set("height",Json::number(double(deck.y),3));terraces.push(std::move(row));
+        }
+        for(const auto& link:detailed.graph.terraceAccess){
+            Json row=Json::object();row.set("socketId",string(link.socketId));row.set("roomId",string(link.roomId));
+            row.set("floor",Json::number(int64_t(link.floor)));row.set("x",Json::number(int64_t(link.x)));
+            row.set("z",Json::number(int64_t(link.z)));access.push(std::move(row));
+        }
+        out.set("terraces",std::move(terraces));out.set("terraceAccess",std::move(access));
         out.set("sockets",std::move(sockets));
         out.set("solids",Json::number(int64_t(detailed.graph.solids.size())));
         out.set("connections",Json::number(int64_t(detailed.graph.connections.size())));
@@ -694,7 +706,7 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
                     z1=aperture.z+aperture.depth*.5f;
                     y0=H-.28f;y1=H;
                 }else{
-                    y0=.24f;y1=y0+aperture.height;
+                    y0=aperture.openingBottom;y1=y0+aperture.height;
                     const float plane=buildingSocketWallPlane(aperture,W,D);
                     switch(aperture.side){
                         case BuildingFeatureSide::Front:
@@ -737,6 +749,7 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
             saved.set("floors",Json::number(int64_t(req.functionalRecipe.floors)));
             saved.set("roomsX",Json::number(int64_t(req.functionalRecipe.roomsX)));
             saved.set("roomsZ",Json::number(int64_t(req.functionalRecipe.roomsZ)));
+            if(req.functionalRecipe.walkableSetbacks)saved.set("walkableSetbacks",Json::fromBool(true));
             if(!req.functionalRecipe.floorFootprints.empty()){
                 Json masks=Json::array();for(const auto& mask:req.functionalRecipe.floorFootprints){
                     Json rows=Json::array();for(const auto& row:mask)rows.push(string(row));masks.push(std::move(rows));}

@@ -40,6 +40,10 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
           y1={depth*(i+1)/(preview.roomsZ??1)}
           y2={depth*(i+1)/(preview.roomsZ??1)}
           stroke="var(--au-line)" strokeDasharray=".35 .25" strokeWidth={.07}/>)}</>}
+      {(preview.terraces??[]).filter(t=>t.floor===selectedFloor).map(t=>
+        <rect key={'deck-'+t.x+':'+t.z} x={width*t.x/(preview.roomsX??1)} y={depth*t.z/(preview.roomsZ??1)}
+          width={width/(preview.roomsX??1)} height={depth/(preview.roomsZ??1)}
+          fill="var(--au-accent)" fillOpacity={.16} stroke="var(--au-accent)" strokeWidth={.1} strokeDasharray=".25 .18"/>)}
       {sockets.map(socket=>{
         const [x,,z]=socket.outside;
         const isSelected=socket.socketId===selected;
@@ -63,6 +67,7 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
     <div className="abg__plan-caption">
       <strong>Native structure plan</strong>
       <small>{preview.width.toFixed(1)} × {preview.depth.toFixed(1)} m · {preview.floors??1} floors · {sockets.length} sockets · {preview.solids??0} solids · {preview.connections??0} graph links</small>
+      {!!preview.terraces?.length&&<small>{preview.terraces.filter(t=>t.floor===selectedFloor).length} terrace cells · {(preview.terraceAccess??[]).filter(t=>t.floor===selectedFloor).length} authored terrace access links</small>}
       {selectedSocket&&<small>Selected: {selectedSocket.socketId} ({selectedSocket.kind}) · opening {selectedSocket.width.toFixed(1)}m, {Math.round(selectedSocket.open*100)}% initial open</small>}
       <small>Click an opening marker to edit its functional property. This is a top-down inspector; the real textured 3D asset appears in the native model thumbnail and Scene viewport after generation.</small>
     </div>

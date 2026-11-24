@@ -163,6 +163,7 @@ export default function BuildingGeneratorPanel({
   const [roomsZ,setRoomsZ]=useState('1');
   const [footprint,setFootprint]=useState<string[]>([]);
   const [floorFootprints,setFloorFootprints]=useState<string[][]>([]);
+  const [walkableSetbacks,setWalkableSetbacks]=useState(false);
   const [editFloor,setEditFloor]=useState(0);
   const shaped=footprint.some(row=>row.includes('0'))||floorFootprints.some(mask=>mask.some(row=>row.includes('0')));
   const editingMask=floorFootprints.length?floorFootprints[editFloor]??[]:footprint;
@@ -278,7 +279,7 @@ export default function BuildingGeneratorPanel({
       setWidth(String(item.width));setHeight(String(item.height));
       setDepth(String(item.depth));setSeed(String(item.seed));
       setFloors(String(item.floors??1));
-      setRoomsX(String(item.roomsX??1));setRoomsZ(String(item.roomsZ??1));setFootprint(item.footprint??[]);setFloorFootprints(item.floorFootprints??[]);setEditFloor(0);
+      setRoomsX(String(item.roomsX??1));setRoomsZ(String(item.roomsZ??1));setFootprint(item.footprint??[]);setFloorFootprints(item.floorFootprints??[]);setWalkableSetbacks(item.walkableSetbacks??false);setEditFloor(0);
       setFeatures((item.features??[]).map(f=>({...makeFeature(f.kind),...f})));
       setMaterialBindings(item.materialBindings??{});
       clearGenerated();
@@ -313,6 +314,9 @@ export default function BuildingGeneratorPanel({
          !Number.isInteger(rz)||rz<1||rz>6||f*rx*rz>128)
         return 'Use 1–8 floors and 1–6 rooms per axis (maximum 128 rooms).';
       if(floorFootprints.length&&(floorFootprints.length!==f||floorFootprints.some(mask=>mask.length!==rz||mask.some(row=>row.length!==rx||!/^[01]+$/.test(row)))))return 'Floor footprint grid does not match dimensions.';
+      if(walkableSetbacks&&(!floorFootprints.length||f<2||roofProfile!=='flat'||
+          !floorFootprints.some((mask,i)=>i>0&&mask.some((row,z)=>[...row].some((v,x)=>v==='0'&&floorFootprints[i-1][z]?.[x]==='1')))))
+        return 'Walkable terraces require at least one supported upper-floor setback and a flat roof.';
       if(shaped){
         if(roofProfile!=='flat'||features.some(f=>f.kind==='sliding-roof'))return 'Custom footprint requires a flat roof without a retractable panel.';
         const masks=floorFootprints.length?floorFootprints:[footprint];
@@ -390,7 +394,7 @@ export default function BuildingGeneratorPanel({
           const maxWidthForKind=isWindow?6:maxWidth;
           const storey=(asNumber(height)-asNumber(roofRise)-0.52)/asNumber(floors);
           if(!Number.isInteger(feature.floor)||feature.floor<0||feature.floor>=asNumber(floors)||
-             (!isWindow&&feature.floor!==0))
+             (!isWindow&&feature.floor!==0&&(!walkableSetbacks||feature.kind!=='personnel-door'||feature.position<0)))
             return 'Selected floor is invalid for the opening.';
           if(!Number.isFinite(feature.sill)||feature.sill<0||feature.sill>4)
             return 'Window sill must be within 0–4m.';
@@ -423,7 +427,7 @@ export default function BuildingGeneratorPanel({
       }
     }
     return '';
-  },[selectedStyle,selectedFunction,mode,features,width,height,depth,seed,floors,roomsX,roomsZ,roofProfile,roofRise,footprint,shaped,floorFootprints]);
+  },[selectedStyle,selectedFunction,mode,features,width,height,depth,seed,floors,roomsX,roomsZ,roofProfile,roofRise,footprint,shaped,floorFootprints,walkableSetbacks]);
 
   const request=(useSeed:number):StudioBuildingRequest=>({
     setting,style,function:mode==='preset'?role:'',mode,textureResolution,uniqueAtlas,
@@ -434,7 +438,8 @@ export default function BuildingGeneratorPanel({
     width:asNumber(width),height:asNumber(height),depth:asNumber(depth),seed:useSeed,
     floors:asNumber(floors),roomsX:asNumber(roomsX),roomsZ:asNumber(roomsZ),
     footprint:mode==='features'&&!floorFootprints.length&&footprint.length?footprint:undefined,
-    floorFootprints:mode==='features'&&floorFootprints.length?floorFootprints:undefined
+    floorFootprints:mode==='features'&&floorFootprints.length?floorFootprints:undefined,
+    walkableSetbacks:mode==='features'&&walkableSetbacks?true:undefined
   });
   // A seed is not a request identity. Include all authoring inputs and the project.
   const draftKey=buildingDraftKey(snapshot?.project.path??'',request(asNumber(seed)));
@@ -489,7 +494,7 @@ export default function BuildingGeneratorPanel({
     const p=presets[id];if(!p)return;
     setMode('features');setWidth(String(p.size[0]));setHeight(String(p.size[1]));setDepth(String(p.size[2]));
     setFloors(String(p.rooms[0]));setRoomsX(String(p.rooms[1]));setRoomsZ(String(p.rooms[2]));
-    setFeatures(p.features);setFootprint([]);setFloorFootprints([]);setEditFloor(0);
+    setFeatures(p.features);setFootprint([]);setFloorFootprints([]);setWalkableSetbacks(false);setEditFloor(0);
     const profile=p.features.some(f=>f.kind==='sliding-roof')?'flat':selectedStyle?.recommendedRoof??'flat';
     const rise=profile==='flat'?0:Math.min(3,Math.max(1.5,p.size[0]*.12));
     setRoofProfile(profile);setRoofRise(String(rise));setHeight(String(p.size[1]+rise));
@@ -879,21 +884,21 @@ export default function BuildingGeneratorPanel({
         <div className="abg__dimensions">
           <StudioField label="Floors" htmlFor="abg-floors">
             <StudioInput id="abg-floors" type="number" min={1} max={8} step={1} value={floors}
-              onChange={e=>{setFloors(e.target.value);setFloorFootprints([]);setEditFloor(0);clearGenerated();}} disabled={busy}/>
+              onChange={e=>{setFloors(e.target.value);setFloorFootprints([]);setWalkableSetbacks(false);setEditFloor(0);clearGenerated();}} disabled={busy}/>
           </StudioField>
           <StudioField label="Rooms X" htmlFor="abg-rooms-x">
             <StudioInput id="abg-rooms-x" type="number" min={1} max={6} step={1} value={roomsX}
-              onChange={e=>{setRoomsX(e.target.value);setFootprint([]);setFloorFootprints([]);setEditFloor(0);clearGenerated();}} disabled={busy}/>
+              onChange={e=>{setRoomsX(e.target.value);setFootprint([]);setFloorFootprints([]);setWalkableSetbacks(false);setEditFloor(0);clearGenerated();}} disabled={busy}/>
           </StudioField>
           <StudioField label="Rooms Z" htmlFor="abg-rooms-z">
             <StudioInput id="abg-rooms-z" type="number" min={1} max={6} step={1} value={roomsZ}
-              onChange={e=>{setRoomsZ(e.target.value);setFootprint([]);setFloorFootprints([]);setEditFloor(0);clearGenerated();}} disabled={busy}/>
+              onChange={e=>{setRoomsZ(e.target.value);setFootprint([]);setFloorFootprints([]);setWalkableSetbacks(false);setEditFloor(0);clearGenerated();}} disabled={busy}/>
           </StudioField>
         </div>
         <StudioField label="Footprint preset" htmlFor="abg-footprint-preset">
           <StudioSelect id="abg-footprint-preset" value="" disabled={busy} onChange={e=>{
             const patterns:Record<string,string[]>={L:['100','100','111'],T:['111','010','010'],U:['101','101','111'],H:['101','111','101'],courtyard:['111','101','111']};
-            setFloorFootprints([]);setEditFloor(0);
+            setFloorFootprints([]);setWalkableSetbacks(false);setEditFloor(0);
             if(e.target.value==='rect')setFootprint([]);
             else if(patterns[e.target.value]){
               const rows=patterns[e.target.value];setRoomsX('3');setRoomsZ('3');setFootprint(rows);
@@ -914,13 +919,18 @@ export default function BuildingGeneratorPanel({
               const base=footprint.length?footprint:Array.from({length:nz},()=> '1'.repeat(nx));
               setFloorFootprints(Array.from({length:nf},()=>base.slice()));
             }else{
-              setFootprint(floorFootprints[0]??footprint);setFloorFootprints([]);
+              setFootprint(floorFootprints[0]??footprint);setFloorFootprints([]);setWalkableSetbacks(false);
             }
             setEditFloor(0);clearGenerated();
           }}>
             <option value="shared">Same plan on all floors</option><option value="per-floor">Independent floor setbacks</option>
           </StudioSelect>
         </StudioField>
+        {floorFootprints.length>1&&<StudioField label="Setback surfaces" htmlFor="abg-walkable-setbacks">
+          <StudioSelect id="abg-walkable-setbacks" value={walkableSetbacks?'terrace':'roof'} disabled={busy} onChange={e=>{setWalkableSetbacks(e.target.value==='terrace');clearGenerated();}}>
+            <option value="roof">Closed roof setbacks</option><option value="terrace">Walkable terraces + parapets</option>
+          </StudioSelect>
+        </StudioField>}
         {floorFootprints.length>0&&<StudioField label="Editing floor" htmlFor="abg-edit-floor">
           <StudioSelect id="abg-edit-floor" value={String(editFloor)} disabled={busy} onChange={e=>setEditFloor(Number(e.target.value))}>
             {floorFootprints.map((_,i)=><option key={i} value={i}>Floor {i}</option>)}
@@ -941,7 +951,7 @@ export default function BuildingGeneratorPanel({
                 }}>{active?'■':'·'}</button>;
             })}
           </div>}
-        <small className="abg__note">Click cells to add or remove rooms in the selected plan. Independent upper floors must be supported by the floor below; removed cells form roof setbacks, not walkable balconies. The top row is Front. Custom shapes use flat roofs; select a facade grid line for openings on recessed or courtyard walls. Existing incompatible features must be edited explicitly.</small>
+        <small className="abg__note">Click cells to add or remove rooms in the selected plan. Independent upper floors must be supported by the floor below; removed cells can form walkable terraces with parapets. To add an upper personnel door, select its floor, facade line and explicit wall position; native validation requires a deck immediately outside. The top row is Front. Custom shapes use flat roofs; select a facade grid line for openings on recessed or courtyard walls. Existing incompatible features must be edited explicitly.</small>
         <small className="abg__note">Internal room partitions, stair and lift geometry follow the selected functional recipe. Native ECS/PHYSIS and graph owners handle dynamic traversal separately; changing setting never changes gameplay permissions.</small>
       </StudioSection>}
         </div>
@@ -1060,7 +1070,7 @@ export default function BuildingGeneratorPanel({
                   value={String(feature.spacing)} disabled={busy}
                   onChange={e=>setFeature(i,'spacing',Number(e.target.value))}/>
               </StudioField>:null}
-              {feature.kind==='window'&&<StudioField label="Floor (starting at 0)" htmlFor={"abg-feature-"+i+"-floor"}>
+              {(feature.kind==='window'||(walkableSetbacks&&feature.kind==='personnel-door'))&&<StudioField label="Floor (starting at 0)" htmlFor={"abg-feature-"+i+"-floor"}>
                 <StudioInput id={"abg-feature-"+i+"-floor"} type="number" min={0} max={7} step={1}
                   value={String(feature.floor)} disabled={busy}
                   onChange={e=>setFeature(i,'floor',Number(e.target.value))}/>

@@ -44,11 +44,16 @@ struct FunctionalBuildingRecipe {
     std::vector<std::string> footprint;
     // Optional explicit masks, one per storey. Upper cells require support below.
     std::vector<std::vector<std::string>> floorFootprints;
+    bool walkableSetbacks=false;
 };
 inline bool functionalCell(const FunctionalBuildingRecipe& r,int x,int z,uint32_t floor=0){
     if(x<0||z<0||x>=int(r.roomsX)||z>=int(r.roomsZ)||floor>=r.floors)return false;
     const auto& mask=r.floorFootprints.empty()?r.footprint:r.floorFootprints[floor];
     return mask.empty()||mask[size_t(z)][size_t(x)]=='1';
+}
+inline bool functionalTerraceCell(const FunctionalBuildingRecipe& r,int x,int z,uint32_t floor){
+    return r.walkableSetbacks&&floor>0&&floor<r.floors&&
+        functionalCell(r,x,z,floor-1)&&!functionalCell(r,x,z,floor);
 }
 inline bool nonRectangularFootprint(const FunctionalBuildingRecipe& r){
     for(const auto& row:r.footprint)if(row.find('0')!=std::string::npos)return true;
@@ -102,6 +107,8 @@ struct BuildingGraphSocket {
     float width=0,height=0,depth=0,open=0;
     // Actual local facade plane; negative retains legacy outer bounds.
     float wallPlane=-1.f;
+    uint32_t floor=0;
+    float openingBottom=.24f; // closed door lower edge in building-local metres
 };
 inline float buildingSocketWallPlane(const BuildingGraphSocket& s,float W,float D){
     if(s.wallPlane>=0.f)return s.wallPlane;
@@ -114,6 +121,8 @@ struct BuildingGraphConnection {std::string id,from,to;uint32_t floor=0;float x=
 };
 // Authored aperture overlap with a ground-floor room, not a clearance guarantee.
 struct BuildingExteriorAperture {std::string socketId,roomId;float start=0,end=0;};
+struct BuildingGraphTerrace {uint32_t floor=0,x=0,z=0;float x0=0,y=0,z0=0,x1=0,z1=0;};
+struct BuildingTerraceAccess {std::string socketId,roomId;uint32_t floor=0,x=0,z=0;};
 struct BuildingStructureGraph {
     std::vector<BuildingGraphSolid> solids;
     std::vector<BuildingGraphSocket> sockets;
@@ -121,6 +130,8 @@ struct BuildingStructureGraph {
     std::vector<BuildingGraphConnection> connections;
     std::string error;
     std::vector<BuildingExteriorAperture> exteriorApertures;
+    std::vector<BuildingGraphTerrace> terraces;
+    std::vector<BuildingTerraceAccess> terraceAccess;
     explicit operator bool() const noexcept {return error.empty();}
 };
 inline const char* buildingFeatureName(BuildingFeatureKind kind) {
@@ -196,6 +207,14 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
         if(nonRectangularFootprint(recipe)&&recipe.roofProfile!=FunctionalRoofProfile::Flat)
             return "Custom footprints currently require a flat roof";
     }
+    if(recipe.walkableSetbacks&&(recipe.floorFootprints.empty()||recipe.floors<2||recipe.roofProfile!=FunctionalRoofProfile::Flat))
+        return "Walkable setbacks require independent floors and flat roofs";
+    if(recipe.walkableSetbacks){
+        bool hasSetback=false;
+        for(uint32_t f=1;f<recipe.floors;++f)for(uint32_t z=0;z<recipe.roomsZ;++z)for(uint32_t x=0;x<recipe.roomsX;++x)
+            hasSetback|=functionalTerraceCell(recipe,int(x),int(z),f);
+        if(!hasSetback)return "Walkable setbacks require at least one supported removed upper cell";
+    }
     const float storey=(functionalCoreHeight(recipe)-0.52f)/float(recipe.floors);
     if(storey<2.8f||recipe.width/float(recipe.roomsX)<2.5f||recipe.depth/float(recipe.roomsZ)<2.5f)
         return "Storey or room dimensions too small";
@@ -251,7 +270,8 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
         }
         if(f.floor>=recipe.floors)return "Opening floor out of range";
         const bool window=f.kind==BuildingFeatureKind::Window;
-        if(!window&&f.floor!=0)return "Entrances only on ground floor";
+        if(!window&&f.floor!=0&&(!recipe.walkableSetbacks||f.kind!=BuildingFeatureKind::PersonnelDoor||f.position<0.f))
+            return "Upper entrances require a personnel door with explicit position on a walkable setback";
         if(!std::isfinite(f.sill)||f.sill<0.f||f.sill>4.f)return "Invalid sill";
         portals+=f.count;
         if(portals>32)return "Too many wall apertures";
@@ -494,13 +514,29 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
         };
         float cursor=0.f;
         for(const auto& hole:row){
+            const bool upperDoor=hole.value.floor>0&&hole.value.kind==BuildingFeatureKind::PersonnelDoor;
+            if(upperDoor){
+                // Every cell overlapped by the opening must have a real deck on the exterior side.
+                bool found=false;
+                for(uint32_t i=0;i<count;++i){
+                    if(std::min(hole.end,(i+1)*cell)-std::max(hole.start,i*cell)<=.0001f)continue;
+                    const int l=int(line),j=int(i);
+                    const int tx=side<2?j:(side==2?l-1:l);
+                    const int tz=side<2?(side==0?l-1:l):j;
+                    if(!functionalTerraceCell(recipe,tx,tz,floor)){
+                        graph.error="Upper door opens onto an unsupported or enclosed cell";return graph;
+                    }
+                    found=true;
+                }
+                if(!found){graph.error="Upper door has no terrace landing";return graph;}
+            }
             wallSection(BuildingGraphPart::Wall,cursor,hole.start,wallBottom,wallTop);
             const bool window=hole.value.kind==BuildingFeatureKind::Window;
-            const float bottom=window?floorTop+storey*float(hole.value.floor)+
-                (hole.value.floor?slabThick:0.f)+hole.value.sill:floorTop;
+            const float bottom=floorTop+storey*float(hole.value.floor)+
+                (hole.value.floor?slabThick:0.f)+(window?hole.value.sill:0.f);
             const float top=bottom+hole.value.height;
             if(top+.15f>wallTop+.0001f){graph.error="Opening frame exceeds its storey wall";return graph;}
-            if(window)wallSection(BuildingGraphPart::Wall,hole.start,hole.end,wallBottom,bottom);
+            if(window||upperDoor)wallSection(BuildingGraphPart::Wall,hole.start,hole.end,wallBottom,bottom);
             wallSection(BuildingGraphPart::Wall,hole.start,hole.end,top,wallTop);
             constexpr float frame=0.14f;
             wallSection(BuildingGraphPart::Trim,hole.start-frame,hole.start,bottom,top,hole.feature);
@@ -525,8 +561,8 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
             if(side==3){px=plane+1.f;pz=longitudinal;}
             graph.sockets.push_back({(window?"window/":"entrance/")+std::to_string(hole.feature)+"/"+
                 std::to_string(hole.copy),hole.value.kind,BuildingFeatureSide(side),
-                hole.feature,hole.copy,px,window?bottom:0.f,pz,
-                hole.value.width,hole.value.height,0.f,hole.value.open,plane});
+                hole.feature,hole.copy,px,window||upperDoor?bottom:0.f,pz,
+                hole.value.width,hole.value.height,0.f,hole.value.open,plane,hole.value.floor,bottom});
             cursor=hole.end;
         }
         wallSection(BuildingGraphPart::Wall,cursor,length,wallBottom,wallTop);
@@ -587,19 +623,27 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
                           socket.side==BuildingFeatureSide::Back;
         const float center=alongX?socket.x:socket.z;
         for(const auto& room:graph.rooms){
-            if(room.floor!=0)continue;
+            if(room.floor!=socket.floor)continue;
             const float plane=buildingSocketWallPlane(socket,W,D);
             const bool boundary=socket.side==BuildingFeatureSide::Front?
-                std::abs(room.z0-plane)<.001f&&!occupiedCell(int(room.x),int(room.z)-1):
+                std::abs(room.z0-plane)<.001f&&!occupiedCell(int(room.x),int(room.z)-1,room.floor):
                 socket.side==BuildingFeatureSide::Back?
-                std::abs(room.z1-plane)<.001f&&!occupiedCell(int(room.x),int(room.z)+1):
+                std::abs(room.z1-plane)<.001f&&!occupiedCell(int(room.x),int(room.z)+1,room.floor):
                 socket.side==BuildingFeatureSide::Left?
-                std::abs(room.x0-plane)<.001f&&!occupiedCell(int(room.x)-1,int(room.z)):
-                std::abs(room.x1-plane)<.001f&&!occupiedCell(int(room.x)+1,int(room.z));
+                std::abs(room.x0-plane)<.001f&&!occupiedCell(int(room.x)-1,int(room.z),room.floor):
+                std::abs(room.x1-plane)<.001f&&!occupiedCell(int(room.x)+1,int(room.z),room.floor);
             if(!boundary)continue;
             const float a=std::max(center-socket.width*0.5f,alongX?room.x0:room.z0);
             const float b=std::min(center+socket.width*0.5f,alongX?room.x1:room.z1);
-            if(b-a>0.001f)graph.exteriorApertures.push_back({socket.id,room.id,a,b});
+            if(b-a>0.001f){
+                if(socket.floor==0)graph.exteriorApertures.push_back({socket.id,room.id,a,b});
+                else{
+                    const int tx=int(room.x)+(socket.side==BuildingFeatureSide::Left?-1:socket.side==BuildingFeatureSide::Right?1:0);
+                    const int tz=int(room.z)+(socket.side==BuildingFeatureSide::Front?-1:socket.side==BuildingFeatureSide::Back?1:0);
+                    if(functionalTerraceCell(recipe,tx,tz,room.floor))
+                        graph.terraceAccess.push_back({socket.id,room.id,room.floor,uint32_t(tx),uint32_t(tz)});
+                }
+            }
         }
     }
     // Cut rectangular shafts from EVERY upper slab using a bounded planar
@@ -624,7 +668,27 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
             if(!hole&&(!shaped||occupiedPoint(mx,mz,floor)))solid(BuildingGraphPart::Floor,xs[ix-1],y,zs[iz-1],
                            xs[ix],y+slabThick,zs[iz]);
             else if(perFloor&&occupiedPoint(mx,mz,floor-1)&&!occupiedPoint(mx,mz,floor))
-                solid(BuildingGraphPart::Roof,xs[ix-1],y,zs[iz-1],xs[ix],y+slabThick,zs[iz]);
+                solid(recipe.walkableSetbacks?BuildingGraphPart::Floor:BuildingGraphPart::Roof,
+                    xs[ix-1],y,zs[iz-1],xs[ix],y+slabThick,zs[iz]);
+        }
+    }
+    // Supported roof decks are real Floor solids so the existing static
+    // navigation source can sample them. Parapets are collidable Trim solids.
+    // No parapet along an interior wall or across adjacent deck cells.
+    if(recipe.walkableSetbacks)for(uint32_t floor=1;floor<recipe.floors;++floor){
+        const float y=floorTop+storey*float(floor)+slabThick;
+        constexpr float rail=.14f,railHeight=1.1f;
+        for(uint32_t z=0;z<recipe.roomsZ;++z)for(uint32_t x=0;x<recipe.roomsX;++x){
+            if(!functionalTerraceCell(recipe,int(x),int(z),floor))continue;
+            const float x0=x*roomW,x1=(x+1)*roomW,z0=z*roomD,z1=(z+1)*roomD;
+            graph.terraces.push_back({floor,x,z,x0,y,z0,x1,z1});
+            const auto edge=[&](int nx,int nz){
+                return !occupiedCell(nx,nz,floor)&&!functionalTerraceCell(recipe,nx,nz,floor);
+            };
+            if(edge(int(x)-1,int(z)))solid(BuildingGraphPart::Trim,x0,y,z0,x0+rail,y+railHeight,z1);
+            if(edge(int(x)+1,int(z)))solid(BuildingGraphPart::Trim,x1-rail,y,z0,x1,y+railHeight,z1);
+            if(edge(int(x),int(z)-1))solid(BuildingGraphPart::Trim,x0,y,z0,x1,y+railHeight,z0+rail);
+            if(edge(int(x),int(z)+1))solid(BuildingGraphPart::Trim,x0,y,z1-rail,x1,y+railHeight,z1);
         }
     }
     // Model two opposite stairs flights with a turn landing. Treads are

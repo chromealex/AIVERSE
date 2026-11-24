@@ -81,6 +81,10 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
         if(std::string(key)=="roomsX")recipe.roomsX=uint32_t(n);
         else recipe.roomsZ=uint32_t(n);
     }
+    if(json.has("walkableSetbacks")){
+        if(json["walkableSetbacks"].type()!=Json::Type::Bool)throw JsonError(path+".walkableSetbacks: expected boolean");
+        recipe.walkableSetbacks=json.getBool("walkableSetbacks");
+    }
     if(json.has("floorFootprints")){
         const auto& masks=json["floorFootprints"];
         if(!masks.isArray()||masks.size()>8)throw JsonError(path+".floorFootprints: expected up to eight masks");
@@ -372,7 +376,7 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
         anchor.open=socket.open;
         anchor.outside={fcoord(socket.x),fcoord(socket.y),fcoord(socket.z)};
         result.anchors.push_back(anchor);
-        if(anchor.kind!=BuildingFeatureKind::SlidingRoof&&anchor.kind!=BuildingFeatureKind::Window&&
+        if(socket.floor==0&&anchor.kind!=BuildingFeatureKind::SlidingRoof&&anchor.kind!=BuildingFeatureKind::Window&&
            anchor.kind!=BuildingFeatureKind::Stairs&&anchor.kind!=BuildingFeatureKind::Elevator)
             result.building.gates.push_back(anchor.outside);
     }
