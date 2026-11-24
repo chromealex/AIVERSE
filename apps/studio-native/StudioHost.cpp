@@ -1392,7 +1392,28 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
     out.set("ready",Json::fromBool(false));
     return respond(std::move(out));
 }
+// Both HTML5 and authenticated MCP call this on the host UI thread.
+// GPU work stays on the existing render owner; record actual dispatch time.
 Json StudioHost::runSpectraPreview(const Json& params) {
+    const auto sequence=++spectraDispatchSequence_;
+    const double started=platform_.now();
+    try {
+        Json result=dispatchSpectraPreview(params);
+        if(!result.getStr("error").empty()||!result["capture"].getStr("error").empty())
+            ++spectraDispatchFailed_;
+        Json metrics=Json::object();
+        metrics.set("sequence",Json::number(int64_t(sequence)));
+        metrics.set("action",Json::string(params.getStr("action")));
+        metrics.set("elapsedMs",Json::number(std::max(0.,platform_.now()-started)*1000.,3));
+        metrics.set("failed",Json::number(int64_t(spectraDispatchFailed_)));
+        result.set("dispatch",std::move(metrics));
+        return result;
+    } catch(...) {
+        ++spectraDispatchFailed_;
+        throw;
+    }
+}
+Json StudioHost::dispatchSpectraPreview(const Json& params) {
     if(projectLoading_ || session_->workspace().project.dir.empty())
         throw std::runtime_error("Open a project before SpectraFX preview");
     if(!fxPreview_)

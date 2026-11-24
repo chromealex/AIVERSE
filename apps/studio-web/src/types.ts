@@ -157,6 +157,7 @@ export interface StudioSpectraCameraSnapshot {
   yaw:number;pitch:number;distance:number;targetX:number;targetY:number;targetZ:number;ortho:boolean;
 }
 export interface StudioSpectraPreviewState {
+  dispatch?:{sequence:number;action:string;elapsedMs:number;failed:number};
   ready:boolean;playing:boolean;gpu:boolean;backend:string;
   tick:number;targetTick:number;timeSeconds:number;
   generation:number;alive:number;error:string;

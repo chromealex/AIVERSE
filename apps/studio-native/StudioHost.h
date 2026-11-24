@@ -196,6 +196,8 @@ private:
     void pollAgentRequests();
     Json assetThumbnail(const std::string& path);
     Json viewportInput(const Json& input);
+    Json dispatchSpectraPreview(const Json& params);
+    uint64_t spectraDispatchSequence_=0,spectraDispatchFailed_=0;
     Json runSpectraPreview(const Json& params); // shared HTML5 / authenticated MCP bridge
     void cancelSpectraCapture(); // invalidate callback state before dropping ownership
     Json captureSpectraFrame(const Json& params); // bounded asynchronous native GPU readback

@@ -1,0 +1,41 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {SpectraCommandQueue} from '../src/panels/spectraCommandQueue.ts';
+const tick=()=>new Promise(resolve=>setImmediate(resolve));
+test('serializes mutations and coalesces duplicate idle status',async()=>{
+  const q=new SpectraCommandQueue(),calls=[];
+  let release;
+  const send=async p=>{calls.push(p.action);if(p.action==='load')await new Promise(r=>{release=r;});return p;};
+  const load=q.enqueue({action:'load'},send);
+  const status=q.enqueue({action:'status',expectedGeneration:1},send);
+  assert.equal(q.enqueue({action:'status',expectedGeneration:1},send),status);
+  const step=q.enqueue({action:'step'},send);
+  await tick();
+  assert.deepEqual(calls,['load']);
+  release();await Promise.all([load,status,step]);
+  assert.deepEqual(calls,['load','step','status']);
+});
+test('stop rejects queued work but does not interrupt native in-flight command',async()=>{
+  const q=new SpectraCommandQueue(),calls=[];
+  let release;
+  const send=async p=>{calls.push(p.action);if(p.action==='load')await new Promise(r=>{release=r;});return p;};
+  const load=q.enqueue({action:'load'},send);
+  const step=q.enqueue({action:'step'},send);
+  const rejected=assert.rejects(step,/Superseded/);
+  const stop=q.enqueue({action:'stop'},send);
+  await tick();assert.deepEqual(calls,['load']);
+  release();await Promise.all([load,rejected,stop]);
+  assert.deepEqual(calls,['load','stop']);
+});
+test('closed panel rejects undispatched work and failure does not stall queue',async()=>{
+  const q=new SpectraCommandQueue();
+  let release;
+  const first=q.enqueue({action:'load'},()=>new Promise(r=>{release=r;}));
+  const pending=q.enqueue({action:'burst'},async()=>{throw Error('should not dispatch');});
+  const rejected=assert.rejects(pending,/closed/);
+  q.cancelWaiting();await tick();release({});await Promise.all([first,rejected]);
+  const failed=q.enqueue({action:'step'},async()=>{throw Error('native failure');});
+  const next=q.enqueue({action:'status'},async()=>({ready:true}));
+  await assert.rejects(failed,/native failure/);assert.deepEqual(await next,{ready:true});
+  await tick();assert.equal(q.depth(),0);
+});

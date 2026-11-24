@@ -10,6 +10,7 @@ import { compareSpectraCaptures } from './spectraPixelDiff';
 import type { SpectraPixelDiff } from './spectraPixelDiff';
 import { parseSpectraReplayPreset } from './spectraReplayPreset';
 import type { SpectraReplayPreset } from './spectraReplayPreset';
+import { SpectraCommandQueue } from './spectraCommandQueue';
 
 type Action='status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'playback'|'burst'|'clear';
 const message=(e:unknown)=>e instanceof Error?e.message:String(e);
@@ -29,16 +30,21 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [gpuBirthRandom,setGpuBirthRandom]=useState(false);
   const [reloadCycle,setReloadCycle]=useState(0);
   const mounted=useRef(false);
+  const commandQueue=useRef(new SpectraCommandQueue());
   useEffect(()=>{
     mounted.current=true;
-    return()=>{mounted.current=false;};
+    const queue=commandQueue.current;
+    return()=>{mounted.current=false;queue.cancelWaiting();};
   },[]);
   // Every command captures this mounted project's identity. In-flight RPCs
   // cannot be unsent, but their continuations cannot issue another command
   // after unmount, and the native host rejects stale project requests.
   const invokePreview=async(input:StudioParams['studio.spectraPreview'])=>{
     if(!mounted.current)throw new Error('SpectraFX preview closed');
-    const result=await invoke('studio.spectraPreview',{...input,expectedProjectPath:projectPath});
+    const result=await commandQueue.current.enqueue({...input,expectedProjectPath:projectPath},request=>{
+      if(!mounted.current)throw new Error('SpectraFX preview closed');
+      return invoke('studio.spectraPreview',request);
+    });
     if(!mounted.current)throw new Error('SpectraFX preview closed');
     return result;
   };
@@ -463,8 +469,9 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       Load this graph and press Play. Orbit the camera in the viewport; no Scene tab or map placement is required.
     </p>
     {error&&<StudioAlert tone="danger">{error}</StudioAlert>}
+    {state?.dispatch&&<small className="spectra-native__hint">Native dispatch #{state.dispatch.sequence} · {state.dispatch.action} · {state.dispatch.elapsedMs.toFixed(2)} ms · failed {state.dispatch.failed}</small>}
     <div className="spectra-native__toolbar">
-      <StudioButton size="sm" variant="primary" disabled={!active||busy||disabled}
+      <StudioButton size="sm" variant="primary" disabled={!active||!state||busy||disabled}
         onClick={()=>void launch()}><Eye size={14}/> Load graph</StudioButton>
       <StudioCheckbox label="GPU birth random (applies on Load)" checked={gpuBirthRandom} disabled={!active||busy}
         onChange={e=>setGpuBirthRandom(e.target.checked)}/>
