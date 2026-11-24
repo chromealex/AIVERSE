@@ -23,6 +23,16 @@ Json Editor::graphMaterialApplyStatus() const {
     return r;
 }
 
+render::texture_graph::NativeGraphImageRead Editor::readSceneGraphMaterialImage(
+        size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
+        std::string_view output){
+    if(!dev_||!gpuDeviceLease().validFor(*dev_)||ws_.project.dir.empty()||
+       clientPlaying()||pendingGraphMaterialApply_)return {};
+    const auto state=textureGraphGpuPreview_.status();
+    if(state.getBool("busy")||state.getBool("gpuTextureSetReady"))return {};
+    return view_.readGraphMaterialImage(type,choice,target,output);
+}
+
 Json Editor::graphMaterialOp(const Json& p){
     const auto action=p.getStr("action");
     if(action=="materialApplyStatus")return graphMaterialApplyStatus();
@@ -47,6 +57,15 @@ Json Editor::graphMaterialOp(const Json& p){
         r.set("proceduralLiveImages",Json::number(int64_t(current->proceduralLive)));
         r.set("proceduralTombstones",Json::number(int64_t(current->proceduralTombstones)));
         r.set("pendingImageRetirement",Json::number(int64_t(current->pendingImageRetirement)));
+        // Inspect each output with a scoped native borrow, then release it.
+        // Only logical availability crosses the Studio/MCP JSON boundary.
+        Json residentOutputs=Json::array();
+        for(const char* output:{"color","normal","metallicRoughness","ao","emissive","mask"}){
+            auto read=readSceneGraphMaterialImage(type,choice,current->identity,output);
+            if(read.texture(*dev_).valid())residentOutputs.push(Json::string(output));
+        }
+        r.set("residentGraphOutputs",residentOutputs);
+        r.set("activeModelReaders",Json::string(std::to_string(view_.modelResources().activeModelReaders())));
         const auto sweep=view_.automaticGraphImageCollectionStats();
         r.set("automaticCollectionEnabled",Json::fromBool(view_.automaticGraphImageCollectionEnabled()));
         r.set("automaticRecyclingEnabled",Json::fromBool(view_.automaticGraphImageRecyclingEnabled()));

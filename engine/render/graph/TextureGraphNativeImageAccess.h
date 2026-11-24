@@ -12,7 +12,15 @@ public:
     NativeGraphImageRead(const NativeGraphImageRead&)=delete;
     NativeGraphImageRead& operator=(const NativeGraphImageRead&)=delete;
     NativeGraphImageRead(NativeGraphImageRead&&)=default;
-    NativeGraphImageRead& operator=(NativeGraphImageRead&&)=default;
+    NativeGraphImageRead& operator=(NativeGraphImageRead&& other)noexcept{
+        if(this!=&other){
+            reset(); // release old pin before releasing old cache reader
+            reader_=std::move(other.reader_);
+            image_=std::move(other.image_);
+            deviceLease_=std::move(other.deviceLease_);
+        }
+        return *this;
+    }
 
     // Call on the bound owner thread. Acquire from the actual owning cache,
     // never from an arbitrary borrowed Model. The scope blocks cache eviction,

@@ -156,6 +156,11 @@ public:
     const render::RetirementDiagnosticRing* gpuRetirementDiagnostics() const {
         return gpuRetirementRing_.get();
     }
+    // Native scene panels may inspect an exact resident graph output only
+    // within an owner-thread scope. No raw handle transport to Studio/MCP.
+    render::texture_graph::NativeGraphImageRead readSceneGraphMaterialImage(
+        size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
+        std::string_view output);
     render::Renderer3D& renderer() { return r3d_; }
     render::GpuResourceRetirement& gpuResourceRetirement() { return gpuResourceRetirement_; }
     const render::GpuResourceRetirement& gpuResourceRetirement() const { return gpuResourceRetirement_; }

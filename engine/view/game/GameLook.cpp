@@ -936,6 +936,21 @@ std::optional<GameView::GraphMaterialTargetInfo> GameView::graphMaterialTarget(
         stats.live,stats.tombstones,stats.pendingRetirement};
 }
 
+render::texture_graph::NativeGraphImageRead GameView::readGraphMaterialImage(
+        size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
+        std::string_view output)const{
+    using namespace render::texture_graph;
+    const auto slot=materialSlot(output);
+    if(!slot||activeStagedModels_||cameraPreparedCapture_)return {};
+    const auto current=graphMaterialTarget(type,choice,target.material);
+    if(!current||target.publication!=current->identity.publication||
+       target.version!=current->identity.version)return {};
+    const auto& live=looks_[type].models[choice];
+    const auto& materials=live.appearanceSnapshot?live.appearanceSnapshot->materials:live.materials;
+    const auto reference=referenceGraphMaterialImage(materials[target.material],slot);
+    return NativeGraphImageRead::acquire(resources_,live.model,reference,*dev_,gpuDeviceLease_);
+}
+
 bool GameView::applyGraphMaterial(size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
         const GraphMaterialApply& apply,std::string* error){
     if(error)error->clear();

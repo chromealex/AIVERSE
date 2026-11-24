@@ -2,6 +2,7 @@
 #include "engine/render/RenderDeviceLifetime.h"
 #include "engine/render/FramePublicationEpoch.h"
 #include "engine/render/ModelImageUploadTransaction.h"
+#include "engine/render/graph/TextureGraphNativeImageAccess.h"
 #include "engine/view/AppearanceAssetRegistry.h"
 // LEGACY compatibility adapter for historical RTS/editor scene presentation.
 // Generic game-agnostic View is now <engine/view/View.h> / aiverse::View.
@@ -405,6 +406,11 @@ public:
         size_t proceduralLive=0,proceduralTombstones=0,pendingImageRetirement=0;
     };
     std::optional<GraphMaterialTargetInfo> graphMaterialTarget(size_t type,size_t choice,size_t material) const;
+    // Exact appearance identity, owner-thread and synchronous borrow only.
+    // The scope must be released before the next mutation/frame/shutdown.
+    render::texture_graph::NativeGraphImageRead readGraphMaterialImage(
+        size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
+        std::string_view output) const;
     using GraphMaterialApply=std::function<bool(view::AppearanceAssetRegistry::Snapshot&,
         std::vector<render::Material>&,render::Model&,gfx::Device&,
         const render::RenderDeviceLifetime::Lease&,render::ModelImageRollbackPool&,std::string*)>;

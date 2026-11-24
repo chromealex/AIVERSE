@@ -313,6 +313,14 @@ std::optional<GameView::GraphMaterialTargetInfo> GameClient::runtimeTextureMater
     if(!dev_||!gpuDeviceLease_.validFor(*dev_)||!inMatch())return {};
     return view_.graphMaterialTarget(type,choice,material);
 }
+render::texture_graph::NativeGraphImageRead GameClient::readRuntimeTextureMaterialImage(
+        size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
+        std::string_view output)const{
+    if(!dev_||!gpuDeviceLease_.validFor(*dev_)||!inMatch()||mapLoading_||runtimeTextureTask_)return {};
+    const auto state=runtimeTextureGraph_.status();
+    if(state.getBool("busy")||state.getBool("gpuTextureSetReady"))return {};
+    return view_.readGraphMaterialImage(type,choice,target,output);
+}
 render::texture_graph::GraphImageReclaimResult GameClient::collectRuntimeTextureMaterialImages(size_t type,size_t choice,size_t material,
         const view::LiveAppearanceMaterialTarget& target,const render::texture_graph::GraphImageRoots& external){
     if(!dev_||!gpuDeviceLease_.validFor(*dev_)||!inMatch()||runtimeTextureTask_)
@@ -356,6 +364,7 @@ Json GameClient::runtimeTextureMaterialStatus()const{
     r.set("applicationReason",Json::string(runtimeTextureReason_));
     r.set("applicationRequest",Json::string(runtimeTextureRequest_));
     const auto sweep=view_.automaticGraphImageCollectionStats();
+    r.set("activeModelReaders",Json::string(std::to_string(view_.modelResources().activeModelReaders())));
     r.set("automaticCollectionEnabled",Json::fromBool(view_.automaticGraphImageCollectionEnabled()));
     r.set("automaticRecyclingEnabled",Json::fromBool(view_.automaticGraphImageRecyclingEnabled()));
     r.set("automaticCollectionInspected",Json::string(std::to_string(sweep.inspected)));

@@ -558,6 +558,12 @@ int main(){
         AIVERSE_TEST_CHECK(blocked&&access.texture(device).valid());
         auto moved=std::move(access);
         AIVERSE_TEST_CHECK(!access.texture(device).valid()&&moved.texture(device).valid());
+        auto second=NativeGraphImageRead::acquire(cache,resident,reference,device,epoch.lease());
+        AIVERSE_TEST_CHECK(second.texture(device).valid()&&cache.activeModelReaders()==2);
+        moved=std::move(second);
+        AIVERSE_TEST_CHECK(!second.texture(device).valid()&&moved.texture(device).valid()&&cache.activeModelReaders()==1);
+        moved=std::move(moved);
+        AIVERSE_TEST_CHECK(moved.texture(device).valid()&&cache.activeModelReaders()==1);
         moved.reset();
         AIVERSE_TEST_CHECK(cache.activeModelReaders()==0&&render::graphImageUnpinned(resident->images[0].proceduralGraphPin));
         device.idle=true;cache.shutdown(device);

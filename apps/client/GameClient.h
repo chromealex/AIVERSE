@@ -130,6 +130,11 @@ public:
     void setAutomaticRuntimeGraphImageCollection(GameView::GraphImageRootProvider provider,
         bool recycleSlots=false,bool detachCompletedReplay=false);
     std::optional<GameView::GraphMaterialTargetInfo> runtimeTextureMaterialTarget(size_t type,size_t choice,size_t material) const;
+    // Synchronous native borrow. Release before frame(), mutation or shutdown;
+    // never keep the raw handle across the scope.
+    render::texture_graph::NativeGraphImageRead readRuntimeTextureMaterialImage(
+        size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
+        std::string_view output)const;
     // The external certificate covers consumers outside this client; its own
     // renderer and LENS roots are always checked, without detaching replay.
     render::texture_graph::GraphImageReclaimResult collectRuntimeTextureMaterialImages(size_t type,size_t choice,size_t material,
