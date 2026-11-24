@@ -211,11 +211,128 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
             m.box(sm.beacon,x-0.1f,padH+0.12f,z-0.1f,x+0.1f,padH+0.24f,z+0.1f);}
     }
     // 2. Main hull.
-    const float lean=custom?std::min(Hh*k.taper,std::min(W,D)*0.20f):Hh*k.taper;
-    auto top=block(0,0,W,D,padH,Hh,cut,lean,k.bands,k.roofRise);
+    const bool profiled=k.body!=StructureBody::Armour;
+    const float lean=profiled?0.f:custom?std::min(Hh*k.taper,std::min(W,D)*0.20f):Hh*k.taper;
+    // Non-armoured profiles replace the dominant body, not just its colour
+    // or a small roof ornament. Gate frames attach to the common solid stem.
+    auto architecturalBody=[&]()->Top{
+        const float base=padH,wallTop=base+Hh;
+        const int wall=sm.hull,roof=st.roof>=0?st.roof:(sm.plate>=0?sm.plate:wall);
+        const int frame=st.window.frame>=0?st.window.frame:sm.dark;
+        const int glass=st.window.glass>=0?st.window.glass:sm.window;
+        m.box(wall,0,base,0,W,wallTop,D);addBox(0,base,0,W,wallTop,D);
+        // Actual façade rhythm: glazing / deep trim on the four faces;
+        // legacy silhouettes are closed bodies, not navigable room layouts.
+        const int rows=std::clamp(int(Hh/3.1f),1,18);
+        for(int row=0;row<rows;++row){
+            const float y=base+(row+.5f)*Hh/rows;
+            const float h=std::min(Hh/rows*.55f,2.4f);
+            for(int side=0;side<4;++side){
+                // The authored legacy gate occupies the front lower storey.
+                if(side==0&&row==0&&k.doors)continue;
+                const float span=side%2==0?W:D;
+                const int cols=std::clamp(int(span/(k.body==StructureBody::Stacked?2.5f:4.f)),1,24);
+                for(int col=0;col<cols;++col){
+                    const float centre=(col+.5f)*span/cols;
+                    const float w=std::min(span/cols*.65f,k.body==StructureBody::Spire?.8f:2.6f);
+                    const float a=centre-w*.5f,b=centre+w*.5f;
+                    const float y0=y-h*.5f,y1=y+h*.5f;
+                    auto panel=[&](int mat,float lo,float hi,float bottom,float upper,float inset,float proud){
+                        switch(side){
+                          case 0:m.box(mat,lo,bottom,-proud,hi,upper,inset);break;
+                          case 1:m.box(mat,W-inset,bottom,lo,W+proud,upper,hi);break;
+                          case 2:m.box(mat,lo,bottom,D-inset,hi,upper,D+proud);break;
+                          default:m.box(mat,-proud,bottom,lo,inset,upper,hi);break;
+                        }
+                    };
+                    panel(frame,a-.09f,b+.09f,y0-.09f,y1+.09f,.04f,.10f);
+                    panel(glass,a,b,y0,y1,.02f,.12f);
+                }
+            }
+        }
+        auto tier=[&](float x,float z,float w,float d,float y,float h,int mat){
+            m.box(mat,x,y,z,x+w,y+h,z+d);addBox(x,y,z,x+w,y+h,z+d);
+        };
+        auto roofPrism=[&](float x,float z,float w,float d,float y,float h,float inset){
+            m.prism(roof,cutRect(x,z,x+w,z+d,0,y),
+                cutRect(x+w*inset,z+d*inset,x+w*(1-inset),z+d*(1-inset),0,y+h));
+            addBox(x,y,z,x+w,y+h,z+d);
+        };
+        const float cx=W*.5f,cz=D*.5f;
+        const float scale=std::min(W,D);
+        float rise=std::clamp(Hh*.45f,.8f,scale*.8f);
+        switch(k.body){
+          case StructureBody::Gable:
+          case StructureBody::Shed:{
+            const float high=wallTop+rise,low=k.body==StructureBody::Shed?wallTop+.12f:wallTop;
+            std::vector<P3> a={{0,wallTop,0},{W,wallTop,0}};
+            if(k.body==StructureBody::Gable)a.push_back({cx,high,0});
+            else {a.push_back({W,low,0});a.push_back({0,high,0});}
+            auto b=a;for(auto& p:b)p[2]=D;
+            m.prism(roof,a,b);addBox(0,wallTop,0,W,high,D);
+            return {cx,cz,cx,cz,high};}
+          case StructureBody::Spire:
+          case StructureBody::Pyramid:{
+            rise=std::clamp(Hh*(k.body==StructureBody::Spire?.9f:.62f),1.f,scale);
+            roofPrism(0,0,W,D,wallTop,rise,.48f);
+            return {cx,cz,cx,cz,wallTop+rise};}
+          case StructureBody::Barrel:
+          case StructureBody::Greenhouse:{
+            std::vector<P3> a;constexpr float pi=3.14159265358979323846f;
+            for(int q=0;q<=16;++q){float t=pi*float(q)/16.f;
+                a.push_back({cx+cx*std::cos(t),wallTop+rise*std::sin(t),0});}
+            auto b=a;for(auto& p:b)p[2]=D;
+            m.prism(k.body==StructureBody::Greenhouse&&glass>=0?glass:roof,a,b);
+            addBox(0,wallTop,0,W,wallTop+rise,D);
+            return {cx,cz,cx,cz,wallTop+rise};}
+          case StructureBody::Dome:
+          case StructureBody::Bulb:{
+            rise=std::clamp(Hh*.82f,1.f,scale*.85f);
+            // Large pressure shell / organic bulb, directly seated on the stem.
+            addDome(m,k.body==StructureBody::Dome&&glass>=0?glass:roof,cx,wallTop,cz,W,rise,D);
+            addBox(0,wallTop,0,W,wallTop+rise,D);
+            if(k.body==StructureBody::Bulb){
+                const float r=scale*.105f;
+                m.cylinder(frame,{cx,wallTop+rise-.12f,cz},1,r,rise*.35f,12);
+                addBox(cx-r,wallTop+rise-.12f,cz-r,cx+r,wallTop+rise+rise*.35f,cz+r);
+            }
+            return {cx,cz,cx,cz,wallTop+rise};}
+          case StructureBody::Ziggurat:
+          case StructureBody::Terrace:
+          case StructureBody::Stacked:{
+            const int levels=k.body==StructureBody::Ziggurat?4:k.body==StructureBody::Stacked?3:2;
+            const float stepH=rise/levels;
+            for(int n=0;n<levels;++n){
+                const float f=1.f-.17f*float(n+1);
+                const float w=W*f,d=D*f;
+                const float x=k.body==StructureBody::Stacked?W*(1-f)*.2f:W*(1-f)*.5f;
+                tier(x,D*(1-f)*.5f,w,d,wallTop+n*stepH,stepH,n%2?wall:roof);
+            }
+            return {cx,cz,cx,cz,wallTop+rise};}
+          case StructureBody::Pagoda:{
+            const float stepH=rise/3.f;
+            for(int n=0;n<3;++n){
+                const float f=1.f-.23f*n,w=W*f,d=D*f,x=(W-w)*.5f,z=(D-d)*.5f,y=wallTop+n*stepH;
+                const float stem=stepH*.55f;
+                tier(x+w*.16f,z+d*.16f,w*.68f,d*.68f,y,stem,wall);
+                roofPrism(x,z,w,d,y+stem,stepH-stem,.20f);
+                // Next tier is narrower and its base overlaps the roof cap.
+            }
+            return {cx,cz,cx,cz,wallTop+rise};}
+          case StructureBody::Facet:
+            roofPrism(0,0,W,D,wallTop,rise,.28f);
+            return {cx,cz,cx,cz,wallTop+rise};
+          case StructureBody::Flat:
+          case StructureBody::Armour:
+            tier(0,0,W,D,wallTop,.25f,roof);
+            return {0,0,W,D,wallTop+.25f};
+        }
+        return {cx,cz,cx,cz,wallTop};
+    };
+    auto top=profiled?architecturalBody():block(0,0,W,D,padH,Hh,cut,lean,k.bands,k.roofRise);
     // Data-chosen silhouettes: a function changes the large shapes, not just the roof props.
     const float rw=top.x1-top.x0,rd=top.z1-top.z0;
-    if(rw>2.5f&&rd>2.5f){
+    if(!profiled&&rw>2.5f&&rd>2.5f){
         switch(k.massing){
             case StructureMassing::Bastion: break;
             case StructureMassing::Spire:{
@@ -293,7 +410,7 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
         }
     }
     // 5b. Vent grilles on the side walls: a dark recess with slats, at mid height.
-    for(uint32_t side=0;side<2;++side){
+    for(uint32_t side=0;!profiled&&side<2;++side){
         uint32_t n=1+g.below(2);
         for(uint32_t i=0;i<n;++i){
             float zc=D*(0.3f+0.4f*(float(i)+0.5f)/float(n)),vy=padH+Hh*(0.35f+0.15f*u()),vh=0.9f,vw=1.6f;
@@ -327,7 +444,7 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
             taken.push_back({top.x0+rw*0.17f,top.z0+rd*0.26f,
                              top.x0+rw*0.89f,top.z0+rd*0.92f});
     }
-    if(k.massing!=StructureMassing::Spire&&k.towerChance>0&&u()<k.towerChance){
+    if(!profiled&&k.massing!=StructureMassing::Spire&&k.towerChance>0&&u()<k.towerChance){
         float tw=k.towerWidth.pick(g)*W,td=k.towerDepth.pick(g)*D,th=k.towerHeight.pick(g);
         tw=std::min(tw,top.x1-top.x0);td=std::min(td,top.z1-top.z0);
         float tx=top.x0+(top.x1-top.x0-tw)*(u()<0.5f?0.1f:0.9f),tz=top.z0+(top.z1-top.z0-td)*0.15f;

@@ -54,7 +54,9 @@ struct StructureForm {
     uint32_t repeat=1;
     int material=-1;
 };
+enum class StructureBody : uint8_t { Armour, Gable, Spire, Barrel, Stacked, Facet, Bulb, Shed, Flat, Ziggurat, Pyramid, Pagoda, Greenhouse, Terrace, Dome };
 struct StructureKind{
+    StructureBody body=StructureBody::Armour;
     std::string id;StructureMassing massing=StructureMassing::Bastion;float width=12,depth=12;StyleRange height{6,8};float taper=0.15f,chamfer=1.6f,roofRise=0.7f,teamChance=0.25f;uint32_t bands=3;
     uint32_t modulesMin=0,modulesMax=0;StyleRange moduleWidth{0.25f,0.4f},moduleDepth{0.4f,0.7f},moduleHeight{0.45f,0.7f};
     float towerChance=0;StyleRange towerWidth{0.25f,0.4f},towerDepth{0.25f,0.4f},towerHeight{2,3.5f};
@@ -659,8 +661,28 @@ inline BuildingStyle readBuildingStyle(const Json& j,const std::string& path="st
     if(j.has("structures")){const auto& all=j["structures"];if(!all.isObject())throw JsonError(path+".structures: expected object");
         if(s.structure.hull<0)throw JsonError(path+".structures: needs the structure materials block");
         for(const auto& [id,o]:all.members()){auto p=path+".structures."+id;
-            allow(o,p,{"size","height","massing","taper","chamfer","roofRise","bands","teamChance","modules","tower","door","legs","thrusters","pad","props","forms"});
+            allow(o,p,{"body","size","height","massing","taper","chamfer","roofRise","bands","teamChance","modules","tower","door","legs","thrusters","pad","props","forms"});
             StructureKind k;k.id=id;
+            if(o.has("body")){
+                if(!o["body"].isString())throw JsonError(p+".body: expected architectural profile");
+                const auto value=o["body"].str();
+                if(value=="armour")k.body=StructureBody::Armour;
+                else if(value=="gable")k.body=StructureBody::Gable;
+                else if(value=="spire")k.body=StructureBody::Spire;
+                else if(value=="barrel")k.body=StructureBody::Barrel;
+                else if(value=="stacked")k.body=StructureBody::Stacked;
+                else if(value=="facet")k.body=StructureBody::Facet;
+                else if(value=="bulb")k.body=StructureBody::Bulb;
+                else if(value=="shed")k.body=StructureBody::Shed;
+                else if(value=="flat")k.body=StructureBody::Flat;
+                else if(value=="ziggurat")k.body=StructureBody::Ziggurat;
+                else if(value=="pyramid")k.body=StructureBody::Pyramid;
+                else if(value=="pagoda")k.body=StructureBody::Pagoda;
+                else if(value=="greenhouse")k.body=StructureBody::Greenhouse;
+                else if(value=="terrace")k.body=StructureBody::Terrace;
+                else if(value=="dome")k.body=StructureBody::Dome;
+                else throw JsonError(p+".body: unknown architectural profile");
+            }
             if(o.has("massing")){
                 if(!o["massing"].isString())throw JsonError(p+".massing: expected string");
                 const auto m=o["massing"].str();

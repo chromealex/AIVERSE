@@ -73,6 +73,30 @@ int main(int argc,char** argv){
             mesh.box(0,0,9,0,2,10,2);
             CHECK(bearingSurface(mesh,faces,1,1,12)<4.f);
         }
+        // The setting now changes the primary architectural geometry.
+        // Compare actual position streams rather than colours or triangle counts alone.
+        {
+            const char* ids[]={"medieval-fantasy","dark-fantasy","steampunk","cyberpunk","scifi-space","alien-civilization","post-apocalypse","modern","ancient-civilizations","asian-historical","solarpunk","underwater"};
+            std::vector<std::vector<float>> fingerprints;
+            for(auto id:ids){
+                const auto style=readBuildingStyle(Json::parse(readFile(root+"/engine/assets/building-styles/"+id+".json")),id);
+                CHECK(!style.structures.empty());
+                for(const auto& kind:style.structures){
+                    CHECK(kind.body!=StructureBody::Armour);
+                    auto result=dressStructure(style,kind.id,42);
+                    CHECK(!result.mesh.vertices.empty()&&result.mesh.triangles()<20000);
+                    auto repeat=dressStructure(style,kind.id,42);
+                    CHECK(result.boxes==repeat.boxes&&result.mesh.vertices.size()==repeat.mesh.vertices.size());
+                }
+                const auto& kind=style.structures.front();
+                auto result=dressStructureGeometry(style,kind.id,42,{},0,StructureSize{24,12,18});
+                std::vector<float> geometry;
+                for(const auto& v:result.mesh.vertices)geometry.insert(geometry.end(),v.pos,v.pos+3);
+                CHECK(!geometry.empty());
+                for(const auto& previous:fingerprints)CHECK(previous!=geometry);
+                fingerprints.push_back(std::move(geometry));
+            }
+        }
         // Every shipped style: openings across sizes, floors, seeds and all four quarter turns.
         for(const char* id:{"scifi","modern"}){
             auto style=readBuildingStyle(Json::parse(readFile(root+"/engine/assets/building-styles/"+id+".json")),id);
