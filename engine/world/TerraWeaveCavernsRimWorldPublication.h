@@ -7,6 +7,26 @@
 #include "engine/world/TerraWeaveCavernsTerrainBinding.h"
 
 namespace aiverse::terraweave::caverns {
+// Owner-side entry point after actual ECS reconcile and cave edit/restore.
+// Build one refined surface plan from the canonical frozen authority and
+// the existing terrain coordinator's immutable soil snapshot.
+inline bool configureRimWorldFromAuthority(const World& frozen,
+        const CaveAuthorityConfig& cfg,CaveGameplayRuntimeFrame& frame,
+        TerrainMutationCoordinator& terrain,std::span<const world::Cell> pins,
+        const std::map<uint64_t,Fixed>& lowerPlanes,
+        const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive){
+    if(!exclusive||!exclusive()||frame.physicsStatus().recoveryRequired||
+       terrain.surfaceEpoch()==UINT64_MAX)return false;
+    auto authority=freezeCaveAuthority(frozen,cfg);
+    const auto soil=terrain.presentationSnapshot();
+    const auto epoch=terrain.surfaceEpoch()+1;
+    auto plan=std::make_shared<const CaveSurfaceGroupPlan>(
+        refineSurfaceGroupForRimGrid(planCaveSurfaceGroup(*soil,*authority,pins,
+            terrain.terrainCellSizeMetres(),terrain.terrainResolution(),epoch),
+            frame.volumeResolution(),frame.volumeSpacingCm()));
+    if(!exclusive()||terrain.soilRevision()!=plan->soilRevision)return false;
+    return frame.configureRimSurfaceGroupAuto(std::move(plan),lowerPlanes,exclusive);
+}
 inline bool bindCommittedRimSurface(CaveGameplayRuntimeFrame& frame,
         CaveTerrainSurfaceBinding& binding,TerrainMutationCoordinator& terrain,
         const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive){
