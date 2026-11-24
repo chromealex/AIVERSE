@@ -103,7 +103,14 @@
     "apps/studio-web/tests/buildingGraphInspection.test.mjs",
     "apps/studio-web/src/graphs/caveGraphInspection.ts",
     "apps/studio-web/src/graphs/CaveStructureGraphView.tsx",
-    "apps/studio-web/tests/caveGraphInspection.test.mjs"
+    "apps/studio-web/tests/caveGraphInspection.test.mjs",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-native/StudioSession.h",
+    "apps/studio-native/tests/StudioSessionTests.cpp",
+    "apps/studio-web/src/types.ts",
+    "apps/studio-web/src/mock.ts",
+    "apps/studio-web/src/graphs/graphInspectionCapture.ts",
+    "apps/studio-web/tests/graphInspectionCapture.test.mjs"
   ],
   "traits": {
     "editable": true,
@@ -114,7 +121,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35B Caverns v1 owner response inspection and paged read-only graph implemented in source; Stage 35A Building Graph inspection retained. Live owner wiring and native acceptance pending.",
+      "note": "Stage 35B Caverns v1 owner response inspection and paged read-only graph implemented in source; Stage 35A Building Graph inspection retained. Live owner wiring and native acceptance pending. Stage 35C planned: native fixed get-only capture, map identity and request cancellation; Building owner remains separate.",
       "evidence": []
     },
     "architecture": {
