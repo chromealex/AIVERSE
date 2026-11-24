@@ -7686,6 +7686,26 @@
         "intersection"
       ],
       "contentPackages": []
+    },
+    {
+      "id": "aiverse-random",
+      "package": "random",
+      "path": "skills/core/aiverse-random/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Deterministic PCG32 and integer sampling",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_random",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/algorithms/Random.h",
+      "keywords": [
+        "random",
+        "pcg",
+        "sampling"
+      ],
+      "contentPackages": []
     }
   ]
 }
