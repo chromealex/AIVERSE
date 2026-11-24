@@ -1888,9 +1888,9 @@
           "textEn": "Page accounting without Model pointers, GPU epochs and hosted retirement diagnostics."
         },
         {
-          "name": "Texture Graph GPU — Stage 38AE (в работе)",
+          "name": "Texture Graph GPU — Stage 38AE (частично, приёмка)",
           "text": "Учёт материалов вложенных моделей при освобождении текстур и граница безопасной сертификации.",
-          "nameEn": "Texture Graph GPU — Stage 38AE (in progress)",
+          "nameEn": "Texture Graph GPU — Stage 38AE (partial, acceptance checkpoint)",
           "textEn": "Attachment material roots and safe collection certification boundary."
         }
       ],
