@@ -262,3 +262,7 @@ Use the existing NEREID plane and spherical sampling functions and TerraWeave au
 ## Stage 128 — water and terrain Data Interfaces (source; QA deferred)
 
 Native adapters: `engine/world/SpectraWaterSnapshot.h` and `engine/world/SpectraTerrainProviders.h`. Capture NEREID plane or sphere on the committed ECS owner; publish immutable sampled depth, thickness, submerged/found, flow, surface position and up axes. Geometry is explicit; mixed worlds can bind separate names. The shared Stage 127 lattice caps sampling at 4096 nodes. TerraWeave authored height snapshots expose height, clearance and reference up; missing tiles are unavailable. Spherical terrain reuses TerraWeave relief with host-selected rendered radius and scale. Up is radial/reference, not a slope normal. Use the existing graph-v2 Data Interface schema. Host integration remains opt-in; no automatic Studio publication or GPU texture field. No tests run.
+
+## Stage 129 — pooled Data Interface integration (in progress)
+
+Audit found GpuPoolWorld compiled graphs but discarded their data-interface bindings. Preserve declarations per effect (not per physical GPU group), resolve each birth against the host's read-only registry, reject missing required data before any GPU/CPU birth, preserve authored fallbacks and per-source values, and retain schema in device-recovery recipes without retaining live provider pointers. Regression source only; QA deferred. Socket and automatic Studio host publication remain subsequent work.
