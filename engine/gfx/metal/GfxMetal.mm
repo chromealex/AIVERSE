@@ -2132,16 +2132,29 @@ public:
     id<MTLCounterSet> timestampCounterSet_ = nil;
     // 1 = explicit blit-command samples, 2 = blit stage-boundary samples
     int timestampScopeMode_ = 0;
+    // A real command is required for stage-boundary sampling on tile GPUs.
+    // This private marker buffer is never read by scene/graph work.
+    id<MTLBuffer> timestampScopeMarker_ = nil;
+    size_t timestampScopeInvalidLogged_ = 0;
 
     bool encodeGpuScopeTimestamp(id<MTLCounterSampleBuffer> samples,
                                  NSUInteger index) {
         if (@available(macOS 11.0, iOS 14.0, *)) {
         if (!cmd_ || enc_ || compute_ || gpuIcbEncoder_ || !samples)
             return false;
+        if (!timestampScopeMarker_) {
+            timestampScopeMarker_=[device_ newBufferWithLength:256 options:MTLResourceStorageModePrivate];
+            if (!timestampScopeMarker_) return false;
+            timestampScopeMarker_.label=@"AIVERSE GPU scope marker";
+        }
         if (timestampScopeMode_ == 1) {
             id<MTLBlitCommandEncoder> blit = [cmd_ blitCommandEncoder];
             if (!blit) return false;
+            // Sample after the opening marker and before the closing marker.
+            // A non-empty encoder avoids a driver-elided marker pass.
+            if(index==0)[blit fillBuffer:timestampScopeMarker_ range:NSMakeRange(0,256) value:0];
             [blit sampleCountersInBuffer:samples atSampleIndex:index withBarrier:YES];
+            if(index!=0)[blit fillBuffer:timestampScopeMarker_ range:NSMakeRange(0,256) value:1];
             [blit endEncoding];
             return true;
         }
@@ -2149,10 +2162,13 @@ public:
             MTLBlitPassDescriptor* descriptor=[MTLBlitPassDescriptor blitPassDescriptor];
             auto* attachment=descriptor.sampleBufferAttachments[0];
             attachment.sampleBuffer=samples;
-            attachment.startOfEncoderSampleIndex=index;
-            attachment.endOfEncoderSampleIndex=MTLCounterDontSample;
+            // Measure between the end of the opening marker and the start
+            // of the closing marker, excluding both marker fills.
+            attachment.startOfEncoderSampleIndex=index==0?MTLCounterDontSample:index;
+            attachment.endOfEncoderSampleIndex=index==0?index:MTLCounterDontSample;
             id<MTLBlitCommandEncoder> blit=[cmd_ blitCommandEncoderWithDescriptor:descriptor];
             if (!blit) return false;
+            [blit fillBuffer:timestampScopeMarker_ range:NSMakeRange(0,256) value:uint8_t(index)];
             [blit endEncoding];
             return true;
         }
@@ -2227,13 +2243,18 @@ public:
                     status!=MTLCommandBufferStatusError) {++i;continue;}
                 bool valid=false;
                 double elapsedMs=0.0;
+                uint64_t first=0,last=0,cpuFinal=0,gpuFinal=0;
+                size_t resolvedBytes=0;
                 if (t.ended && status==MTLCommandBufferStatusCompleted) {
                     NSData* data=[t.sample resolveCounterRange:NSMakeRange(0,2)];
+                    resolvedBytes=data?size_t(data.length):0;
                     if (data && data.length>=sizeof(MTLCounterResultTimestamp)*2) {
                         const auto* samples=
                             static_cast<const MTLCounterResultTimestamp*>(data.bytes);
                         MTLTimestamp cpuEnd=0,gpuEnd=0;
                         [device_ sampleTimestamps:&cpuEnd gpuTimestamp:&gpuEnd];
+                        first=samples[0].timestamp;last=samples[1].timestamp;
+                        cpuFinal=cpuEnd;gpuFinal=gpuEnd;
                         if (samples[0].timestamp>0 && samples[1].timestamp>samples[0].timestamp &&
                             samples[0].timestamp!=MTLCounterErrorValue &&
                             samples[1].timestamp!=MTLCounterErrorValue &&
@@ -2249,6 +2270,18 @@ public:
                                 elapsedMs>0.0 && elapsedMs<=250.0;
                         }
                     }
+                }
+                // Bounded diagnostic: preserve actual counter values for
+                // hardware acceptance, without inventing CPU fallback data.
+                if(!valid && timestampScopeInvalidLogged_<8 &&
+                   (std::getenv("AIVERSE_TEXTURE_GRAPH_REQUIRE_GPU_TIMINGS") ||
+                    std::getenv("AIVERSE_METAL_SCOPE_DIAGNOSTICS"))) {
+                    ++timestampScopeInvalidLogged_;
+                    std::fprintf(stderr,"[metal-scope] invalid mode=%d status=%lu ended=%d bytes=%zu samples=%llu,%llu cpu=%llu,%llu gpu=%llu,%llu ms=%.9g\n",
+                        timestampScopeMode_,(unsigned long)status,int(t.ended),resolvedBytes,
+                        (unsigned long long)first,(unsigned long long)last,
+                        (unsigned long long)t.cpuStart,(unsigned long long)cpuFinal,
+                        (unsigned long long)t.gpuStart,(unsigned long long)gpuFinal,elapsedMs);
                 }
                 result.push_back({t.tag,valid?elapsedMs:0.0,valid});
                 scopedCommands_.erase(scopedCommands_.begin()+i);
