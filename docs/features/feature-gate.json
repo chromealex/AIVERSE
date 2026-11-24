@@ -52,7 +52,11 @@
     "tools/agents/feature_api.py",
     "docs/agents/feature-automation.json",
     "docs/handoff/studio-html5/feature-readiness-stage24-36-2026-11-24.md",
-    "tools/studio/test_design_system.py"
+    "tools/studio/test_design_system.py",
+    "tools/studio/test_build_config.py",
+    "tools/studio/test_content_layout.py",
+    "tools/studio/test_reference_pin_zoom.py",
+    "tools/studio/test_scene_tools.py"
   ],
   "traits": {
     "editable": false,
@@ -133,7 +137,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Mac archive at 9f6f58f64e082479808c0a64e32a36d7ab0fd54c: 20 Python tests PASS, contracts/registry/policy/partial compliance PASS. Studio failed; rerun on fixed HEAD required.",
+      "note": "Mac archive at 9f6f58f64e082479808c0a64e32a36d7ab0fd54c: 20 Python tests PASS, contracts/registry/policy/partial compliance PASS. Studio failed; rerun on fixed HEAD required. Studio QA follow-up fixes cover stale shared-host contracts, case collision, MaterialGraph typing and default dock membership. Fixed tree has not been retested.",
       "evidence": []
     },
     "handoff": {
