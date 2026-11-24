@@ -136,6 +136,9 @@ private:
     uint64_t previewMaterialRevision_ = 0;
     void refreshMaterialPreview();
     std::optional<StudioTransferPlan> pendingAssetTransfer_;
+    std::optional<StudioTransferPlan> agentAssetTransfer_;
+    std::string agentAssetTransferVersion_;
+    std::map<std::string,std::string> agentAssetTransferGuids_;
     editor::ProjectHistory assetHistory_;
     std::string assetHistoryVersion() const;
     Json assetHistoryJson() const;

@@ -13,6 +13,7 @@
 #include "apps/studio-native/StudioAssetReferences.h"
 #include "apps/studio-native/StudioAssetUsage.h"
 #include "apps/studio-native/StudioTools.h"
+#include "apps/studio-native/StudioAgentHistoryPolicy.h"
 #include "engine/view/AttachmentLayout.h"
 #include "apps/studio-native/StudioMoveJournal.h"
 #include "apps/editor/EditorSceneNodes.h"
@@ -573,6 +574,65 @@ std::string clipText(const std::string& s,size_t n){return s.size()<=n?s:s.subst
 // native external picker/purge to an agent.
 Json StudioSession::agentLinkedCall(const std::string& name,const Json& args){
     try{
+        if(name=="studio_history_capabilities"){
+            Json out=Json::object(),rows=Json::array();
+            for(const auto& op:ws_.ops()){
+                Json row=Json::object();row.set("name",str(op.name));row.set("policy",str(studioAgentHistoryPolicy(op.name)));
+                row.set("guiOnly",Json::fromBool(op.guiOnly));rows.push(std::move(row));
+            }
+            out.set("operations",std::move(rows));out.set("bulkUndo",str("map-only"));return out;
+        }
+        if(name=="studio_asset_move_preview"||name=="studio_asset_move_commit"){
+            if(ws_.project.dir.empty()||args.getStr("expectedProject")!=ws_.project.dir||
+               args.getStr("expectedVersion")!=assetHistoryVersion())
+                throw std::runtime_error("Linked asset project or version changed");
+            StudioAssetCatalog catalog(ws_.project.dir);catalog.rebuild(false);
+            Json params=args,request=Json::object();request.set("id",num(int64_t(1)));
+            const bool preview=name=="studio_asset_move_preview";
+            if(preview){
+                agentAssetTransfer_.reset();agentAssetTransferGuids_.clear();
+                const auto& guids=args["guids"];
+                if(!guids.isArray()||guids.size()<1||guids.size()>64||!args["destination"].isString())
+                    throw std::runtime_error("Select 1–64 existing asset GUIDs and a destination");
+                Json paths=Json::array();
+                for(const auto& guid:guids.items()){
+                    if(!guid.isString())throw std::runtime_error("Invalid asset GUID");
+                    const auto entry=catalog.byGuid(guid.str());
+                    if(!entry||!agentAssetTransferGuids_.emplace(entry->guid,entry->path).second)
+                        throw std::runtime_error("Missing or repeated asset GUID");
+                    paths.push(str(entry->path));
+                }
+                params.set("paths",std::move(paths));
+            }else{
+                if(!agentAssetTransfer_||agentAssetTransfer_->token()!=args.getStr("token")||
+                   agentAssetTransferVersion_!=assetHistoryVersion())throw std::runtime_error("Agent asset preview expired");
+                for(const auto& [guid,path]:agentAssetTransferGuids_){
+                    const auto entry=catalog.byGuid(guid);
+                    if(!entry||entry->path!=path)throw std::runtime_error("Preview asset identity changed");
+                }
+                const auto& decisions=args["decisions"];
+                if(!decisions.isArray()||decisions.size()>64)throw std::runtime_error("Invalid move decisions");
+                for(const auto& d:decisions.items()){
+                    const auto action=d.getStr("action");
+                    if(action!="import"&&action!="keep-both"&&action!="skip")throw std::runtime_error("Only non-destructive moves are supported");
+                }
+            }
+            request.set("method",str(preview?"studio.assetMovePreview":"studio.assetTransferCommit"));
+            request.set("params",std::move(params));
+            // Agent and browser previews never share a token or overwrite each other.
+            auto browser=std::move(pendingAssetTransfer_);
+            pendingAssetTransfer_=std::move(agentAssetTransfer_);
+            Json response;
+            try{response=dispatchImpl(request);}
+            catch(...){agentAssetTransfer_.reset();pendingAssetTransfer_=std::move(browser);throw;}
+            agentAssetTransfer_=std::move(pendingAssetTransfer_);pendingAssetTransfer_=std::move(browser);
+            if(response.has("error")){
+                agentAssetTransfer_.reset();Json out=Json::object();out.set("error",response["error"]);return out;
+            }
+            if(preview)agentAssetTransferVersion_=assetHistoryVersion();
+            else {agentAssetTransfer_.reset();agentAssetTransferGuids_.clear();}
+            return response["result"];
+        }
         if(name=="studio_asset_history"){
             if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
             auto out=assetHistoryJson();out.set("project",str(ws_.project.dir));return out;
@@ -672,15 +732,16 @@ bool StudioSession::pollAgentLink() {
         capture("assets",assetHistory_,assetBefore);
         if(ws_.map.data.entities.size()!=entities){clearSelection();dropOrdinalFlags();}
         const bool dirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
-        const bool readOnly=studioToolReadOnly(name)||name=="studio_asset_catalog"||name=="studio_asset_history";
+        const std::string policy=studioAgentHistoryPolicy(name);
+        const bool readOnly=policy=="read";
         // Known native asset no-ops do not invent an untracked mutation.
         const bool nativeNoop=name=="studio_asset_meta_patch"&&assetHistory_.version()==assetBefore&&!failed;
         const bool ownerChanged=ws_.map.historyMark()!=before||ws_.project.documentHistory.version()!=projectBefore||assetHistory_.version()!=assetBefore;
         const bool edit=!failed&&(ownerChanged||dirty!=wasDirty||(!readOnly&&!nativeNoop));
         if(edit||ownerChanged)changed=true;
         // Map-only Undo all never crosses untracked or non-map changes.
-        if((edit&&(links.empty()||std::any_of(links.begin(),links.end(),[](const auto& l){return l.first!="map";})))||
-           (failed&&ownerChanged)||!sameMap||ws_.project.dir!=agentHistoryProject_||ws_.map.path!=agentHistoryMap_)
+        if((edit&&(policy!="map"||links.empty()||std::any_of(links.begin(),links.end(),[](const auto& l){return l.first!="map";})))||
+           (failed&&(!readOnly||ownerChanged))||!sameMap||ws_.project.dir!=agentHistoryProject_||ws_.map.path!=agentHistoryMap_)
             agentHistoryUnsafe_=true;
         if(edit||failed){
             const auto add=[&](const std::string& scope,const std::string& historyId){
@@ -691,7 +752,10 @@ bool StudioSession::pollAgentLink() {
                 agentChanges_.push(std::move(c));
             };
             if(links.empty())add("untracked","");
-            else for(const auto& [scope,historyId]:links)add(scope,historyId);
+            else {
+                for(const auto& [scope,historyId]:links)add(scope,historyId);
+                if(policy=="unverified"||std::any_of(links.begin(),links.end(),[&](const auto& l){return l.first!=policy;}))add("untracked","");
+            }
             if(agentChanges_.size()>2000){agentChanges_.eraseAt(0);agentHistoryUnsafe_=true;}
         }
         agentServer_.send(m.client,reply(id,result).dump(-1));
@@ -994,6 +1058,7 @@ Json StudioSession::agentRequest(const std::string& method, const Json& params) 
         if(agentRun_.running())throw std::runtime_error("Stop the agent first");
         agentSession_.clear();agentLines_.clear();agentChanges_=Json::array();agentRunStart_=-1;
         agentStartIds_.clear();agentEditIds_.clear();agentHistoryUnsafe_=false;
+        agentAssetTransfer_.reset();agentAssetTransferGuids_.clear();
     } else if(method=="studio.agentStart"){
         const std::string prompt=params.getStr("prompt");
         if(prompt.empty()||prompt.size()>20000)throw std::runtime_error("Write a request for the agent (up to 20000 characters)");
