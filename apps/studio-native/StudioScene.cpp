@@ -1400,6 +1400,14 @@ void StudioScene::frameSpectraDock(int framebufferWidth,int framebufferHeight) {
         renderer_.line({0,0,-.65f},{0,0,.65f},rgba(104,147,237));
         renderer_.line({0,-.45f,0},{0,.75f,0},rgba(108,214,129));
     }
+    const bool volume=spectraPreview_->hasVolume();
+    // A separate preview policy, not a change to the authored map HDR settings.
+    if(volume!=spectraDockHdr_){
+        PostFxSettings aa;aa.hdr=volume?HdrMode::On:HdrMode::Off;
+        aa.effects.push_back(defaultPostFxEffect(PostFxType::Fxaa));
+        antialiasing_.setSettings(std::move(aa));spectraDockHdr_=volume;
+    }
+    if(volume)spectraPreview_->contributeVolume(antialiasing_);
     renderer_.render(pass,&antialiasing_);
     if(spectraPreview_->active())spectraPreview_->draw();
     renderer_.resolvePostFx();
@@ -1967,6 +1975,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         renderer_.lighting.sunDir={std::cos(e)*std::sin(a),std::sin(e),std::cos(e)*std::cos(a)};
         renderer_.lighting.sunColor=skyShot_->sunColor;renderer_.lighting.sunIntensity=1.3f;
     }
+    if(spectraPreview_->hasVolume())spectraPreview_->contributeVolume(post_);
     renderer_.render(pass,useLighting?lightingRuntime_.pipeline(post_):static_cast<PostProcess*>(&post_));
     // Renderer3D keeps the HDR scene pass open; GPU/CPU FX draw here,
     // before PRISMA resolves it and before the frame/pass are retired.

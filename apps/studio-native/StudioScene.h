@@ -459,6 +459,7 @@ private:
     std::chrono::steady_clock::time_point windClock_ = std::chrono::steady_clock::now();
     // Facial/material preview FXAA (LDR); the map view keeps PRISMA HDR post_.
     render::PostFx antialiasing_;
+    bool spectraDockHdr_=false;
     render::Camera camera_;
     render::AdaptiveShadowResolution shadowResolution_;
     bool cameraInitialized_ = false;

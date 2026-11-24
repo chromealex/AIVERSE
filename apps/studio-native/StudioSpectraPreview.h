@@ -8,6 +8,7 @@
 #include "engine/fx/SpectraGraphRuntime.h"
 #include "engine/fx/SpectraCheckpointTimelineFile.h"
 #include "engine/fx/SpectraFX.h"
+#include "engine/render/Prisma.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -39,6 +40,8 @@ public:
             error_="Replay restore timed out";
         }
         if(action=="status")return status();
+        if(volumeGrid_&&(action.rfind("checkpoint",0)==0||action.rfind("replay",0)==0))
+            return transferStatus("Volume checkpoints and Replay are not supported yet");
         if(action=="replayCancel"){
             if(!replayPending())return transferStatus("No pending replay restore");
             cancelReplay();error_.clear();return status();
@@ -138,9 +141,9 @@ public:
                 if(!sdfReader(path,bytes)||bytes.size()>fx::kSdfBinaryMaxBytes)return false;
                 sdfSnapshot.emplace(path,bytes);return true;
             };
-            fx::EffectDef checked;
+            spectra::volume::PresentationGraph checked;
             std::vector<std::string> errors;
-            if(!fx::compileSpectraGraph(graph,Json::object(),checked,errors,snapshotReader))
+            if(!spectra::volume::compilePresentationGraph(graph,Json::object(),checked,errors,snapshotReader))
                 return transferStatus(errors.empty()?"SpectraFX graph validation failed":errors.front());
             // Allocate a candidate while the last-known-good instance remains
             // intact. The render owner is between frames, with no open pass.
@@ -157,18 +160,29 @@ public:
             opts.gpuMaterial=opts.gpuBirthRandom;
             opts.gpuProgram=true; // strict GPU VM eligibility, CPU twin otherwise
             opts.preference=spectra::ComputePreference::Automatic;
-            if(!candidate->initGraph(&device,graph,Json::object(),opts)) {
+            if(checked.particles&&!candidate->initGraph(&device,checked.particleGraph,Json::object(),opts)) {
                 const std::string reason=candidate->reason().empty()?
                     "SpectraFX preview backend unavailable":candidate->reason();
                 device.waitForResourceIdle();
                 candidate.reset();
                 return transferStatus(reason);
             }
+            std::unique_ptr<spectra::volume::GpuGasGrid> candidateVolume;
+            std::unique_ptr<spectra::volume::GpuVolumeRenderer> candidateRenderer;
+            if(checked.volume){
+                if(!spectra::volume::supportsVolumeRender(device))return transferStatus("Native GPU volume HDR unavailable");
+                candidateVolume=std::make_unique<spectra::volume::GpuGasGrid>();
+                candidateRenderer=std::make_unique<spectra::volume::GpuVolumeRenderer>();
+                if(!candidateVolume->initAsset(device,checked.volumeAsset,snapshotReader))
+                    return transferStatus(candidateVolume->error());
+            }
             // Commit only after initialization succeeded. Both instances use
             // this same device; retire the old resources before resuming frames.
             device.waitForResourceIdle();
             runtime_.swap(candidate);
             candidate.reset();
+            volumeRenderer_=std::move(candidateRenderer);volumeGrid_=std::move(candidateVolume);
+            volumeMaterial_=checked.volumeAsset.material;hasParticles_=checked.particles;volumeRendered_=false;
             authoredGraph_=graph;
             authoredGpuBirthRandom_=opts.gpuBirthRandom;
             authoredGpuOwnedAllocation_=opts.gpuOwnedAllocation;
@@ -177,7 +191,7 @@ public:
             ready_=true;
             replayPrepared_=false;
             playing_=false;
-            pendingRestart_=true;restartBurstPending_=true;
+            pendingRestart_=true;restartBurstPending_=hasParticles_;
             phase_=0;
             pendingClear_=false;
             burstsPending_=0;
@@ -189,6 +203,7 @@ public:
             hasPendingGpuAllocationSeed_=false;
             gpuSeedFailed_=false;gpuSeedRetryCount_=0;
             backend_=runtime_->gpuActive()?(runtime_->backend()==spectra::ComputeBackend::Vulkan?"Vulkan GPU":"Metal GPU"):"CPU (full effect)";
+            if(volumeGrid_)backend_=std::string(device.info().backend==gfx::Backend::Vulkan?"Vulkan":"Metal")+(hasParticles_?" GPU volume + particles":" GPU volume");
             error_.clear();
             generation_=nextSpectraIdentity();
             return status();
@@ -281,6 +296,7 @@ public:
             return status();
         }
         if(action=="burst") {
+            if(!hasParticles_)return transferStatus("Volume-only graph uses continuous sources; particle burst unavailable");
             const auto& raw=input["count"];
             if(!raw.isNull() &&
                (!raw.isNumber() || raw.numberLiteral().find_first_of(".eE-")!=std::string::npos ||
@@ -316,7 +332,7 @@ public:
             replayPrepared_=false;
             error_.clear();
             playing_=input.getBool("play",false);
-            pendingRestart_=true;restartBurstPending_=true;timeTicks_=0;targetTicks_=0;stepsPending_=0;
+            pendingRestart_=true;restartBurstPending_=hasParticles_;timeTicks_=0;targetTicks_=0;stepsPending_=0;
             hasPendingGpuAllocationSeed_=false;
             gpuSeedFailed_=false;gpuSeedRetryCount_=0;
             phase_=0;
@@ -346,7 +362,7 @@ public:
             targetTicks_=uint32_t(input["tick"].integer());
             stepsPending_=0;
             if(targetTicks_<timeTicks_) {
-                pendingRestart_=true;restartBurstPending_=true;
+                pendingRestart_=true;restartBurstPending_=hasParticles_;
                 timeTicks_=0;
             }
             return status();
@@ -371,7 +387,8 @@ public:
     // camera-dependent draw uniforms, but never advance particle age.
     void prepare(const fx::SpectraFxView& view,render::float3 origin) {
         if(!ready_ || !view.valid())return;
-        runtime_->setView(view);
+        if(hasParticles_)runtime_->setView(view);
+        volumeRendered_=false;
         if(fileImportPending_){fileImportPending_=false;auto bytes=std::move(importLease_.bytes);importLease_.reset();if(!importTimelineCheckpoint(bytes))error_="Checkpoint file restore rejected";return;}
         if(rollbackId_){
             const auto id=std::exchange(rollbackId_,uint64_t(0));
@@ -398,7 +415,8 @@ public:
         }
         if(pendingClear_) {
             hasPendingGpuAllocationSeed_=false;
-            runtime_->clear();
+            if(volumeGrid_&&!volumeGrid_->clear()){playing_=false;error_=volumeGrid_->error();return;}
+            if(hasParticles_)runtime_->clear();
             pendingClear_=false;
         }
         if(hasPendingGpuAllocationSeed_) {
@@ -423,7 +441,8 @@ public:
             timeTicks_=0;
         }
         if(pendingRestart_) {
-            runtime_->clear();
+            if(volumeGrid_&&!volumeGrid_->clear()){playing_=false;error_=volumeGrid_->error();return;}
+            if(hasParticles_)runtime_->clear();
             timeTicks_=0;
             pendingRestart_=false;
         }
@@ -478,9 +497,10 @@ public:
         const uint32_t ticks=std::min(remaining,requested);
         stepsPending_=0;
         for(uint32_t i=0;i<ticks;++i) {
-            if(!runtime_->step(kStep)) {
+            if(volumeGrid_&&!volumeGrid_->step()){playing_=false;phase_=0;error_=volumeGrid_->error();break;}
+            if(hasParticles_&&!runtime_->step(kStep)) {
                 playing_=false;phase_=0;
-                ready_=runtime_->backend()==spectra::ComputeBackend::Cpu ||
+                ready_=bool(volumeGrid_)||runtime_->backend()==spectra::ComputeBackend::Cpu ||
                        runtime_->gpuActive();
                 error_=runtime_->reason().empty()?
                     "SpectraFX preview simulation failed":runtime_->reason();
@@ -492,7 +512,7 @@ public:
             if(playing_ && loop_ && error_.empty()) {
                 // Reset at the next frame's safe simulation update point.
                 // Never recursively call GPU clear() in an open pass.
-                pendingRestart_=true;restartBurstPending_=true;
+                pendingRestart_=true;restartBurstPending_=hasParticles_;
                 timeTicks_=targetTicks_=0;
                 phase_=0;
             } else {
@@ -504,16 +524,28 @@ public:
     // Draw only inside the SAME still-open native Scene pass (before PRISMA
     // resolves that frame). No RHI work is ever submitted by the HTML UI.
     void draw() {
-        if(ready_) runtime_->draw();
+        if(ready_&&hasParticles_) runtime_->draw();
     }
     bool active() const {return ready_;}
+    bool hasVolume()const{return ready_&&bool(volumeGrid_);}
+    void contributeVolume(render::Prisma& post){
+        if(!hasVolume())return;
+        post.setSceneHdrContributor([this](gfx::Device& device,const render::PostFrame& frame,
+            gfx::TextureHandle color,gfx::TextureHandle depth){
+            if(!volumeGrid_||!volumeRenderer_)return gfx::TextureHandle{};
+            auto out=volumeRenderer_->draw(device,*volumeGrid_,frame,color,depth,volumeMaterial_);
+            volumeRendered_=out.valid();
+            if(!out.valid())error_=volumeRenderer_->error();
+            return out;
+        });
+    }
     bool needsFrame() const {
         return ready_ && (fileImportPending_ || checkpointRequest_ || rollbackId_ || playing_ || pendingRestart_ || hasPendingGpuAllocationSeed_ ||
                           restartBurstPending_ || pendingClear_ ||
                           burstsPending_>0 || targetTicks_>timeTicks_ || stepsPending_>0);
     }
     bool exportTimelineCheckpoint(std::vector<uint8_t>& out) const {
-        if(!ready_||playing_||fileImportPending_||checkpointRequest_||rollbackId_||pendingRestart_||restartBurstPending_||
+        if(volumeGrid_||!ready_||playing_||fileImportPending_||checkpointRequest_||rollbackId_||pendingRestart_||restartBurstPending_||
            pendingClear_||hasPendingGpuAllocationSeed_||burstsPending_||stepsPending_||
            targetTicks_!=timeTicks_||!requestedParameters_.empty())return false;
         std::vector<uint8_t> payload;
@@ -521,7 +553,7 @@ public:
     }
     // Render-owner frame only; callers must not invoke this inside a pass.
     bool importTimelineCheckpoint(const std::vector<uint8_t>& bytes) {
-        if(!ready_||playing_||checkpointRequest_||rollbackId_||pendingRestart_||restartBurstPending_||
+        if(volumeGrid_||!ready_||playing_||checkpointRequest_||rollbackId_||pendingRestart_||restartBurstPending_||
            pendingClear_||hasPendingGpuAllocationSeed_||burstsPending_||stepsPending_||
            targetTicks_!=timeTicks_||!requestedParameters_.empty())return false;
         uint32_t tick=0,bursts=0;std::vector<uint8_t> payload;
@@ -532,7 +564,7 @@ public:
     bool authoredGpuBirthRandom() const {return authoredGpuBirthRandom_;}
     bool authoredGpuOwnedAllocation() const {return authoredGpuOwnedAllocation_;}
     bool canBeginReplayTransaction() const {
-        return !checkpointRequest_&&!rollbackId_&&!fileImportPending_&&!importLease_.id&&!exportLease_.id&&!replayPending();
+        return !volumeGrid_&&!checkpointRequest_&&!rollbackId_&&!fileImportPending_&&!importLease_.id&&!exportLease_.id&&!replayPending();
     }
     uint32_t timeTicks() const {return timeTicks_;}
     bool replayReady() const {
@@ -570,7 +602,12 @@ public:
         result.set("checkpointPending",Json::fromBool(checkpointRequest_||rollbackId_||fileImportPending_));
         result.set("generation",Json::number(int64_t(generation_)));
         result.set("error",Json::string(error_));
-        result.set("gpu",Json::fromBool(ready_&&runtime_->gpuActive()));
+        result.set("gpu",Json::fromBool(ready_&&(runtime_->gpuActive()||bool(volumeGrid_))));
+        result.set("volume",Json::fromBool(bool(volumeGrid_)));
+        result.set("hybrid",Json::fromBool(bool(volumeGrid_)&&hasParticles_));
+        result.set("volumeRendered",Json::fromBool(volumeRendered_));
+        result.set("volumeDimension",Json::number(int64_t(volumeGrid_?volumeGrid_->config().dimension:0)));
+        result.set("volumeBytes",Json::number(int64_t(volumeGrid_?volumeGrid_->stats().allocatedBytes+volumeRenderer_->allocatedBytes():0)));
         const auto gpu=ready_&&runtime_->gpuActive();
         const auto& stats=runtime_->gpuStats();
         result.set("alive",Json::number(int64_t(ready_?stats.alive:0)));
@@ -585,6 +622,7 @@ public:
     }
     void stop(gfx::Device& device) {
         device.waitForResourceIdle();
+        volumeRenderer_.reset();volumeGrid_.reset();hasParticles_=true;volumeRendered_=false;
         runtime_->shutdown();
         authoredGraph_=Json::object();authoredGpuBirthRandom_=false;authoredGpuOwnedAllocation_=false;
         checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;
@@ -623,6 +661,10 @@ private:
     Json authoredGraph_=Json::object();
     bool authoredGpuBirthRandom_=false,authoredGpuOwnedAllocation_=false;
     std::unique_ptr<spectra::GraphRuntime> runtime_=std::make_unique<spectra::GraphRuntime>();
+    std::unique_ptr<spectra::volume::GpuGasGrid> volumeGrid_;
+    std::unique_ptr<spectra::volume::GpuVolumeRenderer> volumeRenderer_;
+    spectra::volume::Material volumeMaterial_{};
+    bool hasParticles_=true,volumeRendered_=false;
     std::map<std::string,float> requestedParameters_;
     bool ready_=false,playing_=false,pendingRestart_=false,restartBurstPending_=false;
     bool loop_=true;
