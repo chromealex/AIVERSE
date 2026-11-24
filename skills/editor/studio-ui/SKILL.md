@@ -88,3 +88,7 @@ bash tools/studio/verify_mac.sh
 ```
 
 Inspect real HTML5/WKWebView screenshots in desktop and narrow docks; check visible hover, focus, disabled, loading, empty and error states. Document actual results, commit SHA, touched files and next action in a separate stage file in `docs/handoff/studio-html5/` (named like `01-web-shell.md`) after each stage. Work on `feature/studio-html5`, not `main`; keep legacy ImGui until verified parity.
+
+## Caverns authoring panel (Stage54a)
+
+Panel `caverns` uses `CavernsPanel.tsx` and the existing Workspace operation `terraweave_caverns_paint`. Discover it through `studio.ops`; standalone Studio without the Caverns engine branch must report unavailable. All requests bind expectedProject and expectedMap; mutations also bind exact decimal expectedRevision, and erase uses stampIdText. A coordinate dab is one MapDoc undo step. Explicit refresh after map/history changes; no browser-side SDF, mesh generation or invented telemetry. Generator and entrance records are read-only in this panel. Native 3D brush raycast and GeometryScene preview, paging controls/diagnostics, generator/entrance mutation and combined branch verification are still outstanding. See docs/handoff/studio-html5/caverns-stage54a-2026-11-24.md.
