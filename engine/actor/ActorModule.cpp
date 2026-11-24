@@ -31,6 +31,30 @@ void royaleIo(Archive& a,RoyaleRun& r) {
     uint32_t feed=a.count(r.feed.size());if(feed>6){a.fail();return;}if(!a.writing())r.feed.resize(feed);for(auto& e:r.feed)lib::mechanics::io(a,e);
 }
 }
+// Portable resource codec for the canonical match State. This does not alter
+// the existing interleaved native match snapshot layout.
+void io(Archive& a,State& s) {
+    a(s.round,s.winner,s.nextObject,s.match);
+    if(!a.ok()||!s.round||!s.nextObject||(a.writing()&&s.history.size()>121)){a.fail();return;}
+    uint32_t n=a.count(s.history.size());
+    if(!a.ok()||n>121){a.fail();return;}
+    if(!a.writing())s.history.resize(n);
+    uint32_t previous=0;bool first=true;
+    for(auto& frame:s.history){
+        a(frame.tick);
+        if(!a.ok()||(!first&&frame.tick<=previous)||(a.writing()&&frame.characters.size()>255)){a.fail();return;}
+        previous=frame.tick;first=false;
+        uint32_t count=a.count(frame.characters.size());
+        if(!a.ok()||count>255){a.fail();return;}
+        if(!a.writing())frame.characters.resize(count);
+        for(size_t i=0;i<frame.characters.size();++i){
+            auto& character=frame.characters[i];
+            io(a,character);ioMelee(a,character);
+            if(!a.ok()||character.slot!=i+1){a.fail();return;}
+        }
+    }
+    royaleIo(a,s.royale);
+}
 Config readConfig(const Json& root) {
     if(!root["actor"].isObject())throw JsonError("rules.actor: expected object");
     // Capability blocks that are not specific to this host may sit at the top level of the rules (shared names,
@@ -259,9 +283,14 @@ void ActorHost::spawnProjectile(Simulation& sim,Projectile projectile) {
 }
 void ActorHost::spawnLoot(Simulation& sim,Loot loot) {
     World& w=sim.world();const Entity e=w.create();w.add<Loot>(e,std::move(loot));
+    if(!reportRegionChange(sim,e,world::RegionDirtyKind::Spawn))
+        throw std::logic_error("regionOwnership: dirty loot spawn rejected");
 }
 Entity ActorHost::spawnVehicle(Simulation& sim,Vehicle vehicle) {
-    World& w=sim.world();const Entity e=w.create();w.add<Vehicle>(e,std::move(vehicle));return e;
+    World& w=sim.world();const Entity e=w.create();w.add<Vehicle>(e,std::move(vehicle));
+    if(!reportRegionChange(sim,e,world::RegionDirtyKind::Spawn))
+        throw std::logic_error("regionOwnership: dirty vehicle spawn rejected");
+    return e;
 }
 void ActorHost::clearProjectiles(Simulation& sim) {
     World& w=sim.world();
@@ -269,13 +298,22 @@ void ActorHost::clearProjectiles(Simulation& sim) {
 }
 void ActorHost::resetLootAndVehicles(Simulation& sim) {
     World& w=sim.world();
-    for(const Entity e:lootEntities(sim))w.destroy(e);
+    for(const Entity e:lootEntities(sim)) {
+        if(!reportRegionChange(sim,e,world::RegionDirtyKind::Retire))
+            throw std::logic_error("regionOwnership: dirty loot retire rejected");
+        w.destroy(e);
+    }
     for(const auto& l:initialLoot_)spawnLoot(sim,l);
     // Vehicles are never created or destroyed after setup: restore their initial values in place
     // (the entity and a typed vehicle's VehicleDrive stay).
     for(const Entity e:vehicleEntities(sim)){
         auto& v=*w.tryGet<Vehicle>(e);
-        for(const auto& initial:initialVehicles_)if(initial.id==v.id){v=initial;break;}
+        for(const auto& initial:initialVehicles_)if(initial.id==v.id){
+            v=initial;
+            if(!reportRegionMoveIfCrossed(sim,e))
+                throw std::logic_error("regionOwnership: round car reset dirty report failed");
+            break;
+        }
     }
 }
 // ---------------------------------------------------------------- setup
@@ -330,8 +368,32 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
     setupRoyale(sim,map);
     if(!config_.gear.empty())for(const Entity e:world.resourceConst<CharacterIndex>()->bySlot)world.add<lib::systems::GearLoadout>(e);
     setupVehicles(sim,map);
+    // Explicit, genre-independent world capability. No change in the ECS
+    // schema or save checksum unless rules.regionOwnership is present.
+    // World-space characters and vehicles retain their canonical positions
+    // in CharacterBody/Vehicle rather than duplicating them in Transform.
+    if(rules.has("regionOwnership")) {
+        if(!rules["regionOwnership"].isObject() ||
+           !rules["regionOwnership"].members().empty())
+            throw JsonError("regionOwnership: expected an empty object");
+        world::registerRegionEntityLedger(sim);
+        world::registerRegionStableIdentity(sim);
+        world::registerRegionMoveRequests(sim);
+        world::registerRegionDirtyQueue(sim);
+        sim.world().setResource<world::RegionDirtyQueue>(
+            world::RegionDirtyQueue{});
+        sim.world().setResource<world::RegionEntityLedger>(
+            world::RegionEntityLedger{});
+        sim.world().setResource<world::RegionMoveRequests>(
+            world::RegionMoveRequests{});
+    }
     setupRace(sim,rules,map);
     setupBots(sim,map);
+    // Track the final setup state (races may reposition/seat cars). No
+    // extra resources or save fields are added without the rules block.
+    if(sim.world().resourceConst<world::RegionEntityLedger>())
+        sim.addStateRestoredHook([this](Simulation& s){invalidateRegionOwnershipCaches(s);});
+        synchronizeRegionOwnership(sim);
     meleeAttacks_.clear();
     if(config_.melee.enabled){
         const auto& m=config_.melee;auto total=m.windup+m.active+m.recovery;
@@ -339,6 +401,12 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
         if(!lib::mechanics::valid(meleeAttacks_))throw JsonError("actor.melee: invalid attack timing");
     }
     Hasher hash;hash.str(rules.dump(-1));hash.str(map.dump(-1));if(streamManifest_.getBool("async"))hash.str("world-stream-v1");contentHash_=hash.value();
+    // Destination admission has already completed in readyToStep. Commit
+    // authorized region moves ahead of every movement/projectile system.
+    if(sim.world().resourceConst<world::RegionMoveRequests>())
+        sim.addSystem("actor.regionMoves",[this](Simulation& s){
+            applyRegionMoves(s);
+        });
     // Stage order: programmed projectiles, ordinary projectiles (bullets, grenades, smoke), then the
     // match / royale / character tick. Immediate hits of the projectile stages precede everything else.
     sim.addSystem("actor.projectilePrograms",[this](Simulation& s) {
@@ -350,6 +418,10 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
         tickOrdinaryProjectiles(s);
     });
     sim.addSystem("actor",[this](Simulation& s){tick(s);});
+    if(sim.world().resourceConst<world::RegionEntityLedger>())
+        sim.addSystem("actor.regionOwnership",[this](Simulation& s){
+            synchronizeRegionOwnership(s);
+        });
 }
 void ActorHost::applyCommand(Simulation& sim,const Command& c) {
     Input input;
@@ -417,6 +489,8 @@ void ActorHost::tick(Simulation& sim) {
                 fresh.armor=config_.systems.startArmor;fresh.money=config_.systems.startMoney;
                 fresh.life=a.life+1;fresh.pos=spawns_[a.slot-1];equipInitial(fresh);
                 assign(a,fresh);
+                if(!reportRegionMoveIfCrossed(sim,a.entity))
+                    throw std::logic_error("regionOwnership: deathmatch respawn boundary dirty report failed");
             } else {skydive(sim,a);continue;}   // a body in the air keeps falling (battle royale)
         }
         if(skydive(sim,a))continue;
@@ -453,6 +527,11 @@ void ActorHost::tick(Simulation& sim) {
         if(!a.vehicle){
             if(config_.locomotion)moveActorModes(a,*sim.world().tryGet<LocomotionBody>(a.entity),input,config_.motor,*config_.locomotion,collision_,sim.dt(),config_.worldLimit);
             else moveActor(a,input,config_.motor,collision_,sim.dt(),config_.worldLimit);
+            // Both motor and generic locomotion write CharacterBody directly.
+            // Emit only an actual boundary change; the ledger is updated
+            // later by actor.regionOwnership after grouped car movement.
+            if(!reportRegionMoveIfCrossed(sim,a.entity))
+                throw std::logic_error("regionOwnership: character move dirty report failed");
         }
         if(config_.melee.enabled)tickMelee(sim,a,input);
         // Jump is an edge, movement/fire are held; loss of input eventually releases them.
@@ -529,6 +608,79 @@ void ActorHost::hashState(Simulation& sim,Hasher& hash) {
 // FPS save version 10: written from the components (characters in slot order, dynamic objects in id order,
 // each with its entity handle); older versions are not readable. Typed vehicles write the shared VehicleDrive record
 // (engine/vehicles); maps with a race (map "race") append the shared RaceState; other maps write no race bytes.
+// Validate the content-specific invariants before a reconstructed ECS world
+// is exposed to the authoritative host. The normal native serializer remains
+// the owner of its existing wire format.
+bool ActorHost::validatePortableWorld(const World& w,uint32_t tick)const{
+    const auto* index=w.resourceConst<CharacterIndex>();
+    const auto* state=w.resourceConst<State>();
+    const size_t n=spawns_.size();
+    if(!index||!state||index->bySlot.size()!=n||!state->round||!state->nextObject||
+       state->royale.enabled!=bool(config_.royale)||state->history.size()>121)return false;
+    auto position=[&](Vec3 p){
+        return fxAbs(p.x)<=config_.worldLimit&&fxAbs(p.y)<=config_.worldLimit&&fxAbs(p.z)<=config_.worldLimit;
+    };
+    auto characterValid=[&](const CharacterSnapshot& v){
+        if(!v.slot||v.slot>n||!v.life||!v.team||!position(v.pos)||
+           v.weaponIndex>=config_.weapons.size()||v.bag.size()>24||v.actionTarget>n||
+           uint32_t(v.activeAction)>uint32_t(Action::Vault)||v.owned>15||
+           v.armor<0||v.armor>100||v.health<0||v.health>100||v.money<0||v.money>16000)return false;
+        for(const auto& item:v.bag)if(item.type<1||item.type>9||item.count<1||item.count>20)return false;
+        const auto& m=v.melee;
+        return v.lockTarget<=n&&m.attack>=0&&m.attack<=1&&m.queued>=0&&m.queued<=1&&
+            m.started<=m.lastTick&&m.queuedAt<=m.lastTick&&m.hitTargets.size()<=n&&
+            std::is_sorted(m.hitTargets.begin(),m.hitTargets.end())&&
+            std::adjacent_find(m.hitTargets.begin(),m.hitTargets.end())==m.hitTargets.end()&&
+            (m.hitTargets.empty()||(m.hitTargets.front()>=1&&m.hitTargets.back()<=int64_t(n)));
+    };
+    for(size_t i=0;i<n;++i){
+        const auto e=index->bySlot[i];
+        if(!w.alive(e))return false;
+        auto v=actor::snapshot(makeCharacterRef<true>(w,e));
+        if(v.slot!=i+1||!characterValid(v)||v.lastInputTick>tick)return false;
+        const auto* gear=w.tryGetConst<lib::systems::GearLoadout>(e);
+        const auto* loco=w.tryGetConst<LocomotionBody>(e);
+        if(bool(gear)!=!config_.gear.empty()||(gear&&!lib::systems::valid(config_.gear,*gear))||
+           bool(loco)!=bool(config_.locomotion)||(loco&&!valid(*loco))||
+           w.has<BotMemory>(e)!=bool(botHost_))return false;
+    }
+    for(const auto& frame:state->history){
+        if(frame.tick>tick||frame.characters.size()!=n)return false;
+        for(size_t i=0;i<n;++i)
+            if(frame.characters[i].slot!=i+1||!characterValid(frame.characters[i]))return false;
+    }
+    if(state->royale.enabled){
+        using lib::mechanics::valid;
+        const auto& v=state->royale;
+        if(!valid(v.zone)||!valid(v.bombardment)||!valid(v.drops)||!valid(v.flight)||!valid(v.standings)||
+           v.lastAttacker.size()!=n||v.lastWeapon.size()!=n||v.standings.players.size()!=n||
+           (v.divers.size()!=n&&!(v.divers.empty()&&!config_.royale->flight)))return false;
+        for(const auto& d:v.divers)if(!valid(d))return false;
+        for(auto attacker:v.lastAttacker)if(attacker>n)return false;
+    }
+    if(w.countExisting<Projectile>()>kMaxProjectiles||w.countExisting<Loot>()>kMaxLoot||
+       w.countExisting<Vehicle>()>kMaxVehicles)return false;
+    bool ok=true;
+    w.eachExistingConst<Projectile>([&](Entity,const Projectile& p){
+        if(!p.id||p.id>=state->nextObject||!p.owner||p.owner>n||p.kind>4||p.piercedCount>8||
+           p.weapon>=config_.weapons.size()||!position(p.pos)||
+           !projectile::valid(p.program,p.programSpeed,config_.weapons[p.weapon].flight))ok=false;
+    });
+    w.eachExistingConst<Loot>([&](Entity,const Loot& v){
+        if(!v.id||v.id>=state->nextObject||!position(v.pos))ok=false;
+    });
+    std::vector<Entity> typed;
+    w.eachExistingConst<Vehicle>([&](Entity e,const Vehicle& v){
+        if(!v.id||v.id>=state->nextObject||!position(v.pos)||v.driver>n||v.health<0||v.health>500)ok=false;
+        if(const auto* d=w.tryGetConst<vehicles::VehicleDrive>(e)){
+            typed.push_back(e);
+            if(!config_.vehicleTypes||!config_.vehicleTypes->vehicles.contains(d->type)||!vehicles::valid(*d))ok=false;
+        }
+    });
+    const auto* race=w.resourceConst<vehicles::RaceState>();
+    return ok&&bool(race)==bool(race_)&&(!race||validRace(*race,typed));
+}
+
 bool ActorHost::serializeState(Simulation& sim,Archive& archive) {
     uint32_t version=10;uint64_t content=contentHash_;archive(version,content);
     if(version!=10||content!=contentHash_)return false;

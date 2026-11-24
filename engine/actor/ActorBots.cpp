@@ -10,17 +10,41 @@
 #include <algorithm>
 namespace aiverse::actor {
 struct BotHost { lib::bots::ActorConfig config;std::vector<lib::bots::NavMesh> meshes; };
-void ActorHost::setupBots(Simulation& sim,const Json&) {
-    botHost_.reset();if(config_.bots.isNull())return;
-    auto host=std::make_shared<BotHost>();host->config=lib::bots::fpsConfig(config_.bots);
+// Rebuild only derived navigation geometry; never reset BotMemory, controller
+// state or gameplay RNG. Failed construction leaves previous meshes intact.
+bool ActorHost::rebuildBotNavigation(std::string* error) {
+    if(!botHost_)return true;
+    std::vector<lib::bots::NavMesh> meshes;
+    meshes.reserve(buildingRegions_.size());
     for(const auto& region:buildingRegions_){
         lib::bots::NavBuildConfig c;c.bounds=region.bounds;c.cellSize=Fixed::fromRatio(1,2);
         c.radius=config_.motor.radius;c.height=config_.motor.height;c.stepHeight=config_.motor.stepHeight;
-        auto built=lib::bots::buildNavMesh(collision_,c);if(!built.mesh)throw JsonError("actor.bots: "+built.error);
-        host->meshes.push_back(std::move(*built.mesh));
+        auto built=lib::bots::buildNavMesh(collision_,c);
+        if(!built.mesh) {
+            if(error)*error="actor.bots: "+built.error;
+            return false;
+        }
+        meshes.push_back(std::move(*built.mesh));
     }
+    botHost_->meshes=std::move(meshes);
+    ++navigationRebuilds_;
+    return true;
+}
+void ActorHost::setupBots(Simulation& sim,const Json&) {
+    botHost_.reset();
+    navigationCollisionRevision_=UINT64_MAX;
+    navigationRebuilds_=0;
+    if(config_.bots.isNull())return;
+    auto host=std::make_shared<BotHost>();host->config=lib::bots::fpsConfig(config_.bots);
     botHost_=host;
-    for(const Entity e:sim.world().resourceConst<CharacterIndex>()->bySlot)sim.world().add<BotMemory>(e,BotMemory{lib::bots::saveFps({})});
+    // Streamed collision is not yet available at setup. Defer derived mesh
+    // construction until readyToStep has published all required chunks.
+    if(!streamManifest_.getBool("async")) {
+        std::string error;
+        if(!rebuildBotNavigation(&error))throw JsonError(error);
+    }
+    for(const Entity e:sim.world().resourceConst<CharacterIndex>()->bySlot)
+        sim.world().add<BotMemory>(e,BotMemory{lib::bots::saveFps({})});
 }
 namespace {
 bool insideXZ(const world::Bounds& b,Vec3 p){return p.x>=b.min.x&&p.x<=b.max.x&&p.z>=b.min.z&&p.z<=b.max.z&&p.y>=b.min.y&&p.y<=b.max.y;}

@@ -5243,6 +5243,125 @@ if(AIVERSE_BUILD_TESTS)
     endif()
 endif()
 
+# Dynamic open-world ownership ledger: ECS v10 persistence, rollback, deterministic transfer.
+# This is an independent correctness test; no external game project required.
+if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
+    add_executable(aiverse_region_entity_ledger_test tests/world/region_entity_ledger_test.cpp)
+    target_link_libraries(aiverse_region_entity_ledger_test PRIVATE aiverse_engine)
+    add_test(NAME region_entity_ledger_test COMMAND aiverse_region_entity_ledger_test)
+    set_tests_properties(region_entity_ledger_test PROPERTIES LABELS "World;ECS")
+endif()
+
+# Live ECS region attachment and authority-crossing fixture, without game assets.
+if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
+    add_executable(aiverse_region_ecs_bridge_test tests/world/region_ecs_bridge_test.cpp)
+    target_link_libraries(aiverse_region_ecs_bridge_test PRIVATE aiverse_engine)
+    add_test(NAME region_ecs_bridge_test COMMAND aiverse_region_ecs_bridge_test)
+    set_tests_properties(region_ecs_bridge_test PROPERTIES LABELS "World;ECS")
+endif()
+
+# W1.3: opted-in region cold-store roundtrip of real ECS component pools.
+# This fixture has no external game/genre dependency.
+if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
+    add_executable(aiverse_region_cold_store_test tests/world/region_cold_store_test.cpp)
+    target_link_libraries(aiverse_region_cold_store_test PRIVATE aiverse_engine)
+    add_test(NAME region_cold_store_test COMMAND aiverse_region_cold_store_test)
+    set_tests_properties(region_cold_store_test PROPERTIES LABELS "World;ECS")
+endif()
+
+# W1.4: real GameCore/NativeModule command -> shared region authority runtime.
+# Game map content comes from the normal external template package, not this repo.
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_game)
+    add_executable(aiverse_region_gamecore_integration_test
+        tests/world/region_gamecore_integration_test.cpp)
+    target_link_libraries(aiverse_region_gamecore_integration_test PRIVATE aiverse_game)
+    target_compile_definitions(aiverse_region_gamecore_integration_test PRIVATE
+        AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME region_gamecore_integration_test
+        COMMAND aiverse_region_gamecore_integration_test)
+    set_tests_properties(region_gamecore_integration_test PROPERTIES LABELS "World;ECS")
+endif()
+
+# W1.5: real GameCore world-space admission waits for published collision and
+# rebuilds derived bot navigation before the first authoritative simulation tick.
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_authority)
+    add_executable(aiverse_actor_navigation_stream_gate_test
+        tests/world/actor_navigation_stream_gate_test.cpp)
+    target_link_libraries(aiverse_actor_navigation_stream_gate_test PRIVATE aiverse_authority)
+    add_test(NAME actor_navigation_stream_gate_test
+        COMMAND aiverse_actor_navigation_stream_gate_test)
+    set_tests_properties(actor_navigation_stream_gate_test PROPERTIES LABELS "World;ECS;NETWORK")
+endif()
+
+# W1.6: shared VehicleDrive/VehicleOccupant region grouping and actual
+# world-space ActorHost seat-slot adapter, no external game dependency.
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_engine)
+    add_executable(aiverse_vehicle_region_group_test
+        tests/world/vehicle_region_group_test.cpp)
+    target_link_libraries(aiverse_vehicle_region_group_test PRIVATE aiverse_engine)
+    add_test(NAME vehicle_region_group_test COMMAND aiverse_vehicle_region_group_test)
+    set_tests_properties(vehicle_region_group_test PROPERTIES LABELS "World;ECS;Vehicles")
+endif()
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_game AND TARGET aiverse_fps)
+    add_executable(aiverse_actor_vehicle_region_group_test
+        tests/world/actor_vehicle_region_group_test.cpp)
+    target_link_libraries(aiverse_actor_vehicle_region_group_test PRIVATE aiverse_game aiverse_fps)
+    add_test(NAME actor_vehicle_region_group_test COMMAND aiverse_actor_vehicle_region_group_test)
+    set_tests_properties(actor_vehicle_region_group_test PROPERTIES LABELS "World;ECS;Vehicles")
+endif()
+
+# W1.7: actual world-space ActorHost positions (CharacterBody, Vehicle)
+# share the generic W1 ledger without adding duplicate Transform components.
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_game AND TARGET aiverse_fps)
+    add_executable(aiverse_actor_region_position_test
+        tests/world/actor_region_position_test.cpp)
+    target_link_libraries(aiverse_actor_region_position_test PRIVATE aiverse_game aiverse_fps)
+    add_test(NAME actor_region_position_test COMMAND aiverse_actor_region_position_test)
+    set_tests_properties(actor_region_position_test PROPERTIES LABELS "World;ECS;Vehicles")
+endif()
+
+# W1.8: post-tick world-space actor region ownership, occupied car group
+# migration and dynamic loot tombstones. No external game content.
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_game AND TARGET aiverse_fps)
+    add_executable(aiverse_actor_region_lifecycle_test
+        tests/world/actor_region_lifecycle_test.cpp)
+    target_link_libraries(aiverse_actor_region_lifecycle_test PRIVATE aiverse_game aiverse_fps)
+    add_test(NAME actor_region_lifecycle_test COMMAND aiverse_actor_region_lifecycle_test)
+    set_tests_properties(actor_region_lifecycle_test PROPERTIES LABELS "World;ECS;Vehicles")
+endif()
+
+# W1.9: staged movement admission. Real ActorHost/CollisionStream must refuse
+# a tick until all requested destination collision is resident.
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_authority)
+    add_executable(aiverse_actor_region_admission_test
+        tests/world/actor_region_admission_test.cpp)
+    target_link_libraries(aiverse_actor_region_admission_test PRIVATE aiverse_authority)
+    add_test(NAME actor_region_admission_test
+        COMMAND aiverse_actor_region_admission_test)
+    set_tests_properties(actor_region_admission_test PROPERTIES LABELS "World;ECS;NETWORK")
+endif()
+
+# W1.11: shared VehicleRace race-grid and checkpoint respawn targets,
+# consumed by the existing ActorHost pre-tick streamed collision gate.
+if(AIVERSE_BUILD_TESTS AND TARGET aiverse_vehicles)
+    add_executable(aiverse_race_region_respawn_gate_test
+        tests/world/race_region_respawn_gate_test.cpp)
+    target_link_libraries(aiverse_race_region_respawn_gate_test PRIVATE aiverse_vehicles)
+    add_test(NAME race_region_respawn_gate_test
+        COMMAND aiverse_race_region_respawn_gate_test)
+    set_tests_properties(race_region_respawn_gate_test PROPERTIES LABELS "World;Vehicles")
+endif()
+
+# W1.15: opt-in deterministic ECS lifecycle dirtiness and rollback-safe
+# coalescing. Gameplay actors still retain legacy correctness scans.
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_engine)
+    add_executable(aiverse_region_dirty_queue_test
+        tests/world/region_dirty_queue_test.cpp)
+    target_link_libraries(aiverse_region_dirty_queue_test PRIVATE aiverse_engine)
+    add_test(NAME region_dirty_queue_test COMMAND aiverse_region_dirty_queue_test)
+    set_tests_properties(region_dirty_queue_test PROPERTIES LABELS "World;ECS")
+endif()
+
 # Warcraft III source importer: no game data or StormLib is required for these
 # synthetic format/parser/map-writer acceptance cases. Native integration is a
 # separate acceptance gate when a licensed Warcraft III map is available.

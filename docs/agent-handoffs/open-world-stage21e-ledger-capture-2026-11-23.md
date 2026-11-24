@@ -1,0 +1,3 @@
+# W1.21e — ordered ledger capture
+
+Commit `8e12e17e`, PR #116 Draft. RegionEntityLedger::Transaction(ledger,true) captures revision-ordered records after each successful spawn/despawn/transfer/group operation; repeated changes across operations are retained. Exposes initialRevision(), mutations(), capturing(). Default false preserves existing callers. Capture allocation can throw after mutation; caller must abandon transaction on exception so undo executes, never catch and commit. Capture currently unbounded; next bound and encode payload, replay with revision verification, durable append before commit. Not yet wired to ActorHost or disk. No native tests run. No main merge.

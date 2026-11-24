@@ -1,5 +1,15 @@
 # Large worlds: chunks and a memory budget
 
+## Dynamic entities: authoritative ownership vs chunk residency
+
+The opt-in [RegionEntityLedger](region-entity-ledger.md) records authoritative stable
+entity ownership by region, group transfers, tombstones and portable ECS v10 save/rollback.
+This is a **first policy slice**, not an ECS region streaming host. In particular, the
+resource-residency decisions below must never change deterministic gameplay state.
+Moving a camera or evicting a visual chunk does not despawn or transfer an ECS actor.
+Live component deactivation/reification and collision/navmesh barriers remain W1 work.
+
+
 `AIVERSE::world` provides a shared loader, `world::ChunkStreamer`, for the game host. It does not depend on FPS, the GPU,
 threads or the file system. The host defines the chunk catalog, observers, pinned chunks and the functions that load and
 unload resources. The existing FPS client uses it through `ChunkScene` for the earlier box scenes. For terrain, models and
@@ -270,3 +280,50 @@ AIVERSE_SCREENSHOT=/tmp/world.ppm AIVERSE_EXIT_AFTER_FRAMES=400 <build>/modules/
 осталось 766 объектов.
 
 Не проверено тестами: `shareModels` и `meshOverhang` покрыты только запуском клиента под Xvfb.
+
+
+## Streamed collision and derived actor navigation — W1.5
+
+World-space `actor::ActorHost` already defers `Simulation::step`
+through `GameCore::readyToStep` whenever a required
+`world::CollisionStream` chunk is missing. Its demanded regions include
+respawn points, player actors, vehicles and projectile reach. A blocked
+ready-check does **not** consume the tick, authoritative input commands,
+or the RNG.
+
+The W1.5 refinement avoids constructing a bot's regional navmesh from
+**incomplete** collision geometry at scene setup:
+
+- `CollisionStream::revision()` is a host-local publication epoch. It
+  changes when a streamed collision chunk is published or retired, not
+  when an unrelated presentation camera moves.
+- On async maps, bot navmeshes are deferred until all demanded
+  collision chunks are resident. `ActorHost::readyToStep` then rebuilds
+  the **derived** bot navigation meshes against the current
+  `SpatialWorld`; a failure still blocks the next authoritative tick.
+- After later collision publication/retirement, a different revision
+  triggers revalidation. Rebuilds leave the authoritative
+  `BotMemory`, ECS World, RNG, pending commands, and checksum untouched.
+- `ActorHost::navigationRebuilds()`,
+  `navigationCollisionRevision()` and
+  `navigationReadinessError()` are diagnostic accessors; no values
+  from these queries are persisted or hashed.
+- On non-async maps the bot navmesh still builds during setup as
+  before; games without bot navigation avoid the extra work.
+
+The focused source test is
+`tests/world/actor_navigation_stream_gate_test.cpp`
+(CTest `actor_navigation_stream_gate_test`).
+It exercises delayed/failed chunk reading and actual
+`GameCore` stepping, two-peer checksum parity,
+one navmesh build after readiness, idle-frame no-rebuild,
+fresh save/restore and collision publication epochs.
+
+**Limitations:** This is a readiness fence for the existing
+per-building bot navigation meshes. It is *not* streamed outdoor
+navmesh tiles, obstacle-aware cross-region routing, dynamically
+updated off-mesh links, nor a complete W1 ECS hot/cold region
+lifecycle in world-space ActorHost. Dynamic obstacles not flowing
+through `CollisionStream` do not yet invalidate bot navmeshes.
+These remain separate work. The CTest is registered but its
+Mac/KINGSTON execution is pending.

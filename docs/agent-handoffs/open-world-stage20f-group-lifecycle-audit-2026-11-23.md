@@ -1,0 +1,3 @@
+# W1.20f — group and lifecycle coverage audit
+
+Implementation `7682ad3777a17d64bcfb14871a8f592d21c08b94`, PR #116 Draft. ActorRegionOwnership.cpp now checks changed groups for at least one notified member and fallback spawn/retire for a matching journal entry. Explicit dirty spawn/retire already have notifications. Strict audit is suppressed on initial tracking bootstrap or overflow. Strict failure occurs before ledger transaction commit. Group audit is coarse: it does not prove seat graph writer coverage, nor does it verify every member. Full compatibility scan remains mandatory. No native tests run. Next: implement candidate mode only under a verified writer contract, include restore invalidation and seat membership index, update skill/catalog. No main merge.

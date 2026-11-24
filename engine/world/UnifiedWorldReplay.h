@@ -1,0 +1,41 @@
+#pragma once
+#include "UnifiedWorldTransaction.h"
+#include <memory>
+#include <functional>
+namespace aiverse::world {
+class UnifiedWorldReplay {
+public:
+    struct State {RegionEntityLedger ledger;World world;uint64_t sequence=0;std::string restart;};
+    using Materializer=std::function<bool(World&,const RegionEntityLedger&,const RegionEntityLedger&)>;
+    using Validator=std::function<bool(const State&)>;
+    // Ownership swap publishes both halves together. Readers must be quiescent;
+    // this is transactional publication, not a concurrent atomic pointer.
+    static bool apply(std::unique_ptr<State>& current,const RegionWalFrame& frame,
+        const DurableComponentCodecs& codecs,const Materializer& materialize,
+        const Validator& validate={},const DurableResourceTransaction::Policy& resources={}){
+        if(!current||!materialize||current->sequence==UINT64_MAX||
+           frame.sequence!=current->sequence+1)return false;
+        UnifiedWorldTransaction::Decoded decoded;
+        if(!UnifiedWorldTransaction::decode(frame,decoded))return false;
+        auto staged=std::make_unique<State>(*current);
+        if(!UnifiedWorldTransaction::replayLedger(staged->ledger,decoded))return false;
+        // Host reconciles spawns/despawns and region residency in private state.
+        if(!materialize(staged->world,current->ledger,staged->ledger))return false;
+        if(!codecs.restoreBatch(staged->world,staged->ledger,decoded.components))return false;
+        if(!resources.restore(staged->world,decoded.resources,&staged->ledger))return false;
+        // Restart-aware worlds must carry metadata on every committed tick.
+        if(current->restart.empty()!=decoded.restart.empty())return false;
+        if(!decoded.restart.empty()){
+            NativeRestartState::Data old,next;
+            if(!NativeRestartState::decode(current->restart,old)||!NativeRestartState::decode(decoded.restart,next)||
+               old.contentIdentity!=next.contentIdentity||old.seed!=next.seed||old.tickRate!=next.tickRate||
+               old.tick==UINT32_MAX||next.tick!=old.tick+1||
+               !NativeRestartState::referencesValid(next,staged->world,staged->ledger))return false;
+            staged->restart=std::move(decoded.restart);
+        }
+        staged->sequence=frame.sequence;
+        if(validate&&!validate(*staged))return false;
+        current.swap(staged);return true;
+    }
+};
+}

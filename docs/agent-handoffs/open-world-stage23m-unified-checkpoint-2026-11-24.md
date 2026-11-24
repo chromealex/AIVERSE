@@ -1,0 +1,3 @@
+# W1.23m — unified checkpoint envelope
+
+UnifiedCheckpointFormat.h adds UCP1 little-endian container with UUID, sequence, ledger revision and four canonical versioned sections (Ledger, Entities, Components, Resources). Explicit byte budget, strict order/count, nonzero UUID/version, truncation/trailing rejection and staged output. Section contents are opaque; no semantic validation, digest, capture/restore or publisher integration yet. Next connect native ledger and component codecs, entity materializer and resource codecs, then manifest SHA256 and atomic publication. Native tests not run. PR #116 Draft; no main merge.

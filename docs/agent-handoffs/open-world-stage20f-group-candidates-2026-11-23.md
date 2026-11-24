@@ -1,0 +1,3 @@
+# W1.20f — reverse membership candidates
+
+Commit `a743e0aa6e9b69c9b0847ec9b81cb1061564b331`, PR #116 Draft. ActorRegionOwnership.cpp builds a transient packed-member to car index from validated seat groups and collects dirty car candidates from explicit notifications and component journals. The full scan still determines transfers; candidate expansion is scaffolding and does not yet reduce traversal. No persistent schema changes, no native tests run. Next: retain a validated derived index across ticks with restore invalidation and track previous/current membership on seat changes; only then enable candidate-only reconciliation. Update skill/catalog. No main merge.

@@ -1,4 +1,5 @@
 #include "engine/net/authority/Session.h"
+#include "engine/pack/Sha256.h"
 #include "engine/game/GameCore.h"
 #include "engine/net/Rollback.h"
 #include "engine/bots/Persistence.h"
@@ -7,6 +8,7 @@
 #include <array>
 #include "engine/audio/Audio.h"
 #include <chrono>
+#include <thread>
 #include "engine/net/LatestChannel.h"
 #include "engine/world/ChunkScene.h"
 #include "engine/net/Udp.h"
@@ -523,12 +525,209 @@ void network(Json rules,Json map) {
     for(const auto& a:client.snapshot().characters)CHECK(a.slot!=2);
 }
 }
+// Real authority server lifecycle: disk creation, WAL replay, checkpoint
+// rotation, content mismatch refusal and fail-closed publication.
+static void durableAuthorityRestart(bool async=false){
+#if defined(__unix__) || defined(__APPLE__) || defined(_WIN32)
+    namespace fs=std::filesystem;
+    struct Temp {
+        fs::path dir;
+        ~Temp(){std::error_code ec;if(!dir.empty())fs::remove_all(dir,ec);}
+    } temp;
+    for(unsigned i=0;i<100;++i){
+        auto p=fs::temp_directory_path()/("aiverse-authority-world-"+
+            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+"-"+std::to_string(i));
+        std::error_code ec;
+        if(fs::create_directory(p,ec)){temp.dir=std::move(p);break;}
+    }
+    CHECK(!temp.dir.empty());
+    auto rules=Json::parse(R"({"actor":{"tickRate":60,"maxPlayers":2,"mode":"deathmatch"},"regionOwnership":{}})");
+    auto map=Json::parse(R"({"players":[{"team":1},{"team":2}],"spawns":[[4,2,4],[8,2,4]],"colliders":[]})");
+    std::array<uint8_t,16> uuid{};uuid[0]=17;
+    using Server=net::authority::Server;
+    auto advance=[&](Server& server){
+        const auto tick=server.finalizedTick();
+        const auto packets=server.snapshotStats().packets;
+        if(async){
+            CHECK(!server.step()&&server.persistencePending());
+            CHECK(server.finalizedTick()==tick&&server.simulation().tick()==tick+1);
+            server.broadcast();
+            CHECK(server.snapshotStats().packets==packets);
+            const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);
+            while(!server.step()){
+                CHECK(!server.persistenceFailed()&&server.finalizedTick()==tick);
+                CHECK(std::chrono::steady_clock::now()<deadline);
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+        }else CHECK(server.step());
+        CHECK(server.finalizedTick()==tick+1);
+    };
+    actor::CharacterSnapshot expected;
+    uint64_t rng=0;
+    {
+        Server server(rules,map,1);
+        CHECK(server.enablePersistence(temp.dir,uuid,false,64u*1024u*1024u,async));
+        for(unsigned i=0;i<3;++i)advance(server);
+        CHECK(server.checkpointWorld());
+        if(async){
+            CHECK(server.persistencePending());
+            const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);
+            while(!server.pollWorldCheckpoint()){
+                CHECK(!server.persistenceFailed()&&server.finalizedTick()==3);
+                CHECK(std::chrono::steady_clock::now()<deadline);
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+        }
+        actor::Input input;input.sequence=1;input.forward=1000;input.viewTick=3;
+        auto cmd=actor::command(1,input);cmd.tick=3;
+        server.simulation().inject(cmd);
+        advance(server);
+        advance(server);
+        expected=server.module().snapshot(server.simulation(),1);
+        rng=server.simulation().rng().state();
+        CHECK(server.simulation().tick()==5);
+        Server duplicate(rules,map,1);
+        CHECK(!duplicate.enablePersistence(temp.dir,uuid,true));
+    }
+    {
+        Server wrong(rules,map,2);
+        CHECK(!wrong.enablePersistence(temp.dir,uuid,true));
+    }
+    if(async){
+        using Status=Server::RecoveryStatus;
+        Server cancelled(rules,map,1);
+        CHECK(cancelled.beginPersistenceRecovery(temp.dir,uuid)==Status::Loading);
+        CHECK(cancelled.simulation().tick()==0&&!cancelled.step());
+        Server competing(rules,map,1);
+        CHECK(!competing.enablePersistence(temp.dir,uuid,true));
+        cancelled.cancelPersistenceRecovery();
+        auto result=Status::Loading;
+        const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);
+        while(result==Status::Loading){
+            CHECK(std::chrono::steady_clock::now()<deadline);
+            result=cancelled.pollPersistenceRecovery();
+            if(result==Status::Loading)std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        CHECK(result==Status::Cancelled&&cancelled.simulation().tick()==0);
+    }
+    {
+        Server restored(rules,map,1);
+        if(async){
+            using Status=Server::RecoveryStatus;
+            CHECK(restored.beginPersistenceRecovery(temp.dir,uuid,64u*1024u*1024u,true)==Status::Loading);
+            CHECK(restored.simulation().tick()==0&&!restored.step());
+            auto status=Status::Loading;
+            const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);
+            while(status==Status::Loading){
+                CHECK(std::chrono::steady_clock::now()<deadline);
+                CHECK(restored.simulation().tick()==0);
+                status=restored.pollPersistenceRecovery();
+                if(status==Status::Loading)std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            CHECK(status==Status::Ready);
+            const auto progress=restored.persistenceRecoveryProgress();
+            CHECK(progress.phase=="ready"&&progress.checkpointBytes==progress.checkpointTotal&&
+                progress.frames==2&&progress.sequence==5);
+        }else CHECK(restored.enablePersistence(temp.dir,uuid,true,64u*1024u*1024u,false));
+        CHECK(restored.simulation().tick()==5);
+        CHECK(restored.simulation().rng().state()==rng);
+        CHECK(restored.module().snapshot(restored.simulation(),1)==expected);
+        advance(restored);
+        CHECK(restored.simulation().tick()==6);
+        struct UnsupportedResource{int value=7;};
+        restored.simulation().world().setResource<UnsupportedResource>();
+        const auto packets=restored.snapshotStats().packets;
+        CHECK(!restored.step()&&restored.persistenceFailed());
+        restored.broadcast();
+        CHECK(restored.snapshotStats().packets==packets);
+    }
+    Server final(rules,map,1);
+    CHECK(final.enablePersistence(temp.dir,uuid,true));
+    CHECK(final.simulation().tick()==6);
+#endif
+}
+
+static void streamedPersistenceContent(){
+#if defined(__unix__) || defined(__APPLE__) || defined(_WIN32)
+    namespace fs=std::filesystem;
+    struct Temp {
+        fs::path dir;
+        ~Temp(){std::error_code ec;if(!dir.empty())fs::remove_all(dir,ec);}
+    } temp;
+    for(unsigned i=0;i<100;++i){
+        auto p=fs::temp_directory_path()/("aiverse-streamed-world-"+
+            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+"-"+std::to_string(i));
+        std::error_code ec;
+        if(fs::create_directory(p,ec)){temp.dir=std::move(p);break;}
+    }
+    CHECK(!temp.dir.empty());
+    auto rules=Json::parse(R"({"actor":{"tickRate":60,"maxPlayers":2,"mode":"deathmatch","weapon":{"range":20}},"regionOwnership":{}})");
+    auto map=Json::parse(R"({"players":[{"team":1},{"team":2}],"spawns":[[4,2,4],[8,2,4]],"colliders":[],"world":{"async":true,"version":1,"cellSize":16,"maxResidentBytes":4194304,"maxResidentChunks":2,"maxStagingBytes":4194304,"assets":{},"chunks":[{"file":"near.json","cell":[0,0,0],"reservedBytes":1048576},{"file":"far.json","cell":[20,0,0],"reservedBytes":1048576}]}})");
+    const std::string original=R"({"terrain":{"resolution":2,"heights":[0,0,0,0]}})";
+    const std::string modified=R"({"terrain":{"resolution":2,"heights":[1,1,1,1]}})";
+    auto digest=[](const std::string& bytes){auto h=pack::sha256(bytes.data(),bytes.size());return pack::toHex(h.data(),h.size());};
+    map.member("world").member("assets").set("near.json",Json::string(digest(original)));
+    map.member("world").member("assets").set("far.json",Json::string(digest(original)));
+    auto reader=[original](const std::string& path,std::string& out){
+        if(path!="near.json"&&path!="far.json")return false;out=original;return true;
+    };
+    auto changed=[original,modified](const std::string& path,std::string& out){
+        if(path!="near.json"&&path!="far.json")return false;
+        out=path=="far.json"?modified:original;return true;
+    };
+    std::array<uint8_t,16> uuid{};uuid[0]=39;
+    using Server=net::authority::Server;
+    auto admit=[](Server& server){
+        const auto tick=server.simulation().tick();
+        const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);
+        while(!server.pollPersistenceContent()){
+            CHECK(!server.persistenceFailed()&&server.simulation().tick()==tick);
+            CHECK(std::chrono::steady_clock::now()<deadline);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        CHECK(server.simulation().tick()==tick);
+    };
+    {
+        Server server(rules,map,1,reader);
+        CHECK(server.enablePersistence(temp.dir,uuid,false));
+        admit(server);
+        CHECK(server.step()&&server.finalizedTick()==1);
+    }
+    {
+        // Far chunk is not pinned, but all declared assets must match.
+        Server bad(rules,map,1,changed);
+        CHECK(!bad.enablePersistence(temp.dir,uuid,true)&&bad.persistenceFailed());
+    }
+    {
+        // Even a self-consistent modified manifest must not reopen old content.
+        auto altered=map;
+        altered.member("world").member("assets").set("far.json",Json::string(digest(modified)));
+        Server bad(rules,altered,1,changed);
+        CHECK(!bad.enablePersistence(temp.dir,uuid,true));
+    }
+    {
+        Server restored(rules,map,1,reader);
+        CHECK(restored.beginPersistenceRecovery(temp.dir,uuid)==Server::RecoveryStatus::Loading);
+        auto status=Server::RecoveryStatus::Loading;
+        const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);
+        while(status==Server::RecoveryStatus::Loading){
+            CHECK(std::chrono::steady_clock::now()<deadline);
+            status=restored.pollPersistenceRecovery();
+            if(status==Server::RecoveryStatus::Loading)std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        CHECK(status==Server::RecoveryStatus::Ready&&restored.finalizedTick()==1);
+        admit(restored);
+        CHECK(restored.step()&&restored.finalizedTick()==2);
+    }
+#endif
+}
+
 #include "royale.inc"
 #include "gear.inc"
 #include "vehicles.inc"
 #include "buildings.inc"
 #include "locomotion.inc"
 int main(int argc,char** argv) {
-    try {std::string root=argc>1?argv[1]:"examples/fps/arena";auto rules=Json::parseFile(root+"/rules.json"),map=Json::parseFile(root+"/map.json");audioBank(root+"/../../../engine/assets/fps_audio.json");spatial();cameraControls();locomotionModes();latestChannel();chunks();parallelMotorParityFixture(rules,map);cowSnapshotsFps(rules,map);incrementalRollbackFps(rules,map);reloadTimeline(rules,map);damageScoring(rules,map);simultaneousHitscanRollback(rules,map);dynamicObjectEntities(rules,map);deterministic(rules,map);combat(rules,map);weapons(rules,map);systems();projectilePrograms();projectileProgramStage();projectileSpawns();projectileRoundReset();ordinaryProjectiles();projectileBranches();melee();royale();gear();typedVehicles(root);raceMode(root);buildings();rotatedColliders();houseBots();houseNavigation();upstairsBot();network(rules,map);auto br=root+"/../battle-royale";stress(Json::parseFile(br+"/rules.json"),Json::parseFile(br+"/map.json"));std::puts("FPS spatial, motor, combat, save/rollback and authority tests passed");}
+    try {std::string root=argc>1?argv[1]:"examples/fps/arena";auto rules=Json::parseFile(root+"/rules.json"),map=Json::parseFile(root+"/map.json");audioBank(root+"/../../../engine/assets/fps_audio.json");spatial();cameraControls();locomotionModes();latestChannel();chunks();parallelMotorParityFixture(rules,map);cowSnapshotsFps(rules,map);incrementalRollbackFps(rules,map);reloadTimeline(rules,map);damageScoring(rules,map);simultaneousHitscanRollback(rules,map);dynamicObjectEntities(rules,map);deterministic(rules,map);combat(rules,map);weapons(rules,map);systems();projectilePrograms();projectileProgramStage();projectileSpawns();projectileRoundReset();ordinaryProjectiles();projectileBranches();melee();royale();gear();typedVehicles(root);raceMode(root);buildings();rotatedColliders();houseBots();houseNavigation();upstairsBot();network(rules,map);durableAuthorityRestart();durableAuthorityRestart(true);streamedPersistenceContent();auto br=root+"/../battle-royale";stress(Json::parseFile(br+"/rules.json"),Json::parseFile(br+"/map.json"));std::puts("FPS spatial, motor, combat, save/rollback and authority tests passed");}
     catch(const std::exception& e){std::fprintf(stderr,"%s\n",e.what());return 1;}
 }

@@ -46,10 +46,40 @@ WorldAssets WorldAssets::parse(const Json& j) {
 AssetReader WorldAssets::verifiedReader(const AssetReader& reader)const {
     auto hashes=std::make_shared<const std::map<std::string,std::string>>(this->hashes);
     return [hashes,reader](const std::string& file,std::string& bytes){
-        const auto it=hashes->find(file);if(it==hashes->end())return false;
-        if(!reader(file,bytes)||bytes.size()>32*1024*1024)return false;
-        auto hash=pack::sha256(bytes.data(),bytes.size());return pack::toHex(hash.data(),hash.size())==it->second;
+        const auto it=hashes->find(file);if(it==hashes->end()||!reader)return false;
+        std::string staged;
+        if(!reader(file,staged)||staged.size()>32*1024*1024)return false;
+        auto hash=pack::sha256(staged.data(),staged.size());
+        if(pack::toHex(hash.data(),hash.size())!=it->second)return false;
+        bytes.swap(staged);return true;
     };
+}
+bool WorldAssets::verifyAll(const AssetReader& reader,std::string* error)const{
+    auto verified=verifiedReader(reader);
+    for(const auto& [file,digest]:hashes){
+        (void)digest;
+        std::string bytes;
+        try{
+            if(verified(file,bytes))continue;
+        }catch(...){}
+        if(error)*error="world asset missing, oversized or SHA-256 mismatch: "+file;
+        return false;
+    }
+    if(error)error->clear();
+    return true;
+}
+std::string WorldAssets::persistenceIdentity(const Json& rules,const Json& map){
+    // Length-delimit every field; do not rely on concatenated JSON boundaries.
+    pack::Sha256 sha;
+    auto field=[&](const std::string& value){
+        uint8_t length[8];
+        for(unsigned i=0;i<8;++i)length[i]=uint8_t(uint64_t(value.size())>>(8*i));
+        sha.update(length,sizeof(length));sha.update(value.data(),value.size());
+    };
+    field("aiverse.actor.portable.stream.v1");
+    field(rules.dump(-1));field(map.dump(-1));
+    const auto digest=sha.finish();
+    return "aiverse.actor.portable.stream.v1:"+pack::toHex(digest.data(),digest.size());
 }
 Cell WorldAssets::cell(Vec3 p)const {
     auto f=[&](Fixed x){const int64_t size=int64_t(cellSize)*Fixed::kOne;auto q=x.raw/size;if(x.raw%size<0)--q;return int32_t(std::clamp(q,int64_t(INT32_MIN),int64_t(INT32_MAX)));};

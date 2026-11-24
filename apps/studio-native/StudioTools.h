@@ -55,6 +55,9 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
                       "animation_root_motion_generate"}},
         {"model_anim", {"model_info", "animation_editor", "animation_edit"}},
         {"snapshot_diff", {"game_file_read"}},
+        {"world_persistence", {"world_save_list", "world_save_status", "world_save_page", "world_save_backups",
+            "world_save_create", "world_save_checkpoint", "world_save_retention_preview", "world_save_retention_apply", "world_save_fork",
+            "world_job_start", "world_job_status", "world_job_cancel", "world_job_release"}},
         {"project_import", {"port_scan", "port_report", "port_item", "port_resolve", "port_import"}},
         // Package catalog (AIVERSE-PACKAGES): search and install content into the open project.
         {"catalog", {"package_search", "package_info", "package_status", "package_add", "package_remove", "package_install"}},
@@ -79,6 +82,7 @@ inline bool studioToolAllowed(const std::string& op) {
 // Ops that never change the project or the map: the panel runs them without an undo step or a
 // document refresh.
 inline bool studioToolReadOnly(const std::string& op) {
+    if(op=="world_save_page"||op=="world_save_backups"||op=="world_save_retention_preview"||op=="world_job_status")return true;
     static const char* suffixes[] = {"_get", "_list", "_info", "_types", "_network", "_catalog", "_templates",
                                      "_presets", "_validate", "_ascii", "_estimate", "_api", "_read", "_check",
                                      "_preview", "_analyze", "_state", "_export", "_run", "_scan", "_report", "_sample",

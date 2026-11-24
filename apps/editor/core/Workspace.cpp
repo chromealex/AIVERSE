@@ -6,7 +6,7 @@
 #include "engine/actor/ActorModule.h"
 #include "ScenarioOps.h"
 #include "SchemaOps.h"
-namespace aiverse::editor { void registerFpsOps(Workspace& ws); }
+namespace aiverse::editor { void registerFpsOps(Workspace& ws); void registerWorldPersistenceOps(Workspace& ws); }
 #ifdef AIVERSE_BATTLE_OPS
 namespace aiverse::editor { void registerBattleNetOps(Workspace& ws); }   // agent-net-mobile
 #endif
@@ -223,7 +223,7 @@ bool Project::saveManifest(std::string* err) {
 // ================================================================= workspace
 
 void registerLensOps(Workspace& ws);
-Workspace::Workspace() { registerLensOps(*this); registerGeometryOps(*this); registerModelingOps(*this); registerAnimationOps(*this); registerShaderGraphOps(*this); registerFpsOps(*this); registerCoreOps(); registerPortOps(*this); registerPackageOps(*this); registerTileOps(*this); registerTerrainOps(*this); registerGenOps(*this); registerDataOps(*this); registerBalanceOps(*this); registerLightOps(*this); registerPhysisOps(*this); registerFxOps(*this); registerOverlayOps(*this); registerBrandingOps(*this); registerPlanetOps(*this); registerScenarioOps(*this); registerCampaignOps(*this); registerSchemaOps(*this); registerMaterialOps(*this); registerPostFxOps(*this); registerScriptOps(*this); registerToolchainOps(*this); registerNativeBuildOps(*this); registerStrategicOps(*this); registerUiOps(*this); registerFieldOps(*this); registerRaidOps(*this); registerRouteOps(*this); registerRoadOps(*this); registerWaterOps(*this); registerWizardOps(*this); registerLightBakeOps(*this); registerHumanCreatorOps(*this);
+Workspace::Workspace() { registerLensOps(*this); registerGeometryOps(*this); registerModelingOps(*this); registerAnimationOps(*this); registerShaderGraphOps(*this); registerFpsOps(*this); registerWorldPersistenceOps(*this); registerCoreOps(); registerPortOps(*this); registerPackageOps(*this); registerTileOps(*this); registerTerrainOps(*this); registerGenOps(*this); registerDataOps(*this); registerBalanceOps(*this); registerLightOps(*this); registerPhysisOps(*this); registerFxOps(*this); registerOverlayOps(*this); registerBrandingOps(*this); registerPlanetOps(*this); registerScenarioOps(*this); registerCampaignOps(*this); registerSchemaOps(*this); registerMaterialOps(*this); registerPostFxOps(*this); registerScriptOps(*this); registerToolchainOps(*this); registerNativeBuildOps(*this); registerStrategicOps(*this); registerUiOps(*this); registerFieldOps(*this); registerRaidOps(*this); registerRouteOps(*this); registerRoadOps(*this); registerWaterOps(*this); registerWizardOps(*this); registerLightBakeOps(*this); registerHumanCreatorOps(*this);
 #ifdef AIVERSE_BATTLE_OPS
     registerBattleNetOps(*this);
 #endif
@@ -1488,6 +1488,7 @@ void Workspace::registerCoreOps() {
     gui("play_start", "Play-test the open map inside the editor window (bots on all sides unless 'human' is set). The user watches live.",
         R"({"properties": {"speed": {"type": "number"}, "human": {"type": "integer", "description": "player slot controlled by the user, 0 = bots only"}, "device": {"type": "string"}}})");
     gui("play_stop", "Stop the play-test and return to editing.", "{}");
+    gui("region_ownership_diagnostics", "Read last successful live region ownership reconciliation; requires running editor simulation.", "{}");
     gui("play_status", "Current play-test state: time, players, resources, units, result.", "{}");
     gui("play_units", "Live objects of the running play-test: id (for play_command), map name, type, owner, position, hp, orders, statuses. "
         "Filter by owner / type; at most 'limit' (default 200).",

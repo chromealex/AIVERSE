@@ -1,0 +1,3 @@
+# W1.20f — explicit dirty loot reconciliation (partial)
+
+Implementation `12b637388bd1b7bc86eae19a668df30971d1b822`, PR #116 Draft. ActorRegionOwnership.cpp now handles notified independent Loot movement in the existing dirty loop, validates stable identity/live record and rejects dormant crossing. Characters and vehicles retain group validation. Full scan remains mandatory; this is not a dirty-only performance claim. Early loot transfer changes ordering relative to vehicle transfers; verify revision/event ordering and failure rollback before acceptance. No native build or tests run. Next: audit canonical writers and transactional group reconciliation, then enable candidate-only mode only with proven coverage. Update skill/catalog. No main merge.

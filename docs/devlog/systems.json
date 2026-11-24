@@ -1749,6 +1749,136 @@
   },
   {
    "id": "world",
+   "roadmap": [
+    {
+     "id": "world-background-operator-jobs",
+     "title": "Фоновые задачи обслуживания мира",
+     "titleEn": "Background world maintenance jobs",
+     "text": "Очередь, фактический прогресс восстановления, безопасная отмена и подтверждение результата.",
+     "textEn": "Bounded queue, actual recovery progress, safe cancellation and acknowledged results.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-persistence-tools",
+     "title": "Инструменты сохранения мира",
+     "titleEn": "World persistence tools",
+     "text": "Диагностика, проверка резервных копий и управление сохранениями через общие операции Studio/MCP.",
+     "textEn": "Diagnostics, backup verification and save maintenance through shared Studio/MCP operations.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-ledger-compaction",
+     "title": "Компактизация долгоживущего мира",
+     "titleEn": "Long-lived world compaction",
+     "text": "Ограничение накопления удалённых объектов без повторного использования идентификаторов.",
+     "textEn": "Bound retired-object accumulation without reusing persistent identities.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-streamed-persistence",
+     "title": "Сохранение потоковых миров",
+     "titleEn": "Streamed world persistence",
+     "text": "Проверка SHA-256 внешних ресурсов и барьер готовности коллизий и навигации после восстановления.",
+     "textEn": "SHA-256 external asset validation and collision/navigation readiness barrier after recovery.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-background-recovery",
+     "title": "Фоновое восстановление мира",
+     "titleEn": "Background world recovery",
+     "text": "Чтение checkpoint, восстановление WAL и отменяемая публикация на границе владельца.",
+     "textEn": "Checkpoint reading, WAL recovery and cancellable publication at the owner boundary.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-async-persistence",
+     "title": "Асинхронная запись мира",
+     "titleEn": "Asynchronous world persistence",
+     "text": "Ограниченная очередь дисковых операций, подтверждение после записи и барьер checkpoint.",
+     "textEn": "Bounded disk operation queue, durable acknowledgement and checkpoint barrier.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-authority-runtime-persistence",
+     "title": "Сохранение в авторитетном серверном цикле",
+     "titleEn": "Authoritative server persistence",
+     "text": "Создание и восстановление мира до сетевого запуска, запись подтверждённых тиков и блокировка публикации при ошибках.",
+     "textEn": "Create and recover worlds before network startup, persist finalized ticks and refuse publication on failure.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-portable-projectile-race-state",
+     "title": "Сохранение активных объектов и гонок",
+     "titleEn": "Active objects and race persistence",
+     "text": "Восстановление активных снарядов и состояния гоночной сессии с постоянными ссылками.",
+     "textEn": "Restore active projectiles and race session state with persistent references.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-portable-actor-components",
+     "title": "Восстановление связей игровых объектов",
+     "titleEn": "Restore gameplay object relationships",
+     "text": "Контекстные кодеки компонентов и восстановление связей по постоянным идентификаторам.",
+     "textEn": "Contextual component codecs and relationship restoration through persistent identities.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-stable-actor-identities",
+     "title": "Постоянные идентификаторы объектов мира",
+     "titleEn": "Persistent world object identities",
+     "text": "Независимые от ECS-индексов идентификаторы и адресация перемещений.",
+     "textEn": "Entity-index-independent identities and movement addressing.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-native-restart-state",
+     "title": "Состояние перезапуска симуляции",
+     "titleEn": "Simulation restart state",
+     "text": "Сохранение номера тика, генератора случайных чисел и очереди команд со стабильными ссылками.",
+     "textEn": "Persist simulation tick, random generator and queued commands using stable references.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-native-finalized-wal",
+     "title": "Сохранение подтверждённых тиков мира",
+     "titleEn": "Finalized world tick persistence",
+     "text": "Точный захват изменений владения сущностями на подтверждённых тиках симуляции.",
+     "textEn": "Capture exact entity ownership changes at finalized simulation ticks.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-unified-resource-wal",
+     "title": "Журнал изменений ресурсов мира",
+     "titleEn": "World resource change log",
+     "text": "Сохранение изменений выбранных ECS-ресурсов вместе с сущностями и компонентами.",
+     "textEn": "Persist changes to selected ECS resources alongside entities and components.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-unified-backup-retention",
+     "title": "Безопасное хранение поколений мира",
+     "titleEn": "Safe world generation retention",
+     "text": "Проверка резервных копий перед очисткой, защита активного поколения и управление через сессию мира.",
+     "textEn": "Verify backups before cleanup, protect the active generation and manage through the world session.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-unified-backup-catalog",
+     "title": "Каталог резервных копий мира",
+     "titleEn": "World backup catalog",
+     "text": "Перечисление поколений сохранений и проверка восстановления ECS и журнала изменений.",
+     "textEn": "Enumerate save generations and validate ECS and change-log recovery.",
+     "status": "in-progress"
+    },
+    {
+     "id": "world-ecs-region-lifecycle",
+     "title": "Жизненный цикл динамических сущностей регионов",
+     "titleEn": "Dynamic region entity lifecycle",
+     "text": "Детерминированное владение сущностями по регионам, атомарный перенос групп и сохранение; следующий этап — реальные ECS-резиденция и стриминг.",
+     "textEn": "Deterministic region ownership, atomic group transfer and persistence; live ECS residency and streaming follow.",
+     "status": "in-progress"
+    }
+   ],
    "name": "Дороги и город",
    "nameEn": "Roads and the city",
    "doc": "docs/city-planner.md",

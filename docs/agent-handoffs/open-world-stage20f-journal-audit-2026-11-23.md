@@ -1,0 +1,3 @@
+# W1.20f — journal coverage audit
+
+Commits `2e561d6d`, `158f4cde`, PR #116 Draft. ECS exposes non-consuming peekComponentChanges and componentChangesTracked, callable at quiescent barriers. ActorRegionOwnership compares solo crossings against transient component journals and explicit dirty queue; overflow suppresses strict coverage checks. Optional streamManifest strictRegionJournalAudit rejects uncovered solo crossings before transaction commit. Default behavior unchanged. Group, spawn and retire coverage still needs auditing; strict flag is not yet exposed in editor or validated configuration. Full scan remains. No native build/tests run. Next: audit group/lifecycle writers and expose diagnostics, then candidate-only mode and skill/catalog. No main merge.
