@@ -49,7 +49,7 @@ public:
     bool pollPersistenceContent();
     const std::string& persistenceContentError()const{return persistenceContentError_;}
     bool persistenceFailed()const{return persistenceFailed_;}
-    bool checkpointWorld();
+    bool checkpointWorld(uint64_t retainRevisions=65536);
     bool pollWorldCheckpoint();
     bool persistencePending()const;
     uint32_t finalizedTick()const;
