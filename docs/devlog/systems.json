@@ -1766,6 +1766,12 @@
           "text": "Добавлены неизменяемые токены привязок и автоматический сбор при явном подтверждении ссылок нативным хостом. Сбор по умолчанию отключён; изолированные тесты пройдены.",
           "nameEn": "Texture Graph GPU — Stage 38J (partial)",
           "textEn": "Immutable material binding pins and automatic sweep with native host root certification. Disabled by default; isolated tests passed."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38K (в работе)",
+          "text": "Переиспользование подтверждённо свободных индексов после retirement.",
+          "nameEn": "Texture Graph GPU — Stage 38K (in progress)",
+          "textEn": "Recycle certified free image indices after retirement."
         }
       ],
       "enables": [
