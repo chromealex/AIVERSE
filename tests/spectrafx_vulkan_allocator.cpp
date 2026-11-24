@@ -428,7 +428,9 @@ void sceneVolumeLifecycle(gfx::Device& d){
     require(world.size()==1&&!world.renderable(),"source revision recreates volume");
     world.synchronize(d,{},{});
     require(!world.active(),"detach destroys volume");
+    instance.shutdown();
     require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"scene volume final idle");
+    budget->collect(d.gpuCompletedFence());require(budget->stats().charged()==before,"scene volume ledger returned");
     std::puts("PASS scene volume anchors, impulse, revision and detach");
 }
 void memory(gfx::Device& d){

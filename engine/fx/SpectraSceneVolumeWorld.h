@@ -35,6 +35,7 @@ public:
         }
         renderer_.shutdown();grid_=std::move(next);asset_=std::move(placed);anchor_=anchor;error_.clear();return true;
     }
+    void shutdown(){renderer_.shutdown();grid_.reset();asset_={};error_.clear();}
     bool step(){if(!grid_||!grid_->step()){error_=grid_?grid_->error():"No volume";return false;}return true;}
     bool clear(bool retrigger){
         if(!grid_||!grid_->clear()){error_=grid_?grid_->error():"No volume";return false;}
