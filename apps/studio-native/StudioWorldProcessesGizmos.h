@@ -85,6 +85,8 @@ inline void worldRing(std::vector<Shape>& shapes,render::float3 center,
 inline std::vector<Shape> collect(const editor::MapDoc& document,
                                   std::string_view selectedId={},std::string_view ecologyLayer="combined"){
     std::vector<Shape> out;
+    // The existing authoring viewport is planar; do not draw face x/y as XZ metres.
+    if(document.data.planet())return out;
     const auto& entities=document.data.entities;
     if(entities.size()>65536)return out;
     std::map<std::string,const editor::DocEntity*> ids;
