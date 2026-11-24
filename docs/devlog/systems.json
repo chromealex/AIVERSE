@@ -1749,6 +1749,16 @@
   },
   {
    "id": "world",
+   "roadmap": [
+    {
+     "id": "world-recurring-simulation-budget",
+     "title": "Бюджет фоновой симуляции",
+     "titleEn": "Recurring simulation budget",
+     "text": "Детерминированные порции обновлений и настройка бюджета дискретных решений населения.",
+     "textEn": "Deterministic recurring work slices and configurable population decision budget.",
+     "status": "in-progress"
+    }
+   ],
    "name": "Дороги и город",
    "nameEn": "Roads and the city",
    "doc": "docs/city-planner.md",
