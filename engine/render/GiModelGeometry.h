@@ -16,17 +16,21 @@ inline StaticShadowGeometry giModelGeometry(const Model& model,const mat4& trans
     if(world.size()!=model.nodes.size())throw std::invalid_argument("GI model hierarchy not finalized");
     const uint32_t surfaceBase=uint32_t(out.albedos.size());
     auto decode=[](float x){return x<=.04045f?x/12.92f:std::pow((x+.055f)/1.055f,2.4f);};
-    auto average=[&](int texture,bool color){
-        float3 mean{1,1,1};if(texture<0||size_t(texture)>=model.images.size())return mean;
-        const auto& image=model.images[size_t(texture)];if(image.rgba.empty()||image.width<=0||image.height<=0)return mean;
+    auto average=[&](const Material& material,int Material::* slot,bool color){
+        float3 mean{1,1,1};
+        const auto* resolved=resolveMaterialImage(model,material,slot);
+        if(!resolved)return mean;
+        const auto& image=*resolved;
+        if(image.width<=0||image.height<=0||
+           size_t(image.width)>image.rgba.size()/4/size_t(image.height))return mean;
         mean={};int count=0;
         for(int y=0;y<image.height;y+=std::max(1,image.height/32))for(int x=0;x<image.width;x+=std::max(1,image.width/32)){
-            size_t i=size_t(y*image.width+x)*4;float r=image.rgba[i]/255.0f,g=image.rgba[i+1]/255.0f,b=image.rgba[i+2]/255.0f;
+            size_t i=(size_t(y)*size_t(image.width)+size_t(x))*4;float r=image.rgba[i]/255.0f,g=image.rgba[i+1]/255.0f,b=image.rgba[i+2]/255.0f;
             mean=mean+float3{color?decode(r):r,color?decode(g):g,color?decode(b):b};++count;
         }
         return mean*(1.0f/count);
     };
-    for(const auto& material:model.materials){auto color=average(material.baseTex,true);float diffuse=1-std::clamp(material.metallic*average(material.mrTex,false).z,0.0f,1.0f);
+    for(const auto& material:model.materials){auto color=average(material,&Material::baseTex,true);float diffuse=1-std::clamp(material.metallic*average(material,&Material::mrTex,false).z,0.0f,1.0f);
         out.albedos.push_back({std::clamp(color.x*material.baseColor.x*diffuse,0.0f,1.0f),std::clamp(color.y*material.baseColor.y*diffuse,0.0f,1.0f),std::clamp(color.z*material.baseColor.z*diffuse,0.0f,1.0f)});
     }
     for(size_t i=0;i<model.nodes.size();++i) {

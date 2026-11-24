@@ -1,5 +1,6 @@
 // Stage 112 deferred native test: rollback survives pending/failed GPU fence.
 #include "engine/render/ModelImageUploadTransaction.h"
+#include "engine/render/graph/TextureGraphImageReclamation.h"
 #include "engine/render/ModelResourceCache.h"
 #include "engine/render/ModelStagingTransaction.h"
 #include "engine/render/ModelAssetProvider.h"
@@ -459,6 +460,53 @@ int main(){
     device.complete=true;
     AIVERSE_TEST_CHECK(targets.collect());
     AIVERSE_TEST_CHECK(device.live.empty());
+
+    // Actual transaction -> root refusal -> fenced tombstone -> reuse.
+    // Weak references do not prevent reclamation and cannot resolve the
+    // replacement generation even at the same Model slot.
+    {
+        using namespace render::texture_graph;
+        render::Model generated;
+        render::Material published;
+        auto publish=[&](const char* name){
+            auto image=makeImage(name);
+            image.proceduralGraphImage=true;
+            render::ModelImageUploadTransaction transaction(device,pool,epoch.lease(),true);
+            pinGraphMaterialBinding(published,&render::Material::baseTex,image);
+            published.baseTex=transaction.stage(generated,std::move(image));
+            AIVERSE_TEST_CHECK(transaction.commit()==1);
+        };
+        publish("#texture-graph/first/color");
+        const auto reference=referenceGraphMaterialImage(published,&render::Material::baseTex);
+        AIVERSE_TEST_CHECK(published.baseTex==0&&generated.images.size()==1);
+        auto held=acquirePublishedGraphImage(generated,reference);
+        AIVERSE_TEST_CHECK(bool(held));
+        const auto oldTexture=held.texture;
+        auto previous=published;
+        render::setImportedMaterialImage(published,&render::Material::baseTex,-1);
+        const GraphImageRoots proof{true,0,{},true,true};
+        AIVERSE_TEST_CHECK(reclaimGraphImages(generated,device,epoch.lease(),pool,proof).detached==0);
+        previous=render::Material{};
+        AIVERSE_TEST_CHECK(reclaimGraphImages(generated,device,epoch.lease(),pool,proof).detached==0);
+        held={};
+        device.complete=false;device.idle=false;
+        AIVERSE_TEST_CHECK(reclaimGraphImages(generated,device,epoch.lease(),pool,proof).detached==1);
+        AIVERSE_TEST_CHECK(generated.images[0].proceduralGraphRetired&&pool.pendingImages()==1);
+        AIVERSE_TEST_CHECK(!acquirePublishedGraphImage(generated,reference));
+        AIVERSE_TEST_CHECK(!pool.collect(device)&&device.live.contains(oldTexture.id));
+        AIVERSE_TEST_CHECK(!render::ModelImageUploadTransaction::reusableGraphSlot(generated.images[0],epoch.lease().generation(),pool));
+        device.complete=true;
+        AIVERSE_TEST_CHECK(pool.collect(device)&&!device.live.contains(oldTexture.id));
+        AIVERSE_TEST_CHECK(render::ModelImageUploadTransaction::reusableGraphSlot(generated.images[0],epoch.lease().generation(),pool));
+        publish("#texture-graph/second/color");
+        AIVERSE_TEST_CHECK(published.baseTex==0&&generated.images.size()==1);
+        AIVERSE_TEST_CHECK(!acquirePublishedGraphImage(generated,reference));
+        AIVERSE_TEST_CHECK(bool(acquirePublishedGraphImage(generated,referenceGraphMaterialImage(published,&render::Material::baseTex))));
+        published=render::Material{};
+        device.idle=true;
+        render::releaseModel(device,generated);
+        AIVERSE_TEST_CHECK(device.live.empty());
+    }
 
     epoch.retire();
     bool stale=false;

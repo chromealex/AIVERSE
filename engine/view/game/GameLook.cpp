@@ -1274,8 +1274,16 @@ bool GameView::loadChoice(gfx::Device& dev, const UnitType& t, const Json& view,
 }
 
 int GameView::loadTexture(gfx::Device& dev, const UnitType& t, Model& m, const std::string& path) {
-    for (size_t i = 0; i < m.images.size(); ++i)
-        if (m.images[i].name == path)return int(i);
+    // Runtime publications are not authored file assets. Never mint a raw
+    // imported binding to a procedural generation by its internal name.
+    if(path.rfind("#texture-graph/",0)==0){
+        if(activeImageTransaction_)throw std::runtime_error("runtime procedural image is not an authored texture path");
+        warn(t,"runtime procedural image is not an authored texture path");
+        return -1;
+    }
+    for(size_t i=0;i<m.images.size();++i)
+        if(!m.images[i].proceduralGraphImage&&!m.images[i].proceduralGraphRetired&&
+           m.images[i].name==path)return int(i);
     Image img;
     img.name=path;
     if(activeImageTransaction_) {

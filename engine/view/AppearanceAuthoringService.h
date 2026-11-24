@@ -77,6 +77,8 @@ public:
             mt.baseColor={num(col[0],1),num(col[1],1),num(col[2],1),
                 col.size()>3?num(col[3],1):mt.baseColor.w};
         if(o.has("shaderGraph")) {
+            // No stale tail indices from a replaced or failed graph.
+            for(auto& index:mt.graphTextures)index=-1;
             try {
                 mt.shaderGraph=std::make_shared<render::graph::Program>(
                     render::graph::compile(o["shaderGraph"],"material"));
@@ -85,6 +87,7 @@ public:
             }catch(const std::exception& error) {
                 if(warn)warn(error.what());
                 mt.shaderGraph.reset();
+                for(auto& index:mt.graphTextures)index=-1;
             }
         }
         mt.metallic=num(o["metallic"],mt.metallic);
@@ -139,21 +142,21 @@ public:
         }
         mt.teamStrength=num(o["teamStrength"],mt.teamStrength);
         if(o.has("teamMask")) {
-            mt.teamTex=texture(o.getStr("teamMask"));
+            render::setImportedMaterialImage(mt,&render::Material::teamTex,texture(o.getStr("teamMask")));
             if(mt.team==render::TeamMode::None ||
                mt.team==render::TeamMode::Tint)
                 mt.team=render::TeamMode::Mask;
         }
-        if(o.has("texture"))mt.baseTex=texture(o.getStr("texture"));
-        if(o.has("normalMap"))mt.normalTex=texture(o.getStr("normalMap"));
+        if(o.has("texture"))render::setImportedMaterialImage(mt,&render::Material::baseTex,texture(o.getStr("texture")));
+        if(o.has("normalMap"))render::setImportedMaterialImage(mt,&render::Material::normalTex,texture(o.getStr("normalMap")));
         if(o.has("emissiveMap")) {
-            mt.emissiveTex=texture(o.getStr("emissiveMap"));
+            render::setImportedMaterialImage(mt,&render::Material::emissiveTex,texture(o.getStr("emissiveMap")));
             if(!o.has("emissive"))mt.emissive={1,1,1};
         }
         if(o.has("metallicRoughnessMap"))
-            mt.mrTex=texture(o.getStr("metallicRoughnessMap"));
+            render::setImportedMaterialImage(mt,&render::Material::mrTex,texture(o.getStr("metallicRoughnessMap")));
         if(o.has("occlusionMap"))
-            mt.occlusionTex=texture(o.getStr("occlusionMap"));
+            render::setImportedMaterialImage(mt,&render::Material::occlusionTex,texture(o.getStr("occlusionMap")));
         mt.occlusionStrength=num(o["occlusionStrength"],mt.occlusionStrength);
         mt.normalScale=num(o["normalScale"],mt.normalScale);
         if(const Json& uv=o["uvScale"];uv.size()==2)

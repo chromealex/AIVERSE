@@ -355,6 +355,20 @@ inline constexpr size_t proceduralMaterialChannel(int Material::* slot) noexcept
            slot==&Material::mrTex?2:slot==&Material::occlusionTex?3:
            slot==&Material::emissiveTex?4:slot==&Material::teamTex?5:6;
 }
+// Explicit authored/imported texture assignment never inherits a procedural
+// generation, even when a loader returns the same numerical index. Copies
+// of the previous material retain their immutable pin set.
+inline void setImportedMaterialImage(Material& material,int Material::* slot,int index){
+    const auto channel=proceduralMaterialChannel(slot);
+    if(channel>=6)throw std::invalid_argument("invalid imported material slot");
+    if(material.proceduralGraphPins&&(*material.proceduralGraphPins)[channel]){
+        auto pins=withGraphMaterialPin(material.proceduralGraphPins,channel,{});
+        bool any=false;
+        for(const auto& pin:*pins)if(pin){any=true;break;}
+        material.proceduralGraphPins=any?std::move(pins):GraphMaterialPins{};
+    }
+    material.*slot=index;
+}
 inline const Image* resolveMaterialImageIndex(const Model& model,int index,
         const GraphImagePin* original=nullptr) noexcept {
     if(index<0||size_t(index)>=model.images.size())return nullptr;
