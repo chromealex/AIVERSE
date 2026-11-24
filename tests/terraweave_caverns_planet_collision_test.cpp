@@ -1,11 +1,34 @@
 // Real native scenes, no GPU required for the baseline lifecycle.
 #include "engine/world/TerraWeaveCavernsPlanetCollisionBinding.h"
+#include "engine/world/TerraWeaveCavernsPlanetRuntimeBuild.h"
 #include <stdexcept>
 #include <iostream>
 using namespace aiverse;
 using namespace aiverse::terraweave::caverns;
 static void check(bool ok,const char* why){if(!ok)throw std::runtime_error(why);}
+static void checkCandidateIdentity(){
+    World ecs;
+    CavePlanetAuthoritySet set;
+    CavePlanetAuthorityEntry e;
+    e.id=2;e.region.anchor={"planet",0,{}, {},800};
+    e.authority.recipeId=planetCaveConfig(2,1).recipeId;
+    e.authority.volume.settings.minYcm=-600;
+    e.authority.volume.settings.maxYcm=-100;
+    set.regions.push_back(e);ecs.setResource<CavePlanetAuthoritySet>(set);
+    auto cut=std::make_shared<CavePlanetBodyCutPlan>();
+    auto region=std::make_shared<CavePlanetCutPlan>();region->anchor=e.region.anchor;
+    cut->regions.emplace(2,region);
+    CavePlanetRuntimeCandidate candidate;
+    candidate.generation=3;candidate.cut=cut;
+    candidate.sources.emplace(2,freezePlanetCaveRegion(ecs,2));
+    check(candidate.current(ecs,3),"candidate current");
+    check(!candidate.current(ecs,4),"rollback generation fence");
+    set.regions.front().authority.volume.settings.seed+=1;
+    ecs.setResource<CavePlanetAuthoritySet>(set);
+    check(!candidate.current(ecs,3),"equal numeric revision but changed snapshot");
+}
 int main(){
+    checkCandidateIdentity();
     physics::Scene box;
     world::SpatialWorld spatial;
     CaveColliderLeasePool pool(10000,100);
