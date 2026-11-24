@@ -191,6 +191,9 @@ File-only mixed chains of texture/audio/.bin assets support import, ordinary mov
 ## Mixed directory and embedded model chains (S6f.3.4a)
 Mixed exact-endpoint directory moves/quarantine and self-contained glTF/GLB versions use virtual tree digests and nested GUID/importer checks. Both live and recovery payloads must contain only supported textures/audio/BIN or glTF 2.0 models with embedded resources and no declared extensions. Incoming known model references remain fenced. Nested relocation endpoints, nested Trash metadata edits, external-resource model transitions and mixed URI repairs remain unsupported. No new journal version or MCP action.
 
+## Stable external model versions (S6f.3.4b.1)
+Mixed replacement Undo/Redo accepts glTF/GLB local buffer/image URIs only if their logical content target is a safe indexed regular file with a live GUID and no overlapping relocation endpoint anywhere in the chain. Inspect both versions, including recovery bytes. External model relocations, dependency changes across relocation endpoints, extension topology and mixed URI repair remain unsupported. Do not bypass this fence via the existing ordinary repair planner.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web
