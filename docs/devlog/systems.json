@@ -60,6 +60,14 @@
    ],
    "roadmap": [
     {
+     "status": "in-progress",
+     "target": null,
+     "title": "Планетарный лес: визуализация разложения и точная привязка падений",
+     "titleEn": "Planetary forest: decay presentation and exact fall binding",
+     "text": "Stage 152: толщина древесины из текущего остатка, привязка физического тела к конкретной квитанции падения. Проверка сборки и GPU ещё требуется.",
+     "textEn": "Stage 152: wood thickness from remaining mass, physical body matched to the exact fall receipt. Build and GPU verification still required."
+    },
+    {
      "status": "done",
      "date": "2026-11-18",
      "title": "Ядро: рельеф, биомы и растительность",
