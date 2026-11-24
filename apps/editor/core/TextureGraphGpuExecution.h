@@ -18,7 +18,7 @@ private:
     State state_=State::Idle;
     Phase phase_=Phase::Node;
     tgg::StepFence fence_;
-    tgg::MaterializedDagPlan plan_;
+    tgg::EarlyPackDagPlan plan_;
     std::vector<gfx::BufferHandle> slots_;
     gfx::BufferHandle packed_{};
     std::vector<gfx::ComputeHandle> kernels_;
@@ -112,7 +112,7 @@ public:
         state_=State::Cancelled;reason_="materialized request cancelled";
         results_.clear();pixels_.clear();completed_=0;
     }
-    void begin(gfx::Device& dev,tgg::MaterializedDagPlan plan,int n,size_t outputCount){
+    void begin(gfx::Device& dev,tgg::EarlyPackDagPlan plan,int n,size_t outputCount){
         reset();size_=n;plan_=std::move(plan);
         const bool metal=dev.info().backend==gfx::Backend::Metal,vulkan=dev.info().backend==gfx::Backend::Vulkan;
         if(!plan_.ready()||!outputCount||outputCount>9||(!metal&&!vulkan)||!dev.supportsCompute()||!dev.gpuHealthy()){
