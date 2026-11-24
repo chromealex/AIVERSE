@@ -205,6 +205,21 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
         const auto mipId=owner.start(mipAsset,project,lifetime.lease(),mipResolver).getStr("request");drain();
         const auto mipStatus=owner.status();
         require(mipStatus.getStr("request")==mipId&&mipStatus.getStr("state")=="ready"&&mipStatus.getStr("backend")==expected,"trilinear mip GPU parity failed");
+        // Authored floor-halved NPOT mip layout must not be replaced by box-derived levels.
+        auto authoredAsset=mipAsset;
+        auto& authoredProps=authoredAsset.member("graph").member("nodes").at(0).member("properties");
+        authoredProps.set("revision",Json::string(std::string(64,'f')));
+        authoredProps.set("mipLevel",Json::number(1.0));
+        const render::texture_graph::ImageResolver authoredResolver=[](const std::string&,const std::string&,size_t){
+            render::texture_graph::ImageSource s;s.width=3;s.height=1;s.hasAlpha=true;s.authoredMips=true;
+            s.mips={{3,1,0},{1,1,3}};s.rgb={0xffff0000u,0xffff0000u,0xffff0000u,0xff00ff00u};return s;
+        };
+        const auto authoredProgram=render::texture_graph::compile(authoredAsset["graph"],Json::object(),authoredResolver);
+        const auto authoredImage=render::texture_graph::evaluate(authoredProgram,0);
+        require(render::texture_graph::imageSourceBytes(authoredProgram)==16&&authoredImage.rgba[0]==0&&authoredImage.rgba[1]==255,"authored mip content was not preserved");
+        const auto authoredId=owner.start(authoredAsset,project,lifetime.lease(),authoredResolver).getStr("request");drain();
+        const auto authoredStatus=owner.status();
+        require(authoredStatus.getStr("request")==authoredId&&authoredStatus.getStr("state")=="ready"&&authoredStatus.getStr("backend")==expected,"authored mip GPU parity failed");
         // Typed custom expressions: same validated instruction stream on CPU and GPU.
         auto computed=Json::parse(R"JSON({"graph":{"version":1,"size":64,"nodes":[
           {"id":"a","op":"constant","inputs":[],"properties":{"value":0.25}},

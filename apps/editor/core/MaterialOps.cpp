@@ -13,6 +13,7 @@
 #include "engine/render/ExrTexture.h"
 #include "engine/render/TextureGen.h"
 #include "engine/render/graph/TextureGraph.h"
+#include "engine/render/graph/TextureGraphContainerSource.h"
 #include "engine/render/graph/TextureGraphTemplates.h"
 #include "engine/render/graph/TextureGraphCache.h"
 #include "engine/pack/Sha256.h"
@@ -271,9 +272,11 @@ PinnedRaster readPinnedRaster(const Workspace& ws,const std::string& rel,const s
         source.width=image.width;source.height=image.height;
         source.rgba32f.reserve(image.rgba16f.size());
         for(uint16_t h:image.rgba16f)source.rgba32f.push_back(decodeGraphHalf(h));
+    }else if(render::isKtx2(bytes)||bytes.compare(0,4,"DDS ")==0){
+        source=render::texture_graph::decodeContainerSource(bytes,maxBytes);
     }else{
         render::Image image;
-        if(!render::decodeTextureGraphRaster(bytes,maxBytes/4,image))throw std::runtime_error("unsupported PNG/JPEG/HDR/EXR or image source exceeds decoded budget");
+        if(!render::decodeTextureGraphRaster(bytes,maxBytes/4,image))throw std::runtime_error("unsupported PNG/JPEG/HDR/EXR/DDS/KTX2 or image source exceeds decoded budget");
         source.width=image.width;source.height=image.height;
         const auto& rgba=image.rgba;source.rgb.resize(rgba.size()/4);
         for(size_t i=0;i<source.rgb.size();++i)source.rgb[i]=(uint32_t(rgba[i*4+3])<<24)|(uint32_t(rgba[i*4])<<16)|(uint32_t(rgba[i*4+1])<<8)|rgba[i*4+2];
@@ -525,11 +528,12 @@ void registerMaterialOps(Workspace& ws) {
     auto textureCache=std::make_shared<render::texture_graph::EvaluationCache>();
     const std::string graphSchema=R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"textureName":{"type":"string"},"overrides":{"type":"object"}}})";
     add("texture_graph_cache","Inspect or clear this Workspace texture evaluation cache.",R"({"properties":{"clear":{"type":"boolean"}}})",[w,textureCache](const Json& p){textureCache->selectProject(w->project.dir);if(p.getBool("clear"))textureCache->clear();return textureCache->status();});
-    add("texture_graph_image_asset","Inspect a project PNG/JPEG/HDR/uncompressed EXR and return its immutable source revision, dimensions and format.",R"({"type":"object","properties":{"asset":{"type":"string"}},"required":["asset"]})",[w](const Json& p){
+    add("texture_graph_image_asset","Inspect a project PNG/JPEG/HDR/uncompressed EXR/DDS/KTX2 and return its immutable source revision, dimensions and format.",R"({"type":"object","properties":{"asset":{"type":"string"}},"required":["asset"]})",[w](const Json& p){
         auto image=readPinnedRaster(*w,p.getStr("asset"),"",render::texture_graph::maxImageSourceBytes);
         Json r=okJson();r.set("asset",Json::string(p.getStr("asset")));r.set("revision",Json::string(image.revision));
         r.set("width",Json::number(int64_t(image.source.width)));r.set("height",Json::number(int64_t(image.source.height)));
-        r.set("format",Json::string(image.source.hdr()?"rgba32f-linear":"rgba8"));
+        r.set("format",Json::string(image.source.hdr()?"rgba32f-linear":image.source.authoredMips?"rgba8-container":"rgba8"));
+        r.set("mipLevels",Json::number(int64_t(image.source.authoredMips?image.source.mips.size():1)));
         r.set("decodedBytes",Json::number(int64_t(image.source.bytes())));return r;
     });
     add("texture_graph_catalog","Native typed procedural CPU node catalog.",R"({"type":"object"})",[](const Json&){return render::texture_graph::describeCatalog();});

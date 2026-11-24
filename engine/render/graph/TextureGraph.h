@@ -55,6 +55,7 @@ struct ImageSource {
     std::vector<float> rgba32f;
     // Derived levels are contiguous after level zero, offsets in texels.
     std::vector<ImageMip> mips;
+    bool authoredMips=false; // Standard floor-halved container chain, not derived box levels.
     bool hdr() const{return !rgba32f.empty();}
     size_t bytes() const{return hdr()?rgba32f.size()*sizeof(float):rgb.size()*sizeof(uint32_t);}
     const void* data() const{return hdr()?static_cast<const void*>(rgba32f.data()):static_cast<const void*>(rgb.data());}
@@ -153,7 +154,7 @@ inline size_t imageSourceBytes(const Program& p){
 inline std::string imageSourceIdentity(const Node& n){
     if(!isExternalImageSource(n.info->id))return {};
     require(n.image!=nullptr,"unresolved external image");
-    return std::string(n.image->hdr()?"rgba32f-linear-nearest-v1:":n.image->hasAlpha?"rgba8-nearest-v2:":"rgb8-opaque-nearest-v2:")+std::to_string(n.image->width)+"x"+std::to_string(n.image->height)+":box-ceil-v1:"+std::to_string(n.image->mips.size());
+    return std::string(n.image->hdr()?"rgba32f-linear-nearest-v1:":n.image->hasAlpha?"rgba8-nearest-v2:":"rgb8-opaque-nearest-v2:")+std::to_string(n.image->width)+"x"+std::to_string(n.image->height)+(n.image->authoredMips?":authored-floor-v1:":":box-ceil-v1:")+std::to_string(n.image->mips.size());
 }
 inline std::vector<std::string> formulaTokens(const std::string& expression){
     require(!expression.empty()&&expression.size()<=256,"invalid formula size");
@@ -308,15 +309,26 @@ inline Program compileResolved(const Json& g,const ImageResolver& resolver={}){
                 data=resolver(n.parameters.getStr("asset"),n.parameters.getStr("revision"),maxImageSourceBytes-sourceBytes);
             }
             require(data.width>0&&data.height>0&&data.width<=4096&&data.height<=4096,"image source extent exceeded");
-            const size_t texels=size_t(data.width)*data.height;
-            const size_t stride=data.hdr()?16u:4u;
-            require(texels<=(maxImageSourceBytes-sourceBytes)/stride,"image source byte budget exceeded");
+            size_t texels=size_t(data.width)*data.height;
+            const size_t stride=data.hdr()?16u:4u,available=(maxImageSourceBytes-sourceBytes)/stride;
+            require(texels<=available,"image source byte budget exceeded");
+            if(data.authoredMips){
+                require(!data.mips.empty()&&data.mips.size()<=13,"invalid authored mip count");
+                texels=0;int w=data.width,h=data.height;
+                for(size_t i=0;i<data.mips.size();++i){
+                    const auto& level=data.mips[i];
+                    require(level.width==w&&level.height==h&&level.offset==texels,"invalid authored mip layout");
+                    const size_t count=size_t(w)*h;
+                    require(count<=available-texels,"authored mip chain exceeds source byte budget");texels+=count;
+                    require(w>1||h>1||i+1==data.mips.size(),"authored mip chain exceeds extent");
+                    w=std::max(1,w/2);h=std::max(1,h/2);
+                }
+            }else require(data.mips.empty(),"resolver must return base image or authored mip chain");
             if(data.hdr()){
                 require(data.rgb.empty()&&data.hasAlpha&&data.rgba32f.size()==texels*4,"invalid HDR snapshot layout");
                 for(float v:data.rgba32f)require(std::isfinite(v)&&std::abs(v)<=65504.f,"invalid HDR snapshot value");
             }else require(data.rgb.size()==texels,"invalid RGB snapshot layout");
-            require(data.mips.empty(),"resolver must return base image only");
-            if(n.parameters.getStr("mipMode","base")!="base")buildImageMips(data,maxImageSourceBytes-sourceBytes);
+            if(n.parameters.getStr("mipMode","base")!="base"&&!data.authoredMips)buildImageMips(data,maxImageSourceBytes-sourceBytes);
             sourceBytes+=data.bytes();
             n.image=std::make_shared<const ImageSource>(std::move(data));
         }
