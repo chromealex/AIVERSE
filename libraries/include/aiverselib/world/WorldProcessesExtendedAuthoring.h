@@ -122,7 +122,10 @@ inline bool edit(std::string_view id,std::string_view key,const Json& v,
         return false;
     }
     if(!validate(id,doc,error))return false;
-    Json next=doc;next.set(std::string(key),v);
+    Json next=doc;
+    if(id=="MorphNode"&&key=="gravityRelative"&&!next.has("gravityImpulseMilli"))
+        next.set("gravityImpulseMilli",Json::number(int64_t(0)));
+    next.set(std::string(key),v);
     if(!validate(id,next,error))return false;
     doc=std::move(next);
     return true;
