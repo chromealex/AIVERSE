@@ -44,10 +44,12 @@
       ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The independent runtime library consumer called planRecurringWork and nextRecurringIndex for empty, capped, overflow and fair-cycle inputs.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "tests/libraries/runtime_tests.cpp",
+        "tests/tests_traffic.inc",
+        "docs/evidence/recurring-budget-native-b1bb89949.json"
       ]
     },
     "skill": {
@@ -82,10 +84,12 @@
       ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "A Traffic simulation crossed cursor wrap, saved, restored into a fresh Simulation and retained checksum parity for 80 more ticks. The default population determinism and save fixture also passed.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "tests/libraries/runtime_tests.cpp",
+        "tests/tests_traffic.inc",
+        "docs/evidence/recurring-budget-native-b1bb89949.json"
       ]
     },
     "graphs": {
@@ -115,24 +119,30 @@
       ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Both Traffic fixtures ran simulation ticks and persistence without a frontend.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "tests/libraries/runtime_tests.cpp",
+        "tests/tests_traffic.inc",
+        "docs/evidence/recurring-budget-native-b1bb89949.json"
       ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The standalone runtime package consumer exercised capped and uncapped plans for 200000 items, invalid periods, cursor wrap and full coverage.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "tests/libraries/runtime_tests.cpp",
+        "tests/tests_traffic.inc",
+        "docs/evidence/recurring-budget-native-b1bb89949.json"
       ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native runtime package passed, both Traffic integration fixtures passed all fourteen checks, and real MCP planner acceptance passed.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "tests/libraries/runtime_tests.cpp",
+        "tests/tests_traffic.inc",
+        "docs/evidence/recurring-budget-native-b1bb89949.json"
       ]
     },
     "handoff": {
@@ -174,6 +184,7 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integration-acceptance-d5608fb7f.json"
+    "docs/evidence/integration-acceptance-d5608fb7f.json",
+    "docs/evidence/recurring-budget-native-b1bb89949.json"
   ]
 }
