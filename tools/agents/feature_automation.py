@@ -36,7 +36,7 @@ def discover_branches(root, base):
     return sorted(chosen.values())
 
 def impact_report(registry, policies, changed):
-    changed = set(changed)
+    changed = {p for p in changed if p}
     direct = {}
     reverse = defaultdict(set)
     for ident, data in registry.items():
@@ -142,27 +142,63 @@ def skill_similarity(root, skills, threshold=0.86):
                 pairs.append({"skills": sorted([a,b]), "similarity": round(score, 3)})
     return sorted(pairs, key=lambda p: (-p["similarity"], p["skills"]))
 
+def skill_freshness_candidates(skills, changed):
+    changed = set(changed)
+    rows = []
+    for skill in skills:
+        source = skill.get("source")
+        if isinstance(source, str) and source in changed and skill["path"] not in changed:
+            rows.append({"skill": skill["id"], "source": source,
+                         "reason": "declared source changed without skill file update"})
+    return sorted(rows, key=lambda r: r["skill"])
+
+def conflict_plan(conflicts, registry):
+    """Recommendations only; no automated merge or ownership transfer."""
+    rows = []
+    for conflict in conflicts:
+        path = conflict["path"]
+        owners = sorted({data["owner"] for data in registry.values()
+                         if path in data.get("changed_paths", [])})
+        branches = sorted({c["branch"] for c in conflict["claims"]})
+        rows.append({"path": path, "manifest_owners": owners, "branches": branches,
+                     "action": "coordinate_with_single_owner" if len(owners) == 1 else "integrator_review",
+                     "recommendation": "Serialize edits to shared path; rebase and re-audit after the first accepted change"})
+    return rows
+
 def architecture_report(root, changed, exceptions):
-    """Conservative changed-file include guard. Findings require review."""
+    """Conservative changed-file guard. Findings require review, not automatic ECS proof."""
     findings = []
     excluded = set(exceptions)
+    if not all(repo_path(p) for p in excluded):
+        raise ValueError("architecture exceptions must be exact repository paths")
     for rel in sorted(set(changed)):
         if not repo_path(rel) or rel in excluded:
             continue
-        if not rel.startswith(("engine/", "libraries/")) or Path(rel).suffix not in (".h", ".hpp", ".cpp", ".cc"):
+        if not rel.startswith(("engine/", "libraries/")) or Path(rel).suffix not in (".h", ".hpp", ".cpp", ".cc", ".mm"):
             continue
         path = (root / rel).resolve()
         if not path.is_relative_to(root.resolve()) or not path.is_file():
             continue
+        def finding(line, rule, detail):
+            findings.append({"path": rel, "line": line, "rule": rule, "detail": detail})
         for line, text in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
-            match = re.match(r'\s*#\s*include\s*[<"]([^>"]+)[>"]', text)
-            if not match:
+            if text.lstrip().startswith(("//", "*", "/*")):
                 continue
-            include = match.group(1).replace("\\", "/")
-            if re.search(r"(^|/)(apps/editor|apps/studio-native|tools/mcp|modules/rts|modules/fps)(/|$)", include):
-                findings.append({"path": rel, "line": line, "include": include,
-                                 "rule": "shared engine must not depend on editor or genre host"})
-    return {"findings": findings, "scope": "lexical changed-file include check; not ECS semantic verification"}
+            match = re.match(r'\s*#\s*include\s*[<"]([^>"]+)[>"]', text)
+            if match:
+                include = match.group(1).replace("\\", "/")
+                resolved = (path.parent / include).resolve()
+                candidate = resolved.relative_to(root.resolve()).as_posix() if resolved.is_relative_to(root.resolve()) else include
+                if any(re.search(r"(^|/)(apps/editor|apps/studio-native|tools/mcp|modules/rts|modules/fps)(/|$)", value)
+                       for value in (include, candidate)):
+                    finding(line, "shared engine must not depend on editor or genre host", include)
+                if rel.startswith("engine/view/") and any(re.search(r"(^|/)engine/game(/|$)", value) for value in (include, candidate)):
+                    finding(line, "canonical View cannot depend on game owner", include)
+            if re.search(r'\b(?:if|switch)\s*\([^;]*(?:\bisFps\s*\(|\bisRts\s*\(|\b(?:module|genre)\s*==\s*"(?:rts|fps)")', text):
+                finding(line, "genre-specific branching requires architecture review", text.strip()[:300])
+            if rel.startswith(("engine/sim/", "engine/core/")) and re.search(r'\b(?:rand|srand)\s*\(', text):
+                finding(line, "authoritative simulation randomness requires deterministic owner", text.strip()[:300])
+    return {"findings": findings, "scope": "lexical include, genre and deterministic-RNG checks; not ECS semantic verification"}
 
 def feature_history(root, ident, limit=30):
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", ident) or not 1 <= limit <= 200:
