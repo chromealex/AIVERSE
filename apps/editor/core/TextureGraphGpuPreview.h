@@ -1,6 +1,8 @@
 // Native editor owner: one queued preview/bake, bounded readback and idle plan cache.
 #pragma once
 #include "engine/render/graph/TextureGraphGpu.h"
+#include "engine/render/graph/TextureGraphPipelineCache.h"
+#include <limits>
 #include "engine/render/graph/TextureGraphMaterialBinding.h"
 #include "engine/view/AppearanceAssetRegistry.h"
 #include "MaterialOps.h"
@@ -15,7 +17,19 @@ class TextureGraphGpuPreview {
     struct Read {bool done=false;size_t offset=0,expected=0;std::vector<uint8_t> bytes;};
     std::shared_ptr<Read> read_;
     gfx::BufferHandle buffer_{},scratch_{};gfx::ComputeHandle compute_{},secondCompute_{};
-    std::string firstKey_,secondKey_;
+    using PipelineKey=render::texture_graph::gpu::PipelineCacheKey;
+    using PipelineCache=render::texture_graph::gpu::IdlePipelineCache<gfx::ComputeHandle>;
+    PipelineKey activeKey_;
+    PipelineCache idlePipelines_;
+    bool activePlanAccepted_=false,cacheHit_=false;
+    uint64_t cacheHits_=0;
+    void destroyPair(gfx::Device& dev,gfx::ComputeHandle first,gfx::ComputeHandle second){
+        if(first.valid())dev.destroyCompute(first);
+        if(second.valid())dev.destroyCompute(second);
+    }
+    void clearIdle(gfx::Device& dev){
+        idlePipelines_.clear([&](auto& e){destroyPair(dev,e.first,e.second);});
+    }
     size_t capacity_=0,received_=0,blocks_=0,scratchBytes_=0;
     int passes_=0;bool reused_=false,reusedBuffers_=false,inFlight_=false,bake_=false,published_=false,setBake_=false;
     Json sourceGraph_,overrides_;
@@ -40,9 +54,10 @@ class TextureGraphGpuPreview {
     std::string project_,state_="idle",reason_,backend_="none",submittedBackend_,output_;
     std::vector<uint8_t> pixels_;
     bool queued_=false,requireGpu_=false;
-    bool ownsResources()const{return buffer_.valid()||scratch_.valid()||compute_.valid()||secondCompute_.valid();}
-    void abandon(){buffer_={};scratch_={};compute_={};secondCompute_={};read_.reset();fence_=0;capacity_=0;firstKey_.clear();secondKey_.clear();inFlight_=false;}
-    void release(gfx::Device& dev){if(compute_.valid())dev.destroyCompute(compute_);if(secondCompute_.valid())dev.destroyCompute(secondCompute_);if(buffer_.valid())dev.destroyBuffer(buffer_);if(scratch_.valid())dev.destroyBuffer(scratch_);abandon();}
+    bool ownsActiveResources()const{return buffer_.valid()||scratch_.valid()||compute_.valid()||secondCompute_.valid();}
+    bool ownsResources()const{return ownsActiveResources()||idlePipelines_.size()!=0;}
+    void abandon(){buffer_={};scratch_={};compute_={};secondCompute_={};read_.reset();fence_=0;capacity_=0;activeKey_={};activePlanAccepted_=false;idlePipelines_.abandon();inFlight_=false;}
+    void release(gfx::Device& dev){clearIdle(dev);if(compute_.valid())dev.destroyCompute(compute_);if(secondCompute_.valid())dev.destroyCompute(secondCompute_);if(buffer_.valid())dev.destroyBuffer(buffer_);if(scratch_.valid())dev.destroyBuffer(scratch_);abandon();}
     void fallback(const std::string& why){
         reason_=why;queued_=false;backend_="none";
         if(requireGpu_){state_="failed";pixels_.clear();return;}
@@ -57,7 +72,7 @@ class TextureGraphGpuPreview {
             if(ref.rgba.size()!=pixels_.size())valid=false;
             else for(size_t i=0;i<pixels_.size();++i)if(std::abs(int(pixels_[i])-int(ref.rgba[i]))>1){valid=false;break;}
         }catch(...){valid=false;}
-        if(valid){state_="ready";backend_=submittedBackend_;reason_="complete native readback; CPU reference within one RGBA8 unit";}
+        if(valid){activePlanAccepted_=true;state_="ready";backend_=submittedBackend_;reason_="complete native readback; CPU reference within one RGBA8 unit";}
         else fallback("GPU readback or CPU parity check failed");
     }
     // Collect only a completed output. Multiple named outputs pointing to
@@ -79,7 +94,7 @@ class TextureGraphGpuPreview {
             reason_="all declared outputs completed";return;
         }
         const auto& next=setOutputs_[setImages_.size()];output_=next.first;target_=next.second;
-        received_=blocks_=scratchBytes_=0;passes_=0;reused_=reusedBuffers_=false;pixels_.clear();
+        received_=blocks_=scratchBytes_=0;passes_=0;reused_=reusedBuffers_=cacheHit_=false;pixels_.clear();
         backend_="none";reason_.clear();queued_=true;state_="queued";
     }
     // One range in flight, with exact offset and length. No graphics stalls.
@@ -104,6 +119,9 @@ public:
         Json outputs=Json::array();for(size_t i=0;i<setBackends_.size();++i){Json row=Json::object();row.set("output",Json::string(setOutputs_[i].first));row.set("backend",Json::string(setBackends_[i]));outputs.push(row);}r.set("outputs",outputs);r.set("published",Json::fromBool(published_));
         r.set("receivedBytes",Json::number(int64_t(received_)));r.set("totalBytes",Json::number(int64_t(size_t(size_)*size_*4)));
         r.set("readbackBlocks",Json::number(int64_t(blocks_)));r.set("reusedPlan",Json::fromBool(reused_));r.set("reusedBuffers",Json::fromBool(reusedBuffers_));
+        r.set("pipelineCacheHit",Json::fromBool(cacheHit_));
+        r.set("pipelineCacheHits",Json::number(int64_t(std::min<uint64_t>(cacheHits_,uint64_t(std::numeric_limits<int64_t>::max())))));
+        r.set("idlePipelinePlans",Json::number(int64_t(idlePipelines_.size())));
         r.set("retainedBufferBytes",Json::number(int64_t(capacity_*(scratch_.valid()?2:1))));
         if(state_=="ready"){
             r.set("width",Json::number(int64_t(size_)));r.set("height",Json::number(int64_t(size_)));
@@ -129,7 +147,7 @@ public:
         sourceGraph_=setBake?p["graph"]:Json();overrides_=setBake?(p.has("overrides")?p["overrides"]:Json::object()):Json();
         setOutputs_.clear();setImages_.clear();setBackends_.clear();reusedOutputs_=0;
         if(setBake_){for(const auto& pair:program_->outputs)setOutputs_.push_back(pair);setImages_.reserve(setOutputs_.size());setBackends_.reserve(setOutputs_.size());}
-        passes_=0;blocks_=received_=scratchBytes_=0;reused_=reusedBuffers_=false;requireGpu_=p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=true;state_="queued";return status();
+        passes_=0;blocks_=received_=scratchBytes_=0;reused_=reusedBuffers_=cacheHit_=false;requireGpu_=p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=true;state_="queued";return status();
     }
     void checkProject(const std::string& project){
         if(!project_.empty()&&project_!=project){discard("cancelled","project changed");project_.clear();}
@@ -210,29 +228,38 @@ public:
         const auto first=metal?plan.first.msl:plan.first.glsl;
         const auto second=metal?plan.second.msl:plan.second.glsl;
         const size_t bytes=size_t(size_)*size_*4;
-        // Only one exact last plan is retained, on this owner/device.
-        // A completed readback is the prerequisite to reuse or replace it.
-        reused_=capacity_==bytes&&first==firstKey_&&second==secondKey_&&buffer_.valid()&&compute_.valid()&&
+        // Cache only completed, parity-accepted plans; buffers stay single-owner.
+        PipelineKey key{submittedBackend_,first,second};
+        reused_=activePlanAccepted_&&capacity_==bytes&&key==activeKey_&&buffer_.valid()&&compute_.valid()&&
             (!plan.twoPass||(scratch_.valid()&&secondCompute_.valid()));
         if(!reused_){
             // On a completed plan boundary, same-sized storage is reusable
             // even when the next output requires different shader source.
             const bool keepBuffers=capacity_==bytes&&buffer_.valid();
-            if(compute_.valid())dev.destroyCompute(compute_);compute_={};
-            if(secondCompute_.valid())dev.destroyCompute(secondCompute_);secondCompute_={};
-            firstKey_.clear();secondKey_.clear();
+            auto cached=idlePipelines_.take(key);
+            if(activePlanAccepted_&&compute_.valid())
+                idlePipelines_.put({std::move(activeKey_),compute_,secondCompute_},
+                    [&](auto& e){destroyPair(dev,e.first,e.second);});
+            else destroyPair(dev,compute_,secondCompute_);
+            compute_={};secondCompute_={};activeKey_={};activePlanAccepted_=false;
             if(!keepBuffers){if(buffer_.valid())dev.destroyBuffer(buffer_);buffer_={};if(scratch_.valid())dev.destroyBuffer(scratch_);scratch_={};capacity_=0;}
             reusedBuffers_=keepBuffers;
             fence_=dev.gpuSubmissionFence();inFlight_=true;
             auto createPipeline=[&](const Source& source){return dev.createCompute({metal?source.msl.c_str():nullptr,vulkan?source.glsl.c_str():nullptr,"TextureGraph compute"});};
-            compute_=createPipeline(plan.first);
-            if(plan.twoPass)secondCompute_=createPipeline(plan.second);
+            if(cached){
+                compute_=cached->first;secondCompute_=cached->second;cacheHit_=true;
+                if(cacheHits_!=~uint64_t{0})++cacheHits_;
+            }else{
+                compute_=createPipeline(plan.first);
+                if(plan.twoPass)secondCompute_=createPipeline(plan.second);
+            }
             gfx::BufferDesc desc;desc.type=gfx::BufferType::Storage;desc.usage=gfx::Usage::Immutable;desc.size=bytes;desc.label="TextureGraph output";
             if(!buffer_.valid())buffer_=dev.createBuffer(desc);
             if(plan.twoPass&&!scratch_.valid()){desc.label="TextureGraph height scratch";scratch_=dev.createBuffer(desc);}
-            if(!compute_.valid()||!buffer_.valid()||(plan.twoPass&&(!secondCompute_.valid()||!scratch_.valid()))){if(!ownsResources())inFlight_=false;fallback("GPU plan allocation rejected");return;}
-            capacity_=bytes;firstKey_=first;secondKey_=second;
+            if(!compute_.valid()||!buffer_.valid()||(plan.twoPass&&(!secondCompute_.valid()||!scratch_.valid()))){if(!ownsActiveResources())inFlight_=false;fallback("GPU plan allocation rejected");return;}
+            capacity_=bytes;activeKey_=std::move(key);
         }
+        activePlanAccepted_=false;
         fence_=dev.gpuSubmissionFence();inFlight_=true;
         auto dispatch=[&](gfx::ComputeHandle pipeline,gfx::BufferHandle out,gfx::BufferHandle in){
             if(!dev.beginCompute(pipeline))return false;

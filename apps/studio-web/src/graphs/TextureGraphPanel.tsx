@@ -76,7 +76,20 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
     if(!object(r)||r.ok!==true||r.request!==gpuRequest.id||r.state!=='cancelled')throw new Error('GPU cancellation rejected');
     setGpuReady(false);setPreview(null);setGpuStatus('cancelled'+(r.draining===true?' · waiting for GPU retirement':'')+' — '+String(r.reason??''));return;
    }
-   if(!graph)throw new Error('Invalid graph JSON');
+   if(action==='gpuRead'){
+     if(!gpuRequest)throw new Error('No GPU request to read');
+     const r=await op('texture_graph_gpu_preview',{action:'read'});if(token!==epoch.current)return;
+     if(!object(r)||r.ok!==true||r.request!==gpuRequest.id){setGpuReady(false);throw new Error('GPU request replaced or unavailable');}
+     const matches=gpuRequest.source===text&&gpuRequest.overrides===overrideText&&(gpuRequest.setBake||gpuRequest.output===output)&&(gpuRequest.bake||gpuRequest.resolution===gpuResolution);
+     setGpuStatus(String(r.state)+(r.draining===true?' · waiting for GPU retirement':'')+' / '+String(r.backend)+' · '+String(r.completedOutputs??0)+' / '+String(r.totalOutputs??0)+' maps · '+String(r.receivedBytes??0)+' / '+String(r.totalBytes??0)+' bytes · cached plans '+String(r.idlePipelinePlans??0)+(r.pipelineCacheHit===true?' · pipeline cache hit':'')+' — '+String(r.reason??'')+(matches?'':' · draft changed'));
+     setGpuReady(matches&&r.bake===true&&r.state==='ready'&&r.published!==true&&r.busy!==true);
+     if(matches&&r.state==='ready'&&r.bake!==true){
+       if(typeof r.width!=='number'||typeof r.height!=='number'||!Number.isInteger(r.width)||!Number.isInteger(r.height)||r.width<8||r.height<8||r.width>128||r.height>128||typeof r.rgbaHex!=='string'||r.rgbaHex.length!==r.width*r.height*8||!/^[0-9a-f]+$/.test(r.rgbaHex))throw new Error('Invalid GPU preview payload');
+       setPreview({hex:r.rgbaHex,width:r.width,height:r.height,source:text});
+     }else if(!matches)setPreview(null);
+     return;
+    }
+    if(!graph)throw new Error('Invalid graph JSON');
    const overrides=action==='save'?{}:JSON.parse(overrideText);if(!object(overrides))throw new Error('Overrides must be a JSON object');
    if(action==='save'){
     const r=await op('texture_graph_set',{name,graph,...(original?.name===name?{expected:original.graph}:{})});if(token!==epoch.current)return;
@@ -114,11 +127,11 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
       if(patched.guid!==a.guid||patched.settings.sRGB!==srgb)throw new Error('Importer color-space verification failed');const key=channels[output];if(key)setAsset({guid:a.guid,path:a.path,key});}
     return;
    }
-   if(action==='gpuStart'||action==='gpuBake'||action==='gpuBakeSet'||action==='gpuRead'){
-    const r=await op('texture_graph_gpu_preview',action!=='gpuRead'?{action:'start',graph,overrides,output,requireGpu,resolution:gpuResolution,bake:action==='gpuBake'||action==='gpuBakeSet',bakeSet:action==='gpuBakeSet'}:{action:'read'});if(token!==epoch.current)return;
+   if(action==='gpuStart'||action==='gpuBake'||action==='gpuBakeSet'){
+    const r=await op('texture_graph_gpu_preview',{action:'start',graph,overrides,output,requireGpu,resolution:gpuResolution,bake:action==='gpuBake'||action==='gpuBakeSet',bakeSet:action==='gpuBakeSet'});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||typeof r.request!=='string')throw new Error(object(r)?String(r.reason??'GPU owner unavailable'):'GPU owner unavailable');
-    if(action!=='gpuRead'){setGpuRequest({id:r.request,source:text,overrides:overrideText,output,resolution:gpuResolution,bake:action==='gpuBake'||action==='gpuBakeSet',setBake:action==='gpuBakeSet'});setPreview(null);setGpuReady(false);}
-    else if(!gpuRequest||gpuRequest.id!==r.request||gpuRequest.source!==text||gpuRequest.overrides!==overrideText||(!gpuRequest.setBake&&gpuRequest.output!==output)||(!gpuRequest.bake&&gpuRequest.resolution!==gpuResolution))throw new Error('Preview belongs to a different request or draft');
+    {setGpuRequest({id:r.request,source:text,overrides:overrideText,output,resolution:gpuResolution,bake:action==='gpuBake'||action==='gpuBakeSet',setBake:action==='gpuBakeSet'});setPreview(null);setGpuReady(false);}
+    
     setGpuStatus(String(r.state)+(r.draining===true?' · waiting for GPU retirement':'')+' / '+String(r.backend)+(r.setBake===true?' · '+String(r.completedOutputs)+' / '+String(r.totalOutputs)+' maps':'')+' · '+String(r.receivedBytes??0)+' / '+String(r.totalBytes??0)+' bytes · '+String(r.readbackBlocks??0)+' blocks · encoded passes '+String(r.encodedPasses??0)+(r.reusedPlan===true?' · reused plan':'')+(r.reusedBuffers===true?' · reused buffers':'')+' — '+String(r.reason??''));
     setGpuReady(r.bake===true&&r.state==='ready'&&r.published!==true&&r.busy!==true);
     if(r.state==='ready'&&r.bake!==true){

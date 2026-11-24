@@ -96,7 +96,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 32A in progress: bounded idle GPU pipeline cache and draft-independent request status. Live host publication remains blocked on stable appearance identities.",
+      "note": "Stage 32A bounded pipeline cache and Studio status implemented; isolated cache policy test executed; integrated native and GPU verification pending.",
       "evidence": []
     },
     "architecture": {
@@ -166,7 +166,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification.",
+      "note": "Standalone C++20 LRU policy test PASS on Linux, exact source blobs verified; integrated test suite and native GPU tests not run.",
       "evidence": []
     },
     "handoff": {
