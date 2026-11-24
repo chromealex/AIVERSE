@@ -9,6 +9,26 @@
 using namespace aiverse;
 using namespace aiverse::terraweave::caverns;
 static void check(bool ok,const char* why){if(!ok)throw std::runtime_error(why);}
+static void checkBaselineTransfer(){
+    physics::Scene box;world::SpatialWorld spatial;CaveColliderLeasePool pool(20000,100);
+    CavePlanetBaselineCollision exterior(box,spatial,pool),interior(box,spatial,pool);
+    const auto p=[](int x,int z){return Vec3{Fixed::fromInt(x),10_fx,Fixed::fromInt(z)};};
+    CavePlanetSurfaceSlot slot{{2,0,0,1,0},{{p(0,0),p(0,2),p(2,0)}}};
+    const auto exclusive=[](){return true;};
+    check(exterior.prepare(0,7,std::span<const CavePlanetSurfaceSlot>(&slot,1),
+        [](const auto&){return world::Cell{0,100,0};},[](const auto&){return true;},exclusive)&&
+        exterior.publish(exclusive),"exterior baseline published");
+    const auto mutation=spatial.mutationVersion();
+    physics::Scene foreignBox;CavePlanetBaselineCollision foreign(foreignBox,spatial,pool);
+    check(!exterior.transferSolidLeafTo(slot.key,foreign,exclusive),"foreign physics owner refused");
+    check(!exterior.transferSolidLeafTo(slot.key,interior,[]{return false;}),"transfer requires barrier");
+    check(exterior.transferSolidLeafTo(slot.key,interior,exclusive)&&interior.solidReady()&&
+        exterior.phase()==CavePlanetBaselineCollision::Phase::Empty,"transfer actual solid leaf");
+    check(box.bodyCount()==1&&pool.allocations()==1&&spatial.mutationVersion()==mutation,"no native duplicate or rebuild");
+    check(interior.retireForCut(exclusive)&&interior.prepareRestore(exclusive)&&interior.publish(exclusive),"restore borrowed baseline");
+    check(interior.transferSolidLeafTo(slot.key,exterior,exclusive)&&exterior.solidReady(),"return restored leaf");
+    check(exterior.shutdown(exclusive)&&box.bodyCount()==0&&pool.allocations()==0,"exterior owns final retirement");
+}
 static void checkCandidateIdentity(){
     World ecs;
     CavePlanetAuthoritySet set;
@@ -98,6 +118,20 @@ static void checkTravelPins(){
           cavePlanetTravelPins(world).contains(9),"unsafe cancel preserves pin");
     check(cancelCavePlanetCrossing(world,actor,[](const auto&,auto,const auto&){return true;})&&
           cavePlanetTravelPins(world).contains(9),"exit cancel preserves occupancy");
+}
+static void checkNativeDispatchGuard(){
+    World world;const auto a=world.create(),b=world.create();
+    CavePlanetMotorTickGuard guard;
+    check(guard.claim(4,10,a,1),"first motor dispatch");
+    check(!guard.claim(4,10,a,2),"same entity duplicate");
+    check(!guard.claim(4,10,b,1),"same proxy duplicate");
+    check(!guard.claim(4,11,b,2),"simulation advanced without physics");
+    check(guard.claim(4,10,b,2),"distinct actor same tick");
+    check(!guard.claim(5,10,a,1),"physics advanced without simulation");
+    check(guard.claim(5,11,a,1),"next physics tick");
+    check(!guard.claim(4,10,a,1),"old physics tick refused");
+    guard.reset();
+    check(guard.claim(1,2,a,1),"synchronized restore clears derived receipt");
 }
 static void checkTravelModeSelection(){
     CavePlanetTraversalCapabilities caps;
@@ -304,9 +338,11 @@ int main(){
     checkTravelRim();
     checkTravelReceipts();
     checkTravelModeSelection();
+    checkNativeDispatchGuard();
     checkTravelPins();
     checkOrientedMotor();
     checkCandidateIdentity();
+    checkBaselineTransfer();
     check(!CavePlanetRuntimeHooks{}.valid(),"missing host hooks must refuse");
     physics::Scene box;
     world::SpatialWorld spatial;

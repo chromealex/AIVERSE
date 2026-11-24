@@ -5,7 +5,7 @@
 #include "engine/world/TerraWeaveCavernsPlanetGiViewFrame.h"
 #include "engine/world/TerraWeaveCavernsPlanetEnvironmentEpoch.h"
 #include "engine/world/TerraWeaveCavernsPlanetTravel.h"
-#include "engine/physics/TerraWeaveCavernsPlanetMotorBridge.h"
+#include "engine/physics/TerraWeaveCavernsPlanetMotorDispatch.h"
 #include "engine/render/GiMainCpuBridge.h"
 #include "engine/render/GiMainGpuBridge.h"
 #include "engine/render/Renderer3D.h"
@@ -82,7 +82,7 @@ public:
             Target& target,CavePlanetGiBindings giBindings,CavePlanetRuntimeHooks hooks,
             uint64_t policyRevision,CavePlanetDemandConfig demand={},
             CaveEnvironmentCostSettings costs={},size_t workers=2)
-        :target_(target),scene_(scene),surface_(surface),exclusive_(hooks.exclusive),
+        :target_(target),scene_(scene),surface_(surface),sim_(sim),box_(box),exclusive_(hooks.exclusive),
          giReady_(giBindings.ready),publication_(scene,target,std::move(giBindings)){
         const auto* epoch=sim.world().resourceConst<CavePlanetEnvironmentEpoch>();
         if(!exclusive_||!giReady_||!surface||!epoch||epoch->policyRevision!=policyRevision||
@@ -126,7 +126,7 @@ public:
         const auto required=cavePlanetTravelPins(world,pins);
         renderer.clearDynamicGiOverlay();
         const bool restored=notice_.consume();
-        if(restored)runtime_->invalidateAfterRestore();
+        if(restored){runtime_->invalidateAfterRestore();motorGuard_.reset();}
         if(runtime_->recoveryRequired()){
             result.phase=CavePlanetRuntimePhase::Recovery;
             result.diagnostic="Caverns native cohort quarantined";
@@ -196,6 +196,46 @@ public:
         return stepAdmittedCavePlanetCrossing(*runtime_,scene,world,entity,frame,params,state,proxy,
             motion,coverage,tick,dt,goal);
     }
+    // Optional single-threaded native tick driver for projects that have
+    // not already stepped either owner. Never combine with another driver.
+    enum class TickResult { Held,Advanced,Recovery };
+    TickResult stepNativeTick(const std::set<uint64_t>& pins={}){
+        if(recoveryRequired())return TickResult::Recovery;
+        if(closed_||!exclusive_()||!admitNativeTick(sim_.world(),pins))return TickResult::Held;
+        const auto simulationTick=sim_.tick();
+        const auto physicsTick=box_.tick();
+        if(simulationTick==UINT32_MAX||physicsTick==UINT64_MAX||
+           std::abs(float(sim_.dt().toDouble())-box_.dt())>.00002f)return TickResult::Held;
+        try{
+            sim_.step(); // includes the existing motor dispatch
+            if(recoveryRequired()||notice_.pending()||!exclusive_()||box_.tick()!=physicsTick){
+                runtime_->quarantineNativeMotion();return TickResult::Recovery;
+            }
+            if(sim_.tick()==simulationTick)return TickResult::Held;
+            if(sim_.tick()!=simulationTick+1){
+                runtime_->quarantineNativeMotion();return TickResult::Recovery;
+            }
+            box_.step();
+            if(box_.tick()!=physicsTick+1){
+                runtime_->quarantineNativeMotion();return TickResult::Recovery;
+            }
+            return TickResult::Advanced;
+        }catch(...){runtime_->quarantineNativeMotion();return TickResult::Recovery;}
+    }
+    // Call from the one registered native motor, after canonical capture.
+    // The caller owns Simulation::step and Scene::step; no second scheduler.
+    CavePlanetDispatchResult dispatchMotor(Simulation& sim,Entity entity,
+            const physics::CharacterParams& params,physics::CharacterState& state,physics::BodyHandle proxy,
+            const CavePlanetMotorDispatchInput& input){
+        using R=CavePlanetDispatchResult;
+        if(&sim!=&sim_||closed_||!exclusive_()||notice_.pending())return R::Refused;
+        if(recoveryRequired())return R::Recovery;
+        if(!beforeMotor(sim.world(),{}))return R::Held;
+        if(!sim.world().alive(entity)||!box_.valid(proxy)||box_.motion(proxy)!=physics::Motion::Kinematic)return R::Refused;
+        if(!motorGuard_.claim(box_.tick(),sim.tick(),entity,proxy))return R::Refused;
+        return dispatchCavePlanetMotor(*runtime_,box_,sim.world(),entity,surface_,params,state,proxy,
+            sim.tick(),sim.dt(),input);
+    }
     // Expose the existing native admission adapter only, not a second motor.
     CavePlanetRuntimeFrame& runtime(){return *runtime_;}
     const CavePlanetRuntimeFrame& runtime()const{return *runtime_;}
@@ -236,6 +276,9 @@ private:
     Target& target_;
     render::GiGeometryScene& scene_;
     std::shared_ptr<const game::Surface> surface_;
+    Simulation& sim_;
+    physics::Scene& box_;
+    CavePlanetMotorTickGuard motorGuard_;
     CavePlanetNativeOwner::Exclusive exclusive_;
     std::function<bool()> giReady_;
     CavePlanetRestoreNotice notice_;

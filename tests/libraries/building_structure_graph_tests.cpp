@@ -40,6 +40,24 @@ int main(){
                 CHECK(from&&to);
             }
         }
+        for(auto profile:{FunctionalRoofProfile::Gable,FunctionalRoofProfile::Shed,FunctionalRoofProfile::Barrel,
+             FunctionalRoofProfile::Hip,FunctionalRoofProfile::Dome,FunctionalRoofProfile::Terrace,FunctionalRoofProfile::Pagoda}){
+            FunctionalBuildingRecipe cap;cap.width=24;cap.depth=24;cap.height=12;
+            cap.roomsX=cap.roomsZ=3;cap.footprint={"111","101","111"};cap.roofProfile=profile;cap.roofRise=2;
+            const auto graph=buildFunctionalStructureGraph(cap);CHECK(graph&&graph.roofSections.size()>1);
+            float area=0,highest=0;
+            for(const auto& section:graph.roofSections){
+                area+=(section.x1-section.x0)*(section.z1-section.z0);
+                CHECK(!(section.x0<16&&section.x1>8&&section.z0<16&&section.z1>8));
+            }
+            for(const auto& solid:graph.solids)if(solid.part==BuildingGraphPart::Roof){
+                highest=std::max(highest,solid.y1);
+                CHECK(!(solid.x0<16&&solid.x1>8&&solid.z0<16&&solid.z1>8));
+                if(solid.roofTop[0]>=0)for(float y:solid.roofTop)CHECK(y>=solid.y0&&y<=solid.y1+.001f);
+            }
+            CHECK(std::abs(area-512)<.01f&&std::abs(highest-12)<.001f);
+            CHECK(!intersects(graph,12,10.5f,12,BuildingGraphPart::Roof));
+        }
         FunctionalBuildingRecipe courtyard;courtyard.width=24;courtyard.depth=24;courtyard.height=8;
         courtyard.roomsX=courtyard.roomsZ=3;courtyard.footprint={"111","101","111"};
         BuildingFeature courtDoor;courtDoor.side=BuildingFeatureSide::Back;courtDoor.wallLine=1;
@@ -100,6 +118,34 @@ int main(){
         CHECK(intersects(columns,11.04f,1.f,10.26f,BuildingGraphPart::Trim));
         balcony.features[0].balconySupport=BuildingBalconySupport::Cantilever;
         CHECK(!buildFunctionalStructureGraph(balcony));
+        FunctionalBuildingRecipe octagon;octagon.width=24;octagon.depth=24;octagon.height=8;
+        octagon.roomsX=octagon.roomsZ=2;octagon.cornerChamfers={3,3,3,3};
+        const auto oct=buildFunctionalStructureGraph(octagon);CHECK(oct&&oct.footprintPolygon.size()==8);
+        CHECK(!oct.visualPrisms.empty());
+        CHECK(!intersects(oct,.4f,.12f,.4f,BuildingGraphPart::Floor));
+        CHECK(!intersects(oct,.4f,1,.4f,BuildingGraphPart::Wall));
+        CHECK(intersects(oct,1.65f,1,1.65f,BuildingGraphPart::Wall));
+        CHECK(intersects(oct,12,.12f,12,BuildingGraphPart::Floor));
+        BuildingFeature tooClose;tooClose.position=1.5f;octagon.features={tooClose};
+        CHECK(!buildFunctionalStructureGraph(octagon));
+        FunctionalBuildingRecipe furnished;furnished.width=24;furnished.depth=24;furnished.height=8;
+        furnished.roomsX=furnished.roomsZ=2;furnished.interiorProfile=BuildingInteriorProfile::Residential;
+        furnished.furnitureDensity=4;furnished.roomUses={{0,0,0,BuildingRoomUse::Bedroom}};
+        const auto interior=buildFunctionalStructureGraph(furnished);CHECK(interior);
+        CHECK(interior.roomUses.size()==4&&interior.furniture.size()==16);
+        CHECK(interior.roomUses[0].use==BuildingRoomUse::Bedroom);
+        for(const auto& item:interior.furniture){
+            const auto room=std::find_if(interior.rooms.begin(),interior.rooms.end(),[&](const auto& r){return r.id==item.roomId;});
+            CHECK(room!=interior.rooms.end());
+            const float mx=(room->x0+room->x1)*.5f,mz=(room->z0+room->z1)*.5f;
+            CHECK(item.x1<=mx-.75f||item.x0>=mx+.75f);
+            CHECK(item.z1<=mz-.75f||item.z0>=mz+.75f);
+            CHECK(item.x0>=room->x0+1.55f&&item.z0>=room->z0+1.55f);
+        }
+        BuildingFeature entry;entry.position=6;furnished.features={entry};
+        const auto accessible=buildFunctionalStructureGraph(furnished);CHECK(accessible);
+        CHECK(accessible.roomUses[0].use==BuildingRoomUse::Circulation&&accessible.furniture.size()==12);
+        furnished.interiorProfile=BuildingInteriorProfile::None;CHECK(!buildFunctionalStructureGraph(furnished));
         FunctionalBuildingRecipe disconnected;disconnected.roomsX=disconnected.roomsZ=3;
         disconnected.footprint={"100","010","001"};CHECK(!buildFunctionalStructureGraph(disconnected));
         FunctionalBuildingRecipe r;

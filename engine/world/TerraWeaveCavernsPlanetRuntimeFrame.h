@@ -32,8 +32,12 @@ struct CavePlanetRuntimeHooks {
     // Optional baseline GI producer; refusal is transient and must occur
     // before irreversible native staging (candidate retained for retry).
     std::function<bool(const CavePlanetBodyCutPlan&)> ensureBaselineGi;
+    // Optional paired loan/return from an actual exterior collision owner.
+    CavePlanetCollisionBinding::BaselineTransfer borrowExteriorBaseline,returnExteriorBaseline;
+    std::function<bool()> exteriorHealthy;
     bool valid()const noexcept{
-        return exclusive&&surfaceCell&&volumeCell&&unownedLeaf&&mayReleaseCoverage&&
+        return bool(borrowExteriorBaseline)==bool(returnExteriorBaseline)&&
+            (!borrowExteriorBaseline||exteriorHealthy)&&exclusive&&surfaceCell&&volumeCell&&unownedLeaf&&mayReleaseCoverage&&
             prepareNavigationGi&&commitNavigationGi&&abortNavigationGi&&retireNavigationGi;
     }
 };
@@ -69,6 +73,9 @@ public:
     CavePlanetRuntimeFrame& operator=(const CavePlanetRuntimeFrame&)=delete;
     bool recoveryRequired()const noexcept{
         if(recovery_||residency_.recoveryRequired())return true;
+        if(hooks_.exteriorHealthy){
+            try{if(!hooks_.exteriorHealthy())return true;}catch(...){return true;}
+        }
         for(const auto& [body,c]:cohorts_){(void)body;if(!c.binding||c.binding->recoveryRequired())return true;}
         return false;
     }
@@ -331,6 +338,10 @@ private:
         if(!hooks_.exclusive()||!c.coverage||!hooks_.mayReleaseCoverage(*c.coverage))return false;
         auto* owner=residency_.find(body);
         if(!owner){recovery_=true;return false;}
+        if(owner->closed()&&c.binding->baseline().phase()==CavePlanetBaselineCollision::Phase::Empty){
+            if(!residency_.eraseClosed(body)){recovery_=true;return false;}
+            cohorts_.erase(it);return true;
+        }
         const auto revision=owner->activeRevision();
         if(!owner->closed()){
             const bool preflight=bool(hooks_.prepareRetireNavigationGi);
@@ -346,7 +357,9 @@ private:
         // remains owned. Never advertise the retired cut as active.
         c.active.reset();
         if(!hooks_.exclusive()||!hooks_.mayReleaseCoverage(*c.coverage)||
-           !c.binding->shutdownBaseline(hooks_.exclusive))return false;
+           !(hooks_.returnExteriorBaseline?
+               c.binding->returnBaseline(*c.coverage,hooks_.returnExteriorBaseline,hooks_.exclusive):
+               c.binding->shutdownBaseline(hooks_.exclusive)))return false;
         if(!residency_.eraseClosed(body)){recovery_=true;return false;}
         cohorts_.erase(it);return true;
     }
@@ -372,7 +385,17 @@ private:
         }
         auto& c=it->second;
         if(c.binding->baseline().phase()==CavePlanetBaselineCollision::Phase::Empty){
-            if(!c.binding->initializeBaseline(*candidate.cut,
+            if(hooks_.borrowExteriorBaseline){
+                if(!c.binding->adoptBaseline(*candidate.cut,hooks_.borrowExteriorBaseline,hooks_.exclusive)){
+                    // A missing exterior leaf is a retryable wait, not a
+                    // resident body that pins itself forever before adoption.
+                    if(!recoveryRequired()&&c.binding->baseline().phase()==CavePlanetBaselineCollision::Phase::Empty){
+                        if(!residency_.eraseClosed(body))recovery_=true;
+                        else cohorts_.erase(it);
+                    }
+                    return false;
+                }
+            }else if(!c.binding->initializeBaseline(*candidate.cut,
                 [&](const auto& key){return hooks_.surfaceCell(body,key);},
                 [&](const auto& key){return hooks_.unownedLeaf(body,key);},hooks_.exclusive))
                 throw std::runtime_error("Caverns baseline preparation refused");

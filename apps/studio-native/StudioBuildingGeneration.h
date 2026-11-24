@@ -467,6 +467,19 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
         }
         out.set("roofProfile",string(functionalRoofProfileName(req.functionalRecipe.roofProfile)));
         out.set("roofRise",Json::number(double(req.functionalRecipe.roofRise),3));
+        Json roofSections=Json::array();
+        for(const auto& section:detailed.graph.roofSections){
+            Json row=Json::object();
+            row.set("x0",Json::number(double(section.x0),3));row.set("z0",Json::number(double(section.z0),3));
+            row.set("x1",Json::number(double(section.x1),3));row.set("z1",Json::number(double(section.z1),3));
+            row.set("base",Json::number(double(section.base),3));row.set("rise",Json::number(double(section.rise),3));
+            row.set("ridgeAlongX",Json::fromBool(section.ridgeAlongX));
+            roofSections.push(std::move(row));
+        }
+        out.set("roofSections",std::move(roofSections));
+        Json polygon=Json::array();for(const auto& p:detailed.graph.footprintPolygon){
+            Json point=Json::array();for(float v:p)point.push(Json::number(double(v),3));polygon.push(std::move(point));}
+        out.set("footprintPolygon",std::move(polygon));
         out.set("floors",Json::number(int64_t(req.functionalRecipe.floors)));
         out.set("roomsX",Json::number(int64_t(req.functionalRecipe.roomsX)));
         out.set("roomsZ",Json::number(int64_t(req.functionalRecipe.roomsZ)));
@@ -497,6 +510,18 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
             balconies.push(std::move(row));
         }
         out.set("balconies",std::move(balconies));
+        Json roomUses=Json::array(),furniture=Json::array();
+        for(const auto& room:detailed.graph.roomUses){
+            Json row=Json::object();row.set("roomId",string(room.roomId));row.set("use",string(buildingRoomUseName(room.use)));roomUses.push(std::move(row));
+        }
+        for(const auto& item:detailed.graph.furniture){
+            Json row=Json::object();row.set("id",string(item.id));row.set("roomId",string(item.roomId));
+            row.set("floor",Json::number(int64_t(item.floor)));row.set("kind",string(buildingFurnitureName(item.kind)));
+            row.set("x0",Json::number(double(item.x0),3));row.set("z0",Json::number(double(item.z0),3));
+            row.set("x1",Json::number(double(item.x1),3));row.set("z1",Json::number(double(item.z1),3));
+            furniture.push(std::move(row));
+        }
+        out.set("roomUses",std::move(roomUses));out.set("furniture",std::move(furniture));
         out.set("sockets",std::move(sockets));
         out.set("solids",Json::number(int64_t(detailed.graph.solids.size())));
         out.set("connections",Json::number(int64_t(detailed.graph.connections.size())));
@@ -759,7 +784,21 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
             saved.set("floors",Json::number(int64_t(req.functionalRecipe.floors)));
             saved.set("roomsX",Json::number(int64_t(req.functionalRecipe.roomsX)));
             saved.set("roomsZ",Json::number(int64_t(req.functionalRecipe.roomsZ)));
+            if(req.functionalRecipe.interiorProfile!=BuildingInteriorProfile::None){
+                saved.set("interiorProfile",string(buildingInteriorProfileName(req.functionalRecipe.interiorProfile)));
+                saved.set("furnitureDensity",Json::number(int64_t(req.functionalRecipe.furnitureDensity)));
+                Json uses=Json::array();for(const auto& edit:req.functionalRecipe.roomUses){
+                    Json row=Json::object();row.set("floor",Json::number(int64_t(edit.floor)));
+                    row.set("x",Json::number(int64_t(edit.x)));row.set("z",Json::number(int64_t(edit.z)));
+                    row.set("use",string(buildingRoomUseName(edit.use)));uses.push(std::move(row));
+                }
+                saved.set("roomUses",std::move(uses));
+            }
             if(req.functionalRecipe.walkableSetbacks)saved.set("walkableSetbacks",Json::fromBool(true));
+            if(std::any_of(req.functionalRecipe.cornerChamfers.begin(),req.functionalRecipe.cornerChamfers.end(),[](float c){return c>0.f;})){
+                Json cuts=Json::array();for(float c:req.functionalRecipe.cornerChamfers)cuts.push(Json::number(double(c),3));
+                saved.set("cornerChamfers",std::move(cuts));
+            }
             if(!req.functionalRecipe.floorFootprints.empty()){
                 Json masks=Json::array();for(const auto& mask:req.functionalRecipe.floorFootprints){
                     Json rows=Json::array();for(const auto& row:mask)rows.push(string(row));masks.push(std::move(rows));}

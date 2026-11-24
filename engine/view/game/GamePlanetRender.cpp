@@ -148,6 +148,17 @@ std::vector<terraweave::caverns::CavePlanetSurfaceSlotKey> PlanetRenderer::selec
     std::sort(out.begin(),out.end());
     return out;
 }
+std::vector<terraweave::caverns::CavePlanetSurfaceSlotKey> PlanetRenderer::caveSurfaceLeafKeys(int body,size_t maxKeys)const{
+    if(body<0||size_t(body)>=bodies_.size()||!bodies_[size_t(body)].surf||!maxKeys||maxKeys>65536)
+        throw std::invalid_argument("Planet physical leaf enumeration");
+    std::vector<terraweave::caverns::CavePlanetSurfaceSlotKey> result;
+    for(const auto& c:bodies_[size_t(body)].chunks){
+        if(c.child>=0)continue;
+        if(result.size()>=maxKeys)throw std::length_error("Planet physical leaf enumeration budget");
+        result.push_back({c.face,c.x0,c.y0,c.size,c.level});
+    }
+    std::sort(result.begin(),result.end());return result;
+}
 std::vector<terraweave::caverns::CavePlanetSurfaceSlot> PlanetRenderer::captureCaveSurfaceSlots(int body,
         std::span<const terraweave::caverns::CavePlanetSurfaceSlotKey> keys)const {
     namespace cave=terraweave::caverns;

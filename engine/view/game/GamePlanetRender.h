@@ -51,6 +51,9 @@ public:
     std::vector<terraweave::caverns::CavePlanetSurfaceSlotKey> selectCaveSurfaceSlots(
         const terraweave::caverns::CavePlanetFrame& frame,
         terraweave::caverns::SurfaceRectCm footprint,size_t maxSlots=64)const;
+    // Enumerate the actual finest physical leaf identities, independent
+    // of camera LOD. Bounded; caller chooses residency, never all by default.
+    std::vector<terraweave::caverns::CavePlanetSurfaceSlotKey> caveSurfaceLeafKeys(int body,size_t maxKeys=4096)const;
     std::vector<terraweave::caverns::CavePlanetSurfaceSlot> captureCaveSurfaceSlots(int body,
         std::span<const terraweave::caverns::CavePlanetSurfaceSlotKey> keys)const;
     bool installCaveSurfaceCut(int body,const terraweave::caverns::CavePlanetCutPlan& plan,

@@ -164,6 +164,10 @@ export default function BuildingGeneratorPanel({
   const [footprint,setFootprint]=useState<string[]>([]);
   const [floorFootprints,setFloorFootprints]=useState<string[][]>([]);
   const [walkableSetbacks,setWalkableSetbacks]=useState(false);
+  const [cornerChamfers,setCornerChamfers]=useState<[number,number,number,number]>([0,0,0,0]);
+  const [interiorProfile,setInteriorProfile]=useState<NonNullable<StudioBuildingRequest['interiorProfile']>>('none');
+  const [furnitureDensity,setFurnitureDensity]=useState(3);
+  const [roomUses,setRoomUses]=useState<NonNullable<StudioBuildingRequest['roomUses']>>([]);
   const [editFloor,setEditFloor]=useState(0);
   const shaped=footprint.some(row=>row.includes('0'))||floorFootprints.some(mask=>mask.some(row=>row.includes('0')));
   const editingMask=floorFootprints.length?floorFootprints[editFloor]??[]:footprint;
@@ -279,7 +283,8 @@ export default function BuildingGeneratorPanel({
       setWidth(String(item.width));setHeight(String(item.height));
       setDepth(String(item.depth));setSeed(String(item.seed));
       setFloors(String(item.floors??1));
-      setRoomsX(String(item.roomsX??1));setRoomsZ(String(item.roomsZ??1));setFootprint(item.footprint??[]);setFloorFootprints(item.floorFootprints??[]);setWalkableSetbacks(item.walkableSetbacks??false);setEditFloor(0);
+      setRoomsX(String(item.roomsX??1));setRoomsZ(String(item.roomsZ??1));setFootprint(item.footprint??[]);setFloorFootprints(item.floorFootprints??[]);setWalkableSetbacks(item.walkableSetbacks??false);setCornerChamfers(item.cornerChamfers??[0,0,0,0]);setEditFloor(0);
+      setInteriorProfile(item.interiorProfile??'none');setFurnitureDensity(item.furnitureDensity??3);setRoomUses(item.roomUses??[]);
       setFeatures((item.features??[]).map(f=>({...makeFeature(f.kind),...f})));
       setMaterialBindings(item.materialBindings??{});
       clearGenerated();
@@ -314,11 +319,17 @@ export default function BuildingGeneratorPanel({
          !Number.isInteger(rz)||rz<1||rz>6||f*rx*rz>128)
         return 'Use 1–8 floors and 1–6 rooms per axis (maximum 128 rooms).';
       if(floorFootprints.length&&(floorFootprints.length!==f||floorFootprints.some(mask=>mask.length!==rz||mask.some(row=>row.length!==rx||!/^[01]+$/.test(row)))))return 'Floor footprint grid does not match dimensions.';
-      if(walkableSetbacks&&(!floorFootprints.length||f<2||roofProfile!=='flat'||
+      if(interiorProfile!=='none'&&cornerChamfers.some(c=>c>0))return 'Furnishing currently requires orthogonal rooms.';
+      if(interiorProfile!=='none'&&roomUses.some(r=>r.floor>=f||r.x>=rx||r.z>=rz||(floorFootprints[r.floor]??footprint)[r.z]?.[r.x]==='0'))return 'A room use override references an absent room; remove it first.';
+      const maxCut=Math.min(4,.4*Math.min(asNumber(width)/rx,asNumber(depth)/rz));
+      if(cornerChamfers.some(c=>!Number.isFinite(c)||c<0||c>maxCut||(c>0&&c<.5)))return 'Corner cuts must be zero or 0.5–'+maxCut.toFixed(2)+'m.';
+      if(cornerChamfers.some(c=>c>0)&&(shaped||roofProfile!=='flat'||walkableSetbacks||features.some(f=>f.kind==='sliding-roof')))
+        return 'Chamfered corners require a rectangular footprint and flat non-retractable roof.';
+      if(walkableSetbacks&&(!floorFootprints.length||f<2||
           !floorFootprints.some((mask,i)=>i>0&&mask.some((row,z)=>[...row].some((v,x)=>v==='0'&&floorFootprints[i-1][z]?.[x]==='1')))))
-        return 'Walkable terraces require at least one supported upper-floor setback and a flat roof.';
+        return 'Walkable terraces require at least one supported upper-floor setback.';
       if(shaped){
-        if(roofProfile!=='flat'||features.some(f=>f.kind==='sliding-roof'))return 'Custom footprint requires a flat roof without a retractable panel.';
+        if(features.some(f=>f.kind==='sliding-roof'))return 'Custom footprints do not support a retractable panel.';
         const masks=floorFootprints.length?floorFootprints:[footprint];
         for(let level=0;level<masks.length;level++){
         const mask=masks[level];
@@ -430,7 +441,7 @@ export default function BuildingGeneratorPanel({
       }
     }
     return '';
-  },[selectedStyle,selectedFunction,mode,features,width,height,depth,seed,floors,roomsX,roomsZ,roofProfile,roofRise,footprint,shaped,floorFootprints,walkableSetbacks]);
+  },[selectedStyle,selectedFunction,mode,features,width,height,depth,seed,floors,roomsX,roomsZ,roofProfile,roofRise,footprint,shaped,floorFootprints,walkableSetbacks,cornerChamfers,interiorProfile,furnitureDensity,roomUses]);
 
   const request=(useSeed:number):StudioBuildingRequest=>({
     setting,style,function:mode==='preset'?role:'',mode,textureResolution,uniqueAtlas,
@@ -442,7 +453,11 @@ export default function BuildingGeneratorPanel({
     floors:asNumber(floors),roomsX:asNumber(roomsX),roomsZ:asNumber(roomsZ),
     footprint:mode==='features'&&!floorFootprints.length&&footprint.length?footprint:undefined,
     floorFootprints:mode==='features'&&floorFootprints.length?floorFootprints:undefined,
-    walkableSetbacks:mode==='features'&&walkableSetbacks?true:undefined
+    walkableSetbacks:mode==='features'&&walkableSetbacks?true:undefined,
+    cornerChamfers:mode==='features'&&cornerChamfers.some(c=>c!==0)?cornerChamfers:undefined,
+    interiorProfile:mode==='features'?interiorProfile:undefined,
+    furnitureDensity:mode==='features'&&interiorProfile!=='none'?furnitureDensity:undefined,
+    roomUses:mode==='features'&&interiorProfile!=='none'&&roomUses.length?roomUses:undefined
   });
   // A seed is not a request identity. Include all authoring inputs and the project.
   const draftKey=buildingDraftKey(snapshot?.project.path??'',request(asNumber(seed)));
@@ -497,7 +512,7 @@ export default function BuildingGeneratorPanel({
     const p=presets[id];if(!p)return;
     setMode('features');setWidth(String(p.size[0]));setHeight(String(p.size[1]));setDepth(String(p.size[2]));
     setFloors(String(p.rooms[0]));setRoomsX(String(p.rooms[1]));setRoomsZ(String(p.rooms[2]));
-    setFeatures(p.features);setFootprint([]);setFloorFootprints([]);setWalkableSetbacks(false);setEditFloor(0);
+    setFeatures(p.features);setFootprint([]);setFloorFootprints([]);setWalkableSetbacks(false);setCornerChamfers([0,0,0,0]);setEditFloor(0);setRoomUses([]);
     const profile=p.features.some(f=>f.kind==='sliding-roof')?'flat':selectedStyle?.recommendedRoof??'flat';
     const rise=profile==='flat'?0:Math.min(3,Math.max(1.5,p.size[0]*.12));
     setRoofProfile(profile);setRoofRise(String(rise));setHeight(String(p.size[1]+rise));
@@ -881,7 +896,7 @@ export default function BuildingGeneratorPanel({
           onClick={()=>{const profile=selectedStyle?.recommendedRoof??'flat';const old=asNumber(roofRise);
             const rise=profile==='flat'?0:Math.min(3,Math.max(1.5,asNumber(width)*.12));
             setRoofProfile(profile);setRoofRise(String(rise));if(Number.isFinite(old))setHeight(String(asNumber(height)-old+rise));clearGenerated();}}>Apply setting roof · {selectedStyle?.recommendedRoof??'flat'}</StudioButton>
-        <small className="abg__note">Height includes the cap. It occupies real graph-owned roof solids above the rooms. Retractable roofs require a flat profile.</small>
+        <small className="abg__note">Height includes the cap. Complex footprints automatically split the upper roof into supported sections. Lower setbacks remain flat. Retractable roofs require a rectangular flat profile.</small>
       </StudioSection>}
       {mode==='features'&&<StudioSection title="Floors and rooms">
         <div className="abg__dimensions">
@@ -901,11 +916,10 @@ export default function BuildingGeneratorPanel({
         <StudioField label="Footprint preset" htmlFor="abg-footprint-preset">
           <StudioSelect id="abg-footprint-preset" value="" disabled={busy} onChange={e=>{
             const patterns:Record<string,string[]>={L:['100','100','111'],T:['111','010','010'],U:['101','101','111'],H:['101','111','101'],courtyard:['111','101','111']};
-            setFloorFootprints([]);setWalkableSetbacks(false);setEditFloor(0);
+            setFloorFootprints([]);setWalkableSetbacks(false);setCornerChamfers([0,0,0,0]);setEditFloor(0);
             if(e.target.value==='rect')setFootprint([]);
             else if(patterns[e.target.value]){
               const rows=patterns[e.target.value];setRoomsX('3');setRoomsZ('3');setFootprint(rows);
-              setRoofProfile('flat');setRoofRise('0');
             }
             clearGenerated();
           }}>
@@ -914,6 +928,18 @@ export default function BuildingGeneratorPanel({
             <option value="H">H shape</option><option value="courtyard">Courtyard</option>
           </StudioSelect>
         </StudioField>
+        <div className="abg__dimensions">
+          {['Front left','Front right','Back right','Back left'].map((label,i)=>
+            <StudioField key={i} label={label+' chamfer, m'} htmlFor={'abg-corner-cut-'+i}>
+              <StudioInput id={'abg-corner-cut-'+i} type="number" min={0} max={4} step={.1}
+                value={String(cornerChamfers[i])} disabled={busy} onChange={e=>{
+                  setCornerChamfers(old=>{const next:[number,number,number,number]=[...old];next[i]=Number(e.target.value);return next;});
+                  clearGenerated();
+                }}/>
+            </StudioField>)}
+        </div>
+        <StudioButton variant="secondary" disabled={busy} onClick={()=>{setCornerChamfers([0,0,0,0]);clearGenerated();}}>Reset corner cuts</StudioButton>
+        <small className="abg__note">Chamfer distances cut the actual shell, slabs and roof. Supported on rectangular plans with flat roofs; place openings away from cut corners. Physical strips approximate the exact diagonal.</small>
         <StudioField label="Floor plan mode" htmlFor="abg-floor-plan-mode">
           <StudioSelect id="abg-floor-plan-mode" value={floorFootprints.length?'per-floor':'shared'} disabled={busy} onChange={e=>{
             if(e.target.value==='per-floor'){
@@ -954,8 +980,53 @@ export default function BuildingGeneratorPanel({
                 }}>{active?'■':'·'}</button>;
             })}
           </div>}
-        <small className="abg__note">Click cells to add or remove rooms in the selected plan. Independent upper floors must be supported by the floor below; removed cells can form walkable terraces with parapets. To add an upper personnel door, select its floor, facade line and explicit wall position; native validation requires a deck immediately outside, or a projecting balcony into a clear recessed cell. The top row is Front. Custom shapes use flat roofs; select a facade grid line for openings on recessed or courtyard walls. Existing incompatible features must be edited explicitly.</small>
+        <small className="abg__note">Click cells to add or remove rooms in the selected plan. Independent upper floors must be supported by the floor below; removed cells can form walkable terraces with parapets. To add an upper personnel door, select its floor, facade line and explicit wall position; native validation requires a deck immediately outside, or a projecting balcony into a clear recessed cell. The top row is Front. Custom shapes support composed upper roofs; select a facade grid line for openings on recessed or courtyard walls. Existing incompatible features must be edited explicitly.</small>
         <small className="abg__note">Internal room partitions, stair and lift geometry follow the selected functional recipe. Native ECS/PHYSIS and graph owners handle dynamic traversal separately; changing setting never changes gameplay permissions.</small>
+      </StudioSection>}
+      {mode==='features'&&<StudioSection title="Procedural interior">
+        <StudioField label="Interior profile" htmlFor="abg-interior-profile">
+          <StudioSelect id="abg-interior-profile" value={interiorProfile} disabled={busy}
+            onChange={e=>{setInteriorProfile(e.target.value as typeof interiorProfile);clearGenerated();}}>
+            {['none','residential','office','industrial','commercial','mixed'].map(p=><option key={p} value={p}>{p}</option>)}
+          </StudioSelect>
+        </StudioField>
+        {interiorProfile!=='none'&&<>
+          <StudioField label="Furniture items per room (maximum)" htmlFor="abg-furniture-density">
+            <StudioSelect id="abg-furniture-density" value={String(furnitureDensity)} disabled={busy}
+              onChange={e=>{setFurnitureDensity(Number(e.target.value));clearGenerated();}}>
+              {[0,1,2,3,4].map(n=><option key={n} value={n}>{n===0?'Room uses only':n}</option>)}
+            </StudioSelect>
+          </StudioField>
+          <StudioButton variant="secondary" disabled={busy||!roomUses.length} onClick={()=>{setRoomUses([]);clearGenerated();}}>Clear room overrides</StudioButton>
+          <small className="abg__note">Override room use on the current editing floor. Entrance, shaft and terrace-access rooms remain empty circulation spaces.</small>
+          {Number.isInteger(asNumber(roomsX))&&asNumber(roomsX)>=1&&asNumber(roomsX)<=6&&Number.isInteger(asNumber(roomsZ))&&asNumber(roomsZ)>=1&&asNumber(roomsZ)<=6&&
+            Number.isInteger(asNumber(floors))&&asNumber(floors)>=1&&asNumber(floors)<=8&&<>
+            <StudioField label="Interior floor" htmlFor="abg-interior-floor">
+              <StudioSelect id="abg-interior-floor" value={String(editFloor)} disabled={busy} onChange={e=>setEditFloor(Number(e.target.value))}>
+                {Array.from({length:asNumber(floors)},(_,i)=><option key={i} value={i}>Floor {i}</option>)}
+              </StudioSelect>
+            </StudioField>
+            <div className="abg__fields">
+              {Array.from({length:asNumber(roomsX)*asNumber(roomsZ)},(_,i)=>{
+                const x=i%asNumber(roomsX),z=Math.floor(i/asNumber(roomsX));
+                if((floorFootprints[editFloor]??footprint)[z]?.[x]==='0')return null;
+                const chosen=roomUses.find(r=>r.floor===editFloor&&r.x===x&&r.z===z);
+                return <StudioField key={i} label={'Room '+(x+1)+', '+(z+1)} htmlFor={'abg-room-use-'+i}>
+                  <StudioSelect id={'abg-room-use-'+i} value={chosen?.use??'auto'} disabled={busy} onChange={e=>{
+                    const use=e.target.value;setRoomUses(old=>{
+                      const next=old.filter(r=>r.floor!==editFloor||r.x!==x||r.z!==z);
+                      if(use!=='auto')next.push({floor:editFloor,x,z,use:use as NonNullable<StudioBuildingRequest['roomUses']>[number]['use']});
+                      return next;
+                    });clearGenerated();
+                  }}>
+                    {['auto','lounge','bedroom','kitchen','office','meeting','workshop','storage','retail','circulation','empty'].map(use=><option key={use} value={use}>{use}</option>)}
+                  </StudioSelect>
+                </StudioField>;
+              })}
+            </div>
+          </>}
+        </>}
+        <small className="abg__note">Static procedural furniture uses style materials and physical bounds. Small rooms may remain empty to preserve circulation.</small>
       </StudioSection>}
         </div>
           </div>

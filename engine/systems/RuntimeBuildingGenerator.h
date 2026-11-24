@@ -36,6 +36,10 @@ struct RuntimeBuildingRequest {
     std::vector<std::string> footprint;
     std::vector<std::vector<std::string>> floorFootprints;
     bool walkableSetbacks=false;
+    std::array<float,4> cornerChamfers{};
+    BuildingInteriorProfile interiorProfile=BuildingInteriorProfile::None;
+    uint32_t furnitureDensity=3;
+    std::vector<BuildingRoomUseOverride> roomUses;
 };
 
 enum class RuntimeBuildingError : uint8_t {
@@ -146,7 +150,8 @@ public:
             recipe.roofProfile=request.roofProfile;recipe.roofRise=request.roofRise;
             recipe.floors=request.floors;recipe.roomsX=request.roomsX;recipe.roomsZ=request.roomsZ;
             recipe.footprint=request.footprint;recipe.floorFootprints=request.floorFootprints;
-            recipe.walkableSetbacks=request.walkableSetbacks;
+            recipe.walkableSetbacks=request.walkableSetbacks;recipe.cornerChamfers=request.cornerChamfers;
+            recipe.interiorProfile=request.interiorProfile;recipe.furnitureDensity=request.furnitureDensity;recipe.roomUses=request.roomUses;
             return generateRecipe(request.style,recipe,request.origin,request.yaw);
         }
         const auto* kind=it->second.structureKind(request.function);

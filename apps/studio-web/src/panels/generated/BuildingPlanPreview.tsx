@@ -14,18 +14,18 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
   const [floor,setFloor]=useState(0);
   const selectedFloor=Math.min(floor,Math.max(0,(preview.floors??1)-1));
   const mask=preview.floorFootprints?.[selectedFloor]??preview.footprint;
-  const sockets=(preview.sockets??[]).filter(s=>!preview.floorFootprints?.length||s.floor===undefined||s.floor===selectedFloor);
+  const sockets=(preview.sockets??[]).filter(s=>s.floor===undefined||s.floor===selectedFloor);
   const width=Math.max(preview.width,1),depth=Math.max(preview.depth,1);
   const margin=Math.max(2,Math.max(width,depth)*.08);
   const sx=-margin,sz=-margin;
   const planWidth=width+margin*2,planDepth=depth+margin*2;
   const selectedSocket=sockets.find(s=>s.socketId===selected);
   return <div className="abg__plan">
-    {!!preview.floorFootprints?.length&&<label>Plan floor <select value={selectedFloor} onChange={e=>{setFloor(Number(e.target.value));setSelected('');}}>{preview.floorFootprints.map((_,i)=><option key={i} value={i}>{i}</option>)}</select></label>}
+    {(preview.floors??1)>1&&<label>Plan floor <select value={selectedFloor} onChange={e=>{setFloor(Number(e.target.value));setSelected('');}}>{Array.from({length:preview.floors??1},(_,i)=><option key={i} value={i}>{i}</option>)}</select></label>}
     <svg role="img" aria-label="Generated building footprint, rooms and actual opening anchors"
       viewBox={`${sx} ${sz} ${planWidth} ${planDepth}`}
       preserveAspectRatio="xMidYMid meet">
-      {mask?.length?mask.flatMap((row,z)=>[...row].map((cell,x)=>cell==='1'?
+      {preview.footprintPolygon?.length?<polygon points={preview.footprintPolygon.map(p=>p.join(',')).join(' ')} fill="var(--au-panel-raised)" stroke="var(--au-text)" strokeWidth={.12}/>:mask?.length?mask.flatMap((row,z)=>[...row].map((cell,x)=>cell==='1'?
         <rect key={x+':'+z} x={width*x/(preview.roomsX??1)} y={depth*z/(preview.roomsZ??1)}
           width={width/(preview.roomsX??1)} height={depth/(preview.roomsZ??1)}
           fill="var(--au-panel-raised)" stroke="var(--au-text)" strokeWidth={.12}/>:null)):<>
@@ -47,6 +47,13 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
       {(preview.balconies??[]).filter(t=>t.floor===selectedFloor).map(t=>
         <rect key={'balcony-'+t.socketId} x={t.x0} y={t.z0} width={t.x1-t.x0} height={t.z1-t.z0}
           fill="var(--au-accent)" fillOpacity={.28} stroke="var(--au-accent)" strokeWidth={.1}/>)}
+      {selectedFloor===(preview.floors??1)-1&&(preview.roofSections??[]).map((r,i)=>
+        <g key={'roof-'+i} pointerEvents="none">
+          <rect x={r.x0} y={r.z0} width={r.x1-r.x0} height={r.z1-r.z0} fill="none" stroke="var(--au-accent)" strokeDasharray=".3 .2" strokeWidth={.13}/>
+        </g>)}
+      {(preview.furniture??[]).filter(item=>item.floor===selectedFloor).map(item=>
+        <rect key={item.id} x={item.x0} y={item.z0} width={item.x1-item.x0} height={item.z1-item.z0}
+          fill="var(--au-accent)" fillOpacity={.55} stroke="var(--au-text)" strokeWidth={.06}><title>{item.kind} · {item.roomId}</title></rect>)}
       {sockets.map(socket=>{
         const [x,,z]=socket.outside;
         const isSelected=socket.socketId===selected;
@@ -70,6 +77,9 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
     <div className="abg__plan-caption">
       <strong>Native structure plan</strong>
       <small>{preview.width.toFixed(1)} × {preview.depth.toFixed(1)} m · {preview.floors??1} floors · {sockets.length} sockets · {preview.solids??0} solids · {preview.connections??0} graph links</small>
+      {!!preview.roomUses?.length&&<small>{preview.roomUses.filter(r=>r.roomId.startsWith('room/'+selectedFloor+'/')).map(r=>r.roomId.split('/').slice(2).join(',')+': '+r.use).join(' · ')}</small>}
+      {!!preview.furniture?.length&&<small>{preview.furniture.filter(f=>f.floor===selectedFloor).length} static furniture items</small>}
+      {!!preview.roofSections?.length&&<small>{preview.roofSections.length} composed upper roof sections</small>}
       {!!preview.balconies?.length&&<small>{preview.balconies.filter(t=>t.floor===selectedFloor).length} projecting balconies</small>}
       {!!(preview.terraces?.length||preview.balconies?.length)&&<small>{(preview.terraces??[]).filter(t=>t.floor===selectedFloor).length} terrace cells · {(preview.terraceAccess??[]).filter(t=>t.floor===selectedFloor).length} authored terrace access links</small>}
       {selectedSocket&&<small>Selected: {selectedSocket.socketId} ({selectedSocket.kind}) · opening {selectedSocket.width.toFixed(1)}m, {Math.round(selectedSocket.open*100)}% initial open</small>}
