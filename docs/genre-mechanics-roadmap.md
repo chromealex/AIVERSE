@@ -140,3 +140,7 @@ Native Box3D host adapter consumes only admitted region-scoped steering against 
 ### Stage55a — IN PROGRESS
 
 Restore CTest coverage of the existing Caverns fixtures, explicitly enable optional Box3D in the acceptance build, and run the existing unified runner plus native Studio/MCP and frontend checks. Record exact commit, configuration, inventory and logs. CPU/contract tests do not certify live GPU/GI publication or playable traversal; those need separate native evidence. Mac local outputs remain on KINGSTON. No merge until acceptance.
+
+### Stage56a — IN PROGRESS
+
+Connect planetary native cohort publication to the actual shared GiGeometryScene and existing CPU/GPU GI target. Stage an isolated copy of the shared scene; require host-reserved volume IDs, exact existing baseline leaf IDs and one GI-space projection; validate baseline triangle identity, replace rather than overlay, restore original materials/triangles on retire, fence stale snapshots and refuse unowned collisions. Publish only in the existing exclusive native barrier. Prepare retirement before irreversible native teardown. Managed ECS navigation leases remain owned by the runtime; actual host wiring, moving-body/rebase lifecycle and live GPU QA remain later stages. No new authored schema.
