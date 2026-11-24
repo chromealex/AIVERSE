@@ -117,6 +117,17 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
     }catch(e){setError(message(e));}
     finally{locked.current=false;setBusy(false);}
   }
+  async function armShaft(){
+    if(!editable||!doc?.planetAnchor||locked.current)return;
+    locked.current=true;setBusy(true);setError('');
+    try{
+      const b=await invoke('studio.sceneBrush',{kind:'caverns',armed:true,expectedProject:project,expectedMap:map,
+        radius:Number(entrance.radiusCm)/100,caveMode:'shaft',caveDepth:Number(shaftDepth)/100,caveSurface:true});
+      setArmed(b.armed&&b.kind==='caverns');
+      setStatus('Click the actual chart surface to add one shaft per stroke.');
+    }catch(e){setError(message(e));}
+    finally{locked.current=false;setBusy(false);}
+  }
   async function edit(params: Record<string,unknown>) {
     if((!editable&&!(canCreate&&params.mode==='planet_region')) || !doc || locked.current)return;
     locked.current=true;
@@ -208,7 +219,7 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
           {doc.entrances.slice(entrancePage*32,entrancePage*32+32).map(e=><StudioButton key={e.id} variant={entranceId===e.id?'primary':'secondary'} disabled={busy} onClick={()=>{setEntranceId(e.id);setEntrance({xCm:String(e.xCm),zCm:String(e.zCm),surfaceYcm:String(e.surfaceYcm),caveYcm:String(e.caveYcm),radiusCm:String(e.radiusCm)});}}>#{e.id} · ({e.xCm}, {e.zCm})</StudioButton>)}
           <div className="au-row"><StudioButton disabled={entrancePage===0} onClick={()=>setEntrancePage(p=>p-1)}>Previous</StudioButton><StudioButton disabled={(entrancePage+1)*32>=doc.entrances.length} onClick={()=>setEntrancePage(p=>p+1)}>Next</StudioButton></div>
           {entranceFields.map(k=><StudioField key={k} label={k} htmlFor={'cave-entrance-'+k}><StudioInput id={'cave-entrance-'+k} type="number" step={1} value={entrance[k]} disabled={!editable} onChange={e=>setEntrance(v=>({...v,[k]:e.target.value}))}/></StudioField>)}
-          {doc.planetary && <><StudioField label="Depth below actual coarse surface (cm)" htmlFor="planet-shaft-depth"><StudioInput id="planet-shaft-depth" type="number" value={shaftDepth} onChange={e=>setShaftDepth(e.target.value)} disabled={!editable}/></StudioField><StudioButton disabled={!editable||!int(shaftDepth)||Number(shaftDepth)<=0||!int(entrance.xCm)||!int(entrance.zCm)||!int(entrance.radiusCm)||Number(entrance.radiusCm)<=0} onClick={()=>void edit({mode:'planet_entrance',xCm:Number(entrance.xCm),zCm:Number(entrance.zCm),radiusCm:Number(entrance.radiusCm),depthCm:Number(shaftDepth)})}>Add shaft from surface</StudioButton></>}
+          {doc.planetary && <><StudioField label="Depth below actual coarse surface (cm)" htmlFor="planet-shaft-depth"><StudioInput id="planet-shaft-depth" type="number" value={shaftDepth} onChange={e=>setShaftDepth(e.target.value)} disabled={!editable}/></StudioField><StudioButton disabled={!editable||!int(shaftDepth)||Number(shaftDepth)<=0||!int(entrance.xCm)||!int(entrance.zCm)||!int(entrance.radiusCm)||Number(entrance.radiusCm)<=0} onClick={()=>void edit({mode:'planet_entrance',xCm:Number(entrance.xCm),zCm:Number(entrance.zCm),radiusCm:Number(entrance.radiusCm),depthCm:Number(shaftDepth)})}>Add shaft from surface</StudioButton><StudioButton disabled={!editable||!int(shaftDepth)||Number(shaftDepth)<=0||!int(entrance.radiusCm)||Number(entrance.radiusCm)<25||Number(entrance.radiusCm)>6400} onClick={()=>void armShaft()}>Place shaft in Scene</StudioButton></>}
           <StudioButton disabled={!editable||!entranceValid} onClick={()=>void edit({mode:'entrance_add',...Object.fromEntries(entranceFields.map(k=>[k,Number(entrance[k])]))})}>Add entrance</StudioButton>
           <StudioButton disabled={!editable||!entranceValid||!entranceId} onClick={()=>void edit({mode:'entrance_update',entranceIdText:entranceId,...Object.fromEntries(entranceFields.map(k=>[k,Number(entrance[k])]))})}>Update selected entrance</StudioButton>
           <StudioButton variant="danger" disabled={!editable||!entranceId} onClick={()=>void edit({mode:'entrance_erase',entranceIdText:entranceId})}>Remove selected entrance</StudioButton>
