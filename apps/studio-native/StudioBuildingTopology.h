@@ -144,4 +144,35 @@ inline Json studioBuildingTopology(const lib::systems::BuildingStructureGraph& g
     result.set("connections",std::move(edges));
     return result;
 }
+// Explicit authored route, independent of live lift state and physical clearance.
+inline Json studioBuildingRoute(const lib::systems::BuildingStructureGraph& graph,const Json& query){
+    using namespace buildingTopologyDetail;
+    if(!graph||graph.rooms.size()>128||graph.connections.size()>512||
+       !query.isObject()||!query["start"].isString()||!query["goal"].isString()||
+       query["allowStairs"].type()!=Json::Type::Bool||query["allowElevators"].type()!=Json::Type::Bool)
+        throw std::runtime_error("Invalid building route query");
+    const auto start=query.getStr("start"),goal=query.getStr("goal");
+    const auto exists=[&](const std::string& id){
+        return !id.empty()&&id.size()<=128&&std::any_of(graph.rooms.begin(),graph.rooms.end(),[&](const auto& r){return r.id==id;});
+    };
+    if(!exists(start)||!exists(goal))throw std::runtime_error("Unknown building route room");
+    BuildingRoutePolicy policy;
+    policy.allowStairs=query.getBool("allowStairs");
+    policy.allowElevators=query.getBool("allowElevators");
+    policy.requireAvailableLift=false;
+    const auto route=planBuildingRoomRoute(graph,start,goal,policy);
+    Json result=Json::object(),steps=Json::array();
+    result.set("start",Json::string(start));result.set("goal",Json::string(goal));
+    result.set("allowStairs",Json::fromBool(policy.allowStairs));
+    result.set("allowElevators",Json::fromBool(policy.allowElevators));
+    result.set("reachable",Json::fromBool(route.reachable));
+    for(const auto& step:route.steps){
+        Json row=Json::object();
+        row.set("edgeId",Json::string(step.edgeId));
+        row.set("from",Json::string(step.fromRoom));row.set("to",Json::string(step.toRoom));
+        steps.push(std::move(row));
+    }
+    result.set("steps",std::move(steps));
+    return result;
+}
 } // namespace aiverse::studio
