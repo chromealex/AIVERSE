@@ -128,6 +128,14 @@ public:
     // solvers. Set between ticks after setup; no duplicate actor motor.
     // Assign an authoritative C++ cave goal to a real ActorHost character,
     // leaving movement and collision with the existing CharacterBody motor.
+    // Called only AFTER the actual native SpatialWorld/Box3D/cave SDF
+    // source was committed under the game's exclusive world barrier.
+    // A visual-only editor callback cannot advance actor navigation.
+    bool acceptCommittedCaveNavigation(
+        std::shared_ptr<const terraweave::caverns::CaveNavigationDataProvider>
+            published,
+        const terraweave::caverns::CaveNavigationChange& change,
+        const std::function<bool()>& exclusive);
     bool navigateCaveActor(Simulation& sim,Entity entity,
         terraweave::caverns::PointCm goal,
         terraweave::caverns::CaveAgentProfile profile={},
