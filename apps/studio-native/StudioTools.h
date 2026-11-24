@@ -23,6 +23,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
     static const std::vector<StudioToolGroup> groups = {
         {"terrain", {"map_info", "terrain_sculpt", "terrain_level", "terrain_height", "terrain_heights", "terrain_paint",
                      "terrain_paint_material", "terrain_material", "terrain_detail", "heightmap_import", "heightmap_export"}},
+        {"caverns", {"terraweave_caverns_paint"}},
         {"water", {"water_types", "water_network", "water_set", "water_delete", "water_shores", "water_bake", "nereid_water_state"}},
         {"roads", {"simulation_budget_plan", "road_types", "road_network", "road_add", "road_delete", "road_node_set", "road_edge_set", "road_split",
                    "road_toggle", "road_type_set", "road_stop_set", "road_driveway_set"}},
