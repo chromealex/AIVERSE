@@ -9,6 +9,7 @@
 // their own car) is TrafficCommute.cpp.
 // Fixed maths and integers only; the citizens are created from the simulation RNG on the first tick.
 #include "Traffic.h"
+#include "engine/world/SimulationLod.h"
 #include "Systems.h"
 #include <algorithm>
 #include <stdexcept>
@@ -259,7 +260,7 @@ void Traffic::population(Simulation& sim, TrafficStore& st, const std::vector<Ve
     if (pr.carShare > 0) for (auto& c : st.citizens) parked += c.car.valid();
     const int cap = pr.live, carCap = std::max(4, rules_.maxCars / 2);
     // a slice per tick: everybody is looked at every two seconds
-    const size_t n = st.citizens.size(), slice = std::max<size_t>(1, (n + rate * 2 - 1) / (rate * 2));
+    const size_t n = st.citizens.size(), slice = world::simulationSliceForWindow(n,rate*2);
     for (size_t k = 0; k < slice; ++k) {
         const size_t id = st.citizenCursor++ % n;
         TrafficCitizen& c = st.citizens[id];
