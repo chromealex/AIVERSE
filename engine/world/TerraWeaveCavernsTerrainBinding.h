@@ -78,6 +78,38 @@ public:
         owner_=&terrain;authorRevision_=snapshot->sourceRevision;surfaceEpoch_=epoch;
         groupPlan_=std::move(plan);return true;
     }
+    // Use the SAME immutable plan already accepted by the actual volume
+    // owner. Do not regenerate the rim independently after its commit.
+    bool bindCommittedVolumeGroup(std::shared_ptr<const CaveSurfaceGroupPlan> plan,
+            TerrainMutationCoordinator& terrain,
+            const std::function<bool()>& exclusive,
+            const std::function<bool(const CaveSurfaceGroupPlan&)>& volumeCommitted){
+        if(!plan||!exclusive||!exclusive()||!volumeCommitted||!volumeCommitted(*plan))return false;
+        if(owner_&&owner_!=&terrain)throw std::logic_error("Caverns surface binding owner changed");
+        if(groupPlan_==plan&&surfaceEpoch_==terrain.surfaceEpoch())return true;
+        if(plan->soilRevision!=terrain.soilRevision()||plan->surfaceEpoch<=terrain.surfaceEpoch()||
+           plan->tileMetres!=terrain.terrainCellSizeMetres()||plan->resolution!=terrain.terrainResolution()||
+           plan->patches.empty()||plan->patches.size()>64)return false;
+        std::set<world::Cell> cells;
+        for(const auto& [key,patch]:plan->patches){
+            if(key!=patch.cell||patch.sourceRevision!=plan->soilRevision||patch.surfaceEpoch!=plan->surfaceEpoch||
+               patch.resolution!=plan->resolution||patch.cellSizeMetres!=plan->tileMetres||
+               !validTerrainPatchTopology(patch))return false;
+            cells.insert(key);
+        }
+        if(!exclusive())return false;
+        terrain.setSurfaceGroupTopology(plan->surfaceEpoch,plan->soilRevision,std::move(cells),
+            [plan](TerrainPatch source){
+                const auto it=plan->patches.find(source.cell);
+                if(it==plan->patches.end()||source.sourceRevision!=plan->soilRevision||
+                   source.heightsCm!=it->second.heightsCm||source.resolution!=plan->resolution||
+                   source.cellSizeMetres!=plan->tileMetres)
+                    throw std::logic_error("Caverns stale committed rim source");
+                return it->second;
+            },exclusive);
+        owner_=&terrain;authorRevision_=plan->authorityRevision;surfaceEpoch_=plan->surfaceEpoch;
+        groupPlan_=std::move(plan);return true;
+    }
     std::shared_ptr<const CaveSurfaceGroupPlan> groupPlan()const noexcept{return groupPlan_;}
     // Surface readiness only. The host must independently prove matching
     // Box3D, underground navigation, GI and native volume publication.
