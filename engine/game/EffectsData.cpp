@@ -32,6 +32,24 @@ Json merge(const Json& base, const Json& over) {
 }
 } // namespace
 
+StatMod EffectParser::timedStatMod(const std::string& where, const Json& j) {
+    StatMod m = statMod(where, j);
+    if (!j.has("stackingGroup")) return m;
+    if (!j["stackingGroup"].isString()) fail(where, "stackingGroup must be a nonempty string");
+    const auto name = j.getStr("stackingGroup");
+    if (name.empty() || name.size() > 128) fail(where, "stackingGroup name must have 1..128 bytes");
+    if (m.lerp.raw || m.floor.raw) fail(where, "stackingGroup supports add/mul, not lerp/floor");
+    auto& groups = r.modifierGroups;
+    auto it = std::find(groups.begin(), groups.end(), name);
+    if (it == groups.end()) {
+        if (groups.size() >= 64) fail(where, "at most 64 stacking groups");
+        groups.push_back(name);
+        it = groups.end() - 1;
+    }
+    m.stackingGroup = uint16_t(1 + (it - groups.begin()));
+    return m;
+}
+
 uint64_t EffectParser::statusTags(const Json& arr) {
     uint64_t m = 0;
     for (auto& t : arr.items()) {
@@ -240,7 +258,7 @@ void EffectParser::statusBody(const std::string& where, const Json& j, int idx) 
         for (auto& [n, b] : flags) if (f.str() == n) { s.flags |= b; ok = true; }
         if (!ok) fail(where, "unknown status flag '" + f.str() + "'");
     }
-    for (auto& m : j["mods"].items()) s.mods.push_back(statMod(where + " mods", m));
+    for (auto& m : j["mods"].items()) s.mods.push_back(timedStatMod(where + " mods", m));
     if (const Json& t = j["tick"]; t.isObject()) {
         s.tickAmount = t.getFx("damage") - t.getFx("heal");
         s.tickDamageType = damageIdx(t.getStr("damageType", "normal"));
@@ -383,7 +401,7 @@ EffectDef EffectParser::effect(const std::string& where, const Json& ej) {
     e.chance = ej.getFx("chance", e.chance);
     e.targetChance = ej.getFx("targetChance", e.targetChance);
     e.damageType = damageIdx(ej.getStr("damageType", "normal"));
-    if (e.kind == EffectKind::Buff) e.mod = statMod(w, ej);
+    if (e.kind == EffectKind::Buff) e.mod = timedStatMod(w, ej);
     if (ej.has("unit")) e.spawnType = typeRef(w, ej.getStr("unit"));
     if (e.kind == EffectKind::Spawn && e.spawnType == kNoType) fail(w, "needs 'unit'");
     e.count = int(ej.getInt("count", 1));
