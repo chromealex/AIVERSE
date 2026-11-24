@@ -243,6 +243,74 @@ void assetHistorySessionContract(){
     AIVERSE_TEST_CHECK(call(R"({"id":6,"method":"studio.assetHistory","params":{}})")["result"]["steps"].size()==0);
     fs::remove_all(root);
 }
+void agentScopedHistoryContract(){
+    using namespace aiverse;namespace fs=std::filesystem;
+    const auto root=fs::temp_directory_path()/("studio-agent-scopes-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(root/"content");
+    std::ofstream(root/"game.json")<<R"({"name":"Fixture","module":"game","rules":"rules.json"})";
+    std::ofstream(root/"rules.json")<<R"({"types":{"unit":{"health":{"max":100}}}})";
+    studio::StudioSession session(root.string(),root.string());
+    auto call=[&](const char* text){return session.dispatch(Json::parse(text));};
+    auto info=[&]{
+        const auto result=call(R"({"id":1,"method":"studio.agentInfo","params":{}})");
+        AIVERSE_TEST_CHECK(!result.has("error"));return result["result"];
+    };
+    const auto initial=info();const int port=int(initial.getInt("port"));
+    std::string token;AIVERSE_TEST_CHECK(editor::net::readAgentToken(port,token));
+    editor::net::LineClient client;AIVERSE_TEST_CHECK(client.connect(port));
+    auto exchange=[&](const Json& request){
+        AIVERSE_TEST_CHECK(client.send(request.dump(-1)));
+        std::string line;
+        for(int i=0;i<100;++i){
+            session.pollAgentLink();
+            if(client.recv(line,10))return Json::parse(line)["result"];
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        throw std::runtime_error("Agent link fixture timed out");
+    };
+    Json hello=Json::object();hello.set("id",Json::number(int64_t(1)));hello.set("method",Json::string("hello"));hello.set("token",Json::string(token));
+    AIVERSE_TEST_CHECK(exchange(hello).getBool("ok"));
+    auto agent=[&](const std::string& name,const Json& arguments){
+        Json request=Json::object(),params=Json::object();
+        request.set("id",Json::number(int64_t(2)));request.set("method",Json::string("call"));
+        params.set("name",Json::string(name));params.set("arguments",arguments);request.set("params",std::move(params));
+        return exchange(request);
+    };
+    AIVERSE_TEST_CHECK(!agent("rules_set",Json::parse(R"({"path":"types.unit.health.max","value":200})")).has("error"));
+    auto assets=agent("studio_asset_history",Json::object());
+    Json folder=Json::object();folder.set("expectedProject",assets["project"]);folder.set("expectedVersion",assets["version"]);
+    folder.set("parent",Json::string(""));folder.set("name",Json::string("AgentFolder"));
+    AIVERSE_TEST_CHECK(!agent("studio_asset_folder_create",folder).has("error"));
+    AIVERSE_TEST_CHECK(agent("studio_asset_folder_create",folder).has("error")); // stale owner version
+    auto changes=info()["changes"];
+    Json projectEdit,assetEdit;
+    for(const auto& change:changes.items()){
+        if(change.getStr("scope")=="project")projectEdit=change;
+        if(change.getStr("scope")=="assets")assetEdit=change;
+    }
+    AIVERSE_TEST_CHECK(projectEdit.getBool("canUndo")&&assetEdit.getBool("canUndo"));
+    AIVERSE_TEST_CHECK(info().getInt("startPosition",-1)==-1);
+    auto step=[&](const Json& edit,const std::string& direction,const std::string& version){
+        Json request=Json::object(),params=Json::object();
+        request.set("id",Json::number(int64_t(3)));request.set("method",Json::string("studio.agentHistoryStep"));
+        params.set("scope",edit["scope"]);params.set("historyId",edit["historyId"]);
+        params.set("direction",Json::string(direction));params.set("expectedVersion",Json::string(version));
+        request.set("params",std::move(params));return session.dispatch(request);
+    };
+    AIVERSE_TEST_CHECK(step(projectEdit,"undo","stale").has("error"));
+    AIVERSE_TEST_CHECK(!step(projectEdit,"undo",projectEdit.getStr("historyVersion")).has("error"));
+    AIVERSE_TEST_CHECK(session.workspace().project.rulesJson["types"]["unit"]["health"]["max"].integer()==100);
+    AIVERSE_TEST_CHECK(!step(assetEdit,"undo",assetEdit.getStr("historyVersion")).has("error"));
+    AIVERSE_TEST_CHECK(!fs::exists(root/"content"/"AgentFolder"));
+    changes=info()["changes"];
+    for(const auto& change:changes.items())if(change.getStr("scope")=="assets")assetEdit=change;
+    AIVERSE_TEST_CHECK(assetEdit.getBool("canRedo"));
+    AIVERSE_TEST_CHECK(!step(assetEdit,"redo",assetEdit.getStr("historyVersion")).has("error"));
+    AIVERSE_TEST_CHECK(fs::exists(root/"content"/"AgentFolder"));
+    client.close();session.openProject(root.string());
+    AIVERSE_TEST_CHECK(step(assetEdit,"undo",assetEdit.getStr("historyVersion")).has("error"));
+    fs::remove_all(root);
+}
 void projectHistoryBudgetContract(){
     using namespace aiverse::editor;
     ProjectHistory history;
@@ -895,6 +963,6 @@ int main() {
     AIVERSE_TEST_CHECK(openRejected);
     authoredEntityWorkflow();
     entityWorkflow();
-    mapCompoundHistoryContract();projectFileEditContract();projectDocumentJournalContract();projectOwnerSaveContract();projectHistoryContract();projectHistoryBudgetContract();assetHistorySessionContract();projectFileRecoveryWorkflow();
+    mapCompoundHistoryContract();projectFileEditContract();projectDocumentJournalContract();projectOwnerSaveContract();projectHistoryContract();projectHistoryBudgetContract();assetHistorySessionContract();agentScopedHistoryContract();projectFileRecoveryWorkflow();
     std::cout << "studio session contract PASS\n";
 }

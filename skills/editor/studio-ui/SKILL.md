@@ -116,6 +116,9 @@ Assets toolbar Trash opens AssetTrashDialog. Native assetTrashList returns paged
 ## Durable project document transactions (S6c.5)
 All existing-file ProjectFileEdits operations use one project-local journal in .aiverse-cache/project-document-journal with a stable advisory lock, bounded immutable before/after snapshots and SHA-256 manifest. Publish only after pending marker and snapshots are flushed; commit marker selects the new bytes. Recovery validates every dependency, path, permissions and snapshot before rollback, refuses unknown external bytes, and retains the pending journal for inspection. Project::load recovers before parsing; Studio resolves the inner document journal before outer asset move recovery. Project/asset history version tokens include a per-owner epoch; do not reuse stale tokens after restart. POSIX fsync/F_FULLFSYNC is used; Windows file flush/write-through does not establish equivalent directory durability without testing. Existing files only, not a global project save transaction or a lock against non-cooperating external writers.
 
+## Agent owner history (S6d.1)
+Record linked agent actions by native map ID or ProjectHistory entry ID, scope and source document. Project/asset entries have stable epoch-qualified IDs distinct from ordinal positions. Resolve current boundary and version on every navigation; studio.agentHistoryStep verifies membership, scope, direction and version before calling the same native owner. studio.agentUndoAll rechecks map-only agent suffix, never navigates a mixed project/assets run. Agent panel displays untracked/evicted edits as unavailable, not undoable. Four explicit linked Studio asset adapters are discoverable through MCP; local fallback fails closed. No arbitrary Studio RPC forwarding, destructive asset/purge exposure or cross-scope atomic undo. See docs/mcp-agent-link.md.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

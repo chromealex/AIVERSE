@@ -86,3 +86,8 @@ test('browser demo cannot browse or mutate native asset recovery storage',async(
   await assert.rejects(mockInvoke('studio.assetTrashList',{expectedProject:'/project',offset:0,limit:50}),/native AIVERSE host/);
   await assert.rejects(mockInvoke('studio.assetTrashApply',{expectedProject:'/project',id:'bad',action:'purge',token:'bad',expectedVersion:'bad',confirmed:true}),/native AIVERSE host/);
 });
+
+test('agent scoped history mutations require a native session',async()=>{
+  await assert.rejects(mockInvoke('studio.agentHistoryStep',{scope:'assets',historyId:'forged',expectedVersion:'stale',direction:'undo'}),/native Studio/);
+  await assert.rejects(mockInvoke('studio.agentUndoAll',{expectedVersion:'stale'}),/native Studio/);
+});

@@ -673,8 +673,10 @@ bool StudioSession::pollAgentLink() {
         if(ws_.map.data.entities.size()!=entities){clearSelection();dropOrdinalFlags();}
         const bool dirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
         const bool readOnly=studioToolReadOnly(name)||name=="studio_asset_catalog"||name=="studio_asset_history";
+        // Known native asset no-ops do not invent an untracked mutation.
+        const bool nativeNoop=name=="studio_asset_meta_patch"&&assetHistory_.version()==assetBefore&&!failed;
         const bool ownerChanged=ws_.map.historyMark()!=before||ws_.project.documentHistory.version()!=projectBefore||assetHistory_.version()!=assetBefore;
-        const bool edit=!failed&&(ownerChanged||dirty!=wasDirty||!readOnly);
+        const bool edit=!failed&&(ownerChanged||dirty!=wasDirty||(!readOnly&&!nativeNoop));
         if(edit||ownerChanged)changed=true;
         // Map-only Undo all never crosses untracked or non-map changes.
         if((edit&&(links.empty()||std::any_of(links.begin(),links.end(),[](const auto& l){return l.first!="map";})))||

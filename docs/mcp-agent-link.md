@@ -44,3 +44,7 @@ back to its local workspace as it already did when no editor was running.
 Code: `apps/editor/core/Net.{h,cpp}` (`LineServer`, `agentTokenPath`, `readAgentToken`),
 `apps/editor/EditorAgent.cpp` (`Editor::pollAgentLink`), `tools/mcp/main.cpp`
 (`EditorLink::connectAndHello`). Test: `tests/editor/agent_link_tests.cpp`.
+
+## HTML5 Studio owner history (S6d)
+
+The authenticated link recognizes four explicit Studio-only asset adapters: `studio_asset_history`, `studio_asset_catalog`, `studio_asset_meta_patch`, and `studio_asset_folder_create`. They are discoverable in the shared MCP registry but refuse local fallback/legacy editor execution. Get the active project and version from history; catalog requires expectedProject; mutations also require expectedVersion. No native picker, arbitrary browser RPC, purge or destructive asset mutation is exposed. Existing Rules/Manifest saves record their native project steps where supported. Agent Panel resolves retained map/project/assets IDs and allows one-step Undo/Redo at that owner's boundary; only an exact agent-only map suffix may use bulk undo. Unsupported operations remain untracked. Mixed scopes are not a global atomic undo transaction.
