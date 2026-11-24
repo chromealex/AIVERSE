@@ -21,6 +21,7 @@
 #include "apps/studio-native/StudioPlanetPreview.h"
 #include "apps/studio-native/StudioPlanetProcessOverlays.h"
 #include "apps/studio-native/StudioPlanetForestOverlays.h"
+#include "apps/studio-native/StudioForestCameraFocus.h"
 #include "apps/studio-native/StudioPlanetForestTextures.h"
 #include "apps/studio-native/StudioPlanetRegionEditing.h"
 #include "apps/studio-native/StudioPlanetGravityEditing.h"
@@ -169,6 +170,12 @@ public:
     std::string planetSceneBody(const std::string& project,const std::string& path,uint64_t revision)const{
         return planetMode_&&planetPreview_&&planetModelProject_==project&&planetMapPath_==path&&planetRevision_==revision&&
             (planetSceneBodyOverride(project,path).empty()||planetSceneBodyOverride(project,path)==planetPreview_->bodyId)?planetPreview_->bodyId:std::string{};
+    }
+    std::optional<StudioForestCameraFocus> planetForestCamera(const std::string& project,const std::string& path,uint64_t revision,int width,int height)const{
+        const auto body=planetSceneBody(project,path,revision);
+        if(body.empty()||!cameraInitialized_)return {};
+        StudioForestCameraFocus focus{body,viewCamera(),width,height};
+        return focus.valid()?std::optional<StudioForestCameraFocus>(focus):std::nullopt;
     }
     void setPlanetLiveSnapshot(Json snapshot,std::string project,std::string path,uint64_t revision,std::string layer,std::string aetherLayer){
         planetLiveSnapshot_=std::move(snapshot);planetLiveProject_=std::move(project);

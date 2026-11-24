@@ -320,7 +320,7 @@ void StudioHost::tickGame() {
     invalidate();
     if(wpLiveOptions_.live && now-wpLiveRefresh_>=.25){
         wpLiveRefresh_=now;
-        wpLiveSnapshot_=game_->planetMatch()&&!worldProcessPlanetMapCurrent()?Json():game_->ecologyState(wpLiveOptions_,wpLiveOptions_.forest?worldProcessSceneBody():std::string{});
+        wpLiveSnapshot_=sampleWorldProcessLive();
         rebuildOverlay();
     }
 }
@@ -848,6 +848,19 @@ std::string StudioHost::worldProcessSceneBody(){
     const auto& ws=session_->workspace();
     if(!ws.map.data.planet())return {};
     return onScene([&]{return preview_->planetSceneBody(ws.project.dir,ws.map.path,ws.map.revision);});
+}
+std::optional<StudioForestCameraFocus> StudioHost::worldProcessForestCamera(){
+    if(projectLoading_||!session_||!preview_||!placement_.visible)return {};
+    const auto& ws=session_->workspace();
+    if(!ws.map.data.planet())return {};
+    return onScene([&]{return preview_->planetForestCamera(ws.project.dir,ws.map.path,ws.map.revision,placement_.pixelsW,placement_.pixelsH);});
+}
+Json StudioHost::sampleWorldProcessLive(){
+    if(!game_||!wpLiveOptions_.live||(game_->planetMatch()&&!worldProcessPlanetMapCurrent()))return {};
+    if(!wpLiveOptions_.forest)return game_->ecologyState(wpLiveOptions_);
+    const auto camera=worldProcessForestCamera();
+    const auto body=camera?camera->body:worldProcessSceneBody();
+    return game_->ecologyState(wpLiveOptions_,body,camera);
 }
 bool StudioHost::worldProcessPlanetMapCurrent() const {
     if(projectLoading_||!session_||!game_||!game_->launchedMapCurrent()||wpLivePlanetMapPath_.empty())return false;
@@ -2198,7 +2211,8 @@ bool StudioHost::handleHostMethod(const Json& req) {
             if(wpLiveOptions_.live&&wpLiveOptions_.forest&&game_->planetSnapshotCurrent(wpLiveSnapshot_)&&
                wpLiveSnapshot_["forest"].getBool("active")&&wpLiveSnapshot_["forest"].getStr("focusBody")==body)
                 return wpLiveSnapshot_["forest"];
-            return game_->planetForestState(body);
+            const auto camera=worldProcessForestCamera();
+            return game_->planetForestState(camera?camera->body:body,camera);
         }
         Json out=Json::object();out.set("active",Json::fromBool(false));return out;
     });
@@ -2221,8 +2235,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
         }
         if(next!=wpLiveOptions_){
             wpLiveOptions_=next;
-            wpLiveSnapshot_=wpLiveOptions_.live&&game_&&(!game_->planetMatch()||worldProcessPlanetMapCurrent())
-                ?game_->ecologyState(wpLiveOptions_,wpLiveOptions_.forest?worldProcessSceneBody():std::string{}):Json();
+            wpLiveSnapshot_=sampleWorldProcessLive();
             wpLiveRefresh_=platform_.now();
             rebuildOverlay();
         }

@@ -4,9 +4,11 @@
 #include "aiverselib/world/PlanetConsequenceOwner.h"
 #include "engine/world/TerraWeaveForestHarvestEcs.h"
 #include "apps/studio-native/StudioPlanetForestWeather.h"
+#include "apps/studio-native/StudioForestCameraFocus.h"
 namespace aiverse::studio {
 inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surface,uint32_t tick,size_t limit=128,
-        const std::vector<evolve::PlanetWeatherMapping>& weather={},const std::string& focusBody={}){
+        const std::vector<evolve::PlanetWeatherMapping>& weather={},const std::string& focusBody={},
+        const std::optional<StudioForestCameraFocus>& camera={}){
     limit=std::min(limit,size_t(128));
     namespace tw=terraweave;namespace ev=evolve;namespace wp=lib::worldprocess;
     Json out=Json::object(),rows=Json::array();
@@ -42,8 +44,63 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
     out.set("windZonesCapped",Json::fromBool(!localWindAllowed));
     const bool stormsAllowed=ecs.countExisting<physis::StormEvent>()<=1024;
     out.set("stormsCapped",Json::fromBool(!stormsAllowed));
-    size_t fallen=0,spent=0,physical=0,rejected=0,eligible=0;
+    const bool cameraRank=camera&&camera->valid()&&camera->body==focusBody&&!focusBody.empty();
+    out.set("cameraPrioritized",Json::fromBool(cameraRank));
+    // Rank cheap immutable candidates first; weather and JSON rows are sampled
+    // only after the cap. Keep global summary counters independent of ranking.
+    struct RankedPlant {
+        const tw::AnchoredPlant* plant=nullptr;
+        int group=99;
+        float distance=0,targetDistance=0;
+    };
+    std::vector<RankedPlant> ranked;ranked.reserve(roots->rooted.size());
+    size_t nearView=0;
     for(const auto& plant:roots->rooted){
+        RankedPlant entry;entry.plant=&plant;
+        if(cameraRank){
+            const tw::AnchoredPlantId id{plant.anchor.speciesId,plant.anchor.plantKey};
+            const auto binding=mapped.find(id);
+            if(binding!=mapped.end()&&binding->second->bodyId==focusBody){
+                const auto frame=wp::surfaceFrame(&surface,binding->second->plantedPosition);
+                if(frame&&surface.bodies[size_t(frame->body)].id==focusBody){
+                    const auto anchor=game::Surface::anchor(frame->body);
+                    Vec3 point=binding->second->plantedPosition;
+                    const auto receipt=current.find(id);
+                    const auto body=receipt!=current.end()&&receipt->second->acknowledged?
+                        bodies.find(wp::consequenceKey(receipt->second->fall)):bodies.end();
+                    bool physical=false;
+                    if(body!=bodies.end()&&body->second->body==focusBody){
+                        const auto& record=*body->second;
+                        const auto motionFrame=wp::surfaceFrame(&surface,record.motion.position);
+                        if(record.shape==wp::ConsequenceShape::Capsule&&wp::validConsequence(record)&&motionFrame&&
+                           motionFrame->body==frame->body&&record.key.tick<=tick&&
+                           (record.lastMotionTick==UINT32_MAX||record.lastMotionTick<=tick)){
+                            point=record.motion.position;physical=true;
+                        }
+                    }
+                    const auto local=point-anchor;
+                    const render::float3 p{float(local.x.toDouble()),float(local.y.toDouble()),float(local.z.toDouble())};
+                    const auto [group,distance,targetDistance]=camera->rank(p,float(surface.bodies[size_t(frame->body)].radius.toDouble()));
+                    const auto log=std::lower_bound(wood->ledger.logs.begin(),wood->ledger.logs.end(),id,
+                        [](const auto& r,auto key){return r.id<key;});
+                    const bool retired=(log!=wood->ledger.logs.end()&&log->id==id&&!log->remainingUnits)||
+                        (!physical&&(plant.fallen||(harvest&&tw::isForestHarvested(*harvest,id))));
+                    entry.group=group+(retired?3:0);entry.distance=distance;entry.targetDistance=targetDistance;
+                    if(group==0&&!retired)++nearView;
+                }
+            }
+        }
+        ranked.push_back(entry);
+    }
+    if(cameraRank)std::sort(ranked.begin(),ranked.end(),[](const RankedPlant& a,const RankedPlant& b){
+        const auto& x=a.plant->anchor;const auto& y=b.plant->anchor;
+        return std::tie(a.group,a.distance,a.targetDistance,x.speciesId,x.plantKey)<
+               std::tie(b.group,b.distance,b.targetDistance,y.speciesId,y.plantKey);
+    });
+    if(cameraRank)out.set("viewCandidates",Json::number(int64_t(nearView)));
+    size_t fallen=0,spent=0,physical=0,rejected=0,eligible=0;
+    for(const auto& rankedPlant:ranked){
+        const auto& plant=*rankedPlant.plant;
         const tw::AnchoredPlantId id{plant.anchor.speciesId,plant.anchor.plantKey};
         const auto b=mapped.find(id);if(b==mapped.end()){++rejected;continue;}
         const auto frame=wp::surfaceFrame(&surface,b->second->plantedPosition);
@@ -63,6 +120,7 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
         Json row=Json::object();
         row.set("species",Json::number(int64_t(id.speciesId)));row.set("key",Json::string(std::to_string(id.key)));
         row.set("body",Json::string(b->second->bodyId));row.set("cell",Json::number(int64_t(frame->cell)));
+        if(cameraRank)row.set("viewPriority",Json::number(int64_t(rankedPlant.group)));
         const auto anchor=game::Surface::anchor(frame->body);
         row.set("position",xyz(b->second->plantedPosition-anchor));
         row.set("up",xyz(frame->up));row.set("east",xyz(frame->east));

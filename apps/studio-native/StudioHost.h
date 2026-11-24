@@ -259,6 +259,8 @@ private:
     uint64_t wpLivePlanetRevision_=0;
     bool worldProcessPlanetMapCurrent() const;
     std::string worldProcessSceneBody();
+    std::optional<StudioForestCameraFocus> worldProcessForestCamera();
+    Json sampleWorldProcessLive();
     std::int64_t wpPreviewRevision_=-1;
     std::string wpPreviewOwner_;
     std::string wpPreviewSelection_;
