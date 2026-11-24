@@ -39,6 +39,7 @@ struct RuntimeBuildingRequest {
     std::array<float,4> cornerChamfers{};
     BuildingInteriorProfile interiorProfile=BuildingInteriorProfile::None;
     uint32_t furnitureDensity=3;
+    bool interiorLighting=false,interiorDecor=false;
     std::vector<BuildingRoomUseOverride> roomUses;
 };
 
@@ -152,6 +153,7 @@ public:
             recipe.footprint=request.footprint;recipe.floorFootprints=request.floorFootprints;
             recipe.walkableSetbacks=request.walkableSetbacks;recipe.cornerChamfers=request.cornerChamfers;
             recipe.interiorProfile=request.interiorProfile;recipe.furnitureDensity=request.furnitureDensity;recipe.roomUses=request.roomUses;
+            recipe.interiorLighting=request.interiorLighting;recipe.interiorDecor=request.interiorDecor;
             return generateRecipe(request.style,recipe,request.origin,request.yaw);
         }
         const auto* kind=it->second.structureKind(request.function);

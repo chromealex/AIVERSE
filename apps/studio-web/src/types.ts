@@ -254,6 +254,7 @@ export interface StudioBuildingRequest {
   cornerChamfers?:[number,number,number,number];
   interiorProfile?:'none'|'residential'|'office'|'industrial'|'commercial'|'mixed';
   furnitureDensity?:number;
+  interiorLighting?:boolean; interiorDecor?:boolean;
   roomUses?:Array<{floor:number;x:number;z:number;use:StudioBuildingRoomUse}>;
   mode?: 'features' | 'preset';
   features?: StudioBuildingFeature[];
@@ -268,6 +269,8 @@ export interface StudioBuildingPreview {
   solids?:number; connections?:number; floors?:number; roomsX?:number; roomsZ?:number; footprint?:string[]; floorFootprints?:string[][];
   footprintPolygon?:Array<[number,number]>;
   roomUses?:Array<{roomId:string;use:StudioBuildingRoomUse}>;
+  interiorLights?:Array<{id:string;roomId:string;floor:number;x:number;z:number;intensity:number;range:number}>;
+  interiorDecor?:Array<{id:string;roomId:string;floor:number;x:number;z:number}>;
   furniture?:Array<{id:string;roomId:string;floor:number;kind:string;x0:number;z0:number;x1:number;z1:number}>;
   roofSections?:Array<{x0:number;z0:number;x1:number;z1:number;base:number;rise:number;ridgeAlongX:boolean}>;
   terraces?:Array<{floor:number;x:number;z:number;height:number}>;

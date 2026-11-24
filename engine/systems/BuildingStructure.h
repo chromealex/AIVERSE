@@ -12,11 +12,13 @@ namespace aiverse::lib::systems {
 // All zero preserves legacy style dimensions. Explicit dimensions are the final envelope,
 // including projecting components, props, foundations and gates in the mesh.
 struct StructureSize{float width=0,height=0,depth=0;};
+struct StyledBuildingLight {std::string id;std::array<float,3> position,color;float intensity=1,range=0;};
 struct StyledStructure{StyledMesh mesh;std::vector<BuildingBox> boxes;std::vector<Vec3> gates;
     StructureSize constructionSize{}; // actual authored body dimensions, before any rigid translation
     StructureSize fitResidual{}; // signed unsatisfied W/H/D after last attempt
     std::string fitError; // empty when successful; intended for Studio diagnostics
     uint32_t fitIterations=0;
+    std::vector<StyledBuildingLight> lights;
 };   // gates: ground points in front of each gate
 namespace buildingStyleDetail {
 using P3=std::array<float,3>;

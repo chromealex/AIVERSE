@@ -81,6 +81,10 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
         if(std::string(key)=="roomsX")recipe.roomsX=uint32_t(n);
         else recipe.roomsZ=uint32_t(n);
     }
+    for(const char* key:{"interiorLighting","interiorDecor"})if(json.has(key)){
+        if(json[key].type()!=Json::Type::Bool)throw JsonError(path+"."+key+": expected boolean");
+        if(std::string(key)=="interiorLighting")recipe.interiorLighting=json.getBool(key);else recipe.interiorDecor=json.getBool(key);
+    }
     if(json.has("interiorProfile")){
         bool found=false;
         for(int i=0;i<=int(BuildingInteriorProfile::Mixed);++i)if(json.getStr("interiorProfile")==buildingInteriorProfileName(BuildingInteriorProfile(i))){
@@ -445,6 +449,19 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
         for(const auto& p:prism.polygon){lower.push_back({p[0],prism.y0,p[1]});upper.push_back({p[0],prism.y1,p[1]});}
         const int material=prism.part==BuildingGraphPart::Floor?ground:prism.part==BuildingGraphPart::Roof?(style.roof>=0?style.roof:trim):hull;
         mesh.prism(material,lower,upper);
+    }
+    for(const auto& light:graph.interiorLights){
+        const int glow=sm.glow>=0?sm.glow:trim;
+        mesh.box(trim,light.x-.22f,light.ceiling-.08f,light.z-.22f,light.x+.22f,light.ceiling,light.z+.22f);
+        mesh.box(glow,light.x-.17f,light.ceiling-.16f,light.z-.17f,light.x+.17f,light.ceiling-.08f,light.z+.17f);
+        const auto pos=buildingDetail::turn(Vec3{fcoord(light.x),fcoord(light.y),fcoord(light.z)},yaw,fcoord(W),fcoord(D))+origin;
+        result.building.lights.push_back({light.id,{float(pos.x.toDouble()),float(pos.y.toDouble()),float(pos.z.toDouble())},light.color,light.intensity,light.range});
+    }
+    for(const auto& item:graph.interiorDecor){
+        const float cx=(item.x0+item.x1)*.5f,cz=(item.z0+item.z1)*.5f;
+        mesh.box(trim,item.x0,item.y0,item.z0,item.x1,item.y0+.07f,item.z1);
+        mesh.box(dark,cx-.045f,item.y0+.07f,cz-.045f,cx+.045f,item.y1-.07f,cz+.045f);
+        mesh.box(style.panels.accent>=0?style.panels.accent:trim,item.x0,item.y1-.07f,item.z0,item.x1,item.y1,item.z1);
     }
     for(const auto& socket:graph.sockets){
         BuildingFeatureAnchor anchor;

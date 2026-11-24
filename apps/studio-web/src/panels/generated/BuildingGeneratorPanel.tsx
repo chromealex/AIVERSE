@@ -167,6 +167,8 @@ export default function BuildingGeneratorPanel({
   const [cornerChamfers,setCornerChamfers]=useState<[number,number,number,number]>([0,0,0,0]);
   const [interiorProfile,setInteriorProfile]=useState<NonNullable<StudioBuildingRequest['interiorProfile']>>('none');
   const [furnitureDensity,setFurnitureDensity]=useState(3);
+  const [interiorLighting,setInteriorLighting]=useState(false);
+  const [interiorDecor,setInteriorDecor]=useState(false);
   const [roomUses,setRoomUses]=useState<NonNullable<StudioBuildingRequest['roomUses']>>([]);
   const [editFloor,setEditFloor]=useState(0);
   const shaped=footprint.some(row=>row.includes('0'))||floorFootprints.some(mask=>mask.some(row=>row.includes('0')));
@@ -284,7 +286,7 @@ export default function BuildingGeneratorPanel({
       setDepth(String(item.depth));setSeed(String(item.seed));
       setFloors(String(item.floors??1));
       setRoomsX(String(item.roomsX??1));setRoomsZ(String(item.roomsZ??1));setFootprint(item.footprint??[]);setFloorFootprints(item.floorFootprints??[]);setWalkableSetbacks(item.walkableSetbacks??false);setCornerChamfers(item.cornerChamfers??[0,0,0,0]);setEditFloor(0);
-      setInteriorProfile(item.interiorProfile??'none');setFurnitureDensity(item.furnitureDensity??3);setRoomUses(item.roomUses??[]);
+      setInteriorProfile(item.interiorProfile??'none');setFurnitureDensity(item.furnitureDensity??3);setInteriorLighting(item.interiorLighting??false);setInteriorDecor(item.interiorDecor??false);setRoomUses(item.roomUses??[]);
       setFeatures((item.features??[]).map(f=>({...makeFeature(f.kind),...f})));
       setMaterialBindings(item.materialBindings??{});
       clearGenerated();
@@ -457,6 +459,8 @@ export default function BuildingGeneratorPanel({
     cornerChamfers:mode==='features'&&cornerChamfers.some(c=>c!==0)?cornerChamfers:undefined,
     interiorProfile:mode==='features'?interiorProfile:undefined,
     furnitureDensity:mode==='features'&&interiorProfile!=='none'?furnitureDensity:undefined,
+    interiorLighting:mode==='features'&&interiorProfile!=='none'?interiorLighting:undefined,
+    interiorDecor:mode==='features'&&interiorProfile!=='none'?interiorDecor:undefined,
     roomUses:mode==='features'&&interiorProfile!=='none'&&roomUses.length?roomUses:undefined
   });
   // A seed is not a request identity. Include all authoring inputs and the project.
@@ -996,6 +1000,12 @@ export default function BuildingGeneratorPanel({
               onChange={e=>{setFurnitureDensity(Number(e.target.value));clearGenerated();}}>
               {[0,1,2,3,4].map(n=><option key={n} value={n}>{n===0?'Room uses only':n}</option>)}
             </StudioSelect>
+          </StudioField>
+          <StudioField label="Ceiling fixtures and lights" htmlFor="abg-interior-light">
+            <StudioSelect id="abg-interior-light" value={interiorLighting?'on':'off'} disabled={busy} onChange={e=>{setInteriorLighting(e.target.value==='on');clearGenerated();}}><option value="off">Off</option><option value="on">Automatic</option></StudioSelect>
+          </StudioField>
+          <StudioField label="Furniture-top decorations" htmlFor="abg-interior-decor">
+            <StudioSelect id="abg-interior-decor" value={interiorDecor?'on':'off'} disabled={busy} onChange={e=>{setInteriorDecor(e.target.value==='on');clearGenerated();}}><option value="off">Off</option><option value="on">Automatic</option></StudioSelect>
           </StudioField>
           <StudioButton variant="secondary" disabled={busy||!roomUses.length} onClick={()=>{setRoomUses([]);clearGenerated();}}>Clear room overrides</StudioButton>
           <small className="abg__note">Override room use on the current editing floor. Entrance, shaft and terrace-access rooms remain empty circulation spaces.</small>

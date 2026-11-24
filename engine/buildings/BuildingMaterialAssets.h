@@ -150,7 +150,7 @@ inline std::unique_ptr<render::Model> runtimeTexturedBuildingModel(
 inline std::unique_ptr<render::Model> runtimeAtlasBuildingModel(
     const StyledStructure& building,const std::string& name="procedural-building-atlas"){
     auto atlas=lib::systems::buildUniqueBuildingAtlas(building.mesh);
-    StyledStructure visual;visual.mesh=std::move(atlas.mesh);
+    StyledStructure visual;visual.mesh=std::move(atlas.mesh);visual.lights=building.lights;
     auto model=runtimeBuildingModel(visual,name);
     for(auto& source:atlas.maps){
         render::Image image;image.name="building-atlas-"+std::to_string(model->images.size());

@@ -69,6 +69,12 @@ inline std::unique_ptr<render::Model> runtimeBuildingModel(
     node.name=name;
     node.mesh=0;
     model->nodes.push_back(std::move(node));
+    for(const auto& source:building.lights){
+        render::ModelLight light;light.name=source.id;light.color={source.color[0],source.color[1],source.color[2]};
+        light.intensity=source.intensity;light.range=source.range;
+        render::Node node;node.name=source.id;node.t={source.position[0],source.position[1],source.position[2]};
+        node.light=int(model->lights.size());model->lights.push_back(std::move(light));model->nodes.push_back(std::move(node));
+    }
     model->finalize(); // calculates primitive/node/model bounds on CPU
     return model;
 }

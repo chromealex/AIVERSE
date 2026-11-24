@@ -21,6 +21,7 @@ inline std::string num(float v){std::ostringstream out;out.imbue(std::locale::cl
 inline std::string quoted(const std::string& value){return aiverse::Json::string(value).dump(-1);}
 struct Glb{
     std::vector<uint8_t> bin;std::string accessors,views,meshes,nodes,materials,images,textures;int nAcc=0,nView=0,nMesh=0,nNode=0,nMat=0;
+    std::string punctualLights;int nLight=0;
     static void sep(std::string& s){if(!s.empty())s+=",";}
     int view(const void* data,size_t bytes,int target){while(bin.size()%4)bin.push_back(0);size_t off=bin.size();auto* p=static_cast<const uint8_t*>(data);bin.insert(bin.end(),p,p+bytes);
         sep(views);views+="{\"buffer\":0,\"byteOffset\":"+std::to_string(off)+",\"byteLength\":"+std::to_string(bytes)+",\"target\":"+std::to_string(target)+"}";return nView++;}
@@ -192,10 +193,18 @@ struct Glb{
         sep(meshes);meshes+="{\"name\":"+quoted(name)+",\"primitives\":["+prims+"]}";
         sep(nodes);nodes+="{\"name\":"+quoted(name)+",\"mesh\":"+std::to_string(nMesh++)+"}";nNode++;
     }
+    void addLights(const std::vector<StyledBuildingLight>& lights){
+        for(const auto& l:lights){
+            sep(punctualLights);punctualLights+="{\"name\":"+quoted(l.id)+",\"type\":\"point\",\"color\":["+num(l.color[0])+","+num(l.color[1])+","+num(l.color[2])+"]"+
+                ",\"intensity\":"+num(l.intensity)+",\"range\":"+num(l.range)+"}";
+            sep(nodes);nodes+="{\"name\":"+quoted(l.id)+",\"translation\":["+num(l.position[0])+","+num(l.position[1])+","+num(l.position[2])+"]"+
+                ",\"extensions\":{\"KHR_lights_punctual\":{\"light\":"+std::to_string(nLight++)+"}}}";++nNode;
+        }
+    }
     void write(const std::string& path){
         while(bin.size()%4)bin.push_back(0);
         std::string scene;for(int i=0;i<nNode;++i){if(i)scene+=",";scene+=std::to_string(i);}
-        std::string json="{\"asset\":{\"version\":\"2.0\",\"generator\":\"aiverse_building_export\"},\"extensionsUsed\":[\"KHR_materials_emissive_strength\""+std::string(usesUvTransform?",\"KHR_texture_transform\"":"")+"],\"scene\":0,\"scenes\":[{\"nodes\":["+scene+"]}],"
+        std::string json="{\"asset\":{\"version\":\"2.0\",\"generator\":\"aiverse_building_export\"},\"extensionsUsed\":[\"KHR_materials_emissive_strength\""+std::string(usesUvTransform?",\"KHR_texture_transform\"":"")+std::string(nLight?",\"KHR_lights_punctual\"":"")+"],"+(nLight?"\"extensions\":{\"KHR_lights_punctual\":{\"lights\":["+punctualLights+"]}},":"")+"\"scene\":0,\"scenes\":[{\"nodes\":["+scene+"]}],"
             "\"nodes\":["+nodes+"],\"meshes\":["+meshes+"],\"materials\":["+materials+"],\"images\":["+images+"],\"textures\":["+textures+"],\"accessors\":["+accessors+"],\"bufferViews\":["+views+"],\"buffers\":[{\"byteLength\":"+std::to_string(bin.size())+"}]}";
         while(json.size()%4)json+=' ';
         std::ofstream f(path,std::ios::binary);if(!f)throw std::runtime_error("cannot write "+path);

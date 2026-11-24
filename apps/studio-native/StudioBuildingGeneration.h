@@ -522,6 +522,17 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
             furniture.push(std::move(row));
         }
         out.set("roomUses",std::move(roomUses));out.set("furniture",std::move(furniture));
+        Json lights=Json::array(),decor=Json::array();
+        for(const auto& item:detailed.graph.interiorLights){
+            Json row=Json::object();row.set("id",string(item.id));row.set("roomId",string(item.roomId));row.set("floor",Json::number(int64_t(item.floor)));
+            row.set("x",Json::number(double(item.x),3));row.set("z",Json::number(double(item.z),3));
+            row.set("intensity",Json::number(double(item.intensity),3));row.set("range",Json::number(double(item.range),3));lights.push(std::move(row));
+        }
+        for(const auto& item:detailed.graph.interiorDecor){
+            Json row=Json::object();row.set("id",string(item.id));row.set("roomId",string(item.roomId));row.set("floor",Json::number(int64_t(item.floor)));
+            row.set("x",Json::number(double((item.x0+item.x1)*.5f),3));row.set("z",Json::number(double((item.z0+item.z1)*.5f),3));decor.push(std::move(row));
+        }
+        out.set("interiorLights",std::move(lights));out.set("interiorDecor",std::move(decor));
         out.set("sockets",std::move(sockets));
         out.set("solids",Json::number(int64_t(detailed.graph.solids.size())));
         out.set("connections",Json::number(int64_t(detailed.graph.connections.size())));
@@ -684,6 +695,7 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
             const auto atlas=buildUniqueBuildingAtlas(model.mesh);
             glb.addAtlas(atlas,req.composeFeatures?"building-recipe":req.kind);
         }else glb.add(model.mesh,req.composeFeatures?"building-recipe":req.kind);
+        glb.addLights(model.lights);
         glb.write(temp.string());
         if(!fs::is_regular_file(temp)||fs::file_size(temp)<32)
             throw std::runtime_error("Building GLB export produced an invalid file");
@@ -787,6 +799,7 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
             if(req.functionalRecipe.interiorProfile!=BuildingInteriorProfile::None){
                 saved.set("interiorProfile",string(buildingInteriorProfileName(req.functionalRecipe.interiorProfile)));
                 saved.set("furnitureDensity",Json::number(int64_t(req.functionalRecipe.furnitureDensity)));
+                saved.set("interiorLighting",Json::fromBool(req.functionalRecipe.interiorLighting));saved.set("interiorDecor",Json::fromBool(req.functionalRecipe.interiorDecor));
                 Json uses=Json::array();for(const auto& edit:req.functionalRecipe.roomUses){
                     Json row=Json::object();row.set("floor",Json::number(int64_t(edit.floor)));
                     row.set("x",Json::number(int64_t(edit.x)));row.set("z",Json::number(int64_t(edit.z)));

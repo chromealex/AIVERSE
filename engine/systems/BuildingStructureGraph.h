@@ -69,6 +69,7 @@ struct FunctionalBuildingRecipe {
     std::array<float,4> cornerChamfers{};
     BuildingInteriorProfile interiorProfile=BuildingInteriorProfile::None;
     uint32_t furnitureDensity=3;
+    bool interiorLighting=false,interiorDecor=false;
     std::vector<BuildingRoomUseOverride> roomUses;
 };
 inline bool functionalCell(const FunctionalBuildingRecipe& r,int x,int z,uint32_t floor=0){
@@ -157,6 +158,8 @@ struct BuildingRoofSection {float x0=0,z0=0,x1=0,z1=0,base=0,rise=0;bool ridgeAl
 struct BuildingGraphVisualPrism {BuildingGraphPart part;float y0,y1;std::vector<std::array<float,2>> polygon;};
 struct BuildingGraphRoomUse {std::string roomId;BuildingRoomUse use;};
 struct BuildingGraphFurniture {std::string id,roomId;uint32_t floor;BuildingFurnitureKind kind;float x0,y0,z0,x1,y1,z1;};
+struct BuildingGraphInteriorLight {std::string id,roomId;uint32_t floor;float x,y,z,ceiling;std::array<float,3> color;float intensity,range;};
+struct BuildingGraphDecor {std::string id,roomId;uint32_t floor;float x0,y0,z0,x1,y1,z1;};
 struct BuildingStructureGraph {
     std::vector<BuildingGraphSolid> solids;
     std::vector<BuildingGraphSocket> sockets;
@@ -172,6 +175,8 @@ struct BuildingStructureGraph {
     std::vector<std::array<float,2>> footprintPolygon;
     std::vector<BuildingGraphRoomUse> roomUses;
     std::vector<BuildingGraphFurniture> furniture;
+    std::vector<BuildingGraphInteriorLight> interiorLights;
+    std::vector<BuildingGraphDecor> interiorDecor;
     explicit operator bool() const noexcept {return error.empty();}
 };
 inline const char* buildingFeatureName(BuildingFeatureKind kind) {
@@ -263,7 +268,7 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
         return "Invalid interior profile, furniture density or room override count";
     if(recipe.interiorProfile!=BuildingInteriorProfile::None&&chamfered)
         return "Furnishing chamfered rooms requires polygon-aware placement";
-    if(recipe.interiorProfile==BuildingInteriorProfile::None&&!recipe.roomUses.empty())
+    if(recipe.interiorProfile==BuildingInteriorProfile::None&&(!recipe.roomUses.empty()||recipe.interiorLighting||recipe.interiorDecor))
         return "Room use overrides require an enabled interior profile";
     for(size_t i=0;i<recipe.roomUses.size();++i){
         const auto& edit=recipe.roomUses[i];
@@ -536,6 +541,45 @@ inline void furnishFunctionalBuilding(BuildingStructureGraph& graph,const Functi
             graph.furniture.push_back({"furniture/"+room.id+"/"+std::to_string(zone),room.id,room.floor,kind,solid.x0,solid.y0,solid.z0,solid.x1,solid.y1,solid.z1});
             graph.solids.push_back(solid);
         }
+    }
+}
+
+// Fixtures are attached to real ceiling slabs; decor sits on static furniture.
+inline void decorateFunctionalBuilding(BuildingStructureGraph& graph,const FunctionalBuildingRecipe& recipe){
+    if(recipe.interiorLighting)for(const auto& room:graph.rooms){
+        const bool vertical=std::any_of(graph.connections.begin(),graph.connections.end(),[&](const auto& e){
+            return e.kind!=BuildingConnectionKind::Passage&&(e.from==room.id||e.to==room.id);
+        });
+        if(vertical||room.y1-room.y0<2.45f)continue;
+        const float mx=(room.x0+room.x1)*.5f,mz=(room.z0+room.z1)*.5f;
+        const float w=room.x1-room.x0,d=room.z1-room.z0;
+        // Max four lights per room, and only under an existing solid slab.
+        const int nx=w>=8.f?2:1,nz=d>=8.f?2:1;
+        for(int z=0;z<nz;++z)for(int x=0;x<nx;++x){
+            const float px=nx==1?mx:room.x0+w*(x+.5f)/nx;
+            const float pz=nz==1?mz:room.z0+d*(z+.5f)/nz;
+            const float ceiling=room.y1;
+            const bool supported=std::any_of(graph.solids.begin(),graph.solids.end(),[&](const auto& s){
+                return (s.part==BuildingGraphPart::Floor||s.part==BuildingGraphPart::Roof)&&
+                    std::abs(s.y0-ceiling)<.002f&&px-.22f>=s.x0&&px+.22f<=s.x1&&pz-.22f>=s.z0&&pz+.22f<=s.z1;
+            });
+            if(!supported)continue;
+            const bool blocked=std::any_of(graph.solids.begin(),graph.solids.end(),[&](const auto& s){
+                return s.y0<ceiling-.001f&&s.y1>ceiling-.22f&&s.x0<px+.22f&&s.x1>px-.22f&&s.z0<pz+.22f&&s.z1>pz-.22f;
+            });
+            if(blocked)continue;
+            const bool warm=recipe.interiorProfile==BuildingInteriorProfile::Residential;
+            graph.interiorLights.push_back({"light/"+room.id+"/"+std::to_string(z*nx+x),room.id,room.floor,
+                px,ceiling-.19f,pz,ceiling,warm?std::array<float,3>{1.f,.78f,.55f}:std::array<float,3>{.88f,.94f,1.f},
+                std::clamp(w*d/float(nx*nz)*3.f,35.f,220.f),std::clamp(std::max(w/nx,d/nz),3.f,12.f)});
+        }
+    }
+    if(recipe.interiorDecor)for(const auto& item:graph.furniture){
+        if(item.kind!=BuildingFurnitureKind::Desk&&item.kind!=BuildingFurnitureKind::Table&&item.kind!=BuildingFurnitureKind::Counter)continue;
+        const float x=(item.x0+item.x1)*.5f,z=(item.z0+item.z1)*.5f,y=item.y1;
+        const auto room=std::find_if(graph.rooms.begin(),graph.rooms.end(),[&](const auto& r){return r.id==item.roomId;});
+        if(room==graph.rooms.end()||y+.3f>room->y1-.3f)continue;
+        graph.interiorDecor.push_back({"decor/"+item.id,item.roomId,item.floor,x-.13f,y,z-.11f,x+.13f,y+.28f,z+.11f});
     }
 }
 
@@ -1153,7 +1197,7 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
     }
     if(std::any_of(recipe.cornerChamfers.begin(),recipe.cornerChamfers.end(),[](float c){return c>0.f;}))
         buildingChamferDetail::apply(graph,recipe);
-    if(graph)furnishFunctionalBuilding(graph,recipe);
+    if(graph){furnishFunctionalBuilding(graph,recipe);decorateFunctionalBuilding(graph,recipe);}
     return graph;
 }
 } // namespace aiverse::lib::systems

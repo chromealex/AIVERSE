@@ -54,6 +54,8 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
       {(preview.furniture??[]).filter(item=>item.floor===selectedFloor).map(item=>
         <rect key={item.id} x={item.x0} y={item.z0} width={item.x1-item.x0} height={item.z1-item.z0}
           fill="var(--au-accent)" fillOpacity={.55} stroke="var(--au-text)" strokeWidth={.06}><title>{item.kind} · {item.roomId}</title></rect>)}
+      {(preview.interiorLights??[]).filter(i=>i.floor===selectedFloor).map(i=><circle key={i.id} cx={i.x} cy={i.z} r={.25} fill="#e8bd65" stroke="var(--au-text)" strokeWidth={.06}><title>{i.id} · {i.intensity} cd</title></circle>)}
+      {(preview.interiorDecor??[]).filter(i=>i.floor===selectedFloor).map(i=><rect key={i.id} x={i.x-.12} y={i.z-.12} width={.24} height={.24} fill="var(--au-text)"><title>{i.id}</title></rect>)}
       {sockets.map(socket=>{
         const [x,,z]=socket.outside;
         const isSelected=socket.socketId===selected;

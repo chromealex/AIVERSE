@@ -53,7 +53,7 @@ int main(int argc,char** argv){
             auto result=generateFunctionalBuilding(st,recipe,{},yaw);
             if(!result)throw std::runtime_error(result.error);
             tris+=result.building.mesh.triangles();
-            glb.add(result.building.mesh,"building-recipe");
+            glb.add(result.building.mesh,"building-recipe");glb.addLights(result.building.lights);
             if(withGround)glb.add(ground(-8,-8,recipe.width+8,recipe.depth+8),"ground");
         }else if(!structure.empty()){
             if(sizeProvided&&(!std::isfinite(size.width)||!std::isfinite(size.height)||!std::isfinite(size.depth)||size.width<=0||size.height<=0||size.depth<=0))throw std::runtime_error("--size expects three positive finite dimensions");
