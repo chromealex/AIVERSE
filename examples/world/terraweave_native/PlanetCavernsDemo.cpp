@@ -122,7 +122,7 @@ struct Demo {
     std::map<uint64_t,CavePlanetGiCanonicalChunk> baselineSources;
     double renderSeconds=0;
     uint32_t lastRebaseTick=0,rebaseCount=0;
-    bool movingView=false,forceRebase=false;
+    bool movingView=false,forceRebase=false,fixedStep=false;
     bool restoreScenario=false,restoreCompleted=false;
     std::string checkpointBytes;
     uint32_t checkpointTick=0;
@@ -420,7 +420,7 @@ struct Demo {
             if(progress.pinsReady&&exterior->covers(host->runtime(),sim->world(),anchor.bodyId,keys)){
                 updateMovingFrame();
                 restoringCoverage=false;
-                accumulator+=std::min(dt,.1);
+                accumulator+=fixedStep?1./tickRate:std::min(dt,.1);
                 while(accumulator>=1./tickRate&&!arrived){
                     const auto tick=host->stepNativeTick({regionId});
                     if(tick==CavePlanetCpuNativeHost::TickResult::Recovery)throw std::runtime_error("native tick recovery");
@@ -458,7 +458,10 @@ struct Demo {
             if(frames-lastProgress>=120){lastProgress=frames;
                 std::fprintf(stdout,"[caverns-demo] frame=%u tick=%u regions=%zu phase=%d\n",
                     frames,sim->tick(),progress.residentRegions,int(progress.phase));}
-            if(maxFrames&&frames>=maxFrames){
+            const bool complete=arrived&&(!movingView||rebaseCount)&&
+                (!restoreScenario||(restoreCompleted&&replayCompared&&sim->tick()>checkpointTick));
+            if(maxFrames&&complete){stopping=true;platform::requestQuit();}
+            else if(maxFrames&&frames>=maxFrames){
                 if(!arrived)fail("route did not arrive within frame budget");
                 else if(movingView&&!rebaseCount)fail("moving view did not publish a rebase");
                 else if(restoreScenario&&(!restoreCompleted||!replayCompared||sim->tick()<=checkpointTick))fail("restore/replay did not complete");
@@ -501,6 +504,8 @@ struct Demo {
         if(!device->waitForResourceIdle()||!gi.shutdownAfterGpuIdle()){fail("GI shutdown refused");return;}
         device->destroyBuffer(marker.vb);device->destroyBuffer(marker.ib);
         view.planets().shutdown(*device);renderer.shutdown();initialized=false;
+        require(box->bodyCount()==0&&pool.allocations()==0&&spatial.colliders().empty(),"native resources still owned");
+        std::fprintf(stdout,"[caverns-demo] SHUTDOWN_OK\n");
     }
 };
 // Retain a failed/quarantined owner until process exit, not unsafe teardown.
@@ -515,6 +520,7 @@ int aiverseMain(int argc,char** argv){
         else if(arg=="--swim")demo->scenario=Scenario::Swim;
         else if(arg=="--moving-view")demo->movingView=true;
         else if(arg=="--restore")demo->restoreScenario=true;
+        else if(arg=="--fixed-step")demo->fixedStep=true;
         else{std::fprintf(stderr,"Unknown argument: %s\n",arg.c_str());return 2;}
     }
     platform::AppConfig cfg;cfg.title="AIVERSE Caverns — native chamber";cfg.width=1280;cfg.height=800;
@@ -522,7 +528,7 @@ int aiverseMain(int argc,char** argv){
     cb.init=[](gfx::Device& d){try{demo->init(d);}catch(const std::exception& e){demo->fail(e.what());}};
     cb.frame=[&](gfx::Device& d,double dt){delta=dt;demo->draw(d,dt);};
     cb.afterFrame=[&](gfx::Device&){demo->afterFrame(delta);};
-    cb.shutdown=[](){demo->shutdown();};
+    cb.shutdown=[](){try{demo->shutdown();}catch(const std::exception& e){demo->fail(e.what());}};
     const int result=platform::run(cfg,cb);
     const bool failed=demo->failed;
     if(failed)(void)demo.release();else demo.reset();

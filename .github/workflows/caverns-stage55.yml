@@ -17,15 +17,21 @@ jobs:
         with:
           submodules: recursive
       - name: Install native dependencies
-        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build libx11-dev libegl-dev libgles-dev libvulkan-dev xvfb
+        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build libx11-dev libegl-dev libgles-dev libvulkan-dev xvfb xauth mesa-utils libgl1-mesa-dri
       - name: Enable optional physics and record build configuration
         run: |
-          cmake -S . -B build/caverns-stage55 -DCMAKE_BUILD_TYPE=Debug -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_ENABLE_PHYSICS=ON -DAIVERSE_BUILD_EDITOR=ON -DAIVERSE_BUILD_STUDIO_HTML5=OFF -DAIVERSE_FETCH_TEMPLATES=OFF
+          cmake -S . -B build/caverns-stage55 -DCMAKE_BUILD_TYPE=Debug -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_ENABLE_PHYSICS=ON -DAIVERSE_BUILD_EDITOR=ON -DAIVERSE_BUILD_STUDIO_HTML5=OFF -DAIVERSE_FETCH_TEMPLATES=OFF -DAIVERSE_BUILD_CAVERNS_PLANET_DEMO=ON -DAIVERSE_CAVERNS_PLANET_DEMO_SMOKE=ON
           ctest --test-dir build/caverns-stage55 -N > build/caverns-stage55/inventory.txt
           grep -q 'terraweave_caverns_planet_collision' build/caverns-stage55/inventory.txt
           grep -q 'terraweave_caverns_editor_test' build/caverns-stage55/inventory.txt
-      - name: Unified runner (focused Caverns contracts)
-        run: xvfb-run -a bash run-tests.sh --build-dir build/caverns-stage55 --filter 'caverns' --jobs 4
+          for scenario in chamber portal swim moving_restore portal_restore swim_restore; do
+            grep -q "terraweave_caverns_demo_$scenario" build/caverns-stage55/inventory.txt
+          done
+      - name: Unified runner (Caverns contracts and native scenarios)
+        env:
+          AIVERSE_GFX: gl
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: xvfb-run -a -s '-screen 0 1280x800x24' bash run-tests.sh --build-dir build/caverns-stage55 --filter 'caverns' --jobs 4
       - name: Preserve native diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -34,6 +40,7 @@ jobs:
           path: |
             build/caverns-stage55/inventory.txt
             build/caverns-stage55/test-reports/
+            build/caverns-stage55/caverns-demo-reports/
             build/caverns-stage55/CMakeCache.txt
             build/caverns-stage55/CMakeFiles/CMakeConfigureLog.yaml
   studio-web:
