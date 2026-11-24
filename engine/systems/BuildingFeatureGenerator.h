@@ -81,6 +81,23 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
         if(std::string(key)=="roomsX")recipe.roomsX=uint32_t(n);
         else recipe.roomsZ=uint32_t(n);
     }
+    if(json.has("walkableSetbacks")){
+        if(json["walkableSetbacks"].type()!=Json::Type::Bool)throw JsonError(path+".walkableSetbacks: expected boolean");
+        recipe.walkableSetbacks=json.getBool("walkableSetbacks");
+    }
+    if(json.has("floorFootprints")){
+        const auto& masks=json["floorFootprints"];
+        if(!masks.isArray()||masks.size()>8)throw JsonError(path+".floorFootprints: expected up to eight masks");
+        for(const auto& mask:masks.items()){
+            if(!mask.isArray()||mask.size()>6)throw JsonError(path+".floorFootprints: invalid mask");
+            std::vector<std::string> rows;
+            for(const auto& row:mask.items()){
+                if(!row.isString()||row.str().size()>6)throw JsonError(path+".floorFootprints: invalid row");
+                rows.push_back(row.str());
+            }
+            recipe.floorFootprints.push_back(std::move(rows));
+        }
+    }
     if(json.has("footprint")){
         const auto& rows=json["footprint"];
         if(!rows.isArray()||rows.size()>6)throw JsonError(path+".footprint: expected up to six binary rows");
@@ -121,6 +138,13 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
                 else if(side=="left")f.side=BuildingFeatureSide::Left;
                 else if(side=="right")f.side=BuildingFeatureSide::Right;
                 else throw JsonError(label+".side: expected front, back, left or right");
+            }
+            if(j.has("balconyDepth"))f.balconyDepth=number(j["balconyDepth"],label+".balconyDepth");
+            if(j.has("balconySupport")){
+                const auto support=j.getStr("balconySupport");
+                if(support=="cantilever")f.balconySupport=BuildingBalconySupport::Cantilever;
+                else if(support=="columns")f.balconySupport=BuildingBalconySupport::Columns;
+                else throw JsonError(label+".balconySupport: expected cantilever or columns");
             }
             if(j.has("wallLine")){
                 const auto& value=j["wallLine"];const double n=value.toDouble(-2);
@@ -359,7 +383,7 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
         anchor.open=socket.open;
         anchor.outside={fcoord(socket.x),fcoord(socket.y),fcoord(socket.z)};
         result.anchors.push_back(anchor);
-        if(anchor.kind!=BuildingFeatureKind::SlidingRoof&&anchor.kind!=BuildingFeatureKind::Window&&
+        if(socket.floor==0&&anchor.kind!=BuildingFeatureKind::SlidingRoof&&anchor.kind!=BuildingFeatureKind::Window&&
            anchor.kind!=BuildingFeatureKind::Stairs&&anchor.kind!=BuildingFeatureKind::Elevator)
             result.building.gates.push_back(anchor.outside);
     }

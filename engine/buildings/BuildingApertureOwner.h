@@ -81,7 +81,7 @@ inline bool buildingAuthoredAperturePoses(
             z1=socket.z+socket.depth*0.5f;
             y0=H-0.28f;y1=H;
         }else{
-            y0=0.24f;y1=y0+socket.height;
+            y0=socket.openingBottom;y1=y0+socket.height;
             // The graph owns the local facade plane, including courtyard walls.
             const float plane=buildingSocketWallPlane(socket,W,D);
             switch(socket.side){

@@ -453,6 +453,11 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
             socket.set("width",Json::number(double(a.width),3));
             socket.set("height",Json::number(double(a.height),3));
             socket.set("open",Json::number(double(a.open),3));
+            if(a.featureIndex<req.functionalRecipe.features.size()){
+                const auto& feature=req.functionalRecipe.features[a.featureIndex];
+                if(feature.kind==BuildingFeatureKind::Window||feature.kind==BuildingFeatureKind::PersonnelDoor||feature.kind==BuildingFeatureKind::LargeGate||feature.kind==BuildingFeatureKind::SmallGate)
+                    socket.set("floor",Json::number(int64_t(feature.floor)));
+            }
             Json point=Json::array();
             point.push(Json::number(a.outside.x.toDouble(),3));
             point.push(Json::number(a.outside.y.toDouble(),3));
@@ -467,6 +472,31 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
         out.set("roomsZ",Json::number(int64_t(req.functionalRecipe.roomsZ)));
         Json footprint=Json::array();for(const auto& row:req.functionalRecipe.footprint)footprint.push(string(row));
         out.set("footprint",std::move(footprint));
+        Json floorMasks=Json::array();for(const auto& mask:req.functionalRecipe.floorFootprints){
+            Json rows=Json::array();for(const auto& row:mask)rows.push(string(row));floorMasks.push(std::move(rows));}
+        out.set("floorFootprints",std::move(floorMasks));
+        Json terraces=Json::array(),access=Json::array();
+        for(const auto& deck:detailed.graph.terraces){
+            Json row=Json::object();row.set("floor",Json::number(int64_t(deck.floor)));
+            row.set("x",Json::number(int64_t(deck.x)));row.set("z",Json::number(int64_t(deck.z)));
+            row.set("height",Json::number(double(deck.y),3));terraces.push(std::move(row));
+        }
+        for(const auto& link:detailed.graph.terraceAccess){
+            Json row=Json::object();row.set("socketId",string(link.socketId));row.set("roomId",string(link.roomId));
+            row.set("floor",Json::number(int64_t(link.floor)));row.set("x",Json::number(int64_t(link.x)));
+            row.set("z",Json::number(int64_t(link.z)));access.push(std::move(row));
+        }
+        out.set("terraces",std::move(terraces));out.set("terraceAccess",std::move(access));
+        Json balconies=Json::array();for(const auto& deck:detailed.graph.balconies){
+            Json row=Json::object();row.set("socketId",string(deck.socketId));row.set("floor",Json::number(int64_t(deck.floor)));
+            row.set("x",Json::number(int64_t(deck.x)));row.set("z",Json::number(int64_t(deck.z)));
+            row.set("x0",Json::number(double(deck.x0),3));row.set("z0",Json::number(double(deck.z0),3));
+            row.set("x1",Json::number(double(deck.x1),3));row.set("z1",Json::number(double(deck.z1),3));
+            row.set("height",Json::number(double(deck.y),3));
+            row.set("support",string(deck.support==BuildingBalconySupport::Columns?"columns":"cantilever"));
+            balconies.push(std::move(row));
+        }
+        out.set("balconies",std::move(balconies));
         out.set("sockets",std::move(sockets));
         out.set("solids",Json::number(int64_t(detailed.graph.solids.size())));
         out.set("connections",Json::number(int64_t(detailed.graph.connections.size())));
@@ -686,7 +716,7 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
                     z1=aperture.z+aperture.depth*.5f;
                     y0=H-.28f;y1=H;
                 }else{
-                    y0=.24f;y1=y0+aperture.height;
+                    y0=aperture.openingBottom;y1=y0+aperture.height;
                     const float plane=buildingSocketWallPlane(aperture,W,D);
                     switch(aperture.side){
                         case BuildingFeatureSide::Front:
@@ -729,6 +759,12 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
             saved.set("floors",Json::number(int64_t(req.functionalRecipe.floors)));
             saved.set("roomsX",Json::number(int64_t(req.functionalRecipe.roomsX)));
             saved.set("roomsZ",Json::number(int64_t(req.functionalRecipe.roomsZ)));
+            if(req.functionalRecipe.walkableSetbacks)saved.set("walkableSetbacks",Json::fromBool(true));
+            if(!req.functionalRecipe.floorFootprints.empty()){
+                Json masks=Json::array();for(const auto& mask:req.functionalRecipe.floorFootprints){
+                    Json rows=Json::array();for(const auto& row:mask)rows.push(string(row));masks.push(std::move(rows));}
+                saved.set("floorFootprints",std::move(masks));
+            }
             if(!req.functionalRecipe.footprint.empty()){
                 Json footprint=Json::array();for(const auto& row:req.functionalRecipe.footprint)footprint.push(string(row));
                 saved.set("footprint",std::move(footprint));
@@ -741,6 +777,10 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
                 spec.set("kind",string(buildingFeatureName(feature.kind)));
                 spec.set("side",string(buildingFeatureSideName(feature.side)));
                 if(feature.wallLine>=0)spec.set("wallLine",Json::number(int64_t(feature.wallLine)));
+                if(feature.balconyDepth>0.f){
+                    spec.set("balconyDepth",Json::number(double(feature.balconyDepth),3));
+                    spec.set("balconySupport",string(feature.balconySupport==BuildingBalconySupport::Columns?"columns":"cantilever"));
+                }
                 spec.set("count",Json::number(int64_t(feature.count)));
                 spec.set("width",Json::number(double(feature.width),3));
                 spec.set("height",Json::number(double(feature.height),3));

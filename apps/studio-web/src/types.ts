@@ -230,6 +230,8 @@ export interface StudioBuildingFeature {
   kind: StudioBuildingFeatureKind;
   side: StudioBuildingFeatureSide;
   wallLine?:number; // -1 outer envelope; otherwise zero-based facade grid line
+  balconyDepth?:number;
+  balconySupport?:'cantilever'|'columns';
   count: number;
   width: number;
   height: number;
@@ -246,6 +248,8 @@ export interface StudioBuildingRequest {
   width: number; height: number; depth: number; seed: number;
   floors?: number; roomsX?: number; roomsZ?: number;
   footprint?:string[];
+  floorFootprints?:string[][];
+  walkableSetbacks?:boolean;
   mode?: 'features' | 'preset';
   features?: StudioBuildingFeature[];
   materialBindings?: Record<string,string>; // authored style slot -> project materials.json name
@@ -256,12 +260,15 @@ export interface StudioBuildingRequest {
 export interface StudioBuildingPreview {
   seed: number; triangles: number; vertices: number; materials: number;
   width: number; height: number; depth: number;
-  solids?:number; connections?:number; floors?:number; roomsX?:number; roomsZ?:number; footprint?:string[];
+  solids?:number; connections?:number; floors?:number; roomsX?:number; roomsZ?:number; footprint?:string[]; floorFootprints?:string[][];
+  terraces?:Array<{floor:number;x:number;z:number;height:number}>;
+  terraceAccess?:Array<{socketId:string;roomId:string;floor:number;x:number;z:number}>;
+  balconies?:Array<{socketId:string;floor:number;x:number;z:number;x0:number;z0:number;x1:number;z1:number;height:number;support:'cantilever'|'columns'}>;
   geometry?:import('./graphs/buildingGeometryGraph').BuildingGeometryReport;
   route?:import('./graphs/buildingRoomTopology').BuildingRouteResult;
   topology?: {exteriorApertures?:import('./graphs/buildingRoomTopology').TopologyExteriorAperture[];version:1;rooms:import('./graphs/buildingRoomTopology').TopologyRoom[];connections:import('./graphs/buildingRoomTopology').TopologyConnection[];components:number;withoutElevatorsComponents:number};
   sockets?:Array<{socketId:string;kind:StudioBuildingFeatureKind;
-    side:string;featureIndex:number;width:number;height:number;
+    side:string;featureIndex:number;width:number;height:number;floor?:number;
     open:number;outside:[number,number,number]}>;
 }
 export interface StudioBuildingGenerated { path: string; recipePath?: string; guid: string; bytes: number; triangles: number }
