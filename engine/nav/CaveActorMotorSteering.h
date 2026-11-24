@@ -9,6 +9,7 @@
 #include "engine/core/FixedMath.h"
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
 #include <functional>
 #include <string>
 #include <memory>
@@ -19,6 +20,38 @@ struct CaveActorMotorSteering {
     uint32_t waypointToleranceCm=40;
     uint32_t maxStepCm=100;
 };
+// Opt-in command/API bridge for ACTOR ECS entities (which store their
+// actual position in CharacterBody rather than shared Transform).
+inline bool assignCaveActorGoal(
+    World& world,Entity actor,
+    terraweave::caverns::PointCm destination,
+    terraweave::caverns::CaveAgentProfile agent,
+    std::string algorithm="astar",
+    uint32_t speedCmPerTick=25,
+    uint32_t maxVisits=8192) {
+    if(!world.alive(actor)||!world.has<actor::CharacterBody>(actor)||
+       algorithm.empty()||algorithm.size()>128||
+       !speedCmPerTick||speedCmPerTick>10000||
+       !maxVisits||maxVisits>1048576)
+        return false;
+    terraweave::caverns::validatePoint(destination);
+    terraweave::caverns::CaveNavigationDataProvider::validateProfile(agent);
+    CaveRouteIntent intent;
+    intent.goal=destination;
+    intent.algorithm=std::move(algorithm);
+    intent.maxVisits=maxVisits;
+    CaveRouteFollower route;
+    route.agent=agent;
+    route.speedCmPerTick=speedCmPerTick;
+    route.needsRepath=true;
+    if(world.has<CaveRouteIntent>(actor))
+        world.get<CaveRouteIntent>(actor)=std::move(intent);
+    else world.add<CaveRouteIntent>(actor,std::move(intent));
+    if(world.has<CaveRouteFollower>(actor))
+        world.get<CaveRouteFollower>(actor)=std::move(route);
+    else world.add<CaveRouteFollower>(actor,std::move(route));
+    return true;
+}
 inline bool steerCaveActorMotor(
     World& ecs,Entity entity,actor::Input& input,
     const terraweave::caverns::CaveNavigationDataProvider& source,
