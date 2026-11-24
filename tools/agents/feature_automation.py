@@ -193,7 +193,11 @@ def architecture_report(root, changed, exceptions):
                        for value in (include, candidate)):
                     finding(line, "shared engine must not depend on editor or genre host", include)
                 if rel.startswith("engine/view/") and any(re.search(r"(^|/)engine/game(/|$)", value) for value in (include, candidate)):
-                    if rel in ("engine/view/game/GameView.cpp", "engine/view/game/GameView.h"):
+                    known_legacy = {
+                        "engine/view/game/GameView.cpp": {"engine/game/GameCore.h", "engine/game/Arsenal.h", "engine/game/TopDown.h"},
+                        "engine/view/game/GameView.h": {"engine/game/GameData.h", "engine/game/MapGrid.h"},
+                    }
+                    if candidate in known_legacy.get(rel, set()):
                         # The architecture contract explicitly identifies GameView as legacy
                         # compatibility, not the canonical shared View. Keep the debt visible.
                         legacy_notes.append({"path": rel, "line": line, "detail": include,
