@@ -854,7 +854,7 @@ Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
     if(action=="read")return owner.status();
     if(action=="cancel")return owner.cancel(p,ws.project.dir);
     if(action=="publish")return owner.publish(ws,p);
-    if(action=="enqueue")return owner.enqueue(p,ws.project.dir,lease,render::texture_graph::integer(p["priority"],1,0,3));
+    if(action=="enqueue")return owner.enqueue(p,ws.project.dir,lease,render::texture_graph::integer(p["priority"],1,0,3),editor::textureGraphImageResolver(ws));
     if(action=="queueRead")return owner.queueStatus();
     if(action=="queueCancel")return owner.cancelTicket(p.getStr("ticket"),ws.project.dir);
     if(action=="queueRelease")return owner.releaseTicket(p.getStr("ticket"),ws.project.dir,p.getBool("discardResult"));

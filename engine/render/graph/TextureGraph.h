@@ -46,12 +46,24 @@ inline Kind outputKind(const std::string& name){
 }
 inline constexpr size_t maxImageSourceBytes=16u*1024u*1024u;
 struct ImageSource {int width=0,height=0;std::vector<uint32_t> rgb;};
-// Trusted host must verify the exact pinned revision and obey remaining byte budget.
+// Trusted host must verify the exact pinned revision, return identical decoded RGB
+// pixels and extent for the same asset/revision within a project, and obey byte budget.
 using ImageResolver=std::function<ImageSource(const std::string&,const std::string&,size_t)>;
 struct Node {std::string id;const Op* info=nullptr;std::vector<size_t> inputs;Json parameters;std::shared_ptr<const ImageSource> image;std::array<custom_compute::Program,3> custom;};
 inline bool isCustomCompute(std::string_view id){return id=="customScalar"||id=="customColor";}
 inline bool isImageSource(std::string_view id){return id=="image"||id=="imageAsset";}
 struct Program {int size=256;std::vector<Node> nodes;std::vector<size_t> order;std::map<std::string,size_t> outputs;};
+inline size_t imageSourceBytes(const Program& p){
+    size_t bytes=0;for(const auto& n:p.nodes)if(n.image)bytes+=n.image->rgb.size()*sizeof(uint32_t);
+    return bytes;
+}
+// Source identity for trusted pinned assets. Encoded SHA-256 is verified by
+// host before compilation; dimensions and decoder ABI version guard layout.
+inline std::string imageSourceIdentity(const Node& n){
+    if(std::string_view(n.info->id)!="imageAsset")return {};
+    require(n.image!=nullptr,"unresolved external image");
+    return "rgb8-nearest-v1:"+std::to_string(n.image->width)+"x"+std::to_string(n.image->height);
+}
 inline std::vector<std::string> formulaTokens(const std::string& expression){
     require(!expression.empty()&&expression.size()<=256,"invalid formula size");
     std::istringstream stream(expression);std::vector<std::string> tokens;std::string token;int depth=0;

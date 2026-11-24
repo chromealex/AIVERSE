@@ -34,15 +34,19 @@ struct ResidentMaterialOptions {
 };
 class TextureGraphGpuOwner {
     gpu::TextureRequestQueue pendingRequests_;
+    std::map<uint64_t,render::texture_graph::Program> queuedPrograms_;
+    static constexpr size_t maxQueuedImageBytes=32u*1024u*1024u;
+    size_t queuedImageBytes_=0;
+    void clearPending(){pendingRequests_.clear();queuedPrograms_.clear();queuedImageBytes_=0;}
     std::string queueScope_,queueTicket_,queueRequest_,queueError_;
     render::RenderDeviceLifetime::Lease queueLease_;
     bool queuePromoting_=false;
     bool requestBusy()const{return active()||inFlight_||matRetirementPending()||gpuCleanupPending();}
-    void clearQueue(){pendingRequests_.clear();queueScope_.clear();queueTicket_.clear();queueRequest_.clear();queueError_.clear();queueLease_={};}
+    void clearQueue(){clearPending();queueScope_.clear();queueTicket_.clear();queueRequest_.clear();queueError_.clear();queueLease_={};}
     void promoteQueue(gfx::Device& dev,const std::string& scope){
         if(queueScope_.empty()||queueScope_!=scope)return;
         if(!queueLease_.validFor(dev)||!dev.gpuHealthy()){
-            pendingRequests_.clear();queueError_="texture queue device epoch expired or unhealthy";
+            clearPending();queueError_="texture queue device epoch expired or unhealthy";
             if(!queueRequest_.empty()){
                 if(!published_&&state_!="cancelled"&&state_!="failed")
                     discard("failed","texture queue device epoch expired or unhealthy");
@@ -54,7 +58,12 @@ class TextureGraphGpuOwner {
         auto entry=pendingRequests_.pop();if(!entry)return;
         queueTicket_=std::to_string(entry->ticket);queueRequest_.clear();queueError_.clear();
         queuePromoting_=true;
-        try{queueRequest_=start(Json::parse(entry->payload),scope,queueLease_).getStr("request");}
+        try{
+            auto compiled=queuedPrograms_.extract(entry->ticket);
+            if(compiled.empty())throw std::logic_error("missing queued program snapshot");
+            queuedImageBytes_-=imageSourceBytes(compiled.mapped());
+            queueRequest_=startImpl(Json::parse(entry->payload),scope,queueLease_,{},&compiled.mapped()).getStr("request");
+        }
         catch(const std::exception& e){queueError_=e.what();}
         queuePromoting_=false;
     }
@@ -80,7 +89,8 @@ class TextureGraphGpuOwner {
         std::vector<std::vector<size_t>> edges;std::vector<std::string> nodes;
         for(const auto& node:p.nodes){edges.push_back(node.inputs);std::string key;
             gpu::appendOutputField(key,node.info->id,gpu::outputKeyBudget);
-            if(!gpu::appendOutputField(key,node.parameters.dump(-1),gpu::outputKeyBudget))return {};
+            if(!gpu::appendOutputField(key,node.parameters.dump(-1),gpu::outputKeyBudget)||
+               !gpu::appendOutputField(key,imageSourceIdentity(node),gpu::outputKeyBudget))return {};
             nodes.push_back(std::move(key));}
         std::map<std::string,size_t> outputs;
         for(const auto& [name,index]:p.outputs)if(materialSlot(name))outputs.emplace(name,index);
@@ -334,7 +344,7 @@ class TextureGraphGpuOwner {
                     const auto& source=sources.nodes.at(node);
                     std::string key=metal?source.msl:source.glsl;
                     const auto& authored=program_->nodes.at(node);
-                    if(isImageSource(authored.info->id))key+=authored.parameters.dump(-1);
+                    if(isImageSource(authored.info->id))key+=authored.parameters.dump(-1)+imageSourceIdentity(authored);
                     return key;
                 });
                 matLayout_=sources.plan.schedule.slotBytes;
@@ -495,18 +505,18 @@ private:
 public:
     Json startResidentMaterial(const Json& graph,const Json& overrides,const std::string& scope,
             const render::RenderDeviceLifetime::Lease& lease,const ResidentMaterialOptions& options={},
-            const view::LiveAppearanceMaterialTarget& target={}){
+            const view::LiveAppearanceMaterialTarget& target={},const ImageResolver& resolver={}){
         auto p=residentRequest(graph,overrides,options);
         if(options.incrementalOutputs){if(target.material>65535)throw std::invalid_argument("invalid incremental material index");p.set("expectedModelPublication",Json::string(std::to_string(target.publication)));
             p.set("expectedVersion",Json::string(std::to_string(target.version)));p.set("materialIndex",Json::number(int64_t(target.material)));}
-        return start(p,scope,lease);
+        return start(p,scope,lease,resolver);
     }
     Json enqueueResidentMaterial(const Json& graph,const Json& overrides,const std::string& scope,
-            const render::RenderDeviceLifetime::Lease& lease,const ResidentMaterialOptions& options={},int priority=1){
-        return enqueue(residentRequest(graph,overrides,options),scope,lease,priority);
+            const render::RenderDeviceLifetime::Lease& lease,const ResidentMaterialOptions& options={},int priority=1,const ImageResolver& resolver={}){
+        return enqueue(residentRequest(graph,overrides,options),scope,lease,priority,resolver);
     }
-    // Queue entries are immutable JSON snapshots; pending entries have no GPU handles.
-    Json enqueue(const Json& p,const std::string& scope,const render::RenderDeviceLifetime::Lease& lease,int priority=1){
+    // Queue stores immutable validated programs and bounded original RGB snapshots; no GPU handles.
+    Json enqueue(const Json& p,const std::string& scope,const render::RenderDeviceLifetime::Lease& lease,int priority=1,const ImageResolver& resolver={}){
         if(p.getBool("incrementalOutputs"))throw std::invalid_argument("incremental output reuse requires direct live-target request");
         if(scope.empty()||!lease.alive()||!lease.device()||!lease.validFor(*lease.device()))
             throw std::invalid_argument("texture queue requires live native scope and lease");
@@ -517,15 +527,19 @@ public:
         }
         auto payload=p.dump(-1);
         if(payload.size()>gpu::TextureRequestQueue::maxPayloadBytes)throw std::invalid_argument("texture queue payload exceeds cap");
-        (void)render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object());
+        auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object(),resolver);
+        const auto bytes=imageSourceBytes(program);
+        if(bytes>maxQueuedImageBytes-queuedImageBytes_)throw std::invalid_argument("texture queue image snapshot budget exceeded");
         const auto id=pendingRequests_.push(std::move(payload),priority);
+        try{queuedPrograms_.emplace(id,std::move(program));}catch(...){pendingRequests_.cancel(id);throw;}
+        queuedImageBytes_+=bytes;
         queueScope_=scope;queueLease_=lease;
         Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("ticket",Json::string(std::to_string(id)));r.set("state",Json::string("waiting"));return r;
     }
     Json queueStatus()const{
         Json r=Json::object(),pending=Json::array();
         for(const auto& e:pendingRequests_.pending()){Json row=Json::object();row.set("ticket",Json::string(std::to_string(e.ticket)));row.set("priority",Json::number(int64_t(e.priority)));pending.push(row);}
-        r.set("ok",Json::fromBool(true));r.set("pending",pending);r.set("pendingBytes",Json::number(int64_t(pendingRequests_.bytes())));
+        r.set("ok",Json::fromBool(true));r.set("pending",pending);r.set("pendingBytes",Json::number(int64_t(pendingRequests_.bytes())));r.set("pendingImageBytes",Json::number(int64_t(queuedImageBytes_)));r.set("maxPendingImageBytes",Json::number(int64_t(maxQueuedImageBytes)));
         r.set("blockedByUnreleasedResult",Json::fromBool(queueTicket_.empty()&&state_=="ready"&&!published_));
         r.set("activeTicket",Json::string(queueTicket_));r.set("activeRequest",Json::string(queueRequest_));r.set("error",Json::string(queueError_));
         if(!queueRequest_.empty())r.set("result",status());
@@ -539,6 +553,7 @@ public:
         }else{
             uint64_t id=0;for(const auto& e:pendingRequests_.pending())if(std::to_string(e.ticket)==ticket){id=e.ticket;break;}
             if(!id||!pendingRequests_.cancel(id))throw std::invalid_argument("unknown pending texture queue ticket");
+            auto compiled=queuedPrograms_.extract(id);if(!compiled.empty())queuedImageBytes_-=imageSourceBytes(compiled.mapped());
         }
         return queueStatus();
     }
@@ -617,16 +632,18 @@ public:
         }return r;
     }
     Json start(const Json& p,const std::string& project,render::RenderDeviceLifetime::Lease lease={},const ImageResolver& resolver={}){
+        return startImpl(p,project,lease,resolver,nullptr);
+    }
+private:
+    Json startImpl(const Json& p,const std::string& project,render::RenderDeviceLifetime::Lease lease,const ImageResolver& resolver,Program* prepared){
         if(!queuePromoting_&&(!queueTicket_.empty()||!pendingRequests_.pending().empty()))throw std::runtime_error("texture queue owns scheduling; release active ticket first");
         if(queued_||inFlight_||matRetirementPending()||state_=="pending"||setPending())throw std::runtime_error("previous GPU texture request still active");
         if(!gpuCandidates_.empty()||(outputNoop_&&state_=="ready"&&!published_))throw std::runtime_error("publish or cancel the previous GPU texture set, then retire it");
         if(project.empty())throw std::invalid_argument("open project first");
-        auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object(),resolver);
+        auto program=prepared?std::move(*prepared):render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object(),resolver);
         size_t target=program.nodes.size();const bool setBake=p.getBool("bakeSet"),bake=setBake||p.getBool("bake");
         const bool transfer=p.getBool("gpuTextureTransfer"),mipmaps=p.getBool("gpuTextureMipmaps"),fenceOnly=p.getBool("gpuTextureFenceOnly");
         if(fenceOnly&&!transfer)throw std::invalid_argument("fence-only mode requires GPU texture transfer");
-        const bool externalImages=std::any_of(program.nodes.begin(),program.nodes.end(),[](const Node& n){return std::string_view(n.info->id)=="imageAsset";});
-        if(externalImages&&(p.getBool("incremental")||p.getBool("incrementalOutputs")))throw std::invalid_argument("external image snapshots require nonincremental GPU generation");
         const bool materialized=p.getBool("materialized")||p.getBool("materializedDag")||render::texture_graph::requiresMaterialized(program),incremental=p.getBool("incremental");
         if(incremental&&!materialized)
             throw std::invalid_argument("incremental requires materialized DAG");
@@ -694,6 +711,7 @@ public:
         plannedPasses_=plannedSlotBytes_=0;passes_=0;blocks_=received_=scratchBytes_=0;reused_=reusedBuffers_=cacheHit_=false;requireGpu_=transfer||incremental||p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=!outputNoop_;state_=outputNoop_?"ready":"queued";
         if(outputNoop_){backend_="reused";reason_="all material outputs unchanged; no GPU generation";}return status();
     }
+public:
     void checkProject(const std::string& project){
         if(!queueScope_.empty()&&queueScope_!=project)clearQueue();
         if(lastOutputReceipt_&&lastOutputReceipt_->scope!=project)lastOutputReceipt_.reset();

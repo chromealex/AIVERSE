@@ -200,7 +200,7 @@ void Editor::registerPlayOps() {
             if(action=="materialTarget"||action=="applyMaterial"||action=="materialApplyStatus")return graphMaterialOp(p);
             if(pendingGraphMaterialApply_&&(action=="start"||action=="publish"))
                 throw std::runtime_error("live material application is queued");
-            if(action=="enqueue")return textureGraphGpuPreview_.enqueue(p,ws_.project.dir,gpuDeviceLease(),render::texture_graph::integer(p["priority"],1,0,3));
+            if(action=="enqueue")return textureGraphGpuPreview_.enqueue(p,ws_.project.dir,gpuDeviceLease(),render::texture_graph::integer(p["priority"],1,0,3),textureGraphImageResolver(ws_));
             if(action=="queueRead")return textureGraphGpuPreview_.queueStatus();
             if(action=="queueCancel"||action=="queueRelease"){
                 if(pendingGraphMaterialApply_)throw std::runtime_error("live material application is queued");

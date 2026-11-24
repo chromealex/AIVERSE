@@ -20,6 +20,7 @@ class EvaluationCache {
             std::map<std::string,Json> sorted;for(const auto& [k,v]:n.parameters.members())sorted.emplace(k,v);
             Json properties=Json::object();for(const auto& [k,v]:sorted)properties.set(k,v);
             row.set("properties",properties);
+            if(std::string_view(n.info->id)=="imageAsset")row.set("imageSource",Json::string(imageSourceIdentity(n)));
             for(auto i:n.inputs)inputs.push(Json::number(int64_t(i)));row.set("inputs",inputs);nodes.push(row);
         }
         for(auto t:targets)selected.push(Json::number(int64_t(t)));
@@ -34,7 +35,6 @@ public:
         // Validate even on hit; keys include actual resolved program, not a lossy hash.
         require(!targets.empty()&&targets.size()<=9&&size>=8&&size<=p.size,"invalid cache evaluation");
         for(auto t:targets)require(t<p.nodes.size(),"invalid cache target");
-        if(std::any_of(p.nodes.begin(),p.nodes.end(),[](const Node& n){return std::string_view(n.info->id)=="imageAsset";})){hit=false;increment(misses_);return evaluateMany(p,targets,size);}
         auto k=key(p,targets,size);
         for(auto it=entries_.begin();it!=entries_.end();++it)if(it->key==k){
             auto result=it->images;entries_.splice(entries_.begin(),entries_,it);
