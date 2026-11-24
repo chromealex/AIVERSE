@@ -3,6 +3,8 @@
 #include "engine/physis/PhysisIntegration.h"
 #include "engine/platform/Platform.h"
 #include "engine/world/TerraWeaveCavernsGraphSolvers.h"
+#include <algorithm>
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <map>
@@ -161,10 +163,12 @@ struct Demo {
         require(gi.publishLights({lamp})&&gi.publishEnvironment({}),"GI lights");
         CavePlanetGiBindings bindings;
         bindings.surfaceId=[this](const std::string& b,const auto& key)->std::optional<uint64_t>{
-            if(b!=anchor.bodyId||!surfaceIds.contains(key))return {};return surfaceIds.at(key);
+            if(b!=anchor.bodyId||!surfaceIds.contains(key))return {};
+            return surfaceIds.at(key);
         };
         bindings.volumeId=[this](const std::string& b,uint64_t r,ChunkKey3 key)->std::optional<uint64_t>{
-            if(b!=anchor.bodyId||r!=regionId||!volumeIds.contains(key))return {};return volumeIds.at(key);
+            if(b!=anchor.bodyId||r!=regionId||!volumeIds.contains(key))return {};
+            return volumeIds.at(key);
         };
         bindings.project=project;bindings.albedo=[](const auto&,const auto&,const auto&){return soil;};
         bindings.ready=[this]{return exclusive&&device->waitForResourceIdle();};
@@ -249,25 +253,26 @@ struct Demo {
         view.drawPlanetCaves(renderer,viewFrame,0);
         render::PointLight lamp;lamp.pos={0,-3,0};lamp.radius=8;lamp.intensity=4;
         lamp.color={1,.8f,.55f};renderer.lights.add(lamp);
-        (void)host->bindIndirect(renderer);
+        if(!host->recoveryRequired())(void)host->bindIndirect(renderer);
+        else renderer.clearDynamicGiOverlay();
         renderer.drawMesh(marker,render::mat4::translate(cam.target),{1,1,1,1});
         gfx::PassDesc pass;pass.clearColor[0]=.04f;pass.clearColor[1]=.05f;pass.clearColor[2]=.08f;
         renderer.render(pass);dev.endPass();
     }
     void shutdown(){
         stopping=true;exclusive=true;
-        if(!initialized)return;
+        if(!initialized){if(failed)std::fprintf(stderr,"[caverns-demo] partial initialization retained for process teardown\n");return;}
         module->motor={};
         if(proxy!=physics::kNoBody){
-            if(!box->destroy(proxy)){failed=true;return;}proxy=physics::kNoBody;
+            if(!box->destroy(proxy)){fail("destroy native proxy");return;}proxy=physics::kNoBody;
         }
-        if(!device->waitForResourceIdle()||!host->shutdown(renderer)){failed=true;return;}
+        if(!device->waitForResourceIdle()||!host->shutdown(renderer)){fail("native host shutdown refused");return;}
         host.reset();
         for(const auto& key:keys)if(!exterior->unload(anchor.bodyId,key,[this](const auto&,const auto&){return stopping&&proxy==physics::kNoBody;})){
-            failed=true;return;
+            fail("exterior retirement refused");return;
         }
         exterior.reset();
-        if(!device->waitForResourceIdle()||!gi.shutdownAfterGpuIdle()){failed=true;return;}
+        if(!device->waitForResourceIdle()||!gi.shutdownAfterGpuIdle()){fail("GI shutdown refused");return;}
         device->destroyBuffer(marker.vb);device->destroyBuffer(marker.ib);
         view.planets().shutdown(*device);renderer.shutdown();initialized=false;
     }
