@@ -117,3 +117,6 @@ Existing linked agent batch may coordinate exact-endpoint directory moves/quaran
 
 ### S6f.3.4b.1 — stable external model versions
 Existing linked batch planner resolves local glTF/GLB buffer and image URIs in outgoing and incoming replacement versions at the logical content owner, including recovery slots. Targets must be safe indexed regular files whose identity is unaffected by any relocation endpoint. External model moves, changed dependency endpoints, extension topology and mixed URI repair remain fenced. No new MCP action or journal version.
+
+### S6f.3.4b.2a — projected local model dependencies
+The mixed exact-endpoint planner now resolves typed glTF/GLB external resources against virtual content occupancy after each complete step, including paired file moves, directory moves and model version exchange. A surviving physical model must keep its resource GUID per slot. Unmanaged owners and other formats retain conservative reference fences. Mixed URI repairs, nested relocation roots and unknown model extensions remain fenced. No new MCP action.
