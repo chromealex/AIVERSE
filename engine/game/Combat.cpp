@@ -5,6 +5,7 @@
 #include "Internal.h"
 #include "engine/mechanics/EcsKinematicProjectileSystems.h"
 #include "engine/mechanics/EcsOrderedImpactSystems.h"
+#include "engine/mechanics/WeaponCadence.h"
 #include <algorithm>
 #include <map>
 
@@ -155,7 +156,17 @@ void GameCore::sysWeapons(Simulation& sim) {
     w.each<Combat, Unit, Owner, Transform>([&](Entity e, Combat& c, Unit& u, Owner& o, Transform& tr) {
         const UnitType& t = rules_.types[u.type];
         Fixed atkSpeed = fxMax(stat(sim, e, Stat::AttackSpeed), Fixed::fromRatio(1, 10));
-        for (size_t i = 0; i < t.weapons.size() && i < 4; ++i) c.cooldown[i] = fxMax(Fixed{}, c.cooldown[i] - dt * atkSpeed);
+        using namespace lib::mechanics;
+        // Scope guard also covers early returns and rejected shots: unused credit
+        // must never accumulate across idle, stunned or out-of-range ticks.
+        struct CadenceBoundary {
+            Combat& combat;
+            ~CadenceBoundary() {
+                for (auto& remaining : combat.cooldown) remaining = finishWeaponCadence(remaining);
+            }
+        } boundary{c};
+        for (size_t i = 0; i < t.weapons.size() && i < 4; ++i)
+            c.cooldown[i] = advanceWeaponCadence(c.cooldown[i], dt * atkSpeed, t.weapons[i].preciseCooldown);
         if (u.flags & (kUnitUnderConstruction | kUnitDisabled | kUnitInHand)) return;
         if (auto* b = w.tryGet<Buffs>(e); b && b->stunUntil > sim.tick()) return;
         if (rules_.advancedEffects && (statusFlags(sim, e) & (kStStun | kStDisarm))) return;
@@ -194,14 +205,17 @@ void GameCore::sysWeapons(Simulation& sim) {
             if (sensors_ && sensors_->active() && !sensors_->weaponHits(u.type, i, tu.type)) continue;   // underwater: torpedoes only
             if (wd.rangeAspect != kOne && !inRangeEllipse(tr.pos, tp, wd.range + rangeBonus, wd.rangeAspect)) continue;
             if (m && m->moving && ord && !ord->queue.empty() && ord->queue.front().type == OrderType::Move) continue;
+            const uint32_t budget = wd.preciseCooldown && wd.chargeTime.raw <= 0 ? kMaxCadenceShotsPerTick : 1;
+            for (uint32_t shot = 0; shot < budget && cadenceReady(c.cooldown[i]); ++shot) {
+            if (wd.preciseCooldown && (!w.alive(c.target) || tu.hp.raw <= 0)) break;
             if (wd.chargeTime.raw > 0) {
                 // charging shot: the weapon has to stay on the same target for chargeTime
                 if (c.chargeTarget != c.target) { c.chargeTarget = c.target; c.chargeStart = sim.tick(); }
-                if (sim.tick() - c.chargeStart < uint32_t((wd.chargeTime * int64_t(sim.tickRate())).toInt())) continue;
+                if (sim.tick() - c.chargeStart < uint32_t((wd.chargeTime * int64_t(sim.tickRate())).toInt())) break;
                 c.chargeStart = sim.tick();
             }
-            if (mechOn(sim) && !mechOnFire(sim, e, i, c.target)) continue;   // agent-mech: turret aim, ammo, suppression, crews
-            c.cooldown[i] = wd.cooldown;
+            if (mechOn(sim) && !mechOnFire(sim, e, i, c.target)) break;   // agent-mech: turret aim, ammo, suppression, crews
+            c.cooldown[i] = acceptCadenceShot(c.cooldown[i], wd.cooldown, wd.preciseCooldown && wd.chargeTime.raw <= 0);
             sim.emit({kEvAttack, o.player, e, c.target, int64_t(i), tr.pos});
             const bool prog = progression_ && progression_->active();
             if (prog) progression_->onShot(sim, e);   // perks that fire on every Nth shot (Progression.cpp)
@@ -245,6 +259,7 @@ void GameCore::sysWeapons(Simulation& sim) {
                         shots.push_back({pr, start + side * off});
                     }
                 }
+            }
             }
         }
     });
