@@ -17,7 +17,8 @@ namespace aiverse::editor {
 inline void registerTerraWeaveCavernsOps(Workspace& ws) {
     const Json schema=Json::parse(R"({
       "properties":{
-        "mode":{"type":"string","enum":["carve","fill","erase","get","settings","entrance_add","entrance_update","entrance_erase","planet_region","planet_entrance"]},
+        "mode":{"type":"string","enum":["carve","fill","erase","get","settings","entrance_add","entrance_update","entrance_erase","planet_region","planet_select_region","planet_delete_region","planet_entrance"]},
+        "regionId":{"type":"string"},"expectedRegionId":{"type":"string"},
         "anchor":{"type":"object"},"depthCm":{"type":"integer"},"xCm":{"type":"integer"},"yCm":{"type":"integer"},"zCm":{"type":"integer"},
         "radiusCm":{"type":"integer","minimum":1,"maximum":1000000},
         "stampId":{"type":"integer","minimum":1},
@@ -102,15 +103,21 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
             using namespace terraweave::caverns;
             const bool planet=w->map.data.planet();
             const auto mode=p.getStr("mode","carve");
+            const bool regionEdit=mode=="planet_region"||mode=="planet_select_region"||mode=="planet_delete_region";
             if(mode!="carve"&&mode!="fill"&&mode!="erase"&&mode!="get"&&mode!="settings"&&
-               mode!="entrance_add"&&mode!="entrance_update"&&mode!="entrance_erase"&&mode!="planet_region"&&mode!="planet_entrance")
+               mode!="entrance_add"&&mode!="entrance_update"&&mode!="entrance_erase"&&!regionEdit&&mode!="planet_entrance")
                 throw std::invalid_argument("Caverns paint mode");
-            if(!planet&&(mode=="planet_region"||mode=="planet_entrance"))
+            if(!planet&&(regionEdit||mode=="planet_entrance"))
                 throw std::invalid_argument("Caverns planetary map required");
-            const bool hasRegion=planet&&!w->map.data.extra[planet_caves::key].isNull();
+            auto regions=planet?planet_caves::readRegions(w->map.data):planet_caves::RegionSet{};
+            const auto activeText=regions.active?std::to_string(regions.active):std::string{};
+            if(planet&&mode!="get"&&(p.has("expectedRegionId")||
+                w->map.data.extra[planet_caves::key].getInt("version",0)==2)&&
+               (!p["expectedRegionId"].isString()||p.getStr("expectedRegionId")!=activeText))
+                throw std::invalid_argument("Caverns selected region changed; refresh");
             std::optional<planet_caves::Region> region;
-            if(hasRegion)region=planet_caves::read(w->map.data);
-            if(planet&&!region&&mode!="get"&&mode!="planet_region")
+            if(regions.active)region=regions.regions.at(regions.active);
+            if(planet&&!region&&mode!="get"&&!regionEdit)
                 throw std::invalid_argument("Create a planetary Caverns region first");
             const Json original=planet?(region?caveSnapshotToJson(region->volume):Json{}):w->map.data.extra["terraweaveCaverns"];
             auto volume=caveSnapshotFromJson(original);
@@ -149,10 +156,24 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
                 else {auto& a=*entranceBounds;a.minX=std::min(a.minX,b.minX);a.minY=std::min(a.minY,b.minY);a.minZ=std::min(a.minZ,b.minZ);
                     a.maxX=std::max(a.maxX,b.maxX);a.maxY=std::max(a.maxY,b.maxY);a.maxZ=std::max(a.maxZ,b.maxZ);}
             };
-            if(mode=="planet_region"){
-                if(hasRegion)throw std::invalid_argument("Planetary chart immutable; create a new region in a new document");
-                region=planet_caves::create(w->map.data,cavePlanetAnchorFromJson(p["anchor"]));
-                volume=region->volume;changed=true;fullRebuild=true;
+            if(regionEdit){
+                if(p.getBool("withinStroke",false))throw std::invalid_argument("Caverns region change requires separate history step");
+                if(mode=="planet_region"){
+                    planet_caves::addRegion(w->map.data,regions,
+                        planet_caves::create(w->map.data,cavePlanetAnchorFromJson(p["anchor"])));
+                    changed=true;
+                }else{
+                    const auto id=planet_caves::regionId(p["regionId"]);
+                    if(!regions.regions.contains(id))throw std::out_of_range("Caverns region not found");
+                    if(mode=="planet_select_region"){changed=regions.active!=id;regions.active=id;}
+                    else{
+                        regions.regions.erase(id);changed=true;
+                        if(regions.active==id)regions.active=regions.regions.empty()?0:regions.regions.begin()->first;
+                    }
+                }
+                region=regions.active?std::optional{regions.regions.at(regions.active)}:std::nullopt;
+                volume=region?region->volume:caveSnapshotFromJson(Json{});
+                fullRebuild=changed;
             }else if(mode=="planet_entrance"){
                 if(volume.entrances.size()>=4096)throw std::length_error("Caverns entrance limit");
                 const auto frame=planet_caves::frameForDocument(w->map.data,region->anchor);
@@ -247,12 +268,16 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
             }
             if(changed){
                 if((fullRebuild||entranceId)&&p.getBool("withinStroke",false))throw std::invalid_argument("Caverns recipe/entrance edit requires its own undo step");
-                if(volume.sourceRevision>=uint64_t(INT64_MAX))
-                    throw std::overflow_error("Caverns revision overflow");
-                ++volume.sourceRevision;
+                if(!regionEdit){
+                    if(volume.sourceRevision>=uint64_t(INT64_MAX))
+                        throw std::overflow_error("Caverns revision overflow");
+                    ++volume.sourceRevision;
+                }
                 Json updated;
-                if(planet){region->volume=volume;updated=planet_caves::encode(w->map.data,*region);}
-                else updated=caveSnapshotToJson(volume);
+                if(planet){
+                    if(!regionEdit){region->volume=volume;regions.regions.at(regions.active)=*region;}
+                    updated=planet_caves::encodeRegions(w->map.data,regions);
+                }else updated=caveSnapshotToJson(volume);
                 if(!p.getBool("withinStroke",false))w->map.beginEdit();
                 w->map.data.extra.set(planet?planet_caves::key:"terraweaveCaverns",std::move(updated));
                 w->map.touched();
@@ -282,6 +307,8 @@ inline void registerTerraWeaveCavernsOps(Workspace& ws) {
             }
             result.set("planetary",Json::fromBool(planet));
             if(planet){result.set("planetBodies",planet_caves::describeBodies(w->map.data));
+                result.set("planetRegions",planet_caves::describeRegions(regions));
+                result.set("activeRegionId",Json::string(regions.active?std::to_string(regions.active):std::string{}));
                 if(region)result.set("planetAnchor",cavePlanetAnchorToJson(region->anchor));}
             if(mode=="get"){
                 result.set("snapshot",terraweave::caverns::caveSnapshotToJson(volume));
