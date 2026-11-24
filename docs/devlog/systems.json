@@ -1798,10 +1798,10 @@
           "textEn": "Explicit and automatic collection share Renderer3D/LENS root inspection. Unreleased results and incomplete proofs refuse retirement; integration verification pending."
         },
         {
-          "name": "Texture Graph GPU — Stage 38P (в работе)",
-          "text": "Нативные ссылки на поколение процедурного изображения вместо сохранения сырого индекса.",
-          "nameEn": "Texture Graph GPU — Stage 38P (in progress)",
-          "textEn": "Generation-checked native procedural image references."
+          "name": "Texture Graph GPU — Stage 38P (частично)",
+          "text": "Добавлены слабые ссылки на поколение изображения и проверяемый захват GPU handle с pin. Повторно занятый слот отклоняет старую ссылку. Изолированные тесты пройдены; миграция потребителей и интеграционная проверка ожидаются.",
+          "nameEn": "Texture Graph GPU — Stage 38P (partial)",
+          "textEn": "Weak generation references and checked native handle acquisition with pin; stale recycled slots rejected. Isolated tests passed; consumer migration and integrated verification pending."
         }
       ],
       "enables": [
