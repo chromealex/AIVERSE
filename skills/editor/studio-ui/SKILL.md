@@ -92,6 +92,9 @@ Project owns a separate bounded history (64 entries / 16 MiB of retained plan pa
 ## HTML5 project history (S6c.3)
 Use the existing HistoryPanel with explicit Map / Project scope. Map rows keep native map jumps; project rows are non-interactive and navigation uses one owner-authorized step with exact expectedVersion. Never change global map Undo/Redo shortcuts to select a project scope implicitly. Use shared StudioButton/Alert/EmptyState/Skeleton, show native blocked/conflict reasons and retained payload counters. Demo mode is explicitly unavailable for project writes. Snapshot project.historyVersion invalidates saved Rules and Build views; other snapshot-driven panels refresh via document.changed. Native host sends document.changed on stroke begin/end; native stroke guard remains authoritative. Do not claim asset history, a unified timeline, durable recovery or agent cross-scope Undo all.
 
+## Asset importer metadata history (S6c.4a)
+Use StudioAssetCatalog::patchSettings and native owner-generated exact .meta plans. GUID, importer, other identity fields and physical path must remain unchanged; reindex existing sidecars without generating unrelated metadata, refuse duplicate GUID or stale bytes. Restore through the catalog owner with index reconciliation and rollback on failure. HistoryPanel has a separate Assets scope (64 edits/16 MiB retained payload), native studio.assetHistory/Step with exact expectedVersion, and assets.changed refreshes Assets and pinned Import Settings. No asset payload or import/move undo yet; transfers invalidate this stack before applying. Do not expose arbitrary paths or merge the three timelines. Agent map Undo all remains conservative.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

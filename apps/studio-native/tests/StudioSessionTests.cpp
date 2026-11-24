@@ -159,6 +159,34 @@ void projectHistoryContract(){
     AIVERSE_TEST_CHECK(session.workspace().project.rulesJson["types"]["tree"]["health"]["max"].integer()==200);
     fs::remove_all(root);
 }
+void assetHistorySessionContract(){
+    using namespace aiverse;namespace fs=std::filesystem;
+    const auto root=fs::temp_directory_path()/("studio-asset-history-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(root/"content");
+    std::ofstream(root/"game.json")<<R"({"name":"Fixture","module":"game","rules":"rules.json"})";
+    std::ofstream(root/"rules.json")<<R"({"types":{"unit":{"health":{"max":100}}}})";
+    std::ofstream(root/"content"/"Texture.png")<<"texture";
+    studio::StudioSession session(root.string(),root.string());
+    auto call=[&](const char* json){return session.dispatch(Json::parse(json));};
+    const auto assets=call(R"({"id":1,"method":"studio.assets","params":{}})");
+    AIVERSE_TEST_CHECK(!assets.has("error")&&assets["result"]["files"].size()==1);
+    const auto guid=assets["result"]["files"][0].getStr("guid");
+    Json patch=Json::parse(R"({"id":2,"method":"studio.assetMetaPatch","params":{"key":"compression","value":"high"}})");
+    patch.find("params")->set("guid",Json::string(guid));
+    AIVERSE_TEST_CHECK(!session.dispatch(patch).has("error"));
+    const auto h=call(R"({"id":3,"method":"studio.assetHistory","params":{}})")["result"];
+    AIVERSE_TEST_CHECK(h.getStr("scope")=="assets"&&h.getBool("canUndo")&&h["position"].integer()==1);
+    AIVERSE_TEST_CHECK(!call(R"({"id":4,"method":"studio.assetHistoryStep","params":{"direction":"undo","expectedVersion":"stale"}})").has("result"));
+    Json req=Json::parse(R"({"id":5,"method":"studio.assetHistoryStep","params":{"direction":"undo"}})");
+    req.find("params")->set("expectedVersion",Json::string(h.getStr("version")));
+    const auto result=session.dispatch(req);
+    AIVERSE_TEST_CHECK(!result.has("error")&&result["result"].getBool("canRedo"));
+    AIVERSE_TEST_CHECK(result["result"]["snapshot"]["project"].getStr("assetHistoryVersion")==result["result"].getStr("version"));
+    AIVERSE_TEST_CHECK(Json::parseFile((root/"content"/"Texture.png.meta").string())["settings"].getStr("compression")=="auto");
+    session.openProject(root.string());
+    AIVERSE_TEST_CHECK(call(R"({"id":6,"method":"studio.assetHistory","params":{}})")["result"]["steps"].size()==0);
+    fs::remove_all(root);
+}
 void projectHistoryBudgetContract(){
     using namespace aiverse::editor;
     ProjectHistory history;
@@ -811,6 +839,6 @@ int main() {
     AIVERSE_TEST_CHECK(openRejected);
     authoredEntityWorkflow();
     entityWorkflow();
-    mapCompoundHistoryContract();projectFileEditContract();projectOwnerSaveContract();projectHistoryContract();projectHistoryBudgetContract();projectFileRecoveryWorkflow();
+    mapCompoundHistoryContract();projectFileEditContract();projectOwnerSaveContract();projectHistoryContract();projectHistoryBudgetContract();assetHistorySessionContract();projectFileRecoveryWorkflow();
     std::cout << "studio session contract PASS\n";
 }

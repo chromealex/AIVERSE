@@ -75,3 +75,9 @@ test('project history in demo is explicitly unavailable and cannot mutate files'
   assert.match(h.blockedReason,/native Studio/);
   await assert.rejects(mockInvoke('studio.projectHistoryStep',{direction:'undo',expectedVersion:h.version}),/native Studio/);
 });
+
+test('asset history demo is read-only',async()=>{
+  const h=await mockInvoke('studio.assetHistory',{});
+  assert.equal(h.scope,'assets');assert.equal(h.canUndo,false);
+  await assert.rejects(mockInvoke('studio.assetHistoryStep',{direction:'undo',expectedVersion:h.version}),/native Studio/);
+});

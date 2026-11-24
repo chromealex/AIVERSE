@@ -17,3 +17,10 @@ test('positions do not grant permissions when native owner refuses both directio
   assert.equal(historyStepParams(state,'undo'),null);
   assert.equal(historyStepParams(state,'redo'),null);
 });
+
+test('asset history permissions are explicit and cannot be routed to project history',()=>{
+  const h={...base,scope:'assets',version:'/project|assets|7'};
+  assert.equal(historyStepParams(h,'undo'),null);
+  assert.equal(historyStepParams(base,'undo','assets'),null);
+  assert.deepEqual(historyStepParams(h,'undo','assets'),{direction:'undo',expectedVersion:h.version});
+});
