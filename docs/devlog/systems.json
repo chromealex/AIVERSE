@@ -1744,10 +1744,10 @@
           "textEn": "Native client connected to shared GPU owner and frame-boundary material application. Isolated test passed; integration verification pending."
         },
         {
-          "name": "Texture Graph GPU — Stage 38G (в работе)",
-          "text": "Измерение GPU-вычислений и переноса текстур через общий профилировщик.",
-          "nameEn": "Texture Graph GPU — Stage 38G (in progress)",
-          "textEn": "GPU compute and texture copy scopes through the shared profiler."
+          "name": "Texture Graph GPU — Stage 38G (частично)",
+          "text": "Подключены GPU scopes с идентификатором запроса и выходом графа. Аппаратные измерения и автоматическое освобождение ещё не подтверждены.",
+          "nameEn": "Texture Graph GPU — Stage 38G (partial)",
+          "textEn": "GPU scope capture with request/output attribution implemented. Hardware measurements and automatic reclamation remain pending."
         }
       ],
       "enables": [
