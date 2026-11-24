@@ -108,6 +108,18 @@ def cams():
         ("4-top", dict(x=cx, y=g, z=cz, distance=9, pitch=62, yaw=35)),
     ]
 
+def wait_for_grass():
+    previous = 0
+    stable = 0
+    for _ in range(60):
+        time.sleep(3)
+        count = call("view_wind")["grassPatches"]
+        stable = stable + 1 if count and count == previous else 0
+        if stable >= 4:
+            return
+        previous = count
+    raise RuntimeError("Grass patch uploads did not settle")
+
 for mode in modes:
     # Exercise the persisted map setting and the same auto mode used by old maps.
     if mode not in ("auto", "legacy"):
@@ -116,7 +128,7 @@ for mode in modes:
     call("view_wind", forest=False, nature=True, grass=True, flames=False, sound=False,
          playing=True, windSpeed=0.5, windDirection=25, grassQuality=2, grassMeadow=("legacy" if mode == "legacy" else "auto"), debug="off")
     call("view_focus", x=cx, z=cz, distance=30)
-    time.sleep(10)  # grass patches upload (bounded uploads per frame)
+    wait_for_grass()
     for tag, cam in cams():
         shot(f"{mode}-{tag}", **cam)
     call("view_wind", windSpeed=15)
