@@ -1546,8 +1546,16 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     const auto& map = doc.data;
     cavernsPreview_.syncDocument(*device_,doc,projectPath);
-    const bool planetaryChart=map.planet()&&!map.extra[editor::planet_caves::key].isNull();
-    const auto chartIdentity=planetaryChart?map.extra[editor::planet_caves::key]["anchor"].dump(-1):std::string{};
+    std::optional<editor::planet_caves::Region> selectedChart;
+    std::string chartIdentity;
+    if(map.planet())try{
+        const auto id=editor::planet_caves::activeRegionId(map);
+        if(!id.empty()){
+            selectedChart=editor::planet_caves::read(map);
+            chartIdentity=id+":"+terraweave::caverns::cavePlanetAnchorToJson(selectedChart->anchor).dump(-1);
+        }
+    }catch(const std::exception&){selectedChart.reset();chartIdentity.clear();}
+    const bool planetaryChart=selectedChart.has_value();
     const bool chartChanged=chartIdentity!=planetChartIdentity_;
     if(chartChanged){planetChartIdentity_=chartIdentity;cameraInitialized_=false;sceneCacheValid_=false;terrainRevision_=std::numeric_limits<uint64_t>::max();lightingRevision_=terrainRevision_;}
     const auto now=std::chrono::steady_clock::now();
@@ -1713,7 +1721,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         camera_.target = {map.w * .5f, 0.0f, map.h * .5f};
         camera_.distance = std::clamp(float(std::max(map.w, map.h)) * 1.4f, 16.0f, 100000.0f);
         if(planetaryChart){
-            const auto cap=map.extra[editor::planet_caves::key]["anchor"].getInt("halfExtentCm",400);
+            const auto cap=selectedChart->anchor.halfExtentCm;
             camera_.target={0,0,0};camera_.distance=std::clamp(float(cap)*.035f,3.f,100000.f);
         }else if(fpsProject && lightingModel_) {
             const auto lo=lightingModel_->boundsMin,hi=lightingModel_->boundsMax;
