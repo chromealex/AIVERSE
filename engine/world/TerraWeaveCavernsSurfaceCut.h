@@ -208,9 +208,9 @@ inline TerrainPatch cutCaveTerrainPatch(TerrainPatch patch,
     triangles.reserve(cut.triangles.size());
     const auto fixed=[](double cm){
         if(!std::isfinite(cm)||std::abs(cm)>100000000.)throw std::out_of_range("Caverns cut fixed extent");
-        // Millimetre precision preserves more of the original plane than
-        // centimetre rounding; both native consumers use this same result.
-        return Fixed::fromRatio(int64_t(std::llround(cm*10.)),1000);
+        // Round once to the native Q16 lattice, preserving original
+        // Fixed terrain vertices as well as canonical shared intersections.
+        return Fixed::fromRaw(int64_t(std::llround(cm*(double(Fixed::kOne)/100.))));
     };
     const auto point=[&](CutVertexCm p){return Vec3{fixed(p.x),fixed(p.y),fixed(p.z)};};
     for(const auto& t:cut.triangles){
