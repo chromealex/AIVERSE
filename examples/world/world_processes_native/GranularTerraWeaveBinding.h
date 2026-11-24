@@ -325,11 +325,11 @@ public:
     // Submit only at the normal Renderer3D beginScene/drawMesh stage.
     // Renderer3D owns actual shading, shadows and platform backends.
     void draw(render::Renderer3D& renderer,render::float4 tint={1,1,1,1},
-              std::uint32_t flags=0)const{
+              std::uint32_t flags=0,render::float3 frameTranslation={})const{
         for(const auto& [key,item]:resident_){
             (void)key;
             renderer.drawMesh(item.mesh,
-                render::mat4::translate(item.origin),tint,flags);
+                render::mat4::translate(item.origin+frameTranslation),tint,flags);
         }
     }
     bool shutdownAfterIdle(gfx::Device& device){

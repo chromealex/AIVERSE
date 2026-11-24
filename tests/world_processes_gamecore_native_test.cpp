@@ -12,6 +12,7 @@
 #include "aiverselib/world/WorldProcessesNativeModule.h"
 #include "aiverselib/world/WorldProcessGravity.h"
 #include "aiverselib/world/PlanetProcessGeometry.h"
+#include "aiverselib/world/PlanetGranularPhysicalFrame.h"
 #include "aiverselib/world/PlanetFractureDelivery.h"
 #include "aiverselib/world/SurfaceGravitySupport.h"
 #include "aiverselib/world/GranularPlanetTerrainTransfer.h"
@@ -679,6 +680,18 @@ static void checkPlanetProcessGeometry(){
     granular::SurfaceFieldPlacement place{t.pos,1000,0};
     const auto tops=wp::planetGranularTops(ecs,surface,field,place,200,0,0,3,2,7);
     AIVERSE_TEST_CHECK(tops&&tops->size()==3);
+    const wp::PlanetGranularScale scale{1000,200,0};
+    const auto physical=wp::resolvePlanetGranularPhysicalFrame(ecs,surface,field,"terra",scale,7,"terra");
+    const auto canonical=wp::resolvePlanetGranularPhysicalFrame(ecs,surface,field,"terra",scale,7);
+    AIVERSE_TEST_CHECK(physical&&canonical&&physical->body==0);
+    AIVERSE_TEST_CHECK(physical->publicationOffset==game::Surface::anchor(0));
+    AIVERSE_TEST_CHECK(physical->patchOrigin+physical->publicationOffset==canonical->patchOrigin);
+    AIVERSE_TEST_CHECK(!wp::resolvePlanetGranularPhysicalFrame(ecs,surface,field,"terra",scale,7,"moon"));
+    AIVERSE_TEST_CHECK(!wp::resolvePlanetGranularPhysicalFrame(ecs,surface,field,"terra",{0,200,0},7));
+    AIVERSE_TEST_CHECK(!wp::resolvePlanetGranularPhysicalFrame(ecs,surface,field,"terra",scale,8));
+    ecs.get<Transform>(field).pos=t.pos+surface.up(t.pos)*Fixed::fromInt(2);
+    AIVERSE_TEST_CHECK(!wp::resolvePlanetGranularPhysicalFrame(ecs,surface,field,"terra",scale,7));
+    ecs.get<Transform>(field)=t;
     int b=0,face=0,x=0,y=0;
     AIVERSE_TEST_CHECK(surface.cellFace(tops->back().cell,b,face,x,y)&&b==0&&face!=0);
     for(const auto& q:*tops){
@@ -699,6 +712,10 @@ static void checkPlanetProcessGeometry(){
     place.origin=t.pos;
     const auto moon=wp::planetGranularTops(ecs,surface,field,place,200,0,0,3,2,7);
     AIVERSE_TEST_CHECK(moon&&moon->size()==3&&moon->front().body==1);
+    const auto lunarPhysical=wp::resolvePlanetGranularPhysicalFrame(ecs,surface,field,"moon",scale,7,"moon");
+    AIVERSE_TEST_CHECK(lunarPhysical&&lunarPhysical->publicationOffset==game::Surface::anchor(1));
+    AIVERSE_TEST_CHECK(lunarPhysical->patchOrigin==physical->patchOrigin);
+    AIVERSE_TEST_CHECK(!wp::resolvePlanetGranularPhysicalFrame(ecs,surface,field,"terra",scale,7,"terra"));
     AIVERSE_TEST_CHECK(wp::planetImprintQuad(ecs,surface,trace,7)->geometry.body==1);
     const auto live=aiverse::studio::samplePlanetImprint(ecs,surface,7);
     AIVERSE_TEST_CHECK(live["cells"].size()==1&&!live.getBool("truncated"));
