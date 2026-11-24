@@ -1,4 +1,5 @@
 #include "GameData.h"
+#include "engine/mechanics/MultiTargetSelection.h"
 #include "../../engine/data/JsonCompose.h"
 #include "EffectsData.h"
 #include "ProgressionData.h"
@@ -518,6 +519,16 @@ Rules loadRules(const Json& j) {
             };
             w.targetTags = weaponTags("targetTags");
             w.ignoreTags = weaponTags("ignoreTags");
+            if (wj.has("extraTargets")) {
+                const auto n = wj.getInt("extraTargets", -1);
+                if (!wj["extraTargets"].isNumber() || n < 0 ||
+                    n > int64_t(lib::mechanics::kMaxExtraWeaponTargets) ||
+                    wj["extraTargets"].fx() != Fixed::fromInt(n))
+                    fail(where + " weapon " + w.id, "extraTargets must be an integer in [0, 16]");
+                w.extraTargets = uint8_t(n);
+            }
+            w.extraTargetTags = weaponTags("extraTargetTags");
+            w.extraIgnoreTags = weaponTags("extraIgnoreTags");
             if (w.targets & kLayerGround) w.targets |= kLayerSandOnly | kLayerNaval;
             w.projectileSpeed = wj.getFx("projectileSpeed");
             if (wj.has("flight")) {
