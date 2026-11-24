@@ -11,3 +11,5 @@
 .world-persistence-backup { display: flex; flex-direction: column; align-items: flex-start; gap: var(--au-space-1,4px); min-width: 0; }
 .world-persistence .au-button { max-width: 100%; white-space: normal; }
 .world-persistence .au-tabs { flex-wrap: wrap; }
+
+.world-persistence-result { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
