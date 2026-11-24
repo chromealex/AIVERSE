@@ -309,6 +309,16 @@ Json GameClient::startRuntimeTextureMaterial(size_t type,size_t choice,size_t ma
     runtimeTextureTask_=view::RuntimeTextureGraphTask{runtimeTextureRequest_,type,choice,current->identity};
     runtimeTextureState_="queued";runtimeTextureReason_.clear();return runtimeTextureMaterialStatus();
 }
+std::optional<GameView::GraphMaterialTargetInfo> GameClient::runtimeTextureMaterialTarget(size_t type,size_t choice,size_t material)const{
+    if(!dev_||!gpuDeviceLease_.validFor(*dev_)||!inMatch())return {};
+    return view_.graphMaterialTarget(type,choice,material);
+}
+render::texture_graph::GraphImageReclaimResult GameClient::collectRuntimeTextureMaterialImages(size_t type,size_t choice,size_t material,
+        const view::LiveAppearanceMaterialTarget& target,const render::texture_graph::GraphImageRoots& external){
+    if(!dev_||!gpuDeviceLease_.validFor(*dev_)||!inMatch()||runtimeTextureTask_||runtimeTextureGraph_.status().getBool("busy"))
+        throw std::runtime_error("runtime texture collection requires an idle live presentation host");
+    return view_.collectGraphMaterialImages(type,choice,material,target,external);
+}
 Json GameClient::runtimeTextureMaterialStatus()const{
     auto r=runtimeTextureGraph_.status();
     r.set("applicationState",Json::string(runtimeTextureState_));
@@ -323,9 +333,16 @@ bool GameClient::cancelRuntimeTextureMaterial(const std::string& request){
     runtimeTextureTask_.reset();runtimeTextureState_="cancelled";runtimeTextureReason_="cancelled by native caller";return true;
 }
 void GameClient::tickRuntimeTextureMaterial(gfx::Device& dev){
+    if(runtimeTextureRequest_.empty())return; // unused feature has no per-frame owner work
     // No render encoders or Model read scopes are active at this frame hook.
     // Cancel stale scene tasks before issuing more GPU work.
-    if(runtimeTextureTask_&&!inMatch()&&gpuDeviceLease_.validFor(dev)){
+    bool targetCurrent=inMatch();
+    if(runtimeTextureTask_&&targetCurrent){
+        const auto& task=*runtimeTextureTask_;
+        const auto current=view_.graphMaterialTarget(task.type,task.choice,task.target.material);
+        targetCurrent=current&&current->identity.publication==task.target.publication&&current->identity.version==task.target.version;
+    }
+    if(runtimeTextureTask_&&!targetCurrent&&gpuDeviceLease_.validFor(dev)){
         const auto request=runtimeTextureTask_->request;
         const auto s=runtimeTextureGraph_.status();
         if(s.getStr("request")==request&&(s.getStr("state")=="queued"||s.getStr("state")=="pending"||s.getStr("state")=="ready"))
@@ -336,7 +353,7 @@ void GameClient::tickRuntimeTextureMaterial(gfx::Device& dev){
     const auto s=runtimeTextureGraph_.status();
     using Decision=view::RuntimeTextureGraphDecision;
     const auto decision=view::decideRuntimeTextureGraph(*runtimeTextureTask_,s.getStr("request"),s.getStr("state"),
-        s.getBool("busy"),s.getBool("gpuTextureSetReady"),inMatch());
+        s.getBool("busy"),s.getBool("gpuTextureSetReady"),targetCurrent);
     if(decision==Decision::Wait){runtimeTextureState_="pending";return;}
     if(decision==Decision::Cancel){cancelRuntimeTextureMaterial(runtimeTextureTask_->request);return;}
     const auto task=*runtimeTextureTask_;
@@ -378,7 +395,7 @@ void GameClient::shutdown() {
     audio_.shutdown();
     horizonFrameTiming_.detach(*dev_);
     if (worldScene_) { worldScene_->shutdown(*dev_); worldScene_.reset(); }
-    if(dev_){
+    if(dev_&&!runtimeTextureRequest_.empty()){
         if(!dev_->waitForResourceIdle())throw std::runtime_error("runtime texture graph shutdown: GPU idle barrier failed");
         runtimeTextureGraph_.shutdownAfterIdle(*dev_);
         runtimeTextureTask_.reset();runtimeTextureState_="idle";runtimeTextureReason_.clear();runtimeTextureRequest_.clear();

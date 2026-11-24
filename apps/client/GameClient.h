@@ -14,6 +14,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -121,6 +122,9 @@ public:
         const Json& graph,const Json& overrides=Json::object(),
         const render::texture_graph::ResidentMaterialOptions& options={});
     Json runtimeTextureMaterialStatus() const;
+    std::optional<GameView::GraphMaterialTargetInfo> runtimeTextureMaterialTarget(size_t type,size_t choice,size_t material) const;
+    render::texture_graph::GraphImageReclaimResult collectRuntimeTextureMaterialImages(size_t type,size_t choice,size_t material,
+        const view::LiveAppearanceMaterialTarget& target,const render::texture_graph::GraphImageRoots& external);
     bool cancelRuntimeTextureMaterial(const std::string& request);
     void event(const platform::Event& e);
     void shutdown();
