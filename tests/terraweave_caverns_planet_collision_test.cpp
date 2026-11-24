@@ -128,7 +128,8 @@ static void checkGiViewProjection(){
     const auto first=before.projector()("planet",local);
     const auto last=after.projector()("planet",local);
     const auto remap=after.remapFrom(before,[](uint64_t id)->std::optional<std::string>{
-        if(id==1)return "planet";return {};
+        if(id==1)return "planet";
+        return {};
     });
     const auto mapped=remap(1,first);
     check(std::abs(mapped.x-last.x)<.001f&&std::abs(mapped.y-last.y)<.001f&&

@@ -91,7 +91,12 @@ public:
         if(publication_.providesBaseline()){
             if(hooks.ensureBaselineGi)throw std::invalid_argument("Caverns competing GI baseline source");
             hooks.ensureBaselineGi=[this,&view](const CavePlanetBodyCutPlan& plan){
-                return exclusive_()&&publication_.ensureBaseline(view.planets(),plan);
+                if(!exclusive_())return false;
+                const auto revision=scene_.revision();
+                if(!publication_.ensureBaseline(view.planets(),plan))return false;
+                // A new baseline may submit GPU work. Resume native staging
+                // only on a subsequent owner frame after the readiness gate.
+                return scene_.revision()==revision&&exclusive_()&&giReady_();
             };
         }
         if(!publication_.bind(hooks)||!hooks.valid())

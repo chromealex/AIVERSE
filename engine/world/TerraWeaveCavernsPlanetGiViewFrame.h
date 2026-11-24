@@ -17,6 +17,16 @@ struct CavePlanetGiViewFrame {
     static CavePlanetGiViewFrame capture(const game::PlanetWorld& world,
             const render::SphereViewFrame& frame,double seconds){
         if(!std::isfinite(seconds))throw std::invalid_argument("Caverns GI frame time");
+        const auto finite=[](render::float3 p){return std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z);};
+        if(!finite(frame.origin)||!finite(frame.right)||!finite(frame.up)||!finite(frame.back)||
+           std::abs(render::dot(frame.right,frame.right)-1.f)>.001f||
+           std::abs(render::dot(frame.up,frame.up)-1.f)>.001f||
+           std::abs(render::dot(frame.back,frame.back)-1.f)>.001f||
+           std::abs(render::dot(frame.right,frame.up))>.001f||
+           std::abs(render::dot(frame.right,frame.back))>.001f||
+           std::abs(render::dot(frame.up,frame.back))>.001f||
+           render::dot(render::cross(frame.right,frame.up),frame.back)<.999f)
+            throw std::invalid_argument("Caverns GI invalid view basis");
         CavePlanetGiViewFrame out;out.frame=frame;
         for(size_t i=0;i<world.bodies.size();++i){
             const auto& id=world.bodies[i].id;
