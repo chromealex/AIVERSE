@@ -84,7 +84,9 @@ static void checkPlanetGravity(){
         AIVERSE_TEST_CHECK(force&&force->y<0);
     }
     const auto a=wp::surfaceFrame(&surface,surface.cellCenter(surface.gridCell(0,0,7,3)));
+    AIVERSE_TEST_CHECK(a);
     const int neighbor=surface.neighbor(a->cell,0);
+    AIVERSE_TEST_CHECK(neighbor>=0);
     const auto seam=wp::surfaceFrame(&surface,surface.cellCenter(neighbor));
     const auto moon=wp::surfaceFrame(&surface,surface.cellCenter(surface.gridCell(1,0,7,3)));
     AIVERSE_TEST_CHECK(a&&seam&&moon&&wp::sameSurfaceBody(*a,*seam));
