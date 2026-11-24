@@ -626,6 +626,7 @@ public:
     // Non-owning native world presentation callback; detach before owner teardown.
     using PlanetCaveDraw=std::function<void(render::Renderer3D&,const render::SphereViewFrame&,double)>;
     void setPlanetCaveDraw(PlanetCaveDraw draw){planetCaveDraw_=std::move(draw);}
+    bool hasPlanetCaveDraw()const noexcept{return bool(planetCaveDraw_);}
     // Per frame before beginScene: orbit camera smoothing; returns the Camera to render with (view world).
     const render::Camera& updatePlanetCamera(double seconds, float dt, int viewH);
     // Screen point -> body + body-local surface point (terrain / ocean picking).
