@@ -5,6 +5,8 @@
 #import <QuartzCore/CAMetalLayer.h>
 #include "apps/studio-native/StudioScene.h"
 #include <chrono>
+#include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <thread>
@@ -175,6 +177,27 @@ int aiverseMain(int,char**) { @autoreleasepool {
         require(replacement.getBool("ready")&&replacement.getInt("tick")==0&&
                 replacement["generation"].integer()>reloaded["generation"].integer(),
                 "successful candidate replacement did not commit a new generation");
+        Json volumeGraph=Json::parse(R"JSON({"version":2,"nodes":[
+          {"id":"spawn","type":"Spawn","properties":{"burst":64}},
+          {"id":"init","type":"Initialize","properties":{"life":2,"speed":0,"size":0.5,"spread":0}},
+          {"id":"out","type":"VolumetricParticleOutput","properties":{"density":3,"emission":2,"steps":8,"depthAware":true}}
+        ],"links":[{"from":"spawn","to":"init"},{"from":"init","to":"out"}],"outputs":["out"]})JSON");
+        Json loadVolume=action("load");loadVolume.set("graph",volumeGraph);
+        const auto volumetric=scene.spectraPreviewCommand(loadVolume,"");
+        require(volumetric.getBool("ready"),"depth-aware volumetric Studio preview load failed");
+        scene.spectraPreviewCommand(action("play"),"");
+        bool capturedVolume=false,validVolume=false;
+        scene.captureNextFrame([&](int w,int h,std::vector<uint8_t> pixels){
+            validVolume=w==192&&h==192&&pixels.size()==size_t(w*h*4);
+            if(validVolume)if(const char* path=std::getenv("AIVERSE_SPECTRA_VOLUME_CAPTURE")){
+                std::ofstream image(path,std::ios::binary);
+                image<<"P6\n"<<w<<" "<<h<<"\n255\n";
+                for(size_t i=0;i<pixels.size();i+=4)image.write(reinterpret_cast<const char*>(pixels.data()+i),3);
+            }
+            capturedVolume=true;
+        });
+        for(int i=0;i<10&&!capturedVolume;++i){frame();std::this_thread::sleep_for(std::chrono::milliseconds(5));}
+        require(capturedVolume&&validVolume,"depth-aware volumetric Studio GPU frame capture failed");
         const auto independentIdentity=mapScene.spectraPreviewCommand(action("status"),"");
         require(independentIdentity["generation"].integer()!=replacement["generation"].integer(),
                 "independent preview reused a runtime generation");

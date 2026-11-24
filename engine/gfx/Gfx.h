@@ -869,8 +869,8 @@ public:
     // live TextureHandles only (not swapchain internals); estimate is not a
     // driver allocation query. Query on the graphics device owner thread.
     virtual std::vector<TextureResourceInfo> textureResources() const { return {}; }
-    // Copies the colour of a render target (invalid = the screen as drawn so far this frame) into `to`: an RGBA8
-    // render target of the same size. Only between passes. False when the backend can't (the screen is not
+    // Copies the colour of a render target (invalid = the screen as drawn so far this frame) into `to`:
+    // an RGBA8 target, or a matching RGBA16F HDR target where supported. Only between passes. False when the backend can't (the screen is not
     // readable: see setScreenReadable, sizes differ); the caller then takes another path.
     virtual bool copyColor(TextureHandle from, TextureHandle to) { (void)from; (void)to; return false; }
     // Optional diagnostics only: synchronously read a completed RGBA8 render

@@ -116,7 +116,7 @@ export default function SpectraGraphAssetInspector({
       onClick={()=>void bake(true,true)}>Link SDF resource</StudioButton>
     {typeof raw==='string'&&<small>Linked: {raw}</small>}
     <small>Import copies up to 32³ samples into the graph. Link supports binary SDF up to 128³, saves only a project resource path; reload to pick up changes. Bake high-resolution files with aiverse_sdf_bake MODEL 64|128 OUT.sdfbin and place them under project content.</small>
-    {bakeStatus&&<small role="status">{bakeStatus}</small>
+    {bakeStatus&&<small role="status">{bakeStatus}</small>}
     {error&&<small role="alert">{error}</small>}
   </section>;
   return <section aria-label="SpectraFX node asset reference">

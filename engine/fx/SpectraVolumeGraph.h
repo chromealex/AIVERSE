@@ -200,7 +200,7 @@ inline bool appendPreset(Json& graph,std::string_view preset,std::string& error)
         if(preset=="fog"){source.set("radius",Json::number(1.5));source.set("acceleration",Json::parse("[0,0,0]"));}
     }else if(preset=="magic")material.set("fireColor",Json::parse("[0.5,1.5,7]"));
     else if(preset=="explosion"){
-        source=Json::parse(R"({"mode":"impulse","duration":0.65,"position":[0,0.5,0],"radius":1.2,"smoke":10,"temperature":25,"fuel":18,"acceleration":[0,6,0]})");
+        source=Json::parse(R"({"mode":"impulse","duration":0.65,"position":[0,0.5,0],"radius":1.2,"smoke":10,"temperature":25,"fuel":18,"acceleration":[0,6,0],"radialAcceleration":35})");
         material.set("emission",Json::number(2.0));
     }
     add("VolumeSource","source",source,270);

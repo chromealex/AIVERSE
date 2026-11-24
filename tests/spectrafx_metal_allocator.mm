@@ -5,6 +5,7 @@
 #import <QuartzCore/CAMetalLayer.h>
 #include "engine/fx/SpectraGpuParticles.h"
 #include "engine/fx/SpectraSceneVolumeWorld.h"
+#include "engine/fx/SpectraSceneVolumetricParticles.h"
 #include <cstring>
 #include <algorithm>
 #include <chrono>
@@ -431,6 +432,60 @@ void volumeHdr(gfx::Device& d){
     require(budget->stats().charged()==baseline,"HDR volume allocation released");
     std::puts("PASS dense volume HDR emission, depth clipping and empty field");
 }
+void volumetricParticleScene(gfx::Device& d){
+    auto graph=Json::parse(R"({"version":2,"nodes":[
+        {"id":"spawn","type":"Spawn","properties":{"burst":64}},
+        {"id":"init","type":"Initialize","properties":{"life":1,"speed":0,"size":0.3,"spread":0}},
+        {"id":"out","type":"VolumetricParticleOutput","properties":{"density":3,"emission":2,"steps":8,"depthAware":true}}
+      ],"links":[{"from":"spawn","to":"init"},{"from":"init","to":"out"}],"outputs":["out"]})");
+    gfx::TextureDesc desc;desc.width=desc.height=side;desc.format=gfx::PixelFormat::RGBA16F;
+    desc.renderTarget=true;auto color=d.createTexture(desc);
+    desc.format=gfx::PixelFormat::Depth;auto depth=d.createTexture(desc);
+    require(color.valid()&&depth.valid(),"volumetric scene targets");
+    spectra::SceneVolumetricParticleWorld world;
+    spectra::SceneVolumetricParticleSource source;
+    source.identity="entity:1";source.effect="volumetric";source.position={0,0,.5f};
+    source.graph=&graph;source.depthAware=true;
+    render::PostFrame post{};post.width=post.height=side;post.viewProj=render::mat4::identity();
+    {
+        Frame frame(d);
+        world.synchronize(d,{source},{});
+        if(!world.error().empty())std::fprintf(stderr,"Volumetric admission: %s\n",world.error().c_str());
+        require(world.active()&&world.error().empty(),"volumetric scene admission");
+        world.prepare(view(),0);
+        require(world.error().empty(),"volumetric scene GPU step");
+        gfx::PassDesc pass;pass.colorTarget=color;pass.depthTarget=depth;
+        pass.clearColor[0]=pass.clearColor[1]=pass.clearColor[2]=0;
+        pass.clearDepth=1;d.beginPass(pass);d.endPass();
+        const auto output=world.composeDepth(d,post,color,depth);
+        require(output.valid()&&output!=color,"volumetric scene depth HDR composition");
+    }
+    require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"volumetric scene GPU completion");
+    world.clear();
+    auto hybridGraph=graph;std::string error;std::vector<std::string> errors;
+    spectra::volume::PresentationGraph hybrid;
+    require(spectra::volume::appendPreset(hybridGraph,"smoke",error)&&
+            spectra::volume::compilePresentationGraph(hybridGraph,Json::object(),hybrid,errors),
+            "volumetric hybrid graph compile");
+    spectra::volume::SceneHybridDefinition definition{hybrid.particleGraph,hybrid.coupling,true};
+    spectra::volume::SceneVolumeSource volumeSource;
+    volumeSource.identity="entity:2";volumeSource.effect="hybrid";
+    volumeSource.asset=&hybrid.volumeAsset;volumeSource.hybrid=&definition;
+    spectra::volume::SceneVolumeWorld volumeWorld;
+    {
+        Frame frame(d);
+        volumeWorld.synchronize(d,{volumeSource},{});
+        if(!volumeWorld.error().empty())std::fprintf(stderr,"Hybrid admission: %s\n",volumeWorld.error().c_str());
+        require(volumeWorld.active()&&volumeWorld.hasDepthParticles(),"volumetric hybrid scene admission");
+        volumeWorld.setView(view());volumeWorld.step(spectra::volume::kTick);
+        gfx::PassDesc pass;pass.colorTarget=color;pass.depthTarget=depth;
+        pass.clearDepth=1;d.beginPass(pass);d.endPass();
+        require(volumeWorld.compose(d,post,color,depth).valid(),"volumetric hybrid depth HDR composition");
+    }
+    require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"volumetric hybrid GPU completion");
+    volumeWorld.clear();d.destroyTexture(color);d.destroyTexture(depth);
+    std::puts("PASS volumetric particle and hybrid scene depth HDR passes");
+}
 void sceneVolumeLifecycle(gfx::Device& d){
     namespace vol=aiverse::spectra::volume;
     if(!vol::supportsVolumeRender(d)){std::puts("SKIP scene volume HDR capability");return;}
@@ -455,7 +510,9 @@ void sceneVolumeLifecycle(gfx::Device& d){
     require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"retrigger complete");
     vol::SceneVolumeWorld world;
     std::vector<vol::SceneVolumeSource> rows;
-    for(int i=0;i<5;++i)rows.push_back({std::to_string(i),"explosion",1,{float(i)*3,0,0},&asset});
+    for(int i=0;i<5;++i){vol::SceneVolumeSource row;row.identity=std::to_string(i);
+        row.effect="explosion";row.revision=1;row.anchor={float(i)*3,0,0};row.asset=&asset;
+        rows.push_back(std::move(row));}
     world.synchronize(d,rows,{});
     require(world.size()==vol::SceneVolumeWorld::capacity&&!world.error().empty(),"scene volume admission cap");
     {Frame frame(d);world.step(vol::kTick);require(world.renderable(),"scene volume published");}
@@ -493,7 +550,7 @@ void memory(gfx::Device& d){
     std::printf("PASS shared budget peak=%zu denied=%llu\n",budget->stats().peak,(unsigned long long)budget->stats().denied);
 }
 }
-int aiverseMain(int,char**){
+int aiverseMain(int argc,char** argv){
     @autoreleasepool {
         auto metal=MTLCreateSystemDefaultDevice();
         if(!metal){std::puts("SKIP no Metal device");return 77;}
@@ -503,6 +560,9 @@ int aiverseMain(int,char**){
         auto d=gfx::createMetalDevice((__bridge void*)layer);
         if(!d||!d->supportsCompute()){std::puts("SKIP no Metal compute");return 77;}
         try{
+            if(argc>1&&std::string(argv[1])=="--volumetric-scene"){
+                volumetricParticleScene(*d);return 0;
+            }
             for(bool procedural:{false,true}){
                 for(uint32_t cap:{256u,65536u,262144u})stress(*d,cap,procedural);
                 lod(*d,procedural);

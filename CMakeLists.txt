@@ -4242,8 +4242,12 @@ if(AIVERSE_BUILD_TESTS AND AIVERSE_PLATFORM STREQUAL "macos")
     target_link_libraries(aiverse_spectrafx_metal_allocator_test PRIVATE
         aiverse_runtime aiverse_fx aiverse_render2d)
     add_test(NAME spectrafx_metal_allocator COMMAND aiverse_spectrafx_metal_allocator_test)
+    add_test(NAME spectrafx_metal_volumetric_scene
+        COMMAND aiverse_spectrafx_metal_allocator_test --volumetric-scene)
     set_tests_properties(spectrafx_metal_allocator PROPERTIES
         LABELS "SpectraFX;MetalGPU;RHI" SKIP_RETURN_CODE 77 TIMEOUT 300)
+    set_tests_properties(spectrafx_metal_volumetric_scene PROPERTIES
+        LABELS "SpectraFX;MetalGPU;Volumetrics" SKIP_RETURN_CODE 77 TIMEOUT 300)
 endif()
 
 # Data-driven entity effects shared by every host (table + presenter).

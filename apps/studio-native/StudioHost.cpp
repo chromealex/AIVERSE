@@ -1225,7 +1225,7 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
     // Preserve the ordinary preview status envelope so the same typed
     // Studio/MCP response can carry a capture result without resetting
     // playback controls in React.
-    const respond=[&](Json capture) {
+    const auto respond=[&](Json capture) {
         Json status=fxPreview_?onScene([&]{
             return fxPreview_->spectraPreviewCommand(
                 Json::parse(R"({"action":"status"})"),

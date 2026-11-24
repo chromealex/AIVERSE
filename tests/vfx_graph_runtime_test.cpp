@@ -49,6 +49,21 @@ int main() {
     fx::EffectDef basic;
     std::vector<std::string> errors;
     require(fx::compileSpectraGraph(graph(),basic,errors),"baseline graph must compile");
+    {
+        auto authored=graph();authored.set("version",Json::number(int64_t(2)));
+        auto* output=authored.find("nodes")->at(2).find("type");
+        *output=Json::string("VolumetricParticleOutput");
+        authored.find("nodes")->at(2).set("properties",Json::parse(
+            R"({"shape":"sphere","density":2,"steps":12,"depthAware":true})"));
+        spectra::volume::PresentationGraph compiled;
+        require(spectra::volume::compilePresentationGraph(authored,Json::object(),compiled,errors)&&
+                compiled.particles&&!compiled.volume&&compiled.particleMaterial.enabled&&
+                compiled.particleMaterial.depthAware,"volumetric particle graph must retain its GPU material");
+        auto invalid=authored;
+        invalid.find("nodes")->at(2).find("properties")->set("steps",Json::number(int64_t(1)));
+        require(!spectra::volume::compilePresentationGraph(invalid,Json::object(),compiled,errors),
+                "invalid volumetric ray-step budget must fail validation");
+    }
 
     sp::GraphRuntimeOptions options;
     options.capacity=128;

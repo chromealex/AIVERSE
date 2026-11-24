@@ -189,6 +189,7 @@ void ClientFx::shutdown() {
 void ClientFx::startMatch(Simulation& sim, uint8_t viewer, const game::GameView& view, const game::MapGrid& grid) {
     clearGraphSources();shutdownGraphPool();
     graphSources_.reset();graphSourceAssets_.clear();graphVolumeAssets_.clear();graphHybridDefinitions_.clear();
+    graphVolumetricParticleGraphs_.clear();graphVolumetricParticleDepth_.clear();
     graphView_=&view;graphGrid_=&grid;
     // Read only the published GameView surface during the owner-thread FX
     // update. No capture survives stopMatch, no secondary physics world.
@@ -266,6 +267,7 @@ void ClientFx::startMatch(Simulation& sim, uint8_t viewer, const game::GameView&
 void ClientFx::stopMatch() {
     clearGraphSources();shutdownGraphPool();
     graphSources_.reset();graphSourceAssets_.clear();graphVolumeAssets_.clear();graphHybridDefinitions_.clear();
+    graphVolumetricParticleGraphs_.clear();graphVolumetricParticleDepth_.clear();
     ps_.setSceneCollisionRegistry({});
     graphView_=nullptr;graphGrid_=nullptr;
     if(entityInbox_) {entityInbox_->active=false;entityInbox_.reset();}
@@ -321,6 +323,7 @@ void ClientFx::shutdownGraphPool() {
 void ClientFx::clearGraphSources() {
     finishGraphGpuFrame();
     graphVolumes_.clear();
+    graphVolumetricParticles_.clear();
     if(graphPool_.ready()) {
         graphPool_.discardCollisionChildren();
         graphPool_.setDataInterfaceRegistry(nullptr);
@@ -352,7 +355,16 @@ std::string ClientFx::graphSourceAsset(const std::string& name,bool allowGpu) {
         spectra::volume::PresentationGraph compiled;
         std::vector<std::string> errors;
         if(!spectra::volume::compilePresentationGraph(graph,Json::object(),compiled,errors,platform::readContentFile))return {};
-        if(compiled.particleMaterial.enabled){std::fprintf(stderr,"SpectraFX volumetric particles need dedicated scene routing\\n");return {};}
+        if(compiled.particleMaterial.enabled){
+            if(compiled.volume){
+                graphHybridDefinitions_[name]={std::move(compiled.particleGraph),compiled.coupling,compiled.particleMaterial.depthAware};
+                graphVolumeAssets_[name]=std::move(compiled.volumeAsset);
+                return {};
+            }
+            graphVolumetricParticleGraphs_[name]=std::move(compiled.particleGraph);
+            graphVolumetricParticleDepth_[name]=compiled.particleMaterial.depthAware;
+            return {};
+        }
         if(compiled.volume){
             if(!compiled.particles){graphVolumeAssets_[name]=std::move(compiled.volumeAsset);return {};}
             graph=compiled.particleGraph;
@@ -418,7 +430,7 @@ std::string ClientFx::graphSourceAsset(const std::string& name,bool allowGpu) {
 void ClientFx::presentGraphSources(Simulation& sim,const game::GameScene& scene,
                                     const render::Camera& camera,bool allowGpu,bool allowVolumes) {
     if(!attached_) {
-        if(graphSourceHaveTick_||graphSourceMirror_.size()||graphVolumes_.active())clearGraphSources();
+        if(graphSourceHaveTick_||graphSourceMirror_.size()||graphVolumes_.active()||graphVolumetricParticles_.active())clearGraphSources();
         return;
     }
     const World& world=sim.world();
@@ -427,6 +439,7 @@ void ClientFx::presentGraphSources(Simulation& sim,const game::GameScene& scene,
     if(!graphSources_)graphSources_=std::make_unique<lib::mechanics::SpectraPresentationSystem>(ps_);
     std::vector<lib::mechanics::SpectraSourceSnapshot> rows;
     std::vector<spectra::volume::SceneVolumeSource> volumes;
+    std::vector<spectra::SceneVolumetricParticleSource> volumetricParticles;
     size_t examined=0;
     // Do not enumerate hidden authoritative entities to emit effects.
     // The prepared presentation scene already resolved visibility and pose.
@@ -441,10 +454,24 @@ void ClientFx::presentGraphSources(Simulation& sim,const game::GameScene& scene,
         ++examined;
         auto resolved=*source;
         resolved.effect=graphSourceAsset(source->effect,allowGpu);
+        if(allowVolumes&&dev_){
+            const auto authored=graphVolumetricParticleGraphs_.find(source->effect);
+            if(authored!=graphVolumetricParticleGraphs_.end()){
+                spectra::SceneVolumetricParticleSource row;
+                row.identity=std::to_string(object.entity.packed());row.effect=source->effect;
+                row.revision=source->revision;row.position=position;row.direction=direction;
+                row.scale=float(source->scale.toDouble());row.graph=&authored->second;
+                row.depthAware=graphVolumetricParticleDepth_.at(source->effect);
+                for(const auto& [name,value]:source->parameters)row.parameters.emplace(name,float(value.toDouble()));
+                volumetricParticles.push_back(std::move(row));
+            }
+        }
         if(const auto it=graphVolumeAssets_.find(source->effect);it!=graphVolumeAssets_.end()){
             // Only static, unit-scale flat-map anchors are admitted here.
             if(allowVolumes&&dev_){
-                spectra::volume::SceneVolumeSource row{std::to_string(object.entity.packed()),source->effect,source->revision,position,&it->second};
+                spectra::volume::SceneVolumeSource row;
+                row.identity=std::to_string(object.entity.packed());row.effect=source->effect;
+                row.revision=source->revision;row.anchor=position;row.asset=&it->second;
                 row.scale=float(source->scale.toDouble());
                 if(auto hybrid=graphHybridDefinitions_.find(source->effect);hybrid!=graphHybridDefinitions_.end()){
                     row.hybrid=&hybrid->second;row.direction=direction;
@@ -459,8 +486,9 @@ void ClientFx::presentGraphSources(Simulation& sim,const game::GameScene& scene,
     }
     if(allowVolumes&&dev_){
         graphVolumes_.synchronize(*dev_,volumes,platform::readContentFile);
+        graphVolumetricParticles_.synchronize(*dev_,volumetricParticles,platform::readContentFile);
     }
-    if(rows.empty()&&volumes.empty()) {
+    if(rows.empty()&&volumes.empty()&&volumetricParticles.empty()) {
         graphSources_->setDataInterfaceRegistry(nullptr);
         if(graphPool_.ready())graphPool_.setDataInterfaceRegistry(nullptr);
         liveFields_.clear();graphRegistry_.reset();
@@ -543,12 +571,14 @@ void ClientFx::prepareGraphGpuFrame(Simulation& sim,const game::GameScene& scene
         if(graphGpuSources_->resetForRollback())graphPoolResetPending_=false;
     }
     // Keep the original post-GameView CPU placement on planets.
-    if(!allowed)graphVolumes_.clear();
+    if(!allowed){graphVolumes_.clear();graphVolumetricParticles_.clear();}
     if(planet_)return;
     const auto view=fx::SpectraFxView::fromCamera(camera,viewProj,width,height);
     const bool gpu=allowed&&view.valid()&&!graphPoolResetPending_&&!graphPool_.presentationBlocked();
     presentGraphSources(sim,scene,camera,gpu,allowed&&view.valid());
     if(allowed&&view.valid()){graphVolumes_.setView(view);graphVolumes_.applyEnvironment(graphRegistry_.get());graphVolumes_.step(dt);}else graphVolumes_.clear();
+    if(allowed&&view.valid())graphVolumetricParticles_.prepare(view,dt);
+    else graphVolumetricParticles_.clear();
     graphSourcesPrepared_=true;
     if(!gpu||!graphGpuSources_||!graphPool_.ready())return;
     if(!graphPool_.beginPresentationFrame(view)) {
@@ -567,9 +597,11 @@ void ClientFx::prepareGraphGpuFrame(Simulation& sim,const game::GameScene& scene
 }
 
 void ClientFx::contributeVolumes(render::Prisma& prisma){
-    if(!graphVolumes_.renderable())return;
+    if(!graphVolumes_.renderable()&&!graphVolumes_.hasDepthParticles()&&!graphVolumetricParticles_.hasDepth())return;
     prisma.setSceneHdrContributor([this](gfx::Device& d,const render::PostFrame& f,gfx::TextureHandle c,gfx::TextureHandle z){
-        return graphVolumes_.compose(d,f,c,z);
+        const auto volume=graphVolumes_.compose(d,f,c,z);
+        const auto particles=graphVolumetricParticles_.composeDepth(d,f,volume.valid()?volume:c,z);
+        return particles.valid()?particles:volume;
     });
 }
 
@@ -719,6 +751,7 @@ void ClientFx::render(const render::Lighting& lighting) {
     ps_.setLightDir(lighting.sunDir);   // shading of mesh particles
     ps_.render({lighting.fogColor, lighting.fogDensity});
     graphVolumes_.drawParticles({lighting.fogColor,lighting.fogDensity});
+    graphVolumetricParticles_.drawInline({lighting.fogColor,lighting.fogDensity});
     if(graphPoolOpen_) {
         graphPool_.draw({lighting.fogColor,lighting.fogDensity});
         finishGraphGpuFrame();

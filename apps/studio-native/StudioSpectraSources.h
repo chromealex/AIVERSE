@@ -3,6 +3,7 @@
 #pragma once
 #include "libraries/include/aiverselib/mechanics/SpectraSourceMirror.h"
 #include "engine/fx/SpectraFX.h"
+#include "engine/fx/SpectraSceneVolumetricParticles.h"
 #include "engine/fx/SpectraSdfFileIO.h"
 #include "engine/fx/SpectraScenePoolEmission.h"
 #include "libraries/include/aiverselib/mechanics/SpectraGpuAttachmentEcsAdapter.h"
@@ -25,7 +26,8 @@ public:
         gpuPresenter_.reset();gpuMirror_.clear();gpuPool_.shutdown();gpuDefinitions_.clear();
         presenter_.reset();mirror_.clear();
         particles_.shutdown();textures_.shutdown();
-        volumeWorld_.clear();volumeDefinitions_.clear();volumeOnly_.clear();hybridDefinitions_.clear();
+        volumeWorld_.clear();volumetricWorld_.clear();volumeDefinitions_.clear();volumeOnly_.clear();hybridDefinitions_.clear();
+        volumetricDefinitions_.clear();volumetricDepth_.clear();
         definitions_.clear();schemas_.clear();project_.clear();mapPath_.clear();error_.clear();
         dataRegistry_.reset();externalRegistry_=false;
         collisionRegistry_.reset();
@@ -51,11 +53,14 @@ private:
 public:
     bool animated() const{
         return ready_&&(mirror_.size()!=0||particles_.stats().particles>0||
-            gpuMirror_.size()!=0||gpuPool_.stats().gpuParticlesEstimated>0||gpuPool_.stats().cpuParticles>0||volumeWorld_.active());
+            gpuMirror_.size()!=0||gpuPool_.stats().gpuParticlesEstimated>0||gpuPool_.stats().cpuParticles>0||
+            volumeWorld_.active()||volumetricWorld_.active());
     }
     const std::string& error()const{return error_;}
-    bool hasVolumes()const{return volumeWorld_.renderable();}
+    bool hasVolumes()const{return volumeWorld_.renderable()||volumeWorld_.hasDepthParticles();}
+    bool hasVolumetricDepth()const{return volumetricWorld_.hasDepth();}
     gfx::TextureHandle composeVolumes(gfx::Device& d,const render::PostFrame& f,gfx::TextureHandle color,gfx::TextureHandle depth){return volumeWorld_.compose(d,f,color,depth);}
+    gfx::TextureHandle composeVolumetricDepth(gfx::Device& d,const render::PostFrame& f,gfx::TextureHandle color,gfx::TextureHandle depth){return volumetricWorld_.composeDepth(d,f,color,depth);}
     void synchronize(gfx::Device& device,const editor::MapDoc& doc,const std::string& project,
                      const std::set<std::string>& hidden,
                      float levelHeight=1.5f,bool showTerrain=true,
@@ -66,6 +71,7 @@ public:
         }
         if(project.empty()||doc.data.worldSpace||doc.data.planet()){
             volumeWorld_.clear();
+            volumetricWorld_.clear();
             if(ready_){mirror_.clear();gpuMirror_.clear();}
             if(!externalRegistry_)installRegistry({});
             collisionRegistry_.reset();particles_.setSceneCollisionRegistry({});
@@ -89,9 +95,10 @@ public:
         fieldLevelHeight_=levelHeight;fieldShowTerrain_=showTerrain;
         std::vector<lib::mechanics::SpectraSourceSnapshot> rows,gpuRows;
         std::vector<spectra::volume::SceneVolumeSource> volumes;
+        std::vector<spectra::SceneVolumetricParticleSource> volumetricParticles;
         std::set<std::string> seen;
         error_.clear();
-        for(size_t i=0;i<doc.data.entities.size()&&rows.size()+gpuRows.size()+volumes.size()<65536;++i){
+        for(size_t i=0;i<doc.data.entities.size()&&rows.size()+gpuRows.size()+volumes.size()+volumetricParticles.size()<65536;++i){
             const auto& entity=doc.data.entities[i];
             const auto& value=entity.extra["components"]["SpectraSource"];
             if(!value.isObject()||!entity.at.isNull())continue;
@@ -110,8 +117,20 @@ public:
                 }
                 const auto transform=editor::authoredLocalTransform(entity);
                 const auto p=transform.position;
+                if(const auto authored=volumetricDefinitions_.find(source.effect);authored!=volumetricDefinitions_.end()){
+                    spectra::SceneVolumetricParticleSource row;
+                    row.identity=identity;row.effect=source.effect;row.revision=source.revision;
+                    row.position={float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())};
+                    row.scale=float(source.scale.toDouble());row.graph=&authored->second;
+                    row.depthAware=volumetricDepth_.at(source.effect);
+                    for(const auto& [name,value]:source.parameters)row.parameters.emplace(name,float(value.toDouble()));
+                    volumetricParticles.push_back(std::move(row));continue;
+                }
                 if(auto it=volumeDefinitions_.find(source.effect);it!=volumeDefinitions_.end()){
-                    spectra::volume::SceneVolumeSource row{identity,source.effect,source.revision,{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())},&it->second};
+                    spectra::volume::SceneVolumeSource row;
+                    row.identity=identity;row.effect=source.effect;row.revision=source.revision;
+                    row.anchor={float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())};
+                    row.asset=&it->second;
                     row.scale=float(source.scale.toDouble());
                     if(auto hybrid=hybridDefinitions_.find(source.effect);hybrid!=hybridDefinitions_.end()){
                         row.hybrid=&hybrid->second;
@@ -127,7 +146,9 @@ public:
             }catch(const std::exception& e){error_=e.what();}
         }
         volumeWorld_.synchronize(device,volumes,fx::projectSdfReader(project_));
+        volumetricWorld_.synchronize(device,volumetricParticles,fx::projectSdfReader(project_));
         if(!volumeWorld_.error().empty())error_=volumeWorld_.error();
+        if(!volumetricWorld_.error().empty())error_=volumetricWorld_.error();
         mirror_.sync(rows);gpuMirror_.sync(gpuRows);
         // Retain loaded definitions while their detached particles fade.
         // Definition count is bounded for this document session.
@@ -135,7 +156,9 @@ public:
     void prepare(const fx::SpectraFxView& view,float dt){
         if(!ready_||!view.valid())return;
         volumeWorld_.setView(view);volumeWorld_.applyEnvironment(dataRegistry_.get());volumeWorld_.step(dt);
+        volumetricWorld_.prepare(view,dt);
         if(!volumeWorld_.error().empty())error_=volumeWorld_.error();
+        if(!volumetricWorld_.error().empty())error_=volumetricWorld_.error();
         particles_.setView(view);
         presenter_->sync(mirror_.world(),lib::mechanics::SpectraSourceMirror::resolve);
         if(!presenter_->dataInterfaceError().empty())error_=presenter_->dataInterfaceError();
@@ -151,7 +174,7 @@ public:
             if(!gpuPool_.step(dt)){error_=gpuPool_.reason();finish();}
         }
     }
-    void draw(){if(ready_){particles_.render({});volumeWorld_.drawParticles();}if(gpuFrameOpen_)gpuPool_.draw();}
+    void draw(){if(ready_){particles_.render({});volumeWorld_.drawParticles();volumetricWorld_.drawInline();}if(gpuFrameOpen_)gpuPool_.draw();}
     void finish(){if(gpuFrameOpen_){gpuPool_.endPresentationFrame();gpuFrameOpen_=false;}}
 private:
     static constexpr uint32_t kStudioMaxGroupSlots=65536;
@@ -214,7 +237,20 @@ private:
         if(graph.getInt("version")!=2||!spectra::volume::compilePresentationGraph(graph,Json::object(),compiled,errors,fx::projectSdfReader(project_))){
             error_=errors.empty()?"Invalid SpectraFX graph: "+name:errors.front();return false;
         }
-        if(compiled.particleMaterial.enabled){error_="Volumetric particles need dedicated scene routing";return false;}
+        if(compiled.particleMaterial.enabled){
+            spectra::InstanceParameterTable named;
+            if(!spectra::loadInstanceParameterTable(compiled.particleGraph["instanceParameters"],named,errors)){
+                error_=errors.empty()?"Invalid SpectraFX parameter schema":errors.front();return false;
+            }
+            if(compiled.volume){
+                hybridDefinitions_[name]={std::move(compiled.particleGraph),compiled.coupling,compiled.particleMaterial.depthAware};
+                volumeDefinitions_[name]=std::move(compiled.volumeAsset);
+                schemas_[name]=std::move(named);definitions_.insert(name);return true;
+            }
+            volumetricDefinitions_[name]=std::move(compiled.particleGraph);
+            volumetricDepth_[name]=compiled.particleMaterial.depthAware;
+            schemas_[name]=std::move(named);definitions_.insert(name);return true;
+        }
         if(compiled.volume){
             if(!compiled.particles){volumeDefinitions_[name]=std::move(compiled.volumeAsset);volumeOnly_.insert(name);schemas_[name]={};definitions_.insert(name);return true;}
             graph=compiled.particleGraph;
@@ -280,6 +316,9 @@ private:
     float fieldLevelHeight_=0;
     bool fieldShowTerrain_=false;
     spectra::volume::SceneVolumeWorld volumeWorld_;
+    spectra::SceneVolumetricParticleWorld volumetricWorld_;
+    std::map<std::string,Json> volumetricDefinitions_;
+    std::map<std::string,bool> volumetricDepth_;
     std::map<std::string,spectra::volume::Asset> volumeDefinitions_;
     std::set<std::string> volumeOnly_;
     std::map<std::string,spectra::volume::SceneHybridDefinition> hybridDefinitions_;

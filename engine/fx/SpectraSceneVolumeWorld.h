@@ -3,6 +3,7 @@
 #include "SpectraGpuVolumeRenderer.h"
 #include "SpectraVolumeGraph.h"
 #include "SpectraGraphRuntime.h"
+#include "SpectraSceneVolumetricParticles.h"
 #include <map>
 #include <set>
 #include <memory>
@@ -123,6 +124,7 @@ private:
 struct SceneHybridDefinition {
     Json graph;
     ParticleVolumeCoupling coupling;
+    bool particleDepthAware=false;
 };
 struct SceneVolumeSource {
     std::string identity,effect;
@@ -139,9 +141,10 @@ struct SceneVolumeSource {
 class SceneVolumeWorld final {
 public:
     static constexpr size_t capacity=4;
-    void clear(){entries_.clear();error_.clear();}
+    void clear(){entries_.clear();depthTarget_.clear();error_.clear();}
     bool active()const{return !entries_.empty();}
     bool renderable()const{for(const auto& [id,e]:entries_)if(e.instance->published())return true;return false;}
+    bool hasDepthParticles()const{for(const auto& [id,e]:entries_)if(e.particles&&e.particleDepthAware&&!e.failed)return true;return false;}
     const std::string& error()const{return error_;}
     size_t size()const{return entries_.size();}
     size_t bytes()const{size_t n=0;for(const auto& [id,e]:entries_)n+=e.instance->bytes();return n;}
@@ -170,7 +173,7 @@ public:
             if(row->hybrid){
                 coupling=row->hybrid->coupling;
                 GraphRuntimeOptions options;options.preference=ComputePreference::RequireGpu;
-                options.gpuProgram=true;options.sdfReader=reader;
+                options.gpuProgram=true;options.proceduralBillboards=true;options.sdfReader=reader;
                 particles=std::make_unique<GraphRuntime>();
                 if(!particles->initGraph(&d,row->hybrid->graph,Json::object(),options)||
                    !particles->dataInterfaceBindings().empty()){
@@ -183,7 +186,7 @@ public:
                     error_="Scene hybrid initial burst rejected";continue;
                 }
             }
-            entries_.emplace(id,Entry{row->effect,row->revision,0,std::move(instance),std::move(particles),coupling,false,row->scale});
+            entries_.emplace(id,Entry{row->effect,row->revision,0,std::move(instance),std::move(particles),coupling,false,row->scale,row->hybrid&&row->hybrid->particleDepthAware});
         }
     }
     // Explicit world-space particle deposit into a named resident volume.
@@ -205,7 +208,7 @@ public:
         for(auto& [id,e]:entries_)if(e.particles)e.particles->setView(view);
     }
     void drawParticles(const fx::FxFog& fog={}){
-        for(auto& [id,e]:entries_)if(e.particles&&!e.failed)e.particles->draw(fog);
+        for(auto& [id,e]:entries_)if(e.particles&&!e.failed&&!e.particleDepthAware)e.particles->draw(fog);
     }
     void step(float dt){
         if(!std::isfinite(dt)||dt<0)return;
@@ -234,11 +237,24 @@ public:
             auto next=order[i]->draw(d,f,result,depth);
             if(next.valid())result=next;else error_=order[i]->error();
         }
+        if(hasDepthParticles()){
+            auto particles=depthTarget_.compose(d,f,result,depth,[&](gfx::TextureHandle sampledDepth){
+                bool ok=true;
+                for(auto& [id,e]:entries_)if(e.particles&&e.particleDepthAware&&!e.failed&&
+                    !e.particles->drawWithVolumeDepth(sampledDepth)){
+                    error_=e.particles->reason();ok=false;
+                }
+                return ok;
+            });
+            if(particles.valid())result=particles;
+            else if(error_.empty())error_=depthTarget_.error();
+        }
         return result==color?gfx::TextureHandle{}:result;
     }
 private:
-    struct Entry{std::string effect;uint32_t revision;float phase;std::unique_ptr<VolumeInstance> instance;std::unique_ptr<GraphRuntime> particles;ParticleVolumeCoupling coupling;bool failed;float scale;};
+    struct Entry{std::string effect;uint32_t revision;float phase;std::unique_ptr<VolumeInstance> instance;std::unique_ptr<GraphRuntime> particles;ParticleVolumeCoupling coupling;bool failed;float scale;bool particleDepthAware;};
     std::map<std::string,Entry> entries_;
+    spectra::VolumetricParticleDepthTarget depthTarget_;
     std::string error_;
 };
 }

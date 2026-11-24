@@ -1975,11 +1975,13 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         renderer_.lighting.sunDir={std::cos(e)*std::sin(a),std::sin(e),std::cos(e)*std::cos(a)};
         renderer_.lighting.sunColor=skyShot_->sunColor;renderer_.lighting.sunIntensity=1.3f;
     }
-    if(spectraPreview_->hasVolume()||spectraSources_.hasVolumes()){
+    if(spectraPreview_->hasHdrContribution()||spectraSources_.hasVolumes()||spectraSources_.hasVolumetricDepth()){
         post_.setSceneHdrContributor([this](gfx::Device& d,const render::PostFrame& f,gfx::TextureHandle c,gfx::TextureHandle z){
             auto scene=spectraSources_.composeVolumes(d,f,c,z);
             auto preview=spectraPreview_->drawVolume(d,f,scene.valid()?scene:c,z);
-            return preview.valid()?preview:scene;
+            auto base=preview.valid()?preview:scene;
+            auto particles=spectraSources_.composeVolumetricDepth(d,f,base.valid()?base:c,z);
+            return particles.valid()?particles:base;
         });
     }
     renderer_.render(pass,useLighting?lightingRuntime_.pipeline(post_):static_cast<PostProcess*>(&post_));

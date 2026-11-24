@@ -8,6 +8,7 @@
 #include "engine/fx/SpectraGraphRuntime.h"
 #include "engine/fx/SpectraCheckpointTimelineFile.h"
 #include "engine/fx/SpectraFX.h"
+#include "engine/fx/SpectraSceneVolumetricParticles.h"
 #include "engine/render/Prisma.h"
 #include <algorithm>
 #include <chrono>
@@ -145,8 +146,6 @@ public:
             std::vector<std::string> errors;
             if(!spectra::volume::compilePresentationGraph(graph,Json::object(),checked,errors,snapshotReader))
                 return transferStatus(errors.empty()?"SpectraFX graph validation failed":errors.front());
-            if(checked.particleMaterial.enabled&&checked.particleMaterial.depthAware)
-                return transferStatus("Depth-aware particle preview requires detached opaque depth integration");
             // Allocate a candidate while the last-known-good instance remains
             // intact. The render owner is between frames, with no open pass.
             device.waitForResourceIdle();
@@ -182,6 +181,9 @@ public:
             runtime_.swap(candidate);
             candidate.reset();
             volumeGrid_=std::move(candidateVolume);
+            depthTarget_.clear();
+            volumetricParticleMaterial_=checked.particleMaterial.enabled;
+            volumetricParticleDepth_=checked.particleMaterial.enabled&&checked.particleMaterial.depthAware;
             coupling_=checked.coupling;
             hasParticles_=checked.particles;volumeRendered_=false;
             authoredGraph_=graph;
@@ -205,6 +207,7 @@ public:
             gpuSeedFailed_=false;gpuSeedRetryCount_=0;
             backend_=runtime_->gpuActive()?(runtime_->backend()==spectra::ComputeBackend::Vulkan?"Vulkan GPU":"Metal GPU"):"CPU (full effect)";
             if(volumeGrid_)backend_=std::string(device.info().backend==gfx::Backend::Vulkan?"Vulkan":"Metal")+(hasParticles_?" GPU volume + particles":" GPU volume");
+            else if(checked.particleMaterial.enabled)backend_+=" volumetric particles";
             error_.clear();
             generation_=nextSpectraIdentity();
             return status();
@@ -529,19 +532,27 @@ public:
     // Draw only inside the SAME still-open native Scene pass (before PRISMA
     // resolves that frame). No RHI work is ever submitted by the HTML UI.
     void draw() {
-        if(ready_&&hasParticles_) runtime_->draw();
+        if(ready_&&hasParticles_&&!volumetricParticleDepth_)runtime_->draw();
     }
     bool active() const {return ready_;}
-    bool hasVolume()const{return ready_&&bool(volumeGrid_);}
+    bool hasVolume()const{return ready_&&(bool(volumeGrid_)||volumetricParticleMaterial_);}
+    bool hasHdrContribution()const{return ready_&&(bool(volumeGrid_)||volumetricParticleDepth_);}
     void contributeVolume(render::Prisma& post){
-        if(!hasVolume())return;
+        if(!hasHdrContribution())return;
         post.setSceneHdrContributor([this](gfx::Device& device,const render::PostFrame& frame,
             gfx::TextureHandle color,gfx::TextureHandle depth){return drawVolume(device,frame,color,depth);});
     }
     gfx::TextureHandle drawVolume(gfx::Device& device,const render::PostFrame& frame,gfx::TextureHandle color,gfx::TextureHandle depth){
-        if(!volumeGrid_||!volumeGrid_->published())return {};
-        auto out=volumeGrid_->draw(device,frame,color,depth);volumeRendered_=out.valid();
-        if(!out.valid())error_=volumeGrid_->error();return out;
+        gfx::TextureHandle volume;
+        if(volumeGrid_&&volumeGrid_->published()){
+            volume=volumeGrid_->draw(device,frame,color,depth);volumeRendered_=volume.valid();
+            if(!volume.valid())error_=volumeGrid_->error();
+        }
+        if(!volumetricParticleDepth_)return volume;
+        auto particles=depthTarget_.compose(device,frame,volume.valid()?volume:color,depth,
+            [&](gfx::TextureHandle sampledDepth){return runtime_->drawWithVolumeDepth(sampledDepth);});
+        if(!particles.valid())error_=runtime_->reason().empty()?depthTarget_.error():runtime_->reason();
+        return particles.valid()?particles:volume;
     }
     bool needsFrame() const {
         return ready_ && (fileImportPending_ || checkpointRequest_ || rollbackId_ || playing_ || pendingRestart_ || hasPendingGpuAllocationSeed_ ||
@@ -628,7 +639,8 @@ public:
     }
     void stop(gfx::Device& device) {
         device.waitForResourceIdle();
-        volumeGrid_.reset();coupling_={};hasParticles_=true;volumeRendered_=false;
+        volumeGrid_.reset();depthTarget_.clear();volumetricParticleDepth_=false;volumetricParticleMaterial_=false;
+        coupling_={};hasParticles_=true;volumeRendered_=false;
         runtime_->shutdown();
         authoredGraph_=Json::object();authoredGpuBirthRandom_=false;authoredGpuOwnedAllocation_=false;
         checkpointTicks_.clear();checkpointRequest_=false;rollbackId_=0;
@@ -668,8 +680,9 @@ private:
     bool authoredGpuBirthRandom_=false,authoredGpuOwnedAllocation_=false;
     std::unique_ptr<spectra::GraphRuntime> runtime_=std::make_unique<spectra::GraphRuntime>();
     std::unique_ptr<spectra::volume::VolumeInstance> volumeGrid_;
+    spectra::VolumetricParticleDepthTarget depthTarget_;
     spectra::volume::ParticleVolumeCoupling coupling_;
-    bool hasParticles_=true,volumeRendered_=false;
+    bool hasParticles_=true,volumeRendered_=false,volumetricParticleDepth_=false,volumetricParticleMaterial_=false;
     std::map<std::string,float> requestedParameters_;
     bool ready_=false,playing_=false,pendingRestart_=false,restartBurstPending_=false;
     bool loop_=true;

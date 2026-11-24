@@ -39,6 +39,7 @@ public:
 #else
 #include "engine/fx/ParticleSystem.h"
 #include "engine/fx/SpectraSceneVolumeWorld.h"
+#include "engine/fx/SpectraSceneVolumetricParticles.h"
 #include "engine/render/Prisma.h"
 #include "engine/fx/SpectraFxGpuRoutes.h"
 #include "engine/fx/SpectraFxSimulationBridge.h"
@@ -163,6 +164,9 @@ private:
     std::map<std::string,std::string> graphSourceAssets_;
     std::map<std::string,spectra::volume::Asset> graphVolumeAssets_;
     spectra::volume::SceneVolumeWorld graphVolumes_;
+    std::map<std::string,Json> graphVolumetricParticleGraphs_;
+    std::map<std::string,bool> graphVolumetricParticleDepth_;
+    spectra::SceneVolumetricParticleWorld graphVolumetricParticles_;
     std::map<std::string,spectra::volume::SceneHybridDefinition> graphHybridDefinitions_;
     spectra::GpuPoolWorld graphPool_;
     lib::mechanics::SpectraSourceMirror graphGpuMirror_;

@@ -50,7 +50,6 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
   const [pinned,setPinned]=useState(false);
   const [search,setSearch]=useState('');
   const [providerSearch,setProviderSearch]=useState('');
-  const [selectedOutput,setSelectedOutput]=useState('');
   const [selectedResourceNode,setSelectedResourceNode]=useState('');
   const [binding,setBinding]=useState<FxDataInterface>(blankBinding);
   const [paramName,setParamName]=useState('');
@@ -111,7 +110,6 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
       const parsed=graphV2(r.graph);
       if(!parsed)throw new Error('This asset is not a Graph v2. Upgrade it using the graph tools first.');
       setSaved(parsed);setGraph(parsed);setSelected(item);
-      setSelectedOutput(parsed.nodes.find(n=>n.type==='SpriteOutput')?.id??'');
       const first=Object.keys(parsed.instanceParameters??{})[0]??'';
       if(!pinned || !parsed.instanceParameters?.[selectedName])chooseParameter(first,parsed);
       else chooseParameter(selectedName,parsed);
@@ -149,7 +147,6 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
         if(verified.ok!==true)throw new Error('Native starter validation failed: '+diagnostics(verified));
       }
       setSelected({name,draft:true,valid:true});setSaved(null);setGraph(next);
-      setSelectedOutput(next.nodes.find(n=>n.type==='SpriteOutput')?.id??'');
       setSelectedName('');setValidation(verified);
       setNewName(nextUnusedGraphName([...assets,{name}], 'preview_fx'));
       setSearch('');
