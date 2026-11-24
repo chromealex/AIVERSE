@@ -1,6 +1,7 @@
 #include "apps/editor/AuthoringWater.h"
 #include "apps/studio-native/StudioScene.h"
 #include "apps/studio-native/StudioPlanetLiveBudget.h"
+#include "apps/studio-native/StudioPlanetLiveTerrain.h"
 #include "engine/render/TerraWeaveModelAdapter.h"
 #include "engine/render/TerraWeaveRootModel.h"
 #include "engine/render/TerraWeaveArborWind.h"
@@ -585,6 +586,29 @@ void StudioScene::syncDocumentModels(
     }
 }
 
+void StudioScene::clearLivePlanetTerrain(){
+    if(planetLiveTerrain_.vb.valid())device_->destroyBuffer(planetLiveTerrain_.vb);
+    if(planetLiveTerrain_.ib.valid())device_->destroyBuffer(planetLiveTerrain_.ib);
+    planetLiveTerrain_={};planetLiveTerrainGrid_=Json{};
+}
+bool StudioScene::syncLivePlanetTerrain(const editor::MapDoc& doc,const std::string& projectPath){
+    const auto& layer=planetLiveSnapshot_["forestTerrain"];
+    if(!planetForestLiveCurrent(doc,projectPath)||!layer.getBool("active")||
+       layer.getInt("tick",-1)!=planetLiveSnapshot_["forest"].getInt("tick",-2)||
+       layer["grid"].getStr("body")!=planetPreview_->bodyId)return false;
+    const auto& grid=layer["grid"];
+    if(grid==planetLiveTerrainGrid_&&planetLiveTerrain_.vb.valid()&&planetLiveTerrain_.ib.valid())return true;
+    const int bi=doc.data.findBody(planetPreview_->bodyId);if(bi<0)return false;
+    const auto mesh=buildStudioLivePlanetTerrain(grid,doc.data.bodies[size_t(bi)],*planetPreview_);
+    if(!mesh||!device_->waitForResourceIdle())return false;
+    auto next=mesh->upload(*device_);
+    if(!next.vb.valid()||!next.ib.valid()){
+        if(next.vb.valid())device_->destroyBuffer(next.vb);
+        if(next.ib.valid())device_->destroyBuffer(next.ib);
+        return false;
+    }
+    clearLivePlanetTerrain();planetLiveTerrain_=next;planetLiveTerrainGrid_=grid;return true;
+}
 void StudioScene::clearPlanetForestModels(){
     if(device_)for(auto& [id,model]:planetForestModels_)if(model)releasePreviewModel(*model);
     if(device_)for(auto& [key,model]:planetForestRootModels_)if(model)releasePreviewModel(*model);
@@ -854,6 +878,7 @@ void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std
 StudioScene::~StudioScene() {
     if (device_) {
         device_->waitForResourceIdle();
+        clearLivePlanetTerrain();
         clearPlanetForestModels();
         clearDocumentModels();
         lightingRuntime_.shutdown(*device_,renderer_);
@@ -971,6 +996,7 @@ std::optional<Json> StudioScene::forestPick(float x,float y,float w,float h,cons
     result.set("body",Json::string(planetPreview_->bodyId));return result;
 }
 std::optional<Json> StudioScene::forestGroundPlacement(float x,float y,float w,float h,const std::string& path,uint64_t revision)const{
+    if(planetLiveSnapshot_["forest"].getBool("active")&&planetLivePath_==path&&planetLiveRevision_==revision)return {};
     if(!planetMode_||!planetPreview_||!cameraInitialized_||planetMapPath_!=path||planetRevision_!=revision||
        w<2||h<2||x<0||y<0||x>w||y>h)return {};
     float3 o,d;if(!viewCamera().screenRay(x,y,w,h,o,d))return {};
@@ -1896,6 +1922,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     if(planetMode_){
         if(!device_->waitForResourceIdle())return;
+        clearLivePlanetTerrain();
         clearPlanetForestModels();
         planetMode_=false;planetPreview_.reset();planetMapPath_.clear();cameraInitialized_=false;sceneCacheValid_=false;
         lightingRevision_=std::numeric_limits<uint64_t>::max();clearTransformPreview();
@@ -2432,6 +2459,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     const bool changedDocument=changedBody||planetRevision_!=doc.revision;
     if(changedDocument){
         if(!device_->waitForResourceIdle())return;
+        clearLivePlanetTerrain();
         auto next=StudioPlanetPreview::build(doc,body);
         Mesh replacement;
         if(next)replacement=next->mesh.upload(*device_);
@@ -2460,6 +2488,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         planetModelProject_=projectPath;planetModelRules_=&rules;
         nextFileCheck_=now+std::chrono::seconds(1);
     }
+    const bool useLiveTerrain=syncLivePlanetTerrain(doc,projectPath);
     syncPlanetForestModels(doc,projectPath);
     if(!cameraInitialized_){
         camera_.target={};camera_.distance=planetPreview_?std::max(2.f,planetPreview_->extent*3.f):16.f;
@@ -2526,7 +2555,8 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         lightingStatus_+=" · AETHER "+planetLiveAetherLayer_+(liveAether?" mass / duct potential":" unavailable");
         if(planetLiveSnapshot_["aether"].getBool("truncated"))lightingStatus_+=" (sample capped)";
     }
-    const bool liveForest=livePlanet&&planetLiveSnapshot_["forest"].getBool("active");
+    const bool liveForest=planetForestLiveCurrent(doc,projectPath);
+    if(liveForest)lightingStatus_+=useLiveTerrain?" · completed-tick terrain":" · authored terrain fallback (live unavailable)";
     if(planetForestModelsPending_)lightingStatus_+=" · ARBOR prototypes loading";
     if(!planetForestRejectedModels_.empty()||!planetForestRejectedRoots_.empty()||!planetForestRejectedLogs_.empty())lightingStatus_+=" · ARBOR preview budget or upload rejection";
     if(!liveForest&&planetForestOverlays_.plants)lightingStatus_+=" · authored forest: ARBOR skeleton / root footprint / capsule recipe";
@@ -2580,7 +2610,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         if(planetLiveSnapshot_["imprint"].getBool("truncated"))lightingStatus_+=" (sample capped)";
     }
     if(planetPreview_&&planetTerrain_.vb.valid()&&planetTerrain_.ib.valid()){
-        renderer_.drawMesh(planetTerrain_,mat4{},{1,1,1,1},kDrawNoCastShadow);
+        renderer_.drawMesh(useLiveTerrain?planetLiveTerrain_:planetTerrain_,mat4{},{1,1,1,1},kDrawNoCastShadow);
         if(liveForest)drawLivePlanetForestMeshes(doc,projectPath);
         if(!liveForest&&planetForestModelProject_==projectPath&&planetForestModelCatalog_==doc.data.worldExtra["terraweaveForest"]){
             static const std::vector<uint8_t> barkOnly{1,0};

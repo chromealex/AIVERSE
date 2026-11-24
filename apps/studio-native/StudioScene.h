@@ -158,6 +158,9 @@ public:
     // Project extension gizmos (editor/extensions.lua scene_gizmos): world-space lines, circles (screen px), points.
     struct OverlayShape { int kind = 0; render::float3 a{}, b{}; float radius = 8, thickness = 2; uint8_t r = 90, g = 180, bl = 255; std::string text; };   // kind: 1 line, 2 circle, 3 point, 4 label
     void setOverlayShapes(std::vector<OverlayShape> shapes) { overlayShapes_ = std::move(shapes); }
+    std::string planetSceneBody(const std::string& project,const std::string& path,uint64_t revision)const{
+        return planetMode_&&planetPreview_&&planetModelProject_==project&&planetMapPath_==path&&planetRevision_==revision?planetPreview_->bodyId:std::string{};
+    }
     void setPlanetLiveSnapshot(Json snapshot,std::string project,std::string path,uint64_t revision,std::string layer,std::string aetherLayer){
         planetLiveSnapshot_=std::move(snapshot);planetLiveProject_=std::move(project);
         planetLivePath_=std::move(path);planetLiveRevision_=revision;planetLiveLayer_=std::move(layer);planetLiveAetherLayer_=std::move(aetherLayer);
@@ -196,6 +199,10 @@ private:
     render::Mesh studioCyclorama_;
     render::Mesh terrain_;
     render::Mesh planetTerrain_;
+    render::Mesh planetLiveTerrain_;
+    Json planetLiveTerrainGrid_;
+    void clearLivePlanetTerrain();
+    bool syncLivePlanetTerrain(const editor::MapDoc& doc,const std::string& projectPath);
     std::optional<StudioPlanetPreview> planetPreview_;
     PlanetProcessOverlays planetProcessOverlays_;
     PlanetForestOverlays planetForestOverlays_;

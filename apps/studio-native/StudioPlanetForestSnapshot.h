@@ -6,7 +6,7 @@
 #include "apps/studio-native/StudioPlanetForestWeather.h"
 namespace aiverse::studio {
 inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surface,uint32_t tick,size_t limit=128,
-        const std::vector<evolve::PlanetWeatherMapping>& weather={}){
+        const std::vector<evolve::PlanetWeatherMapping>& weather={},const std::string& focusBody={}){
     limit=std::min(limit,size_t(128));
     namespace tw=terraweave;namespace ev=evolve;namespace wp=lib::worldprocess;
     Json out=Json::object(),rows=Json::array();
@@ -21,6 +21,7 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
         (!physics||physics->bodies.size()<=wp::kMaxConsequences)&&ev::validPlanetDeadwood(*wood,surface);
     out.set("active",Json::fromBool(active));if(!active)return out;
     out.set("tick",Json::number(int64_t(tick)));
+    out.set("focusBody",Json::string(focusBody));
     const auto xyz=[](Vec3 v){Json a=Json::array();for(auto c:{v.x,v.y,v.z})a.push(Json::number(c.toDouble(),4));return a;};
     std::map<tw::AnchoredPlantId,const ev::PlanetRootBinding*> mapped;
     for(const auto& b:bindings->bindings)mapped.emplace(b.id,&b);
@@ -41,7 +42,7 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
     out.set("windZonesCapped",Json::fromBool(!localWindAllowed));
     const bool stormsAllowed=ecs.countExisting<physis::StormEvent>()<=1024;
     out.set("stormsCapped",Json::fromBool(!stormsAllowed));
-    size_t fallen=0,spent=0,physical=0,rejected=0;
+    size_t fallen=0,spent=0,physical=0,rejected=0,eligible=0;
     for(const auto& plant:roots->rooted){
         const tw::AnchoredPlantId id{plant.anchor.speciesId,plant.anchor.plantKey};
         const auto b=mapped.find(id);if(b==mapped.end()){++rejected;continue;}
@@ -56,6 +57,8 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
             bodies.find(wp::consequenceKey(receipt->second->fall)):bodies.end();
         const bool hasBody=body!=bodies.end()&&body->second->body==b->second->bodyId;
         fallen+=plant.fallen;spent+=isSpent;physical+=hasBody;
+        if(!focusBody.empty()&&b->second->bodyId!=focusBody)continue;
+        ++eligible;
         if(rows.size()>=limit)continue;
         Json row=Json::object();
         row.set("species",Json::number(int64_t(id.speciesId)));row.set("key",Json::string(std::to_string(id.key)));
@@ -107,7 +110,8 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
     out.set("fallenCount",Json::number(int64_t(fallen)));out.set("spentCount",Json::number(int64_t(spent)));
     out.set("physicalCount",Json::number(int64_t(physical)));out.set("pendingCount",Json::number(int64_t(pending)));
     out.set("rejected",Json::number(int64_t(rejected)));
-    out.set("truncated",Json::fromBool(roots->rooted.size()>limit));
+    out.set("focusPlantCount",Json::number(int64_t(eligible)));
+    out.set("truncated",Json::fromBool(eligible>rows.size()));
     out.set("plants",std::move(rows));return out;
 }
 } // namespace aiverse::studio

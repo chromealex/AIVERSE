@@ -320,7 +320,7 @@ void StudioHost::tickGame() {
     invalidate();
     if(wpLiveOptions_.live && now-wpLiveRefresh_>=.25){
         wpLiveRefresh_=now;
-        wpLiveSnapshot_=game_->planetMatch()&&!worldProcessPlanetMapCurrent()?Json():game_->ecologyState(wpLiveOptions_);
+        wpLiveSnapshot_=game_->planetMatch()&&!worldProcessPlanetMapCurrent()?Json():game_->ecologyState(wpLiveOptions_,worldProcessSceneBody());
         rebuildOverlay();
     }
 }
@@ -843,6 +843,12 @@ void StudioHost::brushAdjust(double factor, bool disarm) {
 }
 bool StudioHost::brushArmed() const { return !projectLoading_ && preview_ && session_->sceneBrush().armed; }
 // Scene overlay: extension gizmos + spline handles (Roads / Water "Edit nodes").
+std::string StudioHost::worldProcessSceneBody(){
+    if(projectLoading_||!session_||!preview_)return {};
+    const auto& ws=session_->workspace();
+    if(!ws.map.data.planet())return {};
+    return onScene([&]{return preview_->planetSceneBody(ws.project.dir,ws.map.path,ws.map.revision);});
+}
 bool StudioHost::worldProcessPlanetMapCurrent() const {
     if(projectLoading_||!session_||!game_||!game_->launchedMapCurrent()||wpLivePlanetMapPath_.empty())return false;
     const auto& ws=session_->workspace();
@@ -2147,7 +2153,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
         out.set("armed",Json::fromBool(forestPlantArm_.isObject()));return out;
     });
     if(method=="studio.planetForestLive")return answer([&]{
-        if(game_&&worldProcessPlanetMapCurrent())return game_->planetForestState();
+        if(game_&&worldProcessPlanetMapCurrent())return game_->planetForestState(worldProcessSceneBody());
         Json out=Json::object();out.set("active",Json::fromBool(false));return out;
     });
     if(method=="studio.evolveState")return answer([&]{
@@ -2166,7 +2172,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if(next!=wpLiveOptions_){
             wpLiveOptions_=next;
             wpLiveSnapshot_=wpLiveOptions_.live&&game_&&(!game_->planetMatch()||worldProcessPlanetMapCurrent())
-                ?game_->ecologyState(wpLiveOptions_):Json();
+                ?game_->ecologyState(wpLiveOptions_,worldProcessSceneBody()):Json();
             wpLiveRefresh_=platform_.now();
             rebuildOverlay();
         }

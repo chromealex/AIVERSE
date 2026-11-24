@@ -10,7 +10,7 @@ namespace aiverse::studio {
 inline constexpr size_t kPlanetLivePayloadBytes=768*1024;
 inline constexpr size_t kPlanetLiveRootReserve=4096;
 inline constexpr size_t kPlanetLiveLines=4096;
-inline constexpr size_t kPlanetLiveLayerCount=12;
+inline constexpr size_t kPlanetLiveLayerCount=13;
 
 inline size_t planetLiveShare(size_t total,size_t layers){
     return total/std::clamp(layers,size_t(1),kPlanetLiveLayerCount);

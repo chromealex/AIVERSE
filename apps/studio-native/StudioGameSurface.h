@@ -28,8 +28,8 @@ public:
     Json editRuntime(const Json& params);
     // Keep play changes: where each map entity is now (index into the map's entities), or removed:true.
     Json mapEntityStates();
-    Json ecologyState(const StudioWorldProcessLiveOptions& options={});
-    Json planetForestState();
+    Json ecologyState(const StudioWorldProcessLiveOptions& options={},const std::string& focusBody={});
+    Json planetForestState(const std::string& focusBody={});
     bool planetMatch() const;
     bool launchedMapCurrent() const;
     bool planetSnapshotCurrent(const Json& snapshot) const;

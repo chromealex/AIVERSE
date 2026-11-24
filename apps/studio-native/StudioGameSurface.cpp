@@ -7,6 +7,7 @@
 #include "apps/studio-native/StudioPlanetWorldProcesses.h"
 #include "apps/studio-native/StudioPlanetLiveSnapshot.h"
 #include "apps/studio-native/StudioPlanetForestSnapshot.h"
+#include "apps/studio-native/StudioPlanetLiveTerrain.h"
 #include "apps/studio-native/StudioPlanetLiveBudget.h"
 #include "apps/studio-native/StudioPlanetAetherSnapshot.h"
 #include "apps/studio-native/StudioPlanetFractureSnapshot.h"
@@ -93,14 +94,14 @@ void StudioGameSurface::frame(int w,int h,float pw,float ph,double dt,bool focus
         device_->endPass();device_->endFrame();error_=e.what();stop();
     }
 }
-Json StudioGameSurface::planetForestState(){
+Json StudioGameSurface::planetForestState(const std::string& focusBody){
     Simulation* sim=host_&&host_->inMatch()&&host_->canControl()?host_->simulation():nullptr;
     if(sim&&sim->tick()>0)if(const auto* game=dynamic_cast<const game::GameCore*>(&sim->module()))
         if(const auto* surface=game->surface(*sim))
             {
                 const auto config=game->native().loadedConfiguration("world_processes");
                 const auto weather=studioForestWeatherMappings(sim->world(),*surface,config?*config:Json{},game->matchMap());
-                return sampleStudioPlanetForest(sim->world(),*surface,sim->tick()-1,128,weather);
+                return sampleStudioPlanetForest(sim->world(),*surface,sim->tick()-1,128,weather,focusBody);
             }
     Json out=Json::object();out.set("active",Json::fromBool(false));return out;
 }
@@ -128,7 +129,7 @@ bool StudioGameSurface::planetSnapshotCurrent(const Json& snapshot) const {
         snapshot.getBool("active")&&snapshot.getStr("topology")=="planet"&&
         snapshot.getStr("epoch")==std::to_string(runtimeEpoch_);
 }
-Json StudioGameSurface::ecologyState(const StudioWorldProcessLiveOptions& options){
+Json StudioGameSurface::ecologyState(const StudioWorldProcessLiveOptions& options,const std::string& focusBody){
     Simulation* sim=host_&&host_->inMatch()?host_->simulation():nullptr;
     Json out=Json::object(),regions=Json::array();
     out.set("active",Json::fromBool(sim!=nullptr));
@@ -145,7 +146,8 @@ Json StudioGameSurface::ecologyState(const StudioWorldProcessLiveOptions& option
             if(host_->canControl()&&sim->tick()>0){
                 const bool ecology=!options.live||options.layer!="off";
                 const bool granular=options.granularCellCm>0;
-                const size_t layers=size_t(ecology)*2+granular+options.gravity+options.fracture+
+                const bool forestTerrain=options.forest&&!focusBody.empty();
+                const size_t layers=size_t(ecology)*2+granular+options.gravity+options.fracture+forestTerrain+
                     options.echo+options.circuit+options.society+options.forest+options.crowd+options.morph+(options.aetherLayer!="off");
                 if(layers){
                     PlanetLivePayloadBudget budget(layers);
@@ -162,7 +164,8 @@ Json StudioGameSurface::ecologyState(const StudioWorldProcessLiveOptions& option
                     if(options.forest){
                         const auto config=game->native().loadedConfiguration("world_processes");
                         const auto weather=studioForestWeatherMappings(sim->world(),*surface,config?*config:Json{},game->matchMap());
-                        budget.add(out,"forest",sampleStudioPlanetForest(sim->world(),*surface,tick,cap(128),weather));
+                        budget.add(out,"forest",sampleStudioPlanetForest(sim->world(),*surface,tick,cap(128),weather,focusBody));
+                        if(forestTerrain)budget.add(out,"forestTerrain",sampleStudioPlanetTerrain(*surface,tick,focusBody,planetLiveShare(kPlanetLivePayloadBytes-kPlanetLiveRootReserve,layers)));
                     }
                     if(options.society)budget.add(out,"society",samplePlanetSociety(sim->world(),*surface,tick,cap(256),cap(512),cap(128)));
                     if(options.crowd){
