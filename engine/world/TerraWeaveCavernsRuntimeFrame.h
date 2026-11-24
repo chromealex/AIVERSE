@@ -116,6 +116,7 @@ public:
     }
     // Owner keeps the same exclusive world lease across volume staging,
     // surface publication and final downstream acknowledgement.
+    void quarantineRimPublication()noexcept{physicsBarrier_.requireRecovery();}
     bool finishRimSurfacePublication(const std::function<bool(const CaveSurfaceGroupPlan&)>& allOwnersReady,
             const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive){
         if(closed_||physicsBarrier_.status().recoveryRequired||navigationBus_.hasPending()||!allOwnersReady)return false;
