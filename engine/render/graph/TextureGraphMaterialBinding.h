@@ -16,6 +16,28 @@ inline MaterialSlot materialSlot(std::string_view output) {
     if(output=="mask")return &Material::teamTex;
     return nullptr; // height and standalone roughness/metallic are not PBR slots.
 }
+inline size_t graphMaterialChannel(MaterialSlot slot){
+    if(slot==&Material::baseTex)return 0;
+    if(slot==&Material::normalTex)return 1;
+    if(slot==&Material::mrTex)return 2;
+    if(slot==&Material::occlusionTex)return 3;
+    if(slot==&Material::emissiveTex)return 4;
+    if(slot==&Material::teamTex)return 5;
+    throw std::invalid_argument("unknown graph material slot");
+}
+// Prepare before moving an Image into the transaction. Copies of the base
+// material retain their old immutable pin set; the candidate gets a new set.
+inline void pinGraphMaterialBinding(Material& candidate,MaterialSlot slot,Image& image){
+    if(!image.proceduralGraphPin)image.proceduralGraphPin=std::make_shared<const ProceduralImagePin>();
+    candidate.proceduralGraphPins=withGraphMaterialPin(candidate.proceduralGraphPins,graphMaterialChannel(slot),image.proceduralGraphPin);
+}
+// Native callers retaining raw handles/indices must hold this pin as well,
+// or enumerate their external root explicitly at the collection boundary.
+inline GraphImagePin pinPublishedGraphImage(const Model& model,size_t index){
+    if(index>=model.images.size())return {};
+    const auto& image=model.images[index];
+    return image.proceduralGraphImage&&!image.proceduralGraphRetired&&image.tex.valid()?image.proceduralGraphPin:GraphImagePin{};
+}
 struct MaterialImagePlan {
     struct Entry { MaterialSlot slot; Image image; };
     std::vector<Entry> entries;
@@ -72,8 +94,10 @@ inline Material stageMaterialImages(ModelImageUploadTransaction& transaction,
                     "material generation already staged");
     }
     Material result=base;
-    for(auto& entry:plan.entries)
+    for(auto& entry:plan.entries){
+        pinGraphMaterialBinding(result,entry.slot,entry.image);
         result.*(entry.slot)=transaction.stage(model,std::move(entry.image));
+    }
     return result;
 }
 } // namespace aiverse::render::texture_graph

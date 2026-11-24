@@ -18,6 +18,7 @@ struct GraphImageRoots {
     bool complete=false;
     size_t activeReaders=std::numeric_limits<size_t>::max();
     std::span<const std::span<const Material>> extra{};
+    bool trackedOnly=false; // automatic mode never collects legacy untracked images
 };
 struct GraphImageReclaimResult {
     size_t detached=0,live=0,tombstones=0,pendingRetirement=0;
@@ -61,6 +62,8 @@ inline GraphImageReclaimResult reclaimGraphImages(Model& model,gfx::Device& devi
     for(size_t i=0;i<model.images.size();++i){
         const auto& image=model.images[i];
         if(referenced[i]||!image.proceduralGraphImage||image.proceduralGraphRetired)continue;
+        if(image.proceduralGraphPin&&!graphImageUnpinned(image.proceduralGraphPin))continue;
+        if(roots.trackedOnly&&!image.proceduralGraphPin)continue;
         // Do not infer ownership from a name, or touch borrowed/shared/VT images.
         if(!image.tex.valid()||image.borrowedTexture||image.textureCache||image.textureLease||
            !image.textureKey.empty()||image.virtualAlphaMask.valid()||image.virtualFallbackMaxDimension||

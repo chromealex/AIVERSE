@@ -18,6 +18,7 @@
 #include "TextureCodec.h"
 #include "GpuOwnedMemory.h"
 #include "graph/ShaderGraph.h"
+#include "graph/TextureGraphImagePins.h"
 
 namespace aiverse::render {
 
@@ -77,6 +78,9 @@ struct Material {
     // Optional layered eye: UV centre, iris radius, refractive depth in UV units.
     // z == 0 preserves legacy Eye shading. Only the colour pass uses parallax.
     float4 eyeOptics{0, 0, 0, 0};
+    // Immutable copy-on-write CPU pin set for published procedural bindings.
+    // Material copies (snapshots, camera packets, static caches) retain it.
+    GraphMaterialPins proceduralGraphPins;
 };
 
 struct Image {
@@ -115,6 +119,7 @@ struct Image {
     // tombstones: never shift or recycle an image index within a Model.
     bool proceduralGraphImage = false;
     bool proceduralGraphRetired = false;
+    GraphImagePin proceduralGraphPin;
 };
 
 // 60 bytes, one interleaved stream for every model (unskinned meshes leave joints/weights zero).

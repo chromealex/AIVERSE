@@ -108,6 +108,7 @@ inline Material stageCompletedGraphGpuTextures(ModelImageUploadTransaction& tran
     Material result=base;
     for(size_t i=0;i<candidates.size();++i){
         auto& candidate=*candidates[i];
+        pinGraphMaterialBinding(result,slots[i],candidate.image);
         result.*slots[i]=transaction.stageCompletedGpuImage(model,candidate.image,candidate.lease,candidate.fence);
         candidate.encoded=false;candidate.fence=0;candidate.lease={};
     }

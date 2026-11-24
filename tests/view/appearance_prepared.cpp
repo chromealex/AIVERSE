@@ -224,11 +224,16 @@ int main() {
     // The current registry snapshot and caller-pinned earlier snapshot remain
     // roots. A copied shader graph texture binding is a root as well.
     render::Material shaderRoot;shaderRoot.graphTextures[0]=2;
-    std::array<std::span<const render::Material>,2> roots{bound->materials,std::span<const render::Material>(&shaderRoot,1)};
+    // External Material copies automatically retain their procedural pins.
+    render::Material retainedCopy=bound->materials[0];
+    AIVERSE_TEST_CHECK(retainedCopy.proceduralGraphPins&&model.images[0].proceduralGraphPin);
+    AIVERSE_TEST_CHECK(!render::graphImageUnpinned(model.images[0].proceduralGraphPin));
+    std::array<std::span<const render::Material>,1> roots{std::span<const render::Material>(&shaderRoot,1)};
     bool refused=false;try{registry.collectTextureGraphImages(model,device,epoch.lease(),rollback,{false,0,roots});}
     catch(const std::exception&){refused=true;}AIVERSE_TEST_CHECK(refused&&rollback.pendingImages()==0);
     refused=false;try{registry.collectTextureGraphImages(model,device,epoch.lease(),rollback,{true,1,roots});}
     catch(const std::exception&){refused=true;}AIVERSE_TEST_CHECK(refused&&rollback.pendingImages()==0);
+    bound.reset(); // retainedCopy alone protects the first two image generations
     const auto current=registry.find("character");const auto beforeCollect=model.materialRevision;
     const auto reclaimed=registry.collectTextureGraphImages(model,device,epoch.lease(),rollback,{true,0,roots});
     AIVERSE_TEST_CHECK(reclaimed.detached==19&&reclaimed.live==5&&reclaimed.tombstones==19);
@@ -246,7 +251,7 @@ int main() {
     // Caller-pinned snapshot remains renderable until the host detaches it
     // and then releases model GPU/CPU storage.
     AIVERSE_TEST_CHECK(changed->packet(render::mat4{},packet));
-    packet={};bound.reset();
+    packet={};retainedCopy={};bound.reset();
     render::releaseModel(device,model);
     AIVERSE_TEST_CHECK(device.textures.empty());
 }
