@@ -38,7 +38,42 @@ template<int N> std::unique_ptr<Simulation> make(bool cow=false) {
     if(cow)sim->world().enableCowSnapshots();
     return sim;
 }
+static void checkLocalSupportCache(){
+    lib::SupportGraphCache cache;
+    lib::SupportGraphActivity stats{};
+    std::vector<bool> roots{true,false,false,true,false,false};
+    std::vector<std::pair<size_t,size_t>> edges{{0,1},{1,2},{3,4},{4,5}};
+    auto check=[&](){
+        std::vector<lib::worldprocess::Edge> referenceEdges;
+        for(auto [a,b]:edges)referenceEdges.push_back({a,b,1});
+        const auto actual=cache.update(roots.size(),roots,edges,&stats);
+        AIVERSE_TEST_CHECK(actual&&*actual==lib::worldprocess::supported(roots.size(),roots,referenceEdges));
+    };
+    check();AIVERSE_TEST_CHECK(stats.rebuiltVertices==6);
+    check();AIVERSE_TEST_CHECK(stats.rebuiltVertices==0);
+    edges.erase(edges.begin()+1);
+    check();AIVERSE_TEST_CHECK(stats.rebuiltVertices==3);
+    roots[2]=true;check();AIVERSE_TEST_CHECK(stats.rebuiltVertices==0);
+    edges.push_back({2,5});
+    check();AIVERSE_TEST_CHECK(stats.rebuiltVertices==4);
+    // Reverse/duplicate bonds do not alter the effective topology.
+    edges.push_back({5,2});check();AIVERSE_TEST_CHECK(stats.rebuiltVertices==0);
+    // Restoring a previous topology is exact, even without a cache reset.
+    edges={{0,1},{1,2},{3,4},{4,5}};roots[2]=false;check();
+    AIVERSE_TEST_CHECK(stats.rebuiltVertices==6);
+    uint64_t rng=0x8a5c32ULL;
+    auto next=[&](){rng=rng*6364136223846793005ULL+1;return rng>>32;};
+    roots.assign(64,false);roots[0]=true;edges.clear();cache.reset();check();
+    for(size_t i=0;i<256;++i){
+        size_t a=next()%roots.size(),b=next()%roots.size();
+        if(i%3==0&&!edges.empty())edges.erase(edges.begin()+size_t(next()%edges.size()));
+        else edges.emplace_back(a,b);
+        if(i%5==0)roots[a]=!roots[a];
+        check();
+    }
+}
 int main(){
+    checkLocalSupportCache();
     auto a=make<1>(),b=make<2>(true);
     a->step();b->step();
     AIVERSE_TEST_CHECK(a->checksum()==b->checksum());
