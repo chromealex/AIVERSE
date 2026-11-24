@@ -1078,6 +1078,16 @@ Entity GameCore::placeStructure(Simulation& sim, uint8_t player, uint16_t type, 
 
 // ================================================================= commands
 
+static void cancelWeaponWindups(Simulation& sim, Entity e, Combat& combat) {
+    auto& w = sim.world();
+    for (size_t i = 0; i < 4; ++i) {
+        auto& phase = combat.attackTiming[i];
+        const Entity target = phase.target;
+        if (lib::mechanics::cancelAttackWindup(phase))
+            sim.emit({kEvAttackCancelled, w.get<Owner>(e).player, e, target, int64_t(i), w.get<Transform>(e).pos});
+    }
+}
+
 void GameCore::issue(Simulation& sim, Entity e, const Order& o, bool queue) {
     World& w = sim.world();
     auto* ord = w.tryGet<Orders>(e);
@@ -1086,7 +1096,7 @@ void GameCore::issue(Simulation& sim, Entity e, const Order& o, bool queue) {
         ord->queue.clear();
         stopMoving(sim, e);
         if (auto* m = w.tryGet<Mobile>(e)) { m->flowGoalCell = -1; m->flowArrived = -1; }   // leaves its flow crowd
-        if (auto* c = w.tryGet<Combat>(e)) c->target = kNullEntity;
+        if (auto* c = w.tryGet<Combat>(e)) { cancelWeaponWindups(sim, e, *c); c->target = kNullEntity; }
         if (auto* u = w.tryGet<Unit>(e)) u->flags &= kKeepFlags(~kUnitHold);
     }
     ord->queue.push_back(o);
@@ -1245,7 +1255,7 @@ void GameCore::applyCommand(Simulation& sim, const Command& cmd) {
         case kCmdStop:
         case kCmdHold:
             if (auto* ord = w.tryGet<Orders>(e)) { ord->queue.clear(); stopMoving(sim, e); }
-            if (auto* c = w.tryGet<Combat>(e)) c->target = kNullEntity;
+            if (auto* c = w.tryGet<Combat>(e)) { cancelWeaponWindups(sim, e, *c); c->target = kNullEntity; }
             if (cmd.type == kCmdHold) w.get<Unit>(e).flags |= kUnitHold; else w.get<Unit>(e).flags &= kKeepFlags(~kUnitHold);
             break;
         case kCmdGather:
@@ -1695,7 +1705,13 @@ void GameCore::hashState(Simulation& sim, Hasher& h) {
             h.u64(c->target.packed()); h.i32(c->slot); h.u64(c->slotTarget.packed());
             const auto& weapons = rules_.types[u.type].weapons;
             for (size_t i = 0; i < weapons.size() && i < 4; ++i)
-                if (weapons[i].preciseCooldown) { h.u32(uint32_t(i)); h.fx(c->cooldown[i]); }
+                if (weapons[i].preciseCooldown || weapons[i].hasAttackTiming()) {
+                    h.u32(uint32_t(i)); h.fx(c->cooldown[i]);
+                    if (weapons[i].hasAttackTiming()) {
+                        const auto& phase = c->attackTiming[i];
+                        h.u32(uint32_t(phase.phase)); h.u64(phase.target.packed()); h.fx(phase.remaining);
+                    }
+                }
         }
         if (auto* mb = w.tryGet<Mobile>(e)) { h.v3(mb->vel); h.u32(mb->yielded); h.u32(mb->yieldUntil); h.u32(mb->pathPos); h.u32(mb->moving); }
         if (auto* g = w.tryGet<Garrison>(e)) { h.i32(g->count); h.fx(g->growth); h.i32(g->pendingOut); }
