@@ -14,6 +14,44 @@ namespace aiverse::terraweave::caverns {
 inline Vec3 rimPoint(const SurfaceVertexKey& k){
     return {Fixed::fromRaw(k[0]),Fixed::fromRaw(k[1]),Fixed::fromRaw(k[2])};
 }
+// Trim an exclusively owned isolated shaft section at an exact horizontal
+// plane. Owner replaces this whole source, not arbitrary intersecting cave
+// chunks. Adjacent owners must use identical clipping or be absent.
+inline std::vector<world::Triangle> trimOwnedSdfShaft(
+        std::span<const world::Triangle> source,Fixed plane){
+    if(source.empty()||source.size()>32767)throw std::invalid_argument("Caverns shaft trim budget");
+    std::vector<world::Triangle> out;
+    const auto intersection=[&](Vec3 a,Vec3 b){
+        if(surfaceVertexKey(b)<surfaceVertexKey(a))std::swap(a,b);
+        const double t=double(plane.raw-a.y.raw)/double(b.y.raw-a.y.raw);
+        const auto interpolate=[&](Fixed x,Fixed y){return Fixed::fromRaw(x.raw+
+            int64_t(std::llround(double(y.raw-x.raw)*t)));};
+        return Vec3{interpolate(a.x,b.x),plane,interpolate(a.z,b.z)};
+    };
+    for(const auto& tri:source){
+        if(!world::SpatialWorld::validTriangle(tri))throw std::invalid_argument("Caverns malformed shaft source");
+        const Vec3 v[]={tri.a,tri.b,tri.c};
+        if(v[0].y==plane&&v[1].y==plane&&v[2].y==plane)
+            throw std::invalid_argument("Caverns coplanar shaft cap");
+        std::vector<Vec3> poly;
+        const auto push=[&](Vec3 p){
+            if(poly.empty()||surfaceVertexKey(poly.back())!=surfaceVertexKey(p))poly.push_back(p);
+        };
+        for(unsigned i=0;i<3;++i){
+            const auto a=v[i],b=v[(i+1)%3];
+            if(a.y<=plane)push(a);
+            if((a.y<plane&&b.y>plane)||(a.y>plane&&b.y<plane))push(intersection(a,b));
+        }
+        if(poly.size()>1&&surfaceVertexKey(poly.front())==surfaceVertexKey(poly.back()))poly.pop_back();
+        for(size_t i=1;i+1<poly.size();++i){
+            world::Triangle t{poly[0],poly[i],poly[i+1]};
+            if(!world::SpatialWorld::validTriangle(t))
+                throw std::invalid_argument("Caverns degenerate trimmed shaft fragment");
+            out.push_back(t);
+        }
+    }
+    return out;
+}
 using DirectedRimEdges=std::map<SurfaceEdgeKey,std::pair<SurfaceVertexKey,SurfaceVertexKey>>;
 inline DirectedRimEdges retainedSdfPlaneBoundary(
         std::span<const world::Triangle> retained,Fixed plane){
@@ -23,6 +61,8 @@ inline DirectedRimEdges retainedSdfPlaneBoundary(
     for(const auto& tri:retained){
         if(!world::SpatialWorld::validTriangle(tri))throw std::invalid_argument("Caverns retained shaft triangle");
         const Vec3 v[]={tri.a,tri.b,tri.c};
+        if(v[0].y==plane&&v[1].y==plane&&v[2].y==plane)
+            throw std::invalid_argument("Caverns retained shaft cap on transition plane");
         for(unsigned i=0;i<3;++i){
             if(v[i].y>plane)throw std::invalid_argument("Caverns retained shaft overlaps transition band");
             if(v[i].y!=plane||v[(i+1)%3].y!=plane)continue;
