@@ -3,6 +3,7 @@
 #include "aiverselib/world/EvolveSimulationLod.h"
 #include "aiverselib/world/EvolveRegionWorkBudget.h"
 #include "aiverselib/world/WorldProcessBudgetedQueries.h"
+#include "aiverselib/world/WorldProcessReportJobs.h"
 #include <array>
 #include "tests/AlwaysCheck.h"
 #include <iostream>
@@ -226,11 +227,61 @@ static void checkSharedReports(){
         societyState,{1,socialWake},remote);
     AIVERSE_TEST_CHECK(forced&&forced->lod.cold==1&&forced->scheduling.urgentSelected==1);
 }
+static void checkReportJobs(){
+    namespace wp=aiverse::lib::worldprocess;
+    using namespace aiverse::ecs_experiment;
+    World ecs;
+    wp::EntityReportBatch<wp::queries::CrowdSample> crowdBatch;
+    wp::EntityReportBatch<wp::queries::SocietySample> societyBatch;
+    evolve::RegionReportBatch evolveBatch;
+    for(uint32_t i=0;i<127;++i){
+        const auto e=ecs.create();
+        const auto slot=i%2?e:kNullEntity;
+        crowdBatch.samples.push_back({e,10,20,{e,slot,int64_t(i),-int64_t(i)}});
+        societyBatch.samples.push_back({e,11,20,{uint64_t(1)<<(i%64),1000,250000}});
+        evolve::Region region{};
+        region.fertility=i;region.pollution=2*i;
+        evolveBatch.samples.push_back({e,12,20,region});
+    }
+    const auto serialC=wp::analyzeCrowdReports(crowdBatch);
+    const auto serialS=wp::analyzeSocietyReports(societyBatch);
+    const auto serialE=wp::analyzeEvolveReports(evolveBatch);
+    AIVERSE_TEST_CHECK(!serialC.parallel&&!serialS.parallel&&!serialE.parallel);
+    AIVERSE_TEST_CHECK(serialC.values.size()==127&&serialS.values[63].knownTopicCount==1);
+    AIVERSE_TEST_CHECK(serialE.values[126].pollution==252);
+    AIVERSE_TEST_CHECK(serialE.values[0].requestedTick==12&&serialE.values[0].sampleTick==20);
+#if !defined(__EMSCRIPTEN__)
+    for(unsigned n:{0u,1u,3u}){
+        PersistentWorkers pool(n);
+        const wp::ReportJobOptions forced{&pool,ExecutionMode::Parallel,1,1};
+        const auto c=wp::analyzeCrowdReports(crowdBatch,forced);
+        const auto s=wp::analyzeSocietyReports(societyBatch,forced);
+        const auto e=wp::analyzeEvolveReports(evolveBatch,forced);
+        AIVERSE_TEST_CHECK(c.values==serialC.values&&s.values==serialS.values&&e.values==serialE.values);
+        AIVERSE_TEST_CHECK(c.parallel==(n>0)&&s.parallel==(n>0)&&e.parallel==(n>0));
+        const wp::ReportJobOptions conservative{&pool,ExecutionMode::Auto,2048,256};
+        AIVERSE_TEST_CHECK(!wp::analyzeCrowdReports(crowdBatch,conservative).parallel);
+        AIVERSE_TEST_CHECK(!wp::analyzeCrowdReports({},forced).parallel);
+        const std::array<int,4> values{1,2,3,4};
+        bool failed=false;
+        try{
+            (void)wp::analyzeReportValues(std::span<const int>(values),forced,
+                [](int v){if(v==3)throw std::runtime_error("test");return v*2;});
+        }catch(const std::runtime_error&){failed=true;}
+        AIVERSE_TEST_CHECK(failed);
+        AIVERSE_TEST_CHECK(wp::analyzeCrowdReports(crowdBatch,forced).values==serialC.values);
+    }
+#endif
+    AIVERSE_TEST_CHECK(!crowdBatch.scheduling.next.lastTick);
+    AIVERSE_TEST_CHECK(!societyBatch.scheduling.next.lastTick);
+    AIVERSE_TEST_CHECK(!evolveBatch.scheduling.next.lastTick);
+}
 int main(){
     checkRegionLod();
     checkRegionBudget();
     checkRegionPriority();
     checkSharedReports();
+    checkReportJobs();
     auto portal=wl::defaults("EchoPortal");
     AIVERSE_TEST_CHECK(wl::validate("EchoPortal",portal));
     AIVERSE_TEST_CHECK(!wl::edit("EchoPortal","enabled",Json::fromBool(true),portal));
