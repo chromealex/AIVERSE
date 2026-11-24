@@ -242,6 +242,9 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend){
         live=mismatched;
         require(!applyTarget(generationRequest,stamp()),"stale material generation accepted");
         live=validSnapshot;
+        // Failed publication leaves the request owned by the GPU owner.
+        // Explicitly cancel before starting the required full regeneration.
+        cancel(generationRequest);drain();
         const auto regenerate=startTarget(altered);drain();
         require(!owner.status().getBool("incrementalOutputNoop")&&
             owner.status()["materializedPackPasses"].toDouble()==2&&applyTarget(regenerate,stamp()),
