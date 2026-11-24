@@ -63,6 +63,8 @@ struct StructureKind{
     float doorWidth=0.4f,doorHeight=0.55f;uint32_t doors=1;bool legs=false;uint32_t thrusters=0;float pad=1.2f;
     std::vector<BuildingStyleProp> props;
     std::vector<StructureForm> forms; // major structure composition, before small props
+    // Role-authored façade rhythm and roof scale for primary architecture.
+    float facadeBay=4.f,facadeStorey=3.1f,glazingFraction=.65f,profileRoofScale=1.f;
 };
 struct BuildingStyle{
     std::string id,name;
@@ -679,8 +681,13 @@ inline BuildingStyle readBuildingStyle(const Json& j,const std::string& path="st
     if(j.has("structures")){const auto& all=j["structures"];if(!all.isObject())throw JsonError(path+".structures: expected object");
         if(s.structure.hull<0)throw JsonError(path+".structures: needs the structure materials block");
         for(const auto& [id,o]:all.members()){auto p=path+".structures."+id;
-            allow(o,p,{"body","size","height","massing","taper","chamfer","roofRise","bands","teamChance","modules","tower","door","legs","thrusters","pad","props","forms"});
+            allow(o,p,{"body","size","height","massing","taper","chamfer","roofRise","bands","teamChance","modules","tower","door","legs","thrusters","pad","props","forms","facadeBay","facadeStorey","glazingFraction","profileRoofScale"});
             StructureKind k;k.id=id;
+            get(o,"facadeBay",k.facadeBay,p);get(o,"facadeStorey",k.facadeStorey,p);
+            get(o,"glazingFraction",k.glazingFraction,p);get(o,"profileRoofScale",k.profileRoofScale,p);
+            if(k.facadeBay<1.2f||k.facadeBay>12.f||k.facadeStorey<2.5f||k.facadeStorey>8.f||
+               k.glazingFraction<.15f||k.glazingFraction>.85f||k.profileRoofScale<.4f||k.profileRoofScale>1.6f)
+                throw JsonError(p+": architectural facade/roof parameters outside supported bounds");
             if(o.has("body")){
                 if(!o["body"].isString())throw JsonError(p+".body: expected architectural profile");
                 const auto value=o["body"].str();

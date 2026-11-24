@@ -227,7 +227,7 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
         m.box(wall,0,base,0,W,wallTop,D);addBox(0,base,0,W,wallTop,D);
         // Actual façade rhythm: glazing / deep trim on the four faces;
         // legacy silhouettes are closed bodies, not navigable room layouts.
-        const int rows=std::clamp(int(Hh/3.1f),1,18);
+        const int rows=std::clamp(int(Hh/k.facadeStorey),1,18);
         for(int row=0;row<rows;++row){
             const float y=base+(row+.5f)*Hh/rows;
             const float h=std::min(Hh/rows*.55f,2.4f);
@@ -235,10 +235,10 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
                 // The authored legacy gate occupies the front lower storey.
                 if(side==0&&row==0&&k.doors)continue;
                 const float span=side%2==0?W:D;
-                const int cols=std::clamp(int(span/(k.body==StructureBody::Stacked?2.5f:4.f)),1,24);
+                const int cols=std::clamp(int(span/k.facadeBay),1,24);
                 for(int col=0;col<cols;++col){
                     const float centre=(col+.5f)*span/cols;
-                    const float w=std::min(span/cols*.65f,k.body==StructureBody::Spire?.8f:2.6f);
+                    const float w=std::min(span/cols*k.glazingFraction,k.body==StructureBody::Spire?.8f:4.2f);
                     const float a=centre-w*.5f,b=centre+w*.5f;
                     const float y0=y-h*.5f,y1=y+h*.5f;
                     auto panel=[&](int mat,float lo,float hi,float bottom,float upper,float inset,float proud){
@@ -254,6 +254,19 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
                 }
             }
         }
+        // Whole-body cornices and parapet rails reflect the role's storey
+        // rhythm. Each band overlaps the actual wall, not an empty AABB.
+        const float bandH=std::clamp(k.facadeStorey*.035f,.07f,.22f);
+        const float bandOut=std::clamp(k.facadeBay*.025f,.04f,.18f);
+        for(int row=1;row<rows;++row){
+            const float y=base+Hh*row/rows;
+            const int material=style.band.material>=0?style.band.material:frame;
+            if(!k.doors||y>base+std::min(k.doorHeight*(k.height.lo+k.height.hi)*.5f,Hh-.8f)+.5f)
+                m.box(material,0,y-bandH,-bandOut,W,y+bandH,.045f);
+            m.box(material,0,y-bandH,D-.045f,W,y+bandH,D+bandOut);
+            m.box(material,-bandOut,y-bandH,0,.045f,y+bandH,D);
+            m.box(material,W-.045f,y-bandH,0,W+bandOut,y+bandH,D);
+        }
         auto tier=[&](float x,float z,float w,float d,float y,float h,int mat){
             m.box(mat,x,y,z,x+w,y+h,z+d);addBox(x,y,z,x+w,y+h,z+d);
         };
@@ -264,7 +277,7 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
         };
         const float cx=W*.5f,cz=D*.5f;
         const float scale=std::min(W,D);
-        float rise=std::clamp(Hh*.45f,.8f,scale*.8f);
+        float rise=std::clamp(Hh*.45f*k.profileRoofScale,.8f,scale*.8f);
         switch(k.body){
           case StructureBody::Gable:
           case StructureBody::Shed:{
@@ -277,7 +290,7 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
             return {cx,cz,cx,cz,high};}
           case StructureBody::Spire:
           case StructureBody::Pyramid:{
-            rise=std::clamp(Hh*(k.body==StructureBody::Spire?.9f:.62f),1.f,scale);
+            rise=std::clamp(Hh*(k.body==StructureBody::Spire?.9f:.62f)*k.profileRoofScale,1.f,scale);
             roofPrism(0,0,W,D,wallTop,rise,.48f);
             return {cx,cz,cx,cz,wallTop+rise};}
           case StructureBody::Barrel:
@@ -291,7 +304,7 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
             return {cx,cz,cx,cz,wallTop+rise};}
           case StructureBody::Dome:
           case StructureBody::Bulb:{
-            rise=std::clamp(Hh*.82f,1.f,scale*.85f);
+            rise=std::clamp(Hh*.82f*k.profileRoofScale,1.f,scale*.85f);
             // Large pressure shell / organic bulb, directly seated on the stem.
             addDome(m,k.body==StructureBody::Dome&&glass>=0?glass:roof,cx,wallTop,cz,W,rise,D);
             addBox(0,wallTop,0,W,wallTop+rise,D);

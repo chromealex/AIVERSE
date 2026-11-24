@@ -88,7 +88,8 @@ int main(int argc,char** argv){
                     auto repeat=dressStructure(style,kind.id,42);
                     CHECK(result.boxes==repeat.boxes&&result.mesh.vertices.size()==repeat.mesh.vertices.size());
                 }
-                const auto& kind=style.structures.front();
+                const auto* residence=style.structureKind("residence");CHECK(residence);
+                const auto& kind=*residence;
                 auto result=dressStructureGeometry(style,kind.id,42,{},0,StructureSize{24,12,18});
                 std::vector<float> geometry;
                 for(const auto& v:result.mesh.vertices)geometry.insert(geometry.end(),v.pos,v.pos+3);
