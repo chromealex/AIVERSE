@@ -2,6 +2,7 @@
 #include "engine/world/TerraWeaveCavernsPlanetCollisionBinding.h"
 #include "engine/world/TerraWeaveCavernsPlanetRuntimeFrame.h"
 #include "engine/physics/TerraWeaveCavernsPlanetMotorBridge.h"
+#include "engine/world/TerraWeaveCavernsPlanetGiPublication.h"
 #include <stdexcept>
 #include <iostream>
 using namespace aiverse;
@@ -98,7 +99,67 @@ static void checkDrive(){
     intent.traversal=CaveTraversal::Flying;
     check(!cavePlanetCharacterDrive(intent,{}, {},Fixed::fromRatio(1,10)),"flight has its own motor");
 }
+// Real shared GI scene/BVH, recording target exercises publication refusal.
+// This is NOT GPU atlas acceptance; native GPU bridge is verified separately.
+struct GiFixtureTarget {
+    bool accept=true;
+    uint64_t revision=0;
+    std::shared_ptr<const render::GiChunkedGeometrySnapshot> snapshot;
+    bool publishGeometry(std::shared_ptr<const render::GiChunkedGeometrySnapshot> s,uint64_t r){
+        if(!accept||r<=revision)return false;
+        snapshot=std::move(s);revision=r;return true;
+    }
+    bool publishGeometryRegion(std::shared_ptr<const render::GiChunkedGeometrySnapshot> s,
+            uint64_t r,render::GiBounds){return publishGeometry(std::move(s),r);}
+};
+static void checkGiPublication(){
+    render::GiGeometryScene scene;
+    GiFixtureTarget target;
+    const auto point=[](int x,int y,int z){return Vec3{Fixed::fromInt(x),Fixed::fromInt(y),Fixed::fromInt(z)};};
+    const auto project=[](const std::string&,Vec3 p){return render::float3{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())};};
+    const world::Triangle original{point(0,0,0),point(0,0,2),point(2,0,0)};
+    const render::float3 originalColor{.2f,.3f,.4f};
+    scene.replaceChunk(10,{{project("",original.a),project("",original.b),project("",original.c),0}},{originalColor});
+    scene.replaceChunk(99,{{{10,0,0},{10,0,2},{12,0,0},0}},{{.8f,.8f,.8f}});
+    check(scene.publish(target).published,"initial GI scene");
+    const auto oldScene=scene.currentShared();
+    const auto unrelated=oldScene->findChunk(99);
+    CavePlanetGiBindings bindings;
+    bindings.surfaceId=[](const auto&,const auto&)->std::optional<uint64_t>{return 10;};
+    bindings.volumeId=[](const auto&,uint64_t,ChunkKey3)->std::optional<uint64_t>{return 20;};
+    bindings.project=project;
+    bindings.albedo=[](const auto&,const auto&,const auto&){return render::float3{.5f,.5f,.5f};};
+    bindings.ready=[](){return true;};
+    CavePlanetGiPublication<GiFixtureTarget> publication(scene,target,std::move(bindings));
+    auto body=std::make_shared<CavePlanetBodyCutPlan>();
+    auto region=std::make_shared<CavePlanetCutPlan>();
+    body->bodyId="planet";body->surfaceRevision=7;body->surfaceEpoch=1;
+    region->anchor.bodyId=body->bodyId;region->surfaceRevision=7;region->surfaceEpoch=1;region->authorityRevision=1;
+    CavePlanetCutSlot slot;slot.key={2,0,0,1,0};slot.originalBody={original};
+    region->slots.emplace(slot.key,slot);body->regions.emplace(1,region);
+    CavePlanetRuntimeCandidate candidate;candidate.cut=body;candidate.nativeRevision=3;
+    CavePlanetNativeSlot volume;volume.id.region=1;volume.payload.body=0;
+    volume.payload.anchor=region->anchor;volume.payload.collision.revision=3;
+    const auto anchor=game::Surface::anchor(0);
+    volume.payload.collision.triangles.push_back({point(0,-2,0)+anchor,point(0,-2,2)+anchor,point(2,-2,0)+anchor});
+    candidate.volume.push_back(std::move(volume));
+    check(publication.prepare(candidate)&&scene.currentShared()==oldScene,"GI prepare private");
+    target.accept=false;
+    check(!publication.commit("planet",3)&&scene.currentShared()==oldScene,"GI target refusal");
+    check(publication.abort("planet",3)&&!publication.staged(),"GI abort");
+    target.accept=true;
+    check(publication.prepare(candidate)&&publication.commit("planet",3),"GI publish exact replacement");
+    check(publication.revision("planet")==3&&!scene.current()->findChunk(10)&&scene.current()->findChunk(20),"GI removes uncut leaf");
+    check(scene.current()->findChunk(99)==unrelated,"GI preserves unrelated owner");
+    check(publication.prepareRetire("planet",3)&&scene.current()->findChunk(20),"GI retire staging private");
+    check(publication.retire("planet",3)&&!publication.activeBodies(),"GI retirement");
+    const auto* restored=scene.current()->findChunk(10);
+    check(restored&&restored->triangles.size()==1&&restored->albedos.size()==1&&
+          restored->albedos[0].x==originalColor.x&&!scene.current()->findChunk(20),"GI restore baseline materials");
+    check(scene.current()->findChunk(99)==unrelated&&target.snapshot==scene.currentShared(),"GI shared owner identity");
+}
 int main(){
+    checkGiPublication();
     checkDrive();
     checkOrientedMotor();
     checkCandidateIdentity();

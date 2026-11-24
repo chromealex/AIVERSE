@@ -126,10 +126,10 @@ public:
     }
 
     bool prepareRetire(const std::string& body,uint64_t rev){
-        if(pending_||!canStage())return false;
+        if(pending_)return false;
         const auto it=active_.find(body);
         if(it==active_.end())return rev==0;
-        if(it->second.revision!=rev)return false;
+        if(!canStage()||it->second.revision!=rev)return false;
         try{
             const auto base=scene_.currentShared();
             if(!matches(it->second,*base))return false;
