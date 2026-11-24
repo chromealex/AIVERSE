@@ -36,6 +36,7 @@ struct CaveSimulationNavigationHooks {
     CavePublishedNavSource publishedSource;
     CaveRouteSearch search;
     CaveMovementCollision collision;
+    std::function<void()> invalidateDerived;
     uint32_t maxRepairsPerTick=8;
     uint32_t maxMovedPerTick=65536;
 };
@@ -171,13 +172,18 @@ inline void installCaveNavigationSimulation(
         [hooks](Simulation& state){
             const auto source=hooks.publishedSource();
             if(!source)return;
-            (void)updateCaveRouteFollowers(state.world(),*source,
-                                            hooks.collision,
-                                            hooks.maxMovedPerTick);
+            const auto result=updateCaveRouteFollowers(
+                state.world(),*source,hooks.collision,hooks.maxMovedPerTick);
+            // A native body may have appeared while SDF is unchanged.
+            // Invalidate derived route memoization before the next repath.
+            if(result.blocked&&hooks.invalidateDerived)
+                hooks.invalidateDerived();
         });
     // Rollback restores authoritative route components, but derived
     // solver caches may belong to a newer frame. Mark repath explicitly.
-    sim.addStateRestoredHook([source=hooks.publishedSource](Simulation& state){
+    sim.addStateRestoredHook([source=hooks.publishedSource,
+                              invalidate=hooks.invalidateDerived](Simulation& state){
+        if(invalidate)invalidate();
         const auto current=source();
         state.world().eachExisting<CaveRouteFollower>(
             [&](Entity,CaveRouteFollower& route){
