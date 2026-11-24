@@ -1,7 +1,7 @@
 """Bounded agent planning helpers. No agent execution, merges or release publication."""
 import argparse
+import hashlib
 from collections import defaultdict
-from difflib import SequenceMatcher
 import json
 from pathlib import Path
 import re
@@ -178,41 +178,154 @@ def feature_history(root, ident, limit=30):
             continue
         rows.append({"sha": sha, "checks": {k: v["status"] for k, v in data["checks"].items()},
                      "integrations": data["integrations"]})
+    for current, older in zip(rows, rows[1:]):
+        current["regressions"] = sorted(k for k,v in older.get("checks", {}).items()
+                                         if v == "pass" and current.get("checks", {}).get(k) != "pass")
+    return rows
+
+def coverage_history(root, capability, limit=30):
+    """Historical declarations only; a historical PASS is not current evidence."""
+    if not isinstance(capability, str) or not capability or not 1 <= limit <= 200:
+        raise ValueError("invalid capability or limit")
+    from capability_coverage import LEDGER
+    rows = []
+    previous = None
+    for sha in git(root, "log", "--format=%H", "-n", str(limit), "--", LEDGER).splitlines():
+        try:
+            data = json.loads(git(root, "show", f"{sha}:{LEDGER}"))
+        except subprocess.CalledProcessError:
+            data = {"records": []}
+        values = {r["surface"]: r["status"] for r in data["records"] if r["capability"] == capability}
+        if values != previous:
+            rows.append({"sha": sha, "coverage": values})
+            previous = values
+    for current, older in zip(rows, rows[1:]):
+        current["regressions"] = sorted(k for k,v in older["coverage"].items()
+                                         if v == "pass" and current["coverage"].get(k) != "pass")
     return rows
 
 def task_context(root, report, registry, task_id):
-    tasks = [t for owner in report["readiness"]["owners"] for t in owner["tasks"] if t["id"] == task_id]
+    tasks = [dict(t, owner=b["owner"]) for b in report["readiness"]["owners"]
+             for t in b["tasks"] if t["id"] == task_id]
     if len(tasks) != 1:
         raise ValueError("task missing or ambiguous")
     task = tasks[0]
     feature = registry.get(task.get("feature"), {})
     refs = ["AGENTS.md", "docs/agents/feature-contract.md",
+            "docs/agents/contracts/architecture-common.md",
+            "docs/agents/contracts/workflow-parallel.md",
             "skills/workflow/aiverse-new-feature/SKILL.md"]
+    paths = list(feature.get("changed_paths", []))
     refs += [f"docs/features/{feature['id']}.json"] if "id" in feature else []
-    if task.get("evidence"):
+    systems = json.loads((root / "docs/devlog/systems.json").read_text(encoding="utf-8"))["systems"]
+    owner = next((row for row in systems if row["id"] == task["owner"]), {})
+    if repo_path(owner.get("doc")):
+        refs.append(owner["doc"])
+    if repo_path(task.get("evidence")):
         refs.append(task["evidence"])
-    return {"sha": report["sha"], "task": task, "paths": feature.get("changed_paths", []),
-            "integrations": feature.get("integrations", {}), "read_first": list(dict.fromkeys(refs)),
+    surface = task.get("surface")
+    if surface == "studio":
+        refs.extend(["docs/agents/contracts/studio-contract.md", "docs/studio-ui-agent-guide.md",
+                     "skills/editor/studio-ui/SKILL.md"])
+    if surface == "mcp":
+        refs.append("docs/agents/mcp-coverage.md")
+    if surface == "skill":
+        refs.append("docs/agents/contracts/reuse-skills.md")
+    skills = json.loads((root / "skills/catalog.json").read_text(encoding="utf-8"))["skills"]
+    wanted = set(feature.get("integrations", {}).get("skills", []))
+    refs += [entry["path"] for entry in skills if entry["id"] in wanted]
+    dependencies = report["policy"]["dependencies"]["features"].get(task.get("feature"), {})
+    refs += [f"docs/features/{dep}.json" for dep in dependencies.get("requires", [])]
+    existing = [p for p in dict.fromkeys(refs) if repo_path(p) and
+                (root / p).resolve().is_relative_to(root.resolve()) and (root / p).is_file()]
+    return {"sha": report["sha"], "task": task, "paths": paths,
+            "integrations": feature.get("integrations", {}), "read_first": existing,
+            "missing_references": sorted(set(refs) - set(existing)),
+            "dependencies": dependencies.get("requires", []),
             "rules": ["Do not infer coverage from catalog hints", "Use owning APIs and existing skills",
                       "Work in an isolated branch", "Record exact evidence and handoff; no unverified PASS"]}
+
+def write_new_json(path, data):
+    with path.open("x", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+
+def packet_name(task_id):
+    return re.sub(r"[^a-zA-Z0-9_-]", "-", task_id)[:80] + "-" + hashlib.sha256(task_id.encode()).hexdigest()[:12]
 
 def scaffold_gap(root, report, registry, task_id, output):
     context = task_context(root, report, registry, task_id)
     task = context["task"]
     if task["kind"] != "implement_gap":
         raise ValueError("only evidence-backed implementation gaps can be scaffolded")
-    # Generate a review packet, not registered placeholder operations.
-    packet = dict(context, draft=True, surface=task.get("surface"),
+    folder = output / packet_name(task_id)
+    folder.mkdir(parents=True, exist_ok=False)
+    surface = task.get("surface")
+    packet = dict(context, draft=True, surface=surface,
                   next_steps=["Locate the existing owner API and reuse it",
-                              "Draft integration and regression tests",
-                              "Update manifest and roadmap before implementation"])
+                              "Complete implementation and regression tests",
+                              "Update manifest and roadmap before registration"])
+    write_new_json(folder / "task.json", packet)
+    if surface == "mcp":
+        draft = '''// UNREGISTERED DRAFT. Replace placeholders after resolving the owning API.
+#include "Workspace.h"
+namespace aiverse::editor {
+inline void registerReviewedCapabilityDraft(Workspace& ws) {
+    ws.registerOp({"REVIEW_OPERATION_ID", "REVIEW_DESCRIPTION",
+        Json::parse(R"({"type":"object","additionalProperties":false})"),
+        [](const Json&) -> Json {
+            throw std::runtime_error("Draft integration: owner implementation required");
+        }, false});
+}
+}
+'''
+        name = "CapabilityOps.h.in"
+    elif surface == "studio":
+        draft = '''// UNREGISTERED DRAFT. Bind typed native owner operation before registration.
+import { StudioPanel, StudioSection, StudioAlert } from '../ui';
+export default function CapabilityDraftPanel() {
+  return <StudioPanel title="Capability draft">
+    <StudioSection title="Integration">
+      <StudioAlert tone="warning">Owner API not wired. No runtime evidence.</StudioAlert>
+    </StudioSection>
+  </StudioPanel>;
+}
+'''
+        name = "CapabilityPanel.tsx.in"
+    elif surface == "skill":
+        draft = '''---
+name: REVIEW_SKILL_ID
+description: REVIEW_OWNING_CAPABILITY
+---
+# Draft: not catalog registered
+- Owner and public API:
+- Target/dependencies:
+- Minimal usage:
+- Persistence and deterministic state:
+- MCP/Studio integration:
+- Verification command and evidence:
+'''
+        name = "SKILL.md.in"
+    else:
+        draft = "# Owner integration draft\n\nResolve the reviewed gap using the existing public owner API. Add no registration until implementation and evidence exist.\n"
+        name = "integration.md"
+    (folder / name).write_text(draft, encoding="utf-8")
+    return folder
+
+def export_assignments(root, report, registry, output):
+    """Export deterministic per-agent proposals; consumers must accept ownership separately."""
     output.mkdir(parents=True, exist_ok=True)
-    name = re.sub(r"[^a-zA-Z0-9_-]", "-", task_id)
-    path = output / (name + ".json")
-    with path.open("x", encoding="utf-8") as f:
-        json.dump(packet, f, indent=2, ensure_ascii=False)
-        f.write("\n")
-    return path
+    by_agent = defaultdict(list)
+    for row in report["automation"]["schedule"]:
+        if row["state"] == "proposed" and row["agent"]:
+            by_agent[row["agent"]].append(task_context(root, report, registry, row["task"]))
+    files = []
+    for agent, tasks in sorted(by_agent.items()):
+        path = output / (packet_name(agent) + ".json")
+        write_new_json(path, {"schema": 1, "sha": report["sha"], "agent": agent,
+                              "state": "proposed", "tasks": tasks})
+        files.append(str(path))
+    return {"assignments": files, "agents": len(by_agent), "dispatch": "external_acceptance_required"}
 
 def main():
     from feature_registry import load_registry
@@ -222,15 +335,18 @@ def main():
     history = sub.add_parser("history")
     history.add_argument("feature")
     history.add_argument("--limit", type=int, default=30)
+    history.add_argument("--capability", action="store_true")
     context = sub.add_parser("context")
     context.add_argument("task")
     draft = sub.add_parser("draft")
     draft.add_argument("task")
     draft.add_argument("--output", type=Path, required=True)
+    assignments = sub.add_parser("assignments")
+    assignments.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     try:
         if args.command == "history":
-            result = feature_history(ROOT, args.feature, args.limit)
+            result = (coverage_history if args.capability else feature_history)(ROOT, args.feature, args.limit)
         else:
             report = json.loads(args.report.read_text(encoding="utf-8"))
             if report.get("sha") != git(ROOT, "rev-parse", "HEAD").strip():
@@ -238,8 +354,10 @@ def main():
             registry = load_registry(ROOT)
             if args.command == "context":
                 result = task_context(ROOT, report, registry, args.task)
-            else:
+            elif args.command == "draft":
                 result = {"draft": str(scaffold_gap(ROOT, report, registry, args.task, args.output))}
+            else:
+                result = export_assignments(ROOT, report, registry, args.output)
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
     except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as exc:
