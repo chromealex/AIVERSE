@@ -4,6 +4,7 @@
 // All calls run on the existing physics owner's structural barrier.
 #include "engine/buildings/BuildingWorldRuntime.h"
 #include "engine/physics/Scene.h"
+#include "engine/data/Json.h"
 #include <cmath>
 #include <functional>
 #include <map>
@@ -85,15 +86,26 @@ public:
                 scene_->setLinearVelocity(update.handle,{0,0,0});
             ++moved;
         }
+        size_t retired=0;
         for(const auto& [id,old]:bodies_){
             const auto it=next.find(id);
-            if(it==next.end()||it->second.handle!=old.handle)scene_->destroy(old.handle);
+            if(it==next.end()||it->second.handle!=old.handle){scene_->destroy(old.handle);++retired;}
         }
         bodies_=std::move(next);
+        lastCreated_=created.size();lastMoved_=moved;lastRetired_=retired;
+        if(publications_!=UINT64_MAX)++publications_;
         if(error)error->clear();return true;
     }
     bool retire(std::string* error=nullptr){return synchronize({}, {},error);}
     size_t bodyCount()const noexcept{return bodies_.size();}
+    Json telemetry()const{
+        Json j=Json::object();
+        j.set("successfulPublications",Json::string(std::to_string(publications_)));
+        j.set("bodyCount",Json::number(int64_t(bodies_.size())));
+        j.set("lastCreated",Json::number(int64_t(lastCreated_)));
+        j.set("lastMoved",Json::number(int64_t(lastMoved_)));
+        j.set("lastRetired",Json::number(int64_t(lastRetired_)));return j;
+    }
     physics::BodyHandle body(uint32_t colliderId)const{
         const auto it=bodies_.find(colliderId);
         return it==bodies_.end()?physics::kNoBody:it->second.handle;
@@ -145,6 +157,8 @@ public:
         };
     }
 private:
+    uint64_t publications_=0;
+    size_t lastCreated_=0,lastMoved_=0,lastRetired_=0;
     struct Entry{physics::BodyHandle handle=physics::kNoBody;world::Bounds bounds{};bool movable=false;};
     static b3Vec3 asFloat(Vec3 v){
         return {float(v.x.toDouble()),float(v.y.toDouble()),float(v.z.toDouble())};
