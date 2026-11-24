@@ -42,3 +42,4 @@
 #include "engine/buildings/BuildingLiftCheckpointPersistence.h"
 #include "engine/buildings/BuildingLiftRenderState.h"
 #include "engine/buildings/BuildingReplicaBridge.h"
+#include "engine/buildings/BuildingReplicaRenderScene.h"

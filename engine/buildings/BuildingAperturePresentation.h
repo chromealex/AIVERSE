@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdint>
 #include <map>
+#include <set>
 #include <memory>
 #include <string>
 #include <utility>
@@ -178,6 +179,26 @@ public:
         return true;
     }
 
+    // Trusted replica or rollback owner may reset the accepted timeline
+    // without replacing CPU Models that are leased by Renderer3D.
+    // Geometry and socket identity must still match exactly.
+    bool resetPhysicalTimeline(const std::vector<BuildingAperturePose>& poses,
+                    uint64_t serverTick,uint64_t revision,bool snap=true){
+        if(poses.size()!=entries_.size())return false;
+        std::set<std::string> seen;
+        for(const auto& pose:poses){
+            const auto it=entries_.find(pose.socketId);
+            if(it==entries_.end()||!seen.insert(pose.socketId).second||
+               !sameBounds(it->second.pose.bounds,pose.bounds)||
+               it->second.pose.kind!=pose.kind||pose.physicalPermille>1000||
+               pose.open!=(pose.physicalPermille==1000))return false;
+        }
+        for(const auto& pose:poses){
+            auto& e=entries_.at(pose.socketId);e.pose=pose;
+            if(snap)e.visualOpening=Fixed::fromRatio(pose.physicalPermille,1000);
+        }
+        lastTick_=serverTick;lastRevision_=revision;return true;
+    }
     // Render-thread visual interpolation only; dtMs is not simulation time.
     // Opening/closing access is still determined by authoritative colliders.
     BuildingApertureVisualFrame interpolate(uint32_t dtMs,

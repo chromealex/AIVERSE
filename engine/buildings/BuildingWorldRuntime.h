@@ -4,6 +4,7 @@
 // Renderer3D. No FPS/RTS/ActorHost dependencies, no second ECS or transport.
 // Authoritative-server/local checkpoint recovery, NOT deterministic lockstep.
 #include "engine/buildings/BuildingEcsReconcile.h"
+#include "engine/buildings/BuildingSceneContentIdentity.h"
 #include "engine/buildings/BuildingEcsObstruction.h"
 #include "engine/buildings/BuildingCirculationEcsScene.h"
 #include "engine/buildings/BuildingLiftCheckpointPersistence.h"
@@ -170,26 +171,9 @@ public:
             scene->domains|=buildingGraphBit(BuildingGraphDomain::Navigation);
         }
         if(!scene->domains)return fail(error,"At least one real graph consumer is required");
-        Hasher hash;hash.str("aiverse.building.scene.v1");
-        hash.u64(scene->def.sceneId);hash.str(scene->def.instanceKey);
-        hash.str(styleId);hash.v3(scene->def.origin);hash.u32(scene->def.yaw);
-        hash.u32(scene->domains);hash.u32(scene->def.stepPermille);
-        for(const auto& box:scene->generated.building.boxes){hash.v3(box.min);hash.v3(box.max);}
-        for(const auto& pose:scene->poses){
-            hash.str(pose.socketId);hash.u32(pose.featureIndex);
-            hash.u32(uint32_t(pose.kind));hash.u32(pose.physicalPermille);
-            hash.v3(pose.bounds.min);hash.v3(pose.bounds.max);
-        }
-        for(const auto& room:scene->generated.structureGraph.rooms){
-            hash.str(room.id);hash.u32(room.floor);
-        }
-        for(const auto& edge:scene->generated.structureGraph.connections){
-            hash.str(edge.id);hash.str(edge.from);hash.str(edge.to);hash.u32(uint32_t(edge.kind));
-        }
-        for(const auto& [feature,floors]:scene->liftLayout){
-            hash.u32(feature);hash.u32(floors);
-        }
-        scene->contentHash=hash.value();
+        scene->contentHash=buildingSceneContentIdentity(scene->def.sceneId,
+            scene->def.instanceKey,styleId,scene->def.origin,scene->def.yaw,
+            scene->domains,scene->def.stepPermille,scene->generated,scene->poses,scene->liftLayout);
         const auto id=scene->def.sceneId;
         scenes_.emplace(id,std::move(scene));
         if(error)error->clear();

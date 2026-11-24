@@ -1755,3 +1755,6 @@ of the relevant repository files and exact proposed edits. Both suites
 PASS on both compilers. These are CPU tests only, not GLB/GPU or
 native Simulation/PHYSIS/Replica/Studio execution.
 Handoff: docs/agent-handoffs/buildings-stage-23w1.md.
+
+### Stage 23W.2: remote visual building scenes
+Use BuildingReplicaRenderScene for authenticated remote scenes. Prepare from the same authored recipe/style/scene definition, including the server graph mask and step policy, and verify the independently computed content identity. Accept committed server snapshots on the serialized graphics owner, then upload through the existing Renderer3D/WorldScene lease. No client physics or access authorization. New epochs reset visual timeline without replacing leased CPU models; retire GPU before clear. See docs/agent-handoffs/buildings-stage-23w2.md.

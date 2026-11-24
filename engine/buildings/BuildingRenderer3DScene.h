@@ -8,6 +8,7 @@
 #include "engine/render/RenderDeviceLifetime.h"
 #include "engine/world/SpatialWorld.h"
 #include <algorithm>
+#include <functional>
 #include <cstdint>
 #include <map>
 #include <set>
@@ -29,6 +30,9 @@ public:
     BuildingRenderer3DScene& operator=(const BuildingRenderer3DScene&)=delete;
     ~BuildingRenderer3DScene()=default; // deliberately no unsafe implicit GPU release
 
+    using ModelVisitor=std::function<bool(render::Model&)>;
+    using GatherModels=std::function<bool(const ModelVisitor&)>;
+    using SubmitPoses=std::function<bool(uint32_t,const BuildingDualLeafGameSession::SubmitLeaf&,std::string*)>;
     // The caller must have already assigned each socket's combined PBR
     // material+texture GUID image set before calling initialize().
     // instanceNamespace is unique across active WorldScene render owners.
@@ -38,17 +42,36 @@ public:
                     uint64_t instanceNamespace,std::string* error=nullptr,
                     render::Model* shell=nullptr,Vec3 shellOrigin={},
                     BuildingLiftRenderState* lifts=nullptr){
+        if(!session.attached()){
+            if(error)*error="Building session is detached";
+            return false;
+        }
+        return initializePresentation(device,renderer,std::move(deviceLease),
+            [&session](const ModelVisitor& visit){return session.forEachCpuModel(visit);},
+            [&session](uint32_t ms,const BuildingDualLeafGameSession::SubmitLeaf& submit,std::string* issue){
+                return session.submit(ms,submit,issue);
+            },instanceNamespace,error,shell,shellOrigin,lifts);
+    }
+
+    // Shared GPU owner for local authority and remote-only presentation.
+    // CPU owners must outlive shutdown; no new renderer or device.
+    bool initializePresentation(gfx::Device& device,render::Renderer3D& renderer,
+                    render::RenderDeviceLifetime::Lease deviceLease,
+                    GatherModels gather,SubmitPoses submit,
+                    uint64_t instanceNamespace,std::string* error=nullptr,
+                    render::Model* shell=nullptr,Vec3 shellOrigin={},
+                    BuildingLiftRenderState* lifts=nullptr){
         auto fail=[&](const std::string& why){
             if(error)*error=why;
             return false;
         };
-        if(status_!=Status::Detached||!session.attached()||
+        if(status_!=Status::Detached||!gather||!submit||
            !instanceNamespace||!deviceLease.validFor(device))
             return fail("Invalid Renderer3D building scene or GPU device generation");
         // Gather every CPU model before ANY upload, so partial-upload
         // failures can be retired without losing ownership of a model.
         std::set<render::Model*> unique;
-        const bool gathered=session.forEachCpuModel([&](render::Model& model){
+        const bool gathered=gather([&](render::Model& model){
             if(!unique.insert(&model).second||unique.size()>64u)return false;
             models_.push_back(&model);
             return true;
@@ -65,7 +88,7 @@ public:
         }
         device_=&device;
         renderer_=&renderer;
-        session_=&session;
+        submit_=std::move(submit);
         deviceLease_=std::move(deviceLease);
         namespace_=instanceNamespace;
         shell_=shell;shellOrigin_=shellOrigin;lifts_=lifts;
@@ -107,7 +130,7 @@ public:
         };
         if(status_!=Status::Resident||!device_||
            !deviceLease_.validFor(*device_)||
-           renderer_!=&renderer||!session_||cellSize<=0)
+           renderer_!=&renderer||!submit_||cellSize<=0)
             return fail("Building render owner not resident or GPU epoch changed");
         std::map<uint64_t,std::pair<std::string,uint8_t>> identities;
         if(shell_){
@@ -124,7 +147,7 @@ public:
             renderer.drawModel(command);
         }
         std::string drawError;
-        const bool accepted=session_->submit(
+        const bool accepted=submit_(
             std::min<uint32_t>(renderDtMs,350u),
             [&](const render::Model& model,const BuildingApertureLeafPose& pose){
                 if(pose.leaf>1u)return false;
@@ -194,7 +217,7 @@ public:
             render::releaseModel(*device_,*model);
         }
         models_.clear();
-        device_=nullptr;renderer_=nullptr;session_=nullptr;
+        device_=nullptr;renderer_=nullptr;submit_={};
         namespace_=0;shell_=nullptr;shellOrigin_={};lifts_=nullptr;
         deviceLease_={};
         status_=Status::Detached;
@@ -220,7 +243,7 @@ private:
     Status status_=Status::Detached;
     gfx::Device* device_=nullptr;
     render::Renderer3D* renderer_=nullptr;
-    BuildingDualLeafGameSession* session_=nullptr;
+    SubmitPoses submit_;
     render::RenderDeviceLifetime::Lease deviceLease_;
     uint64_t namespace_=0;
     std::vector<render::Model*> models_;
