@@ -687,21 +687,22 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
                     y0=H-.28f;y1=H;
                 }else{
                     y0=.24f;y1=y0+aperture.height;
+                    const float plane=buildingSocketWallPlane(aperture,W,D);
                     switch(aperture.side){
                         case BuildingFeatureSide::Front:
                             x0=aperture.x-aperture.width*.5f;
                             x1=aperture.x+aperture.width*.5f;
-                            z0=0.f;z1=.36f;break;
+                            z0=plane;z1=plane+.36f;break;
                         case BuildingFeatureSide::Back:
                             x0=aperture.x-aperture.width*.5f;
                             x1=aperture.x+aperture.width*.5f;
-                            z0=D-.36f;z1=D;break;
+                            z0=plane-.36f;z1=plane;break;
                         case BuildingFeatureSide::Left:
-                            x0=0.f;x1=.36f;
+                            x0=plane;x1=plane+.36f;
                             z0=aperture.z-aperture.width*.5f;
                             z1=aperture.z+aperture.width*.5f;break;
                         case BuildingFeatureSide::Right:
-                            x0=W-.36f;x1=W;
+                            x0=plane-.36f;x1=plane;
                             z0=aperture.z-aperture.width*.5f;
                             z1=aperture.z+aperture.width*.5f;break;
                     }
@@ -739,6 +740,7 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
                 Json spec=Json::object();
                 spec.set("kind",string(buildingFeatureName(feature.kind)));
                 spec.set("side",string(buildingFeatureSideName(feature.side)));
+                if(feature.wallLine>=0)spec.set("wallLine",Json::number(int64_t(feature.wallLine)));
                 spec.set("count",Json::number(int64_t(feature.count)));
                 spec.set("width",Json::number(double(feature.width),3));
                 spec.set("height",Json::number(double(feature.height),3));

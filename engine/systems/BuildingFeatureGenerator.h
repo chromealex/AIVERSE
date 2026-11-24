@@ -122,6 +122,11 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
                 else if(side=="right")f.side=BuildingFeatureSide::Right;
                 else throw JsonError(label+".side: expected front, back, left or right");
             }
+            if(j.has("wallLine")){
+                const auto& value=j["wallLine"];const double n=value.toDouble(-2);
+                if(!value.isNumber()||n<-1||n>6||std::floor(n)!=n)throw JsonError(label+".wallLine: expected integer -1..6");
+                f.wallLine=int(n);
+            }
             if(j.has("count")){
                 const float count=number(j["count"],label+".count");
                 if(count<1||count>8||std::floor(count)!=count)

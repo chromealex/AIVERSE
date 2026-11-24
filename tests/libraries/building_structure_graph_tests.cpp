@@ -40,6 +40,18 @@ int main(){
                 CHECK(from&&to);
             }
         }
+        FunctionalBuildingRecipe courtyard;courtyard.width=24;courtyard.depth=24;courtyard.height=8;
+        courtyard.roomsX=courtyard.roomsZ=3;courtyard.footprint={"111","101","111"};
+        BuildingFeature courtDoor;courtDoor.side=BuildingFeatureSide::Back;courtDoor.wallLine=1;
+        courtDoor.position=12;courtDoor.width=1.2f;courtDoor.height=2.4f;courtDoor.open=1;
+        courtyard.features={courtDoor};
+        const auto court=buildFunctionalStructureGraph(courtyard);CHECK(court);
+        CHECK(court.sockets.size()==1&&std::abs(court.sockets[0].wallPlane-8)<.001f);
+        CHECK(std::abs(court.sockets[0].z-9)<.001f);
+        CHECK(!intersects(court,12,1,7.8f,BuildingGraphPart::Wall));
+        CHECK(intersects(court,9,1,7.8f,BuildingGraphPart::Wall));
+        CHECK(court.exteriorApertures.size()==1&&court.exteriorApertures[0].roomId=="room/0/1/0");
+        courtyard.features[0].position=3;CHECK(!buildFunctionalStructureGraph(courtyard));
         FunctionalBuildingRecipe disconnected;disconnected.roomsX=disconnected.roomsZ=3;
         disconnected.footprint={"100","010","001"};CHECK(!buildFunctionalStructureGraph(disconnected));
         FunctionalBuildingRecipe r;

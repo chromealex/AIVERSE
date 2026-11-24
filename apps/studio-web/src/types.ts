@@ -229,6 +229,7 @@ export type StudioBuildingFeatureSide = 'front' | 'back' | 'left' | 'right';
 export interface StudioBuildingFeature {
   kind: StudioBuildingFeatureKind;
   side: StudioBuildingFeatureSide;
+  wallLine?:number; // -1 outer envelope; otherwise zero-based facade grid line
   count: number;
   width: number;
   height: number;

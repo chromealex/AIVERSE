@@ -395,9 +395,15 @@ export default function BuildingGeneratorPanel({
             if(feature.position-span*0.5<0.72||feature.position+span*0.5>sideLength-0.72)
               return 'Exact opening position is outside its usable wall.';
           }
-          const info=used[feature.side]??{width:0,count:0};
-          info.width+=feature.width*feature.count;info.count+=feature.count;
-          used[feature.side]=info;
+          const line=feature.wallLine??-1;
+          if(!Number.isInteger(line)||line<-1||line>((feature.side==='front'||feature.side==='back')?asNumber(roomsZ):asNumber(roomsX)))
+            return 'Invalid facade grid line.';
+          // Native graph checks individual exposed spans and exact placement.
+          if(line<0&&!shaped){
+            const info=used[feature.side]??{width:0,count:0};
+            info.width+=feature.width*feature.count;info.count+=feature.count;
+            used[feature.side]=info;
+          }
         }
       }
       for(const [side,info] of Object.entries(used)){
@@ -901,7 +907,7 @@ export default function BuildingGeneratorPanel({
                 }}>{active?'■':'·'}</button>;
             })}
           </div>}
-        <small className="abg__note">Click cells to add or remove rooms on every storey. The top row is Front. Custom shapes use flat roofs; openings on recessed walls are not yet supported. Existing incompatible features must be edited explicitly.</small>
+        <small className="abg__note">Click cells to add or remove rooms on every storey. The top row is Front. Custom shapes use flat roofs; select a facade grid line for openings on recessed or courtyard walls. Existing incompatible features must be edited explicitly.</small>
         <small className="abg__note">Internal room partitions, stair and lift geometry follow the selected functional recipe. Native ECS/PHYSIS and graph owners handle dynamic traversal separately; changing setting never changes gameplay permissions.</small>
       </StudioSection>}
         </div>
@@ -983,8 +989,14 @@ export default function BuildingGeneratorPanel({
               </StudioField>
               {!['sliding-roof','stairs','elevator'].includes(feature.kind)&&<StudioField label="Wall" htmlFor={"abg-feature-"+i+"-side"}>
                 <StudioSelect id={"abg-feature-"+i+"-side"} value={feature.side} disabled={busy}
-                  onChange={e=>setFeature(i,'side',e.target.value)}>
+                  onChange={e=>{setFeatures(old=>old.map((f,j)=>j===i?{...f,side:e.target.value as StudioBuildingFeature['side'],wallLine:-1}:f));clearGenerated();}}>
                   {['front','back','left','right'].map(side=><option key={side} value={side}>{side}</option>)}
+                </StudioSelect>
+              </StudioField>}
+              {!['sliding-roof','stairs','elevator'].includes(feature.kind)&&<StudioField label="Facade grid line" htmlFor={'abg-feature-'+i+'-wall-line'}>
+                <StudioSelect id={'abg-feature-'+i+'-wall-line'} value={String(feature.wallLine??-1)} disabled={busy} onChange={e=>setFeature(i,'wallLine',Number(e.target.value))}>
+                  <option value={-1}>Outer envelope (default)</option>
+                  {Array.from({length:Math.max(0,Math.min(5,((feature.side==='front'||feature.side==='back')?asNumber(roomsZ):asNumber(roomsX))-1))},(_,k)=><option key={k+1} value={k+1}>Interior grid line {k+1}</option>)}
                 </StudioSelect>
               </StudioField>}
               {!['sliding-roof','stairs','elevator'].includes(feature.kind)&&<StudioField label="Count" htmlFor={"abg-feature-"+i+"-count"}>
