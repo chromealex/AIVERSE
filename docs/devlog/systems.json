@@ -1894,9 +1894,9 @@
           "textEn": "Attachment material roots and safe collection certification boundary."
         },
         {
-          "name": "Texture Graph GPU — Stage 38AF (в работе)",
+          "name": "Texture Graph GPU — Stage 38AF (исправление, проверка)",
           "text": "Исправление линковки теста replay на Mac без расширения зависимостей snapshot.",
-          "nameEn": "Texture Graph GPU — Stage 38AF (in progress)",
+          "nameEn": "Texture Graph GPU — Stage 38AF (fix, verification pending)",
           "textEn": "Fix Mac replay regression linkage without expanding snapshot dependencies."
         }
       ],

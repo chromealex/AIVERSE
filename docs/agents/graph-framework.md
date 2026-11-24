@@ -343,3 +343,7 @@ Stage 38AE (partial, integration checkpoint): GameView now enumerates attachment
 ## Stage 38AE — isolated acceptance rerun
 
 Stage 38AE acceptance checkpoint: four isolated exact-blob CPU fixtures at 170937b242b44121e3b53dff202ed568741c9fba (texture_graph_image_pins, vulkan_scope_timing, texture_graph_liveness, texture_graph_output_reuse) passed GCC 14.2, Clang 17 and Clang ASan/UBSan, all with -std=c++20 -Wall -Wextra -Werror. All eight source Git blob hashes matched. Full checkout blocked by GitHub DNS; no /dev/dri. GitHub Actions list for exact HEAD returned zero runs; draft PR #133 remains open. Integrated 30-test suite, actual Metal/Vulkan, Client/Editor/Studio/MCP and Mac merged-tree gate NOT RUN.
+
+## Stage 38AF — native fixture linkage
+
+Stage 38AF: user Mac Release build at the preceding acceptance checkpoint failed linking aiverse_camera_model_snapshot_tests (x86_64 undefined Renderer3D::detachCompletedGraphImageReplay and canDetachCompletedGraphImageReplay). Snapshot target intentionally links engine/View/zstd only; Renderer3D.cpp lives in aiverse_runtime. Moved the complete replay callback preflight/refusal fixture to existing aiverse_camera_client_adapter_tests, already linked to runtime with platform aiverseMain. Kept the standalone snapshot fixture and its dependency boundary unchanged. Added camera_client_adapter to consolidated runner (31 tests per backend). 10/10 exact-source checks passed at 9c0075a3ea3a75ca8fdde317ff63e1c438215efb; Mac rebuild and CTest NOT RUN after correction.
