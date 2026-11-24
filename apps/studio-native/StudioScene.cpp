@@ -712,7 +712,7 @@ void StudioScene::syncPlanetForestModels(const editor::MapDoc& doc,const std::st
             // Existing shared GPU branch hierarchy; explicit per-draw tangent wind.
             const render::wind::WindMaskLibrary masks;
             const auto atlas=render::wind::WindMaskAtlas::fromLibrary(masks);
-            tw::applyArborWind(*model,tw::generateTree(recipe.profile,recipe.seed,tw::TreeLOD::High),owners,render::wind::WindProfile{},masks,atlas);
+            tw::applyArborWind(*model,tw::generateTree(recipe.profile,recipe.seed,tw::TreeLOD::High),owners,render::wind::WindProfile{},masks,*atlas);
             size_t bytes=model->vertices.size()*sizeof(render::ModelVertex)+model->indices.size()*sizeof(uint32_t);
             for(auto& image:model->images){
                 bytes+=size_t(image.width)*size_t(image.height)*8u; // conservative mip estimate

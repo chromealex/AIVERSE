@@ -52,7 +52,8 @@ inline void studioForestWeatherSample(Json& row,const World& ecs,const game::Sur
         if(!best||d<nearest||(d==nearest&&candidate.cell.packed()<best->cell.packed())){best=&candidate;nearest=d;}
     }
     const auto east=fxNormalize(frame.east);
-    const auto south=fxNormalize(east.cross(frame.up));
+    const auto south=fxNormalize(Vec3{east.y*frame.up.z-east.z*frame.up.y,
+        east.z*frame.up.x-east.x*frame.up.z,east.x*frame.up.y-east.y*frame.up.x});
     Vec3 wind{};bool available=false;
     if(best){
         if(const auto* a=ecs.tryGetConst<physis::Atmosphere>(best->cell)){
@@ -77,6 +78,9 @@ inline void studioForestWeatherSample(Json& row,const World& ecs,const game::Sur
     }
     if(available){
         // Clamp visual tangent speed to the existing ARBOR wind range.
+        // Match PHYSIS component cap before taking a squared length.
+        const auto cap=200_fx;
+        wind={fxClamp(wind.x,-cap,cap),fxClamp(wind.y,-cap,cap),fxClamp(wind.z,-cap,cap)};
         auto x=wind.dot(east),z=wind.dot(south);
         const auto speed=fxSqrt(x*x+z*z);
         if(speed>50_fx){x=x*50_fx/speed;z=z*50_fx/speed;}
