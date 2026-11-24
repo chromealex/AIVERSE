@@ -23,6 +23,14 @@ class WorldPersistencePanelTests(unittest.TestCase):
             self.assertIn("world_save_" + name, tools)
             self.assertIn("world_save_" + name, panel)
 
+    def test_background_job_contract(self):
+        panel = (SRC / "panels/WorldPersistencePanel.tsx").read_text()
+        for op in ("start", "status", "cancel", "release"):
+            self.assertIn("world_job_" + op, panel)
+        self.assertIn("cancelAllowed", panel)
+        self.assertIn("checkpointTotal", panel)
+        self.assertIn("Existing job from", panel)
+
     def test_confirmation_and_truthful_diagnostics(self):
         panel = (SRC / "panels/WorldPersistencePanel.tsx").read_text()
         self.assertIn("expectedGenerations:confirmed.plan.removeGenerations", panel)
