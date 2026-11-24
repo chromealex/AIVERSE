@@ -1,5 +1,6 @@
 #include "ModelingOps.h"
 #include "Workspace.h"
+#include <aiverselib/runtime/WorkBudget.h>
 #include "ShaderGraphOps.h"
 #include "AnimationOps.h"
 #include "GeometryOps.h"
@@ -510,6 +511,26 @@ void Workspace::registerCoreOps() {
             result.set("guiOnlyCount", Json::number(int64_t(guiOnly)));
             result.set("note", str("Registration only. Verify tools/call against the built MCP executable and active editor; compile-time capabilities and runtime dependencies may differ."));
             return result;
+        });
+    add("simulation_budget_plan", "Calculate deterministic recurring decision visits per tick and maximum revisit latency. Pure planning only; does not change rules or live simulation.",
+        R"({"type":"object","properties":{"count":{"type":"integer","minimum":0,"maximum":2000000000},"periodTicks":{"type":"integer","minimum":1,"maximum":36000},"maxVisitsPerTick":{"type":"integer","minimum":0,"maximum":2000000000}},"required":["count","periodTicks"],"additionalProperties":false})",
+        [](const Json& p){
+            auto read=[&](const char* key,uint32_t maximum,uint32_t minimum,bool required){
+                if(!p.has(key)&&!required)return uint32_t(0);
+                const auto& v=p[key];
+                if(!v.isNumber()||v.fx().raw%Fixed::kOne||v.integer()<minimum||uint64_t(v.integer())>maximum)
+                    throw std::runtime_error(std::string("invalid simulation budget field: ")+key);
+                return uint32_t(v.integer());
+            };
+            const auto count=read("count",2000000000,0,true);
+            const auto period=read("periodTicks",36000,1,true);
+            const auto cap=read("maxVisitsPerTick",2000000000,0,false);
+            const auto plan=lib::runtime::planRecurringWork(count,period,cap);
+            Json out=Json::object();
+            out.set("visitsPerTick",Json::number(int64_t(plan.visitsPerTick)));
+            out.set("maxRevisitTicks",Json::number(int64_t(plan.maxRevisitTicks)));
+            out.set("meetsPeriod",Json::fromBool(plan.meetsPeriod));
+            return out;
         });
     auto needProject = [this] { if (project.dir.empty()) throw std::runtime_error("no game is open: call open_game first"); };
     auto entityRef = [this](const Json& p) {
