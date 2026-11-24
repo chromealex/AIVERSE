@@ -31,6 +31,7 @@
 #include "engine/render/RenderDeviceLifetime.h"
 #include "apps/studio-native/StudioFacialGpuPreview.h"
 #include "apps/studio-native/StudioCavernsPreview.h"
+#include "engine/render/NativePresentationRetirement.h"
 
 namespace aiverse::studio {
 class StudioScene final {
@@ -53,7 +54,13 @@ public:
                 throw std::runtime_error("Caverns preview GPU retirement refused");
             lastFrameSignature_=0;
         }
-        return cavernsPreview_.stats();
+        auto result=cavernsPreview_.stats();
+        result.set("terrainCutEntrances",Json::string(std::to_string(terrainCutStats_.cutEntrances)));
+        result.set("terrainRejectedEntrances",Json::string(std::to_string(terrainCutStats_.rejectedEntrances)));
+        result.set("terrainTriangles",Json::string(std::to_string(terrainCutStats_.triangles)));
+        result.set("terrainCutDiagnostic",Json::string(terrainCutStats_.cutDiagnostic));
+        result.set("terrainCutSupported",Json::fromBool(terrainCutStats_.handled));
+        return result;
     }
     const std::string& lightingStatus() const { return lightingStatus_; }
     // Preview wind for every rigged model (<model>.wind.json) + debug view.
@@ -184,6 +191,10 @@ private:
     render::Mesh cube_;
     render::Mesh studioCyclorama_;
     render::Mesh terrain_;
+    render::MeshBuilder terrainCpu_;
+    TerrainPreviewStats terrainCutStats_;
+    render::NativePresentationRetirement terrainRetirement_;
+    bool terrainWasShown_=false,terrainCavernsAuthored_=false;
     std::unique_ptr<render::Model> materialSphere_;
     // Built-in Mesh Renderer primitives (StaticModel.asset "" / builtin:cube / builtin:sphere).
     std::unique_ptr<render::Model> builtinCube_, builtinSphere_;
