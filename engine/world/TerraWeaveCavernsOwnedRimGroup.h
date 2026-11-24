@@ -84,6 +84,104 @@ inline std::vector<Vec3> clipRimSlotPolygon(const std::vector<Vec3>& poly,
     if(out.size()>1&&surfaceVertexKey(out.front())==surfaceVertexKey(out.back()))out.pop_back();
     return out;
 }
+// Pre-split the actual terrain boundary at the native volume grid before
+// building the collar. The same refined plan MUST go to both owners.
+// This addresses rim-edge crossings, not arbitrary noncollinear seams.
+inline CaveSurfaceGroupPlan refineSurfaceGroupForRimGrid(CaveSurfaceGroupPlan plan,
+        uint32_t resolution,int32_t spacingCm){
+    if(!resolution||resolution>64||spacingCm<=0||spacingCm>10000||
+       plan.patches.size()>64)throw std::invalid_argument("Caverns rim grid refinement budget");
+    const int64_t spanCm=int64_t(resolution)*spacingCm;
+    if((spanCm*Fixed::kOne)%100)throw std::invalid_argument("Caverns rim grid Q16 span");
+    const int64_t grid=Fixed::fromRatio(spanCm,100).raw;
+    std::map<SurfaceEdgeKey,std::vector<SurfaceVertexKey>> splits;
+    size_t splitCount=0;
+    for(auto& rim:plan.rims){
+        if(rim.ring.size()<3||rim.ring.size()>8192)throw std::invalid_argument("Caverns rim grid ring");
+        std::vector<SurfaceVertexKey> ring;
+        for(size_t i=0;i<rim.ring.size();++i){
+            const auto from=rim.ring[i],to=rim.ring[(i+1)%rim.ring.size()];
+            auto a=from,b=to;if(b<a)std::swap(a,b);
+            if(a==b)throw std::invalid_argument("Caverns duplicate rim edge");
+            std::vector<SurfaceVertexKey> points;
+            for(unsigned axis=0;axis<3;++axis){
+                const int64_t low=std::min(a[axis],b[axis]),high=std::max(a[axis],b[axis]);
+                if(low==high)continue;
+                const auto first=floorDiv(low,grid)+1;
+                const auto last=floorDiv(high-1,grid);
+                if(last-first>64)throw std::length_error("Caverns rim edge grid crossings");
+                for(int64_t k=first;k<=last;++k){
+                    const int64_t plane=k*grid;
+                    const double t=double(plane-a[axis])/double(b[axis]-a[axis]);
+                    SurfaceVertexKey p;
+                    for(unsigned d=0;d<3;++d)p[d]=a[d]+int64_t(std::llround(double(b[d]-a[d])*t));
+                    p[axis]=plane;points.push_back(p);
+                }
+            }
+            std::sort(points.begin(),points.end());
+            points.erase(std::unique(points.begin(),points.end()),points.end());
+            if(!points.empty()){
+                if(points.front()<=a||points.back()>=b||splitCount+points.size()>32768)
+                    throw std::invalid_argument("Caverns rim grid precision/budget");
+                splitCount+=points.size();
+                if(!splits.emplace(SurfaceEdgeKey{a,b},points).second)
+                    throw std::invalid_argument("Caverns duplicate grid rim ownership");
+            }
+            ring.push_back(from);
+            if(from==a)ring.insert(ring.end(),points.begin(),points.end());
+            else ring.insert(ring.end(),points.rbegin(),points.rend());
+        }
+        if(ring.size()>8192)throw std::length_error("Caverns refined rim budget");
+        rim.ring=std::move(ring);
+    }
+    if(splits.empty())return plan;
+    std::map<SurfaceEdgeKey,size_t> uses;
+    size_t total=0;
+    for(auto& [cell,patch]:plan.patches){
+        (void)cell;
+        std::vector<world::Triangle> next;
+        for(const auto& t:patch.collision){
+            const Vec3 original[]={t.a,t.b,t.c};
+            std::vector<world::Triangle> fragments{t};
+            for(unsigned side=0;side<3;++side){
+                const auto edge=surfaceEdgeKey(original[side],original[(side+1)%3]);
+                const auto split=splits.find(edge);if(split==splits.end())continue;
+                bool replaced=false;
+                for(size_t j=0;j<fragments.size()&&!replaced;++j){
+                    const auto f=fragments[j];const Vec3 v[]={f.a,f.b,f.c};
+                    for(unsigned e=0;e<3;++e){
+                        if(surfaceEdgeKey(v[e],v[(e+1)%3])!=edge)continue;
+                        auto points=split->second;
+                        if(surfaceVertexKey(v[e])!=edge.first)std::reverse(points.begin(),points.end());
+                        Vec3 a=v[e];const auto b=v[(e+1)%3],opposite=v[(e+2)%3];
+                        std::vector<world::Triangle> pieces;
+                        for(const auto& p:points){auto q=rimPoint(p);pieces.push_back({a,q,opposite});a=q;}
+                        pieces.push_back({a,b,opposite});
+                        for(const auto& piece:pieces)if(!world::SpatialWorld::validTriangle(piece))
+                            throw std::invalid_argument("Caverns refined terrain triangle invalid");
+                        fragments[j]=pieces.front();fragments.insert(fragments.end(),pieces.begin()+1,pieces.end());
+                        ++uses[edge];replaced=true;break;
+                    }
+                }
+                if(!replaced)throw std::invalid_argument("Caverns terrain rim split missing source edge");
+            }
+            if(fragments.size()>65534-next.size())throw std::length_error("Caverns refined tile triangle budget");
+            next.insert(next.end(),fragments.begin(),fragments.end());
+        }
+        total+=next.size();if(total>1000000)throw std::length_error("Caverns refined surface group triangle budget");
+        patch.collision.swap(next);
+    }
+    for(const auto& [edge,points]:splits){(void)points;if(uses[edge]!=1)
+        throw std::invalid_argument("Caverns rim refinement edge incidence");}
+    for(const auto& [cell,patch]:plan.patches)for(const unsigned axis:{0u,2u}){
+        auto neighbor=cell;if(axis==0)++neighbor.x;else ++neighbor.z;
+        const auto it=plan.patches.find(neighbor);if(it==plan.patches.end())continue;
+        const auto plane=Fixed::fromInt(int64_t(axis==0?neighbor.x:neighbor.z)*plan.tileMetres).raw;
+        if(surfaceTileEdge(patch,axis,plane)!=surfaceTileEdge(it->second,axis,plane))
+            throw std::invalid_argument("Caverns refined terrain seam mismatch");
+    }
+    return plan;
+}
 // A complete rectangular slot group is required. Every source must be the
 // same native epoch and lattice. No source outside the group is touched.
 // The actual retained volume triangles stay in their original slots.
