@@ -306,3 +306,15 @@ Stage44 source commits are not proof of compilation, gameplay parity or
 all-owner rollback. Native builds and test campaigns remain deferred by
 the user's features-first request. See
 `docs/agent-handoffs/caverns-stage44-2026-11-24.md`.
+
+## Stage45 architecture correction — ActorHost coupling retired (2026-11-24)
+
+The Stage44 ActorHost-specific native cave integration documented above was **reverted** in the feature branch after review of the engine's genre-neutral architecture. Do not use it as a current API. Both `engine/actor/ActorModule.h` and `engine/actor/ActorModule.cpp` were returned to their pre-Stage44 content; `CaveActorMotorSteering.h` and ActorHost-specific collision catalog/commit headers were deleted.
+
+Use these **common C++ interfaces** instead:
+
+- `engine/world/TerraWeaveCavernsSpatialRevisionOwner.h` owns bounded versioned cave collision leases in an existing `world::SpatialWorld`; staged changes use an independent complete snapshot and an exclusive-owner publish barrier. It does not import ActorHost or assert any automatic Box3D, NavMesh, or GPU publication.
+- `engine/nav/CaveSimulationNavigation.h::installCaveRepathSimulation` opts into the authoritative ECS route-intent/persistence/replanning systems **without installing a movement controller**.
+- `engine/nav/CaveEcsSteering.h::prepareCaveSteering` takes a shared ECS entity-position callback and produces a versioned `CaveSteeringRequest`; a project's existing walking/flying/swimming/vehicle motor consumes it. `installCaveSteeringSystem` is an optional fixed-tick producer. Only the selected motor mutates physical position; do not also install the direct Transform follower for the same entity.
+
+Every algorithm still consumes the immutable Cave SDF provider, not a genre-specific entity representation. See `docs/agent-handoffs/caverns-stage45-2026-11-24.md`. These changes are committed source awaiting native build/verification.
