@@ -664,7 +664,8 @@ still applies.
 `view.camera()` returns the host camera `{x, z, zoom, pitch, yaw, width, height, ortho}`: target on the ground, zoom in
 the units of game.json `"camera"` (orthographic: visible view-plane height in world units; perspective: distance),
 angles in degrees, viewport in framebuffer pixels. `view.set_camera{x =, z =, zoom =, pitch =, yaw =}` changes any
-subset after the frame's view scripts (pitch 5..90, zoom > 0, finite values). A game ports its own framing with it
+subset after the frame's view scripts, before client world streaming and rendering (pitch 5..90, zoom > 0,
+finite values). The world scene and `view.to_screen` use the resulting camera in the same frame. A game ports its own framing with it
 (OpenWar: `scripts/view/openwar/camera.lua`, Unity's ArmyMapView). Presentation only; the client applies it, the
 editor Game view does not yet. Test: `openwar_player_colors_flat_lighting_view_camera`.
 

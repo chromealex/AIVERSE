@@ -1355,6 +1355,9 @@ void GameClient::frame(gfx::Device& dev, double dt) {
             cam_ = view_.updatePlanetCamera(scene_.seconds, float(dt), fbH());
             pass.clearColor[0] = pass.clearColor[1] = pass.clearColor[2] = 0.0f;
         }
+        // Apply view.set_camera before streaming, culling and drawing so the
+        // world and view.to_screen use the same camera in this frame.
+        runViewScripts(screen_ == Screen::Playing ? float(dt) : 0.0f);
         if (worldScene_ && !planet()) {   // load / unload chunks for where the camera looks (GPU uploads: before the scene pass)
             horizonFrameTiming_.begin(dev,worldScene_.get());
             const Vec3 focus{Fixed::fromInt(int64_t(cam_.target.x)), Fixed{}, Fixed::fromInt(int64_t(cam_.target.z))};
@@ -1503,7 +1506,6 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         fx_.update(*sim_, scene_, cam_, r3d_.viewProj(),renderW,renderH,
                    screen_ == Screen::Playing || screen_ == Screen::Over ? float(dt) : 0.0f);
         fx_.addLights(r3d_.lights);   // particle lights ("light" module)
-        runViewScripts(screen_ == Screen::Playing ? float(dt) : 0.0f);
         if (auto* enc = mod().encounters(); enc && enc->active()) {   // telegraph decals + status rings (EncounterDecals.h)
             auto ground = groundCanvas_;
             game::appendEncounterDecals(*sim_, mod(), view_, spectator_ ? 0 : human_, ground);
