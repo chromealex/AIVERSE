@@ -12,6 +12,76 @@ namespace aiverse::editor {
 
 using namespace aiverse::game;
 
+Json Editor::graphMaterialApplyStatus() const {
+    const bool sameProject=!ws_.project.dir.empty()&&graphMaterialApplyProject_==ws_.project.dir;
+    Json r=Json::object();
+    r.set("ok",Json::fromBool(true));
+    r.set("state",Json::string(sameProject?graphMaterialApplyState_:"idle"));
+    r.set("request",Json::string(sameProject?graphMaterialApplyRequest_:std::string{}));
+    r.set("reason",Json::string(sameProject?graphMaterialApplyReason_:std::string{}));
+    r.set("persistent",Json::fromBool(false));
+    return r;
+}
+
+Json Editor::graphMaterialOp(const Json& p){
+    const auto action=p.getStr("action");
+    if(action=="materialApplyStatus")return graphMaterialApplyStatus();
+    // This editor scene owner is not the separately hosted client renderer.
+    if(!dev_||ws_.project.dir.empty()||clientPlaying())
+        throw std::runtime_error("editor scene material owner unavailable");
+    const auto index=[&](const char* key){
+        if(!p.has(key)||!p[key].isNumber())throw std::invalid_argument(std::string("missing material target field: ")+key);
+        return size_t(render::texture_graph::integer(p[key],0,0,65535));
+    };
+    const auto type=index("typeIndex"),choice=index("choiceIndex"),material=index("materialIndex");
+    const auto current=view_.graphMaterialTarget(type,choice,material);
+    if(!current)throw std::runtime_error("material target not resident or owner busy");
+    if(action=="materialTarget"){
+        Json r=Json::object();r.set("ok",Json::fromBool(true));
+        r.set("typeIndex",Json::number(int64_t(type)));r.set("choiceIndex",Json::number(int64_t(choice)));
+        r.set("materialIndex",Json::number(int64_t(material)));
+        r.set("modelPath",Json::string(current->modelPath));r.set("materialName",Json::string(current->materialName));
+        r.set("variant",Json::number(int64_t(current->variant)));
+        r.set("expectedModelPublication",Json::string(std::to_string(current->identity.publication)));
+        r.set("expectedVersion",Json::string(std::to_string(current->identity.version)));
+        r.set("persistent",Json::fromBool(false));return r;
+    }
+    if(action!="applyMaterial")throw std::invalid_argument("unknown live material action");
+    if(pendingGraphMaterialApply_)throw std::runtime_error("material application already queued");
+    const view::LiveAppearanceMaterialTarget target{view::parseAppearanceIdentity(p.getStr("expectedModelPublication")),
+        view::parseAppearanceIdentity(p.getStr("expectedVersion")),material};
+    if(target.publication!=current->identity.publication||target.version!=current->identity.version)
+        throw std::runtime_error("material target changed; inspect again");
+    const auto ready=textureGraphGpuPreview_.status();
+    const auto request=p.getStr("request");
+    if(request.empty()||ready.getStr("request")!=request||!ready.getBool("gpuTextureSetReady")||ready.getBool("busy"))
+        throw std::runtime_error("no matching accepted GPU-resident texture set");
+    pendingGraphMaterialApply_=PendingGraphMaterialApply{ws_.project.dir,request,type,choice,target};
+    graphMaterialApplyProject_=ws_.project.dir;graphMaterialApplyRequest_=request;
+    graphMaterialApplyState_="queued";graphMaterialApplyReason_.clear();
+    return graphMaterialApplyStatus();
+}
+
+void Editor::applyQueuedGraphMaterial(){
+    if(!pendingGraphMaterialApply_)return;
+    auto task=std::move(*pendingGraphMaterialApply_);
+    pendingGraphMaterialApply_.reset();
+    graphMaterialApplyState_="failed";
+    if(!dev_||task.project!=ws_.project.dir||clientPlaying()){
+        graphMaterialApplyReason_="editor scene owner or project changed";return;
+    }
+    // Runs after asset hot reload/reclaim and before new view submissions.
+    // Resolve again; a queued task never stores a borrowed Model pointer.
+    std::string error;
+    const bool ok=view_.applyGraphMaterial(task.type,task.choice,task.target,
+        [&](auto& live,auto& mirror,auto& model,auto& device,const auto& lease,auto& rollback,std::string* why){
+            return textureGraphGpuPreview_.publishCompletedGpuSnapshot(task.project,task.request,
+                live,task.target,model,device,lease,rollback,&mirror,why);
+        },&error);
+    graphMaterialApplyState_=ok?"applied":"failed";
+    graphMaterialApplyReason_=ok?"accepted GPU textures adopted into live editor appearance":std::move(error);
+}
+
 Json Editor::graphWatchSample(const std::string& domain,const std::string& entity) const {
     Json r=Json::object();r.set("available",Json::fromBool(false));
     if(!sim_||!graphPlayEpoch_||graphPlayEpoch_==~uint64_t{0})return r;
@@ -89,13 +159,24 @@ void Editor::registerPlayOps() {
             return r;
         });
     add("texture_graph_gpu_owner_preview","Queue, read or publish native texture GPU preview/bake/set; CPU fallback unless requireGpu.",
-        R"({"properties":{"action":{"type":"string","enum":["start","read","publish","cancel"]},"graph":{"type":"object"},"overrides":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"requireGpu":{"type":"boolean"},"resolution":{"type":"integer","minimum":8,"maximum":128},"bake":{"type":"boolean"},"bakeSet":{"type":"boolean"},"materialized":{"type":"boolean","description":"Opt-in experimental native materialized DAG execution"},"materializedDag":{"type":"boolean","description":"Compatibility alias for materialized"},"fusePointwise":{"type":"boolean","description":"Opt-in bounded pointwise fusion for materialized DAG; also supported in plan inspection"},"gpuTextureTransfer":{"type":"boolean","description":"Experimental GPU-resident full materialized set; actual copied mip zero is CPU-reference validated; requires native lease"},"gpuTextureMipmaps":{"type":"boolean","description":"Generate full GPU mip chain for copied textures; requires gpuTextureTransfer"},"timeoutMs":{"type":"integer","minimum":1000,"maximum":300000},"request":{"type":"string"},"textureName":{"type":"string"}},"required":["action"]})",
+        R"({"properties":{"action":{"type":"string","enum":["start","read","publish","cancel","materialTarget","applyMaterial","materialApplyStatus"]},"graph":{"type":"object"},"overrides":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"requireGpu":{"type":"boolean"},"resolution":{"type":"integer","minimum":8,"maximum":128},"bake":{"type":"boolean"},"bakeSet":{"type":"boolean"},"materialized":{"type":"boolean","description":"Opt-in experimental native materialized DAG execution"},"materializedDag":{"type":"boolean","description":"Compatibility alias for materialized"},"fusePointwise":{"type":"boolean","description":"Opt-in bounded pointwise fusion for materialized DAG; also supported in plan inspection"},"gpuTextureTransfer":{"type":"boolean","description":"Experimental GPU-resident full materialized set; actual copied mip zero is CPU-reference validated; requires native lease"},"gpuTextureMipmaps":{"type":"boolean","description":"Generate full GPU mip chain for copied textures; requires gpuTextureTransfer"},"timeoutMs":{"type":"integer","minimum":1000,"maximum":300000},"typeIndex":{"type":"integer","minimum":0,"maximum":65535},"choiceIndex":{"type":"integer","minimum":0,"maximum":65535},"materialIndex":{"type":"integer","minimum":0,"maximum":65535},"expectedVersion":{"type":"string"},"expectedModelPublication":{"type":"string"},"request":{"type":"string"},"textureName":{"type":"string"}},"required":["action"]})",
         [this](const Json& p){
             if(!dev_)throw std::runtime_error("native graphics owner unavailable");
             textureGraphGpuPreview_.checkProject(ws_.project.dir);
-            if(p.getStr("action")=="start")return textureGraphGpuPreview_.start(p,ws_.project.dir,gpuDeviceLease());
+            const auto action=p.getStr("action");
+            if(action=="materialTarget"||action=="applyMaterial"||action=="materialApplyStatus")return graphMaterialOp(p);
+            if(pendingGraphMaterialApply_&&(action=="start"||action=="publish"))
+                throw std::runtime_error("live material application is queued");
+            if(action=="start")return textureGraphGpuPreview_.start(p,ws_.project.dir,gpuDeviceLease());
             if(p.getStr("action")=="read")return textureGraphGpuPreview_.status();
-            if(p.getStr("action")=="cancel")return textureGraphGpuPreview_.cancel(p,ws_.project.dir);
+            if(action=="cancel"){
+                auto result=textureGraphGpuPreview_.cancel(p,ws_.project.dir);
+                if(pendingGraphMaterialApply_&&pendingGraphMaterialApply_->request==p.getStr("request")){
+                    pendingGraphMaterialApply_.reset();graphMaterialApplyState_="cancelled";
+                    graphMaterialApplyReason_="GPU request cancelled";
+                }
+                return result;
+            }
             if(p.getStr("action")=="publish")return textureGraphGpuPreview_.publish(ws_,p);
             throw std::invalid_argument("unknown GPU preview action");
         });
