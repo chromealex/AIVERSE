@@ -38,8 +38,8 @@ struct CaveSurfaceRim {
     // Ordered exact Q16 vertices of the cut boundary, closed implicitly.
     std::vector<SurfaceVertexKey> ring;
 };
-inline CaveSurfaceRim extractCaveSurfaceRim(
-        const std::map<world::Cell,TerrainPatch>& patches,const Entrance& e,
+inline CaveSurfaceRim extractCaveSurfaceRimTriangles(
+        std::span<const world::Triangle> triangles,const Entrance& e,
         size_t& work,size_t maxWork=4000000) {
     constexpr unsigned sides=16;
     constexpr double epsilonCm=0.01; // larger than one native Q16 unit
@@ -48,11 +48,7 @@ inline CaveSurfaceRim extractCaveSurfaceRim(
         return CutVertexCm{cm(v[0]),cm(v[1]),cm(v[2])};
     };
     std::map<SurfaceEdgeKey,unsigned> edges;
-    for(const auto& [cell,patch]:patches){
-        const int64_t span=int64_t(patch.cellSizeMetres)*100;
-        const int64_t x=int64_t(cell.x)*span,z=int64_t(cell.z)*span;
-        if(!overlaps({x,z,x+span,z+span},entranceBounds(e)))continue;
-        for(const auto& tri:patch.collision){
+    for(const auto& tri:triangles){
             if(++work>maxWork)throw std::length_error("Caverns rim extraction budget");
             const Vec3 v[]={tri.a,tri.b,tri.c};
             for(unsigned i=0;i<3;++i){
@@ -68,7 +64,6 @@ inline CaveSurfaceRim extractCaveSurfaceRim(
                 if(inside&&onSide&&++edges[key]>2)
                     throw std::invalid_argument("Caverns nonmanifold terrain rim");
             }
-        }
     }
     std::map<SurfaceVertexKey,std::vector<SurfaceVertexKey>> adjacency;
     for(const auto& [edge,count]:edges)if(count==1){
@@ -94,6 +89,20 @@ inline CaveSurfaceRim extractCaveSurfaceRim(
     }while(current!=first);
     if(rim.ring.size()!=adjacency.size())throw std::invalid_argument("Caverns disconnected terrain rim");
     return rim;
+}
+inline CaveSurfaceRim extractCaveSurfaceRim(
+        const std::map<world::Cell,TerrainPatch>& patches,const Entrance& e,
+        size_t& work,size_t maxWork=4000000) {
+    std::vector<world::Triangle> triangles;
+    for(const auto& [cell,patch]:patches){
+        const int64_t span=int64_t(patch.cellSizeMetres)*100;
+        const int64_t x=int64_t(cell.x)*span,z=int64_t(cell.z)*span;
+        if(!overlaps({x,z,x+span,z+span},entranceBounds(e)))continue;
+        if(triangles.size()>maxWork||patch.collision.size()>maxWork-triangles.size())
+            throw std::length_error("Caverns rim extraction source budget");
+        triangles.insert(triangles.end(),patch.collision.begin(),patch.collision.end());
+    }
+    return extractCaveSurfaceRimTriangles(triangles,e,work,maxWork);
 }
 // Native volume transition owner must supply the actual final boundary,
 // not an ideal analytic circle. Exact shared Q16 edges are required.
