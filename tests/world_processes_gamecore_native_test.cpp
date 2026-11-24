@@ -1,3 +1,4 @@
+#include "apps/studio-native/StudioPlanetLiveSnapshot.h"
 // Actual GameCore map fixture proving native module ECS hydration via mapPlaced().
 #include "aiverselib/world/WorldProcessesNativeModule.h"
 #include "aiverselib/world/WorldProcessGravity.h"
@@ -557,6 +558,16 @@ static void checkPlanetProcessGeometry(){
     const auto moon=wp::planetGranularTops(ecs,surface,field,place,200,0,0,3,2,7);
     AIVERSE_TEST_CHECK(moon&&moon->size()==3&&moon->front().body==1);
     AIVERSE_TEST_CHECK(wp::planetImprintQuad(ecs,surface,trace,7)->geometry.body==1);
+    const auto live=aiverse::studio::samplePlanetImprint(ecs,surface,7);
+    AIVERSE_TEST_CHECK(live["cells"].size()==1&&!live.getBool("truncated"));
+    const auto& row=live["cells"][size_t(0)];
+    AIVERSE_TEST_CHECK(row.getStr("body")=="moon"&&row.getInt("footprint")==50);
+    const auto canonical=wp::planetImprintQuad(ecs,surface,trace,7);
+    const auto expected=canonical->geometry.vertices[0]-game::Surface::anchor(1);
+    AIVERSE_TEST_CHECK(std::abs(row["vertices"][size_t(0)][size_t(0)].toDouble()-expected.x.toDouble())<.001);
+    AIVERSE_TEST_CHECK(aiverse::studio::samplePlanetImprint(ecs,surface,8)["cells"].size()==0);
+    const auto capped=aiverse::studio::samplePlanetImprint(ecs,surface,7,0);
+    AIVERSE_TEST_CHECK(capped.getBool("truncated")&&capped["cells"].size()==0);
 }
 static void checkPlanetGranular(){
     game::Surface surface;

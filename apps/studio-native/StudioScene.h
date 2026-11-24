@@ -151,6 +151,10 @@ public:
     // Project extension gizmos (editor/extensions.lua scene_gizmos): world-space lines, circles (screen px), points.
     struct OverlayShape { int kind = 0; render::float3 a{}, b{}; float radius = 8, thickness = 2; uint8_t r = 90, g = 180, bl = 255; std::string text; };   // kind: 1 line, 2 circle, 3 point, 4 label
     void setOverlayShapes(std::vector<OverlayShape> shapes) { overlayShapes_ = std::move(shapes); }
+    void setPlanetLiveSnapshot(Json snapshot,std::string project,std::string path,uint64_t revision){
+        planetLiveSnapshot_=std::move(snapshot);planetLiveProject_=std::move(project);
+        planetLivePath_=std::move(path);planetLiveRevision_=revision;
+    }
     // World point -> view point (same units as pick / groundPoint); false when behind the camera.
     bool projectPoint(render::float3 world, float width, float height, render::float2& out) const;
     void setBrushCursor(bool visible, render::float3 center, float radius) { brushVisible_=visible; brushCenter_=center; brushRadius_=radius; }
@@ -187,6 +191,9 @@ private:
     render::Mesh planetTerrain_;
     std::optional<StudioPlanetPreview> planetPreview_;
     PlanetProcessOverlays planetProcessOverlays_;
+    Json planetLiveSnapshot_;
+    std::string planetLiveProject_,planetLivePath_;
+    uint64_t planetLiveRevision_=0;
     struct PlanetRegionDrag { PlanetRegionChart chart; PlanetRegionHandle handle=PlanetRegionHandle::Center;
         uint64_t revision=0; std::optional<evolve::Area> candidate; };
     std::optional<PlanetRegionDrag> planetRegionDrag_;

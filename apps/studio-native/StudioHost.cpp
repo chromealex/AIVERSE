@@ -1104,7 +1104,12 @@ void StudioHost::rebuildOverlay() {
         sh.a = {float(hd["x"].toDouble()), 0.2f, float(hd["z"].toDouble())};
         shapes.push_back(sh);
     }
-    onScene([&] { preview_->setOverlayShapes(std::move(shapes)); });
+    onScene([&] {
+        preview_->setOverlayShapes(std::move(shapes));
+        preview_->setPlanetLiveSnapshot(wpLiveEcology_&&wpEcologyLayer_!="off"&&
+            wpLiveSnapshot_.getBool("active")&&wpLiveSnapshot_.getStr("topology")=="planet"
+            ?wpLiveSnapshot_:Json{},wpLivePlanetProject_,wpLivePlanetMapPath_,wpLivePlanetRevision_);
+    });
 }
 // World Processes: drag authored stable-ID references or area handles.
 // Hit-testing and hover preview read ONLY the MapDoc. Commit is a single
@@ -2210,12 +2215,24 @@ bool StudioHost::handleHostMethod(const Json& req) {
                 plan.camera = std::array<float, 5>{cam.target.x, cam.target.z, cam.distance, float(cam.pitch * 57.29578), float(cam.yaw * 57.29578)};
             }
             ensureGame();
+            wpLiveSnapshot_=Json();wpLivePlanetProject_.clear();wpLivePlanetMapPath_.clear();
             game_->start(plan, engineRoot_ + "/engine/assets");
+            if(plan.map){
+                wpLivePlanetProject_=plan.project;
+                wpLivePlanetMapPath_=session_->workspace().map.path;
+                wpLivePlanetRevision_=session_->workspace().map.revision;
+            }
+            rebuildOverlay();
             gameFrameTime_ = 0;
-        } else if (method == "studio.gameStop" && game_) game_->stop();
+        } else if (method == "studio.gameStop" && game_) {
+            game_->stop();wpLiveSnapshot_=Json();wpLivePlanetMapPath_.clear();rebuildOverlay();
+        }
         else if (method == "studio.gameControl") {
             if (!game_) throw std::runtime_error("No game is running");
             game_->control(params.getStr("action"));
+            if(params.getStr("action")=="restart"||params.getStr("action")=="checkpointRestore"){
+                wpLiveSnapshot_=Json();rebuildOverlay();
+            }
         }
         return gameState();
     });

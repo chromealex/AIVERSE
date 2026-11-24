@@ -2177,6 +2177,15 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     if(planetProcessOverlays_.invalidPhysis)lightingStatus_+=" · invalid PHYSIS fields";
     if(planetProcessOverlays_.truncated)lightingStatus_+=" · overlay budget reached";
     if(planetProcessOverlays_.regionChartClipped)lightingStatus_+=" · EVOLVE chart clipped";
+    const bool liveImprint=planetLiveSnapshot_.getBool("active")&&
+        planetLiveSnapshot_.getStr("topology")=="planet"&&
+        !planetLivePath_.empty()&&planetLivePath_==doc.path&&
+        planetLiveProject_==projectPath&&planetLiveRevision_==doc.revision&&!doc.dirty&&
+        planetLiveSnapshot_["imprint"].isObject();
+    if(liveImprint){
+        lightingStatus_+=" · live IMPRINT tick "+std::to_string(planetLiveSnapshot_["imprint"].getInt("sampleTick"));
+        if(planetLiveSnapshot_["imprint"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+    }
     if(planetPreview_&&planetTerrain_.vb.valid()&&planetTerrain_.ib.valid()){
         renderer_.drawMesh(planetTerrain_,mat4{},{1,1,1,1},kDrawNoCastShadow);
         std::set<std::string> renderedModels;
@@ -2204,6 +2213,29 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
             for(const auto& line:planetProcessOverlays_.lines)
                 if(line.owner.empty()||!hidden_.count(line.owner))
                     renderer_.line(line.a,line.b,line.color);
+            if(liveImprint){
+                // Snapshot contains canonical, already body-local vertices.
+                // Draw read-only outlines, not another physical mesh or collider.
+                size_t count=0;
+                for(const auto& row:planetLiveSnapshot_["imprint"]["cells"].items()){
+                    if(count>=1024)break;
+                    if(row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto& vertices=row["vertices"].items();
+                    if(vertices.size()!=4)continue;
+                    std::array<render::float3,4> points{};
+                    bool valid=true;
+                    for(size_t i=0;i<4;++i){
+                        const auto& xyz=vertices[i].items();
+                        if(xyz.size()!=3){valid=false;break;}
+                        points[i]={float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
+                    }
+                    if(!valid)continue;
+                    const auto f=row.getInt("footprint"),s=row.getInt("scent"),r=row.getInt("residue");
+                    const auto color=f>=s&&f>=r?rgba(255,190,90):s>=r?rgba(105,215,255):rgba(215,130,255);
+                    for(size_t i=0;i<4;++i)renderer_.line(points[i],points[(i+1)%4],color);
+                    ++count;
+                }
+            }
             if(const auto it=planetPreview_->modelFrames.find(selectedId);it!=planetPreview_->modelFrames.end()){
                 const auto origin=it->second.transformPoint({});
                 const float length=std::clamp(planetPreview_->radius*.045f,1.f,12.f);

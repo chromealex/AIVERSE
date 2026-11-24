@@ -252,6 +252,8 @@ private:
     bool wpLiveEcology_=false;
     double wpLiveRefresh_=0;
     Json wpLiveSnapshot_;
+    std::string wpLivePlanetProject_,wpLivePlanetMapPath_;
+    uint64_t wpLivePlanetRevision_=0;
     std::int64_t wpPreviewRevision_=-1;
     std::string wpPreviewOwner_;
     std::string wpPreviewSelection_;

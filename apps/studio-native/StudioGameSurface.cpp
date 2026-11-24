@@ -5,6 +5,7 @@
 #include "engine/physis/Physis.h"
 #include "apps/studio-native/StudioGameSurface.h"
 #include "apps/studio-native/StudioPlanetWorldProcesses.h"
+#include "apps/studio-native/StudioPlanetLiveSnapshot.h"
 #include "engine/sim/Simulation.h"
 #include "engine/sim/CommonComponents.h"
 #include "engine/game/GameCore.h"
@@ -93,6 +94,20 @@ Json StudioGameSurface::ecologyState(){
     Simulation* sim=host_&&host_->inMatch()?host_->simulation():nullptr;
     Json out=Json::object(),regions=Json::array();
     out.set("active",Json::fromBool(sim!=nullptr));
+    if(sim)if(const auto* game=dynamic_cast<const game::GameCore*>(&sim->module()))
+        if(const auto* surface=game->surface(*sim)){
+            // Planar ecology rows cannot be interpreted as spherical positions.
+            // No remote world inspection and no sample before the first completed tick.
+            out.set("topology",Json::string("planet"));
+            out.set("active",Json::fromBool(host_->canControl()));
+            out.set("tick",Json::number(int64_t(sim->tick())));
+            out.set("epoch",Json::string(std::to_string(runtimeEpoch_)));
+            for(const char* key:{"regions","plants","weather","logs","soil"})
+                out.set(key,Json::array());
+            if(host_->canControl()&&sim->tick()>0)
+                out.set("imprint",samplePlanetImprint(sim->world(),*surface,sim->tick()-1));
+            return out;
+        }
     if(sim){
         out.set("tick",Json::number(int64_t(sim->tick())));
         for(const auto& v:evolve::visualRegions(sim->world())){
