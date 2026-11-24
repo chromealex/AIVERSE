@@ -374,6 +374,78 @@ int main(){
         aiverse::studio::studioAssetTrashApply(project,outgoingId,"purge",purge.getStr("token"));
         AIVERSE_TEST_CHECK(read(live)=="old pixels"&&read(sidecar)==originalSidecar);
         AIVERSE_TEST_CHECK(!fs::exists(project/".aiverse-cache"/"studio-asset-trash"/outgoingId));
+        // Persist a mixed owner timeline without retaining payload bytes in memory.
+        {
+            using namespace aiverse::studio;using aiverse::editor::ProjectHistory;
+            const auto p=temp/"Persistent";
+            fs::create_directories(p/"content");
+            write(p/"content"/"Image.png","original image");
+            StudioAssetCatalog index(p);index.rebuild();
+            const auto imageGuid=index.byPath("Image.png")->guid;
+            ProjectHistory timeline;
+            {
+                StudioAssetHistoryPublication publication(p);
+                index.patchSettings(imageGuid,"compression",aiverse::Json::string("high"),&timeline);
+                ProjectHistory::MovePlan folderPlan;
+                studioCreateContentFolder(p,"","Folder",&folderPlan);
+                timeline.recordMove(std::move(folderPlan),"Create");
+                auto move=StudioTransferPlan::internal(p,"Folder",{"Image.png"});
+                std::optional<ProjectHistory::MovePlan> movePlan;
+                (void)move.apply(move.token(),{}, {},&movePlan);
+                AIVERSE_TEST_CHECK(movePlan);timeline.recordMove(std::move(*movePlan),"Move");
+                write(external/"Image.png","replacement image");
+                auto replace=StudioTransferPlan::external(p,"Folder",{external/"Image.png"});
+                (void)replace.apply(replace.token(),{{0,"replace"}},{},&movePlan);
+                AIVERSE_TEST_CHECK(movePlan&&movePlan->replacement);
+                timeline.recordMove(std::move(*movePlan),"Replace");
+                auto removal=studioQuarantineAsset(p,"Folder/Image.png",imageGuid);
+                timeline.recordMove(std::move(removal),"Delete");
+                // The cursor and the redo branch must both survive reopening.
+                studioReplayAssetQuarantine(p,*timeline.next(false).move,false);
+                timeline.advance(false);publication.save(timeline);
+            }
+            auto restored=studioLoadAssetHistoryCheckpoint(p);
+            AIVERSE_TEST_CHECK(restored.steps().size()==5&&restored.position()==4&&restored.canRedo());
+            AIVERSE_TEST_CHECK(restored.versionToken()!=timeline.versionToken());
+            {
+                StudioAssetHistoryPublication publication(p);
+                AIVERSE_TEST_CHECK(publication.cancelUnchanged(restored));
+            }
+            // Verify the persisted plan can actually drive the native owners.
+            {
+                StudioAssetHistoryPublication publication(p);
+                studioReplayAssetQuarantine(p,*restored.next(true).move,true);restored.advance(true);
+                AIVERSE_TEST_CHECK(!fs::exists(p/"content"/"Folder"/"Image.png"));
+                studioReplayAssetQuarantine(p,*restored.next(false).move,false);restored.advance(false);
+                studioReplayAssetReplacement(p,*restored.next(false).move,false);restored.advance(false);
+                studioReplayAssetMove(p,*restored.next(false).move,false);restored.advance(false);
+                AIVERSE_TEST_CHECK(read(p/"content"/"Image.png")=="original image");
+                publication.save(restored);
+            }
+            auto reopened=studioLoadAssetHistoryCheckpoint(p);
+            AIVERSE_TEST_CHECK(reopened.position()==2&&reopened.steps().size()==5&&reopened.canRedo());
+            // Unexpected content must never reactivate an old history.
+            write(p/"content"/"Image.png","external edit");
+            bool rejected=false;
+            try{(void)studioLoadAssetHistoryCheckpoint(p);}catch(const std::runtime_error&){rejected=true;}
+            AIVERSE_TEST_CHECK(rejected);
+            write(p/"content"/"Image.png","original image");
+            AIVERSE_TEST_CHECK(studioLoadAssetHistoryCheckpoint(p).position()==2);
+            // Simulate interruption after the marker, before checkpoint commit.
+            {StudioAssetHistoryPublication interrupted(p);}
+            rejected=false;
+            try{(void)studioLoadAssetHistoryCheckpoint(p);}catch(const std::runtime_error&){rejected=true;}
+            AIVERSE_TEST_CHECK(rejected&&fs::exists(p/"content"/"Image.png"));
+            {StudioAssetHistoryPublication publication(p);publication.save(reopened);}
+            AIVERSE_TEST_CHECK(studioLoadAssetHistoryCheckpoint(p).steps().size()==5);
+            // Changing a retained replacement slot invalidates the checkpoint.
+            const auto& replacementPlan=*reopened.steps()[3].move;
+            const auto retained=p/replacementPlan.files[1].to;
+            AIVERSE_TEST_CHECK(fs::exists(retained));write(retained,"damaged backup");
+            rejected=false;
+            try{(void)studioLoadAssetHistoryCheckpoint(p);}catch(const std::runtime_error&){rejected=true;}
+            AIVERSE_TEST_CHECK(rejected);
+        }
         std::cout<<"PASS studio conflict resolution and GUID-preserving asset transfers\n";
     }catch(...){fs::remove_all(temp);throw;}
     fs::remove_all(temp);

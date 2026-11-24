@@ -1362,6 +1362,12 @@ bool StudioAssetHistoryPublication::cancelUnchanged(const AssetHistory& history)
     checkTrashJournal(impl_->project);
     fs::remove(cache/"asset-history.dirty");StudioMoveJournal::syncPath(cache);return true;
 }
+void studioRecoverAssetJournal(const fs::path& project){
+    const auto cache=assetHistoryCache(project,false);
+    if(!existsOrSymlink(cache))return;
+    editor::project_file_detail::Lock lock(cache/"asset-history.lock");
+    StudioMoveJournal::recover(project);
+}
 AssetHistory studioLoadAssetHistoryCheckpoint(const fs::path& project){
     const auto cache=assetHistoryCache(project,false);
     if(!existsOrSymlink(cache))return {};

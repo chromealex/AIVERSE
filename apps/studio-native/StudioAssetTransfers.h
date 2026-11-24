@@ -81,6 +81,7 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 editor::ProjectHistory studioLoadAssetHistoryCheckpoint(const std::filesystem::path& project);
+void studioRecoverAssetJournal(const std::filesystem::path& project);
 // Recovery browser: list persisted slots; review exact current identity before restore/purge.
 Json studioAssetTrashList(const std::filesystem::path& project,size_t offset,size_t limit);
 Json studioAssetTrashReview(const std::filesystem::path& project,const std::string& id,const std::string& action);

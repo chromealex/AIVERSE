@@ -301,7 +301,13 @@ void assetHistorySessionContract(){
     AIVERSE_TEST_CHECK(result["result"]["snapshot"]["project"].getStr("assetHistoryVersion")==result["result"].getStr("version"));
     AIVERSE_TEST_CHECK(Json::parseFile((root/"content"/"Texture.png.meta").string())["settings"].getStr("compression")=="auto");
     session.openProject(root.string());
-    AIVERSE_TEST_CHECK(call(R"({"id":6,"method":"studio.assetHistory","params":{}})")["result"]["steps"].size()==0);
+    const auto restored=call(R"({"id":6,"method":"studio.assetHistory","params":{}})")["result"];
+    AIVERSE_TEST_CHECK(restored["steps"].size()==1&&restored.getBool("canRedo")&&restored.getBool("persistent"));
+    AIVERSE_TEST_CHECK(restored.getStr("version")!=result["result"].getStr("version"));
+    req.find("params")->set("direction",Json::string("redo"));
+    req.find("params")->set("expectedVersion",Json::string(restored.getStr("version")));
+    AIVERSE_TEST_CHECK(!session.dispatch(req).has("error"));
+    AIVERSE_TEST_CHECK(Json::parseFile((root/"content"/"Texture.png.meta").string())["settings"].getStr("compression")=="high");
     fs::remove_all(root);
 }
 void agentScopedHistoryContract(){

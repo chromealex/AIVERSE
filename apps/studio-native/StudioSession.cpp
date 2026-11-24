@@ -87,7 +87,7 @@ std::string recoveredProjectDir(const editor::Workspace& ws,const std::string& i
     // Material writes inside an asset transaction may themselves use a document
     // journal. Resolve that inner transaction before rolling back the outer move.
     editor::recoverProjectFileEdits(directory);
-    StudioMoveJournal::recover(directory);
+    studioRecoverAssetJournal(directory);
     return directory;
 }
 

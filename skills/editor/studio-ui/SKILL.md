@@ -125,6 +125,9 @@ Use StudioAgentHistoryPolicy.h explicit policy, not suffix-based StudioToolReadO
 ## Persistent Project history (S6e.1)
 ProjectHistoryPersistence serializes bounded document-only steps and cursor into .aiverse-cache/project-history.json with a checksum, restricted owner paths and exact current baseline. Project::applyHistoryTransaction stages the checkpoint alongside Rules/Manifest in the existing document journal; no-op edits do not change the checkpoint. Reopen revalidates dependency sets, continuous before/after bytes and cursor, creates a fresh epoch, and reports persistenceWarning if recovery is unavailable. Do not reuse old tokens or claim Map/Assets timelines persist yet. No cross-owner atomic navigation.
 
+## Persistent Assets history (S6e.2)
+Native StudioAssetHistoryPublication holds a per-project advisory lock and writes a durable dirty marker before tracked asset mutations. After the existing asset/file journal commits, serialize typed metadata and move/quarantine/create/replacement plans and cursor into .aiverse-cache/asset-history.json. Validate checksum, bounded plan shape, current full content tree/material digest and referenced recovery-slot trees on reopen; renew owner epoch. Rejected operations can retire the dirty marker only if exact checkpoint and filesystem state still match. Interrupted checkpoint publication intentionally disables cross-session replay rather than attempting to reconstruct an uncertain cursor. Payloads remain in Trash. This is not one atomic transaction with the asset journal: a crash in the post-commit checkpoint window can discard saved history. Hashing is synchronous and bounded to 20k entries per tree. No background storage cleanup.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web
