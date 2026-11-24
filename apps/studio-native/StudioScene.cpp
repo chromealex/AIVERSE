@@ -1706,7 +1706,29 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     // proxies/syncDocumentModels ran above: lighting needs modelInstances_ first.
     device_->beginFrame(framebufferWidth, framebufferHeight);
     StudioFrameScope scope{*device_};
+    // Stage both preview owners before draw submission. Share the exact
+    // surface plan pointer; neither half is drawn before its counterpart.
+    bool sparsePrepared=false;
+    if(sparseTerrain){
+        try{
+            if(sparseTerrainRetirement_.pending()>=128)throw std::runtime_error("Sparse terrain GPU retirement pressure");
+            const auto cm=[](float v){return int64_t(std::llround(std::clamp(double(v),-9990000.,9990000.)*100.));};
+            sparseTerrainPreview_.prepare(*device_,doc,cm(camera_.target.x),cm(camera_.target.z),
+                retireSparse,cavernsPreview_.visible());
+            sparsePrepared=true;sparseTerrainError_.clear();
+        }catch(const std::exception& e){sparseTerrainError_=e.what();}
+    }
+    auto surfaceGroup=sparsePrepared?sparseTerrainPreview_.surfaceGroup():nullptr;
+    cavernsPreview_.syncRimGroup(surfaceGroup);
     cavernsPreview_.beforeRender(*device_,brushVisible_&&brushVolume_?brushCenter_:camera_.target);
+    if(surfaceGroup&&!surfaceGroup->rims.empty()&&cavernsPreview_.rimRejected(surfaceGroup)){
+        const auto why=cavernsPreview_.rimError();
+        sparseTerrainPreview_.rejectSurfaceGroup(retireSparse,why.empty()?"Caverns matching volume unavailable":why);
+        surfaceGroup.reset();sparsePrepared=false;
+        cavernsPreview_.syncRimGroup({});
+    }
+    const bool pairedRimReady=cavernsPreview_.rimReady(surfaceGroup)&&
+        (!surfaceGroup||surfaceGroup->rims.empty()||sparseTerrainPreview_.surfaceGroupUploaded());
     nereid_.prepare(*device_,view.eye());
     const double opticalNow=std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
     nereid_.updateUnderwater(post_,underwaterFrameTime_>0?float(opticalNow-underwaterFrameTime_):1.f/60.f);
@@ -1868,15 +1890,9 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         o.segment(x0,y0,x1,y0,w,rgba(130,181,255,220));o.segment(x1,y0,x1,y1,w,rgba(130,181,255,220));
         o.segment(x1,y1,x0,y1,w,rgba(130,181,255,220));o.segment(x0,y1,x0,y0,w,rgba(130,181,255,220));
     }
-    if(sparseTerrain&&!cavernsPreview_.isolate()){
-        try {
-            if(sparseTerrainRetirement_.pending()>=128)throw std::runtime_error("Sparse terrain GPU retirement pressure");
-            const auto cm=[](float v){return int64_t(std::llround(std::clamp(double(v),-9990000.,9990000.)*100.));};
-            sparseTerrainPreview_.draw(*device_,renderer_,doc,cm(camera_.target.x),cm(camera_.target.z),retireSparse,true);
-            sparseTerrainError_.clear();
-        }catch(const std::exception& e){sparseTerrainError_=e.what();}
-    }
-    cavernsPreview_.draw(renderer_);
+    if(sparseTerrain&&sparsePrepared&&!cavernsPreview_.isolate())
+        sparseTerrainPreview_.submit(renderer_,pairedRimReady,true);
+    if(pairedRimReady)cavernsPreview_.draw(renderer_);
     gfx::PassDesc pass;
     pass.clearColor[0] = 0.038f; pass.clearColor[1] = 0.064f;
     pass.clearColor[2] = 0.098f; pass.clearColor[3] = 1.0f;
