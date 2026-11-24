@@ -395,6 +395,19 @@ public:
     bool reloadAppearanceTypes(const std::set<size_t>& types,
                                bool reloadMaterialLibrary=false,
                                size_t* refreshed=nullptr);
+    // Thin compatibility adapter: the shared engine appearance transaction
+    // owns publication; this adapter only resolves an already resident choice.
+    struct GraphMaterialTargetInfo {
+        view::LiveAppearanceMaterialTarget identity;
+        std::string modelPath,materialName;
+        int variant=-1;
+    };
+    std::optional<GraphMaterialTargetInfo> graphMaterialTarget(size_t type,size_t choice,size_t material) const;
+    using GraphMaterialApply=std::function<bool(view::AppearanceAssetRegistry::Snapshot&,
+        std::vector<render::Material>&,render::Model&,gfx::Device&,
+        const render::RenderDeviceLifetime::Lease&,render::ModelImageRollbackPool&,std::string*)>;
+    bool applyGraphMaterial(size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
+        const GraphMaterialApply& apply,std::string* error=nullptr);
     bool typeCurrent(uint16_t t) const { return typeLoaded(t) && requestedModels_[t]==loadedModels_[t]; }
     bool detailRequested(uint16_t t) const { return t<requestedModels_.size() && requestedModels_[t].empty(); }
     void requestDetail(uint16_t type, bool detailed);
