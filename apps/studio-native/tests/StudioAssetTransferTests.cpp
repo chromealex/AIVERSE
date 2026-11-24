@@ -1268,28 +1268,47 @@ int main(){
             catch(const std::runtime_error&){refused=true;}
             AIVERSE_TEST_CHECK(refused&&read(source/"Mesh.gltf")==model);
             fs::rename(source/"MissingPaint.png",source/"Paint.png");
-            // Even if the resource exists, a chain that changes its endpoint
-            // is not in the stable-dependency subset.
-            move=StudioTransferPlan::internal(p,"B",{"A/Pack/Paint.png"});
-            (void)move.apply(move.token(),{},{},&plan,true);
-            AIVERSE_TEST_CHECK(plan);
-            editor::ProjectHistory resourceMove;
-            resourceMove.recordMove(std::move(*plan),"Move version dependency");
-            auto combined=resourceMove.steps();
-            const auto versionSteps=versions.steps();
-            combined.insert(combined.end(),versionSteps.begin(),versionSteps.end());
-            refused=false;
-            try{(void)studioPlanMixedAssetChain(p,combined,true);}
-            catch(const std::runtime_error&){refused=true;}
-            AIVERSE_TEST_CHECK(refused&&read(source/"Mesh.gltf")==model);
-            const auto moveUndo=studioPlanMixedAssetChain(p,resourceMove.steps(),false);
-            studioApplyHistoryBatch(p,moveUndo.relocations,moveUndo.documents,moveUndo.movingResources);
             auto externalRedo=studioPlanMixedAssetChain(p,versions.steps(),true);
             studioApplyHistoryBatch(p,externalRedo.relocations,externalRedo.documents,externalRedo.movingResources);
             AIVERSE_TEST_CHECK(read(source/"Mesh.gltf")==externalModel);
             index.rebuild(false);
             AIVERSE_TEST_CHECK(index.byGuid(modelGuid)->path=="A/Pack/Mesh.gltf");
             AIVERSE_TEST_CHECK(index.byGuid(textureGuid)->path=="A/Pack/Paint.png");
+            // A whole folder carries its model and texture together. A
+            // mixed metadata step must see their projected content paths.
+            editor::ProjectHistory externalFolder;
+            move=StudioTransferPlan::internal(p,"B",{"A/Pack"});
+            (void)move.apply(move.token(),{},{},&plan,true);
+            AIVERSE_TEST_CHECK(plan&&plan->resourceEdits.empty());
+            externalFolder.recordMove(std::move(*plan),"Move external model folder");
+            index.rebuild(false);
+            index.patchSettings(textureGuid,"compression",Json::string("high"),&externalFolder);
+            auto folderUndo=externalFolder.steps();
+            std::reverse(folderUndo.begin(),folderUndo.end());
+            auto projected=studioPlanMixedAssetChain(p,folderUndo,false);
+            studioApplyHistoryBatch(p,projected.relocations,projected.documents,projected.movingResources);
+            AIVERSE_TEST_CHECK(read(source/"Mesh.gltf")==externalModel&&read(source/"Paint.png")=="pixels");
+            projected=studioPlanMixedAssetChain(p,externalFolder.steps(),true);
+            studioApplyHistoryBatch(p,projected.relocations,projected.documents,projected.movingResources);
+            AIVERSE_TEST_CHECK(read(dest/"Mesh.gltf")==externalModel&&read(dest/"Paint.png")=="pixels");
+            index.rebuild(false);
+            AIVERSE_TEST_CHECK(index.byGuid(textureGuid)->path=="B/Pack/Paint.png");
+            // Return to the embedded version before testing the nested
+            // endpoint guard.
+            projected=studioPlanMixedAssetChain(p,folderUndo,false);
+            studioApplyHistoryBatch(p,projected.relocations,projected.documents,projected.movingResources);
+            projected=studioPlanMixedAssetChain(p,versions.steps(),false);
+            studioApplyHistoryBatch(p,projected.relocations,projected.documents,projected.movingResources);
+            // Nested relocation endpoints are intentionally still fenced:
+            // a version exchange inside a moved directory is not eligible.
+            auto nestedVersion=versions.steps();
+            const auto folderSteps=externalFolder.steps();
+            nestedVersion.insert(nestedVersion.end(),folderSteps.begin(),folderSteps.end());
+            refused=false;
+            try{(void)studioPlanMixedAssetChain(p,nestedVersion,true);}
+            catch(const std::runtime_error&){refused=true;}
+            AIVERSE_TEST_CHECK(refused&&read(source/"Mesh.gltf")==model);
+
         }
         std::cout<<"PASS studio conflict resolution and GUID-preserving asset transfers\n";
     }catch(...){fs::remove_all(temp);throw;}
