@@ -134,6 +134,10 @@ editor reads it. Details: docs/editor-world-tree.md § Game hooks.
 | `lanes` | `{"left": 4, "right": 2, "spacing": 0.35}` — Mushroom Wars 2 lanes between garrison buildings (replaces map `roads` for sends) |
 | `ai` | `{"towers": 1, "scouts": 1, "invasionSize": 6, "escalateSeconds": 300, "climbWeight": 24, "exposureWeight": 12, "terrain": true, "workersPerBase": 14, "firstAttackArmy": 8, "armyGrowth": 4, "maxAttackArmy": 16}` — computer player knobs, every key optional (defaults shown): `towers` defensive structures at the chokepoint toward the enemy once the base was raided (0 = none); `scouts` units holding a watch post on high ground along the attack route; `invasionSize` orbit units gathered before a fleet transfers to another body (planets); `escalateSeconds` no enemy structure destroyed for this long (after 8 min) raises the stalemate level (bigger waves, a little more range in the unit mix, economy targets, alternate routes, at level 3 no retreat); `climbWeight` / `exposureWeight` route cost per level climbed / per level of higher ground overlooking a cell (10 = one cell); `terrain: false` turns the terrain analysis off (direct attack-moves). See "Computer player" |
 
+### Weapon and effect target tags
+
+Weapon entries accept optional `targetTags` (match at least one listed tag) and `ignoreTags` (reject any listed tag). Both are arrays of known unit type tag names. Layer targeting still applies. With neither field, existing weapon targeting is unchanged. Effect filters support `ignoreTags` alongside their existing `tags` include list, including chain and area targets. Exclusion wins. Filters restrict eligible targets; incidental legacy splash damage is a separate policy.
+
 ## Splitting rules.json
 
 A big game does not keep everything in one `rules.json`. The loader assembles the rules from several
