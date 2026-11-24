@@ -191,16 +191,38 @@ int main(int argc,char** argv){
         vertical.set("setting",Json::string("modern"));
         auto modernStairs=studioBuildingInspect(engine,vertical);
         CHECK(modernStairs["triangles"].integer()==stairPreview["triangles"].integer());
-        // Synthetic room ownership on a real generated mesh; GLB must share
-        // vertex accessors/materials while preserving every triangle exactly.
+        // Isolate one real triangle as room furniture. Duplicate its three
+        // vertices so no neighbouring shell triangle shares room ownership.
         auto partitioned=buildingStudioDetail::produce(engine,buildingStudioDetail::request(req));
-        const auto& mesh=partitioned.mesh;
+        auto& mesh=partitioned.mesh;
         CHECK(!mesh.parts.empty()&&!mesh.vertices.empty());
+        auto part=std::find_if(mesh.parts.begin(),mesh.parts.end(),[](const auto& p){return p.indices.size()>=3;});
+        CHECK(part!=mesh.parts.end());
+        const uint32_t firstRoomVertex=uint32_t(mesh.vertices.size());
+        for(size_t k=0;k<3;++k){
+            const auto vertex=mesh.vertices.at(part->indices[k]);
+            mesh.vertices.push_back(vertex);part->indices[k]=firstRoomVertex+uint32_t(k);
+        }
+        partitioned.roomVisualRanges.push_back({"room/test",firstRoomVertex,3});
         const auto groups=aiverse::lib::systems::buildingVisualGroups(partitioned,mesh);
-        CHECK(groups.size()==1);
+        CHECK(groups.size()==2&&groups[1].name=="room/test");
+        CHECK(groups[1].indices.at(part->material).size()==3);
         size_t groupedTriangles=0;
         for(const auto& group:groups)for(const auto& [mat,idx]:group.indices){(void)mat;groupedTriangles+=idx.size()/3;}
         CHECK(groupedTriangles==mesh.triangles());
+        aiverse::lib::systems::buildingExport::Glb groupedGlb;
+        groupedGlb.add(mesh,"test",&partitioned);
+        CHECK(groupedGlb.nMesh==2&&groupedGlb.nNode==2);
+        CHECK(groupedGlb.nMat==int(mesh.materials.size()));
+        CHECK(groupedGlb.nodes.find("room/test")!=std::string::npos);
+        CHECK(groupedGlb.nodes.find("building-shell")!=std::string::npos);
+        // Atlas-style vertex remapping preserves source triangle ownership.
+        auto remapped=mesh;
+        std::reverse(remapped.vertices.begin(),remapped.vertices.end());
+        for(auto& p:remapped.parts)for(auto& idx:p.indices)idx=uint32_t(remapped.vertices.size()-1-idx);
+        const auto remappedGroups=aiverse::lib::systems::buildingVisualGroups(partitioned,remapped);
+        const auto& roomIndices=remappedGroups[1].indices.at(part->material);
+        CHECK(roomIndices.size()==3&&roomIndices[0]==remapped.vertices.size()-1-firstRoomVertex);
         auto invalid=[](const auto& fn){
             try{fn();}catch(const std::exception&){return true;}
             return false;
