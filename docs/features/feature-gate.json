@@ -63,7 +63,15 @@
     "docs/native-modules.md",
     "engine/game/GameCore.h",
     "tests/fps/tests.cpp",
-    "tests/fps/vehicles.inc"
+    "tests/fps/vehicles.inc",
+    "tests/native_project_build.py",
+    "tests/libraries/gameplay_tests.cpp",
+    "tools/skills/audit.py",
+    "apps/editor/PhysisAuthoring.h",
+    "apps/studio-native/StudioGameLaunch.h",
+    "apps/editor/windows/AttachmentAuthoringWindow.cpp",
+    "apps/editor/windows/LuaCustomInspector.h",
+    "tests/editor/lua_inspector_sandbox_tests.cpp"
   ],
   "traits": {
     "editable": false,
@@ -144,7 +152,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Mac QA v5 at 35bc27ecfb80ad00350120548bc9dc3ed89fb236: Python 21/21 (native host fixture included), Web 218/218, Studio contracts 48/48, partial compliance, native Studio/MCP build, registry and four MCP calls, camera adapter, all four former failing link targets PASS. Full native build stopped at 93% on eight ambiguous require calls in vfx_graph_ops_test.cpp; CTest NOT RUN. Compiler diagnostics also identify missing overrides and unused FPS test code. Fixes applied after tested SHA; current HEAD verification pending.",
+      "note": "Mac QA v6 at 8f755978dd11120a1d1036d96ffab7421bfc6482: full native configure/build PASS; CTest 483 passed, 4 failed, 1 skipped (488 total). Python 21/21, Web 218/218, Studio contracts 48/48, typecheck/Vite, native Studio/MCP, MCP registry/read-only smoke, partial compliance and policy PASS. Fixed stale native registry on empty reconfigure, rotated placement test territory fixture, MCP protocol path classification, and graph draft optional arrays; compiler warning fixes included. Current SHA NOT RUN, strict readiness blocked by pending evidence.",
       "evidence": []
     },
     "handoff": {
