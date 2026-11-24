@@ -27,6 +27,7 @@
 #include "aiverselib/world/EvolvePlanetEcologySampling.h"
 #include "aiverselib/world/EvolvePlanetRootClimate.h"
 #include "aiverselib/world/EvolvePlanetRootSupport.h"
+#include "aiverselib/world/PlanetPhysicalDelivery.h"
 #include "engine/game/PlanetTerrainWater.h"
 #include "engine/game/PlanetSeaVolume.h"
 #include "engine/game/PlanetSeaGrid.h"
@@ -878,11 +879,13 @@ static void checkPlanetRootSupport(){
     auto moonTree=tree;moonTree.anchor.plantKey=11;
     World ecs;TerraWeaveAuthorityResource authority;authority.rooted={tree,moonTree};
     ecs.setResource<TerraWeaveAuthorityResource>(authority);ecs.enableCowSnapshots();
-    const World before=ecs;
+    ecs.setResource<evolve::PlanetRootDeliveryResource>();
     std::vector<evolve::PlanetRootBinding> bindings{
         {{1,10},"terra",surface.cellCenter(surface.gridCell(0,0,7,7))},
         {{1,11},"moon",surface.cellCenter(surface.gridCell(1,0,7,7))}
     };
+    AIVERSE_TEST_CHECK(evolve::setPlanetRootBindings(ecs,surface,bindings));
+    const World before=ecs;
     auto wrong=bindings;wrong[1].bodyId="terra";
     AIVERSE_TEST_CHECK(!evolve::reconcilePlanetRoots(ecs,lowered,wrong,1,7));
     const auto result=evolve::reconcilePlanetRoots(ecs,lowered,bindings,1,7);
@@ -893,6 +896,19 @@ static void checkPlanetRootSupport(){
     AIVERSE_TEST_CHECK(current->stateRevision==1&&!before.resourceConst<TerraWeaveAuthorityResource>()->rooted[0].fallen);
     const auto retry=evolve::reconcilePlanetRoots(ecs,lowered,bindings,1,7);
     AIVERSE_TEST_CHECK(retry&&retry->falls.empty()&&retry->authorityRevision==1);
+    const auto pending=wp::pendingPlanetPhysicalDelivery(ecs,lowered,"terra",7);
+    AIVERSE_TEST_CHECK(pending.plants.size()==1&&pending.collapses.empty());
+    AIVERSE_TEST_CHECK(!wp::commitPlanetPhysicalDelivery(ecs,lowered,"terra",7,
+        [](World&,const auto&){return false;},[](World&,const auto&){return false;}));
+    AIVERSE_TEST_CHECK(evolve::pendingPlanetPlantFalls(ecs).size()==1);
+    AIVERSE_TEST_CHECK(wp::commitPlanetPhysicalDelivery(ecs,lowered,"terra",7,
+        [](World&,const auto&){return false;},[](World& staged,const auto& fall){
+            // Fixture receipt only; production owner writes a durable shape.
+            return fall.event.id.key==10;
+        }));
+    AIVERSE_TEST_CHECK(evolve::pendingPlanetPlantFalls(ecs).empty());
+    AIVERSE_TEST_CHECK(!evolve::commitPlanetPlantFall(ecs,pending.plants[0],7,
+        [](World&,const auto&){return true;}));
     ecs=before;
     AIVERSE_TEST_CHECK(evolve::reconcilePlanetRoots(ecs,lowered,bindings,1,7)->falls.size()==1);
 }

@@ -26,6 +26,7 @@ struct PlanetBankPipelineConfig {
     struct Bank {Entity entity;uint32_t wave=0,slope=0,shield=0;};
     std::vector<Bank> banks;
     std::vector<fracture::PlanetFoundation> foundations;
+    bool rootFalls=false;
 };
 inline constexpr size_t kMaxScheduledPlanetBanks=16;
 inline bool runPlanetBankPipeline(game::GameCore& core,World& world,
@@ -44,11 +45,17 @@ inline bool runPlanetBankPipeline(game::GameCore& core,World& world,
     const auto* gs=world.resourceConst<game::GameState>();
     if(!gs||!gs->surface||!gs->grid.hf)return reject();
     const auto surface=gs->surface;
-    // This automatic path is not the rooted fall-event owner. Refuse to
-    // silently omit its durable consequences; explicit native transaction
-    // APIs remain available for rooted terrain.
+    std::vector<evolve::PlanetRootBinding> rootBindings;
     if(const auto* roots=world.resourceConst<terraweave::TerraWeaveAuthorityResource>();
-       roots&&!roots->rooted.empty())return reject();
+       roots&&!roots->rooted.empty()){
+        const auto* delivery=world.resourceConst<evolve::PlanetRootDeliveryResource>();
+        if(!config.rootFalls||!delivery||delivery->bindings.size()!=roots->rooted.size())return reject();
+        rootBindings=delivery->bindings;
+        std::set<terraweave::AnchoredPlantId> ids;
+        for(const auto& root:roots->rooted)ids.insert({root.anchor.speciesId,root.anchor.plantKey});
+        for(const auto& binding:rootBindings)if(!ids.erase(binding.id))return reject();
+        if(!ids.empty())return reject();
+    }
     std::set<std::pair<int,int>> cells;
     std::set<uint64_t> entities,foundations;
     std::set<int> affectedBodies;
@@ -90,7 +97,7 @@ inline bool runPlanetBankPipeline(game::GameCore& core,World& world,
     for(const auto& entry:banks){
         const auto revision=staged.resourceConst<game::GameState>()->planetTerrainRevision;
         const auto receipt=commitPlanetBankErosion(core,staged,entry.entity,revision,tick,
-            config.dtMs,seconds,entry.wave,entry.slope,entry.shield,config.foundations);
+            config.dtMs,seconds,entry.wave,entry.slope,entry.shield,config.foundations,rootBindings);
         if(!receipt||receipt->movedVolumeCm3>UINT64_MAX-moved)return reject();
         moved+=receipt->movedVolumeCm3;
     }
@@ -116,10 +123,13 @@ inline void installPlanetBankPipeline(game::GameCore& core,Simulation& sim,const
        !json["banks"].isArray()||!json["banks"].size()||json["banks"].size()>kMaxScheduledPlanetBanks)
         throw std::invalid_argument("planetBanks requires a heightfield planet and 1..16 banks");
     for(const auto& [key,value]:json.members())
-        if(key!="intervalTicks"&&key!="maxTransferCm3"&&key!="banks"&&key!="foundations")
+        if(key!="intervalTicks"&&key!="maxTransferCm3"&&key!="banks"&&key!="foundations"&&key!="rootFalls")
             throw std::invalid_argument("planetBanks unknown key: "+key);
     const auto surface=gs->surface;
     PlanetBankPipelineConfig cfg;
+    if(json.has("rootFalls")&&json["rootFalls"].type()!=Json::Type::Bool)
+        throw std::invalid_argument("planetBanks rootFalls must be Boolean");
+    cfg.rootFalls=json.getBool("rootFalls");
     cfg.intervalTicks=uint32_t(planetBankInteger(json,"intervalTicks",1,1,240));
     const uint64_t duration=uint64_t(cfg.intervalTicks)*1000;
     if(!sim.tickRate()||duration>uint64_t(sim.tickRate())*1000)
@@ -200,6 +210,7 @@ inline void installPlanetBankPipeline(game::GameCore& core,Simulation& sim,const
         cfg.foundations.push_back({entity,surface->bodies[size_t(frame->body)].id,{tr->pos},1,Fixed::fromRatio(1,8)});
     }
     registerPlanetBankErosionPersistence(sim);registerPlanetSedimentTransportPersistence(sim);
+    if(cfg.rootFalls)evolve::registerPlanetRootDeliveryPersistence(sim);
     sim.registerPersistentResource<PlanetBankPipelineState>("worldprocess.planet_bank_pipeline",1);
     w.setResource<PlanetBankPipelineState>();
     for(const auto& item:initial){
