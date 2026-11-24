@@ -9,7 +9,7 @@ inline bool surfaceCrowdEligible(const game::GameCore& host,const World& read,En
     const auto* unit=read.tryGetConst<game::Unit>(e);
     if(!unit||unit->hp.raw<=0||unit->type>=host.rules().types.size()||
        (unit->flags&(game::kUnitOffMap|game::kUnitInTransit|game::kUnitPossessed|
-                    game::kUnitHold|game::kUnitUnderConstruction))||
+                    game::kUnitHold|game::kUnitUnderConstruction|game::kUnitFollower|game::kUnitDisabled))||
        read.has<game::Transit>(e)||!read.has<game::Mobile>(e)||
        !read.has<game::Orders>(e))return false;
     const auto& type=host.rules().types[unit->type];
@@ -43,6 +43,11 @@ inline bool advanceGameCoreSurfaceCrowd(game::GameCore& host,Simulation& sim){
         // The existing Move order uses a minimum goal radius of 0.7 units
         // for one mover. Match that tolerance to avoid repeat arrival orders.
         if(surface->groundDist(tr->pos,intent.target)<=Fixed::fromRatio(7,10))continue;
+        // Failed or blocked routes can be retried, but do not launch an
+        // expensive path request every tick for a still-reserved slot.
+        const auto* previous=read.tryGetConst<crowd::Agent>(intent.agent);
+        if(previous&&previous->allocated==intent.slot&&
+           sim.tick()%16!=intent.agent.packed()%16)continue;
         orders.push_back(intent);
     }
     if(!crowd::commitSurfaceSlots(world,*plan))return false;
