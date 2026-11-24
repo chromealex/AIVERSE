@@ -5,6 +5,7 @@
 #include "WorldProcessesMapHydration.h"
 #include "ImprintSurfaceTrails.h"
 #include "CrowdGameCoreSurface.h"
+#include "EvolveSurfaceRegions.h"
 #include "engine/game/GameCore.h"
 #include "engine/game/Native.h"
 #include <cstdint>
@@ -34,6 +35,23 @@ inline void installGameCoreSurfaceTrails(Simulation& sim){
             (void)imprint::stampSurfaceMotion(current.world(),*surface,current.tick());
     });
 }
+inline bool hydrateGameCoreSurfaceArea(Simulation& sim,Entity e,const Json& doc,std::string* error){
+    const auto* host=dynamic_cast<const game::GameCore*>(&sim.module());
+    const auto* surface=host?host->surface(sim):nullptr;
+    const auto* tr=static_cast<const World&>(sim.world()).tryGetConst<Transform>(e);
+    if(!surface||!tr||!authoring::extended::validate("EvolveArea",doc,error))return false;
+    evolve::Area local;
+    local.centerXcm=doc.has("offsetXcm")?doc["offsetXcm"].integer():0;
+    local.centerZcm=doc.has("offsetZcm")?doc["offsetZcm"].integer():0;
+    local.halfWidthCm=doc["halfWidthCm"].integer();
+    local.halfDepthCm=doc["halfDepthCm"].integer();
+    local.enabled=doc["enabled"].boolean();
+    if(!evolve::setSurfaceArea(sim.world(),*surface,e,tr->pos,local)){
+        if(error)*error="Invalid planetary region origin or bounds";
+        return false;
+    }
+    return true;
+}
 class WorldProcessesNativeModule final:public game::NativeModule {
 public:
     void setup(game::GameCore& host,Simulation& sim,
@@ -43,7 +61,9 @@ public:
         const SuiteFlags flags=suiteFlags(config);
         (void)authoring::hydrateMap(sim,host.matchMap(),host.mapPlaced(),flags,
             host.surface(sim)?&installGameCoreSurfaceTrails:nullptr,
-            host.surface(sim)?&installGameCoreSurfaceCrowd:nullptr);
+            host.surface(sim)?&installGameCoreSurfaceCrowd:nullptr,
+            host.surface(sim)?&evolve::registerSurfaceAreaPersistence:nullptr,
+            host.surface(sim)?&hydrateGameCoreSurfaceArea:nullptr);
     }
 };
 inline std::unique_ptr<game::NativeModule> createWorldProcessesNativeModule(){
