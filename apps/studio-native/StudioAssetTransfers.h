@@ -70,7 +70,8 @@ StudioBatchAssetPlan studioPlanAssetMoveChain(const std::filesystem::path& proje
 // Mixed exact-endpoint history: ordinary moves, reversible Trash operations,
 // replacement versions and importer settings. Bounded glTF/GLB dependency
 // edges are validated against virtual content occupancy and GUIDs at each
-// step. No mixed URI rewrites or nested relocation roots.
+// step, with typed glTF/GLB URI overlays and streamed GLB snapshots.
+// Nested relocation roots and other repair formats remain fenced.
 bool studioCanPlanMixedAssetChain(const std::vector<editor::ProjectHistory::Step>& ordered);
 StudioBatchAssetPlan studioPlanMixedAssetChain(const std::filesystem::path& project,
     const std::vector<editor::ProjectHistory::Step>& ordered,bool redo);
