@@ -8,7 +8,7 @@ import './SpectraGraphCanvas.css';
 
 interface CatalogNode {type:string;group:string;ports:string[]}
 const volumeFields:Record<string,Record<string,unknown>>={
-  VolumeDomain:{dimension:32,origin:[-2,-1,-2],cellSize:0.125,gravity:[0,-9.81,0],wind:[0,0,0],obstacle:'',particleDrag:0,particleDeposit:[0,0,0]},
+  VolumeDomain:{dimension:32,origin:[-2,-1,-2],cellSize:0.125,gravity:[0,-9.81,0],wind:[0,0,0],obstacle:'',particleDrag:0,particleDeposit:[0,0,0],physisWindResponse:0,physisGravityBlend:0},
   VolumeSource:{mode:'continuous',position:[0,0,0],radius:0.5,smoke:3,temperature:8,fuel:4,acceleration:[0,2,0],radialAcceleration:0,duration:1},
   VolumeAdvection:{buoyancy:1,smokeWeight:0.1,velocityDecay:0.15,smokeDecay:0.25,temperatureDecay:0.6,fuelDecay:0.05,maxVelocity:20},
   VolumeCombustion:{ignition:0.5,burnRate:3,heatYield:2,smokeYield:0.5},

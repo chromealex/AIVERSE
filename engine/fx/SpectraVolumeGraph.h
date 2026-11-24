@@ -98,12 +98,12 @@ inline bool compilePresentationGraph(const Json& graph,const Json& overrides,Pre
         const int kind=types.at(at);const auto& p=volumes.at(at)["properties"];
         if(kind!=1&&!uniqueStages.insert(kind).second)return fail("duplicate volume stage");
         if(kind==0){
-            if(!asset_detail::keys(p,{"dimension","origin","cellSize","gravity","wind","obstacle","particleDrag","particleDeposit"}))return fail("invalid VolumeDomain properties");
+            if(!asset_detail::keys(p,{"dimension","origin","cellSize","gravity","wind","obstacle","particleDrag","particleDeposit","physisWindResponse","physisGravityBlend"}))return fail("invalid VolumeDomain properties");
             if(!asset_detail::number(p,"particleDrag",next.coupling.drag)||
                !asset_detail::vector(p,"particleDeposit",next.coupling.deposit)||!next.coupling.valid())
                 return fail("invalid particle volume coupling");
             for(const auto& [k,v]:p.members()){
-                if(k=="obstacle")asset.set(k,v);
+                if(k=="obstacle"||k=="physisWindResponse"||k=="physisGravityBlend")asset.set(k,v);
                 else if(k!="particleDrag"&&k!="particleDeposit")simulation.set(k,v);
             }
         }else if(kind==1){

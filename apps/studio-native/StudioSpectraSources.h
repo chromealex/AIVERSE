@@ -134,7 +134,7 @@ public:
     }
     void prepare(const fx::SpectraFxView& view,float dt){
         if(!ready_||!view.valid())return;
-        volumeWorld_.setView(view);volumeWorld_.step(dt);
+        volumeWorld_.setView(view);volumeWorld_.applyEnvironment(dataRegistry_.get());volumeWorld_.step(dt);
         if(!volumeWorld_.error().empty())error_=volumeWorld_.error();
         particles_.setView(view);
         presenter_->sync(mirror_.world(),lib::mechanics::SpectraSourceMirror::resolve);

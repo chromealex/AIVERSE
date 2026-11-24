@@ -458,7 +458,7 @@ void ClientFx::presentGraphSources(Simulation& sim,const game::GameScene& scene,
     if(allowVolumes&&dev_){
         graphVolumes_.synchronize(*dev_,volumes,platform::readContentFile);
     }
-    if(rows.empty()) {
+    if(rows.empty()&&volumes.empty()) {
         graphSources_->setDataInterfaceRegistry(nullptr);
         if(graphPool_.ready())graphPool_.setDataInterfaceRegistry(nullptr);
         liveFields_.clear();graphRegistry_.reset();
@@ -546,7 +546,7 @@ void ClientFx::prepareGraphGpuFrame(Simulation& sim,const game::GameScene& scene
     const auto view=fx::SpectraFxView::fromCamera(camera,viewProj,width,height);
     const bool gpu=allowed&&view.valid()&&!graphPoolResetPending_&&!graphPool_.presentationBlocked();
     presentGraphSources(sim,scene,camera,gpu,allowed&&view.valid());
-    if(allowed&&view.valid()){graphVolumes_.setView(view);graphVolumes_.step(dt);}else graphVolumes_.clear();
+    if(allowed&&view.valid()){graphVolumes_.setView(view);graphVolumes_.applyEnvironment(graphRegistry_.get());graphVolumes_.step(dt);}else graphVolumes_.clear();
     graphSourcesPrepared_=true;
     if(!gpu||!graphGpuSources_||!graphPool_.ready())return;
     if(!graphPool_.beginPresentationFrame(view)) {
