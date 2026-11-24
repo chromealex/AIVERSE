@@ -103,8 +103,9 @@ void GameCore::initProjectileProgram(Simulation& sim, Projectile& p, Vec3 start)
     projectile::initialize(p.program,p.speed,*f,toward);
     if (f->arc) {
         const World& world=sim.world();
-        if (world.alive(p.target) && world.has<Unit>(p.target) && world.has<Transform>(p.target))
-            p.aim=lift(sim,world.get<Transform>(p.target).pos,Fixed::fromRatio(6,10));
+        const auto* targetTransform=world.tryGetConst<Transform>(p.target);
+        if (world.alive(p.target) && world.has<Unit>(p.target) && targetTransform)
+            p.aim=lift(sim,targetTransform->pos,Fixed::fromRatio(6,10));
         else p.aim=lift(sim,p.aim,Fixed::fromRatio(6,10));
         const Fixed distance=surface ? surface->groundDist(start,p.aim) : dist2D(start,p.aim);
         const auto arc=projectile::fitTargetArc(*f,distance,p.speed);
@@ -317,6 +318,11 @@ void GameCore::sysProjectilePrograms(Simulation& sim, const std::vector<Entity>&
                 const Fixed left=arc.duration-s.age;
                 const Fixed speed=distance(position,p.aim)/left;
                 slice=fxMin(slice,projectile::sliceTime(s,fxMax(p.speed,speed),slice,true));
+                // Endpoint guidance also changes altitude; bound the actual
+                // chord, not just the horizontal speed estimate.
+                for (int n=0;n<16 && slice.raw>1 &&
+                    projectile::magnitude(endpoint(position,slice)-position)>Fixed::fromRatio(1,4);++n)
+                    slice=fxMax(Fixed::fromRaw(1),slice/2);
             }
             Vec3 delta=endpoint(position,slice)-position;
             Fixed fullLength=spatial?projectile::magnitude(delta):p.speed*slice,length=fxMin(s.distanceLeft,fullLength);
