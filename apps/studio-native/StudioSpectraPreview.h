@@ -29,7 +29,7 @@ public:
     // Render-thread command. Graph loads happen BETWEEN frames so retiring
     // GPU resources can settle before the new backend allocates. Commands
     // never run inside an active render/compute pass.
-    Json command(gfx::Device& device,const Json& input) {
+    Json command(gfx::Device& device,const Json& input,const fx::SdfResourceReader& sdfReader={}) {
         const std::string action=input.getStr("action","status");
         const auto now=std::chrono::steady_clock::now();
         importLease_.expire(now,fileImportPending_);
@@ -130,7 +130,7 @@ public:
                 return transferStatus("Preview graph exceeds 512 KiB");
             fx::EffectDef checked;
             std::vector<std::string> errors;
-            if(!fx::compileSpectraGraph(graph,Json::object(),checked,errors))
+            if(!fx::compileSpectraGraph(graph,Json::object(),checked,errors,sdfReader))
                 return transferStatus(errors.empty()?"SpectraFX graph validation failed":errors.front());
             // Allocate a candidate while the last-known-good instance remains
             // intact. The render owner is between frames, with no open pass.
@@ -138,6 +138,7 @@ public:
             auto candidate=std::make_unique<spectra::GraphRuntime>();
             spectra::GraphRuntimeOptions opts;
             opts.capacity=1024;
+            opts.sdfReader=sdfReader;
             if(input.has("gpuOwnedAllocation")&&input["gpuOwnedAllocation"].type()!=Json::Type::Bool)
                 return transferStatus("gpuOwnedAllocation must be boolean");
             opts.gpuOwnedAllocation=input.getBool("gpuOwnedAllocation",false);

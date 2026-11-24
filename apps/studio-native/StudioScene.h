@@ -1,6 +1,7 @@
 // macOS-only native preview: AIVERSE gfx::Device + Renderer3D over a CAMetalLayer.
 // No ImGui, no CPU texture readback, no dependency on UI component hierarchy.
 #pragma once
+#include "engine/fx/SpectraSdfFileIO.h"
 #include <chrono>
 #include <memory>
 #include <optional>
@@ -147,7 +148,7 @@ public:
                 throw std::runtime_error("gpuOwnedAllocation must be boolean");
             load.set("gpuOwnedAllocation",Json::fromBool(input.has("gpuOwnedAllocation")?
                 input.getBool("gpuOwnedAllocation"):spectraPreview_->authoredGpuOwnedAllocation()));
-            const auto loaded=candidate->command(*device_,load);
+            const auto loaded=candidate->command(*device_,load,fx::projectSdfReader(project));
             Json prepare=input;prepare.set("action",Json::string("replayPrepare"));
             const auto prepared=loaded.getBool("ready")&&loaded.getStr("error").empty()?
                 candidate->command(*device_,prepare):loaded;
@@ -231,7 +232,7 @@ public:
             if(action!="status") {lastFrameSignature_=0;settleFrames_=30;}
             return out;
         }
-        Json result=spectraPreview_->command(*device_,input);
+        Json result=spectraPreview_->command(*device_,input,fx::projectSdfReader(project));
         result.set("background",Json::string(fxBackground_));
         result.set("grid",Json::fromBool(fxGrid_));
         result.set("axes",Json::fromBool(fxAxes_));

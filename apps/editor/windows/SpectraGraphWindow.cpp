@@ -5,6 +5,7 @@
 #include "../EditorUtil.h"
 #include "../core/FxOps.h"
 #include "engine/fx/SpectraFX.h"
+#include "engine/fx/SpectraSdfFileIO.h"
 #include "libraries/include/aiverselib/mechanics/SpectraGpuCaptureMailbox.h"
 #include "libraries/include/aiverselib/mechanics/SpectraGpuRecoveryHost.h"
 #include "engine/fx/SpectraModuleSchema.h"
@@ -104,7 +105,7 @@ public:
 private:
     void refreshDiagnostics() {
         fx::EffectDef result;
-        valid_=spectra::compileGraph(doc_,result,errors_);
+        valid_=spectra::compileGraph(doc_,Json::object(),result,errors_,fx::projectSdfReader(project_));
         emitters_=valid_?int(result.emitters.size()):0;
         gpuEligible_=false;
         gpuVmEligible_=false;

@@ -7,6 +7,7 @@
 #include "engine/fx/SpectraFX.h"
 #include "engine/fx/SpectraAuthoring.h"
 #include "engine/fx/SpectraSdfBaker.h"
+#include "engine/fx/SpectraSdfFileIO.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -88,10 +89,10 @@ Json sourceGraph(const Json& p, const Workspace& ws) {
     }
     return Json::parse(readFile(graphFile(ws, requireGraphName(p))));
 }
-Json graphEvaluation(const Json& graph, const Json& overrides, fx::EffectDef* compiled = nullptr) {
+Json graphEvaluation(const Workspace& ws,const Json& graph, const Json& overrides, fx::EffectDef* compiled = nullptr) {
     fx::EffectDef def;
     std::vector<std::string> errors;
-    const bool ok = spectra::compileGraph(graph, overrides, def, errors);
+    const bool ok = spectra::compileGraph(graph, overrides, def, errors,fx::projectSdfReader(ws.project.dir));
     Json response = Json::object();
     response.set("ok", Json::fromBool(ok));
     response.set("errors", graphStrings(errors));
@@ -836,7 +837,7 @@ void registerSpectraGraphOps(Workspace& ws) {
             Json item = Json::object();
             item.set("name", strGraph(name));
             try {
-                Json state = graphEvaluation(Json::parse(readFile(graphFile(ws, name))), Json::object());
+                Json state = graphEvaluation(ws,Json::parse(readFile(graphFile(ws, name))), Json::object());
                 for (const auto& [key, value] : state.members()) item.set(key, value);
             } catch (const std::exception& e) {
                 item.set("ok", Json::fromBool(false));
@@ -861,7 +862,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         try {
             const Json graph = Json::parse(content);
             response.set("graph", graph);
-            response.set("validation", graphEvaluation(graph, Json::object()));
+            response.set("validation", graphEvaluation(ws,graph, Json::object()));
         } catch (const std::exception& e) {
             response.set("parseError", strGraph(e.what()));
         }
@@ -872,7 +873,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         R"({"properties":{"name":{"type":"string"},"graph":{"type":"object"},"text":{"type":"string"},"overrides":{"type":"object"}}})",
         [&ws](const Json& p) {
         requireGame(ws);
-        return graphEvaluation(sourceGraph(p, ws), p.has("overrides") ? p["overrides"] : Json::object());
+        return graphEvaluation(ws,sourceGraph(p, ws), p.has("overrides") ? p["overrides"] : Json::object());
     });
 
     add("fx_graph_set", "Create or replace fx/graphs/<name>.vfx.json after strict SpectraFX compiler validation; legacy effects are not changed.",
@@ -882,7 +883,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         const std::string name = requireGraphName(p);
         if (!p.has("graph") && !p.has("text")) throw std::runtime_error("provide graph or text");
         const Json graph = sourceGraph(p, ws);
-        Json response = graphEvaluation(graph, Json::object());
+        Json response = graphEvaluation(ws,graph, Json::object());
         response.set("name", strGraph(name));
         if (!response.getBool("ok")) return response; // never overwrite a valid graph with invalid input
         const std::string content = graph.dump(2) + "\n";
@@ -934,7 +935,7 @@ void registerSpectraGraphOps(Workspace& ws) {
     // a valid graph node by node. The caller can commit via fx_graph_set or
     // preserve incomplete work using fx_graph_draft_set.
     add("fx_graph_edit",
-        "Apply a v1/v2 graph edit in memory and return the edited JSON plus compiler diagnostics. Actions: new, upgrade, add, connect, disconnect, deleteNode, setProperty, bakeSdf (closed project model, dimension 4..32), importSdf (project .sdfbin snapshot); does not write files.",
+        "Apply a v1/v2 graph edit in memory and return the edited JSON plus compiler diagnostics. Actions: new, upgrade, add, connect, disconnect, deleteNode, setProperty, bakeSdf (closed project model, dimension 4..32), importSdf (project .sdfbin snapshot), linkSdf (persistent project .sdfbin reference); does not write files.",
         R"({"properties":{"name":{"type":"string"},"graph":{"type":"object"},"text":{"type":"string"},
              "action":{"type":"string"},"type":{"type":"string"},"from":{"type":"string"},
              "to":{"type":"string"},"toPort":{"type":"string"},"node":{"type":"string"},
@@ -984,7 +985,7 @@ void registerSpectraGraphOps(Workspace& ws) {
                 graph.set("links",std::move(links));
                 graph.set("outputs",std::move(outputs));
             }
-        } else if(action=="importSdf") {
+        } else if(action=="importSdf"||action=="linkSdf") {
             requireReplayProject(ws,p);
             Json* n=spectra::authoring::node(graph,p.getStr("node"));
             if(graph.getInt("version")!=2||!n||n->getStr("type")!="CollisionModule")
@@ -1005,7 +1006,7 @@ void registerSpectraGraphOps(Workspace& ws) {
             if(!fx::decodeSdfBinary(bytes,sdf,&error))throw std::runtime_error("SDF import: "+error);
             Json props=(*n)["properties"];
             if(!props.isObject())props=Json::object();
-            props.set("staticSdf",fx::staticSdfToJson(sdf));
+            props.set("staticSdf",action=="linkSdf"?Json::string(asset):fx::staticSdfToJson(sdf));
             n->set("properties",std::move(props));
         } else if(action=="bakeSdf") {
             // Same edit pipeline as setProperty; never persist partial work.
@@ -1062,7 +1063,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         }
         response.set("graph",graph);
         if(!added.empty())response.set("newNodeId",Json::string(added));
-        response.set("validation",graphEvaluation(graph,Json::object()));
+        response.set("validation",graphEvaluation(ws,graph,Json::object()));
         response.set("summary",Json::string("In-memory SpectraFX graph edit; save via fx_graph_set or fx_graph_draft_set"));
         return response;
     });
@@ -1085,7 +1086,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         Json response=Json::object();
         response.set("name",Json::string(name));
         response.set("ok",Json::fromBool(true));
-        response.set("validation",graphEvaluation(doc,Json::object()));
+        response.set("validation",graphEvaluation(ws,doc,Json::object()));
         response.set("summary",Json::string("Draft saved separately; published graph/effect unchanged"));
         return response;
     });
@@ -1100,7 +1101,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         Json response=Json::object();
         response.set("name",Json::string(name));
         response.set("graph",doc);
-        response.set("validation",graphEvaluation(doc,Json::object()));
+        response.set("validation",graphEvaluation(ws,doc,Json::object()));
         return response;
     });
 
@@ -1136,7 +1137,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         const std::string name=requireGraphName(p);
         const fs::path draft=draftFile(ws,name);
         const Json doc=Json::parse(readFile(draft));
-        Json response=graphEvaluation(doc,Json::object());
+        Json response=graphEvaluation(ws,doc,Json::object());
         response.set("name",Json::string(name));
         if(!response.getBool("ok"))return response;
         writeFile(graphFile(ws,name),doc.dump(2)+"\n");
@@ -1154,7 +1155,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         const std::string name = requireGraphName(p);
         const std::string effect = requireGraphName(p, "effect");
         fx::EffectDef compiled;
-        Json response = graphEvaluation(sourceGraph(p, ws),
+        Json response = graphEvaluation(ws,sourceGraph(p, ws),
             p.has("overrides") ? p["overrides"] : Json::object(), &compiled);
         if (!response.getBool("ok")) return response;
         const fs::path target = effectFile(ws, effect);

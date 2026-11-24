@@ -3,6 +3,7 @@
 #pragma once
 #include "libraries/include/aiverselib/mechanics/SpectraSourceMirror.h"
 #include "engine/fx/SpectraFX.h"
+#include "engine/fx/SpectraSdfFileIO.h"
 #include "engine/fx/SpectraScenePoolEmission.h"
 #include "libraries/include/aiverselib/mechanics/SpectraGpuAttachmentEcsAdapter.h"
 #include "engine/fx/FxModelMesh.h"
@@ -190,7 +191,7 @@ private:
         }
         const auto graph=Json::parse(text);
         fx::EffectDef def;std::vector<std::string> errors;
-        if(graph.getInt("version")!=2||!spectra::compileGraph(graph,def,errors)){
+        if(graph.getInt("version")!=2||!spectra::compileGraph(graph,Json::object(),def,errors,fx::projectSdfReader(project_))){
             error_=errors.empty()?"Invalid SpectraFX graph: "+name:errors.front();return false;
         }
         spectra::InstanceParameterTable named;
@@ -209,6 +210,7 @@ private:
             try{
                 spectra::PoolContinuousEmission emission;
                 spectra::GraphRuntimeOptions options;
+                options.sdfReader=fx::projectSdfReader(project_);
                 options.preference=spectra::ComputePreference::RequireGpu;options.gpuProgram=true;
                 options.routePoolCollisionChildren=true;
                 options.proceduralBillboards=true;options.gpuIndirect=true;
