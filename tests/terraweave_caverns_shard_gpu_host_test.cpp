@@ -12,7 +12,7 @@ static CaveBatchChunk entry(ChunkKey3 k,uint64_t revision,bool populated) {
     chunk.mesh.key=k;chunk.revision=revision;
     chunk.generatorVersion=1;chunk.resolution=4;chunk.spacingCm=100;
     if(populated) {
-        chunk.mesh.vertices={{0,0,0,0,1,0},{1,0,0,0,1,0},{0,0,1,0,1,0}};
+        chunk.mesh.vertices={{1,1,1,0,1,0},{2,1,1,0,1,0},{1,1,2,0,1,0}};
         chunk.mesh.indices={0,1,2};
     }
     return chunk;

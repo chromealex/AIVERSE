@@ -43,7 +43,7 @@ int main() {
     }catch(const std::invalid_argument&){rejectsDuplicate=true;}
     assert(rejectsDuplicate);
 
-    // A seam mismatch requests one coarse-side rebuild, using the precise
+    // A seam mismatch requests both sides to rebuild, using the precise
     // immutable snapshot at the source revision declared in that request.
     CaveSeamPublicationGate gate;
     CaveCertifiedChunk coarse;
@@ -54,10 +54,10 @@ int main() {
     CaveCertifiedChunk fine;
     fine.mesh.key={1,0,0};fine.resolution=4;fine.spacingCm=100;
     fine.sourceRevision=27;fine.renderRevision=1;
-    fine.mesh.vertices={{0,0,0,0,1,0},{0,2,0,0,1,0},{0,4,0,0,1,0},{1,0,0,0,1,0}};
+    fine.mesh.vertices={{0,0,0,0,1,0},{0,2,1,0,1,0},{0,4,0,0,1,0},{1,0,0,0,1,0}};
     fine.mesh.indices={0,1,3,1,2,3};
     gate.upsert(coarse);gate.upsert(fine);
-    assert(gate.analyze().pendingChunks==1);
+    assert(gate.analyze().pendingChunks==2);
     CaveSnapshotRegenerator workers(1);
     auto frozen=std::make_shared<const CaveVolumeSnapshot>(snapshot);
     auto started=workers.pump(gate,frozen,2);
@@ -65,13 +65,16 @@ int main() {
     // Wrong snapshot revision cannot launch another pending job.
     auto wrong=std::make_shared<CaveVolumeSnapshot>(snapshot);
     wrong->sourceRevision=99;
-    assert(workers.pump(gate,wrong,2).started==0);
-    size_t completed=0;
-    for(int i=0;i<500&&workers.inFlight();++i){
+    const auto rejected=workers.pump(gate,wrong,2);
+    assert(rejected.started==0);
+    size_t completed=rejected.accepted;
+    for(int i=0;i<500&&completed<2;++i){
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        completed+=workers.poll(gate).finished;
+        const auto progress=workers.pump(gate,frozen,2);
+        assert(progress.failed==0 && progress.stale==0 && progress.inFlight<=1);
+        completed+=progress.accepted;
     }
-    assert(workers.inFlight()==0&&completed==1);
+    assert(workers.inFlight()==0&&completed==2 && gate.analyze().pendingChunks==0);
     workers.drain();
     std::cout<<"caverns authored snapshot and async worker contracts OK\n";
 }

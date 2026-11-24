@@ -21,12 +21,17 @@ int main(){
     CaveSeamPublicationGate gate;
     gate.upsert(sample({0,0,0},false,false));
     gate.upsert(sample({1,0,0},true,true));
+    // The fine side subdivides the same straight edge and is stitchable.
+    assert(gate.analyze().pendingChunks==0);
+    auto divergent=sample({1,0,0},true,true,2);
+    divergent.mesh.vertices[1].z=1;
+    gate.upsert(std::move(divergent));
     auto audit=gate.analyze();
-    assert(audit.fallbackFaces==1 && audit.pendingChunks==1);
+    assert(audit.fallbackFaces==1 && audit.pendingChunks==2);
     assert(!gate.canPublish({0,0,0},1));
     assert(!gate.canPublish({1,0,0},1));
     auto jobs=gate.requests();
-    assert(jobs.size()==1 && jobs[0].key.x==0 && jobs[0].key.y==0 && jobs[0].key.z==0);
+    assert(jobs.size()==2 && jobs[0].key.x==0 && jobs[0].key.y==0 && jobs[0].key.z==0);
     // Old result has a different source revision: rejected.
     auto stale=sample({0,0,0},true,false,2);
     stale.sourceRevision=4;
@@ -38,15 +43,19 @@ int main(){
     assert(gate.accept(jobs[0],rebuilt));
     assert(!gate.canPublish({0,0,0},2)); // audit not refreshed
     audit=gate.analyze();
+    assert(audit.fallbackFaces==1);
+    assert(gate.requests(1).front().key==jobs[1].key);
+    assert(gate.accept(jobs[1],sample({1,0,0},true,true,3)));
+    audit=gate.analyze();
     assert(audit.fallbackFaces==0);
     assert(gate.canPublish({0,0,0},2));
-    assert(gate.canPublish({1,0,0},1));
+    assert(gate.canPublish({1,0,0},3));
     // Changed mesh revision invalidates neighbor certification.
-    auto changed=sample({1,0,0},true,true,3);
+    auto changed=sample({1,0,0},true,true,4);
     gate.upsert(std::move(changed));
     assert(!gate.canPublish({0,0,0},2));
     audit=gate.analyze();
     assert(audit.fallbackFaces==0);
-    assert(gate.canPublish({1,0,0},3));
+    assert(gate.canPublish({1,0,0},4));
     std::cout<<"caverns stage16 seam publication gate contract OK\n";
 }

@@ -7,7 +7,7 @@ static CaveBatchChunk chunk(ChunkKey3 key,uint64_t revision,bool visible) {
     CaveBatchChunk c;c.mesh.key=key;c.revision=revision;
     c.generatorVersion=7;c.resolution=4;c.spacingCm=100;
     if(visible) {
-        c.mesh.vertices={{0,0,0,0,1,0},{1,0,0,0,1,0},{0,0,1,0,1,0}};
+        c.mesh.vertices={{1,1,1,0,1,0},{2,1,1,0,1,0},{1,1,2,0,1,0}};
         c.mesh.indices={0,1,2};
     }
     return c;

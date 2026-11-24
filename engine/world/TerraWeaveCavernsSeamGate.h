@@ -4,6 +4,7 @@
 // snapshot, then publish certified groups at its graphics/physics barrier.
 #include "engine/world/TerraWeaveCavernsLodPolicy.h"
 #include "engine/world/TerraWeaveCavernsShards.h"
+#include <algorithm>
 #include <cstdint>
 #include <array>
 #include <map>
@@ -140,9 +141,15 @@ public:
         std::vector<CaveRebuildRequest> out;
         for(const auto& [key,request]:pending_) {
             (void)key;
-            if(out.size()==budget)break;
             out.push_back(request);
         }
+        // A freshly requeued low-key chunk must not starve its older neighbor
+        // when a host can rebuild only one side of the seam at a time.
+        const size_t count=std::min(budget,out.size());
+        std::partial_sort(out.begin(),out.begin()+count,out.end(),[](const auto& a,const auto& b){
+            return a.requestSerial<b.requestSerial;
+        });
+        out.resize(count);
         return out;
     }
     // Only accept completed rebuilt meshes for a current, outstanding job.
