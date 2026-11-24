@@ -191,7 +191,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35C fixtures authored; exact isolated verification pending. Full native, Studio and GPU gates NOT RUN.",
+      "note": "Stage 35C and 35B exact-source isolated Node 22.16.0 tests rerun 8/8 PASS; strict TS 5.8.3 against extracted unchanged graph types and new scope DTO declarations PASS. Native fixture authored, NOT RUN. Full Studio/React, native/MCP, hardware and merged-tree gates NOT RUN.",
       "evidence": []
     },
     "handoff": {
