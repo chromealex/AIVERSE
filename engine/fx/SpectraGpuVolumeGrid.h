@@ -88,13 +88,15 @@ public:
             error_="Invalid volume asset";return false;
         }
         for(const auto& source:asset.sources)if(!source.valid()){error_="Invalid volume source";return false;}
+        if(asset.impulse&&(!asset.impulse->valid()||!between(asset.impulseSeconds,.001f,1.f))){error_="Invalid volume impulse";return false;}
         fx::StaticSdfVolume sdf;
         if(!asset.obstacle.empty()&&(!fx::validSdfResourcePath(asset.obstacle)||!reader||
             !fx::loadSdfBinary(asset.obstacle,reader,sdf,error_))){
             if(error_.empty())error_="Invalid volume SDF reader or resource";return false;
         }
         if(!init(device,asset.simulation,sdf,std::move(budget)))return false;
-        return setSources(asset.sources);
+        if(!setSources(asset.sources))return false;
+        return !asset.impulse||queueImpulse(*asset.impulse,asset.impulseSeconds);
     }
     void shutdown(){
         if(device_){

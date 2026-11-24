@@ -93,7 +93,18 @@ inline bool compilePresentationGraph(const Json& graph,const Json& overrides,Pre
         if(kind==0){
             if(!asset_detail::keys(p,{"dimension","origin","cellSize","gravity","wind","obstacle"}))return fail("invalid VolumeDomain properties");
             for(const auto& [k,v]:p.members())if(k=="obstacle")asset.set(k,v);else simulation.set(k,v);
-        }else if(kind==1)sources.push(p);
+        }else if(kind==1){
+            Json source=p;
+            const auto mode=p.getStr("mode","continuous");
+            if(p.has("mode")&&!p["mode"].isString())return fail("invalid VolumeSource mode");
+            source.erase("mode");source.erase("duration");
+            if(mode=="impulse"){
+                if(asset.has("impulse"))return fail("one impulse source per volume");
+                asset.set("impulse",source);
+                if(p.has("duration"))asset.set("impulseSeconds",p["duration"]);
+            }else if(mode=="continuous"&&!p.has("duration"))sources.push(source);
+            else return fail("invalid VolumeSource mode or duration");
+        }
         else if(kind==2){
             if(!asset_detail::keys(p,{"buoyancy","smokeWeight","velocityDecay","smokeDecay","temperatureDecay","fuelDecay","maxVelocity"}))return fail("invalid VolumeAdvection properties");
             for(const auto& [k,v]:p.members())simulation.set(k,v);
@@ -142,7 +153,7 @@ inline bool appendPreset(Json& graph,std::string_view preset,std::string& error)
     if(graph.getInt("version")!=2||!graph["nodes"].isArray()||!graph["links"].isArray()||
        !graph["outputs"].isArray()||hasVolume(graph)||graph["nodes"].size()>250||graph["links"].size()>507||
        graph["outputs"].size()>=16){error="Graph cannot admit a volume branch";return false;}
-    if(preset!="fire"&&preset!="smoke"&&preset!="magic"&&preset!="fog"){
+    if(preset!="fire"&&preset!="smoke"&&preset!="magic"&&preset!="fog"&&preset!="explosion"){
         error="Unknown volume preset";return false;
     }
     Json next=graph;auto* nodes=next.find("nodes");auto* links=next.find("links");auto* outputs=next.find("outputs");
@@ -168,6 +179,10 @@ inline bool appendPreset(Json& graph,std::string_view preset,std::string& error)
         material.set("emission",Json::number(int64_t(0)));combustion.set("burnRate",Json::number(int64_t(0)));
         if(preset=="fog"){source.set("radius",Json::number(1.5));source.set("acceleration",Json::parse("[0,0,0]"));}
     }else if(preset=="magic")material.set("fireColor",Json::parse("[0.5,1.5,7]"));
+    else if(preset=="explosion"){
+        source=Json::parse(R"({"mode":"impulse","duration":0.65,"position":[0,0.5,0],"radius":1.2,"smoke":10,"temperature":25,"fuel":18,"acceleration":[0,6,0]})");
+        material.set("emission",Json::number(2.0));
+    }
     add("VolumeSource","source",source,270);
     add("VolumeAdvection","advect",Json::parse(R"({"buoyancy":1,"smokeDecay":0.35,"temperatureDecay":1.2})"),500);
     add("VolumeCombustion","burn",combustion,730);

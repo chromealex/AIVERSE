@@ -22,7 +22,7 @@ struct NodeInfo {
 inline const std::vector<NodeInfo>& nodeCatalog() {
     static const std::vector<NodeInfo> catalog{
         {"VolumeDomain","Volumes",R"({"dimension":32,"origin":[-2,-1,-2],"cellSize":0.125})","",true},
-        {"VolumeSource","Volumes",R"({"position":[0,0,0],"radius":0.5,"smoke":3,"temperature":8,"fuel":4})","",true},
+        {"VolumeSource","Volumes",R"({"mode":"continuous","position":[0,0,0],"radius":0.5,"smoke":3,"temperature":8,"fuel":4})","",true},
         {"VolumeAdvection","Volumes",R"({"buoyancy":1,"smokeDecay":0.25})","",true},
         {"VolumeCombustion","Volumes",R"({"ignition":0.5,"burnRate":3})","",true},
         {"VolumePressure","Volumes",R"({"pressureIterations":12})","",true},

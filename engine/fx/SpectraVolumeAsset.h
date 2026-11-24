@@ -6,12 +6,15 @@
 #include "engine/data/Json.h"
 #include <string>
 #include <initializer_list>
+#include <optional>
 
 namespace aiverse::spectra::volume {
 struct Asset {
     Config simulation;
     Material material;
     std::vector<Source> sources;
+    std::optional<Source> impulse;
+    float impulseSeconds=1;
     std::string obstacle;
 };
 namespace asset_detail {
@@ -52,7 +55,7 @@ inline Json vec(float3 v){auto a=Json::array();a.push(scalar(v.x));a.push(scalar
 inline bool readAsset(const Json& root,Asset& output,std::string& error){
     using namespace asset_detail;
     const auto fail=[&](const char* reason){error=reason;return false;};
-    if(!keys(root,{"format","version","simulation","material","sources","obstacle"})||
+    if(!keys(root,{"format","version","simulation","material","sources","obstacle","impulse","impulseSeconds"})||
        root.getStr("format")!="aiverse.spectrafx.volume"||!root["version"].isNumber()||root["version"].toDouble()!=1)
         return fail("Expected SpectraFX volume asset v1");
     Asset next;
@@ -75,15 +78,24 @@ inline bool readAsset(const Json& root,Asset& output,std::string& error){
            !number(m,"extinction",a.extinction)||!number(m,"emission",a.emission)||
            !number(m,"emissionThreshold",a.emissionThreshold)||!a.valid())return fail("Invalid volume material");
     }
+    const auto parseSource=[](const Json& entry,Source& a){
+        return keys(entry,{"position","radius","smoke","temperature","fuel","acceleration"})&&
+            vector(entry,"position",a.position)&&number(entry,"radius",a.radius)&&
+            number(entry,"smoke",a.smoke)&&number(entry,"temperature",a.temperature)&&
+            number(entry,"fuel",a.fuel)&&vector(entry,"acceleration",a.acceleration)&&a.valid();
+    };
+    if(root.has("impulse")){
+        Source impulse;
+        if(!parseSource(root["impulse"],impulse)||!number(root,"impulseSeconds",next.impulseSeconds)||
+           !between(next.impulseSeconds,.001f,1.f))return fail("Invalid volume impulse");
+        next.impulse=impulse;
+    }else if(root.has("impulseSeconds"))return fail("Impulse duration requires impulse source");
     if(root.has("sources")){
         const auto& sources=root["sources"];
         if(!sources.isArray()||sources.size()>kMaxSources)return fail("Invalid volume source count");
         for(const auto& entry:sources.items()){
             Source a;
-            if(!keys(entry,{"position","radius","smoke","temperature","fuel","acceleration"})||
-               !vector(entry,"position",a.position)||!number(entry,"radius",a.radius)||
-               !number(entry,"smoke",a.smoke)||!number(entry,"temperature",a.temperature)||
-               !number(entry,"fuel",a.fuel)||!vector(entry,"acceleration",a.acceleration)||!a.valid())
+            if(!parseSource(entry,a))
                 return fail("Invalid volume source");
             next.sources.push_back(a);
         }
@@ -109,11 +121,13 @@ inline Json writeAsset(const Asset& a){
     m.set("smokeColor",vec(a.material.smokeColor));m.set("fireColor",vec(a.material.fireColor));
     m.set("extinction",scalar(a.material.extinction));m.set("emission",scalar(a.material.emission));
     m.set("emissionThreshold",scalar(a.material.emissionThreshold));root.set("material",std::move(m));
-    for(const auto& x:a.sources){
+    const auto writeSource=[](const Source& x){
         Json j=Json::object();j.set("position",vec(x.position));j.set("radius",scalar(x.radius));
         j.set("smoke",scalar(x.smoke));j.set("temperature",scalar(x.temperature));j.set("fuel",scalar(x.fuel));
-        j.set("acceleration",vec(x.acceleration));sources.push(std::move(j));
-    }
+        j.set("acceleration",vec(x.acceleration));return j;
+    };
+    for(const auto& x:a.sources)sources.push(writeSource(x));
+    if(a.impulse){root.set("impulse",writeSource(*a.impulse));root.set("impulseSeconds",scalar(a.impulseSeconds));}
     root.set("sources",std::move(sources));
     if(!a.obstacle.empty())root.set("obstacle",Json::string(a.obstacle));
     return root;
@@ -130,6 +144,7 @@ inline bool initAsset(const Asset& a,GasGrid& out,std::string& error,const fx::S
             if(error.empty())error="Invalid volume obstacle";return false;
         }
     }
+    if(a.impulse&&(!between(a.impulseSeconds,.001f,1.f)||!next.inject(*a.impulse,a.impulseSeconds))){error="Invalid volume impulse";return false;}
     out=std::move(next);error.clear();return true;
 }
 }
