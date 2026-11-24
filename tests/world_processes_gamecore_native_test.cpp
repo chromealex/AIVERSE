@@ -116,8 +116,63 @@ static void checkPlanetGravity(){
         [](const World&,Entity)->std::optional<Vec3>{return Vec3{Fixed{},Fixed::fromInt(1),Fixed{}};}));
     AIVERSE_TEST_CHECK(ecs.get<granular::Field>(loose).mass[1]==10);
 }
+static void checkPlanetImprint(){
+    game::Surface surface;
+    game::BodyDef planet;planet.id="terra";planet.faceSize=8;planet.radius=Fixed::fromInt(64);
+    surface.bodies.push_back(planet);
+    planet.id="moon";planet.radius=Fixed::fromInt(20);
+    surface.bodies.push_back(planet);surface.build();
+    const int a=surface.gridCell(0,0,7,3),b=surface.neighbor(a,0);
+    AIVERSE_TEST_CHECK(b>=0);
+    int body=0,face=0,x=0,y=0;
+    AIVERSE_TEST_CHECK(surface.cellFace(b,body,face,x,y)&&body==0&&face!=0);
+    const int moon=surface.gridCell(1,face,x,y);
+    World ecs;
+    auto makeTrace=[&](int cell){
+        const auto e=ecs.create();Transform t{};t.pos=surface.cellCenter(cell);
+        ecs.add<Transform>(e,t);ecs.add<imprint::Cell>(e);return e;
+    };
+    const auto first=makeTrace(a),second=makeTrace(b),duplicate=makeTrace(b),other=makeTrace(moon);
+    const auto source=ecs.create(),tracker=ecs.create();
+    Transform tr{};tr.pos=surface.cellCenter(a);ecs.add<Transform>(source,tr);
+    imprint::Tracker cfg{};cfg.source=source;cfg.cell=first;cfg.minimumDistance=1;
+    cfg.footprint=50;cfg.scent=10;ecs.add<imprint::Tracker>(tracker,cfg);
+    AIVERSE_TEST_CHECK(imprint::stampSurfaceMotion(ecs,surface,1));
+    AIVERSE_TEST_CHECK(ecs.get<imprint::Cell>(first).footprint==0);
+    ecs.enableCowSnapshots();
+    const World before=ecs;
+    ecs.get<Transform>(source).pos=surface.cellCenter(b);
+    AIVERSE_TEST_CHECK(imprint::stampSurfaceMotion(ecs,surface,2));
+    AIVERSE_TEST_CHECK(ecs.get<imprint::Cell>(second).footprint==50);
+    AIVERSE_TEST_CHECK(ecs.get<imprint::Cell>(duplicate).footprint==0);
+    AIVERSE_TEST_CHECK(imprint::stampSurfaceMotion(ecs,surface,2));
+    AIVERSE_TEST_CHECK(ecs.get<imprint::Cell>(second).footprint==50);
+    ecs=before;
+    ecs.get<Transform>(source).pos=surface.cellCenter(b);
+    AIVERSE_TEST_CHECK(imprint::stampSurfaceMotion(ecs,surface,2));
+    AIVERSE_TEST_CHECK(ecs.get<imprint::Cell>(second).footprint==50);
+    ecs.get<Transform>(source).pos=surface.cellCenter(moon);
+    AIVERSE_TEST_CHECK(imprint::stampSurfaceMotion(ecs,surface,3));
+    AIVERSE_TEST_CHECK(ecs.get<imprint::Cell>(other).footprint==0);
+    AIVERSE_TEST_CHECK(ecs.get<imprint::SurfaceTrailHistory>(tracker).body==1);
+    ecs.add<game::Transit>(source);
+    AIVERSE_TEST_CHECK(imprint::stampSurfaceMotion(ecs,surface,4));
+    AIVERSE_TEST_CHECK(!ecs.get<imprint::SurfaceTrailHistory>(tracker).initialized);
+    ecs.remove<game::Transit>(source);
+    ecs.get<Transform>(source).pos=surface.cellCenter(a);
+    AIVERSE_TEST_CHECK(imprint::stampSurfaceMotion(ecs,surface,5));
+    AIVERSE_TEST_CHECK(ecs.get<imprint::Cell>(first).footprint==0);
+    ecs.get<Transform>(source).pos=surface.cellCenter(b);
+    ecs.get<imprint::Cell>(second).enabled=false;
+    AIVERSE_TEST_CHECK(imprint::stampSurfaceMotion(ecs,surface,6));
+    AIVERSE_TEST_CHECK(ecs.get<imprint::Cell>(duplicate).footprint==50);
+    ecs.get<imprint::Cell>(duplicate).enabled=false;
+    AIVERSE_TEST_CHECK(imprint::stampSurfaceMotion(ecs,surface,7));
+    AIVERSE_TEST_CHECK(!ecs.get<imprint::SurfaceTrailHistory>(tracker).initialized);
+}
 int main(){
     checkPlanetGravity();
+    checkPlanetImprint();
     const Json map=mapWithProcesses();
     auto sim=make(map,true),peer=make(map,true);
     auto zone=placed(*sim,1),gas=placed(*sim,2);
