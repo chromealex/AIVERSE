@@ -128,7 +128,7 @@ export interface StudioHub { recent: Array<{ dir: string; name: string; lastOpen
   templates: StudioTemplate[]; defaultLocation: string }
 export interface StudioAgentChange { op: string; args: string; ok: boolean; undoable: boolean; position: number; error?: string }
 export interface StudioAgentInfo { lines: string[]; total: number; running: boolean; port: number; clients: number; changes: StudioAgentChange[];
-  startPosition: number; cli: string; mcp: boolean; conversation: boolean; result?: string }
+  startPosition: number; historyVersion?:string; cli: string; mcp: boolean; conversation: boolean; result?: string }
 // World maintenance uses decimal strings for uint64 values, never JS numbers.
 export interface StudioWorldRegion {cell:[number,number,number];live:number;materialized:number}
 export interface StudioWorldStatus {
@@ -572,4 +572,4 @@ export interface MetaHumanReport { pending?:boolean; detected:boolean; score:num
   rig?: { halfJoints:number; twistJoints:number; jawJoint:boolean; eyeJoints:boolean } }
 export type StudioAlignMode = 'minX' | 'centerX' | 'maxX' | 'minZ' | 'centerZ' | 'maxZ' | 'distributeX' | 'distributeZ' | 'ground';
 /** Undo history: applied steps first (oldest → newest), then the redo branch; position = applied count. */
-export interface StudioHistory { steps: Array<{ label: string; done: boolean }>; position: number; version?:string; scope?:'map' }
+export interface StudioHistory { steps: Array<{ label: string; done: boolean }>; position: number; version?:string; scope?:'map'; strokeActive?:boolean }

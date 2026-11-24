@@ -83,6 +83,9 @@ Keep the existing HostedClient and independent scene document. Play requires sav
 ## Map history transactions (S6a)
 Use the existing MapDoc owner, not a second undo stack. Synchronous compound operations use MapDoc::CompoundEdit; every nested beginEdit marks the transaction but does not push/trim history. Commit publishes one before-image, failure restores the original map/dirty state and preserves previous redo. History labels bind process-unique native entry IDs, not depth. History navigation sends expectedVersion and the panel describes the oldest retained entry, not necessarily the opened map. This is map-scoped, not project/rules/asset filesystem history. Cross-frame brush grouping is still a separate ownership concern; do not claim global transaction parity.
 
+## Cross-frame stroke history (S6b)
+One CompoundEdit is owned by the Scene stroke from press to release. No history entry until commit; invalid dab, explicit cancellation, document switch and hidden/detached Scene cancel and restore the before-image. Other authoring requests and linked agent calls are refused during the stroke rather than folded into it. Agent history links resolve retained native IDs, send the current version, and Undo all requires an uninterrupted retained agent-only suffix. This is still map history; never claim reversibility of file or rules mutations.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

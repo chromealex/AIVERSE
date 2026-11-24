@@ -331,6 +331,9 @@ void authoredEntityWorkflow() {
        const size_t depth=session.workspace().map.undoDepth();
        std::string err;
        AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err));
+       AIVERSE_TEST_CHECK(session.strokeActive()&&session.workspace().map.undoDepth()==depth);
+       AIVERSE_TEST_CHECK(call("studio.undo").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.history")["result"].getBool("strokeActive"));
        AIVERSE_TEST_CHECK(session.strokeDab(8,4,&err) && session.strokeDab(12,4,&err));
        AIVERSE_TEST_CHECK(session.strokeEnd(&err));
        AIVERSE_TEST_CHECK(session.workspace().map.undoDepth()==depth+1);
@@ -345,6 +348,14 @@ void authoredEntityWorkflow() {
        const auto steps2=call("studio.history")["result"]["steps"];
        AIVERSE_TEST_CHECK(steps2[steps2.size()-1].getStr("label")=="Scatter objects");
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && session.workspace().map.data.entities.size()==entities);
+       const auto beforeCancel=session.workspace().map.toJson();
+       const auto redoBefore=session.workspace().map.redoDepth();
+       AIVERSE_TEST_CHECK(session.strokeBegin(5,5,&err));
+       AIVERSE_TEST_CHECK(session.strokeCancel()&&!session.strokeActive());
+       AIVERSE_TEST_CHECK(session.workspace().map.toJson()==beforeCancel&&session.workspace().map.redoDepth()==redoBefore);
+       AIVERSE_TEST_CHECK(session.strokeBegin(5,5,&err));
+       AIVERSE_TEST_CHECK(!session.strokeDab(1e20,0,&err)&&!session.strokeActive());
+       AIVERSE_TEST_CHECK(session.workspace().map.toJson()==beforeCancel&&session.workspace().map.redoDepth()==redoBefore);
        // Path tool without a road type refuses to start.
        call("studio.sceneBrush",R"({"kind":"road","roadType":""})");
        AIVERSE_TEST_CHECK(!session.strokeBegin(5,5,&err) && !err.empty());

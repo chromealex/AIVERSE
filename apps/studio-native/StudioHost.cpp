@@ -224,6 +224,7 @@ void StudioHost::webReady() {
 // models in with a per-frame budget. requestId < 0: --project / last project.
 void StudioHost::openProject(const std::string& path, int64_t requestId) {
     if (projectLoading_) return;
+    session_->strokeCancel();mouse_={};
     projectLoading_ = true;
     if (game_) game_->stop();
     playReview_=Json();
@@ -285,7 +286,7 @@ void StudioHost::gameEvent(const platform::Event& event) {
     if (game_ && platform_.surfaceDrawable(StudioSurface::Game)) game_->event(event);
 }
 void StudioHost::surfaceDetached(StudioSurface surface) {
-    if (surface == StudioSurface::Scene) { placement_ = {}; readyEmitted_ = false; }
+    if (surface == StudioSurface::Scene) { if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");mouse_={};placement_ = {}; readyEmitted_ = false; }
     else { gamePlacement_ = {}; if (game_) game_->suspend(); }
 }
 void StudioHost::tickGame() {
@@ -595,6 +596,7 @@ void StudioHost::failScene(const std::string& message) {
     sendEvent("viewport.error", message);
     readyEmitted_ = false;
     placement_.visible = false;
+    if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");mouse_={};
     {
         ViewportRect hidden;
         NativeViewportPlacement none;
@@ -785,6 +787,8 @@ bool StudioHost::updateBrushCursor(double x, double y, double w, double h) {
     return true;
 }
 void StudioHost::brushAdjust(double factor, bool disarm) {
+    if(projectLoading_)return;
+    if(disarm&&session_->strokeCancel()){mouse_={};sendEvent("document.changed", "");}
     const auto& b = session_->sceneBrush();
     Json params = Json::object();
     if (disarm) params.set("armed", Json::fromBool(false));
@@ -888,7 +892,7 @@ bool StudioHost::terrainStroke(int phase, double x, double y, double w, double h
     const float radius=brush.kind=="road"?.6f:brush.kind=="river"?float(brush.width*.5):float(brush.radius);
     onScene([&]{preview_->setBrushCursor(true,at,radius,brush.kind=="caverns",brush.caveMode=="fill");});
     const bool ok = phase == 0 ? session_->strokeBegin(at.x, at.z, &error,at.y) : session_->strokeDab(at.x, at.z, &error,at.y);
-    if (!ok && !error.empty()) report();
+    if (!ok && !error.empty()) {report();if(!session_->strokeActive())sendEvent("document.changed", "");}
     return ok;
 }
 bool StudioHost::placeAsset(const std::string& asset, double x, double y, double w, double h) {
@@ -994,6 +998,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
     }
     if (button == 2) { if (phase == 1) pan(dx, dy); return; }
     if (phase == 0) {
+        if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");
         m = {};
         m.active = true; m.pressX = x; m.pressY = y;
         // Spline handles (Roads / Water "Edit nodes"): LMB on a handle drags it.
@@ -1171,7 +1176,7 @@ void StudioHost::applyViewport(const Json& params) {
     NativeViewportPlacement placed;
     if (!platform_.placeSurface(StudioSurface::Scene, rect, placed)) return;
     placement_ = placed;
-    if (!placement_.visible) readyEmitted_ = false;
+    if (!placement_.visible) {readyEmitted_ = false;if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");mouse_={};}
 }
 Json StudioHost::viewportInput(const Json& input) {
     const std::string kind = input.getStr("kind");

@@ -52,7 +52,8 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
     try { total.current = 0; apply(await invoke('studio.agentReset', { from: 0 }), true); } catch (e) { setError(message(e)); }
   };
   const jump = async (position: number) => {
-    try { const r = await invoke('studio.historyJump', { position }); commitSnapshot(r.snapshot); }
+    if(!info?.historyVersion||info.running||position<0)return;
+    try { const r = await invoke('studio.historyJump', { position,expectedVersion:info.historyVersion }); commitSnapshot(r.snapshot);void poll(); }
     catch (e) { setError(message(e)); }
   };
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -61,7 +62,7 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
   if (!projectPath) return <div className="agent__empty">Open a project to work with the agent.</div>;
   const changes = info?.changes ?? [];
   const edits = changes.filter(c => c.ok);
-  const canUndoAll = !!info && info.startPosition >= 0 && edits.some(c => c.undoable) && !info.running;
+  const canUndoAll = !!info?.historyVersion && info.startPosition >= 0 && edits.some(c => c.undoable) && !info.running;
   return <div className="agent">
     <div className="agent__head">
       <Bot size={14}/>
@@ -70,7 +71,7 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
       {!!info?.port && <span className="agent__meta" title="Local agent link (aiversemcp connects here)">port {info.port}{info.clients ? ` · ${info.clients} linked` : ''}</span>}
       <span className="agent__fill"/>
       <button type="button" className="au-button au-button--sm au-button--ghost" disabled={!canUndoAll}
-        title="Go back in History to before this conversation's first change" onClick={() => void jump(info!.startPosition)}>
+        title="Undo the agent-only retained suffix; disabled if other edits or eviction make it unsafe" onClick={() => void jump(info!.startPosition)}>
         <RotateCcw size={13}/>Undo all</button>
       <button type="button" className="au-button au-button--sm au-button--ghost" disabled={!!info?.running} onClick={() => void reset()} title="Start a new conversation">
         <MessageSquarePlus size={13}/>New</button>
@@ -97,7 +98,7 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
       {changes.length > 0 && <aside className="agent__changes">
         <b>Changes · {edits.length}</b>
         {changes.map((c, i) => <button key={i} type="button" className={'agent__change' + (c.ok ? '' : ' is-error')}
-          disabled={!c.undoable} title={c.error || c.args} onClick={() => void jump(c.position)}>
+          disabled={!c.undoable||!info?.historyVersion||info.running} title={c.error || ('Navigate global map history to this edit · '+c.args)} onClick={() => void jump(c.position)}>
           {c.ok ? <CheckCircle2 size={11}/> : <CircleAlert size={11}/>}<span>{c.op}</span>
           {c.undoable && <small>#{c.position}</small>}</button>)}
       </aside>}

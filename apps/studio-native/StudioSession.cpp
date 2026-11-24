@@ -501,6 +501,7 @@ void StudioSession::refreshMaterialPreview() {
     ++previewMaterialRevision_;
 }
 Json StudioSession::saveMapAs(const std::string& path) {
+    if(stroking_)throw std::runtime_error("Finish the active Scene stroke before saving");
     if (ws_.project.dir.empty() || path.empty()) throw std::runtime_error("Open a project and choose a map file");
     namespace fs=std::filesystem;
     const auto root=fs::weakly_canonical(ws_.project.dir);
@@ -517,6 +518,8 @@ Json StudioSession::saveMapAs(const std::string& path) {
     return snapshot();
 }
 Json StudioSession::openProject(const std::string& path) {
+    strokeCancel();brush_.armed=false;
+    agentHistoryUnsafe_=true;
     if (path.empty()) throw std::runtime_error("Project path is empty");
     const auto directory=recoveredProjectDir(ws_,path);
     std::string error;
@@ -593,6 +596,7 @@ bool StudioSession::pollAgentLink() {
         }
         if(method!="call"){agentServer_.send(m.client,reply(id,error("unknown method")).dump(-1));continue;}
         const std::string name=msg["params"].getStr("name");
+        if(stroking_){agentServer_.send(m.client,reply(id,error("Scene stroke active; retry after release or cancel")).dump(-1));continue;}
         const Json args=msg["params"]["arguments"].isObject()?msg["params"]["arguments"]:Json::object();
         if(name=="view_screenshot"){
             // Answered by the host with the Scene's next frame (finishAgentScreenshot).
@@ -608,15 +612,18 @@ bool StudioSession::pollAgentLink() {
         const bool failed=result.has("error");
         const bool undoable=ws_.map.historyMark()!=before&&ws_.map.canUndo();
         labelNewHistory(before,"Agent · "+studioToolLabel(name));
+        if(undoable)for(size_t i=0;i<ws_.map.undoDepth();++i)if(ws_.map.undoId(i)>before)agentEditIds_.push_back(ws_.map.undoId(i));
         if(ws_.map.data.entities.size()!=entities){clearSelection();dropOrdinalFlags();}
         const bool dirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
         const bool edit=!failed&&(undoable||dirty!=wasDirty||!studioToolReadOnly(name));
         if(edit)changed=true;
+        if((edit&&!undoable)||(failed&&undoable)||ws_.project.dir!=agentHistoryProject_||ws_.map.path!=agentHistoryMap_)agentHistoryUnsafe_=true;
         if(edit||failed){
             Json c=Json::object();
             c.set("op",str(name));c.set("args",str(clipText(args.dump(-1),160)));
             c.set("ok",Json::fromBool(!failed));c.set("undoable",Json::fromBool(undoable));
             c.set("position",num(int64_t(undoLabels_.size())));
+            if(undoable)c.set("historyId",str(std::to_string(ws_.map.undoId(ws_.map.undoDepth()-1))));
             if(failed)c.set("error",str(clipText(result.getStr("error"),300)));
             agentChanges_.push(std::move(c));
         }
@@ -693,6 +700,7 @@ Json StudioSession::splineHandles() {
     return out;
 }
 bool StudioSession::splineMove(const std::string& id, double x, double z, std::string* error) {
+    if(stroking_){if(error)*error="Finish the active Scene stroke first";return false;}
     if(!std::isfinite(x)||!std::isfinite(z)){if(error)*error="invalid position";return false;}
     syncHistoryLabels();
     const auto before=ws_.map.historyMark();
@@ -763,13 +771,28 @@ bool StudioSession::caveBrushPoint(double ox,double oy,double oz,double dx,doubl
     x=r.getInt("xCm")/100.;y=r.getInt("yCm")/100.;z=r.getInt("zCm")/100.;
     return true;
 }
-bool StudioSession::strokeDab(double x, double z, std::string* error,double y) {
+bool StudioSession::strokeCancel(){
+    if(!stroking_&&!strokeTransaction_)return false;
+    stroking_=false;strokeTransaction_.reset();strokePoints_=Json::array();
+    clearSelection();dropOrdinalFlags();syncHistoryLabels();return true;
+}
+bool StudioSession::strokeDab(double x,double z,std::string* error,double y){
+    if(!stroking_)return false;
+    try{
+        if(!std::isfinite(x)||!std::isfinite(y)||!std::isfinite(z)||std::abs(x)>1e7||std::abs(y)>1e7||std::abs(z)>1e7)
+            throw std::runtime_error("Invalid stroke coordinates");
+        if(strokeDabImpl(x,z,error,y))return true;
+    }catch(const std::exception& e){if(error)*error=e.what();}
+    strokeCancel();return false;
+}
+bool StudioSession::strokeDabImpl(double x, double z, std::string* error,double y) {
     if(!stroking_)return false;
     const auto& b=brush_;
     const double d=b.kind=="caverns"?std::hypot(x-strokeX_,y-strokeHeight_,z-strokeY_):std::hypot(x-strokeX_,z-strokeY_);
     if(brushPathKind(b.kind)){
         // Path tools: a point every two cells; the op runs once on release.
         if(d<2.0 && strokePoints_.size()>0)return true;
+        if(strokePoints_.size()>=4096){if(error)*error="Path stroke point limit";return false;}
         Json pt=Json::array();pt.push(Json::number(x,2));pt.push(Json::number(z,2));
         if(b.kind=="river")pt.push(Json::number(b.width,2));
         strokePoints_.push(std::move(pt));strokeX_=x;strokeY_=z;
@@ -806,42 +829,41 @@ bool StudioSession::strokeDab(double x, double z, std::string* error,double y) {
     return true;
 }
 bool StudioSession::strokeBegin(double x, double z, std::string* error,double y) {
-    if(!brush_.armed||ws_.project.dir.empty())return false;
+    if(!brush_.armed||ws_.project.dir.empty()||stroking_)return false;
     const auto& b=brush_;
     if((b.kind=="tiles"&&b.tile.empty())||(b.kind=="field"&&b.field.empty())||(b.kind=="objects"&&b.type.empty())||(b.kind=="road"&&b.roadType.empty())){
         if(error)*error=std::string("choose a ")+(b.kind=="tiles"?"tile terrain":b.kind=="field"?"field":b.kind=="objects"?"type":"road type")+" first";
         return false;
     }
     syncHistoryLabels();
-    strokeDepth_=ws_.map.undoDepth();strokeHistoryMark_=ws_.map.historyMark();stroking_=true;strokeDabs_=0;strokePoints_=Json::array();
-    strokeX_=x+1e9;strokeY_=z+1e9;   // the first dab always applies
-    if(!strokeDab(x,z,error,y)){stroking_=false;return false;}
-    return true;
+    try{
+        strokeTransaction_=std::make_unique<editor::MapDoc::CompoundEdit>(ws_.map);
+        strokeHistoryMark_=ws_.map.historyMark();stroking_=true;strokeDabs_=0;strokePoints_=Json::array();
+        strokeX_=x+1e9;strokeY_=z+1e9;
+        return strokeDab(x,z,error,y);
+    }catch(const std::exception& e){if(error)*error=e.what();strokeCancel();return false;}
 }
 bool StudioSession::strokeEnd(std::string* error) {
     if(!stroking_)return true;
-    stroking_=false;
     const auto& b=brush_;
-    bool ok=true;
-    if(brushPathKind(b.kind)){
-        if(strokePoints_.size()<2){if(error)*error="drag further to draw a "+b.kind;return false;}
-        Json p=Json::object();std::string op;
-        if(b.kind=="road"){op="road_add";p.set("points",strokePoints_);p.set("type",str(b.roadType));p.set("curve",str("smooth"));}
-        else {op="water_set";Json body=Json::object();body.set("kind",str("river"));body.set("points",strokePoints_);p.set("body",std::move(body));}
-        const Json r=ws_.call(op,p,"editor");
-        if(r.has("error")){if(error)*error=r.getStr("error");ok=false;}
-        else strokeDabs_=int(strokePoints_.size());
-    }
+    try{
+        if(brushPathKind(b.kind)){
+            if(strokePoints_.size()<2)throw std::runtime_error("drag further to draw a "+b.kind);
+            Json p=Json::object();std::string op;
+            if(b.kind=="road"){op="road_add";p.set("points",strokePoints_);p.set("type",str(b.roadType));p.set("curve",str("smooth"));}
+            else {op="water_set";Json body=Json::object();body.set("kind",str("river"));body.set("points",strokePoints_);p.set("body",std::move(body));}
+            const Json r=ws_.call(op,p,"editor");
+            if(r.has("error"))throw std::runtime_error(r.getStr("error"));
+            strokeDabs_=int(strokePoints_.size());
+        }
+        strokeTransaction_->commit();
+    }catch(const std::exception& e){if(error)*error=e.what();strokeCancel();return false;}
+    strokeTransaction_.reset();stroking_=false;strokePoints_=Json::array();
     if(ws_.map.historyMark()!=strokeHistoryMark_){
-        // Legacy cross-frame brush grouping remains depth-based; never merge
-        // across an evicted pre-stroke snapshot.
-        if(strokeDepth_==0||(strokeDepth_<=ws_.map.undoDepth()&&ws_.map.undoId(strokeDepth_-1)<=strokeHistoryMark_))
-            ws_.map.mergeUndoSince(strokeDepth_);
         labelNewHistory(strokeHistoryMark_,brushLabel(b.kind));
         ws_.log("studio",std::string(brushLabel(b.kind))+(brushPathKind(b.kind)?" · "+std::to_string(strokeDabs_)+" points":" · "+std::to_string(strokeDabs_)+" dabs"));
     }
-    syncHistoryLabels();
-    return ok;
+    syncHistoryLabels();return true;
 }
 void StudioSession::finishAgentScreenshot(const std::string& pngBase64, int width, int height, const std::string& why) {
     for(const auto& shot:agentShots_){
@@ -866,6 +888,7 @@ Json StudioSession::agentRequest(const std::string& method, const Json& params) 
     else if(method=="studio.agentReset"){
         if(agentRun_.running())throw std::runtime_error("Stop the agent first");
         agentSession_.clear();agentLines_.clear();agentChanges_=Json::array();agentRunStart_=-1;
+        agentStartIds_.clear();agentEditIds_.clear();agentHistoryUnsafe_=false;
     } else if(method=="studio.agentStart"){
         const std::string prompt=params.getStr("prompt");
         if(prompt.empty()||prompt.size()>20000)throw std::runtime_error("Write a request for the agent (up to 20000 characters)");
@@ -874,7 +897,11 @@ Json StudioSession::agentRequest(const std::string& method, const Json& params) 
         if(editor::agentCliPath("claude-code").empty())throw std::runtime_error("Claude Code CLI (claude) was not found: install it and sign in, then try again");
         if(!agentRun_.sessionId().empty())agentSession_=agentRun_.sessionId();
         syncHistoryLabels();
-        if(agentSession_.empty()||agentRunStart_<0)agentRunStart_=int64_t(undoLabels_.size());
+        if(agentSession_.empty()||agentRunStart_<0){
+            agentRunStart_=int64_t(undoLabels_.size());agentStartIds_.clear();agentEditIds_.clear();
+            agentHistoryProject_=ws_.project.dir;agentHistoryMap_=ws_.map.path;agentHistoryUnsafe_=false;
+            for(size_t i=0;i<ws_.map.undoDepth();++i)agentStartIds_.push_back(ws_.map.undoId(i));
+        }
         const fs::path dir=fs::path(ws_.logsDir())/"studio-agent";
         std::error_code ec;fs::create_directories(dir,ec);
         // aiversemcp of this build, pointed at this Studio's port; strict: the user's global "aiverse" entry
@@ -927,8 +954,28 @@ Json StudioSession::agentRequest(const std::string& method, const Json& params) 
     out.set("running",Json::fromBool(agentRun_.running()));
     out.set("port",num(int64_t(agentServer_.port())));
     out.set("clients",num(int64_t(agentServer_.clients())));
-    out.set("changes",agentChanges_);
-    out.set("startPosition",num(agentRunStart_));
+    // Resolve old action IDs against the current retained timeline. Never
+    // replay an ordinal from a different document or an evicted history.
+    Json changes=Json::array();
+    const bool sameSource=agentHistoryProject_==ws_.project.dir&&agentHistoryMap_==ws_.map.path;
+    std::map<std::string,size_t> positions;
+    for(size_t i=0;i<ws_.map.undoDepth();++i)positions.emplace(std::to_string(ws_.map.undoId(i)),i+1);
+    for(size_t i=0;i<ws_.map.redoDepth();++i)positions.emplace(std::to_string(ws_.map.redoId(i)),ws_.map.undoDepth()+ws_.map.redoDepth()-i);
+    for(auto c:agentChanges_.items()){
+        const auto it=positions.find(c.getStr("historyId"));
+        const bool retained=sameSource&&it!=positions.end();
+        c.set("undoable",Json::fromBool(retained));
+        c.set("position",num(retained?int64_t(it->second):-1));changes.push(std::move(c));
+    }
+    bool canUndoAll=sameSource&&!agentHistoryUnsafe_&&!stroking_&&!agentRun_.running()&&!agentEditIds_.empty()&&
+        ws_.map.undoDepth()==agentStartIds_.size()+agentEditIds_.size();
+    if(canUndoAll){
+        for(size_t i=0;i<agentStartIds_.size();++i)if(ws_.map.undoId(i)!=agentStartIds_[i])canUndoAll=false;
+        for(size_t i=0;i<agentEditIds_.size();++i)if(ws_.map.undoId(agentStartIds_.size()+i)!=agentEditIds_[i])canUndoAll=false;
+    }
+    out.set("changes",changes);
+    out.set("startPosition",num(canUndoAll?int64_t(agentStartIds_.size()):-1));
+    out.set("historyVersion",str(historyVersion()));
     static const std::string cli=editor::agentCliPath("claude-code");   // a login-shell lookup: once per run of Studio
     out.set("cli",str(cli));
     out.set("mcp",Json::fromBool(!mcpTool_.empty()));
@@ -1075,15 +1122,21 @@ Json StudioSession::historyJson() const {
     for(const auto& l:undoLabels_){Json s=Json::object();s.set("label",str(l));s.set("done",Json::fromBool(true));steps.push(std::move(s));}
     for(auto it=redoLabels_.rbegin();it!=redoLabels_.rend();++it){Json s=Json::object();s.set("label",str(*it));s.set("done",Json::fromBool(false));steps.push(std::move(s));}
     out.set("steps",steps);out.set("position",Json::number(int64_t(undoLabels_.size())));
-    out.set("version",str(historyVersion()));out.set("scope",str("map"));
+    out.set("version",str(historyVersion()));out.set("scope",str("map"));out.set("strokeActive",Json::fromBool(stroking_));
     return out;
 }
 Json StudioSession::dispatch(const Json& request) {
     const std::string method=request.getStr("method");
-    // Cave stroke ownership cannot cross a document switch or history mutation.
-    if(brush_.kind=="caverns"&&(method=="studio.openProject"||method=="studio.openMap"||method=="studio.newMap"||method=="studio.hubOpen"||method=="studio.hubCreate"||method=="studio.undo"||method=="studio.redo"||method=="studio.historyJump")) {
-        if(stroking_)(void)strokeEnd();
-        brush_.armed=false;
+    const bool switching=method=="studio.openProject"||method=="studio.openMap"||method=="studio.newMap"||method=="studio.hubOpen"||method=="studio.hubCreate";
+    if(switching){strokeCancel();brush_.armed=false;agentHistoryUnsafe_=true;}
+    if(stroking_){
+        // The stroke owns the MapDoc transaction across frames. Only explicit
+        // observational requests can enter; other edits retry after release.
+        static const std::set<std::string> reads={"studio.snapshot","studio.inspect","studio.propertiesFor","studio.history","studio.stats","studio.project","studio.agentInfo","studio.agentStop","studio.componentCatalog"};
+        if(method=="studio.sceneBrush"&&request["params"].has("armed")&&!request["params"].getBool("armed",true))strokeCancel();
+        else if(!reads.count(method)){
+            Json reply=Json::object();reply.set("id",request["id"]);reply.set("error",str("Finish or cancel the active Scene stroke first"));return reply;
+        }
     }
     if(method=="studio.history"||method=="studio.historyJump") {
         Json reply=Json::object();reply.set("id",request["id"]);
