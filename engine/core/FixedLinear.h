@@ -54,4 +54,45 @@ template<size_t N> inline std::optional<Fixed> fxDeterminant(const FixedMatrix<N
     for(size_t i=0;i<N;++i){d*=lu->factors.at(i,i);if(!fxLinearBounded(d))return {};}
     return d;
 }
+
+template<size_t N> inline std::optional<std::array<Fixed,N>> fxLUSolve(const FixedLU<N>& lu,const std::array<Fixed,N>& rhs,Fixed pivotMin=Fixed::fromRaw(16)){
+    static_assert(N>=1&&N<=16);
+    if(pivotMin.raw<=0)return {};
+    std::array<bool,N> seen{};std::array<Fixed,N> x{};
+    for(auto v:lu.factors.values)if(!fxLinearBounded(v))return {};
+    for(auto v:rhs)if(!fxLinearBounded(v))return {};
+    for(size_t i=0;i<N;++i){
+        auto p=lu.permutation[i];if(p>=N||seen[p])return {};seen[p]=true;
+        x[i]=rhs[p];
+        for(size_t j=0;j<i;++j){x[i]-=lu.factors.at(i,j)*x[j];if(!fxLinearBounded(x[i]))return {};}
+    }
+    for(size_t i=N;i-->0;){
+        for(size_t j=i+1;j<N;++j){x[i]-=lu.factors.at(i,j)*x[j];if(!fxLinearBounded(x[i]))return {};}
+        auto d=lu.factors.at(i,i);if(fxAbs(d)<pivotMin)return {};
+        x[i]=x[i]/d;if(!fxLinearBounded(x[i]))return {};
+    }return x;
+}
+template<size_t N> inline std::optional<FixedMatrix<N>> fxCholesky(const FixedMatrix<N>& a,Fixed pivotMin=Fixed::fromRaw(16)){
+    static_assert(N>=1&&N<=16);
+    if(pivotMin.raw<=0)return {};
+    for(auto v:a.values)if(!fxLinearBounded(v))return {};
+    FixedMatrix<N> l;
+    for(size_t i=0;i<N;++i)for(size_t j=0;j<=i;++j){
+        if(a.at(i,j)!=a.at(j,i))return {};
+        auto v=a.at(i,j);
+        for(size_t k=0;k<j;++k){v-=l.at(i,k)*l.at(j,k);if(!fxLinearBounded(v))return {};}
+        if(i==j){if(v<pivotMin)return {};l.at(i,j)=fxSqrt(v);if(l.at(i,j)<pivotMin)return {};}
+        else l.at(i,j)=v/l.at(j,j);
+        if(!fxLinearBounded(l.at(i,j)))return {};
+    }return l;
+}
+template<size_t N> inline std::optional<Fixed> fxResidualInfinity(const FixedMatrix<N>& a,const std::array<Fixed,N>& x,const std::array<Fixed,N>& b){
+    static_assert(N>=1&&N<=16);
+    for(auto v:a.values)if(!fxLinearBounded(v))return {};
+    for(auto v:x)if(!fxLinearBounded(v))return {};
+    for(auto v:b)if(!fxLinearBounded(v))return {};
+    Fixed worst{};
+    for(size_t i=0;i<N;++i){auto r=-b[i];for(size_t j=0;j<N;++j)r+=a.at(i,j)*x[j];worst=fxMax(worst,fxAbs(r));}
+    return worst;
+}
 }
