@@ -114,7 +114,7 @@ public:
     // invertSnap: Ctrl/Cmd held flips the snap setting for this drag step.
     void updateTransformDrag(float x, float y, float width, float height, bool invertSnap);
     struct TransformCommit { std::string id; TransformTool tool = TransformTool::Move; int axis = -1;
-        render::float3 move{}; float degrees = 0; float factor = 1; Json surfacePlacement; };
+        render::float3 move{}; float degrees = 0; float factor = 1; Json surfacePlacement; std::optional<uint64_t> expectedRevision; };
     std::optional<TransformCommit> endTransformDrag();
     bool transformDragActive() const { return drag_.axis >= 0 || !planetDragId_.empty(); }
     void clearTransformPreview();
@@ -204,6 +204,7 @@ private:
     uint64_t planetRevision_=std::numeric_limits<uint64_t>::max();
     bool planetMode_=false;
     std::string planetDragId_;
+    uint64_t planetTransformRevision_=0;
     Json planetDragOriginal_,planetDragPlacement_;
     void framePlanet(int width,int height,const editor::MapDoc& doc,const std::string& selectedId,
                      const std::string& projectPath,const Json& rules);

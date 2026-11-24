@@ -689,10 +689,16 @@ void StudioHost::moveEnd() {
     const auto commit = onScene([&] { return preview_->endTransformDrag(); });
     lastActionCaption_.clear();
     sendEvent("viewport.action", "");
+    if(commit&&commit->expectedRevision&&
+       (*commit->expectedRevision!=session_->workspace().map.revision||
+        session_->lockedIds().contains(commit->id)||session_->hiddenIds().contains(commit->id))){
+        onScene([&]{preview_->clearTransformPreview();});return;
+    }
     if(commit&&commit->surfacePlacement.isObject()){
         Json params=Json::object();params.set("entityId",Json::string(commit->id));
         params.set("componentId",Json::string("SurfacePlacement"));
         params.set("key",Json::string("placement"));params.set("value",commit->surfacePlacement);
+        if(commit->expectedRevision)params.set("expectedRevision",Json::number(int64_t(*commit->expectedRevision)));
         const auto outcome=request("studio.setProperty",params);
         if(outcome.has("error"))platform_.log("AIVERSE planet move: "+outcome.getStr("error"));
         else sendEvent("document.changed","");
@@ -743,6 +749,7 @@ void StudioHost::moveEnd() {
         set.set("entityId", Json::string(commit->id));
         set.set("componentId", Json::string("Transform"));
         set.set("values", values);
+        if(commit->expectedRevision)set.set("expectedRevision",Json::number(int64_t(*commit->expectedRevision)));
         const auto outcome = request("studio.setProperties", set);
         if (outcome.has("error")) platform_.log("AIVERSE transform: " + outcome.getStr("error"));
     }

@@ -821,11 +821,11 @@ void StudioScene::setSnap(bool enabled,float move,float rotate,float scale) {
 void StudioScene::handleAxes(float3 out[3]) const {
     // Scale always uses the object's own axes (a world-axis scale of a rotated
     // object would shear); Move/Rotate follow the Global/Local toggle.
-    const bool local=(tool_==TransformTool::Scale||localSpace_)&&selectedAxesValid_;
+    const bool local=(planetMode_||tool_==TransformTool::Scale||localSpace_)&&selectedAxesValid_;
     for(int a=0;a<3;++a)out[a]=local?selectedAxes_[a]:float3{a==0?1.f:0.f,a==1?1.f:0.f,a==2?1.f:0.f};
 }
 int StudioScene::transformGizmoHit(float x,float y,float width,float height) const {
-    if(planetMode_||materialMode_||!gizmosVisible_||tool_==TransformTool::View||!selectedPivotValid_||width<4||height<4)return -1;
+    if((planetMode_&&tool_==TransformTool::Move)||materialMode_||!gizmosVisible_||tool_==TransformTool::View||!selectedPivotValid_||width<4||height<4)return -1;
     if(selectedIsLight_&&tool_!=TransformTool::Move)return -1;
     const auto view=viewCamera();
     float3 axes[3];handleAxes(axes);
@@ -835,12 +835,14 @@ int StudioScene::transformGizmoHit(float x,float y,float width,float height) con
     // Plane squares (all tools): Move = drag in the plane, Scale = both plane axes,
     // Rotate = turn about the plane's normal (same as that axis's ring).
     for(int n=0;n<3;++n){
+        if(planetMode_&&tool_==TransformTool::Rotate&&n!=1)continue;
         float2 q[4];
         if(planeQuad(view,selectedPivot_,axes,n,h.worldLength,width,height,q)&&insideQuad(q,x,y))
             return tool_==TransformTool::Rotate?n:4+n;
     }
     if(tool_==TransformTool::Rotate) {
         for(int a=0;a<3;++a){
+            if(planetMode_&&a!=1)continue;
             float3 u,v;ringBasis(axes[a],u,v);float2 prev{};bool hasPrev=false;
             for(int i=0;i<=kRingSegments;++i){
                 const float t=6.2831853f*float(i)/float(kRingSegments);
@@ -856,12 +858,13 @@ int StudioScene::transformGizmoHit(float x,float y,float width,float height) con
     return best;
 }
 bool StudioScene::beginTransformDrag(float x,float y,float width,float height) {
-    if(planetMode_){
+    if(planetMode_&&tool_==TransformTool::Move){
         if(!gizmosVisible_||!planetPreview_||tool_!=TransformTool::Move||selectedId_.empty()||selection_.size()>1)return false;
         float3 o,d;if(!viewCamera().screenRay(x,y,width,height,o,d))return false;
         if(planetPreview_->pick(o,d,hidden_,locked_,modelInstances_)!=selectedId_)return false;
         const auto at=planetPreview_->placements.find(selectedId_);
         if(at==planetPreview_->placements.end())return false;
+        planetTransformRevision_=planetRevision_;
         planetDragId_=selectedId_;planetDragOriginal_=at->second;planetDragPlacement_=Json{};
         tween_.active=false;return true;
     }
@@ -893,6 +896,7 @@ bool StudioScene::beginTransformDrag(float x,float y,float width,float height) {
     }
     tween_.active=false;
     drag_=d;
+    if(planetMode_)planetTransformRevision_=planetRevision_;
     return true;
 }
 void StudioScene::updateTransformDrag(float x,float y,float width,float height,bool invertSnap) {
@@ -1000,12 +1004,13 @@ std::string StudioScene::transformCaption() const {
 std::optional<StudioScene::TransformCommit> StudioScene::endTransformDrag() {
     if(!planetDragId_.empty()){
         TransformCommit c;c.id=planetDragId_;c.tool=TransformTool::Move;
-        c.surfacePlacement=planetDragPlacement_;
+        c.surfacePlacement=planetDragPlacement_;c.expectedRevision=planetTransformRevision_;
         const bool changed=c.surfacePlacement.isObject()&&c.surfacePlacement!=planetDragOriginal_;
         clearTransformPreview();if(changed)return c;return std::nullopt;
     }
     if(drag_.axis<0)return std::nullopt;
     TransformCommit c;c.id=drag_.id;c.tool=drag_.tool;c.axis=drag_.axis;
+    if(planetMode_)c.expectedRevision=planetTransformRevision_;
     if(drag_.tool==TransformTool::Move)c.move=drag_.moveOffset;
     else if(drag_.tool==TransformTool::Rotate)c.degrees=drag_.value;
     else c.factor=drag_.value;
@@ -1028,6 +1033,7 @@ void StudioScene::drawTransformGizmo(const render::Camera& view,int width,int he
     const float u=std::min(W,H)*0.16f/110.0f;
     auto drawPlanes=[&](){
         for(int n=0;n<3;++n){
+            if(planetMode_&&tool_==TransformTool::Rotate&&n!=1)continue;
             float2 q[4];if(!planeQuad(view,pivot,axes,n,h.worldLength,W,H,q))continue;
             const bool hot=dragging&&(drag_.axis==4+n||(tool_==TransformTool::Rotate&&drag_.axis==n));
             const uint32_t base=hot?active:colors[n];
@@ -1040,6 +1046,7 @@ void StudioScene::drawTransformGizmo(const render::Camera& view,int width,int he
         drawPlanes();
         const float3 toEye=normalize(view.eye()-pivot);
         for(int a=0;a<3;++a){
+            if(planetMode_&&a!=1)continue;
             const bool hot=dragging&&drag_.axis==a;
             float3 bu,bv;ringBasis(axes[a],bu,bv);
             float2 prev{};bool hasPrev=false;
@@ -2132,6 +2139,36 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         camera_.yaw=.55f;camera_.pitch=.35f;camera_.ortho=false;tween_.active=false;cameraInitialized_=true;
     }
     stepTween();selectedId_=selectedId;selectedPivotValid_=false;selectedBoxValid_=false;
+    selectedAxesValid_=false;selectedIsLight_=false;
+    // Use the existing transform gizmo for authored rigid models. Yaw is
+    // about the radial vertical (not arbitrary global Y); scale is along
+    // actual model axes. Pitch/roll edits remain numeric-only.
+    if(planetPreview_&&selected>=0&&selection_.size()<=1&&
+       !locked_.count(selectedId)&&!hidden_.count(selectedId)&&
+       (tool_==TransformTool::Rotate||tool_==TransformTool::Scale)){
+        const auto& entity=doc.data.entities[size_t(selected)];
+        const auto frame=planetPreview_->modelFrames.find(selectedId);
+        const auto model=std::find_if(modelInstances_.begin(),modelInstances_.end(),
+            [&](const auto& instance){return instance.id==selectedId&&instance.model;});
+        if(editor::authoredEntity(entity)&&frame!=planetPreview_->modelFrames.end()&&model!=modelInstances_.end()){
+            selectedPivot_=frame->second.transformPoint({});
+            const auto radial=normalize(selectedPivot_);
+            const auto view=viewCamera();
+            float2 screen;float3 o,d;
+            if(view.worldToScreen(selectedPivot_,float(width),float(height),screen)&&
+               view.screenRay(screen.x,screen.y,float(width),float(height),o,d)&&
+               planetPreview_->terrainHit(o,d)+.3f>=dot(selectedPivot_-o,d)){
+                selectedPivotValid_=true;selectedAxesValid_=true;
+                for(int i=0;i<3;++i)selectedAxes_[i]=normalize(frame->second.transformDir({i==0?1.f:0.f,i==1?1.f:0.f,i==2?1.f:0.f}));
+                if(tool_==TransformTool::Rotate){
+                    selectedAxes_[1]=radial;
+                    auto right=normalize(cross(radial,float3{0,0,1}));
+                    if(dot(right,right)<.5f)right=normalize(cross(radial,float3{1,0,0}));
+                    selectedAxes_[0]=right;selectedAxes_[2]=normalize(cross(right,radial));
+                }
+            }
+        }
+    }
     device_->beginFrame(width,height);StudioFrameScope scope{*device_};
     renderThumbnail();
     const auto view=viewCamera();renderer_.beginScene(view,width,height);
@@ -2148,6 +2185,8 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
             renderedModels.insert(instance.id);
             if(hidden_.count(instance.id))continue;
             render::ModelDraw draw;draw.model=instance.model;draw.world=instance.world;
+            if(drag_.axis>=0&&drag_.id==instance.id&&(drag_.tool==TransformTool::Rotate||drag_.tool==TransformTool::Scale))
+                draw.world=dragPreview()*instance.world;
             if(auto custom=instanceMaterials_.find(instance.id);custom!=instanceMaterials_.end())draw.materials=&custom->second.materials;
             if(auto team=instanceTeams_.find(instance.id);team!=instanceTeams_.end())draw.team=team->second;
             if(instance.id==selectedId||selection_.count(instance.id))draw.outline={.25f,.62f,1.f,.035f};
@@ -2207,6 +2246,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     }
     drawPlanetRegionHandles(view,width,height,doc);
     drawPlanetGravityHandles(view,width,height);
+    if(tool_==TransformTool::Rotate||tool_==TransformTool::Scale)drawTransformGizmo(view,width,height);
     if(orientationGizmo_&&gizmosVisible_)drawOrientationGizmo(view,width,height);
     gfx::PassDesc pass;pass.clearColor[0]=.038f;pass.clearColor[1]=.064f;pass.clearColor[2]=.098f;pass.clearColor[3]=1;
     renderer_.render(pass,&antialiasing_);renderer_.resolvePostFx();++framesDrawn_;

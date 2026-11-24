@@ -3158,6 +3158,10 @@ Json StudioSession::dispatchImpl(const Json& request) {
             if(params["entityIds"].isArray()){for(const auto& v:params["entityIds"].items())if(v.isString())targets.push_back(v.str());}
             else targets.push_back(params.getStr("entityId"));
             if(targets.empty() || targets.size()>10000)throw std::runtime_error("Invalid entity list");
+            if(params.has("expectedRevision")){
+                if(!params["expectedRevision"].isNumber()||params["expectedRevision"].integer(-1)!=int64_t(ws_.map.revision))throw std::runtime_error("Stale transform revision");
+                for(const auto& id:targets)if(locked_.contains(id)||hidden_.contains(id))throw std::runtime_error("Transform requires editable entity");
+            }
             const std::string componentId=params.getStr("componentId");
             if(lib::worldprocess::linked::supports(componentId) ||
                lib::worldprocess::extendedLinks::supports(componentId)) {
@@ -3231,6 +3235,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
             const Json& value = params["value"];
             const std::string componentId=params.getStr("componentId");
             if(componentId=="SurfacePlacement"){
+                if(params.has("expectedRevision")&&(!params["expectedRevision"].isNumber()||params["expectedRevision"].integer(-1)!=int64_t(ws_.map.revision)))throw std::runtime_error("Stale surface placement revision");
                 if(!ws_.map.data.planet()||entityId.compare(0,7,"entity:")!=0||
                    locked_.contains(entityId)||hidden_.contains(entityId))
                     throw std::runtime_error("Planet placement requires an editable planet entity");
