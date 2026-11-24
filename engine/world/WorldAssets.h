@@ -13,6 +13,11 @@ struct WorldAssets {
     std::map<std::string,std::string> hashes;
     static WorldAssets parse(const Json&);
     AssetReader verifiedReader(const AssetReader&)const;
+    // Audit every declared asset, not just currently resident chunks.
+    // One file at a time; caller supplies a bounded independent reader.
+    bool verifyAll(const AssetReader&,std::string* error=nullptr)const;
+    // Stable SHA-256 identity over rules/map JSON (including manifest).
+    static std::string persistenceIdentity(const Json& rules,const Json& map);
     // Ground partitions are X/Z columns: their Y range is not tied to camera altitude.
     Cell cell(Vec3)const;
     Vec3 origin(Cell c)const{return {Fixed::fromInt(int64_t(c.x)*cellSize),{},Fixed::fromInt(int64_t(c.z)*cellSize)};}
