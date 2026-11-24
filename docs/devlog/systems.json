@@ -1921,6 +1921,14 @@
         "Make a custom water, lava or hologram material without a shader programmer.",
         "Run one graph on Metal, WebGL and desktop.",
         "Let an agent change the look of a game safely."
+      ],
+      "roadmap": [
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Повторное использование сохранённых параметризованных графов текстур",
+          "titleEn": "Reuse saved parameterized texture graphs"
+        }
       ]
     },
     {
