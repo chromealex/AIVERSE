@@ -237,7 +237,7 @@ struct PinnedRaster {std::string revision;render::Image image;};
 PinnedRaster readPinnedRaster(const Workspace& ws,const std::string& rel,const std::string& expected,size_t maxBytes){
     needProject(ws);
     const fs::path relative(rel);
-    if(rel.size()>512||rel.find('\\')!=std::string::npos||rel.find(':')!=std::string::npos||relative.is_absolute()||relative.empty()||*relative.begin()!="content")throw std::invalid_argument("image asset must be inside project content");
+    if(rel.size()>512||rel.find('\0')!=std::string::npos||rel.find('\\')!=std::string::npos||rel.find(':')!=std::string::npos||relative.is_absolute()||relative.empty()||*relative.begin()!="content")throw std::invalid_argument("image asset must be inside project content");
     auto path=fs::canonical(ws.project.dir);
     for(const auto& part:relative){
         if(part==".."||part=="."||part.empty())throw std::invalid_argument("invalid image asset path");

@@ -1,3 +1,4 @@
+#include "core/MaterialOps.h"
 // Agent ops that act inside the play-test: list live objects and issue player commands, so an agent
 // can test a mechanic by playing it (surrender, abilities, digging, roads, ...). Commands go through
 // Simulation::submit like player input, so the play-test stays deterministic and replayable.
