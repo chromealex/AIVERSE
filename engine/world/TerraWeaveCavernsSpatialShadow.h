@@ -108,9 +108,11 @@ public:
         if(!staged_||revision!=stagedRevision_||installed_)return false;
         staged_.reset();stagedId_=0;stagedRevision_=0;return true;
     }
+    bool canRetire(const world::SpatialWorld& spatial)const noexcept {
+        return !installed_&&!staged_&&owns(spatial,activeId_,activeGenerations_);
+    }
     void unload(world::SpatialWorld& spatial){
-        if(installed_)throw std::logic_error("Caverns cannot unload installed candidate");
-        if(!owns(spatial,activeId_,activeGenerations_))
+        if(!canRetire(spatial))
             throw std::logic_error("Caverns collision unload lost ownership");
         for(size_t i=0;i<activeGenerations_.size();++i)
             if(!spatial.removeIfGeneration(activeId_+uint32_t(i),activeGenerations_[i]))
