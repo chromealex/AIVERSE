@@ -73,6 +73,7 @@ public:
         const Vec3 away{150_fx,1_fx,150_fx};
         ecs.add<Transform>(stranger,Transform{away,away,{}});
         ecs.add<Owner>(rider,Owner{1});ecs.add<Owner>(stranger,Owner{2});
+        buildings->setGraphMonitor(graphMonitor);
         const Vec3 half{Fixed::fromRatio(1,4),Fixed::fromRatio(9,10),Fixed::fromRatio(1,4)};
         ecs.add<BuildingPhysicalExtent>(rider,BuildingPhysicalExtent{half,true,{0_fx,half.y,0_fx}});
         ecs.add<BuildingPhysicalExtent>(stranger,BuildingPhysicalExtent{half,true,{0_fx,half.y,0_fx}});
@@ -158,6 +159,7 @@ public:
         return sim.world().resourceConst<BuildingLiftWorldCheckpoints>()->scenes.at(1).lifts.at(feature).state;
     }
 
+    std::shared_ptr<BuildingGraphMonitor> graphMonitor=std::make_shared<BuildingGraphMonitor>();
     std::shared_ptr<BuildingWorldRuntime> buildings;
     world::SpatialWorld spatial;
     scene::SceneCollisionNamespaces namespaces;
@@ -396,11 +398,15 @@ int main(int argc,char** argv){
         CHECK((diagnostics->pendingDomains&gameplay)!=0);
         CHECK((diagnostics->refusedDomains&gameplay)!=0);
         CHECK(diagnostics->attempts>0);
+        const auto published=game->graphMonitor->read(1);
+        CHECK(published.isObject()&&published.getInt("pendingDomains")!=0);
+        CHECK(published["history"].isArray());
         game->graphAvailable=true;
         step();
         const auto settled=world.graphDiagnostics(1);
         CHECK(settled&&settled->lastChange&&settled->pendingDomains==0);
         CHECK((settled->acknowledgedDomains&gameplay)!=0);
+        CHECK(game->graphMonitor->read(1).getInt("pendingDomains")==0);
         for(int i=0;i<80&&game->lift(sim).phase!=BuildingLiftPhase::Traveling;++i)step();
         CHECK(game->lift(sim).phase==BuildingLiftPhase::Traveling);
         for(int i=0;i<8;++i)step();
