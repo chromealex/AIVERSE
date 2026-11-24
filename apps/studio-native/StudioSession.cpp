@@ -1823,7 +1823,15 @@ Json StudioSession::dispatch(const Json& request) {
                         studioCheckMapAssetPaths(ws_.project.dir,ws_.map.toJson(),ws_.project.rulesJson,ws_.project.manifest,paths,false);
                     };
                     if(entry.move->resourceEdits.empty())studioReplayAssetMove(ws_.project.dir,*entry.move,redo,check,&staged);
-                    else{check();staged=studioPlanAssetMoveChain(ws_.project.dir,{*entry.move},redo);}
+                    else{
+                        check();staged=studioPlanAssetMoveChain(ws_.project.dir,{*entry.move},redo);
+                        const auto& before=redo?entry.move->materialsBefore:entry.move->materialsAfter;
+                        const auto& after=redo?entry.move->materialsAfter:entry.move->materialsBefore;
+                        if(bool(before)!=bool(after))throw std::runtime_error("Unsupported material topology change");
+                        const auto material=std::filesystem::canonical(ws_.project.dir)/"materials.json";
+                        if(before)staged.documents.push_back({material,*before,*after});
+                        else if(std::filesystem::exists(material))throw std::runtime_error("Material library topology changed");
+                    }
                 }else{
                     if(entry.files.size()!=1)throw std::runtime_error("Unsupported asset history entry");
                     const auto plan=redo?entry.files:editor::reverseProjectFileEdits(entry.files);
@@ -1890,15 +1898,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
     const auto method=request.getStr("method");
     // These three staged owners publish their own paired-cursor batch.
     // Keep the legacy dirty-marker wrapper only for operations not yet staged.
-    static const std::set<std::string> assetWrites={"studio.assetTrashApply","studio.assetTrashBatchApply"};
-    if(ws_.project.dir.empty()||!assetWrites.count(method))return dispatchImplCore(request);
-    // This wrapper is also used by explicit agent adapters; do not bypass it.
-    try{
-        StudioAssetHistoryPublication publication(ws_.project.dir);
-        auto reply=dispatchImplCore(request);
-        finishAssetHistoryPublication(publication,!reply.has("error"));
-        return reply;
-    }catch(const std::exception& e){Json reply=Json::object();reply.set("id",request["id"]);reply.set("error",str(e.what()));return reply;}
+    return dispatchImplCore(request);
 }
 Json StudioSession::dispatchImplCore(const Json& request) {
     Json reply = Json::object();
@@ -2840,7 +2840,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             }else{
                 if(!params.getBool("confirmed")||params.getStr("expectedVersion")!=assetHistoryVersion())
                     throw std::runtime_error("Confirm cleanup against current asset history");
-                reply.set("result",studioApplyTrashBatch(ws_.project.dir,ids,params.getStr("token"),assetHistory_));
+                reply.set("result",studioPurgeUnprotectedTrashBatch(ws_.project.dir,ids,params.getStr("token"),assetHistory_));
             }
         } else if (method == "studio.assetTrashList" || method == "studio.assetTrashReview" || method == "studio.assetTrashApply") {
             if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir)
@@ -2857,22 +2857,31 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 }
                 result.set("items",std::move(rows));reply.set("result",std::move(result));
             }else if(method=="studio.assetTrashReview"){
+                if(params.getStr("action")=="purge"){
+                    const auto protectedIds=studioProtectedTrashIds(assetHistory_);
+                    if(std::binary_search(protectedIds.begin(),protectedIds.end(),params.getStr("id")))
+                        throw std::runtime_error("Recovery record is protected by retained Undo/Redo");
+                }
                 auto review=studioAssetTrashReview(ws_.project.dir,params.getStr("id"),params.getStr("action"));
                 review.set("version",str(assetHistoryVersion()));reply.set("result",std::move(review));
             }else{
                 if(!params.getBool("confirmed")||params.getStr("expectedVersion")!=assetHistoryVersion())
                     throw std::runtime_error("Confirm recovery against the current asset history");
-                // Purge is irreversible; invalidate history even if disk cleanup fails midway.
-                if(params.getStr("action")=="purge"){
-                    const auto review=studioAssetTrashReview(ws_.project.dir,params.getStr("id"),"purge");
-                    if(review.getStr("token")!=params.getStr("token"))
-                        throw std::runtime_error("Recovery record changed; review again");
-                    assetHistory_.reset();pendingAssetTransfer_.reset();agentHistoryUnsafe_=true;
-                }
-                studioAssetTrashApply(ws_.project.dir,params.getStr("id"),params.getStr("action"),params.getStr("token"));
-                // Cross-session operations deliberately fence the session-local stack.
-                assetHistory_.reset();pendingAssetTransfer_.reset();agentHistoryUnsafe_=true;
-                Json result=Json::object();result.set("ok",Json::fromBool(true));reply.set("result",std::move(result));
+                const auto id=params.getStr("id"),action=params.getStr("action"),token=params.getStr("token");
+                if(action=="purge"){
+                    reply.set("result",studioPurgeUnprotectedTrash(ws_.project.dir,id,token,assetHistory_));
+                }else if(action=="restore"){
+                    StudioBatchAssetPlan staged;
+                    studioAssetTrashApply(ws_.project.dir,id,action,token,&staged);
+                    auto next=assetHistory_;next.reset();
+                    studioApplyHistoryBatch(ws_.project.dir,staged.relocations,staged.documents,
+                        staged.movingResources,&assetHistory_,&next);
+                    assetHistory_=std::move(next);assetHistoryPersistenceWarning_.clear();
+                    pendingAssetTransfer_.reset();agentHistoryUnsafe_=true;agentBatchFenced_=true;
+                    try{StudioAssetCatalog catalog(ws_.project.dir);catalog.rebuild(false);}
+                    catch(const std::exception& e){assetHistoryPersistenceWarning_="Asset index refresh required: "+std::string(e.what());}
+                    Json result=Json::object();result.set("ok",Json::fromBool(true));reply.set("result",std::move(result));
+                }else throw std::runtime_error("Invalid recovery action");
             }
         } else if (method == "studio.assetDelete") {
             if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir||
