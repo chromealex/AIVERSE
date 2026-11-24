@@ -350,7 +350,72 @@ static void checkPlanetGranular(){
     AIVERSE_TEST_CHECK(!granular::advanceSurfaceFields(ecs,surface,3));
     AIVERSE_TEST_CHECK(ecs.get<granular::Field>(field).sampledTick==2);
 }
+static void checkMorphGravity(){
+    World ecs;
+    const auto owner=ecs.create(),node=ecs.create();
+    Transform tr{};ecs.add<Transform>(owner,tr);
+    morph::Node n{};n.drag=0;ecs.add<morph::Node>(node,n);
+    physis::GravitySettings settings;settings.baseline={Fixed{},Fixed::fromInt(-10),Fixed{}};
+    ecs.setResource<physis::GravitySettings>(settings);
+    AIVERSE_TEST_CHECK(morph::bindGravity(ecs,node,{owner,100,1000,false,true}));
+    const auto absolute=morph::physisNodeLoad(ecs,nullptr,node,n);
+    AIVERSE_TEST_CHECK(absolute&&(*absolute)[1]==-10);
+    ecs.get<morph::GravityBinding>(node).relative=true;
+    const auto relative=morph::physisNodeLoad(ecs,nullptr,node,n);
+    AIVERSE_TEST_CHECK(relative&&(*relative==std::array<morph::I,3>{}));
+    ecs.get<morph::GravityBinding>(node).relative=false;
+    WorldTransform wt{};
+    const auto rotation=fxQuaternionAxisAngle({Fixed{},Fixed{},Fixed::fromInt(1)},Fixed::fromRatio(1,4));
+    AIVERSE_TEST_CHECK(rotation);
+    wt.rotation={rotation->x,rotation->y,rotation->z,rotation->w};
+    ecs.add<WorldTransform>(owner,wt);
+    const auto rotated=morph::physisNodeLoad(ecs,nullptr,node,n);
+    AIVERSE_TEST_CHECK(rotated&&(*rotated)[0]<=-9&&(*rotated)[1]==0);
+    ecs.remove<WorldTransform>(owner);
+
+    game::Surface surface;
+    game::BodyDef planet;planet.id="terra";planet.faceSize=8;planet.radius=Fixed::fromInt(64);
+    surface.bodies.push_back(planet);surface.build();
+    ecs.resource<physis::GravitySettings>()->baseline={};
+    const auto field=ecs.create();
+    physis::GravityField g;g.mode=physis::GravityMode::Attract;
+    g.center=game::Surface::anchor(0);g.radiusMeters=Fixed::fromInt(200);
+    g.radialMagnitude=Fixed::fromInt(10);g.overrideBaseline=true;
+    ecs.add<physis::GravityField>(field,g);
+    for(int face=0;face<6;++face){
+        ecs.get<Transform>(owner).pos=surface.cellCenter(surface.gridCell(0,face,3,3));
+        const auto force=morph::physisNodeLoad(ecs,&surface,node,n);
+        AIVERSE_TEST_CHECK(force&&(*force)[1]<0&&(*force)[0]==0&&(*force)[2]==0);
+    }
+    ecs.enableCowSnapshots();const World before=ecs;
+    AIVERSE_TEST_CHECK(morph::advanceWithPhysisGravity(ecs,&surface,1));
+    const auto moved=ecs.get<morph::Node>(node);
+    AIVERSE_TEST_CHECK(moved.y<0&&moved.sampledTick==1);
+    AIVERSE_TEST_CHECK(morph::advanceWithPhysisGravity(ecs,&surface,1));
+    AIVERSE_TEST_CHECK(ecs.get<morph::Node>(node).y==moved.y);
+    ecs=before;
+    AIVERSE_TEST_CHECK(morph::advanceWithPhysisGravity(ecs,&surface,1));
+    AIVERSE_TEST_CHECK(ecs.get<morph::Node>(node).y==moved.y);
+    AIVERSE_TEST_CHECK(morph::enqueueImpact(ecs,node,2,1,0,0));
+    ecs.destroy(owner);
+    AIVERSE_TEST_CHECK(!morph::advanceWithPhysisGravity(ecs,&surface,2));
+    AIVERSE_TEST_CHECK(ecs.get<morph::Node>(node).sampledTick==1);
+    AIVERSE_TEST_CHECK(ecs.get<morph::Impact>(node).pending);
+
+    Json map=baseMap();
+    map.member("entities").at(1).set("components",Json::parse(R"({"MorphNode":{
+        "restX":0,"restY":0,"restZ":0,"drag":0,"anchored":false,"enabled":true,
+        "gravityImpulseMilli":1000,"gravityRelative":true}})"));
+    auto sim=make(map,true);
+    const auto authored=placed(*sim,1);
+    AIVERSE_TEST_CHECK(sim->world().has<morph::GravityBinding>(authored));
+    sim->step();
+    auto restored=make(map,true);std::string error;
+    AIVERSE_TEST_CHECK(restored->deserialize(sim->serialize(),&error));
+    AIVERSE_TEST_CHECK(restored->checksum()==sim->checksum());
+}
 int main(){
+    checkMorphGravity();
     checkPlanetGranular();
     checkPlanetEvolveHydration();
     checkPlanetGravity();
