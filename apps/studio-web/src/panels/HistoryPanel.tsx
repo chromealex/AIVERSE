@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { History, RotateCcw, Undo2, Redo2, RefreshCw } from 'lucide-react';
 import { invoke } from '../bridge';
-import type { StudioHistory, StudioProjectHistory, StudioSnapshot } from '../types';
+import type { StudioHistory, StudioProjectHistory, StudioAssetHistory, StudioSnapshot } from '../types';
 import { StudioAlert, StudioButton, StudioIconButton, StudioEmptyState, StudioSkeleton } from '../ui';
 import { historyStepParams, type HistoryDirection, type HistoryScope } from './historyLogic';
 import './HistoryPanel.css';
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
-type HistoryRead = { source: StudioSnapshot; scope: HistoryScope; value: StudioHistory | StudioProjectHistory };
+type HistoryRead = { source: StudioSnapshot; scope: HistoryScope; value: StudioHistory | StudioProjectHistory | StudioAssetHistory };
 type HistoryError = { project: string; scope: HistoryScope; message: string };
-const read = (scope: HistoryScope) => scope === 'map' ? invoke('studio.history', {}) : invoke('studio.projectHistory', {});
+const read = (scope: HistoryScope) => scope === 'map' ? invoke('studio.history', {}) : scope === 'project' ? invoke('studio.projectHistory', {}) : invoke('studio.assetHistory', {});
 
 /** Independent map timeline and saved project document history. Never replay a project jump. */
 export default function HistoryPanel({ snapshot, commitSnapshot }: {
@@ -26,7 +26,8 @@ export default function HistoryPanel({ snapshot, commitSnapshot }: {
   const project = snapshot?.project.path ?? '';
   const history = loaded && loaded.source === snapshot && loaded.scope === scope ? loaded.value : null;
   const error = failure?.project === project && failure.scope === scope ? failure.message : '';
-  const projectHistory = history?.scope === 'project' ? history as StudioProjectHistory : null;
+  const savedHistory = history?.scope === 'project' || history?.scope === 'assets' ? history : null;
+  const savedScope = scope === 'assets' ? 'assets' : 'project';
 
   useEffect(() => {
     if (!project || !snapshot || pending) return;
@@ -47,14 +48,14 @@ export default function HistoryPanel({ snapshot, commitSnapshot }: {
   const navigate = async (position: number | HistoryDirection) => {
     if (request.current || !snapshot || !history || history.strokeActive) return;
     const source = snapshot;
-    const params = scope === 'project' && typeof position !== 'number'
-      ? historyStepParams(projectHistory, position) : null;
-    if (scope === 'project' && !params) return;
+    const params = scope !== 'map' && typeof position !== 'number'
+      ? historyStepParams(savedHistory, position, savedScope) : null;
+    if (scope !== 'map' && !params) return;
     if (scope === 'map' && (typeof position !== 'number' || !history.version)) return;
     request.current = true; setPending(true); setFailure(null);
     try {
-      const result = scope === 'project' && params
-        ? await invoke('studio.projectHistoryStep', params)
+      const result = params
+        ? scope === 'assets' ? await invoke('studio.assetHistoryStep', params) : await invoke('studio.projectHistoryStep', params)
         : await invoke('studio.historyJump', { position: position as number, expectedVersion: history.version });
       // Do not replace a newer snapshot delivered by a native event or a project switch.
       // Native document.changed refreshes other windows even when this reply is discarded.
@@ -78,20 +79,22 @@ export default function HistoryPanel({ snapshot, commitSnapshot }: {
       <div className="history__scopes" role="group" aria-label="History scope">
         <StudioButton size="sm" variant={scope === 'map' ? 'primary' : 'ghost'} aria-pressed={scope === 'map'} disabled={pending} onClick={() => switchScope('map')}>Map</StudioButton>
         <StudioButton size="sm" variant={scope === 'project' ? 'primary' : 'ghost'} aria-pressed={scope === 'project'} disabled={pending} onClick={() => switchScope('project')}>Project</StudioButton>
+        <StudioButton size="sm" variant={scope === 'assets' ? 'primary' : 'ghost'} aria-pressed={scope === 'assets'} disabled={pending} onClick={() => switchScope('assets')}>Assets</StudioButton>
       </div>
       <StudioIconButton size="sm" variant="ghost" aria-label="Refresh history" title="Refresh history" disabled={pending} icon={<RefreshCw size={14}/>} onClick={reload}/>
     </div>
     <div className="history__description">
       {scope === 'map' ? 'Scene edits only. Global Undo / Redo controls the map.'
-        : 'Saved Rules and compatible Manifest edits. Assets and map edits are separate.'}
+        : scope === 'project' ? 'Saved Rules and compatible Manifest edits. Assets and map edits are separate.'
+        : 'Importer settings only. Move/import operations currently reset asset history.'}
     </div>
-    {scope === 'project' && <div className="history__actions">
-      <StudioButton size="sm" disabled={disabled || !historyStepParams(projectHistory, 'undo')} onClick={() => void navigate('undo')}><Undo2 size={14}/>Undo</StudioButton>
-      <StudioButton size="sm" disabled={disabled || !historyStepParams(projectHistory, 'redo')} onClick={() => void navigate('redo')}><Redo2 size={14}/>Redo</StudioButton>
+    {scope !== 'map' && <div className="history__actions">
+      <StudioButton size="sm" disabled={disabled || !historyStepParams(savedHistory, 'undo', savedScope)} onClick={() => void navigate('undo')}><Undo2 size={14}/>Undo</StudioButton>
+      <StudioButton size="sm" disabled={disabled || !historyStepParams(savedHistory, 'redo', savedScope)} onClick={() => void navigate('redo')}><Redo2 size={14}/>Redo</StudioButton>
     </div>}
     {error && <StudioAlert tone="danger" className="history__alert" title="History unavailable or edit refused">{error}</StudioAlert>}
     {history?.strokeActive && <StudioAlert tone="warning" className="history__alert">Finish or cancel the active Scene stroke first.</StudioAlert>}
-    {projectHistory?.blockedReason && <StudioAlert tone="warning" className="history__alert">{projectHistory.blockedReason}</StudioAlert>}
+    {savedHistory?.blockedReason && <StudioAlert tone="warning" className="history__alert">{savedHistory.blockedReason}</StudioAlert>}
     {loading && <div className="history__loading"><StudioSkeleton/><StudioSkeleton width="65%"/><span role="status">Reading history…</span></div>}
     {pending && <div className="history__description" role="status">Applying history…</div>}
     {history && scope === 'map' && <div role="listbox" aria-label="Map edit history" className="history__list">
@@ -104,17 +107,17 @@ export default function HistoryPanel({ snapshot, commitSnapshot }: {
         <b>{i + 1}</b><span title={step.label}>{step.label}</span></button>)}
       {!steps.length && <div className="history__empty"><History size={14}/>No retained map edits.</div>}
     </div>}
-    {projectHistory && <>
-      <ol className="history__list history__project-list" aria-label="Project edit history">
-        <li className={'history__step history__step--origin' + (projectHistory.position === 0 ? ' is-current' : '')} aria-current={projectHistory.position === 0 ? 'step' : undefined}>
-          <RotateCcw size={12}/><span>Oldest retained project state</span></li>
-        {steps.map((step, i) => <li key={i} aria-current={projectHistory.position === i + 1 ? 'step' : undefined}
-          className={'history__step' + (step.done ? '' : ' is-redo') + (projectHistory.position === i + 1 ? ' is-current' : '')}>
+    {savedHistory && <>
+      <ol className="history__list history__project-list" aria-label={scope === 'assets' ? 'Asset edit history' : 'Project edit history'}>
+        <li className={'history__step history__step--origin' + (savedHistory.position === 0 ? ' is-current' : '')} aria-current={savedHistory.position === 0 ? 'step' : undefined}>
+          <RotateCcw size={12}/><span>Oldest retained {scope === 'assets' ? 'asset' : 'project'} state</span></li>
+        {steps.map((step, i) => <li key={i} aria-current={savedHistory.position === i + 1 ? 'step' : undefined}
+          className={'history__step' + (step.done ? '' : ' is-redo') + (savedHistory.position === i + 1 ? ' is-current' : '')}>
           <b>{i + 1}</b><span title={step.label}>{step.label}</span><small>{step.done ? 'Applied' : 'Redo'}</small></li>)}
-        {!steps.length && <li className="history__empty"><History size={14}/>No retained project edits.</li>}
+        {!steps.length && <li className="history__empty"><History size={14}/>No retained {scope === 'assets' ? 'asset' : 'project'} edits.</li>}
       </ol>
       <div className="history__footer" title="Estimated retained payload; not total process memory">
-        {steps.length} / {projectHistory.maxSteps} steps · {(projectHistory.bytes / 1048576).toFixed(2)} / {(projectHistory.maxBytes / 1048576).toFixed(0)} MiB
+        {steps.length} / {savedHistory.maxSteps} steps · {(savedHistory.bytes / 1048576).toFixed(2)} / {(savedHistory.maxBytes / 1048576).toFixed(0)} MiB
       </div>
     </>}
   </div>;

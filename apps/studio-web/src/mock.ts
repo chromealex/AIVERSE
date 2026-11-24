@@ -150,7 +150,8 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
     throw new Error('Open the native Studio');
   if (method === 'studio.history') return { steps: [], position: 0 } as StudioResult['studio.history'];
   if (method === 'studio.projectHistory') return { scope:'project', steps:[], position:0, version:'', strokeActive:false, canUndo:false, canRedo:false, bytes:0, maxBytes:16777216, maxSteps:64, blockedReason:'Project history requires the native Studio' };
-  if (method === 'studio.projectHistoryStep' || method === 'studio.historyJump' || method === 'studio.entitiesAlign') throw new Error('Open the native Studio');
+  if (method === 'studio.assetHistory') return { scope:'assets', steps:[], position:0, version:'', strokeActive:false, canUndo:false, canRedo:false, bytes:0, maxBytes:16777216, maxSteps:64, blockedReason:'Asset history requires the native Studio' };
+  if (method === 'studio.assetHistoryStep' || method === 'studio.projectHistoryStep' || method === 'studio.historyJump' || method === 'studio.entitiesAlign') throw new Error('Open the native Studio');
   if (method === 'studio.componentCatalog') return [
     { id: 'MeshRenderer', title: 'Mesh Renderer', group: 'Rendering', hint: 'Model and material slots', action: 'native', available: false, reason: 'Already on this entity' },
     { id: 'Light', title: 'Point Light', group: 'Rendering', hint: 'Adds a light entity at this position', action: 'light', available: true },

@@ -177,7 +177,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
   const native=nativeConnected();
   const reload=useCallback(()=>setRefreshToken(t=>t+1),[]);
   useEffect(()=>onNativeEvent((event,payload)=>{
-    if(event==='workspace.changed')reload();
+    if(event==='workspace.changed'||event==='assets.changed')reload();
     if(event==='assets.importPreview' && payload &&
        typeof payload==='object' && 'token' in payload && 'items' in payload){
       const candidate=payload as StudioAssetTransferPlan;
@@ -467,7 +467,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
             </div>}
       </div>
       {selectedAsset&&native&&<AssetImportSettings key={selectedAsset.guid||selectedAsset.path}
-        asset={selectedAsset} locked={pinnedAssetGuid!==null}
+        asset={selectedAsset} refreshToken={refreshToken} locked={pinnedAssetGuid!==null}
         onToggleLock={toggleAssetPin} onClose={()=>{setSelected(null);setPinnedAssetGuid(null)}}
         onSaved={reload} onError={setError}/>}
     </div>
