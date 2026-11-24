@@ -31,6 +31,8 @@ public:
         const std::string& destination,const std::vector<std::filesystem::path>& nativePickerFiles);
     static StudioTransferPlan internal(const std::filesystem::path& project,
         const std::string& destination,const std::vector<std::string>& contentPaths);
+    static StudioTransferPlan rename(const std::filesystem::path& project,
+        const std::string& contentPath,const std::string& newName);
     Json describe() const;
     // Internal no-overwrite moves use an all-or-error reversible sequence.
     // The completion hook runs before the move is considered committed, so

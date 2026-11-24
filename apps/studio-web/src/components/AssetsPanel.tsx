@@ -154,6 +154,8 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
   const [busy,setBusy]=useState(false);
   const [addingFolder,setAddingFolder]=useState(false);
   const [folderName,setFolderName]=useState('');
+  const [renameTarget,setRenameTarget]=useState<string|null>(null);
+  const [renameName,setRenameName]=useState('');
   const [plan,setPlan]=useState<StudioAssetTransferPlan|null>(null);
   const [refreshToken,setRefreshToken]=useState(0);
   // Folder tree width: drag the divider (persisted), double-click resets.
@@ -190,7 +192,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       setError(String(payload.message));
     }
   }),[reload]);
-  useEffect(()=>{setFolder('');setSelected(null);setPinnedAssetGuid(null);setSearch('');setPlan(null);},[projectPath]);
+  useEffect(()=>{setFolder('');setSelected(null);setPinnedAssetGuid(null);setSearch('');setPlan(null);setRenameTarget(null);},[projectPath]);
   // Command palette (# assets) reveals a file: open its folder and select it.
   useEffect(()=>{
     const reveal=(event:Event)=>{
@@ -262,6 +264,15 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     }catch(e){setError(String(e instanceof Error?e.message:e))}
     finally{setBusy(false)}
   };
+  const previewRename=async()=>{
+    if(!native||!projectPath||busy||!renameTarget||!renameName.trim())return;
+    setBusy(true);setError('');setMessage('');
+    try{
+      const result=await invoke('studio.assetMovePreview',{paths:[renameTarget],destination:'',newName:renameName.trim()});
+      setRenameTarget(null);setPlan(result);
+    }catch(e){setError(String(e instanceof Error?e.message:e))}
+    finally{setBusy(false)}
+  };
   const applyTransfer=async(decisions:Array<{id:number;action:StudioAssetConflictAction}>)=>{
     if(!plan||busy)return;
     setBusy(true);setError('');
@@ -271,7 +282,8 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       setMessage(response.files.length+' asset(s) processed'+
         (response.repairedMaterialReferences
           ? ' · '+response.repairedMaterialReferences+' material reference(s) repaired' : '')+
-        (response.issues.length?' · '+response.issues.length+' issue(s)':''));
+        (response.issues.length?' · '+response.issues.length+' issue(s)':'')+
+        (response.files.length&&response.historyRecorded===false?' · Not retained in asset history':''));
       if(response.issues.length)setError(response.issues.map(x=>x.name+': '+x.message).join('; '));
       reload();
     }catch(e){setError(String(e instanceof Error?e.message:e))}
@@ -328,6 +340,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     target.directory
       ?{id:'open',label:'Open Folder',icon:<FolderOpen size={13}/>,onSelect:()=>goTo(target.path)}
       :{id:'settings',label:'Import Settings',icon:<Library size={13}/>,disabled:!native,onSelect:()=>setSelected(target.path)},
+    {id:'rename',label:'Rename…',disabled:!native||!projectPath||busy,onSelect:()=>{setRenameTarget(target.path);setRenameName(assetFileName(target.path));}},
     {id:'copy',label:'Copy Path',icon:<Search size={13}/>,onSelect:()=>copyPath(target.path)},
     ...(target.directory?[]:[{id:'refs',label:'Find References',icon:<Link2 size={13}/>,disabled:!native||!projectPath,
       onSelect:()=>void findReferences(target.path)} as StudioMenuItem]),
@@ -388,6 +401,15 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
         onChange={event=>setFolderName(event.target.value)} placeholder="Folder name"/>
       <button type="submit" disabled={!folderName.trim()||busy}>Create</button>
       <button type="button" onClick={()=>{setAddingFolder(false);setFolderName('')}}>Cancel</button>
+    </form>}
+    {renameTarget&&<form className="studio-assets-create-folder" onSubmit={event=>{
+      event.preventDefault();void previewRename();
+    }}>
+      <span title={renameTarget}>Rename {assetFileName(renameTarget)}</span>
+      <input autoFocus aria-label="New asset filename" value={renameName}
+        onChange={event=>setRenameName(event.target.value)} placeholder="Name (keep file extension)"/>
+      <button type="submit" disabled={!renameName.trim()||busy||renameName.trim()===assetFileName(renameTarget)}>Review</button>
+      <button type="button" disabled={busy} onClick={()=>setRenameTarget(null)}>Cancel</button>
     </form>}
     {creatingMaterial&&<form className="studio-assets-create-folder" onSubmit={event=>{
       event.preventDefault();void createMaterial();

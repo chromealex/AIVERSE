@@ -2147,7 +2147,11 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 if(!path.isString())throw std::runtime_error("Invalid source path");
                 sources.push_back(path.str());
             }
-            pendingAssetTransfer_=StudioTransferPlan::internal(ws_.project.dir,
+            if(params.has("newName")){
+                if(sources.size()!=1||!params["newName"].isString())
+                    throw std::runtime_error("Rename requires one asset and a filename");
+                pendingAssetTransfer_=StudioTransferPlan::rename(ws_.project.dir,sources.front(),params.getStr("newName"));
+            }else pendingAssetTransfer_=StudioTransferPlan::internal(ws_.project.dir,
                 params.getStr("destination"),sources);
             Json preview=pendingAssetTransfer_->describe();
             StudioAssetCatalog catalog(ws_.project.dir);

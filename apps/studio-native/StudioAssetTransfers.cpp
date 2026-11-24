@@ -210,6 +210,22 @@ StudioTransferPlan StudioTransferPlan::internal(const fs::path& project,
     for(const auto& p:paths)source.push_back(checkedSource(project,p));
     return plan(project,folder,StudioTransferType::Move,source);
 }
+StudioTransferPlan StudioTransferPlan::rename(const fs::path& project,
+    const std::string& path,const std::string& newName){
+    validateSegment(newName);
+    const auto source=checkedSource(project,path);
+    const auto directory=fs::is_directory(fs::symlink_status(source));
+    if(newName==source.filename().string())throw std::runtime_error("Asset already has that name");
+    if(!directory&&fs::path(newName).extension()!=source.extension())
+        throw std::runtime_error("Rename must preserve file extension and importer");
+    const auto parent=fs::path(path).parent_path().generic_string();
+    auto result=internal(project,parent=="."?"":parent,{path});
+    auto& entry=result.entries_.front();
+    entry.destination=source.parent_path()/newName;
+    entry.relativeDestination=entry.destination.lexically_relative(studioContentRoot(project)).generic_string();
+    entry.conflict=existsOrSymlink(entry.destination)||existsOrSymlink(studioMetaPath(entry.destination))?"name":"";
+    return result;
+}
 StudioTransferPlan StudioTransferPlan::plan(const fs::path& project,
     const std::string& destination,StudioTransferType type,
     const std::vector<fs::path>& sources){

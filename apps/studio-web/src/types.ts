@@ -60,6 +60,7 @@ export interface StudioAssetTransferPlan {
 export type StudioAssetConflictAction =
   'import' | 'skip' | 'keep-both' | 'replace' | 'new-guid';
 export interface StudioAssetTransferResult {
+  historyRecorded?: boolean;
   files: string[]; issues: Array<{name: string; message: string}>;
   repairedMaterialReferences?: number;
 }
@@ -357,7 +358,7 @@ export interface StudioParams {
   'studio.assetReferences': Record<string, never>;
   'studio.assetMetaPatch': {guid:string;key:string;value:string|number|boolean};
   'studio.assetFolderCreate': { parent: string; name: string };
-  'studio.assetMovePreview': { paths: string[]; destination: string };
+  'studio.assetMovePreview': { paths: string[]; destination: string; newName?: string };
   'studio.assetImportPreview': { destination: string };
   'studio.assetTransferCommit': { token: string; decisions: Array<{id:number;action:StudioAssetConflictAction}> };
   'studio.materials': Record<string, never>;
