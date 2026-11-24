@@ -30,7 +30,8 @@ inline Json studioPlanetForestDocument(const editor::MapDoc& doc,const Json& rul
         Json row=Json::object();row.set("id",Json::string(e.id));row.set("type",Json::string(e.type));
         row.set("placement",e.at);markers.push(std::move(row));
     }
-    out.set("markers",std::move(markers));return out;
+    Json presets=Json::array();for(const auto& preset:terraweave::botanicalTreePresets())presets.push(Json::string(std::string(preset.name)));
+    out.set("presets",std::move(presets));out.set("markers",std::move(markers));return out;
 }
 inline void validateStudioPlanetForest(const editor::MapDoc& doc,const Json& rules,
         const Json& forest,const Json& catalog){

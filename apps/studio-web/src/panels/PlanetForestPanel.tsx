@@ -1,0 +1,99 @@
+import {useEffect,useState} from 'react';
+import {invoke,onNativeEvent} from '../bridge';
+import type {StudioPlanetForestDocument,StudioPlanetForestLive} from '../types';
+import {object,rows,patchRow,removeRow,nextId,collisionMode,type ForestRecord} from './planetForestSchema';
+import './PlanetForestPanel.css';
+
+type NumSpec=readonly [string,string,number,number,number];
+const cadence:NumSpec[]=[['growthInterval','Growth interval (ticks)',32,1,100000],['decayInterval','Decay interval (ticks)',64,1,100000],['nutrientInterval','Nutrient interval (ticks)',256,1,100000],['baselineNutrients','Baseline nutrients (‰)',500,0,1000],['maxPlants','Max plants',4096,1,4096],['naturalFallPermille','Natural fall threshold (‰)',0,0,1000]];
+const ecology:NumSpec[]=[['id','Species ID',1,1,1000000],['matureTicks','Maturity (ticks)',120000,1,1000000000],['lifespanTicks','Lifespan (ticks)',2400000,2,1000000000],['seedIntervalTicks','Seed interval (ticks)',24000,1,1000000000],['seedSpreadCm','Seed spread (cm)',700,50,20000],['shadeDeathTicks','Shade death (ticks)',240000,1,1000000000],['floodDeathTicks','Flood death (ticks)',80000,1,1000000000],['droughtDeathTicks','Drought death (ticks)',240000,1,1000000000]];
+const profile:NumSpec[]=[['id','Species ID',1,1,1000000],['prototypeSeed','Prototype seed',1,0,2147483647],['minHeightCm','Min height (cm)',800,100,100000],['maxHeightCm','Max height (cm)',1500,100,100000]];
+const custom:NumSpec[]=[['trunkRadiusCm','Trunk radius (cm)',24,1,10000],['branches','Branches',22,0,256],['leafRadiusCm','Leaf radius (cm)',95,0,100000],['whorlSize','Whorl size',0,0,8]];
+function Numbers({data,specs,change}:{data:ForestRecord;specs:NumSpec[];change:(patch:ForestRecord)=>void}){
+  return <>{specs.map(([key,label,def,min,max])=><label className="pf-row" key={key}><span>{label}</span><input className="au-input" type="number" min={min} max={max} step={1} value={data[key]===undefined?'':String(data[key])} placeholder={String(def)} onChange={e=>change({[key]:e.target.value===''?undefined:Number(e.target.value)})}/></label>)}</>;
+}
+const err=(e:unknown)=>e instanceof Error?e.message:String(e);
+export default function PlanetForestPanel({historyVersion,onChanged}:{historyVersion?:string;onChanged:()=>void}){
+  const [base,setBase]=useState<StudioPlanetForestDocument|null>(null);
+  const [forest,setForest]=useState<ForestRecord|null>(null),[catalog,setCatalog]=useState<ForestRecord|null>(null);
+  const [override,setOverride]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  const [dirty,setDirty]=useState(false),[stale,setStale]=useState(false),[live,setLive]=useState<StudioPlanetForestLive|null>(null);
+  const [body,setBody]=useState(''),[filter,setFilter]=useState('');
+  function accept(d:StudioPlanetForestDocument){setBase(d);setForest(d.forest===null?null:object(d.forest));setCatalog(d.catalog===null?null:object(d.catalog));setOverride(d.override);setDirty(false);setStale(false);setLive(null);}
+  async function reload(){setBusy(true);setError('');try{accept(await invoke('studio.planetForest',{}));}catch(e){setError(err(e));}finally{setBusy(false);}}
+  useEffect(()=>{void reload();},[]); // mount per project
+  useEffect(()=>{if(base)setStale(true);},[historyVersion]); // do not discard a pending draft
+  useEffect(()=>onNativeEvent(event=>{if(event==='document.changed'){setStale(true);setLive(null);}}),[]);
+  function editForest(next:ForestRecord|null){setForest(next);setOverride(next!==null);setDirty(true);}
+  function editCatalog(next:ForestRecord|null){setCatalog(next);setDirty(true);}
+  async function apply(){if(!base)return;setBusy(true);setError('');try{
+    const d=await invoke('studio.planetForestSet',{mapPath:base.mapPath,expectedRevision:base.revision,forest:override?forest:null,catalog});
+    accept(d);onChanged();
+  }catch(e){setError(err(e));}finally{setBusy(false);}}
+  async function sample(){setError('');try{setLive(await invoke('studio.planetForestLive',{}));}catch(e){setError(err(e));}}
+  if(!base)return <section className="rules__form">{error||'Loading planet forest…'} <button onClick={()=>void reload()}>Reload</button></section>;
+  if(!base.available)return <section className="rules__form">Planetary map required. <button onClick={()=>void reload()}>Reload</button></section>;
+  const species=rows(forest?.species),plants=rows(forest?.plants),weather=rows(forest?.weather),profiles=rows(catalog?.species);
+  const bodies=[...new Set(base.markers.map(m=>m.placement.body))];
+  const markers=base.markers.filter(m=>!body||m.placement.body===body);
+  const patch=(key:string,i:number,p:ForestRecord)=>forest&&editForest(patchRow(forest,key,i,p));
+  const markerPicker=(value:unknown,change:(v:string)=>void)=><select className="au-input" value={String(value??'')} onChange={e=>change(e.target.value)}>
+    <option value="">Choose existing surface marker</option>{value&&!base.markers.some(m=>m.id===value)&&<option value={String(value)}>Missing: {String(value)}</option>}
+    {base.markers.map(m=><option key={m.id} value={m.id}>{m.id} · {m.placement.body} / {m.placement.face}</option>)}</select>;
+  return <section className="rules__form pf">
+    <div className="pf-toolbar"><h3>Planet forest</h3><button disabled={busy} onClick={()=>void reload()}>{dirty?'Discard & reload':'Reload'}</button><button disabled={busy||!dirty||stale} onClick={()=>void apply()}>Apply to map</button></div>
+    {error&&<div className="rules__error" role="alert">{error}</div>}
+    {stale&&<p className="pf-note">Document changed. Reload before applying; draft has not been overwritten.</p>}
+    <p className="pf-note">Map-owned override · Undo/Redo via document history. Save the map and restart local Play. Native physics authority is configured by the host, not this panel.</p>
+    {!base.moduleEnabled&&<p className="pf-note">world_processes native module is not installed in this project. Only the visual ARBOR catalogue can be edited.</p>}
+    <fieldset disabled={busy} className="rules__group"><legend>Simulation</legend>
+      <label className="pf-row"><span>Map override</span><input type="checkbox" checked={override} disabled={!base.moduleEnabled} onChange={e=>{setOverride(e.target.checked);if(e.target.checked&&!forest)setForest({species:[{id:1}],plants:[]});setDirty(true);}}/></label>
+      <p className="pf-note">{override?'Use this map’s simulation settings':'Inherit native module rules'} · physics requested: {base.physicsRequested?'yes':'no'}</p>
+      {override&&forest&&<Numbers data={forest} specs={cadence} change={p=>editForest({...forest,...p})}/>}
+    </fieldset>
+    {override&&forest&&<>
+    <fieldset disabled={busy} className="rules__group"><legend>Ecology species</legend>
+      {species.map((row,i)=><details key={i} open={i===0}><summary>Species {String(row.id??i+1)}</summary>
+        <Numbers data={row} specs={ecology} change={p=>patch('species',i,p)}/>
+        <label className="pf-row"><span>Collision</span><select className="au-input" value={!row.naturalFallBody?'none':object(row.naturalFallBody).fromArbor?'arbor':'capsule'} onChange={e=>editForest({...forest,species:species.map((r,j)=>j===i?collisionMode(r,e.target.value):r)})}><option value="none">None / external owner</option><option value="arbor">ARBOR trunk</option><option value="capsule">Manual capsule</option></select></label>
+        {!!row.naturalFallBody&&<Numbers data={object(row.naturalFallBody)} specs={[...(object(row.naturalFallBody).fromArbor?[]:[['radiusCm','Radius (cm)',15,2,100000],['halfHeightCm','Half height (cm)',200,2,100000]] as NumSpec[]),['density','Density',600,1,1000000],['frictionPermille','Friction (‰)',500,0,10000]]} change={p=>patch('species',i,{naturalFallBody:{...object(row.naturalFallBody),...p}})}/>}
+        <button onClick={()=>editForest(removeRow(forest,'species',i))}>Remove species</button>
+      </details>)}
+      <button disabled={species.length>=64} onClick={()=>editForest({...forest,species:[...species,{id:nextId(species,'id')}]})}>Add species</button>
+    </fieldset>
+    <fieldset disabled={busy} className="rules__group"><legend>Rooted plants</legend>
+      <label className="pf-row"><span>Planet / moon</span><select className="au-input" value={body} onChange={e=>setBody(e.target.value)}><option value="">All bodies</option>{bodies.map(b=><option key={b}>{b}</option>)}</select></label>
+      <label className="pf-row"><span>Search markers</span><input className="au-input" value={filter} onChange={e=>setFilter(e.target.value)}/></label>
+      {plants.map((row,i)=>({row,i})).filter(({row})=>(!body||base.markers.find(m=>m.id===row.entity)?.placement.body===body)&&String(row.entity??'').toLowerCase().includes(filter.toLowerCase())).map(({row,i})=><details key={i}><summary>{String(row.entity??'Unbound')} · {String(row.species)}:{String(row.key)}</summary>
+        <label className="pf-row"><span>Surface marker</span>{markerPicker(row.entity,v=>patch('plants',i,{entity:v}))}</label>
+        <label className="pf-row"><span>Species</span><select className="au-input" value={String(row.species??'')} onChange={e=>patch('plants',i,{species:Number(e.target.value)})}><option value="">Choose species</option>{species.map((r,j)=><option key={j} value={String(r.id)}>{String(r.id)}</option>)}</select></label>
+        <Numbers data={row} specs={[['key','Stable plant key',1,1,1000000000],['ageTicks','Initial age (ticks; blank = mature)',0,0,1000000000]]} change={p=>patch('plants',i,p)}/>
+        <label className="pf-row"><span>Habit</span><select className="au-input" value={String(row.habit??'tree')} onChange={e=>patch('plants',i,{habit:e.target.value})}><option>tree</option><option>shrub</option></select></label>
+        <button onClick={()=>editForest(removeRow(forest,'plants',i))}>Remove plant</button>
+      </details>)}
+      <button disabled={!markers.length||!species.length||plants.length>=4096} onClick={()=>editForest({...forest,plants:[...plants,{entity:markers[0].id,species:species[0].id,key:nextId(plants,'key'),habit:'tree'}]})}>Add plant at marker</button>
+    </fieldset>
+    <fieldset disabled={busy} className="rules__group"><legend>PHYSIS weather mappings</legend>
+      {weather.map((row,i)=><details key={i}><summary>{String(row.entity??'Unbound')}</summary><label className="pf-row"><span>Marker</span>{markerPicker(row.entity,v=>patch('weather',i,{entity:v}))}</label><Numbers data={row} specs={[['x','Climate cell X',0,-1000000,1000000],['z','Climate cell Z',0,-1000000,1000000],['coverageMetres','Coverage (m)',32,1,4096]]} change={p=>patch('weather',i,p)}/><button onClick={()=>editForest(removeRow(forest,'weather',i))}>Remove mapping</button></details>)}
+      <button disabled={!markers.length} onClick={()=>editForest({...forest,weather:[...weather,{entity:markers[0].id,x:0,z:0,coverageMetres:32}]})}>Add mapping</button>
+    </fieldset></>}
+    <fieldset disabled={busy} className="rules__group"><legend>ARBOR visual catalogue</legend>
+      {!catalog?<button onClick={()=>editCatalog({species:[{id:1,preset:'oak'}]})}>Create catalogue</button>:<>
+      <label className="pf-row"><span>Botanical textures (content folder)</span><input className="au-input" value={String(catalog.botanicalTextures??'')} onChange={e=>editCatalog({...catalog,botanicalTextures:e.target.value})}/></label>
+      {profiles.map((row,i)=><details key={i}><summary>ARBOR {String(row.id??i+1)} · {String(row.preset??row.shape??'custom')}</summary>
+        <label className="pf-row"><span>Preset</span><select className="au-input" value={String(row.preset??'')} onChange={e=>editCatalog(patchRow(catalog,'species',i,{preset:e.target.value||undefined}))}><option value="">Custom</option>{(base.presets??[]).map(p=><option key={p}>{p}</option>)}</select></label>
+        <Numbers data={row} specs={profile} change={p=>editCatalog(patchRow(catalog,'species',i,p))}/>
+        {!row.preset&&<><label className="pf-row"><span>Crown shape</span><select className="au-input" value={String(row.shape??'broadleaf')} onChange={e=>editCatalog(patchRow(catalog,'species',i,{shape:e.target.value}))}><option>broadleaf</option><option>conifer</option><option>columnar</option></select></label><Numbers data={row} specs={custom} change={p=>editCatalog(patchRow(catalog,'species',i,p))}/></>}
+        <button onClick={()=>editCatalog(removeRow(catalog,'species',i))}>Remove profile</button>
+      </details>)}
+      <button disabled={profiles.length>=64} onClick={()=>editCatalog({...catalog,species:[...profiles,{id:nextId(profiles,'id'),preset:'oak'}]})}>Add ARBOR profile</button>
+      <button onClick={()=>editCatalog(null)}>Remove catalogue</button></>}
+    </fieldset>
+    <fieldset className="rules__group"><legend>Live forest inspector</legend><button onClick={()=>void sample()}>Sample completed tick</button>
+      {live&&!live.active&&<p className="pf-note">Start local Play with the current saved planetary map.</p>}
+      {live?.active&&<><p>Tick {live.tick} · plants {live.plantCount} · dead {live.deadCount} · fallen {live.fallenCount} · spent {live.spentCount} · physical {live.physicalCount} · pending {live.pendingCount}</p>
+      {live.truncated&&<p className="pf-note">First 128 plants only.</p>}
+      {(live.plants??[]).map(p=><details key={p.species+':'+p.key}><summary>{p.body} · {p.species}:{p.key} · {p.spent?'spent':p.harvested?'harvested':p.physical?'physical':p.pending?'pending':p.fallen?'fallen':p.dead?'dead':'standing'}</summary><p>Cell {p.cell} · age {p.ageTicks} · root support {p.supportPermille}‰</p><p>Wood {p.remainingUnits??'—'} / {p.initialUnits??'—'} · motion tick {p.motionTick??'—'} {p.awake?'· awake':''}</p></details>)}</>}
+    </fieldset>
+  </section>;
+}

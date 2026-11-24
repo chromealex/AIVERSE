@@ -73,6 +73,7 @@ function ComponentCard({ component, entityId, busy, collapsed, onToggle, onChang
             window.dispatchEvent(new CustomEvent('studio:show-panel', { detail: 'rules' }));
             window.setTimeout(() => window.dispatchEvent(new CustomEvent('studio:rules-type', { detail: type })), 0); }}>
           Edit type “{String(component.properties.find(p => p.key === 'type')?.value)}” in Rules →</button>}
+      {component.id === 'PlanetForestMarker' && <button type="button" className="insp-link" onClick={()=>{window.dispatchEvent(new CustomEvent('studio:show-panel',{detail:'rules'}));window.setTimeout(()=>window.dispatchEvent(new CustomEvent('studio:rules-forest')),0);}}>Edit planetary forest →</button>}
       {component.id === 'GranularField' && <GranularGridEditor
         properties={component.properties} disabled={busy}
         onCommit={serialized => onChange('grid', serialized)}/>}
