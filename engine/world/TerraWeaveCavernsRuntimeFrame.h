@@ -62,8 +62,8 @@ public:
     }
     void onEditedVolume(CaveDirtyBounds bounds,
                         std::shared_ptr<const CaveVolumeSnapshot> snapshot) {
-        if(closed_||physicsBarrier_.status().recoveryRequired)
-            throw std::runtime_error("Caverns world closed or needs recovery");
+        if(closed_||restoring_||physicsBarrier_.status().recoveryRequired)
+            throw std::runtime_error("Caverns world closed, restoring or needs recovery");
         host_.edited(bounds,std::move(snapshot));
         recordNavigationBounds(bounds);
         readyStreamBuilds_.clear();
@@ -94,13 +94,13 @@ public:
         if(!restoring_||closed_||physicsBarrier_.status().recoveryRequired||
            !exclusive||!exclusive()||!s.requestedRevision||
            s.requestedRevision!=s.committedRevision||navigationBus_.hasPending()||
-           !navigationBus_.active())return false;
+           !navigationBus_.active()||!navigationBus_.active()->environmentRevision())return false;
         restoring_=false;return true;
     }
     bool restoringAuthoredWorld()const noexcept{return restoring_;}
     bool onAuthoringOperation(const Json& response,
                              std::shared_ptr<const CaveVolumeSnapshot> snapshot) {
-        if(closed_||physicsBarrier_.status().recoveryRequired)return false;
+        if(closed_||restoring_||physicsBarrier_.status().recoveryRequired)return false;
         const bool accepted=host_.consumeAuthoringOperation(response,std::move(snapshot));
         if(accepted){
             const Json& b=response["dirtyBounds"];
@@ -317,9 +317,7 @@ public:
     // callback; never invoke this against visual-only client preview.
     nav::CaveRouteTickStats updateEcsRouteFollowing(
         World& world,const nav::CaveMovementCollision& collision) {
-        if(closed_||physicsBarrier_.status().recoveryRequired ||
-           navigationBus_.hasPending())return {};
-        const auto data=navigationBus_.active();
+        const auto data=gameplayNavigationSource();
         if(!data)return {};
         return nav::updateCaveRouteFollowers(world,*data,collision);
     }
