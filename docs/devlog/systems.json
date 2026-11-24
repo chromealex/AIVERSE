@@ -1822,10 +1822,10 @@
           "textEn": "Authored overrides release old pins, GI validates generations, transaction/reuse regression authored. Integrated verification pending."
         },
         {
-          "name": "Texture Graph GPU — Stage 38T (в работе)",
-          "text": "Владение снимками LENS и изоляция процедурных изображений от файлового кэша.",
-          "nameEn": "Texture Graph GPU — Stage 38T (in progress)",
-          "textEn": "LENS attachment snapshot ownership and procedural image cache isolation."
+          "name": "Texture Graph GPU — Stage 38T (частично)",
+          "text": "LENS владеет снимками attachments; процедурные текстуры изолированы от файлового кэша и дедупликации. Интеграционная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38T (partial)",
+          "textEn": "LENS owns attachment snapshots; runtime images isolated from file cache and name deduplication. Integrated verification pending."
         }
       ],
       "enables": [
