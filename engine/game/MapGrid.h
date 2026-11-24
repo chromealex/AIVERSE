@@ -127,6 +127,8 @@ struct MapPathWorkCounter {
 struct MapPathTelemetry {
     uint64_t cellInvalidations=0;
     MapPathWorkCounter flatHpa,flowFull,flowCluster;
+    std::vector<int> recentCellIds,lastHpaClusterIds;
+    uint8_t lastHpaLayer=0;
 };
 struct MapGrid {
     int w = 0, h = 0;
