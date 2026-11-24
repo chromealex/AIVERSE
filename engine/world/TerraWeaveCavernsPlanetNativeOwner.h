@@ -6,6 +6,7 @@
 #include <map>
 #include <set>
 #include <functional>
+#include <iterator>
 
 namespace aiverse::terraweave::caverns {
 enum class CavePlanetSlotKind:uint8_t { Surface,Volume };
@@ -13,9 +14,11 @@ struct CavePlanetSlotId {
     CavePlanetSlotKind kind=CavePlanetSlotKind::Volume;
     CavePlanetSurfaceSlotKey surface{};
     ChunkKey3 volume{};
+    uint64_t region=1; // legacy single-chart callers retain region 1
 };
 struct CavePlanetSlotLess {
     bool operator()(const CavePlanetSlotId& a,const CavePlanetSlotId& b)const{
+        if(a.region!=b.region)return a.region<b.region;
         if(a.kind!=b.kind)return a.kind<b.kind;
         if(a.kind==CavePlanetSlotKind::Surface)return a.surface<b.surface;
         return KeyLess{}(a.volume,b.volume);
@@ -25,10 +28,10 @@ struct CavePlanetNativeSlot {
     CavePlanetSlotId id;
     CavePlanetNativePayload payload;
 };
-// One explicitly owned chart per body in this first native path. Complete
-// replacement sets must include all prior slots (empty tombstones allowed
-// for volume). No caller may reuse another chart's native IDs or baseline
-// surface colliders. The actual host holds exclusive readers across commit.
+// One native owner per body. Region-qualified slots share one geometry
+// transaction, physics barrier and renderer cut epoch. Complete replacement
+// sets include all prior slots (empty tombstones allowed for volume).
+// The actual host holds exclusive readers across commit.
 class CavePlanetNativeOwner {
 public:
     using Exclusive=CaveGameplayPhysicsBarrier::ExclusiveProof;
@@ -47,63 +50,114 @@ public:
     // frozen plan. The native host reserves globally distinct owner cells,
     // supplies volume replacements and keeps the same chart recipe.
     using SurfaceCellAllocator=std::function<world::Cell(const CavePlanetSurfaceSlotKey&)>;
+    using BodySurfaceCellAllocator=std::function<world::Cell(uint64_t,const CavePlanetSurfaceSlotKey&)>;
     bool stageCut(gfx::Device& device,const world::SpatialWorld& spatial,
             std::shared_ptr<const CavePlanetCutPlan> plan,
             std::vector<CavePlanetNativeSlot> volume,uint64_t nativeRevision,
             const SurfaceCellAllocator& surfaceCells,const ColliderIds& reserveIds){
-        if(!plan||!surfaceCells||plan->slots.size()>64||volume.size()>64)return false;
-        for(const auto& slot:volume)if(slot.id.kind!=CavePlanetSlotKind::Volume)return false;
-        volume.reserve(volume.size()+plan->slots.size());
-        for(const auto& [key,item]:plan->slots){
-            (void)item;
+        if(!plan||!surfaceCells||!sameCavePlanetAnchor(plan->anchor,frame_.anchor()))return false;
+        auto body=std::make_shared<const CavePlanetBodyCutPlan>(singlePlanetBodyCut(std::move(plan)));
+        return stageBodyCut(device,spatial,std::move(body),std::move(volume),nativeRevision,
+            [&](uint64_t,const CavePlanetSurfaceSlotKey& key){return surfaceCells(key);},reserveIds);
+    }
+    bool stageBodyCut(gfx::Device& device,const world::SpatialWorld& spatial,
+            std::shared_ptr<const CavePlanetBodyCutPlan> plan,
+            std::vector<CavePlanetNativeSlot> volume,uint64_t nativeRevision,
+            const BodySurfaceCellAllocator& surfaceCells,const ColliderIds& reserveIds){
+        if(!plan||!surfaceCells||volume.size()>64||plan->bodyId!=frame_.anchor().bodyId)return false;
+        const auto slots=collectPlanetBodyCutSlots(*plan);
+        const auto frames=certifyPlanetBodyCut(*plan,frame_.sharedSurface());
+        for(const auto& slot:volume)if(slot.id.kind!=CavePlanetSlotKind::Volume||
+            !frames.contains(slot.id.region))return false;
+        volume.reserve(volume.size()+slots.size());
+        for(const auto& [key,ref]:slots){
             CavePlanetNativeSlot slot;
-            slot.id.kind=CavePlanetSlotKind::Surface;slot.id.surface=key;
-            slot.payload=prepareCavePlanetCutSlotPayload(frame_,*plan,key,surfaceCells(key),nativeRevision);
+            slot.id.kind=CavePlanetSlotKind::Surface;slot.id.surface=key;slot.id.region=ref.region;
+            slot.payload=prepareCavePlanetCutSlotPayload(frames.at(ref.region),*plan->regions.at(ref.region),
+                key,surfaceCells(ref.region,key),nativeRevision);
             volume.push_back(std::move(slot));
         }
-        return stage(device,spatial,std::move(plan),std::move(volume),nativeRevision,reserveIds);
+        return stageBody(device,spatial,std::move(plan),std::move(volume),nativeRevision,reserveIds);
     }
     bool stage(gfx::Device& device,const world::SpatialWorld& spatial,
             std::shared_ptr<const CavePlanetCutPlan> plan,
             std::vector<CavePlanetNativeSlot> slots,uint64_t nativeRevision,
             const ColliderIds& reserveIds){
+        if(!plan||!sameCavePlanetAnchor(plan->anchor,frame_.anchor()))return false;
+        return stageBody(device,spatial,std::make_shared<const CavePlanetBodyCutPlan>(
+            singlePlanetBodyCut(std::move(plan))),std::move(slots),nativeRevision,reserveIds);
+    }
+    bool stageBody(gfx::Device& device,const world::SpatialWorld& spatial,
+            std::shared_ptr<const CavePlanetBodyCutPlan> plan,
+            std::vector<CavePlanetNativeSlot> slots,uint64_t nativeRevision,
+            const ColliderIds& reserveIds){
         if(recoveryRequired()||staged()||!plan||!reserveIds||!nativeRevision||
-           nativeRevision<=activeRevision_||!sameCavePlanetAnchor(plan->anchor,frame_.anchor())||
-           !plan->surfaceEpoch||!plan->surfaceRevision||!plan->authorityRevision||
+           nativeRevision<=activeRevision_||plan->bodyId!=frame_.anchor().bodyId||
+           !plan->surfaceEpoch||!plan->surfaceRevision||
            (activePlan_&&plan->surfaceEpoch<=activePlan_->surfaceEpoch)||
            slots.empty()||slots.size()>128||(device_&&device_!=&device)||(spatial_&&spatial_!=&spatial))return false;
+        const auto leafSlots=collectPlanetBodyCutSlots(*plan);
+        const auto frames=certifyPlanetBodyCut(*plan,frame_.sharedSurface());
+        if(activePlan_)for(const auto& [id,previous]:activePlan_->regions){
+            const auto it=plan->regions.find(id);
+            if(it==plan->regions.end()||!sameCavePlanetAnchor(previous->anchor,it->second->anchor))return false;
+        }
         std::set<CavePlanetSlotId,CavePlanetSlotLess> wanted;
         std::set<CavePlanetSurfaceSlotKey> surfaceKeys;
         std::set<world::Cell> cells;
-        std::vector<world::Triangle> volumeTriangles;
-        size_t totalTriangles=0;
+        std::map<uint64_t,std::vector<world::Triangle>> volumeTriangles;
+        size_t totalTriangles=0,volumeSlots=0;
         const auto anchor=game::Surface::anchor(frame_.body());
         for(const auto& slot:slots){
             const auto& p=slot.payload;
+            const auto fr=frames.find(slot.id.region);
+            if(fr==frames.end())return false;
+            const auto& regionFrame=fr->second;
             if(!wanted.insert(slot.id).second||!cells.insert(p.collision.cell).second||
-               p.body!=frame_.body()||!sameCavePlanetAnchor(p.anchor,frame_.anchor())||
+               p.body!=frame_.body()||!sameCavePlanetAnchor(p.anchor,regionFrame.anchor())||
                p.collision.revision!=nativeRevision||p.collision.triangles.size()>65534||
                p.collision.triangles.empty()!=(!p.model))return false;
             if(p.collision.triangles.size()>262144-totalTriangles)return false;
             totalTriangles+=p.collision.triangles.size();
             if(slot.id.kind==CavePlanetSlotKind::Surface){
-                const auto it=plan->slots.find(slot.id.surface);
-                if(it==plan->slots.end()||!surfaceKeys.insert(slot.id.surface).second||
-                   p.collision.triangles.size()!=it->second.bodyTriangles.size())return false;
+                const auto it=leafSlots.find(slot.id.surface);
+                if(it==leafSlots.end()||it->second.region!=slot.id.region||
+                   !surfaceKeys.insert(slot.id.surface).second||
+                   p.collision.triangles.size()!=it->second.slot->bodyTriangles.size())return false;
                 for(size_t i=0;i<p.collision.triangles.size();++i){
-                    const auto& a=p.collision.triangles[i];const auto& b=it->second.bodyTriangles[i];
+                    const auto& a=p.collision.triangles[i];const auto& b=it->second.slot->bodyTriangles[i];
                     if(a.a!=b.a+anchor||a.b!=b.b+anchor||a.c!=b.c+anchor)return false;
                 }
             }else if(slot.id.kind==CavePlanetSlotKind::Volume){
+                if(++volumeSlots>64)return false;
                 for(const auto& t:p.collision.triangles)for(const auto& v:{t.a,t.b,t.c})
-                    frame_.checkLocal(frame_.fromSimulation(v));
-                volumeTriangles.insert(volumeTriangles.end(),p.collision.triangles.begin(),p.collision.triangles.end());
+                    regionFrame.checkLocal(regionFrame.fromSimulation(v));
+                auto& triangles=volumeTriangles[slot.id.region];
+                triangles.insert(triangles.end(),p.collision.triangles.begin(),p.collision.triangles.end());
             }else return false;
         }
-        if(surfaceKeys.size()!=plan->slots.size())return false;
+        if(surfaceKeys.size()!=leafSlots.size())return false;
         for(const auto& key:activeSlots_)if(!wanted.contains(key))return false;
-        for(const auto& rim:plan->rims)
-            if(!planetRimNativeBoundaryMatches(frame_,rim,volumeTriangles))return false;
+        for(const auto& [id,region]:plan->regions)for(const auto& rim:region->rims)
+            if(!planetRimNativeBoundaryMatches(frames.at(id),rim,volumeTriangles[id]))return false;
+        // Reserve and validate all candidate ranges across charts before
+        // staging any physics shadow. Existing live ranges are also fenced.
+        std::map<CavePlanetSlotId,uint32_t,CavePlanetSlotLess> firstIds;
+        std::map<uint64_t,uint64_t> ranges;
+        for(const auto& slot:slots){
+            const auto count=slot.payload.collision.triangles.size();
+            const uint32_t first=count?reserveIds(slot.id,count):0;
+            if(count){
+                const uint64_t end=uint64_t(first)+count;
+                if(!first||end>uint64_t(UINT32_MAX)+1)return false;
+                const auto after=ranges.lower_bound(first);
+                if((after!=ranges.end()&&after->first<end)||
+                   (after!=ranges.begin()&&std::prev(after)->second>first))return false;
+                for(uint64_t n=first;n<end;++n)if(spatial.colliders().contains(uint32_t(n)))return false;
+                ranges.emplace(first,end);
+            }
+            firstIds.emplace(slot.id,first);
+        }
         // Existing physics shadows own ranges and bodies; reserve every
         // candidate ID before installation. Nothing live changes here.
         std::vector<CaveVolumePhysicsStage*> prepared;prepared.reserve(slots.size());
@@ -125,12 +179,12 @@ public:
                 // trusting caller-supplied native body or Model buffers.
                 const auto userData=p.collision.body.userData;
                 p.collision.body={};p.model=buildExactCavePayload(p.collision,p.simulationOrigin,userData);
-                const auto first=p.collision.triangles.empty()?0:reserveIds(slot.id,p.collision.triangles.size());
+                const auto first=firstIds.at(slot.id);
                 if(!stage->prepareExact(p.collision,first,spatial)){cancel();return false;}
                 prepared.push_back(stage.get());
                 // Surface is drawn by PlanetRenderer only, never GeometryScene.
                 if(slot.id.kind!=CavePlanetSlotKind::Volume||!p.model)continue;
-                const auto name="planet-cave/"+std::to_string(ordinal++);
+                const auto name="planet-cave/"+std::to_string(slot.id.region)+"/"+std::to_string(ordinal++);
                 const auto origin=p.simulationOrigin-anchor;
                 Json pos=Json::array();for(auto v:{origin.x,origin.y,origin.z})pos.push(Json::number(v.toDouble()));
                 Json inst=Json::object();inst.set("model",Json::string(name));inst.set("position",std::move(pos));
@@ -166,7 +220,7 @@ public:
         blocked_=true;box_=&box;planet_=&planet;
         bool irreversible=false;
         try{
-            const bool published=planet.installCaveSurfaceCut(frame_.body(),*pendingPlan_,exclusive,[&]{
+            const bool published=planet.installCaveBodyCut(frame_.body(),*pendingPlan_,surfaceEpoch(),exclusive,[&]{
                 return geometry_.activate([&](uint64_t rev){
                     if(rev!=revision||!exclusive())return false;
                     // All fallible planet buffers are staged first.
@@ -230,7 +284,7 @@ public:
                 auto& stage=*physics_.at(key);stage.boxOwner().unload(box);stage.spatialOwner().unload(spatial);
             }
             if(!exclusive()||!restoreOriginalsAndRetireNavGi()||
-               !planet.clearCaveSurfaceCut(frame_.body(),exclusive)||!geometry_.shutdownAfterGpuIdle(device)){
+               !planet.clearCaveBodyCut(frame_.body(),surfaceEpoch(),exclusive)||!geometry_.shutdownAfterGpuIdle(device)){
                 barrier_.requireRecovery();return false;
             }
             physics_.clear();activeSlots_.clear();activePlan_.reset();activeRevision_=0;blocked_=false;
@@ -243,7 +297,7 @@ private:
     CaveGameplayPhysicsBarrier barrier_;
     std::map<CavePlanetSlotId,std::unique_ptr<CaveVolumePhysicsStage>,CavePlanetSlotLess> physics_;
     std::set<CavePlanetSlotId,CavePlanetSlotLess> activeSlots_,pendingSlots_;
-    std::shared_ptr<const CavePlanetCutPlan> activePlan_,pendingPlan_;
+    std::shared_ptr<const CavePlanetBodyCutPlan> activePlan_,pendingPlan_;
     uint64_t activeRevision_=0,pendingRevision_=0;
     bool blocked_=false;
     gfx::Device* device_=nullptr;const world::SpatialWorld* spatial_=nullptr;
