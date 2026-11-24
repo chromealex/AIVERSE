@@ -104,7 +104,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 34A in progress: bounded explicit compute pass scheduling with initialized resource validation and dispatch failure propagation. Parallel Stage 34B: deterministic bounded physical slot assignment and immediate output pack planning in progress.",
+      "note": "Stage 34B bounded GPU slot allocation plan implemented in source; separate 34A pass schedule remains owner integration work. No GPU execution or allocation claimed.",
       "evidence": []
     },
     "architecture": {
@@ -174,7 +174,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 32A/33A standalone policy evidence retained in handoffs; Stage 33B standalone exact-source C++20 DAG liveness fixture PASS (Linux GCC 14.2); integrated parity fixture, CTest, native/Studio/GPU and Mac gate NOT RUN.",
+      "note": "Stage 34B isolated exact-blob C++20 slot planning PASS (GCC 14.2); full CTest, native GPU, Studio and Mac gate NOT RUN.",
       "evidence": []
     },
     "handoff": {
