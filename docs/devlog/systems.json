@@ -659,12 +659,12 @@
    ],
    "roadmap": [
     {
-     "status": "in-progress",
+     "status": "done",
      "date": "2026-11-24",
      "title": "Камера view scripts в том же кадре",
      "titleEn": "Same-frame view script camera",
-     "text": "Проверка переноса view.set_camera перед стримингом и отрисовкой мира в клиенте; ожидаются Mac-сборка и приёмка перетаскивания карты.",
-     "textEn": "Validate view.set_camera before world streaming and drawing in the client; Mac build and map drag acceptance are pending."
+     "text": "Клиент применяет view.set_camera до стриминга и отрисовки мира. Проверены Mac-сборка, 449 пройденных CTest (один пропущен) и фиксация кадра после zoom и drag на Metal.",
+     "textEn": "The client applies view.set_camera before world streaming and drawing. Mac build, 449 passing CTests (one skipped) and fixed framing after zoom and drag were checked on Metal."
     },
     {
      "status": "done",
