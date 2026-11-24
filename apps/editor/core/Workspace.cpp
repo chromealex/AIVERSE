@@ -932,6 +932,18 @@ void Workspace::registerCoreOps() {
     addLinked("studio_agent_batch_apply","Apply a reviewed conversation batch using its exact token; stop the hosted agent first.",
         R"({"type":"object","properties":{"expectedProject":{"type":"string"},"direction":{"type":"string","enum":["undo","redo"]},"token":{"type":"string"},"confirmed":{"type":"boolean"}},"required":["expectedProject","direction","token","confirmed"],"additionalProperties":false})",
         [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_owner_history","Read linked Map, Project and Assets owner history, version tokens, dirty flags and save availability.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"}},"required":["expectedProject"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_owner_history_step","Navigate one current native owner boundary. Requires exact owner version and confirmation; stop hosted agent first.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"scope":{"type":"string","enum":["map","project","assets"]},"direction":{"type":"string","enum":["undo","redo"]},"expectedVersion":{"type":"string"},"confirmed":{"type":"boolean"}},"required":["expectedProject","scope","direction","expectedVersion","confirmed"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_save_documents","Save the currently named map and dirty Project documents with native atomic checkpoints. No Save As or arbitrary file path.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"expectedMap":{"type":"string"},"expectedOwnerVersion":{"type":"string"},"confirmed":{"type":"boolean"}},"required":["expectedProject","expectedMap","expectedOwnerVersion","confirmed"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_asset_history_reset_review","Read a review of a damaged asset checkpoint. Archive/reset apply remains native UI only.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"}},"required":["expectedProject"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
     // ---------------------------------------------------------------- rules
     add("rules_get", "Read rules.json or a part of it by path (e.g. 'types.footman', 'resources', 'triggers[0]'). No path = whole file. "
         "Rules split over files (rules.json \"include\") read as one document; \"extends\" entries are shown as written, "
