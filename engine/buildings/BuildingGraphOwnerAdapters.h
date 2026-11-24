@@ -51,6 +51,7 @@ struct BuildingGridGraphAdapter {
         if(!grid.sphere()&&grid.w>0&&grid.h>0){
             Json bounds=Json::array();
             auto add=[&](const char* kind,int id,int x,int z,int w,int h){
+                if(bounds.size()>=96)return;
                 Json row=Json::object(),lo=Json::array(),hi=Json::array();
                 row.set("kind",Json::string(kind));
                 row.set("id",Json::string(std::to_string(id)));
@@ -58,9 +59,10 @@ struct BuildingGridGraphAdapter {
                 for(int v:{x+w,0,z+h})hi.push(Json::number(int64_t(v)));
                 row.set("min",std::move(lo));row.set("max",std::move(hi));bounds.push(std::move(row));
             };
-            std::set<int> seen;
-            for(int id:t.recentCellIds)if(id>=0&&int64_t(id)<int64_t(grid.w)*grid.h&&seen.insert(id).second)
-                add("grid-cells",id,id%grid.w,id/grid.w,1,1);
+            std::set<int> seen;size_t cellSamples=0;
+            for(int id:t.recentCellIds)if(id>=0&&int64_t(id)<int64_t(grid.w)*grid.h&&seen.insert(id).second&&cellSamples<48){
+                add("grid-cells",id,id%grid.w,id/grid.w,1,1);++cellSamples;
+            }
             const int k=game::HpaGraph::kC,cw=(grid.w-1)/k+1,ch=(grid.h-1)/k+1;
             for(int id:t.lastHpaClusterIds)if(id>=0&&int64_t(id)<int64_t(cw)*ch){
                 const int x=(id%cw)*k,z=(id/cw)*k;
