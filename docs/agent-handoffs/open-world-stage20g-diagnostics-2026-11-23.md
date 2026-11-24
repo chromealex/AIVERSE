@@ -1,0 +1,3 @@
+# W1.20g — ownership diagnostics
+
+Commits `a31e150f`, `8104a914`, PR #116 Draft. Public engine/world/RegionOwnershipDiagnostics.h exposes a transient World resource with last successful tracked entity count, scanned cars, candidate cars, pending groups, uncovered solo/group/lifecycle counts, overflow and solo candidate flag. ActorRegionOwnership publishes it and erases it on restore. Read via resourceConst; not persisted or hashed. Does not yet expose MCP/editor or cumulative full-scan counters. Full vehicle scan remains. No native tests run. Next update existing skill/catalog, expose diagnostics via MCP, then WAL. No main merge.

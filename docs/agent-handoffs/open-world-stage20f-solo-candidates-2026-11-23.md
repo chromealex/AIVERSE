@@ -1,0 +1,3 @@
+# W1.20f — solo character candidates
+
+Commit `ea67f7332dbec7e39e14f097e95a4be6bd883805`, PR #116 Draft. ActorRegionOwnership.cpp extends experimental candidate mode with streamManifest regionDirtyOnlySolo (default false), unions CharacterBody and Loot journals, handles independent character lifecycle and transfers. Requires no vehicles, no previous seat membership, initialized nonoverflow journals, explicit queue and strict audit disabled. Character backlink validation still traverses CharacterBody; not a completely scan-free path. Raw writer coverage and configuration plumbing not verified. No native tests run. Next: verify writer contract, remove redundant scan only where safe, implement vehicle candidate mode and skill/catalog. No main merge.

@@ -10,6 +10,7 @@
 // Fixed maths and integers only; the citizens are created from the simulation RNG on the first tick.
 #include "Traffic.h"
 #include <aiverselib/runtime/WorkBudget.h>
+#include "engine/world/SimulationLod.h"
 #include "Systems.h"
 #include <algorithm>
 #include <stdexcept>
@@ -315,14 +316,20 @@ void Traffic::population(Simulation& sim, TrafficStore& st, const std::vector<Ve
         }
         // on his way
         if (c.e.valid()) continue;   // as a real person or in his real car: Traffic::people / Traffic::cars move him
-        const int to = destOf(c);
-        if (sim.tick() >= c.eta) {   // the end of the leg
+        if (coldTripCatchUp_ && !c.car.valid() && sim.tick() >= c.eta) {
+            if (!advanceVirtualTrip(c, sim.tick(), rate))
+                throw std::logic_error("traffic: invalid virtual trip catch-up");
+            if (c.state != kCitizenToWork && c.state != kCitizenToHome) continue;
+            // The remaining leg is already at its correct virtual time;
+            // the existing pedestrian/car spawn path below may reify it.
+        } else if (sim.tick() >= c.eta) {   // the end of the leg
             if ((c.leg == kLegToStop || c.leg == kLegAtStop) && c.stopA >= 0) travel(sim, c, kLegRide, stops_[size_t(c.stopA)].kerb);
             else if (c.leg == kLegRide && c.stopB >= 0) travel(sim, c, kLegWalk, stops_[size_t(c.stopB)].kerb);
             else if (c.via) { const Vec2 school = legTarget(c); c.via = 0; travel(sim, c, c.leg, school); }   // by the school, then on
             else arrive(c);
             continue;
         }
+        const int to = destOf(c);
         if (foci.empty() || c.leg == kLegRide) continue;   // a rider gets off when a bus calls at his stop (Traffic::passengers)
         const Fixed t = Fixed::fromRatio(int64_t(sim.tick() - c.left), std::max<int64_t>(1, int64_t(c.eta - c.left)));
         const Vec2 at = c.from + (legTarget(c) - c.from) * t;

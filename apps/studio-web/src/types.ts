@@ -126,6 +126,52 @@ export interface StudioHub { recent: Array<{ dir: string; name: string; lastOpen
 export interface StudioAgentChange { op: string; args: string; ok: boolean; undoable: boolean; position: number; error?: string }
 export interface StudioAgentInfo { lines: string[]; total: number; running: boolean; port: number; clients: number; changes: StudioAgentChange[];
   startPosition: number; cli: string; mcp: boolean; conversation: boolean; result?: string }
+// World maintenance uses decimal strings for uint64 values, never JS numbers.
+export interface StudioWorldRegion {cell:[number,number,number];live:number;materialized:number}
+export interface StudioWorldStatus {
+  mode:'offline';tick:number;sequence:string;generation:string;revision:string;
+  historyFloor:string;retiredFloor:string;nextIdentity:string;
+  live:number;tombstones:number;capacity:number;materialized:number;
+  ledgerArchiveBytes:string;checkpointBytes:string;regionCount:number;
+  regionsTruncated:boolean;regions:StudioWorldRegion[];error?:string;
+}
+export interface StudioWorldBackup {
+  generation:string;active:boolean;status:string;sequence?:string;revision?:string;
+}
+export interface StudioWorldRetention {
+  valid:boolean;overBudget:boolean;retainedBytes:string;removeGenerations:string[];
+}
+export interface StudioWorldCleanup extends StudioWorldRetention {
+  ok:boolean;removed:string[];failedGeneration:string;
+}
+export interface StudioWorldPage {
+  revision:string;historyFloor:string;bootstrap:boolean;resetRequired:boolean;more:boolean;next:string;
+  records:Array<{id:string;revision:string;cell:[number,number,number];live:boolean}>;
+}
+export interface StudioWorldJob {
+  state:'idle'|'running'|'succeeded'|'failed'|'cancelled';
+  id?:string;project?:string;operation?:string;phase?:string;
+  cancelRequested?:boolean;cancelAllowed?:boolean;error?:string;result?:unknown;
+  progress?:{checkpointBytes?:string;checkpointTotal?:string;walBytes?:string;frames?:string;sequence?:string;assetsRead?:string;assetsTotal?:string};
+}
+export interface StudioSimulationLodConfig {
+  enabled:boolean;hotCells:number;warmCells:number;warmTicks:number;coldTicks:number;
+}
+export interface StudioSimulationLodSettings extends StudioSimulationLodConfig {
+  authored:boolean;requiresRestart:boolean;
+}
+export interface StudioWorldOps {
+  world_save_list:{params:Record<string,never>;result:{worlds:string[]}};
+  world_save_create:{params:{world:string;seed:string};result:StudioWorldStatus};
+  world_save_status:{params:{world:string;seed:string};result:StudioWorldStatus};
+  world_save_checkpoint:{params:{world:string;seed:string;retainRevisions:string};result:StudioWorldStatus};
+  world_save_backups:{params:{world:string;seed:string;verify:boolean};result:{complete:boolean;backups:StudioWorldBackup[]}};
+  world_save_retention_preview:{params:{world:string;seed:string;keepPrevious:string;maxBytes:string};result:StudioWorldRetention};
+  world_save_retention_apply:{params:{world:string;seed:string;keepPrevious:string;maxBytes:string;expectedGenerations:string[]};result:StudioWorldCleanup};
+  world_save_fork:{params:{world:string;seed:string;generation:string;newWorld:string};result:{ok:boolean;world:string}};
+  world_save_page:{params:{world:string;seed:string;after:string;limit:string;bootstrap:boolean;expectedRevision:string};result:StudioWorldPage};
+}
+
 export interface StudioToolOp { name: string; description: string; schema: unknown; readOnly: boolean }
 export interface StudioInputControl { device: string; code: string | number; deviceIndex?: number }
 export interface StudioInputAsset {
@@ -248,7 +294,7 @@ export interface StudioParams {
   /** Tool panel ops (Terrain, Roads, PostFX, ...) with their JSON schemas. */
   'studio.ops': { panel: string };
   /** Run one Workspace op of a tool panel (validated, undoable like an agent edit). */
-  'studio.op': { op: string; params: Record<string, unknown> };
+  'studio.op': { op: string; params: Record<string, unknown>; expectedProject?: string };
   'studio.inputGet': Record<string,never>;
   'studio.inputSet': { asset: StudioInputAsset };
   'studio.assetAudit': Record<string,never>;

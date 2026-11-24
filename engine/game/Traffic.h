@@ -447,6 +447,8 @@ private:
     // getting there (TrafficCommute.cpp)
     void setupCommute();
     void travel(Simulation& sim, TrafficCitizen& c, uint8_t leg, Vec2 from) const;   // unseen from here on this leg
+    bool travelAt(TrafficCitizen& c, uint8_t leg, Vec2 from, uint32_t start, uint32_t rate) const;
+    bool advanceVirtualTrip(TrafficCitizen& c, uint32_t now, uint32_t rate) const;
     Vec2 legTarget(const TrafficCitizen& c) const;
     uint32_t tripTicks(const TrafficCitizen& c, int from, int to, uint32_t rate) const;
     void depart(Simulation& sim, TrafficStore& st, int32_t id, uint8_t state);
@@ -476,6 +478,7 @@ private:
 
     GameHost* m_ = nullptr;
     TrafficRules rules_;
+    bool coldTripCatchUp_ = false; // authored root simulationLod opt-in; never serialized runtime state
     bool base_ = false; int baseLimits_[4] = {0, 0, 0, 0};   // scaleLimits: the rules' own limits
     lib::mechanics::TrafficNet net_;
     std::vector<std::array<Fixed, 4>> noParking_;   // map traffic.noParking: [x0, z0, x1, z1] cell rectangles where nobody parks

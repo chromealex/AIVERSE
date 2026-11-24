@@ -1,0 +1,3 @@
+# W1.23i — component transaction wire codec
+
+DurableComponentTransaction.h adds deterministic little-endian DCT1 format: magic/version/count then operation, owner u64, schema version u32, schema length u16, payload length u32, schema and payload. Limits 16 MiB encoded frame, 1M records, canonical ASCII schema, nonzero owner/version, empty remove payload. Rejects truncation/trailing bytes/unknown operation; output unchanged on rejection. CRC and sequence belong to outer WAL frame. Not wired to WAL yet; next mixed ledger/component envelope and atomic replay. Native tests not run. PR #116 Draft; no main merge.

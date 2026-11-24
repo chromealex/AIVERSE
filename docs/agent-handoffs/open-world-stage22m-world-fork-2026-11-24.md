@@ -1,0 +1,3 @@
+# W1.22m — world fork
+
+PersistentWorldSession::forkGeneration validates a distinct nonzero destination UUID and existing empty private destination directory, recovers selected source generation under source session lock, creates a new independent checkpoint/WAL session with preserved ledger revisions and reset WAL sequence. Source files unchanged. Destination creation failure may leave orphan files; no automatic cleanup. Caller serializes session operations and owns destination directory. Only ledger state copied, not full ECS or assets. Native tests not run. Next backup enumeration and skill/catalog, then full ECS persistence. PR #116 Draft; no main merge.

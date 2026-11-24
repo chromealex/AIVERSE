@@ -90,6 +90,27 @@ public:
         });
     }
 
+    // Explicit world-aware resource codec, e.g. stable references. Transfer
+    // is a stateless function; native handle-based codecs remain unchanged.
+    template<class T,bool (*Transfer)(Archive&,T&,const World&)>
+    void registerContextualResource(std::string id,uint32_t version=1){
+        static_assert(std::is_copy_constructible_v<T> && std::is_default_constructible_v<T>);
+        insert({std::move(id),Kind::Resource,version,detail::componentTypeId<T>(),
+            [](Archive& a,const World& w){
+                const auto* source=w.resourceConst<T>();
+                uint8_t present=source?1:0;a(present);
+                if(source){T value=*source;if(!Transfer(a,value,w))a.fail();}
+            },
+            [](Archive& a,World& w,const Decoder* migrate){
+                uint8_t present=0;a(present);
+                if(!a.ok()||present>1||migrate){a.fail();return;}
+                if(!present){w.eraseResource<T>();return;}
+                T value{};
+                if(!Transfer(a,value,w)){a.fail();return;}
+                if(a.ok())w.setResource<T>(std::move(value));
+            },{}});
+    }
+
     // Decode an OLD value, then explicitly transform it into the current T.
     // The new schema's normal io(Archive&,T&) always handles writes.
     // Versions are exact: readers for unregistered older versions are rejected.
@@ -102,6 +123,47 @@ public:
         registerMigration<T>(id,Kind::Resource,fromVersion,std::forward<Fn>(reader));
     }
 
+    // Reuse native schema codecs for long-lived storage without changing
+    // the existing snapshot format. Selection is by stable registered ID.
+    struct SchemaInfo {std::string id;Kind kind;uint32_t version;};
+    std::vector<SchemaInfo> schemas()const {
+        std::vector<SchemaInfo> out;out.reserve(entries_.size());
+        for(const auto& e:entries_)out.push_back({e.id,e.kind,e.version});
+        return out;
+    }
+    bool captureSchema(const World& world,const std::string& id,LoadedHash::Chunk& out)const {
+        auto it=std::find_if(entries_.begin(),entries_.end(),[&](const Entry& e){return e.id==id;});
+        if(it==entries_.end())return false;
+        LoadedHash::Chunk chunk{it->id,it->kind,it->version,{}};
+        Archive a(&chunk.bytes);a.formatVersion=it->version;it->write(a,world);
+        if(!a.ok()||chunk.bytes.size()>kMaxPayload)return false;
+        out=std::move(chunk);return true;
+    }
+    // Entity allocator/liveness must already be restored by the host.
+    // Selected schemas replace their entire pools/resources; others stay intact.
+    bool restoreSchemas(World& world,const std::vector<LoadedHash::Chunk>& chunks)const {
+        if(chunks.size()>kMaxSchemas)return false;
+        World staged=world;
+        std::string previous;
+        for(const auto& chunk:chunks){
+            if(chunk.id.empty()||chunk.id<=previous||chunk.bytes.size()>kMaxPayload)return false;
+            previous=chunk.id;
+            auto it=std::find_if(entries_.begin(),entries_.end(),[&](const Entry& e){return e.id==chunk.id;});
+            if(it==entries_.end()||it->kind!=chunk.kind)return false;
+            const Decoder* migration=nullptr;
+            if(chunk.version!=it->version){
+                auto m=it->migrations.find(chunk.version);
+                if(!chunk.version||chunk.version>=it->version||m==it->migrations.end())return false;
+                migration=&m->second;
+            }
+            Archive a(chunk.bytes);a.formatVersion=chunk.version;it->read(a,staged,migration);
+            if(!a.ok()||a.remaining()!=0)return false;
+        }
+        for(const auto& [name,validate]:validators_){
+            (void)name;std::string reason;if(!validate(staged,reason))return false;
+        }
+        world=std::move(staged);return true;
+    }
     size_t componentCount()const {
         return size_t(std::count_if(entries_.begin(),entries_.end(),
             [](const Entry& e){return e.kind==Kind::Component;}));

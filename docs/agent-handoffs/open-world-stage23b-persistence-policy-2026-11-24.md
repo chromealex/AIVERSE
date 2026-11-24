@@ -1,0 +1,3 @@
+# W1.23b — public Simulation API and policy
+
+Simulation.h exposes persistentSchemas, capturePersistentSchema and restorePersistentSchemas for an offline staged World (rejects direct live world). PersistentEcsPolicy.h selects registered stable IDs as Transient(default), Checkpoint or Journal; captures sorted full schema chunks, journal selection also included in checkpoint baseline. Policy is in-memory only; Journal is selection intent, not disk integration. No entity remapping, policy serialization or live restore yet. No native tests run. Next stable identity mapping and bounded chunk envelope. PR #116 Draft; no main merge.

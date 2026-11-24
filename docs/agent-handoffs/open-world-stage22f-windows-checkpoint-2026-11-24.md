@@ -1,0 +1,3 @@
+# W1.22f — Windows checkpoint publisher
+
+Commit `62173635`, PR #116 Draft. RegionCheckpointPublish.h adds Win32 exclusive publication lock, monotonic manifest validation, CREATE_NEW generation files, WriteFile and FlushFileBuffers, temporary manifest replacement via MoveFileExW(REPLACE_EXISTING|WRITE_THROUGH). Replacement failure is ambiguous and requires recovery. Existing generations preserved. Windows filesystem power-loss/metadata durability and native compilation unverified; do not equate WRITE_THROUGH with proven POSIX directory fsync semantics. Caller must stop old WAL writer and hold world save barrier. Next session-wide lock and WAL identity binding. No native tests run. No main merge.

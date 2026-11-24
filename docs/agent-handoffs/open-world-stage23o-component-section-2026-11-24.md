@@ -1,0 +1,3 @@
+# W1.23o — paged component checkpoint section
+
+UnifiedComponentSection.h encodes CPS1 as length-prefixed DCT1 pages under aggregate byte budget; individual pages retain 16 MiB cap, full section may exceed it. Snapshot accepts Upsert only and rejects duplicate owner/schema across pages. Restore operates on private World with rebuilt stable refs and rejects malformed/trailing pages; caller discards staged state on failure. Input records supplied by caller; automatic enumeration, adapter binding, streaming disk IO and native tests remain outstanding. Next entity section and automatic component capture. PR #116 Draft; no main merge.

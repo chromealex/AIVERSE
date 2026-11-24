@@ -11,6 +11,8 @@
 #include "Systems.h"
 #include "../core/FixedMath.h"
 #include <algorithm>
+#include <limits>
+#include <stdexcept>
 
 namespace aiverse::game {
 using namespace detail;
@@ -82,11 +84,81 @@ Vec2 Traffic::legTarget(const TrafficCitizen& c) const {
     return to >= 0 ? places_[size_t(to)].pos : c.from;
 }
 
-void Traffic::travel(Simulation& sim, TrafficCitizen& c, uint8_t leg, Vec2 from) const {
+// The same duration/arrival formula for live transitions and virtual
+// deadline catch-up. Explicit start tick prevents accumulated slice delay.
+// Reject an unrepresentable interval rather than wrap the persisted clock.
+bool Traffic::travelAt(TrafficCitizen& c, uint8_t leg, Vec2 from,
+                       uint32_t start, uint32_t rate) const {
     const TrafficPopulationRules& pr = rules_.population;
-    c.leg = leg; c.from = from; c.left = sim.tick();
     const Fixed speed = leg == kLegDrive ? pr.drive : leg == kLegRide ? pr.ride : pr.walk;
-    c.eta = sim.tick() + ticksOf((legTarget(c) - from).length() / speed, sim.tickRate()) + 1;
+    if (!rate || speed.raw <= 0 || start == UINT32_MAX) return false;
+    TrafficCitizen next = c;
+    next.leg = leg; next.from = from; next.left = start;
+    const Fixed distance = (legTarget(next) - from).length();
+    if (distance.raw < 0) return false;
+    // Fixed division uses q*65536 + (r*65536)/speed.raw.
+    // Bound both intermediate products before using the canonical arithmetic.
+    const int64_t q = distance.raw / speed.raw, r = distance.raw % speed.raw;
+    if (uint64_t(q) > UINT32_MAX ||
+        r > std::numeric_limits<int64_t>::max() / Fixed::kOne) return false;
+    const Fixed seconds = distance / speed;
+    if (seconds.raw < 0 ||
+        uint64_t(seconds.raw) > uint64_t(std::numeric_limits<int64_t>::max()) / rate) return false;
+    const uint64_t duration = uint64_t((seconds * int64_t(rate)).toInt()) + 1;
+    if (duration > uint64_t(UINT32_MAX) - start) return false;
+    next.eta = start + uint32_t(duration);
+    c = next;
+    return true;
+}
+
+void Traffic::travel(Simulation& sim, TrafficCitizen& c, uint8_t leg, Vec2 from) const {
+    if (!travelAt(c, leg, from, sim.tick(), sim.tickRate()))
+        throw std::logic_error("traffic: trip deadline outside tick range");
+}
+
+// Only the existing canonical virtual citizen is advanced. Live bodies,
+// vehicles, passengers and externally held citizens remain with their owner.
+// Every completed leg starts its successor at its OWN saved deadline, not
+// the round-robin poll tick. No spawn, RNG, physics or external events here.
+bool Traffic::advanceVirtualTrip(TrafficCitizen& citizen, uint32_t now, uint32_t rate) const {
+    if (citizen.e.valid() || citizen.car.valid() || citizen.held ||
+        (citizen.state != kCitizenToWork && citizen.state != kCitizenToHome))
+        return false;
+    TrafficCitizen next = citizen;
+    const auto validPlace = [&](int id) { return id >= 0 && size_t(id) < places_.size(); };
+    const auto validStop = [&](int id) { return id >= 0 && size_t(id) < stops_.size(); };
+    // At most three bus legs, one school detour and arrival; a corrupt
+    // cyclic itinerary must not consume the simulation tick indefinitely.
+    constexpr unsigned maxTransitions = 5;
+    for (unsigned transition = 0; transition < maxTransitions; ++transition) {
+        if (!validPlace(destOf(next)) ||
+            (next.via && !validPlace(next.school)) ||
+            next.leg > kLegDrive || next.left > now || next.eta <= next.left)
+            return false;
+        const bool boarding = next.leg == kLegToStop || next.leg == kLegAtStop;
+        if ((boarding && (!validStop(next.stopA) || !validStop(next.stopB))) ||
+            (next.leg == kLegRide && !validStop(next.stopB))) return false;
+        if (now < next.eta) { citizen = next; return true; }
+        const uint32_t at = next.eta;
+        if (boarding) {
+            if (!travelAt(next, kLegRide, stops_[size_t(next.stopA)].kerb, at, rate)) return false;
+        } else if (next.leg == kLegRide) {
+            if (!travelAt(next, kLegWalk, stops_[size_t(next.stopB)].kerb, at, rate)) return false;
+        } else if (next.via) {
+            const Vec2 school = legTarget(next);
+            next.via = 0;
+            if (!validPlace(destOf(next)) || !travelAt(next, next.leg, school, at, rate)) return false;
+        } else {
+            arrive(next);
+            citizen = next;
+            return true;
+        }
+    }
+    // A still-unfinished, valid next leg may be published only if it is
+    // strictly in the future. Otherwise reject the whole local candidate.
+    if (now >= next.eta) return false;
+    citizen = next;
+    return true;
 }
 
 // How long the trip takes unseen: he leaves home that much before his shift.

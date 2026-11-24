@@ -1,0 +1,3 @@
+# W1.20f — typed seat writer notifications
+
+Commit `36120bda9167a2351ecf71ce62b2cad057649145`, PR #116 Draft. ActorVehicles.cpp tickVehicles explicitly notifies CharacterBody and Vehicle journals for SeatEntered and exits/ejections, and Vehicle for driver change. Existing persistent crossing notification remains. Notifications are transient, same-cell seat changes included, no save schema change. Index is still rebuilt by canonical scan; legacy arcade seats and race seat writers require separate audit. No native tests run. Next wire remaining writers, validate seat events and candidate-only mode, update skill/catalog. No main merge.
