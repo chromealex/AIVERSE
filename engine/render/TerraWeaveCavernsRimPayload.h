@@ -31,7 +31,7 @@ inline std::unique_ptr<render::Model> buildExactCavePayload(
         throw std::invalid_argument("Caverns rim body origin float precision");
     std::map<SurfaceVertexKey,int32_t> indices;
     CaveMesh mesh;
-    for(const auto& tri:out.collision.triangles){
+    for(const auto& tri:collision.triangles){
         const Vec3 points[]={tri.a-origin,tri.b-origin,tri.c-origin};
         render::float3 p[3];
         for(unsigned i=0;i<3;++i){
