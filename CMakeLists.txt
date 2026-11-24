@@ -300,6 +300,8 @@ add_library(aiverse_game STATIC
     engine/game/ComputerPlayerTactics.cpp)
 target_link_libraries(aiverse_game PUBLIC aiverse_fps aiverse_voxelgame)   # actor / voxel systems: engine/actor, engine/voxel CMakeLists
 target_link_libraries(aiverse_game PUBLIC aiverse_engine)
+# Shared recurring work policy for data-driven population decisions.
+target_link_libraries(aiverse_game PRIVATE AIVERSE::lib_work_budget)
 # The one vehicle system of every host (docs/driving.md, AGENTS.md "no genre split"): components, the per-tick step,
 # the race adapter. The grid-map host (engine/game/Driving.cpp) and the metre-map host (engine/actor/ActorVehicles.cpp)
 # only implement its world queries.
