@@ -148,3 +148,7 @@ Connect planetary native cohort publication to the actual shared GiGeometryScene
 ### Stage56b — IN PROGRESS
 
 Compose the existing planetary runtime, canonical ECS environment and GI publication into one optional native host lifecycle. Bind actual existing Scene, SpatialWorld, GameView, GI scene and CPU/GPU target, retain explicit external owner proofs, and install restore notification without storing native handles in ECS. Gate frame publication on target readiness, refresh native environment leases at the actual motor boundary, and suppress stale GI after restore or irreversible failures. No automatic creation of a second Scene or migration of grid-based GameCore. Native game-specific host adoption and actual baseline GI source ownership remain required.
+
+### Stage56c — IN PROGRESS (GI coordinate transaction)
+
+Retain exact body-space triangle/material sources for leased cut, volume and original leaves. Reproject active GI cohorts atomically with the existing scene/target at the exclusive frame barrier, including host-supplied nonleased chunk coordinate mapping. Force full GI invalidation; refuse stale scene, invalid projection and unavailable fences without advancing the projection. Preserve collision/navigation native revision and ECS state. Host must supply frozen transforms and coordinate nongeometry GI inputs before presentation. Source regression: target refusal, moved cut, restored moved baseline and unrelated chunk mapping. Default native host adoption and real GPU/Mac acceptance remain separate.
