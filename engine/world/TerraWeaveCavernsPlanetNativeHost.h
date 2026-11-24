@@ -125,7 +125,7 @@ public:
         const bool wasCoherent=frameCoherent_;
         frameCoherent_=false;
         CavePlanetRuntimeProgress result;
-        if(closed_||!exclusive_()){
+        if(closed_||!exclusive_()||&world!=&sim_.world()){
             result.phase=CavePlanetRuntimePhase::Refused;
             result.diagnostic="Caverns native host requires exclusive readers";
             return result;
@@ -169,7 +169,7 @@ public:
     // Admission before the existing authoritative tick. Never use camera
     // visibility, GPU readiness or a local lease as a lockstep checksum.
     bool admitNativeTick(const World& world,const std::set<uint64_t>& pins)const{
-        return !closed_&&!notice_.pending()&&!runtime_->recoveryRequired()&&
+        return &world==&sim_.world()&&!closed_&&!notice_.pending()&&!runtime_->recoveryRequired()&&
             runtime_->requiredRegionsReady(world,cavePlanetTravelPins(world,pins));
     }
     // Call after canonical capture and immediately before the existing

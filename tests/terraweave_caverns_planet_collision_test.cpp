@@ -145,6 +145,8 @@ static void checkNativeCheckpointCodec(){
         restored->controller.velocity.z==-.5f&&restored->simulation=="fixture","native checkpoint roundtrip");
     check(!decodeCaveNativeCheckpoint(bytes.substr(0,bytes.size()-1)),"truncated checkpoint refused");
     check(!decodeCaveNativeCheckpoint(bytes+"x"),"trailing checkpoint bytes refused");
+    auto corrupt=bytes;corrupt[20]^=1;
+    check(!decodeCaveNativeCheckpoint(corrupt),"native payload checksum refusal");
     c.controller.grounded=true;check(encodeCaveNativeCheckpoint(c).empty(),"unsupported moving ground refused");
     c.controller.grounded=false;
     physics::Scene scene;physics::CharacterParams params;physics::CharacterState state;

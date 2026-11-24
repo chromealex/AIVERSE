@@ -127,7 +127,10 @@ struct Demo {
     std::string checkpointBytes;
     uint32_t checkpointTick=0;
     uint64_t checkpointChecksum=0;
-    bool restoredProxyReady=false;
+    bool restoredProxyReady=false,restoringCoverage=false,replayCompared=false;
+    uint32_t replayTargetTick=0;
+    Vec3 replayTargetPosition{};
+    Journey replayTargetJourney=Journey::Explore;
     std::unique_ptr<physics::Scene> box;
     world::SpatialWorld spatial;
     CaveColliderLeasePool pool{1,1000000};
@@ -279,9 +282,11 @@ struct Demo {
         const auto orientation=cavePlanetVolumeOrientation(*frame,flightIntent);
         require(orientation&&box->moveCharacterOriented(proxy,actorState,*orientation,true),"initial proxy orientation");
         require(host->setNativeRestoreProof([this](const Simulation& state){
-            return restoredProxyReady&&&state==sim.get()&&state.world().alive(module->actor)&&
+            const bool safe=restoredProxyReady&& &state==sim.get()&&state.world().alive(module->actor)&&
                 caveNativeProxyPositionMatches(*box,proxy,actorState)&&
                 cavePlanetDispatchPositionMatches(position,state.world(),module->actor,actorState);
+            if(safe)restoredProxyReady=false;
+            return safe;
         }),"bind native restore proof");
         // A deeply immersed swimmer must deliberately steer vertically;
         // neutral buoyancy would otherwise rise toward the water surface.
@@ -347,7 +352,19 @@ struct Demo {
     // advance before loading. Portal checkpoint is taken while straddling
     // a committed rim, not before the travel request starts.
     bool exerciseRestore(){
-        if(!restoreScenario||restoreCompleted||arrived)return false;
+        if(!restoreScenario)return false;
+        if(restoreCompleted){
+            if(!replayCompared&&sim->tick()==replayTargetTick){
+                const auto current=position(sim->world(),module->actor);
+                require(current&&(*current-replayTargetPosition).length()<=Fixed::fromRatio(3,100)&&
+                    sim->world().get<ActorPosition>(module->actor).journey==replayTargetJourney,
+                    "native replay position/journey mismatch");
+                replayCompared=true;
+                std::fprintf(stdout,"[caverns-demo] REPLAY_MATCH tick=%u\\n",sim->tick());
+            }
+            return false;
+        }
+        if(arrived)return false;
         const auto* travel=sim->world().tryGetConst<CavePlanetTravel>(module->actor);
         require(bool(travel),"checkpoint travel missing");
         if(checkpointBytes.empty()){
@@ -364,6 +381,9 @@ struct Demo {
             return false;
         }
         if(sim->tick()-checkpointTick<12)return false;
+        replayTargetTick=sim->tick();
+        replayTargetPosition=*position(sim->world(),module->actor);
+        replayTargetJourney=sim->world().get<ActorPosition>(module->actor).journey;
         const auto saved=decodeCaveNativeCheckpoint(checkpointBytes);
         require(saved&&saved->actor==module->actor&&saved->simulationTick==checkpointTick&&
             saved->checksum==checkpointChecksum,"decode checkpoint identity");
@@ -380,7 +400,7 @@ struct Demo {
             require(!host->admitNativeTick(sim->world(),{regionId}),"restore must close native admission");
             restoredProxyReady=true;
         }catch(...){host->runtime().quarantineNativeMotion();throw;}
-        restoreCompleted=true;forceRebase=movingView;accumulator=0;
+        restoreCompleted=true;restoringCoverage=true;forceRebase=movingView;accumulator=0;
         std::fprintf(stdout,"[caverns-demo] RESTORED tick=%u checksum=%llu\n",sim->tick(),
             static_cast<unsigned long long>(checkpointChecksum));
         return true;
@@ -399,6 +419,7 @@ struct Demo {
                 throw std::runtime_error(progress.diagnostic);
             if(progress.pinsReady&&exterior->covers(host->runtime(),sim->world(),anchor.bodyId,keys)){
                 updateMovingFrame();
+                restoringCoverage=false;
                 accumulator+=std::min(dt,.1);
                 while(accumulator>=1./tickRate&&!arrived){
                     const auto tick=host->stepNativeTick({regionId});
@@ -433,14 +454,14 @@ struct Demo {
                     if(exerciseRestore())break;
                 }
             }
-            (void)gi.updateFrame(renderPosition(*position(sim->world(),module->actor)));
+            if(!restoringCoverage)(void)gi.updateFrame(renderPosition(*position(sim->world(),module->actor)));
             if(frames-lastProgress>=120){lastProgress=frames;
                 std::fprintf(stdout,"[caverns-demo] frame=%u tick=%u regions=%zu phase=%d\n",
                     frames,sim->tick(),progress.residentRegions,int(progress.phase));}
             if(maxFrames&&frames>=maxFrames){
                 if(!arrived)fail("route did not arrive within frame budget");
                 else if(movingView&&!rebaseCount)fail("moving view did not publish a rebase");
-                else if(restoreScenario&&(!restoreCompleted||sim->tick()<=checkpointTick))fail("restore/replay did not complete");
+                else if(restoreScenario&&(!restoreCompleted||!replayCompared||sim->tick()<=checkpointTick))fail("restore/replay did not complete");
                 else{stopping=true;platform::requestQuit();}
             }
         }catch(const std::exception& ex){fail(ex.what());}
@@ -452,13 +473,15 @@ struct Demo {
         render::Camera cam;cam.target=renderPosition(*position(sim->world(),module->actor));
         cam.distance=1.4f;cam.pitch=.25f;cam.yaw=.8f+(movingView?float(renderSeconds)*.15f:0.f);
         renderer.beginScene(cam,dev.framebufferWidth(),dev.framebufferHeight());
-        view.planets().draw(renderer,viewFrame,renderSeconds,planetBody,0);
-        view.drawPlanetCaves(renderer,viewFrame,renderSeconds);
+        if(!restoringCoverage){
+            view.planets().draw(renderer,viewFrame,renderSeconds,planetBody,0);
+            view.drawPlanetCaves(renderer,viewFrame,renderSeconds);
+        }
         render::PointLight lamp;lamp.pos=lampPosition(project);lamp.radius=8;lamp.intensity=4;
         lamp.color={1,.8f,.55f};renderer.lights.add(lamp);
         if(!host->recoveryRequired())(void)host->bindIndirect(renderer);
         else renderer.clearDynamicGiOverlay();
-        renderer.drawMesh(marker,render::mat4::translate(cam.target),{1,1,1,1});
+        if(!restoringCoverage)renderer.drawMesh(marker,render::mat4::translate(cam.target),{1,1,1,1});
         gfx::PassDesc pass;pass.clearColor[0]=.04f;pass.clearColor[1]=.05f;pass.clearColor[2]=.08f;
         renderer.render(pass);dev.endPass();
     }

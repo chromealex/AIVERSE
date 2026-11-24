@@ -4,6 +4,7 @@
 // pointer identities, or process-local physics ticks are serialized.
 #include "engine/physics/TerraWeaveCavernsPlanetMotorDispatch.h"
 #include "engine/core/Archive.h"
+#include "engine/core/Hash.h"
 #include <bit>
 #include <cmath>
 #include <optional>
@@ -60,12 +61,17 @@ inline void io(Archive& a,CaveNativeAirborneCheckpoint& c){
     if(!validCaveNativeCheckpoint(c))a.fail();
 }
 inline std::string encodeCaveNativeCheckpoint(CaveNativeAirborneCheckpoint checkpoint){
-    std::string bytes;Archive a(&bytes);a(checkpoint);return a.ok()?bytes:std::string{};
+    std::string bytes;Archive a(&bytes);a(checkpoint);
+    if(!a.ok())return {};
+    Hasher hash;hash.bytes(bytes.data(),bytes.size());auto checksum=hash.value();a(checksum);
+    return a.ok()?bytes:std::string{};
 }
 inline std::optional<CaveNativeAirborneCheckpoint> decodeCaveNativeCheckpoint(const std::string& bytes){
-    if(bytes.size()>kCaveNativeCheckpointMaxBytes+256)return {};
+    if(bytes.size()<8||bytes.size()>kCaveNativeCheckpointMaxBytes+256)return {};
+    Hasher hash;hash.bytes(bytes.data(),bytes.size()-8);
     CaveNativeAirborneCheckpoint result;Archive a(bytes);a(result);
-    if(!a.ok()||a.remaining())return {};
+    uint64_t expected=0;a(expected);
+    if(!a.ok()||a.remaining()||expected!=hash.value())return {};
     return result;
 }
 inline bool caveNativeProxyPositionMatches(const physics::Scene& scene,physics::BodyHandle proxy,
@@ -97,6 +103,9 @@ inline bool restoreCaveNativeAirborneProxy(physics::Scene& scene,physics::BodyHa
     if(!scene.moveCharacterOriented(proxy,checkpoint.controller,checkpoint.orientation,true)||
        !scene.setLinearVelocity(proxy,{0,0,0})||!scene.setAngularVelocity(proxy,{0,0,0}))return false;
     if(!caveNativeProxyPositionMatches(scene,proxy,checkpoint.controller))return false;
+    const auto actual=scene.rotation(proxy),wanted=checkpoint.orientation;
+    const float alignment=actual.v.x*wanted.v.x+actual.v.y*wanted.v.y+actual.v.z*wanted.v.z+actual.s*wanted.s;
+    if(!std::isfinite(alignment)||std::abs(alignment)<.9999f)return false;
     controller=checkpoint.controller;return true;
 }
 } // namespace aiverse::terraweave::caverns
