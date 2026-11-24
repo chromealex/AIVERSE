@@ -1,8 +1,12 @@
 #include "engine/render/TerraWeaveCavernsShardGpuHost.h"
+// Include an independent global namespace after the GPU host. A namespace
+// leak in a transitive Caverns header must fail this compile fixture.
+#include "engine/nav/GraphSearch.h"
 #include <cassert>
 #include <iostream>
 #include <stdexcept>
 using namespace aiverse::terraweave::caverns;
+static_assert(sizeof(::aiverse::nav::GraphEdge)>0);
 static CaveBatchChunk entry(ChunkKey3 k,uint64_t revision,bool populated) {
     CaveBatchChunk chunk;
     chunk.mesh.key=k;chunk.revision=revision;

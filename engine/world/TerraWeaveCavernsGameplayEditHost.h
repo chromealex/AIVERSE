@@ -324,8 +324,9 @@ public:
 
     // Resume one prospective GPU shard upload. No mixed-epoch publish;
     // all shards remain invisible until commitAtOwnerBarrier is called.
+    // Compatibility argument: the batch must use the options frozen at stageReady.
     bool pumpGpuBatch(gfx::Device& device,uint64_t visualRevision,
-                      CaveBatchSpec spec={}) {
+                      CaveBatchSpec /*spec*/={}) {
         if(!gpuBatch_||stagedVisualRevision_!=visualRevision ||
            !snapshot_||!gpuBatch_->ready())return false;
         if(gpuBatchIndex_>=gpuBatch_->snapshots.size())return false;

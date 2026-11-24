@@ -233,3 +233,4 @@ inline CaveBatchPrepared prepareFullCaveShardPresentation(
     }
     return prepareCaveBatch(std::move(visualChunks),spec);
 }
+} // namespace aiverse::terraweave::caverns
