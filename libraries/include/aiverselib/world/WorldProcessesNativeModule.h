@@ -7,6 +7,7 @@
 #include "CrowdGameCoreSurface.h"
 #include "EvolveSurfaceRegions.h"
 #include "GranularSurfaceField.h"
+#include "MorphPhysisGravity.h"
 #include "engine/game/GameCore.h"
 #include "engine/game/Native.h"
 #include <cstdint>
@@ -61,6 +62,14 @@ inline void installGameCoreSurfaceGranular(Simulation& sim){
             (void)granular::advanceSurfaceFields(current.world(),*surface,current.tick());
     });
 }
+inline void installGameCoreMorphGravity(Simulation& sim){
+    morph::registerPersistence(sim);
+    morph::registerGravityPersistence(sim);
+    sim.addSystem("morph.constraints",[](Simulation& current){
+        const auto* host=dynamic_cast<const game::GameCore*>(&current.module());
+        if(host)(void)morph::advanceWithPhysisGravity(current.world(),host->surface(current),current.tick());
+    });
+}
 class WorldProcessesNativeModule final:public game::NativeModule {
 public:
     void setup(game::GameCore& host,Simulation& sim,
@@ -73,7 +82,8 @@ public:
             host.surface(sim)?&installGameCoreSurfaceCrowd:nullptr,
             host.surface(sim)?&evolve::registerSurfaceAreaPersistence:nullptr,
             host.surface(sim)?&hydrateGameCoreSurfaceArea:nullptr,
-            host.surface(sim)?&installGameCoreSurfaceGranular:nullptr);
+            host.surface(sim)?&installGameCoreSurfaceGranular:nullptr,
+            &installGameCoreMorphGravity);
     }
 };
 inline std::unique_ptr<game::NativeModule> createWorldProcessesNativeModule(){
