@@ -320,3 +320,11 @@ legacy circle and does **not** define ecology coverage.
 Overlapping handles can be selected by repeated clicking near the
 same screen location; the active component/field is labeled.
 No tests have been executed on this stage per user request.
+
+## Stage 101: planetary render / physical owner adapters
+
+- `PlanetProcessGeometry.h` derives curved GRANULAR top quads and IMPRINT cell quads from canonical Surface, ECS position and completed tick. GRANULAR mass fraction controls radial fill height; explicit transverse thickness, shared column boundaries, outward winding. Not volumetric collision or actual terrain mutation.
+- `PlanetGranularIntegration.h` and `PhysicalSceneHost::preparePlanetGranular` build the existing immutable patch type with identical render and Box3D vertices/indices, revision signature and resident tile budgets. Existing publishers/fences remain sole owners. Simulation-space anchor coordinates only; orbital/camera-relative rebase and actual GameView attachment remain host work. On rollback reset the existing publisher before republishing older ticks.
+- MORPH `projectMorphContactDirection` and opt-in `collectPlanetMorphPhysicsInputs` reuse the existing owner frame (WorldTransform or surface yaw) for contact normals before quantization. Scene axes must match simulation axes. Record integer inputs at the existing authoritative replay barrier; never simulate Box3D on lockstep clients. Existing ModelStream is reused; deformation of rigid collision hull not implemented.
+- FRACTURE `PlanetFractureDelivery.h::projectPlanetCollapse` validates the existing pending event, reads frame and PHYSIS gravity, rejects overlapping active PHYSIS primary fracture outbox. No spawn or acknowledgement. Physical owner must durably commit/deduplicate before acknowledging existing event. Use existing `physics::applyPhysisToBody` once before each Box3D step for dynamic bodies in canonical simulation coordinates; never add full gravity again.
+- IMPRINT quad is a read-only overlay packet; host still owns visibility/material/upload/drawing. Actual planet client integration, GPU/Box3D acceptance, dynamic fracture debris and terrain/lifecycle owner dependencies remain open. Build/tests NOT RUN.
