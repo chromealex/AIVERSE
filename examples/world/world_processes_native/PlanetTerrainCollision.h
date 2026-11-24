@@ -1,20 +1,14 @@
 // Native projection of the canonical immutable Surface into the existing
-// Box3D Scene. No terrain state or new physics world. Full-body coverage
-// for explicitly bounded small/medium planets; streaming is separate work.
+// Box3D Scene. No terrain state or new physics world. Bounded full-body
+// or owner-declared streamed residency.
 #pragma once
-#include "engine/game/Surface.h"
+#include "PlanetTerrainResidency.h"
 #include "engine/physics/PhysisBox3D.h"
 #include <algorithm>
 #include <memory>
 #include <vector>
 
 namespace aiverse::examples::world_processes_native {
-struct PlanetTerrainCollisionConfig {
-    bool enabled=false;
-    // 6*N*N cells; bound memory and maximum old/new simultaneous bodies.
-    static constexpr int maxFaceSize=96;
-    static constexpr int tileSize=16;
-};
 class PlanetTerrainCollision {
 public:
     size_t count()const{return entries_.size();}
@@ -23,49 +17,50 @@ public:
         return physics::kNoBody;
     }
     bool publish(physics::Scene& scene,std::shared_ptr<const game::Surface> surface,
-                 int body,uint64_t revision){
+                 int body,uint64_t revision,PlanetTerrainCollisionConfig config={}){
         if(!surface||!surface->tab||body<0||size_t(body)>=surface->bodies.size())return false;
         const auto& def=surface->bodies[size_t(body)];const int n=def.faceSize;
-        if(n<2||n>PlanetTerrainCollisionConfig::maxFaceSize||
+        if(n<2||n>PlanetTerrainCollisionConfig::maxStreamedFaceSize||
            surface->cubeOf(body).faceSize()!=n)return false;
         const size_t per=size_t(n+1)*size_t(n+1);
         if(def.cornerBase>surface->corners.size()||6*per>surface->corners.size()-def.cornerBase)return false;
         if(scene_&&(scene_!=&scene||body!=body_||surface->tab!=surface_->tab||
            revision<revision_))return false;
         for(const auto& e:entries_)if(!scene.valid(e.handle))return false;
-        if(scene_&&revision==revision_){
-            if(surface->corners!=surface_->corners)return false;
-            return true;
-        }
-        // Validate every seam and radial bound before creating any body.
+        if(scene_&&revision==revision_&&surface!=surface_&&surface->corners!=surface_->corners)return false;
+        const auto requested=planPlanetTerrainTiles(*surface,body,config);
+        if(!requested)return false;
         const auto& cube=surface->cubeOf(body);
-        for(int f=0;f<6;++f)for(int y=0;y<=n;++y)for(int x=0;x<=n;++x){
-            const auto height=surface->corner(body,f,x,y);
-            const auto radius=def.radius+Fixed::fromRatio(height,16);
-            if(radius<=Fixed{}||radius>Fixed::fromInt(1500))return false;
-            if(x==0||x==n||y==0||y==n){
-                int ids[3];const int count=cube.cornerDuplicates(f,x,y,ids);
-                for(int k=0;k<count;++k)
-                    if(surface->corners[def.cornerBase+size_t(ids[k])]!=height)return false;
-            }
-        }
-        std::vector<Entry> next;
-        std::vector<physics::BodyDesc> descriptions;
+        std::vector<Entry> next;next.reserve(requested->size());
+        std::vector<physics::BodyDesc> descriptions;descriptions.reserve(requested->size());
+        std::vector<size_t> changed;changed.reserve(requested->size());
+        std::set<physics::BodyHandle> retained;
         constexpr int tile=PlanetTerrainCollisionConfig::tileSize;
-        const size_t tilesPerFace=size_t((n+tile-1)/tile);
-        next.reserve(6*tilesPerFace*tilesPerFace);
-        descriptions.reserve(6*tilesPerFace*tilesPerFace);
-        std::vector<size_t> changed;changed.reserve(6*tilesPerFace*tilesPerFace);
-        for(int f=0;f<6;++f)for(int y=0;y<n;y+=tile)for(int x=0;x<n;x+=tile){
+        for(const auto& key:*requested){
+            const auto [f,x,y]=key;
             Entry e;e.face=f;e.x=x;e.y=y;
             const int w=std::min(tile,n-x),h=std::min(tile,n-y);
             e.heights.reserve(size_t(w+1)*size_t(h+1));
-            for(int j=0;j<=h;++j)for(int i=0;i<=w;++i)
-                e.heights.push_back(surface->corner(body,f,x+i,y+j));
+            for(int j=0;j<=h;++j)for(int i=0;i<=w;++i){
+                const int cx=x+i,cy=y+j;
+                const auto height=surface->corner(body,f,cx,cy);
+                const auto radius=def.radius+Fixed::fromRatio(height,16);
+                if(radius<=Fixed{}||radius>Fixed::fromInt(1500))return false;
+                if(cx==0||cx==n||cy==0||cy==n){
+                    int ids[3];const int count=cube.cornerDuplicates(f,cx,cy,ids);
+                    for(int k=0;k<count;++k)
+                        if(surface->corners[def.cornerBase+size_t(ids[k])]!=height)return false;
+                }
+                e.heights.push_back(height);
+            }
             const size_t index=next.size();
-            if(index<entries_.size()&&entries_[index].heights==e.heights)
-                e.handle=entries_[index].handle;
-            else{
+            const auto old=std::lower_bound(entries_.begin(),entries_.end(),key,
+                [](const Entry& entry,const PlanetTerrainTileKey& k){
+                    return PlanetTerrainTileKey{entry.face,entry.x,entry.y}<k;
+                });
+            if(old!=entries_.end()&&PlanetTerrainTileKey{old->face,old->x,old->y}==key&&old->heights==e.heights){
+                e.handle=old->handle;retained.insert(e.handle);
+            }else{
                 physics::BodyDesc d;d.motion=physics::Motion::Static;d.shape=physics::ShapeKind::Mesh;
                 d.vertices.reserve(e.heights.size());d.indices.reserve(size_t(w)*h*6);
                 for(int j=0;j<=h;++j)for(int i=0;i<=w;++i){
@@ -97,9 +92,24 @@ public:
         }catch(...){discard();throw;}
         // Exclusive serialized scene ownership: all old handles were
         // validated, no query/step is allowed while versions overlap.
-        for(size_t i:changed)if(i<entries_.size())scene.destroy(entries_[i].handle);
+        for(const auto& old:entries_)if(!retained.contains(old.handle))scene.destroy(old.handle);
         entries_=std::move(next);surface_=std::move(surface);
         scene_=&scene;body_=body;revision_=revision;return true;
+    }
+    // Admission for a position and its immediate seam-aware neighbor cells.
+    // Not a swept-volume proof: caller must pin the complete query region.
+    bool covers(Vec3 position)const{
+        if(!scene_||!surface_)return false;
+        const int cell=planetTerrainCell(*surface_,body_,position);
+        if(cell<0)return false;
+        const auto covered=[&](int index){
+            if(index<0)return true; // cube-corner missing diagonal
+            const auto key=planetTerrainTile(*surface_,body_,index);
+            return key&&scene_->valid(handle(key->face,key->x,key->y));
+        };
+        if(!covered(cell))return false;
+        for(int k=0;k<8;++k)if(!covered(surface_->neighbor(cell,k)))return false;
+        return true;
     }
     bool reset(physics::Scene& scene){
         if(scene_&&scene_!=&scene)return false;

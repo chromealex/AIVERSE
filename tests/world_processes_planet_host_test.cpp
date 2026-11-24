@@ -40,9 +40,35 @@ static void checkTerrainCollision(){
     check(!bounded.publish(small,edited,0,1)&&small.valid(retained)&&small.bodyCount()==6,"no replacement capacity preserves old geometry");
     check(bounded.reset(small),"bounded shutdown");
 }
+static void checkStreamedTerrain(){
+    auto surface=std::make_shared<game::Surface>();
+    game::BodyDef def;def.id="terra";def.radius=Fixed::fromInt(120);def.faceSize=112;
+    surface->bodies.push_back(def);surface->build();
+    const auto at=[&](int face,int x,int y){return surface->cellCenter(surface->gridCell(0,face,x,y));};
+    PlanetTerrainCollisionConfig cfg;cfg.enabled=true;cfg.streamed=true;cfg.maxResidentTiles=16;
+    cfg.regions={{at(0,111,111),2}};
+    const auto pins=planPlanetTerrainTiles(*surface,0,cfg);
+    check(pins&&pins->size()>=3&&pins->size()<=16,"three-face streamed seam coverage");
+    physics::Scene scene;PlanetTerrainCollision terrain;
+    check(terrain.publish(scene,surface,0,0,cfg)&&terrain.covers(cfg.regions[0].position),"stream beyond legacy face limit");
+    const auto old=terrain.handle(0,96,96);
+    check(scene.valid(old)&&!terrain.covers(at(1,40,40)),"unresident ground rejected");
+    cfg.regions.push_back({at(1,40,40),2});
+    check(terrain.publish(scene,surface,0,0,cfg)&&terrain.handle(0,96,96)==old,"same revision residency expands");
+    const auto retained=terrain.handle(1,32,32);
+    cfg.regions.erase(cfg.regions.begin());
+    check(terrain.publish(scene,surface,0,0,cfg)&&terrain.handle(1,32,32)==retained&&!scene.valid(old),"retire distant chunks");
+    const auto count=scene.bodyCount();
+    cfg.maxResidentTiles=1;cfg.regions.push_back({at(0,111,111),2});
+    check(!terrain.publish(scene,surface,0,0,cfg)&&scene.bodyCount()==count&&scene.valid(retained),"budget rejection is atomic");
+    cfg.maxResidentTiles=16;cfg.regions={{game::Surface::anchor(1)+Vec3{Fixed::fromInt(120),{},{}},2}};
+    check(!terrain.publish(scene,surface,0,0,cfg),"foreign body rejected");
+    check(terrain.reset(scene)&&scene.bodyCount()==0,"stream shutdown");
+}
 int main(){
     try{
         checkTerrainCollision();
+        checkStreamedTerrain();
         auto surface=std::make_shared<game::Surface>();
         game::BodyDef def;def.id="terra";def.radius=Fixed::fromInt(64);def.faceSize=8;
         surface->bodies.push_back(def);def.id="moon";surface->bodies.push_back(def);surface->build();

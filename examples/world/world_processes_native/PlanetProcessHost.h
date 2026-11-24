@@ -30,6 +30,7 @@ public:
     size_t physicsTiles()const{return physical_.granularPhysicsTiles();}
     size_t terrainPhysicsTiles()const{return terrain_.count();}
     physics::BodyHandle terrainHandle(int face,int x,int y)const{return terrain_.handle(face,x,y);}
+    bool terrainCovers(Vec3 position)const{return terrain_.covers(position);}
     physics::BodyHandle debrisHandle(Entity member)const{return physical_.planetDebris().handle(member);}
     // Asset lifetime is explicit, after prepare and before render publication.
     bool addMorphVisual(PhysicalSceneHost::InstanceId id,gfx::Device& device,
@@ -61,13 +62,13 @@ public:
         const int body=surface->findBody(stamp.body);
         if(body<0||!surface->bodies[size_t(body)].hasSurface()||
            (scene_&&body!=bodyIndex_))return false;
-        if(terrainConfig.enabled&&surface->bodies[size_t(body)].faceSize>PlanetTerrainCollisionConfig::maxFaceSize)return false;
+        if(terrainConfig.enabled&&!planPlanetTerrainTiles(*surface,body,terrainConfig))return false;
         auto frame=physical_.preparePlanetGranularBody(ecs,*surface,stamp.body,stamp.terrainRevision,
             tiles,placements,stamp.completedTick,budget);
         World snapshot=ecs;
         snapshot_=std::move(snapshot);surface_=std::move(surface);
         frame_=std::move(frame);stamp_=std::move(stamp);
-        scene_=&scene;sceneTick_=scene.tick();bodyIndex_=body;terrainEnabled_=terrainConfig.enabled;
+        scene_=&scene;sceneTick_=scene.tick();bodyIndex_=body;terrainEnabled_=terrainConfig.enabled;terrainConfig_=std::move(terrainConfig);
         physical_.invalidateMorphPublications();
         renderDone_=false;recorded_=false;contacts_.clear();debrisStates_.clear();
         phase_=Phase::Prepared;return true;
@@ -77,12 +78,13 @@ public:
     bool publishPhysics(){
         if(phase_!=Phase::Prepared||!sceneCurrent())return false;
         phase_=Phase::Fault;
-        if(terrainEnabled_&&!terrain_.publish(*scene_,surface_,bodyIndex_,stamp_.terrainRevision))return false;
+        if(terrainEnabled_&&!terrain_.publish(*scene_,surface_,bodyIndex_,stamp_.terrainRevision,terrainConfig_))return false;
         if(!physical_.publishPhysics(*scene_,frame_))return false;
         phase_=Phase::PhysicsPublished;return true;
     }
     bool publishDebris(const PlanetDebrisProjection& request){
         if(phase_!=Phase::PhysicsPublished||!sceneCurrent()||request.bodyId!=stamp_.body)return false;
+        if(terrainEnabled_&&!terrain_.covers(request.simulationPosition))return false;
         phase_=Phase::Fault;
         if(!physical_.planetDebris().publish(*scene_,*snapshot_,*surface_,request))return false;
         phase_=Phase::PhysicsPublished;return true;
@@ -110,6 +112,17 @@ public:
             const std::map<uint64_t,Entity>& morphOwners={},
             MorphContactConfig contactConfig={}){
         if(phase_!=Phase::PhysicsPublished||!sceneCurrent()||characters.size()>1024)return false;
+        const auto coveredLocal=[&](b3Vec3 position){
+            if(!terrainEnabled_)return true;
+            Vec3 local{};
+            return physics::physisVec3(position,local)&&terrain_.covers(local+game::Surface::anchor(bodyIndex_));
+        };
+        // Existing debris must remain admitted before any forces or step.
+        if(terrainEnabled_){
+            std::vector<PlanetDebrisState> current;
+            if(!physical_.planetDebris().capture(*scene_,*snapshot_,*surface_,current))return false;
+            for(const auto& state:current)if(!terrain_.covers(state.simulationPosition))return false;
+        }
         struct Staged {physics::CharacterState state; b3Quat orientation; physics::Pushes pushes;};
         std::vector<Staged> staged;staged.reserve(characters.size());
         std::set<physics::BodyHandle> proxies;
@@ -118,10 +131,11 @@ public:
             if(!ch.state||!ch.orientation||!outputs.insert(ch.state).second||
                !outputs.insert(ch.orientation).second||!scene_->valid(ch.proxy)||
                scene_->motion(ch.proxy)!=physics::Motion::Kinematic||
-               !proxies.insert(ch.proxy).second)return false;
+               !proxies.insert(ch.proxy).second||!coveredLocal(ch.state->position))return false;
             Staged item{*ch.state,*ch.orientation,{}};
             if(!stepPlanetCharacter(*scene_,*snapshot_,*surface_,stamp_.body,ch.referenceForward,
                 ch.settings,item.state,ch.input,item.orientation,&item.pushes,ch.proxy))return false;
+            if(!coveredLocal(item.state.position))return false;
             staged.push_back(std::move(item));
         }
         // After the first side effect, a failure is fatal for this phase.
@@ -139,6 +153,8 @@ public:
         if(!physical_.collectPlanetMorphPhysicsInputs(*scene_,*snapshot_,*surface_,morphBodies,morphOwners,
             stamp_.completedTick+1,contacts_,contactConfig))return false;
         if(!physical_.planetDebris().capture(*scene_,*snapshot_,*surface_,debrisStates_))return false;
+        if(terrainEnabled_)for(const auto& state:debrisStates_)
+            if(!terrain_.covers(state.simulationPosition))return false;
         phase_=Phase::PhysicsStepped;return true;
     }
     // Record both motion checkpoints and next-tick MORPH input in the existing
@@ -218,11 +234,12 @@ private:
     void clear(){
         snapshot_.reset();surface_.reset();frame_={};stamp_={};contacts_.clear();debrisStates_.clear();
         scene_=nullptr;device_=nullptr;sceneTick_=0;bodyIndex_=-1;
-        renderDone_=recorded_=terrainEnabled_=false;phase_=Phase::Idle;
+        renderDone_=recorded_=terrainEnabled_=false;terrainConfig_={};phase_=Phase::Idle;
     }
     PhysicalSceneHost physical_;
     PlanetTerrainCollision terrain_;
     bool terrainEnabled_=false;
+    PlanetTerrainCollisionConfig terrainConfig_;
     Phase phase_=Phase::Idle;
     PlanetHostStamp stamp_{};
     physics::Scene* scene_=nullptr;
