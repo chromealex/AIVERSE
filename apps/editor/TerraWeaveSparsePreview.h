@@ -117,14 +117,16 @@ public:
         size_t uploads=0;
         for(const auto& c:candidates) {
             auto it=models_.find(c.tile.cell);
+            const uint32_t effective=caveSnapshot_?(c.tile.flat?2u:33u):c.tile.resolution;
+            const auto neighbors=caveSnapshot_?std::array<uint32_t,4>{}:c.tile.neighborResolution;
             const bool matched=it!=models_.end() &&
-                it->second.resolution==c.tile.resolution &&
-                it->second.neighbors==c.tile.neighborResolution;
+                it->second.resolution==effective &&
+                it->second.neighbors==neighbors;
             if(matched)continue;
             if(uploads>=kMaxUploadsPerFrame)continue;
             auto visual=caveSnapshot_
                 ? terraweave::caverns::cutCaveTerrainPatch(
-                    terraweave::bakeEarthworksTerrainPatch(*earth_,c.tile.cell,authoring_->chunkSizeMetres(),33),*caveSnapshot_,1)
+                    terraweave::bakeEarthworksTerrainPatch(*earth_,c.tile.cell,authoring_->chunkSizeMetres(),c.tile.flat?2u:33u),*caveSnapshot_,1)
                 : terraweave::bakeSparseTerrainVisual(*earth_,c.tile,authoring_->chunkSizeMetres());
             auto model=terraweave::makeEarthworksTerrainModel(visual);
             model->path="terraweave/editor-sparse/"+
@@ -140,8 +142,8 @@ public:
             }
             if(it!=models_.end())gpuRetire(it->second.gpu);
             ModelEntry entry;
-            entry.resolution=c.tile.resolution;
-            entry.neighbors=c.tile.neighborResolution;
+            entry.resolution=effective;
+            entry.neighbors=neighbors;
             entry.gpu=std::move(model);
             models_.insert_or_assign(c.tile.cell,std::move(entry));
             ++uploads;
