@@ -1,4 +1,5 @@
 #include "ShaderGraphOps.h"
+#include "GraphAssetTransaction.h"
 #include "engine/render/graph/ShaderGraph.h"
 #include <filesystem>
 #include <fstream>
@@ -30,7 +31,7 @@ Json result(const Json& g) {
 }
 }
 void registerShaderGraphOps(Workspace& ws) {
-    const auto schema=Json::parse(R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"target":{"type":"string"},"emitter":{"type":"integer"},"scope":{"type":"string"}}})");
+    const auto schema=Json::parse(R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":["object","null"]},"target":{"type":"string"},"emitter":{"type":"integer"},"scope":{"type":"string"}}})");
     ws.registerOp({"shader_graph_catalog","Supported operations and domains; all ports are RGBA vectors, scalar constants splat.",Json::object(),[](const Json&){
         Json r=Json::object(),ops=Json::array();for(auto& op:render::graph::catalog()) {Json n=Json::object();n.set("id",Json::string(op.id));n.set("inputs",Json::number(int64_t(op.inputs)));n.set("vertex",Json::fromBool(op.vertex));Json domains=Json::array();for(auto d:{"material","postfx","particle"})if(render::graph::supports(op,d))domains.push(Json::string(d));n.set("domains",domains);ops.push(n);}r.set("nodes",ops);r.set("domains",Json::parse(R"(["material","postfx","particle"] )"));return r;
     }});
@@ -41,13 +42,12 @@ void registerShaderGraphOps(Workspace& ws) {
     }});
     ws.registerOp({"shader_graph_get","Read and validate a project graph.",schema,[&ws](const Json& p){return result(load(ws,p.getStr("name")));}});
     ws.registerOp({"shader_graph_validate","Validate graph and generate GLSL/MSL statements without writing files.",schema,[](const Json& p){return result(p["graph"]);}});
-    ws.registerOp({"shader_graph_set","Validate and atomically save shaders/<name>.json. Applying is a separate operation.",schema,[&ws](const Json& p){
+    ws.registerOp({"shader_graph_set","Validate and atomically save shaders/<name>.json. Existing assets require expected original graph; missing expected means create-only. Applying is separate.",schema,[&ws](const Json& p){
         const auto r=result(p["graph"]);const auto path=graphPath(ws,p.getStr("name"));
         const auto text=p["graph"].dump(2)+"\n";if(text.size()>256*1024)throw std::runtime_error("graph exceeds 256 KiB");
-        fs::create_directories(path.parent_path());auto temp=path;temp+=".tmp";
-        if(fs::is_symlink(temp))throw std::runtime_error("temporary graph path is a symlink");
-        {std::ofstream f(temp,std::ios::binary|std::ios::trunc);f<<text;f.close();if(!f)throw std::runtime_error("cannot save graph");}
-        fs::rename(temp,path);return r;
+        graph_asset::Transaction tx(path);
+        tx.checkExpected(p,[&]{return load(ws,p.getStr("name"));});
+        tx.replace(text,256*1024);return r;
     }});
     ws.registerOp({"shader_graph_apply","Apply a saved graph snapshot: target=material library name or existing particle effect name, emitter=0 by default; postfx scope=game|map. Reapply after edits.",schema,[&ws](const Json& p){
         const auto g=load(ws,p.getStr("name"));const auto program=render::graph::compile(g);Json q=Json::object();
