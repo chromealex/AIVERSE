@@ -36,7 +36,9 @@ public:
         if(!matchesBaseline(plan)){
             (void)baseline_.shutdown(exclusive);return false;
         }
-        return baseline_.publish(exclusive);
+        if(baseline_.publish(exclusive))return true;
+        if(!baseline_.recoveryRequired())(void)baseline_.shutdown(exclusive);
+        return false;
     }
     // The host supplies current ECS state; no stale region revision is
     // allowed to stage or commit. Rollback must cancel pending work and
