@@ -69,7 +69,7 @@ inline GrassSpecies parseGrassSpecies(const Json& j,const std::string& where) {
         "taperPermille","shoulderPermille","segments","rootColor","midColor","tipColor",
         "colorJitterPermille","dryPermille","dryColor","head","headPermille","stemHeightPermille",
         "headLengthMm","headHalfWidthMm","headColor","fieldAffinityPermille","fieldTolerancePermille",
-        "flexPermille"},where);
+        "flexPermille","basalLeaves"},where);
     GrassSpecies s;
     if(j.has("preset")){
         const auto name=j["preset"].str();
@@ -89,6 +89,7 @@ inline GrassSpecies parseGrassSpecies(const Json& j,const std::string& where) {
     readU32(j,"twistPermille",s.twistPermille,where);
     readU32(j,"taperPermille",s.taperPermille,where);
     readU32(j,"shoulderPermille",s.shoulderPermille,where);
+    readU32(j,"basalLeaves",s.basalLeaves,where);
     readU32(j,"segments",s.segments,where);
     readRgb(j,"rootColor",s.rootColor,where);
     readRgb(j,"midColor",s.midColor,where);

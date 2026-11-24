@@ -98,6 +98,10 @@ sand bands, roads, exporter cover masks, slope masks supplied by the host.
 - One opaque, double-sided, vertex-coloured material per patch (pigment in
   linear vertex colour, `baseColor` white); no textures, no per-blade entities,
   one draw per visible patch and LOD; shadows off as before.
+- The `meadow` preset grows an overlapping canopy. Each root carries a central
+  blade and four shorter leaves. Set `basalLeaves` (0 to 4) on a species to
+  control this lower layer. Each basal leaf costs one triangle and only grows
+  on stems without a flower or seed head.
 - Blade = 2*segments-1 triangles; flowering stems add 2 (flower) or 4 (crossed
   panicle/spike diamonds): `meadowBladeTriangleBound(segments)`.
 - LOD: the shared chain keeps the same seeded blades (1/3, 1/8 of them), widens

@@ -54,6 +54,7 @@ struct GrassSpecies {
     uint32_t taperPermille=500;            // 0 strap with blunt tip .. 1000 needle
     uint32_t shoulderPermille=200;         // where the blade reaches full width, 0..900
     uint32_t segments=3;                   // 1..4 ribbon segments (host cap: quality.bladeSegments)
+    uint32_t basalLeaves=0;                // 0..4 short leaves at a non-flowering root
     GrassRgb rootColor{46,62,22};
     GrassRgb midColor{92,128,44};
     GrassRgb tipColor{150,170,78};
@@ -123,6 +124,7 @@ inline void validateGrassMeadow(const GrassMeadow& m) {
         if(s.twistPermille>1000)bad("twistPermille");
         if(s.taperPermille>1000)bad("taperPermille");
         if(s.shoulderPermille>900)bad("shoulderPermille");
+        if(s.basalLeaves>4)bad("basalLeaves");
         if(s.segments<1||s.segments>4)bad("segments");
         if(s.colorJitterPermille>500)bad("colorJitterPermille");
         if(s.dryPermille>1000)bad("dryPermille");
@@ -231,8 +233,28 @@ inline std::optional<GrassMeadow> grassMeadowPreset(std::string_view name) {
     };
     if(name=="legacy") return m; // empty = legacy uniform generator
     if(name=="meadow") {
-        add("meadowFine",520);add("broadBlade",220);add("tallDry",140);add("timothy",70);
-        add("wildflower",30);add("clover",20);
+        add("broadBlade",640);
+        m.species[0].heightCm=54;
+        m.species[0].halfWidthMm=24;
+        m.species[0].segments=3;
+        m.species[0].midColor={74,140,53};
+        m.species[0].tipColor={134,179,74};
+        add("meadowFine",300);
+        m.species[1].heightCm=66;
+        m.species[1].halfWidthMm=14;
+        m.species[1].midColor={87,151,55};
+        m.species[1].tipColor={147,187,78};
+        add("sedge",60);
+        m.species[2].heightCm=46;
+        m.species[2].halfWidthMm=18;
+        for(auto& s:m.species)s.basalLeaves=4;
+        m.clumps.spacingCm=28;
+        m.clumps.radiusCm=22;
+        m.clumps.gapPermille=5;
+        m.clumps.clumpedPermille=610;
+        m.clumps.centreDensityPermille=270;
+        m.field.densityContrastPermille=80;
+        m.field.dryPatchPermille=35;
     } else if(name=="lushMeadow") {
         add("broadBlade",420);add("meadowFine",380);add("timothy",80);add("clover",80);add("wildflower",40);
         m.field.dryPatchPermille=120;m.clumps.gapPermille=120;m.clumps.clumpedPermille=760;

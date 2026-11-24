@@ -292,6 +292,29 @@ inline std::unique_ptr<render::Model> makeMeadowGrassPatchModel(
                 if(seg+1<segments)targetIndices.insert(targetIndices.end(),{lo+1,hi+1,hi});
             }
         }
+        // A rosette fills the lower canopy. Its leaves share the head budget,
+        // wind weights, fire tint and placement mask of their parent blade.
+        if(!flowering){
+            for(uint32_t leaf=0;leaf<sp.basalLeaves;++leaf){
+                const float angle=2.39996f*float(leaf)+jitter;
+                const auto radialDir=out*std::cos(angle)+side0*std::sin(angle);
+                const auto across=render::float3{radialDir.z,0,-radialDir.x};
+                const float scale=.54f+.28f*float((b>>(leaf*8))&255u)/255.f;
+                const auto tip=root+(radialDir*.76f+render::float3{0,scale,0})*height;
+                const auto normal=render::normalize(render::float3{0,1,0}-radialDir*.45f);
+                const uint32_t start=uint32_t(model->vertices.size());
+                for(unsigned corner=0;corner<3;++corner){
+                    render::ModelVertex v;
+                    const bool atTip=corner==2;
+                    v.pos=atTip?tip:root+across*((corner?1.f:-1.f)*halfWidth);
+                    v.nrm=normal;
+                    v.uv={atTip?.5f:float(corner),float(atTip)};
+                    v.color=finish(pack(blade(atTip?.82f:.18f)),atTip?scale:0.f);
+                    model->vertices.push_back(v);
+                }
+                targetIndices.insert(targetIndices.end(),{start,start+1,start+2});
+            }
+        }
         if(flowering){
             // Seed head / flower at the stem tip: two crossed diamonds (4 tris).
             const auto tip=centre(1.f);

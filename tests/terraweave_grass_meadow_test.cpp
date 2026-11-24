@@ -70,6 +70,9 @@ int main() {
     assert(!grassSpeciesPreset("bamboo")&&!grassMeadowPreset("jungle"));
 
     const auto meadow=*grassMeadowPreset("meadow");
+    auto denseOverride=parseGrassMeadow(Json::parse(R"({"species":[{"preset":"sedge","basalLeaves":3}]})"));
+    assert(denseOverride.species[0].basalLeaves==3);
+    assert(throwsInvalid([]{parseGrassMeadow(Json::parse(R"({"species":[{"basalLeaves":5}]})"));}));
     // 3. World-anchored clumps: same clump regardless of which patch asks.
     {
         const auto a=grassClumpAt(meadow,3,-2),b=grassClumpAt(meadow,3,-2);
@@ -109,9 +112,8 @@ int main() {
         var/=1600.0;
         const auto emptyCells=1600-cells.size();
         std::printf("placed %u clumped %u dispersion %.2f empty 20cm cells %zu\n",placed,clumped,var/mean,emptyCells);
-        assert(placed>10000&&clumped>placed*6/10);
-        assert(var/mean>3.0);
-        assert(emptyCells>100); // visible bare gaps between tufts
+        assert(placed>18000 && clumped>placed/2);
+        assert(emptyCells<16); // roots occupy over 99% of the sampled ground
     }
 
     // 5. Meadow model: deterministic, species/heads present, filters honoured.
@@ -120,6 +122,13 @@ int main() {
     {
         const auto a=makeGrassPatchModel(patch,flat,q),b=makeGrassPatchModel(patch,flat,q);
         assert(a&&b&&geometryHash(*a)==geometryHash(*b));
+        auto singleLeaf=q;
+        for(auto& species:singleLeaf.meadow.species)species.basalLeaves=0;
+        const auto stems=makeGrassPatchModel(patch,flat,singleLeaf);
+        assert(stems);
+        // All three meadow species use three segments (5 main triangles).
+        // Four basal leaves grow from each accepted root at this tier.
+        assert(uint64_t(triangles(*a,0))*5==uint64_t(triangles(*stems,0))*9);
         assert(a->materials.size()==1&&a->materials[0].vertexColors&&!a->materials[0].castShadow);
         assert(triangles(*a,0)<=uint64_t(q.maxBladesPerPatch)*meadowBladeTriangleBound(q.bladeSegments));
         float minY=1e9f,maxY=-1e9f;std::set<uint32_t> colours;
@@ -208,7 +217,11 @@ int main() {
         assert(burnt&&burnt->materials.size()==2&&burnt->meshes[0].primitives.size()==2);
         assert(burnt->meshes[0].primitives[1].material==1&&burnt->materials[1].emissiveStrength>0);
         float maxCharred=0;
-        for(const auto& v:burnt->vertices)if(v.pos.x<3.9f)maxCharred=std::max(maxCharred,v.pos.y-1.23f);
+        // Select by root through the placement mask; fresh leaves can arch
+        // across the boundary into the charred region.
+        const auto stubble=makeGrassPatchModel(patch,flat,q,[](int64_t x,int64_t){return x<0;},&burn);
+        assert(stubble);
+        for(const auto& v:stubble->vertices)maxCharred=std::max(maxCharred,v.pos.y-1.23f);
         assert(maxCharred<.35f); // charred stubble is short
     }
 #endif
