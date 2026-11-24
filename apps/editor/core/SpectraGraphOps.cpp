@@ -202,7 +202,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         response.set("name", strGraph(name));
         if (!response.getBool("ok")) return response; // never overwrite a valid graph with invalid input
         const std::string content = graph.dump(2) + "\n";
-        graph_asset::Transaction tx(graphFile(ws,name));
+        graph_asset::Transaction tx(graphFile(ws,name),ws.project.dir);
         const bool existed=tx.checkExpected(p,[&]{return Json::parse(readFile(tx.target()));});
         tx.replace(content,1024*1024);
         noteGraph(ws, (existed ? "SpectraFX graph updated: " : "SpectraFX graph created: ") + name);
@@ -214,7 +214,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         R"({"properties":{"name":{"type":"string"}},"required":["name"]})", [&ws](const Json& p) {
         requireGame(ws);
         const std::string name = requireGraphName(p);
-        graph_asset::Transaction tx(graphFile(ws,name));
+        graph_asset::Transaction tx(graphFile(ws,name),ws.project.dir);
         std::error_code ec;
         if (!fs::remove(tx.target(), ec)) {
             if (ec) throw std::runtime_error("cannot delete SpectraFX graph: " + ec.message());
@@ -336,7 +336,7 @@ void registerSpectraGraphOps(Workspace& ws) {
            !doc["nodes"].isArray() || doc["nodes"].size()>256 ||
            !doc["links"].isArray() || doc["links"].size()>512)
             throw std::runtime_error("draft must be a bounded v1/v2 graph object");
-        graph_asset::Transaction tx(draftFile(ws,name));
+        graph_asset::Transaction tx(draftFile(ws,name),ws.project.dir);
         tx.checkExpected(p,[&]{return Json::parse(readFile(tx.target()));});
         tx.replace(doc.dump(2)+"\n",1024*1024);
         noteGraph(ws,"SpectraFX draft saved: "+name);
@@ -392,7 +392,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         [&ws](const Json& p) {
         requireGame(ws);
         const std::string name=requireGraphName(p);
-        graph_asset::Transaction draftTx(draftFile(ws,name));
+        graph_asset::Transaction draftTx(draftFile(ws,name),ws.project.dir);
         const fs::path draft=draftTx.target();
         const Json doc=Json::parse(readFile(draft));
         if(!p["expectedDraft"].isObject() || !(doc==p["expectedDraft"]))
@@ -400,7 +400,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         Json response=graphEvaluation(doc,Json::object());
         response.set("name",Json::string(name));
         if(!response.getBool("ok"))return response;
-        graph_asset::Transaction tx(graphFile(ws,name));
+        graph_asset::Transaction tx(graphFile(ws,name),ws.project.dir);
         tx.checkExpected(p,[&]{return Json::parse(readFile(tx.target()));});
         tx.replace(doc.dump(2)+"\n",1024*1024);
         std::error_code ec;
