@@ -237,6 +237,7 @@ void MapGrid::block(int x0, int y0, int fw, int fh, int delta) {
 }
 
 void MapGrid::cellChanged(int x, int y) {
+    if(pathTelemetryEnabled_&&inside(x,y)&&pathTelemetry_.cellInvalidations!=UINT64_MAX)++pathTelemetry_.cellInvalidations;
     clearanceDirty = true;
     navDirty(x - 1, y - 1, x + 1, y + 1);
     ++flowStamp_;
