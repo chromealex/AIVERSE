@@ -842,7 +842,8 @@ void StudioScene::drawPlanetForestFarChunks(const Json& rows,float flora,int wid
             const float a=clip.at(3,0)+sign*clip.at(axis,0),b=clip.at(3,1)+sign*clip.at(axis,1);
             const float c=clip.at(3,2)+sign*clip.at(axis,2),d=clip.at(3,3)+sign*clip.at(axis,3);
             // Small padded frustum to prefetch at viewport boundaries.
-            const float pad=.04f*(std::abs(a)+std::abs(b)+std::abs(c))*std::max(1.f,view.distance);
+            const float margin=planetForestFarChunks_.count(cell)?.08f:.04f;
+            const float pad=margin*(std::abs(a)+std::abs(b)+std::abs(c))*std::max(1.f,view.distance);
             if(a*center.x+b*center.y+c*center.z+d+std::abs(a)*half.x+std::abs(b)*half.y+std::abs(c)*half.z+pad<0)outside=true;
         }
         if(outside){++frustumRejected;continue;}
@@ -949,8 +950,20 @@ void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std
     if(index<0)return;
     const auto& scale=doc.data.bodies[size_t(index)].meta["visual"]["flora"]["scale"];
     const float flora=scale.isNumber()?std::clamp(float(scale.toDouble()),.001f,10.f):.06f;
-    const auto& far=planetLiveSnapshot_["forest"]["farPlants"];
+    Json far=Json::array();
+    for(const auto& row:planetLiveSnapshot_["forest"]["farPlants"].items())far.push(row);
+    // Unavailable ARBOR prototypes must not permanently remove a standing
+    // plant from both tiers. The same current-tick pose drives its proxy.
+    size_t fallback=0;
+    for(const auto& row:planetLiveSnapshot_["forest"]["plants"].items()){
+        if(row.getStr("body")!=planetPreview_->bodyId||row.getBool("spent")||row.getBool("physical")||row.getBool("fallen")||row.getBool("harvested")||row.getStr("habit")=="grass")continue;
+        if(planetForestModels_.count(uint32_t(row.getInt("species"))))continue;
+        Json proxy=Json::object();
+        for(const char* key:{"cell","species","key","position","up","east","sizePermille","foliagePermille"})proxy.set(key,row[key]);
+        proxy.set("shrub",Json::fromBool(row.getStr("habit")=="shrub"));far.push(std::move(proxy));++fallback;
+    }
     drawPlanetForestFarChunks(far,flora,width,height);
+    if(fallback)lightingStatus_+=" · prototype fallback "+std::to_string(fallback);
     static const std::vector<uint8_t> barkOnly{1,0};
     planetForestSeasonMaterials_.clear();
     const auto tick=uint64_t(planetLiveSnapshot_["forest"].getInt("tick",0));

@@ -857,9 +857,8 @@ std::optional<StudioForestCameraFocus> StudioHost::worldProcessForestCamera(){
     return onScene([&]{return preview_->planetForestCamera(ws.project.dir,ws.map.path,ws.map.revision,placement_.pixelsW,placement_.pixelsH);});
 }
 Json StudioHost::sampleWorldProcessLive(){
-    wpForestRenderSnapshot_=Json{};
-    if(!game_||!wpLiveOptions_.live||(game_->planetMatch()&&!worldProcessPlanetMapCurrent()))return {};
-    if(!wpLiveOptions_.forest)return game_->ecologyState(wpLiveOptions_);
+    if(!game_||!wpLiveOptions_.live||(game_->planetMatch()&&!worldProcessPlanetMapCurrent())){wpForestRenderSnapshot_=Json{};return {};}
+    if(!wpLiveOptions_.forest){wpForestRenderSnapshot_=Json{};return game_->ecologyState(wpLiveOptions_);}
     const auto camera=worldProcessForestCamera();
     const auto body=camera?camera->body:worldProcessSceneBody();
     return game_->ecologyState(wpLiveOptions_,body,camera,&wpForestRenderSnapshot_);

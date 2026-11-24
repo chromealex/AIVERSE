@@ -130,7 +130,8 @@ bool StudioGameSurface::planetSnapshotCurrent(const Json& snapshot) const {
         snapshot.getStr("epoch")==std::to_string(runtimeEpoch_);
 }
 Json StudioGameSurface::ecologyState(const StudioWorldProcessLiveOptions& options,const std::string& focusBody,const std::optional<StudioForestCameraFocus>& camera,Json* forestRender){
-    if(forestRender)*forestRender=Json{};
+    Json previousForestRender;
+    if(forestRender){previousForestRender=std::move(*forestRender);*forestRender=Json{};}
     Simulation* sim=host_&&host_->inMatch()?host_->simulation():nullptr;
     Json out=Json::object(),regions=Json::array();
     out.set("active",Json::fromBool(sim!=nullptr));
@@ -167,7 +168,11 @@ Json StudioGameSurface::ecologyState(const StudioWorldProcessLiveOptions& option
                         const auto weather=studioForestWeatherMappings(sim->world(),*surface,config?*config:Json{},game->matchMap());
                         budget.add(out,"forest",sampleStudioPlanetForest(sim->world(),*surface,tick,cap(kStudioForestDiagnosticLimit),weather,focusBody,camera));
                         // Native Scene only: independent budget, same completed tick and body.
-                        if(forestRender&&!focusBody.empty())*forestRender=sampleStudioPlanetForest(sim->world(),*surface,tick,kStudioForestRenderLimit,weather,focusBody,camera,true);
+                        if(forestRender&&!focusBody.empty()){
+                            const bool sameEpoch=previousForestRender.getStr("epoch")==std::to_string(runtimeEpoch_);
+                            *forestRender=sampleStudioPlanetForest(sim->world(),*surface,tick,kStudioForestRenderLimit,weather,focusBody,camera,true,sameEpoch?&previousForestRender:nullptr);
+                            forestRender->set("epoch",Json::string(std::to_string(runtimeEpoch_)));
+                        }
                         if(forestTerrain)budget.add(out,"forestTerrain",sampleStudioPlanetTerrain(*surface,tick,focusBody,planetLiveShare(kPlanetLivePayloadBytes-kPlanetLiveRootReserve,layers)));
                     }
                     if(options.society)budget.add(out,"society",samplePlanetSociety(sim->world(),*surface,tick,cap(256),cap(512),cap(128)));

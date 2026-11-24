@@ -10,7 +10,7 @@ inline constexpr size_t kStudioForestDiagnosticLimit=128;
 inline constexpr size_t kStudioForestRenderLimit=2048;
 inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surface,uint32_t tick,size_t limit=128,
         const std::vector<evolve::PlanetWeatherMapping>& weather={},const std::string& focusBody={},
-        const std::optional<StudioForestCameraFocus>& camera={},bool renderPopulation=false){
+        const std::optional<StudioForestCameraFocus>& camera={},bool renderPopulation=false,const Json* previousRender=nullptr){
     limit=std::min(limit,renderPopulation?kStudioForestRenderLimit:kStudioForestDiagnosticLimit);
     namespace tw=terraweave;namespace ev=evolve;namespace wp=lib::worldprocess;
     Json out=Json::object(),rows=Json::array(),far=Json::array();
@@ -56,6 +56,10 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
         float distance=0,targetDistance=0;
         int64_t cell=-1;
     };
+    // Reuse only stable identities, never previous simulation values.
+    std::set<std::pair<int64_t,std::string>> previousDetail;
+    if(renderPopulation&&previousRender&&previousRender->getBool("active")&&previousRender->getStr("focusBody")==focusBody)
+        for(const auto& row:(*previousRender)["plants"].items())previousDetail.emplace(row.getInt("species"),row.getStr("key"));
     std::vector<RankedPlant> ranked;ranked.reserve(roots->rooted.size());
     size_t nearView=0;
     const auto cameraClip=cameraRank?camera->viewProjection():render::mat4{};
@@ -92,6 +96,10 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
                     const bool retired=(log!=wood->ledger.logs.end()&&log->id==id&&!log->remainingUnits)||
                         (!physical&&(plant.fallen||(harvest&&tw::isForestHarvested(*harvest,id))));
                     entry.group=group+(retired?3:0);entry.distance=distance;entry.targetDistance=targetDistance;
+                    // 15% distance hysteresis, within the same visibility class.
+                    if(renderPopulation&&!retired&&previousDetail.count({int64_t(id.speciesId),std::to_string(id.key)})){
+                        entry.distance*=.7225f;entry.targetDistance*=.7225f;
+                    }
                     if(group==0&&!retired)++nearView;
                 }
             }
