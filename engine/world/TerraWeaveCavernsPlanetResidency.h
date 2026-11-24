@@ -59,6 +59,12 @@ public:
         if(!it->second->close(device,planet,box,spatial,exclusive,restoreOriginalsAndRetireNavGi))return false;
         owners_->erase(it);return true;
     }
+    // Collision binding has already coordinated close/restore. Do not close twice.
+    bool eraseClosed(const std::string& id){
+        const auto it=owners_->find(id);if(it==owners_->end())return true;
+        if(!it->second->closed())return false;
+        owners_->erase(it);return true;
+    }
     bool empty()const noexcept{return owners_->empty();}
     // The host MUST close every owner before destruction, or keep this
     // registry alive in its explicit recovery state. No implicit GPU free.
