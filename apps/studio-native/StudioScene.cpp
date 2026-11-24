@@ -1576,10 +1576,10 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     const auto& proxies=proxies_;
     const bool showTerrain=planetaryChart||showTerrain_;
-    const bool sparseTerrain=!map.planet()&&!map.extra["terraweaveSparseTerrain"].isNull();
+    const bool sparseTerrain=!map.planet()&&map.extra["terraweaveSparse"].isObject();
     auto retireSparse=[&](auto& model){if(model)renderer_.invalidateModelCachesFor(model.get());sparseTerrainRetirement_.retireModel(*device_,model);};
     (void)sparseTerrainRetirement_.collectWithoutIdle(*device_);
-    if((!sparseTerrain||sparseTerrainProject_!=projectPath)&&sparseTerrainPreview_.residentCount())sparseTerrainPreview_.release(retireSparse);
+    if((!sparseTerrain||sparseTerrainProject_!=projectPath)&&(sparseTerrainPreview_.residentCount()||sparseTerrainPreview_.authoredCount()))sparseTerrainPreview_.release(retireSparse);
     sparseTerrainProject_=projectPath;
     snapPivots_.clear();
     // Same pivot as the Move gizmo: bottom centre (lights: centre).
