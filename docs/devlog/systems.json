@@ -1768,10 +1768,10 @@
           "textEn": "Immutable material binding pins and automatic sweep with native host root certification. Disabled by default; isolated tests passed."
         },
         {
-          "name": "Texture Graph GPU — Stage 38K (в работе)",
-          "text": "Переиспользование подтверждённо свободных индексов после retirement.",
-          "nameEn": "Texture Graph GPU — Stage 38K (in progress)",
-          "textEn": "Recycle certified free image indices after retirement."
+          "name": "Texture Graph GPU — Stage 38K",
+          "text": "Подтверждённо свободные слоты процедурных текстур можно переиспользовать после GPU retirement. По умолчанию сохраняется append-only; изолированные тесты пройдены.",
+          "nameEn": "Texture Graph GPU — Stage 38K",
+          "textEn": "Certified procedural image slots can be reused after GPU retirement. Append-only remains the default; isolated tests passed."
         }
       ],
       "enables": [
