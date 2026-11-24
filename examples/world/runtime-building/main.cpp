@@ -96,7 +96,7 @@ public:
             // runtime separately checks real ECS body volumes on unload.
             d.canUnload=[](){return true;};
             d.resetDerivedGraphs=[this,id](){graphRevisions.erase(id);return true;};
-            d.graphOwners.emplace(BuildingGraphDomain::Gameplay,
+            CHECK(d.bindGraphOwner(BuildingGraphDomain::Gameplay,"gameplay",
                 [this](const BuildingGraphChange& c){
                     if(!graphAvailable)return false;
                     // The derived cache belongs to the native module,
@@ -104,7 +104,12 @@ public:
                     if(c.kind==BuildingGraphChangeKind::Removed)graphRevisions.erase(c.sceneId);
                     else graphRevisions[c.sceneId]=c.revision;
                     return true;
-                });
+                },[this,id](){
+                    Json report=Json::object();
+                    const auto it=graphRevisions.find(id);
+                    if(it!=graphRevisions.end())report.set("revision",Json::string(std::to_string(it->second)));
+                    report.set("ownerAvailable",Json::fromBool(graphAvailable));return report;
+                }));
             return d;
         };
         auto first=definition(1,"instances/buildings/a",{},navA);
@@ -296,6 +301,7 @@ int main(int argc,char** argv){
         const auto navTelemetry=game->graphMonitor->read(1)["ownerTelemetry"]["navmesh"];
         CHECK(navTelemetry.isObject()&&navTelemetry.getInt("tileCount")>0);
         CHECK(navTelemetry["lastSuccessfulRefresh"].isObject());
+        CHECK(game->graphMonitor->read(1)["ownerTelemetry"]["gameplay"].isObject());
         CHECK(world.canBoardLift(1,game->feature,0));
         CHECK(!world.canTraverse(2,"entrance/0/0"));
         CHECK(!game->spatial.colliders().empty());
