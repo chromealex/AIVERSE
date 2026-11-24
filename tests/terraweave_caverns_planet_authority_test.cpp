@@ -140,7 +140,7 @@ static void checkPlanetMotion(const std::shared_ptr<const game::Surface>& surfac
     check(!zero.groundedCompatible&&!stepCavePlanetMotion(zero,{},state,{},1,Fixed::fromRatio(1,20)),"zero gravity refuses grounded motor");
     check(!state.initialized,"refused step mutated state");
 }
-static void checkNavigationCoverage(){
+static void checkNavigationCoverage(const std::shared_ptr<const game::Surface>& surface){
     const CavePlanetAnchor anchor{"planet",0,8_fx,8_fx,800};
     CavePlanetDemandConfig cfg;
     auto keys=planetInteriorKeys(anchor,cfg);
@@ -150,6 +150,22 @@ static void checkNavigationCoverage(){
     check(coverage.contains({-cap+1,-cap+1,-cap+1},{cap-1,cap-1,cap-1}),"interior covered");
     check(!coverage.contains({0,0,0},{cap,0,0}),"outer boundary rejected");
     check(!coverage.contains({1,0,0},{0,0,0}),"inverted bounds rejected");
+    auto sim=make(regions());
+    auto index=std::make_shared<const CaveSnapshotSpatialIndex>(freezePlanetCaveRegion(sim->world(),2));
+    const auto frame=CavePlanetFrame::make(surface,anchor);
+    auto frozen=std::make_shared<const World>();
+    const auto provider=makeResidentCavePlanetNavigation(frame,index,frozen,7,coverage,
+        [](PointCm)->std::optional<std::pair<int32_t,int32_t>>{return {};});
+    CaveAgentProfile agent;agent.traversal=CaveTraversal::Flying;
+    agent.radiusCm=0;agent.heightCm=1;
+    check(provider->residentSegment({0,0,0},{0,0,0},agent),"resident provider interior");
+    check(!provider->residentSegment({cap,0,0},{cap,0,0},agent),"provider rejected unmeshed chart");
+    const CavePlanetNavigationLease lease{2,3,4,provider};
+    check(lease.matches(2,3,4,index->revision(),7),"lease identity");
+    check(!lease.matches(9,3,4,index->revision(),7),"wrong region");
+    check(!lease.matches(2,4,4,index->revision(),7),"stale restore generation");
+    check(!lease.matches(2,3,5,index->revision(),7),"stale native publication");
+    check(!lease.matches(2,3,4,index->revision(),8),"stale environment");
     keys.erase(keys.begin());
     bool refused=false;
     try{(void)CavePlanetNavigationCoverage::certify(anchor,cfg,keys);}
@@ -161,7 +177,7 @@ int main(){
     checkBodyCut(surface);
     checkDemand(surface);
     checkPlanetMotion(surface);
-    checkNavigationCoverage();
+    checkNavigationCoverage(surface);
     const auto old=decodePlanetCaveMap(region(99,0),surface);
     check(old.regions.size()==1&&old.regions.front().id==1,"v1 migration");
     bool refused=false;
