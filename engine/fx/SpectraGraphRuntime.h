@@ -102,6 +102,11 @@ public:
         dataRegistry_=registry;
     }
     const DataInterfaceSampleStats& dataInterfaceStats() const {return dataStats_;}
+    // Shared runtimes use the host BatchWorld setter; GPU collision is not implied.
+    bool setSceneCollisionRegistry(std::shared_ptr<const fx::SceneCollisionRegistry> registry,uint32_t maxQueries=8192) {
+        if(!initialized_||sharedWorld_||useComputeWrapper_)return false;
+        cpu_.setSceneCollisionRegistry(std::move(registry),maxQueries);return true;
+    }
     bool burstAt(fx::float3 worldPosition,
                  fx::float3 direction = {0,1,0},
                  fx::float4 tint = {1,1,1,1});

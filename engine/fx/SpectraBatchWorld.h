@@ -60,6 +60,9 @@ public:
     // EXACTLY ONCE per presentation frame, after all emitters registered
     // their births/moves. draw() EXACTLY ONCE during the scene render pass.
     // Never call update()/draw() independently from each GraphRuntime.
+    void setSceneCollisionRegistry(std::shared_ptr<const fx::SceneCollisionRegistry> registry,uint32_t maxQueries=8192) {
+        particles_.setSceneCollisionRegistry(std::move(registry),maxQueries);
+    }
     void setView(const fx::SpectraFxView& view);
     template<class Camera>
     void setView(const Camera& camera,const render::mat4& projection,int width,int height) {

@@ -189,6 +189,7 @@ struct FxCollision {
     bool ground = true;                         // the terrain (setGroundHeight) + "height"
     std::vector<FxPlane> planes;                // effect space
     float radius = 0;                           // particle radius as a share of its size (Unity radius scale)
+    bool scene = false;                         // opt-in host swept collision provider
 };
 struct FxNoise {
     FxRange strength{0, 0};                     // over the lifetime

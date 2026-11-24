@@ -440,6 +440,7 @@ void ParticleSystem::Impl::emitInstance(size_t slot, float dt, float spawn, int&
 void ParticleSystem::Impl::stepParticle(size_t& i, float dt, bool& removed) {
     removed = false;
     auto& p = particles[i];
+    const auto previousPosition=p.pos;
     p.age += dt;
     const EmitterDef& d = defOf(p);
     if (p.age * p.invLife >= 1.0f) {
@@ -581,6 +582,27 @@ void ParticleSystem::Impl::stepParticle(size_t& i, float dt, bool& removed) {
             const float rad = c.radius > 0 ? c.radius * 0.5f * p.size : 0.0f;
             const float before = render::length(p.vel);
             bool hit = false;
+            if(c.scene && sceneCollision && dt>0) {
+                if(sceneCollisionStats.queries>=sceneCollisionBudget)++sceneCollisionStats.budgetDenied;
+                else {
+                    ++sceneCollisionStats.queries;
+                    SceneCollisionHit contact;
+                    const SceneCollisionQuery query{previousPosition,p.pos,rad};
+                    if(sceneCollision->sweep(query,contact,sceneCollisionStats)) {
+                        const auto n=contact.normal;
+                        const float vn=render::dot(p.vel,n);
+                        const float approach=render::dot(p.pos-previousPosition,n);
+                        if(contact.penetration>0||approach<0||vn<0) {
+                            p.pos=previousPosition+(p.pos-previousPosition)*contact.fraction+
+                                  n*(contact.penetration+0.001f);
+                            if(vn<0)p.vel=(p.vel-n*vn)*(1-c.dampen)-n*(vn*c.bounce);
+                            p.vtot=p.vel;
+                            ++sceneCollisionStats.hits;
+                            hit=true;
+                        }
+                    }
+                }
+            }
             if (c.ground && upFn && altFn) { // curved worlds: the ground along the local up
                 const float3 n = upFn(p.pos);
                 const float below = c.height * p.scale + rad - altFn(p.pos);
@@ -811,6 +833,12 @@ void ParticleSystem::setQuality(FxQuality q) {
 }
 
 void ParticleSystem::setGroundHeight(std::function<float(float, float)> fn) { impl_->ground = std::move(fn); }
+void ParticleSystem::setSceneCollisionRegistry(std::shared_ptr<const SceneCollisionRegistry> registry,uint32_t maxQueries) {
+    impl_->sceneCollision=std::move(registry);
+    impl_->sceneCollisionBudget=std::min(maxQueries,65536u);
+    impl_->sceneCollisionStats={};
+}
+SceneCollisionStats ParticleSystem::sceneCollisionStats() const {return impl_->sceneCollisionStats;}
 void ParticleSystem::setWind(float3 wind) { impl_->wind = wind; }
 void ParticleSystem::setLightDir(float3 dir) { if (render::length(dir) > 1e-5f) impl_->lightDir = render::normalize(dir); }
 void ParticleSystem::setUpFunction(std::function<float3(float3)> fn) { impl_->upFn = std::move(fn); }
@@ -1181,6 +1209,7 @@ void ParticleSystem::setView(const SpectraFxView& view) {
 
 void ParticleSystem::update(float dt) {
     auto& I = *impl_;
+    I.sceneCollisionStats={};
     dt = std::clamp(dt, 0.0f, 0.1f);
     if (I.haveView) {   // camera velocity ("cameraStretch")
         if (I.haveLastEye && dt > 0) I.camVel = (I.eye - I.lastEye) * (1.0f / dt);

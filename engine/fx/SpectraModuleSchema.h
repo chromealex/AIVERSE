@@ -85,7 +85,7 @@ inline constexpr std::array<FieldSpec,9> kNoiseModuleFields{{
     {"rotation","Rotation influence",FieldKind::Number,-3600,3600,"0"},
     {"size","Size influence",FieldKind::Number,0,10,"0"}
 }};
-inline constexpr std::array<FieldSpec,8> kCollisionModuleFields{{
+inline constexpr std::array<FieldSpec,9> kCollisionModuleFields{{
     {"height","Ground offset",FieldKind::Number,-100,100,"0"},
     {"bounce","Bounce",FieldKind::Number,0,2,"0.5"},
     {"dampen","Collision damping",FieldKind::Number,0,1,"0"},
@@ -93,6 +93,7 @@ inline constexpr std::array<FieldSpec,8> kCollisionModuleFields{{
     {"minKillSpeed","Minimum kill speed",FieldKind::Number,0,1000,"0"},
     {"maxKillSpeed","Maximum kill speed",FieldKind::Number,0,100000,"0"},
     {"ground","Terrain collision",FieldKind::Boolean,0,0,"true"},
+    {"scene","Swept scene collision",FieldKind::Boolean,0,0,"false"},
     {"radius","Particle radius multiplier",FieldKind::Number,0,10,"0"}
 }};
 inline constexpr std::array<FieldSpec,10> kTrailModuleFields{{

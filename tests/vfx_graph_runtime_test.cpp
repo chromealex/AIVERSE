@@ -429,5 +429,34 @@ int main() {
         require(registry.sample("terraweave","up_x",{15,0,0},value)&&value==1,"radial terrain up");
         require(!registry.sample("terraweave","height",{0,0,0},value),"undefined planet centre");
     }
+    {
+        auto registry=std::make_shared<fx::SceneCollisionRegistry>();
+        require(registry->bind(1,fx::makeSceneSdfSweep([](render::float3 p,float& d){
+            d=render::length(p)-1.f;return true;
+        })),"sphere SDF");
+        fx::SceneCollisionHit hit;
+        fx::SceneCollisionStats stats;
+        require(registry->sweep({{-3,0,0},{3,0,0},0.25f},hit,stats)&&
+                std::abs(hit.fraction-(1.75f/6.f))<0.002f&&hit.normal.x<-.99f,
+                "swept sphere prevents tunnelling");
+        fx::ParticleSystem ps;
+        require(ps.init(nullptr),"scene collision CPU init");
+        fx::EffectDef effect;
+        std::vector<std::string> errors;
+        require(fx::parseEffect(Json::parse(R"({"emitters":[{"burst":1,"speed":60,"life":2,"size":0.2,"spread":0,"gravity":[0,0,0],"collision":{"ground":false,"scene":true,"bounce":1}}]})"),"sweep",effect,errors),"authored scene collision");
+        require(effect.emitters[0].collision.scene,"scene flag");
+        const auto roundtrip=fx::effectToJson(effect);
+        fx::EffectDef restored;
+        require(fx::parseEffect(roundtrip,"roundtrip",restored,errors)&&restored.emitters[0].collision.scene,"scene collision roundtrip");
+        ps.setSceneCollisionRegistry(registry);
+        const int id=ps.define("sweep",effect);
+        require(id>=0&&ps.play(id,{-3,0,0},{1,0,0}).valid(),"scene collision particle birth");
+        ps.update(.1f);
+        std::vector<fx::FxParticleInfo> particles;
+        ps.snapshot(particles);
+        require(particles.size()==1&&particles[0].pos.x<0&&particles[0].vel.x<0&&
+                ps.sceneCollisionStats().hits==1,"actual CPU particle swept collision");
+        ps.shutdown();
+    }
     std::cout<<"PASS SpectraFX graph GPU eligibility, strict CPU preservation and host fallback\n";
 }
