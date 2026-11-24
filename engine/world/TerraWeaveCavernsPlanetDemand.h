@@ -9,7 +9,7 @@ namespace aiverse::terraweave::caverns {
 struct CavePlanetObserver {int body=-1;Vec3 simulationPosition{};};
 struct CavePlanetDemandConfig {
     uint32_t resolution=8;
-    int32_t spacingCm=25;
+    int32_t spacingCm=0; // 0: choose a Q16 interior lattice per region
     int32_t enterCm=1000,leaveCm=1500;
     size_t maxRegions=8,maxVolumeSlots=64;
 };
@@ -25,10 +25,27 @@ struct CavePlanetDemand {
     size_t volumeSlots=0;
     bool pinnedOverflow=false;
 };
+// Resolve a full, bounded chart cohort. Auto spacing is intentionally
+// conservative; callers requiring a finer lattice provide an explicit
+// spacing and accept a budget refusal rather than an invisible LOD change.
+inline CavePlanetDemandConfig resolvePlanetDemandLattice(const CavePlanetAnchor& anchor,
+        CavePlanetDemandConfig cfg){
+    if(!cfg.resolution||cfg.resolution>64||cfg.spacingCm<0||cfg.spacingCm>10000)
+        throw std::invalid_argument("Caverns gameplay lattice config");
+    if(!cfg.spacingCm){
+        const int64_t cap=anchor.halfExtentCm;
+        // The 25cm quantum is compatible with any base resolution.
+        const int64_t spacing=25*(cap/(25*int64_t(cfg.resolution)+13));
+        if(!spacing||spacing>10000)throw std::length_error("Caverns chart too small for auto lattice");
+        cfg.spacingCm=int32_t(spacing);
+    }
+    return cfg;
+}
 // Authoritative sampling is never artificially clipped to the chart box.
 // Leave a real gradient halo and refuse charts exceeding the native budget.
 inline std::set<ChunkKey3,KeyLess> planetInteriorKeys(const CavePlanetAnchor& anchor,
-        const CavePlanetDemandConfig& cfg){
+        const CavePlanetDemandConfig& input){
+    const auto cfg=resolvePlanetDemandLattice(anchor,input);
     if(!cfg.resolution||cfg.resolution>64||cfg.spacingCm<1||cfg.spacingCm>10000||
        !cfg.maxVolumeSlots||cfg.maxVolumeSlots>64)
         throw std::invalid_argument("Caverns gameplay lattice config");
