@@ -188,3 +188,7 @@ Add opt-in desktop executable using actual shared Surface, PlanetRenderer/GameVi
 ### Stage58d1 — IN PROGRESS (native portal and swim scenarios)
 
 Extend opt-in planet demo with explicit shaft entry, canonical interior route and exit, and separate submerged chamber traversal using existing NEREID and locomotion. Keep one native dispatcher, persistent scenario phase and motion state, actual accepted rim and live coverage checks. Conservative swept-envelope proof restricted to known local patch and chart bounds. No simulated success or teleport at crossings; source only until real acceptance. Moving frame and native restore follow.
+
+### Stage58d2 — IN PROGRESS (orbital presentation and floating-origin scenario)
+
+Add opt-in moving planet demo with real Surface parent/orbit, one frozen LENS render/GI frame per publication, discrete rebases under actual native exclusion, coherent lights and focus. Remap unleased baseline vertices directly from canonical fixed body positions, rejecting ambiguous/missing identity instead of accumulating drift. Preserve ECS checksum, native physics tick and SpatialWorld mutation across presentation changes. Bounded CPU GI lattice and full invalidation per rebase; no claim of continuous scrolling or live acceptance. Restore scenario follows.
