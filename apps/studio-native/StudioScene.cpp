@@ -906,13 +906,15 @@ Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
         }
         if(action=="studioHdrAdopt"){
             if(!device_->waitForResourceIdle())throw std::runtime_error("resident HDR replacement retirement failed");
+            const bool mipmaps=owner.status().getBool("gpuTextureMipmaps");
             auto candidate=owner.takeResidentRadiance(*device_,lease,ws.project.dir,p.getStr("request"));
             gfx::TextureInfo info;
             if(!device_->textureInfo(candidate,info)){device_->destroyTexture(candidate);throw std::runtime_error("resident HDR metadata unavailable");}
             if(presentation.residentHdr.valid())device_->destroyTexture(presentation.residentHdr);
-            presentation.residentHdr=candidate;presentation.residentHdrRequest=p.getStr("request");presentation.residentHdrMipCount=info.mipLevels;presentation.hdrCapture.reset();
+            const int levels=mipmaps?gfx::maxTextureMipLevels(info.width,info.height,1):1;
+            presentation.residentHdr=candidate;presentation.residentHdrRequest=p.getStr("request");presentation.residentHdrMipCount=levels;presentation.hdrCapture.reset();
             Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("state",Json::string("resident"));r.set("request",Json::string(presentation.residentHdrRequest));
-            r.set("mipLevels",Json::number(int64_t(info.mipLevels)));r.set("size",Json::number(int64_t(info.width)));return r;
+            r.set("mipLevels",Json::number(int64_t(levels)));r.set("size",Json::number(int64_t(info.width)));return r;
         }
         if(action=="studioHdrRelease"){
             if(presentation.residentHdr.valid()){
