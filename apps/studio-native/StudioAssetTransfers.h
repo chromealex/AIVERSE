@@ -116,6 +116,10 @@ private:
 };
 editor::ProjectHistory studioLoadAssetHistoryCheckpoint(const std::filesystem::path& project);
 void studioRecoverAssetJournal(const std::filesystem::path& project);
+// Explicit reset of unreadable/stale persistent history only. Archive exact
+// checkpoint/legacy marker bytes before replacing the checkpoint.
+Json studioReviewAssetHistoryReset(const std::filesystem::path& project);
+void studioApplyAssetHistoryReset(const std::filesystem::path& project,const std::string& token);
 // Recovery browser: list persisted slots; review exact current identity before restore/purge.
 // Project-local logical-byte budget. Zero preserves the unlimited legacy policy.
 Json studioRecoveryStorage(const std::filesystem::path& project);
