@@ -96,9 +96,12 @@
       "evidence": []
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending actual execution and integration review.",
-      "evidence": []
+      "status": "pass",
+      "note": "Registered workflow skill exists; Mac QA v7 skill_catalog, skill_routing and skill_audit PASS. Documentation and catalog unchanged by main sync. This does not prove every runtime operation.",
+      "evidence": [
+        "skills/workflow/aiverse-new-feature/SKILL.md",
+        "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md"
+      ]
     },
     "mcp": {
       "status": "not_run",
@@ -136,9 +139,12 @@
       "evidence": []
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending actual execution and integration review.",
-      "evidence": []
+      "status": "pass",
+      "note": "Mac v7 policy dependency report: both registered features have empty requires and no dependency declaration errors; partial compliance and native-host build fixture passed. This is declared dependency scope, not release readiness.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md",
+        "docs/evidence/feature-gate-mac-v7-summary.log.txt"
+      ]
     },
     "headless": {
       "status": "not_applicable",
@@ -152,7 +158,7 @@
     },
     "tests": {
       "status": "pass",
-      "note": "Mac QA v7, tested 59558502: full desktop Debug CTest 487 passed, 0 failures, 1 opt-in LENS skip; Python 22/22, web 218/218, Studio contracts 48/48. Scope is automated Mac QA; standalone extra suites, manual UI/refresh, cross-platform and publishing remain unverified.",
+      "note": "Mac QA v7, tested 59558502: full desktop Debug CTest 487 passed, 0 failures, 1 opt-in LENS skip; Python 22/22, web 218/218, Studio contracts 48/48. Scope is automated Mac QA; standalone extra suites, manual UI/refresh, cross-platform and publishing remain unverified. Main synced with two site-only changes; strict provenance requires a fresh report, not a rewritten old SHA.",
       "evidence": [
         "docs/evidence/feature-gate-mac-v7-python.log.txt",
         "docs/evidence/feature-gate-mac-v7-ctest.log.txt",
@@ -160,14 +166,21 @@
       ]
     },
     "handoff": {
-      "status": "not_run",
-      "note": "Pending actual execution and integration review.",
-      "evidence": []
+      "status": "pass",
+      "note": "Stage handoffs record actual tested SHA, results, limitations and next integration requirements; latest main sync documented.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md",
+        "docs/agent-handoffs/feature-gate-stage43-mac-qa-2026-11-24.md"
+      ]
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending actual execution and integration review.",
-      "evidence": []
+      "status": "pass",
+      "note": "Reviewed existing feature/graph authoring contract and workflow skill; documented scope and outstanding owner acceptance requirements in stage handoff.",
+      "evidence": [
+        "docs/agents/feature-contract.md",
+        "skills/workflow/aiverse-new-feature/SKILL.md",
+        "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md"
+      ]
     },
     "publishing": {
       "status": "not_run",
