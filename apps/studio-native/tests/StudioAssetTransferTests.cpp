@@ -1501,6 +1501,61 @@ int main(){
             AIVERSE_TEST_CHECK(!fs::exists(p/"content"/"New"/"Atomic.png")&&studioLoadAssetHistoryCheckpoint(p).position()==4);
             AIVERSE_TEST_CHECK(!fs::exists(p/".aiverse-cache"/"asset-history.dirty"));
         }
+        // S6f.4b.3b.2: internal relocation, material and model references,
+        // and the persistent asset cursor have one publication boundary.
+        {
+            using namespace aiverse;using namespace aiverse::studio;
+            const auto p=fs::canonical(temp)/"AtomicInternalMove";
+            fs::create_directories(p/"content"/"A");fs::create_directories(p/"content"/"B");
+            const auto source=p/"content"/"A"/"Paint.png",dest=p/"content"/"B"/"Paint.png";
+            const auto model=p/"content"/"A"/"Model.gltf",materials=p/"materials.json";
+            const std::string originalModel=R"({"asset":{"version":"2.0"},"images":[{"uri":"Paint.png"}]})";
+            const std::string originalMaterials=R"({"materials":{"Paint":{"texture":"content/A/Paint.png"}},"extra":"preserved"})";
+            write(source,"pixels");write(model,originalModel);write(materials,originalMaterials);
+            StudioAssetCatalog index(p);index.rebuild();
+            const auto guid=index.byPath("A/Paint.png")->guid;
+            editor::ProjectHistory history;
+            auto transfer=StudioTransferPlan::internal(p,"B",{"A/Paint.png"});
+            StudioBatchAssetPlan staged;
+            std::optional<editor::ProjectHistory::MovePlan> recorded;
+            const auto result=transfer.apply(transfer.token(),{},{},&recorded,true,&staged);
+            AIVERSE_TEST_CHECK(recorded&&result.getInt("repairedMaterialReferences")==1&&result.getInt("repairedResourceDocuments")==1);
+            AIVERSE_TEST_CHECK(fs::exists(source)&&!fs::exists(dest)&&read(materials)==originalMaterials&&read(model)==originalModel);
+            auto next=history;next.recordMove(*recorded,"Move paint with references");
+            const auto checkpoint=p/".aiverse-cache"/"asset-history.json";
+            // A changed material baseline rejects publication without moving
+            // the asset, repairing the model or creating the checkpoint.
+            write(materials,originalMaterials+"\n");
+            bool refused=false;
+            try{studioApplyHistoryBatch(p,staged.relocations,staged.documents,staged.movingResources,&history,&next);}
+            catch(const std::runtime_error&){refused=true;}
+            AIVERSE_TEST_CHECK(refused&&fs::exists(source)&&!fs::exists(checkpoint)&&read(model)==originalModel);
+            write(materials,originalMaterials);
+            studioApplyHistoryBatch(p,staged.relocations,staged.documents,staged.movingResources,&history,&next);
+            AIVERSE_TEST_CHECK(!fs::exists(source)&&fs::exists(dest)&&studioLoadAssetHistoryCheckpoint(p).position()==1);
+            const auto movedMaterials=Json::parseFile(materials.string());
+            AIVERSE_TEST_CHECK(movedMaterials["materials"]["Paint"].getStr("texture")=="content/B/Paint.png"&&movedMaterials.getStr("extra")=="preserved");
+            AIVERSE_TEST_CHECK(Json::parseFile(model.string())["images"][0].getStr("uri")=="../B/Paint.png");
+            index.rebuild(false);AIVERSE_TEST_CHECK(index.byPath("B/Paint.png")->guid==guid);
+            auto previous=next;previous.advance(false);
+            auto undo=studioPlanAssetMoveChain(p,{*recorded},false);
+            undo.documents.push_back({materials,*recorded->materialsAfter,*recorded->materialsBefore});
+            studioApplyHistoryBatch(p,undo.relocations,undo.documents,undo.movingResources,&next,&previous);
+            AIVERSE_TEST_CHECK(fs::exists(source)&&read(materials)==originalMaterials&&read(model)==originalModel);
+            AIVERSE_TEST_CHECK(studioLoadAssetHistoryCheckpoint(p).position()==0);
+            // Rename uses the same staged path and updates both owners.
+            auto rename=StudioTransferPlan::rename(p,"A/Paint.png","Tint.png");
+            StudioBatchAssetPlan renamed;
+            std::optional<editor::ProjectHistory::MovePlan> renameHistory;
+            rename.apply(rename.token(),{},{},&renameHistory,true,&renamed);
+            AIVERSE_TEST_CHECK(renameHistory&&fs::exists(source));
+            auto renamedHistory=previous;renamedHistory.recordMove(*renameHistory,"Rename paint");
+            studioApplyHistoryBatch(p,renamed.relocations,renamed.documents,renamed.movingResources,&previous,&renamedHistory);
+            AIVERSE_TEST_CHECK(fs::exists(p/"content"/"A"/"Tint.png")&&!fs::exists(source));
+            AIVERSE_TEST_CHECK(Json::parseFile(model.string())["images"][0].getStr("uri")=="Tint.png");
+            AIVERSE_TEST_CHECK(Json::parseFile(materials.string())["materials"]["Paint"].getStr("texture")=="content/A/Tint.png");
+            AIVERSE_TEST_CHECK(studioLoadAssetHistoryCheckpoint(p).position()==1);
+        }
         std::cout<<"PASS studio conflict resolution and GUID-preserving asset transfers\n";
     }catch(...){fs::remove_all(temp);throw;}
     fs::remove_all(temp);
