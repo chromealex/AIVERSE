@@ -48,6 +48,7 @@ namespace aiverse::editor { void registerPhysisOps(Workspace&); }
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -516,6 +517,48 @@ void Workspace::registerCoreOps() {
     add("feature_readiness_get", "Read an existing engine readiness report snapshot; not live verification.",
         R"({"type":"object","additionalProperties":false})",
         [this](const Json&) { return featureReadinessSnapshot(*this); });
+    add("feature_readiness_query", "Page feature readiness snapshot sections: features, tasks, dependencies, blockers and schedule.",
+        R"({"type":"object","properties":{"section":{"enum":["features","tasks","dependencies","blockers","schedule"]},"owner":{"type":"string"},"feature":{"type":"string"},"kind":{"type":"string"},"offset":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":200}},"additionalProperties":false})",
+        [this](const Json& p) { return featureReadinessQuery(*this,p); });
+    add("feature_readiness_status_get", "Inspect report-generation job status without opening a game.",
+        R"({"type":"object","additionalProperties":false})",
+        [this](const Json&) {
+            Json out=Json::object();
+            out.set("busy", Json::fromBool(building()));
+            out.set("label",str(runLabel()));
+            out.set("runCount",num(int64_t(runCount())));
+            out.set("exitCode",num(int64_t(buildResult())));
+            return out;
+        });
+    add("feature_readiness_refresh", "Queue the fixed local feature policy report generator. Does not build, test or mutate a project.",
+        R"({"type":"object","additionalProperties":false})",
+        [this](const Json&) {
+            if (building()) throw std::runtime_error("Another background job is running");
+            if (engineDir.empty()) throw std::runtime_error("Engine root is unavailable");
+            const auto script=fs::absolute(fs::path(engineDir)/"tools/agents/feature_policy.py");
+            const auto output=fs::absolute(fs::path(engineDir)/"logs/feature-readiness.json");
+            if (!fs::is_regular_file(script)) throw std::runtime_error("Feature policy script unavailable");
+            const char* env=std::getenv("AIVERSE_PYTHON");
+#if defined(_WIN32)
+            const std::string python=env&&*env?env:"python";
+#else
+            const std::string python=env&&*env?env:"python3";
+#endif
+            auto safeArg=[](const std::string& value) {
+                if (value.find_first_of("\r\n")!=std::string::npos) throw std::runtime_error("Unsupported newline in tool argument");
+#if defined(_WIN32)
+                if (value.find_first_of("\"%!^&|<>")!=std::string::npos) throw std::runtime_error("Unsupported command character");
+#endif
+                return shellQuote(value);
+            };
+            const std::string command=safeArg(python)+" "+safeArg(script.string())+" --base origin/main --output "+safeArg(output.string());
+            const int count=runCount();
+            startCommand(command,"Feature readiness report","feature-readiness");
+            Json out=Json::object();
+            out.set("queued",Json::fromBool(true));
+            out.set("runCount",num(int64_t(count)));
+            return out;
+        });
     auto needProject = [this] { if (project.dir.empty()) throw std::runtime_error("no game is open: call open_game first"); };
     auto entityRef = [this](const Json& p) {
         int i = -1;
