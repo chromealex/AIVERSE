@@ -2417,7 +2417,7 @@ void Editor::frame(gfx::Device& dev, double dt) {
     pollAgentLink();
     applyChanges();
     graphGpuProfile_.checkProject(ws_.project.dir);
-    textureGraphGpuPreview_.tick(dev,ws_.project.dir);
+    textureGraphGpuPreview_.tick(dev,ws_.project.dir,&graphGpuProfile_);
     // Poll changed presentation assets before any new frame submissions.
     // This runs even when every editor property/model window is closed.
     pollVisualAssets(dt);
