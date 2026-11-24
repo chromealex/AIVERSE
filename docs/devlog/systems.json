@@ -1708,10 +1708,10 @@
           "textEn": "Graphs are edited over MCP, with a starter material library."
         },
         {
-          "name": "Texture Graph GPU — Stage 38A (в работе)",
-          "text": "Явный режим GPU-resident без чтения пикселей на CPU, только привязка к материалу. Проверка на оборудовании ещё не выполнена.",
-          "nameEn": "Texture Graph GPU — Stage 38A (in progress)",
-          "textEn": "Explicit GPU-resident material-only generation without CPU pixel readback. Hardware verification pending."
+          "name": "Texture Graph GPU — Stage 38A",
+          "text": "Добавлен opt-in режим генерации текстур для материала без чтения пикселей на CPU. Изолированный тест бюджета пройден; сборка и GPU-проверка ещё не выполнены.",
+          "nameEn": "Texture Graph GPU — Stage 38A",
+          "textEn": "Opt-in material generation without CPU pixel readback implemented. Isolated budget test passed; integrated build and GPU verification pending."
         }
       ],
       "enables": [
