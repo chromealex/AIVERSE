@@ -139,6 +139,9 @@ int main() {
     invalid.capacity=65536;
     check(spectra::validComputeEmitter(invalid,&reason),"large group descriptor rejected");
     check(!spectra::gpuEmitterUsesWideIndices(16384)&&spectra::gpuEmitterUsesWideIndices(16385),"wide index boundary");
+    check(spectra::gpuBillboardGeometryBytes(65536,true)==size_t(65536)*40+12,"compact instance geometry");
+    check(spectra::gpuBillboardGeometryBytes(65536,false)==size_t(65536)*184,"expanded geometry");
+    check(spectra::estimateGpuEmitterAllocation(65536,true)<spectra::estimateGpuEmitterAllocation(65536,false),"compact allocation admission estimate");
     invalid.capacity=spectra::kGpuEmitterMaxSlots;
     check(spectra::validComputeEmitter(invalid,&reason),"maximum supported descriptor rejected");
     invalid.capacity=spectra::kGpuEmitterMaxSlots+1;

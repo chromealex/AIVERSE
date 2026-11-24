@@ -244,8 +244,9 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
     if(u.meta.x==5u) {
         if(id==0u) {
             uint alive=min(atomic_load_explicit(&aliveCounter[0],memory_order_relaxed),u.meta.y);
-            gpuDrawArgs[0].indexCount=alive*6u;
-            gpuDrawArgs[0].instanceCount=1u;
+            const bool procedural=u.gravityDt.w>0.5f;
+            gpuDrawArgs[0].indexCount=procedural?6u:alive*6u;
+            gpuDrawArgs[0].instanceCount=procedural?alive:1u;
             gpuDrawArgs[0].firstIndex=0u;
             gpuDrawArgs[0].baseVertex=0;
             gpuDrawArgs[0].firstInstance=0u;
@@ -295,6 +296,15 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
     float4 color=p.tint;
     color.a=active ? color.a*clamp(1.0f-p.positionAge.w/p.velocityLife.w,0.0f,1.0f) : 0.0f;
     uint rgba=packColor(color);
+    // Compact path: same 40-byte ABI, one record per surviving particle.
+    // u = half size, v = unused. Expansion happens in the vertex shader.
+    if(u.gravityDt.w>0.5f){
+        Vertex record{};
+        record.x=active?centre.x:0.0f;record.y=active?centre.y:0.0f;record.z=active?centre.z:0.0f;
+        record.u=halfSize;record.rgba=rgba;
+        vertices[ordinal]=record;
+        return;
+    }
     VmAttributes attributes=stateAttributes[slot];
     VmParams sourceParams=stateParams[slot];
     float4 graphData=float4(
@@ -315,6 +325,40 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
         vertices[base+j].g2=graphData.z;
         vertices[base+j].g3=graphData.w;
     }
+}
+)MSL";
+
+// Metal indexed-instanced billboard expansion. Buffer 0 is the compact
+// compute-written record stream, not a vertex descriptor attribute stream.
+inline constexpr const char* kProceduralBillboardMetal=R"MSL(
+#include <metal_stdlib>
+using namespace metal;
+struct Record { float x,y,z,u,v; uint rgba; float g0,g1,g2,g3; };
+struct U0 { float4x4 viewProj; float4 fog,camPos,params,right,up; };
+struct VOut { float4 pos [[position]]; float2 uv; half4 col; };
+vertex VOut vs_main(uint vertex [[vertex_id]],uint instance [[instance_id]],
+                    device const Record* records [[buffer(0)]],
+                    constant U0& u [[buffer(1)]]) {
+    const Record p=records[instance];
+    const float2 corners[4]={float2(-1,-1),float2(1,-1),float2(1,1),float2(-1,1)};
+    const float2 uv[4]={float2(0,1),float2(1,1),float2(1,0),float2(0,0)};
+    const uint j=vertex&3u;
+    const float3 at=float3(p.x,p.y,p.z)+p.u*(u.right.xyz*corners[j].x+u.up.xyz*corners[j].y);
+    float4 c=float4(float(p.rgba&255u),float((p.rgba>>8)&255u),
+                    float((p.rgba>>16)&255u),float((p.rgba>>24)&255u))/255.0f;
+    VOut o;o.pos=u.viewProj*float4(at,1.0f);o.uv=uv[j];
+    const float f=1.0f-exp(-length(at-u.camPos.xyz)*u.fog.w);
+    c.rgb=mix(c.rgb,mix(u.fog.rgb*mix(1.0f,c.a,u.params.y),float3(1.0f),u.params.z),f*(1.0f-u.params.x));
+    c.a*=1.0f-f*u.params.x;o.col=half4(c);return o;
+}
+fragment half4 fs_main(VOut in [[stage_in]],constant U0& u [[buffer(1)]],
+                      texture2d<half> tex0 [[texture(0)]],sampler s0 [[sampler(0)]]) {
+    float4 c=float4(tex0.sample(s0,in.uv)*in.col);
+#if AIVERSE_HDR
+    if(u.params.y>0.5f)c.rgb=rtsSrgbDecode(c.rgb/max(c.a,0.0001f))*c.a;
+    else c=rtsDisplay(c);
+#endif
+    return half4(c);
 }
 )MSL";
 

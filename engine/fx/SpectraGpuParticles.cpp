@@ -165,6 +165,8 @@ bool ComputeParticles::initGpu() {
         desc_.shaderGraph,desc_.graphInputs,graphMaterial,reason_,desc_.gpuBirthRandom))return false;
     const std::array<uint32_t,4> graphChannels=graphMaterial.sources;
     gpuIndirectActive_=desc_.gpuIndirect && device_->supportsGpuAuthoredIndirectDraw();
+    proceduralActive_=desc_.proceduralBillboards&&!materialActive&&
+        device_->info().backend==gfx::Backend::Metal;
     gpuResetDirty_=false;
     gpuStagingDirty_=false;
     compute_=device_->createCompute({shaders::kMetal,shaders::kGLSL,"SpectraFX Metal particle simulation"});
@@ -207,13 +209,15 @@ bool ComputeParticles::initGpu() {
     gpuDrawArgs_=buffer(*device_,gfx::BufferType::Storage,sizeof(zeroArgs),
                         &zeroArgs,"SpectraFX GPU authored draw args");
     vertices_=buffer(*device_,gfx::BufferType::Storage,
-                     cap*4*sizeof(Vertex),nullptr,"SpectraFX GPU quad vertices");
+                     size_t(cap)*(proceduralActive_?1u:4u)*sizeof(Vertex),nullptr,
+                     proceduralActive_?"SpectraFX compact billboard records":"SpectraFX GPU quad vertices");
 
-    const bool wideIndices=gpuEmitterUsesWideIndices(cap);
+    const bool wideIndices=!proceduralActive_&&gpuEmitterUsesWideIndices(cap);
+    const uint32_t quadCount=proceduralActive_?1u:cap;
     // Preserve compact indices for small groups; large groups use UInt32.
     auto buildIndices=[&]<class Index>(){
-        std::vector<Index> idx(size_t(cap)*6);
-        for(uint32_t n=0;n<cap;++n){
+        std::vector<Index> idx(size_t(quadCount)*6);
+        for(uint32_t n=0;n<quadCount;++n){
             const uint32_t i=n*4;
             const size_t at=size_t(n)*6;
             idx[at]=Index(i);idx[at+1]=Index(i+1);idx[at+2]=Index(i+2);
@@ -248,7 +252,8 @@ bool ComputeParticles::initGpu() {
     if(materialActive)materialShaders=gpu_material::makeShaders(graphMaterial);
     shader.glslVertex=materialActive?materialShaders.glslVertex.c_str():fx::shaders::kParticleVS;
     shader.glslFragment=materialActive?materialShaders.glslFragment.c_str():fx::shaders::kParticleFS;
-    shader.msl=materialActive?materialShaders.msl.c_str():fx::shaders::kParticleMSL;
+    shader.msl=materialActive?materialShaders.msl.c_str():
+        proceduralActive_?shaders::kProceduralBillboardMetal:fx::shaders::kParticleMSL;
     shader.textureSlots=1;shader.uniformSlots=1;
     shader.label=materialActive?"SpectraFX GPU particle material":"SpectraFX GPU billboard";
     vertexShader_=device_->createShader(shader);
@@ -259,7 +264,8 @@ bool ComputeParticles::initGpu() {
         pd.attrs[1]={1,gfx::VertexFormat::Float2,12};
         pd.attrs[2]={2,gfx::VertexFormat::UByte4N,20};
         if(materialActive)pd.attrs[3]={3,gfx::VertexFormat::Float4,24};
-        pd.attrCount=materialActive?4:3;pd.stride=sizeof(Vertex);
+        pd.attrCount=proceduralActive_?0:(materialActive?4:3);
+        pd.stride=proceduralActive_?0:sizeof(Vertex);
         pd.indexType=wideIndices?gfx::IndexType::UInt32:gfx::IndexType::UInt16;
         pd.cull=gfx::CullMode::None;pd.blend=gfx::BlendMode::Additive;
         pd.depthTest=true;pd.depthWrite=false;
@@ -286,7 +292,8 @@ bool ComputeParticles::initGpu() {
     pendingSlots_.reserve(cap);
     pendingProgramParams_.reserve(cap);
     aliveSlots_.reserve(cap);
-    stats_.gpuBytes=size_t(cap)*(sizeof(ParticleState)*2+3*sizeof(uint32_t)+4*sizeof(Vertex)+6*(wideIndices?sizeof(uint32_t):sizeof(uint16_t)))
+    stats_.gpuBytes=size_t(cap)*(sizeof(ParticleState)*2+3*sizeof(uint32_t))
+                    +gpuBillboardGeometryBytes(cap,proceduralActive_)
                     +size_t(n*n*4)+2*sizeof(zero)+sizeof(zeroArgs)
                     +size_t(cap)*2*sizeof(ProgramParams)+sizeof(vmPayload)
                     +size_t(cap)*sizeof(ProgramAttributes)+sizeof(graphChannels);
@@ -321,7 +328,7 @@ void ComputeParticles::releaseGpu() {
     pipeline_={};vertexShader_={};compute_={};states_={};seeds_={};slots_={};
     killSlots_={};
     vertices_={};indices_={};texture_={};liveSlots_={};
-    aliveCounter_={};gpuDrawArgs_={};vmErrors_={};gpuIndirectActive_=false;
+    aliveCounter_={};gpuDrawArgs_={};vmErrors_={};gpuIndirectActive_=false;proceduralActive_=false;
     seedProgramParams_={};stateProgramParams_={};gpuVmPayload_={};
     stateAttributes_={};graphSources_={};
     gpuResetDirty_=false;
@@ -724,7 +731,7 @@ bool ComputeParticles::step(float dt) {
     device_->setComputeBuffer(13,graphSources_);
     device_->setComputeBuffer(14,killSlots_);
     Uniforms u{};
-    u.gravityDt={desc_.gravityY,dt,desc_.drag,0};
+    u.gravityDt={desc_.gravityY,dt,desc_.drag,proceduralActive_?1.f:0.f};
     u.rightSize={right_.x,right_.y,right_.z,desc_.size};
     u.up={up_.x,up_.y,up_.z,0};
     u.meta={0,desc_.capacity,count,compactCount};
@@ -806,6 +813,8 @@ void ComputeParticles::draw(const fx::FxFog& fog) {
     u.fog[0]=fog.color.x;u.fog[1]=fog.color.y;u.fog[2]=fog.color.z;u.fog[3]=fog.density;
     u.camera[0]=eye_.x;u.camera[1]=eye_.y;u.camera[2]=eye_.z;u.camera[3]=1;
     u.params[0]=1;u.params[1]=0;u.params[2]=0;u.params[3]=0;
+    u.right[0]=right_.x;u.right[1]=right_.y;u.right[2]=right_.z;
+    u.up[0]=up_.x;u.up[1]=up_.y;u.up[2]=up_.z;
     device_->setPipeline(pipeline_);
     device_->setVertexBuffer(vertices_);
     device_->setIndexBuffer(indices_);
@@ -821,7 +830,8 @@ void ComputeParticles::draw(const fx::FxFog& fog) {
         }
         ++stats_.gpuIndirectDraws;
     } else {
-        device_->drawIndexed(drawCount_*6);
+        if(proceduralActive_)device_->drawIndexed(6,0,0,drawCount_);
+        else device_->drawIndexed(drawCount_*6);
     }
     stats_.drawCalls=1;
 }

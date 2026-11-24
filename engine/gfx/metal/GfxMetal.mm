@@ -1563,7 +1563,7 @@ public:
         MTLRenderPipelineDescriptor* pd = [MTLRenderPipelineDescriptor new];
         pd.vertexFunction = s->vs;
         pd.fragmentFunction = s->fs; // depth-only shaders without fs_main get nil (no fragment stage)
-        pd.vertexDescriptor = vd;
+        pd.vertexDescriptor = d.attrCount>0 ? vd : nil;
         pd.rasterSampleCount = NSUInteger(std::max(1, d.sampleCount));
         // Metal requires opt-in at pipeline creation for pipeline states
         // referenced by indirect render commands. Without this the driver may

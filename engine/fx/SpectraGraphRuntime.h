@@ -22,7 +22,8 @@ struct GraphRuntimeOptions {
     fx::FxQuality quality = fx::FxQuality::High;
     ComputePreference preference = ComputePreference::Automatic;
     uint32_t capacity = 1024; // GPU-only slots; not a CPU EffectDef particle budget
-    bool gpuIndirect = false; // opt-in GPU-authored compaction/draw, Metal only
+    bool gpuIndirect = false;
+    bool proceduralBillboards = false; // opt-in GPU-authored compaction/draw, Metal only
     // Opt-in Stage-22 bounded Metal VM. Unsupported programs use exact CPU effects.
     bool gpuProgram = false;
     // Strict opt-in: only pure, bounded particle-domain shaderGraph nodes.

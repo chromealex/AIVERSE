@@ -90,6 +90,7 @@ std::string GpuPoolWorld::groupKey(const fx::EffectDef& effect,
         "|vm="+std::to_string(unsigned(options.gpuProgram))+
         "|material="+std::to_string(unsigned(options.gpuMaterial))+
         "|indirect="+std::to_string(unsigned(options.gpuIndirect))+
+        "|procedural="+std::to_string(unsigned(options.proceduralBillboards))+
         "|checkpointCadence="+std::to_string(options.checkpointEveryFrames)+
         "|adaptive="+std::to_string(unsigned(options.adaptiveCheckpoint.enabled))+
         "|adaptiveMax="+std::to_string(options.adaptiveCheckpoint.maxIntervalFrames)+
@@ -206,13 +207,15 @@ bool GpuPoolWorld::defineCompiled(const std::string& name,
         for(size_t i=0;i<gpuGroups_.size();++i) {
             // Include retired but not yet released allocations.
             if(gpuGroups_[i].particles){
-                const auto bytes=estimateGpuEmitterAllocation(gpuGroups_[i].particles->allocatedCapacity());
+                const auto bytes=estimateGpuEmitterAllocation(gpuGroups_[i].particles->allocatedCapacity(),
+                    gpuGroups_[i].particles->proceduralBillboardsActive());
                 allocated=bytes>SIZE_MAX-allocated?SIZE_MAX:allocated+bytes;
             }
             if(gpuGroups_[i].live())++liveGroups;
             else if(!gpuGroups_[i].particles && freeSlot==gpuGroups_.size())freeSlot=i;
         }
-        const size_t requested=estimateGpuEmitterAllocation(actual.capacity);
+        const size_t requested=estimateGpuEmitterAllocation(actual.capacity,
+            actual.proceduralBillboards&&eligible.gpu.shaderGraph.isNull());
         const bool fitsMemory=!budgets_.maxGpuAllocationBytes||
             (allocated<=budgets_.maxGpuAllocationBytes&&requested<=budgets_.maxGpuAllocationBytes-allocated);
         if(liveGroups<budgets_.maxGpuGroups&&fitsMemory) {

@@ -39,8 +39,12 @@ inline constexpr uint32_t kGpuCheckpointCaptureMaxSlots=4096;
 inline constexpr uint32_t kGpuUInt16QuadMaxSlots=16384;
 inline constexpr bool gpuEmitterUsesWideIndices(uint32_t capacity){return capacity>kGpuUInt16QuadMaxSlots;}
 // Conservative buffer accounting envelope; not a driver memory measurement.
-inline constexpr size_t estimateGpuEmitterAllocation(uint32_t capacity){
-    return size_t(capacity)*512u+65536u;
+inline constexpr size_t estimateGpuEmitterAllocation(uint32_t capacity,bool procedural=false){
+    return size_t(capacity)*(procedural?384u:512u)+65536u;
+}
+inline constexpr size_t gpuBillboardGeometryBytes(uint32_t capacity,bool procedural){
+    return procedural?size_t(capacity)*40u+12u:
+        size_t(capacity)*(160u+6u*(gpuEmitterUsesWideIndices(capacity)?4u:2u));
 }
 struct ComputeEmitterDesc {
     uint32_t capacity = 1024;          // default only; ceiling is kGpuEmitterMaxSlots
@@ -55,6 +59,7 @@ struct ComputeEmitterDesc {
     // Experimental Metal-only option; no effect on existing CPU/host-gather
     // paths. Requires RHI supportsGpuAuthoredIndirectDraw().
     bool gpuIndirect = false;
+    bool proceduralBillboards = false; // Metal compact records + indexed instancing
     // Experimental Metal GPU scalar VM (requires strict Stage-22 eligibility).
     // Off by default; unsupported stages/operations execute the full CPU VM.
     bool gpuProgram = false;
@@ -134,6 +139,7 @@ struct ComputeStats {
 class ComputeParticles final {
 public:
     uint32_t allocatedCapacity() const {return desc_.capacity;}
+    bool proceduralBillboardsActive() const {return gpuActive()&&proceduralActive_;}
     ComputeParticles() = default;
     ~ComputeParticles() { shutdown(); }
     ComputeParticles(const ComputeParticles&) = delete;
@@ -221,13 +227,14 @@ private:
     struct DrawUniforms {
         float viewProj[16];
         float fog[4], camera[4], params[4];
+        float right[4],up[4];
     };
     static_assert(sizeof(ParticleState)==64);
     static_assert(sizeof(ProgramParams)==32);
     static_assert(sizeof(ProgramAttributes)==32);
     static_assert(sizeof(Vertex)==40);
     static_assert(sizeof(Uniforms)==64);
-    static_assert(sizeof(DrawUniforms)==112);
+    static_assert(sizeof(DrawUniforms)==144);
 
     bool initGpu();
     bool initCpu();
@@ -272,6 +279,7 @@ private:
     fx::float3 eye_{}, right_{1,0,0}, up_{0,1,0};
     bool initialized_ = false, viewReady_ = false, verticesReady_ = false;
     bool gpuIndirectActive_ = false;
+    bool proceduralActive_ = false;
     bool gpuResetDirty_ = false; // failed partial GPU clear; block new births/steps
     bool gpuStagingDirty_ = false; // checked input upload failed; next step retries all input buffers
     ComputeStats stats_;

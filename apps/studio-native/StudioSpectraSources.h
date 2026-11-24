@@ -160,6 +160,7 @@ private:
                 spectra::PoolContinuousEmission emission;
                 spectra::GraphRuntimeOptions options;
                 options.preference=spectra::ComputePreference::RequireGpu;options.gpuProgram=true;
+                options.proceduralBillboards=true;options.gpuIndirect=true;
                 // Small default groups; opt in to larger allocations per graph.
                 const auto& poolCapacity=graph["scenePoolCapacity"];
                 options.capacity=16384;
