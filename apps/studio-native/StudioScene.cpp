@@ -600,6 +600,8 @@ StudioScene::~StudioScene() {
         terrainRetirement_.retireBuffer(*device_,terrain_.ib);
         terrainRetirement_.retireBuffer(*device_,planetCutTerrain_.vb);
         terrainRetirement_.retireBuffer(*device_,planetCutTerrain_.ib);
+        terrainRetirement_.retireBuffer(*device_,globeMesh_.vb);
+        terrainRetirement_.retireBuffer(*device_,globeMesh_.ib);
         (void)terrainRetirement_.completeForShutdown(*device_);
         sparseTerrainPreview_.release([&](auto& model){sparseTerrainRetirement_.retireModel(*device_,model);});
         (void)sparseTerrainRetirement_.completeForShutdown(*device_);
@@ -1251,6 +1253,7 @@ void StudioScene::zoom(float wheel) {
     // Unity-like dolly: zoom toward the pivot; at the minimum distance keep
     // moving forward by pushing the pivot instead of stopping.
     const float next=camera_.distance*std::exp(-wheel*0.035f);
+    if(caveGlobeRequested()){camera_.target={0,0,0};camera_.distance=std::clamp(next,12.f,100.f);return;}
     constexpr float kMinDistance=2.0f;
     if(next<kMinDistance && wheel>0) {
         const float cp=std::cos(camera_.pitch),sp=std::sin(camera_.pitch);
@@ -1331,6 +1334,80 @@ void StudioScene::resetView() {
     cameraInitialized_=false;
     camera_.pitch=0.85f;
     camera_.yaw=0.55f;
+}
+void StudioScene::setCaveGlobe(std::string body,const std::string& project,const std::string& map){
+    if(body==globeBody_&&project==globeProject_&&map==globeMap_)return;
+    if(!device_)throw std::runtime_error("Caverns globe device unavailable");
+    if(!body.empty()&&!cavernsPreview_.close(*device_))
+        throw std::runtime_error("Caverns chart retirement refused");
+    terrainRetirement_.retireBuffer(*device_,globeMesh_.vb);
+    terrainRetirement_.retireBuffer(*device_,globeMesh_.ib);
+    globeMesh_={};globe_.reset();globeDoc_=nullptr;globeRevision_=0;
+    globeBody_=std::move(body);globeProject_=project;globeMap_=map;
+    globeReady_=false;globeError_.clear();planetCutDrawn_=false;
+    cameraInitialized_=false;tween_.active=false;lastFrameSignature_=0;
+    terrainRevision_=std::numeric_limits<uint64_t>::max();
+    lightingRevision_=terrainRevision_;
+}
+Json StudioScene::pickCaveGlobe(float x,float y,float width,float height,const editor::MapDoc& doc,
+                               const std::string& project)const{
+    Json out=Json::object();out.set("hit",Json::fromBool(false));
+    if(!globeReady_||!globe_||project!=globeProject_||doc.path!=globeMap_||
+       doc.revision!=globeRevision_||x<0||y<0||x>=width||y>=height)return out;
+    float3 origin,direction;
+    if(!caveScreenRay(x,y,width,height,origin,direction))return out;
+    const auto hit=globe_->pick(origin,direction);
+    if(!hit)return out;
+    out.set("hit",Json::fromBool(true));out.set("body",Json::string(globeBody_));
+    out.set("face",Json::number(int64_t(hit->face)));
+    out.set("aQ16",Json::number(hit->a.raw));out.set("bQ16",Json::number(hit->b.raw));
+    out.set("regionId",Json::string(hit->regionId));
+    out.set("mapRevisionText",Json::string(std::to_string(doc.revision)));
+    return out;
+}
+void StudioScene::renderCaveGlobe(int width,int height,const editor::MapDoc& doc){
+    (void)terrainRetirement_.collectWithoutIdle(*device_);
+    if(globeDoc_!=&doc||globeRevision_!=doc.revision){
+        globeReady_=false;globeError_.clear();
+        try{
+            if(terrainRetirement_.pending()>=64)throw std::runtime_error("Globe retirement budget");
+            auto candidate=StudioPlanetGlobe::capture(doc.data,globeBody_);
+            auto cpu=candidate.mesh();
+            auto mesh=cpu.upload(*device_);
+            if(!mesh.vb.valid()||!mesh.ib.valid()){
+                terrainRetirement_.retireBuffer(*device_,mesh.vb);
+                terrainRetirement_.retireBuffer(*device_,mesh.ib);
+                throw std::runtime_error("Globe overview upload failed");
+            }
+            terrainRetirement_.retireBuffer(*device_,globeMesh_.vb);
+            terrainRetirement_.retireBuffer(*device_,globeMesh_.ib);
+            globeMesh_=mesh;globe_=std::move(candidate);
+        }catch(const std::exception& e){globe_.reset();globeError_=e.what();}
+        globeDoc_=&doc;globeRevision_=doc.revision;
+    }
+    if(!cameraInitialized_){
+        camera_.target={0,0,0};camera_.distance=32.f;camera_.ortho=false;
+        camera_.pitch=.3f;camera_.yaw=.55f;tween_.active=false;cameraInitialized_=true;
+    }
+    // No chart or flat-scene object submissions in overview mode.
+    camera_.target={0,0,0};camera_.distance=std::clamp(camera_.distance,12.f,100.f);
+    tween_.active=false;
+    device_->beginFrame(width,height);StudioFrameScope scope{*device_};
+    renderer_.beginScene(viewCamera(),width,height);
+    renderer_.clearDynamicGiOverlay();
+    renderer_.lighting=render::Lighting{};
+    renderer_.lighting.sunIntensity=1.2f;renderer_.lighting.skyColor={.44f,.53f,.68f};
+    renderer_.lighting.fogDensity=0;
+    if(globe_&&globeMesh_.vb.valid()&&globeMesh_.ib.valid()){
+        renderer_.drawMesh(globeMesh_,mat4{}, {1,1,1,1},kDrawNoCastShadow);
+        for(const auto& marker:globe_->markers)
+            renderer_.drawMesh(cube_,mat4::translate(marker.position)*mat4::scale({marker.size,marker.size,marker.size}),
+                {.95f,.66f,.18f,1},kDrawNoCastShadow);
+    }
+    gfx::PassDesc pass;pass.clearColor[0]=.025f;pass.clearColor[1]=.035f;pass.clearColor[2]=.06f;pass.clearColor[3]=1.f;
+    renderer_.render(pass,&antialiasing_);renderer_.resolvePostFx();
+    globeReady_=globe_.has_value()&&globeMesh_.vb.valid()&&globeMesh_.ib.valid();
+    ++framesDrawn_;
 }
 void StudioScene::frame(int framebufferWidth, int framebufferHeight, const editor::MapDoc& doc,
                              bool fpsProject, const std::string& selectedId,
@@ -1545,6 +1622,11 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         return;
     }
     const auto& map = doc.data;
+    if(caveGlobeRequested()){
+        if(projectPath!=globeProject_||doc.path!=globeMap_||!map.planet()||map.findBody(globeBody_)<0)
+            setCaveGlobe({},projectPath,doc.path);
+        else {renderCaveGlobe(framebufferWidth,framebufferHeight,doc);return;}
+    }
     cavernsPreview_.syncDocument(*device_,doc,projectPath);
     std::optional<editor::planet_caves::Region> selectedChart;
     std::string chartIdentity;
