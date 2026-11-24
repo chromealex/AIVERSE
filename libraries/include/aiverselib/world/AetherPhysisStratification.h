@@ -80,7 +80,12 @@ inline bool advanceWithStratification(World& world,const game::Surface* surface,
                     -1000,1000);
                 // Opposite directions get opposite heads; no double transfer
                 // on a bidirectional duct. Starting masses <= 1e9.
-                const auto bias=(stratification_detail::riseFactor(a,b)*buoyancy).toInt();
+                // Canonical endpoint order avoids asymmetry from Fixed
+                // rounding on reversed vectors at equilibrium.
+                const bool forward=f.from<f.to;
+                const auto magnitude=(stratification_detail::riseFactor(
+                    forward?a:b,forward?b:a)*buoyancy).toInt();
+                const auto bias=forward?magnitude:-magnitude;
                 const Mass mean=(from+to)/2;
                 return from-to+mean*bias/1000;
             });
