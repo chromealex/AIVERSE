@@ -98,7 +98,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 33A in progress: request-local shared scalar GPU scratch for normal and matching scalar outputs; preserve CPU parity and owner retirement.",
+      "note": "Stage 33A request-local shared scalar scratch implemented in source; accepted scalar producer reused between matching scalar and normal outputs; no general DAG cache or GPU-to-GPU binding. Integrated acceptance pending.",
       "evidence": []
     },
     "architecture": {
@@ -168,7 +168,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Standalone C++20 LRU policy test PASS on Linux, exact source blobs verified; integrated test suite and native GPU tests not run.",
+      "note": "Stage 32A isolated cache policy PASS; Stage 33A standalone exact-blob C++20 scratch identity/invalidation fixture PASS (Linux GCC 14.2). Native graph fixture, CTest, Studio, shader/device acceptance and merged-tree Mac gate NOT RUN.",
       "evidence": []
     },
     "handoff": {
