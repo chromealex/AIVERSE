@@ -13,7 +13,11 @@ namespace aiverse::editor {
 class ProjectHistory {
 public:
     static constexpr size_t MaxSteps=64, MaxBytes=16u*1024u*1024u;
-    struct MoveFile { std::string from,to,bytes; };
+    struct MoveFile {
+        std::string from,to,bytes; // exact bytes for the root sidecar only
+        std::string digest;       // streaming SHA-256 of asset file or complete tree
+        bool directory=false;
+    };
     struct MovePlan {
         std::vector<MoveFile> files; // content-relative exact file/sidecar pairs
         std::optional<std::string> materialsBefore,materialsAfter;
@@ -53,7 +57,7 @@ public:
         try {
             size_t n=sizeof(Step)+std::min<size_t>(label.size(),256);
             auto add=[&](size_t size){if(size>MaxBytes-n)throw std::length_error("Move history budget");n+=size;};
-            for(const auto& f:move.files){add(sizeof(MoveFile));add(f.from.size());add(f.to.size());add(f.bytes.size());}
+            for(const auto& f:move.files){add(sizeof(MoveFile));add(f.from.size());add(f.to.size());add(f.bytes.size());add(f.digest.size());}
             if(move.materialsBefore)add(move.materialsBefore->size());
             if(move.materialsAfter)add(move.materialsAfter->size());
             while(steps_.size()>position_){bytes_-=steps_.back().bytes;steps_.pop_back();}

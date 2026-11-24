@@ -48,7 +48,7 @@ private:
     std::string token_;
     std::vector<StudioTransferEntry> entries_;
 };
-// Replay a native recorded regular-file move, never a browser-supplied path list.
+// Replay a native recorded file or directory move, never a browser-supplied path list.
 void studioReplayAssetMove(const std::filesystem::path& project,
                            const editor::ProjectHistory::MovePlan& plan,bool redo,
                            const std::function<void()>& validateReferences = {});

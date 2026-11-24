@@ -1186,13 +1186,21 @@ Json StudioSession::dispatch(const Json& request) {
                         const auto rulesText=ws_.project.rulesJson.dump(-1);
                         for(size_t i=0;i<entry.move->files.size();i+=2){
                             const auto& f=entry.move->files[i];
+                            auto affected=[&](const std::string& value,const std::string& path){
+                                return value==path||(f.directory&&value.starts_with(path+"/"));
+                            };
                             for(const auto& ref:refs)
-                                if(!ref.writable&&(ref.path=="content/"+f.from||ref.path=="content/"+f.to))
+                                if(!ref.writable&&(affected(ref.path,"content/"+f.from)||affected(ref.path,"content/"+f.to)))
                                     throw std::runtime_error("Asset move history blocked by rules reference: "+ref.owner);
                             for(const auto& path:{f.from,f.to}){
                                 for(const auto& value:{path,"content/"+path}){
                                     const auto literal=Json::string(value).dump(-1);
-                                    if(mapText.find(literal)!=std::string::npos||rulesText.find(literal)!=std::string::npos)
+                                    const auto prefix=f.directory?Json::string(value+"/").dump(-1):std::string{};
+                                    const auto matches=[&](const std::string& document){
+                                        return document.find(literal)!=std::string::npos||
+                                            (!prefix.empty()&&document.find(prefix.substr(0,prefix.size()-1))!=std::string::npos);
+                                    };
+                                    if(matches(mapText)||matches(rulesText))
                                         throw std::runtime_error("Asset move history blocked by a current map/rules path reference: "+value);
                                 }
                             }

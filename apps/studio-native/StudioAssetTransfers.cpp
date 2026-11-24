@@ -1,6 +1,7 @@
 #include "apps/studio-native/StudioAssetTransfers.h"
 #include "apps/studio-native/StudioContentDirectory.h"
 #include "apps/studio-native/StudioMoveJournal.h"
+#include "engine/pack/Sha256.h"
 #include <algorithm>
 #include <fstream>
 #include <exception>
@@ -75,6 +76,59 @@ std::string guidFromSidecar(const fs::path& source,bool& invalid) {
         if(!studioValidGuid(guid)){invalid=true;return {};}
         return guid;
     } catch(...){invalid=true;return {};}
+}
+// Hash a complete tree with deterministic path/type/length framing, including
+// empty directories and all sidecars. Reject symlinks, special files and
+// excessive entry counts. Memory is bounded independently of payload size.
+std::string moveDigest(const fs::path& source,bool directory){
+    pack::Sha256 hash;
+    const auto field=[&](const std::string& s){
+        const auto size=std::to_string(s.size())+":";
+        hash.update(size.data(),size.size());hash.update(s.data(),s.size());
+    };
+    const auto file=[&](const fs::path& path){
+        if(!fs::is_regular_file(fs::symlink_status(path)))
+            throw std::runtime_error("Unsupported file in asset history");
+        const auto size=fs::file_size(path);
+        const auto stamp=fs::last_write_time(path);
+        field(std::to_string(size));
+        std::ifstream stream(path,std::ios::binary);
+        if(!stream)throw std::runtime_error("Cannot read move history file");
+        char buffer[65536];std::uintmax_t total=0;
+        while(stream.read(buffer,sizeof(buffer))||stream.gcount()){
+            const auto n=static_cast<size_t>(stream.gcount());
+            hash.update(buffer,n);total+=n;
+        }
+        if(stream.bad()||!stream.eof()||total!=size||fs::file_size(path)!=size||fs::last_write_time(path)!=stamp)
+            throw std::runtime_error("Asset changed while hashing");
+    };
+    if(!directory){field("file-v1");file(source);}
+    else {
+        if(!fs::is_directory(fs::symlink_status(source)))throw std::runtime_error("Asset directory changed");
+        field("tree-v1");
+        std::vector<fs::path> entries;
+        for(const auto& item:fs::recursive_directory_iterator(source)){
+            if(entries.size()>=20000)throw std::runtime_error("Asset history tree entry limit");
+            const auto status=item.symlink_status();
+            if(!fs::is_directory(status)&&!fs::is_regular_file(status))
+                throw std::runtime_error("Unsupported entry in asset history tree");
+            entries.push_back(item.path().lexically_relative(source));
+        }
+        std::sort(entries.begin(),entries.end(),[](const auto& a,const auto& b){return a.generic_string()<b.generic_string();});
+        for(const auto& rel:entries){
+            const auto path=source/rel;
+            field(rel.generic_string());
+            const auto status=fs::symlink_status(path);
+            if(fs::is_directory(status))field("directory");
+            else {field("file");file(path);}
+        }
+    }
+    const auto result=hash.finish();return pack::toHex(result.data(),result.size());
+}
+bool matchesMoveFile(const fs::path& path,const editor::ProjectHistory::MoveFile& f){
+    if(!f.digest.empty())return moveDigest(path,f.directory)==f.digest;
+    return fs::is_regular_file(fs::symlink_status(path))&&fs::file_size(path)==f.bytes.size()&&
+           editor::readProjectFileBytes(path)==f.bytes;
 }
 std::string nonce() {
     std::random_device random;
@@ -288,8 +342,8 @@ Json StudioTransferPlan::apply(const std::string& token,
                 if (a.rfind(b+"/",0)==0 || b.rfind(a+"/",0)==0)
                     throw std::runtime_error("Move selection contains a directory and its descendant");
             }
-        // Capture only bounded regular-file moves with existing sidecars. Directory
-        // moves and large assets remain functional, but are explicit history barriers.
+        // Root sidecars and material documents retain exact bytes; asset payloads
+        // use a streaming digest, including complete directory trees.
         std::optional<editor::ProjectHistory::MovePlan> recorded;
         if(history&&!planned.empty()){
             try {
@@ -304,12 +358,17 @@ Json StudioTransferPlan::apply(const std::string& token,
                     used+=bytes.size();return bytes;
                 };
                 for(const auto& pair:planned)
-                    if(!fs::is_regular_file(fs::symlink_status(pair.first))||
-                       !fs::is_regular_file(fs::symlink_status(studioMetaPath(pair.first))))
-                        throw std::runtime_error("Move history requires regular file and sidecar");
-                for(const auto& op:operations)
-                    candidate.files.push_back({op.source.lexically_relative(root).generic_string(),
-                        op.destination.lexically_relative(root).generic_string(),capture(op.source)});
+                    if(!fs::is_regular_file(fs::symlink_status(studioMetaPath(pair.first))))
+                        throw std::runtime_error("Move history requires an existing sidecar");
+                for(const auto& op:operations){
+                    editor::ProjectHistory::MoveFile file;
+                    file.from=op.source.lexically_relative(root).generic_string();
+                    file.to=op.destination.lexically_relative(root).generic_string();
+                    file.directory=!op.meta&&fs::is_directory(fs::symlink_status(op.source));
+                    if(op.meta)file.bytes=capture(op.source);
+                    else file.digest=moveDigest(op.source,file.directory);
+                    candidate.files.push_back(std::move(file));
+                }
                 const auto material=project_/"materials.json";
                 if(existsOrSymlink(material))candidate.materialsBefore=capture(material);
                 recorded=std::move(candidate);
@@ -348,7 +407,7 @@ Json StudioTransferPlan::apply(const std::string& token,
                     if(bool(recorded->materialsBefore)!=bool(recorded->materialsAfter))
                         recorded.reset(); // creation/deletion is not supported by this replay
                     if(recorded)for(const auto& f:recorded->files)
-                        if(editor::readProjectFileBytes(root/f.to)!=f.bytes)
+                        if(!matchesMoveFile(root/f.to,f))
                             throw std::runtime_error("Asset changed during move");
                 }catch(const std::exception&){recorded.reset();}
             }
@@ -483,7 +542,7 @@ void studioReplayAssetMove(const fs::path& project,
     StudioAssetCatalog catalog(project);catalog.rebuild(false);
     std::set<fs::path> reserved;
     std::vector<StudioMoveJournalOperation> operations;
-    auto checked=[&](const std::string& rel,bool sidecar,bool source){
+    auto checked=[&](const std::string& rel,bool sidecar,bool source,bool directory){
         const fs::path p(rel);
         if(rel.empty()||p.is_absolute()||rel.size()>1024)throw std::runtime_error("Invalid recorded move path");
         const auto parent=p.parent_path().generic_string();
@@ -494,7 +553,7 @@ void studioReplayAssetMove(const fs::path& project,
         }else validateSegment(p.filename().string());
         const auto result=folder/p.filename();
         if(!reserved.insert(result).second)throw std::runtime_error("Overlapping recorded move paths");
-        if(source?!fs::is_regular_file(fs::symlink_status(result)):existsOrSymlink(result))
+        if(source?!(directory?fs::is_directory(fs::symlink_status(result)):fs::is_regular_file(fs::symlink_status(result))):existsOrSymlink(result))
             throw std::runtime_error("Asset move history path changed or collides: "+rel);
         return result;
     };
@@ -505,13 +564,13 @@ void studioReplayAssetMove(const fs::path& project,
         const auto doc=Json::parse(meta.bytes);
         const auto indexed=catalog.byGuid(doc.getStr("guid"));
         const auto& source=redo?asset.from:asset.to;
-        if(!indexed||indexed->directory||indexed->path!=source||indexed->importer!=doc.getStr("importer"))
+        if(!indexed||indexed->directory!=asset.directory||indexed->path!=source||indexed->importer!=doc.getStr("importer"))
             throw std::runtime_error("Asset GUID or importer changed since move");
         for(size_t j=i;j<i+2;++j){
             const auto& f=plan.files[j];const auto& from=redo?f.from:f.to;const auto& to=redo?f.to:f.from;
-            const auto src=checked(from,j!=i,true);
-            (void)checked(to,j!=i,false);
-            if(fs::file_size(src)!=f.bytes.size()||editor::readProjectFileBytes(src)!=f.bytes)
+            const auto src=checked(from,j!=i,true,f.directory);
+            (void)checked(to,j!=i,false,f.directory);
+            if(!matchesMoveFile(src,f))
                 throw std::runtime_error("Asset move history source bytes changed: "+from);
             operations.push_back({from,to});
         }
@@ -523,8 +582,7 @@ void studioReplayAssetMove(const fs::path& project,
         for(size_t i=0;i<operations.size();++i){
             const auto& op=operations[i];
             const auto from=root/op.from,to=root/op.to;
-            const auto& expected=plan.files[i].bytes;
-            if(fs::file_size(from)!=expected.size()||editor::readProjectFileBytes(from)!=expected)
+            if(!matchesMoveFile(from,plan.files[i]))
                 throw std::runtime_error("Asset changed during history replay");
             if(existsOrSymlink(to))throw std::runtime_error("Asset move destination occupied");
             fs::rename(from,to);
@@ -532,7 +590,7 @@ void studioReplayAssetMove(const fs::path& project,
             if(from.parent_path()!=to.parent_path())StudioMoveJournal::syncPath(to.parent_path());
         }
         for(size_t i=0;i<operations.size();++i)
-            if(editor::readProjectFileBytes(root/operations[i].to)!=plan.files[i].bytes)
+            if(!matchesMoveFile(root/operations[i].to,plan.files[i]))
                 throw std::runtime_error("Asset bytes changed during replay");
         if(materialBefore)editor::applyProjectFileEdits(project,{{material,*materialBefore,*materialAfter}});
         else checkMaterial();
