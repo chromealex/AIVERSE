@@ -10,6 +10,7 @@
 #include "MorphPhysisGravity.h"
 #include "AetherPhysisStratification.h"
 #include "WorldProcessesPlanetBankPipeline.h"
+#include "WorldProcessesPlanetForestPipeline.h"
 #include "engine/game/GameCore.h"
 #include "engine/game/Native.h"
 #include <cstdint>
@@ -87,6 +88,7 @@ public:
         // adding its first authored component. Unknown/typed flags fail fast.
         auto suite=config;
         suite.erase("planetBanks");
+        suite.erase("planetForest");
         const SuiteFlags flags=suiteFlags(suite);
         if(flags.crowdGravitySupport&&!host.surface(sim))
             throw std::invalid_argument("CROWD gravity support requires planetary Surface");
@@ -101,7 +103,12 @@ public:
             host.surface(sim)?&installGameCoreSurfaceGranular:nullptr,
             &installGameCoreMorphGravity,
             &installGameCoreAetherStratification);
-        if(config.has("planetBanks"))installPlanetBankPipeline(host,sim,config["planetBanks"]);
+        if(config.has("planetBanks")){
+            if(config.has("planetForest")&&!config["planetBanks"].getBool("rootFalls"))
+                throw std::invalid_argument("planetBanks.rootFalls required with planetForest");
+            installPlanetBankPipeline(host,sim,config["planetBanks"]);
+        }
+        if(config.has("planetForest"))installPlanetForestPipeline(host,sim,config["planetForest"]);
     }
 };
 inline std::unique_ptr<game::NativeModule> createWorldProcessesNativeModule(){

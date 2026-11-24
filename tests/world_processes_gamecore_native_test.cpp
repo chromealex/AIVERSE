@@ -870,6 +870,26 @@ static void checkPlanetTerrainWater(){
     AIVERSE_TEST_CHECK(dry&&dry->forcing.wetContactPermille==0);
     AIVERSE_TEST_CHECK(g::samplePlanetTerrainWater(ecs,surface,pos).submerged); // restored geometry
 }
+static void checkScheduledPlanetForest(){
+    const std::string root=std::string(AIVERSE_SOURCE_DIR)+"/examples/native/world_processes/planet-demo";
+    auto map=Json::parseFile(root+"/maps/planet.json");
+    auto rules=Json::parseFile(root+"/rules.json");
+    rules.set("terrain",Json::parse(R"({"model":"heightfield"})"));
+    rules.member("nativeModules").at(0).member("config").set("planetForest",Json::parse(
+        R"({"growthInterval":2,"decayInterval":3,"nutrientInterval":4,"species":[{"id":1,"matureTicks":2,"lifespanTicks":20,"seedIntervalTicks":2}],"plants":[{"entity":"local_slot","species":1,"key":1}],"weather":[{"entity":"local_slot","x":0,"z":0,"coverageMetres":64}]})"));
+    std::vector<g::NativeDefinition> defs{examples::planet_processes::definition()};
+    Simulation sim(SimConfig{1,20,0,true},std::make_unique<g::GameCore>(std::move(defs)));
+    sim.setup(rules,map);
+    sim.step();
+    const auto* first=sim.world().resourceConst<wp::PlanetForestPipelineState>();
+    AIVERSE_TEST_CHECK(first&&first->lastSuccess==0&&first->successes==1);
+    SimSnapshot saved;sim.saveState(saved);
+    sim.step();sim.step();
+    AIVERSE_TEST_CHECK(sim.world().resourceConst<wp::PlanetForestPipelineState>()->lastSuccess==2);
+    const auto hash=sim.checksum();
+    sim.loadState(saved);sim.step();sim.step();
+    AIVERSE_TEST_CHECK(sim.checksum()==hash);
+}
 static void checkPlanetNutrients(){
     using namespace terraweave;
     namespace nw=aiverse::lib::nereid;
@@ -1905,6 +1925,7 @@ int main(){
     checkPlanetForestEcology();
     checkPlanetDeadwood();
     checkPlanetNutrients();
+    checkScheduledPlanetForest();
     checkPlanetTerrainWater();
     checkPlanetBankErosion();
     checkPlanetSedimentTransport();
