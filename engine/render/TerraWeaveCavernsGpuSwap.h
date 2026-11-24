@@ -126,6 +126,9 @@ public:
     void draw(render::Renderer3D& renderer) {
         if(active_)active_->draw(renderer);
     }
+    void drawExactPlaced(render::Renderer3D& renderer,const render::mat4& parent){
+        if(active_)active_->drawExactPlaced(renderer,parent);
+    }
     // Stage38: graphics-owner frame boundary, OUTSIDE render passes.
     // No GPU idle wait: standard non-STRATA scenes are removed after real
     // GPU fence completion, then their model retirement tokens are polled.
