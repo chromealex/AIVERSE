@@ -1,3 +1,7 @@
+## Stage 116 — live GPU pool compaction (in progress; QA deferred)
+
+After 120 birth-idle steps, use exact asynchronous occupancy proof (unchanged birth/reset epoch). If at most one quarter occupied, shrink to a geometric capacity with at least twice observed live count, minimum 256. GPU migration preserves particle state, VM parameters/attributes and owner tokens, rebuilds dense alive/free partition. Candidate overlap remains budgeted; rejection preserves old pool. Physical IDs may relocate; Medium LOD selection may change once. No synchronous readback or new authoring fields.
+
 ## Stage 115 — production Metal allocator acceptance (test source registered; NOT RUN)
 
 Exercise real ComputeParticles and Metal RHI, not mock GPU: 256/65536/262144 slots, both geometry paths, exact free/alive/visible/LOD counters and unique slot ownership, kill/reuse, growth, reset/idle shrink, memory budget fences. Register Mac CTest and repair older standalone smoke bindings to current shader ABI. Device absent is SKIP, not PASS. Record execution separately from source registration. New `spectrafx_metal_allocator` CTest links production RHI, reports exact partition/draw ownership via blocking QA-only `auditGpuAllocation`, includes capacity/LOD/memory cases. Updated legacy standalone compaction smoke to bind current VM/material/kill buffers and uniform ABI. Hardware run still required.
