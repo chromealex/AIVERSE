@@ -1,5 +1,6 @@
 // Linked map-authoring -> authoritative ECS references across all 3 systems.
 #include "aiverselib/world/WorldProcessesMapHydration.h"
+#include "aiverselib/world/GranularEcs.h"
 #include "aiverselib/world/EvolveSimulationLod.h"
 #include "aiverselib/world/EvolveRegionWorkBudget.h"
 #include "aiverselib/world/WorldProcessBudgetedQueries.h"
@@ -317,7 +318,111 @@ static void checkStudioReportDiagnostics(){
     catch(const std::invalid_argument&){rejected=true;}
     AIVERSE_TEST_CHECK(rejected);
 }
+// Unchanged dense settlement traversal as an independent parity oracle.
+static bool denseGranularReference(granular::Field& f,uint32_t tick){
+    if(!granular::valid(f))return false;
+    if(f.enabled){
+        const size_t w=f.width,h=f.height;
+        for(size_t y=h-1;y>0;--y)for(size_t x=0;x<w;++x){
+            const auto src=(y-1)*w+x;
+            if(f.solid[src]||!f.mass[src])continue;
+            const auto transfer=[&](size_t xx){
+                const auto dst=y*w+xx;
+                if(f.solid[dst])return;
+                const auto amount=std::min(f.mass[src],f.capacity-f.mass[dst]);
+                f.mass[src]-=amount;f.mass[dst]+=amount;
+            };
+            transfer(x);
+            if(f.mass[src]){
+                if(((tick+uint32_t(y)+uint32_t(x))&1)==0){
+                    if(x>0)transfer(x-1);
+                    if(x+1<w)transfer(x+1);
+                }else{
+                    if(x+1<w)transfer(x+1);
+                    if(x>0)transfer(x-1);
+                }
+            }
+        }
+    }
+    f.sampledTick=tick;
+    return true;
+}
+static granular::Field granularField(uint16_t w,uint16_t h){
+    granular::Field f;
+    f.width=w;f.height=h;f.capacity=50;
+    f.mass.assign(size_t(w)*h,0);f.solid.assign(f.mass.size(),0);
+    return f;
+}
+static void checkGranularActivity(){
+    uint64_t rng=0xa35159c8dULL;
+    auto next=[&](){rng=rng*6364136223846793005ULL+1;return rng>>32;};
+    auto sum=[](const auto& f){int64_t total=0;for(auto x:f.mass)total+=x;return total;};
+    for(uint16_t width:{1,2,7,63,64,65,127,128}){
+        for(uint32_t trial=0;trial<16;++trial){
+            auto f=granularField(width,uint16_t(1+next()%16));
+            for(size_t i=0;i<f.mass.size();++i){
+                f.solid[i]=uint8_t(next()%5==0);
+                if(!f.solid[i]&&next()%3)f.mass[i]=int64_t(next()%51);
+            }
+            for(uint32_t tick=1;tick<=8;++tick){
+                // Direct external edits between ticks must be visible.
+                const auto edit=size_t(next()%f.mass.size());
+                if(!f.solid[edit])f.mass[edit]=int64_t(next()%51);
+                f.enabled=trial%4!=0||tick%2==0;
+                auto reference=f;
+                const auto mass=sum(f);
+                granular::SettlementActivity stats{};
+                AIVERSE_TEST_CHECK(denseGranularReference(reference,tick));
+                AIVERSE_TEST_CHECK(granular::settle(f,tick,&stats));
+                AIVERSE_TEST_CHECK(f.mass==reference.mass&&f.solid==reference.solid);
+                AIVERSE_TEST_CHECK(f.sampledTick==reference.sampledTick&&sum(f)==mass);
+                AIVERSE_TEST_CHECK(stats.activeRows+stats.skippedRows==stats.sourceRows);
+                AIVERSE_TEST_CHECK(stats.transfers<=stats.candidateCells*3);
+                AIVERSE_TEST_CHECK(granular::valid(f));
+            }
+        }
+    }
+    // Both directions across the 64-bit boundary; no same-tick double fall.
+    for(size_t source:{size_t(63),size_t(64)}){
+        auto f=granularField(128,3);
+        std::fill(f.solid.begin()+128,f.solid.begin()+256,uint8_t(1));
+        const auto target=source==63?64:63;
+        f.solid[128+target]=0;
+        f.mass[source]=50;
+        granular::SettlementActivity stats{};
+        AIVERSE_TEST_CHECK(granular::settle(f,1,&stats));
+        AIVERSE_TEST_CHECK(f.mass[source]==0&&f.mass[128+target]==50&&f.mass[256+target]==0);
+        AIVERSE_TEST_CHECK(stats.transfers==1&&stats.movedMass==50);
+        AIVERSE_TEST_CHECK(granular::settle(f,2,&stats)&&f.mass[256+target]==50);
+        AIVERSE_TEST_CHECK(granular::settle(f,3,&stats)&&stats.candidateCells==0&&stats.skippedRows==2);
+    }
+    // Lower row vacates capacity during this same pass, waking upper row.
+    auto stacked=granularField(1,3);stacked.mass={50,50,0};
+    AIVERSE_TEST_CHECK(granular::settle(stacked,1));
+    AIVERSE_TEST_CHECK((stacked.mass==std::vector<int64_t>{0,50,50}));
+    // Direct obstacle edit wakes a previously quiet region.
+    auto blocked=granularField(1,2);blocked.mass[0]=30;blocked.solid[1]=1;
+    granular::SettlementActivity stats{};
+    AIVERSE_TEST_CHECK(granular::settle(blocked,1,&stats)&&stats.activeRows==0);
+    blocked.solid[1]=0;
+    AIVERSE_TEST_CHECK(granular::settle(blocked,2,&stats)&&blocked.mass[1]==30);
+    blocked.solid[1]=1;const auto invalid=blocked;const auto oldStats=stats;
+    AIVERSE_TEST_CHECK(!granular::settle(blocked,3,&stats));
+    AIVERSE_TEST_CHECK(blocked.mass==invalid.mass&&blocked.sampledTick==invalid.sampledTick);
+    AIVERSE_TEST_CHECK(stats.transfers==oldStats.transfers);
+    // Authoritative source applied before settle wakes field in the same tick.
+    World ecs;
+    const auto field=ecs.create(),source=ecs.create();
+    ecs.add<granular::Field>(field,granularField(1,2));
+    ecs.add<granular::Source>(source,granular::Source{field,0,0,30,true});
+    AIVERSE_TEST_CHECK(granular::advance(ecs,1));
+    AIVERSE_TEST_CHECK(ecs.get<granular::Field>(field).mass[1]==30);
+    ecs.get<granular::Source>(source).delta=30;
+    AIVERSE_TEST_CHECK(granular::advance(ecs,2));
+    AIVERSE_TEST_CHECK((ecs.get<granular::Field>(field).mass==std::vector<int64_t>{10,50}));
+}
 int main(){
+    checkGranularActivity();
     checkRegionLod();
     checkRegionBudget();
     checkRegionPriority();
