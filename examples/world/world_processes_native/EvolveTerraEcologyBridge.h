@@ -5,6 +5,7 @@
 #pragma once
 #include "aiverselib/world/EvolveEcs.h"
 #include "aiverselib/world/EvolveArea.h"
+#include "aiverselib/world/EvolveSpatialIndex.h"
 #include "engine/world/TerraWeaveForestEcology.h"
 #include <algorithm>
 #include <cstdint>
@@ -103,6 +104,32 @@ makeEvolveForestClimateSampler(const World& world,
                z>=area->centerZcm+area->halfDepthCm)continue;
             climate=projectEvolutionClimate(*region,climate);
         }
+        return climate;
+    };
+}
+// Tick-scoped indexed sampler for synchronous advanceForestEcology.
+// The caller must keep region membership and Area bounds fixed for the
+// duration of the step (including in baseline callbacks). Rebuild after any
+// structural edit or rollback. The public reusable sampler above retains its
+// live-area semantics; it cannot use a stale spatial index after edits.
+// Scratch is private to the callable: do not invoke the same instance
+// concurrently. Region climate values are still read from canonical World.
+inline terraweave::ForestEcologyClimateSampler
+makeIndexedEvolveForestClimateSampler(const World& world,
+    terraweave::ForestEcologyClimateSampler baseline={}) {
+    auto zones=evolve::extents(world);
+    if(zones.size()>evolve::kMaxRegions)
+        throw std::length_error("EVOLVE forest region projection budget");
+    return [&world,index=evolve::SpatialIndex(std::move(zones)),
+            baseline=std::move(baseline),scratch=std::vector<size_t>{}]
+           (const terraweave::AnchoredPlant& plant) mutable {
+        auto climate=baseline?baseline(plant):terraweave::ForestEcologyClimate{};
+        index.query(plant.anchor.xCm,plant.anchor.zCm,scratch,
+            [&](const evolve::Extent& zone){
+                if(!world.alive(zone.region))return;
+                const auto* region=world.tryGetConst<evolve::Region>(zone.region);
+                if(region)climate=projectEvolutionClimate(*region,climate);
+            });
         return climate;
     };
 }
