@@ -248,3 +248,7 @@ Record real GPU device model, backend and test project. Suggested scenarios: 10,
 3. Capture bounded queue profiling and non-regression of rollback/Stop/Kill; add positive/negative property tests.
 4. Integrate a typed editor inspector and HTML5 Studio source browser **after** synchronizing `feature/studio-html5` ownership; do not modify that parallel branch blindly.
 5. Continue with Stage 2 IR design and capability-based compiler as a separate code+handoff stage.
+
+## Stage 127 — PHYSIS Data Interface snapshot bridge (in progress)
+
+Owner: SpectraFX presentation, existing feature branch. User requested remaining functionality before more test runs. Reuse PHYSIS read-only sampleNatureField; host publishes a bounded immutable 3D lattice at a committed tick, no World pointer on the render thread. Named scalar channels for wind/gravity and atmosphere, signed metres including spherical worlds, explicit missing grid data. Use existing GraphRuntime DataInterfaceRegistry and graph-v2 bindings, no schema or backend ABI changes. Native example and regression source; no compile/CTest until user requests QA. Studio live environment publication is a separate host integration; no fake preview samples. Remaining matrix rows stay open until source and evidence support closure.
