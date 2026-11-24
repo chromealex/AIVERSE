@@ -601,6 +601,9 @@ bool StudioSession::pollAgentLink() {
             agentLines_.push_back("→ view_screenshot");
             continue;
         }
+        if(stroking_&&brush_.kind=="caverns"){
+            agentServer_.send(m.client,reply(id,error("Finish the active Caverns stroke before MCP operations")).dump(-1));continue;
+        }
         syncHistoryLabels();
         const size_t before=ws_.map.undoDepth(),entities=ws_.map.data.entities.size();
         const bool wasDirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
@@ -614,7 +617,8 @@ bool StudioSession::pollAgentLink() {
         syncHistoryLabels();
         if(ws_.map.data.entities.size()!=entities){clearSelection();dropOrdinalFlags();}
         const bool dirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
-        const bool edit=!failed&&(undoable||dirty!=wasDirty||!studioToolReadOnly(name));
+        const bool readOnly=studioToolReadOnly(name)||(name=="terraweave_caverns_paint"&&args.getStr("mode")=="get");
+        const bool edit=!failed&&(undoable||dirty!=wasDirty||!readOnly);
         if(edit)changed=true;
         if(edit||failed){
             Json c=Json::object();
@@ -1865,14 +1869,16 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 throw std::runtime_error("Caverns project/map changed; refresh the panel");
             const Json input=params["params"].isObject()?params["params"]:Json::object();
             if(op=="terraweave_caverns_paint" && input.getStr("mode")!="get" &&
-               (!input["expectedRevision"].isString() || input.getBool("withinStroke",false)))
+               (stroking_ || input.getStr("expectedMapRevision")!=std::to_string(ws_.map.revision) ||
+                !input["expectedRevision"].isString() || input.getBool("withinStroke",false)))
                 throw std::runtime_error("Caverns Studio edit requires revision and its own undo step");
             const bool wasDirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
             const size_t depth=ws_.map.undoDepth(),entityCount=ws_.map.data.entities.size();
-            const Json result=ws_.call(op,input,"studio");
+            Json result=ws_.call(op,input,"studio");
+            if(op=="terraweave_caverns_paint"&&!result.has("error"))result.set("mapRevisionText",str(std::to_string(ws_.map.revision)));
             if (result.has("error")) throw std::runtime_error(result.getStr("error"));
             const bool dirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
-            const bool readOnly=studioToolReadOnly(op)||(op=="terraweave_caverns_paint"&&input.getStr("mode")=="get");
+            const bool readOnly=studioToolReadOnly(op)||(op=="terraweave_caverns_paint"&&(input.getStr("mode")=="get"||!result.getBool("changed",true)));
             const bool changed=!readOnly||ws_.map.undoDepth()!=depth||dirty!=wasDirty;
             if (ws_.map.data.entities.size()!=entityCount) { clearSelection(); dropOrdinalFlags(); }
             Json out=Json::object();
