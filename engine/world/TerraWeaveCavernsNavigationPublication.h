@@ -56,7 +56,8 @@ public:
     // If a callback throws, the event is retained for retry and callers
     // must not query a consumer's stale derived navigation cache.
     bool publish(std::shared_ptr<const CaveSnapshotSpatialIndex> committed,
-                 CaveDirtyBounds bounds,bool fullRebuild=false) {
+                 CaveDirtyBounds bounds,bool fullRebuild=false,
+                 CaveResidencyCheck residency={}) {
         if(!committed||!committed->revision())
             throw std::invalid_argument("Caverns missing nav commit source");
         if(active_&&committed->revision()<=active_->revision())return false;
@@ -65,13 +66,15 @@ public:
             bounds.maxZ<=bounds.minZ))
             throw std::invalid_argument("Caverns nav dirty bounds");
         const uint64_t old=active_?active_->revision():0;
+        const auto nextResidency=residency?std::move(residency):residency_;
         auto next=std::make_shared<const CaveNavigationDataProvider>(
             std::move(committed),callbacks_,
-            active_?active_->environmentRevision():0);
+            active_?active_->environmentRevision():0,nextResidency);
         pending_.push_back({
             CaveNavigationChange{old,next->revision(),bounds,fullRebuild},
             std::move(next),0
         });
+        residency_=nextResidency;
         active_=pending_.back().provider;
         return dispatchPending();
     }
@@ -90,13 +93,31 @@ public:
             affected.maxZ<=affected.minZ))
             throw std::invalid_argument("Caverns environment dirty bounds");
         auto replacement=std::make_shared<const CaveNavigationDataProvider>(
-            active_->indexedSource(),newCallbacks,environmentEpoch);
+            active_->indexedSource(),newCallbacks,environmentEpoch,residency_);
         pending_.push_back({
             CaveNavigationChange{active_->revision(),active_->revision(),
                                  affected,fullRebuild},
             replacement,0
         });
         callbacks_=std::move(newCallbacks);
+        active_=std::move(replacement);
+        return dispatchPending();
+    }
+    // Replace the immutable residency snapshot and notify every solver.
+    // Full rebuild is conservative: an agent footprint may span several
+    // chunks beyond the dirty bounds, not just a single graph node halo.
+    bool publishResidency(CaveResidencyCheck next,CaveDirtyBounds bounds) {
+        if(!active_||!next)return false;
+        if(bounds.maxX<=bounds.minX||bounds.maxY<=bounds.minY||
+           bounds.maxZ<=bounds.minZ)
+            throw std::invalid_argument("Caverns residency bounds");
+        auto replacement=std::make_shared<const CaveNavigationDataProvider>(
+            active_->indexedSource(),callbacks_,active_->environmentRevision(),next);
+        pending_.push_back({
+            CaveNavigationChange{active_->revision(),active_->revision(),bounds,true},
+            replacement,0
+        });
+        residency_=std::move(next);
         active_=std::move(replacement);
         return dispatchPending();
     }
@@ -150,6 +171,7 @@ private:
         uint64_t lastDelivered=0;
     };
     CaveNavigationCallbacks callbacks_;
+    CaveResidencyCheck residency_;
     std::shared_ptr<const CaveNavigationDataProvider> active_;
     std::map<uint64_t,Observer> observers_;
     std::vector<Event> pending_;
