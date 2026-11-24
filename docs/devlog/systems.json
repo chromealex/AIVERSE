@@ -1856,6 +1856,12 @@
           "text": "Аудит raw-ссылок, проверка двух рендереров до удаления CPU replay, единый сценарий приёмки. Автоматическая сертификация пока выключена.",
           "nameEn": "Texture Graph GPU — Stage 38Y (partial)",
           "textEn": "Audit raw references, preflight both renderers before CPU replay detachment and consolidate acceptance. Automatic certification remains disabled."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38Z (в работе)",
+          "text": "Scoped ModelReadLease для штатных читателей Model, без удержания через мутации.",
+          "nameEn": "Texture Graph GPU — Stage 38Z (in progress)",
+          "textEn": "Scoped ModelReadLease for stock model readers, without holding across mutations."
         }
       ],
       "enables": [
