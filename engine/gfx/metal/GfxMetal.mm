@@ -1921,6 +1921,37 @@ public:
         screenReadable_ = readable;
         if (!capture_ && !captured_) layer_.framebufferOnly = readable ? NO : YES;
     }
+    bool supportsStorageBufferTextureCopy() const override {
+        return supportsCompute() && gpuHealthy();
+    }
+    bool copyStorageBufferToTexture2D(BufferHandle from,TextureHandle to,
+                                     const BufferTextureCopy2D& copy) override {
+        auto* source=buffers_.get(from.id);
+        const auto* dst=textures_.get(to.id);
+        if(!cmd_||enc_||compute_||gpuIcbEncoder_||!supportsStorageBufferTextureCopy()||
+           !source||!source->storage||!dst||!dst->tex||dst->storage||
+           dst->dimension!=TextureDimension::Texture2D||
+           dst->tex.textureType!=MTLTextureType2D||dst->tex.sampleCount!=1||
+           dst->tex.mipmapLevelCount!=1||dst->tex.framebufferOnly||
+           (dst->tex.usage&MTLTextureUsageRenderTarget)||
+           (dst->tex.pixelFormat!=MTLPixelFormatRGBA8Unorm&&
+            dst->tex.pixelFormat!=MTLPixelFormatRGBA8Unorm_sRGB)||
+           !validBufferTextureCopy2D(copy,source->size,int(dst->tex.width),int(dst->tex.height))) {
+            error_="Metal: rejected storage buffer to RGBA8 texture copy";return false;
+        }
+        id<MTLBuffer> src=current(*source);
+        if(!src){error_="Metal: copy source unavailable";return false;}
+        id<MTLBlitCommandEncoder> blit=[cmd_ blitCommandEncoder];
+        if(!blit){error_="Metal: texture copy encoder unavailable";return false;}
+        [blit copyFromBuffer:src sourceOffset:NSUInteger(copy.sourceOffset)
+            sourceBytesPerRow:NSUInteger(copy.rowPitchBytes) sourceBytesPerImage:0
+            sourceSize:MTLSizeMake(NSUInteger(copy.width),NSUInteger(copy.height),1)
+            toTexture:dst->tex destinationSlice:0 destinationLevel:0
+            destinationOrigin:MTLOriginMake(0,0,0)];
+        [blit endEncoding];
+        return true;
+    }
+
     bool copyColor(TextureHandle from, TextureHandle to) override {
         auto* dst = textures_.get(to.id);
         if (!cmd_ || enc_ || !dst) return false;
