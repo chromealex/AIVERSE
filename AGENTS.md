@@ -173,6 +173,21 @@ NavMesh and streaming, read
 World-space resource/streaming ownership lives under
 `engine/world/TerraWeaveCaverns*.h`; presentation GPU ownership lives under
 `engine/render/TerraWeaveCaverns*.h`.
+Stage42 pathfinding reuse: generic integer A*/Dijkstra/reverse FlowField
+and HPA-style region corridor implementations live in
+`engine/nav/GraphSearch.h` and `engine/nav/GraphHierarchy.h`. They accept
+the shared `nav::GraphEdge` callback contract, including Caverns 3D graph
+and future engine worlds; DO NOT duplicate solvers in genre modules.
+`TerraWeaveCavernsGraphSolvers.h` wires cave occupancy to these common
+algorithms and `TerraWeaveCavernsNativeNavSolver.h` wraps the existing
+nav::Mesh. `engine/nav/CaveEcsRouteFollow.h` owns opt-in ECS route
+components and versioned movement, requiring the actual authoritative
+Box3D/SpatialWorld collision callback. Legacy MapGrid 2D pathfinding
+algorithms remain untouched; they are not yet migrated onto the new
+3D graph API. Any real GameModule must explicitly install its deterministic
+tick, serialization/rollback/hash and repath behavior before calling
+runtime locomotion complete. Keep tests deferred only while finishing
+features; native acceptance is mandatory before main merge.
 Stage41 pathfinding owner rule: Caverns provides ONE shared immutable SDF
 navigation provider, 3D grid adjacency, HPA cluster portals, native
 nav::Source adapter, revisioned dirty-event bus and registered custom solver
