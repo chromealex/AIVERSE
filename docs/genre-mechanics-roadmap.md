@@ -96,3 +96,7 @@ Load v1/v2 planetary regions into one persistent ECS region-set resource using t
 ### Stage54u2 — IN PROGRESS
 
 One complete body-level cut transaction over disjoint chart leaf sets. Acceptance: stable region-qualified slots, common surface epoch/revision, exact combined exterior/rim certificate, aggregate surface/volume/triangle budgets, current-epoch fencing, shared native owner and a single existing renderer publication. Preserve legacy single-chart API, reject conflicting leaf ownership and collider ranges before installation. Automatic GameCore physics/streaming demand remains later work. Native QA pending.
+
+### Stage54u3 — IN PROGRESS
+
+Native planet leaf baseline collision ownership in existing Box3D and SpatialWorld, exact renderer-captured original triangles, disjoint host-reserved ID namespace and explicit exclusion proof. Publish baseline before accepting cut; retire baseline exactly once on native cut commit, restore before reopening readers on close, quarantine irreversible failures. Standard spherical GameCore has grid movement rather than an existing Box3D planetary owner, so automatic actor locomotion and runtime demand remain separate integration work. Register real scene regression; native QA pending.
