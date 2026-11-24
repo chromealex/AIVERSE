@@ -45,18 +45,20 @@
     "apps/studio-native/StudioTools.h",
     "apps/studio-web/src/nestedDock.ts",
     "apps/studio-web/src/panels/StudioPanelRenderer.tsx",
-    "apps/studio-web/src/panels/FeatureReadinessPanel.tsx"
+    "apps/studio-web/src/panels/FeatureReadinessPanel.tsx",
+    "apps/studio-native/StudioSession.cpp",
+    "docs/handoff/studio-html5/feature-readiness-stage20-21-2026-11-24.md"
   ],
   "traits": {
     "editable": false,
     "simulation": false,
-    "visible": false,
+    "visible": true,
     "runtime": false
   },
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stages 16–23: dependency, roadmap, skill and API policy; parallel ownership and release reporting; read-only Studio/MCP report consumption. Pending implementation and validation.",
+      "note": "Stages 16–23 source implementation: dependency and roadmap policy, Skills/API checks, explicit agent claims, release report, MCP snapshot and Studio panel; execution and integration validation pending.",
       "evidence": []
     },
     "architecture": {
@@ -65,8 +67,8 @@
       "evidence": []
     },
     "native_api": {
-      "status": "not_applicable",
-      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "status": "not_run",
+      "note": "Read-only engine readiness report/dashboard implemented in source; native build, real MCP, Studio UI and publishing verification pending.",
       "evidence": []
     },
     "skill": {
@@ -75,13 +77,13 @@
       "evidence": []
     },
     "mcp": {
-      "status": "not_applicable",
-      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "status": "not_run",
+      "note": "Read-only engine readiness report/dashboard implemented in source; native build, real MCP, Studio UI and publishing verification pending.",
       "evidence": []
     },
     "studio": {
-      "status": "not_applicable",
-      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "status": "not_run",
+      "note": "Read-only engine readiness report/dashboard implemented in source; native build, real MCP, Studio UI and publishing verification pending.",
       "evidence": []
     },
     "inspector": {
@@ -140,8 +142,8 @@
       "evidence": []
     },
     "publishing": {
-      "status": "not_applicable",
-      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "status": "not_run",
+      "note": "Read-only engine readiness report/dashboard implemented in source; native build, real MCP, Studio UI and publishing verification pending.",
       "evidence": []
     }
   },
@@ -149,9 +151,15 @@
     "skills": [
       "aiverse-new-feature"
     ],
-    "mcp_tools": [],
-    "studio_panels": [],
-    "studio_methods": []
+    "mcp_tools": [
+      "feature_readiness_get"
+    ],
+    "studio_panels": [
+      "feature_readiness"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
   },
   "test_reports": []
 }
