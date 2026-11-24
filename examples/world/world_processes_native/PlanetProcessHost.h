@@ -26,8 +26,18 @@ public:
     enum class Phase { Idle, Prepared, PhysicsPublished, PhysicsStepped, Complete, Fault };
     Phase phase()const{return phase_;}
     const PlanetHostStamp& stamp()const{return stamp_;}
-    // Asset lifetime/registration is explicit, before the first frame.
-    PhysicalSceneHost& assets(){return physical_;}
+    size_t physicsTiles()const{return physical_.granularPhysicsTiles();}
+    physics::BodyHandle debrisHandle(Entity member)const{return physical_.planetDebris().handle(member);}
+    // Asset lifetime is explicit, after prepare and before render publication.
+    bool addMorphVisual(PhysicalSceneHost::InstanceId id,gfx::Device& device,
+            const render::Model& model,std::span<const render::ModelVertex> vertices,
+            std::span<const uint32_t> indices,std::span<const MorphVertexBinding> binding,
+            MorphModelStreamConfig config={}){
+        if((phase_!=Phase::Prepared&&phase_!=Phase::PhysicsPublished)||renderDone_||
+           (device_&&device_!=&device))return false;
+        if(!physical_.addMorphVisual(id,device,model,vertices,indices,binding,config))return false;
+        device_=&device;return true;
+    }
 
     // Caller provides an immutable owner Surface snapshot and a completed ECS
     // World after all authoritative terrain/fracture changes. Freeze by copy;
@@ -52,6 +62,7 @@ public:
         snapshot_=std::move(snapshot);surface_=std::move(surface);
         frame_=std::move(frame);stamp_=std::move(stamp);
         scene_=&scene;sceneTick_=scene.tick();bodyIndex_=body;
+        physical_.invalidateMorphPublications();
         renderDone_=false;recorded_=false;contacts_.clear();
         phase_=Phase::Prepared;return true;
     }
@@ -167,10 +178,14 @@ public:
         phase_=Phase::Fault;
         if(device_){if(!physical_.resetAfterRollback(*scene_,*device_))return false;}
         else if(!physical_.resetPhysicsOnly(*scene_))return false;
-        clear();return true;
+        auto* retainedDevice=device_;
+        clear();device_=retainedDevice;return true;
     }
     bool shutdown(){
-        if(!scene_)return phase_==Phase::Idle;
+        if(!scene_){
+            if(phase_!=Phase::Idle||!physical_.shutdownMorphVisuals())return false;
+            device_=nullptr;return true;
+        }
         phase_=Phase::Fault;
         if(device_){if(!physical_.shutdownAfterIdle(*scene_,*device_))return false;}
         else if(!physical_.resetPhysicsOnly(*scene_))return false;

@@ -135,6 +135,13 @@ public:
         return preparePlanetGranularBodyFrame(ecs,surface,body,terrainRevision,residency,
                                              placements,completedTick,budget);
     }
+    void invalidateMorphPublications(){
+        for(auto& [id,stream]:morphVisuals_){(void)id;stream->invalidatePublication();}
+    }
+    bool shutdownMorphVisuals(){
+        for(auto& [id,stream]:morphVisuals_){(void)id;if(!stream->shutdownAfterIdle())return false;}
+        morphVisuals_.clear();return true;
+    }
     bool resetPhysicsOnly(physics::Scene& scene){
         physics_.shutdown(scene);
         if(!debris_.reset(scene))return false;
