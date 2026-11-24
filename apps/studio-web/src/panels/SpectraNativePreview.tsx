@@ -760,9 +760,9 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
           {[1,2,4,8].map(n=><option value={n} key={n}>{n}×</option>)}
         </StudioSelect>
       </StudioField>
-      <StudioButton size="sm" variant="primary" disabled={!active||!state?.ready||busy||!!(state.volume&&!state.hybrid)}
-        onClick={()=>void command('burst',{count:burstCount})}>
-        Trigger Burst
+      <StudioButton size="sm" variant="primary" disabled={!active||!state?.ready||busy||!!(state.volume&&!state.hybrid&&!state.volumeImpulse)}
+        onClick={()=>void command('burst',{count:state?.volumeImpulse?1:burstCount})}>
+        {state?.volumeImpulse?'Trigger explosion':'Trigger Burst'}
       </StudioButton>
       <StudioButton size="sm" disabled={!active||!state?.ready||busy}
         onClick={()=>void command('clear')}>

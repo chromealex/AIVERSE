@@ -6,6 +6,7 @@
 #include <string>
 #include "engine/render/Renderer3D.h"
 #include "engine/view/game/GameView.h"
+namespace aiverse::render { class Prisma; }
 namespace aiverse::client {
 class ClientFx {
 public:
@@ -20,6 +21,7 @@ public:
     void addLights(render::LightSystem&) {}
     void prepareGpuFrame(float, const render::Camera&) {}
     void prepareGraphGpuFrame(Simulation&,const game::GameScene&,const render::Camera&,const render::mat4&,int,int,float) {}
+    void contributeVolumes(render::Prisma&) {}
     void renderGpu(const render::mat4&, const render::Camera&) {}
     void render(const render::Lighting&) {}
     void renderPrepared(const render::Camera3D&, const render::mat4&, int, int, const render::Lighting&) {}
@@ -36,6 +38,8 @@ public:
 } // namespace aiverse::client
 #else
 #include "engine/fx/ParticleSystem.h"
+#include "engine/fx/SpectraSceneVolumeWorld.h"
+#include "engine/render/Prisma.h"
 #include "engine/fx/SpectraFxGpuRoutes.h"
 #include "engine/fx/SpectraFxSimulationBridge.h"
 #include "engine/fx/SpectraFxEntityEffects.h"
@@ -85,6 +89,7 @@ public:
         const render::Camera& camera,const render::mat4& viewProj,int width,int height,float dt);
     // Draw GPU-owned billboards in the still open scene pass, after render().
     void renderGpu(const render::mat4& viewProj, const render::Camera& camera);
+    void contributeVolumes(render::Prisma& prisma);
     // After Renderer3D::render(): draws into the still open main pass.
     void render(const render::Lighting& lighting);
     // Reorient and draw already updated particles for another LENS camera.
@@ -140,7 +145,7 @@ private:
     };
     bool ensureGpuPlayback(gfx::Device& dev);
     void presentEntityEffects(Simulation& sim, const game::GameScene& scene, float dt);
-    void presentGraphSources(Simulation& sim,const game::GameScene& scene,const render::Camera& camera,bool allowGpu=false);
+    void presentGraphSources(Simulation& sim,const game::GameScene& scene,const render::Camera& camera,bool allowGpu=false,bool allowVolumes=false);
     void finishGraphGpuFrame();
     void shutdownGraphPool();
     void clearGraphSources();
@@ -156,6 +161,8 @@ private:
     lib::mechanics::SpectraSourceMirror graphSourceMirror_;
     std::unique_ptr<lib::mechanics::SpectraPresentationSystem> graphSources_;
     std::map<std::string,std::string> graphSourceAssets_;
+    std::map<std::string,spectra::volume::Asset> graphVolumeAssets_;
+    spectra::volume::SceneVolumeWorld graphVolumes_;
     spectra::GpuPoolWorld graphPool_;
     lib::mechanics::SpectraSourceMirror graphGpuMirror_;
     std::unique_ptr<spectra::GpuEcsAttachmentPresenter> graphGpuSources_;

@@ -163,7 +163,7 @@ export interface StudioSpectraPreviewState {
   generation:number;alive:number;error:string;
   gpuOwnedAllocationRequested?:boolean;gpuOwnedAllocation?:boolean;aliveEstimated?:boolean;
   gpuAllocatedCapacity?:number;gpuBytes?:number;gpuLiveCompactions?:number;gpuAllocationBudgetDenied?:number;
-  volume?:boolean;hybrid?:boolean;volumeRendered?:boolean;volumeDimension?:number;volumeBytes?:number;
+  volume?:boolean;hybrid?:boolean;volumeRendered?:boolean;volumeDimension?:number;volumeBytes?:number;volumeImpulse?:boolean;
   speed:number;loop:boolean;
   bursts:number;queuedBursts:number;clearing:boolean;
   checkpoints?:Array<{id:number;tick:number}>;

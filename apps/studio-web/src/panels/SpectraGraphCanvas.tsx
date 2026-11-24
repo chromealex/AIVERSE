@@ -98,7 +98,7 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
       <StudioField label="Volume preset">
         <StudioSelect value={volumePreset} onChange={e=>setVolumePreset(e.target.value)}>
           <option value="fire">Fire</option><option value="smoke">Smoke</option>
-          <option value="magic">Magic</option><option value="fog">Fog</option>
+          <option value="magic">Magic</option><option value="fog">Fog</option><option value="explosion">Explosion</option>
         </StudioSelect>
       </StudioField>
       <StudioButton size="sm" disabled={disabled||working||hasVolume}

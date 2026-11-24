@@ -1536,6 +1536,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
             r3d_.lighting.skyColor = r3d_.lighting.fogColor = {0.18f, 0.19f, 0.21f};
             r3d_.lighting.fogDensity = 0;
         }
+        fx_.contributeVolumes(prisma_);
         r3d_.render(pass, &prisma_);
         view_.noteRenderedFrame(r3d_.profile().cameraModelTriangles, r3d_.profile().triangles[0], r3d_.drawCalls());
         fx_.render(r3d_.lighting);
