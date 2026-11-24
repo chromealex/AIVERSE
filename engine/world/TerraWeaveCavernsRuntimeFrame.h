@@ -90,9 +90,10 @@ public:
         }catch(...) {physicsBarrier_.requireRecovery();throw;}
     }
     bool configureRimSurfaceGroup(std::shared_ptr<const CaveSurfaceGroupPlan> plan,
-            std::vector<CaveOwnedRimRequest> requests,const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive){
+            std::vector<CaveOwnedRimRequest> requests,const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive,
+            bool expandRequiredSlots=false){
         if(closed_||physicsBarrier_.status().recoveryRequired||!exclusive||!exclusive())return false;
-        if(!host_.configureRimGroup(std::move(plan),std::move(requests),exclusive))return false;
+        if(!host_.configureRimGroup(std::move(plan),std::move(requests),exclusive,expandRequiredSlots))return false;
         try{
             readyStreamBuilds_.clear();pendingRetires_.clear();invalidateNavigationRouteCache();syncStreamingEditPins();
         }catch(...){physicsBarrier_.requireRecovery();throw;}
@@ -100,7 +101,7 @@ public:
     }
     // Automatically select the complete padded volume slot set from the
     // frozen surface plan. The actual host chooses the lower trim planes
-    // and must enqueue all these keys before calling configure.
+    // and the automatic configure path expands the current immutable dirty batch.
     std::vector<CaveOwnedRimRequest> selectRimSurfaceRequests(const CaveSurfaceGroupPlan& plan,
             const std::map<uint64_t,Fixed>& lowerPlanes)const{
         auto snapshot=host_.sourceSnapshot();
@@ -111,7 +112,7 @@ public:
             const std::map<uint64_t,Fixed>& lowerPlanes,const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive){
         if(!plan||!exclusive||!exclusive()||closed_||physicsBarrier_.status().recoveryRequired)return false;
         auto requests=selectRimSurfaceRequests(*plan,lowerPlanes);
-        return configureRimSurfaceGroup(std::move(plan),std::move(requests),exclusive);
+        return configureRimSurfaceGroup(std::move(plan),std::move(requests),exclusive,true);
     }
     // Owner keeps the same exclusive world lease across volume staging,
     // surface publication and final downstream acknowledgement.
