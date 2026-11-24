@@ -1822,13 +1822,20 @@ Json StudioSession::dispatchImpl(const Json& request) {
             if((op.starts_with("world_save_")||op=="world_job_start"||op.starts_with("world_simulation_lod_"))&&params.getStr("expectedProject")!=ws_.project.dir)
                 throw std::runtime_error("World maintenance project changed; reopen the panel");
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
+            if(op=="terraweave_caverns_paint" && (params.getStr("expectedProject")!=ws_.project.dir ||
+               !params["expectedMap"].isString() || params.getStr("expectedMap")!=(ws_.map.path.empty()?"":ws_.relative(ws_.map.path))))
+                throw std::runtime_error("Caverns project/map changed; refresh the panel");
             const Json input=params["params"].isObject()?params["params"]:Json::object();
+            if(op=="terraweave_caverns_paint" && input.getStr("mode")!="get" &&
+               (!input["expectedRevision"].isString() || input.getBool("withinStroke",false)))
+                throw std::runtime_error("Caverns Studio edit requires revision and its own undo step");
             const bool wasDirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
             const size_t depth=ws_.map.undoDepth(),entityCount=ws_.map.data.entities.size();
             const Json result=ws_.call(op,input,"studio");
             if (result.has("error")) throw std::runtime_error(result.getStr("error"));
             const bool dirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
-            const bool changed=!studioToolReadOnly(op)||ws_.map.undoDepth()!=depth||dirty!=wasDirty;
+            const bool readOnly=studioToolReadOnly(op)||(op=="terraweave_caverns_paint"&&input.getStr("mode")=="get");
+            const bool changed=!readOnly||ws_.map.undoDepth()!=depth||dirty!=wasDirty;
             if (ws_.map.data.entities.size()!=entityCount) { clearSelection(); dropOrdinalFlags(); }
             Json out=Json::object();
             out.set("op",str(op));out.set("result",result);out.set("changed",Json::fromBool(changed));
