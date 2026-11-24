@@ -51,6 +51,7 @@ import WorldPersistencePanel from './WorldPersistencePanel';
 import WorldExplorerPanel from './generated/WorldExplorerPanel';
 import SimulationProfilerPanel from './generated/SimulationProfilerPanel';
 import TerraweaveGeneratorPanel from './generated/TerraweaveGeneratorPanel';
+import CavernsPanel from './generated/CavernsPanel';
 
 import CatalogPanel from './generated/CatalogPanel';
 
@@ -163,6 +164,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'wind': return <WindPanel snapshot={snapshot}/>;
       case 'human_appearance': return <HumanAppearancePanel snapshot={snapshot}/>;
       case 'human_creator': return <HumanCreatorPanel snapshot={snapshot}/>;
+      case 'caverns': return <CavernsPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'terraweave_generator': return <TerraweaveGeneratorPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'catalog': return <CatalogPanel snapshot={snapshot}/>;
       case 'world_explorer': return <WorldExplorerPanel snapshot={snapshot}/>;
