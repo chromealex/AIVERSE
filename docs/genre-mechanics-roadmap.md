@@ -152,3 +152,7 @@ Compose the existing planetary runtime, canonical ECS environment and GI publica
 ### Stage56c — IN PROGRESS (GI coordinate transaction)
 
 Retain exact body-space triangle/material sources for leased cut, volume and original leaves. Reproject active GI cohorts atomically with the existing scene/target at the exclusive frame barrier, including host-supplied nonleased chunk coordinate mapping. Force full GI invalidation; refuse stale scene, invalid projection and unavailable fences without advancing the projection. Preserve collision/navigation native revision and ECS state. Host must supply frozen transforms and coordinate nongeometry GI inputs before presentation. Source regression: target refusal, moved cut, restored moved baseline and unrelated chunk mapping. Default native host adoption and real GPU/Mac acceptance remain separate.
+
+### Stage56d — IN PROGRESS (native baseline source and frame adapter)
+
+Connect the actual PlanetRenderer leaf capture to the existing native GI scene before cave publication. Opt-in host proofs reserve exact disjoint leaf IDs and material source; never overwrite external geometry or fabricate ownership. Baseline target refusal remains retryable before native commit. Capture the existing SphereViewFrame and PlanetWorld body centers by value for GI projection, provide old/new frame mapping for other registered producers. Keep native simulation anchors unchanged. Default client has no authoritative native planetary physics owner; no automatic adoption or live acceptance claimed.
