@@ -232,6 +232,34 @@ int main() {
     require(call("fx_replay_preset_relocate_apply",applyPlan).has("error"),"conflicting plan applied");
     require(call("fx_replay_preset_relocate_preview",movedGet).getStr("state")=="conflict",
             "duplicate GUID accepted");
+    // Export the relocated v2 recipe after removing the deliberate GUID
+    // collision. The target has the same asset at a different content path.
+    fs::remove(movedFrom);fs::remove(movedFrom.string()+".meta");
+    Json portableGet=Json::object();portableGet.set("name",Json::string("relocation_v2"));
+    const auto portable=call("fx_replay_preset_portable_export",portableGet)["portable"];
+    require(portable.isObject()&&!portable["recipe"].has("projectPath"),"portable export retained project identity");
+    const auto target=root/"portable-target";
+    fs::create_directories(target/"content");
+    fs::copy_file(movedTo,target/"content"/"target.png");
+    fs::copy_file(movedTo.string()+".meta",target/"content"/"target.png.meta");
+    ws.project.dir=target.string();
+    Json portableArgs=Json::object();portableArgs.set("portable",portable);
+    const auto portablePlan=call("fx_replay_preset_portable_preview",portableArgs);
+    require(portablePlan.getStr("state")=="ready"&&portablePlan["candidate"].getStr("projectPath")==target.string(),
+            "cross-project portable remap failed");
+    portableArgs.set("newName",Json::string("imported"));
+    portableArgs.set("planRevision",Json::string("stale"));
+    require(call("fx_replay_preset_portable_apply",portableArgs).has("error"),"stale portable plan applied");
+    portableArgs.set("planRevision",portablePlan["planRevision"]);
+    require(!call("fx_replay_preset_portable_apply",portableArgs).has("error"),"portable apply failed");
+    Json imported=Json::object();imported.set("name",Json::string("imported"));
+    require(call("fx_replay_preset_get",imported)["compatibility"].getStr("state")=="matching",
+            "imported preset dependencies mismatch");
+    require(call("fx_replay_preset_portable_apply",portableArgs).has("error"),"portable import overwrote existing name");
+    fs::remove(target/"content"/"target.png");
+    require(call("fx_replay_preset_portable_preview",portableArgs).getStr("state")=="conflict",
+            "portable import missed absent target resource");
+    ws.project.dir=root.string();
     getPreset.set("expectedGraphSignature",Json::string("other"));
     require(call("fx_replay_preset_get",getPreset).has("error"),"stale graph revision accepted");
     savePreset.set("name",Json::string("../escape"));

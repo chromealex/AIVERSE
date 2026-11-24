@@ -71,6 +71,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [presetCompatibility,setPresetCompatibility]=useState('');
   const [relocationPlan,setRelocationPlan]=useState<{source:string;state:string;planRevision?:string;detail?:string;changes:Array<{from:string;to:string;state:string;detail?:string}>}|null>(null);
   const [presetLibraryBusy,setPresetLibraryBusy]=useState(false);
+  const [portableImport,setPortableImport]=useState<{portable:Record<string,unknown>;state:string;planRevision?:string;detail?:string;changes:Array<{from:string;to:string;state:string;detail?:string}>}|null>(null);
   const [liveScalars,setLiveScalars]=useState<Record<string,number>>({});
   const [replayRestoring,setReplayRestoring]=useState(false);
   const replayCancelled=useRef(false);
@@ -308,6 +309,46 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       await refreshPresetLibrary();setPresetSelected(presetName);
       setPresetCompatibility('Relocated copy saved; source unchanged');
     }catch(e){setError(message(e));setRelocationPlan(null);}finally{setPresetLibraryBusy(false);}
+  };
+  const exportPortablePreset=async()=>{
+    if(!presetSelected||presetLibraryBusy||!active)return;
+    setPresetLibraryBusy(true);setError('');
+    try{
+      const result=await presetOp('fx_replay_preset_portable_export',{name:presetSelected});
+      const blob=new Blob([JSON.stringify(result.portable)],{type:'application/json'});
+      if(!result.portable||blob.size>65536)throw new Error('Invalid or oversized portable replay');
+      const url=URL.createObjectURL(blob);
+      const link=document.createElement('a');link.href=url;link.download=presetSelected+'.spectra-portable.json';
+      link.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }catch(e){setError(message(e));}finally{setPresetLibraryBusy(false);}
+  };
+  const previewPortablePreset=async(file:File|undefined)=>{
+    if(!file||!active||presetLibraryBusy||busy)return;
+    setPresetLibraryBusy(true);setPortableImport(null);setError('');
+    try{
+      if(file.size>65536)throw new Error('Portable replay exceeds 64 KiB');
+      const portable:unknown=JSON.parse(await file.text());
+      if(!portable||typeof portable!=='object'||Array.isArray(portable))throw new Error('Invalid portable replay');
+      const envelope=portable as Record<string,unknown>;
+      const result=await presetOp('fx_replay_preset_portable_preview',{portable:envelope});
+      if(typeof result.state!=='string'||!Array.isArray(result.changes))throw new Error('Invalid portable import plan');
+      setPortableImport({portable:envelope,state:result.state,
+        planRevision:typeof result.planRevision==='string'?result.planRevision:undefined,
+        detail:typeof result.detail==='string'?result.detail:undefined,
+        changes:result.changes.filter((r):r is {from:string;to:string;state:string;detail?:string}=>
+          !!r&&typeof r.from==='string'&&typeof r.to==='string'&&typeof r.state==='string')});
+    }catch(e){setError(message(e));}finally{setPresetLibraryBusy(false);}
+  };
+  const applyPortablePreset=async()=>{
+    if(!active||busy||presetLibraryBusy||!portableImport?.planRevision||
+      !['ready','matching'].includes(portableImport.state)||!(/^[a-z0-9_]{1,48}$/).test(presetName)||presetName==='fx')return;
+    setPresetLibraryBusy(true);setError('');
+    try{
+      await presetOp('fx_replay_preset_portable_apply',{portable:portableImport.portable,newName:presetName,
+        planRevision:portableImport.planRevision});
+      setPortableImport(null);await refreshPresetLibrary();setPresetSelected(presetName);
+      setPresetCompatibility('Portable copy saved in target project');
+    }catch(e){setError(message(e));setPortableImport(null);}finally{setPresetLibraryBusy(false);}
   };
   const exportReplayPreset=()=>{
     if(!replayPreset)return;
@@ -675,6 +716,21 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       </StudioField>
       <StudioButton size="sm" disabled={!active||!replayPreset||presetLibraryBusy||busy||!(/^[a-z0-9_]{1,48}$/).test(presetName)||presetName==='fx'}
         onClick={()=>void saveNamedPreset()}>Save to project Assets</StudioButton>
+      <StudioButton size="sm" disabled={!active||!presetSelected||presetLibraryBusy||busy}
+        onClick={()=>void exportPortablePreset()}>Export portable preset</StudioButton>
+      <label>Import portable preset <input type="file" accept=".json,application/json"
+        disabled={!active||busy||presetLibraryBusy} onChange={e=>{
+          void previewPortablePreset(e.target.files?.[0]);e.target.value='';
+        }}/></label>
+      {portableImport&&<div className="spectra-native__hint">
+        <small>Portable import: {portableImport.state} · {portableImport.detail??''}</small>
+        {portableImport.changes.filter(r=>r.state!=='unchanged').map(r=>
+          <div key={r.from}><small>{r.state}: {r.from} → {r.to} {r.detail??''}</small></div>)}
+        <StudioButton size="sm" disabled={!active||busy||presetLibraryBusy||!portableImport.planRevision||
+          !['ready','matching'].includes(portableImport.state)||!(/^[a-z0-9_]{1,48}$/).test(presetName)||presetName==='fx'}
+          onClick={()=>void applyPortablePreset()}>Save portable copy with new name</StudioButton>
+        <StudioButton size="sm" disabled={presetLibraryBusy} onClick={()=>setPortableImport(null)}>Discard import</StudioButton>
+      </div>}
       {relocationPlan?.state==='ready'&&<StudioButton size="sm"
         disabled={!active||presetLibraryBusy||busy||!relocationPlan.planRevision||!(/^[a-z0-9_]{1,48}$/).test(presetName)||presetName==='fx'||presetName===presetSelected}
         onClick={()=>void applyPresetRelocation()}>Save relocated copy with new name</StudioButton>}

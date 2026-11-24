@@ -543,7 +543,7 @@ Json replayRelocationPlan(const Json& preset,const Workspace& ws) {
     if(conflicts){out.set("state",strGraph("conflict"));return out;}
     Json candidate=preset;
     const auto graph=rewriteReplayPaths(Json::parse(preset.getStr("graphSignature")),mapping);
-    candidate.set("graphSignature",strGraph(graph.dump(-1)));
+    if(!mapping.empty())candidate.set("graphSignature",strGraph(graph.dump(-1)));
     Json expected=Json::array();
     for(auto& [path,row]:expectedRows){(void)path;expected.push(std::move(row));}
     candidate.set("dependencies",expected);
@@ -589,6 +589,31 @@ Json publishReplayPreset(const Workspace& ws,const std::string& name,const Json&
     Json out=Json::object();out.set("name",strGraph(name));
     out.set("path",strGraph("spectrafx/replays/"+name+kReplaySuffix));
     return out;
+}
+// Portable envelope deliberately excludes projectPath and unknown preset
+// metadata. The graph itself remains authored data, not an asset archive.
+Json portableReplayRecipe(const Json& source) {
+    Json recipe=Json::object();
+    for(const char* field:{"format","version","graphSignature","camera","tick","speed","loop",
+        "background","grid","axes","parameters","gpuBirthRandom","seed","gpuShaderSeed",
+        "gpuAllocationSeed","dependencyVersion","dependencies"})
+        if(source.has(field))recipe.set(field,source[field]);
+    return recipe;
+}
+Json portableReplayPlan(const Json& portable,const Workspace& ws) {
+    if(!portable.isObject()||portable.getStr("format")!="aiverse.spectrafx.replay.portable"||
+       portable.getInt("version",-1)!=1||portable.dump(-1).size()>kReplayMaxBytes||
+       !portable["recipe"].isObject()||portable["recipe"].has("projectPath"))
+        throw std::runtime_error("Invalid portable replay envelope");
+    Json recipe=portableReplayRecipe(portable["recipe"]);
+    recipe.set("projectPath",strGraph(ws.project.dir));
+    if(recipe.dump(-1).size()>kReplayMaxBytes)throw std::runtime_error("Replay exceeds target size limit");
+    validateReplayPreset(recipe,ws);
+    // Require the strongest currently supported manifest, not a partial
+    // legacy baseline. No silent rebaseline on import.
+    if(recipe.getInt("dependencyVersion")!=3||!recipe["dependencies"].isArray())
+        throw std::runtime_error("Portable replay requires a version 3 dependency manifest");
+    return replayRelocationPlan(recipe,ws);
 }
 void noteGraph(Workspace& ws, const std::string& text) {
     // Existing editor live-reload watcher subscribes to Change::Fx.
@@ -674,6 +699,41 @@ void registerSpectraGraphOps(Workspace& ws) {
         auto out=publishReplayPreset(ws,newName,candidate);
         out.set("source",strGraph(name));
         return out;
+    });
+    add("fx_replay_preset_portable_export","Export a named replay recipe without its project path. References resources by recorded GUID and fingerprints; does not embed asset bytes.",
+        R"({"properties":{"name":{"type":"string"},"expectedProjectPath":{"type":"string"}},"required":["name"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);const auto name=requireGraphName(p);
+        const auto dir=replayDirectory(ws,false);
+        if(dir.empty())throw std::runtime_error("Replay library is empty");
+        const auto preset=readReplayPreset(dir/(name+kReplaySuffix),ws);
+        if(preset.getInt("dependencyVersion")!=3||replayCompatibility(preset,ws).getStr("state")!="matching")
+            throw std::runtime_error("Export requires a matching version 3 dependency baseline");
+        Json portable=Json::object();
+        portable.set("format",strGraph("aiverse.spectrafx.replay.portable"));
+        portable.set("version",Json::number(int64_t(1)));
+        portable.set("recipe",portableReplayRecipe(preset));
+        if(portable.dump(-1).size()>kReplayMaxBytes)throw std::runtime_error("Portable replay exceeds 64 KiB");
+        Json out=Json::object();out.set("portable",std::move(portable));return out;
+    });
+    add("fx_replay_preset_portable_preview","Preview importing a portable replay into the open project. No files are written.",
+        R"({"properties":{"portable":{"type":"object"},"expectedProjectPath":{"type":"string"}},"required":["portable"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);
+        return portableReplayPlan(p["portable"],ws);
+    });
+    add("fx_replay_preset_portable_apply","Recompute the reviewed portable import plan and save a new immutable preset in the target project.",
+        R"({"properties":{"portable":{"type":"object"},"newName":{"type":"string"},"planRevision":{"type":"string"},"expectedProjectPath":{"type":"string"}},"required":["portable","newName","planRevision"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);const auto name=requireGraphName(p,"newName");
+        const auto plan=portableReplayPlan(p["portable"],ws);
+        const auto state=plan.getStr("state");
+        if((state!="ready"&&state!="matching")||!p["planRevision"].isString()||
+           p.getStr("planRevision")!=plan.getStr("planRevision"))
+            throw std::runtime_error("Portable import plan is stale or has conflicts; preview again");
+        const auto& candidate=plan["candidate"];
+        validateReplayPreset(candidate,ws);
+        return publishReplayPreset(ws,name,candidate);
     });
     add("fx_replay_preset_save","Create an immutable named replay preset asset. Existing names are never overwritten.",
         R"({"properties":{"name":{"type":"string"},"preset":{"type":"object"},"expectedProjectPath":{"type":"string"}},"required":["name","preset"]})",

@@ -1,0 +1,5 @@
+# Stage 95 — portable replay recipe envelope
+
+Parent `d8d08c1dc0f45cb5871bb9279ae875536243510e`; branch `feature/spectrafx-html5-data-interfaces-20261123`.
+
+Adds fx_replay_preset_portable_export/preview/apply. Envelope version 1 whitelists recipe fields and strips projectPath; requires matching dependency manifest v3. Target binds to the current project, uses Stage 93 GUID and fingerprint verification, returns a reviewed candidate or conflicts. Apply recomputes revision and publishes an immutable new named asset using Stage 94 helper. UI exports a selected saved preset and previews/imports a portable file. No assets are embedded or copied; existing target files and sidecars must match the source baseline (paths without GUID must match in place). No manual substitutions/rebaseline, graph publication or runtime restore as part of import. The current authored graph must still match the imported graph signature for ordinary Replay restore. Regression source covers cross-project relocation, stale plan, missing resource and duplicate name. No build or tests executed. Main unchanged.
