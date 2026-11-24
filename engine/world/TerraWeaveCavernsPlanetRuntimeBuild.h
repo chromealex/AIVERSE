@@ -13,6 +13,7 @@ struct CavePlanetBuildRegion {
     std::shared_ptr<const CaveVolumeSnapshot> snapshot;
     std::shared_ptr<const CaveSnapshotSpatialIndex> index;
     std::shared_ptr<CavePlanetCutPlan> cut;
+    CavePlanetDemandConfig lattice;
     std::set<ChunkKey3,KeyLess> keys;
     std::map<ChunkKey3,CaveCertifiedChunk,KeyLess> chunks;
 };
@@ -158,7 +159,8 @@ public:
             if(body->bodyId.empty())body->bodyId=frame.anchor().bodyId;
             if(body->bodyId!=frame.anchor().bodyId)throw std::invalid_argument("Caverns mixed body build");
             const auto snapshot=freezePlanetCaveRegion(ecs,id);
-            auto keys=planetInteriorKeys(frame.anchor(),cfg);
+            const auto lattice=resolvePlanetDemandLattice(frame.anchor(),cfg);
+            auto keys=planetInteriorKeys(frame.anchor(),lattice);
             if(keys.size()>cfg.maxVolumeSlots-count)throw std::length_error("Caverns body volume budget");
             count+=keys.size();
             const auto leaves=planet.selectCaveSurfaceSlots(frame,planetRuntimeFootprint(*snapshot));
@@ -167,10 +169,10 @@ public:
                 body->surfaceRevision,surfaceEpoch));
             body->regions.emplace(id,cut);
             next.push_back({id,std::move(frame),snapshot,
-                std::make_shared<const CaveSnapshotSpatialIndex>(snapshot),std::move(cut),std::move(keys),{}});
+                std::make_shared<const CaveSnapshotSpatialIndex>(snapshot),std::move(cut),lattice,std::move(keys),{}});
         }
         (void)certifyPlanetBodyCut(*body,surface);
-        cfg_=cfg;generation_=generation;nativeRevision_=nativeRevision;surface_=surface;
+        generation_=generation;nativeRevision_=nativeRevision;surface_=surface;
         plan_=std::move(body);regions_=std::move(next);region_=0;
     }
     // Returns true only when all immutable source meshes have arrived.
@@ -184,7 +186,7 @@ public:
                result.ticket.generation!=generation_||!r.keys.contains(result.ticket.key))
                 throw std::runtime_error("Caverns runtime worker failed or stale");
             CaveCertifiedChunk c;
-            c.mesh=std::move(result.collisionMesh);c.resolution=cfg_.resolution;c.spacingCm=cfg_.spacingCm;
+            c.mesh=std::move(result.collisionMesh);c.resolution=r.lattice.resolution;c.spacingCm=r.lattice.spacingCm;
             c.sourceRevision=r.snapshot->sourceRevision;c.renderRevision=nativeRevision_;
             r.chunks.emplace(result.ticket.key,std::move(c));
         }
@@ -193,7 +195,7 @@ public:
             if(sent>=maxDispatch)break;
             if(r.chunks.contains(key)||jobs_.hasJob(key))continue;
             if(!jobs_.dispatch({CaveResidencyAction::Build,key,generation_,r.snapshot->sourceRevision,0},
-                r.snapshot,cfg_.resolution,cfg_.spacingCm,r.index))break;
+                r.snapshot,r.lattice.resolution,r.lattice.spacingCm,r.index))break;
             ++sent;
         }
         if(r.chunks.size()==r.keys.size()&&!jobs_.inFlight())++region_;
@@ -204,7 +206,7 @@ public:
         CavePlanetRuntimeCandidate out;out.generation=generation_;out.nativeRevision=nativeRevision_;
         size_t total=0;
         for(auto& r:regions_){
-            auto slots=preparePlanetRuntimeVolume(r,cfg_,nativeRevision_,cells);
+            auto slots=preparePlanetRuntimeVolume(r,r.lattice,nativeRevision_,cells);
             for(const auto& slot:slots){
                 if(slot.payload.collision.triangles.size()>262144-total)throw std::length_error("Caverns body volume triangle budget");
                 total+=slot.payload.collision.triangles.size();
@@ -221,7 +223,6 @@ public:
     void drain(){cancel();jobs_.drain();}
 private:
     CaveWorldStreamJobs jobs_;
-    CavePlanetDemandConfig cfg_{};
     uint64_t generation_=0,nativeRevision_=0;
     std::shared_ptr<const game::Surface> surface_;
     std::shared_ptr<CavePlanetBodyCutPlan> plan_;
