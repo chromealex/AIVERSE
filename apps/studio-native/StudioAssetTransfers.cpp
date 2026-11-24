@@ -661,6 +661,7 @@ void studioReplayAssetQuarantine(const fs::path& project,
     if(deleted?(!indexed||indexed->path!=asset.from||indexed->directory!=asset.directory):bool(indexed))
         throw std::runtime_error("Asset quarantine GUID conflict");
     const auto source=deleted?live:stored,destination=deleted?stored:live;
+    if(deleted&&indexed->importer!=Json::parse(meta.bytes).getStr("importer"))throw std::runtime_error("Asset quarantine importer changed");
     if(existsOrSymlink(destination)||existsOrSymlink(studioMetaPath(destination))||
        !matchesMoveFile(source,asset)||!matchesMoveFile(studioMetaPath(source),meta))
         throw std::runtime_error("Asset quarantine source or destination changed");
@@ -705,6 +706,7 @@ editor::ProjectHistory::MovePlan studioQuarantineAsset(const fs::path& project,
     const auto relative=".aiverse-cache/studio-asset-trash/"+id+"/asset";
     editor::ProjectHistory::MovePlan plan;plan.quarantine=true;
     const auto meta=studioMetaPath(source);
+    if(!fs::is_regular_file(fs::symlink_status(meta)))throw std::runtime_error("Invalid asset quarantine sidecar");
     if(fs::file_size(meta)>1024*1024)throw std::runtime_error("Asset metadata too large for history");
     plan.files.push_back({path,relative,{},moveDigest(source,current->directory),current->directory});
     plan.files.push_back({path+".meta",relative+".meta",editor::readProjectFileBytes(meta),{},false});

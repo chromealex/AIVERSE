@@ -156,6 +156,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
   const [folderName,setFolderName]=useState('');
   const [renameTarget,setRenameTarget]=useState<string|null>(null);
   const [renameName,setRenameName]=useState('');
+  const [deleteTarget,setDeleteTarget]=useState<{path:string;guid:string;project:string;version:string}|null>(null);
   const [plan,setPlan]=useState<StudioAssetTransferPlan|null>(null);
   const [refreshToken,setRefreshToken]=useState(0);
   // Folder tree width: drag the divider (persisted), double-click resets.
@@ -192,7 +193,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       setError(String(payload.message));
     }
   }),[reload]);
-  useEffect(()=>{setFolder('');setSelected(null);setPinnedAssetGuid(null);setSearch('');setPlan(null);setRenameTarget(null);},[projectPath]);
+  useEffect(()=>{setFolder('');setSelected(null);setPinnedAssetGuid(null);setSearch('');setPlan(null);setRenameTarget(null);setDeleteTarget(null);},[projectPath]);
   // Command palette (# assets) reveals a file: open its folder and select it.
   useEffect(()=>{
     const reveal=(event:Event)=>{
@@ -262,6 +263,30 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     try{
       setPlan(await invoke('studio.assetMovePreview',{paths,destination}));
     }catch(e){setError(String(e instanceof Error?e.message:e))}
+    finally{setBusy(false)}
+  };
+  const reviewDelete=async(path:string)=>{
+    if(!native||!projectPath||busy)return;
+    const entry=[...catalog.files,...(catalog.folders??[])].find(item=>item.path===path);
+    if(!entry?.guid){setError('Refresh Assets before deleting');return;}
+    setBusy(true);setError('');
+    try{
+      const h=await invoke('studio.assetHistory',{});
+      if(!h.version||h.strokeActive)throw new Error('Finish the active stroke and refresh asset history');
+      setDeleteTarget({path,guid:entry.guid,project:projectPath,version:h.version});
+    }catch(e){setError(String(e instanceof Error?e.message:e))}
+    finally{setBusy(false)}
+  };
+  const deleteAsset=async()=>{
+    if(!deleteTarget||busy||deleteTarget.project!==projectPath)return;
+    setBusy(true);setError('');setMessage('');
+    try{
+      const r=await invoke('studio.assetDelete',{path:deleteTarget.path,guid:deleteTarget.guid,
+        expectedProject:deleteTarget.project,expectedVersion:deleteTarget.version,confirmed:true});
+      setDeleteTarget(null);setSelected(null);setPinnedAssetGuid(null);
+      setMessage('Moved to recovery storage: '+r.path+(r.historyRecorded?' · Undo in History / Assets':' · Recovery: '+r.backup));
+      reload();
+    }catch(e){setDeleteTarget(null);setError(String(e instanceof Error?e.message:e))}
     finally{setBusy(false)}
   };
   const previewRename=async()=>{
@@ -340,6 +365,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     target.directory
       ?{id:'open',label:'Open Folder',icon:<FolderOpen size={13}/>,onSelect:()=>goTo(target.path)}
       :{id:'settings',label:'Import Settings',icon:<Library size={13}/>,disabled:!native,onSelect:()=>setSelected(target.path)},
+    {id:'delete',label:'Move to Trash…',disabled:!native||!projectPath||busy,onSelect:()=>void reviewDelete(target.path)},
     {id:'rename',label:'Rename…',disabled:!native||!projectPath||busy,onSelect:()=>{setRenameTarget(target.path);setRenameName(assetFileName(target.path));}},
     {id:'copy',label:'Copy Path',icon:<Search size={13}/>,onSelect:()=>copyPath(target.path)},
     ...(target.directory?[]:[{id:'refs',label:'Find References',icon:<Link2 size={13}/>,disabled:!native||!projectPath,
@@ -402,6 +428,14 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       <button type="submit" disabled={!folderName.trim()||busy}>Create</button>
       <button type="button" onClick={()=>{setAddingFolder(false);setFolderName('')}}>Cancel</button>
     </form>}
+    {deleteTarget&&<div className="studio-asset-dialog-overlay" data-native-overlay>
+      <section className="studio-asset-dialog" role="dialog" aria-modal="true" aria-label="Confirm asset deletion">
+        <header><div><h3>Move to Trash?</h3><p>{'content/'+deleteTarget.path}</p></div></header>
+        <p>The asset and metadata move to project recovery storage. Undo is available in History / Assets if retained. Known map, rules and material references block deletion.</p>
+        <footer><button type="button" disabled={busy} onClick={()=>setDeleteTarget(null)}>Cancel</button>
+          <button type="button" className="studio-asset-confirm" disabled={busy} onClick={()=>void deleteAsset()}>{busy?'Moving…':'Move to Trash'}</button></footer>
+      </section>
+    </div>}
     {renameTarget&&<form className="studio-assets-create-folder" onSubmit={event=>{
       event.preventDefault();void previewRename();
     }}>

@@ -217,6 +217,34 @@ int main(){
         try{aiverse::studio::studioCheckMapAssetPaths(project,aiverse::Json::object(),aiverse::Json::object(),aiverse::Json::object(),{{"Other/LargeTree",true}});}
         catch(const std::runtime_error&){referenceRefused=true;}
         AIVERSE_TEST_CHECK(referenceRefused);
+        // Soft deletion retains the complete folder and sidecars outside content.
+        fs::create_directories(project/"content"/"TrashTree");
+        write(project/"content"/"TrashTree"/"Item.png","pixels");
+        db.rebuild();
+        const auto trashGuid=db.byPath("TrashTree")->guid;
+        const auto childGuid=db.byPath("TrashTree/Item.png")->guid;
+        auto deleted=aiverse::studio::studioQuarantineAsset(project,"TrashTree",trashGuid);
+        AIVERSE_TEST_CHECK(deleted.quarantine&&deleted.files.size()==2);
+        const auto backup=project/deleted.files[0].to;
+        AIVERSE_TEST_CHECK(fs::exists(backup/"Item.png")&&!fs::exists(project/"content"/"TrashTree"));
+        db.rebuild(false);AIVERSE_TEST_CHECK(!db.byGuid(trashGuid)&&!db.byGuid(childGuid));
+        fs::create_directory(project/"content"/"TrashTree");
+        bool collisionDelete=false;
+        try{aiverse::studio::studioReplayAssetQuarantine(project,deleted,false);}catch(const std::runtime_error&){collisionDelete=true;}
+        AIVERSE_TEST_CHECK(collisionDelete&&fs::exists(backup/"Item.png"));
+        fs::remove(project/"content"/"TrashTree");
+        aiverse::studio::studioReplayAssetQuarantine(project,deleted,false);
+        db.rebuild(false);
+        AIVERSE_TEST_CHECK(db.byGuid(childGuid)->path=="TrashTree/Item.png");
+        bool referenced=false;
+        try{aiverse::studio::studioReplayAssetQuarantine(project,deleted,true,[]{throw std::runtime_error("Referenced");});}
+        catch(const std::runtime_error&){referenced=true;}
+        AIVERSE_TEST_CHECK(referenced&&fs::exists(project/"content"/"TrashTree"/"Item.png"));
+        aiverse::studio::studioReplayAssetQuarantine(project,deleted,true);
+        AIVERSE_TEST_CHECK(fs::exists(backup/"Item.png"));
+        aiverse::editor::ProjectHistory deletedHistory;
+        deletedHistory.recordMove(std::move(deleted),"Delete tree");deletedHistory.reset();
+        AIVERSE_TEST_CHECK(fs::exists(backup/"Item.png")); // history eviction must not purge recoverable data
         std::cout<<"PASS studio conflict resolution and GUID-preserving asset transfers\n";
     }catch(...){fs::remove_all(temp);throw;}
     fs::remove_all(temp);

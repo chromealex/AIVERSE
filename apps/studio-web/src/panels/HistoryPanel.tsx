@@ -86,7 +86,7 @@ export default function HistoryPanel({ snapshot, commitSnapshot }: {
     <div className="history__description">
       {scope === 'map' ? 'Scene edits only. Global Undo / Redo controls the map.'
         : scope === 'project' ? 'Saved Rules and compatible Manifest edits. Assets and map edits are separate.'
-        : 'Importer settings, internal file/folder moves and renames. Unsupported transfers and imports may reset history.'}
+        : 'Importer settings, moves, renames and soft deletion. Unsupported transfers and imports may reset history.'}
     </div>
     {scope !== 'map' && <div className="history__actions">
       <StudioButton size="sm" disabled={disabled || !historyStepParams(savedHistory, 'undo', savedScope)} onClick={() => void navigate('undo')}><Undo2 size={14}/>Undo</StudioButton>

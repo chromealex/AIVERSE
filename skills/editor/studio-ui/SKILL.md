@@ -101,6 +101,9 @@ Use StudioTransferPlan::apply with optional native MovePlan capture; record actu
 ## Folder and large-file move history (S6c.4b.2)
 Reuse pack::Sha256 for streaming regular-file / deterministic folder tree digests (relative paths, entry type, size, file bytes; includes empty directories and child sidecars). Retain exact root sidecar/material bytes, not payload copies. Rename uses existing preview/decision/commit route with one validated filename; file extension unchanged. Native map/rules reference fence includes current map, manifest-listed maps and bounded saved JSON maps under maps/; refusal rather than rewriting unsupported dependencies. Keep folder/payload limits and known script/encoded/binary dependency gaps explicit. Do not treat SHA-256 as a lock against concurrent external writers.
 
+## Asset soft deletion (S6c.4c.1)
+Use native studio.assetDelete with current project, exact asset history version, path/GUID and explicit confirmation. The owner moves an asset and its root sidecar to a unique .aiverse-cache/studio-asset-trash record using journal v2 restricted to content/trash pairs. Folder trees use streaming digests. Undo/redo uses the same owner and refuses conflicts; deletion/redo checks known map/rules/material references. Trash payloads intentionally survive history reset/eviction/reopen; no permanent purge or automatic cleanup. Import/replace and trash recovery UI remain separate work.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

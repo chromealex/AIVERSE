@@ -121,6 +121,17 @@ int main() {
             expect(!fs::exists(original),"Malformed journal partially restored the target");
         }
         fs::remove_all(project/".aiverse-cache"/"studio-move-journal");
+        const std::string trash=".aiverse-cache/studio-asset-trash/0123456789abcdef01234567/asset";
+        fs::create_directories((project/trash).parent_path());
+        {
+            StudioMoveJournal journal(project);
+            journal.begin({{"content/B/Stone.png",trash},{"content/B/Stone.png.meta",trash+".meta"}},true);
+            fs::rename(moved,project/trash);
+            writeFile(materials,"external-material-change");
+            StudioMoveJournal::recover(project);
+            expect(fs::exists(moved)&&fs::exists(movedMeta),"Quarantine partial rollback failed");
+            expect(readFile(materials)=="external-material-change","Quarantine recovery modified unrelated materials");
+        }
         fs::remove_all(project);
         std::cout<<"PASS studio persistent move recovery and collision safety\n";
     } catch (...) {
