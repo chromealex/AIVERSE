@@ -16,8 +16,12 @@ using namespace aiverse::terraweave::caverns;
 namespace {
 constexpr uint64_t regionId=1;
 constexpr int tickRate=60;
+constexpr uint64_t mouthId=1;
+enum class Scenario:uint8_t { Chamber,Portal,Swim };
+enum class Journey:uint8_t { Enter,Explore,Return,Exit,Done };
 const CavePlanetAnchor anchor{"planet",2,120_fx,120_fx,1200};
 const Vec3 localStart{-1_fx,-4_fx,0_fx},localGoal{1_fx,-4_fx,0_fx};
+const Vec3 portalStart{0_fx,2_fx,0_fx},portalGoal{1_fx,-5_fx,0_fx},portalReturn{0_fx,-4_fx,0_fx};
 const render::float3 soil{.32f,.26f,.20f};
 CavePlanetDemandConfig demand(){
     CavePlanetDemandConfig out;out.resolution=16;out.spacingCm=50;out.maxRegions=1;out.maxVolumeSlots=8;return out;
@@ -28,19 +32,28 @@ std::shared_ptr<const game::Surface> makeSurface(){
     body.id=anchor.bodyId;body.radius=100_fx;body.faceSize=256;
     s->bodies.push_back(body);s->build();return s;
 }
-Json authoredMap(){
+Json authoredMap(Scenario scenario){
     CaveVolumeSnapshot volume;
     volume.settings.tunnelChance=0;volume.settings.chamberChance=0;
     volume.settings.minYcm=-790;volume.settings.maxYcm=-100;
-    volume.stamps.push_back({1,{0,-400,0},300,CaveStampMode::Carve});
+    if(scenario==Scenario::Portal){
+        volume.stamps.push_back({1,{0,-500,0},220,CaveStampMode::Carve});
+        volume.entrances.push_back({mouthId,0,0,0,-400,125});
+    }else volume.stamps.push_back({1,{0,-400,0},300,CaveStampMode::Carve});
     canonicalizeCaveSnapshot(volume);
     Json doc=Json::object(),map=Json::object();
     doc.set("version",Json::number(int64_t(1)));
     doc.set("anchor",cavePlanetAnchorToJson(anchor));doc.set("volume",caveSnapshotToJson(volume));
     map.set(kPlanetCaveMapKey,std::move(doc));return map;
 }
-struct ActorPosition {Vec3 value{};};
-void io(Archive& archive,ActorPosition& p){archive(p.value);}
+struct ActorPosition {Vec3 value{};Journey journey=Journey::Explore;};
+void io(Archive& archive,ActorPosition& p){archive(p.value,p.journey);if(!archive.writing()&&uint8_t(p.journey)>uint8_t(Journey::Done))archive.fail();}
+struct DemoSwimState {lib::mechanics::LocomotionState value;};
+void io(Archive& a,DemoSwimState& s){a(s.value);if(!a.writing()&&!lib::mechanics::valid(s.value))a.fail();}
+CaveAgentProfile agentFor(Scenario scenario){
+    CaveAgentProfile a;a.traversal=scenario==Scenario::Swim?CaveTraversal::Swimming:CaveTraversal::Flying;
+    a.radiusCm=20;a.heightCm=60;a.sampleCm=25;return a;
+}
 std::optional<Vec3> position(const World& world,Entity e){
     const auto* p=world.tryGetConst<ActorPosition>(e);
     return p?std::optional<Vec3>{p->value}:std::nullopt;
@@ -49,30 +62,39 @@ struct DemoModule final:GameModule {
     std::shared_ptr<const game::Surface> surface;
     Entity actor{};
     std::function<void(Simulation&)> motor;
-    explicit DemoModule(std::shared_ptr<const game::Surface> s):surface(std::move(s)){}
+    Scenario scenario;
+    DemoModule(std::shared_ptr<const game::Surface> s,Scenario mode):surface(std::move(s)),scenario(mode){}
     std::string name()const override{return "native-caverns-chamber";}
     void setup(Simulation& sim,const Json&,const Json& map)override{
         physis::InstallOptions physisOptions;
         physisOptions.climate.width=1;physisOptions.climate.height=1;
         physisOptions.enableGravityFields=true;physis::install(sim,physisOptions);
         lib::nereid::registerNereidSphereWaterPersistence(sim);
-        sim.registerPersistentComponent<ActorPosition>("demo.caverns.actor.position",1);
+        sim.registerPersistentComponent<ActorPosition>("demo.caverns.actor.position",2);
+        sim.registerPersistentComponent<DemoSwimState>("demo.caverns.actor.swim",1);
         registerCavePlanetTravel(sim);
-        physis::GravitySettings zero;zero.baseline={};sim.world().setResource<physis::GravitySettings>(zero);
         const auto frame=CavePlanetFrame::make(surface,anchor);
+        physis::GravitySettings gravity;gravity.baseline=scenario==Scenario::Swim?frame.up()*(-10_fx):Vec3{};
+        sim.world().setResource<physis::GravitySettings>(gravity);
+        if(scenario==Scenario::Swim){
+            lib::nereid::WaterSphereComponent sea;sea.center=game::Surface::anchor(0);
+            sea.surfaceRadius=100_fx;sea.floorRadius=90_fx;
+            sim.world().add<lib::nereid::WaterSphereComponent>(sim.world().create(),sea);
+        }
         actor=sim.world().create();
-        sim.world().add<ActorPosition>(actor,ActorPosition{frame.toSimulation(localStart)});
-        sim.world().add<CavePlanetTravel>(actor,CavePlanetTravel{regionId,0,0,0});
+        const bool portal=scenario==Scenario::Portal;
+        sim.world().add<ActorPosition>(actor,ActorPosition{frame.toSimulation(portal?portalStart:localStart),portal?Journey::Enter:Journey::Explore});
+        sim.world().add<DemoSwimState>(actor,DemoSwimState{});
+        sim.world().add<CavePlanetTravel>(actor,CavePlanetTravel{portal?0:regionId,0,0,0});
         sim.addSystem("demo.motor",[this](Simulation& s){if(motor)motor(s);});
         auto router=std::make_shared<CavePathRouter>();
         CaveGraphSolverSettings solver;solver.cellCm=25;solver.regionMarginCells=2;
         registerCaveSharedGraphSolvers(*router,solver);
         require(bool(installPlanetCavesInNativeSimulation(sim,map[kPlanetCaveMapKey],surface,router,
             position,"demo.motor",1,demand())),"install cave authority");
-        CaveAgentProfile agent;agent.traversal=CaveTraversal::Flying;agent.radiusCm=20;
-        agent.heightCm=60;agent.sampleCm=25;
-        require(assignCavePlanetMotorGoal(sim.world(),actor,surface,regionId,frame.toSimulation(localGoal),
-            agent,"astar",3),"assign chamber route");
+        if(portal)require(requestCavePlanetCrossing(sim.world(),actor,regionId,mouthId,true,sim.tick()),"request portal entry");
+        else require(assignCavePlanetMotorGoal(sim.world(),actor,surface,regionId,frame.toSimulation(localGoal),
+            agentFor(scenario),"astar",3),"assign chamber route");
     }
     void applyCommand(Simulation&,const Command&)override{}
     void hashState(Simulation&,Hasher&)override{}
@@ -104,6 +126,8 @@ struct Demo {
     physics::BodyHandle proxy=physics::kNoBody;
     render::Mesh marker;
     bool exclusive=false,stopping=false,failed=false,initialized=false,arrived=false;
+    Scenario scenario=Scenario::Chamber;
+    lib::mechanics::LocomotionModeConfig swimConfig;
     unsigned frames=0,maxFrames=0;
     double accumulator=0;
     uint64_t lastProgress=0;
@@ -115,9 +139,9 @@ struct Demo {
     void init(gfx::Device& dev){
         device=&dev;exclusive=true;
         surface=makeSurface();frame=CavePlanetFrame::make(surface,anchor);
-        auto m=std::make_unique<DemoModule>(surface);module=m.get();
+        auto m=std::make_unique<DemoModule>(surface,scenario);module=m.get();
         SimConfig cfg;cfg.tickRate=tickRate;sim=std::make_unique<Simulation>(cfg,std::move(m));
-        sim->setup(Json::object(),authoredMap());
+        sim->setup(Json::object(),authoredMap(scenario));
         physics::SceneConfig physical;physical.tickRate=tickRate;physical.gravity={0,0,0};
         box=std::make_unique<physics::Scene>(physical);
         renderer.init(dev);
@@ -134,7 +158,7 @@ struct Demo {
         project=CavePlanetGiViewFrame::capture(planet,viewFrame,0).projector();
         // The demo intentionally owns just the bounded cave-area surface
         // patch. No other static terrain producer exists in this Scene.
-        keys=view.planets().selectCaveSurfaceSlots(*frame,{-1,-1,1,1});
+        keys=view.planets().selectCaveSurfaceSlots(*frame,scenario==Scenario::Portal?SurfaceRectCm{-250,-250,250,250}:SurfaceRectCm{-1,-1,1,1});
         uint64_t id=1;for(const auto& key:keys)surfaceIds.emplace(key,id++);
         for(const auto& key:planetInteriorKeys(anchor,demand()))volumeIds.emplace(key,id++);
         const auto cells=[this](const std::string& b,const CavePlanetSurfaceSlotKey& key){
@@ -185,11 +209,48 @@ struct Demo {
         params.radius=.18f;params.height=.55f;params.maxSpeed=2;
         actorState.position=physics::physisB3(*position(sim->world(),module->actor));
         proxy=box->createCharacter(params,actorState.position);require(proxy!=physics::kNoBody,"create real proxy");
-        CavePlanetMotorIntent flightIntent;flightIntent.traversal=CaveTraversal::Flying;
+        CavePlanetMotorIntent flightIntent;flightIntent.traversal=agentFor(scenario).traversal;
+        flightIntent.basis=cavePlanetMotionBasis(*frame,sim->world(),*position(sim->world(),module->actor));
         const auto orientation=cavePlanetVolumeOrientation(*frame,flightIntent);
         require(orientation&&box->moveCharacterOriented(proxy,actorState,*orientation,true),"initial proxy orientation");
+        // A deeply immersed swimmer must deliberately steer vertically;
+        // neutral buoyancy would otherwise rise toward the water surface.
+        swimConfig.buoyancy=Fixed{};
         module->motor=[this](Simulation& s){
-            CavePlanetMotorDispatchInput input;input.capabilities.ground=false;input.capabilities.flight=true;
+            CavePlanetMotorDispatchInput input;input.capabilities.ground=false;
+            input.capabilities.flight=scenario!=Scenario::Swim;input.capabilities.swim=scenario==Scenario::Swim;
+            auto stagedSwim=s.world().get<DemoSwimState>(module->actor).value;
+            input.swimConfig=&swimConfig;input.swimState=&stagedSwim;
+            const auto journey=s.world().get<ActorPosition>(module->actor).journey;
+            if(scenario==Scenario::Portal&&(journey==Journey::Enter||journey==Journey::Exit)){
+                const auto current=position(s.world(),module->actor);
+                require(bool(current),"portal position missing");
+                // Existing flight controller flies along the certified shaft
+                // axis. Native crossing adapter performs the real sweep.
+                const auto target=frame->toSimulation(journey==Journey::Enter?portalReturn:portalStart);
+                const auto delta=target-*current;
+                input.crossing.velocity=fxNormalize(delta)*fxMin(1_fx,delta.length()/s.dt());
+                if(journey==Journey::Enter)input.crossingGoal=CavePlanetCrossingGoal{
+                    frame->toSimulation(portalGoal),agentFor(scenario),"astar",3,8192};
+                input.crossingCoverage=[this](const World& w,Entity actor,uint64_t region,Vec3 a,Vec3 b,Fixed extent){
+                    if(actor!=module->actor||region!=regionId||!exclusive||
+                       !host->runtime().regionReady(w,region)||extent<=Fixed{})return false;
+                    try{
+                        const auto from=frame->fromSimulation(a),to=frame->fromSimulation(b);
+                        const auto cap=Fixed::fromRatio(8,1);
+                        for(const auto p:{from,to})if(fxAbs(p.x)+extent>=cap||
+                            fxAbs(p.y)+extent>=cap||fxAbs(p.z)+extent>=cap)return false;
+                        // Complete swept envelope against finest terrain
+                        // leaves, not a camera-dependent residency flag.
+                        const auto lo=[](Fixed x){return floorDiv(x.raw*100,Fixed::kOne);};
+                        const auto hi=[&](Fixed x){return -lo(-x);};
+                        const SurfaceRectCm rect{lo(fxMin(from.x,to.x)-extent),lo(fxMin(from.z,to.z)-extent),
+                            hi(fxMax(from.x,to.x)+extent)+1,hi(fxMax(from.z,to.z)+extent)+1};
+                        const auto needed=view.planets().selectCaveSurfaceSlots(*frame,rect);
+                        return exterior->covers(host->runtime(),w,anchor.bodyId,needed);
+                    }catch(const std::exception&){return false;}
+                };
+            }
             // The demo's existing flight controller requests velocity; the
             // engine owns collision, route cap and authoritative dispatch.
             input.flight=[](const CavePlanetMotorIntent& intent,Vec3,Fixed){return std::optional<Vec3>{intent.simulationDirection*1_fx};};
@@ -201,6 +262,8 @@ struct Demo {
             const auto result=host->dispatchMotor(s,module->actor,params,actorState,proxy,input);
             if(result==CavePlanetDispatchResult::Recovery||result==CavePlanetDispatchResult::Refused)
                 throw std::runtime_error("native motor refused");
+            if(result==CavePlanetDispatchResult::Interior&&scenario==Scenario::Swim)
+                s.world().get<DemoSwimState>(module->actor).value=stagedSwim;
         };
         render::MeshBuilder mesh;mesh.color(render::rgba(255,180,65)).sphere({},.18f);
         marker=mesh.upload(dev);
@@ -227,9 +290,29 @@ struct Demo {
                     accumulator-=1./tickRate;
                     const auto actual=position(sim->world(),module->actor);
                     const auto* route=sim->world().tryGetConst<nav::CaveRouteFollower>(module->actor);
-                    if(actual&&route&&route->arrived&&(*actual-frame->toSimulation(localGoal)).length()<Fixed::fromRatio(35,100)){
-                        arrived=true;std::fprintf(stdout,"[caverns-demo] ARRIVED tick=%u bodies=%zu\n",sim->tick(),box->bodyCount());
+                    auto& actor=sim->world().get<ActorPosition>(module->actor);
+                    const auto* travel=sim->world().tryGetConst<CavePlanetTravel>(module->actor);
+                    require(actual&&travel,"missing journey state");
+                    const auto at=[&](Vec3 goal){return (*actual-frame->toSimulation(goal)).length()<Fixed::fromRatio(35,100);};
+                    if(scenario==Scenario::Portal){
+                        if(actor.journey==Journey::Enter&&travel->occupiedRegion==regionId&&!travel->pendingRegion){
+                            actor.journey=Journey::Explore;
+                            std::fprintf(stdout,"[caverns-demo] ENTERED tick=%u\n",sim->tick());
+                        }else if(actor.journey==Journey::Explore&&route&&route->arrived&&at(portalGoal)){
+                            require(assignCavePlanetMotorGoal(sim->world(),module->actor,surface,regionId,
+                                frame->toSimulation(portalReturn),agentFor(scenario),"astar",3),"assign return route");
+                            actor.journey=Journey::Return;
+                        }else if(actor.journey==Journey::Return&&route&&route->arrived&&at(portalReturn)){
+                            require(requestCavePlanetCrossing(sim->world(),module->actor,regionId,mouthId,false,sim->tick()),"request exit");
+                            actor.journey=Journey::Exit;
+                        }else if(actor.journey==Journey::Exit&&!travel->occupiedRegion&&!travel->pendingRegion){
+                            actor.journey=Journey::Done;arrived=true;
+                            std::fprintf(stdout,"[caverns-demo] EXITED tick=%u\n",sim->tick());
+                        }
+                    }else if(route&&route->arrived&&at(localGoal)){
+                        actor.journey=Journey::Done;arrived=true;
                     }
+                    if(arrived)std::fprintf(stdout,"[caverns-demo] ARRIVED tick=%u bodies=%zu\n",sim->tick(),box->bodyCount());
                 }
             }
             (void)gi.updateFrame(renderPosition(*position(sim->world(),module->actor)));
@@ -282,7 +365,13 @@ std::unique_ptr<Demo> demo;
 }
 int aiverseMain(int argc,char** argv){
     demo=std::make_unique<Demo>();
-    if(argc==3&&std::string(argv[1])=="--frames")demo->maxFrames=unsigned(std::strtoul(argv[2],nullptr,10));
+    for(int i=1;i<argc;++i){
+        const std::string arg=argv[i];
+        if(arg=="--frames"&&i+1<argc)demo->maxFrames=unsigned(std::strtoul(argv[++i],nullptr,10));
+        else if(arg=="--portal")demo->scenario=Scenario::Portal;
+        else if(arg=="--swim")demo->scenario=Scenario::Swim;
+        else{std::fprintf(stderr,"Unknown argument: %s\n",arg.c_str());return 2;}
+    }
     platform::AppConfig cfg;cfg.title="AIVERSE Caverns — native chamber";cfg.width=1280;cfg.height=800;
     double delta=0;platform::AppCallbacks cb;
     cb.init=[](gfx::Device& d){try{demo->init(d);}catch(const std::exception& e){demo->fail(e.what());}};

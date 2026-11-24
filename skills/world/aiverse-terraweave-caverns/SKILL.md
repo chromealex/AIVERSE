@@ -913,3 +913,8 @@ Use `CavePlanetNativeHost::dispatchMotor` from the existing motor system with th
 ## Stage58c — optional native chamber executable
 
 Enable `AIVERSE_ENABLE_PHYSICS=ON` and `AIVERSE_BUILD_CAVERNS_PLANET_DEMO=ON` on desktop, build `aiverse_caverns_planet_demo`. The bounded sealed-chamber example composes actual Surface, Simulation, PHYSIS/NEREID, Box3D, SpatialWorld, exterior registry, PlanetRenderer and CPU GI, uses a scripted native flight route and the single host tick/dispatch. It uses a fixed planet view frame and one local leaf patch, not whole-planet streaming. `--frames N` requests a bounded arrival smoke run; failure returns nonzero. Open-mouth crossing, swimming, dynamic frame, restore and broader coverage remain separate. Source only; not built or run.
+
+
+## Stage58d1 — portal and swim demo scenarios
+
+The optional native demo accepts `--portal` for authored shaft entry → chamber A* route → return → physical exit, and `--swim` for a separate submerged chamber using actual NEREID sphere water and the shared swim policy. Each uses the same dispatch/Scene, persistent journey phase and locomotion state. Portal motion proves committed region and all finest terrain leaves in its conservative swept envelope; geometry certification or missing coverage refuses rather than creating a fake opening. `--frames N` combines with either scenario. The demo retains fixed view/one bounded patch and scripted controls. These are new source scenarios, not validated runtime evidence. Dynamic frame and synchronized native restore remain pending.
