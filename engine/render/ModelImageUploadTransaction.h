@@ -138,6 +138,58 @@ public:
         entry->images.push_back(std::move(image)); // nothrow move
         return int(index);
     }
+    // Adopt an exclusively owned, already copied RGBA8 image. The producer
+    // must hold its source buffer and texture through the real copy fence.
+    // This is an ownership move, not another texture allocation or upload.
+    // No borrowed/cached/virtual textures and no outstanding GPU work.
+    int stageCompletedGpuImage(Model& model,Image& image,
+            const RenderDeviceLifetime::Lease& producerLease,uint64_t copyFence) {
+        checkDevice();
+        if(committed_)throw std::logic_error("image transaction already committed");
+        if(!lease_.validFor(device_)||!producerLease.validFor(device_)||
+           lease_.generation()!=producerLease.generation()||
+           !device_.gpuHealthy()||!copyFence||device_.gpuCompletedFence()<copyFence)
+            throw std::runtime_error("GPU image copy is not retired in the transaction device generation");
+        if(image.name.empty()||image.width<=0||image.height<=0||!image.tex.valid()||
+           image.borrowedTexture||image.textureCache||image.textureLease||!image.textureKey.empty()||
+           !image.rgba.empty()||image.sharedRgba||image.compressed||image.gpuCompressed||
+           image.virtualFallbackMaxDimension!=0||image.virtualFallbackPreserveAlpha||
+           image.virtualAlphaMask.valid()||image.alphaCoverageThreshold||image.alphaCoverageMipmaps)
+            throw std::invalid_argument("GPU image must be an exclusively owned ordinary RGBA8 texture");
+        gfx::TextureInfo info{};
+        if(!device_.textureInfo(image.tex,info)||info.width!=image.width||info.height!=image.height||
+           info.format!=gfx::PixelFormat::RGBA8)
+            throw std::invalid_argument("GPU image metadata mismatch");
+        // Existing Model images and all staged images must have distinct
+        // ownership. The producer is responsible for exclusivity across
+        // other live Models and external texture owners.
+        auto conflict=[&](const Image& other){
+            return other.tex==image.tex||other.virtualAlphaMask==image.tex;
+        };
+        for(const auto& other:model.images)
+            if(other.name==image.name||conflict(other))
+                throw std::invalid_argument("GPU image name or handle already published");
+        Entry* entry=nullptr;
+        for(auto& e:entries_){
+            if(e.model==&model)entry=&e;
+            for(const auto& other:e.images)
+                if(conflict(other)||(e.model==&model&&other.name==image.name))
+                    throw std::invalid_argument("GPU image name or handle already staged");
+        }
+        if(!entry){
+            entries_.push_back({&model,model.images.size(),{}});
+            entry=&entries_.back();
+        }
+        const size_t index=entry->original+entry->images.size();
+        if(index>=size_t(std::numeric_limits<int>::max()))
+            throw std::overflow_error("too many material images");
+        // All potentially throwing allocations precede the transfer. Image
+        // has nothrow move construction; explicitly invalidate source handle.
+        entry->images.reserve(entry->images.size()+1);
+        entry->images.push_back(std::move(image));
+        image.tex={};
+        return int(index);
+    }
     size_t pendingImages() const noexcept {
         size_t n=0;
         for(const auto& entry:entries_)n+=entry.images.size();
