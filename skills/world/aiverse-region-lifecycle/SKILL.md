@@ -220,3 +220,36 @@ RegionEntityLedger::Transaction is an exclusive sparse undo transaction: use its
 Read engine/world/RegionOwnershipDiagnostics.h via World::resourceConst<RegionOwnershipDiagnostics>() for last successful reconciliation. Experimental stream manifest flags regionDirtyOnlyLoot, regionDirtyOnlySolo and regionDirtyOnlyVehicles default off; configuration and native acceptance are unverified. Vehicle mode still scans canonical groups; do not claim scan-free transport. strictRegionJournalAudit is a development coverage check, not proof of all writers. Keep full scan default. See stage20 handoffs for limitations. No W1.20 native tests have been run.
 
 MCP: call `region_ownership_diagnostics {}` in a running editor play session. It returns `available:false` when no live resource exists; it never fabricates headless metrics or mutates simulation. Native MCP build not yet verified.
+
+## W1.28 — authoritative decision LOD (source implementation)
+
+Use `engine/world/SimulationLod.h` for a genre-independent, deterministic
+decision cadence. The opt-in root rules block is:
+
+```json
+{"simulationLod":{"enabled":true,"hotCells":4,"warmCells":16,"warmTicks":4,"coldTicks":16}}
+```
+
+The shared policy takes current authoritative Cell, a span of authoritative
+observer Cells, nonzero stable identity, fixed tick and a critical-work
+override. Missing observers/identity and invalid configuration fail hot.
+The actor adapter uses 32-metre cells and existing BotMemory/CharacterControl;
+only idle/patrol decision work is decimated. Active combat/interaction,
+nearby actors, loot/vehicles, interiors and live projectiles force the normal
+path. Motor/physics, damage, weapons, ownership and WAL still tick normally.
+TrafficPopulation reuses the fair slice formula without changing its current
+two-second population check window. This is NOT actor/vehicle cold parking,
+unloaded-world advancement, or a global AI scheduler.
+
+Read authored settings using `world_simulation_lod_get`; validate with
+`world_simulation_lod_validate {config}`; save using
+`world_simulation_lod_set {config,expected}` (expected is the previous normalized
+five-field config). The setter uses the existing rules owner and refuses an
+occupied maintenance slot. The Studio World Persistence Simulation LOD tab
+uses those same operations and is project-bound. Stop the server before
+changing rules; existing persistence content identity may no longer match.
+No live configuration migration is implied. Last-pass diagnostic counts are
+derived ECS resources, excluded from durable projection, cleared by the
+region restore hook. Read them through the live editor world_regions_status
+simulationLod field; absence is unavailable, not zero measured work.
+No build, test, performance measurement or cross-host parity has been run.
