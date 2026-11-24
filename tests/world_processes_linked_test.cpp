@@ -4,6 +4,7 @@
 #include "aiverselib/world/EvolveRegionWorkBudget.h"
 #include "aiverselib/world/WorldProcessBudgetedQueries.h"
 #include "aiverselib/world/WorldProcessReportJobs.h"
+#include "apps/studio-native/StudioWorldProcessDiagnostics.h"
 #include <array>
 #include "tests/AlwaysCheck.h"
 #include <iostream>
@@ -276,12 +277,53 @@ static void checkReportJobs(){
     AIVERSE_TEST_CHECK(!societyBatch.scheduling.next.lastTick);
     AIVERSE_TEST_CHECK(!evolveBatch.scheduling.next.lastTick);
 }
+static void checkStudioReportDiagnostics(){
+    World ecs;
+    const auto focus=ecs.create(),other=ecs.create();
+    ecs.add<Transform>(focus,Transform{});
+    ecs.add<crowd::Agent>(focus,crowd::Agent{});
+    auto far=crowd::Agent{};far.x=100000;far.z=100000;
+    ecs.add<crowd::Agent>(other,far);
+    ecs.add<society::Person>(focus,society::Person{});
+    ecs.add<evolve::Region>(other,evolve::Region{});
+    AIVERSE_TEST_CHECK(evolve::setArea(ecs,other,{100000,100000,1000,1000,true}));
+    studio::StudioWorldProcessDiagnostics diagnostics;
+    const auto first=diagnostics.sample(&ecs,"epoch1",1,0,"");
+    AIVERSE_TEST_CHECK(first.getBool("active")&&!first.getBool("observerAvailable"));
+    AIVERSE_TEST_CHECK(first["lanes"]["crowd"].getBool("available"));
+    AIVERSE_TEST_CHECK(first["lanes"]["crowd"]["hot"].integer()==2);
+    AIVERSE_TEST_CHECK(first["lanes"]["crowd"]["pending"].integer()==2);
+    const auto next=diagnostics.sample(&ecs,"epoch1",2,0,"");
+    AIVERSE_TEST_CHECK(next["lanes"]["crowd"]["oldestPendingTicks"].integer()==1);
+    const auto repeat=diagnostics.sample(&ecs,"epoch1",2,0,"");
+    AIVERSE_TEST_CHECK(repeat["lanes"]["crowd"]["oldestPendingTicks"].integer()==1);
+    const auto focused=diagnostics.sample(&ecs,"epoch1",2,1,std::to_string(focus.packed()));
+    AIVERSE_TEST_CHECK(focused.getBool("observerAvailable"));
+    AIVERSE_TEST_CHECK(focused["lanes"]["crowd"]["hot"].integer()==1);
+    AIVERSE_TEST_CHECK(focused["lanes"]["crowd"]["cold"].integer()==1);
+    AIVERSE_TEST_CHECK(focused["lanes"]["crowd"].getStr("mode")=="serial");
+    AIVERSE_TEST_CHECK(focused["lanes"]["crowd"]["selected"].integer()==1);
+    const auto restored=diagnostics.sample(&ecs,"epoch1",1,0,"");
+    AIVERSE_TEST_CHECK(restored["lanes"]["crowd"]["oldestPendingTicks"].integer()==0);
+    const auto epoch=diagnostics.sample(&ecs,"epoch2",1,0,"");
+    AIVERSE_TEST_CHECK(epoch.getStr("epoch")=="epoch2");
+    AIVERSE_TEST_CHECK(epoch["lanes"]["crowd"]["oldestPendingTicks"].integer()==0);
+    AIVERSE_TEST_CHECK(!diagnostics.sample(nullptr,"epoch2",1,0,"").getBool("active"));
+    const auto fresh=diagnostics.sample(&ecs,"epoch2",10,0,"");
+    AIVERSE_TEST_CHECK(fresh["lanes"]["crowd"]["oldestPendingTicks"].integer()==0);
+    AIVERSE_TEST_CHECK(ecs.get<crowd::Agent>(focus).sampledTick==UINT32_MAX);
+    bool rejected=false;
+    try{(void)diagnostics.sample(&ecs,"epoch2",11,513,"");}
+    catch(const std::invalid_argument&){rejected=true;}
+    AIVERSE_TEST_CHECK(rejected);
+}
 int main(){
     checkRegionLod();
     checkRegionBudget();
     checkRegionPriority();
     checkSharedReports();
     checkReportJobs();
+    checkStudioReportDiagnostics();
     auto portal=wl::defaults("EchoPortal");
     AIVERSE_TEST_CHECK(wl::validate("EchoPortal",portal));
     AIVERSE_TEST_CHECK(!wl::edit("EchoPortal","enabled",Json::fromBool(true),portal));
