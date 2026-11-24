@@ -110,12 +110,7 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
  const save=()=>void run(async current=>{
   if(!draft||!original||!name||!dirty)return;
   requireOk(await op(prefix+'_validate',{graph:draft}));if(!current())return;
-  if(fx){
-   // Native fx_graph_set currently lacks an expected revision. Preflight is not atomic.
-   const actual=graphReply(await op(prefix+'_get',{name}));if(!current())return;
-   if(JSON.stringify(actual)!==JSON.stringify(original))throw new Error('Asset changed externally; discard and reload before saving.');
-  }
-  const result=await op(prefix+'_set',{name,graph:draft,...(!fx?{expected:original}:{})});
+  const result=await op(prefix+'_set',{name,graph:draft,expected:original});
   requireOk(result);if(!current())return;
   const saved=graphReply(await op(prefix+'_get',{name}));if(!current())return;reset(saved);setStatus('Saved and read back from native asset.');
  });
@@ -143,7 +138,7 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
    <StudioButton size="sm" disabled={!active||busy} onClick={()=>nativeEdit({action:'deleteNode',node:active})}>Delete node</StudioButton></>}
   </div>
   {error&&<StudioAlert tone="danger">{error}</StudioAlert>}{status&&<StudioAlert tone="success">{status}</StudioAlert>}
-  {fx?<StudioAlert tone="warning">Published graph save uses a read-back preflight, not an atomic revision lock. Avoid concurrent edits.</StudioAlert>:<StudioAlert>Pose dependencies must point to earlier nodes; state transitions may loop. Layout is local. Connect state ports to add an unconditional transition; configure timing and conditions before saving.</StudioAlert>}
+  {fx?<StudioAlert tone="warning">Published graph save checks the original document under a native write lock. If it changed, discard and reload before retrying.</StudioAlert>:<StudioAlert>Pose dependencies must point to earlier nodes; state transitions may loop. Layout is local. Connect state ports to add an unconditional transition; configure timing and conditions before saving.</StudioAlert>}
   {draft?<><GraphCanvas view={view} selected={active} selection={selection} onSelection={setSelection} label={domain+' graph'}
    disabled={busy} pendingOutput={pending} onOutput={setPending} onInput={connect} onCancel={()=>setPending(null)}
    onSelect={id=>setSelection(id?[id]:[])} onMove={(id,x,y)=>move([{id,x,y}])} onMoveGroup={move}/>
