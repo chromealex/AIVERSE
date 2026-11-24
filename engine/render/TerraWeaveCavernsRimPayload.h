@@ -36,6 +36,10 @@ inline CaveRimReplacement prepareCaveRimReplacement(
     for(const auto p:{origin.x,origin.y,origin.z})if(std::abs(p.toDouble())>100000.)
         throw std::out_of_range("Caverns rim physics origin");
     body.position={float(origin.x.toDouble()),float(origin.y.toDouble()),float(origin.z.toDouble())};
+    if(std::llround(double(body.position.x)*Fixed::kOne)!=origin.x.raw||
+       std::llround(double(body.position.y)*Fixed::kOne)!=origin.y.raw||
+       std::llround(double(body.position.z)*Fixed::kOne)!=origin.z.raw)
+        throw std::invalid_argument("Caverns rim body origin float precision");
     std::map<SurfaceVertexKey,int32_t> indices;
     CaveMesh mesh;
     for(const auto& tri:out.collision.triangles){
@@ -69,5 +73,33 @@ inline CaveRimReplacement prepareCaveRimReplacement(
     }
     out.model=makeCaveGeometryModel(mesh);
     return out;
+}
+// Prepare-time verification against the actual combined triangle soup.
+// Does not prove that an owner has installed it or retired its old walls.
+inline bool preparedRimMatchesGroup(const CaveSurfaceGroupPlan& group,
+        std::span<const CaveRimReplacement> replacements){
+    if(replacements.size()!=group.rims.size())return false;
+    std::set<uint64_t> seen;
+    for(const auto& r:replacements){
+        if(!r.model||!r.collision.revision||r.surfaceEpoch!=group.surfaceEpoch||
+           r.authorityRevision!=group.authorityRevision||r.collar.entranceId!=r.entranceId||
+           r.collar.surfaceEpoch!=group.surfaceEpoch||r.collar.authorityRevision!=group.authorityRevision||
+           !seen.insert(r.entranceId).second)return false;
+        const auto it=std::find_if(group.rims.begin(),group.rims.end(),
+            [&](const auto& rim){return rim.entranceId==r.entranceId;});
+        if(it==group.rims.end()||!matchesCaveSurfaceRim(*it,r.collar.terrainBoundary))return false;
+        std::map<SurfaceEdgeKey,unsigned> incidence;
+        for(const auto& t:r.collision.triangles){
+            const Vec3 p[]={t.a,t.b,t.c};
+            for(unsigned i=0;i<3;++i){
+                const auto edge=surfaceEdgeKey(p[i],p[(i+1)%3]);
+                if(r.collar.terrainBoundary.contains(edge)||r.collar.volumeBoundary.contains(edge))
+                    if(++incidence[edge]>2)return false;
+            }
+        }
+        for(const auto& edge:r.collar.terrainBoundary)if(incidence[edge]!=1)return false;
+        for(const auto& edge:r.collar.volumeBoundary)if(incidence[edge]!=2)return false;
+    }
+    return true;
 }
 } // namespace aiverse::terraweave::caverns
