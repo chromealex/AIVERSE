@@ -252,3 +252,7 @@ The native Studio owner uses `StudioWorldProcessLiveOptions` for atomic typed pa
 ## Stage 118: aggregate planetary Live diagnostic budgets
 
 The Studio presentation helper `StudioPlanetLiveBudget.h` limits compact aggregate snapshot data to 768 KiB (4 KiB root reserve) and Live line submissions to 4096 per frame. Enabled layers receive deterministic equal allocations; owner row caps and CROWD route caps scale with concurrent sampling. Complete row prefixes are retained and transport trimming/omission is explicitly reported in `diagnosticBudget`; sampled counters remain pre-transport. ECHO emitter sampling now has a 256 default cap. PHYSIS canonical queries and authored gizmos retain their separate limits. These are diagnostic budgets, not gameplay restrictions or measured frame-time guarantees. No compilation/tests/visual/backend acceptance yet. See `docs/handoffs/world-processes-stage118-live-budget-2026-11-24.md`.
+
+## Stage 119: Studio branch integration boundary
+
+Pinned full-tree comparison identified 19 independently divergent paths (11 under Studio), not proven merge conflicts. Reuse the Studio branch's canonical hosted current-map index API to reject planetary Live samples if the running map no longer matches Play-current-map. Added read-only `tools/studio/audit_branch_overlap.py` for the integrator. No branch merge, build or tests executed. See `docs/handoffs/world-processes-stage119-studio-integration-2026-11-24.md` for precise shared ownership and merge checklist. Physical owner work resumes next.
