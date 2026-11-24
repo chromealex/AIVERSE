@@ -4,6 +4,7 @@
 #include "engine/fx/SpectraGpuPoolWorld.h"
 #include "engine/world/SpectraPhysisSnapshot.h"
 #include "engine/world/SpectraWaterSnapshot.h"
+#include "engine/world/SpectraLiveFields.h"
 #include "engine/world/SpectraTerrainProviders.h"
 #include <array>
 #include <cmath>
@@ -375,6 +376,21 @@ int main() {
         body.surfaceY=Fixed::fromInt(5);body.bottomY=Fixed::fromInt(-5);
         water.add<lib::nereid::WaterBodyComponent>(water.create(),body);
         world::SpectraFieldRegion region;region.origin={2,3,0};region.spacing=1;
+        world::SpectraLiveFields live;
+        auto first=live.publish(water,1,7,region,world::SpectraWaterGeometry::Plane);
+        require(first && live.publish(water,1,7,region,world::SpectraWaterGeometry::Plane)==first,
+                "same committed tick and region reuse immutable registry");
+        auto replacement=live.publish(water,2,7,region,world::SpectraWaterGeometry::Plane);
+        require(replacement && replacement!=first,"same tick replacement refreshes registry");
+        float liveValue=-1;
+        require(replacement->sample("nereid","depth",{2,3,0},liveValue)&&liveValue==2,
+                "live registry contains canonical water depth");
+        require(!replacement->sample("physis","wind_x",{2,3,0},liveValue),"absent PHYSIS stays unavailable");
+        auto invalidRegion=region;invalidRegion.spacing=0;
+        require(!live.publish(water,2,8,invalidRegion,world::SpectraWaterGeometry::Plane)&&!live.current(),
+                "invalid publication clears current registry");
+        require(first->sample("nereid","depth",{2,3,0},liveValue)&&liveValue==2,
+                "old leased registry remains immutable");
         auto plane=world::SpectraWaterSnapshot::capture(water,region,world::SpectraWaterGeometry::Plane,7);
         sp::DataInterfaceRegistry registry;
         require(plane && plane->tick()==7 && world::publishSpectraWater(registry,plane),"water snapshot");

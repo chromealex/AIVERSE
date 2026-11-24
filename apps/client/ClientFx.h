@@ -45,6 +45,8 @@ public:
 #include "engine/render/Renderer3D.h"
 #include "engine/render/TextureCache.h"
 #include "engine/fx/GameFx.h"
+#include "engine/world/SpectraLiveFields.h"
+#include "libraries/include/aiverselib/mechanics/SpectraSourceMirror.h"
 #include "engine/view/game/GameView.h"
 
 namespace aiverse::client {
@@ -134,6 +136,9 @@ private:
     };
     bool ensureGpuPlayback(gfx::Device& dev);
     void presentEntityEffects(Simulation& sim, const game::GameScene& scene, float dt);
+    void presentGraphSources(Simulation& sim,const game::GameScene& scene,const render::Camera& camera);
+    void clearGraphSources();
+    std::string graphSourceAsset(const std::string& name);
     int entityRule(uint64_t key, const std::vector<std::string>& selectors);
     fx::SpectraFxEntityEffects entities_;
     std::unordered_map<uint64_t,int> entityRules_;
@@ -141,6 +146,13 @@ private:
     const game::Rules* rules_ = nullptr;
     gfx::Device* dev_ = nullptr;
     fx::ParticleSystem ps_;
+    world::SpectraLiveFields liveFields_;
+    lib::mechanics::SpectraSourceMirror graphSourceMirror_;
+    std::unique_ptr<lib::mechanics::SpectraPresentationSystem> graphSources_;
+    std::map<std::string,std::string> graphSourceAssets_;
+    uint64_t graphSourceEpoch_=1;
+    uint64_t graphSourceTick_=0;
+    bool graphSourceHaveTick_=false;
     game::GameFx bridge_;
     render::TextureCache textures_;   // sprite textures of effects: the same loader (and atlas) as sprites
     bool attached_ = false;

@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include "engine/fx/FxModelMesh.h"
+#include "engine/fx/VfxGraph.h"
 #include "engine/platform/Platform.h"
 #include "engine/game/GameCore.h"
 
@@ -184,6 +185,8 @@ void ClientFx::shutdown() {
 }
 
 void ClientFx::startMatch(Simulation& sim, uint8_t viewer, const game::GameView& view, const game::MapGrid& grid) {
+    clearGraphSources();
+    graphSources_.reset();graphSourceAssets_.clear();
     ps_.clear();
     bridge_.setHeightFn([&view, &grid](float x, float z) { return view.heightAt(grid, x, z); });
     ps_.setGroundHeight([&view, &grid](float x, float z) { return view.heightAt(grid, x, z); });   // "collision" module
@@ -243,6 +246,8 @@ void ClientFx::startMatch(Simulation& sim, uint8_t viewer, const game::GameView&
 }
 
 void ClientFx::stopMatch() {
+    clearGraphSources();
+    graphSources_.reset();graphSourceAssets_.clear();
     if(entityInbox_) {entityInbox_->active=false;entityInbox_.reset();}
     entities_.reset(true);
     lightBuf_.clear();
@@ -280,6 +285,86 @@ void ClientFx::setPlanetView(const game::GameView* view) {
     ps_.setViewSpace(&space_);
 }
 
+void ClientFx::clearGraphSources() {
+    if(graphSources_)graphSources_->reset();
+    graphSourceMirror_.clear();
+    liveFields_.clear();
+    graphSourceHaveTick_=false;
+    // Explicit epoch boundary even if replacement sim has the same tick.
+    if(++graphSourceEpoch_==0)graphSourceEpoch_=1;
+}
+
+std::string ClientFx::graphSourceAsset(const std::string& name) {
+    if(const auto it=graphSourceAssets_.find(name);it!=graphSourceAssets_.end())return it->second;
+    if(!fx::vfxgraph_detail::nameOk(name)||graphSourceAssets_.size()>=256)return {};
+    // Cache failures for this match. Graph names use a separate namespace
+    // from legacy fx/<name>.json definitions.
+    auto [entry,inserted]=graphSourceAssets_.emplace(name,std::string{});
+    (void)inserted;
+    std::string text;
+    if(!platform::readContentFile("fx/graphs/"+name+".vfx.json",text)||text.size()>512u*1024u)return {};
+    try {
+        const auto graph=Json::parse(text);
+        if(graph.getInt("version")!=2)return {};
+        fx::EffectDef effect;
+        std::vector<std::string> errors;
+        if(!fx::compileSpectraGraph(graph,effect,errors))return {};
+        const std::string runtimeName="graph:live:"+name;
+        if(ps_.define(runtimeName,effect)<0||
+           !graphSources_->bindGraphDataInterfaces(runtimeName,graph,errors))return {};
+        entry->second=runtimeName;
+        return runtimeName;
+    } catch(const std::exception& ex) {
+        std::fprintf(stderr,"SpectraFX live graph '%s': %s\n",name.c_str(),ex.what());
+        return {};
+    }
+}
+
+void ClientFx::presentGraphSources(Simulation& sim,const game::GameScene& scene,
+                                    const render::Camera& camera) {
+    // GameScene currently renders planetary effects in body-local space.
+    // Do not feed global PHYSIS/NEREID coordinates into that particle system.
+    if(planet_||!attached_) {
+        if(graphSourceHaveTick_||graphSourceMirror_.size())clearGraphSources();
+        return;
+    }
+    const World& world=sim.world();
+    if(graphSourceHaveTick_&&sim.tick()<graphSourceTick_)clearGraphSources();
+    if(!graphSources_&&!world.countExisting<lib::mechanics::SpectraSourceComponent>())return;
+    if(!graphSources_)graphSources_=std::make_unique<lib::mechanics::SpectraPresentationSystem>(ps_);
+    std::vector<lib::mechanics::SpectraSourceSnapshot> rows;
+    // Do not enumerate hidden authoritative entities to emit effects.
+    // The prepared presentation scene already resolved visibility and pose.
+    for(const auto& object:scene.objects) {
+        if(rows.size()>=4096)break;
+        if(!object.entity.valid()||!object.visible||object.blip||!world.alive(object.entity))continue;
+        const auto* source=world.tryGetConst<lib::mechanics::SpectraSourceComponent>(object.entity);
+        if(!source||!source->enabled||source->effect.empty())continue;
+        auto resolved=*source;
+        resolved.effect=graphSourceAsset(source->effect);
+        if(resolved.effect.empty())continue;
+        rows.push_back({std::to_string(object.entity.packed()),std::move(resolved),object.pos,object.facing});
+    }
+    graphSourceMirror_.sync(rows);
+    if(rows.empty()) {
+        graphSources_->setDataInterfaceRegistry(nullptr);
+        liveFields_.clear();
+    } else {
+        // Quantized observer region limits cost and avoids a new capture for
+        // every interpolated camera movement in the same committed tick.
+        aiverse::world::SpectraFieldRegion region;
+        region.spacing=32.f;region.dimensions={9,5,9};
+        const auto snap=[](float v){return std::floor(v/32.f)*32.f;};
+        region.origin={snap(camera.target.x)-128.f,snap(camera.target.y)-64.f,
+                       snap(camera.target.z)-128.f};
+        const auto registry=liveFields_.publish(world,graphSourceEpoch_,sim.tick(),region,
+                                                aiverse::world::SpectraWaterGeometry::Plane);
+        graphSources_->setDataInterfaceRegistry(registry.get());
+    }
+    graphSources_->sync(graphSourceMirror_.world(),lib::mechanics::SpectraSourceMirror::resolve);
+    graphSourceTick_=sim.tick();graphSourceHaveTick_=true;
+}
+
 void ClientFx::update(Simulation& sim, const game::GameScene& scene, const render::Camera& cam, const render::mat4& viewProj,
                       int fbW, int fbH, float dt) {
     preparedLightsValid_ = false;
@@ -290,6 +375,7 @@ void ClientFx::update(Simulation& sim, const game::GameScene& scene, const rende
     if(gpuPlayback_ && !planet_) gpuPlayback_->playGpuImpactEffects(32);
     if (attached_ && dt > 0) bridge_.update(sim, &scene.objects, dt);
     if (attached_) presentEntityEffects(sim, scene, dt);
+    presentGraphSources(sim,scene,cam);
     ps_.update(dt);
     static const bool dbg = std::getenv("AIVERSE_FX_DEBUG") != nullptr;
     static int frames = 0;
