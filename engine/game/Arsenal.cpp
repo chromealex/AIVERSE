@@ -347,7 +347,7 @@ void Arsenal::hitscan(Simulation& sim, Entity hero, uint8_t player, size_t weapo
         const Owner* co = w.tryGet<Owner>(c);
         if (!cu || !co || cu->hp.raw <= 0 || (cu->flags & kUnitOffMap)) return;
         const UnitType& ct = m_->rules().types[cu->type];
-        if (ct.invulnerable || !layerHit(wd.targets, ct.layer)) return;
+        if (ct.invulnerable || !weaponTargetMatches(wd, ct.layer, ct.tags)) return;
         if (!m_->hostile(sim, player, co->player) && !(rules_.hitsNeutral && co->player == 0)) return;
         const Vec3 off = flat(w.get<Transform>(c).pos - from);
         const Fixed along = off.dot(dir);
