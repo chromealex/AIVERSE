@@ -364,7 +364,8 @@
       "modeling",
       "terraweave_generator",
       "materials",
-      "models"
+      "models",
+      "texture_graph"
     ],
     "studio_methods": [
       "studio.shaderGraphCatalog",

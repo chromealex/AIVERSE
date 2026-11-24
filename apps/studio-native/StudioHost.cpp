@@ -221,7 +221,7 @@ void StudioHost::webReady() {
 void StudioHost::openProject(const std::string& path, int64_t requestId) {
     if (projectLoading_) return;
     if(preview_&&!textureGraphScope_.empty()){
-        onScene([&]{preview_->invalidateTextureGraphProject();});
+        try{onScene([&]{preview_->invalidateTextureGraphProject();});}catch(const std::exception& e){if(requestId>=0)sendError(Json::number(requestId),e.what());return;}
         textureGraphWork_=true;textureGraphScope_.clear();
     }
     projectLoading_ = true;

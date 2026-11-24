@@ -115,6 +115,24 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
         frame();drain();
         require(owner.status().getStr("state")=="failed"&&owner.status()["completedOutputs"].toDouble()==0,"queued deadline failed");
         complete(); // new request after cancellation and timeout
+        // Exercise neighborhood filters, restricted arithmetic and embedded image
+        // source on the production CPU-reference-checked materialized GPU path.
+        auto filters=Json::parse(R"JSON({"graph":{"version":1,"size":64,"nodes":[
+            {"id":"g","op":"gradient","inputs":[],"properties":{"axis":"x"}},
+            {"id":"c","op":"constant","inputs":[],"properties":{"value":0.75}},
+            {"id":"b","op":"blur","inputs":["g"],"properties":{"radius":2}},
+            {"id":"e","op":"erosion","inputs":["b"],"properties":{"radius":1}},
+            {"id":"w","op":"warp","inputs":["e","c","g"],"properties":{"amount":4}},
+            {"id":"d","op":"distort","inputs":["w","c"],"properties":{"amount":3}},
+            {"id":"f","op":"formula","inputs":["d","c"],"properties":{"expression":"a b * 0.5 +"}},
+            {"id":"i","op":"image","inputs":[],"properties":{"width":2,"height":2,"rgb":"ff000000ff000000ffffffff"}}
+        ],"outputs":{"height":"f","color":"i"}},"requireGpu":true,"bakeSet":true,"fusePointwise":true})JSON");
+        const auto filterId=owner.start(filters,project).getStr("request");drain();
+        const auto fs=owner.status();
+        require(fs.getStr("request")==filterId&&fs.getStr("state")=="ready"&&fs.getStr("backend")==expected,"native filter / formula / image GPU acceptance failed");
+        require(fs["completedOutputs"].toDouble()==2,"missing filter or image result");
+        for(const auto& row:fs["outputs"].items())require(row.getStr("backend")==expected,"filter or image CPU fallback");
+        std::printf("TextureGraph filter/formula/image parity accepted: %s\n",expected);
         // Exercise the public native material API with the same RHI and owner.
         // A missing lease must not enqueue work or replace the last result.
         auto residentGraph=Json::parse(R"JSON({"version":1,"size":32,"nodes":[

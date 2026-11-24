@@ -133,6 +133,7 @@ struct StudioScene::GraphPresentation {
         sampleRenderer->render(pass);dev.endPass();
         auto result=capture;
         if(!dev.captureTexture(color,[result](int w,int h,std::vector<uint8_t> rgba){
+            if(result->state!="pending")return;
             if(w!=side||h!=side||rgba.size()!=size_t(side)*side*4){result->state="failed";result->error="Native PBR capture returned invalid pixels";return;}
             result->hex.reserve(rgba.size()*2);
             for(size_t i=0;i<rgba.size();++i){const auto v=i%4==3?uint8_t(255):rgba[i];result->hex+="0123456789abcdef"[v>>4];result->hex+="0123456789abcdef"[v&15];}
@@ -759,8 +760,12 @@ Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
                     if(!uploadModel(*device_,*model)){releaseModel(*device_,*model);model.reset();}
                 }
             }
-            if(!model||model->materials.empty())throw std::runtime_error("PBR preview model unavailable");
-            const size_t index=p.has("materialIndex")?GraphPresentation::index(p,*model):0;
+            if(!model)throw std::runtime_error("PBR preview model unavailable");
+            size_t index=0;
+            try {
+                if(model->materials.empty())throw std::runtime_error("PBR preview model has no materials");
+                index=p.has("materialIndex")?GraphPresentation::index(p,*model):0;
+            }catch(...){releaseModel(*device_,*model);throw;}
             if(!presentation.sampleRenderer){
                 auto renderer=std::make_unique<Renderer3D>();renderer->setGpuDeviceLease(lease);
                 if(!renderer->init(*device_)){renderer->shutdown();releaseModel(*device_,*model);throw std::runtime_error("PBR renderer unavailable");}
