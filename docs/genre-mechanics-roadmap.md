@@ -100,3 +100,7 @@ One complete body-level cut transaction over disjoint chart leaf sets. Acceptanc
 ### Stage54u3 — IN PROGRESS
 
 Native planet leaf baseline collision ownership in existing Box3D and SpatialWorld, exact renderer-captured original triangles, disjoint host-reserved ID namespace and explicit exclusion proof. Publish baseline before accepting cut; retire baseline exactly once on native cut commit, restore before reopening readers on close, quarantine irreversible failures. Standard spherical GameCore has grid movement rather than an existing Box3D planetary owner, so automatic actor locomotion and runtime demand remain separate integration work. Register real scene regression; native QA pending.
+
+### Stage54u4a — IN PROGRESS
+
+Deterministic body-local observer demand with hysteresis and pins, global bounded region/slot budget; immutable ECS snapshots and rollback-safe candidate identity; reuse existing stream worker tickets and exact native collar helpers to prepare a full body candidate. No clipped preview fields in gameplay; refuse incomplete exterior/shaft geometry. Host collision binding activation and safe baseline coverage transfer remain 54u4b. Native QA pending.
