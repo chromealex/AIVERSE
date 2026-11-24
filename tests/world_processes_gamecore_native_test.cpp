@@ -1,6 +1,7 @@
 // Actual GameCore map fixture proving native module ECS hydration via mapPlaced().
 #include "aiverselib/world/WorldProcessesNativeModule.h"
 #include "aiverselib/world/WorldProcessGravity.h"
+#include "aiverselib/world/SurfaceGravitySupport.h"
 #include "aiverselib/world/GranularPlanetTerrainTransfer.h"
 #include "aiverselib/world/CircuitSurfaceWiring.h"
 #include "apps/studio-native/StudioPlanetWorldProcesses.h"
@@ -61,6 +62,45 @@ static Entity placed(const Simulation& sim,std::size_t i){
     auto& game=static_cast<const g::GameCore&>(sim.module());
     AIVERSE_TEST_CHECK(game.mapPlaced().size()>i);
     return game.mapPlaced()[i];
+}
+static void checkPlanetGravitySupport(){
+    const Vec3 up{Fixed{},Fixed::fromInt(1),Fixed{}};
+    const auto down=wp::classifyGravitySupport({Fixed{},Fixed::fromInt(-10),Fixed{}},up,{});
+    AIVERSE_TEST_CHECK(down&&down->supported()&&down->inwardAcceleration==Fixed::fromInt(10));
+    const auto none=wp::classifyGravitySupport({},up,{});
+    AIVERSE_TEST_CHECK(none&&none->status==wp::GravitySupportStatus::WeakGravity);
+    const auto reverse=wp::classifyGravitySupport(up,up,{});
+    AIVERSE_TEST_CHECK(reverse&&reverse->status==wp::GravitySupportStatus::Outward);
+    const auto slope=wp::classifyGravitySupport({Fixed::fromInt(10),Fixed::fromInt(-1),Fixed{}},up,{});
+    AIVERSE_TEST_CHECK(slope&&slope->status==wp::GravitySupportStatus::TooSteep);
+    const auto air=wp::classifyGravitySupport(down->acceleration,up,Fixed::fromInt(2));
+    AIVERSE_TEST_CHECK(air&&air->status==wp::GravitySupportStatus::Airborne);
+    AIVERSE_TEST_CHECK(!wp::classifyGravitySupport(up,{},{}));
+    game::Surface surface;
+    game::BodyDef body;body.id="terra";body.faceSize=8;body.radius=Fixed::fromInt(64);
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    World ecs;physis::GravitySettings settings;settings.baseline={};
+    ecs.setResource<physis::GravitySettings>(settings);
+    const auto e=ecs.create();
+    physis::GravityField gravity;gravity.mode=physis::GravityMode::Attract;
+    gravity.center=game::Surface::anchor(0);gravity.radiusMeters=Fixed::fromInt(200);
+    gravity.radialMagnitude=Fixed::fromInt(10);gravity.overrideBaseline=true;
+    ecs.add<physis::GravityField>(e,gravity);
+    for(int face=0;face<6;++face){
+        const auto pos=surface.cellCenter(surface.gridCell(0,face,7,3));
+        const auto support=wp::samplePlanetGravitySupport(ecs,surface,pos);
+        AIVERSE_TEST_CHECK(support&&support->body==0&&support->supported());
+    }
+    const auto p=surface.cellCenter(surface.gridCell(0,0,7,3));
+    const auto lunar=surface.cellCenter(surface.gridCell(1,0,7,3));
+    AIVERSE_TEST_CHECK(wp::samplePlanetGravitySupport(ecs,surface,lunar)->status==
+        wp::GravitySupportStatus::WeakGravity);
+    ecs.enableCowSnapshots();const World saved=ecs;
+    ecs.get<physis::GravityField>(e).mode=physis::GravityMode::Repel;
+    AIVERSE_TEST_CHECK(wp::samplePlanetGravitySupport(ecs,surface,p)->status==
+        wp::GravitySupportStatus::Outward);
+    ecs=saved;
+    AIVERSE_TEST_CHECK(wp::samplePlanetGravitySupport(ecs,surface,p)->supported());
 }
 static void checkPlanetGravity(){
     namespace wp=aiverse::lib::worldprocess;
@@ -729,6 +769,18 @@ static void checkAuthoredPlanetDemo(){
     AIVERSE_TEST_CHECK(restored->checksum()==sim->checksum());
     sim->loadState(snapshot);sim->step();
     AIVERSE_TEST_CHECK(restored->checksum()==sim->checksum());
+    // Native opt-in CROWD must release an unsupported allocation on the
+    // next reservation tick; movement authority remains with GameCore.
+    std::vector<Entity> fields;
+    w.eachExistingConst<physis::GravityField>([&](Entity e,const physis::GravityField&){
+        fields.push_back(e);
+    });
+    for(Entity e:fields)w.get<physis::GravityField>(e).enabled=false;
+    sim->step();
+    AIVERSE_TEST_CHECK(w.get<crowd::Agent>(walker).allocated==kNullEntity);
+    for(Entity e:fields)w.get<physis::GravityField>(e).enabled=true;
+    sim->step();
+    AIVERSE_TEST_CHECK(w.get<crowd::Agent>(walker).allocated==slot);
 }
 int main(){
     checkAuthoredPlanetDemo();
@@ -739,6 +791,7 @@ int main(){
     checkPlanetSoilTransfer();
     checkPlanetGranular();
     checkPlanetEvolveHydration();
+    checkPlanetGravitySupport();
     checkPlanetGravity();
     checkPlanetImprint();
     checkPlanetCrowdSlots();

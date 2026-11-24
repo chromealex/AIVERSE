@@ -2,6 +2,7 @@
 // owns Transform, Mobile route, slope speed, separation and projection.
 #pragma once
 #include "CrowdSurfaceSlots.h"
+#include "SurfaceGravitySupport.h"
 #include "engine/game/GameCore.h"
 
 namespace aiverse::lib::worldprocess {
@@ -18,18 +19,28 @@ inline bool surfaceCrowdEligible(const game::GameCore& host,const World& read,En
 // Run after GameCore movement. Orders are consumed at the next owner tick;
 // never overwrite player/AI commands, current paths or combat targets.
 // Legacy Agent x/z/speed/radius are not a second position/motion authority.
-inline bool advanceGameCoreSurfaceCrowd(game::GameCore& host,Simulation& sim){
+inline bool advanceGameCoreSurfaceCrowd(game::GameCore& host,Simulation& sim,bool gravitySupport=false){
     const auto* surface=host.surface(sim);
     if(!surface)return false;
     auto& world=sim.world();
     const World& read=world;
     const auto& grid=host.state(sim).grid;
+    const auto supported=[&](Vec3 position){
+        if(!gravitySupport)return true;
+        const auto sample=samplePlanetGravitySupport(read,*surface,position);
+        return sample&&sample->supported();
+    };
     auto plan=crowd::planSurfaceSlots(read,*surface,sim.tick(),
-        [&](Entity e){return surfaceCrowdEligible(host,read,e);},
+        [&](Entity e){
+            if(!surfaceCrowdEligible(host,read,e))return false;
+            if(!gravitySupport)return true;
+            const auto* tr=read.tryGetConst<Transform>(e);
+            return tr&&supported(tr->pos);
+        },
         [&](Entity e,const SurfaceFrame& frame){
             const auto* unit=read.tryGetConst<game::Unit>(e);
             const auto& type=host.rules().types[unit->type];
-            return grid.passableAt(frame.origin,type.pathLayer);
+            return grid.passableAt(frame.origin,type.pathLayer)&&supported(frame.origin);
         });
     if(!plan)return false;
     std::vector<crowd::SurfaceSlotIntent> orders;
@@ -63,6 +74,16 @@ inline void installGameCoreSurfaceCrowd(Simulation& sim){
     sim.addSystem("crowd.surface_slots",[](Simulation& current){
         auto* host=dynamic_cast<game::GameCore*>(&current.module());
         if(host)(void)advanceGameCoreSurfaceCrowd(*host,current);
+    });
+}
+// Choose instead of the legacy planetary installer. Existing routes and
+// player/AI orders are never canceled here; only CROWD reservations and
+// newly issued idle-agent Move orders are gravity-aware.
+inline void installGameCoreGravitySurfaceCrowd(Simulation& sim){
+    crowd::registerPersistence(sim);
+    sim.addSystem("crowd.surface_slots",[](Simulation& current){
+        auto* host=dynamic_cast<game::GameCore*>(&current.module());
+        if(host)(void)advanceGameCoreSurfaceCrowd(*host,current,true);
     });
 }
 } // namespace aiverse::lib::worldprocess

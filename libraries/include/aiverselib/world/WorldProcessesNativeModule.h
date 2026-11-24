@@ -85,9 +85,14 @@ public:
         // Project may enable any of the seven new systems even before
         // adding its first authored component. Unknown/typed flags fail fast.
         const SuiteFlags flags=suiteFlags(config);
+        if(flags.crowdGravitySupport&&!host.surface(sim))
+            throw std::invalid_argument("CROWD gravity support requires planetary Surface");
+        const CrowdInstaller crowdInstaller=host.surface(sim)?
+            (flags.crowdGravitySupport?&installGameCoreGravitySurfaceCrowd:
+                                      &installGameCoreSurfaceCrowd):nullptr;
         (void)authoring::hydrateMap(sim,host.matchMap(),host.mapPlaced(),flags,
             host.surface(sim)?&installGameCoreSurfaceTrails:nullptr,
-            host.surface(sim)?&installGameCoreSurfaceCrowd:nullptr,
+            crowdInstaller,
             host.surface(sim)?&evolve::registerSurfaceAreaPersistence:nullptr,
             host.surface(sim)?&hydrateGameCoreSurfaceArea:nullptr,
             host.surface(sim)?&installGameCoreSurfaceGranular:nullptr,

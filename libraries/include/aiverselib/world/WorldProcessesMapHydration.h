@@ -38,6 +38,8 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
                                AetherStratificationInstaller aetherInstaller=nullptr) {
     if(requested.aetherStratification&&!aetherInstaller)
         throw std::invalid_argument("World Processes: AETHER stratification needs a native spatial owner");
+    if(requested.crowdGravitySupport&&!crowdInstaller)
+        throw std::invalid_argument("World Processes: CROWD gravity support needs native surface owner");
     const Json& entities=map["entities"];
     if(!entities.isArray()) {
         if(!placed.empty())throw std::invalid_argument("World Processes: map.entities missing");
@@ -273,7 +275,8 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
     totals.extra.morph |= requested.morph||totals.extra.morphGravity;
     if(totals.extra.morphGravity&&!morphGravityInstaller)
         throw std::invalid_argument("World Processes: MORPH gravity needs native frame installer");
-    totals.extra.crowd |= requested.crowd;
+    totals.extra.crowdGravitySupport=requested.crowdGravitySupport;
+    totals.extra.crowd |= requested.crowd||requested.crowdGravitySupport;
     totals.extra.imprint |= requested.imprint;
     totals.extra.circuit |= requested.circuit;
     totals.extra.granular |= requested.granular;
