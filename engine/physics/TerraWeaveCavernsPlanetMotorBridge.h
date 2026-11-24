@@ -3,6 +3,7 @@
 #include "engine/physics/TerraWeaveCavernsPlanetPhysics.h"
 #include "engine/world/TerraWeaveCavernsPlanetRuntimeFrame.h"
 #include "engine/world/TerraWeaveCavernsPlanetEnvironmentEpoch.h"
+#include "engine/world/TerraWeaveCavernsPlanetTravel.h"
 #include "engine/mechanics/LocomotionModes.h"
 #include <algorithm>
 #include <cmath>
@@ -48,6 +49,7 @@ inline bool stepAdmittedCavePlanetCharacter(CavePlanetRuntimeFrame& runtime,
     const auto* epoch=world.resourceConst<CavePlanetEnvironmentEpoch>();
     const auto* route=world.tryGetConst<nav::CaveRouteFollower>(entity);
     const auto region=nav::caveRouteScope(world,entity);
+    if(!cavePlanetInteriorMotorAllowed(world,entity,region))return {};
     const auto* entry=findPlanetCaveRegion(world,region);
     if(!epoch||!route||!entry||!sameCavePlanetAnchor(entry->region.anchor,frame.anchor())||
        !physics::validParams(params)||params.radius*100>route->agent.radiusCm||
@@ -161,6 +163,7 @@ inline std::optional<CavePlanetVolumeStep> stepAdmittedCavePlanetVolume(
     const auto* epoch=world.resourceConst<CavePlanetEnvironmentEpoch>();
     const auto* route=world.tryGetConst<nav::CaveRouteFollower>(entity);
     const auto region=nav::caveRouteScope(world,entity);
+    if(!cavePlanetInteriorMotorAllowed(world,entity,region))return {};
     const auto* entry=findPlanetCaveRegion(world,region);
     if(!epoch||!route||!entry||!sameCavePlanetAnchor(entry->region.anchor,frame.anchor())||
        params.radius*100>route->agent.radiusCm||params.height*100>route->agent.heightCm)return {};

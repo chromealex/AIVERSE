@@ -85,6 +85,20 @@ static void checkOrientedMotor(){
     check(!physics::stepCharacterOriented(scene.world(),params,state,{},scene.dt(),{{0,0,0},0}),"invalid quaternion refused");
     check(state.position.x==before.x&&state.position.y==before.y&&state.position.z==before.z,"invalid orientation moved character");
 }
+static void checkTravelPins(){
+    World world;
+    const auto actor=world.create();
+    world.add<CavePlanetTravel>(actor,CavePlanetTravel{9,0,0,0});
+    check(cavePlanetTravelPins(world).contains(9),"stationary cave occupant pinned without route");
+    check(cavePlanetInteriorMotorAllowed(world,actor,9),"occupied chart motor");
+    world.get<CavePlanetTravel>(actor)={9,9,7,1};
+    check(cavePlanetTravelMotor(world,actor)==CavePlanetTravelMotor::Crossing&&
+          !cavePlanetInteriorMotorAllowed(world,actor,9),"crossing excludes regular motor");
+    check(!cancelCavePlanetCrossing(world,actor,[](const auto&,auto,const auto&){return false;})&&
+          cavePlanetTravelPins(world).contains(9),"unsafe cancel preserves pin");
+    check(cancelCavePlanetCrossing(world,actor,[](const auto&,auto,const auto&){return true;})&&
+          cavePlanetTravelPins(world).contains(9),"exit cancel preserves occupancy");
+}
 static void checkTravelRim(){
     Entrance mouth;mouth.id=7;mouth.radiusCm=200;
     CaveSurfaceRim rim;rim.entranceId=7;
@@ -246,6 +260,7 @@ int main(){
     checkDrive();
     checkVolumeSweep();
     checkTravelRim();
+    checkTravelPins();
     checkOrientedMotor();
     checkCandidateIdentity();
     check(!CavePlanetRuntimeHooks{}.valid(),"missing host hooks must refuse");

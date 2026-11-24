@@ -114,7 +114,6 @@ public:
     CavePlanetRuntimeProgress beforeFrame(const World& world,render::Renderer3D& renderer,
             std::span<const CavePlanetObserver> observers,const std::set<uint64_t>& pins,
             size_t jobs=2){
-        const auto required=cavePlanetTravelPins(world,pins);
         const bool wasCoherent=frameCoherent_;
         frameCoherent_=false;
         CavePlanetRuntimeProgress result;
@@ -123,6 +122,7 @@ public:
             result.diagnostic="Caverns native host requires exclusive readers";
             return result;
         }
+        const auto required=cavePlanetTravelPins(world,pins);
         renderer.clearDynamicGiOverlay();
         const bool restored=notice_.consume();
         if(restored)runtime_->invalidateAfterRestore();
@@ -169,6 +169,11 @@ public:
             return true;
         };
         return current()||(runtime_->refreshNavigationEnvironment(world)&&current());
+    }
+    // Before the existing crossing motor, under the same owner exclusion.
+    bool admitCrossing(const World& world,Entity entity)const{
+        return !closed_&&exclusive_()&&!notice_.pending()&&!runtime_->recoveryRequired()&&
+            cavePlanetCrossingReady(*runtime_,world,entity);
     }
     // Expose the existing native admission adapter only, not a second motor.
     CavePlanetRuntimeFrame& runtime(){return *runtime_;}

@@ -110,6 +110,23 @@ inline bool crossesCavePlanetRim(const CaveSurfaceRim& rim,const Entrance& mouth
     }
     return false;
 }
+// Native preflight, before the host allows any crossing movement.
+inline bool cavePlanetCrossingReady(const CavePlanetRuntimeFrame& runtime,const World& world,Entity entity){
+    const auto* state=world.tryGetConst<CavePlanetTravel>(entity);
+    const auto* epoch=world.resourceConst<CavePlanetEnvironmentEpoch>();
+    if(!world.alive(entity)||!state||!validCavePlanetTravel(*state)||!state->pendingRegion||!epoch||
+       !cavePlanetTravelEntrance(world,state->pendingRegion,state->entrance))return false;
+    const auto cut=runtime.committedRegionCut(world,state->pendingRegion);
+    return cut&&std::find(cut->accepted.begin(),cut->accepted.end(),state->entrance)!=cut->accepted.end()&&
+        bool(runtime.committedNavigationLease(world,state->pendingRegion,epoch->revision));
+}
+// Legacy callers without the optional travel component retain their
+// original route admission. Tracked actors cannot run regular cave motors
+// while crossing or outside their occupied chart.
+inline bool cavePlanetInteriorMotorAllowed(const World& world,Entity entity,uint64_t region){
+    const auto* state=world.tryGetConst<CavePlanetTravel>(entity);
+    return !state||(validCavePlanetTravel(*state)&&!state->pendingRegion&&state->occupiedRegion==region&&region);
+}
 struct CavePlanetCrossingGoal {
     Vec3 simulationGoal{};
     CaveAgentProfile agent{};
