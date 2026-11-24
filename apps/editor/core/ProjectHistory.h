@@ -28,12 +28,13 @@ public:
         bool created=false; // import/create: undo quarantines, redo restores
         bool replacement=false; // pairs: live -> old slot, new slot -> live; sidecar bytes unchanged
     };
-    struct Step { std::string label; std::vector<ProjectFileEdit> files; size_t bytes=0; std::optional<MovePlan> move; };
+    struct Step { std::string label; std::vector<ProjectFileEdit> files; size_t bytes=0; std::optional<MovePlan> move; std::string id; };
     const std::vector<Step>& steps() const noexcept {return steps_;}
     size_t position() const noexcept {return position_;}
     size_t bytes() const noexcept {return bytes_;}
     uint64_t version() const noexcept {return version_;}
     std::string versionToken() const {return epoch_+":"+std::to_string(version_);}
+    std::string nextId() const {return epoch_+":"+std::to_string(version_+1);}
     bool canUndo() const noexcept{return position_>0;}
     bool canRedo() const noexcept{return position_<steps_.size();}
     const Step& next(bool redo) const {
@@ -48,21 +49,21 @@ public:
         if(std::none_of(files.begin(),files.end(),[](const auto& f){return f.before!=f.after;}))return;
         if(label.empty()){reset();return;}
         try {
-            size_t n=sizeof(Step)+std::min<size_t>(label.size(),256);
+            size_t n=sizeof(Step)+std::min<size_t>(label.size(),256)+nextId().size();
             auto add=[&](size_t size){if(size>MaxBytes-n)throw std::length_error("Project history budget");n+=size;};
             for(const auto& f:files){add(sizeof(ProjectFileEdit));add(f.path.native().size()*sizeof(std::filesystem::path::value_type));add(f.before.size());add(f.after.size());}
             while(steps_.size()>position_){bytes_-=steps_.back().bytes;steps_.pop_back();}
             while(!steps_.empty()&&(steps_.size()>=MaxSteps||n>MaxBytes-bytes_)){
                 bytes_-=steps_.front().bytes;steps_.erase(steps_.begin());--position_;
             }
-            steps_.push_back({label.substr(0,256),std::move(files),n,{}});
+            steps_.push_back({label.substr(0,256),std::move(files),n,{},nextId()});
             bytes_+=n;position_=steps_.size();++version_;
         }catch(...){reset();}
     }
     void recordMove(MovePlan&& move,const std::string& label) noexcept {
         if(move.files.empty())return;
         try {
-            size_t n=sizeof(Step)+std::min<size_t>(label.size(),256);
+            size_t n=sizeof(Step)+std::min<size_t>(label.size(),256)+nextId().size();
             auto add=[&](size_t size){if(size>MaxBytes-n)throw std::length_error("Move history budget");n+=size;};
             for(const auto& f:move.files){add(sizeof(MoveFile));add(f.from.size());add(f.to.size());add(f.bytes.size());add(f.digest.size());}
             if(move.materialsBefore)add(move.materialsBefore->size());
@@ -71,7 +72,7 @@ public:
             while(!steps_.empty()&&(steps_.size()>=MaxSteps||n>MaxBytes-bytes_)){
                 bytes_-=steps_.front().bytes;steps_.erase(steps_.begin());--position_;
             }
-            steps_.push_back({label.substr(0,256),{},n,std::move(move)});
+            steps_.push_back({label.substr(0,256),{},n,std::move(move),nextId()});
             bytes_+=n;position_=steps_.size();++version_;
         }catch(...){reset();}
     }

@@ -164,6 +164,9 @@ private:
     uint64_t strokeHistoryMark_=0; bool stroking_=false; double strokeX_=0, strokeY_=0, strokeHeight_=0;
     bool strokeDabImpl(double x,double z,std::string* error,double y);
     Json agentRequest(const std::string& method, const Json& params);
+    Json agentLinkedCall(const std::string& name,const Json& args);
+    Json agentHistoryLink(Json change) const;
+    bool agentCanUndoAll() const;
 };
 Json hubTemplatesJson(const std::string& engineDir, const Json& params);
 }

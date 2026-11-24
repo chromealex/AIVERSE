@@ -569,6 +569,40 @@ std::string shellQuote(const std::string& s) {
 }
 std::string clipText(const std::string& s,size_t n){return s.size()<=n?s:s.substr(0,n)+"…";}
 }
+// Explicit native adapters: never expose the generic browser dispatch or
+// native external picker/purge to an agent.
+Json StudioSession::agentLinkedCall(const std::string& name,const Json& args){
+    try{
+        if(name=="studio_asset_history"){
+            if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
+            auto out=assetHistoryJson();out.set("project",str(ws_.project.dir));return out;
+        }
+        if(name=="studio_asset_catalog"||name=="studio_asset_meta_patch"||name=="studio_asset_folder_create"){
+            if(ws_.project.dir.empty()||args.getStr("expectedProject")!=ws_.project.dir)
+                throw std::runtime_error("Linked Studio project changed");
+            if(name=="studio_asset_catalog"){
+                const auto offset=args.getInt("offset",0),limit=args.getInt("limit",100);
+                if(offset<0||limit<1||limit>200)throw std::runtime_error("Invalid asset catalog page");
+                StudioAssetCatalog catalog(ws_.project.dir);catalog.rebuild(false);
+                const auto assets=catalog.all();Json rows=Json::array(),out=Json::object();
+                for(size_t i=size_t(offset);i<assets.size()&&rows.size()<size_t(limit);++i){
+                    const auto& e=assets[i];Json row=Json::object();
+                    row.set("guid",str(e.guid));row.set("path",str(e.path));row.set("importer",str(e.importer));
+                    row.set("directory",Json::fromBool(e.directory));row.set("settings",e.settings);rows.push(std::move(row));
+                }
+                out.set("items",std::move(rows));out.set("total",num(int64_t(assets.size())));out.set("version",str(assetHistoryVersion()));return out;
+            }
+            if(args.getStr("expectedVersion")!=assetHistoryVersion())throw std::runtime_error("Asset history changed; refresh first");
+            Json request=Json::object();request.set("id",num(int64_t(1)));
+            request.set("method",str(name=="studio_asset_meta_patch"?"studio.assetMetaPatch":"studio.assetFolderCreate"));
+            request.set("params",args);
+            const auto reply=dispatchImpl(request);
+            if(reply.has("error")){Json error=Json::object();error.set("error",reply["error"]);return error;}
+            return reply["result"];
+        }
+        return ws_.call(name,args,"agent");
+    }catch(const std::exception& e){Json out=Json::object();out.set("error",str(e.what()));return out;}
+}
 // Agent link, protocol 2 (docs/mcp-agent-link.md): hello + token, then {"method":"call"} lines from
 // aiversemcp. Every call runs through ws_.call with source "agent": validated, logged, undoable; each
 // MapDoc snapshot it adds becomes a History step "Agent · <op>" and an entry of the panel's change list.
@@ -612,28 +646,51 @@ bool StudioSession::pollAgentLink() {
         }
         syncHistoryLabels();
         const auto before=ws_.map.historyMark();const size_t entities=ws_.map.data.entities.size();
+        const auto projectBefore=ws_.project.documentHistory.version(),assetBefore=assetHistory_.version();
+        const auto sourceMap=ws_.map.path;
         const bool wasDirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
         if(name=="open_game"||name=="open_project"||name=="create_game"||name=="create_project")assetHistory_.reset();
         const auto assetProjectBefore=ws_.project.dir;
-        const Json result=ws_.call(name,args,"agent");
+        const Json result=agentLinkedCall(name,args);
         if(assetProjectBefore!=ws_.project.dir)assetHistory_.reset();
         const bool failed=result.has("error");
-        const bool undoable=ws_.map.historyMark()!=before&&ws_.map.canUndo();
+        const bool sameProject=assetProjectBefore==ws_.project.dir;
+        const bool sameMap=sameProject&&sourceMap==ws_.map.path;
+        std::vector<std::pair<std::string,std::string>> links;
         labelNewHistory(before,"Agent · "+studioToolLabel(name));
-        if(undoable)for(size_t i=0;i<ws_.map.undoDepth();++i)if(ws_.map.undoId(i)>before)agentEditIds_.push_back(ws_.map.undoId(i));
+        if(sameMap)for(size_t i=0;i<ws_.map.undoDepth();++i)if(ws_.map.undoId(i)>before){
+            const auto id=ws_.map.undoId(i);
+            if(!failed)links.emplace_back("map",std::to_string(id));
+            agentEditIds_.push_back(id);
+        }
+        const auto capture=[&](const char* scope,const editor::ProjectHistory& history,uint64_t previous){
+            if(!failed&&sameProject&&history.version()==previous+1&&history.canUndo()&&
+               history.next(false).id==history.versionToken())
+                links.emplace_back(scope,history.next(false).id);
+        };
+        capture("project",ws_.project.documentHistory,projectBefore);
+        capture("assets",assetHistory_,assetBefore);
         if(ws_.map.data.entities.size()!=entities){clearSelection();dropOrdinalFlags();}
         const bool dirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
-        const bool edit=!failed&&(undoable||dirty!=wasDirty||!studioToolReadOnly(name));
-        if(edit)changed=true;
-        if((edit&&!undoable)||(failed&&undoable)||ws_.project.dir!=agentHistoryProject_||ws_.map.path!=agentHistoryMap_)agentHistoryUnsafe_=true;
+        const bool readOnly=studioToolReadOnly(name)||name=="studio_asset_catalog"||name=="studio_asset_history";
+        const bool ownerChanged=ws_.map.historyMark()!=before||ws_.project.documentHistory.version()!=projectBefore||assetHistory_.version()!=assetBefore;
+        const bool edit=!failed&&(ownerChanged||dirty!=wasDirty||!readOnly);
+        if(edit||ownerChanged)changed=true;
+        // Map-only Undo all never crosses untracked or non-map changes.
+        if((edit&&(links.empty()||std::any_of(links.begin(),links.end(),[](const auto& l){return l.first!="map";})))||
+           (failed&&ownerChanged)||!sameMap||ws_.project.dir!=agentHistoryProject_||ws_.map.path!=agentHistoryMap_)
+            agentHistoryUnsafe_=true;
         if(edit||failed){
-            Json c=Json::object();
-            c.set("op",str(name));c.set("args",str(clipText(args.dump(-1),160)));
-            c.set("ok",Json::fromBool(!failed));c.set("undoable",Json::fromBool(undoable));
-            c.set("position",num(int64_t(undoLabels_.size())));
-            if(undoable)c.set("historyId",str(std::to_string(ws_.map.undoId(ws_.map.undoDepth()-1))));
-            if(failed)c.set("error",str(clipText(result.getStr("error"),300)));
-            agentChanges_.push(std::move(c));
+            const auto add=[&](const std::string& scope,const std::string& historyId){
+                Json c=Json::object();c.set("op",str(name));c.set("args",str(clipText(args.dump(-1),160)));
+                c.set("ok",Json::fromBool(!failed));c.set("scope",str(scope));c.set("historyId",str(historyId));
+                c.set("sourceProject",str(ws_.project.dir));c.set("sourceMap",str(ws_.map.path));
+                if(failed)c.set("error",str(clipText(result.getStr("error"),300)));
+                agentChanges_.push(std::move(c));
+            };
+            if(links.empty())add("untracked","");
+            else for(const auto& [scope,historyId]:links)add(scope,historyId);
+            if(agentChanges_.size()>2000){agentChanges_.eraseAt(0);agentHistoryUnsafe_=true;}
         }
         agentServer_.send(m.client,reply(id,result).dump(-1));
     }
@@ -887,6 +944,44 @@ void StudioSession::finishAgentScreenshot(const std::string& pngBase64, int widt
     }
     agentShots_.clear();
 }
+bool StudioSession::agentCanUndoAll() const{
+    bool ok=agentHistoryProject_==ws_.project.dir&&agentHistoryMap_==ws_.map.path&&
+        !agentHistoryUnsafe_&&!stroking_&&!agentRun_.running()&&!agentEditIds_.empty()&&
+        ws_.map.undoDepth()==agentStartIds_.size()+agentEditIds_.size();
+    if(!ok)return false;
+    for(size_t i=0;i<agentStartIds_.size();++i)if(ws_.map.undoId(i)!=agentStartIds_[i])return false;
+    for(size_t i=0;i<agentEditIds_.size();++i)if(ws_.map.undoId(agentStartIds_.size()+i)!=agentEditIds_[i])return false;
+    return true;
+}
+Json StudioSession::agentHistoryLink(Json c) const{
+    const auto scope=c.getStr("scope"),id=c.getStr("historyId");
+    bool retained=false,applied=false,undo=false,redo=false;int64_t position=-1;
+    std::string version;
+    if(c.getBool("ok")&&!id.empty()&&c.getStr("sourceProject")==ws_.project.dir){
+        if(scope=="map"&&c.getStr("sourceMap")==ws_.map.path){
+            version=historyVersion();
+            for(size_t i=0;i<ws_.map.undoDepth();++i)if(std::to_string(ws_.map.undoId(i))==id){
+                retained=applied=true;position=int64_t(i+1);undo=i+1==ws_.map.undoDepth();
+            }
+            for(size_t i=0;i<ws_.map.redoDepth();++i)if(std::to_string(ws_.map.redoId(i))==id){
+                retained=true;position=int64_t(ws_.map.undoDepth()+ws_.map.redoDepth()-i);redo=i+1==ws_.map.redoDepth();
+            }
+        }else if(scope=="project"||scope=="assets"){
+            const auto& history=scope=="project"?ws_.project.documentHistory:assetHistory_;
+            version=scope=="project"?ws_.project.historyVersion():assetHistoryVersion();
+            const bool blocked=scope=="project"&&(!ws_.project.historyStatus().getBool("canUndo")&&!ws_.project.historyStatus().getBool("canRedo"));
+            for(size_t i=0;i<history.steps().size();++i)if(history.steps()[i].id==id){
+                retained=true;applied=i<history.position();position=int64_t(i+1);
+                undo=!blocked&&applied&&i+1==history.position();redo=!blocked&&!applied&&i==history.position();
+            }
+        }
+    }
+    const bool safe=!stroking_&&!agentRun_.running();
+    c.set("undoable",Json::fromBool(retained));c.set("applied",Json::fromBool(applied));
+    c.set("canUndo",Json::fromBool(safe&&undo));c.set("canRedo",Json::fromBool(safe&&redo));
+    c.set("position",num(position));c.set("historyVersion",str(version));
+    return c;
+}
 Json StudioSession::agentRequest(const std::string& method, const Json& params) {
     namespace fs=std::filesystem;
     if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
@@ -962,26 +1057,10 @@ Json StudioSession::agentRequest(const std::string& method, const Json& params) 
     out.set("running",Json::fromBool(agentRun_.running()));
     out.set("port",num(int64_t(agentServer_.port())));
     out.set("clients",num(int64_t(agentServer_.clients())));
-    // Resolve old action IDs against the current retained timeline. Never
-    // replay an ordinal from a different document or an evicted history.
     Json changes=Json::array();
-    const bool sameSource=agentHistoryProject_==ws_.project.dir&&agentHistoryMap_==ws_.map.path;
-    std::map<std::string,size_t> positions;
-    for(size_t i=0;i<ws_.map.undoDepth();++i)positions.emplace(std::to_string(ws_.map.undoId(i)),i+1);
-    for(size_t i=0;i<ws_.map.redoDepth();++i)positions.emplace(std::to_string(ws_.map.redoId(i)),ws_.map.undoDepth()+ws_.map.redoDepth()-i);
-    for(auto c:agentChanges_.items()){
-        const auto it=positions.find(c.getStr("historyId"));
-        const bool retained=sameSource&&it!=positions.end();
-        c.set("undoable",Json::fromBool(retained));
-        c.set("position",num(retained?int64_t(it->second):-1));changes.push(std::move(c));
-    }
-    bool canUndoAll=sameSource&&!agentHistoryUnsafe_&&!stroking_&&!agentRun_.running()&&!agentEditIds_.empty()&&
-        ws_.map.undoDepth()==agentStartIds_.size()+agentEditIds_.size();
-    if(canUndoAll){
-        for(size_t i=0;i<agentStartIds_.size();++i)if(ws_.map.undoId(i)!=agentStartIds_[i])canUndoAll=false;
-        for(size_t i=0;i<agentEditIds_.size();++i)if(ws_.map.undoId(agentStartIds_.size()+i)!=agentEditIds_[i])canUndoAll=false;
-    }
-    out.set("changes",changes);
+    for(auto c:agentChanges_.items())changes.push(agentHistoryLink(std::move(c)));
+    const bool canUndoAll=agentCanUndoAll();
+    out.set("changes",std::move(changes));
     out.set("startPosition",num(canUndoAll?int64_t(agentStartIds_.size()):-1));
     out.set("historyVersion",str(historyVersion()));
     static const std::string cli=editor::agentCliPath("claude-code");   // a login-shell lookup: once per run of Studio
@@ -1165,6 +1244,42 @@ Json StudioSession::dispatch(const Json& request) {
         else if(!reads.count(method)){
             Json reply=Json::object();reply.set("id",request["id"]);reply.set("error",str("Finish or cancel the active Scene stroke first"));return reply;
         }
+    }
+    if(method=="studio.agentHistoryStep"||method=="studio.agentUndoAll"){
+        Json reply=Json::object();reply.set("id",request["id"]);
+        try{
+            if(!request.isObject()||!request["id"].isNumber()||agentRun_.running())throw std::runtime_error("Stop the agent before navigating history");
+            const auto& p=request["params"];
+            if(method=="studio.agentUndoAll"){
+                if(!agentCanUndoAll()||p.getStr("expectedVersion")!=historyVersion())
+                    throw std::runtime_error("Agent map history changed; refresh first");
+                while(ws_.map.undoDepth()>agentStartIds_.size())ws_.map.undo();
+                syncHistoryLabels();clearSelection();dropOrdinalFlags();agentHistoryUnsafe_=true;
+            }else{
+                const auto direction=p.getStr("direction"),scope=p.getStr("scope"),id=p.getStr("historyId");
+                if(direction!="undo"&&direction!="redo")throw std::runtime_error("Invalid agent history direction");
+                bool allowed=false;
+                for(const auto& c:agentChanges_.items())if(c.getStr("scope")==scope&&c.getStr("historyId")==id&&!id.empty()){
+                    const auto link=agentHistoryLink(c);
+                    allowed=link.getStr("historyVersion")==p.getStr("expectedVersion")&&link.getBool(direction=="undo"?"canUndo":"canRedo");
+                    if(allowed)break;
+                }
+                if(!allowed)throw std::runtime_error("Agent edit is not at the current history boundary; refresh History");
+                if(scope=="map"){
+                    if(direction=="undo")ws_.map.undo();else ws_.map.redo();
+                    syncHistoryLabels();clearSelection();dropOrdinalFlags();
+                }else{
+                    Json nested=Json::object();nested.set("id",request["id"]);
+                    nested.set("method",str(scope=="project"?"studio.projectHistoryStep":"studio.assetHistoryStep"));
+                    nested.set("params",p);
+                    const auto result=dispatch(nested);
+                    if(result.has("error"))throw std::runtime_error(result.getStr("error"));
+                }
+                agentHistoryUnsafe_=true;
+            }
+            reply.set("result",snapshot());
+        }catch(const std::exception& e){reply.set("error",str(e.what()));}
+        return reply;
     }
     if(method=="studio.assetHistory"||method=="studio.assetHistoryStep"){
         Json reply=Json::object();reply.set("id",request["id"]);

@@ -783,6 +783,24 @@ void Workspace::registerCoreOps() {
             note({Change::Rules,0,0,-1,-1,-1,"Project history: "+direction});
             return project.historyStatus();
         });
+    // Linked Studio-only asset operations. The standalone MCP registry
+    // advertises the schema, but the native session owns the actual mutation.
+    add("studio_asset_history","Read current linked Studio asset history and project identity.",
+        R"({"type":"object","properties":{},"additionalProperties":false})",[](const Json&)->Json{
+            throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");
+        });
+    add("studio_asset_catalog","Read existing linked Studio content GUIDs and importer settings; no metadata creation.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"offset":{"type":"integer"},"limit":{"type":"integer"}},"required":["expectedProject"]})",[](const Json&)->Json{
+            throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");
+        });
+    add("studio_asset_meta_patch","Change one existing asset importer setting through linked Studio history.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"expectedVersion":{"type":"string"},"guid":{"type":"string"},"key":{"type":"string"},"value":{}},"required":["expectedProject","expectedVersion","guid","key","value"]})",[](const Json&)->Json{
+            throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");
+        });
+    add("studio_asset_folder_create","Create a content folder through linked Studio history.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"expectedVersion":{"type":"string"},"parent":{"type":"string"},"name":{"type":"string"}},"required":["expectedProject","expectedVersion","parent","name"]})",[](const Json&)->Json{
+            throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");
+        });
     // ---------------------------------------------------------------- rules
     add("rules_get", "Read rules.json or a part of it by path (e.g. 'types.footman', 'resources', 'triggers[0]'). No path = whole file. "
         "Rules split over files (rules.json \"include\") read as one document; \"extends\" entries are shown as written, "
