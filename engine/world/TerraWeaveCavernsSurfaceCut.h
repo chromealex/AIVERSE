@@ -1,7 +1,7 @@
 #pragma once
 // TerraWeave Caverns surface cut. Produces one common triangle soup for
 // visual + collision adapters. Does not publish to SpatialWorld / RHI.
-#include "TerraWeaveCavernsEntrances.h"
+#include "TerraWeaveCavernsVolumeSnapshot.h"
 #include "engine/world/TerraWeaveTerrainPatch.h"
 #include <cmath>
 #include <array>
@@ -151,5 +151,70 @@ inline CutSurface cutTerrainEntrances(const terraweave::TerrainPatch& patch,
             {toCutVertex(tri.a),toCutVertex(tri.b),toCutVertex(tri.c)},
             candidates,sides,maxTriangles);
     return out;
+}
+// Shared native patch adapter. Until cross-tile seam publication is
+// implemented, only accept a complete mouth strictly inside one tile.
+// Incompatible or potentially Fill-sealed entrances retain solid terrain.
+inline TerrainPatch cutCaveTerrainPatch(TerrainPatch patch,
+        const CaveVolumeSnapshot& snapshot,uint64_t surfaceEpoch) {
+    if(!surfaceEpoch||patch.presentationOnly||patch.clippedSurface||
+       !validTerrainPatchTopology(patch))throw std::invalid_argument("Caverns authoritative cut patch");
+    patch.surfaceEpoch=surfaceEpoch;
+    const int64_t span=int64_t(patch.cellSizeMetres)*100;
+    const int64_t x=int64_t(patch.cell.x)*span,z=int64_t(patch.cell.z)*span;
+    const SurfaceRectCm tile{x,z,x+span,z+span};
+    std::vector<Entrance> accepted;
+    size_t checks=0;
+    constexpr size_t maxChecks=2000000;
+    for(const auto& e:snapshot.entrances){
+        const auto b=entranceBounds(e);
+        if(!overlaps(tile,b))continue;
+        if(b.minX<=tile.minX||b.minZ<=tile.minZ||
+           b.maxX>=tile.maxX||b.maxZ>=tile.maxZ)continue;
+        bool safe=true;
+        double low=1e30,high=-1e30;
+        for(const auto& tri:patch.collision){
+            if(++checks>maxChecks)throw std::length_error("Caverns tile certification budget");
+            const CutTriangleCm t{toCutVertex(tri.a),toCutVertex(tri.b),toCutVertex(tri.c)};
+            const double minX=std::min({t.a.x,t.b.x,t.c.x}),maxX=std::max({t.a.x,t.b.x,t.c.x});
+            const double minZ=std::min({t.a.z,t.b.z,t.c.z}),maxZ=std::max({t.a.z,t.b.z,t.c.z});
+            if(maxX<b.minX||minX>=b.maxX||maxZ<b.minZ||minZ>=b.maxZ)continue;
+            low=std::min({low,t.a.y,t.b.y,t.c.y});high=std::max({high,t.a.y,t.b.y,t.c.y});
+            if(!entranceIntersectsTriangleAtHeight(t,e)){safe=false;break;}
+        }
+        if(safe)for(const auto& stamp:snapshot.stamps){
+            if(++checks>maxChecks)throw std::length_error("Caverns tile fill certification budget");
+            if(stamp.mode!=CaveStampMode::Fill)continue;
+            const auto& p=stamp.center;const auto r=stamp.radiusCm;
+            if(p.x+r>=b.minX&&p.x-r<=b.maxX&&p.z+r>=b.minZ&&p.z-r<=b.maxZ&&
+               p.y+r>=low&&p.y-r<=high){safe=false;break;}
+        }
+        if(safe&&low<=high)accepted.push_back(e);
+    }
+    if(accepted.empty())return patch;
+    // Bound worst-case triangle/candidate pair count before clipping.
+    if(accepted.size()>maxChecks/patch.collision.size())
+        throw std::length_error("Caverns tile cut work budget");
+    auto cut=cutTerrainEntrances(patch,accepted,16,65534);
+    std::vector<world::Triangle> triangles;
+    triangles.reserve(cut.triangles.size());
+    const auto fixed=[](double cm){
+        if(!std::isfinite(cm)||std::abs(cm)>100000000.)throw std::out_of_range("Caverns cut fixed extent");
+        // Millimetre precision preserves more of the original plane than
+        // centimetre rounding; both native consumers use this same result.
+        return Fixed::fromRatio(int64_t(std::llround(cm*10.)),1000);
+    };
+    const auto point=[&](CutVertexCm p){return Vec3{fixed(p.x),fixed(p.y),fixed(p.z)};};
+    for(const auto& t:cut.triangles){
+        world::Triangle tri{point(t.a),point(t.b),point(t.c)};
+        if(!world::SpatialWorld::validTriangle(tri))
+            throw std::invalid_argument("Caverns quantized terrain fragment invalid");
+        triangles.push_back(tri);
+    }
+    if(triangles.empty())throw std::invalid_argument("Caverns fully removed terrain tile unsupported");
+    patch.collision.swap(triangles);
+    patch.clippedSurface=true;
+    for(const auto& e:accepted){const auto b=entranceBounds(e);patch.surfaceHoles.push_back({b.minX,b.minZ,b.maxX,b.maxZ});}
+    return patch;
 }
 } // namespace aiverse::terraweave::caverns
