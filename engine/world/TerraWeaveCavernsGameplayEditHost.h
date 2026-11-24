@@ -8,7 +8,7 @@
 #include "engine/world/TerraWeaveCavernsVolumePhysicsStage.h"
 #include "engine/world/TerraWeaveCavernsAuthoredNavStage.h"
 #include "engine/render/TerraWeaveCavernsShardGpuHost.h"
-#include "engine/world/TerraWeaveCavernsOwnedRimChunk.h"
+#include "engine/world/TerraWeaveCavernsOwnedRimGroup.h"
 #include <algorithm>
 #include <cstdint>
 #include <functional>
@@ -137,17 +137,19 @@ public:
         if(!snapshot_||!plan||!exclusive||!exclusive()||stagedRevision_||gpuBatch_||
            committedRevision_==snapshot_->sourceRevision||plan->authorityRevision!=authoredRevision_||
            !plan->surfaceEpoch||plan->surfaceEpoch<=committedRimSurfaceEpoch_||
-           requests.size()!=plan->rims.size()||requests.size()>64)return false;
+           requests.size()<plan->rims.size()||requests.size()>64)return false;
         const auto dirty=worker_.dirtyKeys();
         std::set<ChunkKey3,KeyLess> keys;
-        std::set<uint64_t> ids;
+        std::map<uint64_t,Fixed> planes;
         for(const auto& request:requests){
-            if(!keys.insert(request.key).second||!ids.insert(request.entranceId).second||
+            const auto [plane,inserted]=planes.emplace(request.entranceId,request.lowerPlane);
+            if((!inserted&&plane->second!=request.lowerPlane)||!keys.insert(request.key).second||
                std::find(dirty.begin(),dirty.end(),request.key)==dirty.end()||
                std::none_of(plan->rims.begin(),plan->rims.end(),[&](const auto& rim){return rim.entranceId==request.entranceId;}))return false;
             // Never steal an externally streamed native slot.
             if(geometry_.catalog().find(request.key)&&!physics_.contains(request.key))return false;
         }
+        if(planes.size()!=plan->rims.size())return false;
         for(const auto& key:activeRimKeys_)
             if(std::find(dirty.begin(),dirty.end(),key)==dirty.end())return false;
         rimPlan_=std::move(plan);rimRequests_=std::move(requests);
@@ -224,26 +226,50 @@ public:
                c.dirty.sourceRevision!=sourceRevision)return false;
         // Prepare-only native physics. No Box3D body is created here.
         try {
-            std::vector<CaveRimReplacement> rims;
-            std::map<ChunkKey3,size_t,KeyLess> exact;
+            std::map<ChunkKey3,CaveCollisionPrepared,KeyLess> exact;
             stagedRimKeys_.clear();
             if(rimPlan_){
+                std::map<uint64_t,CaveOwnedRimGroupRequest> groups;
                 for(const auto& request:rimRequests_){
-                    auto it=std::find_if(candidates.begin(),candidates.end(),[&](const auto& c){return c.dirty.key==request.key;});
-                    if(it==candidates.end())throw std::logic_error("Caverns rim source is not in certified dirty batch");
-                    auto owned=prepareOwnedRimChunk(it->candidate,request,*rimPlan_,*snapshot_);
-                    it->candidate=std::move(owned.candidate);
-                    exact.emplace(request.key,rims.size());stagedRimKeys_.insert(request.key);
-                    rims.push_back(std::move(owned.replacement));
+                    auto& g=groups[request.entranceId];g.entranceId=request.entranceId;
+                    g.lowerPlane=request.lowerPlane;g.keys.push_back(request.key);
                 }
-                if(!preparedRimMatchesGroup(*rimPlan_,rims))throw std::invalid_argument("Caverns prepared rim group mismatch");
+                for(const auto& [id,group]:groups){
+                    (void)id;
+                    std::vector<CaveCertifiedChunk> sources;
+                    for(const auto& key:group.keys){
+                        const auto it=std::find_if(candidates.begin(),candidates.end(),[&](const auto& c){return c.dirty.key==key;});
+                        if(it==candidates.end())throw std::logic_error("Caverns rim source is not in certified dirty batch");
+                        sources.push_back(it->candidate);
+                    }
+                    if(sources.size()==1){
+                        const CaveOwnedRimRequest request{group.keys.front(),group.entranceId,group.lowerPlane};
+                        auto owned=prepareOwnedRimChunk(sources.front(),request,*rimPlan_,*snapshot_);
+                        const auto rim=std::find_if(rimPlan_->rims.begin(),rimPlan_->rims.end(),[&](const auto& r){return r.entranceId==group.entranceId;});
+                        if(rim==rimPlan_->rims.end()||!matchesCaveSurfaceRim(*rim,owned.replacement.collar.terrainBoundary))
+                            throw std::invalid_argument("Caverns prepared rim mismatch");
+                        auto it=std::find_if(candidates.begin(),candidates.end(),[&](const auto& c){return c.dirty.key==request.key;});
+                        it->candidate=std::move(owned.candidate);
+                        exact.emplace(request.key,std::move(owned.replacement.collision));stagedRimKeys_.insert(request.key);
+                    }else{
+                        auto owned=prepareOwnedRimGroup(sources,group,*rimPlan_,*snapshot_);
+                        for(auto& slot:owned.slots){
+                            const auto key=slot.candidate.mesh.key;
+                            auto it=std::find_if(candidates.begin(),candidates.end(),[&](const auto& c){return c.dirty.key==key;});
+                            if(it==candidates.end()||!exact.emplace(key,std::move(slot.collision)).second)
+                                throw std::logic_error("Caverns duplicate exact slot");
+                            it->candidate=std::move(slot.candidate);stagedRimKeys_.insert(key);
+                        }
+                    }
+                }
+                if(stagedRimKeys_.size()!=rimRequests_.size())throw std::logic_error("Caverns incomplete rim slot group");
             }
             preparedPhysics_.reserve(candidates.size());
             for(const auto& c:candidates) {
                 auto& owner=physics_[c.dirty.key];
                 if(!owner)owner=std::make_unique<CaveVolumePhysicsStage>();
                 const auto found=exact.find(c.dirty.key);
-                const auto collision=found==exact.end()?prepareCaveVolumeCollision(c.candidate.mesh,c.candidate.resolution,c.candidate.spacingCm,sourceRevision):rims[found->second].collision;
+                const auto collision=found==exact.end()?prepareCaveVolumeCollision(c.candidate.mesh,c.candidate.resolution,c.candidate.spacingCm,sourceRevision):found->second;
                 const uint32_t firstId=colliderIds(c.dirty.key,collision.triangles.size());
                 if(!owner->prepareExact(collision,firstId,spatial))
                     throw std::runtime_error("Caverns collision stage refused");
