@@ -38,6 +38,15 @@ int main(int argc,char** argv){
         const std::string root=argc>1?argv[1]:".";
         const auto scifi=readBuildingStyle(Json::parse(readFile(root+"/engine/assets/building-styles/scifi.json")));
         const auto modern=readBuildingStyle(Json::parse(readFile(root+"/engine/assets/building-styles/modern.json")));
+        FunctionalBuildingRecipe composed;composed.width=24;composed.depth=24;composed.height=12;
+        composed.roomsX=composed.roomsZ=3;composed.footprint={"111","101","111"};
+        composed.roofProfile=FunctionalRoofProfile::Gable;composed.roofRise=2;
+        const auto compound=generateFunctionalBuilding(modern,composed);
+        CHECK(compound&&compound.graph.roofSections.size()>1);
+        CHECK(std::abs(compound.building.mesh.boundsMax[1]-12)<.001f);
+        CHECK(!collisionAt(compound.building,12,10.5f,12));
+        for(const auto& v:compound.building.mesh.vertices)
+            CHECK(!(v.pos[1]>10.001f&&v.pos[0]>8.001f&&v.pos[0]<15.999f&&v.pos[2]>8.001f&&v.pos[2]<15.999f));
         const auto recipe=readFunctionalBuildingRecipe(Json::parse(readFile(root+"/engine/assets/building-recipes/multiuse-open.json")));
         CHECK(recipe.features.size()==4);
         CHECK(recipe.features[1].kind==BuildingFeatureKind::SmallGate&&recipe.features[1].count==2);

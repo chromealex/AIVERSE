@@ -40,6 +40,24 @@ int main(){
                 CHECK(from&&to);
             }
         }
+        for(auto profile:{FunctionalRoofProfile::Gable,FunctionalRoofProfile::Shed,FunctionalRoofProfile::Barrel,
+             FunctionalRoofProfile::Hip,FunctionalRoofProfile::Dome,FunctionalRoofProfile::Terrace,FunctionalRoofProfile::Pagoda}){
+            FunctionalBuildingRecipe cap;cap.width=24;cap.depth=24;cap.height=12;
+            cap.roomsX=cap.roomsZ=3;cap.footprint={"111","101","111"};cap.roofProfile=profile;cap.roofRise=2;
+            const auto graph=buildFunctionalStructureGraph(cap);CHECK(graph&&graph.roofSections.size()>1);
+            float area=0,highest=0;
+            for(const auto& section:graph.roofSections){
+                area+=(section.x1-section.x0)*(section.z1-section.z0);
+                CHECK(!(section.x0<16&&section.x1>8&&section.z0<16&&section.z1>8));
+            }
+            for(const auto& solid:graph.solids)if(solid.part==BuildingGraphPart::Roof){
+                highest=std::max(highest,solid.y1);
+                CHECK(!(solid.x0<16&&solid.x1>8&&solid.z0<16&&solid.z1>8));
+                if(solid.roofTop[0]>=0)for(float y:solid.roofTop)CHECK(y>=solid.y0&&y<=solid.y1+.001f);
+            }
+            CHECK(std::abs(area-512)<.01f&&std::abs(highest-12)<.001f);
+            CHECK(!intersects(graph,12,10.5f,12,BuildingGraphPart::Roof));
+        }
         FunctionalBuildingRecipe courtyard;courtyard.width=24;courtyard.depth=24;courtyard.height=8;
         courtyard.roomsX=courtyard.roomsZ=3;courtyard.footprint={"111","101","111"};
         BuildingFeature courtDoor;courtDoor.side=BuildingFeatureSide::Back;courtDoor.wallLine=1;

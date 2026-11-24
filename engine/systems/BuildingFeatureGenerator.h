@@ -281,7 +281,8 @@ inline bool dressFunctionalRoofCell(buildingStyleDetail::Mesher& mesh,const Func
         return {x,std::clamp(s.y0+f*recipe.roofRise,s.y0,s.y1),z};
     };
     const std::array<P3,4> a={P3{s.x0,s.y0,s.z0},P3{s.x1,s.y0,s.z0},P3{s.x1,s.y0,s.z1},P3{s.x0,s.y0,s.z1}};
-    const std::array<P3,4> b={top(s.x0,s.z0),top(s.x1,s.z0),top(s.x1,s.z1),top(s.x0,s.z1)};
+    std::array<P3,4> b={top(s.x0,s.z0),top(s.x1,s.z0),top(s.x1,s.z1),top(s.x0,s.z1)};
+    if(s.roofTop[0]>=0.f)for(size_t i=0;i<b.size();++i)b[i][1]=std::clamp(s.roofTop[i],s.y0,s.y1);
     // Split the top into planar triangles (curved profiles are not a planar quad).
     mesh.poly(material,{b[0],b[1],b[2]},{0,1,0});
     mesh.poly(material,{b[0],b[2],b[3]},{0,1,0});

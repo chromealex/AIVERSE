@@ -47,6 +47,10 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
       {(preview.balconies??[]).filter(t=>t.floor===selectedFloor).map(t=>
         <rect key={'balcony-'+t.socketId} x={t.x0} y={t.z0} width={t.x1-t.x0} height={t.z1-t.z0}
           fill="var(--au-accent)" fillOpacity={.28} stroke="var(--au-accent)" strokeWidth={.1}/>)}
+      {selectedFloor===(preview.floors??1)-1&&(preview.roofSections??[]).map((r,i)=>
+        <g key={'roof-'+i} pointerEvents="none">
+          <rect x={r.x0} y={r.z0} width={r.x1-r.x0} height={r.z1-r.z0} fill="none" stroke="var(--au-accent)" strokeDasharray=".3 .2" strokeWidth={.13}/>
+        </g>)}
       {sockets.map(socket=>{
         const [x,,z]=socket.outside;
         const isSelected=socket.socketId===selected;
@@ -70,6 +74,7 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
     <div className="abg__plan-caption">
       <strong>Native structure plan</strong>
       <small>{preview.width.toFixed(1)} × {preview.depth.toFixed(1)} m · {preview.floors??1} floors · {sockets.length} sockets · {preview.solids??0} solids · {preview.connections??0} graph links</small>
+      {!!preview.roofSections?.length&&<small>{preview.roofSections.length} composed upper roof sections</small>}
       {!!preview.balconies?.length&&<small>{preview.balconies.filter(t=>t.floor===selectedFloor).length} projecting balconies</small>}
       {!!(preview.terraces?.length||preview.balconies?.length)&&<small>{(preview.terraces??[]).filter(t=>t.floor===selectedFloor).length} terrace cells · {(preview.terraceAccess??[]).filter(t=>t.floor===selectedFloor).length} authored terrace access links</small>}
       {selectedSocket&&<small>Selected: {selectedSocket.socketId} ({selectedSocket.kind}) · opening {selectedSocket.width.toFixed(1)}m, {Math.round(selectedSocket.open*100)}% initial open</small>}

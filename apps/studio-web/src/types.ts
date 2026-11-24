@@ -261,6 +261,7 @@ export interface StudioBuildingPreview {
   seed: number; triangles: number; vertices: number; materials: number;
   width: number; height: number; depth: number;
   solids?:number; connections?:number; floors?:number; roomsX?:number; roomsZ?:number; footprint?:string[]; floorFootprints?:string[][];
+  roofSections?:Array<{x0:number;z0:number;x1:number;z1:number;base:number;rise:number;ridgeAlongX:boolean}>;
   terraces?:Array<{floor:number;x:number;z:number;height:number}>;
   terraceAccess?:Array<{socketId:string;roomId:string;floor:number;x:number;z:number}>;
   balconies?:Array<{socketId:string;floor:number;x:number;z:number;x0:number;z0:number;x1:number;z1:number;height:number;support:'cantilever'|'columns'}>;

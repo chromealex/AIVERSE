@@ -314,11 +314,11 @@ export default function BuildingGeneratorPanel({
          !Number.isInteger(rz)||rz<1||rz>6||f*rx*rz>128)
         return 'Use 1–8 floors and 1–6 rooms per axis (maximum 128 rooms).';
       if(floorFootprints.length&&(floorFootprints.length!==f||floorFootprints.some(mask=>mask.length!==rz||mask.some(row=>row.length!==rx||!/^[01]+$/.test(row)))))return 'Floor footprint grid does not match dimensions.';
-      if(walkableSetbacks&&(!floorFootprints.length||f<2||roofProfile!=='flat'||
+      if(walkableSetbacks&&(!floorFootprints.length||f<2||
           !floorFootprints.some((mask,i)=>i>0&&mask.some((row,z)=>[...row].some((v,x)=>v==='0'&&floorFootprints[i-1][z]?.[x]==='1')))))
-        return 'Walkable terraces require at least one supported upper-floor setback and a flat roof.';
+        return 'Walkable terraces require at least one supported upper-floor setback.';
       if(shaped){
-        if(roofProfile!=='flat'||features.some(f=>f.kind==='sliding-roof'))return 'Custom footprint requires a flat roof without a retractable panel.';
+        if(features.some(f=>f.kind==='sliding-roof'))return 'Custom footprints do not support a retractable panel.';
         const masks=floorFootprints.length?floorFootprints:[footprint];
         for(let level=0;level<masks.length;level++){
         const mask=masks[level];
@@ -881,7 +881,7 @@ export default function BuildingGeneratorPanel({
           onClick={()=>{const profile=selectedStyle?.recommendedRoof??'flat';const old=asNumber(roofRise);
             const rise=profile==='flat'?0:Math.min(3,Math.max(1.5,asNumber(width)*.12));
             setRoofProfile(profile);setRoofRise(String(rise));if(Number.isFinite(old))setHeight(String(asNumber(height)-old+rise));clearGenerated();}}>Apply setting roof · {selectedStyle?.recommendedRoof??'flat'}</StudioButton>
-        <small className="abg__note">Height includes the cap. It occupies real graph-owned roof solids above the rooms. Retractable roofs require a flat profile.</small>
+        <small className="abg__note">Height includes the cap. Complex footprints automatically split the upper roof into supported sections. Lower setbacks remain flat. Retractable roofs require a rectangular flat profile.</small>
       </StudioSection>}
       {mode==='features'&&<StudioSection title="Floors and rooms">
         <div className="abg__dimensions">
@@ -905,7 +905,6 @@ export default function BuildingGeneratorPanel({
             if(e.target.value==='rect')setFootprint([]);
             else if(patterns[e.target.value]){
               const rows=patterns[e.target.value];setRoomsX('3');setRoomsZ('3');setFootprint(rows);
-              setRoofProfile('flat');setRoofRise('0');
             }
             clearGenerated();
           }}>
@@ -954,7 +953,7 @@ export default function BuildingGeneratorPanel({
                 }}>{active?'■':'·'}</button>;
             })}
           </div>}
-        <small className="abg__note">Click cells to add or remove rooms in the selected plan. Independent upper floors must be supported by the floor below; removed cells can form walkable terraces with parapets. To add an upper personnel door, select its floor, facade line and explicit wall position; native validation requires a deck immediately outside, or a projecting balcony into a clear recessed cell. The top row is Front. Custom shapes use flat roofs; select a facade grid line for openings on recessed or courtyard walls. Existing incompatible features must be edited explicitly.</small>
+        <small className="abg__note">Click cells to add or remove rooms in the selected plan. Independent upper floors must be supported by the floor below; removed cells can form walkable terraces with parapets. To add an upper personnel door, select its floor, facade line and explicit wall position; native validation requires a deck immediately outside, or a projecting balcony into a clear recessed cell. The top row is Front. Custom shapes support composed upper roofs; select a facade grid line for openings on recessed or courtyard walls. Existing incompatible features must be edited explicitly.</small>
         <small className="abg__note">Internal room partitions, stair and lift geometry follow the selected functional recipe. Native ECS/PHYSIS and graph owners handle dynamic traversal separately; changing setting never changes gameplay permissions.</small>
       </StudioSection>}
         </div>

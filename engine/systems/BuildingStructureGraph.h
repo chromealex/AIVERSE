@@ -101,6 +101,8 @@ struct BuildingGraphSolid {
     BuildingGraphPart part=BuildingGraphPart::Wall;
     float x0=0,y0=0,z0=0,x1=0,y1=0,z1=0;
     uint32_t featureIndex=UINT32_MAX;
+    // Optional graph-authored corner heights in x0z0,x1z0,x1z1,x0z1 order.
+    std::array<float,4> roofTop{-1.f,-1.f,-1.f,-1.f};
 };
 struct BuildingGraphSocket {
     std::string id; // stable within one recipe: entrance/<feature>/<copy> or roof/<feature>
@@ -128,6 +130,7 @@ struct BuildingExteriorAperture {std::string socketId,roomId;float start=0,end=0
 struct BuildingGraphTerrace {uint32_t floor=0,x=0,z=0;float x0=0,y=0,z0=0,x1=0,z1=0;};
 struct BuildingGraphBalcony {std::string socketId;uint32_t floor=0,x=0,z=0;float x0=0,y=0,z0=0,x1=0,z1=0;BuildingBalconySupport support=BuildingBalconySupport::Cantilever;};
 struct BuildingTerraceAccess {std::string socketId,roomId;uint32_t floor=0,x=0,z=0;};
+struct BuildingRoofSection {float x0=0,z0=0,x1=0,z1=0,base=0,rise=0;bool ridgeAlongX=false;};
 struct BuildingStructureGraph {
     std::vector<BuildingGraphSolid> solids;
     std::vector<BuildingGraphSocket> sockets;
@@ -138,6 +141,7 @@ struct BuildingStructureGraph {
     std::vector<BuildingGraphTerrace> terraces;
     std::vector<BuildingTerraceAccess> terraceAccess;
     std::vector<BuildingGraphBalcony> balconies;
+    std::vector<BuildingRoofSection> roofSections;
     explicit operator bool() const noexcept {return error.empty();}
 };
 inline const char* buildingFeatureName(BuildingFeatureKind kind) {
@@ -210,11 +214,9 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
         }
         if(queue.size()!=count)return "Footprint cells must be edge-connected";
       }
-        if(nonRectangularFootprint(recipe)&&recipe.roofProfile!=FunctionalRoofProfile::Flat)
-            return "Custom footprints currently require a flat roof";
     }
-    if(recipe.walkableSetbacks&&(recipe.floorFootprints.empty()||recipe.floors<2||recipe.roofProfile!=FunctionalRoofProfile::Flat))
-        return "Walkable setbacks require independent floors and flat roofs";
+    if(recipe.walkableSetbacks&&(recipe.floorFootprints.empty()||recipe.floors<2))
+        return "Walkable setbacks require independent floors";
     if(recipe.walkableSetbacks){
         bool hasSetback=false;
         for(uint32_t f=1;f<recipe.floors;++f)for(uint32_t z=0;z<recipe.roomsZ;++z)for(uint32_t x=0;x<recipe.roomsX;++x)
@@ -824,7 +826,59 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
     if(!roof){
         footprintSlab(BuildingGraphPart::Roof,roofBase,H,recipe.floors-1);
         const auto profile=recipe.roofProfile;
-        if(profile==FunctionalRoofProfile::Terrace||profile==FunctionalRoofProfile::Pagoda){
+        if(shaped&&profile!=FunctionalRoofProfile::Flat){
+            // Cover the top occupied mask by disjoint maximal rectangles.
+            // Deterministic row-major anchor, largest area then longest X.
+            // Unlike an envelope roof, no section bridges a courtyard.
+            std::array<bool,36> used{};
+            const uint32_t topFloor=recipe.floors-1;
+            const auto available=[&](uint32_t x,uint32_t z){
+                return occupiedCell(int(x),int(z),topFloor)&&!used[z*6+x];
+            };
+            for(uint32_t z=0;z<recipe.roomsZ;++z)for(uint32_t x=0;x<recipe.roomsX;++x){
+                if(!available(x,z))continue;
+                uint32_t bestX=1,bestZ=1;
+                for(uint32_t dz=1;z+dz<=recipe.roomsZ;++dz)for(uint32_t dx=1;x+dx<=recipe.roomsX;++dx){
+                    if(dx*dz<bestX*bestZ||(dx*dz==bestX*bestZ&&dx<=bestX))continue;
+                    bool fit=true;
+                    for(uint32_t j=z;j<z+dz;++j)for(uint32_t i=x;i<x+dx;++i)
+                        if(!available(i,j))fit=false;
+                    if(fit){bestX=dx;bestZ=dz;}
+                }
+                for(uint32_t j=z;j<z+bestZ;++j)for(uint32_t i=x;i<x+bestX;++i)used[j*6+i]=true;
+                const float ax=x*roomW,az=z*roomD;
+                const float bx=x+bestX==recipe.roomsX?W:(x+bestX)*roomW;
+                const float bz=z+bestZ==recipe.roomsZ?D:(z+bestZ)*roomD;
+                const float w=bx-ax,d=bz-az;
+                const bool alongX=w>d;
+                graph.roofSections.push_back({ax,az,bx,bz,H,recipe.roofRise,alongX});
+                if(profile==FunctionalRoofProfile::Terrace||profile==FunctionalRoofProfile::Pagoda){
+                    const int levels=profile==FunctionalRoofProfile::Pagoda?3:4;
+                    const float dy=recipe.roofRise/levels;
+                    for(int k=0;k<levels;++k){
+                        const float inset=.095f*k;
+                        solid(BuildingGraphPart::Roof,ax+w*inset,H+dy*k,az+d*inset,
+                            bx-w*inset,H+dy*(k+1),bz-d*inset);
+                    }
+                    continue;
+                }
+                const bool twoAxis=profile==FunctionalRoofProfile::Dome||profile==FunctionalRoofProfile::Hip;
+                const int nx=twoAxis||!alongX?12:1,nz=twoAxis||alongX?12:1;
+                auto height=[&](int i,int j){
+                    const float u=2.f*i/nx-1.f,v=2.f*j/nz-1.f;
+                    return H+recipe.roofRise*functionalRoofFraction(profile,alongX?v:u,alongX?u:v);
+                };
+                for(int j=0;j<nz;++j)for(int i=0;i<nx;++i){
+                    const std::array<float,4> corners{height(i,j),height(i+1,j),height(i+1,j+1),height(i,j+1)};
+                    const float peak=*std::max_element(corners.begin(),corners.end());
+                    if(peak<=H+.0001f)continue;
+                    const size_t before=graph.solids.size();
+                    solid(BuildingGraphPart::Roof,ax+w*i/nx,H,az+d*j/nz,
+                        ax+w*(i+1)/nx,peak,az+d*(j+1)/nz);
+                    if(graph.solids.size()!=before)graph.solids.back().roofTop=corners;
+                }
+            }
+        }else if(profile==FunctionalRoofProfile::Terrace||profile==FunctionalRoofProfile::Pagoda){
             const int levels=profile==FunctionalRoofProfile::Pagoda?3:4;
             const float dy=recipe.roofRise/levels;
             for(int level=0;level<levels;++level){

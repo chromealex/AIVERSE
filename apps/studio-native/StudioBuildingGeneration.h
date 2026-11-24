@@ -467,6 +467,16 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
         }
         out.set("roofProfile",string(functionalRoofProfileName(req.functionalRecipe.roofProfile)));
         out.set("roofRise",Json::number(double(req.functionalRecipe.roofRise),3));
+        Json roofSections=Json::array();
+        for(const auto& section:detailed.graph.roofSections){
+            Json row=Json::object();
+            row.set("x0",Json::number(double(section.x0),3));row.set("z0",Json::number(double(section.z0),3));
+            row.set("x1",Json::number(double(section.x1),3));row.set("z1",Json::number(double(section.z1),3));
+            row.set("base",Json::number(double(section.base),3));row.set("rise",Json::number(double(section.rise),3));
+            row.set("ridgeAlongX",Json::fromBool(section.ridgeAlongX));
+            roofSections.push(std::move(row));
+        }
+        out.set("roofSections",std::move(roofSections));
         out.set("floors",Json::number(int64_t(req.functionalRecipe.floors)));
         out.set("roomsX",Json::number(int64_t(req.functionalRecipe.roomsX)));
         out.set("roomsZ",Json::number(int64_t(req.functionalRecipe.roomsZ)));
