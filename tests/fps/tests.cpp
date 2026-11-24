@@ -592,9 +592,42 @@ static void durableAuthorityRestart(bool async=false){
         Server wrong(rules,map,2);
         CHECK(!wrong.enablePersistence(temp.dir,uuid,true));
     }
+    if(async){
+        using Status=Server::RecoveryStatus;
+        Server cancelled(rules,map,1);
+        CHECK(cancelled.beginPersistenceRecovery(temp.dir,uuid)==Status::Loading);
+        CHECK(cancelled.simulation().tick()==0&&!cancelled.step());
+        Server competing(rules,map,1);
+        CHECK(!competing.enablePersistence(temp.dir,uuid,true));
+        cancelled.cancelPersistenceRecovery();
+        auto result=Status::Loading;
+        const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);
+        while(result==Status::Loading){
+            CHECK(std::chrono::steady_clock::now()<deadline);
+            result=cancelled.pollPersistenceRecovery();
+            if(result==Status::Loading)std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        CHECK(result==Status::Cancelled&&cancelled.simulation().tick()==0);
+    }
     {
         Server restored(rules,map,1);
-        CHECK(restored.enablePersistence(temp.dir,uuid,true,64u*1024u*1024u,async));
+        if(async){
+            using Status=Server::RecoveryStatus;
+            CHECK(restored.beginPersistenceRecovery(temp.dir,uuid,64u*1024u*1024u,true)==Status::Loading);
+            CHECK(restored.simulation().tick()==0&&!restored.step());
+            auto status=Status::Loading;
+            const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);
+            while(status==Status::Loading){
+                CHECK(std::chrono::steady_clock::now()<deadline);
+                CHECK(restored.simulation().tick()==0);
+                status=restored.pollPersistenceRecovery();
+                if(status==Status::Loading)std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            CHECK(status==Status::Ready);
+            const auto progress=restored.persistenceRecoveryProgress();
+            CHECK(progress.phase=="ready"&&progress.checkpointBytes==progress.checkpointTotal&&
+                progress.frames==2&&progress.sequence==5);
+        }else CHECK(restored.enablePersistence(temp.dir,uuid,true,64u*1024u*1024u,false));
         CHECK(restored.simulation().tick()==5);
         CHECK(restored.simulation().rng().state()==rng);
         CHECK(restored.module().snapshot(restored.simulation(),1)==expected);
