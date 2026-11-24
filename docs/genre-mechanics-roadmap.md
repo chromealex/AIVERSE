@@ -92,3 +92,7 @@ Native Studio single-body globe overview using bounded authored coarse surface t
 ### Stage54u1 — IN PROGRESS
 
 Load v1/v2 planetary regions into one persistent ECS region-set resource using the actual immutable gameplay Surface. Share existing stamp transaction logic, validate stable IDs/anchors and conservative same-body separation, retain independent revisions, expose native freeze/edit API, and load from the standard planetary GameCore setup. Acceptance: bounded canonical archive and staged save validator, no editor/GPU dependency, no competing flat authority, deterministic state/hash/rollback via PersistentEcs. Physical publication and aggregate renderer leaf ownership are subsequent 54u slices, not asserted by loading alone. Native QA pending.
+
+### Stage54u2 — IN PROGRESS
+
+One complete body-level cut transaction over disjoint chart leaf sets. Acceptance: stable region-qualified slots, common surface epoch/revision, exact combined exterior/rim certificate, aggregate surface/volume/triangle budgets, current-epoch fencing, shared native owner and a single existing renderer publication. Preserve legacy single-chart API, reject conflicting leaf ownership and collider ranges before installation. Automatic GameCore physics/streaming demand remains later work. Native QA pending.
