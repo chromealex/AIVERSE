@@ -28,6 +28,14 @@ public:
     const std::string& surfaceGroupDiagnostic()const noexcept{return groupDiagnostic_;}
     size_t certifiedSurfaceEdges()const noexcept{return group_?group_->certifiedEdges:0;}
     size_t plannedSurfaceOpenings()const noexcept{return group_?group_->acceptedEntrances.size():0;}
+    std::shared_ptr<const terraweave::caverns::CaveSurfaceGroupPlan> surfaceGroup()const noexcept{return group_;}
+    bool surfaceGroupUploaded()const noexcept{return group_&&models_.size()==groupCells_.size();}
+    // Refuse the entire cut preview on unsupported volume geometry. Keep
+    // the selected tile set so the following prepare builds solid terrain.
+    void rejectSurfaceGroup(const Retire& retire,std::string diagnostic){
+        for(auto& [key,entry]:models_){(void)key;if(entry.gpu)retire(entry.gpu);}
+        models_.clear();group_.reset();groupDiagnostic_=std::move(diagnostic);
+    }
 
     void release(const Retire& retire) {
         if(!retire)throw std::invalid_argument("TerraWeave preview missing GPU retirement owner");
@@ -59,6 +67,11 @@ public:
     void draw(gfx::Device& device,render::Renderer3D& renderer,
               const MapDoc& doc,int64_t cameraXcm,int64_t cameraZcm,
               const Retire& gpuRetire,bool allowCuts=false) {
+        prepare(device,doc,cameraXcm,cameraZcm,gpuRetire,allowCuts);
+        submit(renderer,true);
+    }
+    void prepare(gfx::Device& device,const MapDoc& doc,int64_t cameraXcm,int64_t cameraZcm,
+              const Retire& gpuRetire,bool allowCuts=false){
         if(!gpuRetire)
             throw std::invalid_argument("TerraWeave missing preview retirement");
         if(doc.data.planet() ||
@@ -120,7 +133,7 @@ public:
             models_.clear();group_.reset();groupDiagnostic_.clear();
             try{
                 const std::vector<world::Cell> pins(needed.begin(),needed.end());
-                group_=std::make_unique<terraweave::caverns::CaveSurfaceGroupPlan>(
+                group_=std::make_shared<terraweave::caverns::CaveSurfaceGroupPlan>(
                     terraweave::caverns::planCaveSurfaceGroup(*earth_,*caveSnapshot_,pins,
                         authoring_->chunkSizeMetres(),33,1));
             }catch(const std::exception& e){groupDiagnostic_=e.what();}
@@ -173,19 +186,23 @@ public:
             models_.insert_or_assign(c.tile.cell,std::move(entry));
             ++uploads;
         }
-        if(group_&&models_.size()!=needed.size())return;
-        for(const auto& c:candidates) {
-            const auto found=models_.find(c.tile.cell);
-            if(found==models_.end() || !found->second.gpu)continue;
+    }
+    // Studio calls only after the matching volume group is actually active.
+    // Legacy draw() retains the older surface-only behavior.
+    void submit(render::Renderer3D& renderer,bool matchingVolumeReady)const {
+        if(!authoring_||(group_&&(!matchingVolumeReady||!surfaceGroupUploaded())))return;
+        const int64_t span=int64_t(authoring_->chunkSizeMetres())*100;
+        for(const auto& [key,entry]:models_) {
+            if(!entry.gpu)continue;
             render::ModelDraw draw;
-            draw.model=found->second.gpu.get();
+            draw.model=entry.gpu.get();
             draw.world=render::mat4::translate({
-                float(int64_t(c.tile.cell.x)*span)*0.01f,
+                float(int64_t(key.x)*span)*0.01f,
                 // Scene's legacy RTS grid may still be drawn under this
                 // optional overlay. Lift VISUAL preview by 2 cm to avoid
                 // z-fighting; authored ECS soil and collider remain exact.
-                allowCuts?0.f:0.02f,
-                float(int64_t(c.tile.cell.z)*span)*0.01f
+                allowCuts_?0.f:0.02f,
+                float(int64_t(key.z)*span)*0.01f
             });
             draw.flags=render::kDrawStatic;
             renderer.drawModel(draw);
@@ -200,7 +217,7 @@ private:
         std::array<uint32_t,4> neighbors{};
         std::unique_ptr<render::Model> gpu;
     };
-    std::unique_ptr<terraweave::caverns::CaveSurfaceGroupPlan> group_;
+    std::shared_ptr<const terraweave::caverns::CaveSurfaceGroupPlan> group_;
     std::set<world::Cell> groupCells_;
     std::string groupDiagnostic_;
     bool allowCuts_=false;
