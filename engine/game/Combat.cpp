@@ -120,6 +120,7 @@ Fixed GameCore::environmentWaterDepth(Simulation& sim, Fixed x, Fixed z) {
 void GameCore::dealDamage(Simulation& sim, Entity target, Fixed dmg, uint16_t dmgType, Entity source, uint8_t sourceOwner, const WeaponDef* wd) {
     struct Hooks {
         GameCore& m; Simulation& sim;
+        bool critical = false;
         bool before(Entity t, Entity s, Fixed& d) {   // native modules (docs/native-modules.md § Hooks)
             if (m.native_.has(kHookDamage)) { m.native_.damage(m, sim, t, s, d); if (d.raw <= 0) return false; }
             return true;
@@ -129,7 +130,7 @@ void GameCore::dealDamage(Simulation& sim, Entity target, Fixed dmg, uint16_t dm
         uint32_t statusFlags(Entity t) { return m.statusFlags(sim, t); }
         Fixed stat(Entity e, Stat s) { return m.stat(sim, e, s); }
         Fixed finish(Entity t, Entity s, uint8_t owner, uint16_t type, Fixed fin) {
-            if (m.progression_ && m.progression_->active()) fin = m.progression_->damage(sim, t, s, fin);   // perks: crits, incoming damage
+            if (m.progression_ && m.progression_->active()) fin = m.progression_->damage(sim, t, s, fin, &critical);   // perks: crits, incoming damage
             if (m.script_ && (m.script_->hooks() & ScriptEngine::kHookDamage)) fin = m.script_->beforeDamage(sim, t, s, owner, fin, type);   // before_damage (G12)
             return fin;
         }
@@ -735,7 +736,7 @@ void GameCore::grantKill(Simulation& sim, Entity victim, uint8_t killer) {
     if (victimOwner == 0 && arsenal_ && arsenal_->active()) { arsenal_->neutralKill(sim, victim, killer); return; }   // parked cars (rules arsenal.payNeutral)
     if (killer == 0 || killer == kHostileNeutral || !hostile(sim, killer, victimOwner)) return;
     // bounty
-    for (auto& b : vt.bounty) addResource(sim, killer, b.res, b.value);
+    payUnitBounty(sim, victim, killer);
     if (rules_.originals) gainOn(sim, killer, &ResourceDef::gainKill, kOne);
     // score (lane battlers, arcade modes)
     uint8_t team = teamOf(sim, killer);
@@ -813,7 +814,9 @@ void GameCore::sysDeath(Simulation& sim) {
             if (rules_.anyDeathGain) payDeathGain(sim, e, owner);
             grantKill(sim, e, u.lastAttacker);
             if (!t.wreck.empty() && wreckType >= 0) leftovers.push_back({uint16_t(wreckType), pos, int16_t(t.wreck[0].res), t.wreck[0].value});
-            sim.emit({kEvDied, owner, e, u.lastHitBy, u.type, pos});
+            SimEvent death{kEvDied, owner, e, u.lastHitBy, u.type, pos};
+            death.subjectType = u.type; death.subjectOwner = owner; death.subjectKey = e.packed();
+            sim.emit(death);
         }
         if (rules_.originals) onDeathOriginals(sim, e, owner, pos, silent);   // explosions, infection, dead heroes
         if (rules_.fidelity && !silent) deathFidelity(sim, e);                // the foundation goes with the structure
