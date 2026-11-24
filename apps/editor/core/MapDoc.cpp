@@ -408,26 +408,49 @@ Json MapDoc::toJson() const {
 }
 
 std::vector<ProjectFileEdit> MapDoc::stageExistingSave(const std::filesystem::path& project){
+    return stageSave(project,path,false);
+}
+std::vector<ProjectFileEdit> MapDoc::stageSave(const std::filesystem::path& project,const std::string& file,bool allowCreation){
     namespace fs=std::filesystem;
-    if(path.empty()||compoundBefore_)throw std::runtime_error("Save an existing map outside an active compound edit");
+    if(file.empty()||compoundBefore_)throw std::runtime_error("Choose a map file outside an active compound edit");
     const auto root=fs::canonical(project);
+    const auto targetMap=fs::absolute(file).lexically_normal();
+    const auto mapRelative=targetMap.lexically_relative(root);
+    if(mapRelative.empty()||*mapRelative.begin()!="maps"||targetMap.extension()!=".json")
+        throw std::runtime_error("Choose a map within the project maps directory");
+    const bool newIdentity=path.empty()||fs::absolute(path).lexically_normal()!=targetMap;
+    if(newIdentity){
+        if(!allowCreation||fs::exists(fs::symlink_status(targetMap)))
+            throw std::runtime_error("Save As requires a vacant map output");
+        data.cornersFile.clear();data.detailFile.clear();
+        for(auto& b:data.bodies){b.cornersFile.clear();b.detailFile.clear();}
+        if(!path.empty()){undo_.clear();redo_.clear();historyEpoch_=newHistoryEpoch();}
+    }
+    path=targetMap.string();
     std::vector<ProjectFileEdit> edits;
     std::set<fs::path> targets;
     size_t bytes=0;
     const auto append=[&](const std::string& file,const std::string& after){
         const auto target=fs::absolute(file).lexically_normal();
         const auto rel=target.lexically_relative(root);
-        if(rel.empty()||rel.is_absolute()||*rel.begin()==".."||
-           !fs::is_regular_file(fs::symlink_status(target))||fs::canonical(target)!=target)
-            throw std::runtime_error("Coordinated save requires an existing safe map/sidecar: "+file);
+        const auto status=fs::symlink_status(target);
+        const bool exists=fs::exists(status);
+        const auto ext=target.extension().string();
+        if(rel.empty()||rel.is_absolute()||*rel.begin()!="maps"||
+           (ext!=".json"&&ext!=".r16"&&ext!=".splat")||
+           !fs::is_directory(fs::symlink_status(target.parent_path()))||
+           fs::canonical(target.parent_path())!=target.parent_path()||
+           (exists&&(!fs::is_regular_file(status)||fs::canonical(target)!=target))||
+           (!exists&&!allowCreation)||(newIdentity&&exists))
+            throw std::runtime_error("Unsafe or occupied coordinated map output: "+file);
         if(!targets.insert(target).second)throw std::runtime_error("Duplicate map sidecar target: "+file);
         constexpr size_t limit=128u*1024u*1024u;
-        if(after.size()>limit-bytes||fs::file_size(target)>limit-bytes-after.size())
+        if(after.size()>limit-bytes||(exists&&fs::file_size(target)>limit-bytes-after.size()))
             throw std::runtime_error("Coordinated map save exceeds snapshot budget");
-        auto before=readProjectFileBytes(target);
+        auto before=exists?readProjectFileBytes(target):std::string{};
         if(before.size()>limit-bytes-after.size())throw std::runtime_error("Coordinated map save exceeds snapshot budget");
         bytes+=before.size()+after.size();
-        edits.push_back({target,std::move(before),after});
+        edits.push_back({target,std::move(before),after,{},0,!exists});
     };
     for(auto [a,b]:data.roads)
         for(int i:{a,b})if(data.entities.at(size_t(i)).id.empty())
