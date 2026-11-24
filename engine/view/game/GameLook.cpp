@@ -907,6 +907,68 @@ bool GameView::reloadAppearanceTypes(const std::set<size_t>& types,
     return true;
 }
 
+// Compatibility adapter only. It never owns the graph request or textures.
+// No implicit load, type replacement, material asset write or animation reset.
+std::optional<GameView::GraphMaterialTargetInfo> GameView::graphMaterialTarget(
+        size_t type,size_t choice,size_t material) const {
+    if(!dev_||!gpuDeviceLease_.validFor(*dev_)||!dev_->gpuHealthy()||
+       !resources_.boundToResourceDevice(*dev_)||resources_.activeModelReaders()!=0||
+       strictAppearanceReload_||activeImageTransaction_||
+       type>std::numeric_limits<uint16_t>::max()||type>=looks_.size()||
+       !typeCurrent(uint16_t(type))||choice>=looks_[type].models.size())return {};
+    const auto& live=looks_[type].models[choice];
+    if(!live.model||!live.modelGeneration)return {};
+    bool owned=false;
+    for(const auto& [key,model]:resources_.models()){
+        (void)key;if(model.get()==live.model){owned=true;break;}
+    }
+    if(!owned)return {};
+    const auto& snapshot=live.appearanceSnapshot;
+    if(snapshot&&snapshot->model!=live.model)return {};
+    const auto& materials=snapshot?snapshot->materials:live.materials;
+    const uint64_t publication=snapshot?snapshot->modelPublicationGeneration:live.modelGeneration;
+    const uint64_t version=snapshot?snapshot->version:1;
+    const view::LiveAppearanceMaterialTarget identity{publication,version,material};
+    if(!identity.matches(publication,version,materials.size()))return {};
+    return GraphMaterialTargetInfo{identity,live.model->path,materials[material].name,live.variant};
+}
+
+bool GameView::applyGraphMaterial(size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
+        const GraphMaterialApply& apply,std::string* error){
+    if(error)error->clear();
+    try{
+        const auto current=graphMaterialTarget(type,choice,target.material);
+        if(!apply||!current||!target.matches(current->identity.publication,current->identity.version,
+                looks_[type].models[choice].materials.size()))
+            throw std::runtime_error("live appearance target missing, stale or busy");
+        auto& live=looks_[type].models[choice];
+        // Initial choices may predate snapshot publication. Prepare the
+        // exact already-authored state locally; publish only on success.
+        auto snapshot=live.appearanceSnapshot;
+        if(!snapshot){
+            auto prepared=std::make_shared<view::AppearanceAssetRegistry::Asset>();
+            prepared->model=live.model;prepared->materials=live.materials;
+            prepared->nodeMaterial=live.nodeMaterial;prepared->geometry=live.geometry;
+            prepared->variant=live.variant;prepared->graph=live.graph;
+            prepared->graphDefinition=live.graphSignature;
+            prepared->modelSource=live.model->path;
+            prepared->modelPublicationGeneration=current->identity.publication;
+            prepared->version=current->identity.version;
+            // Existing animation players and their own generation stay
+            // untouched; this snapshot only supplies appearance metadata.
+            prepared->sourceId=live.graph?live.modelGeneration:0;
+            prepared->generation=live.graph?live.modelGeneration:0;
+            snapshot=std::move(prepared);
+        }
+        if(!apply(snapshot,live.materials,*live.model,*dev_,gpuDeviceLease_,imageRollback_,error))
+            return false;
+        live.appearanceSnapshot=std::move(snapshot);
+        return true;
+    }catch(const std::exception& e){
+        if(error)*error=e.what();return false;
+    }
+}
+
 void GameView::requestDetail(uint16_t type, bool detailed) {
     if(!rules_ || type>=requestedModels_.size())return;
     const auto& t=rules_->types[type];const auto coarse=t.view["streaming"].getStr("coarseModel");
