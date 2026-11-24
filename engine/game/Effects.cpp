@@ -72,7 +72,7 @@ bool GameCore::filterOk(Simulation& sim, const TargetFilter& f, Entity e, uint8_
         auto* ord = w.tryGet<Orders>(e);
         if (!w.has<GroupTag>(e) || !ord || ord->queue.empty() || ord->queue.front().type != OrderType::Enter) return false;
     }
-    if (f.tags && !(t.tags & f.tags)) return false;
+    if (!targetTagsMatch(t.tags, f.tags, f.ignoreTags)) return false;
     if (f.type != kNoType && f.type != u->type) return false;
     if (t.level < f.minLevel || t.level > f.maxLevel) return false;
     if (enemy) {
@@ -108,9 +108,9 @@ std::vector<Entity> GameCore::effectTargets(Simulation& sim, const EffectDef& e,
     auto fdist = [&](Vec3 p) { if (f.aspect == kOne) return dist2D(p, center); Vec3 d = flat(p - center); d.z = d.z / f.aspect; return d.length(); };
     switch (f.shape) {
     case Shape::Target:
-        if (f.self && !f.enemies && !f.allies) { if (w.alive(ctx.caster) && w.has<Unit>(ctx.caster)) out.push_back(ctx.caster); }
+        if (f.self && !f.enemies && !f.allies) { if (w.alive(ctx.caster) && w.has<Unit>(ctx.caster) && targetTagsMatch(rules_.types[w.get<Unit>(ctx.caster).type].tags, f.tags, f.ignoreTags)) out.push_back(ctx.caster); }
         else if (w.alive(ctx.target) && w.has<Unit>(ctx.target)) {
-            if (legacyKind(e.kind) || filterOk(sim, f, ctx.target, ctx.owner, ctx.caster)) out.push_back(ctx.target);
+            if ((legacyKind(e.kind) && !f.ignoreTags && !f.tags) || filterOk(sim, f, ctx.target, ctx.owner, ctx.caster)) out.push_back(ctx.target);
         }
         break;
     case Shape::Group: {
