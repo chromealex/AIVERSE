@@ -7,6 +7,7 @@
 #include "EvolvePlanetNaturalFalls.h"
 #include "PlanetArborCollision.h"
 #include "EvolvePlanetForestRetirement.h"
+#include "PlanetForestPendingDelivery.h"
 
 namespace aiverse::lib::worldprocess {
 struct PlanetForestPipelineState {
@@ -106,21 +107,31 @@ inline bool runPlanetForestPipeline(World& world,const game::Surface& surface,
         // The native publisher reconciles removed handles on its next frame.
         if(!retireSpentPlanetForestBodies(staged,surface,tick))return reject();
         if(cfg.naturalFallPermille){
-            const auto fallen=evolve::reconcilePlanetNaturalFalls(staged,surface,tick,cfg.naturalFallPermille);
-            if(!fallen)return reject();
-            for(const auto& fall:fallen->falls){
-                const auto recipe=cfg.naturalFallBodies.find(fall.event.id.speciesId);
-                if(recipe==cfg.naturalFallBodies.end())continue;
-                auto shape=recipe->second;
-                if(const auto trunk=cfg.arborTrunks.find(fall.event.id.speciesId);trunk!=cfg.arborTrunks.end()){
-                    const auto scale=cfg.floraScales.find(fall.bodyId);
-                    if(scale==cfg.floraScales.end())return reject();
-                    const auto derived=resolvePlanetArborFall(staged,fall,trunk->second,scale->second,shape);
-                    if(!derived)return reject();
-                    shape=*derived;
-                }
-                if(!deliverPlanetForestCapsule(staged,surface,fall,tick,shape))return reject();
+            if(!evolve::reconcilePlanetNaturalFalls(staged,surface,tick,cfg.naturalFallPermille))return reject();
+        }
+        // Drain all configured due receipts, including terrain-induced falls,
+        // not just new natural falls. Wait for the canonical mass ledger.
+        for(const auto& fall:evolve::pendingPlanetPlantFalls(staged)){
+            if(fall.event.tick>tick)continue;
+            const auto* wood=staged.resourceConst<evolve::PlanetDeadwoodResource>();
+            const auto log=std::lower_bound(wood->ledger.logs.begin(),wood->ledger.logs.end(),fall.event.id,
+                [](const auto& r,auto id){return r.id<id;});
+            if(log==wood->ledger.logs.end()||log->id!=fall.event.id)continue;
+            if(!log->remainingUnits){
+                if(!completeSpentPlanetFall(staged,surface,fall,tick))return reject();
+                continue;
             }
+            const auto recipe=cfg.naturalFallBodies.find(fall.event.id.speciesId);
+            if(recipe==cfg.naturalFallBodies.end())continue;
+            auto shape=recipe->second;
+            if(const auto trunk=cfg.arborTrunks.find(fall.event.id.speciesId);trunk!=cfg.arborTrunks.end()){
+                const auto scale=cfg.floraScales.find(fall.bodyId);
+                if(scale==cfg.floraScales.end())return reject();
+                const auto derived=resolvePlanetArborFall(staged,fall,trunk->second,scale->second,shape);
+                if(!derived)return reject();
+                shape=*derived;
+            }
+            if(!deliverPlanetForestCapsule(staged,surface,fall,tick,shape))return reject();
         }
         if(nutrientDue){
             const auto result=evolve::advancePlanetNutrients(staged,surface,tick,cfg.nutrient,
@@ -136,7 +147,7 @@ inline bool runPlanetForestPipeline(World& world,const game::Surface& surface,
         world=std::move(staged);return true;
     }catch(const std::exception&){return reject();}
 }
-inline void installPlanetForestPipeline(game::GameCore& core,Simulation& sim,const Json& json){
+inline PlanetForestPipelineConfig installPlanetForestPipeline(game::GameCore& core,Simulation& sim,const Json& json){
     using namespace terraweave;
     using namespace evolve;
     auto& world=sim.world();
@@ -190,8 +201,8 @@ inline void installPlanetForestPipeline(game::GameCore& core,Simulation& sim,con
         cfg.species.push_back(s);
         if(item.has("naturalFallBody")){
             const auto& shape=item["naturalFallBody"];
-            if(!cfg.naturalFallPermille||!shape.isObject())
-                throw std::invalid_argument("planetForest naturalFallBody requires enabled natural fall");
+            if(!shape.isObject())
+                throw std::invalid_argument("planetForest naturalFallBody requires object");
             for(const auto& [key,value]:shape.members())
                 if(key!="radiusCm"&&key!="halfHeightCm"&&key!="density"&&key!="frictionPermille"&&key!="fromArbor")
                     throw std::invalid_argument("planetForest naturalFallBody unknown key: "+key);
@@ -297,11 +308,12 @@ inline void installPlanetForestPipeline(game::GameCore& core,Simulation& sim,con
     world.setResource<PlanetForestPipelineState>();
     if(!setPlanetRootBindings(world,*surface,bindings)||!initializePlanetDeadwood(world,*surface,baseline))
         throw std::invalid_argument("planetForest authority setup");
-    sim.addSystem("worldprocess.planet_forest_pipeline",[cfg=std::move(cfg)](Simulation& current){
+    sim.addSystem("worldprocess.planet_forest_pipeline",[cfg](Simulation& current){
         const auto* state=current.world().resourceConst<game::GameState>();
         if(!state||!state->surface)return;
         const auto surface=state->surface;
         (void)runPlanetForestPipeline(current.world(),*surface,current.tick(),cfg);
     });
+    return cfg;
 }
 } // namespace aiverse::lib::worldprocess

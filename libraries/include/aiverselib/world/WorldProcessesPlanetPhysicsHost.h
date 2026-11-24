@@ -3,7 +3,7 @@
 #pragma once
 #include "PlanetTerrainCollision.h"
 #include "PlanetConsequencePublisher.h"
-#include "WorldProcessesPlanetForestPipeline.h"
+#include "PlanetForestStaticSources.h"
 #include "engine/game/GameState.h"
 #include <memory>
 #include <set>
@@ -15,16 +15,19 @@ public:
     // Owns isolated body-local scenes and no authoritative state. Rebuild
     // on restore; exact float contact caches are not part of ECS persistence.
     bool step(World& world,std::shared_ptr<const game::Surface> surface,
-              uint64_t terrainRevision,uint32_t tick,uint32_t tickRate,uint64_t restoreSerial){
+              uint64_t terrainRevision,uint32_t tick,uint32_t tickRate,uint64_t restoreSerial,
+              const PlanetForestPipelineConfig& forest={}){
         if(!surface||!surface->tab||tick==UINT32_MAX||tickRate<10||tickRate>240)return false;
         if(!initialized_||restoreSerial!=restoreSerial_||tickRate!=tickRate_||
            topology_.lock()!=surface->tab||(lastTick_!=UINT32_MAX&&tick!=lastTick_+1)){
             clear();initialized_=true;restoreSerial_=restoreSerial;tickRate_=tickRate;topology_=surface->tab;
         }
         const auto* records=world.resourceConst<PlanetConsequenceResource>();
-        if(!records||records->bodies.empty()){scenes_.clear();lastTick_=tick;return true;}
-        if(records->bodies.size()>kMaxConsequences){clear();return false;}
+        if(!records||records->bodies.size()>kMaxConsequences){clear();return false;}
+        const auto sources=collectPlanetForestStaticSources(world,*surface,forest);
+        if(!sources){clear();return false;}
         std::set<std::string> active;
+        for(const auto& [body,list]:*sources)if(!list.empty())active.insert(body);
         for(const auto& record:records->bodies){
             // This opt-in forest bridge owns plant consequences only. Do
             // not step another project's structural or externally owned scene.
@@ -57,6 +60,12 @@ public:
                 }
                 if(!entry->terrain.publish(entry->scene,surface,body,terrainRevision,terrainConfig)||
                    !entry->consequences.publish(entry->scene,world,*surface,id)){
+                    clear();return false;
+                }
+                const auto found=sources->find(id);
+                const auto desired=found==sources->end()?std::span<const PlanetSourceCollider>{}:
+                    std::span<const PlanetSourceCollider>(found->second);
+                if(!entry->sources.publish(entry->scene,world,*surface,id,desired,true)){
                     clear();return false;
                 }
                 std::vector<ConsequenceCheckpoint> before;
@@ -99,6 +108,7 @@ private:
         physics::Scene scene;
         PlanetTerrainCollision terrain;
         PlanetConsequencePublisher consequences;
+        PlanetSourcePublisher sources;
     };
     std::map<std::string,std::unique_ptr<BodyScene>> scenes_;
     std::weak_ptr<const game::SphereTables> topology_;
@@ -106,18 +116,18 @@ private:
     uint32_t tickRate_=0,lastTick_=UINT32_MAX;
     bool initialized_=false;
 };
-inline void installPlanetForestPhysicsAuthority(Simulation& sim){
+inline void installPlanetForestPhysicsAuthority(Simulation& sim,const PlanetForestPipelineConfig& forest){
     if(!sim.config().singleAuthorityPhysics||sim.tickRate()<10||sim.tickRate()>240||
        !sim.world().resourceConst<PlanetForestPipelineState>())
         throw std::invalid_argument("planet forest physics requires explicit single authority and forest pipeline");
     if(!sim.world().resourceConst<PlanetConsequenceResource>())registerPlanetConsequencePersistence(sim);
     auto physics=std::make_shared<PlanetForestPhysicsAuthority>();
     sim.addStateRestoredHook([physics](Simulation&){physics->clear();});
-    sim.addSystem("worldprocess.planet_forest_physics",[physics](Simulation& current){
+    sim.addSystem("worldprocess.planet_forest_physics",[physics,forest](Simulation& current){
         const auto* state=current.world().resourceConst<game::GameState>();
         if(!state||!state->surface||
            !physics->step(current.world(),state->surface,state->planetTerrainRevision,
-                          current.tick(),current.tickRate(),current.stateRestoreSerial()))
+                          current.tick(),current.tickRate(),current.stateRestoreSerial(),forest))
             throw std::runtime_error("planet forest physics publication failed; stop authoritative host");
     });
 }

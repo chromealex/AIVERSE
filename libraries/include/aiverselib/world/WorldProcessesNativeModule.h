@@ -82,7 +82,7 @@ inline void installGameCoreAetherStratification(Simulation& sim){
 }
 class WorldProcessesNativeModule final:public game::NativeModule {
 public:
-    using PlanetPhysicsInstaller=void(*)(Simulation&);
+    using PlanetPhysicsInstaller=void(*)(Simulation&,const PlanetForestPipelineConfig&);
     explicit WorldProcessesNativeModule(PlanetPhysicsInstaller install=nullptr):installPhysics_(install){}
     void setup(game::GameCore& host,Simulation& sim,
                game::NativeState&,const Json& config) const override {
@@ -116,8 +116,10 @@ public:
                 throw std::invalid_argument("planetBanks.rootFalls required with planetForest");
             installPlanetBankPipeline(host,sim,config["planetBanks"]);
         }
-        if(config.has("planetForest"))installPlanetForestPipeline(host,sim,config["planetForest"]);
-        if(physics)installPhysics_(sim);
+        if(config.has("planetForest")){
+            const auto forest=installPlanetForestPipeline(host,sim,config["planetForest"]);
+            if(physics)installPhysics_(sim,forest);
+        }
     }
 private:
     PlanetPhysicsInstaller installPhysics_=nullptr;

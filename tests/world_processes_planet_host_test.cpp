@@ -2,6 +2,7 @@
 #include "examples/world/world_processes_native/PlanetProcessHost.h"
 #include "aiverselib/world/EvolvePlanetForestRetirement.h"
 #include "aiverselib/world/EvolvePlanetNaturalFalls.h"
+#include "aiverselib/world/PlanetForestStaticSources.h"
 #include <stdexcept>
 #include <cstdio>
 
@@ -183,7 +184,34 @@ static void checkSpentForestPublisher(){
     auto wood=*world.resourceConst<ev::PlanetDeadwoodResource>();
     check(ev::seedPlanetDeadwood(wood,surface,plant,binding,3),"forest biomass");
     world.setResource<ev::PlanetDeadwoodResource>(wood);
+    wp::PlanetForestPipelineConfig cfg;
+    cfg.naturalFallBodies.emplace(1,wp::PlanetForestCapsuleRecipe{});
+    cfg.arborTrunks.emplace(1,wp::PlanetArborTrunk{1,1000,50});cfg.floraScales.emplace("terra",1_fx);
+    auto staticSources=wp::collectPlanetForestStaticSources(world,surface,cfg);
+    check(staticSources&&staticSources->at("terra").size()==1,"pending standing source");
+    physics::Scene staticScene;wp::PlanetSourcePublisher staticPublisher;
+    check(staticPublisher.publish(staticScene,world,surface,"terra",staticSources->at("terra"),true),"standing capsule");
+    const auto staticKey=staticSources->at("terra").front().key;
+    const auto oldStatic=staticPublisher.handle(staticKey);
+    auto grown=*world.resourceConst<tw::TerraWeaveAuthorityResource>();
+    grown.rooted[0].environment.matureTicks=100;grown.rooted[0].environment.ageTicks=0;
+    world.setResource<tw::TerraWeaveAuthorityResource>(grown);
+    staticSources=wp::collectPlanetForestStaticSources(world,surface,cfg);
+    check(staticSources&&staticPublisher.publish(staticScene,world,surface,"terra",staticSources->at("terra"),true),"resize source");
+    check(!staticScene.valid(oldStatic)&&staticPublisher.count()==1,"retire prior shape");
+    const World pending=world;
     check(wp::deliverPlanetForestCapsule(world,surface,fall,3,{}),"forest capsule");
+    staticSources=wp::collectPlanetForestStaticSources(world,surface,cfg);
+    check(staticSources&&staticSources->empty()&&staticPublisher.publish(staticScene,world,surface,"terra",{},true)&&
+          staticScene.bodyCount()==0,"ack removes static source");
+    World spentPending=pending;
+    auto spentWood=*spentPending.resourceConst<ev::PlanetDeadwoodResource>();
+    spentWood.ledger.totalRespiredUnits+=spentWood.ledger.logs.front().remainingUnits;
+    spentWood.ledger.logs.front().remainingUnits=0;
+    spentPending.setResource<ev::PlanetDeadwoodResource>(spentWood);
+    check(wp::completeSpentPlanetFall(spentPending,surface,fall,3)&&
+          ev::pendingPlanetPlantFalls(spentPending).empty()&&
+          spentPending.resourceConst<wp::PlanetConsequenceResource>()->bodies.empty(),"spent pending terminal no body");
     const auto key=wp::consequenceKey(fall);
     const wp::PlanetSourceKey source=wp::consequenceSource(key);
     physics::Scene scene;PlanetConsequencePublisher publisher;
