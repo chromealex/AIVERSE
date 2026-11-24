@@ -14,6 +14,8 @@ class SupportGraphCache {
     bool ready_=false;
 public:
     void reset(){edges_.clear();labels_.clear();ready_=false;}
+    // Derived canonical weak-component labels, valid until next update/reset.
+    const std::vector<size_t>& labels()const{return labels_;}
     // Exact topology comparison, not a hash/revision guess. Root changes
     // alone never rebuild connectivity. Added/removed edges invalidate
     // the complete old components of their endpoints (including splits).
