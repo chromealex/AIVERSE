@@ -187,7 +187,8 @@ inline CaveRepathTickStats repathCaveEntities(
 // the existing native controller consume it. DO NOT register both this
 // and the Transform follower installer in the same Simulation.
 inline void installCaveRepathSimulation(
-    Simulation& sim,CaveSimulationNavigationHooks hooks) {
+    Simulation& sim,CaveSimulationNavigationHooks hooks,
+    std::optional<size_t> beforeSystem=std::nullopt) {
     if(!hooks.publishedSource||!hooks.search||!hooks.maxRepairsPerTick||
        hooks.maxRepairsPerTick>65536)
         throw std::invalid_argument("Caverns missing repath owner");
@@ -195,24 +196,16 @@ inline void installCaveRepathSimulation(
         "caverns.route",2);
     sim.registerPersistentComponent<CaveRouteIntent>(
         "caverns.route.intent",1);
-    sim.addSystem("caverns.navigation.repath",
-        [hooks](Simulation& state){
-            (void)repathCaveEntities(state,hooks);
-        });
-    sim.addStateRestoredHook(
-        [source=hooks.publishedSource,invalid=hooks.invalidateDerived](
-            Simulation& state) {
-            if(invalid)invalid();
-            const auto published=source();
-            state.world().eachExisting<CaveRouteFollower>(
-                [&](Entity,CaveRouteFollower& route){
-                    if(!published ||
-                       route.sourceRevision!=published->revision()||
-                       route.environmentRevision!=
-                           published->environmentRevision())
-                        route.needsRepath=true;
-                });
-        });
+    Simulation::SystemFn repath=[hooks](Simulation& state){
+        (void)repathCaveEntities(state,hooks);
+    };
+    if(beforeSystem)sim.insertSystem(*beforeSystem,"caverns.navigation.repath",std::move(repath));
+    else sim.addSystem("caverns.navigation.repath",std::move(repath));
+    // Restoration must preserve persistent ECS bytes/checksum. Repath and
+    // steering check source epochs on the next tick before motor execution.
+    sim.addStateRestoredHook([invalid=hooks.invalidateDerived](Simulation&){
+        if(invalid)invalid();
+    });
 }
 inline void installCaveNavigationSimulation(
     Simulation& sim,CaveSimulationNavigationHooks hooks){
@@ -242,18 +235,10 @@ inline void installCaveNavigationSimulation(
             if(result.blocked&&hooks.invalidateDerived)
                 hooks.invalidateDerived();
         });
-    // Rollback restores authoritative route components, but derived
-    // solver caches may belong to a newer frame. Mark repath explicitly.
-    sim.addStateRestoredHook([source=hooks.publishedSource,
-                              invalidate=hooks.invalidateDerived](Simulation& state){
+    // Do not mutate restored persistent components outside the tick.
+    // Repath/follow validate the revision again before using a route.
+    sim.addStateRestoredHook([invalidate=hooks.invalidateDerived](Simulation&){
         if(invalidate)invalidate();
-        const auto current=source();
-        state.world().eachExisting<CaveRouteFollower>(
-            [&](Entity,CaveRouteFollower& route){
-                if(!current||route.sourceRevision!=current->revision()||
-                   route.environmentRevision!=current->environmentRevision())
-                    route.needsRepath=true;
-            });
     });
 }
 } // namespace aiverse::nav
