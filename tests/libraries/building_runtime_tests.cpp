@@ -1,6 +1,8 @@
 // Portable runtime building generator smoke/regression. No Studio, GPU or GLB
 // exporter in the tested dependency graph. Packageable native game API.
 #include <engine/systems/RuntimeBuildingGenerator.h>
+#include <engine/systems/CachedRuntimeBuildingGenerator.h>
+#include <engine/systems/BuildingSurfaceCache.h>
 #include <engine/buildings/BuildingDestructionAdapter.h>
 #include <cstdio>
 #include <fstream>
@@ -132,6 +134,25 @@ int main(int argc,char** argv) {
             {Part::Roof,1,3,1,3,3.28f,3}};
         CHECK(!beginBuildingDestruction(glassBridge));
         CHECK(beginBuildingDestruction(glassBridge,nullptr,BuildingSupportMode::DamageOnly));
+        CachedRuntimeBuildingGenerator cached(64u*1024u*1024u,1);
+        CHECK(cached.registerStyleJson(buffer.str()));
+        RuntimeBuildingRequest cachedRequest;cachedRequest.style="scifi";cachedRequest.composeFeatures=true;cachedRequest.size={16,8,12};
+        auto c0=cached.generate(cachedRequest);auto c1=cached.generate(cachedRequest);
+        CHECK(c0&&*c0&&c0==c1&&cached.stats().hits==1);
+        cachedRequest.seed++;auto c2=cached.generate(cachedRequest);
+        CHECK(c2&&*c2&&c2!=c0&&cached.stats().evictions==1);
+        cachedRequest.origin.x=Fixed::fromInt(100);auto c3=cached.generate(cachedRequest);
+        CHECK(c3&&*c3&&c3!=c2&&c3->building.mesh.boundsMin[0]>=99.f);
+        cached.clear();CHECK(cached.stats().entries==0&&*c0);
+        CHECK(!*cached.generate(cachedRequest));
+        BuildingSurfaceCache surfaces(128u*1024u,1);
+        auto p0=surfaces.get("wood","desk",4,BuildingSurfaceChannel::BaseColor,128);
+        auto p1=surfaces.get("wood","desk",4,BuildingSurfaceChannel::BaseColor,128);
+        CHECK(p0==p1&&p0->rgba.size()==128u*128u*4u&&surfaces.stats().hits==1);
+        auto p2=surfaces.get("wood","desk",4,BuildingSurfaceChannel::Normal,128);
+        CHECK(p2!=p0&&surfaces.stats().evictions==1);
+        CHECK(surfaces.get("bad","desk",4,BuildingSurfaceChannel::Normal,128)->rgba.empty());
+        CHECK(surfaces.stats().entries==1);
         generator.clear();
         CHECK(generator.styleCount()==0);
         CHECK(generator.generate(sized).error==RuntimeBuildingError::UnknownStyle);

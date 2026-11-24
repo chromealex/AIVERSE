@@ -4,6 +4,7 @@
 // Assets importer resolves Images; this layer does no file or GPU IO.
 #include "engine/buildings/RuntimeBuildingModel.h"
 #include "engine/buildings/BuildingTextureAtlas.h"
+#include "engine/systems/BuildingSurfaceCache.h"
 #include <array>
 #include <functional>
 #include <map>
@@ -47,7 +48,8 @@ inline render::Material authoredBuildingMaterial(const StyleMaterial& style){
 // materials. Nothing is published until EVERY GUID has resolved.
 inline bool bindBuildingStyleMaterials(
     render::Model& model,const std::vector<StyleMaterial>& authored,
-    const BuildingImageByGuid& resolve,std::string* error=nullptr){
+    const BuildingImageByGuid& resolve,std::string* error=nullptr,
+    lib::systems::BuildingSurfaceCache* surfaceCache=nullptr){
     if(authored.size()!=model.materials.size()){
         if(error)*error="Building Model material count mismatches style";
         return false;
@@ -107,9 +109,8 @@ inline bool bindBuildingStyleMaterials(
                 if(const auto it=indices.find(key);it!=indices.end()){
                     *slots[i]=it->second;continue;
                 }
-                auto pixels=lib::systems::generateBuildingSurface(
-                    source.surfacePattern,source.id,source.surfaceSeed,
-                    channels[i],source.surfaceResolution);
+                auto pixels=surfaceCache?*surfaceCache->get(source.surfacePattern,source.id,source.surfaceSeed,channels[i],source.surfaceResolution):
+                    lib::systems::generateBuildingSurface(source.surfacePattern,source.id,source.surfaceSeed,channels[i],source.surfaceResolution);
                 if(pixels.rgba.empty()){
                     if(error)*error="Invalid procedural PBR surface in "+source.id;
                     return false;
@@ -140,10 +141,10 @@ inline std::unique_ptr<render::Model> runtimeTexturedBuildingModel(
     const StyledStructure& building,
     const BuildingImageByGuid& resolve,
     const std::string& name="procedural-building",
-    std::string* error=nullptr){
+    std::string* error=nullptr,lib::systems::BuildingSurfaceCache* surfaceCache=nullptr){
     auto model=runtimeBuildingModel(building,name);
     if(!bindBuildingStyleMaterials(*model,building.mesh.materials,
-                                   resolve,error))return {};
+                                   resolve,error,surfaceCache))return {};
     return model;
 }
 // Shared atlas path for native Model preview, identical pixels and UVs to GLB.
