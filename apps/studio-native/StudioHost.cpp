@@ -761,16 +761,26 @@ void StudioHost::selectionAction(const std::string& method) {
     sendEvent("selection.changed", "");
 }
 // Ring under the cursor while the Scene brush is armed (radius; river: half its width; road: a dot).
+bool StudioHost::resolveBrushPoint(double x,double y,double w,double h,render::float3& at,std::string* error) {
+    if(!preview_||x<0||y<0||w<2||h<2||x>=w||y>=h)return false;
+    if(session_->sceneBrush().kind!="caverns")
+        return onScene([&]{return preview_->groundPoint(float(x),float(y),float(w),float(h),at);});
+    render::float3 origin{},direction{};
+    if(!onScene([&]{return preview_->caveScreenRay(float(x),float(y),float(w),float(h),origin,direction);}))return false;
+    double px=0,py=0,pz=0;
+    if(!session_->caveBrushPoint(origin.x,origin.y,origin.z,direction.x,direction.y,direction.z,px,py,pz,error))return false;
+    at={float(px),float(py),float(pz)};return true;
+}
 bool StudioHost::updateBrushCursor(double x, double y, double w, double h) {
     if (!preview_) return false;
     const auto& b = session_->sceneBrush();
     render::float3 at{};
-    if (!b.armed || x < 0 || y < 0 || !onScene([&] { return preview_->groundPoint(float(x), float(y), float(w), float(h), at); })) {
+    if (!b.armed || !resolveBrushPoint(x,y,w,h,at)) {
         onScene([&] { preview_->setBrushCursor(false, {}, 0); });
         return b.armed;
     }
     const float r = b.kind == "road" ? 0.6f : b.kind == "river" ? float(b.width * 0.5) : float(b.radius);
-    onScene([&] { preview_->setBrushCursor(true, at, r); });
+    onScene([&] { preview_->setBrushCursor(true, at, r,b.kind=="caverns",b.caveMode=="fill"); });
     return true;
 }
 void StudioHost::brushAdjust(double factor, bool disarm) {
@@ -868,9 +878,15 @@ bool StudioHost::terrainStroke(int phase, double x, double y, double w, double h
         return true;
     }
     render::float3 at{};
-    if (!onScene([&] { return preview_->groundPoint(float(x), float(y), float(w), float(h), at); })) return phase != 0;
-    updateBrushCursor(x, y, w, h);
-    const bool ok = phase == 0 ? session_->strokeBegin(at.x, at.z, &error) : session_->strokeDab(at.x, at.z, &error);
+    if (!resolveBrushPoint(x,y,w,h,at,&error)) {
+        if(!error.empty())report();
+        onScene([&]{preview_->setBrushCursor(false,{},0);});
+        return phase != 0;
+    }
+    const auto& brush=session_->sceneBrush();
+    const float radius=brush.kind=="road"?.6f:brush.kind=="river"?float(brush.width*.5):float(brush.radius);
+    onScene([&]{preview_->setBrushCursor(true,at,radius,brush.kind=="caverns",brush.caveMode=="fill");});
+    const bool ok = phase == 0 ? session_->strokeBegin(at.x, at.z, &error,at.y) : session_->strokeDab(at.x, at.z, &error,at.y);
     if (!ok && !error.empty()) report();
     return ok;
 }
@@ -982,7 +998,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
         // Spline handles (Roads / Water "Edit nodes"): LMB on a handle drags it.
         if (!mods.alt && splineDrag(0, x, y, w, h)) { m.spline = true; return; }
         // Scene brush armed: plain LMB paints; Alt still orbits.
-        if (!mods.alt && brushArmed()) { m.stroke = terrainStroke(0, x, y, w, h); if (m.stroke) return; }
+        if (!mods.alt && brushArmed()) { m.stroke = terrainStroke(0, x, y, w, h); if (m.stroke||session_->sceneBrush().kind=="caverns") { if(!m.stroke)m.active=false;return; } }
         // Plain LMB on a handle starts a Move / Rotate / Scale drag (Unity W/E/R tools).
         m.move = !mods.alt && moveBegin(x, y, w, h);
         return;
