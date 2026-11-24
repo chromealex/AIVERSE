@@ -4,6 +4,17 @@ on:
   pull_request:
     paths:
       - 'libraries/include/aiverselib/world/**'
+      - 'examples/world/world_processes_native/**'
+      - 'examples/world/world_processes_planet_demo/**'
+      - 'engine/physics/**'
+      - 'engine/game/**'
+      - 'engine/render/**'
+      - 'engine/world/**'
+      - 'CMakeLists.txt'
+      - 'tests/world_processes*_test.cpp'
+      - 'tests/world_processes_native_acceptance.sh'
+      - 'tests/physics/**'
+      - 'tests/physis_box3d_test.cpp'
       - 'tests/ecs_echo_acoustics_test.cpp'
       - 'tests/ecs_fracture_structure_test.cpp'
       - 'tests/ecs_aether_gas_test.cpp'
@@ -39,3 +50,27 @@ jobs:
           CXX: clang++
           AIVERSE_SANITIZE: '1'
         run: bash tests/world_processes_verify.sh
+
+  planet-native:
+    name: Planet native host / Box3D (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux packages
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build libx11-dev libegl-dev libgles-dev
+      - name: Native host and PHYSIS acceptance (Debug)
+        shell: bash
+        run: bash tests/world_processes_native_acceptance.sh build/world-processes-native 4
+      - name: Upload native evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: world-processes-native-${{ matrix.os }}
+          path: build/world-processes-native/world-processes-native-evidence/
+          if-no-files-found: error
