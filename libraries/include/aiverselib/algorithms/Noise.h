@@ -132,7 +132,108 @@ template<std::size_t N> inline std::optional<int32_t> periodicGradientNoise(
     return int32_t(s->value);
 }
 
-enum class NoiseBasis { Value, Gradient };
+namespace noise_detail {
+// Rational skew transform S=I+F*11^T and exact inverse I-G*11^T,
+// G=F/(1+N*F). The 2D F approximates (sqrt(3)-1)/2; 3D F=1/3.
+// Unskew only local fractions: no coordinate-dependent rounding drift.
+template<std::size_t N> struct SimplexTransform {
+    static constexpr int64_t numerator=N==2?23988:1;
+    static constexpr int64_t denominator=N==2?65536:3;
+    static constexpr int64_t inverseDenominator=denominator+int64_t(N)*numerator;
+};
+
+template<std::size_t N> inline NoiseSample<N> simplexKernel(
+    std::array<int64_t,N> skew,uint64_t seed,std::array<int32_t,N> period) {
+    using Transform=SimplexTransform<N>;
+    constexpr int64_t one30=int64_t(1)<<30;
+    constexpr int64_t one32=int64_t(1)<<32;
+    // Slightly below squared radius 1/2, so omitted vertices have zero
+    // support even at quantized simplex boundaries (including 3D faces).
+    constexpr int64_t radiusSquared=32760*noiseOne;
+    constexpr int64_t scale=48;
+    std::array<int64_t,N> cell{},fraction{},offset{};
+    std::array<std::size_t,N> rank{};
+    int64_t sum=0;
+    for(std::size_t j=0;j<N;++j) {
+        cell[j]=noiseFloor(skew[j]);
+        fraction[j]=skew[j]-cell[j]*noiseOne;
+        sum+=fraction[j]; rank[j]=j;
+    }
+    // Fixed insertion sort with explicit axis order for equal fractions.
+    for(std::size_t j=1;j<N;++j) {
+        const auto k=rank[j]; auto i=j;
+        while(i&&fraction[k]>fraction[rank[i-1]]) {rank[i]=rank[i-1];--i;}
+        rank[i]=k;
+    }
+    NoiseSample<N> out{}; // accumulate in Q30, convert only once
+    for(std::size_t corner=0;corner<=N;++corner) {
+        const auto unskew=(sum-int64_t(corner)*noiseOne)*Transform::numerator/Transform::inverseDenominator;
+        std::array<int64_t,N> d{};
+        std::array<int64_t,3> h{};
+        int64_t r2=0;
+        for(std::size_t j=0;j<N;++j) {
+            d[j]=fraction[j]-offset[j]*noiseOne-unskew;
+            r2+=d[j]*d[j];
+            h[j]=noiseWrap(cell[j]+offset[j],period[j]);
+        }
+        if(r2<radiusSquared) {
+            const auto g=gradient<N>(noiseHash(h[0],h[1],h[2],seed));
+            int64_t dot=0; // Q32
+            for(std::size_t j=0;j<N;++j) dot+=g[j]*d[j];
+            const int64_t t=(radiusSquared-r2)/4;
+            const int64_t t2=t*t/one30,t3=t2*t/one30,t4=t3*t/one30;
+            out.value+=t4*dot/one32;
+            // d(t^4*dot(g,d))/dx = t^4*g - 8*t^3*dot(g,d)*d.
+            for(std::size_t j=0;j<N;++j) {
+                const int64_t dotD=dot*d[j]/noiseOne;
+                out.derivative[j]+=t4*g[j]/noiseOne-8*(t3*dotD/one32);
+            }
+        }
+        if(corner<N) offset[rank[corner]]=1;
+    }
+    out.value=out.value*scale/(one30/noiseOne);
+    for(auto& v:out.derivative) v=v*scale/(one30/noiseOne);
+    return out;
+}
+} // namespace noise_detail
+
+// Cartesian Q16 input, aperiodic. Derivatives per Cartesian input unit.
+template<std::size_t N> inline std::optional<NoiseSample<N>> simplexNoiseSample(
+    std::array<int64_t,N> p,uint64_t seed) {
+    static_assert(N==2||N==3);
+    if(!noiseValid(p,std::array<int32_t,N>{})) return {};
+    using Transform=noise_detail::SimplexTransform<N>;
+    int64_t sum=0; for(auto v:p) sum+=v;
+    // For N=2, |sum*numerator| <= 2^47*23988 < 2^62.
+    // N=3 uses numerator 1. The skew coordinates fit comfortably in int64.
+    const auto product=sum*Transform::numerator;
+    const auto shift=product/Transform::denominator-(product%Transform::denominator<0);
+    for(auto& v:p) v+=shift;
+    return noise_detail::simplexKernel(p,seed,std::array<int32_t,N>{});
+}
+
+template<std::size_t N> inline std::optional<int64_t> simplexNoise(
+    std::array<int64_t,N> p,uint64_t seed) {
+    auto s=simplexNoiseSample(p,seed);
+    if(!s) return {};
+    return s->value;
+}
+
+// Skew-lattice coordinates, NOT Cartesian coordinates. Exact periodicity
+// along each skew axis; derivative rows are transformed by inverse S.
+template<std::size_t N> inline std::optional<NoiseSample<N>> simplexSkewNoiseSample(
+    std::array<int64_t,N> skew,uint64_t seed,std::array<int32_t,N> period={}) {
+    static_assert(N==2||N==3);
+    if(!noiseValid(skew,period)) return {};
+    using Transform=noise_detail::SimplexTransform<N>;
+    auto out=noise_detail::simplexKernel(skew,seed,period);
+    int64_t sum=0; for(auto v:out.derivative) sum+=v;
+    const auto correction=sum*Transform::numerator/Transform::inverseDenominator;
+    for(auto& v:out.derivative) v-=correction;
+    return out;
+}
+
+enum class NoiseBasis { Value, Gradient, Simplex };
 enum class NoiseFractalMode { FBm, Turbulence, Ridged, Billow };
 struct NoiseFractalOptions {
     unsigned octaves=4;
@@ -151,9 +252,12 @@ template<std::size_t N> inline std::optional<NoiseSample<N>> fractalNoiseSample(
     if(!noiseValid(p,period)||options.octaves<1||options.octaves>16||
         options.lacunarity<1||options.lacunarity>8||options.gainQ16<0||
         options.gainQ16>noiseOne||
-        (options.basis!=NoiseBasis::Value&&options.basis!=NoiseBasis::Gradient)||
+        (options.basis!=NoiseBasis::Value&&options.basis!=NoiseBasis::Gradient&&
+         options.basis!=NoiseBasis::Simplex)||
         (options.mode!=NoiseFractalMode::FBm&&options.mode!=NoiseFractalMode::Turbulence&&
          options.mode!=NoiseFractalMode::Ridged&&options.mode!=NoiseFractalMode::Billow)) return {};
+    if(options.basis==NoiseBasis::Simplex)
+        for(auto v:period) if(v) return {}; // Cartesian periods are not skew periods.
     constexpr int64_t coordLimit=int64_t(1)<<46;
     constexpr int64_t frequencyLimit=65536;
     constexpr int32_t periodLimit=100000000;
@@ -163,7 +267,8 @@ template<std::size_t N> inline std::optional<NoiseSample<N>> fractalNoiseSample(
         const auto octaveSeed=i?deriveSeed(seed,0x4e4f49534546424dull,i):seed;
         const auto sample=options.basis==NoiseBasis::Value?
             periodicValueNoiseSample(p,octaveSeed,period):
-            periodicGradientNoiseSample(p,octaveSeed,period);
+            (options.basis==NoiseBasis::Gradient?periodicGradientNoiseSample(p,octaveSeed,period):
+             simplexNoiseSample(p,octaveSeed));
         if(!sample) return {};
         auto s=*sample;
         if(options.mode!=NoiseFractalMode::FBm) {

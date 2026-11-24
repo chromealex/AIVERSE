@@ -3769,7 +3769,7 @@
       "package": "noise",
       "path": "skills/core/aiverse-noise/SKILL.md",
       "domain": "gameplay",
-      "summary": "Deterministic periodic value, gradient, cellular, fractal, vector, warp and curl noise",
+      "summary": "Deterministic value, gradient, simplex, cellular, fractal, vector, warp and curl noise",
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_noise",
@@ -3794,7 +3794,10 @@
         "domain",
         "warp",
         "curl",
-        "jacobian"
+        "jacobian",
+        "simplex",
+        "skew",
+        "lattice"
       ],
       "contentPackages": []
     },

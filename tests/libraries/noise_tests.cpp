@@ -129,10 +129,93 @@ template<std::size_t N> void verifyComposition() {
     CHECK(!noise_detail::chainProduct(bound+1,1));
 }
 
+template<std::size_t N> void verifySimplex() {
+    std::array<int64_t,N> p{};
+    std::array<int32_t,N> period{};
+    for(std::size_t j=0;j<N;++j) {p[j]=-82173+int64_t(j)*59317; period[j]=int32_t(j+3);}
+    // Stable golden samples freeze the seed, lattice, scaling and derivative ABI.
+    auto golden=simplexNoiseSample(p,17);
+    if constexpr(N==2) CHECK(golden==NoiseSample<2>{-16195,{-95275,-120521}});
+    else CHECK(golden==NoiseSample<3>{-19872,{24689,51882,-51077}});
+    NoiseFractalOptions single{}; single.basis=NoiseBasis::Simplex; single.octaves=1;
+    for(uint64_t seed=0;seed<128;++seed) {
+        auto s=simplexNoiseSample(p,seed);
+        auto tile=simplexSkewNoiseSample(p,seed,period);
+        CHECK(s&&tile);
+        CHECK(s==simplexNoiseSample(p,seed));
+        CHECK(s->value==*simplexNoise(p,seed));
+        CHECK(s==fractalNoiseSample(p,seed,{},single));
+        CHECK(!fractalNoiseSample(p,seed,period,single));
+        for(std::size_t axis=0;axis<N;++axis) {
+            auto q=p; q[axis]+=int64_t(period[axis])*noiseOne;
+            CHECK(tile==simplexSkewNoiseSample(q,seed,period));
+            q=p; q[axis]-=int64_t(period[axis])*noiseOne;
+            CHECK(tile==simplexSkewNoiseSample(q,seed,period));
+            auto lo=p,hi=p; lo[axis]-=256; hi[axis]+=256;
+            auto a=simplexNoiseSample(lo,seed),b=simplexNoiseSample(hi,seed);
+            auto c=simplexSkewNoiseSample(lo,seed,period),d=simplexSkewNoiseSample(hi,seed,period);
+            CHECK(a&&b&&c&&d);
+            CHECK(std::abs((b->value-a->value)*128-s->derivative[axis])<=3000);
+            CHECK(std::abs((d->value-c->value)*128-tile->derivative[axis])<=3000);
+        }
+        for(auto mode:{NoiseFractalMode::FBm,NoiseFractalMode::Turbulence,NoiseFractalMode::Ridged,NoiseFractalMode::Billow}) {
+            auto opts=single; opts.octaves=4; opts.mode=mode;
+            auto f=fractalNoiseSample(p,seed,{},opts);
+            CHECK(f&&f==fractalNoiseSample(p,seed,{},opts));
+            CHECK(!fractalNoiseSample(p,seed,period,opts));
+        }
+        auto warp=NoiseWarpOptions{}; warp.carrier=single; warp.displacement=single;
+        CHECK(domainWarpNoiseSample(p,seed,{},warp));
+        CHECK(vectorNoiseSample(p,seed,{},single));
+        CHECK(curlNoise(p,seed,{},single));
+        CHECK(!domainWarpNoiseSample(p,seed,period,warp));
+        p[0]+=1037;
+    }
+    // Probe both sides of an internal simplex rank boundary and cell seam.
+    for(uint64_t seed=0;seed<64;++seed) {
+        std::array<int64_t,N> q{}; q.fill(noiseOne/3);
+        auto a=q,b=q; --a[0]; ++b[0];
+        auto l=simplexSkewNoiseSample(a,seed,period),r=simplexSkewNoiseSample(b,seed,period);
+        CHECK(l&&r&&std::abs(l->value-r->value)<=32);
+        for(std::size_t j=0;j<N;++j) CHECK(std::abs(l->derivative[j]-r->derivative[j])<=160);
+        q[0]=0; a=q; b=q; --a[0]; ++b[0];
+        l=simplexSkewNoiseSample(a,seed,period); r=simplexSkewNoiseSample(b,seed,period);
+        CHECK(l&&r&&std::abs(l->value-r->value)<=32);
+        for(std::size_t j=0;j<N;++j) CHECK(std::abs(l->derivative[j]-r->derivative[j])<=160);
+    }
+    Pcg32 rng(42);
+    for(unsigned i=0;i<1024;++i) {
+        for(auto& x:p) x=int64_t(*rng.below(2621440))-1310720;
+        const auto seed=rng.next64();
+        auto s=simplexNoiseSample(p,seed),t=simplexSkewNoiseSample(p,seed,period);
+        CHECK(s&&t);
+        for(std::size_t j=0;j<N;++j) {
+            auto lo=p,hi=p; lo[j]-=256; hi[j]+=256;
+            CHECK(std::abs((*simplexNoise(hi,seed)-*simplexNoise(lo,seed))*128-s->derivative[j])<=3000);
+            CHECK(std::abs((simplexSkewNoiseSample(hi,seed,period)->value-simplexSkewNoiseSample(lo,seed,period)->value)*128-t->derivative[j])<=3000);
+        }
+    }
+    auto deep=single; deep.octaves=6; deep.lacunarity=8; deep.gainQ16=noiseOne;
+    deep.mode=NoiseFractalMode::Billow;
+    CHECK(fractalNoiseSample(p,19,{},deep));
+    deep.octaves=7; CHECK(!fractalNoiseSample(p,19,{},deep));
+    constexpr int64_t limit=int64_t(1)<<46;
+    p.fill(limit); CHECK(simplexNoiseSample(p,1));
+    p.fill(-limit); CHECK(simplexNoiseSample(p,1));
+    p[0]=-limit-1; CHECK(!simplexNoiseSample(p,1));
+    CHECK(!simplexSkewNoiseSample(p,1,period));
+    p.fill(0); CHECK(simplexNoise(p,1)==0);
+    period[0]=-1; CHECK(!simplexSkewNoiseSample(p,1,period));
+    auto invalid=single; invalid.basis=static_cast<NoiseBasis>(255);
+    CHECK(!fractalNoiseSample(p,1,{},invalid));
+}
+
 int main() {
     verify<2>();
     verify<3>();
     verifyComposition<2>();
     verifyComposition<3>();
-    std::cout << "Noise stage 46 checks passed\n";
+    verifySimplex<2>();
+    verifySimplex<3>();
+    std::cout << "Noise stage 47 checks passed\n";
 }
