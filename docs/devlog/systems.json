@@ -1751,6 +1751,14 @@
    "id": "world",
    "roadmap": [
     {
+     "id": "world-background-operator-jobs",
+     "title": "Фоновые задачи обслуживания мира",
+     "titleEn": "Background world maintenance jobs",
+     "text": "Очередь, фактический прогресс восстановления, безопасная отмена и подтверждение результата.",
+     "textEn": "Bounded queue, actual recovery progress, safe cancellation and acknowledged results.",
+     "status": "in-progress"
+    },
+    {
      "id": "world-persistence-tools",
      "title": "Инструменты сохранения мира",
      "titleEn": "World persistence tools",
