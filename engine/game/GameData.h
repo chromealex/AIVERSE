@@ -100,6 +100,8 @@ struct WeaponDef {
     bool hasAttackTiming() const { return windup.raw > 0 || backswing.raw > 0; }
     uint8_t targets = kLayerGround;
     uint64_t targetTags = 0, ignoreTags = 0;
+    uint8_t extraTargets = 0; // distinct secondary targets for one accepted attack
+    uint64_t extraTargetTags = 0, extraIgnoreTags = 0;
     Fixed projectileSpeed{};
     Fixed splash{};
     uint16_t damageType = 0;
