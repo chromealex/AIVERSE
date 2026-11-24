@@ -145,6 +145,12 @@ export interface StudioWorldPage {
   revision:string;historyFloor:string;bootstrap:boolean;resetRequired:boolean;more:boolean;next:string;
   records:Array<{id:string;revision:string;cell:[number,number,number];live:boolean}>;
 }
+export interface StudioWorldJob {
+  state:'idle'|'running'|'succeeded'|'failed'|'cancelled';
+  id?:string;project?:string;operation?:string;phase?:string;
+  cancelRequested?:boolean;cancelAllowed?:boolean;error?:string;result?:unknown;
+  progress?:{checkpointBytes?:string;checkpointTotal?:string;walBytes?:string;frames?:string;sequence?:string;assetsRead?:string;assetsTotal?:string};
+}
 export interface StudioWorldOps {
   world_save_list:{params:Record<string,never>;result:{worlds:string[]}};
   world_save_create:{params:{world:string;seed:string};result:StudioWorldStatus};
