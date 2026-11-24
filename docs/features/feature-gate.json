@@ -37,7 +37,15 @@
     "tools/agents/graph_inventory.py",
     "docs/agents/graph-inventory.json",
     "tools/agents/capability_coverage.py",
-    "docs/evidence/capability-coverage.json"
+    "docs/evidence/capability-coverage.json",
+    "tools/agents/feature_policy.py",
+    "docs/agents/feature-policy.json",
+    "apps/editor/core/FeatureGateOps.h",
+    "apps/editor/core/Workspace.cpp",
+    "apps/studio-native/StudioTools.h",
+    "apps/studio-web/src/nestedDock.ts",
+    "apps/studio-web/src/panels/StudioPanelRenderer.tsx",
+    "apps/studio-web/src/panels/FeatureReadinessPanel.tsx"
   ],
   "traits": {
     "editable": false,
@@ -48,7 +56,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stages 14–15: reviewed capability coverage ledger with current Git evidence, unknown versus confirmed gap and deterministic implementation queue. Execution pending.",
+      "note": "Stages 16–23: dependency, roadmap, skill and API policy; parallel ownership and release reporting; read-only Studio/MCP report consumption. Pending implementation and validation.",
       "evidence": []
     },
     "architecture": {
