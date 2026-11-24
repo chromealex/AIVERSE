@@ -15,6 +15,8 @@ int main(){
     check(scalar.msl.find("float3(input0[tid])")!=std::string::npos&&scalar.glsl.find("vec3(input0[tid])")!=std::string::npos);
     check(rgb.glsl.find("input0[tid].xyz")!=std::string::npos&&rgb.glsl.find("0xff000000u")!=std::string::npos);
     check(rgb.msl.find("1024u")!=std::string::npos&&rgb.glsl.find("uint result[]")!=std::string::npos);
+    auto image=materializedKernel(KernelValue::Vector,{KernelValue::PackedBytes},64,"result[tid]=float4(float(input0[tid]));",{},true);
+    check(image.msl.find("uint* input0")!=std::string::npos&&image.glsl.find("uint input0[]")!=std::string::npos);
     bool bad=false;try{(void)materializedKernel(KernelValue::Scalar,std::vector<KernelValue>(4,KernelValue::Scalar),8,"x");}catch(const std::invalid_argument&){bad=true;}check(bad);
     bad=false;try{(void)packMaterializedKernel(KernelValue::PackedBytes,8);}catch(const std::invalid_argument&){bad=true;}check(bad);
     bad=false;try{(void)packMaterializedKernel(KernelValue::Scalar,1025);}catch(const std::invalid_argument&){bad=true;}check(bad);

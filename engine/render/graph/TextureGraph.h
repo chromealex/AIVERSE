@@ -67,8 +67,11 @@ inline float evaluateFormula(const std::vector<std::string>& tokens,float a,floa
     }
     return stack[0];
 }
+inline constexpr int maxEmbeddedImageSide=1024;
+inline constexpr size_t maxEmbeddedImagePixels=32768;
 inline std::vector<uint32_t> imagePixels(const Json& p){
-    const int w=integer(p["width"],1,1,32),h=integer(p["height"],1,1,32);
+    const int w=integer(p["width"],1,1,maxEmbeddedImageSide),h=integer(p["height"],1,1,maxEmbeddedImageSide);
+    require(size_t(w)*h<=maxEmbeddedImagePixels,"embedded image pixel budget exceeded");
     const auto hex=p.getStr("rgb","808080");
     require(hex.size()==size_t(w)*h*6,"image RGB payload extent mismatch");
     auto digit=[](char c)->uint32_t{if(c>='0'&&c<='9')return uint32_t(c-'0');if(c>='a'&&c<='f')return uint32_t(c-'a'+10);throw std::invalid_argument("invalid image hex digit");};
@@ -86,7 +89,7 @@ inline Json properties(const std::string& id){
         Json p=Json::object(),list=Json::array();p.set("type",Json::string("enum"));p.set("default",Json::string(value));
         for(const auto& v:values)list.push(Json::string(v));p.set("options",list);result.set(key,p);
     };
-    if(id=="image"){field("width","integer",Json::number(int64_t(1)),1,32);field("height","integer",Json::number(int64_t(1)),1,32);field("rgb","image",Json::string("808080"));}
+    if(id=="image"){field("width","integer",Json::number(int64_t(1)),1,maxEmbeddedImageSide);field("height","integer",Json::number(int64_t(1)),1,maxEmbeddedImageSide);field("rgb","image",Json::string("808080"));}
     if(id=="formula")field("expression","text",Json::string("a b *"));
     if(id=="constant")field("value","number",Json::number(.5));
     if(id=="color")field("value","rgb",Json::parse("[0.5,0.5,0.5]"));
@@ -287,7 +290,7 @@ inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t
         }
         const auto formula=id=="formula"?formulaTokens(q.getStr("expression","a b *")):std::vector<std::string>{};
         const auto imported=id=="image"?imagePixels(q):std::vector<uint32_t>{};
-        const int imageWidth=id=="image"?integer(q["width"],1,1,32):1,imageHeight=id=="image"?integer(q["height"],1,1,32):1;
+        const int imageWidth=id=="image"?integer(q["width"],1,1,maxEmbeddedImageSide):1,imageHeight=id=="image"?integer(q["height"],1,1,maxEmbeddedImageSide):1;
         const float value=scalar(q["value"].isArray()?Json():q["value"],.5f);
         const int period=integer(q["period"],8,1,256),octaves=id=="fbm"?integer(q["octaves"],4,1,6):1;const auto randomSeed=seed(q["seed"]);
         const float strength=scalar(q["strength"],2,0,16),low=scalar(q["low"],0),high=scalar(q["high"],1),threshold=scalar(q["threshold"],.5f);

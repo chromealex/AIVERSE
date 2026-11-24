@@ -104,7 +104,8 @@ class TextureGraphGpuOwner {
     // Materialized resources belong to this SAME frame-boundary owner.
     // Only successful, fence-retired requests enter the materialized idle cache.
     std::optional<render::texture_graph::gpu::MaterializedSources> matSources_;
-    std::vector<gfx::BufferHandle> matSlots_;
+    std::vector<gfx::BufferHandle> matSlots_,matImageInputs_;
+    size_t matImageBytes_=0;
     std::vector<gfx::ComputeHandle> matNodes_,matPacks_;
     uint64_t matSerial_=0;
     size_t matBytes_=0,matNodePasses_=0,matPackPasses_=0;
@@ -195,12 +196,13 @@ class TextureGraphGpuOwner {
     bool queued_=false,requireGpu_=false;
     bool ownsActiveResources()const{return buffer_.valid()||scratch_.valid()||compute_.valid()||secondCompute_.valid()||matSources_.has_value();}
     bool ownsResources()const{return ownsActiveResources()||idlePipelines_.size()!=0||matIdleBuffers_.bytes()!=0||matIdlePipelines_.size()!=0||!gpuCandidates_.empty();}
-    void abandonActive(){matKeys_.clear();matDirty_.clear();textureRead_.reset();matActivePipelines_.clear();matLayout_.clear();matLastFence_=0;matSources_.reset();matSlots_.clear();matNodes_.clear();matPacks_.clear();matSerial_=0;matBytes_=0;matEncoded_=false;sharedScratch_.invalidate();reusedScratch_=false;buffer_={};scratch_={};compute_={};secondCompute_={};read_.reset();fence_=0;capacity_=0;activeKey_={};activePlanAccepted_=false;idlePipelines_.abandon();inFlight_=false;}
+    void abandonActive(){matKeys_.clear();matDirty_.clear();textureRead_.reset();matActivePipelines_.clear();matLayout_.clear();matLastFence_=0;matSources_.reset();matSlots_.clear();matImageInputs_.clear();matImageBytes_=0;matNodes_.clear();matPacks_.clear();matSerial_=0;matBytes_=0;matEncoded_=false;sharedScratch_.invalidate();reusedScratch_=false;buffer_={};scratch_={};compute_={};secondCompute_={};read_.reset();fence_=0;capacity_=0;activeKey_={};activePlanAccepted_=false;idlePipelines_.abandon();inFlight_=false;}
     void abandon(){matIdleKeys_.clear();matIdleLease_={};abandonActive();gpuCandidates_.clear();gpuAcceptedTextures_=0;matIdleBuffers_.abandon();matIdlePipelines_.abandon();matCacheDevice_=nullptr;matCacheProject_.clear();}
     void release(gfx::Device& dev,bool afterIdle=false){
         if(!clearGpuCandidates(dev,afterIdle))return;
         for(auto& e:matActivePipelines_)destroyPair(dev,e.first,e.second);
         for(auto h:matSlots_)if(h.valid())dev.destroyBuffer(h);
+        for(auto h:matImageInputs_)if(h.valid())dev.destroyBuffer(h);
         clearMatIdle(dev);clearIdle(dev);
         if(compute_.valid())dev.destroyCompute(compute_);
         if(secondCompute_.valid())dev.destroyCompute(secondCompute_);
@@ -218,6 +220,8 @@ class TextureGraphGpuOwner {
             !active()&&state_=="ready"&&project_==matCacheProject_&&matCacheDevice_==&dev&&
             (backend_=="metal"||backend_=="vulkan");
         if(!keep){release(dev);return true;}
+        for(auto h:matImageInputs_)if(h.valid())dev.destroyBuffer(h);
+        matImageInputs_.clear();matImageBytes_=0;
         matSlots_.push_back(buffer_);buffer_={};
         matIdleBuffers_.put({std::move(matLayout_),std::move(matSlots_)},
             render::texture_graph::gpu::materializedBudgetBytes,[&](auto& e){destroyMatBuffers(dev,e);});
@@ -326,14 +330,18 @@ class TextureGraphGpuOwner {
                 matReachableNodes_=matSources_->reachableNodes;matFusedNodes_=matSources_->fusedNodes;
                 matSerial_=serial_;
                 auto& sources=*matSources_;
-                if(matIncremental_)matKeys_=incrementalKeys(sources.plan.schedule,[&](size_t node)->const std::string&{
-                    const auto& source=sources.nodes.at(node);return metal?source.msl:source.glsl;
+                if(matIncremental_)matKeys_=incrementalKeys(sources.plan.schedule,[&](size_t node){
+                    const auto& source=sources.nodes.at(node);
+                    std::string key=metal?source.msl:source.glsl;
+                    const auto& authored=program_->nodes.at(node);
+                    if(std::string_view(authored.info->id)=="image")key+=authored.parameters.dump(-1);
+                    return key;
                 });
                 matLayout_=sources.plan.schedule.slotBytes;
                 matLayout_.push_back(sources.resultCapacityBytes);
                 if(!RetiredBufferSet<gfx::BufferHandle>::admissible(matLayout_,materializedBudgetBytes))
                     throw std::runtime_error("materialized layout exceeds cache budget");
-                matNodes_.resize(sources.nodes.size());matPacks_.resize(sources.packs.size());
+                matNodes_.resize(sources.nodes.size());matPacks_.resize(sources.packs.size());matImageInputs_.resize(sources.nodes.size());
                 matActivePipelines_.reserve(sources.plan.schedule.passes.size()+sources.packs.size());
                 // Any partial creation or submission belongs to this fence.
                 fence_=matLastFence_=token;inFlight_=true;
@@ -392,7 +400,7 @@ class TextureGraphGpuOwner {
             if(!groupDetail)beginProfileScope(dispatchScope,dev,profile,"texture-graph-materialized-dispatch",serial_,output_.c_str());
             if(first){
                 size_t ordinal=0;
-                const auto result=encodePassSchedule(sources.plan.schedule,(gpuTransferRequested_?gpuTransferBudget_.dagBudget:materializedBudgetBytes)-sources.resultCapacityBytes,[&](const ScheduledPass& pass){
+                const auto result=encodePassSchedule(sources.plan.schedule,(gpuTransferRequested_?gpuTransferBudget_.dagBudget:materializedBudgetBytes)-sources.resultCapacityBytes-sources.imageSourceBytes,[&](const ScheduledPass& pass){
                     const size_t passOrdinal=ordinal++;
                     // The full schedule is preflighted. A clean dedicated slot
                     // contains the exact previously fence-retired value.
@@ -408,8 +416,21 @@ class TextureGraphGpuOwner {
                         for(auto node:sources.regionMembers.at(pass.pipeline))meta.members.push_back(program_->nodes.at(node).id);
                         beginProfileScope(groupScope,dev,profile,"texture-graph-materialized-group",serial_,output_.c_str(),&meta);
                     }catch(...){groupScope.reset();}
+                    size_t inputCount=pass.inputs.size();
+                    const auto& node=program_->nodes.at(pass.pipeline);
+                    if(std::string_view(node.info->id)=="image"){
+                        if(inputCount!=0)return false;
+                        const auto data=imagePixels(node.parameters);
+                        const size_t bytes=data.size()*sizeof(uint32_t);
+                        if(bytes>sources.imageSourceBytes-matImageBytes_)return false;
+                        gfx::BufferDesc desc;desc.type=gfx::BufferType::Storage;desc.usage=gfx::Usage::Immutable;
+                        desc.size=bytes;desc.data=data.data();desc.label="TextureGraph immutable RGB source";
+                        auto& input=matImageInputs_.at(pass.pipeline);input=dev.createBuffer(desc);
+                        if(!input.valid())return false;
+                        matImageBytes_+=bytes;inputs[0]=input;inputCount=1;
+                    }
                     if(!dispatchMaterializedPass(dev,matNodes_.at(pass.pipeline),matSlots_.at(pass.output),
-                            std::span<const gfx::BufferHandle>(inputs.data(),pass.inputs.size()),pixels,metal))return false;
+                            std::span<const gfx::BufferHandle>(inputs.data(),inputCount),pixels,metal))return false;
                     if(groupScope)groupScope->finish();
                     ++passes_;++matNodePasses_;return true;
                 });
@@ -572,7 +593,7 @@ public:
         r.set("materializedPipelineCacheHits",Json::number(int64_t(matPipelineHits_)));
         r.set("materializedIdleBytes",Json::number(int64_t(matIdleBuffers_.bytes())));
         r.set("materializedIdlePipelines",Json::number(int64_t(matIdlePipelines_.size())));
-        r.set("retainedBufferBytes",Json::number(int64_t(matIdleBuffers_.bytes()+matBytes_+capacity_*(scratch_.valid()?2:1))));
+        r.set("retainedBufferBytes",Json::number(int64_t(matIdleBuffers_.bytes()+matBytes_+matImageBytes_+capacity_*(scratch_.valid()?2:1))));
         r.set("incrementalOutputsRequested",Json::fromBool(outputReuseTarget_.has_value()));
         r.set("incrementalOutputNoop",Json::fromBool(outputNoop_));
         Json reusedMaps=Json::array();for(const auto& [name,image]:reusedOutputNames_){(void)image;reusedMaps.push(Json::string(name));}

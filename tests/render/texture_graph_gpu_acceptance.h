@@ -133,6 +133,16 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
         require(fs["completedOutputs"].toDouble()==2,"missing filter or image result");
         for(const auto& row:fs["outputs"].items())require(row.getStr("backend")==expected,"filter or image CPU fallback");
         std::printf("TextureGraph filter/formula/image parity accepted: %s\n",expected);
+        // Larger immutable RGB input must use data, not source-code literals.
+        auto buffered=Json::parse(R"JSON({"graph":{"version":1,"size":64,"nodes":[{"id":"i","op":"image","inputs":[],"properties":{"width":64,"height":64}}],"outputs":{"color":"i"}},"requireGpu":true,"bakeSet":true,"materialized":true})JSON");
+        std::string rgb;rgb.reserve(64*64*6);for(int i=0;i<64*64;++i)rgb+=i%2?"ff0000":"0000ff";
+        buffered.member("graph").member("nodes").at(0).member("properties").set("rgb",Json::string(rgb));
+        auto bufferedProgram=render::texture_graph::compile(buffered["graph"]);
+        auto bufferedSources=render::texture_graph::gpu::compileMaterializedDag(bufferedProgram,{0},64);
+        require(bufferedSources.imageSourceBytes==64*64*4&&bufferedSources.nodes[0].msl.find("switch(index)")==std::string::npos&&bufferedSources.nodes[0].msl.find("input0[index]")!=std::string::npos,"RGB source not budgeted or still shader literals");
+        const auto bufferedId=owner.start(buffered,project).getStr("request");drain();
+        const auto bs=owner.status();
+        require(bs.getStr("request")==bufferedId&&bs.getStr("state")=="ready"&&bs.getStr("backend")==expected,"buffer-backed RGB GPU acceptance failed");
         // Native function calls lower into ordinary typed DAG nodes. Two calls
         // share a definition but use independent parameter values and public IDs.
         auto functions=Json::parse(R"JSON({"graph":{"version":1,"size":32,

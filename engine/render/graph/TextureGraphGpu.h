@@ -199,11 +199,9 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
     const bool normal=std::string(node.info->id)=="normal";
     const std::string_view op=node.info->id;
     if(op=="image"){
-        const auto pixels=imagePixels(node.parameters);
-        const auto w=std::to_string(integer(node.parameters["width"],1,1,32)),h=std::to_string(integer(node.parameters["height"],1,1,32));
-        body="uint x=tid%n,y=tid/n;uint index=(y*"+h+"u/n)*"+w+"u+x*"+w+"u/n;uint rgb=0u;switch(index){\n";
-        for(size_t i=0;i<pixels.size();++i)body+="case "+std::to_string(i)+"u:rgb="+std::to_string(pixels[i])+"u;break;\n";
-        body+="default:break;}float3 value=float3(float((rgb>>16u)&255u),float((rgb>>8u)&255u),float(rgb&255u))/255.0f;\n";
+        const auto w=std::to_string(integer(node.parameters["width"],1,1,maxEmbeddedImageSide)),h=std::to_string(integer(node.parameters["height"],1,1,maxEmbeddedImageSide));
+        types.push_back(KernelValue::PackedBytes);
+        body="uint x=tid%n,y=tid/n;uint index=(y*"+h+"u/n)*"+w+"u+x*"+w+"u/n;uint rgb=input0[index];float3 value=float3(float((rgb>>16u)&255u),float((rgb>>8u)&255u),float(rgb&255u))/255.0f;\n";
     }else if(neighborhoodOp(op)){
         body="int x=int(tid%n),y=int(tid/n),side=int(n);\n";
         if(op=="blur"||op=="erosion"){
@@ -234,7 +232,7 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
         body+="float3 value=clamp("+expr+",0.0f,1.0f);\n";
     }
     body+=output==KernelValue::Scalar?"result[tid]=value.x;":"result[tid]=float4(value,1.0f);";
-    return materializedKernel(output,types,n,body,normal||!types.empty()?std::string{}:pointwiseCommon());
+    return materializedKernel(output,types,n,body,normal||!types.empty()?std::string{}:pointwiseCommon(),op=="image");
 }
 // Only the known pointwise operations participate. Future neighborhood,
 // sampling or side-effect operations remain materialization boundaries.
@@ -289,7 +287,7 @@ struct MaterializedSources {
     std::vector<Source> nodes; // indexed by source node; unreachable entries empty
     std::vector<std::vector<size_t>> regionMembers; // authored node indices by pass root
     std::vector<Source> packs; // target order; shared result buffer reused
-    size_t resultBytes=0,resultCapacityBytes=0,totalBytes=0;
+    size_t resultBytes=0,resultCapacityBytes=0,totalBytes=0,imageSourceBytes=0;
     size_t reachableNodes=0,fusedNodes=0;
 };
 inline MaterializedSources compileMaterializedDag(const Program& p,const std::vector<size_t>& targets,
@@ -299,6 +297,14 @@ inline MaterializedSources compileMaterializedDag(const Program& p,const std::ve
     r.resultBytes=size_t(n)*size_t(n)*4u;
     r.resultCapacityBytes=paddedResult?gfx::rgba8CopyLayout(n,n).bytes:r.resultBytes;
     require(r.resultCapacityBytes>=r.resultBytes&&r.resultCapacityBytes<budget,"materialized result exceeds budget");
+    // Conservatively reserve every authored image source, including unused nodes.
+    for(const auto& node:p.nodes)if(std::string_view(node.info->id)=="image"){
+        const auto w=integer(node.parameters["width"],1,1,maxEmbeddedImageSide),h=integer(node.parameters["height"],1,1,maxEmbeddedImageSide);
+        const size_t bytes=size_t(w)*h*sizeof(uint32_t);
+        require(bytes<=budget-r.resultCapacityBytes-r.imageSourceBytes,"image source exceeds materialized budget");
+        r.imageSourceBytes+=bytes;
+    }
+    const auto slotBudget=budget-r.resultCapacityBytes-r.imageSourceBytes;
     if(fusePointwise){
         std::vector<std::vector<size_t>> edges;
         std::vector<size_t> bytes;
@@ -310,7 +316,7 @@ inline MaterializedSources compileMaterializedDag(const Program& p,const std::ve
             pointwise.push_back(fusionPointwise(node));
         }
         const auto fusion=planPointwiseFusion(edges,p.order,targets,pointwise);
-        r.plan=lowerDagSlots(fusion.edges,p.order,targets,bytes,budget-r.resultCapacityBytes,3,incremental);
+        r.plan=lowerDagSlots(fusion.edges,p.order,targets,bytes,slotBudget,3,incremental);
         r.reachableNodes=fusion.reachable;r.fusedNodes=fusion.reachable-fusion.passes;
         r.nodes.resize(p.nodes.size());r.regionMembers.resize(p.nodes.size());
         for(const auto& pass:r.plan.schedule.passes){
@@ -319,7 +325,7 @@ inline MaterializedSources compileMaterializedDag(const Program& p,const std::ve
             r.regionMembers[pass.pipeline]=region.nodes;
         }
     }else{
-        r.plan=planMaterializedDag(p,targets,n,budget-r.resultCapacityBytes,incremental);
+        r.plan=planMaterializedDag(p,targets,n,slotBudget,incremental);
         r.reachableNodes=r.plan.schedule.passes.size();
         r.nodes.resize(p.nodes.size());r.regionMembers.resize(p.nodes.size());
         for(const auto& pass:r.plan.schedule.passes){
@@ -327,7 +333,7 @@ inline MaterializedSources compileMaterializedDag(const Program& p,const std::ve
             r.regionMembers[pass.pipeline]={pass.pipeline};
         }
     }
-    r.totalBytes=r.plan.allocatedBytes+r.resultCapacityBytes;
+    r.totalBytes=r.plan.allocatedBytes+r.resultCapacityBytes+r.imageSourceBytes;
     for(auto target:targets)r.packs.push_back(packMaterializedKernel(materializedValue(p.nodes[target].info->output),n));
     return r;
 }
