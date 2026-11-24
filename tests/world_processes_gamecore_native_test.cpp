@@ -1,4 +1,5 @@
 #include "apps/studio-native/StudioPlanetLiveSnapshot.h"
+#include "apps/studio-native/StudioPlanetAetherSnapshot.h"
 // Actual GameCore map fixture proving native module ECS hydration via mapPlaced().
 #include "aiverselib/world/WorldProcessesNativeModule.h"
 #include "aiverselib/world/WorldProcessGravity.h"
@@ -744,6 +745,48 @@ static void checkMorphGravity(){
     AIVERSE_TEST_CHECK(restored->deserialize(sim->serialize(),&error));
     AIVERSE_TEST_CHECK(restored->checksum()==sim->checksum());
 }
+static void checkPlanetLiveAether(){
+    using aiverse::studio::AetherDiagnosticPolicy;
+    using aiverse::studio::samplePlanetAether;
+    game::Surface surface;
+    game::BodyDef body;body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    World ecs;
+    const auto low=ecs.create(),high=ecs.create(),moon=ecs.create(),duct=ecs.create(),cross=ecs.create(),source=ecs.create();
+    Transform tr{};tr.pos=game::Surface::anchor(0)+surface.facePoint(0,0,Fixed::fromInt(4),Fixed::fromInt(4));
+    const auto frame=wp::surfaceFrame(&surface,tr.pos);AIVERSE_TEST_CHECK(frame);
+    physis::GravitySettings gravity;gravity.baseline=frame->up*Fixed::fromInt(-10);
+    ecs.setResource<physis::GravitySettings>(gravity);
+    ecs.add<Transform>(low,tr);
+    tr.pos=tr.pos+frame->up*Fixed::fromInt(2);ecs.add<Transform>(high,tr);
+    tr.pos=game::Surface::anchor(1)+surface.facePoint(1,0,Fixed::fromInt(4),Fixed::fromInt(4));
+    ecs.add<Transform>(moon,tr);
+    for(auto e:{low,high,moon}){aether::GasCell c{1000,1000,1000};c.sampledTick=7;ecs.add<aether::GasCell>(e,c);}
+    ecs.add<aether::GasDuct>(duct,aether::GasDuct{low,high,1000,false,true});
+    ecs.add<aether::GasDuct>(cross,aether::GasDuct{low,moon,1000,false,true});
+    ecs.add<aether::GasFlux>(source,aether::GasFlux{low,5,-2,0,true});
+    const auto diffusion=samplePlanetAether(ecs,surface,7,AetherDiagnosticPolicy::Diffusion);
+    AIVERSE_TEST_CHECK(diffusion.getBool("available")&&diffusion["cells"].size()==3);
+    AIVERSE_TEST_CHECK(diffusion["ducts"].size()==1&&diffusion.getInt("crossBody")==1);
+    AIVERSE_TEST_CHECK(diffusion["ducts"][size_t(0)]["potential"][size_t(0)].integer()==0);
+    const auto strat=samplePlanetAether(ecs,surface,7,AetherDiagnosticPolicy::Stratified);
+    const auto& d=strat["ducts"][size_t(0)];
+    AIVERSE_TEST_CHECK(d.getBool("potentialAvailable"));
+    AIVERSE_TEST_CHECK(d["potential"][size_t(0)].integer()>0&&d["potential"][size_t(1)].integer()<0);
+    AIVERSE_TEST_CHECK(d["potential"][size_t(2)].integer()==0);
+    for(const auto& c:strat["cells"].items())if(c.getStr("id")==std::to_string(low.packed())){
+        AIVERSE_TEST_CHECK(c["sourceRate"][size_t(0)].integer()==5&&c["sourceRate"][size_t(1)].integer()==-2);
+    }
+    ecs.get<aether::GasDuct>(duct).oneWay=true;
+    const auto valve=samplePlanetAether(ecs,surface,7,AetherDiagnosticPolicy::Stratified);
+    AIVERSE_TEST_CHECK(valve["ducts"][size_t(0)]["potential"][size_t(1)].integer()==0);
+    const auto unknown=samplePlanetAether(ecs,surface,7,AetherDiagnosticPolicy::Unknown);
+    AIVERSE_TEST_CHECK(!unknown["ducts"][size_t(0)].getBool("potentialAvailable"));
+    AIVERSE_TEST_CHECK(samplePlanetAether(ecs,surface,8,AetherDiagnosticPolicy::Diffusion)["cells"].size()==0);
+    const auto cap=samplePlanetAether(ecs,surface,7,AetherDiagnosticPolicy::Diffusion,1);
+    AIVERSE_TEST_CHECK(cap.getBool("truncated")&&cap["cells"].size()==1);
+    AIVERSE_TEST_CHECK(ecs.get<aether::GasCell>(low).smoke==1000);
+}
 static void checkAetherStratification(){
     World ecs;
     physis::GravitySettings gravity;gravity.baseline={Fixed{},Fixed::fromInt(-10),Fixed{}};
@@ -944,6 +987,7 @@ int main(){
     checkPlanetStudioDiagnostics();
     checkCircuitSurfaceWiring();
     checkAetherStratification();
+    checkPlanetLiveAether();
     checkMorphGravity();
     checkPlanetSoilTransfer();
     checkPlanetCollapseDelivery();

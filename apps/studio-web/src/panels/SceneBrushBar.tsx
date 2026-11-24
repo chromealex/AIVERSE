@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Brush, Spline } from 'lucide-react';
 import { invoke, onNativeEvent } from '../bridge';
 import { WorldProcessDiagnostics } from '../components/WorldProcessDiagnostics';
-import type { StudioSceneBrush, EvolveLayer, EvolveLiveState } from '../types';
+import type { StudioSceneBrush, EvolveLayer, EvolveLiveState, AetherLayer } from '../types';
 
 export type BrushKind = StudioSceneBrush['kind'];
 const KIND_LABEL: Record<BrushKind, string> = {
@@ -81,6 +81,11 @@ function EcologyLiveMap({layer}:{layer:EvolveLayer}){
   if(error)return <span role="alert">{error}</span>;
   if(!state?.active)return <small>Live ecology: start Play mode</small>;
   if(state.topology==='planet')return <div><small>Planetary live snapshot · tick {state.tick}</small>
+    {state.aether&&<div><small>AETHER · {state.aether.policy} · {state.aether.cells.length}/{state.aether.cellCount} cells · {state.aether.ducts.length}/{state.aether.ductCount} ducts{state.aether.truncated?' · capped':''}{state.aether.available?'':' · unavailable'}</small>
+      <small>Cross-body {state.aether.crossBody} · omitted ducts {state.aether.omittedDucts} · rejected {state.aether.rejected}{state.aether.gravityCapped?' · gravity budget exceeded':''}</small>
+      {state.aether.cells.slice(0,8).map(c=><div key={c.id}><small>{c.body} · {c.id} · smoke {c.mass[0]} · toxin {c.mass[1]} · oxygen {c.mass[2]} · configured source [{c.sourceRate.join(', ')}]</small></div>)}
+      {state.aether.ducts.slice(0,8).map(d=><div key={d.id}><small>{d.from} → {d.to} · {d.oneWay?'one-way':'two-way'} · cap {d.cap} · {d.potentialAvailable?'potential ['+d.potential?.join(', ')+'] · bias ['+d.bias?.join(', ')+']':'potential unavailable'}</small></div>)}
+      <small>Mass units are game-quantized, not physical concentrations. Potential is isolated-duct tendency, not measured previous-tick flow. Values ordered smoke/toxin/oxygen.</small></div>}
     {state.gravity&&<div><small>PHYSIS effective gravity · {state.gravity.fieldCount} fields{state.gravity.usesDefaultSettings?" · default baseline":""}{state.gravity.available?"": " · unavailable"}</small>
       {state.gravity.bodies.map(b=><div key={b.body}><small>{b.body}: {b.minMagnitude.toFixed(2)}–{b.maxMagnitude.toFixed(2)} m/s² · inward {b.inward} · outward {b.outward} · tangent {b.tangent} · zero {b.zero}</small></div>)}
       <small>Cyan inward · orange outward · violet tangent · grey zero. Sampled surface points only.</small></div>}
@@ -138,14 +143,15 @@ export function EcologyLayerPicker(){
   const [live,setLive]=useState(false);
   const [granularCellCm,setGranularCellCm]=useState(0);
   const [liveGravity,setLiveGravity]=useState(false);
+  const [aetherLayer,setAetherLayer]=useState<AetherLayer>('off');
   const [pending,setPending]=useState(true);
   const [error,setError]=useState('');
-  useEffect(()=>{let active=true;void invoke('studio.evolveLayer',{}).then(r=>{if(active){setLayer(r.layer);setLive(r.live);setGranularCellCm(r.granularCellCm??0);setLiveGravity(r.liveGravity??false);}}).catch(e=>{if(active)setError(message(e));}).finally(()=>{if(active)setPending(false);});return()=>{active=false;};},[]);
+  useEffect(()=>{let active=true;void invoke('studio.evolveLayer',{}).then(r=>{if(active){setLayer(r.layer);setLive(r.live);setGranularCellCm(r.granularCellCm??0);setLiveGravity(r.liveGravity??false);setAetherLayer(r.aetherLayer??'off');}}).catch(e=>{if(active)setError(message(e));}).finally(()=>{if(active)setPending(false);});return()=>{active=false;};},[]);
   return <div><label className="ptp__row"><span>EVOLVE (authored)</span><select className="au-input" value={layer} disabled={pending} onChange={e=>{
     const next=e.target.value as EvolveLayer;
     setPending(true);
     void invoke('studio.evolveLayer',{layer:next}).then(r=>{setLayer(r.layer);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));
-  }}>{(['combined','fertility','pollution','succession','durability','off'] as EvolveLayer[]).map(v=><option key={v} value={v}>{v}</option>)}</select>{error&&<span role="alert">{error}</span>}</label><label><input type="checkbox" checked={live} disabled={pending} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{live:e.target.checked}).then(r=>{setLive(r.live);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>Live 3D overlay</label><label><input type="checkbox" checked={liveGravity} disabled={pending||!live} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{liveGravity:e.target.checked}).then(r=>{setLiveGravity(r.liveGravity??false);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>Effective PHYSIS gravity (planet)</label><label className="ptp__row"><span>GRANULAR planet diagnostic cell/depth (cm)</span><select className="au-input" disabled={pending||!live} value={granularCellCm} onChange={e=>{
+  }}>{(['combined','fertility','pollution','succession','durability','off'] as EvolveLayer[]).map(v=><option key={v} value={v}>{v}</option>)}</select>{error&&<span role="alert">{error}</span>}</label><label><input type="checkbox" checked={live} disabled={pending} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{live:e.target.checked}).then(r=>{setLive(r.live);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>Live 3D overlay</label><label><input type="checkbox" checked={liveGravity} disabled={pending||!live} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{liveGravity:e.target.checked}).then(r=>{setLiveGravity(r.liveGravity??false);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>Effective PHYSIS gravity (planet)</label><label className="ptp__row"><span>AETHER gas mass / potential (planet)</span><select className="au-input" value={aetherLayer} disabled={pending||!live} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{aetherLayer:e.target.value as AetherLayer}).then(r=>{setAetherLayer(r.aetherLayer??'off');setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}>{(['off','smoke','toxin','oxygen'] as const).map(v=><option key={v} value={v}>{v}</option>)}</select></label><label className="ptp__row"><span>GRANULAR planet diagnostic cell/depth (cm)</span><select className="au-input" disabled={pending||!live} value={granularCellCm} onChange={e=>{
     setPending(true);void invoke('studio.evolveLayer',{granularCellCm:Number(e.target.value)}).then(r=>{setGranularCellCm(r.granularCellCm??0);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));
   }}>{Array.from(new Set([0,10,25,50,100,200,500,1000,2000,5000,10000,granularCellCm])).sort((a,b)=>a-b).map(n=><option key={n} value={n}>{n===0?'Off':n}</option>)}</select></label><small>Display scale only; ground-relative tops, no physical geometry changes.</small><EcologyLiveMap layer={layer}/><WorldProcessDiagnostics/></div>;
 }

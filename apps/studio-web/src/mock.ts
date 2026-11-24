@@ -59,7 +59,7 @@ export function mockInvoke<M extends StudioMethod>(method: M, params: StudioPara
 export async function mockInvoke(method: StudioMethod, params: StudioParams[StudioMethod]): Promise<StudioResult[StudioMethod]> {
   if (method === 'studio.worldProcessDiagnostics') return {active:false} as StudioResult['studio.worldProcessDiagnostics'];
   if (method === 'studio.evolveState') return {active:false,regions:[]} as StudioResult['studio.evolveState'];
-  if (method === 'studio.evolveLayer') return {layer: (params as StudioParams['studio.evolveLayer']).layer ?? 'combined',live:(params as StudioParams['studio.evolveLayer']).live??false,granularCellCm:(params as StudioParams['studio.evolveLayer']).granularCellCm??0,liveGravity:(params as StudioParams['studio.evolveLayer']).liveGravity??false} as StudioResult['studio.evolveLayer'];
+  if (method === 'studio.evolveLayer') return {layer: (params as StudioParams['studio.evolveLayer']).layer ?? 'combined',live:(params as StudioParams['studio.evolveLayer']).live??false,granularCellCm:(params as StudioParams['studio.evolveLayer']).granularCellCm??0,liveGravity:(params as StudioParams['studio.evolveLayer']).liveGravity??false,aetherLayer:(params as StudioParams['studio.evolveLayer']).aetherLayer??'off'} as StudioResult['studio.evolveLayer'];
   if (method === 'studio.worldProcessAreaPreview' ||
       method === 'studio.worldProcessGroupPivot' ||
       method === 'studio.worldProcessAreaBatchResize')
