@@ -1675,3 +1675,35 @@ elevator recipes must still use the circulation owner; managed runtime
 refuses them rather than spawning a missing platform. No C++ or GPU
 PASS is claimed until actual CI evidence. Handoff: docs/agent-handoffs/
 building-stage23v2-common-world-runtime-2026-11-24.md.
+
+## Stage 23V.5 — common runtime circulation
+
+The BuildingWorldRuntime registry now composes the existing
+BuildingCirculationEcsScene<Transform> for every scene. Elevator recipes
+must provide atLiftLanding and authorizeLift in Definition. The same
+SceneCollisionNamespaces lease assigns static shell, aperture, lift
+platform and physical landing door collider IDs. Do not use the old
+genre-specific modules. The host supplies real ECS BuildingPhysicalExtent
+and optional PHYSIS obstruction queries and must defer actor retirement
+if retireActor returns false (e.g. a rider in transit).
+
+makeLiftCommand uses the existing reserved Simulation Command (param
+2..5, scene/epoch/feature/floor args). submitAuthenticated stamps the
+transport's player; reauthorization occurs when the fixed tick consumes
+the request. captureLiftSnapshot only exports committed acknowledged
+state. Use route/canBoardLift and existing native stair/lift actions,
+not teleports. The graph revision stream is shared with apertures.
+Only physical/access changes trigger native graph refresh; pending ACKs
+gate the next Simulation tick before other systems run.
+
+BuildingLiftWorldCheckpoints persists cabin phase, timing, position,
+rider maps and ECS passenger markers. Reconcile restores platform/door
+colliders at saved heights before graph publication, without applying
+old motion to already restored actors. GPU shell/leaf/lift assets use
+one Renderer3D retirement boundary. Host must call prepareGraphics and
+retireGraphics on its serialized graphics boundary.
+
+The registry is an opt-in authoritative checkpoint integration, not a
+deterministic lockstep rollback engine. External graph consumers and
+game movement still own their policies; native C++/GPU/network acceptance
+has not yet been run. Handoff: docs/agent-handoffs/buildings-stage-23v5.md.

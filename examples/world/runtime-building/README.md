@@ -511,3 +511,28 @@ unblocks Simulation. On final shutdown stop the simulation and graphics
 owners first, call shutdown(), then release the registry. The game
 continues to own its actor/cargo transforms, extent and movement policy.
 No compile/run/real GPU result is asserted for this stage.
+
+## Stage 23V.5: lifts in the same world registry
+
+Set Definition::atLiftLanding and Definition::authorizeLift for
+elevator recipes, in addition to the aperture authorization and range
+callbacks. Use the actual authoritative actor motor and ECS body
+volumes. The shared registry installs persistence for passenger
+components and circulation checkpoints automatically; do not register
+a second copy.
+
+Call makeLiftCommand(sceneId, featureIndex, floor, actor, slot, kind)
+with Call, Board, SelectFloor or Exit, then submit through the existing
+Simulation command stream or submitAuthenticated on an admitted
+connection. The server checks actor ownership again at the fixed tick.
+The actual cabin/landing interaction and ride displacements run on
+existing ECS Transform entities. For rendering, the existing
+prepareGraphics/retireGraphics pair now includes platform and landing
+door models. On checkpoint restore, reconcile reconstructs exact saved
+lift colliders and passenger bindings; pending client command epochs are
+invalidated. Never despawn a rider if retireActor returns false.
+
+For regional nav, route returns explicit native same-floor corridors and
+stair/lift actions. canBoardLift requires actual open landing colliders
+and acknowledged graph state; use the game's existing stair/actor motor
+to execute vertical segments. No second graph or network channel.

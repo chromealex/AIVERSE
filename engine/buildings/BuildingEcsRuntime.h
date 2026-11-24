@@ -196,7 +196,7 @@ public:
         }
         record->fixedTick=sim.tick()+1;
         record->revision=physics_->revision();
-        record->graphAcknowledged=frame.graphAcknowledged;
+        record->graphAcknowledged=!physics_->pendingGraphs()&&!physics_->faulted();
         record->leaves.clear();
         for(const auto& pose:poses)
             record->leaves.push_back({pose.socketId,
