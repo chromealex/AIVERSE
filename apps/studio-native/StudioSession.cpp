@@ -1888,8 +1888,10 @@ Json StudioSession::dispatch(const Json& request) {
 }
 Json StudioSession::dispatchImpl(const Json& request) {
     const auto method=request.getStr("method");
-    static const std::set<std::string> assetWrites={"studio.assetMetaPatch","studio.assetFolderCreate","studio.assetTransferCommit",
-        "studio.assetDelete","studio.assetTrashApply","studio.assetTrashBatchApply"};
+    // These three staged owners publish their own paired-cursor batch.
+    // Keep the legacy dirty-marker wrapper only for operations not yet staged.
+    static const std::set<std::string> assetWrites={"studio.assetTransferCommit",
+        "studio.assetTrashApply","studio.assetTrashBatchApply"};
     if(ws_.project.dir.empty()||!assetWrites.count(method))return dispatchImplCore(request);
     // This wrapper is also used by explicit agent adapters; do not bypass it.
     try{
@@ -2798,7 +2800,13 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             if(!studioValidGuid(guid)||key.size()>40||!params.has("value"))
                 throw std::runtime_error("Invalid asset import setting request");
             StudioAssetCatalog catalog(ws_.project.dir);
-            const auto updated=catalog.patchSettings(guid,key,params["value"],&assetHistory_);
+            catalog.rebuild(false);
+            auto next=assetHistory_;
+            std::vector<editor::ProjectFileEdit> edits;
+            const auto updated=catalog.patchSettings(guid,key,params["value"],&next,&edits);
+            studioApplyHistoryBatch(ws_.project.dir,{},edits,{},&assetHistory_,&next);
+            assetHistory_=std::move(next);assetHistoryPersistenceWarning_.clear();
+            try{catalog.rebuild(false);}catch(const std::exception& e){assetHistoryPersistenceWarning_="Asset index refresh required: "+std::string(e.what());}
             agentHistoryUnsafe_=true;
             Json detail=Json::object();
             detail.set("guid",str(updated.guid));
@@ -2879,18 +2887,29 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 studioCheckMapAssetPaths(ws_.project.dir,ws_.map.toJson(),ws_.project.rulesJson,ws_.project.manifest,{{path,current->directory}});
                 if(studioDocumentNamesAsset(editor::loadMaterialLibrary(ws_),path,current->directory))throw std::runtime_error("Asset is referenced by materials");
             };
-            auto plan=studioQuarantineAsset(ws_.project.dir,path,guid,check);
+            StudioBatchAssetPlan staged;
+            auto plan=studioQuarantineAsset(ws_.project.dir,path,guid,check,&staged);
             const auto backup=plan.files.front().to;
-            assetHistory_.recordMove(std::move(plan),"Delete asset: "+path);agentHistoryUnsafe_=true;
+            auto next=assetHistory_;next.recordMove(std::move(plan),"Delete asset: "+path);
+            studioApplyHistoryBatch(ws_.project.dir,staged.relocations,staged.documents,staged.movingResources,&assetHistory_,&next);
+            assetHistory_=std::move(next);assetHistoryPersistenceWarning_.clear();
+            try{catalog.rebuild(false);}catch(const std::exception& e){assetHistoryPersistenceWarning_="Asset index refresh required: "+std::string(e.what());}
+            agentHistoryUnsafe_=true;
             pendingAssetTransfer_.reset();
             Json r=Json::object();r.set("path",str(path));r.set("backup",str(backup));r.set("historyRecorded",Json::fromBool(assetHistory_.canUndo()));
             reply.set("result",std::move(r));
         } else if (method == "studio.assetFolderCreate") {
             if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
             editor::ProjectHistory::MovePlan history;
+            StudioBatchAssetPlan staged;
             const std::string path=studioCreateContentFolder(ws_.project.dir,
-                params.getStr("parent"),params.getStr("name"),&history);
-            assetHistory_.recordMove(std::move(history),"Create folder: "+path);agentHistoryUnsafe_=true;
+                params.getStr("parent"),params.getStr("name"),&history,&staged);
+            auto next=assetHistory_;next.recordMove(std::move(history),"Create folder: "+path);
+            studioApplyHistoryBatch(ws_.project.dir,staged.relocations,staged.documents,staged.movingResources,&assetHistory_,&next);
+            assetHistory_=std::move(next);assetHistoryPersistenceWarning_.clear();
+            try{StudioAssetCatalog catalog(ws_.project.dir);catalog.rebuild(false);}
+            catch(const std::exception& e){assetHistoryPersistenceWarning_="Asset index refresh required: "+std::string(e.what());}
+            agentHistoryUnsafe_=true;
             Json r=Json::object();
             r.set("path",str(path));reply.set("result",std::move(r));
         } else if (method == "studio.assetMovePreview") {
