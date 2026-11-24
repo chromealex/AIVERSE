@@ -108,6 +108,23 @@ int main() {
             expect(readFile(model)==before&&!fs::exists(target),"Moved resource recovery failed");
             StudioMoveJournal::recover(project);fs::remove(model);
         }
+        // v6: binary-safe moved GLB snapshot and exact pending recovery.
+        {
+            using namespace aiverse::studio;
+            const auto model=root/"A"/"Moved.glb",target=root/"B"/"Moved.glb";
+            StudioModelRepairDocument doc;doc.binary=true;doc.json=aiverse::Json::parse(R"({"images":[{"uri":"Stone.png"}]})");
+            studioGlbAppendU32(doc.tail,4);studioGlbAppendU32(doc.tail,0x004e4942);doc.tail.append("\xff\0\x80\x01",4);
+            const auto before=studioEncodeModelRepair(doc);
+            auto images=doc.json["images"];auto image=images[0];image.set("uri",aiverse::Json::string("../A/Stone.png"));images.at(0)=std::move(image);doc.json.set("images",std::move(images));
+            const auto after=studioEncodeModelRepair(doc);
+            writeFile(model,before);
+            StudioMoveJournal journal(project);
+            journal.begin({{"A/Moved.glb","B/Moved.glb"}},false,false,{{fs::path("content/A/Moved.glb"),before,after}});
+            fs::rename(model,target);writeFile(target,after);
+            StudioMoveJournal::recover(project);
+            expect(readFile(model)==before&&!fs::exists(target),"Binary resource exact recovery failed");
+            StudioMoveJournal::recover(project);fs::remove(model);
+        }
         // Commit marker forbids rollback on restart.
         {
             StudioMoveJournal journal(project);

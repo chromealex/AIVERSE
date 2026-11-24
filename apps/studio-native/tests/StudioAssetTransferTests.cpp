@@ -283,6 +283,47 @@ int main(){
             fs::remove(project/"content"/"Models"/"outside.png");
             fs::remove(studioMetaPath(project/"content"/"Models"/"outside.png"));db.rebuild(false);
         }
+        // S6g.6.3: binary GLB repair retains BIN and unknown chunk bytes.
+        {
+            using namespace aiverse;
+            using namespace aiverse::studio;
+            const auto model=project/"content"/"Models"/"Binary.glb";
+            const auto texture=project/"content"/"Models"/"binary.png";
+            StudioModelRepairDocument doc;
+            doc.binary=true;doc.json=Json::parse(R"({"asset":{"version":"2.0"},"images":[{"uri":"binary.png"}],"buffers":[{"byteLength":4}]})");
+            studioGlbAppendU32(doc.tail,4);studioGlbAppendU32(doc.tail,0x004e4942);
+            doc.tail.append("\0\xff\x80\x01",4);
+            studioGlbAppendU32(doc.tail,4);studioGlbAppendU32(doc.tail,0x12345678);
+            doc.tail.append("\xfe\0\x7f\x02",4);
+            const auto original=studioEncodeModelRepair(doc);
+            write(model,original);write(texture,"binary texture");db.rebuild();
+            auto move=StudioTransferPlan::internal(project,"Other",{"Models/binary.png"});
+            std::optional<editor::ProjectHistory::MovePlan> recorded;
+            const auto result=move.apply(move.token(),{},{},&recorded,true);
+            AIVERSE_TEST_CHECK(recorded&&result.getInt("repairedResourceDocuments")==1);
+            const auto changed=read(model);
+            const auto parsed=studioDecodeModelRepair(model,changed);
+            AIVERSE_TEST_CHECK(parsed.binary&&parsed.tail==doc.tail);
+            AIVERSE_TEST_CHECK(parsed.json["images"][0].getStr("uri")=="../Other/binary.png");
+            editor::ProjectHistory timeline;auto copy=*recorded;timeline.recordMove(std::move(copy),"Repair GLB");
+            {StudioAssetHistoryPublication publication(project);publication.save(timeline);}
+            auto reopened=studioLoadAssetHistoryCheckpoint(project);
+            AIVERSE_TEST_CHECK(reopened.canUndo()&&reopened.next(false).move->resourceEdits[0].before==original);
+            studioReplayAssetMove(project,*reopened.next(false).move,false);
+            AIVERSE_TEST_CHECK(read(model)==original&&fs::exists(texture));
+            studioReplayAssetMove(project,*recorded,true);
+            AIVERSE_TEST_CHECK(read(model)==changed);
+            studioReplayAssetMove(project,*recorded,false);
+            fs::remove(project/".aiverse-cache"/"asset-history.json");
+            auto moved=StudioTransferPlan::internal(project,"Other",{"Models/Binary.glb"});
+            (void)moved.apply(moved.token(),{},{},&recorded,true);
+            AIVERSE_TEST_CHECK(recorded&&!recorded->files[0].digestAfter.empty());
+            AIVERSE_TEST_CHECK(studioDecodeModelRepair(project/"content"/"Other"/"Binary.glb",read(project/"content"/"Other"/"Binary.glb")).tail==doc.tail);
+            studioReplayAssetMove(project,*recorded,false);
+            AIVERSE_TEST_CHECK(read(model)==original);
+            fs::remove(model);fs::remove(texture);fs::remove(studioMetaPath(model));fs::remove(studioMetaPath(texture));db.rebuild(false);
+        }
+
         // S6h.1: persisted quota blocks growth, not restoration or explicit purge.
         {
             using namespace aiverse;

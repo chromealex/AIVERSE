@@ -93,3 +93,6 @@ Existing linked internal move preview advertises repair candidates; commit may r
 
 ### S6g.6.2 — moved glTF owners
 Internal move uses projected owner paths for textual glTF URI repair, including nested folder moves. Direction-specific file/tree digests and v5 recovery maintain exact original bytes. Legacy v4 recovery retained. No arbitrary source rewriting or coordinated repaired batch replay.
+
+### S6g.6.3 — binary GLB URI repair
+Internal moves repair bounded GLB v2 JSON chunks with exact trailing chunk preservation, binary-safe history and v6 journal recovery. Models exceeding retained repair budgets are refused before mutation. Existing MCP operation and preview fields are unchanged.

@@ -1461,16 +1461,16 @@ void validateHistoryMove(const fs::path& project,const AssetHistory::MovePlan& p
         for(const auto& f:plan.files)repairMoves.push_back({f.from,f.to});
     for(const auto& edit:plan.resourceEdits){
         const auto path=edit.path.generic_string();
-        if(!path.starts_with("content/")||edit.path.extension()!=".gltf"||!repairPaths.insert(path).second)
+        if(!path.starts_with("content/")||!studioRepairModelExtension(edit.path)||!repairPaths.insert(path).second)
             throw std::runtime_error("Invalid persisted resource path");
         validateHistoryContentPath(path.substr(8));
         for(size_t count:{edit.before.size(),edit.after.size()}){
             if(count>8u*1024u*1024u-repairBytes)throw std::runtime_error("Persisted resource budget exceeded");
             repairBytes+=count;
         }
-        (void)Json::parse(edit.before);(void)Json::parse(edit.after);
+        studioValidateModelRepairBytes(edit);
         const auto destination=StudioMoveJournal::resourceDestination(path,repairMoves);
-        if(!destination.starts_with("content/")||fs::path(destination).extension()!=".gltf")
+        if(!destination.starts_with("content/")||!studioRepairModelExtension(fs::path(destination)))
             throw std::runtime_error("Invalid persisted repaired destination");
         validateHistoryContentPath(destination.substr(8));
     }
@@ -1552,8 +1552,7 @@ std::string encodeAssetHistory(const fs::path& project,const AssetHistory& histo
             if(!plan.resourceEdits.empty()){
                 Json edits=Json::array();
                 for(const auto& edit:plan.resourceEdits){
-                    Json item=Json::object();item.set("path",Json::string(edit.path.generic_string()));
-                    item.set("before",Json::string(edit.before));item.set("after",Json::string(edit.after));edits.push(std::move(item));
+                    edits.push(studioEncodeResourceEdit(edit));
                 }
                 move.set("resourceEdits",std::move(edits));
             }
@@ -1602,8 +1601,7 @@ AssetHistory decodeAssetHistory(const fs::path& project,const std::string& text)
             if(move.has("resourceEdits")){
                 if(!move["resourceEdits"].isArray()||move["resourceEdits"].size()>32)throw std::runtime_error("Invalid resource history");
                 for(const auto& edit:move["resourceEdits"].items()){
-                    if(!edit["path"].isString()||!edit["before"].isString()||!edit["after"].isString())throw std::runtime_error("Invalid resource history entry");
-                    plan.resourceEdits.push_back({fs::path(edit.getStr("path")),edit.getStr("before"),edit.getStr("after")});
+                    plan.resourceEdits.push_back(studioDecodeResourceEdit(edit,true));
                 }
             }
             validateHistoryMove(project,plan);history.recordMove(std::move(plan),label);

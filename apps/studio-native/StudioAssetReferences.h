@@ -7,6 +7,7 @@
 #include "engine/render/Xml.h"
 #include "engine/pack/Sha256.h"
 #include "apps/editor/core/ProjectFileEdits.h"
+#include "apps/studio-native/StudioModelRepairBytes.h"
 #include <iterator>
 #include <map>
 #include <algorithm>
@@ -192,7 +193,7 @@ inline Json studioMoveReferenceImpact(const Json& transfer,
                 row.set("validateOnApply",Json::fromBool(true));
                 row.set("preservesDefault",Json::fromBool(studioGltfRelocationSafe(ref,defaults)));
                 row.set("repairCandidate",Json::fromBool(ref.owner=="glTF resource"&&
-                    std::filesystem::path(ref.document).extension()==".gltf"&&
+                    studioRepairModelExtension(std::filesystem::path(ref.document))&&
                     (studioRelocatedReferencePath(ref.document,defaults)!=ref.document||
                      studioRelocatedReferencePath(ref.path,defaults)!=ref.path)));
             }
@@ -553,7 +554,7 @@ inline std::string studioRelativeGltfUri(const std::string& owner,const std::str
 inline std::vector<editor::ProjectFileEdit> studioPlanGltfRepairs(const std::filesystem::path& project,
     const std::vector<StudioReferenceRelocation>& moves){
     namespace fs=std::filesystem;
-    struct Pending{std::string before;Json doc;};
+    struct Pending{std::string before;StudioModelRepairDocument doc;};
     std::map<std::string,Pending> pending;
     size_t bytes=0;
     const auto root=fs::canonical(project);
@@ -564,7 +565,7 @@ inline std::vector<editor::ProjectFileEdit> studioPlanGltfRepairs(const std::fil
         for(const auto& move:moves)
             if(target==ref.path&&studioReferenceMatchesPath(ref.path,move.to,move.directory))
                 throw std::runtime_error("Move would adopt an existing destination reference");
-        if(ref.owner!="glTF resource"||fs::path(ref.document).extension()!=".gltf"||(owner==ref.document&&target==ref.path)||
+        if(ref.owner!="glTF resource"||!studioRepairModelExtension(fs::path(ref.document))||(owner==ref.document&&target==ref.path)||
            !studioSafeModelResourceFile(root,ref.document))
             throw std::runtime_error("Model resource cannot be repaired safely: "+ref.document+" "+ref.field);
         auto it=pending.find(ref.document);
@@ -573,7 +574,7 @@ inline std::vector<editor::ProjectFileEdit> studioPlanGltfRepairs(const std::fil
                 throw std::runtime_error("glTF repair history budget exceeded");
             auto before=editor::readProjectFileBytes(root/ref.document);bytes+=before.size();
             if(bytes>4u*1024u*1024u)throw std::runtime_error("glTF repair history budget exceeded");
-            auto doc=Json::parse(before);
+            auto doc=studioDecodeModelRepair(fs::path(ref.document),before);
             it=pending.emplace(ref.document,Pending{std::move(before),std::move(doc)}).first;
         }
         // Use typed slots only, and validate the exact original URI.
@@ -581,13 +582,13 @@ inline std::vector<editor::ProjectFileEdit> studioPlanGltfRepairs(const std::fil
         for(const char* group:{"buffers","images"}){
             const auto prefix=std::string("/")+group+"/";
             if(!ref.field.starts_with(prefix))continue;
-            const auto& entries=it->second.doc[group];
+            const auto& entries=it->second.doc.json[group];
             for(size_t i=0;i<entries.size();++i){
                 if(ref.field!=prefix+std::to_string(i)+"/uri")continue;
                 auto item=entries[i];
                 if(item.getStr("uri")!=ref.uri)throw std::runtime_error("glTF URI changed during repair planning");
                 item.set("uri",Json::string(studioRelativeGltfUri(owner,target)));
-                auto array=entries;array.at(i)=std::move(item);it->second.doc.set(group,std::move(array));
+                auto array=entries;array.at(i)=std::move(item);it->second.doc.json.set(group,std::move(array));
                 found=true;break;
             }
             if(found)break;
@@ -596,7 +597,7 @@ inline std::vector<editor::ProjectFileEdit> studioPlanGltfRepairs(const std::fil
     }
     std::vector<editor::ProjectFileEdit> result;
     for(auto& [path,edit]:pending){
-        auto after=edit.doc.dump(2)+"\n";
+        auto after=studioEncodeModelRepair(edit.doc);
         if(after.size()>8u*1024u*1024u-bytes)throw std::runtime_error("glTF repair history budget exceeded");
         bytes+=after.size();
         result.push_back({fs::path(path),std::move(edit.before),std::move(after)});
@@ -607,7 +608,8 @@ inline std::vector<editor::ProjectFileEdit> studioPlanGltfRepairs(const std::fil
 // formatting. Compare normalized typed resource resolution, all other JSON
 // fields unchanged; exact source bytes are separately verified.
 inline std::string studioCanonicalGltfRepair(const std::string& path,const std::string& bytes){
-    auto doc=Json::parse(bytes);
+    auto model=studioDecodeModelRepair(std::filesystem::path(path),bytes);
+    auto& doc=model.json;
     for(const char* group:{"buffers","images"}){
         auto array=doc[group];
         if(!array.isArray())continue;
@@ -618,7 +620,9 @@ inline std::string studioCanonicalGltfRepair(const std::string& path,const std::
         }
         doc.set(group,std::move(array));
     }
-    return doc.dump(-1);
+    // Include binary identity, with explicit framing to avoid collisions.
+    const auto normalized=doc.dump(-1);
+    return std::string(model.binary?"glb:":"text:")+std::to_string(normalized.size())+":"+normalized+model.tail;
 }
 inline std::vector<editor::ProjectFileEdit> studioAbsoluteResourceEdits(const std::filesystem::path& project,
     const std::vector<editor::ProjectFileEdit>& edits,const std::vector<StudioReferenceRelocation>& moves={}){

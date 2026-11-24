@@ -170,6 +170,9 @@ Internal Studio/MCP moves can repair exact buffers/images URI slots in stationar
 ## Moved glTF owner repair (S6g.6.2)
 A textual glTF owner can move directly or under a moved directory while URI targets are reprojected. Exact original document paths are retained and translated on replay. Move file/tree digests have a precomputed optional after digest. Journal v5 locates repaired files at either endpoint before reversing relocation; v4 remains readable. Individual history checks both directional digests. GLB/OBJ/DAE edits and coordinated repaired replay remain separate work.
 
+## Binary GLB repair (S6g.6.3)
+Native URI repair supports bounded .glb snapshots: validate GLB v2 headers and chunk table, rewrite only JSON, preserve exact following chunk headers/payload/padding. Snapshot history and v6 move journal encode binary bytes as hex and restore exact originals; legacy v1–v5 journals remain readable. Existing 4 MiB input / 8 MiB paired repair budget deliberately rejects large models needing rewrites; no streaming repair or external backup storage claim. UI/MCP reuse existing internal transfer path.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

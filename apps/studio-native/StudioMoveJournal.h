@@ -7,6 +7,7 @@
 #include "engine/data/Json.h"
 #include "apps/studio-native/StudioAssetFileDigest.h"
 #include "apps/editor/core/ProjectFileEdits.h"
+#include "apps/studio-native/StudioModelRepairBytes.h"
 #include <set>
 #include <filesystem>
 #include <cerrno>
@@ -86,13 +87,11 @@ public:
                 syncPath(folder_/"materials.backup");
             }
             Json state=Json::object();
-            state.set("version",Json::number(int64_t(replacement?3:quarantine?2:resources.empty()?1:5)));
+            state.set("version",Json::number(int64_t(replacement?3:quarantine?2:resources.empty()?1:6)));
             if(!resources.empty()){
                 Json repairs=Json::array();
                 for(const auto& edit:resources){
-                    Json row=Json::object();row.set("path",Json::string(edit.path.generic_string()));
-                    row.set("before",Json::string(edit.before));row.set("after",Json::string(edit.after));
-                    repairs.push(std::move(row));
+                    repairs.push(studioEncodeResourceEdit(edit));
                 }
                 state.set("resources",std::move(repairs));
             }
@@ -125,7 +124,7 @@ public:
         // never reverse a committed transaction.
         const auto version=Json::parseFile((folder_/"pending.json").string())["version"].integer();
         const fs::path material=project_/"materials.json";
-        if ((version==1||version==4||version==5)&&fs::exists(material)) syncPath(material);
+        if ((version==1||version==4||version==5||version==6)&&fs::exists(material)) syncPath(material);
         syncPath(project_);
         renamePath(folder_/"pending.json",folder_/"committed.json");
         syncPath(folder_);
@@ -158,7 +157,7 @@ public:
         if(fs::file_size(pending)>64ull*1024*1024)throw std::runtime_error("Oversized Studio move journal");
         const Json state=Json::parseFile(pending.string());
         const auto version=state["version"].integer();
-        if ((version!=1&&version!=2&&version!=3&&version!=4&&version!=5) || !state["operations"].isArray() ||
+        if ((version!=1&&version!=2&&version!=3&&version!=4&&version!=5&&version!=6) || !state["operations"].isArray() ||
             state["operations"].size()>128)
             throw std::runtime_error("Invalid Studio move recovery manifest");
         if(version==3){restoreReplacement(state["operations"]);fs::remove_all(folder_);return;}
@@ -187,23 +186,22 @@ public:
                 throw std::runtime_error("Studio recovery missing both sides of a move");
             steps.push_back({source,destination,dst});
         }
-        if(version==4||version==5){
+        if(version==4||version==5||version==6){
             if(!state["resources"].isArray()||state["resources"].size()>32)throw std::runtime_error("Invalid resource repair recovery manifest");
             std::vector<editor::ProjectFileEdit> edits,reverse;
             std::vector<StudioMoveJournalOperation> moves;
             for(const auto& op:operations)moves.push_back({op.getStr("from"),op.getStr("to")});
             for(const auto& row:state["resources"].items()){
-                if(!row["path"].isString()||!row["before"].isString()||!row["after"].isString())throw std::runtime_error("Invalid resource repair record");
-                edits.push_back({fs::path(row.getStr("path")),row.getStr("before"),row.getStr("after")});
+                edits.push_back(studioDecodeResourceEdit(row,version==6));
             }
-            validateResources(edits,moves,version==5);
+            validateResources(edits,moves,version>=5);
             editor::recoverProjectFileEdits(project_);
             for(const auto& edit:edits){
                 const auto relative=edit.path.generic_string();
                 const auto projected=resourceDestination(relative,moves);
                 const auto projectRoot=fs::canonical(project_);
                 auto path=projectRoot/edit.path;
-                if(version==5&&projected!=relative){
+                if(version>=5&&projected!=relative){
                     const auto other=projectRoot/projected;
                     const bool sourceExists=fs::exists(fs::symlink_status(path));
                     const bool targetExists=fs::exists(fs::symlink_status(other));
@@ -274,7 +272,7 @@ private:
         for(const auto& edit:edits){
             const auto path=edit.path.generic_string();
             validateRelative(path);
-            if(!path.starts_with("content/")||edit.path.extension()!=".gltf"||!seen.insert(path).second)
+            if(!path.starts_with("content/")||!studioRepairModelExtension(edit.path)||!seen.insert(path).second)
                 throw std::runtime_error("Invalid resource repair path");
             for(const auto& segment:edit.path){
                 const auto name=segment.string();
@@ -285,14 +283,14 @@ private:
             const auto destination=resourceDestination(path,moves);
             validateRelative(destination);
             if(!destinations.insert(destination).second||(!allowMoved&&destination!=path)||
-               fs::path(destination).extension()!=".gltf")
+               !studioRepairModelExtension(fs::path(destination)))
                 throw std::runtime_error("Invalid moved resource repair path");
             safePath(root,root/destination);
             for(size_t count:{edit.before.size(),edit.after.size()}){
                 if(count>8u*1024u*1024u-bytes)throw std::runtime_error("Resource repair journal budget exceeded");
                 bytes+=count;
             }
-            if(!Json::parse(edit.before).isObject()||!Json::parse(edit.after).isObject())throw std::runtime_error("Invalid resource repair JSON");
+            studioValidateModelRepairBytes(edit);
         }
     }
     static void writeFile(const fs::path& filename,const std::string& data) {
