@@ -79,7 +79,9 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const std::filesystem::path& proj
 void studioApplyHistoryBatch(const std::filesystem::path& project,
     const std::vector<StudioBatchRelocation>& relocations,
     const std::vector<editor::ProjectFileEdit>& documents,
-    const std::vector<StudioBatchResourceEdit>& movingResources={});
+    const std::vector<StudioBatchResourceEdit>& movingResources={},
+    const editor::ProjectHistory* currentAssets=nullptr,
+    const editor::ProjectHistory* nextAssets=nullptr);
 void studioRecoverHistoryBatch(const std::filesystem::path& project);
 // Replay a native recorded file or directory move, never a browser-supplied path list.
 void studioReplayAssetMove(const std::filesystem::path& project,
