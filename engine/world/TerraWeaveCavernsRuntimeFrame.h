@@ -35,7 +35,8 @@ public:
                                       CaveShardConfig shards={},
                                       size_t pending=1024,size_t workers=2,
                                       StreamSettings streaming={})
-        :residency_(streaming),
+        :chunkResolution_(resolution),chunkSpacingCm_(spacingCm),
+         residency_(streaming),
          streamJobs_(workers),
          host_(resolution,spacingCm,shards,pending,workers) {
         registerCaveSharedGraphSolvers(pathRouter_);
@@ -134,15 +135,17 @@ public:
         if(!published&&physicsFinalized)
             physicsBarrier_.requireRecovery();
         if(published){
+            try {
             syncStreamingEditPins();
             // Notify ALL derived solver caches only after a real all-owner
             // Box3D/SpatialWorld/NavMesh/GPU commit. Failure to deliver an
             // invalidation leaves a pending retry, not a false physics ACK.
             if(navDirty_){
                 (void)navigationBus_.publish(host_.indexedSnapshot(),
-                                             navDirtyBounds_);
+                                             navDirtyBounds_,true,makeResidencyCheck());
                 navDirty_=false;
             }
+            }catch(...) {physicsBarrier_.requireRecovery();throw;}
         }
         return published;
     }
@@ -447,7 +450,9 @@ public:
         readyStreamBuilds_.erase(it);
         // Streaming may alter passable topology at the SAME authored SDF
         // revision. Consumers rebuild local routes/flow seeds/cluster borders.
-        (void)navigationBus_.invalidateResidency(navigationBounds);
+        try {
+            (void)navigationBus_.publishResidency(makeResidencyCheck(),navigationBounds);
+        }catch(...) {physicsBarrier_.requireRecovery();throw;}
         return true;
     }
     // Edit-owned native chunks must be retired by their actual owners.
@@ -474,7 +479,7 @@ public:
             if(!exclusive()||!residency_.acknowledge(ticket))
                 throw std::logic_error("Caverns owned retirement ACK refused");
             pendingRetires_.erase(it);
-            (void)navigationBus_.invalidateResidency(bounds);
+            (void)navigationBus_.publishResidency(makeResidencyCheck(),bounds);
             return true;
         }catch(...) {
             physicsBarrier_.requireRecovery();
@@ -512,7 +517,7 @@ public:
         if(!residency_.acknowledge(ticket))
             throw std::logic_error("Caverns streaming retirement ACK refused after native commit");
         pendingRetires_.erase(it);
-        (void)navigationBus_.invalidateResidency(
+        (void)navigationBus_.publishResidency(makeResidencyCheck(),
             navigationChunkBounds(ticket.key,chunkResolution_,chunkSpacingCm_));
         return true;
         } catch(...) {
@@ -547,6 +552,8 @@ public:
     void setNavigationChunkDimensions(uint32_t resolution,int32_t spacingCm){
         if(!resolution||resolution>64||spacingCm<=0||spacingCm>10000)
             throw std::invalid_argument("Caverns nav chunk dimensions");
+        if(host_.sourceSnapshot()&&(resolution!=chunkResolution_||spacingCm!=chunkSpacingCm_))
+            throw std::logic_error("Caverns cannot change live collision chunk dimensions");
         chunkResolution_=resolution;
         chunkSpacingCm_=spacingCm;
     }
@@ -600,6 +607,26 @@ public:
     }
     CaveGameplayEditHost& host()noexcept{return host_;}
 private:
+    CaveResidencyCheck makeResidencyCheck()const {
+        // Only the committed native source catalog is eligible, never a
+        // requested ticket, CPU completion, or pending graphics upload.
+        auto keys=std::make_shared<const std::set<ChunkKey3,KeyLess>>(
+            host_.geometry().catalog().committedKeys());
+        const int64_t span=int64_t(chunkResolution_)*chunkSpacingCm_;
+        return [keys=std::move(keys),span](PointCm lo,PointCm hi) {
+            if(span<=0||lo.x>hi.x||lo.y>hi.y||lo.z>hi.z)return false;
+            const ChunkKey3 a{floorDiv(lo.x,span),floorDiv(lo.y,span),floorDiv(lo.z,span)};
+            const ChunkKey3 b{floorDiv(hi.x,span),floorDiv(hi.y,span),floorDiv(hi.z,span)};
+            const uint64_t nx=uint64_t(b.x-a.x)+1,ny=uint64_t(b.y-a.y)+1,nz=uint64_t(b.z-a.z)+1;
+            const uint64_t budget=std::min<uint64_t>(keys->size(),65536);
+            if(!budget||nx>budget||ny>budget/nx||nz>budget/(nx*ny))return false;
+            for(int64_t z=a.z;z<=b.z;++z)
+            for(int64_t y=a.y;y<=b.y;++y)
+            for(int64_t x=a.x;x<=b.x;++x)
+                if(!keys->contains(ChunkKey3{x,y,z}))return false;
+            return true;
+        };
+    }
     static CaveDirtyBounds navigationChunkBounds(ChunkKey3 key,
                                                   uint32_t resolution,
                                                   int32_t spacingCm) {
