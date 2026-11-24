@@ -77,9 +77,9 @@ public:
             if(owner_&&!close(device))error_="Caverns preview retirement refused";
             return;
         }
-            const auto authored=planetary_?editor::planet_caves::encode(doc.data,editor::planet_caves::read(doc.data)):
-                doc.data.extra["terraweaveCaverns"];
             if(seenDoc_!=&doc||seenRevision_!=doc.revision||!owner_){
+                const auto& authored=planetary_?editor::planet_caves::selectedRegionRecord(doc.data):
+                    doc.data.extra["terraweaveCaverns"];
                 const auto bytes=(planetary_?editor::planet_caves::activeRegionId(doc.data):std::string{})+":"+authored.dump(-1);
                 if(bytes!=document_||!owner_){
                     namespace cave=terraweave::caverns;
