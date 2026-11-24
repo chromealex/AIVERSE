@@ -22,11 +22,11 @@ StudioGameSurface::~StudioGameSurface() {
     lifetime_->retire();
 }
 void StudioGameSurface::start(const StudioGameLaunch& plan,const std::string& assets) {
-    error_.clear();launch_=plan;assets_=assets;matchObserved_=false;++runtimeEpoch_;
+    error_.clear();launch_=plan;assets_=assets;matchObserved_=false;++runtimeEpoch_;worldProcessDiagnostics_.reset();
     host_->start(*device_,plan.project,assets,lifetime_->lease(),plan.map);
     if (plan.camera) { const auto& c=*plan.camera; host_->setStartCamera(c[0],c[1],c[2],c[3],c[4]); }
 }
-void StudioGameSurface::stop() { matchObserved_=false;++runtimeEpoch_; host_->suspendInput();host_->stop();host_->collectGpuRetirements(); }
+void StudioGameSurface::stop() { matchObserved_=false;++runtimeEpoch_;worldProcessDiagnostics_.reset(); host_->suspendInput();host_->stop();host_->collectGpuRetirements(); }
 void StudioGameSurface::setDevice(const StudioGameDevice& profile) {
     (void)profile.profile();host_->suspendInput();profile_=profile;
 }
@@ -37,7 +37,7 @@ void StudioGameSurface::control(const std::string& action) {
     }
     if(action=="checkpointSave"||action=="checkpointRestore"){
         if(!host_->checkpoint(action=="checkpointRestore"))throw std::runtime_error("Checkpoint requires a paused local match and valid saved state");
-        if(action=="checkpointRestore"){++runtimeEpoch_;}
+        if(action=="checkpointRestore"){++runtimeEpoch_;worldProcessDiagnostics_.reset();}
         return;
     }
     if(action=="speed1"||action=="speed2"||action=="speed5"||action=="speed10"||action=="speed25"||action=="speed50"||action=="speed100"){
@@ -70,12 +70,19 @@ void StudioGameSurface::frame(int w,int h,float pw,float ph,double dt,bool focus
         device_->endFrame();
         const bool match=host_->inMatch();
         if(match && !matchObserved_)++runtimeEpoch_;
+        if(!match&&matchObserved_)worldProcessDiagnostics_.reset();
         matchObserved_=match;
         if (host_->quitRequested()) stop();
         if (!host_->errorText().empty()) error_=host_->errorText();
     } catch (const std::exception& e) {
         device_->endPass();device_->endFrame();error_=e.what();stop();
     }
+}
+Json StudioGameSurface::worldProcessDiagnostics(int cap,const std::string& focus){
+    // Restrict diagnostics to a loaded local match, no remote world inspection.
+    Simulation* sim=host_&&host_->inMatch()&&host_->canControl()?host_->simulation():nullptr;
+    return worldProcessDiagnostics_.sample(sim?&sim->world():nullptr,
+        std::to_string(runtimeEpoch_),sim?sim->tick():0,cap,focus);
 }
 Json StudioGameSurface::ecologyState(){
     Simulation* sim=host_&&host_->inMatch()?host_->simulation():nullptr;
