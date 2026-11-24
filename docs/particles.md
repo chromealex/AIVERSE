@@ -120,6 +120,10 @@ screen-fraction cap is reached; the perspective field-of-view scale must not be 
 Fill rate is the real limit on old Mali/Adreno: keep an effect under ~1–1.5x screen fill (the editor
 shows it) by shrinking `size`/`sizeOverLife` or the burst before anything else.
 
+## Named model-node event anchors
+
+Use a binding object such as `{"effect":"impact","node":"Chest","offset":[0,0.2,0],"inheritRotation":true,"inheritScale":true}`. The node is looked up on the subject's current presentation model (hit/death: victim; attack/ability: caster). For attack or ability, `anchor:"target"` selects the event target instead. The special node `origin` means the model frame. Offset is in node-local units. Rotation inheritance aligns the effect's emission +Y to the node's +Y; scale inheritance uses the mean of the three basis lengths, sampled on spawn. Damaged loops update position and direction; existing particles are not rescaled. If the node or recent visible pose is unavailable, use the existing height placement. Planet anchors convert the view frame into the active body's particle space. This is the GameFx CPU bridge; standalone SpectraFX ECS/GPU attachment commands do not yet consume named nodes. Baked models without a CPU pose use their bind matrices.
+
 ## MCP (agents)
 
 | Op | What |
@@ -129,7 +133,7 @@ shows it) by shrinking `size`/`sizeOverLife` or the burst before anything else.
 | `fx_delete` | refuses while bound unless `unbind: true` |
 | `fx_templates` | recipes on built-in textures: explosion, fire, smoke, muzzle_flash, magic_aura, heal, frost, lightning, blood, dust_trail, rain, snow, portal, level_up; `color` tint, `scale` |
 | `fx_import_unity` | `{source: .prefab / folder / .unitypackage, name, prefab, scale}`: runs the importer below, returns its report + the engine's check of every written file |
-| `fx_bind` | `{effect, cue, type?, weapon?, ability?, category?, height, scale, teamColor, below}` → `fx/fx.json` (`effect: null` = none, `remove: true` = back to the fallback) |
+| `fx_bind` | `{effect, cue, type?, weapon?, ability?, category?, height, scale, teamColor, below, node?, offset?, inheritRotation?, inheritScale?, anchor?}` → `fx/fx.json` (`effect: null` = none, `remove: true` = back to the fallback) |
 | `fx_preview` | GUI: plays an effect at `x, z` in the Scene view (Game view during a play-test) and moves the camera there; `advance` + `freeze` hold a moment for `view_screenshot`, `moving` circles it (trails), `pitch`, `quality`, `loop`, `stop` |
 
 Core ops live in `apps/editor/core/FxOps.cpp` (also work in `aiversemcp` without an editor), `fx_preview` in
