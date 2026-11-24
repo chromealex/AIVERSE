@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseBuildingRoomTopology,projectBuildingRoomTopology,roomComponentMembers} from '../src/graphs/buildingRoomTopology.ts';
+import {exteriorConnectivity,parseBuildingRoute,parseBuildingRoomTopology,projectBuildingRoomTopology,roomComponentMembers} from '../src/graphs/buildingRoomTopology.ts';
 const r=(id,floor,x,component,withoutElevatorsComponent)=>({id,floor,x,z:0,min:[x*4,floor*4,0],max:[x*4+4,floor*4+3,4],component,withoutElevatorsComponent});
 const e=(id,from,to,floor,kind,socketId)=>({id,from,to,floor,kind,position:[2,0,2],width:1,height:2,...(socketId?{socketId}:{})});
 const fixture=()=>({version:1,components:1,withoutElevatorsComponents:2,rooms:[r('a',0,0,0,0),r('b',0,1,0,0),r('c',1,0,0,1),r('d',1,1,0,1)],
@@ -31,4 +31,52 @@ test('isolated native component is reported without inventing an outside path',(
  const raw={version:1,components:2,withoutElevatorsComponents:2,rooms:[r('a',0,0,0,0),r('b',0,1,1,1)],connections:[]};
  const t=parseBuildingRoomTopology(raw,1,2,1,0,[]);
  assert.equal(roomComponentMembers(t,'a').length,1);assert.equal(projectBuildingRoomTopology(t).links.length,0);
+});
+
+test('native route validates ordered edge IDs and reverse traversal',()=>{
+ const t=parse(fixture()),query={start:'d',goal:'b',allowStairs:true,allowElevators:true};
+ const steps=[{edgeId:'q',from:'d',to:'c'},{edgeId:'lift',from:'c',to:'a'},{edgeId:'p',from:'a',to:'b'}];
+ assert.deepEqual(parseBuildingRoute({...query,reachable:true,steps},query,t).steps,steps);
+ for(const change of [r=>{r.steps[1].edgeId='missing'},r=>{r.steps.reverse()},r=>{r.steps.pop()},r=>{r.goal='a'},r=>{r.reachable=false}]){
+  const result=structuredClone({...query,reachable:true,steps});change(result);
+  assert.throws(()=>parseBuildingRoute(result,query,t));
+ }
+ const restricted={...query,allowElevators:false};
+ assert.throws(()=>parseBuildingRoute({...restricted,reachable:true,steps},restricted,t));
+ assert.equal(parseBuildingRoute({...restricted,reachable:false,steps:[]},restricted,t).reachable,false);
+ const same={...query,goal:query.start};
+ assert.equal(parseBuildingRoute({...same,reachable:true,steps:[]},same,t).reachable,true);
+ assert.throws(()=>parseBuildingRoute({...same,reachable:false,steps:[]},same,t));
+});
+test('exterior overlaps preserve multiple room endpoints without adding routing edges',()=>{
+ const raw=fixture();raw.exteriorApertures=[{socketId:'gate',roomId:'a',start:3,end:4},{socketId:'gate',roomId:'b',start:4,end:5}];
+ const read=()=>parseBuildingRoomTopology(raw,2,2,1,3,[{id:'lift/0/0',kind:'elevator'},{id:'gate',kind:'small-gate'}]);
+ assert.equal(read().exteriorApertures.length,2);
+ assert.equal(read().connections.length,3);
+ raw.exteriorApertures[1].roomId='c';assert.throws(read);
+ raw.exteriorApertures[1].roomId='a';assert.throws(read);
+});
+
+test('exterior nodes are per socket, ground-floor only and do not change native connectivity',()=>{
+ const raw=fixture();raw.exteriorApertures=[{socketId:'gate',roomId:'a',start:3,end:4},{socketId:'gate',roomId:'b',start:4,end:5}];
+ const t=parseBuildingRoomTopology(raw,2,2,1,3,[{id:'lift/0/0',kind:'elevator'},{id:'gate',kind:'small-gate'}]);
+ const all=projectBuildingRoomTopology(t),ground=projectBuildingRoomTopology(t,0),upper=projectBuildingRoomTopology(t,1);
+ assert.equal(all.nodes.filter(n=>n.id==='exterior:gate').length,1);
+ assert.deepEqual(all.links.filter(l=>l.from==='exterior:gate').map(l=>l.to),['room:a','room:b']);
+ assert.equal(ground.links.filter(l=>l.from==='exterior:gate').length,2);
+ assert.ok(!upper.nodes.some(n=>n.id==='exterior:gate'));
+ assert.ok(!upper.links.some(l=>l.from==='exterior:gate'));
+ assert.equal(t.connections.length,3);
+ assert.equal(exteriorConnectivity(t).entranceCount,1);
+ assert.equal(exteriorConnectivity(t).roomsWithoutExterior.length,0);
+ assert.deepEqual(exteriorConnectivity(t,true).roomsWithoutExterior.map(r=>r.id),['c','d']);
+ assert.deepEqual(exteriorConnectivity(t,true).groupsWithoutExterior,[1]);
+});
+test('missing exterior report differs from explicitly empty entrances',()=>{
+ assert.equal(exteriorConnectivity(parse(fixture())),undefined);
+ const raw=fixture();raw.exteriorApertures=[];
+ const gap=exteriorConnectivity(parse(raw),true);
+ assert.equal(gap.entranceCount,0);
+ assert.equal(gap.roomsWithoutExterior.length,4);
+ assert.deepEqual(gap.groupsWithoutExterior,[0,1]);
 });
