@@ -1751,7 +1751,7 @@ struct BatchTimeline {
     std::vector<BatchState> phases;
 };
 BatchTimeline batchTimeline(const fs::path& root,const std::vector<StudioBatchRelocation>& moves){
-    if(moves.empty()||moves.size()>256)throw std::runtime_error("Invalid coordinated relocation count");
+    if(moves.size()>256)throw std::runtime_error("Invalid coordinated relocation count");
     BatchTimeline timeline;
     BatchState simulated;
     for(const auto& m:moves){
@@ -1798,6 +1798,7 @@ void validateBatchDocuments(const fs::path& root,const BatchTimeline& timeline,
     for(const auto& edit:docs){
         const auto rel=edit.path.lexically_relative(root).generic_string();
         (void)editor::project_file_detail::safeTarget(root,rel);
+        if(edit.createOnly)throw std::runtime_error("Creation-only edit cannot enter asset batch");
         if(!unique.insert(rel).second)throw std::runtime_error("Duplicate coordinated document");
         if(!edit.tailDigest.empty()||edit.tailBytes){
             if(!rel.starts_with("content/")||!studioStreamingResource(edit))throw std::runtime_error("Invalid coordinated streaming resource");
@@ -1908,7 +1909,8 @@ void retireBatch(const fs::path& folder){
 void reverseBatch(const fs::path& root,const fs::path& folder,
                   const std::vector<StudioBatchRelocation>& moves,
                   const std::vector<editor::ProjectFileEdit>& docs,
-                  const std::vector<StudioBatchResourceEdit>& resources={}){
+                  const std::vector<StudioBatchResourceEdit>& resources={},
+                  const std::optional<editor::ProjectFileEdit>& checkpoint={}){
     const auto timeline=batchTimeline(root,moves);
     validateMovingBatchResources(root,moves,resources);
     const auto phase=batchPhaseWithResources(root,timeline,resources);
@@ -1919,12 +1921,21 @@ void reverseBatch(const fs::path& root,const fs::path& folder,
         auto moved=finalMovingBatchEdits(root,resources);
         published.insert(published.end(),moved.begin(),moved.end());
     }
+    if(checkpoint){
+        if(!studioResourceMatches(checkpoint->path,*checkpoint)&&!studioResourceMatches(checkpoint->path,*checkpoint,true))
+            throw std::runtime_error("Asset checkpoint recovery conflict");
+    }
     for(const auto& f:published){
         if(studioResourceMatches(f.path,f))continue;
         if(!studioResourceMatches(f.path,f,true))throw std::runtime_error("Coordinated document recovery conflict: "+f.path.string());
         auto undo=f;std::swap(undo.before,undo.after);reverse.push_back(std::move(undo));
     }
     StudioMoveJournal(root).applyResources(reverse,true);
+    if(checkpoint&&!studioResourceMatches(checkpoint->path,*checkpoint)){
+        if(!studioResourceMatches(checkpoint->path,*checkpoint,true))throw std::runtime_error("Asset checkpoint changed during recovery");
+        auto edit=*checkpoint;std::swap(edit.before,edit.after);
+        editor::applyProjectFileEdits(root,{edit});
+    }
     for(size_t i=phase;i>0;--i){
         const auto& m=moves[i-1];
         const auto from=batchPath(root,m.to),to=batchPath(root,m.from);
@@ -2546,7 +2557,7 @@ void studioRecoverHistoryBatch(const fs::path& project){
         throw std::runtime_error("Invalid coordinated history journal");
     const auto envelope=Json::parseFile(pending.string());const auto payload=envelope.getStr("payload");
     const auto version=envelope.getInt("version");
-    if((version!=1&&version!=2&&version!=3)||historyHash(payload)!=envelope.getStr("sha256"))
+    if((version!=1&&version!=2&&version!=3&&version!=4)||historyHash(payload)!=envelope.getStr("sha256"))
         throw std::runtime_error("Coordinated journal checksum mismatch");
     const auto body=Json::parse(payload);
     if(!body["moves"].isArray()||body["moves"].size()>256||!body["documents"].isArray()||body["documents"].size()>4096)
@@ -2554,7 +2565,7 @@ void studioRecoverHistoryBatch(const fs::path& project){
     std::vector<StudioBatchRelocation> moves;
     std::vector<editor::ProjectFileEdit> docs;
     std::vector<StudioBatchResourceEdit> resources;
-    if(version==3){
+    if(version==3||version==4){
         if(!body["movingResources"].isArray()||body["movingResources"].size()>32)
             throw std::runtime_error("Invalid moving resource journal rows");
         for(const auto& row:body["movingResources"].items()){
@@ -2582,19 +2593,62 @@ void studioRecoverHistoryBatch(const fs::path& project){
             docs.push_back({path,row.getStr("before"),row.getStr("after")});
         }
     }
-    // Resolve the nested existing-file journal before examining its baseline.
+    // Resolve any nested existing-file journal before examining its baseline.
     editor::recoverProjectFileEdits(root);
-    reverseBatch(root,folder,moves,docs,resources);
+    std::optional<editor::ProjectFileEdit> checkpoint;
+    if(version==4){
+        const auto target=editor::project_file_detail::safeTarget(root,".aiverse-cache/asset-history.json");
+        const auto readSnapshot=[&](const fs::path& file,const std::string& hash){
+            if(!validHistoryDigest(hash)||!fs::is_regular_file(fs::symlink_status(file))||
+               fs::file_size(file)>AssetCheckpointMaxBytes)
+                throw std::runtime_error("Invalid coordinated asset checkpoint snapshot");
+            auto bytes=editor::readProjectFileBytes(file);
+            if(historyHash(bytes)!=hash)throw std::runtime_error("Coordinated asset checkpoint checksum mismatch");
+            return bytes;
+        };
+        auto before=readSnapshot(folder/"asset-before",body.getStr("assetCheckpointBefore"));
+        auto after=before; // no ready marker means no checkpoint publication was allowed
+        const auto ready=folder/"asset-ready.json";
+        if(existsOrSymlink(ready)){
+            if(!fs::is_regular_file(fs::symlink_status(ready))||fs::file_size(ready)>4096)
+                throw std::runtime_error("Invalid asset checkpoint readiness marker");
+            const auto row=Json::parseFile(ready.string());
+            if(row.getStr("transaction")!=historyHash(payload))
+                throw std::runtime_error("Asset checkpoint belongs to another transaction");
+            after=readSnapshot(folder/"asset-after",row.getStr("afterHash"));
+        }
+        checkpoint=editor::ProjectFileEdit{target,std::move(before),std::move(after)};
+        for(const auto& f:docs)if(f.path==target)
+            throw std::runtime_error("Duplicate coordinated asset checkpoint");
+    }else if(body.has("assetCheckpointBefore")||existsOrSymlink(folder/"asset-ready.json"))
+        throw std::runtime_error("Asset checkpoint journal version mismatch");
+    if(version!=4&&moves.empty())throw std::runtime_error("Empty legacy coordinated relocation journal");
+    reverseBatch(root,folder,moves,docs,resources,checkpoint);
 }
 void studioApplyHistoryBatch(const fs::path& project,const std::vector<StudioBatchRelocation>& moves,
                             const std::vector<editor::ProjectFileEdit>& documents,
-                            const std::vector<StudioBatchResourceEdit>& movingResources){
-    if(moves.empty()){
-        if(!movingResources.empty())throw std::runtime_error("Moving resources require relocation chain");
-        editor::applyProjectFileEdits(project,documents);return;
-    }
+                            const std::vector<StudioBatchResourceEdit>& movingResources,
+                            const AssetHistory* currentAssets,const AssetHistory* nextAssets){
+    if(bool(currentAssets)!=bool(nextAssets))throw std::runtime_error("Both asset history cursors are required");
+    if(moves.empty()&&!movingResources.empty())throw std::runtime_error("Moving resources require relocation chain");
+    if(moves.empty()&&!nextAssets){editor::applyProjectFileEdits(project,documents);return;}
     const auto root=fs::canonical(project),folder=batchFolder(root);
     editor::project_file_detail::directory(folder.parent_path());
+    std::unique_ptr<editor::project_file_detail::Lock> assetLock;
+    std::optional<editor::ProjectFileEdit> checkpoint;
+    if(nextAssets){
+        const auto cache=assetHistoryCache(root,true);
+        assetLock=std::make_unique<editor::project_file_detail::Lock>(cache/"asset-history.lock");
+        checkTrashJournal(root);
+        if(existsOrSymlink(cache/"asset-history.dirty"))
+            throw std::runtime_error("Interrupted legacy asset publication; reopen project");
+        const auto target=editor::project_file_detail::safeTarget(root,".aiverse-cache/asset-history.json");
+        if(fs::file_size(target)>AssetCheckpointMaxBytes)throw std::runtime_error("Oversized asset checkpoint");
+        auto before=editor::readProjectFileBytes(target);
+        if(before!=encodeAssetHistory(root,*currentAssets))
+            throw std::runtime_error("Asset history checkpoint baseline changed; reopen project");
+        checkpoint=editor::ProjectFileEdit{target,std::move(before),{}};
+    }
     if(existsOrSymlink(folder.parent_path()/"studio-move-journal"))throw std::runtime_error("Pending asset move journal");
     const auto timeline=batchTimeline(root,moves);
     if(batchPhase(root,timeline)!=0)throw std::runtime_error("Coordinated relocation baseline changed");
@@ -2619,6 +2673,7 @@ void studioApplyHistoryBatch(const fs::path& project,const std::vector<StudioBat
     for(auto& f:docs)f.path=fs::canonical(f.path);
     validateBatchDocuments(root,timeline,docs);
     for(const auto& f:docs){
+        if(checkpoint&&f.path==checkpoint->path)throw std::runtime_error("Duplicate coordinated asset checkpoint");
         if(!studioResourceMatches(f.path,f))throw std::runtime_error("Coordinated document baseline changed");
         if(studioStreamingResource(f)&&fs::space(root).available<
            std::max<uint64_t>(f.before.size(),f.after.size())+f.tailBytes+16ull*1024*1024)
@@ -2644,7 +2699,7 @@ void studioApplyHistoryBatch(const fs::path& project,const std::vector<StudioBat
             files.push(std::move(row));
         }
         body.set("moves",std::move(rows));body.set("documents",std::move(files));
-        if(!movingResources.empty()){
+        if(!movingResources.empty()||checkpoint){
             Json resources=Json::array();
             for(const auto& resource:movingResources){
                 Json row=Json::object();
@@ -2657,7 +2712,12 @@ void studioApplyHistoryBatch(const fs::path& project,const std::vector<StudioBat
             }
             body.set("movingResources",std::move(resources));
         }
-        const auto payload=body.dump(-1);Json envelope=Json::object();envelope.set("version",Json::number(int64_t(movingResources.empty()?2:3)));
+        if(checkpoint){
+            writeAssetCheckpoint(folder/"asset-before",checkpoint->before);
+            body.set("assetCheckpointBefore",Json::string(historyHash(checkpoint->before)));
+        }
+        const auto payload=body.dump(-1);Json envelope=Json::object();
+        envelope.set("version",Json::number(int64_t(checkpoint?4:(movingResources.empty()?2:3))));
         envelope.set("sha256",Json::string(historyHash(payload)));envelope.set("payload",Json::string(payload));
         const auto text=envelope.dump(-1)+"\n";
         if(text.size()>256u*1024u*1024u)throw std::runtime_error("Coordinated journal exceeds disk budget");
@@ -2678,6 +2738,23 @@ void studioApplyHistoryBatch(const fs::path& project,const std::vector<StudioBat
         for(const auto& edit:finalDocs)
             if(!studioResourceMatches(edit.path,edit,true))throw std::runtime_error("Coordinated final document identity changed");
         if(!movingResources.empty())checkFinalBatchPayloads(root,timeline,movingResources);
+        if(checkpoint){
+            // Compute the exact content/material/Trash fingerprint from the
+            // actual final disk state while the outer pending marker is live.
+            // Persist both byte images and a transaction-bound ready marker
+            // before the inner journal may touch the checkpoint.
+            checkpoint->after=encodeAssetHistory(root,*nextAssets);
+            writeAssetCheckpoint(folder/"asset-after",checkpoint->after);
+            Json ready=Json::object();
+            ready.set("transaction",Json::string(historyHash(payload)));
+            ready.set("afterHash",Json::string(historyHash(checkpoint->after)));
+            writeAssetCheckpoint(folder/"asset-ready.tmp",ready.dump(-1));
+            StudioMoveJournal::renamePath(folder/"asset-ready.tmp",folder/"asset-ready.json");
+            editor::applyProjectFileEdits(root,{*checkpoint});
+            if(!studioResourceMatches(checkpoint->path,*checkpoint,true)||
+               encodeAssetHistory(root,*nextAssets)!=checkpoint->after)
+                throw std::runtime_error("Coordinated final asset checkpoint changed");
+        }
         // The outer marker is authoritative even after the inner journal commits.
         StudioMoveJournal::renamePath(folder/"pending.json",folder/"committed.json");
     }catch(const std::exception& e){
