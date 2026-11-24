@@ -236,10 +236,16 @@ static void verifyLockstep(const std::string& root){
     {
         net::SessionConfig options;options.rollbackWindow=8;options.checksumInterval=1;
         options.incrementalWorldSnapshots=true;
-        net::RollbackSession session(sim,options,{},
+        // An empty controlled-slot list means spectator, with prediction
+        // intentionally disabled by RollbackSession. Use a real client
+        // controlling slot 1; the late authoritative command belongs to 2.
+        net::RollbackSession session(sim,options,{1},
             [](uint32_t,const std::vector<Command>&){},[](uint32_t,uint64_t){});
+        CHECK(session.confirmedNext()==first);
         session.update(0.2,1000);
         target=sim.tick();CHECK(target>first);
+        CHECK(session.stats().predictedTicks==target-first);
+        CHECK(session.confirmedNext()==first);
         session.confirm(first,1,{*late});
         session.update(0.0,1001);
         CHECK(!session.broken()&&runtime.ready()&&session.stats().rollbacks==1);
