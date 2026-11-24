@@ -58,6 +58,6 @@ inline void registerCavePlanetRegion(Simulation& sim,std::shared_ptr<const game:
                 return true;
             }catch(const std::exception& e){error=e.what();return false;}
         });
-    sim.world().setResource<CavePlanetRegionResource>({1,anchor});
+    sim.world().setResource<CavePlanetRegionResource>(CavePlanetRegionResource{1,anchor});
 }
 } // namespace aiverse::terraweave::caverns
