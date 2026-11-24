@@ -184,7 +184,8 @@ export interface StudioBuildingPreview {
   seed: number; triangles: number; vertices: number; materials: number;
   width: number; height: number; depth: number;
   solids?:number; connections?:number; floors?:number; roomsX?:number; roomsZ?:number;
-  topology?: {version:1;rooms:import('./graphs/buildingRoomTopology').TopologyRoom[];connections:import('./graphs/buildingRoomTopology').TopologyConnection[];components:number;withoutElevatorsComponents:number};
+  route?:import('./graphs/buildingRoomTopology').BuildingRouteResult;
+  topology?: {exteriorApertures?:import('./graphs/buildingRoomTopology').TopologyExteriorAperture[];version:1;rooms:import('./graphs/buildingRoomTopology').TopologyRoom[];connections:import('./graphs/buildingRoomTopology').TopologyConnection[];components:number;withoutElevatorsComponents:number};
   sockets?:Array<{socketId:string;kind:StudioBuildingFeatureKind;
     side:string;featureIndex:number;width:number;height:number;
     open:number;outside:[number,number,number]}>;
@@ -196,7 +197,7 @@ export interface StudioParams {
   'studio.buildingRegenerate': {recipe:string};
   'studio.buildingRecipes': Record<string,never>;
   'studio.buildingReadRecipe': {recipe:string};
-  'studio.buildingInspect': StudioBuildingRequest;
+  'studio.buildingInspect': StudioBuildingRequest & {routeQuery?:import('./graphs/buildingRoomTopology').BuildingRouteQuery};
   'studio.buildingPreview': StudioBuildingRequest;
   'studio.buildingPreviewStop': Record<string,never>;
   'studio.buildingGenerate': StudioBuildingRequest;
