@@ -6,6 +6,7 @@
 #include "engine/game/MapGrid.h"
 #include "engine/data/Json.h"
 #include <aiverselib/strategy/ZoneGraph.h>
+#include <aiverselib/mechanics/Railways.h>
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -47,10 +48,12 @@ public:
         game::RoadGraph next;
         next.nodes=source_->nodes;
         next.adj.resize(source_->adj.size());
+        filteredSamples_.clear();
         for(size_t i=0;i<source_->adj.size();++i)
-            for(uint16_t j:source_->adj[i])
-                if(policy_(static_cast<uint16_t>(i),j))
-                    next.adj[i].push_back(j);
+            for(uint16_t j:source_->adj[i]){
+                if(policy_(static_cast<uint16_t>(i),j))next.adj[i].push_back(j);
+                else if(filteredSamples_.size()<128)filteredSamples_.emplace_back(uint16_t(i),j);
+            }
         sourceLinks_=0;activeLinks_=0;
         for(const auto& row:source_->adj)sourceLinks_+=row.size();
         for(const auto& row:next.adj)activeLinks_+=row.size();
@@ -70,7 +73,9 @@ public:
         j.set("nodes",Json::number(int64_t(filtered_.nodes.size())));
         j.set("sourceDirectedLinks",Json::number(int64_t(sourceLinks_)));
         j.set("activeDirectedLinks",Json::number(int64_t(activeLinks_)));
-        j.set("filteredDirectedLinks",Json::number(int64_t(sourceLinks_-activeLinks_)));return j;
+        j.set("filteredDirectedLinks",Json::number(int64_t(sourceLinks_-activeLinks_)));
+        Json sample=Json::array();for(const auto& [a,b]:filteredSamples_){Json pair=Json::array();pair.push(Json::number(int64_t(a)));pair.push(Json::number(int64_t(b)));sample.push(std::move(pair));}
+        j.set("filteredLinkSample",std::move(sample));return j;
     }
     const game::RoadGraph& graph()const noexcept{return filtered_;}
     uint64_t revision()const noexcept{return revision_;}
@@ -79,6 +84,7 @@ private:
     CanTraverse policy_;
     game::RoadGraph filtered_;
     size_t sourceLinks_=0,activeLinks_=0;
+    std::vector<std::pair<uint16_t,uint16_t>> filteredSamples_;
     uint64_t revision_=0;
 };
 
@@ -102,13 +108,15 @@ public:
            !lib::strategy::valid(*source_))return false;
         lib::strategy::ZoneGraph next;
         next.zones=source_->zones;
+        std::vector<lib::strategy::ZoneDoor> omitted;
         for(const auto& door:source_->doors)
             if(policy_(door))next.doors.push_back(door);
+            else if(omitted.size()<128)omitted.push_back(door);
         if(!lib::strategy::valid(next)){
             if(error)*error="Filtered ZoneGraph failed structural validation";
             return false;
         }
-        sourceDoors_=source_->doors.size();
+        sourceDoors_=source_->doors.size();filteredSamples_=std::move(omitted);
         filtered_=std::move(next);
         revision_=revision;
         if(error)error->clear();
@@ -125,7 +133,9 @@ public:
         j.set("zones",Json::number(int64_t(filtered_.zones.size())));
         j.set("sourceDoors",Json::number(int64_t(sourceDoors_)));
         j.set("activeDoors",Json::number(int64_t(filtered_.doors.size())));
-        j.set("filteredDoors",Json::number(int64_t(sourceDoors_-filtered_.doors.size())));return j;
+        j.set("filteredDoors",Json::number(int64_t(sourceDoors_-filtered_.doors.size())));
+        Json sample=Json::array();for(const auto& door:filteredSamples_){Json row=Json::object();row.set("from",Json::number(int64_t(door.from)));row.set("to",Json::number(int64_t(door.to)));row.set("required",Json::number(int64_t(door.required)));sample.push(std::move(row));}
+        j.set("filteredDoorSample",std::move(sample));return j;
     }
     const lib::strategy::ZoneGraph& graph()const noexcept{return filtered_;}
     uint64_t revision()const noexcept{return revision_;}
@@ -134,6 +144,7 @@ private:
     CanTraverse policy_;
     lib::strategy::ZoneGraph filtered_;
     size_t sourceDoors_=0;
+    std::vector<lib::strategy::ZoneDoor> filteredSamples_;
     uint64_t revision_=0;
 };
 
@@ -153,8 +164,32 @@ inline BuildingGraphChangeRouter::Consumer buildingAllGraphOwners(
     };
 }
 
-// Railways is optional and not present at the expected include path in
-// this feature branch. The REAL rail owner must validate current route /
+// Read-only view of the existing rail owner state. Reservations are not
+// building-caused block closures; no geometry or invalidation attribution.
+inline Json buildingRailTelemetry(const lib::mechanics::RailNetwork& network,
+                                  const lib::mechanics::RailState& state){
+    Json out=Json::object(),reservations=Json::array(),waiting=Json::array();
+    size_t waitingCount=0;
+    for(const auto& [id,train]:state.trains)if(train.waiting){
+        ++waitingCount;if(waiting.size()<128)waiting.push(Json::string(std::to_string(id)));
+    }
+    for(const auto& [block,train]:state.blockOwner){
+        if(reservations.size()>=128)break;
+        Json row=Json::object();row.set("block",Json::string(std::to_string(block)));
+        row.set("train",Json::string(std::to_string(train)));reservations.push(std::move(row));
+    }
+    out.set("scope",Json::string("rail owner network state"));
+    out.set("tick",Json::number(int64_t(state.lastTick)));
+    out.set("initialized",Json::fromBool(state.initialized));
+    out.set("segments",Json::number(int64_t(network.segments.size())));
+    out.set("trains",Json::number(int64_t(state.trains.size())));
+    out.set("reservedBlocks",Json::number(int64_t(state.blockOwner.size())));
+    out.set("waitingTrains",Json::number(int64_t(waitingCount)));
+    out.set("reservationSample",std::move(reservations));
+    out.set("waitingTrainSample",std::move(waiting));return out;
+}
+
+// The REAL rail owner must validate current route /
 // block reservations and accept invalidation before returning true.
 // This callback never edits train reservations or bypasses stepRail().
 inline BuildingGraphChangeRouter::Consumer buildingRailOwnerInvalidator(
