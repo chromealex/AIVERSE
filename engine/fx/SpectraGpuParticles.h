@@ -72,6 +72,7 @@ struct VolumetricParticleMaterial {
     render::float3 axes{1,1,1}; // radii relative to particle half-size
     float noiseFrequency=3,noiseStrength=0;
     uint32_t noiseOctaves=3;
+    bool depthAware=false; // requires detached current-frame depth texture at draw
     uint32_t shadowSteps=4; // 0 disables self-shadowing
     float shadowStrength=1,anisotropy=0,ambient=.35f;
     float directIntensity=.65f;
@@ -249,6 +250,9 @@ public:
     bool step(float dt);                    // once per presentation frame
     // Direction points from the particle towards the light. Linear RGB.
     bool setVolumeLight(render::float3 direction,render::float3 color);
+    // Host must supply a separate, sampled current-frame opaque depth texture,
+    // NOT the depth attachment of the open color pass. Full viewport only.
+    bool drawWithVolumeDepth(gfx::TextureHandle opaqueDepth,const fx::FxFog& fog={});
     void draw(const fx::FxFog& fog = {});    // inside render pass
     ComputeBackend backend() const { return backend_; }
     bool ready() const { return initialized_; }
@@ -346,8 +350,8 @@ private:
     static_assert(sizeof(Vertex)==40);
     static_assert(sizeof(Uniforms)==352);
     static_assert(sizeof(DrawUniforms)==144);
-    struct VolumeDrawUniforms {DrawUniforms base;render::float4 lightDir,lightColor,lightControl;};
-    static_assert(sizeof(VolumeDrawUniforms)==192);
+    struct VolumeDrawUniforms {DrawUniforms base;render::float4 lightDir,lightColor,lightControl;render::mat4 invVP;render::float4 depthControl;};
+    static_assert(sizeof(VolumeDrawUniforms)==272);
 
     bool stepGpuAllocated(float dt);
     bool growGpuAllocation(uint32_t required);
@@ -387,7 +391,7 @@ private:
     std::shared_ptr<SharedSdfGpuPayload> sharedSdfPayload_;
     gfx::BufferHandle vmErrors_;
     gfx::BufferHandle stateAttributes_; // compute slot 11, 8 scalar VM registers/particle
-    gfx::TextureHandle texture_,volumeTexture_;
+    gfx::TextureHandle texture_,volumeTexture_,drawVolumeDepth_;
     render::float3 volumeLightDirection_{0,1,0},volumeLightColor_{1,1,1};
     size_t volumeTextureCharge_=0;
     uint64_t volumeTextureFence_=0;

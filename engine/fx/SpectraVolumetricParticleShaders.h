@@ -6,7 +6,7 @@ inline constexpr const char* metal=R"MSL(
 #include <metal_stdlib>
 using namespace metal;
 struct Record {float x,y,z,u,v;uint rgba;float g0,g1,g2,g3;};
-struct U0 {float4x4 viewProj;float4 fog,camPos,params,right,up,lightDir,lightColor,lightControl;};
+struct U0 {float4x4 viewProj;float4 fog,camPos,params,right,up,lightDir,lightColor,lightControl;float4x4 invVP;float4 depthControl;};
 
 float hashVolume(float3 p){return fract(sin(dot(p,float3(127.1f,311.7f,74.7f)))*43758.5453f);}
 float noiseVolume(float3 p){
@@ -43,6 +43,17 @@ vertex VOut vs_main(uint vertexIndex [[vertex_id]],uint instance [[instance_id]]
  float base=max(p.u,0.0001f);float r=base*boundRadius(u.right.xyz,int(u.params.w));float3 delta=center-u.camPos.xyz;float d=length(delta);
  float4 color=float4(float(p.rgba&255u),float((p.rgba>>8)&255u),float((p.rgba>>16)&255u),float(p.rgba>>24))/255.0f;
  VOut o;o.sphere=float4(center,base);o.color=color;o.age=p.v;
+#if SPECTRA_VOLUME_DEPTH
+ // Near-plane intersection and orthographic projections use a full-screen
+ // proxy. Fragment integration still rejects all rays missing the volume.
+ float4 nearPlane=float4(u.viewProj[0].z,u.viewProj[1].z,u.viewProj[2].z,u.viewProj[3].z);
+ if(u.depthControl.z>1.5f)nearPlane+=float4(u.viewProj[0].w,u.viewProj[1].w,u.viewProj[2].w,u.viewProj[3].w);
+ float3 wrow=float3(u.viewProj[0].w,u.viewProj[1].w,u.viewProj[2].w);
+ if(color.a>0.0f&&(d<=r*1.01f||length(wrow)<1e-6f||dot(nearPlane,float4(center,1))<=r*length(nearPlane.xyz))){
+  const float2 corners[4]={float2(-1,-1),float2(1,-1),float2(1,1),float2(-1,1)};
+  o.pos=float4(corners[vertexIndex&3u],0,1);o.world=center;return o;
+ }
+#endif
  if(d<=r*1.01f||color.a<=0.0f){o.pos=float4(2,2,2,1);o.world=center;return o;}
  float3 n=delta/d;float3 ref=abs(n.y)<0.95f?float3(0,1,0):float3(1,0,0);
  float3 right=normalize(cross(ref,n)),up=cross(n,right);
@@ -75,11 +86,31 @@ fragment half4 fs_main(VOut in [[stage_in]],constant U0& u [[buffer(1)]]
 #if SPECTRA_TEXTURE_VOLUME
  ,texture3d<float> densityTexture [[texture(0)]],sampler densitySampler [[sampler(0)]]
 #endif
+#if SPECTRA_VOLUME_DEPTH
+ ,depth2d<float,access::read> sceneDepth [[texture(1)]]
+#endif
  ){
  float3 rd=normalize(in.world-u.camPos.xyz),oc=u.camPos.xyz-in.sphere.xyz;
+ float reach=1e8f;
+#if SPECTRA_VOLUME_DEPTH
+ uint2 pixel=uint2(in.pos.xy);
+ if(pixel.x>=uint(u.depthControl.x)||pixel.y>=uint(u.depthControl.y))discard_fragment();
+ float depth=sceneDepth.read(pixel);
+ if(!(depth>=0.0f&&depth<=1.0f))discard_fragment();
+ float2 screen=(float2(pixel)+0.5f)/u.depthControl.xy;
+ if(u.depthControl.w>0.5f)screen.y=1.0f-screen.y;
+ float2 ndc=screen*2.0f-1.0f;
+ float4 nearH=u.invVP*float4(ndc,1.0f-u.depthControl.z,1);
+ float4 endH=u.invVP*float4(ndc,min(depth,0.99999f)*u.depthControl.z+1.0f-u.depthControl.z,1);
+ if(abs(nearH.w)<1e-8f||abs(endH.w)<1e-8f)discard_fragment();
+ float3 eye=nearH.xyz/nearH.w,end=endH.xyz/endH.w;
+ float3 delta=end-eye;reach=length(delta);
+ if(!(reach>1e-6f))discard_fragment();
+ rd=delta/reach;oc=eye-in.sphere.xyz;
+#endif
  float r=in.sphere.w*boundRadius(u.right.xyz,int(u.params.w)),b=dot(oc,rd),disc=b*b-dot(oc,oc)+r*r;
  if(disc<=0.0f||in.color.a<=0.0f)discard_fragment();
- float t0=max(0.0f,-b-sqrt(disc)),t1=-b+sqrt(disc);
+ float t0=max(0.0f,-b-sqrt(disc)),t1=min(reach,-b+sqrt(disc));
  if(t1<=t0)discard_fragment();
  uint steps=uint(clamp(u.params.z,4.0f,32.0f));float ds=(t1-t0)/float(steps);
  float trans=1.0f;float3 rgb=float3(0);
@@ -123,7 +154,7 @@ fragment half4 fs_main(VOut in [[stage_in]],constant U0& u [[buffer(1)]]
 }
 )MSL";
 inline constexpr const char* vertex=R"GLSL(
-layout(std140) uniform U0 {mat4 u_viewProj;vec4 u_fog;vec4 u_camPos;vec4 u_params;vec4 u_right;vec4 u_up;vec4 u_lightDir;vec4 u_lightColor;vec4 u_lightControl;};
+layout(std140) uniform U0 {mat4 u_viewProj;vec4 u_fog;vec4 u_camPos;vec4 u_params;vec4 u_right;vec4 u_up;vec4 u_lightDir;vec4 u_lightColor;vec4 u_lightControl;mat4 u_invVP;vec4 u_depthControl;};
 layout(location=0) in vec3 a_pos;
 layout(location=1) in vec2 a_size;
 layout(location=2) in vec4 a_col;
@@ -160,6 +191,15 @@ out highp vec3 v_world;flat out highp vec4 v_sphere;flat out highp vec4 v_color;
 void main(){
  float base=max(a_size.x,0.0001);float r=base*boundRadius(u_right.xyz,int(u_params.w));vec3 delta=a_pos-u_camPos.xyz;float d=length(delta);
  v_sphere=vec4(a_pos,base);v_color=a_col;v_world=a_pos;v_age=a_size.y;
+#if SPECTRA_VOLUME_DEPTH
+ vec4 nearPlane=vec4(u_viewProj[0].z,u_viewProj[1].z,u_viewProj[2].z,u_viewProj[3].z);
+ if(u_depthControl.z>1.5)nearPlane+=vec4(u_viewProj[0].w,u_viewProj[1].w,u_viewProj[2].w,u_viewProj[3].w);
+ vec3 wrow=vec3(u_viewProj[0].w,u_viewProj[1].w,u_viewProj[2].w);
+ if(a_col.a>0.0&&(d<=r*1.01||length(wrow)<1e-6||dot(nearPlane,vec4(a_pos,1))<=r*length(nearPlane.xyz))){
+  const vec2 screenCorners[4]=vec2[4](vec2(-1,-1),vec2(1,-1),vec2(1,1),vec2(-1,1));
+  gl_Position=vec4(screenCorners[gl_VertexID&3],0,1);return;
+ }
+#endif
  if(d<=r*1.01||a_col.a<=0.0){gl_Position=vec4(2,2,2,1);return;}
  vec3 n=delta/d,ref=abs(n.y)<0.95?vec3(0,1,0):vec3(1,0,0);
  vec3 right=normalize(cross(ref,n)),up=cross(n,right);
@@ -170,10 +210,13 @@ void main(){
 )GLSL";
 inline constexpr const char* fragment=R"GLSL(
 precision highp float;
-layout(std140) uniform U0 {mat4 u_viewProj;vec4 u_fog;vec4 u_camPos;vec4 u_params;vec4 u_right;vec4 u_up;vec4 u_lightDir;vec4 u_lightColor;vec4 u_lightControl;};
+layout(std140) uniform U0 {mat4 u_viewProj;vec4 u_fog;vec4 u_camPos;vec4 u_params;vec4 u_right;vec4 u_up;vec4 u_lightDir;vec4 u_lightColor;vec4 u_lightControl;mat4 u_invVP;vec4 u_depthControl;};
 in highp vec3 v_world;flat in highp vec4 v_sphere;flat in highp vec4 v_color;flat in highp float v_age;
 #if SPECTRA_TEXTURE_VOLUME
 uniform highp sampler3D tex0;
+#endif
+#if SPECTRA_VOLUME_DEPTH
+uniform highp sampler2D tex1;
 #endif
 out highp vec4 o_color;
 
@@ -224,9 +267,26 @@ float phaseHG(float cosTheta,float g){
 }
 void main(){
  vec3 rd=normalize(v_world-u_camPos.xyz),oc=u_camPos.xyz-v_sphere.xyz;
+ float reach=1e8;
+#if SPECTRA_VOLUME_DEPTH
+ ivec2 pixel=ivec2(gl_FragCoord.xy);
+ if(any(lessThan(pixel,ivec2(0)))||any(greaterThanEqual(pixel,ivec2(u_depthControl.xy))))discard;
+ float depth=texelFetch(tex1,pixel,0).r;
+ if(!(depth>=0.0&&depth<=1.0))discard;
+ vec2 screen=(vec2(pixel)+0.5)/u_depthControl.xy;
+ if(u_depthControl.w>0.5)screen.y=1.0-screen.y;
+ vec2 ndc=screen*2.0-1.0;
+ vec4 nearH=u_invVP*vec4(ndc,1.0-u_depthControl.z,1);
+ vec4 endH=u_invVP*vec4(ndc,min(depth,0.99999)*u_depthControl.z+1.0-u_depthControl.z,1);
+ if(abs(nearH.w)<1e-8||abs(endH.w)<1e-8)discard;
+ vec3 eye=nearH.xyz/nearH.w,end=endH.xyz/endH.w;
+ vec3 delta=end-eye;reach=length(delta);
+ if(!(reach>1e-6))discard;
+ rd=delta/reach;oc=eye-v_sphere.xyz;
+#endif
  float r=v_sphere.w*boundRadius(u_right.xyz,int(u_params.w)),b=dot(oc,rd),disc=b*b-dot(oc,oc)+r*r;
  if(disc<=0.0||v_color.a<=0.0)discard;
- float t0=max(0.0,-b-sqrt(disc)),t1=-b+sqrt(disc);if(t1<=t0)discard;
+ float t0=max(0.0,-b-sqrt(disc)),t1=min(reach,-b+sqrt(disc));if(t1<=t0)discard;
  int steps=int(clamp(u_params.z,4.0,32.0));float ds=(t1-t0)/float(steps);
  float trans=1.0;vec3 rgb=vec3(0),color=v_color.rgb;
 #if AIVERSE_HDR

@@ -357,7 +357,7 @@ bool ComputeParticles::initGpu() {
         if(!volumeTexture_.valid()){reason_="Particle volume texture allocation failed";return false;}
     }
     gfx::ShaderDesc shader;
-    std::string volumeMetal,volumeFragment;
+    std::string volumeMetal,volumeFragment,volumeVertex;
     // Shader source storage must outlive createShader() on all RHI backends.
     gpu_material::Shaders materialShaders;
     if(materialActive)materialShaders=gpu_material::makeShaders(graphMaterial);
@@ -370,13 +370,17 @@ bool ComputeParticles::initGpu() {
     if(desc_.volumeMaterial.enabled){
         shader.glslVertex=volumetric_particles::vertex;shader.glslFragment=volumetric_particles::fragment;
         shader.msl=volumetric_particles::metal;
-        if(desc_.volumeMaterial.texture){
-            volumeMetal=std::string("#define SPECTRA_TEXTURE_VOLUME 1\n")+shader.msl;
-            volumeFragment=std::string("#define SPECTRA_TEXTURE_VOLUME 1\n")+shader.glslFragment;
+        std::string defines;
+        if(desc_.volumeMaterial.texture)defines+="#define SPECTRA_TEXTURE_VOLUME 1\n";
+        if(desc_.volumeMaterial.depthAware)defines+="#define SPECTRA_VOLUME_DEPTH 1\n";
+        if(!defines.empty()){
+            volumeMetal=defines+shader.msl;volumeFragment=defines+shader.glslFragment;
+            volumeVertex=defines+shader.glslVertex;
             shader.msl=volumeMetal.c_str();shader.glslFragment=volumeFragment.c_str();
+            shader.glslVertex=volumeVertex.c_str();
         }
     }
-    shader.textureSlots=desc_.volumeMaterial.enabled&&!desc_.volumeMaterial.texture?0:1;shader.uniformSlots=1;
+    shader.textureSlots=desc_.volumeMaterial.enabled&&desc_.volumeMaterial.depthAware?2:(desc_.volumeMaterial.enabled&&!desc_.volumeMaterial.texture?0:1);shader.uniformSlots=1;
     shader.label=materialActive?"SpectraFX GPU particle material":"SpectraFX GPU billboard";
     vertexShader_=device_->createShader(shader);
     if(vertexShader_.valid()) {
@@ -391,7 +395,7 @@ bool ComputeParticles::initGpu() {
         pd.vertexPerInstance=proceduralActive_&&vulkan;
         pd.indexType=wideIndices?gfx::IndexType::UInt32:gfx::IndexType::UInt16;
         pd.cull=gfx::CullMode::None;pd.blend=desc_.volumeMaterial.enabled?gfx::BlendMode::Premultiplied:gfx::BlendMode::Additive;
-        pd.depthTest=true;pd.depthWrite=false;
+        pd.depthTest=!(desc_.volumeMaterial.enabled&&desc_.volumeMaterial.depthAware);pd.depthWrite=false;
         pd.label="SpectraFX GPU additive";
         pipeline_=device_->createPipeline(pd);
     }
@@ -477,7 +481,7 @@ void ComputeParticles::releaseGpu() {
     sharedSdfPayload_.reset();stats_.sharedSdfBytes=0;stats_.sharedSdfOffsetWords=0;stats_.sharedSdfPacked=false;
     retireAllocationCharge(gpuAllocationCharge_,gpuAllocationLastFence_);
     retireAllocationCharge(volumeTextureCharge_,volumeTextureFence_);
-    volumeTexture_={};volumeTextureCharge_=0;volumeTextureFence_=0;
+    drawVolumeDepth_={};volumeTexture_={};volumeTextureCharge_=0;volumeTextureFence_=0;
     volumeLightDirection_={0,1,0};volumeLightColor_={1,1,1};
     gpuAllocationCharge_=0;gpuAllocationLastFence_=0;gpuGrowthBudgetBlocked_=false;
     volumeDragCompute_={};
@@ -1478,6 +1482,21 @@ bool ComputeParticles::setVolumeLight(render::float3 direction,render::float3 co
     if(!finite(len)||len<1e-5f)return false;
     volumeLightDirection_=direction*(1.f/len);volumeLightColor_=color;return true;
 }
+bool ComputeParticles::drawWithVolumeDepth(gfx::TextureHandle opaqueDepth,const fx::FxFog& fog){
+    gfx::TextureInfo info{};
+    if(!gpuActive()||!desc_.volumeMaterial.enabled||!desc_.volumeMaterial.depthAware||
+       !viewReady_||!opaqueDepth.valid()||!device_->textureInfo(opaqueDepth,info)||
+       info.format!=gfx::PixelFormat::Depth||info.width!=viewWidth_||info.height!=viewHeight_){
+        reason_="Volume depth draw requires matching detached opaque depth";return false;
+    }
+    auto inverse=viewProj_.inverse();const auto product=viewProj_*inverse;
+    for(int y=0;y<4;++y)for(int x=0;x<4;++x){
+        const auto v=product.at(y,x);
+        if(!finite(v)||std::abs(v-(x==y?1.f:0.f))>.02f){reason_="Invalid volume depth projection";return false;}
+    }
+    drawVolumeDepth_=opaqueDepth;draw(fog);drawVolumeDepth_={};
+    return stats_.drawCalls!=0||drawCount_==0;
+}
 void ComputeParticles::draw(const fx::FxFog& fog) {
     stats_.drawCalls=0;
     if(!initialized_||!viewReady_||desc_.quality==fx::FxQuality::Off)return;
@@ -1486,6 +1505,9 @@ void ComputeParticles::draw(const fx::FxFog& fog) {
     }
     if(gpuResetDirty_ || !verticesReady_ || !pipeline_.valid() ||
        drawCount_==0)return;
+    if(desc_.volumeMaterial.enabled&&desc_.volumeMaterial.depthAware&&!drawVolumeDepth_.valid()){
+        reason_="Depth-aware volume draw requires detached opaque depth";return;
+    }
     markGpuAllocationUsed();
     DrawUniforms u{};
     std::memcpy(u.viewProj,viewProj_.m,sizeof(u.viewProj));
@@ -1510,10 +1532,11 @@ void ComputeParticles::draw(const fx::FxFog& fog) {
     device_->setIndexBuffer(indices_);
     if(desc_.volumeMaterial.enabled){
         const auto& m=desc_.volumeMaterial;
-        const VolumeDrawUniforms v{u,
+        VolumeDrawUniforms v{u,
             {volumeLightDirection_.x,volumeLightDirection_.y,volumeLightDirection_.z,m.directIntensity},
             {volumeLightColor_.x,volumeLightColor_.y,volumeLightColor_.z,m.ambient},
-            {float(m.shadowSteps),m.shadowStrength,m.anisotropy,0}};
+            {float(m.shadowSteps),m.shadowStrength,m.anisotropy,0},viewProj_.inverse(),
+            {float(viewWidth_),float(viewHeight_),device_->info().clipDepthZeroToOne?1.f:2.f,device_->info().renderTargetFlipY?1.f:0.f}};
         device_->setUniforms(0,&v,sizeof(v));
     }else device_->setUniforms(0,&u,sizeof(u));
     if(!desc_.volumeMaterial.enabled)device_->setTexture(0,texture_);
@@ -1521,6 +1544,10 @@ void ComputeParticles::draw(const fx::FxFog& fog) {
         const auto fence=device_->gpuSubmissionFence();
         volumeTextureFence_=fence?std::max(volumeTextureFence_,fence):GpuAllocationBudget::unknownFence;
         device_->setTexture(0,volumeTexture_);
+    }
+    if(desc_.volumeMaterial.enabled&&desc_.volumeMaterial.depthAware){
+        if(!volumeTexture_.valid())device_->setTexture(0,texture_);
+        device_->setTexture(1,drawVolumeDepth_);
     }
     if(gpuIndirectActive_) {
         // No CPU readback, and no unsafe direct-draw fallback when GPU

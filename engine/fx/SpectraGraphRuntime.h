@@ -125,6 +125,10 @@ public:
     bool setVolumeLight(render::float3 direction,render::float3 color){
         return gpuActive()&&gpu_.setVolumeLight(direction,color);
     }
+    bool drawWithVolumeDepth(gfx::TextureHandle depth,const fx::FxFog& fog={}){
+        if(!gpuActive()||!gpu_.drawWithVolumeDepth(depth,fog)){reason_=gpu_.reason();return false;}
+        return true;
+    }
     void draw(const fx::FxFog& fog = {}); // during still-open render pass
     void clear();
     // CPU-only deterministic reset. GPU/shared-world paths reject explicitly.
