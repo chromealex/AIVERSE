@@ -1730,6 +1730,12 @@
           "text": "Добавлена ограниченная асинхронная очередь GPU-запросов с приоритетами, отменой и явной выдачей результата. Изолированный тест пройден; интеграционная проверка ожидается.",
           "nameEn": "Texture Graph GPU — Stage 38D",
           "textEn": "Bounded asynchronous GPU request queue with priorities, cancellation and explicit result release. Isolated test passed; integrated verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38E (в работе)",
+          "text": "Безопасное освобождение процедурных текстур после проверки всех ссылок.",
+          "nameEn": "Texture Graph GPU — Stage 38E (in progress)",
+          "textEn": "Safe procedural image reclamation after complete reference enumeration."
         }
       ],
       "enables": [
