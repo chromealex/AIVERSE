@@ -13,7 +13,7 @@ inline int textureGraphGpuCopyAcceptance(gfx::Device& dev,gfx::Backend backend){
     namespace gpu=render::texture_graph::gpu;
     auto require=[](bool ok,const char* why){if(!ok)throw std::runtime_error(why);};
     struct Capture {bool done=false;gfx::TextureReadbackResult result;};
-    auto run=[&](int n,bool vector,gfx::PixelFormat format){
+    auto run=[&](int n,bool vector,gfx::PixelFormat format,bool generateMips=false){
         const auto type=vector?gpu::KernelValue::Vector:gpu::KernelValue::Scalar;
         const auto pack=gpu::packMaterializedTextureKernel(type,n);
         const std::string value="float((tid%n+3u*(tid/n))%251u)/255.0f";
@@ -21,6 +21,7 @@ inline int textureGraphGpuCopyAcceptance(gfx::Device& dev,gfx::Backend backend){
             vector?"result[tid]=float4("+value+",0.25f,0.75f,1.0f);":"result[tid]="+value+";");
         const bool metal=backend==gfx::Backend::Metal;
         auto capture=std::make_shared<Capture>();
+        auto mipCapture=std::make_shared<Capture>();
         gfx::BufferHandle input{},packed{};
         gfx::TextureHandle texture{},mipped{};
         gfx::ComputeHandle fillPipeline{},packPipeline{};
@@ -31,8 +32,9 @@ inline int textureGraphGpuCopyAcceptance(gfx::Device& dev,gfx::Backend backend){
             bd.size=size_t(n)*n*(vector?16u:4u);input=dev.createBuffer(bd);
             bd.size=pack.bufferBytes;packed=dev.createBuffer(bd);
             gfx::TextureDesc td;td.width=td.height=n;td.format=format;td.mipLevels=1;
+            td.mipmaps=generateMips;td.mipLevels=generateMips?0:1;
             texture=dev.createTexture(td);
-            td.mipLevels=2;mipped=dev.createTexture(td);
+            td.mipmaps=false;td.mipLevels=2;mipped=dev.createTexture(td);
             auto create=[&](const gpu::Source& source){
                 return dev.createCompute({metal?source.msl.c_str():nullptr,
                     metal?nullptr:source.glsl.c_str(),"GPU texture transfer acceptance"});
@@ -49,16 +51,24 @@ inline int textureGraphGpuCopyAcceptance(gfx::Device& dev,gfx::Backend backend){
             auto wrong=pack.copy;wrong.sourceOffset=4;
             require(!dev.copyStorageBufferToTexture2D(packed,texture,wrong),"unaligned copy accepted");
             require(!dev.copyStorageBufferToTexture2D(packed,mipped,pack.copy),"multi-mip copy accepted");
-            require(dev.copyStorageBufferToTexture2D(packed,texture,pack.copy),"GPU buffer-to-texture copy rejected");
+            auto copy=pack.copy;copy.generateMipmaps=generateMips;
+            if(generateMips)require(!dev.copyStorageBufferToTexture2D(packed,mipped,copy),"incomplete mip chain accepted");
+            require(dev.copyStorageBufferToTexture2D(packed,texture,copy),"GPU buffer-to-texture copy rejected");
             const auto fence=dev.gpuSubmissionFence();
             require(fence!=0,"missing copy fence");
             require(dev.readTextureAsync(texture,{},[capture](auto bytes){
                 capture->result=std::move(bytes);capture->done=true;
             }),"diagnostic readback rejected");
+            if(generateMips){
+                gfx::TextureReadbackDesc mip; mip.mipLevel=1;
+                require(dev.readTextureAsync(texture,mip,[mipCapture](auto bytes){
+                    mipCapture->result=std::move(bytes);mipCapture->done=true;
+                }),"mip diagnostic readback rejected");
+            }
             dev.endFrame();frame=false;
             require(dev.waitIdle(),"copy GPU idle failed");
             require(!dev.copyStorageBufferToTexture2D(packed,texture,pack.copy),"copy outside frame accepted");
-            for(int i=0;i<12&&(!capture->done||dev.gpuCompletedFence()<fence);++i){
+            for(int i=0;i<12&&(!capture->done||(generateMips&&!mipCapture->done)||dev.gpuCompletedFence()<fence);++i){
                 dev.beginFrame(64,64);dev.endFrame();
                 require(dev.waitIdle(),"readback GPU idle failed");
             }
@@ -73,7 +83,25 @@ inline int textureGraphGpuCopyAcceptance(gfx::Device& dev,gfx::Backend backend){
                     data.pixels[k+2]==(vector?191:v)&&data.pixels[k+3]==255,
                     "GPU copy pixel mismatch (row pitch, raw bytes, channels or orientation)");
             }
-            std::printf("PASS GPU copy %dx%d, row=%zu, %s\n",n,n,pack.copy.rowPitchBytes,vector?"vector sRGB bytes":"scalar RGBA8");
+            if(generateMips){
+                const auto& mip=mipCapture->result;
+                const int half=n/2;
+                require(!vector&&format==gfx::PixelFormat::RGBA8&&n%2==0&&
+                    mipCapture->done&&mip.success()&&mip.width==half&&mip.height==half&&
+                    mip.format==format&&mip.pixels.size()==size_t(half)*half*4,
+                    "missing generated mip bytes");
+                for(int y=0;y<half;++y)for(int x=0;x<half;++x){
+                    int sum=0;
+                    for(int dy=0;dy<2;++dy)for(int dx=0;dx<2;++dx)
+                        sum+=((2*x+dx)+3*(2*y+dy))%251;
+                    const auto k=size_t(y*half+x)*4;
+                    for(int channel=0;channel<3;++channel)
+                        require(std::abs(int(mip.pixels[k+channel])*4-sum)<=4,"generated mip mismatch");
+                    require(mip.pixels[k+3]==255,"generated mip alpha mismatch");
+                }
+            }
+            std::printf("PASS GPU copy %dx%d, row=%zu, %s%s\n",n,n,pack.copy.rowPitchBytes,
+                vector?"vector sRGB bytes":"scalar RGBA8",generateMips?" with generated mip chain":"");
             result=0;
         }catch(const std::exception& e){std::fprintf(stderr,"FAIL GPU copy: %s / %s\n",e.what(),dev.lastError().c_str());}
         if(frame)dev.endFrame();
@@ -91,6 +119,7 @@ inline int textureGraphGpuCopyAcceptance(gfx::Device& dev,gfx::Backend backend){
     }
     std::printf("GPU copy device: %s\n",dev.info().name.c_str());
     if(run(65,false,gfx::PixelFormat::RGBA8))return 1;
-    return run(128,true,gfx::PixelFormat::RGBA8_sRGB);
+    if(run(128,true,gfx::PixelFormat::RGBA8_sRGB))return 1;
+    return run(64,false,gfx::PixelFormat::RGBA8,true);
 }
 } // namespace aiverse::tests
