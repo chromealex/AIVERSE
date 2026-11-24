@@ -2,6 +2,7 @@
 #include "apps/studio-native/StudioScene.h"
 #include "apps/studio-native/StudioPlanetLiveBudget.h"
 #include "engine/render/TerraWeaveModelAdapter.h"
+#include "engine/render/TerraWeaveRootModel.h"
 #include "engine/render/TerraWeaveBotanicalForest.h"
 #include "engine/world/TerraWeaveForestSpeciesManifest.h"
 #include "apps/studio-native/StudioFont6x11.h"
@@ -585,23 +586,87 @@ void StudioScene::syncDocumentModels(
 
 void StudioScene::clearPlanetForestModels(){
     if(device_)for(auto& [id,model]:planetForestModels_)if(model)releasePreviewModel(*model);
+    if(device_)for(auto& [key,model]:planetForestRootModels_)if(model)releasePreviewModel(*model);
+    if(device_&&planetForestLogModel_)releasePreviewModel(*planetForestLogModel_);
+    planetForestRootModels_.clear();planetForestRejectedRoots_.clear();planetForestLogModel_.reset();planetForestLogRejected_=false;
     planetForestModels_.clear();planetForestRejectedModels_.clear();
     planetForestModelBytes_=0;planetForestModelCatalog_=Json{};planetForestModelProject_.clear();planetForestModelsPending_=false;
+}
+bool StudioScene::planetForestLiveCurrent(const editor::MapDoc& doc,const std::string& projectPath)const{
+    return planetPreview_&&planetLiveSnapshot_.getBool("active")&&planetLiveSnapshot_.getStr("topology")=="planet"&&
+        planetLiveSnapshot_["forest"].getBool("active")&&planetLiveProject_==projectPath&&
+        planetLivePath_==doc.path&&planetLiveRevision_==doc.revision&&!doc.dirty;
+}
+namespace {
+std::optional<render::float3> studioForestVec(const Json& value){
+    if(!value.isArray()||value.size()!=3)return {};
+    const auto& a=value.items();
+    render::float3 v{float(a[0].toDouble(NAN)),float(a[1].toDouble(NAN)),float(a[2].toDouble(NAN))};
+    if(!std::isfinite(v.x)||!std::isfinite(v.y)||!std::isfinite(v.z))return {};
+    return v;
+}
+std::optional<render::mat4> studioForestFrame(render::float3 origin,render::float3 up,render::float3 east){
+    if(render::dot(up,up)<.5f)return {};
+    up=render::normalize(up);east=east-up*render::dot(east,up);
+    if(render::dot(east,east)<.0001f)return {};
+    east=render::normalize(east);
+    const auto forward=render::normalize(render::cross(east,up));
+    render::mat4 basis;
+    const render::float3 axes[3]={east,up,forward};
+    for(int i=0;i<3;++i){basis.at(0,i)=axes[i].x;basis.at(1,i)=axes[i].y;basis.at(2,i)=axes[i].z;}
+    return render::mat4::translate(origin)*basis;
+}
+uint32_t studioForestRootTier(const Json& row){
+    if(!row.getBool("visibleRoots"))return 0;
+    const auto depth=row.getInt("rootDepthCm"),exposed=row.getInt("exposedCm");
+    if(depth<=0||depth>10000||exposed<=0||exposed>depth)return 0;
+    // Same three depth tiers as ArborForestAdapter::exposedRootTier.
+    return uint32_t(std::clamp<int64_t>((exposed*3+depth-1)/depth,1,3));
+}
 }
 void StudioScene::syncPlanetForestModels(const editor::MapDoc& doc,const std::string& projectPath){
     namespace fs=std::filesystem;namespace tw=terraweave;
     const auto& catalog=doc.data.worldExtra["terraweaveForest"];
     if(planetForestModelProject_!=projectPath||!(planetForestModelCatalog_==catalog)){
-        if(!planetForestModels_.empty()&&!device_->waitForResourceIdle())return;
+        if((!planetForestModels_.empty()||!planetForestRootModels_.empty()||planetForestLogModel_)&&!device_->waitForResourceIdle())return;
         clearPlanetForestModels();planetForestModelProject_=projectPath;planetForestModelCatalog_=catalog;
     }
     planetForestModelsPending_=false;
-    if(projectPath.empty()||!catalog["species"].isArray()||catalog["species"].size()>64||planetForestOverlays_.invalid)return;
+    if(projectPath.empty()||!planetPreview_)return;
+    const bool live=planetForestLiveCurrent(doc,projectPath);
     std::set<uint32_t> needed;
-    for(const auto& plant:planetForestOverlays_.picks)needed.insert(plant.species);
+    std::set<ForestRootModelKey> rootsNeeded;
+    bool logNeeded=false;
+    if(live){
+        for(const auto& row:planetLiveSnapshot_["forest"]["plants"].items()){
+            if(row.getStr("body")!=planetPreview_->bodyId||row.getBool("spent"))continue;
+            if(row.getBool("physical")&&row["capsule"].isObject()){logNeeded=true;continue;}
+            if(row.getBool("fallen")||row.getBool("harvested"))continue;
+            const auto id=uint32_t(row.getInt("species"));if(!id)continue;
+            needed.insert(id);
+            if(const auto tier=studioForestRootTier(row);tier)rootsNeeded.emplace(id,row.getStr("habit")=="shrub",tier);
+        }
+    }else if(!planetForestOverlays_.invalid)for(const auto& plant:planetForestOverlays_.picks)needed.insert(plant.species);
     const auto dir=catalog.getStr("botanicalTextures");
     constexpr size_t budget=192u*1024u*1024u;
     // Generate at most one new model per Scene frame. Shared renderer owns LOD and batching.
+    if(logNeeded&&!planetForestLogModel_&&!planetForestLogRejected_){
+        std::unique_ptr<render::Model> model;
+        try{
+            render::MeshBuilder mesh;mesh.color(render::rgba(255,255,255));
+            mesh.cylinder({0,-.5f,0},.5f,1.f,16,true);
+            render::Material bark;bark.name="Forest consequence log";bark.baseColor={.31f,.18f,.11f,1};bark.roughness=.9f;
+            model=render::modelFromParts("studio/forest/log",{{"Log",&mesh,bark,render::mat4{}}});
+            if(!model)throw std::runtime_error("Forest log mesh");
+            const size_t bytes=model->vertices.size()*sizeof(render::ModelVertex)+model->indices.size()*sizeof(uint32_t);
+            if(bytes>budget-planetForestModelBytes_)throw std::length_error("Forest log cache budget");
+            render::prepareModelUpload(*model);
+            if(!render::uploadModel(*device_,*model,false,false))throw std::runtime_error("Forest log upload");
+            planetForestLogModel_=std::move(model);planetForestModelBytes_+=bytes;
+        }catch(const std::exception&){if(model)releasePreviewModel(*model);planetForestLogRejected_=true;}
+        planetForestModelsPending_=true;return;
+    }
+    if(!catalog["species"].isArray()||catalog["species"].size()>64)return;
     for(const auto& def:catalog["species"].items()){
         const auto id=uint32_t(def.getInt("id",0));
         if(!needed.count(id)||planetForestModels_.count(id)||planetForestRejectedModels_.count(id))continue;
@@ -657,8 +722,79 @@ void StudioScene::syncPlanetForestModels(const editor::MapDoc& doc,const std::st
             planetForestRejectedModels_.insert(id);
         }
         planetForestModelsPending_=true;
-        break;
+        return;
     }
+    for(const auto& key:rootsNeeded){
+        if(planetForestRootModels_.count(key)||planetForestRejectedRoots_.count(key))continue;
+        if(planetForestRootModels_.size()>=32||planetForestModelBytes_>=budget){planetForestRejectedRoots_.insert(key);continue;}
+        const auto [id,shrub,tier]=key;
+        const auto& defs=catalog["species"].items();
+        const auto def=std::find_if(defs.begin(),defs.end(),[&](const Json& j){return j.getInt("id")==int64_t(id);});
+        if(def==defs.end()){planetForestRejectedRoots_.insert(key);continue;}
+        std::unique_ptr<render::Model> model;
+        try{
+            const auto recipe=world::parseForestSpeciesRecipe(*def);
+            model=tw::makeExposedRootModel(id,recipe.seed,tw::defaultRootProfile(shrub?tw::PlantHabit::Shrub:tw::PlantHabit::Tree),tier);
+            const size_t bytes=model->vertices.size()*sizeof(render::ModelVertex)+model->indices.size()*sizeof(uint32_t);
+            if(bytes>budget-planetForestModelBytes_)throw std::length_error("Forest root cache budget");
+            model->path=projectPath+"/"+model->path+(shrub?"/shrub":"/tree");
+            render::prepareModelUpload(*model);
+            if(!render::uploadModel(*device_,*model,false,false))throw std::runtime_error("Forest root upload");
+            planetForestRootModels_.emplace(key,std::move(model));planetForestModelBytes_+=bytes;
+        }catch(const std::exception&){if(model)releasePreviewModel(*model);planetForestRejectedRoots_.insert(key);}
+        planetForestModelsPending_=true;return;
+    }
+}
+void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std::string& projectPath){
+    if(!planetForestLiveCurrent(doc,projectPath)||planetForestModelProject_!=projectPath||
+       !(planetForestModelCatalog_==doc.data.worldExtra["terraweaveForest"]))return;
+    const auto index=doc.data.findBody(planetPreview_->bodyId);
+    if(index<0)return;
+    const auto& scale=doc.data.bodies[size_t(index)].meta["visual"]["flora"]["scale"];
+    const float flora=scale.isNumber()?std::clamp(float(scale.toDouble()),.001f,10.f):.06f;
+    static const std::vector<uint8_t> barkOnly{1,0};
+    size_t rendered=0,missing=0;
+    for(const auto& row:planetLiveSnapshot_["forest"]["plants"].items()){
+        if(row.getStr("body")!=planetPreview_->bodyId||row.getBool("spent"))continue;
+        if(row.getBool("physical")){
+            const auto& cap=row["capsule"];
+            const auto center=studioForestVec(cap["center"]),axis=studioForestVec(cap["axis"]);
+            const float radius=float(cap["radius"].toDouble()),half=float(cap["halfHeight"].toDouble());
+            if(!planetForestLogModel_||!center||!axis||radius<=0||radius>1000||half<=0||half>1000){++missing;continue;}
+            const auto frame=studioForestFrame(*center,*axis,std::abs(axis->y)<.9f?render::float3{0,1,0}:render::float3{1,0,0});
+            if(!frame){++missing;continue;}
+            // Wood proxy occupies the published capsule envelope; no inferred falling trajectory.
+            render::ModelDraw draw;draw.model=planetForestLogModel_.get();
+            draw.world=*frame*render::mat4::scale({radius*2,(half+radius)*2,radius*2});
+            renderer_.drawModel(draw);++rendered;continue;
+        }
+        if(row.getBool("fallen")||row.getBool("harvested")||row.getStr("habit")=="grass")continue;
+        const auto origin=studioForestVec(row["position"]),up=studioForestVec(row["up"]),east=studioForestVec(row["east"]);
+        const auto size=row.getInt("sizePermille",-1);
+        if(!origin||!up||!east||size<=0||size>1000){++missing;continue;}
+        const auto frame=studioForestFrame(*origin,*up,*east);
+        if(!frame){++missing;continue;}
+        const auto id=uint32_t(row.getInt("species"));
+        const bool shrub=row.getStr("habit")=="shrub";
+        const float factor=flora*float(size)*.001f*(shrub?.25f:1.f);
+        const auto model=planetForestModels_.find(id);
+        if(model!=planetForestModels_.end()){
+            render::ModelDraw draw;draw.model=model->second.get();
+            draw.world=*frame*render::mat4::scale({factor,factor,factor});
+            if(row.getBool("dead")||row.getInt("foliagePermille",0)==0)draw.materialMask=&barkOnly;
+            renderer_.drawModel(draw);++rendered;
+        }else ++missing;
+        if(const auto tier=studioForestRootTier(row);tier){
+            const auto root=planetForestRootModels_.find({id,shrub,tier});
+            if(root!=planetForestRootModels_.end()){
+                render::ModelDraw draw;draw.model=root->second.get();
+                // Root support dimensions are actual metres, not flora visual scale.
+                draw.world=*frame;renderer_.drawModel(draw);
+            }else ++missing;
+        }
+    }
+    lightingStatus_+=" · live forest meshes "+std::to_string(rendered);
+    if(missing)lightingStatus_+=" · missing live models "+std::to_string(missing);
 }
 StudioScene::~StudioScene() {
     if (device_) {
@@ -2336,8 +2472,8 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         if(planetLiveSnapshot_["aether"].getBool("truncated"))lightingStatus_+=" (sample capped)";
     }
     const bool liveForest=livePlanet&&planetLiveSnapshot_["forest"].getBool("active");
-    if(!liveForest&&planetForestModelsPending_)lightingStatus_+=" · ARBOR prototypes loading";
-    if(!liveForest&&!planetForestRejectedModels_.empty())lightingStatus_+=" · ARBOR preview budget or upload rejection";
+    if(planetForestModelsPending_)lightingStatus_+=" · ARBOR prototypes loading";
+    if(!planetForestRejectedModels_.empty()||!planetForestRejectedRoots_.empty()||planetForestLogRejected_)lightingStatus_+=" · ARBOR preview budget or upload rejection";
     if(!liveForest&&planetForestOverlays_.plants)lightingStatus_+=" · authored forest: ARBOR skeleton / root footprint / capsule recipe";
     if(livePlanet&&planetLiveSnapshot_["forest"].isObject()){
         lightingStatus_+=liveForest?" · live forest roots / actual capsule poses":" · live forest unavailable";
@@ -2389,6 +2525,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     }
     if(planetPreview_&&planetTerrain_.vb.valid()&&planetTerrain_.ib.valid()){
         renderer_.drawMesh(planetTerrain_,mat4{},{1,1,1,1},kDrawNoCastShadow);
+        if(liveForest)drawLivePlanetForestMeshes(doc,projectPath);
         if(!liveForest&&planetForestModelProject_==projectPath&&planetForestModelCatalog_==doc.data.worldExtra["terraweaveForest"]){
             static const std::vector<uint8_t> barkOnly{1,0};
             const bool current=forestSelection_.getStr("project")==projectPath&&forestSelection_.getStr("mapPath")==doc.path&&

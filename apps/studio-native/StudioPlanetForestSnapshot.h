@@ -56,7 +56,15 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
         row.set("body",Json::string(b->second->bodyId));row.set("cell",Json::number(int64_t(frame->cell)));
         const auto anchor=game::Surface::anchor(frame->body);
         row.set("position",xyz(b->second->plantedPosition-anchor));
-        row.set("up",xyz(frame->up));
+        row.set("up",xyz(frame->up));row.set("east",xyz(frame->east));
+        row.set("habit",Json::string(plant.anchor.roots.habit==tw::PlantHabit::Shrub?"shrub":plant.anchor.roots.habit==tw::PlantHabit::Tree?"tree":"grass"));
+        try{
+            const auto appearance=tw::plantAppearance(plant.environment);
+            row.set("sizePermille",Json::number(int64_t(appearance.sizePermille)));
+            row.set("foliagePermille",Json::number(int64_t(dead.contains(id)?0:appearance.foliagePermille)));
+            row.set("exposedCm",Json::number(int64_t(plant.support.exposedCm)));
+            row.set("visibleRoots",Json::fromBool(plant.support.hasVisibleRoots));
+        }catch(const std::exception&){++rejected;}
         row.set("rootRadiusCm",Json::number(int64_t(plant.anchor.roots.radiusCm)));
         row.set("rootDepthCm",Json::number(int64_t(plant.anchor.roots.depthCm)));
         row.set("ageTicks",Json::string(std::to_string(plant.environment.ageTicks)));

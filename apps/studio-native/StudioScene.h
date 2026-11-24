@@ -1,3 +1,4 @@
+#include <tuple>
 // macOS-only native preview: AIVERSE gfx::Device + Renderer3D over a CAMetalLayer.
 // No ImGui, no CPU texture readback, no dependency on UI component hierarchy.
 #pragma once
@@ -202,10 +203,17 @@ private:
     std::string planetForestModelProject_;
     std::map<uint32_t,std::unique_ptr<render::Model>> planetForestModels_;
     std::set<uint32_t> planetForestRejectedModels_;
+    using ForestRootModelKey=std::tuple<uint32_t,bool,uint32_t>;
+    std::map<ForestRootModelKey,std::unique_ptr<render::Model>> planetForestRootModels_;
+    std::set<ForestRootModelKey> planetForestRejectedRoots_;
+    std::unique_ptr<render::Model> planetForestLogModel_;
+    bool planetForestLogRejected_=false;
     size_t planetForestModelBytes_=0;
     bool planetForestModelsPending_=false;
     void clearPlanetForestModels();
     void syncPlanetForestModels(const editor::MapDoc& doc,const std::string& projectPath);
+    bool planetForestLiveCurrent(const editor::MapDoc& doc,const std::string& projectPath)const;
+    void drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std::string& projectPath);
     Json forestSelection_;
     Json planetLiveSnapshot_;
     std::string planetLiveProject_,planetLivePath_,planetLiveLayer_,planetLiveAetherLayer_;
