@@ -11,6 +11,7 @@
 #include "SpectraFunctionAssets.h"
 #include "SpectraSdfBinary.h"
 #include "SpectraVolumeAsset.h"
+#include "SpectraGpuVolumeGrid.h"
 #include "SpectraGpuParticles.h"
 #include "SpectraGpuFramePlan.h"
 #include "SpectraGpuProgram.h"
