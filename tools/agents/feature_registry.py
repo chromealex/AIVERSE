@@ -7,6 +7,7 @@ import sys
 from check_feature import ROOT, DIMENSIONS, validate
 from legacy_inventory import inventory
 from graph_inventory import inventory as graph_inventory
+from capability_inventory import inventory as capability_inventory
 
 PREFIX = "docs/features/"
 
@@ -70,14 +71,69 @@ def matrix(registry):
                  "integrations": data.get("integrations", {})}
                 for key, data in sorted(registry.items())]}
 
+def owner_readiness(registry, root, capabilities, graphs, owner=None):
+    """Group independent inventory views; do not count overlapping rows as unique features."""
+    owners = {}
+    def group(name):
+        return owners.setdefault(name, {"owner": name, "manifests": [], "capabilities": [],
+                                        "graphs": [], "tasks": []})
+    for ident, data in sorted(registry.items()):
+        bucket = group(data["owner"])
+        checks = {dim: data.get("checks", {}).get(dim, {}).get("status", "missing")
+                  for dim in DIMENSIONS}
+        errors = validate(data, root)
+        pending = sorted(dim for dim, status in checks.items()
+                         if status not in ("pass", "not_applicable"))
+        state = "invalid" if errors else "pending" if pending else "declared_ready"
+        bucket["manifests"].append({"id": ident, "state": state, "checks": checks})
+        if errors or pending:
+            bucket["tasks"].append({"id": "manifest-audit:" + ident, "owner": data["owner"],
+                                    "kind": "fix_manifest" if errors else "investigate",
+                                    "feature": ident, "pending": pending, "errors": errors,
+                                    "acceptance": ["Resolve listed manifest errors",
+                                                   "Verify pending checks or document justified exclusions",
+                                                   "Record evidence and update the manifest"]})
+    for report, key, label in ((capabilities, "capabilities", "capabilities"),
+                                (graphs, "graphs", "graphs")):
+        for row in report[key]:
+            group(row["owner"])[label].append(row["id"])
+        for task in report["tasks"]:
+            group(task["owner"])["tasks"].append(task)
+    result = []
+    seen = set()
+    errors = list(capabilities["errors"]) + list(graphs["errors"])
+    for name, bucket in sorted(owners.items()):
+        for task in bucket["tasks"]:
+            if task["id"] in seen:
+                errors.append("duplicate audit task: " + task["id"])
+            seen.add(task["id"])
+        if owner is not None and name != owner:
+            continue
+        for key in ("capabilities", "graphs"):
+            bucket[key].sort()
+        bucket["tasks"].sort(key=lambda task: (task["kind"] != "fix_manifest", task["id"]))
+        bucket["counts"] = {key: len(bucket[key]) for key in
+                            ("manifests", "capabilities", "graphs", "tasks")}
+        result.append(bucket)
+    if owner is not None and not result:
+        errors.append("unknown owner: " + owner)
+    return {"scope": "Overlapping manifest, catalog capability and graph views; no runtime readiness claim",
+            "owners": result, "errors": errors,
+            "counts": {key: sum(row["counts"][key] for row in result) for key in
+                       ("manifests", "capabilities", "graphs", "tasks")}}
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base")
+    parser.add_argument("--readiness", action="store_true", help="Unified owner-scoped audit queue")
+    parser.add_argument("--owner", help="Filter unified readiness by exact owner ID")
     parser.add_argument("--gaps", action="store_true", help="List declared integration gaps and invalid references")
     parser.add_argument("--graphs", action="store_true", help="Include known graph domain inventory")
     parser.add_argument("--legacy", action="store_true", help="Include catalog inventory without claiming runtime verification")
     parser.add_argument("--format", choices=["json", "markdown"], default="json")
     args = parser.parse_args()
+    if args.owner is not None and not args.readiness:
+        parser.error("--owner requires --readiness")
     try:
         registry = load_registry(ROOT)
         errors = [f"{key}: {e}" for key, data in registry.items() for e in validate(data)]
@@ -92,6 +148,10 @@ def main():
         if args.graphs:
             report["graph_inventory"] = graph_inventory(ROOT)
             errors.extend(report["graph_inventory"]["errors"])
+        if args.readiness:
+            report["readiness"] = owner_readiness(registry, ROOT, capability_inventory(ROOT),
+                report.get("graph_inventory") or graph_inventory(ROOT), args.owner)
+            errors.extend(report["readiness"]["errors"])
         report["errors"] = errors
         if args.format == "json":
             print(json.dumps(report, indent=2))
@@ -115,6 +175,19 @@ def main():
                 print("\nIntegration audit queue (declared, not runtime proof):")
                 for task in report["integration_gaps"]:
                     print(f"- {task['feature']} / {task['surface']}: {task['status']} — {task['note']}")
+            if args.readiness:
+                readiness = report["readiness"]
+                print("\n" + readiness["scope"])
+                print("| Owner | Manifests | Catalog capabilities | Graphs | Audit tasks |")
+                print("|---|---:|---:|---:|---:|")
+                for bucket in readiness["owners"]:
+                    counts = bucket["counts"]
+                    print("| " + bucket["owner"] + " | " + " | ".join(str(counts[key]) for key in
+                          ("manifests", "capabilities", "graphs", "tasks")) + " |")
+                for bucket in readiness["owners"]:
+                    print("\n### " + bucket["owner"])
+                    for task in bucket["tasks"]:
+                        print("- " + task["id"] + " (" + task["kind"] + ")")
             for error in errors:
                 print("- " + error)
         return int(bool(errors))
