@@ -197,6 +197,7 @@ private:
     Json assetThumbnail(const std::string& path);
     Json viewportInput(const Json& input);
     Json runSpectraPreview(const Json& params); // shared HTML5 / authenticated MCP bridge
+    void cancelSpectraCapture(); // invalidate callback state before dropping ownership
     Json captureSpectraFrame(const Json& params); // bounded asynchronous native GPU readback
     void applyViewport(const Json& params);
     bool handleHostMethod(const Json& req); // methods the host answers itself; false: StudioSession's

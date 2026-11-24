@@ -136,6 +136,10 @@ int aiverseMain(int,char**) { @autoreleasepool {
         frame();
         const Json stopped=scene.spectraPreviewCommand(action("stop"),"");
         require(!stopped.getBool("ready"),"shutdown left GPU visual source alive");
+        const auto reloaded=scene.spectraPreviewCommand(load,"");
+        require(reloaded.getBool("ready"),"preview reload failed");
+        const auto switched=scene.spectraPreviewCommand(action("status"),"different-project");
+        require(!switched.getBool("ready"),"status exposed old project runtime");
         scene.setSpectraDockMode(false);
         require(!scene.spectraDockMode(),"native Scene not restored after FX tab close");
         require(scene.cameraState().distance==mapCamera.distance,

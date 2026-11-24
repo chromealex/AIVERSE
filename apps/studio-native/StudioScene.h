@@ -81,6 +81,9 @@ public:
     }
     Json spectraPreviewCommand(const Json& input,const std::string& project) {
         const auto action=input.getStr("action","status");
+        if(project!=spectraProject_ && spectraPreview_.active())
+            spectraPreview_.stop(*device_);
+        spectraProject_=project;
         if(action=="stage") {
             const auto background=input.getStr("background");
             if(background!="dark" && background!="neutral" &&
@@ -122,7 +125,7 @@ public:
             camera_.target={x,y,z};camera_.ortho=c.getBool("ortho");cameraInitialized_=true;
         }
         if(action=="stage"||action=="cameraPreset"||action=="cameraRestore"||action=="status") {
-            const Json state=spectraPreview_.status();
+            const Json state=spectraPreview_.command(*device_,Json::parse(R"({"action":"status"})"));
             Json out=state;
             out.set("background",Json::string(fxBackground_));
             out.set("grid",Json::fromBool(fxGrid_));
@@ -139,9 +142,6 @@ public:
             if(action!="status") {lastFrameSignature_=0;settleFrames_=30;}
             return out;
         }
-        if(project!=spectraProject_ && spectraPreview_.active())
-            spectraPreview_.stop(*device_);
-        spectraProject_=project;
         Json result=spectraPreview_.command(*device_,input);
         result.set("background",Json::string(fxBackground_));
         result.set("grid",Json::fromBool(fxGrid_));

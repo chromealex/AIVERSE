@@ -68,7 +68,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   useEffect(()=>{
     setState(null);setSeek(0);setError('');setParameter('');
     setAutoReload(false);
-    setCapturePending(false);setCaptureImage('');setCaptureError('');
+    setCapturePending(false);setCaptureId(undefined);setCaptureImage('');setCaptureError('');
     setCompareA('');setCompareB('');setCaptureSlot(null);
     setPixelDiff(null);setDiffError('');
     setCaptureMetaA(null);setCaptureMetaB(null);pendingMeta.current=null;setLockedCamera(null);setReplayPreset(null);setLiveScalars({});setReplaySeed('');setGpuAllocationSeed('');
@@ -76,13 +76,16 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   },[projectPath]);
   useEffect(()=>{
     if(!active || !state?.ready)return;
+    let closed=false,inFlight=false;
     const timer=setInterval(()=>{
+      if(closed||inFlight)return;
+      inFlight=true;
       void invoke('studio.spectraPreview',{action:'status'}).then(next=>{
-        setState(next);
-      }).catch(e=>setError(message(e)));
+        if(!closed)setState(next);
+      }).catch(e=>{if(!closed)setError(message(e));}).finally(()=>{inFlight=false;});
     },500);
-    return()=>clearInterval(timer);
-  },[active,state?.ready]);
+    return()=>{closed=true;clearInterval(timer);};
+  },[active,state?.ready,projectPath]);
 
   // Opt-in, bounded authoring-only live reload. It recompiles the current
   // in-memory graph through native StudioScene; it never saves or publishes
@@ -155,7 +158,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       }).finally(()=>{inFlight=false;});
     },350);
     return()=>{closed=true;window.clearInterval(timer);};
-  },[active,capturePending,captureSlot,captureId]);
+  },[active,capturePending,captureSlot,captureId,projectPath]);
 
   useEffect(()=>{
     let cancelled=false;

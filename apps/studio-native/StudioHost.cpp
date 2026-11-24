@@ -94,9 +94,13 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
     });
 }
 StudioHost::~StudioHost() { shutdown(); }
+void StudioHost::cancelSpectraCapture() {
+    auto shot=std::move(fxShot_);
+    if(shot){std::lock_guard<std::mutex> lock(shot->mutex);shot->cancelled=true;}
+}
 void StudioHost::shutdown() {
     *alive_ = false;
-    fxShot_.reset(); // completion callback retains its own immutable shared state
+    cancelSpectraCapture();
     if(session_)session_->workspace().setSpectraPreviewHandler({});
     game_.reset(); // hosted client and its device retire before the native surface
     if (renderThread_) {
@@ -229,7 +233,7 @@ void StudioHost::webReady() {
 void StudioHost::openProject(const std::string& path, int64_t requestId) {
     if (projectLoading_) return;
     projectLoading_ = true;
-    fxShot_.reset(); // a pending readback must not leak a previous project's pixels
+    cancelSpectraCapture(); // invalidate old project callbacks before opening
     if (game_) game_->stop();
     sendProjectSplash(path);
     sendLoading("project", "Opening " + fs::path(path).filename().string(), 0, 0);
@@ -292,7 +296,8 @@ void StudioHost::surfaceDetached(StudioSurface surface) {
     if (surface == StudioSurface::Scene) { placement_ = {}; readyEmitted_ = false; }
     else if(surface == StudioSurface::Fx) {
         fxPlacement_={};fxSurfaceVisible_=false;
-        fxShot_.reset(); // a detached floating FX tab owns no pending preview
+        cancelSpectraCapture();
+        if(fxPreview_)onScene([&]{fxPreview_.reset();});
     }
     else { gamePlacement_ = {}; if (game_) game_->suspend(); }
 }
@@ -406,6 +411,7 @@ void StudioHost::tickFx() {
         ViewportRect hidden;NativeViewportPlacement none;
         (void)platform_.placeSurface(StudioSurface::Fx,hidden,none);
         fxPlacement_={};fxSurfaceVisible_=false;
+        cancelSpectraCapture();
         try{onScene([&]{fxPreview_.reset();});}catch(const std::exception&){}
     }
 }
@@ -1376,7 +1382,7 @@ Json StudioHost::captureSpectraFrame(const Json& params) {
                 });
         });
     } catch(...) {
-        fxShot_.reset();
+        cancelSpectraCapture();
         throw;
     }
     out.set("pending",Json::fromBool(true));
@@ -1423,7 +1429,10 @@ Json StudioHost::runSpectraPreview(const Json& params) {
             return fxPreview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
         });
     }
-    return onScene([&]{return fxPreview_->spectraPreviewCommand(params,project);});
+    Json result=onScene([&]{return fxPreview_->spectraPreviewCommand(params,project);});
+    if(action=="stop"||(action=="load"&&result.getBool("ready")&&result.getStr("error").empty()))
+        cancelSpectraCapture();
+    return result;
 }
 void StudioHost::applyViewport(const Json& params) {
     const std::string id = params.getStr("id");
