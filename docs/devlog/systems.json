@@ -1712,6 +1712,12 @@
           "text": "Добавлен opt-in режим генерации текстур для материала без чтения пикселей на CPU. Изолированный тест бюджета пройден; сборка и GPU-проверка ещё не выполнены.",
           "nameEn": "Texture Graph GPU — Stage 38A",
           "textEn": "Opt-in material generation without CPU pixel readback implemented. Isolated budget test passed; integrated build and GPU verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38B (в работе)",
+          "text": "Общий нативный GPU owner и тонкий адаптер редактора.",
+          "nameEn": "Texture Graph GPU — Stage 38B (in progress)",
+          "textEn": "Shared native GPU owner and thin editor adapter."
         }
       ],
       "enables": [
