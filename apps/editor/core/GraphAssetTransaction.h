@@ -13,7 +13,10 @@ namespace fs = std::filesystem;
 
 class Transaction {
 public:
-    explicit Transaction(const fs::path& path) : target_(fs::weakly_canonical(path)) {
+    explicit Transaction(const fs::path& path, const fs::path& projectRoot) : target_(fs::weakly_canonical(path)) {
+        const auto relative=target_.lexically_relative(fs::weakly_canonical(projectRoot));
+        if(projectRoot.empty() || relative.empty() || *relative.begin()==".." || fs::is_symlink(fs::symlink_status(path)))
+            throw std::runtime_error("Graph write path is outside the project or is a symlink");
         fs::create_directories(target_.parent_path());
         lock_ = target_; lock_ += ".aiverse-write-lock";
         std::error_code ec;
