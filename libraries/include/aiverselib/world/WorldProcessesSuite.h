@@ -24,8 +24,9 @@ namespace aiverse::lib::worldprocess {
 struct SuiteFlags {
     bool morph=false,crowd=false,imprint=false,circuit=false;
     bool granular=false,evolve=false,society=false;
+    bool morphGravity=false;
     bool any()const {
-        return morph||crowd||imprint||circuit||granular||evolve||society;
+        return morph||crowd||imprint||circuit||granular||evolve||society||morphGravity;
     }
 };
 inline SuiteFlags suiteFlags(const Json& json) {
@@ -35,6 +36,7 @@ inline SuiteFlags suiteFlags(const Json& json) {
         if(value.type()!=Json::Type::Bool)
             throw std::invalid_argument("World Processes suite flag must be Boolean: "+key);
         if(key=="morph")f.morph=value.boolean();
+        else if(key=="morphGravity")f.morphGravity=value.boolean();
         else if(key=="crowd")f.crowd=value.boolean();
         else if(key=="imprint")f.imprint=value.boolean();
         else if(key=="circuit")f.circuit=value.boolean();
@@ -43,16 +45,21 @@ inline SuiteFlags suiteFlags(const Json& json) {
         else if(key=="society")f.society=value.boolean();
         else throw std::invalid_argument("Unknown World Processes suite flag: "+key);
     }
+    f.morph|=f.morphGravity;
     return f;
 }
 using ImprintTrailInstaller=void(*)(Simulation&);
 using CrowdInstaller=void(*)(Simulation&);
 using EvolveAreaInstaller=void(*)(Simulation&);
 using GranularInstaller=void(*)(Simulation&);
-inline void installSuite(Simulation& sim,SuiteFlags flags,ImprintTrailInstaller trails=nullptr,CrowdInstaller crowdInstaller=nullptr,EvolveAreaInstaller areas=nullptr,GranularInstaller granularInstaller=nullptr) {
+using MorphGravityInstaller=void(*)(Simulation&);
+inline void installSuite(Simulation& sim,SuiteFlags flags,ImprintTrailInstaller trails=nullptr,CrowdInstaller crowdInstaller=nullptr,EvolveAreaInstaller areas=nullptr,GranularInstaller granularInstaller=nullptr,MorphGravityInstaller morphGravityInstaller=nullptr) {
     // Order is stable across game/server/editor builds. Integrations can
     // place their own producer systems before this opt-in installation.
-    if(flags.morph)morph::install(sim);
+    if(flags.morphGravity){
+        if(!morphGravityInstaller)throw std::invalid_argument("MORPH gravity requires a native frame owner");
+        morphGravityInstaller(sim);
+    }else if(flags.morph)morph::install(sim);
     if(flags.crowd){
         if(crowdInstaller)crowdInstaller(sim);
         else {crowd::installRoutes(sim);crowd::install(sim);}
