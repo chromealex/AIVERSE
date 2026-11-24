@@ -93,6 +93,7 @@ ${_defs}});
 target_sources(aiverse_game PRIVATE "${AIVERSE_NATIVE_ENGINE_ROOT}/engine/game/Native.cpp")
 target_sources(aiverse_native_modules INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/gen/NativeRegistry.cpp")
 target_include_directories(aiverse_native_modules INTERFACE "${AIVERSE_NATIVE_ENGINE_ROOT}")
+target_link_libraries(aiverse_native_modules INTERFACE aiverse_game)
 # Every executable of this build that links a game host gets the project's modules (deferred to the end of the
 # top-level CMakeLists, so executables declared later are included too).
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL aiverse_native_link_hosts "${CMAKE_SOURCE_DIR}")
