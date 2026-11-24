@@ -56,7 +56,7 @@ float GameClient::cityFrame(double dt) {
     if (!city_ || !city_->mirror) return 0;
     city_->client->poll(net::nowMs());
     city_->mirror->update(dt);
-    if (!sim_->events().empty()) processEvents();   // notices about this player, as after a local tick
+    processEvents();   // drain every mirror event batch, even if the latest batch is empty
     if (!city_->client->connected() && !city_->lost) { city_->lost = true; notice("Connection to the city is lost"); }
     return city_->mirror->alpha();
 }
