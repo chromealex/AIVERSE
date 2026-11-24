@@ -97,7 +97,12 @@ Json StudioGameSurface::worldProcessDiagnostics(int cap,const std::string& focus
     return worldProcessDiagnostics_.sample(sim?&sim->world():nullptr,
         std::to_string(runtimeEpoch_),sim?sim->tick():0,cap,focus);
 }
-Json StudioGameSurface::ecologyState(int32_t granularCellCm,bool liveGravity,bool liveAether,bool liveFracture,bool liveMorph,bool liveEcho,bool liveCrowd,bool liveCircuit,bool liveSociety){
+bool StudioGameSurface::planetSnapshotCurrent(const Json& snapshot) const {
+    return host_&&host_->inMatch()&&host_->canControl()&&
+        snapshot.getBool("active")&&snapshot.getStr("topology")=="planet"&&
+        snapshot.getStr("epoch")==std::to_string(runtimeEpoch_);
+}
+Json StudioGameSurface::ecologyState(const StudioWorldProcessLiveOptions& options){
     Simulation* sim=host_&&host_->inMatch()?host_->simulation():nullptr;
     Json out=Json::object(),regions=Json::array();
     out.set("active",Json::fromBool(sim!=nullptr));
@@ -114,27 +119,27 @@ Json StudioGameSurface::ecologyState(int32_t granularCellCm,bool liveGravity,boo
             if(host_->canControl()&&sim->tick()>0){
                 out.set("imprint",samplePlanetImprint(sim->world(),*surface,sim->tick()-1));
                 out.set("evolve",samplePlanetEvolve(sim->world(),*surface,sim->tick()-1));
-                if(liveGravity)out.set("gravity",samplePlanetGravity(sim->world(),*surface,sim->tick()-1));
-                if(liveFracture)out.set("fracture",samplePlanetFracture(sim->world(),*surface,sim->tick()-1));
-                if(liveEcho)out.set("echo",samplePlanetEcho(sim->world(),*surface,sim->tick()-1));
-                if(liveCircuit)out.set("circuit",samplePlanetCircuit(sim->world(),*surface,sim->tick()-1));
-                if(liveSociety)out.set("society",samplePlanetSociety(sim->world(),*surface,sim->tick()-1));
-                if(liveCrowd){
+                if(options.gravity)out.set("gravity",samplePlanetGravity(sim->world(),*surface,sim->tick()-1));
+                if(options.fracture)out.set("fracture",samplePlanetFracture(sim->world(),*surface,sim->tick()-1));
+                if(options.echo)out.set("echo",samplePlanetEcho(sim->world(),*surface,sim->tick()-1));
+                if(options.circuit)out.set("circuit",samplePlanetCircuit(sim->world(),*surface,sim->tick()-1));
+                if(options.society)out.set("society",samplePlanetSociety(sim->world(),*surface,sim->tick()-1));
+                if(options.crowd){
                     const auto config=game->native().loadedConfiguration("world_processes");
                     out.set("crowd",samplePlanetCrowd(sim->world(),*surface,sim->tick()-1,config&&config->getBool("crowdGravitySupport"),game));
                 }
-                if(liveMorph){
+                if(options.morph){
                     const auto config=game->native().loadedConfiguration("world_processes");
                     out.set("morph",samplePlanetMorph(sim->world(),*surface,sim->tick()-1,config&&config->getBool("morphGravity")));
                 }
-                if(liveAether){
+                if(options.aetherLayer!="off"){
                     auto policy=AetherDiagnosticPolicy::Unknown;
                     if(const auto config=game->native().loadedConfiguration("world_processes"))
                         policy=config->getBool("aetherStratification")?AetherDiagnosticPolicy::Stratified:AetherDiagnosticPolicy::Diffusion;
                     out.set("aether",samplePlanetAether(sim->world(),*surface,sim->tick()-1,policy));
                 }
-                if(granularCellCm>0)
-                    out.set("granular",samplePlanetGranular(sim->world(),*surface,sim->tick()-1,granularCellCm));
+                if(options.granularCellCm>0)
+                    out.set("granular",samplePlanetGranular(sim->world(),*surface,sim->tick()-1,options.granularCellCm));
             }
             return out;
         }

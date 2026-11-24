@@ -236,6 +236,8 @@ void StudioHost::openProject(const std::string& path, int64_t requestId) {
     if (projectLoading_) return;
     projectLoading_ = true;
     if (game_) game_->stop();
+    wpLiveSnapshot_=Json();wpLivePlanetProject_.clear();wpLivePlanetMapPath_.clear();wpLivePlanetRevision_=0;wpLiveRefresh_=0;
+    rebuildOverlay();
     sendProjectSplash(path);
     sendLoading("project", "Opening " + fs::path(path).filename().string(), 0, 0);
     StudioSession* session = session_.get();
@@ -301,15 +303,22 @@ void StudioHost::tickGame() {
     const double now = platform_.now(), dt = gameFrameTime_ > 0 ? now - gameFrameTime_ : 0;
     gameFrameTime_ = now;
     if (!game_) return;
-    if(wpLiveEcology_ && !game_->state().getBool("inMatch") && wpLiveSnapshot_.getBool("active")){
-        wpLiveSnapshot_=Json();rebuildOverlay();
-    }
+    const auto invalidate=[&]{
+        if(!wpLiveSnapshot_.getBool("active"))return;
+        const bool planet=wpLiveSnapshot_.getStr("topology")=="planet";
+        if(planet?(!game_->planetSnapshotCurrent(wpLiveSnapshot_)||!worldProcessPlanetMapCurrent()):!game_->state().getBool("inMatch")){
+            wpLiveSnapshot_=Json();wpLiveRefresh_=0;rebuildOverlay();
+        }
+    };
+    invalidate();
     if (!gamePlacement_.visible || !platform_.surfaceDrawable(StudioSurface::Game)) { game_->suspend(); return; }
     game_->frame(gamePlacement_.pixelsW, gamePlacement_.pixelsH, float(gamePlacement_.width), float(gamePlacement_.height),
                  dt, platform_.gameFocused());
-    if(wpLiveEcology_ && now-wpLiveRefresh_>=.25){
+    invalidate();
+    if(wpLiveOptions_.live && now-wpLiveRefresh_>=.25){
         wpLiveRefresh_=now;
-        wpLiveSnapshot_=game_->ecologyState(wpGranularCellCm_,wpLiveGravity_,wpLiveAether_!="off",wpLiveFracture_,wpLiveMorph_,wpLiveEcho_,wpLiveCrowd_,wpLiveCircuit_,wpLiveSociety_);
+        wpLiveSnapshot_=game_->ecologyState(wpLiveOptions_);
+        if(wpLiveSnapshot_.getStr("topology")=="planet"&&!worldProcessPlanetMapCurrent())wpLiveSnapshot_=Json();
         rebuildOverlay();
     }
 }
@@ -818,6 +827,12 @@ void StudioHost::brushAdjust(double factor, bool disarm) {
 }
 bool StudioHost::brushArmed() const { return !projectLoading_ && preview_ && session_->sceneBrush().armed; }
 // Scene overlay: extension gizmos + spline handles (Roads / Water "Edit nodes").
+bool StudioHost::worldProcessPlanetMapCurrent() const {
+    if(projectLoading_||!session_||wpLivePlanetMapPath_.empty())return false;
+    const auto& ws=session_->workspace();
+    return ws.project.dir==wpLivePlanetProject_&&ws.map.path==wpLivePlanetMapPath_&&
+        ws.map.revision==wpLivePlanetRevision_&&!ws.map.dirty;
+}
 void StudioHost::rebuildOverlay() {
     if (!preview_) return;
     auto shapes = extShapes_;
@@ -825,21 +840,21 @@ void StudioHost::rebuildOverlay() {
     // OverlayShape renderer. This is a read-only projection of MapDoc,
     // never a second ECS simulation or a new viewport.
     if(session_ && !session_->workspace().project.dir.empty()) {
-        auto worldShapes=worldprocess_gizmos::collect(session_->workspace().map,{},wpEcologyLayer_);
+        auto worldShapes=worldprocess_gizmos::collect(session_->workspace().map,{},wpLiveOptions_.layer);
         shapes.reserve(shapes.size()+worldShapes.size());
         for(auto& shape:worldShapes)shapes.push_back(std::move(shape));
-        if(wpLiveEcology_&&wpLiveSnapshot_.getBool("active")){
+        if(wpLiveOptions_.live&&wpLiveSnapshot_.getBool("active")){
             for(const auto& r:wpLiveSnapshot_["regions"].items()){
                 if(shapes.size()+5>=1390)break;
                 const float x0=float(r.getInt("minXcm",0))/100.f,z0=float(r.getInt("minZcm",0))/100.f;
                 const float x1=float(r.getInt("maxXcm",0))/100.f,z1=float(r.getInt("maxZcm",0))/100.f;
                 const auto u=[&](const char* key){return std::clamp(float(r.getInt(key,0))/1e9f,0.f,1.f);};
                 float red=u("pollution"),green=u("fertility"),blue=.35f;
-                if(wpEcologyLayer_=="fertility")red=.15f;
-                if(wpEcologyLayer_=="pollution")green=.15f;
-                if(wpEcologyLayer_=="succession"){red=.15f;green=u("succession");blue=.85f;}
-                if(wpEcologyLayer_=="durability"){green=u("durability");red=1-green;}
-                if(wpEcologyLayer_=="off")continue;
+                if(wpLiveOptions_.layer=="fertility")red=.15f;
+                if(wpLiveOptions_.layer=="pollution")green=.15f;
+                if(wpLiveOptions_.layer=="succession"){red=.15f;green=u("succession");blue=.85f;}
+                if(wpLiveOptions_.layer=="durability"){green=u("durability");red=1-green;}
+                if(wpLiveOptions_.layer=="off")continue;
                 const auto rr=uint8_t(red*255),gg=uint8_t(green*255),bb=uint8_t(blue*255);
                 render::float3 center{(x0+x1)*.5f,.9f,(z0+z1)*.5f};
                 worldprocess_gizmos::rectangle(shapes,center,x1-x0,z1-z0,rr,gg,bb);
@@ -848,7 +863,7 @@ void StudioHost::rebuildOverlay() {
                     "% P:"+std::to_string(int(u("pollution")*100))+"%",rr,gg,bb));
             }
         }
-        if(wpLiveEcology_&&wpLiveSnapshot_.getBool("active")){
+        if(wpLiveOptions_.live&&wpLiveSnapshot_.getBool("active")){
             for(const auto& p:wpLiveSnapshot_["plants"].items()){
                 if(shapes.size()>=1250)break;
                 const bool fallen=p.getBool("fallen"),dead=p.getBool("dead");
@@ -1106,9 +1121,9 @@ void StudioHost::rebuildOverlay() {
     }
     onScene([&] {
         preview_->setOverlayShapes(std::move(shapes));
-        preview_->setPlanetLiveSnapshot(wpLiveEcology_&&(wpEcologyLayer_!="off"||wpLiveGravity_||wpLiveAether_!="off"||wpLiveFracture_||wpLiveMorph_||wpLiveEcho_||wpLiveCrowd_||wpLiveCircuit_||wpLiveSociety_)&&
+        preview_->setPlanetLiveSnapshot(wpLiveOptions_.live&&wpLiveOptions_.anyPlanetLayer()&&worldProcessPlanetMapCurrent()&&
             wpLiveSnapshot_.getBool("active")&&wpLiveSnapshot_.getStr("topology")=="planet"
-            ?wpLiveSnapshot_:Json{},wpLivePlanetProject_,wpLivePlanetMapPath_,wpLivePlanetRevision_,wpEcologyLayer_,wpLiveAether_);
+            ?wpLiveSnapshot_:Json{},wpLivePlanetProject_,wpLivePlanetMapPath_,wpLivePlanetRevision_,wpLiveOptions_.layer,wpLiveOptions_.aetherLayer);
     });
 }
 // World Processes: drag authored stable-ID references or area handles.
@@ -2042,76 +2057,26 @@ bool StudioHost::handleHostMethod(const Json& req) {
     if(method=="studio.evolveState")return answer([&]{
         // Browser polling can reuse the same completed-tick geometry sampled
         // for the native Scene. No duplicate heavy GRANULAR query.
-        if(wpLiveEcology_&&wpLiveSnapshot_.getStr("topology")=="planet")return wpLiveSnapshot_;
+        if(wpLiveOptions_.live&&game_&&worldProcessPlanetMapCurrent()&&game_->planetSnapshotCurrent(wpLiveSnapshot_))return wpLiveSnapshot_;
+        if(wpLiveOptions_.live&&game_&&!worldProcessPlanetMapCurrent()){
+            auto state=game_->ecologyState();
+            if(state.getStr("topology")=="planet"){Json out=Json::object();out.set("active",Json::fromBool(false));out.set("regions",Json::array());return out;}
+            return state;
+        }
         if(game_)return game_->ecologyState();
         Json out=Json::object();out.set("active",Json::fromBool(false));
         out.set("regions",Json::array());return out;
     });
     if(method=="studio.evolveLayer")return answer([&]{
-        const auto layer=params.getStr("layer");
-        if(!layer.empty()&&layer!="combined"&&layer!="fertility"&&layer!="pollution"&&
-           layer!="succession"&&layer!="durability"&&layer!="off")
-            throw std::runtime_error("Invalid EVOLVE layer");
-        int32_t cellCm=wpGranularCellCm_;
-        if(params.has("granularCellCm")){
-            const auto& v=params["granularCellCm"];
-            const auto n=v.integer(-1);
-            if(!v.isNumber()||n<0||n>10000||(n>0&&n<10)||v.fx()!=Fixed::fromInt(n))
-                throw std::runtime_error("GRANULAR diagnostic cell size must be 0 or integer 10..10000 cm");
-            cellCm=int32_t(n);
+        const auto next=wpLiveOptions_.patched(params);
+        if(next!=wpLiveOptions_){
+            wpLiveOptions_=next;
+            wpLiveSnapshot_=wpLiveOptions_.live&&game_?game_->ecologyState(wpLiveOptions_):Json();
+            if(wpLiveSnapshot_.getStr("topology")=="planet"&&!worldProcessPlanetMapCurrent())wpLiveSnapshot_=Json();
+            wpLiveRefresh_=platform_.now();
+            rebuildOverlay();
         }
-        if(params.has("live")&&params["live"].type()!=Json::Type::Bool)
-            throw std::runtime_error("Live overlay must be boolean");
-        if(params.has("liveGravity")&&params["liveGravity"].type()!=Json::Type::Bool)
-            throw std::runtime_error("Live gravity overlay must be boolean");
-        if(params.has("liveFracture")&&params["liveFracture"].type()!=Json::Type::Bool)
-            throw std::runtime_error("Live FRACTURE overlay must be boolean");
-        if(params.has("liveMorph")&&params["liveMorph"].type()!=Json::Type::Bool)
-            throw std::runtime_error("Live MORPH overlay must be boolean");
-        if(params.has("liveEcho")&&params["liveEcho"].type()!=Json::Type::Bool)
-            throw std::runtime_error("Live ECHO overlay must be boolean");
-        if(params.has("liveCrowd")&&params["liveCrowd"].type()!=Json::Type::Bool)
-            throw std::runtime_error("Live CROWD overlay must be boolean");
-        if(params.has("liveCircuit")&&params["liveCircuit"].type()!=Json::Type::Bool)
-            throw std::runtime_error("Live CIRCUIT overlay must be boolean");
-        if(params.has("liveSociety")&&params["liveSociety"].type()!=Json::Type::Bool)
-            throw std::runtime_error("Live SOCIETY overlay must be boolean");
-        auto aetherLayer=wpLiveAether_;
-        if(params.has("aetherLayer")){
-            if(params["aetherLayer"].type()!=Json::Type::String)
-                throw std::runtime_error("AETHER layer must be a string");
-            aetherLayer=params.getStr("aetherLayer");
-            if(aetherLayer!="off"&&aetherLayer!="smoke"&&aetherLayer!="toxin"&&aetherLayer!="oxygen")
-                throw std::runtime_error("Invalid AETHER layer");
-        }
-        if(!layer.empty())wpEcologyLayer_=layer;
-        if(params.has("live")||params.has("granularCellCm")||params.has("liveGravity")||params.has("aetherLayer")||params.has("liveFracture")||params.has("liveMorph")||params.has("liveEcho")||params.has("liveCrowd")||params.has("liveCircuit")||params.has("liveSociety")){
-            wpLiveAether_=std::move(aetherLayer);
-            wpLiveFracture_=params.getBool("liveFracture",wpLiveFracture_);
-            wpLiveMorph_=params.getBool("liveMorph",wpLiveMorph_);
-            wpLiveEcho_=params.getBool("liveEcho",wpLiveEcho_);
-            wpLiveCrowd_=params.getBool("liveCrowd",wpLiveCrowd_);
-            wpLiveCircuit_=params.getBool("liveCircuit",wpLiveCircuit_);
-            wpLiveSociety_=params.getBool("liveSociety",wpLiveSociety_);
-            wpLiveGravity_=params.getBool("liveGravity",wpLiveGravity_);
-            wpGranularCellCm_=cellCm;
-            wpLiveEcology_=params.getBool("live",wpLiveEcology_);
-            wpLiveSnapshot_=wpLiveEcology_&&game_?game_->ecologyState(wpGranularCellCm_,wpLiveGravity_,wpLiveAether_!="off",wpLiveFracture_,wpLiveMorph_,wpLiveEcho_,wpLiveCrowd_,wpLiveCircuit_,wpLiveSociety_):Json();
-        }
-        if(!layer.empty()||params.has("live")||params.has("granularCellCm")||params.has("liveGravity")||params.has("aetherLayer")||params.has("liveFracture")||params.has("liveMorph")||params.has("liveEcho")||params.has("liveCrowd")||params.has("liveCircuit")||params.has("liveSociety"))rebuildOverlay();
-        Json result=Json::object();
-        result.set("layer",Json::string(wpEcologyLayer_));
-        result.set("live",Json::fromBool(wpLiveEcology_));
-        result.set("granularCellCm",Json::number(int64_t(wpGranularCellCm_)));
-        result.set("liveGravity",Json::fromBool(wpLiveGravity_));
-        result.set("aetherLayer",Json::string(wpLiveAether_));
-        result.set("liveFracture",Json::fromBool(wpLiveFracture_));
-        result.set("liveMorph",Json::fromBool(wpLiveMorph_));
-        result.set("liveEcho",Json::fromBool(wpLiveEcho_));
-        result.set("liveCrowd",Json::fromBool(wpLiveCrowd_));
-        result.set("liveCircuit",Json::fromBool(wpLiveCircuit_));
-        result.set("liveSociety",Json::fromBool(wpLiveSociety_));
-        return result;
+        return wpLiveOptions_.json();
     });
     if(method=="studio.worldProcessAreaPreview")return answer([&]{
         const auto selected=session_->selectedObjectIds();
@@ -2265,7 +2230,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
                 plan.camera = std::array<float, 5>{cam.target.x, cam.target.z, cam.distance, float(cam.pitch * 57.29578), float(cam.yaw * 57.29578)};
             }
             ensureGame();
-            wpLiveSnapshot_=Json();wpLivePlanetProject_.clear();wpLivePlanetMapPath_.clear();
+            wpLiveSnapshot_=Json();wpLivePlanetProject_.clear();wpLivePlanetMapPath_.clear();wpLivePlanetRevision_=0;wpLiveRefresh_=0;
             game_->start(plan, engineRoot_ + "/engine/assets");
             if(plan.map){
                 wpLivePlanetProject_=plan.project;
@@ -2281,7 +2246,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
             if (!game_) throw std::runtime_error("No game is running");
             game_->control(params.getStr("action"));
             if(params.getStr("action")=="restart"||params.getStr("action")=="checkpointRestore"){
-                wpLiveSnapshot_=Json();rebuildOverlay();
+                wpLiveSnapshot_=Json();wpLiveRefresh_=0;rebuildOverlay();
             }
         }
         return gameState();

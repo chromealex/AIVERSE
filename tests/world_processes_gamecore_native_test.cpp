@@ -1,3 +1,4 @@
+#include "apps/studio-native/StudioWorldProcessLiveOptions.h"
 #include "apps/studio-native/StudioPlanetLiveSnapshot.h"
 #include "apps/studio-native/StudioPlanetAetherSnapshot.h"
 #include "apps/studio-native/StudioPlanetFractureSnapshot.h"
@@ -1239,7 +1240,23 @@ static void checkAuthoredPlanetDemo(){
     sim->step();
     AIVERSE_TEST_CHECK(w.get<crowd::Agent>(walker).allocated==slot);
 }
+static void checkWorldProcessLiveOptions(){
+    const studio::StudioWorldProcessLiveOptions defaults;
+    AIVERSE_TEST_CHECK(defaults.layer=="combined"&&!defaults.live&&defaults.anyPlanetLayer());
+    const auto next=defaults.patched(Json::parse(R"({"layer":"off","live":true,"liveSociety":true,"granularCellCm":100,"aetherLayer":"oxygen"})"));
+    AIVERSE_TEST_CHECK(next.live&&next.society&&next.granularCellCm==100&&next.aetherLayer=="oxygen"&&next.anyPlanetLayer());
+    AIVERSE_TEST_CHECK(next.patched(Json::object())==next);
+    AIVERSE_TEST_CHECK(defaults.patched(defaults.json())==defaults&&defaults.patched(next.json())==next);
+    const auto disabled=next.patched(Json::parse(R"({"liveSociety":false,"aetherLayer":"off"})"));
+    AIVERSE_TEST_CHECK(!disabled.anyPlanetLayer()&&disabled.live&&disabled.granularCellCm==100);
+    for(const char* bad:{R"({"live":false,"liveEcho":1})",R"({"layer":3})",R"({"layer":""})",R"({"granularCellCm":10.5})",R"({"granularCellCm":9})",R"({"aetherLayer":"water"})"}){
+        bool rejected=false;
+        try{(void)next.patched(Json::parse(bad));}catch(const std::runtime_error&){rejected=true;}
+        AIVERSE_TEST_CHECK(rejected&&next.live&&next.society);
+    }
+}
 int main(){
+    checkWorldProcessLiveOptions();
     checkAuthoredPlanetDemo();
     checkPlanetStudioDiagnostics();
     checkCircuitSurfaceWiring();
