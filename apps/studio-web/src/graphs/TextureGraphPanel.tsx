@@ -649,7 +649,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
    <div className="tg-bake-row">
       <StudioInput aria-label="New texture name" value={textureName} disabled={busy||disabled} onChange={e=>setTextureName(e.target.value)}/>
     <StudioButton size="sm" variant="primary" disabled={busy||disabled||!gpuCaps?.available||!outputs.length||gpuPolling} onClick={()=>void run('gpuBakeSet')}>GPU PBR bake</StudioButton>
-    <StudioButton size="sm" disabled={busy||disabled||!gpuCaps?.available||!outputs.includes(output)||gpuPolling} onClick={()=>void run('gpuBake')}>GPU output bake</StudioButton>
+    <StudioButton size="sm" disabled={busy||disabled||!gpuCaps?.available||!outputs.includes(output)||gpuPolling} onClick={()=>void run('gpuBake')}>{output==='radiance'?'GPU HDR bake (RGBA32F)':'GPU output bake'}</StudioButton>
     <StudioButton size="sm" disabled={busy||disabled||!gpuReady||!textureName||gpuRequest?.source!==text||gpuRequest?.overrides!==overrideText||(!gpuRequest?.setBake&&gpuRequest?.output!==output)} onClick={()=>void run('gpuPublish')}>Publish GPU bake</StudioButton>
       <StudioButton disabled={busy||disabled||!textureName||!outputs.includes(output)} onClick={()=>void run('bake')}>{output==='radiance'?'Export linear EXR (CPU)':'Bake selected output to new PNG'}</StudioButton>
   <StudioButton disabled={busy||disabled||!textureName||!outputs.length} onClick={()=>void run('bakeSet')}>Bake all outputs</StudioButton>

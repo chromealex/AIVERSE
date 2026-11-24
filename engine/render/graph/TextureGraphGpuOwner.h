@@ -13,6 +13,9 @@
 #include "engine/render/graph/GraphGpuProfile.h"
 #include <array>
 #include <limits>
+#include <cstring>
+#include <span>
+#include "engine/render/CameraExr.h"
 #include "engine/render/graph/TextureGraphGpuTextureTransfer.h"
 #include "engine/view/AppearanceAssetRegistry.h"
 #include <utility>
@@ -203,7 +206,8 @@ class TextureGraphGpuOwner {
     size_t target_=0;int size_=0;
     std::string project_,state_="idle",reason_,backend_="none",submittedBackend_,output_;
     std::vector<uint8_t> pixels_;
-    bool queued_=false,requireGpu_=false;
+    bool queued_=false,requireGpu_=false,rawRadiance_=false;
+    size_t resultByteCount()const{return size_t(size_)*size_*(rawRadiance_?16u:4u);}
     bool ownsActiveResources()const{return buffer_.valid()||scratch_.valid()||compute_.valid()||secondCompute_.valid()||matSources_.has_value();}
     bool ownsResources()const{return ownsActiveResources()||idlePipelines_.size()!=0||matIdleBuffers_.bytes()!=0||matIdlePipelines_.size()!=0||!gpuCandidates_.empty();}
     void abandonActive(){matKeys_.clear();matDirty_.clear();textureRead_.reset();matActivePipelines_.clear();matLayout_.clear();matLastFence_=0;matSources_.reset();matSlots_.clear();matImageInputs_.clear();matImageBytes_=0;matNodes_.clear();matPacks_.clear();matSerial_=0;matBytes_=0;matEncoded_=false;sharedScratch_.invalidate();reusedScratch_=false;buffer_={};scratch_={};compute_={};secondCompute_={};read_.reset();fence_=0;capacity_=0;activeKey_={};activePlanAccepted_=false;idlePipelines_.abandon();inFlight_=false;}
@@ -250,6 +254,21 @@ class TextureGraphGpuOwner {
         catch(const std::exception& e){state_="failed";reason_=e.what();pixels_.clear();}
     }
     void finish(){
+        if(rawRadiance_){
+            bool valid=received_==resultByteCount()&&pixels_.size()==received_;
+            if(valid)try{
+                const auto reference=evaluateRadiance(*program_,target_,size_);
+                valid=reference.size()*sizeof(float)==pixels_.size();
+                if(valid)for(size_t i=0;i<reference.size();++i){
+                    float v;std::memcpy(&v,pixels_.data()+i*sizeof(float),sizeof(float));
+                    const float tolerance=std::max(0.0001f,std::abs(reference[i])*0.0001f);
+                    if(!std::isfinite(v)||std::abs(v)>65504.f||(i%4==3?v!=1.f:std::abs(v-reference[i])>tolerance)){valid=false;break;}
+                }
+            }catch(...){valid=false;}
+            if(valid){state_="ready";backend_=submittedBackend_;reason_="complete RGBA32F native readback; CPU reference validated";}
+            else fallback("HDR GPU readback or float parity check failed");
+            return;
+        }
         bool valid=received_==size_t(size_)*size_*4&&pixels_.size()==received_;
         if(valid)for(size_t i=3;i<pixels_.size();i+=4)if(pixels_[i]!=255){valid=false;break;}
         if(valid)try{
@@ -330,7 +349,7 @@ class TextureGraphGpuOwner {
                 const auto budget=gpuTransferRequested_?gpuTransferBudget_.dagBudget:materializedBudgetBytes;
                 if(gpuTransferRequested_&&(!gpuTransferLease_.validFor(dev)||!dev.supportsStorageBufferTextureCopy()))
                     throw std::runtime_error("GPU texture transfer requires a live native device and copy support");
-                matSources_=compileMaterializedDag(*program_,targets,size_,budget,matFusion_,gpuTransferRequested_,matIncremental_);
+                matSources_=compileMaterializedDag(*program_,targets,size_,budget,matFusion_,gpuTransferRequested_,matIncremental_,rawRadiance_);
                 if(gpuTransferRequested_){
                     for(size_t i=0;i<setOutputs_.size();++i)if(render::texture_graph::materialSlot(setOutputs_[i].first)){
                         const auto kind=program_->nodes.at(targets[i]).info->output;
@@ -397,7 +416,7 @@ class TextureGraphGpuOwner {
             if(matSerial_!=serial_||(!first&&!matEncoded_))throw std::logic_error("stale materialized execution");
             const size_t index=setBake_?setBackends_.size():0;
             if(index>=sources.packs.size())throw std::logic_error("invalid materialized output ordinal");
-            const auto pixels=uint32_t(sources.resultBytes/4);
+            const auto pixels=uint32_t(size_t(size_)*size_);
             // Allocate CPU output before encoding work; failures still retain
             // any newly created handles through the owner retirement path.
             if(!gpuFenceOnly_)pixels_.assign(sources.resultBytes,0);
@@ -527,7 +546,7 @@ public:
         auto payload=p.dump(-1);
         if(payload.size()>gpu::TextureRequestQueue::maxPayloadBytes)throw std::invalid_argument("texture queue payload exceeds cap");
         auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object(),resolver);
-        if(program.outputs.count("radiance")&&!(p.getBool("gpuTextureFenceOnly")&&p.getBool("gpuTextureTransfer")))throw std::invalid_argument("HDR export uses CPU EXR bake; queue supports normalized sets only");
+        if(program.outputs.count("radiance")&&!(p.getBool("gpuTextureFenceOnly")&&p.getBool("gpuTextureTransfer"))&&!(p.getBool("bake")&&!p.getBool("bakeSet")&&p.getStr("output")=="radiance"))throw std::invalid_argument("queue HDR as a separate radiance bake");
         const auto bytes=imageSourceBytes(program);
         if(bytes>maxQueuedImageBytes-queuedImageBytes_)throw std::invalid_argument("texture queue image snapshot budget exceeded");
         const auto id=pendingRequests_.push(std::move(payload),priority);
@@ -585,7 +604,7 @@ public:
         r.set("completedOutputs",Json::number(int64_t(published_&&setBake_?setOutputs_.size():setBackends_.size())));r.set("totalOutputs",Json::number(int64_t(setOutputs_.size())));
         r.set("currentOutput",Json::string(output_));r.set("reusedOutputs",Json::number(int64_t(reusedOutputs_)));
         Json outputs=Json::array();for(size_t i=0;i<setBackends_.size();++i){Json row=Json::object();row.set("output",Json::string(setOutputs_[i].first));row.set("backend",Json::string(setBackends_[i]));outputs.push(row);}r.set("outputs",outputs);r.set("published",Json::fromBool(published_));
-        r.set("receivedBytes",Json::number(int64_t(received_)));r.set("totalBytes",Json::number(int64_t(gpuFenceOnly_?0:size_t(size_)*size_*4)));
+        r.set("receivedBytes",Json::number(int64_t(received_)));r.set("totalBytes",Json::number(int64_t(gpuFenceOnly_?0:resultByteCount())));
         r.set("readbackBlocks",Json::number(int64_t(blocks_)));r.set("reusedPlan",Json::fromBool(reused_));r.set("reusedBuffers",Json::fromBool(reusedBuffers_));
         r.set("pipelineCacheHit",Json::fromBool(cacheHit_));
         r.set("pipelineCacheHits",Json::number(int64_t(std::min<uint64_t>(cacheHits_,uint64_t(std::numeric_limits<int64_t>::max())))));
@@ -618,6 +637,7 @@ public:
         r.set("gpuTextureFenceOnly",Json::fromBool(gpuFenceOnly_));
         r.set("gpuTextureAcceptance",Json::string(gpuFenceOnly_?"fence_only":"cpu_reference"));
         r.set("fileExportAvailable",Json::fromBool(!gpuFenceOnly_));
+        r.set("resultFormat",Json::string(rawRadiance_?"rgba32f-linear":"rgba8"));
         r.set("gpuTextureGeneration",Json::string(gpuGeneration_));
         r.set("gpuTextureSetReady",Json::fromBool(gpuCandidatesReady()));
         r.set("gpuTexturePublished",Json::fromBool(gpuPublished_));
@@ -643,7 +663,9 @@ private:
         auto program=prepared?std::move(*prepared):render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object(),resolver);
         size_t target=program.nodes.size();const bool setBake=p.getBool("bakeSet"),bake=setBake||p.getBool("bake");
         const bool transfer=p.getBool("gpuTextureTransfer"),mipmaps=p.getBool("gpuTextureMipmaps"),fenceOnly=p.getBool("gpuTextureFenceOnly");
-        if(bake&&((setBake&&program.outputs.count("radiance")&&!fenceOnly)||(!setBake&&p.getStr("output")=="radiance")))throw std::invalid_argument("HDR export uses CPU EXR bake; GPU RGBA8 bake cannot publish radiance");
+        const bool rawRadiance=bake&&!setBake&&p.getStr("output")=="radiance";
+        if(setBake&&program.outputs.count("radiance")&&!fenceOnly)throw std::invalid_argument("export radiance as a separate HDR bake");
+        if(rawRadiance&&(transfer||mipmaps||fenceOnly||p.getBool("incrementalOutputs")))throw std::invalid_argument("HDR raw bake does not support material texture transfer");
         if(fenceOnly&&!transfer)throw std::invalid_argument("fence-only mode requires GPU texture transfer");
         const bool materialized=p.getBool("materialized")||p.getBool("materializedDag")||render::texture_graph::requiresMaterialized(program),incremental=p.getBool("incremental");
         if(incremental&&!materialized)
@@ -702,14 +724,14 @@ private:
         sharedScratch_.invalidate();reusedScratch_=false;sharedScratchHits_=0;
         matIncremental_=incremental;matReusedNodes_=0;matRequested_=materialized;matFusion_=matRequested_&&p.getBool("fusePointwise");matReachableNodes_=matFusedNodes_=0;matFailed_=false;matNodePasses_=matPackPasses_=matPipelineHits_=0;matBufferHit_=false;
         outputReuseTarget_=reuseTarget;pendingOutputReceipt_=std::move(receipt);reusedOutputNames_=std::move(reusedNames);outputNoop_=noop;
-        ++serial_;gpuTransferRequested_=transfer;gpuTextureMipmaps_=mipmaps;gpuPublished_=false;gpuFenceOnly_=fenceOnly;
+        ++serial_;rawRadiance_=rawRadiance;gpuTransferRequested_=transfer;gpuTextureMipmaps_=mipmaps;gpuPublished_=false;gpuFenceOnly_=fenceOnly;
         gpuTransferLease_=(transfer||incremental)?lease:render::RenderDeviceLifetime::Lease{};gpuTransferBudget_=transferBudget;
         gpuAcceptedTextures_=0;gpuGeneration_=transfer?"gpu_"+std::to_string(lease.generation())+"_"+std::to_string(serial_):std::string{};
         size_=std::min(program.size,requested);target_=target;program_=std::move(program);project_=project;output_=output;bake_=bake;published_=false;setBake_=setBake;
         sourceGraph_=setBake?p["graph"]:Json();overrides_=setBake?(p.has("overrides")?p["overrides"]:Json::object()):Json();
         setOutputs_.clear();setImages_.clear();setBackends_.clear();reusedOutputs_=0;
         if(setBake_){for(const auto& pair:program_->outputs)if(!gpuFenceOnly_||render::texture_graph::materialSlot(pair.first))setOutputs_.push_back(pair);setImages_.reserve(setOutputs_.size());setBackends_.reserve(setOutputs_.size());}
-        plannedPasses_=plannedSlotBytes_=0;passes_=0;blocks_=received_=scratchBytes_=0;reused_=reusedBuffers_=cacheHit_=false;requireGpu_=transfer||incremental||p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=!outputNoop_;state_=outputNoop_?"ready":"queued";
+        plannedPasses_=plannedSlotBytes_=0;passes_=0;blocks_=received_=scratchBytes_=0;reused_=reusedBuffers_=cacheHit_=false;requireGpu_=rawRadiance||transfer||incremental||p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=!outputNoop_;state_=outputNoop_?"ready":"queued";
         if(outputNoop_){backend_="reused";reason_="all material outputs unchanged; no GPU generation";}return status();
     }
 public:
@@ -855,6 +877,7 @@ protected:
     Json publishBaked(const std::string& scope,const std::string& request,
             PublishSet&& publishSet,PublishImage&& publishImage){
         checkProject(scope);
+        if(rawRadiance_)throw std::runtime_error("raw HDR bake requires radiance publication");
         if(gpuFenceOnly_)throw std::runtime_error("fence-only GPU textures cannot be exported; use validated bake");
         if(!bake_||published_||state_!="ready"||request!=std::to_string(serial_)||inFlight_||matRetirementPending()||setIncomplete()||project_!=scope)
             throw std::runtime_error("no matching completed unpublished texture bake");
@@ -863,7 +886,37 @@ protected:
         else{render::Image img;img.width=img.height=size_;img.rgba=pixels_;r=publishImage(output_,img);}
         published_=true;pixels_.clear();setImages_.clear();r.set("backend",Json::string(backend_));r.set("request",Json::string(std::to_string(serial_)));return r;
     }
+protected:
+    template<class Publish>
+    Json publishRadianceBaked(const std::string& scope,const std::string& request,Publish&& publish){
+        auto rgba=readAcceptedRadiance(scope,request);
+        Json r=publish(size_,std::span<const float>(rgba.data(),rgba.size()));
+        published_=true;pixels_.clear();
+        r.set("backend",Json::string(backend_));r.set("request",Json::string(request));return r;
+    }
 public:
+    bool isRadianceBake()const noexcept{return rawRadiance_;}
+    // Copy only accepted GPU bytes, never the CPU reference. Native caller
+    // must use the owner's thread and exact request/scope identity.
+    std::vector<float> readAcceptedRadiance(const std::string& scope,const std::string& request)const{
+        if(!rawRadiance_||!bake_||published_||state_!="ready"||request!=std::to_string(serial_)||inFlight_||matRetirementPending()||project_!=scope||pixels_.size()!=resultByteCount()||(backend_!="metal"&&backend_!="vulkan"))
+            throw std::runtime_error("no matching accepted HDR GPU bake");
+        std::vector<float> rgba(pixels_.size()/sizeof(float));
+        std::memcpy(rgba.data(),pixels_.data(),pixels_.size());return rgba;
+    }
+    // Explicit CPU-staged upload from accepted GPU readback, NOT zero-copy.
+    // Returned texture is caller-owned; no adoption into Model material slots.
+    gfx::TextureHandle uploadAcceptedRadiance(gfx::Device& dev,const RenderDeviceLifetime::Lease& lease,
+            const std::string& scope,const std::string& request,gfx::PixelFormat format){
+        require(lease.validFor(dev)&&dev.gpuHealthy(),"HDR upload requires live device lease");
+        require((format==gfx::PixelFormat::RGBA16F||format==gfx::PixelFormat::RGBA32F)&&dev.supports(format),"unsupported HDR upload format");
+        const auto rgba=readAcceptedRadiance(scope,request);
+        gfx::TextureDesc desc;desc.width=desc.height=size_;desc.format=format;desc.filter=gfx::Filter::Linear;
+        std::vector<uint16_t> half;
+        if(format==gfx::PixelFormat::RGBA16F){half.reserve(rgba.size());for(float v:rgba)half.push_back(cameraFloatToHalf(v));desc.data=half.data();}
+        else desc.data=rgba.data();
+        auto texture=dev.createTexture(desc);if(!texture.valid())throw std::runtime_error("HDR texture upload rejected");return texture;
+    }
     // Native tools stop scheduling empty frames once no work can advance.
     bool needsFrame() const {
         return requestBusy() || (project_.empty() && ownsResources()) ||

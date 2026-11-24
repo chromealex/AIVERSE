@@ -213,6 +213,25 @@ void saveMaterialLibrary(Workspace& ws, const Json& lib, const std::string& what
     ws.note({Change::Rules, 0, 0, -1, -1, -1, what});   // views rebuild with the library
 }
 
+Json publishTextureGraphRadiance(Workspace& ws,const std::string& name,int size,std::span<const float> rgba){
+    needProject(ws);
+    if(!render::texture_graph::safeId(name)||size<8||size>1024||rgba.size()!=size_t(size)*size*4)throw std::invalid_argument("invalid HDR texture result");
+    for(size_t i=0;i<rgba.size();++i)if(!std::isfinite(rgba[i])||std::abs(rgba[i])>65504.f||(i%4==3&&rgba[i]!=1.f))throw std::invalid_argument("invalid HDR texture sample");
+    std::vector<uint8_t> exr;
+    if(!render::cameraEncodeExrFloat(size,size,rgba,exr))throw std::runtime_error("EXR encode failed");
+    const auto root=fs::canonical(ws.project.dir),dir=root/"content"/"textures";
+    if(fs::is_symlink(root/"content")||fs::is_symlink(dir))throw std::runtime_error("texture destination symlink rejected");
+    fs::create_directories(dir);
+    const std::string rel="content/textures/"+name+"_radiance.exr";
+    const auto dest=root/rel,stage=fs::path(dest.string()+".stage");
+    if(fs::exists(dest)||fs::is_symlink(dest)||!fs::create_directory(stage))throw std::runtime_error("EXR already exists or staging busy");
+    struct Cleanup {fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}} cleanup{stage};
+    const auto temp=stage/"payload";
+    {std::ofstream stream(temp,std::ios::binary);stream.write(reinterpret_cast<const char*>(exr.data()),std::streamsize(exr.size()));stream.close();if(!stream)throw std::runtime_error("EXR write failed");}
+    fs::create_hard_link(temp,dest);
+    ws.note({Change::Rules,0,0,-1,-1,-1,"Texture graph HDR bake: "+rel});
+    Json r=okJson();r.set("path",Json::string(rel));r.set("output",Json::string("radiance"));r.set("size",Json::number(int64_t(size)));r.set("format",Json::string("exr-rgba16f"));return r;
+}
 Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::string& output,const render::Image& image){
     needProject(ws);
     if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture name");
@@ -596,20 +615,8 @@ void registerMaterialOps(Workspace& ws) {
         auto it=program.outputs.find(output);if(it==program.outputs.end())throw std::invalid_argument("unknown output");
         if(output=="radiance"){
             const auto rgba=render::texture_graph::evaluateRadiance(program,it->second);
-            std::vector<uint8_t> exr;
-            if(!render::cameraEncodeExrFloat(program.size,program.size,rgba,exr))throw std::runtime_error("EXR encode failed");
-            const auto root=fs::canonical(w->project.dir),dir=root/"content"/"textures";
-            if(fs::is_symlink(root/"content")||fs::is_symlink(dir))throw std::runtime_error("texture destination symlink rejected");
-            fs::create_directories(dir);
-            const std::string rel="content/textures/"+name+"_radiance.exr";
-            const auto dest=root/rel,stage=fs::path(dest.string()+".stage");
-            if(fs::exists(dest)||fs::is_symlink(dest)||!fs::create_directory(stage))throw std::runtime_error("EXR already exists or staging busy");
-            struct Cleanup {fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}} cleanup{stage};
-            const auto temp=stage/"payload";
-            {std::ofstream stream(temp,std::ios::binary);stream.write(reinterpret_cast<const char*>(exr.data()),std::streamsize(exr.size()));stream.close();if(!stream)throw std::runtime_error("EXR write failed");}
-            fs::create_hard_link(temp,dest);
-            w->note({Change::Rules,0,0,-1,-1,-1,"Texture graph HDR bake: "+rel});
-            Json r=okJson();r.set("path",Json::string(rel));r.set("output",Json::string(output));r.set("size",Json::number(int64_t(program.size)));r.set("format",Json::string("exr-rgba16f"));r.set("backend",Json::string("cpu"));return r;
+            auto r=publishTextureGraphRadiance(*w,name,program.size,std::span<const float>(rgba.data(),rgba.size()));
+            r.set("backend",Json::string("cpu"));return r;
         }
         textureCache->selectProject(w->project.dir);bool cacheHit=false;
         auto img=textureCache->evaluate(program,{it->second},0,cacheHit).front();

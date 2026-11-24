@@ -7,6 +7,7 @@ namespace aiverse::editor {
 class TextureGraphGpuPreview final : public render::texture_graph::TextureGraphGpuOwner {
 public:
     Json publish(Workspace& ws,const Json& p){
+        if(isRadianceBake())return publishRadianceBaked(ws.project.dir,p.getStr("request"),[&](int size,std::span<const float> rgba){return publishTextureGraphRadiance(ws,p.getStr("textureName"),size,rgba);});
         return publishBaked(ws.project.dir,p.getStr("request"),
             [&](const Json& graph,const Json& overrides,const std::vector<render::Image>& images,
                 const std::vector<std::string>& backends){

@@ -289,6 +289,15 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
         const auto hdrPreviewId=owner.start(hdrGraph,project,lifetime.lease()).getStr("request");drain();
         const auto hdrPreviewStatus=owner.status();
         require(hdrPreviewStatus.getStr("request")==hdrPreviewId&&hdrPreviewStatus.getStr("state")=="ready"&&hdrPreviewStatus.getStr("backend")==expected,"HDR materialized preview parity failed");
+        auto hdrBake=hdrGraph;hdrBake.set("bake",Json::fromBool(true));
+        const auto rawId=owner.start(hdrBake,project,lifetime.lease()).getStr("request");drain();
+        const auto rawStatus=owner.status();
+        require(rawStatus.getStr("request")==rawId&&rawStatus.getStr("state")=="ready"&&rawStatus.getStr("backend")==expected&&rawStatus.getStr("resultFormat")=="rgba32f-linear"&&rawStatus.getInt("receivedBytes")==16*16*16,"raw GPU HDR readback failed");
+        const auto rawGpu=owner.readAcceptedRadiance(project,rawId);
+        require(rawGpu.size()==rawHdr.size()&&std::abs(rawGpu[0]-12.f)<.001f&&std::abs(rawGpu[1]-6.f)<.001f&&std::abs(rawGpu[2]+3.f)<.001f&&rawGpu[3]==1.f,"raw GPU HDR values lost");
+        bool staleHdr=false;try{(void)owner.readAcceptedRadiance(project,"stale");}catch(const std::runtime_error&){staleHdr=true;}
+        require(staleHdr,"stale HDR request accepted");
+        cancel(rawId);drain();
         // Native function calls lower into ordinary typed DAG nodes. Two calls
         // share a definition but use independent parameter values and public IDs.
         auto functions=Json::parse(R"JSON({"graph":{"version":1,"size":32,

@@ -48,6 +48,9 @@ inline Source packMaterializedKernelAt(KernelValue input,int n,const std::string
         "uint3 rgb=uint3(floor(clamp("+display+",0.0f,1.0f)*255.0f+0.5f));\n"
         "result["+index+"]=rgb.x|(rgb.y<<8)|(rgb.z<<16)|0xff000000u;");
 }
+inline Source packRadianceFloatKernel(int n){
+    return materializedKernel(KernelValue::Vector,{KernelValue::Vector},n,"result[tid]=float4(input0[tid].xyz,1.0f);");
+}
 inline Source packMaterializedKernel(KernelValue input,int n){
     return packMaterializedKernelAt(input,n,"tid");
 }
