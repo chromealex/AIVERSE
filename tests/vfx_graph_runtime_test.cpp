@@ -139,6 +139,17 @@ int main() {
         sdf.samples.pop_back();
         require(!sp::inspectGraphGpuEligibility(volume,options).eligible,"invalid SDF rejected");
     }
+    {
+        sp::ComputeEmitterDesc desc;
+        desc.depthCollision=true;
+        require(!sp::validComputeEmitter(desc),"depth must not silently fall back to CPU");
+        desc.backend=sp::ComputePreference::RequireGpu;
+        require(sp::validComputeEmitter(desc),"explicit native depth config");
+        desc.staticSphereRadius=1;
+        require(!sp::validComputeEmitter(desc),"incompatible depth and sphere rejected");
+        sp::DepthCollisionSnapshot invalid;
+        require(!invalid.valid(),"unpublished depth rejected");
+    }
     options.capacity=4; // burst requires five slots
     require(!sp::inspectGraphGpuEligibility(basic,options).eligible,
             "unsafe GPU pool size accepted");

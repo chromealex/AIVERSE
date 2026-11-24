@@ -4,6 +4,7 @@
 // lifetime, gravity, drag and size. CPU fallback reuses fx::ParticleSystem.
 // GPU simulation/vertices never round-trip to CPU during normal frames.
 #pragma once
+#include "SpectraDepthCollision.h"
 
 #include "ParticleSystem.h"
 #include "SpectraGpuCheckpoint.h"
@@ -95,6 +96,7 @@ struct ComputeEmitterDesc {
     render::float3 staticSphereCenter{};
     float collisionBounce=0.5f,collisionDampen=0,collisionRadiusScale=0;
     fx::StaticSdfVolume staticSdf;
+    bool depthCollision=false; // native GPU-only opt-in, requires RequireGpu
 };
 
 bool validComputeEmitter(const ComputeEmitterDesc&, std::string* reason = nullptr);
@@ -192,6 +194,9 @@ public:
     bool killSourceParticles(uint64_t sourceToken);
     // Set the frame view before step(); changing a previously culled view
     // invalidates the compact geometry until the next step (dt=0 is valid).
+    // One fresh previous-frame publication per step; no CPU fallback.
+    bool setDepthCollisionSnapshot(const DepthCollisionSnapshot& snapshot);
+    void clearDepthCollisionSnapshot(){depthSnapshot_={};}
     void setView(const fx::SpectraFxView& view);
     template<class Camera>
     void setView(const Camera& camera,const render::mat4& projection,int width,int height) {
@@ -278,6 +283,8 @@ private:
         render::float4 lodEye{}; // xyz: camera position; w: LOD near distance
         render::float4 collisionSphere{}; // centre xyz, obstacle radius (0 disables)
         render::float4 collisionResponse{}; // bounce, dampen, particle radius scale
+        float depthViewProj[16]{},depthInverse[16]{};
+        render::float4 depthControl{},depthEye{};
     };
     struct DrawUniforms {
         float viewProj[16];
@@ -288,7 +295,7 @@ private:
     static_assert(sizeof(ProgramParams)==32);
     static_assert(sizeof(ProgramAttributes)==32);
     static_assert(sizeof(Vertex)==40);
-    static_assert(sizeof(Uniforms)==192);
+    static_assert(sizeof(Uniforms)==352);
     static_assert(sizeof(DrawUniforms)==144);
 
     bool stepGpuAllocated(float dt);
@@ -305,6 +312,8 @@ private:
     void switchToCpu(const std::string& why);
     gfx::Device* device_ = nullptr;
     ComputeEmitterDesc desc_;
+    DepthCollisionSnapshot depthSnapshot_{};
+    void fillDepthUniforms(Uniforms& u);
     // Separate shader birth stream; zero disables authored seeded randomness.
     uint32_t shaderBirthSeed_=0, shaderBirthOrdinal_=0;
     bool shaderBirthSeedEnabled_=false;

@@ -60,6 +60,8 @@ bool validComputeEmitter(const ComputeEmitterDesc& d,std::string* why) {
        !finite(d.collisionDampen)||d.collisionDampen<0||d.collisionDampen>1||
        !finite(d.collisionRadiusScale)||d.collisionRadiusScale<0||d.collisionRadiusScale>10)
         return fail("invalid analytic sphere collision");
+    if(d.depthCollision&&(d.backend!=ComputePreference::RequireGpu||d.staticSdf.dimension||d.staticSphereRadius>0||!d.particleProgram.isNull()))
+        return fail("depth collision requires native RequireGpu and no static/VM collision");
     if(!d.staticSdf.valid()||(d.staticSdf.dimension&&d.staticSphereRadius>0))
         return fail("invalid or combined static SDF volume");
     if(why)why->clear();
@@ -189,6 +191,7 @@ bool ComputeParticles::initGpu() {
         desc_.shaderGraph,desc_.graphInputs,graphMaterial,reason_,desc_.gpuBirthRandom))return false;
     const std::array<uint32_t,4> graphChannels=graphMaterial.sources;
     std::vector<uint32_t> graphPayload(graphChannels.begin(),graphChannels.end());
+    if(desc_.depthCollision)graphPayload.resize(4+kDepthCollisionBytes/sizeof(uint32_t),0);
     if(desc_.staticSdf.dimension) {
         const auto& sdf=desc_.staticSdf;
         const auto bits=[](float v){uint32_t u;std::memcpy(&u,&v,sizeof(u));return u;};
@@ -447,6 +450,7 @@ void ComputeParticles::releaseGpu() {
     drawCount_=0;
 }
 void ComputeParticles::shutdown() {
+    depthSnapshot_={};
     checkpointHistory_.clear();
     shaderBirthSeed_=0;shaderBirthOrdinal_=0;shaderBirthSeedEnabled_=false;
     cpu_.shutdown();cpuEffect_=-1;releaseGpu();device_=nullptr;
@@ -486,6 +490,7 @@ void ComputeParticles::clear() {
     (void)tryClear(); // preserve legacy ABI; status is available via reason()
 }
 bool ComputeParticles::tryClear() {
+    depthSnapshot_={};
     if(!initialized_)return false;
     if(backend_==ComputeBackend::Cpu) {
         cpu_.clear();cpuHandles_.clear();
@@ -726,6 +731,29 @@ bool ComputeParticles::killSourceParticles(uint64_t sourceToken) {
     verticesReady_=false;
     return true;
 }
+bool ComputeParticles::setDepthCollisionSnapshot(const DepthCollisionSnapshot& snapshot) {
+    depthSnapshot_={};
+    if(!gpuActive()||!desc_.depthCollision||!device_||snapshot.device!=device_||
+       !snapshot.valid()||!device_->gpuHealthy()||!device_->canUpdateSharedBuffers())return false;
+    const uint64_t current=device_->gpuSubmissionFence();
+    if(!current||snapshot.fence>=current||current-snapshot.fence>2)return false;
+    gfx::BufferInfo info;
+    if(!device_->bufferInfo(snapshot.depth,info)||info.logicalBytes!=kDepthCollisionBytes)return false;
+    if(!device_->copyStorageBufferChecked(snapshot.depth,graphSources_,kDepthCollisionBytes,0,4*sizeof(uint32_t)))return false;
+    depthSnapshot_=snapshot;
+    return true;
+}
+void ComputeParticles::fillDepthUniforms(Uniforms& u) {
+    if(!desc_.depthCollision||!depthSnapshot_.valid())return;
+    const uint64_t current=device_->gpuSubmissionFence();
+    if(current>depthSnapshot_.fence&&current-depthSnapshot_.fence<=2) {
+        std::memcpy(u.depthViewProj,depthSnapshot_.viewProj.m,sizeof(u.depthViewProj));
+        std::memcpy(u.depthInverse,depthSnapshot_.inverseViewProj.m,sizeof(u.depthInverse));
+        u.depthControl={1.f,depthSnapshot_.zeroToOne?1.f:0.f,depthSnapshot_.topDown?1.f:0.f,depthSnapshot_.maxSurfaceEdge};
+        u.depthEye={depthSnapshot_.eye.x,depthSnapshot_.eye.y,depthSnapshot_.eye.z,0};
+    }
+    depthSnapshot_={}; // explicit resubmission each step
+}
 void ComputeParticles::setView(const fx::SpectraFxView& view) {
     if(!view.valid()) { viewReady_=false;return; }
     if(gpuCullViewUsed_ && verticesReady_ &&
@@ -910,6 +938,7 @@ bool ComputeParticles::step(float dt) {
     u.gravityDt={desc_.gravityY,dt,desc_.drag,proceduralActive_?1.f:0.f};
     u.collisionSphere={desc_.staticSphereCenter.x,desc_.staticSphereCenter.y,desc_.staticSphereCenter.z,desc_.staticSphereRadius};
     u.collisionResponse={desc_.collisionBounce,desc_.collisionDampen,desc_.collisionRadiusScale,desc_.staticSdf.dimension?1.f:0.f};
+    fillDepthUniforms(u);
     u.rightSize={right_.x,right_.y,right_.z,desc_.size};
     u.up={up_.x,up_.y,up_.z,0};
     u.meta={0,desc_.capacity,count,compactCount};
@@ -1012,7 +1041,7 @@ bool ComputeParticles::replaceGpuAllocation(uint32_t next,bool empty,bool compac
     size_t candidateCharge=0;uint64_t candidateFence=0;
     if(desc_.allocationBudget){
         auto& budget=*desc_.allocationBudget;budget.collect(device_->gpuCompletedFence());
-        candidateCharge=estimateGpuEmitterAllocation(next,proceduralActive_)+(desc_.staticSdf.dimension?(5+desc_.staticSdf.samples.size())*sizeof(uint32_t):0);
+        candidateCharge=estimateGpuEmitterAllocation(next,proceduralActive_)+(desc_.staticSdf.dimension?(5+desc_.staticSdf.samples.size())*sizeof(uint32_t):0)+(desc_.depthCollision?kDepthCollisionBytes:0);
         if(!budget.reserve(candidateCharge)){
             ++stats_.gpuAllocationBudgetDenied;
             if(shrinking)++stats_.gpuPhysicalShrinkFailures;else{++stats_.gpuPhysicalGrowthFailures;gpuGrowthBudgetBlocked_=true;}
@@ -1260,6 +1289,7 @@ bool ComputeParticles::stepGpuAllocated(float dt){
     u.gravityDt={desc_.gravityY,dt,desc_.drag,proceduralActive_?1.f:0.f};
     u.collisionSphere={desc_.staticSphereCenter.x,desc_.staticSphereCenter.y,desc_.staticSphereCenter.z,desc_.staticSphereRadius};
     u.collisionResponse={desc_.collisionBounce,desc_.collisionDampen,desc_.collisionRadiusScale,desc_.staticSdf.dimension?1.f:0.f};
+    fillDepthUniforms(u);
     u.rightSize={right_.x,right_.y,right_.z,desc_.size};u.up={up_.x,up_.y,up_.z,(dt>0.f||count>0)?1.f:0.f};
     u.meta={0,cap,count,0};
     const bool cull=viewReady_&&std::all_of(viewProj_.m,viewProj_.m+16,[](float x){return std::isfinite(x);});

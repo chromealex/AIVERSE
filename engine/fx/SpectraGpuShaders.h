@@ -74,6 +74,8 @@ struct Uniforms {
     float4 cullControl;
     float4 lodEye;
     float4 collisionSphere,collisionResponse;
+    float4x4 depthViewProj,depthInverse;
+    float4 depthControl,depthEye;
 };
 struct DrawArgs {
     uint indexCount, instanceCount, firstIndex;
@@ -321,6 +323,45 @@ void collideSdf(thread Particle& p,float3 from,constant Uniforms& u,device const
     float vn=dot(p.velocityLife.xyz,normal);
     if(vn<0.0f)p.velocityLife.xyz=(p.velocityLife.xyz-normal*vn)*(1.0f-u.collisionResponse.y)-normal*(vn*u.collisionResponse.x);
 }
+bool depthPoint(constant Uniforms& u,device const uint* graphSources,int2 pixel,thread float3& point) {
+    float depth=as_type<float>(graphSources[4u+uint(pixel.y)*64u+uint(pixel.x)]);
+    if(!(depth>=0.0f&&depth<0.99999f))return false;
+    float2 uv=(float2(pixel)+0.5f)/64.0f;
+    float y=u.depthControl.z>0.5f?1.0f-2.0f*uv.y:2.0f*uv.y-1.0f;
+    float4 p=u.depthInverse*float4(uv.x*2.0f-1.0f,y,u.depthControl.y>0.5f?depth:depth*2.0f-1.0f,1.0f);
+    if(abs(p.w)<0.000001f)return false;
+    point=p.xyz/p.w;
+    return true;
+}
+void collideDepth(thread Particle& p,float3 from,constant Uniforms& u,device const uint* graphSources,float dt) {
+    if(u.depthControl.x<0.5f||dt<=0.0f)return;
+    float4 clip=u.depthViewProj*float4(p.positionAge.xyz,1.0f);
+    if(clip.w<=0.000001f)return;
+    float2 ndc=clip.xy/clip.w;
+    float2 uv=float2(ndc.x*0.5f+0.5f,u.depthControl.z>0.5f?0.5f-ndc.y*0.5f:0.5f+ndc.y*0.5f);
+    if(!all(uv>=float2(0))||!all(uv<float2(1)))return;
+    int2 pixel=int2(uv*64.0f);
+    if(pixel.x<1||pixel.y<1||pixel.x>=63||pixel.y>=63)return;
+    float3 a,b,c;
+    if(!depthPoint(u,graphSources,pixel,a)||!depthPoint(u,graphSources,pixel+int2(1,0),b)||!depthPoint(u,graphSources,pixel+int2(0,1),c))return;
+    float3 x=b-a,y=c-a;
+    if(length(x)>u.depthControl.w||length(y)>u.depthControl.w)return;
+    float3 normal=cross(x,y);
+    float n=length(normal);
+    if(n<0.000001f)return;
+    normal/=n;
+    if(dot(normal,u.depthEye.xyz-a)<0.0f)normal=-normal;
+    float radius=max(0.0f,p.size.x)*0.5f*u.collisionResponse.z;
+    float start=dot(from-a,normal)-radius,end=dot(p.positionAge.xyz-a,normal)-radius;
+    // Only front-to-back crossings; no hidden-side penetration recovery.
+    if(start<0.0f||end>=0.0f||start-end<0.000001f)return;
+    float fraction=start/(start-end);
+    float3 contact=mix(from,p.positionAge.xyz,fraction);
+    if(length(contact-a)>u.depthControl.w+radius)return;
+    p.positionAge.xyz=contact+normal*0.001f;
+    float vn=dot(p.velocityLife.xyz,normal);
+    if(vn<0.0f)p.velocityLife.xyz=(p.velocityLife.xyz-normal*vn)*(1.0f-u.collisionResponse.y)-normal*(vn*u.collisionResponse.x);
+}
 uint packColor(float4 c) {
     uint4 bytes=uint4(clamp(c,0.0f,1.0f)*255.0f+0.5f);
     return bytes.x | (bytes.y<<8) | (bytes.z<<16) | (bytes.w<<24);
@@ -427,7 +468,7 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
             dead=p.positionAge.w>=p.velocityLife.w;
             if(!dead){
                 VmParams params=stateParams[slot];VmAttributes attrs=stateAttributes[slot];
-                vmRun(vmProgram[0],1u,p,params,attrs,dt,vmErrors);collideStaticSphere(p,previousPosition,u,dt);collideSdf(p,previousPosition,u,graphSources,dt);stateAttributes[slot]=attrs;
+                vmRun(vmProgram[0],1u,p,params,attrs,dt,vmErrors);collideStaticSphere(p,previousPosition,u,dt);collideSdf(p,previousPosition,u,graphSources,dt);collideDepth(p,previousPosition,u,graphSources,dt);stateAttributes[slot]=attrs;
             }
         }
         if(dead){
@@ -522,7 +563,7 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
             VmParams params=stateParams[id];
             VmAttributes attrs=stateAttributes[id];
             vmRun(vmProgram[0],1u,p,params,attrs,dt,vmErrors);
-            collideStaticSphere(p,previousPosition,u,dt);collideSdf(p,previousPosition,u,graphSources,dt);
+            collideStaticSphere(p,previousPosition,u,dt);collideSdf(p,previousPosition,u,graphSources,dt);collideDepth(p,previousPosition,u,graphSources,dt);
             stateAttributes[id]=attrs;
         }
         particles[id]=p;
@@ -720,7 +761,7 @@ layout(std430,set=0,binding=4) buffer LiveSlots {uint liveSlots[];};
 layout(std430,set=0,binding=5) buffer Counters {uint aliveCounter[];};
 layout(std430,set=0,binding=6) buffer DrawBuffer {DrawArgs gpuDrawArgs[];};
 layout(std430,set=0,binding=7) readonly buffer SeedParams {VmParams seedParams[];};
-layout(std140,set=0,binding=8) uniform Inputs {vec4 gravityDt,rightSize,up;uvec4 meta;mat4 cullViewProj;vec4 cullControl,lodEye,collisionSphere,collisionResponse;} u;
+layout(std140,set=0,binding=8) uniform Inputs {vec4 gravityDt,rightSize,up;uvec4 meta;mat4 cullViewProj;vec4 cullControl,lodEye,collisionSphere,collisionResponse;mat4 depthViewProj,depthInverse;vec4 depthControl,depthEye;} u;
 layout(std430,set=0,binding=9) buffer StateParams {VmParams stateParams[];};
 layout(std430,set=0,binding=10) readonly buffer Program {VmPayload vmProgram;};
 layout(std430,set=0,binding=11) buffer Attributes {VmAttributes stateAttributes[];};
@@ -962,6 +1003,45 @@ void collideSdf(inout Particle p,vec3 from,float dt) {
     float vn=dot(p.velocityLife.xyz,normal);
     if(vn<0.0)p.velocityLife.xyz=(p.velocityLife.xyz-normal*vn)*(1.0-u.collisionResponse.y)-normal*(vn*u.collisionResponse.x);
 }
+bool depthPoint(ivec2 pixel,out vec3 point) {
+    float depth=uintBitsToFloat(graphSources[4u+uint(pixel.y)*64u+uint(pixel.x)]);
+    if(!(depth>=0.0&&depth<0.99999))return false;
+    vec2 uv=(vec2(pixel)+0.5)/64.0;
+    float y=u.depthControl.z>0.5?1.0-2.0*uv.y:2.0*uv.y-1.0;
+    vec4 p=u.depthInverse*vec4(uv.x*2.0-1.0,y,u.depthControl.y>0.5?depth:depth*2.0-1.0,1.0);
+    if(abs(p.w)<0.000001)return false;
+    point=p.xyz/p.w;
+    return true;
+}
+void collideDepth(inout Particle p,vec3 from,float dt) {
+    if(u.depthControl.x<0.5||dt<=0.0)return;
+    vec4 clip=u.depthViewProj*vec4(p.positionAge.xyz,1.0);
+    if(clip.w<=0.000001)return;
+    vec2 ndc=clip.xy/clip.w;
+    vec2 uv=vec2(ndc.x*0.5+0.5,u.depthControl.z>0.5?0.5-ndc.y*0.5:0.5+ndc.y*0.5);
+    if(!all(greaterThanEqual(uv,vec2(0)))||!all(lessThan(uv,vec2(1))))return;
+    ivec2 pixel=ivec2(uv*64.0);
+    if(pixel.x<1||pixel.y<1||pixel.x>=63||pixel.y>=63)return;
+    vec3 a,b,c;
+    if(!depthPoint(pixel,a)||!depthPoint(pixel+ivec2(1,0),b)||!depthPoint(pixel+ivec2(0,1),c))return;
+    vec3 x=b-a,y=c-a;
+    if(length(x)>u.depthControl.w||length(y)>u.depthControl.w)return;
+    vec3 normal=cross(x,y);
+    float n=length(normal);
+    if(n<0.000001)return;
+    normal/=n;
+    if(dot(normal,u.depthEye.xyz-a)<0.0)normal=-normal;
+    float radius=max(0.0,p.size.x)*0.5*u.collisionResponse.z;
+    float start=dot(from-a,normal)-radius,end=dot(p.positionAge.xyz-a,normal)-radius;
+    // Only front-to-back crossings; no hidden-side penetration recovery.
+    if(start<0.0||end>=0.0||start-end<0.000001)return;
+    float fraction=start/(start-end);
+    vec3 contact=mix(from,p.positionAge.xyz,fraction);
+    if(length(contact-a)>u.depthControl.w+radius)return;
+    p.positionAge.xyz=contact+normal*0.001;
+    float vn=dot(p.velocityLife.xyz,normal);
+    if(vn<0.0)p.velocityLife.xyz=(p.velocityLife.xyz-normal*vn)*(1.0-u.collisionResponse.y)-normal*(vn*u.collisionResponse.x);
+}
 uint packColor(vec4 c) {
     uvec4 bytes=uvec4(clamp(c,0.0,1.0)*255.0+0.5);
     return bytes.x | (bytes.y<<8) | (bytes.z<<16) | (bytes.w<<24);
@@ -1047,7 +1127,7 @@ void main(){
             dead=p.positionAge.w>=p.velocityLife.w;
             if(!dead){
                 VmParams params=stateParams[slot];VmAttributes attrs=stateAttributes[slot];
-                vmRun(1u,p,params,attrs,dt);collideStaticSphere(p,previousPosition,dt);collideSdf(p,previousPosition,dt);stateAttributes[slot]=attrs;
+                vmRun(1u,p,params,attrs,dt);collideStaticSphere(p,previousPosition,dt);collideSdf(p,previousPosition,dt);collideDepth(p,previousPosition,dt);stateAttributes[slot]=attrs;
             }
         }
         if(dead){
@@ -1142,7 +1222,7 @@ void main(){
             VmParams params=stateParams[id];
             VmAttributes attrs=stateAttributes[id];
             vmRun(1u,p,params,attrs,dt);
-            collideStaticSphere(p,previousPosition,dt);collideSdf(p,previousPosition,dt);
+            collideStaticSphere(p,previousPosition,dt);collideSdf(p,previousPosition,dt);collideDepth(p,previousPosition,dt);
             stateAttributes[id]=attrs;
         }
         particles[id]=p;
