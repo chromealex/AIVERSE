@@ -67,6 +67,9 @@ void StudioGameSurface::frame(int w,int h,float pw,float ph,double dt,bool focus
         device_->endPass();device_->endFrame();error_=e.what();stop();
     }
 }
+bool StudioGameSurface::canReview(const editor::Workspace& ws) const {
+    return host_->canStep()&&studioPlaySourceMatches(launch_,ws)&&host_->currentMapIndex()==launch_.map;
+}
 Json StudioGameSurface::mapEntityStates() {
     Simulation* sim=host_ && host_->inMatch()?host_->simulation():nullptr;
     auto* mod=sim?dynamic_cast<game::GameCore*>(&sim->module()):nullptr;
@@ -183,6 +186,7 @@ Json StudioGameSurface::editRuntime(const Json& params){
 Json StudioGameSurface::state() const {
     Json out=Json::object();out.set("device",profile_.json());
     out.set("active",Json::fromBool(host_->active()));
+    out.set("epoch",Json::string(std::to_string(runtimeEpoch_)));
     out.set("paused",Json::fromBool(host_->paused()));
     out.set("runtimeDebugEdited",Json::fromBool(runtimeDebugEdited_));
     out.set("canControl",Json::fromBool(host_->canControl()));

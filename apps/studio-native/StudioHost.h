@@ -216,6 +216,8 @@ private:
     size_t rulesSnapshotHash_ = 0;
     double nextMapSnapshot_ = 0, nextRulesCheck_ = 0;
     std::unique_ptr<StudioGameSurface> game_;
+    Json playReview_;
+    uint64_t playReviewSerial_=0;
     NativeViewportPlacement placement_{}, gamePlacement_{};
     double gameFrameTime_ = 0;
     struct AgentShot { std::string png; int w = 0, h = 0; std::atomic<bool> done{false}; };

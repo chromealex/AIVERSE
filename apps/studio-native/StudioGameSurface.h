@@ -26,6 +26,8 @@ public:
     Json editRuntime(const Json& params);
     // Keep play changes: where each map entity is now (index into the map's entities), or removed:true.
     Json mapEntityStates();
+    const StudioGameLaunch& launchPlan() const{return launch_;}
+    bool canReview(const editor::Workspace& ws) const;
 private:
     std::unique_ptr<gfx::Device> device_;
     std::unique_ptr<render::RenderDeviceLifetime> lifetime_;
