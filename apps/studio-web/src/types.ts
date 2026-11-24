@@ -54,7 +54,7 @@ export interface StudioTrashEntry {
   kind?:'deleted'|'created'|'replacement'; role?:string; directory?:boolean; bytes?:number; slotBytes?:number; historyProtected?:boolean; error?:string;
 }
 export interface StudioRecoveryStorage {trashBytes:number;checkpointBytes:number;journalBytes:number;quotaMiB:number;overQuota:boolean;warning:boolean;availableBytes:number}
-export interface StudioTrashPage {items:StudioTrashEntry[];total:number;truncated:boolean;recoveryPending:boolean;storage?:StudioRecoveryStorage;storageError?:string}
+export interface StudioTrashPage {items:StudioTrashEntry[];total:number;truncated:boolean;recoveryPending:boolean;recoveryReason?:string;storage?:StudioRecoveryStorage;storageError?:string}
 export interface StudioTrashReview extends StudioTrashEntry {action:StudioTrashAction;token:string;version:string}
 export interface StudioTrashBatchReview {items:StudioTrashEntry[];bytes:number;token:string;version:string}
 export interface StudioTrashBatchResult {ok:boolean;removed:string[];failedId?:string;error?:string}
