@@ -117,6 +117,24 @@ struct GiFixtureTarget {
         snapshot=std::move(s);revision=r;return true;
     }
 };
+static void checkGiViewProjection(){
+    game::PlanetWorld world;
+    game::PlanetBody body;body.id="planet";body.radius=100;world.bodies.push_back(body);
+    render::SphereViewFrame a,b;
+    a.origin={0,0,0};b.origin={10,0,0};
+    const auto before=CavePlanetGiViewFrame::capture(world,a,0);
+    const auto after=CavePlanetGiViewFrame::capture(world,b,0);
+    const Vec3 local{2_fx,3_fx,4_fx};
+    const auto first=before.projector()("planet",local);
+    const auto last=after.projector()("planet",local);
+    const auto remap=after.remapFrom(before,[](uint64_t id)->std::optional<std::string>{
+        if(id==1)return "planet";return {};
+    });
+    const auto mapped=remap(1,first);
+    check(std::abs(mapped.x-last.x)<.001f&&std::abs(mapped.y-last.y)<.001f&&
+          std::abs(mapped.z-last.z)<.001f,"planet GI view frame remap");
+    check(std::abs(remap(2,{15,0,0}).x-5)<.001f,"static GI world remap");
+}
 static void checkGiPublication(){
     render::GiGeometryScene scene;
     GiFixtureTarget target;
@@ -186,6 +204,7 @@ int main(){
     check(notice.pending()&&notice.consume()&&!notice.pending(),"coalesced native restore notice");
     static_assert(!std::is_copy_constructible_v<CavePlanetCpuNativeHost>);
     static_assert(!std::is_copy_constructible_v<CavePlanetGpuNativeHost>);
+    checkGiViewProjection();
     checkGiPublication();
     checkDrive();
     checkOrientedMotor();

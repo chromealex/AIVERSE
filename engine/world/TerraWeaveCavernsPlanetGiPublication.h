@@ -35,7 +35,14 @@ struct CavePlanetGiBindings {
     std::function<render::float3(const std::string&,const CavePlanetSlotId&,const world::Triangle&)> albedo;
     // Host proves existing GI target can mutate (resource fences, no pass).
     std::function<bool()> ready;
-    bool valid()const noexcept{return surfaceId&&volumeId&&project&&albedo&&ready;}
+    // Optional real terrain baseline producer. Both callbacks must be
+    // supplied together. Proof covers ID reservation AND absence of any
+    // overlapping GI geometry (including coarse parent terrain chunks).
+    std::function<bool(const std::string&,const CavePlanetSurfaceSlotKey&,uint64_t)> baselineUnowned;
+    std::function<render::float3(const std::string&,const CavePlanetSurfaceSlotKey&,const world::Triangle&)> baselineAlbedo;
+    bool providesBaseline()const noexcept{return baselineUnowned&&baselineAlbedo;}
+    bool valid()const noexcept{return surfaceId&&volumeId&&project&&albedo&&ready&&
+        bool(baselineUnowned)==bool(baselineAlbedo);}
 };
 
 template<class Target>
@@ -133,6 +140,62 @@ public:
             static_assert(std::is_nothrow_move_assignable_v<render::GiGeometryScene>);
             scene_=std::move(prospective);
             active_.swap(next);bindings_.project.swap(nextProject);
+            return true;
+        }catch(const std::exception&){return false;}
+    }
+
+    bool providesBaseline()const noexcept{return bindings_.providesBaseline();}
+    // Publish actual uncut terrain leaves before native physics replacement.
+    // These are ordinary host terrain chunks, not cave-owned leases; after
+    // retirement the host remains responsible for their residency/eviction.
+    // Existing chunks must match exactly; never overwrite another producer.
+    bool ensureBaseline(const game::PlanetRenderer& planet,const CavePlanetBodyCutPlan& plan){
+        if(!providesBaseline()||pending_||scene_.hasPendingChanges()||!bindings_.ready()||
+           scene_.revision()==UINT64_MAX||planet.caveSurfaceRevision()!=plan.surfaceRevision)return false;
+        try{
+            const auto body=planet.world().find(plan.bodyId);
+            if(body<0)return false;
+            const auto slots=collectPlanetBodyCutSlots(plan);
+            // An already active cohort has retained the exact original.
+            // prepare() validates its geometry and lease before replacement.
+            if(active_.contains(plan.bodyId))return current();
+            const auto base=scene_.currentShared();
+            std::vector<CavePlanetSurfaceSlotKey> keys;
+            for(const auto& [key,ref]:slots){(void)ref;keys.push_back(key);}
+            const auto captured=planet.captureCaveSurfaceSlots(body,keys);
+            if(captured.size()!=keys.size())return false;
+            auto prospective=scene_;
+            std::set<uint64_t> used;
+            for(const auto& leaf:captured){
+                const auto found=slots.find(leaf.key);
+                if(found==slots.end())return false;
+                BodyGeometry source;
+                source.triangles.reserve(leaf.bodyTriangles.size());
+                for(const auto& triangle:leaf.bodyTriangles)source.triangles.push_back({triangle,0});
+                if(!matchesOriginal(plan.bodyId,found->second.slot->originalBody,source))return false;
+                const auto id=bindings_.surfaceId(plan.bodyId,leaf.key);
+                if(!id||!used.insert(*id).second||ownedElsewhere(plan.bodyId,*id))return false;
+                if(base){
+                    const auto original=chunk(*base,*id);
+                    if(original){
+                        if(!captureOriginal(plan.bodyId,leaf.bodyTriangles,*original))return false;
+                        continue;
+                    }
+                }
+                if(!bindings_.baselineUnowned(plan.bodyId,leaf.key,*id))return false;
+                source.albedos.reserve(source.triangles.size());
+                for(auto& item:source.triangles){
+                    item.surface=uint32_t(source.albedos.size());
+                    source.albedos.push_back(bindings_.baselineAlbedo(plan.bodyId,leaf.key,item.triangle));
+                }
+                replaceBody(prospective,*id,plan.bodyId,source,bindings_.project);
+            }
+            if(!bindings_.ready()||scene_.hasPendingChanges()||scene_.currentShared()!=base||
+               planet.caveSurfaceRevision()!=plan.surfaceRevision)return false;
+            if(!prospective.hasPendingChanges())return bool(base);
+            if(!prospective.publish(target_).published)return false;
+            static_assert(std::is_nothrow_move_assignable_v<render::GiGeometryScene>);
+            scene_=std::move(prospective);
             return true;
         }catch(const std::exception&){return false;}
     }

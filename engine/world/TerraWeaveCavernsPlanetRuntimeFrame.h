@@ -29,6 +29,9 @@ struct CavePlanetRuntimeHooks {
     // Optional fallible retirement staging before the native owner removes
     // any physics/render source. Legacy hosts may retain their own preflight.
     std::function<bool(const std::string&,uint64_t)> prepareRetireNavigationGi;
+    // Optional baseline GI producer; refusal is transient and must occur
+    // before irreversible native staging (candidate retained for retry).
+    std::function<bool(const CavePlanetBodyCutPlan&)> ensureBaselineGi;
     bool valid()const noexcept{
         return exclusive&&surfaceCell&&volumeCell&&unownedLeaf&&mayReleaseCoverage&&
             prepareNavigationGi&&commitNavigationGi&&abortNavigationGi&&retireNavigationGi;
@@ -347,6 +350,7 @@ private:
             if(!retire(body,pins))return false;
             it=cohorts_.end();
         }
+        if(hooks_.ensureBaselineGi&&!hooks_.ensureBaselineGi(*candidate.cut))return false;
         if(it==cohorts_.end()){
             const auto& anchor=candidate.cut->regions.begin()->second->anchor;
             auto& owner=residency_.open(CavePlanetFrame::make(surface_,anchor));

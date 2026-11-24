@@ -2,7 +2,7 @@
 // Stage56b: optional native host composition over the REAL shared owners.
 // No GameCore/ActorHost dependency, no second physics scene or GI runtime.
 // All native methods execute at the host's existing exclusive frame barrier.
-#include "engine/world/TerraWeaveCavernsPlanetGiPublication.h"
+#include "engine/world/TerraWeaveCavernsPlanetGiViewFrame.h"
 #include "engine/world/TerraWeaveCavernsPlanetEnvironmentEpoch.h"
 #include "engine/render/GiMainCpuBridge.h"
 #include "engine/render/GiMainGpuBridge.h"
@@ -88,6 +88,12 @@ public:
            hooks.navigationInputs||view.hasPlanetCaveDraw())
             throw std::invalid_argument("Caverns native host requires installed canonical ECS and unique owner");
         hooks.navigationInputs=canonicalCavePlanetNavigationInputs(surface,policyRevision,costs);
+        if(publication_.providesBaseline()){
+            if(hooks.ensureBaselineGi)throw std::invalid_argument("Caverns competing GI baseline source");
+            hooks.ensureBaselineGi=[this,&view](const CavePlanetBodyCutPlan& plan){
+                return exclusive_()&&publication_.ensureBaseline(view.planets(),plan);
+            };
+        }
         if(!publication_.bind(hooks)||!hooks.valid())
             throw std::invalid_argument("Caverns native host binding");
         notice_.attach(sim);
@@ -120,7 +126,7 @@ public:
         }
         // Fence pressure is transient, not a bad authored recipe. Refuse
         // before entering the runtime's irreversible publication barrier.
-        if(!target_.ready()||!giReady_()||!scene_.current()||scene_.hasPendingChanges()){
+        if(!target_.ready()||!giReady_()||(!scene_.current()&&!publication_.providesBaseline())||scene_.hasPendingChanges()){
             result.phase=CavePlanetRuntimePhase::WaitingCoverage;
             result.pinsReady=runtime_->requiredRegionsReady(world,pins);
             // A busy fence alone does not invalidate an unchanged published
