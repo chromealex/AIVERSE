@@ -1,0 +1,29 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build
+Test project /Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build
+    Start 223: library_building_style
+    Start 515: studio_building_preview
+1/9 Test #515: studio_building_preview .............   Passed    2.84 sec
+    Start 514: studio_building_topology
+2/9 Test #514: studio_building_topology ............   Passed    2.90 sec
+    Start 546: studio_session
+3/9 Test #546: studio_session ......................   Passed    0.92 sec
+    Start 219: library_building_surface_patterns
+4/9 Test #219: library_building_surface_patterns ...   Passed    8.67 sec
+    Start 537: studio_material_schema
+5/9 Test #537: studio_material_schema ..............   Passed    0.28 sec
+    Start 536: studio_bridge
+6/9 Test #536: studio_bridge .......................   Passed    0.54 sec
+    Start 218: library_building_features
+7/9 Test #218: library_building_features ...........   Passed    1.58 sec
+    Start 224: library_building_runtime
+8/9 Test #224: library_building_runtime ............   Passed    0.21 sec
+9/9 Test #223: library_building_style ..............   Passed   23.72 sec
+
+100% tests passed, 0 tests failed out of 9
+
+Label Time Summary:
+EDITOR    =   6.65 sec*proc (3 tests)
+GPU       =   2.84 sec*proc (1 test)
+Metal     =   2.84 sec*proc (1 test)
+
+Total Test time (real) =  25.45 sec
