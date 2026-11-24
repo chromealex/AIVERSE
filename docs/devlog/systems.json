@@ -2395,6 +2395,14 @@
       ],
       "roadmap": [
         {
+          "id": "studio-linked-asset-mcp",
+          "title": "MCP для ассетов и восстановления",
+          "titleEn": "Linked asset and recovery MCP",
+          "text": "S6i: чтение графа, корзины и квот; обратимое удаление по GUID, подтверждённое восстановление, явные границы необратимых операций.",
+          "textEn": "S6i: graph, trash and quota readback; GUID-based reversible deletion, confirmed restore and explicit irreversible-operation boundaries.",
+          "status": "in-progress"
+        },
+        {
           "id": "studio-recovery-storage-quota",
           "title": "Квоты восстановления Studio",
           "titleEn": "Studio recovery storage quotas",
