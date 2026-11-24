@@ -239,9 +239,9 @@ public:
                 return false;
             snapshots.push_back(pendingIt->second);
         }
-        bool committed=false;
-        try {committed=commitOwners(snapshots);}
-        catch(...) {return false;}
+        // Propagate native commit exceptions so the outer world owner can
+        // quarantine a partially committed physics/navigation transaction.
+        const bool committed=commitOwners(snapshots);
         if(!committed)return false;
         // Every GPU candidate and revision was verified before invoking
         // the callback. With owner-exclusive access, these activate calls
