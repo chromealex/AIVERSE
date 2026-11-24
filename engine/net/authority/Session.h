@@ -1,7 +1,7 @@
 #pragma once
 #include "engine/net/Conn.h"
 #include "engine/actor/ActorModule.h"
-#include "libraries/include/aiverselib/net/SnapshotDelta.h"
+#include "engine/net/SnapshotDelta.h"
 #include <deque>
 
 namespace aiverse::net::authority {
@@ -14,6 +14,7 @@ struct Snapshot {
     actor::RoyaleView royale;
     lib::systems::GearLoadout gear;   // own gear (fps.gear)
     lib::mechanics::RaceView race;        // own race standing (map "race")
+    std::string locomotion;               // own actor::LocomotionBody bytes (rules `locomotion`), empty otherwise
 };
 Bytes encodeSnapshot(const Snapshot& snapshot);
 bool decodeSnapshot(const Bytes&,Snapshot& out);
@@ -52,6 +53,8 @@ public:
     bool submit(actor::Input input);
     const Snapshot& snapshot()const{return latest_;}
     const actor::CharacterSnapshot& predicted()const{return predicted_;}
+    // Predicted locomotion mode state (rules `locomotion`); default-constructed without it.
+    const actor::LocomotionBody& predictedLocomotion()const{return predictedLocomotion_;}
     bool ready()const{return ready_;}
     bool connected()const{return conn_->state()!=ConnState::Closed;}
     uint32_t nextSequence()const{return sequence_+1;}
@@ -62,6 +65,7 @@ private:
     std::unique_ptr<Conn> conn_;
     Snapshot latest_;
     actor::CharacterSnapshot predicted_;
+    actor::LocomotionBody predictedLocomotion_;
     std::deque<actor::Input> pending_;
     uint32_t sequence_=0;
     bool ready_=false,sentHello_=false;

@@ -253,7 +253,7 @@ Las plantillas son paquetes del [catálogo](https://chromealex.github.io/AIVERSE
 
 ```bash
 ./studio_mac.command                    # AIVERSE Studio, el editor (requiere Xcode, CMake, Node.js)
-./studio_mac.command templates/mushrooms   # ...con otro proyecto
+./studio_mac.command ~/.aiverse/packages/templates/mushrooms   # ...con otro proyecto
 ```
 
 Windows: `studio_windows.cmd [project]` compila y abre `AiverseStudio.exe` (requiere Visual Studio 2022,

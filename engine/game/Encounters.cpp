@@ -3,7 +3,7 @@
 // the encounter schedule, hashing and saving. Integer / Fixed maths only; loops in entity order or sorted vectors.
 #include "Encounters.h"
 #include "Systems.h"
-#include "aiverselib/mechanics/EncounterPersistence.h"
+#include "engine/mechanics/EncounterPersistence.h"
 #include "../core/Archive.h"
 #include "../core/FixedMath.h"
 #include <algorithm>

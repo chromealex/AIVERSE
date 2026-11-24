@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // survival-ecology: population model per species per region. Every `periodTicks` each population changes by
 // logistic growth r*N*(K-N)/K (negative above the carrying capacity K), base mortality, predation with a
 // saturating functional response attack*Npred*Nprey/(Nprey+half) (prey shared by predators in id order),

@@ -9,7 +9,7 @@ Use when a native/host combat owner needs spatial melee hits, i-frames, parry/bl
 lock-on. Attack timing/combos/hit dedupe come from `melee-combat` (`genre/Melee.h`); this package composes it.
 
 1. Read `docs/mechanics-packages.md` (combat-actions rows and runtime contract) and the catalog entry. Inspect
-   `libraries/include/aiverselib/mechanics/CombatActions.h` for exact behavior.
+   `engine/mechanics/CombatActions.h` for exact behavior.
 2. Responsibility: contacts and outcomes only. `collectMeleeHits` returns `HitContact`s (self/team filtered,
    once per swing via `recordMeleeHit`); `resolveCombatContact` returns Hit/Blocked/Parried/Evaded;
    `applyPoiseHit` returns poise damage and stun ticks. Health, damage formulas, stamina and status effects

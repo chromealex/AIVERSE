@@ -41,7 +41,7 @@ supersede the old RTS-only instructions.
    `Collision/Impact`, `Damage`, `Effects/Despawn` components/systems.
    A rifle bullet, artillery shell, homing rocket or spell uses one
    calculation library plus settings, not duplicate RTS/FPS math. Start
-   with `engine/sim/ProjectileData.h` and `aiverselib/mechanics/Weapons.h`.
+   with `engine/sim/ProjectileData.h` and `engine/mechanics/Weapons.h`.
    Apply the same decomposition to vehicles, crafting, loot, economy, AI,
    inventory, interactions and other features.
 7. **Compose in native C++ games.** Expose through public

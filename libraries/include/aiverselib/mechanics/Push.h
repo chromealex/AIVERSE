@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // physical-interactions: push/pull heavy objects, free (continuous) or on a grid. Forces of all actors
 // pushing one object add up; motion starts only when the horizontal force exceeds friction*mass*gravity.
 // Free mode integrates velocity (capped, kinetic friction slows it) with a swept move that slides along

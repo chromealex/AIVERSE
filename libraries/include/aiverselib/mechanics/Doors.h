@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // physical-interactions: kinematic doors. Hinged doors rotate the closed panel box around a vertical pivot
 // (conservative AABB of the rotated panel), sliding doors translate it. Opening takes openTicks, closing
 // closeTicks (exact integer progress). Each tick the next pose is tested against the owner's bodies; a

@@ -1,6 +1,6 @@
 #include "../Editor.h"
 #include "../EditorUtil.h"
-#include "libraries/include/aiverselib/motionweave/MotionWeave.h"
+#include "engine/animation/MotionWeave.h"
 #include "libraries/include/aiverselib/animation/HumanoidProfile.h"
 #include <algorithm>
 #include <map>

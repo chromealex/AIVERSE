@@ -3,8 +3,8 @@
 // wrecks, depleted extractors).
 #include "Damage.h"
 #include "Internal.h"
-#include "../../libraries/include/aiverselib/mechanics/EcsKinematicProjectileSystems.h"
-#include "../../libraries/include/aiverselib/mechanics/EcsOrderedImpactSystems.h"
+#include "engine/mechanics/EcsKinematicProjectileSystems.h"
+#include "engine/mechanics/EcsOrderedImpactSystems.h"
 #include <algorithm>
 #include <map>
 

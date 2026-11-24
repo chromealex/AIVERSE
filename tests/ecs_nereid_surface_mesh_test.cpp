@@ -1,5 +1,5 @@
 // NEREID stage 7B -- presentation-only mesh topology and LOD.
-#include <aiverselib/water/NereidWaterSurfaceMesh.h>
+#include "engine/world/nereid/NereidWaterSurfaceMesh.h"
 #include <cmath>
 #include <iostream>
 #include <stdexcept>

@@ -8,7 +8,7 @@ identité visuelle et une vérification par des bots. Tout ce qu’il écrit, ce
 ensuite.
 
 Code : `apps/editor/core/GameWizard*.cpp` (sans UI), `apps/editor/core/WizardOps.cpp` (MCP), `apps/editor/EditorGameWizard.cpp`
-(la page du hub). Kit d’exécution copié dans chaque jeu : `templates/_wizard/` (Lua + RmlUi, voir son README).
+(la page du hub). Kit d’exécution copié dans chaque jeu : `tools/wizard/kit/` (Lua + RmlUi, voir son README).
 
 ## Réponses (`WizardSpec`, toutes facultatives)
 

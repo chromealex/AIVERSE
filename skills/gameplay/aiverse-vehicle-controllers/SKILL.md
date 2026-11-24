@@ -11,7 +11,7 @@ Not a rigid-body simulator: no suspension geometry, tyre temperature or Box3D au
 `weapon-policies`; on-foot movement uses `character-locomotion`; generic objectives stay in `match-rules`.
 
 1. Read `docs/mechanics-packages.md` (vehicle-controllers: determinism/network model) and the catalog entry. Inspect
-   `libraries/include/aiverselib/mechanics/Vehicle*.h`, `RaceCourse.h` and `bots/RaceBot.h` for exact behaviour.
+   `engine/mechanics/Vehicle*.h`, `RaceCourse.h` and `bots/RaceBot.h` for exact behaviour.
 2. Authority split. Authoritative (save, hash, identical on every peer): `VehicleState`, `VehicleDamageState`,
    `VehicleSeatState`, `RaceState`, `RaceBotState`. Owner: collision/ground queries reported as `VehicleContacts`
    (grounded, ground height/normal, surface grip, optional per-wheel contacts), collision resolution after the step

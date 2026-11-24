@@ -118,7 +118,7 @@ export interface StudioExtensions { path: string; exists: boolean; error?: strin
 export interface StudioAttachmentItem { model: string; socket: string; enabled?: boolean; id?: string; animated?: boolean; animationGraph?: string; local?: number[]; childWorld?: number[] }
 export interface StudioAttachmentDoc { parent: string; attachments: StudioAttachmentItem[] }
 export interface StudioAttachmentsResult { path: string; exists: boolean; error?: string; document: StudioAttachmentDoc }
-/** A project template: engine templates/<id>, or a catalog package ("pkg:<id>", source "catalog"). */
+/** A project template: an installed sample game (catalog package), or a catalog package ("pkg:<id>", source "catalog"). */
 export interface StudioTemplate { id: string; name: string; description: string; genre: string; maps: number;
   source?: 'engine' | 'catalog'; official?: boolean; version?: string; size?: number; preview?: string }
 export interface StudioHub { recent: Array<{ dir: string; name: string; lastOpened: number; exists: boolean }>;

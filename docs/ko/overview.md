@@ -21,7 +21,7 @@ engine/
 modules/rts/ generic RTS layer: types from data, orders, A*, combat, economy, construction,
              production, garrisons (Mushroom Wars), roads, fog of war, AI
              view/ — draws any type from the "view" block in rules.json
-modules/fps/ FPS module (in development): movement, combat and match state
+engine/actor/ actor host on ECS (former modules/fps): movement, combat, vehicles, streaming and match state for any project
 apps/
   fps/       standalone FPS client and server
   client/    the game (menu, match with bots, HUD, minimap, mouse and touch)
@@ -42,13 +42,13 @@ platform/    packaging templates (Info.plist, Gradle project, HTML shell)
 ```bash
 cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release      # requires Xcode and CMake
 cmake --build build/mac -j 8
-open build/mac/AiverseEditor.app                              # editor (project templates/skirmish)
+open build/mac/AiverseEditor.app                              # editor (project ~/.aiverse/packages/templates/skirmish)
 open build/mac/AiverseGame.app                                # game
 ./build/mac/aiverse_tests
 ```
 
-에디터에서 다른 게임 열기: `AiverseEditor.app/Contents/MacOS/AiverseEditor --project templates/mushrooms`.
-게임을 다른 데이터 세트로 실행하려면 `-DAIVERSE_CONTENT_DIR=.../templates/mushrooms`를 지정합니다.
+에디터에서 다른 게임 열기: `AiverseEditor.app/Contents/MacOS/AiverseEditor --project ~/.aiverse/packages/templates/mushrooms`.
+게임을 다른 데이터 세트로 실행하려면 `-DAIVERSE_CONTENT_DIR=~/.aiverse/packages/templates/mushrooms`를 지정합니다.
 
 ### 여러 에디터를 동시에 사용하기
 
@@ -60,12 +60,12 @@ open build/mac/AiverseGame.app                                # game
 ## 플랫폼별 빌드 — aiversebuild
 
 ```bash
-./build/mac/aiversebuild --project templates/skirmish --target macos     # Builds/macos/<Name>.app (ad-hoc signed)
-./build/mac/aiversebuild --project templates/skirmish --target ios       # Builds/ios/xcode/AIVERSE.xcodeproj + simulator build
-./build/mac/aiversebuild --project templates/skirmish --target android   # Builds/android/<Name>-release.apk when SDK/NDK and gradle are present
-./build/mac/aiversebuild --project templates/skirmish --target web       # Builds/web (requires emsdk)
-./build/mac/aiversebuild --project templates/skirmish --target windows   # .exe via mingw-w64 (brew install mingw-w64) or sources + build.bat
-./build/mac/aiversebuild --project templates/skirmish --target all
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target macos     # Builds/macos/<Name>.app (ad-hoc signed)
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target ios       # Builds/ios/xcode/AIVERSE.xcodeproj + simulator build
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target android   # Builds/android/<Name>-release.apk when SDK/NDK and gradle are present
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target web       # Builds/web (requires emsdk)
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target windows   # .exe via mingw-w64 (brew install mingw-w64) or sources + build.bat
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target all
 ```
 
 결과물은 `<프로젝트>/Builds/<플랫폼>/`에 놓이며, 완성된 빌드와 크기 보고서만 들어갑니다. 중간 산출물(CMake 트리, 팩, 재인코딩된 오디오,
@@ -123,7 +123,7 @@ aiversebuild --project ... --target web --install-missing   # install and build 
 aiversebuild ... --no-pack          # ship folders as is (debugging)
 aiversebuild ... --pack-level 9     # zstd level (default 19 for Release, 3 for Debug)
 
-assetpipe pack -o content.rpak templates/skirmish engine/assets=engine   # build a pack by hand
+assetpipe pack -o content.rpak ~/.aiverse/packages/templates/skirmish engine/assets=engine   # build a pack by hand
 assetpipe list content.rpak       # files, sizes, compression
 assetpipe verify content.rpak     # unpack everything and check hashes
 assetpipe extract content.rpak out/
@@ -277,8 +277,8 @@ Unreal의 `.uproject`나 `project.godot`처럼 더블 클릭으로 열 수 있�
 ```
 
 ```bash
-./build/mac/aiverse_i18n extract --project templates/skirmish --lang de --write   # lang/de.json skeleton, new strings marked // TODO
-./build/mac/aiverse_i18n check   --project templates/skirmish                     # placeholders, plural forms, untranslated strings
+./build/mac/aiverse_i18n extract --project ~/.aiverse/packages/templates/skirmish --lang de --write   # lang/de.json skeleton, new strings marked // TODO
+./build/mac/aiverse_i18n check   --project ~/.aiverse/packages/templates/skirmish                     # placeholders, plural forms, untranslated strings
 ```
 
 언어는 다음 순서로 정해집니다: 메뉴에서 플레이어가 고른 것(기억됨) → 시스템 언어 → 게임의 원래 언어. 확인용: `--lang ru`, `AIVERSE_LANG=ru`,
@@ -346,8 +346,8 @@ Linux x86-64(GCC, Clang, MinGW), Linux ARM64(GCC), macOS ARM64(AppleClang) — �
 
 ```bash
 ./build/mac/aiverse_server --config apps/server/server.json            # UDP 27015, WebSocket 27016
-./build/mac/aiverse_netbot --server 127.0.0.1 --project templates/mushrooms --queue 1v1   # a bot in the queue
-./build/mac/aiverse_netbot --server ws://127.0.0.1:27016 --project templates/mushrooms --queue 1v1
+./build/mac/aiverse_netbot --server 127.0.0.1 --project ~/.aiverse/packages/templates/mushrooms --queue 1v1   # a bot in the queue
+./build/mac/aiverse_netbot --server ws://127.0.0.1:27016 --project ~/.aiverse/packages/templates/mushrooms --queue 1v1
 ./build/mac/aiverse_net_tests                                          # network tests
 docker build -f apps/server/Dockerfile -t aiverse-server .             # server in a container
 ```
@@ -428,8 +428,8 @@ audio.json 절에 있습니다. 개요:
   `texture_generate`.
 
 망가진 모델이 있어도 게임은 깨지지 않습니다: 그 타입은 도형으로 그려지고 이유는 에디터 콘솔에 나옵니다. 보기:
-`aiverse_modelview model.glb@Walk` 또는 `aiverse_modelview --game templates/showcase`(게임의 모든 타입을 게임이 그리는 그대로 표시). 에디터에서는
-**Models** 창(클립, 노드, 머티리얼, 초상화, 모델 파일 저장 시 다시 불러오기). 예: `templates/showcase`. 전체 형식: [models.md](../models.md).
+`aiverse_modelview model.glb@Walk` 또는 `aiverse_modelview --game ~/.aiverse/packages/templates/showcase`(게임의 모든 타입을 게임이 그리는 그대로 표시). 에디터에서는
+**Models** 창(클립, 노드, 머티리얼, 초상화, 모델 파일 저장 시 다시 불러오기). 예: `~/.aiverse/packages/templates/showcase`. 전체 형식: [models.md](../models.md).
 
 ## 라이팅
 

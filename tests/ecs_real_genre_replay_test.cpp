@@ -27,7 +27,7 @@ std::unique_ptr<Simulation> make(Genre genre,bool cow) {
     std::unique_ptr<GameModule> module;
     uint32_t tickRate=20;
     if(genre==Genre::Rts) {
-        const std::string base=root+"/templates/mushrooms/";
+        const std::string base=std::string(AIVERSE_TEMPLATES_DIR)+"/mushrooms/";
         rules=readComposedJson(base+"rules.json",fileReader());
         map=Json::parseFile(base+"maps/duel.json");
         module=std::make_unique<game::GameCore>();

@@ -65,13 +65,15 @@ python3 tools/pkg/aiverse_pkg.py create <id-шаблона> ~/Games/New   # но
 
 - MCP и стартовый экран ImGui: `list_projects` отдаёт тот же список (у шаблонов из каталога id
   `pkg:<пакет>`); `create_project {template: "pkg:skirmish"}` создаёт проект из пакета.
-- Папка `templates/` остаётся в движке как запасной вариант без сети и как данные тестов (эталоны
-  детерминизма, CI). Стартовый экран скрывает шаблон движка, если пакет каталога указывает
-  `provides.engineTemplate: "<id>"`.
-- Публикация шаблона: `python3 tools/pkg/export_templates.py --catalog <checkout AIVERSE-PACKAGES>
-  --previews <кадры>` превращает шаблоны движка в пакеты (английское описание с `-ru`, настоящий кадр
-  движка как превью); то, что должно быть только в версии из каталога, кладётся в пакет, а не в
-  `templates/`. Шаблоны других авторов — обычные pull request'ы без `official`.
+- В репозитории движка больше нет папки `templates/`. Тесты, CI, контент клиента по умолчанию и мастер
+  игры берут официальные шаблоны из одной установленной папки с подпапками по id движка (`skirmish/`,
+  `mushrooms/`, ...): `AIVERSE_TEMPLATES_DIR`, по умолчанию `~/.aiverse/packages/templates`.
+  `python3 tools/pkg/fetch_templates.py [--out DIR] [--only skirmish,...]` ставит или обновляет их
+  (повторный запуск работает без сети) и печатает папку; CMake запускает его при конфигурации, если
+  папки нет (`-DAIVERSE_FETCH_TEMPLATES=OFF` — пропустить, цель `aiverse_fetch_templates` — обновить).
+- Изменить пример игры: правка в checkout AIVERSE-PACKAGES (генераторы из `tools/templates/` правят
+  установленные копии), новая версия пакета и pull request в каталог; эталоны детерминизма в
+  `tests/checksums/baseline.txt` следуют версиям пакетов.
 
 ## Web-просмотрщик
 

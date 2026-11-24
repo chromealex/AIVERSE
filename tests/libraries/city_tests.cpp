@@ -1,7 +1,7 @@
 // Tests of the city packages: world-calendar, weather-timeline, vehicle-fx, swept-shapes, derived-keys,
 // city-traffic routes.
-#include <aiverselib/SweptShapes.h>
-#include <aiverselib/mechanics/traffic/TrafficRoutes.h>
+#include "engine/core/SweptShapes.h"
+#include "engine/mechanics/traffic/TrafficRoutes.h"
 #include <aiverselib/mechanics/vehicle-fx/TyreTrails.h>
 #include <aiverselib/mechanics/vehicle-fx/VehicleLights.h>
 #include <aiverselib/runtime/DerivedKeys.h>

@@ -1,10 +1,10 @@
 // Cross-genre compile/runtime contract: the exact same ECS mechanic policies
 // run in two unrelated GameModule/component types with no RTS/FPS includes.
 // Does NOT imply all existing GameCore/actor::ActorHost methods are universal.
-#include <aiverselib/mechanics/EcsMechanicSystems.h>
-#include <aiverselib/mechanics/Locomotion.h>
-#include <aiverselib/mechanics/Weapons.h>
-#include <aiverselib/mechanics/Match.h>
+#include "engine/mechanics/EcsMechanicSystems.h"
+#include "engine/mechanics/Locomotion.h"
+#include "engine/mechanics/Weapons.h"
+#include "engine/mechanics/Match.h"
 #include "tests/AlwaysCheck.h"
 #include <cstdint>
 #include <iostream>

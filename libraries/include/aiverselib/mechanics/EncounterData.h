@@ -1,16 +1,16 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 #include <string_view>
 // JSON encounter data (boss-encounters). Integers only: lengths in milli-metres ("radiusMilli"), angles in
 // milli-turns ("halfAngleMilli": 167 = 60 degrees each side), times in ticks, multipliers in milli (1000 = x1).
 // {"ticksPerSecond":20,"statuses":[...],"attacks":[...],"bosses":[...],"schedule":{...},"mob":{...}}; see
 // examples/libraries/mechanics/boss-encounter.json and docs/mechanics-packages.md (boss-encounters). Errors name the path.
-#include "BossEncounter.h"
-#include "BossSchedule.h"
+#include "engine/mechanics/BossEncounter.h"
+#include "engine/mechanics/BossSchedule.h"
 #include "CombatData.h"
-#include "MobBehaviour.h"
-#include "StatusEffects.h"
-#include "Telegraphs.h"
+#include "engine/mechanics/MobBehaviour.h"
+#include "engine/mechanics/StatusEffects.h"
+#include "engine/mechanics/Telegraphs.h"
 #include "engine/core/Hash.h"
 #include <string>
 namespace aiverse::lib::mechanics {

@@ -6,7 +6,7 @@
 언어, 브랜딩, 그리고 봇을 이용한 검증까지 포함됩니다. 작성되는 것은 모두 일반 게임 데이터이므로 이후 자유롭게 편집할 수 있습니다.
 
 코드: `apps/editor/core/GameWizard*.cpp`(UI 없음), `apps/editor/core/WizardOps.cpp`(MCP), `apps/editor/EditorGameWizard.cpp`
-(허브 페이지). 모든 게임에 복사되는 런타임 키트: `templates/_wizard/`(Lua + RmlUi, README 참고).
+(허브 페이지). 모든 게임에 복사되는 런타임 키트: `tools/wizard/kit/`(Lua + RmlUi, README 참고).
 
 ## 답변(`WizardSpec`, 모두 선택 사항)
 

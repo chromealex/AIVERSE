@@ -1,5 +1,5 @@
-#include <aiverselib/animation/PhysicalPoseBlend.h>
-#include <aiverselib/animation/EcsAnimationSystems.h>
+#include "engine/animation/PhysicalPoseBlend.h"
+#include "engine/animation/EcsAnimationSystems.h"
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>

@@ -1,12 +1,12 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Versioned save/load (mechanics::save/load from Persistence.h) and checksum hashing for physical-interactions.
 // Record kinds 80..87 are reserved for this package: CarryState 80, PushState 81, RopeState 82, DoorState 83,
 // PlatformState 84, BreakableState 85 (86..87 free). Store each state in its own NativeState key; bind
 // interactionConfigHash and interactionDefinitionsHash in the save envelope. Loading validates structure only:
 // the step functions additionally check every record against the bound definitions.
 #include "PhysicalInteractions.h"
-#include "Persistence.h"
+#include "engine/mechanics/Persistence.h"
 #include "engine/core/Hash.h"
 #include <string>
 namespace aiverse::lib::mechanics {

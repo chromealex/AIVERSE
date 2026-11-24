@@ -1,10 +1,10 @@
 #!/bin/bash
 # AIVERSE Studio on macOS: builds the web UI and the native Studio, then opens it.
-# Usage: ./studio_mac.command [project folder]   (default: the project hub's last project / templates/skirmish)
+# Usage: ./studio_mac.command [project folder]   (default: the project hub's last project / the skirmish template package)
 # Log: studio_mac.log. Needs Xcode, CMake and Node.js (brew install cmake node).
 cd "$(dirname "$0")" || exit 1
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
-PROJECT="${1:-templates/skirmish}"
+PROJECT="${1:-${AIVERSE_TEMPLATES_DIR:-$HOME/.aiverse/packages/templates}/skirmish}"
 {
   echo "== $(date)"
   command -v node >/dev/null || { echo "Node.js is missing: brew install node"; exit 1; }

@@ -7,7 +7,7 @@ Meta-Spiel (Menüs, Upgrades, Shop, Tagesbelohnung, Profil, Einstellungen, Ergeb
 Branding und eine Prüfung mit Bots. Alles, was er schreibt, sind gewöhnliche Spieldaten, die sich danach bearbeiten lassen.
 
 Code: `apps/editor/core/GameWizard*.cpp` (ohne UI), `apps/editor/core/WizardOps.cpp` (MCP), `apps/editor/EditorGameWizard.cpp`
-(die Hub-Seite). Laufzeit-Kit, das in jedes Spiel kopiert wird: `templates/_wizard/` (Lua + RmlUi, siehe dessen README).
+(die Hub-Seite). Laufzeit-Kit, das in jedes Spiel kopiert wird: `tools/wizard/kit/` (Lua + RmlUi, siehe dessen README).
 
 ## Antworten (`WizardSpec`, alles optional)
 

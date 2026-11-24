@@ -1,7 +1,7 @@
 // SpectraFX Stage 29 — read-only conversion of committed ECS SimEvents
 // to GpuCueBridge one-shot requests. No ECS particle handles or genre rules.
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 #include "engine/fx/SpectraGpuCueBridge.h"
 #include "engine/sim/Simulation.h"
 #include <cstdint>

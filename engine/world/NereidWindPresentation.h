@@ -3,7 +3,7 @@
 // presentation-only struct has no dependency on PHYSIS internals or genres.
 #pragma once
 #include "engine/render/Math3D.h"
-#include <aiverselib/water/NereidWater.h>
+#include "engine/world/nereid/NereidWater.h"
 #include <algorithm>
 #include <cmath>
 

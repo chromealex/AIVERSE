@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // survival-ecology persistence: versioned mechanics::save/load records (SurvivalState 106, EcologyState 107,
 // EcologyAnimalState 108, EcologyResourceState 109; kinds 104..111 are shared with settlement-production, see
 // ColonyPersistence.h) and checksum hashing. Bind survivalConfigHash / ecologyDefsHash / ecologyAnimalDefsHash in
@@ -8,7 +8,7 @@
 #include "Ecology.h"
 #include "EcologyAnimals.h"
 #include "EcologyResources.h"
-#include "Persistence.h"
+#include "engine/mechanics/Persistence.h"
 #include "engine/core/Hash.h"
 #include <string>
 namespace aiverse::lib::mechanics {

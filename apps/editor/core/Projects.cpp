@@ -1,3 +1,4 @@
+#include "engine/platform/TemplatesDir.h"
 #include "Projects.h"
 #include <algorithm>
 #include <cctype>
@@ -87,7 +88,7 @@ std::vector<TemplateInfo> listTemplates(const std::string& engineDir) {
     out.push_back(empty);
     std::error_code ec;
     std::vector<TemplateInfo> found;
-    for (auto& e : fs::directory_iterator(fs::path(engineDir) / "templates", ec)) {
+    for (auto& e : fs::directory_iterator(fs::path(aiverse::platform::templatesDir(engineDir)), ec)) {
         if (!e.is_directory() || !fs::exists(e.path() / "game.json")) continue;
         TemplateInfo t;
         t.id = e.path().filename().string();
@@ -247,7 +248,7 @@ std::string createProject(const std::string& engineDir, const std::string& templ
     if (ec) return fail("не удалось создать " + dst.string() + ": " + ec.message());
     try {
         if (templateId != "empty" && !isCatalogTemplate(templateId)) {
-            const fs::path src = fs::path(engineDir) / "templates" / templateId;
+            const fs::path src = fs::path(aiverse::platform::templatesDir(engineDir)) / templateId;
             if (!fs::exists(src / "game.json")) return fail("шаблон '" + templateId + "' не найден");
             // per file: MinGW's recursive fs::copy fails into an existing folder
             for (auto it = fs::recursive_directory_iterator(src); it != fs::recursive_directory_iterator(); ++it) {

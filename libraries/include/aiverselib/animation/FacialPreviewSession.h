@@ -2,7 +2,7 @@
 // Native ModelView and future HTML5 Studio native bridges use this same
 // genre-neutral compiled rig, one parent pose and actor-local smoothing state.
 #pragma once
-#include <aiverselib/animation/FacialControlRig.h>
+#include "engine/animation/FacialControlRig.h"
 #include <cmath>
 #include <map>
 #include <memory>

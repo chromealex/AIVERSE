@@ -5,6 +5,14 @@
 
 namespace aiverse::game {
 namespace {
+std::vector<NativeDefinition>& registeredNativeModules() { static std::vector<NativeDefinition> modules; return modules; }
+}
+NativeRegistrar::NativeRegistrar(std::vector<NativeDefinition> definitions) {
+    auto& modules = registeredNativeModules();
+    for (auto& d : definitions) modules.push_back(std::move(d));
+}
+std::vector<NativeDefinition> compiledNativeModules() { return registeredNativeModules(); }
+namespace {
 void hashState(Hasher& h, const NativeState& s) {
     h.u32(uint32_t(s.values.size()));
     for (const auto& [key, value] : s.values) { h.str(key); h.i64(value); }

@@ -1,6 +1,6 @@
 #pragma once
-#include "Config.h"
-#include "NavMesh.h"
+#include "engine/bots/Config.h"
+#include "engine/bots/NavMesh.h"
 namespace aiverse::lib::bots {
 inline Vec3 navVector(const Json& value){
     if(!value.isArray()||value.size()!=3)throw JsonError("navmesh: expected [x,y,z]");

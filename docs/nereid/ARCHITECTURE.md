@@ -21,8 +21,8 @@ introducing NEREID.
 ## Stage 1 — authoritative gameplay data + sampling
 
 Public C++ headers:
-- `<aiverselib/water/NereidWater.h>`
-- `<aiverselib/water/NereidWaterSystems.h>`
+- `"engine/world/nereid/NereidWater.h"`
+- `"engine/world/nereid/NereidWaterSystems.h"`
 - Package: `AIVERSE::lib_nereid_water` from `libraries/catalog.json`.
 
 Namespace: `aiverse::lib::nereid`.
@@ -88,7 +88,7 @@ values are present in the enum.
 
 ## Stage 2 — cross-genre buoyancy output
 
-`<aiverselib/water/NereidBuoyancySystems.h>` exposes the optional
+`"engine/world/nereid/NereidBuoyancySystems.h"` exposes the optional
 `AIVERSE::lib_nereid_buoyancy` package. It runs only when Entities have
 WaterBuoyancyComponent, WaterVelocityInputComponent, WaterContactComponent
 and WaterForceComponent.
@@ -242,7 +242,7 @@ available; default adaptive thresholds remain heuristics.
 
 ## Stage 7B — reusable presentation geometry, not gameplay authority
 
-`<aiverselib/water/NereidWaterSurfaceMesh.h>` provides independent
+`"engine/world/nereid/NereidWaterSurfaceMesh.h"` provides independent
 CPU mesh creation for NEREID water bodies using only generic ECS water
 data: rectangles/discs, bounded infinite-ocean patches, simple concave
 polygons and variable-width river ribbons. LOD controls tessellation

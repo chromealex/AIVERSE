@@ -3,7 +3,7 @@
 // hero and rules "driving" can switch it on with data only.
 //
 // The road network is built at setup from the map's tile characters (tiles.rows): rules traffic.roads.tiles lists
-// the road characters, traffic.pedestrians.walk the sidewalk ones (libraries/include/aiverselib/mechanics/Traffic.h:
+// the road characters, traffic.pedestrians.walk the sidewalk ones (engine/mechanics/Traffic.h:
 // pieces, junctions, lanes). Cars are ordinary "driving" vehicles: this file is their driver. Each tick it plans
 // pedals and steering (pure pursuit along the lane / the turn through the junction, stop lines on yellow and red,
 // following distance to whatever is ahead: cars, people, the hero, parked cars), and Driving.cpp feeds that input
@@ -24,7 +24,7 @@
 #include <algorithm>
 #include "../core/Fixed.h"
 #include "../data/Json.h"
-#include "../../libraries/include/aiverselib/mechanics/Traffic.h"
+#include "engine/mechanics/Traffic.h"
 
 namespace aiverse { class Simulation; class Hasher; class Archive; }
 

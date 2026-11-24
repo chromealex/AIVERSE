@@ -3,7 +3,7 @@
 // The caller supplies graph names already defined/loaded in the particle system.
 #pragma once
 #include "engine/fx/SpectraFX.h"
-#include <aiverselib/water/NereidInteractionPresentation.h>
+#include "engine/world/nereid/NereidInteractionPresentation.h"
 #include <array>
 #include <algorithm>
 #include <cmath>

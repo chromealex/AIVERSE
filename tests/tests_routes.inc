@@ -273,7 +273,7 @@ TEST(routes_editor_ops) {
     const fs::path root = fs::temp_directory_path() / ("aiverse_routes_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::remove_all(root);
     fs::create_directories(root / "games");
-    fs::copy(fs::path(AIVERSE_SOURCE_DIR) / "templates" / "sporelanes", root / "games" / "sporelanes", fs::copy_options::recursive);
+    fs::copy(fs::path(AIVERSE_TEMPLATES_DIR) / "sporelanes", root / "games" / "sporelanes", fs::copy_options::recursive);
     editor::Workspace ws;
     ws.engineDir = AIVERSE_SOURCE_DIR;
     std::string err;

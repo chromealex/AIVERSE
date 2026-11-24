@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Cinematic time-scale domains (authoritative). A domain (world, player, ui, cinematic or a custom id) advances
 // in whole domain steps per authoritative tick at an exact integer ratio: every scale is held in 1/720720 step
 // units and a per-domain integer accumulator carries the remainder, so 1/2 speed advances exactly one step every

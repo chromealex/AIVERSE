@@ -24,7 +24,7 @@ Authority: `docs/terrain.md` (contract and branches), `docs/game-format.md` (key
 5. Planets: the same tools with `body` and `face` (`apps/editor/core/PlanetDetailOps.cpp`,
    `engine/view/game/GamePlanetDetail.cpp`); planet bodies themselves - `skills/world/aiverse-planets`.
 6. Check: `map_validate` (slopes, visual surface vs simulated ground on walkable cells), `view_screenshot`,
-   a bot match (`match_run`); 2D tile games must look unchanged (`templates/tiles2d`, `templates/km2d`).
+   a bot match (`match_run`); 2D tile games must look unchanged (`~/.aiverse/packages/templates/tiles2d`, `~/.aiverse/packages/templates/km2d`).
 
 Invariants: the view never writes simulation layers; the terrain mesh is not rebuilt during play (editor edits
 rebuild dirty chunks only); old maps without a `terrain` block keep pixels and checksums.

@@ -1,9 +1,0 @@
-// SpectraFX entity effect (rules types.catapult.spectraFx): dust behind a moving catapult.
-{
-  "emitters": [
-    { "comment": "dust", "texture": "builtin:smoke", "blend": "alpha", "rate": 18, "loop": true,
-      "life": [0.6, 1.1], "speed": [0.3, 0.8], "spread": 35, "shape": "disc", "radius": 0.35, "drag": 1.5,
-      "size": [0.35, 0.6], "sizeOverLife": [[0, 0.6], [1, 1.6]], "rotation": [0, 360], "spin": [-40, 40],
-      "color": [[0, "#a08860a0"], [1, "#a0886000"]] }
-  ]
-}

@@ -1,5 +1,5 @@
 // Deferred checks for persistent workers, barriers and exceptions.
-#include <aiverselib/animation/MotionWeaveWorkers.h>
+#include "engine/animation/MotionWeaveWorkers.h"
 #include <atomic>
 #include "../AlwaysCheck.h"
 #include <stdexcept>

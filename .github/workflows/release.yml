@@ -18,8 +18,8 @@ on:
   workflow_dispatch:
     inputs:
       game:
-        description: Game folder to package
-        default: templates/skirmish
+        description: Game folder to package (default the skirmish template package)
+        default: ''
 
 permissions:
   contents: write
@@ -27,7 +27,9 @@ permissions:
   id-token: write
 
 env:
-  GAME: ${{ github.event.inputs.game || 'templates/skirmish' }}
+  # sample games: official template packages of the catalog, installed by tools/pkg/fetch_templates.py
+  AIVERSE_TEMPLATES_DIR: ${{ github.workspace }}/.aiverse-templates
+  GAME: ${{ github.event.inputs.game || format('{0}/.aiverse-templates/skirmish', github.workspace) }}
   CMAKE_BUILD_PARALLEL_LEVEL: 4
 
 jobs:
@@ -40,6 +42,9 @@ jobs:
       exe: ${{ steps.g.outputs.EXE }}
     steps:
       - uses: actions/checkout@v4
+      - name: Template packages (sample games from the package catalog)
+        shell: bash
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/pkg/fetch_templates.py
       - id: g
         run: python3 .github/scripts/game-info.py "$GAME" | tee -a "$GITHUB_OUTPUT"
 
@@ -52,6 +57,9 @@ jobs:
       HAS_CERT: ${{ secrets.WINDOWS_CERT_PFX_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Template packages (sample games from the package catalog)
+        shell: bash
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/pkg/fetch_templates.py
       - name: Build tools and package
         shell: bash
         run: |
@@ -98,6 +106,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Template packages (sample games from the package catalog)
+        shell: bash
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/pkg/fetch_templates.py
       - name: Package
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q ninja-build libx11-dev libegl-dev libgles-dev
@@ -118,6 +129,9 @@ jobs:
       HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Template packages (sample games from the package catalog)
+        shell: bash
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/pkg/fetch_templates.py
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 17 }
       - uses: gradle/actions/setup-gradle@v4
@@ -159,6 +173,9 @@ jobs:
       HAS_DEVID: ${{ secrets.MACOS_CERT_P12_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Template packages (sample games from the package catalog)
+        shell: bash
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/pkg/fetch_templates.py
       - name: Tools
         run: |
           cmake -S . -B build/host -DCMAKE_BUILD_TYPE=Release -DAIVERSE_BUILD_CLIENT=OFF -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_HEADLESS=OFF
@@ -235,6 +252,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Template packages (sample games from the package catalog)
+        shell: bash
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/pkg/fetch_templates.py
       - uses: mymindstorm/setup-emsdk@v14
         with: { version: 3.1.74 }
       - name: Package

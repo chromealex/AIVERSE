@@ -5,8 +5,8 @@
 // The host owns Model/GPU/Graph publications and the visual parent pose.
 #pragma once
 #include "SceneAttachmentHost.h"
-#include <aiverselib/animation/MotionWeaveSourceBridge.h>
-#include <aiverselib/animation/EcsAnimationSystems.h>
+#include "engine/animation/MotionWeaveSourceBridge.h"
+#include "engine/animation/EcsAnimationSystems.h"
 #include <cmath>
 #include <cstdint>
 #include <limits>

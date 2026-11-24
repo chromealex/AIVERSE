@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Quick-time events judged on authoritative input ticks (never on device/audio time). Kinds: Press (a timing
 // window [open, close] in ticks after the prompt, optional perfect sub-window; an early press fails), Mash
 // (count presses before close), Hold (press before close, keep it down for `hold` ticks) and Sequence (ordered

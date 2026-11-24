@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 import importlib.util,json,os,shutil,tempfile,unittest
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools/pkg'))
+from fetch_templates import default_dir as templates_dir  # noqa: E402
 ROOT=Path(__file__).resolve().parents[2]
 spec=importlib.util.spec_from_file_location('gameplay',ROOT/'tools/libraries/gameplay.py');gp=importlib.util.module_from_spec(spec);spec.loader.exec_module(gp)
 class Tools(unittest.TestCase):
@@ -34,7 +37,7 @@ class Tools(unittest.TestCase):
         if configured:self.assertTrue(binary.is_file(),'AIVERSE_HEADLESS must point to a built executable')
         if binary is None:self.skipTest('build aiverse_headless or set AIVERSE_HEADLESS')
         with tempfile.TemporaryDirectory() as temp:
-            project=Path(temp)/'game';shutil.copytree(ROOT/'templates/skirmish',project)
+            project=Path(temp)/'game';shutil.copytree(templates_dir()/'skirmish',project)
             for name,payload in [
                 ('resource',{'id':'copper','definition':{'kind':'stock','start':0}}),
                 ('building',{'id':'store','definition':{'health':{'max':100},'structure':{'footprint':[2,2]},'cost':{'gold':10}},'builders':['peasant']}),

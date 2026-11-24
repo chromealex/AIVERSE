@@ -20,6 +20,7 @@ def load_meta():
 
 # Search vocabulary is routing metadata, not another copy of skill instructions.
 ALIASES = {
+ 'aiverse-character-locomotion':'wallrun wall-run wall slide walljump dash air dash grapple hook glide glider one-way platform drop through parkour паркур бег по стене рывок крюк кошка планирование односторонн платформ locomotion movement jump coyote slope ledge ladder swim climb mantle vault движение прыжок склон уступ лестница плавание лазание',
  'aiverse-ecs-shared-static':'ecs shared static immutable configuration prefab interned dedup memory snapshot rollback staticref sharedref scene read-only component component storage game editor общие статические компоненты префаб память конфиг дедупликация снапшот откат',
  'aiverse-voxel-world':'voxel voxels block blocks chunk chunks minecraft dig mine place raycast region save воксел блок чанк майнкрафт копат ставит регион',
  'aiverse-voxel-light':'voxel light skylight blocklight torch shadow flood свет освещен факел тень воксел',
@@ -88,6 +89,9 @@ ALIASES = {
 
 # MCP and repository workflows (no runtime library): id, summary, source of truth.
 WORKFLOWS=[
+ ('aiverse-mcp-coverage','Audit real MCP tools/list, GUI-only restrictions and verified capability calls','docs/agents/mcp-coverage.md'),
+ ('aiverse-warcraft3-import','Import licensed Warcraft III map archives and assets using the bounded MPQ/Studio pipeline','docs/warcraft3-import.md'),
+ ('aiverse-gpu-batching','Profile renderer instance/material batching, Metal GPU counters and A/B capture parity','docs/geometry-performance.md'),
  ('aiverse-lens','LENS camera scene authoring, MCP validation and native Studio PNG capture','apps/editor/core/LensOps.cpp'),
  ('aiverse-lens-native','LENS native multi-camera scheduling, prepared-frame replay and GPU capture ownership','docs/camera-system.md'),
 
@@ -109,8 +113,7 @@ WORKFLOWS=[
  ('aiverse-niagara-vfx','Legacy Niagara-style discovery alias; use the official SpectraFX workflow','docs/spectrafx.md'),
  ('aiverse-spectrafx','SpectraFX universal graphs, particle assets and ECS presentation for native games','docs/spectrafx.md'),
  ('aiverse-prisma','PRISMA universal HDR post-processing, screen effects, volumes, camera profiles and GPU quality','docs/prisma.md'),
- ('aiverse-animation-ecs','Legacy C++ presentation ECS animation API and fixed-point root-motion handoff','libraries/include/aiverselib/animation/EcsAnimationSystems.h'),
- ('aiverse-motionweave','Universal multithreaded MotionWeave animation scheduler and native integration','docs/motionweave.md'),
+ ('aiverse-animation-ecs','Legacy C++ presentation ECS animation API and fixed-point root-motion handoff','engine/animation/EcsAnimationSystems.h'),
  ('aiverse-view','Genre-independent scene View: appearance, layers, visibility, packets and rendering adapters','docs/view.md'),
  ('aiverse-game-screens','Game screens and HUD with RmlUi and Lua, validation, phone previews','docs/ui-scripting.md'),
  ('aiverse-release-build','Platform packaging: branding, toolchains, size estimate, build and status','docs/overview.md'),
@@ -170,6 +173,9 @@ WORKFLOWS=[
  ('aiverse-autolod','Static model LOD generation with meshoptimizer and LOD transitions in the renderer','docs/autolod.md'),
 ]
 WORKFLOW_ALIASES={
+ 'aiverse-mcp-coverage':'mcp protocol server tools registry capabilities coverage audit tools/list tools/call introspection registration agents проверка скиллы инструменты мсп',
+ 'aiverse-warcraft3-import':'warcraft warcraft3 wc3 wc3x mpq w3x w3m mdx mdl blp map importer stormlib reforged варкрафт импорт карта архив',
+ 'aiverse-gpu-batching':'gpu batching material batches instancing metal icb draw calls performance profiling counters renderer батчинг батчи инстансинг производительность отрисовка',
  'aiverse-packages':'package packages catalog plugins download install asset store marketplace pbr textures materials template пакет пакеты каталог плагины скачать установить магазин ассетов материалы текстуры шаблон',
  'aiverse-lens':'lens camera cameras capture offscreen minimap камер захват линз',
  'aiverse-lens-native':'lens native camera replay snapshot gpu capture натив камер захват',
@@ -200,7 +206,7 @@ WORKFLOW_ALIASES={
  'aiverse-devlog':'devlog website site screenshots showcase cover changelog progress gh-pages pages ход разработки сайт скриншот скрин кадр обложка витрина',
  'aiverse-docs-upkeep':'docs readme documentation translation документац ридми перевод',
  'aiverse-shared-capability':'genre split shared capability any project module only extract move engine library adapter host compatibility header no genre mode жанр разделение общий любой проект вынести перенести модуль адаптер',
- 'aiverse-capability-audit':'capability audit gap gaps missing feasibility estimate limits can engine genre minecraft voxel sandbox чего не хватает оценк можно ли сделать возможност ограничен пробел жанр движок умеет',
+ 'aiverse-capability-audit':'mechanics status what exists code audit stale механики пробелы что есть статус устарел capability audit gap gaps missing feasibility estimate limits can engine genre minecraft voxel sandbox чего не хватает оценк можно ли сделать возможност ограничен пробел жанр движок умеет',
  'aiverse-capability-request':'feature request missing capability feedback report engine gap github issue запрос фичи не хватает движок отправить пожелание',
  'aiverse-terrain':'terrain relief heightfield heightmap sculpt cliff detail splat рельеф высот скульпт обрыв ландшафт',
  'aiverse-terra-first':'new game create game world environment terra terraweave новый проект игра создать мир окружение терра',
@@ -241,7 +247,7 @@ WORKFLOW_ALIASES={
  'aiverse-lighting':'lighting light luma gi probes mcp освещение свет лампа пробы',
  'aiverse-prisma':'prisma postfx postprocess post-processing bloom hdr exposure tonemap lut grade depth of field motion blur taa ssr volume screen-space постобработка постэффект призма камера',
  'aiverse-animation-ecs':'animation ecs clip montage retarget budget fixed root motion animation system анимация бюджет корневая',
- 'aiverse-motionweave':'motionweave animation rig retarget pose workers scheduler shared universal анимация риг потоки',
+ 'aiverse-motionweave':'motionweave animation rig retarget pose workers scheduler shared universal анимация риг потоки montage notify root motion warp warping ragdoll inertialization crowd facial viseme монтаж ретаргет рэгдолл варпинг лицо',
  'aiverse-view':'view scene appearance packet visibility frustum layers universal genre independent отображение сцена видимость',
  'aiverse-game-screens':'ui screen menu hud shop rml интерфейс экран меню худ магазин',
  'aiverse-release-build':'build release platform android ios web windows macos linux package сборк релиз платформ',
@@ -308,8 +314,10 @@ def generate():
     for name,summary,source in WORKFLOWS:
         entries.append(dict(id=name,package=None,path=skill_path(name),domain='workflow',summary=summary,
             side='tools',runtime='none',target=None,dependencies=[],backendDependencies=[],source=source))
+    # Search words of the policy packages live next to their registration script (tools/skills/policy_packages.py).
+    policy_aliases=json.loads((ROOT/'tools/skills/policy_aliases.json').read_text(encoding='utf-8')) if (ROOT/'tools/skills/policy_aliases.json').is_file() else {}
     for entry in entries:
-        entry['keywords']=(ALIASES.get(entry['id'],'')+' '+WORKFLOW_ALIASES.get(entry['id'],'')).split()
+        entry['keywords']=(ALIASES.get(entry['id'],'')+' '+WORKFLOW_ALIASES.get(entry['id'],'')+' '+policy_aliases.get(entry['id'],'')).split()
         entry['contentPackages']=skill_packages(entry['path'])
     return dict(schema=1,skills=sorted(entries,key=lambda e:e['id']))
 

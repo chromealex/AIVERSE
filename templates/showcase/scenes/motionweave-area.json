@@ -1,9 +1,0 @@
-{
-  "version": 1,
-  "id": "scenes/motionweave-area",
-  "dependencies": [],
-  "objects": [
-    {"id":11,"prefab":"visual/slime","properties":{"x":4,"y":0,"z":0}},
-    {"id":12,"prefab":"logic/marker","properties":{"x":5,"y":0,"z":0}}
-  ]
-}

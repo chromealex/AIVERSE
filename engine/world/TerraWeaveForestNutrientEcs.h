@@ -7,7 +7,7 @@
 #include "engine/world/TerraWeaveForestDeadwoodEcs.h"
 #include "engine/world/TerraWeaveForestNutrientCycle.h"
 #include "engine/world/TerraWeaveNereidNutrientJunction.h"
-#include <aiverselib/water/NereidQueryIndex.h>
+#include "engine/world/nereid/NereidQueryIndex.h"
 #include <algorithm>
 #include <cstdint>
 #include <functional>

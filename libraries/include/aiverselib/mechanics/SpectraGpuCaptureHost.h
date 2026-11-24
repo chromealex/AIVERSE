@@ -4,7 +4,7 @@
 // Call pollBeforeStep() after Device.beginFrame, submitAfterStepBeforePass()
 // after pool.step and before gfx::Device::beginPass.
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 
 #include "engine/fx/SpectraGpuPoolWorld.h"
 #include "engine/fx/SpectraCheckpointInspector.h"

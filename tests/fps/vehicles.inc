@@ -33,7 +33,7 @@ void typedVehicles(const std::string& root) {
 // ECS shape (one vehicle system, engine/vehicles): the vehicles::RaceState resource holds the session and racer i's car
 // (racer i = slot i), the cars are Vehicle + vehicles::VehicleDrive entities driven by their character.
 void raceMode(const std::string& root) {
-    auto dir=root+"/../../../templates/racing/";
+    auto dir=std::string(AIVERSE_TEMPLATES_DIR)+"/racing/";
     auto project=actor::readProject([&](const std::string& f,std::string& text){std::ifstream in(dir+f);if(!in)return false;text.assign(std::istreambuf_iterator<char>(in),{});return true;});
     auto rules=project.rules,map=project.map;
     auto sim=simulation(rules,map),twin=simulation(rules,map);auto S=[&]()->actor::State&{return state(*sim);};auto R=[&]()->const vehicles::RaceState&{return *vehicles::VehicleRace::state(static_cast<const World&>(sim->world()));};

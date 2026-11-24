@@ -33,7 +33,7 @@ sc::SceneAsset load(const std::filesystem::path& root,
 }
 int main() {
     const std::filesystem::path root=
-        std::filesystem::path(AIVERSE_SOURCE_DIR)/"templates/showcase";
+        std::filesystem::path(AIVERSE_TEMPLATES_DIR)/"showcase";
     const auto json=Json::parse(read(root/"motionweave-visuals.json"));
     AIVERSE_TEST_CHECK(json["version"].numberLiteral()=="1");
     AIVERSE_TEST_CHECK(json["residencyKey"].isString());

@@ -1,7 +1,7 @@
 // The integer HP commit used by generic ECS damage and live FPS must preserve
 // the previous valid FPS result, including zero, death and excessive damage.
 // This test is deliberately independent of modules/fps and modules/rts.
-#include <aiverselib/mechanics/EcsDamageSystems.h>
+#include "engine/mechanics/EcsDamageSystems.h"
 #include <algorithm>
 #include <cstdint>
 #include <iostream>

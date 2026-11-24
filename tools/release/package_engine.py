@@ -5,7 +5,7 @@
     python3 tools/release/package_engine.py --platform macos   --bin build/mac
     python3 tools/release/package_engine.py --platform linux   --bin build/linux-release
 
-The zip holds AIVERSE/ = a snapshot of the sources at HEAD (git archive: templates, engine assets,
+The zip holds AIVERSE/ = a snapshot of the sources at HEAD (git archive: engine assets, tools,
 everything aiversebuild needs to build games) + AIVERSE/bin/ with the executables. The editor and the
 tools find the engine next to themselves (engine/platform/EngineDir.h), so the folder works anywhere.
 Intermediates go to <out>/.temp; <out> gets only AIVERSE-<version>-<commit>-<platform>.zip.

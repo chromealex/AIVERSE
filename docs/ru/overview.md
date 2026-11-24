@@ -21,7 +21,7 @@ engine/
 modules/rts/ универсальный RTS-слой: типы из данных, приказы, A*, бой, экономика, стройка,
              производство, гарнизоны (Mushroom Wars), дороги, туман войны, ИИ
              view/ — отрисовка любых типов по блоку "view" в rules.json
-modules/fps/ FPS-модуль (в разработке): движение, бой и состояние матча
+engine/actor/ хост акторов на ECS (бывший modules/fps): движение, бой, транспорт, стриминг и состояние матча для любого проекта
 apps/
   fps/       отдельные FPS-клиент и сервер
   client/    игра (меню, матч с ботами, HUD, мини-карта, мышь и тач)
@@ -42,13 +42,13 @@ platform/    шаблоны упаковки (Info.plist, Gradle-проект, H
 ```bash
 cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release      # нужны Xcode и CMake
 cmake --build build/mac -j 8
-open build/mac/AiverseEditor.app                              # редактор (проект templates/skirmish)
+open build/mac/AiverseEditor.app                              # редактор (проект ~/.aiverse/packages/templates/skirmish)
 open build/mac/AiverseGame.app                                # игра
 ./build/mac/aiverse_tests
 ```
 
-Другую игру в редакторе: `AiverseEditor.app/Contents/MacOS/AiverseEditor --project templates/mushrooms`.
-Чтобы игра запускалась с другим набором данных, задайте `-DAIVERSE_CONTENT_DIR=.../templates/mushrooms`.
+Другую игру в редакторе: `AiverseEditor.app/Contents/MacOS/AiverseEditor --project ~/.aiverse/packages/templates/mushrooms`.
+Чтобы игра запускалась с другим набором данных, задайте `-DAIVERSE_CONTENT_DIR=~/.aiverse/packages/templates/mushrooms`.
 
 ### Несколько редакторов одновременно
 
@@ -63,12 +63,12 @@ open build/mac/AiverseGame.app                                # игра
 ## Сборка под платформы — aiversebuild
 
 ```bash
-./build/mac/aiversebuild --project templates/skirmish --target macos     # Builds/macos/<Name>.app (подписан ad-hoc)
-./build/mac/aiversebuild --project templates/skirmish --target ios       # Builds/ios/xcode/AIVERSE.xcodeproj + сборка для симулятора
-./build/mac/aiversebuild --project templates/skirmish --target android   # Builds/android/<Name>-release.apk, если есть SDK/NDK и gradle
-./build/mac/aiversebuild --project templates/skirmish --target web       # Builds/web (нужен emsdk)
-./build/mac/aiversebuild --project templates/skirmish --target windows   # .exe через mingw-w64 (brew install mingw-w64) или исходники + build.bat
-./build/mac/aiversebuild --project templates/skirmish --target all
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target macos     # Builds/macos/<Name>.app (подписан ad-hoc)
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target ios       # Builds/ios/xcode/AIVERSE.xcodeproj + сборка для симулятора
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target android   # Builds/android/<Name>-release.apk, если есть SDK/NDK и gradle
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target web       # Builds/web (нужен emsdk)
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target windows   # .exe через mingw-w64 (brew install mingw-w64) или исходники + build.bat
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target all
 ```
 
 Результат кладётся в `<проект>/Builds/<платформа>/` — там только готовые сборки и отчёт о размере.
@@ -132,7 +132,7 @@ aiversebuild --project ... --target web --install-missing   # поставить
 aiversebuild ... --no-pack          # класть папки как есть (отладка)
 aiversebuild ... --pack-level 9     # уровень zstd (по умолчанию 19 для Release, 3 для Debug)
 
-assetpipe pack -o content.rpak templates/skirmish engine/assets=engine   # собрать пак вручную
+assetpipe pack -o content.rpak ~/.aiverse/packages/templates/skirmish engine/assets=engine   # собрать пак вручную
 assetpipe list content.rpak       # файлы, размеры, сжатие
 assetpipe verify content.rpak     # распаковать всё и проверить хеши
 assetpipe extract content.rpak out/
@@ -319,8 +319,8 @@ python3 tools/importers/ta/import.py --source "~/Games/TotalA" --out ~/AiverseGa
 ```
 
 ```bash
-./build/mac/aiverse_i18n extract --project templates/skirmish --lang de --write   # заготовка lang/de.json, новые строки помечены // TODO
-./build/mac/aiverse_i18n check   --project templates/skirmish                     # плейсхолдеры, формы мн. числа, непереведённое
+./build/mac/aiverse_i18n extract --project ~/.aiverse/packages/templates/skirmish --lang de --write   # заготовка lang/de.json, новые строки помечены // TODO
+./build/mac/aiverse_i18n check   --project ~/.aiverse/packages/templates/skirmish                     # плейсхолдеры, формы мн. числа, непереведённое
 ```
 
 Язык выбирается так: выбор игрока в меню (запоминается) → язык системы → исходный язык игры.
@@ -403,8 +403,8 @@ Linux ARM64 (GCC), macOS ARM64 (AppleClang) — одинаковые контр�
 
 ```bash
 ./build/mac/aiverse_server --config apps/server/server.json            # UDP 27015, WebSocket 27016
-./build/mac/aiverse_netbot --server 127.0.0.1 --project templates/mushrooms --queue 1v1   # бот в очередь
-./build/mac/aiverse_netbot --server ws://127.0.0.1:27016 --project templates/mushrooms --queue 1v1
+./build/mac/aiverse_netbot --server 127.0.0.1 --project ~/.aiverse/packages/templates/mushrooms --queue 1v1   # бот в очередь
+./build/mac/aiverse_netbot --server ws://127.0.0.1:27016 --project ~/.aiverse/packages/templates/mushrooms --queue 1v1
 ./build/mac/aiverse_net_tests                                          # сетевые тесты
 docker build -f apps/server/Dockerfile -t aiverse-server .             # сервер в контейнере
 ```
@@ -495,9 +495,9 @@ docker build -f apps/server/Dockerfile -t aiverse-server .             # сер�
   `material_*` / `texture_generate` для агентов.
 
 Сломанная модель не ломает игру: тип рисуется фигурой, причина пишется в консоль редактора.
-Просмотр: `aiverse_modelview модель.glb@Walk` или `aiverse_modelview --game templates/showcase` (все типы игры
+Просмотр: `aiverse_modelview модель.glb@Walk` или `aiverse_modelview --game ~/.aiverse/packages/templates/showcase` (все типы игры
 так, как их рисует игра); в редакторе — окно **Models** (клипы, узлы, материалы, портрет,
-перезагрузка при сохранении файла модели). Пример — `templates/showcase`, полный формат — `docs/models.md`.
+перезагрузка при сохранении файла модели). Пример — `~/.aiverse/packages/templates/showcase`, полный формат — `docs/models.md`.
 
 ## Освещение
 

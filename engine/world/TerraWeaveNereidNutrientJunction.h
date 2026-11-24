@@ -4,9 +4,9 @@
 // 4m lattice probes locate narrow stream footprints inside 32m nutrient cells.
 #pragma once
 #include "engine/world/TerraWeaveForestNutrientCycle.h"
-#include <aiverselib/water/NereidQueryIndex.h>
-#include <aiverselib/water/NereidConfluences.h>
-#include <aiverselib/water/NereidCascades.h>
+#include "engine/world/nereid/NereidQueryIndex.h"
+#include "engine/world/nereid/NereidConfluences.h"
+#include "engine/world/nereid/NereidCascades.h"
 #include <algorithm>
 #include <cstdint>
 #include <optional>

@@ -1,5 +1,5 @@
 // snapshot-delta: record diffs, XOR runs, sender/receiver over a lossy latest-only channel, malformed input.
-#include <aiverselib/net/SnapshotDelta.h>
+#include "engine/net/SnapshotDelta.h"
 #include <cstdio>
 #include <stdexcept>
 #include <string>

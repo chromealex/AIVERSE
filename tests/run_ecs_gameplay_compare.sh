@@ -3,6 +3,7 @@
 # Optional --full also runs the full game and network unit test targets.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+TPL=${AIVERSE_TEMPLATES_DIR:-$(python3 tools/pkg/fetch_templates.py)}
 FULL=0
 for arg in "$@"; do
   case "$arg" in
@@ -35,7 +36,7 @@ for mode in off on; do
   fi
   cmake --build "$build" --parallel "${AIVERSE_ECS_BUILD_JOBS:-4}" --target "${targets[@]}"
   echo "=== RTS headless: $mode ==="
-  "$build/aiverse_headless" --project templates/skirmish --seed 3 --max-seconds 10 \
+  "$build/aiverse_headless" --project "$TPL/skirmish" --seed 3 --max-seconds 10 \
     --verify-restore-at 2 --verify-restore-ticks 40 \
     --tick-times "$ROOT/rtssim-$mode.tick-us" \
     --checksum-log "$ROOT/rtssim-$mode.checksums" > "$ROOT/rtssim-$mode.log" 2>&1 || {
@@ -46,7 +47,7 @@ for mode in off on; do
     cat "$ROOT/rtssim-$mode.log"; exit 1;
   }
   echo "=== RTS headless COW: $mode ==="
-  "$build/aiverse_headless" --project templates/skirmish --seed 3 --max-seconds 10 \
+  "$build/aiverse_headless" --project "$TPL/skirmish" --seed 3 --max-seconds 10 \
     --cow-snapshots --verify-restore-at 2 --verify-restore-ticks 40 \
     --checksum-log "$ROOT/rtssim-$mode.cow.checksums" > "$ROOT/rtssim-$mode.cow.log" 2>&1 || {
     cat "$ROOT/rtssim-$mode.cow.log"; exit 1;

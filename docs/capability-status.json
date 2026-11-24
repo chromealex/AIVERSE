@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "baseline": "189123665c6d0f351eb52721f5db233b7b392e24",
   "areas": [
     {
@@ -7,18 +7,32 @@
       "area": "Правила, контент и интерфейс матча сторон (армии, башни, волны)",
       "scope": "Собрать правила конкретной игры, интерфейс и AI; для перечисленных базовых циклов обязательный новый модуль не выявлен",
       "acceptance": "Полный матч с победой, сохранением и воспроизводимым replay на целевом наборе правил",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Собрать правила конкретной игры, интерфейс и AI; для перечисленных базовых циклов обязательный новый модуль не выявлен"
+      "status": "partial",
+      "libraries": [
+        "abilities",
+        "bot-matches",
+        "bots-commander",
+        "construction"
+      ],
+      "tests": [
+        "library_aiverse_bots"
+      ],
+      "gameReady": "Собрать правила конкретной игры, интерфейс и AI; для перечисленных базовых циклов обязательный новый модуль не выявлен",
+      "code": []
     },
     {
       "id": "R2",
       "area": "Тактическое поведение армий",
       "scope": "Довести удержание строя, локальные манёвры, взаимодействие осад/транспорта и тактический AI под выбранный эталон; наличие блоков не доказывает поведение 1:1",
       "acceptance": "Сценарии обхода препятствий строем, флангов, высадки и осады без застреваний; детерминизм и save/restore",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Довести удержание строя, локальные манёвры, взаимодействие осад/транспорта и тактический AI под выбранный эталон; наличие блоков не доказывает поведение 1:1"
+      "status": "partial",
+      "libraries": [
+        "navigation",
+        "squads"
+      ],
+      "tests": [],
+      "gameReady": "Довести удержание строя, локальные манёвры, взаимодействие осад/транспорта и тактический AI под выбранный эталон; наличие блоков не доказывает поведение 1:1",
+      "code": []
     },
     {
       "id": "R3",
@@ -27,135 +41,323 @@
       "acceptance": "Цепочка миссий с переносом состояния, ветвлением и загрузкой в середине миссии",
       "status": "planned",
       "libraries": [],
-      "remaining": "Собрать миссии, обучение, ветвление и редакторскую проверку цепочек; постановочные сцены при необходимости требуют A3"
+      "tests": [],
+      "gameReady": "Собрать миссии, обучение, ветвление и редакторскую проверку цепочек; постановочные сцены при необходимости требуют A3",
+      "code": []
     },
     {
       "id": "R4",
       "area": "Масштаб армий",
       "scope": "Определить бюджеты CPU/GPU/памяти и измерить нужные армии, снаряды, дальность обзора и платформы; оптимизации делать по профилю",
       "acceptance": "Записанные p95 времени кадра/тика и память на согласованной сцене; ускорение не меняет checksum",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Определить бюджеты CPU/GPU/памяти и измерить нужные армии, снаряды, дальность обзора и платформы; оптимизации делать по профилю"
+      "status": "partial",
+      "libraries": [
+        "performance-budgets"
+      ],
+      "tests": [],
+      "gameReady": "Определить бюджеты CPU/GPU/памяти и измерить нужные армии, снаряды, дальность обзора и платформы; оптимизации делать по профилю",
+      "code": []
     },
     {
       "id": "R5",
       "area": "Полноценное движение в 3D",
       "scope": "Объёмная навигация/избегание, 3D-формации, ввод высоты и согласованное представление кораблей",
       "acceptance": "Флот проходит объёмное препятствие в разных плоскостях, сохраняет формацию и корректно возобновляется из save",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Объёмная навигация/избегание, 3D-формации, ввод высоты и согласованное представление кораблей"
+      "status": "partial",
+      "libraries": [
+        "volume-nav"
+      ],
+      "tests": [
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть объёмная сетка препятствий, детерминированный A* по 26 соседям со сглаживанием, локальное избегание стаи и 3D-слоты формаций (volume-nav). Осталось: иерархические и стримящиеся объёмы, ввод высоты в интерфейсе, согласованное представление кораблей.",
+      "code": [
+        "libraries/include/aiverselib/bots/VolumeNav.h"
+      ]
     },
     {
       "id": "F1",
       "area": "Продвинутое прямое движение",
       "scope": "Общий контроллер склонов/ступеней/движущихся опор и нужных игре wall-run, grapple, плавания; синхронизировать prediction и камеру",
       "acceptance": "Запись ввода воспроизводит прохождение препятствий; сетевые коррекции не разрывают движение",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Общий контроллер склонов/ступеней/движущихся опор и нужных игре wall-run, grapple, плавания; синхронизировать prediction и камеру"
+      "status": "partial",
+      "libraries": [
+        "character-locomotion",
+        "ecs-locomotion",
+        "physical-interactions",
+        "physics"
+      ],
+      "tests": [
+        "library_genre",
+        "ecs_cross_genre_locomotion_test",
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть Ground/Air со склонами, Ledge, Ladder, Swim, Climb, Mantle/Vault и (0.3.0) dash с зарядами в воздухе, wall slide, wall run с запретом той же стены, grapple (подтягивание и маятник со сматыванием), планирование и односторонние платформы — всё в LocomotionModes.h; движущиеся платформы (Platforms.h), ступени Box3D-персонажа. В engine/actor режимы включаются блоком rules `locomotion` с предсказанием и сверкой на клиенте (aiverse_fps_tests). Осталось: вращающиеся опоры, камера и анимации новых режимов, уступы/лестницы/вода в отчёте хоста (нет меток в формате карты).",
+      "code": [
+        "engine/mechanics/LocomotionModes.h",
+        "libraries/include/aiverselib/mechanics/Platforms.h",
+        "engine/physics/Character.cpp",
+        "engine/actor/ActorMotor.cpp"
+      ]
     },
     {
       "id": "F2",
       "area": "AI прямого действия",
       "scope": "Навигация по сложной 3D-геометрии/off-mesh links; поиск/укрытия, роли группы и задачи конкретного режима; единый lifecycle в игре",
       "acceptance": "Бот проходит вертикальный маршрут, ищет потерянную цель и выполняет цель режима, используя те же команды, что игрок",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Навигация по сложной 3D-геометрии/off-mesh links; поиск/укрытия, роли группы и задачи конкретного режима; единый lifecycle в игре"
+      "status": "partial",
+      "libraries": [
+        "ai-perception",
+        "bots-combatant",
+        "nav-links",
+        "navmesh",
+        "squads",
+        "stealth-senses"
+      ],
+      "tests": [
+        "library_fps_bots",
+        "library_navmesh",
+        "library_genre",
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть off-mesh links (прыжок, спрыгивание, лестница, лазание, дверь, телепорт) в общем планировщике с любым навмешем и прохождение связей по тикам, генерация точек укрытий от коробок (nav-links), выбор укрытия ботом, роли отряда, слоистый навмеш. Осталось: автоматическое извлечение связей из геометрии, стриминг навмеша, задачи конкретного режима.",
+      "code": [
+        "libraries/include/aiverselib/bots/ShooterBot.h",
+        "libraries/include/aiverselib/bots/SquadRoles.h",
+        "engine/nav/NavMesh.h",
+        "libraries/include/aiverselib/bots/NavLinks.h"
+      ]
     },
     {
       "id": "F3",
       "area": "Разрушения и деформации",
       "scope": "Разрушаемая геометрия с обновлением коллизий, навигации и видимости; для BeamNG отдельно soft-body транспорт; репликация обломков",
       "acceptance": "Пролом изменяет путь, LOS и сохранение; сеть не расходится; отдельный benchmark обломков",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Разрушаемая геометрия с обновлением коллизий, навигации и видимости; для BeamNG отдельно soft-body транспорт; репликация обломков"
+      "status": "partial",
+      "libraries": [
+        "physical-interactions",
+        "physics",
+        "structure-destruction"
+      ],
+      "tests": [
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть разрушаемые конструкции из коробок: урон по области, раскол на фрагменты, обрушение без опоры, авторитетные обломки для репликации и грязные области для коллизий, навмеша и видимости (structure-destruction); разрушаемые объекты и события PHYSIS. Осталось: разрезание произвольных мешей, расчёт напряжений, soft-body транспорт.",
+      "code": [
+        "libraries/include/aiverselib/mechanics/Breakables.h",
+        "engine/physis/PhysisFractureOutbox.h",
+        "engine/physis/PhysisFractureDelivery.h",
+        "libraries/include/aiverselib/mechanics/StructureDestruction.h"
+      ]
     },
     {
       "id": "F4",
       "area": "Оружие: авторинг и ощущение от первого лица",
       "scope": "Авторинг альтернативного огня/особых попаданий, полноценные модели и анимации оружия, звуковые события; проверить ограничения под конкретный арсенал",
       "acceptance": "Все режимы оружия проходят серверную валидацию; визуальные события следуют подтверждённым выстрелам; тесты задержки",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Авторинг альтернативного огня/особых попаданий, полноценные модели и анимации оружия, звуковые события; проверить ограничения под конкретный арсенал"
+      "status": "partial",
+      "libraries": [
+        "ecs-hitscan",
+        "ecs-hitscan-resolution",
+        "ecs-impact-damage",
+        "ecs-projectile-systems",
+        "ecs-weapon-launch",
+        "weapon-policies"
+      ],
+      "tests": [
+        "library_genre",
+        "ecs_cross_genre_weapon_pipeline_test",
+        "ecs_hitscan_resolution_test"
+      ],
+      "gameReady": "Есть подача боеприпасов, режимы заряда и стек модулей оружия (WeaponMods.h), баллистика (Ballistics.h), ECS-запуск снарядов и программы полёта. Осталось: полноценные модели и анимации оружия, звуковые события, проверка под конкретный арсенал.",
+      "code": [
+        "libraries/include/aiverselib/mechanics/WeaponMods.h",
+        "libraries/include/aiverselib/mechanics/Ballistics.h",
+        "engine/mechanics/Weapons.h"
+      ]
     },
     {
       "id": "A1",
       "area": "Бой от анимации",
       "scope": "Связать авторитетные окна и swept hitboxes с анимацией, lock-on, stagger, контактами и движением; не переносить float view в lockstep",
       "acceptance": "Одинаковая команда даёт одинаковые попадания; тесты быстрых взмахов, нескольких целей, парирования и rollback",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Связать авторитетные окна и swept hitboxes с анимацией, lock-on, stagger, контактами и движением; не переносить float view в lockstep"
+      "status": "partial",
+      "libraries": [
+        "combat-actions",
+        "melee-combat"
+      ],
+      "tests": [
+        "library_genre"
+      ],
+      "gameReady": "Есть кадровые hitbox/hurtbox, неуязвимость при уклонении, направленный блок с perfect parry, poise/stagger и выбор цели lock-on (CombatActions.h), удары по свипу кончика оружия в общем хосте персонажа (engine/actor/ActorMelee.cpp). Осталось: брать окна ударов из notifies клипов MotionWeave, тесты rollback и сети на быстрых взмахах по нескольким целям.",
+      "code": [
+        "engine/mechanics/CombatActions.h",
+        "engine/mechanics/Melee.h",
+        "engine/actor/ActorMelee.cpp"
+      ]
     },
     {
       "id": "A2",
       "area": "Сложные сборки и предметы",
       "scope": "Схемы аффиксов/сокетов/реакций и редактор связей; проверка порядка модификаторов, циклов триггеров и миграции предметов; сами навыки — контент",
       "acceptance": "Тестовые сборки имеют объяснимый итоговый расчёт; старое сохранение загружается после изменения данных",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Схемы аффиксов/сокетов/реакций и редактор связей; проверка порядка модификаторов, циклов триггеров и миграции предметов; сами навыки — контент"
+      "status": "partial",
+      "libraries": [
+        "attribute-modifiers",
+        "inventory",
+        "item-affixes",
+        "loot-tables",
+        "match-progression",
+        "save-migrations",
+        "status-effects",
+        "weapon-policies"
+      ],
+      "tests": [
+        "library_progression",
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть генерация предметов по пулам аффиксов (префиксы/суффиксы, группы, тиры, уровень предмета), крафт, сокеты с цветами и камнями, элементальные ауры и реакции, миграция предметов (item-affixes), модификаторы и перки. Осталось: редактор связей и UI предметов.",
+      "code": [
+        "engine/mechanics/Perks.h",
+        "libraries/include/aiverselib/mechanics/WeaponMods.h",
+        "libraries/include/aiverselib/mechanics/ItemAffixes.h"
+      ]
     },
     {
       "id": "A3",
       "area": "Постановка и анимационный pipeline",
       "scope": "Retargeting, montage/notifies, root-motion authority и warping по потребности; timeline сцен, lip-sync и синхронизация сцены/сохранения",
       "acceptance": "Сцена с движением, голосом и взаимодействием корректно пропускается, прерывается и восстанавливается",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Retargeting, montage/notifies, root-motion authority и warping по потребности; timeline сцен, lip-sync и синхронизация сцены/сохранения"
+      "status": "partial",
+      "libraries": [
+        "cinematic-gameplay",
+        "lip-sync",
+        "motionweave"
+      ],
+      "tests": [
+        "library_genre",
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть MotionWeave: монтажи, notifies, root motion, motion warping, retargeting, инерциализация, ragdoll; таймлайны сцен с QTE; lip-sync по записанной речи или тексту для виз VIVID (lip-sync). Осталось: подключение MotionWeave к живым игровым сценам и префабам, вьюпорт HTML5 Studio, распознавание фонем.",
+      "code": [
+        "engine/animation/AnimationMontage.h",
+        "engine/animation/AnimationPlayback.h",
+        "libraries/include/aiverselib/animation/EcsRootMotionSystems.h",
+        "libraries/include/aiverselib/animation/RootMotionBaker.h",
+        "libraries/include/aiverselib/animation/AnimationMotionWarp.h",
+        "libraries/include/aiverselib/animation/HumanoidRetarget.h",
+        "libraries/include/aiverselib/animation/GenericRetarget.h",
+        "engine/animation/PoseInertialization.h",
+        "libraries/include/aiverselib/animation/PhysicsRagdollBridge.h",
+        "libraries/include/aiverselib/mechanics/CinematicScene.h",
+        "engine/character/vivid/Face.h",
+        "libraries/include/aiverselib/animation/LipSync.h"
+      ]
     },
     {
       "id": "A4",
       "area": "Квесты и социальные состояния",
       "scope": "Журнал/календарь/отношения, долгоживущие ветки и миграция квестов; связать диалог с миром и UI; конкретные истории — данные",
       "acceptance": "Два взаимоисключающих пути квеста, загрузка между репликами и корректные последствия в другом регионе",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Журнал/календарь/отношения, долгоживущие ветки и миграция квестов; связать диалог с миром и UI; конкретные истории — данные"
+      "status": "partial",
+      "libraries": [
+        "narrative-graphs",
+        "objectives",
+        "quest-journal",
+        "world-calendar"
+      ],
+      "tests": [
+        "library_genre",
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть квесты как данные: этапы, счётчики, ветки, требования, лимиты времени, провал и повтор, отслеживаемый квест, журнал и миграция версий (quest-journal); факты, отношения и сцены (narrative-graphs). Осталось: UI журнала и маркеры квестов на карте.",
+      "code": [
+        "libraries/include/aiverselib/mechanics/NarrativeScenes.h",
+        "engine/mechanics/Narrative.h",
+        "libraries/include/aiverselib/mechanics/QuestJournal.h"
+      ]
     },
     {
       "id": "D1",
       "area": "Генератор забегов и режиссёр",
       "scope": "Граф комнат/событий/награды, ограничения достижимости, бюджет столкновений и адаптивный режиссёр; существующие генераторы рельефа переиспользовать",
       "acceptance": "Пакет seed-проверок достижимости и бюджета сложности; воспроизводимый забег с save/restore",
-      "status": "partial",
+      "status": "core",
       "libraries": [
         "run-graph"
       ],
-      "remaining": "Связный seeded граф комнат, бюджеты встреч, фиксированные предложения наград и lifecycle реализованы. Остались геометрия комнат, адаптивный режиссёр, фактические встречи и интерфейс маршрута."
+      "tests": [
+        "strategy_libraries"
+      ],
+      "gameReady": "Связный seeded граф комнат, бюджеты встреч, фиксированные предложения наград и lifecycle реализованы. Остались геометрия комнат, адаптивный режиссёр, фактические встречи и интерфейс маршрута.",
+      "code": []
     },
     {
       "id": "D2",
       "area": "Массовые сборки и тысячи снарядов",
       "scope": "Выбор наград/эволюций и читабельная обратная связь; бюджет столкновений, притяжения XP, эффектов и предметов; не считать производительность доказанной",
       "acceptance": "Длительный забег целевой плотности с замерами CPU/GPU/памяти и повторяемым seed",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Выбор наград/эволюций и читабельная обратная связь; бюджет столкновений, притяжения XP, эффектов и предметов; не считать производительность доказанной"
+      "status": "partial",
+      "libraries": [
+        "boss-encounters",
+        "ecs-projectile-systems",
+        "match-progression",
+        "performance-budgets"
+      ],
+      "tests": [
+        "library_encounters",
+        "library_progression"
+      ],
+      "gameReady": "Есть орбы опыта с задержкой приземления, радиусом подбора, магнитами, самонаведением и бюджетом с объединением значений (XpPickups.h), выбор наград из N вариантов при повышении уровня (Perks.h). Осталось: эволюции оружия, бюджеты столкновений и эффектов на тысячах снарядов, замеры производительности.",
+      "code": [
+        "engine/mechanics/XpPickups.h",
+        "engine/mechanics/Perks.h"
+      ]
     },
     {
       "id": "S1",
       "area": "Физиология и среда",
       "scope": "Связанные температура/влажность/одежда/раны/болезни и укрытие; агрегировать дальние процессы; это больше простой шкалы hunger",
       "acceptance": "Прогоны холод/жара/дождь/лечение с единицами измерения, сохранением и стабильным timestep",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Связанные температура/влажность/одежда/раны/болезни и укрытие; агрегировать дальние процессы; это больше простой шкалы hunger"
+      "status": "partial",
+      "libraries": [
+        "survival-ecology",
+        "weather-timeline",
+        "wounds-disease"
+      ],
+      "tests": [
+        "library_genre_production_survival",
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть температура тела, одежда, укрытие, влажность и голод (Survival.h), раны с кровотечением, болью, заживлением, инфекцией и лечением, болезни с инкубацией, заразностью, лечением и иммунитетом (wounds-disease). Осталось: потеря функций конечностей, агрегирование дальних процессов, медицинский UI.",
+      "code": [
+        "libraries/include/aiverselib/mechanics/Survival.h",
+        "libraries/include/aiverselib/mechanics/WoundsDisease.h"
+      ]
     },
     {
       "id": "S2",
       "area": "Экология и автономная жизнь",
       "scope": "Жизненные циклы, стаи, расписания, приручение и симуляция вдали от игрока; сохранять состояние групп и причин событий",
       "acceptance": "Существа продолжают жизнь после выгрузки/загрузки региона; поведение и популяции проверяются по seed",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Жизненные циклы, стаи, расписания, приручение и симуляция вдали от игрока; сохранять состояние групп и причин событий"
+      "status": "partial",
+      "libraries": [
+        "boss-encounters",
+        "herds-taming",
+        "survival-ecology"
+      ],
+      "tests": [
+        "library_genre_production_survival",
+        "library_production_survival_example",
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть популяции, поведение отдельных животных, мобы, стада с вожаком, связностью, общей паникой и сменой вожака, агрегированные стада вдали от игрока и приручение по доверию с приказами (herds-taming). Осталось: разведение прирученных, верховая езда, суточные расписания животных.",
+      "code": [
+        "libraries/include/aiverselib/mechanics/EcologyAnimals.h",
+        "libraries/include/aiverselib/mechanics/Ecology.h",
+        "engine/mechanics/MobBehaviour.h",
+        "libraries/include/aiverselib/mechanics/HerdsTaming.h"
+      ]
     },
     {
       "id": "W1",
@@ -164,10 +366,15 @@
       "acceptance": "Переход через регионы без паузы/потери объектов; рестарт сервера и возвращение восстанавливают изменения",
       "status": "partial",
       "libraries": [
-        "voxel-world",
-        "voxel-replication"
+        "voxel-replication",
+        "voxel-world"
       ],
-      "remaining": "Для воксельных миров есть региональные сохранения правок (парковка, файлы регионов) и стриминг изменяемого состояния клиентам. Осталось: авторитетная подгрузка коллизии и ИИ по регионам для всех жанров, выгрузка и сохранение динамических объектов, переходы между регионами без паузы, подключение к engine/net."
+      "tests": [
+        "library_voxel",
+        "voxel_headless"
+      ],
+      "gameReady": "Для воксельных миров есть региональные сохранения правок (парковка, файлы регионов) и стриминг изменяемого состояния клиентам. Осталось: авторитетная подгрузка коллизии и ИИ по регионам для всех жанров, выгрузка и сохранение динамических объектов, переходы между регионами без паузы, подключение к engine/net.",
+      "code": []
     },
     {
       "id": "W2",
@@ -176,15 +383,20 @@
       "acceptance": "Выкапывание тоннеля/строительство этажей обновляет свет, путь, воду при её наличии и save",
       "status": "partial",
       "libraries": [
-        "voxel-world",
+        "voxel-gen",
         "voxel-light",
         "voxel-mesh",
-        "voxel-gen",
-        "voxel-ticks",
         "voxel-nav",
-        "voxel-replication"
+        "voxel-replication",
+        "voxel-ticks",
+        "voxel-world"
       ],
-      "remaining": "Есть библиотеки (docs/voxel.md) и играбельный модуль voxel: шаблон templates/voxel_sandbox, клиент с рендером чанков, сервер, сетевая сессия с предсказанием, мобы, день и ночь, сохранения. Осталось: текстуры блоков, модели мобов, выпадающие предметы и крафт, сенсорное управление, многоуровневые помещения как отдельный режим, проверка клиента на macOS/Windows/телефонах."
+      "tests": [
+        "library_voxel",
+        "voxel_headless"
+      ],
+      "gameReady": "Есть библиотеки (docs/voxel.md) и играбельный модуль voxel: шаблон templates/voxel_sandbox, клиент с рендером чанков, сервер, сетевая сессия с предсказанием, мобы, день и ночь, сохранения. Осталось: текстуры блоков, модели мобов, выпадающие предметы и крафт, сенсорное управление, многоуровневые помещения как отдельный режим, проверка клиента на macOS/Windows/телефонах.",
+      "code": []
     },
     {
       "id": "W3",
@@ -194,123 +406,267 @@
       "status": "partial",
       "libraries": [
         "building-gen",
-        "building-style"
+        "building-style",
+        "voxel-gen"
       ],
-      "remaining": "Есть здания с этажами и лестницами (building-gen) и стили построек из файлов (building-style): цельные бронированные постройки (sci-fi: казармы, командный центр, завод, склад) и фасады для зданий с этажами. Осталось: подключение стилей к картам и рендеру в игре, kit-модели и текстуры в стилях, пещеры, интерьеры, островные маршруты и ограничения связности."
+      "remaining": "Есть процедурные здания и стили построек, а также воксельные пещеры и копаемые подземелья. Осталось: подключение стилей к игровым картам и рендеру, сложные интерьеры, островные маршруты и проверка связности в генераторах.",
+      "tests": [
+        "library_building_gen"
+      ],
+      "gameReady": "Есть процедурные здания с этажами, лестницами, дверями и окнами (BuildingGen.h), 3D-пещеры и руды в воксельном генераторе (VoxelGen.h), копаемые подземелья с комнатами (engine/game/Dungeon.cpp). Осталось: интерьеры сложнее коробок, островные маршруты, ограничения связности прямо в генераторах.",
+      "code": [
+        "engine/systems/BuildingGen.h",
+        "libraries/include/aiverselib/systems/voxelgen/VoxelGen.h",
+        "engine/game/Dungeon.cpp"
+      ]
     },
     {
       "id": "C1",
       "area": "Агентная колония",
       "scope": "Общие расписания/приоритеты задач, семьи/отношения/настроение, принадлежность предметов, объяснение решений и многоуровневое размещение по потребности",
       "acceptance": "Колония переживает смену суток и отсутствие ресурсов; нет вечных резервирований; мысли/причины видны игроку",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Общие расписания/приоритеты задач, семьи/отношения/настроение, принадлежность предметов, объяснение решений и многоуровневое размещение по потребности"
+      "status": "partial",
+      "libraries": [
+        "colonist-relations",
+        "decision-explanations",
+        "reservations",
+        "settlement-production",
+        "tasks",
+        "world-calendar"
+      ],
+      "tests": [
+        "library_genre_production_survival",
+        "library_production_survival_example",
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть потребности, расписания, настроение, работы и резервирование колонистов, семьи, воспоминания, мнения, дружба и соперничество, пары, владение предметами и социальное настроение (colonist-relations). Осталось: рождение и старение, многоуровневое размещение.",
+      "code": [
+        "libraries/include/aiverselib/mechanics/Colony.h",
+        "libraries/include/aiverselib/mechanics/ColonyTypes.h",
+        "libraries/include/aiverselib/mechanics/ColonistRelations.h"
+      ]
     },
     {
       "id": "C2",
       "area": "Производственные сети",
       "scope": "Транспортные графы с пропускной способностью, буферами и backpressure; для соответствующих игр — трубопроводы, давление, тепло и электрические сети",
       "acceptance": "Остановка выхода создаёт корректную пробку; разрыв сети и save/restore не дублируют ресурсы",
-      "status": "partial",
+      "status": "core",
       "libraries": [
-        "production-networks"
+        "production-networks",
+        "railways",
+        "settlement-production",
+        "utility-networks"
       ],
-      "remaining": "Есть атомарные рецепты, буферы и детерминированный транспорт с сохранением ресурсов. Остались давление, тепло, электричество, железные дороги и полноценная интеграция."
+      "tests": [
+        "strategy_libraries",
+        "library_genre_production_survival",
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть рецепты, буферы, транспорт, электричество и простые жидкости (ColonyPower.h), трубы с давлением, насосами, клапанами и баками, теплообмен комнат с дверями и термостатами (utility-networks), поезда с блочной сигнализацией и станциями (railways). Осталось: поиск маршрутов поездов по развилкам, цепные сигналы, смешивание газов и полноценная интеграция в игру.",
+      "code": [
+        "libraries/include/aiverselib/mechanics/ColonyPower.h",
+        "libraries/include/aiverselib/mechanics/UtilityNetworks.h",
+        "libraries/include/aiverselib/mechanics/Railways.h"
+      ]
     },
     {
       "id": "C3",
       "area": "Городская экономика и политика",
       "scope": "Участки/зонирование, домохозяйства, бюджеты, услуги, классы/фракции и голосования как общие политики; детали законов — данные",
       "acceptance": "Изменение налогов/услуги объяснимо меняет бюджет и население; сохранение не меняет расчёт",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Участки/зонирование, домохозяйства, бюджеты, услуги, классы/фракции и голосования как общие политики; детали законов — данные"
+      "status": "partial",
+      "libraries": [
+        "city-policy"
+      ],
+      "tests": [
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть зонирование с ростом участков по спросу, жители и рабочие места, налоги, покрытие службами, бюджет с займами, политики, одобрение фракций и выборы (city-policy); торговля и карьеры города (aiverse-city-economy). Осталось: отдельные домохозяйства и классы как агенты, стоимость земли из окружения, UI бюджета.",
+      "code": [
+        "libraries/include/aiverselib/mechanics/CityPolicy.h"
+      ]
     },
     {
       "id": "C4",
       "area": "Транспорт и масштаб города",
       "scope": "Полосы/перекрёстки, расписания, пересадки и товарные потоки; агрегирование населения и диагностика заторов",
       "acceptance": "Часы пик, перекрытая улица и новый маршрут корректно перераспределяют поток при измеримом бюджете",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Полосы/перекрёстки, расписания, пересадки и товарные потоки; агрегирование населения и диагностика заторов"
+      "status": "partial",
+      "libraries": [
+        "city-traffic",
+        "transit-schedules"
+      ],
+      "tests": [
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть полосы, перекрёстки, светофоры и пешеходы (city-traffic), линии с расписаниями, планирование маршрутов с пересадками, посадка по вместимости и диагностика перегруженных остановок (transit-schedules). Осталось: агрегирование населения города в спрос, связь транспорта расписаний с телами на дорогах, тарифы.",
+      "code": [
+        "engine/mechanics/Traffic.h",
+        "engine/game/Traffic.cpp",
+        "libraries/include/aiverselib/mechanics/TransitSchedules.h"
+      ]
     },
     {
       "id": "T1",
       "area": "Очередь действий и реакции",
       "scope": "Инициатива/скорость, очки действий, interrupts/reactions, фазовые события и одновременное разрешение по правилам игры",
       "acceptance": "Прерывание действия не расходует ресурс дважды; replay/save одинаково разрешает цепочку реакций",
-      "status": "partial",
+      "status": "core",
       "libraries": [
         "turn-scheduler"
       ],
-      "remaining": "Есть очередь инициативы/AP и вложенных реакций. Остались динамическая инициатива, правила доступности реакций, эффекты, тактическая сетка, интерфейс и AI."
+      "tests": [
+        "strategy_libraries",
+        "library_cards_turns"
+      ],
+      "gameReady": "Есть очередь инициативы/AP и вложенных реакций. Остались динамическая инициатива, правила доступности реакций, эффекты, тактическая сетка, интерфейс и AI.",
+      "code": []
     },
     {
       "id": "T2",
       "area": "Тактическая сетка и предпросмотр",
       "scope": "Гексы/многоэтажные клетки по потребности; AP-путь, линия огня и вероятности до подтверждения, реакционный огонь и согласованная отмена",
       "acceptance": "Предпросмотр совпадает с результатом команды; корректная навигация на ступенях/гексах",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Гексы/многоэтажные клетки по потребности; AP-путь, линия огня и вероятности до подтверждения, реакционный огонь и согласованная отмена"
+      "status": "partial",
+      "libraries": [
+        "tactics-grid",
+        "tactics-levels"
+      ],
+      "tests": [
+        "library_cards_turns",
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть квадратные и гексовые поля, укрытия, линия огня, превью выстрела, WeGo с overwatch (tactics-grid), многоэтажные поля с лестницами, видимость через открытые перекрытия, бонус высоты и план хода с отменой (tactics-levels). Осталось: UI тактики и разрушаемые перекрытия.",
+      "code": [
+        "libraries/include/aiverselib/mechanics/TacticsGrid.h",
+        "libraries/include/aiverselib/mechanics/TacticsWeGo.h",
+        "libraries/include/aiverselib/mechanics/TacticsLevels.h"
+      ]
     },
     {
       "id": "T3",
       "area": "Глубокая стратегическая кампания",
       "scope": "Договоры, торговля, города/районы, политические системы, генерация галактики и AI долгого планирования по выбранной 4X",
       "acceptance": "AI завершает полную кампанию, соблюдает договоры; битва и обратный перенос потерь воспроизводятся",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Договоры, торговля, города/районы, политические системы, генерация галактики и AI долгого планирования по выбранной 4X"
+      "status": "partial",
+      "libraries": [
+        "diplomacy"
+      ],
+      "tests": [
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть рынок, дань и союзы в ядре игры, стратегическая кампания, отношения из затухающих модификаторов, договоры с перемирием и штрафами за разрыв, оборонительные союзы, оценка сделок и советник стратегии ИИ (diplomacy). Осталось: города и районы, политические системы, генерация галактики, шпионаж.",
+      "code": [
+        "engine/game/MechEconomy.cpp",
+        "engine/game/Components.h",
+        "modules/strategic",
+        "libraries/include/aiverselib/mechanics/Diplomacy.h"
+      ]
     },
     {
       "id": "T4",
       "area": "Поиск действий ботом",
       "scope": "Перечисление легальных действий, оценка состояния, ограниченный поиск и объяснение хода для конкретных правил",
       "acceptance": "Бот не читает скрытые сведения, соблюдает бюджет времени и проходит эталонные тактические позиции",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Перечисление легальных действий, оценка состояния, ограниченный поиск и объяснение хода для конкретных правил"
+      "status": "partial",
+      "libraries": [
+        "cards-turns-bots",
+        "tactics-grid",
+        "turn-search"
+      ],
+      "tests": [
+        "library_cards_turns",
+        "library_cards_turns_example",
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть перечисление легальных действий в тактике и картах, бот карт с поиском и универсальный поиск по любым пошаговым правилам: alpha-beta с итеративным углублением и бюджетом узлов, MCTS с сидом и объяснением хода (turn-search). Осталось: детерминизация скрытой информации в общем виде, игры больше чем на двух игроков.",
+      "code": [
+        "libraries/include/aiverselib/bots/CardBot.h",
+        "libraries/include/aiverselib/bots/TacticsBot.h",
+        "libraries/include/aiverselib/mechanics/TacticsTurns.h",
+        "libraries/include/aiverselib/bots/TurnSearch.h"
+      ]
     },
     {
       "id": "M1",
       "area": "Командный матч героев: draft, магазин, роли AI",
       "scope": "Draft/ban, shop/recall/respawn, assists/deny/courier по правилам игры; командные роли AI; low-latency ввод и честная видимость",
       "acceptance": "Матч от выбора героев до результата, reconnect без раскрытия тумана; специфичные механики героя покрыты тестами",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Draft/ban, shop/recall/respawn, assists/deny/courier по правилам игры; командные роли AI; low-latency ввод и честная видимость"
+      "status": "partial",
+      "libraries": [
+        "abilities",
+        "battle-royale",
+        "hero-match",
+        "match-rules"
+      ],
+      "tests": [
+        "library_genre",
+        "library_royale",
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть цели матча, респаун волнами, способности, драфт с пиками и банами, магазин с рецептами, продажа, курьер, recall, ластхиты, денаи, ассисты, награды за серии и таймеры возрождения (hero-match). Осталось: командные роли ИИ, линии и крипы как данные шаблона, честная видимость.",
+      "code": [
+        "engine/mechanics/MatchObjectives.h",
+        "libraries/include/aiverselib/mechanics/HeroMatch.h"
+      ]
     },
     {
       "id": "P1",
       "area": "Точный 2D-платформинг",
       "scope": "Односторонние/движущиеся платформы, склоны, wall-slide/jump, dash, петли по потребности; авторские метрики движения и камера",
       "acceptance": "Набор edge-case уровней проходит при повторе ввода; нет проваливания/залипания на движущихся платформах",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Односторонние/движущиеся платформы, склоны, wall-slide/jump, dash, петли по потребности; авторские метрики движения и камера"
+      "status": "partial",
+      "libraries": [
+        "character-locomotion",
+        "physical-interactions"
+      ],
+      "tests": [
+        "library_genre",
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть движущиеся платформы, wall jump, wall-slide, dash, планирование и односторонние платформы с проваливанием вниз (LocomotionModes 0.3.0). Осталось: петли и гравитация по поверхности, авторские метрики движения, 2D-камера платформера.",
+      "code": [
+        "libraries/include/aiverselib/mechanics/Platforms.h",
+        "engine/mechanics/LocomotionModes.h",
+        "libraries/include/aiverselib/mechanics/Doors.h"
+      ]
     },
     {
       "id": "P2",
       "area": "3D-платформер и камера",
       "scope": "Third-person камера с препятствиями, опоры/хват/планирование и переключаемые контроллеры; особые гравитации по потребности",
       "acceptance": "Набор прыжков/краёв/поворотов камеры и контроллерные устройства; однозначный reset состояния",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Third-person камера с препятствиями, опоры/хват/планирование и переключаемые контроллеры; особые гравитации по потребности"
+      "status": "partial",
+      "libraries": [
+        "camera",
+        "character-locomotion",
+        "follow-camera"
+      ],
+      "tests": [
+        "library_genre",
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть камера третьего лица: орбита, плечо со сменой стороны, обход препятствий сферическим свипом владельца, возврат за спину, стек профилей с плавными переходами (follow-camera); хват за уступ и планирование (LocomotionModes). Осталось: особые гравитации и привязка камеры к хосту engine/actor.",
+      "code": [
+        "engine/gameplay/Camera.h",
+        "libraries/include/aiverselib/gameplay/ThirdPersonCamera.h"
+      ]
     },
     {
       "id": "P3",
       "area": "Связанный мир с воротами способностей",
       "scope": "Граф зон/дверей/способностей, карта посещений, checkpoints и валидатор достижимости; сами замки и секреты — данные",
       "acceptance": "Можно доказать достижимость финала и отсутствие softlock после каждого открытия способности",
-      "status": "partial",
+      "status": "core",
       "libraries": [
         "zone-graph"
       ],
-      "remaining": "Граф зон/способностей, карта посещений, checkpoints, доказательство достижимости и softlock с witness реализованы и проверены через native restore. Остались привязка физических дверей, загрузка регионов и UI карты."
+      "tests": [
+        "strategy_libraries"
+      ],
+      "gameReady": "Граф зон/способностей, карта посещений, checkpoints, доказательство достижимости и softlock с witness реализованы и проверены через native restore. Остались привязка физических дверей, загрузка регионов и UI карты.",
+      "code": []
     },
     {
       "id": "V1",
@@ -321,7 +677,12 @@
       "libraries": [
         "vehicle-controllers"
       ],
-      "remaining": "Есть детерминированная кинематическая модель (vehicle-controllers): колёсная аркадно-симуляционная (кривая момента, авто/ручная КПП, сцепление по колёсам, перенос веса, ручник, дрифт), гусеничная, на воздушной подушке; используется в FPS (fps.vehicleTypes, гонки по блоку race) и в вождении вида сверху. Нет подвески, модели мотоцикла, типов покрытия в хостах (grip задаёт владелец, FPS/RTS его не передают), столкновений машин между собой в FPS."
+      "tests": [
+        "library_vehicles_sports",
+        "library_vehicles_sports_example"
+      ],
+      "gameReady": "Есть детерминированная кинематическая модель (vehicle-controllers): колёсная аркадно-симуляционная (кривая момента, авто/ручная КПП, сцепление по колёсам, перенос веса, ручник, дрифт), гусеничная, на воздушной подушке; используется в FPS (fps.vehicleTypes, гонки по блоку race) и в вождении вида сверху. Нет подвески, модели мотоцикла, типов покрытия в хостах (grip задаёт владелец, FPS/RTS его не передают), столкновений машин между собой в FPS.",
+      "code": []
     },
     {
       "id": "V2",
@@ -330,20 +691,38 @@
       "acceptance": "Посадка/выход/потеря корпуса и несколько пассажиров корректны в сохранении и сети",
       "status": "partial",
       "libraries": [
-        "vehicle-controllers"
+        "nereid-buoyancy",
+        "vehicle-controllers",
+        "watercraft"
       ],
-      "remaining": "Есть аркадный самолёт, места водителя/пассажиров/стрелков с посадкой, выходом, выбросом и сохранением (FPS typed vehicles). Нет плавучести и лодок, аэродинамики сверх аркадной, сборных корпусов, проверки многоместности в сети."
+      "tests": [
+        "library_vehicles_sports",
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть аркадный самолёт и места в транспорте (vehicle-controllers), плавучесть NEREID, лодки и корабли из сборных блоков корпуса с плавучестью по точкам, сопротивлением, тягой, рулём, опрокидыванием и затоплением, самолёт с подъёмной силой, сопротивлением, сваливанием и рулями (watercraft). Осталось: проверка многоместности в сети, удары волн, связка с NEREID в хосте.",
+      "code": [
+        "engine/mechanics/VehicleSeats.h",
+        "engine/vehicles/Vehicles.h",
+        "engine/physis/PhysisForces.h",
+        "libraries/include/aiverselib/mechanics/Watercraft.h"
+      ]
     },
     {
       "id": "V3",
       "area": "Гоночные правила и AI",
       "scope": "Racing line, обгон, позиции по трассе, фальстарт/штрафы/питы/флаги и ghosts по формату гонки",
       "acceptance": "Заезд с ботами не допускает срезки/повторного checkpoint; корректен порядок финиша и восстановление replay",
-      "status": "partial",
+      "status": "core",
       "libraries": [
         "vehicle-controllers"
       ],
-      "remaining": "Есть гоночная сессия (RaceSession: сетка, отсчёт, упорядоченные чекпоинты без срезки, круги, позиции, не та сторона, возврат на трассу, финиш и победитель), гоночный бот (racing line, торможение, обгон, rubber band), общий блок race в rules и map для любого проекта (адаптеры FPS и вождения), общий HUD и камера за машиной, шаблон templates/racing; детерминизм и восстановление сохранения проверены тестами. Нет фальстарта, штрафов, пит-стопов, флагов, ghosts/повторов заездов, столкновений машин между собой."
+      "tests": [
+        "library_vehicles_sports",
+        "library_vehicles_sports_example",
+        "aiverse_tests"
+      ],
+      "gameReady": "Есть гоночная сессия (RaceSession: сетка, отсчёт, упорядоченные чекпоинты без срезки, круги, позиции, не та сторона, возврат на трассу, финиш и победитель), гоночный бот (racing line, торможение, обгон, rubber band), общий блок race в rules и map для любого проекта (адаптеры FPS и вождения), общий HUD и камера за машиной, шаблон templates/racing; детерминизм и восстановление сохранения проверены тестами. Нет фальстарта, штрафов, пит-стопов, флагов, ghosts/повторов заездов, столкновений машин между собой.",
+      "code": []
     },
     {
       "id": "K1",
@@ -352,9 +731,15 @@
       "acceptance": "Набор конфликтующих триггеров и вложенных эффектов всегда завершается и одинаково воспроизводится",
       "status": "partial",
       "libraries": [
+        "card-games",
         "card-runtime"
       ],
-      "remaining": "Есть зоны карт, экземпляры, приоритет, стек и пять эффектов. Остались произвольные триггеры/замещения, цели-существа, конструктор колод и полноценные правила выбранных игр."
+      "tests": [
+        "strategy_libraries",
+        "library_cards_turns"
+      ],
+      "gameReady": "Есть зоны карт, экземпляры, приоритет, стек и пять эффектов. Остались произвольные триггеры/замещения, цели-существа, конструктор колод и полноценные правила выбранных игр.",
+      "code": []
     },
     {
       "id": "K2",
@@ -363,9 +748,19 @@
       "acceptance": "Пакеты наблюдателя/соперника не содержат скрытых карт; reconnect не меняет RNG и порядок колоды",
       "status": "partial",
       "libraries": [
-        "card-runtime"
+        "card-games",
+        "card-runtime",
+        "secret-state"
       ],
-      "remaining": "Есть приватная проекция руки и публичных зон. Остались authoritative transport, защита секретного состояния, reconnect и сетевые проверки; RTS lockstep сам по себе секретности не обеспечивает."
+      "tests": [
+        "library_cards_turns",
+        "strategy_libraries",
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть приватная проекция руки (card-runtime), зоны с правилами видимости, непрозрачные дескрипторы на игрока с перешифровкой при тасовке, события раскрытия, снимки для переподключения и раунды commit/reveal (secret-state). Осталось: транспорт в engine/net и криптографический хеш при недоверии к серверу.",
+      "code": [
+        "libraries/include/aiverselib/mechanics/SecretState.h"
+      ]
     },
     {
       "id": "K3",
@@ -374,73 +769,128 @@
       "acceptance": "Полный seeded run с сохранением в событии/бою и воспроизводимыми наградами",
       "status": "partial",
       "libraries": [
-        "run-graph",
-        "card-runtime"
+        "card-games",
+        "card-runtime",
+        "run-graph"
       ],
-      "remaining": "Есть маршрут, сохранение выбора награды, завершение seeded run и базовый карточный runtime. Остались операции удаления/улучшения карт, relic hooks, намерения противника и игровой UI."
+      "tests": [
+        "strategy_libraries",
+        "library_cards_turns"
+      ],
+      "gameReady": "Есть маршрут, сохранение выбора награды, завершение seeded run и базовый карточный runtime. Остались операции удаления/улучшения карт, relic hooks, намерения противника и игровой UI.",
+      "code": []
     },
     {
       "id": "Q1",
       "area": "Правила клеточных головоломок",
       "scope": "Отдельные policies для падающих фигур, цепочек, Sokoban, препятствий и особых клеток; не выдавать match-3 за универсальный puzzle runtime",
       "acceptance": "Набор эталонных полей и повтор команд; невозможный ход не меняет состояние; каскад завершается",
-      "status": "partial",
+      "status": "core",
       "libraries": [
-        "grid-puzzles"
+        "grid-puzzles",
+        "puzzle-solvers"
       ],
-      "remaining": "Есть Sokoban, undo/redo и поиск кратчайшего решения. Остались остальные семейства головоломок, инструменты авторинга и игровые интерфейсы."
+      "tests": [
+        "library_genre_puzzles",
+        "library_genre_puzzles_example"
+      ],
+      "gameReady": "Есть Sokoban, match-3 с каскадами, особыми фишками и подсказками, заливка, пятнашки, undo/redo и поиск решения. Осталось: падающие фигуры, цепочки, инструменты авторинга и игровые интерфейсы.",
+      "code": [
+        "libraries/include/aiverselib/mechanics/PuzzleSokoban.h",
+        "libraries/include/aiverselib/mechanics/PuzzleMatch3.h",
+        "libraries/include/aiverselib/mechanics/PuzzleFlood.h",
+        "libraries/include/aiverselib/mechanics/PuzzleSliding.h"
+      ]
     },
     {
       "id": "Q2",
       "area": "Проверка решения и программируемые задачи",
       "scope": "Представление ограничений, undo/redo, solver/hints, проверка генератора; для Zachtronics — безопасный пошаговый исполнитель программ",
       "acceptance": "Известные решаемые/нерешаемые позиции определяются верно; подсказка использует легальные действия",
-      "status": "partial",
+      "status": "core",
       "libraries": [
         "grid-puzzles",
-        "puzzle-machine"
+        "puzzle-machine",
+        "puzzle-solvers"
       ],
-      "remaining": "Есть Sokoban BFS с явным исчерпанием бюджета и bounded integer VM с сохранением PC/памяти/IO. Остались другие модели ограничений, генераторы, UI подсказок и редактор программ."
+      "tests": [
+        "strategy_libraries",
+        "library_genre_puzzles"
+      ],
+      "gameReady": "Есть Sokoban BFS с бюджетом, bounded integer VM, общие головоломки на ограничениях (AllDifferent, Sum, Count, Runs) с проверкой единственности решения и сборщиками судоку и японских кроссвордов (PuzzleConstraints.h). Осталось: генераторы, UI подсказок, редактор программ.",
+      "code": [
+        "libraries/include/aiverselib/mechanics/PuzzleConstraints.h",
+        "libraries/include/aiverselib/mechanics/PuzzleSolvers.h"
+      ]
     },
     {
       "id": "Q3",
       "area": "Физические взаимодействия",
       "scope": "Хват/перенос/бросок, верёвки/механизмы и мотор персонажа связать с игрой; выбрать правила save/network; soft bodies/fluid — отдельно по потребности",
       "acceptance": "Физическая задача проходит после сохранения; ограничены энергия/туннелирование; сеть использует выбранную authority-модель",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Хват/перенос/бросок, верёвки/механизмы и мотор персонажа связать с игрой; выбрать правила save/network; soft bodies/fluid — отдельно по потребности"
+      "status": "partial",
+      "libraries": [
+        "physical-interactions",
+        "physics"
+      ],
+      "tests": [
+        "library_genre",
+        "physics_scene"
+      ],
+      "gameReady": "Есть подбор, перенос и бросок с превью дуги (Carry.h), толкание (Push.h), XPBD-верёвки с разрывом (Ropes.h, без столкновений с миром), двери с замками (Doors.h). Осталось: столкновения верёвок, связка с мотором персонажа в игре, правила save и сети для конкретной игры; soft bodies и жидкости отдельно.",
+      "code": [
+        "libraries/include/aiverselib/mechanics/Carry.h",
+        "libraries/include/aiverselib/mechanics/Ropes.h",
+        "libraries/include/aiverselib/mechanics/Push.h",
+        "libraries/include/aiverselib/mechanics/Doors.h"
+      ]
     },
     {
       "id": "Q4",
       "area": "Время, порталы и топология",
       "scope": "Нужная игре разновидность: локальный rewind, порталы с переносом скорости, рекурсивные/перспективные миры, изменение правил; это разные задачи",
       "acceptance": "Проверка инвариантов конкретной механики, включая коллизию, звук, сохранение и переходы между пространствами",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Нужная игре разновидность: локальный rewind, порталы с переносом скорости, рекурсивные/перспективные миры, изменение правил; это разные задачи"
+      "status": "partial",
+      "libraries": [
+        "portals-rewind"
+      ],
+      "tests": [
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть связанные порталы с переносом позиции, скорости и направления, преобразования для рекурсивного вида и игровая перемотка времени по истории снимков с запасом энергии (portals-rewind). Осталось: локальные пузыри времени для отдельных объектов, перспективные и неевклидовы миры, рендер рекурсии в View.",
+      "code": [
+        "libraries/include/aiverselib/mechanics/PortalsRewind.h"
+      ]
     },
     {
       "id": "Q5",
       "area": "Игровой тайминг под музыку",
       "scope": "Input timestamps, окна judgement, калибровка задержки и tempo map; beat-grid музыки не проверяет попадание игрока",
       "acceptance": "Одинаковая запись входов даёт одинаковую оценку на разных частотах кадров/аудиобуферах",
-      "status": "partial",
+      "status": "core",
       "libraries": [
         "rhythm-timing"
       ],
-      "remaining": "Tempo map, целочисленный timestamp judgement, calibration и tap/hold проверены на разбиении времени и native restore. Остались настоящий audio/input clock bridge, UI калибровки и испытания на устройствах."
+      "tests": [
+        "strategy_libraries"
+      ],
+      "gameReady": "Tempo map, целочисленный timestamp judgement, calibration и tap/hold проверены на разбиении времени и native restore. Остались настоящий audio/input clock bridge, UI калибровки и испытания на устройствах.",
+      "code": []
     },
     {
       "id": "I1",
       "area": "Длительный offline-прогресс",
       "scope": "Для нелинейных цепочек — событийное быстрое продвижение, смена лимитов/работников/состояний и миграции; связать с UI/профилем",
       "acceptance": "Результат суток offline совпадает с эталонным пошаговым прогоном в оговорённой точности; нет двойного claim",
-      "status": "partial",
+      "status": "core",
       "libraries": [
         "offline-production"
       ],
-      "remaining": "Есть точный offline-расчёт одновременных аффинных цепочек. Остались ограничения складов, потребление, события открытия, piecewise-переходы и интеграция доверенного времени."
+      "tests": [
+        "strategy_libraries"
+      ],
+      "gameReady": "Есть точный offline-расчёт одновременных аффинных цепочек. Остались ограничения складов, потребление, события открытия, piecewise-переходы и интеграция доверенного времени.",
+      "code": []
     },
     {
       "id": "I2",
@@ -451,7 +901,12 @@
       "libraries": [
         "big-numbers"
       ],
-      "remaining": "Есть точные неотрицательные целые до 4104 цифр. Остались дробные/логарифмические представления, форматирование UI и графы prestige."
+      "tests": [
+        "meta_liveops",
+        "strategy_libraries"
+      ],
+      "gameReady": "Есть точные неотрицательные целые до 4104 цифр. Остались дробные/логарифмические представления, форматирование UI и графы prestige.",
+      "code": []
     },
     {
       "id": "N1",
@@ -460,19 +915,33 @@
       "acceptance": "Матчи с потерями пакетов, reconnect и рестартом сервиса; проверка доступа и измеренная ёмкость на целевом хостинге",
       "status": "partial",
       "libraries": [
+        "network-session",
         "session-admission",
-        "network-session"
+        "snapshot-delta"
       ],
-      "remaining": "Локальный HTTP/SQLite стенд проверен на сессии, доступ, retry, restart и нагрузку; FPS admission/reconnect/server restore проверены по UDP с 10% потерь. Profile-to-match через приватную локальную таблицу проверен с настоящим dedicated server, reconnect и отзывом активного соединения. Остались защищённый WAN transport, распределённая оркестрация матчей и игровые правила видимости/anti-cheat."
+      "tests": [
+        "aiverse_net_tests",
+        "library_snapshot_delta"
+      ],
+      "gameReady": "Локальный HTTP/SQLite стенд проверен на сессии, доступ, retry, restart и нагрузку; FPS admission/reconnect/server restore проверены по UDP с 10% потерь. Profile-to-match через приватную локальную таблицу проверен с настоящим dedicated server, reconnect и отзывом активного соединения. Остались защищённый WAN transport, распределённая оркестрация матчей и игровые правила видимости/anti-cheat.",
+      "code": []
     },
     {
       "id": "U1",
       "area": "Специализированные редакторы и устройства ввода",
       "scope": "Специализированные редакторы полей/трасс/графов, touch/controller UX, accessibility и публикация пользовательских данных по потребности",
       "acceptance": "Полный цикл создать/проверить/сыграть/сохранить/упаковать на выбранной платформе без ручной правки C++",
-      "status": "planned",
-      "libraries": [],
-      "remaining": "Специализированные редакторы полей/трасс/графов, touch/controller UX, accessibility и публикация пользовательских данных по потребности"
+      "status": "partial",
+      "libraries": [
+        "touch-accessibility"
+      ],
+      "tests": [
+        "library_policy_mechanics"
+      ],
+      "gameReady": "Есть тач-управление (стики, кнопки, жесты) и настройки доступности: цветовое зрение, масштабы, субтитры, меньше движения, переназначение с конфликтами (touch-accessibility); масштаб окон QTE. Осталось: экранные виджеты, геймпад-UX меню, специализированные редакторы полей, трасс и графов.",
+      "code": [
+        "libraries/include/aiverselib/gameplay/TouchAccessibility.h"
+      ]
     }
   ],
   "verification": {
@@ -505,5 +974,17 @@
       "browser": "login page inspected; authenticated screens not inspected",
       "profile_to_match": "Dedicated FPS: issued profile token, slot 1, acknowledged inputs, reconnect and live revocation passed; UDP/WS bound to IPv4 loopback"
     }
+  },
+  "statusMeaning": {
+    "planned": "no reusable code for this area yet",
+    "partial": "reusable libraries exist and are tested, but the acceptance criterion is not fully checked",
+    "core": "the acceptance criterion is checked by the listed tests, which run in ./run-tests.sh; gameReady lists what a shipped game still needs (UI, content, integration)"
+  },
+  "audited": "2026-11-21 against libraries/catalog.json and the tests reached by ./run-tests.sh (tools/genre/check_registry.py); 2026-11-22 code audit and policy packages (codeAudit)",
+  "codeAudit": {
+    "date": "2026-11-22",
+    "commit": "02f9337af",
+    "note": "Statuses checked against code, not only skills. Areas still planned after the audit have no implementation found: R1-R5, C3, K2 (partial), Q4, U1. Paths of the code that exists are in each area under \"code\".",
+    "policyPackages": "batch1-4"
   }
 }

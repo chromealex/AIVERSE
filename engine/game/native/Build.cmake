@@ -1,3 +1,11 @@
+# Native modules are project code: their objects, the generated registry and every library they use belong to
+# AIVERSE::native_modules, never to an engine target (the engine does not depend on libraries; docs/architecture-layers.md).
+# Executables that host projects link it (aiverse_native_link_hosts at the end of configuration); a module registers
+# itself through aiverse::game::NativeRegistrar, so a binary without modules simply has none.
+if(NOT TARGET aiverse_native_modules)
+    add_library(aiverse_native_modules INTERFACE)
+    add_library(AIVERSE::native_modules ALIAS aiverse_native_modules)
+endif()
 # Native module authors call this from <project>/native/CMakeLists.txt.
 function(aiverse_native_module)
     cmake_parse_arguments(M "" "ID;VERSION;ENTRY" "SOURCES" ${ARGN})
@@ -17,14 +25,14 @@ function(aiverse_native_module)
     target_include_directories(aiverse_native_${M_ID} PRIVATE "${AIVERSE_NATIVE_ENGINE_ROOT}")
     target_compile_features(aiverse_native_${M_ID} PRIVATE cxx_std_20)
     set_target_properties(aiverse_native_${M_ID} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_sources(aiverse_game PRIVATE $<TARGET_OBJECTS:aiverse_native_${M_ID}>)
+    target_sources(aiverse_native_modules INTERFACE $<TARGET_OBJECTS:aiverse_native_${M_ID}>)
     set_property(GLOBAL APPEND_STRING PROPERTY AIVERSE_NATIVE_DECLS
         "std::unique_ptr<aiverse::game::NativeModule> ${M_ENTRY}();\n")
     set_property(GLOBAL APPEND_STRING PROPERTY AIVERSE_NATIVE_DEFS
-        "    result.push_back({\"${M_ID}\", ${M_VERSION}u, &::${M_ENTRY}});\n")
+        "    {\"${M_ID}\", ${M_VERSION}u, &::${M_ENTRY}},\n")
 endfunction()
-# Links engine libraries into a native module: its objects get their usage requirements (include dirs, defines) and
-# aiverse_game, which carries the module's objects into every executable, links them for the final link.
+# Links libraries into a native module: its objects get their usage requirements (include dirs, defines) and
+# AIVERSE::native_modules, which carries the module's objects into every host executable, links them for the final link.
 #   aiverse_native_link(ID <id> LIBRARIES aiverse_net aiverse_plugins ...)
 function(aiverse_native_link)
     cmake_parse_arguments(L "" "ID" "LIBRARIES" ${ARGN})
@@ -32,7 +40,7 @@ function(aiverse_native_link)
         message(FATAL_ERROR "aiverse_native_link: ID of a module declared with aiverse_native_module")
     endif()
     target_link_libraries(aiverse_native_${L_ID} PRIVATE ${L_LIBRARIES})
-    target_link_libraries(aiverse_game PUBLIC ${L_LIBRARIES})
+    target_link_libraries(aiverse_native_modules INTERFACE ${L_LIBRARIES})
 endfunction()
 # protobuf messages + gRPC client stubs of the module's own .proto files (docs/grpc.md), linked with aiverse_grpc:
 #   aiverse_native_use_grpc(ID <id> IMPORT_ROOT <dir> PROTOS a.proto b.proto [NO_STUBS])
@@ -76,11 +84,38 @@ get_property(_decls GLOBAL PROPERTY AIVERSE_NATIVE_DECLS)
 get_property(_defs GLOBAL PROPERTY AIVERSE_NATIVE_DEFS)
 file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/gen/NativeRegistry.cpp" CONTENT
 "#include \"engine/game/Native.h\"\n${_decls}
-namespace aiverse::game {
-std::vector<NativeDefinition> compiledNativeModules() {
-    std::vector<NativeDefinition> result;
-${_defs}    return result;
+namespace {
+// Explicit references prevent dead stripping of the module objects.
+const aiverse::game::NativeRegistrar aiverseNativeRegistrar({
+${_defs}});
 }
-}")
-target_sources(aiverse_game PRIVATE "${AIVERSE_NATIVE_ENGINE_ROOT}/engine/game/Native.cpp" "${CMAKE_CURRENT_BINARY_DIR}/gen/NativeRegistry.cpp")
+")
+target_sources(aiverse_game PRIVATE "${AIVERSE_NATIVE_ENGINE_ROOT}/engine/game/Native.cpp")
+target_sources(aiverse_native_modules INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/gen/NativeRegistry.cpp")
+target_include_directories(aiverse_native_modules INTERFACE "${AIVERSE_NATIVE_ENGINE_ROOT}")
+# Every executable of this build that links a game host gets the project's modules (deferred to the end of the
+# top-level CMakeLists, so executables declared later are included too).
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL aiverse_native_link_hosts "${CMAKE_SOURCE_DIR}")
 endmacro()
+
+set(AIVERSE_NATIVE_HOSTS aiverse_game aiverse_runtime aiverse_client_runtime aiverse_authority aiverse_editor_core aiverse_hosted_client
+    CACHE INTERNAL "Targets whose direct users are project hosts (they receive AIVERSE::native_modules)")
+function(aiverse_native_link_hosts dir)
+    get_property(targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(t IN LISTS targets)
+        get_target_property(type ${t} TYPE)
+        if(type STREQUAL "EXECUTABLE")
+            get_target_property(links ${t} LINK_LIBRARIES)
+            foreach(h IN LISTS AIVERSE_NATIVE_HOSTS)
+                if(links AND h IN_LIST links)
+                    target_link_libraries(${t} PRIVATE aiverse_native_modules)
+                    break()
+                endif()
+            endforeach()
+        endif()
+    endforeach()
+    get_property(subdirs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+    foreach(d IN LISTS subdirs)
+        aiverse_native_link_hosts("${d}")
+    endforeach()
+endfunction()

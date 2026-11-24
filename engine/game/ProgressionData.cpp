@@ -1,8 +1,8 @@
 // rules "progression": the match-progression library format plus engine keys (ProgressionData.h).
 #include "ProgressionData.h"
 #include "EffectsData.h"
-#include "libraries/include/aiverselib/mechanics/PerksData.h"
-#include "libraries/include/aiverselib/mechanics/PerksPersistence.h"
+#include "engine/mechanics/PerksData.h"
+#include "engine/mechanics/PerksPersistence.h"
 #include <algorithm>
 #include <bit>
 #include <stdexcept>

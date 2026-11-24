@@ -19,7 +19,7 @@ Read `AGENTS.md`, `docs/ecs-all-features-migration-plan.md` and
 - `TimedExpiryComponent` requests deterministic despawn at the specified tick.
 
 ## Registration / order
-Include `<aiverselib/mechanics/EcsTimedMechanics.h>` and link
+Include `"engine/mechanics/EcsTimedMechanics.h"` and link
 `AIVERSE::lib_ecs_timed_mechanics` in a native project.
 
 ```cpp

@@ -10,6 +10,8 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'tools/libraries'))
 from gameplay import read_json
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools/pkg'))
+from fetch_templates import default_dir as templates_dir  # noqa: E402
 WORK=ROOT/'build/.temp/strategy-native'
 WORK.mkdir(parents=True,exist_ok=True)
 def run(args):
@@ -20,7 +22,7 @@ def run(args):
     return result.stdout
 def project(path):
     if path.exists():shutil.rmtree(path)
-    shutil.copytree(ROOT/'templates/skirmish',path)
+    shutil.copytree(templates_dir()/'skirmish',path)
     shutil.copytree(ROOT/'examples/native/strategy',path/'native')
     rules=read_json(path/'rules.json')
     rules['nativeModules']=[{'id':'strategy_demo','command':32768,'config':{'rate':1}}]

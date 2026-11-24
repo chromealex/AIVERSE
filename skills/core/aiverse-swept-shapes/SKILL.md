@@ -5,7 +5,7 @@ description: Use the swept-shapes Fixed-point helpers in AIVERSE simulation code
 
 # swept-shapes
 
-Header: `libraries/include/aiverselib/SweptShapes.h` (`AIVERSE::lib_swept_shapes`). Tests: `tests/libraries/city_tests.cpp`.
+Header: `engine/core/SweptShapes.h` (`AIVERSE::lib_swept_shapes`). Tests: `tests/libraries/city_tests.cpp`.
 
 1. Crossing danger: `sweptBoxCircle(at, velocity, forward, halfLength, halfWidth, radius, horizon)` with the circle's position and velocity relative to the box (car) and the box's unit forward axis; `hit` plus the entry / exit window. Put the time the walker needs to clear the lane into `horizon`.
 2. Walkers inside rooms / yards: build `AxisBox`es (`axisBoxMilli` for millimetre data), grow them by the walker radius with `inflate`, then `slideMove(x, z, tx, tz, boxes, ox, oz)` clamps the move axis by axis (x first) so walkers slide along walls.

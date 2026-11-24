@@ -129,7 +129,7 @@ masks with continuous bilinear interpolation; grass checks the same sand sample
 before placing each tuft/blade root. Older ground snapshots keep their legacy
 water-plane filter. No automatic change to existing exported maps or game saves.
 
-`<aiverselib/water/NereidFootprintDistance.h>` exposes optional signed horizontal
+`"engine/world/nereid/NereidFootprintDistance.h"` exposes optional signed horizontal
 clearance for native authoring. Negative inside, positive outside; invalid or
 disabled water returns no value. Polygon/box/disc use boundary distance; tapered
 rivers use the existing centreline projection/half-width margin, not a certified

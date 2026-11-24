@@ -566,7 +566,7 @@ static Json mechLoadMap(const std::string& dir, const std::string& file) {
 TEST(mech_save_states_all_games) {
     namespace fs = std::filesystem;
     std::vector<std::string> games;
-    for (auto& e : fs::directory_iterator(std::string(AIVERSE_SOURCE_DIR) + "/templates"))
+    for (auto& e : fs::directory_iterator(std::string(AIVERSE_TEMPLATES_DIR)))
         if (e.is_directory() && fs::exists(e.path() / "rules.json") && e.path().filename().string()[0] != '_') games.push_back(e.path().string());
     std::sort(games.begin(), games.end());
     CHECK(games.size() >= 20);

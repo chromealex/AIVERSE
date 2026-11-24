@@ -1,6 +1,7 @@
 // Headless runner: bot-vs-bot matches, replay recording and verification for any game project.
 //   aiverse_headless --project templates/skirmish [--map maps/valley.json] --seed 7 --record m.rpl
 //   aiverse_headless --replay m.rpl
+#include "engine/platform/TemplatesDir.h"
 #include <algorithm>
 #include "engine/data/JsonCompose.h"
 #include <chrono>
@@ -72,7 +73,7 @@ static void attachScriptLog(Simulation& sim, bool quiet) {
 }
 
 struct Args {
-    std::string project = "templates/skirmish", map, replay, record;
+    std::string project = aiverse::platform::templatesDir(".") + "/skirmish", map, replay, record;
     std::string generate, symmetry = "auto", genOut, genParams;   // --generate PRESET: a generated map (template = the map)
     int players = 0;
     uint64_t seed = 1;

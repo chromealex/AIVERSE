@@ -1,7 +1,7 @@
 // Headless library consumer. This is also a recipe for a project-owned authoritative bot host.
 #include <aiverselib/bots/Rts.h>
 #include "engine/game/GameCore.h"
-#include <aiverselib/bots/Persistence.h>
+#include "engine/bots/Persistence.h"
 #include <aiverselib/bots/Waypoints.h>
 #include <aiverselib/bots/NavMeshData.h>
 #include "engine/game/Script.h"

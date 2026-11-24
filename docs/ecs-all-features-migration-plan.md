@@ -48,15 +48,15 @@ Work from command dispatch, queues and phase ordering toward small neutral syste
 | ID | Existing code | Disposition | Action |
 |---|---|---|---|
 | `abilities` | `libraries/include/aiverselib/gameplay/Abilities.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `gear-tiers` | `libraries/include/aiverselib/systems/Gear.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `gear-tiers` | `engine/systems/Gear.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `attribute-modifiers` | `libraries/include/aiverselib/systems/EngineMechanics.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `status-effects` | `libraries/include/aiverselib/systems/EngineMechanics.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `melee-combat` | `libraries/include/aiverselib/mechanics/Melee.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `combat-actions` | `libraries/include/aiverselib/mechanics/CombatActions.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `weapon-policies` | `libraries/include/aiverselib/mechanics/Weapons.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `ecs-projectile-systems` | `libraries/include/aiverselib/mechanics/EcsProjectileSystems.h` | ECS | Already generic; integrate legacy hosts and verify |
-| `ecs-impact-damage` | `libraries/include/aiverselib/mechanics/EcsDamageSystems.h` | ECS | Already generic; integrate legacy hosts and verify |
-| `ecs-weapon-launch` | `libraries/include/aiverselib/mechanics/EcsWeaponLaunchSystems.h` | ECS | Already generic; integrate legacy hosts and verify |
+| `melee-combat` | `engine/mechanics/Melee.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `combat-actions` | `engine/mechanics/CombatActions.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `weapon-policies` | `engine/mechanics/Weapons.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `ecs-projectile-systems` | `engine/mechanics/EcsProjectileSystems.h` | ECS | Already generic; integrate legacy hosts and verify |
+| `ecs-impact-damage` | `engine/mechanics/EcsDamageSystems.h` | ECS | Already generic; integrate legacy hosts and verify |
+| `ecs-weapon-launch` | `engine/mechanics/EcsWeaponLaunchSystems.h` | ECS | Already generic; integrate legacy hosts and verify |
 
 ### P2 — 11 packages
 | ID | Existing code | Disposition | Action |
@@ -64,13 +64,13 @@ Work from command dispatch, queues and phase ordering toward small neutral syste
 | `spatial` | `engine/game/GameCore.h` | POLICY + ECS adapter | Inspect existing implementation; do not duplicate |
 | `grid` | `libraries/include/aiverselib/Grid.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
 | `navigation` | `docs/pathfinding.md` | POLICY + ECS adapter | Inspect existing implementation; do not duplicate |
-| `navmesh` | `libraries/include/aiverselib/bots/NavMesh.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `character-locomotion` | `libraries/include/aiverselib/mechanics/Locomotion.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `navmesh` | `engine/bots/NavMesh.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `character-locomotion` | `engine/mechanics/Locomotion.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `zone-graph` | `libraries/include/aiverselib/strategy/ZoneGraph.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `physical-interactions` | `libraries/include/aiverselib/mechanics/PhysicalInteractions.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `vehicle-controllers` | `libraries/include/aiverselib/mechanics/Vehicles.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `swept-shapes` | `libraries/include/aiverselib/SweptShapes.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
-| `city-traffic` | `libraries/include/aiverselib/mechanics/Traffic.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `vehicle-controllers` | `engine/mechanics/Vehicles.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `swept-shapes` | `engine/core/SweptShapes.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
+| `city-traffic` | `engine/mechanics/Traffic.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `voxel-nav` | `libraries/include/aiverselib/bots/voxelnav/VoxelNav.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 
 ### P3 — 15 packages
@@ -78,16 +78,16 @@ Work from command dispatch, queues and phase ordering toward small neutral syste
 |---|---|---|---|
 | `tasks` | `libraries/include/aiverselib/Tasks.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
 | `logistics` | `libraries/include/aiverselib/Logistics.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
-| `progression` | `libraries/include/aiverselib/Progression.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
+| `progression` | `engine/core/progression/Progression.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
 | `objectives` | `libraries/include/aiverselib/Objectives.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
 | `construction` | `libraries/include/aiverselib/gameplay/Construction.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `inventory` | `libraries/include/aiverselib/gameplay/Inventory.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `inventory` | `engine/gameplay/Inventory.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `squads` | `libraries/include/aiverselib/gameplay/Squads.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `tutorial` | `libraries/include/aiverselib/gameplay/Tutorial.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `object-interactions` | `libraries/include/aiverselib/systems/Interactions.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `reservations` | `libraries/include/aiverselib/systems/Reservations.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `action-sequences` | `libraries/include/aiverselib/systems/Sequence.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `loot-tables` | `libraries/include/aiverselib/systems/Loot.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `loot-tables` | `engine/core/progression/Loot.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `offline-production` | `libraries/include/aiverselib/strategy/Offline.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `production-networks` | `libraries/include/aiverselib/strategy/Production.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `settlement-production` | `libraries/include/aiverselib/mechanics/Colony.h` | ECS | Extract state+systems; preserve and reuse existing policy |
@@ -96,8 +96,8 @@ Work from command dispatch, queues and phase ordering toward small neutral syste
 | ID | Existing code | Disposition | Action |
 |---|---|---|---|
 | `save-migrations` | `libraries/include/aiverselib/gameplay/Saves.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `tag-conditions` | `libraries/include/aiverselib/systems/Tags.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `progression-curves` | `libraries/include/aiverselib/systems/Curves.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `tag-conditions` | `engine/systems/Tags.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `progression-curves` | `engine/systems/Curves.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `ai-perception` | `libraries/include/aiverselib/systems/Perception.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `bots-commander` | `libraries/include/aiverselib/bots/Rts.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `bots-combatant` | `libraries/include/aiverselib/bots/Fps.h` | ECS | Extract state+systems; preserve and reuse existing policy |
@@ -120,8 +120,8 @@ Work from command dispatch, queues and phase ordering toward small neutral syste
 | `puzzle-machine` | `libraries/include/aiverselib/strategy/PuzzleMachine.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `sports-rules` | `libraries/include/aiverselib/mechanics/Sports.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `survival-ecology` | `libraries/include/aiverselib/mechanics/SurvivalEcology.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `boss-encounters` | `libraries/include/aiverselib/mechanics/Telegraphs.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `match-progression` | `libraries/include/aiverselib/mechanics/Perks.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `boss-encounters` | `engine/mechanics/Telegraphs.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `match-progression` | `engine/mechanics/Perks.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `world-calendar` | `libraries/include/aiverselib/systems/Calendar.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `voxel-world` | `libraries/include/aiverselib/systems/voxel/VoxelWorld.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `voxel-light` | `libraries/include/aiverselib/systems/voxellight/VoxelLight.h` | ECS | Extract state+systems; preserve and reuse existing policy |
@@ -134,21 +134,21 @@ Work from command dispatch, queues and phase ordering toward small neutral syste
 | `geometry` | `engine/render/Geometry.h` | ADAPTER | Inspect existing implementation; do not duplicate |
 | `math` | `engine/core/FixedMath.h` | POLICY + ECS adapter | Inspect existing implementation; do not duplicate |
 | `collections` | `libraries/include/aiverselib/Collections.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
-| `graphs` | `libraries/include/aiverselib/Graphs.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
+| `graphs` | `engine/core/Graphs.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
 | `behavior` | `libraries/include/aiverselib/Behavior.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
 | `rules` | `libraries/include/aiverselib/Rules.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
 | `generation` | `engine/game/gen/MapGen.h` | POLICY + ECS adapter | Inspect existing implementation; do not duplicate |
 | `presentation` | `libraries/include/aiverselib/Presentation.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
 | `ui-patterns` | `engine/ui/templates/README.md` | ADAPTER | Inspect existing implementation; do not duplicate |
 | `verification` | `tests/check_headless_restore.py` | KEEP | Inspect existing implementation; do not duplicate |
-| `input` | `libraries/include/aiverselib/gameplay/Input.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
-| `camera` | `libraries/include/aiverselib/gameplay/Camera.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
+| `input` | `engine/gameplay/Input.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
+| `camera` | `engine/gameplay/Camera.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
 | `feedback` | `libraries/include/aiverselib/gameplay/Feedback.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
-| `diagnostics` | `libraries/include/aiverselib/gameplay/Diagnostics.h` | KEEP | Extract state+systems; preserve and reuse existing policy |
+| `diagnostics` | `engine/gameplay/Diagnostics.h` | KEEP | Extract state+systems; preserve and reuse existing policy |
 | `content-pipeline` | `tools/libraries/gameplay.py` | KEEP | Extract state+systems; preserve and reuse existing policy |
 | `game-verification` | `tools/libraries/gameplay.py` | KEEP | Extract state+systems; preserve and reuse existing policy |
 | `project-recipes` | `tools/libraries/gameplay.py` | KEEP | Extract state+systems; preserve and reuse existing policy |
-| `configuration` | `libraries/include/aiverselib/gameplay/Configuration.h` | KEEP | Extract state+systems; preserve and reuse existing policy |
+| `configuration` | `engine/gameplay/Configuration.h` | KEEP | Extract state+systems; preserve and reuse existing policy |
 | `ui-binding` | `libraries/include/aiverselib/app/Binding.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
 | `screens` | `libraries/include/aiverselib/app/Screens.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
 | `themes` | `libraries/include/aiverselib/app/Theme.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
@@ -175,7 +175,7 @@ Work from command dispatch, queues and phase ordering toward small neutral syste
 | `bot-matches` | `examples/libraries/bots/main.cpp` | KEEP | Extract state+systems; preserve and reuse existing policy |
 | `big-numbers` | `libraries/include/aiverselib/strategy/BigNumber.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `session-admission` | `libraries/include/aiverselib/net/Admission.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
-| `snapshot-delta` | `libraries/include/aiverselib/net/SnapshotDelta.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
+| `snapshot-delta` | `engine/net/SnapshotDelta.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
 | `physics` | `engine/physics/World.h` | ADAPTER | Inspect existing implementation; do not duplicate |
 | `weather-timeline` | `libraries/include/aiverselib/systems/WeatherTimeline.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
 | `vehicle-fx` | `libraries/include/aiverselib/mechanics/vehicle-fx/VehicleLights.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |

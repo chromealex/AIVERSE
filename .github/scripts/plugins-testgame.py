@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""Makes a copy of templates/skirmish with every native plugin enabled (test ad ids), for CI builds that
+"""Makes a copy of the skirmish template package with every native plugin enabled (test ad ids), for CI builds that
 compile the plugins against the real SDKs. Usage: plugins-testgame.py <out dir>"""
 import json, re, shutil, sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools/pkg"))
+from fetch_templates import default_dir as templates_dir  # noqa: E402
+
 out = Path(sys.argv[1])
 if out.exists():
     shutil.rmtree(out)
-shutil.copytree("templates/skirmish", out)
+shutil.copytree(templates_dir() / "skirmish", out)
 text = (out / "game.json").read_text(encoding="utf-8")
 game = json.loads(re.sub(r"^\s*//.*$", "", text, flags=re.M))
 game["plugins"] = {

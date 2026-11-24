@@ -1,5 +1,5 @@
 // The public MotionWeave header/CMake target must work for native hosts.
-#include <aiverselib/motionweave/MotionWeave.h>
+#include "engine/animation/MotionWeave.h"
 #include "../AlwaysCheck.h"
 #include <cmath>
 #include <string>

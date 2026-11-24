@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // physical-interactions: breakable objects. Health with per damage type scale (milli, 0 = immune) and
 // threshold (hits whose scaled damage is below it are ignored), ordered damage stages reached when health
 // drops to a stage's health, and debris spawn requests as data (kind, count, position, seed). Damage events

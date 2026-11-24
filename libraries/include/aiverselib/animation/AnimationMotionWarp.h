@@ -1,7 +1,7 @@
 // Presentation-space motion warping over a single non-looping clip.
 // Calculates requested root deltas; NEVER moves authoritative ECS entities.
 #pragma once
-#include "AnimationPlayback.h"
+#include "engine/animation/AnimationPlayback.h"
 #include <algorithm>
 #include <cmath>
 #include <optional>

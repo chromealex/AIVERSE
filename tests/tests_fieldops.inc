@@ -241,7 +241,7 @@ TEST(fieldops_bad_data_errors) {
 // The sample game uses the mechanics and its bots play them: radar towers, geothermal plants on the vents, air
 // plants and aircraft; a radar contact is tracked beyond sight; the match ends with a winner.
 TEST(fieldops_metaltide_bots_use_the_mechanics) {
-    const std::string dir = std::string(AIVERSE_SOURCE_DIR) + "/templates/metaltide/";
+    const std::string dir = std::string(AIVERSE_TEMPLATES_DIR) + "/metaltide/";
     Json rulesJson = readComposedJson(dir + "rules.json", fileReader());
     Json map = readComposedJson(dir + "maps/twin_craters.json", fileReader());
     SimConfig cfg; cfg.seed = 2;

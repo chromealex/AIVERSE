@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // JSON definitions for sports-rules (example: examples/libraries/mechanics/vehicles-sports/sports.json).
 // Top level: "field" (milli-metres, boundary lines|walls|faceoff, faceoffSpotsMilli) and "formations" (id, slots
 // with role keeper|defender|midfielder|forward, baseMilli/attackMilli/defendMilli as [x,y] milli fractions of the

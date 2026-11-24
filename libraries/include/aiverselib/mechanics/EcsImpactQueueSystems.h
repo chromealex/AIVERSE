@@ -3,8 +3,8 @@
 // armor, shields, faction, status and collision/spatial-query rules.
 // No RTS/FPS module dependency; no secondary health or projectile owner.
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
-#include "EcsOrderedImpactSystems.h"
+#include "engine/mechanics/Namespace.h"
+#include "engine/mechanics/EcsOrderedImpactSystems.h"
 #include <cstddef>
 #include <cstdint>
 #include <limits>

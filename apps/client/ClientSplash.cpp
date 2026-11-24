@@ -1,95 +1,48 @@
 #include "ClientSplash.h"
 
-#include <algorithm>
-#include <cstdio>
-
 namespace aiverse::client {
 
 void ClientBoot::init(gfx::Device& dev, GameClient& client, Mode mode, std::function<void()> afterLoad) {
-    dev_ = &dev;
     client_ = &client;
-    mode_ = mode;
-    afterLoad_ = std::move(afterLoad);
-    if (mode_ == Mode::Off) {
-        client.init(dev);
-        if (afterLoad_) afterLoad_();
-        phase_ = Phase::Done;
-        return;
-    }
     Json block;
     std::string text;
     try {
         if (platform::readContentFile("game.json", text)) block = Json::parse(text)["splash"];
     } catch (const std::exception&) {}   // the client reports a broken game.json in its menu
-    if (block.isNull()) block = splash::defaultBlock();
-    else if (block.type() == Json::Type::Bool) block = Json();   // "splash": false: background colour only
-    splash_.init(dev, block, [](const std::string& p, std::string& out) { return platform::readContentFile(p, out); });
-    if (!splash_.error().empty()) std::fprintf(stderr, "splash: %s\n", splash_.error().c_str());
-    contentWait_ = splash_.spec().waitForContent;
-    if (contentWait_) platform::requestAllContent();
+    const bool contentWait = block.isObject() && block.getBool("waitForContent", false);
+    if (contentWait) platform::requestAllContent();
+    splash::Boot::Hooks h;
+    h.steps = GameClient::kInitSteps;
+    h.step = [&client](gfx::Device& d, int i) { client.initStep(d, i); };
+    h.weight = [](int i) { return GameClient::initWeight(i); };
+    h.frame = [&client](gfx::Device& d, double dt) { client.frame(d, dt); };
+    h.overlay = [&client](gfx::Device& d, double dt, float shown, int step) {
+        if (step > 1) client.drawLoadingStatus(d, dt, shown, client.initLabel(step));
+    };
+    if (contentWait) {   // split builds: downloads and local loading share the bar
+        h.moreLoading = [] { platform::ContentProgress c = platform::contentProgress(); return c.busy || c.ready + c.failed < c.chunks; };
+        h.moreProgress = [] { platform::ContentProgress c = platform::contentProgress(); return c.bytesTotal ? float(double(c.bytesReady) / double(c.bytesTotal)) : 1.0f; };
+    }
+    h.afterLoad = std::move(afterLoad);
+    h.handOver = [&client] { return client.mapLoading(); };
+    h.pixelScale = [] { return platform::dpiScale(); };
+    const auto m = mode == Mode::Off ? splash::Boot::Mode::Off : mode == Mode::LoadingOnly ? splash::Boot::Mode::LoadingOnly : splash::Boot::Mode::Full;
+    boot_.init(dev, block, m, [](const std::string& p, std::string& out) { return platform::readContentFile(p, out); }, std::move(h));
 }
 
-float ClientBoot::progress() const {
-    float p = 0;
-    for (int i = 0; i < step_ && i < GameClient::kInitSteps; ++i) p += GameClient::initWeight(i);
-    if (contentWait_) {
-        platform::ContentProgress c = platform::contentProgress();
-        float dl = c.bytesTotal ? float(double(c.bytesReady) / double(c.bytesTotal)) : 1.0f;
-        p = p * 0.5f + dl * 0.5f;   // downloads and local loading share the bar
-    }
-    return p;
-}
-
-void ClientBoot::frame(gfx::Device& dev, double dt) {
-    const float px = platform::dpiScale();
-    if (phase_ == Phase::Done) { client_->frame(dev, dt); return; }
-    if (phase_ == Phase::Fading) {
-        client_->frame(dev, dt);
-        const float len = splash_.spec().fadeOut;
-        fade_ = len > 0 ? fade_ - float(dt) / len : 0.0f;
-        splash_.update(dt, false);
-        if (fade_ <= 0) { phase_ = Phase::Done; splash_.shutdown(); return; }
-        splash_.draw(dev, fade_, false, px);
-        return;
-    }
-    // Loading: the first frame only shows the splash; then one init step per frame.
-    const bool stepsDone = step_ >= GameClient::kInitSteps;
-    bool contentDone = true;
-    if (contentWait_) {
-        platform::ContentProgress c = platform::contentProgress();
-        contentDone = !c.busy && c.ready + c.failed >= c.chunks;
-    }
-    const bool loaded = stepsDone && contentDone;
-    splash_.update(dt, !loaded);
-    if (step_ >= 0 && !stepsDone) client_->initStep(dev, step_);
-    if (!stepsDone) ++step_;
-    splash_.setProgress(progress());
-    const bool leave = mode_ == Mode::LoadingOnly ? loaded && splash_.imagesLoaded() : splash_.readyToLeave(loaded);
-    if (leave) {
-        for (auto& w : splash_.warnings()) std::fprintf(stderr, "%s\n", w.c_str());
-        if (afterLoad_) afterLoad_();
-        if (client_->mapLoading()) { phase_ = Phase::Done; splash_.shutdown(); client_->frame(dev, 0); return; }
-        phase_ = Phase::Fading;
-        fade_ = 1;
-        client_->frame(dev, dt);
-        splash_.draw(dev, fade_, false, px);
-        return;
-    }
-    splash_.draw(dev, 1, true, px);
-    if (step_ > 1) client_->drawLoadingStatus(dev, dt, splash_.shownProgress(), client_->initLabel(step_));
-}
+void ClientBoot::frame(gfx::Device& dev, double dt) { boot_.frame(dev, dt); }
 
 void ClientBoot::event(const platform::Event& e) {
-    if (phase_ != Phase::Loading) { client_->event(e); return; }
+    if (!boot_.booting()) { client_->event(e); return; }
     if (e.type == platform::EventType::MouseDown || e.type == platform::EventType::TouchBegin ||
         (e.type == platform::EventType::KeyDown && !e.repeat))
-        splash_.skip();
+        boot_.skip();
 }
 
 void ClientBoot::shutdown() {
-    splash_.shutdown();
+    boot_.shutdown();
     // a window closed in the middle of loading: the half-initialised client is left to the OS
-    if (phase_ != Phase::Loading || step_ >= GameClient::kInitSteps) client_->shutdown();
+    if (boot_.loaded()) client_->shutdown();
 }
 
 } // namespace aiverse::client

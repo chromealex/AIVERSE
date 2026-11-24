@@ -5,7 +5,7 @@
 #pragma once
 #include "GameWater.h"
 #include <cmath>
-#include <aiverselib/water/NereidRasterImport.h>
+#include "engine/world/nereid/NereidRasterImport.h"
 
 namespace aiverse::game::water {
 

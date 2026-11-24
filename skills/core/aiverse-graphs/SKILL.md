@@ -11,9 +11,9 @@ Resolve paths relative to the engine root. Read `libraries/catalog.json`,
 ## Select and integrate
 
 - Layer: **simulation**. Current coverage: BFS and topological ordering.
-- Read `libraries/include/aiverselib/Graphs.h` as the current API authority. No Lua implementation is required.
+- Read `engine/core/Graphs.h` as the current API authority. No Lua implementation is required.
 - Use dense IDs. Test unreachable nodes, cycles and duplicate edges. Weighted search and flows remain planned.
-- Call `aiverse_native_module(...)` in the external game native/CMakeLists.txt, then `target_link_libraries(aiverse_native_<id> PRIVATE AIVERSE::libraries)`. Include `<aiverselib/Graphs.h>`. The engine defines the target before loading game modules; do not add a second libraries subdirectory.
+- Call `aiverse_native_module(...)` in the external game native/CMakeLists.txt, then `target_link_libraries(aiverse_native_<id> PRIVATE AIVERSE::libraries)`. Include `"engine/core/Graphs.h"`. The engine defines the target before loading game modules; do not add a second libraries subdirectory.
 - Use `examples/native/libraries` as a compiling project-local example.
 - Pin with `python3 tools/libraries/catalog.py pin graphs --project /absolute/game` for C++ foundation entries; verify with the same command using `verify` before upgrading.
 - Do not copy algorithms into the game. Extend the common library if a reusable operation is missing.

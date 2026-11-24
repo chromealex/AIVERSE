@@ -5,7 +5,7 @@
 #include "MapRules.h"
 #include "../core/FixedMath.h"
 #include "gen/MapGen.h"
-#include <aiverselib/water/NereidSphereInteractions.h>
+#include "engine/world/nereid/NereidSphereInteractions.h"
 #include <algorithm>
 #include <cstdlib>
 #include <stdexcept>

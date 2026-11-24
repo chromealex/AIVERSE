@@ -7,12 +7,12 @@
 #include "ActorSystems.h"
 #include "ActorComponents.h"
 #include "engine/world/CollisionStream.h"
-#include "libraries/include/aiverselib/mechanics/Melee.h"
-#include "libraries/include/aiverselib/mechanics/royale/BattleRoyale.h"
-#include "libraries/include/aiverselib/systems/Gear.h"
-#include "libraries/include/aiverselib/systems/BuildingGen.h"
-#include "libraries/include/aiverselib/mechanics/VehicleData.h"
-#include "libraries/include/aiverselib/mechanics/RaceSessionData.h"
+#include "engine/mechanics/Melee.h"
+#include "engine/mechanics/royale/BattleRoyale.h"
+#include "engine/systems/Gear.h"
+#include "engine/systems/BuildingGen.h"
+#include "engine/mechanics/VehicleData.h"
+#include "engine/mechanics/RaceSessionData.h"
 #include "engine/vehicles/VehicleRace.h"
 #include <optional>
 #include <span>
@@ -53,6 +53,10 @@ struct Config {
     // Opt-in `fps.royale` (battle-royale package; a map's own `royale` block replaces it): phased zone, air
     // insertion, bombardment, supply drops and standings. `crate` = items of a landed supply drop.
     std::optional<lib::mechanics::RoyaleRules> royale;
+    // Opt-in rules `locomotion` (character-locomotion package, the locomotion.* keys of docs/gameplay-settings.md):
+    // characters move through the mode machine (dash, wall slide, wall run, grapple, slopes) instead of the plain
+    // motor. The motor's speed, jumpSpeed and gravity still apply; absent = the plain motor, unchanged bytes.
+    std::optional<lib::mechanics::LocomotionModeConfig> locomotion;
     std::vector<Item> crate;
     // Opt-in `fps.gear` (gear-tiers package): tiered helmets / vests / backpacks as loot type 200 + id.
     lib::systems::GearCatalog gear;
@@ -132,6 +136,8 @@ public:
     // Per-slot gear (nullptr without `fps.gear`).
     lib::systems::GearLoadout* gear(Simulation& sim,uint8_t slot) const;
     const lib::systems::GearLoadout* gear(const Simulation& sim,uint8_t slot) const;
+    // Locomotion mode state of a character (rules `locomotion`); nullptr without it.
+    const LocomotionBody* locomotion(const Simulation& sim,uint8_t slot) const;
     // Dynamic objects in ascending id (= creation order). Entities carry Projectile / Loot / Vehicle
     // (+ VehicleDrive on typed vehicles); the value variants return copies for read-only consumers.
     std::vector<Entity> projectileEntities(const Simulation& sim) const;

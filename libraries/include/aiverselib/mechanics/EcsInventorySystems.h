@@ -2,9 +2,9 @@
 // Reuses the existing native inventory algorithms (stacks, weight, transfer)
 // instead of re-implementing inventory for RTS, FPS or RPG.
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
-#include "EcsMechanicSystems.h"
-#include "aiverselib/gameplay/Inventory.h"
+#include "engine/mechanics/Namespace.h"
+#include "engine/mechanics/EcsMechanicSystems.h"
+#include "engine/gameplay/Inventory.h"
 #include <cstdint>
 #include <map>
 #include <optional>

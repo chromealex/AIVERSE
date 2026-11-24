@@ -321,6 +321,9 @@ void requestChunkFor(const std::string& rel) {
 }
 } // namespace detail
 
+void setEngineAssetsDir(const std::string& dir) { state().engineAssets = dir; }
+const std::string& engineAssetsDir() { return state().engineAssets; }
+
 #if !defined(__ANDROID__)
 namespace {
 std::unique_ptr<pack::Source> openStdPack(const std::string& path) { return pack::openFileSource(path); }
@@ -342,6 +345,8 @@ bool readContentFile(const std::string& rel, std::string& out) {
     if (detail::readFileStd(contentRootFor() + "/" + rel, out)) return true;
     if (g_hosted && !g_hosted->engineAssets.empty() && rel.rfind("engine/", 0) == 0 &&
         detail::readFileStd(g_hosted->engineAssets + "/" + rel.substr(7), out)) return true;
+    if (!state().engineAssets.empty() && rel.rfind("engine/", 0) == 0 &&
+        detail::readFileStd(state().engineAssets + "/" + rel.substr(7), out)) return true;
     return detail::readFileStd(rel, out); // absolute path or relative to CWD (tools, editor)
 }
 #endif

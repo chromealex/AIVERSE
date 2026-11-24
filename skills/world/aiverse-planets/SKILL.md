@@ -13,7 +13,7 @@ Contract: `docs/planets.md`. A map without `world` / `generate` behaves exactly 
    `params.heights: "fbm"` only for old maps), not from hand-made formulas: a height function built from bands
    (`abs(z)`, latitude rings) gives straight-edged lowlands that the sea fills as squares on the cube faces.
    Bake a static map with `aiverse_headless --project <dir> --generate rocky --seed N --players 2 --gen-out <map>`
-   (the project's first map supplies the bodies; `templates/planets/maps/big_planet.json` is made this way).
+   (the project's first map supplies the bodies; `~/.aiverse/packages/templates/planets/maps/big_planet.json` is made this way).
    The ocean is cut per pixel where the ground is above `seaLevel`; coasts follow the heights at any LOD.
 4. TerraWeave on spheres (`skills/workflow/aiverse-terra-first/SKILL.md` applies to planets too):
    relief and land biomes come from `engine/world/TerraWeaveSphere.h` (`heightAtSphere`, `climateAtSphere`,
@@ -33,6 +33,6 @@ Contract: `docs/planets.md`. A map without `world` / `generate` behaves exactly 
    probes and splash / wake events automatically. Never write planet-only water code.
 6. Cube-sphere terrain: relief and materials with the heightfield tools; check seams between faces on screenshots (`view_focus` on edges).
 7. Bots: `rules.ai.invasionSize` sets the orbit fleet; bots build orbital yards when the enemy is reachable only through orbit. `match_run` must show transfers between bodies and a winner (`skills/ai/aiverse-bots-debug` otherwise).
-8. Determinism: same seed -> same checksum; `templates/` checksums unchanged when engine code is touched.
+8. Determinism: same seed -> same checksum; sample-game checksums (`tests/checksums/check.sh`) unchanged when engine code is touched.
 
 Runtime library: none. Workflow over the engine MCP map and planet tools.

@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // card-games: deterministic card/board game rules (definitions + rule variants as data, zones, shuffled decks,
 // draw/mulligan, phases, legal action generation, a LIFO effect stack with priority passing, fizzling,
 // per-seat hidden information with a non-leaking viewFor projection and redacted events).

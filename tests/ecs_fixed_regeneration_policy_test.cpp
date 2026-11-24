@@ -1,7 +1,7 @@
 // Pure Fixed regeneration is shared by the RTS Unit ECS system and the
 // generic ECS energy system. Test legacy arithmetic identity including
 // non-integer fractions, negative rates and clamped caps.
-#include <aiverselib/mechanics/FixedRegeneration.h>
+#include "engine/mechanics/FixedRegeneration.h"
 #include <cstdint>
 #include <iostream>
 #include <stdexcept>

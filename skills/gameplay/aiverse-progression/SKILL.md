@@ -11,9 +11,9 @@ Resolve paths relative to the engine root. Read `libraries/catalog.json`,
 ## Select and integrate
 
 - Layer: **simulation**. Current coverage: Weighted selection and level thresholds.
-- Read `libraries/include/aiverselib/Progression.h` as the current API authority. No Lua implementation is required.
+- Read `engine/core/progression/Progression.h` as the current API authority. No Lua implementation is required.
 - Supply simulation RNG as draw(total), integer 1..total. Zero total returns nil. Test zero weights and endpoints. For pity/exclusions use the loot-tables package (systems/Loot.h); for interpolated progression use progression-curves.
-- Call `aiverse_native_module(...)` in the external game native/CMakeLists.txt, then `target_link_libraries(aiverse_native_<id> PRIVATE AIVERSE::libraries)`. Include `<aiverselib/Progression.h>`. The engine defines the target before loading game modules; do not add a second libraries subdirectory.
+- Call `aiverse_native_module(...)` in the external game native/CMakeLists.txt, then `target_link_libraries(aiverse_native_<id> PRIVATE AIVERSE::libraries)`. Include `"engine/core/progression/Progression.h"`. The engine defines the target before loading game modules; do not add a second libraries subdirectory.
 - Use `examples/native/libraries` as a compiling project-local example.
 - Pin with `python3 tools/libraries/catalog.py pin progression --project /absolute/game` for C++ foundation entries; verify with the same command using `verify` before upgrading.
 - Do not copy algorithms into the game. Extend the common library if a reusable operation is missing.

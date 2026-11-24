@@ -2,7 +2,7 @@
 // The race HUD of every client (any project with a map "race", docs/races.md): start countdown, place, lap, the
 // standings, "wrong way" and the result. Reads only a lib::mechanics::RaceView (presentation never writes the sim).
 #include "engine/i18n/Localization.h"
-#include "libraries/include/aiverselib/mechanics/RaceSession.h"
+#include "engine/mechanics/RaceSession.h"
 #include "third_party/imgui/imgui.h"
 #include <algorithm>
 #include <cfloat>

@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Flood fill and connectivity puzzles (puzzle-solvers): the color-flood game (recolor the origin region until the
 // board is one color) with an IDA* solver, and rotatable pipe/wire grids with source -> sink connectivity, leak
 // checks and a bounded backtracking solver. Region counting is puzzleRegions (PuzzleCommon.h).

@@ -1,5 +1,6 @@
 // Project hub (like Unity Hub): recent projects anywhere on disk, "new project" from a template into
 // a folder the user picks, and a folder browser (ImGui, works the same on every desktop OS).
+#include "engine/platform/TemplatesDir.h"
 #include <algorithm>
 #include <cstring>
 #include <ctime>
@@ -264,7 +265,7 @@ void Editor::drawGamePicker() {
     } else {
         ui::heading("Новый проект");
         ui::heading(engineText(ws_, "hub.template").c_str());
-        ImGui::SetItemTooltip("Шаблоны: %s", (fs::path(ws_.engineDir) / "templates").string().c_str());
+        ImGui::SetItemTooltip("Шаблоны: %s", aiverse::platform::templatesDir(ws_.engineDir).c_str());
         ImGui::Separator();
         const float formH = 150;
         ImGui::BeginChild("##templates", ImVec2(0, -formH));

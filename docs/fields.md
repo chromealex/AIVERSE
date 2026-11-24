@@ -8,7 +8,7 @@ overlay. Gap `G5` of `docs/lua-coverage.md`.
 Code: `modules/rts/RtsGridFieldData.*` (format), `RtsGridFields.*` (kernels, effects, hooks, hash, saves),
 `GridFieldsApi.cpp` (Lua), `modules/rts/view/GameFieldView.*` (overlay, GLSL + MSL),
 `apps/editor/core/FieldOps.*` + `apps/editor/windows/FieldsWindow.cpp` (editor, MCP). Samples:
-`templates/wildfire` (forest fire + creep, data only), `templates/lua_lab` (`scripts/fire.lua`).
+`templates/wildfire` (forest fire + creep, data only), `tests/checksums/games/lua_lab` (`scripts/fire.lua`).
 
 ## Data
 

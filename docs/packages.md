@@ -66,12 +66,15 @@ folder you pick, then the packages its `game.json` lists are installed.
 
 - MCP and the ImGui hub: `list_projects` returns the same list (ids `pkg:<package>` for catalog
   templates); `create_project {template: "pkg:skirmish"}` creates a project from a package.
-- The engine keeps `templates/` as the offline fallback and as test data (determinism baselines, CI).
-  The hub hides an engine template whose catalog package says `provides.engineTemplate: "<id>"`.
-- Publishing a template: `python3 tools/pkg/export_templates.py --catalog <AIVERSE-PACKAGES checkout>
-  --previews <frames>` turns engine templates into packages (English summary with `-ru`, a real
-  engine frame as the preview); content that only the catalog version should have goes into the
-  package, not into `templates/`. Other authors' templates are regular pull requests without `official`.
+- The engine repository has no `templates/` folder any more. Tests, CI, the default client content and
+  the game wizard read the official templates from one installed folder, named by engine id
+  (`skirmish/`, `mushrooms/`, ...): `AIVERSE_TEMPLATES_DIR`, default `~/.aiverse/packages/templates`.
+  `python3 tools/pkg/fetch_templates.py [--out DIR] [--only skirmish,...]` installs or updates them
+  (a second run is offline) and prints the folder; CMake runs it at configure time when the folder is
+  missing (`-DAIVERSE_FETCH_TEMPLATES=OFF` to skip, target `aiverse_fetch_templates` to update).
+- Changing a sample game: edit it in a checkout of AIVERSE-PACKAGES (generators in `tools/templates/`
+  edit the installed copies), bump the package version and open a catalog pull request; determinism
+  baselines in `tests/checksums/baseline.txt` follow the package versions.
 
 ## Web viewer
 

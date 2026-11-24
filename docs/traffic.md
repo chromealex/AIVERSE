@@ -4,7 +4,7 @@ A top-down city game (docs/topdown.md, docs/driving.md) gets living streets from
 computer keep their lanes, turn at junctions and stop at red lights; traffic light props show the signals;
 pedestrians walk the sidewalks, wait at the kerb and cross at the junctions on "walk", and run away from gunfire.
 Simulation: `engine/game/Traffic.{h,cpp}`; the reusable kernels (road network, lanes, signal phases, the bot
-driver's pedals, sidewalk paths) are header-only in `libraries/include/aiverselib/mechanics/Traffic.h` and can be used
+driver's pedals, sidewalk paths) are header-only in `engine/mechanics/Traffic.h` and can be used
 by a game's native module without the RTS module. Tests: `aiverse_tests traffic_`.
 
 ## How it works
@@ -278,7 +278,7 @@ to the point (within 3 cells) for traffic along that axis (default: the axis of 
 Not done: money of single citizens (the loot is a town-wide counter), a shop that closes after it was robbed,
 several gangs at once, robbers as passengers the player can see in the car, a hideout other than the ringleader's home.
 
-## C++ library (`aiverselib/mechanics/Traffic.h`)
+## C++ library (`engine/mechanics/Traffic.h`)
 
 | function | contract |
 |---|---|
@@ -311,7 +311,7 @@ spline roads instead of road tiles (`engine/game/TrafficRoads.cpp`):
   becomes a piece from that node over the deck's centre line to the other one, with the lanes of a road at the first;
 - crossing strips: at every junction of three or more arms the first cell of the piece (along 0..1 from the cut)
   is a strip when sidewalk cells touch it on both sides; people cross there on "walk" as on tiles;
-- helpers for modules that work on any piece (`aiverselib/mechanics/Traffic.h`): `trafficPieceLength`,
+- helpers for modules that work on any piece (`engine/mechanics/Traffic.h`): `trafficPieceLength`,
   `trafficLaneBetween` (lane points between two along values, so a route follows a curve), `trafficKerbPoint` /
   `trafficKerbAcross` (half a cell beyond the carriageway edge: bins, stops, waiting people),
   `trafficApproachAxis` (signal axis at a piece end).

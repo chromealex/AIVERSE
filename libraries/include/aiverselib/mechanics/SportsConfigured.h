@@ -1,8 +1,8 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Adapters from the generated optional `sports` settings section (milli-units, milli-turns, ticks) to the match
 // rules and the positioning bot config.
-#include "../gameplay/Configuration.h"
+#include "engine/gameplay/Configuration.h"
 #include "Sports.h"
 #include <string>
 #include <vector>

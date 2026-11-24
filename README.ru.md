@@ -251,7 +251,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 
 ```bash
 ./studio_mac.command                    # AIVERSE Studio, редактор (нужны Xcode, CMake, Node.js)
-./studio_mac.command templates/mushrooms   # ...для другого проекта
+./studio_mac.command ~/.aiverse/packages/templates/mushrooms   # ...для другого проекта
 ```
 
 Windows: `studio_windows.cmd [project]` собирает и открывает `AiverseStudio.exe` (нужны Visual Studio 2022,

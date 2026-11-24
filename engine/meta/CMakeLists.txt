@@ -161,7 +161,7 @@ function(aiverse_add_meta_server target)
     endforeach()
 endfunction()
 
-# Native OBJECT modules are inserted with TARGET_OBJECTS: propagate dependencies to owner.
+# Native OBJECT modules are inserted with TARGET_OBJECTS: propagate dependencies through AIVERSE::native_modules.
 function(aiverse_native_use_meta native_target)
     if(NOT TARGET ${native_target} OR NOT TARGET aiverse_game)
         message(FATAL_ERROR "aiverse_native_use_meta expects a registered native target")
@@ -179,7 +179,7 @@ function(aiverse_native_use_meta native_target)
         message(FATAL_ERROR "meta selection must be CLIENT, SERVER or an existing selected kit target")
     endif()
     target_link_libraries(${native_target} PRIVATE ${dependency})
-    target_link_libraries(aiverse_game PUBLIC ${dependency})
+    target_link_libraries(aiverse_native_modules INTERFACE ${dependency})   # project code: never an engine target
 endfunction()
 
 # Reference subprocess host with an explicit policy selection; protocol/auth stay unchanged.

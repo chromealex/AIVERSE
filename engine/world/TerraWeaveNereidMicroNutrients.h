@@ -4,9 +4,9 @@
 #pragma once
 #include "engine/world/TerraWeaveForestMicroNutrients.h"
 #include "engine/world/TerraWeaveForestNutrientEcs.h"
-#include <aiverselib/water/NereidConfluences.h>
-#include <aiverselib/water/NereidCascades.h>
-#include <aiverselib/water/NereidQueryIndex.h>
+#include "engine/world/nereid/NereidConfluences.h"
+#include "engine/world/nereid/NereidCascades.h"
+#include "engine/world/nereid/NereidQueryIndex.h"
 #include <algorithm>
 #include <cstdint>
 #include <functional>

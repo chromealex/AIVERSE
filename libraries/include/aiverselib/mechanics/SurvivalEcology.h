@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // survival-ecology umbrella: body model + weather modifiers, population ecosystems, animal behavior, renewable
 // resources, JSON data, settings adapter and persistence.
 #include "Survival.h"

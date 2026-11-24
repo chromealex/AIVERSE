@@ -12,7 +12,7 @@ joint constraints, and exactly one host-evaluated parent pose.
 ## Public native C++ API
 
 Use the normal `AIVERSE::MotionWeave` target and include
-`<aiverselib/animation/FacialControlRig.h>`:
+`"engine/animation/FacialControlRig.h"`:
 
 ```cpp
 using namespace aiverse;

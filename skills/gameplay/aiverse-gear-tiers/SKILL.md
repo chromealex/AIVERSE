@@ -9,11 +9,11 @@ Use when a project has armor-like pieces with levels and durability (equipment s
 `engine/actor` host wires it from rules (`gear` at the top level or `actor.gear`, docs/fps.md § Gear); the same block on other hosts is debt G4/G6
 in `docs/no-genre-split-audit.md`. The steps below are for native / host owners.
 
-1. Read `libraries/include/aiverselib/systems/Gear.h` (namespace `aiverse::lib::systems`) and the catalog entry.
+1. Read `engine/systems/Gear.h` (namespace `aiverse::lib::systems`) and the catalog entry.
 2. Data: `readGearCatalog(json["gear"], "gear")` - pieces with `id`, `slot` (your slot numbering), `tier`,
    `durability`, `reduction` and `wear` (milli: 550 = 55 %, 1000 = one durability point per absorbed point),
    `zones` (bit mask of your hit zones, e.g. 1 head, 2 body, 4 legs) and `capacity`. Errors name the path
-   (`gear[2].reduction: must be in 0..1000`). Example: `templates/fps_survival/rules/gear.json`.
+   (`gear[2].reduction: must be in 0..1000`). Example: `~/.aiverse/packages/templates/fps_survival/rules/gear.json`.
 3. One `GearLoadout` per actor in the owner's state. On a hit: `absorbHit(catalog, loadout, zoneBit, damage)`
    returns the damage to apply, the absorbed points, the wear and the slots that broke (removed from the loadout);
    apply the damage through the owner's health path and show the broken pieces.

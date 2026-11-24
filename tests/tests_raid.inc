@@ -4,7 +4,7 @@
 #include "engine/game/TopDown.h"
 
 namespace {
-const std::string kRaidDir = std::string(AIVERSE_SOURCE_DIR) + "/templates/extraction";
+const std::string kRaidDir = std::string(AIVERSE_TEMPLATES_DIR) + "/extraction";
 
 std::unique_ptr<Simulation> raidSample(const std::string& mapFile, uint64_t seed) {
     Json rules = Json::parseFile(kRaidDir + "/rules.json");

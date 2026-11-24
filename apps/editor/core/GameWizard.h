@@ -4,7 +4,7 @@
 // pass, the enemy waits), soft hints in every match, the meta game (levels with stars and rewards, upgrades, shop,
 // daily reward, profile, settings, ads and purchases when asked), branding from the art, music and sounds, languages.
 // Used by the editor window (EditorGameWizard.cpp) and MCP (game_make*, WizardOps.cpp). Format: docs/game-wizard.md.
-// The generated runtime is data: templates/_wizard (Lua + RmlUi), configured by files the wizard writes.
+// The generated runtime is data: tools/wizard/kit (Lua + RmlUi), configured by files the wizard writes.
 #pragma once
 #include <functional>
 #include <memory>

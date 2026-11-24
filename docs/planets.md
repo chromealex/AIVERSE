@@ -30,7 +30,7 @@ A map either describes today's flat battlefield (implicitly one body of kind `pl
   (or at `"pos": [x, y, z]`).
 - All gameplay quantities are Fixed; sizes in world units (the flat-map cell is 1 unit).
 - `"nereid": true | {"depth": d, "current": v, "axis": [x, y, z], "priority": p}` on a planet or moon makes its sea a
-  NEREID water body on the sphere (`libraries/include/aiverselib/water/NereidSphereWater.h`): one entity with
+  NEREID water body on the sphere (`engine/world/nereid/NereidSphereWater.h`): one entity with
   `WaterSphereComponent` (centre = the body anchor, surface = `radius + seaLevel`, floor = surface - `depth`,
   default radius / 4; `current` m/s eastward about `axis`, default still water). Entities with a `WaterProbeComponent`
   and `WaterSphereContactComponent` get radial depth, the current and (with `WaterBuoyancyComponent`) buoyancy along

@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // survival-ecology: renewable resource nodes (berry bushes, trees, fish, grass). Harvests are applied first,
 // sorted by (node, requester) and clamped to the amount left; a node that reaches 0 is depleted and waits
 // regrowDelayTicks before it regrows. Every node regrows on ticks divisible by its periodTicks by

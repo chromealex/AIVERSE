@@ -1,11 +1,11 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Versioned save/load (mechanics::save/load from Persistence.h) and checksum hashing for cinematic-gameplay state.
 // Record kinds 72..79 are reserved for this package (72..76 used; 76 = NarrativeCueQueue in NarrativeCinematicBridge.h): TimeState 72, SceneState 73, QteProgress 74,
 // ParticipantState 75. Store each state in its own NativeState key, feed cinematicHash(state) into the simulation
 // checksum and bind sceneLibraryHash(library) (which includes every scene version) in the save envelope.
 #include "CinematicRunner.h"
-#include "Persistence.h"
+#include "engine/mechanics/Persistence.h"
 #include "engine/core/Hash.h"
 #include <string>
 namespace aiverse::lib::mechanics {

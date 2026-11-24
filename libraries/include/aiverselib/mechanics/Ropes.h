@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // physical-interactions: ropes/chains as particle chains solved with XPBD distance constraints and a fixed
 // iteration count (InteractionConfig::ropeIterations), Gauss-Seidel from end A to end B. Segments only resist
 // stretching (slack ropes fold freely). Tension = max segment constraint force (lambda/dt^2) in newtons;

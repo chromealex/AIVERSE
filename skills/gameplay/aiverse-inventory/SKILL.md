@@ -5,7 +5,7 @@ description: Reuse AIVERSE inventory for stacked inventory, weight/slot limits, 
 
 # inventory
 
-Read `docs/gameplay-packages.md`, `libraries/catalog.json` and `libraries/include/aiverselib/gameplay/Inventory.h` from the engine root.
+Read `docs/gameplay-packages.md`, `libraries/catalog.json` and `engine/gameplay/Inventory.h` from the engine root.
 Read `docs/gameplay-settings.md` for supported settings; do not invent JSON keys or APIs.
 
 ## Workflow

@@ -6,7 +6,7 @@
 // deterministic: rules are evaluated in (priority desc, id asc) order, ties pick the lowest id. No RNG.
 // State (ColonyPlannerState) is mechanics::save/load record kind 110.
 #include "../mechanics/ColonyRunner.h"
-#include "../mechanics/Persistence.h"
+#include "engine/mechanics/Persistence.h"
 #include "engine/core/Hash.h"
 #include <algorithm>
 #include <cstdint>

@@ -1,6 +1,6 @@
 // Kinematic projectile system: fixed-tick travel and replay in unrelated hosts.
-#include <aiverselib/mechanics/EcsKinematicProjectileSystems.h>
-#include <aiverselib/mechanics/EcsOrderedImpactSystems.h>
+#include "engine/mechanics/EcsKinematicProjectileSystems.h"
+#include "engine/mechanics/EcsOrderedImpactSystems.h"
 #include <algorithm>
 #include <cstdint>
 #include <iostream>

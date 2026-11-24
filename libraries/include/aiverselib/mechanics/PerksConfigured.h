@@ -1,11 +1,11 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Adapters from the generated `perks` settings section (integer ticks, milli-metres) to the match-progression
 // configs, plus cross-field checks the generated loader cannot express.
-#include "../gameplay/Configuration.h"
-#include "Perks.h"
-#include "XpPickups.h"
-#include "Summons.h"
+#include "engine/gameplay/Configuration.h"
+#include "engine/mechanics/Perks.h"
+#include "engine/mechanics/XpPickups.h"
+#include "engine/mechanics/Summons.h"
 #include <string>
 #include <vector>
 namespace aiverse::lib::mechanics {

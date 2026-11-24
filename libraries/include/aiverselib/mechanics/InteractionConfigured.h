@@ -1,7 +1,7 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Adapter from the generated optional `interaction` settings section (milli-units, ticks) to InteractionConfig.
-#include "../gameplay/Configuration.h"
+#include "engine/gameplay/Configuration.h"
 #include "InteractionConfig.h"
 #include <string>
 #include <vector>

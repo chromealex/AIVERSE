@@ -7,7 +7,7 @@ settings, result), purchases and ads when asked, languages, branding, and a chec
 ordinary game data that the game can edit afterwards.
 
 Code: `apps/editor/core/GameWizard*.cpp` (no UI), `apps/editor/core/WizardOps.cpp` (MCP), `apps/editor/EditorGameWizard.cpp`
-(the hub page). Runtime kit copied into every game: `templates/_wizard/` (Lua + RmlUi, see its README).
+(the hub page). Runtime kit copied into every game: `tools/wizard/kit/` (Lua + RmlUi, see its README).
 
 ## Answers (`WizardSpec`, all optional)
 

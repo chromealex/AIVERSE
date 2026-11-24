@@ -3,7 +3,7 @@
 The hero of a top-down game (docs/topdown.md) gets into vehicles and drives them. There is **one vehicle system**
 for every host (AGENTS.md "no genre split"): `engine/vehicles/Vehicles.{h,cpp}` (target `AIVERSE::vehicles`) and the
 race adapter `engine/vehicles/VehicleRace.{h,cpp}`. The vehicle dynamics are the controllers of the
-vehicle-controllers library (`libraries/include/aiverselib/mechanics/VehicleControllers.h`, docs/mechanics-packages.md
+vehicle-controllers library (`engine/mechanics/VehicleControllers.h`, docs/mechanics-packages.md
 § Vehicles). Tests: `aiverse_tests driving_`, `traffic_`; FPS `typedVehicles`, `raceMode`.
 
 ## The vehicle system (engine/vehicles)

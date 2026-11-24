@@ -349,4 +349,48 @@ Json defaultBlock() {
     return j;
 }
 
+namespace {
+void mergeInto(Json& base, const Json& over) {
+    for (const auto& [key, value] : over.members()) {
+        if (value.isObject() && base[key].isObject()) { Json merged = base[key]; mergeInto(merged, value); base.set(key, merged); }
+        else base.set(key, value);
+    }
+}
+}
+
+Choice resolveBlock(const Json& splash) {
+    Choice c;
+    if (splash.isNull()) { c.block = defaultBlock(); return c; }
+    if (splash.type() == Json::Type::Bool) { if (splash.boolean(true)) c.block = defaultBlock(); else c.off = true; return c; }
+    if (splash.isString()) {
+        const std::string s = splash.str();
+        if (s == "default" || s == "engine") c.block = defaultBlock();
+        else if (s == "none" || s == "off") c.off = true;
+        else throw std::runtime_error("splash: unknown value '" + s + "' (default, none or an object)");
+        return c;
+    }
+    if (!splash.isObject()) throw std::runtime_error("splash: expected true/false, \"default\", \"none\" or an object");
+    if (!splash.getBool("enabled", true)) { c.off = true; return c; }
+    Json own = splash;own.erase("enabled");own.erase("mapLoading");
+    const std::string base = splash.getStr("base", "");
+    own.erase("base");
+    if (base == "engine" || base == "default") { c.block = defaultBlock(); mergeInto(c.block, own); }
+    else if (base.empty()) c.block = own;
+    else throw std::runtime_error("splash.base: unknown '" + base + "' (engine)");
+    return c;
+}
+
+Spec projectSpec(const Json& splash, std::vector<std::string>* warnings) {
+    const Choice c = resolveBlock(splash);
+    return c.off ? Spec{} : parseSpec(c.block, warnings);
+}
+
+Choice resolveMapBlock(const Json& splash) {
+    if (splash.isObject() && splash.has("mapLoading")) {
+        const Json& m = splash["mapLoading"];
+        if (!(m.isString() && m.str() == "same")) return resolveBlock(m);
+    }
+    return resolveBlock(splash);
+}
+
 } // namespace aiverse::splash

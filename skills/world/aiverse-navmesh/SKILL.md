@@ -5,7 +5,7 @@ description: Reuse AIVERSE automatic deterministic layered aabb navigation mesh 
 
 # navmesh
 
-1. Read `docs/bots.md`, `docs/navmesh.md` and this catalog entry. Read `libraries/include/aiverselib/bots/NavMesh.h` (FPS adapter) and `engine/nav/NavMesh.h` (genre-independent mesh, A* + funnel) for exact APIs.
+1. Read `docs/bots.md`, `docs/navmesh.md` and this catalog entry. Read `engine/bots/NavMesh.h` (FPS adapter) and `engine/nav/NavMesh.h` (genre-independent mesh, A* + funnel) for exact APIs.
 2. Pathfinding stays genre-independent: put mesh/search changes into `engine/nav` and keep genre code to a `nav::Source` (spans + links). Build immutable regional polygon meshes from current collision and motor dimensions. Rebuild on geometry changes. Bound cell/polygon/candidate/search budgets. No triangle/slope importer or cross-region streaming links. Use navPath/navStep, real motor tests and aiverse_navmesh exporter.
 3. Link `AIVERSE::lib_navmesh` from an executable host target; registered OBJECT native modules call `aiverse_native_use_bots(aiverse_native_<id> NAVMESH)` so backend dependencies propagate to the game. Use `examples/native/libraries/BotConsumer.cpp` for include/persistence access and `examples/libraries/bots/main.cpp` for actual host scheduling.
 4. Keep configurations immutable and validate JSON at load. Store dynamic state explicitly; save and restore it with simulation before producing further commands. Never retain future state after rollback.

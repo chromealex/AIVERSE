@@ -1,11 +1,11 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Versioned save/load (mechanics::save/load) and hashing for tactics-grid state. Record kinds (cards+turns batch range
 // 96..103): TacticsState 98, TacticsOrders 99 (WeGo orders collected but not yet resolved). turn-scheduler's
 // strategy/Persistence.h TurnState record (kind 3) is unchanged. Feed tacticsHash(state) (and the pending orders)
 // into the simulation checksum and bind tacticsScenarioHash(scenario) in the save envelope.
 #include "TacticsWeGo.h"
-#include "Persistence.h"
+#include "engine/mechanics/Persistence.h"
 #include "engine/core/Hash.h"
 #include <string>
 namespace aiverse::lib::mechanics {

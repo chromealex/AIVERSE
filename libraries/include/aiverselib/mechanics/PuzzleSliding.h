@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Sliding and packing puzzles (puzzle-solvers): N-puzzle (15-puzzle) parity, seeded shuffles that are always
 // solvable and an IDA* solver; sliding blocks of arbitrary rectangle sizes (Klotski / rush-hour style) with a BFS
 // solver; polyomino packing with rotations/flips by bounded exact-cover backtracking and solution counting.

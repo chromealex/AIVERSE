@@ -5,7 +5,7 @@
 // feeds to stepMelee/stepDodge/stepGuard/stepLockOn and to the locomotion owner. The bot never changes
 // combat, body or health state; the owner authorizes and applies the inputs like a player's.
 #include "GenreCommon.h"
-#include "../mechanics/CombatActions.h"
+#include "engine/mechanics/CombatActions.h"
 namespace aiverse::lib::bots {
 struct MeleeBotConfig {
     Fixed minRange=Fixed::fromRatio(6,5),maxRange=Fixed::fromRatio(11,5); // spacing band between body centres (metres)

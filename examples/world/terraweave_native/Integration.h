@@ -2,7 +2,7 @@
 // TerraWeave authoritative terrain/vegetation and the shared WorldScene.
 // This is a reusable example header (not an engine-level genre module).
 #pragma once
-#include <aiverselib/water/NereidNativeWater.h>
+#include "engine/world/nereid/NereidNativeWater.h"
 #include "engine/world/TerraWeaveNativeDriver.h"
 #include "engine/world/TerraWeaveShorelineRaster.h"
 #include "engine/world/TerraWeaveSedimentEcs.h"

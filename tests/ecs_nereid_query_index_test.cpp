@@ -1,5 +1,5 @@
 // NEREID stage 4: indexed-vs-reference sampling, native hosts and COW replay.
-#include <aiverselib/water/NereidQueryIndex.h>
+#include "engine/world/nereid/NereidQueryIndex.h"
 #include <iostream>
 #include <memory>
 #include <stdexcept>

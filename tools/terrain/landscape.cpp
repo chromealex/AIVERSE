@@ -3,7 +3,7 @@
 #include "engine/world/TerraWeaveAlpine.h"
 #include "engine/world/TerraWeaveRocks.h"
 #include "engine/world/TerraWeaveShoreCover.h"
-#include <aiverselib/water/NereidFootprintDistance.h>
+#include "engine/world/nereid/NereidFootprintDistance.h"
 #include "engine/render/TerraWeaveRockModel.h"
 #include "engine/render/TerraWeaveTerrainPatchRender.h"
 #include "engine/render/TerraWeaveTerrainLod.h"

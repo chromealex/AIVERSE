@@ -1,6 +1,6 @@
 #pragma once
-#include "Tags.h"
-#include "../gameplay/Diagnostics.h"
+#include "engine/systems/Tags.h"
+#include "engine/gameplay/Diagnostics.h"
 #include <algorithm>
 #include <span>
 #include <vector>

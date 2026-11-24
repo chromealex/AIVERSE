@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // JSON definitions for physical-interactions (example: examples/libraries/mechanics/interactables.json).
 // Top-level arrays: carryables, pushables, ropes, doors, platforms, breakables (all optional). Distances,
 // masses, speeds and forces are integer milli-units (metres, kg, m/s, N), angles milli-turns, compliance

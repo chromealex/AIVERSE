@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Cinematic scene flow (authoritative): scene timelines of timed cues on tracks, sync points that wait for
 // host-reported facts (dialogue line finished, animation marker reached, participants in position) with timeouts,
 // QTE stops with success/fail branches, interaction staging (marks, move-to-mark with timeout and teleport

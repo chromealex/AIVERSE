@@ -17,7 +17,7 @@ if(AIVERSE_BUILD_SERVER AND NOT EMSCRIPTEN)
     add_executable(aiverse_voxel_server ../../apps/voxel/server.cpp)
     target_link_libraries(aiverse_voxel_server PRIVATE aiverse_voxelgame)
     if(AIVERSE_BUILD_TESTS)
-        add_test(NAME voxel_server COMMAND aiverse_voxel_server --project ${PROJECT_SOURCE_DIR}/templates/voxel_sandbox --ticks 100 --loopback --port 27290)
+        add_test(NAME voxel_server COMMAND aiverse_voxel_server --project ${AIVERSE_TEMPLATES_DIR}/voxel_sandbox --ticks 100 --loopback --port 27290)
     endif()
 endif()
 # Voxel projects run in the one game client (apps/client/main.cpp: game.json "module" "voxel").

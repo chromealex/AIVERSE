@@ -1,5 +1,5 @@
 // Cross-genre NEREID native setup: adaptive index/reference parity and rollback.
-#include <aiverselib/water/NereidNativeWater.h>
+#include "engine/world/nereid/NereidNativeWater.h"
 #include <iostream>
 #include <memory>
 #include <stdexcept>

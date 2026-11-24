@@ -3,7 +3,7 @@
 **MotionWeave** — новое общее имя модульной системы анимации.
 Старые классы `AnimationGraph` и `Animator`, JSON-форматы и namespace
 `aiverse::lib::animation` остаются без изменений для совместимости.
-Публичная точка входа: `<aiverselib/motionweave/MotionWeave.h>`,
+Публичная точка входа: `"engine/animation/MotionWeave.h"`,
 `AIVERSE::MotionWeave`. [Архитектура](motionweave.md).
 
 `engine/render/AnimationGraph.h` предоставляет граф поз и машину состояний поверх
@@ -1446,7 +1446,7 @@ or performance benchmarks. All tests remain deferred until feature freeze.
 
 ## Pre-retirement source playback handoff (Stage 146, 2026-11-19)
 
-Generic presentation hosts using `<aiverselib/animation/MotionWeaveSourceBridge.h>` can opt into `bridge.forgetForReimport(world, sourceIds)` (or `view.forgetSourcesForReimport(sourceIds)`) before retiring the OLD CPU Model and Graph. Unlike ordinary `forget`, this captures the old healthy graph player's **named** playback state and clip phases before the ECS source and any borrowed Model/Graph references are destroyed. Call on the presentation thread outside worker update; the caller still owns CPU Model read leases, GPU retirement tokens and graphics fences.
+Generic presentation hosts using `"engine/animation/MotionWeaveSourceBridge.h"` can opt into `bridge.forgetForReimport(world, sourceIds)` (or `view.forgetSourcesForReimport(sourceIds)`) before retiring the OLD CPU Model and Graph. Unlike ordinary `forget`, this captures the old healthy graph player's **named** playback state and clip phases before the ECS source and any borrowed Model/Graph references are destroyed. Call on the presentation thread outside worker update; the caller still owns CPU Model read leases, GPU retirement tokens and graphics fences.
 
 When a NEW Model/compiled Graph is next synchronized under the same source identity and logical generation, the bridge restores playback only if copied rig names/parents match exactly, both publication epochs are nonzero and different, and the Model address is different. The old address is compared only as an integer (never dereferenced); allocator reuse and in-place reimport restart conservatively. Incompatible authored clips/states also restart. The one-shot snapshot is removed on first attempted recovery, expires after 120 source `sync` calls and is capped at 8192 records. The bridge never transfers old physical pose, contacts, native solver/IK, root motion, montage/notifies, gameplay authority or GPU handles. `forget` and `clear` cancel pending continuity.
 

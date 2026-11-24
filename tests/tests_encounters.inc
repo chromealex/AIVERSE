@@ -289,7 +289,7 @@ TEST(encounters_determinism_save_and_rollback) {
 }
 
 TEST(encounters_golem_pit_sample_ends_with_a_result) {
-    const std::string dir = std::string(AIVERSE_SOURCE_DIR) + "/templates/boss_arena";
+    const std::string dir = std::string(AIVERSE_TEMPLATES_DIR) + "/boss_arena";
     Json rules = Json::parseFile(dir + "/rules.json");
     rules.set("scripts", Json::array());   // the sample's story script needs the project reader (headless covers it)
     for (uint64_t seed : {1, 2}) {

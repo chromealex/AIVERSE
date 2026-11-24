@@ -1,6 +1,6 @@
 #pragma once
 #include "engine/game/GameCore.h"
-#include "Loot.h"
+#include "engine/core/progression/Loot.h"
 #include <optional>
 #include <span>
 namespace aiverse::lib::systems {

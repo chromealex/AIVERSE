@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // JSON for survival-ecology (example: examples/libraries/mechanics/production-survival/ecology.json):
 // {"ecology":{"periodTicks":1200,"noiseMilli":0,
 //    "species":[{"id":1,"growthMilli":250,"mortalityMilli":10},

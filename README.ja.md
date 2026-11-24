@@ -251,7 +251,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 
 ```bash
 ./studio_mac.command                    # AIVERSE Studio（エディタ。Xcode、CMake、Node.js が必要）
-./studio_mac.command templates/mushrooms   # ……別のプロジェクトで
+./studio_mac.command ~/.aiverse/packages/templates/mushrooms   # ……別のプロジェクトで
 ```
 
 Windows：`studio_windows.cmd [project]` で `AiverseStudio.exe` をビルドして開きます（Visual Studio 2022、

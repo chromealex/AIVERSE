@@ -38,10 +38,11 @@ std::string f3(float v) { char b[16]; std::snprintf(b, sizeof b, "%.3f", v); ret
 NativeSplash nativeSplash(const Json& game) {
     NativeSplash n;
     const Json& j = game["splash"];
-    if (!j.isObject()) return n;
-    n.enabled = true;
+    if (!j.isObject()) return n;   // the engine screen or none: the OS default launch screen
     splash::Spec spec;
-    try { spec = splash::parseSpec(j); } catch (const std::exception&) {}
+    try { spec = splash::projectSpec(j); } catch (const std::exception&) {}
+    if (!spec.enabled) return n;
+    n.enabled = true;
     n.background = spec.background;
     n.progress = spec.progress.color;
     // the logo the engine splash starts with, so the hand-over looks continuous
@@ -49,6 +50,7 @@ NativeSplash nativeSplash(const Json& game) {
         const splash::Layer& l = spec.layers[i];
         if (i == 0 && spec.layers.size() > 1 && l.fit == splash::Fit::Cover) continue;   // a full-screen base image: prefer the logo
         n.image = !l.images.empty() ? l.images[0] : l.sheet;
+        if (n.image.rfind("engine/", 0) == 0) n.image.clear();   // engine art (base "engine") is not in the project folder
     }
     const Json& nj = j["native"];
     if (nj.isObject()) {
@@ -62,7 +64,7 @@ NativeSplash nativeSplash(const Json& game) {
 
 std::vector<std::string> splashBaseFiles(const Json& game) {
     std::vector<std::string> v;
-    try { v = splash::parseSpec(game["splash"]).images(); } catch (const std::exception&) {}
+    if (game["splash"].isObject()) try { v = splash::projectSpec(game["splash"]).images(); } catch (const std::exception&) {}
     NativeSplash n = nativeSplash(game);
     if (!n.image.empty() && std::find(v.begin(), v.end(), n.image) == v.end()) v.push_back(n.image);
     return v;

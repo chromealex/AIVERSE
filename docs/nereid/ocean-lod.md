@@ -83,7 +83,7 @@ editor scenes with terrain, underwater views of a ring sea.
 
 ## Files
 
-`libraries/include/aiverselib/water/NereidWaterSurfaceMesh.h` (ring mesh and policy),
+`engine/world/nereid/NereidWaterSurfaceMesh.h` (ring mesh and policy),
 `engine/render/NereidSurfaceResident.h` (keys, cell-centred patch),
 `engine/world/NereidWaterScene.h` (basis, flow bounds, `drawStats()`),
 `engine/world/NereidWaterManifest.h` (`oceanLod`, `oceanInnerCell(s)`),

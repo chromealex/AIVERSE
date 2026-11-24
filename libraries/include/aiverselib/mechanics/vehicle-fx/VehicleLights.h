@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // vehicle-fx: lamp channels of a vehicle for its look. Headlights / tail lamps, brake lamps that stay lit for a
 // moment after hard deceleration, reverse lamps, indicators and hazards that blink, emergency beacons with a
 // double-flash strobe (left and right out of phase), a roof sign ("available"). The model names its emissive

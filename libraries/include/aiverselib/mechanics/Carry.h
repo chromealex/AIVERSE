@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // physical-interactions: pick up / carry / throw. Held objects follow a hold point in front of the carrier
 // with a swept move (blocked -> dropped), carriers get a mass speed penalty, throws convert a charged impulse
 // into a ballistic flight integrated by stepFlight; previewThrow uses the same integrator, so preview points

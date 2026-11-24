@@ -1,6 +1,6 @@
 // agent-bw-ai: Bunker Wars computer player (rules ai.controller "bw", engine/game/BwAI*)
 #include "engine/game/BwAI.h"
-static const std::string kBwaiShroom = std::string(AIVERSE_SOURCE_DIR) + "/templates/shroomwars";
+static const std::string kBwaiShroom = std::string(AIVERSE_TEMPLATES_DIR) + "/shroomwars";
 
 static Json bwaiRules(const std::string& bw = "") {
     Json r = Json::parseFile(kBwaiShroom + "/rules.json");

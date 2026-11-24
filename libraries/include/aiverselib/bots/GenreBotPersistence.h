@@ -6,7 +6,7 @@
 #include "MeleeBot.h"
 #include "ShooterBot.h"
 #include "SquadRoles.h"
-#include "../mechanics/Persistence.h"
+#include "engine/mechanics/Persistence.h"
 #include "engine/core/Hash.h"
 #include <string>
 namespace aiverse::lib::bots {

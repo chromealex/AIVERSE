@@ -21,7 +21,7 @@ engine/
 modules/rts/ generic RTS layer: types from data, orders, A*, combat, economy, construction,
              production, garrisons (Mushroom Wars), roads, fog of war, AI
              view/ — draws any type from the "view" block in rules.json
-modules/fps/ FPS module (in development): movement, combat and match state
+engine/actor/ actor host on ECS (former modules/fps): movement, combat, vehicles, streaming and match state for any project
 apps/
   fps/       standalone FPS client and server
   client/    the game (menu, match with bots, HUD, minimap, mouse and touch)
@@ -42,13 +42,13 @@ platform/    packaging templates (Info.plist, Gradle project, HTML shell)
 ```bash
 cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release      # requires Xcode and CMake
 cmake --build build/mac -j 8
-open build/mac/AiverseEditor.app                              # editor (project templates/skirmish)
+open build/mac/AiverseEditor.app                              # editor (project ~/.aiverse/packages/templates/skirmish)
 open build/mac/AiverseGame.app                                # game
 ./build/mac/aiverse_tests
 ```
 
-Otro juego en el editor: `AiverseEditor.app/Contents/MacOS/AiverseEditor --project templates/mushrooms`.
-Para que el juego arranque con otro conjunto de datos, pasa `-DAIVERSE_CONTENT_DIR=.../templates/mushrooms`.
+Otro juego en el editor: `AiverseEditor.app/Contents/MacOS/AiverseEditor --project ~/.aiverse/packages/templates/mushrooms`.
+Para que el juego arranque con otro conjunto de datos, pasa `-DAIVERSE_CONTENT_DIR=~/.aiverse/packages/templates/mushrooms`.
 
 ### Varios editores a la vez
 
@@ -61,12 +61,12 @@ cambiar tras reiniciar el editor. `--listen <puerto>` fija un puerto exacto (si 
 ## Compilar para las plataformas — aiversebuild
 
 ```bash
-./build/mac/aiversebuild --project templates/skirmish --target macos     # Builds/macos/<Name>.app (ad-hoc signed)
-./build/mac/aiversebuild --project templates/skirmish --target ios       # Builds/ios/xcode/AIVERSE.xcodeproj + simulator build
-./build/mac/aiversebuild --project templates/skirmish --target android   # Builds/android/<Name>-release.apk when SDK/NDK and gradle are present
-./build/mac/aiversebuild --project templates/skirmish --target web       # Builds/web (requires emsdk)
-./build/mac/aiversebuild --project templates/skirmish --target windows   # .exe via mingw-w64 (brew install mingw-w64) or sources + build.bat
-./build/mac/aiversebuild --project templates/skirmish --target all
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target macos     # Builds/macos/<Name>.app (ad-hoc signed)
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target ios       # Builds/ios/xcode/AIVERSE.xcodeproj + simulator build
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target android   # Builds/android/<Name>-release.apk when SDK/NDK and gradle are present
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target web       # Builds/web (requires emsdk)
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target windows   # .exe via mingw-w64 (brew install mingw-w64) or sources + build.bat
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target all
 ```
 
 El resultado va a `<proyecto>/Builds/<plataforma>/`: solo builds terminados y el informe de tamaño. Todo lo intermedio
@@ -130,7 +130,7 @@ en `dist/<plataforma>/size-report.txt`.
 aiversebuild ... --no-pack          # ship folders as is (debugging)
 aiversebuild ... --pack-level 9     # zstd level (default 19 for Release, 3 for Debug)
 
-assetpipe pack -o content.rpak templates/skirmish engine/assets=engine   # build a pack by hand
+assetpipe pack -o content.rpak ~/.aiverse/packages/templates/skirmish engine/assets=engine   # build a pack by hand
 assetpipe list content.rpak       # files, sizes, compression
 assetpipe verify content.rpak     # unpack everything and check hashes
 assetpipe extract content.rpak out/
@@ -300,8 +300,8 @@ Las cadenas del menú y del HUD están en `engine/assets/lang/` (ahora inglés y
 ```
 
 ```bash
-./build/mac/aiverse_i18n extract --project templates/skirmish --lang de --write   # lang/de.json skeleton, new strings marked // TODO
-./build/mac/aiverse_i18n check   --project templates/skirmish                     # placeholders, plural forms, untranslated strings
+./build/mac/aiverse_i18n extract --project ~/.aiverse/packages/templates/skirmish --lang de --write   # lang/de.json skeleton, new strings marked // TODO
+./build/mac/aiverse_i18n check   --project ~/.aiverse/packages/templates/skirmish                     # placeholders, plural forms, untranslated strings
 ```
 
 El idioma se elige así: la elección del jugador en el menú (se recuerda) → el idioma del sistema → el idioma de origen del
@@ -380,8 +380,8 @@ simulación es determinista, así que todos tienen el mismo estado.
 
 ```bash
 ./build/mac/aiverse_server --config apps/server/server.json            # UDP 27015, WebSocket 27016
-./build/mac/aiverse_netbot --server 127.0.0.1 --project templates/mushrooms --queue 1v1   # a bot in the queue
-./build/mac/aiverse_netbot --server ws://127.0.0.1:27016 --project templates/mushrooms --queue 1v1
+./build/mac/aiverse_netbot --server 127.0.0.1 --project ~/.aiverse/packages/templates/mushrooms --queue 1v1   # a bot in the queue
+./build/mac/aiverse_netbot --server ws://127.0.0.1:27016 --project ~/.aiverse/packages/templates/mushrooms --queue 1v1
 ./build/mac/aiverse_net_tests                                          # network tests
 docker build -f apps/server/Dockerfile -t aiverse-server .             # server in a container
 ```
@@ -469,9 +469,9 @@ Un tipo se dibuja según su bloque `"view"`: una forma integrada (`"shape"`) o u
   jugador; la ventana **Materiales** con vista previa y las operaciones MCP `material_*` / `texture_generate` para agentes.
 
 Un modelo roto no rompe el juego: el tipo se dibuja como forma y el motivo va a la consola del editor. Visualización:
-`aiverse_modelview model.glb@Walk` o `aiverse_modelview --game templates/showcase` (todos los tipos de un juego tal como los
+`aiverse_modelview model.glb@Walk` o `aiverse_modelview --game ~/.aiverse/packages/templates/showcase` (todos los tipos de un juego tal como los
 dibuja el juego); en el editor, la ventana **Models** (clips, nodos, materiales, retrato, recarga al guardar el archivo del
-modelo). Ejemplo: `templates/showcase`; formato completo: [models.md](../models.md).
+modelo). Ejemplo: `~/.aiverse/packages/templates/showcase`; formato completo: [models.md](../models.md).
 
 ## Iluminación
 

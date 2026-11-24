@@ -5,7 +5,7 @@ description: Install independent deterministic ECS hitscan fire-intent resolutio
 
 # Schedulable ECS hitscan
 
-Use `<aiverselib/mechanics/EcsHitscanResolutionSystems.h>` from
+Use `"engine/mechanics/EcsHitscanResolutionSystems.h"` from
 `AIVERSE::lib_ecs_hitscan_resolution`, or in a native project:
 `aiverse_native_use_libraries(your_target ecs-hitscan-resolution)`.
 

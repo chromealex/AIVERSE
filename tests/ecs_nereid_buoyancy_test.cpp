@@ -1,5 +1,5 @@
 // NEREID cross-genre buoyancy + drag: same component policy in unrelated hosts.
-#include <aiverselib/water/NereidBuoyancySystems.h>
+#include "engine/world/nereid/NereidBuoyancySystems.h"
 #include <iostream>
 #include <memory>
 #include <stdexcept>

@@ -1,11 +1,11 @@
 ---
 name: aiverse-character-locomotion
-description: Reuse AIVERSE fixed character movement policy (ground/air acceleration, jump buffer, coyote time) and its mode machine for slopes, ledges, ladders, swimming, wall climbing and mantle/vault when building native C++ games across genres.
+description: Reuse AIVERSE fixed character movement policy (ground/air acceleration, jump buffer, coyote time) and its mode machine for slopes, ledges, ladders, swimming, wall climbing, mantle/vault, dash, wall slide, wall run, grapple and one-way platforms when building native C++ games across genres.
 ---
 
 # character-locomotion
 
-1. Read `docs/mechanics-packages.md` and the catalog entry. Inspect `libraries/include/aiverselib/mechanics/Locomotion.h` for exact runtime behavior.
+1. Read `docs/mechanics-packages.md` and the catalog entry. Inspect `engine/mechanics/Locomotion.h` for exact runtime behavior.
 2. One owner per state: if the project's host already owns this state (for example a host in `engine/game` or `engine/actor` that has its own movement, ammo, damage or victory), adapt that owner to these policies instead of running a second copy; never maintain duplicate health, inventory or cooldown state. A host that cannot use the policy yet is debt in `docs/no-genre-split-audit.md`, not a genre rule.
 3. Load scalar JSON through generated readGameplaySettings, then genre/Configured.h adapters. Read narrative definitions with readStory; use stable localization/fact/choice IDs. Keep definitions immutable for a running save.
 4. Host executables link AIVERSE::mechanics. Registered native OBJECT modules call aiverse_native_use_mechanics(aiverse_native_<id>) to propagate collision dependencies without a circular game link. Follow examples/native/libraries/GenreConsumer.cpp.
@@ -17,9 +17,9 @@ Build selection: `AIVERSE::lib_character_locomotion`; native OBJECT modules call
 `aiverse_native_use_libraries(target character-locomotion)`. Only this header library and its
 declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.
 
-## Mode machine (slopes, ledges, ladders, swimming, climbing, mantle)
+## Mode machine (slopes, ledges, ladders, swimming, climbing, mantle, dash, wall moves, grapple)
 
-Include `<aiverselib/mechanics/LocomotionModes.h>` (plus `genre/Persistence.h` for save/load). Use it
+Include `engine/mechanics/LocomotionModes.h` (plus `genre/Persistence.h` for save/load). Use it
 instead of writing per-game ladder/ledge/swim/climb code; `stepMotion` remains the ground/air core.
 
 - Load `locomotionModeConfig(settings)` from the optional `locomotion.*` keys (milli-units, ticks;
@@ -34,9 +34,15 @@ instead of writing per-game ladder/ledge/swim/climb code; `stepMotion` remains t
 - Edges (`jumpPressed`, `grabPressed`, `dropPressed`) come from validated Commands. `vertical`
   drives ladders/walls/ledges/swim depth. Grab attaches ladders/walls; jump near a reported
   obstacle mantles/vaults; falling past a ledge auto-grabs unless `autoLedgeGrab` is false.
+- Moves (0.3.0): `dashPressed` (+ `facing` for a dash without wish); `env.wallContact` + `contactNormal`
+  for any wall at the side (wall slide while pushing into it, wall run when fast along it);
+  `grapplePressed`/`grappleReleased` with `env.grappleAnchor` + `grappleOffset` (anchor minus body,
+  from the owner's aim raycast, refreshed every tick while attached); `env.groundOneWay` + drop for
+  drop-through - honour `result.ignoreOneWay` and land with `oneWaySupports(...)` in the owner sweep.
+  Do not write a separate dash/grapple/wall-run controller in a game.
 - Stamina: built-in counter (`climbStamina`, drain/regen per tick) or the owner's pool via
   `stepLocomotionWithStamina(..., spend)` where `spend(cost)` debits atomically.
-- Persist with `genre::save/load` (state kind 20), hash with `locomotionHash`, and bind
+- Persist with `genre::save/load` (state kind 21; 0.2.0 kind 20 records still load), hash with `locomotionHash`, and bind
   `locomotionConfigHash(config)` in the save envelope. Presentation IK climbing
   (docs/surface-locomotion.md) only reads this state; it is not the gameplay authority.
 - Verify with `aiverse_library_genre_tests` (each mode trajectory, restore, rejection).

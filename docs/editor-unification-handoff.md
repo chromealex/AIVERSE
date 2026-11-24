@@ -560,7 +560,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 - Tests must verify native runtime spawn without pre-registered index and duplicate-ID failure. Native compile/CI not yet confirmed.
 
 ### 2026-11-18 — Cross-genre audit: stage 1, ECS policy adapter
-- Commit `cb9a43e`: `libraries/include/aiverselib/genre/EcsMechanicSystems.h` introduces genre-independent `eachEcsMechanic<Component>(World&,policy)` and `addEcsMechanicSystem<Component>(Simulation&,name,policy)`. Game code chooses an arbitrary ECS component type, binds its existing policy, and gets deterministic dense-order iteration and COW write preparation. No dependency on `GameCore` or `fps::Module`.
+- Commit `cb9a43e`: `engine/mechanics/EcsMechanicSystems.h` introduces genre-independent `eachEcsMechanic<Component>(World&,policy)` and `addEcsMechanicSystem<Component>(Simulation&,name,policy)`. Game code chooses an arbitrary ECS component type, binds its existing policy, and gets deterministic dense-order iteration and COW write preparation. No dependency on `GameCore` or `fps::Module`.
 - This is **an adapter, not universalization of all FPS/RTS functions**. Any mechanic requiring `GameCore&`, `fps::Actor`, global RNG, actor ownership, collision or format-specific state must be extracted/refactored separately. No native compilation yet.
 - Next: compile and run the same pure policies against two different GameModules via this common adapter; add coverage and an explicit capability matrix for each mechanic.
 
@@ -580,7 +580,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 - New test is not yet wired into build/test runners; no native compilation or passing CI observed.
 
 ### 2026-11-18 — Cross-genre audit: stage 3, public header contract
-- Commit `561bafa`: cross-genre test imports `<aiverselib/genre/EcsMechanicSystems.h>`, `Locomotion.h`, `Weapons.h`, `Match.h` via published `AIVERSE::libraries` include conventions instead of repository-internal relative include paths. This makes the test a useful native-project consumer contract.
+- Commit `561bafa`: cross-genre test imports `"engine/mechanics/EcsMechanicSystems.h"`, `Locomotion.h`, `Weapons.h`, `Match.h` via published `AIVERSE::libraries` include conventions instead of repository-internal relative include paths. This makes the test a useful native-project consumer contract.
 - Build and execution still pending. Next action: register the test in root CMake and standalone ECS runner.
 
 ### 2026-11-18 — Cross-genre audit: stage 4, CMake consumer target
@@ -620,7 +620,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 - **Next agent:** use the shared-library registry first; do not create duplicate RTS/FPS projectile/damage implementations. Follow the updated skill and `AGENTS.md` for all new game mechanics.
 
 ### 2026-11-18 — Universal ECS projectile + damage resolution, stage A
-- Commit `3dfe73e`: added `libraries/include/aiverselib/genre/EcsDamageSystems.h`, a genre-neutral **Components + Systems** damage layer. Components: `HitPointsComponent`, `ProjectileDamageComponent`, `ColliderEntityIndex` (collision ID→generation-safe Entity), `DamageQueue`; event `DamageRequest`; applied report `DamageApplied`.
+- Commit `3dfe73e`: added `engine/mechanics/EcsDamageSystems.h`, a genre-neutral **Components + Systems** damage layer. Components: `HitPointsComponent`, `ProjectileDamageComponent`, `ColliderEntityIndex` (collision ID→generation-safe Entity), `DamageQueue`; event `DamageRequest`; applied report `DamageApplied`.
 - `enqueueProjectileDamage` translates a `ProjectileImpactEvent` from the existing common `addProjectileFlightSystem` into an ordered damage request. `addDamageResolutionSystem` consumes requests at a later fixed system barrier in insertion order; callbacks can emit events but not mutate projectile traversal or structural state. Default policy applies direct damage; custom policies can add armor/factions/resistance without modifying the shared system.
 - **No RTS/FPS includes**, public `AIVERSE::libraries` header. Supports any genre using ECS projectile/health components. This creates the shared capability; genre-specific implementations have NOT yet been ported and no tests/build have passed.
 - Next: executable shooter/strategy host test using the SAME flight/damage systems, rollback/COW checks, CMake and standalone runner wiring, then measure parity before adapting actual RTS/FPS gameplay.
@@ -636,7 +636,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 - Commit `76d7a69` (`docs/ecs-mechanic-composition.md`): detailed architecture, per-mechanic deliverables/acceptance gates and concrete launch -> flight -> collision -> damage -> effects/despawn design, plus candid migration status.
 - Commit `035aae4` (`skills/workflow/aiverse-new-mechanic/SKILL.md`): rewrote older RTS-only instructions. All future features must follow shared ECS component + system + policy + host-adapter architecture.
 - Commit `bc6ff19` (`skills/gameplay/aiverse-weapon-policies/SKILL.md`) requires shared ECS weapon/projectile systems for all genres. Commit `3cd63b6` created `skills/gameplay/aiverse-ecs-projectile-systems/SKILL.md` for the new shared flight API.
-- Commit `8f36243` (`libraries/include/aiverselib/genre/EcsProjectileSystems.h`) adds reusable `ProjectileFlightComponent`, `BallisticFlightPolicy`, `ProjectileImpactEvent`, `addProjectileFlightSystem`: deterministic ECS ballistic updates, read-only collision source provided by ANY game, ordered impact sink after component iteration, deferred despawn. This is a reusable **flight stage**, not complete combat/damage/AI migration.
+- Commit `8f36243` (`engine/mechanics/EcsProjectileSystems.h`) adds reusable `ProjectileFlightComponent`, `BallisticFlightPolicy`, `ProjectileImpactEvent`, `addProjectileFlightSystem`: deterministic ECS ballistic updates, read-only collision source provided by ANY game, ordered impact sink after component iteration, deferred despawn. This is a reusable **flight stage**, not complete combat/damage/AI migration.
 - Commit `68d92e0` (`tests/ecs_projectile_composition_test.cpp`) exercises the same flight ECS system in unrelated Shooter and Strategy GameModule hosts, with stable ordered impacts and deep-vs-page-COW rollback checksum comparison. Commits `bd94083`, `786941f` register it in CTest and the standalone ECS suite, without linking aiverse_game or aiverse_fps.
 - Commit `741c292` registers package `ecs-projectile-systems` and its public `AIVERSE::lib_ecs_projectile_systems` target in `libraries/catalog.json`. Commit `41d6fb3` updates the composition guide to point to actual implementations.
 - **Native build and shader test results are NOT confirmed.** These are code, test and guideline changes, NOT proof every legacy RTS/FPS mechanic is universal. Outstanding: replace genre-specific projectile/collision/damage logic with shared systems, extract RTS-only NativeModule hooks, FPS Actor State workspace migration, generic Inspector/persistence integration, and pass cross-genre/native/ASan/TSan tests.
@@ -681,7 +681,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 - **Verification:** source-level inspection only; native test builds still pending. Keep both CTest and standalone suite as required gates.
 
 ### 2026-11-18 — Universal ECS weapon launch, stage A
-- Commit `3e146a3`: added shared `libraries/include/aiverselib/genre/EcsWeaponLaunchSystems.h`. Data-only ECS components: `WeaponParametersComponent` (Fixed speed/gravity/radius, lifetime, cooldown, damage), `WeaponStateComponent` (ammo/nextFireTick), `FireIntentComponent` (origin/direction/one-shot request), `ProjectileSpawnQueue` and `ProjectileSpawnCommand`.
+- Commit `3e146a3`: added shared `engine/mechanics/EcsWeaponLaunchSystems.h`. Data-only ECS components: `WeaponParametersComponent` (Fixed speed/gravity/radius, lifetime, cooldown, damage), `WeaponStateComponent` (ammo/nextFireTick), `FireIntentComponent` (origin/direction/one-shot request), `ProjectileSpawnQueue` and `ProjectileSpawnCommand`.
 - `addWeaponLaunchSystem` validates settings, cooldown/ammo, consumes requests in stable `WeaponState` dense order and emits spawn commands without structural changes during iteration. `addProjectileSpawnSystem` consumes them in a separate deterministic barrier and creates `ProjectileFlightComponent`/`ProjectileDamageComponent` pairs for the shared flight→impact→damage chain. Host genre adapters supply inputs and configuration; no `GameCore` or `fps::Module` dependencies.
 - **Status:** initial implementation only, not compiled/run or integrated with legacy RTS/FPS gameplay. Next: full cross-genre weapon→spawn→flight→damage test, CMake/standalone registration, catalog, skill and documentation. Keep existing host combat untouched until equivalence is proven.
 
@@ -789,7 +789,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Generic ECS timed mechanics header
 - Implementation SHA: `5907d5f893f91bd4e7989ed2eb8eaa3109ba2959`.
-- Added `libraries/include/aiverselib/genre/EcsTimedMechanics.h`: `WeaponReloadComponent`/`ReloadIntentComponent` with reload and fire-intent gate stages; `HealthRegenerationComponent` over the canonical shared `HitPointsComponent`; `EnergyRegenerationComponent`; `TimedExpiryComponent`, all independently registered with `Simulation` and without RTS/FPS dependencies.
+- Added `engine/mechanics/EcsTimedMechanics.h`: `WeaponReloadComponent`/`ReloadIntentComponent` with reload and fire-intent gate stages; `HealthRegenerationComponent` over the canonical shared `HitPointsComponent`; `EnergyRegenerationComponent`; `TimedExpiryComponent`, all independently registered with `Simulation` and without RTS/FPS dependencies.
 - Verification: source uploaded via GitHub; **native compile and CTest not run**, host integrations not yet switched. Shared health/weapon components remain additive/opt-in and are not asserted to replace legacy modules.
 - Next: add two-host COW/save/rollback fixture, package registration, skill, catalog and CMake, then verify natively before any default host switch.
 
@@ -817,7 +817,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Universal ECS locomotion policy adapter
 - Implementation SHA: `7e48fd23d31cc82fbd791c755f7301bb18635a48`.
-- Added `libraries/include/aiverselib/genre/EcsLocomotionSystems.h`: `LocomotionParametersComponent`, `LocomotionStateComponent`, `LocomotionInputComponent`, `LocomotionOutputComponent` and `addLocomotionPolicySystem`. Uses the existing shared `stepMotion` fixed-point policy instead of duplicating movement math. Consumes jump edge, leaves persistent movement wishes, returns velocity; host collision/position integration is intentionally separate.
+- Added `libraries/include/aiverselib/mechanics/EcsLocomotionSystems.h`: `LocomotionParametersComponent`, `LocomotionStateComponent`, `LocomotionInputComponent`, `LocomotionOutputComponent` and `addLocomotionPolicySystem`. Uses the existing shared `stepMotion` fixed-point policy instead of duplicating movement math. Consumes jump edge, leaves persistent movement wishes, returns velocity; host collision/position integration is intentionally separate.
 - Verification: GitHub source committed, **native compiler and behavioral tests not executed**. Does not replace FPS `moveActor` or RTS `sysMovement` yet.
 - Next: native cross-genre tests and CMake/catalog/skill registration; then integrate collision sampling and movement into actual hosts behind parity gates.
 
@@ -838,7 +838,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Shared ECS inventory transaction system
 - Implementation SHA: `bbda102d6635edf170d83fe5a79280351a53d159`.
-- Added `libraries/include/aiverselib/genre/EcsInventorySystems.h`: per-Entity `InventoryComponent`; immutable `InventoryCatalog` world resource; ordered `InventoryCommandQueue`, `InventoryResultQueue`, generation-safe source/destination entities, and `addInventoryTransactionSystem`. Reuses transactional `gameplay::addItem/removeItem/transferItem` policies, preserving capacity and no-partial-write guarantees without FPS/RTS dependencies.
+- Added `libraries/include/aiverselib/mechanics/EcsInventorySystems.h`: per-Entity `InventoryComponent`; immutable `InventoryCatalog` world resource; ordered `InventoryCommandQueue`, `InventoryResultQueue`, generation-safe source/destination entities, and `addInventoryTransactionSystem`. Reuses transactional `gameplay::addItem/removeItem/transferItem` policies, preserving capacity and no-partial-write guarantees without FPS/RTS dependencies.
 - Verification: source committed; **not compiled or run**, not yet integrated into legacy built-in FPS `Actor::bag` or RTS inventories.
 - Next: cross-genre transaction/rollback tests, public package and CMake runner, skill; then migrate FPS loot/pickups and RTS item transfer by explicit authority cutover.
 
@@ -909,7 +909,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Shared reload policy extracted for direct native host integration
 - Implementation SHA: `930cdf4ae80aa0cc80a845d3c5d2a31f086119fa`.
-- Changed `libraries/include/aiverselib/genre/EcsTimedMechanics.h` to extract `stepWeaponReload(WeaponStateComponent&,WeaponReloadComponent&,tick,request)`; `addWeaponReloadSystem` now calls the same deterministic function. Explicitly preserves normal FPS behavior including completion before a same-tick new request. No added system-level double-owner.
+- Changed `engine/mechanics/EcsTimedMechanics.h` to extract `stepWeaponReload(WeaponStateComponent&,WeaponReloadComponent&,tick,request)`; `addWeaponReloadSystem` now calls the same deterministic function. Explicitly preserves normal FPS behavior including completion before a same-tick new request. No added system-level double-owner.
 - Verification: static source modification only. **Native compiler/CTest unavailable so far**, no live FPS parity yet. The shared function uses the pre-existing FPS transfer arithmetic, so any invalid negative state handling must be checked in host validators.
 - Next: convert the legacy FPS reload step to a temporary typed adapter invoking this policy with canonical fields, then add native golden parity fixtures covering weapon switching, ammo/reserve, replay and save v9.
 
@@ -930,7 +930,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Shared accepted-shot accounting extraction
 - Implementation SHA: `f8b41cf113dc9042824716192073068fb429a9e8`.
-- Changed `libraries/include/aiverselib/genre/EcsWeaponLaunchSystems.h`: extracted pure `commitAcceptedShot(ammo,nextFireTick,now,interval,shots?)` policy, used by generic ECS weapon launch after its existing acceptance checks. No RNG or structural writes, and no new validation inside the helper. Existing generic accepted-shot semantics remain decrement ammo and set nextFireTick.
+- Changed `engine/mechanics/EcsWeaponLaunchSystems.h`: extracted pure `commitAcceptedShot(ammo,nextFireTick,now,interval,shots?)` policy, used by generic ECS weapon launch after its existing acceptance checks. No RNG or structural writes, and no new validation inside the helper. Existing generic accepted-shot semantics remain decrement ammo and set nextFireTick.
 - Verification: GitHub commit only; native C++ compilation and test execution **not run**.
 - Next: call the same policy from real FPS `Module::shoot` while preserving its prior validation/hitscan/rewind and save v9 ordering; then document that separate commit.
 
@@ -951,21 +951,21 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Genre-independent fixed-point regen policy foundation
 - Implementation SHA: `d6ae0b68fe23762b567735c8a613a91d58693d3e`.
-- Added `libraries/include/aiverselib/genre/FixedRegeneration.h`: pure `stepFixedResourceRegeneration(current,maximum,rate,dt)`; exact fixed-point operation order matches existing RTS `Unit` regen. No ECS or genre-module dependency, so multiple ECS systems can reuse it without duplicating math.
+- Added `engine/mechanics/FixedRegeneration.h`: pure `stepFixedResourceRegeneration(current,maximum,rate,dt)`; exact fixed-point operation order matches existing RTS `Unit` regen. No ECS or genre-module dependency, so multiple ECS systems can reuse it without duplicating math.
 - Verification: GitHub source commit only, **no native compiler or runtime executed**.
 - Next: wire `addEnergyRegenerationSystem` and real RTS `sysEconomy` into the same policy while keeping `Unit` canonical; then add a focused cross-host policy smoke regression.
 
 
 ### 2026-11-18 — First kinematic projectile ECS system implementation
 - Implementation SHA: `55a9ecc5c074b75e63907cd41db7cfb0af1d138d`.
-- Added `libraries/include/aiverselib/genre/EcsKinematicProjectileSystems.h`: `KinematicProjectileComponent` (origin/current/destination, owner/target, shotId, elapsed/duration, alive), pure `stepKinematicProjectile` fixed-point endpoint interpolation per simulation tick, `KinematicArrivalEvent`, and `addKinematicProjectileSystem`. The system iterates the ECS pool in dense order, stages arrival events, emits them after iteration, and defers destruction. No collision world, physics forces or RNG. Target tracking is **not** implemented: the endpoint is fixed at launch, and the arrival sink must resolve stale/dead targets.
+- Added `engine/mechanics/EcsKinematicProjectileSystems.h`: `KinematicProjectileComponent` (origin/current/destination, owner/target, shotId, elapsed/duration, alive), pure `stepKinematicProjectile` fixed-point endpoint interpolation per simulation tick, `KinematicArrivalEvent`, and `addKinematicProjectileSystem`. The system iterates the ECS pool in dense order, stages arrival events, emits them after iteration, and defers destruction. No collision world, physics forces or RNG. Target tracking is **not** implemented: the endpoint is fixed at launch, and the arrival sink must resolve stale/dead targets.
 - Verification: GitHub source commit only, no native compilation or CTest. Not registered as a standalone library package or connected to RTS yet. Physics and hitscan systems remain separate existing/planned paths.
 - Next: add independent host tests for travel duration, event ordering, expiry and snapshot rollback; register public package/skill and CMake; connect real RTS adapter behind parity gate.
 
 
 ### 2026-11-18 — ECS energy regeneration policy deduplication
 - Implementation SHA: `9f1fd207014a4b223e47ab3df885b769da95d550`.
-- Changed `libraries/include/aiverselib/genre/EcsTimedMechanics.h` to call the shared pure `stepFixedResourceRegeneration` rather than maintaining independent Fixed arithmetic. Its existing zero floor, valid rate gate and maximum cap are unchanged, and authoritative EnergyRegenerationComponent continues to live in ECS.
+- Changed `engine/mechanics/EcsTimedMechanics.h` to call the shared pure `stepFixedResourceRegeneration` rather than maintaining independent Fixed arithmetic. Its existing zero floor, valid rate gate and maximum cap are unchanged, and authoritative EnergyRegenerationComponent continues to live in ECS.
 - Verification: static source reasoning/edit only; **not compiled/tested**. Existing `ecs_cross_genre_timed_mechanics_test` is the validation gate.
 - Next: port direct RTS Unit health/energy policy calls without moving their existing authoritative component storage.
 
@@ -1038,7 +1038,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Kinematic ECS adds nonphysical pursuit mode
 - Implementation SHA: `58ca3b611a059b38146416a5d21f9a8bef211d55`.
-- `libraries/include/aiverselib/genre/EcsKinematicProjectileSystems.h` now supports two **nonphysical** movement policies: existing deterministic `TimedEndpoint` interpolation and `Pursuit` travel by a fixed distance per tick toward a resolvable destination. Added `advanceKinematicPursuit` with existing `moveTowards` fixed-point semantics; `addKinematicProjectileSystem` accepts an optional destination resolver for moving targets and distinguishes hit arrival from lifetime expiry (expiry emits no hit event).
+- `engine/mechanics/EcsKinematicProjectileSystems.h` now supports two **nonphysical** movement policies: existing deterministic `TimedEndpoint` interpolation and `Pursuit` travel by a fixed distance per tick toward a resolvable destination. Added `advanceKinematicPursuit` with existing `moveTowards` fixed-point semantics; `addKinematicProjectileSystem` accepts an optional destination resolver for moving targets and distinguishes hit arrival from lifetime expiry (expiry emits no hit event).
 - Default TimedEndpoint call sites remain source-compatible. Target resolver receives `Simulation&` and `const KinematicProjectileComponent&` and returns `Vec3`; missed/dead targets can keep the last known destination by default.
 - **Unverified:** GitHub source commit only, no C++ build, no actual RTS module integration or snapshot execution yet. Next: replace nonphysical RTS movement calls with this same shared policy, then test moving-target and timeout behavior.
 
@@ -1089,7 +1089,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Shared deterministic ordered projectile impact policy
 - Implementation SHA: `c44f3638788e4b18d62e4724082bd58b9d9574db`.
-- Added public `libraries/include/aiverselib/genre/EcsOrderedImpactSystems.h` with `OrderedProjectileImpact` (ECS projectile, shooter, target, Fixed damage, location and splash radius) and `resolveOrderedProjectileImpact` which preserves canonical per-projectile order: resolve direct target, stage direct-hit effects, visit eligible splash candidates in the host spatial query's order. Prevents applying splash twice to the primary target. All armor/status/faction/distance logic remains injected by caller callbacks. No `SpatialWorld`, RTS/FPS module, or rigid-body dependency.
+- Added public `engine/mechanics/EcsOrderedImpactSystems.h` with `OrderedProjectileImpact` (ECS projectile, shooter, target, Fixed damage, location and splash radius) and `resolveOrderedProjectileImpact` which preserves canonical per-projectile order: resolve direct target, stage direct-hit effects, visit eligible splash candidates in the host spatial query's order. Prevents applying splash twice to the primary target. All armor/status/faction/distance logic remains injected by caller callbacks. No `SpatialWorld`, RTS/FPS module, or rigid-body dependency.
 - Intent: extract the live RTS direct+splash impact block without batching/reordering damage (which could change shields, callbacks and network replay). This generic resolver is a policy used from an ECS gameplay system, not yet a separately scheduled impact system.
 - Verification: GitHub source commit only; no compilation or CTest observed. Next: integrate into `Combat.cpp::sysProjectiles` and add portable callback-order regressions.
 
@@ -1142,7 +1142,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Shared deterministic hitscan candidate query policy
 - Implementation SHA: `ae9ee7b975139250674c952876a28994bddff5ca`.
-- New public `libraries/include/aiverselib/genre/EcsHitscanSystems.h` exports `HitscanCandidate<T>` and `selectClosestHitscanCandidate`. Inputs: candidate range (live ECS-derived view or immutable rewind snapshot), origin, delta, maximum allowed fraction, eligible predicate and hitbox provider. Uses existing `world::intersect` fixed-point slab query and strict `fraction < best`, retaining original source range order for equal-distance ties. No projectile motion integration or extra RNG; real source and target identities remain the caller's.
+- New public `engine/mechanics/EcsHitscanSystems.h` exports `HitscanCandidate<T>` and `selectClosestHitscanCandidate`. Inputs: candidate range (live ECS-derived view or immutable rewind snapshot), origin, delta, maximum allowed fraction, eligible predicate and hitbox provider. Uses existing `world::intersect` fixed-point slab query and strict `fraction < best`, retaining original source range order for equal-distance ties. No projectile motion integration or extra RNG; real source and target identities remain the caller's.
 - This is a **shared raycast selection policy**, not an independently registered `HitscanSystem` or a replacement for environment/vehicle obstruction. Next connect real FPS `traceShot` to this policy without touching rewind selection or damage order.
 - Verification: connector GitHub commit only; native compilation/CTest have not run.
 
@@ -1172,7 +1172,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Universal ECS ordered-impact queue system (new, opt-in)
 - **Code SHA:** `bf80c4f272564a78c33af8fcfe6fde801a18c4ef`.
-- Added `libraries/include/aiverselib/genre/EcsImpactQueueSystems.h`. New `OrderedImpactQueue` World resource (bounded pending list, monotonic sequence), `enqueueOrderedImpact` and `addOrderedImpactResolutionSystem` bridge the existing generic `resolveOrderedProjectileImpact` policy to a registered ECS Simulation stage. The queue is drained with a swap: requests submitted from damage callbacks execute at the **next barrier**, not recursively.
+- Added `libraries/include/aiverselib/mechanics/EcsImpactQueueSystems.h`. New `OrderedImpactQueue` World resource (bounded pending list, monotonic sequence), `enqueueOrderedImpact` and `addOrderedImpactResolutionSystem` bridge the existing generic `resolveOrderedProjectileImpact` policy to a registered ECS Simulation stage. The queue is drained with a swap: requests submitted from damage callbacks execute at the **next barrier**, not recursively.
 - All gameplay rules (friendly fire, armor, shields, statuses, target liveness, spatial radius and splash) remain host-injected callbacks, with no FPS/RTS dependency and no second authoritative HP/projectile state. It respects caller-controlled order, not a false global same-tick sort. **Compatibility warning:** the existing RTS immediate per-projectile damage path must not be wholesale replaced with a single end-of-tick barrier without proving identical effects ordering.
 - **Verification:** GitHub file creation only, native C++ compile and tests **not executed**. This is a new public source header, not yet a catalog package or built-in FPS/RTS integration.
 - **Next:** add shooter+strategy regression for callback/queue ordering and COW snapshots, publish the native catalog package and agent skill, register CTest and standalone runner. Verify native build before any legacy adoption.
@@ -1275,7 +1275,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — New composable ECS hitscan request-resolution system
 - Implementation SHA: `268518ca82f9efafe66376d028aa53cc1d059aac`.
-- New `libraries/include/aiverselib/genre/EcsHitscanResolutionSystems.h` implements `HitscanIntentComponent` (origin/delta/maximumFraction/shotId/requested), `HitscanResolvedEvent` (source/target entity, shotId, point/fraction), and `addHitscanResolutionSystem`. Consumes one-shot ECS requests even when invalid, queries host-selected current or rewind candidates, checks eligibility/hitbox through shared nearest-ray policy, stages successful hits in stable source pool order and calls hit sink **after** traversal. No simulated projectile movement, new RNG, or internal damage application.
+- New `engine/mechanics/EcsHitscanResolutionSystems.h` implements `HitscanIntentComponent` (origin/delta/maximumFraction/shotId/requested), `HitscanResolvedEvent` (source/target entity, shotId, point/fraction), and `addHitscanResolutionSystem`. Consumes one-shot ECS requests even when invalid, queries host-selected current or rewind candidates, checks eligibility/hitbox through shared nearest-ray policy, stages successful hits in stable source pool order and calls hit sink **after** traversal. No simulated projectile movement, new RNG, or internal damage application.
 - This is a true separate ECS **system**, but it is not yet wired into the live FPS authoritative fire path. Existing FPS rewind hitscan stays on `ActorSystems.cpp::traceShot` using the shared policy; this new system's post-traversal damage callback order would differ from that legacy path if enabled without parity tests. No compiled/tested production guarantee.
 - Next: add cross-host ECS fire-intent/snapshot tests; register catalog target and skill; then compare same-tick FPS and RTS hit ordering before changing live scheduling.
 
@@ -1351,7 +1351,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Shared integer health commit for ECS damage resolution
 - Implementation SHA: `e9990503283b3bfe8ead7994a387f15f8551007b`.
-- `libraries/include/aiverselib/genre/EcsDamageSystems.h` adds `applyIntegerHitPointDamage(int32_t&,int32_t)`, an immediate, allocation-free deterministic HP update after armor/faction/shield and other host policies are already applied. `addDamageResolutionSystem` now calls the same primitive. Handles nonpositive damage/current without mutation and large damage without signed subtraction overflow.
+- `engine/mechanics/EcsDamageSystems.h` adds `applyIntegerHitPointDamage(int32_t&,int32_t)`, an immediate, allocation-free deterministic HP update after armor/faction/shield and other host policies are already applied. `addDamageResolutionSystem` now calls the same primitive. Handles nonpositive damage/current without mutation and large damage without signed subtraction overflow.
 - Verification: GitHub source edit only; **native compiler, CTest, real FPS/RTS parity NOT run**. Next: adopt same helper in live FPS `damage` after knockdown resolution with the old event ordering unchanged; add edge-case regression and run FPS save/rollback checks.
 
 
@@ -1403,14 +1403,14 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Generic ECS DamageQueue versioned bytes and complete checksum
 - Implementation SHA: `fb9542e0474f2903b93776b438ead0e6fe9b9241`.
-- Extended `libraries/include/aiverselib/genre/EcsDamageSystems.h` with explicit `Archive` IO for `DamageRequest` and `DamageQueue`, versioned v1 layout, bounded 16,384-request input, `saveDamageQueue`, transactional `loadDamageQueue` and `hashDamageQueue` covering both generation-safe Entity IDs, shot ID and damage amount in enqueue order. This completes a shared persistence primitive needed by real host rollback/save integrations.
+- Extended `engine/mechanics/EcsDamageSystems.h` with explicit `Archive` IO for `DamageRequest` and `DamageQueue`, versioned v1 layout, bounded 16,384-request input, `saveDamageQueue`, transactional `loadDamageQueue` and `hashDamageQueue` covering both generation-safe Entity IDs, shot ID and damage amount in enqueue order. This completes a shared persistence primitive needed by real host rollback/save integrations.
 - Verification: source committed only, **native C++ compilation, save round-trip and live game/save parity still not executed**. Adding a serializer alone does not automatically wire `GameModule::serializeState` or hash to this resource.
 - Next: add CTest round-trip/truncation/checksum mutation checks in the existing integer-damage fixture, update AI skill and complete native test gates before using it as authoritative pending damage in FPS/RTS.
 
 
 ### 2026-11-18 — Shared synchronous hitscan intent policy for live FPS and scheduled ECS
 - Implementation SHA: `801ad2a943031cf83cbd781c0c2f71664ccfe5d3`.
-- Changed `libraries/include/aiverselib/genre/EcsHitscanResolutionSystems.h`: added `resolveHitscanIntent` pure generic policy taking `HitscanIntentComponent`, shooter entity, current or immutable historical target range, eligibility, hitboxes and live-entity mapping. Returns both `HitscanResolvedEvent` and a pointer to the matched immutable pose, preserving FPS historical head/limb checks. The scheduled `addHitscanResolutionSystem` now calls this **same** policy, copying a request before clearing `requested`, and still batches callbacks after ECS iteration; no change to intended order or one-shot semantics.
+- Changed `engine/mechanics/EcsHitscanResolutionSystems.h`: added `resolveHitscanIntent` pure generic policy taking `HitscanIntentComponent`, shooter entity, current or immutable historical target range, eligibility, hitboxes and live-entity mapping. Returns both `HitscanResolvedEvent` and a pointer to the matched immutable pose, preserving FPS historical head/limb checks. The scheduled `addHitscanResolutionSystem` now calls this **same** policy, copying a request before clearing `requested`, and still batches callbacks after ECS iteration; no change to intended order or one-shot semantics.
 - **No gameplay migration claim yet**: live FPS still calls the shared nearest-candidate helper directly until its own `traceShot` is migrated in a separate implementation commit. This helper enables in-tick immediate resolution without postponing damage to the next system barrier.
 - Verification: GitHub code commit only, not compiled or exercised. Follow-up tests must check invalid/blocked intents, rewind pose lifetime, snapshot/rollback and multiple sources.
 
@@ -1490,7 +1490,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Shared swept projectile-target collision policy (physical path)
 - Implementation SHA: `97ad4670832714ba2c324c88cf2f5f6224653a09`.
-- New public `libraries/include/aiverselib/genre/EcsSweepQuerySystems.h` defines `SweptProjectileContact<Candidate>` (stable pointer/fraction/normal) and `selectSweptProjectileContact`. Performs deterministic fixed-point swept segment against AABB expanded by projectile extents with injectable bounds and stable tie preference. Unlike the strict legacy actor hitscan selector, endpoint fraction=1 contacts are accepted. No physics integration, RNG or damage; this is shared collision selection to compose with physical/ballistic projectile solver and impact policies. No genre check.
+- New public `engine/mechanics/EcsSweepQuerySystems.h` defines `SweptProjectileContact<Candidate>` (stable pointer/fraction/normal) and `selectSweptProjectileContact`. Performs deterministic fixed-point swept segment against AABB expanded by projectile extents with injectable bounds and stable tie preference. Unlike the strict legacy actor hitscan selector, endpoint fraction=1 contacts are accepted. No physics integration, RNG or damage; this is shared collision selection to compose with physical/ballistic projectile solver and impact policies. No genre check.
 - Verification: connector GitHub source commit only; no C++ compilation, no gameplay usage yet. Next migrate the actual FPS programmed projectile sweep loop preserving its stable target-ID ordering and wall collision precedence, then add tests.
 
 
@@ -1663,7 +1663,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Reusable deterministic physical bouncing projectile policy
 - Implementation SHA: `d2504f112e8455160e715f80cd9fa926f2f9db5b`.
-- `libraries/include/aiverselib/genre/EcsProjectileSystems.h` now defines `BounceMotionConfig` (gravity, bounce velocity divisor, contact-fraction inset, collision box half-extent) and `stepBouncingProjectile`. This is a pure physics-motion policy over explicit position, velocity and a read-only `SpatialWorld` collision provider. It does not own a timer, apply damage, spawn/despawn or change projectile Entity ownership. Its default values intentionally match existing FPS grenade bounce: gravity 10, half-extent 0.1, contact inset 0.01, reflection divided by 2 exactly (fixed-point division, not multiplication by 0.5).
+- `engine/mechanics/EcsProjectileSystems.h` now defines `BounceMotionConfig` (gravity, bounce velocity divisor, contact-fraction inset, collision box half-extent) and `stepBouncingProjectile`. This is a pure physics-motion policy over explicit position, velocity and a read-only `SpatialWorld` collision provider. It does not own a timer, apply damage, spawn/despawn or change projectile Entity ownership. Its default values intentionally match existing FPS grenade bounce: gravity 10, half-extent 0.1, contact inset 0.01, reflection divided by 2 exactly (fixed-point division, not multiplication by 0.5).
 - Native result **unverified**; next implementation commit replaces only the real FPS ordinary grenade bounce branch with this shared policy, keeping effects/fuses and nonphysical RTS projectiles independent.
 
 ### 2026-11-18 — Native ECS migration integrity and failed-load rollback

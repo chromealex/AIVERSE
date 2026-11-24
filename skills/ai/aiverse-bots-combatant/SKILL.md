@@ -7,7 +7,7 @@ description: Reuse the AIVERSE combatant bot (one agent: perception, reaction, a
 
 Current host: commands are `fpsCommand` for the `engine/actor` host (formerly modules/fps); using it on other hosts is debt G3/G5 in `docs/no-genre-split-audit.md`.
 
-1. Read `docs/bots.md` and this catalog entry. Read `libraries/include/aiverselib/bots/Fps.h` for exact APIs.
+1. Read `docs/bots.md` and this catalog entry. Read `engine/bots/Fps.h` for exact APIs.
 2. Run on one authoritative host with map bot:false for owned slots. Use fpsCommand then sim.submit; never mutate actors. Persist FpsState with the simulation. Supply generated navmesh or authored waypoint graph; no bomb, loot or vehicle mechanics are implied.
 3. Link `AIVERSE::lib_bots_combatant` from an executable host target. For registered OBJECT native modules use `aiverse_native_use_bots(aiverse_native_<id> COMMANDER COMBATANT)` with only the bot backends the module uses (legacy argument names `RTS`, `FPS` still accepted) to avoid circular linkage. Use `examples/native/libraries/BotConsumer.cpp` for include/persistence access and `examples/libraries/bots/main.cpp` for actual host scheduling.
 4. Keep configurations immutable and validate JSON at load. Store dynamic state explicitly; save and restore it with simulation before producing further commands. Never retain future state after rollback.

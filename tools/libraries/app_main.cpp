@@ -1,7 +1,7 @@
 // Host CLI over the same public C++ APIs used by native games.
 #include "engine/data/Json.h"
 #include <aiverselib/app/Balance.h>
-#include <aiverselib/systems/Curves.h>
+#include "engine/systems/Curves.h"
 #include <aiverselib/app/Performance.h>
 #include <aiverselib/app/Planner.h>
 #include <aiverselib/app/Scenario.h>

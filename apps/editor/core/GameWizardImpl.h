@@ -58,7 +58,7 @@ std::string slugOf(const std::string& title);
 namespace aiverse::editor {
 
 struct GameMaker::Ctx {
-    std::string engineDir, kitDir;           // engine checkout, templates/_wizard
+    std::string engineDir, kitDir;           // engine checkout, tools/wizard/kit
     std::string dir;                         // the new project
     WizardSpec spec;
     Json plan = Json::object();

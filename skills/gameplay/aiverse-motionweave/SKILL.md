@@ -5,7 +5,7 @@ description: Modular ECS animation system for AIVERSE native projects across FPS
 # AIVERSE MotionWeave
 
 Canonical public API:
-- Header: `<aiverselib/motionweave/MotionWeave.h>`
+- Header: `"engine/animation/MotionWeave.h"`
 - CMake: `AIVERSE::MotionWeave`
 - C++ namespace: `aiverse::motionweave`
 - Scheduler: `motionweave::MotionWeave::update(presentationWorld, dt)`
@@ -19,6 +19,12 @@ Existing `AnimationGraph`, `Animator`, `Pose` and special-purpose headers under
 `aiverselib/animation/` are part of MotionWeave. Older consumers may
 continue using `aiverse::lib::animation` and `AIVERSE::animation_ecs`.
 Do not fork/duplicate the runtime for another genre.
+
+Library catalog id: `motionweave` (`python3 tools/libraries/catalog.py info motionweave`); capability area
+A3 in `docs/capability-status.json`. Exists: montages with sections, slots and bone masks, clip notifies, root
+motion extraction/baking, motion warping, humanoid and generic retargeting, pose inertialization, crowd
+budgets, facial rig, Box3D ragdoll bridge. Not done (2026-11-22): audio-driven lip-sync (Vivid visemes are set
+by hand), live game-scene/prefab binding, HTML5 Studio viewport.
 
 Read `docs/motionweave.md`, `docs/animation-graphs.md`,
 `docs/agent-handoffs/animation-universal.md` and `AGENTS.md`.
@@ -57,7 +63,7 @@ non-authoritative debugging overlay. The independent CTest targets are
 
 NEVER introduce genre/app includes into `engine/render`,
 `libraries/include/aiverselib/animation` or
-`libraries/include/aiverselib/motionweave`.
+`engine/animation`.
 A generic source frame carries stable source ID, generation,
 model, graph and named animation parameter values; the source adapter
 `MotionWeaveSourceBridge` projects those into a presentation ECS World.
@@ -68,7 +74,7 @@ The engine core provides no named gameplay actions and does not
 contain conditional FPS/RTS paths. Reuse one animation system,
 one set of components and one set of algorithms for every genre.
 
-Core action edges use only `<aiverselib/animation/AnimationActionEdges.h>`:
+Core action edges use only `"engine/animation/AnimationActionEdges.h"`:
 a revision/generation and arbitrary named counters and flags. FPS-only
 `shots/reloadUntil/health` conversion lives under
 `engine/view/ActorAnimationEvents.h`, not in the MotionWeave library.
@@ -77,7 +83,7 @@ without duplicating generic event/animation algorithms.
 
 ## Stage 180: semantic facial rig and existing IK (source-only)
 
-Use `<aiverselib/animation/FacialControlRig.h>` and
+Use `"engine/animation/FacialControlRig.h"` and
 `FacialControlRig::compile(model, authoredV1, declaredParameters)`.
 This compiles explicit importer-authored **mesh-local morph names** and
 optional existing native `render::AnimationRig` `rig` operators

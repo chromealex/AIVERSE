@@ -1,7 +1,7 @@
 // SpectraFX — AIVERSE's universal, native-project ECS presentation API.
 // Include this in any native game module (FPS, RTS, racing, RPG, etc.).
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 #include "engine/fx/SpectraFX.h"
 #include "EcsVfxPresentation.h"
 #include "SpectraCueEcsAdapter.h"

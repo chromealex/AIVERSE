@@ -5,8 +5,8 @@
 // must execute at a native structural-write barrier before water sampling.
 #pragma once
 #include "engine/world/TerraWeaveEcsBankBridge.h"
-#include <aiverselib/water/NereidQueryIndex.h>
-#include <aiverselib/water/NereidSedimentTransport.h>
+#include "engine/world/nereid/NereidQueryIndex.h"
+#include "engine/world/nereid/NereidSedimentTransport.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>

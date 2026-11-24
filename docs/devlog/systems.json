@@ -2419,6 +2419,24 @@
       "taglineEn": "Moving a project from another engine",
       "essence": "Импортёр переносит сцены, префабы, модели, частицы и анимации; остальное попадает в отчёт для агента.",
       "essenceEn": "The importer moves scenes, prefabs, models, particles and animations; the rest goes into a report for an agent.",
+      "roadmap": [
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Чтение карт Warcraft III",
+          "titleEn": "Warcraft III map import",
+          "text": "Архивы MPQ, высоты, объекты и размещение на карте; предпросмотр рельефа в Studio. Интеграция игровых объектов и проверка на реальных картах ещё в работе.",
+          "textEn": "MPQ archives, heights, objects and placements; Studio terrain preview. Game object integration and real-map verification remain in progress."
+        },
+        {
+          "status": "planned",
+          "target": null,
+          "title": "Перенос игровых объектов Warcraft III в ECS",
+          "titleEn": "Warcraft III objects to native ECS",
+          "text": "Соответствие ID моделей, материалов, правил, вода и растительность через действующие системы движка.",
+          "textEn": "Map object IDs to models, materials and native rules; reuse existing water and foliage systems."
+        }
+      ],
       "includes": [
         {
           "name": "Сцены и префабы",
@@ -2529,7 +2547,8 @@
       ],
       "roadmap": [
         {
-          "status": "in-progress",
+          "status": "done",
+          "date": "2026-11-23",
           "target": null,
           "title": "Один экран загрузки во всех проектах",
           "titleEn": "One loading screen in every project",
@@ -2596,7 +2615,16 @@
       "id": "render",
       "name": "Рендер и материалы",
       "nameEn": "Rendering and materials",
-      "doc": "docs/models.md"
+      "doc": "docs/models.md",
+      "roadmap": [
+        {
+          "status": "in-progress",
+          "title": "3D-объекты в интерфейсе",
+          "text": "Вывод объектов сцены и отдельно анимированных моделей в элементы UI через внеэкранную текстуру.",
+          "titleEn": "3D objects in UI",
+          "textEn": "Render scene objects and independently animated models into UI elements through an offscreen texture."
+        }
+      ]
     },
     {
       "id": "gameplay",
@@ -2660,6 +2688,14 @@
       "roadmap": [
         {
           "status": "in-progress",
+          "title": "Строительная сетка",
+          "text": "Координаты и привязка ячеек, поворот footprint и проверка размещения через общую библиотеку construction.",
+          "titleEn": "Construction grid",
+          "textEn": "Cell coordinates and snapping, rotated footprints and placement checks through the shared construction library."
+        },
+        {
+          "status": "done",
+          "date": "2026-11-23",
           "target": null,
           "title": "Новые движения персонажа",
           "titleEn": "New character moves",
@@ -2667,7 +2703,8 @@
           "textEn": "Dash with air charges, wall run and slide, grapple (pull and swing), glide and dropping through one-way platforms in the shared movement machine. Done in a branch, waiting for the merge into main."
         },
         {
-          "status": "in-progress",
+          "status": "done",
+          "date": "2026-11-23",
           "target": null,
           "title": "Новые движения в FPS с предсказанием",
           "titleEn": "New moves in the FPS with prediction",
@@ -2675,7 +2712,8 @@
           "textEn": "A rules \"locomotion\" block moves characters through the movement machine; the client predicts the modes and reconciles with the server, saves and checksums change only with the block."
         },
         {
-          "status": "in-progress",
+          "status": "done",
+          "date": "2026-11-23",
           "target": null,
           "title": "Пакеты для пробелов реестра возможностей",
           "titleEn": "Packages for the capability gaps",

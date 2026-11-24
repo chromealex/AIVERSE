@@ -1,9 +1,9 @@
 // boss-encounters: telegraph areas and lifecycle, statuses, boss phases / patterns / enrage / adds, schedule and
 // rotation, mob behaviour states, persistence, JSON data and the headless hero-vs-boss reference fight.
 #include <aiverselib/mechanics/EncounterData.h>
-#include <aiverselib/mechanics/EncounterPersistence.h>
+#include "engine/mechanics/EncounterPersistence.h"
 #include <aiverselib/mechanics/EncounterScenario.h>
-#include <aiverselib/mechanics/TelegraphDecals.h>
+#include "engine/mechanics/TelegraphDecals.h"
 #include <array>
 #include <iostream>
 #include <stdexcept>
@@ -109,10 +109,10 @@ void statuses(){
     for(int i=0;i<3;++i){applyStatus(defs,boss,0,2,7);}
     CHECK(boss.active.size()==3);                  // maxStacks 3
     roundtrip(boss);CHECK(clearStatuses(defs,boss).size()==3&&boss.active.empty());
-    auto rules=rtsStatusRules(defs.at(3),20);CHECK(rules.status.find("\"speed\", \"mul\": 0.6000")!=std::string::npos&&rules.duration=="2.0000");
-    CHECK(rtsStatusRules(defs.at(2),20).status.find("\"independent\"")!=std::string::npos);
-    CHECK(rtsStatusRules(defs.at(1),20).status.find("\"stun\"")!=std::string::npos);
-    CHECK(Json::parse(rtsStatusRules(defs.at(2),20).status).isObject());
+    auto rules=gameStatusRules(defs.at(3),20);CHECK(rules.status.find("\"speed\", \"mul\": 0.6000")!=std::string::npos&&rules.duration=="2.0000");
+    CHECK(gameStatusRules(defs.at(2),20).status.find("\"independent\"")!=std::string::npos);
+    CHECK(gameStatusRules(defs.at(1),20).status.find("\"stun\"")!=std::string::npos);
+    CHECK(Json::parse(gameStatusRules(defs.at(2),20).status).isObject());
 }
 TelegraphSet bossAttacks(){
     TelegraphSet t;

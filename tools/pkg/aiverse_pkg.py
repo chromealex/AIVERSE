@@ -41,6 +41,7 @@ import shutil
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
@@ -141,8 +142,15 @@ def fetch_bytes(url: str) -> bytes:
     if offline():
         raise PkgError(f'offline (AIVERSE_PACKAGES_OFFLINE): cannot fetch {url}')
     req = urllib.request.Request(url, headers={'User-Agent': 'aiverse-pkg/1'})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return r.read()
+    for attempt in range(6):   # GitHub answers 429 when many packages are read at once (CI runners share IPs)
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return r.read()
+        except urllib.error.HTTPError as e:
+            if e.code not in (429, 502, 503, 504) or attempt == 5:
+                raise
+            retry = e.headers.get('Retry-After', '')
+            time.sleep(min(60.0, float(retry)) if retry.isdigit() else 2.0 * 2 ** attempt)
 
 
 def download(url: str, dest: Path, expect_sha: str, expect_size: int | None, log) -> None:

@@ -2,7 +2,7 @@
 
 **AIVerse InputFlow** (short: **InputFlow**) is AIVERSE's genre-independent, action-based **presentation input** system. It uses a device → mapping context → action → trigger pipeline, inspired by Unreal Engine's Enhanced Input without copying its C++ API or binary asset format.
 
-The canonical native C++ header is `#include <aiverselib/gameplay/InputFlow.h>`. Use `aiverse::lib::gameplay::inputflow::InputFlow` to create the runtime and `inputflow::InputAction`, `inputflow::InputContext` and `inputflow::InputValue` to describe input. The old `<aiverselib/gameplay/EnhancedInput.h>` and `aiverse::lib::gameplay::enhanced::InputSystem` remain source-compatible aliases. Existing `input/actions.json` paths, profile file names and command layouts remain unchanged. New native consumers should link `AIVERSE::InputFlow` (or `AIVERSE::lib_inputflow`); `AIVERSE::lib_input` is preserved as an alias to the same header-only library.
+The canonical native C++ header is `#include "engine/platform/input/InputFlowCore.h"`. Use `aiverse::lib::gameplay::inputflow::InputFlow` to create the runtime and `inputflow::InputAction`, `inputflow::InputContext` and `inputflow::InputValue` to describe input. The old `"engine/platform/input/EnhancedInputCore.h"` and `aiverse::lib::gameplay::enhanced::InputSystem` remain source-compatible aliases. Existing `input/actions.json` paths, profile file names and command layouts remain unchanged. New native consumers should link `AIVERSE::InputFlow` (or `AIVERSE::lib_inputflow`); `AIVERSE::lib_input` is preserved as an alias to the same header-only library.
 
 ## Runtime pipeline
 
@@ -22,8 +22,8 @@ platform::Event / GamepadState
 Input processing is **not** ECS authoritative simulation. Never feed float device state directly to deterministic ECS. ECS systems consume semantic commands and own the rules; UI and remapping stay local. A single \`Fire\` action can be converted into FPS, RTS, vehicle, turret or UI commands without duplicating physical-key handling.
 
 Files:
-- \`libraries/include/aiverselib/gameplay/Input.h\`: legacy \`InputPhase\`, \`Binding\`, \`resolveInput\`, \`deadzone\` and selection helpers (unchanged).
-- \`libraries/include/aiverselib/gameplay/EnhancedInput.h\`: header-only pure C++20 core, target \`AIVERSE::lib_input\` / native \`aiverse_native_use_libraries(target input)\`.
+- \`engine/gameplay/Input.h\`: legacy \`InputPhase\`, \`Binding\`, \`resolveInput\`, \`deadzone\` and selection helpers (unchanged).
+- \`engine/platform/input/EnhancedInputCore.h\`: header-only pure C++20 core, target \`AIVERSE::lib_input\` / native \`aiverse_native_use_libraries(target input)\`.
 - \`engine/platform/EnhancedInputAdapter.h\`: OS event and gamepad conversion; requires platform hosting.
 - \`engine/platform/EnhancedInputConfig.h\`: strict JSON action assets and per-user rebinding profiles; requires the engine \`Json\` type, so native modules link engine interfaces if they need it.
 - \`apps/fps/client.cpp\`: FPS reference use; maps action state to the unchanged \`fps::Input\` command.
@@ -244,7 +244,7 @@ evidence of a passing test.
 ## C++ basics
 
 \`\`\`cpp
-#include <aiverselib/gameplay/InputFlow.h>
+#include "engine/platform/input/InputFlowCore.h"
 namespace ei = aiverse::lib::gameplay::inputflow;
 ei::InputFlow input;
 input.defineAction({"Move",ei::ValueType::Axis2D,{ei::Modifier::normalize()}});

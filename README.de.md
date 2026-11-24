@@ -253,7 +253,7 @@ Vorlagen sind Pakete des [Katalogs](https://chromealex.github.io/AIVERSE/catalog
 
 ```bash
 ./studio_mac.command                    # AIVERSE Studio, der Editor (braucht Xcode, CMake, Node.js)
-./studio_mac.command templates/mushrooms   # ...mit einem anderen Projekt
+./studio_mac.command ~/.aiverse/packages/templates/mushrooms   # ...mit einem anderen Projekt
 ```
 
 Windows: `studio_windows.cmd [project]` baut und öffnet `AiverseStudio.exe` (braucht Visual Studio 2022,

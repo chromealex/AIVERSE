@@ -18,7 +18,7 @@
 #include "engine/character/vivid/GpuActorRetirement.h"
 #include "engine/character/vivid/GpuMorphAssetCache.h"
 #include "engine/character/vivid/FaceShapeBinding.h"
-#include <aiverselib/motionweave/MotionWeave.h>
+#include "engine/animation/MotionWeave.h"
 
 #include <algorithm>
 #include <cmath>

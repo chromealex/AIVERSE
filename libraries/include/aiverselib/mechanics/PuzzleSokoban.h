@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Sokoban sessions for puzzle-solvers over the grid-puzzles rules (strategy/Puzzles.h: pushMove, PushHistory undo/redo,
 // pushDeadCells / pushDeadlocked, solvePushAStar). Adds strictly increasing move numbers, push/undo counters and the
 // command struct players and bots share. The board/state legality stays owned by grid-puzzles.

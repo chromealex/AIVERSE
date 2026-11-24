@@ -18,7 +18,7 @@
 #include "engine/data/Json.h"
 #include "engine/render/Renderer3D.h"
 #include "engine/world/NereidWaterManifest.h"
-#include <aiverselib/water/NereidRasterImport.h>
+#include "engine/world/nereid/NereidRasterImport.h"
 #include <algorithm>
 #include <cmath>
 #include <functional>

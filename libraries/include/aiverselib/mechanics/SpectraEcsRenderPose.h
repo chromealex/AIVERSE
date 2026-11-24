@@ -2,7 +2,7 @@
 // Two committed-pose snapshots live ONLY in the presentation layer, never
 // inside the authoritative gameplay simulation, ECS hash or network state.
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 
 #include "SpectraGpuAttachmentEcsAdapter.h"
 #include <algorithm>

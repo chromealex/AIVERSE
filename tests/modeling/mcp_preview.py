@@ -13,6 +13,9 @@ import socket
 import subprocess
 import tempfile
 import time
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools/pkg'))
+from fetch_templates import default_dir as templates_dir  # noqa: E402
 
 
 def main():
@@ -29,7 +32,7 @@ def main():
         editor = build / ('AiverseEditor.exe' if os.name == 'nt' else 'AiverseEditor')
     with tempfile.TemporaryDirectory(prefix='aiverse-modeling-mcp-') as tmp:
         project = Path(tmp) / 'game'
-        shutil.copytree(root / 'templates/showcase', project)
+        shutil.copytree(templates_dir() / 'showcase', project)
         with socket.socket() as probe:
             probe.bind(('127.0.0.1', 0))
             port = probe.getsockname()[1]

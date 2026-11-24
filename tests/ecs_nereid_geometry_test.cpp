@@ -1,6 +1,6 @@
 // NEREID polygon/spline water geometry in two unrelated native game hosts.
-#include <aiverselib/water/NereidWaterSystems.h>
-#include <aiverselib/water/NereidFootprintDistance.h>
+#include "engine/world/nereid/NereidWaterSystems.h"
+#include "engine/world/nereid/NereidFootprintDistance.h"
 #include <iostream>
 #include <memory>
 #include <stdexcept>

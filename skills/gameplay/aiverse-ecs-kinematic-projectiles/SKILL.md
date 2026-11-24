@@ -5,7 +5,7 @@ description: Use deterministic nonphysical projectile motion in RTS, FPS, tower 
 
 # ECS kinematic projectiles
 
-Use the public native header `<aiverselib/mechanics/EcsKinematicProjectileSystems.h>`
+Use the public native header `"engine/mechanics/EcsKinematicProjectileSystems.h"`
 and package `AIVERSE::lib_ecs_kinematic_projectiles`
 (from `aiverse_native_use_libraries(your_target ecs-kinematic-projectiles)`).
 Do not copy these algorithms into a particular genre module.

@@ -1,7 +1,7 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Adapter from the generated optional `survival` settings section to SurvivalConfig (body model and weather chill/wetting).
-#include "../gameplay/Configuration.h"
+#include "engine/gameplay/Configuration.h"
 #include "Survival.h"
 #include <string>
 #include <vector>

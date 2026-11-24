@@ -18,7 +18,7 @@
 // Only uses graph features available on origin/main so the same source can
 // measure the engine before and after an optimisation.
 #include "tests/animation/HumanoidLocomotionFixture.h"
-#include <aiverselib/motionweave/MotionWeave.h>
+#include "engine/animation/MotionWeave.h"
 #include "engine/render/AnimationMotion.h"
 #include <algorithm>
 #include <chrono>

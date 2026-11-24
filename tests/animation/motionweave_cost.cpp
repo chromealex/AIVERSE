@@ -1,5 +1,5 @@
-#include <aiverselib/animation/AnimationWorkPolicy.h>
-#include <aiverselib/motionweave/MotionWeave.h>
+#include "engine/animation/AnimationWorkPolicy.h"
+#include "engine/animation/MotionWeave.h"
 #include "../AlwaysCheck.h"
 #include <cmath>
 using namespace aiverse;

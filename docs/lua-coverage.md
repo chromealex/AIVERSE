@@ -6,7 +6,7 @@
 производительности и что добавить в ядро (один раз, обобщённо), чтобы цель стала достижимой.
 
 Состояние: ветка `master` на `adfbbac` (Lua 5.4, стандартная библиотека на Lua, 18 образцов игр).
-Прототипы: `templates/lua_lab` (5 механик, которых нет в C++), бенчмарк: `templates/lua_lab/bench`,
+Прототипы: `tests/checksums/games/lua_lab` (5 механик, которых нет в C++), бенчмарк: `tests/checksums/games/lua_lab/bench`,
 тест: `lua_lab_prototypes` в `tests/tests.cpp`.
 
 ---
@@ -119,10 +119,10 @@
 
 ---
 
-## 4. Прототипы (`templates/lua_lab`)
+## 4. Прототипы (`tests/checksums/games/lua_lab`)
 
 Игра «Iron and Gold» (как `templates/scripted`) + пять механик, которых нет в C++. Только
-публичный Lua API (плюс данные). Запуск: `build/lin/aiverse_headless --project templates/lua_lab --seed 3`.
+публичный Lua API (плюс данные). Запуск: `build/lin/aiverse_headless --project tests/checksums/games/lua_lab --seed 3`.
 
 | № | Механика | Файл | Результат (seed 3, боты, матч до победы) | Где API не хватило |
 |---|---|---|---|---|
@@ -153,7 +153,7 @@
 
 ## 5. Производительность и детерминизм
 
-Бенчмарк: `templates/lua_lab/bench` (N нейтральных юнитов на поле 128×128, два игрока-бота
+Бенчмарк: `tests/checksums/games/lua_lab/bench` (N нейтральных юнитов на поле 128×128, два игрока-бота
 со зданием, 60 игровых секунд = 1200 тиков). Время — **процессорное user-время** процесса
 (машина была сильно загружена другими сборками, поэтому стена не показательна), лучшее из
 повторов. «Lua, мс/тик» = режим − `idle` (та же сцена без работы скрипта).
@@ -269,9 +269,9 @@ C++-ядро и только параметры из данных/Lua, у виз
 
 ```sh
 cmake -S . -B build/lin -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build/lin -j3
-build/lin/aiverse_headless --project templates/lua_lab --seed 3            # прототипы, лог script: fire/attrition/...
+build/lin/aiverse_headless --project tests/checksums/games/lua_lab --seed 3            # прототипы, лог script: fire/attrition/...
 build/lin/aiverse_tests | grep lua_lab                                      # тест прототипов + детерминизм
-build/lin/aiverse_headless --project templates/lua_lab/bench --map maps/n1000_read.json --max-seconds 60
+build/lin/aiverse_headless --project tests/checksums/games/lua_lab/bench --map maps/n1000_read.json --max-seconds 60
 ```
 
 Карты бенча: `maps/n{100,1000,5000}_{idle,read,unit,state,order}.json`, `maps/n100_field.json`

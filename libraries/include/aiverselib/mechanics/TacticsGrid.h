@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // tactics-grid: square and hex boards for turn strategy. Weighted movement with a deterministic reachable set and
 // paths, half/full cover from the owner grid with a flank angle, integer line of fire and shot previews (hit chance
 // in integer milli). Hex boards use axial coordinates (q = x, r = y) stored as a width x height parallelogram.

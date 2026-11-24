@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // physical-interactions umbrella: deterministic kinematic interaction policies. Determinism/network model:
 // these policies are the authoritative state (Fixed math, integer ticks, ascending-ID order, owner collision
 // queries through engine/world); run them on the authority (or in lockstep on every peer) from validated

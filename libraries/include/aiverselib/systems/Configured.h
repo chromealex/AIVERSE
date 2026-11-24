@@ -1,6 +1,6 @@
 #pragma once
-#include "../gameplay/Configuration.h"
-#include "Loot.h"
+#include "engine/gameplay/Configuration.h"
+#include "engine/core/progression/Loot.h"
 #include "Perception.h"
 #include "Decisions.h"
 namespace aiverse::lib::systems {

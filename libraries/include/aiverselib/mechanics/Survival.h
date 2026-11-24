@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // survival-ecology: body model (core temperature from owner-supplied environment, clothing and shelter;
 // wetness; hunger/thirst/stamina interplay; condition) and weather modifiers. Integer math only: temperatures
 // in milli-degrees C (core in micro-degrees), meters 0..100000, rates per tick. The owner supplies environment,

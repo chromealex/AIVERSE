@@ -2,7 +2,7 @@
 // telegraph begun and stepped to its strike, the burn applied, and every state stored in NativeState. A real
 // authoritative handler passes sim.rng(), applies the hits through the game's damage owner and draws the views.
 #include <aiverselib/mechanics/EncounterData.h>
-#include <aiverselib/mechanics/EncounterPersistence.h>
+#include "engine/mechanics/EncounterPersistence.h"
 #include "engine/game/Native.h"
 #include <array>
 bool libraryEncounterConsumerExample(aiverse::game::NativeState& state){

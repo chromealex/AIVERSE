@@ -1,7 +1,7 @@
 // Offline bake of float skeletal root motion into deterministic Q16 tick samples.
 // Import/authoring ONLY. Simulation consumes the fixed values, never samples floats.
 #pragma once
-#include "AnimationPlayback.h"
+#include "engine/animation/AnimationPlayback.h"
 #include "GenericRetarget.h"
 #include "EcsRootMotionSystems.h"
 #include "engine/data/Json.h"

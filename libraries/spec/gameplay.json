@@ -644,6 +644,150 @@
           "default": 30,
           "minimum": 2,
           "maximum": 3600
+        },
+        "dashEnabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "dashSpeedMilli": {
+          "type": "integer",
+          "default": 14000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "dashEndSpeedMilli": {
+          "type": "integer",
+          "default": 6000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "dashTicks": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "dashCooldownTicks": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "airDashes": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 16
+        },
+        "wallSlideEnabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "wallSlideSpeedMilli": {
+          "type": "integer",
+          "default": 2500,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "wallRunEnabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "wallRunSpeedMilli": {
+          "type": "integer",
+          "default": 8000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "wallRunMinSpeedMilli": {
+          "type": "integer",
+          "default": 4000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "wallRunGravityScaleMilli": {
+          "type": "integer",
+          "default": 250,
+          "minimum": 0,
+          "maximum": 2000
+        },
+        "wallRunTicks": {
+          "type": "integer",
+          "default": 90,
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "wallRunCooldownTicks": {
+          "type": "integer",
+          "default": 12,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "grappleEnabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "grappleSwing": {
+          "type": "boolean",
+          "default": false
+        },
+        "grappleMaxLengthMilli": {
+          "type": "integer",
+          "default": 30000,
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "grappleSpeedMilli": {
+          "type": "integer",
+          "default": 18000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "grappleArriveMilli": {
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "grappleReelSpeedMilli": {
+          "type": "integer",
+          "default": 4000,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "grappleTicks": {
+          "type": "integer",
+          "default": 300,
+          "minimum": 1,
+          "maximum": 36000
+        },
+        "oneWayDropTicks": {
+          "type": "integer",
+          "default": 12,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "wallReattachTicks": {
+          "type": "integer",
+          "default": 12,
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "glideEnabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "glideFallSpeedMilli": {
+          "type": "integer",
+          "default": 1500,
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "glideForwardSpeedMilli": {
+          "type": "integer",
+          "default": 8000,
+          "minimum": 0,
+          "maximum": 100000
         }
       },
       "relations": [
@@ -670,6 +814,18 @@
         [
           "vaultMaxHeightMilli",
           "mantleMaxHeightMilli"
+        ],
+        [
+          "dashEndSpeedMilli",
+          "dashSpeedMilli"
+        ],
+        [
+          "wallRunMinSpeedMilli",
+          "wallRunSpeedMilli"
+        ],
+        [
+          "grappleArriveMilli",
+          "grappleMaxLengthMilli"
         ]
       ]
     },

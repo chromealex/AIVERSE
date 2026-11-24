@@ -1,5 +1,5 @@
 #pragma once
-#include "Diagnostics.h"
+#include "engine/gameplay/Diagnostics.h"
 #include <cstdint>
 #include <limits>
 namespace aiverse::lib::gameplay {

@@ -10,7 +10,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <limits>
-#include <aiverselib/motionweave/MotionWeave.h>
+#include "engine/animation/MotionWeave.h"
 #include <memory>
 #include <utility>
 

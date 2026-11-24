@@ -1,8 +1,8 @@
 // In-match progression on real units: store, system, unit pipeline hooks, commands, bot (Progression.h).
 #include "Progression.h"
 #include "Systems.h"
-#include "libraries/include/aiverselib/mechanics/PerksData.h"
-#include "libraries/include/aiverselib/mechanics/PerksPersistence.h"
+#include "engine/mechanics/PerksData.h"
+#include "engine/mechanics/PerksPersistence.h"
 #include "../core/Archive.h"
 #include "../core/Hash.h"
 #include "../sim/Simulation.h"

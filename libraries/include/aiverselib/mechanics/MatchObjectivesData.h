@@ -1,12 +1,12 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Objective layout JSON (immutable per map; bind its version in the save envelope):
 // {"zones":[{"id":1,"kind":"capture","center":[0,0,0],"radiusMilli":4000,"heightMilli":3000}],
 //  "payload":{"path":[[0,0,0],[20000,0,0],[20000,0,30000]],"checkpointsMilli":[20000]},
 //  "route":{"gates":[{"id":1,"center":[0,0,10000],"normal":[0,0,1000],"radiusMilli":6000}]}}
 // Coordinates are milli-metres. Zone kinds: capture, hill, extraction, bombSite. Gates are passed in
 // array order (gate index = position); IDs must ascend. Errors: JsonError("objectives.<path>: ...").
-#include "MatchObjectives.h"
+#include "engine/mechanics/MatchObjectives.h"
 #include "engine/core/FixedMath.h"
 #include "engine/data/Json.h"
 #include <charconv>

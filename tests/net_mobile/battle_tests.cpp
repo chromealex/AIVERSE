@@ -410,7 +410,7 @@ static std::string duelMap() {
 
 TEST(hosted_rts_topdown_battle_agrees_on_the_outcome) {
     battle::RtsBattleOptions o;
-    o.project = std::string(AIVERSE_SOURCE_DIR) + "/templates/topdown_arena";
+    o.project = std::string(AIVERSE_TEMPLATES_DIR) + "/topdown_arena";
     o.mapJson = duelMap();
     o.rulesPatch = R"({"victory": "noUnits", "fogOfWar": {"mode": "off"}, "topDown": {"respawn": 0},
                       "types": {"drone": {"health": {"max": 220, "regen": 0}}}})";
@@ -432,7 +432,7 @@ TEST(hosted_rts_topdown_battle_agrees_on_the_outcome) {
 
 TEST(rts_outcome_freezes_at_the_result_tick) {
     battle::RtsBattleOptions o;
-    o.project = std::string(AIVERSE_SOURCE_DIR) + "/templates/topdown_arena";
+    o.project = std::string(AIVERSE_TEMPLATES_DIR) + "/topdown_arena";
     o.mapJson = duelMap();
     o.rulesPatch = R"({"victory": "noUnits", "topDown": {"respawn": 0}, "types": {"drone": {"health": {"max": 120, "regen": 0}}}})";
     auto g = battle::rtsBattleGame(o);

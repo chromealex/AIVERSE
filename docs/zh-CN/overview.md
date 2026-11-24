@@ -20,7 +20,7 @@ engine/
 modules/rts/ generic RTS layer: types from data, orders, A*, combat, economy, construction,
              production, garrisons (Mushroom Wars), roads, fog of war, AI
              view/ — draws any type from the "view" block in rules.json
-modules/fps/ FPS module (in development): movement, combat and match state
+engine/actor/ actor host on ECS (former modules/fps): movement, combat, vehicles, streaming and match state for any project
 apps/
   fps/       standalone FPS client and server
   client/    the game (menu, match with bots, HUD, minimap, mouse and touch)
@@ -41,13 +41,13 @@ platform/    packaging templates (Info.plist, Gradle project, HTML shell)
 ```bash
 cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release      # requires Xcode and CMake
 cmake --build build/mac -j 8
-open build/mac/AiverseEditor.app                              # editor (project templates/skirmish)
+open build/mac/AiverseEditor.app                              # editor (project ~/.aiverse/packages/templates/skirmish)
 open build/mac/AiverseGame.app                                # game
 ./build/mac/aiverse_tests
 ```
 
-在编辑器中打开另一个游戏：`AiverseEditor.app/Contents/MacOS/AiverseEditor --project templates/mushrooms`。
-要让游戏以另一套数据启动，请传入 `-DAIVERSE_CONTENT_DIR=.../templates/mushrooms`。
+在编辑器中打开另一个游戏：`AiverseEditor.app/Contents/MacOS/AiverseEditor --project ~/.aiverse/packages/templates/mushrooms`。
+要让游戏以另一套数据启动，请传入 `-DAIVERSE_CONTENT_DIR=~/.aiverse/packages/templates/mushrooms`。
 
 ### 同时运行多个编辑器
 
@@ -58,12 +58,12 @@ open build/mac/AiverseGame.app                                # game
 ## 多平台构建 —— aiversebuild
 
 ```bash
-./build/mac/aiversebuild --project templates/skirmish --target macos     # Builds/macos/<Name>.app (ad-hoc signed)
-./build/mac/aiversebuild --project templates/skirmish --target ios       # Builds/ios/xcode/AIVERSE.xcodeproj + simulator build
-./build/mac/aiversebuild --project templates/skirmish --target android   # Builds/android/<Name>-release.apk when SDK/NDK and gradle are present
-./build/mac/aiversebuild --project templates/skirmish --target web       # Builds/web (requires emsdk)
-./build/mac/aiversebuild --project templates/skirmish --target windows   # .exe via mingw-w64 (brew install mingw-w64) or sources + build.bat
-./build/mac/aiversebuild --project templates/skirmish --target all
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target macos     # Builds/macos/<Name>.app (ad-hoc signed)
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target ios       # Builds/ios/xcode/AIVERSE.xcodeproj + simulator build
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target android   # Builds/android/<Name>-release.apk when SDK/NDK and gradle are present
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target web       # Builds/web (requires emsdk)
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target windows   # .exe via mingw-w64 (brew install mingw-w64) or sources + build.bat
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target all
 ```
 
 输出位于 `<项目>/Builds/<平台>/` —— 只有完成的构建和体积报告。所有中间产物（CMake 树、资源包、重新编码的音频、Gradle 项目、xcodebuild
@@ -117,7 +117,7 @@ aiversebuild --project ... --target web --install-missing   # install and build 
 aiversebuild ... --no-pack          # ship folders as is (debugging)
 aiversebuild ... --pack-level 9     # zstd level (default 19 for Release, 3 for Debug)
 
-assetpipe pack -o content.rpak templates/skirmish engine/assets=engine   # build a pack by hand
+assetpipe pack -o content.rpak ~/.aiverse/packages/templates/skirmish engine/assets=engine   # build a pack by hand
 assetpipe list content.rpak       # files, sizes, compression
 assetpipe verify content.rpak     # unpack everything and check hashes
 assetpipe extract content.rpak out/
@@ -264,8 +264,8 @@ aiversebuild --project ~/AiverseGames/dune2 --target macos
 ```
 
 ```bash
-./build/mac/aiverse_i18n extract --project templates/skirmish --lang de --write   # lang/de.json skeleton, new strings marked // TODO
-./build/mac/aiverse_i18n check   --project templates/skirmish                     # placeholders, plural forms, untranslated strings
+./build/mac/aiverse_i18n extract --project ~/.aiverse/packages/templates/skirmish --lang de --write   # lang/de.json skeleton, new strings marked // TODO
+./build/mac/aiverse_i18n check   --project ~/.aiverse/packages/templates/skirmish                     # placeholders, plural forms, untranslated strings
 ```
 
 语言选择顺序：玩家在菜单中的选择（会被记住）→ 系统语言 → 游戏源语言。测试用：`--lang ru`、`AIVERSE_LANG=ru`，伪语言 `--lang qps`
@@ -329,8 +329,8 @@ Linux ARM64（GCC）、macOS ARM64（AppleClang）—— 对局校验和完全�
 
 ```bash
 ./build/mac/aiverse_server --config apps/server/server.json            # UDP 27015, WebSocket 27016
-./build/mac/aiverse_netbot --server 127.0.0.1 --project templates/mushrooms --queue 1v1   # a bot in the queue
-./build/mac/aiverse_netbot --server ws://127.0.0.1:27016 --project templates/mushrooms --queue 1v1
+./build/mac/aiverse_netbot --server 127.0.0.1 --project ~/.aiverse/packages/templates/mushrooms --queue 1v1   # a bot in the queue
+./build/mac/aiverse_netbot --server ws://127.0.0.1:27016 --project ~/.aiverse/packages/templates/mushrooms --queue 1v1
 ./build/mac/aiverse_net_tests                                          # network tests
 docker build -f apps/server/Dockerfile -t aiverse-server .             # server in a container
 ```
@@ -405,8 +405,8 @@ audio.json 一节；简要示例：
   颜色遮罩的程序化无缝纹理；带预览的 **材质** 窗口，以及供智能体使用的 MCP 操作 `material_*` / `texture_generate`。
 
 损坏的模型不会让游戏崩溃：该类型会用形状绘制，原因写入编辑器控制台。查看：`aiverse_modelview model.glb@Walk` 或
-`aiverse_modelview --game templates/showcase`（按游戏的绘制方式显示游戏中的所有类型）；在编辑器中 —— **Models** 窗口（片段、节点、材质、
-头像，保存模型文件时自动重新加载）。示例：`templates/showcase`；完整格式：[models.md](../models.md)。
+`aiverse_modelview --game ~/.aiverse/packages/templates/showcase`（按游戏的绘制方式显示游戏中的所有类型）；在编辑器中 —— **Models** 窗口（片段、节点、材质、
+头像，保存模型文件时自动重新加载）。示例：`~/.aiverse/packages/templates/showcase`；完整格式：[models.md](../models.md)。
 
 ## 光照
 

@@ -1,5 +1,6 @@
 // Game wizard: the spec, the catalog of templates the window offers, the choice of a template from the idea
 // (planGame), the download of an art link, and the step list of GameMaker. The steps live in GameWizard*.cpp.
+#include "engine/platform/TemplatesDir.h"
 #include "GameWizardImpl.h"
 
 #include <algorithm>
@@ -290,7 +291,7 @@ Json wizardCatalog(const std::string& engineDir) {
     Json r = Json::object();
     Json temps = Json::array();
     for (auto& t : templateTraits()) {
-        const fs::path dir = fs::path(engineDir) / "templates" / t.id;
+        const fs::path dir = fs::path(aiverse::platform::templatesDir(engineDir)) / t.id;
         if (!fs::exists(dir / "game.json")) continue;
         Json m = readJsonFile((dir / "game.json").string());
         Json e = Json::object();
@@ -332,7 +333,7 @@ struct Pick { std::string id, reason; int score = 0; };
 
 Pick chooseTemplate(const std::string& engineDir, const WizardSpec& s, const std::string& idea, Json* scoresOut) {
     if (s.genre != "auto" && !s.genre.empty()) {
-        if (!fs::exists(fs::path(engineDir) / "templates" / s.genre / "game.json")) throw std::runtime_error("шаблон '" + s.genre + "' не найден");
+        if (!fs::exists(fs::path(aiverse::platform::templatesDir(engineDir)) / s.genre / "game.json")) throw std::runtime_error("шаблон '" + s.genre + "' не найден");
         return {s.genre, "выбран в мастере", 0};
     }
     const auto ws = words(idea);
@@ -341,7 +342,7 @@ Pick chooseTemplate(const std::string& engineDir, const WizardSpec& s, const std
     std::vector<Pick> picks;
     const uint32_t seed = s.seed ? uint32_t(s.seed) : hashText(s.title + "|" + idea);
     for (auto& t : templateTraits()) {
-        if (!fs::exists(fs::path(engineDir) / "templates" / t.id / "game.json")) continue;
+        if (!fs::exists(fs::path(aiverse::platform::templatesDir(engineDir)) / t.id / "game.json")) continue;
         Pick p{t.id, "", 0};
         std::vector<std::string> hits;
         for (auto& kw : words(t.keywords)) {
@@ -360,7 +361,7 @@ Pick chooseTemplate(const std::string& engineDir, const WizardSpec& s, const std
         if (!feats.empty()) p.reason += std::string(p.reason.empty() ? "" : "; ") + "механики: " + feats[0] + (feats.size() > 1 ? ", " + feats[1] : "");
         picks.push_back(p);
     }
-    if (picks.empty()) throw std::runtime_error("в templates/ нет шаблонов игр");
+    if (picks.empty()) throw std::runtime_error("не установлены шаблоны игр (python3 tools/pkg/fetch_templates.py)");
     std::stable_sort(picks.begin(), picks.end(), [&](const Pick& a, const Pick& b) {
         if (a.score != b.score) return a.score > b.score;
         return (hashText(a.id) ^ seed) < (hashText(b.id) ^ seed);   // ties: the seed decides, the same answers give the same game
@@ -377,7 +378,7 @@ Pick chooseTemplate(const std::string& engineDir, const WizardSpec& s, const std
         const std::vector<std::string> safe = s.orientation == "portrait" ? std::vector<std::string>{"borderrush", "laneclash"}
                                                                            : std::vector<std::string>{"skirmish", "mushrooms", "ironfront", "starfall"};
         std::vector<std::string> have;
-        for (auto& id : safe) if (fs::exists(fs::path(engineDir) / "templates" / id / "game.json")) have.push_back(id);
+        for (auto& id : safe) if (fs::exists(fs::path(aiverse::platform::templatesDir(engineDir)) / id / "game.json")) have.push_back(id);
         if (!have.empty()) return {have[seed % have.size()], "идея не задана: мастер выбрал сам", 0};
     }
     if (picks[0].reason.empty()) picks[0].reason = "лучше всего подходит к ответам";
@@ -410,7 +411,7 @@ Json planGame(const std::string& engineDir, const WizardSpec& s) {
     r.set("template", Json::string(p.id));
     r.set("reason", Json::string(p.reason));
     r.set("candidates", scores);
-    const fs::path tdir = fs::path(engineDir) / "templates" / p.id;
+    const fs::path tdir = fs::path(aiverse::platform::templatesDir(engineDir)) / p.id;
     Json m = readJsonFile((tdir / "game.json").string());
     r.set("templateName", Json::string(m.getStr("name", p.id)));
     r.set("orientation", Json::string(s.orientation == "auto" ? m.getStr("orientation", "landscape") : s.orientation));
@@ -549,7 +550,7 @@ void GameMaker::Ctx::saveRules() {
 GameMaker::GameMaker(Workspace& ws, WizardSpec spec) : ws_(ws), spec_(std::move(spec)), ctx_(std::make_shared<Ctx>()) {
     Ctx& c = *ctx_;
     c.engineDir = ws_.engineDir;
-    c.kitDir = (fs::path(ws_.engineDir) / "templates" / "_wizard").string();
+    c.kitDir = (fs::path(ws_.engineDir) / "tools" / "wizard" / "kit").string();
     c.spec = spec_;
     if (c.spec.location.empty()) c.spec.location = defaultProjectsDir();
     if (!c.spec.languages.empty()) c.mainLang = c.spec.languages[0];

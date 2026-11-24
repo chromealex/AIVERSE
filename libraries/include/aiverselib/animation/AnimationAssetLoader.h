@@ -1,7 +1,7 @@
 // Pure runtime parser for animation assets authored by Workspace/MCP Editor.
 // Shared by native RTS/FPS/RPG projects and the standalone model viewer.
 #pragma once
-#include "AnimationMontage.h"
+#include "engine/animation/AnimationMontage.h"
 #include "GenericRetarget.h"
 #include "engine/render/ModelClips.h"
 #include "engine/data/Json.h"

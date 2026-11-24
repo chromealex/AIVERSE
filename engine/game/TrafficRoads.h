@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <vector>
 #include "../roads/RoadNet.h"
-#include "../../libraries/include/aiverselib/mechanics/Traffic.h"
+#include "engine/mechanics/Traffic.h"
 
 namespace aiverse::game {
 

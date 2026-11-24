@@ -14,7 +14,9 @@ turns templates/<id>/ of the engine into templates/<package-id>/ of a catalog ch
                       [--version 1.0.0]
 
 files/ never reaches the catalog's main branch: the pull request is accepted by its owner and
-tools/catalog.py accept turns it into the release archive. The engine keeps templates/ as the offline
+tools/catalog.py accept turns it into the release archive. The engine no longer keeps templates/ (the
+sample games were moved to the catalog on 2026-11-22); --source points at a folder of templates to export.
+The old note:
 fallback and as test data (determinism baselines, CI); a template that grows heavy content keeps it in
 its package only. Standard library only.
 """
@@ -28,6 +30,7 @@ import sys
 from pathlib import Path
 
 ENGINE = Path(__file__).resolve().parents[2]
+SOURCE = ENGINE / 'templates'   # set by --source
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from aiverse_pkg import strip_comments  # noqa: E402
 
@@ -165,7 +168,7 @@ def preview_for(tid: str, folder: Path, shots: Path | None) -> Path | None:
 
 
 def export(tid: str, out_root: Path, shots: Path | None, version: str) -> str:
-    src = ENGINE / 'templates' / tid
+    src = SOURCE / tid
     game = load_game(src)
     en, ru, tags = TEXT[tid]
     pid = package_id(tid)
@@ -222,9 +225,12 @@ def main(argv=None) -> int:
     ap.add_argument('--previews', type=Path, help='folder with <template>.jpg engine frames')
     ap.add_argument('--only', help='comma-separated engine template ids')
     ap.add_argument('--version', default='1.0.0')
+    ap.add_argument('--source', type=Path, default=SOURCE, help='folder of templates to export (<id>/game.json)')
     a = ap.parse_args(argv)
+    globals()['SOURCE'] = a.source
+    SOURCE = a.source
     ids = a.only.split(',') if a.only else sorted(
-        p.name for p in (ENGINE / 'templates').iterdir()
+        p.name for p in SOURCE.iterdir()
         if p.is_dir() and p.name not in SKIP_TEMPLATES and (p / 'game.json').is_file())
     missing = [t for t in ids if t not in TEXT]
     if missing:

@@ -1,7 +1,7 @@
 #pragma once
 // Adapters from the generated `genreBots` settings section (integer ticks, milli-metres, micro-turns) to the
 // action-bots configs, plus readable cross-field errors. The shooter's lead solver uses the `aimSolver` section.
-#include "../gameplay/Configuration.h"
+#include "engine/gameplay/Configuration.h"
 #include "GenreBots.h"
 #include <string>
 #include <vector>

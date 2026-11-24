@@ -2,7 +2,7 @@
 // Native games of any genre provide one render-pose resolver. Gameplay ECS
 // never stores particle handles; all mutable VFX state stays in presentation.
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 
 #include "EcsVfxPresentation.h" // exact existing SpectraSourceComponent type
 #include "engine/fx/SpectraCueScheduler.h"

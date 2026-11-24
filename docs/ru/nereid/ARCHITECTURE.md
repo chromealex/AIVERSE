@@ -21,8 +21,8 @@ NEREID — универсальный, независимый от жанра ф
 ## Этап 1 — авторитетные игровые данные + выборка
 
 Публичные заголовки C++:
-- `<aiverselib/water/NereidWater.h>`
-- `<aiverselib/water/NereidWaterSystems.h>`
+- `"engine/world/nereid/NereidWater.h"`
+- `"engine/world/nereid/NereidWaterSystems.h"`
 - Пакет: `AIVERSE::lib_nereid_water` из `libraries/catalog.json`.
 
 Пространство имён: `aiverse::lib::nereid`.
@@ -88,7 +88,7 @@ NEREID — универсальный, независимый от жанра ф
 
 ## Этап 2 — межжанровый вывод плавучести
 
-`<aiverselib/water/NereidBuoyancySystems.h>` предоставляет необязательный
+`"engine/world/nereid/NereidBuoyancySystems.h"` предоставляет необязательный
 пакет `AIVERSE::lib_nereid_buoyancy`. Он работает только для Entity с
 WaterBuoyancyComponent, WaterVelocityInputComponent, WaterContactComponent
 и WaterForceComponent.
@@ -242,7 +242,7 @@ COW. Экспериментальный shell-раннер ECS теперь та
 
 ## Этап 7B — переиспользуемая презентационная геометрия, не игровой авторитет
 
-`<aiverselib/water/NereidWaterSurfaceMesh.h>` обеспечивает независимое
+`"engine/world/nereid/NereidWaterSurfaceMesh.h"` обеспечивает независимое
 создание мешей на CPU для водоёмов NEREID только по общим данным воды ECS:
 прямоугольники/диски, ограниченные участки бесконечного океана, простые вогнутые
 полигоны и ленты рек переменной ширины. LOD управляет тесселяцией,

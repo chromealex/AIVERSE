@@ -1,5 +1,5 @@
 #pragma once
-#include "Config.h"
+#include "engine/bots/Config.h"
 #include "engine/game/ComputerPlayer.h"
 namespace aiverse::lib::bots {
 inline game::AIConfig rtsConfig(const Json& j) {

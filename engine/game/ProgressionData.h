@@ -19,9 +19,9 @@
 #include "../../engine/core/Fixed.h"
 #include "../../engine/data/Json.h"
 #include "../../engine/sim/ProjectileData.h"
-#include "libraries/include/aiverselib/mechanics/Perks.h"
-#include "libraries/include/aiverselib/mechanics/XpPickups.h"
-#include "libraries/include/aiverselib/mechanics/Summons.h"
+#include "engine/mechanics/Perks.h"
+#include "engine/mechanics/XpPickups.h"
+#include "engine/mechanics/Summons.h"
 
 namespace aiverse::game {
 

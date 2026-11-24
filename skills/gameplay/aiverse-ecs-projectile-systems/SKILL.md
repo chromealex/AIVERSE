@@ -9,7 +9,7 @@ Read `AGENTS.md`, `docs/ecs-mechanic-composition.md`,
 `docs/mechanics-packages.md`, and
 `skills/gameplay/aiverse-weapon-policies/SKILL.md`.
 
-1. Include `<aiverselib/mechanics/EcsProjectileSystems.h>`. Use public
+1. Include `"engine/mechanics/EcsProjectileSystems.h"`. Use public
    `ProjectileFlightComponent` (`ProjectileConfig` + `ProjectileState`
    + generation-safe `owner` + stable `shotId`) on project Entities.
 2. Register `addProjectileFlightSystem(sim,name,collisionProvider,onImpact)`
@@ -37,9 +37,9 @@ Read `AGENTS.md`, `docs/ecs-mechanic-composition.md`,
 7. This flight skill is **one part** of the complete common shooting pipeline.
    For weapon inputs/ammo/cooldown and deterministic deferred projectile creation,
    use `skills/gameplay/aiverse-ecs-weapon-launch/SKILL.md` and
-   `<aiverselib/mechanics/EcsWeaponLaunchSystems.h>`. For health, impacts and
+   `"engine/mechanics/EcsWeaponLaunchSystems.h"`. For health, impacts and
    ordered damage, use `skills/gameplay/aiverse-ecs-impact-damage/SKILL.md`
-   and `<aiverselib/mechanics/EcsDamageSystems.h>`.
+   and `"engine/mechanics/EcsDamageSystems.h"`.
 8. Run `ecs_projectile_composition_test` (flight-only),
    `ecs_cross_genre_projectile_test` (flight + health) and
    `ecs_cross_genre_weapon_pipeline_test` (full launch-to-damage)
@@ -51,7 +51,7 @@ Read `AGENTS.md`, `docs/ecs-mechanic-composition.md`,
 ## Physical versus kinematic projectiles
 
 The public `EcsProjectileSystems.h` now also exports
-`<aiverselib/mechanics/EcsSweepQuerySystems.h>`. Use
+`"engine/mechanics/EcsSweepQuerySystems.h"`. Use
 `selectSweptProjectileContact(candidates,origin,displacement,extent,bounds,preferTie)`
 for dynamic-target collision of a moving projectile, with expanded AABB and
 fixed-point nearest contact. A swept endpoint fraction of 1 is a valid hit;

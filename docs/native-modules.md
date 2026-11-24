@@ -119,7 +119,13 @@ aiverse_native_link(ID online LIBRARIES aiverse_net aiverse_plugins)
 ```
 
 `aiverse_native_link` gives the module's objects the libraries' include paths / definitions and links them into
-`aiverse_game` (which carries the module's objects into every executable). `aiverse_native_use_grpc` runs
+`AIVERSE::native_modules`. That target is project code above the engine: it carries the module objects, the generated
+`NativeRegistry.cpp` (one `aiverse::game::NativeRegistrar` with every module of the project) and every library the
+modules use (`aiverse_native_use_libraries`, `_mechanics`, `_bots`, `_session`, `_meta`, `_link`). At the end of
+configuration every executable that links a game host (`aiverse_game`, `aiverse_runtime`, `aiverse_client_runtime`,
+`aiverse_authority`, `aiverse_editor_core`, `aiverse_hosted_client`) links `AIVERSE::native_modules`; engine targets
+never link library packages (docs/architecture-layers.md). A binary without modules gets an empty
+`compiledNativeModules()`. `aiverse_native_use_grpc` runs
 `aiverse_protobuf_generate(... GRPC)` on the module target (`NO_STUBS`: messages only; no `PROTOS`: only the link) and
 links `aiverse_grpc`. Developer tools and tests of the project can be plain `add_executable` targets in the same file.
 
@@ -287,7 +293,7 @@ aiverse_native_module(ID my_game VERSION 1 ENTRY createMyGame SOURCES MyGame.cpp
 target_link_libraries(aiverse_native_my_game PRIVATE AIVERSE::libraries)
 ```
 
-Use `#include <aiverselib/Graphs.h>` (and other headers from `libraries/include/aiverselib`). Do not copy algorithms and do
+Use `#include "engine/core/Graphs.h"` (and other headers from `libraries/include/aiverselib`). Do not copy algorithms and do
 not edit the engine CMake for a specific game: the target is already declared before the native project is loaded.
 `aiversebuild` carries the libraries into source exports. Full example: `examples/native/libraries`; API and limits:
 [libraries.md](libraries.md). Library containers are not saved automatically: persistent state lives in NativeState, and

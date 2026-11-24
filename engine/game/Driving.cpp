@@ -2,7 +2,7 @@
 // vehicle adoption, getting in / out, the hero's stick as the driver's controls, the sweep of the body over the map
 // grid and other units, decks, damage and the race seats. Fixed maths only; every loop runs in entity-index order.
 #include "Driving.h"
-#include <aiverselib/SweptShapes.h>
+#include "engine/core/SweptShapes.h"
 namespace {
 // Conservative rejection only: exact deckSpot, deck ordering and mouth rules still decide for nearby cars.
 // Q16 normalization can displace a projected endpoint by < segment-length raw units per axis.
@@ -19,7 +19,7 @@ bool deckMayTouchBody(const aiverse::game::DrivingDeck& d, aiverse::Vec3 center,
 #include "../core/Archive.h"
 #include "../core/FixedMath.h"
 #include "../roads/RoadNet.h"
-#include "../../libraries/include/aiverselib/mechanics/VehiclePersistence.h"
+#include "engine/mechanics/VehiclePersistence.h"
 #include <algorithm>
 #include <stdexcept>
 

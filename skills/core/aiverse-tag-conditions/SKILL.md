@@ -5,7 +5,7 @@ description: Reuse AIVERSE C++ all/any/none tag filters and bounded-value condit
 
 # tag-conditions
 
-Read `docs/gameplay-systems.md`, `libraries/include/aiverselib/systems/Tags.h` and this package's catalog entry.
+Read `docs/gameplay-systems.md`, `engine/systems/Tags.h` and this package's catalog entry.
 
 1. Resolve type tags using Rules.tagMask; reject unknown names with resolveTags. Keep type tags separate from status/dispel tags. Missing condition inputs fail closed. Built-in EffectDef target filters remain authoritative.
 2. Prefer existing engine mechanics and data settings before custom state. Keep all new outcome-affecting data in NativeState; no mutable module members.

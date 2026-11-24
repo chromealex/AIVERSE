@@ -4,7 +4,7 @@
 // returns the same input struct a player controller produces, and the authoritative owner validates and
 // applies it through its ordinary command path. Fixed math, integer ticks, RNG only through the passed-in
 // engine Random (sim.rng() or an RNG the owner saves with the simulation).
-#include "../mechanics/Melee.h"
+#include "engine/mechanics/Melee.h"
 #include "engine/core/FixedMath.h"
 #include "engine/core/Random.h"
 #include <algorithm>

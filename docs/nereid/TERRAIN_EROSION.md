@@ -18,7 +18,7 @@ WaterBody, currents, confluence, cascade, underwater, rendering or PHYSIS wind.
 
 ## NEREID shore erosion mechanics
 
-\`libraries/include/aiverselib/water/NereidErosion.h\` exposes:
+\`engine/world/nereid/NereidErosion.h\` exposes:
 
 - \`ShoreSoil\`: sand, silt, loam, clay, gravel, non-erodible rock.
 - \`ShoreErosionCell\`: ground and bedrock (cm), carried sediment (equal-area
@@ -38,7 +38,7 @@ publish changed cells at a well-defined ECS read barrier.
 
 ### Optional ECS stage
 
-\`libraries/include/aiverselib/water/NereidShorelineSystems.h\` adds
+\`engine/world/nereid/NereidShorelineSystems.h\` adds
 \`WaterBankSoilComponent\`, \`WaterBankErosionOutputComponent\`,
 \`registerNereidBankErosionPersistence(sim)\` and
 \`addNereidBankErosionSystem(sim,name,fixedDeltaMs)\`.

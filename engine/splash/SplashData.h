@@ -1,7 +1,7 @@
 // Splash / loading screen: the game.json "splash" block and its timeline (CPU only, no GPU).
 // The client draws it through SplashScreen (engine/splash/SplashScreen.h); aiversebuild and the editor
 // use the same evaluation for previews and for the native launch screens. Format: docs/game-format.md
-// "Icons and splash".
+// "Icons and splash" (which screen a project gets: resolveBlock below; startup driver: SplashBoot.h).
 //
 //   "splash": {
 //     "background": "#101418",
@@ -102,9 +102,23 @@ struct Spec {
 // Parses game.json["splash"]. Throws std::runtime_error with a readable message ("splash.logos[1]:
 // unknown fit 'x'"); warnings get non-fatal notes.
 Spec parseSpec(const Json& splash, std::vector<std::string>* warnings = nullptr);
-// The engine's default "splash" block (the AIVERSE mark), used when game.json has none;
-// "splash": false keeps the old behaviour (background colour only while loading).
+// The engine's default "splash" block (the AIVERSE mark), used when game.json has none.
 Json defaultBlock();
+
+// What a project's game.json "splash" value asks for. Every client (game, actor, voxel hosts) and the
+// map loading screen go through this, so a project decides alone:
+//   missing / null / true / "default"   -> the engine's loading screen (defaultBlock)
+//   false / "none" / {"enabled": false}  -> no loading screen at all (the game loads, then shows)
+//   {"base": "engine", ...keys}          -> the engine's screen with these keys replaced; objects merge
+//                                           ({"progress": {"color": ...}} keeps the rest of the bar)
+//   any other object                     -> the project's own screen (parseSpec format)
+// "mapLoading" inside the block: the screen of later map loads - false (none), "same" (default: this
+// block) or a value of the same forms. Throws std::runtime_error("splash: ...") on anything else.
+struct Choice { bool off = false; Json block; };
+Choice resolveBlock(const Json& splash);
+Choice resolveMapBlock(const Json& splash);
+// parseSpec of what resolveBlock picks (enabled = false when the project switched the screen off).
+Spec projectSpec(const Json& splash, std::vector<std::string>* warnings = nullptr);
 
 // One quad to draw: centre and size in pixels of the target, frame of the layer, rotation, opacity.
 struct DrawItem {

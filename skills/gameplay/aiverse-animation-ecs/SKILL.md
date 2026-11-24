@@ -6,11 +6,11 @@ description: Shared C++ presentation ECS animation components and graph player u
 
 Subsystem name: **AIVERSE MotionWeave**. New agents should prefer
 `skills/gameplay/aiverse-motionweave/SKILL.md`, public header
-`<aiverselib/motionweave/MotionWeave.h>` and
+`"engine/animation/MotionWeave.h"` and
 `AIVERSE::MotionWeave`. The old API, skill and target remain usable.
 
 CMake target `AIVERSE::animation_ecs`; public header
-`<aiverselib/animation/EcsAnimationSystems.h>`.
+`"engine/animation/EcsAnimationSystems.h"`.
 
 Use a SEPARATE `aiverse::World` for animation presentation. Never put these
 floating-point components, graph players, or asset pointers in the authoritative
@@ -105,7 +105,7 @@ See all stage checkpoints in
 
 ## Stage 180: reusable facial Control Rig + gaze/mandible IK
 
-- Public `<aiverselib/animation/FacialControlRig.h>` compiles v1
+- Public `"engine/animation/FacialControlRig.h"` compiles v1
   `morphs` bindings from exact imported node+mesh semantic names to the
   existing 64 sparse GPU morph channels; optional `rig` uses the
   **existing** `render::AnimationRig` for bone aim, joint limits and IK.

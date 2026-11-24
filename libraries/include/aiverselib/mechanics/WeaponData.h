@@ -1,8 +1,8 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Validated data for Ballistics.h / WeaponMods.h: generated-settings adapters (milli-units -> Fixed)
 // and a JSON reader for material tables, weapon frames and attachments with path-qualified errors.
-#include "../gameplay/Configuration.h"
+#include "engine/gameplay/Configuration.h"
 #include "Ballistics.h"
 #include "WeaponMods.h"
 #include "engine/data/Json.h"

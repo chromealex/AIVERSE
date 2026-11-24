@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // tactics-grid simultaneous turns (WeGo): every team submits orders for its units (move within 1 AP of mobility,
 // then attack a target it can see now, or hold on overwatch); tacticsResolveWeGo resolves them in fixed phases:
 //   1. overwatch reservations are armed;

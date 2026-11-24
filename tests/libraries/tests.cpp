@@ -1,10 +1,10 @@
 #include <aiverselib/Collections.h>
-#include <aiverselib/Graphs.h>
+#include "engine/core/Graphs.h"
 #include <aiverselib/Grid.h>
 #include <aiverselib/Behavior.h>
 #include <aiverselib/Tasks.h>
 #include <aiverselib/Rules.h>
-#include <aiverselib/Progression.h>
+#include "engine/core/progression/Progression.h"
 #include <aiverselib/Logistics.h>
 #include <aiverselib/Objectives.h>
 #include <aiverselib/Presentation.h>

@@ -184,3 +184,36 @@ Branch `feature/aiv20261122_template_packages`. Catalog: PR #4 (`official` flag,
 - Not done: `templates/` still in the engine (tests, CI, determinism baselines use it); creating a
   project from a big template blocks the Studio main thread during the download (runs in the
   chooseFolder callback). History cleanup of the engine repo dropped by the owner.
+
+## Stage 7 — Studio hub off the UI thread; templates/ removed from the engine (2026-11-22)
+
+- PR #110 (merged): `studio.hubTemplates` and `studio.hubCreate` run in `runInBackground`
+  (StudioHost), `hubTemplatesJson` shared with StudioSession. g++ syntax check only; native macOS
+  Studio NOT RUN.
+- Branch `feature/aiv20261122_templates_out`: `templates/` deleted from the engine.
+  - `tools/pkg/fetch_templates.py [--out DIR] [--only ids]`: installs every official template package
+    into `DIR/<provides.engineTemplate>/` (default `AIVERSE_TEMPLATES_DIR` or
+    `~/.aiverse/packages/templates`), stamps `.aiverse-package`, skips installed versions, prints DIR.
+    `aiverse_pkg.fetch_bytes` retries 429/5xx with backoff (GitHub raw rate limit hit at ~20 reads).
+    Installed packages are byte-identical to the old `templates/<id>` except `.aiverse` project files
+    and README (checked with `diff -r` for all 36).
+  - CMake: cache `AIVERSE_TEMPLATES_DIR`, `AIVERSE_FETCH_TEMPLATES` (configure-time install when
+    `skirmish/game.json` is missing), global compile definition `AIVERSE_TEMPLATES_DIR`, target
+    `aiverse_fetch_templates`; `AIVERSE_CONTENT_DIR` defaults to `<templates>/skirmish` and old caches
+    pointing at `.../templates/<id>` are remapped.
+  - C++: `engine/platform/TemplatesDir.h` (`templatesDir(engineDir)`: env, legacy `<engine>/templates`,
+    packages home); used by Workspace::gamesDir, Projects, GameWizard, editor/fps/voxel/headless/netbot
+    defaults. `looksLikeEngineDir` accepts `tools/pkg` instead of `templates/`.
+  - Tests: `AIVERSE_SOURCE_DIR "/templates/` -> `AIVERSE_TEMPLATES_DIR "/`; `readSource("templates/..")`
+    maps to the templates dir; Python tests and CI scripts use `fetch_templates.default_dir()`;
+    `check.sh`, `headless-checksums.sh`, `run_ecs_gameplay_compare.sh` call `fetch_templates.py`.
+  - CI (`ci.yml`, `release.yml`): env `AIVERSE_TEMPLATES_DIR=$GITHUB_WORKSPACE/.aiverse-templates`,
+    a "Template packages" step after every checkout.
+  - Moved: `templates/_wizard` -> `tools/wizard/kit`, `templates/_tools` -> `tools/templates`
+    (generators now edit the installed packages), `templates/lua_lab` -> `tests/checksums/games/lua_lab`
+    (baseline lines moved to the fixtures section, order kept as check.sh prints it).
+  - Docs: AGENTS.md (layout, §3 games rule, §4 commands), docs/packages.md (+ru), overview quick start
+    and skills paths, README studio_mac line in 9 languages.
+- Remaining: about 350 historical `templates/<id>` mentions in docs (handoffs, module docs) left as is;
+  `apps/server/server.json` and `tools/art2d/make_samples.py` still use relative `templates/` paths;
+  the game wizard does not fetch missing templates itself (lists only installed ones).

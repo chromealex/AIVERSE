@@ -1,10 +1,10 @@
 #include "engine/world/TerraWeaveRiverbed.h"
 #include "engine/world/TerraWeaveAlpine.h"
 #include "engine/world/TerraWeaveShoreCover.h"
-#include <aiverselib/water/NereidFootprintDistance.h>
+#include "engine/world/nereid/NereidFootprintDistance.h"
 #include "engine/world/NereidManifestHost.h"
 #include "engine/world/NereidFlowAuthoring.h"
-#include <aiverselib/water/NereidQueryIndex.h>
+#include "engine/world/nereid/NereidQueryIndex.h"
 #include <cassert>
 using namespace aiverse;
 using namespace aiverse::terraweave;

@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // physical-interactions: tuning shared by all interaction policies (see InteractionConfigured.h for the
 // generated `interaction` settings section). Units: metres, kilograms, seconds, newtons, ticks.
 #include "PhysicalCommon.h"

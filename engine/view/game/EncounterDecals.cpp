@@ -2,7 +2,7 @@
 #include "EncounterDecals.h"
 #include "GameView.h"
 #include "../../game/GameCore.h"
-#include "aiverselib/mechanics/TelegraphDecals.h"
+#include "engine/mechanics/TelegraphDecals.h"
 #include <cmath>
 
 namespace aiverse::game {

@@ -46,7 +46,7 @@ target_compile_features(aiverse_vivid_render PUBLIC cxx_std_20)
 # VIVID adds only a post-animation facial composition adapter.
 add_library(aiverse_vivid_motionweave STATIC MotionWeaveBridge.cpp)
 add_library(AIVERSE::vivid_motionweave ALIAS aiverse_vivid_motionweave)
-target_link_libraries(aiverse_vivid_motionweave PUBLIC aiverse_vivid_render AIVERSE::MotionWeave)
+target_link_libraries(aiverse_vivid_motionweave PUBLIC aiverse_vivid_render aiverse_motionweave_core)   # engine target: MotionWeave core only
 target_compile_features(aiverse_vivid_motionweave PUBLIC cxx_std_20)
 
 

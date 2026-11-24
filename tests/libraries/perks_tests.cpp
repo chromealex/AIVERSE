@@ -1,7 +1,7 @@
 // match-progression: perks/modifier pipeline, xp + level curve + offers, xp pickups, summons, battle deck.
-#include <aiverselib/mechanics/PerksData.h>
+#include "engine/mechanics/PerksData.h"
 #include <aiverselib/mechanics/PerksConfigured.h>
-#include <aiverselib/mechanics/PerksPersistence.h>
+#include "engine/mechanics/PerksPersistence.h"
 #include <iostream>
 #include <stdexcept>
 using namespace aiverse;using namespace aiverse::lib::mechanics;

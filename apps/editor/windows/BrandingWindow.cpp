@@ -73,7 +73,7 @@ private:
             iconSpec_ = branding::parseIcons(ws.project.manifest);
             if (iconSpec_.master.empty() && fs::exists(fs::path(ws.project.dir) / "icon.png")) iconSpec_.master = "icon.png";
             for (auto& w : branding::validateIcons(iconSpec_, ws.project.dir)) warnings_.push_back(w);
-            spec_ = splash::parseSpec(ws.project.manifest["splash"], &warnings_);
+            spec_ = splash::projectSpec(ws.project.manifest["splash"], &warnings_);
             splashImgs_ = branding::loadSplashImages(spec_, ws.project.dir);
             for (auto& w : splashImgs_.warnings) warnings_.push_back(w);
             for (auto& layer : splashImgs_.frames)   // the preview is small: keep the CPU raster cheap

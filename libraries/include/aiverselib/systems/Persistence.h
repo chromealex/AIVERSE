@@ -2,7 +2,7 @@
 #include "engine/game/Native.h"
 #include "Reservations.h"
 #include "Sequence.h"
-#include "Loot.h"
+#include "engine/core/progression/Loot.h"
 #include "Perception.h"
 #include <limits>
 namespace aiverse::lib::systems {

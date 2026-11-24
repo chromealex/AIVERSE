@@ -12,7 +12,7 @@ using namespace aiverse;using namespace aiverse::voxelgame;using namespace aiver
 #define CHECK(x) do{if(!(x))throw std::runtime_error(std::string(__FILE__)+":"+std::to_string(__LINE__)+": " #x);}while(false)
 namespace {
 std::string root;
-Project load(){return readProject([](const std::string& f,std::string& t){std::ifstream in(root+"/templates/voxel_sandbox/"+f);if(!in)return false;t.assign(std::istreambuf_iterator<char>(in),{});return true;});}
+Project load(){return readProject([](const std::string& f,std::string& t){std::ifstream in(std::string(AIVERSE_TEMPLATES_DIR)+"/voxel_sandbox/"+f);if(!in)return false;t.assign(std::istreambuf_iterator<char>(in),{});return true;});}
 std::unique_ptr<Simulation> make(const Project& p,uint64_t seed=1){auto sim=std::make_unique<Simulation>(SimConfig{seed,0,0},std::make_unique<game::GameCore>());sim->setup(p.rules,p.map);return sim;}
 VoxelHost& mod(Simulation& s){return host(s);}
 void send(Simulation& sim,uint8_t slot,Input in){static uint32_t seq=0;in.sequence=++seq;auto c=command(slot,in);c.tick=sim.tick();sim.inject(c);}

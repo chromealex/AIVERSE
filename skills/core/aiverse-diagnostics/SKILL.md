@@ -5,7 +5,7 @@ description: Reuse AIVERSE diagnostics for structured refusal codes, values and 
 
 # diagnostics
 
-Read `docs/gameplay-packages.md`, `libraries/catalog.json` and `libraries/include/aiverselib/gameplay/Diagnostics.h` from the engine root.
+Read `docs/gameplay-packages.md`, `libraries/catalog.json` and `engine/gameplay/Diagnostics.h` from the engine root.
 Read `docs/gameplay-settings.md` for supported settings; do not invent JSON keys or APIs.
 
 ## Workflow

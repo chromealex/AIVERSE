@@ -5,7 +5,7 @@ description: Reuse AIVERSE configuration for generated c++ settings, json schema
 
 # configuration
 
-Read `docs/gameplay-packages.md`, `libraries/catalog.json` and `libraries/include/aiverselib/gameplay/Configuration.h` from the engine root.
+Read `docs/gameplay-packages.md`, `libraries/catalog.json` and `engine/gameplay/Configuration.h` from the engine root.
 Read `docs/gameplay-settings.md` for supported settings; do not invent JSON keys or APIs.
 
 ## Workflow

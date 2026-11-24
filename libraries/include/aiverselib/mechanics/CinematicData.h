@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // JSON scene library for cinematic-gameplay (example: examples/libraries/mechanics/scene.json):
 // {"domains":[{"id":1,"name":"world","parent":0,"scale":[1,1]}],              optional, default world/player/ui/cinematic
 //  "timePresets":[{"id":1,"domain":1,"scale":[0,1],"ticks":6,"priority":1000,"blend":"override"}],

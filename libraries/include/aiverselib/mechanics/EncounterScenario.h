@@ -1,12 +1,12 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Headless reference fight (boss-encounters): one scripted hero against one boss of an EncounterData file,
 // wiring every policy the way an owner would: stepBoss chooses attacks and add waves, beginTelegraph/stepTelegraph
 // resolve them on exact ticks, StatusEffects slow/stun/burn the hero, adds hunt with MobBehaviour + swarm
 // pressure. The hero kites, steps out of windups it can see after `reaction` ticks and shoots. Deterministic:
 // same data + config + seed -> same report and checksum. Used by tests and `aiverse_encounter simulate`.
 #include "EncounterData.h"
-#include "EncounterPersistence.h"
+#include "engine/mechanics/EncounterPersistence.h"
 #include "engine/core/Hash.h"
 #include "engine/core/Random.h"
 #include <algorithm>

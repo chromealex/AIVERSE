@@ -251,7 +251,7 @@ Templates are packages of the [catalog](https://chromealex.github.io/AIVERSE/cat
 
 ```bash
 ./studio_mac.command                    # AIVERSE Studio, the editor (needs Xcode, CMake, Node.js)
-./studio_mac.command templates/mushrooms   # ...on another project
+./studio_mac.command ~/.aiverse/packages/templates/mushrooms   # ...on another project
 ```
 
 Windows: `studio_windows.cmd [project]` builds and opens `AiverseStudio.exe` (needs Visual Studio 2022,

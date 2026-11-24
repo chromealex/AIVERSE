@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // JSON for narrative scenes (narrative-graphs 0.2.0). Localization keys only; integer IDs; strict: unknown keys,
 // wrong types, duplicate IDs, unknown characters/facts/flags/chapters/nodes/consequences, broken edges and lines
 // that cannot reach an ending throw JsonError("narrative.<path>: reason"). JSON paths use array indexes

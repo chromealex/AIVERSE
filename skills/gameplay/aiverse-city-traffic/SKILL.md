@@ -5,7 +5,7 @@ description: Set up and extend road traffic in any AIVERSE project - lane cars, 
 
 # city-traffic
 
-Behaviour and format: `docs/traffic.md`. Simulation: `engine/game/Traffic.*`, `engine/game/TrafficCity.cpp` (incidents, services), `engine/game/TrafficPopulation.cpp` / `engine/game/TrafficCommute.cpp` (population), `engine/game/TrafficGangs.cpp`, `engine/game/TrafficRoads.cpp` (spline roads). Kernels: `libraries/include/aiverselib/mechanics/Traffic.h` and `libraries/include/aiverselib/mechanics/traffic/TrafficRoutes.h` (`AIVERSE::lib_city_traffic`). Tests: `aiverse_tests traffic_`, `tests/libraries/city_tests.cpp`.
+Behaviour and format: `docs/traffic.md`. Simulation: `engine/game/Traffic.*`, `engine/game/TrafficCity.cpp` (incidents, services), `engine/game/TrafficPopulation.cpp` / `engine/game/TrafficCommute.cpp` (population), `engine/game/TrafficGangs.cpp`, `engine/game/TrafficRoads.cpp` (spline roads). Kernels: `engine/mechanics/Traffic.h` and `engine/mechanics/traffic/TrafficRoutes.h` (`AIVERSE::lib_city_traffic`). Tests: `aiverse_tests traffic_`, `tests/libraries/city_tests.cpp`.
 
 1. Prerequisites: vehicles in `driving.vehicles` (`skills/gameplay/aiverse-driving`), roads as tiles listed in `traffic.roads.tiles` or a spline `roadNetwork` (`skills/world/aiverse-roads`, `"roads": {"network": true}`).
 2. Rules `traffic`: `cars`, `buses` (stop types or bays), `emergency`, `signals` (+ `lights` prop types with `view.light`), `pedestrians` (walk tiles, `panic`). Loader errors name the key; fix them before anything else.

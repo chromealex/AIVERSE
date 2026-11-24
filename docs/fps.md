@@ -2,7 +2,7 @@
 
 Optional FPS skeletal animations are powered by **AIVERSE MotionWeave**.
 New native modules link `AIVERSE::MotionWeave` and include
-`<aiverselib/motionweave/MotionWeave.h>`.
+`"engine/animation/MotionWeave.h"`.
 See [MotionWeave](motionweave.md). The old animation ECS target remains valid.
 
 FPS projects use `game.json` with `module: "fps"` and `genre: "fps"`. Choose FPS in
@@ -14,7 +14,7 @@ Existing copied projects are not overwritten when engine templates change.
 
 The actor-session host (game.json `"module": "actor"`, legacy name) reads its settings from `rules.actor`. The blocks
 that describe capabilities rather than this host - `royale`, `gear`, `crate`, `vehicleTypes`, `bots`, `weapons`,
-`weapon` - may also be written at the top level of the rules (`rules.royale`, ...), which is where shared systems
+`weapon`, `locomotion` - may also be written at the top level of the rules (`rules.royale`, ...), which is where shared systems
 read them as they are extracted from the legacy hosts (docs/no-genre-split-audit.md, G6). A block may sit in only one
 of the two places; both at once is a load error. Existing projects keep `rules.actor.<block>` unchanged.
 
@@ -204,12 +204,34 @@ durability. With a catalog the gear replaces the legacy flat armor absorption. B
 (`Snapshot::gear`); FPS save version 10 stores loadouts. `templates/fps_survival` ships three helmet, vest and
 backpack levels (`rules/gear.json`) spread near the spawns and in supply crates.
 
+## Locomotion modes (opt-in)
+
+A `locomotion` block (top level of the rules, or `rules.actor.locomotion`) moves characters through the shared
+character-locomotion mode machine (`engine/mechanics/LocomotionModes.h`) instead of the plain motor. Keys are the
+`locomotion.*` settings of docs/gameplay-settings.md (milli-units and ticks, same ranges and relations; `{}` = defaults);
+the motor's `speed` / `sprintSpeed` / `jumpSpeed` / `gravity` and stances still apply. Rules without the block behave
+and hash exactly as before: no locomotion state, no save or network bytes.
+
+| Move | Input | How the host reports the world |
+|---|---|---|
+| Dash | Dash press (desktop **K**, pad RB): along the move direction, else the view | wall ahead from the side probes ends it |
+| Wall slide / wall run | hold the move key into a wall / run along it after a jump | short side probes around the body: wall normal and collider id (same-wall reattach rule) |
+| Grapple (pull or swing) | hold Grapple (middle mouse, **J**, pad LB); release lets go | the view ray up to `grappleMaxLengthMilli`; the hit point is kept while attached |
+| Glide | hold Glide (**Space** held, pad A) while falling | — |
+| Slopes, coyote time, jump buffer | as before | ground normal of the sweep |
+
+The server sends each player its own locomotion state (snapshot-delta record kind 5); the client predicts the modes
+with the same motor and reconciles them with the rest of the pose. Saves (version 10) append the per-character state
+only with the block; the checksum includes it only with the block. Not reported by this host yet: ledges, ladders,
+climbable walls, water and one-way colliders (the map format has no tags for them), so those modes stay idle here.
+Tests: `aiverse_fps_tests` (`locomotionModes`: dash, wall run, grapple, save mid-dash, client prediction).
+
 ## Close combat (opt-in)
 
 `actor.melee.enabled: true` adds an authoritative melee strike, guard, parry and lock-on.
 It is independent of `actor.mechanics`; rules without the block behave as before.
 Swing timing, input buffering, chaining and one-hit-per-target-per-swing come from the
-shared `melee-combat` library (`libraries/include/aiverselib/mechanics/Melee.h`).
+shared `melee-combat` library (`engine/mechanics/Melee.h`).
 
 | Behavior | Implementation | Current limits |
 |---|---|---|

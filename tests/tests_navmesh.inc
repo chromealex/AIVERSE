@@ -150,7 +150,7 @@ TEST(navmesh_rts_grid_paths) {
 
 TEST(navmesh_rts_matches_deterministic) {
     // whole bot matches with navmesh paths: deterministic, and the navmesh answers the searches
-    for (auto [game, map] : {std::pair{kSkirmish, std::string("maps/valley.json")}, std::pair{std::string(AIVERSE_SOURCE_DIR) + "/templates/frostcrown", std::string("maps/frozen_pass.json")}}) {
+    for (auto [game, map] : {std::pair{kSkirmish, std::string("maps/valley.json")}, std::pair{std::string(AIVERSE_TEMPLATES_DIR) + "/frostcrown", std::string("maps/frozen_pass.json")}}) {
       for (const char* mode : {"navmesh", "hybrid"}) {
         auto run = [&](int* answered) {
             SimConfig cfg; cfg.seed = 4;

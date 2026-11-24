@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // stepScene: one authoritative tick of the cinematic scene runner (see CinematicScene.h for the model).
 // Order inside a tick: options, commands (by seq; seq <= lastCommand ignored), host reports (line finished /
 // markers, validated against cue emission and the current tick), then unless paused: start a pending scene

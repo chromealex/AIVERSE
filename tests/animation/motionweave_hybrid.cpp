@@ -1,5 +1,5 @@
 // Serial vs hybrid MotionWeave graph parity; callback remains on main thread.
-#include <aiverselib/motionweave/MotionWeave.h>
+#include "engine/animation/MotionWeave.h"
 #include <atomic>
 #include "../AlwaysCheck.h"
 #include <cmath>

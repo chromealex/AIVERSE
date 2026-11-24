@@ -4,8 +4,8 @@
 #pragma once
 #include "engine/world/TerraWeaveEarthworks.h"
 #include "engine/world/TerraWeaveVegetationSoil.h"
-#include <aiverselib/water/NereidErosion.h>
-#include <aiverselib/water/NereidShorelineSystems.h>
+#include "engine/world/nereid/NereidErosion.h"
+#include "engine/world/nereid/NereidShorelineSystems.h"
 #include <algorithm>
 #include <cstdint>
 #include <optional>

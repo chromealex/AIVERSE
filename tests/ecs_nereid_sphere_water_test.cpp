@@ -1,5 +1,5 @@
 // NEREID sphere water: radial sampling, currents, priority, buoyancy and save/restore in a host module.
-#include <aiverselib/water/NereidNativeWater.h>
+#include "engine/world/nereid/NereidNativeWater.h"
 #include <iostream>
 #include <memory>
 #include <stdexcept>

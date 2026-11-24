@@ -1,7 +1,7 @@
 #pragma once
 #include <cstddef>
-#include "../Graphs.h"
-#include "../Progression.h"
+#include "engine/core/Graphs.h"
+#include "engine/core/progression/Progression.h"
 #include <algorithm>
 #include <cstdint>
 #include <map>

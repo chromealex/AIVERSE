@@ -254,7 +254,7 @@ Les modèles sont des paquets du [catalogue](https://chromealex.github.io/AIVERS
 
 ```bash
 ./studio_mac.command                    # AIVERSE Studio, l'éditeur (requiert Xcode, CMake, Node.js)
-./studio_mac.command templates/mushrooms   # ...sur un autre projet
+./studio_mac.command ~/.aiverse/packages/templates/mushrooms   # ...sur un autre projet
 ```
 
 Windows : `studio_windows.cmd [project]` compile et ouvre `AiverseStudio.exe` (requiert Visual Studio 2022,

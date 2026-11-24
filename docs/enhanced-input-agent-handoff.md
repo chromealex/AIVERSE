@@ -9,7 +9,7 @@ Branch: `feature/aiv990_enhanced_input` (base `feature/universal-entity-inspecto
 ## Stage 1 — audit and design (complete)
 
 ### Existing code
-- `libraries/include/aiverselib/gameplay/Input.h`: `InputPhase`, `InputEvent`, `Binding`, `resolveInput` (single best priority match, stable ID tie-break), integer `deadzone`; also selection/control-groups/drag gestures. This is the old public API: **do not remove or break**.
+- `engine/gameplay/Input.h`: `InputPhase`, `InputEvent`, `Binding`, `resolveInput` (single best priority match, stable ID tie-break), integer `deadzone`; also selection/control-groups/drag gestures. This is the old public API: **do not remove or break**.
 - `engine/platform/Platform.h`: platform-normalized `Event` for KeyDown/Up, MouseDown/Up, MouseMove (delta), Wheel, Touch, FocusLost. `Key` enum and modifiers.
 - `engine/platform/Gamepad.h`: `pollGamepads`, four standard-layout pads, `PadButton`, `PadAxis`, button edges, per-axis floats.
 - `apps/fps/client.cpp`: directly maintains pressed `std::set<platform::Key>`, weapon/action one-shots, mouse look and fire; builds `fps::Input` commands per simulation tick.
@@ -893,7 +893,7 @@ ctest --test-dir build/enhanced-input --output-on-failure -R '^library_enhanced_
 
 **User-reported CTest failures (actual, from full macOS test run):**
 - `skill_catalog` (CTest #90) **FAILED**: `catalog.py: error: stale skill catalog; run generate`.
-- `skill_audit` (CTest #92) **FAILED** with nine `missing path` reports in `skills/ui/aiverse-input/SKILL.md`: `apps/fps/client.cpp`, `docs/enhanced-input-agent-handoff.md`, `docs/enhanced-input.md`, `docs/gameplay-settings.md`, `engine/platform/EnhancedInputAdapter.h`, `engine/platform/EnhancedInputConfig.h`, `libraries/catalog.json`, `libraries/include/aiverselib/gameplay/Input.h`, `libraries/spec/gameplay.json`. These were caused by literal escaped-backtick Markdown (`\\`path\\``) in the skill. The repository audit interpreted the leading backslash as part of a path.
+- `skill_audit` (CTest #92) **FAILED** with nine `missing path` reports in `skills/ui/aiverse-input/SKILL.md`: `apps/fps/client.cpp`, `docs/enhanced-input-agent-handoff.md`, `docs/enhanced-input.md`, `docs/gameplay-settings.md`, `engine/platform/EnhancedInputAdapter.h`, `engine/platform/EnhancedInputConfig.h`, `libraries/catalog.json`, `engine/gameplay/Input.h`, `libraries/spec/gameplay.json`. These were caused by literal escaped-backtick Markdown (`\\`path\\``) in the skill. The repository audit interpreted the leading backslash as part of a path.
 - Remaining tests in the user's CTest output were not provided, so do not claim that the full 106-test suite has passed.
 
 **Changes:**

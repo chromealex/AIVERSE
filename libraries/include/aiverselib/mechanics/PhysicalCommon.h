@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // physical-interactions: shared types for the kinematic interaction policies (carry/throw, push/pull,
 // ropes, doors, moving platforms, breakables). These policies are the authoritative gameplay state:
 // Fixed math, integer ticks, ascending-ID order. Collision comes from the owner through a Collision

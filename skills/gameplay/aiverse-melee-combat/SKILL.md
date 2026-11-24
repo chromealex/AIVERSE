@@ -5,7 +5,7 @@ description: Reuse AIVERSE custom melee timing, buffered combos, active-window h
 
 # melee-combat
 
-1. Read `docs/mechanics-packages.md` and the catalog entry. Inspect `libraries/include/aiverselib/mechanics/Melee.h` for exact runtime behavior.
+1. Read `docs/mechanics-packages.md` and the catalog entry. Inspect `engine/mechanics/Melee.h` for exact runtime behavior.
 2. One owner per state: if the project's host already owns this state (for example a host in `engine/game` or `engine/actor` that has its own movement, ammo, damage or victory), adapt that owner to these policies instead of running a second copy; never maintain duplicate health, inventory or cooldown state. A host that cannot use the policy yet is debt in `docs/no-genre-split-audit.md`, not a genre rule.
 3. Load scalar JSON through generated readGameplaySettings, then genre/Configured.h adapters. Read narrative definitions with readStory; use stable localization/fact/choice IDs. Keep definitions immutable for a running save.
 4. Host executables link AIVERSE::mechanics. Registered native OBJECT modules call aiverse_native_use_mechanics(aiverse_native_<id>) to propagate collision dependencies without a circular game link. Follow examples/native/libraries/GenreConsumer.cpp.

@@ -3,6 +3,7 @@
 //              [--listen <port>|0] [--play]
 //              [--native-editor] [--tools-from <dir>]   (set by the switch to a per-project build: EditorNativeBuild.cpp)
 // Without --listen, uses the default MCP port if free, otherwise an OS-assigned port.
+#include "engine/platform/TemplatesDir.h"
 #include "engine/platform/EngineDir.h"
 #include "core/BuildTool.h"
 #include <cstdlib>
@@ -70,7 +71,7 @@ int aiverseMain(int argc, char** argv) {
         else if (a == "--select") g_demoSelect = std::atoi(argv[++i]); // used by automated screenshots
     }
     std::error_code ec;
-    if (!game.empty()) opt.projectDir = opt.engineDir + "/templates/" + game;
+    if (!game.empty()) opt.projectDir = aiverse::platform::templatesDir(opt.engineDir) + "/" + game;
     if (!opt.projectDir.empty()) opt.projectDir = fs::absolute(opt.projectDir, ec).lexically_normal().string();
     if (!opt.projectDir.empty() && (opt.projectDir.back() == '/' || opt.projectDir.back() == '\\')) opt.projectDir.pop_back();
     if (!opt.openMap.empty()) opt.openMap = fs::absolute(opt.openMap, ec).string();

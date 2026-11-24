@@ -1,6 +1,7 @@
-#include <aiverselib/gameplay/Diagnostics.h>
-#include <aiverselib/gameplay/Input.h>
-#include <aiverselib/gameplay/Camera.h>
+#include "engine/gameplay/Diagnostics.h"
+#include "engine/gameplay/Input.h"
+#include "engine/gameplay/Camera.h"
+#include <aiverselib/gameplay/Construction.h>
 #include <aiverselib/gameplay/Configured.h>
 #include <aiverselib/gameplay/Squads.h>
 #include <aiverselib/gameplay/Feedback.h>
@@ -23,6 +24,16 @@ int main(){
     camera::Pose pose{0,0,20,179,45},target{100,20,100,-179,45};camera::Limits limits;CHECK(camera::advance(pose,target,limits,1,8));CHECK(pose.x>90&&pose.yaw<0);CHECK(!camera::advance(pose,target,limits,-1,8));
     auto invalidLimits=limits;invalidLimits.minZoom=300;CHECK(!camera::constrain(pose,invalidLimits));
     Placement place{0,0,2,3,1,1,5,true};int cells=0;
+    const ConstructionGrid grid{4};
+    auto snapped=gridPlacement(-1,9,grid,place);
+    CHECK(snapped&&snapped->x==-1&&snapped->z==2);
+    CHECK(gridWorldMin(snapped->x,grid)==-4);
+    CHECK(gridCell(-4,grid)==-1&&gridCell(-5,grid)==-2);
+    CHECK(!gridCell(0,ConstructionGrid{0}));
+    CHECK(!gridWorldMin(std::numeric_limits<std::int64_t>::max(),grid));
+    int rotatedCells=0;
+    CHECK(checkPlacement(*snapped,[&](Cell c){++rotatedCells;CHECK(c.x>=-1&&c.x<2&&c.z>=2&&c.z<4);return CellInfo{};}));
+    CHECK(rotatedCells==6);
     CHECK(checkPlacement(place,[&](Cell c){++cells;CHECK(c.x<3&&c.z<2);return CellInfo{true,1,3,0};}));CHECK(cells==6);
     CHECK(checkPlacement(place,[](Cell){return CellInfo{false,1,0,42};}).subject==42);
     CHECK(checkPlacement(place,[](Cell){return CellInfo{true,2,0,0};}).reason==Reason::Territory);

@@ -149,7 +149,7 @@ adds no rendered UI and does not resolve the earlier showcase GUI environment li
 
 ## Tiered protective gear (gear-tiers 0.1.0)
 
-`libraries/include/aiverselib/systems/Gear.h` (`AIVERSE::lib_gear_tiers`): a catalog of pieces (slot, tier,
+`engine/systems/Gear.h` (`AIVERSE::lib_gear_tiers`): a catalog of pieces (slot, tier,
 durability, absorbed share and wear in milli, covered hit-zone bits, carry capacity) and one `GearLoadout` per
 actor. `absorbHit` lets each covering piece in slot order take its share of the remaining damage, capped by its
 durability, wears it and removes broken pieces; `equipGear` returns the replaced piece for the loot owner;

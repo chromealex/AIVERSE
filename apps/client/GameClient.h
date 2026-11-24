@@ -181,6 +181,7 @@ private:
     bool startupReported_ = false;
     std::chrono::steady_clock::time_point startupStarted_ = std::chrono::steady_clock::now();
     splash::SplashScreen loadingSplash_;
+    bool mapSplashOff_ = false;   // game.json "splash" / "splash.mapLoading": none for map loads
     std::vector<uint16_t> loadingTypes_, warmingTypes_;
     size_t loadingCursor_ = 0;
     std::chrono::steady_clock::time_point loadingStarted_;

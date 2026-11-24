@@ -1,8 +1,8 @@
 // NEREID review-fix regressions (2026-11-21): rock shores, flood flux
 // carries through partial obstructions, flood flow units, dead inflow ports,
 // bucketed flood obstruction lookup.
-#include <aiverselib/water/NereidErosion.h>
-#include <aiverselib/water/NereidFloodRouting.h>
+#include "engine/world/nereid/NereidErosion.h"
+#include "engine/world/nereid/NereidFloodRouting.h"
 #include "engine/world/NereidRipples.h"
 #include "engine/world/NereidCascadeScene.h"
 #include "engine/world/TerraWeaveSedimentEcs.h"

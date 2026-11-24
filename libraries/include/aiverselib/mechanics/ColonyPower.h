@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // settlement-production: power / fluid graphs. Nodes (producers, consumers, storage, conduits) of one medium
 // are joined by undirected links; every connected component (breadth-first over a lib::Graph from Graphs.h, nodes in id
 // order) balances on its own each tick. Shortage is covered by storage (rate-limited, ascending id), then
@@ -7,7 +7,7 @@
 // supply, later ones that still fit are kept too (skip-fit); a shed consumer stays off for restoreDelayTicks
 // (hysteresis against flapping). Surplus charges storage in ascending id order.
 // Integer units per tick (watts, litres, ...); producer output is scaled by owner factors (weather, fuel).
-#include "../Graphs.h"
+#include "engine/core/Graphs.h"
 #include <algorithm>
 #include <cstdint>
 #include <map>

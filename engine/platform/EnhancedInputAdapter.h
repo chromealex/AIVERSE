@@ -1,7 +1,7 @@
 // Translates AIVERSE platform events/gamepad polls to the presentation-side AIVerse InputFlow core.
 // A hosted view may feed its own forwarded Event stream. Do not feed both host and guest events.
 #pragma once
-#include <aiverselib/gameplay/InputFlow.h>
+#include "input/InputFlowCore.h"
 #include "Platform.h"
 #include "Gamepad.h"
 #include <cmath>
