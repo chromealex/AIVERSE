@@ -1,3 +1,7 @@
 # Meadow grass integration
 
 Base 73a749b64. Port deterministic meadow geometry, JSON presets and PHYSIS preview. Preserve legacy maps, existing clump instancing and shared wind. Acceptance pending: native regression, exporter/preview parity, Mac captures and GPU measurements, merged-tree quick gate.
+
+Implementation b341da6ca. Native CPU regression PASS on macOS arm64: c++ -std=c++20 -O1 -I. -Wl,-dead_strip tests/terraweave_grass_meadow_test.cpp engine/data/Json.cpp engine/core/Fixed.cpp engine/render/Model.cpp; executed the result with assertions enabled. LOD triangles 16504 / 3093 / 433. Prior link attempts with an x86_64 archive and incomplete source list failed before running tests.
+
+Exporter smoke PASS on macOS x86_64 using the current exporter source and existing PR121 libraries (its source differs from base 73a749b64 only in docs). Same 7m patch, seed 42, 600 blades. Unconfigured output matched the baseline executable byte for byte in grass-1.gltf and grass-1.bin (geometry SHA256 c516d1491786ad017d2f75f82e2d1028761c940f9cad635e9b3535811166d003). Meadow geometry SHA256 492baa7a39538db059c4c04a9e6a83a2a719cdb146b9918e82395a6d0bd73e43. Export material fixture supplied spruce bark under the missing pine bark filenames; grass uses no bark textures. Both outputs visibly rendered in Metal modelview. Build and raw captures under /Volumes/KINGSTON/AIVERSE-builds/meadow-integration-20261124. These are export checks; editor and whole-tree acceptance recorded separately.
