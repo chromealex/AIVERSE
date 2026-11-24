@@ -221,6 +221,9 @@ Metadata patch, folder creation, reversible deletion, external import and replac
 ## Atomic internal Asset transfer (S6f.4b.3b.2)
 Use staged StudioTransferPlan::apply with no live commit callback for internal Move/Rename as well as external transfers. Resolve actual conflict decisions first; prepare typed URI edits, exact material snapshots (preserve unrelated document fields), GUID and tree digests through the existing ordinary chain planner. Recheck actual endpoints against map/rules before journal v4/v5 publication with the detached Asset cursor. Refresh disposable index and material view only after commit. Oversized/unrecordable internal moves refuse before mutation; legacy direct callers retain their prior path. Explicit Trash restore/purge and batch cleanup remain separate. No new MCP endpoint.
 
+## Transactional Trash restore and protected cleanup (S6h.3a)
+Explicit restore uses staged native quarantine/replacement relocation and clears the previous Asset cursor in the same outer journal v4/v5 transaction. Single and batch purge both refuse retained Undo/Redo slots and validate the persistent checkpoint under the asset lock; unprotected purge preserves history. UI disables protected purge and displays the native recoveryReason when available. Purge remains irreversible, with partial failure possible. Legacy dirty markers are fenced, not automatically discarded. No new MCP endpoint or full native verification.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web
