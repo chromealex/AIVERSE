@@ -203,6 +203,9 @@ Supersedes the previous mixed URI fence for recorded glTF/GLB repairs: resolve p
 ## Coordinated existing-document save (S6f.4a)
 Native studio.save with dirty Rules/Manifest prepares detached MapDoc and Project copies, merges exact existing-file snapshots and uses a single ProjectDocumentJournal commit. Existing map/terrain outputs only; new outputs refuse before publication. Live owners swap after commit; map history retains its separate dirty marker/checkpoint and may be fenced on interruption. Save As and standalone Workspace map_save still use their legacy paths. Do not claim global saved cursor atomicity or support for newly created sidecars. No new MCP action.
 
+## Creation-aware Studio save (S6f.4b.1)
+Native studio.save and native Save As share detached owner staging and ProjectDocumentJournal v2. Explicit createOnly output is distinct from an empty existing file, restricted to .json/.r16/.splat under maps/ with existing safe parent directories; no-clobber publish and exact-byte rollback are required. Save As refuses occupied new identities/sidecars and includes manifest registration in the same transaction. v1 recovery remains readable. Existing map history dirty marker/checkpoint is still post-commit, asset cursor checkpoint separate; standalone Workspace map_save is unchanged. Creation is save-only, not a reversible history operation. No automatic directory creation or arbitrary file deletion.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web
