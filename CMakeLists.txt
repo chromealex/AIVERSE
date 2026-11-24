@@ -3192,6 +3192,14 @@ if(AIVERSE_ENABLE_PHYSICS)
             target_compile_options(aiverse_physics_scene_tests PRIVATE -Wall -Wextra)
         endif()
         add_test(NAME physics_scene COMMAND aiverse_physics_scene_tests ${PROJECT_SOURCE_DIR}/examples/physics/scene.json)
+        add_executable(aiverse_terraweave_caverns_planet_collision_test
+            tests/terraweave_caverns_planet_collision_test.cpp)
+        target_link_libraries(aiverse_terraweave_caverns_planet_collision_test PRIVATE
+            aiverse_game_view aiverse_models aiverse_world AIVERSE::physics)
+        add_test(NAME terraweave_caverns_planet_collision
+            COMMAND aiverse_terraweave_caverns_planet_collision_test)
+        set_tests_properties(terraweave_caverns_planet_collision PROPERTIES
+            LABELS "TerraWeave;Caverns;PHYSICS")
     endif()
     if(AIVERSE_BUILD_PHYSICS_DEMO AND AIVERSE_DESKTOP)
         add_executable(aiverse_physics_demo examples/physics/main.cpp $<TARGET_OBJECTS:aiverse_runtime>)
