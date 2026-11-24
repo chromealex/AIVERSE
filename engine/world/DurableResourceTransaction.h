@@ -87,7 +87,7 @@ public:
         staged.setResource<RegionEntityLedger>(ledger);
         if(!registry.restoreSchemas(staged,records))return false;
         const auto* view=staged.resourceConst<RegionEntityLedger>();
-        if(!view||view->lastRevision()!=ledger.lastRevision()||view->records()!=ledger.records())return false;
+        if(!view||!view->sameState(ledger))return false;
         staged.eraseResource<RegionEntityLedger>();
         world=std::move(staged);return true;
     }
