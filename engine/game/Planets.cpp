@@ -2,6 +2,7 @@
 // and orbit shells, vision over the sphere (horizon included), interplanetary transit. Flat maps never get
 // here: every entry point is guarded by GameState::surface.
 #include "Internal.h"
+#include "PlanetSurfaceState.h"
 #include "engine/core/FixedMath.h"
 #include "engine/world/nereid/NereidSphereInteractions.h"
 #include <algorithm>
@@ -25,6 +26,30 @@ const Surface* GameCore::surface(Simulation& sim) const {
     return gs ? gs->surface.get() : nullptr;
 }
 
+uint32_t GameCore::minimumSaveVersion(const Simulation& sim) const {
+    const auto* gs=sim.world().resourceConst<GameState>();
+    return !systems_&&gs&&gs->planetTerrainRevision?11u:0u;
+}
+bool GameCore::stagePlanetTerrain(World& staged,const Surface& expected,
+        uint64_t expectedRevision,const Surface& candidate) const {
+    const auto* current=staged.resourceConst<GameState>();
+    if(systems_||!current||!current->grid.hf||!current->surface||
+       current->surface.get()!=&expected||current->planetTerrainRevision!=expectedRevision||
+       expectedRevision==UINT64_MAX||candidate.tab!=expected.tab||
+       candidate.corners==expected.corners||
+       !validPlanetSurfaceCorners(expected,candidate.corners))return false;
+    // Only the corner payload is accepted; all topology and body data are
+    // inherited from the canonical source, never from untrusted candidate.
+    auto next=std::make_shared<Surface>(expected);
+    next->corners=candidate.corners;
+    auto* gs=staged.resource<GameState>();
+    bindPlanetSurface(*gs,std::move(next),expectedRevision+1);
+    gs->grid.enableSphereHeights(rules_.levelHeight);
+    gs->grid.invalidateSphereTerrain();
+    gs->visionToken=0;
+    gs->lanesDirty=true;
+    return true;
+}
 int GameCore::bodyOf(Simulation& sim, Vec3 p) const {
     const Surface* s = surface(sim);
     return s ? s->bodyAt(p) : 0;
@@ -240,6 +265,8 @@ void GameCore::setupWorld(Simulation& sim, const Json& map) {
     }
     std::shared_ptr<const Surface> cs = surf;
     gs.surface = cs;
+    gs.authoredSurface = cs;
+    gs.planetTerrainRevision = 0;
     g.surf = cs;
     gs.hash.surf = cs;
     if (rules_.terrain.heightfield()) {
@@ -439,6 +466,13 @@ void GameCore::hashWorld(Simulation& sim, Hasher& h) {
     h.u32(uint32_t(S.bodies.size()));
     for (auto& b : S.bodies) { h.u32(uint32_t(b.faceSize)); h.fx(b.radius); h.fx(b.orbitPeriod); }
     for (size_t i = 0; i < S.corners.size(); i += 17) h.i32(S.corners[i]);
+    const auto& gs=state(sim);
+    if(gs.planetTerrainRevision){
+        h.str("game.planet.terrain.v1");h.u64(gs.planetTerrainRevision);
+        h.u64(planetSurfaceRecipeHash(*gs.authoredSurface));
+        h.u64(uint64_t(S.corners.size()));
+        for(auto corner:S.corners)h.i32(corner);
+    }
     w.each<Transit>([&](Entity e, Transit& t) { h.u64(e.packed()); h.i32(t.from); h.i32(t.to); h.u32(t.depart); h.u32(t.arrive); h.v3(t.arrival); });
 }
 

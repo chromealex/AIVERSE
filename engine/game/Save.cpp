@@ -3,6 +3,7 @@
 // pathing caches come from setup on the loading side. Format rule: append fields at the end of a type's list
 // and bump kSaveVersion in Simulation.cpp; a component type missing from kPools makes saving fail loudly.
 #include "Internal.h"
+#include "PlanetSurfaceState.h"
 #include "../vehicles/Vehicles.h"
 #include <algorithm>
 
@@ -262,6 +263,41 @@ bool GameCore::serializeState(Simulation& sim, Archive& a) {
         });
     }
     ioState(a, gs);
+    // v11 is selected only when this module owns edited spherical terrain.
+    // Read the canonical corners before any native consumers or path rebuild.
+    if(a.formatVersion>=11){
+        if(!gs.authoredSurface||!gs.grid.hf){a.fail();return false;}
+        uint64_t revision=gs.planetTerrainRevision;
+        uint64_t recipe=planetSurfaceRecipeHash(*gs.authoredSurface);
+        a(revision,recipe);
+        if(!a.ok()||!revision||recipe!=planetSurfaceRecipeHash(*gs.authoredSurface)){
+            a.fail();return false;
+        }
+        if(a.writing()){
+            if(!gs.surface||!validPlanetSurfaceCorners(*gs.authoredSurface,gs.surface->corners)){
+                a.fail();return false;
+            }
+            auto corners=gs.surface->corners;
+            a(corners);
+        }else{
+            const size_t expected=gs.authoredSurface->corners.size();
+            const auto count=a.count(0,sizeof(int16_t));
+            if(!a.ok()||count!=expected||gs.grid.w!=gs.authoredSurface->W||
+               gs.grid.h!=gs.authoredSurface->H){a.fail();return false;}
+            auto next=std::make_shared<Surface>(*gs.authoredSurface);
+            for(auto& corner:next->corners)a(corner);
+            if(!a.ok()||!validPlanetSurfaceCorners(*gs.authoredSurface,next->corners)){
+                a.fail();return false;
+            }
+            bindPlanetSurface(gs,std::move(next),revision);
+            gs.grid.invalidateSphereTerrain();
+        }
+    }else if(!a.writing()&&gs.authoredSurface){
+        // Loading an older unedited save into an already edited match.
+        const bool changed=gs.planetTerrainRevision!=0;
+        bindPlanetSurface(gs,gs.authoredSurface,0);
+        if(changed)gs.grid.invalidateSphereTerrain();
+    }
     ioRoutes(a, gs);   // Routes.cpp: only when the map / rules use routes, groups or a screen
     if (!native_.serialize(sim, a)) return false;
     // Lua state of games with their own scripts (the standard library keeps its state in GameState)

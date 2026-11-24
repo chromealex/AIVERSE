@@ -166,7 +166,7 @@ constexpr uint32_t kSaveMagic = 0x56535452;   // "RTSV"
 // Version 7 (agent-bw-skills): skill objects (Area goal / arrived / deaths, Pulled pool); 4..6 remain readable.
 // Version 8 (agent-bw-skills): effect budgets, transfers (Transfer pool), status groups, loadout slots.
 // Version 9: the RTS module's frozen match outcome (a load after the match end restored no result: bots stopped).
-constexpr uint32_t kSaveVersion = 10;
+constexpr uint32_t kSaveVersion = 11;
 } // namespace
 void io(Archive& a, Command& c) { a(c.tick, c.player, c.flags, c.type, c.seq, c.units, c.target, c.point, c.param, c.args); }   // found by ADL
 void io(Archive& a, PlayerInfo& p) { a(p.slot, p.name, p.team, p.alive); }
@@ -174,7 +174,10 @@ void io(Archive& a, PlayerInfo& p) { a(p.slot, p.name, p.team, p.alive); }
 std::string Simulation::serialize() {
     std::string out;
     Archive a(&out);
-    uint32_t magic = kSaveMagic, version = persistentEcs_.empty()?9:kSaveVersion, rate = tickRate_;
+    uint32_t magic = kSaveMagic, version = persistentEcs_.empty()?9u:10u, rate = tickRate_;
+    version = std::max(version,module_->minimumSaveVersion(*this));
+    if(version>kSaveVersion)return {};
+    a.formatVersion=version;
     uint64_t seed = cfg_.seed, st = rng_.state(), inc = rng_.increment();
     a(magic, version, seed, rate, tick_, st, inc, players_, pending_, executed_, seqByPlayer_);
     World::EntityState es = world_.entityState();

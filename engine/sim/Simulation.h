@@ -58,6 +58,8 @@ public:
     // Save states: write / read the module's dynamic state (World pools and resources). The reading side runs
     // on a simulation set up from the same rules and map. Default: not supported.
     virtual bool serializeState(Simulation&, Archive&) { return false; }
+    // Optional module layout extension; zero keeps the legacy save selection.
+    virtual uint32_t minimumSaveVersion(const Simulation&) const { return 0; }
     // Called before the world is copied or hashed (rollback snapshots, checksums): a module that keeps
     // state outside the World lazily (scripting VM) writes it in now.
     virtual void prepareSnapshot(Simulation&) {}

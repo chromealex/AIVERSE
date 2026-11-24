@@ -19,6 +19,7 @@
 #include "aiverselib/world/PlanetCharacterGravityFrame.h"
 #include "aiverselib/world/GranularPlanetTerrainTransfer.h"
 #include "aiverselib/world/GranularPlanetSoilGeometry.h"
+#include "aiverselib/world/GranularGameCorePlanetSoil.h"
 #include "aiverselib/world/CircuitSurfaceWiring.h"
 #include "apps/studio-native/StudioPlanetWorldProcesses.h"
 #include "aiverselib/world/EvolveSurfaceEcology.h"
@@ -1350,6 +1351,49 @@ static void checkPlanetStudioDiagnostics(){
     const auto plane=owner.sample(&ecs,"2",1,64,ref);
     AIVERSE_TEST_CHECK(!plane.has("topology"));
 }
+static void checkGameCorePlanetTerrainPersistence(){
+    const std::string root=std::string(AIVERSE_SOURCE_DIR)+"/examples/native/world_processes/planet-demo";
+    const Json map=Json::parseFile(root+"/maps/planet.json");
+    Json rules=Json::parseFile(root+"/rules.json");
+    rules.set("terrain",Json::parse(R"({"model":"heightfield"})"));
+    const auto create=[&](){
+        std::vector<g::NativeDefinition> defs{examples::planet_processes::definition()};
+        auto s=std::make_unique<Simulation>(SimConfig{1,20,0,true},
+            std::make_unique<g::GameCore>(std::move(defs)));
+        s->setup(rules,map);return s;
+    };
+    auto sim=create(),peer=create();
+    auto& core=static_cast<g::GameCore&>(sim->module());
+    auto& w=sim->world();
+    const auto* gs=w.resourceConst<g::GameState>();
+    AIVERSE_TEST_CHECK(gs&&gs->grid.hf&&gs->surface&&gs->planetTerrainRevision==0);
+    const auto base=gs->surface;
+    const auto legacy=sim->serialize();
+    AIVERSE_TEST_CHECK(!legacy.empty()&&uint8_t(legacy[4])==10);
+    const auto initialHash=sim->checksum();
+    SimSnapshot rollback;sim->saveState(rollback);
+    granular::PlanetSoilTarget target;
+    target.body=0;target.bodyId=base->bodies[0].id;
+    target.surfaceCell=base->gridCell(0,0,0,0);
+    const auto fp=wp::planetTerrainFootprint(*base,0,target.surfaceCell);
+    AIVERSE_TEST_CHECK(fp);target.footprint=*fp;target.volumeBudgetCm3=UINT64_MAX;
+    const auto edit=granular::previewPlanetSoilGeometry(*base,target,1,-100,100);
+    AIVERSE_TEST_CHECK(edit);
+    AIVERSE_TEST_CHECK(core.stagePlanetTerrain(w,*base,0,*edit->surface));
+    gs=w.resourceConst<g::GameState>();
+    AIVERSE_TEST_CHECK(gs->planetTerrainRevision==1&&gs->surface==gs->grid.surf&&gs->surface==gs->hash.surf);
+    AIVERSE_TEST_CHECK(gs->surface->corners==edit->surface->corners&&sim->checksum()!=initialHash);
+    AIVERSE_TEST_CHECK(!core.stagePlanetTerrain(w,*base,0,*edit->surface));
+    const auto saved=sim->serialize();
+    AIVERSE_TEST_CHECK(!saved.empty()&&uint8_t(saved[4])==11);
+    std::string error;
+    AIVERSE_TEST_CHECK(peer->deserialize(saved,&error)&&peer->checksum()==sim->checksum());
+    const auto* loaded=peer->world().resourceConst<g::GameState>();
+    AIVERSE_TEST_CHECK(loaded->planetTerrainRevision==1&&loaded->surface->corners==edit->surface->corners&&loaded->surface==loaded->grid.surf&&loaded->surface==loaded->hash.surf);
+    AIVERSE_TEST_CHECK(peer->deserialize(legacy,&error)&&peer->checksum()==initialHash);
+    sim->loadState(rollback);
+    AIVERSE_TEST_CHECK(sim->checksum()==initialHash&&w.resourceConst<g::GameState>()->surface==base);
+}
 static void checkAuthoredPlanetDemo(){
     const std::string root=std::string(AIVERSE_SOURCE_DIR)+"/examples/native/world_processes/planet-demo";
     const Json map=Json::parseFile(root+"/maps/planet.json");
@@ -1471,6 +1515,7 @@ int main(){
     checkPlanetLiveBudget();
     checkWorldProcessLiveOptions();
     checkAuthoredPlanetDemo();
+    checkGameCorePlanetTerrainPersistence();
     checkPlanetStudioDiagnostics();
     checkCircuitSurfaceWiring();
     checkPlanetLiveCircuit();

@@ -140,6 +140,8 @@ struct GameState {
     RouteState routes;                       // authored routes, row groups, multiscreen (Routes.cpp)
     // planets (map `world` block): bodies, cube-sphere layout of the grid rows (Surface.h); null on flat maps
     std::shared_ptr<const Surface> surface;
+    std::shared_ptr<const Surface> authoredSurface; // immutable map recipe, shared by rollback snapshots
+    uint64_t planetTerrainRevision = 0;
     // fidelity mechanics: eaters (sandworms) that submerged and come back later
     struct Resurface { uint16_t type; uint8_t owner; uint32_t at; };
     std::vector<Resurface> resurface;

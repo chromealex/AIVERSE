@@ -76,6 +76,7 @@ public:
     void hashState(Simulation& sim, Hasher& h) override;
     void prepareSnapshot(Simulation& sim) override { if (script_) script_->flush(sim); }   // world-space: script_ is null
     bool serializeState(Simulation& sim, Archive& a) override;   // Save.cpp
+    uint32_t minimumSaveVersion(const Simulation& sim) const override;
     int result(Simulation& sim) override;
     // Frozen outcome (null / empty until the match has a result). The blob is what hosted battle clients report
     // (NetClient::setResultReporter): result, tick, per player slot / team / alive / units / structures / team score.
@@ -184,6 +185,10 @@ public:
     Vec3 lift(Simulation& sim, Vec3 p, Fixed h) const;
     // ---- planets: what the view / editor / AI call (all no-ops / flat answers on flat maps)
     const Surface* surface(Simulation& sim) const;                // null on flat maps
+    // Authoritative staged World barrier, heightfield planets only. Caller
+    // owns soil accounting, actor/root/collider reconciliation and replay.
+    bool stagePlanetTerrain(World& staged,const Surface& expected,
+        uint64_t expectedRevision,const Surface& candidate) const;
     int bodyOf(Simulation& sim, Vec3 p) const;                     // 0 on flat maps
     // Body centre in world space at a sim tick (circular orbits, Fixed). View: float(world) at tick + alpha.
     Vec3 bodyWorldPosition(Simulation& sim, int body, uint32_t tick) const;
