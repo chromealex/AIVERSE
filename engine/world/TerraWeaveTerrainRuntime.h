@@ -58,6 +58,28 @@ public:
         auto next=pending_;
         for(const auto& [cell,resident]:residents_){(void)resident;next.insert_or_assign(cell,earth_.revision());}
         surfaceTransform_=std::move(transform);surfaceEpoch_=epoch;pending_.swap(next);
+        surfaceGroupCells_.clear();surfaceGroupExclusive_={};surfaceGroupSoilRevision_=0;
+    }
+    // A certified group must remain pinned, with the same soil snapshot,
+    // until all its resident replacements and downstream owners are ready.
+    void setSurfaceGroupTopology(uint64_t epoch,uint64_t soilRevision,
+            std::set<world::Cell> cells,SurfaceTransform transform,
+            std::function<bool()> exclusive){
+        if(cells.empty()||cells.size()>64||soilRevision!=earth_.revision()||!exclusive||!exclusive())
+            throw std::invalid_argument("TerraWeave surface group requires frozen soil and exclusive readers");
+        setSurfaceTopology(epoch,std::move(transform));
+        surfaceGroupCells_.swap(cells);surfaceGroupSoilRevision_=soilRevision;
+        surfaceGroupExclusive_=std::move(exclusive);
+    }
+    uint32_t terrainResolution()const noexcept{return resolution_;}
+    bool surfaceGroupReady()const noexcept{
+        if(surfaceGroupCells_.empty())return true;
+        if(surfaceGroupSoilRevision_!=earth_.revision()||!pending_.empty()||residents_.size()!=surfaceGroupCells_.size())return false;
+        for(const auto& cell:surfaceGroupCells_){
+            const auto it=residents_.find(cell);
+            if(it==residents_.end()||!it->second.resident()||it->second.surfaceEpoch()!=surfaceEpoch_||it->second.revision()!=surfaceGroupSoilRevision_)return false;
+        }
+        return true;
     }
     uint64_t surfaceEpoch()const noexcept{return surfaceEpoch_;}
     // Optional observer of committed tiles, e.g. dynamic GI geometry
@@ -199,6 +221,10 @@ public:
                 throw std::invalid_argument("TerraWeave tiles are X/Z columns");
             needed.insert(tile);
         }
+        if(!surfaceGroupCells_.empty()&&(needed!=surfaceGroupCells_||earth_.revision()!=surfaceGroupSoilRevision_))
+            throw std::logic_error("TerraWeave surface group pins/soil changed: reconcile a new certified group");
+        if(!surfaceGroupCells_.empty()&&!surfaceGroupReady()&&(!surfaceGroupExclusive_||!surfaceGroupExclusive_()))
+            throw std::logic_error("TerraWeave surface group publication requires exclusive readers");
         std::map<world::Cell,SparseTerrainView> visualPlan;
         if(!surfaceTransform_)for(const auto& tile:adaptive) {
             if(!needed.contains(tile.cell) ||
@@ -364,6 +390,7 @@ public:
     // when a live patch is drawn, or z-fighting will occur.
     void draw(render::Renderer3D& renderer,
               TerrainPatchRenderOriginCm origin={}) const {
+        if(!surfaceGroupReady())return;
         for(const auto& [cell,patch]:residents_){
             (void)cell;patch.submit(renderer,origin);
         }
@@ -378,6 +405,10 @@ public:
     bool refreshNavMesh(nav::Mesh& mesh,
                         const EarthworksNavSource& source,
                         std::string* error=nullptr) const {
+        if(!surfaceGroupReady()){
+            if(error)*error="TerraWeave surface group is not fully published";
+            return false;
+        }
         std::vector<RectCm> dirty;
         for(const auto& change:retiredDirty_)dirty.push_back(change.bounds);
         for(const auto& [cell,resident]:residents_){
@@ -495,6 +526,9 @@ private:
     int32_t cellSizeMetres_=256;
     uint32_t resolution_=33;
     SurfaceTransform surfaceTransform_;
+    std::set<world::Cell> surfaceGroupCells_;
+    std::function<bool()> surfaceGroupExclusive_;
+    uint64_t surfaceGroupSoilRevision_=0;
     uint64_t surfaceEpoch_=0;
     TerrainCollisionPublisher colliders_;
     GrassPatchRenderer grassRhi_{};
