@@ -149,7 +149,9 @@ public:
                         victim=f;
                 flows_.erase(victim);
             }
-            auto computed=buildGraphFlow(*this,{goal},maxVisits);
+            // Compute a COMPLETE integration field on first use. A field
+            // truncated at the caller visit budget must never be cached.
+            auto computed=buildGraphFlow(*this,{goal},uint32_t(size()));
             it=flows_.emplace(goal,CachedFlow{std::move(computed),
                                               ++serial_}).first;
             ++stats_.flowBuilds;
