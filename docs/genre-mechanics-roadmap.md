@@ -104,3 +104,7 @@ Native planet leaf baseline collision ownership in existing Box3D and SpatialWor
 ### Stage54u4a — IN PROGRESS
 
 Deterministic body-local observer demand with hysteresis and pins, global bounded region/slot budget; immutable ECS snapshots and rollback-safe candidate identity; reuse existing stream worker tickets and exact native collar helpers to prepare a full body candidate. No clipped preview fields in gameplay; refuse incomplete exterior/shaft geometry. Host collision binding activation and safe baseline coverage transfer remain 54u4b. Native QA pending.
+
+### Stage54u4b — IN PROGRESS
+
+Genre-independent native host frame coordinator for planetary demand, shared builder and collision binding, exact source/epoch checks, explicit nav/GI hooks and actual host exclusion. Preserve old coherent cohort during rebuild; close/restore and release only under host proof of no occupied volume and safe baseline coverage. Bound pending jobs and resident cohorts; fail closed on pin/budget conflicts. Native API and example/test source, no automatic legacy motor conversion; no claim of tested traversal until native QA.
