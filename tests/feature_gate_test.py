@@ -154,6 +154,7 @@ class GateTest(unittest.TestCase):
             git("init", "-q")
             git("config", "user.name", "Fixture")
             git("config", "user.email", "fixture@example.invalid")
+            git("config", "core.autocrlf", "false")
             source = root / "source.py"
             source.write_text("version = 1\n")
             git("add", ".")
@@ -452,6 +453,7 @@ class AutomationTest(unittest.TestCase):
             git("init","-q","-b","main")
             git("config","user.name","Fixture")
             git("config","user.email","fixture@example.invalid")
+            git("config","core.autocrlf","false")
             manifest = root/"docs/features/base.json"
             manifest.parent.mkdir(parents=True)
             def write(status):
