@@ -1,6 +1,7 @@
 #include "apps/studio-native/StudioPlanetLiveSnapshot.h"
 #include "apps/studio-native/StudioPlanetAetherSnapshot.h"
 #include "apps/studio-native/StudioPlanetFractureSnapshot.h"
+#include "apps/studio-native/StudioPlanetMorphSnapshot.h"
 // Actual GameCore map fixture proving native module ECS hydration via mapPlaced().
 #include "aiverselib/world/WorldProcessesNativeModule.h"
 #include "aiverselib/world/WorldProcessGravity.h"
@@ -722,6 +723,53 @@ static void checkPlanetGranular(){
     AIVERSE_TEST_CHECK(!granular::advanceSurfaceFields(ecs,surface,3));
     AIVERSE_TEST_CHECK(ecs.get<granular::Field>(field).sampledTick==2);
 }
+static void checkPlanetLiveMorph(){
+    using aiverse::studio::samplePlanetMorph;
+    game::Surface surface;game::BodyDef body;body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    World ecs;
+    const auto owner=ecs.create(),moonOwner=ecs.create();
+    const auto a=ecs.create(),b=ecs.create(),moon=ecs.create(),unbound=ecs.create();
+    const auto spring=ecs.create(),cross=ecs.create(),unknown=ecs.create(),force=ecs.create();
+    Transform tr{};tr.pos=surface.cellCenter(surface.gridCell(0,0,3,3));ecs.add<Transform>(owner,tr);
+    tr.pos=surface.cellCenter(surface.gridCell(1,0,3,3));ecs.add<Transform>(moonOwner,tr);
+    morph::Node n{};n.sampledTick=7;n.anchored=true;ecs.add<morph::Node>(a,n);
+    n.anchored=false;n.x=150;n.restX=100;n.vx=10;ecs.add<morph::Node>(b,n);
+    ecs.add<morph::Node>(moon,n);ecs.add<morph::Node>(unbound,n);
+    AIVERSE_TEST_CHECK(morph::bindGravity(ecs,a,{owner,100,1000,false,true}));
+    AIVERSE_TEST_CHECK(morph::bindGravity(ecs,b,{owner,100,1000,false,true}));
+    AIVERSE_TEST_CHECK(morph::bindGravity(ecs,moon,{moonOwner,100,1000,false,true}));
+    ecs.add<morph::Spring>(spring,morph::Spring{a,b,100,0,0,400,true});
+    ecs.add<morph::Spring>(cross,morph::Spring{a,moon,100,0,0,400,true});
+    ecs.add<morph::Spring>(unknown,morph::Spring{a,unbound,100,0,0,400,true});
+    ecs.add<morph::Force>(force,morph::Force{b,5,0,-2,true});
+    AIVERSE_TEST_CHECK(morph::enqueueImpact(ecs,b,8,10,20,30));
+    physis::GravitySettings settings;settings.baseline={Fixed{},Fixed::fromInt(-10),Fixed{}};
+    ecs.setResource<physis::GravitySettings>(settings);
+    const auto snapshot=samplePlanetMorph(ecs,surface,7,true);
+    AIVERSE_TEST_CHECK(snapshot.getBool("available")&&snapshot["nodes"].size()==4);
+    AIVERSE_TEST_CHECK(snapshot.getInt("unprojected")==1&&snapshot.getInt("crossBody")==1&&snapshot.getInt("frameMismatch")==1);
+    const auto frame=morph::gravity_detail::ownerFrame(ecs,&surface,owner);
+    AIVERSE_TEST_CHECK(frame);
+    const auto expected=frame->origin+frame->simulationVector({Fixed::fromRatio(3,2),{},{} })-game::Surface::anchor(0);
+    bool found=false;
+    for(const auto& row:snapshot["nodes"].items())if(row.getStr("id")==std::to_string(b.packed())){
+        found=true;AIVERSE_TEST_CHECK(row.getBool("projected")&&row.getStr("body")=="terra");
+        AIVERSE_TEST_CHECK(row["displacement"][size_t(0)].integer()==50);
+        AIVERSE_TEST_CHECK(std::abs(row["position"][size_t(0)].toDouble()-expected.x.toDouble())<.001);
+        AIVERSE_TEST_CHECK(row["configuredForce"][size_t(2)].integer()==-2);
+        AIVERSE_TEST_CHECK(row["pendingImpact"].getInt("tick")==8);
+        const auto load=morph::physisNodeLoad(ecs,&surface,b,ecs.get<morph::Node>(b));
+        AIVERSE_TEST_CHECK(load&&row["currentGravityLoad"][size_t(1)].integer()==(*load)[1]);
+    }
+    AIVERSE_TEST_CHECK(found);
+    const auto& edge=snapshot["springs"][size_t(0)];
+    AIVERSE_TEST_CHECK(edge.getBool("projected")&&edge["residual"][size_t(0)].integer()==50);
+    AIVERSE_TEST_CHECK(ecs.get<morph::Impact>(b).pending&&ecs.get<morph::Node>(b).x==150);
+    AIVERSE_TEST_CHECK(samplePlanetMorph(ecs,surface,8,true)["nodes"].size()==0);
+    const auto cap=samplePlanetMorph(ecs,surface,7,false,1);
+    AIVERSE_TEST_CHECK(cap.getBool("truncated")&&cap["nodes"].size()==1);
+}
 static void checkMorphGravity(){
     World ecs;
     const auto owner=ecs.create(),node=ecs.create();
@@ -1030,6 +1078,7 @@ int main(){
     checkAetherStratification();
     checkPlanetLiveAether();
     checkMorphGravity();
+    checkPlanetLiveMorph();
     checkPlanetSoilTransfer();
     checkPlanetCollapseDelivery();
     checkPlanetLiveFracture();
