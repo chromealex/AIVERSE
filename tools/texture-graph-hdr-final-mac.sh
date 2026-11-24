@@ -30,7 +30,7 @@ run(){
 { git rev-parse HEAD; git status --short; uname -a; cmake --version; node --version; npm --version; } | tee "$logs/environment.log"
 node -e 'if(Number(process.versions.node.split(".")[0])<22)process.exit(1)' || { echo "Node 22+ required"; exit 2; }
 web_root="$(mktemp -d "$root/web.XXXXXX")"
-git archive HEAD apps/studio-web | tar -xf - -C "$web_root"
+git archive HEAD apps/studio-web engine/assets/branding/mark.png | tar -xf - -C "$web_root"
 web="$web_root/apps/studio-web"
 export npm_config_cache="$root/npm-cache"
 run npm-install npm --prefix "$web" install --no-audit --no-fund
