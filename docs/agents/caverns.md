@@ -85,3 +85,8 @@ Use `CavePlanetNativeHost::dispatchMotor` from the existing motor system with th
 ## Stage58b — exterior collision leaf ownership
 
 `CavePlanetExteriorCollision` loads exact finest PlanetRenderer leaves into the existing Box3D/SpatialWorld and shared reserved collider pool. Bind paired borrow/return hooks before constructing native host (set actual exclusive, unownedLeaf, volumeCell and coverage-release proofs separately). Use the same cell allocator; a loan transfers live baseline entries/handles without recreating physics; after cave close restored originals return to the exterior registry. `covers` verifies a supplied complete leaf set using real solid/committed cave owners, not camera visibility. The project must conservatively compute the complete swept envelope leaf set and certify other coverage, reserve global ID/cell namespace, manage exterior streaming and retire safely. No global planet collision coverage or runnable host claim. No new saved data. Tests not run.
+
+
+## Stage58c — optional native chamber executable
+
+Enable `AIVERSE_ENABLE_PHYSICS=ON` and `AIVERSE_BUILD_CAVERNS_PLANET_DEMO=ON` on desktop, build `aiverse_caverns_planet_demo`. The bounded sealed-chamber example composes actual Surface, Simulation, PHYSIS/NEREID, Box3D, SpatialWorld, exterior registry, PlanetRenderer and CPU GI, uses a scripted native flight route and the single host tick/dispatch. It uses a fixed planet view frame and one local leaf patch, not whole-planet streaming. `--frames N` requests a bounded arrival smoke run; failure returns nonzero. Open-mouth crossing, swimming, dynamic frame, restore and broader coverage remain separate. Source only; not built or run.

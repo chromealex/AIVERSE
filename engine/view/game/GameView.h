@@ -627,6 +627,10 @@ public:
     using PlanetCaveDraw=std::function<void(render::Renderer3D&,const render::SphereViewFrame&,double)>;
     void setPlanetCaveDraw(PlanetCaveDraw draw){planetCaveDraw_=std::move(draw);}
     bool hasPlanetCaveDraw()const noexcept{return bool(planetCaveDraw_);}
+    // Native hosts drawing their own planet pass reuse the same callback.
+    void drawPlanetCaves(render::Renderer3D& renderer,const render::SphereViewFrame& frame,double seconds){
+        if(planetCaveDraw_)planetCaveDraw_(renderer,frame,seconds);
+    }
     // Per frame before beginScene: orbit camera smoothing; returns the Camera to render with (view world).
     const render::Camera& updatePlanetCamera(double seconds, float dt, int viewH);
     // Screen point -> body + body-local surface point (terrain / ocean picking).
