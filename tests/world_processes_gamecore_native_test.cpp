@@ -490,6 +490,34 @@ struct PlanetSoilFixture {
     uint64_t revision=4;
     int64_t terra=1000,moon=2000;
 };
+static void checkPlanetTerrainFootprint(){
+    game::Surface surface;game::BodyDef body;
+    body.id="terra";body.faceSize=8;body.radius=Fixed::fromInt(64);
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    using lib::worldprocess::planetTerrainFootprint;
+    const auto interior=planetTerrainFootprint(surface,0,surface.gridCell(0,0,3,3));
+    AIVERSE_TEST_CHECK(interior&&interior->affectedCells.size()==9);
+    for(const auto& c:interior->corners)AIVERSE_TEST_CHECK(c.aliasCount==1);
+    const auto edge=planetTerrainFootprint(surface,0,surface.gridCell(0,0,7,3));
+    AIVERSE_TEST_CHECK(edge&&edge->affectedCells.size()==9);
+    size_t doubles=0;
+    for(const auto& c:edge->corners)if(c.aliasCount==2)++doubles;
+    AIVERSE_TEST_CHECK(doubles==2);
+    const int cornerCell=surface.gridCell(0,0,7,7);
+    const auto triple=planetTerrainFootprint(surface,0,cornerCell);
+    AIVERSE_TEST_CHECK(triple&&triple->bodyId=="terra");
+    int alias=-1;
+    for(const auto& c:triple->corners)if(c.aliasCount==3)alias=c.aliases[2];
+    AIVERSE_TEST_CHECK(alias>=0);
+    for(int cell:triple->affectedCells)AIVERSE_TEST_CHECK(surface.bodyOfCell(cell)==0);
+    AIVERSE_TEST_CHECK(!planetTerrainFootprint(surface,1,cornerCell));
+    const auto moon=planetTerrainFootprint(surface,1,surface.gridCell(1,0,7,7));
+    AIVERSE_TEST_CHECK(moon&&moon->bodyId=="moon"&&moon->corners[0].canonical==triple->corners[0].canonical);
+    AIVERSE_TEST_CHECK(!planetTerrainFootprint(surface,0,-1));
+    surface.corners[surface.bodies[0].cornerBase+size_t(alias)]=1;
+    AIVERSE_TEST_CHECK(!planetTerrainFootprint(surface,0,cornerCell));
+    AIVERSE_TEST_CHECK(planetTerrainFootprint(surface,1,surface.gridCell(1,0,7,7)));
+}
 static void checkPlanetSoilTransfer(){
     using namespace granular;
     game::Surface surface;
@@ -506,6 +534,7 @@ static void checkPlanetSoilTransfer(){
     PlanetSoilRequest req{field,"terra",2,2,1000,PlanetSoilDirection::Fill,50,4};
     const auto target=planPlanetSoilTransfer(ecs,surface,req,7);
     AIVERSE_TEST_CHECK(target&&target->body==0&&target->face!=0&&target->volumeBudgetCm3==50);
+    AIVERSE_TEST_CHECK(target->footprint.bodyId==target->bodyId&&target->footprint.surfaceCell==target->surfaceCell&&!target->footprint.affectedCells.empty());
     auto owner=[](World& staged,const PlanetSoilTarget& t)->std::optional<PlanetSoilOwnerChange>{
         auto* soil=staged.resource<PlanetSoilFixture>();
         if(soil->revision!=t.expectedTerrainRevision)return {};
@@ -1286,6 +1315,7 @@ int main(){
     checkMorphGravity();
     checkPlanetLiveMorph();
     checkPlanetLiveEcho();
+    checkPlanetTerrainFootprint();
     checkPlanetSoilTransfer();
     checkPlanetCollapseDelivery();
     checkPlanetLiveFracture();

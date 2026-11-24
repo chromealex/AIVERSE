@@ -2,6 +2,7 @@
 // No terrain store, height mutation, brush solver or scheduler is defined here.
 #pragma once
 #include "GranularSurfaceField.h"
+#include "PlanetTerrainFootprint.h"
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -24,6 +25,7 @@ struct PlanetSoilTarget {
     uint32_t completedTick=0;
     uint64_t expectedTerrainRevision=0,volumeBudgetCm3=0;
     PlanetSoilDirection direction=PlanetSoilDirection::Fill;
+    lib::worldprocess::PlanetTerrainFootprint footprint;
 };
 struct PlanetSoilOwnerChange {
     uint64_t beforeRevision=0,afterRevision=0,movedVolumeCm3=0;
@@ -64,6 +66,9 @@ inline std::optional<PlanetSoilTarget> planPlanetSoilTransfer(
     PlanetSoilTarget target;
     if(!surface.cellFace(grain->surfaceCell,target.body,target.face,target.x,target.y)||
        target.body!=frame->body)return {};
+    const auto footprint=lib::worldprocess::planetTerrainFootprint(surface,target.body,grain->surfaceCell);
+    if(!footprint||footprint->bodyId!=request.expectedBody)return {};
+    target.footprint=*footprint;
     target.bodyId=request.expectedBody;target.surfaceCell=grain->surfaceCell;
     target.ground=grain->ground;target.up=grain->up;
     target.completedTick=completedTick;target.direction=request.direction;
