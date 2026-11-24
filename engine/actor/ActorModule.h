@@ -19,6 +19,7 @@
 #include <utility>
 
 #include "../game/HostSystems.h"
+namespace aiverse::terraweave::caverns {class CaveNavigationDataProvider;}
 namespace aiverse::actor {
 constexpr uint32_t kBuildingColliderBase=0x40000000;
 constexpr uint32_t kRotatedColliderBase=0x50000000;   // triangles of map colliders with a "yaw" (12 per box)   // collider ids of map `buildings` (building-gen)
@@ -211,6 +212,11 @@ private:
 
     Config config_;
     world::SpatialWorld collision_;
+    // Opt-in single-motor cave steering. No second Transform mover: the
+    // existing CharacterBody + moveActor owns the authoritative position.
+    std::shared_ptr<const terraweave::caverns::CaveNavigationDataProvider>
+        caveNavigation_;
+
     std::vector<Vec3> spawns_;
     std::vector<bool> bots_;
     uint64_t contentHash_=0;
