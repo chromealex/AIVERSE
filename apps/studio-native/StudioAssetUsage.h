@@ -4,6 +4,7 @@
 #pragma once
 #include "engine/data/Json.h"
 #include <filesystem>
+#include <cctype>
 #include <fstream>
 #include <iterator>
 #include <set>
@@ -37,6 +38,60 @@ inline std::vector<StudioTextFile> studioProjectTextFiles(const std::filesystem:
         f.text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
         out.push_back(std::move(f));
     }
+    return out;
+}
+
+// Recovery diagnostics must not silently treat truncated or skipped files as
+// evidence of no dependencies. This scanner is advisory, not a deletion gate.
+struct StudioRecoveryTextScan {
+    size_t visited=0, scanned=0, skipped=0;
+    bool truncated=false;
+    Json mentions=Json::array();
+};
+inline StudioRecoveryTextScan studioRecoveryTextScan(const std::filesystem::path& project,
+    const std::vector<std::string>& needles){
+    namespace fs=std::filesystem;
+    StudioRecoveryTextScan out;
+    constexpr size_t maxVisits=40000,maxFiles=6000,maxBytes=128*1024*1024,maxFile=8*1024*1024;
+    size_t total=0;
+    std::error_code ec;
+    fs::recursive_directory_iterator it(project,ec),end;
+    if(ec){out.truncated=true;return out;}
+    for(;it!=end;it.increment(ec)){
+        if(ec){out.truncated=true;break;}
+        if(++out.visited>maxVisits||out.scanned>=maxFiles){out.truncated=true;break;}
+        const auto stat=it->symlink_status(ec);
+        if(ec){out.truncated=true;break;}
+        if(fs::is_symlink(stat)){it.disable_recursion_pending();++out.skipped;continue;}
+        const auto name=it->path().filename().string();
+        if(fs::is_directory(stat)){
+            if(name==".aiverse-cache"||name==".git"||name=="node_modules"||name=="Builds"||name=="dist"||name=="Logs"||name=="logs"){
+                it.disable_recursion_pending();++out.skipped;
+            }
+            continue;
+        }
+        if(!fs::is_regular_file(stat)){++out.skipped;continue;}
+        auto ext=it->path().extension().string();
+        for(char& ch:ext)ch=char(std::tolower(static_cast<unsigned char>(ch)));
+        static const std::set<std::string> supported={".json",".lua",".rml",".rcss",".gltf",".aiverse",".cpp",".cc",".cxx",".c",".h",".hpp",".cs",".ts",".js",".hlsl",".glsl",".metal",".xml",".yaml",".yml",".toml"};
+        if(!supported.count(ext)){++out.skipped;continue;}
+        const auto bytes=it->file_size(ec);
+        if(ec){out.truncated=true;break;}
+        if(bytes>maxFile||bytes>maxBytes-total){++out.skipped;out.truncated=true;continue;}
+        std::ifstream stream(it->path(),std::ios::binary);
+        if(!stream){++out.skipped;out.truncated=true;continue;}
+        std::string contents(static_cast<size_t>(bytes),'\0');
+        if(bytes&&!stream.read(contents.data(),static_cast<std::streamsize>(bytes))){++out.skipped;out.truncated=true;continue;}
+        if(stream.peek()!=std::char_traits<char>::eof()||stream.bad()){++out.skipped;out.truncated=true;continue;}
+        ++out.scanned;total+=static_cast<size_t>(bytes);
+        for(const auto& needle:needles){
+            if(needle.empty()||contents.find(needle)==std::string::npos)continue;
+            if(out.mentions.size()>=200){out.truncated=true;break;}
+            Json row=Json::object();row.set("file",Json::string(it->path().lexically_relative(project).generic_string()));
+            row.set("reference",Json::string(needle));out.mentions.push(std::move(row));
+        }
+    }
+    if(ec)out.truncated=true;
     return out;
 }
 

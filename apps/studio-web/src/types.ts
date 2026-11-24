@@ -640,7 +640,7 @@ export interface StudioResult {
   'studio.assetMovePreview': StudioAssetTransferPlan;
   'studio.assetImportPreview': StudioAssetTransferPlan | { cancelled: true };
   'studio.assetTransferCommit': StudioAssetTransferResult;
-  'studio.materialPublicationRollbackPreview': {name:string;blockers:{kind:string;owner:string}[];journalOnlyRollbackAllowed:boolean;contentRollbackAllowed:boolean};
+  'studio.materialPublicationRollbackPreview': {name:string;blockers:{kind:string;owner:string}[];journalOnlyRollbackAllowed:boolean;contentRollbackAllowed:boolean;coverage:{visited:number;scanned:number;skipped:number;truncated:boolean;dynamicReferencesVerified:boolean}};
   'studio.materialPublicationRollbackEmpty': {rolledBack:boolean;pendingPublications:import('./panels/materialSchema').MaterialPublication[]};
   'studio.materialPublicationFinalize': {finalized:boolean;pendingPublications:import('./panels/materialSchema').MaterialPublication[]};
   'studio.materialPublicationRepair': {restored:boolean;pendingPublications:import('./panels/materialSchema').MaterialPublication[]};

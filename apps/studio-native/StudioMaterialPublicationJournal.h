@@ -111,8 +111,17 @@ public:
         for(const auto& ref:studioCollectAssetReferences(library,rules,{}))
             if(ref.path.starts_with("content/"+prefix)||ref.path.starts_with(prefix))add("known_asset_reference",ref.document+":"+ref.owner+":"+ref.field);
         const auto needle=Json::string(name).dump(-1);
-        for(const auto& file:studioProjectTextFiles(project,6000))
-            if(file.text.find(prefix)!=std::string::npos||file.text.find(needle)!=std::string::npos)add("text_reference",file.path);
+        std::vector<std::string> needles{prefix,needle};
+        const auto assetsFile=dir/"assets.json";
+        if(!fs::is_symlink(assetsFile)&&fs::is_regular_file(assetsFile)&&fs::file_size(assetsFile)<=65536){
+            const auto evidence=Json::parseFile(assetsFile.string());
+            if(evidence.isArray()&&evidence.size()<=4)for(const auto& item:evidence.items()){
+                const auto guid=item.getStr("guid");
+                if(studioValidGuid(guid))needles.push_back(guid);
+            }
+        }
+        const auto scan=studioRecoveryTextScan(project,needles);
+        for(const auto& hit:scan.mentions.items())add("text_reference",hit.getStr("file")+": "+hit.getStr("reference"));
         const auto mapText=map.dump(-1),rulesText=rules.dump(-1);
         if(mapText.find(prefix)!=std::string::npos||mapText.find(needle)!=std::string::npos)add("open_map_reference","current map");
         if(rulesText.find(prefix)!=std::string::npos||rulesText.find(needle)!=std::string::npos)add("merged_rules_reference","current rules");
@@ -126,6 +135,13 @@ public:
         // Text scans are advisory and cannot prove absence of dynamic references.
         result.set("journalOnlyRollbackAllowed",Json::fromBool(!library.has(name)&&!remains));
         result.set("contentRollbackAllowed",Json::fromBool(false));
+        Json coverage=Json::object();
+        coverage.set("visited",Json::number(int64_t(scan.visited)));
+        coverage.set("scanned",Json::number(int64_t(scan.scanned)));
+        coverage.set("skipped",Json::number(int64_t(scan.skipped)));
+        coverage.set("truncated",Json::fromBool(scan.truncated));
+        coverage.set("dynamicReferencesVerified",Json::fromBool(false));
+        result.set("coverage",std::move(coverage));
         return result;
     }
     static void rollbackEmpty(const std::filesystem::path& project,const std::string& name,const Json& rules,const Json& map){
