@@ -566,6 +566,11 @@ public:
         if(ready_&&hasParticles_&&!volumetricParticleDepth_)runtime_->draw();
     }
     bool active() const {return ready_;}
+    bool volumeStageFloor(float& height)const{
+        if(!ready_||!volumeGrid_||!volumeGrid_->grid())return false;
+        height=volumeGrid_->grid()->config().origin.y;
+        return true;
+    }
     bool hasVolume()const{return ready_&&(bool(volumeGrid_)||volumetricParticleMaterial_);}
     bool hasHdrContribution()const{return ready_&&(bool(volumeGrid_)||volumetricParticleDepth_);}
     void contributeVolume(render::Prisma& post){

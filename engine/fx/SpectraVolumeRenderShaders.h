@@ -57,12 +57,15 @@ float flameDetailFactor(float3 p){
     return clamp((low*0.7f+high*0.3f-0.26f)*2.15f,0.0f,1.0f);
 }
 float emberSample(float3 p){return volumeHash(floor(p*8.0f));}
-float shadow(float3 p,float3 dir,float reach,float4 domain,int n,uint steps,float extinction FIELD_ARG){
+float shadow(float3 p,float3 dir,float reach,float4 domain,int n,uint steps,float extinction,float detail FIELD_ARG){
     if(steps==0u||reach<=0.0f)return 1.0f;
     float2 hit=intersectBox(p,dir,domain.xyz,domain.xyz+float3(domain.w*float(n)),reach);
-    float ds=max(0.0f,hit.y-hit.x)/float(steps),tau=0.0f;
+    if(hit.y<=hit.x)return 1.0f;
+    float ds=(hit.y-hit.x)/float(steps),tau=0.0f;
     for(uint i=0u;i<steps;++i){
-        tau+=fieldAt(p+dir*(hit.x+(float(i)+0.5f)*ds),domain,n FIELD_PASS).x*extinction*ds;
+        float3 samplePos=p+dir*(hit.x+(float(i)+0.5f)*ds);
+        float density=fieldAt(samplePos,domain,n FIELD_PASS).x;
+        if(density>0.0f)tau+=density*smokeDetailFactor(samplePos,detail)*extinction*ds;
         if(tau>12.0f)break;
     }
     return exp(-tau);
@@ -84,6 +87,11 @@ KERNEL_BEGIN
     float3 dir=(end-eye)/reach;
     reach=depth<0.99999f?min(reach,u.camera.z):u.camera.z;
     int n=int(u.meta.z);
+    if(depth<0.99999f&&u.sun.w>0.0f&&u.limits.x>0.0f){
+        float visibility=shadow(end,u.sun.xyz,u.controls.z,u.domain,n,uint(u.limits.x)*2u,u.smoke.w,u.limits.z FIELD_PASS);
+        float directShare=u.sun.w/(1.0f+u.controls.y+u.sun.w);
+        background.rgb*=1.0f-directShare*(1.0f-visibility);
+    }
     float2 hit=intersectBox(eye,dir,u.domain.xyz,u.domain.xyz+float3(u.domain.w*float(n)),reach);
     if(hit.y<=hit.x){WRITE_COLOR(id,background);return;}
     uint steps=uint(clamp(ceil((hit.y-hit.x)/(u.domain.w*0.5f)),1.0f,float(u.meta.w)));
@@ -100,7 +108,7 @@ KERNEL_BEGIN
         float integral=sigma>1e-5f?opacity/sigma:ds;
         float3 incident=float3(u.controls.y);
         if(sigma>0.0f&&u.sun.w>0.0f){
-            float atten=shadow(p,u.sun.xyz,u.controls.z,u.domain,n,uint(u.limits.x),u.smoke.w FIELD_PASS);
+            float atten=shadow(p,u.sun.xyz,u.controls.z,u.domain,n,uint(u.limits.x),u.smoke.w,u.limits.z FIELD_PASS);
             incident+=u.sunColor.xyz*(u.sun.w*phase(dot(dir,u.sun.xyz),u.controls.w)*atten);
         }
         if(sigma>0.0f)for(uint l=0u;l<uint(u.limits.y);++l){
@@ -108,7 +116,7 @@ KERNEL_BEGIN
             if(dist<=1e-5f||dist>=radius)continue;
             float3 lightDir=delta/dist;
             float falloff=1.0f-dist/radius;falloff=falloff*falloff/(1.0f+dist*dist);
-            float atten=shadow(p,lightDir,dist,u.domain,n,uint(u.limits.x),u.smoke.w FIELD_PASS);
+            float atten=shadow(p,lightDir,dist,u.domain,n,uint(u.limits.x),u.smoke.w,u.limits.z FIELD_PASS);
             incident+=u.pointColor[l].xyz*(u.pointColor[l].w*falloff*phase(dot(dir,lightDir),u.controls.w)*atten);
         }
         float ember=max(0.0f,emberSample(p)-0.999f)*1000.0f*u.limits.w*min(1.0f,max(0.0f,field.x))*ds;

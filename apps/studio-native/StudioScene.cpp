@@ -1400,6 +1400,11 @@ void StudioScene::frameSpectraDock(int framebufferWidth,int framebufferHeight) {
         renderer_.line({0,0,-.65f},{0,0,.65f},rgba(104,147,237));
         renderer_.line({0,-.45f,0},{0,.75f,0},rgba(108,214,129));
     }
+    float floorHeight=0;
+    if(fxBackground_=="light"&&spectraPreview_->volumeStageFloor(floorHeight)){
+        renderer_.drawMesh(cube_,render::mat4::translate({0,floorHeight-.05f,0})*
+            render::mat4::scale({100,.1f,100}),{.55f,.55f,.55f,1},render::kDrawNoCastShadow);
+    }
     const bool volume=spectraPreview_->hasVolume();
     // A separate preview policy, not a change to the authored map HDR settings.
     if(volume!=spectraDockHdr_){

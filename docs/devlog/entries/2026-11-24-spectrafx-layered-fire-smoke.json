@@ -7,7 +7,8 @@
   "body": [
     "Эффект собирается из газового объёма и отдельных частиц с текстурными анимациями. В редакторе его можно открыть как граф fire_smoke_v2; свечение добавляется обработкой PRISMA.",
     "Объём поддерживает локальные источники света и более подробную сетку. Дым уходит по диагонали от очага, а пламя и искры остаются отдельными слоями.",
-    "Четыре источника тепла в очаге горят с разной частотой. Радиус горячих участков и подача топлива меняются, пока сам очаг остаётся на месте."
+    "Четыре источника тепла в очаге горят с разной частотой. Радиус горячих участков и подача топлива меняются, пока сам очаг остаётся на месте.",
+    "Плотные клубы затеняют соседние слои дыма. На светлой площадке под шлейфом движется мягкая солнечная тень."
   ],
   "status": "experimental",
   "verified": "Показано в нативном Studio на macOS с Metal: снят кадр 1024×576 с объёмным дымом, огнём и искрами.",
@@ -24,6 +25,11 @@
       "src": "docs/devlog/media/2026-11-24-spectrafx-layered-fire-smoke/02.png",
       "caption": "Очаг крупным планом во время горения.",
       "captionEn": "Close-up of the burning core."
+    },
+    {
+      "src": "docs/devlog/media/2026-11-24-spectrafx-layered-fire-smoke/03.png",
+      "caption": "Клубы дыма и их тень на светлой поверхности.",
+      "captionEn": "Smoke billows and their shadow on the light stage."
     }
   ],
   "links": [
@@ -42,7 +48,8 @@
   "bodyEn": [
     "The effect combines a gas volume with separately animated textured particles. Open the fire_smoke_v2 graph in Studio; PRISMA adds the glow.",
     "The volume supports local lights and a finer grid. Smoke trails diagonally from the source while flames and sparks remain separate layers.",
-    "Four heat sources flicker at different rates. The hot regions expand and contract as fuel input changes, while the base stays in place."
+    "Four heat sources flicker at different rates. The hot regions expand and contract as fuel input changes, while the base stays in place.",
+    "Dense billows shade nearby smoke. The light stage reveals a soft sun shadow that moves with the plume."
   ],
   "verifiedEn": "Shown in native Studio on macOS with Metal: a 1024×576 frame captures the volumetric smoke, fire and sparks.",
   "limitsEn": "This is experimental: internal smoke lighting and flame shape do not yet reach the cinematic quality of the references."

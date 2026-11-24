@@ -136,15 +136,16 @@
           -0.4,
           0
         ],
-        "radius": 0.42,
-        "smoke": 10,
+        "radius": 0.53,
+        "smoke": 12,
         "temperature": 3,
         "fuel": 0,
         "acceleration": [
           8,
           7,
           0
-        ]
+        ],
+        "flickerHz": 0.85
       }
     },
     {
@@ -194,16 +195,16 @@
       ],
       "properties": {
         "smokeColor": [
-          0.14,
           0.135,
-          0.13
+          0.13,
+          0.125
         ],
         "fireColor": [
           9,
           2,
           0.12
         ],
-        "extinction": 2.6,
+        "extinction": 2.45,
         "emission": 0.35,
         "emissionThreshold": 0.7,
         "smokeDetail": 1,
@@ -222,6 +223,20 @@
             ],
             "radius": 7,
             "intensity": 100
+          },
+          {
+            "position": [
+              0.5,
+              4.8,
+              1.7
+            ],
+            "color": [
+              0.78,
+              0.86,
+              1
+            ],
+            "radius": 7,
+            "intensity": 38
           }
         ]
       }
@@ -335,7 +350,7 @@
         920
       ],
       "properties": {
-        "rate": 44,
+        "rate": 24,
         "duration": 4,
         "loop": true
       }
@@ -357,8 +372,8 @@
           4.2
         ],
         "size": [
-          1.8,
-          2.8
+          1.05,
+          1.9
         ],
         "direction": [
           0,
@@ -395,19 +410,19 @@
         "color": [
           [
             0,
-            "#19171600"
+            "#33271d00"
           ],
           [
             0.18,
-            "#24211eae"
+            "#52453766"
           ],
           [
             0.65,
-            "#35322eb0"
+            "#37322d94"
           ],
           [
             1,
-            "#524d4800"
+            "#716e6a00"
           ]
         ]
       }
