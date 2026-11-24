@@ -482,6 +482,7 @@ void ActorHost::tick(Simulation& sim) {
     while(s.history.size()>size_t(config_.rewindTicks)+1)s.history.pop_front();
     const World& view=sim.world();
     const size_t count=characterCount(sim);
+    if(config_.simulationLod.enabled)sim.world().setResource<world::SimulationLodDiagnostics>(world::SimulationLodDiagnostics{sim.tick()});
     for(size_t index=1;index<=count;++index) {
         auto a=character(sim,uint8_t(index));
         if(a.health<=0) {
