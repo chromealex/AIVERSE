@@ -1982,3 +1982,6 @@ Native enqueue/start accept an explicit trusted ImageResolver. Enqueue captures 
 
 ### Pinned raster channels (38BI)
 Use `imageAsset` for RGB color and `imageAssetChannel` for typed scalar `red`, `green`, `blue`, or `alpha` (default). Both use the same pinned asset/revision and bounded source snapshots; the native PNG/JPEG resolver preserves RGBA (JPEG is opaque). Native RGB-only resolvers remain compatible and report opaque alpha unless `ImageSource::hasAlpha` is true and packed words contain alpha in bits 24–31. This is channel extraction, not RGBA graph output or HDR/mip support.
+
+### Linear HDR raster inputs (38BJ)
+Pinned `imageAsset` and `imageAssetChannel` accept Radiance RGBE and uncompressed scanline EXR through the project resolver. Existing bounded decoders yield half-float radiance; immutable snapshots and GPU uploads use RGBA32F, not RGB8. Set `hdrExposure` (-12..12 EV) and `hdrMapping` (`reinhard` or `clamp`) for explicit HDR-to-normalized input conversion. Alpha is not exposed or tone mapped; it is clamped to the scalar graph range. LDR inputs ignore HDR properties. Graph outputs and downstream processing remain normalized; this is not an HDR output pipeline. Combined snapshot cap is still 16 MiB, with 16 bytes/texel for HDR.

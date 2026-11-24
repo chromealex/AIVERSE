@@ -174,6 +174,21 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
         const auto channelId=owner.start(channel,project,lifetime.lease(),rgbaSource).getStr("request");drain();
         const auto channelStatus=owner.status();
         require(channelStatus.getStr("request")==channelId&&channelStatus.getStr("state")=="ready"&&channelStatus.getStr("backend")==expected,"external alpha mask GPU parity failed");
+        // HDR source stays floating-point until explicit input mapping.
+        auto hdrAsset=external;
+        hdrAsset.member("graph").member("nodes").at(0).member("properties").set("revision",Json::string(std::string(64,'d')));
+        hdrAsset.member("graph").member("nodes").at(0).member("properties").set("hdrExposure",Json::number(int64_t(-1)));
+        const render::texture_graph::ImageResolver hdrSource=[](const std::string&,const std::string&,size_t){
+            render::texture_graph::ImageSource s;s.width=2;s.height=1;s.hasAlpha=true;s.rgba32f={4.f,2.f,-1.f,1.f,0.5f,0.25f,8.f,0.5f};return s;
+        };
+        const auto hp=render::texture_graph::compile(hdrAsset["graph"],Json::object(),hdrSource);
+        const auto hi=render::texture_graph::evaluate(hp,0);
+        require(render::texture_graph::imageSourceBytes(hp)==32&&hi.rgba[0]==170&&hi.rgba[1]==128&&hi.rgba[2]==0,"HDR exposure/mapping CPU mismatch");
+        const auto hs=render::texture_graph::gpu::compileMaterializedDag(hp,{0},64);
+        require(hs.imageSourceBytes==32&&hs.nodes[0].msl.find("float4 raw=input0[index]")!=std::string::npos,"HDR source GPU buffer layout mismatch");
+        const auto hdrId=owner.start(hdrAsset,project,lifetime.lease(),hdrSource).getStr("request");drain();
+        const auto hdrStatus=owner.status();
+        require(hdrStatus.getStr("request")==hdrId&&hdrStatus.getStr("state")=="ready"&&hdrStatus.getStr("backend")==expected,"HDR source GPU parity failed");
         // Typed custom expressions: same validated instruction stream on CPU and GPU.
         auto computed=Json::parse(R"JSON({"graph":{"version":1,"size":64,"nodes":[
           {"id":"a","op":"constant","inputs":[],"properties":{"value":0.25}},

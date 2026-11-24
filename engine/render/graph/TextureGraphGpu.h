@@ -213,13 +213,25 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
     if(isImageSource(op)){
         require(node.image!=nullptr,"missing resolved image source");
         const auto w=std::to_string(node.image->width),h=std::to_string(node.image->height);
-        types.push_back(KernelValue::PackedBytes);
-        body="uint x=tid%n,y=tid/n;uint index=(y*"+h+"u/n)*"+w+"u+x*"+w+"u/n;uint rgb=input0[index];";
-        if(op=="imageAssetChannel"){
-            const auto shift=imageChannelShift(node.parameters.getStr("channel","alpha"));
-            // Read the source even for legacy opaque alpha; keep binding ABI identical.
-            body+="float3 value=float3("+std::string(shift==24&&!node.image->hasAlpha?"1.0f":"float((rgb>>"+std::to_string(shift)+"u)&255u)/255.0f")+");\n";
-        }else body+="float3 value=float3(float((rgb>>16u)&255u),float((rgb>>8u)&255u),float(rgb&255u))/255.0f;\n";
+        body="uint x=tid%n,y=tid/n;uint index=(y*"+h+"u/n)*"+w+"u+x*"+w+"u/n;";
+        if(node.image->hdr()){
+            types.push_back(KernelValue::Vector);
+            const auto gain=literal(std::ldexp(1.f,integer(node.parameters["hdrExposure"],0,-12,12)));
+            const bool reinhard=node.parameters.getStr("hdrMapping","reinhard")=="reinhard";
+            body+="float4 raw=input0[index];float3 exposed=max(raw.xyz*"+gain+",float3(0.0f));";
+            body+=reinhard?"float3 mapped=exposed/(float3(1.0f)+exposed);":"float3 mapped=min(exposed,float3(1.0f));";
+            if(op=="imageAssetChannel"){
+                const auto shift=imageChannelShift(node.parameters.getStr("channel","alpha"));
+                body+="float3 value=float3("+std::string(shift==24?"clamp(raw.w,0.0f,1.0f)":shift==16?"mapped.x":shift==8?"mapped.y":"mapped.z")+");\n";
+            }else body+="float3 value=mapped;\n";
+        }else{
+            types.push_back(KernelValue::PackedBytes);
+            body+="uint rgb=input0[index];";
+            if(op=="imageAssetChannel"){
+                const auto shift=imageChannelShift(node.parameters.getStr("channel","alpha"));
+                body+="float3 value=float3("+std::string(shift==24&&!node.image->hasAlpha?"1.0f":"float((rgb>>"+std::to_string(shift)+"u)&255u)/255.0f")+");\n";
+            }else body+="float3 value=float3(float((rgb>>16u)&255u),float((rgb>>8u)&255u),float(rgb&255u))/255.0f;\n";
+        }
     }else if(neighborhoodOp(op)){
         body="int x=int(tid%n),y=int(tid/n),side=int(n);\n";
         if(op=="blur"||op=="erosion"){
@@ -320,7 +332,7 @@ inline MaterializedSources compileMaterializedDag(const Program& p,const std::ve
         require(node.info!=nullptr,"invalid materialized node");
         if(!isImageSource(node.info->id))continue;
         require(node.image!=nullptr,"missing resolved image source");
-        const size_t bytes=node.image->rgb.size()*sizeof(uint32_t);
+        const size_t bytes=node.image->bytes();
         require(bytes<=budget-r.resultCapacityBytes-r.imageSourceBytes,"image source exceeds materialized budget");
         r.imageSourceBytes+=bytes;
     }

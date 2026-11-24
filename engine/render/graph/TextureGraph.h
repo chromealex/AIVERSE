@@ -47,7 +47,20 @@ inline Kind outputKind(const std::string& name){
 inline constexpr size_t maxImageSourceBytes=16u*1024u*1024u;
 // Packed words are 0xAARRGGBB when hasAlpha is true; legacy RGB resolvers
 // leave hasAlpha false and are treated as opaque. Storage remains 4 bytes/pixel.
-struct ImageSource {int width=0,height=0;std::vector<uint32_t> rgb;bool hasAlpha=false;};
+struct ImageSource {
+    int width=0,height=0;std::vector<uint32_t> rgb;bool hasAlpha=false;
+    // Alternative linear RGBA float snapshot (four floats per texel).
+    // Exactly one representation may be populated; HDR alpha is linear.
+    std::vector<float> rgba32f;
+    bool hdr() const{return !rgba32f.empty();}
+    size_t bytes() const{return hdr()?rgba32f.size()*sizeof(float):rgb.size()*sizeof(uint32_t);}
+    const void* data() const{return hdr()?static_cast<const void*>(rgba32f.data()):static_cast<const void*>(rgb.data());}
+};
+static_assert(sizeof(float)==4,"texture graph float buffer ABI requires 32-bit floats");
+inline float mapRadiance(float v,float gain,bool reinhard){
+    v=std::max(v*gain,0.f);
+    return reinhard?v/(1.f+v):std::min(v,1.f);
+}
 // Trusted host must verify the exact pinned revision, return identical decoded
 // pixels, alpha availability and extent within a project, and obey byte budget.
 using ImageResolver=std::function<ImageSource(const std::string&,const std::string&,size_t)>;
@@ -64,7 +77,7 @@ inline unsigned imageChannelShift(const std::string& channel){
 }
 struct Program {int size=256;std::vector<Node> nodes;std::vector<size_t> order;std::map<std::string,size_t> outputs;};
 inline size_t imageSourceBytes(const Program& p){
-    size_t bytes=0;for(const auto& n:p.nodes)if(n.image)bytes+=n.image->rgb.size()*sizeof(uint32_t);
+    size_t bytes=0;for(const auto& n:p.nodes)if(n.image)bytes+=n.image->bytes();
     return bytes;
 }
 // Source identity for trusted pinned assets. Encoded SHA-256 is verified by
@@ -72,7 +85,7 @@ inline size_t imageSourceBytes(const Program& p){
 inline std::string imageSourceIdentity(const Node& n){
     if(!isExternalImageSource(n.info->id))return {};
     require(n.image!=nullptr,"unresolved external image");
-    return std::string(n.image->hasAlpha?"rgba8-nearest-v2:":"rgb8-opaque-nearest-v2:")+std::to_string(n.image->width)+"x"+std::to_string(n.image->height);
+    return std::string(n.image->hdr()?"rgba32f-linear-nearest-v1:":n.image->hasAlpha?"rgba8-nearest-v2:":"rgb8-opaque-nearest-v2:")+std::to_string(n.image->width)+"x"+std::to_string(n.image->height);
 }
 inline std::vector<std::string> formulaTokens(const std::string& expression){
     require(!expression.empty()&&expression.size()<=256,"invalid formula size");
@@ -120,7 +133,11 @@ inline Json properties(const std::string& id){
         for(const auto& v:values)list.push(Json::string(v));p.set("options",list);result.set(key,p);
     };
     if(id=="image"){field("width","integer",Json::number(int64_t(1)),1,maxEmbeddedImageSide);field("height","integer",Json::number(int64_t(1)),1,maxEmbeddedImageSide);field("rgb","image",Json::string("808080"));}
-    if(isExternalImageSource(id)){field("asset","text",Json::string(""));field("revision","text",Json::string(""));}
+    if(isExternalImageSource(id)){
+        field("asset","text",Json::string(""));field("revision","text",Json::string(""));
+        field("hdrExposure","integer",Json::number(int64_t(0)),-12,12);
+        options("hdrMapping","reinhard",{"reinhard","clamp"});
+    }
     if(id=="imageAssetChannel")options("channel","alpha",{"red","green","blue","alpha"});
     if(id=="formula")field("expression","text",Json::string("a b *"));
     if(isCustomCompute(id)){
@@ -158,6 +175,8 @@ inline void validateParameters(const Node& n){
     if(isExternalImageSource(id)){
         const auto asset=p.getStr("asset"),revision=p.getStr("revision");
         require(!asset.empty()&&asset.size()<=512&&revision.size()==64&&revision.find_first_not_of("0123456789abcdef")==std::string::npos,"imageAsset requires a path and pinned SHA-256 revision");
+        (void)integer(p["hdrExposure"],0,-12,12);
+        require(!p.has("hdrMapping")||(p["hdrMapping"].isString()&&(p.getStr("hdrMapping")=="reinhard"||p.getStr("hdrMapping")=="clamp")),"invalid HDR mapping");
     }
     if(id=="imageAssetChannel"){
         require(!p.has("channel")||p["channel"].isString(),"image asset channel must be text");
@@ -212,9 +231,15 @@ inline Program compileResolved(const Json& g,const ImageResolver& resolver={}){
                 require(bool(resolver),"external imageAsset requires an explicit host resolver");
                 data=resolver(n.parameters.getStr("asset"),n.parameters.getStr("revision"),maxImageSourceBytes-sourceBytes);
             }
-            require(data.width>0&&data.height>0&&data.width<=4096&&data.height<=4096&&
-                size_t(data.width)*data.height==data.rgb.size()&&data.rgb.size()<=(maxImageSourceBytes-sourceBytes)/sizeof(uint32_t),"image source extent or byte budget exceeded");
-            sourceBytes+=data.rgb.size()*sizeof(uint32_t);
+            require(data.width>0&&data.height>0&&data.width<=4096&&data.height<=4096,"image source extent exceeded");
+            const size_t texels=size_t(data.width)*data.height;
+            const size_t stride=data.hdr()?16u:4u;
+            require(texels<=(maxImageSourceBytes-sourceBytes)/stride,"image source byte budget exceeded");
+            if(data.hdr()){
+                require(data.rgb.empty()&&data.hasAlpha&&data.rgba32f.size()==texels*4,"invalid HDR snapshot layout");
+                for(float v:data.rgba32f)require(std::isfinite(v)&&std::abs(v)<=65504.f,"invalid HDR snapshot value");
+            }else require(data.rgb.size()==texels,"invalid RGB snapshot layout");
+            sourceBytes+=data.bytes();
             n.image=std::make_shared<const ImageSource>(std::move(data));
         }
         p.nodes.push_back(std::move(n));
@@ -373,6 +398,9 @@ inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t
         const auto* imported=node.image.get();
         if(isImageSource(id))require(imported!=nullptr,"missing resolved image source");
         const unsigned imageShift=id=="imageAssetChannel"?imageChannelShift(q.getStr("channel","alpha")):0;
+        const bool hdr=imported&&imported->hdr();
+        const float hdrGain=hdr?std::ldexp(1.f,integer(q["hdrExposure"],0,-12,12)):1.f;
+        const bool reinhard=q.getStr("hdrMapping","reinhard")=="reinhard";
         const float value=scalar(q["value"].isArray()?Json():q["value"],.5f);
         const int period=integer(q["period"],8,1,256),octaves=id=="fbm"?integer(q["octaves"],4,1,6):1;const auto randomSeed=seed(q["seed"]);
         const float strength=scalar(q["strength"],2,0,16),low=scalar(q["low"],0),high=scalar(q["high"],1),threshold=scalar(q["threshold"],.5f);
@@ -395,9 +423,18 @@ inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t
                 else for(size_t channel=0;channel<3;++channel)r[channel]=custom_compute::evaluate(node.custom[channel],args);
             }
             else if(isImageSource(id)){
-                const auto p=imported->rgb[size_t(y*imported->height/n)*imported->width+x*imported->width/n];
-                if(id=="imageAssetChannel")r=gray(imageShift==24&&!imported->hasAlpha?1.f:float((p>>imageShift)&255u)/255.f);
-                else r={float((p>>16)&255u)/255.f,float((p>>8)&255u)/255.f,float(p&255u)/255.f};
+                const size_t index=size_t(y*imported->height/n)*imported->width+x*imported->width/n;
+                if(hdr){
+                    const auto* v=imported->rgba32f.data()+index*4;
+                    if(id=="imageAssetChannel"){
+                        const unsigned c=imageShift==24?3:2-imageShift/8;
+                        r=gray(c==3?clamp(v[3]):mapRadiance(v[c],hdrGain,reinhard));
+                    }else for(size_t c=0;c<3;++c)r[c]=mapRadiance(v[c],hdrGain,reinhard);
+                }else{
+                    const auto p=imported->rgb[index];
+                    if(id=="imageAssetChannel")r=gray(imageShift==24&&!imported->hasAlpha?1.f:float((p>>imageShift)&255u)/255.f);
+                    else r={float((p>>16)&255u)/255.f,float((p>>8)&255u)/255.f,float(p&255u)/255.f};
+                }
             }
             else if(id=="add")r=gray(a()+b());else if(id=="subtract")r=gray(a()-b());else if(id=="multiply")r=gray(a()*b());
             else if(id=="min")r=gray(std::min(a(),b()));else if(id=="max")r=gray(std::max(a(),b()));else if(id=="invert")r=gray(1-a());

@@ -10,6 +10,7 @@
 #include <stdexcept>
 
 #include "engine/render/Model.h"
+#include "engine/render/ExrTexture.h"
 #include "engine/render/TextureGen.h"
 #include "engine/render/graph/TextureGraph.h"
 #include "engine/render/graph/TextureGraphTemplates.h"
@@ -233,7 +234,13 @@ Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::s
 }
 
 namespace {
-struct PinnedRaster {std::string revision;render::Image image;};
+struct PinnedRaster {std::string revision;render::texture_graph::ImageSource source;};
+float decodeGraphHalf(uint16_t h){
+    const unsigned exponent=(h>>10)&31u,mantissa=h&1023u;
+    if(exponent==31)throw std::invalid_argument("nonfinite HDR texel");
+    const float v=exponent?std::ldexp(1.f+float(mantissa)/1024.f,int(exponent)-15):std::ldexp(float(mantissa),-24);
+    return (h&0x8000u)?-v:v;
+}
 PinnedRaster readPinnedRaster(const Workspace& ws,const std::string& rel,const std::string& expected,size_t maxBytes){
     needProject(ws);
     const fs::path relative(rel);
@@ -251,18 +258,32 @@ PinnedRaster readPinnedRaster(const Workspace& ws,const std::string& rel,const s
     const auto digest=pack::sha256(bytes.data(),bytes.size());
     PinnedRaster result;result.revision=pack::toHex(digest.data(),digest.size());
     if(!expected.empty()&&expected!=result.revision)throw std::runtime_error("image asset revision changed; explicitly reselect or refresh source");
-    if(!render::decodeTextureGraphRaster(bytes,maxBytes/4,result.image))throw std::runtime_error("unsupported PNG/JPEG or image source exceeds decoded budget");
+    const bool hdr=bytes.compare(0,10,"#?RADIANCE")==0||bytes.compare(0,6,"#?RGBE")==0;
+    const bool exr=bytes.size()>=4&&bytes.compare(0,4,"\x76\x2f\x31\x01",4)==0;
+    auto& source=result.source;
+    source.hasAlpha=true;
+    if(hdr||exr){
+        render::RadianceImage image;std::string error;
+        // Decoder uses 8 bytes/pixel, graph snapshot uses 16.
+        const bool ok=hdr?render::parseRadianceHdr(bytes,image,error,maxBytes/2):render::parseOpenExr(bytes,image,error,maxBytes/2);
+        if(!ok)throw std::runtime_error(error);
+        if(image.width>4096||image.height>4096)throw std::runtime_error("HDR image extent exceeds graph limit");
+        source.width=image.width;source.height=image.height;
+        source.rgba32f.reserve(image.rgba16f.size());
+        for(uint16_t h:image.rgba16f)source.rgba32f.push_back(decodeGraphHalf(h));
+    }else{
+        render::Image image;
+        if(!render::decodeTextureGraphRaster(bytes,maxBytes/4,image))throw std::runtime_error("unsupported PNG/JPEG/HDR/EXR or image source exceeds decoded budget");
+        source.width=image.width;source.height=image.height;
+        const auto& rgba=image.rgba;source.rgb.resize(rgba.size()/4);
+        for(size_t i=0;i<source.rgb.size();++i)source.rgb[i]=(uint32_t(rgba[i*4+3])<<24)|(uint32_t(rgba[i*4])<<16)|(uint32_t(rgba[i*4+1])<<8)|rgba[i*4+2];
+    }
     return result;
 }
 }
 render::texture_graph::ImageResolver textureGraphImageResolver(const Workspace& ws){
     return [&ws](const std::string& path,const std::string& revision,size_t budget){
-        auto loaded=readPinnedRaster(ws,path,revision,budget);
-        render::texture_graph::ImageSource result;result.width=loaded.image.width;result.height=loaded.image.height;
-        const auto& rgba=loaded.image.rgba;result.rgb.resize(rgba.size()/4);
-        result.hasAlpha=true; // Decoder always returns RGBA; JPEG alpha is 255.
-        for(size_t i=0;i<result.rgb.size();++i)result.rgb[i]=(uint32_t(rgba[i*4+3])<<24)|(uint32_t(rgba[i*4])<<16)|(uint32_t(rgba[i*4+1])<<8)|rgba[i*4+2];
-        return result;
+        return readPinnedRaster(ws,path,revision,budget).source;
     };
 }
 
@@ -504,10 +525,12 @@ void registerMaterialOps(Workspace& ws) {
     auto textureCache=std::make_shared<render::texture_graph::EvaluationCache>();
     const std::string graphSchema=R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"textureName":{"type":"string"},"overrides":{"type":"object"}}})";
     add("texture_graph_cache","Inspect or clear this Workspace texture evaluation cache.",R"({"properties":{"clear":{"type":"boolean"}}})",[w,textureCache](const Json& p){textureCache->selectProject(w->project.dir);if(p.getBool("clear"))textureCache->clear();return textureCache->status();});
-    add("texture_graph_image_asset","Inspect a project PNG/JPEG and return its immutable source revision and dimensions.",R"({"type":"object","properties":{"asset":{"type":"string"}},"required":["asset"]})",[w](const Json& p){
+    add("texture_graph_image_asset","Inspect a project PNG/JPEG/HDR/uncompressed EXR and return its immutable source revision, dimensions and format.",R"({"type":"object","properties":{"asset":{"type":"string"}},"required":["asset"]})",[w](const Json& p){
         auto image=readPinnedRaster(*w,p.getStr("asset"),"",render::texture_graph::maxImageSourceBytes);
         Json r=okJson();r.set("asset",Json::string(p.getStr("asset")));r.set("revision",Json::string(image.revision));
-        r.set("width",Json::number(int64_t(image.image.width)));r.set("height",Json::number(int64_t(image.image.height)));return r;
+        r.set("width",Json::number(int64_t(image.source.width)));r.set("height",Json::number(int64_t(image.source.height)));
+        r.set("format",Json::string(image.source.hdr()?"rgba32f-linear":"rgba8"));
+        r.set("decodedBytes",Json::number(int64_t(image.source.bytes())));return r;
     });
     add("texture_graph_catalog","Native typed procedural CPU node catalog.",R"({"type":"object"})",[](const Json&){return render::texture_graph::describeCatalog();});
     add("texture_graph_templates","Validated native PBR starter graph documents.",R"({"type":"object"})",[](const Json&){Json r=okJson();r.set("templates",render::texture_graph::templates());return r;});
