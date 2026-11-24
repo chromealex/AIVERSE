@@ -144,7 +144,7 @@ inline bool studioGltfRelocationSafe(const StudioAssetReference& ref,
             return false;
     if(owner==ref.document&&target==ref.path)return true;
     if(ref.uri.empty())return false;
-    if(std::filesystem::path(owner).parent_path()!=std::filesystem::path(ref.document).parent_path()&&
+    if(ref.owner!="glTF resource"&&std::filesystem::path(owner).parent_path()!=std::filesystem::path(ref.document).parent_path()&&
        (ref.uri.find("..")!=std::string::npos||ref.uri.find('%')!=std::string::npos))return false;
     const auto resolved=ref.owner=="OBJ resource"?studioObjResourcePath(owner,ref.uri):
         ref.owner=="DAE resource"?studioDaeResourcePath(owner,ref.uri):studioGltfResourcePath(owner,ref.uri);
@@ -193,8 +193,8 @@ inline Json studioMoveReferenceImpact(const Json& transfer,
                 row.set("preservesDefault",Json::fromBool(studioGltfRelocationSafe(ref,defaults)));
                 row.set("repairCandidate",Json::fromBool(ref.owner=="glTF resource"&&
                     std::filesystem::path(ref.document).extension()==".gltf"&&
-                    studioRelocatedReferencePath(ref.document,defaults)==ref.document&&
-                    studioRelocatedReferencePath(ref.path,defaults)!=ref.path));
+                    (studioRelocatedReferencePath(ref.document,defaults)!=ref.document||
+                     studioRelocatedReferencePath(ref.path,defaults)!=ref.path)));
             }
             result.push(std::move(row));
         }
@@ -537,8 +537,8 @@ inline void studioCheckGltfRelocations(const std::filesystem::path& project,
         if(!studioGltfRelocationSafe(ref,moves))
             throw std::runtime_error("Asset move would change model resource resolution: "+ref.document+" "+ref.field);
 }
-// Repair only stationary textual glTF models, so relocation payload digests
-// stay unchanged. The original and new complete bytes are retained verbatim.
+// Repair typed textual glTF slots against their projected owner and target.
+// The original and new complete bytes are retained verbatim.
 inline std::string studioRelativeGltfUri(const std::string& owner,const std::string& target){
     const auto rel=std::filesystem::path(target).lexically_relative(std::filesystem::path(owner).parent_path()).generic_string();
     static constexpr char hex[]="0123456789ABCDEF";
@@ -561,7 +561,10 @@ inline std::vector<editor::ProjectFileEdit> studioPlanGltfRepairs(const std::fil
     for(const auto& ref:studioCollectGltfReferences(project,{})){
         if(studioGltfRelocationSafe(ref,moves))continue;
         const auto owner=studioRelocatedReferencePath(ref.document,moves),target=studioRelocatedReferencePath(ref.path,moves);
-        if(ref.owner!="glTF resource"||fs::path(ref.document).extension()!=".gltf"||owner!=ref.document||target==ref.path||
+        for(const auto& move:moves)
+            if(target==ref.path&&studioReferenceMatchesPath(ref.path,move.to,move.directory))
+                throw std::runtime_error("Move would adopt an existing destination reference");
+        if(ref.owner!="glTF resource"||fs::path(ref.document).extension()!=".gltf"||(owner==ref.document&&target==ref.path)||
            !studioSafeModelResourceFile(root,ref.document))
             throw std::runtime_error("Model resource cannot be repaired safely: "+ref.document+" "+ref.field);
         auto it=pending.find(ref.document);
@@ -618,9 +621,10 @@ inline std::string studioCanonicalGltfRepair(const std::string& path,const std::
     return doc.dump(-1);
 }
 inline std::vector<editor::ProjectFileEdit> studioAbsoluteResourceEdits(const std::filesystem::path& project,
-    const std::vector<editor::ProjectFileEdit>& edits){
+    const std::vector<editor::ProjectFileEdit>& edits,const std::vector<StudioReferenceRelocation>& moves={}){
     auto result=edits;
-    for(auto& edit:result)edit.path=std::filesystem::canonical(project)/edit.path;
+    const auto root=std::filesystem::canonical(project);
+    for(auto& edit:result)edit.path=root/studioRelocatedReferencePath(edit.path.generic_string(),moves);
     return result;
 }
 inline void studioCheckMapAssetPaths(const std::filesystem::path& project,

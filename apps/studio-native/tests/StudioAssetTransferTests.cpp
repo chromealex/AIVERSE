@@ -244,6 +244,37 @@ int main(){
             fs::remove(model);fs::remove(texture);fs::remove(studioMetaPath(model));fs::remove(studioMetaPath(texture));db.rebuild(false);
         }
 
+        // S6g.6.2: moving a model/folder with typed URI repair changes its
+        // payload digest. Both direction-specific tree digests must survive.
+        {
+            using namespace aiverse;
+            using namespace aiverse::studio;
+            fs::create_directories(project/"content"/"Models"/"Pack");
+            const auto source=project/"content"/"Models"/"Pack";
+            const auto destination=project/"content"/"Other"/"Pack";
+            const std::string original="{ \"images\": [{\"uri\":\"../outside.png\"}] }\n";
+            write(source/"model.gltf",original);
+            write(project/"content"/"Models"/"outside.png","texture");
+            db.rebuild();
+            auto move=StudioTransferPlan::internal(project,"Other",{"Models/Pack"});
+            std::optional<editor::ProjectHistory::MovePlan> recorded;
+            const auto result=move.apply(move.token(),{},{},&recorded,true);
+            AIVERSE_TEST_CHECK(recorded&&result.getInt("repairedResourceDocuments")==1);
+            AIVERSE_TEST_CHECK(!recorded->files[0].digestAfter.empty());
+            AIVERSE_TEST_CHECK(Json::parse(read(destination/"model.gltf"))["images"][0].getStr("uri")=="../../Models/outside.png");
+            studioReplayAssetMove(project,*recorded,false);
+            AIVERSE_TEST_CHECK(read(source/"model.gltf")==original);
+            studioReplayAssetMove(project,*recorded,true);
+            studioReplayAssetMove(project,*recorded,false);
+            auto single=StudioTransferPlan::internal(project,"Other",{"Models/Pack/model.gltf"});
+            const auto one=single.apply(single.token(),{},{},&recorded,true);
+            AIVERSE_TEST_CHECK(one.getInt("repairedResourceDocuments")==1&&recorded&&!recorded->files[0].digestAfter.empty());
+            studioReplayAssetMove(project,*recorded,false);
+            AIVERSE_TEST_CHECK(read(source/"model.gltf")==original);
+            fs::remove_all(source);fs::remove(studioMetaPath(source));
+            fs::remove(project/"content"/"Models"/"outside.png");
+            fs::remove(studioMetaPath(project/"content"/"Models"/"outside.png"));db.rebuild(false);
+        }
         // S6h.1: persisted quota blocks growth, not restoration or explicit purge.
         {
             using namespace aiverse;

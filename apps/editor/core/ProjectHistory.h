@@ -20,6 +20,7 @@ public:
         std::string from,to,bytes; // exact bytes for the root sidecar only
         std::string digest;       // streaming SHA-256 of asset file or complete tree
         bool directory=false;
+        std::string digestAfter{}; // optional projected repaired asset/tree digest
     };
     struct MovePlan {
         std::vector<MoveFile> files; // content-relative exact file/sidecar pairs
@@ -27,7 +28,7 @@ public:
         bool quarantine=false; // content-relative from, project-relative trash destination
         bool created=false; // import/create: undo quarantines, redo restores
         bool replacement=false; // pairs: live -> old slot, new slot -> live; sidecar bytes unchanged
-        std::vector<ProjectFileEdit> resourceEdits; // stationary project-relative model documents
+        std::vector<ProjectFileEdit> resourceEdits; // original project-relative model documents
     };
     struct Step { std::string label; std::vector<ProjectFileEdit> files; size_t bytes=0; std::optional<MovePlan> move; std::string id; };
     const std::vector<Step>& steps() const noexcept {return steps_;}
@@ -66,7 +67,7 @@ public:
         try {
             size_t n=sizeof(Step)+std::min<size_t>(label.size(),256)+nextId().size();
             auto add=[&](size_t size){if(size>MaxBytes-n)throw std::length_error("Move history budget");n+=size;};
-            for(const auto& f:move.files){add(sizeof(MoveFile));add(f.from.size());add(f.to.size());add(f.bytes.size());add(f.digest.size());}
+            for(const auto& f:move.files){add(sizeof(MoveFile));add(f.from.size());add(f.to.size());add(f.bytes.size());add(f.digest.size());add(f.digestAfter.size());}
             if(move.materialsBefore)add(move.materialsBefore->size());
             if(move.materialsAfter)add(move.materialsAfter->size());
             for(const auto& edit:move.resourceEdits){add(sizeof(ProjectFileEdit));add(edit.path.native().size()*sizeof(std::filesystem::path::value_type));add(edit.before.size());add(edit.after.size());}

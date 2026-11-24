@@ -90,6 +90,19 @@ int main() {
             StudioMoveJournal::recover(project);
             fs::remove(model);
         }
+        // v5: the repaired model itself moves; restore at whichever
+        // endpoint owns it before reversing the rename.
+        {
+            const auto model=root/"A"/"Moved.gltf",target=root/"B"/"Moved.gltf";
+            const std::string before=R"({"images":[{"uri":"Stone.png"}]})",after=R"({"images":[{"uri":"../A/Stone.png"}]})";
+            writeFile(model,before);
+            StudioMoveJournal journal(project);
+            journal.begin({{"A/Moved.gltf","B/Moved.gltf"}},false,false,{{fs::path("content/A/Moved.gltf"),before,after}});
+            fs::rename(model,target);writeFile(target,after);
+            StudioMoveJournal::recover(project);
+            expect(readFile(model)==before&&!fs::exists(target),"Moved resource recovery failed");
+            StudioMoveJournal::recover(project);fs::remove(model);
+        }
         // Commit marker forbids rollback on restart.
         {
             StudioMoveJournal journal(project);

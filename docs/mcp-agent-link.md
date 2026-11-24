@@ -90,3 +90,6 @@ Linked dependency query now returns native bounded pages, token and coverage sum
 
 ### S6g.6.1 — stationary glTF path repair
 Existing linked internal move preview advertises repair candidates; commit may repair supported stationary textual glTF buffers/images URI slots transactionally. Exact undo/redo bytes retained. Other resource formats and moving-source rewrites remain conservative. No additional MCP command.
+
+### S6g.6.2 — moved glTF owners
+Internal move uses projected owner paths for textual glTF URI repair, including nested folder moves. Direction-specific file/tree digests and v5 recovery maintain exact original bytes. Legacy v4 recovery retained. No arbitrary source rewriting or coordinated repaired batch replay.

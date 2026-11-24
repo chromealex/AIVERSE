@@ -83,8 +83,22 @@ std::string guidFromSidecar(const fs::path& source,bool& invalid) {
 // Hash a complete tree with deterministic path/type/length framing, including
 // empty directories and all sidecars. Reject symlinks, special files and
 // excessive entry counts. Memory is bounded independently of payload size.
-std::string moveDigest(const fs::path& source,bool directory){
-    if(!directory)return studioAssetFileDigest(source);
+using ResourceOverlay=std::map<fs::path,std::pair<std::string,std::string>>;
+std::string moveDigest(const fs::path& source,bool directory,const ResourceOverlay* overlay=nullptr){
+    const auto replacement=[&](const fs::path& path)->const std::string*{
+        if(!overlay)return nullptr;
+        const auto it=overlay->find(fs::absolute(path).lexically_normal());
+        if(it==overlay->end())return nullptr;
+        if(editor::readProjectFileBytes(path)!=it->second.first)throw std::runtime_error("Resource changed before projected digest");
+        return &it->second.second;
+    };
+    if(!directory){
+        if(const auto* bytes=replacement(source)){
+            const auto digest=pack::sha256(bytes->data(),bytes->size());
+            return pack::toHex(digest.data(),digest.size());
+        }
+        return studioAssetFileDigest(source);
+    }
     pack::Sha256 hash;
     const auto field=[&](const std::string& s){
         const auto size=std::to_string(s.size())+":";
@@ -93,6 +107,9 @@ std::string moveDigest(const fs::path& source,bool directory){
     const auto file=[&](const fs::path& path){
         if(!fs::is_regular_file(fs::symlink_status(path)))
             throw std::runtime_error("Unsupported file in asset history");
+        if(const auto* bytes=replacement(path)){
+            field(std::to_string(bytes->size()));hash.update(bytes->data(),bytes->size());return;
+        }
         const auto size=fs::file_size(path);
         const auto stamp=fs::last_write_time(path);
         field(std::to_string(size));
@@ -128,8 +145,8 @@ std::string moveDigest(const fs::path& source,bool directory){
     }
     const auto result=hash.finish();return pack::toHex(result.data(),result.size());
 }
-bool matchesMoveFile(const fs::path& path,const editor::ProjectHistory::MoveFile& f){
-    if(!f.digest.empty())return moveDigest(path,f.directory)==f.digest;
+bool matchesMoveFile(const fs::path& path,const editor::ProjectHistory::MoveFile& f,bool after=false){
+    if(!f.digest.empty())return moveDigest(path,f.directory)==(after&&!f.digestAfter.empty()?f.digestAfter:f.digest);
     return fs::is_regular_file(fs::symlink_status(path))&&fs::file_size(path)==f.bytes.size()&&
            editor::readProjectFileBytes(path)==f.bytes;
 }
@@ -556,13 +573,25 @@ Json StudioTransferPlan::apply(const std::string& token,
                 for(const auto& pair:planned)
                     if(!fs::is_regular_file(fs::symlink_status(studioMetaPath(pair.first))))
                         throw std::runtime_error("Move history requires an existing sidecar");
+                ResourceOverlay overlay;
+                for(const auto& edit:repairs)overlay.emplace(fs::canonical(project_)/edit.path,std::make_pair(edit.before,edit.after));
                 for(const auto& op:operations){
                     editor::ProjectHistory::MoveFile file;
                     file.from=op.source.lexically_relative(root).generic_string();
                     file.to=op.destination.lexically_relative(root).generic_string();
                     file.directory=!op.meta&&fs::is_directory(fs::symlink_status(op.source));
                     if(op.meta)file.bytes=capture(op.source);
-                    else file.digest=moveDigest(op.source,file.directory);
+                    else{
+                        file.digest=moveDigest(op.source,file.directory);
+                        const auto rel="content/"+file.from;
+                        const bool affected=std::any_of(repairs.begin(),repairs.end(),[&](const auto& edit){
+                            return studioReferenceMatchesPath(edit.path.generic_string(),rel,file.directory);
+                        });
+                        if(affected){
+                            file.digestAfter=moveDigest(op.source,file.directory,&overlay);
+                            if(file.digestAfter==file.digest)throw std::runtime_error("Unexpected no-op moved resource repair");
+                        }
+                    }
                     candidate.files.push_back(std::move(file));
                 }
                 const auto material=project_/"materials.json";
@@ -591,7 +620,7 @@ Json StudioTransferPlan::apply(const std::string& token,
                 if (operation.source.parent_path()!=operation.destination.parent_path())
                     StudioMoveJournal::syncPath(operation.destination.parent_path());
             }
-            editor::applyProjectFileEdits(project_,studioAbsoluteResourceEdits(project_,repairs));
+            editor::applyProjectFileEdits(project_,studioAbsoluteResourceEdits(project_,repairs,referenceMoves));
             StudioAssetCatalog catalog(project_); catalog.rebuild();
             if (beforeCommit) beforeCommit();
             if(recorded){
@@ -605,7 +634,7 @@ Json StudioTransferPlan::apply(const std::string& token,
                     if(bool(recorded->materialsBefore)!=bool(recorded->materialsAfter))
                         recorded.reset(); // creation/deletion is not supported by this replay
                     if(recorded)for(const auto& f:recorded->files)
-                        if(!matchesMoveFile(root/f.to,f))
+                        if(!matchesMoveFile(root/f.to,f,true))
                             throw std::runtime_error("Asset changed during move");
                 }catch(const std::exception&){recorded.reset();}
             }
@@ -892,7 +921,7 @@ void studioReplayAssetMove(const fs::path& project,
             const auto& f=plan.files[j];const auto& from=redo?f.from:f.to;const auto& to=redo?f.to:f.from;
             const auto src=checked(from,j!=i,true,f.directory);
             (void)checked(to,j!=i,false,f.directory);
-            if(!matchesMoveFile(src,f))
+            if(!matchesMoveFile(src,f,!redo))
                 throw std::runtime_error("Asset move history source bytes changed: "+from);
             operations.push_back({from,to});
         }
@@ -902,6 +931,13 @@ void studioReplayAssetMove(const fs::path& project,
     for(size_t i=0;i<operations.size();i+=2)
         referenceMoves.push_back({"content/"+operations[i].from,"content/"+operations[i].to,plan.files[i].directory});
     auto repairs=redo?plan.resourceEdits:editor::reverseProjectFileEdits(plan.resourceEdits);
+    if(!redo){
+        std::vector<StudioReferenceRelocation> forward;
+        for(size_t i=0;i<plan.files.size();i+=2)
+            forward.push_back({"content/"+plan.files[i].from,"content/"+plan.files[i].to,plan.files[i].directory});
+        for(auto& edit:repairs)edit.path=studioRelocatedReferencePath(edit.path.generic_string(),forward);
+        std::sort(repairs.begin(),repairs.end(),[](const auto& a,const auto& b){return a.path.generic_string()<b.path.generic_string();});
+    }
     if(repairs.empty())studioCheckGltfRelocations(project,referenceMoves);
     else{
         if(staged)throw std::runtime_error("Resource repair history requires individual navigation");
@@ -909,8 +945,9 @@ void studioReplayAssetMove(const fs::path& project,
         if(generated.size()!=repairs.size())throw std::runtime_error("Resource repair history dependencies changed");
         for(size_t i=0;i<repairs.size();++i){
             const auto& saved=repairs[i];const auto& expected=generated[i];
+            const auto destination=studioRelocatedReferencePath(saved.path.generic_string(),referenceMoves);
             if(saved.path!=expected.path||saved.before!=expected.before||
-               studioCanonicalGltfRepair(saved.path.generic_string(),saved.after)!=studioCanonicalGltfRepair(expected.path.generic_string(),expected.after))
+               studioCanonicalGltfRepair(destination,saved.after)!=studioCanonicalGltfRepair(destination,expected.after))
                 throw std::runtime_error("Resource repair history no longer matches typed dependencies");
         }
     }
@@ -928,7 +965,7 @@ void studioReplayAssetMove(const fs::path& project,
         for(size_t i=0;i<operations.size();++i){
             const auto& op=operations[i];
             const auto from=root/op.from,to=root/op.to;
-            if(!matchesMoveFile(from,plan.files[i]))
+            if(!matchesMoveFile(from,plan.files[i],!redo))
                 throw std::runtime_error("Asset changed during history replay");
             if(existsOrSymlink(to))throw std::runtime_error("Asset move destination occupied");
             StudioMoveJournal::renamePath(from,to);
@@ -936,12 +973,15 @@ void studioReplayAssetMove(const fs::path& project,
             if(from.parent_path()!=to.parent_path())StudioMoveJournal::syncPath(to.parent_path());
         }
         for(size_t i=0;i<operations.size();++i)
-            if(!matchesMoveFile(root/operations[i].to,plan.files[i]))
+            if(!matchesMoveFile(root/operations[i].to,plan.files[i],!redo))
                 throw std::runtime_error("Asset bytes changed during replay");
-        auto documents=studioAbsoluteResourceEdits(project,repairs);
+        auto documents=studioAbsoluteResourceEdits(project,repairs,referenceMoves);
         if(materialBefore)documents.push_back({material,*materialBefore,*materialAfter});
         else checkMaterial();
         editor::applyProjectFileEdits(project,documents);
+        for(size_t i=0;i<operations.size();++i)
+            if(!matchesMoveFile(root/operations[i].to,plan.files[i],redo))
+                throw std::runtime_error("Repaired asset bytes changed during replay");
         catalog.rebuild(false);
         for(size_t i=0;i<plan.files.size();i+=2){
             const auto& asset=plan.files[i];const auto& meta=plan.files[i+1];
@@ -1410,6 +1450,9 @@ void validateHistoryMove(const fs::path& project,const AssetHistory::MovePlan& p
     if((plan.quarantine||plan.replacement)&&!plan.resourceEdits.empty())throw std::runtime_error("Invalid persisted resource repair");
     if(plan.resourceEdits.size()>32)throw std::runtime_error("Too many persisted resource edits");
     size_t repairBytes=0;std::set<std::string> repairPaths;
+    std::vector<StudioMoveJournalOperation> repairMoves;
+    if(!plan.quarantine&&!plan.replacement)
+        for(const auto& f:plan.files)repairMoves.push_back({f.from,f.to});
     for(const auto& edit:plan.resourceEdits){
         const auto path=edit.path.generic_string();
         if(!path.starts_with("content/")||edit.path.extension()!=".gltf"||!repairPaths.insert(path).second)
@@ -1420,15 +1463,21 @@ void validateHistoryMove(const fs::path& project,const AssetHistory::MovePlan& p
             repairBytes+=count;
         }
         (void)Json::parse(edit.before);(void)Json::parse(edit.after);
-        for(const auto& f:plan.files)for(const auto& endpoint:{f.from,f.to}){
-            const auto base="content/"+endpoint;
-            if(path==base||path.starts_with(base+"/")||base.starts_with(path+"/"))throw std::runtime_error("Persisted repair overlaps move");
-        }
+        const auto destination=StudioMoveJournal::resourceDestination(path,repairMoves);
+        if(!destination.starts_with("content/")||fs::path(destination).extension()!=".gltf")
+            throw std::runtime_error("Invalid persisted repaired destination");
+        validateHistoryContentPath(destination.substr(8));
     }
     std::set<std::string> sources,targets;
     for(size_t i=0;i<plan.files.size();i+=2){
         const auto& a=plan.files[i];const auto& b=plan.files[i+1];
         validateHistoryContentPath(a.from);
+        const bool repaired=std::any_of(plan.resourceEdits.begin(),plan.resourceEdits.end(),[&](const auto& edit){
+            return studioReferenceMatchesPath(edit.path.generic_string(),"content/"+a.from,a.directory);
+        });
+        if(!b.digestAfter.empty()||repaired!=!a.digestAfter.empty()||
+           (!a.digestAfter.empty()&&(!validHistoryDigest(a.digestAfter)||a.digestAfter==a.digest)))
+            throw std::runtime_error("Invalid persisted repaired asset digest");
         if(!sources.insert(a.from).second||!targets.insert(a.to).second||
            !validHistoryDigest(a.digest)||a.from==a.to)
             throw std::runtime_error("Invalid persisted asset move identity");
@@ -1490,7 +1539,9 @@ std::string encodeAssetHistory(const fs::path& project,const AssetHistory& histo
             if(plan.materialsBefore){move.set("materialsBefore",Json::string(*plan.materialsBefore));move.set("materialsAfter",Json::string(*plan.materialsAfter));}
             for(const auto& f:plan.files){
                 Json item=Json::object();item.set("from",Json::string(f.from));item.set("to",Json::string(f.to));
-                item.set("bytes",Json::string(f.bytes));item.set("digest",Json::string(f.digest));item.set("directory",Json::fromBool(f.directory));files.push(std::move(item));
+                item.set("bytes",Json::string(f.bytes));item.set("digest",Json::string(f.digest));item.set("directory",Json::fromBool(f.directory));
+                if(!f.digestAfter.empty())item.set("digestAfter",Json::string(f.digestAfter));
+                files.push(std::move(item));
             }
             if(!plan.resourceEdits.empty()){
                 Json edits=Json::array();
@@ -1539,7 +1590,8 @@ AssetHistory decodeAssetHistory(const fs::path& project,const std::string& text)
             for(const auto& f:files.items()){
                 if(!f["from"].isString()||!f["to"].isString()||!f["bytes"].isString()||!f["digest"].isString())
                     throw std::runtime_error("Invalid asset history move entry");
-                plan.files.push_back({f.getStr("from"),f.getStr("to"),f.getStr("bytes"),f.getStr("digest"),f.getBool("directory")});
+                if(f.has("digestAfter")&&!f["digestAfter"].isString())throw std::runtime_error("Invalid repaired history digest");
+                plan.files.push_back({f.getStr("from"),f.getStr("to"),f.getStr("bytes"),f.getStr("digest"),f.getBool("directory"),f.getStr("digestAfter")});
             }
             if(move.has("resourceEdits")){
                 if(!move["resourceEdits"].isArray()||move["resourceEdits"].size()>32)throw std::runtime_error("Invalid resource history");

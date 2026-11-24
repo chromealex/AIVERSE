@@ -167,6 +167,9 @@ Existing XML parser and shared BOM conversion discover COLLADA library_images in
 ## Transactional stationary glTF URI repair (S6g.6.1)
 Internal Studio/MCP moves can repair exact buffers/images URI slots in stationary textual .gltf models when targets relocate. Native plan validates complete choices, budgets exact before/after bytes, and uses move journal v4 plus existing document journal; individual Undo/Redo validates typed resolution and restores exact source bytes. Moving model owners requiring edits, GLB/OBJ/DAE rewrites, coordinated repaired history and unknown URI adoption remain refused. No arbitrary JSON rewriting. Legacy direct transfer callers must opt in and provide history.
 
+## Moved glTF owner repair (S6g.6.2)
+A textual glTF owner can move directly or under a moved directory while URI targets are reprojected. Exact original document paths are retained and translated on replay. Move file/tree digests have a precomputed optional after digest. Journal v5 locates repaired files at either endpoint before reversing relocation; v4 remains readable. Individual history checks both directional digests. GLB/OBJ/DAE edits and coordinated repaired replay remain separate work.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web
