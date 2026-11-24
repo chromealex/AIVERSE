@@ -60,7 +60,10 @@
     "apps/studio-web/tests/nested-dock.mjs",
     "CMakeLists.txt",
     "engine/game/native/Build.cmake",
-    "docs/native-modules.md"
+    "docs/native-modules.md",
+    "engine/game/GameCore.h",
+    "tests/fps/tests.cpp",
+    "tests/fps/vehicles.inc"
   ],
   "traits": {
     "editable": false,
@@ -141,7 +144,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Mac v3 archive at 3929953e2bc977b207f7de7a8360bc78179e4588: Python 20/20, Web 218/218, Studio contracts 48/48, native Studio/MCP build, registry 347 tools, four MCP calls, camera_client_adapter and template fetch PASS. Full build failed at four render-only tools receiving NativeRegistry.cpp; CTest NOT RUN. Partial compliance detected three Building Geometry paths, owner manifest updated separately. Current fixed-tree verification pending.",
+      "note": "Mac QA v5 at 35bc27ecfb80ad00350120548bc9dc3ed89fb236: Python 21/21 (native host fixture included), Web 218/218, Studio contracts 48/48, partial compliance, native Studio/MCP build, registry and four MCP calls, camera adapter, all four former failing link targets PASS. Full native build stopped at 93% on eight ambiguous require calls in vfx_graph_ops_test.cpp; CTest NOT RUN. Compiler diagnostics also identify missing overrides and unused FPS test code. Fixes applied after tested SHA; current HEAD verification pending.",
       "evidence": []
     },
     "handoff": {
