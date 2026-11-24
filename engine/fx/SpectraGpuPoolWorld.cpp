@@ -52,13 +52,10 @@ bool GpuPoolWorld::init(gfx::Device* device, PoolWorldBudgets budgets) {
     checkpointBudget_=budgets_.sharedCheckpointBudget
         ?budgets_.sharedCheckpointBudget
         :std::make_shared<CheckpointReadbackBudget>(budgets_.checkpointReadback);
-    if(budgets_.sharedAllocationBudget){
-        allocationBudget_=budgets_.sharedAllocationBudget;ownsAllocationBudget_=false;
-    }else if(!ownsAllocationBudget_||!allocationBudget_||allocationBudget_->deviceKey()!=device_){
-        allocationBudget_=std::make_shared<GpuAllocationBudget>(budgets_.maxGpuAllocationBytes);ownsAllocationBudget_=true;
-    }else allocationBudget_->setLimit(budgets_.maxGpuAllocationBytes);
-    if(device_&&!allocationBudget_->bind(device_)){
-        reason_="SpectraFX shared allocation budget belongs to another Device";cpu_.shutdown();device_=nullptr;return false;
+    allocationBudget_=device_?device_->acquireGpuAllocationBudget(budgets_.sharedAllocationBudget,budgets_.maxGpuAllocationBytes):
+        (budgets_.sharedAllocationBudget?budgets_.sharedAllocationBudget:std::make_shared<GpuAllocationBudget>(budgets_.maxGpuAllocationBytes));
+    if(!allocationBudget_){
+        reason_="SpectraFX allocation budget conflicts with canonical Device ledger";cpu_.shutdown();device_=nullptr;return false;
     }
     sourceWorldEpoch_=nextSourceWorldEpoch.fetch_add(1,std::memory_order_relaxed);
     initialized_=true;
@@ -77,6 +74,7 @@ void GpuPoolWorld::shutdown() {
     sources_.clear();freeSourceSlots_.clear();
     sourceWorldEpoch_=0;nextBindingRevision_=1;nextSourceToken_=1;
     checkpointBudget_.reset();
+    allocationBudget_.reset();
     cpu_.shutdown();
     device_=nullptr;
     initialized_=frameOpen_=stepped_=drawn_=groupsDirty_=false;

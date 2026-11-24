@@ -63,7 +63,7 @@ struct PoolWorldBudgets {
     CheckpointReadbackLimits checkpointReadback{};
     std::shared_ptr<CheckpointReadbackBudget> sharedCheckpointBudget;
     // Aggregate conservative physical allocation envelopes, including overlap.
-    // Zero is unlimited. Explicit external budget owns its own limit.
+    // Zero inherits the Device limit; conflicting nonzero limits are rejected.
     size_t maxGpuAllocationBytes=0;
     std::shared_ptr<GpuAllocationBudget> sharedAllocationBudget;
 };
@@ -341,7 +341,6 @@ private:
     PoolWorldStats stats_{};
     std::shared_ptr<CheckpointReadbackBudget> checkpointBudget_;
     std::shared_ptr<GpuAllocationBudget> allocationBudget_;
-    bool ownsAllocationBudget_=false;
     std::vector<Group> gpuGroups_;
     PoolResetReport resetReport_{};
     std::vector<uint8_t> resetAccepted_; // per GPU group, retained across retries

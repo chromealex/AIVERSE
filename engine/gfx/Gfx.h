@@ -31,6 +31,7 @@
 #include <string>
 #include <vector>
 #include "engine/gfx/GpuTimingRouter.h"
+#include "engine/gfx/GpuAllocationBudget.h"
 
 namespace aiverse::gfx {
 
@@ -727,7 +728,30 @@ inline VulkanExtensionRequests& vulkanExtensionRequests() { static VulkanExtensi
 
 class Device {
 public:
-    virtual ~Device() = default;
+    virtual ~Device() {if(allocationBudget_)allocationBudget_->closeDevice(this);}
+    // One render-owner-thread ledger for presentation clients that opt into
+    // envelope accounting. Independent worlds cannot bypass the same limit.
+    // Zero inherits; nonzero conflicting limits are rejected. Explicit budget
+    // adoption is allowed only before use or after an unowned idle ledger.
+    std::shared_ptr<GpuAllocationBudget> acquireGpuAllocationBudget(
+        std::shared_ptr<GpuAllocationBudget> requested={},size_t limit=0){
+        if(allocationBudget_)allocationBudget_->collect(gpuCompletedFence());
+        if(requested&&allocationBudget_&&requested!=allocationBudget_){
+            if(allocationBudget_.use_count()!=1||allocationBudget_->stats().charged()!=0)return {};
+            if(!requested->bind(this)||(limit&&requested->stats().limit&&requested->stats().limit!=limit))return {};
+            allocationBudget_->closeDevice(this);allocationBudget_.reset();
+        }
+        if(!allocationBudget_){
+            auto candidate=requested?requested:std::make_shared<GpuAllocationBudget>(limit);
+            if(!candidate->bind(this)||(limit&&candidate->stats().limit&&candidate->stats().limit!=limit))return {};
+            allocationBudget_=std::move(candidate);
+        }
+        if(limit){
+            if(allocationBudget_->stats().limit&&allocationBudget_->stats().limit!=limit)return {};
+            allocationBudget_->setLimit(limit);
+        }
+        return allocationBudget_;
+    }
     // One shared timing collection owner per graphics Device. Components
     // subscribe instead of independently draining takeGpuTimings().
     // All router calls remain on this Device's render owner thread.
@@ -1161,6 +1185,7 @@ protected:
     int fbW_ = 0, fbH_ = 0;
 private:
     GpuTimingRouter gpuTimingRouter_{};
+    std::shared_ptr<GpuAllocationBudget> allocationBudget_;
 };
 
 // Backend factories. `nativeSurface` is backend specific:

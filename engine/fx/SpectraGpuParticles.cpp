@@ -174,9 +174,10 @@ bool ComputeParticles::initGpu() {
     physicalCapacity_=cap;
     proceduralActive_=desc_.proceduralBillboards&&!materialActive&&
         device_->info().backend==gfx::Backend::Metal;
-    if(desc_.allocationBudget){
+    desc_.allocationBudget=device_->acquireGpuAllocationBudget(desc_.allocationBudget);
+    if(!desc_.allocationBudget){reason_="GPU allocation budget conflicts with canonical Device ledger";return false;}
+    {
         auto& budget=*desc_.allocationBudget;
-        if(!budget.bind(device_)){reason_="GPU allocation budget belongs to another Device";return false;}
         budget.collect(device_->gpuCompletedFence());
         const size_t charge=estimateGpuEmitterAllocation(cap,proceduralActive_);
         if(!budget.reserve(charge)){++stats_.gpuAllocationBudgetDenied;reason_="SpectraFX physical GPU allocation budget exhausted";return false;}

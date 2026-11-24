@@ -541,6 +541,22 @@ int main() {
     check(memory->stats().charged()==0,"completed retirement leaked charge");
     check(!memory->bind(&growthDevice),"budget accepted another Device");
 
+    RecordingMetalDevice canonicalDevice;
+    canonicalDevice.indirectAvailable=true;canonicalDevice.storageCopyAvailable=true;
+    auto canonical=canonicalDevice.acquireGpuAllocationBudget({},smallCharge*2);
+    check(bool(canonical),"canonical device budget");
+    auto implicitConfig=memConfig;implicitConfig.allocationBudget.reset();
+    spectra::ComputeParticles implicitA,implicitB,implicitC;
+    check(implicitA.init(&canonicalDevice,implicitConfig)&&implicitB.init(&canonicalDevice,implicitConfig),
+          "implicit emitters did not share canonical budget");
+    check(!implicitC.init(&canonicalDevice,implicitConfig)&&canonical->stats().active==smallCharge*2,
+          "implicit emitter bypassed canonical budget");
+    check(!canonicalDevice.acquireGpuAllocationBudget({},smallCharge*3),"conflicting limit accepted");
+    check(!canonicalDevice.acquireGpuAllocationBudget(std::make_shared<spectra::GpuAllocationBudget>()),
+          "second live ledger accepted");
+    implicitA.shutdown();implicitB.shutdown();
+    check(canonical->stats().charged()==0,"canonical shutdown leaked charge");
+
     // Explicit hard GPU requirement never silently reports a CPU implementation.
     config.backend=ComputePreference::RequireGpu;
     check(!emitter.init(nullptr,config),"RequireGpu should fail without a Device");

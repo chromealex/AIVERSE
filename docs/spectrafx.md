@@ -1,6 +1,6 @@
-## Stage 117 — canonical Device allocation ledger (in progress; QA deferred)
+## Stage 117 — canonical Device allocation ledger (source implemented; QA deferred)
 
-Promote the existing envelope ledger to a generic RHI utility and let each Device own one canonical instance. All ComputeParticles and GpuPoolWorld owners acquire it automatically; explicit shared budget adoption only before a canonical owner exists, conflicting independent limits rejected, zero inherits. Keep fence charges across pool teardown, invalidate external references on Device destruction. No driver-wide accounting or new authored schema.
+Promote the existing envelope ledger to a generic RHI utility and let each Device own one canonical instance. All ComputeParticles and GpuPoolWorld owners acquire it automatically; explicit shared budget adoption before first use or when old ledger is fully unowned and uncharged, conflicting independent limits rejected, zero inherits. Keep fence charges across pool teardown, invalidate external references on Device destruction. No driver-wide accounting or new authored schema.
 
 ## Stage 116 — live GPU pool compaction (source implemented; QA deferred)
 
