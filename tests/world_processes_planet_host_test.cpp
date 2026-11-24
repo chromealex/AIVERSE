@@ -1,5 +1,7 @@
 // Real CPU/Box3D composition fixture. No GPU or automatic GameCore wiring.
 #include "examples/world/world_processes_native/PlanetProcessHost.h"
+#include "aiverselib/world/EvolvePlanetForestRetirement.h"
+#include "aiverselib/world/EvolvePlanetNaturalFalls.h"
 #include <stdexcept>
 #include <cstdio>
 
@@ -155,8 +157,54 @@ static void checkConsequenceOwner(){
     check(!wp::planetSourceRetired(original,source.key,"terra"),"rollback restores visibility");
     check(sources.reset(scene)&&scene.bodyCount()==0,"source shutdown");
 }
+static void checkSpentForestPublisher(){
+    namespace wp=lib::worldprocess;
+    namespace ev=evolve;
+    namespace tw=terraweave;
+    game::Surface surface;game::BodyDef body;body.id="terra";body.radius=64_fx;body.faceSize=8;
+    surface.bodies.push_back(body);surface.build();
+    const auto pos=surface.cellCenter(surface.gridCell(0,0,3,3));
+    const auto frame=wp::surfaceFrame(&surface,pos);check(bool(frame),"forest surface frame");
+    World world;world.enableCowSnapshots();
+    tw::AnchoredPlant plant;plant.anchor.speciesId=1;plant.anchor.plantKey=77;
+    plant.anchor.roots=tw::defaultRootProfile(tw::PlantHabit::Tree);plant.fallen=true;
+    tw::TerraWeaveAuthorityResource roots;roots.rooted={plant};
+    world.setResource<tw::TerraWeaveAuthorityResource>(roots);
+    world.setResource<ev::PlanetRootDeliveryResource>();world.setResource<wp::PlanetConsequenceResource>();
+    const ev::PlanetRootBinding binding{{1,77},"terra",pos};
+    const std::vector<ev::PlanetRootBinding> bindings{binding};
+    check(ev::setPlanetRootBindings(world,surface,bindings),"forest bindings");
+    ev::PlanetPlantFall fall;fall.event.id=binding.id;fall.event.tick=3;fall.event.sourceSoilRevision=1;
+    fall.bodyId="terra";fall.plantedPosition=pos;fall.tangentDirection=frame->east;
+    auto delivery=*world.resourceConst<ev::PlanetRootDeliveryResource>();
+    check(ev::appendPlanetPlantFalls(delivery,std::span(&fall,1)),"forest outbox");
+    world.setResource<ev::PlanetRootDeliveryResource>(delivery);
+    check(ev::initializePlanetDeadwood(world,surface),"forest ledger");
+    auto wood=*world.resourceConst<ev::PlanetDeadwoodResource>();
+    check(ev::seedPlanetDeadwood(wood,surface,plant,binding,3),"forest biomass");
+    world.setResource<ev::PlanetDeadwoodResource>(wood);
+    check(wp::deliverPlanetForestCapsule(world,surface,fall,3,{}),"forest capsule");
+    const auto key=wp::consequenceKey(fall);
+    const wp::PlanetSourceKey source=wp::consequenceSource(key);
+    physics::Scene scene;PlanetConsequencePublisher publisher;
+    check(publisher.publish(scene,world,surface,"terra")&&publisher.count()==1,"publish forest capsule");
+    const auto old=publisher.handle(key);check(scene.valid(old),"live forest body");
+    const World before=world;
+    wood.ledger.totalRespiredUnits+=wood.ledger.logs.front().remainingUnits;
+    wood.ledger.logs.front().remainingUnits=0;wood.ledger.logs.front().lastEvaluatedTick=4;
+    world.setResource<ev::PlanetDeadwoodResource>(wood);
+    const auto retired=wp::retireSpentPlanetForestBodies(world,surface,4);
+    check(retired&&retired->retired.size()==1,"retire spent forest record");
+    check(publisher.publish(scene,world,surface,"terra")&&publisher.count()==0&&!scene.valid(old),"destroy spent Box3D handle");
+    check(wp::planetSourceRetired(world,source,"terra"),"receipt prevents static resurrection");
+    check(publisher.publish(scene,world,surface,"terra")&&scene.bodyCount()==0,"repeat retirement");
+    world=before;
+    check(publisher.reset(scene)&&publisher.publish(scene,world,surface,"terra")&&publisher.count()==1,"rollback recreates forest capsule");
+    check(publisher.reset(scene)&&scene.bodyCount()==0,"forest shutdown");
+}
 int main(){
     try{
+        checkSpentForestPublisher();
         checkTerrainCollision();
         checkStreamedTerrain();
         checkMorphCollisionPublication();

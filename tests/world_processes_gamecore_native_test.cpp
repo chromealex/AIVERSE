@@ -30,6 +30,7 @@
 #include "aiverselib/world/EvolvePlanetForestEcology.h"
 #include "aiverselib/world/EvolvePlanetNutrients.h"
 #include "aiverselib/world/EvolvePlanetNaturalFalls.h"
+#include "aiverselib/world/EvolvePlanetForestRetirement.h"
 #include "aiverselib/world/PlanetPhysicalDelivery.h"
 #include "engine/game/PlanetTerrainWater.h"
 #include "engine/game/PlanetSeaVolume.h"
@@ -1036,6 +1037,31 @@ static void checkPlanetNaturalFalls(){
     AIVERSE_TEST_CHECK(evolve::pendingPlanetPlantFalls(ecs).empty());
     AIVERSE_TEST_CHECK(ecs.resourceConst<wp::PlanetConsequenceResource>()->bodies.size()==1);
     AIVERSE_TEST_CHECK(!wp::deliverPlanetForestCapsule(ecs,surface,result->falls[0],4,{}));
+    const auto notSpent=wp::retireSpentPlanetForestBodies(ecs,surface,4);
+    AIVERSE_TEST_CHECK(notSpent&&notSpent->retired.empty());
+    const auto key=wp::consequenceKey(result->falls[0]);
+    wp::ConsequenceBody structure;
+    structure.key={wp::ConsequenceKind::Structure,123,1,0,0,3};
+    structure.body="terra";structure.motion.position=pos;
+    AIVERSE_TEST_CHECK(wp::stageConsequence(ecs,surface,structure));
+    auto spent=*ecs.resourceConst<evolve::PlanetDeadwoodResource>();
+    auto& spentLog=spent.ledger.logs.front();
+    spent.ledger.totalRespiredUnits+=spentLog.remainingUnits;
+    spentLog.remainingUnits=0;spentLog.lastEvaluatedTick=5;
+    ecs.setResource<evolve::PlanetDeadwoodResource>(spent);
+    const World preRetirement=ecs;
+    const auto early=wp::retireSpentPlanetForestBodies(ecs,surface,4);
+    AIVERSE_TEST_CHECK(early&&early->retired.empty());
+    const auto retired=wp::retireSpentPlanetForestBodies(ecs,surface,5);
+    AIVERSE_TEST_CHECK(retired&&retired->retired.size()==1&&retired->retired.front()==key);
+    AIVERSE_TEST_CHECK(ecs.resourceConst<wp::PlanetConsequenceResource>()->bodies.size()==1);
+    AIVERSE_TEST_CHECK(ecs.resourceConst<wp::PlanetConsequenceResource>()->bodies[0].key==structure.key);
+    AIVERSE_TEST_CHECK(ecs.resourceConst<evolve::PlanetRootDeliveryResource>()->events.front().acknowledged);
+    AIVERSE_TEST_CHECK(evolve::validPlanetDeadwood(*ecs.resourceConst<evolve::PlanetDeadwoodResource>(),surface));
+    AIVERSE_TEST_CHECK(wp::retireSpentPlanetForestBodies(ecs,surface,5)->retired.empty());
+    ecs=preRetirement;
+    AIVERSE_TEST_CHECK(ecs.resourceConst<wp::PlanetConsequenceResource>()->bodies.size()==2);
+    AIVERSE_TEST_CHECK(wp::retireSpentPlanetForestBodies(ecs,surface,5)->retired.size()==1);
     ecs=before;
     AIVERSE_TEST_CHECK(evolve::reconcilePlanetNaturalFalls(ecs,surface,3,500)->falls.size()==1);
 }

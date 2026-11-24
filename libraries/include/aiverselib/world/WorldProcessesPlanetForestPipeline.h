@@ -5,6 +5,7 @@
 #include "EvolvePlanetForestEcology.h"
 #include "EvolvePlanetNutrients.h"
 #include "EvolvePlanetNaturalFalls.h"
+#include "EvolvePlanetForestRetirement.h"
 
 namespace aiverse::lib::worldprocess {
 struct PlanetForestPipelineState {
@@ -98,6 +99,9 @@ inline bool runPlanetForestPipeline(World& world,const game::Surface& surface,
                 });
             if(!result||!add(report.decayed,result->decayedUnits))return reject();
         }
+        // Release fully spent plant records before staging new natural falls.
+        // The native publisher reconciles removed handles on its next frame.
+        if(!retireSpentPlanetForestBodies(staged,surface,tick))return reject();
         if(cfg.naturalFallPermille){
             const auto fallen=evolve::reconcilePlanetNaturalFalls(staged,surface,tick,cfg.naturalFallPermille);
             if(!fallen)return reject();
