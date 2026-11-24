@@ -183,7 +183,7 @@ export interface StudioParams {
   'studio.gameInspect': {epoch:string;ref:string};
   'studio.gameDevices': Record<string,never>;
   'studio.gameDevice': Pick<StudioGameDevice,'id'|'landscape'|'safeArea'>;
-  'studio.gameControl': {action:'pause'|'resume'|'step'|'restart'};
+  'studio.gameControl': {action:'pause'|'resume'|'step'|'restart'|'checkpointSave'|'checkpointRestore'|'speed1'|'speed2'|'speed5'|'speed10'|'speed25'|'speed50'|'speed100'};
   'studio.project': Record<string, never>;
   'studio.newMap': {width: number; height: number; name: string};
   'studio.openMap': {file: string};
