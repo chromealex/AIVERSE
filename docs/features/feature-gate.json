@@ -138,9 +138,9 @@
     },
     "tests": {
       "status": "pass",
-      "note": "On macOS, Python 3.12 ran all 20 feature gate regression tests on the merged source branch at 447e9151191e277665656a754266578a366c45ba. This exercises the gate implementation independently of readiness of the features audited by it.",
+      "note": "20 Python feature-gate tests passed on the current roadmap and policy. Contract routing and catalog validation passed. Studio source tests ran 55 cases with one Vite bundle case skipped in the source-only checkout.",
       "evidence": [
-        "docs/evidence/integration-feature-gate-447e91511.json"
+        "docs/evidence/integration-authoring-5e541da2e.json"
       ]
     },
     "handoff": {
@@ -177,6 +177,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integration-feature-gate-447e91511.json"
+    "docs/evidence/integration-authoring-5e541da2e.json"
   ]
 }
