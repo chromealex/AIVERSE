@@ -108,3 +108,7 @@ Deterministic body-local observer demand with hysteresis and pins, global bounde
 ### Stage54u4b — IN PROGRESS
 
 Genre-independent native host frame coordinator for planetary demand, shared builder and collision binding, exact source/epoch checks, explicit nav/GI hooks and actual host exclusion. Preserve old coherent cohort during rebuild; close/restore and release only under host proof of no occupied volume and safe baseline coverage. Bound pending jobs and resident cohorts; fail closed on pin/budget conflicts. Native API and example/test source, no automatic legacy motor conversion; no claim of tested traversal until native QA.
+
+### Stage54v1 — IN PROGRESS
+
+Use PHYSIS gravityAt as the sole field policy; expose exact local tangent motion frame and native residency admission; extend the existing Box3D character solver with a gravity-oriented query basis, preserving flat defaults and proxy orientation, and adapt existing Fixed locomotion policy without new position writers. Zero gravity rejects grounded motor and routes to existing host free-flight policy. Regression source for tilted/ceiling support, jump and PHYSIS radial fields; native QA pending. No default legacy host migration.
