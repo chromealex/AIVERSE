@@ -9,6 +9,7 @@
 // their own car) is TrafficCommute.cpp.
 // Fixed maths and integers only; the citizens are created from the simulation RNG on the first tick.
 #include "Traffic.h"
+#include <aiverselib/runtime/WorkBudget.h>
 #include "Systems.h"
 #include <algorithm>
 #include <stdexcept>
@@ -41,6 +42,16 @@ void Traffic::parsePopulation(const Json& j, TrafficRules& r, const std::vector<
     const int64_t count = p.getInt("count", 0);
     if (count < 0 || count > 200000) throw std::runtime_error(where + ".count: 0..200000");
     pr.count = int(count);
+    auto boundedInteger=[&](const char* key,uint32_t maximum){
+        if(!p.has(key))return uint32_t(0);
+        const auto& value=p[key];
+        if(!value.isNumber()||value.fx().raw%Fixed::kOne||
+           value.integer()<0||uint64_t(value.integer())>maximum)
+            throw std::runtime_error(where+"."+key+": expected integer in 0.."+std::to_string(maximum));
+        return uint32_t(value.integer());
+    };
+    pr.updatePeriodTicks=boundedInteger("updatePeriodTicks",36000);
+    pr.maxUpdatesPerTick=boundedInteger("maxUpdatesPerTick",200000);
     const Fixed day = p.getFx("dayLength", Fixed::fromInt(1200));
     if (day < Fixed::fromInt(24)) throw std::runtime_error(where + ".dayLength: at least 24 seconds");
     pr.dayTicks = std::max<uint32_t>(1440 / 60, ticksOf(day, rate));
@@ -258,10 +269,15 @@ void Traffic::population(Simulation& sim, TrafficStore& st, const std::vector<Ve
     for (auto& c : st.cars) driving += c.citizen >= 0;
     if (pr.carShare > 0) for (auto& c : st.citizens) parked += c.car.valid();
     const int cap = pr.live, carCap = std::max(4, rules_.maxCars / 2);
-    // a slice per tick: everybody is looked at every two seconds
-    const size_t n = st.citizens.size(), slice = std::max<size_t>(1, (n + rate * 2 - 1) / (rate * 2));
-    for (size_t k = 0; k < slice; ++k) {
-        const size_t id = st.citizenCursor++ % n;
+    // Recurring discretionary population decisions use the existing saved
+    // cursor. Do not apply this budget to vehicle physics, pedestrian motion,
+    // collision, or service incidents, which retain their ordinary tick order.
+    const auto n=uint32_t(st.citizens.size());
+    const auto plan=lib::runtime::planRecurringWork(n,
+        pr.updatePeriodTicks?pr.updatePeriodTicks:rate*2,pr.maxUpdatesPerTick);
+    if(!plan.valid)return;
+    for(uint32_t k=0;k<plan.visitsPerTick;++k){
+        const size_t id=*lib::runtime::nextRecurringIndex(n,st.citizenCursor);
         TrafficCitizen& c = st.citizens[id];
         if (c.held) continue;   // a script / native module runs him (TrafficCitizen::held)
         if (c.state == kCitizenDead || c.state == kCitizenGang) continue;
