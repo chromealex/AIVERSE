@@ -92,12 +92,22 @@ inline Json resolve(const std::string& family,const Json& source,const std::stri
         }
         for(const auto& n:source["nodes"].items())if(n.getStr("op")=="imageAsset"||n.getStr("op")=="imageAssetChannel")asset(n.getStr("id"),"texture-image-asset",n["properties"].getStr("asset"));
         for(const auto& [name,def]:source["functions"].members())for(const auto& n:def["nodes"].items())if(n.getStr("op")=="imageAsset"||n.getStr("op")=="imageAssetChannel")asset(name+"/"+n.getStr("id"),"texture-image-asset",n["properties"].getStr("asset"));
-        for(const auto& n:source["nodes"].items())if(n.getStr("op")=="function"){
-            const auto fn=n["properties"].getStr("function");
-            const bool found=safe(fn)&&source["functions"][fn].isObject();
-            add(n.getStr("id"),"embedded-texture-function",fn,found?"embedded":"missing");
-            if(!found)issue("missing-texture-function",n.getStr("id"));
-        }
+        const auto& defs=source["functions"];std::map<std::string,int> mark;
+        std::function<void(const Json&,const std::string&,size_t)> walk;
+        walk=[&](const Json& graph,const std::string& prefix,size_t depth){
+            for(const auto& n:graph["nodes"].items())if(n.getStr("op")=="function"){
+                const auto fn=n["properties"].getStr("function"),owner=prefix+n.getStr("id");
+                const bool found=safe(fn)&&defs[fn].isObject();
+                add(owner,"embedded-texture-function",fn,found?"embedded":"missing");
+                if(!found){issue("missing-texture-function",owner);continue;}
+                if(mark[fn]==1){issue("recursive-texture-function",owner+" -> "+fn);continue;}
+                if(depth>=8){issue("texture-function-depth",owner);continue;}
+                if(mark[fn]==2)continue;
+                mark[fn]=1;walk(defs[fn],fn+"/",depth+1);mark[fn]=2;
+            }
+        };
+        walk(source,"",0);
+        for(const auto& [name,def]:defs.members())if(mark[name]==0){mark[name]=1;walk(def,name+"/",1);mark[name]=2;}
     }else if(family=="spectrafx"){
         for(const auto& n:source["nodes"].items()){
             const auto id=n.getStr("id");const auto& p=n["properties"];

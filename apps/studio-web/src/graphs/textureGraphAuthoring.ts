@@ -91,28 +91,37 @@ const copyJson=<T>(x:T):T=>JSON.parse(JSON.stringify(x)) as T;
 export function textureFunctionLibrary(graph:Obj):Obj {
  return obj(graph.functions)?graph.functions:{};
 }
-export function textureFunctionSpec(graph:Obj,node:Obj,catalog:Obj[]):Obj|undefined {
+export function textureFunctionSpec(graph:Obj,node:Obj,catalog:Obj[],stack:readonly string[]=[]):Obj|undefined {
  if(node.op!=='function')return catalog.find(n=>n.id===node.op);
  const p=node.properties;if(!obj(p)||!safeTextureId(p.function)||!safeTextureId(p.output))return;
+ if(stack.length>=8||stack.includes(p.function))return;
  const library=textureFunctionLibrary(graph);
  const def=Object.hasOwn(library,p.function)?library[p.function]:undefined;
  if(!obj(def)||!Array.isArray(def.inputs)||!def.inputs.every(v=>obj(v)&&safeTextureId(v.id)&&typeof v.type==='string'&&textureKinds.has(v.type))||!obj(def.outputs)||!Object.hasOwn(def.outputs,p.output))return;
  const result=rows(def.nodes).find(n=>n.id===(def.outputs as Obj)[String(p.output)]);
- const output=catalog.find(n=>n.id===result?.op)?.output;
+ const output=result?textureFunctionSpec(graph,result,catalog,[...stack,p.function])?.output:undefined;
  if(typeof output!=='string'||!textureKinds.has(output))return;
  return {id:'function',label:p.function+' / '+p.output,inputs:def.inputs.map(v=>(v as Obj).type),inputNames:def.inputs.map(v=>(v as Obj).id),output,properties:{},parameters:obj(def.parameters)?def.parameters:{}};
 }
 export function checkFunctionDraft(graph:Obj):void {
  const library=textureFunctionLibrary(graph),nodes=rows(graph.nodes);
  if(Object.keys(library).length>16||nodes.length>64)throw new Error('Texture function definition or node limit exceeded');
- let expanded=0;
- for(const n of nodes){
-  if(n.op!=='function'){expanded++;continue;}
+ const count=(n:Obj,stack:readonly string[]):number=>{
+  if(n.op!=='function')return 1;
   const p=n.properties;
-  const d=obj(p)&&typeof p.function==='string'&&Object.hasOwn(library,p.function)?library[p.function]:undefined;
+  const name=obj(p)&&safeTextureId(p.function)?p.function:'';
+  const d=Object.hasOwn(library,name)?library[name]:undefined;
   if(!obj(d)||!Array.isArray(d.nodes)||!d.nodes.length)throw new Error('Missing function definition');
-  expanded+=d.nodes.length;
+  if(stack.includes(name)||stack.length>=8)throw new Error('Recursive function or nesting depth exceeds 8');
+  let total=0;
+  for(const child of rows(d.nodes)){total+=count(child,[...stack,name]);if(total>64)throw new Error('Expanded function exceeds node limit');}
+  return total;
+ };
+ for(const [name,def] of Object.entries(library)){
+  if(!safeTextureId(name)||!obj(def)||!Array.isArray(def.nodes)||!def.nodes.length)throw new Error('Invalid function definition');
+  let total=0;for(const n of rows(def.nodes)){total+=count(n,[name]);if(total>64)throw new Error('Expanded function exceeds node limit');}
  }
+ let expanded=0;for(const n of nodes){expanded+=count(n,[]);if(expanded>64)throw new Error('Expanded function exceeds node limit');}
  const size=graph.size??256;
  if(expanded>64||typeof size!=='number'||!Number.isInteger(size)||size<8||size>1024||expanded*size*size>4194304)throw new Error('Expanded function exceeds native work budget; reduce resolution or node count');
  if(new TextEncoder().encode(JSON.stringify(graph)).length>256*1024)throw new Error('Texture graph exceeds 256 KiB document limit');
@@ -128,7 +137,6 @@ export function defineTextureFunction(graph:Obj,catalog:Obj[],ids:readonly strin
  if(!body.length||body.length!==selected.size||!selected.has(resultId))throw new Error('Select function body and result node');
  const formal:Obj[]=[],external=new Map<string,string>(),reserved=new Set(body.map(n=>String(n.id)));
  const nodes=body.map(n=>{
-  if(n.op==='function')throw new Error('Nested function definitions are not supported');
   const spec=textureFunctionSpec(graph,n,catalog);
   if(!safeTextureId(n.id)||!spec||!Array.isArray(spec.inputs)||!Array.isArray(n.inputs)||spec.inputs.length!==n.inputs.length)throw new Error('Unknown function body node or input arity');
   const inputs=n.inputs.map((v,i)=>{
@@ -161,7 +169,8 @@ export function addTextureFunctionCall(graph:Obj,catalog:Obj[],name:string,outpu
  const next={...graph,nodes:[...nodes,call]};checkFunctionDraft(next);return {graph:next,id};
 }
 export function removeTextureFunction(graph:Obj,name:string):Obj {
- if(rows(graph.nodes).some(n=>n.op==='function'&&obj(n.properties)&&n.properties.function===name))throw new Error('Remove all function instances first');
+ const callers=[...rows(graph.nodes),...Object.entries(textureFunctionLibrary(graph)).filter(([key])=>key!==name).flatMap(([,def])=>obj(def)?rows(def.nodes):[])];
+ if(callers.some(n=>n.op==='function'&&obj(n.properties)&&n.properties.function===name))throw new Error('Remove all function instances, including nested calls, first');
  const library={...textureFunctionLibrary(graph)};delete library[name];
  const links={...textureFunctionLinks(graph)};delete links[name];
  return {...graph,functions:library,functionLinks:links};
@@ -181,14 +190,14 @@ function assetDefinition(asset:Obj):{name:string;definition:Obj} {
  if(!obj(definition))throw new Error('Function asset definition missing');
  return {name,definition};
 }
-function functionInterface(def:Obj,catalog:Obj[]):string {
+function functionInterface(def:Obj,catalog:Obj[],graph:Obj):string {
  if(!Array.isArray(def.inputs)||!obj(def.outputs)||!Object.keys(def.outputs).length)throw new Error('Invalid function interface');
  const inputs=def.inputs.map(v=>{
   if(!obj(v)||!safeTextureId(v.id)||typeof v.type!=='string'||!textureKinds.has(v.type))throw new Error('Invalid formal input');
   return [v.id,v.type];
  });
  const outputs=Object.entries(def.outputs).sort(([a],[b])=>a.localeCompare(b)).map(([name,id])=>{
-  const node=rows(def.nodes).find(n=>n.id===id),kind=catalog.find(n=>n.id===node?.op)?.output;
+  const node=rows(def.nodes).find(n=>n.id===id),kind=node?textureFunctionSpec(graph,node,catalog)?.output:undefined;
   if(!safeTextureId(name)||typeof kind!=='string'||!textureKinds.has(kind))throw new Error('Invalid function output');
   return [name,kind];
  });
@@ -197,6 +206,11 @@ function functionInterface(def:Obj,catalog:Obj[]):string {
   const types=p.bindings.map(b=>{
    if(!obj(b)||typeof b.property!=='string')throw new Error('Invalid parameter binding');
    const node=rows(def.nodes).find(n=>n.id===b.node),fields=catalog.find(n=>n.id===node?.op)?.properties;
+   if(node?.op==='function'&&b.property.startsWith('arguments.')){
+    const spec=textureFunctionSpec(graph,node,catalog),arg=b.property.slice(10);
+    if(!safeTextureId(arg)||!obj(spec?.parameters)||!Object.hasOwn(spec.parameters,arg))throw new Error('Unknown forwarded function argument');
+    return 'functionArgument';
+   }
    const field=obj(fields)&&Object.hasOwn(fields,b.property)?fields[b.property]:undefined;
    if(!obj(field)||typeof field.type!=='string')throw new Error('Unknown parameter property');
    return field.type;
@@ -206,13 +220,52 @@ function functionInterface(def:Obj,catalog:Obj[]):string {
  });
  return JSON.stringify([inputs,outputs,parameters]);
 }
+function functionClosure(graph:Obj,name:string):Obj {
+ const library=textureFunctionLibrary(graph),out:Obj=Object.create(null),active=new Set<string>();
+ const visit=(key:string,depth:number)=>{
+  if(active.has(key)||depth>8)throw new Error('Recursive function or nesting depth exceeds 8');
+  if(Object.hasOwn(out,key))return;
+  const def=Object.hasOwn(library,key)?library[key]:undefined;
+  if(!safeTextureId(key)||!obj(def))throw new Error('Missing function dependency');
+  active.add(key);
+  for(const n of rows(def.nodes))if(n.op==='function'){
+   if(!obj(n.properties)||!safeTextureId(n.properties.function))throw new Error('Invalid nested function call');
+   visit(n.properties.function,depth+1);
+  }
+  active.delete(key);out[key]=def;
+ };
+ visit(name,1);return out;
+}
+function importFunctionClosure(asset:Obj,name:string,alias:string,library:Obj,prior:Obj={}):{definitions:Obj;helpers:Obj} {
+ const closure=functionClosure(asset,name),mapping:Record<string,string>=Object.create(null),helpers:Obj=Object.create(null);
+ mapping[name]=alias;
+ const reserved=new Set([...Object.keys(library),alias]);let serial=0;
+ for(const key of Object.keys(closure).sort())if(key!==name){
+  const old=prior[key];let mapped:string;
+  if(safeTextureId(old)&&Object.hasOwn(library,old)&&old!==alias)mapped=old;
+  else{do{mapped=alias.slice(0,48)+'_dep_'+(++serial);}while(reserved.has(mapped));}
+  reserved.add(mapped);mapping[key]=mapped;helpers[key]=mapped;
+ }
+ const definitions:Obj=Object.create(null);
+ for(const [key,def] of Object.entries(closure)){
+  if(!obj(def))throw new Error('Invalid function dependency');
+  const copy=copyJson(def);
+  copy.nodes=rows(copy.nodes).map(n=>{
+   if(n.op!=='function')return n;
+   if(!obj(n.properties)||!safeTextureId(n.properties.function)||!Object.hasOwn(mapping,n.properties.function))throw new Error('Missing nested function dependency');
+   return {...n,properties:{...n.properties,function:mapping[n.properties.function]}};
+  });
+  definitions[mapping[key]]=copy;
+ }
+ return {definitions,helpers};
+}
 /** Build ordinary native-validatable graph documents for all named results.
  * The first document is the standalone saved asset; the rest are validation probes.
  */
 export function makeTextureFunctionAsset(graph:Obj,catalog:Obj[],name:string):Obj[] {
  const library=textureFunctionLibrary(graph),def=Object.hasOwn(library,name)?library[name]:undefined;
  if(!obj(def)||!Array.isArray(def.inputs)||!obj(def.outputs))throw new Error('Select a valid function definition');
- functionInterface(def,catalog);
+ functionInterface(def,catalog,graph);
  const nodes:Obj[]=[],args:string[]=[];
  def.inputs.forEach((input,i)=>{
   if(!obj(input))throw new Error('Invalid function input');
@@ -230,16 +283,17 @@ export function makeTextureFunctionAsset(graph:Obj,catalog:Obj[],name:string):Ob
   const call:Obj={id:'asset_result',op:'function',inputs:args,properties:{function:name,output,arguments:{}}};
   const kind=textureFunctionSpec(graph,call,catalog)?.output;
   if(typeof kind!=='string'||!Object.hasOwn(channels,kind))throw new Error('Invalid function output kind');
-  const asset={version:1,size:32,nodes:[...nodes,call],outputs:{[channels[kind]]:'asset_result'},functions:{[name]:copyJson(def)},functionAsset:{version:1,definition:name}};
+  const asset={version:1,size:32,nodes:[...nodes,call],outputs:{[channels[kind]]:'asset_result'},functions:copyJson(functionClosure(graph,name)),functionAsset:{version:1,definition:name}};
   checkFunctionDraft(asset);return asset;
  });
 }
 export function linkTextureFunctionAsset(graph:Obj,assetName:string,asset:Obj,catalog:Obj[]):{graph:Obj;alias:string} {
  if(!safeTextureId(assetName))throw new Error('Invalid function asset name');
- const {name,definition}=assetDefinition(asset);functionInterface(definition,catalog);
+ const {name,definition}=assetDefinition(asset);functionInterface(definition,catalog,asset);
  const library=textureFunctionLibrary(graph),links=textureFunctionLinks(graph);
  if(Object.hasOwn(library,assetName)||Object.hasOwn(links,assetName))throw new Error('Function alias exists; refresh the existing link or choose another asset');
- const next={...graph,functions:{...library,[assetName]:copyJson(definition)},functionLinks:{...links,[assetName]:{asset:assetName,definition:name}}};
+ const imported=importFunctionClosure(asset,name,assetName,library);
+ const next={...graph,functions:{...library,...imported.definitions},functionLinks:{...links,[assetName]:{asset:assetName,definition:name,helpers:imported.helpers}}};
  checkFunctionDraft(next);return {graph:next,alias:assetName};
 }
 export function refreshTextureFunctionAsset(graph:Obj,alias:string,asset:Obj,catalog:Obj[]):Obj {
@@ -247,8 +301,16 @@ export function refreshTextureFunctionAsset(graph:Obj,alias:string,asset:Obj,cat
  const link=Object.hasOwn(links,alias)?links[alias]:undefined,old=Object.hasOwn(library,alias)?library[alias]:undefined;
  if(!obj(link)||!obj(old))throw new Error('Function is not linked');
  const {name,definition}=assetDefinition(asset);
- if(name!==link.definition||functionInterface(old,catalog)!==functionInterface(definition,catalog))throw new Error('Incompatible function revision: inputs, results or parameter types changed');
- const next={...graph,functions:{...library,[alias]:copyJson(definition)}};
+ if(name!==link.definition||functionInterface(old,catalog,graph)!==functionInterface(definition,catalog,asset))throw new Error('Incompatible function revision: inputs, results or parameter types changed');
+ const prior=obj(link.helpers)?link.helpers:{};
+ const imported=importFunctionClosure(asset,name,alias,library,prior);
+ // Do not overwrite a private helper that has independent external callers.
+ const owned=new Set([alias,...Object.values(prior).filter(safeTextureId)]);
+ for(const [key,value] of Object.entries(imported.definitions))if(key!==alias&&Object.hasOwn(library,key)&&JSON.stringify(library[key])!==JSON.stringify(value)){
+  const outside=[...rows(graph.nodes),...Object.entries(library).filter(([n])=>!owned.has(n)).flatMap(([,def])=>obj(def)?rows(def.nodes):[])];
+  if(outside.some(n=>n.op==='function'&&obj(n.properties)&&n.properties.function===key))throw new Error('Linked helper has independent callers: '+key);
+ }
+ const next={...graph,functions:{...library,...imported.definitions},functionLinks:{...links,[alias]:{...link,helpers:imported.helpers}}};
  checkFunctionDraft(next);return next;
 }
 export function detachTextureFunctionAsset(graph:Obj,alias:string):Obj {

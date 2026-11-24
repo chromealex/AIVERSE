@@ -259,6 +259,24 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
         require(fnStatus.getStr("request")==functionId&&fnStatus.getStr("state")=="ready"&&fnStatus.getStr("backend")==expected&&fnStatus["completedOutputs"].toDouble()==2,"native function GPU acceptance failed");
         for(const auto& row:fnStatus["outputs"].items())require(row.getStr("backend")==expected,"native function CPU fallback");
         std::printf("TextureGraph function instance parity accepted: %s\\n",expected);
+        // Nested calls retain the public result ID and forward independent instance parameters.
+        auto nested=functions;
+        nested.member("graph").member("functions").set("wrapper",Json::parse(R"JSON({
+          "inputs":[{"id":"x","type":"scalar"}],
+          "nodes":[{"id":"nested","op":"function","inputs":["x"],"properties":{"function":"scale","output":"value","arguments":{}}}],
+          "outputs":{"value":"nested"},
+          "parameters":{"gain":{"default":0.5,"bindings":[{"node":"nested","property":"arguments.gain"}]}}
+        })JSON"));
+        for(size_t i=1;i<=2;++i)nested.member("graph").member("nodes").at(i).member("properties").set("function",Json::string("wrapper"));
+        const auto np=render::texture_graph::compile(nested["graph"]);
+        require(np.nodes.size()==5&&np.nodes[np.outputs.at("height")].id=="first"&&render::texture_graph::evaluate(np,np.outputs.at("height")).rgba[0]==51&&render::texture_graph::evaluate(np,np.outputs.at("roughness")).rgba[0]==153,"nested function instance mismatch");
+        auto recursion=nested["graph"];
+        recursion.member("functions").member("wrapper").member("nodes").at(0).member("properties").set("function",Json::string("wrapper"));
+        bool rejectedRecursion=false;try{(void)render::texture_graph::compile(recursion);}catch(const std::invalid_argument&){rejectedRecursion=true;}
+        require(rejectedRecursion,"recursive texture function accepted");
+        const auto nestedId=owner.start(nested,project).getStr("request");drain();
+        const auto nestedStatus=owner.status();
+        require(nestedStatus.getStr("request")==nestedId&&nestedStatus.getStr("state")=="ready"&&nestedStatus.getStr("backend")==expected,"nested function GPU parity failed");
         // Exercise the public native material API with the same RHI and owner.
         // A missing lease must not enqueue work or replace the last result.
         auto residentGraph=Json::parse(R"JSON({"version":1,"size":32,"nodes":[

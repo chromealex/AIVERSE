@@ -370,19 +370,28 @@ inline Json resolveParameters(const Json& source,const Json& overrides=Json::obj
             const auto node=b.getStr("node"),key=b.getStr("property");auto it=ids.find(node);
             require(it!=ids.end()&&bound.emplace(std::make_pair(node,key),true).second,"unknown or duplicate parameter binding");
             auto& entry=resolved.member("nodes").at(it->second);
-            auto schema=properties(entry.getStr("op"));
-            require(schema.has(key),"unknown bound node property");
-            const auto type=schema[key].getStr("type");require(commonType.empty()||commonType==type,"parameter binding type mismatch");commonType=type;
             if(!entry.has("properties"))entry.set("properties",Json::object());
             require(entry["properties"].isObject(),"invalid bound properties");
-            entry.member("properties").set(key,value);
+            if(entry.getStr("op")=="function"){
+                const std::string prefix="arguments.";
+                require(key.rfind(prefix,0)==0&&safeId(key.substr(prefix.size())),"function binding must target arguments.<name>");
+                require(commonType.empty()||commonType=="functionArgument","parameter binding type mismatch");commonType="functionArgument";
+                auto& props=entry.member("properties");
+                if(!props.has("arguments"))props.set("arguments",Json::object());
+                require(props["arguments"].isObject(),"invalid bound function arguments");
+                props.member("arguments").set(key.substr(prefix.size()),value);
+            }else{
+                auto schema=properties(entry.getStr("op"));
+                require(schema.has(key),"unknown bound node property");
+                const auto type=schema[key].getStr("type");require(commonType.empty()||commonType==type,"parameter binding type mismatch");commonType=type;
+                entry.member("properties").set(key,value);
+            }
         }
     }
     return resolved;
 }
-// Function definitions are embedded immutable source snapshots. Each call selects one
-// named result, retains its public node ID, and expands into the existing typed DAG.
-// No recursion, additional execution backend, filesystem lookup or enlarged budgets.
+// Expand embedded function calls recursively into the existing typed DAG.
+inline constexpr size_t maxFunctionDepth=8;
 inline Json expandFunctions(const Json& source){
     const auto& defs=source["functions"];
     if(defs.isNull())return source;
@@ -392,32 +401,98 @@ inline Json expandFunctions(const Json& source){
         const auto& props=call["properties"];
         require(props.isObject()&&safeId(props.getStr("function"))&&safeId(props.getStr("output")),"invalid texture function call");
         for(const auto& [k,v]:props.members()){(void)v;require(k=="function"||k=="output"||k=="arguments","unknown texture function call property");}
+        require(props["arguments"].isNull()||props["arguments"].isObject(),"invalid function arguments");
         const auto& def=defs[props.getStr("function")];
-        require(def.isObject()&&def["inputs"].isArray()&&def["inputs"].size()<=3&&def["nodes"].isArray()&&def["nodes"].size()>0&&def["nodes"].size()<=64&&def["outputs"].isObject()&&def["outputs"].size()>0&&def["outputs"].size()<=9,"invalid texture function definition");
+        require(def.isObject(),"unknown texture function definition");
         return def;
     };
     auto selected=[&](const Json& call,const Json& def){
         const auto& result=def["outputs"][call["properties"].getStr("output")];
-        require(result.isString()&&safeId(result.str()),"unknown texture function output");
-        return result.str();
+        require(result.isString()&&safeId(result.str()),"unknown texture function output");return result.str();
+    };
+    // Validate the entire library, including currently unused definitions.
+    std::map<std::string,int> state;
+    std::map<std::string,std::map<std::string,Kind>> outputs;
+    std::map<std::string,size_t> depths;
+    std::function<void(const std::string&,size_t)> validate;
+    validate=[&](const std::string& name,size_t depth){
+        require(depth<=maxFunctionDepth,"texture function nesting exceeds depth limit");
+        require(state[name]!=1,"recursive texture function call");
+        if(state[name]==2){require(depth+depths.at(name)-1<=maxFunctionDepth,"texture function nesting exceeds depth limit");return;}
+        state[name]=1;size_t height=1;
+        const auto& def=defs[name];
+        require(safeId(name)&&def.isObject()&&def["inputs"].isArray()&&def["inputs"].size()<=3&&def["nodes"].isArray()&&def["nodes"].size()>0&&def["nodes"].size()<=64&&def["outputs"].isObject()&&def["outputs"].size()>0&&def["outputs"].size()<=9,"invalid texture function definition");
+        require(def["functions"].isNull(),"function definitions must use the shared library");
+        std::map<std::string,Kind> local;
+        std::map<std::string,bool> bodyIds;
+        for(const auto& f:def["inputs"].items()){
+            const auto id=f.getStr("id"),type=f.getStr("type");
+            require(safeId(id)&&(type=="scalar"||type=="color"||type=="normal"||type=="packed"),"invalid texture formal input");
+            const auto kind=type=="scalar"?Kind::Scalar:type=="color"?Kind::Color:type=="normal"?Kind::Normal:Kind::Packed;
+            require(local.emplace(id,kind).second,"duplicate texture formal input");
+        }
+        for(const auto& row:def["nodes"].items()){
+            const auto id=row.getStr("id"),operation=row.getStr("op");
+            require(safeId(id)&&bodyIds.emplace(id,true).second,"invalid or duplicate function body node ID");
+            Kind kind;
+            if(operation=="function"){
+                const auto& child=definition(row);const auto fn=row["properties"].getStr("function");
+                (void)selected(row,child);validate(fn,depth+1);
+                height=std::max(height,1+depths.at(fn));
+                kind=outputs.at(fn).at(row["properties"].getStr("output"));
+            }else kind=op(operation).output;
+            require(local.emplace(id,kind).second,"duplicate texture function local ID");
+        }
+        for(const auto& row:def["nodes"].items()){
+            std::vector<Kind> expected;
+            if(row.getStr("op")=="function"){
+                const auto& child=definition(row);
+                for(const auto& f:child["inputs"].items()){
+                    const auto type=f.getStr("type");
+                    expected.push_back(type=="scalar"?Kind::Scalar:type=="color"?Kind::Color:type=="normal"?Kind::Normal:Kind::Packed);
+                }
+            }else expected=op(row.getStr("op")).inputs;
+            require(row["inputs"].isArray()&&row["inputs"].size()==expected.size(),"texture function input arity mismatch");
+            for(size_t i=0;i<expected.size();++i){
+                auto arg=local.find(row["inputs"][i].str());
+                require(arg!=local.end()&&arg->second==expected[i],"texture function local input type mismatch");
+            }
+        }
+        // A local data-flow cycle is distinct from recursive calls.
+        std::map<std::string,int> marks;
+        std::map<std::string,const Json*> body;
+        for(const auto& row:def["nodes"].items())body.emplace(row.getStr("id"),&row);
+        std::function<void(const std::string&)> visit=[&](const std::string& id){
+            if(!body.count(id))return;
+            require(marks[id]!=1,"texture function local data-flow cycle");if(marks[id]==2)return;
+            marks[id]=1;for(const auto& link:(*body.at(id))["inputs"].items())visit(link.str());marks[id]=2;
+        };
+        for(const auto& entry:body)visit(entry.first);
+        for(const auto& [key,value]:def["outputs"].members()){
+            require(safeId(key)&&value.isString()&&bodyIds.count(value.str()),"texture function output must reference a body node");
+            outputs[name].emplace(key,local.at(value.str()));
+        }
+        depths[name]=height;state[name]=2;
+    };
+    for(const auto& [name,def]:defs.members()){(void)def;validate(name,1);}
+    auto nodeKind=[&](const Json& row){
+        if(row.getStr("op")!="function")return op(row.getStr("op")).output;
+        const auto& def=definition(row);(void)selected(row,def);
+        return outputs.at(row["properties"].getStr("function")).at(row["properties"].getStr("output"));
     };
     std::map<std::string,Kind> kinds;
     std::map<std::string,bool> used;
     for(const auto& row:source["nodes"].items()){
-        const auto id=row.getStr("id"),operation=row.getStr("op");
+        const auto id=row.getStr("id");
         require(safeId(id)&&used.emplace(id,true).second,"invalid or duplicate texture node ID");
-        if(operation!="function"){kinds.emplace(id,op(operation).output);continue;}
-        const auto& def=definition(row);const auto result=selected(row,def);
-        bool found=false;
-        for(const auto& body:def["nodes"].items())if(body.getStr("id")==result){
-            require(!found,"duplicate function result ID");
-            kinds.emplace(id,op(body.getStr("op")).output);found=true;
-        }
-        require(found,"texture function output must reference a body node");
+        kinds.emplace(id,nodeKind(row));
     }
-    Json flat=Json::array();size_t serial=0;
-    for(const auto& row:source["nodes"].items()){
-        if(row.getStr("op")!="function"){require(flat.size()<64,"expanded texture graph exceeds node limit");flat.push(row);continue;}
+    Json flat=Json::array();size_t serial=0,visits=0;
+    std::function<void(const Json&,size_t)> expand;
+    expand=[&](const Json& row,size_t depth){
+        require(++visits<=64*(maxFunctionDepth+1),"texture function expansion work limit");
+        if(row.getStr("op")!="function"){require(flat.size()<64,"expanded texture graph exceeds node limit");flat.push(row);return;}
+        require(depth<=maxFunctionDepth,"texture function nesting exceeds depth limit");
         const auto& def=definition(row);const auto result=selected(row,def);
         const auto& actual=row["inputs"];const auto& formals=def["inputs"];
         require(actual.isArray()&&actual.size()==formals.size(),"texture function input arity mismatch");
@@ -425,34 +500,29 @@ inline Json expandFunctions(const Json& source){
         for(size_t i=0;i<formals.size();++i){
             const auto formal=formals[i].getStr("id"),type=formals[i].getStr("type"),arg=actual[i].str();
             const auto kind=kinds.find(arg);
-            require(safeId(formal)&&kind!=kinds.end()&&type==kindName(kind->second)&&names.emplace(formal,arg).second,"invalid texture function input or type mismatch");
+            require(kind!=kinds.end()&&type==kindName(kind->second)&&names.emplace(formal,arg).second,"invalid texture function input or type mismatch");
         }
         const auto& args=row["properties"]["arguments"];
         const auto body=resolveParameters(def,args.isNull()?Json::object():args);
-        require(flat.size()+body["nodes"].size()<=64,"expanded texture graph exceeds node limit");
         for(const auto& n:body["nodes"].items()){
-            const auto id=n.getStr("id");
-            require(safeId(id),"invalid texture function node ID");
-            (void)op(n.getStr("op")); // explicitly rejects nested function calls
-            std::string mapped=row.getStr("id");
+            const auto id=n.getStr("id");std::string mapped=row.getStr("id");
             if(id!=result){
                 do{mapped="fn_internal_"+std::to_string(++serial);}while(used.count(mapped));
-                used.emplace(mapped,true);
+                used.emplace(mapped,true);kinds.emplace(mapped,nodeKind(n));
             }
             require(names.emplace(id,mapped).second,"duplicate texture function local ID");
         }
         for(const auto& n:body["nodes"].items()){
             Json expanded=n,inputs=Json::array();
-            require(n["inputs"].isArray(),"invalid texture function node inputs");
             for(const auto& link:n["inputs"].items()){
-                const auto it=names.find(link.str());
-                require(it!=names.end(),"unknown texture function local input");
+                const auto it=names.find(link.str());require(it!=names.end(),"unknown texture function local input");
                 inputs.push(Json::string(it->second));
             }
-            expanded.set("id",Json::string(names.at(n.getStr("id"))));
-            expanded.set("inputs",inputs);flat.push(expanded);
+            expanded.set("id",Json::string(names.at(n.getStr("id"))));expanded.set("inputs",inputs);
+            expand(expanded,depth+1);
         }
-    }
+    };
+    for(const auto& row:source["nodes"].items())expand(row,1);
     Json expanded=source;expanded.erase("functions");expanded.set("nodes",flat);
     return expanded;
 }
