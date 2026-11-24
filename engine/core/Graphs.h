@@ -67,6 +67,39 @@ inline std::optional<WeightedPaths> dijkstra(const WeightedGraph& g,std::size_t 
         }
     }return out;
 }
+// Multi-source shortest paths with initial nonnegative costs. Equal-cost
+// paths choose the smallest stable source ID, including across zero-cost
+// cycles. A vertex's best label dominates every weaker label along any
+// common suffix. No parent tree is promised for this owner-labelled query.
+struct WeightedSeed {std::size_t vertex;std::uint64_t cost,sourceId;};
+struct MultiSourcePaths {
+    std::vector<std::uint64_t> distance,sourceId;
+};
+inline std::optional<MultiSourcePaths> multiSourceDijkstra(
+        const WeightedGraph& g,const std::vector<WeightedSeed>& seeds,
+        std::uint64_t maxCost=kInfiniteCost-1){
+    if(maxCost==kInfiniteCost)return {};
+    for(const auto& row:g)for(auto e:row)
+        if(e.to>=g.size()||e.cost==kInfiniteCost)return {};
+    for(auto seed:seeds)if(seed.vertex>=g.size()||seed.cost>maxCost)return {};
+    MultiSourcePaths out{std::vector<std::uint64_t>(g.size(),kInfiniteCost),
+                         std::vector<std::uint64_t>(g.size(),0)};
+    using Item=std::tuple<std::uint64_t,std::uint64_t,std::size_t>;
+    std::priority_queue<Item,std::vector<Item>,std::greater<Item>> q;
+    auto offer=[&](std::size_t v,std::uint64_t cost,std::uint64_t source){
+        if(cost<out.distance[v]||(cost==out.distance[v]&&source<out.sourceId[v])){
+            out.distance[v]=cost;out.sourceId[v]=source;q.emplace(cost,source,v);
+        }
+    };
+    for(auto seed:seeds)offer(seed.vertex,seed.cost,seed.sourceId);
+    while(!q.empty()){
+        const auto [cost,source,u]=q.top();q.pop();
+        if(cost!=out.distance[u]||source!=out.sourceId[u])continue;
+        for(auto e:g[u])if(e.cost<=maxCost-cost)
+            offer(e.to,cost+e.cost,source);
+    }
+    return out;
+}
 inline std::optional<std::vector<std::size_t>> graphPath(const WeightedPaths& p,std::size_t start,std::size_t goal){
     if(p.distance.size()!=p.parent.size()||start>=p.parent.size()||goal>=p.parent.size()||p.distance[goal]==kInfiniteCost)return {};
     std::vector<std::size_t> out;
