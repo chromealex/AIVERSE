@@ -168,13 +168,35 @@ int main() {
     require(!call("fx_replay_preset_save",nestedSave).has("error"),"nested dependency save failed");
     Json nestedGet=Json::object();nestedGet.set("name",Json::string("nested"));
     const auto nested=call("fx_replay_preset_get",nestedGet);
-    require(nested["preset"].getInt("dependencyVersion")==2&&nested["preset"]["dependencies"].size()==3,
+    require(nested["preset"].getInt("dependencyVersion")==3&&nested["preset"]["dependencies"].size()==3,
             "nested manifest did not resolve unique cycle-safe dependencies");
     require(nested["compatibility"].getStr("state")=="matching","nested baseline mismatch");
     {std::ofstream f(buffer,std::ios::binary|std::ios::trunc);f<<"456";}
     require(call("fx_replay_preset_get",nestedGet)["compatibility"].getStr("state")=="changed","external glTF buffer change missed");
     {std::ofstream f(modelFile,std::ios::trunc);f<<R"({"buffers":[{"uri":"../../outside.bin"}]})";}
     require(call("fx_replay_preset_get",nestedGet)["compatibility"].getStr("state")=="unavailable","escaping glTF URI accepted");
+    // GLB JSON chunk is read without loading the binary body.
+    const auto glb=root/"content"/"ship.glb";
+    std::string glbJson=R"({"asset":{"version":"2.0"},"images":[{"uri":"ship.bin"}]})";
+    while(glbJson.size()%4)glbJson+=' ';
+    {std::ofstream f(glb,std::ios::binary);
+     auto word=[&](uint32_t v){for(unsigned shift=0;shift<32;shift+=8)f.put(char((v>>shift)&255));};
+     word(0x46546c67u);word(2);word(uint32_t(20+glbJson.size()));
+     word(uint32_t(glbJson.size()));word(0x4e4f534au);f<<glbJson;}
+    {std::ofstream f(root/"content"/"ship.obj");f<<"mtllib ship.mtl\n";}
+    {std::ofstream f(root/"content"/"ship.mtl");f<<"map_Kd ship.bin\n";}
+    Json formatGraph=v2;
+    formatGraph.set("testAsset",Json::parse(R"(["content/ship.glb","content/ship.obj"])"));
+    Json formatPreset=preset;formatPreset.set("graphSignature",Json::string(formatGraph.dump(-1)));
+    Json formatSave=Json::object();formatSave.set("name",Json::string("formats"));formatSave.set("preset",formatPreset);
+    require(!call("fx_replay_preset_save",formatSave).has("error"),"GLB/OBJ manifest save failed");
+    Json formatGet=Json::object();formatGet.set("name",Json::string("formats"));
+    const auto formats=call("fx_replay_preset_get",formatGet);
+    require(formats["compatibility"].getStr("state")=="matching"&&formats["preset"]["dependencies"].size()==4,
+            "GLB/OBJ/MTL dependencies incomplete");
+    {std::ofstream f(root/"content"/"ship.mtl");f<<"map_Kd -s 1 1 1 ship.bin\n";}
+    require(call("fx_replay_preset_get",formatGet)["compatibility"].getStr("state")=="unavailable",
+            "unsupported MTL options silently accepted");
     getPreset.set("expectedGraphSignature",Json::string("other"));
     require(call("fx_replay_preset_get",getPreset).has("error"),"stale graph revision accepted");
     savePreset.set("name",Json::string("../escape"));

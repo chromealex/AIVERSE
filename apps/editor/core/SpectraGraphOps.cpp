@@ -15,6 +15,7 @@
 #include <iterator>
 #include <map>
 #include <set>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -271,35 +272,100 @@ void addReplayChild(std::set<std::string>& children,const std::string& child){
     if(!child.empty())children.insert(child);
     if(children.size()>64)throw std::runtime_error("Too many replay dependencies");
 }
-void collectReplayChildren(const fs::path& file,const std::string& owner,
-                           std::set<std::string>& children,uint64_t& parseBudget) {
-    auto ext=file.extension().string();
-    std::transform(ext.begin(),ext.end(),ext.begin(),[](unsigned char c){return char(std::tolower(c));});
-    if(ext!=".json"&&ext!=".gltf")return;
+std::string readReplayGlbJson(const fs::path& file,uint64_t& parseBudget) {
     const auto bytes=fs::file_size(file);
-    if(bytes>1024*1024||bytes>parseBudget)
-        throw std::runtime_error("Replay dependency JSON exceeds parse budget");
-    const auto text=readFile(file);
-    if(text.size()!=bytes)throw std::runtime_error("Replay dependency changed during parse");
-    parseBudget-=bytes;
-    const auto doc=Json::parse(text);
-    collectReplayPaths(doc,children);
-    if(ext==".gltf"){
-        for(const char* key:{"buffers","images"}){
-            const auto& entries=doc[key];
-            if(entries.isNull())continue;
-            if(!entries.isArray())throw std::runtime_error("Invalid glTF dependency table");
-            for(const auto& item:entries.items()){
-                if(!item.isObject())throw std::runtime_error("Invalid glTF dependency entry");
-                if(item.has("uri")){
-                    if(!item["uri"].isString())throw std::runtime_error("Invalid glTF URI");
-                    addReplayChild(children,replayLocalUri(owner,item.getStr("uri")));
-                }
+    if(bytes<20||bytes>kReplayDependencyBudget)throw std::runtime_error("Invalid GLB size");
+    std::ifstream input(file,std::ios::binary);
+    std::array<unsigned char,20> header{};
+    if(!input.read(reinterpret_cast<char*>(header.data()),std::streamsize(header.size())))
+        throw std::runtime_error("Cannot read GLB header");
+    auto u32=[&](size_t at){
+        return uint32_t(header[at])|(uint32_t(header[at+1])<<8)|
+               (uint32_t(header[at+2])<<16)|(uint32_t(header[at+3])<<24);
+    };
+    const auto length=u32(12);
+    if(u32(0)!=0x46546c67u||u32(4)!=2||u32(8)!=bytes||
+       u32(16)!=0x4e4f534au||!length||length%4||uint64_t(length)+20>bytes||
+       length>1024*1024||uint64_t(length)+20>parseBudget)
+        throw std::runtime_error("Invalid or oversized GLB JSON chunk");
+    std::string json(length,' ');
+    if(!input.read(json.data(),std::streamsize(length)))throw std::runtime_error("Truncated GLB JSON");
+    parseBudget-=uint64_t(length)+20;
+    return json;
+}
+void collectReplayGltf(const Json& doc,const std::string& owner,std::set<std::string>& children) {
+    for(const char* key:{"buffers","images"}){
+        const auto& entries=doc[key];
+        if(entries.isNull())continue;
+        if(!entries.isArray())throw std::runtime_error("Invalid glTF dependency table");
+        for(const auto& item:entries.items()){
+            if(!item.isObject())throw std::runtime_error("Invalid glTF dependency entry");
+            if(item.has("uri")){
+                if(!item["uri"].isString())throw std::runtime_error("Invalid glTF URI");
+                addReplayChild(children,replayLocalUri(owner,item.getStr("uri")));
             }
         }
     }
 }
-Json replayDependencies(const Json& preset,const Workspace& ws,bool recursive) {
+void collectReplayWavefront(const std::string& text,const std::string& owner,bool obj,
+                            std::set<std::string>& children) {
+    std::istringstream input(text);
+    std::string line;
+    while(std::getline(input,line)){
+        if(!line.empty()&&line.back()=='\r')line.pop_back();
+        const auto comment=line.find('#');
+        if(comment!=std::string::npos)line.resize(comment);
+        if(line.find_last_not_of(" \t")!=std::string::npos&&
+           line[line.find_last_not_of(" \t")]=='\\')
+            throw std::runtime_error("Unsupported Wavefront line continuation");
+        std::istringstream fields(line);
+        std::string key;
+        fields>>key;
+        if(obj&&key=="mtllib"){
+            std::string name;bool found=false;
+            while(fields>>name){
+                if(name.front()=='-'||name.find_first_of("\"'")!=std::string::npos)
+                    throw std::runtime_error("Unsupported OBJ material reference");
+                addReplayChild(children,replayLocalUri(owner,name));found=true;
+            }
+            if(!found)throw std::runtime_error("Empty OBJ material reference");
+        }else if(!obj&&(key.rfind("map_",0)==0||key=="bump"||key=="disp"||key=="decal"||key=="refl"||key=="norm")){
+            std::string name,extra;
+            // Conservative subset: one unquoted filename, no map options.
+            // Unsupported options or ambiguous paths must not appear verified.
+            if(!(fields>>name)||name.front()=='-'||name.find_first_of("\"'")!=std::string::npos||(fields>>extra))
+                throw std::runtime_error("Unsupported MTL texture reference or options");
+            addReplayChild(children,replayLocalUri(owner,name));
+        }
+    }
+}
+void collectReplayChildren(const fs::path& file,const std::string& owner,
+                           std::set<std::string>& children,uint64_t& parseBudget,int64_t version) {
+    auto ext=file.extension().string();
+    std::transform(ext.begin(),ext.end(),ext.begin(),[](unsigned char c){return char(std::tolower(c));});
+    if(version>=3&&ext==".glb"){
+        const auto doc=Json::parse(readReplayGlbJson(file,parseBudget));
+        collectReplayPaths(doc,children);
+        collectReplayGltf(doc,owner,children);
+        return;
+    }
+    const bool wavefront=version>=3&&(ext==".obj"||ext==".mtl");
+    if(ext!=".json"&&ext!=".gltf"&&!wavefront)return;
+    const auto bytes=fs::file_size(file);
+    if(bytes>1024*1024||bytes>parseBudget)
+        throw std::runtime_error("Replay dependency document exceeds parse budget");
+    const auto text=readFile(file);
+    if(text.size()!=bytes)throw std::runtime_error("Replay dependency changed during parse");
+    parseBudget-=bytes;
+    if(wavefront){
+        collectReplayWavefront(text,owner,ext==".obj",children);
+        return;
+    }
+    const auto doc=Json::parse(text);
+    collectReplayPaths(doc,children);
+    if(ext==".gltf")collectReplayGltf(doc,owner,children);
+}
+Json replayDependencies(const Json& preset,const Workspace& ws,int64_t version) {
     std::set<std::string> paths;
     collectReplayPaths(Json::parse(preset.getStr("graphSignature")),paths);
     Json manifest=Json::array();
@@ -324,9 +390,9 @@ Json replayDependencies(const Json& preset,const Workspace& ws,bool recursive) {
             row.set("guid",strGraph(guid));
             row.set("meta",strGraph(replayFingerprint(meta,budget)));
         }
-        if(recursive){
+        if(version>=2){
             std::set<std::string> children;
-            collectReplayChildren(file,relative,children,parseBudget);
+            collectReplayChildren(file,relative,children,parseBudget,version);
             for(const auto& child:children)if(!visited.count(child))paths.insert(child);
             if(paths.size()+visited.size()>64)throw std::runtime_error("Too many replay dependencies");
         }
@@ -338,15 +404,15 @@ Json replayDependencies(const Json& preset,const Workspace& ws,bool recursive) {
 Json replayCompatibility(const Json& preset,const Workspace& ws) {
     Json out=Json::object();
     const auto version=preset.getInt("dependencyVersion",1);
-    out.set("scope",strGraph(version==2?"content paths, JSON references and external glTF buffer/image URIs":"direct content paths and existing meta sidecars only"));
-    if(version!=1&&version!=2){
+    out.set("scope",strGraph(version==3?"content paths, JSON, glTF/GLB external URIs and simple OBJ/MTL references":version==2?"content paths, JSON references and external glTF buffer/image URIs":"direct content paths and existing meta sidecars only"));
+    if(version!=1&&version!=2&&version!=3){
         out.set("state",strGraph("unavailable"));out.set("detail",strGraph("Unsupported dependency manifest version"));return out;
     }
     if(!preset.has("dependencies")){
         out.set("state",strGraph("unverified"));return out;
     }
     try{
-        const auto current=replayDependencies(preset,ws,version==2);
+        const auto current=replayDependencies(preset,ws,version);
         const bool same=current.dump(-1)==preset["dependencies"].dump(-1);
         out.set("state",strGraph(same?"matching":"changed"));
         out.set("count",Json::number(int64_t(current.size())));
@@ -435,8 +501,8 @@ void registerSpectraGraphOps(Workspace& ws) {
             if(replayCompatibility(preset,ws).getStr("state")!="matching")
                 throw std::runtime_error("Replay resource baseline no longer matches");
         }else{
-            preset.set("dependencyVersion",Json::number(int64_t(2)));
-            preset.set("dependencies",replayDependencies(preset,ws,true));
+            preset.set("dependencyVersion",Json::number(int64_t(3)));
+            preset.set("dependencies",replayDependencies(preset,ws,3));
         }
         const auto bytes=preset.dump(-1);
         if(bytes.size()>kReplayMaxBytes)throw std::runtime_error("Replay preset with dependencies exceeds 64 KiB");
