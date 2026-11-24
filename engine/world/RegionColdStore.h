@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <any>
 #include <cstdint>
+#include <functional>
 #include <iterator>
 #include <limits>
 #include <map>
@@ -173,9 +174,11 @@ void registerRegionColdState(SimulationT& sim,
 class RegionDormancyController {
     struct Adapter {
         uint32_t version;
+        uint32_t type;
         bool (*present)(const World&,Entity);
         bool (*encode)(const World&,Entity,std::string&);
         bool (*decode)(const std::string&,std::any&);
+        bool (*encodeValue)(std::any&,std::string&);
         void (*remove)(World&,Entity);
         void (*restore)(World&,Entity,const std::any&);
     };
@@ -208,6 +211,201 @@ class RegionDormancyController {
     }
 
 public:
+    // Host-owned explicit component policy, configured at setup. Every
+    // parked type in a guarded group must be classified: catch up using its
+    // portable clock, or explicitly pause. No implicit clock or save field.
+    class ColdAdvancePlan {
+        struct Entry {
+            uint32_t type=0;
+            std::function<uint64_t(const std::any&)> tick;
+            std::function<bool(std::any&,RegionEntityId,uint64_t,uint64_t)> advance;
+        };
+        std::map<std::string,Entry> entries_;
+        friend class RegionDormancyController;
+        bool insert(std::string name,Entry value) {
+            if(name.empty() || name.size()>128 ||
+               entries_.size()>=RegionColdStore::kMaxComponents)return false;
+            for(const auto& [key,entry]:entries_) {
+                (void)key;
+                if(entry.type==value.type)return false;
+            }
+            return entries_.emplace(std::move(name),std::move(value)).second;
+        }
+    public:
+        template<class T,class ReadTick,class Advance>
+        bool addAdvance(std::string name,ReadTick readTick,Advance advance) {
+            return insert(std::move(name),Entry{
+                aiverse::detail::componentTypeId<T>(),
+                [readTick=std::move(readTick)](const std::any& v)->uint64_t {
+                    return readTick(std::any_cast<const T&>(v));
+                },
+                [advance=std::move(advance)](std::any& v,RegionEntityId id,
+                                             uint64_t from,uint64_t to)->bool {
+                    return advance(std::any_cast<T&>(v),id,from,to);
+                }
+            });
+        }
+        template<class T>
+        bool addPaused(std::string name) {
+            return insert(std::move(name),Entry{aiverse::detail::componentTypeId<T>(),{},{}});
+        }
+    };
+
+private:
+    bool validatePlan(const ColdAdvancePlan& plan,std::string* error)const {
+        if(plan.entries_.empty())return reject(error,"empty cold advancement plan");
+        for(const auto& [name,entry]:plan.entries_) {
+            const auto it=adapters_.find(name);
+            if(it==adapters_.end() || it->second.type!=entry.type)
+                return reject(error,"cold policy does not match registered codec");
+        }
+        return true;
+    }
+
+    // Stable-ID order for every guarded operation and eligibility callback.
+    // The domain owner still has to verify COMPLETE linked group membership.
+    bool canonicalGroup(const World& world,const RegionEntityLedger& ledger,
+                        const RegionColdStore& store,std::span<const Entity> entities,
+                        Cell owner,bool dormant,std::vector<Entity>& ordered,
+                        std::string* error)const {
+        if(entities.empty() || entities.size()>RegionColdStore::kMaxEntities)
+            return reject(error,"empty or oversized cold group");
+        std::map<RegionEntityId,Entity> members;
+        for(Entity entity:entities) {
+            RegionEntityId id=0;
+            if(!identity(world,ledger,entity,owner,id) ||
+               !members.emplace(id,entity).second)
+                return reject(error,"invalid or duplicate cold group member");
+            const auto* marker=world.tryGetConst<RegionDormant>(entity);
+            const auto* record=store.find(id);
+            if(dormant) {
+                if(!marker || marker->marker!=1 || !record ||
+                   record->owner!=owner ||
+                   record->ownerRevision!=ledger.find(id)->revision)
+                    return reject(error,"invalid or stale dormant group member");
+            }else if(marker || record) {
+                return reject(error,"parking group member is already dormant");
+            }
+        }
+        ordered.reserve(members.size());
+        for(const auto& [id,entity]:members) {
+            (void)id;
+            ordered.push_back(entity);
+        }
+        return true;
+    }
+
+    struct ColdWork {
+        RegionEntityId id=0;
+        const std::string* name=nullptr;
+        const Adapter* codec=nullptr;
+        const ColdAdvancePlan::Entry* policy=nullptr;
+        std::any value;
+        uint64_t from=0;
+    };
+
+    // Complete mode accepts heterogeneous entities, but every parked blob
+    // must have a matching explicit policy. Legacy single-type mode requires
+    // that type on every member and ignores unrelated paused payloads.
+    bool prepareAdvance(const World& world,const RegionColdStore& store,
+                        std::span<const Entity> ordered,const ColdAdvancePlan& plan,
+                        uint64_t targetTick,bool complete,std::vector<ColdWork>& work,
+                        std::string* error)const {
+        if(!validatePlan(plan,error))return false;
+        for(Entity entity:ordered) {
+            const auto id=world.tryGetConst<RegionStableIdentity>(entity)->id;
+            const auto* record=store.find(id);
+            if(!record || record->components.empty())
+                return reject(error,"missing cold group payload");
+            size_t matched=0;
+            for(const auto& [name,blob]:record->components) {
+                const auto rule=plan.entries_.find(name);
+                if(rule==plan.entries_.end()) {
+                    if(complete)return reject(error,"parked component has no explicit policy");
+                    continue;
+                }
+                ++matched;
+                const auto& codec=adapters_.at(name);
+                if(codec.version!=blob.version || codec.present(world,entity))
+                    return reject(error,"stale or already resident cold component");
+                std::any decoded;
+                if(!codec.decode(blob.bytes,decoded))
+                    return reject(error,"corrupt cold component payload");
+                if(!rule->second.tick)continue; // explicitly safe to pause
+                const uint64_t from=rule->second.tick(decoded);
+                if(from>targetTick)return reject(error,"cold advancement cannot rewind a component");
+                if(from!=targetTick)
+                    work.push_back({id,&name,&codec,&rule->second,std::move(decoded),from});
+            }
+            if(!matched)return reject(error,"cold group member has no matching policy");
+        }
+        return true;
+    }
+
+    // Work has already been decoded and validated. Apply in stable-ID then
+    // component-name order to a private candidate; audit aggregate budget once.
+    bool stageAdvance(const RegionColdStore& store,RegionColdStore& candidate,
+                      std::vector<ColdWork>& work,uint64_t targetTick,
+                      std::string* error)const {
+        candidate=store;
+        size_t encodedBytes=0;
+        for(auto& item:work) {
+            if(!item.policy->advance(item.value,item.id,item.from,targetTick) ||
+               item.policy->tick(item.value)!=targetTick)
+                return reject(error,"cold policy refused or did not record target tick");
+            std::string bytes;
+            if(!item.codec->encodeValue(item.value,bytes) ||
+               bytes.size()>RegionColdStore::kMaxTotalBytes-encodedBytes)
+                return reject(error,"advanced cold payload exceeds codec budget");
+            encodedBytes+=bytes.size();
+            std::any roundTrip;
+            if(!item.codec->decode(bytes,roundTrip) ||
+               item.policy->tick(roundTrip)!=targetTick)
+                return reject(error,"advanced cold timestamp is not persistent");
+            candidate.parked_.at(item.id).components.at(*item.name).bytes=std::move(bytes);
+        }
+        if(work.empty())return true;
+        std::string encoded;
+        Archive audit(&encoded);
+        io(audit,candidate);
+        if(!audit.ok())return reject(error,"advanced cold store exceeds persistence limits");
+        return true;
+    }
+
+    bool advanceWithPlan(const World& world,const RegionEntityLedger& ledger,
+                         RegionColdStore& store,std::span<const Entity> entities,
+                         Cell owner,uint64_t targetTick,const ColdAdvancePlan& plan,
+                         bool complete,std::string* error)const {
+        std::vector<Entity> ordered;
+        std::vector<ColdWork> work;
+        if(!canonicalGroup(world,ledger,store,entities,owner,true,ordered,error) ||
+           !prepareAdvance(world,store,ordered,plan,targetTick,complete,work,error))return false;
+        if(work.empty())return true;
+        RegionColdStore candidate;
+        if(!stageAdvance(store,candidate,work,targetTick,error))return false;
+        store.parked_.swap(candidate.parked_);
+        return true;
+    }
+
+    template<class Admit>
+    bool advanceAndWakeWithPlan(World& world,const RegionEntityLedger& ledger,
+                                RegionColdStore& store,std::span<const Entity> entities,
+                                Cell owner,uint64_t targetTick,const ColdAdvancePlan& plan,
+                                bool complete,Admit admit,std::string* error)const {
+        std::vector<Entity> ordered;
+        std::vector<ColdWork> work;
+        if(!canonicalGroup(world,ledger,store,entities,owner,true,ordered,error) ||
+           !prepareAdvance(world,store,ordered,plan,targetTick,complete,work,error))return false;
+        if(!admit(std::as_const(world),owner,std::span<const Entity>(ordered)))
+            return reject(error,"cold wake admission refused");
+        RegionColdStore candidate;
+        if(!stageAdvance(store,candidate,work,targetTick,error))return false;
+        if(!wakeGroup(world,ledger,candidate,ordered,owner,error))return false;
+        store.parked_.swap(candidate.parked_);
+        return true;
+    }
+
+public:
     void setPositionReader(RegionPositionReader position) {
         if(!position)throw std::invalid_argument("region position reader is required");
         position_=std::move(position);
@@ -224,8 +422,13 @@ public:
             "Core identity, position and dormant marker must remain live in ECS");
         if(name.empty() || name.size()>128 || !version ||
            adapters_.size()>=RegionColdStore::kMaxComponents)return false;
+        const uint32_t type=aiverse::detail::componentTypeId<T>();
+        for(const auto& [key,codec]:adapters_) {
+            (void)key;
+            if(codec.type==type)return false;
+        }
         Adapter entry{
-            version,
+            version,type,
             +[](const World& w,Entity entity)->bool {return w.has<T>(entity);},
             +[](const World& w,Entity entity,std::string& bytes)->bool {
                 const auto* source=w.tryGetConst<T>(entity);
@@ -242,6 +445,13 @@ public:
                 if(!a.ok() || a.remaining()!=0)return false;
                 target=std::move(value);
                 return true;
+            },
+            +[](std::any& source,std::string& bytes)->bool {
+                auto* value=std::any_cast<T>(&source);
+                if(!value)return false;
+                Archive a(&bytes);
+                io(a,*value);
+                return a.ok() && bytes.size()<=RegionColdStore::kMaxComponentBytes;
             },
             +[](World& w,Entity entity){w.remove<T>(entity);},
             +[](World& w,Entity entity,const std::any& item){
@@ -323,144 +533,102 @@ public:
         return true;
     }
 
-    // Advance one explicitly opted-in component across a complete dormant
-    // group. The component's OWN portable schema must retain its last
-    // simulated tick; do not introduce a second clock in the cold store.
-    // readTick(const T&) -> uint64_t; advance(T&, stableId, from, to) -> bool.
-    // The owner must supply an authoritative tick and deterministic pure
-    // catch-up policy (no World mutation, external side effects, RNG or IO).
-    // The policy may reject an interval that cannot be simulated safely.
-    // Identity, position, owner revision, and other component payloads remain
-    // unchanged. No world handles are retired or created here.
+    // Explicit opt-in eligibility at a quiescent authoritative tick.
+    // Verify complete policy coverage and each active portable clock before
+    // removal. The predicate must check pins, external references, occupants,
+    // active actions and other owner-specific constraints, without writes.
+    template<class Admit>
+    bool parkGroupGuarded(World& world,const RegionEntityLedger& ledger,
+                          RegionColdStore& store,std::span<const Entity> entities,
+                          Cell owner,uint64_t currentTick,const ColdAdvancePlan& plan,
+                          Admit admit,std::string* error=nullptr)const {
+        std::vector<Entity> ordered;
+        if(!canonicalGroup(world,ledger,store,entities,owner,false,ordered,error) ||
+           !validatePlan(plan,error))return false;
+        if(!admit(std::as_const(world),owner,std::span<const Entity>(ordered)))
+            return reject(error,"cold parking eligibility refused");
+        for(Entity entity:ordered) {
+            size_t matched=0;
+            for(const auto& [name,codec]:adapters_) {
+                if(!codec.present(world,entity))continue;
+                ++matched;
+                const auto policy=plan.entries_.find(name);
+                if(policy==plan.entries_.end())
+                    return reject(error,"live parkable component has no explicit policy");
+                if(!policy->second.tick)continue;
+                std::string bytes;
+                std::any decoded;
+                if(!codec.encode(world,entity,bytes) || !codec.decode(bytes,decoded) ||
+                   policy->second.tick(decoded)!=currentTick)
+                    return reject(error,"parkable component clock is not at current tick");
+            }
+            if(!matched)return reject(error,"entity has no registered parkable components");
+        }
+        return parkGroup(world,ledger,store,ordered,owner,error);
+    }
+
+    // Explicit complete policy for heterogeneous component groups. Both
+    // APIs are trusted native calls; no external callbacks or side effects
+    // are permitted from policy functions. All clocked blobs share the
+    // authoritative target tick; unrelated non-parked components stay live.
+    bool advanceGroup(const World& world,const RegionEntityLedger& ledger,
+                      RegionColdStore& store,std::span<const Entity> entities,
+                      Cell owner,uint64_t targetTick,const ColdAdvancePlan& plan,
+                      std::string* error=nullptr)const {
+        return advanceWithPlan(world,ledger,store,entities,owner,targetTick,plan,true,error);
+    }
+
+    template<class Admit>
+    bool advanceAndWakeGroup(World& world,const RegionEntityLedger& ledger,
+                             RegionColdStore& store,std::span<const Entity> entities,
+                             Cell owner,uint64_t targetTick,const ColdAdvancePlan& plan,
+                             Admit admit,std::string* error=nullptr)const {
+        return advanceAndWakeWithPlan(world,ledger,store,entities,owner,targetTick,
+                                      plan,true,std::move(admit),error);
+    }
+
+    // W1.29a single-type compatibility: every member must own this named
+    // component; all other parked types must be safe to pause. Prefer the
+    // complete plan overload for new hosts.
     template<class T,class ReadTick,class Advance>
     bool advanceGroup(const World& world,const RegionEntityLedger& ledger,
                       RegionColdStore& store,std::span<const Entity> entities,
                       Cell owner,const std::string& component,uint64_t targetTick,
                       ReadTick readTick,Advance advance,std::string* error=nullptr)const {
-        if(entities.empty() || entities.size()>RegionColdStore::kMaxEntities)
-            return reject(error,"empty or oversized cold advancement group");
-        const auto codec=adapters_.find(component);
-        if(codec==adapters_.end())
-            return reject(error,"unregistered cold advancement component");
-        // Validate the whole group before invoking any domain policy.
-        // Ordered by durable ID, never caller order or sparse-pool order.
-        std::map<RegionEntityId,const RegionColdBlob*> source;
-        for(Entity entity:entities) {
-            RegionEntityId id=0;
-            const auto* dormant=world.tryGetConst<RegionDormant>(entity);
-            if(!identity(world,ledger,entity,owner,id) || !dormant ||
-               dormant->marker!=1 || codec->second.present(world,entity))
-                return reject(error,"invalid dormant advancement member");
-            const auto* record=store.find(id);
-            const auto* entry=ledger.find(id);
-            if(!record || !entry || record->owner!=owner ||
-               record->ownerRevision!=entry->revision)
-                return reject(error,"stale dormant advancement record");
-            const auto blob=record->components.find(component);
-            if(blob==record->components.end() || blob->second.version!=codec->second.version ||
-               !source.emplace(id,&blob->second).second)
-                return reject(error,"missing, mismatched or duplicate advancement payload");
-        }
-        struct Work { RegionEntityId id; T value; uint64_t from; };
-        std::vector<Work> work;
-        work.reserve(source.size());
-        for(const auto& [id,blob]:source) {
-            std::any decoded;
-            if(!codec->second.decode(blob->bytes,decoded))
-                return reject(error,"corrupt dormant advancement payload");
-            const auto* value=std::any_cast<T>(&decoded);
-            if(!value)
-                return reject(error,"cold advancement type does not match codec");
-            const uint64_t from=readTick(*value);
-            if(from>targetTick)
-                return reject(error,"cold advancement cannot rewind a component");
-            if(from!=targetTick)work.push_back({id,*value,from});
-        }
-        if(work.empty())return true; // retry at same tick is a byte-identical no-op
-
-        // Publish only after ALL policies and portable encodes succeed.
-        // Scratch space is bounded by the existing cold-store persistence cap.
-        RegionColdStore candidate=store;
-        size_t encodedBytes=0;
-        for(auto& item:work) {
-            if(!advance(item.value,item.id,item.from,targetTick) ||
-               readTick(std::as_const(item.value))!=targetTick)
-                return reject(error,"cold advancement policy refused or did not record target tick");
-            std::string bytes;
-            Archive archive(&bytes);
-            io(archive,item.value);
-            if(!archive.ok() || bytes.size()>RegionColdStore::kMaxComponentBytes ||
-               bytes.size()>RegionColdStore::kMaxTotalBytes-encodedBytes)
-                return reject(error,"advanced cold payload exceeds codec budget");
-            encodedBytes+=bytes.size();
-            // Verify that the authoritative tick survives the actual codec;
-            // an omitted/nonportable timestamp must never permit double work.
-            std::any roundTrip;
-            if(!codec->second.decode(bytes,roundTrip))
-                return reject(error,"advanced cold payload failed roundtrip");
-            const auto* persisted=std::any_cast<T>(&roundTrip);
-            if(!persisted || readTick(*persisted)!=targetTick)
-                return reject(error,"advanced cold timestamp is not persistent");
-            candidate.parked_.at(item.id).components.at(component).bytes=std::move(bytes);
-        }
-        std::string encoded;
-        Archive audit(&encoded);
-        io(audit,candidate);
-        if(!audit.ok())return reject(error,"advanced cold store exceeds persistence limits");
-        store.parked_.swap(candidate.parked_);
-        return true;
+        ColdAdvancePlan plan;
+        if(!plan.addAdvance<T>(component,std::move(readTick),std::move(advance)))
+            return reject(error,"invalid cold advancement component");
+        return advanceWithPlan(world,ledger,store,entities,owner,targetTick,plan,false,error);
     }
 
-    // Explicit group admission for owners whose collision/nav/interaction
-    // state must be ready before restoring active components. The predicate
-    // is read-only and must consult authoritative host readiness, not a
-    // renderer callback. Catch-up remains private until wake succeeds.
-    // Existing plain wakeGroup is retained for components safe to pause.
     template<class T,class ReadTick,class Advance,class Admit>
     bool advanceAndWakeGroup(World& world,const RegionEntityLedger& ledger,
                              RegionColdStore& store,std::span<const Entity> entities,
                              Cell owner,const std::string& component,uint64_t targetTick,
                              ReadTick readTick,Advance advance,Admit admit,
                              std::string* error=nullptr)const {
-        if(entities.empty() || entities.size()>RegionColdStore::kMaxEntities)
-            return reject(error,"empty or oversized cold wake group");
-        // Reject stale, mixed, duplicate or incomplete members before the
-        // admission callback. The host must supply the complete linked group.
-        std::set<RegionEntityId> ids;
-        for(Entity entity:entities) {
-            RegionEntityId id=0;
-            if(!identity(world,ledger,entity,owner,id) ||
-               !world.has<RegionDormant>(entity) || !ids.insert(id).second)
-                return reject(error,"invalid guarded wake group");
-            const auto* record=store.find(id);
-            if(!record || record->owner!=owner ||
-               record->ownerRevision!=ledger.find(id)->revision)
-                return reject(error,"stale guarded wake record");
-        }
-        if(!admit(std::as_const(world),owner,entities))
-            return reject(error,"cold wake admission refused");
-        RegionColdStore candidate=store;
-        if(!advanceGroup<T>(world,ledger,candidate,entities,owner,component,
-                            targetTick,std::move(readTick),std::move(advance),error))
-            return false;
-        if(!wakeGroup(world,ledger,candidate,entities,owner,error))return false;
-        store.parked_.swap(candidate.parked_);
-        return true;
+        ColdAdvancePlan plan;
+        if(!plan.addAdvance<T>(component,std::move(readTick),std::move(advance)))
+            return reject(error,"invalid cold advancement component");
+        return advanceAndWakeWithPlan(world,ledger,store,entities,owner,targetTick,
+                                      plan,false,std::move(admit),error);
     }
 
     bool wakeGroup(World& world,const RegionEntityLedger& ledger,
                    RegionColdStore& store,std::span<const Entity> entities,
                    Cell owner,std::string* error=nullptr)const {
-        if(entities.empty())return reject(error,"empty region wake group");
+        if(entities.empty() || entities.size()>RegionColdStore::kMaxEntities)
+            return reject(error,"empty or oversized region wake group");
         std::set<uint64_t> handles;
         std::set<RegionEntityId> ids;
         std::vector<Decoded> decoded;
         decoded.reserve(entities.size());
         for(Entity entity:entities) {
             RegionEntityId id=0;
+            const auto* marker=world.tryGetConst<RegionDormant>(entity);
             if(!handles.insert(entity.packed()).second ||
                !identity(world,ledger,entity,owner,id) ||
-               !ids.insert(id).second || !world.has<RegionDormant>(entity))
+               !ids.insert(id).second || !marker || marker->marker!=1)
                 return reject(error,"invalid or non-dormant ECS entity");
             const auto* record=store.find(id);
             if(!record || record->owner!=owner ||
