@@ -1,4 +1,5 @@
 #include "engine/render/graph/TextureGraphFusion.h"
+#include "engine/render/graph/TextureGraphDagLowering.h"
 #include <cstdlib>
 #include <iostream>
 using namespace aiverse::render::texture_graph::gpu;
@@ -29,8 +30,15 @@ int main(){
     const auto bounded=planPointwiseFusion(longChain,longOrder,{31},std::vector<bool>(32,true));
     check(bounded.passes==4);
     for(const auto& group:bounded.regions)check(group.nodes.size()<=maxFusionNodes&&group.inputs.size()<=maxFusionInputs);
+    // Run the exact canonical typed lowerer on both DAGs.
+    const auto originalSlots=lowerDagSlots(chain,order,{4},std::vector<size_t>(5,256),4096);
+    const auto fusedSlots=lowerDagSlots(all.edges,order,{4},std::vector<size_t>(5,256),4096);
+    check(originalSlots.schedule.passes.size()==5&&originalSlots.allocatedBytes==512);
+    check(fusedSlots.schedule.passes.size()==1&&fusedSlots.allocatedBytes==256);
+    const auto pinnedSlots=lowerDagSlots(pin.edges,order,{1,4,1},std::vector<size_t>(5,256),4096);
+    check(pinnedSlots.outputSlots[0]==pinnedSlots.outputSlots[2]&&pinnedSlots.outputSlots[0]!=pinnedSlots.outputSlots[1]);
     bool invalid=false;
     try{planPointwiseFusion(chain,{1,0,2,3,4},{4},std::vector<bool>(5,true));}catch(const std::invalid_argument&){invalid=true;}
     check(invalid);
-    std::cout<<"PASS: bounded fusion, pinned outputs, neighborhood barriers, shared nodes, duplicate ports, input cap, pruning\n";
+    std::cout<<"PASS: bounded fusion, pinned outputs, neighborhood barriers, shared nodes, duplicate ports, input cap, pruning, typed slots\n";
 }
