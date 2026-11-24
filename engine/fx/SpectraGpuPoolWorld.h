@@ -177,6 +177,7 @@ struct PoolWorldStats {
     uint32_t cpuParticles = 0, gpuParticlesEstimated = 0;
     size_t gpuBytes = 0; // private live groups plus unique shared SDF bytes
     size_t sharedSdfBytes=0,sharedSdfEntries=0;
+    size_t sharedSdfPayloadBytes=0,sdfAtlasBytes=0,sdfAtlasPages=0;
 };
 
 class GpuPoolWorld final {

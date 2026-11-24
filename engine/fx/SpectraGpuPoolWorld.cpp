@@ -58,7 +58,7 @@ bool GpuPoolWorld::init(gfx::Device* device, PoolWorldBudgets budgets) {
     if(!allocationBudget_){
         reason_="SpectraFX allocation budget conflicts with canonical Device ledger";cpu_.shutdown();device_=nullptr;return false;
     }
-    if(device_)sharedSdfCache_=std::make_shared<SharedSdfGpuCache>(*device_);
+    if(device_)sharedSdfCache_=std::make_shared<SharedSdfGpuCache>(*device_,true);
     sourceWorldEpoch_=nextSourceWorldEpoch.fetch_add(1,std::memory_order_relaxed);
     initialized_=true;
     reason_.clear();
@@ -864,6 +864,9 @@ bool GpuPoolWorld::step(float dt) {
     }
     stats_.sharedSdfBytes=sharedSdfCache_?sharedSdfCache_->liveBytes():0;
     stats_.sharedSdfEntries=sharedSdfCache_?sharedSdfCache_->liveEntries():0;
+    stats_.sharedSdfPayloadBytes=sharedSdfCache_?sharedSdfCache_->livePayloadBytes():0;
+    stats_.sdfAtlasBytes=sharedSdfCache_?sharedSdfCache_->atlasBytes():0;
+    stats_.sdfAtlasPages=sharedSdfCache_?sharedSdfCache_->atlasPages():0;
     stats_.gpuBytes+=stats_.sharedSdfBytes;
     stats_.cpuParticles=uint32_t(cpu_.stats().particles);
     return allOk;

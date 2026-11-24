@@ -158,6 +158,8 @@ struct ComputeStats {
     // In indirect mode submittedSlots/alive are CPU lifespan estimates;
     // exact GPU alive count stays on GPU and is used as the draw argument.
     size_t gpuBytes = 0, uploadedBytes = 0; // private bytes, excludes shared SDF payload
+    uint32_t sharedSdfOffsetWords=0;
+    bool sharedSdfPacked=false;
     size_t sharedSdfBytes=0; // referenced bytes, not an additional private allocation
     uint32_t gpuPhysicalGrowths=0,gpuPhysicalGrowthFailures=0;
     uint32_t gpuPhysicalShrinks=0,gpuPhysicalShrinkFailures=0,gpuIdleProofRequests=0;
@@ -291,7 +293,7 @@ private:
         render::float4 cullControl{}; // x: valid culling view; yz: viewport pixels; w: LOD far distance
         render::float4 lodEye{}; // xyz: camera position; w: LOD near distance
         render::float4 collisionSphere{}; // centre xyz, obstacle radius (0 disables)
-        render::float4 collisionResponse{}; // bounce, dampen, particle radius scale
+        render::float4 collisionResponse{}; // bounce, dampen, radius scale, SDF offset+1 (0 disables)
         float depthViewProj[16]{},depthInverse[16]{};
         render::float4 depthControl{},depthEye{};
     };

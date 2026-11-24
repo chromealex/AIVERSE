@@ -288,6 +288,7 @@ bool sampleSdf(device const uint* graphSources,float3 p,thread float& distance,t
 }
 bool collideSdf(thread Particle& p,float3 from,constant Uniforms& u,device const uint* graphSources,float dt,thread float3& eventNormal) {
     if(u.collisionResponse.w<0.5f||dt<=0.0f)return false;
+    graphSources+=uint(u.collisionResponse.w)-1u;
     float3 delta=p.positionAge.xyz-from;
     float len=length(delta),spacing=as_type<float>(graphSources[8]);
     uint steps=uint(clamp(ceil(len/(spacing*0.5f)),1.0f,64.0f));
@@ -689,11 +690,12 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
     }
     VmAttributes attributes=stateAttributes[slot];
     VmParams sourceParams=stateParams[slot];
+    const uint sourceBase=u.collisionResponse.w>=1.0f?uint(u.collisionResponse.w)-1u:0u;
     float4 graphData=float4(
-        materialSource(graphSources[0],p,sourceParams,attributes),
-        materialSource(graphSources[1],p,sourceParams,attributes),
-        materialSource(graphSources[2],p,sourceParams,attributes),
-        materialSource(graphSources[3],p,sourceParams,attributes));
+        materialSource(graphSources[sourceBase],p,sourceParams,attributes),
+        materialSource(graphSources[sourceBase+1u],p,sourceParams,attributes),
+        materialSource(graphSources[sourceBase+2u],p,sourceParams,attributes),
+        materialSource(graphSources[sourceBase+3u],p,sourceParams,attributes));
     for(uint j=0;j<4u;++j) {
         float3 at=active?positions[j]:float3(0.0f);
         vertices[base+j].x=at.x;
@@ -975,14 +977,15 @@ bool collideStaticSphere(inout Particle p,vec3 from,float dt,out vec3 eventNorma
     eventNormal=n;return true;
 }
 bool sampleSdf(vec3 p,out float distance,out vec3 gradient) {
-    uint n=graphSources[4];
-    vec3 origin=vec3(uintBitsToFloat(graphSources[5]),uintBitsToFloat(graphSources[6]),uintBitsToFloat(graphSources[7]));
-    float spacing=uintBitsToFloat(graphSources[8]);
+    uint sourceBase=uint(u.collisionResponse.w)-1u;
+    uint n=graphSources[sourceBase+4u];
+    vec3 origin=vec3(uintBitsToFloat(graphSources[sourceBase+5u]),uintBitsToFloat(graphSources[sourceBase+6u]),uintBitsToFloat(graphSources[sourceBase+7u]));
+    float spacing=uintBitsToFloat(graphSources[sourceBase+8u]);
     vec3 q=(p-origin)/spacing;
     if(!all(greaterThanEqual(q,vec3(0)))||!all(lessThanEqual(q,vec3(float(n-1u)))))return false;
     uvec3 base=min(uvec3(q),uvec3(n-2u));
     vec3 t=q-vec3(base);
-    uint i=9u+(base.z*n+base.y)*n+base.x;
+    uint i=sourceBase+9u+(base.z*n+base.y)*n+base.x;
     float a=uintBitsToFloat(graphSources[i]),b=uintBitsToFloat(graphSources[i+1u]),c=uintBitsToFloat(graphSources[i+n]),d=uintBitsToFloat(graphSources[i+n+1u]);
     i+=n*n;
     float e=uintBitsToFloat(graphSources[i]),f=uintBitsToFloat(graphSources[i+1u]),g=uintBitsToFloat(graphSources[i+n]),h=uintBitsToFloat(graphSources[i+n+1u]);
@@ -995,7 +998,7 @@ bool sampleSdf(vec3 p,out float distance,out vec3 gradient) {
 bool collideSdf(inout Particle p,vec3 from,float dt,out vec3 eventNormal) {
     if(u.collisionResponse.w<0.5||dt<=0.0)return false;
     vec3 delta=p.positionAge.xyz-from;
-    float len=length(delta),spacing=uintBitsToFloat(graphSources[8]);
+    float len=length(delta),spacing=uintBitsToFloat(graphSources[uint(u.collisionResponse.w)-1u+8u]);
     uint steps=uint(clamp(ceil(len/(spacing*0.5)),1.0,64.0));
     float radius=max(0.0,p.size.x)*0.5*u.collisionResponse.z;
     float distance,previous=0.0,penetration=0.0,t=0.0;
@@ -1369,11 +1372,12 @@ void main(){
     }
     VmAttributes attributes=stateAttributes[slot];
     VmParams sourceParams=stateParams[slot];
+    uint sourceBase=u.collisionResponse.w>=1.0?uint(u.collisionResponse.w)-1u:0u;
     vec4 graphData=vec4(
-        materialSource(graphSources[0],p,sourceParams,attributes),
-        materialSource(graphSources[1],p,sourceParams,attributes),
-        materialSource(graphSources[2],p,sourceParams,attributes),
-        materialSource(graphSources[3],p,sourceParams,attributes));
+        materialSource(graphSources[sourceBase],p,sourceParams,attributes),
+        materialSource(graphSources[sourceBase+1u],p,sourceParams,attributes),
+        materialSource(graphSources[sourceBase+2u],p,sourceParams,attributes),
+        materialSource(graphSources[sourceBase+3u],p,sourceParams,attributes));
     for(uint j=0;j<4u;++j) {
         vec3 at=particleActive?positions[j]:vec3(0.0);
         vertices[base+j].x=at.x;

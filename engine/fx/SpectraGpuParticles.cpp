@@ -390,6 +390,8 @@ bool ComputeParticles::initGpu() {
                     +size_t(cap)*sizeof(ProgramAttributes)+(sharedSdfPayload_?0:graphPayload.size()*sizeof(uint32_t))
                     +(gpuAllocationActive_?size_t(cap)*20u+10u*sizeof(uint32_t):0u);
     stats_.sharedSdfBytes=sharedSdfPayload_?sharedSdfPayload_->bytes():0;
+    stats_.sharedSdfOffsetWords=sharedSdfPayload_?sharedSdfPayload_->offsetWords():0;
+    stats_.sharedSdfPacked=sharedSdfPayload_&&sharedSdfPayload_->packed();
     return true;
 }
 void ComputeParticles::markGpuAllocationUsed(){
@@ -437,7 +439,7 @@ void ComputeParticles::releaseGpu() {
         if(indices_.valid())device_->destroyBuffer(indices_);
         if(texture_.valid())device_->destroyTexture(texture_);
     }
-    sharedSdfPayload_.reset();stats_.sharedSdfBytes=0;
+    sharedSdfPayload_.reset();stats_.sharedSdfBytes=0;stats_.sharedSdfOffsetWords=0;stats_.sharedSdfPacked=false;
     retireAllocationCharge(gpuAllocationCharge_,gpuAllocationLastFence_);
     gpuAllocationCharge_=0;gpuAllocationLastFence_=0;gpuGrowthBudgetBlocked_=false;
     pipeline_={};vertexShader_={};compute_={};compactAllocationCompute_={};states_={};seeds_={};slots_={};
@@ -815,6 +817,10 @@ bool ComputeParticles::step(float dt) {
         reason_="SpectraFX GPU step must be before the render pass";
         return false;
     }
+    if(sharedSdfPayload_&&!sharedSdfPayload_->ensureUploaded()){
+        ++stats_.gpuStagingUploadFailures;verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
+        reason_="SpectraFX packed SDF upload rejected; retry before simulation";return false;
+    }
     markGpuAllocationUsed();
     if(gpuAllocationActive_)return stepGpuAllocated(dt);
     // Recycle only after a successful Metal frame completion callback,
@@ -951,7 +957,7 @@ bool ComputeParticles::step(float dt) {
     Uniforms u{};
     u.gravityDt={desc_.gravityY,dt,desc_.drag,proceduralActive_?1.f:0.f};
     u.collisionSphere={desc_.staticSphereCenter.x,desc_.staticSphereCenter.y,desc_.staticSphereCenter.z,desc_.staticSphereRadius};
-    u.collisionResponse={desc_.collisionBounce,desc_.collisionDampen,desc_.collisionRadiusScale,desc_.staticSdf.dimension?1.f:0.f};
+    u.collisionResponse={desc_.collisionBounce,desc_.collisionDampen,desc_.collisionRadiusScale,desc_.staticSdf.dimension?float(1u+stats_.sharedSdfOffsetWords):0.f};
     fillDepthUniforms(u);
     u.depthEye.w=desc_.reportCollisionEvents?1.f:0.f;
     u.rightSize={right_.x,right_.y,right_.z,desc_.size};
@@ -1305,7 +1311,7 @@ bool ComputeParticles::stepGpuAllocated(float dt){
     Uniforms u{};
     u.gravityDt={desc_.gravityY,dt,desc_.drag,proceduralActive_?1.f:0.f};
     u.collisionSphere={desc_.staticSphereCenter.x,desc_.staticSphereCenter.y,desc_.staticSphereCenter.z,desc_.staticSphereRadius};
-    u.collisionResponse={desc_.collisionBounce,desc_.collisionDampen,desc_.collisionRadiusScale,desc_.staticSdf.dimension?1.f:0.f};
+    u.collisionResponse={desc_.collisionBounce,desc_.collisionDampen,desc_.collisionRadiusScale,desc_.staticSdf.dimension?float(1u+stats_.sharedSdfOffsetWords):0.f};
     fillDepthUniforms(u);
     u.depthEye.w=desc_.reportCollisionEvents?1.f:0.f;
     u.rightSize={right_.x,right_.y,right_.z,desc_.size};u.up={up_.x,up_.y,up_.z,(dt>0.f||count>0)?1.f:0.f};
