@@ -4,6 +4,8 @@
 #include "Vulkan.h"
 #include "VkApi.h"
 #include "VkShaderCompiler.h"
+#include "VkScopeTiming.h"
+#include <deque>
 
 #include <array>
 #include <functional>
@@ -159,6 +161,9 @@ struct FrameSlot {
     VkQueryPool timing = VK_NULL_HANDLE;
     uint32_t timingCount = 0;
     std::vector<std::string> timingLabels;   // one per query, "" = frame start
+    VkQueryPool scopeTiming=VK_NULL_HANDLE;
+    ScopeTimingFrame scopeRecords;
+    bool scopeSubmitted=false;
 };
 
 class VulkanDevice final : public Device {
@@ -224,6 +229,9 @@ public:
     bool readTextureAsync(TextureHandle, TextureReadbackDesc, TextureReadFn) override;
     bool gpuHealthy() const override { return healthy_; }
     bool waitIdle() override;
+    bool beginGpuScope(uint64_t tag) override;
+    void endGpuScope() override;
+    std::vector<GpuTiming> takeGpuScopeTimings() override;
     // serial_ names the currently recording VkFence-backed frame. This is
     // NOT evidence of completion. completed_ advances only after a real
     // vkWaitForFences return of VK_SUCCESS for its recorded frame slot.
@@ -417,6 +425,10 @@ private:
     double timingFrameMs_ = 0.0;
     void timestamp(const std::string& label, VkPipelineStageFlagBits stage);
     void collectTiming(FrameSlot& s);
+    uint32_t scopeTimestampBits_=0;
+    std::deque<GpuTiming> completedScopes_;
+    void collectScopeTiming(FrameSlot& s,bool completed);
+    void pollScopeTimings();
     std::vector<VkImageView> swapViews_;
     VkDescriptorSetLayout rotLayout_ = VK_NULL_HANDLE;
     VkPipelineLayout rotPipeLayout_ = VK_NULL_HANDLE;

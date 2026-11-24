@@ -73,7 +73,7 @@ public:
     void cancel(uint64_t tag){pending_.erase(tag);}
     Json report() const{
         Json r=Json::object();r.set("available",Json::fromBool(!samples_.empty()));r.set("enabled",Json::fromBool(enabled_));
-        r.set("backend",Json::string(backend_));r.set("scopeBackendImplemented",Json::fromBool(backend_=="Metal"||backend_=="GL33"));r.set("device",Json::string(device_));r.set("epoch",Json::string(std::to_string(epoch_)));
+        r.set("backend",Json::string(backend_));r.set("scopeBackendImplemented",Json::fromBool(backend_=="Metal"||backend_=="GL33"||backend_=="Vulkan"));r.set("device",Json::string(device_));r.set("epoch",Json::string(std::to_string(epoch_)));
         r.set("textureGroupDetail",Json::fromBool(textureGroups_));
         r.set("textureGroupMaxPerFrame",Json::number(int64_t(TextureGroupScopeBudget::maxPerFrame)));
         r.set("textureGroupThrottled",Json::string(std::to_string(groupThrottled_)));
