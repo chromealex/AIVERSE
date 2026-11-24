@@ -55,6 +55,10 @@ public:
                 if(error)*error="Opened aperture still has a registered blocking collider";
                 return false;
             }
+        // Until the authoritative full endpoint, navigation must not
+        // choose a route through the physical gap between moving leaves.
+        for(const auto& pose:owner.poses())
+            if(!pose.open)updated.push_back(pose.bounds);
         blockers_=std::move(updated);
         if(error)error->clear();
         return true;

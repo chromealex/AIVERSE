@@ -58,6 +58,27 @@ void Simulation::setup(const Json& rules, const Json& map) {
     physis::autoInstallFromMap(*this, map);
 #endif
     persistentEcs_.seal();
+    setupComplete_=true;
+    auto completed=std::move(setupCompletedHooks_);
+    for(auto& hook:completed)hook(*this);
+}
+
+bool Simulation::registerSharedCommandHandler(uint16_t type,SharedCommandHandler handler){
+    return !setupComplete_&&type!=0&&handler&&
+           sharedCommands_.emplace(type,std::move(handler)).second;
+}
+bool Simulation::addSetupCompletedHook(SystemFn fn){
+    if(setupComplete_||!fn)return false;
+    setupCompletedHooks_.push_back(std::move(fn));return true;
+}
+bool Simulation::addStepGate(StepGate gate){
+    if(setupComplete_||!gate)return false;
+    stepGates_.push_back(std::move(gate));return true;
+}
+bool Simulation::readyToStep(){
+    if(!module_->readyToStep(*this))return false;
+    for(auto& gate:stepGates_)if(!gate(*this))return false;
+    return true;
 }
 
 PlayerInfo* Simulation::player(uint8_t slot) {
@@ -91,7 +112,7 @@ void Simulation::present(std::vector<SimEvent> events) {
 }
 
 void Simulation::step() {
-    if(!module_->readyToStep(*this))return;
+    if(!readyToStep())return;
     events_.clear();
 
     auto it = pending_.find(tick_);
@@ -103,7 +124,9 @@ void Simulation::step() {
             return a.player != b.player ? a.player < b.player : a.seq < b.seq;
         });
         for (auto& c : cmds) {
-            module_->applyCommand(*this, c);
+            const auto shared=sharedCommands_.find(c.type);
+            if(shared!=sharedCommands_.end())shared->second(*this,c);
+            else module_->applyCommand(*this, c);
             if (cfg_.recordCommands) executed_.push_back(std::move(c));
         }
         world_.flush();

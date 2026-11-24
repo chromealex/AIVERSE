@@ -142,6 +142,15 @@ public:
 
     // Advance exactly one fixed tick.
     void step();
+    // Shared, opt-in engine extensions register during GameModule::setup.
+    // The chosen command ID must be reserved by the project's command catalog.
+    using SharedCommandHandler=std::function<void(Simulation&,const Command&)>;
+    using StepGate=std::function<bool(Simulation&)>;
+    bool registerSharedCommandHandler(uint16_t type,SharedCommandHandler handler);
+    bool addSetupCompletedHook(SystemFn fn);
+    bool addStepGate(StepGate gate);
+    bool readyToStep();
+    bool setupComplete()const noexcept{return setupComplete_;}
     // Advance by real time; returns number of ticks executed. Use alpha() for render interpolation.
     int advance(double realSeconds, int maxTicks = 8);
     double alpha() const { return accumulator_ * tickRate_; }
@@ -208,6 +217,10 @@ private:
     double accumulator_ = 0.0; // real-time only, never affects the simulation
     std::vector<System> systems_;
     std::vector<SystemFn> stateRestoredHooks_;
+    std::vector<SystemFn> setupCompletedHooks_;
+    std::vector<StepGate> stepGates_;
+    std::map<uint16_t,SharedCommandHandler> sharedCommands_;
+    bool setupComplete_=false;
     int64_t (*profClock_)() = nullptr;
     std::vector<int64_t> profNs_;
     std::map<uint32_t, std::vector<Command>> pending_;

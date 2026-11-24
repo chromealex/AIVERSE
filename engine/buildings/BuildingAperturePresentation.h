@@ -184,16 +184,15 @@ public:
                                            uint32_t animationMs=350){
         BuildingApertureVisualFrame frame;
         frame.serverTick=lastTick_;frame.revision=lastRevision_;
-        if(entries_.empty()||lastTick_==0||animationMs==0){
+        if(animationMs==0){
             frame.error="No committed aperture presentation frame";
             return frame;
         }
         const Fixed alpha=Fixed::fromRatio(
             std::min(dtMs,animationMs),animationMs);
         for(auto& [id,e]:entries_){
-            const Fixed target=e.pose.moving?
-                Fixed::fromRatio(e.pose.physicalPermille,1000):
-                (e.pose.open?Fixed::fromInt(1):Fixed{});
+            // Stationary restored/initial partial poses must remain exact.
+            const Fixed target=Fixed::fromRatio(e.pose.physicalPermille,1000);
             if(e.visualOpening<target)
                 e.visualOpening=fxMin(target,e.visualOpening+alpha);
             else if(e.visualOpening>target)

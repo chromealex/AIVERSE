@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <memory>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -41,6 +42,34 @@ inline void io(Archive& archive,BuildingEcsWorldState& state) {
            leaf.physicalPermille>1000)archive.fail();
 }
 
+// Multiple independently placed scenes share one persistent ECS resource.
+struct BuildingEcsSceneCollection {
+    uint64_t namespaceFingerprint=0;
+    std::map<uint64_t,BuildingEcsWorldState> scenes;
+    std::map<uint64_t,uint64_t> contentHashes;
+};
+inline void io(Archive& archive,BuildingEcsSceneCollection& collection){
+    archive(collection.namespaceFingerprint,collection.scenes,collection.contentHashes);
+    if(!archive.ok()||!collection.namespaceFingerprint||collection.scenes.size()>256||
+       collection.scenes.size()!=collection.contentHashes.size())archive.fail();
+    for(const auto& [id,state]:collection.scenes)
+        if(!id||state.sceneId!=id||!collection.contentHashes.contains(id))
+            archive.fail();
+}
+inline BuildingEcsWorldState* buildingEcsSceneState(World& world,uint64_t sceneId){
+    if(auto* all=world.resource<BuildingEcsSceneCollection>()){
+        const auto it=all->scenes.find(sceneId);
+        return it==all->scenes.end()?nullptr:&it->second;
+    }
+    auto* state=world.resource<BuildingEcsWorldState>();
+    return state&&state->sceneId==sceneId?state:nullptr;
+}
+inline void registerBuildingEcsSceneCollection(Simulation& sim,uint64_t fingerprint){
+    if(!fingerprint)throw std::invalid_argument("Building namespace fingerprint required");
+    sim.registerPersistentResource<BuildingEcsSceneCollection>("building.scenes",1);
+    sim.world().setResource<BuildingEcsSceneCollection>().namespaceFingerprint=fingerprint;
+}
+
 // Stage A MUST run in the common GameModule::setup BEFORE the persistent
 // ECS registry seals. Call only once for a Simulation. The resource is
 // canonical for saves/checkpoints; never store GPU handles in it.
@@ -64,31 +93,46 @@ public:
         BuildingDualLeafOwner& physics,world::SpatialWorld& spatial,
         BuildingGraphChangeRouter& router,uint16_t stepPermille=100,
         std::string* error=nullptr) {
+        if(sim.tick()!=0){
+            if(error)*error="Legacy building registration must precede first tick";
+            return {};
+        }
+        return attachManaged(sim,session,physics,spatial,router,stepPermille,error,true);
+    }
+    // The common world owner drives managed scenes in one stable-ID system.
+    static std::shared_ptr<BuildingEcsRuntime> attachManaged(
+        Simulation& sim,BuildingDualLeafGameSession& session,
+        BuildingDualLeafOwner& physics,world::SpatialWorld& spatial,
+        BuildingGraphChangeRouter& router,uint16_t stepPermille=100,
+        std::string* error=nullptr,bool installCallbacks=false){
         auto fail=[&](const char* why){
             if(error)*error=why;
             return std::shared_ptr<BuildingEcsRuntime>{};
         };
-        if(sim.tick()!=0||!session.attached()||!physics.attached()||
+        if(!session.attached()||!physics.attached()||
            physics.sceneId()==0||stepPermille==0||stepPermille>250)
-            return fail("Build ECS registration needs attached owners before first tick");
-        const auto* state=sim.world().resourceConst<BuildingEcsWorldState>();
+            return fail("Building ECS registration needs attached owners");
+        const auto* state=buildingEcsSceneState(sim.world(),physics.sceneId());
         if(!state||state->sceneId!=physics.sceneId())
             return fail("Missing or mismatched persistent ECS building scene resource");
         // Initial physical state is part of the persisted ECS resource,
         // including fully open leaves before the first moving command.
         {
-            auto& current=*sim.world().resource<BuildingEcsWorldState>();
+            auto& current=*buildingEcsSceneState(sim.world(),physics.sceneId());
             const auto poses=physics.poses();
             if(poses.size()>64)return fail("Building scene aperture budget exceeded");
             current.leaves.clear();
             for(const auto& pose:poses)current.leaves.push_back({
                 pose.socketId,pose.physicalPermille,pose.revision,
                 pose.open,pose.moving});
+            current.fixedTick=sim.tick();
             current.revision=physics.revision();
             current.graphAcknowledged=!physics.pendingGraphs();
         }
         auto runtime=std::shared_ptr<BuildingEcsRuntime>(
-            new BuildingEcsRuntime(sim,session,physics,spatial,router,stepPermille));
+            new BuildingEcsRuntime(sim,session,physics,spatial,router,
+                                   stepPermille,physics.sceneId()));
+        if(!installCallbacks){if(error)error->clear();return runtime;}
         // Never capture a bare pointer into the global system registry.
         // The owner can be destroyed independently; the callback no-ops.
         const std::weak_ptr<BuildingEcsRuntime> weak=runtime;
@@ -106,6 +150,17 @@ public:
         return runtime;
     }
 
+    static std::shared_ptr<BuildingEcsRuntime> suspendedManaged(
+        Simulation& sim,BuildingDualLeafGameSession& session,
+        BuildingDualLeafOwner& physics,world::SpatialWorld& spatial,
+        BuildingGraphChangeRouter& router,uint64_t sceneId,uint16_t stepPermille){
+        if(!sceneId||!stepPermille||stepPermille>250||
+           !buildingEcsSceneState(sim.world(),sceneId))return {};
+        auto result=std::shared_ptr<BuildingEcsRuntime>(new BuildingEcsRuntime(
+            sim,session,physics,spatial,router,stepPermille,sceneId));
+        result->suspended_=true;return result;
+    }
+    uint64_t sceneId()const noexcept{return sceneId_;}
     bool enqueue(const BuildingApertureCommand& command,
                  std::string* error=nullptr) {
         if(suspended_||!sim_||!sim_->world().alive(command.actor)){
@@ -127,7 +182,7 @@ public:
         // Physical commit can precede graph ACK; World must capture that
         // collider revision even while movement and presentation are held.
         // The graphAccepted flag stays false until the same event retries.
-        auto* record=sim.world().resource<BuildingEcsWorldState>();
+        auto* record=buildingEcsSceneState(sim.world(),sceneId_);
         if(!record||record->sceneId!=physics_->sceneId()){
             suspended_=true;
             lastError_="Missing or mismatched committed ECS building state";
@@ -166,7 +221,7 @@ public:
            !physics.attached()||physics.faulted()||
            physics.pendingGraphs())
             return reject("Rebinding requires suspended runtime and fully rebuilt owners");
-        auto* state=sim_->world().resource<BuildingEcsWorldState>();
+        auto* state=buildingEcsSceneState(sim_->world(),sceneId_);
         if(!state||!state->sceneId||physics.sceneId()!=state->sceneId||
            !state->graphAcknowledged)
             return reject("Restored scene/graph state not reconciled");
@@ -221,15 +276,16 @@ private:
     BuildingEcsRuntime(Simulation& sim,BuildingDualLeafGameSession& session,
                        BuildingDualLeafOwner& physics,
                        world::SpatialWorld& spatial,
-                       BuildingGraphChangeRouter& router,uint16_t step)
+                       BuildingGraphChangeRouter& router,uint16_t step,uint64_t sceneId)
         :sim_(&sim),session_(&session),physics_(&physics),
-         spatial_(&spatial),router_(&router),stepPermille_(step){}
+         spatial_(&spatial),router_(&router),stepPermille_(step),sceneId_(sceneId){}
     Simulation* sim_;
     BuildingDualLeafGameSession* session_;
     BuildingDualLeafOwner* physics_;
     world::SpatialWorld* spatial_;
     BuildingGraphChangeRouter* router_;
     uint16_t stepPermille_;
+    uint64_t sceneId_;
     bool suspended_=false;
     std::string lastError_;
 };

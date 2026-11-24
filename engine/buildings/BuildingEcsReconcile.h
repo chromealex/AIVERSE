@@ -28,7 +28,7 @@ inline bool restoreBuildingEcsLeafScene(
     BuildingDualLeafGameSession::Authorize authorize,
     BuildingDualLeafGameSession::InteractionRange reachable,
     uint32_t graphDomains,
-    std::string* error=nullptr){
+    std::string* error=nullptr,const world::Bounds* fullSceneBounds=nullptr){
     auto fail=[&](const std::string& reason){
         if(error)*error=reason;
         return false;
@@ -37,8 +37,8 @@ inline bool restoreBuildingEcsLeafScene(
        freshSession.attached()||!probe||!authorize||!reachable||
        graphDomains==0||(graphDomains&~kBuildingGraphAll))
         return fail("Restoration requires suspended ECS owner and fresh authorized world owners");
-    auto* state=sim.world().resource<BuildingEcsWorldState>();
-    if(!state||!state->sceneId||state->leaves.empty()||
+    auto* state=buildingEcsSceneState(sim.world(),runtime.sceneId());
+    if(!state||!state->sceneId||(!fullSceneBounds&&state->leaves.empty())||
        state->leaves.size()!=authoredPoses.size()||
        reservedIds.size()!=authoredPoses.size()||
        authoredPoses.size()>64)
@@ -80,8 +80,9 @@ inline bool restoreBuildingEcsLeafScene(
         }
         return expanded;
     };
-    world::Bounds affected=fullTravel(authoredPoses.front().bounds);
-    for(size_t i=1;i<authoredPoses.size();++i){
+    world::Bounds affected=fullSceneBounds?*fullSceneBounds:
+        fullTravel(authoredPoses.front().bounds);
+    for(size_t i=0;i<authoredPoses.size();++i){
         const auto b=fullTravel(authoredPoses[i].bounds);
         affected.min={fxMin(affected.min.x,b.min.x),
                       fxMin(affected.min.y,b.min.y),

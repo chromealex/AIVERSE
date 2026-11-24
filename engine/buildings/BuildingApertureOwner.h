@@ -35,47 +35,41 @@ struct BuildingApertureUpdate {
     std::string error;
 };
 
-class BuildingApertureOwner {
-public:
-    using ObstructionProbe=std::function<bool(const world::Bounds&)>;
-    // IDs are game-owned: exactly one unique dynamic collider per operable
-    // socket. The static generated model MUST be the runtime variant with
-    // DoorLeaf and RoofPanel excluded from static collision and rendering.
-    bool attach(const RuntimeBuildingResult& generated,
-                world::SpatialWorld& spatial,
-                uint64_t sceneId,Vec3 origin,uint32_t yaw,
-                const std::map<std::string,uint32_t>& colliderIds,
-                ObstructionProbe obstruction,
-                std::string* error=nullptr){
-        auto fail=[&](const char* msg){if(error)*error=msg;return false;};
-        if(attached_||!generated||!generated.structureGraph||sceneId==0||
-           yaw>3||!obstruction)return fail("Invalid aperture scene or safety probe");
+inline bool buildingOperableAperture(BuildingFeatureKind kind){
+    return kind==BuildingFeatureKind::PersonnelDoor||
+           kind==BuildingFeatureKind::LargeGate||
+           kind==BuildingFeatureKind::SmallGate||
+           kind==BuildingFeatureKind::SlidingRoof;
+}
+// Shared, side-effect-free conversion: never publish a temporary collider.
+inline bool buildingAuthoredAperturePoses(
+    const RuntimeBuildingResult& generated,Vec3 origin,uint32_t yaw,
+    std::vector<BuildingAperturePose>& out,std::string* error=nullptr){
+    auto fail=[&](const char* msg){if(error)*error=msg;return false;};
+    if(!generated||!generated.structureGraph||yaw>3)
+        return fail("Invalid generated aperture scene");
         const float W=generated.building.constructionSize.width;
         const float H=generated.building.constructionSize.height;
         const float D=generated.building.constructionSize.depth;
         if(!(W>0&&H>0&&D>0))return fail("Invalid construction dimensions");
-        std::map<std::string,Entry> staged;
-        std::set<uint32_t> seen;
+        std::map<std::string,BuildingAperturePose> staged;
         for(const auto& socket:generated.structureGraph.sockets){
-            if(!operable(socket.kind))continue;
-            const auto it=colliderIds.find(socket.id);
-            if(it==colliderIds.end()||it->second==0||
-               !seen.insert(it->second).second||staged.contains(socket.id))
-                return fail("Missing or duplicate dynamic aperture collider ID");
-            Entry e;
-            e.pose.socketId=socket.id;
-            e.pose.featureIndex=socket.featureIndex;
-            e.pose.kind=socket.kind;
+            if(!buildingOperableAperture(socket.kind))continue;
+            if(socket.id.empty()||staged.contains(socket.id))
+                return fail("Missing or duplicate aperture socket");
+            BuildingAperturePose pose;
+            pose.socketId=socket.id;
+            pose.featureIndex=socket.featureIndex;
+            pose.kind=socket.kind;
             // The authored functional recipe may start a door partially
             // open. Its physical AABB and graph-facing open flag must agree
             // with the quantized progress used on the first motion tick.
             if(!std::isfinite(socket.open)||socket.open<0.f||socket.open>1.f)
                 return fail("Invalid initial aperture progress");
-            e.pose.physicalPermille=uint16_t(std::clamp(
+            pose.physicalPermille=uint16_t(std::clamp(
                 int(std::lround(socket.open*1000.f)),0,1000));
-            e.pose.open=e.pose.physicalPermille==1000;
-            e.pose.revision=1;
-            e.colliderId=it->second;
+            pose.open=pose.physicalPermille==1000;
+            pose.revision=1;
             // Store the original full-width slab as the closed reference.
             // This owner models one translating physical slab; use the
             // independent dual-leaf owner for paired sliding panels.
@@ -110,9 +104,49 @@ public:
             }
             const Vec3 a=buildingLocalToWorld(x0,y0,z0,W,D,origin,yaw);
             const Vec3 b=buildingLocalToWorld(x1,y1,z1,W,D,origin,yaw);
-            e.pose.bounds={{fxMin(a.x,b.x),fxMin(a.y,b.y),fxMin(a.z,b.z)},
+            pose.bounds={{fxMin(a.x,b.x),fxMin(a.y,b.y),fxMin(a.z,b.z)},
                            {fxMax(a.x,b.x),fxMax(a.y,b.y),fxMax(a.z,b.z)}};
-            staged.emplace(socket.id,std::move(e));
+            staged.emplace(socket.id,std::move(pose));
+        }
+    std::vector<BuildingAperturePose> result;
+    result.reserve(staged.size());
+    for(auto& [id,pose]:staged){
+        (void)id;
+        if(pose.bounds.min.x>=pose.bounds.max.x||
+           pose.bounds.min.y>=pose.bounds.max.y||
+           pose.bounds.min.z>=pose.bounds.max.z)
+            return fail("Invalid authored aperture bounds");
+        result.push_back(std::move(pose));
+    }
+    out=std::move(result);
+    if(error)error->clear();return true;
+}
+
+class BuildingApertureOwner {
+public:
+    using ObstructionProbe=std::function<bool(const world::Bounds&)>;
+    // IDs are game-owned: exactly one unique dynamic collider per operable
+    // socket. The static generated model MUST be the runtime variant with
+    // DoorLeaf and RoofPanel excluded from static collision and rendering.
+    bool attach(const RuntimeBuildingResult& generated,
+                world::SpatialWorld& spatial,
+                uint64_t sceneId,Vec3 origin,uint32_t yaw,
+                const std::map<std::string,uint32_t>& colliderIds,
+                ObstructionProbe obstruction,
+                std::string* error=nullptr){
+        auto fail=[&](const char* msg){if(error)*error=msg;return false;};
+        if(attached_||!generated||!generated.structureGraph||sceneId==0||
+           yaw>3||!obstruction)return fail("Invalid aperture scene or safety probe");
+        std::vector<BuildingAperturePose> poses;
+        if(!buildingAuthoredAperturePoses(generated,origin,yaw,poses,error))return false;
+        std::map<std::string,Entry> staged;
+        std::set<uint32_t> seen;
+        for(const auto& pose:poses){
+            auto it=colliderIds.find(pose.socketId);
+            if(it==colliderIds.end()||!it->second||!seen.insert(it->second).second)
+                return fail("Missing or duplicate dynamic aperture collider ID");
+            Entry e;e.pose=pose;e.colliderId=it->second;
+            staged.emplace(pose.socketId,std::move(e));
         }
         if(staged.size()!=colliderIds.size())
             return fail("Collider IDs contain unknown or unsupported aperture sockets");
@@ -339,12 +373,6 @@ public:
         sceneId_=revision_=0;attached_=false;faulted_=false;
     }
 private:
-    static bool operable(BuildingFeatureKind kind){
-        return kind==BuildingFeatureKind::PersonnelDoor||
-               kind==BuildingFeatureKind::LargeGate||
-               kind==BuildingFeatureKind::SmallGate||
-               kind==BuildingFeatureKind::SlidingRoof;
-    }
     static bool sameBounds(const world::Bounds& a,const world::Bounds& b){
         return a.min.x==b.min.x&&a.min.y==b.min.y&&a.min.z==b.min.z&&
                a.max.x==b.max.x&&a.max.y==b.max.y&&a.max.z==b.max.z;
