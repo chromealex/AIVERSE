@@ -162,6 +162,10 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
             </>}
             {preview.error && <StudioAlert tone="danger" title="Native preview">{preview.error}</StudioAlert>}
             <StudioBadge tone={preview.visible?'accent':'neutral'}>{preview.visible?'Visual owner open':'No active preview source'}</StudioBadge>
+            <div>Terrain openings: {preview.terrainCutEntrances ?? '—'} · rejected: {preview.terrainRejectedEntrances ?? '—'}</div>
+            <div>Terrain triangles: {preview.terrainTriangles ?? '—'}</div>
+            {preview.terrainCutSupported===false && <StudioAlert title="Terrain source">Automatic cuts require the legacy heightfield preview. Entity-based terrain is unchanged.</StudioAlert>}
+            {preview.terrainCutDiagnostic && <StudioAlert tone="warning" title="Surface cut">{preview.terrainCutDiagnostic}</StudioAlert>}
             <div>Ready chunks: {preview.ready ?? '—'} / {preview.tracked ?? '—'}</div>
             <div>CPU jobs: {preview.pendingCpu ?? '—'}</div>
             <div>GPU shards: {preview.activeShards ?? '—'} active / {preview.stagedShards ?? '—'} staged</div>
@@ -170,7 +174,7 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
             <div>STRATA arena bytes (active / staged / retired): {preview.activeStrataArenaBytes ?? '—'} / {preview.stagedStrataArenaBytes ?? '—'} / {preview.retiredStrataArenaBytes ?? '—'}</div>
             <div>Page transfer bytes / deferrals: {preview.pageTransfers ?? '—'} / {preview.pageDeferrals ?? '—'}</div>
           </>}
-          <StudioAlert title="Visual preview only">Isolation hides terrain and the composite lighting mesh; other authored models remain. Counters describe native visual residency and estimates, not gameplay collision, NavMesh or measured driver VRAM.</StudioAlert>
+          <StudioAlert title="Visual preview only">The same clipped heightfield supplies ordinary and PBR terrain geometry. Isolation hides terrain and the composite lighting mesh; other authored models remain. Counters describe native visual residency and estimates, not gameplay collision, NavMesh or measured driver VRAM.</StudioAlert>
         </StudioSection>
         <StudioSection title="Generator">
           <div>Revision: {doc.revision} · Generator: {doc.generator}</div>
@@ -186,7 +190,7 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
           <StudioButton disabled={!editable||!entranceValid} onClick={()=>void edit({mode:'entrance_add',...Object.fromEntries(entranceFields.map(k=>[k,Number(entrance[k])]))})}>Add entrance</StudioButton>
           <StudioButton disabled={!editable||!entranceValid||!entranceId} onClick={()=>void edit({mode:'entrance_update',entranceIdText:entranceId,...Object.fromEntries(entranceFields.map(k=>[k,Number(entrance[k])]))})}>Update selected entrance</StudioButton>
           <StudioButton variant="danger" disabled={!editable||!entranceId} onClick={()=>void edit({mode:'entrance_erase',entranceIdText:entranceId})}>Remove selected entrance</StudioButton>
-          <StudioAlert title="Shaft authoring">Surface Y and cave Y are explicit centimetre coordinates. The shaft does not yet cut the Studio heightfield automatically.</StudioAlert>
+          <StudioAlert title="Shaft authoring">Surface Y and cave Y are explicit centimetre coordinates. Valid shafts automatically subtract openings from the legacy Studio heightfield. Fill, mismatched elevation or unsupported terrain can prevent a cut; check diagnostics. The SDF shaft mesh is approximate and gameplay collision is separate.</StudioAlert>
         </StudioSection>
       </>}
     </div>
