@@ -143,6 +143,22 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
         const auto bufferedId=owner.start(buffered,project).getStr("request");drain();
         const auto bs=owner.status();
         require(bs.getStr("request")==bufferedId&&bs.getStr("state")=="ready"&&bs.getStr("backend")==expected,"buffer-backed RGB GPU acceptance failed");
+        // Native host resolver supplies original external pixels with a small graph.
+        auto external=Json::parse(R"JSON({"graph":{"version":1,"size":64,"nodes":[{"id":"asset","op":"imageAsset","inputs":[],"properties":{"asset":"content/source.png","revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}],"outputs":{"color":"asset"}},"requireGpu":true,"bakeSet":true,"materialized":true})JSON");
+        const render::texture_graph::ImageResolver resolveImage=[](const std::string& path,const std::string& revision,size_t budget){
+            if(path!="content/source.png"||revision!=std::string(64,'a')||budget<512u*512u*4u)throw std::invalid_argument("fixture source mismatch");
+            render::texture_graph::ImageSource source;source.width=source.height=512;
+            source.rgb.resize(512u*512u);for(size_t i=0;i<source.rgb.size();++i)source.rgb[i]=(i/512)%16<8?0xff0000u:0x0000ffu;
+            return source;
+        };
+        bool missingResolver=false;try{(void)render::texture_graph::compile(external["graph"]);}catch(const std::invalid_argument&){missingResolver=true;}
+        require(missingResolver,"external image silently resolved without host");
+        const auto externalProgram=render::texture_graph::compile(external["graph"],Json::object(),resolveImage);
+        const auto externalSources=render::texture_graph::gpu::compileMaterializedDag(externalProgram,{0},64);
+        require(externalSources.imageSourceBytes==512u*512u*4u,"external source bytes not admitted");
+        const auto externalId=owner.start(external,project,lifetime.lease(),resolveImage).getStr("request");drain();
+        const auto externalStatus=owner.status();
+        require(externalStatus.getStr("request")==externalId&&externalStatus.getStr("state")=="ready"&&externalStatus.getStr("backend")==expected,"external image GPU parity failed");
         // Native function calls lower into ordinary typed DAG nodes. Two calls
         // share a definition but use independent parameter values and public IDs.
         auto functions=Json::parse(R"JSON({"graph":{"version":1,"size":32,
