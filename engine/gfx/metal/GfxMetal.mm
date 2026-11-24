@@ -1932,7 +1932,8 @@ public:
            !source||!source->storage||!dst||!dst->tex||dst->storage||
            dst->dimension!=TextureDimension::Texture2D||
            dst->tex.textureType!=MTLTextureType2D||dst->tex.sampleCount!=1||
-           dst->tex.mipmapLevelCount!=1||dst->tex.framebufferOnly||
+           (copy.generateMipmaps?(!dst->mips||dst->tex.mipmapLevelCount!=NSUInteger(maxTextureMipLevels(copy.width,copy.height,1))):dst->tex.mipmapLevelCount!=1)||
+           dst->tex.framebufferOnly||
            (dst->tex.usage&MTLTextureUsageRenderTarget)||
            (dst->tex.pixelFormat!=MTLPixelFormatRGBA8Unorm&&
             dst->tex.pixelFormat!=MTLPixelFormatRGBA8Unorm_sRGB)||
@@ -1948,6 +1949,7 @@ public:
             sourceSize:MTLSizeMake(NSUInteger(copy.width),NSUInteger(copy.height),1)
             toTexture:dst->tex destinationSlice:0 destinationLevel:0
             destinationOrigin:MTLOriginMake(0,0,0)];
+        if(copy.generateMipmaps)[blit generateMipmapsForTexture:dst->tex];
         [blit endEncoding];
         return true;
     }
