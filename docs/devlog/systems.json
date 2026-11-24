@@ -1786,10 +1786,10 @@
           "textEn": "Vulkan scoped timestamps with fence-confirmed asynchronous delivery. Isolated tests passed; hardware verification pending."
         },
         {
-          "name": "Texture Graph GPU — Stage 38N (в работе)",
-          "text": "Учёт ссылок renderer caches и LENS при освобождении текстур.",
-          "nameEn": "Texture Graph GPU — Stage 38N (in progress)",
-          "textEn": "Renderer and LENS material root inspection for texture reclamation."
+          "name": "Texture Graph GPU — Stage 38N (частично)",
+          "text": "Добавлен учёт ссылок рендерера и LENS, автоматическое переиспользование при подтверждении внешних ссылок. По умолчанию выключено; интеграционная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38N (partial)",
+          "textEn": "Renderer and LENS root inspection, opt-in certified automatic slot recycling. Default off; integrated verification pending."
         }
       ],
       "enables": [
