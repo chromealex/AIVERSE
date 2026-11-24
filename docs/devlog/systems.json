@@ -1862,6 +1862,12 @@
           "text": "Scoped ModelReadLease для штатных читателей Model, без удержания через мутации.",
           "nameEn": "Texture Graph GPU — Stage 38Z (partial)",
           "textEn": "Scoped ModelReadLease for stock model readers, without holding across mutations."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38AA (в работе)",
+          "text": "Защита транзакций публикации и teardown при активных читателях; сохранение pending hot reload.",
+          "nameEn": "Texture Graph GPU — Stage 38AA (in progress)",
+          "textEn": "Preflight publication and teardown against active readers; preserve pending hot reload."
         }
       ],
       "enables": [
