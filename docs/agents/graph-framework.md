@@ -210,3 +210,8 @@ StudioSession snapshots optionally carry graphDocument {projectPath,mapPath,epoc
 ## Stage 35D — Building candidate provenance
 
 `buildingCandidateCapture.ts` captures one bounded set of JSON wire recipes before native evaluation, deep-freezes the copies, and provides identity-based retirement of superseded or invalidated batches. Use the captured recipe object both for `studio.buildingInspect` and its corresponding graph. A later form reconstruction must never label an older native response. Draft keys include project and complete base-seed request; remount graph on batch/candidate identity. The owner panel integration is maintained on a separate branch from the Building owner, with the exact shared canvas/projection blobs rather than a competing renderer or generator. The graph feature branch does not claim that owner panel exists until integration.
+
+
+## Stage 35E — native room topology projection
+
+Optional buildingInspect topology v1 contains exact native room IDs/bounds/grid indices, connection IDs/endpoints/kinds and two authored component partitions (all links, without elevators), computed through the existing native room planner. Vertical edges reference exact native stair/lift socket IDs. Shared BuildingRoomTopologyView validates counts, IDs, bounds, endpoints and partition consistency, displays explicit edges and floor-filtered neighboring endpoints, and inspects reachability groups by native labels. Legacy count-only reports stay supported. No browser route solver, no runtime lift/door state, actor clearance, exterior connectivity or NavMesh claim. Exterior sockets remain in the recipe graph until native owner supplies explicit room endpoints. Native DTO implementation is in the separate Building integration PR #136.

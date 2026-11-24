@@ -1,7 +1,9 @@
 import type {GraphView,NodeView,Link,Port} from './graphFramework';
+import {parseBuildingRoomTopology} from './buildingRoomTopology.ts';
+import type {BuildingRoomTopology} from './buildingRoomTopology';
 
 // Only a projection of an owner recipe and its studio.buildingInspect response.
-// No room adjacency, geometry, collision, runtime access or file mutation.
+// Optional native room topology is inspected separately; no runtime or file mutation.
 type Obj=Record<string,unknown>;
 const object=(v:unknown):v is Obj=>!!v&&typeof v==='object'&&!Array.isArray(v);
 const fail=(message:string):never=>{throw new Error(message)};
@@ -13,7 +15,7 @@ const array=(v:unknown,label:string,max:number):unknown[]=>Array.isArray(v)&&v.l
 const port=(id:string,type:string,multiple=false):Port=>({id,type,multiple});
 const node=(id:string,label:string,x:number,y:number,inputs:Port[]=[],outputs:Port[]=[]):NodeView=>({id,label,x,y,inputs,outputs});
 export interface BuildingSocketView {id:string;kind:string;side:string;featureIndex:number;width:number;height:number;open:number;outside:readonly [number,number,number]}
-export interface BuildingInspectionView {view:GraphView;sockets:readonly BuildingSocketView[];seed:number;triangles:number;vertices:number;solids:number|null;connectionCount:number|null;floors:number|null;roomsX:number|null;roomsZ:number|null;mode:'features'|'preset'}
+export interface BuildingInspectionView {view:GraphView;sockets:readonly BuildingSocketView[];seed:number;triangles:number;vertices:number;solids:number|null;connectionCount:number|null;floors:number|null;roomsX:number|null;roomsZ:number|null;mode:'features'|'preset';topology:BuildingRoomTopology|null}
 const kinds=new Set(['large-gate','small-gate','personnel-door','sliding-roof','window','stairs','elevator']);
 export function projectBuildingInspection(recipeValue:unknown,inspectionValue:unknown):BuildingInspectionView {
  const recipe=record(recipeValue,'recipe'),inspection=record(inspectionValue,'inspection');
@@ -47,6 +49,7 @@ export function projectBuildingInspection(recipeValue:unknown,inspectionValue:un
  }
  let solids:number|null=null,connectionCount:number|null=null,floors:number|null=null,roomsX:number|null=null,roomsZ:number|null=null;
  const sockets:BuildingSocketView[]=[];
+ let topology:BuildingRoomTopology|null=null;
  if(mode==='features'){
   solids=integer(inspection.solids,'solids');connectionCount=integer(inspection.connections,'connections');
   floors=integer(inspection.floors,'floors',1,8);roomsX=integer(inspection.roomsX,'roomsX',1,6);roomsZ=integer(inspection.roomsZ,'roomsZ',1,6);
@@ -65,6 +68,7 @@ export function projectBuildingInspection(recipeValue:unknown,inspectionValue:un
    nodes.push(node(key,kind+' · '+id,640,270+i*85,[port('socket','socket'),port('feature','feature')],[]));
    connect('structure','sockets',key,'socket');connect('feature:'+featureIndex,'feature',key,'feature');
   });
- }else if(inspection.sockets!==undefined||inspection.solids!==undefined||inspection.connections!==undefined)fail('Preset inspection must not contain functional structure data');
- return {view:{nodes,links},sockets,seed,triangles,vertices,solids,connectionCount,floors,roomsX,roomsZ,mode};
+  if(inspection.topology!==undefined)topology=parseBuildingRoomTopology(inspection.topology,floors,roomsX,roomsZ,connectionCount,sockets);
+ }else if(inspection.sockets!==undefined||inspection.solids!==undefined||inspection.connections!==undefined||inspection.topology!==undefined)fail('Preset inspection must not contain functional structure data');
+ return {view:{nodes,links},sockets,seed,triangles,vertices,solids,connectionCount,floors,roomsX,roomsZ,mode,topology};
 }

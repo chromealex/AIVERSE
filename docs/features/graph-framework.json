@@ -126,7 +126,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35D common candidate capture gate implemented; actual BuildingGeneratorPanel wiring in owner-relative draft PR #136, not merged. Stage 35C Caverns native capture remains on this branch. Stage 35E planned: native room/connection DTO, structural component diagnostics using existing room planner, shared topology view.",
+      "note": "Stage 35E shared optional native room topology parser and view implemented; owner DTO on PR #136; native and Studio acceptance pending.",
       "evidence": []
     },
     "architecture": {
@@ -196,7 +196,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35D isolated Node v22.16.0 candidate gate tests 4/4 PASS, strict TypeScript 5.8.3 gate PASS, exact local Git blob identity verified on both branches. Full Studio/native/MCP/GPU/Mac gates NOT RUN.",
+      "note": "Stage 35E fixtures authored; verification pending.",
       "evidence": []
     },
     "handoff": {

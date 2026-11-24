@@ -89,3 +89,6 @@ Stage 35C: in compatible native Studio use `studio.cavernsGraphInspect {scope: s
 
 
 Stage 35D: use `BuildingCandidateGate` to capture immutable JSON-wire Building requests for up to three seeds. Pass each captured request directly to the existing `studio.buildingInspect` and retain that exact object with the returned report. Invalidate on edits, project change/reopen and unmount; do not publish retired batches. Use `BuildingStructureGraphView` keyed by batch and seed, and route its explicit feature selection to the existing owner form. Building Graph is an authored/native inspection view, not a new geometry evaluator or live navigation graph.
+
+
+Stage 35E: inspect optional buildingInspect.topology version 1 using parseBuildingRoomTopology and BuildingRoomTopologyView. Use only returned rooms, connections, vertical socket IDs and native component labels. All-links and no-elevator groups are structural diagnostics, not a live traversability guarantee. Never infer exterior-door endpoints or reconstruct adjacency from room grid dimensions. Legacy reports remain count-only.
