@@ -8,6 +8,8 @@ description: Reuse AIVERSE C++ authoritative effective stat snapshots through ex
 Read `docs/gameplay-systems.md`, `libraries/include/aiverselib/systems/EngineMechanics.h` and this package's catalog entry.
 
 1. Call effectiveStats after checking the entity. Configure existing StatMod/tech/level/status rules; never evaluate a parallel modifier stack. The snapshot returns final values, not an invented per-source breakdown. Missing units and invalid stats fail.
+Timed buff effects and status mods support `stackingGroup` for strongest-wins add/mul composition. Use one group for alternative levels of a slow or aura, separate groups for independently combining effects. Native code can use `game::upsertTimedBuff` with the one-based group ID from `Rules::modifierGroups`; keep the authoritative Buffs component, not a parallel native state. Only a single contribution per stat/group is applied. Read the group semantics and restrictions in docs/game-format.md.
+
 For optional final movement speed bounds use top-level rules.json `minUnitSpeed` / `maxUnitSpeed` (nonnegative, ordered). They apply after the authoritative stat pipeline for types with positive base movement speed; absent keys keep previous behavior. They do not bypass movement permissions or hard immobilization controls.
 
 2. Prefer existing engine mechanics and data settings before custom state. Keep all new outcome-affecting data in NativeState; no mutable module members.
