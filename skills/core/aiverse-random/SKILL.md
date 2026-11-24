@@ -7,3 +7,5 @@ Use aiverselib/algorithms/Random.h, namespace aiverse::lib::algorithms. Pcg32 ha
 RandomSampling.h adds Xoroshiro128Plus (24/16/37 variant), IntegerAliasTable (exact integer weights, transactional build, O(1) expected sampling), reservoirIndices (uniform subset), approximateNormalQ16 (12 uniforms, bounded tails, not exact Gaussian). No tests.
 
 RandomSequences.h: Q32 radical inverse, Halton2, Hammersley2, Sobol2 and jittered stratified samples. Exponential, Poisson (lambda <=64, bounded budget), Gaussian Box-Muller use floating math and are not lockstep-safe. No tests.
+
+SpatialSampling.h: poissonDiskInteger<2/3> uses bounded dart throwing with exact integer minimum separation and spatial buckets. Partial output explicitly marked; not maximal or Bridson. latinHypercubeQ32<1..16> gives one jittered sample per stratum per axis. No tests.
