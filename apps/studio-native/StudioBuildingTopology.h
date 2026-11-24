@@ -121,6 +121,25 @@ inline Json studioBuildingTopology(const lib::systems::BuildingStructureGraph& g
         if(!socket.empty())row.set("socketId",Json::string(socket));
         edges.push(std::move(row));
     }
+    Json exterior=Json::array();
+    std::set<std::pair<std::string,std::string>> apertureIds;
+    if(graph.exteriorApertures.size()>4096)throw std::runtime_error("Too many exterior apertures");
+    for(const auto& a:graph.exteriorApertures){
+        const auto socket=std::find_if(graph.sockets.begin(),graph.sockets.end(),[&](const auto& s){return s.id==a.socketId;});
+        const auto room=std::find_if(graph.rooms.begin(),graph.rooms.end(),[&](const auto& r){return r.id==a.roomId;});
+        if(socket==graph.sockets.end()||room==graph.rooms.end()||room->floor!=0||
+           (socket->kind!=BuildingFeatureKind::PersonnelDoor&&socket->kind!=BuildingFeatureKind::SmallGate&&socket->kind!=BuildingFeatureKind::LargeGate)||
+           !apertureIds.emplace(a.socketId,a.roomId).second||
+           !std::isfinite(a.start)||!std::isfinite(a.end)||a.start<0||a.end>160||a.end-a.start<=0.001f)
+            throw std::runtime_error("Invalid exterior aperture");
+        Json row=Json::object();
+        row.set("socketId",Json::string(a.socketId));
+        row.set("roomId",Json::string(a.roomId));
+        row.set("start",Json::number(double(a.start),6));
+        row.set("end",Json::number(double(a.end),6));
+        exterior.push(std::move(row));
+    }
+    result.set("exteriorApertures",std::move(exterior));
     result.set("rooms",std::move(rooms));
     result.set("connections",std::move(edges));
     return result;

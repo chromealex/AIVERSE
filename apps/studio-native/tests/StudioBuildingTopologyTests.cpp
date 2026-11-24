@@ -42,6 +42,19 @@ int main(){
         AIVERSE_TEST_CHECK(edge.getStr("socketId")=="stairs/0/0");
     }
     AIVERSE_TEST_CHECK(foundStair);
+    BuildingFeature gate;
+    gate.kind=BuildingFeatureKind::SmallGate;gate.width=4;gate.height=2.4f;
+    gate.position=8;gate.open=1;
+    recipe.features={gate};
+    graph=buildFunctionalStructureGraph(recipe);
+    AIVERSE_TEST_CHECK(bool(graph));
+    AIVERSE_TEST_CHECK(graph.exteriorApertures.size()==2);
+    AIVERSE_TEST_CHECK(graph.exteriorApertures[0].roomId=="room/0/0/0");
+    AIVERSE_TEST_CHECK(graph.exteriorApertures[1].roomId=="room/0/1/0");
+    AIVERSE_TEST_CHECK(graph.exteriorApertures[0].end==8.f && graph.exteriorApertures[1].start==8.f);
+    const auto exterior=studio::studioBuildingTopology(graph);
+    AIVERSE_TEST_CHECK(exterior["exteriorApertures"].size()==2);
+    AIVERSE_TEST_CHECK(exterior.getInt("components")==2);
     graph.connections.front().to="missing";
     bool refused=false;
     try{(void)studio::studioBuildingTopology(graph);}catch(const std::runtime_error&){refused=true;}

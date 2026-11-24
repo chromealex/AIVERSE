@@ -12,7 +12,8 @@ const point=(v:unknown):[number,number,number]=>{const a=arr(v,3);if(a.length!==
 export type RoomConnectionKind='passage'|'stair'|'elevator';
 export interface TopologyRoom {id:string;floor:number;x:number;z:number;min:[number,number,number];max:[number,number,number];component:number;withoutElevatorsComponent:number}
 export interface TopologyConnection {id:string;from:string;to:string;floor:number;kind:RoomConnectionKind;position:[number,number,number];width:number;height:number;socketId?:string}
-export interface BuildingRoomTopology {rooms:readonly TopologyRoom[];connections:readonly TopologyConnection[];components:number;withoutElevatorsComponents:number;floors:number}
+export interface TopologyExteriorAperture {socketId:string;roomId:string;start:number;end:number}
+export interface BuildingRoomTopology {exteriorApertures?:readonly TopologyExteriorAperture[];rooms:readonly TopologyRoom[];connections:readonly TopologyConnection[];components:number;withoutElevatorsComponents:number;floors:number}
 interface SocketRef {id:string;kind:string}
 const unique=(values:readonly string[])=>new Set(values).size===values.length;
 /** Validate only the native DTO, never reconstruct room adjacency or calculate runtime routes. */
@@ -53,7 +54,16 @@ export function parseBuildingRoomTopology(value:unknown,floors:number,roomsX:num
   return edge;
  });
  if(!unique(connections.map(e=>e.id))||!unique(connections.flatMap(e=>e.socketId?[e.socketId]:[])))throw Error('Duplicate connection or vertical socket ID');
- return {rooms,connections,components,withoutElevatorsComponents,floors};
+ const exteriorApertures=t.exteriorApertures===undefined?undefined:arr(t.exteriorApertures,4096).map((v):TopologyExteriorAperture=>{
+  const a=obj(v),socketId=id(a.socketId),roomId=id(a.roomId),start=num(a.start),end=num(a.end);
+  const kind=bySocket.get(socketId)?.kind;
+  if(!byId.has(roomId)||byId.get(roomId)?.floor!==0||
+     (kind!=='personnel-door'&&kind!=='small-gate'&&kind!=='large-gate')||end-start<=0.00099)
+   throw Error('Invalid exterior aperture');
+  return {socketId,roomId,start,end};
+ });
+ if(exteriorApertures&&!unique(exteriorApertures.map(a=>JSON.stringify([a.socketId,a.roomId]))))throw Error('Duplicate exterior aperture');
+ return {rooms,connections,components,withoutElevatorsComponents,floors,...(exteriorApertures===undefined?{}:{exteriorApertures})};
 }
 export const roomNodeId=(r:TopologyRoom)=>'room:'+r.id;
 export const connectionNodeId=(e:TopologyConnection)=>'connection:'+e.id;

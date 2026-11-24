@@ -57,12 +57,15 @@ enum class BuildingConnectionKind : uint8_t { Passage, Stair, Elevator };
 struct BuildingGraphConnection {std::string id,from,to;uint32_t floor=0;float x=0,y=0,z=0,width=1.2f,height=2.2f;
     BuildingConnectionKind kind=BuildingConnectionKind::Passage;
 };
+// Authored aperture overlap with a ground-floor room, not a clearance guarantee.
+struct BuildingExteriorAperture {std::string socketId,roomId;float start=0,end=0;};
 struct BuildingStructureGraph {
     std::vector<BuildingGraphSolid> solids;
     std::vector<BuildingGraphSocket> sockets;
     std::vector<BuildingGraphRoom> rooms;
     std::vector<BuildingGraphConnection> connections;
     std::string error;
+    std::vector<BuildingExteriorAperture> exteriorApertures;
     explicit operator bool() const noexcept {return error.empty();}
 };
 inline const char* buildingFeatureName(BuildingFeatureKind kind) {
@@ -397,6 +400,27 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
             graph.connections.push_back({"passage/z/"+std::to_string(f)+"/"+
                 std::to_string(x)+"/"+std::to_string(z),roomId(f,x,z-1),
                 roomId(f,x,z),f,mid,bottom,at,1.2f,lintel-bottom});
+        }
+    }
+    // Wall sockets carry the exact authored opening centre and width. Clip
+    // the opening interval against every boundary cell; a wide gate may
+    // overlap more than one room. Do not add exterior shortcuts to room routes.
+    for(const auto& socket:graph.sockets){
+        if(socket.kind!=BuildingFeatureKind::PersonnelDoor&&
+           socket.kind!=BuildingFeatureKind::SmallGate&&
+           socket.kind!=BuildingFeatureKind::LargeGate)continue;
+        const bool alongX=socket.side==BuildingFeatureSide::Front||
+                          socket.side==BuildingFeatureSide::Back;
+        const float center=alongX?socket.x:socket.z;
+        for(const auto& room:graph.rooms){
+            if(room.floor!=0)continue;
+            const bool boundary=socket.side==BuildingFeatureSide::Front?room.z==0:
+                socket.side==BuildingFeatureSide::Back?room.z+1==recipe.roomsZ:
+                socket.side==BuildingFeatureSide::Left?room.x==0:room.x+1==recipe.roomsX;
+            if(!boundary)continue;
+            const float a=std::max(center-socket.width*0.5f,alongX?room.x0:room.z0);
+            const float b=std::min(center+socket.width*0.5f,alongX?room.x1:room.z1);
+            if(b-a>0.001f)graph.exteriorApertures.push_back({socket.id,room.id,a,b});
         }
     }
     // Cut rectangular shafts from EVERY upper slab using a bounded planar

@@ -32,6 +32,13 @@ export function BuildingRoomTopologyView({data,onSelectSocket}:{data:BuildingRoo
   {room&&<div className="au-stack"><strong>{room.id}</strong>
    <small>Floor {room.floor+1} · grid {room.x+1}, {room.z+1}</small>
    <small>Bounds {room.min.join(', ')} – {room.max.join(', ')} m</small>
+   {data.exteriorApertures!==undefined&&<div className="au-stack">
+    <small>{data.exteriorApertures.filter(a=>a.roomId===room.id).length} authored exterior aperture overlaps</small>
+    {data.exteriorApertures.filter(a=>a.roomId===room.id).map(a=><div key={a.socketId} className="au-row">
+     <small>{a.socketId} · {(a.end-a.start).toFixed(2)} m overlap</small>
+     {onSelectSocket&&<StudioButton size="sm" onClick={()=>onSelectSocket(a.socketId)}>Select entrance</StudioButton>}
+    </div>)}
+   </div>}
    <small>{members.length} of {data.rooms.length} rooms structurally reachable (including selected room); {data.rooms.length-members.length} outside this group.</small>
    {members.length===1&&<StudioAlert tone="warning">This room has no reachable peer under the selected policy.</StudioAlert>}
    <StudioSelect aria-label="Compare structural reachability to room" value={destination?.id??''} onChange={e=>setTarget(e.target.value)}>
@@ -44,6 +51,6 @@ export function BuildingRoomTopologyView({data,onSelectSocket}:{data:BuildingRoo
    {withoutElevators&&edge.kind==='elevator'&&<small>Excluded from the selected connectivity policy.</small>}
    {edge.socketId&&onSelectSocket&&<StudioButton size="sm" onClick={()=>onSelectSocket(edge.socketId!)}>Select source feature</StudioButton>}
   </div>}
-  <StudioAlert>Native authored room connectivity only. Elevator operation, door openness, actor clearance, collision, NavMesh and exterior access are not verified by this report. Exterior doors and gates remain in the socket graph.</StudioAlert>
+  <StudioAlert>Native authored room connectivity only. Elevator operation, door openness, actor clearance, collision, NavMesh and exterior access are not verified by this report. Exterior aperture overlaps, when reported, describe authored geometry only and do not certify exterior access.</StudioAlert>
  </StudioSection>;
 }

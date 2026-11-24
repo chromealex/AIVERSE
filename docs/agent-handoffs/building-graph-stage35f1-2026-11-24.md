@@ -1,0 +1,3 @@
+# Stage 35F.1 — authored exterior aperture overlap
+
+Parent 9a9703d34cc7b77003852174228e5bd68af3c445. Native graph emits separate ground-floor room overlaps from authored entrance socket intervals, including gates spanning cells. Studio topology v1 gains optional exteriorApertures; web validates identities and displays per-room overlaps with source feature selection. No exterior routing shortcut or clearance claim. Native fixture authored, not run; full build and CI not verified. Next: explicit native route query and path highlighting, shared branch reconciliation, exact-head validation. No main merge.
