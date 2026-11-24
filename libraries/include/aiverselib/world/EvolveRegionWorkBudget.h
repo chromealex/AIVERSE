@@ -101,4 +101,44 @@ inline std::optional<RegionBudgetBatch> prepareRegionBudget(
     out.remaining=pending.size();
     return out;
 }
+// Concrete optional consumer: bounded read-only ecological reporting.
+// Consumers can publish these snapshots with their sample tick and retain
+// older reports for deferred regions. Never feed stale reports back into
+// the canonical pressure integrator or TerraWeave climate callback.
+struct RegionReportSample {
+    Entity region=kNullEntity;
+    uint32_t requestedTick=0,sampleTick=0;
+    Region value{};
+};
+struct RegionReportBatch {
+    RegionBudgetBatch scheduling;
+    std::vector<RegionReportSample> samples;
+};
+template<class Critical>
+inline std::optional<RegionReportBatch> prepareRegionReports(
+        const World& ecs,const world::SimulationLodConfig& config,
+        std::span<const world::Cell> observers,int32_t cellSizeCm,
+        uint32_t tick,const RegionBudgetState& state,size_t maxVisitsPerTick,
+        Critical critical){
+    if(ecs.countExisting<Region>()>kMaxRegions)return std::nullopt;
+    const auto plan=planRegionWork(ecs,config,observers,cellSizeCm,tick,critical);
+    auto scheduling=prepareRegionBudget(plan,state,maxVisitsPerTick);
+    if(!scheduling)return std::nullopt;
+    RegionReportBatch out{std::move(*scheduling),{}};
+    out.samples.reserve(out.scheduling.selected.size());
+    for(const auto& item:out.scheduling.selected){
+        const auto* r=ecs.tryGetConst<Region>(item.region);
+        if(!ecs.alive(item.region)||!r||!r->enabled||!valid(*r))
+            return std::nullopt;
+        out.samples.push_back({item.region,item.firstDueTick,tick,*r});
+    }
+    return out;
+}
+inline std::optional<RegionReportBatch> prepareRegionReports(
+        const World& ecs,const world::SimulationLodConfig& config,
+        std::span<const world::Cell> observers,int32_t cellSizeCm,
+        uint32_t tick,const RegionBudgetState& state,size_t maxVisitsPerTick){
+    return prepareRegionReports(ecs,config,observers,cellSizeCm,tick,state,
+        maxVisitsPerTick,[](Entity){return false;});
+}
 } // namespace aiverse::evolve
