@@ -1178,6 +1178,18 @@ void GeometryScene::updateStrataStreamingBeforeDraw(Renderer3D& r){
     (void)r;
 #endif
 }
+void GeometryScene::drawExactPlaced(Renderer3D& r,const mat4& parent){
+    if(hlod_||strataStagingEnabled_||strataPortableRenderingEnabled_)
+        throw std::logic_error("GeometryScene exact placement requires unsimplified sources");
+    stats_.submitted=0;stats_.surfaceProxiesSubmitted=0;
+    for(const auto& i:instances_){
+        ModelDraw d;d.model=i.model;d.world=parent*i.world;d.layers=i.layers;
+        d.geometry=GeometryPolicy{};d.geometry.clusters=false;
+        d.geometry.shadowClusters=false;d.geometry.occluder=false;
+        d.staticCache=nullptr;
+        r.drawModel(d);++stats_.submitted;
+    }
+}
 void GeometryScene::draw(Renderer3D& r){
     // STRATA triangle budget: steer the pixel-error threshold so the STRATA
     // triangles of a frame stay near the budget. Triangle count falls roughly
