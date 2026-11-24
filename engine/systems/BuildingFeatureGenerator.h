@@ -386,6 +386,7 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
         }
     }
     Mesher mesh(result.building.mesh.materials.size());
+    auto recordRoom=[&](const std::string& id,size_t first){if(mesh.v.size()>first)result.building.roomVisualRanges.push_back({id,uint32_t(first),uint32_t(mesh.v.size()-first)});};
     auto addBox=[&](int material,float x0,float y0,float z0,
                     float x1,float y1,float z1,bool collider=true,bool visible=true){
         if(visible)mesh.box(material,x0,y0,z0,x1,y1,z1);
@@ -436,10 +437,12 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
             const int finish=style.interior>=0?style.interior:hull;
             const int detail=style.panels.accent>=0?style.panels.accent:trim;
             const float x=solid.x0,y=solid.y0,z=solid.z0,X=solid.x1,Y=solid.y1,Z=solid.z1;
+            const size_t first=mesh.v.size();
             if(visualDetail==0){
                 buildingInteriorDetail::Form form{mesh,x,y,z,X-x,Y-y,Z-z};
                 buildingInteriorDetail::furniture(form,style,item.kind,finish,detail,dark);
             }else if(visualDetail<3)mesh.box(finish,x,y,z,X,Y,Z);
+            recordRoom(item.roomId,first);
             addBox(material,x,y,z,X,Y,Z,true,false);
             continue;
         }
@@ -455,17 +458,21 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
         mesh.prism(material,lower,upper);
     }
     for(const auto& light:graph.interiorLights){
+        const size_t first=mesh.v.size();
         const int glow=sm.glow>=0?sm.glow:trim;
         if(visualDetail==0){
             buildingInteriorDetail::Form form{mesh,light.x-.22f,light.ceiling-.16f,light.z-.22f,.44f,.16f,.44f};
             buildingInteriorDetail::fixture(form,style,trim,glow);
         }else if(visualDetail<3)mesh.box(glow,light.x-.22f,light.ceiling-.12f,light.z-.22f,light.x+.22f,light.ceiling,light.z+.22f);
+        recordRoom(light.roomId,first);
         const auto pos=buildingDetail::turn(Vec3{fcoord(light.x),fcoord(light.y),fcoord(light.z)},yaw,fcoord(W),fcoord(D))+origin;
         result.building.lights.push_back({light.id,{float(pos.x.toDouble()),float(pos.y.toDouble()),float(pos.z.toDouble())},{light.color[0]*style.interiorGrammar.lightTint[0],light.color[1]*style.interiorGrammar.lightTint[1],light.color[2]*style.interiorGrammar.lightTint[2]},light.intensity*style.interiorGrammar.lightGain,light.range});
     }
     if(visualDetail==0)for(const auto& item:graph.interiorDecor){
+        const size_t first=mesh.v.size();
         buildingInteriorDetail::Form form{mesh,item.x0,item.y0,item.z0,item.x1-item.x0,item.y1-item.y0,item.z1-item.z0};
         buildingInteriorDetail::decor(form,style,trim,style.panels.accent>=0?style.panels.accent:trim);
+        recordRoom(item.roomId,first);
     }
     for(const auto& socket:graph.sockets){
         BuildingFeatureAnchor anchor;

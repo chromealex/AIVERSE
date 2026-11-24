@@ -330,6 +330,9 @@ struct ModelDraw {
     // (layers & Renderer3D::visibilityMask()) != 0; skipped draws also cast
     // no shadow in that view. Default layer 0 (bit 1).
     uint32_t layers = 1;
+    // Explicit all-pass visibility for ephemeral rigid draws. Caller must
+    // certify visibility in every view (including shadow/reflection).
+    const std::vector<uint8_t>* nodeMask = nullptr;
 };
 
 enum DrawFlags : uint32_t {

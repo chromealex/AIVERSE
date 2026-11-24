@@ -33,7 +33,8 @@ inline size_t buildingGeometryEstimatedBytes(const RuntimeBuildingResult& r){
         for(const auto& p:m.parts)vector(p.indices);
         for(const auto& t:m.materials){string(t.id);string(t.surfacePattern);string(t.textures.baseColor);string(t.textures.metallicRoughness);string(t.textures.normal);string(t.textures.occlusion);string(t.textures.emissive);}
     };
-    mesh(r.building.mesh);vector(r.building.visualLods);
+    mesh(r.building.mesh);vector(r.building.roomVisualRanges);for(const auto& v:r.building.roomVisualRanges)string(v.roomId);
+    vector(r.building.visualLods);
     for(const auto& l:r.building.visualLods)mesh(l.mesh);
     vector(r.building.boxes);vector(r.building.gates);vector(r.building.lights);
     for(const auto& l:r.building.lights)string(l.id);
