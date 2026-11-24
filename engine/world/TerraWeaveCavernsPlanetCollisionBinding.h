@@ -49,6 +49,7 @@ public:
            !pendingLeases_.empty()||!matchesBaseline(*plan)||!matchesAuthority(ecs,*plan)||
            (!baseline_.solidReady()&&!baseline_.cutReady())||
            planet_.caveSurfaceRevision()!=plan->surfaceRevision)return false;
+        pendingLeases_.reserve(128); // no allocation after a lease is acquired
         try{
             const bool ok=owner_.stageBodyCut(device,spatial_,plan,std::move(volume),nativeRevision,cells,
                 [&](const CavePlanetSlotId&,size_t count){
