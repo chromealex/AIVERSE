@@ -28,30 +28,39 @@ struct SurfaceGrainCell {
 // columns centered about the origin. Row zero is the highest row.
 // All rows are a vertical section, NOT an XZ heightfield. Terrain relief
 // is obtained from the canonical Surface and altitude is radial.
+namespace surface_field_detail {
+inline std::optional<SurfaceGrainCell> sampleValidated(
+        const game::Surface& surface,const Field& field,
+        const SurfaceFieldPlacement& placement,
+        const lib::worldprocess::SurfaceFrame& frame,uint16_t x,uint16_t row){
+    const auto radius=surface.bodies[size_t(frame.body)].radius;
+    if(radius.raw<=0||Fixed::fromRatio(int64_t(field.width)*placement.cellSizeCm,200)>=
+        radius*game::kFxTwoPi/4)return {};
+    const auto offset=Fixed::fromRatio(
+        (int64_t(2)*x+1-field.width)*placement.cellSizeCm,200);
+    const auto turns=offset/(radius*game::kFxTwoPi);
+    // One local patch must not wrap around the body or reach its antipode.
+    if(fxAbs(turns)>=Fixed::fromRatio(1,4))return {};
+    const auto direction=fxNormalize(frame.up*fxCosTurns(turns)+frame.east*fxSinTurns(turns));
+    const auto ground=surface.project(game::Surface::anchor(frame.body)+direction*radius);
+    const auto height=Fixed::fromRatio(
+        int64_t(2)*placement.bottomClearanceCm+
+        (int64_t(2)*(field.height-row)-1)*placement.cellSizeCm,200);
+    const auto center=ground+direction*height;
+    const auto resolved=lib::worldprocess::surfaceFrame(&surface,center);
+    if(!resolved||resolved->body!=frame.body)return {};
+    const size_t i=size_t(row)*field.width+x;
+    return SurfaceGrainCell{frame.body,resolved->cell,center,ground,direction,
+        field.mass[i],field.solid[i]!=0};
+}
+} // namespace surface_field_detail
 inline std::optional<SurfaceGrainCell> surfaceGrainCell(
         const game::Surface& surface,const Field& field,
         const SurfaceFieldPlacement& placement,uint16_t x,uint16_t row){
     if(!valid(placement)||!valid(field)||x>=field.width||row>=field.height)return {};
     const auto frame=lib::worldprocess::surfaceFrame(&surface,placement.origin);
     if(!frame)return {};
-    const auto radius=surface.bodies[size_t(frame->body)].radius;
-    if(radius.raw<=0)return {};
-    const auto offset=Fixed::fromRatio(
-        (int64_t(2)*x+1-field.width)*placement.cellSizeCm,200);
-    const auto turns=offset/(radius*game::kFxTwoPi);
-    // One local patch must not wrap around the body or reach its antipode.
-    if(fxAbs(turns)>=Fixed::fromRatio(1,4))return {};
-    const auto direction=fxNormalize(frame->up*fxCosTurns(turns)+frame->east*fxSinTurns(turns));
-    const auto ground=surface.project(game::Surface::anchor(frame->body)+direction*radius);
-    const auto height=Fixed::fromRatio(
-        int64_t(2)*placement.bottomClearanceCm+
-        (int64_t(2)*(field.height-row)-1)*placement.cellSizeCm,200);
-    const auto center=ground+direction*height;
-    const auto resolved=lib::worldprocess::surfaceFrame(&surface,center);
-    if(!resolved||resolved->body!=frame->body)return {};
-    const size_t i=size_t(row)*field.width+x;
-    return SurfaceGrainCell{frame->body,resolved->cell,center,ground,direction,
-        field.mass[i],field.solid[i]!=0};
+    return surface_field_detail::sampleValidated(surface,field,placement,*frame,x,row);
 }
 // Bounded patch read. Exact same coordinate mapping for physics and view
 // consumers; never derive colliders/mesh from an independent XZ terrain.
@@ -65,10 +74,12 @@ inline std::optional<std::vector<SurfaceGrainCell>> sampleSurfaceGrainPatch(
        !columns||!rows||columns>32||rows>32||
        size_t(columns)*rows>maximumCells||maximumCells>1024||
        size_t(firstX)+columns>field->width||size_t(firstRow)+rows>field->height)return {};
+    const auto frame=lib::worldprocess::surfaceFrame(&surface,placement.origin);
+    if(!frame)return {};
     std::vector<SurfaceGrainCell> out;
     out.reserve(size_t(columns)*rows);
     for(uint16_t row=0;row<rows;++row)for(uint16_t x=0;x<columns;++x){
-        auto cell=surfaceGrainCell(surface,*field,placement,
+        auto cell=surface_field_detail::sampleValidated(surface,*field,placement,*frame,
             uint16_t(firstX+x),uint16_t(firstRow+row));
         if(!cell)return {};
         out.push_back(*cell);
