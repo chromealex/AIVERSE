@@ -212,6 +212,9 @@ Maintain one exhaustive panel-to-category mapping in `apps/studio-web/src/window
 ## Atomic Map checkpoint (S6f.4b.2)
 Studio Save/Save As now holds the per-map advisory lock and stages the Map history checkpoint v2 in the same ProjectDocumentJournal transaction as map/terrain and Project documents. v2 uses the exact file hash set; v1 remains readable. Loaded baselines must match before publication, including removed sidecar dependencies. New checkpoint targets are restricted to the exact map-history-<sha256>.json cache filename. Legacy dirty markers fence atomic save. Standalone map_save and Asset history checkpoint are still separate. No full power-loss/OS validation yet.
 
+## Atomic Asset history navigation (S6f.4b.3a)
+Individual and coordinated Asset Undo/Redo use outer studio-history-batch journal v4, with a verified existing Asset checkpoint, retained before image, and transaction-bound after image published before the outer commit. Metadata-only navigation uses a zero-relocation v4 batch. Hold the cooperating asset-history lock and refuse stale checkpoint or dirty marker. Recovery restores the checkpoint and payload; v1–v3 journals remain readable. New asset mutations still use legacy dirty-marker recording; do not claim full atomicity of imports/delete/move recording. No native or fault-injection test execution yet.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web
