@@ -4,6 +4,7 @@
 // This does NOT embed/copy any search algorithm; the solver controls
 // open/closed sets, tie-breaking and goal heuristics.
 #include "engine/world/TerraWeaveCavernsNavigationData.h"
+#include "engine/nav/GraphSearch.h"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -109,6 +110,16 @@ public:
             output.push_back({index(target),
                 uint32_t(std::min<uint64_t>(cost,UINT32_MAX))});
         }
+    }
+    // Shared engine/nav solver edge adapter. This keeps existing cave
+    // callers using CaveGraphEdge while all generic graph solvers operate
+    // on nav::GraphEdge without duplicating their A*/flow code.
+    void neighbors(uint32_t node,std::vector<nav::GraphEdge>& output)const{
+        std::vector<CaveGraphEdge> edges;
+        neighbors(node,edges);
+        output.clear();
+        output.reserve(edges.size());
+        for(const auto edge:edges)output.push_back({edge.to,edge.cost});
     }
     // A* / HPA* region entrances and flow-field cluster borders consume the
     // same directed edges, including tunnels crossing +/-Y cell layers.
