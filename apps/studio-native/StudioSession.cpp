@@ -413,6 +413,7 @@ Json StudioSession::snapshot() const {
     project.set("name", str(ws_.project.manifest.getStr("name", "No project opened")));
     project.set("path", str(ws_.project.dir));
     project.set("historyVersion",str(ws_.project.historyVersion()));
+    project.set("assetHistoryVersion",str(assetHistoryVersion()));
     project.set("dirty", Json::fromBool(ws_.map.dirty || ws_.project.rulesDirty || ws_.project.manifestDirty));
     result.set("project", std::move(project));
     Json scene = Json::object();
@@ -527,7 +528,7 @@ Json StudioSession::openProject(const std::string& path) {
     if (!ws_.openGame(directory, &error))
         throw std::runtime_error(error.empty() ? "Unable to open project" : error);
     (void)studioContentRoot(ws_.project.dir);
-    pendingAssetTransfer_.reset();
+    pendingAssetTransfer_.reset();assetHistory_.reset();
     clearSelection();hidden_.clear();locked_.clear();
     facialPreview_.reset(); // project identity may change; never reuse prior GUID
     previewMaterialName_.clear();
@@ -609,7 +610,10 @@ bool StudioSession::pollAgentLink() {
         syncHistoryLabels();
         const auto before=ws_.map.historyMark();const size_t entities=ws_.map.data.entities.size();
         const bool wasDirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
+        if(name=="open_game"||name=="open_project"||name=="create_game"||name=="create_project")assetHistory_.reset();
+        const auto assetProjectBefore=ws_.project.dir;
         const Json result=ws_.call(name,args,"agent");
+        if(assetProjectBefore!=ws_.project.dir)assetHistory_.reset();
         const bool failed=result.has("error");
         const bool undoable=ws_.map.historyMark()!=before&&ws_.map.canUndo();
         labelNewHistory(before,"Agent · "+studioToolLabel(name));
@@ -1126,6 +1130,26 @@ Json StudioSession::historyJson() const {
     out.set("version",str(historyVersion()));out.set("scope",str("map"));out.set("strokeActive",Json::fromBool(stroking_));
     return out;
 }
+std::string StudioSession::assetHistoryVersion() const {
+    return ws_.project.dir+"|assets|"+std::to_string(assetHistory_.version());
+}
+Json StudioSession::assetHistoryJson() const {
+    Json out=Json::object(),steps=Json::array();
+    size_t i=0;
+    for(const auto& entry:assetHistory_.steps()){
+        Json row=Json::object();row.set("label",str(entry.label));
+        row.set("done",Json::fromBool(i++<assetHistory_.position()));steps.push(std::move(row));
+    }
+    out.set("scope",str("assets"));out.set("steps",std::move(steps));
+    out.set("position",Json::number(int64_t(assetHistory_.position())));
+    out.set("bytes",Json::number(int64_t(assetHistory_.bytes())));
+    out.set("maxSteps",Json::number(int64_t(editor::ProjectHistory::MaxSteps)));
+    out.set("maxBytes",Json::number(int64_t(editor::ProjectHistory::MaxBytes)));
+    out.set("version",str(assetHistoryVersion()));out.set("strokeActive",Json::fromBool(stroking_));
+    out.set("canUndo",Json::fromBool(!stroking_&&assetHistory_.canUndo()));
+    out.set("canRedo",Json::fromBool(!stroking_&&assetHistory_.canRedo()));
+    return out;
+}
 Json StudioSession::dispatch(const Json& request) {
     const std::string method=request.getStr("method");
     const bool switching=method=="studio.openProject"||method=="studio.openMap"||method=="studio.newMap"||method=="studio.hubOpen"||method=="studio.hubCreate";
@@ -1133,11 +1157,37 @@ Json StudioSession::dispatch(const Json& request) {
     if(stroking_){
         // The stroke owns the MapDoc transaction across frames. Only explicit
         // observational requests can enter; other edits retry after release.
-        static const std::set<std::string> reads={"studio.snapshot","studio.inspect","studio.propertiesFor","studio.history","studio.projectHistory","studio.stats","studio.project","studio.agentInfo","studio.agentStop","studio.componentCatalog"};
+        static const std::set<std::string> reads={"studio.snapshot","studio.inspect","studio.propertiesFor","studio.history","studio.projectHistory","studio.assetHistory","studio.stats","studio.project","studio.agentInfo","studio.agentStop","studio.componentCatalog"};
         if(method=="studio.sceneBrush"&&request["params"].has("armed")&&!request["params"].getBool("armed",true))strokeCancel();
         else if(!reads.count(method)){
             Json reply=Json::object();reply.set("id",request["id"]);reply.set("error",str("Finish or cancel the active Scene stroke first"));return reply;
         }
+    }
+    if(method=="studio.assetHistory"||method=="studio.assetHistoryStep"){
+        Json reply=Json::object();reply.set("id",request["id"]);
+        try {
+            if(!request.isObject()||!request["id"].isNumber())throw std::runtime_error("Invalid request envelope");
+            if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
+            const bool step=method=="studio.assetHistoryStep";
+            if(step){
+                const auto& params=request["params"];
+                if(!params["expectedVersion"].isString()||params.getStr("expectedVersion")!=assetHistoryVersion())
+                    throw std::runtime_error("Asset history changed; refresh before navigating");
+                const auto direction=params.getStr("direction");
+                if(direction!="undo"&&direction!="redo")throw std::runtime_error("Invalid asset history direction");
+                const bool redo=direction=="redo";
+                const auto& entry=assetHistory_.next(redo);
+                if(entry.files.size()!=1)throw std::runtime_error("Unsupported asset history entry");
+                const auto plan=redo?entry.files:editor::reverseProjectFileEdits(entry.files);
+                StudioAssetCatalog catalog(ws_.project.dir);
+                catalog.applyMetadataEdit(plan.front());
+                assetHistory_.advance(redo);agentHistoryUnsafe_=true;
+            }
+            auto result=assetHistoryJson();
+            if(step)result.set("snapshot",snapshot());
+            reply.set("result",std::move(result));
+        }catch(const std::exception& e){reply.set("error",str(e.what()));}
+        return reply;
     }
     if(method=="studio.projectHistory"||method=="studio.projectHistoryStep"){
         Json reply=Json::object();reply.set("id",request["id"]);
@@ -2039,7 +2089,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
             if(!studioValidGuid(guid)||key.size()>40||!params.has("value"))
                 throw std::runtime_error("Invalid asset import setting request");
             StudioAssetCatalog catalog(ws_.project.dir);
-            const auto updated=catalog.patchSettings(guid,key,params["value"]);
+            const auto updated=catalog.patchSettings(guid,key,params["value"],&assetHistory_);
+            agentHistoryUnsafe_=true;
             Json detail=Json::object();
             detail.set("guid",str(updated.guid));
             detail.set("path",str(updated.path));
@@ -2142,6 +2193,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
             };
             const std::function<void()> commitHook =
                 internal ? std::function<void()>(repair) : std::function<void()>{};
+            // Until transfer plans have their own reversible history, do not cross this boundary.
+            assetHistory_.reset();agentHistoryUnsafe_=true;
             Json result=pendingAssetTransfer_->apply(token,decisions,commitHook);
             pendingAssetTransfer_.reset();
             if (internal) result.set("repairedMaterialReferences",num(int64_t(repaired)));

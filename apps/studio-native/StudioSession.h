@@ -136,6 +136,9 @@ private:
     uint64_t previewMaterialRevision_ = 0;
     void refreshMaterialPreview();
     std::optional<StudioTransferPlan> pendingAssetTransfer_;
+    editor::ProjectHistory assetHistory_;
+    std::string assetHistoryVersion() const;
+    Json assetHistoryJson() const;
     StudioWindState wind_;
     Json windSceneStats_;
     // Agent panel (studio.agent*): link server, the Claude Code run, its transcript and change list.

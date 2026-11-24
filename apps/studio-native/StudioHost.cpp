@@ -79,7 +79,7 @@ const std::set<std::string>& documentChangingMethods() {
         "studio.renderLightingSet", "studio.lightingSet", "studio.lightAdd", "studio.lightUpdate", "studio.lightDelete",
         "studio.materialPatch", "studio.materialCreate", "studio.setProperties", "studio.componentAdd",
         "studio.componentRemove", "studio.entityMove", "studio.entitiesDelete", "studio.entitiesDuplicate",
-        "studio.assetPlace", "studio.entityFlags", "studio.rulesSet", "studio.entitiesAlign", "studio.historyJump", "studio.projectHistoryStep"};
+        "studio.assetPlace", "studio.entityFlags", "studio.rulesSet", "studio.entitiesAlign", "studio.historyJump", "studio.projectHistoryStep", "studio.assetMetaPatch", "studio.assetHistoryStep", "studio.assetTransferCommit"};
     return methods;
 }
 } // namespace
@@ -1628,6 +1628,7 @@ void StudioHost::afterSessionReply(const Json& req, const Json& reply) {
         mapSnapshot_.reset(); rulesSnapshot_.reset();
     }
     if (method == "studio.materialPreview") sendEvent("material.preview", req["params"].getStr("name"));
+    if(method=="studio.assetMetaPatch"||method=="studio.assetHistoryStep"||method=="studio.assetTransferCommit")sendEvent("assets.changed", "");
     if (documentChangingMethods().count(method) || (method == "studio.op" && reply["result"].getBool("changed")))
         sendEvent("document.changed", "");
 }
