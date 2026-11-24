@@ -11,6 +11,7 @@
 // an incrementally refreshed mesh equals a mesh built from scratch (rectangles and portals are tile-local).
 #pragma once
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -78,6 +79,11 @@ struct Query {
     bool bestCorridor = false;
 };
 
+struct RefreshTelemetry {
+    uint64_t revision=0,elapsedNs=0;
+    size_t rebuiltTiles=0,portalTiles=0,rectangles=0;
+    std::vector<uint32_t> tileIds; // bounded sample, not stable polygon identities
+};
 class Mesh {
 public:
     static constexpr uint32_t kNone = 0xFFFFFFFFu;
@@ -87,6 +93,7 @@ public:
             if (err) *err = "navmesh: invalid size, tile or cell";
             return false;
         }
+        lastRefresh_.reset();
         cfg_ = cfg;
         tw_ = (cfg.width + cfg.tile - 1) / cfg.tile;
         td_ = (cfg.depth + cfg.tile - 1) / cfg.tile;
@@ -115,15 +122,20 @@ public:
     }
     void markAllDirty() { for (auto& t : tiles_) t.dirty = true; anyDirty_ = !tiles_.empty(); }
     bool dirty() const { return anyDirty_; }
+    void setRefreshTelemetryEnabled(bool enabled){telemetryEnabled_=enabled;if(!enabled)lastRefresh_.reset();}
+    const std::optional<RefreshTelemetry>& lastRefreshTelemetry()const noexcept{return lastRefresh_;}
 
     // Rebuilds dirty tiles (spans, rectangles) and the portals of every tile that can see them.
     bool refresh(const Source& src, std::string* err = nullptr) {
         if (!anyDirty_) return true;
+        const auto started=telemetryEnabled_?std::chrono::steady_clock::now():std::chrono::steady_clock::time_point{};
+        RefreshTelemetry measured;
         std::vector<uint8_t> edges(tiles_.size(), 0);
         std::vector<Span> tmp;
         for (size_t i = 0; i < tiles_.size(); ++i) {
             if (!tiles_[i].dirty) continue;
             rebuildTile(src, tiles_[i], tmp);
+            if(telemetryEnabled_){++measured.rebuiltTiles;if(measured.tileIds.size()<128)measured.tileIds.push_back(uint32_t(i));}
             const int32_t tx = int32_t(i) % tw_, tz = int32_t(i) / tw_;
             // a tile's portals look one column into its 8 neighbours (corner checks): refresh all of them
             for (int32_t dz = -1; dz <= 1; ++dz)
@@ -139,7 +151,7 @@ public:
         }
         for (size_t i = 0; i < tiles_.size(); ++i) {
             tiles_[i].dirty = false;
-            if (edges[i]) rebuildPortals(src, uint32_t(i));
+            if (edges[i]) {rebuildPortals(src, uint32_t(i));if(telemetryEnabled_)++measured.portalTiles;}
         }
         base_.assign(tiles_.size() + 1, 0);
         for (size_t i = 0; i < tiles_.size(); ++i) base_[i + 1] = base_[i] + uint32_t(tiles_[i].rects.size());
@@ -156,6 +168,11 @@ public:
         }
         anyDirty_ = false;
         ++revision_;
+        if(telemetryEnabled_){
+            measured.revision=revision_;measured.rectangles=rectCount();
+            measured.elapsedNs=uint64_t(std::max<int64_t>(0,std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-started).count()));
+            lastRefresh_=std::move(measured);
+        }
         return true;
     }
     uint64_t revision() const { return revision_; }
@@ -163,7 +180,7 @@ public:
     // barrier; retain the saved revision used by persisted path cursors.
     bool restoreRebuiltRevision(uint64_t revision){
         if(!built_||anyDirty_||!revision)return false;
-        revision_=revision;return true;
+        revision_=revision;lastRefresh_.reset();return true;
     }
     size_t lastVisits() const { return lastVisits_; }   // rectangles the last rectangle search expanded (diagnostics)
 
@@ -308,6 +325,8 @@ private:
     int32_t tw_ = 0, td_ = 0;
     bool built_ = false, anyDirty_ = false;
     uint64_t revision_ = 0;
+    bool telemetryEnabled_=false;
+    std::optional<RefreshTelemetry> lastRefresh_;
     std::vector<Tile> tiles_;
     std::vector<uint32_t> base_;
     std::vector<uint32_t> slotBase_, slotOwner_, slotIndex_, slotTarget_;
