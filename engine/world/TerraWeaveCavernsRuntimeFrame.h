@@ -13,6 +13,9 @@
 #include "engine/world/TerraWeaveCavernsGraphSolvers.h"
 #include "engine/world/TerraWeaveCavernsNativeNavSolver.h"
 #include "engine/nav/CaveEcsRouteFollow.h"
+#include "engine/nav/CaveSimulationNavigation.h"
+#include "engine/nav/CavePathQueryCache.h"
+#include "engine/world/TerraWeaveCavernsNavigationEnvironment.h"
 #include <algorithm>
 #include <map>
 #include <set>
@@ -33,6 +36,11 @@ public:
          streamJobs_(workers),
          host_(resolution,spacingCm,shards,pending,workers) {
         registerCaveSharedGraphSolvers(pathRouter_);
+        navigationBus_.subscribe(CaveNavigationConsumer::Custom,
+            [this](const CaveNavigationChange&,
+                   std::shared_ptr<const CaveNavigationDataProvider>){
+                pathCache_.invalidate();
+            });
     }
     // Explicit per-world entry point. Instances are single-world owners:
     // after closeWorldAfterGpuIdle succeeds, construct a new one for a new
@@ -145,6 +153,41 @@ public:
     bool retryNavigationInvalidations(){
         return navigationBus_.dispatchPending();
     }
+    // Game authority installs this during Simulation::setup with a real
+    // same-epoch native physics callback, never visual-only GameClient.
+    void installNavigationInSimulation(
+        Simulation& sim,nav::CaveMovementCollision collision,
+        uint32_t maxRepairsPerTick=8,uint32_t maxMovedPerTick=65536) {
+        nav::CaveSimulationNavigationHooks hooks;
+        hooks.publishedSource=[this]{return navigationBus_.active();};
+        hooks.search=[this](const std::string& algorithm,
+                            const CavePathQuery& q){
+            return this->findPath(algorithm,q);
+        };
+        hooks.collision=std::move(collision);
+        hooks.maxRepairsPerTick=maxRepairsPerTick;
+        hooks.maxMovedPerTick=maxMovedPerTick;
+        nav::installCaveNavigationSimulation(sim,std::move(hooks));
+    }
+    // Publish the authoritative immutable ECS environment at a fixed-tick
+    // owner barrier: NEREID flood and PHYSIS traction are derived read-only.
+    bool publishNavigationEnvironment(
+        std::shared_ptr<const World> frozenWorld,
+        uint64_t environmentEpoch,CaveDirtyBounds affected,
+        CaveEnvironmentCostSettings settings={},bool fullRebuild=false) {
+        const auto published=navigationBus_.active();
+        if(closed_||physicsBarrier_.status().recoveryRequired||!published||
+           !frozenWorld||!environmentEpoch)return false;
+        CaveEnvironmentSource src{
+            published->revision(),environmentEpoch,std::move(frozenWorld)};
+        return navigationBus_.publishEnvironment(environmentEpoch,
+            makeCaveEnvironmentCallbacks(std::move(src),settings),
+            affected,fullRebuild);
+    }
+    nav::CavePathCacheStats navigationCacheStats()const noexcept {
+        return pathCache_.stats();
+    }
+    void invalidateNavigationRouteCache(){pathCache_.invalidate();}
     bool registerNativeNavMeshSolver(CaveNavConfig config,
                                      const std::string& name="navmesh") {
         return registerCaveNativeNavSolver(pathRouter_,config,name);
@@ -177,7 +220,12 @@ public:
     }
     CavePathResult findPath(const std::string& name,
                             const CavePathQuery& query)const {
-        return pathRouter_.query(name,query,navigationBus_);
+        if(navigationBus_.hasPending())return {};
+        const auto published=navigationBus_.active();
+        if(!published || published->revision()!=query.sourceRevision)
+            return {};
+        return pathCache_.get(name,query,published->environmentRevision(),
+            [&]{return pathRouter_.query(name,query,navigationBus_);});
     }
     // The host drives interest once per world frame using the camera/player
     // center in CHUNK coordinates. Build tickets may be scheduled on worker
@@ -434,6 +482,7 @@ private:
     }
     CaveNavigationPublication navigationBus_{nullptr};
     CavePathRouter pathRouter_;
+    mutable nav::CavePathQueryCache pathCache_{};
     CaveDirtyBounds navDirtyBounds_{};
     bool navDirty_=false;
     uint32_t chunkResolution_=16;
