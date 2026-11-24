@@ -360,12 +360,12 @@ void GameView::drawPlanets(Renderer3D& r, const GameScene& s, double time, const
         const float3 pv = place.transformPoint({0, 0, 0});
         if (o.isProjectile) {
             if (o.visible) {
-                ::aiverse::view::MeshObject packet;
-                packet.mesh=&projectile_;
-                packet.world=mat4::translate(place.transformPoint({0,0.3f,0}));
-                packet.color={1,0.95f,0.8f,1};
-                packet.flags=kDrawUnlit;
-                ::aiverse::View::submitMesh(r,packet);
+                SceneObject shot=o;
+                shot.pos=body>=0?bodyToView(body,o.pos):pv;
+                shot.facing=pframe_.dirToView(o.facing);
+                const float3 radial=body>=0?pframe_.dirToView(normalize(o.pos)):float3{0,1,0};
+                if(body<0||!occluded(body,shot.pos))
+                    drawProjectile(r,key,shot,dt,radial,false);
             }
             continue;
         }
@@ -507,7 +507,12 @@ void sceneFromSphere(Simulation& sim, GameCore& m, const Surface& S, GameScene& 
         if (!Surface::onSphere(t.pos)) return;
         SceneObject so;
         so.entity = e; so.isProjectile = true; so.source = pr.source;
-        if (auto* su = w.tryGet<Unit>(pr.source)) so.shooterType = su->type;
+        so.owner=pr.owner;
+        if(pr.sourceType<R.types.size())so.shooterType=pr.sourceType;
+        else if(auto* su=w.tryGet<Unit>(pr.source))so.shooterType=su->type;
+        so.shotWeapon=int8_t(view_adapter::projectileAppearanceSlot(R,pr));
+        const Vec3 delta=t.pos-t.prevPos;
+        so.facing=toF(delta.lengthSq().raw>0?delta:pr.aim-t.pos);
         int body;
         so.pos = local(t.prevPos, t.pos, body);
         so.body = int16_t(body);
