@@ -72,6 +72,24 @@ int main() {
             expect(readFile(originalMeta)=="persistent-guid-sidecar","GUID metadata bytes changed");
             expect(readFile(materials)==materialBefore,"Material backup not restored");
         }
+        // v4: a resource document is written before the outer move commits.
+        // Recovery restores both exact original resource bytes and paths.
+        {
+            const auto model=root/"A"/"Model.gltf";
+            const std::string before="{ \"images\": [{\"uri\":\"Stone.png\"}] }\n";
+            const std::string after=R"({"images":[{"uri":"../B/Stone.png"}]})";
+            writeFile(model,before);
+            StudioMoveJournal journal(project);
+            journal.begin(operations,false,false,{{fs::path("content/A/Model.gltf"),before,after}});
+            fs::rename(original,moved);fs::rename(originalMeta,movedMeta);
+            writeFile(model,after);
+            StudioMoveJournal::recover(project);
+            expect(readFile(model)==before,"Resource repair exact bytes not restored");
+            expect(fs::exists(original)&&fs::exists(originalMeta),"Resource move not restored");
+            expect(!fs::exists(moved),"Resource destination survives rollback");
+            StudioMoveJournal::recover(project);
+            fs::remove(model);
+        }
         // Commit marker forbids rollback on restart.
         {
             StudioMoveJournal journal(project);

@@ -248,6 +248,11 @@ private:
             validateRelative(path);
             if(!path.starts_with("content/")||edit.path.extension()!=".gltf"||!seen.insert(path).second)
                 throw std::runtime_error("Invalid resource repair path");
+            for(const auto& segment:edit.path){
+                const auto name=segment.string();
+                if(name.find('\0')!=std::string::npos||name==".aiverse-cache"||name==".git"||name.starts_with(".aiverse-save-"))
+                    throw std::runtime_error("Unsafe resource repair segment");
+            }
             safePath(root,root/edit.path);
             for(const auto& op:moves)for(const auto& endpoint:{op.from,op.to}){
                 const auto p="content/"+endpoint;

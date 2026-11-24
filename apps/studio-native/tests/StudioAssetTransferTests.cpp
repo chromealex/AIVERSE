@@ -228,7 +228,15 @@ int main(){
             AIVERSE_TEST_CHECK(read(model)==original&&fs::exists(texture));
             studioReplayAssetMove(project,*recorded,true);
             AIVERSE_TEST_CHECK(read(model)==changed);
-            studioReplayAssetMove(project,*recorded,false);
+            editor::ProjectHistory timeline;
+            auto copy=*recorded;timeline.recordMove(std::move(copy),"Repair model URI");
+            {
+                StudioAssetHistoryPublication publication(project);publication.save(timeline);
+            }
+            const auto reopened=studioLoadAssetHistoryCheckpoint(project);
+            AIVERSE_TEST_CHECK(reopened.canUndo()&&reopened.next(false).move->resourceEdits.size()==1);
+            studioReplayAssetMove(project,*reopened.next(false).move,false);
+            fs::remove(project/".aiverse-cache"/"asset-history.json");
             move=StudioTransferPlan::internal(project,"Other",{"Models/repair.png"});
             bool refused=false;try{(void)move.apply(move.token(),{},[]{throw std::runtime_error("fixture failure");},&recorded,true);}
             catch(const std::runtime_error&){refused=true;}
