@@ -22,7 +22,8 @@ inline StudioGameLaunch studioGameLaunch(const editor::Workspace& ws,bool curren
         throw std::runtime_error("Save changes before Play");
     const auto missing=editor::missingNativeModules(ws.project.rulesJson,editor::compiledNativeIds());
     if (!missing.empty()) throw std::runtime_error("This Studio build lacks project native module: "+missing.front());
-    StudioGameLaunch plan{ws.project.dir,{}};
+    StudioGameLaunch plan{};
+    plan.project=ws.project.dir;
     if (currentMap) {
         if (ws.map.path.empty()) throw std::runtime_error("Save the current map before Play");
         const auto path=std::filesystem::weakly_canonical(ws.map.path);
