@@ -62,6 +62,14 @@
     {
      "status": "in-progress",
      "target": null,
+     "title": "Планетарный лес: физический хост",
+     "titleEn": "Planetary forest: physics host",
+     "text": "Stage 158: явный single-authority native host, отдельные сцены тел, существующие коллайдеры и checkpoint.",
+     "textEn": "Stage 158: explicit single-authority native host, body-scoped scenes, existing collision and checkpoint owners."
+    },
+    {
+     "status": "in-progress",
+     "target": null,
      "title": "Планетарный лес: удаление разложившихся физических тел",
      "titleEn": "Planetary forest: spent physical body retirement",
      "text": "Stage 157: удаление по нулевому остатку древесины и точной подтверждённой квитанции; сохранение баланса и rollback.",
