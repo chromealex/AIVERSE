@@ -240,6 +240,8 @@ void StudioHost::openProject(const std::string& path, int64_t requestId) {
             return;
         }
     }
+    buildingGraphOverlayScene_=0;rebuildOverlay();
+    session_->setBuildingGraphReader({});
     projectLoading_ = true;
     if (game_) game_->stop();
     sendProjectSplash(path);
@@ -804,6 +806,27 @@ bool StudioHost::brushArmed() const { return !projectLoading_ && preview_ && ses
 void StudioHost::rebuildOverlay() {
     if (!preview_) return;
     auto shapes = extShapes_;
+    if(buildingGraphOverlayScene_){
+        const auto snapshot=session_->buildingGraphSnapshot(buildingGraphOverlayScene_);
+        const auto& change=snapshot["lastChange"];
+        const auto& lo=change["min"];const auto& hi=change["max"];
+        if(lo.isArray()&&hi.isArray()&&lo.size()==3&&hi.size()==3){
+            float a[3]{},b[3]{};bool valid=true;
+            for(size_t i=0;i<3;++i){
+                const double x=lo[i].toDouble(),y=hi[i].toDouble();
+                if(!lo[i].isNumber()||!hi[i].isNumber()||!std::isfinite(x)||!std::isfinite(y)||x>y||std::abs(x)>1e7||std::abs(y)>1e7){valid=false;break;}
+                a[i]=float(x);b[i]=float(y);
+            }
+            if(valid){
+                auto corner=[&](unsigned c){return render::float3{c&1?b[0]:a[0],c&2?b[1]:a[1],c&4?b[2]:a[2]};};
+                for(unsigned c=0;c<8;++c)for(unsigned bit:{1u,2u,4u})if(!(c&bit)){
+                    StudioScene::OverlayShape sh;sh.kind=1;sh.thickness=2.5f;
+                    sh.r=255;sh.g=120;sh.bl=40;sh.a=corner(c);sh.b=corner(c|bit);
+                    shapes.push_back(sh);
+                }
+            }
+        }
+    }
     for (const auto& seg : splineCache_["segments"].items()) {
         StudioScene::OverlayShape sh; sh.kind = 1; sh.thickness = 2; sh.r = 255; sh.g = 200; sh.bl = 80;
         sh.a = {float(seg[0].toDouble()), 0.15f, float(seg[1].toDouble())};
@@ -1302,6 +1325,20 @@ bool StudioHost::handleHostMethod(const Json& req) {
         return true; // diagnostics never touch Workspace or the filesystem
     }
     if (!hasId) return false;
+    if(method=="studio.buildingGraphOverlay")return answer([&]{
+        const auto raw=params.getStr("sceneId");
+        if(raw.empty()){buildingGraphOverlayScene_=0;rebuildOverlay();}
+        else{
+            if(!preview_)throw std::runtime_error("Open the native Scene viewport");
+            if(raw.size()>19||raw[0]=='0')throw std::runtime_error("Invalid scene ID");
+            uint64_t id=0;
+            for(char c:raw){if(c<'0'||c>'9'||id>(uint64_t(INT64_MAX)-uint64_t(c-'0'))/10)throw std::runtime_error("Invalid scene ID");id=id*10+uint64_t(c-'0');}
+            const auto snap=session_->buildingGraphSnapshot(id);
+            if(!snap["lastChange"].isObject())throw std::runtime_error("No committed building invalidation snapshot");
+            buildingGraphOverlayScene_=id;rebuildOverlay();
+        }
+        Json out=Json::object();out.set("active",Json::fromBool(buildingGraphOverlayScene_!=0));return out;
+    });
     if(method=="studio.buildingPreview")return answer([&]{
         if(!preview_)throw std::runtime_error("Open the native Scene viewport");
         const auto& project=session_->workspace().project.dir;
@@ -1417,13 +1454,14 @@ bool StudioHost::handleHostMethod(const Json& req) {
                 plan.camera = std::array<float, 5>{cam.target.x, cam.target.z, cam.distance, float(cam.pitch * 57.29578), float(cam.yaw * 57.29578)};
             }
             ensureGame();
+            buildingGraphOverlayScene_=0;rebuildOverlay();
             session_->setBuildingGraphReader({});
             game_->start(plan, engineRoot_ + "/engine/assets");
             gameFrameTime_ = 0;
-        } else if (method == "studio.gameStop" && game_) {session_->setBuildingGraphReader({});game_->stop();}
+        } else if (method == "studio.gameStop" && game_) {buildingGraphOverlayScene_=0;session_->setBuildingGraphReader({});game_->stop();rebuildOverlay();}
         else if (method == "studio.gameControl") {
             if (!game_) throw std::runtime_error("No game is running");
-            if(params.getStr("action")=="restart")session_->setBuildingGraphReader({});
+            if(params.getStr("action")=="restart"){buildingGraphOverlayScene_=0;session_->setBuildingGraphReader({});rebuildOverlay();}
             game_->control(params.getStr("action"));
         }
         return gameState();
@@ -1594,7 +1632,7 @@ void StudioHost::handleMessage(const std::string& json) {
     try {
         if (handleHostMethod(req)) return;
         const std::string method = req.getStr("method");
-        if (game_ && (method == "studio.openMap" || method == "studio.newMap")) {session_->setBuildingGraphReader({});game_->stop();}
+        if (game_ && (method == "studio.openMap" || method == "studio.newMap")) {buildingGraphOverlayScene_=0;session_->setBuildingGraphReader({});game_->stop();rebuildOverlay();}
         if (projectLoading_ && method != "studio.viewportRect") { sendError(req["id"], "Project is loading"); return; }
         Json reply;
         if (method == "studio.assetThumbnail" && req["id"].isNumber()) {
