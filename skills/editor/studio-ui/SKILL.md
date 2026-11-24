@@ -209,6 +209,9 @@ Native studio.save and native Save As share detached owner staging and ProjectDo
 ## Window menu categories
 Maintain one exhaustive panel-to-category mapping in `apps/studio-web/src/windowGroups.ts` whenever registering a new StudioPanel. Window uses the shared nested context menu with alphabetic children and native open-state check marks; do not duplicate open panels into a separate flat list. Preserve workspace switching, docking, floating and Command Palette search. UI-facing labels are English, including Wind and its panel controls. The shell test enforces complete, unique registry coverage.
 
+## Atomic Map checkpoint (S6f.4b.2)
+Studio Save/Save As now holds the per-map advisory lock and stages the Map history checkpoint v2 in the same ProjectDocumentJournal transaction as map/terrain and Project documents. v2 uses the exact file hash set; v1 remains readable. Loaded baselines must match before publication, including removed sidecar dependencies. New checkpoint targets are restricted to the exact map-history-<sha256>.json cache filename. Legacy dirty markers fence atomic save. Standalone map_save and Asset history checkpoint are still separate. No full power-loss/OS validation yet.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web
