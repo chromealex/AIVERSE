@@ -6,6 +6,7 @@
 #include "PlanetTerrainCollision.h"
 #include "PlanetMorphCollision.h"
 #include "PlanetMorphNodeProxies.h"
+#include "PlanetConsequencePublisher.h"
 #include "aiverselib/world/EvolvePlanetRootClimate.h"
 #include <optional>
 #include <set>
@@ -29,6 +30,8 @@ public:
     enum class Phase { Idle, Prepared, PhysicsPublished, PhysicsStepped, Complete, Fault };
     Phase phase()const{return phase_;}
     const PlanetHostStamp& stamp()const{return stamp_;}
+    size_t consequenceCount()const{return consequences_.count();}
+    physics::BodyHandle consequenceHandle(const PlanetConsequencePublisher::Key& key)const{return consequences_.handle(key);}
     size_t physicsTiles()const{return physical_.granularPhysicsTiles();}
     size_t terrainPhysicsTiles()const{return terrain_.count();}
     size_t morphPhysicsCount()const{return morphCollision_.count();}
@@ -99,7 +102,7 @@ public:
         frame_=std::move(frame);morphPrepared_=std::move(prepared);nodePrepared_=std::move(nodes);stamp_=std::move(stamp);
         scene_=&scene;sceneTick_=scene.tick();bodyIndex_=body;terrainEnabled_=terrainConfig.enabled;terrainConfig_=std::move(terrainConfig);
         physical_.invalidateMorphPublications();
-        renderDone_=false;recorded_=false;contacts_.clear();debrisStates_.clear();
+        renderDone_=false;recorded_=false;contacts_.clear();debrisStates_.clear();consequenceStates_.clear();
         phase_=Phase::Prepared;return true;
     }
     // Same immutable geometry drives both publishers. A partial owner error
@@ -111,11 +114,13 @@ public:
         if(!physical_.publishPhysics(*scene_,frame_))return false;
         if(!morphCollision_.publish(*scene_,std::move(morphPrepared_)))return false;
         if(!morphNodes_.publish(*scene_,nodePrepared_))return false;
+        if(!consequences_.publish(*scene_,*snapshot_,*surface_,stamp_.body))return false;
         phase_=Phase::PhysicsPublished;return true;
     }
     bool publishDebris(const PlanetDebrisProjection& request){
         if(phase_!=Phase::PhysicsPublished||!sceneCurrent()||request.bodyId!=stamp_.body)return false;
         if(terrainEnabled_&&!terrain_.covers(request.simulationPosition))return false;
+        if(snapshot_->resourceConst<lib::worldprocess::PlanetConsequenceResource>())return false; // one debris owner
         phase_=Phase::Fault;
         if(!physical_.planetDebris().publish(*scene_,*snapshot_,*surface_,request))return false;
         phase_=Phase::PhysicsPublished;return true;
@@ -157,6 +162,11 @@ public:
             if(!physical_.planetDebris().capture(*scene_,*snapshot_,*surface_,current))return false;
             for(const auto& state:current)if(!terrain_.covers(state.simulationPosition))return false;
         }
+        if(terrainEnabled_){
+            std::vector<PlanetConsequencePublisher::Checkpoint> current;
+            if(!consequences_.capture(*scene_,*surface_,stamp_.body,current))return false;
+            for(const auto& state:current)if(!terrain_.covers(state.motion.position))return false;
+        }
         struct Staged {physics::CharacterState state; b3Quat orientation; physics::Pushes pushes;};
         std::vector<Staged> staged;staged.reserve(characters.size());
         std::set<physics::BodyHandle> proxies;
@@ -174,7 +184,8 @@ public:
         }
         // After the first side effect, a failure is fatal for this phase.
         phase_=Phase::Fault;
-        if(!physical_.planetDebris().applyGravity(*scene_,*snapshot_,*surface_))return false;
+        if(!physical_.planetDebris().applyGravity(*scene_,*snapshot_,*surface_)||
+           !consequences_.applyGravity(*scene_,*snapshot_))return false;
         for(size_t i=0;i<characters.size();++i){
             const auto& ch=characters[i];const auto& item=staged[i];
             if(!scene_->moveCharacterOriented(ch.proxy,item.state,item.orientation))return false;
@@ -190,6 +201,8 @@ public:
         if(!physical_.planetDebris().capture(*scene_,*snapshot_,*surface_,debrisStates_))return false;
         if(terrainEnabled_)for(const auto& state:debrisStates_)
             if(!terrain_.covers(state.simulationPosition))return false;
+        if(!consequences_.capture(*scene_,*surface_,stamp_.body,consequenceStates_))return false;
+        if(terrainEnabled_)for(const auto& state:consequenceStates_)if(!terrain_.covers(state.motion.position))return false;
         phase_=Phase::PhysicsStepped;return true;
     }
     // Record both motion checkpoints and next-tick MORPH input in the existing
@@ -197,11 +210,19 @@ public:
     // handles are persisted. On failure the same frozen batch can be retried.
     // The callback must not step or mutate the physics scene.
     template<class Record>
-    bool recordPhysicsOutputs(Record&& record){
+    bool recordAllPhysicsOutputs(Record&& record){
         if(phase_!=Phase::PhysicsStepped||recorded_||!sceneCurrent())return false;
         if(!std::forward<Record>(record)(stamp_,std::span<const MorphContactInput>(contacts_),
-            std::span<const PlanetDebrisState>(debrisStates_)))return false;
+            std::span<const PlanetDebrisState>(debrisStates_),
+            std::span<const PlanetConsequencePublisher::Checkpoint>(consequenceStates_)))return false;
         recorded_=true;finish();return true;
+    }
+    template<class Record>
+    bool recordPhysicsOutputs(Record&& record){
+        if(!consequenceStates_.empty())return false;
+        return recordAllPhysicsOutputs([&](const auto& stamp,auto contacts,auto debris,auto){
+            return std::forward<Record>(record)(stamp,contacts,debris);
+        });
     }
     // Compatibility for hosts with no live debris. Do not silently drop
     // native owner motion when the physical step actually contains debris.
@@ -246,7 +267,7 @@ public:
     bool resetAfterRollback(){
         if(!scene_)return phase_==Phase::Idle;
         phase_=Phase::Fault;
-        if(!terrain_.reset(*scene_)||!morphCollision_.reset(*scene_)||!morphNodes_.reset(*scene_))return false;
+        if(!terrain_.reset(*scene_)||!morphCollision_.reset(*scene_)||!morphNodes_.reset(*scene_)||!consequences_.reset(*scene_))return false;
         if(device_){if(!physical_.resetAfterRollback(*scene_,*device_))return false;}
         else if(!physical_.resetPhysicsOnly(*scene_))return false;
         auto* retainedDevice=device_;
@@ -258,7 +279,7 @@ public:
             device_=nullptr;return true;
         }
         phase_=Phase::Fault;
-        if(!terrain_.reset(*scene_)||!morphCollision_.reset(*scene_)||!morphNodes_.reset(*scene_))return false;
+        if(!terrain_.reset(*scene_)||!morphCollision_.reset(*scene_)||!morphNodes_.reset(*scene_)||!consequences_.reset(*scene_))return false;
         if(device_){if(!physical_.shutdownAfterIdle(*scene_,*device_))return false;}
         else if(!physical_.resetPhysicsOnly(*scene_))return false;
         clear();return true;
@@ -267,7 +288,7 @@ private:
     bool sceneCurrent()const{return scene_&&scene_->tick()==sceneTick_;}
     void finish(){if(phase_==Phase::PhysicsStepped&&renderDone_&&recorded_)phase_=Phase::Complete;}
     void clear(){
-        snapshot_.reset();surface_.reset();frame_={};morphPrepared_.clear();nodePrepared_.clear();contactDebounce_.reset();stamp_={};contacts_.clear();debrisStates_.clear();
+        snapshot_.reset();surface_.reset();frame_={};morphPrepared_.clear();nodePrepared_.clear();contactDebounce_.reset();stamp_={};contacts_.clear();debrisStates_.clear();consequenceStates_.clear();
         scene_=nullptr;device_=nullptr;sceneTick_=0;bodyIndex_=-1;
         renderDone_=recorded_=terrainEnabled_=false;terrainConfig_={};phase_=Phase::Idle;
     }
@@ -275,6 +296,8 @@ private:
     PlanetTerrainCollision terrain_;
     PlanetMorphCollisionPublisher morphCollision_;
     PlanetMorphNodePublisher morphNodes_;
+    PlanetConsequencePublisher consequences_;
+    std::vector<PlanetConsequencePublisher::Checkpoint> consequenceStates_;
     MorphContactDebounce contactDebounce_;
     std::vector<PlanetMorphNodeProxy> nodePrepared_;
     std::vector<PlanetMorphPreparedCollider> morphPrepared_;

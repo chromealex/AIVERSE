@@ -113,12 +113,43 @@ static void checkMorphNodeProxies(){
     check(!nodes.publish(scene,{proxy})&&scene.valid(handle),"shape change requires retirement");
     check(nodes.reset(scene)&&scene.bodyCount()==0,"proxy rollback retirement");
 }
+static void checkConsequenceOwner(){
+    namespace wp=lib::worldprocess;
+    game::Surface surface;game::BodyDef body;body.id="terra";body.radius=64_fx;body.faceSize=8;
+    surface.bodies.push_back(body);surface.build();
+    World world;world.setResource<wp::PlanetConsequenceResource>();
+    const auto member=world.create();Transform tr{};tr.pos=surface.cellCenter(surface.gridCell(0,0,3,3));
+    world.add<Transform>(member,tr);world.add<fracture::Member>(member,fracture::Member{false,true,true});
+    fracture::Event event{member,fracture::collapseEventKey(member,7),7};
+    world.add<fracture::Collapse>(member,fracture::Collapse{event.key,7,fracture::Delivery::Pending});
+    const auto owner=[&](World&,const auto& delivery)->std::optional<wp::ConsequenceBody>{
+        wp::ConsequenceBody record;record.motion.position=delivery.frame.origin+surface.up(tr.pos)*2_fx;
+        return record; // fixture has no source collider
+    };
+    check(wp::deliverPlanetConsequences(world,surface,"terra",7,owner,
+        [](World&,const auto&)->std::optional<wp::ConsequenceBody>{return {};}),"durable consequence");
+    check(fracture::planetCollapseReceipt(world,event),"ack after record");
+    const auto key=wp::consequenceKey(event);
+    physics::Scene scene;PlanetConsequencePublisher pub;
+    check(pub.publish(scene,world,surface,"terra")&&pub.count()==1,"spawn durable body");
+    const auto handle=pub.handle(key);
+    check(pub.publish(scene,world,surface,"terra")&&pub.handle(key)==handle,"idempotent body");
+    scene.step();
+    std::vector<wp::ConsequenceCheckpoint> state;
+    check(pub.capture(scene,surface,"terra",state)&&state.size()==1,"capture motion");
+    check(wp::commitConsequenceMotion(world,surface,"terra",7,state),"persist native checkpoint");
+    check(!wp::commitConsequenceMotion(world,surface,"terra",7,state),"reject repeated checkpoint");
+    check(pub.reset(scene)&&scene.bodyCount()==0,"reset body");
+    check(pub.publish(scene,world,surface,"terra")&&pub.count()==1,"restore checkpoint");
+    check(pub.reset(scene),"shutdown owner");
+}
 int main(){
     try{
         checkTerrainCollision();
         checkStreamedTerrain();
         checkMorphCollisionPublication();
         checkMorphNodeProxies();
+        checkConsequenceOwner();
         auto surface=std::make_shared<game::Surface>();
         game::BodyDef def;def.id="terra";def.radius=Fixed::fromInt(64);def.faceSize=8;
         surface->bodies.push_back(def);def.id="moon";surface->bodies.push_back(def);surface->build();
