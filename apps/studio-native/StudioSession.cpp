@@ -3,6 +3,7 @@
 #include "apps/editor/AuthoringWater.h"
 #include "StudioHumanCharacterBuild.h"
 #include "StudioSession.h"
+#include "apps/editor/core/TerraWeavePlanetCavernsDoc.h"
 #include "engine/world/NereidFlowAuthoring.h"
 #include "apps/editor/core/ProjectFile.h"
 #include "apps/editor/core/Projects.h"
@@ -763,6 +764,11 @@ bool StudioSession::caveBrushPoint(double ox,double oy,double oz,double dx,doubl
         const double t=(brush_.caveY-oy)/dy;
         if(t<=0||t>500)return false;
         x=ox+dx*t;y=brush_.caveY;z=oz+dz*t;
+        if(ws_.map.data.planet()){
+            try{const auto cap=editor::planet_caves::read(ws_.map.data).anchor.halfExtentCm/100.;
+                return std::abs(x)<=cap&&std::abs(y)<=cap&&std::abs(z)<=cap;}
+            catch(const std::exception& e){if(error)*error=e.what();return false;}
+        }
         return std::abs(x)<=1e7&&std::abs(z)<=1e7;
     }
     Json p=Json::object();
@@ -2536,7 +2542,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     throw std::runtime_error("Caverns brush project/map changed");
                 bool paint=false,pick=false;
                 for(const auto& op:ws_.ops()){paint|=op.name=="terraweave_caverns_paint";pick|=op.name=="terraweave_caverns_pick";}
-                if(!paint||!pick||ws_.map.data.planet())throw std::runtime_error("Caverns native flat-world backend unavailable");
+                if(!paint||!pick)throw std::runtime_error("Caverns native backend unavailable");
+                if(ws_.map.data.planet())(void)editor::planet_caves::read(ws_.map.data);
             }
             brush_=std::move(next);
             if(brush_.armed)splineEdit_.clear();
