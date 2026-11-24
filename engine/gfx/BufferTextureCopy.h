@@ -8,6 +8,7 @@ inline constexpr std::size_t rgba8CopyAlignment=256;
 struct BufferTextureCopy2D {
     int width=0,height=0;
     std::size_t sourceOffset=0,rowPitchBytes=0;
+    bool generateMipmaps=false; // full allocated chain, same command submission
 };
 struct Rgba8CopyLayout {
     std::size_t rowPitchBytes=0,bytes=0;
