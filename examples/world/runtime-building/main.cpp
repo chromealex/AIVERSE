@@ -258,9 +258,11 @@ static void verifyPhysisBinding(){
         {2,{{1_fx,1_fx,1_fx},{2_fx,3_fx,2_fx}}}};
     CHECK(binding.synchronize(shapes,{2}));
     CHECK(binding.bodyCount()==2&&physics.bodyCount()==2);
+    CHECK(binding.telemetry().getInt("lastCreated")==2);
     const auto leaf=binding.body(2);
     shapes.at(2).min.x+=1_fx;shapes.at(2).max.x+=1_fx;
     CHECK(binding.synchronize(shapes,{2})&&binding.body(2)==leaf);
+    CHECK(binding.telemetry().getInt("lastMoved")==1);
     CHECK(physics.position(leaf).x>2.4f&&physics.position(leaf).x<2.6f);
     physics::BodyDesc cargo;cargo.position={2.5f,2.f,1.5f};
     auto actor=physics.create(cargo);CHECK(actor);
@@ -291,6 +293,9 @@ int main(int argc,char** argv){
         CHECK(game->namespaces.activeCount()==2);
         CHECK(game->navA.built()&&!game->navA.dirty());
         CHECK(game->navB.built()&&!game->navB.dirty());
+        const auto navTelemetry=game->graphMonitor->read(1)["ownerTelemetry"]["navmesh"];
+        CHECK(navTelemetry.isObject()&&navTelemetry.getInt("tileCount")>0);
+        CHECK(navTelemetry["lastSuccessfulRefresh"].isObject());
         CHECK(world.canBoardLift(1,game->feature,0));
         CHECK(!world.canTraverse(2,"entrance/0/0"));
         CHECK(!game->spatial.colliders().empty());
