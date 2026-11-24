@@ -25,6 +25,10 @@ struct BuildingCirculationTick {
     std::vector<BuildingLiftPlatformMotion> platformMovements;
     uint64_t graphRevision=0;
 };
+struct BuildingCirculationCheckpoint {
+    std::map<uint32_t,BuildingLiftCheckpoint> lifts;
+    std::map<uint64_t,uint32_t> riders;
+};
 class BuildingCirculationHost {
 public:
     bool initialize(const RuntimeBuildingResult& generated,
@@ -62,6 +66,41 @@ public:
         return true;
     }
 
+    // Checkpoint for entity-bound riders, never anonymous passenger counts.
+    // A staged copy prevents partial restore of a malformed checkpoint.
+    bool captureCheckpoint(BuildingCirculationCheckpoint& out)const{
+        BuildingCirculationCheckpoint staged;
+        staged.riders=riders_;
+        std::map<uint32_t,uint32_t> counts;
+        for(const auto& [actor,feature]:riders_){
+            if(!actor||!lifts_.contains(feature))return false;
+            ++counts[feature];
+        }
+        for(const auto& [feature,lift]:lifts_){
+            BuildingLiftCheckpoint state;
+            if(!lift.captureCheckpoint(state)||state.state.passengerCount!=counts[feature])
+                return false;
+            staged.lifts.emplace(feature,state);
+        }
+        out=std::move(staged);return true;
+    }
+    bool restoreCheckpoint(const BuildingCirculationCheckpoint& saved){
+        if(saved.lifts.size()!=lifts_.size()||saved.riders.size()>lifts_.size()*BuildingLiftController::kMaxPassengers)
+            return false;
+        auto staged=lifts_;
+        std::map<uint32_t,uint32_t> counts;
+        for(const auto& [actor,feature]:saved.riders){
+            if(!actor||!staged.contains(feature))return false;
+            ++counts[feature];
+        }
+        for(auto& [feature,lift]:staged){
+            const auto it=saved.lifts.find(feature);
+            if(it==saved.lifts.end()||it->second.state.passengerCount!=counts[feature]||
+               !lift.restoreCheckpoint(it->second))return false;
+        }
+        lifts_=std::move(staged);riders_=saved.riders;navLinks_={};
+        return true;
+    }
     void clear(){
         graph_={};lifts_.clear();navLinks_={};riders_.clear();
         ++graphRevision_;

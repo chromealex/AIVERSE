@@ -1,6 +1,7 @@
 // Standalone C++20 test. BuildingStructureGraph is independent of engine
 // materials, rendering, game modules and editor runtime.
 #include <aiverselib/systems/BuildingStructureGraph.h>
+#include <aiverselib/systems/BuildingCirculationRuntime.h>
 #include <cmath>
 #include <cstdio>
 #include <stdexcept>
@@ -135,6 +136,31 @@ int main(){
             ++upperHoles;
         }
         CHECK(upperHoles==2);
+        // Recover an occupied lift mid-trip, preserving integer rounding and
+        // door timing. Unconsumed motion cannot be checkpointed.
+        BuildingLiftController original,recovered;
+        CHECK(original.initialize(threeGraph,1));
+        CHECK(recovered.initialize(threeGraph,1));
+        CHECK(original.board(0));
+        CHECK(original.requestDestination(2));
+        original.advance(BuildingLiftController::kDoorTimeMs+17);
+        BuildingLiftCheckpoint saved;
+        CHECK(!original.captureCheckpoint(saved));
+        CHECK(original.takePlatformMotion().has_value());
+        CHECK(original.captureCheckpoint(saved));
+        CHECK(saved.state.phase==BuildingLiftPhase::Traveling);
+        auto invalid=saved;invalid.travelRemainder=1000;
+        CHECK(!recovered.restoreCheckpoint(invalid));
+        CHECK(recovered.restoreCheckpoint(saved));
+        CHECK(!recovered.takePlatformMotion().has_value());
+        for(int i=0;i<20;++i){
+            original.advance(17);recovered.advance(17);
+            auto x=original.takePlatformMotion(),y=recovered.takePlatformMotion();
+            CHECK(bool(x)==bool(y));
+            if(x)CHECK(x->oldYmm==y->oldYmm&&x->newYmm==y->newYmm&&x->revision==y->revision);
+        }
+        CHECK(original.snapshot().platformYmm==recovered.snapshot().platformYmm);
+        CHECK(recovered.snapshot().passengerCount==1);
         std::puts("building structure graph standalone PASS");
         return 0;
     }catch(const std::exception& e){

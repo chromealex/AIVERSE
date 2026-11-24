@@ -40,6 +40,8 @@ class BuildingDualLeafGameSession {
 public:
     using Authorize=BuildingApertureFixedTickOwner::Authorize;
     using InteractionRange=BuildingApertureFixedTickOwner::InteractionRange;
+    using QueuedActorGuard=std::function<bool(const World&,uint8_t,Entity)>;
+    void setQueuedActorGuard(QueuedActorGuard guard){queuedActorGuard_=std::move(guard);}
     using SubmitLeaf=std::function<bool(
         const render::Model&,const BuildingApertureLeafPose&)>;
 
@@ -71,7 +73,8 @@ public:
            !command.actor.valid()||!ecs.alive(command.actor)||
            command.socketId.empty()||!command.sequence||
            !command.graphDomains||
-           (command.graphDomains&~kBuildingGraphAll)){
+           (command.graphDomains&~kBuildingGraphAll)||
+           (queuedActorGuard_&&!queuedActorGuard_(ecs,command.authenticatedPlayer,command.actor))){
             if(error)*error="Invalid dual leaf command envelope";
             return false;
         }
@@ -141,6 +144,8 @@ public:
                 result.actor=cmd.actor;result.sequence=cmd.sequence;
                 if(!ecs.alive(cmd.actor)||cmd.sceneId!=sceneId_){
                     result.error="Actor retired or scene changed";
+                }else if(queuedActorGuard_&&!queuedActorGuard_(ecs,cmd.authenticatedPlayer,cmd.actor)){
+                    result.error="Authenticated actor ownership changed";
                 }else if(accepted_.contains(cmd.actor.packed())&&
                          cmd.sequence<=accepted_.at(cmd.actor.packed())){
                     result.error="Actor command reordered";
@@ -252,7 +257,7 @@ public:
             presentation_.clear();
         }
         accepted_.clear();queue_.clear();
-        authorize_={};range_={};
+        authorize_={};range_={};queuedActorGuard_={};
         sceneId_=lastTick_=0;
     }
     bool attached()const noexcept{return sceneId_!=0;}
@@ -260,6 +265,7 @@ public:
 private:
     BuildingAperturePresentation presentation_;
     mutable std::mutex presentationMutex_;
+    QueuedActorGuard queuedActorGuard_;
     Authorize authorize_;
     InteractionRange range_;
     uint64_t sceneId_=0,lastTick_=0;

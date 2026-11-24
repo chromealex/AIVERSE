@@ -87,6 +87,8 @@ public:
         }
         if(staged.size()!=ids.size())
             return fail("Unexpected door IDs without matching lift");
+        for(uint32_t id:allIds)
+            if(spatial.colliders().contains(id))return fail("Landing door collider ID occupied");
         // Register closed leaves; open landing doors are absent from
         // SpatialWorld. Roll back ALL new colliders on any failure.
         std::vector<uint32_t> added;

@@ -5,6 +5,7 @@
 // Requires world-owner exclusive access; do not invoke from render threads.
 #include "engine/buildings/BuildingCirculationScene.h"
 #include "engine/core/ECS.h"
+#include "engine/core/Archive.h"
 #include <algorithm>
 #include <cmath>
 #include <concepts>
@@ -23,6 +24,10 @@ struct BuildingLiftPassenger {
     uint64_t lastAppliedRevision=0;
     bool attached=false;
 };
+inline void io(Archive& ar,BuildingLiftPassenger& p){
+    ar(p.sceneId,p.liftFeature,p.lastAppliedRevision,p.attached);
+    if(p.attached&&(!p.sceneId||!p.lastAppliedRevision))ar.fail();
+}
 struct BuildingLiftActorBinding {
     uint64_t sceneId=0;
     Entity actor{};

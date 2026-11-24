@@ -52,7 +52,8 @@ public:
                           const BuildingLiftPlatformPose& pose,
                           float width,float depth,Vec3 origin,uint32_t yaw){
         if(feature!=pose.featureIndex||!colliderId||yaw>3||
-           !(width>0)||!(depth>0)||registered_.count(feature))
+           !(width>0)||!(depth>0)||registered_.count(feature)||
+           spatial.colliders().contains(colliderId))
             return false;
         const auto bounds=buildingLiftPlatformWorldBounds(
             pose,width,depth,origin,yaw);

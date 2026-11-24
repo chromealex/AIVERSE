@@ -22,6 +22,7 @@ struct BuildingApertureCommand {
     std::string socketId;
     bool open=false;
     uint32_t graphDomains=0;
+    uint8_t authenticatedPlayer=0; // trusted host slot; legacy callers leave zero
 };
 struct BuildingApertureCommandOutcome {
     Entity actor{};

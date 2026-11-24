@@ -44,6 +44,12 @@ struct BuildingLiftSnapshot {
     uint32_t passengerCount=0;
     bool doorsOpen()const{return phase==BuildingLiftPhase::Open;}
 };
+// Authoritative checkpoint, distinct from a network replica snapshot.
+// Captured only after the physics owner consumed the pending movement.
+struct BuildingLiftCheckpoint {
+    BuildingLiftSnapshot state;
+    int64_t travelRemainder=0;
+};
 struct BuildingLiftEvent {
     enum class Kind : uint8_t { DoorsClosed, Departed, Arrived, DoorsOpened };
     Kind kind=Kind::Arrived;
@@ -147,6 +153,31 @@ public:
         auto movement=std::move(pendingMotion_);
         pendingMotion_.reset();
         return movement;
+    }
+    bool captureCheckpoint(BuildingLiftCheckpoint& out)const{
+        if(floorsMm_.empty()||pendingMotion_)return false;
+        out={state_,travelRemainder_};return true;
+    }
+    // Restore into an initialized controller before registering its collider.
+    // No synthetic motion or actor delta: the ECS checkpoint already contains
+    // the actors at the saved physical height.
+    bool restoreCheckpoint(const BuildingLiftCheckpoint& saved){
+        const auto& s=saved.state;
+        if(floorsMm_.empty()||pendingMotion_||s.featureIndex!=state_.featureIndex||
+           !s.revision||s.revision==UINT64_MAX||
+           s.currentFloor>=floorsMm_.size()||s.targetFloor>=floorsMm_.size()||
+           s.phase>BuildingLiftPhase::Offline||s.passengerCount>kMaxPassengers||
+           s.platformYmm<floorsMm_.front()||s.platformYmm>floorsMm_.back()||
+           saved.travelRemainder<0||saved.travelRemainder>=1000)return false;
+        const bool timed=s.phase==BuildingLiftPhase::Closing||s.phase==BuildingLiftPhase::Opening;
+        if(timed?s.phaseElapsedMs>=kDoorTimeMs:s.phaseElapsedMs!=0)return false;
+        if((s.phase==BuildingLiftPhase::Open||timed)&&
+           s.platformYmm!=floorsMm_[s.currentFloor])return false;
+        if((s.phase==BuildingLiftPhase::Open||s.phase==BuildingLiftPhase::Opening)&&
+           s.currentFloor!=s.targetFloor)return false;
+        state_=s;pose_.yMm=s.platformYmm;pose_.revision=s.revision;
+        travelRemainder_=saved.travelRemainder;
+        return true;
     }
     // Client-side replication accepts only a validated newer snapshot.
     // Authoritative simulation must never use remote snapshots.
@@ -279,7 +310,7 @@ public:
                     int64_t(remaining)*kSpeedMmPerSecond;
                 const int64_t step=std::max<int64_t>(1,advanceNumerator/1000);
                 travelRemainder_=advanceNumerator%1000;
-                const int64_t move=std::min(std::llabs(delta),step);
+                const int64_t move=std::min<int64_t>(std::llabs(delta),step);
                 const int64_t previous=state_.platformYmm;
                 state_.platformYmm+=delta<0?-move:move;
                 pose_.yMm=state_.platformYmm;

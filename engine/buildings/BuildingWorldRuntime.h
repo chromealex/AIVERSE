@@ -207,6 +207,7 @@ public:
                !s->session.attach(id,s->physics,s->style,s->def.authorize,s->def.reachable,error)){
                 (void)dropPhysical(*s,nullptr);return false;
             }
+            s->session.setQueuedActorGuard(owns_);
             s->status=Status::Loading;
         }
         const auto ack=s->router.publish({id,1,UINT32_MAX,
@@ -319,6 +320,7 @@ public:
                     s->domains,error,&s->bounds)){
                     (void)dropPhysical(*s,nullptr);return false;
                 }
+                s->session.setQueuedActorGuard(owns_);
                 s->status=Status::Active;
             }
             s->recovered=true;
@@ -587,7 +589,7 @@ private:
         if(!c.seq||!validateCommand(c)){lastError_="Building command rejected";return;}
         auto* s=find(uint64_t(c.args[0]));
         BuildingApertureCommand request{uint64_t(c.args[0]),c.units[0],c.seq,
-            s->poses[size_t(c.args[2])].socketId,c.param==1,s->domains};
+            s->poses[size_t(c.args[2])].socketId,c.param==1,s->domains,c.player};
         (void)s->runtime->enqueue(request,&lastError_);
     }
     void advance(Simulation& sim){

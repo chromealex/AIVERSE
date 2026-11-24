@@ -10,6 +10,7 @@
 #include <aiverselib/systems/RuntimeBuildingGenerator.h>
 #include <functional>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -45,17 +46,30 @@ public:
     bool attach(const RuntimeBuildingResult& generated,
                 world::SpatialWorld& spatial,nav::Mesh* navmesh,
                 const std::map<uint32_t,uint32_t>& colliderIds,
-                Vec3 origin,uint32_t yaw,std::string* error=nullptr){
+                Vec3 origin,uint32_t yaw,std::string* error=nullptr,
+                const BuildingCirculationCheckpoint* restored=nullptr){
         if(attached_){if(error)*error="Scene already attached";return false;}
         BuildingCirculationHost staged;
         std::string problem;
         if(!staged.initialize(generated,origin,yaw,&problem)){
             if(error)*error=problem;return false;
         }
+        if(restored&&!staged.restoreCheckpoint(*restored)){
+            if(error)*error="Invalid authoritative lift checkpoint";
+            return false;
+        }
         const auto& lifts=staged.lifts();
         if(colliderIds.size()!=lifts.size()){
             if(error)*error="One unique collider id is required per elevator";
             return false;
+        }
+        std::set<uint32_t> ids;
+        for(const auto& [feature,id]:colliderIds){
+            if(!lifts.contains(feature)||!id||!ids.insert(id).second||
+               spatial.colliders().contains(id)){
+                if(error)*error="Elevator collider ID unavailable";
+                return false;
+            }
         }
         // Verify ids and complete registration before exposing the scene.
         std::vector<uint32_t> registered;

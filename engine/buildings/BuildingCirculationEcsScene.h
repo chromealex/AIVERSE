@@ -36,13 +36,18 @@ public:
                 const RuntimeBuildingResult& generated,
                 const std::map<uint32_t,uint32_t>& platformColliderIds,
                 uint64_t sceneId,Vec3 origin,uint32_t yaw,
-                std::string* error=nullptr){
+                std::string* error=nullptr,
+                const BuildingCirculationCheckpoint* restored=nullptr){
         if(!sceneId){
             if(error)*error="Scene identity must be nonzero";
             return false;
         }
+        if(restored&&!validatePassengers(ecs,sceneId,*restored)){
+            if(error)*error="Lift checkpoint disagrees with ECS passengers";
+            return false;
+        }
         if(!scene_.attach(generated,spatial,navmesh,platformColliderIds,
-                          origin,yaw,error))return false;
+                          origin,yaw,error,restored))return false;
         ecs_=&ecs;
         sceneId_=sceneId;
         origin_=origin;yaw_=yaw;
@@ -222,14 +227,23 @@ public:
         return encodeBuildingLiftStateFrame(frame,out,error);
     }
 
+    bool captureCheckpoint(BuildingCirculationCheckpoint& out)const{
+        if(!ecs_||!scene_.attached()||scene_.faulted()||!lastPublishComplete_)
+            return false;
+        BuildingCirculationCheckpoint staged;
+        if(!scene_.host().captureCheckpoint(staged)||
+           !validatePassengers(*ecs_,sceneId_,staged))return false;
+        out=std::move(staged);return true;
+    }
     bool rebuildNavigation(const nav::Mesh& mesh,std::string* error=nullptr){
         return scene_.rebuildNavigation(mesh,error);
     }
-    void detach(world::SpatialWorld& spatial,nav::Mesh* navmesh){
+    void detach(world::SpatialWorld& spatial,nav::Mesh* navmesh,
+                bool clearPassengers=true){
         commandAuthority_.reset(); // drops authenticated callbacks before detaching their world
         // Clear only the caller's old ECS attachment markers. Game owner
         // remains responsible for safe despawn/relocation at unload.
-        if(ecs_){
+        if(ecs_&&clearPassengers){
             const uint64_t oldScene=sceneId_;
             ecs_->eachExisting<BuildingLiftPassenger>(
                 [oldScene](Entity,BuildingLiftPassenger& p){
@@ -243,6 +257,19 @@ public:
     const BuildingCirculationScene& scene()const noexcept{return scene_;}
     uint64_t sceneId()const noexcept{return sceneId_;}
 private:
+    static bool validatePassengers(World& ecs,uint64_t sceneId,
+                                   const BuildingCirculationCheckpoint& saved){
+        std::map<uint64_t,uint32_t> found;
+        bool valid=true;
+        ecs.eachExisting<BuildingLiftPassenger>([&](Entity e,BuildingLiftPassenger& p){
+            if(!p.attached||p.sceneId!=sceneId)return;
+            const auto lift=saved.lifts.find(p.liftFeature);
+            if(!ecs.alive(e)||!ecs.tryGet<Body>(e)||lift==saved.lifts.end()||
+               !p.lastAppliedRevision||p.lastAppliedRevision>lift->second.state.revision||
+               !found.emplace(e.packed(),p.liftFeature).second)valid=false;
+        });
+        return valid&&found==saved.riders;
+    }
     bool doorwayOccupied(uint32_t feature,uint32_t floor){
         if(!ecs_||!scene_.attached())return true; // fail closed
         for(const auto& pose:scene_.doors().poses()){
