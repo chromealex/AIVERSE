@@ -46,7 +46,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 12 in progress: audit all declared MCP integrations by feature against live registry; add protocol regression fixtures and per-feature gap reporting.",
+      "note": "Stage 13 in progress: unified owner-scoped readiness report and deterministic agent investigation queue for manifests, catalog capabilities and graph domains.",
       "evidence": []
     },
     "architecture": {
