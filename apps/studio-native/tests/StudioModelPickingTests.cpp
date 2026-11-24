@@ -106,7 +106,29 @@ int main() {
     AIVERSE_TEST_CHECK(studioPickModelSurface(masked,mat4::identity(),{1.1f,.25f,5},direction));
     material.uvOffset.x=.5f;
     AIVERSE_TEST_CHECK(studioPickModelSurface(masked,mat4::identity(),{.25f,.25f,5},direction));
-    masked.images[0].rgba.clear();
+    // Procedural CPU alpha must belong to the same material generation.
+    // The recycled numerical slot can contain fully opaque replacement data;
+    // neither a stale pin nor a naked index may select that new surface.
+    auto& procedural=masked.images[0];
+    procedural.proceduralGraphImage=true;
+    procedural.proceduralGraphPin=std::make_shared<const ProceduralImagePin>();
+    material.proceduralGraphPins=withGraphMaterialPin({},0,procedural.proceduralGraphPin);
+    AIVERSE_TEST_CHECK(studioPickModelSurface(masked,mat4::identity(),{.25f,.25f,5},direction));
+    const auto previous=material;
+    procedural.proceduralGraphPin=std::make_shared<const ProceduralImagePin>();
+    procedural.rgba.assign(16,255);
+    AIVERSE_TEST_CHECK(!studioPickModelSurface(masked,mat4::identity(),{.25f,.25f,5},direction));
+    AIVERSE_TEST_CHECK(modelPickAlpha(masked,previous,{.25f,.25f})==0);
+    material.proceduralGraphPins.reset();
+    AIVERSE_TEST_CHECK(!studioPickModelSurface(masked,mat4::identity(),{.25f,.25f,5},direction));
+    material.proceduralGraphPins=withGraphMaterialPin({},0,procedural.proceduralGraphPin);
+    AIVERSE_TEST_CHECK(studioPickModelSurface(masked,mat4::identity(),{.25f,.25f,5},direction));
+    procedural.proceduralGraphRetired=true;
+    AIVERSE_TEST_CHECK(!studioPickModelSurface(masked,mat4::identity(),{.25f,.25f,5},direction));
+    procedural.proceduralGraphRetired=false;
+    procedural.rgba.resize(3);
+    AIVERSE_TEST_CHECK(!studioPickModelSurface(masked,mat4::identity(),{.25f,.25f,5},direction));
+    procedural.rgba.clear();
     AIVERSE_TEST_CHECK(!studioPickModelSurface(masked,mat4::identity(),{.25f,.25f,5},direction));
     std::cout<<"PASS studio CPU model triangle picking\n";
 }

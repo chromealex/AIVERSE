@@ -283,10 +283,7 @@ private:
         vt.addressModes[0]=float(uint32_t(map.addressU));
         vt.addressModes[1]=float(uint32_t(map.addressV));
         vt.policy[0]=it.material.alpha==AlphaMode::Mask?1.0f:0.0f;
-        gfx::TextureHandle alphaMask;
-        if (it.material.baseTex >= 0 &&
-            size_t(it.material.baseTex) < it.model.images.size())
-            alphaMask = it.model.images[size_t(it.material.baseTex)].virtualAlphaMask;
+        const auto alphaMask=resolvedMaterialAlphaCoverage(it.model,it.material);
         vt.alphaMode[0]=alphaMask.valid()?1.0f:0.0f;
         vt.policy[1]=it.lodThreshold<1.0f?1.0f:0.0f;
         vt.policy[2]=it.lodThreshold;
@@ -331,11 +328,7 @@ private:
             dev.setUniforms(4,morph,sizeof(morph));
             dev.setTexture(8,it.model.morphTex);
         }
-        gfx::TextureHandle alpha=white_;
-        if (it.material.baseTex>=0 &&
-            size_t(it.material.baseTex)<it.model.images.size() &&
-            it.model.images[size_t(it.material.baseTex)].tex.valid())
-            alpha=it.model.images[size_t(it.material.baseTex)].tex;
+        const auto alpha=resolvedMaterialTexture(it.model,it.material,&Material::baseTex,white_);
         dev.setTexture(1,alpha);
         // Bind the exact R8 coverage for masked VT images, irrespective of
         // whether this draw also uses bone textures and morph deltas.
