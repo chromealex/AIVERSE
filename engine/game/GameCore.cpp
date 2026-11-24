@@ -1742,6 +1742,7 @@ void GameCore::hashState(Simulation& sim, Hasher& h) {
             h.u32(f->enabled); h.u32(f->homing); h.u32(f->blockTerrain); h.fx(f->radius);
             h.fx(f->maxDistance); h.fx(f->lifetime); h.u32(f->splitBudget); h.u32(uint32_t(f->modifiers.size()));
             if(f->gravity.raw||f->verticalSpeed.raw){h.fx(f->gravity);h.fx(f->verticalSpeed);}
+            if(f->arc){h.u32(1);h.fx(f->arcHeight);h.fx(f->arcHeightPerDistance);}
             for (const auto& m : f->modifiers) {
                 h.u32(uint32_t(m.kind)); h.fx(m.factor); h.fx(m.radius); h.fx(m.angle); h.fx(m.after); h.u32(m.count); h.u32(m.timed);
             }
