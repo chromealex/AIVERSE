@@ -32,6 +32,8 @@ void GameView::setWorld(const Json& map) {
     fog_.setBlur({});
     PlanetWorld w = loadPlanetWorld(map, &warnings_);
     loadPlanetDetailFiles(w, map, read_, &warnings_);
+    discardPendingSurfaceLease();framePublication_.invalidate();
+    if(dev_)planetFlora_.setAuthoredSpecies(*dev_,w.forestManifest,read_);
     planets_.setWorld(w);
     planetVision_.clear();
     rebuildPlanetFlora();
@@ -50,7 +52,8 @@ void GameView::updateWorld(const Json& map) {
     PlanetWorld w = loadPlanetWorld(map);
     loadPlanetDetailFiles(w, map, read_, nullptr);
     const PlanetWorld& cur = planets_.world();
-    bool same = w.bodies.size() == cur.bodies.size() && !w.empty();
+    bool same = w.bodies.size() == cur.bodies.size() && !w.empty() &&
+        w.forestManifest.dump(0)==cur.forestManifest.dump(0);
     for (size_t i = 0; same && i < w.bodies.size(); ++i) {
         const PlanetBody &a = w.bodies[i], &b = cur.bodies[i];
         same = a.id == b.id && a.kind == b.kind && a.faceSize == b.faceSize && a.radius == b.radius && a.seaLevel == b.seaLevel &&
@@ -98,6 +101,8 @@ void GameView::setSimWorld(std::shared_ptr<const Surface> surf, const MapGrid& g
     loadPlanetDetailFiles(visual, map, read_, &warnings_);
     PlanetWorld w = planetWorldFromSim(std::move(surf), grid.flags, visual);
     applyLiveSeaLevels(w,grid);
+    discardPendingSurfaceLease();framePublication_.invalidate();
+    if(dev_)planetFlora_.setAuthoredSpecies(*dev_,w.forestManifest,read_);
     planetDetailBaseline_.clear();planetDetailBaseline_.resize(w.bodies.size());
     for(size_t i=0;i<w.bodies.size();++i){
         const auto& body=w.bodies[i];
@@ -399,7 +404,7 @@ void GameView::drawPlanets(Renderer3D& r, const GameScene& s, double time, const
     if(blend<0.5f){
         for(const auto& plant:s.planetForest.plants){
             if(plant.body<0||size_t(plant.body)>=W.bodies.size())continue;
-            const auto* model=planetFlora_.proto(plant.proto);
+            const auto* model=planetFlora_.forestProto(plant.species,plant.proto);
             if(!model)continue;
             const auto center=bodyToView(plant.body,plant.local);
             const auto d=center-eye;

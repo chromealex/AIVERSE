@@ -12,6 +12,18 @@ namespace wp=aiverse::lib::worldprocess;
 static void check(bool ok,const char* msg){if(!ok)throw std::runtime_error(msg);}
 int main(){
     try{
+        // The same manifest profile schema as the flat TerraWeave owner.
+        const auto authored=Json::parse(R"({"species":[{"id":42,"preset":"oak","prototypeSeed":7},{"id":77,"shape":"columnar","minHeightCm":500,"maxHeightCm":500,"branches":5}]})");
+        const auto models=game::buildPlanetForestSpecies(authored);
+        check(models.size()==2&&models.contains(42)&&models.contains(77)&&!models.contains(1),"exact authored species IDs");
+        check(models.at(42)->materials.size()==2&&models.at(77)->materials.size()==2,"bark foliage contract");
+        bool duplicate=false;
+        try{(void)game::buildPlanetForestSpecies(Json::parse(R"({"species":[{"id":42},{"id":42}]})"));}
+        catch(const std::exception&){duplicate=true;}
+        check(duplicate,"duplicate species rejected");
+        const auto map=Json::parse(R"({"world":{"bodies":[{"id":"terra","faceSize":8}],"terraweaveForest":{"species":[{"id":42,"preset":"oak"}]}}})");
+        const auto visualWorld=game::loadPlanetWorld(map);
+        check(visualWorld.forestManifest["species"].size()==1,"map catalog preserved");
         game::Surface surface;
         game::BodyDef body;body.id="terra";body.radius=64_fx;body.faceSize=8;
         surface.bodies.push_back(body);surface.build();

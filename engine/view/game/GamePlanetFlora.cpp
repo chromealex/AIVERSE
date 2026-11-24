@@ -5,6 +5,7 @@
 #include "engine/render/TerraWeaveRockModel.h"
 #include "engine/world/TerraWeaveSphere.h"
 #include "engine/world/TerraWeaveTreePresets.h"
+#include "engine/world/TerraWeaveForestSpeciesManifest.h"
 #include "engine/world/TerraWeaveDeadwoodPresentation.h"
 #include "aiverselib/world/EvolvePlanetDeadwood.h"
 #include "aiverselib/world/PlanetConsequenceOwner.h"
@@ -159,6 +160,59 @@ bool collectPlanetForestVisuals(const World& world,const Surface& surface,
     output=std::move(next);return true;
 }
 
+PlanetForestModels buildPlanetForestSpecies(const Json& manifest,const render::FileReader& reader){
+    PlanetForestModels models;
+    if(manifest.type()==Json::Type::Null)return models;
+    if(!manifest.isObject()||!manifest["species"].isArray()||
+       manifest["species"].size()==0||manifest["species"].size()>64)
+        throw JsonError("world.terraweaveForest.species: expected 1..64 entries");
+    if(manifest.has("botanicalTextures")&&!manifest["botanicalTextures"].isString())
+        throw JsonError("world.terraweaveForest.botanicalTextures: expected string");
+    const auto dir=manifest.getStr("botanicalTextures","");
+    if(!dir.empty()&&(!reader||!world::safeAssetPath(dir)))
+        throw JsonError("world.terraweaveForest.botanicalTextures: invalid content directory or reader");
+    for(const auto& def:manifest["species"].items()){
+        const auto recipe=world::parseForestSpeciesRecipe(def);
+        const auto id=recipe.profile.speciesId;
+        if(models.contains(id))throw JsonError("world.terraweaveForest.species: duplicate id");
+        auto model=tw::makeArborModel(recipe.profile,recipe.seed,recipe.mesh);
+        if(recipe.preset&&!dir.empty()){
+            tw::applyBotanicalTexture(*model,0,dir,std::string(recipe.preset->barkMaterial),reader);
+            tw::applyBotanicalTexture(*model,1,dir,std::string(recipe.preset->leafMaterial),reader);
+        }
+        models.emplace(id,std::move(model));
+    }
+    return models;
+}
+
+namespace {
+void releasePlanetForestModels(gfx::Device& dev,PlanetForestModels& models){
+    for(auto& [id,model]:models){(void)id;render::releaseModel(dev,*model);}
+    models.clear();
+}
+}
+void PlanetFlora::setAuthoredSpecies(gfx::Device& dev,const Json& manifest,const render::FileReader& reader){
+    auto next=buildPlanetForestSpecies(manifest,reader);
+    if(next.empty()&&authored_.empty()&&pendingAuthored_.empty())return;
+    // Map switch/reload only. Never retire a model used by an earlier frame
+    // until the owner has proved device idle.
+    if(!dev.waitForResourceIdle())throw std::runtime_error("planet forest: GPU idle barrier failed");
+    releasePlanetForestModels(dev,pendingAuthored_);
+    pendingAuthored_=std::move(next);
+    try{
+        for(auto& [id,model]:pendingAuthored_){
+            (void)id;render::prepareModelUpload(*model);
+            if(!render::uploadModel(dev,*model,false,false))
+                throw std::runtime_error("planet forest: authored model upload failed");
+        }
+    }catch(...){
+        if(dev.waitForResourceIdle())releasePlanetForestModels(dev,pendingAuthored_);
+        throw;
+    }
+    releasePlanetForestModels(dev,authored_);
+    authored_.swap(pendingAuthored_);
+}
+
 bool PlanetFlora::makePrototypes(gfx::Device& dev) {
     if (!protos_.empty()) return true;
     try {
@@ -190,6 +244,8 @@ bool PlanetFlora::makePrototypes(gfx::Device& dev) {
 void PlanetFlora::shutdown(gfx::Device& dev) {
     for (auto& m : protos_) render::releaseModel(dev, *m);
     protos_.clear();
+    releasePlanetForestModels(dev,authored_);
+    releasePlanetForestModels(dev,pendingAuthored_);
     instances_.clear();
 }
 

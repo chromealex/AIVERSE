@@ -6,6 +6,7 @@
 #include "GamePlanet.h"
 #include "engine/render/Model.h"
 #include <memory>
+#include <map>
 #include <vector>
 
 namespace aiverse::game {
@@ -32,6 +33,10 @@ bool collectPlanetForestVisuals(const World& world,const Surface& surface,
                               PlanetForestVisualSnapshot& output,
                               const std::vector<uint8_t>* visibility=nullptr);
 
+using PlanetForestModels=std::map<uint32_t,std::unique_ptr<render::Model>>;
+// CPU-only shared ARBOR recipe build; no scatter, no GPU state.
+PlanetForestModels buildPlanetForestSpecies(const Json& manifest,const render::FileReader& reader={});
+
 class PlanetFlora {
 public:
     struct Instance {
@@ -42,6 +47,12 @@ public:
         float yaw = 0, scale = 1;
     };
     void shutdown(gfx::Device& dev);
+    // Called at map publication boundary, not from per-frame terrain rebuild.
+    void setAuthoredSpecies(gfx::Device& dev,const Json& manifest,const render::FileReader& reader);
+    const render::Model* forestProto(uint32_t species,int fallback)const {
+        const auto it=authored_.find(species);
+        return it==authored_.end()?proto(fallback):it->second.get();
+    }
     bool ensurePrototypes(gfx::Device& dev){return makePrototypes(dev);}
     static bool treeProto(int proto){return proto>=0&&proto<5;}
     // Rebuilds the sites of every surface body; prototypes are made and uploaded once per device.
@@ -53,6 +64,7 @@ private:
     bool makePrototypes(gfx::Device& dev);
     std::vector<std::unique_ptr<render::Model>> protos_;
     std::vector<Instance> instances_;
+    PlanetForestModels authored_,pendingAuthored_;
 };
 
 } // namespace aiverse::game
