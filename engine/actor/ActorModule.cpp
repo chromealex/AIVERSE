@@ -405,6 +405,19 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
     });
     sim.addSystem("actor",[this](Simulation& s){tick(s);});
 }
+bool ActorHost::navigateCaveActor(
+    Simulation& sim,Entity entity,
+    terraweave::caverns::PointCm goal,
+    terraweave::caverns::CaveAgentProfile profile,
+    std::string algorithm,uint32_t speedCmPerTick,
+    uint32_t maxVisits) {
+    if(!caveNavigation_||!sim.world().alive(entity)||
+       !sim.world().has<CharacterBody>(entity))
+        return false;
+    return nav::assignCaveActorGoal(sim.world(),entity,goal,profile,
+                                    std::move(algorithm),speedCmPerTick,
+                                    maxVisits);
+}
 void ActorHost::applyCommand(Simulation& sim,const Command& c) {
     Input input;
     if(c.player==0||c.player>characterCount(sim)||!decodeInput(c,input))return;
