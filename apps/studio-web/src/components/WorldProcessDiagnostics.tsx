@@ -63,7 +63,9 @@ export function WorldProcessDiagnostics(){
       </form>
       <small>Use a live entity reference from the current Play session. Without a valid transform, all work fails HOT. No camera is used.</small>
       {error?<small role="alert">{error}</small>:!state?<small>Reading local diagnostics…</small>:!state.active?<small>Start a local Play match.</small>:<>
-        <small>Tick {state.tick} · epoch {state.epoch} · {state.cellSizeCm/100}m cells · {state.observerAvailable?'focus resolved':'no focus — HOT fallback'}</small>
+        <small>Tick {state.tick} · epoch {state.epoch} · {state.topology==='planet'?'planet · '+state.cellSizeCm/100+'m distance bands':state.cellSizeCm/100+'m cells'} · {state.observerAvailable?'focus resolved':'no focus — HOT fallback'}</small>
+        {state.topology==='planet'&&<small>Planet LOD uses same-body surface chord distance; other bodies are cold. Region extent bounds are conservative.</small>}
+        {state.focusSurface&&<section className="wpdiag__lane"><strong>{state.focusSurface.body} · face {state.focusSurface.face} · cell {state.focusSurface.x}, {state.focusSurface.y}</strong><small>PHYSIS gravity (east / up / south): {state.focusSurface.gravityLocal.map(v=>v.toFixed(3)).join(' / ')} m/s²</small></section>}
         <small>Preview cadence: 1 / {state.config.warmTicks} / {state.config.coldTicks} ticks. Samples follow editor polling, not every simulation tick.</small>
         {systems.map(name=><Lane key={name} name={name} lane={state.lanes[name]} tick={state.tick}/>)}
       </>}
