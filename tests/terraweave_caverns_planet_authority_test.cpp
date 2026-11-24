@@ -4,6 +4,7 @@
 #include "engine/world/TerraWeaveCavernsPlanetMotion.h"
 #include "engine/world/TerraWeaveCavernsPlanetNavigation.h"
 #include "engine/world/TerraWeaveCavernsPlanetEnvironmentEpoch.h"
+#include "engine/physis/PhysisIntegration.h"
 #include "engine/world/TerraWeaveCavernsNavigationGraph.h"
 #include "engine/world/TerraWeaveCavernsPathRouter.h"
 #include <iostream>
@@ -291,7 +292,87 @@ static void checkEnvironmentEpoch(const std::shared_ptr<const game::Surface>& su
     sources.clear();
     check(!sources.get(world,2),"restore clears derived provider");
 }
+// Exercise the actual fixed-tick installer and persistence; the test motor
+// is a read-only consumer (physical traversal is tested in the Box3D suite).
+struct CanonicalTickHost final:GameModule {
+    Entity actor{};
+    bool sawIntent=false;
+    std::shared_ptr<CavePlanetCanonicalNavigationSources> sources;
+    std::string name()const override{return "planet-cave-canonical-tick";}
+    void setup(Simulation& sim,const Json&,const Json& map)override{
+        auto surface=makeSurface();
+        registerPlanetCaveMap(sim,map[kPlanetCaveMapKey],surface);
+        physis::InstallOptions options;
+        options.climate.width=1;options.climate.height=1;options.enableGravityFields=true;
+        physis::install(sim,options);
+        lib::nereid::registerNereidSphereWaterPersistence(sim);
+        const auto frame=CavePlanetFrame::make(surface,{"planet",0,8_fx,8_fx,800});
+        physis::GravitySettings gravity;
+        gravity.baseline=frame.east()*Fixed::fromInt(-10);
+        sim.world().setResource<physis::GravitySettings>(gravity);
+        actor=sim.world().create();
+        const auto position=frame.toSimulation(CavePlanetFrame::metres({-250,-350,0}));
+        auto router=std::make_shared<CavePathRouter>();
+        CaveGraphSolverSettings cfg;cfg.cellCm=10;cfg.regionMarginCells=2;
+        registerCaveSharedGraphSolvers(*router,cfg);
+        sim.addSystem("fixture.motor",[this](Simulation& s){
+            const auto provider=sources->get(s.world(),2);
+            sawIntent=provider&&nav::caveMotorRequest(s.world(),actor,*provider);
+        });
+        sources=installCanonicalCavePlanetNavigation(sim,surface,router,
+            [position](const World&,Entity){return std::optional<Vec3>{position};},
+            "fixture.motor",1);
+        CaveAgentProfile agent;agent.radiusCm=10;agent.heightCm=100;
+        agent.sampleCm=25;agent.groundProbeCm=75;agent.maxStepCm=10;
+        check(assignCavePlanetMotorGoal(sim.world(),actor,surface,2,
+            frame.toSimulation(CavePlanetFrame::metres({-250,-275,0})),agent),"canonical goal");
+    }
+    void applyCommand(Simulation&,const Command&)override{}
+    void hashState(Simulation&,Hasher&)override{}
+    int result(Simulation&)override{return 0;}
+    bool serializeState(Simulation&,Archive& a)override{return a.ok();}
+};
+static void checkCanonicalTick(){
+    auto item=region(2,0);
+    CaveVolumeSnapshot volume;volume.settings.tunnelChance=0;volume.settings.chamberChance=0;
+    volume.settings.minYcm=-750;volume.settings.maxYcm=0;
+    volume.stamps.push_back({1,{0,-350,0},300,CaveStampMode::Carve});
+    canonicalizeCaveSnapshot(volume);item.set("volume",caveSnapshotToJson(volume));
+    Json doc=Json::object(),list=Json::array();list.push(std::move(item));
+    doc.set("version",Json::number(int64_t(2)));doc.set("activeRegionId",Json::string("2"));
+    doc.set("nextRegionId",Json::string("3"));doc.set("regions",std::move(list));
+    Json map=Json::object();map.set(kPlanetCaveMapKey,std::move(doc));
+    auto owner=std::make_unique<CanonicalTickHost>();auto* host=owner.get();
+    Simulation sim(SimConfig{},std::move(owner));sim.setup(Json::object(),map);
+    std::vector<std::string> names;
+    for(size_t i=0;i<sim.systemCount();++i)names.push_back(sim.systemName(i));
+    const auto capture=std::find(names.begin(),names.end(),"caverns.navigation.capture");
+    check(capture!=names.end()&&names.end()-capture>=4&&
+        capture[1]=="caverns.navigation.repath"&&capture[2]=="caverns.navigation.intent"&&
+        capture[3]=="fixture.motor","fixed tick order");
+    check(std::find(names.begin(),capture,"physis.environment")!=capture,"PHYSIS before capture");
+    sim.step();check(host->sawIntent,"motor receives canonical steering");
+    const auto epoch=sim.world().resourceConst<CavePlanetEnvironmentEpoch>()->revision;
+    const auto bytes=sim.serialize();check(!bytes.empty(),"canonical save");
+    SimSnapshot snapshot;sim.saveState(snapshot);
+    physis::GravitySettings zero;zero.baseline={};
+    sim.world().setResource<physis::GravitySettings>(zero);
+    sim.step();
+    check(sim.world().resourceConst<CavePlanetEnvironmentEpoch>()->revision>epoch,"gravity repath epoch");
+    check(!host->sawIntent,"zero gravity invalidates steering");
+    sim.loadState(snapshot);
+    check(!host->sources->get(sim.world(),2),"rollback removes derived source");
+    check(nav::caveRouteScope(sim.world(),host->actor)==2,"rollback scope");
+    check(sim.world().resourceConst<CavePlanetEnvironmentEpoch>()->revision==epoch,"rollback epoch");
+    sim.step();check(host->sawIntent,"rollback rebuild steering");
+    std::string error;
+    check(sim.deserialize(bytes,&error),"canonical deserialize");
+    check(nav::caveRouteScope(sim.world(),host->actor)==2,"saved scope");
+    check(sim.world().resourceConst<CavePlanetEnvironmentEpoch>()->revision==epoch,"saved epoch");
+    sim.step();check(host->sawIntent,"loaded route steering");
+}
 int main(){
+    checkCanonicalTick();
     const auto surface=makeSurface();
     checkBodyCut(surface);
     checkDemand(surface);

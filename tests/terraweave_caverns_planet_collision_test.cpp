@@ -1,7 +1,7 @@
 // Real native scenes, no GPU required for the baseline lifecycle.
 #include "engine/world/TerraWeaveCavernsPlanetCollisionBinding.h"
 #include "engine/world/TerraWeaveCavernsPlanetRuntimeFrame.h"
-#include "engine/physics/TerraWeaveCavernsPlanetPhysics.h"
+#include "engine/physics/TerraWeaveCavernsPlanetMotorBridge.h"
 #include <stdexcept>
 #include <iostream>
 using namespace aiverse;
@@ -83,7 +83,23 @@ static void checkOrientedMotor(){
     check(!physics::stepCharacterOriented(scene.world(),params,state,{},scene.dt(),{{0,0,0},0}),"invalid quaternion refused");
     check(state.position.x==before.x&&state.position.y==before.y&&state.position.z==before.z,"invalid orientation moved character");
 }
+static void checkDrive(){
+    CavePlanetMotorIntent intent;
+    intent.speedCmPerTick=10;
+    intent.basis.groundedCompatible=true;
+    intent.basis.right={0_fx,1_fx,0_fx};intent.basis.up={1_fx,0_fx,0_fx};
+    intent.basis.back={0_fx,0_fx,-1_fx};
+    intent.simulationDirection=intent.basis.back*Fixed::fromInt(-1);
+    intent.simulationDestination=intent.simulationDirection;
+    const auto drive=cavePlanetCharacterDrive(intent,{}, {},Fixed::fromRatio(1,10));
+    check(drive&&std::abs(drive->input.moveZ-1)<.001f&&
+        std::abs(drive->input.moveX)<.001f,"oriented route input");
+    check(std::abs(drive->params.walkSpeed-1)<.001f,"route speed cap");
+    intent.traversal=CaveTraversal::Flying;
+    check(!cavePlanetCharacterDrive(intent,{}, {},Fixed::fromRatio(1,10)),"flight has its own motor");
+}
 int main(){
+    checkDrive();
     checkOrientedMotor();
     checkCandidateIdentity();
     check(!CavePlanetRuntimeHooks{}.valid(),"missing host hooks must refuse");

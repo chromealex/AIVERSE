@@ -129,6 +129,7 @@ public:
     // Environment-only changes replace all admitted providers atomically
     // under reader exclusion, not the already committed SDF/physics/GI.
     // Old workers retain immutable providers but cannot pass the identity gate.
+    bool ownsPhysicsScene(const physics::Scene& scene)const noexcept{return &scene==&box_;}
     bool refreshNavigationEnvironment(const World& ecs){
         if(!hooks_.navigationInputs||closed_||recoveryRequired()||!hooks_.exclusive())return false;
         try{
