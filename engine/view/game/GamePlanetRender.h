@@ -21,6 +21,8 @@
 #include "GamePlanet.h"
 #include "GamePlanetCamera.h"
 #include "GameTerrainRender.h"
+#include "engine/world/TerraWeaveCavernsPlanetCut.h"
+#include <functional>
 
 namespace aiverse::game {
 
@@ -43,6 +45,15 @@ public:
     bool updateDetail(int body, const std::vector<int16_t>& detail);
     int detailScale(int body) const { return surface(body) ? surface(body)->detailScale() : 0; }
 
+    // Opt-in exact leaf replacement; host owns the matching volume and
+    // collision publication. Call outside render passes, with readers paused.
+    uint64_t caveSurfaceRevision()const noexcept{return caveSurfaceRevision_;}
+    std::vector<terraweave::caverns::CavePlanetSurfaceSlot> captureCaveSurfaceSlots(int body,
+        std::span<const terraweave::caverns::CavePlanetSurfaceSlotKey> keys)const;
+    bool installCaveSurfaceCut(int body,const terraweave::caverns::CavePlanetCutPlan& plan,
+        const std::function<bool()>& exclusive,const std::function<bool()>& nativeOwnersReady);
+    bool clearCaveSurfaceCut(int body,const std::function<bool()>& exclusive);
+    uint64_t caveSurfaceCutEpoch(int body)const noexcept;
     struct Options { bool orbits = true, atmosphere = true, sky = true; float lodRange = 48; };
     Options options;
     // Queues everything; the lighting of `r` gets the star direction of `lightBody`.
@@ -66,6 +77,7 @@ public:
             for (const auto& chunk : body.chunks) {
                 counter.buffer(chunk.vb);
                 counter.buffer(chunk.ib);
+                counter.buffer(chunk.caveVb);counter.buffer(chunk.caveIb);
             }
         }
         const auto cache=textures_.ownedGpuMemoryStats();
@@ -95,11 +107,15 @@ private:
         gfx::BufferHandle vb, ib;
         uint32_t indexCount = 0;
         bool built = false;
+        gfx::BufferHandle caveVb,caveIb;
+        uint32_t caveIndices=0;
+        bool caveCut=false,caveDescendant=false;
     };
     struct Body {
         std::unique_ptr<PlanetSurface> surf;
         std::vector<Chunk> chunks;          // [0..5]: face roots
         int levels = 1, grid = 16;
+        uint64_t caveCutEpoch=0;
         gfx::TextureHandle vision;
         std::vector<uint8_t> visionPx;
         bool fog = false;
@@ -141,6 +157,7 @@ private:
     PlanetWorld world_;
     std::vector<Body> bodies_;
     Stats stats_;
+    uint64_t caveSurfaceRevision_=1;
 };
 
 } // namespace aiverse::game
