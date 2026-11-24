@@ -378,3 +378,7 @@ Add bounded reusable triangle-mesh signed distance baking in engine/bake; exact-
 ## Stage 143 — editor mesh SDF bake (in progress)
 
 Extend the shared fx_graph_edit operation with in-memory bakeSdf for an existing CollisionModule and checked project content model. Use existing bounded mesh baker, preserve unrelated graph fields, return normal compiler diagnostics; no disk writes until normal graph save. HTML5 resource inspector uses indexed asset selection, dimension and stale-result rejection. No high-resolution format change in this stage. Tests authored only.
+
+## Stage 143 — Studio/MCP in-memory SDF baking (source; QA deferred)
+
+Shared `fx_graph_edit` action `bakeSdf` takes Graph v2 CollisionModule node, project content model path and integer dimension 4..16 (optional expectedProjectPath). Uses existing model loader and bounded offline SDF baker. Dependencies restricted to checked project content, no symlink traversal, total 64 MiB input; no filesystem writes. Returns normal graph/compiler diagnostics, preserves unrelated authoring. HTML5 Graph resource inspector adds CollisionModule model asset picker (search/drop), lattice dimension and Bake/Rebake, rejecting stale graph/project responses. Parent local draft save/publish unchanged; no global undo/redo implementation claim. Native MCP uses same edit action; no new op registry. No high-resolution format, asset texture or dynamic geometry. Build/CTest/TS/UI not run.

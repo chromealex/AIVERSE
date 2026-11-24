@@ -6,6 +6,7 @@
 #include "PackageTool.h"
 #include "engine/fx/SpectraFX.h"
 #include "engine/fx/SpectraAuthoring.h"
+#include "engine/fx/SpectraSdfBaker.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -933,11 +934,13 @@ void registerSpectraGraphOps(Workspace& ws) {
     // a valid graph node by node. The caller can commit via fx_graph_set or
     // preserve incomplete work using fx_graph_draft_set.
     add("fx_graph_edit",
-        "Apply a v1/v2 graph edit in memory and return the edited JSON plus compiler diagnostics. Actions: new, upgrade, add, connect, disconnect, deleteNode, setProperty; does not write files.",
+        "Apply a v1/v2 graph edit in memory and return the edited JSON plus compiler diagnostics. Actions: new, upgrade, add, connect, disconnect, deleteNode, setProperty, bakeSdf (closed project model, dimension 4..16); does not write files.",
         R"({"properties":{"name":{"type":"string"},"graph":{"type":"object"},"text":{"type":"string"},
              "action":{"type":"string"},"type":{"type":"string"},"from":{"type":"string"},
              "to":{"type":"string"},"toPort":{"type":"string"},"node":{"type":"string"},
-             "property":{"type":"string"},"value":{},"draft":{"type":"boolean"}},
+             "property":{"type":"string"},"value":{},"draft":{"type":"boolean"},
+             "model":{"type":"string"},"dimension":{"type":"integer","minimum":4,"maximum":16},
+             "expectedProjectPath":{"type":"string"}},
              "required":["action"]})", [&ws](const Json& p) {
         requireGame(ws);
         const std::string action=p.getStr("action");
@@ -981,6 +984,43 @@ void registerSpectraGraphOps(Workspace& ws) {
                 graph.set("links",std::move(links));
                 graph.set("outputs",std::move(outputs));
             }
+        } else if(action=="bakeSdf") {
+            // Same edit pipeline as setProperty; never persist partial work.
+            requireReplayProject(ws,p);
+            Json* n=spectra::authoring::node(graph,p.getStr("node"));
+            const auto& dimension=p["dimension"];
+            const auto d=dimension.toDouble();
+            if(graph.getInt("version")!=2||!n||n->getStr("type")!="CollisionModule"||
+               !dimension.isNumber()||!std::isfinite(d)||d<4||d>16||std::floor(d)!=d)
+                throw std::runtime_error("Select a Graph v2 CollisionModule and integer dimension 4..16");
+            const std::string model=p.getStr("model");
+            (void)checkedReplayDependency(ws,model);
+            if(!render::isNativeModelFormat(model))
+                throw std::runtime_error("Choose a native supported model format");
+            uint64_t remaining=64ull*1024*1024;
+            // All model dependencies must remain inside project content;
+            // the existing checked path rejects traversal and symlinks.
+            render::FileReader reader=[&](const std::string& name,std::string& bytes){
+                try{
+                    const auto file=checkedReplayDependency(ws,name);
+                    const auto size=fs::file_size(file);
+                    if(size>remaining)return false;
+                    std::ifstream input(file,std::ios::binary);
+                    if(!input)return false;
+                    bytes.resize(size_t(size));
+                    if(size&&!input.read(bytes.data(),std::streamsize(size)))return false;
+                    if(input.peek()!=std::char_traits<char>::eof())return false;
+                    remaining-=size;return true;
+                }catch(const std::exception&){return false;}
+            };
+            fx::StaticSdfVolume sdf;
+            if(!fx::bakeStaticSdfModel(model,reader,uint32_t(d),render::mat4{},sdf,error))
+                throw std::runtime_error("SDF bake: "+error);
+            Json props=(*n)["properties"];
+            if(!props.isObject())props=Json::object();
+            props.set("staticSdf",fx::staticSdfToJson(sdf));
+            // Other modules, terrain policy, and sphere stay as authored.
+            n->set("properties",std::move(props));
         } else if(action=="setProperty") {
             Json* n=spectra::authoring::node(graph,p.getStr("node"));
             if(!n || !p.has("value"))ok=false;

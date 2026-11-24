@@ -37,6 +37,29 @@ int main() {
       "outputs":["out"]
     })JSON");
 
+    // In-memory bake is a shared Studio/MCP edit, not a write operation.
+    {
+        fs::create_directories(root/"content");
+        std::ofstream model(root/"content"/"tetra.obj");
+        model<<"v 0 0 0\nv 1 0 0\nv 0 1 0\nv 0 0 1\n"
+               "f 1 3 2\nf 1 2 4\nf 1 4 3\nf 2 3 4\n";
+        model.close();
+        auto request=Json::parse(R"({"action":"bakeSdf","node":"collision","model":"content/tetra.obj","dimension":8,
+            "graph":{"version":2,"nodes":[{"id":"spawn","type":"Spawn","properties":{"burst":1}},
+            {"id":"init","type":"Initialize","properties":{"life":1,"speed":0,"spread":0}},
+            {"id":"collision","type":"CollisionModule","properties":{"ground":false,"bounce":0.7}},
+            {"id":"out","type":"SpriteOutput","properties":{"texture":"builtin:soft"}}],
+            "links":[{"from":"spawn","to":"init"},{"from":"init","to":"collision"},{"from":"collision","to":"out"}],"outputs":["out"]}})");
+        auto baked=call("fx_graph_edit",request);
+        require(baked.getBool("ok")&&baked["validation"].getBool("ok"),"native model SDF edit");
+        const auto& props=baked["graph"]["nodes"][size_t(2)]["properties"];
+        require(props["staticSdf"]["samples"].size()==512&&props.getBool("ground",true)==false,"SDF and previous properties");
+        require(!fs::exists(root/"fx"),"SDF edit must not publish files");
+        request.set("model",Json::string("content/../escape.obj"));
+        auto rejected=call("fx_graph_edit",request);
+        require(rejected.has("error")||!rejected.getBool("ok"),"SDF traversal rejected");
+    }
+
     Json create = Json::object();
     create.set("name", Json::string("spark"));
     create.set("graph", graph);

@@ -362,20 +362,20 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
             <p className="spectra-di__hint">Drag a provider onto the binding form. Actual runtime availability is resolved by the host.</p>
           </StudioSection>
           <StudioSection title="Graph resource assets">
-            <p className="spectra-di__hint">Select SpriteOutput, TrailModule, MaterialModule or MeshOutput. Textures use a string property; MeshOutput uses the meshes array. Resources resolve through the native project GUID index.</p>
+            <p className="spectra-di__hint">Select an output or CollisionModule. MeshOutput references models; CollisionModule bakes a closed model into a static SDF. Assets resolve through the native project index.</p>
             <StudioField label="Resource node" htmlFor="spectra-resource-node">
               <StudioSelect id="spectra-resource-node" value={selectedResourceNode}
                 onChange={e=>setSelectedResourceNode(e.target.value)}>
                 <option value="">Choose resource node…</option>
-                {graph.nodes.filter(n=>['SpriteOutput','TrailModule','MaterialModule','MeshOutput'].includes(n.type))
+                {graph.nodes.filter(n=>['SpriteOutput','TrailModule','MaterialModule','MeshOutput','CollisionModule'].includes(n.type))
                   .map(node=><option key={node.id} value={node.id}>{node.id} · {node.type}</option>)}
               </StudioSelect>
             </StudioField>
             {graph.nodes.filter(n=>n.id===selectedResourceNode).map(node=>
               <SpectraIndexedGraphAssetInspector key={node.id+'-'+node.type}
                 graph={graph} projectPath={projectPath} selectedNodeId={node.id}
-                property={node.type==='MeshOutput'?'meshes':'texture'}
-                kinds={node.type==='MeshOutput'?['model']:['texture']}
+                property={node.type==='CollisionModule'?'staticSdf':node.type==='MeshOutput'?'meshes':'texture'}
+                kinds={node.type==='MeshOutput'||node.type==='CollisionModule'?['model']:['texture']}
                 disabled={busy} onGraphChange={next=>apply({graph:next,error:''})}/>)}
           </StudioSection>
           <StudioSection title="DataInterface nodes">

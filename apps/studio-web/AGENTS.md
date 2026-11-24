@@ -301,3 +301,7 @@ The old App shell and NestedDockWorkspace use `src/ui/editor-shell.css` to inher
 - API: `studio.assets` takes an empty parameters object and returns `{root:"content",files:[{path,bytes}]}`. Do not reintroduce an arbitrary browser-selected directory or expose game.json/rules.json/maps from the project root.
 - Existing project files **outside** `content/` are not moved automatically. If needed, instruct the user to move/copy assets consciously and update any existing references; never migrate by silently overwriting paths.
 - The HTML5 content-browser is read-only. Asset import/rename/delete can be added only with new bounded native Workspace operations and separate handoffs/tests.
+
+## Stage 143 — Studio/MCP in-memory SDF baking (source; QA deferred)
+
+Shared `fx_graph_edit` action `bakeSdf` takes Graph v2 CollisionModule node, project content model path and integer dimension 4..16 (optional expectedProjectPath). Uses existing model loader and bounded offline SDF baker. Dependencies restricted to checked project content, no symlink traversal, total 64 MiB input; no filesystem writes. Returns normal graph/compiler diagnostics, preserves unrelated authoring. HTML5 Graph resource inspector adds CollisionModule model asset picker (search/drop), lattice dimension and Bake/Rebake, rejecting stale graph/project responses. Parent local draft save/publish unchanged; no global undo/redo implementation claim. Native MCP uses same edit action; no new op registry. No high-resolution format, asset texture or dynamic geometry. Build/CTest/TS/UI not run.

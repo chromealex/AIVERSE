@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { StudioButton, StudioField, StudioSelect } from '../ui';
 import { invoke } from '../bridge';
 import SpectraAssetPicker from './SpectraAssetPicker';
 import type { SpectraIndexedAsset } from './SpectraAssetPicker';
 import { bindResolvedSpectraAsset, editSpectraMeshSlot } from './spectraAssetBinding';
-import type { SpectraGraphV2 } from './spectraDataInterfaceModel';
+import { graphV2, type SpectraGraphV2 } from './spectraDataInterfaceModel';
+import type { SpectraAssetReference } from './spectraAssetBinding';
 
 /** Asset-reference sub-inspector for a selected graph node.
  * The host supplies an authoritative project asset index and selected node.
@@ -18,9 +20,10 @@ interface Props {
   onGraphChange:(graph:SpectraGraphV2)=>void;
   kinds?:readonly string[];
   disabled?:boolean;
+  projectPath?:string;
 }
 export default function SpectraGraphAssetInspector({
-  graph,selectedNodeId,property,assets,onGraphChange,kinds,disabled=false,
+  graph,selectedNodeId,property,assets,onGraphChange,kinds,disabled=false,projectPath,
 }:Props){
   const [locked,setLocked]=useState(false);
   const [targetNodeId,setTargetNodeId]=useState<string|null>(selectedNodeId);
@@ -43,6 +46,35 @@ export default function SpectraGraphAssetInspector({
   useEffect(()=>{setPendingInsertAfter(null);},[property]);
   // A node deleted by a graph edit is never resurrected by a stale lock.
   const node=graph.nodes.find(n=>n.id===targetNodeId);
+  const [bakeModel,setBakeModel]=useState<SpectraAssetReference|null>(null);
+  const [bakeDimension,setBakeDimension]=useState(16);
+  const [baking,setBaking]=useState(false);
+  const [bakeStatus,setBakeStatus]=useState('');
+  const currentBake=useRef({graph,targetNodeId,projectPath,onGraphChange});
+  currentBake.current={graph,targetNodeId,projectPath,onGraphChange};
+  const mounted=useRef(true);
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
+  const bake=async()=>{
+    const request=currentBake.current;
+    const model=assets.find(a=>a.guid===bakeModel?.guid&&a.kind==='model');
+    if(disabled||baking||!request.projectPath||!request.targetNodeId||!model?.path)return;
+    setBaking(true);setError('');setBakeStatus('');
+    try{
+      const response=await invoke('studio.op',{op:'fx_graph_edit',params:{
+        action:'bakeSdf',graph:request.graph,node:request.targetNodeId,
+        expectedProjectPath:request.projectPath,model:'content/'+model.path,dimension:bakeDimension}});
+      if(!mounted.current)return;
+      const latest=currentBake.current;
+      if(latest.graph!==request.graph||latest.targetNodeId!==request.targetNodeId||
+         latest.projectPath!==request.projectPath){setError('Graph or project changed; discarded stale bake.');return;}
+      const result=response.result as {ok?:boolean;graph?:unknown;error?:string;validation?:{ok?:boolean}}|undefined;
+      const next=graphV2(result?.graph);
+      if(!result?.ok||!next)throw new Error(result?.error||'Native SDF bake rejected.');
+      latest.onGraphChange(next);
+      setBakeStatus('Baked '+bakeDimension+'³ samples into local draft. '+(result.validation?.ok?'Compiler accepted.':'Validate graph before publishing.'));
+    }catch(e){if(mounted.current)setError(e instanceof Error?e.message:String(e));}
+    finally{if(mounted.current)setBaking(false);}
+  };
   const raw=node?.properties?.[property];
   const currentPath=typeof raw==='string'?raw:
     property==='meshes'&&Array.isArray(raw)&&typeof raw[0]==='string'?raw[0]:null;
@@ -59,6 +91,23 @@ export default function SpectraGraphAssetInspector({
     if(result.error){setError(result.error);return;}
     setError('');onGraphChange(result.graph);
   };
+  if(property==='staticSdf')return <section aria-label="SpectraFX mesh SDF bake">
+    <header><strong>Mesh SDF</strong> <small>{node?.id??'No node selected'}</small></header>
+    <SpectraAssetPicker assets={assets} value={bakeModel} kinds={['model']}
+      disabled={disabled||baking||!node} locked={locked} onLockChange={setLocked}
+      onChange={asset=>{setBakeModel(asset);setBakeStatus('');}}/>
+    <StudioField label="Lattice dimension" htmlFor="spectra-sdf-dimension">
+      <StudioSelect id="spectra-sdf-dimension" value={String(bakeDimension)}
+        disabled={disabled||baking} onChange={e=>setBakeDimension(Number(e.target.value))}>
+        {[4,8,12,16].map(n=><option key={n} value={n}>{n} × {n} × {n}</option>)}
+      </StudioSelect>
+    </StudioField>
+    <StudioButton size="sm" disabled={disabled||baking||!node||!bakeModel||!projectPath}
+      onClick={()=>void bake()}>{baking?'Baking…':raw?'Rebake SDF':'Bake SDF'}</StudioButton>
+    <small>Closed low-poly mesh, bind pose, model-space metres. Replaces only the baked SDF in the local graph; save to publish.</small>
+    {bakeStatus&&<small role="status">{bakeStatus}</small>}
+    {error&&<small role="alert">{error}</small>}
+  </section>;
   return <section aria-label="SpectraFX node asset reference">
     <header style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
       <strong>{property} asset</strong>
