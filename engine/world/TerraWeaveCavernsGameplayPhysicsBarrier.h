@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <functional>
 #include <vector>
+#include <span>
+#include <set>
 
 namespace aiverse::terraweave::caverns {
 enum class CavePhysicsCommitPhase:uint8_t {
@@ -55,6 +57,28 @@ public:
             owners.push_back({&it->second->spatialOwner(),
                               &it->second->boxOwner()});
         }
+        return applyPairs(owners,revision,boxScene,spatial,exclusive,
+            [&](uint64_t rev){return view.navigation.commit(rev);});
+    }
+    // Shared native barrier for non-flat region owners. The nav callback
+    // commits the already prepared existing navigation owner, not a dummy ACK.
+    bool applyPrepared(std::span<CaveVolumePhysicsStage* const> stages,uint64_t revision,
+            physics::Scene& boxScene,world::SpatialWorld& spatial,
+            const ExclusiveProof& exclusive,const std::function<bool(uint64_t)>& finalizeNavigation){
+        if(status_.recoveryRequired||!revision||stages.empty()||!exclusive||!exclusive()||!finalizeNavigation)return false;
+        status_={CavePhysicsCommitPhase::Preflight,revision,0,false};
+        std::vector<Pair> owners;owners.reserve(stages.size());
+        std::set<CaveVolumePhysicsStage*> unique;
+        for(auto* stage:stages){
+            if(!stage||!unique.insert(stage).second||!stage->prepared(revision))return false;
+            owners.push_back({&stage->spatialOwner(),&stage->boxOwner()});
+        }
+        return applyPairs(owners,revision,boxScene,spatial,exclusive,finalizeNavigation);
+    }
+private:
+    bool applyPairs(const std::vector<Pair>& owners,uint64_t revision,
+            physics::Scene& boxScene,world::SpatialWorld& spatial,
+            const ExclusiveProof& exclusive,const std::function<bool(uint64_t)>& finalizeNavigation){
         status_.phase=CavePhysicsCommitPhase::Installing;
         std::vector<Pair> installed;
         installed.reserve(owners.size());
@@ -103,7 +127,7 @@ public:
                 return false;
             }
         }
-        if(!exclusive()||!view.navigation.commit(revision)) {
+        if(!exclusive()||!finalizeNavigation(revision)) {
             status_.phase=CavePhysicsCommitPhase::RecoveryRequired;
             status_.recoveryRequired=true;
             return false;
@@ -111,7 +135,6 @@ public:
         status_.phase=CavePhysicsCommitPhase::Complete;
         return true;
     }
-private:
     void rollback(const std::vector<Pair>& installed,
                   world::SpatialWorld& spatial,physics::Scene& boxScene,
                   uint64_t revision) {
