@@ -40,9 +40,10 @@ export default function TextureGraphPanel({documentEpoch,projectPath,disabled,on
  const [names,setNames]=useState<string[]>([]),[catalog,setCatalog]=useState<Obj[]>([]),[selected,setSelected]=useState(''),[output,setOutput]=useState('color'),[textureName,setTextureName]=useState('');
  const [gpuRequest,setGpuRequest]=useState<{id:string;source:string;overrides:string;output:string;resolution:number;bake:boolean;setBake:boolean}|null>(null),[gpuReady,setGpuReady]=useState(false),[gpuStatus,setGpuStatus]=useState(''),[requireGpu,setRequireGpu]=useState(false),[materialized,setMaterialized]=useState(false),[gpuResolution,setGpuResolution]=useState(32);
  const [preview,setPreview]=useState<{hex:string;width:number;height:number;source:string}|null>(null),[asset,setAsset]=useState<{guid:string;path:string;key:MaterialKey}|null>(null);
+ const [recoveryRows,setRecoveryRows]=useState<Obj[]>([]),[quarantineRows,setQuarantineRows]=useState<Obj[]>([]);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState('');
  const epoch=useRef(0),lock=useRef(false),canvas=useRef<HTMLCanvasElement>(null);
- useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setOverrideText('{}');setBakedSet('');setGpuRequest(null);setGpuReady(false);setGpuStatus('');setText(JSON.stringify(template,null,2));setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
+ useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setOverrideText('{}');setBakedSet('');setGpuRequest(null);setGpuReady(false);setGpuStatus('');setRecoveryRows([]);setQuarantineRows([]);setText(JSON.stringify(template,null,2));setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
  return()=>{epoch.current++;lock.current=false};},[projectPath,documentEpoch]);
  useEffect(()=>{const c=canvas.current;if(!c||!preview||preview.source!==text)return;
  const bytes=new Uint8ClampedArray(preview.hex.length/2);for(let i=0;i<bytes.length;i++)bytes[i]=parseInt(preview.hex.slice(i*2,i*2+2),16);
@@ -50,7 +51,7 @@ export default function TextureGraphPanel({documentEpoch,projectPath,disabled,on
  },[preview,text]);
  let graph:Obj|null=null;try{const value=JSON.parse(text);if(object(value))graph=value}catch{}
  const edit=(value:Obj)=>{setText(JSON.stringify(value,null,2));setPreview(null);setAsset(null);setAssets([]);};
- const run=async(action:string)=>{
+ const run=async(action:string,recoveryId='')=>{
   if(lock.current||disabled||!projectPath)return;lock.current=true;setBusy(true);setError('');setStatus('');const token=epoch.current;
   try{
    if(action==='catalog'){
@@ -69,7 +70,16 @@ export default function TextureGraphPanel({documentEpoch,projectPath,disabled,on
     const r=await op('texture_graph_material_variant',{textureName:bakedSet,materialName:variantName,base:baseMaterial});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true)throw new Error('Native material variant creation failed');setStatus('Created inherited material '+variantName+'; refresh Materials.');return;
    }
-   if(action==='publications'){const r=await op('texture_graph_publications_get');if(token===epoch.current)setStatus(JSON.stringify(r));return;}
+   if(['publications','quarantine','restore','resume','finalize'].includes(action)){
+    const actions:Record<string,string>={quarantine:'texture_graph_publication_quarantine',restore:'texture_graph_quarantine_restore',resume:'texture_graph_publication_resume',finalize:'texture_graph_publication_finalize'};
+    if(action!=='publications'){
+     const r=await op(actions[action],{id:recoveryId});if(token!==epoch.current)return;
+     if(!object(r)||r.ok!==true)throw Error('Recovery operation rejected');
+    }
+    const [pending,archived]=await Promise.all([op('texture_graph_publications_get'),op('texture_graph_quarantine_get')]);if(token!==epoch.current)return;
+    if(!object(pending)||!Array.isArray(pending.publications)||!object(archived)||!Array.isArray(archived.quarantine))throw Error('Recovery report unavailable');
+    setRecoveryRows(pending.publications.filter(object));setQuarantineRows(archived.quarantine.filter(object));return;
+   }
    if(action==='cache'||action==='clearCache'){const r=await op('texture_graph_cache',{clear:action==='clearCache'});if(token===epoch.current)setStatus(JSON.stringify(r));return;}
    if(action==='gpuCancel'){
     if(!gpuRequest)throw new Error('No GPU request to cancel');
@@ -239,6 +249,11 @@ export default function TextureGraphPanel({documentEpoch,projectPath,disabled,on
    <textarea aria-label="Instance overrides JSON" rows={4} value={overrideText} disabled={busy||disabled} onChange={e=>{setOverrideText(e.target.value);setPreview(null);setAssets([]);setAsset(null);setBakedSet('')}}/>
    <div className="au-row"><StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('cache')}>Cache status</StudioButton><StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('clearCache')}>Clear cache</StudioButton></div>
     <StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('publications')}>Inspect pending publications</StudioButton>
+    {recoveryRows.map(r=><div key={String(r.id)}><small>{String(r.id)} · {String(r.status)}</small>
+     {r.quarantinable===true&&<><StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('quarantine',String(r.id))}>Quarantine</StudioButton><StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('resume',String(r.id))}>Resume verified stage</StudioButton></>}
+     {r.status==='destination_matches_evidence'&&r.stagePresent!==true&&<StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('finalize',String(r.id))}>Finalize</StudioButton>}
+    </div>)}
+    {quarantineRows.map(r=><div key={String(r.id)}><small>Quarantine: {String(r.id)} · {String(r.status)}</small>{r.restorable===true&&<StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('restore',String(r.id))}>Restore to pending</StudioButton>}</div>)}
   </StudioSection>
   <textarea aria-label="Texture graph JSON" value={text} disabled={busy||disabled} rows={12} onChange={e=>{setText(e.target.value);setPreview(null);setAsset(null);setAssets([]);setPending(null)}}/>
   <StudioSelect aria-label="Texture output" value={output} disabled={busy||disabled} onChange={e=>{setOutput(e.target.value);setAsset(null);setPreview(null)}}>{outputs.map(n=><option key={n}>{n}</option>)}</StudioSelect>

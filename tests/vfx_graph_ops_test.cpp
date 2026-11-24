@@ -140,6 +140,16 @@ int main() {
         const auto saved=root/".aiverse-cache"/"texture-publications-quarantine"/quarantined.getStr("quarantineId")/"journal"/"stage"/"payload";
         requireGraphTest(fs::is_regular_file(saved)&&!fs::exists(intent.stage()),"quarantine lost staged bytes");
         requireGraphTest(!fs::exists(root/"content"/"textures"/"quarantine_fixture_color.png"),"quarantine published content");
+        const auto list=call("texture_graph_quarantine_get",Json::object());
+        requireGraphTest(list["quarantine"].size()==1,"quarantine entry missing");
+        Json restore=Json::object();restore.set("id",quarantined["quarantineId"]);
+        requireGraphTest(call("texture_graph_quarantine_restore",restore).getBool("ok"),"quarantine restore failed");
+        requireGraphTest(fs::is_regular_file(intent.stage()/"payload"),"restore lost payload");
+        requireGraphTest(call("texture_graph_publication_resume",args).has("error"),"incomplete stage published");
+        {std::ofstream out(intent.stage()/"payload",std::ios::binary|std::ios::trunc);out<<"abc";}
+        intent.evidence(Json::parse(R"([{"file":"payload","sha256":"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"}])"));
+        requireGraphTest(call("texture_graph_publication_resume",args).getBool("ok"),"verified stage resume failed");
+        requireGraphTest(fs::is_regular_file(root/"content"/"textures"/"quarantine_fixture_color.png"),"resumed file missing");
     }
     {
         auto material=Json::parse(R"({"name":"fixture_material","material":{"roughness":0.5},"createOnly":true})");

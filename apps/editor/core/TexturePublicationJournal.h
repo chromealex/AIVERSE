@@ -22,7 +22,131 @@ class TexturePublicationJournal {
     static bool validOutput(const std::string& output){
         try{(void)render::texture_graph::outputKind(output);return true;}catch(...){return false;}
     }
+    struct Intent {std::string id,name,output;};
+    static Intent readIsolated(const Path& journal){
+        namespace fs=std::filesystem;
+        const auto file=journal/"intent.json";
+        if(fs::is_symlink(journal)||!fs::is_directory(journal)||fs::is_symlink(file)||!fs::is_regular_file(file)||fs::file_size(file)>4096)
+            throw std::runtime_error("Invalid isolated publication journal");
+        const auto j=Json::parseFile(file.string());
+        const auto name=j.getStr("name"),output=j.getStr("output");
+        if(j.getInt("version")!=2||!render::texture_graph::safeId(name)||(!output.empty()&&!validOutput(output)))
+            throw std::runtime_error("Invalid isolated publication identity");
+        return {output.empty()?"set-"+name:"image-"+name+"."+output,name,output};
+    }
+    static bool safeSlot(const std::string& slot){
+        return !slot.empty()&&slot.size()<=128&&slot!="."&&slot!=".."&&slot.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.")==std::string::npos;
+    }
+    static Path quarantineRoot(const Path& project){
+        const auto parent=root(project).parent_path()/"texture-publications-quarantine";
+        if(std::filesystem::is_symlink(parent))throw std::runtime_error("Unsafe quarantine directory");
+        return parent;
+    }
+    static Path destination(const Path& project,const Intent& intent){
+        namespace fs=std::filesystem;
+        const auto textures=project/"content"/"textures";
+        if(fs::is_symlink(project/"content")||fs::is_symlink(textures))throw std::runtime_error("Unsafe texture destination");
+        return textures/(intent.output.empty()?intent.name:intent.name+"_"+intent.output+".png");
+    }
+    static void requireVacant(const Path& project,const Intent& intent){
+        namespace fs=std::filesystem;
+        const auto dest=destination(project,intent);
+        const auto legacy=intent.output.empty()?dest.parent_path()/("."+intent.name+".stage"):Path(dest.string()+".stage");
+        if(fs::exists(dest)||fs::is_symlink(dest)||fs::exists(legacy)||fs::is_symlink(legacy))
+            throw std::runtime_error("Texture destination or legacy staging already exists");
+    }
+    static void verifyStage(const Path& journal,const Intent& intent){
+        namespace fs=std::filesystem;
+        const auto stage=journal/"stage",file=journal/"files.json";
+        if(fs::is_symlink(stage)||!fs::is_directory(stage)||fs::is_symlink(file)||!fs::is_regular_file(file)||fs::file_size(file)>16384)
+            throw std::runtime_error("Missing complete staged evidence");
+        const auto expected=Json::parseFile(file.string());
+        if(!expected.isArray()||expected.size()==0||expected.size()>10)throw std::runtime_error("Invalid staged evidence");
+        std::set<std::string> seen,required;
+        if(intent.output.empty()){
+            const auto manifest=stage/"texture-set.json";
+            if(fs::is_symlink(manifest)||!fs::is_regular_file(manifest)||fs::file_size(manifest)>512*1024)
+                throw std::runtime_error("Invalid staged texture manifest");
+            const auto doc=Json::parseFile(manifest.string());
+            if(doc.getInt("version")!=1)throw std::runtime_error("Unsupported texture manifest");
+            const auto program=render::texture_graph::compile(doc["graph"],doc["overrides"]);
+            required.insert("texture-set.json");
+            for(const auto& pair:program.outputs)required.insert(pair.first+".png");
+        }else required.insert("payload");
+        for(const auto& record:expected.items()){
+            const auto name=record.getStr("file"),hash=record.getStr("sha256");
+            if(!required.count(name)||!seen.insert(name).second||hash.size()!=64||publicationFileSha256(stage/name)!=hash)
+                throw std::runtime_error("Staged texture evidence mismatch");
+        }
+        if(required!=seen)throw std::runtime_error("Incomplete staged texture set");
+        std::set<std::string> actual;
+        for(const auto& entry:fs::directory_iterator(stage)){
+            if(entry.is_symlink()||!entry.is_regular_file()||!required.count(entry.path().filename().string()))
+                throw std::runtime_error("Unexpected staged texture file");
+            actual.insert(entry.path().filename().string());
+        }
+        if(actual!=required)throw std::runtime_error("Incomplete staged texture files");
+    }
 public:
+    static Json inspectQuarantine(const Path& project){
+        namespace fs=std::filesystem;
+        Json rows=Json::array();const auto archive=quarantineRoot(project);
+        if(!fs::exists(archive))return rows;
+        for(const auto& slot:fs::directory_iterator(archive)){
+            if(rows.size()>=256)break;
+            if(slot.is_symlink()||!slot.is_directory())continue;
+            const auto id=slot.path().filename().string();const auto journal=slot.path()/"journal";
+            if(!safeSlot(id)||!fs::exists(journal))continue;
+            Json row=Json::object();row.set("id",Json::string(id));
+            row.set("status",Json::string("invalid"));row.set("restorable",Json::fromBool(false));
+            try{
+                const auto intent=readIsolated(journal);
+                row.set("publicationId",Json::string(intent.id));
+                row.set("destination",Json::string(destination(project,intent).lexically_relative(project).generic_string()));
+                requireVacant(project,intent);
+                const auto active=root(project)/intent.id;
+                if(fs::exists(active)||fs::is_symlink(active))throw std::runtime_error("Active intent already exists");
+                row.set("restorable",Json::fromBool(true));row.set("status",Json::string("incomplete"));
+                try{verifyStage(journal,intent);row.set("status",Json::string("verified_stage"));}catch(...){}
+            }catch(...){}
+            rows.push(std::move(row));
+        }
+        return rows;
+    }
+    static std::string restoreQuarantine(const Path& project,const std::string& slot){
+        namespace fs=std::filesystem;
+        ProjectAssetWriteLock lock(project);
+        if(!safeSlot(slot))throw std::runtime_error("Invalid quarantine identity");
+        const auto folder=quarantineRoot(project)/slot;
+        if(fs::is_symlink(folder)||!fs::is_directory(folder))throw std::runtime_error("Invalid quarantine slot");
+        const auto journal=folder/"journal";const auto intent=readIsolated(journal);
+        requireVacant(project,intent);
+        const auto parent=root(project),active=parent/intent.id;
+        fs::create_directories(parent);
+        if(fs::exists(active)||fs::is_symlink(active))throw std::runtime_error("Active intent already exists");
+        fs::rename(journal,active);
+        std::error_code ec;fs::remove(folder,ec);
+        return intent.id;
+    }
+    static void resume(const Path& project,const std::string& id){
+        namespace fs=std::filesystem;
+        ProjectAssetWriteLock lock(project);
+        if(!safeSlot(id))throw std::runtime_error("Invalid publication identity");
+        const auto journal=root(project)/id;
+        const auto intent=readIsolated(journal);
+        if(intent.id!=id)throw std::runtime_error("Publication identity mismatch");
+        requireVacant(project,intent);verifyStage(journal,intent);
+        const auto dest=destination(project,intent),stage=journal/"stage";
+        fs::create_directories(dest.parent_path());
+        requireVacant(project,intent);
+        if(intent.output.empty())fs::rename(stage,dest);
+        else{
+            fs::create_hard_link(stage/"payload",dest);
+            fs::remove(stage/"payload");
+            fs::remove(stage);
+        }
+        archivePublicationJournal(journal);
+    }
     TexturePublicationJournal(const Path& project,const std::string& name,const std::string& output){
         namespace fs=std::filesystem;
         if(!render::texture_graph::safeId(name)||(!output.empty()&&!validOutput(output)))throw std::runtime_error("Invalid texture publication identity");
