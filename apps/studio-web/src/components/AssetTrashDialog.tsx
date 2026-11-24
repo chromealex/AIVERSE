@@ -110,13 +110,13 @@ export default function AssetTrashDialog({projectPath,onClose,onChanged}:{projec
           <div className="studio-trash__info">
             <strong title={row.path??row.id}>{row.path??row.id}</strong>
             <small>{row.status==='invalid'?'Invalid record':row.kind==='replacement'?'Previous file version':row.kind==='created'?'Imported / created':'Deleted asset'}{row.directory?' · Folder':''}{row.slotBytes!==undefined?' · '+formatBytes(row.slotBytes):row.bytes!==undefined?' · '+formatBytes(row.bytes):''}</small>
-            {row.historyProtected&&<small>Protected by retained Undo/Redo (batch purge excluded)</small>}
+            {row.historyProtected&&<small>Protected by retained Undo/Redo — purge unavailable</small>}
             {row.guid&&<small title={row.guid}>GUID {row.guid}</small>}
             {row.error&&<small role="alert">{row.error}</small>}
           </div>
           {row.status==='retained'&&<div className="studio-trash__actions">
             <StudioButton size="sm" disabled={busy||!!page?.recoveryPending} onClick={()=>void prepare(row.id,'restore')}>Restore…</StudioButton>
-            <StudioButton size="sm" variant="danger" disabled={busy||!!page?.recoveryPending} onClick={()=>void prepare(row.id,'purge')}>Purge…</StudioButton>
+            <StudioButton size="sm" variant="danger" disabled={busy||!!row.historyProtected||!!page?.recoveryPending} onClick={()=>void prepare(row.id,'purge')}>Purge…</StudioButton>
           </div>}
         </div>)}
         {batch&&<div className="studio-trash__review">
@@ -130,7 +130,7 @@ export default function AssetTrashDialog({projectPath,onClose,onChanged}:{projec
         </div>}
         {review&&<div className="studio-trash__review">
           <StudioAlert tone={review.action==='purge'?'danger':'warning'} title={review.action==='purge'?'Permanently remove recovery data':'Restore this record'}>
-            {review.path}. This action clears the current Assets undo/redo history.
+            {review.path}. {review.action==='restore'?'Restoring clears the current Assets Undo/Redo history as part of the same transaction.':'Retained Undo/Redo history is preserved.'}
             {review.action==='purge'?' The recovery payload will be permanently deleted. Live content will not be changed.':
               review.kind==='replacement'?' The current version is saved separately; its GUID and metadata are retained.':' The original path and GUID must be available.'}
           </StudioAlert>
