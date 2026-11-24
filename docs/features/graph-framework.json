@@ -91,7 +91,9 @@
     "engine/render/graph/TextureGraphLiveness.h",
     "tests/render/texture_graph_liveness.cpp",
     "engine/render/graph/TextureGraphPassSchedule.h",
-    "tests/render/texture_graph_pass_schedule.cpp"
+    "tests/render/texture_graph_pass_schedule.cpp",
+    "engine/render/graph/TextureGraphDagLowering.h",
+    "tests/render/texture_graph_dag_lowering.cpp"
   ],
   "traits": {
     "editable": true,
@@ -102,7 +104,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 34A explicit bounded GPU pass schedule integrated into existing native fused/two-pass paths; arbitrary DAG lowering and hardware acceptance pending.",
+      "note": "Stage 34B in progress: typed materialized DAG slot allocation and multi-input pass lowering; no arbitrary native dispatch until shader and owner integration.",
       "evidence": []
     },
     "architecture": {
