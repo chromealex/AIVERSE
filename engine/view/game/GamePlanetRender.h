@@ -48,6 +48,9 @@ public:
     // Opt-in exact leaf replacement; host owns the matching volume and
     // collision publication. Call outside render passes, with readers paused.
     uint64_t caveSurfaceRevision()const noexcept{return caveSurfaceRevision_;}
+    std::vector<terraweave::caverns::CavePlanetSurfaceSlotKey> selectCaveSurfaceSlots(
+        const terraweave::caverns::CavePlanetFrame& frame,
+        terraweave::caverns::SurfaceRectCm footprint,size_t maxSlots=64)const;
     std::vector<terraweave::caverns::CavePlanetSurfaceSlot> captureCaveSurfaceSlots(int body,
         std::span<const terraweave::caverns::CavePlanetSurfaceSlotKey> keys)const;
     bool installCaveSurfaceCut(int body,const terraweave::caverns::CavePlanetCutPlan& plan,
@@ -115,7 +118,7 @@ private:
         std::unique_ptr<PlanetSurface> surf;
         std::vector<Chunk> chunks;          // [0..5]: face roots
         int levels = 1, grid = 16;
-        uint64_t caveCutEpoch=0;
+        uint64_t caveCutEpoch=0,caveCutWatermark=0;
         gfx::TextureHandle vision;
         std::vector<uint8_t> visionPx;
         bool fog = false;
