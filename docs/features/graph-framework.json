@@ -93,7 +93,9 @@
     "engine/render/graph/TextureGraphPassSchedule.h",
     "tests/render/texture_graph_pass_schedule.cpp",
     "engine/render/graph/TextureGraphDagLowering.h",
-    "tests/render/texture_graph_dag_lowering.cpp"
+    "tests/render/texture_graph_dag_lowering.cpp",
+    "engine/render/graph/TextureGraphKernelSource.h",
+    "tests/render/texture_graph_kernel_source.cpp"
   ],
   "traits": {
     "editable": true,
@@ -104,7 +106,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 34B typed DAG slot plan and headless/Studio plan-only inspection implemented; actual multi-input shader lowering and GPU execution pending.",
+      "note": "Stage 34C in progress: shared node expression compiler, typed Metal/Vulkan materialized kernels and RGBA8 pack source; native dispatch remains separate.",
       "evidence": []
     },
     "architecture": {
