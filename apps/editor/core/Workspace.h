@@ -79,6 +79,9 @@ public:
     // Run an operation. Never throws: errors come back as {"error": "..."}.
     Json call(const std::string& name, const Json& params, const std::string& source = "editor");
     const std::vector<Op>& ops() const { return ops_; }
+    // Host publishes a detached owner-thread snapshot; clear on world teardown.
+    // No live world provider is installed by the headless workspace itself.
+    std::function<Json(uint64_t)> buildingGraphDiagnosticsProvider;
     void registerOp(Op op);       // GUI adds view/play/screenshot ops
     Json toolList() const;        // MCP tools/list payload
 
