@@ -142,7 +142,7 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
             if(renderPopulation&&!isSpent&&!hasBody&&!plant.fallen&&!(harvest&&tw::isForestHarvested(*harvest,id))&&plant.anchor.roots.habit!=tw::PlantHabit::Grass){
                 try{
                     const auto appearance=tw::plantAppearance(plant.environment);
-                    Json proxy=Json::object();proxy.set("position",xyz(b->second->plantedPosition-game::Surface::anchor(frame->body)));
+                    Json proxy=Json::object();proxy.set("cell",Json::number(int64_t(frame->cell)));proxy.set("species",Json::number(int64_t(id.speciesId)));proxy.set("key",Json::string(std::to_string(id.key)));proxy.set("position",xyz(b->second->plantedPosition-game::Surface::anchor(frame->body)));
                     proxy.set("up",xyz(frame->up));proxy.set("east",xyz(frame->east));
                     proxy.set("sizePermille",Json::number(int64_t(appearance.sizePermille)));
                     proxy.set("foliagePermille",Json::number(int64_t(dead.contains(id)?0:appearance.foliagePermille)));

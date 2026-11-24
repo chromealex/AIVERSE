@@ -612,9 +612,12 @@ bool StudioScene::syncLivePlanetTerrain(const editor::MapDoc& doc,const std::str
     planetLiveTerrainCpu_=std::move(mesh);return true;
 }
 void StudioScene::clearPlanetForestFarMesh(){
-    if(device_&&planetForestFarMesh_.vb.valid())device_->destroyBuffer(planetForestFarMesh_.vb);
-    if(device_&&planetForestFarMesh_.ib.valid())device_->destroyBuffer(planetForestFarMesh_.ib);
-    planetForestFarMesh_={};planetForestFarRows_=Json{};planetForestFarScale_=-1.f;
+    if(device_)for(auto& [cell,chunk]:planetForestFarChunks_){
+        if(chunk.mesh.vb.valid())device_->destroyBuffer(chunk.mesh.vb);
+        if(chunk.mesh.ib.valid())device_->destroyBuffer(chunk.mesh.ib);
+    }
+    planetForestFarChunks_.clear();planetForestFarBody_.clear();planetForestFarProject_.clear();
+    planetForestFarPath_.clear();planetForestFarEpoch_.clear();planetForestFarRevision_=0;
 }
 void StudioScene::clearPlanetForestModels(){
     clearPlanetForestFarMesh();
@@ -792,34 +795,87 @@ void StudioScene::syncPlanetForestModels(const editor::MapDoc& doc,const std::st
         planetForestModelsPending_=true;return;
     }
 }
-bool StudioScene::syncPlanetForestFarMesh(const Json& rows,float flora){
-    if(rows==planetForestFarRows_&&flora==planetForestFarScale_)return planetForestFarMesh_.vb.valid()&&planetForestFarMesh_.ib.valid();
-    render::MeshBuilder builder;
+void StudioScene::drawPlanetForestFarChunks(const Json& rows,float flora){
+    const auto body=planetPreview_->bodyId;
+    const auto epoch=planetLiveSnapshot_.getStr("epoch");
+    const bool changed=planetForestFarBody_!=body||planetForestFarProject_!=planetLiveProject_||
+        planetForestFarPath_!=planetLivePath_||planetForestFarEpoch_!=epoch||planetForestFarRevision_!=planetLiveRevision_;
+    bool idle=false;
+    const auto acquireIdle=[&](){if(!idle)idle=device_->waitForResourceIdle();return idle;};
+    if(changed){
+        if(!acquireIdle())return;
+        clearPlanetForestFarMesh();planetForestFarBody_=body;planetForestFarProject_=planetLiveProject_;
+        planetForestFarPath_=planetLivePath_;planetForestFarEpoch_=epoch;planetForestFarRevision_=planetLiveRevision_;
+    }
+    std::map<int64_t,Json> requested;
     for(const auto& row:rows.items()){
-        const auto p=studioForestVec(row["position"]),up=studioForestVec(row["up"]),east=studioForestVec(row["east"]);
-        const auto size=row.getInt("sizePermille");
-        if(!p||!up||!east||size<=0||size>1000)continue;
-        const auto frame=studioForestFrame(*p,*up,*east);if(!frame)continue;
-        const float h=flora*float(size)*.001f*(row.getBool("shrub")?1.5f:6.f);
-        const float cover=float(std::clamp<int64_t>(row.getInt("foliagePermille"),0,1000))*.001f;
-        const auto u=render::normalize(*up),e=render::normalize(*east),n=render::normalize(render::cross(u,e));
-        const float w=h*(.035f+.24f*cover);
-        const auto color=cover>0.f?render::rgba(55,105,48):render::rgba(100,72,48);
-        // Two crossed, double-sided tapered silhouettes in the local tangent frame.
-        for(const auto side:{e,n}){
-            const auto normal=render::normalize(render::cross(side,u));
-            const auto b=uint32_t(builder.vertexCount());
-            builder.addVertex(*p-side*w,normal,color);builder.addVertex(*p+side*w,normal,color);builder.addVertex(*p+u*h,normal,color);
-            builder.addTriangle(b,b+1,b+2);builder.addTriangle(b+2,b+1,b);
+        const auto cell=row.getInt("cell",-1);if(cell<0)continue;
+        auto it=requested.find(cell);
+        if(it==requested.end())it=requested.emplace(cell,Json::array()).first;
+        it->second.push(row);
+    }
+    // Stable identity order prevents camera ranking alone from invalidating a mesh.
+    for(auto& [cell,chunkRows]:requested){
+        auto sorted=chunkRows.items();
+        std::sort(sorted.begin(),sorted.end(),[](const Json& a,const Json& b){
+            return std::make_pair(a.getInt("species"),a.getStr("key"))<std::make_pair(b.getInt("species"),b.getStr("key"));
+        });
+        chunkRows=Json::array();for(auto& row:sorted)chunkRows.push(std::move(row));
+    }
+    for(auto it=planetForestFarChunks_.begin();it!=planetForestFarChunks_.end();){
+        if(requested.count(it->first)){++it;continue;}
+        if(!acquireIdle()){++it;continue;}
+        if(it->second.mesh.vb.valid())device_->destroyBuffer(it->second.mesh.vb);
+        if(it->second.mesh.ib.valid())device_->destroyBuffer(it->second.mesh.ib);
+        it=planetForestFarChunks_.erase(it);
+    }
+    size_t drawn=0,pending=0,uploads=0;
+    constexpr size_t maxUploadsPerFrame=16;
+    for(const auto& [cell,chunkRows]:requested){
+        auto found=planetForestFarChunks_.find(cell);
+        if(found==planetForestFarChunks_.end()||!(found->second.rows==chunkRows)||found->second.scale!=flora){
+            if(uploads>=maxUploadsPerFrame||!acquireIdle()){++pending;continue;}
+            render::MeshBuilder builder;
+            for(const auto& row:chunkRows.items()){
+                const auto p=studioForestVec(row["position"]),up=studioForestVec(row["up"]),east=studioForestVec(row["east"]);
+                const auto size=row.getInt("sizePermille");
+                if(!p||!up||!east||size<=0||size>1000)continue;
+                const auto frame=studioForestFrame(*p,*up,*east);if(!frame)continue;
+                const float h=flora*float(size)*.001f*(row.getBool("shrub")?1.5f:6.f);
+                const float cover=float(std::clamp<int64_t>(row.getInt("foliagePermille"),0,1000))*.001f;
+                const auto u=render::normalize(*up),e=render::normalize(*east),n=render::normalize(render::cross(u,e));
+                const float w=h*(.035f+.24f*cover);
+                const auto color=cover>0.f?render::rgba(55,105,48):render::rgba(100,72,48);
+                // Two crossed, double-sided tapered silhouettes in the local tangent frame.
+                for(const auto side:{e,n}){
+                    const auto normal=render::normalize(render::cross(side,u));
+                    const auto b=uint32_t(builder.vertexCount());
+                    builder.addVertex(*p-side*w,normal,color);builder.addVertex(*p+side*w,normal,color);builder.addVertex(*p+u*h,normal,color);
+                    builder.addTriangle(b,b+1,b+2);builder.addTriangle(b+2,b+1,b);
+                }
+            }
+        
+            ++uploads;
+            if(builder.vertexCount()==0)continue;
+            auto next=builder.upload(*device_);
+            if(!next.vb.valid()||!next.ib.valid()){
+                if(next.vb.valid())device_->destroyBuffer(next.vb);
+                if(next.ib.valid())device_->destroyBuffer(next.ib);
+                ++pending;continue;
+            }
+            auto& chunk=planetForestFarChunks_[cell];
+            if(chunk.mesh.vb.valid())device_->destroyBuffer(chunk.mesh.vb);
+            if(chunk.mesh.ib.valid())device_->destroyBuffer(chunk.mesh.ib);
+            chunk.mesh=next;chunk.rows=chunkRows;chunk.scale=flora;
+            found=planetForestFarChunks_.find(cell);
+        }
+        if(found!=planetForestFarChunks_.end()&&found->second.mesh.vb.valid()&&found->second.mesh.ib.valid()){
+            renderer_.drawMesh(found->second.mesh,render::mat4{},{1,1,1,1},render::kDrawNoCastShadow);
+            drawn+=chunkRows.size();
         }
     }
-    if(!device_->waitForResourceIdle())return false;
-    if(builder.vertexCount()==0){clearPlanetForestFarMesh();planetForestFarRows_=rows;planetForestFarScale_=flora;return false;}
-    auto next=builder.upload(*device_);
-    if(!next.vb.valid()||!next.ib.valid()){
-        if(next.vb.valid())device_->destroyBuffer(next.vb);if(next.ib.valid())device_->destroyBuffer(next.ib);return false;
-    }
-    clearPlanetForestFarMesh();planetForestFarMesh_=next;planetForestFarRows_=rows;planetForestFarScale_=flora;return true;
+    lightingStatus_+=" · far forest proxies "+std::to_string(drawn)+" · chunks "+std::to_string(requested.size());
+    if(pending)lightingStatus_+=" · pending far chunks "+std::to_string(pending);
 }
 void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std::string& projectPath){
     if(!planetForestLiveCurrent(doc,projectPath)||planetForestModelProject_!=projectPath||
@@ -829,10 +885,7 @@ void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std
     const auto& scale=doc.data.bodies[size_t(index)].meta["visual"]["flora"]["scale"];
     const float flora=scale.isNumber()?std::clamp(float(scale.toDouble()),.001f,10.f):.06f;
     const auto& far=planetLiveSnapshot_["forest"]["farPlants"];
-    if(syncPlanetForestFarMesh(far,flora)){
-        renderer_.drawMesh(planetForestFarMesh_,render::mat4{},{1,1,1,1},render::kDrawNoCastShadow);
-        lightingStatus_+=" · far forest proxies "+std::to_string(far.size());
-    }else if(far.size())lightingStatus_+=" · far forest upload unavailable";
+    drawPlanetForestFarChunks(far,flora);
     static const std::vector<uint8_t> barkOnly{1,0};
     planetForestSeasonMaterials_.clear();
     const auto tick=uint64_t(planetLiveSnapshot_["forest"].getInt("tick",0));
