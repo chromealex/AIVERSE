@@ -96,7 +96,10 @@
     "tests/render/texture_graph_gpu_slots.cpp",
     "engine/render/graph/TextureGraphGpuDag.h",
     "engine/render/graph/TextureGraphGpuNodeAbi.h",
-    "tests/render/texture_graph_gpu_node_abi.cpp"
+    "tests/render/texture_graph_gpu_node_abi.cpp",
+    "apps/editor/core/TextureGraphGpuExecution.h",
+    "engine/render/graph/TextureGraphGpuStepState.h",
+    "tests/render/texture_graph_gpu_step_state.cpp"
   ],
   "traits": {
     "editable": true,
@@ -107,7 +110,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35A source lowering for materialized DAG implemented, shared fused expression compiler retained. Runtime dispatch/retirement and hardware acceptance pending.",
+      "note": "Stage 35B in progress: opt-in early-pack native executor, existing owner/fences, output-index parity and retirement. Parent typed pinned-output route requires reconciliation.",
       "evidence": []
     },
     "architecture": {
