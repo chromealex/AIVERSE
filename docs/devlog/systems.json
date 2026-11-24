@@ -1726,10 +1726,10 @@
           "textEn": "Incremental GPU DAG with dedicated slots and unchanged-node reuse. Isolated test passed; hardware verification pending."
         },
         {
-          "name": "Texture Graph GPU — Stage 38D (в работе)",
-          "text": "Ограниченная очередь с приоритетами и явным завершением запроса.",
-          "nameEn": "Texture Graph GPU — Stage 38D (in progress)",
-          "textEn": "Bounded priority queue with explicit result release."
+          "name": "Texture Graph GPU — Stage 38D",
+          "text": "Добавлена ограниченная асинхронная очередь GPU-запросов с приоритетами, отменой и явной выдачей результата. Изолированный тест пройден; интеграционная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38D",
+          "textEn": "Bounded asynchronous GPU request queue with priorities, cancellation and explicit result release. Isolated test passed; integrated verification pending."
         }
       ],
       "enables": [
