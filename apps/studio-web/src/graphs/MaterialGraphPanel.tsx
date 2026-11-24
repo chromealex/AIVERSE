@@ -11,7 +11,7 @@ import type {TextureRecipe,TextureOutput} from './materialGraph';
 
 const object=(x:unknown):x is Record<string,unknown>=>!!x&&typeof x==='object'&&!Array.isArray(x);
 const op=async(name:string,params:Record<string,unknown>={})=>(await invoke('studio.op',{op:name,params})).result;
-export default function MaterialGraphPanel({name,material,draft,projectPath,disabled,onEdit,mode}:{name:string;material:MaterialData;draft:MaterialPatch;projectPath:string;disabled:boolean;onEdit:(key:MaterialKey,value:FieldValue)=>void;mode:'texture'|'dependencies'|'quick'}){
+export default function MaterialGraphPanel({name,material,draft,projectPath,disabled,onEdit,mode}:{name:string;material:MaterialData;draft:MaterialPatch;projectPath:string;disabled:boolean;onEdit:(key:MaterialKey,value:FieldValue)=>void;mode:'properties'|'texture'|'dependencies'|'quick'}){
  const [selected,setSelected]=useState(''),[patterns,setPatterns]=useState<string[]>([]);
  const [recipe,setRecipe]=useState<TextureRecipe>({pattern:'',output:'color',seed:1,size:256,scale:8,name:''});
  const [error,setError]=useState(''),[status,setStatus]=useState(''),[busy,setBusy]=useState(false);
@@ -54,7 +54,7 @@ export default function MaterialGraphPanel({name,material,draft,projectPath,disa
   {fields.map(f=><PropertyField key={f.key} property={f} disabled={disabled||busy} onChange={v=>onEdit(f.key,v)}/>)}
   <small>Dependency view of the material draft; edit channels using the existing asset picker. Shader evaluation remains in Shader Graph.</small>
   </StudioSection></div>
-  <div hidden={mode!=='texture'}><TextureGraphPanel projectPath={projectPath} disabled={disabled||busy} onEdit={onEdit}/></div>
+  <div hidden={mode!=='texture'}><TextureGraphPanel active={mode==='texture'} projectPath={projectPath} disabled={disabled||busy} onEdit={onEdit}/></div>
   <div hidden={mode!=='quick'} className="material-quick-view">
   <StudioSection title="Generate texture">
    <StudioSelect aria-label="Pattern" disabled={busy||disabled} value={recipe.pattern} onChange={e=>setRecipe(r=>({...r,pattern:e.target.value}))}>{patterns.map(p=><option key={p}>{p}</option>)}</StudioSelect>

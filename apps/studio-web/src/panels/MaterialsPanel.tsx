@@ -146,7 +146,7 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
      <div className="materials-modes" role="group" aria-label="Material workspace">
       {(['properties','texture','dependencies','quick'] as const).map(mode=><StudioButton key={mode} size="sm" aria-pressed={materialMode===mode} disabled={mode!=='properties'&&(!connected||!projectPath)} onClick={()=>setMaterialMode(mode)}>{mode==='properties'?'Properties':mode==='texture'?'Texture Graph':mode==='dependencies'?'Dependencies':'Quick texture'}</StudioButton>)}
      </div>
-     {connected&&projectPath&&<div hidden={materialMode==='properties'} className="materials-graph-host"><MaterialGraphPanel name={name} material={selected} draft={draft} projectPath={projectPath} disabled={busy||loading} onEdit={edit} mode={materialMode==='properties'?'texture':materialMode}/></div>}
+     {connected&&projectPath&&<div hidden={materialMode==='properties'} className="materials-graph-host"><MaterialGraphPanel name={name} material={selected} draft={draft} projectPath={projectPath} disabled={busy||loading} onEdit={edit} mode={materialMode}/></div>}
      <div className="materials-fields" hidden={materialMode!=='properties'}>
       {props.map(field=><PropertyField key={name+':'+field.key} property={field}
        disabled={busy||!connected||!projectPath} onChange={v=>edit(field.key,v)}/>)}

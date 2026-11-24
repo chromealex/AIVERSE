@@ -2,7 +2,8 @@ import {useEffect,useRef,useState} from 'react';
 import {invoke} from '../bridge';
 import {StudioAlert,StudioButton,StudioInput,StudioSelect,StudioSection} from '../ui';
 import GraphCanvas from './GraphCanvas';
-import {validateTopology} from './graphFramework';
+import {validateTopology,DraftHistory} from './graphFramework';
+import {textureLayout,duplicateTextureNode,texturePreviewKey} from './textureGraphAuthoring';
 import type {GraphView,NodeView,Link} from './graphFramework';
 import type {PortRef} from './graphGeometry';
 import type {MaterialKey,FieldValue} from '../panels/materialSchema';
@@ -33,7 +34,7 @@ function projection(graph:Obj,catalog:Obj[]):GraphView{
  });
  return {nodes,links};
 }
-export default function TextureGraphPanel({projectPath,disabled,onEdit}:{projectPath:string;disabled:boolean;onEdit:(key:MaterialKey,value:FieldValue)=>void}){
+export default function TextureGraphPanel({projectPath,disabled,onEdit,active=true}:{projectPath:string;disabled:boolean;active?:boolean;onEdit:(key:MaterialKey,value:FieldValue)=>void}){
  const [text,setText]=useState(JSON.stringify(template,null,2)),[name,setName]=useState(''),[original,setOriginal]=useState<{name:string;graph:Obj}|null>(null);
  const [overrideText,setOverrideText]=useState('{}'),[parameterName,setParameterName]=useState(''),[parameterField,setParameterField]=useState(''),[variantName,setVariantName]=useState(''),[baseMaterial,setBaseMaterial]=useState(''),[bakedSet,setBakedSet]=useState('');
  const [templates,setTemplates]=useState<Obj[]>([]),[outputTypes,setOutputTypes]=useState<Obj>({}),[newOp,setNewOp]=useState('constant'),[pending,setPending]=useState<PortRef|null>(null);
@@ -50,15 +51,30 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
  const [inspectorTab,setInspectorTab]=useState<'node'|'outputs'|'parameters'>('node');
  const [gpuPolling,setGpuPolling]=useState(false),[previewKind,setPreviewKind]=useState('');
  const [gpuCaps,setGpuCaps]=useState<{available:boolean;residentApply:boolean;reason:string}|null>(null);
+ const [autoPreview,setAutoPreview]=useState(true),[search,setSearch]=useState(''),[showSearch,setShowSearch]=useState(false),[inspectorWidth,setInspectorWidth]=useState(300),[expanded,setExpanded]=useState(false);
+ const searchInput=useRef<HTMLInputElement>(null),workspace=useRef<HTMLElement>(null);
+ const history=useRef(new DraftHistory(JSON.stringify(template,null,2),64)),autoAttempt=useRef('');
  const epoch=useRef(0),lock=useRef(false),canvas=useRef<HTMLCanvasElement>(null);
- useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setOverrideText('{}');setBakedSet('');setGpuRequest(null);setGpuPolling(false);setPreviewKind('');setGpuCaps(null);setQueueTicket('');setQueueInfo(null);setQueueDrafts({});setGpuReady(false);setResidentReady(false);setLiveTarget(null);setLiveApply('');setGpuStatus('');setText(JSON.stringify(template,null,2));setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
+ useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setOverrideText('{}');setBakedSet('');setGpuRequest(null);setGpuPolling(false);setPreviewKind('');setGpuCaps(null);setQueueTicket('');setQueueInfo(null);setQueueDrafts({});setGpuReady(false);setResidentReady(false);setLiveTarget(null);setLiveApply('');setGpuStatus('');history.current=new DraftHistory(JSON.stringify(template,null,2),64);autoAttempt.current='';setText(history.current.current());setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
  return()=>{epoch.current++;lock.current=false};},[projectPath]);
  useEffect(()=>{const c=canvas.current;if(!c||!preview||preview.source!==text)return;
  const bytes=new Uint8ClampedArray(preview.hex.length/2);for(let i=0;i<bytes.length;i++)bytes[i]=parseInt(preview.hex.slice(i*2,i*2+2),16);
  c.getContext('2d')?.putImageData(new ImageData(bytes,preview.width,preview.height),0,0);
  },[preview,text]);
  let graph:Obj|null=null;try{const value=JSON.parse(text);if(object(value))graph=value}catch{}
- const edit=(value:Obj)=>{setText(JSON.stringify(value,null,2));setPreview(null);setAsset(null);setAssets([]);};
+ const changeText=(next:string,record=true)=>{
+  if(record)history.current.push(next);
+  setText(next);setPreview(null);setAsset(null);setAssets([]);setBakedSet('');setGpuReady(false);setResidentReady(false);
+ };
+ const edit=(value:Obj)=>changeText(JSON.stringify(value,null,2));
+ const replaceDocument=(value:Obj)=>{const next=JSON.stringify(value,null,2);history.current=new DraftHistory(next,64);autoAttempt.current='';changeText(next,false);setSelected('');setPending(null);};
+ const undo=()=>{if(history.current.canUndo()){changeText(history.current.undo(),false);setSelected('');setPending(null);}};
+ const redo=()=>{if(history.current.canRedo()){changeText(history.current.redo(),false);setSelected('');setPending(null);}};
+ const semantic=graph?texturePreviewKey(graph,overrideText,output,gpuResolution,[requireGpu,materialized,fusePointwise,incremental]):'';
+ const openSearch=()=>{setShowSearch(true);setSearch('');};
+ useEffect(()=>{if(showSearch)searchInput.current?.focus();},[showSearch]);
+ useEffect(()=>{if(!active)setExpanded(false);},[active]);
+ useEffect(()=>{if(!expanded)return;const fn=(e:KeyboardEvent)=>{if(e.key==='Escape')setExpanded(false);};document.addEventListener('keydown',fn);return()=>document.removeEventListener('keydown',fn);},[expanded]);
  const run=async(action:string)=>{
   if(lock.current||disabled||!projectPath)return;lock.current=true;setBusy(true);setError('');setStatus('');const token=epoch.current;
   try{
@@ -72,7 +88,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
    if(action==='load'){
     const r=await op('texture_graph_get',{name});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||!object(r.graph))throw new Error('Graph unavailable');
-    setOriginal({name,graph:r.graph});edit(r.graph);setSelected('');setPending(null);return;
+    setOriginal({name,graph:r.graph});replaceDocument(r.graph);setSelected('');setPending(null);return;
    }
    if(action==='variant'){
     if(!bakedSet)throw new Error('Bake a set and configure its importer first');
@@ -111,7 +127,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
     if(!gpuRequest)throw new Error('No GPU request to cancel');
     const r=await op('texture_graph_gpu_preview',{action:'cancel',request:gpuRequest.id});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||r.request!==gpuRequest.id||r.state!=='cancelled')throw new Error('GPU cancellation rejected');
-    setGpuPolling(false);setGpuReady(false);setResidentReady(false);setPreview(null);setGpuStatus('cancelled'+(r.draining===true?' · waiting for GPU retirement':'')+' — '+String(r.reason??''));return;
+    setAutoPreview(false);setGpuPolling(r.busy===true||r.draining===true);setGpuReady(false);setResidentReady(false);setPreview(null);setGpuStatus('cancelled'+(r.draining===true?' · waiting for GPU retirement':'')+' — '+String(r.reason??''));return;
    }
    if(action==='queueRead'||action==='queueCancel'||action==='queueRelease'){
      const r=await op('texture_graph_gpu_preview',{action,ticket:queueTicket,...(action==='queueRelease'?{discardResult:true}:{})});if(token!==epoch.current)return;
@@ -188,6 +204,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
     return;
    }
    if(action==='gpuStart'||action==='gpuBake'||action==='gpuBakeSet'){
+    if(action==='gpuStart'){autoAttempt.current=semantic;}else setAutoPreview(false);
     const reuse=action==='gpuBakeSet'&&materialized&&incremental&&gpuTextureTransfer&&gpuTextureFenceOnly&&incrementalOutputs;
     if(reuse&&!liveTarget)throw new Error('Inspect live material before incremental output generation');
     const r=await op('texture_graph_gpu_preview',{action:'start',graph,overrides,output,requireGpu,materialized,...(reuse&&liveTarget?{incrementalOutputs:true,typeIndex:liveTarget.typeIndex,choiceIndex:liveTarget.choiceIndex,materialIndex:liveTarget.materialIndex,expectedVersion:liveTarget.expectedVersion,expectedModelPublication:liveTarget.expectedModelPublication}:{}),fusePointwise:materialized&&fusePointwise,incremental:materialized&&incremental,gpuTextureTransfer:action==='gpuBakeSet'&&materialized&&gpuTextureTransfer,gpuTextureFenceOnly:action==='gpuBakeSet'&&materialized&&gpuTextureTransfer&&gpuTextureFenceOnly,gpuTextureMipmaps:action==='gpuBakeSet'&&materialized&&gpuTextureTransfer&&gpuTextureMipmaps,resolution:gpuResolution,bake:action==='gpuBake'||action==='gpuBakeSet',bakeSet:action==='gpuBakeSet'});if(token!==epoch.current)return;
@@ -203,7 +220,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
     }return;
    }
    if(action==='previewNode'||action==='previewOutput'){
-    setPreview(null);setPreviewKind('CPU');
+    setAutoPreview(false);setPreview(null);setPreviewKind('CPU');
     const r=await op('texture_graph_preview',{graph,overrides,...(action==='previewNode'?{node:selected}:{output})});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||typeof r.width!=='number'||typeof r.height!=='number'||!Number.isInteger(r.width)||!Number.isInteger(r.height)||r.width<8||r.height<8||r.width>32||r.height>32||typeof r.rgbaHex!=='string'||r.rgbaHex.length!==r.width*r.height*8||!/^[0-9a-f]+$/.test(r.rgbaHex))throw new Error('Invalid native preview');
     setPreview({hex:r.rgbaHex,width:r.width,height:r.height,source:text});return;
@@ -244,7 +261,26 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
   const timer=setTimeout(()=>void run('gpuRead'),350);
   return()=>clearTimeout(timer);
  },[gpuPolling,busy,disabled,gpuRequest,text,overrideText,output,gpuResolution,projectPath]);
- const view=graph?projection(graph,catalog):{nodes:[],links:[]};
+ // Auto-preview only in the visible workspace, never replaces a bake or queue.
+ useEffect(()=>{
+  if(!active||!autoPreview||!gpuCaps?.available||busy||disabled||gpuPolling||gpuRequest?.bake||queueTicket||Object.keys(queueDrafts).length||!graph||!catalog.length||!object(graph.outputs)||!graph.outputs[output]||!semantic||autoAttempt.current===semantic)return;
+  if(validateTopology(projection(graph,catalog),{cycles:'reject'}).length)return;
+  const timer=setTimeout(()=>{autoAttempt.current=semantic;void run('gpuStart');},500);
+  return()=>clearTimeout(timer);
+ },[active,autoPreview,gpuCaps?.available,busy,disabled,gpuPolling,gpuRequest?.bake,queueTicket,queueDrafts,semantic,catalog,projectPath]);
+ const rawView=graph?projection(graph,catalog):{nodes:[],links:[]};
+ const arranged=textureLayout(rawView);
+ const view={...rawView,nodes:rawView.nodes.map(n=>{const row=Array.isArray(graph?.nodes)?graph.nodes.find(v=>object(v)&&v.id===n.id):null;const pos=object(row)?row.position:null;const xy=arranged.get(n.id);return Array.isArray(pos)||!xy?n:{...n,x:xy[0],y:xy[1]};})};
+ const moveNodes=(positions:readonly {id:string;x:number;y:number}[])=>{
+  if(!graph||!Array.isArray(graph.nodes))return;
+  const byId=new Map(positions.map(p=>[p.id,p]));
+  const next={...graph,nodes:graph.nodes.map(n=>{if(!object(n)||typeof n.id!=='string')return n;const p=byId.get(n.id);const current=view.nodes.find(v=>v.id===n.id);return p?{...n,position:[Math.max(0,Math.min(2000,p.x)),Math.max(0,Math.min(2000,p.y))]}:current&&!Array.isArray(n.position)?{...n,position:[current.x,current.y]}:n;})};
+  const nextText=JSON.stringify(next,null,2);history.current.push(nextText);setText(nextText);
+  setPreview(old=>old?.source===text?{...old,source:nextText}:old);
+  // A bake still requires its exact source document; layout cannot publish stale assets.
+  setGpuReady(false);setResidentReady(false);
+ };
+ const autoLayout=()=>moveNodes([...arranged].map(([id,[x,y]])=>({id,x,y})));
  const outputs=graph&&object(graph.outputs)?Object.keys(graph.outputs):[];
  const rows=graph&&Array.isArray(graph.nodes)?graph.nodes.filter(object):[];
  const current=rows.find(n=>n.id===selected);
@@ -258,13 +294,14 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
   if(validateTopology(projection(next,catalog),{cycles:'reject'}).some(x=>x.code==='cycle')){setError('Texture graph cannot contain cycles');return;}
   edit(next);setPending(null);setError('');
  };
- const addNode=()=>{
-  if(!graph||rows.length>=32)return;const t=catalog.find(n=>n.id===newOp);if(!t)return;
-  let i=1;while(rows.some(n=>n.id===newOp+'_'+i))i++;
-  const id=newOp+'_'+i,props:Obj={};
+ const addNode=(kind=newOp)=>{
+  if(!graph||rows.length>=32)return;const t=catalog.find(n=>n.id===kind);if(!t)return;
+  let i=1;while(rows.some(n=>n.id===kind+'_'+i))i++;
+  const id=kind+'_'+i,props:Obj={};
   if(object(t.properties))for(const [key,value] of Object.entries(t.properties))if(object(value))props[key]=value.default;
-  edit({...graph,nodes:[...rows,{id,op:newOp,inputs:Array.isArray(t.inputs)?t.inputs.map(()=> ''):[],properties:props}]});setSelected(id);setPending(null);
+  edit({...graph,nodes:[...rows,{id,op:kind,inputs:Array.isArray(t.inputs)?t.inputs.map(()=> ''):[],properties:props}]});setSelected(id);setPending(null);
  };
+ const duplicate=()=>{if(!graph)return;const copy=duplicateTextureNode(graph,selected);if(copy){edit(copy.graph);setSelected(copy.id);setPending(null);}};
  const removeNode=()=>{
   if(!graph||!selected)return;const nextOutputs=object(graph.outputs)?Object.fromEntries(Object.entries(graph.outputs).filter(([,v])=>v!==selected)):{};
   edit({...graph,outputs:nextOutputs,nodes:rows.filter(n=>n.id!==selected).map(n=>({...n,inputs:Array.isArray(n.inputs)?n.inputs.map(v=>v===selected?'':v):[]}))});setSelected('');setPending(null);
@@ -279,25 +316,29 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
   edit({...graph,parameters:{...defs,[parameterName]:{default:value,bindings:[{node:current.id,property:parameterField}]}}});setParameterName('');
  };
 
- return <section className="tg-workspace" aria-label="Procedural Texture Graph">
+ return <section ref={workspace} className={"tg-workspace"+(expanded?" tg-expanded":"")} aria-label="Procedural Texture Graph">
   <div className="tg-toolbar">
-   <div className="tg-title"><strong>Texture Graph</strong><small>Native PBR generator</small></div>
+   <div className="tg-title"><strong>Texture Graph</strong><small>Native PBR generator</small></div><StudioButton size="sm" onClick={()=>setExpanded(v=>!v)}>{expanded?"Restore":"Expand"}</StudioButton>
      <StudioSelect aria-label="Saved texture graph" value={names.includes(name)?name:''} disabled={busy||disabled} onChange={e=>{setName(e.target.value);setOriginal(null)}}><option value="">Select saved graph</option>{names.map(n=><option key={n}>{n}</option>)}</StudioSelect>
   <StudioInput aria-label="Graph name" placeholder="Graph name" value={name} disabled={busy||disabled} onChange={e=>setName(e.target.value)}/>
-  <div className="au-row" style={{flexWrap:'wrap'}}>{['load','save','validate'].map(action=><StudioButton key={action} size="sm" disabled={busy||disabled||(action!=='validate'&&!name)} onClick={()=>void run(action)}>{action}</StudioButton>)}<StudioButton size="sm" disabled={busy||disabled} onClick={()=>{edit(template);setOriginal(null);setName('')}}>New PBR template</StudioButton></div>
-     {templates.length>0&&<StudioSelect aria-label="Native PBR template" value="" disabled={busy||disabled} onChange={e=>{const t=templates.find(t=>t.name===e.target.value);if(t&&object(t.graph)){edit(t.graph);setOriginal(null);setName('');setSelected('');setPending(null)}}}><option value="">Load native PBR template</option>{templates.map(t=><option key={String(t.name)}>{String(t.name)}</option>)}</StudioSelect>}
+  <div className="au-row" style={{flexWrap:'wrap'}}>{['load','save','validate'].map(action=><StudioButton key={action} size="sm" disabled={busy||disabled||(action!=='validate'&&!name)} onClick={()=>void run(action)}>{action}</StudioButton>)}<StudioButton size="sm" disabled={busy||disabled} onClick={()=>{replaceDocument(template);setOriginal(null);setName('')}}>New PBR template</StudioButton></div>
+     {templates.length>0&&<StudioSelect aria-label="Native PBR template" value="" disabled={busy||disabled} onChange={e=>{const t=templates.find(t=>t.name===e.target.value);if(t&&object(t.graph)){replaceDocument(t.graph);setOriginal(null);setName('');setSelected('');setPending(null)}}}><option value="">Load native PBR template</option>{templates.map(t=><option key={String(t.name)}>{String(t.name)}</option>)}</StudioSelect>}
      <StudioButton size="sm" disabled={disabled||busy} onClick={()=>void run('catalog')}>Refresh graph / node catalog</StudioButton>
   </div>
-  <div className="tg-body">
+  <div className="tg-body" style={{"--tg-inspector-width":inspectorWidth+"px"} as React.CSSProperties}>
+
    <div className="tg-main">
     <div className="tg-node-toolbar">
-       {graph&&catalog.length>0&&<div className="au-row"><StudioSelect aria-label="Node type" value={newOp} disabled={busy||disabled} onChange={e=>setNewOp(e.target.value)}>{catalog.map(n=><option key={String(n.id)}>{String(n.id)}</option>)}</StudioSelect><StudioButton size="sm" disabled={busy||disabled||rows.length>=32} onClick={addNode}>Add node</StudioButton><StudioButton size="sm" disabled={busy||disabled||!selected} onClick={removeNode}>Remove node</StudioButton></div>}
+     <div className="tg-edit-actions"><StudioButton size="sm" disabled={busy||disabled||!history.current.canUndo()} onClick={undo}>Undo</StudioButton><StudioButton size="sm" disabled={busy||disabled||!history.current.canRedo()} onClick={redo}>Redo</StudioButton><StudioButton size="sm" disabled={busy||disabled||!selected||rows.length>=32} onClick={duplicate}>Duplicate</StudioButton><StudioButton size="sm" disabled={busy||disabled||!rows.length} onClick={autoLayout}>Auto layout</StudioButton><StudioButton size="sm" disabled={busy||disabled||rows.length>=32} onClick={openSearch}>+ Search node</StudioButton></div>
+       {graph&&catalog.length>0&&<div className="au-row"><StudioSelect aria-label="Node type" value={newOp} disabled={busy||disabled} onChange={e=>setNewOp(e.target.value)}>{catalog.map(n=><option key={String(n.id)}>{String(n.id)}</option>)}</StudioSelect><StudioButton size="sm" disabled={busy||disabled||rows.length>=32} onClick={()=>addNode()}>Add node</StudioButton><StudioButton size="sm" disabled={busy||disabled||!selected} onClick={removeNode}>Remove node</StudioButton></div>}
      <small>{rows.length} nodes · {outputs.length} outputs</small>
+     {showSearch&&<div className="tg-search"><input ref={searchInput} aria-label="Search node catalog" placeholder="Search nodes…" value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>{if(e.key==='Escape')setShowSearch(false);}}/><StudioButton size="sm" onClick={()=>setShowSearch(false)}>Close</StudioButton><div className="tg-search-results">{catalog.filter(n=>[n.id,n.output,n.description].some(v=>String(v??'').toLowerCase().includes(search.toLowerCase()))).map(n=><StudioButton key={String(n.id)} size="sm" disabled={busy||disabled||rows.length>=32} onClick={()=>{addNode(String(n.id));setShowSearch(false);}}>{String(n.id)} · {String(n.output??'')}</StudioButton>)}</div></div>}
     </div>
-      {catalog.length>0&&<div className="tg-canvas"><GraphCanvas view={view} selected={selected} label="Texture DAG" disabled={busy||disabled} onSelect={setSelected} pendingOutput={pending} onOutput={p=>setPending(p)} onInput={p=>{if(pending)connect(pending.node,p.node,Number(p.port))}} onCancel={()=>setPending(null)} onMove={(id,x,y)=>{if(graph&&Array.isArray(graph.nodes))edit({...graph,nodes:graph.nodes.map(n=>object(n)&&n.id===id?{...n,position:[x,y]}:n)})}}/></div>}
+      {catalog.length>0&&<div className="tg-canvas"><GraphCanvas view={view} selected={selected} label="Texture DAG" disabled={busy||disabled} onSelect={setSelected} pendingOutput={pending} onOutput={p=>setPending(p)} onInput={p=>{if(pending)connect(pending.node,p.node,Number(p.port))}} onCancel={()=>setPending(null)} enhancedNavigation typedPorts onAddMenu={openSearch} commands={[{id:"add",label:"Search nodes",shortcut:"shift+a",run:openSearch},{id:"undo",label:"Undo",shortcut:"mod+z",disabled:!history.current.canUndo(),run:undo},{id:"redo",label:"Redo",shortcut:"mod+shift+z",disabled:!history.current.canRedo(),run:redo},{id:"duplicate",label:"Duplicate",shortcut:"mod+d",disabled:!selected||rows.length>=32,run:duplicate},{id:"layout",label:"Auto layout",run:autoLayout},{id:"delete",label:"Remove",shortcut:"delete",disabled:!selected,run:removeNode}]} onMove={(id,x,y)=>moveNodes([{id,x,y}])}/></div>}
     {!catalog.length&&<div className="tg-empty">Loading native node catalog. Use Refresh if it is unavailable.</div>}
    </div>
-   <aside className="tg-inspector">
+   <aside className="tg-inspector" style={{width:inspectorWidth,maxWidth:"100%",boxSizing:"border-box"}}>
+    <label className="tg-width">Inspector width <input aria-label="Inspector width" type="range" min={235} max={480} step={5} value={inspectorWidth} onChange={e=>setInspectorWidth(Number(e.target.value))}/></label>
     <section className="tg-preview">
      <div className="tg-preview-header"><strong>Preview</strong><small>{preview&&preview.source===text?previewKind:'No result'}</small></div>
      <div className="tg-image">{preview&&preview.source===text?<canvas ref={canvas} width={preview.width} height={preview.height} aria-label="Native texture preview"/>:<span>No preview generated</span>}</div>
@@ -305,6 +346,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
         <StudioSelect aria-label="GPU preview resolution" value={String(gpuResolution)} disabled={busy||disabled} onChange={e=>{setGpuResolution(Number(e.target.value));setPreview(null)}}>{[32,64,128].map(n=><option key={n} value={n}>{n} × {n}</option>)}</StudioSelect>
      <div className="au-row"><StudioButton size="sm" variant="primary" disabled={busy||disabled||!gpuCaps?.available||gpuPolling||!outputs.includes(output)} onClick={()=>void run('gpuStart')}>GPU preview</StudioButton><StudioButton size="sm" disabled={busy||disabled||!outputs.includes(output)} onClick={()=>void run('previewOutput')}>CPU preview</StudioButton></div>
      <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!gpuRequest} onClick={()=>void run('gpuCancel')}>Cancel</StudioButton><StudioButton size="sm" disabled={busy||disabled||!gpuRequest} onClick={()=>void run('gpuRead')}>Read result</StudioButton></div>
+     <label className="au-row"><input type="checkbox" checked={autoPreview} onChange={e=>{autoAttempt.current='';setAutoPreview(e.target.checked);}}/> Auto GPU preview</label>
      <label className="au-row"><input type="checkbox" checked={requireGpu} disabled={busy||disabled} onChange={e=>setRequireGpu(e.target.checked)}/> Require GPU (no fallback)</label>
      {gpuCaps&&!gpuCaps.available&&<StudioAlert tone="warning">{gpuCaps.reason||'Native GPU owner unavailable'}</StudioAlert>}
      {gpuStatus&&<small className="tg-status">{gpuStatus}</small>}
@@ -379,7 +421,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
    </StudioSection>
     </div>
    </details>
-   <details className="tg-advanced"><summary>Source JSON</summary>  <textarea aria-label="Texture graph JSON" value={text} disabled={busy||disabled} rows={12} onChange={e=>{setText(e.target.value);setPreview(null);setAsset(null);setAssets([]);setPending(null)}}/></details>
+   <details className="tg-advanced"><summary>Source JSON</summary>  <textarea aria-label="Texture graph JSON" value={text} disabled={busy||disabled} rows={12} onChange={e=>{changeText(e.target.value);setPending(null)}}/></details>
      {bakedSet&&<StudioSection title="Create baked material variant"><small>Inherit an existing material; override only baked channels. No runtime regeneration.</small><StudioInput aria-label="Base material" value={baseMaterial} disabled={busy||disabled} onChange={e=>setBaseMaterial(e.target.value)}/><StudioInput aria-label="New material name" value={variantName} disabled={busy||disabled} onChange={e=>setVariantName(e.target.value)}/><StudioButton disabled={busy||disabled||!baseMaterial||!variantName} onClick={()=>void run('variant')}>Create variant from {bakedSet}</StudioButton></StudioSection>}
   {assets.map(a=><StudioButton key={a.guid} disabled={busy||disabled} onClick={()=>onEdit(a.key,a.guid)}>Assign {a.path} to {a.key}</StudioButton>)}
   {asset&&<StudioButton disabled={busy||disabled} onClick={()=>onEdit(asset.key,asset.guid)}>Assign {asset.path} to material draft</StudioButton>}

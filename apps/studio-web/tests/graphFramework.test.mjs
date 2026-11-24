@@ -55,3 +55,23 @@ test('multiple named output ports have distinct anchors and follow preview posit
  assert.equal(samePort(null,{node:'a',port:'mask'}),false);
  assert.equal(samePort({node:'a',port:'color'},{node:'a',port:'mask'}),false);
 });
+
+import {textureLayout,duplicateTextureNode,texturePreviewKey} from '../src/graphs/textureGraphAuthoring.ts';
+test('texture DAG layout orders dependencies and has bounded nonoverlapping positions',()=>{
+ const g={nodes:['c','a','b'].map(node),links:[edge('1','a','b'),edge('2','b','c')]};
+ const p=textureLayout(g);assert.ok(p.get('a')[0]<p.get('b')[0]);assert.ok(p.get('b')[0]<p.get('c')[0]);
+ const chain={nodes:Array.from({length:32},(_,i)=>node(String(i))),links:Array.from({length:31},(_,i)=>edge(String(i),String(i),String(i+1)))};
+ const coords=[...textureLayout(chain).values()];assert.equal(new Set(coords.map(x=>x.join(','))).size,32);assert.ok(coords.every(p=>p.every(v=>v>=0&&v<=2000)));
+});
+test('texture duplicate preserves source connections but never rebinds outputs',()=>{
+ const g={nodes:[{id:'a',op:'constant',inputs:[],properties:{value:1}},{id:'b',op:'remap',inputs:['a'],properties:{low:.2}}],outputs:{color:'b'}};
+ const d=duplicateTextureNode(g,'b');assert.equal(d.graph.nodes.length,3);assert.deepEqual(d.graph.nodes[2].inputs,['a']);assert.equal(d.graph.outputs.color,'b');assert.equal(g.nodes.length,2);
+ d.graph.nodes[2].properties.low=.8;assert.equal(g.nodes[1].properties.low,.2);
+});
+test('texture preview key ignores coordinates but includes parameters and output',()=>{
+ const g={nodes:[{id:'a',op:'constant',position:[0,0],properties:{value:1}}]};
+ const key=x=>texturePreviewKey(x,'{}','color',128,[true]);
+ assert.equal(key(g),key({nodes:[{...g.nodes[0],position:[90,30]}]}));
+ assert.notEqual(key(g),key({nodes:[{...g.nodes[0],properties:{value:2}}]}));
+ assert.notEqual(key(g),texturePreviewKey(g,'{}','normal',128,[true]));
+});

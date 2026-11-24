@@ -6,7 +6,7 @@
 .tg-toolbar>.au-input,.tg-toolbar>.au-select,.tg-bake-row>.au-input{width:auto;min-width:110px;max-width:220px}
 .tg-workspace .au-row>.au-button{flex:0 1 auto;min-width:0}
 .tg-workspace .au-row{gap:6px}
-.tg-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(235px,300px);gap:10px;min-height:460px;align-items:start}
+.tg-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(235px,var(--tg-inspector-width,300px));gap:10px;min-height:460px;align-items:start}
 .tg-main{min-width:0;display:flex;flex-direction:column;height:clamp(460px,62vh,850px);border:1px solid var(--au-line);border-radius:6px;overflow:hidden;background:var(--au-canvas)}
 .tg-node-toolbar{padding:8px;background:var(--au-panel-raised);border-bottom:1px solid var(--au-line)}
 .tg-node-toolbar small{margin-left:auto}
@@ -31,3 +31,13 @@
 .tg-workspace textarea{box-sizing:border-box;width:100%;min-height:72px;resize:vertical;background:var(--au-canvas);color:var(--au-text);border:1px solid var(--au-line);border-radius:4px;padding:8px;font:11px monospace}
 .tg-advanced textarea{margin-top:8px;min-height:160px}
 @media(max-width:680px){.tg-body{grid-template-columns:minmax(0,1fr)}.tg-inspector{max-height:none}.tg-main{height:460px}}
+
+.tg-edit-actions{display:flex;flex-wrap:wrap;gap:5px}
+.tg-search{display:flex;flex-wrap:wrap;gap:6px;width:100%;padding:6px;border:1px solid var(--au-line);border-radius:5px;background:var(--au-canvas)}
+.tg-search input{flex:1;min-width:110px;padding:6px;background:var(--au-panel-raised);color:var(--au-text);border:1px solid var(--au-line);border-radius:4px}
+.tg-search-results{display:flex;flex-wrap:wrap;gap:4px;width:100%;max-height:150px;overflow:auto}
+.tg-width{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--au-text-muted)}
+.tg-width input{flex:1;min-width:40px}
+.tg-expanded{position:fixed;inset:0;z-index:1000;overflow:auto;background:var(--au-canvas)}
+.tg-expanded .tg-main,.tg-expanded .tg-inspector{height:calc(100vh - 130px);max-height:none}
+@media(max-width:680px){.tg-body{grid-template-columns:minmax(0,1fr)}.tg-inspector{width:100%!important}.tg-expanded .tg-main{height:460px}}
