@@ -498,7 +498,9 @@ Json StudioTransferPlan::describe() const {
 Json StudioTransferPlan::apply(const std::string& token,
                          const std::vector<StudioTransferDecision>& decisions,
                          const std::function<void()>& beforeCommit,
-                         std::optional<editor::ProjectHistory::MovePlan>* history,bool repairResources){
+                         std::optional<editor::ProjectHistory::MovePlan>* history,bool repairResources,StudioBatchAssetPlan* staged){
+    if(staged&&(!history||type_!=StudioTransferType::External||beforeCommit))
+        throw std::runtime_error("Staged transfer requires external source, history and no commit hook");
     // Even legacy external callers must not use the destructive replace path.
     std::optional<editor::ProjectHistory::MovePlan> localHistory;
     if(!history&&type_==StudioTransferType::External&&
@@ -751,7 +753,7 @@ Json StudioTransferPlan::apply(const std::string& token,
             }
             StudioMoveJournal::syncPath(cache);StudioMoveJournal::syncPath(cache.parent_path());
             if(!plan.files.empty()){
-                studioReplayAssetReplacement(project_,plan,true);
+                studioReplayAssetReplacement(project_,plan,true,staged);
                 for(size_t i=0;i<plan.files.size();i+=2)copied.push(Json::string(plan.files[i].from));
                 *history=std::move(plan);
             }
@@ -792,7 +794,7 @@ Json StudioTransferPlan::apply(const std::string& token,
                 stageCreatedAsset(project_,i.destination.lexically_relative(root).generic_string(),
                     i.entry->source,i.entry->directory,i.preserve,plan);
             if(!plan.files.empty()){
-                studioReplayAssetQuarantine(project_,plan,false);
+                studioReplayAssetQuarantine(project_,plan,false,{},staged);
                 for(const auto& i:imports)copied.push(Json::string(i.destination.lexically_relative(root).generic_string()));
                 *history=std::move(plan);
             }
