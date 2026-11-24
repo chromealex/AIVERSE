@@ -227,6 +227,47 @@ void Project::applyHistoryTransaction(const std::vector<ProjectFileEdit>& edits,
     documentHistory=std::move(next);savedHistoryCheckpoint=std::move(bytes);
     historyPersistenceWarning.clear();
 }
+std::vector<ProjectFileEdit> Project::stageDirtySave(){
+    if(!rulesDirty&&!manifestDirty)return {};
+    if(dir.empty()||!savedManifestText)throw std::runtime_error("Project documents must be loaded before saving");
+    const auto previous=Json::parse(*savedManifestText);
+    const bool topology=previous.getStr("rules","rules.json")!=manifest.getStr("rules","rules.json")||
+                        previous.getStr("module","game")!=manifest.getStr("module","game");
+    if(rulesDirty&&(topology||historyRequiresReload))
+        throw std::runtime_error("Reopen after changing the rules source or module before saving rules");
+    auto manifestBytes=*savedManifestText;
+    if(manifestDirty&&previous.dump()!=manifest.dump())manifestBytes=manifest.dump()+"\n";
+    std::vector<ProjectFileEdit> edits={{fs::path(dir)/"game.json",*savedManifestText,manifestBytes}};
+    if(rulesDirty){
+        const auto parts=splitComposed(rulesJson,rulesOrigin);
+        if(rulesOrigin.files.empty()||parts.size()!=savedRulesText.size()||
+           fs::weakly_canonical(rulesOrigin.files.front())!=fs::weakly_canonical(rulesPath()))
+            throw std::runtime_error("Rules file set changed; reopen the project");
+        for(size_t i=0;i<parts.size();++i){
+            const auto normalized=parts[i].second.dump()+"\n";
+            const auto before=savedRulesText.at(i);
+            const auto after=rulesOrigin.text.at(i)==normalized?before:normalized;
+            edits.push_back({parts[i].first,before,after});
+            savedRulesText[i]=after;rulesOrigin.text[i]=normalized;
+        }
+    }else if(manifestDirty&&!topology){
+        for(size_t i=0;i<rulesOrigin.files.size();++i){
+            const auto& bytes=savedRulesText.at(i);edits.push_back({rulesOrigin.files[i],bytes,bytes});
+        }
+    }
+    auto next=documentHistory;
+    next.record(std::vector<ProjectFileEdit>(edits),{});
+    if(next.versionToken()!=documentHistory.versionToken()){
+        auto checkpoint=prepareProjectHistoryCheckpoint(dir,savedHistoryCheckpoint,next);
+        savedHistoryCheckpoint=checkpoint.after;
+        edits.push_back(std::move(checkpoint));
+        documentHistory=std::move(next);historyPersistenceWarning.clear();
+    }
+    savedManifestText=std::move(manifestBytes);
+    if(manifestDirty&&topology)historyRequiresReload=true;
+    rulesDirty=false;manifestDirty=false;
+    return edits;
+}
 bool Project::saveRules(std::string* err,const std::string& historyLabel) {
     try {
         if(!savedManifestText||rulesOrigin.files.empty())
