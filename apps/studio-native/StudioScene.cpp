@@ -5,6 +5,7 @@
 #include "apps/studio-native/StudioFont6x11.h"
 #include "engine/render/CameraPng.h"
 #include "engine/render/EnvironmentIbl.h"
+#include "engine/render/EnvironmentIblGpu.h"
 #include "engine/render/ExrTexture.h"
 #include "apps/studio-native/StudioLightingPreview.h"
 #include "engine/render/GiModelGeometry.h"
@@ -50,6 +51,10 @@ struct StudioScene::GraphPresentation {
     std::string residentHdrRequest;
     int residentHdrMipCount=0;
     std::string environmentPath;
+    environment_ibl::GpuPrefilter environmentGpu;
+    std::string environmentGpuRequest,environmentGpuState="idle",environmentGpuError;
+    int environmentGpuSide=0;
+    bool environmentGpuCancelled=false;
     float environmentYaw=0.f,environmentIntensity=1.f;
     std::shared_ptr<Capture> capture;
     bool draw=false;
@@ -86,6 +91,34 @@ struct StudioScene::GraphPresentation {
     void resetSample(gfx::Device& dev){
         if(sample){if(sampleRenderer)sampleRenderer->invalidateModelCachesFor(sample.get());sampleAppearance.reset();releaseModel(dev,*sample);sample.reset();}
         capture.reset();draw=false;
+    }
+    bool environmentGpuPending()const{return environmentGpu.source.valid();}
+    Json environmentGpuStatus()const{
+        Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("request",Json::string(environmentGpuRequest));
+        r.set("state",Json::string(environmentGpuState));r.set("reason",Json::string(environmentGpuError));
+        r.set("environment",Json::string(environmentGpuState=="ready"?"@graph":""));
+        r.set("backend",Json::string("gpu"));r.set("prefilterBackend",Json::string("gpu"));
+        r.set("width",Json::number(int64_t(environmentGpuSide)));r.set("height",Json::number(int64_t(environmentGpuSide/2)));return r;
+    }
+    void serviceEnvironmentGpu(gfx::Device& dev){
+        if(!environmentGpuPending())return;
+        auto& job=environmentGpu;
+        if(!job.fence&&!environmentGpuCancelled){
+            try{if(!job.encode(dev))environmentGpuError="GPU IBL dispatch or copy rejected";}
+            catch(const std::exception& ex){environmentGpuError=ex.what();}
+            if(job.fence)return;
+        }
+        if(job.fence&&dev.gpuCompletedFence()<job.fence)return;
+        if(environmentGpuCancelled||!job.encoded||!dev.gpuHealthy()){
+            environmentGpuState=environmentGpuCancelled?"cancelled":"failed";
+            if(!environmentGpuCancelled&&environmentGpuError.empty())environmentGpuError="GPU IBL completion rejected";
+        }else{
+            if(!dev.waitForResourceIdle())return;
+            if(sampleRenderer)sampleRenderer->setModelEnvironment({});
+            if(environment.valid())dev.destroyTexture(environment);
+            environment=job.atlas;job.atlas={};environmentPath="@graph";environmentGpuState="ready";
+        }
+        job.releaseAfterIdle(dev);
     }
     void replaceEnvironment(gfx::Device& dev,const RadianceImage& hdr,std::string identity){
         if(dev.maxFragmentTextureSlots()<14||!dev.supports(gfx::PixelFormat::RGBA16F))throw std::runtime_error("Native HDR environment unsupported by this GPU");
@@ -129,6 +162,7 @@ struct StudioScene::GraphPresentation {
         replaceEnvironment(dev,hdr,relative);
     }
     void shutdown(gfx::Device& dev){
+        environmentGpu.releaseAfterIdle(dev);
         scene.clear();merged.clear();resetSample(dev);
         if(sampleRenderer){sampleRenderer->shutdown();sampleRenderer.reset();}
         if(color.valid())dev.destroyTexture(color);
@@ -786,6 +820,7 @@ Json StudioScene::textureGraphCapabilities() const {
     r.set("residentApply",Json::fromBool(false));
     r.set("studioResidentApply",Json::fromBool(available&&device_->supportsStorageBufferTextureCopy()));
     r.set("studioPbrPreview",Json::fromBool(available&&device_->supportsStorageBufferTextureCopy()));
+    r.set("studioGpuIbl",Json::fromBool(available&&environment_ibl::gpuPrefilterSupported(*device_)));
     r.set("studioPbrEnvironment",Json::fromBool(available&&device_->maxFragmentTextureSlots()>=14&&device_->supports(gfx::PixelFormat::RGBA16F)));
     r.set("studioResidentHdr16",Json::fromBool(available&&device_->supportsStorageBufferTextureCopy()&&device_->supports(gfx::PixelFormat::RGBA16F)));
     r.set("studioResidentHdr32",Json::fromBool(available&&device_->supportsStorageBufferTextureCopy()&&device_->supports(gfx::PixelFormat::RGBA32F)));
@@ -806,7 +841,25 @@ Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
     if(action.rfind("studio",0)==0){
         if(!graphPresentation_)graphPresentation_=std::make_unique<GraphPresentation>();
         auto& presentation=*graphPresentation_;
+        if(action=="studioEnvironmentGpuRead"||action=="studioEnvironmentGpuCancel"){
+            if(p.getStr("request")!=presentation.environmentGpuRequest||presentation.environmentGpuRequest.empty())throw std::invalid_argument("Stale GPU IBL request");
+            if(action=="studioEnvironmentGpuCancel"&&presentation.environmentGpuPending())presentation.environmentGpuCancelled=true;
+            return presentation.environmentGpuStatus();
+        }
+        if(action=="studioEnvironmentApplyResident"){
+            if(presentation.environmentGpuPending()||(presentation.capture&&presentation.capture->state=="pending"))throw std::runtime_error("Finish current environment or capture first");
+            if(!environment_ibl::gpuPrefilterSupported(*device_))throw std::runtime_error("GPU IBL unavailable");
+            const auto request=p.getStr("request");
+            auto source=owner.takeResidentRadiance(*device_,lease,ws.project.dir,request);
+            gfx::TextureInfo info{};
+            if(!device_->textureInfo(source,info)||info.width!=info.height||info.format!=gfx::PixelFormat::RGBA16F){device_->destroyTexture(source);throw std::runtime_error("GPU IBL requires resident RGBA16F");}
+            presentation.environmentGpu.source=source;presentation.environmentGpu.side=info.width;
+            presentation.environmentGpuSide=info.width;presentation.environmentGpuRequest=request;
+            presentation.environmentGpuState="pending";presentation.environmentGpuError.clear();presentation.environmentGpuCancelled=false;
+            return presentation.environmentGpuStatus();
+        }
         if(action=="studioEnvironmentGenerate"||action=="studioEnvironmentApplyGpu"){
+            if(presentation.environmentGpuPending())throw std::runtime_error("GPU IBL pending");
             if(presentation.capture&&presentation.capture->state=="pending")throw std::runtime_error("PBR capture pending");
             auto install=[&](int size,std::span<const float> rgba){
                 auto source=environment_ibl::fromGraphLatLong(size,rgba);
@@ -979,6 +1032,7 @@ Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
             auto r=GraphPresentation::info(presentation.sampleAppearance,presentation.sampleMaterial);r.set("state",Json::string("applied"));return r;
         }
         if(action=="studioPbrRender"){
+            if(presentation.environmentGpuPending())throw std::runtime_error("GPU IBL pending");
             if(!presentation.sample||!presentation.sampleAppearance)throw std::runtime_error("Prepare PBR preview first");
             if(presentation.capture&&presentation.capture->state=="pending")throw std::runtime_error("PBR capture pending");
             presentation.yaw=previewScalar(p["yaw"],.65f,-100.f,100.f);presentation.pitch=previewScalar(p["pitch"],.42f,-1.4f,1.4f);
@@ -1018,6 +1072,7 @@ bool StudioScene::serviceTextureGraph(const std::string& project) {
     if(!device_->beginOffscreenFrame())throw std::runtime_error("Studio GPU offscreen frame unavailable");
     try {
         textureGraph_->tick(*device_,project);
+        if(graphPresentation_)graphPresentation_->serviceEnvironmentGpu(*device_);
         if(graphPresentation_&&graphPresentation_->draw)graphPresentation_->renderSample(*device_);
     }catch(...) {device_->endPass();device_->endFrame();throw;}
     device_->endFrame();
@@ -1026,7 +1081,7 @@ bool StudioScene::serviceTextureGraph(const std::string& project) {
         auto& p=*graphPresentation_;
         if(p.capture&&p.capture->state=="pending"&&std::chrono::steady_clock::now()>p.capture->deadline){p.capture->state="failed";p.capture->error="Native PBR capture timed out";}
         if(p.hdrCapture&&p.hdrCapture->state=="pending"&&std::chrono::steady_clock::now()>p.hdrCapture->deadline){p.hdrCapture->state="failed";p.hdrCapture->error="HDR diagnostic capture timed out";}
-        more=p.draw||(p.capture&&p.capture->state=="pending")||(p.hdrCapture&&p.hdrCapture->state=="pending")||p.rollback.pendingImages()!=0;
+        more=p.environmentGpuPending()||p.draw||(p.capture&&p.capture->state=="pending")||(p.hdrCapture&&p.hdrCapture->state=="pending")||p.rollback.pendingImages()!=0;
     }
     return textureGraph_->needsFrame()||more;
 }

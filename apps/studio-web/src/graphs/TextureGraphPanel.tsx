@@ -51,7 +51,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
  const [assets,setAssets]=useState<{guid:string;path:string;key:MaterialKey}[]>([]);
  const [imageAssets,setImageAssets]=useState<string[]>([]),[imageAssetChoice,setImageAssetChoice]=useState('');
  const [names,setNames]=useState<string[]>([]),[catalog,setCatalog]=useState<Obj[]>([]),[selected,setSelected]=useState(''),[output,setOutput]=useState('color'),[textureName,setTextureName]=useState('');
- const [gpuRequest,setGpuRequest]=useState<{id:string;source:string;overrides:string;output:string;resolution:number;bake:boolean;setBake:boolean;previewKey?:string;studioEnvironment?:boolean;studioTarget?:StudioGpuTarget}|null>(null),[gpuReady,setGpuReady]=useState(false),[gpuStatus,setGpuStatus]=useState(''),[requireGpu,setRequireGpu]=useState(true),[materialized,setMaterialized]=useState(false),[fusePointwise,setFusePointwise]=useState(false),[incremental,setIncremental]=useState(false),[gpuTextureTransfer,setGpuTextureTransfer]=useState(false),[gpuTextureMipmaps,setGpuTextureMipmaps]=useState(true),[gpuTextureFenceOnly,setGpuTextureFenceOnly]=useState(false),[incrementalOutputs,setIncrementalOutputs]=useState(false),[gpuResolution,setGpuResolution]=useState(128);
+ const [gpuRequest,setGpuRequest]=useState<{id:string;source:string;overrides:string;output:string;resolution:number;bake:boolean;setBake:boolean;previewKey?:string;studioEnvironment?:boolean;iblPending?:boolean;studioTarget?:StudioGpuTarget}|null>(null),[gpuReady,setGpuReady]=useState(false),[gpuStatus,setGpuStatus]=useState(''),[requireGpu,setRequireGpu]=useState(true),[materialized,setMaterialized]=useState(false),[fusePointwise,setFusePointwise]=useState(false),[incremental,setIncremental]=useState(false),[gpuTextureTransfer,setGpuTextureTransfer]=useState(false),[gpuTextureMipmaps,setGpuTextureMipmaps]=useState(true),[gpuTextureFenceOnly,setGpuTextureFenceOnly]=useState(false),[incrementalOutputs,setIncrementalOutputs]=useState(false),[gpuResolution,setGpuResolution]=useState(128);
  const [hdrChannel,setHdrChannel]=useState<'color'|'emissive'>('emissive');
  const [residentHdrFormat,setResidentHdrFormat]=useState('rgba16f'),[residentHdrMips,setResidentHdrMips]=useState(true),[residentHdr,setResidentHdr]=useState<{id:string;levels:number;size:number}|null>(null),[hdrMip,setHdrMip]=useState('0'),[hdrCapturePending,setHdrCapturePending]=useState(false);
  const [queuePriority,setQueuePriority]=useState('1'),[queueTicket,setQueueTicket]=useState(''),[queueInfo,setQueueInfo]=useState<Obj|null>(null);
@@ -63,7 +63,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState('');
  const [inspectorTab,setInspectorTab]=useState<'node'|'outputs'|'parameters'>('node');
  const [gpuPolling,setGpuPolling]=useState(false),[previewKind,setPreviewKind]=useState('');
- const [gpuCaps,setGpuCaps]=useState<{available:boolean;residentApply:boolean;studioResidentApply:boolean;studioPbrPreview:boolean;studioPbrEnvironment:boolean;studioResidentHdr16:boolean;studioResidentHdr32:boolean;studioResidentHdrMips:boolean;reason:string}|null>(null);
+ const [gpuCaps,setGpuCaps]=useState<{available:boolean;residentApply:boolean;studioResidentApply:boolean;studioPbrPreview:boolean;studioPbrEnvironment:boolean;studioGpuIbl:boolean;studioResidentHdr16:boolean;studioResidentHdr32:boolean;studioResidentHdrMips:boolean;reason:string}|null>(null);
  const [pbrShape,setPbrShape]=useState('sphere'),[pbrAsset,setPbrAsset]=useState(''),[pbrIndex,setPbrIndex]=useState('0'),[modelAssets,setModelAssets]=useState<string[]>([]),[sceneTargets,setSceneTargets]=useState<Obj[]>([]),[sceneAsset,setSceneAsset]=useState(''),[sceneMaterial,setSceneMaterial]=useState('0');
  const [pbrReady,setPbrReady]=useState(''),[pbrCapture,setPbrCapture]=useState(''),[pbrImage,setPbrImage]=useState<PreviewImage|null>(null),[previewMode,setPreviewMode]=useState<'texture'|'pbr'>('texture');
  const [hdriAssets,setHdriAssets]=useState<string[]>([]),[renderedHdri,setRenderedHdri]=useState(''),[hdri,setHdri]=useState(''),[hdriYaw,setHdriYaw]=useState(0),[hdriIntensity,setHdriIntensity]=useState(1);
@@ -153,7 +153,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
     const [c,l,t,caps]=await Promise.all([op('texture_graph_catalog'),op('texture_graph_list'),op('texture_graph_templates'),op('texture_graph_gpu_preview',{action:'capabilities'})]);
     if(token!==epoch.current)return;
     if(!object(c)||!Array.isArray(c.nodes)||!object(l)||!Array.isArray(l.graphs))throw new Error('Catalog unavailable');
-    setGpuCaps({available:object(caps)&&caps.available===true,residentApply:object(caps)&&caps.residentApply===true,studioResidentApply:object(caps)&&caps.studioResidentApply===true,studioPbrPreview:object(caps)&&caps.studioPbrPreview===true,studioPbrEnvironment:object(caps)&&caps.studioPbrEnvironment===true,studioResidentHdr16:object(caps)&&caps.studioResidentHdr16===true,studioResidentHdr32:object(caps)&&caps.studioResidentHdr32===true,studioResidentHdrMips:object(caps)&&caps.studioResidentHdrMips===true,reason:object(caps)?String(caps.reason??''):'GPU capability unavailable'});
+    setGpuCaps({available:object(caps)&&caps.available===true,residentApply:object(caps)&&caps.residentApply===true,studioResidentApply:object(caps)&&caps.studioResidentApply===true,studioPbrPreview:object(caps)&&caps.studioPbrPreview===true,studioPbrEnvironment:object(caps)&&caps.studioPbrEnvironment===true,studioGpuIbl:object(caps)&&caps.studioGpuIbl===true,studioResidentHdr16:object(caps)&&caps.studioResidentHdr16===true,studioResidentHdr32:object(caps)&&caps.studioResidentHdr32===true,studioResidentHdrMips:object(caps)&&caps.studioResidentHdrMips===true,reason:object(caps)?String(caps.reason??''):'GPU capability unavailable'});
     setCatalog(c.nodes.filter(object));setOutputTypes(object(c.outputTypes)?c.outputTypes:{});setTemplates(object(t)&&Array.isArray(t.templates)?t.templates.filter(object):[]);setNames(l.graphs.filter((x):x is string=>typeof x==='string'));return;
    }
    if(action==='load'){
@@ -291,6 +291,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
    }
    if(action==='gpuCancel'){
     if(!gpuRequest)throw new Error('No GPU request to cancel');
+     if(gpuRequest.iblPending){await op('texture_graph_gpu_preview',{action:'studioEnvironmentGpuCancel',request:gpuRequest.id});if(token===epoch.current){setGpuPolling(true);setGpuStatus('Cancelling GPU IBL · waiting for fence');}return;}
     const r=await op('texture_graph_gpu_preview',{action:'cancel',request:gpuRequest.id});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||r.request!==gpuRequest.id||r.state!=='cancelled')throw new Error('GPU cancellation rejected');
     setAutoPreview(false);setGpuPolling(r.busy===true||r.draining===true);if(r.busy!==true&&r.draining!==true)setGpuRequest(null);setGpuReady(false);setResidentReady(false);setPreview(null);setGpuStatus('cancelled'+(r.draining===true?' · waiting for GPU retirement':'')+' — '+String(r.reason??''));return;
@@ -307,6 +308,22 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
    }
    if(action==='gpuRead'){
      if(!gpuRequest)throw new Error('No GPU request to read');
+     if(gpuRequest.iblPending){
+      const applied=await op('texture_graph_gpu_preview',{action:'studioEnvironmentGpuRead',request:gpuRequest.id});if(token!==epoch.current)return;
+      if(!object(applied)||applied.ok!==true||applied.request!==gpuRequest.id)throw new Error('GPU IBL status rejected');
+      if(applied.state==='pending'){setGpuPolling(true);return;}
+      setGpuRequest(null);setGpuReady(false);setResidentReady(false);setGpuPolling(false);
+      if(applied.state==='cancelled'){setGpuStatus('GPU IBL cancelled');return;}
+      if(applied.state!=='ready')throw new Error(String(applied.reason||'GPU IBL failed'));
+      if(gpuRequest.source!==text||gpuRequest.overrides!==overrideText){setHdri('@graph');setStatus('GPU IBL generated from previous draft; regenerate to update');return;}
+      if(!object(applied)||applied.ok!==true||applied.environment!=='@graph')throw new Error('Graph environment rejected');
+      setHdri('@graph');setPreviewMode('pbr');setStatus('GPU radiance · GPU IBL prefilter · '+String(applied.width)+' × '+String(applied.height));
+      if(!pbrReady||pbrReady!==pbrKey){const prepared=await op('texture_graph_gpu_preview',{action:'studioPbrPrepare',shape:pbrShape,asset:pbrAsset,materialIndex:pbrShape==='model'?Number(pbrIndex):0});if(token!==epoch.current)return;targetStamp(prepared,'pbr');}
+      setPbrReady(pbrKey);setPbrImage(null);
+      const capture=await op('texture_graph_gpu_preview',{action:'studioPbrRender',yaw:pbrYaw,pitch:pbrPitch,zoom:pbrZoom,light:pbrLight,lightYaw:pbrLightYaw,environment:'@graph',environmentYaw:hdriYaw,environmentIntensity:hdriIntensity});if(token!==epoch.current)return;
+      if(!object(capture)||capture.ok!==true||typeof capture.capture!=='string'||capture.state!=='pending')throw new Error('Graph environment render rejected');setPbrCapture(capture.capture);return;
+
+     }
      const r=await op('texture_graph_gpu_preview',{action:'read'});if(token!==epoch.current)return;
      if(!object(r)||r.ok!==true||r.request!==gpuRequest.id){setGpuReady(false);throw new Error('GPU request replaced or unavailable');}
      setGpuPolling(r.busy===true||r.state==='queued'||r.state==='pending');
@@ -316,16 +333,10 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
      setGpuReady(matches&&r.bake===true&&r.fileExportAvailable!==false&&r.state==='ready'&&r.published!==true&&r.busy!==true);
      setPreviewKind(String(r.backend??'unknown'));
      setResidentReady(matches&&r.gpuTextureSetReady===true&&r.busy!==true&&r.published!==true);
-     if(matches&&gpuRequest.studioEnvironment&&r.state==='ready'&&r.busy!==true&&r.published!==true){
-      const applied=await op('texture_graph_gpu_preview',{action:'studioEnvironmentApplyGpu',request:gpuRequest.id});if(token!==epoch.current)return;
-      if(!object(applied)||applied.ok!==true)throw new Error('GPU graph environment rejected');
-      setGpuRequest(null);setGpuReady(false);setResidentReady(false);setGpuPolling(false);
-      if(!object(applied)||applied.ok!==true||applied.environment!=='@graph')throw new Error('Graph environment rejected');
-      setHdri('@graph');setPreviewMode('pbr');setStatus(String(applied.backend)+' radiance · CPU IBL prefilter · '+String(applied.width)+' × '+String(applied.height));
-      if(!pbrReady||pbrReady!==pbrKey){const prepared=await op('texture_graph_gpu_preview',{action:'studioPbrPrepare',shape:pbrShape,asset:pbrAsset,materialIndex:pbrShape==='model'?Number(pbrIndex):0});if(token!==epoch.current)return;targetStamp(prepared,'pbr');}
-      setPbrReady(pbrKey);setPbrImage(null);
-      const capture=await op('texture_graph_gpu_preview',{action:'studioPbrRender',yaw:pbrYaw,pitch:pbrPitch,zoom:pbrZoom,light:pbrLight,lightYaw:pbrLightYaw,environment:'@graph',environmentYaw:hdriYaw,environmentIntensity:hdriIntensity});if(token!==epoch.current)return;
-      if(!object(capture)||capture.ok!==true||typeof capture.capture!=='string'||capture.state!=='pending')throw new Error('Graph environment render rejected');setPbrCapture(capture.capture);return;
+     if(matches&&gpuRequest.studioEnvironment&&r.residentRadianceReady===true&&r.busy!==true&&r.published!==true){
+      const applied=await op('texture_graph_gpu_preview',{action:'studioEnvironmentApplyResident',request:gpuRequest.id});if(token!==epoch.current)return;
+      if(!object(applied)||applied.ok!==true||applied.state!=='pending'||applied.request!==gpuRequest.id)throw new Error('GPU IBL request rejected');
+      setGpuRequest({...gpuRequest,iblPending:true});setGpuPolling(true);setGpuReady(false);setResidentReady(false);setGpuStatus('GPU IBL prefilter pending');return;
      }
      if(matches&&r.residentRadianceReady===true&&r.busy!==true&&r.published!==true&&gpuRequest.studioTarget){
       const {kind,...stamp}=gpuRequest.studioTarget;
@@ -382,7 +393,8 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
     if(gpuPolling||residentReady||gpuRequest?.bake||queueTicket||Object.keys(queueDrafts).length||pbrCapture)throw new Error('Finish current GPU request or capture first');
     setAutoPreview(false);
     if(action==='studioEnvironmentGpu'){
-      const r=await op('texture_graph_gpu_preview',{action:'start',graph,overrides,output:'radiance',bake:true,requireGpu:true,materialized:true,fusePointwise:true});if(token!==epoch.current)return;
+      if(!gpuCaps?.studioGpuIbl)throw new Error('GPU IBL unavailable');
+      const r=await op('texture_graph_gpu_preview',{action:'start',graph,overrides,output:'radiance',bake:true,requireGpu:true,materialized:true,fusePointwise:true,residentRadianceFormat:'rgba16f'});if(token!==epoch.current)return;
       if(!object(r)||r.ok!==true||typeof r.request!=='string')throw new Error('GPU environment request rejected');
       setGpuRequest({id:r.request,source:text,overrides:overrideText,output:'radiance',resolution:gpuResolution,bake:true,setBake:false,studioEnvironment:true});setGpuPolling(true);setGpuReady(false);setResidentReady(false);return;
     }
@@ -782,10 +794,10 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
    </details>
    <details className="tg-advanced"><summary>Source JSON</summary>  <textarea aria-label="Texture graph JSON" value={text} disabled={busy||disabled} rows={12} onChange={e=>{changeText(e.target.value);setPending(null)}}/></details>
      {output==='radiance'&&<StudioSection title="HDR environment (lat-long)">
-      <small>Graph UV covers the entire sphere. Export 2:1 EXR, or generate the preview lighting. IBL filtering is CPU; GPU generation uses explicit raw readback.</small>
+      <small>Graph UV covers the entire sphere. Export 2:1 EXR, or generate the preview lighting. GPU path filters resident HDR directly into the IBL atlas without CPU radiance readback. CPU path remains available.</small>
       <div className="au-row"><StudioButton disabled={busy||disabled||!textureName||!outputs.includes('radiance')} onClick={()=>void run('environmentExport')}>Export environment EXR</StudioButton>
       <StudioButton disabled={busy||disabled||gpuPolling||!!gpuRequest?.bake||!!pbrCapture||!gpuCaps?.studioPbrEnvironment||!outputs.includes('radiance')||(pbrShape==='model'&&!pbrAsset)} onClick={()=>void run('studioEnvironmentGenerate')}>Preview environment (CPU)</StudioButton>
-      <StudioButton disabled={busy||disabled||gpuPolling||!!gpuRequest?.bake||!!pbrCapture||!gpuCaps?.studioPbrEnvironment||!outputs.includes('radiance')||(pbrShape==='model'&&!pbrAsset)} onClick={()=>void run('studioEnvironmentGpu')}>Preview environment (GPU graph)</StudioButton></div>
+      <StudioButton disabled={busy||disabled||gpuPolling||!!gpuRequest?.bake||!!pbrCapture||!gpuCaps?.studioGpuIbl||!outputs.includes('radiance')||(pbrShape==='model'&&!pbrAsset)} onClick={()=>void run('studioEnvironmentGpu')}>Preview environment (GPU IBL)</StudioButton></div>
      </StudioSection>}
      {output==='radiance'&&<StudioSection title="Create persistent HDR material"><small>Export EXR first (CPU or GPU). Uses the named bake on disk, including after reopening the project. Assign the new library material explicitly.</small><StudioSelect aria-label="Persistent HDR channel" value={hdrChannel} disabled={busy||disabled} onChange={e=>setHdrChannel(e.target.value==='color'?'color':'emissive')}><option value="emissive">Linear emissive</option><option value="color">Linear base color</option></StudioSelect><StudioInput aria-label="HDR base material" value={baseMaterial} disabled={busy||disabled} onChange={e=>setBaseMaterial(e.target.value)}/><StudioInput aria-label="New HDR material name" value={variantName} disabled={busy||disabled} onChange={e=>setVariantName(e.target.value)}/><StudioButton disabled={busy||disabled||!textureName||!baseMaterial||!variantName} onClick={()=>void run('hdrVariant')}>Create HDR material from {textureName||'EXR bake'}</StudioButton></StudioSection>}
      {bakedSet&&<StudioSection title="Create baked material variant"><small>Inherit an existing material; override only baked channels. No runtime regeneration.</small><StudioInput aria-label="Base material" value={baseMaterial} disabled={busy||disabled} onChange={e=>setBaseMaterial(e.target.value)}/><StudioInput aria-label="New material name" value={variantName} disabled={busy||disabled} onChange={e=>setVariantName(e.target.value)}/><StudioButton disabled={busy||disabled||!baseMaterial||!variantName} onClick={()=>void run('variant')}>Create variant from {bakedSet}</StudioButton></StudioSection>}
