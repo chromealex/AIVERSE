@@ -2395,6 +2395,14 @@
       ],
       "roadmap": [
         {
+          "id": "studio-play-review",
+          "title": "Безопасный перенос изменений из Play",
+          "titleEn": "Play Mode change review",
+          "text": "Изолированная игровая сессия, проверка исходной карты и выборочный предварительный просмотр переноса изменений.",
+          "textEn": "Isolated local session, source map revision guard and selective preview of play-to-scene changes.",
+          "status": "in-progress"
+        },
+        {
           "id": "studio-runtime-debugger",
           "title": "Редактирование состояния локальной игры",
           "titleEn": "Runtime Debugger",
