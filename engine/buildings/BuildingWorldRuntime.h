@@ -96,6 +96,12 @@ public:
             })){
             fail(error,"Building command type already reserved");return {};
         }
+        sim.registerDiagnosticSource("building.graph",[weak]()->Simulation::DiagnosticReader{
+            auto h=weak.lock();if(!h)return {};
+            if(!h->graphMonitor_)h->setGraphMonitor(std::make_shared<BuildingGraphMonitor>());
+            std::weak_ptr<BuildingGraphMonitor> monitor=h->graphMonitor_;
+            return [monitor](uint64_t id){if(auto m=monitor.lock())return m->read(id);return Json{};};
+        });
         registerBuildingEcsSceneCollection(sim,namespaces.fingerprint());
         registerBuildingPhysicalExtentPersistence(sim);
         registerBuildingLiftCheckpointPersistence(sim);
