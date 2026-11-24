@@ -374,3 +374,7 @@ Add bounded reusable triangle-mesh signed distance baking in engine/bake; exact-
 ## Stage 142 — static mesh SDF baking (source; QA deferred)
 
 `engine/bake/MeshDistanceGrid.h` adds reusable offline bounded indexed-triangle distance baking, double precision closest-triangle distance and nonzero solid-angle winding sign. Exact seam weld and closed directed-edge checks reject open/inconsistent/nonmanifold edges and degenerate faces; no self-intersection or nonmanifold-vertex certification. Auto cubic bounds pad one cell around largest extent, 4..16 nodes per axis, max 8192 triangles and 16 Mi sample-triangle pairs. `engine/fx/SpectraSdfBaker.h` reuses existing model bind-pose mesh extraction, accepts affine transform, produces current staticSdf JSON. Native `aiverse_sdf_bake MODEL DIMENSION OUT.json` tool; paste output into CollisionModule staticSdf. No new GPU ABI, runtime mesh scanning, high-resolution texture atlas or Studio/MCP baking button. Regression source only, no build/tests run.
+
+## Stage 143 — editor mesh SDF bake (in progress)
+
+Extend the shared fx_graph_edit operation with in-memory bakeSdf for an existing CollisionModule and checked project content model. Use existing bounded mesh baker, preserve unrelated graph fields, return normal compiler diagnostics; no disk writes until normal graph save. HTML5 resource inspector uses indexed asset selection, dimension and stale-result rejection. No high-resolution format change in this stage. Tests authored only.
