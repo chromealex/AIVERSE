@@ -16,16 +16,25 @@
     },
     {
       "id": "math",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "layer": "simulation",
       "status": "engine-reference",
       "source": "engine/core/FixedMath.h",
       "skill": "skills/core/aiverse-math/SKILL.md",
-      "summary": "Fixed arithmetic, vectors and trigonometry",
-      "notes": "Use existing Fixed; angles in turns. Check zero vectors and overflow.",
+      "summary": "Fixed arithmetic, trigonometry, interpolation, rotations, matrices, curves and numerical solvers",
+      "notes": "Engine reference; Q16 bounded algorithms, no new verification.",
       "verifiedPlatforms": [],
       "runtime": "none",
-      "cmakeTarget": null
+      "cmakeTarget": null,
+      "dependencies": [
+        "engine/core/FixedInterpolation.h",
+        "engine/core/FixedQuaternion.h",
+        "engine/core/FixedMatrix.h",
+        "engine/core/FixedCurves.h",
+        "engine/core/FixedNumerical.h",
+        "engine/core/FixedLinear.h",
+        "engine/core/FixedQR.h"
+      ]
     },
     {
       "id": "collections",
