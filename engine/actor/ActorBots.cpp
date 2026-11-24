@@ -58,6 +58,8 @@ bool ActorHost::thinkBot(Simulation& sim,CharacterRef a) {
     // not reuse held actions, and do not sleep an actor with a remembered
     // target, active interaction, vehicle, projectile or nearby character.
     const auto& lod=config_.simulationLod;
+    auto* diagnostics=lod.enabled?w.resource<world::SimulationLodDiagnostics>():nullptr;
+    world::SimulationLodTier tier=world::SimulationLodTier::Hot;
     if(lod.enabled&&bot.initialized&&bot.life==a.life&&bot.slot==a.slot&&bot.lastTick<now&&
        (bot.decision==lib::bots::ActorDecision::Idle||bot.decision==lib::bots::ActorDecision::Patrol)&&
        !bot.target&&!a.vehicle&&!a.downed&&!a.frozen&&!a.fireHeld&&!a.blockHeld&&!a.lockTarget&&
@@ -95,12 +97,26 @@ bool ActorHost::thinkBot(Simulation& sim,CharacterRef a) {
             id=identity?identity->id:0;
         }
         const auto decision=world::simulationLodDecision(lod,here,observers,id,now,critical);
+        tier=decision.tier;
         if(!decision.due&&now-bot.lastTick<decision.period){
+            if(diagnostics){
+                if(tier==world::SimulationLodTier::Warm)++diagnostics->warm;
+                else ++diagnostics->cold;
+                ++diagnostics->deferred;
+            }
             // Retain only continuous steering already present in canonical
             // CharacterControl. No stale fire/reload/jump/interaction edge.
             a.input.viewTick=now;a.lastInputTick=now;
             return true;
         }
+    }
+    if(diagnostics){
+        switch(tier){
+            case world::SimulationLodTier::Hot:++diagnostics->hot;break;
+            case world::SimulationLodTier::Warm:++diagnostics->warm;break;
+            case world::SimulationLodTier::Cold:++diagnostics->cold;break;
+        }
+        ++diagnostics->executed;
     }
     // Objective: wanted loot within 25 m (closest), else a point inside the next circle (spread by slot).
     std::optional<Vec3> objective;std::optional<Loot> want;Fixed best=625_fx;
