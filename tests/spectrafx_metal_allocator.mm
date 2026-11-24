@@ -149,6 +149,27 @@ void drawAcceptance(gfx::Device& d,bool procedural){
     d.destroyTexture(color);d.destroyTexture(depth);
     std::printf("PASS real indirect billboard pixels procedural=%d\n",int(procedural));
 }
+void liveCompaction(gfx::Device& d,bool procedural){
+    auto cfg=config(1024,procedural);cfg.lifetime=60.f;
+    ComputeParticles p;require(p.init(&d,cfg),"live compact init");
+    p.setView(view());
+    {Frame frame(d);burst(p,768,1,{0,0,.5f});burst(p,64,2,{0,0,.5f});
+     require(p.step(0),"live compact growth");}
+    require(audit(d,p,832).capacity==1024,"live compact source capacity");
+    {Frame frame(d);require(p.killSourceParticles(1)&&p.step(0),"selective kill");}
+    audit(d,p,64);
+    for(uint32_t i=0;i<kGpuIdleReclaimSteps+8&&p.allocatedCapacity()>256;++i){
+        tick(d,p);require(d.waitIdle(),"live compact proof completion");
+    }
+    auto a=audit(d,p,64);
+    require(a.capacity==256&&p.stats().gpuLiveCompactions==1,"live compaction capacity");
+    require(std::all_of(a.liveOwners.begin(),a.liveOwners.end(),[](uint64_t x){return x==2;}),"live compaction owner continuity");
+    {Frame frame(d);burst(p,64,3,{0,0,.5f});require(p.step(0),"post compact reuse");}
+    auto b=audit(d,p,128);
+    require(std::count(b.liveOwners.begin(),b.liveOwners.end(),2ull)==64&&
+            std::count(b.liveOwners.begin(),b.liveOwners.end(),3ull)==64,"live compact partition reuse");
+    std::printf("PASS live compaction procedural=%d\n",int(procedural));
+}
 void memory(gfx::Device& d){
     auto small=estimateGpuEmitterAllocation(256,false),large=estimateGpuEmitterAllocation(512,false);
     auto budget=std::make_shared<GpuAllocationBudget>(small+large);
@@ -187,6 +208,7 @@ int aiverseMain(int,char**){
                 for(uint32_t cap:{256u,65536u,262144u})stress(*d,cap,procedural);
                 lod(*d,procedural);
                 drawAcceptance(*d,procedural);
+                liveCompaction(*d,procedural);
             }
             memory(*d);
             std::puts("PASS production Metal allocator acceptance");return 0;

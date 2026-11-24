@@ -4,6 +4,49 @@
 #pragma once
 namespace aiverse::spectra::shaders {
 
+// Dedicated migration kernel: old allocator is read-only, candidate is
+// unpublished. A completed occupancy proof and unchanged birth epoch
+// guarantee the current alive count cannot exceed candidate capacity.
+inline constexpr const char* kCompactAllocationMetal=R"MSL(
+#include <metal_stdlib>
+using namespace metal;
+struct Particle {float4 positionAge,velocityLife,tint,size;};
+struct Pair {float4 a,b;};
+kernel void cs_main(uint id [[thread_position_in_grid]],
+    device const Particle* oldState [[buffer(0)]],
+    device const Pair* oldParams [[buffer(1)]],
+    device const Pair* oldAttrs [[buffer(2)]],
+    device const uint2* oldOwners [[buffer(3)]],
+    device const uint* oldAlive [[buffer(4)]],
+    device const uint* oldCounters [[buffer(5)]],
+    device Particle* newState [[buffer(6)]],
+    device Pair* newParams [[buffer(7)]],
+    constant uint4& u [[buffer(8)]],
+    device Pair* newAttrs [[buffer(9)]],
+    device uint2* newOwners [[buffer(10)]],
+    device uint* newAlive [[buffer(11)]],
+    device uint* newFree [[buffer(12)]],
+    device uint* newCounters [[buffer(13)]]) {
+    const uint count=oldCounters[0];
+    if(count>u.x||count>u.y||id>=u.y)return;
+    if(id<count){
+        const uint slot=oldAlive[id];
+        if(slot>=u.x)return;
+        newState[id]=oldState[slot];
+        newParams[id]=oldParams[slot];
+        newAttrs[id]=oldAttrs[slot];
+        newOwners[id]=oldOwners[slot];
+        newAlive[id]=id;
+    }else newFree[id-count]=u.y-1u-(id-count);
+    if(id==0u){
+        newCounters[0]=count;newCounters[1]=u.y-count;
+        newCounters[2]=0u;newCounters[3]=0u;
+        newCounters[4]=count;newCounters[5]=count;
+        newCounters[6]=oldCounters[6];newCounters[7]=oldCounters[7];
+    }
+}
+)MSL";
+
 inline constexpr const char* kMetal = R"MSL(
 #include <metal_stdlib>
 using namespace metal;

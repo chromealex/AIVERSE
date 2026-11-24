@@ -359,6 +359,7 @@ void ComputeParticles::releaseGpu() {
         if(pipeline_.valid())device_->destroyPipeline(pipeline_);
         if(vertexShader_.valid())device_->destroyShader(vertexShader_);
         if(compute_.valid())device_->destroyCompute(compute_);
+        if(compactAllocationCompute_.valid())device_->destroyCompute(compactAllocationCompute_);
         if(states_.valid())device_->destroyBuffer(states_);
         if(seeds_.valid())device_->destroyBuffer(seeds_);
         if(slots_.valid())device_->destroyBuffer(slots_);
@@ -382,13 +383,13 @@ void ComputeParticles::releaseGpu() {
     }
     retireAllocationCharge(gpuAllocationCharge_,gpuAllocationLastFence_);
     gpuAllocationCharge_=0;gpuAllocationLastFence_=0;gpuGrowthBudgetBlocked_=false;
-    pipeline_={};vertexShader_={};compute_={};states_={};seeds_={};slots_={};
+    pipeline_={};vertexShader_={};compute_={};compactAllocationCompute_={};states_={};seeds_={};slots_={};
     killSlots_={};gpuSourceOwners_={};
     gpuAliveCurrent_={};gpuAliveNext_={};gpuDispatchArgs_={};
     pendingGpuOwners_.clear();pendingGpuKills_.clear();gpuBirthEstimates_.clear();
     gpuAllocationClock_=0;gpuEstimatedBirths_=0;gpuAllocationActive_=gpuAllocationSubmitted_=gpuCullViewUsed_=false;
     gpuDemandGrowth_=false;physicalCapacity_=0;
-    gpuIdleSteps_=0;gpuBirthEpoch_=0;gpuEmptyProven_=false;
+    gpuIdleSteps_=0;gpuBirthEpoch_=0;gpuEmptyProven_=false;gpuCompactTarget_=0;
     vertices_={};indices_={};texture_={};liveSlots_={};
     aliveCounter_={};gpuDrawArgs_={};vmErrors_={};gpuIndirectActive_=false;proceduralActive_=false;
     seedProgramParams_={};stateProgramParams_={};gpuVmPayload_={};
@@ -463,7 +464,7 @@ bool ComputeParticles::tryClear() {
     // retained checkpoint immediately; a partial reset is never a snapshot.
     markGpuAllocationUsed();
     gpuResetDirty_=true;
-    ++gpuBirthEpoch_;gpuEmptyProven_=false;gpuIdleSteps_=0;
+    ++gpuBirthEpoch_;gpuEmptyProven_=false;gpuIdleSteps_=0;gpuCompactTarget_=0;
     verticesReady_=false;drawCount_=0;stats_.submittedSlots=0;
     lastCheckpoint_={};checkpointRevision_=0;
     ++vmFrameRevision_;
@@ -953,10 +954,11 @@ bool ComputeParticles::growGpuAllocation(uint32_t required){
     if(!next||next<=old)return false;
     return replaceGpuAllocation(next,false);
 }
-bool ComputeParticles::replaceGpuAllocation(uint32_t next,bool empty){
+bool ComputeParticles::replaceGpuAllocation(uint32_t next,bool empty,bool compact){
     const uint32_t old=physicalCapacity_;
+    const bool shrinking=empty||compact;
     if(!gpuDemandGrowth_||!device_||!device_->gpuHealthy()||!device_->canUpdateSharedBuffers()||
-       !next||next>desc_.capacity||(empty?next>=old:next<=old))return false;
+       !next||next>desc_.capacity||(shrinking?next>=old:next<=old))return false;
     // Charge the full candidate envelope before allocation, including shared
     // constants conservatively. Keep the old envelope until GPU completion.
     size_t candidateCharge=0;uint64_t candidateFence=0;
@@ -965,7 +967,7 @@ bool ComputeParticles::replaceGpuAllocation(uint32_t next,bool empty){
         candidateCharge=estimateGpuEmitterAllocation(next,proceduralActive_);
         if(!budget.reserve(candidateCharge)){
             ++stats_.gpuAllocationBudgetDenied;
-            if(empty)++stats_.gpuPhysicalShrinkFailures;else{++stats_.gpuPhysicalGrowthFailures;gpuGrowthBudgetBlocked_=true;}
+            if(shrinking)++stats_.gpuPhysicalShrinkFailures;else{++stats_.gpuPhysicalGrowthFailures;gpuGrowthBudgetBlocked_=true;}
             return false;
         }
     }
@@ -998,7 +1000,7 @@ bool ComputeParticles::replaceGpuAllocation(uint32_t next,bool empty){
         if(counters.valid())device_->destroyBuffer(counters);
         if(indices.valid())device_->destroyBuffer(indices);
         retireAllocationCharge(candidateCharge,candidateFence);
-        if(empty)++stats_.gpuPhysicalShrinkFailures;else ++stats_.gpuPhysicalGrowthFailures;
+        if(shrinking)++stats_.gpuPhysicalShrinkFailures;else ++stats_.gpuPhysicalGrowthFailures;
         return false;
     };
     std::vector<uint32_t> emptyFree;
@@ -1031,7 +1033,33 @@ bool ComputeParticles::replaceGpuAllocation(uint32_t next,bool empty){
         if(!indices.valid())return discard();
     }
     size_t copied=0;
-    if(!empty){
+    if(compact){
+        if(!compactAllocationCompute_.valid())
+            compactAllocationCompute_=device_->createCompute({shaders::kCompactAllocationMetal,nullptr,"SpectraFX live allocation compaction"});
+        if(!compactAllocationCompute_.valid()||!device_->beginCompute(compactAllocationCompute_))return discard();
+        const auto fence=device_->gpuSubmissionFence();
+        candidateFence=fence?fence:GpuAllocationBudget::unknownFence;
+        markGpuAllocationUsed();
+        device_->setComputeBuffer(0,states_);
+        device_->setComputeBuffer(1,stateProgramParams_);
+        device_->setComputeBuffer(2,stateAttributes_);
+        device_->setComputeBuffer(3,gpuSourceOwners_);
+        device_->setComputeBuffer(4,gpuAliveCurrent_);
+        device_->setComputeBuffer(5,aliveCounter_);
+        device_->setComputeBuffer(6,replacements[0].fresh);
+        device_->setComputeBuffer(7,replacements[6].fresh);
+        device_->setComputeBuffer(9,replacements[7].fresh);
+        device_->setComputeBuffer(10,replacements[3].fresh);
+        device_->setComputeBuffer(11,replacements[9].fresh);
+        device_->setComputeBuffer(12,replacements[8].fresh);
+        device_->setComputeBuffer(13,counters);
+        const std::array<uint32_t,4> u{old,next,0,0};
+        device_->setComputeUniforms(u.data(),sizeof(u));
+        const bool ok=device_->dispatchChecked(next);
+        device_->endCompute();
+        if(!ok)return discard();
+        ++stats_.gpuDispatches;
+    }else if(!empty){
     // Even a partially encoded copy can retain candidate resources.
     const auto fence=device_->gpuSubmissionFence();
     candidateFence=fence?fence:GpuAllocationBudget::unknownFence;
@@ -1065,7 +1093,8 @@ bool ComputeParticles::replaceGpuAllocation(uint32_t next,bool empty){
     if(indices.valid()){device_->destroyBuffer(indices_);indices_=indices;indices={};}
     size_t bytesPerSlot=0;for(const auto& r:replacements)bytesPerSlot+=r.stride;
     if(!proceduralActive_)bytesPerSlot+=6u*(wide?4u:2u);
-    if(empty){
+    if(shrinking){
+        if(compact)++stats_.gpuLiveCompactions;
         const size_t reclaimed=size_t(old-next)*bytesPerSlot;
         stats_.gpuBytes-=reclaimed;stats_.gpuReclaimedBytes+=reclaimed;
         ++stats_.gpuPhysicalShrinks;
@@ -1093,7 +1122,7 @@ void ComputeParticles::serviceGpuIdleReclaim(uint32_t pendingBirths){
     if(!gpuDemandGrowth_)return;
     if(pendingBirths||!pendingGpuKills_.empty()){
         gpuIdleSteps_=0;
-        if(pendingBirths)gpuEmptyProven_=false;
+        if(pendingBirths){gpuEmptyProven_=false;gpuCompactTarget_=0;}
         return;
     }
     if(gpuEmptyProven_){
@@ -1105,17 +1134,32 @@ void ComputeParticles::serviceGpuIdleReclaim(uint32_t pendingBirths){
         }
         return;
     }
-    // Estimates only schedule a bounded check; they NEVER authorize shrink.
-    if(gpuEstimatedBirths_||!gpuAllocationSubmitted_){gpuIdleSteps_=0;return;}
+    if(gpuCompactTarget_){
+        const uint32_t target=gpuCompactTarget_;gpuCompactTarget_=0;
+        gpuIdleSteps_=0;
+        if(target<physicalCapacity_&&!gpuResetDirty_&&!gpuStagingDirty_)
+            (void)replaceGpuAllocation(target,false,true);
+        return;
+    }
+    // Sparse live pools also get a bounded proof even if conservative
+    // lifespan estimates overstate occupancy after selective kills.
+    if(!gpuAllocationSubmitted_||(gpuEstimatedBirths_&&physicalCapacity_<=gpuInitialPhysicalCapacity(desc_.capacity))){
+        gpuIdleSteps_=0;return;
+    }
     if(++gpuIdleSteps_<kGpuIdleReclaimSteps)return;
     gpuIdleSteps_=0;
     const auto epoch=gpuBirthEpoch_;
     if(requestAllocationCounters([this,epoch](bool ok,AllocationCounters observed){
         if(ok&&epoch==gpuBirthEpoch_&&!gpuResetDirty_&&!gpuStagingDirty_&&
-           observed.alive==0&&observed.free==physicalCapacity_){
-            gpuEmptyProven_=true;
-            // First attempt on the next owner step; subsequent failures cool down.
-            gpuIdleSteps_=kGpuIdleReclaimSteps-1;
+           observed.alive<=physicalCapacity_&&observed.free==physicalCapacity_-observed.alive){
+            if(observed.alive==0){
+                gpuEmptyProven_=true;
+                gpuIdleSteps_=kGpuIdleReclaimSteps-1;
+            }else if(physicalCapacity_>gpuInitialPhysicalCapacity(desc_.capacity)&&
+                     observed.alive<=physicalCapacity_/4){
+                gpuCompactTarget_=gpuNextPhysicalCapacity(gpuInitialPhysicalCapacity(desc_.capacity),
+                    observed.alive*2,desc_.capacity);
+            }
         }
     }))++stats_.gpuIdleProofRequests;
 }
@@ -1210,7 +1254,7 @@ bool ComputeParticles::stepGpuAllocated(float dt){
     gpuCullViewUsed_=cull;
     gpuAllocationSubmitted_|=count!=0;
     if(count){
-        ++gpuBirthEpoch_;gpuEmptyProven_=false;gpuIdleSteps_=0;
+        ++gpuBirthEpoch_;gpuEmptyProven_=false;gpuIdleSteps_=0;gpuCompactTarget_=0;
         gpuBirthEstimates_.push_back({gpuAllocationClock_+desc_.lifetime,count});
         gpuEstimatedBirths_+=count;stats_.gpuAllocationRequests+=count;
     }

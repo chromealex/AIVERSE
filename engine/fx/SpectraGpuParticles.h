@@ -149,6 +149,7 @@ struct ComputeStats {
     size_t gpuBytes = 0, uploadedBytes = 0;
     uint32_t gpuPhysicalGrowths=0,gpuPhysicalGrowthFailures=0;
     uint32_t gpuPhysicalShrinks=0,gpuPhysicalShrinkFailures=0,gpuIdleProofRequests=0;
+    uint32_t gpuLiveCompactions=0;
     uint32_t gpuAllocationBudgetDenied=0,gpuBudgetLimitedBirths=0;
     size_t gpuReclaimedBytes=0; // logical released buffer bytes, not driver residency
     size_t gpuGrowthCopiedBytes=0;
@@ -285,7 +286,7 @@ private:
 
     bool stepGpuAllocated(float dt);
     bool growGpuAllocation(uint32_t required);
-    bool replaceGpuAllocation(uint32_t next,bool empty);
+    bool replaceGpuAllocation(uint32_t next,bool empty,bool compact=false);
     void markGpuAllocationUsed();
     void retireAllocationCharge(size_t bytes,uint64_t fence);
     bool shrinkEmptyGpuAllocation();
@@ -303,7 +304,7 @@ private:
     ComputeBackend backend_ = ComputeBackend::Cpu;
     fx::ParticleSystem cpu_;
     int cpuEffect_ = -1;
-    gfx::ComputeHandle compute_;
+    gfx::ComputeHandle compute_,compactAllocationCompute_;
     gfx::ShaderHandle vertexShader_;
     gfx::PipelineHandle pipeline_;
     gfx::BufferHandle states_, seeds_, slots_, vertices_, indices_, liveSlots_;
@@ -335,6 +336,7 @@ private:
     uint32_t gpuIdleSteps_=0;
     uint64_t gpuBirthEpoch_=0; // invalidates asynchronous empty proofs
     bool gpuEmptyProven_=false;
+    uint32_t gpuCompactTarget_=0;
     bool gpuCullViewUsed_=false; // camera-dependent compact stream
     int viewWidth_=1,viewHeight_=1;
     struct KilledSlotAwaitingFrame {

@@ -1,4 +1,4 @@
-## Stage 116 — live GPU pool compaction (in progress; QA deferred)
+## Stage 116 — live GPU pool compaction (source implemented; QA deferred)
 
 After 120 birth-idle steps, use exact asynchronous occupancy proof (unchanged birth/reset epoch). If at most one quarter occupied, shrink to a geometric capacity with at least twice observed live count, minimum 256. GPU migration preserves particle state, VM parameters/attributes and owner tokens, rebuilds dense alive/free partition. Candidate overlap remains budgeted; rejection preserves old pool. Physical IDs may relocate; Medium LOD selection may change once. No synchronous readback or new authoring fields.
 
