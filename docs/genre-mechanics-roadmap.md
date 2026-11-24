@@ -192,3 +192,7 @@ Extend opt-in planet demo with explicit shaft entry, canonical interior route an
 ### Stage58d2 — IN PROGRESS (orbital presentation and floating-origin scenario)
 
 Add opt-in moving planet demo with real Surface parent/orbit, one frozen LENS render/GI frame per publication, discrete rebases under actual native exclusion, coherent lights and focus. Remap unleased baseline vertices directly from canonical fixed body positions, rejecting ambiguous/missing identity instead of accumulating drift. Preserve ECS checksum, native physics tick and SpatialWorld mutation across presentation changes. Bounded CPU GI lattice and full invalidation per rebase; no claim of continuous scrolling or live acceptance. Restore scenario follows.
+
+### Stage58d3 — IN PROGRESS (synchronized native checkpoint)
+
+Bounded native demo checkpoint joins Simulation serialization with exact airborne controller state, real proxy orientation and entity/tick/checksum identity; no saved native handles. Restore only outside readers and after actual physics step; validate payload, restore ECS and reapply one kinematic proxy, invalidate native generations/steering, block admission until owner proof and rebuilt coverage. Add scripted save/advance/restore smoke including pending portal receipt and swimmer state. Restore render frame from saved simulation tick via exact GI reprojection. Dynamic body/ground support restoration is outside this bounded example; no live acceptance until built/run.
