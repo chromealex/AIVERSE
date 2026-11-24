@@ -578,6 +578,7 @@ public:
     }
     bool geometryOnly() const { return geometryOnly_; }
     const render::Model* modelOf(uint16_t type, size_t choice = 0) const;
+    const render::Model* projectileModelOf(uint16_t type,size_t weapon) const; // borrowed, same lifetime as modelOf
     const std::vector<ViewEvent>& events() const { return events_; }
     const std::vector<ViewEffect>& effects() const { return effects_; }
     void setSelectionOutline(bool on) { outline_ = on; }
