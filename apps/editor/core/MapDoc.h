@@ -4,6 +4,7 @@
 // victory, future blocks) is kept verbatim in `extra`, so the editor never drops data it doesn't
 // know about. Undo/redo are whole-document snapshots (maps are small).
 #pragma once
+#include "ProjectFileEdits.h"
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -142,6 +143,10 @@ public:
     bool load(const std::string& file, std::string* err);
     bool loadJson(const Json& j, std::string* err);
     bool save(const std::string& file, std::string* err);
+    // Existing saved map and sidecars only. Call on a detached owner.
+    std::vector<ProjectFileEdit> stageExistingSave(const std::filesystem::path& project);
+    std::shared_ptr<void> beginStagedSave(){return beginHistorySave(path);}
+    void finishStagedSave(){dirty=false;saveHistoryCheckpoint();}
     // Big maps carry their corners as terrain.cornersFile + an in-memory terrain.cornersBlob (what the
     // simulation loader reads); save() writes the blob to the .r16 file and never into the JSON.
     Json toJson() const;
