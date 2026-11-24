@@ -98,6 +98,9 @@ void studioRecoverAssetJournal(const std::filesystem::path& project);
 Json studioRecoveryStorage(const std::filesystem::path& project);
 Json studioSetRecoveryQuota(const std::filesystem::path& project,int64_t expectedMiB,int64_t quotaMiB);
 Json studioAssetTrashList(const std::filesystem::path& project,size_t offset,size_t limit);
+std::vector<std::string> studioProtectedTrashIds(const editor::ProjectHistory& history);
+Json studioReviewTrashBatch(const std::filesystem::path& project,const std::vector<std::string>& ids,const editor::ProjectHistory& history);
+Json studioApplyTrashBatch(const std::filesystem::path& project,const std::vector<std::string>& ids,const std::string& token,const editor::ProjectHistory& history);
 Json studioAssetTrashReview(const std::filesystem::path& project,const std::string& id,const std::string& action);
 void studioAssetTrashApply(const std::filesystem::path& project,const std::string& id,const std::string& action,const std::string& expectedToken);
 std::string studioCreateContentFolder(const std::filesystem::path& project,

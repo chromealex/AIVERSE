@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {RefreshCw,Trash2,X} from 'lucide-react';
 import {invoke,onNativeEvent} from '../bridge';
-import type {StudioTrashAction,StudioTrashPage,StudioTrashReview} from '../types';
+import type {StudioTrashAction,StudioTrashPage,StudioTrashReview,StudioTrashBatchReview} from '../types';
 import {StudioAlert,StudioButton,StudioIconButton,StudioEmptyState,StudioSkeleton,StudioInput} from '../ui';
 import './AssetTrashDialog.css';
 
@@ -20,6 +20,8 @@ export default function AssetTrashDialog({projectPath,onClose,onChanged}:{projec
   const [review,setReview]=useState<StudioTrashReview|null>(null);
   const [confirm,setConfirm]=useState(false);
   const [quota,setQuota]=useState('0');
+  const [selected,setSelected]=useState<string[]>([]);
+  const [batch,setBatch]=useState<StudioTrashBatchReview|null>(null);
   useEffect(()=>{if(page?.storage)setQuota(String(page.storage.quotaMiB));},[page]);
   const request=useRef(false);
   const mounted=useRef(true);
@@ -28,7 +30,7 @@ export default function AssetTrashDialog({projectPath,onClose,onChanged}:{projec
     if(event==='assets.changed'||event==='workspace.changed'){setReview(null);setConfirm(false);setRefresh(v=>v+1);}
   }),[]);
   useEffect(()=>{
-    let live=true;setPage(null);
+    let live=true;setPage(null);setSelected([]);setBatch(null);setConfirm(false);
     void invoke('studio.assetTrashList',{expectedProject:projectPath,offset,limit:PAGE})
       .then(r=>{if(live){if(offset>=r.total&&offset>0){setOffset(Math.max(0,Math.floor(Math.max(0,r.total-1)/PAGE)*PAGE));return;}setPage(r);}})
       .catch(e=>{if(live)setError(message(e));});
@@ -42,9 +44,25 @@ export default function AssetTrashDialog({projectPath,onClose,onChanged}:{projec
     catch(e){if(mounted.current)setError(message(e));}
     finally{request.current=false;if(mounted.current)setBusy(false);}
   };
+  const prepareBatch=async()=>{
+    if(request.current||!selected.length||page?.recoveryPending)return;
+    request.current=true;setBusy(true);setError('');setReview(null);setBatch(null);setConfirm(false);
+    try{const r=await invoke('studio.assetTrashBatchReview',{expectedProject:projectPath,ids:selected});if(mounted.current)setBatch(r);}
+    catch(e){if(mounted.current)setError(message(e));}
+    finally{request.current=false;if(mounted.current)setBusy(false);}
+  };
+  const applyBatch=async()=>{
+    if(request.current||!batch||!confirm)return;
+    request.current=true;setBusy(true);setError('');
+    try{
+      const r=await invoke('studio.assetTrashBatchApply',{expectedProject:projectPath,ids:batch.items.map(row=>row.id),token:batch.token,expectedVersion:batch.version,confirmed:true});
+      if(mounted.current){onChanged();reload();if(!r.ok)setError('Removed '+r.removed.length+' records; cleanup stopped: '+(r.error??'unknown error'));}
+    }catch(e){if(mounted.current){setError(message(e));setBatch(null);setConfirm(false);setRefresh(v=>v+1);}}
+    finally{request.current=false;if(mounted.current)setBusy(false);}
+  };
   const prepare=async(id:string,action:StudioTrashAction)=>{
     if(request.current||page?.recoveryPending)return;
-    request.current=true;setBusy(true);setError('');setReview(null);setConfirm(false);
+    request.current=true;setBusy(true);setError('');setReview(null);setBatch(null);setConfirm(false);
     try{const r=await invoke('studio.assetTrashReview',{expectedProject:projectPath,id,action});if(mounted.current)setReview(r);}
     catch(e){if(mounted.current)setError(message(e));}
     finally{request.current=false;if(mounted.current)setBusy(false);}
@@ -82,10 +100,17 @@ export default function AssetTrashDialog({projectPath,onClose,onChanged}:{projec
         <StudioInput aria-label="Filter this recovery page" placeholder="Filter this page by path, GUID or kind" value={filter} onChange={e=>setFilter(e.target.value)} disabled={busy}/>
         {!page&&!error&&<StudioSkeleton/>}
         {page&&items.length===0&&<StudioEmptyState icon={<Trash2 size={24}/>} title="No matching recovery records"/>}
+        <div className="studio-trash__actions">
+          <StudioButton size="sm" disabled={busy||!!page?.recoveryPending||!items.some(r=>r.status==='retained'&&!r.historyProtected)} onClick={()=>{setSelected(items.filter(r=>r.status==='retained'&&!r.historyProtected).map(r=>r.id));setBatch(null);setConfirm(false);}}>Select eligible on page</StudioButton>
+          <StudioButton size="sm" disabled={busy||!!page?.recoveryPending||!selected.length} onClick={()=>void prepareBatch()}>Review purge ({selected.length})…</StudioButton>
+        </div>
         {items.map(row=><div className="studio-trash__row" key={row.id}>
+          {row.status==='retained'&&<input type="checkbox" aria-label={'Select '+(row.path??row.id)} disabled={busy||!!row.historyProtected||!!page?.recoveryPending} checked={selected.includes(row.id)}
+            onChange={e=>{setSelected(old=>e.target.checked?[...old,row.id]:old.filter(id=>id!==row.id));setBatch(null);setConfirm(false);}}/>}
           <div className="studio-trash__info">
             <strong title={row.path??row.id}>{row.path??row.id}</strong>
-            <small>{row.status==='invalid'?'Invalid record':row.kind==='replacement'?'Previous file version':row.kind==='created'?'Imported / created':'Deleted asset'}{row.directory?' · Folder':row.bytes!==undefined?' · '+formatBytes(row.bytes):''}</small>
+            <small>{row.status==='invalid'?'Invalid record':row.kind==='replacement'?'Previous file version':row.kind==='created'?'Imported / created':'Deleted asset'}{row.directory?' · Folder':''}{row.slotBytes!==undefined?' · '+formatBytes(row.slotBytes):row.bytes!==undefined?' · '+formatBytes(row.bytes):''}</small>
+            {row.historyProtected&&<small>Protected by retained Undo/Redo (batch purge excluded)</small>}
             {row.guid&&<small title={row.guid}>GUID {row.guid}</small>}
             {row.error&&<small role="alert">{row.error}</small>}
           </div>
@@ -94,6 +119,15 @@ export default function AssetTrashDialog({projectPath,onClose,onChanged}:{projec
             <StudioButton size="sm" variant="danger" disabled={busy||!!page?.recoveryPending} onClick={()=>void prepare(row.id,'purge')}>Purge…</StudioButton>
           </div>}
         </div>)}
+        {batch&&<div className="studio-trash__review">
+          <StudioAlert tone="danger" title="Review permanent cleanup">{batch.items.length} records · {formatBytes(batch.bytes)}. Only selected unprotected recovery slots will be removed. Live content and retained history are preserved. Disk errors can stop cleanup partway.</StudioAlert>
+          {batch.items.map(row=><small key={row.id}>{row.path} · {formatBytes(row.slotBytes??row.bytes??0)}</small>)}
+          <label className="au-checkbox"><input className="au-checkbox__input" type="checkbox" checked={confirm} disabled={busy} onChange={e=>setConfirm(e.target.checked)}/><span>Confirm permanent deletion of these records.</span></label>
+          <div className="studio-trash__actions">
+            <StudioButton size="sm" disabled={busy} onClick={()=>{setBatch(null);setConfirm(false);}}>Cancel</StudioButton>
+            <StudioButton size="sm" variant="danger" disabled={busy||!confirm} onClick={()=>void applyBatch()}>Permanently purge selected</StudioButton>
+          </div>
+        </div>}
         {review&&<div className="studio-trash__review">
           <StudioAlert tone={review.action==='purge'?'danger':'warning'} title={review.action==='purge'?'Permanently remove recovery data':'Restore this record'}>
             {review.path}. This action clears the current Assets undo/redo history.

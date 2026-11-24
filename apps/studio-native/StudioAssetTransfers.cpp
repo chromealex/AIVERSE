@@ -185,6 +185,16 @@ uint64_t recoveryBytes(const fs::path& root,size_t& visited){
         for(const auto& item:fs::recursive_directory_iterator(root))add(item.path(),item.symlink_status());
     return bytes;
 }
+// Logical source size plus a small reserve for staging metadata. This is a
+// preflight, not a reservation against another process consuming free blocks.
+void checkRecoveryStagingSpace(const fs::path& project,const fs::path& source){
+    size_t visited=0;
+    const auto bytes=source.empty()?uint64_t(0):recoveryBytes(source,visited);
+    constexpr uint64_t reserve=16ull*RecoveryMiB;
+    const auto available=fs::space(fs::canonical(project)).available;
+    if(available<reserve||bytes>available-reserve)
+        throw std::runtime_error("Insufficient disk space for asset staging (including 16 MiB reserve)");
+}
 bool inRecoveryTrash(const std::string& path){return path.starts_with(".aiverse-cache/studio-asset-trash/");}
 // Net retained bytes, not transient staging occupancy. Sources have already
 // been checked by their native owner. No deletion is performed to fit a quota.
@@ -252,6 +262,7 @@ void copyFolderNoSymlinks(const fs::path& source,const fs::path& target) {
 void stageCreatedAsset(const fs::path& project,const std::string& path,
     const fs::path& source,bool directory,bool preserveSidecar,
     editor::ProjectHistory::MovePlan& plan){
+    checkRecoveryStagingSpace(project,source);
     // Validate/create the cache root with the existing catalog owner.
     {StudioAssetCatalog live(project);}
     const auto root=project/".aiverse-cache"/"studio-asset-trash";
@@ -662,6 +673,7 @@ Json StudioTransferPlan::apply(const std::string& token,
                     if(!fs::create_directory(folder))throw std::runtime_error("Cannot reserve replacement slot");
                     return ".aiverse-cache/studio-asset-trash/"+id+"/asset";
                 };
+                checkRecoveryStagingSpace(project_,e.source);
                 const auto oldSlot=reserve(),newSlot=reserve();
                 fs::copy_file(e.source,project_/newSlot,fs::copy_options::none);
                 if(studioAssetFileDigest(project_/newSlot)!=newDigest)
@@ -1183,8 +1195,9 @@ Json trashRow(const TrashRecord& r){
     row.set("id",Json::string(r.id));row.set("path",Json::string(r.path));row.set("guid",Json::string(r.guid));
     row.set("kind",Json::string(r.kind));row.set("role",Json::string(r.role));row.set("directory",Json::fromBool(r.directory));
     row.set("status",Json::string("retained"));
-    // Directory sizes are intentionally not recursively enumerated by list.
-    if(!r.directory)row.set("bytes",Json::number(int64_t(std::min<std::uintmax_t>(fs::file_size(r.folder/"asset"),INT64_MAX))));
+    size_t visited=0;
+    row.set("bytes",Json::number(int64_t(recoveryBytes(r.folder/"asset",visited))));
+    row.set("slotBytes",Json::number(int64_t(recoveryBytes(r.folder,visited))));
     return row;
 }
 }
@@ -1220,6 +1233,68 @@ Json studioAssetTrashList(const fs::path& project,size_t offset,size_t limit){
     try{out.set("storage",studioRecoveryStorage(project));}
     catch(const std::exception& e){out.set("storageError",Json::string(e.what()));}
     return out;
+}
+std::vector<std::string> studioProtectedTrashIds(const editor::ProjectHistory& history){
+    std::set<std::string> ids;
+    for(const auto& step:history.steps()){
+        if(!step.move)continue;
+        for(const auto& f:step.move->files){
+            if(!inRecoveryTrash(f.to))continue;
+            const auto id=fs::path(f.to).parent_path().filename().string();
+            if(id.size()==24&&id.find_first_not_of("0123456789abcdef")==std::string::npos)ids.insert(id);
+        }
+    }
+    return {ids.begin(),ids.end()};
+}
+Json studioReviewTrashBatch(const fs::path& project,const std::vector<std::string>& requested,const editor::ProjectHistory& history){
+    checkTrashJournal(project);
+    if(requested.empty()||requested.size()>50)throw std::runtime_error("Select 1–50 recovery records");
+    const std::set<std::string> ids(requested.begin(),requested.end());
+    if(ids.size()!=requested.size())throw std::runtime_error("Repeated recovery record");
+    const auto protectedIds=studioProtectedTrashIds(history);
+    Json items=Json::array();
+    pack::Sha256 hash;
+    const auto add=[&](const std::string& s){
+        const auto size=std::to_string(s.size())+":";
+        hash.update(size.data(),size.size());hash.update(s.data(),s.size());
+    };
+    add(fs::canonical(project).generic_string());add(history.versionToken());add("batch-purge-v1");
+    uint64_t total=0;
+    for(const auto& id:ids){
+        if(std::binary_search(protectedIds.begin(),protectedIds.end(),id))
+            throw std::runtime_error("Recovery record is protected by retained Undo/Redo: "+id);
+        const auto reviewed=reviewTrash(project,id,"purge");
+        auto row=trashRow(reviewed.record);
+        const auto bytes=uint64_t(row.getInt("slotBytes"));
+        if(bytes>RecoveryMaxAccountedBytes-total)throw std::runtime_error("Cleanup byte budget exceeded");
+        total+=bytes;add(id);add(reviewed.token);add(std::to_string(bytes));
+        items.push(std::move(row));
+    }
+    const auto digest=hash.finish();
+    Json out=Json::object();out.set("items",std::move(items));out.set("bytes",Json::number(int64_t(total)));
+    out.set("token",Json::string(pack::toHex(digest.data(),digest.size())));
+    return out;
+}
+Json studioApplyTrashBatch(const fs::path& project,const std::vector<std::string>& ids,const std::string& token,const editor::ProjectHistory& history){
+    const auto plan=studioReviewTrashBatch(project,ids,history);
+    if(token.empty()||plan.getStr("token")!=token)throw std::runtime_error("Cleanup plan changed; review again");
+    // Preflight all entries before irreversible work. Revalidate each entry
+    // again immediately before deletion. A filesystem failure can be partial.
+    std::vector<std::pair<std::string,std::string>> checked;
+    for(const auto& row:plan["items"].items()){
+        const auto id=row.getStr("id");
+        const auto review=reviewTrash(project,id,"purge");
+        checked.emplace_back(id,review.token);
+    }
+    // Ensure the complete set is still identical after capturing per-item tokens.
+    if(studioReviewTrashBatch(project,ids,history).getStr("token")!=token)
+        throw std::runtime_error("Cleanup plan changed; review again");
+    Json removed=Json::array(),out=Json::object();
+    for(const auto& [id,expected]:checked){
+        try{studioAssetTrashApply(project,id,"purge",expected);removed.push(Json::string(id));}
+        catch(const std::exception& e){out.set("failedId",Json::string(id));out.set("error",Json::string(e.what()));break;}
+    }
+    out.set("ok",Json::fromBool(!out.has("error")));out.set("removed",std::move(removed));return out;
 }
 Json studioAssetTrashReview(const fs::path& project,const std::string& id,const std::string& action){
     const auto reviewed=reviewTrash(project,id,action);

@@ -158,6 +158,38 @@ int main(){
             db.rebuild(false);
         }
 
+        // S6h.2: protected history, exact batch review, changed payload refusal.
+        {
+            using namespace aiverse;
+            using namespace aiverse::studio;
+            fs::create_directories(project/"content"/"Cleanup");
+            write(project/"content"/"Cleanup"/"a.bin","folder payload");
+            write(project/"content"/"Purge.bin","purge payload");db.rebuild();
+            auto folder=studioQuarantineAsset(project,"Cleanup",db.byPath("Cleanup")->guid);
+            auto file=studioQuarantineAsset(project,"Purge.bin",db.byPath("Purge.bin")->guid);
+            const auto folderId=fs::path(folder.files[0].to).parent_path().filename().string();
+            const auto fileId=fs::path(file.files[0].to).parent_path().filename().string();
+            editor::ProjectHistory protectedHistory;
+            auto keep=folder;protectedHistory.recordMove(std::move(keep),"Protected folder");
+            AIVERSE_TEST_CHECK(studioProtectedTrashIds(protectedHistory).size()==1);
+            bool refused=false;
+            try{(void)studioReviewTrashBatch(project,{folderId,fileId},protectedHistory);}
+            catch(const std::runtime_error&){refused=true;}
+            AIVERSE_TEST_CHECK(refused);
+            editor::ProjectHistory empty;
+            const auto plan=studioReviewTrashBatch(project,{folderId,fileId},empty);
+            AIVERSE_TEST_CHECK(plan["items"].size()==2&&plan.getInt("bytes")>27);
+            write(project/file.files[0].to,"changed payload");
+            refused=false;try{(void)studioApplyTrashBatch(project,{folderId,fileId},plan.getStr("token"),empty);}
+            catch(const std::runtime_error&){refused=true;}
+            AIVERSE_TEST_CHECK(refused&&fs::exists(project/folder.files[0].to));
+            write(project/file.files[0].to,"purge payload");
+            const auto refreshed=studioReviewTrashBatch(project,{folderId,fileId},empty);
+            const auto applied=studioApplyTrashBatch(project,{folderId,fileId},refreshed.getStr("token"),empty);
+            AIVERSE_TEST_CHECK(applied.getBool("ok")&&applied["removed"].size()==2);
+            AIVERSE_TEST_CHECK(!fs::exists(project/folder.files[0].to)&&!fs::exists(project/file.files[0].to));
+        }
+
         // Preview name collision, skip by default and leave content unchanged.
         auto skip=StudioTransferPlan::external(project,"Models",{external/"Ship.glb"});
         AIVERSE_TEST_CHECK(skip.describe()["items"][0].getStr("conflict")=="name");

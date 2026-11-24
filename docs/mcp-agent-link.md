@@ -72,3 +72,6 @@ Native studio.assetReferences optional path/depth returns direct or multi-hop ed
 
 ### S6h.1 — recovery storage policy
 Native Studio Asset Trash reports logical trash/checkpoint/journal bytes, free disk and configurable retained quota; positive net payload growth is refused above quota. Default unlimited; manual purge remains explicit. Standalone linked quota API deferred to S6i; no automatic cleanup.
+
+### S6h.2 — reviewed history-protected batch cleanup
+Studio Trash supports explicit selected-record batch review/apply with exact digest and history version protection. Native read/write operations are not yet standalone linked MCP tools (S6i). No automatic eviction; single-record purge retains its documented history-reset semantics.

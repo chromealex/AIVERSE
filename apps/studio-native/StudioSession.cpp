@@ -1681,7 +1681,7 @@ Json StudioSession::dispatch(const Json& request) {
 Json StudioSession::dispatchImpl(const Json& request) {
     const auto method=request.getStr("method");
     static const std::set<std::string> assetWrites={"studio.assetMetaPatch","studio.assetFolderCreate","studio.assetTransferCommit",
-        "studio.assetDelete","studio.assetTrashApply"};
+        "studio.assetDelete","studio.assetTrashApply","studio.assetTrashBatchApply"};
     if(ws_.project.dir.empty()||!assetWrites.count(method))return dispatchImplCore(request);
     // This wrapper is also used by explicit agent adapters; do not bypass it.
     try{
@@ -2585,13 +2585,38 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                params["quotaMiB"].numberLiteral()!=std::to_string(quota))
                 throw std::runtime_error("Recovery quota requires integer MiB");
             reply.set("result",studioSetRecoveryQuota(ws_.project.dir,expected,quota));
+        } else if(method=="studio.assetTrashBatchReview"||method=="studio.assetTrashBatchApply"){
+            if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir)
+                throw std::runtime_error("Recovery project changed; reopen Trash");
+            const auto& raw=params["ids"];
+            if(!raw.isArray()||raw.size()<1||raw.size()>50)throw std::runtime_error("Select 1–50 recovery records");
+            std::vector<std::string> ids;
+            for(const auto& id:raw.items()){
+                if(!id.isString())throw std::runtime_error("Invalid recovery record ID");
+                ids.push_back(id.str());
+            }
+            if(method=="studio.assetTrashBatchReview"){
+                auto review=studioReviewTrashBatch(ws_.project.dir,ids,assetHistory_);
+                review.set("version",str(assetHistoryVersion()));reply.set("result",std::move(review));
+            }else{
+                if(!params.getBool("confirmed")||params.getStr("expectedVersion")!=assetHistoryVersion())
+                    throw std::runtime_error("Confirm cleanup against current asset history");
+                reply.set("result",studioApplyTrashBatch(ws_.project.dir,ids,params.getStr("token"),assetHistory_));
+            }
         } else if (method == "studio.assetTrashList" || method == "studio.assetTrashReview" || method == "studio.assetTrashApply") {
             if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir)
                 throw std::runtime_error("Recovery project changed; reopen Trash");
             if(method=="studio.assetTrashList"){
                 const auto offset=params.getInt("offset",0),limit=params.getInt("limit",50);
                 if(offset<0||limit<1)throw std::runtime_error("Invalid recovery page");
-                reply.set("result",studioAssetTrashList(ws_.project.dir,size_t(offset),size_t(limit)));
+                auto result=studioAssetTrashList(ws_.project.dir,size_t(offset),size_t(limit));
+                const auto protectedIds=studioProtectedTrashIds(assetHistory_);
+                Json rows=Json::array();
+                for(auto row:result["items"].items()){
+                    row.set("historyProtected",Json::fromBool(std::binary_search(protectedIds.begin(),protectedIds.end(),row.getStr("id"))));
+                    rows.push(std::move(row));
+                }
+                result.set("items",std::move(rows));reply.set("result",std::move(result));
             }else if(method=="studio.assetTrashReview"){
                 auto review=studioAssetTrashReview(ws_.project.dir,params.getStr("id"),params.getStr("action"));
                 review.set("version",str(assetHistoryVersion()));reply.set("result",std::move(review));

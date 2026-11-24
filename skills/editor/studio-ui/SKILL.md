@@ -149,6 +149,9 @@ Optional studio.assetReferences {path,depth:1..16} returns incoming/outgoing edg
 ## Recovery storage budget (S6h.1)
 Asset Trash lists logical bytes of the full recovery store (including unlisted slots), asset checkpoint, asset journals and available filesystem bytes. Project-local versioned studio-recovery-policy.json sets quotaMiB (0 unlimited, default compatible); explicit Studio save compares prior quota under asset-history lock. Positive net retained growth on quarantine/replacement and coordinated history is refused above a configured quota. Net-reducing restore remains available; no automatic purge. Staging peak, other caches, record-only overhead and noncooperating writers are not hard limited. Pending coordinated journal blocks manual recovery actions. Keep explicit single-record digest/token/confirmation purge semantics.
 
+## History-protected cleanup (S6h.2)
+Trash rows report logical payload and complete slot bytes (folders included). Batch review accepts 1–50 distinct slot IDs and refuses every slot mentioned by retained Undo/Redo, including redo tail. It binds canonical project, history epoch/version, sorted IDs, exact reviewed record and payload digest, and byte totals. Confirmed apply revalidates the full set and each slot, reports removed IDs and first failure; irreversible cleanup is not an atomic transaction. Single-slot restore/purge retains its existing explicit history-invalidating behavior. Staging checks available logical source bytes plus 16 MiB reserve before each native staged import/replacement; not a physical reservation or full peak-disk guarantee.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web
