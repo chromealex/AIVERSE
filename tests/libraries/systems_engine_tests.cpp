@@ -1,14 +1,64 @@
 #include "engine/mechanics/WeaponCadence.h"
+#include "engine/mechanics/MultiTargetSelection.h"
 #include "engine/sim/PresentationEventQueue.h"
 #include <aiverselib/systems/EngineMechanics.h>
 #include <aiverselib/systems/Configured.h>
 #include <aiverselib/systems/Persistence.h>
 #include <array>
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 using namespace aiverse;using namespace aiverse::lib::systems;
 #define CHECK(x) do{if(!(x)){std::cerr<<"failed "<<__LINE__<<": "<<#x<<'\n';std::exit(1);}}while(false)
 int main(){
+    {
+        using namespace aiverse::lib::mechanics;
+        NearestWeaponTargets nearest(2);
+        nearest.consider(Entity{4,1},Fixed::fromInt(2));
+        nearest.consider(Entity{8,1},Fixed::fromInt(1));
+        nearest.consider(Entity{2,1},Fixed::fromInt(2));
+        nearest.consider(Entity{8,1},Fixed::fromInt(1));
+        nearest.consider(Entity{9,1},Fixed::fromInt(3));
+        CHECK(nearest.size()==2);
+        CHECK(nearest.begin()[0].entity==(Entity{8,1}));
+        CHECK(nearest.begin()[1].entity==(Entity{2,1}));
+        NearestWeaponTargets none(0);none.consider(Entity{1,1},Fixed{});CHECK(none.size()==0);
+    }
+    {
+        Simulation multi(SimConfig{31,8,0,true},std::make_unique<game::GameCore>());
+        multi.setup(Json::parse(R"({"victory":"noUnits","types":{"shooter":{"health":{"max":100},"weapons":[{"range":6,"damage":10,"cooldown":60,"projectileSpeed":2,"extraTargets":2,"extraTargetTags":["eligible"],"extraIgnoreTags":["immune"],"onHit":{"type":"damage","amount":5}}]},"primary":{"health":{"max":100}},"secondary":{"health":{"max":100},"tags":["eligible"]},"ignored":{"health":{"max":100},"tags":["eligible","immune"]}}})"),Json::parse(R"({"size":[8,8],"players":[{"name":"A","team":1},{"name":"B","team":2}],"terrain":{"rows":["........","........","........","........","........","........","........","........"]},"entities":[{"type":"shooter","owner":1,"pos":[1,1]},{"type":"primary","owner":2,"pos":[3,1]},{"type":"secondary","owner":2,"pos":[2,3]},{"type":"secondary","owner":2,"pos":[4,3]},{"type":"ignored","owner":2,"pos":[2,1]},{"type":"secondary","owner":1,"pos":[1,3]}]})"));
+        auto& host=static_cast<game::GameCore&>(multi.module());
+        Entity shooter,primary;std::vector<Entity> eligible,excluded;
+        multi.world().each<game::Unit,Owner>([&](Entity e,auto& unit,auto& owner){
+            const auto& id=host.rules().types[unit.type].id;
+            if(id=="shooter")shooter=e;else if(id=="primary")primary=e;
+            else if(id=="secondary"&&owner.player==2)eligible.push_back(e);else excluded.push_back(e);
+        });
+        CHECK(shooter.valid()&&primary.valid()&&eligible.size()==2&&excluded.size()==2);
+        auto& combat=multi.world().get<game::Combat>(shooter);combat.target=primary;combat.autoTarget=false;
+        SimSnapshot before;multi.saveState(before);
+        auto launch=[&](){
+            multi.step();
+            int attackEvents=0;for(const auto& event:multi.events())if(event.a==shooter&&event.type==game::kEvAttack)++attackEvents;
+            CHECK(attackEvents==1);
+            std::vector<uint64_t> targets;
+            multi.world().each<game::Projectile>([&](Entity,auto& projectile){if(projectile.source==shooter){CHECK(projectile.onHit>=0);targets.push_back(projectile.target.packed());}});
+            std::sort(targets.begin(),targets.end());CHECK(targets.size()==3);
+            CHECK(std::adjacent_find(targets.begin(),targets.end())==targets.end());
+            CHECK(std::find(targets.begin(),targets.end(),primary.packed())!=targets.end());
+            for(auto e:eligible)CHECK(std::find(targets.begin(),targets.end(),e.packed())!=targets.end());
+            for(auto e:excluded)CHECK(std::find(targets.begin(),targets.end(),e.packed())==targets.end());
+            return multi.checksum();
+        };
+        const auto hash=launch();multi.loadState(before);CHECK(launch()==hash);
+        for(int i=0;i<40;++i)multi.step();
+        CHECK(multi.world().get<game::Unit>(primary).hp==Fixed::fromInt(85));
+        for(auto e:eligible)CHECK(multi.world().get<game::Unit>(e).hp==Fixed::fromInt(85));
+        for(auto e:excluded)CHECK(multi.world().get<game::Unit>(e).hp==Fixed::fromInt(100));
+        for(const char* invalid:{R"({"types":{"unit":{"weapons":[{"extraTargets":17}]}}})",R"({"types":{"unit":{"weapons":[{"extraTargets":1.5}]}}})",R"({"types":{"unit":{"weapons":[{"extraTargetTags":["unknown"]}]}}})"}){
+            bool rejected=false;try{(void)game::loadRules(Json::parse(invalid));}catch(const std::runtime_error&){rejected=true;}CHECK(rejected);
+        }
+    }
     {
         using namespace aiverse::lib::mechanics;
         AttackTimingState phase;
