@@ -158,6 +158,38 @@ inline CaveRepathTickStats repathCaveEntities(
     });
     return stats;
 }
+// Motor-neutral alternative for gameplay owners that already have their
+// own authoritative movement controller. Register only route persistence,
+// goal search and rollback; let CaveEcsSteering output desired motion and
+// the existing native controller consume it. DO NOT register both this
+// and the Transform follower installer in the same Simulation.
+inline void installCaveRepathSimulation(
+    Simulation& sim,CaveSimulationNavigationHooks hooks) {
+    if(!hooks.publishedSource||!hooks.search||!hooks.maxRepairsPerTick)
+        throw std::invalid_argument("Caverns missing repath owner");
+    sim.registerPersistentComponent<CaveRouteFollower>(
+        "caverns.route",2);
+    sim.registerPersistentComponent<CaveRouteIntent>(
+        "caverns.route.intent",1);
+    sim.addSystem("caverns.navigation.repath",
+        [hooks](Simulation& state){
+            (void)repathCaveEntities(state,hooks);
+        });
+    sim.addStateRestoredHook(
+        [source=hooks.publishedSource,invalid=hooks.invalidateDerived](
+            Simulation& state) {
+            if(invalid)invalid();
+            const auto published=source();
+            state.world().eachExisting<CaveRouteFollower>(
+                [&](Entity,CaveRouteFollower& route){
+                    if(!published ||
+                       route.sourceRevision!=published->revision()||
+                       route.environmentRevision!=
+                           published->environmentRevision())
+                        route.needsRepath=true;
+                });
+        });
+}
 inline void installCaveNavigationSimulation(
     Simulation& sim,CaveSimulationNavigationHooks hooks){
     if(!hooks.publishedSource||!hooks.search||!hooks.collision ||
