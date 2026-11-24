@@ -384,7 +384,9 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
         out.set("solids",Json::number(int64_t(detailed.graph.solids.size())));
         out.set("connections",Json::number(int64_t(detailed.graph.connections.size())));
         out.set("topology",studioBuildingTopology(detailed.graph));
+        if(params.has("routeQuery"))out.set("route",studioBuildingRoute(detailed.graph,params["routeQuery"]));
     }
+    if(!req.composeFeatures&&params.has("routeQuery"))throw std::runtime_error("Route requires functional building");
     return out;
 }
 // Writes a new GLB (never overwrites another asset) inside project/content,
