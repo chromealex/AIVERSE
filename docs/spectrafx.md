@@ -1,3 +1,7 @@
+## Stage 120A — Vulkan allocator RHI prerequisites (in progress; QA deferred)
+
+Add capability-gated storage-buffer/uniform compute layout (native slot 8 uniform, up to 18 storage descriptors), ordered immutable storage uploads/copies, indirect compute, ranged and blocking buffer reads with transfer budget. Preserve existing texture and push-constant layouts. No SpectraFX Vulkan activation until complete compatible shader/host routing is implemented. Native tests deferred.
+
 ## Stage 119B — owned asynchronous checkpoint capture (source implemented; QA deferred)
 
 Reuse existing chunked capture, shared readback budget, cadence and callback lifetime. Capture seven streams for owned allocation, exact partition metadata, validate revision and mode; no publication after partial enqueue or invalid data. Register production checkpoint fixture for history, disk v2 and async completion. Native tests remain deferred. Seven streams reconstruct exact partition; default 512 KiB per-frame checkpoint quota may reject 4096-slot owned snapshots, which need a configured larger quota. Native capture/restore remains bounded to 4096 physical slots. File v2 remains same-build presentation-only; v1 is unchanged. CPU fallback refuses owned snapshots with process-local source tokens.
