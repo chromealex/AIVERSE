@@ -120,7 +120,13 @@ export interface PlanetFractureLiveState {available:boolean;sampleTick:number;me
 export interface PlanetMorphLiveNode {id:string;enabled:boolean;anchored:boolean;current:number[];rest:number[];displacement:number[];velocity:number[];configuredForce:number[];projected:boolean;body?:string;owner?:string;unitsPerMetre?:number;position?:number[];restPosition?:number[];binding?:{owner:string;unitsPerMetre:number;impulseMilli:number;relative:boolean;enabled:boolean};currentGravityLoad?:number[];pendingImpact?:{tick:number;impulse:number[]}}
 export interface PlanetMorphLiveSpring {id:string;first:string;second:string;enabled:boolean;stiffness:number;residual:number[];projected:boolean;body?:string;a?:number[];b?:number[]}
 export interface PlanetMorphLiveState {available:boolean;sampleTick:number;nodeCount:number;springCount:number;forceCount:number;gravityInstalled:boolean;gravityCapped:boolean;truncated:boolean;rejected:number;unprojected:number;omittedSprings:number;frameMismatch:number;crossBody:number;nodes:PlanetMorphLiveNode[];springs:PlanetMorphLiveSpring[]}
-export interface EvolveLiveState {morph?:PlanetMorphLiveState;fracture?:PlanetFractureLiveState;aether?:PlanetAetherLiveState;gravity?:PlanetGravityLiveState;evolve?:PlanetEvolveLiveState;topology?:'planet';epoch?:string;imprint?:PlanetLiveProcessSummary;granular?:PlanetLiveProcessSummary & {available:boolean;cellSizeCm:number;fieldCount:number;tiles:number};logs?:{x:number;z:number;ratio:number}[];soil?:{x:number;z:number;units:string}[];absorbedUnits?:string;respiredUnits?:string;active:boolean;tick?:number;regions:EvolveLiveRegion[];plantCount?:number;plants?:{id:string;x:number;z:number;fallen:boolean;dead?:boolean;recruited?:boolean;mature?:boolean;ageTicks?:string;matureTicks?:string;shadeStress?:string;floodStress?:string;droughtStress?:string}[];weather?:{x:number;z:number;size:number;rain:number;temperature:number;wetness:number}[]}
+export interface PlanetEchoLiveLocation {id:string;placed:boolean;body?:string;position?:number[]}
+export interface PlanetEchoLiveZone extends PlanetEchoLiveLocation {enabled:boolean}
+export interface PlanetEchoLiveEmitter extends PlanetEchoLiveLocation {zone:string;intensity:number;enabled:boolean;active:boolean}
+export interface PlanetEchoLiveReceiver extends PlanetEchoLiveLocation {zone:string;threshold:number;enabled:boolean;zoneActive:boolean;hearingAvailable:boolean;valid?:boolean;audible?:boolean;intensity?:number;source?:string;sourcePosition?:number[]}
+export interface PlanetEchoLivePortal {id:string;from:string;to:string;enabled:boolean;bidirectional:boolean;loss:number;active:boolean;placed:boolean;body?:string;a?:number[];b?:number[]}
+export interface PlanetEchoLiveState {available:boolean;sampleTick:number;zoneCount:number;portalCount:number;emitterCount:number;receiverCount:number;truncated:boolean;rejected:number;unplaced:number;omittedPortals:number;crossBody:number;staleHearing:number;audible:number;zones:PlanetEchoLiveZone[];portals:PlanetEchoLivePortal[];emitters:PlanetEchoLiveEmitter[];receivers:PlanetEchoLiveReceiver[]}
+export interface EvolveLiveState {echo?:PlanetEchoLiveState;morph?:PlanetMorphLiveState;fracture?:PlanetFractureLiveState;aether?:PlanetAetherLiveState;gravity?:PlanetGravityLiveState;evolve?:PlanetEvolveLiveState;topology?:'planet';epoch?:string;imprint?:PlanetLiveProcessSummary;granular?:PlanetLiveProcessSummary & {available:boolean;cellSizeCm:number;fieldCount:number;tiles:number};logs?:{x:number;z:number;ratio:number}[];soil?:{x:number;z:number;units:string}[];absorbedUnits?:string;respiredUnits?:string;active:boolean;tick?:number;regions:EvolveLiveRegion[];plantCount?:number;plants?:{id:string;x:number;z:number;fallen:boolean;dead?:boolean;recruited?:boolean;mature?:boolean;ageTicks?:string;matureTicks?:string;shadeStress?:string;floodStress?:string;droughtStress?:string}[];weather?:{x:number;z:number;size:number;rain:number;temperature:number;wetness:number}[]}
 export type WorldProcessDiagnosticLane = {available:false;error:string} | {
   available:true;tick:number;hot:number;warm:number;cold:number;executed:number;deferred:number;
   budget:number;selected:number;pending:number;urgent:number;urgentSelected:number;queued:number;removed:number;
@@ -290,7 +296,7 @@ export interface StudioParams {
   'studio.agentInfo': { from?: number };
   'studio.worldProcessDiagnostics': {budget:number;focus?:string};
   'studio.evolveState': Record<string, never>;
-  'studio.evolveLayer': {layer?: EvolveLayer;live?:boolean;granularCellCm?:number;liveGravity?:boolean;aetherLayer?:AetherLayer;liveFracture?:boolean;liveMorph?:boolean};
+  'studio.evolveLayer': {layer?: EvolveLayer;live?:boolean;granularCellCm?:number;liveGravity?:boolean;aetherLayer?:AetherLayer;liveFracture?:boolean;liveMorph?:boolean;liveEcho?:boolean};
   'studio.sceneBrush': Partial<StudioSceneBrush>;
   'studio.splineEdit': { kind: '' | 'road' | 'river' };
   'studio.hub': Record<string,never>;
@@ -457,7 +463,7 @@ export interface StudioResult {
   'studio.agentInfo': StudioAgentInfo;
   'studio.worldProcessDiagnostics': WorldProcessDiagnostics;
   'studio.evolveState': EvolveLiveState;
-  'studio.evolveLayer': {layer: EvolveLayer;live:boolean;granularCellCm?:number;liveGravity?:boolean;aetherLayer?:AetherLayer;liveFracture?:boolean;liveMorph?:boolean};
+  'studio.evolveLayer': {layer: EvolveLayer;live:boolean;granularCellCm?:number;liveGravity?:boolean;aetherLayer?:AetherLayer;liveFracture?:boolean;liveMorph?:boolean;liveEcho?:boolean};
   'studio.sceneBrush': StudioSceneBrush;
   'studio.hub': StudioHub;
   'studio.hubTemplates': { templates: StudioTemplate[]; error?: string };

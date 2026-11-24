@@ -2193,6 +2193,11 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         lightingStatus_+=" · AETHER "+planetLiveAetherLayer_+(liveAether?" mass / duct potential":" unavailable");
         if(planetLiveSnapshot_["aether"].getBool("truncated"))lightingStatus_+=" (sample capped)";
     }
+    const bool liveEcho=livePlanet&&planetLiveSnapshot_["echo"].getBool("available");
+    if(livePlanet&&planetLiveSnapshot_["echo"].isObject()){
+        lightingStatus_+=liveEcho?" · ECHO acoustic graph / hearing":" · ECHO unavailable";
+        if(planetLiveSnapshot_["echo"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+    }
     const bool liveMorph=livePlanet&&planetLiveSnapshot_["morph"].getBool("available");
     if(livePlanet&&planetLiveSnapshot_["morph"].isObject()){
         lightingStatus_+=liveMorph?" · MORPH bound node displacement":" · MORPH unavailable";
@@ -2325,6 +2330,63 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                     const float len=std::min(marker,distance*.24f);
                     renderer_.line(tip,tip-direction*len+side*(len*.45f),color);
                     renderer_.line(tip,tip-direction*len-side*(len*.45f),color);
+                }
+            }
+            if(liveEcho){
+                const auto& data=planetLiveSnapshot_["echo"];
+                const auto readVec=[](const Json& j)->std::optional<render::float3>{
+                    const auto& xyz=j.items();if(xyz.size()!=3)return {};
+                    return render::float3{float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
+                };
+                const float extent=std::clamp(planetPreview_->radius*.012f,.12f,1.5f);
+                const auto marker=[&](render::float3 p,float s,uint32_t color){
+                    for(const auto axis:{render::float3{s,0,0},render::float3{0,s,0},render::float3{0,0,s}})
+                        renderer_.line(p-axis,p+axis,color);
+                };
+                size_t count=0;
+                for(const auto& row:data["portals"].items()){
+                    if(count++>=512)break;
+                    if(!row.getBool("placed")||row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto a=readVec(row["a"]),b=readVec(row["b"]);if(!a||!b)continue;
+                    const auto loss=std::clamp(float(row.getInt("loss"))/1000000.f,0.f,1.f);
+                    const auto color=row.getBool("active")?rgba(uint8_t(110+145*loss),uint8_t(205-95*loss),230):rgba(105,115,130);
+                    const auto delta=*b-*a;
+                    if(!row.getBool("active")){
+                        renderer_.line(*a,*a+delta*.4f,color);renderer_.line(*a+delta*.6f,*b,color);continue;
+                    }
+                    renderer_.line(*a,*b,color);
+                    const float distance=std::sqrt(dot(delta,delta));
+                    if(!row.getBool("bidirectional")&&distance>.001f){
+                        const auto dir=delta*(1.f/distance);
+                        const auto tip=*a+delta*.6f;
+                        const auto side=normalize(cross(dir,std::abs(dir.y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
+                        const float len=std::min(extent,distance*.2f);
+                        renderer_.line(tip,tip-dir*len+side*(len*.45f),color);
+                        renderer_.line(tip,tip-dir*len-side*(len*.45f),color);
+                    }
+                }
+                for(const char* key:{"zones","emitters","receivers"}){
+                    count=0;
+                    for(const auto& row:data[key].items()){
+                        if(count++>=256)break;
+                        if(!row.getBool("placed")||row.getStr("body")!=planetPreview_->bodyId)continue;
+                        const auto p=readVec(row["position"]);if(!p)continue;
+                        const std::string kind=key;
+                        if(kind=="zones")marker(*p,extent,row.getBool("enabled")?rgba(115,185,255):rgba(110,120,135));
+                        else if(kind=="emitters"){
+                            const float power=std::clamp(float(std::log1p(std::max<int64_t>(0,row.getInt("intensity")))/std::log(1000001.)),0.f,1.f);
+                            marker(*p,extent*(.6f+power),row.getBool("active")?rgba(255,185,90):rgba(110,120,135));
+                        }else{
+                            const bool valid=row.getBool("hearingAvailable")&&row.getBool("valid");
+                            const bool audible=valid&&row.getBool("audible");
+                            marker(*p,extent*.75f,audible?rgba(115,240,155):valid?rgba(210,120,135):rgba(110,120,135));
+                            if(audible)if(const auto src=readVec(row["sourcePosition"])){
+                                const auto delta=*src-*p;
+                                // Dashed winner relation, never a portal path.
+                                for(int i=0;i<8;++i)renderer_.line(*p+delta*(float(i)/8),*p+delta*((float(i)+.5f)/8),rgba(110,220,155));
+                            }
+                        }
+                    }
                 }
             }
             if(liveMorph){
