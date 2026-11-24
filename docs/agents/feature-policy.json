@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "features": {
+    "feature-gate": {
+      "requires": [],
+      "roadmap": {
+        "system": "agents",
+        "id": "feature-gate"
+      },
+      "api_paths": []
+    },
+    "graph-framework": {
+      "requires": [],
+      "roadmap": null,
+      "api_paths": []
+    }
+  },
+  "claims": []
+}
