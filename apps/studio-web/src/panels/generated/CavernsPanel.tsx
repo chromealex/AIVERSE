@@ -22,6 +22,9 @@ function decode(value: unknown): Document {
 }
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 const fields = ['xCm','yCm','zCm','radiusCm'] as const;
+const recipeFields = ['cellCm','tunnelRadiusCm','chamberRadiusCm','tunnelChance','chamberChance','minYcm','maxYcm'] as const;
+const entranceFields = ['xCm','zCm','surfaceYcm','caveYcm','radiusCm'] as const;
+const int = (s:string) => s.trim()!=='' && Number.isSafeInteger(Number(s));
 export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: StudioSnapshot | null; commitSnapshot: (s: StudioSnapshot)=>void }) {
   const project = snapshot?.project.path ?? '';
   const [doc,setDoc] = useState<Document|null>(null);
@@ -35,6 +38,10 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
   const [pickMode,setPickMode] = useState<'surface'|'plane'>('surface');
   const [armed,setArmed] = useState(false);
   const [page,setPage] = useState(0);
+  const [recipe,setRecipe] = useState<Record<string,string>>({});
+  const [entrance,setEntrance] = useState({xCm:'0',zCm:'0',surfaceYcm:'0',caveYcm:'-500',radiusCm:'400'});
+  const [entranceId,setEntranceId] = useState('');
+  const [entrancePage,setEntrancePage] = useState(0);
   const [preview,setPreview] = useState<StudioCavernsPreview|null>(null);
   const [previewError,setPreviewError] = useState('');
   const epoch=useRef(0);
@@ -71,6 +78,9 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
     }
     if(event==='document.changed'){setDoc(null);setSelected('');}
   }),[]);
+  useEffect(()=>{if(doc){setRecipe({seedText:doc.seed,...Object.fromEntries(recipeFields.map(k=>[k,String(doc.settings[k])]))});setEntranceId('');setEntrancePage(0);}},[doc]);
+  const recipeValid=decimal(recipe.seedText) && recipeFields.every(k=>int(recipe[k]??'')) && Number(recipe.cellCm)>=100 && Number(recipe.cellCm)<=10000 && Number(recipe.tunnelRadiusCm)>=1 && Number(recipe.tunnelRadiusCm)<=Math.floor(Number(recipe.cellCm)/3) && Number(recipe.chamberRadiusCm)>=1 && Number(recipe.chamberRadiusCm)<=Math.floor(Number(recipe.cellCm)/2) && ['tunnelChance','chamberChance'].every(k=>Number(recipe[k])>=0&&Number(recipe[k])<=1000) && Math.abs(Number(recipe.minYcm))<=1000000000 && Math.abs(Number(recipe.maxYcm))<=1000000000 && Number(recipe.minYcm)<Number(recipe.maxYcm);
+  const entranceValid=entranceFields.every(k=>int(entrance[k])) && entranceFields.slice(0,4).every(k=>Math.abs(Number(entrance[k]))<=1000000000) && Number(entrance.surfaceYcm)>Number(entrance.caveYcm) && Number(entrance.radiusCm)>=1 && Number(entrance.radiusCm)<=1000000;
   const values=Object.fromEntries(fields.map(k=>[k,Number(form[k])])) as Record<typeof fields[number],number>;
   const valid=fields.every(k=>form[k].trim()!=='' && Number.isSafeInteger(values[k])) &&
     fields.slice(0,3).every(k=>Math.abs(values[k])<=1000000000) && values.radiusCm>=1 && values.radiusCm<=1000000;
@@ -152,14 +162,21 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
           </>}
           <StudioAlert title="Visual preview only">Isolation hides terrain and the composite lighting mesh; other authored models remain. Counters describe native visual residency and estimates, not gameplay collision, NavMesh or measured driver VRAM.</StudioAlert>
         </StudioSection>
-        <StudioSection title="Generator · read only">
-          <div>Revision: {doc.revision}</div><div>Generator: {doc.generator}</div><div>Seed: {doc.seed}</div>
-          {Object.entries(doc.settings).filter(([k])=>k!=='seed').map(([k,v])=><div key={k}>{k}: {v}</div>)}
+        <StudioSection title="Generator">
+          <div>Revision: {doc.revision} · Generator: {doc.generator}</div>
+          <StudioField label="Seed (decimal)" htmlFor="cave-seed"><StudioInput id="cave-seed" value={recipe.seedText??''} disabled={!editable} onChange={e=>setRecipe(v=>({...v,seedText:e.target.value}))}/></StudioField>
+          {recipeFields.map(k=><StudioField key={k} label={k} htmlFor={'cave-recipe-'+k}><StudioInput id={'cave-recipe-'+k} type="number" step={1} value={recipe[k]??''} disabled={!editable} onChange={e=>setRecipe(v=>({...v,[k]:e.target.value}))}/></StudioField>)}
+          <StudioButton variant="primary" disabled={!editable||!recipeValid} onClick={()=>void edit({mode:'settings',settings:{seedText:recipe.seedText,...Object.fromEntries(recipeFields.map(k=>[k,Number(recipe[k])]))}})}>Apply generator settings</StudioButton>
+          <StudioAlert title="Regeneration">Changes the procedural base, preserves stamps and shafts, and requires regeneration of the loaded region. Undo restores the previous recipe.</StudioAlert>
         </StudioSection>
         <StudioSection title={'Entrances · '+doc.entrances.length}>
-          {doc.entrances.slice(0,32).map(e=><div key={e.id}>#{e.id} · ({e.xCm}, {e.zCm}) · {e.caveYcm} → {e.surfaceYcm} cm</div>)}
-          {doc.entrances.length>32 && <div>Showing first 32 entrances.</div>}
-          <StudioAlert title="Authoring">Generator settings and entrances are read only here.</StudioAlert>
+          {doc.entrances.slice(entrancePage*32,entrancePage*32+32).map(e=><StudioButton key={e.id} variant={entranceId===e.id?'primary':'secondary'} disabled={busy} onClick={()=>{setEntranceId(e.id);setEntrance({xCm:String(e.xCm),zCm:String(e.zCm),surfaceYcm:String(e.surfaceYcm),caveYcm:String(e.caveYcm),radiusCm:String(e.radiusCm)});}}>#{e.id} · ({e.xCm}, {e.zCm})</StudioButton>)}
+          <div className="au-row"><StudioButton disabled={entrancePage===0} onClick={()=>setEntrancePage(p=>p-1)}>Previous</StudioButton><StudioButton disabled={(entrancePage+1)*32>=doc.entrances.length} onClick={()=>setEntrancePage(p=>p+1)}>Next</StudioButton></div>
+          {entranceFields.map(k=><StudioField key={k} label={k} htmlFor={'cave-entrance-'+k}><StudioInput id={'cave-entrance-'+k} type="number" step={1} value={entrance[k]} disabled={!editable} onChange={e=>setEntrance(v=>({...v,[k]:e.target.value}))}/></StudioField>)}
+          <StudioButton disabled={!editable||!entranceValid} onClick={()=>void edit({mode:'entrance_add',...Object.fromEntries(entranceFields.map(k=>[k,Number(entrance[k])]))})}>Add entrance</StudioButton>
+          <StudioButton disabled={!editable||!entranceValid||!entranceId} onClick={()=>void edit({mode:'entrance_update',entranceIdText:entranceId,...Object.fromEntries(entranceFields.map(k=>[k,Number(entrance[k])]))})}>Update selected entrance</StudioButton>
+          <StudioButton variant="danger" disabled={!editable||!entranceId} onClick={()=>void edit({mode:'entrance_erase',entranceIdText:entranceId})}>Remove selected entrance</StudioButton>
+          <StudioAlert title="Shaft authoring">Surface Y and cave Y are explicit centimetre coordinates. The shaft does not yet cut the Studio heightfield automatically.</StudioAlert>
         </StudioSection>
       </>}
     </div>
