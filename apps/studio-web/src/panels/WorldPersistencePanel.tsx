@@ -13,9 +13,10 @@ const required: Op[] = ['world_save_list','world_save_status','world_save_create
   'world_save_backups','world_save_retention_preview','world_save_retention_apply','world_save_fork','world_save_page'];
 const isUuid = (value: string) => /^[0-9a-f]{32}$/.test(value) && /[1-9a-f]/.test(value);
 const isCounter = (value: string) => /^(0|[1-9][0-9]{0,19})$/.test(value) && BigInt(value)<=18446744073709551615n;
+const generateUuid = () => Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
-async function worldOp<K extends Op>(op: K, params: StudioWorldOps[K]['params']): Promise<StudioWorldOps[K]['result']> {
-  const reply = await invoke('studio.op', {op,params});
+async function worldOp<K extends Op>(expectedProject:string, op: K, params: StudioWorldOps[K]['params']): Promise<StudioWorldOps[K]['result']> {
+  const reply = await invoke('studio.op', {op,params,expectedProject});
   if (!reply.result || typeof reply.result !== 'object') throw new Error('Invalid native world response');
   const result = reply.result as StudioWorldOps[K]['result'];
   if ('error' in result && result.error) throw new Error(String(result.error));
@@ -62,13 +63,13 @@ function WorldPersistenceBody({projectPath}:{projectPath:string}) {
   const lock=useRef(false),alive=useRef(true);
   useEffect(()=>{alive.current=true;return()=>{alive.current=false}},[]);
   async function check() {
-    setChecking(true);setAvailable(false);setError('');
+    setChecking(true);setAvailable(false);setError('');setPlan(null);
     try {
       if(!projectPath||!nativeConnected())return;
       const info=await invoke('studio.ops',{panel:'world_persistence'});
       if(!alive.current)return;
       if(!required.every(op=>info.ops.some(item=>item.name===op)))throw new Error('World persistence backend is not included in this native build.');
-      const list=await worldOp('world_save_list',{});
+      const list=await worldOp(projectPath,'world_save_list',{});
       if(alive.current){setWorlds(list.worlds);setAvailable(true);}
     }catch(e){if(alive.current)setError(message(e));}
     finally{if(alive.current)setChecking(false);}
@@ -83,11 +84,11 @@ function WorldPersistenceBody({projectPath}:{projectPath:string}) {
     try{await job();}catch(e){if(alive.current)setError(message(e));}
     finally{lock.current=false;if(alive.current)setBusy('');}
   }
-  async function refreshWorlds(){const r=await worldOp('world_save_list',{});if(alive.current)setWorlds(r.worlds);}
-  async function inspect(){setPlan(null);setPage(null);setStatus(null);const r=await worldOp('world_save_status',scope);if(alive.current)setStatus(r);}
-  async function readBackups(verify:boolean){setBackups([]);setGeneration('');const r=await worldOp('world_save_backups',{...scope,verify});if(alive.current){setBackups(r.backups);if(!r.complete)setNotice('Backup scan incomplete.');}}
+  async function refreshWorlds(){const r=await worldOp(projectPath,'world_save_list',{});if(alive.current)setWorlds(r.worlds);}
+  async function inspect(){setPlan(null);setPage(null);setStatus(null);const r=await worldOp(projectPath,'world_save_status',scope);if(alive.current)setStatus(r);}
+  async function readBackups(verify:boolean){setBackups([]);setGeneration('');const r=await worldOp(projectPath,'world_save_backups',{...scope,verify});if(alive.current){setBackups(r.backups);if(!r.complete)setNotice('Backup scan incomplete.');}}
   async function readPage(after:string,bootstrap:boolean,expectedRevision:string){
-    const r=await worldOp('world_save_page',{...scope,after,limit:'100',bootstrap,expectedRevision});
+    const r=await worldOp(projectPath,'world_save_page',{...scope,after,limit:'100',bootstrap,expectedRevision});
     if(alive.current){setPage(r);if(r.resetRequired)setNotice('History changed or compacted. Refresh status and restart bootstrap.');}
   }
   return <StudioPanel title="World Persistence" eyebrow="WORLD / STORAGE"
@@ -109,9 +110,9 @@ function WorldPersistenceBody({projectPath}:{projectPath:string}) {
           <StudioButton variant="primary" disabled={!selected} onClick={()=>void run('Recovering world…',inspect)}>Inspect / recover offline</StudioButton>
           <StudioField label="New world UUID" htmlFor="wp-new" hint="32 lowercase hexadecimal characters"><StudioInput id="wp-new" value={newWorld} disabled={!!busy} onChange={e=>setNewWorld(e.target.value)} spellCheck={false}/></StudioField>
           <div className="world-persistence-actions">
-            <StudioButton disabled={!!busy} onClick={()=>setNewWorld(crypto.randomUUID().replaceAll('-',''))}>Generate UUID</StudioButton>
+            <StudioButton disabled={!!busy} onClick={()=>setNewWorld(generateUuid())}>Generate UUID</StudioButton>
             <StudioButton disabled={!!busy||!isUuid(newWorld)||!isCounter(seed)||worlds.includes(newWorld)}
-              onClick={()=>void run('Creating world…',async()=>{const r=await worldOp('world_save_create',{world:newWorld,seed});await refreshWorlds();if(alive.current){setWorld(newWorld);clearSelectionData();setStatus(r);setNewWorld('');}})}>Create</StudioButton>
+              onClick={()=>void run('Creating world…',async()=>{const r=await worldOp(projectPath,'world_save_create',{world:newWorld,seed});await refreshWorlds();if(alive.current){setWorld(newWorld);clearSelectionData();setStatus(r);setNewWorld('');}})}>Create</StudioButton>
           </div>
         </StudioSection>
         <StudioTabs<Tab> label="World maintenance sections" selected={tab} onChange={setTab}
@@ -127,7 +128,7 @@ function WorldPersistenceBody({projectPath}:{projectPath:string}) {
             <StudioProgress label="Ledger record capacity" value={status.live+status.tombstones} max={status.capacity}/>
             <RegionMap status={status}/>
             <StudioField label="Retain revisions" htmlFor="wp-revisions"><StudioInput id="wp-revisions" disabled={!!busy} value={retain} onChange={e=>setRetain(e.target.value)}/></StudioField>
-            <StudioButton disabled={!selected||!isCounter(retain)} onClick={()=>void run('Writing checkpoint…',async()=>{setPlan(null);setPage(null);setBackups([]);setGeneration('');setStatus(null);const r=await worldOp('world_save_checkpoint',{...scope,retainRevisions:retain});if(alive.current)setStatus(r);})}>Create checkpoint</StudioButton>
+            <StudioButton disabled={!selected||!isCounter(retain)} onClick={()=>void run('Writing checkpoint…',async()=>{setPlan(null);setPage(null);setBackups([]);setGeneration('');setStatus(null);const r=await worldOp(projectPath,'world_save_checkpoint',{...scope,retainRevisions:retain});if(alive.current)setStatus(r);})}>Create checkpoint</StudioButton>
           </>}
         </StudioSection>}
         {tab==='backups'&&<StudioSection title="Backup generations">
@@ -144,22 +145,22 @@ function WorldPersistenceBody({projectPath}:{projectPath:string}) {
             <option value="">Choose verified backup…</option>{backups.filter(b=>b.status==='recoverable').map(b=><option key={b.generation} value={b.generation}>{b.generation}</option>)}
           </StudioSelect></StudioField>
           <StudioField label="Fork destination UUID" htmlFor="wp-fork"><StudioInput id="wp-fork" value={forkWorld} disabled={!!busy} onChange={e=>setForkWorld(e.target.value)}/></StudioField>
-          <StudioButton disabled={!!busy} onClick={()=>setForkWorld(crypto.randomUUID().replaceAll('-',''))}>Generate fork UUID</StudioButton>
+          <StudioButton disabled={!!busy} onClick={()=>setForkWorld(generateUuid())}>Generate fork UUID</StudioButton>
           <StudioButton disabled={!selected||!generation||!isUuid(forkWorld)||worlds.includes(forkWorld)}
-            onClick={()=>void run('Forking verified backup…',async()=>{const r=await worldOp('world_save_fork',{...scope,generation,newWorld:forkWorld});if(!r.ok)throw new Error('Fork refused');await refreshWorlds();if(alive.current){setNotice('Independent world created: '+r.world);setForkWorld('');}})}>Create independent fork</StudioButton>
+            onClick={()=>void run('Forking verified backup…',async()=>{const r=await worldOp(projectPath,'world_save_fork',{...scope,generation,newWorld:forkWorld});if(!r.ok)throw new Error('Fork refused');await refreshWorlds();if(alive.current){setNotice('Independent world created: '+r.world);setForkWorld('');}})}>Create independent fork</StudioButton>
         </StudioSection>}
         {tab==='retention'&&<StudioSection title="Backup retention">
           <StudioField label="Keep previous backups" htmlFor="wp-keep"><StudioInput id="wp-keep" value={keep} disabled={!!busy} onChange={e=>{setKeep(e.target.value);setPlan(null)}}/></StudioField>
           <StudioField label="Soft disk budget (bytes, 0 = unlimited)" htmlFor="wp-max"><StudioInput id="wp-max" value={maxBytes} disabled={!!busy} onChange={e=>{setMaxBytes(e.target.value);setPlan(null)}}/></StudioField>
           <StudioButton disabled={!selected||!isCounter(keep)||!isCounter(maxBytes)} onClick={()=>void run('Planning retention…',async()=>{
-            setPlan(null);const p=await worldOp('world_save_retention_preview',{...scope,keepPrevious:keep,maxBytes});if(!p.valid)throw new Error('Retention preview refused');
+            setPlan(null);const p=await worldOp(projectPath,'world_save_retention_preview',{...scope,keepPrevious:keep,maxBytes});if(!p.valid)throw new Error('Retention preview refused');
             if(alive.current)setPlan({...scope,keepPrevious:keep,maxBytes,plan:p});
           })}>Preview cleanup</StudioButton>
           {plan&&<StudioAlert tone="warning" title="Review exact deletion plan">
             <div>Retained bytes: {plan.plan.retainedBytes}</div><div>Remove: {plan.plan.removeGenerations.join(', ')||'None'}</div>
             {plan.plan.overBudget&&<div>Protected backups exceed the soft budget.</div>}
             <StudioButton variant="danger" disabled={!selected||!plan.plan.removeGenerations.length} onClick={()=>void run('Applying confirmed cleanup…',async()=>{
-              const confirmed=plan;setPlan(null);const r=await worldOp('world_save_retention_apply',{world:confirmed.world,seed:confirmed.seed,keepPrevious:confirmed.keepPrevious,maxBytes:confirmed.maxBytes,expectedGenerations:confirmed.plan.removeGenerations});
+              const confirmed=plan;setPlan(null);const r=await worldOp(projectPath,'world_save_retention_apply',{world:confirmed.world,seed:confirmed.seed,keepPrevious:confirmed.keepPrevious,maxBytes:confirmed.maxBytes,expectedGenerations:confirmed.plan.removeGenerations});
               if(alive.current){setBackups([]);setGeneration('');setNotice('Removed: '+(r.removed.join(', ')||'None'));if(!r.ok)throw new Error('Cleanup refused or incomplete; refresh preview. Failed generation: '+r.failedGeneration);}
             })}>Confirm deletion of listed generations</StudioButton>
             <StudioButton disabled={!!busy} onClick={()=>setPlan(null)}>Cancel plan</StudioButton>
