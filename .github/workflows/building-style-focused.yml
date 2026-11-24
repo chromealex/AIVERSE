@@ -3,6 +3,7 @@ name: Building Style Focused
 on:
   pull_request:
     paths:
+      - '.github/workflows/building-style-focused.yml'
       - 'engine/systems/Building*.h'
       - 'engine/systems/RuntimeBuildingGenerator.h'
       - 'engine/systems/BuildingFeatureGenerator.h'
@@ -119,6 +120,27 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Compile engine-owned building headers without library includes
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Match the engine runtime's dependency direction, not the broader
+          # gameplay-native include search path. Compile each header alone so
+          # earlier includes cannot hide a missing dependency.
+          for header in \
+            engine/systems/BuildingGen.h \
+            engine/systems/BuildingStyle.h \
+            engine/systems/BuildingSurfacePattern.h \
+            engine/systems/BuildingStructure.h \
+            engine/systems/BuildingStructureGraph.h \
+            engine/systems/BuildingFeatureGenerator.h \
+            engine/systems/RuntimeBuildingGenerator.h \
+            engine/systems/BuildingCirculationRuntime.h \
+            engine/systems/BuildingRouteExecutor.h \
+            engine/buildings/BuildingNavMeshBridge.h; do
+            echo "Checking $header (engine include root only)"
+            printf '#include "%s"\n' "$header" | g++ -std=c++20 -I. -x c++ -fsyntax-only -
+          done
       - name: Compile only the building generator tests and exporter
         shell: bash
         run: |
