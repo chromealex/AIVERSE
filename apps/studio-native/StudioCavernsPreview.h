@@ -5,6 +5,9 @@
 #include "apps/editor/core/MapDoc.h"
 #include "engine/world/TerraWeaveCavernsArchive.h"
 #include "engine/world/TerraWeaveCavernsClientVisualHost.h"
+#if defined(AIVERSE_STRATA_STAGING_ENABLED)
+#include "engine/render/StrataStreamingCoordinator.h"
+#endif
 #include <algorithm>
 #include <cmath>
 #include <memory>
@@ -22,8 +25,35 @@ public:
         const bool enabled=input.getBool("enabled",enabled_);
         const bool isolate=input.getBool("isolate",isolate_);
         const bool paging=input.getBool("paging",paging_);
-        if((!enabled||paging!=paging_)&&owner_&&!close(device))return false;
-        enabled_=enabled;isolate_=isolate;paging_=paging;
+        auto budget=budget_;
+        if(input.has("budgets")){
+            const auto& b=input["budgets"];
+            if(!b.isObject())throw std::invalid_argument("Caverns budgets object");
+            const auto bytes=[&](const char* key){
+                const auto& v=b[key];const auto n=v.toDouble();
+                if(!v.isNumber()||!std::isfinite(n)||std::trunc(n)!=n||n<4||n>2147483648.||int64_t(n)%4)
+                    throw std::invalid_argument(std::string("Caverns invalid byte budget: ")+key);
+                return size_t(n);
+            };
+            budget={bytes("perSourceBytes"),bytes("perShardBytes"),bytes("deviceBytes"),
+                    bytes("perSourceUploadBytes"),bytes("perShardUploadBytes"),bytes("deviceUploadBytes"),true};
+            if(budget.perSourceBytes>budget.perShardBytes||budget.perShardBytes>budget.deviceBytes||
+               budget.perSourceUploadBytes>budget.perShardUploadBytes||budget.perShardUploadBytes>budget.deviceUploadBytes)
+                throw std::invalid_argument("Caverns budgets must ascend source/shard/device");
+        }
+        const bool changed=budget.perSourceBytes!=budget_.perSourceBytes||budget.perShardBytes!=budget_.perShardBytes||
+            budget.deviceBytes!=budget_.deviceBytes||budget.perSourceUploadBytes!=budget_.perSourceUploadBytes||
+            budget.perShardUploadBytes!=budget_.perShardUploadBytes||budget.deviceUploadBytes!=budget_.deviceUploadBytes;
+        if((!enabled||paging!=paging_||changed)&&owner_&&!close(device))return false;
+#if defined(AIVERSE_STRATA_STAGING_ENABLED)
+        if(enabled&&paging){
+            const auto shared=render::strata::deviceIndexBudgetStats(device);
+            if(shared.activeLeases&&((shared.limitBytes&&shared.limitBytes!=budget.deviceBytes)||
+                (shared.frameUploadLimitBytes&&shared.frameUploadLimitBytes!=budget.deviceUploadBytes)))
+                throw std::invalid_argument("Caverns paging conflicts with live device STRATA policy");
+        }
+#endif
+        budget_=budget;enabled_=enabled;isolate_=isolate;paging_=paging;
         if(!enabled_)error_.clear();
         return true;
     }
@@ -56,8 +86,7 @@ public:
                         owner_=std::make_unique<Host>(stream);
                         terraweave::caverns::CaveBatchSpec spec;
                         spec.enableStrata=paging_;
-                        if(paging_)spec.paging={4u*1024*1024,24u*1024*1024,128u*1024*1024,
-                                                512u*1024,2u*1024*1024,8u*1024*1024,true};
+                        if(paging_)spec.paging=budget_;
                         owner_->setGraphicsOptions(spec);
                         owner_->open(source);
                     }else if(owner_->opened())owner_->replaceSnapshot(source);
@@ -104,6 +133,11 @@ public:
         boolean("enabled",enabled_);boolean("isolate",isolate_);boolean("paging",paging_);
         boolean("visible",visible());boolean("visualOnly",true);
         out.set("error",Json::string(error_));
+        Json budgets=Json::object();
+        const auto bytes=[&](const char* k,size_t n){budgets.set(k,Json::number(int64_t(n)));};
+        bytes("perSourceBytes",budget_.perSourceBytes);bytes("perShardBytes",budget_.perShardBytes);bytes("deviceBytes",budget_.deviceBytes);
+        bytes("perSourceUploadBytes",budget_.perSourceUploadBytes);bytes("perShardUploadBytes",budget_.perShardUploadBytes);bytes("deviceUploadBytes",budget_.deviceUploadBytes);
+        out.set("budgets",std::move(budgets));
         if(owner_){
             const auto r=owner_->streaming();const auto g=owner_->gpuStats();const auto m=owner_->gpuMemoryStats();
             count("sourceRevision",owner_->sourceRevision());count("tracked",r.tracked);count("ready",r.ready);
@@ -117,6 +151,8 @@ public:
         return out;
     }
 private:
+    terraweave::caverns::CaveStrataPaging budget_{4u*1024*1024,24u*1024*1024,128u*1024*1024,
+                                                512u*1024,2u*1024*1024,8u*1024*1024,true};
     std::unique_ptr<Host> owner_;
     const editor::MapDoc* seenDoc_=nullptr; // identity only, never dereferenced
     uint64_t seenRevision_=0;
