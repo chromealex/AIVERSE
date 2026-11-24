@@ -12,7 +12,8 @@ const point=(v:unknown):[number,number,number]=>{const a=arr(v,3);if(a.length!==
 export type RoomConnectionKind='passage'|'stair'|'elevator';
 export interface TopologyRoom {id:string;floor:number;x:number;z:number;min:[number,number,number];max:[number,number,number];component:number;withoutElevatorsComponent:number}
 export interface TopologyConnection {id:string;from:string;to:string;floor:number;kind:RoomConnectionKind;position:[number,number,number];width:number;height:number;socketId?:string}
-export interface BuildingRoomTopology {rooms:readonly TopologyRoom[];connections:readonly TopologyConnection[];components:number;withoutElevatorsComponents:number;floors:number}
+export interface TopologyExteriorAperture {socketId:string;roomId:string;start:number;end:number}
+export interface BuildingRoomTopology {exteriorApertures?:readonly TopologyExteriorAperture[];rooms:readonly TopologyRoom[];connections:readonly TopologyConnection[];components:number;withoutElevatorsComponents:number;floors:number}
 interface SocketRef {id:string;kind:string}
 const unique=(values:readonly string[])=>new Set(values).size===values.length;
 /** Validate only the native DTO, never reconstruct room adjacency or calculate runtime routes. */
@@ -53,10 +54,20 @@ export function parseBuildingRoomTopology(value:unknown,floors:number,roomsX:num
   return edge;
  });
  if(!unique(connections.map(e=>e.id))||!unique(connections.flatMap(e=>e.socketId?[e.socketId]:[])))throw Error('Duplicate connection or vertical socket ID');
- return {rooms,connections,components,withoutElevatorsComponents,floors};
+ const exteriorApertures=t.exteriorApertures===undefined?undefined:arr(t.exteriorApertures,4096).map((v):TopologyExteriorAperture=>{
+  const a=obj(v),socketId=id(a.socketId),roomId=id(a.roomId),start=num(a.start),end=num(a.end);
+  const kind=bySocket.get(socketId)?.kind;
+  if(!byId.has(roomId)||byId.get(roomId)?.floor!==0||
+     (kind!=='personnel-door'&&kind!=='small-gate'&&kind!=='large-gate')||end-start<=0.00099)
+   throw Error('Invalid exterior aperture');
+  return {socketId,roomId,start,end};
+ });
+ if(exteriorApertures&&!unique(exteriorApertures.map(a=>JSON.stringify([a.socketId,a.roomId]))))throw Error('Duplicate exterior aperture');
+ return {rooms,connections,components,withoutElevatorsComponents,floors,...(exteriorApertures===undefined?{}:{exteriorApertures})};
 }
 export const roomNodeId=(r:TopologyRoom)=>'room:'+r.id;
 export const connectionNodeId=(e:TopologyConnection)=>'connection:'+e.id;
+export const exteriorNodeId=(socketId:string)=>'exterior:'+socketId;
 /** Floor filtering includes actual adjacent endpoints of visible edges. No synthetic links. */
 export function projectBuildingRoomTopology(data:BuildingRoomTopology,floor:number|null=null):GraphView {
  if(floor!==null)int(floor,0,data.floors-1,'selected floor');
@@ -78,10 +89,51 @@ export function projectBuildingRoomTopology(data:BuildingRoomTopology,floor:numb
   links.push({id:JSON.stringify([e.id,0]),from:'room:'+e.from,to:n,output:'out',input:'in'},
    {id:JSON.stringify([e.id,1]),from:n,to:'room:'+e.to,output:'out',input:'in'});
  }
+ // An exterior node represents one authored aperture, never a shared outdoor
+ // navigation vertex. Links are provenance only and are not planner edges.
+ const visibleRooms=new Set(rooms.map(r=>r.id));
+ const apertures=(data.exteriorApertures??[]).filter(a=>(floor===null||floor===0)&&visibleRooms.has(a.roomId));
+ const exteriorIds=[...new Set(apertures.map(a=>a.socketId))];
+ const firstRow=Math.max(roomRows.get(0)??0,edgeRows.get(0)??0);
+ exteriorIds.forEach((socketId,i)=>{
+  const n=exteriorNodeId(socketId);
+  nodes.push({id:n,label:'Exterior · '+socketId,x:40,y:40+(firstRow+i)*100,inputs:[],outputs:[{id:'out',type:'room',multiple:true}]});
+ });
+ for(const a of apertures)links.push({id:JSON.stringify(['exterior',a.socketId,a.roomId]),from:exteriorNodeId(a.socketId),to:'room:'+a.roomId,output:'out',input:'in'});
  return {nodes,links};
+}
+/** Group diagnostics use native component labels only. Undefined means legacy
+ * report: no conclusion about the presence of authored entrance overlaps. */
+export function exteriorConnectivity(data:BuildingRoomTopology,withoutElevators=false){
+ if(data.exteriorApertures===undefined)return undefined;
+ const key=withoutElevators?'withoutElevatorsComponent':'component';
+ const entranceRooms=new Set(data.exteriorApertures.map(a=>a.roomId));
+ const groups=new Set(data.rooms.filter(r=>entranceRooms.has(r.id)).map(r=>r[key]));
+ const roomsWithoutExterior=data.rooms.filter(r=>!groups.has(r[key]));
+ return {entranceCount:new Set(data.exteriorApertures.map(a=>a.socketId)).size,
+  roomsWithoutExterior,groupsWithoutExterior:[...new Set(roomsWithoutExterior.map(r=>r[key]))].sort((a,b)=>a-b)};
 }
 export function roomComponentMembers(data:BuildingRoomTopology,roomId:string,withoutElevators=false):readonly TopologyRoom[]{
  const room=data.rooms.find(r=>r.id===roomId);if(!room)return [];
  const key=withoutElevators?'withoutElevatorsComponent':'component';
  return data.rooms.filter(r=>r[key]===room[key]);
+}
+
+export interface BuildingRouteQuery {start:string;goal:string;allowStairs:boolean;allowElevators:boolean}
+export interface BuildingRouteResult extends BuildingRouteQuery {reachable:boolean;steps:{edgeId:string;from:string;to:string}[]}
+/** Validate a native path, never solve one. */
+export function parseBuildingRoute(value:unknown,query:BuildingRouteQuery,data:BuildingRoomTopology):BuildingRouteResult {
+ const r=obj(value);
+ if(!data.rooms.some(x=>x.id===query.start)||!data.rooms.some(x=>x.id===query.goal)||
+ r.start!==query.start||r.goal!==query.goal||r.allowStairs!==query.allowStairs||r.allowElevators!==query.allowElevators||typeof r.reachable!=='boolean')throw Error('Route response does not match request');
+ const byEdge=new Map(data.connections.map(e=>[e.id,e])),seen=new Set([query.start]);
+ let current=query.start;
+ const steps=arr(r.steps,127).map(v=>{
+  const s=obj(v),edgeId=id(s.edgeId),from=id(s.from),to=id(s.to),edge=byEdge.get(edgeId);
+  if(!edge||from!==current||seen.has(to)||!((edge.from===from&&edge.to===to)||(edge.to===from&&edge.from===to))||
+     (edge.kind==='stair'&&!query.allowStairs)||(edge.kind==='elevator'&&!query.allowElevators))throw Error('Invalid native route step');
+  current=to;seen.add(to);return {edgeId,from,to};
+ });
+ if(r.reachable?current!==query.goal:steps.length!==0||query.start===query.goal)throw Error('Invalid native route destination');
+ return {...query,reachable:r.reachable,steps};
 }
