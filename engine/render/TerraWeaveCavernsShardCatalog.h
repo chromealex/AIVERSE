@@ -26,6 +26,10 @@ public:
         validateCaveShardConfig(cfg);
     }
     CaveShardConfig config()const noexcept{return config_;}
+    uint64_t lastShardRevision(CaveShardKey shard)const noexcept {
+        const auto it=lastShardRevision_.find(shard);
+        return it==lastShardRevision_.end()?0:it->second;
+    }
     // Adopt only after a complete external graphics/physics/nav commit.
     // A no-mesh chunk remains in the source catalog so the owner knows the
     // slot exists but should have no GeometryScene instance.
