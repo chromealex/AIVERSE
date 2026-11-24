@@ -543,7 +543,7 @@ void ActorHost::shoot(Simulation& sim,CharacterRef p) {
 void ActorHost::tick(Simulation& sim) {
     auto& s=state(sim);if(s.winner)return;
     if(caveNavigation_)
-        (void)nav::repathCaveActorRoutes(sim,*caveNavigation_,8,
+        (void)nav::repathCaveActorRoutes(sim,caveNavigation_,8,
                                          caveRouteResolver_);
     // Programmed and ordinary projectiles have already advanced in the preceding stages.
     if(config_.systems.enabled)tickSystems(sim);
