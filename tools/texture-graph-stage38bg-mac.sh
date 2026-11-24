@@ -45,11 +45,11 @@ run configure cmake -S "$source_dir" -B "$build" \
     -DAIVERSE_TEXTURE_GRAPH_GPU_TESTS=ON -DAIVERSE_STUDIO_WEB_DIST="$web/dist"
 run studio-mcp-build cmake --build "$build" --config Release --parallel "$jobs" --target aiverse_studio aiversemcp
 run native-acceptance python3 tools/texture-graph-stage38-acceptance.py --build-dir "$build" --backend metal --full --parallel "$jobs"
-mcp="$(find "$build" -type f -name aiversemcp -perm -111 -print | head -n 1)"
+mcp="$(find "$build" -type f -name aiversemcp -perm -111 -print | sed -n '1p')"
 [[ -n "$mcp" ]] || { echo "MCP executable not found"; exit 1; }
 run mcp-audit python3 tools/mcp/audit_registry.py "$mcp" --engine "$source_dir" --feature-manifest docs/features/graph-framework.json
 [[ "$(git rev-parse HEAD)" == "$sha" && -z "$(git status --porcelain --untracked-files=no)" ]] || { echo "Checkout changed during QA"; exit 1; }
-app="$(find "$build" -type d -name AiverseStudioHTML5.app -print | head -n 1)"
+app="$(find "$build" -type d -name AiverseStudioHTML5.app -print | sed -n '1p')"
 [[ -n "$app" ]] || { echo "Studio bundle not found"; exit 1; }
 printf 'STUDIO_APP=%s\n' "$app" | tee "$logs/studio-app.txt"
 echo "Automated acceptance passed; live Studio/MCP, Vulkan hardware and merged-tree gate remain separate."
