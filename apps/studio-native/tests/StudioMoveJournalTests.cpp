@@ -123,7 +123,7 @@ int main() {
             fs::rename(model,target);writeFile(target,after);
             const auto pending=project/".aiverse-cache"/"studio-move-journal"/"pending.json";
             const auto manifest=aiverse::Json::parse(readFile(pending));
-            expect(manifest.getInt("version")==6&&manifest["resources"][0].getStr("encoding")=="hex","GLB journal lacks binary encoding");
+            expect(manifest.getInt("version")==7&&manifest["resources"][0].getStr("encoding")=="hex","GLB journal lacks binary encoding");
             StudioMoveJournal::recover(project);
             expect(readFile(model)==before&&!fs::exists(target),"Binary resource exact recovery failed");
             StudioMoveJournal::recover(project);fs::remove(model);

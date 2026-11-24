@@ -360,7 +360,25 @@ int main(){
             AIVERSE_TEST_CHECK(read(mtl).find("../Models/repair-texture.png")!=std::string::npos);
             studioReplayAssetMove(project,*recorded,false);
             AIVERSE_TEST_CHECK(read(obj)==objBytes&&read(mtl)==mtlBytes);
-            for(const auto& path:{obj,mtl,dae,tex}){fs::remove(path);fs::remove(studioMetaPath(path));}
+            const auto utf16=studioDaeEncodeUtf16(daeBytes,1);
+            write(dae,utf16);
+            move=StudioTransferPlan::internal(project,"Other",{"Models/repair-texture.png"});
+            (void)move.apply(move.token(),{},{},&recorded,true);
+            AIVERSE_TEST_CHECK(studioDaeUtf16Endian(read(dae))==1);
+            AIVERSE_TEST_CHECK(studioDaeRepairText(read(dae)).find("../Other/repair-texture.png")!=std::string::npos);
+            studioReplayAssetMove(project,*recorded,false);
+            AIVERSE_TEST_CHECK(read(dae)==utf16);
+            // Shared MTL consumers in different directories must not silently
+            // rewrite the same slot to incompatible OBJ-relative targets.
+            const auto otherObj=project/"content"/"Other"/"Shared.obj";
+            const auto otherTex=project/"content"/"Other"/"repair-texture.png";
+            write(otherObj,"mtllib ../Models/Repair.mtl\nv 0 0 0\n");
+            write(otherTex,"other texture");db.rebuild();
+            move=StudioTransferPlan::rename(project,"Models/repair-texture.png","renamed-texture.png");
+            bool refused=false;try{(void)move.apply(move.token(),{},{},&recorded,true);}
+            catch(const std::runtime_error&){refused=true;}
+            AIVERSE_TEST_CHECK(refused&&read(mtl)==mtlBytes&&fs::exists(tex));
+            for(const auto& path:{obj,mtl,dae,tex,otherObj,otherTex}){fs::remove(path);fs::remove(studioMetaPath(path));}
             db.rebuild(false);
         }
 

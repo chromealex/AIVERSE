@@ -149,8 +149,6 @@ inline bool studioGltfRelocationSafe(const StudioAssetReference& ref,
             return false;
     if(owner==ref.document&&target==ref.path)return true;
     if(ref.uri.empty())return false;
-    if(ref.owner!="glTF resource"&&std::filesystem::path(owner).parent_path()!=std::filesystem::path(ref.document).parent_path()&&
-       (ref.uri.find("..")!=std::string::npos||ref.uri.find('%')!=std::string::npos))return false;
     const auto resolved=ref.owner=="OBJ resource"?studioObjResourcePath(owner,ref.uri):
         ref.owner=="DAE resource"?studioDaeResourcePath(owner,ref.uri):studioGltfResourcePath(owner,ref.uri);
     return resolved==target;
@@ -647,7 +645,7 @@ inline std::vector<editor::ProjectFileEdit> studioPlanGltfRepairs(const std::fil
                 throw std::runtime_error("Text resource changed during repair planning");
             replacements.emplace(key,fs::path(path).extension()==".dae"?studioXmlResourceEscape(demand.desired):demand.desired);
         }
-        auto after=studioPatchTextSlots(before,slots,replacements);
+        auto after=studioPatchResourceText(fs::path(path),before,slots,replacements);
         if(after.size()>StudioResourceEditBudget/2-afterBytes)throw std::runtime_error("Text resource repair budget exceeded");
         afterBytes+=after.size();
         result.push_back({fs::path(path),std::move(before),std::move(after)});
@@ -683,7 +681,7 @@ inline std::string studioCanonicalGltfRepair(const std::string& path,const std::
                     normalized.emplace(slot.key,std::filesystem::path(value).lexically_normal().generic_string());
             }
         }
-        return studioPatchTextSlots(bytes,slots,normalized);
+        return studioPatchResourceText(std::filesystem::path(path),bytes,slots,normalized);
     }
     auto model=studioDecodeModelRepair(std::filesystem::path(path),bytes);
     auto& doc=model.json;
