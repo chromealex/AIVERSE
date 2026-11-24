@@ -62,6 +62,14 @@
     {
      "status": "in-progress",
      "target": null,
+     "title": "Планетарный лес: коллайдеры из скелета ARBOR",
+     "titleEn": "Planetary forest: ARBOR skeleton-derived collision",
+     "text": "Stage 159: точные вид и seed, размеры ствола, возраст и остаточная масса при падении.",
+     "textEn": "Stage 159: exact species and seed, trunk dimensions, age and remaining mass at fall."
+    },
+    {
+     "status": "in-progress",
+     "target": null,
      "title": "Планетарный лес: физический хост",
      "titleEn": "Planetary forest: physics host",
      "text": "Stage 158: явный single-authority native host, отдельные сцены тел, существующие коллайдеры и checkpoint.",
