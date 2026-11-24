@@ -703,6 +703,8 @@ private:
     graph_telemetry::Watch graphWatch_;
     graph_gpu_profile::Capture graphGpuProfile_;
     TextureGraphGpuPreview textureGraphGpuPreview_;
+    uint64_t graphOwnerProjectLifetime_=0;
+    void syncGraphOwnerProjectLifetime();
     Json graphWatchSample(const std::string& domain,const std::string& entity) const;
     void captureGraphWatch() noexcept;
     std::vector<game::ComputerPlayer> bots_;

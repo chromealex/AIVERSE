@@ -258,6 +258,9 @@ public:
         if(setBake_){for(const auto& pair:program_->outputs)setOutputs_.push_back(pair);setImages_.reserve(setOutputs_.size());setBackends_.reserve(setOutputs_.size());}
         plannedPasses_=plannedSlotBytes_=0;passes_=0;blocks_=received_=scratchBytes_=0;reused_=reusedBuffers_=cacheHit_=false;requireGpu_=p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=true;state_="queued";return status();
     }
+    void invalidateProjectLifetime(){
+        if(!project_.empty()){discard("cancelled","project lifetime changed");project_.clear();}
+    }
     void checkProject(const std::string& project){
         if(!project_.empty()&&project_!=project){discard("cancelled","project changed");project_.clear();}
     }

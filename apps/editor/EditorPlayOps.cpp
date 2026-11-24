@@ -10,6 +10,15 @@
 
 namespace aiverse::editor {
 
+void Editor::syncGraphOwnerProjectLifetime(){
+    const auto lifetime=ws_.projectLifetime();
+    if(graphOwnerProjectLifetime_==lifetime)return;
+    graphOwnerProjectLifetime_=lifetime;
+    textureGraphGpuPreview_.invalidateProjectLifetime();
+    graphGpuProfile_.clear();
+}
+
+
 using namespace aiverse::game;
 
 Json Editor::graphWatchSample(const std::string& domain,const std::string& entity) const {
@@ -92,6 +101,7 @@ void Editor::registerPlayOps() {
         R"({"properties":{"action":{"type":"string","enum":["start","read","publish","cancel"]},"graph":{"type":"object"},"overrides":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"requireGpu":{"type":"boolean"},"resolution":{"type":"integer","minimum":8,"maximum":128},"bake":{"type":"boolean"},"bakeSet":{"type":"boolean"},"materialized":{"type":"boolean","description":"Opt-in experimental native materialized DAG execution"},"timeoutMs":{"type":"integer","minimum":1000,"maximum":300000},"request":{"type":"string"},"textureName":{"type":"string"}},"required":["action"]})",
         [this](const Json& p){
             if(!dev_)throw std::runtime_error("native graphics owner unavailable");
+            syncGraphOwnerProjectLifetime();
             textureGraphGpuPreview_.checkProject(ws_.project.dir);
             if(p.getStr("action")=="start")return textureGraphGpuPreview_.start(p,ws_.project.dir);
             if(p.getStr("action")=="read")return textureGraphGpuPreview_.status();
@@ -106,6 +116,7 @@ void Editor::registerPlayOps() {
             if(!dev_||ws_.project.dir.empty()){
                 Json r=Json::object();r.set("available",Json::fromBool(false));r.set("reason",Json::string("Native editor graphics owner unavailable"));return r;
             }
+            syncGraphOwnerProjectLifetime();
             graphGpuProfile_.checkProject(ws_.project.dir);
             if(action=="start")graphGpuProfile_.start(dev_->info(),ws_.project.dir);
             else if(action=="stop")graphGpuProfile_.stop();
