@@ -1,6 +1,7 @@
 import type {GraphView,NodeView,Link} from './graphFramework';
 import {object} from './nativeGraphAdapters.ts';
 import type {GraphObject} from './nativeGraphAdapters';
+import {parseCaveSnapshot,projectCavePage} from './caveGraphInspection.ts';
 
 /** Read-only dependency projections of existing owner recipes. Never an evaluator. */
 const node=(id:string,label:string,x:number,y:number,input:string|null,output:string|null):NodeView=>({
@@ -33,18 +34,7 @@ export function buildingRecipeProjection(recipe:GraphObject):GraphView {
  });
  return {nodes,links};
 }
+/** Compatibility projection of the first bounded page, using the canonical parser. */
 export function caveSnapshotProjection(snapshot:GraphObject):GraphView {
- if(snapshot.version!==1||!object(snapshot.settings)||!Array.isArray(snapshot.stamps)||!Array.isArray(snapshot.entrances))throw new Error('Unsupported Caverns snapshot');
- const nodes=[node('settings','Caverns generator settings',40,40,null,'volume'),node('volume','Authored SDF volume',600,40,'volume','volume')];
- const links=[link('settings','volume')];
- // Bounded presentation; never truncate or rewrite the persisted snapshot.
- const rows=[...snapshot.stamps.slice(0,64).map(s=>({s,kind:'stamp'})),...snapshot.entrances.slice(0,32).map(s=>({s,kind:'entrance'}))];
- const seen=new Set<string>();
- rows.forEach(({s,kind},i)=>{
-  if(!object(s)||typeof s.id!=='number'||!Number.isSafeInteger(s.id)||s.id<=0)return;
-  const id=kind+':'+s.id;if(seen.has(id))return;seen.add(id);
-  nodes.push(node(id,kind==='stamp'?String(s.mode)+' · '+String(s.radiusCm)+' cm':'Entrance · '+String(s.radiusCm)+' cm',300,40+i*70,null,'volume'));
-  links.push(link(id,'volume'));
- });
- return {nodes,links};
+ return projectCavePage(parseCaveSnapshot(snapshot)).view;
 }

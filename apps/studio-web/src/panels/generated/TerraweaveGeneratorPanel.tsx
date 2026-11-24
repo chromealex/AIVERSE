@@ -11,6 +11,7 @@ import {
   type ForestForm, type GenerateMode, type TerrainForm
 } from './terraweaveGeneratorLogic';
 import GraphCanvas from '../../graphs/GraphCanvas';
+import {CaveInspectionImport} from '../../graphs/CaveStructureGraphView';
 import {terrainRecipeProjection} from '../../graphs/generatorProjections';
 import './TerraweaveGeneratorPanel.css';
 
@@ -31,6 +32,7 @@ export default function TerraweaveGeneratorPanel({ snapshot, commitSnapshot }:
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [showGraph,setShowGraph]=useState(false);
+  const [showCaverns,setShowCaverns]=useState(false);
 
   const loadForest = useCallback(async () => {
     if (!projectLoaded) return;
@@ -88,6 +90,10 @@ export default function TerraweaveGeneratorPanel({ snapshot, commitSnapshot }:
           <GraphCanvas view={terrainRecipeProjection({...terrain},{...forest})} selected="" label="TerraWeave recipe dependency view" disabled onSelect={()=>{}} onMove={()=>{}}/>
         </div>}
         <small>Read-only projection. Landscape and forest edits below use their native operations; this is not a new graph evaluator.</small>
+      </StudioSection>
+      <StudioSection title="Caverns dependencies" actions={<StudioButton size="sm" onClick={()=>setShowCaverns(v=>!v)}>{showCaverns?'Hide inspection':'Inspect report'}</StudioButton>}>
+        {showCaverns&&<CaveInspectionImport key={JSON.stringify([snapshot?.project.path,snapshot?.scene.name])}/>}
+        <small>Imported owner report only until the Caverns owner operation is integrated.</small>
       </StudioSection>
       <StudioSection title="Landscape">
         <div className="twg__grid">

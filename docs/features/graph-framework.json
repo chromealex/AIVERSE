@@ -114,7 +114,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35A read-only Building Graph owner DTO projection and imported report inspector implemented; live BuildingGeneratorPanel wiring pending owner PR #114 integration. Stage 35B planned: Caverns get-response projection with exact revision/count validation and bounded paging; offline inspection in TerraWeave panel. No native owner modification.",
+      "note": "Stage 35B Caverns v1 owner response inspection and paged read-only graph implemented in source; Stage 35A Building Graph inspection retained. Live owner wiring and native acceptance pending.",
       "evidence": []
     },
     "architecture": {
@@ -184,7 +184,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35A isolated Node 22.16.0 adapter tests 4/4 PASS; TypeScript 5.8.3 strict pure adapter check PASS. Exact tested source blobs confirmed; full Studio build, native Building Generator integration and GPU gates NOT RUN.",
+      "note": "Stage 35B targeted fixtures authored, verification pending; full Studio/native/GPU gates NOT RUN.",
       "evidence": []
     },
     "handoff": {
