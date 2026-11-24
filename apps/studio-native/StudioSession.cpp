@@ -634,7 +634,7 @@ namespace {
 bool brushPathKind(const std::string& k){return k=="road"||k=="river";}
 const char* brushLabel(const std::string& k){
     return k=="terrain"?"Terrain brush":k=="paint"?"Paint terrain":k=="tiles"?"Paint tiles":k=="field"?"Paint field":
-           k=="objects"?"Scatter objects":k=="road"?"Draw road":k=="river"?"Draw river":"Brush";
+           k=="objects"?"Scatter objects":k=="road"?"Draw road":k=="river"?"Draw river":k=="caverns"?"Caverns brush":"Brush";
 }
 }
 StudioLuaContext StudioSession::luaContext() const {
@@ -744,12 +744,36 @@ Json StudioSession::sceneBrushJson() const {
     o.set("value",Json::number(b.value,3));o.set("type",str(b.type));o.set("owner",num(int64_t(b.owner)));
     o.set("count",num(int64_t(b.count)));o.set("spread",Json::number(b.spread,3));
     o.set("roadType",str(b.roadType));o.set("width",Json::number(b.width,3));
+    o.set("caveMode",str(b.caveMode));o.set("caveY",Json::number(b.caveY,3));o.set("caveSurface",Json::fromBool(b.caveSurface));
     return o;
 }
-bool StudioSession::strokeDab(double x, double z, std::string* error) {
+bool StudioSession::caveBrushPoint(double ox,double oy,double oz,double dx,double dy,double dz,
+                                  double& x,double& y,double& z,std::string* error){
+    if(!brush_.armed||brush_.kind!="caverns"||ws_.project.dir.empty())return false;
+    const double length=std::sqrt(dx*dx+dy*dy+dz*dz);
+    if(!std::isfinite(length)||length<1e-8||!std::isfinite(ox)||!std::isfinite(oy)||!std::isfinite(oz)||
+       std::abs(ox)>1e7||std::abs(oy)>1e7||std::abs(oz)>1e7)return false;
+    dx/=length;dy/=length;dz/=length;
+    if(!brush_.caveSurface){
+        if(std::abs(dy)<1e-8)return false;
+        const double t=(brush_.caveY-oy)/dy;
+        if(t<=0||t>500)return false;
+        x=ox+dx*t;y=brush_.caveY;z=oz+dz*t;
+        return std::abs(x)<=1e7&&std::abs(z)<=1e7;
+    }
+    Json p=Json::object();
+    p.set("xCm",num(std::llround(ox*100)));p.set("yCm",num(std::llround(oy*100)));p.set("zCm",num(std::llround(oz*100)));
+    p.set("dxQ20",num(std::llround(dx*(1<<20))));p.set("dyQ20",num(std::llround(dy*(1<<20))));p.set("dzQ20",num(std::llround(dz*(1<<20))));
+    const auto r=ws_.call("terraweave_caverns_pick",p,"editor");
+    if(r.has("error")){if(error)*error=r.getStr("error");return false;}
+    if(!r.getBool("hit",false))return false;
+    x=r.getInt("xCm")/100.;y=r.getInt("yCm")/100.;z=r.getInt("zCm")/100.;
+    return true;
+}
+bool StudioSession::strokeDab(double x, double z, std::string* error,double y) {
     if(!stroking_)return false;
     const auto& b=brush_;
-    const double d=std::hypot(x-strokeX_,z-strokeY_);
+    const double d=b.kind=="caverns"?std::hypot(x-strokeX_,y-strokeHeight_,z-strokeY_):std::hypot(x-strokeX_,z-strokeY_);
     if(brushPathKind(b.kind)){
         // Path tools: a point every two cells; the op runs once on release.
         if(d<2.0 && strokePoints_.size()>0)return true;
@@ -770,16 +794,25 @@ bool StudioSession::strokeDab(double x, double z, std::string* error) {
         p.set("radius",num(int64_t(std::lround(b.radius))));}
     else if(b.kind=="field"){op="field_paint";p.set("id",str(b.field));p.set("x",num(int64_t(std::floor(x))));p.set("z",num(int64_t(std::floor(z))));
         p.set("radius",num(int64_t(std::lround(b.radius))));p.set("value",Json::number(b.value,3));p.set("mode",str(b.fieldMode));}
+    else if(b.kind=="caverns"){
+        if(!std::isfinite(x)||!std::isfinite(y)||!std::isfinite(z)||
+           std::abs(x)>1e7||std::abs(y)>1e7||std::abs(z)>1e7||strokeDabs_>=256){
+            if(error)*error="Caverns stroke limit or coordinate extent";return false;
+        }
+        op="terraweave_caverns_paint";p.set("mode",str(b.caveMode));
+        p.set("xCm",num(std::llround(x*100)));p.set("yCm",num(std::llround(y*100)));
+        p.set("zCm",num(std::llround(z*100)));p.set("radiusCm",num(std::llround(b.radius*100)));
+    }
     else if(b.kind=="objects"){op="entity_place";p.set("type",str(b.type));p.set("owner",num(int64_t(b.owner)));
         p.set("x",Json::number(x,3));p.set("z",Json::number(z,3));
         if(b.count>1){p.set("count",num(int64_t(b.count)));p.set("spread",Json::number(b.spread,3));}}
     else {if(error)*error="Unknown brush";return false;}
     const Json r=ws_.call(op,p,"editor");   // "editor": no Console line per dab; one line per stroke at the end
     if(r.has("error")){if(error)*error=r.getStr("error");return false;}
-    strokeX_=x;strokeY_=z;++strokeDabs_;
+    strokeX_=x;strokeY_=z;strokeHeight_=y;++strokeDabs_;
     return true;
 }
-bool StudioSession::strokeBegin(double x, double z, std::string* error) {
+bool StudioSession::strokeBegin(double x, double z, std::string* error,double y) {
     if(!brush_.armed||ws_.project.dir.empty())return false;
     const auto& b=brush_;
     if((b.kind=="tiles"&&b.tile.empty())||(b.kind=="field"&&b.field.empty())||(b.kind=="objects"&&b.type.empty())||(b.kind=="road"&&b.roadType.empty())){
@@ -789,7 +822,7 @@ bool StudioSession::strokeBegin(double x, double z, std::string* error) {
     syncHistoryLabels();
     strokeDepth_=ws_.map.undoDepth();stroking_=true;strokeDabs_=0;strokePoints_=Json::array();
     strokeX_=x+1e9;strokeY_=z+1e9;   // the first dab always applies
-    if(!strokeDab(x,z,error)){stroking_=false;return false;}
+    if(!strokeDab(x,z,error,y)){stroking_=false;return false;}
     return true;
 }
 bool StudioSession::strokeEnd(std::string* error) {
@@ -2453,8 +2486,9 @@ Json StudioSession::dispatchImpl(const Json& request) {
             reply.set("result",splineHandles());
         } else if (method == "studio.sceneBrush") {
             // Arm / disarm the Scene brush and set its tool and settings (session only).
-            auto& b=brush_;
-            static const std::set<std::string> kinds={"terrain","paint","tiles","field","objects","road","river"};
+            if(stroking_)throw std::runtime_error("Finish the active Scene stroke first");
+            auto next=brush_;auto& b=next;
+            static const std::set<std::string> kinds={"terrain","paint","tiles","field","objects","road","river","caverns"};
             static const std::set<std::string> ops={"raise","lower","smooth","flatten","noise","erode"};
             static const std::set<std::string> modes={"set","add","max","erase"};
             auto number=[&](const char* k,double lo,double hi){const double v=params[k].toDouble();
@@ -2475,7 +2509,17 @@ Json StudioSession::dispatchImpl(const Json& request) {
             if (params.has("spread")) b.spread=number("spread",0,32);
             if (params.has("roadType")) b.roadType=text("roadType");
             if (params.has("width")) b.width=number("width",1,200);
-            if (params.has("armed")) { b.armed=params.getBool("armed")&&!ws_.project.dir.empty(); if (b.armed) splineEdit_.clear(); }
+            if(params.has("caveMode")){const auto mode=params.getStr("caveMode");if(mode!="carve"&&mode!="fill")throw std::runtime_error("Unknown cave brush mode");b.caveMode=mode;}
+            if(params.has("caveY"))b.caveY=number("caveY",-10000000,10000000);
+            if(params.has("caveSurface"))b.caveSurface=params.getBool("caveSurface");
+            if (params.has("armed")) b.armed=params.getBool("armed")&&!ws_.project.dir.empty();
+            if(b.armed&&b.kind=="caverns"){
+                bool paint=false,pick=false;
+                for(const auto& op:ws_.ops()){paint|=op.name=="terraweave_caverns_paint";pick|=op.name=="terraweave_caverns_pick";}
+                if(!paint||!pick||ws_.map.data.planet())throw std::runtime_error("Caverns native flat-world backend unavailable");
+            }
+            brush_=std::move(next);
+            if(brush_.armed)splineEdit_.clear();
             reply.set("result",sceneBrushJson());
         } else if (method == "studio.agentInfo" || method == "studio.agentStart" || method == "studio.agentStop" || method == "studio.agentReset") {
             reply.set("result", agentRequest(method, params));
