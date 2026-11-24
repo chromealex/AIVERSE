@@ -1005,6 +1005,7 @@ bool ComputeParticles::step(float dt) {
     stats_.submittedSlots=drawCount_;
     verticesReady_=true;reason_.clear();
     collisionReadable_=desc_.reportCollisionEvents&&dt>0.f;
+    collisionFrame_=device_->frameSerial();
     // Queue chunked readback only after the VM/integration/compact dispatches.
     // This is optional; never block the render loop on checkpoint collection.
     if(checkpointCadence_.due(vmFrameRevision_)) {
@@ -1359,6 +1360,7 @@ bool ComputeParticles::stepGpuAllocated(float dt){
     stats_.submittedSlots=stats_.alive; // estimate, actual indirect count stays GPU-side
     drawCount_=gpuAllocationSubmitted_?cap:0;reason_.clear();
     collisionReadable_=desc_.reportCollisionEvents&&dt>0.f;
+    collisionFrame_=device_->frameSerial();
     if(cap<=kGpuCheckpointCaptureMaxSlots&&checkpointCadence_.due(vmFrameRevision_)){
         if(!asyncCheckpointPending_&&requestGpuCheckpoint())checkpointCadence_.accepted(vmFrameRevision_);
         else checkpointCadence_.deferred(vmFrameRevision_);
@@ -1485,6 +1487,7 @@ bool ComputeParticles::requestGpuCollisionEvents(GpuCollisionCallback callback) 
        collisionReadPending_||!device_||!device_->gpuHealthy()||!device_->canUpdateSharedBuffers()||
        !readbackLifetime_||gpuResetDirty_||gpuStagingDirty_)return false;
     const auto frame=device_->frameSerial();
+    if(frame!=collisionFrame_)return false;
     struct Reservation {
         std::shared_ptr<CheckpointReadbackBudget> budget;
         size_t returned=0;

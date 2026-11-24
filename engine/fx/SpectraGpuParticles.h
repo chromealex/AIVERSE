@@ -318,7 +318,7 @@ private:
     gfx::Device* device_ = nullptr;
     ComputeEmitterDesc desc_;
     DepthCollisionSnapshot depthSnapshot_{};
-    uint64_t collisionEpoch_=0;
+    uint64_t collisionEpoch_=0,collisionFrame_=0;
     bool collisionReadable_=false,collisionReadPending_=false;
     void invalidateCollisionEvents(){++collisionEpoch_;collisionReadable_=false;}
     void fillDepthUniforms(Uniforms& u);

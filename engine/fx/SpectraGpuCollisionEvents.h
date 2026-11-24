@@ -1,6 +1,7 @@
 // Bounded GPU collision feedback: visual-only, historical physical slot IDs.
 #pragma once
 #include "engine/fx/SpectraFxEmitterEvents.h"
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <vector>
