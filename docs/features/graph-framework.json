@@ -112,8 +112,7 @@
     "apps/studio-web/src/graphs/graphInspectionCapture.ts",
     "apps/studio-web/tests/graphInspectionCapture.test.mjs",
     "apps/studio-web/src/graphs/buildingCandidateCapture.ts",
-    "apps/studio-web/tests/buildingCandidateCapture.test.mjs",
-    "apps/studio-web/src/panels/generated/BuildingGeneratorPanel.tsx"
+    "apps/studio-web/tests/buildingCandidateCapture.test.mjs"
   ],
   "traits": {
     "editable": true,
@@ -124,7 +123,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35C native read-only Caverns capture bridge, document-scope and cancellation implemented in source; Stage 35A Building inspector retained, direct owner integration pending. Stage 35D planned: pin exact native recipe per seed, reject retired batches, wire feature selection in Building owner panel on isolated integration branch.",
+      "note": "Stage 35D common Building candidate request snapshot/gate implemented; owner panel integration staged separately from Building owner HEAD.",
       "evidence": []
     },
     "architecture": {
@@ -194,7 +193,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Stage 35C and 35B exact-source isolated Node 22.16.0 tests rerun 8/8 PASS; strict TS 5.8.3 against extracted unchanged graph types and new scope DTO declarations PASS. Native fixture authored, NOT RUN. Full Studio/React, native/MCP, hardware and merged-tree gates NOT RUN.",
+      "note": "Stage 35D bounded gate isolated tests authored; full Studio/native acceptance pending.",
       "evidence": []
     },
     "handoff": {

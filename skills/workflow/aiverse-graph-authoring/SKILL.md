@@ -86,3 +86,6 @@ Stage 35B: for Caverns use `terraweave_caverns_paint {mode:get}` from the actual
 
 
 Stage 35C: in compatible native Studio use `studio.cavernsGraphInspect {scope: snapshot.graphDocument}`. It is an explicitly get-only bridge, not a new MCP mutation. Handle unavailable/unsupported/absent without fabricating a graph; validate scope then parse ready.report via inspectCaveReply. Keep the decimal-string document epoch and revision exact; invalidate request tickets on document/workspace/project changes and remount. This is a captured authored snapshot, not a continuous runtime stream. Keep native brush edits with the Caverns owner. Do not merge an unrelated owner branch merely for this UI.
+
+
+Stage 35D: use `BuildingCandidateGate` to capture immutable JSON-wire Building requests for up to three seeds. Pass each captured request directly to the existing `studio.buildingInspect` and retain that exact object with the returned report. Invalidate on edits, project change/reopen and unmount; do not publish retired batches. Use `BuildingStructureGraphView` keyed by batch and seed, and route its explicit feature selection to the existing owner form. Building Graph is an authored/native inspection view, not a new geometry evaluator or live navigation graph.
