@@ -614,13 +614,16 @@ def main(argv=None) -> int:
     s = sub.add_parser('templates'); s.add_argument('words', nargs='*'); s.add_argument('--all', action='store_true')
     s.add_argument('--refresh', action='store_true'); s.add_argument('--cached', action='store_true')
     s = sub.add_parser('create'); s.add_argument('ref'); s.add_argument('folder', type=Path)
+    s = sub.add_parser('fx-package-export'); s.add_argument('preset'); s.add_argument('package'); s.add_argument('--project', type=Path, required=True)
+    s = sub.add_parser('fx-package-preview'); s.add_argument('package'); s.add_argument('--project', type=Path, required=True)
+    s = sub.add_parser('fx-package-apply'); s.add_argument('package'); s.add_argument('revision'); s.add_argument('--project', type=Path, required=True)
     for k in sub.choices.values():
         k.add_argument('--json', action='store_true', default=argparse.SUPPRESS)
     a = ap.parse_args(argv)
     log = (lambda s: print(s, file=sys.stderr))
     try:
         r = run(a, log)
-    except (PkgError, OSError, zipfile.BadZipFile, urllib.error.URLError) as e:
+    except (PkgError, OSError, zipfile.BadZipFile, urllib.error.URLError, ValueError, KeyError, TypeError) as e:
         if getattr(a, 'json', False):
             print(json.dumps({'ok': False, 'error': str(e)}, ensure_ascii=False))
         else:
@@ -636,6 +639,13 @@ def main(argv=None) -> int:
 
 
 def run(a, log):
+    if a.cmd.startswith('fx-package-'):
+        import spectra_package as fx
+        if a.cmd == 'fx-package-export':
+            return fx.export_package(a.project, a.preset, a.package)
+        if a.cmd == 'fx-package-preview':
+            return fx.plan_package(a.project, a.package)[0]
+        return fx.apply_package(a.project, a.package, a.revision)
     if a.cmd == 'search':
         return cmd_search(a)
     if a.cmd == 'templates':

@@ -3,6 +3,7 @@
 // Legacy fx/*.json and fx_preview continue to work; fx_graph_bake bridges them.
 #include "Workspace.h"
 #include "FxOps.h"
+#include "PackageTool.h"
 #include "engine/fx/SpectraFX.h"
 #include "engine/fx/SpectraAuthoring.h"
 #include <algorithm>
@@ -734,6 +735,33 @@ void registerSpectraGraphOps(Workspace& ws) {
         const auto& candidate=plan["candidate"];
         validateReplayPreset(candidate,ws);
         return publishReplayPreset(ws,name,candidate);
+    });
+    add("fx_replay_package_export","Export a verified named preset and recorded dependency bytes to project/packages/<package>.aivfx.",
+        R"({"properties":{"name":{"type":"string"},"package":{"type":"string"},"expectedProjectPath":{"type":"string"}},"required":["name","package"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);
+        const auto name=requireGraphName(p),package=requireGraphName(p,"package");
+        const auto dir=replayDirectory(ws,false);
+        if(dir.empty())throw std::runtime_error("Replay library is empty");
+        const auto preset=readReplayPreset(dir/(name+kReplaySuffix),ws);
+        if(preset.getInt("dependencyVersion")!=3||replayCompatibility(preset,ws).getStr("state")!="matching")
+            throw std::runtime_error("Package export requires matching manifest v3");
+        return runPackageTool(ws.engineDir,{"fx-package-export",name,package,"--project",ws.project.dir});
+    });
+    add("fx_replay_package_preview","Preview project-local .aivfx package payload installation (no writes).",
+        R"({"properties":{"package":{"type":"string"},"expectedProjectPath":{"type":"string"}},"required":["package"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);const auto package=requireGraphName(p,"package");
+        return runPackageTool(ws.engineDir,{"fx-package-preview",package,"--project",ws.project.dir});
+    });
+    add("fx_replay_package_apply","Install reviewed missing payloads without overwriting; returns portable recipe for separate verified preset import.",
+        R"({"properties":{"package":{"type":"string"},"planRevision":{"type":"string"},"expectedProjectPath":{"type":"string"}},"required":["package","planRevision"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);const auto package=requireGraphName(p,"package");
+        const auto revision=p.getStr("planRevision");
+        if(revision.size()!=64||revision.find_first_not_of("0123456789abcdef")!=std::string::npos)
+            throw std::runtime_error("Invalid package revision");
+        return runPackageTool(ws.engineDir,{"fx-package-apply",package,revision,"--project",ws.project.dir});
     });
     add("fx_replay_preset_save","Create an immutable named replay preset asset. Existing names are never overwritten.",
         R"({"properties":{"name":{"type":"string"},"preset":{"type":"object"},"expectedProjectPath":{"type":"string"}},"required":["name","preset"]})",

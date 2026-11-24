@@ -71,6 +71,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [presetCompatibility,setPresetCompatibility]=useState('');
   const [relocationPlan,setRelocationPlan]=useState<{source:string;state:string;planRevision?:string;detail?:string;changes:Array<{from:string;to:string;state:string;detail?:string}>}|null>(null);
   const [presetLibraryBusy,setPresetLibraryBusy]=useState(false);
+  const [packageName,setPackageName]=useState('');
+  const [packagePlan,setPackagePlan]=useState<{name:string;state:string;planRevision:string;files:Array<{path:string;state:string}>}|null>(null);
   const [portableImport,setPortableImport]=useState<{portable:Record<string,unknown>;state:string;planRevision?:string;detail?:string;changes:Array<{from:string;to:string;state:string;detail?:string}>}|null>(null);
   const [liveScalars,setLiveScalars]=useState<Record<string,number>>({});
   const [replayRestoring,setReplayRestoring]=useState(false);
@@ -349,6 +351,37 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       setPortableImport(null);await refreshPresetLibrary();setPresetSelected(presetName);
       setPresetCompatibility('Portable copy saved in target project');
     }catch(e){setError(message(e));setPortableImport(null);}finally{setPresetLibraryBusy(false);}
+  };
+  const validPackageName=/^[a-z0-9_]{1,48}$/.test(packageName)&&packageName!=='fx';
+  const runReplayPackage=async(action:'export'|'preview'|'apply')=>{
+    if(!active||busy||presetLibraryBusy||!validPackageName)return;
+    setPresetLibraryBusy(true);setError('');
+    try{
+      if(action==='export'){
+        const result=await presetOp('fx_replay_package_export',{name:presetSelected,package:packageName});
+        setPresetCompatibility('Package saved: '+String(result.path));
+      }else if(action==='preview'){
+        setPackagePlan(null);
+        const result=await presetOp('fx_replay_package_preview',{package:packageName});
+        if(typeof result.state!=='string'||typeof result.planRevision!=='string'||!Array.isArray(result.files))
+          throw new Error('Invalid package plan');
+        setPackagePlan({name:packageName,state:result.state,planRevision:result.planRevision,
+          files:result.files.filter((r):r is {path:string;state:string}=>!!r&&typeof r.path==='string'&&typeof r.state==='string')});
+      }else{
+        if(packagePlan?.name!==packageName||packagePlan.state!=='ready')return;
+        const result=await presetOp('fx_replay_package_apply',{package:packageName,planRevision:packagePlan.planRevision});
+        setPackagePlan(null);
+        const envelope=result.portable as Record<string,unknown>;
+        const plan=await presetOp('fx_replay_preset_portable_preview',{portable:envelope});
+        if(typeof plan.state!=='string'||!Array.isArray(plan.changes))throw new Error('Invalid portable import plan');
+        setPortableImport({portable:envelope,state:plan.state,
+          planRevision:typeof plan.planRevision==='string'?plan.planRevision:undefined,
+          detail:typeof plan.detail==='string'?plan.detail:undefined,
+          changes:plan.changes.filter((r):r is {from:string;to:string;state:string;detail?:string}=>
+            !!r&&typeof r.from==='string'&&typeof r.to==='string'&&typeof r.state==='string')});
+        setPresetCompatibility('Assets installed; review portable recipe before saving');
+      }
+    }catch(e){setError(message(e));setPackagePlan(null);}finally{setPresetLibraryBusy(false);}
   };
   const exportReplayPreset=()=>{
     if(!replayPreset)return;
@@ -730,6 +763,19 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
           !['ready','matching'].includes(portableImport.state)||!(/^[a-z0-9_]{1,48}$/).test(presetName)||presetName==='fx'}
           onClick={()=>void applyPortablePreset()}>Save portable copy with new name</StudioButton>
         <StudioButton size="sm" disabled={presetLibraryBusy} onClick={()=>setPortableImport(null)}>Discard import</StudioButton>
+      </div>}
+      <StudioField label="VFX package name (packages/*.aivfx)" htmlFor="spectra-package-name">
+        <StudioInput id="spectra-package-name" value={packageName} onChange={e=>{setPackageName(e.target.value);setPackagePlan(null);}}/>
+      </StudioField>
+      <StudioButton size="sm" disabled={!active||busy||presetLibraryBusy||!validPackageName||!presetSelected}
+        onClick={()=>void runReplayPackage('export')}>Export VFX package</StudioButton>
+      <StudioButton size="sm" disabled={!active||busy||presetLibraryBusy||!validPackageName}
+        onClick={()=>void runReplayPackage('preview')}>Preview package in project</StudioButton>
+      {packagePlan&&<div className="spectra-native__hint">
+        <small>Package: {packagePlan.state}</small>
+        {packagePlan.files.map(f=><div key={f.path}><small>{f.state}: {f.path}</small></div>)}
+        <StudioButton size="sm" disabled={busy||presetLibraryBusy||packagePlan.state!=='ready'}
+          onClick={()=>void runReplayPackage('apply')}>Install reviewed assets</StudioButton>
       </div>}
       {relocationPlan?.state==='ready'&&<StudioButton size="sm"
         disabled={!active||presetLibraryBusy||busy||!relocationPlan.planRevision||!(/^[a-z0-9_]{1,48}$/).test(presetName)||presetName==='fx'||presetName===presetSelected}
