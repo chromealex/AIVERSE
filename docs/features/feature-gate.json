@@ -92,7 +92,7 @@
     },
     "native_api": {
       "status": "not_run",
-      "note": "Native Workspace readiness query and fixed local report generation implemented in source; build and runtime validation pending.",
+      "note": "Mac Studio/MCP native builds and readiness get/query/status calls PASS; refresh operation still needs live acceptance.",
       "evidence": []
     },
     "skill": {
@@ -102,12 +102,12 @@
     },
     "mcp": {
       "status": "not_run",
-      "note": "Four readiness operations declared; actual built MCP registry and tools/call NOT RUN.",
+      "note": "Mac live registry 347 tools/13 families and four read-only smoke calls PASS; refresh operation not exercised.",
       "evidence": []
     },
     "studio": {
       "status": "not_run",
-      "note": "Opt-in regeneration, job status, dependency graph and assignment proposals implemented in source; typecheck, build and visual validation pending.",
+      "note": "Mac TypeScript/Vite, 218 web tests, 48 contracts and native build PASS; manual dashboard, refresh and screenshot still pending.",
       "evidence": []
     },
     "inspector": {
@@ -151,9 +151,13 @@
       "evidence": []
     },
     "tests": {
-      "status": "not_run",
-      "note": "Mac QA v6 at 8f755978dd11120a1d1036d96ffab7421bfc6482: full native configure/build PASS; CTest 483 passed, 4 failed, 1 skipped (488 total). Python 21/21, Web 218/218, Studio contracts 48/48, typecheck/Vite, native Studio/MCP, MCP registry/read-only smoke, partial compliance and policy PASS. Fixed stale native registry on empty reconfigure, rotated placement test territory fixture, MCP protocol path classification, and graph draft optional arrays; compiler warning fixes included. Current SHA NOT RUN, strict readiness blocked by pending evidence.",
-      "evidence": []
+      "status": "pass",
+      "note": "Mac QA v7, tested 59558502: full desktop Debug CTest 487 passed, 0 failures, 1 opt-in LENS skip; Python 22/22, web 218/218, Studio contracts 48/48. Scope is automated Mac QA; standalone extra suites, manual UI/refresh, cross-platform and publishing remain unverified.",
+      "evidence": [
+        "docs/evidence/feature-gate-mac-v7-python.log.txt",
+        "docs/evidence/feature-gate-mac-v7-ctest.log.txt",
+        "docs/evidence/feature-gate-mac-v7-summary.log.txt"
+      ]
     },
     "handoff": {
       "status": "not_run",
@@ -188,5 +192,8 @@
       "studio.op"
     ]
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/feature-gate-mac-v7-python.json",
+    "docs/evidence/feature-gate-mac-v7-ctest.json"
+  ]
 }
