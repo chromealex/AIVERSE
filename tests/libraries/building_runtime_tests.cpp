@@ -3,6 +3,7 @@
 #include <engine/systems/RuntimeBuildingGenerator.h>
 #include <engine/systems/CachedRuntimeBuildingGenerator.h>
 #include <engine/systems/BuildingInstances.h>
+#include <engine/systems/BuildingStreamPolicy.h>
 #include <engine/systems/BuildingSurfaceCache.h>
 #include <engine/buildings/BuildingDestructionAdapter.h>
 #include <cstdio>
@@ -169,6 +170,27 @@ int main(int argc,char** argv) {
         CHECK(placed.boxes==direct.building.boxes&&placed.gates==direct.building.gates);
         CHECK(!placeBuildingInstance(templateB,{0,inst.origin,inst.yaw},placed));
         CHECK(placed.placement.id==2);
+        // Streaming is presentation-only, deterministic and model-budgeted.
+        BuildingPlacedInstance nearInstance,farInstance,otherModel;
+        CHECK(placeBuildingInstance(templateA,{1,{},0},nearInstance));
+        CHECK(placeBuildingInstance(templateA,{3,{Fixed::fromInt(120),{},{}},0},farInstance));
+        CHECK(placeBuildingInstance(templateC,{4,{Fixed::fromInt(20),{},{}},0},otherModel));
+        std::vector<BuildingPlacedInstance> streamCandidates{farInstance,otherModel,nearInstance};
+        BuildingStreamPolicy streamPolicy;streamPolicy.enterDistance=100;streamPolicy.exitDistance=150;
+        streamPolicy.maxNewModels=1;
+        BuildingStreamPlan streamPlan;
+        const auto absent=[](const std::string&){return false;};
+        CHECK(planBuildingStream(streamCandidates,{},streamPolicy,{},absent,streamPlan));
+        CHECK(streamPlan.selectedIds==std::set<uint64_t>{1}&&streamPlan.newModels==1);
+        CHECK(streamPlan.outside==1&&streamPlan.deferred==1);
+        CHECK(planBuildingStream(streamCandidates,{},streamPolicy,{3},absent,streamPlan));
+        CHECK(streamPlan.selectedIds.size()==2&&streamPlan.selectedIds.contains(3)&&streamPlan.newModels==1);
+        streamPolicy.maxNewModels=0;
+        CHECK(planBuildingStream(streamCandidates,{},streamPolicy,{3},[&](const std::string& k){return k==templateA.modelKey;},streamPlan));
+        CHECK(streamPlan.selectedIds.size()==2&&streamPlan.newModels==0);
+        streamCandidates.push_back(nearInstance);
+        CHECK(!planBuildingStream(streamCandidates,{},streamPolicy,{},absent,streamPlan));
+        CHECK(streamPlan.selectedIds.size()==2);
         generator.clear();
         CHECK(generator.styleCount()==0);
         CHECK(generator.generate(sized).error==RuntimeBuildingError::UnknownStyle);

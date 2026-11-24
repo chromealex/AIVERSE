@@ -27,9 +27,9 @@ struct BuildingInstanceRenderFrame {
         return true;
     }
 };
-inline bool prepareBuildingInstanceFrame(gfx::Device& device,
+inline bool prepareBuildingInstancePointerFrame(gfx::Device& device,
     const render::RenderDeviceLifetime::Lease& deviceLease,render::ModelResourceCache& cache,
-    std::span<const BuildingPlacedInstance> instances,world::Cell renderOrigin,int cellSize,
+    std::span<const BuildingPlacedInstance* const> instances,world::Cell renderOrigin,int cellSize,
     const BuildingImageByGuid& resolve,BuildingInstanceRenderFrame& out,
     std::string* error=nullptr,lib::systems::BuildingSurfaceCache* surfaces=nullptr){
     auto fail=[&](const std::string& why){if(error)*error=why;return false;};
@@ -38,7 +38,9 @@ inline bool prepareBuildingInstanceFrame(gfx::Device& device,
     // Check whole batch before any GPU operation. A duplicate ID is not a
     // second object: it would corrupt Renderer3D's persistent packet state.
     std::set<uint64_t> ids;std::map<std::string,const BuildingInstanceTemplate*> unique;
-    for(const auto& i:instances){
+    for(const auto* ptr:instances){
+        if(!ptr)return fail("Null building instance");
+        const auto& i=*ptr;
         if(!i.resource||!lib::systems::validBuildingInstancePlacement(i.placement)||
            !ids.insert(i.placement.id).second)return fail("Invalid or duplicate building instance");
         unique.try_emplace(i.resource.modelKey,&i.resource);
@@ -72,7 +74,8 @@ inline bool prepareBuildingInstanceFrame(gfx::Device& device,
         BuildingInstanceRenderFrame next;
         next.scope=cache.acquireFrameReadScope();
         next.draws.reserve(instances.size());
-        for(const auto& i:instances){
+        for(const auto* ptr:instances){
+            const auto& i=*ptr;
             const auto* model=cache.find(i.resource.modelKey);
             if(!model)return fail("Building model missing after publication");
             const auto& b=i.resource.local->building;
@@ -93,5 +96,16 @@ inline bool prepareBuildingInstanceFrame(gfx::Device& device,
         out=std::move(next);if(error)error->clear();return true;
     }catch(const std::exception& e){retire();return fail(e.what());}
     catch(...){retire();return fail("Building instance publication failed");}
+}
+// Compatibility entry point for contiguous instance storage.
+inline bool prepareBuildingInstanceFrame(gfx::Device& device,
+    const render::RenderDeviceLifetime::Lease& deviceLease,render::ModelResourceCache& cache,
+    std::span<const BuildingPlacedInstance> instances,world::Cell renderOrigin,int cellSize,
+    const BuildingImageByGuid& resolve,BuildingInstanceRenderFrame& out,
+    std::string* error=nullptr,lib::systems::BuildingSurfaceCache* surfaces=nullptr){
+    if(instances.size()>65536){if(error)*error="Building instance budget exceeded";return false;}
+    std::vector<const BuildingPlacedInstance*> refs;refs.reserve(instances.size());
+    for(const auto& i:instances)refs.push_back(&i);
+    return prepareBuildingInstancePointerFrame(device,deviceLease,cache,refs,renderOrigin,cellSize,resolve,out,error,surfaces);
 }
 } // namespace aiverse::building
