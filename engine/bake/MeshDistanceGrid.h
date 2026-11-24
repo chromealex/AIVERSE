@@ -2,7 +2,7 @@
 // Distances at grid nodes are Euclidean; interpolated distances are approximate.
 // Exact-position welding handles duplicate vertices at UV/material seams.
 #pragma once
-#include "engine/render/Math3D.h"
+#include "MeshDistanceQueries.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -19,68 +19,25 @@ struct MeshDistanceGrid {
     uint32_t dimension=0;
     std::vector<float> samples; // x-fastest
 };
-namespace distance_detail {
-struct D3 {
-    double x=0,y=0,z=0;
-    D3 operator+(D3 b)const{return {x+b.x,y+b.y,z+b.z};}
-    D3 operator-(D3 b)const{return {x-b.x,y-b.y,z-b.z};}
-    D3 operator*(double k)const{return {x*k,y*k,z*k};}
-};
-inline D3 d(render::float3 p){return {p.x,p.y,p.z};}
-inline double dot(D3 a,D3 b){return a.x*b.x+a.y*b.y+a.z*b.z;}
-inline D3 cross(D3 a,D3 b){return {a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x};}
-inline double len2(D3 p){return dot(p,p);}
-inline double length(D3 p){return std::sqrt(len2(p));}
-inline bool validPoint(render::float3 p){
-    return std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z)&&
-        std::abs(p.x)<=1e6f&&std::abs(p.y)<=1e6f&&std::abs(p.z)<=1e6f;
-}
-struct Tri { D3 a,b,c; };
-// Closest-point triangle Voronoi regions, double precision offline.
-inline double distance2(D3 p,const Tri& t){
-    const D3 ab=t.b-t.a,ac=t.c-t.a,ap=p-t.a;
-    const double d1=dot(ab,ap),d2=dot(ac,ap);
-    if(d1<=0&&d2<=0)return len2(ap);
-    const D3 bp=p-t.b;
-    const double d3=dot(ab,bp),d4=dot(ac,bp);
-    if(d3>=0&&d4<=d3)return len2(bp);
-    const double vc=d1*d4-d3*d2;
-    if(vc<=0&&d1>=0&&d3<=0)return len2(ap-ab*(d1/(d1-d3)));
-    const D3 cp=p-t.c;
-    const double d5=dot(ab,cp),d6=dot(ac,cp);
-    if(d6>=0&&d5<=d6)return len2(cp);
-    const double vb=d5*d2-d1*d6;
-    if(vb<=0&&d2>=0&&d6<=0)return len2(ap-ac*(d2/(d2-d6)));
-    const double va=d3*d6-d5*d4;
-    if(va<=0&&d4-d3>=0&&d5-d6>=0)
-        return len2(bp-(t.c-t.b)*((d4-d3)/((d4-d3)+(d5-d6))));
-    const double inv=1/(va+vb+vc);
-    return len2(ap-ab*(vb*inv)-ac*(vc*inv));
-}
-inline double solidAngle(D3 p,const Tri& t){
-    const D3 a=t.a-p,b=t.b-p,c=t.c-p;
-    const double la=length(a),lb=length(b),lc=length(c);
-    return 2*std::atan2(dot(a,cross(b,c)),
-        la*lb*lc+dot(a,b)*lc+dot(b,c)*la+dot(c,a)*lb);
-}
-}
 inline constexpr uint32_t kMeshDistanceMaxDimension=32;
-inline constexpr uint32_t kMeshDistanceMaxTriangles=8192;
-inline constexpr uint64_t kMeshDistanceMaxWork=16ull*1024*1024;
+inline constexpr uint32_t kMeshDistanceMaxTriangles=32768;
+inline constexpr uint64_t kMeshDistanceMaxWork=64ull*1024*1024;
 // Closed consistently wound triangle surfaces only. Exact seam weld; reject
 // open/nonmanifold edges and degenerate triangles. Does not prove absence of
 // self intersections or nonmanifold vertices. Nonzero winding defines solid.
 // On error leave previous output untouched. No automatic mesh simplification.
 inline bool bakeMeshDistanceGrid(const std::vector<render::float3>& positions,
         const std::vector<uint32_t>& indices,uint32_t dimension,
-        const render::mat4& transform,MeshDistanceGrid& output,std::string& error){
+        const render::mat4& transform,MeshDistanceGrid& output,std::string& error,
+        MeshDistanceQueryStats* stats=nullptr,uint64_t workLimit=kMeshDistanceMaxWork){
     using namespace distance_detail;
-    auto fail=[&](const char* why){error=why;return false;};
+    QueryWork work;work.limit=std::min(workLimit,kMeshDistanceMaxWork);
+    auto fail=[&](const char* why){error=why;if(stats)*stats=work.stats;return false;};
     if(dimension<4||dimension>kMeshDistanceMaxDimension)return fail("SDF bake dimension must be 4..32");
     const size_t count=indices.size()/3;
     const uint64_t nodes=uint64_t(dimension)*dimension*dimension;
     if(indices.empty()||indices.size()%3||count>kMeshDistanceMaxTriangles||
-       nodes*count>kMeshDistanceMaxWork||positions.size()>kMeshDistanceMaxTriangles*3u)
+       positions.size()>kMeshDistanceMaxTriangles*3u)
         return fail("SDF mesh/sample work budget exceeded or invalid triangles");
     for(float v:transform.m)if(!std::isfinite(v))return fail("invalid transform");
     if(transform.at(3,0)!=0||transform.at(3,1)!=0||transform.at(3,2)!=0||
@@ -133,24 +90,23 @@ inline bool bakeMeshDistanceGrid(const std::vector<render::float3>& positions,
     if(!validPoint(grid.origin)||!validPoint(grid.origin+render::float3{2*half,2*half,2*half}))
         return fail("SDF padded bounds exceed coordinate range");
     grid.samples.reserve(size_t(nodes));
-    constexpr double fourPi=12.56637061435917295385;
+    const MeshDistanceBvh bvh(triangles);
     const double eps=std::max(1e-9,double(grid.spacing)*1e-7);
     for(uint32_t z=0;z<dimension;++z)for(uint32_t y=0;y<dimension;++y)for(uint32_t x=0;x<dimension;++x){
         const D3 p=d(grid.origin)+D3{double(x)*grid.spacing,double(y)*grid.spacing,double(z)*grid.spacing};
-        double best=std::numeric_limits<double>::infinity(),angle=0;
-        for(const auto& tri:triangles)best=std::min(best,distance2(p,tri));
+        double best=0;
+        if(!bvh.nearestSquared(p,best,work))return fail("SDF traversal work budget exceeded");
         double distance=std::sqrt(best);
         if(!std::isfinite(distance)||distance>100000)return fail("invalid baked distance");
         if(distance<=eps)distance=0;
         else {
-            for(const auto& tri:triangles)angle+=solidAngle(p,tri);
-            const double winding=std::abs(angle/fourPi);
-            if(!std::isfinite(winding)||std::abs(winding-std::round(winding))>0.05)
-                return fail("ambiguous winding in mesh");
-            if(winding>0.5)distance=-distance;
+            bool inside=false,invalid=false;
+            if(!bvh.inside(p,inside,work,invalid))
+                return fail(invalid?"ambiguous winding in mesh":"SDF traversal work budget exceeded");
+            if(inside)distance=-distance;
         }
         grid.samples.push_back(float(distance));
     }
-    output=std::move(grid);error.clear();return true;
+    output=std::move(grid);error.clear();if(stats)*stats=work.stats;return true;
 }
 }
