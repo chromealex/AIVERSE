@@ -75,6 +75,20 @@ int main() {
                 imported["graph"]["nodes"][size_t(2)]["properties"]["staticSdf"]["samples"].size()==27,
                 "binary SDF import through shared Workspace");
         require(!fs::exists(root/"fx"),"import does not publish");
+        import.set("action",Json::string("linkSdf"));
+        auto linked=call("fx_graph_edit",import);
+        require(linked.getBool("ok")&&linked["validation"].getBool("ok")&&
+                linked["graph"]["nodes"][size_t(2)]["properties"].getStr("staticSdf")=="content/test.sdfbin",
+                "persistent external SDF link");
+        require(!fs::exists(root/"fx"),"link does not publish");
+        Json save=Json::object();save.set("name",Json::string("linked_sdf"));save.set("graph",linked["graph"]);
+        require(call("fx_graph_set",save).getBool("ok"),"publish external link");
+        Json name=Json::object();name.set("name",Json::string("linked_sdf"));
+        auto reopened=call("fx_graph_get",name);
+        require(reopened["validation"].getBool("ok")&&
+                reopened["graph"]["nodes"][size_t(2)]["properties"].getStr("staticSdf")=="content/test.sdfbin",
+                "persistent link reopens without inline samples");
+        fs::remove_all(root/"fx");
         import.set("sdfAsset",Json::string("content/../test.sdfbin"));
         auto badImport=call("fx_graph_edit",import);
         require(badImport.has("error")||!badImport.getBool("ok"),"SDF import traversal denied");

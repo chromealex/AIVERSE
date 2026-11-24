@@ -128,9 +128,19 @@ public:
             const std::string authored=graph.dump(-1);
             if(authored.size()>512u*1024u)
                 return transferStatus("Preview graph exceeds 512 KiB");
+            // Candidate validation and initialization use the same immutable
+            // dependency bytes, even if the source file changes mid-command.
+            std::map<std::string,std::string> sdfSnapshot;
+            fx::SdfResourceReader snapshotReader;
+            if(sdfReader)snapshotReader=[&](const std::string& path,std::string& bytes){
+                const auto it=sdfSnapshot.find(path);
+                if(it!=sdfSnapshot.end()){bytes=it->second;return true;}
+                if(!sdfReader(path,bytes)||bytes.size()>fx::kSdfBinaryMaxBytes)return false;
+                sdfSnapshot.emplace(path,bytes);return true;
+            };
             fx::EffectDef checked;
             std::vector<std::string> errors;
-            if(!fx::compileSpectraGraph(graph,Json::object(),checked,errors,sdfReader))
+            if(!fx::compileSpectraGraph(graph,Json::object(),checked,errors,snapshotReader))
                 return transferStatus(errors.empty()?"SpectraFX graph validation failed":errors.front());
             // Allocate a candidate while the last-known-good instance remains
             // intact. The render owner is between frames, with no open pass.
@@ -138,7 +148,7 @@ public:
             auto candidate=std::make_unique<spectra::GraphRuntime>();
             spectra::GraphRuntimeOptions opts;
             opts.capacity=1024;
-            opts.sdfReader=sdfReader;
+            opts.sdfReader=snapshotReader;
             if(input.has("gpuOwnedAllocation")&&input["gpuOwnedAllocation"].type()!=Json::Type::Bool)
                 return transferStatus("gpuOwnedAllocation must be boolean");
             opts.gpuOwnedAllocation=input.getBool("gpuOwnedAllocation",false);
