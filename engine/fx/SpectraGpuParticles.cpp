@@ -282,7 +282,7 @@ bool ComputeParticles::initGpu() {
         reason_="GPU resource/pipeline allocation failed: "+device_->lastError();
         return false;
     }
-    ages_.assign(cap,-1.f);
+    ages_.assign(cap,-1.f);activePages_.reset(cap);
     slotSourceTokens_.assign(cap,0);
     pendingKillSlots_.clear();
     killedSlotsAwaitingFrame_.clear();
@@ -333,7 +333,7 @@ void ComputeParticles::releaseGpu() {
     stateAttributes_={};graphSources_={};
     gpuResetDirty_=false;
     gpuStagingDirty_=false;
-    ages_.clear();freeSlots_.clear();pendingStates_.clear();pendingSlots_.clear();
+    ages_.clear();activePages_.reset(0);freeSlots_.clear();pendingStates_.clear();pendingSlots_.clear();
     pendingKillSlots_.clear();killedSlotsAwaitingFrame_.clear();
     slotSourceTokens_.clear();
     pendingProgramParams_.clear();programStateCache_.clear();cpuHandles_.clear();
@@ -431,7 +431,7 @@ bool ComputeParticles::tryClear() {
     std::fill(slotSourceTokens_.begin(),slotSourceTokens_.end(),0);
     programStateCache_.assign(cap,ProgramParams{});
     programParamsDirty_=false;
-    ages_.assign(cap,-1.f);
+    ages_.assign(cap,-1.f);activePages_.reset(cap);
     freeSlots_.clear();freeSlots_.reserve(cap);
     for(uint32_t i=cap;i>0;--i)freeSlots_.push_back(i-1);
     aliveSlots_.clear();
@@ -465,8 +465,7 @@ bool ComputeParticles::setProgramParameter(uint32_t slot,float value,
             default:p.w=value;break;
             }
         };
-        for(size_t i=0;i<ages_.size();++i)
-            if(ages_[i]>0.f)write(programStateCache_[i]);
+        activePages_.forEach([&](uint32_t i){write(programStateCache_[i]);});
         for(ProgramParams& seed:pendingProgramParams_)write(seed);
         programParamsDirty_=true; // uploaded outside active render passes
     }
@@ -504,6 +503,7 @@ bool ComputeParticles::burstAt(fx::float3 position,fx::float3 direction,fx::floa
     for(uint32_t n=0;n<desc_.burst;++n) {
         const uint32_t slot=freeSlots_.back();freeSlots_.pop_back();
         ages_[slot]=desc_.lifetime;
+        activePages_.insert(slot);
         slotSourceTokens_[slot]=sourceToken;
         ParticleState particle{};
         particle.positionAge={position.x,position.y,position.z,0};
@@ -542,21 +542,20 @@ bool ComputeParticles::killSourceParticles(uint64_t sourceToken) {
         pendingStates_.erase(pendingStates_.begin()+at);
         pendingProgramParams_.erase(pendingProgramParams_.begin()+at);
         ages_[slot]=-1.f;slotSourceTokens_[slot]=0;
+        activePages_.erase(slot);
         freeSlots_.push_back(slot);
         ++stats_.selectivelyKilled;
     }
     // Submitted slots remain reserved until the next successful GPU compute
     // submission. They become invisible to CPU gather immediately, and
     // receive a Metal-ordered dead-state upload before the next compact pass.
-    for(uint32_t i=0;i<uint32_t(slotSourceTokens_.size());++i) {
-        if(slotSourceTokens_[i]!=sourceToken)continue;
-        slotSourceTokens_[i]=0;
-        if(ages_[i]>0.f) {
-            ages_[i]=-1.f;
-            pendingKillSlots_.push_back(i);
-            ++stats_.selectivelyKilled;
-        }
-    }
+    activePages_.forEach([&](uint32_t i){
+        if(slotSourceTokens_[i]!=sourceToken)return;
+        slotSourceTokens_[i]=0;ages_[i]=-1.f;
+        activePages_.erase(i);
+        pendingKillSlots_.push_back(i);
+        ++stats_.selectivelyKilled;
+    });
     stats_.alive=uint32_t(ages_.size()-freeSlots_.size()-
                           pendingKillSlots_.size()-
                           killedSlotsAwaitingFrame_.size());
@@ -623,15 +622,16 @@ bool ComputeParticles::step(float dt) {
     uint32_t updatePrefix=0;
     uint32_t compactCount=0; // only a CPU estimate in GPU indirect mode
     aliveSlots_.clear();
-    for(uint32_t i=0;i<uint32_t(ages_.size());++i) {
-        if(ages_[i]<=0.f)continue;
-        updatePrefix=i+1; // integrate every physical slot alive before dt
-        if(ages_[i]>dt) {
+    stats_.hostActiveSlotVisits=0;
+    stats_.hostOccupiedPages=uint32_t(activePages_.occupiedPages());
+    activePages_.forEach([&](uint32_t i){
+        ++stats_.hostActiveSlotVisits;
+        updatePrefix=i+1; // ordered occupied slots preserve GPU update prefix
+        if(ages_[i]>dt){
             ++compactCount;
-            // Preserve the existing CPU-authored gather as the fallback.
             if(!gpuIndirectActive_)aliveSlots_.push_back(i);
         }
-    }
+    });
     if(updatePrefix==0 && count==0 && pendingKillSlots_.empty() &&
        !gpuStagingDirty_ && !programParamsDirty_) {
         drawCount_=0;
@@ -778,13 +778,13 @@ bool ComputeParticles::step(float dt) {
     pendingKillSlots_.clear();
     stats_.gpuKillFencesPending=uint32_t(killedSlotsAwaitingFrame_.size());
     // Commit CPU lifespan/free-slot changes only after GPU dispatch submission.
-    for(uint32_t i=0;i<desc_.capacity;++i) {
-        if(ages_[i]<=0.f)continue;
+    activePages_.forEach([&](uint32_t i){
+        ++stats_.hostActiveSlotVisits;
         ages_[i]-=dt;
         if(ages_[i]<=0.f){
-            ages_[i]=-1.f;slotSourceTokens_[i]=0;freeSlots_.push_back(i);
+            ages_[i]=-1.f;slotSourceTokens_[i]=0;activePages_.erase(i);freeSlots_.push_back(i);
         }
-    }
+    });
     stats_.alive=compactCount;
     drawCount_=compactCount;
     stats_.submittedSlots=drawCount_;
@@ -1158,6 +1158,8 @@ bool ComputeParticles::restoreGpuSnapshot(const GpuCheckpoint& source) {
         return false;
     }
     ages_=snapshot.remainingLifetime;freeSlots_=snapshot.freeSlotOrder;
+    activePages_.reset(uint32_t(n));
+    for(uint32_t i=0;i<uint32_t(n);++i)if(ages_[i]>0.f)activePages_.insert(i);
     slotSourceTokens_=snapshot.sourceTokens;programParams_=snapshot.birthParameters;
     programStateCache_=std::move(params);programParamsDirty_=false;
     shaderBirthSeed_=snapshot.shaderBirthSeed;shaderBirthOrdinal_=snapshot.shaderBirthOrdinal;

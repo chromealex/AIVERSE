@@ -11,6 +11,7 @@
 #include "SpectraCheckpointFile.h"
 #include "SpectraCheckpointReadbackBudget.h"
 #include "SpectraAdaptiveCheckpoint.h"
+#include "SpectraActiveParticlePages.h"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -106,6 +107,7 @@ struct GpuCheckpointStatus {
 struct ComputeStats {
     uint32_t alive = 0, dropped = 0;
     uint32_t gpuDispatches = 0, drawCalls = 0;
+    uint32_t hostActiveSlotVisits = 0, hostOccupiedPages = 0; // latest step, no GPU readback
     uint32_t submittedSlots = 0; // dense GPU quads published from live-slot map
     uint32_t gpuFallbacks = 0, lostOnFallback = 0;
     uint32_t recoveredOnFallback=0;
@@ -260,6 +262,7 @@ private:
     gfx::BufferHandle stateAttributes_; // compute slot 11, 8 scalar VM registers/particle
     gfx::TextureHandle texture_;
     std::vector<float> ages_;
+    ActiveParticlePages activePages_;
     uint32_t drawCount_ = 0; // dense vertices emitted this frame (<= alive)
     std::vector<uint32_t> freeSlots_, pendingSlots_, aliveSlots_;
     std::vector<uint32_t> pendingKillSlots_;

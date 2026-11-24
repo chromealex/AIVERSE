@@ -108,7 +108,22 @@ public:
     }
 };
 
+static void sparsePageOwnership(){
+    spectra::ActiveParticlePages pages;
+    pages.reset(262144);
+    check(pages.insert(262143)&&pages.insert(64)&&pages.insert(2)&&pages.insert(65),"sparse page admission");
+    check(!pages.insert(64)&&!pages.insert(262144),"duplicate or invalid slot accepted");
+    check(pages.size()==4&&pages.occupiedPages()==3,"page accounting");
+    std::vector<uint32_t> visited;
+    pages.forEach([&](uint32_t slot){visited.push_back(slot);pages.erase(slot);});
+    check(visited==std::vector<uint32_t>{2,64,65,262143},"stable order or erase traversal");
+    check(pages.size()==0&&pages.occupiedPages()==0&&!pages.contains(64),"empty page not retired");
+    check(pages.insert(65)&&pages.contains(65),"slot reuse");
+    pages.reset(128);
+    check(pages.size()==0&&!pages.contains(65),"reset ownership");
+}
 int main() {
+    sparsePageOwnership();
     using spectra::ComputePreference;
     using spectra::ComputeBackend;
     using spectra::chooseComputeBackend;
