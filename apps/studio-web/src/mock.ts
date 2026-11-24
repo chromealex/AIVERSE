@@ -119,6 +119,7 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
     // Demo cannot inspect an actual project's materials/rules.
     return [];
   }
+  if (method === 'studio.buildingSurfacePreview') throw Error('Native procedural texture preview unavailable in mock');
   if (method === 'studio.buildingCatalog') return {styles: []} as StudioResult['studio.buildingCatalog'];
   if (method === 'studio.buildingRecipes')
     return {recipes: []} as StudioResult['studio.buildingRecipes'];

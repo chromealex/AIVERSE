@@ -3,6 +3,7 @@
 #pragma once
 
 #include "apps/studio-native/StudioAssetCatalog.h"
+#include "apps/editor/core/BrandingOps.h"
 #include "apps/studio-native/StudioBuildingDependencies.h"
 #include "apps/studio-native/StudioBuildingTopology.h"
 #include "apps/studio-native/StudioContentDirectory.h"
@@ -284,6 +285,33 @@ inline Json studioBuildingCatalog(const std::filesystem::path& engine) {
     }
     out.set("styles",std::move(styles));
     return out;
+}
+// Read-only style surface preview. One validated material, three bounded
+// 128x128 PNGs. Uses the same portable generator as native Model/GLB.
+inline Json studioBuildingSurfacePreview(const std::filesystem::path& engine,const Json& params) {
+    using namespace buildingStudioDetail;
+    const auto id=params.getStr("style"),slot=params.getStr("slot");
+    if(slot.empty()||slot.size()>64)throw std::runtime_error("Invalid building material slot");
+    const auto style=load(engine,id);
+    const auto it=std::find_if(style.materials.begin(),style.materials.end(),
+        [&](const StyleMaterial& material){return material.id==slot;});
+    if(it==style.materials.end()||it->surfacePattern.empty())
+        throw std::runtime_error("Material has no procedural surface");
+    Json out=Json::object(),maps=Json::array();
+    const char* keys[]={"baseColor","metallicRoughness","normal"};
+    const char* labels[]={"Base Color","Metallic / Roughness","Normal"};
+    for(size_t i=0;i<3;++i){
+        const auto pixels=generateBuildingSurface(it->surfacePattern,it->id,it->surfaceSeed,
+            static_cast<BuildingSurfaceChannel>(i));
+        const auto png=building::encodeBuildingPngRgba(pixels.rgba,pixels.width,pixels.height);
+        const std::string bytes(reinterpret_cast<const char*>(png.data()),png.size());
+        Json map=Json::object();
+        map.set("channel",string(keys[i]));map.set("label",string(labels[i]));
+        map.set("url",string("data:image/png;base64,"+editor::base64Encode(bytes)));
+        maps.push(std::move(map));
+    }
+    out.set("style",string(id));out.set("slot",string(slot));
+    out.set("maps",std::move(maps));return out;
 }
 // Temporary GPU preview requests use exactly the native geometry and
 // project PBR material override path. No disk writes, sidecar or new GUID.

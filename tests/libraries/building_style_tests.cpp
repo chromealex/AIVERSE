@@ -2,6 +2,7 @@
 // windows hold only glass), determinism per seed, palettes and seeds vary the look, quarter-turn yaw, style
 // proportions, triangle budget and readable style errors. argv[1] = repository root (style files).
 #include <engine/systems/BuildingStructure.h>
+#include "engine/buildings/BuildingGlbWriter.h"
 #include <cstdio>
 #include <fstream>
 #include <sstream>
@@ -88,6 +89,24 @@ int main(int argc,char** argv){
         BuildingDef tiny;tiny.width=6_fx;tiny.depth=6_fx;auto before=tiny;CHECK(!applyBuildingStyle(tiny,st));CHECK(tiny==before);
         // Determinism and variation.
         auto a=dressBuilding(d,st,7),b=dressBuilding(d,st,7);
+        // Exercise the real GLB serializer without an Assets resolver: the
+        // original style must produce all three embedded PNGs per material.
+        buildingExport::Glb glb;glb.add(a,"procedural-textured-building");
+        const auto images=Json::parse("["+glb.images+"]");
+        const auto materials=Json::parse("["+glb.materials+"]");
+        const auto views=Json::parse("["+glb.views+"]");
+        CHECK(images.size()==a.materials.size()*3&&materials.size()==a.materials.size());
+        for(const auto& image:images.items()){
+            CHECK(image.getStr("mimeType")=="image/png");
+            const auto off=views[size_t(image.getInt("bufferView"))].getInt("byteOffset");
+            CHECK(off>=0&&uint64_t(off)+8<=glb.bin.size());
+            CHECK(glb.bin[size_t(off)]==137&&glb.bin[size_t(off)+1]==80&&glb.bin[size_t(off)+2]==78&&glb.bin[size_t(off)+3]==71);
+        }
+        for(const auto& material:materials.items()){
+            CHECK(material["pbrMetallicRoughness"]["baseColorTexture"].isObject());
+            CHECK(material["pbrMetallicRoughness"]["metallicRoughnessTexture"].isObject());
+            CHECK(material["normalTexture"].isObject());
+        }
         CHECK(a.vertices.size()==b.vertices.size()&&a.parts.size()==b.parts.size()&&a.materials==b.materials);
         for(size_t i=0;i<a.vertices.size();++i)for(int k=0;k<3;++k)CHECK(a.vertices[i].pos[k]==b.vertices[i].pos[k]);
         bool differs=false,palette=false;

@@ -1136,6 +1136,10 @@ Json StudioSession::dispatchImpl(const Json& request) {
         }
         // Procedural building assets: native-only computation and bounded project writes.
         // Browser requests supply data, never executable commands or filesystem paths.
+        if(method=="studio.buildingSurfacePreview") {
+            reply.set("result",studioBuildingSurfacePreview(ws_.engineDir,params));
+            return reply;
+        }
         if(method=="studio.buildingCatalog") {
             reply.set("result",studioBuildingCatalog(ws_.engineDir));
             return reply;

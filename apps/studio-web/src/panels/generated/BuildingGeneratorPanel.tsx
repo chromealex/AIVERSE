@@ -21,6 +21,46 @@ import type {BuildingCandidateTicket} from '../../graphs/buildingCandidateCaptur
 import type { MaterialLibrary } from '../materialSchema';
 import './BuildingGeneratorPanel.css';
 
+function BuildingSurfacePreview({style,visible}:{style:StudioBuildingStyle|undefined;visible:boolean}){
+  const slots=Object.keys(style?.surfaces??{}).filter(slot=>!!style?.surfaces?.[slot]?.pattern);
+  const [selected,setSelected]=useState('');
+  const slot=slots.includes(selected)?selected:slots[0]??'';
+  const [result,setResult]=useState<import('../../types').StudioBuildingSurfacePreview|null>(null);
+  const [error,setError]=useState('');
+  const [busy,setBusy]=useState(false);
+  const styleId=style?.id??'';
+  useEffect(()=>{
+    setResult(null);setError('');setBusy(false);
+    if(!visible||!styleId||!slot||!nativeConnected())return;
+    let alive=true;setBusy(true);
+    void invoke('studio.buildingSurfacePreview',{style:styleId,slot}).then(value=>{
+      if(!alive)return;
+      if(value.style!==styleId||value.slot!==slot)throw Error('Texture preview identity mismatch');
+      setResult(value);
+    }).catch(e=>{if(alive)setError(explain(e));}).finally(()=>{if(alive)setBusy(false);});
+    return()=>{alive=false};
+  },[styleId,slot,visible]);
+  const current=result?.style===styleId&&result.slot===slot?result:null;
+  return <StudioSection title="Generated PBR textures">
+    {!slot?<StudioEmptyState title="No procedural surface" description="This style has no procedural surface patterns."/>:<>
+      <StudioField label="Material slot" htmlFor="abg-surface-slot">
+        <StudioSelect id="abg-surface-slot" value={slot} onChange={e=>setSelected(e.target.value)}>
+          {slots.map(s=><option value={s} key={s}>{s} · {style?.surfaces?.[s]?.pattern}</option>)}
+        </StudioSelect>
+      </StudioField>
+      {busy&&<small>Generating native PBR maps…</small>}
+      {error&&<StudioAlert tone="danger">{error}</StudioAlert>}
+      {current&&<div className="abg__surface-grid">
+        {current.maps.map(map=><figure key={map.channel}>
+          <img src={map.url} alt={map.label+' generated texture'} width={128} height={128}/>
+          <figcaption>{map.label}</figcaption>
+        </figure>)}
+      </div>}
+      <small className="abg__note">Actual native style maps · 128 × 128 · deterministic material seed. Base Color is neutral modulation of the authored tint. Imported project textures override corresponding channels; GLB embeds the generated PNGs for remaining channels.</small>
+    </>}
+  </StudioSection>;
+}
+
 type Candidate = { seed:number; batch:number; scope:string; recipe:StudioBuildingRequest; data?:StudioBuildingPreview; error?:string };
 const explain = (error:unknown) => error instanceof Error ? error.message : String(error);
 const settingLabel = (id:string) => ({
@@ -616,7 +656,7 @@ export default function BuildingGeneratorPanel({
       {!loading&&styles.length===0&&<StudioEmptyState title="No building styles"
         icon={<Building2 size={22}/>} description="Install engine/assets/building-styles or open native AIVERSE Studio."/>}
       {parameterError&&<StudioAlert tone="warning" title="Parameters">{parameterError}</StudioAlert>}
-      <StudioTabs label="Building workspace" selected={page} onChange={setPage} items={[
+      <StudioTabs<typeof page> label="Building workspace" selected={page} onChange={setPage} items={[
         {id:'recipe',label:'Recipe'},{id:'features',label:'Features'},{id:'materials',label:'Materials'},
         {id:'graphs',label:'Graphs'},{id:'runtime',label:'Runtime'}
       ]}/>
@@ -800,6 +840,7 @@ export default function BuildingGeneratorPanel({
       </StudioSection>}
       </div>
       <div className="abg__page au-stack" hidden={page!=='materials'}>
+      <BuildingSurfacePreview key={selectedStyle?.id??''} style={selectedStyle} visible={page==='materials'}/>
       <StudioSection title="Architectural material bindings">
         <p className="abg__note">Each patterned style slot automatically generates Base Color, Metallic/Roughness and Normal maps in native preview and GLB. Project Assets override individual channels; no imported texture is required.</p>
         <div className="abg__fields">
@@ -856,22 +897,6 @@ export default function BuildingGeneratorPanel({
       </div>
       <div className="abg__page au-stack" hidden={page!=='graphs'}>
       {visibleVariants.length>0&&<StudioSection title="Variants">
-        <div className="abg__actions">
-          <StudioButton variant="secondary" loading={busy} disabled={Boolean(parameterError)||busy||!nativeConnected()}
-            onClick={()=>void preview()}>Evaluate 3 seeds</StudioButton>
-          <StudioButton variant="secondary" loading={previewBusy}
-            disabled={Boolean(parameterError)||busy||previewBusy||!nativeConnected()}
-            onClick={()=>void previewNative3D()}>
-            Preview 3D in Scene
-          </StudioButton>
-          {livePreview&&<StudioButton variant="secondary" disabled={previewBusy}
-            onClick={()=>void closeNative3D()}>Close 3D preview</StudioButton>}
-          <StudioButton variant="primary" loading={busy}
-            disabled={Boolean(parameterError)||busy||!nativeConnected()}
-            onClick={()=>void generate()}>
-            <WandSparkles size={15}/> Generate GLB
-          </StudioButton>
-        </div>
         {visibleVariants.length>0&&<div className="abg__candidates" role="group" aria-label="Generated building candidates">
           {visibleVariants.map(candidate=><button type="button" key={candidate.batch+':'+candidate.seed}
             className={'abg__candidate'+(candidate.seed===selectedSeed?' abg__candidate--active':'')}

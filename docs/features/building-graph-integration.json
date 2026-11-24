@@ -173,7 +173,7 @@
     },
     "studio": {
       "status": "not_run",
-      "note": "Stage 35D planned; integration verification pending. Stage 37 native app build and selected automated Studio checks succeeded per runner completion. Real WKWebView visual/interaction acceptance NOT RUN. Stage 38 user screenshots show excessive full-width forms and large empty dependency graphs. Reorganize workspace into Recipe/Features/Materials/Graphs/Runtime tabs, keep actions always visible and source controls focusable, present truthful empty graph state. Original scifi style had no surface patterns; author PBR patterns and seed per slot; expose native catalog surface metadata and test actual generated pixels. User requires textures generated with building; existing native preview and GLB writer use same generator; no new GPU or file owner. NOT RUN after changes.",
+      "note": "Stage 35D planned; integration verification pending. Stage 37 native app build and selected automated Studio checks succeeded per runner completion. Real WKWebView visual/interaction acceptance NOT RUN. Stage 38 user screenshots show excessive full-width forms and large empty dependency graphs. Reorganize workspace into Recipe/Features/Materials/Graphs/Runtime tabs, keep actions always visible and source controls focusable, present truthful empty graph state. Original scifi style had no surface patterns; author PBR patterns and seed per slot; expose native catalog surface metadata and test actual generated pixels. User requires textures generated with building; existing native preview and GLB writer use same generator; no new GPU or file owner. NOT RUN after changes. Stage 38 texture preview uses bounded native style/slot selection and actual same-generator PNG maps; no browser mock, no project file writes. All 13 shipped style JSON files checked for nonempty pattern on every slot. GLB serializer regression inspects actual embedded PNG buffer signatures and three glTF material channels. Native/TS build and visual review NOT RUN.",
       "evidence": []
     },
     "inspector": {
@@ -250,7 +250,8 @@
     "studio_methods": [
       "studio.buildingInspect",
       "studio.buildingTextureProvenance",
-      "studio.buildingGraphOverlay"
+      "studio.buildingGraphOverlay",
+      "studio.buildingSurfacePreview"
     ]
   },
   "test_reports": []
