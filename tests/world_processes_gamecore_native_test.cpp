@@ -869,6 +869,35 @@ static void checkPlanetTerrainWater(){
     AIVERSE_TEST_CHECK(dry&&dry->forcing.wetContactPermille==0);
     AIVERSE_TEST_CHECK(g::samplePlanetTerrainWater(ecs,surface,pos).submerged); // restored geometry
 }
+static void checkPlanetDeadwood(){
+    using namespace terraweave;
+    game::Surface surface;game::BodyDef body;body.id="terra";body.radius=64_fx;body.faceSize=8;
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    World ecs;TerraWeaveAuthorityResource roots;
+    AnchoredPlant tree;tree.anchor.speciesId=1;tree.anchor.plantKey=17;tree.anchor.roots=defaultRootProfile(PlantHabit::Tree);
+    tree.fallen=true;
+    auto moon=tree;moon.anchor.plantKey=18;moon.fallen=false;
+    roots.rooted={tree,moon};
+    ecs.setResource<TerraWeaveAuthorityResource>(roots);
+    ecs.setResource<evolve::PlanetRootDeliveryResource>();
+    std::vector<evolve::PlanetRootBinding> bindings{{{1,17},"terra",surface.cellCenter(surface.gridCell(0,0,7,7))},
+        {{1,18},"moon",surface.cellCenter(surface.gridCell(1,0,7,7))}};
+    AIVERSE_TEST_CHECK(evolve::setPlanetRootBindings(ecs,surface,bindings));
+    AIVERSE_TEST_CHECK(evolve::initializePlanetDeadwood(ecs,surface,500));
+    ForestDeadwoodDecaySettings settings;settings.intervalTicks=1;
+    AIVERSE_TEST_CHECK(evolve::advancePlanetDeadwood(ecs,surface,0,settings));
+    const auto initial=ecs.resourceConst<evolve::PlanetDeadwoodResource>()->ledger.totalInitialUnits;
+    AIVERSE_TEST_CHECK(initial>0);
+    ecs.enableCowSnapshots();const World before=ecs;
+    const auto step=evolve::advancePlanetDeadwood(ecs,surface,10000,settings);
+    AIVERSE_TEST_CHECK(step&&step->decayedUnits>0&&step->nutrientsReturned>0);
+    const auto* r=ecs.resourceConst<evolve::PlanetDeadwoodResource>();
+    AIVERSE_TEST_CHECK(r->ledger.totalInitialUnits==initial&&r->ledger.logs.size()==1&&deadwoodLedgerBalanced(r->ledger));
+    AIVERSE_TEST_CHECK(evolve::planetDeadwoodFertility(*r,surface,bindings[0],500)>500);
+    AIVERSE_TEST_CHECK(evolve::planetDeadwoodFertility(*r,surface,bindings[1],500)==500);
+    ecs=before;
+    AIVERSE_TEST_CHECK(evolve::advancePlanetDeadwood(ecs,surface,10000,settings)->decayedUnits==step->decayedUnits);
+}
 static void checkPlanetForestEcology(){
     using namespace terraweave;
     game::Surface surface;game::BodyDef body;body.id="terra";body.radius=64_fx;body.faceSize=8;
@@ -1829,6 +1858,7 @@ int main(){
     checkPlanetFoundationLoss();
     checkPlanetRootSupport();
     checkPlanetForestEcology();
+    checkPlanetDeadwood();
     checkPlanetTerrainWater();
     checkPlanetBankErosion();
     checkPlanetSedimentTransport();

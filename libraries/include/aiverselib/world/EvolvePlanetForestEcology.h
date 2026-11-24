@@ -6,6 +6,7 @@
 #include "engine/world/TerraWeaveForestEcology.h"
 #include "engine/world/TerraWeaveForestHarvestEcs.h"
 #include "engine/world/TerraWeaveForestDeadwood.h"
+#include "EvolvePlanetDeadwood.h"
 #include <map>
 #include <set>
 namespace aiverse::evolve {
@@ -35,6 +36,8 @@ inline std::optional<PlanetForestEcologyOutcome> advancePlanetForestEcology(
        authority->rooted.size()!=delivery->bindings.size()||
        authority->rooted.size()>kMaxPlanetRootBindings||
        world.resourceConst<ForestDeadwoodResource>())return {};
+    const auto* deadwood=world.resourceConst<PlanetDeadwoodResource>();
+    if(deadwood&&!validPlanetDeadwood(*deadwood,surface))return {};
     cfg.maxTrackedPlants=std::min<uint32_t>(cfg.maxTrackedPlants,kMaxPlanetRootBindings);
     validateForestEcologySettings(cfg);
     const auto* prior=world.resourceConst<ForestEcologyResource>();
@@ -68,7 +71,8 @@ inline std::optional<PlanetForestEcologyOutcome> advancePlanetForestEcology(
         if(!frame||surface.bodies[size_t(frame->body)].id!=it->second.bodyId)return {};
         const auto pos=surface.project(it->second.plantedPosition);
         ground.emplace(id,pos);bodies.emplace(id,frame->body);
-        ForestEcologyClimate climate{1000,0,plant.environment.waterPermille,plant.environment.nutrientsPermille};
+        ForestEcologyClimate climate{1000,0,plant.environment.waterPermille,
+            deadwood?deadwood->baselineNutrientsPermille:plant.environment.nutrientsPermille};
         sites.push_back({it->second.bodyId,pos,climate,false,true});
         requests.push_back({it->second.bodyId,pos,climate,{}});
         ids.push_back(id);
@@ -81,7 +85,11 @@ inline std::optional<PlanetForestEcologyOutcome> advancePlanetForestEcology(
         auto sampled=samplePlanetRootClimate(world,surface,weather,sites,climateTick);
         if(!sampled)return {};samples=std::move(sampled->sites);
     }
-    for(size_t i=0;i<ids.size();++i)climates.emplace(ids[i],samples[i].climate);
+    for(size_t i=0;i<ids.size();++i){
+        auto c=samples[i].climate;
+        if(deadwood)c.nutrientsPermille=planetDeadwoodFertility(*deadwood,surface,bindings.at(ids[i]),c.nutrientsPermille);
+        climates.emplace(ids[i],c);
+    }
     struct Crown {AnchoredPlantId id;int body;Vec3 pos;int64_t radius,top;PlantHabit habit;};
     std::vector<Crown> crowns;
     for(const auto& plant:authority->rooted){
@@ -162,6 +170,16 @@ inline std::optional<PlanetForestEcologyOutcome> advancePlanetForestEcology(
             [&](const AnchoredPlant& plant){return climates.at({plant.anchor.speciesId,plant.anchor.plantKey});},cfg,&geometry);
     }catch(const std::exception&){return {};}
     if(out.ecology.born.size()!=born.size())return {};
+    std::optional<PlanetDeadwoodResource> deadwoodUpdate;
+    if(deadwood&&!out.ecology.died.empty()){
+        deadwoodUpdate=*deadwood;
+        for(const auto& death:out.ecology.died){
+            const auto found=std::find_if(rooted.begin(),rooted.end(),[&](const auto& plant){
+                return AnchoredPlantId{plant.anchor.speciesId,plant.anchor.plantKey}==death.id;
+            });
+            if(found==rooted.end()||!seedPlanetDeadwood(*deadwoodUpdate,surface,*found,bindings.at(death.id),tick))return {};
+        }
+    }
     auto updated=*authority;auto rootDelivery=*delivery;
     if(!out.ecology.changed.empty()||!out.ecology.born.empty()||!out.ecology.died.empty()){
         if(updated.stateRevision==UINT64_MAX)return {};
@@ -171,6 +189,7 @@ inline std::optional<PlanetForestEcologyOutcome> advancePlanetForestEcology(
     std::sort(rootDelivery.bindings.begin(),rootDelivery.bindings.end(),[](const auto& a,const auto& b){return a.id<b.id;});
     out.born=std::move(born);
     World staged=world;
+    if(deadwoodUpdate)staged.setResource<PlanetDeadwoodResource>(std::move(*deadwoodUpdate));
     staged.setResource<ForestEcologyResource>(std::move(ecology));
     staged.setResource<TerraWeaveAuthorityResource>(std::move(updated));
     staged.setResource<PlanetRootDeliveryResource>(std::move(rootDelivery));
