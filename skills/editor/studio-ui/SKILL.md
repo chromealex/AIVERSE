@@ -176,6 +176,9 @@ Native URI repair supports bounded .glb snapshots: validate GLB v2 headers and c
 ## Wavefront and COLLADA text repairs (S6g.6.4)
 OBJ mtllib and renderer-supported MTL texture slots are repaired with exact line spans, preserving options, whitespace and line endings. MTL paths resolve relative to each consuming OBJ; incompatible shared-library demands refuse the entire move. DAE library_images init_from/ref leaf text is patched using existing XML parser source offsets, preserving unrelated XML. Round-trippable UTF-16 LE/BE is preserved, including BOM. Mixed-markup leaf rewrites remain refused. Original bytes and path-aware digests use journal v7 and existing history; other binary/dynamic formats remain outside repair coverage.
 
+## Streaming GLB repair (S6g.6.5)
+Binary GLB above 1 MiB uses exact before/after JSON prefixes, tail length and SHA-256. Stream tail in 64 KiB blocks; validate chunk structure, baseline and staged bytes before atomic replacement. Journal v8 retains compact snapshots and rolls back at the actual resource path. Existing small/full history stays readable. Aggregate 4 MiB prefix/text per direction, 32 documents and GLB uint32 total length remain limits. Disk staging requires a temporary full output file (no retained geometry copies); check free space before rename and publication, no hard reservation. Undo refuses changed tail. Generic project file journal refuses compact edits.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

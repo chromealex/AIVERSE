@@ -382,6 +382,68 @@ int main(){
             db.rebuild(false);
         }
 
+        // S6g.6.5: large GLB retains only the JSON prefix and tail identity.
+        {
+            using namespace aiverse;
+            using namespace aiverse::studio;
+            const auto model=project/"content"/"Models"/"Large.glb";
+            const auto texture=project/"content"/"Models"/"large.png";
+            const auto doc=Json::parse(R"({"asset":{"version":"2.0"},"images":[{"uri":"large.png"}],"buffers":[{"byteLength":12582912}]})");
+            constexpr uint32_t payload=12u*1024u*1024u;
+            {
+                std::ofstream out(model,std::ios::binary);
+                const auto prefix=studioEncodeGlbPrefix(doc,uint64_t(payload)+8);
+                out.write(prefix.data(),static_cast<std::streamsize>(prefix.size()));
+                std::string header;studioGlbAppendU32(header,payload);studioGlbAppendU32(header,0x004e4942);
+                out.write(header.data(),8);
+                const std::string block(65536,'\x9f');
+                for(uint32_t i=0;i<payload;i+=static_cast<uint32_t>(block.size()))
+                    out.write(block.data(),static_cast<std::streamsize>(block.size()));
+                AIVERSE_TEST_CHECK(bool(out));
+            }
+            write(texture,"texture");db.rebuild();
+            const auto original=studioReadGlbPrefix(model);
+            const auto originalFileDigest=studioAssetFileDigest(model);
+            auto move=StudioTransferPlan::internal(project,"Other",{"Models/large.png"});
+            std::optional<editor::ProjectHistory::MovePlan> recorded;
+            const auto result=move.apply(move.token(),{},{},&recorded,true);
+            AIVERSE_TEST_CHECK(recorded&&result.getInt("repairedResourceDocuments")==1);
+            const auto& edit=recorded->resourceEdits[0];
+            AIVERSE_TEST_CHECK(studioStreamingResource(edit)&&edit.tailDigest==original.digest&&edit.tailBytes==payload+8);
+            AIVERSE_TEST_CHECK(edit.before.size()+edit.after.size()<4096);
+            const auto changed=studioReadGlbPrefix(model);
+            AIVERSE_TEST_CHECK(changed.digest==original.digest&&studioDecodeGlbPrefix(changed.prefix,changed.tailBytes)["images"][0].getStr("uri")=="../Other/large.png");
+            editor::ProjectHistory timeline;auto copy=*recorded;timeline.recordMove(std::move(copy),"Large GLB");
+            {StudioAssetHistoryPublication publication(project);publication.save(timeline);}
+            AIVERSE_TEST_CHECK(fs::file_size(project/".aiverse-cache"/"asset-history.json")<65536);
+            auto reopened=studioLoadAssetHistoryCheckpoint(project);
+            AIVERSE_TEST_CHECK(reopened.canUndo()&&reopened.next(false).move->resourceEdits[0].tailDigest==original.digest);
+            studioReplayAssetMove(project,*reopened.next(false).move,false);
+            AIVERSE_TEST_CHECK(studioAssetFileDigest(model)==originalFileDigest);
+            studioReplayAssetMove(project,*recorded,true);
+            // A changed tail is not allowed to borrow the retained prefix.
+            {
+                std::fstream io(model,std::ios::binary|std::ios::in|std::ios::out);
+                io.seekp(-1,std::ios::end);io.put('x');
+            }
+            bool rejected=false;try{studioReplayAssetMove(project,*recorded,false);}
+            catch(const std::runtime_error&){rejected=true;}
+            AIVERSE_TEST_CHECK(rejected&&fs::exists(project/"content"/"Other"/"large.png"));
+            {
+                std::fstream io(model,std::ios::binary|std::ios::in|std::ios::out);
+                io.seekp(-1,std::ios::end);io.put('\x9f');
+            }
+            studioReplayAssetMove(project,*recorded,false);
+            AIVERSE_TEST_CHECK(studioAssetFileDigest(model)==originalFileDigest);
+            fs::remove(project/".aiverse-cache"/"asset-history.json");
+            auto modelMove=StudioTransferPlan::internal(project,"Other",{"Models/Large.glb"});
+            (void)modelMove.apply(modelMove.token(),{},{},&recorded,true);
+            AIVERSE_TEST_CHECK(recorded&&studioStreamingResource(recorded->resourceEdits[0])&&!recorded->files[0].digestAfter.empty());
+            studioReplayAssetMove(project,*recorded,false);
+            AIVERSE_TEST_CHECK(studioAssetFileDigest(model)==originalFileDigest);
+            fs::remove(model);fs::remove(texture);fs::remove(studioMetaPath(model));fs::remove(studioMetaPath(texture));db.rebuild(false);
+        }
+
         // S6h.1: persisted quota blocks growth, not restoration or explicit purge.
         {
             using namespace aiverse;

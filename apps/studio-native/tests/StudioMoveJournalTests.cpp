@@ -123,9 +123,30 @@ int main() {
             fs::rename(model,target);writeFile(target,after);
             const auto pending=project/".aiverse-cache"/"studio-move-journal"/"pending.json";
             const auto manifest=aiverse::Json::parse(readFile(pending));
-            expect(manifest.getInt("version")==7&&manifest["resources"][0].getStr("encoding")=="hex","GLB journal lacks binary encoding");
+            expect(manifest.getInt("version")==8&&manifest["resources"][0].getStr("encoding")=="hex","GLB journal lacks binary encoding");
             StudioMoveJournal::recover(project);
             expect(readFile(model)==before&&!fs::exists(target),"Binary resource exact recovery failed");
+            StudioMoveJournal::recover(project);fs::remove(model);
+        }
+        // v8: interruption after compact GLB publication at the moved path.
+        {
+            using namespace aiverse::studio;
+            const auto model=root/"A"/"Stream.glb",target=root/"B"/"Stream.glb";
+            auto doc=aiverse::Json::parse(R"({"images":[{"uri":"Stone.png"}]})");
+            std::string tail;studioGlbAppendU32(tail,4);studioGlbAppendU32(tail,0x004e4942);tail.append("\xff\0\x80\x01",4);
+            const auto before=studioEncodeGlbPrefix(doc,tail.size());
+            writeFile(model,before+tail);
+            const auto snapshot=studioReadGlbPrefix(model);
+            auto images=doc["images"];auto image=images[0];image.set("uri",aiverse::Json::string("../A/Stone.png"));images.at(0)=std::move(image);doc.set("images",std::move(images));
+            const auto after=studioEncodeGlbPrefix(doc,tail.size());
+            aiverse::editor::ProjectFileEdit edit{fs::path("content/A/Stream.glb"),before,after,snapshot.digest,snapshot.tailBytes};
+            StudioMoveJournal journal(project);
+            journal.begin({{"A/Stream.glb","B/Stream.glb"}},false,false,{edit});
+            fs::rename(model,target);edit.path=fs::canonical(target);
+            journal.applyResources({edit});
+            expect(readFile(target)==after+tail,"Streamed GLB publication changed tail");
+            StudioMoveJournal::recover(project);
+            expect(readFile(model)==before+tail&&!fs::exists(target),"Compact GLB rollback failed");
             StudioMoveJournal::recover(project);fs::remove(model);
         }
         // Commit marker forbids rollback on restart.

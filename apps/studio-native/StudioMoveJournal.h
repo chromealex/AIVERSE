@@ -56,8 +56,12 @@ public:
         if(replacement&&!quarantine)throw std::runtime_error("Invalid replacement journal mode");
         if(!resources.empty()&&quarantine)throw std::runtime_error("Invalid resource repair journal mode");
         validateResources(resources,operations,true);
-        for(const auto& edit:resources)
+        for(const auto& edit:resources){
             if(!studioResourceMatches(project_/edit.path,edit))throw std::runtime_error("Resource repair baseline changed");
+            if(studioStreamingResource(edit)&&fs::space(project_).available<
+                std::max<uint64_t>(edit.before.size(),edit.after.size())+edit.tailBytes+16ull*1024*1024)
+                throw std::runtime_error("Insufficient disk for reversible streamed GLB repair");
+        }
         if(replacement)validateReplacementOperations(operations);
         for(const auto& operation:operations){
             validateRelative(operation.from);validateRelative(operation.to);
@@ -123,7 +127,15 @@ public:
     // complete source and staged bytes are validated. Recovery can retry.
     void applyResources(const std::vector<editor::ProjectFileEdit>& edits){
         std::vector<editor::ProjectFileEdit> ordinary;
+        const auto root=fs::canonical(project_);
+        std::set<fs::path> unique;
         for(const auto& edit:edits){
+            const auto relative=edit.path.lexically_relative(root).generic_string();
+            validateRelative(relative);safePath(root,edit.path);
+            if(!unique.insert(edit.path).second||fs::canonical(edit.path)!=edit.path)
+                throw std::runtime_error("Invalid or duplicate resource publication target");
+            if(studioStreamingResource(edit)&&(!relative.starts_with("content/")||edit.path.extension()!=".glb"))
+                throw std::runtime_error("Invalid streaming resource target");
             if(!studioResourceMatches(edit.path,edit))throw std::runtime_error("Resource publication baseline changed");
             if(!studioStreamingResource(edit))ordinary.push_back(edit);
         }
@@ -148,6 +160,7 @@ public:
             if(!studioResourceMatches(temp,edit,true)||!studioResourceMatches(edit.path,edit))
                 throw std::runtime_error("Streamed GLB publication identity changed");
             renamePath(temp,edit.path,true);syncPath(edit.path);syncPath(edit.path.parent_path());
+            if(!studioResourceMatches(edit.path,edit,true))throw std::runtime_error("Published GLB identity changed");
         }
         editor::applyProjectFileEdits(project_,ordinary);
     }

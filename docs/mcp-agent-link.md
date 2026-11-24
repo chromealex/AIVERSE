@@ -99,3 +99,6 @@ Internal moves repair bounded GLB v2 JSON chunks with exact trailing chunk prese
 
 ### S6g.6.4 — Wavefront and COLLADA repair
 Native move owner now plans supported OBJ mtllib, MTL texture and DAE leaf image paths with exact text-span edits and shared MTL conflict refusal. Existing linked preview/commit use the same owner; Round-trippable UTF-16 LE/BE is supported; mixed XML leaf rewrites and unrepresentable Wavefront texture names are refused.
+
+### S6g.6.5 — streaming large GLB repair
+Binary GLB above 1 MiB uses compact JSON-prefix history and verified streamed tail publication through journal v8. Existing linked internal move automatically uses the same owner. Temporary disk space, JSON-prefix budget and GLB format limits remain explicit; no large text/other model streaming or coordinated repaired batch yet.
