@@ -2432,6 +2432,7 @@ void Editor::frame(gfx::Device& dev, double dt) {
     // Sweep only after a substantial no-use interval, before new viewport
     // submission. Never unload while the editor's play simulation is active.
     reclaimEditorAssets();
+    applyQueuedGraphMaterial();
     if (!playing() && gridRevision_ != doc().revision && time_ >= gridRebuildAt_) { syncGrid(); gridRebuildAt_ = time_ + 0.05; }
     if (sceneFlying_) {
         float k = float(std::min(1.0, dt * 4.0));
