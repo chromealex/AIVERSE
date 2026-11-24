@@ -1,7 +1,7 @@
 #pragma once
 // Prepare-only conversion; existing GeometryScene and collision owners must
 // use this payload, rather than publishing the chart mesh in global XYZ.
-#include "engine/world/TerraWeaveCavernsPlanetSurface.h"
+#include "engine/world/TerraWeaveCavernsPlanetCut.h"
 #include "engine/render/TerraWeaveCavernsRimPayload.h"
 #include "engine/world/TerraWeaveCavernsVolumeCollision.h"
 
@@ -41,6 +41,53 @@ inline CavePlanetNativePayload prepareCavePlanetNativeTriangles(
     }
     out.model=buildExactCavePayload(out.collision,out.simulationOrigin,userData);
     return out;
+}
+// Preserve the cut planner's actual body-space boundary vertices. Never
+// round-trip original planet terrain through the approximate chart inverse.
+inline CavePlanetNativePayload prepareCavePlanetCutSlotPayload(
+        const CavePlanetFrame& frame,const CavePlanetCutPlan& plan,
+        CavePlanetSurfaceSlotKey key,world::Cell ownerCell,uint64_t nativeRevision,
+        uint32_t userData=0){
+    if(!nativeRevision||!sameCavePlanetAnchor(frame.anchor(),plan.anchor)||
+       !plan.surfaceRevision||!plan.surfaceEpoch||!plan.authorityRevision)
+        throw std::invalid_argument("Caverns planetary cut payload identity");
+    const auto& slot=plan.slots.at(key);
+    if(slot.bodyTriangles.size()!=slot.chartTriangles.size()||slot.bodyTriangles.size()>65534)
+        throw std::invalid_argument("Caverns planetary cut payload topology");
+    CavePlanetNativePayload out;out.anchor=frame.anchor();out.body=frame.body();
+    const auto anchor=game::Surface::anchor(frame.body());
+    const auto centre=frame.toSimulation({});
+    out.simulationOrigin={Fixed::fromInt(centre.x.floorInt()),Fixed::fromInt(centre.y.floorInt()),Fixed::fromInt(centre.z.floorInt())};
+    out.collision.cell=ownerCell;out.collision.revision=nativeRevision;
+    out.collision.triangles.reserve(slot.bodyTriangles.size());
+    for(const auto& t:slot.bodyTriangles){
+        world::Triangle transformed{t.a+anchor,t.b+anchor,t.c+anchor};
+        if(!world::SpatialWorld::validTriangle(transformed))
+            throw std::invalid_argument("Caverns planetary cut collision triangle");
+        out.collision.triangles.push_back(transformed);
+    }
+    out.model=buildExactCavePayload(out.collision,out.simulationOrigin,userData);
+    return out;
+}
+// Check the ACTUAL transformed final volume source against the terrain
+// boundary, not merely chart-space equality or a matching revision.
+inline bool planetRimNativeBoundaryMatches(const CavePlanetFrame& frame,
+        const CaveSurfaceRim& rim,std::span<const world::Triangle> finalVolume){
+    if(rim.ring.size()<3||finalVolume.size()>262144)return false;
+    std::set<SurfaceEdgeKey> expected;
+    const auto point=[&](const SurfaceVertexKey& key){
+        return frame.toSimulation({Fixed::fromRaw(key[0]),Fixed::fromRaw(key[1]),Fixed::fromRaw(key[2])});
+    };
+    for(size_t i=0;i<rim.ring.size();++i)
+        if(!expected.insert(surfaceEdgeKey(point(rim.ring[i]),point(rim.ring[(i+1)%rim.ring.size()]))).second)return false;
+    std::map<SurfaceEdgeKey,unsigned> uses;
+    for(const auto& t:finalVolume){
+        if(!world::SpatialWorld::validTriangle(t))return false;
+        const Vec3 p[]={t.a,t.b,t.c};
+        for(unsigned i=0;i<3;++i){auto edge=surfaceEdgeKey(p[i],p[(i+1)%3]);
+            if(expected.contains(edge)&&++uses[edge]>1)return false;}
+    }
+    return uses.size()==expected.size();
 }
 inline CavePlanetNativePayload prepareCavePlanetNativeChunk(
         const CavePlanetFrame& frame,const CaveMesh& mesh,uint32_t resolution,
