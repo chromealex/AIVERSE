@@ -244,9 +244,10 @@ inline void bakeArborImpostorFromModel(ArborImpostorAtlas& out,
     constexpr double tau = 6.283185307179586476925286766559;
     auto sample = [&](const render::Material& m, render::float2 uv, float rgba[4]) {
         rgba[0] = m.baseColor.x; rgba[1] = m.baseColor.y; rgba[2] = m.baseColor.z; rgba[3] = m.baseColor.w;
-        if (m.baseTex < 0 || size_t(m.baseTex) >= nearModel.images.size()) return;
-        const auto& img = nearModel.images[size_t(m.baseTex)];
-        if (img.width <= 0 || img.rgba.size() < size_t(img.width) * img.height * 4) return;
+        const auto* resolved=render::resolveMaterialImage(nearModel,m,&render::Material::baseTex);
+        if(!resolved)return;
+        const auto& img=*resolved;
+        if(img.width<=0||img.height<=0||size_t(img.width)>img.rgba.size()/4/size_t(img.height))return;
         float u = uv.x * m.uvScale.x + m.uvOffset.x, v = uv.y * m.uvScale.y + m.uvOffset.y;
         u -= std::floor(u); v -= std::floor(v);
         const int x = std::clamp(int(u * float(img.width)), 0, img.width - 1);

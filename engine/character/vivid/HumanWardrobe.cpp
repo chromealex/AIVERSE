@@ -25,12 +25,20 @@ void prune(Model& m){
  for(auto& n:m.nodes)if(n.mesh>=0)n.mesh=retain(retain,n.mesh);
  m.meshes=std::move(meshes);
 }
+// Wardrobe export remaps CPU asset slots; it must never copy an exclusive
+// resident graph texture or transfer a live generation to a different Model.
+void requireOfflineImages(const Model& model){
+ for(const auto& image:model.images)need(!runtimeGraphImage(image)&&!image.tex.valid()&&!image.virtualAlphaMask.valid()&&!image.borrowedTexture&&!image.textureLease,"Wardrobe requires offline CPU images");
+ for(const auto& material:model.materials)need(!material.proceduralGraphPins,"Wardrobe cannot remap live material generations");
+}
 void compactMaterials(Model& m) {
+ requireOfflineImages(m);
  std::vector<int> mm(m.materials.size(),-1),im(m.images.size(),-1);std::vector<Material> materials;std::vector<Image> images;
  for(auto& mesh:m.meshes)for(auto& p:mesh.primitives){auto& target=mm.at(size_t(p.material));if(target<0){auto material=m.materials.at(size_t(p.material));need(!material.shaderGraph&&(material.shading==ShadingModel::Pbr||(material.shading==ShadingModel::Eye&&material.eyeOptics.z>0)),"Final character contains an unbaked shader");for(auto* t:{&material.baseTex,&material.mrTex,&material.normalTex,&material.occlusionTex,&material.emissiveTex,&material.teamTex})if(*t>=0){auto& mapped=im.at(size_t(*t));if(mapped<0){mapped=int(images.size());images.push_back(m.images[size_t(*t)]);}*t=mapped;}target=int(materials.size());materials.push_back(std::move(material));}p.material=target;p.variantMaterial.clear();}
  m.materials=std::move(materials);m.images=std::move(images);
 }
 void append(Model& dst,Model src,const Json& item) {
+ requireOfflineImages(src);
  const auto id=item.getStr("id"),socket=item.getStr("socket");
  const auto bone=socket.empty()?item.getStr("bone"):"socket/"+socket;
  const auto rule=item.getStr("attachmentRule");
@@ -80,11 +88,12 @@ void mask(Model& model,const Json& entry,const FileReader& reader,int size) {
  const int index=model.findMaterial(entry.getStr("material"));need(index>=0,"Body mask material missing: "+entry.getStr("material"));
  auto& m=model.materials[size_t(index)];Image maskImage;need(readModelImage(entry.getStr("texture"),reader,maskImage),"Cannot decode body visibility mask");
  need(maskImage.width>0&&maskImage.height>0&&maskImage.rgba.size()==size_t(maskImage.width)*maskImage.height*4,"Body mask pixels unavailable");
- const Image* source=m.baseTex<0?nullptr:&model.images.at(size_t(m.baseTex));
+ const Image* source=resolveMaterialImage(model,m,&Material::baseTex);
+ need(m.baseTex<0||(source&&!runtimeGraphImage(*source)),"Body mask requires an authored CPU texture");
  Image out;out.name=m.name+".visibility";out.width=source?source->width:size;out.height=source?source->height:size;out.repeat=source?source->repeat:true;
  if(source){need(source->rgba.size()==size_t(out.width)*out.height*4,"Body colour pixels unavailable");out.rgba=source->rgba;}else out.rgba.resize(size_t(out.width)*out.height*4,255);
  for(int y=0;y<out.height;++y)for(int x=0;x<out.width;++x){const size_t from=(size_t(y*maskImage.height/out.height)*maskImage.width+x*maskImage.width/out.width)*4;const size_t to=(size_t(y)*out.width+x)*4+3;out.rgba[to]=uint8_t((unsigned(out.rgba[to])*maskImage.rgba[from]+127)/255);}
- m.baseTex=int(model.images.size());model.images.push_back(std::move(out));if(m.alpha==AlphaMode::Opaque){m.alpha=AlphaMode::Mask;m.alphaCutoff=.5f;}
+ const int imageIndex=int(model.images.size());model.images.push_back(std::move(out));setImportedMaterialImage(m,&Material::baseTex,imageIndex);if(m.alpha==AlphaMode::Opaque){m.alpha=AlphaMode::Mask;m.alphaCutoff=.5f;}
 }
 // Bake the bind-pose deformation into vertices and morph vectors; move joint
 // pivots and translation keys by the corresponding bind offset. Runtime retains
@@ -144,7 +153,7 @@ need(!item.has("independentRig")||item["independentRig"].type()==Json::Type::Boo
 }
 Json inspectHumanWardrobe(const Model& model){auto result=Json::object(),meshes=Json::array(),bones=Json::array(),materials=Json::array();std::set<std::string> names;for(const auto& n:model.nodes){if(n.mesh>=0)names.insert(model.meshes.at(size_t(n.mesh)).name);bones.push(Json::string(n.name));}for(const auto& n:names)meshes.push(Json::string(n));for(const auto& m:model.materials)materials.push(Json::string(m.name));result.set("meshes",meshes);result.set("bones",bones);result.set("materials",materials);return result;}
 std::unique_ptr<Model> assembleHumanCharacter(const std::string& base,const FileReader& read,const Json& wardrobe,const HumanAppearance& look,int size,const HumanFaceShape* face){
- validateHumanWardrobe(wardrobe);auto model=loadModel(base,read);need(bool(model),"Cannot import base character");model->finalize();
+ validateHumanWardrobe(wardrobe);auto model=loadModel(base,read);need(bool(model),"Cannot import base character");requireOfflineImages(*model);model->finalize();
  // Named sockets become ordinary transform nodes, so standard animation/world
  // traversal and GLB export preserve them without a second attachment clock.
  if(wardrobe.has("sockets"))for(const auto& socket:wardrobe["sockets"].items()){
