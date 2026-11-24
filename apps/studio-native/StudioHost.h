@@ -261,6 +261,9 @@ private:
     std::string worldProcessSceneBody();
     std::optional<StudioForestCameraFocus> worldProcessForestCamera();
     Json sampleWorldProcessLive();
+    Json planetSceneBodyRequest(const Json& params);
+    Json planetForestLiveRequest();
+    Json planetViewAgentRequest(const std::string& name,const Json& params);
     std::int64_t wpPreviewRevision_=-1;
     std::string wpPreviewOwner_;
     std::string wpPreviewSelection_;

@@ -91,6 +91,7 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
     : platform_(platform), engineRoot_(engineRoot), htmlComposite_(htmlComposite) {
     // The project opens asynchronously after the UI loads (splash and progress).
     session_ = std::make_unique<StudioSession>(engineRoot, std::string());
+    session_->setPlanetViewAgentProvider([this](const std::string& name,const Json& args){return planetViewAgentRequest(name,args);});
     session_->setMaterialSlotProvider([this](const std::string& asset) {
         return preview_ ? onScene([&] { return preview_->modelMaterialSlots(asset); }) : std::vector<std::string>{};
     });
@@ -861,6 +862,92 @@ Json StudioHost::sampleWorldProcessLive(){
     const auto camera=worldProcessForestCamera();
     const auto body=camera?camera->body:worldProcessSceneBody();
     return game_->ecologyState(wpLiveOptions_,body,camera);
+}
+Json StudioHost::planetSceneBodyRequest(const Json& params){
+        if(projectLoading_||!session_||!preview_)throw std::runtime_error("Scene unavailable");
+        const auto& ws=session_->workspace();
+        if(!ws.map.data.planet())throw std::runtime_error("Planetary map required");
+        if(params.has("body")){
+            if(!params["body"].isString()||params.getStr("mapPath")!=ws.map.path||params.getStr("expectedRevision")!=std::to_string(ws.map.revision))
+                throw std::runtime_error("Reload the current planetary map");
+            if(session_->strokeActive()||brushArmed()||wpDrag_.active||mouse_.active)throw std::runtime_error("Finish the active Scene gesture first");
+            const auto body=params.getStr("body");const int bi=ws.map.data.findBody(body);
+            if(!body.empty()&&(bi<0||!ws.map.data.bodies[size_t(bi)].surface()))throw std::runtime_error("Unknown surface body");
+            const bool armed=forestPlantArm_.isObject();forestPlantArm_=Json{};
+            onScene([&]{preview_->setPlanetSceneBody(ws.project.dir,ws.map.path,body);});
+            if(armed){Json payload=Json::object();payload.set("cancelled",Json::fromBool(true));sendEventPayload("planetForest.planted",payload);}
+            wpLiveSnapshot_=Json{};wpLiveRefresh_=0;rebuildOverlay();
+        }
+        Json out=Json::object();out.set("override",Json::string(onScene([&]{return preview_->planetSceneBodyOverride(ws.project.dir,ws.map.path);})));out.set("activeBody",Json::string(worldProcessSceneBody()));
+        return out;
+}
+Json StudioHost::planetForestLiveRequest(){
+        if(game_&&worldProcessPlanetMapCurrent()){
+            const auto body=worldProcessSceneBody();
+            if(wpLiveOptions_.live&&wpLiveOptions_.forest&&game_->planetSnapshotCurrent(wpLiveSnapshot_)&&
+               wpLiveSnapshot_["forest"].getBool("active")&&wpLiveSnapshot_["forest"].getStr("focusBody")==body)
+                return wpLiveSnapshot_["forest"];
+            const auto camera=worldProcessForestCamera();
+            return game_->planetForestState(camera?camera->body:body,camera);
+        }
+        Json out=Json::object();out.set("active",Json::fromBool(false));return out;
+}
+Json StudioHost::planetViewAgentRequest(const std::string& name,const Json& params){
+    if(projectLoading_||!session_||!preview_)throw std::runtime_error("Native Scene unavailable");
+    const auto& ws=session_->workspace();
+    if(!ws.map.data.planet()||!params["expectedProject"].isString()||params.getStr("expectedProject")!=ws.project.dir||
+       !params["mapPath"].isString()||params.getStr("mapPath")!=ws.map.path||
+       !params["expectedRevision"].isString()||params.getStr("expectedRevision")!=std::to_string(ws.map.revision))
+        throw std::runtime_error("Planetary project/map changed; read current identity before retry");
+    if(name=="studio_planet_forest_live"){
+        if(!worldProcessPlanetMapCurrent())throw std::runtime_error("Start local Play on the current saved map");
+        const auto out=planetForestLiveRequest();
+        if(!out.getBool("active"))throw std::runtime_error("Completed local forest snapshot unavailable");
+        return out;
+    }
+    if(name=="studio_planet_scene_body_set"){
+        if(!params["body"].isString())throw std::runtime_error("Body string required");
+        return planetSceneBodyRequest(params);
+    }
+    if(name!="studio_planet_scene_get"&&name!="studio_planet_scene_camera_set")throw std::runtime_error("Unknown planetary view operation");
+    if(name=="studio_planet_scene_camera_set"){
+        if(session_->strokeActive()||brushArmed()||wpDrag_.active||mouse_.active||forestPlantArm_.isObject())
+            throw std::runtime_error("Finish the active Scene gesture first");
+        const auto body=worldProcessSceneBody();
+        if(body.empty()||params.getStr("body")!=body)throw std::runtime_error("Wait for the requested rendered body");
+        if(!params["target"].isArray()||params["target"].size()!=3||params["ortho"].type()!=Json::Type::Bool)
+            throw std::runtime_error("Camera target and orthographic flag required");
+        const auto bounded=[](const Json& j,double lo,double hi){
+            if(!j.isNumber())throw std::runtime_error("Numeric camera field required");
+            const double v=j.toDouble();
+            if(!std::isfinite(v)||v<lo||v>hi)throw std::runtime_error("Camera field out of range");
+            return float(v);
+        };
+        StudioScene::CameraState camera;
+        camera.target={bounded(params["target"][0],-8192,8192),bounded(params["target"][1],-8192,8192),bounded(params["target"][2],-8192,8192)};
+        camera.distance=bounded(params["distance"],2,8192);
+        camera.yaw=std::remainder(bounded(params["yaw"],-1000,1000),6.28318530718f);
+        camera.pitch=bounded(params["pitch"],-1.5707963,1.5707963);camera.ortho=params.getBool("ortho");
+        onScene([&]{
+            if(preview_->planetSceneBody(ws.project.dir,ws.map.path,ws.map.revision)!=body||preview_->transformDragActive())
+                throw std::runtime_error("Scene changed or transform gesture active");
+            preview_->setPlanetOrbitCamera(camera);
+        });
+        wpLiveRefresh_=0;
+        cameraSent_=false;publishCamera(camera);
+    }
+    Json out=planetSceneBodyRequest(Json::object());
+    out.set("project",Json::string(ws.project.dir));out.set("mapPath",Json::string(ws.map.path));
+    out.set("revision",Json::string(std::to_string(ws.map.revision)));
+    if(!out.getStr("activeBody").empty()){
+        const auto camera=onScene([&]{return preview_->cameraState();});
+        Json view=Json::object(),target=Json::array();
+        for(float value:{camera.target.x,camera.target.y,camera.target.z})target.push(Json::number(double(value),4));
+        view.set("target",std::move(target));view.set("distance",Json::number(double(camera.distance),4));
+        view.set("yaw",Json::number(double(camera.yaw),6));view.set("pitch",Json::number(double(camera.pitch),6));
+        view.set("ortho",Json::fromBool(camera.ortho));out.set("camera",std::move(view));
+    }
+    return out;
 }
 bool StudioHost::worldProcessPlanetMapCurrent() const {
     if(projectLoading_||!session_||!game_||!game_->launchedMapCurrent()||wpLivePlanetMapPath_.empty())return false;
@@ -2161,24 +2248,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if(game_)return game_->worldProcessDiagnostics(int(cap),params.getStr("focus"));
         Json out=Json::object();out.set("active",Json::fromBool(false));return out;
     });
-    if(method=="studio.planetSceneBody")return answer([&]{
-        if(projectLoading_||!session_||!preview_)throw std::runtime_error("Scene unavailable");
-        const auto& ws=session_->workspace();
-        if(!ws.map.data.planet())throw std::runtime_error("Planetary map required");
-        if(params.has("body")){
-            if(!params["body"].isString()||params.getStr("mapPath")!=ws.map.path||params.getStr("expectedRevision")!=std::to_string(ws.map.revision))
-                throw std::runtime_error("Reload the current planetary map");
-            if(session_->strokeActive()||brushArmed()||wpDrag_.active||mouse_.active)throw std::runtime_error("Finish the active Scene gesture first");
-            const auto body=params.getStr("body");const int bi=ws.map.data.findBody(body);
-            if(!body.empty()&&(bi<0||!ws.map.data.bodies[size_t(bi)].surface()))throw std::runtime_error("Unknown surface body");
-            const bool armed=forestPlantArm_.isObject();forestPlantArm_=Json{};
-            onScene([&]{preview_->setPlanetSceneBody(ws.project.dir,ws.map.path,body);});
-            if(armed){Json payload=Json::object();payload.set("cancelled",Json::fromBool(true));sendEventPayload("planetForest.planted",payload);}
-            wpLiveSnapshot_=Json{};wpLiveRefresh_=0;rebuildOverlay();
-        }
-        Json out=Json::object();out.set("override",Json::string(onScene([&]{return preview_->planetSceneBodyOverride(ws.project.dir,ws.map.path);})));out.set("activeBody",Json::string(worldProcessSceneBody()));
-        return out;
-    });
+    if(method=="studio.planetSceneBody")return answer([&]{return planetSceneBodyRequest(params);});
     if(method=="studio.planetForestArm")return answer([&]{
         Json out=Json::object();forestPlantArm_=Json{};
         if(preview_)onScene([&]{preview_->setForestDragPreview(Json{});});
@@ -2205,17 +2275,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
         }
         out.set("armed",Json::fromBool(forestPlantArm_.isObject()));return out;
     });
-    if(method=="studio.planetForestLive")return answer([&]{
-        if(game_&&worldProcessPlanetMapCurrent()){
-            const auto body=worldProcessSceneBody();
-            if(wpLiveOptions_.live&&wpLiveOptions_.forest&&game_->planetSnapshotCurrent(wpLiveSnapshot_)&&
-               wpLiveSnapshot_["forest"].getBool("active")&&wpLiveSnapshot_["forest"].getStr("focusBody")==body)
-                return wpLiveSnapshot_["forest"];
-            const auto camera=worldProcessForestCamera();
-            return game_->planetForestState(camera?camera->body:body,camera);
-        }
-        Json out=Json::object();out.set("active",Json::fromBool(false));return out;
-    });
+    if(method=="studio.planetForestLive")return answer([&]{return planetForestLiveRequest();});
     if(method=="studio.evolveState")return answer([&]{
         // Browser polling can reuse the same completed-tick geometry sampled
         // for the native Scene. No duplicate heavy GRANULAR query.

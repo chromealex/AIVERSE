@@ -1127,6 +1127,16 @@ bool StudioSession::pollAgentLink() {
             agentLines_.push_back("→ view_screenshot");
             continue;
         }
+        // The authenticated, explicit native view adapter cannot touch a document
+        // owner. Do not put camera navigation in the map/asset history journal.
+        if(studioPlanetViewAgentOperation(name)){
+            Json result;
+            try{
+                if(!planetViewAgent_)throw std::runtime_error("Requires an authenticated HTML5 Studio agent link with a native Scene host");
+                result=planetViewAgent_(name,args);
+            }catch(const std::exception& e){result=error(e.what());}
+            agentServer_.send(m.client,reply(id,result).dump(-1));continue;
+        }
         syncHistoryLabels();
         const auto before=ws_.map.historyMark();const size_t entities=ws_.map.data.entities.size();
         const auto projectBefore=ws_.project.documentHistory.version(),assetBefore=assetHistory_.version();
@@ -1177,8 +1187,10 @@ bool StudioSession::pollAgentLink() {
         const bool nativeNoop=(name=="studio_asset_meta_patch"||
             (name=="studio_asset_move_commit"&&!result["files"].size()&&!result["issues"].size()))&&
             assetHistory_.version()==assetBefore&&!failed;
+        const bool forestNoop=(name=="planet_forest_set"||name=="planet_forest_move")&&
+            result.has("changed")&&!result.getBool("changed")&&!failed;
         const bool ownerChanged=ws_.map.historyMark()!=before||ws_.project.documentHistory.version()!=projectBefore||assetHistory_.version()!=assetBefore;
-        const bool edit=!failed&&(ownerChanged||dirty!=wasDirty||(!readOnly&&!nativeNoop));
+        const bool edit=!failed&&(ownerChanged||dirty!=wasDirty||(!readOnly&&!nativeNoop&&!forestNoop));
         if(edit||ownerChanged)changed=true;
         // Map-only Undo all never crosses untracked or non-map changes.
         if((edit&&(policy!="map"||links.empty()||std::any_of(links.begin(),links.end(),[](const auto& l){return l.first!="map";})))||

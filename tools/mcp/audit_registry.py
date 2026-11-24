@@ -25,6 +25,7 @@ REQUIRED = {
     "human": ("human_schema", "human_create"),
     "mcp": ("mcp_registry",),
     "simulation": ("simulation_budget_plan",),
+    "studio_planet_view": ("studio_planet_forest_live", "studio_planet_scene_get", "studio_planet_scene_body_set", "studio_planet_scene_camera_set"),
     "studio_assets": ("studio_asset_history", "studio_asset_catalog", "studio_asset_meta_patch",
                       "studio_asset_folder_create", "studio_asset_dependencies",
                       "studio_asset_recovery_storage", "studio_asset_trash_list",
@@ -52,7 +53,7 @@ def main():
         {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}},
         {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"mcp_registry","arguments":{}}},
         *[{"jsonrpc":"2.0","id":100+i,"method":"tools/call","params":{"name":name,"arguments":{}}}
-          for i,name in enumerate(REQUIRED["studio_assets"])],
+          for i,name in enumerate(REQUIRED["studio_assets"] + REQUIRED["studio_planet_view"])],
     ]
     try:
         done = subprocess.run(cmd, input="\n".join(map(json.dumps, requests))+"\n",
@@ -107,7 +108,7 @@ def main():
     if any(not isinstance(t.get("guiOnly"), bool) for t in registry.values()):
         print("ERROR: missing guiOnly metadata", file=sys.stderr)
         return 2
-    for i,name in enumerate(REQUIRED["studio_assets"]):
+    for i,name in enumerate(REQUIRED["studio_assets"] + REQUIRED["studio_planet_view"]):
         if not registry.get(name, {}).get("studioLinkOnly"):
             print("ERROR: missing Studio link restriction:", name, file=sys.stderr)
             return 2

@@ -90,6 +90,10 @@ public:
     void setOrthographic(bool ortho);
     struct CameraState { float yaw = 0, pitch = 0, distance = 0; bool ortho = false; render::float3 target{}; };
     CameraState cameraState() const { return {camera_.yaw, camera_.pitch, camera_.distance, camera_.ortho, camera_.target}; }
+    void setPlanetOrbitCamera(const CameraState& state){
+        tween_.active=false;camera_.target=state.target;camera_.distance=state.distance;
+        camera_.yaw=state.yaw;camera_.pitch=state.pitch;camera_.ortho=state.ortho;autoIso_=false;cameraInitialized_=true;
+    }
     // Corner orientation gizmo rendered by Renderer3D, for the default host where
     // the Metal view covers the WebView (the HTML gizmo is used in composite mode).
     void setOrientationGizmo(bool enabled) { orientationGizmo_ = enabled; }

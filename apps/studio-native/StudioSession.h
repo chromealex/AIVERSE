@@ -93,6 +93,8 @@ public:
     // Scene owns model loading). Without it, slots come from authored overrides.
     using MaterialSlotProvider=std::function<std::vector<std::string>(const std::string& asset)>;
     void setMaterialSlotProvider(MaterialSlotProvider provider) { materialSlots_=std::move(provider); }
+    using PlanetViewAgentProvider=std::function<Json(const std::string&,const Json&)>;
+    void setPlanetViewAgentProvider(PlanetViewAgentProvider provider){planetViewAgent_=std::move(provider);}
     Json previewExternalAssets(const std::vector<std::filesystem::path>& files,
                                const std::string& destination); // native picker ONLY
 private:
@@ -114,6 +116,7 @@ private:
     Json inspectorFor(const std::string& entityId) const; // entity header + components
     Json setMeshRenderer(int index, const std::string& key, const Json& value);
     MaterialSlotProvider materialSlots_;
+    PlanetViewAgentProvider planetViewAgent_;
     int indexFor(const std::string& id) const;
     editor::Workspace ws_;
     std::string selected_;
