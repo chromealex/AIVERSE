@@ -391,10 +391,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/building-studio-b954cd47a.json",
-    "docs/evidence/building-live-owner-b954cd47a.json",
-    "docs/evidence/building-material-export-b954cd47a.json",
-    "docs/evidence/integration-tools-b954cd47a.json",
-    "docs/evidence/building-export-1894e6dd8.json"
+    "docs/evidence/integration-acceptance-1748b1027.json"
   ]
 }
