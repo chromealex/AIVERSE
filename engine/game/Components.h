@@ -198,7 +198,9 @@ enum GameEvent : uint16_t {
     kEvAttackWindup,    // attack clip starts; a = attacker, b = target, value = weapon index
     kEvAttackCancelled, // windup interrupted without consuming cooldown
     kEvAttackRecoveryEnd, // backswing completed; value = weapon index
+    kEvBounty,            // actual resource credit: player = recipient, a = victim, value = Fixed raw
 };
+constexpr uint16_t kHitCritical = 1u << 0; // kEvHit.flags
 // kEvModePhase values
 enum ModePhaseEvent : int64_t { kModeSdCounter = 1, kModeSdPreview, kModeSdStart, kModeSdEnd, kModeTimeStep, kModeTimeUp,
                                 kModeKohAlarm, kModeDomHeld, kModeZoneLost, kModeZoneChanged };
