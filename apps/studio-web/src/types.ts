@@ -120,6 +120,7 @@ export interface StudioCavernsPreview {
   budgets:StudioCavernsBudgets;
   terrainCutEntrances?:string; terrainRejectedEntrances?:string; terrainTriangles?:string;
   terrainCutDiagnostic?:string; terrainCutSupported?:boolean;
+  sparseTerrainResident?:string; sparseTerrainAuthored?:string; sparseTerrainDiagnostic?:string;
   enabled:boolean; isolate:boolean; paging:boolean; visible:boolean; visualOnly:true; error:string;
   sourceRevision?:string; tracked?:string; ready?:string; pendingCpu?:string; retirePending?:string;
   activeShards?:string; stagedShards?:string; retiredScenes?:string;
