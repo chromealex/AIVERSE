@@ -1,6 +1,6 @@
 // Real native scenes, no GPU required for the baseline lifecycle.
 #include "engine/world/TerraWeaveCavernsPlanetCollisionBinding.h"
-#include "engine/world/TerraWeaveCavernsPlanetRuntimeBuild.h"
+#include "engine/world/TerraWeaveCavernsPlanetRuntimeFrame.h"
 #include <stdexcept>
 #include <iostream>
 using namespace aiverse;
@@ -29,6 +29,7 @@ static void checkCandidateIdentity(){
 }
 int main(){
     checkCandidateIdentity();
+    check(!CavePlanetRuntimeHooks{}.valid(),"missing host hooks must refuse");
     physics::Scene box;
     world::SpatialWorld spatial;
     CaveColliderLeasePool pool(10000,100);
