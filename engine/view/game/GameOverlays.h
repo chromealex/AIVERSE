@@ -18,6 +18,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <utility>
 #include "../../render/Renderer3D.h"
 #include "../../render/NativePresentationRetirement.h"
 #include "../../render/TextureCache.h"
