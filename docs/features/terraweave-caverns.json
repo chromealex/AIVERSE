@@ -239,17 +239,20 @@
       ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The Caverns authoring skill is registered in the validated catalog and the documented stamp workflow passed native readback.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "skills/world/aiverse-terraweave-caverns/SKILL.md",
+        "docs/evidence/integration-tools-b954cd47a.json",
+        "docs/evidence/caverns-authoring-b954cd47a.json"
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Native stdio carved and filled a map, undid and redid edits, saved it, and read the identical snapshot and stable IDs in a fresh MCP process.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "docs/evidence/caverns-authoring-b954cd47a.json",
+        "docs/evidence/integration-tools-b954cd47a.json"
       ]
     },
     "studio": {
@@ -330,10 +333,11 @@
       ]
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The Caverns owner document and skill describe deterministic generation, authored stamps, planetary ownership and native restore constraints.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "docs/agents/caverns.md",
+        "skills/world/aiverse-terraweave-caverns/SKILL.md"
       ]
     },
     "publishing": {
@@ -359,5 +363,8 @@
       "caverns"
     ]
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/caverns-authoring-b954cd47a.json",
+    "docs/evidence/integration-tools-b954cd47a.json"
+  ]
 }

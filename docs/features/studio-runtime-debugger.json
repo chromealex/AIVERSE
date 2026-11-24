@@ -136,8 +136,8 @@
       ]
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The owner handoff describes the supported Studio workflow, bridge contract and limits.",
       "evidence": [
         "docs/handoff/studio-html5/s4-runtime-debugger-2026-11-24.md"
       ]
@@ -162,5 +162,8 @@
       "runtime"
     ]
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/studio-web-b954cd47a.json",
+    "docs/evidence/integration-native-contracts-b954cd47a.json"
+  ]
 }

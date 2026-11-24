@@ -69,18 +69,14 @@
       ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
-      "evidence": [
-        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
-      ]
+      "status": "not_applicable",
+      "note": "This read-only inspector projects the active hosted simulation. It owns no persistent scene data.",
+      "evidence": []
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
-      "evidence": [
-        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
-      ]
+      "status": "not_applicable",
+      "note": "The inspector reads existing simulation state and has no authorable node graph.",
+      "evidence": []
     },
     "performance": {
       "status": "not_run",
@@ -132,8 +128,8 @@
       ]
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The owner handoff describes the supported Studio workflow, bridge contract and limits.",
       "evidence": [
         "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
       ]
@@ -159,5 +155,7 @@
       "runtime"
     ]
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/studio-web-b954cd47a.json"
+  ]
 }

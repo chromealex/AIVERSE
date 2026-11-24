@@ -275,9 +275,12 @@
       "evidence": []
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Stage 35D planned; integration verification pending.",
-      "evidence": []
+      "status": "pass",
+      "note": "The independent native BuildingWorldRuntime consumer installed its ECS module in Simulation and exposed scene navigation telemetry through the diagnostic provider.",
+      "evidence": [
+        "examples/world/runtime-building/main.cpp",
+        "docs/evidence/building-live-owner-b954cd47a.json"
+      ]
     },
     "skill": {
       "status": "not_run",
@@ -286,9 +289,10 @@
     },
     "mcp": {
       "status": "pass",
-      "note": "Standalone registry and validation passed. Live MCP returned native navigation telemetry for two scenes and reported a missing scene unavailable at a9773f75c.",
+      "note": "Real MCP stdio and the Studio agent link read two native Building scenes with navigation telemetry. Missing-owner, absent-scene and invalid-ID requests were checked.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "docs/evidence/integration-tools-b954cd47a.json",
+        "docs/evidence/building-live-owner-b954cd47a.json"
       ]
     },
     "studio": {
@@ -335,10 +339,9 @@
     },
     "examples": {
       "status": "pass",
-      "note": "The native C++ exporter generated twenty GLBs from the four Sci-Fi structures across seeds and dimensions. The batch validated meshes, bounds and geometry on macOS, including the compact twin-bay factory.",
+      "note": "The C++ exporter generated all 20 sized models. All 12 setting-specific GLB files passed embedded PBR channel and PNG validation.",
       "evidence": [
-        "tools/buildings/building_style_export.cpp",
-        "tools/buildings/qa_batch_20.py",
+        "docs/evidence/building-material-export-b954cd47a.json",
         "docs/evidence/building-export-1894e6dd8.json"
       ]
     },
@@ -350,10 +353,10 @@
       ]
     },
     "handoff": {
-      "status": "not_run",
-      "note": "Stage 35G shared source reconciliation recorded; owner branch unavailable, final integration pending. Integration stages 11–17 record code, failures, native results and promotion scope.",
+      "status": "pass",
+      "note": "Stages 17–21 record source SHAs, native Studio, merge conflicts, ownership and corrective regression evidence.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "docs/agent-handoffs/building-caverns-integration-stage21-2026-11-25.md"
       ]
     },
     "documentation": {
@@ -388,8 +391,10 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/building-caverns-mac-a9773f75c.json",
-    "docs/evidence/building-caverns-studio-a9773f75c.json",
+    "docs/evidence/building-studio-b954cd47a.json",
+    "docs/evidence/building-live-owner-b954cd47a.json",
+    "docs/evidence/building-material-export-b954cd47a.json",
+    "docs/evidence/integration-tools-b954cd47a.json",
     "docs/evidence/building-export-1894e6dd8.json"
   ]
 }

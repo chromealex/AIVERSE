@@ -211,9 +211,10 @@
       ]
     },
     "handoff": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification. Integration stages 11–17 record code, failures, native results and promotion scope.",
+      "status": "pass",
+      "note": "Owner stages and the merged guarded-write regressions are recorded with source and acceptance results.",
       "evidence": [
+        "docs/handoff/studio-html5/graph-framework-stage35e-2026-11-24.md",
         "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
       ]
     },
@@ -314,7 +315,7 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/building-caverns-mac-a9773f75c.json",
-    "docs/evidence/building-caverns-studio-a9773f75c.json"
+    "docs/evidence/integration-native-contracts-b954cd47a.json",
+    "docs/evidence/studio-web-b954cd47a.json"
   ]
 }

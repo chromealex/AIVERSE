@@ -58,10 +58,11 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Real stdio discovered the planner, returned exact capped and uncapped revisit times for 200000 items and rejected invalid inputs.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "docs/evidence/integration-tools-b954cd47a.json",
+        "tests/simulation_budget_mcp_test.py"
       ]
     },
     "studio": {
@@ -86,11 +87,9 @@
       ]
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
-      "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
-      ]
+      "status": "not_applicable",
+      "note": "The integer visit budget and saved cursor operate on a recurring population; they have no authored node or edge representation.",
+      "evidence": []
     },
     "performance": {
       "status": "not_run",
@@ -142,10 +141,11 @@
       ]
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native API, Traffic adapter, planner inputs and update cadence are documented.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "docs/traffic.md",
+        "skills/core/aiverse-work-budget/SKILL.md"
       ]
     },
     "publishing": {
@@ -161,9 +161,17 @@
       "aiverse-work-budget",
       "aiverse-city-traffic"
     ],
-    "mcp_tools": [],
-    "studio_methods": [],
-    "studio_panels": []
+    "mcp_tools": [
+      "simulation_budget_plan"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ],
+    "studio_panels": [
+      "roads"
+    ]
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/integration-tools-b954cd47a.json"
+  ]
 }

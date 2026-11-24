@@ -67,9 +67,12 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Stages 24–36 source implementation added: automatic report refresh, paginated MCP, standalone Clang API audit, unregistered integration scaffolds, skill review, deterministic scheduling and assignment export, local/fetched branch discovery and conflict proposals, declared impact closure, explicit release scope, read-only dependency graph, lexical architecture review, history and task context. Verification pending; external agent dispatch, semantic ECS proof, ABI guarantees and remote worktree discovery are not claimed.",
-      "evidence": []
+      "status": "pass",
+      "note": "The strict audit detected missing coverage on the integrated diff; native refresh produced a versioned report with a valid SHA and paginated readback.",
+      "evidence": [
+        "docs/evidence/feature-readiness-stdio-b954cd47a.json",
+        "docs/agent-handoffs/building-caverns-integration-stage19-2026-11-25.md"
+      ]
     },
     "architecture": {
       "status": "not_run",
@@ -87,9 +90,12 @@
       "evidence": []
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Four readiness operations declared; actual built MCP registry and tools/call NOT RUN.",
-      "evidence": []
+      "status": "pass",
+      "note": "All four native readiness operations worked over stdio without a loaded project: generation, completion, snapshot readback and a bounded feature page.",
+      "evidence": [
+        "docs/evidence/feature-readiness-stdio-b954cd47a.json",
+        "docs/evidence/integration-tools-b954cd47a.json"
+      ]
     },
     "studio": {
       "status": "not_run",
@@ -138,9 +144,10 @@
     },
     "tests": {
       "status": "pass",
-      "note": "20 Python feature-gate tests passed on the current roadmap and policy. Contract routing and catalog validation passed. Studio source tests ran 55 cases with one Vite bundle case skipped in the source-only checkout.",
+      "note": "20 feature-gate tests passed. Registry, contracts and all four readiness MCP operations were verified against the native implementation.",
       "evidence": [
-        "docs/evidence/integration-authoring-5e541da2e.json"
+        "docs/evidence/integration-tools-b954cd47a.json",
+        "docs/evidence/feature-readiness-stdio-b954cd47a.json"
       ]
     },
     "handoff": {
@@ -149,9 +156,11 @@
       "evidence": []
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending actual execution and integration review.",
-      "evidence": []
+      "status": "pass",
+      "note": "The delivery contract specifies manifest shape, dependencies, partial versus strict audit, integration references and evidence freshness.",
+      "evidence": [
+        "docs/agents/feature-contract.md"
+      ]
     },
     "publishing": {
       "status": "not_run",
@@ -177,6 +186,8 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integration-authoring-5e541da2e.json"
+    "docs/evidence/feature-readiness-stdio-b954cd47a.json",
+    "docs/evidence/integration-tools-b954cd47a.json",
+    "docs/evidence/studio-web-b954cd47a.json"
   ]
 }

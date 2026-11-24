@@ -1,0 +1,11 @@
+{
+  "sha": "b954cd47aceffd107f0dcc52f544d39bdb862b29",
+  "argv": [
+    "bash",
+    "-ec",
+    "out=/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage21-fixed/materials\nmkdir -p \"$out\"\nfor id in medieval-fantasy dark-fantasy steampunk cyberpunk scifi-space alien-civilization post-apocalypse modern ancient-civilizations asian-historical solarpunk underwater; do\n /Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage21-fixed/aiverse_building_export --style \"engine/assets/building-styles/$id.json\" --structure residence --seed 17 --out \"$out/$id.glb\"\ndone\npython3.12 tools/buildings/verify_setting_glb.py \"$out\""
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/building-material-export-b954cd47a.log.txt",
+  "sha256": "290b4e05b1d93fae9c5a478529e5fe3171636f560f3fb02548ae68c16be00823"
+}
