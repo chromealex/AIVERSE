@@ -4917,6 +4917,10 @@ if(AIVERSE_BUILD_TESTS AND TARGET aiversemcp AND Python3_EXECUTABLE)
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/lens_mcp_test.py
         $<TARGET_FILE:aiversemcp> ${CMAKE_CURRENT_SOURCE_DIR})
     set_tests_properties(lens_mcp_stdio PROPERTIES TIMEOUT 60)
+    add_test(NAME world_persistence_mcp_stdio COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/world/world_persistence_mcp_test.py
+        $<TARGET_FILE:aiversemcp> ${CMAKE_CURRENT_SOURCE_DIR})
+    set_tests_properties(world_persistence_mcp_stdio PROPERTIES LABELS "World;PERSISTENCE;MCP" TIMEOUT 120)
 endif()
 
 if(AIVERSE_BUILD_TESTS AND TARGET aiverse_editor_core AND AIVERSE_BUILD_STRATA)
@@ -5247,7 +5251,7 @@ endif()
 # This is an independent correctness test; no external game project required.
 if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
     add_executable(aiverse_region_entity_ledger_test tests/world/region_entity_ledger_test.cpp)
-    target_link_libraries(aiverse_region_entity_ledger_test PRIVATE aiverse_engine)
+    target_link_libraries(aiverse_region_entity_ledger_test PRIVATE aiverse_engine aiverse_pack)
     add_test(NAME region_entity_ledger_test COMMAND aiverse_region_entity_ledger_test)
     set_tests_properties(region_entity_ledger_test PROPERTIES LABELS "World;ECS")
 endif()
