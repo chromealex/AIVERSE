@@ -7,12 +7,22 @@
         "system": "agents",
         "id": "feature-gate"
       },
-      "api_paths": []
+      "api_paths": [
+        "apps/editor/core/FeatureGateOps.h",
+        "tools/agents/check_feature.py",
+        "tools/agents/feature_policy.py"
+      ]
     },
     "graph-framework": {
       "requires": [],
-      "roadmap": null,
-      "api_paths": []
+      "roadmap": {
+        "system": "studio",
+        "id": "graph-framework"
+      },
+      "api_paths": [
+        "apps/editor/core/GraphOps.h",
+        "apps/studio-web/src/graphs/graphFramework.ts"
+      ]
     }
   },
   "claims": []
