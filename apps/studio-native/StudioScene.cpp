@@ -1420,6 +1420,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     const std::string& projectRoot=projectPath;
     facialReady_=false;
     facialError_.clear();
+    globeReady_=false; // only the actual overview render enables picking
     if (!device_ || framebufferWidth < 2 || framebufferHeight < 2) return;
     if(antialiasing_.pendingTargetRetirements())antialiasing_.collectRetiredTargets();
     if (renderer_.pendingProgramRetirements()) renderer_.collectRetiredPrograms();
