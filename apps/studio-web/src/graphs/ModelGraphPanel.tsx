@@ -12,8 +12,8 @@ import type {Positioned} from './graphSelection';
 import {modelProjection,connectModelParent,modelingReply,object,replaceAnimationEntry,animationProjection,connectAnimationPose,addAnimationTransition,geometryProjection,connectGeometryOperand,setGeometryBoolean,moveGeometryModifier,geometryModifierKinds,addGeometryModifier,removeGeometryModifier,modelMaterialIds,bindModelMaterial} from './nativeGraphAdapters';
 import type {GraphObject} from './nativeGraphAdapters';
 
-export default function ModelGraphPanel({projectPath}:{projectPath:string}){
- const op=async(name:string,params:GraphObject={})=>(await invoke('studio.op',{op:name,params,expectedProject:projectPath})).result;
+export default function ModelGraphPanel({documentEpoch,projectPath}:{documentEpoch?:string;projectPath:string}){
+ const op=async(name:string,params:GraphObject={})=>(await invoke('studio.op',{op:name,params,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch})).result;
  const [names,setNames]=useState<string[]>([]),[name,setName]=useState('');
  const [original,setOriginal]=useState<GraphObject|null>(null),[draft,setDraft]=useState<GraphObject|null>(null);
  const [revision,setRevision]=useState(0),[mode,setMode]=useState<'model'|'geometry'|'pose'|'states'>('model');
@@ -45,7 +45,7 @@ export default function ModelGraphPanel({projectPath}:{projectPath:string}){
    setNames(result.models.filter((n):n is string=>typeof n==='string'));
   });
   return ()=>{if(epoch.current===token)epoch.current++};
- },[projectPath]);
+ },[projectPath,documentEpoch]);
  useEffect(()=>{setJson(entry?JSON.stringify(entry,null,2):'')},[entry]);
  const open=(asset:string)=>void run(async live=>{if(!asset||dirty)return;
   const r=modelingReply(await op('modeling_get',{name:asset}));if(!live())return;
@@ -109,7 +109,7 @@ export default function ModelGraphPanel({projectPath}:{projectPath:string}){
     label="Model graph" disabled={busy} pendingOutput={pending} onOutput={setPending} onInput={connect} onCancel={()=>setPending(null)}
     onSelect={id=>setSelection(id?[id]:[])} onMove={(id,x,y)=>move([{id,x,y}])} onMoveGroup={move}/>
    <GraphDiagnostics view={view} policy={{cycles:mode==='states'?'allow':'reject'}}/>
-   {name&&(mode==='model'||mode==='geometry')&&<StrataAnalysisPanel projectPath={projectPath} suggestedModel={'models/'+name+'.glb'} disabled={busy}/>}
+   {name&&(mode==='model'||mode==='geometry')&&<StrataAnalysisPanel projectPath={projectPath} documentEpoch={documentEpoch} suggestedModel={'models/'+name+'.glb'} disabled={busy}/>}
    {graph&&(mode==='pose'||mode==='states')&&<AnimationParameters doc={graph} disabled={busy} onEdit={next=>edit({...draft,graph:next})}/>}
    {entry&&<StudioSection title={'Entry '+active}>{mode==='geometry'&&object(entry)&&object(entry.geometry)&&<>
     <StudioSelect aria-label="Source material" disabled={busy} value={String(entry.material??'')} onChange={e=>edit(bindModelMaterial(draft,active,e.target.value))}><option value="">Default material</option>{modelMaterialIds(draft).map(id=><option key={id} value={id}>{id}</option>)}</StudioSelect>

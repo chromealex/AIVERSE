@@ -130,8 +130,8 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
   const shown = ops.filter(o => !spec.state.includes(o.name) && (!q || o.name.includes(q) || o.description.toLowerCase().includes(q)));
   return <div className="tool">
     {hasGraph&&<div className="au-row"><StudioButton size="sm" disabled={graphMode} onClick={()=>setGraphMode(true)}>Graph</StudioButton><StudioButton size="sm" disabled={!graphMode} onClick={()=>setGraphMode(false)}>Native operations</StudioButton></div>}
-    {graphDomain&&<div hidden={!graphMode} style={{flex:1,minHeight:0,overflow:"auto"}}><NativeGraphPanel domain={graphDomain} projectPath={projectPath}/></div>}
-    {modelGraph&&<div hidden={!graphMode} style={{flex:1,minHeight:0,overflow:"auto"}}><ModelGraphPanel projectPath={projectPath}/></div>}
+    {graphDomain&&<div hidden={!graphMode} style={{flex:1,minHeight:0,overflow:"auto"}}><NativeGraphPanel key={snapshot?.graphDocument?.epoch} documentEpoch={snapshot?.graphDocument?.epoch} domain={graphDomain} projectPath={projectPath}/></div>}
+    {modelGraph&&<div hidden={!graphMode} style={{flex:1,minHeight:0,overflow:"auto"}}><ModelGraphPanel key={snapshot?.graphDocument?.epoch} documentEpoch={snapshot?.graphDocument?.epoch} projectPath={projectPath}/></div>}
     <div hidden={hasGraph&&graphMode} style={{flex:1,minHeight:0,overflow:"auto"}}>
     <div className="tool__head">
       <p>{spec.intro}</p>
@@ -140,7 +140,7 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
     </div>
     {error && <div className="tool__error" role="alert">{error}</div>}
     <div className="tool__scroll">
-      {panel==='models'&&<StrataAnalysisPanel projectPath={projectPath}/>}
+      {panel==='models'&&<StrataAnalysisPanel key={snapshot?.graphDocument?.epoch} documentEpoch={snapshot?.graphDocument?.epoch} projectPath={projectPath}/>}
       {BRUSHES[panel] && <SceneBrushBar kinds={BRUSHES[panel]!}/>}
       {Object.entries(state).map(([name, value]) => <div key={name} className="tool__state">
         <JsonTree value={value} name={opLabel(name, spec.prefix)} open/>

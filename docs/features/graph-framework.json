@@ -126,7 +126,8 @@
     "docs/shader-graph-agents.md",
     "docs/spectrafx.md",
     "docs/ru/spectrafx.md",
-    "skills/visuals/aiverse-spectrafx/SKILL.md"
+    "skills/visuals/aiverse-spectrafx/SKILL.md",
+    "apps/studio-web/src/panels/StudioPanelRenderer.tsx"
   ],
   "traits": {
     "editable": true,
@@ -162,7 +163,7 @@
     },
     "studio": {
       "status": "not_run",
-      "note": "Existing Caverns panel mounts native scoped capture and offline import without a second panel; actual native GUI acceptance pending. Stage 64 scopes isolated debugger and profiler Studio operations to the expected project; native bridge regression authored, NOT RUN. Stage 65 scopes graph runtime, modeling, texture and material panel operations to the active project; native runtime operations require scope and optional asset metadata scope is checked. Tests NOT RUN.",
+      "note": "Existing Caverns panel mounts native scoped capture and offline import without a second panel; actual native GUI acceptance pending. Stage 64 scopes isolated debugger and profiler Studio operations to the expected project; native bridge regression authored, NOT RUN. Stage 65 scopes graph runtime, modeling, texture and material panel operations to the active project; native runtime operations require scope and optional asset metadata scope is checked. Tests NOT RUN. Stage 66 passes existing graph document epoch through graph panels and rejects stale supplied epochs in native operations, shader saves and texture asset metadata patches; legacy callers without epoch remain compatible. Tests NOT RUN.",
       "evidence": []
     },
     "inspector": {

@@ -14,7 +14,7 @@ import {DraftHistory} from '../graphs/graphFramework';
 import {StudioButton,StudioInput,StudioSelect,StudioSection} from '../ui';
 import './ShaderGraphPanel.css';
 
-export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
+export default function ShaderGraphPanel({projectPath,documentEpoch}:{projectPath:string;documentEpoch?:string}) {
  const [names,setNames]=useState<string[]>([]);
  const [operations,setOperations]=useState<StudioShaderGraphOp[]>([]);
  const [selectedOp,setSelectedOp]=useState('');
@@ -136,7 +136,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
   if(!draft||!document||!selected||busy||!dirty)return;
   setBusy(true);setError('');setMessage('');
   try{
-   const result=await invoke('studio.shaderGraphSave',{name:selected,graph:draft,expected:document.graph,expectedProject:projectPath});
+   const result=await invoke('studio.shaderGraphSave',{name:selected,graph:draft,expected:document.graph,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch});
    if(saveScope.current.projectPath!==projectPath||saveScope.current.selected!==selected)return;
    setDocument(result);resetDraft(structuredClone(result.graph));
    setMessage('Graph saved to shaders/'+selected+'.json. MapDoc Undo does not apply.');
@@ -209,7 +209,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
        ]}
        onMove={(id,x,y)=>{if(draft)editDraft(shaderAdapters.get(draft.domain??'material')?.move(draft,id,x,y)??draft)}}/>
       <GraphDiagnostics view={view} policy={{cycles:'reject'}}/>
-      <GraphGpuProfilePanel projectPath={projectPath}/>
+      <GraphGpuProfilePanel documentEpoch={documentEpoch} projectPath={projectPath}/>
       {pendingOutput&&<StudioButton size="sm" onClick={()=>setPendingOutput(null)}>Cancel connection from {pendingOutput.node}</StudioButton>}
       {activeNode&&draft&&<StudioSection title={'Node: '+activeNode.id}>
        <div className="au-stack">

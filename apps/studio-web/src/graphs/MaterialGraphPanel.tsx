@@ -10,8 +10,8 @@ import {materialGraph,textureRecipeParams,textureChannelForOutput} from './mater
 import type {TextureRecipe,TextureOutput} from './materialGraph';
 
 const object=(x:unknown):x is Record<string,unknown>=>!!x&&typeof x==='object'&&!Array.isArray(x);
-export default function MaterialGraphPanel({name,material,draft,projectPath,disabled,onEdit}:{name:string;material:MaterialData;draft:MaterialPatch;projectPath:string;disabled:boolean;onEdit:(key:MaterialKey,value:FieldValue)=>void}){
- const op=async(name:string,params:Record<string,unknown>={})=>(await invoke('studio.op',{op:name,params,expectedProject:projectPath})).result;
+export default function MaterialGraphPanel({documentEpoch,name,material,draft,projectPath,disabled,onEdit}:{documentEpoch?:string;name:string;material:MaterialData;draft:MaterialPatch;projectPath:string;disabled:boolean;onEdit:(key:MaterialKey,value:FieldValue)=>void}){
+ const op=async(name:string,params:Record<string,unknown>={})=>(await invoke('studio.op',{op:name,params,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch})).result;
  const [selected,setSelected]=useState(''),[patterns,setPatterns]=useState<string[]>([]);
  const [recipe,setRecipe]=useState<TextureRecipe>({pattern:'',output:'color',seed:1,size:256,scale:8,name:''});
  const [error,setError]=useState(''),[status,setStatus]=useState(''),[busy,setBusy]=useState(false);
@@ -25,7 +25,7 @@ export default function MaterialGraphPanel({name,material,draft,projectPath,disa
    const list=r.patterns.filter((p):p is string=>typeof p==='string');setPatterns(list);setRecipe(old=>({...old,pattern:list.includes(old.pattern)?old.pattern:list[0]??''}));
   }).catch(e=>{if(epoch.current===token)setError(String(e))});
   return ()=>{if(epoch.current===token)epoch.current++};
- },[projectPath]);
+ },[projectPath,documentEpoch]);
  const generate=async()=>{
   if(disabled||lock.current)return;
   lock.current=true;setBusy(true);setError('');setStatus('');setGenerated(null);
@@ -52,7 +52,7 @@ export default function MaterialGraphPanel({name,material,draft,projectPath,disa
   </div>
   {fields.map(f=><PropertyField key={f.key} property={f} disabled={disabled||busy} onChange={v=>onEdit(f.key,v)}/>)}
   <small>Dependency view of the material draft; edit channels using the existing asset picker. Shader evaluation remains in Shader Graph.</small>
-  <TextureGraphPanel projectPath={projectPath} disabled={disabled||busy} onEdit={onEdit}/>
+  <TextureGraphPanel projectPath={projectPath} documentEpoch={documentEpoch} disabled={disabled||busy} onEdit={onEdit}/>
   <StudioSection title="Generate texture">
    <StudioSelect aria-label="Pattern" disabled={busy||disabled} value={recipe.pattern} onChange={e=>setRecipe(r=>({...r,pattern:e.target.value}))}>{patterns.map(p=><option key={p}>{p}</option>)}</StudioSelect>
    <StudioSelect aria-label="Texture output" disabled={busy||disabled} value={recipe.output} onChange={e=>setRecipe(r=>({...r,output:e.target.value as TextureOutput}))}><option value="color">Color / albedo</option><option value="normal">Normal</option><option value="mask">Team mask</option></StudioSelect>

@@ -10,7 +10,7 @@ import type { MaterialData, MaterialKey, MaterialLibrary, MaterialPatch, Materia
 import './MaterialsPanel.css';
 
 const EMPTY:MaterialLibrary={library:{}};
-export default function MaterialsPanel({projectPath,previewMaterial}:{projectPath:string;previewMaterial?:string|null}){
+export default function MaterialsPanel({projectPath,previewMaterial,documentEpoch}:{documentEpoch?:string;projectPath:string;previewMaterial?:string|null}){
  const [library,setLibrary]=useState<MaterialLibrary>(EMPTY);
  const [name,setName]=useState('');
  const [query,setQuery]=useState('');
@@ -144,7 +144,7 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
       <strong>{name}</strong><small>Library PBR factors</small>
      </div>
      <StudioButton size="sm" onClick={()=>setGraphMode(v=>!v)}>{graphMode?'Properties':'Graph / texture generator'}</StudioButton>
-     {graphMode&&connected&&projectPath?<MaterialGraphPanel name={name} material={selected} draft={draft} projectPath={projectPath} disabled={busy||loading} onEdit={edit}/>:<div className="materials-fields">
+     {graphMode&&connected&&projectPath?<MaterialGraphPanel documentEpoch={documentEpoch} name={name} material={selected} draft={draft} projectPath={projectPath} disabled={busy||loading} onEdit={edit}/>:<div className="materials-fields">
       {props.map(field=><PropertyField key={name+':'+field.key} property={field}
        disabled={busy||!connected||!projectPath} onChange={v=>edit(field.key,v)}/>)}
      </div>}</>}

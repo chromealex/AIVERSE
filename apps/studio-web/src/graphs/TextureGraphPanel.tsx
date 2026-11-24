@@ -31,8 +31,8 @@ function projection(graph:Obj,catalog:Obj[]):GraphView{
  });
  return {nodes,links};
 }
-export default function TextureGraphPanel({projectPath,disabled,onEdit}:{projectPath:string;disabled:boolean;onEdit:(key:MaterialKey,value:FieldValue)=>void}){
- const op=async(name:string,params:Obj={})=>(await invoke('studio.op',{op:name,params,expectedProject:projectPath})).result;
+export default function TextureGraphPanel({documentEpoch,projectPath,disabled,onEdit}:{documentEpoch?:string;projectPath:string;disabled:boolean;onEdit:(key:MaterialKey,value:FieldValue)=>void}){
+ const op=async(name:string,params:Obj={})=>(await invoke('studio.op',{op:name,params,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch})).result;
  const [text,setText]=useState(JSON.stringify(template,null,2)),[name,setName]=useState(''),[original,setOriginal]=useState<{name:string;graph:Obj}|null>(null);
  const [overrideText,setOverrideText]=useState('{}'),[parameterName,setParameterName]=useState(''),[parameterField,setParameterField]=useState(''),[variantName,setVariantName]=useState(''),[baseMaterial,setBaseMaterial]=useState(''),[bakedSet,setBakedSet]=useState('');
  const [templates,setTemplates]=useState<Obj[]>([]),[outputTypes,setOutputTypes]=useState<Obj>({}),[newOp,setNewOp]=useState('constant'),[pending,setPending]=useState<PortRef|null>(null);
@@ -43,7 +43,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState('');
  const epoch=useRef(0),lock=useRef(false),canvas=useRef<HTMLCanvasElement>(null);
  useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setOverrideText('{}');setBakedSet('');setGpuRequest(null);setGpuReady(false);setGpuStatus('');setText(JSON.stringify(template,null,2));setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
- return()=>{epoch.current++;lock.current=false};},[projectPath]);
+ return()=>{epoch.current++;lock.current=false};},[projectPath,documentEpoch]);
  useEffect(()=>{const c=canvas.current;if(!c||!preview||preview.source!==text)return;
  const bytes=new Uint8ClampedArray(preview.hex.length/2);for(let i=0;i<bytes.length;i++)bytes[i]=parseInt(preview.hex.slice(i*2,i*2+2),16);
  c.getContext('2d')?.putImageData(new ImageData(bytes,preview.width,preview.height),0,0);
@@ -117,7 +117,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
       for(const row of r.files.filter(object)){
         const a=index.files.find(a=>'content/'+a.path===row.path&&a.importer==='texture'&&a.guid);
         if(!a?.guid||typeof row.sRGB!=='boolean'||typeof row.output!=='string')continue;
-        const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:row.sRGB,expectedProject:projectPath});if(token!==epoch.current)return;
+        const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:row.sRGB,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch});if(token!==epoch.current)return;
         if(patched.guid!==a.guid||patched.settings.sRGB!==row.sRGB)throw new Error('Importer color-space verification failed for '+a.path);
         configured++;const key=channels[row.output];if(key)mapped.push({guid:a.guid,path:a.path,key});
       }
@@ -128,7 +128,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
     setGpuReady(false);setStatus('Published '+r.path+' via '+String(r.backend));setAsset(null);
     const index=await invoke('studio.assets',{});if(token!==epoch.current)return;
     const a=index.files.find(a=>'content/'+a.path===r.path&&a.importer==='texture'&&a.guid);
-    if(a?.guid){const srgb=output==='color'||output==='emissive';const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:srgb,expectedProject:projectPath});if(token!==epoch.current)return;
+    if(a?.guid){const srgb=output==='color'||output==='emissive';const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:srgb,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch});if(token!==epoch.current)return;
       if(patched.guid!==a.guid||patched.settings.sRGB!==srgb)throw new Error('Importer color-space verification failed');const key=channels[output];if(key)setAsset({guid:a.guid,path:a.path,key});}
     return;
    }
@@ -160,7 +160,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
     for(const row of r.files.filter(object)){
       const a=index.files.find(a=>'content/'+a.path===row.path&&a.importer==='texture'&&a.guid);
       if(!a?.guid||typeof row.sRGB!=='boolean'||typeof row.output!=='string')continue;
-      const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:row.sRGB,expectedProject:projectPath});if(token!==epoch.current)return;
+      const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:row.sRGB,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch});if(token!==epoch.current)return;
       if(patched.guid!==a.guid||patched.settings.sRGB!==row.sRGB)throw new Error('Importer color-space verification failed for '+a.path);
       configured++;const key=channels[row.output];if(key)mapped.push({guid:a.guid,path:a.path,key});
     }
@@ -173,7 +173,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
     const key=channels[output];
     const assets=await invoke('studio.assets',{});if(token!==epoch.current)return;
     const a=assets.files.find(a=>'content/'+a.path===r.path&&a.importer==='texture'&&a.guid);
-    if(a?.guid){const srgb=output==='color'||output==='emissive';const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:srgb,expectedProject:projectPath});if(token!==epoch.current)return;if(patched.guid!==a.guid||patched.settings.sRGB!==srgb)throw new Error('Importer color-space verification failed');if(key)setAsset({guid:a.guid,path:a.path,key});}else setStatus('Baked '+r.path+'; refresh Assets and assign with asset picker.');
+    if(a?.guid){const srgb=output==='color'||output==='emissive';const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:srgb,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch});if(token!==epoch.current)return;if(patched.guid!==a.guid||patched.settings.sRGB!==srgb)throw new Error('Importer color-space verification failed');if(key)setAsset({guid:a.guid,path:a.path,key});}else setStatus('Baked '+r.path+'; refresh Assets and assign with asset picker.');
    }
   }catch(e){if(epoch.current===token)setError(e instanceof Error?e.message:String(e))}
   finally{if(epoch.current===token){lock.current=false;setBusy(false)}}

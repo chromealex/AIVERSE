@@ -1682,6 +1682,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 Json request=Json::object();
                 request.set("graph",draft);
                 if(method=="studio.shaderGraphSave") {
+                    if(params.has("expectedDocumentEpoch") && params.getStr("expectedDocumentEpoch")!=std::to_string(graphDocumentEpoch_))
+                        throw std::runtime_error("Shader graph document reopened; reload before saving");
                     if(params.getStr("expectedProject")!=ws_.project.dir)
                         throw std::runtime_error("Shader Graph project changed; reload before saving");
                     const std::string name=params.getStr("name");
@@ -2004,6 +2006,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
         } else if (method == "studio.op") {
             const std::string op=params.getStr("op");
             if (!studioToolAllowed(op)) throw std::runtime_error("This operation is not available in Studio panels: "+op);
+            if(params.has("expectedDocumentEpoch") && params.getStr("expectedDocumentEpoch")!=std::to_string(graphDocumentEpoch_))
+                throw std::runtime_error("Graph document reopened; refresh the panel");
             if(params.has("expectedProject") && params.getStr("expectedProject")!=ws_.project.dir)
                 throw std::runtime_error("Studio operation project changed; reload before retrying");
             if (op.rfind("feature_readiness_",0)!=0 && ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
@@ -2111,6 +2115,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
             r.set("folders",std::move(folders));
             reply.set("result", std::move(r));
         } else if (method == "studio.assetMetaPatch") {
+            if(params.has("expectedDocumentEpoch") && params.getStr("expectedDocumentEpoch")!=std::to_string(graphDocumentEpoch_))
+                throw std::runtime_error("Asset document reopened; refresh the panel");
             if(params.has("expectedProject") && params.getStr("expectedProject")!=ws_.project.dir)
                 throw std::runtime_error("Asset metadata project changed; refresh the panel");
             if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");

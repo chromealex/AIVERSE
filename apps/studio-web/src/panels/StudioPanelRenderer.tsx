@@ -154,10 +154,10 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'lighting':
         return <LightingPanel projectPath={snapshot?.project.path ?? ''} selectedId={snapshot?.selectedId ?? null} onSelect={select}/>;
       case 'materials':
-        return <MaterialsPanel projectPath={snapshot?.project.path ?? ''}
+        return <MaterialsPanel key={snapshot?.graphDocument?.epoch} documentEpoch={snapshot?.graphDocument?.epoch} projectPath={snapshot?.project.path ?? ''}
           previewMaterial={snapshot?.previewMaterial}/>;
       case 'shader_graph':
-        return <ShaderGraphPanel projectPath={snapshot?.project.path ?? ''}/>;
+        return <ShaderGraphPanel key={snapshot?.graphDocument?.epoch} documentEpoch={snapshot?.graphDocument?.epoch} projectPath={snapshot?.project.path ?? ''}/>;
       case 'project': return <ProjectPanel {...ctx}/>;
       case 'facial_rig':
         return <FacialRigPanel projectPath={snapshot?.project.path ?? ''}/>;

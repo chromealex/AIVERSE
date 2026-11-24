@@ -85,6 +85,9 @@ void caveGraphCaptureWorkflow() {
         debug.set("expectedProject",Json::string("other-project"));
         AIVERSE_TEST_CHECK(call("studio.op",debug).has("error"));
         debug.set("expectedProject",Json::string(projectPath));
+        debug.set("expectedDocumentEpoch",Json::string("0"));
+        AIVERSE_TEST_CHECK(call("studio.op",debug).has("error"));
+        debug.set("expectedDocumentEpoch",call("studio.snapshot")["result"]["graphDocument"]["epoch"]);
         const auto debugReply=call("studio.op",debug);
         AIVERSE_TEST_CHECK(!debugReply.has("error") && !debugReply["result"].getBool("changed"));
         save.set("expectedProject",Json::string(projectPath));
@@ -114,6 +117,7 @@ void caveGraphCaptureWorkflow() {
         AIVERSE_TEST_CHECK(!call("studio.cavernsGraphInspect",args()).has("error"));
         const auto beforeReopen=args();
         session.openProject(project.string());
+        AIVERSE_TEST_CHECK(call("studio.op",debug).has("error"));
         AIVERSE_TEST_CHECK(call("studio.cavernsGraphInspect",beforeReopen).has("error"));
     }
     fs::remove_all(root);
