@@ -161,6 +161,49 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend){
         require(owner.queueStatus().getStr("activeTicket")==low,"next ticket not promoted");drain();
         owner.releaseTicket(low,project,true);drain();
         require(owner.queueStatus().getStr("activeTicket").empty(),"queue result not released");
+        // Real GPU candidates adopt into an actual immutable appearance.
+        // Keep the old snapshot pinned across a partial publication.
+        render::Model materialModel;materialModel.materials.resize(1);
+        render::ModelImageRollbackPool rollback;
+        struct ModelCleanup {
+            gfx::Device& dev;render::Model& model;
+            ~ModelCleanup(){if(dev.waitIdle())render::releaseModel(dev,model);}
+        } cleanup{dev,materialModel};
+        view::AppearanceAssetRegistry registry;
+        view::AppearanceAssetRegistry::Asset asset;asset.model=&materialModel;asset.materials=materialModel.materials;
+        require(registry.publishPrepared("fixture",asset),"fixture appearance publication failed");
+        auto live=registry.find("fixture");
+        opts.incremental=true;opts.incrementalOutputs=true;opts.fusePointwise=true;
+        auto stamp=[&]{return view::LiveAppearanceMaterialTarget{live->modelPublicationGeneration,live->version,0};};
+        auto startTarget=[&](const Json& graph){
+            return owner.startResidentMaterial(graph,Json::object(),project,lifetime.lease(),opts,stamp()).getStr("request");
+        };
+        auto applyTarget=[&](const std::string& id,const view::LiveAppearanceMaterialTarget& target){
+            return owner.publishCompletedGpuSnapshot(project,id,live,target,materialModel,dev,lifetime.lease(),rollback);
+        };
+        const auto full=startTarget(residentGraph);drain();
+        require(owner.status()["materializedPackPasses"].toDouble()==2&&applyTarget(full,stamp()),"initial targeted GPU set failed");
+        const auto pinned=live;
+        const auto aoIndex=live->materials[0].occlusionTex,normalIndex=live->materials[0].normalTex;
+        require(aoIndex>=0&&normalIndex>=0&&materialModel.images.size()==2,"initial texture bindings missing");
+        const auto aoHandle=materialModel.images[size_t(aoIndex)].tex;
+        auto altered=Json::parse(residentGraph.dump(-1).replace(residentGraph.dump(-1).find("\"strength\":4")+11,1,"8"));
+        const auto partial=startTarget(altered);drain();
+        auto partialStatus=owner.status();
+        require(partialStatus["incrementalReusedOutputs"].size()==1&&partialStatus["materializedPackPasses"].toDouble()==1,
+            "unchanged output regenerated");
+        auto stale=stamp();++stale.version;
+        require(!applyTarget(partial,stale)&&applyTarget(partial,stamp()),"stale or partial publication mismatch");
+        require(materialModel.images.size()==3&&live->materials[0].occlusionTex==aoIndex&&
+            materialModel.images[size_t(aoIndex)].tex==aoHandle&&live->materials[0].normalTex!=normalIndex&&
+            pinned->materials[0].normalTex==normalIndex,"partial publication changed old or retained bindings");
+        const auto revision=live->version;const auto noChange=startTarget(altered);
+        require(owner.status().getBool("incrementalOutputNoop")&&owner.status().getBool("gpuTextureSetReady")&&
+            owner.status()["materializedPackPasses"].toDouble()==0,"unchanged set encoded GPU work");
+        require(applyTarget(noChange,stamp())&&live->version==revision&&materialModel.images.size()==3,"no-op mutated appearance");
+        registry.clear();live.reset();
+        require(rollback.drain(dev),"fixture image rollback drain failed");
+
         require(dev.gpuHealthy(),"device unhealthy");
         const auto report=profile.report();
         std::set<std::string> scopes;
