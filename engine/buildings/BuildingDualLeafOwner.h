@@ -120,8 +120,11 @@ public:
         uint64_t savedRevision,
         world::SpatialWorld& spatial,uint64_t sceneId,
         SweptObstruction probe,std::string* error=nullptr){
-        if(attached_||!savedRevision){
-            if(error)*error="Restored dual leaf owner needs detached state and revision";
+        // Revision zero is a valid snapshot before the first door motion.
+        // The graph reconciliation layer publishes a nonzero invalidation
+        // revision before the scene may resume handling interactions.
+        if(attached_){
+            if(error)*error="Restored dual leaf owner must be detached";
             return false;
         }
         return attach(generated,ids,spatial,sceneId,std::move(probe),
