@@ -15,7 +15,7 @@ REQUIRED = {
     "scene": ("scene_entity_list", "scene_component_set"),
     "camera": ("lens_scene_get", "lens_camera_set"),
     "animation": ("animation_graph_list", "animation_graph_set"),
-    "terrain": ("terrain_sculpt", "terrain_material"),
+    "terrain": ("terrain_sculpt", "terrain_material", "terraweave_meadow_get", "terraweave_meadow_set"),
     "lighting": ("light_list", "scene_light_create"),
     "physis": ("physis_get", "physis_set"),
     "spectrafx": ("fx_graph_list", "fx_graph_set"),
