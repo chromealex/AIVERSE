@@ -121,6 +121,9 @@ public:
     CaveGpuUploadStats gpuUploadStats()const noexcept{
         return host_.gpuUploadStats();
     }
+    CaveGeometrySwapOwner::MemoryStats gpuMemoryStats()const noexcept{
+        return host_.gpuMemoryStats();
+    }
     // Runs on an owner frame boundary, not from a deterministic simulation
     // system or an already open graphics command buffer.
     CaveEditTick frameOutsidePass(
