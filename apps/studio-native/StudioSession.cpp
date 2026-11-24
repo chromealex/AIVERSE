@@ -353,6 +353,13 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
                 if(water)sc=readOnly(sc);
                 transform.push(sc);
             }
+            if(!e.at.isNull()){
+                Json location=Json::array();
+                for(const auto* key:{"body","face","x","y"})
+                    location.push(readOnly(genericField(key,e.at[key])));
+                components.push(component("SurfacePlacement","Planet placement",location,
+                    "Canonical authored body and face coordinates. Planet Scene handles are not available in this viewport."));
+            }
             components.push(component("Transform","Transform",transform));
             // Mesh Renderer: authored StaticModel (editable) or the type's view (read-only).
             const Json& view=ws_.project.rulesJson["types"][e.type]["view"];
@@ -416,7 +423,12 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
                 const bool extendedLinked=lib::worldprocess::extendedLinks::supports(name) &&
                     lib::worldprocess::extendedLinks::validate(name,value);
                 const bool authorable=standalone||linked||extended||extendedLinked;
-                if(value.isObject())for(const auto& [key,item]:value.members()) {
+                Json display=value;
+                if(extended&&name=="MorphNode"){
+                    if(!display.has("gravityImpulseMilli"))display.set("gravityImpulseMilli",Json::number(int64_t(0)));
+                    if(!display.has("gravityRelative"))display.set("gravityRelative",Json::fromBool(true));
+                }
+                if(display.isObject())for(const auto& [key,item]:display.members()) {
                     Json field=genericField(key,item);
                     if(authorable) {
                         field.set("editable",Json::fromBool(true));
@@ -477,7 +489,7 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
                                 if(name=="MorphNode"){
                                     if(key=="restX"||key=="restY"||key=="restZ"){
                                         minimum=-morph::kPositionLimit;maximum=morph::kPositionLimit;
-                                    }else maximum=1000;
+                                    }else maximum=key=="gravityImpulseMilli"?1000000:1000;
                                 }else if(name=="CrowdAgent"){
                                     if(key=="x"||key=="z"||key=="goalX"||key=="goalZ"){
                                         minimum=-crowd::kCoord;maximum=crowd::kCoord;
@@ -491,7 +503,9 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
                                     if(key=="capacity")minimum=1;
                                 }else if(name=="EvolveRegion")maximum=evolve::kMaxState;
                                 else if(name=="EvolveArea"){
-                                    minimum=50;maximum=evolve::kAreaMaxHalfExtentCm;
+                                    const bool offset=key=="offsetXcm"||key=="offsetZcm";
+                                    minimum=offset?-evolve::kAreaCoordinateCm:50;
+                                    maximum=offset?evolve::kAreaCoordinateCm:evolve::kAreaMaxHalfExtentCm;
                                 }
                                 else if(name=="SocietyPerson")maximum=key=="credibility"?1000:1000000;
                             }
@@ -501,6 +515,17 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
                             field.set("integer",Json::fromBool(true));
                         }
                     }
+                    if(ws_.map.data.planet()&&(name=="CrowdAgent"||name=="CrowdSlot")&&
+                       key!="enabled"){
+                        field=readOnly(field);
+                        field.set("description",str("Planet movement uses real placement and GameCore navigation; legacy planar field is inactive."));
+                    }
+                    if(ws_.map.data.planet()&&name=="EvolveArea")
+                        field.set("description",str("Local east/south chart in centimetres, not global XZ."));
+                    if(name=="MorphNode"&&key=="gravityImpulseMilli")
+                        field.set("description",str("Opt-in PHYSIS load scale, 0 disables; 1000 = one impulse unit per m/s²."));
+                    if(name=="MorphNode"&&key=="gravityRelative")
+                        field.set("description",str("Subtract frame acceleration for free-fall deformation."));
                     fields.push(std::move(field));
                 }
                 else fields.push(genericField("value",value));
@@ -2649,6 +2674,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                    method == "studio.buildLog" || method == "studio.buildEstimate") {
             reply.set("result", buildRequest(method, params));
         } else if(method=="studio.worldProcessAreaBatchResize"){
+            if(ws_.map.data.planet())throw std::runtime_error("Planet regions use local east/south numeric extents; planar group pivot unavailable");
             // All selected regions are validated and staged before one Undo.
             const auto& ids=params["entityIds"];
             const auto& numerator=params["scaleNumerator"];
@@ -2767,6 +2793,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
             }
             reply.set("result",Json::number(int64_t(pending.size())));
         } else if(method=="studio.worldProcessAreaBatchMove"){
+            if(ws_.map.data.planet())throw std::runtime_error("Planet regions use individual local offsets; planar group move unavailable");
             // One validated, all-or-nothing MapDoc edit for selected regions.
             // The caller supplies stable map IDs, never transient ECS slots.
             const auto& ids=params["entityIds"];
@@ -2891,8 +2918,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     throw std::runtime_error("Invalid EVOLVE area update");
                 // Check ECS world limits against map position before mutation.
                 // Full authoritative quantization is repeated by hydration.
-                const auto worldX=std::llround(double(source.x)*100.);
-                const auto worldZ=std::llround(double(source.z)*100.);
+                const auto worldX=ws_.map.data.planet()?0ll:std::llround(double(source.x)*100.);
+                const auto worldZ=ws_.map.data.planet()?0ll:std::llround(double(source.z)*100.);
                 const auto centerX=worldX+next["offsetXcm"].integer();
                 const auto centerZ=worldZ+next["offsetZcm"].integer();
                 const auto halfX=next["halfWidthCm"].integer();
