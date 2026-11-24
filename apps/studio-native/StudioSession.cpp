@@ -3225,11 +3225,26 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             }
             reply.set("result",snapshot());
         } else if (method == "studio.save") {
-            const Json r = ws_.call("map_save", Json::object(), "studio");
-            if (r.has("error")) throw std::runtime_error(r.getStr("error"));
-            std::string error;
-            if (ws_.project.rulesDirty && !ws_.project.saveRules(&error)) throw std::runtime_error(error);
-            if (ws_.project.manifestDirty && !ws_.project.saveManifest(&error)) throw std::runtime_error(error);
+            if(ws_.project.rulesDirty||ws_.project.manifestDirty){
+                if(stroking_)throw std::runtime_error("Finish the active Scene stroke before saving");
+                // Existing map and project documents are prepared by detached
+                // owners. Do not publish a partial save on unsupported topology.
+                auto map=ws_.map;
+                auto project=ws_.project;
+                HistoryFileBatch files;
+                files.append(map.stageExistingSave(project.dir));
+                files.append(project.stageDirtySave());
+                const auto plan=files.plan();
+                const auto historyLock=map.beginStagedSave();
+                editor::applyProjectFileEdits(project.dir,plan);
+                map.finishStagedSave();
+                ws_.map=std::move(map);
+                ws_.project=std::move(project);
+                ws_.log("studio","Saved map and project documents together");
+            }else{
+                const Json r=ws_.call("map_save",Json::object(),"studio");
+                if(r.has("error"))throw std::runtime_error(r.getStr("error"));
+            }
             reply.set("result", snapshot());
         } else if (method == "studio.undo") {
             if (!ws_.map.canUndo()) throw std::runtime_error("Nothing to undo");
