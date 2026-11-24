@@ -123,6 +123,13 @@ public:
             std::shared_ptr<const terraweave::caverns::CaveNavigationDataProvider>)>;
     // Optional authoritative game module override for user/custom path
     // solvers. Set between ticks after setup; no duplicate actor motor.
+    // Assign an authoritative C++ cave goal to a real ActorHost character,
+    // leaving movement and collision with the existing CharacterBody motor.
+    bool navigateCaveActor(Simulation& sim,Entity entity,
+        terraweave::caverns::PointCm goal,
+        terraweave::caverns::CaveAgentProfile profile={},
+        std::string algorithm="astar",uint32_t speedCmPerTick=25,
+        uint32_t maxVisits=8192);
     void setCaveRouteResolver(CaveRouteResolver resolver) {
         caveRouteResolver_=std::move(resolver);
     }
