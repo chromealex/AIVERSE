@@ -182,7 +182,10 @@ private:
     bool planetMode_=false;
     std::string planetDragId_;
     Json planetDragOriginal_,planetDragPlacement_;
-    void framePlanet(int width,int height,const editor::MapDoc& doc,const std::string& selectedId);
+    void framePlanet(int width,int height,const editor::MapDoc& doc,const std::string& selectedId,
+                     const std::string& projectPath,const Json& rules);
+    std::string planetModelProject_;
+    const Json* planetModelRules_=nullptr;
 
     std::unique_ptr<render::Model> materialSphere_;
     // Built-in Mesh Renderer primitives (StaticModel.asset "" / builtin:cube / builtin:sphere).

@@ -372,6 +372,13 @@ void StudioScene::syncDocumentModels(
         const int index=studioMapEntityIndex(proxy.id,doc);
        if(index<0)continue;
        const auto& entity=entities[size_t(index)];
+       const render::mat4* planetFrame=nullptr;
+       if(planetMode_){
+           if(!planetPreview_)continue;
+           const auto it=planetPreview_->modelFrames.find(proxy.id);
+           if(it==planetPreview_->modelFrames.end())continue;
+           planetFrame=&it->second;
+       }
        if(entity.extra["components"].has("NereidWater"))continue;
        const auto& view=rules["types"][entity.type]["view"];
        const Json& raw=view["model"];
@@ -397,7 +404,7 @@ void StudioScene::syncDocumentModels(
                 const float sz=float(std::clamp(footprint.isArray() && footprint.size()>1 ? footprint[size_t(1)].toDouble() : 1.0,.25,64.0));
                 scale=render::mat4::scale({sx*k,k*std::max(sx,sz)*.75f,sz*k});
             }
-            const render::mat4 placement=editor::authoredEntity(entity) ? editor::authoredModelMatrix(entity) :
+            const render::mat4 placement=planetFrame?*planetFrame:editor::authoredEntity(entity) ? editor::authoredModelMatrix(entity) :
                 render::mat4::translate({proxy.center.x,proxy.center.y-proxy.half.y,proxy.center.z})*
                 (structure ? render::mat4{} : render::mat4::rotateY(proxy.yaw));
             modelInstances_.push_back({proxy.id,shape,placement*scale});
@@ -539,7 +546,7 @@ void StudioScene::syncDocumentModels(
             overridden.insert(proxy.id);
         }
         modelInstances_.push_back({proxy.id,found->second.get(),
-           editor::authoredEntity(entity)?editor::authoredModelMatrix(entity):
+           planetFrame?*planetFrame:editor::authoredEntity(entity)?editor::authoredModelMatrix(entity):
            render::mat4::translate({proxy.center.x,proxy.center.y-proxy.half.y,proxy.center.z})*
            render::mat4::rotateY(proxy.yaw)});
     }
@@ -629,7 +636,7 @@ std::string StudioScene::pick(float x, float y, float width, float height,
     if (materialMode_ || facialMode_ || !cameraInitialized_ ||
         !viewCamera().screenRay(x,y,width,height,origin,direction)) return {};
     if(map.data.planet())return planetMode_&&planetPreview_&&planetDoc_==&map&&planetRevision_==map.revision?
-        planetPreview_->pick(origin,direction,hidden_,locked_):std::string{};
+        planetPreview_->pick(origin,direction,hidden_,locked_,modelInstances_):std::string{};
     // Pick the oriented cube mesh that Renderer3D actually draws, not its
     // expanded axis-aligned bounding box. Empty rotated corners are unpickable.
     auto proxies=studioDocumentProxies(map,fpsProject,terrainLevelHeight_);
@@ -852,7 +859,7 @@ bool StudioScene::beginTransformDrag(float x,float y,float width,float height) {
     if(planetMode_){
         if(!gizmosVisible_||!planetPreview_||tool_!=TransformTool::Move||selectedId_.empty()||selection_.size()>1)return false;
         float3 o,d;if(!viewCamera().screenRay(x,y,width,height,o,d))return false;
-        if(planetPreview_->pick(o,d,hidden_,locked_)!=selectedId_)return false;
+        if(planetPreview_->pick(o,d,hidden_,locked_,modelInstances_)!=selectedId_)return false;
         const auto at=planetPreview_->placements.find(selectedId_);
         if(at==planetPreview_->placements.end())return false;
         planetDragId_=selectedId_;planetDragOriginal_=at->second;planetDragPlacement_=Json{};
@@ -1563,7 +1570,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         return;
     }
     if(doc.data.planet()){
-        framePlanet(framebufferWidth,framebufferHeight,doc,selectedId);return;
+        framePlanet(framebufferWidth,framebufferHeight,doc,selectedId,projectPath,rules);return;
     }
     if(planetMode_){
         planetMode_=false;planetPreview_.reset();planetDoc_=nullptr;cameraInitialized_=false;sceneCacheValid_=false;
@@ -1896,7 +1903,8 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     // StudioFrameScope ends the pass and frame, including on exceptions.
 }
-void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,const std::string& selectedId){
+void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,const std::string& selectedId,
+                              const std::string& projectPath,const Json& rules){
     const bool entering=!planetMode_;
     if(entering){
         if(!lightingRuntime_.shutdown(*device_,renderer_)||!device_->waitForResourceIdle())return;
@@ -1914,7 +1922,8 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     }
     const bool changedBody=!planetPreview_||planetDoc_!=&doc||body<0||
         planetPreview_->bodyId!=doc.data.bodies[size_t(body)].id;
-    if(changedBody||planetRevision_!=doc.revision){
+    const bool changedDocument=changedBody||planetRevision_!=doc.revision;
+    if(changedDocument){
         if(!device_->waitForResourceIdle())return;
         auto next=StudioPlanetPreview::build(doc,body);
         Mesh replacement;
@@ -1925,6 +1934,14 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         planetTerrain_=replacement;planetPreview_=std::move(next);planetDoc_=&doc;planetRevision_=doc.revision;
         if(changedBody){cameraInitialized_=false;clearTransformPreview();}
     }
+    const auto now=std::chrono::steady_clock::now();
+    if(changedDocument||planetModelProject_!=projectPath||planetModelRules_!=&rules||modelsPending_||now>=nextFileCheck_){
+        if(planetModelProject_!=projectPath)clearDocumentModels();
+        if(planetPreview_)syncDocumentModels(doc,projectPath,rules,planetPreview_->markers);
+        else clearDocumentModels();
+        planetModelProject_=projectPath;planetModelRules_=&rules;
+        nextFileCheck_=now+std::chrono::seconds(1);
+    }
     if(!cameraInitialized_){
         camera_.target={};camera_.distance=planetPreview_?std::max(2.f,planetPreview_->extent*3.f):16.f;
         camera_.yaw=.55f;camera_.pitch=.35f;camera_.ortho=false;tween_.active=false;cameraInitialized_=true;
@@ -1934,11 +1951,23 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     renderThumbnail();
     const auto view=viewCamera();renderer_.beginScene(view,width,height);
     renderer_.setSceneSelectionOutline(true);renderer_.lighting=Lighting{};renderer_.lighting.fogDensity=0;
-    lightingStatus_="Planet authoring preview · markers and coarse surface";
+    lightingStatus_="Planet authoring preview · rigid models and coarse surface";
     if(planetPreview_&&planetTerrain_.vb.valid()&&planetTerrain_.ib.valid()){
         renderer_.drawMesh(planetTerrain_,mat4{},{1,1,1,1},kDrawNoCastShadow);
+        std::set<std::string> renderedModels;
+        for(const auto& instance:modelInstances_){
+            if(!instance.model)continue;
+            renderedModels.insert(instance.id);
+            if(hidden_.count(instance.id))continue;
+            render::ModelDraw draw;draw.model=instance.model;draw.world=instance.world;
+            if(auto custom=instanceMaterials_.find(instance.id);custom!=instanceMaterials_.end())draw.materials=&custom->second.materials;
+            if(auto team=instanceTeams_.find(instance.id);team!=instanceTeams_.end())draw.team=team->second;
+            if(instance.id==selectedId||selection_.count(instance.id))draw.outline={.25f,.62f,1.f,.035f};
+            else if(instance.id==hover_)draw.outline={.62f,.8f,1.f,.02f};
+            renderer_.drawModel(draw);
+        }
         for(const auto& marker:planetPreview_->markers){
-            if(hidden_.count(marker.id))continue;
+            if(hidden_.count(marker.id)||renderedModels.count(marker.id))continue;
             const auto world=mat4::translate(marker.center)*mat4::scale(marker.half*2.f);
             if(marker.id==selectedId||selection_.count(marker.id))
                 renderer_.drawSelectionMesh(cube_,world,marker.color,{.25f,.62f,1.f,1.f});

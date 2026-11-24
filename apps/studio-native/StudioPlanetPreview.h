@@ -3,6 +3,7 @@
 #pragma once
 #include "apps/studio-native/StudioVisualPicking.h"
 #include "engine/game/Sphere.h"
+#include "apps/studio-native/StudioModelPicking.h"
 #include <optional>
 #include <array>
 #include <map>
@@ -17,6 +18,7 @@ struct StudioPlanetPreview {
     render::MeshBuilder mesh;
     std::vector<StudioDocumentProxy> markers;
     std::map<std::string,Json> placements;
+    std::map<std::string,render::mat4> modelFrames;
     std::map<std::string,std::string> authoredIds;
     struct Link { std::string from,to; uint32_t color=0; };
     std::vector<Link> links;
@@ -28,6 +30,33 @@ struct StudioPlanetPreview {
         const float u=a-x,v=b-y;
         const auto h=[&](int i,int j){return float(body.corners[body.cornerIndex(face,i,j)])/16.f;};
         return (h(x,y)*(1-u)+h(x+1,y)*u)*(1-v)+(h(x,y+1)*(1-u)+h(x+1,y+1)*u)*v;
+    }
+    // Surface yaw about radial up. The model basis must be orthonormal:
+    // projected cube face tangents themselves are not orthogonal at corners.
+    static render::mat4 modelFrame(const game::CubeSphere& cube,int face,
+            Fixed a,Fixed b,render::float3 ground,const editor::DocEntity& entity){
+        const auto direction=cube.dirFromFace(face,a,b);
+        int canonical;Fixed ca,cb;cube.faceFromDir(direction,canonical,ca,cb);
+        Vec3 east,south;game::CubeSphere::faceTangents(canonical,direction,east,south);
+        const auto up=render::normalize(f3(direction));
+        const auto right=render::normalize(f3(east));
+        const auto forward=render::normalize(render::cross(right,up));
+        render::mat4 basis;
+        const render::float3 axes[3]={right,up,forward};
+        for(int i=0;i<3;++i){
+            basis.at(0,i)=axes[i].x;basis.at(1,i)=axes[i].y;basis.at(2,i)=axes[i].z;
+        }
+        render::mat4 local;
+        if(editor::authoredEntity(entity)){
+            // Existing authored rotation/scale. Never interpret mirrored
+            // face x/y as Cartesian translation; at owns the ground anchor.
+            local=editor::authoredModelMatrix(entity);
+            local.at(0,3)=0;local.at(1,3)=0;local.at(2,3)=0;
+        }else{
+            const double facing=entity.extra["facing"].toDouble(0);
+            if(std::isfinite(facing))local=render::mat4::rotateY(float(-facing*3.141592653589793/180.));
+        }
+        return render::mat4::translate(ground)*basis*local;
     }
     static std::optional<StudioPlanetPreview> build(const editor::MapDoc& doc,int bi){
         if(bi<0||size_t(bi)>=doc.data.bodies.size())return {};
@@ -76,6 +105,8 @@ struct StudioPlanetPreview {
             marker.color=e.owner==2?render::float4{.94f,.52f,.42f,1}:render::float4{.44f,.70f,.98f,1};
             marker.calculateBounds();
             out.placements.emplace(marker.id,e.at);
+            try{out.modelFrames.emplace(marker.id,modelFrame(cube,int(face),fixed(float(x)),fixed(float(y)),ground,e));}
+            catch(const std::exception&){/* Invalid authored transform keeps the marker. */}
             if(!e.id.empty())out.authoredIds.emplace(e.id,marker.id);
             out.markers.push_back(std::move(marker));
         }
@@ -131,10 +162,19 @@ struct StudioPlanetPreview {
         return at;
     }
     std::string pick(render::float3 origin,render::float3 direction,
-                     const std::set<std::string>& hidden,const std::set<std::string>& locked)const{
+                     const std::set<std::string>& hidden,const std::set<std::string>& locked,
+                     const std::vector<StudioModelPickInstance>& models={})const{
         float closest=terrainHit(origin,direction);std::string id;
+        std::set<std::string> replaced;
+        for(const auto& model:models){
+            if(!model.model)continue;
+            replaced.insert(model.id);
+            if(hidden.count(model.id)||locked.count(model.id))continue;
+            const auto hit=studioPickModelSurface(*model.model,model.world,origin,direction);
+            if(hit.distance<closest){closest=hit.distance;id=model.id;}
+        }
         for(const auto& p:markers){
-            if(hidden.count(p.id)||locked.count(p.id))continue;
+            if(hidden.count(p.id)||locked.count(p.id)||replaced.count(p.id))continue;
             const float distance=studioRayProxyBox(p,origin,direction);
             if(distance<closest){closest=distance;id=p.id;}
         }
