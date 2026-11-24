@@ -23,8 +23,8 @@ public:
         if(!registered_) {
             ed.ws().registerOp({"shader_graph_preview","Open a graph in the node editor. Refuses to replace unsaved edits.",Json::parse(R"({"properties":{"name":{"type":"string"},"graph":{"type":"object"}}})"),[this,&ed](const Json& p){
                 if(dirty_)throw std::runtime_error("save or discard the current graph first");
-                Json g=p["graph"];if(g.isNull()) {auto r=ed.ws().call("shader_graph_get",p);if(r.has("error"))return r;g=r["graph"];}
-                previewReady_=false;render::graph::compile(g);project_=ed.ws().project.dir;doc_=g;name_=p.getStr("name","untitled");saved_=doc_;undo_.clear();redo_.clear();selected_=0;retirePreview();
+                Json g=p["graph"];const bool fromAsset=g.isNull();if(fromAsset) {auto r=ed.ws().call("shader_graph_get",p);if(r.has("error"))return r;g=r["graph"];}
+                previewReady_=false;render::graph::compile(g);project_=ed.ws().project.dir;doc_=g;name_=p.getStr("name","untitled");saved_=doc_;expected_=fromAsset?g:Json();expectedName_=fromAsset?name_:std::string();undo_.clear();redo_.clear();selected_=0;retirePreview();
                 ed.focusWindow(id());Json r=Json::object();r.set("ok",Json::fromBool(true));return r;
             },true});
             ed.ws().registerOp({"shader_graph_preview_status","Current graph preview GPU diagnostics (call after a rendered frame).",Json::object(),[this](const Json&) {
@@ -37,18 +37,18 @@ public:
         if(ed.ws().project.dir.empty()){ui::hint(tr("shaderGraph.openProject").c_str());return;}
         if(project_!=ed.ws().project.dir) {
             if(!project_.empty() && dirty_) { // Keep an explicit draft per project while switching.
-                drafts_[project_]={name_,doc_};
+                drafts_[project_]={name_,doc_};originals_[project_]={expectedName_,expected_};
             }
             project_=ed.ws().project.dir;retirePreview();undo_.clear();redo_.clear();
-            if(auto it=drafts_.find(project_);it!=drafts_.end()){name_=it->second.first;doc_=it->second.second;dirty_=true;}
-            else {doc_=render::graph::makeDefault("material");name_="untitled";dirty_=false;}
+            if(auto it=drafts_.find(project_);it!=drafts_.end()){name_=it->second.first;doc_=it->second.second;dirty_=true;expectedName_=originals_[project_].first;expected_=originals_[project_].second;}
+            else {doc_=render::graph::makeDefault("material");name_="untitled";dirty_=false;expected_=Json();expectedName_.clear();}
             saved_=doc_;selected_=0;
         }
         ImGui::SetNextItemWidth(180);ui::inputString("##name",name_);ImGui::SameLine();
         if(ImGui::Button(tr("shaderGraph.save").c_str()))save(ed);
         ImGui::SameLine();ImGui::BeginDisabled(dirty_);
-        if(ImGui::Button(tr("shaderGraph.load").c_str())) {Json p=Json::object();p.set("name",Json::string(name_));auto r=ed.ws().call("shader_graph_get",p);if(check(r)){doc_=saved_=r["graph"];undo_.clear();redo_.clear();selected_=0;retirePreview();}}
-        ImGui::SameLine();if(ImGui::Button(tr("shaderGraph.new").c_str())){doc_=render::graph::makeDefault(doc_.getStr("domain"));saved_=doc_;undo_.clear();redo_.clear();selected_=0;}
+        if(ImGui::Button(tr("shaderGraph.load").c_str())) {Json p=Json::object();p.set("name",Json::string(name_));auto r=ed.ws().call("shader_graph_get",p);if(check(r)){doc_=saved_=r["graph"];expected_=saved_;expectedName_=name_;undo_.clear();redo_.clear();selected_=0;retirePreview();}}
+        ImGui::SameLine();if(ImGui::Button(tr("shaderGraph.new").c_str())){doc_=render::graph::makeDefault(doc_.getStr("domain"));saved_=doc_;expected_=Json();expectedName_.clear();undo_.clear();redo_.clear();selected_=0;}
         ImGui::EndDisabled();ImGui::SameLine();
         if(ImGui::Button(tr("shaderGraph.undo").c_str())&&!undo_.empty()){redo_.push_back(doc_);doc_=undo_.back();undo_.pop_back();dirty_=true;}
         ImGui::SameLine();if(ImGui::Button(tr("shaderGraph.redo").c_str())&&!redo_.empty()){undo_.push_back(doc_);doc_=redo_.back();redo_.pop_back();dirty_=true;}
@@ -119,7 +119,7 @@ private:
     }
     void remember(){if(undo_.size()>=64)undo_.erase(undo_.begin());undo_.push_back(doc_);redo_.clear();dirty_=true;}
     bool check(const Json& r){error_=r.has("error");message_=r.getStr("error");return !error_;}
-    bool save(Editor& ed){Json p=Json::object();p.set("name",Json::string(name_));p.set("graph",doc_);if(!check(ed.ws().call("shader_graph_set",p)))return false;saved_=doc_;dirty_=false;drafts_.erase(project_);return true;}
+    bool save(Editor& ed){Json p=Json::object();p.set("name",Json::string(name_));p.set("graph",doc_);if(expectedName_==name_&&expected_.isObject())p.set("expected",expected_);if(!check(ed.ws().call("shader_graph_set",p)))return false;saved_=doc_;expected_=doc_;expectedName_=name_;dirty_=false;drafts_.erase(project_);return true;}
     void add(const render::graph::Op& op) {
         if(doc_["nodes"].size()>=128)return;
         remember();Json n=Json::object();
@@ -191,7 +191,8 @@ private:
         }
     }
     Json doc_=render::graph::makeDefault("material"),saved_=doc_;std::vector<Json> undo_,redo_;
-    std::map<std::string,std::pair<std::string,Json>> drafts_;
+    std::map<std::string,std::pair<std::string,Json>> drafts_,originals_;
+    Json expected_;std::string expectedName_;
     std::string project_,name_="untitled",target_,connecting_,message_,search_;int selected_=0,emitter_=0;
     bool dirty_=false,error_=false,registered_=false,previewReady_=false,draggingNode_=false;ImVec2 pan_{20,20};double time_=0;float dt_=0;
     std::shared_ptr<ShaderGraphPreview> preview_ =
