@@ -159,6 +159,19 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
         const auto externalId=owner.start(external,project,lifetime.lease(),resolveImage).getStr("request");drain();
         const auto externalStatus=owner.status();
         require(externalStatus.getStr("request")==externalId&&externalStatus.getStr("state")=="ready"&&externalStatus.getStr("backend")==expected,"external image GPU parity failed");
+        // Typed custom expressions: same validated instruction stream on CPU and GPU.
+        auto computed=Json::parse(R"JSON({"graph":{"version":1,"size":64,"nodes":[
+          {"id":"a","op":"constant","inputs":[],"properties":{"value":0.25}},
+          {"id":"b","op":"constant","inputs":[],"properties":{"value":0.75}},
+          {"id":"c","op":"constant","inputs":[],"properties":{"value":0.5}},
+          {"id":"red","op":"color","inputs":[],"properties":{"value":[1,0,0]}},
+          {"id":"blue","op":"color","inputs":[],"properties":{"value":[0,0,1]}},
+          {"id":"s","op":"customScalar","inputs":["a","b","c"],"properties":{"code":"a b c mix p0 * p1 + sat","p0":0.5,"p1":0.25}},
+          {"id":"rgb","op":"customColor","inputs":["red","blue","s"],"properties":{"red":"ar br c mix","green":"u p2 *","blue":"ab bb c mix","p2":0.5}}
+        ],"outputs":{"height":"s","color":"rgb"}},"requireGpu":true,"bakeSet":true,"materialized":true,"fusePointwise":true})JSON");
+        const auto customId=owner.start(computed,project,lifetime.lease()).getStr("request");drain();
+        const auto customStatus=owner.status();
+        require(customStatus.getStr("request")==customId&&customStatus.getStr("state")=="ready"&&customStatus.getStr("backend")==expected,"custom compute GPU parity failed");
         // Native function calls lower into ordinary typed DAG nodes. Two calls
         // share a definition but use independent parameter values and public IDs.
         auto functions=Json::parse(R"JSON({"graph":{"version":1,"size":32,

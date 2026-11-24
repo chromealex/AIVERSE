@@ -6,6 +6,8 @@
 #include <cmath>
 #include <cstdint>
 #include <sstream>
+#include <iterator>
+#include <utility>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -100,7 +102,7 @@ inline std::string emit(const Program& program,Variable variable,Literal literal
     std::vector<std::string> stack;stack.reserve(maxInstructions);
     auto pop=[&](){auto s=std::move(stack.back());stack.pop_back();return s;};
     for(const auto& op:program){
-        if(op.code==Code::Literal){stack.push_back(literal(op.value));continue;}
+        if(op.code==Code::Literal){stack.push_back("("+literal(op.value)+")");continue;}
         if(op.code==Code::Variable){stack.push_back(variable(op.index));continue;}
         std::string expr;
         if(op.code==Code::Mix){auto t=pop(),b=pop(),a=pop();expr="tgCustomMix("+a+","+b+","+t+")";}

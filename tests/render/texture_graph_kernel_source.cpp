@@ -1,4 +1,5 @@
 #include "engine/render/graph/TextureGraphKernelSource.h"
+#include "engine/render/graph/TextureGraphCustomCompute.h"
 #include <cstdlib>
 #include <iostream>
 using namespace aiverse::render::texture_graph::gpu;
@@ -20,5 +21,18 @@ int main(){
     bool bad=false;try{(void)materializedKernel(KernelValue::Scalar,std::vector<KernelValue>(4,KernelValue::Scalar),8,"x");}catch(const std::invalid_argument&){bad=true;}check(bad);
     bad=false;try{(void)packMaterializedKernel(KernelValue::PackedBytes,8);}catch(const std::invalid_argument&){bad=true;}check(bad);
     bad=false;try{(void)packMaterializedKernel(KernelValue::Scalar,1025);}catch(const std::invalid_argument&){bad=true;}check(bad);
-    std::cout<<"PASS: typed Metal/Vulkan ABI, three inputs, scalar/vector packing, bounds\n";
+    namespace cc=aiverse::render::texture_graph::custom_compute;
+    cc::Values values{};values[0]=.25f;values[3]=.75f;values[6]=.5f;
+    check(cc::evaluate(cc::parse("a b c mix",false),values)==.5f);
+    check(cc::evaluate(cc::parse("1 0 /",false),values)==16.f);
+    check(cc::evaluate(cc::parse("-2 sqrt",false),values)==0.f);
+    check(cc::evaluate(cc::parse("ar br c mix",true),values)==.5f);
+    for(const auto* code:{"a +","a b","while","a;","17","ar","a nan +","a 1e2 *"}){
+        bad=false;try{(void)cc::parse(code,false);}catch(const std::invalid_argument&){bad=true;}check(bad);
+    }
+    std::string tooLong="a";for(int i=0;i<25;++i)tooLong+=" neg neg";
+    bad=false;try{(void)cc::parse(tooLong,false);}catch(const std::invalid_argument&){bad=true;}check(bad);
+    const auto expression=cc::emit(cc::parse("a -1 -",false),[](unsigned){return std::string("a");},[](float x){return std::to_string(x);});
+    check(expression.find("--")==std::string::npos);
+    std::cout<<"PASS: typed Metal/Vulkan ABI, custom compute interpreter, safe source emission and bounds\\n";
 }

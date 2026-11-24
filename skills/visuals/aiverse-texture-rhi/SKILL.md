@@ -1973,3 +1973,6 @@ The final verifier requires an absolute `--build-root`, supports
 `--expected-ref` (default HEAD), and builds Debug. On the owner's machine
 all builds, logs, module cache and temporary fixtures belong on KINGSTON.
 Focused CI triggers for main as well as the historical feature branch.
+
+## Custom texture compute (Stage 38BF, source implementation)
+The native Texture Graph catalog includes customScalar (three scalar inputs, one scalar output) and customColor (two RGB inputs and one scalar input, RGB output). Use code for scalar and red/green/blue for RGB channel expressions. Postfix tokens: a b c (scalar) or ar ag ab br bg bb c (RGB), u v pixel-center UV, p0..p3 numeric parameters, decimal literals [-16,16], + - * / min max abs neg invert sat sqrt fract sin cos step mix. Example scalar: a b c mix p0 * p1 + sat. Each channel is limited to 48 instructions and 1024 bytes; graph-wide custom pixel-instruction admission is 64 Mi instructions per evaluation. Intermediate arithmetic saturates to [-16,16], division guards zero, outputs clamp to [0,1]. Native CPU, materialized GPU and pointwise fusion use the same parsed instructions. No arbitrary GLSL/MSL/HLSL, loops or resource access. Validate through texture_graph_validate and use strict requireGpu for actual hardware acceptance. Implementation not yet hardware-certified.
