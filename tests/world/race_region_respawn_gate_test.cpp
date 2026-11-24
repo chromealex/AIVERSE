@@ -1,6 +1,7 @@
 // W1.11: real shared race policy reports candidate respawn destinations
 // before ActorHost/CollisionStream can allow a racing tick.
 #include "engine/vehicles/VehicleRace.h"
+#include "engine/mechanics/VehiclePersistence.h"
 #include "tests/AlwaysCheck.h"
 #include <array>
 #include <iostream>
