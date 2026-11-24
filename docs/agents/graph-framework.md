@@ -347,3 +347,7 @@ Stage 38AE acceptance checkpoint: four isolated exact-blob CPU fixtures at 17093
 ## Stage 38AF — native fixture linkage
 
 Stage 38AF: user Mac Release build at the preceding acceptance checkpoint failed linking aiverse_camera_model_snapshot_tests (x86_64 undefined Renderer3D::detachCompletedGraphImageReplay and canDetachCompletedGraphImageReplay). Snapshot target intentionally links engine/View/zstd only; Renderer3D.cpp lives in aiverse_runtime. Moved the complete replay callback preflight/refusal fixture to existing aiverse_camera_client_adapter_tests, already linked to runtime with platform aiverseMain. Kept the standalone snapshot fixture and its dependency boundary unchanged. Added camera_client_adapter to consolidated runner (31 tests per backend). 10/10 exact-source checks passed at 9c0075a3ea3a75ca8fdde317ff63e1c438215efb; Mac rebuild and CTest NOT RUN after correction.
+
+## Stage 38AG — NativeRegistrar link dependency
+
+Stage 38AG: user Mac rerun advanced to aiverse_camera_client_adapter_tests link, then failed with undefined NativeRegistrar constructor from generated NativeRegistry.cpp. Native module configuration attaches that source to direct runtime users; Native.cpp is compiled into aiverse_game. Explicitly link the existing aiverse_game owner for camera_client_adapter_tests. No production source, fixture coverage or standalone snapshot dependency changed. 7/7 exact-source checks passed at 79043f35c14ee12e63973e903dbdebf0e8ab8fec; corrected Mac link and full CTest remain NOT RUN.
