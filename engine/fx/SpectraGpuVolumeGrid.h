@@ -277,7 +277,7 @@ private:
         auto pack=[](const Source& s,float dt){return GpuSourceData{
             {s.position.x,s.position.y,s.position.z,s.radius},{s.smoke,s.temperature,s.fuel,s.radialAcceleration},
             {s.acceleration.x,s.acceleration.y,s.acceleration.z,dt}};};
-        for(size_t i=0;i<sources_.size();++i)u.sources[i]=pack(sources_[i],kTick);
+        for(size_t i=0;i<sources_.size();++i)u.sources[i]=pack(sources_[i].atTick(stats_.ticks),kTick);
         if(impulsePending_)u.sources[sources_.size()]=pack(impulse_,impulseSeconds_);
         return u;
     }

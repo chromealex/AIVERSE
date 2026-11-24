@@ -111,10 +111,10 @@ inline bool readAsset(const Json& root,Asset& output,std::string& error){
         }
     }
     const auto parseSource=[](const Json& entry,Source& a){
-        return keys(entry,{"position","radius","smoke","temperature","fuel","acceleration","radialAcceleration"})&&
+        return keys(entry,{"position","radius","smoke","temperature","fuel","acceleration","radialAcceleration","flickerHz"})&&
             vector(entry,"position",a.position)&&number(entry,"radius",a.radius)&&
             number(entry,"smoke",a.smoke)&&number(entry,"temperature",a.temperature)&&
-            number(entry,"fuel",a.fuel)&&number(entry,"radialAcceleration",a.radialAcceleration)&&vector(entry,"acceleration",a.acceleration)&&a.valid();
+            number(entry,"flickerHz",a.flickerHz)&&number(entry,"fuel",a.fuel)&&number(entry,"radialAcceleration",a.radialAcceleration)&&vector(entry,"acceleration",a.acceleration)&&a.valid();
     };
     if(root.has("impulse")){
         Source impulse;
@@ -168,6 +168,7 @@ inline Json writeAsset(const Asset& a){
     const auto writeSource=[](const Source& x){
         Json j=Json::object();j.set("position",vec(x.position));j.set("radius",scalar(x.radius));
         j.set("smoke",scalar(x.smoke));j.set("temperature",scalar(x.temperature));j.set("fuel",scalar(x.fuel));
+        if(x.flickerHz>0)j.set("flickerHz",scalar(x.flickerHz));
         j.set("acceleration",vec(x.acceleration));j.set("radialAcceleration",scalar(x.radialAcceleration));return j;
     };
     for(const auto& x:a.sources)sources.push(writeSource(x));

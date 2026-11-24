@@ -42,8 +42,19 @@ struct Source {
     float radius=.5f,smoke=1,temperature=1,fuel=0;
     float radialAcceleration=0;
     float3 acceleration{0,2,0}; // weighted rate; impulse uses explicit duration
+    float flickerHz=0;
+    Source atTick(uint64_t tick) const {
+        if(flickerHz==0)return *this;
+        Source sample=*this;
+        const double phase=6.28318530718*double(tick)*kTick*flickerHz;
+        const float pulse=float(.5+.32*std::sin(phase)+.18*std::sin(1.71*phase));
+        sample.radius*=.65f+.55f*pulse;
+        sample.temperature*=.25f+1.25f*pulse;
+        sample.fuel*=.25f+1.25f*pulse;
+        return sample;
+    }
     bool valid()const{
-        return bounded(position,1e6f)&&between(radius,.01f,1000)&&
+        return between(flickerHz,0,12)&&bounded(position,1e6f)&&between(radius,.01f,1000)&&
             between(smoke,0,100)&&between(temperature,0,100)&&between(fuel,0,100)&&between(radialAcceleration,-100,100)&&bounded(acceleration,100);
     }
 };
@@ -163,7 +174,7 @@ public:
             scratch_[i]=c;
         });
         cells_.swap(scratch_);
-        for(const auto& source:sources_)addSource(source,kTick);
+        for(const auto& source:sources_)addSource(source.atTick(tick_),kTick);
         enforceWalls();
         if(cfg_.pressureIterations)project();
         enforceWalls();
