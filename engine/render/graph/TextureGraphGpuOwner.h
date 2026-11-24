@@ -8,6 +8,7 @@
 #include "engine/render/graph/TextureGraphPassSchedule.h"
 #include "engine/render/graph/TextureGraphMaterializedDispatch.h"
 #include "engine/render/graph/TextureGraphGpuResourceCache.h"
+#include "engine/render/graph/TextureGraphRequestQueue.h"
 #include <array>
 #include <limits>
 #include "engine/render/graph/TextureGraphGpuTextureTransfer.h"
@@ -29,6 +30,23 @@ struct ResidentMaterialOptions {
     int timeoutMs=60000;
 };
 class TextureGraphGpuOwner {
+    gpu::TextureRequestQueue pendingRequests_;
+    std::string queueScope_,queueTicket_,queueRequest_,queueError_;
+    render::RenderDeviceLifetime::Lease queueLease_;
+    bool queuePromoting_=false;
+    bool requestBusy()const{return active()||inFlight_||matRetirementPending()||gpuCleanupPending();}
+    void clearQueue(){pendingRequests_.clear();queueScope_.clear();queueTicket_.clear();queueRequest_.clear();queueError_.clear();queueLease_={};}
+    void promoteQueue(gfx::Device& dev,const std::string& scope){
+        if(queueScope_.empty()||queueScope_!=scope)return;
+        if(!queueLease_.validFor(dev)||!dev.gpuHealthy()){pendingRequests_.clear();return;}
+        if(!queueTicket_.empty()||requestBusy()||!gpuCandidates_.empty()||(state_=="ready"&&!published_))return;
+        auto entry=pendingRequests_.pop();if(!entry)return;
+        queueTicket_=std::to_string(entry->ticket);queueRequest_.clear();queueError_.clear();
+        queuePromoting_=true;
+        try{queueRequest_=start(Json::parse(entry->payload),scope,queueLease_).getStr("request");}
+        catch(const std::exception& e){queueError_=e.what();}
+        queuePromoting_=false;
+    }
     using Program=render::texture_graph::Program;
     using Source=render::texture_graph::gpu::Source;
     struct Read {bool done=false;size_t offset=0,expected=0;std::vector<uint8_t> bytes;};
@@ -384,6 +402,53 @@ public:
         p.set("timeoutMs",Json::number(int64_t(options.timeoutMs)));
         return start(p,scope,lease);
     }
+    // Queue entries are immutable JSON snapshots; pending entries have no GPU handles.
+    Json enqueue(const Json& p,const std::string& scope,const render::RenderDeviceLifetime::Lease& lease,int priority=1){
+        if(scope.empty()||!lease.alive()||!lease.device()||!lease.validFor(*lease.device()))
+            throw std::invalid_argument("texture queue requires live native scope and lease");
+        checkProject(scope);
+        if(!queueScope_.empty()&&(queueScope_!=scope||queueLease_.generation()!=lease.generation())){
+            if(!pendingRequests_.pending().empty()||!queueTicket_.empty())throw std::runtime_error("previous texture queue epoch not released");
+            clearQueue();
+        }
+        auto payload=p.dump(-1);
+        if(payload.size()>gpu::TextureRequestQueue::maxPayloadBytes)throw std::invalid_argument("texture queue payload exceeds cap");
+        (void)render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object());
+        const auto id=pendingRequests_.push(std::move(payload),priority);
+        queueScope_=scope;queueLease_=lease;
+        Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("ticket",Json::string(std::to_string(id)));r.set("state",Json::string("waiting"));return r;
+    }
+    Json queueStatus()const{
+        Json r=Json::object(),pending=Json::array();
+        for(const auto& e:pendingRequests_.pending()){Json row=Json::object();row.set("ticket",Json::string(std::to_string(e.ticket)));row.set("priority",Json::number(int64_t(e.priority)));pending.push(row);}
+        r.set("ok",Json::fromBool(true));r.set("pending",pending);r.set("pendingBytes",Json::number(int64_t(pendingRequests_.bytes())));
+        r.set("activeTicket",Json::string(queueTicket_));r.set("activeRequest",Json::string(queueRequest_));r.set("error",Json::string(queueError_));
+        if(!queueRequest_.empty())r.set("result",status());
+        return r;
+    }
+    Json cancelTicket(const std::string& ticket,const std::string& scope){
+        checkProject(scope);
+        if(ticket.empty()||scope!=queueScope_)throw std::invalid_argument("unknown texture queue ticket");
+        if(ticket==queueTicket_&&!queueRequest_.empty()){
+            Json p=Json::object();p.set("request",Json::string(queueRequest_));cancel(p,scope);
+        }else{
+            uint64_t id=0;for(const auto& e:pendingRequests_.pending())if(std::to_string(e.ticket)==ticket){id=e.ticket;break;}
+            if(!id||!pendingRequests_.cancel(id))throw std::invalid_argument("unknown pending texture queue ticket");
+        }
+        return queueStatus();
+    }
+    // Explicit acknowledgement preserves the result until publication or caller discard.
+    Json releaseTicket(const std::string& ticket,const std::string& scope,bool discardResult=false){
+        checkProject(scope);
+        if(ticket.empty()||ticket!=queueTicket_||scope!=queueScope_)throw std::invalid_argument("unknown active texture queue ticket");
+        if(requestBusy())throw std::runtime_error("texture request still busy or draining");
+        if(!queueRequest_.empty()&&state_=="ready"&&!published_){
+            if(!discardResult)throw std::runtime_error("publish or explicitly discard the texture result");
+            Json p=Json::object();p.set("request",Json::string(queueRequest_));cancel(p,scope);
+            if(requestBusy())return queueStatus();
+        }
+        queueTicket_.clear();queueRequest_.clear();queueError_.clear();return queueStatus();
+    }
     Json status() const{
         Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("state",Json::string(setPending()&&state_=="ready"?"pending":state_));r.set("backend",Json::string(backend_));
         r.set("request",Json::string(std::to_string(serial_)));r.set("reason",Json::string(reason_));
@@ -437,6 +502,7 @@ public:
         }return r;
     }
     Json start(const Json& p,const std::string& project,render::RenderDeviceLifetime::Lease lease={}){
+        if(!queuePromoting_&&(!queueTicket_.empty()||!pendingRequests_.pending().empty()))throw std::runtime_error("texture queue owns scheduling; release active ticket first");
         if(queued_||inFlight_||matRetirementPending()||state_=="pending"||setPending())throw std::runtime_error("previous GPU texture request still active");
         if(!gpuCandidates_.empty())throw std::runtime_error("publish or cancel the previous GPU texture set, then retire it");
         if(project.empty())throw std::invalid_argument("open project first");
@@ -481,6 +547,7 @@ public:
         plannedPasses_=plannedSlotBytes_=0;passes_=0;blocks_=received_=scratchBytes_=0;reused_=reusedBuffers_=cacheHit_=false;requireGpu_=transfer||incremental||p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=true;state_="queued";return status();
     }
     void checkProject(const std::string& project){
+        if(!queueScope_.empty()&&queueScope_!=project)clearQueue();
         if(!project_.empty()&&project_!=project){discard("cancelled","project changed");project_.clear();}
     }
     Json cancel(const Json& p,const std::string& project){
@@ -593,6 +660,7 @@ public:
     // owns only its bytes and is delivered on the owner thread.
     void tick(gfx::Device& dev,const std::string& project){
         checkProject(project);
+        promoteQueue(dev,project);
         // Request-wide monotonic deadline, evaluated at owner frame boundaries.
         if(active()&&Clock::now()>=deadline_)discard("failed","GPU texture request timed out");
         if((gpuTransferRequested_||matIncremental_)&&!gpuTransferLease_.validFor(dev)){
@@ -732,6 +800,6 @@ public:
         pixels_.assign(bytes,0);state_="pending";
         if(!queueRange(dev))fallback("GPU readback request rejected");
     }
-    void shutdownAfterIdle(gfx::Device& dev){discard("cancelled","owner shutdown");if(dev.gpuHealthy())release(dev,true);else abandon();}
+    void shutdownAfterIdle(gfx::Device& dev){clearQueue();discard("cancelled","owner shutdown");if(dev.gpuHealthy())release(dev,true);else abandon();}
 };
 } // namespace aiverse::render::texture_graph

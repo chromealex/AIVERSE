@@ -133,6 +133,15 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend){
         runIncremental(inc,3,0);runIncremental(inc,0,3);
         auto modified=Json::parse(inc.dump(-1).replace(inc.dump(-1).find("0.25"),4,"0.75"));
         runIncremental(modified,2,1);
+        cancel(owner.status().getStr("request"));drain();
+        const auto low=owner.enqueue(inc,project,lifetime.lease(),0).getStr("ticket");
+        const auto high=owner.enqueue(modified,project,lifetime.lease(),3).getStr("ticket");
+        frame();require(owner.queueStatus().getStr("activeTicket")==high,"priority promotion failed");drain();
+        require(owner.queueStatus().getStr("activeTicket")==high,"ready result overwritten");
+        owner.releaseTicket(high,project,true);drain();frame();
+        require(owner.queueStatus().getStr("activeTicket")==low,"next ticket not promoted");drain();
+        owner.releaseTicket(low,project,true);drain();
+        require(owner.queueStatus().getStr("activeTicket").empty(),"queue result not released");
         require(dev.gpuHealthy(),"device unhealthy");
         result=0;
     }catch(const std::exception& e){std::fprintf(stderr,"FAIL texture graph RHI: %s\n",e.what());}

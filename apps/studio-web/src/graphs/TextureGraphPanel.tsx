@@ -39,13 +39,15 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
  const [assets,setAssets]=useState<{guid:string;path:string;key:MaterialKey}[]>([]);
  const [names,setNames]=useState<string[]>([]),[catalog,setCatalog]=useState<Obj[]>([]),[selected,setSelected]=useState(''),[output,setOutput]=useState('color'),[textureName,setTextureName]=useState('');
  const [gpuRequest,setGpuRequest]=useState<{id:string;source:string;overrides:string;output:string;resolution:number;bake:boolean;setBake:boolean}|null>(null),[gpuReady,setGpuReady]=useState(false),[gpuStatus,setGpuStatus]=useState(''),[requireGpu,setRequireGpu]=useState(false),[materialized,setMaterialized]=useState(false),[fusePointwise,setFusePointwise]=useState(false),[incremental,setIncremental]=useState(false),[gpuTextureTransfer,setGpuTextureTransfer]=useState(false),[gpuTextureMipmaps,setGpuTextureMipmaps]=useState(true),[gpuTextureFenceOnly,setGpuTextureFenceOnly]=useState(false),[gpuResolution,setGpuResolution]=useState(32);
+ const [queuePriority,setQueuePriority]=useState('1'),[queueTicket,setQueueTicket]=useState(''),[queueInfo,setQueueInfo]=useState<Obj|null>(null);
+ const [queueDrafts,setQueueDrafts]=useState<Record<string,{source:string;overrides:string;output:string;resolution:number}>>({});
  const [residentReady,setResidentReady]=useState(false),[liveType,setLiveType]=useState('0'),[liveChoice,setLiveChoice]=useState('0'),[liveMaterial,setLiveMaterial]=useState('0');
  const [liveTarget,setLiveTarget]=useState<{typeIndex:number;choiceIndex:number;materialIndex:number;expectedVersion:string;expectedModelPublication:string;modelPath:string;materialName:string}|null>(null);
  const [liveApply,setLiveApply]=useState('');
  const [preview,setPreview]=useState<{hex:string;width:number;height:number;source:string}|null>(null),[asset,setAsset]=useState<{guid:string;path:string;key:MaterialKey}|null>(null);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState('');
  const epoch=useRef(0),lock=useRef(false),canvas=useRef<HTMLCanvasElement>(null);
- useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setOverrideText('{}');setBakedSet('');setGpuRequest(null);setGpuReady(false);setResidentReady(false);setLiveTarget(null);setLiveApply('');setGpuStatus('');setText(JSON.stringify(template,null,2));setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
+ useEffect(()=>{epoch.current++;lock.current=false;setBusy(false);setOriginal(null);setName('');setOverrideText('{}');setBakedSet('');setGpuRequest(null);setQueueTicket('');setQueueInfo(null);setQueueDrafts({});setGpuReady(false);setResidentReady(false);setLiveTarget(null);setLiveApply('');setGpuStatus('');setText(JSON.stringify(template,null,2));setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
  return()=>{epoch.current++;lock.current=false};},[projectPath]);
  useEffect(()=>{const c=canvas.current;if(!c||!preview||preview.source!==text)return;
  const bytes=new Uint8ClampedArray(preview.hex.length/2);for(let i=0;i<bytes.length;i++)bytes[i]=parseInt(preview.hex.slice(i*2,i*2+2),16);
@@ -106,6 +108,16 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
     if(!object(r)||r.ok!==true||r.request!==gpuRequest.id||r.state!=='cancelled')throw new Error('GPU cancellation rejected');
     setGpuReady(false);setResidentReady(false);setPreview(null);setGpuStatus('cancelled'+(r.draining===true?' · waiting for GPU retirement':'')+' — '+String(r.reason??''));return;
    }
+   if(action==='queueRead'||action==='queueCancel'||action==='queueRelease'){
+     const r=await op('texture_graph_gpu_preview',{action,ticket:queueTicket,...(action==='queueRelease'?{discardResult:true}:{})});if(token!==epoch.current)return;
+     if(!object(r)||r.ok!==true)throw new Error('GPU queue operation failed');setQueueInfo(r);
+     if(action==='queueRead'&&typeof r.activeTicket==='string'&&typeof r.activeRequest==='string'&&r.activeRequest){
+       const draft=queueDrafts[r.activeTicket];if(draft){setGpuRequest({id:r.activeRequest,...draft,bake:true,setBake:true});setGpuReady(false);setResidentReady(false);setQueueTicket(r.activeTicket);}
+     }
+     if(action==='queueRelease'&&r.activeTicket!==queueTicket){setQueueDrafts(old=>{const next={...old};delete next[queueTicket];return next});setQueueTicket('');setGpuRequest(null);setGpuReady(false);setResidentReady(false);}
+     if(action==='queueCancel'&&r.activeTicket!==queueTicket){setQueueDrafts(old=>{const next={...old};delete next[queueTicket];return next});setQueueTicket('');}
+     return;
+   }
    if(action==='gpuRead'){
      if(!gpuRequest)throw new Error('No GPU request to read');
      const r=await op('texture_graph_gpu_preview',{action:'read'});if(token!==epoch.current)return;
@@ -129,6 +141,11 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
    }
    if(action==='validate'){
     const r=await op('texture_graph_validate',{graph,overrides});if(token!==epoch.current)return;if(!object(r)||r.ok!==true)throw new Error('Native validation failed');setStatus('Native topology and work budget valid');return;
+   }
+   if(action==='queueEnqueue'){
+     const r=await op('texture_graph_gpu_preview',{action:'enqueue',graph,overrides,priority:Number(queuePriority),bakeSet:true,requireGpu:true,materialized,fusePointwise:materialized&&!incremental&&fusePointwise,incremental:materialized&&incremental,gpuTextureTransfer:materialized&&gpuTextureTransfer,gpuTextureFenceOnly:materialized&&gpuTextureTransfer&&gpuTextureFenceOnly,gpuTextureMipmaps:materialized&&gpuTextureTransfer&&gpuTextureMipmaps});if(token!==epoch.current)return;
+     if(!object(r)||r.ok!==true||typeof r.ticket!=='string')throw new Error('GPU enqueue rejected');const ticket=r.ticket;
+     setQueueDrafts(old=>({...old,[ticket]:{source:text,overrides:overrideText,output,resolution:gpuResolution}}));setQueueTicket(ticket);setStatus('Waiting GPU ticket '+ticket);return;
    }
    if(action==='gpuPlan'){
      const r=await op('texture_graph_gpu_preview',{action:'plan',fusePointwise:!incremental&&fusePointwise,incremental:materialized&&incremental,graph,overrides,bakeSet:true,resolution:gpuResolution,gpuTextureTransfer:materialized&&gpuTextureTransfer,gpuTextureFenceOnly:materialized&&gpuTextureTransfer&&gpuTextureFenceOnly,gpuTextureMipmaps:materialized&&gpuTextureTransfer&&gpuTextureMipmaps});if(token!==epoch.current)return;
@@ -295,6 +312,14 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
    <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!outputs.includes(output)} onClick={()=>void run('gpuBake')}>Queue full-size GPU bake</StudioButton><StudioButton size="sm" disabled={busy||disabled||!gpuReady||!textureName||gpuRequest?.source!==text||gpuRequest?.overrides!==overrideText||(!gpuRequest?.setBake&&gpuRequest?.output!==output)} onClick={()=>void run('gpuPublish')}>Publish completed bake</StudioButton></div>
    <StudioButton size="sm" disabled={busy||disabled||!outputs.length} onClick={()=>void run('gpuPlan')}>Analyze materialized DAG (plan only)</StudioButton>
     <StudioButton size="sm" disabled={busy||disabled||!outputs.length} onClick={()=>void run('gpuBakeSet')}>Queue full-size GPU PBR set</StudioButton>
+   <StudioSection title="GPU request queue">
+    <small>Non-preemptive, priority 3 highest; equal priority FIFO. Read queue to select an active draft, then Read result above. Publish/apply or explicitly discard and release before the next request.</small>
+    <StudioSelect aria-label="GPU queue priority" value={queuePriority} disabled={busy||disabled} onChange={e=>setQueuePriority(e.target.value)}>{[0,1,2,3].map(n=><option key={n} value={String(n)}>Priority {n}</option>)}</StudioSelect>
+    <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!outputs.length} onClick={()=>void run('queueEnqueue')}>Enqueue PBR set</StudioButton><StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('queueRead')}>Read queue</StudioButton></div>
+    <StudioInput aria-label="GPU queue ticket" value={queueTicket} disabled={busy||disabled} onChange={e=>setQueueTicket(e.target.value)}/>
+    <div className="au-row"><StudioButton size="sm" disabled={busy||disabled||!queueTicket} onClick={()=>void run('queueCancel')}>Cancel ticket</StudioButton><StudioButton size="sm" disabled={busy||disabled||!queueTicket} onClick={()=>void run('queueRelease')}>Discard / release active</StudioButton></div>
+    {queueInfo&&<small>Active {String(queueInfo.activeTicket||'none')} · request {String(queueInfo.activeRequest||'none')} · pending {Array.isArray(queueInfo.pending)?queueInfo.pending.filter(object).map(x=>String(x.ticket)+' (p'+String(x.priority)+')').join(', '):''} · {String(queueInfo.pendingBytes??0)} bytes · {String(queueInfo.error??'')}</small>}
+   </StudioSection>
    <StudioButton size="sm" disabled={busy||disabled||!gpuRequest} onClick={()=>void run('gpuCancel')}>Cancel GPU request</StudioButton>
     <small>Request timeout: 60 seconds by default. Cancellation discards unpublished results; GPU retirement may still be pending.</small>
     {gpuStatus&&<small>{gpuStatus}</small>}
