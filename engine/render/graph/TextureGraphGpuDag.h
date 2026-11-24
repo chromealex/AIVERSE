@@ -34,7 +34,7 @@ inline Source compileNodeKernel(const Program& p,size_t target,int n){
     const bool helpers=id=="noise"||id=="fbm"||id=="voronoi"||id=="pattern"||id=="patternMask";
     return materializedKernel(n,count,helpers?pointwiseHelpers():std::string{},body);
 }
-struct MaterializedDagPlan {
+struct EarlyPackDagPlan {
     DagSlotPlan slots;
     std::vector<Source> nodeKernels; // exact index of corresponding slot step
     Source packKernel;
@@ -44,14 +44,14 @@ struct MaterializedDagPlan {
 };
 // A source-plan is eligible only when the owner can support the budget and
 // bindings. The fused path remains available for ineligible plans.
-inline MaterializedDagPlan compileMaterializedDag(const Program& p,const std::vector<size_t>& targets,
+inline EarlyPackDagPlan compileMaterializedDag(const Program& p,const std::vector<size_t>& targets,
         int n,size_t budget=maxDagSlotBytes,size_t slotLimit=maxDagSlots){
     require(n>=8&&n<=p.size&&n<=maxBakeSize,"invalid materialized GPU resolution");
     std::vector<std::vector<size_t>> edges;edges.reserve(p.nodes.size());
     for(const auto& node:p.nodes)edges.push_back(node.inputs);
     auto slots=planDagSlots(edges,p.order,targets,n,budget,slotLimit);
     if(!slots.fits)return {{},{},{},"materialized DAG exceeds storage budget"};
-    MaterializedDagPlan result;
+    EarlyPackDagPlan result;
     result.nodeKernels.reserve(slots.steps.size());
     for(const auto& step:slots.steps){
         auto source=compileNodeKernel(p,step.node,n);
