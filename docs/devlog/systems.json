@@ -1751,6 +1751,14 @@
    "id": "world",
    "roadmap": [
     {
+     "id": "world-background-recovery",
+     "title": "Фоновое восстановление мира",
+     "titleEn": "Background world recovery",
+     "text": "Чтение checkpoint, восстановление WAL и отменяемая публикация на границе владельца.",
+     "textEn": "Checkpoint reading, WAL recovery and cancellable publication at the owner boundary.",
+     "status": "in-progress"
+    },
+    {
      "id": "world-async-persistence",
      "title": "Асинхронная запись мира",
      "titleEn": "Asynchronous world persistence",
