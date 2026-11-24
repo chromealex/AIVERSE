@@ -29,10 +29,12 @@ struct StyleMaterial{
     std::string id;StyleRgb color{0.5f,0.5f,0.5f};float metallic=0,roughness=0.8f;
     StyleRgb emissive{0,0,0};float emissiveStrength=1;
     StyleTextureGuidSlots textures;
-    std::string surfacePattern; uint32_t surfaceSeed=0; // optional generated PBR maps
     std::array<float,2> uvScale{1.f,1.f},uvOffset{0.f,0.f};
     float uvRotation=0.f; // radians, shared by all PBR texture channels
     float normalScale=1.f,occlusionStrength=1.f;
+    // Append new fields to preserve positional aggregate initializers across
+    // native tools and existing game clients.
+    std::string surfacePattern; uint32_t surfaceSeed=0;
     bool operator==(const StyleMaterial&)const=default;
 };
 struct StyleRange{float lo=0,hi=0;float pick(Random& g)const{return lo+(hi-lo)*float(g.unit().toDouble());}};
