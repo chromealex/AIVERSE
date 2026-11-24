@@ -66,6 +66,7 @@ Config readConfig(const Json& root) {
         j.set(key,root[key]);
     }
     Config c;
+    c.simulationLod=world::readSimulationLod(root["simulationLod"]);
     c.tickRate=uint32_t(integer(j,"tickRate",60,20,120));
     c.snapshotRate=uint32_t(integer(j,"snapshotRate",20,1,c.tickRate));
     c.maxPlayers=uint32_t(integer(j,"maxPlayers",100,1,200));
