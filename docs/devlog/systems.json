@@ -62,6 +62,14 @@
     {
      "status": "in-progress",
      "target": null,
+     "title": "Планетарный лес: видимость по Fog of War",
+     "titleEn": "Planetary forest: fog-of-war visibility",
+     "text": "Stage 153: отображать текущее состояние только в видимых ячейках, без истории и без раскрытия скрытых изменений через декоративные деревья.",
+     "textEn": "Stage 153: publish current state only in visible cells, without history or exposing hidden changes through decorative trees."
+    },
+    {
+     "status": "in-progress",
+     "target": null,
      "title": "Планетарный лес: визуализация разложения и точная привязка падений",
      "titleEn": "Planetary forest: decay presentation and exact fall binding",
      "text": "Stage 152: толщина древесины из текущего остатка, привязка физического тела к конкретной квитанции падения. Проверка сборки и GPU ещё требуется.",
