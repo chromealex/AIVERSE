@@ -6,6 +6,7 @@
 #include "engine/buildings/BuildingCirculationScene.h"
 #include "engine/core/ECS.h"
 #include "engine/core/Archive.h"
+#include "engine/sim/CommonComponents.h"
 #include <algorithm>
 #include <cmath>
 #include <concepts>
@@ -125,7 +126,10 @@ public:
                 report.complete=false;
                 report.error="Lift motion exceeds max one-tick travel";break;
             }
-            body->pos.y+=buildingFixedMm(move.newYmm-move.oldYmm);
+            const Fixed delta=buildingFixedMm(move.newYmm-move.oldYmm);
+            body->pos.y+=delta;
+            // The common Transform's prevPos belongs to the previous tick;
+            // leave it untouched so interpolation includes the lift motion.
             marker->lastAppliedRevision=move.revision;
             report.moved.push_back(entity);
         }

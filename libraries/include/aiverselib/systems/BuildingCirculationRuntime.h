@@ -43,12 +43,14 @@ struct BuildingLiftSnapshot {
     uint64_t revision=1;
     uint32_t passengerCount=0;
     bool doorsOpen()const{return phase==BuildingLiftPhase::Open;}
+    bool operator==(const BuildingLiftSnapshot&)const=default;
 };
 // Authoritative checkpoint, distinct from a network replica snapshot.
 // Captured only after the physics owner consumed the pending movement.
 struct BuildingLiftCheckpoint {
     BuildingLiftSnapshot state;
     int64_t travelRemainder=0;
+    bool operator==(const BuildingLiftCheckpoint&)const=default;
 };
 struct BuildingLiftEvent {
     enum class Kind : uint8_t { DoorsClosed, Departed, Arrived, DoorsOpened };

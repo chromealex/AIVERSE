@@ -39,3 +39,6 @@
 #include "engine/buildings/BuildingEcsReconcile.h"
 #include "engine/buildings/BuildingRenderer3DScene.h"
 #include "engine/buildings/BuildingWorldRuntime.h"
+#include "engine/buildings/BuildingLiftCheckpointPersistence.h"
+#include "engine/buildings/BuildingLiftRenderState.h"
+#include "engine/buildings/BuildingReplicaBridge.h"

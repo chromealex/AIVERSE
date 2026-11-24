@@ -5,6 +5,8 @@
 // Authoritative-server/local checkpoint recovery, NOT deterministic lockstep.
 #include "engine/buildings/BuildingEcsReconcile.h"
 #include "engine/buildings/BuildingEcsObstruction.h"
+#include "engine/buildings/BuildingCirculationEcsScene.h"
+#include "engine/buildings/BuildingLiftCheckpointPersistence.h"
 #include "engine/buildings/BuildingDynamicNavSource.h"
 #include "engine/buildings/BuildingGraphOwnerAdapters.h"
 #include "engine/buildings/BuildingRenderer3DScene.h"
@@ -40,6 +42,11 @@ public:
         std::map<BuildingGraphDomain,BuildingGraphChangeRouter::Consumer> graphOwners;
         BuildingDualLeafGameSession::Authorize authorize;
         BuildingDualLeafGameSession::InteractionRange reachable;
+        // Required only for recipes with lifts. All callbacks run on the
+        // authoritative world thread; actual boarding/exit is still checked
+        // by the ECS circulation bridge.
+        BuildingCirculationEcsScene<Transform>::AtLanding atLiftLanding;
+        std::function<bool(Entity,uint32_t,uint32_t,BuildingLiftCommandKind)> authorizeLift;
         BuildingDualLeafOwner::SweptObstruction extraObstruction;
         BuildingImageByGuid imageResolver;
         // Game's real actor/cargo/route evacuation gate, not a fake ACK.
@@ -57,7 +64,8 @@ public:
         OwnsActor owns,std::string* error=nullptr){
         if(sim.setupComplete()||!namespaces.sealed()||!commandType||!owns||
            sim.world().resourceConst<BuildingEcsSceneCollection>()||
-           sim.world().resourceConst<BuildingEcsWorldState>()){
+           sim.world().resourceConst<BuildingEcsWorldState>()||
+           sim.world().resourceConst<BuildingLiftWorldCheckpoints>()){
             fail(error,"Invalid or duplicate shared building world setup");return {};
         }
         auto host=std::shared_ptr<BuildingWorldRuntime>(
@@ -71,7 +79,8 @@ public:
         }
         registerBuildingEcsSceneCollection(sim,namespaces.fingerprint());
         registerBuildingPhysicalExtentPersistence(sim);
-        sim.addStepGate([weak](Simulation&){auto h=weak.lock();return h&&h->ready();});
+        registerBuildingLiftCheckpointPersistence(sim);
+        sim.addStepGate([weak](Simulation&){auto h=weak.lock();return h&&h->settleGraphs();});
         sim.addStateRestoredHook([weak](Simulation&){
             if(auto h=weak.lock())h->beginRecovery();
         });
@@ -106,11 +115,6 @@ public:
            !namespaces_->find(definition.instanceKey)||
            scenes_.contains(definition.sceneId))
             return fail(error,"Invalid building definition or namespace");
-        // Lift cabin/rider persistence uses the separate circulation owner.
-        // Never silently load a static shell with missing lift platforms.
-        for(const auto& feature:recipe.features)
-            if(feature.kind==BuildingFeatureKind::Elevator)
-                return fail(error,"Elevator recipes require the circulation scene owner");
         for(const auto& [id,other]:scenes_){
             (void)id;
             if(other->def.instanceKey==definition.instanceKey||
@@ -127,8 +131,20 @@ public:
         if(!buildingAuthoredAperturePoses(scene->generated,scene->def.origin,
                 scene->def.yaw,scene->poses,error)||scene->poses.size()>64)
             return fail(error,"Invalid building aperture pose budget");
+        BuildingCirculationHost layout;
+        if(!layout.initialize(scene->generated,scene->def.origin,scene->def.yaw,error))
+            return false;
+        size_t liftShapes=0;
+        for(const auto& [feature,lift]:layout.lifts()){
+            scene->liftLayout.emplace(feature,lift.floorCount());
+            liftShapes+=1+2*lift.floorCount();
+        }
+        if(scene->liftLayout.size()>64||
+           (!scene->liftLayout.empty()&&(!scene->def.atLiftLanding||
+             !scene->def.authorizeLift||sim_->tickRate()>1000)))
+            return fail(error,"Lift recipe requires real landing/access guards and supported tick rate");
         if(scene->generated.building.boxes.empty()||
-           scene->generated.building.boxes.size()+2*scene->poses.size()>65535)
+           scene->generated.building.boxes.size()+2*scene->poses.size()+liftShapes>65535)
             return fail(error,"Invalid building collider budget");
         const auto& first=scene->generated.building.boxes.front();
         scene->bounds={first.min+scene->def.origin,first.max+scene->def.origin};
@@ -170,6 +186,9 @@ public:
         for(const auto& edge:scene->generated.structureGraph.connections){
             hash.str(edge.id);hash.str(edge.from);hash.str(edge.to);hash.u32(uint32_t(edge.kind));
         }
+        for(const auto& [feature,floors]:scene->liftLayout){
+            hash.u32(feature);hash.u32(floors);
+        }
         scene->contentHash=hash.value();
         const auto id=scene->def.sceneId;
         scenes_.emplace(id,std::move(scene));
@@ -204,12 +223,16 @@ public:
             for(const auto& pose:s->poses)positions.emplace(pose.socketId,pose.physicalPermille);
             if(!s->physics.attachRestored(s->poses,s->leafIds,positions,1,*spatial_,
                    id,probe(*s),error)||
-               !s->session.attach(id,s->physics,s->style,s->def.authorize,s->def.reachable,error)){
+               !s->session.attach(id,s->physics,s->style,s->def.authorize,s->def.reachable,error)||
+               !attachCirculation(*s,nullptr,error)){
                 (void)dropPhysical(*s,nullptr);return false;
             }
             s->session.setQueuedActorGuard(owns_);
             s->status=Status::Loading;
         }
+        BuildingCirculationCheckpoint initialLifts;
+        if(!s->circulation.captureCheckpoint(initialLifts))
+            return fail(error,"Initial lift checkpoint is inconsistent with ECS");
         const auto ack=s->router.publish({id,1,UINT32_MAX,
             BuildingGraphChangeKind::Created,s->domains,s->bounds,false});
         if(!ack.complete)return fail(error,ack.error);
@@ -225,6 +248,14 @@ public:
             all->scenes.erase(id);all->contentHashes.erase(id);
             return fail(error,"Building ECS attachment failed after graph ACK");
         }
+        if(!s->liftLayout.empty()){
+            auto* lifts=liftCheckpoints();
+            if(!lifts){s->faulted=true;return fail(error,"Missing lift checkpoint resource");}
+            lifts->scenes[id]=std::move(initialLifts);
+        }
+        if(!publishLiftPresentation(*s)){
+            s->faulted=true;return fail(error,"Initial lift presentation invalid");
+        }
         s->status=Status::Active;
         if(error)error->clear();
         return true;
@@ -238,7 +269,8 @@ public:
         if(s->status==Status::Active){
             if(!graphicsDetached(*s)||!s->def.canUnload()||
                buildingEcsSweptOccupied(sim_->world(),s->bounds,s->bounds)||
-               s->physics.moving()||s->physics.pendingGraphs()||s->session.queued())
+               s->physics.moving()||s->physics.pendingGraphs()||s->session.queued()||
+               !s->liftQueue.empty()||!s->circulation.canUnload()||!liftsIdle(*s))
                 return fail(error,"Building is occupied, moving or GPU-resident");
             if(!ownsPhysical(*s))return fail(error,"Building collider lease mismatch");
             if(epoch_==INT64_MAX||s->physics.revision()==UINT64_MAX)
@@ -256,6 +288,7 @@ public:
         if(auto* all=collection()){
             all->scenes.erase(id);all->contentHashes.erase(id);
         }
+        if(auto* lifts=liftCheckpoints())lifts->scenes.erase(id);
         if(error)error->clear();
         return true;
     }
@@ -271,19 +304,28 @@ public:
         for(auto& [id,s]:scenes_){
             (void)id;
             s->recovered=false;
+            s->liftQueue.clear();
             if(s->runtime)s->runtime->suspend();
         }
     }
     bool reconcile(std::string* error=nullptr){
         if(!recovering_||epochExhausted_)return fail(error,"Building recovery unavailable");
         auto* all=collection();
-        if(!all||all->contentHashes.size()!=all->scenes.size())
+        const auto* liftState=sim_->world().resourceConst<BuildingLiftWorldCheckpoints>();
+        if(!all||!liftState||all->contentHashes.size()!=all->scenes.size())
             return fail(error,"Restored building namespace or content table differs");
+        for(const auto& [id,saved]:liftState->scenes){
+            (void)saved;
+            const auto* s=find(id);
+            if(!s||s->liftLayout.empty()||!all->scenes.contains(id))
+                return fail(error,"Orphaned restored lift checkpoint");
+        }
         for(const auto& [id,state]:all->scenes){
             auto* s=find(id);
             const auto hash=all->contentHashes.find(id);
             if(!s||state.sceneId!=id||hash==all->contentHashes.end()||
-               hash->second!=s->contentHash)
+               hash->second!=s->contentHash||
+               (liftState->scenes.contains(id)!=(!s->liftLayout.empty())))
                 return fail(error,"Restored building content identity differs");
         }
         for(const auto& [id,s]:scenes_){
@@ -311,7 +353,14 @@ public:
                     releaseScene(*s);
                 }
             }else{
+                std::optional<BuildingCirculationCheckpoint> restored;
+                if(!s->liftLayout.empty())restored=liftState->scenes.at(id);
                 if(!dropPhysical(*s,error)||!prepareStatic(*s,error))return false;
+                // Restore the cabin and ECS passenger bindings at their
+                // saved height BEFORE the shared graph rebuild.
+                if(!attachCirculation(*s,restored?&*restored:nullptr,error)){
+                    (void)dropPhysical(*s,nullptr);return false;
+                }
                 s->runtime=BuildingEcsRuntime::suspendedManaged(*sim_,s->session,
                     s->physics,*spatial_,s->router,id,s->def.stepPermille);
                 if(!s->runtime||!restoreBuildingEcsLeafScene(*sim_,*s->runtime,
@@ -321,6 +370,10 @@ public:
                     (void)dropPhysical(*s,nullptr);return false;
                 }
                 s->session.setQueuedActorGuard(owns_);
+                if(!publishLiftPresentation(*s)){
+                    (void)dropPhysical(*s,nullptr);
+                    return fail(error,"Restored lift presentation invalid");
+                }
                 s->status=Status::Active;
             }
             s->recovered=true;
@@ -344,6 +397,59 @@ public:
         c.args={int64_t(id),int64_t(epoch_),int64_t(it-s->poses.begin())};
         return c;
     }
+    // Same existing Command envelope, distinguished by bounded operation.
+    // Apertures: 3 args; lifts: 4 args, param 2..5. No extra transport.
+    std::optional<Command> makeLiftCommand(uint64_t id,uint32_t feature,
+              uint32_t floor,Entity actor,uint8_t player,BuildingLiftCommandKind kind)const{
+        const auto* s=find(id);
+        if(!s||s->status!=Status::Active||!ready()||!actor.valid()||!player||
+           kind>BuildingLiftCommandKind::Exit||!s->liftLayout.contains(feature)||
+           floor>=s->liftLayout.at(feature))return {};
+        Command c;c.type=commandType_;c.player=player;c.units={actor};
+        c.param=2+int64_t(kind);
+        c.args={int64_t(id),int64_t(epoch_),int64_t(feature),int64_t(floor)};
+        return c;
+    }
+    // Transport copies only the last graph-acknowledged ECS revision.
+    // Content identity and socket order are stable across peers.
+    bool captureApertureState(uint64_t id,BuildingEcsWorldState& out,
+                              uint64_t& contentHash)const{
+        const auto* s=find(id);
+        const auto* all=sim_->world().resourceConst<BuildingEcsSceneCollection>();
+        if(!s||!all||!ready()||s->status!=Status::Active||
+           s->physics.pendingGraphs())return false;
+        const auto it=all->scenes.find(id);
+        if(it==all->scenes.end()||!it->second.graphAcknowledged||
+           it->second.revision!=s->physics.revision())return false;
+        out=it->second;contentHash=s->contentHash;return true;
+    }
+    bool hasLifts(uint64_t id)const{
+        const auto* s=find(id);return s&&!s->liftLayout.empty();
+    }
+    bool captureLiftSnapshot(uint64_t id,uint64_t serverTick,
+                     std::vector<uint8_t>& out,std::string* error=nullptr)const{
+        const auto* s=find(id);
+        if(!s||s->liftLayout.empty()||!ready()||s->status!=Status::Active||
+           s->physics.pendingGraphs())
+            return fail(error,"No graph-acknowledged lift state");
+        return s->circulation.captureServerSnapshot(serverTick,out,error);
+    }
+    // Use the existing native mesh and explicit stair/lift route segments.
+    BuildingNavRoute route(uint64_t id,const std::string& from,
+                const std::string& to,BuildingRoutePolicy policy={})const{
+        const auto* s=find(id);
+        if(!s||!ready()||s->status!=Status::Active||s->physics.pendingGraphs()||
+           !s->def.regionalNavigation){
+            BuildingNavRoute out;out.error="Building route unavailable";return out;
+        }
+        return s->circulation.scene().host().route(*s->def.regionalNavigation,from,to,policy);
+    }
+    bool canBoardLift(uint64_t id,uint32_t feature,uint32_t floor)const{
+        const auto* s=find(id);
+        return s&&ready()&&s->status==Status::Active&&!s->physics.pendingGraphs()&&
+               s->circulation.scene().doors().enabled()&&
+               s->circulation.scene().doorsOpenAt(feature,floor);
+    }
     // Server ingress after established transport authentication. Route
     // through Simulation::submit, never apply packet data to physics.
     bool submitAuthenticated(uint8_t authenticatedSlot,Command command,
@@ -357,8 +463,38 @@ public:
         if(error)error->clear();return true;
     }
     uint64_t commandEpoch()const noexcept{return epoch_;}
-    void retireActor(Entity actor){
-        for(auto& [id,s]:scenes_){(void)id;if(s->runtime)s->runtime->retireActor(actor);}
+    // Call before destroying/recycling an actor. A moving rider may
+    // refuse retirement; the existing host must keep that ECS entity alive.
+    bool retireActor(Entity actor,std::string* error=nullptr){
+        if(!sim_->world().alive(actor)||!ready())
+            return fail(error,"Actor retirement requires an active world");
+        // Check every scene before releasing a passenger in any of them.
+        for(const auto& [id,s]:scenes_){
+            (void)id;
+            if(s->status==Status::Active&&s->physics.pendingGraphs())
+                return fail(error,"Building graph update pending");
+        }
+        for(auto& [id,s]:scenes_){
+            (void)id;
+            if(s->status==Status::Active&&
+               s->circulation.scene().host().riderBindings().contains(actor.packed())&&
+               !s->circulation.prepareActorRetirement(actor,error))return false;
+        }
+        for(auto& [id,s]:scenes_){
+            (void)id;
+            if(s->runtime)s->runtime->retireActor(actor);
+            s->circulation.clearActorCommandSequence(actor);
+            s->liftQueue.erase(std::remove_if(s->liftQueue.begin(),s->liftQueue.end(),
+                [&](const Command& c){return !c.units.empty()&&c.units[0]==actor;}),s->liftQueue.end());
+            if(s->status==Status::Active&&!s->liftLayout.empty()){
+                BuildingCirculationCheckpoint cp;
+                if(!s->circulation.captureCheckpoint(cp)||!liftCheckpoints()){
+                    s->faulted=true;return fail(error,"Lift passenger retirement checkpoint failed");
+                }
+                liftCheckpoints()->scenes[s->def.sceneId]=std::move(cp);
+            }
+        }
+        if(error)error->clear();return true;
     }
     // Read-only access uses committed physics AND graph acknowledgement.
     bool canTraverse(uint64_t id,const std::string& socket)const{
@@ -375,7 +511,8 @@ public:
             (void)id;
             if(s->status==Status::Loading||s->status==Status::Removing||
                (s->status==Status::Active&&(!s->runtime||
-                   s->runtime->suspended()||s->physics.faulted())))return false;
+                   s->runtime->suspended()||s->physics.faulted()||s->faulted||
+                   s->circulation.scene().faulted())))return false;
         }
         return true;
     }
@@ -401,10 +538,18 @@ public:
                 if(!s->session.bindMaterial(pose.socketId,
                     s->generated.building.mesh.materials[size_t(material)],
                     s->def.imageResolver,error))return false;
+            if(!s->liftLayout.empty()){
+                auto palette=s->style;
+                palette.materials=s->generated.building.mesh.materials;
+                s->liftRender.clearAssets();
+                if(!s->liftRender.initialize(s->circulation.scene().host(),palette,
+                       s->def.imageResolver,error))return false;
+            }
         }catch(const std::exception& e){return fail(error,e.what());}
         s->renderer=std::make_shared<BuildingRenderer3DScene>();
         if(!s->renderer->initialize(device,renderer,std::move(lease),s->session,id,
-                                    error,s->shell.get(),s->def.origin))return false;
+                                    error,s->shell.get(),s->def.origin,
+                                    s->liftLayout.empty()?nullptr:&s->liftRender))return false;
         view.setBuildingRenderOwner(id,s->renderer);
         if(error)error->clear();return true;
     }
@@ -414,7 +559,7 @@ public:
         if(!s)return fail(error,"Unknown building scene");
         view.setBuildingRenderOwner(id,std::shared_ptr<BuildingRenderer3DScene>{});
         if(s->renderer&&!s->renderer->shutdown(error))return false;
-        s->renderer.reset();s->shell.reset();
+        s->renderer.reset();s->shell.reset();s->liftRender.clearAssets();
         if(error)error->clear();return true;
     }
     // Final world destruction only: host has stopped simulation, removed
@@ -424,11 +569,13 @@ public:
         shuttingDown_=true;
         for(const auto& [id,s]:scenes_){
             (void)id;
-            if(!graphicsDetached(*s)||!ownsPhysical(*s))
-                return fail(error,"Building world still has GPU or foreign collider leases");
+            if(!graphicsDetached(*s)||!ownsPhysical(*s)||
+               !s->circulation.scene().host().riderBindings().empty())
+                return fail(error,"Building world still has passengers, GPU or foreign collider leases");
         }
         for(auto& [id,s]:scenes_){(void)id;if(!dropPhysical(*s,error))return false;}
         if(auto* all=collection()){all->scenes.clear();all->contentHashes.clear();}
+        if(auto* lifts=liftCheckpoints())lifts->scenes.clear();
         if(error)error->clear();return true;
     }
 
@@ -442,7 +589,13 @@ private:
         uint32_t domains=0;
         uint64_t contentHash=0,removeRevision=0;
         Status status=Status::Unloaded;
-        bool recovered=false;
+        bool recovered=false,faulted=false;
+        std::map<uint32_t,uint32_t> liftLayout;
+        std::map<uint32_t,uint32_t> platformIds;
+        std::map<BuildingLiftDoorKey,BuildingLiftDoorIds> landingIds;
+        BuildingCirculationEcsScene<Transform> circulation;
+        BuildingLiftRenderState liftRender;
+        std::vector<Command> liftQueue;
         std::optional<scene::SceneCollisionNamespaces::Lease> lease;
         std::map<uint32_t,world::Bounds> statics;
         std::map<std::string,BuildingDualLeafIds> leafIds;
@@ -480,6 +633,19 @@ private:
         auto* all=sim_->world().resource<BuildingEcsSceneCollection>();
         return all&&all->namespaceFingerprint==namespaces_->fingerprint()?all:nullptr;
     }
+    BuildingLiftWorldCheckpoints* liftCheckpoints(){
+        return sim_->world().resource<BuildingLiftWorldCheckpoints>();
+    }
+    static bool liftsIdle(const Scene& s){
+        for(const auto& [id,lift]:s.circulation.scene().host().lifts()){
+            (void)id;
+            const auto& snap=lift.snapshot();
+            if(snap.passengerCount||
+               (snap.phase!=BuildingLiftPhase::Open&&snap.phase!=BuildingLiftPhase::Offline))
+                return false;
+        }
+        return true;
+    }
     static bool graphicsDetached(const Scene& s){
         return !s.renderer||s.renderer->status()==BuildingRenderer3DScene::Status::Detached;
     }
@@ -505,6 +671,13 @@ private:
             ids.first=uint32_t(next++);ids.second=uint32_t(next++);
             s.leafIds.emplace(pose.socketId,ids);
         }
+        for(const auto& [feature,floors]:s.liftLayout){
+            s.platformIds.emplace(feature,uint32_t(next++));
+            for(uint32_t floor=0;floor<floors;++floor){
+                BuildingLiftDoorIds ids{uint32_t(next++),uint32_t(next++)};
+                s.landingIds.emplace(BuildingLiftDoorKey{feature,floor},ids);
+            }
+        }
         for(uint64_t n=base+1;n<next;++n)
             if(spatial_->colliders().contains(uint32_t(n))){
                 releaseScene(s);return fail(error,"Building collision ID is already occupied");
@@ -528,15 +701,83 @@ private:
                 if(c.kind==BuildingGraphChangeKind::Removed){
                     mesh=nav::Mesh{};return true;
                 }
-                if(!s.dynamicNav.synchronize(s.physics,*spatial_))return false;
-                if(!mesh.built())return mesh.build(s.dynamicNav,s.dynamicNav.config());
-                markBuildingNavCollisionChanged(mesh,c.bounds);
-                return mesh.refresh(s.dynamicNav)&&!mesh.dirty();
+                std::vector<world::Bounds> liftBounds;
+                if(!verifiedLiftBounds(s,&liftBounds)||
+                   !s.dynamicNav.synchronize(s.physics,*spatial_,nullptr,liftBounds))
+                    return false;
+                if(!mesh.built()){
+                    if(!mesh.build(s.dynamicNav,s.dynamicNav.config()))return false;
+                }else{
+                    markBuildingNavCollisionChanged(mesh,c.bounds);
+                    if(!mesh.refresh(s.dynamicNav)||mesh.dirty())return false;
+                }
+                return s.circulation.rebuildNavigation(mesh);
             });
         }
         for(const auto& [domain,consumer]:s.def.graphOwners)
             s.router.registerConsumer(domain,consumer);
         return true;
+    }
+    // Physical lift owners share the scene lease; compare their exact
+    // expected shapes, including absence of open landing doors.
+    bool verifiedLiftBounds(const Scene& s,std::vector<world::Bounds>* out=nullptr)const{
+        const auto& circulation=s.circulation.scene();
+        if(!circulation.attached())return s.platformIds.empty()||
+            std::none_of(s.platformIds.begin(),s.platformIds.end(),
+                [&](const auto& p){return spatial_->colliders().contains(p.second);});
+        const auto platforms=circulation.colliders().colliderBounds();
+        const auto doors=circulation.doors().closedColliderBounds();
+        const auto ids=circulation.doors().ownedColliderIds();
+        if(platforms.size()!=s.platformIds.size())return false;
+        for(const auto& [feature,id]:s.platformIds){
+            (void)feature;
+            if(!platforms.contains(id))return false;
+        }
+        // During failed initialization the doors may not yet be attached.
+        for(const auto& [key,pair]:s.landingIds){
+            (void)key;
+            for(uint32_t id:{pair.left,pair.right}){
+                if(circulation.doors().enabled()&&!ids.contains(id))return false;
+                const auto expected=doors.find(id);
+                const auto actual=spatial_->colliders().find(id);
+                if((expected==doors.end())!=(actual==spatial_->colliders().end())||
+                   (expected!=doors.end()&&!same(expected->second,actual->second.bounds)))return false;
+            }
+        }
+        for(const auto& [id,b]:platforms){
+            const auto actual=spatial_->colliders().find(id);
+            if(actual==spatial_->colliders().end()||!same(b,actual->second.bounds))return false;
+            if(out)out->push_back(b);
+        }
+        if(out)for(const auto& [id,b]:doors){(void)id;out->push_back(b);}
+        return true;
+    }
+    bool attachCirculation(Scene& s,const BuildingCirculationCheckpoint* saved,
+                           std::string* error){
+        if(!s.circulation.attach(sim_->world(),*spatial_,nullptr,s.generated,s.platformIds,
+                      s.def.sceneId,s.def.origin,s.def.yaw,error,saved))return false;
+        if(s.liftLayout.empty())return true;
+        if(!s.circulation.attachLandingDoors(*spatial_,nullptr,s.landingIds,error)||
+           !s.circulation.configureAuthenticatedCommands(
+              [this](uint64_t player,Entity actor){
+                  return player>0&&player<=255&&owns_(sim_->world(),uint8_t(player),actor);
+              },s.def.atLiftLanding,error))return false;
+        // Use actual ECS extents plus the host's optional PHYSIS callback.
+        s.circulation.setDoorObstructionProbe([this,&s](uint32_t feature,uint32_t floor){
+            auto box=s.circulation.scene().doors().doorwayBounds(feature,floor);
+            const auto ids=s.landingIds.find({feature,floor});
+            return !box||ids==s.landingIds.end()||
+                buildingEcsSweptOccupied(sim_->world(),box->first,box->second)||
+                (s.def.extraObstruction&&s.def.extraObstruction(box->first,box->second,
+                      ids->second.left,ids->second.right));
+        });
+        return true;
+    }
+    bool publishLiftPresentation(Scene& s){
+        if(s.liftLayout.empty())return true;
+        const auto size=s.generated.building.constructionSize;
+        return s.liftRender.publish(buildingLiftVisualFrame(s.circulation.scene().host(),
+            s.circulation.scene().doors(),size.width,size.depth,s.def.origin,s.def.yaw));
     }
     bool ownsPhysical(const Scene& s)const{
         if(s.status==Status::Removing)return true;
@@ -554,20 +795,24 @@ private:
                     return false;
             }
         }
-        return true;
+        return verifiedLiftBounds(s);
     }
     void removeGeometry(Scene& s){
         if(s.runtime)s.runtime->suspend();
         s.runtime.reset();
         if(s.session.attached())s.session.detach();
+        // The World may already contain restored passenger markers.
+        // Do not clear them while destroying the previous derived owner.
+        if(s.circulation.scene().attached())s.circulation.detach(*spatial_,nullptr,false);
         if(s.physics.attached())s.physics.detach(*spatial_);
         for(const auto& [id,b]:s.statics){(void)b;spatial_->remove(id);}
         s.statics.clear();
     }
     void releaseScene(Scene& s){
-        s.router={};s.statics.clear();s.leafIds.clear();s.lease.reset();
-        s.runtime.reset();s.shell.reset();s.renderer.reset();
-        s.status=Status::Unloaded;s.removeRevision=0;
+        s.router={};s.statics.clear();s.leafIds.clear();s.platformIds.clear();
+        s.landingIds.clear();s.liftQueue.clear();s.lease.reset();
+        s.runtime.reset();s.shell.reset();s.renderer.reset();s.liftRender.clear();
+        s.status=Status::Unloaded;s.removeRevision=0;s.faulted=false;
     }
     bool dropPhysical(Scene& s,std::string* error){
         if(!graphicsDetached(s)||!ownsPhysical(s))
@@ -578,25 +823,133 @@ private:
     }
     bool validateCommand(const Command& c)const{
         if(!ready()||c.type!=commandType_||!c.player||c.flags||c.target.valid()||
-           c.units.size()!=1||c.args.size()!=3||c.args[0]<=0||
+           c.units.size()!=1||c.args.size()<3||c.args[0]<=0||
            c.args[1]!=int64_t(epoch_)||c.args[2]<0||
-           (c.param!=0&&c.param!=1))return false;
+           !sim_->world().alive(c.units[0])||!owns_(sim_->world(),c.player,c.units[0]))
+            return false;
         const auto* s=find(uint64_t(c.args[0]));
-        return s&&s->status==Status::Active&&uint64_t(c.args[2])<s->poses.size()&&
-            sim_->world().alive(c.units[0])&&owns_(sim_->world(),c.player,c.units[0]);
+        if(!s||s->status!=Status::Active)return false;
+        if(c.args.size()==3&&(c.param==0||c.param==1))
+            return uint64_t(c.args[2])<s->poses.size();
+        if(c.args.size()!=4||c.param<2||c.param>5||c.args[2]>UINT32_MAX||
+           c.args[3]<0||c.args[3]>UINT32_MAX)return false;
+        const auto it=s->liftLayout.find(uint32_t(c.args[2]));
+        return it!=s->liftLayout.end()&&uint64_t(c.args[3])<it->second;
     }
     void dispatch(const Command& c){
         if(!c.seq||!validateCommand(c)){lastError_="Building command rejected";return;}
         auto* s=find(uint64_t(c.args[0]));
+        if(c.args.size()==4){
+            if(s->liftQueue.size()>=1024){lastError_="Lift command queue full";return;}
+            const auto duplicate=std::find_if(s->liftQueue.begin(),s->liftQueue.end(),
+                 [&](const Command& q){return q.player==c.player&&q.seq==c.seq;});
+            if(duplicate==s->liftQueue.end())s->liftQueue.push_back(c);
+            return;
+        }
         BuildingApertureCommand request{uint64_t(c.args[0]),c.units[0],c.seq,
             s->poses[size_t(c.args[2])].socketId,c.param==1,s->domains,c.player};
         (void)s->runtime->enqueue(request,&lastError_);
+    }
+    // Retry graph ACKs BEFORE any other Simulation system can use a
+    // previously dirty graph. No physical step is executed here.
+    bool settleGraphs(){
+        if(!ready())return false;
+        for(auto& [id,s]:scenes_){
+            if(s->status!=Status::Active||!s->physics.pendingGraphs())continue;
+            const auto ack=s->physics.retry(s->router);
+            if(!ack.graphsAcknowledged){lastError_=ack.error;return false;}
+            auto* state=buildingEcsSceneState(sim_->world(),id);
+            if(!state||!publishLiftPresentation(*s)){
+                s->faulted=true;lastError_="Committed building graph readback failed";return false;
+            }
+            state->graphAcknowledged=true;
+        }
+        return true;
+    }
+    bool advanceLift(Scene& s,Simulation& sim){
+        if(s.liftLayout.empty())return true;
+        if(s.physics.pendingGraphs())return true;
+        auto* records=liftCheckpoints();
+        if(!records||!records->scenes.contains(s.def.sceneId)||
+           s.physics.revision()==UINT64_MAX)return false;
+        const auto before=records->scenes.at(s.def.sceneId);
+        // Commands enter via Simulation's authenticated command stream.
+        // Recheck ownership and gameplay authorization when consumed.
+        const size_t count=std::min<size_t>(64,s.liftQueue.size());
+        for(size_t i=0;i<count;++i){
+            const auto& c=s.liftQueue[i];
+            if(!validateCommand(c))continue;
+            const auto feature=uint32_t(c.args[2]),floor=uint32_t(c.args[3]);
+            const auto kind=BuildingLiftCommandKind(c.param-2);
+            if(!s.def.authorizeLift(c.units[0],feature,floor,kind))continue;
+            const auto result=s.circulation.handleAuthenticatedCommand(c.player,
+                BuildingLiftCommand{s.def.sceneId,c.units[0].packed(),c.seq,feature,floor,kind});
+            if(!result.accepted)lastError_=result.reason;
+        }
+        s.liftQueue.erase(s.liftQueue.begin(),s.liftQueue.begin()+count);
+        // Use absolute tick boundaries, retaining integer time remainder
+        // for rates that do not divide 1000 (e.g. 60 Hz).
+        const uint64_t tick=sim.tick(),rate=sim.tickRate();
+        const auto elapsed=uint32_t((tick+1)*1000/rate-tick*1000/rate);
+        const auto result=s.circulation.advance(*spatial_,nullptr,elapsed);
+        BuildingCirculationCheckpoint after;
+        if(!result.complete||!verifiedLiftBounds(s)||
+           !s.circulation.captureCheckpoint(after)){
+            lastError_=result.error.empty()?"Lift physical/ECS checkpoint failed":result.error;
+            return false;
+        }
+        // Only physical/access topology changes need graph invalidation.
+        // Pure door timer/rounding updates only affect the visual snapshot.
+        bool topology=before.riders!=after.riders;
+        world::Bounds affected{};bool haveBounds=false;
+        const auto include=[&](const world::Bounds& b){
+            if(!haveBounds){affected=b;haveBounds=true;}else expand(affected,b);
+        };
+        if(after.lifts.size()!=before.lifts.size())return false;
+        for(const auto& [feature,saved]:after.lifts){
+            const auto previous=before.lifts.find(feature);
+            if(previous==before.lifts.end())return false;
+            const auto& old=previous->second.state;
+            const auto& now=saved.state;
+            if(old.phase==now.phase&&old.platformYmm==now.platformYmm&&
+               old.passengerCount==now.passengerCount&&old.currentFloor==now.currentFloor)continue;
+            topology=true;
+            const auto& lift=s.circulation.scene().host().lifts().at(feature);
+            auto pose=lift.platformPose();
+            const auto size=s.generated.building.constructionSize;
+            include(buildingLiftPlatformWorldBounds(pose,size.width,size.depth,s.def.origin,s.def.yaw));
+            pose.yMm=old.platformYmm;
+            include(buildingLiftPlatformWorldBounds(pose,size.width,size.depth,s.def.origin,s.def.yaw));
+            for(uint32_t floor:{old.currentFloor,now.currentFloor}){
+                auto door=s.circulation.scene().doors().doorwayBounds(feature,floor);
+                if(door){include(door->first);include(door->second);}
+            }
+        }
+        records=liftCheckpoints();
+        if(!records)return false;
+        records->scenes[s.def.sceneId]=std::move(after);
+        if(topology){
+            const auto commit=s.physics.publishExternalCommit(s.router,
+                  haveBounds?affected:s.bounds,s.domains);
+            if(!commit.committed){lastError_=commit.error;return false;}
+            auto* state=buildingEcsSceneState(sim.world(),s.def.sceneId);
+            if(!state)return false;
+            state->revision=commit.revision;state->graphAcknowledged=commit.graphsAcknowledged;
+            if(!commit.graphsAcknowledged){lastError_=commit.error;return true;}
+        }
+        return publishLiftPresentation(s);
     }
     void advance(Simulation& sim){
         if(!ready())return;
         for(auto& [id,s]:scenes_){
             (void)id;
-            if(s->status==Status::Active)s->runtime->advance(sim);
+            if(s->status!=Status::Active)continue;
+            s->runtime->advance(sim);
+            if(s->runtime->suspended()||s->physics.faulted()||!advanceLift(*s,sim)){
+                s->faulted=true;s->runtime->suspend();
+                if(lastError_.empty())lastError_="Building scene owner faulted";
+                return;
+            }
         }
     }
     Simulation* sim_;

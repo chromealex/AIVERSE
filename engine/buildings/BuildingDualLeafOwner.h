@@ -159,7 +159,7 @@ public:
                                  BuildingGraphChangeRouter& router,
                                  uint16_t step=100){
         BuildingDualLeafStep result;
-        if(!attached_||faulted_||pending_||!step||step>250){
+        if(!attached_||faulted_||pending_||!step||step>250||revision_==UINT64_MAX){
             result.error="Dual-leaf scene unavailable or graph ACK pending";
             return result;
         }
@@ -225,6 +225,23 @@ public:
         return result;
     }
 
+    // One revision stream for all physical owners of this building.
+    // A committed lift change uses the same ACK gate as a leaf movement.
+    BuildingDualLeafStep publishExternalCommit(BuildingGraphChangeRouter& router,
+                    world::Bounds affected,uint32_t domains){
+        BuildingDualLeafStep result;
+        if(!attached_||faulted_||pending_||!domains||(domains&~kBuildingGraphAll)||
+           revision_==UINT64_MAX){
+            result.error="External graph commit unavailable";return result;
+        }
+        pending_=BuildingGraphChange{sceneId_,++revision_,UINT32_MAX,
+            BuildingGraphChangeKind::Moved,domains,affected,false};
+        result.committed=true;result.revision=revision_;
+        const auto ack=router.publish(*pending_);
+        result.graphsAcknowledged=ack.complete;result.error=ack.error;
+        if(ack.complete)pending_.reset();
+        return result;
+    }
     BuildingDualLeafStep retry(BuildingGraphChangeRouter& router){
         BuildingDualLeafStep result;
         if(!pending_){result.error="No pending graph event";return result;}

@@ -65,6 +65,9 @@ public:
                             std::string* error=nullptr){
         return scene_.attachDoors(spatial,navmesh,ids,error);
     }
+    void setDoorObstructionProbe(BuildingCirculationScene::ObstructionProbe probe){
+        scene_.setDoorObstructionProbe(std::move(probe));
+    }
     // Native/authoritative owner-only action. Network clients MUST use
     // handleAuthenticatedCommand with a configured ownership policy.
     bool board(Entity actor,uint32_t feature,std::string* error=nullptr){

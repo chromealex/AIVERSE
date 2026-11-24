@@ -81,6 +81,9 @@ public:
         const auto next=buildingLiftPlatformWorldBounds(pose,
             entry.width,entry.depth,entry.origin,entry.yaw);
         const auto previous=entry.bounds;
+        const auto owned=spatial.colliders().find(entry.id);
+        if(owned==spatial.colliders().end()||!sameBounds(owned->second.bounds,previous))
+            return false;
         spatial.remove(entry.id);
         if(!spatial.add({entry.id,next})){
             // Preserve collision ownership on failure and keep the
@@ -107,10 +110,19 @@ public:
         registered_.erase(it);
         return true;
     }
+    std::map<uint32_t,world::Bounds> colliderBounds()const{
+        std::map<uint32_t,world::Bounds> out;
+        for(const auto& [feature,state]:registered_){(void)feature;out.emplace(state.id,state.bounds);}
+        return out;
+    }
     bool contains(uint32_t feature)const{return registered_.contains(feature);}
     size_t size()const{return registered_.size();}
 
 private:
+    static bool sameBounds(const world::Bounds& a,const world::Bounds& b){
+        return a.min.x==b.min.x&&a.min.y==b.min.y&&a.min.z==b.min.z&&
+               a.max.x==b.max.x&&a.max.y==b.max.y&&a.max.z==b.max.z;
+    }
     struct State {
         uint32_t id=0;world::Bounds bounds{};
         float width=0,depth=0;Vec3 origin{};uint32_t yaw=0;

@@ -28,6 +28,7 @@ struct BuildingCirculationTick {
 struct BuildingCirculationCheckpoint {
     std::map<uint32_t,BuildingLiftCheckpoint> lifts;
     std::map<uint64_t,uint32_t> riders;
+    bool operator==(const BuildingCirculationCheckpoint&)const=default;
 };
 class BuildingCirculationHost {
 public:

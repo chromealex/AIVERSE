@@ -1675,3 +1675,83 @@ elevator recipes must still use the circulation owner; managed runtime
 refuses them rather than spawning a missing platform. No C++ or GPU
 PASS is claimed until actual CI evidence. Handoff: docs/agent-handoffs/
 building-stage23v2-common-world-runtime-2026-11-24.md.
+
+## Stage 23V.5 — common runtime circulation
+
+The BuildingWorldRuntime registry now composes the existing
+BuildingCirculationEcsScene<Transform> for every scene. Elevator recipes
+must provide atLiftLanding and authorizeLift in Definition. The same
+SceneCollisionNamespaces lease assigns static shell, aperture, lift
+platform and physical landing door collider IDs. Do not use the old
+genre-specific modules. The host supplies real ECS BuildingPhysicalExtent
+and optional PHYSIS obstruction queries and must defer actor retirement
+if retireActor returns false (e.g. a rider in transit).
+
+makeLiftCommand uses the existing reserved Simulation Command (param
+2..5, scene/epoch/feature/floor args). submitAuthenticated stamps the
+transport's player; reauthorization occurs when the fixed tick consumes
+the request. captureLiftSnapshot only exports committed acknowledged
+state. Use route/canBoardLift and existing native stair/lift actions,
+not teleports. The graph revision stream is shared with apertures.
+Only physical/access changes trigger native graph refresh; pending ACKs
+gate the next Simulation tick before other systems run.
+
+BuildingLiftWorldCheckpoints persists cabin phase, timing, position,
+rider maps and ECS passenger markers. Reconcile restores platform/door
+colliders at saved heights before graph publication, without applying
+old motion to already restored actors. GPU shell/leaf/lift assets use
+one Renderer3D retirement boundary. Host must call prepareGraphics and
+retireGraphics on its serialized graphics boundary.
+
+The registry is an opt-in authoritative checkpoint integration, not a
+deterministic lockstep rollback engine. External graph consumers and
+game movement still own their policies; native C++/GPU/network acceptance
+has not yet been run. Handoff: docs/agent-handoffs/buildings-stage-23v5.md.
+
+### Stage 23V.6 — existing generic authoritative network transport
+
+BuildingReplicaBridge uses the existing net::replica::Server message
+channels and existing Command binary format. Register two project-owned
+channels, route the admitted Server::onMessage(slot,channel,payload)
+to bridge.receive, and send confirmed state with bridge.send to explicit
+authorized peers only. Exact command length/counts are validated before
+decode; authenticated slot overrides any client-authored player field.
+The state frame includes scene/command epoch/content hash/tick/revision,
+all aperture progress and existing lift snapshot. BuildingReplicaView
+rejects stale or mismatched content before exposing read-only state.
+It never grants physical access. The host still owns admission, interest,
+connection lifecycle, and graphics presentation of remote replicas.
+
+BuildingPhysicalExtent now has centreOffset for feet-based transforms;
+schema v2 explicitly migrates v1 to a zero offset. Restored lift rider
+maps are validated against the decoded ECS passenger generations before
+persistent load commits. Handoff: docs/agent-handoffs/buildings-stage-23v6.md.
+
+### Stage 23V.7 — executable native reference integration
+
+examples/world/runtime-building/main.cpp is now a real genre-free
+GameModule + Simulation integration executable, not a pseudocode-only
+README. CMake target aiverse_building_world_example and CTest
+building_native_world_replica exercise two generated scenes, actual
+SpatialWorld and NavMesh, generic Replica loopback identity, lift
+boarding/motion/exit, graph ACK gate, persistent mid-trip checkpoint
+and independent scene lifecycle. Focused CI also typechecks the source.
+No successful native execution or GPU result is claimed yet. Handoff:
+docs/agent-handoffs/buildings-stage-23v7.md.
+
+## Stage 23W.1 — verified standalone CPU checks
+
+Linux arm64 job 138236694049 at ab090304 failed compiling WorldScene
+due to wallSection receiving a side integer instead of BuildingGraphPart,
+a nonportable std::min integer overload in lift movement, and unused col
+in the surface generator. The lift min fix already exists from 23V.3;
+23W.1 fixes the two remaining exact source diagnostics and adds wall
+sill/lintel/pane geometry assertions.
+
+Executed standalone building_surface_pattern_tests and
+building_structure_graph_tests with GCC 14.2 and Clang 17, C++20,
+-O1 -Wall -Wextra -Werror -pedantic, using Git blob SHA-verified copies
+of the relevant repository files and exact proposed edits. Both suites
+PASS on both compilers. These are CPU tests only, not GLB/GPU or
+native Simulation/PHYSIS/Replica/Studio execution.
+Handoff: docs/agent-handoffs/buildings-stage-23w1.md.

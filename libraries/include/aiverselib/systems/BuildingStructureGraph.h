@@ -325,8 +325,8 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
             const float bottom=window?floorTop+storey*float(hole.value.floor)+
                 (hole.value.floor?slabThick:0.f)+hole.value.sill:floorTop;
             const float top=bottom+hole.value.height;
-            if(window)wallSection(side,hole.start,hole.end,floorTop,bottom);
-            wallSection(side,hole.start,hole.end,top,H);
+            if(window)wallSection(BuildingGraphPart::Wall,hole.start,hole.end,floorTop,bottom);
+            wallSection(BuildingGraphPart::Wall,hole.start,hole.end,top,H);
             constexpr float frame=0.14f;
             wallSection(BuildingGraphPart::Trim,hole.start-frame,hole.start,bottom,top,hole.feature);
             wallSection(BuildingGraphPart::Trim,hole.end,hole.end+frame,bottom,top,hole.feature);

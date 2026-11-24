@@ -14,6 +14,7 @@
 #include <compare>
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
@@ -124,8 +125,15 @@ public:
             if(it==controllers.end())return false;
             const auto& lift=it->second;
             const bool open=lift.readyAt(key.floor);
-            if(open==door.open)continue;
             const auto bounds=leafBounds(door);
+            const auto a=spatial.colliders().find(door.ids.left);
+            const auto b=spatial.colliders().find(door.ids.right);
+            if(door.open){
+                if(a!=spatial.colliders().end()||b!=spatial.colliders().end())return false;
+            }else if(a==spatial.colliders().end()||b==spatial.colliders().end()||
+                     !sameBounds(a->second.bounds,bounds.first)||
+                     !sameBounds(b->second.bounds,bounds.second))return false;
+            if(open==door.open)continue;
             if(open){
                 spatial.remove(door.ids.left);
                 spatial.remove(door.ids.right);
@@ -150,6 +158,28 @@ public:
         auto it=entries_.find({feature,floor});
         return it!=entries_.end()&&it->second.open;
     }
+    std::set<uint32_t> ownedColliderIds()const{
+        std::set<uint32_t> out;
+        for(const auto& [key,door]:entries_){
+            (void)key;out.insert(door.ids.left);out.insert(door.ids.right);
+        }
+        return out;
+    }
+    std::map<uint32_t,world::Bounds> closedColliderBounds()const{
+        std::map<uint32_t,world::Bounds> out;
+        for(const auto& [key,door]:entries_){
+            (void)key;if(door.open)continue;
+            const auto b=leafBounds(door);
+            out.emplace(door.ids.left,b.first);out.emplace(door.ids.right,b.second);
+        }
+        return out;
+    }
+    std::optional<std::pair<world::Bounds,world::Bounds>>
+    doorwayBounds(uint32_t feature,uint32_t floor)const{
+        auto it=entries_.find({feature,floor});
+        if(it==entries_.end())return {};
+        return leafBounds(it->second);
+    }
     bool enabled()const noexcept{return !entries_.empty();}
     std::vector<BuildingLiftDoorPose> poses()const {
         std::vector<BuildingLiftDoorPose> result;
@@ -173,6 +203,10 @@ public:
         entries_.clear();
     }
 private:
+    static bool sameBounds(const world::Bounds& a,const world::Bounds& b){
+        return a.min.x==b.min.x&&a.min.y==b.min.y&&a.min.z==b.min.z&&
+               a.max.x==b.max.x&&a.max.y==b.max.y&&a.max.z==b.max.z;
+    }
     struct Door {
         BuildingLiftDoorIds ids;
         uint32_t feature=0,floor=0;
