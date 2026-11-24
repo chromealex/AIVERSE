@@ -5,6 +5,8 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import os
+import tempfile
 from collections import Counter
 from check_feature import ROOT, DIMENSIONS, validate
 
@@ -196,16 +198,19 @@ def readiness_errors(root, registry, selected, changed=()):
         visit(ident)
     return errors
 
-def release_report(root, registry, policy, readiness):
+def release_report(root, registry, policy, readiness, selection=None):
     blockers = []
     for ident, state in sorted(policy["dependencies"]["features"].items()):
+        if selection is not None and ident not in selection["features"]:
+            continue
         if state["state"] != "declared_ready":
             blockers.append({"feature": ident, "reason": state["state"]})
         else:
             for error in validate(registry[ident], root, ready=True, verify_git=True):
                 blockers.append({"feature": ident, "reason": error})
     blockers.extend({"feature": None, "reason": e} for e in policy["errors"] + readiness["errors"])
-    blockers.extend({"feature": ident, "reason": "roadmap mapping unreviewed"} for ident in policy["roadmap"]["unmapped"])
+    blockers.extend({"feature": ident, "reason": "roadmap mapping unreviewed"} for ident in policy["roadmap"]["unmapped"]
+                    if selection is None or ident in selection["features"])
     blockers.extend({"feature": None, "reason": "ownership conflict: " + c["path"]} for c in policy["ownership"]["conflicts"])
     gaps = [task["id"] for owner in readiness["owners"] for task in owner["tasks"] if task["kind"] == "implement_gap"]
     blockers.extend({"feature": None, "reason": "reviewed gap: " + gap} for gap in gaps)
@@ -222,32 +227,67 @@ def main():
     from feature_registry import load_registry, owner_readiness
     from capability_inventory import inventory as capabilities
     from graph_inventory import inventory as graphs
+    from feature_automation import (read_config, discover_branches, impact_report, release_scope,
+                                    schedule_tasks, skill_similarity, architecture_report)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base")
     parser.add_argument("--branch", action="append", default=[], help="Compare an explicit active branch ref to --base for overlap checks")
+    parser.add_argument("--discover-branches", action="store_true", help="Discover unmerged local/fetched feature and integration refs")
+    parser.add_argument("--release-scope", action="store_true", help="Use configured feature selection for --release")
     parser.add_argument("--output", type=Path, help="Optional report file; use ignored build output")
     parser.add_argument("--require-release-ready", action="store_true", help="Exit nonzero when release has blockers")
     parser.add_argument("--release", help="Release label; all registered manifests remain in scope")
     args = parser.parse_args()
-    if args.branch and not args.base:
-        parser.error("--branch requires --base")
+    if (args.branch or args.discover_branches) and not args.base:
+        parser.error("branch comparison requires --base")
+    if args.release_scope and not args.release:
+        parser.error("--release-scope requires --release")
     try:
         registry = load_registry(ROOT)
         changed = []
         if args.base:
             base = subprocess.check_output(["git", "rev-parse", "--verify", "--end-of-options", args.base + "^{commit}"], cwd=ROOT, text=True).strip()
             changed = subprocess.check_output(["git", "diff", "--name-only", "--no-renames", "-z", base + "...HEAD"], cwd=ROOT).decode().split("\0")
-        claims = [branch_claim(ROOT, base, ref) for ref in sorted(set(args.branch))]
+        refs = set(args.branch)
+        if args.discover_branches:
+            refs.update(discover_branches(ROOT, base))
+        claims = [branch_claim(ROOT, base, ref) for ref in sorted(refs)]
         policy = build_report(ROOT, registry, changed, claims)
         readiness = owner_readiness(registry, ROOT, capabilities(ROOT), graphs(ROOT))
         sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+        config = read_config(ROOT)
+        policies = read(ROOT, POLICY)["features"]
+        selection = release_scope(config, args.release, policy["dependencies"]) if args.release_scope else None
+        architecture = architecture_report(ROOT, changed, config["architecture_exceptions"])
+        automation = {
+            "impact": impact_report(registry, policies, changed),
+            "skill_similarity": skill_similarity(ROOT, read(ROOT, "skills/catalog.json")["skills"]),
+            "architecture": architecture,
+            "schedule": schedule_tasks(readiness, policy["dependencies"], config["agents"],
+                {c["path"] for c in policy["ownership"]["conflicts"]}, registry),
+            "compared_branches": sorted(refs),
+            "release_selection": selection,
+        }
+        release = release_report(ROOT, registry, policy, readiness, selection)
+        for finding in architecture["findings"]:
+            release["blockers"].append({"feature": None, "reason": f"architecture review: {finding['path']}:{finding['line']}"})
+        if release["blockers"]:
+            release["state"] = "blocked"
         report = {"schema": 1, "sha": sha, "policy": policy, "readiness": readiness,
-                  "release": release_report(ROOT, registry, policy, readiness)}
+                  "release": release, "automation": automation}
         report["release"]["target"] = args.release
         output = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)
-            args.output.write_text(output, encoding="utf-8")
+            # Atomic publish: readers never observe a partially written report.
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=args.output.parent,
+                                             prefix=".feature-readiness-", delete=False) as file:
+                temp = Path(file.name)
+                file.write(output)
+            try:
+                os.replace(temp, args.output)
+            finally:
+                temp.unlink(missing_ok=True)
         else:
             print(output, end="")
         return int(bool(policy["errors"] or readiness["errors"] or policy["ownership"]["conflicts"] or
