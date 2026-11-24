@@ -1313,7 +1313,7 @@ std::optional<Json> StudioScene::forestPick(float x,float y,float w,float h,cons
         float3 o,d;if(!view.screenRay(sx,sy,w,h,o,d))continue;
         const auto p=pick.ground+(pick.tip-pick.ground)*t;
         const float depth=dot(p-o,d);
-        if(depth<=0||planetPreview_->terrainHit(o,d)+.05f<depth)continue;
+        if(depth<=0||planetPreview_->terrainHit(o,d,visiblePlanetTerrain())+.05f<depth)continue;
         if(error==best&&depth>=bestDepth)continue;
         chosen=&pick;best=error;bestDepth=depth;
     }
@@ -1327,7 +1327,7 @@ std::optional<Json> StudioScene::forestGroundPlacement(float x,float y,float w,f
     if(!planetMode_||!planetPreview_||!cameraInitialized_||planetMapPath_!=path||planetRevision_!=revision||
        w<2||h<2||x<0||y<0||x>w||y>h)return {};
     float3 o,d;if(!viewCamera().screenRay(x,y,w,h,o,d))return {};
-    return planetPreview_->groundPlacement(o,d);
+    return planetPreview_->groundPlacement(o,d,visiblePlanetTerrain());
 }
 bool StudioScene::groundPoint(float x,float y,float width,float height,float3& out) const {
     float3 o,d;
