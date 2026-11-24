@@ -97,9 +97,10 @@ export interface StudioSnapshot {
 export interface RenderLightingSettings { version: 1; indirect: 'off'|'cpu'|'auto'|'gpu'; direct: 'legacy'|'luma'; quality: 'balanced'|'high'|'ultra'; probes: number; layers: number; spacing: number; samples: number; distance: number; cpuBudgetMs: number }
 export interface StudioEntityCatalog { types: Array<{id: string; name: string}>; mapEntities: boolean }
 export interface StudioProjectState { maps: Array<{file: string; title: string}>; currentMap: string; canCreateMap: boolean; maxMapSize: number }
-export interface StudioRuntimeRow {ref:string; name:string; kind:string; owner:number; parent:string; health:number; components:string[]}
+export interface StudioRuntimeOwnership {state:'untracked'|'invalid-tag'|'ledger-unavailable'|'missing-record'|'retired'|'live-record'; stableId?:string; cell?:[number,number,number];revision?:string;dormantMarker:boolean}
+export interface StudioRuntimeRow {ref:string; name:string; kind:string; owner:number; parent:string; health:number; components:string[];ownership?:StudioRuntimeOwnership}
 export interface StudioRuntimePage {active:boolean; epoch:string; tick:number; rows:StudioRuntimeRow[]; total:number}
-export interface StudioRuntimeEntity {ref:string; epoch:string; tick:number; components:Record<string,unknown>; stats?:Record<string,unknown>}
+export interface StudioRuntimeEntity {ref:string; epoch:string; tick:number; components:Record<string,unknown>; stats?:Record<string,unknown>;ownership?:StudioRuntimeOwnership;componentSchemas?:Record<string,unknown>}
 export interface StudioGameDeviceChrome { corner:number; cutout?:{x:number;y:number;width:number;height:number;radius:number}; insets:{left:number;top:number;right:number;bottom:number} }
 export interface StudioGameDevice { id:string; landscape:boolean; safeArea:boolean; width:number; height:number; touch:boolean; chrome?:StudioGameDeviceChrome }
 export interface StudioGameDeviceOption { id:string; name:string; group:string }
@@ -221,8 +222,8 @@ export interface StudioParams {
   'studio.gameState': Record<string,never>;
   'studio.gameProfile': {expectedProject:string;action:'status'|'start'|'stop';steps?:number};
   'studio.gameRegions': {expectedProject:string};
-  'studio.gameEntities': {offset:number;limit:number;query:string};
-  'studio.gameInspect': {epoch:string;ref:string};
+  'studio.gameEntities': {offset:number;limit:number;query:string;expectedProject?:string};
+  'studio.gameInspect': {epoch:string;ref:string;expectedProject?:string};
   'studio.gameDevices': Record<string,never>;
   'studio.gameDevice': Pick<StudioGameDevice,'id'|'landscape'|'safeArea'>;
   'studio.gameControl': {action:'pause'|'resume'|'step'|'restart'};

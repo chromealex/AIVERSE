@@ -6,3 +6,6 @@
 .studio-runtime__fields > div { display:grid; grid-template-columns:minmax(70px,1fr) minmax(0,1.5fr); gap:var(--au-space-2); padding:var(--au-space-1) 0; }
 .studio-runtime__fields dt { color:var(--au-text-muted); overflow-wrap:anywhere; }
 .studio-runtime__fields dd { margin:0; overflow-wrap:anywhere; }
+
+.studio-runtime__fields dd { font-variant-numeric:tabular-nums; }
+.studio-panel-runtime .au-button { max-width:100%; white-space:normal; overflow-wrap:anywhere; }

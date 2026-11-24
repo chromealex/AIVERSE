@@ -71,6 +71,9 @@ Panel ID `world_explorer` uses the hosted Game surface's read-only `studio.gameR
 ## Simulation Profiler (S2)
 Panel `simulation_profiler`, typed `studio.gameProfile` with expectedProject and explicit start/status/stop. Uses the existing Simulation timing owner through a bounded capture (1–120 completed steps); does not overwrite an active headless clock. Tick timings include command application and ECS flush, exclude readiness check and rendering; per-system timings include their flush. Results are wall time, not CPU thread utilization. Poll only the bounded result, never infer per-system entity counts or simulation load from LOD. Paused matches do not advance the sample; stop retains partial results. Captures are local, unsaved, and lost with the Simulation. No network profiling or remote MCP claim.
 
+## Entity Debugger (S3)
+Extend the existing `runtime` panel and `StudioRuntimeInspect`; no competing inspector. `studio.gameEntities` supports exact `sid:<decimal>`, `ref:<decimal>`, `cell:<x,y,z>` alongside the existing shared query grammar. Stable IDs and ownership revisions are decimal strings; cells come from the live ledger, not scene position. Only rows in the existing runtime model are searchable; absence is not a retired/unmaterialized classification. Ownership markers are diagnostic, not proof of full identity uniqueness or collision/nav residency. Preserve legacy numeric $entity and prefer additive $entityRef string when navigating; reject unsafe numeric fallback. Bind requests to expectedProject and selection epoch, clear on project change. Native component readers/schemas stay authoritative; list component counts refer to the existing row catalogue, selected inspector includes extensions. Read only; no runtime editing or persistence mutation.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

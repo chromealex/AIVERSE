@@ -1352,6 +1352,10 @@ bool StudioHost::handleHostMethod(const Json& req) {
         out.set("reason",Json::string("No local match is running"));return out;
     });
     if (method == "studio.gameEntities" || method == "studio.gameInspect") return answer([&] {
+        // Older clients omit expectedProject. Entity Debugger always sends it.
+        if(params.has("expectedProject")&&(session_->workspace().project.dir.empty()||
+            params.getStr("expectedProject")!=session_->workspace().project.dir))
+            throw std::runtime_error("Runtime inspection project changed");
         if (method == "studio.gameEntities") {
             if (!params["offset"].isNumber() || !params["limit"].isNumber() || !params["query"].isString() ||
                 params["offset"].toDouble() < 0 || params["offset"].toDouble() > 10000000 ||
