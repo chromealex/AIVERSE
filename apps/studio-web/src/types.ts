@@ -263,6 +263,7 @@ export interface StudioBuildingRequest {
   materialBindings?: Record<string,string>; // authored style slot -> project materials.json name
   textureResolution?:128|256|512;
   uniqueAtlas?:boolean;
+  generateVisualLods?:boolean;
   roofProfile?:StudioBuildingRoofProfile; roofRise?:number;
 }
 export interface StudioBuildingPreview {
@@ -271,6 +272,8 @@ export interface StudioBuildingPreview {
   solids?:number; connections?:number; floors?:number; roomsX?:number; roomsZ?:number; footprint?:string[]; floorFootprints?:string[][];
   footprintPolygon?:Array<[number,number]>;
   removedDamage?:Array<StudioBuildingDamageZone & {zone:number}>;
+  visualLods?:Array<{detailLevel:number;maxPixels:number;triangles:number;vertices:number}>;
+  visualGroups?:Array<{id:string;triangles:number}>;
   roomUses?:Array<{roomId:string;use:StudioBuildingRoomUse}>;
   interiorLights?:Array<{id:string;roomId:string;floor:number;x:number;z:number;intensity:number;range:number}>;
   interiorDecor?:Array<{id:string;roomId:string;floor:number;x:number;z:number}>;

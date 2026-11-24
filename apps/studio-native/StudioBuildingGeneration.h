@@ -96,6 +96,7 @@ struct Request {
     uint64_t seed=1;
     int textureResolution=0; // zero uses authored per-material quality
     bool uniqueAtlas=false;
+    bool generateVisualLods=false;
     StructureSize dimensions{};
     bool composeFeatures=false;
     FunctionalBuildingRecipe functionalRecipe{};
@@ -124,6 +125,12 @@ inline Request request(const Json& params) {
         if(params["uniqueAtlas"].type()!=Json::Type::Bool)throw std::runtime_error("uniqueAtlas must be boolean");
         req.uniqueAtlas=params.getBool("uniqueAtlas");
     }
+    if(params.has("generateVisualLods")){
+        if(params["generateVisualLods"].type()!=Json::Type::Bool)throw std::runtime_error("generateVisualLods must be boolean");
+        req.generateVisualLods=params.getBool("generateVisualLods");
+    }
+    if(req.generateVisualLods&&(!req.composeFeatures||req.uniqueAtlas))
+        throw std::runtime_error("Semantic LOD requires a functional recipe and tiled textures");
     const auto positive=[&](const char* field){
         const Json& v=params[field];
         if(!v.isNumber())throw std::runtime_error(std::string("Building ")+field+" must be a number in metres");
@@ -256,6 +263,7 @@ inline void applyProjectMaterials(const fs::path& project,const Request& req,
     // rotation remains valid and is exported via KHR_texture_transform.
     if(used.size()!=req.materialBindings.size())
         throw std::runtime_error("Material binding references a missing architecture style slot");
+    for(auto& lod:generated.visualLods)lod.mesh.materials=generated.mesh.materials;
 }
 
 inline StyledStructure produce(const fs::path& engine,const Request& req) {
@@ -265,6 +273,7 @@ inline StyledStructure produce(const fs::path& engine,const Request& req) {
         auto result=generateFunctionalBuilding(style,req.functionalRecipe);
         if(!result)
             throw std::runtime_error("Functional building recipe: "+result.error);
+        if(req.generateVisualLods)generateFunctionalBuildingVisualLods(style,req.functionalRecipe,result);
         generated=std::move(result.building);
     }else{
         if(!style.structureKind(req.kind))
@@ -276,6 +285,7 @@ inline StyledStructure produce(const fs::path& engine,const Request& req) {
                 :generated.fitError);
     }
     if(req.textureResolution)for(auto& material:generated.mesh.materials)material.surfaceResolution=req.textureResolution;
+    for(auto& lod:generated.visualLods)lod.mesh.materials=generated.mesh.materials;
     uint64_t generatedBytes=0;
     for(const auto& material:generated.mesh.materials)if(!material.surfacePattern.empty())
         generatedBytes+=uint64_t(material.surfaceResolution)*material.surfaceResolution*4u*kBuildingSurfaceChannels.size();
@@ -417,8 +427,9 @@ inline std::unique_ptr<render::Model> studioBuildingPreviewCpuModel(
         return true;
     };
     std::string error;
-    auto model=building::runtimeRoomPartitionedBuildingModel(
-        built,resolver,"studio/generated-building-preview",&error);
+    auto model=req.generateVisualLods?
+        building::runtimeTexturedBuildingModel(built,resolver,"studio/generated-building-preview",&error):
+        building::runtimeRoomPartitionedBuildingModel(built,resolver,"studio/generated-building-preview",&error);
     if(!model)throw std::runtime_error(error.empty()?
         "Building preview CPU Model failed":error);
     return model;
@@ -438,6 +449,18 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
     out.set("width",Json::number(double(model.mesh.boundsMax[0]-model.mesh.boundsMin[0]),3));
     out.set("height",Json::number(double(model.mesh.boundsMax[1]-model.mesh.boundsMin[1]),3));
     out.set("depth",Json::number(double(model.mesh.boundsMax[2]-model.mesh.boundsMin[2]),3));
+    if(req.generateVisualLods){
+        Json lods=Json::array();
+        for(const auto& lod:model.visualLods){
+            Json row=Json::object();
+            row.set("detailLevel",Json::number(int64_t(lod.detailLevel)));
+            row.set("maxPixels",Json::number(double(lod.maxPixels)));
+            row.set("triangles",Json::number(int64_t(lod.mesh.triangles())));
+            row.set("vertices",Json::number(int64_t(lod.mesh.vertices.size())));
+            lods.push(std::move(row));
+        }
+        out.set("visualLods",std::move(lods));
+    }
     if(!model.roomVisualRanges.empty()){
         Json groups=Json::array();
         for(const auto& group:buildingVisualGroups(model,model.mesh)){
@@ -722,7 +745,8 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
         if(req.uniqueAtlas){
             const auto atlas=buildUniqueBuildingAtlas(model.mesh);
             glb.addAtlas(atlas,req.composeFeatures?"building-recipe":req.kind,&model);
-        }else glb.add(model.mesh,req.composeFeatures?"building-recipe":req.kind,&model);
+        }else if(req.generateVisualLods)glb.addSemanticLods(model,"building-recipe");
+        else glb.add(model.mesh,req.composeFeatures?"building-recipe":req.kind,&model);
         glb.addLights(model.lights);
         glb.write(temp.string());
         if(!fs::is_regular_file(temp)||fs::file_size(temp)<32)
@@ -737,6 +761,7 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
         saved.set("seed",Json::number(int64_t(req.seed)));
         if(req.textureResolution)saved.set("textureResolution",Json::number(int64_t(req.textureResolution)));
         if(req.uniqueAtlas)saved.set("uniqueAtlas",Json::fromBool(true));
+        if(req.generateVisualLods)saved.set("generateVisualLods",Json::fromBool(true));
         if(!req.materialBindings.empty()){
             Json bindings=Json::object();
             for(const auto& [slot,name]:req.materialBindings)

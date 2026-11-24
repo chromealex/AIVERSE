@@ -6,6 +6,8 @@
 #include "engine/buildings/BuildingTextureAtlas.h"
 #include "engine/buildings/BuildingVisualGroups.h"
 #include <cstdint>
+#include <limits>
+#include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <functional>
@@ -182,24 +184,29 @@ struct Glb{
         try{add(atlas.mesh,name,source);}catch(...){activeAtlas.fill(-1);throw;}
         activeAtlas.fill(-1);
     }
-    void add(const StyledMesh& m,const std::string& name,const StyledStructure* source=nullptr){
+    void add(const StyledMesh& m,const std::string& name,const StyledStructure* source=nullptr,
+        const std::vector<int>* sharedMaterials=nullptr,bool sceneNode=true,const std::string& extras=""){
         if(m.vertices.empty())return;
         std::vector<float> pos,nrm,uv;for(const auto& v:m.vertices){pos.insert(pos.end(),v.pos,v.pos+3);nrm.insert(nrm.end(),v.nrm,v.nrm+3);uv.insert(uv.end(),v.uv,v.uv+2);}
         auto bounds=",\"min\":["+num(m.boundsMin[0])+","+num(m.boundsMin[1])+","+num(m.boundsMin[2])+"],\"max\":["+num(m.boundsMax[0])+","+num(m.boundsMax[1])+","+num(m.boundsMax[2])+"]";
         int p=accessor(view(pos.data(),pos.size()*4,34962),5126,m.vertices.size(),"VEC3",bounds),n=accessor(view(nrm.data(),nrm.size()*4,34962),5126,m.vertices.size(),"VEC3"),t=accessor(view(uv.data(),uv.size()*4,34962),5126,m.vertices.size(),"VEC2");
-        std::vector<int> mats;for(const auto& mt:m.materials)mats.push_back(material(mt));
+        std::vector<int> mats;
+        if(sharedMaterials){if(sharedMaterials->size()!=m.materials.size())throw std::invalid_argument("LOD palette mismatch");mats=*sharedMaterials;}
+        else for(const auto& mt:m.materials)mats.push_back(material(mt));
         auto emit=[&](const std::string& nodeName,const auto& parts){
             std::string prims;
             for(const auto& [materialId,indices]:parts){
                 if(indices.empty())continue;
                 if(materialId<0||size_t(materialId)>=mats.size()||indices.size()%3)
                     throw std::invalid_argument("Invalid GLB primitive");
+                for(auto index:indices)if(index>=m.vertices.size())throw std::invalid_argument("GLB index out of range");
                 int i=accessor(view(indices.data(),indices.size()*4,34963),5125,indices.size(),"SCALAR");sep(prims);
                 prims+="{\"attributes\":{\"POSITION\":"+std::to_string(p)+",\"NORMAL\":"+std::to_string(n)+",\"TEXCOORD_0\":"+std::to_string(t)+"},\"indices\":"+std::to_string(i)+",\"material\":"+std::to_string(mats[size_t(materialId)])+"}";
             }
             if(prims.empty())return;
-            sep(meshes);meshes+="{\"name\":"+quoted(nodeName)+",\"primitives\":["+prims+"]}";
-            sep(nodes);nodes+="{\"name\":"+quoted(nodeName)+",\"mesh\":"+std::to_string(nMesh++)+"}";nNode++;
+            sep(meshes);meshes+="{\"name\":"+quoted(nodeName)+",\"primitives\":["+prims+"]"+extras+"}";
+            if(sceneNode){sep(nodes);nodes+="{\"name\":"+quoted(nodeName)+",\"mesh\":"+std::to_string(nMesh)+"}";++nNode;}
+            ++nMesh;
         };
         if(source&&!source->roomVisualRanges.empty()){
             for(const auto& group:buildingVisualGroups(*source,m))emit(group.name,group.indices);
@@ -210,6 +217,36 @@ struct Glb{
             for(const auto& part:m.parts)parts.emplace_back(part.material,part.indices);
             emit(name,parts);
         }
+    }
+    // Alternatives are meshes only, never scene nodes. The existing AIVERSE
+    // glTF importer reads mesh.extras.aiverseLods in descending pixel order.
+    // Other glTF viewers display the base node without duplicate geometry.
+    void addSemanticLods(const StyledStructure& building,const std::string& name){
+        const auto& base=building.mesh;
+        if(base.vertices.empty()||!base.triangles()||building.visualLods.size()>3)
+            throw std::invalid_argument("Invalid building LOD base or level count");
+        float previous=std::numeric_limits<float>::infinity();
+        size_t triangles=base.triangles();
+        std::string levels;
+        int index=nMesh+1;
+        uint32_t lastDetail=0;
+        for(const auto& level:building.visualLods){
+            const auto& mesh=level.mesh;
+            if(!std::isfinite(level.maxPixels)||level.maxPixels<=0||level.maxPixels>=previous||
+               level.detailLevel<=lastDetail||!mesh.triangles()||mesh.triangles()>=triangles||
+               mesh.vertices.empty()||mesh.materials!=base.materials)
+                throw std::invalid_argument("Invalid semantic GLB LOD");
+            sep(levels);levels+="{\"mesh\":"+std::to_string(index++)+
+                ",\"maxPixels\":"+num(level.maxPixels)+"}";
+            previous=level.maxPixels;triangles=mesh.triangles();lastDetail=level.detailLevel;
+        }
+        std::vector<int> palette;
+        for(const auto& m:base.materials)palette.push_back(material(m));
+        const auto extra=levels.empty()?std::string{}:
+            ",\"extras\":{\"aiverseLods\":["+levels+"]}";
+        add(base,name,nullptr,&palette,true,extra);
+        for(const auto& level:building.visualLods)
+            add(level.mesh,name+"/lod"+std::to_string(level.detailLevel),nullptr,&palette,false);
     }
     void addLights(const std::vector<StyledBuildingLight>& lights){
         for(const auto& l:lights){

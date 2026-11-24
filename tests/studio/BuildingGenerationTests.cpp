@@ -223,6 +223,32 @@ int main(int argc,char** argv){
         const auto remappedGroups=aiverse::lib::systems::buildingVisualGroups(partitioned,remapped);
         const auto& roomIndices=remappedGroups[1].indices.at(part->material);
         CHECK(roomIndices.size()==3&&roomIndices[0]==remapped.vertices.size()-1-firstRoomVertex);
+        // Use a real source mesh with one triangle removed to verify the GLB
+        // wire contract independently of whether this recipe yields a cheaper LOD.
+        auto lodAsset=partitioned;
+        auto cheaper=mesh;
+        auto reduced=std::find_if(cheaper.parts.begin(),cheaper.parts.end(),[](const auto& p){return p.indices.size()>=6;});
+        CHECK(reduced!=cheaper.parts.end());
+        reduced->indices.resize(reduced->indices.size()-3);
+        lodAsset.visualLods.push_back({1,220.f,std::move(cheaper)});
+        aiverse::lib::systems::buildingExport::Glb lodGlb;
+        lodGlb.addSemanticLods(lodAsset,"test-lod");
+        CHECK(lodGlb.nMesh==2&&lodGlb.nNode==1);
+        CHECK(lodGlb.nMat==int(mesh.materials.size()));
+        auto meshJson=Json::parse("["+lodGlb.meshes+"]");
+        CHECK(meshJson[0]["extras"]["aiverseLods"][0]["mesh"].integer()==1);
+        CHECK(meshJson[0]["extras"]["aiverseLods"][0]["maxPixels"].integer()==220);
+        auto lodRequest=multi;
+        lodRequest.set("generateVisualLods",Json::fromBool(true));
+        auto lodPreview=studioBuildingInspect(engine,lodRequest);
+        CHECK(lodPreview["visualLods"].isArray());
+        size_t prior=size_t(lodPreview["triangles"].integer());
+        for(const auto& level:lodPreview["visualLods"].items()){
+            CHECK(size_t(level["triangles"].integer())<prior);prior=size_t(level["triangles"].integer());
+        }
+        auto lodExport=studioBuildingGenerate(engine,temp,lodRequest);
+        auto lodReopened=studioBuildingReadRecipe(engine,temp,lodExport.getStr("recipePath"));
+        CHECK(lodReopened["request"].getBool("generateVisualLods"));
         auto invalid=[](const auto& fn){
             try{fn();}catch(const std::exception&){return true;}
             return false;
@@ -231,6 +257,8 @@ int main(int argc,char** argv){
         CHECK(invalid([&]{studioBuildingInspect(engine,Json::parse(R"({"setting":"modern","style":"scifi","function":"factory","width":28,"height":15,"depth":24,"seed":42})"));}));
         CHECK(invalid([&]{studioBuildingInspect(engine,Json::parse(R"({"setting":"scifi","style":"scifi","function":"nonexistent","width":28,"height":15,"depth":24,"seed":42})"));}));
         CHECK(invalid([&]{studioBuildingInspect(engine,Json::parse(R"({"setting":"scifi","style":"scifi","function":"factory","width":28,"height":15,"depth":24,"seed":-5})"));}));
+        lodRequest.set("uniqueAtlas",Json::fromBool(true));
+        CHECK(invalid([&]{studioBuildingInspect(engine,lodRequest);}));
         fs::remove_all(temp);
         std::puts("studio building generator PASS");
         return 0;

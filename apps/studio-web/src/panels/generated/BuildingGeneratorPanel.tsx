@@ -147,6 +147,7 @@ export default function BuildingGeneratorPanel({
   const [mode,setMode]=useState<'features'|'preset'>('features');
   const [textureResolution,setTextureResolution]=useState<128|256|512>(256);
   const [uniqueAtlas,setUniqueAtlas]=useState(false);
+  const [generateVisualLods,setGenerateVisualLods]=useState(false);
   const [roofProfile,setRoofProfile]=useState<import('../../types').StudioBuildingRoofProfile>('flat');
   const [roofRise,setRoofRise]=useState('0');
   const [features,setFeatures]=useState<StudioBuildingFeature[]>([
@@ -281,7 +282,7 @@ export default function BuildingGeneratorPanel({
       setSetting(selected.setting);setStyle(selected.id);
       setRole(item.function??'');
       setMode(item.mode??'features');
-      setTextureResolution(item.textureResolution??128);setUniqueAtlas(item.uniqueAtlas??false);
+      setTextureResolution(item.textureResolution??128);setUniqueAtlas(item.uniqueAtlas??false);setGenerateVisualLods(item.generateVisualLods??false);
       setRoofProfile(item.roofProfile??'flat');setRoofRise(String(item.roofRise??0));
       setWidth(String(item.width));setHeight(String(item.height));
       setDepth(String(item.depth));setSeed(String(item.seed));
@@ -455,6 +456,7 @@ export default function BuildingGeneratorPanel({
 
   const request=(useSeed:number):StudioBuildingRequest=>({
     setting,style,function:mode==='preset'?role:'',mode,textureResolution,uniqueAtlas,
+    generateVisualLods:mode==='features'&&!uniqueAtlas&&generateVisualLods?true:undefined,
     roofProfile:mode==='features'?roofProfile:undefined,
     roofRise:mode==='features'?asNumber(roofRise):undefined,
     features:mode==='features'?features:undefined,
@@ -1236,6 +1238,14 @@ export default function BuildingGeneratorPanel({
       </StudioSection>}
       </div>
       <div className="abg__page au-stack" hidden={page!=='materials'}>
+      <StudioSection title="Geometry detail">
+        <StudioField label="Runtime representation" htmlFor="abg-visual-lods">
+          <StudioSelect id="abg-visual-lods" value={mode==='features'&&!uniqueAtlas&&generateVisualLods?'lod':'rooms'} disabled={busy||mode!=='features'||uniqueAtlas} onChange={e=>{setGenerateVisualLods(e.target.value==='lod');clearGenerated();}}>
+            <option value="rooms">Room groups / full detail</option><option value="lod">Semantic distance LOD</option>
+          </StudioSelect>
+        </StudioField>
+        <small className="abg__note">Semantic LOD simplifies decorative geometry without changing collision or layout. It uses whole-building meshes and tiled textures; room partition and unique atlas are separate modes.</small>
+      </StudioSection>
       <StudioSection title="Texture quality">
         <StudioField label="Generated map resolution" htmlFor="abg-texture-resolution">
           <StudioSelect id="abg-texture-resolution" value={textureResolution} disabled={busy} onChange={e=>{setTextureResolution(Number(e.target.value) as 128|256|512);clearGenerated();}}>
@@ -1243,7 +1253,7 @@ export default function BuildingGeneratorPanel({
           </StudioSelect>
         </StudioField>
         <StudioField label="Texture layout" htmlFor="abg-texture-layout">
-          <StudioSelect id="abg-texture-layout" value={uniqueAtlas?'unique':'tiled'} disabled={busy} onChange={e=>{setUniqueAtlas(e.target.value==='unique');clearGenerated();}}>
+          <StudioSelect id="abg-texture-layout" value={uniqueAtlas?'unique':'tiled'} disabled={busy} onChange={e=>{setUniqueAtlas(e.target.value==='unique');if(e.target.value==='unique')setGenerateVisualLods(false);clearGenerated();}}>
             <option value="tiled">Tiled material maps</option><option value="unique">Unique UV atlas (up to 2048)</option>
           </StudioSelect>
         </StudioField>
@@ -1322,6 +1332,11 @@ export default function BuildingGeneratorPanel({
       </StudioSection>}
 
         {!activeCandidate?.data&&<StudioEmptyState title="Evaluate a building first" description="Evaluate 3 seeds to inspect the actual native geometry, rooms and routes. No graph is fabricated before evaluation."/>}
+      {activeCandidate?.data?.visualLods&&<StudioSection title="Generated semantic LODs">
+        <small>LOD 0 · {activeCandidate.data.triangles.toLocaleString()} triangles</small>
+        {activeCandidate.data.visualLods.map(lod=><small key={lod.detailLevel}>LOD {lod.detailLevel} · {lod.triangles.toLocaleString()} triangles · ≤ {lod.maxPixels} px</small>)}
+        {!activeCandidate.data.visualLods.length&&<small>No cheaper semantic alternatives for this recipe.</small>}
+      </StudioSection>}
       {activeCandidate?.data&&<StudioSection title="Generated layout and structure">
         {activeCandidate.data.sockets&&<BuildingPlanPreview
           key={'plan:'+activeCandidate.batch+':'+activeCandidate.seed}
