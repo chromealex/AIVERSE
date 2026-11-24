@@ -100,7 +100,10 @@
     "tests/render/texture_graph_materialized_dispatch.cpp",
     "apps/studio-web/src/graphs/buildingGraphInspection.ts",
     "apps/studio-web/src/graphs/BuildingStructureGraphView.tsx",
-    "apps/studio-web/tests/buildingGraphInspection.test.mjs"
+    "apps/studio-web/tests/buildingGraphInspection.test.mjs",
+    "apps/studio-web/src/graphs/caveGraphInspection.ts",
+    "apps/studio-web/src/graphs/CaveStructureGraphView.tsx",
+    "apps/studio-web/tests/caveGraphInspection.test.mjs"
   ],
   "traits": {
     "editable": true,
@@ -111,7 +114,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35A read-only Building Graph owner DTO projection and imported report inspector implemented; live BuildingGeneratorPanel wiring pending owner PR #114 integration.",
+      "note": "Stage 35A read-only Building Graph owner DTO projection and imported report inspector implemented; live BuildingGeneratorPanel wiring pending owner PR #114 integration. Stage 35B planned: Caverns get-response projection with exact revision/count validation and bounded paging; offline inspection in TerraWeave panel. No native owner modification.",
       "evidence": []
     },
     "architecture": {
