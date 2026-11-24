@@ -668,7 +668,8 @@ export default function BuildingGeneratorPanel({
           key={'plan:'+activeCandidate.batch+':'+activeCandidate.seed}
           preview={activeCandidate.data} onSelectFeature={focusFeature}/>}
         <BuildingStructureGraphView key={'graph:'+activeCandidate.batch+':'+activeCandidate.seed}
-          recipe={activeCandidate.recipe} inspection={activeCandidate.data} onSelectFeature={focusFeature}/>
+          recipe={activeCandidate.recipe} inspection={activeCandidate.data} onSelectFeature={focusFeature}
+          onRoute={async routeQuery=>(await invoke('studio.buildingInspect',{...activeCandidate.recipe,routeQuery})).route}/>
       </StudioSection>}
       {mode==='features'&&<StudioSection title="Functional properties">
         <div className="abg__property-list" ref={featureRoot}>
