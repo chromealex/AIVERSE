@@ -119,6 +119,8 @@ export interface StudioCavernsBudgets { perSourceBytes:number; perShardBytes:num
 export interface StudioCavernsPreview {
   budgets:StudioCavernsBudgets;
   planetaryChart?:boolean; previewResolution?:string; previewSpacingCm?:string;
+  globeBody?:string; globeReady?:boolean; globeError?:string;
+  chartSlots?:string; exactChartSlots?:string; chartLodFallback?:boolean;
   terrainCutEntrances?:string; terrainRejectedEntrances?:string; terrainTriangles?:string;
   terrainCutDiagnostic?:string; terrainCutSupported?:boolean;
   sparseTerrainResident?:string; sparseTerrainAuthored?:string; sparseTerrainDiagnostic?:string;
@@ -341,7 +343,7 @@ export interface StudioParams {
   'studio.hubOpen': { dir: string };
   'studio.hubCreate': { template: string; name: string };
   'studio.stats': Record<string,never>;
-  'studio.cavernsPreview': { expectedProject:string; expectedMap:string; enabled?:boolean; isolate?:boolean; paging?:boolean; budgets?:StudioCavernsBudgets };
+  'studio.cavernsPreview': { expectedProject:string; expectedMap:string; enabled?:boolean; isolate?:boolean; paging?:boolean; budgets?:StudioCavernsBudgets; globeBody?:string };
   'studio.gpuStats': { textures?: boolean };
   'studio.previewPlayChanges': {expectedProject:string;positions:boolean;amounts:boolean;removeDead:boolean};
   'studio.keepPlayChanges': {expectedProject:string;token:string};
