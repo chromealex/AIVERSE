@@ -47,6 +47,9 @@ public:
         bool teamColor = false;
         bool upright = false;   // plays along +Y whatever the event direction (Unity AlignExplosionToWorldUp)
         bool clear = false;     // trail: its particles vanish with the projectile instead of fading out
+        std::string node;
+        fx::float3 offset{};
+        bool inheritRotation=false, inheritScale=false, targetNode=false;
         bool set = false;   // given in fx.json (an explicit null switches a fallback off)
         bool valid() const { return effect >= 0; }
     };
@@ -58,6 +61,8 @@ public:
 
     // Ground height for effect positions (GameView::heightAt) and team colours (GameView::playerColor).
     void setHeightFn(std::function<float(float x, float z)> fn) { height_ = std::move(fn); }
+    using NodeFn = std::function<bool(Entity,const std::string&,render::mat4&)>;
+    void setNodeFn(NodeFn fn) { node_=std::move(fn); }
     void setAttackOriginFn(std::function<bool(Entity,fx::float3&,fx::float3&)> fn) { attackOrigin_=std::move(fn); }
     void setPlayerColorFn(std::function<fx::float4(int player)> fn) { playerColor_ = std::move(fn); }
     // Curved worlds (planets), optional; unset = flat behaviour. place(simPos, lift, out, up): where an effect
@@ -96,7 +101,8 @@ private:
     Binding resolve(const Json& v, const std::string& where);
     const Binding& lookup(int type, FxCue c) const;
     const Binding& trailFor(int type, int weapon = -1) const;
-    bool playAt(const Binding& b, const Vec3& pos, int type, fx::float3 dir, int owner);
+    bool nodePlacement(const Binding& b, Entity entity, fx::float3& pos, fx::float3& dir, float& scale) const;
+    bool playAt(const Binding& b, const Vec3& pos, int type, fx::float3 dir, int owner, Entity anchor=kNullEntity);
     void handle(Simulation& sim, const SimEvent& ev);
 
     fx::ParticleSystem* ps_ = nullptr;
@@ -110,6 +116,7 @@ private:
     std::function<bool(Entity,fx::float3&,fx::float3&)> attackOrigin_;
     std::function<fx::float4(int)> playerColor_;
     PlaceFn place_;
+    NodeFn node_;
     std::unordered_map<uint64_t, Attached> trails_, damaged_;
     std::unordered_map<uint64_t, uint8_t> lastWeapon_;   // shooter -> the weapon it fired last (its "hit" effect)
     uint32_t frame_ = 0;
