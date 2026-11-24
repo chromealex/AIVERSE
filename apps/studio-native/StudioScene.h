@@ -144,7 +144,7 @@ public:
     void setOverlayShapes(std::vector<OverlayShape> shapes) { overlayShapes_ = std::move(shapes); }
     // World point -> view point (same units as pick / groundPoint); false when behind the camera.
     bool projectPoint(render::float3 world, float width, float height, render::float2& out) const;
-    void setBrushCursor(bool visible, render::float3 center, float radius) { brushVisible_=visible; brushCenter_=center; brushRadius_=radius; }
+    void setBrushCursor(bool visible, render::float3 center, float radius,bool volume=false,bool fill=false) { brushVisible_=visible; brushCenter_=center; brushRadius_=radius; brushVolume_=volume; brushFill_=fill; }
     void resetCamera() { lightingRevision_ = std::numeric_limits<uint64_t>::max(); cameraInitialized_ = false; terrainRevision_ = std::numeric_limits<uint64_t>::max(); clearDocumentModels(); }
     // Frames actually drawn / skipped because nothing visible changed (diagnostics).
     uint64_t framesDrawn() const { return framesDrawn_; }
@@ -274,6 +274,7 @@ private:
     void drawSelectionBox(const render::Camera& view, int width, int height);
     std::vector<OverlayShape> overlayShapes_;
     std::optional<SkyShot> skyShot_;
+    bool brushVolume_=false,brushFill_=false;
     bool brushVisible_ = false; render::float3 brushCenter_{}; float brushRadius_ = 0;
     void drawBrushCursor(const render::Camera& view, int width, int height);
     void drawTransformGizmo(const render::Camera& view, int width, int height);
