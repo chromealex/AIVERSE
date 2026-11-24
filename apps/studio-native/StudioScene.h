@@ -248,6 +248,11 @@ private:
     std::chrono::steady_clock::time_point planetForestTextureCheck_{};
     size_t planetForestModelBytes_=0;
     bool planetForestModelsPending_=false;
+    render::Mesh planetForestFarMesh_;
+    Json planetForestFarRows_;
+    float planetForestFarScale_=-1.f;
+    void clearPlanetForestFarMesh();
+    bool syncPlanetForestFarMesh(const Json& rows,float flora);
     void clearPlanetForestModels();
     void syncPlanetForestModels(const editor::MapDoc& doc,const std::string& projectPath);
     bool planetForestLiveCurrent(const editor::MapDoc& doc,const std::string& projectPath)const;

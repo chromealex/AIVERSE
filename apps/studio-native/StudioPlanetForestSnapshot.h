@@ -13,7 +13,7 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
         const std::optional<StudioForestCameraFocus>& camera={},bool renderPopulation=false){
     limit=std::min(limit,renderPopulation?kStudioForestRenderLimit:kStudioForestDiagnosticLimit);
     namespace tw=terraweave;namespace ev=evolve;namespace wp=lib::worldprocess;
-    Json out=Json::object(),rows=Json::array();
+    Json out=Json::object(),rows=Json::array(),far=Json::array();
     const auto* roots=ecs.resourceConst<tw::TerraWeaveAuthorityResource>();
     const auto* bindings=ecs.resourceConst<ev::PlanetRootDeliveryResource>();
     const auto* history=ecs.resourceConst<tw::ForestEcologyResource>();
@@ -136,7 +136,22 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
         fallen+=plant.fallen;spent+=isSpent;physical+=hasBody;
         if(!focusBody.empty()&&b->second->bodyId!=focusBody)continue;
         ++eligible;
-        if(rows.size()>=limit||(renderPopulation&&!selected.count(&plant)))continue;
+        if(rows.size()>=limit||(renderPopulation&&!selected.count(&plant))){
+            // Cheap native-only representation of omitted standing plants.
+            // No expensive weather queries or per-plant model draws.
+            if(renderPopulation&&!isSpent&&!hasBody&&!plant.fallen&&!(harvest&&tw::isForestHarvested(*harvest,id))&&plant.anchor.roots.habit!=tw::PlantHabit::Grass){
+                try{
+                    const auto appearance=tw::plantAppearance(plant.environment);
+                    Json proxy=Json::object();proxy.set("position",xyz(b->second->plantedPosition-game::Surface::anchor(frame->body)));
+                    proxy.set("up",xyz(frame->up));proxy.set("east",xyz(frame->east));
+                    proxy.set("sizePermille",Json::number(int64_t(appearance.sizePermille)));
+                    proxy.set("foliagePermille",Json::number(int64_t(dead.contains(id)?0:appearance.foliagePermille)));
+                    proxy.set("shrub",Json::fromBool(plant.anchor.roots.habit==tw::PlantHabit::Shrub));
+                    far.push(std::move(proxy));
+                }catch(const std::exception&){++rejected;}
+            }
+            continue;
+        }
         Json row=Json::object();
         row.set("species",Json::number(int64_t(id.speciesId)));row.set("key",Json::string(std::to_string(id.key)));
         row.set("body",Json::string(b->second->bodyId));row.set("cell",Json::number(int64_t(frame->cell)));
@@ -195,6 +210,7 @@ inline Json sampleStudioPlanetForest(const World& ecs,const game::Surface& surfa
         Json directory=Json::array();
         for(const auto& [cell,chunk]:chunks){Json entry=Json::object();entry.set("cell",Json::number(cell));entry.set("population",Json::number(int64_t(chunk.population)));entry.set("selected",Json::number(int64_t(chunk.selected)));entry.set("priority",Json::number(int64_t(chunk.priority)));directory.push(std::move(entry));}
         out.set("renderChunks",std::move(directory));
+        out.set("farPlants",std::move(far));
     }
     out.set("plants",std::move(rows));return out;
 }

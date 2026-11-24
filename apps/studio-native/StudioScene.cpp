@@ -611,7 +611,13 @@ bool StudioScene::syncLivePlanetTerrain(const editor::MapDoc& doc,const std::str
     clearLivePlanetTerrain();planetLiveTerrain_=next;planetLiveTerrainGrid_=grid;
     planetLiveTerrainCpu_=std::move(mesh);return true;
 }
+void StudioScene::clearPlanetForestFarMesh(){
+    if(device_&&planetForestFarMesh_.vb.valid())device_->destroyBuffer(planetForestFarMesh_.vb);
+    if(device_&&planetForestFarMesh_.ib.valid())device_->destroyBuffer(planetForestFarMesh_.ib);
+    planetForestFarMesh_={};planetForestFarRows_=Json{};planetForestFarScale_=-1.f;
+}
 void StudioScene::clearPlanetForestModels(){
+    clearPlanetForestFarMesh();
     if(device_)for(auto& [id,model]:planetForestModels_)if(model)releasePreviewModel(*model);
     if(device_)for(auto& [key,model]:planetForestRootModels_)if(model)releasePreviewModel(*model);
     if(device_)for(auto& [id,model]:planetForestLogModels_)if(model)releasePreviewModel(*model);
@@ -786,6 +792,35 @@ void StudioScene::syncPlanetForestModels(const editor::MapDoc& doc,const std::st
         planetForestModelsPending_=true;return;
     }
 }
+bool StudioScene::syncPlanetForestFarMesh(const Json& rows,float flora){
+    if(rows==planetForestFarRows_&&flora==planetForestFarScale_)return planetForestFarMesh_.vb.valid()&&planetForestFarMesh_.ib.valid();
+    render::MeshBuilder builder;
+    for(const auto& row:rows.items()){
+        const auto p=studioForestVec(row["position"]),up=studioForestVec(row["up"]),east=studioForestVec(row["east"]);
+        const auto size=row.getInt("sizePermille");
+        if(!p||!up||!east||size<=0||size>1000)continue;
+        const auto frame=studioForestFrame(*p,*up,*east);if(!frame)continue;
+        const float h=flora*float(size)*.001f*(row.getBool("shrub")?1.5f:6.f);
+        const float cover=float(std::clamp<int64_t>(row.getInt("foliagePermille"),0,1000))*.001f;
+        const auto u=render::normalize(*up),e=render::normalize(*east),n=render::normalize(render::cross(u,e));
+        const float w=h*(.035f+.24f*cover);
+        const auto color=cover>0.f?render::rgba(55,105,48):render::rgba(100,72,48);
+        // Two crossed, double-sided tapered silhouettes in the local tangent frame.
+        for(const auto side:{e,n}){
+            const auto normal=render::normalize(render::cross(side,u));
+            const auto b=uint32_t(builder.vertexCount());
+            builder.addVertex(*p-side*w,normal,color);builder.addVertex(*p+side*w,normal,color);builder.addVertex(*p+u*h,normal,color);
+            builder.addTriangle(b,b+1,b+2);builder.addTriangle(b+2,b+1,b);
+        }
+    }
+    if(!device_->waitForResourceIdle())return false;
+    if(builder.vertexCount()==0){clearPlanetForestFarMesh();planetForestFarRows_=rows;planetForestFarScale_=flora;return false;}
+    auto next=builder.upload(*device_);
+    if(!next.vb.valid()||!next.ib.valid()){
+        if(next.vb.valid())device_->destroyBuffer(next.vb);if(next.ib.valid())device_->destroyBuffer(next.ib);return false;
+    }
+    clearPlanetForestFarMesh();planetForestFarMesh_=next;planetForestFarRows_=rows;planetForestFarScale_=flora;return true;
+}
 void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std::string& projectPath){
     if(!planetForestLiveCurrent(doc,projectPath)||planetForestModelProject_!=projectPath||
        !(planetForestModelCatalog_==doc.data.worldExtra["terraweaveForest"]))return;
@@ -793,6 +828,11 @@ void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std
     if(index<0)return;
     const auto& scale=doc.data.bodies[size_t(index)].meta["visual"]["flora"]["scale"];
     const float flora=scale.isNumber()?std::clamp(float(scale.toDouble()),.001f,10.f):.06f;
+    const auto& far=planetLiveSnapshot_["forest"]["farPlants"];
+    if(syncPlanetForestFarMesh(far,flora)){
+        renderer_.drawMesh(planetForestFarMesh_,render::mat4{},{1,1,1,1},render::kDrawNoCastShadow);
+        lightingStatus_+=" · far forest proxies "+std::to_string(far.size());
+    }else if(far.size())lightingStatus_+=" · far forest upload unavailable";
     static const std::vector<uint8_t> barkOnly{1,0};
     planetForestSeasonMaterials_.clear();
     const auto tick=uint64_t(planetLiveSnapshot_["forest"].getInt("tick",0));
@@ -2576,7 +2616,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     if(!liveForest&&planetForestOverlays_.plants)lightingStatus_+=" · authored forest: ARBOR skeleton / root footprint / capsule recipe";
     if(livePlanet&&planetLiveSnapshot_["forest"].isObject()){
         lightingStatus_+=liveForest?" · live forest roots / actual capsule poses":" · live forest unavailable";
-        if(planetLiveSnapshot_["forest"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+        if(planetLiveSnapshot_["forest"].getBool("truncated"))lightingStatus_+=" (detail budget)";
         if(planetLiveSnapshot_["forest"].getBool("stormsCapped")||planetLiveSnapshot_["forest"].getBool("windZonesCapped"))lightingStatus_+=" · wind field capped";
     }
     const bool liveSociety=livePlanet&&planetLiveSnapshot_["society"].getBool("available");
