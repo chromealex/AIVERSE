@@ -46,7 +46,7 @@ struct CavePlanetRuntimeCandidate {
             const std::shared_ptr<const game::Surface>& surface,uint64_t region,
             std::shared_ptr<const World> frozen,uint64_t environmentRevision,
             CavePhysisCellMapper mapper,CaveEnvironmentCostSettings settings={},
-            CaveNavigationCallbacks policies={})const{
+            CaveNavigationCallbacks policies={},Fixed sphereSeconds={})const{
         if(!nativeRevision||!frozen||!current(*frozen,generation)||!environmentRevision||!mapper)return {};
         const auto source=sources.find(region);
         const auto coverage=navigationCoverage.find(region);
@@ -55,7 +55,7 @@ struct CavePlanetRuntimeCandidate {
         auto provider=makeResidentCavePlanetNavigation(std::move(frame),
             std::make_shared<const CaveSnapshotSpatialIndex>(source->second),
             std::move(frozen),environmentRevision,coverage->second,std::move(mapper),
-            settings,std::move(policies),region);
+            settings,std::move(policies),region,sphereSeconds);
         return CavePlanetNavigationLease{region,generation,nativeRevision,std::move(provider)};
     }
     // Build a complete immutable cohort in a temporary map. Refusal never
@@ -77,7 +77,7 @@ struct CavePlanetRuntimeCandidate {
                 }
             }
             auto lease=navigationLease(surface,id,frozen,input->environmentRevision,
-                input->physisCell,input->settings,input->policies);
+                input->physisCell,input->settings,input->policies,input->sphereSeconds);
             if(!lease)return {};
             next.emplace(id,std::move(*lease));
         }

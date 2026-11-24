@@ -5,6 +5,7 @@
 // path worker callbacks must not read a concurrently mutating live World.
 #include "engine/world/TerraWeaveCavernsNavigationData.h"
 #include "engine/world/nereid/NereidWaterSystems.h"
+#include "engine/world/nereid/NereidSphereWater.h"
 #include "engine/physis/PhysisEnvironment.h"
 #include "engine/core/ECS.h"
 #include <algorithm>
@@ -34,6 +35,7 @@ using CavePhysisCellMapper=std::function<std::optional<std::pair<int32_t,int32_t
 struct CaveEnvironmentCoordinates {
     std::function<Vec3(PointCm)> waterPosition;
     CavePhysisCellMapper physisCell;
+    std::optional<Fixed> sphereSeconds; // opt-in planetary water sampling
 };
 inline CaveNavigationCallbacks makeCaveEnvironmentCallbacks(
     CaveEnvironmentSource captured,
@@ -43,12 +45,13 @@ inline CaveNavigationCallbacks makeCaveEnvironmentCallbacks(
        !settings.baseCost||settings.maxCost<settings.baseCost)
         throw std::invalid_argument("Caverns environment immutable ECS source");
     const auto ecs=std::move(captured.frozenEcs);
-    const auto sampleWaterAt=[ecs,position=std::move(coordinates.waterPosition)](PointCm p){
+    const auto submergedAt=[ecs,position=std::move(coordinates.waterPosition),seconds=coordinates.sphereSeconds](PointCm p){
         const Vec3 metres=position?position(p):Vec3{
             Fixed::fromRatio(p.x,100),
             Fixed::fromRatio(p.y,100),
             Fixed::fromRatio(p.z,100)};
-        return lib::nereid::sampleWater(*ecs,metres);
+        return lib::nereid::sampleWater(*ecs,metres).submerged||
+            (seconds&&lib::nereid::sampleSphereWater(*ecs,metres,*seconds).submerged);
     };
     const auto cellAt=[settings,mapper=std::move(coordinates.physisCell)](PointCm p)
         ->std::optional<std::pair<int32_t,int32_t>>{
@@ -59,14 +62,11 @@ inline CaveNavigationCallbacks makeCaveEnvironmentCallbacks(
         return std::pair{int32_t(px),int32_t(pz)};
     };
     CaveNavigationCallbacks cb;
-    cb.submerged=[sampleWaterAt](PointCm p){
-        return sampleWaterAt(p).submerged;
-    };
-    cb.traversalCost=[ecs,sampleWaterAt,settings,cellAt](
+    cb.submerged=submergedAt;
+    cb.traversalCost=[ecs,submergedAt,settings,cellAt](
         PointCm p,CaveTraversal traversal)->uint32_t {
         uint64_t cost=settings.baseCost;
-        const auto water=sampleWaterAt(p);
-        if(water.submerged && traversal!=CaveTraversal::Swimming)
+        if(submergedAt(p) && traversal!=CaveTraversal::Swimming)
             cost+=settings.waterSurcharge;
         if(const auto cell=cellAt(p)){
             physis::EnvironmentalResponse environment;

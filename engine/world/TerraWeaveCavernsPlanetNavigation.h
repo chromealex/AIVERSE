@@ -53,6 +53,7 @@ struct CavePlanetNavigationInputs {
     CavePhysisCellMapper physisCell;
     CaveEnvironmentCostSettings settings;
     CaveNavigationCallbacks policies;
+    Fixed sphereSeconds{};
 };
 using CavePlanetNavigationInputSource=std::function<std::optional<CavePlanetNavigationInputs>(const World&,uint64_t)>;
 using CavePlanetNavigationLeaseSet=std::map<uint64_t,CavePlanetNavigationLease>;
@@ -60,12 +61,13 @@ inline std::shared_ptr<const CaveNavigationDataProvider> makeResidentCavePlanetN
         CavePlanetFrame frame,std::shared_ptr<const CaveSnapshotSpatialIndex> index,
         std::shared_ptr<const World> frozen,uint64_t environmentRevision,
         CavePlanetNavigationCoverage coverage,CavePhysisCellMapper mapper,
-        CaveEnvironmentCostSettings settings={},CaveNavigationCallbacks policies={},uint64_t scopeId=0){
+        CaveEnvironmentCostSettings settings={},CaveNavigationCallbacks policies={},uint64_t scopeId=0,Fixed sphereSeconds={}){
     if(!index||!frozen||!environmentRevision||!mapper||policies.submerged||policies.traversalCost)
         throw std::invalid_argument("Caverns planetary navigation environment owner");
     CaveEnvironmentCoordinates coords;
     coords.waterPosition=[frame](PointCm p){return frame.toSimulation(CavePlanetFrame::metres(p));};
     coords.physisCell=std::move(mapper);
+    coords.sphereSeconds=sphereSeconds;
     auto environment=makeCaveEnvironmentCallbacks({index->revision(),0,frozen},settings,std::move(coords));
     policies.submerged=std::move(environment.submerged);
     policies.traversalCost=std::move(environment.traversalCost);

@@ -12,7 +12,7 @@ inline std::shared_ptr<const CaveNavigationDataProvider> captureCavePlanetAuthor
         const std::shared_ptr<const game::Surface>& surface,std::shared_ptr<const World> frozen,
         uint64_t regionId,uint64_t environmentEpoch,const CavePlanetDemandConfig& lattice,
         CavePhysisCellMapper mapper,CaveEnvironmentCostSettings settings={},
-        CaveNavigationCallbacks policies={}){
+        CaveNavigationCallbacks policies={},Fixed sphereSeconds={}){
     if(!surface||!frozen||!regionId||!environmentEpoch||!mapper)return {};
     const auto* entry=findPlanetCaveRegion(*frozen,regionId);
     if(!entry)return {};
@@ -21,7 +21,7 @@ inline std::shared_ptr<const CaveNavigationDataProvider> captureCavePlanetAuthor
     const auto coverage=CavePlanetNavigationCoverage::certify(frame.anchor(),lattice,keys);
     auto index=std::make_shared<const CaveSnapshotSpatialIndex>(freezePlanetCaveRegion(*frozen,regionId));
     return makeResidentCavePlanetNavigation(frame,std::move(index),std::move(frozen),
-        environmentEpoch,coverage,std::move(mapper),settings,std::move(policies),regionId);
+        environmentEpoch,coverage,std::move(mapper),settings,std::move(policies),regionId,sphereSeconds);
 }
 using CaveSimulationPosition=std::function<std::optional<Vec3>(const World&,Entity)>;
 inline nav::CaveWorldPositionSource cavePlanetChartPosition(
