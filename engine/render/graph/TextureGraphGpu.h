@@ -298,7 +298,9 @@ inline MaterializedSources compileMaterializedDag(const Program& p,const std::ve
     r.resultCapacityBytes=paddedResult?gfx::rgba8CopyLayout(n,n).bytes:r.resultBytes;
     require(r.resultCapacityBytes>=r.resultBytes&&r.resultCapacityBytes<budget,"materialized result exceeds budget");
     // Conservatively reserve every authored image source, including unused nodes.
-    for(const auto& node:p.nodes)if(std::string_view(node.info->id)=="image"){
+    for(const auto& node:p.nodes){
+        require(node.info!=nullptr,"invalid materialized node");
+        if(std::string_view(node.info->id)!="image")continue;
         const auto w=integer(node.parameters["width"],1,1,maxEmbeddedImageSide),h=integer(node.parameters["height"],1,1,maxEmbeddedImageSide);
         const size_t bytes=size_t(w)*h*sizeof(uint32_t);
         require(bytes<=budget-r.resultCapacityBytes-r.imageSourceBytes,"image source exceeds materialized budget");

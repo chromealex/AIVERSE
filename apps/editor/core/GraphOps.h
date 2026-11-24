@@ -191,7 +191,7 @@ inline void registerGraphOps(Workspace& ws) {
                 for(size_t i=0;i<names.size();++i){Json row=Json::object();row.set("name",Json::string(names[i]));row.set("slot",Json::number(int64_t(plan.outputSlots[i])));outputs.push(row);}
                 r.set("ok",Json::fromBool(true));r.set("state",Json::string("planned"));r.set("executed",Json::fromBool(false));
                 r.set("resolution",Json::number(int64_t(n)));r.set("slotBytes",slots);r.set("passes",passes);r.set("outputs",outputs);
-                r.set("allocatedBytes",Json::number(int64_t(sources.totalBytes)));r.set("intermediateBytes",Json::number(int64_t(plan.allocatedBytes)));r.set("resultBytes",Json::number(int64_t(sources.resultBytes)));
+                r.set("allocatedBytes",Json::number(int64_t(sources.totalBytes)));r.set("imageSourceBytes",Json::number(int64_t(sources.imageSourceBytes)));r.set("intermediateBytes",Json::number(int64_t(plan.allocatedBytes)));r.set("resultBytes",Json::number(int64_t(sources.resultBytes)));
                 r.set("nodeShaderCount",Json::number(int64_t(plan.schedule.passes.size())));
                 r.set("reachableNodeCount",Json::number(int64_t(sources.reachableNodes)));r.set("fusionElidedPasses",Json::number(int64_t(sources.fusedNodes)));r.set("packShaderCount",Json::number(int64_t(sources.packs.size())));r.set("peakLive",Json::number(int64_t(plan.peakLive)));
                 r.set("budgetBytes",Json::number(int64_t(budget)));
