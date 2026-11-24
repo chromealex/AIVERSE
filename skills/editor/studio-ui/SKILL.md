@@ -164,6 +164,9 @@ The existing model resource graph now scans GLB v2 JSON chunks without reading B
 ## Dependency coverage and paging (S6g.5)
 Existing XML parser and shared BOM conversion discover COLLADA library_images init_from/ref file candidates (conservative even if unused). Native studio.assetDependencyPage returns at most 100 selected rows, direction counts, coverage diagnostics and graph token. The token hashes known selected edges and scan counts; pass it when changing pages, refresh on mismatch. Existing array endpoint is retained. Linked studio_asset_dependencies supports expectedToken and direction with depth, retains direct mode without depth. Dynamic references, opaque/unsupported formats and skipped URIs are not complete coverage; no URI repair in this stage.
 
+## Transactional stationary glTF URI repair (S6g.6.1)
+Internal Studio/MCP moves can repair exact buffers/images URI slots in stationary textual .gltf models when targets relocate. Native plan validates complete choices, budgets exact before/after bytes, and uses move journal v4 plus existing document journal; individual Undo/Redo validates typed resolution and restores exact source bytes. Moving model owners requiring edits, GLB/OBJ/DAE rewrites, coordinated repaired history and unknown URI adoption remain refused. No arbitrary JSON rewriting. Legacy direct transfer callers must opt in and provide history.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

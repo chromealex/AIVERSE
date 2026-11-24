@@ -6,6 +6,7 @@
 #include "engine/data/Json.h"
 #include "engine/render/Xml.h"
 #include "engine/pack/Sha256.h"
+#include "apps/editor/core/ProjectFileEdits.h"
 #include <iterator>
 #include <map>
 #include <algorithm>
@@ -190,6 +191,10 @@ inline Json studioMoveReferenceImpact(const Json& transfer,
                 // promise that rewriting the source is supported.
                 row.set("validateOnApply",Json::fromBool(true));
                 row.set("preservesDefault",Json::fromBool(studioGltfRelocationSafe(ref,defaults)));
+                row.set("repairCandidate",Json::fromBool(ref.owner=="glTF resource"&&
+                    std::filesystem::path(ref.document).extension()==".gltf"&&
+                    studioRelocatedReferencePath(ref.document,defaults)==ref.document&&
+                    studioRelocatedReferencePath(ref.path,defaults)!=ref.path));
             }
             result.push(std::move(row));
         }
@@ -531,6 +536,92 @@ inline void studioCheckGltfRelocations(const std::filesystem::path& project,
     for(const auto& ref:studioCollectGltfReferences(project,{}))
         if(!studioGltfRelocationSafe(ref,moves))
             throw std::runtime_error("Asset move would change model resource resolution: "+ref.document+" "+ref.field);
+}
+// Repair only stationary textual glTF models, so relocation payload digests
+// stay unchanged. The original and new complete bytes are retained verbatim.
+inline std::string studioRelativeGltfUri(const std::string& owner,const std::string& target){
+    const auto rel=std::filesystem::path(target).lexically_relative(std::filesystem::path(owner).parent_path()).generic_string();
+    static constexpr char hex[]="0123456789ABCDEF";
+    std::string uri;
+    for(unsigned char c:rel){
+        if((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')||c=='-'||c=='_'||c=='.'||c=='~'||c=='/')uri+=char(c);
+        else{uri+='%';uri+=hex[c>>4];uri+=hex[c&15];}
+    }
+    if(uri.empty()||studioGltfResourcePath(owner,uri)!=target)throw std::runtime_error("Cannot encode safe relative glTF URI");
+    return uri;
+}
+inline std::vector<editor::ProjectFileEdit> studioPlanGltfRepairs(const std::filesystem::path& project,
+    const std::vector<StudioReferenceRelocation>& moves){
+    namespace fs=std::filesystem;
+    struct Pending{std::string before;Json doc;};
+    std::map<std::string,Pending> pending;
+    size_t bytes=0;
+    const auto root=fs::canonical(project);
+    if(moves.empty())return {};
+    for(const auto& ref:studioCollectGltfReferences(project,{})){
+        if(studioGltfRelocationSafe(ref,moves))continue;
+        const auto owner=studioRelocatedReferencePath(ref.document,moves),target=studioRelocatedReferencePath(ref.path,moves);
+        if(ref.owner!="glTF resource"||fs::path(ref.document).extension()!=".gltf"||owner!=ref.document||target==ref.path||
+           !studioSafeModelResourceFile(root,ref.document))
+            throw std::runtime_error("Model resource cannot be repaired safely: "+ref.document+" "+ref.field);
+        auto it=pending.find(ref.document);
+        if(it==pending.end()){
+            if(pending.size()>=32||fs::file_size(root/ref.document)>4u*1024u*1024u-bytes)
+                throw std::runtime_error("glTF repair history budget exceeded");
+            auto before=editor::readProjectFileBytes(root/ref.document);bytes+=before.size();
+            if(bytes>4u*1024u*1024u)throw std::runtime_error("glTF repair history budget exceeded");
+            auto doc=Json::parse(before);
+            it=pending.emplace(ref.document,Pending{std::move(before),std::move(doc)}).first;
+        }
+        // Use typed slots only, and validate the exact original URI.
+        bool found=false;
+        for(const char* group:{"buffers","images"}){
+            const auto prefix=std::string("/")+group+"/";
+            if(!ref.field.starts_with(prefix))continue;
+            const auto& entries=it->second.doc[group];
+            for(size_t i=0;i<entries.size();++i){
+                if(ref.field!=prefix+std::to_string(i)+"/uri")continue;
+                auto item=entries[i];
+                if(item.getStr("uri")!=ref.uri)throw std::runtime_error("glTF URI changed during repair planning");
+                item.set("uri",Json::string(studioRelativeGltfUri(owner,target)));
+                auto array=entries;array[i]=std::move(item);it->second.doc.set(group,std::move(array));
+                found=true;break;
+            }
+            if(found)break;
+        }
+        if(!found)throw std::runtime_error("Unknown glTF repair slot");
+    }
+    std::vector<editor::ProjectFileEdit> result;
+    for(auto& [path,edit]:pending){
+        auto after=edit.doc.dump(2)+"\n";
+        if(after.size()>8u*1024u*1024u-bytes)throw std::runtime_error("glTF repair history budget exceeded");
+        bytes+=after.size();
+        result.push_back({fs::path(path),std::move(edit.before),std::move(after)});
+    }
+    return result;
+}
+// Replay may restore an equivalent noncanonical URI spelling and original
+// formatting. Compare normalized typed resource resolution, all other JSON
+// fields unchanged; exact source bytes are separately verified.
+inline std::string studioCanonicalGltfRepair(const std::string& path,const std::string& bytes){
+    auto doc=Json::parse(bytes);
+    for(const char* group:{"buffers","images"}){
+        auto array=doc[group];
+        if(!array.isArray())continue;
+        for(size_t i=0;i<array.size();++i){
+            auto item=array[i];const auto uri=item.getStr("uri");
+            const auto resolved=studioGltfResourcePath(path,uri);
+            if(!resolved.empty()){item.set("uri",Json::string(resolved));array[i]=std::move(item);}
+        }
+        doc.set(group,std::move(array));
+    }
+    return doc.dump(-1);
+}
+inline std::vector<editor::ProjectFileEdit> studioAbsoluteResourceEdits(const std::filesystem::path& project,
+    const std::vector<editor::ProjectFileEdit>& edits){
+    auto result=edits;
+    for(auto& edit:result)edit.path=std::filesystem::canonical(project)/edit.path;
+    return result;
 }
 inline void studioCheckMapAssetPaths(const std::filesystem::path& project,
     const Json& currentMap,const Json& rules,const Json& manifest,

@@ -2912,7 +2912,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             std::optional<editor::ProjectHistory::MovePlan> moveHistory;
             agentHistoryUnsafe_=true;
             Json result;
-            try{result=pendingAssetTransfer_->apply(token,decisions,commitHook,&moveHistory);}
+            try{result=pendingAssetTransfer_->apply(token,decisions,commitHook,&moveHistory,internal);}
             catch(...){assetHistory_.reset();throw;}
             const auto beforeHistory=assetHistory_.version();
             if(moveHistory){

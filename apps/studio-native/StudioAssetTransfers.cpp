@@ -466,7 +466,7 @@ Json StudioTransferPlan::describe() const {
 Json StudioTransferPlan::apply(const std::string& token,
                          const std::vector<StudioTransferDecision>& decisions,
                          const std::function<void()>& beforeCommit,
-                         std::optional<editor::ProjectHistory::MovePlan>* history){
+                         std::optional<editor::ProjectHistory::MovePlan>* history,bool repairResources){
     // Even legacy external callers must not use the destructive replace path.
     std::optional<editor::ProjectHistory::MovePlan> localHistory;
     if(!history&&type_==StudioTransferType::External&&
@@ -532,7 +532,9 @@ Json StudioTransferPlan::apply(const std::string& token,
         for(const auto& [from,to]:planned)
             referenceMoves.push_back({"content/"+from.lexically_relative(root).generic_string(),
                 "content/"+to.lexically_relative(root).generic_string(),fs::is_directory(fs::symlink_status(from))});
-        studioCheckGltfRelocations(project_,referenceMoves);
+        std::vector<editor::ProjectFileEdit> repairs;
+        if(repairResources&&history)repairs=studioPlanGltfRepairs(project_,referenceMoves);
+        else studioCheckGltfRelocations(project_,referenceMoves);
         // Root sidecars and material documents retain exact bytes; asset payloads
         // use a streaming digest, including complete directory trees.
         std::optional<editor::ProjectHistory::MovePlan> recorded;
@@ -540,6 +542,9 @@ Json StudioTransferPlan::apply(const std::string& token,
             try {
                 editor::ProjectHistory::MovePlan candidate;
                 size_t used=0;
+                candidate.resourceEdits=repairs;
+                for(const auto& edit:repairs)used+=edit.before.size()+edit.after.size()+sizeof(editor::ProjectFileEdit)+edit.path.native().size()*sizeof(fs::path::value_type);
+                if(used>editor::ProjectHistory::MaxBytes/2+1024*1024)throw std::runtime_error("Resource repair history budget exceeded");
                 const auto capture=[&](const fs::path& file){
                     if(!fs::is_regular_file(fs::symlink_status(file)))throw std::runtime_error("Not a history file");
                     const auto size=fs::file_size(file);
@@ -565,6 +570,7 @@ Json StudioTransferPlan::apply(const std::string& token,
                 recorded=std::move(candidate);
             }catch(const std::exception&){recorded.reset();}
         }
+        if(!repairs.empty()&&!recorded)throw std::runtime_error("Resource repair requires retained move history");
         StudioMoveJournal journal(project_);
         std::vector<StudioMoveJournalOperation> journalOps;
         journalOps.reserve(operations.size());
@@ -575,7 +581,7 @@ Json StudioTransferPlan::apply(const std::string& token,
             });
         // Publish the recovery plan before the first mutation. This journal is
         // outside content/ and persists until a committed marker is published.
-        journal.begin(journalOps);
+        journal.begin(journalOps,false,false,repairs);
         try {
             for (const auto& operation:operations) {
                 StudioMoveJournal::renamePath(operation.source,operation.destination);
@@ -585,6 +591,7 @@ Json StudioTransferPlan::apply(const std::string& token,
                 if (operation.source.parent_path()!=operation.destination.parent_path())
                     StudioMoveJournal::syncPath(operation.destination.parent_path());
             }
+            editor::applyProjectFileEdits(project_,studioAbsoluteResourceEdits(project_,repairs));
             StudioAssetCatalog catalog(project_); catalog.rebuild();
             if (beforeCommit) beforeCommit();
             if(recorded){
@@ -601,6 +608,11 @@ Json StudioTransferPlan::apply(const std::string& token,
                         if(!matchesMoveFile(root/f.to,f))
                             throw std::runtime_error("Asset changed during move");
                 }catch(const std::exception&){recorded.reset();}
+            }
+            if(!repairs.empty()){
+                if(!recorded)throw std::runtime_error("Resource repair history could not be retained");
+                editor::ProjectHistory probe;auto copy=*recorded;probe.recordMove(std::move(copy),"Move assets");
+                if(!probe.canUndo())throw std::runtime_error("Resource repair exceeds retained history budget");
             }
             journal.commit();
         } catch (...) {
@@ -620,6 +632,7 @@ Json StudioTransferPlan::apply(const std::string& token,
         Json result=Json::object();
         result.set("files",std::move(completed));
         result.set("issues",Json::array());
+        result.set("repairedResourceDocuments",Json::number(int64_t(repairs.size())));
         if(history)*history=std::move(recorded);
         return result;
     }
@@ -888,7 +901,19 @@ void studioReplayAssetMove(const fs::path& project,
     std::vector<StudioReferenceRelocation> referenceMoves;
     for(size_t i=0;i<operations.size();i+=2)
         referenceMoves.push_back({"content/"+operations[i].from,"content/"+operations[i].to,plan.files[i].directory});
-    studioCheckGltfRelocations(project,referenceMoves);
+    auto repairs=redo?plan.resourceEdits:editor::reverseProjectFileEdits(plan.resourceEdits);
+    if(repairs.empty())studioCheckGltfRelocations(project,referenceMoves);
+    else{
+        if(staged)throw std::runtime_error("Resource repair history requires individual navigation");
+        const auto generated=studioPlanGltfRepairs(project,referenceMoves);
+        if(generated.size()!=repairs.size())throw std::runtime_error("Resource repair history dependencies changed");
+        for(size_t i=0;i<repairs.size();++i){
+            const auto& saved=repairs[i];const auto& expected=generated[i];
+            if(saved.path!=expected.path||saved.before!=expected.before||
+               studioCanonicalGltfRepair(saved.path.generic_string(),saved.after)!=studioCanonicalGltfRepair(expected.path.generic_string(),expected.after))
+                throw std::runtime_error("Resource repair history no longer matches typed dependencies");
+        }
+    }
     checkMaterial();
     if(staged){
         for(size_t i=0;i<operations.size();++i){
@@ -898,7 +923,7 @@ void studioReplayAssetMove(const fs::path& project,
         if(materialBefore)staged->documents.push_back({material,*materialBefore,*materialAfter});
         return;
     }
-    StudioMoveJournal journal(project);journal.begin(operations);
+    StudioMoveJournal journal(project);journal.begin(operations,false,false,repairs);
     try{
         for(size_t i=0;i<operations.size();++i){
             const auto& op=operations[i];
@@ -913,8 +938,10 @@ void studioReplayAssetMove(const fs::path& project,
         for(size_t i=0;i<operations.size();++i)
             if(!matchesMoveFile(root/operations[i].to,plan.files[i]))
                 throw std::runtime_error("Asset bytes changed during replay");
-        if(materialBefore)editor::applyProjectFileEdits(project,{{material,*materialBefore,*materialAfter}});
+        auto documents=studioAbsoluteResourceEdits(project,repairs);
+        if(materialBefore)documents.push_back({material,*materialBefore,*materialAfter});
         else checkMaterial();
+        editor::applyProjectFileEdits(project,documents);
         catalog.rebuild(false);
         for(size_t i=0;i<plan.files.size();i+=2){
             const auto& asset=plan.files[i];const auto& meta=plan.files[i+1];
@@ -1380,6 +1407,24 @@ void validateHistoryMove(const fs::path& project,const AssetHistory::MovePlan& p
        (plan.materialsBefore.has_value()!=plan.materialsAfter.has_value())||
        ((plan.quarantine||plan.replacement)&&(plan.materialsBefore||plan.materialsAfter)))
         throw std::runtime_error("Invalid persisted asset move plan");
+    if((plan.quarantine||plan.replacement)&&!plan.resourceEdits.empty())throw std::runtime_error("Invalid persisted resource repair");
+    if(plan.resourceEdits.size()>32)throw std::runtime_error("Too many persisted resource edits");
+    size_t repairBytes=0;std::set<std::string> repairPaths;
+    for(const auto& edit:plan.resourceEdits){
+        const auto path=edit.path.generic_string();
+        if(!path.starts_with("content/")||edit.path.extension()!=".gltf"||!repairPaths.insert(path).second)
+            throw std::runtime_error("Invalid persisted resource path");
+        validateHistoryContentPath(path.substr(8));
+        for(size_t count:{edit.before.size(),edit.after.size()}){
+            if(count>8u*1024u*1024u-repairBytes)throw std::runtime_error("Persisted resource budget exceeded");
+            repairBytes+=count;
+        }
+        (void)Json::parse(edit.before);(void)Json::parse(edit.after);
+        for(const auto& f:plan.files)for(const auto& endpoint:{f.from,f.to}){
+            const auto base="content/"+endpoint;
+            if(path==base||path.starts_with(base+"/")||base.starts_with(path+"/"))throw std::runtime_error("Persisted repair overlaps move");
+        }
+    }
     std::set<std::string> sources,targets;
     for(size_t i=0;i<plan.files.size();i+=2){
         const auto& a=plan.files[i];const auto& b=plan.files[i+1];
@@ -1447,6 +1492,14 @@ std::string encodeAssetHistory(const fs::path& project,const AssetHistory& histo
                 Json item=Json::object();item.set("from",Json::string(f.from));item.set("to",Json::string(f.to));
                 item.set("bytes",Json::string(f.bytes));item.set("digest",Json::string(f.digest));item.set("directory",Json::fromBool(f.directory));files.push(std::move(item));
             }
+            if(!plan.resourceEdits.empty()){
+                Json edits=Json::array();
+                for(const auto& edit:plan.resourceEdits){
+                    Json item=Json::object();item.set("path",Json::string(edit.path.generic_string()));
+                    item.set("before",Json::string(edit.before));item.set("after",Json::string(edit.after));edits.push(std::move(item));
+                }
+                move.set("resourceEdits",std::move(edits));
+            }
             move.set("files",std::move(files));row.set("move",std::move(move));
         }else{
             if(step.files.size()!=1)throw std::runtime_error("Unsupported asset metadata checkpoint");
@@ -1487,6 +1540,13 @@ AssetHistory decodeAssetHistory(const fs::path& project,const std::string& text)
                 if(!f["from"].isString()||!f["to"].isString()||!f["bytes"].isString()||!f["digest"].isString())
                     throw std::runtime_error("Invalid asset history move entry");
                 plan.files.push_back({f.getStr("from"),f.getStr("to"),f.getStr("bytes"),f.getStr("digest"),f.getBool("directory")});
+            }
+            if(move.has("resourceEdits")){
+                if(!move["resourceEdits"].isArray()||move["resourceEdits"].size()>32)throw std::runtime_error("Invalid resource history");
+                for(const auto& edit:move["resourceEdits"].items()){
+                    if(!edit["path"].isString()||!edit["before"].isString()||!edit["after"].isString())throw std::runtime_error("Invalid resource history entry");
+                    plan.resourceEdits.push_back({fs::path(edit.getStr("path")),edit.getStr("before"),edit.getStr("after")});
+                }
             }
             validateHistoryMove(project,plan);history.recordMove(std::move(plan),label);
         }else{

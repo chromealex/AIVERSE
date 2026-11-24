@@ -65,7 +65,7 @@ export interface StudioAssetTransferItem {
 export interface StudioAssetTransferPlan {
   token: string; source: 'internal' | 'external'; items: StudioAssetTransferItem[];
   references?: Array<{ id: number; document: string; owner: string; field: string;
-    from: string; to: string; writable: boolean; validateOnApply?:boolean; preservesDefault?:boolean }>;
+    from: string; to: string; writable: boolean; validateOnApply?:boolean; preservesDefault?:boolean; repairCandidate?:boolean }>;
 }
 export type StudioAssetConflictAction =
   'import' | 'skip' | 'keep-both' | 'replace' | 'new-guid';
@@ -73,6 +73,7 @@ export interface StudioAssetTransferResult {
   historyRecorded?: boolean;
   files: string[]; issues: Array<{name: string; message: string}>;
   repairedMaterialReferences?: number;
+  repairedResourceDocuments?: number;
 }
 export interface StudioDependencyCoverage {gltf:number;glb:number;obj:number;dae:number;opaqueGlb:number;unsupportedModels:number;symlinks:number;unsupportedUris:number;missingLibraries:number;embedded:number;complete:boolean;note:string}
 export interface StudioDependencyPage {items:StudioAssetReference[];token:string;total:number;incoming:number;outgoing:number;unresolved:number;coverage:StudioDependencyCoverage;depth:number;path:string;guid:string}

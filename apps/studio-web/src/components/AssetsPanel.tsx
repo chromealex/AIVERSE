@@ -84,7 +84,7 @@ function PreviewDialog({plan,busy,onCancel,onCommit}:{
               <small>Ready · no conflict</small>}
             {(plan.references??[]).filter(ref=>ref.id===item.id).map((ref,index)=>
               <small key={index} className={ref.writable?'':'studio-asset-conflict-warning'}>
-                {ref.writable?'Will repair material reference: ':ref.validateOnApply?(ref.preservesDefault?'Default move preserves resource; final choices rechecked: ':'Resource must remain resolvable; final choices checked: '):'Blocked: read-only reference: '}
+                {ref.writable?'Will repair material reference: ':ref.validateOnApply?(ref.preservesDefault?'Default move preserves resource; final choices rechecked: ':ref.repairCandidate?'Will attempt transactional glTF URI repair: ':'Resource must remain resolvable; final choices checked: '):'Blocked: read-only reference: '}
                 {ref.document} / {ref.owner} / {ref.field}
               </small>)}
           </div>
@@ -333,6 +333,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       setMessage(response.files.length+' asset(s) processed'+
         (response.repairedMaterialReferences
           ? ' · '+response.repairedMaterialReferences+' material reference(s) repaired' : '')+
+        (response.repairedResourceDocuments?' · '+response.repairedResourceDocuments+' model document(s) repaired':'')+
         (response.issues.length?' · '+response.issues.length+' issue(s)':'')+
         (response.files.length&&response.historyRecorded===false?' · Not retained in asset history':''));
       if(response.issues.length)setError(response.issues.map(x=>x.name+': '+x.message).join('; '));

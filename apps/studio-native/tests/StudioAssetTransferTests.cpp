@@ -210,6 +210,32 @@ int main(){
             fs::remove_all(folder);fs::remove(studioMetaPath(folder));db.rebuild(false);
         }
 
+        // S6g.6: stationary glTF automatic repair, exact undo/redo and journal rollback.
+        {
+            using namespace aiverse;
+            using namespace aiverse::studio;
+            const auto model=project/"content"/"Models"/"Repair.gltf";
+            const auto texture=project/"content"/"Models"/"repair.png";
+            const std::string original="{ \"images\" : [{\"uri\":\"./repair.png\"}], \"extras\":{\"keep\":true} }\n";
+            write(model,original);write(texture,"repair texture");db.rebuild();
+            auto move=StudioTransferPlan::internal(project,"Other",{"Models/repair.png"});
+            std::optional<editor::ProjectHistory::MovePlan> recorded;
+            const auto result=move.apply(move.token(),{},{},&recorded,true);
+            AIVERSE_TEST_CHECK(recorded&&recorded->resourceEdits.size()==1&&result.getInt("repairedResourceDocuments")==1);
+            const auto changed=read(model);
+            AIVERSE_TEST_CHECK(Json::parse(changed)["images"][0].getStr("uri")=="../Other/repair.png");
+            studioReplayAssetMove(project,*recorded,false);
+            AIVERSE_TEST_CHECK(read(model)==original&&fs::exists(texture));
+            studioReplayAssetMove(project,*recorded,true);
+            AIVERSE_TEST_CHECK(read(model)==changed);
+            studioReplayAssetMove(project,*recorded,false);
+            move=StudioTransferPlan::internal(project,"Other",{"Models/repair.png"});
+            bool refused=false;try{(void)move.apply(move.token(),{},[]{throw std::runtime_error("fixture failure");},&recorded,true);}
+            catch(const std::runtime_error&){refused=true;}
+            AIVERSE_TEST_CHECK(refused&&read(model)==original&&fs::exists(texture));
+            fs::remove(model);fs::remove(texture);fs::remove(studioMetaPath(model));fs::remove(studioMetaPath(texture));db.rebuild(false);
+        }
+
         // S6h.1: persisted quota blocks growth, not restoration or explicit purge.
         {
             using namespace aiverse;

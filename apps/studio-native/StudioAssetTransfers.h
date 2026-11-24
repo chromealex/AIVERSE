@@ -41,7 +41,7 @@ public:
     // dependent material writes can fail and trigger filesystem rollback.
     Json apply(const std::string& token,const std::vector<StudioTransferDecision>& decisions,
                const std::function<void()>& beforeCommit = {},
-               std::optional<editor::ProjectHistory::MovePlan>* history = nullptr);
+               std::optional<editor::ProjectHistory::MovePlan>* history = nullptr,bool repairResources=false);
     const std::string& token()const{return token_;}
 private:
     static StudioTransferPlan plan(const std::filesystem::path& project,

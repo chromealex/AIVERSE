@@ -87,3 +87,6 @@ Dependency queries include GLB external JSON resources and OBJ material librarie
 
 ### S6g.5 — paged graph and diagnostics
 Linked dependency query now returns native bounded pages, token and coverage summary; optional expectedToken fences changed selected graphs and direction requires depth. COLLADA declared image paths are conservative candidates. Unknown formats and dynamic references remain explicit coverage gaps.
+
+### S6g.6.1 — stationary glTF path repair
+Existing linked internal move preview advertises repair candidates; commit may repair supported stationary textual glTF buffers/images URI slots transactionally. Exact undo/redo bytes retained. Other resource formats and moving-source rewrites remain conservative. No additional MCP command.
