@@ -2,6 +2,7 @@
 #include "aiverselib/world/WorldProcessesNativeModule.h"
 #include "aiverselib/world/WorldProcessGravity.h"
 #include "aiverselib/world/CircuitSurfaceWiring.h"
+#include "apps/studio-native/StudioPlanetWorldProcesses.h"
 #include "aiverselib/world/EvolveSurfaceEcology.h"
 #include <array>
 #include "engine/data/JsonCompose.h"
@@ -490,7 +491,43 @@ static void checkCircuitSurfaceWiring(){
     AIVERSE_TEST_CHECK(enabled&&enabled->size()==1&&enabled->front().node==second);
     AIVERSE_TEST_CHECK(ecs.countExisting<circuit::Wire>()==0);
 }
+static void checkPlanetStudioDiagnostics(){
+    game::Surface surface;game::BodyDef body;
+    body.id="terra";body.faceSize=8;body.radius=Fixed::fromInt(1000);
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);
+    surface.build();
+    const int start=surface.gridCell(0,0,7,3),seam=surface.neighbor(start,0);
+    AIVERSE_TEST_CHECK(seam>=0);
+    World ecs;
+    const auto focus=ecs.create(),near=ecs.create(),remote=ecs.create(),unknown=ecs.create();
+    const auto addAt=[&](Entity e,int cell){
+        Transform t{};t.pos=surface.cellCenter(cell);ecs.add<Transform>(e,t);
+    };
+    addAt(focus,start);addAt(near,seam);addAt(remote,surface.gridCell(1,0,7,3));
+    for(auto e:{near,remote,unknown})ecs.add<crowd::Agent>(e);
+    physis::GravitySettings gravity;gravity.baseline={};
+    ecs.setResource<physis::GravitySettings>(gravity);
+    studio::StudioWorldProcessDiagnostics owner;
+    const auto ref=std::to_string(focus.packed());
+    const auto result=studio::planet_wp::sample(owner,ecs,surface,"1",1,64,ref);
+    AIVERSE_TEST_CHECK(result.getStr("topology")=="planet");
+    AIVERSE_TEST_CHECK(result.getBool("observerAvailable"));
+    AIVERSE_TEST_CHECK(result["focusSurface"].getStr("body")=="terra");
+    AIVERSE_TEST_CHECK(result["focusSurface"]["gravityLocal"][0].fx().raw==0);
+    const auto& lane=result["lanes"]["crowd"];
+    AIVERSE_TEST_CHECK(lane.getInt("cold")==1);
+    AIVERSE_TEST_CHECK(lane.getInt("hot")>=1);
+    AIVERSE_TEST_CHECK(lane.getInt("hot")+lane.getInt("warm")+lane.getInt("cold")==3);
+    const auto same=studio::planet_wp::sample(owner,ecs,surface,"1",1,64,ref);
+    AIVERSE_TEST_CHECK(same==result);
+    const auto noFocus=studio::planet_wp::sample(owner,ecs,surface,"1",2,64,"");
+    AIVERSE_TEST_CHECK(!noFocus.getBool("observerAvailable"));
+    AIVERSE_TEST_CHECK(noFocus["lanes"]["crowd"].getInt("hot")==3);
+    const auto plane=owner.sample(&ecs,"2",1,64,ref);
+    AIVERSE_TEST_CHECK(!plane.has("topology"));
+}
 int main(){
+    checkPlanetStudioDiagnostics();
     checkCircuitSurfaceWiring();
     checkAetherStratification();
     checkMorphGravity();
