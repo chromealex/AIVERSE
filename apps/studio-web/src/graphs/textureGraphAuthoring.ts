@@ -51,6 +51,8 @@ export function instantiateTextureGraph(target:Obj,source:Obj):{graph:Obj;ids:st
  };
  const old=checked(target.nodes), incoming=checked(source.nodes);
  if(!incoming.length||old.length+incoming.length>64)throw new Error('Reusable graph exceeds 64-node limit');
+ const size=target.size??256;
+ if(typeof size!=='number'||!Number.isInteger(size)||size<8||size>1024||size*size*(old.length+incoming.length)>4194304)throw new Error('Reusable graph exceeds native pixel-node budget; reduce bake resolution');
  const defs=(x:unknown):Obj=>{if(x==null)return {};if(!obj(x))throw new Error('Invalid texture graph parameters');return x;};
  const oldDefs=defs(target.parameters),newDefs=defs(source.parameters);
  if(Object.keys(oldDefs).length+Object.keys(newDefs).length>32)throw new Error('Reusable graph exceeds 32-parameter limit');
@@ -78,5 +80,6 @@ export function instantiateTextureGraph(target:Obj,source:Obj):{graph:Obj;ids:st
  }
  const graph:Obj={...target,nodes:[...old,...nodes]};
  if(Object.keys(additions).length)graph.parameters={...oldDefs,...additions};
+ if(new TextEncoder().encode(JSON.stringify(graph)).length>256*1024)throw new Error('Reusable graph exceeds 256 KiB document limit');
  return {graph,ids:[...ids.values()],outputs,parameters};
 }

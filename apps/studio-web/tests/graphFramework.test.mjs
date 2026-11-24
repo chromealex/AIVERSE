@@ -100,6 +100,7 @@ test('saved texture graph insertion rejects dangling references and exceeded bud
  const src={nodes:[{id:'a',op:'constant',inputs:[]}],outputs:{height:'a'}};
  const full={nodes:Array.from({length:64},(_,i)=>({id:'n'+i,op:'constant',inputs:[]}))};
  assert.throws(()=>instantiateTextureGraph(full,src),/64-node/);
+ assert.throws(()=>instantiateTextureGraph({size:1024,nodes:full.nodes.slice(0,4)},src),/pixel-node/);
  assert.throws(()=>instantiateTextureGraph(target,{...src,parameters:{x:{default:0,bindings:[{node:'missing',property:'value'}]}}}),/binding/);
  assert.deepEqual(target,{nodes:[],outputs:{}});
 });
