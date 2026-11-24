@@ -85,8 +85,10 @@ class StudioDesignSystemTests(unittest.TestCase):
     def test_root_agent_discovery_and_skill(self):
         root_agents=(ROOT/"AGENTS.md").read_text(encoding="utf-8")
         skill=(ROOT/"skills/editor/studio-ui/SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("docs/studio-design-system.md",root_agents)
-        self.assertIn("skills/editor/studio-ui/SKILL.md",root_agents)
+        contract=(ROOT/"docs/agents/contracts/studio-contract.md").read_text(encoding="utf-8")
+        self.assertIn("docs/agents/contracts/studio-contract.md",root_agents)
+        self.assertIn("docs/studio-design-system.md",contract)
+        self.assertIn("skills/editor/studio-ui/SKILL.md",contract)
         self.assertIn("StudioPanel",skill)
         self.assertIn("npm run typecheck",skill)
 
