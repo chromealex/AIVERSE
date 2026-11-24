@@ -263,7 +263,50 @@ static void checkPlanetEvolveRegions(){
     const auto zero=evolve::surfaceRegionOffset(surface,*f,*f);
     AIVERSE_TEST_CHECK(zero&&zero->x.raw==0&&zero->y.raw==0);
 }
+// Exercise actual native hydration on a planet map, not only the standalone
+// Surface index. Reuse known unit types from the existing host fixture.
+static void checkPlanetEvolveHydration(){
+    const Json source=baseMap();
+    Json map=Json::parse(R"({"world":{"start":"terra","bodies":[
+        {"id":"terra","kind":"planet","radius":64,"faceSize":32},
+        {"id":"moon","kind":"moon","radius":32,"faceSize":16}]},
+        "players":[],"entities":[]})");
+    auto players=source["players"];
+    for(size_t i=0;i<players.size();++i){
+        Json at=Json::parse(R"({"body":"terra","face":0,"x":16,"y":16})");
+        at.set("face",Json::number(int64_t(i%6)));
+        players.at(i).set("start",at);
+    }
+    map.set("players",std::move(players));
+    Json entity=source["entities"][1];
+    entity.set("id",Json::string("planet_ecology"));
+    entity.set("at",Json::parse(R"({"body":"terra","face":0,"x":28,"y":16})"));
+    entity.set("components",Json::parse(R"({
+        "EvolveRegion":{"durability":1000000000,"fertility":200000000,"succession":0,"pollution":0,"enabled":true},
+        "EvolveArea":{"halfWidthCm":1000,"halfDepthCm":1000,"offsetXcm":0,"offsetZcm":0,"enabled":true}
+    })"));
+    map.member("entities").push(std::move(entity));
+    auto sim=make(map,true);
+    const auto e=placed(*sim,0);
+    AIVERSE_TEST_CHECK(sim->world().has<evolve::Region>(e));
+    AIVERSE_TEST_CHECK(sim->world().has<evolve::SurfaceArea>(e));
+    AIVERSE_TEST_CHECK(!sim->world().has<evolve::Area>(e));
+    const auto& area=sim->world().get<evolve::SurfaceArea>(e);
+    AIVERSE_TEST_CHECK(area.body==0&&area.local.halfWidthCm==1000);
+    const auto& host=static_cast<const game::GameCore&>(sim->module());
+    const auto* surface=host.surface(*sim);
+    AIVERSE_TEST_CHECK(surface);
+    evolve::SurfaceRegionIndex index;
+    AIVERSE_TEST_CHECK(index.build(sim->world(),*surface));
+    AIVERSE_TEST_CHECK(evolve::sampleSurfaceEcology(sim->world(),*surface,index,
+        area.origin,{}).nutrientsPermille==200);
+    auto restored=make(map,true);
+    std::string error;
+    AIVERSE_TEST_CHECK(restored->deserialize(sim->serialize(),&error));
+    AIVERSE_TEST_CHECK(restored->checksum()==sim->checksum());
+}
 int main(){
+    checkPlanetEvolveHydration();
     checkPlanetGravity();
     checkPlanetImprint();
     checkPlanetCrowdSlots();
