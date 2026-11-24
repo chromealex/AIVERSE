@@ -92,6 +92,32 @@ static void checkGpuGraphImagePublication(){
     AIVERSE_TEST_CHECK(next->materials[0].occlusionTex==0&&next->materials[0].baseTex==1);
     AIVERSE_TEST_CHECK(old->materials[0].baseTex==-1&&next->version>old->version);
     AIVERSE_TEST_CHECK(!publish(next->version,true)&&model.images.size()==2);
+    // The actual live snapshot can be replaced without a temporary
+    // registry. Keep the pinned old snapshot and shared base untouched.
+    auto live=next;
+    auto mirror=next->materials;
+    GraphGpuTextureCopy liveAo,liveColor;
+    dev.rejectCopy=false;++dev.submitted;dev.beginFrame(1,1);
+    AIVERSE_TEST_CHECK(queueGraphGpuTextureCopy(dev,epoch.lease(),program,"gpu3","ao",source,copy,liveAo));
+    AIVERSE_TEST_CHECK(queueGraphGpuTextureCopy(dev,epoch.lease(),program,"gpu3","color",source,copy,liveColor));
+    dev.endFrame();dev.completed=dev.submitted;
+    GraphGpuTextureCopy* liveRows[]{&liveAo,&liveColor};
+    const view::LiveAppearanceMaterialTarget stamp{live->modelPublicationGeneration,live->version,0};
+    auto direct=[&](view::LiveAppearanceMaterialTarget target,std::vector<render::Material>* targetMirror){
+        return view::AppearanceAssetRegistry::publishGpuTextureGraphSnapshot(live,target,model,dev,
+            epoch.lease(),rollback,program,liveRows,"gpu3",true,targetMirror);
+    };
+    AIVERSE_TEST_CHECK(!direct({stamp.publication,stamp.version+1,0},&mirror));
+    AIVERSE_TEST_CHECK(!direct({stamp.publication+1,stamp.version,0},&mirror));
+    AIVERSE_TEST_CHECK(!direct(stamp,&model.materials));
+    AIVERSE_TEST_CHECK(live==next&&model.images.size()==2&&liveAo.image.tex.valid());
+    AIVERSE_TEST_CHECK(direct(stamp,&mirror));
+    AIVERSE_TEST_CHECK(live->version==stamp.version+1&&live->modelPublicationGeneration==stamp.publication);
+    AIVERSE_TEST_CHECK(live->materials[0].occlusionTex==2&&live->materials[0].baseTex==3);
+    AIVERSE_TEST_CHECK(mirror[0].occlusionTex==2&&mirror[0].baseTex==3&&model.images.size()==4);
+    AIVERSE_TEST_CHECK(model.materials[0].baseTex==-1&&next->materials[0].baseTex==1&&registry.find("gpu")==next);
+    AIVERSE_TEST_CHECK(!liveAo.image.tex.valid()&&!liveColor.image.tex.valid());
+    AIVERSE_TEST_CHECK(!direct(stamp,&mirror)&&model.images.size()==4);
     // An unadopted failed candidate stays producer-owned through completion.
     dev.destroyTexture(failed.image.tex);failed.image.tex={};
     dev.destroyBuffer(source);
