@@ -430,6 +430,135 @@ Json readReplayPreset(const fs::path& file,const Workspace& ws) {
     validateReplayPreset(preset,ws);
     return preset;
 }
+// Standalone Workspace can inspect authoritative sidecars without opening
+// Studio's disposable SQLite index or generating any new asset identities.
+bool replayGuidValid(const std::string& guid) {
+    return guid.size()==32&&guid.find_first_not_of("0123456789abcdef")==std::string::npos;
+}
+std::map<std::string,std::vector<std::string>> replayGuidLocations(
+    const Workspace& ws,const std::set<std::string>& wanted) {
+    std::map<std::string,std::vector<std::string>> found;
+    if(wanted.empty())return found;
+    const fs::path root=fs::path(ws.project.dir)/"content";
+    const auto status=replayFileStatus(root);
+    if(!fs::exists(status))return found;
+    if(!fs::is_directory(status))throw std::runtime_error("Invalid content directory");
+    size_t count=0;
+    uint64_t budget=32ull*1024*1024;
+    for(const auto& entry:fs::recursive_directory_iterator(root)){
+        if(++count>20000)throw std::runtime_error("Replay GUID scan entry limit exceeded");
+        const auto st=entry.symlink_status();
+        if(!fs::is_regular_file(st)||entry.path().extension()!=".meta")continue;
+        const auto bytes=entry.file_size();
+        if(bytes>65536||bytes>budget)throw std::runtime_error("Replay GUID metadata scan budget exceeded");
+        budget-=bytes;
+        const auto text=readFile(entry.path());
+        if(text.size()!=bytes)throw std::runtime_error("Asset metadata changed during scan");
+        const auto guid=Json::parse(text).getStr("guid");
+        if(!wanted.count(guid))continue;
+        auto asset=entry.path();asset.replace_extension();
+        const auto relative=asset.lexically_relative(fs::path(ws.project.dir)).generic_string();
+        if(!fs::is_regular_file(replayFileStatus(asset)))continue;
+        (void)checkedReplayDependency(ws,relative);
+        found[guid].push_back(relative);
+    }
+    for(auto& [guid,locations]:found){(void)guid;std::sort(locations.begin(),locations.end());}
+    return found;
+}
+Json rewriteReplayPaths(const Json& value,const std::map<std::string,std::string>& mapping,unsigned depth=0) {
+    if(depth>64)throw std::runtime_error("Replay graph nesting limit exceeded");
+    if(value.isString()){
+        const auto it=mapping.find(value.str());
+        return it==mapping.end()?value:Json::string(it->second);
+    }
+    if(value.isArray()){
+        Json out=Json::array();
+        for(const auto& item:value.items())out.push(rewriteReplayPaths(item,mapping,depth+1));
+        return out;
+    }
+    if(value.isObject()){
+        Json out=Json::object();
+        for(const auto& [key,item]:value.members())out.set(key,rewriteReplayPaths(item,mapping,depth+1));
+        return out;
+    }
+    return value;
+}
+Json replayRelocationPlan(const Json& preset,const Workspace& ws) {
+    const auto& dependencies=preset["dependencies"];
+    const auto version=preset.getInt("dependencyVersion",1);
+    if(!dependencies.isArray()||dependencies.size()>64||version<1||version>3)
+        throw std::runtime_error("Replay has no supported dependency baseline");
+    std::set<std::string> wanted,oldPaths;
+    for(const auto& row:dependencies.items()){
+        const auto old=row.getStr("path"),guid=row.getStr("guid");
+        if(!row.isObject()||old.rfind("content/",0)!=0||old.size()>520||
+           !oldPaths.insert(old).second||!row["content"].isString()||
+           (row.has("guid")&&!replayGuidValid(guid)))
+            throw std::runtime_error("Invalid replay dependency baseline");
+        if(!guid.empty())wanted.insert(guid);
+    }
+    const auto locations=replayGuidLocations(ws,wanted);
+    Json changes=Json::array();
+    bool conflicts=false;
+    std::map<std::string,std::string> mapping;
+    std::map<std::string,Json> expectedRows;
+    uint64_t budget=kReplayDependencyBudget;
+    for(const auto& row:dependencies.items()){
+        const auto old=row.getStr("path"),guid=row.getStr("guid");
+        std::string target=old,state="unchanged",detail;
+        if(!guid.empty()){
+            const auto it=locations.find(guid);
+            if(it==locations.end()){state="missing";detail="GUID not found";}
+            else if(it->second.size()!=1){state="conflict";detail="Duplicate GUID";}
+            else target=it->second.front();
+        }
+        if(state=="unchanged"){
+            try{
+                const auto file=checkedReplayDependency(ws,target);
+                if(replayFingerprint(file,budget)!=row.getStr("content")){
+                    state="changed";detail="Content fingerprint differs";
+                }else if(row.has("meta")){
+                    const auto meta=fs::path(file.string()+".meta");
+                    if(!fs::is_regular_file(replayFileStatus(meta))||
+                       replayFingerprint(meta,budget)!=row.getStr("meta")){
+                        state="changed";detail="Metadata fingerprint differs";
+                    }
+                }
+                if(state=="unchanged"&&target!=old)state="moved";
+            }catch(const std::exception& e){state="missing";detail=e.what();}
+        }
+        if(state=="unchanged"||state=="moved"){
+            Json expected=row;expected.set("path",strGraph(target));
+            if(!expectedRows.emplace(target,std::move(expected)).second){
+                state="conflict";detail="Multiple old dependencies map to one destination";
+            }else if(state=="moved")mapping.emplace(old,target);
+        }
+        if(state!="unchanged"&&state!="moved")conflicts=true;
+        Json change=Json::object();change.set("from",strGraph(old));change.set("to",strGraph(target));
+        change.set("state",strGraph(state));change.set("detail",strGraph(detail));
+        if(!guid.empty())change.set("guid",strGraph(guid));
+        changes.push(std::move(change));
+    }
+    Json out=Json::object();out.set("changes",std::move(changes));
+    if(conflicts){out.set("state",strGraph("conflict"));return out;}
+    Json candidate=preset;
+    const auto graph=rewriteReplayPaths(Json::parse(preset.getStr("graphSignature")),mapping);
+    candidate.set("graphSignature",strGraph(graph.dump(-1)));
+    Json expected=Json::array();
+    for(auto& [path,row]:expectedRows){(void)path;expected.push(std::move(row));}
+    candidate.set("dependencies",expected);
+    // Rewalk the candidate graph; moving a relative nested resource may
+    // require changing its parent asset, which this read-only plan cannot do.
+    const auto compatibility=replayCompatibility(candidate,ws);
+    if(compatibility.getStr("state")!="matching"||candidate.dump(-1).size()>kReplayMaxBytes){
+        out.set("state",strGraph("conflict"));
+        out.set("detail",strGraph("Remapped graph does not reproduce the recorded dependency closure"));
+        return out;
+    }
+    out.set("state",strGraph(mapping.empty()?"matching":"ready"));
+    out.set("candidate",std::move(candidate));
+    return out;
+}
 void noteGraph(Workspace& ws, const std::string& text) {
     // Existing editor live-reload watcher subscribes to Change::Fx.
     ws.note({Change::Fx, 0, 0, -1, -1, -1, text});
@@ -488,6 +617,14 @@ void registerSpectraGraphOps(Workspace& ws) {
         if(p["preset"].dump(-1).size()>kReplayMaxBytes)throw std::runtime_error("Replay preset exceeds 64 KiB");
         validateReplayPreset(p["preset"],ws);
         return replayCompatibility(p["preset"],ws);
+    });
+    add("fx_replay_preset_relocate_preview","Read-only GUID relocation plan for a named Replay Preset. Returns a candidate only when the full recorded dependency closure still matches.",
+        R"({"properties":{"name":{"type":"string"},"expectedProjectPath":{"type":"string"}},"required":["name"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);const auto name=requireGraphName(p);
+        const auto dir=replayDirectory(ws,false);
+        if(dir.empty())throw std::runtime_error("Replay library is empty");
+        return replayRelocationPlan(readReplayPreset(dir/(name+kReplaySuffix),ws),ws);
     });
     add("fx_replay_preset_save","Create an immutable named replay preset asset. Existing names are never overwritten.",
         R"({"properties":{"name":{"type":"string"},"preset":{"type":"object"},"expectedProjectPath":{"type":"string"}},"required":["name","preset"]})",

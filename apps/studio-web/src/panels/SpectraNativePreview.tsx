@@ -69,6 +69,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [presetSelected,setPresetSelected]=useState('');
   const [presetSearch,setPresetSearch]=useState('');
   const [presetCompatibility,setPresetCompatibility]=useState('');
+  const [relocationPlan,setRelocationPlan]=useState<{state:string;detail?:string;changes:Array<{from:string;to:string;state:string;detail?:string}>}|null>(null);
   const [presetLibraryBusy,setPresetLibraryBusy]=useState(false);
   const [liveScalars,setLiveScalars]=useState<Record<string,number>>({});
   const [replayRestoring,setReplayRestoring]=useState(false);
@@ -282,6 +283,17 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       setReplaySeed(preset.seed===undefined?'':String(preset.seed));
       setGpuAllocationSeed(preset.gpuAllocationSeed===undefined?'':String(preset.gpuAllocationSeed));
       setGpuShaderSeed(preset.gpuShaderSeed===undefined?'':String(preset.gpuShaderSeed));
+    }catch(e){setError(message(e));}finally{setPresetLibraryBusy(false);}
+  };
+  const previewPresetRelocation=async()=>{
+    if(!presetSelected||presetLibraryBusy||!active)return;
+    setPresetLibraryBusy(true);setError('');setRelocationPlan(null);
+    try{
+      const result=await presetOp('fx_replay_preset_relocate_preview',{name:presetSelected});
+      if(typeof result.state!=='string'||!Array.isArray(result.changes))throw new Error('Invalid relocation plan');
+      setRelocationPlan({state:result.state,detail:typeof result.detail==='string'?result.detail:undefined,
+        changes:result.changes.filter((r):r is {from:string;to:string;state:string;detail?:string}=>
+          !!r&&typeof r.from==='string'&&typeof r.to==='string'&&typeof r.state==='string')});
     }catch(e){setError(message(e));}finally{setPresetLibraryBusy(false);}
   };
   const exportReplayPreset=()=>{
@@ -631,13 +643,20 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       {presetCompatibility&&<small>Resource compatibility: {presetCompatibility}</small>}
       <StudioField label="Saved Replay Presets" htmlFor="spectra-preset-library">
         <StudioSelect id="spectra-preset-library" value={presetSelected} disabled={!active||presetLibraryBusy||busy}
-          onChange={e=>setPresetSelected(e.target.value)}>
+          onChange={e=>{setPresetSelected(e.target.value);setRelocationPlan(null);}}>
           <option value="">Select saved preset…</option>
           {presetEntries.filter(p=>p.name.includes(presetSearch.toLowerCase().trim())||p.name===presetSelected).map(p=><option key={p.name} value={p.name} disabled={!p.ok}>{p.name}{p.ok?' · tick '+p.tick:' · incompatible'}</option>)}
         </StudioSelect>
       </StudioField>
       <StudioButton size="sm" disabled={!active||!presetSelected||presetLibraryBusy||busy} onClick={()=>void selectNamedPreset()}>Load saved preset</StudioButton>
       <StudioButton size="sm" disabled={!active||presetLibraryBusy||busy} onClick={()=>void refreshPresetLibrary().catch(e=>setError(message(e)))}>Refresh presets</StudioButton>
+      <StudioButton size="sm" disabled={!active||!presetSelected||presetLibraryBusy||busy}
+        onClick={()=>void previewPresetRelocation()}>Preview GUID relocation</StudioButton>
+      {relocationPlan&&<div className="spectra-native__hint">
+        <small>Relocation: {relocationPlan.state} · read-only {relocationPlan.detail??''}</small>
+        {relocationPlan.changes.filter(r=>r.state!=='unchanged').map(r=>
+          <div key={r.from}><small>{r.state}: {r.from} → {r.to} {r.detail??''}</small></div>)}
+      </div>}
       <StudioField label="New preset name" htmlFor="spectra-preset-name">
         <StudioInput id="spectra-preset-name" value={presetName} onChange={e=>setPresetName(e.target.value)}/>
       </StudioField>

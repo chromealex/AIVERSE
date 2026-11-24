@@ -197,6 +197,28 @@ int main() {
     {std::ofstream f(root/"content"/"ship.mtl");f<<"map_Kd -s 1 1 1 ship.bin\n";}
     require(call("fx_replay_preset_get",formatGet)["compatibility"].getStr("state")=="unavailable",
             "unsupported MTL options silently accepted");
+    const auto movedFrom=root/"content"/"relocate.png";
+    const auto movedTo=root/"content"/"relocated.png";
+    const std::string moveMeta=R"({"guid":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})";
+    {std::ofstream f(movedFrom,std::ios::binary);f<<"pixels";}
+    {std::ofstream f(movedFrom.string()+".meta");f<<moveMeta;}
+    Json movedGraph=v2;movedGraph.set("testAsset",Json::string("content/relocate.png"));
+    Json movedPreset=preset;movedPreset.set("graphSignature",Json::string(movedGraph.dump(-1)));
+    Json movedSave=Json::object();movedSave.set("name",Json::string("relocation"));movedSave.set("preset",movedPreset);
+    require(!call("fx_replay_preset_save",movedSave).has("error"),"relocation baseline save failed");
+    fs::rename(movedFrom,movedTo);fs::rename(movedFrom.string()+".meta",movedTo.string()+".meta");
+    Json movedGet=Json::object();movedGet.set("name",Json::string("relocation"));
+    const auto plan=call("fx_replay_preset_relocate_preview",movedGet);
+    require(plan.getStr("state")=="ready"&&plan["changes"][size_t(0)].getStr("to")=="content/relocated.png",
+            "GUID relocation plan failed");
+    require(call("fx_replay_preset_get",movedGet)["preset"].getStr("graphSignature")==movedGraph.dump(-1),
+            "read-only relocation changed stored preset");
+    Json movedCheck=Json::object();movedCheck.set("preset",plan["candidate"]);
+    require(call("fx_replay_preset_check",movedCheck).getStr("state")=="matching","candidate dependency closure mismatch");
+    {std::ofstream f(movedFrom,std::ios::binary);f<<"pixels";}
+    {std::ofstream f(movedFrom.string()+".meta");f<<moveMeta;}
+    require(call("fx_replay_preset_relocate_preview",movedGet).getStr("state")=="conflict",
+            "duplicate GUID accepted");
     getPreset.set("expectedGraphSignature",Json::string("other"));
     require(call("fx_replay_preset_get",getPreset).has("error"),"stale graph revision accepted");
     savePreset.set("name",Json::string("../escape"));
