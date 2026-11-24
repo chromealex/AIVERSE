@@ -2,7 +2,7 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import {invoke,nativeConnected} from '../bridge';
 import {StudioAlert,StudioButton,StudioEmptyState,StudioInput,StudioPanel,StudioSection,StudioSelect,StudioTextarea} from '../ui';
 import GraphCanvas from './GraphCanvas';
-import GraphDiagnostics from './GraphDiagnostics';
+import GraphDiagnostics from './GraphDiagnosticsPanel';
 import GraphRuntimeProbePanel from './GraphRuntimeProbePanel';
 import GraphLiveSnapshotPanel from './GraphLiveSnapshotPanel';
 import GraphDebugSessionPanel from './GraphDebugSessionPanel';
