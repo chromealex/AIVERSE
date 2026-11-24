@@ -29,6 +29,35 @@ inline std::vector<P3> cutRect(float x0,float z0,float x1,float z1,float c,float
 
 // Architectural curves: bounded tessellation counts, true 3D shells rather
 // than merely adding more rectangular decorations. Coordinates in metres.
+// Actual triangle contact, not conservative collision boxes. A tapered
+// hull's AABB includes empty space; using it as a bearing surface leaves
+// visible gaps. Capture index counts before adding the supported piece.
+inline std::vector<size_t> bearingSnapshot(const Mesher& mesh){
+    std::vector<size_t> counts;counts.reserve(mesh.perMaterial.size());
+    for(const auto& part:mesh.perMaterial)counts.push_back(part.size());
+    return counts;
+}
+inline float bearingSurface(const Mesher& mesh,const std::vector<size_t>& counts,
+                            float x,float z,float ceiling){
+    float highest=0.f;
+    for(size_t p=0;p<counts.size();++p){
+        const auto& indices=mesh.perMaterial[p];
+        for(size_t i=0;i+2<counts[p];i+=3){
+            const auto& a=mesh.v[indices[i]],&b=mesh.v[indices[i+1]],&c=mesh.v[indices[i+2]];
+            if(a.nrm[1]<=0.02f&&b.nrm[1]<=0.02f&&c.nrm[1]<=0.02f)continue;
+            const float ax=a.pos[0],az=a.pos[2],bx=b.pos[0],bz=b.pos[2],cx=c.pos[0],cz=c.pos[2];
+            const float det=(bz-cz)*(ax-cx)+(cx-bx)*(az-cz);
+            if(std::abs(det)<1e-7f)continue;
+            const float u=((bz-cz)*(x-cx)+(cx-bx)*(z-cz))/det;
+            const float v=((cz-az)*(x-cx)+(ax-cx)*(z-cz))/det;
+            const float w=1.f-u-v;
+            if(u<-.0001f||v<-.0001f||w<-.0001f)continue;
+            const float y=u*a.pos[1]+v*b.pos[1]+w*c.pos[1];
+            if(y<=ceiling+.025f)highest=std::max(highest,y);
+        }
+    }
+    return highest;
+}
 inline void addArch(Mesher& m,int material,float cx,float y0,float z0,float width,float height,float depth){
     const float x0=cx-width*0.5f,x1=cx+width*0.5f,z1=z0+depth;
     const float leg=std::clamp(width*0.12f,0.24f,0.85f);
@@ -269,7 +298,8 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
         for(uint32_t i=0;i<n;++i){
             float zc=D*(0.3f+0.4f*(float(i)+0.5f)/float(n)),vy=padH+Hh*(0.35f+0.15f*u()),vh=0.9f,vw=1.6f;
             float l=lean*(vy+vh/2-padH)/Hh;float x=side?W-l:l;float sx=side?1.f:-1.f;
-            m.box(sm.dark,std::min(x,x+sx*0.2f),vy,zc-vw/2,std::max(x,x+sx*0.2f),vy+vh,zc+vw/2);
+            const float inner=x-sx*(lean*vh/(2.f*Hh)+.06f);
+            m.box(sm.dark,std::min(inner,x+sx*0.2f),vy,zc-vw/2,std::max(inner,x+sx*0.2f),vy+vh,zc+vw/2);
             for(float y=vy+0.12f;y<vy+vh-0.1f;y+=0.2f)m.box(sm.hull,std::min(x+sx*0.18f,x+sx*0.26f),y,zc-vw/2+0.08f,std::max(x+sx*0.18f,x+sx*0.26f),y+0.07f,zc+vw/2-0.08f);
         }
     }
@@ -299,8 +329,8 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
     }
     if(k.massing!=StructureMassing::Spire&&k.towerChance>0&&u()<k.towerChance){
         float tw=k.towerWidth.pick(g)*W,td=k.towerDepth.pick(g)*D,th=k.towerHeight.pick(g);
-        float tx=top.x0+(top.x1-top.x0-tw)*(u()<0.5f?0.1f:0.9f),tz=top.z0+(top.z1-top.z0-td)*0.15f;
         tw=std::min(tw,top.x1-top.x0);td=std::min(td,top.z1-top.z0);
+        float tx=top.x0+(top.x1-top.x0-tw)*(u()<0.5f?0.1f:0.9f),tz=top.z0+(top.z1-top.z0-td)*0.15f;
         auto t=block(tx,tz,tx+tw,tz+td,top.y,th,0.5f,th*0.12f,2,0.3f);
         if(sm.window>=0){float wy=top.y+th*0.6f,l=th*0.12f*0.6f;m.box(sm.window,tx+0.4f+l,wy,tz+l-0.03f,tx+tw-0.4f-l,wy+0.28f,tz+l+0.05f);}
         taken.push_back({tx-0.3f,tz-0.3f,tx+tw+0.3f,tz+td+0.3f});
@@ -333,7 +363,7 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
         const int material=form.material;
         // Freeze the previously existing architectural solids. The form's own
         // AABB cannot act as evidence that its *underside* is supported.
-        const size_t bearingBoxes=out.boxes.size();
+        const auto bearingFaces=bearingSnapshot(m);
         switch(form.kind){
         case StructureForm::Kind::Pod:{
             // Cut-corner wing, possibly protruding past the main hull.
@@ -394,7 +424,7 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
             break;}
         case StructureForm::Kind::SweptHull:{
             if(fw<1.5f||fd<2.5f||fh<1.2f)break;
-            addSweptHull(m,material,cx,y0,cz,fw,fh,fd);
+            addSweptHull(m,material,cx,y0,z0,fw,fh,fd);
             addBox(x0,y0,z0,x1,y1,z1); // conservative closed body
             break;}
         case StructureForm::Kind::Gantry:{
@@ -419,50 +449,56 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
         // with no connection to the ground. For each load point, stop at the
         // highest pre-existing solid below it, otherwise build a grounded leg.
         // This also adds a coarse collider so physics agrees with the mesh.
-        auto bearing=[&](float px,float pz){
-            float supportY=0.f;
-            for(size_t bi=0;bi<bearingBoxes;++bi){
-                const auto& b=out.boxes[bi];
-                const float ax=float(b.min.x.toDouble()),bx=float(b.max.x.toDouble());
-                const float az=float(b.min.z.toDouble()),bz=float(b.max.z.toDouble());
-                if(px<ax+0.02f||px>bx-0.02f||pz<az+0.02f||pz>bz-0.02f)continue;
-                const float low=float(b.min.y.toDouble()),high=float(b.max.y.toDouble());
-                // Already intersecting an existing hull/module at this level.
-                if(y0>=low-0.025f&&y0<=high+0.025f)return;
-                if(high<y0)supportY=std::max(supportY,high);
-            }
-            if(y0-supportY<0.075f)return;
+        auto bearing=[&](float px,float pz,float contactY){
+            // Sample the visible roof/facade triangles rather than the broad
+            // physics proxy. Extend both ends slightly to ensure overlap.
+            const float supportY=bearingSurface(m,bearingFaces,px,pz,contactY);
+            if(contactY-supportY<0.035f)return;
             const float radius=std::clamp(std::min(fw,fd)*0.075f,0.15f,0.48f);
-            m.box(material,px-radius,supportY,pz-radius,
-                  px+radius,y0+0.035f,pz+radius);
-            addBox(px-radius,supportY,pz-radius,
-                   px+radius,y0+0.035f,pz+radius);
+            const float bottom=std::max(0.f,supportY-0.04f),topY=contactY+0.055f;
+            m.box(material,px-radius,bottom,pz-radius,px+radius,topY,pz+radius);
+            addBox(px-radius,bottom,pz-radius,px+radius,topY,pz+radius);
         };
         // Never block a portal's centre: support only the two uprights.
         // Side attachments receive corner/edge support without filling
         // the open space beneath them with an oversized rectangular slab.
         const float halfX=fw*0.30f,halfZ=fd*0.30f;
         switch(form.kind){
-          case StructureForm::Kind::Arch:
-          case StructureForm::Kind::Gantry:
-            bearing(x0+fw*0.09f,cz);
-            bearing(x1-fw*0.09f,cz);
-            break;
+          case StructureForm::Kind::Arch:{
+            const float leg=std::clamp(fw*0.12f,0.24f,0.85f);
+            bearing(x0+leg*.5f,cz,y0);
+            bearing(x1-leg*.5f,cz,y0);
+            break;}
+          case StructureForm::Kind::Gantry:{
+            const float leg=std::max(0.15f,std::min(fw*0.16f,0.75f));
+            bearing(x0+leg*.5f,cz,y0);
+            bearing(x1-leg*.5f,cz,y0);
+            break;}
           case StructureForm::Kind::Silo:{
             const float r=std::min(fw,fd)*0.27f;
-            bearing(cx-r,cz);bearing(cx+r,cz);
-            bearing(cx,cz-r);bearing(cx,cz+r);
+            bearing(cx-r,cz,y0);bearing(cx+r,cz,y0);
+            bearing(cx,cz-r,y0);bearing(cx,cz+r,y0);
             break;}
           case StructureForm::Kind::Pylon:
-            bearing(cx,cz);
+            bearing(cx,cz,y0);
             break;
           case StructureForm::Kind::Pod:
           case StructureForm::Kind::Dome:
+            bearing(cx-halfX,cz-halfZ,y0);
+            bearing(cx+halfX,cz-halfZ,y0);
+            bearing(cx-halfX,cz+halfZ,y0);
+            bearing(cx+halfX,cz+halfZ,y0);
+            break;
           case StructureForm::Kind::SweptHull:
-            bearing(cx-halfX,cz-halfZ);
-            bearing(cx+halfX,cz-halfZ);
-            bearing(cx-halfX,cz+halfZ);
-            bearing(cx+halfX,cz+halfZ);
+            // The swept hull's bottom is curved and varies by station.
+            // At its central axis the lowest ring vertex is exactly known.
+            for(int station:{2,4,6}){
+                constexpr float pi=3.14159265358979323846f;
+                const float t=float(station)/8.f;
+                const float profile=.72f+.28f*std::sin(pi*t);
+                const float contact=y0+fh*(.5f+.06f*std::sin(2*pi*t)-.48f*profile);
+                bearing(cx,z0+fd*t,contact);
+            }
             break;
         }
         // Large authored modules keep random roof props clear of their

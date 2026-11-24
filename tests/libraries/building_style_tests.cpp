@@ -60,6 +60,19 @@ std::string readFile(const std::string& p){std::ifstream f(p,std::ios::binary);i
 int main(int argc,char** argv){
     try{
         std::string root=argc>1?argv[1]:".";
+        // Broad collision boxes cannot establish real contact on a tapered
+        // roof. A point inside the proxy but outside the roof must find the
+        // actual lower surface (or ground), not the phantom roof height.
+        {
+            using namespace buildingStyleDetail;
+            Mesher mesh(1);
+            mesh.prism(0,cutRect(0,0,10,10,0,0),cutRect(3,3,7,7,0,8));
+            auto faces=bearingSnapshot(mesh);
+            CHECK(std::abs(bearingSurface(mesh,faces,5,5,9)-8)<.001f);
+            CHECK(bearingSurface(mesh,faces,1,5,9)<4.f);
+            mesh.box(0,0,9,0,2,10,2);
+            CHECK(bearingSurface(mesh,faces,1,1,12)<4.f);
+        }
         // Every shipped style: openings across sizes, floors, seeds and all four quarter turns.
         for(const char* id:{"scifi","modern"}){
             auto style=readBuildingStyle(Json::parse(readFile(root+"/engine/assets/building-styles/"+id+".json")),id);
