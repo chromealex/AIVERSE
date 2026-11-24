@@ -1563,6 +1563,9 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     const std::string name=params.getStr("name");
                     if(!validStudioShaderGraphName(name))
                         throw std::runtime_error("Invalid Shader Graph filename");
+                    if(!validStudioShaderGraphDraft(params["expected"]))
+                        throw std::runtime_error("Original Shader Graph document required; reload before saving");
+                    request.set("expected",params["expected"]);
                     request.set("name",str(name));
                 }
                 const Json raw=ws_.call(method=="studio.shaderGraphSave"?
