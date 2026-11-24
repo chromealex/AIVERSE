@@ -221,6 +221,14 @@ inline CaveBatchPrepared prepareFullCaveShardPresentation(
             throw std::logic_error("Caverns incomplete shared LOD shard plan");
         // Stitched vertex/index data is PRESENTATION ONLY. Authoritative
         // Box3D/SpatialWorld collision uses the unmodified snapshot mesh.
+        if(chunk.preserveExactSurface){
+            const auto& mesh=it->second.mesh;
+            if(mesh.indices!=chunk.mesh.indices||mesh.vertices.size()!=chunk.mesh.vertices.size())
+                throw std::logic_error("Caverns exact rim visual topology changed");
+            for(size_t i=0;i<mesh.vertices.size();++i){const auto& a=mesh.vertices[i];const auto& b=chunk.mesh.vertices[i];
+                if(a.x!=b.x||a.y!=b.y||a.z!=b.z)throw std::logic_error("Caverns exact rim visual vertex changed");}
+            spec.enableStrata=false;
+        }
         chunk.mesh=it->second.mesh;
     }
     return prepareCaveBatch(std::move(visualChunks),spec);
