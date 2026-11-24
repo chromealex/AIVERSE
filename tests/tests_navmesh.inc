@@ -45,7 +45,10 @@ TEST(navmesh_core_paths_rectangles_and_refresh) {
     g.w = 20; g.h = 10;
     nav::Config c; c.width = g.w; c.depth = g.h; c.tile = 8;
     nav::Mesh m;
+    m.setRefreshTelemetryEnabled(true);
     CHECK(m.build(g, c));
+    CHECK(m.lastRefreshTelemetry() && m.lastRefreshTelemetry()->rebuiltTiles==m.tileCount());
+    CHECK(m.lastRefreshTelemetry()->revision==m.revision());
     CHECK(m.rectCount() < 20);   // 190 open cells merge into a few rectangles
     std::vector<Vec3> path;
     nav::Query q;
@@ -60,6 +63,9 @@ TEST(navmesh_core_paths_rectangles_and_refresh) {
     g.rows[0][10] = '#'; g.rows[1][10] = '#';
     m.markDirty(10, 0, 10, 1);
     CHECK(m.refresh(g));
+    CHECK(m.lastRefreshTelemetry() && m.lastRefreshTelemetry()->rebuiltTiles>0);
+    CHECK(m.lastRefreshTelemetry()->portalTiles>=m.lastRefreshTelemetry()->rebuiltTiles);
+    CHECK(m.lastRefreshTelemetry()->rectangles==m.rectCount());
     CHECK(!m.findPath(navAt(11, 17), navAt(31, 17), q, path));
     nav::Mesh fresh;
     fresh.build(g, c);
