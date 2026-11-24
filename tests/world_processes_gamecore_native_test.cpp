@@ -305,7 +305,53 @@ static void checkPlanetEvolveHydration(){
     AIVERSE_TEST_CHECK(restored->deserialize(sim->serialize(),&error));
     AIVERSE_TEST_CHECK(restored->checksum()==sim->checksum());
 }
+static void checkPlanetGranular(){
+    game::Surface surface;
+    game::BodyDef planet;planet.id="terra";planet.faceSize=8;planet.radius=Fixed::fromInt(64);
+    surface.bodies.push_back(planet);
+    planet.id="moon";surface.bodies.push_back(planet);surface.build();
+    World ecs;
+    physis::GravitySettings settings;settings.baseline={};
+    ecs.setResource<physis::GravitySettings>(settings);
+    const auto gravity=ecs.create();
+    physis::GravityField g;g.mode=physis::GravityMode::Attract;
+    g.center=game::Surface::anchor(0);g.radiusMeters=Fixed::fromInt(200);
+    g.radialMagnitude=Fixed::fromInt(10);g.overrideBaseline=true;
+    ecs.add<physis::GravityField>(gravity,g);
+    const auto field=ecs.create();
+    Transform tr{};tr.pos=surface.cellCenter(surface.gridCell(0,0,7,3));
+    ecs.add<Transform>(field,tr);
+    granular::Field grains;grains.width=3;grains.height=3;grains.capacity=10;
+    grains.mass.assign(9,0);grains.solid.assign(9,0);grains.mass[4]=10;
+    ecs.add<granular::Field>(field,grains);
+    granular::SurfaceFieldPlacement placement{tr.pos,1000,0};
+    const auto patch=granular::sampleSurfaceGrainPatch(ecs,surface,field,placement,0,0,3,3);
+    AIVERSE_TEST_CHECK(patch&&patch->size()==9);
+    int body=0,face=0,x=0,y=0;
+    AIVERSE_TEST_CHECK(surface.cellFace((*patch)[2].surfaceCell,body,face,x,y));
+    AIVERSE_TEST_CHECK(body==0&&face!=0);
+    for(const auto& cell:*patch)AIVERSE_TEST_CHECK(cell.body==0);
+    AIVERSE_TEST_CHECK(((*patch)[1].center-(*patch)[1].ground).length()>
+                       ((*patch)[7].center-(*patch)[7].ground).length());
+    AIVERSE_TEST_CHECK(!granular::sampleSurfaceGrainPatch(ecs,surface,field,placement,0,0,3,3,8));
+    const auto local=granular::surfaceFieldGravity(ecs,surface,field);
+    AIVERSE_TEST_CHECK(local&&wp::granularGravityAxis(*local)==wp::GravityAxis::Down);
+    AIVERSE_TEST_CHECK(granular::advanceSurfaceFields(ecs,surface,1));
+    AIVERSE_TEST_CHECK(ecs.get<granular::Field>(field).mass[7]==10);
+    ecs.enableCowSnapshots();const World before=ecs;
+    ecs.get<physis::GravityField>(gravity).mode=physis::GravityMode::Repel;
+    AIVERSE_TEST_CHECK(granular::advanceSurfaceFields(ecs,surface,2));
+    AIVERSE_TEST_CHECK(ecs.get<granular::Field>(field).mass[4]==10);
+    ecs=before;
+    ecs.get<physis::GravityField>(gravity).enabled=false;
+    AIVERSE_TEST_CHECK(granular::advanceSurfaceFields(ecs,surface,2));
+    AIVERSE_TEST_CHECK(ecs.get<granular::Field>(field).mass[7]==10);
+    ecs.get<Transform>(field).pos=game::Surface::anchor(0);
+    AIVERSE_TEST_CHECK(!granular::advanceSurfaceFields(ecs,surface,3));
+    AIVERSE_TEST_CHECK(ecs.get<granular::Field>(field).sampledTick==2);
+}
 int main(){
+    checkPlanetGranular();
     checkPlanetEvolveHydration();
     checkPlanetGravity();
     checkPlanetImprint();
