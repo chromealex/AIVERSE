@@ -2,6 +2,7 @@
 #include "apps/studio-native/StudioPlanetPreview.h"
 #include "apps/studio-native/StudioPlanetProcessOverlays.h"
 #include "apps/studio-native/StudioPlanetRegionEditing.h"
+#include "apps/studio-native/StudioPlanetGravityEditing.h"
 #include "tests/TestCheck.h"
 #include <cmath>
 #include <iostream>
@@ -88,6 +89,29 @@ int main() {
     AIVERSE_TEST_CHECK(edited&&edited->centerXcm==200&&edited->centerZcm==-400);
     const auto payload=planetRegionEditPayload(chart,*edited,42);
     AIVERSE_TEST_CHECK(payload.getInt("expectedRevision")==42&&payload["value"].getInt("offsetZcm")==-400);
+    auto gravityConfig=editor::physis_authoring::defaultConfig();
+    gravityConfig.set("enableGravityFields",Json::fromBool(true));
+    gravityConfig.set("gravityFields",Json::parse(R"([{"id":"local","center":[8192,0,0],"mode":"Attract","radiusMeters":100,"radialMagnitude":10},{"id":"global","center":[0,0,0],"mode":"Uniform","radiusMeters":0,"acceleration":[0,-1,0]},{"id":"moon","center":[12288,0,0],"mode":"Repel","radiusMeters":80,"radialMagnitude":5}])"));
+    globe.data.extra.set("physis",gravityConfig);
+    const auto handles=planetGravityHandles(globe,*preview);
+    AIVERSE_TEST_CHECK(handles.size()==1&&handles.front().id=="local");
+    const auto& field=handles.front();
+    AIVERSE_TEST_CHECK(field.center.x==0&&field.radius==100);
+    const auto revision=globe.revision;
+    AIVERSE_TEST_CHECK(!planetGravityEditPayload(globe,field,field.center,field.radius,revision));
+    const auto edit=planetGravityEditPayload(globe,field,{10,20,-30},125,revision);
+    AIVERSE_TEST_CHECK(edit&&edit->getStr("op")=="physis_set");
+    AIVERSE_TEST_CHECK((*edit)["params"].getInt("expectedRevision")==int64_t(revision));
+    const auto& modified=(*edit)["params"]["config"]["gravityFields"][size_t(0)];
+    AIVERSE_TEST_CHECK(modified["center"][size_t(0)].toDouble()==8202);
+    AIVERSE_TEST_CHECK(modified["center"][size_t(1)].toDouble()==20);
+    AIVERSE_TEST_CHECK(modified["center"][size_t(2)].toDouble()==-30);
+    AIVERSE_TEST_CHECK(modified.getInt("radiusMeters")==125);
+    AIVERSE_TEST_CHECK((*edit)["params"]["config"]["gravityFields"][size_t(1)]==gravityConfig["gravityFields"][size_t(1)]);
+    AIVERSE_TEST_CHECK(!planetGravityEditPayload(globe,field,{2048,0,0},125,revision));
+    AIVERSE_TEST_CHECK(!planetGravityEditPayload(globe,field,{0,0,0},125,revision+1));
+    AIVERSE_TEST_CHECK(!planetGravityEditPayload(globe,field,{0,0,0},0,revision));
+    AIVERSE_TEST_CHECK(globe.data.extra["physis"]==gravityConfig);
     std::cout<<"StudioTerrainGeometry PASS\n";
     editor::MapDoc blank;blank.reset(32,32);render::MeshBuilder noSurface;
     AIVERSE_TEST_CHECK(buildTerrainPreview(blank.data,noSurface).quads==0);
