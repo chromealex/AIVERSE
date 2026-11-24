@@ -48,6 +48,8 @@ inline void canonicalizeCaveSnapshot(CaveVolumeSnapshot& snapshot) {
         [](const auto& a,const auto& b){return a.id<b.id;});
     for(size_t i=0;i<snapshot.entrances.size();++i){
         const auto& e=snapshot.entrances[i];
+        validatePoint({e.xCm,e.surfaceYcm,e.zCm});
+        validatePoint({e.xCm,e.caveYcm,e.zCm});
         if(e.radiusCm<=0||e.radiusCm>1000000||
            e.surfaceYcm<e.caveYcm||
            (i&&snapshot.entrances[i-1].id==e.id))
