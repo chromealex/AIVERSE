@@ -19,8 +19,88 @@ struct MaterialFixtureDevice : FakeDevice {
     }
     bool waitForResourceIdle() override{return true;}
 };
+// This fixture verifies ownership and fences only; it does not execute a shader.
+struct TransferFixtureDevice : MaterialFixtureDevice {
+    uint64_t submitted=1,completed=0;
+    bool rejectCopy=false;
+    int copies=0,created=0;
+    gfx::TextureHandle createTexture(const gfx::TextureDesc& d) override {
+        ++created;return MaterialFixtureDevice::createTexture(d);
+    }
+    bool supportsStorageBufferTextureCopy()const override{return true;}
+    uint64_t gpuSubmissionFence()const override{return inFrame?submitted:0;}
+    uint64_t gpuCompletedFence()const override{return completed;}
+    bool bufferInfo(gfx::BufferHandle h,gfx::BufferInfo& out)const override{
+        auto it=buffers.find(h.id);if(it==buffers.end())return false;
+        out={it->second.size(),1};return true;
+    }
+    bool textureInfo(gfx::TextureHandle h,gfx::TextureInfo& out)const override{
+        auto it=textures.find(h.id);if(it==textures.end())return false;
+        out={it->second.w,it->second.h,gfx::PixelFormat::RGBA8};return true;
+    }
+    bool copyStorageBufferToTexture2D(gfx::BufferHandle from,gfx::TextureHandle to,
+            const gfx::BufferTextureCopy2D& c)override{
+        auto b=buffers.find(from.id);auto t=textures.find(to.id);
+        if(rejectCopy||!inFrame||b==buffers.end()||t==textures.end()||
+           !gfx::validBufferTextureCopy2D(c,b->second.size(),t->second.w,t->second.h))return false;
+        ++copies;return true;
+    }
+};
+static void checkGpuGraphImagePublication(){
+    using namespace aiverse;
+    using namespace render::texture_graph;
+    TransferFixtureDevice dev;
+    render::RenderDeviceLifetime epoch(dev);
+    render::ModelImageRollbackPool rollback;
+    render::Model model;model.materials.resize(1);
+    view::AppearanceAssetRegistry registry;
+    view::AppearanceAssetRegistry::Asset asset;asset.model=&model;asset.materials=model.materials;
+    AIVERSE_TEST_CHECK(registry.publishPrepared("gpu",asset));
+    const auto old=registry.find("gpu");
+    Program program;program.size=8;program.outputs={{"ao",0},{"color",1},{"height",0}};
+    const auto layout=gfx::rgba8CopyLayout(8,8);
+    gfx::BufferDesc bd;bd.type=gfx::BufferType::Storage;bd.size=layout.bytes;
+    auto source=dev.createBuffer(bd);
+    const gfx::BufferTextureCopy2D copy{8,8,0,layout.rowPitchBytes};
+    GraphGpuTextureCopy ao,color,failed;
+    // No active recording frame => no copy or texture allocation.
+    AIVERSE_TEST_CHECK(!queueGraphGpuTextureCopy(dev,epoch.lease(),program,"gpu1","ao",source,copy,ao));
+    AIVERSE_TEST_CHECK(dev.created==0&&!ao.image.tex.valid());
+    dev.beginFrame(1,1);
+    AIVERSE_TEST_CHECK(queueGraphGpuTextureCopy(dev,epoch.lease(),program,"gpu1","ao",source,copy,ao));
+    AIVERSE_TEST_CHECK(queueGraphGpuTextureCopy(dev,epoch.lease(),program,"gpu1","color",source,copy,color));
+    auto aoHandle=ao.image.tex;auto colorHandle=color.image.tex;
+    dev.rejectCopy=true;
+    AIVERSE_TEST_CHECK(!queueGraphGpuTextureCopy(dev,epoch.lease(),program,"gpu2","ao",source,copy,failed));
+    AIVERSE_TEST_CHECK(failed.fence==dev.submitted&&failed.image.tex.valid()&&!failed.encoded);
+    dev.endFrame();
+    GraphGpuTextureCopy* rows[]{&ao,&color};
+    auto publish=[&](uint64_t version,bool accepted){
+        return registry.publishGpuTextureGraphMaterial("gpu",version,old->modelPublicationGeneration,
+            0,model,dev,epoch.lease(),rollback,program,rows,"gpu1",accepted);
+    };
+    AIVERSE_TEST_CHECK(!publish(old->version,true)&&model.images.empty());
+    AIVERSE_TEST_CHECK(ao.image.tex==aoHandle&&color.image.tex==colorHandle);
+    dev.completed=dev.submitted;
+    AIVERSE_TEST_CHECK(!graphGpuTextureCopyComplete(failed,dev));
+    AIVERSE_TEST_CHECK(!publish(old->version,false)&&model.images.empty());
+    AIVERSE_TEST_CHECK(!publish(old->version+1,true)&&model.images.empty());
+    AIVERSE_TEST_CHECK(publish(old->version,true));
+    const auto next=registry.find("gpu");
+    AIVERSE_TEST_CHECK(model.images.size()==2&&model.images[0].tex==aoHandle&&model.images[1].tex==colorHandle);
+    AIVERSE_TEST_CHECK(!ao.image.tex.valid()&&!color.image.tex.valid()&&dev.created==3&&dev.copies==2);
+    AIVERSE_TEST_CHECK(next->materials[0].occlusionTex==0&&next->materials[0].baseTex==1);
+    AIVERSE_TEST_CHECK(old->materials[0].baseTex==-1&&next->version>old->version);
+    AIVERSE_TEST_CHECK(!publish(next->version,true)&&model.images.size()==2);
+    // An unadopted failed candidate stays producer-owned through completion.
+    dev.destroyTexture(failed.image.tex);failed.image.tex={};
+    dev.destroyBuffer(source);
+    registry.clear();render::releaseModel(dev,model);
+    AIVERSE_TEST_CHECK(dev.textures.empty()&&dev.buffers.empty());
+}
 int main() {
     using namespace aiverse;
+    checkGpuGraphImagePublication();
     render::Model model;
     model.path="models/unit.glb";
     model.materials.resize(1);
