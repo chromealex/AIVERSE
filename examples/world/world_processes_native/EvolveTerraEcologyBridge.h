@@ -8,8 +8,10 @@
 #include "aiverselib/world/EvolveSpatialIndex.h"
 #include "aiverselib/world/EvolveClimateProjection.h"
 #include "engine/world/TerraWeaveForestEcology.h"
+#include "engine/world/TerraWeaveForestEcologyEcs.h"
 #include <algorithm>
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -115,5 +117,28 @@ makeIndexedEvolveForestClimateSampler(const World& world,
             });
         return climate;
     };
+}
+// ECS ecology entry point shared by the native gameplay host and the
+// TerraWeave composition example. It has no Box3D dependency.
+inline terraweave::ForestEcologyEcsOutcome advanceEvolveForestEcologyEcs(
+        World& ecs,const terraweave::TerraWeaveEcsAuthorityConfig& cfg,
+        std::uint64_t tick,
+        const std::vector<terraweave::ForestEcologySpecies>& species,
+        terraweave::ForestEcologySettings settings={},
+        terraweave::ForestEcologyClimateOverride baseline={}){
+    return terraweave::advanceForestEcologyEcs(
+        ecs,cfg,tick,species,settings,
+        [&ecs,zones=std::optional<evolve::SpatialIndex>{},
+         baseline=std::move(baseline),scratch=std::vector<size_t>{}](
+            const terraweave::AnchoredPlant& plant,
+            terraweave::ForestEcologyClimate climate) mutable {
+            if(!zones)zones.emplace(ecs);
+            if(baseline)climate=baseline(plant,climate);
+            zones->query(plant.anchor.xCm,plant.anchor.zCm,scratch,[&](const evolve::Extent& zone){
+                const auto* region=ecs.tryGetConst<evolve::Region>(zone.region);
+                if(region)climate=projectEvolutionClimate(*region,climate);
+            });
+            return climate;
+        });
 }
 } // namespace aiverse::examples::world_processes_native

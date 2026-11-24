@@ -10,7 +10,7 @@
 #include "engine/world/TerraWeaveFloodShorelineSystem.h"
 #include "engine/world/TerraWeaveShoreRecoveryEcs.h"
 #include "engine/world/TerraWeaveForestEcologyEcs.h"
-#include "../world_processes_native/WorldProcessGameplayHost.h"
+#include "../world_processes_native/EvolveTerraEcologyBridge.h"
 #include "engine/world/TerraWeaveForestHarvestEcs.h"
 #include "engine/world/TerraWeaveForestDeadwoodEcs.h"
 #include "engine/world/TerraWeaveForestNutrientEcs.h"
@@ -189,8 +189,8 @@ inline void registerSystems(
                 [cfg,species=std::move(rootedForestSpecies),
                  settings=rootedForestSettings,
                  onChanged=std::move(onForestEcology)](Simulation& current){
-                    const auto result=world_processes_native::WorldProcessGameplayHost::
-                        advanceEcologyEcs(current.world(),cfg,current.tick(),species,settings);
+                    const auto result=world_processes_native::
+                        advanceEvolveForestEcologyEcs(current.world(),cfg,current.tick(),species,settings);
                     if(onChanged&&(!result.ecology.changed.empty()||
                                    !result.ecology.died.empty()||
                                    !result.ecology.born.empty()))
