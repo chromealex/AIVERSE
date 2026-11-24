@@ -8,7 +8,7 @@
 #include "engine/render/graph/TextureGraphGpuResourceCache.h"
 #include <array>
 #include <limits>
-#include "engine/render/graph/TextureGraphMaterialBinding.h"
+#include "engine/render/graph/TextureGraphGpuTextureTransfer.h"
 #include "engine/view/AppearanceAssetRegistry.h"
 #include "MaterialOps.h"
 #include <chrono>
@@ -21,6 +21,17 @@ class TextureGraphGpuPreview {
     using Source=render::texture_graph::gpu::Source;
     struct Read {bool done=false;size_t offset=0,expected=0;std::vector<uint8_t> bytes;};
     std::shared_ptr<Read> read_;
+    // Request-local copied textures are still owned by this same native
+    // owner until explicitly adopted by the appearance transaction.
+    using GpuCopy=render::texture_graph::GraphGpuTextureCopy;
+    struct TextureRead {bool done=false;gfx::TextureReadbackResult result;};
+    std::shared_ptr<TextureRead> textureRead_;
+    std::vector<std::unique_ptr<GpuCopy>> gpuCandidates_;
+    render::RenderDeviceLifetime::Lease gpuTransferLease_;
+    render::texture_graph::gpu::TextureRequestBudget gpuTransferBudget_;
+    std::string gpuGeneration_;
+    size_t gpuAcceptedTextures_=0;
+    bool gpuTransferRequested_=false,gpuTextureMipmaps_=false,gpuPublished_=false;
     gfx::BufferHandle buffer_{},scratch_{};gfx::ComputeHandle compute_{},secondCompute_{};
     // Materialized resources belong to this SAME frame-boundary owner.
     // Only successful, fence-retired requests enter the materialized idle cache.
@@ -67,6 +78,21 @@ class TextureGraphGpuPreview {
         }else{matIdleBuffers_.abandon();matIdlePipelines_.abandon();}
         matCacheDevice_=nullptr;matCacheProject_.clear();
     }
+    bool gpuCleanupPending()const{return !gpuCandidates_.empty()&&
+        (published_||state_=="failed"||state_=="cancelled"||project_.empty());}
+    bool gpuCandidatesReady()const{return gpuTransferRequested_&&!gpuCandidates_.empty()&&
+        gpuAcceptedTextures_==gpuCandidates_.size()&&gpuTransferLease_.alive()&&
+        state_=="ready"&&!published_&&!active()&&!inFlight_&&!matRetirementPending();}
+    // This helper is called only by the frame owner. Unhealthy/expired
+    // epochs are abandoned, never destroyed through a different Device.
+    bool clearGpuCandidates(gfx::Device& dev,bool afterIdle=false){
+        for(const auto& c:gpuCandidates_)
+            if(c->image.tex.valid()&&c->lease.validFor(dev)&&dev.gpuHealthy()&&!afterIdle&&
+               (!c->fence||dev.gpuCompletedFence()<c->fence))return false;
+        for(auto& c:gpuCandidates_)
+            if(c->image.tex.valid()&&c->lease.validFor(dev)&&dev.gpuHealthy())dev.destroyTexture(c->image.tex);
+        gpuCandidates_.clear();textureRead_.reset();gpuAcceptedTextures_=0;return true;
+    }
     bool matRetirementPending()const{return matSources_&&!inFlight_&&
         (matSerial_!=serial_||!matRequested_||matFailed_||!active());}
     size_t capacity_=0,received_=0,blocks_=0,scratchBytes_=0;
@@ -96,10 +122,11 @@ class TextureGraphGpuPreview {
     std::vector<uint8_t> pixels_;
     bool queued_=false,requireGpu_=false;
     bool ownsActiveResources()const{return buffer_.valid()||scratch_.valid()||compute_.valid()||secondCompute_.valid()||matSources_.has_value();}
-    bool ownsResources()const{return ownsActiveResources()||idlePipelines_.size()!=0||matIdleBuffers_.bytes()!=0||matIdlePipelines_.size()!=0;}
-    void abandonActive(){matActivePipelines_.clear();matLayout_.clear();matLastFence_=0;matSources_.reset();matSlots_.clear();matNodes_.clear();matPacks_.clear();matSerial_=0;matBytes_=0;matEncoded_=false;sharedScratch_.invalidate();reusedScratch_=false;buffer_={};scratch_={};compute_={};secondCompute_={};read_.reset();fence_=0;capacity_=0;activeKey_={};activePlanAccepted_=false;idlePipelines_.abandon();inFlight_=false;}
-    void abandon(){abandonActive();matIdleBuffers_.abandon();matIdlePipelines_.abandon();matCacheDevice_=nullptr;matCacheProject_.clear();}
-    void release(gfx::Device& dev){
+    bool ownsResources()const{return ownsActiveResources()||idlePipelines_.size()!=0||matIdleBuffers_.bytes()!=0||matIdlePipelines_.size()!=0||!gpuCandidates_.empty();}
+    void abandonActive(){textureRead_.reset();matActivePipelines_.clear();matLayout_.clear();matLastFence_=0;matSources_.reset();matSlots_.clear();matNodes_.clear();matPacks_.clear();matSerial_=0;matBytes_=0;matEncoded_=false;sharedScratch_.invalidate();reusedScratch_=false;buffer_={};scratch_={};compute_={};secondCompute_={};read_.reset();fence_=0;capacity_=0;activeKey_={};activePlanAccepted_=false;idlePipelines_.abandon();inFlight_=false;}
+    void abandon(){abandonActive();gpuCandidates_.clear();gpuAcceptedTextures_=0;matIdleBuffers_.abandon();matIdlePipelines_.abandon();matCacheDevice_=nullptr;matCacheProject_.clear();}
+    void release(gfx::Device& dev,bool afterIdle=false){
+        if(!clearGpuCandidates(dev,afterIdle))return;
         for(auto& e:matActivePipelines_)destroyPair(dev,e.first,e.second);
         for(auto h:matSlots_)if(h.valid())dev.destroyBuffer(h);
         clearMatIdle(dev);clearIdle(dev);
@@ -153,6 +180,9 @@ class TextureGraphGpuPreview {
         setImages_.push_back(std::move(image));setBackends_.push_back(backend_);
         while(setIncomplete()){
             const auto next=setImages_.size();
+            // Every bindable output gets its own exclusively owned texture,
+            // even if two named channels reference the same graph node.
+            if(gpuTransferRequested_&&render::texture_graph::materialSlot(setOutputs_[next].first))break;
             size_t previous=next;
             for(size_t i=0;i<next;++i)if(setOutputs_[i].second==setOutputs_[next].second){previous=i;break;}
             if(previous==next)break;
@@ -197,12 +227,21 @@ class TextureGraphGpuPreview {
                 std::vector<size_t> targets;
                 if(setBake_){for(const auto& pair:setOutputs_)targets.push_back(pair.second);}
                 else targets.push_back(target_);
-                matSources_=compileMaterializedDag(*program_,targets,size_,materializedBudgetBytes,matFusion_);
+                const auto budget=gpuTransferRequested_?gpuTransferBudget_.dagBudget:materializedBudgetBytes;
+                if(gpuTransferRequested_&&(!gpuTransferLease_.validFor(dev)||!dev.supportsStorageBufferTextureCopy()))
+                    throw std::runtime_error("GPU texture transfer requires a live native device and copy support");
+                matSources_=compileMaterializedDag(*program_,targets,size_,budget,matFusion_,gpuTransferRequested_);
+                if(gpuTransferRequested_){
+                    for(size_t i=0;i<setOutputs_.size();++i)if(render::texture_graph::materialSlot(setOutputs_[i].first)){
+                        const auto kind=program_->nodes.at(targets[i]).info->output;
+                        matSources_->packs[i]=packMaterializedTextureKernel(materializedValue(kind),size_).source;
+                    }
+                }
                 matReachableNodes_=matSources_->reachableNodes;matFusedNodes_=matSources_->fusedNodes;
                 matSerial_=serial_;
                 auto& sources=*matSources_;
                 matLayout_=sources.plan.schedule.slotBytes;
-                matLayout_.push_back(sources.resultBytes);
+                matLayout_.push_back(sources.resultCapacityBytes);
                 if(!RetiredBufferSet<gfx::BufferHandle>::admissible(matLayout_,materializedBudgetBytes))
                     throw std::runtime_error("materialized layout exceeds cache budget");
                 matNodes_.resize(sources.nodes.size());matPacks_.resize(sources.packs.size());
@@ -226,7 +265,7 @@ class TextureGraphGpuPreview {
                 for(size_t i=0;i<matPacks_.size();++i)matPacks_[i]=create(sources.packs[i]);
                 if(auto cached=matIdleBuffers_.take(matLayout_)){
                     matSlots_=std::move(cached->handles);buffer_=matSlots_.back();matSlots_.pop_back();
-                    matBytes_=sources.plan.allocatedBytes;capacity_=sources.resultBytes;matBufferHit_=true;
+                    matBytes_=sources.plan.allocatedBytes;capacity_=sources.resultCapacityBytes;matBufferHit_=true;
                 }else{
                     matIdleBuffers_.clear([&](auto& e){destroyMatBuffers(dev,e);});
                     matSlots_.resize(sources.plan.schedule.slotBytes.size());
@@ -237,7 +276,7 @@ class TextureGraphGpuPreview {
                         if(!matSlots_[i].valid())throw std::runtime_error("materialized slot allocation rejected");
                         matBytes_+=desc.size;
                     }
-                    desc.size=sources.resultBytes;desc.label="TextureGraph packed result";buffer_=dev.createBuffer(desc);
+                    desc.size=sources.resultCapacityBytes;desc.label="TextureGraph packed result";buffer_=dev.createBuffer(desc);
                     if(!buffer_.valid())throw std::runtime_error("materialized result allocation rejected");
                     capacity_=desc.size;
                 }
@@ -255,7 +294,7 @@ class TextureGraphGpuPreview {
             plannedSlotBytes_=sources.totalBytes;scratchBytes_=sources.plan.allocatedBytes;
             fence_=matLastFence_=token;inFlight_=true;
             if(first){
-                const auto result=encodePassSchedule(sources.plan.schedule,materializedBudgetBytes-sources.resultBytes,[&](const ScheduledPass& pass){
+                const auto result=encodePassSchedule(sources.plan.schedule,(gpuTransferRequested_?gpuTransferBudget_.dagBudget:materializedBudgetBytes)-sources.resultCapacityBytes,[&](const ScheduledPass& pass){
                     std::array<gfx::BufferHandle,3> inputs{};
                     if(pass.inputs.size()>inputs.size())return false;
                     for(size_t i=0;i<pass.inputs.size();++i)inputs[i]=matSlots_.at(pass.inputs[i]);
@@ -272,15 +311,32 @@ class TextureGraphGpuPreview {
                 throw std::runtime_error("materialized output packing rejected");
             ++passes_;++matPackPasses_;
             state_="pending";
-            if(!queueRange(dev))fallback("materialized readback request rejected");
+            if(gpuTransferRequested_&&render::texture_graph::materialSlot(setOutputs_.at(index).first)){
+                auto candidate=std::make_unique<GpuCopy>();
+                auto* item=candidate.get();
+                // Allocate host storage before recording a new texture.
+                gpuCandidates_.push_back(std::move(candidate));
+                const auto layout=gfx::rgba8CopyLayout(size_,size_);
+                const gfx::BufferTextureCopy2D copy{size_,size_,0,layout.rowPitchBytes,gpuTextureMipmaps_};
+                if(!render::texture_graph::queueGraphGpuTextureCopy(dev,gpuTransferLease_,*program_,
+                        gpuGeneration_,setOutputs_[index].first,buffer_,copy,*item))
+                    throw std::runtime_error("materialized GPU texture copy rejected");
+                auto read=std::make_shared<TextureRead>();
+                // Compare the actual destination mip zero, not a second
+                // independently packed buffer. This is validation only.
+                if(!dev.readTextureAsync(item->image.tex,{},[read](auto result){
+                        read->result=std::move(result);read->done=true;
+                    }))throw std::runtime_error("GPU texture validation readback rejected");
+                textureRead_=std::move(read);
+            }else if(!queueRange(dev))fallback("materialized readback request rejected");
         }catch(const std::exception& e){fallback(e.what());}
     }
 public:
     Json status() const{
         Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("state",Json::string(setPending()&&state_=="ready"?"pending":state_));r.set("backend",Json::string(backend_));
         r.set("request",Json::string(std::to_string(serial_)));r.set("reason",Json::string(reason_));
-        r.set("busy",Json::fromBool(active()||inFlight_||matRetirementPending()));
-        r.set("draining",Json::fromBool(matRetirementPending()||(inFlight_&&(state_=="cancelled"||state_=="failed"))));
+        r.set("busy",Json::fromBool(active()||inFlight_||matRetirementPending()||gpuCleanupPending()));
+        r.set("draining",Json::fromBool(matRetirementPending()||gpuCleanupPending()||(inFlight_&&(state_=="cancelled"||state_=="failed"))));
         r.set("timeoutMs",Json::number(int64_t(timeoutMs_)));
         r.set("plannedPasses",Json::number(int64_t(plannedPasses_)));
         r.set("plannedSlotBytes",Json::number(int64_t(plannedSlotBytes_)));
@@ -308,17 +364,40 @@ public:
         r.set("materializedIdleBytes",Json::number(int64_t(matIdleBuffers_.bytes())));
         r.set("materializedIdlePipelines",Json::number(int64_t(matIdlePipelines_.size())));
         r.set("retainedBufferBytes",Json::number(int64_t(matIdleBuffers_.bytes()+matBytes_+capacity_*(scratch_.valid()?2:1))));
+        r.set("gpuTextureTransferRequested",Json::fromBool(gpuTransferRequested_));
+        r.set("gpuTextureMipmaps",Json::fromBool(gpuTextureMipmaps_));
+        r.set("gpuTextureGeneration",Json::string(gpuGeneration_));
+        r.set("gpuTextureSetReady",Json::fromBool(gpuCandidatesReady()));
+        r.set("gpuTexturePublished",Json::fromBool(gpuPublished_));
+        r.set("gpuTextureAccepted",Json::number(int64_t(gpuAcceptedTextures_)));
+        r.set("gpuTextureReservedBytes",Json::number(int64_t(gpuTransferBudget_.textureBytes)));
+        r.set("gpuTextureValidationBytes",Json::number(int64_t(gpuTransferBudget_.validationBytes)));
+        r.set("gpuTextureDagBudget",Json::number(int64_t(gpuTransferBudget_.dagBudget)));
         if(state_=="ready"){
             r.set("width",Json::number(int64_t(size_)));r.set("height",Json::number(int64_t(size_)));
             // Full-size images never cross the JSON bridge.
             if(!bake_){std::string hex;hex.reserve(pixels_.size()*2);for(auto v:pixels_){hex+="0123456789abcdef"[v>>4];hex+="0123456789abcdef"[v&15];}r.set("rgbaHex",Json::string(hex));}
         }return r;
     }
-    Json start(const Json& p,const std::string& project){
+    Json start(const Json& p,const std::string& project,render::RenderDeviceLifetime::Lease lease={}){
         if(queued_||inFlight_||matRetirementPending()||state_=="pending"||setPending())throw std::runtime_error("previous GPU texture request still active");
+        if(!gpuCandidates_.empty())throw std::runtime_error("publish or cancel the previous GPU texture set, then retire it");
         if(project.empty())throw std::invalid_argument("open project first");
         auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object());
         size_t target=program.nodes.size();const bool setBake=p.getBool("bakeSet"),bake=setBake||p.getBool("bake");
+        const bool transfer=p.getBool("gpuTextureTransfer"),mipmaps=p.getBool("gpuTextureMipmaps");
+        const bool materialized=p.getBool("materialized")||p.getBool("materializedDag");
+        render::texture_graph::gpu::TextureRequestBudget transferBudget;
+        if(mipmaps&&!transfer)throw std::invalid_argument("GPU texture mipmaps require texture transfer");
+        if(transfer){
+            if(!setBake||!materialized)throw std::invalid_argument("GPU texture transfer requires materialized bakeSet");
+            if(!lease.alive()||!lease.device()||!lease.validFor(*lease.device()))
+                throw std::invalid_argument("GPU texture transfer requires native device lease");
+            transferBudget=render::texture_graph::graphGpuTextureBudget(program,mipmaps,
+                render::texture_graph::gpu::materializedBudgetBytes);
+            if(!transferBudget)throw std::invalid_argument("GPU texture request exceeds budget or has no bindable outputs");
+            gpuCandidates_.reserve(render::texture_graph::gpu::maxTextureSetImages);
+        }
         auto output=p.getStr("output");
         if(setBake){output=program.outputs.begin()->first;target=program.outputs.begin()->second;}
         else if(!bake&&p.has("node")){for(size_t i=0;i<program.nodes.size();++i)if(program.nodes[i].id==p.getStr("node"))target=i;}
@@ -329,12 +408,15 @@ public:
         timeoutMs_=render::texture_graph::integer(p["timeoutMs"],60000,1000,300000);
         deadline_=Clock::now()+std::chrono::milliseconds(timeoutMs_);
         sharedScratch_.invalidate();reusedScratch_=false;sharedScratchHits_=0;
-        matRequested_=p.getBool("materialized")||p.getBool("materializedDag");matFusion_=matRequested_&&p.getBool("fusePointwise");matReachableNodes_=matFusedNodes_=0;matFailed_=false;matNodePasses_=matPackPasses_=matPipelineHits_=0;matBufferHit_=false;
-        ++serial_;size_=std::min(program.size,requested);target_=target;program_=std::move(program);project_=project;output_=output;bake_=bake;published_=false;setBake_=setBake;
+        matRequested_=materialized;matFusion_=matRequested_&&p.getBool("fusePointwise");matReachableNodes_=matFusedNodes_=0;matFailed_=false;matNodePasses_=matPackPasses_=matPipelineHits_=0;matBufferHit_=false;
+        ++serial_;gpuTransferRequested_=transfer;gpuTextureMipmaps_=mipmaps;gpuPublished_=false;
+        gpuTransferLease_=transfer?lease:render::RenderDeviceLifetime::Lease{};gpuTransferBudget_=transferBudget;
+        gpuAcceptedTextures_=0;gpuGeneration_=transfer?"gpu_"+std::to_string(lease.generation())+"_"+std::to_string(serial_):std::string{};
+        size_=std::min(program.size,requested);target_=target;program_=std::move(program);project_=project;output_=output;bake_=bake;published_=false;setBake_=setBake;
         sourceGraph_=setBake?p["graph"]:Json();overrides_=setBake?(p.has("overrides")?p["overrides"]:Json::object()):Json();
         setOutputs_.clear();setImages_.clear();setBackends_.clear();reusedOutputs_=0;
         if(setBake_){for(const auto& pair:program_->outputs)setOutputs_.push_back(pair);setImages_.reserve(setOutputs_.size());setBackends_.reserve(setOutputs_.size());}
-        plannedPasses_=plannedSlotBytes_=0;passes_=0;blocks_=received_=scratchBytes_=0;reused_=reusedBuffers_=cacheHit_=false;requireGpu_=p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=true;state_="queued";return status();
+        plannedPasses_=plannedSlotBytes_=0;passes_=0;blocks_=received_=scratchBytes_=0;reused_=reusedBuffers_=cacheHit_=false;requireGpu_=transfer||p.getBool("requireGpu");pixels_.clear();reason_.clear();backend_="none";queued_=true;state_="queued";return status();
     }
     void checkProject(const std::string& project){
         if(!project_.empty()&&project_!=project){discard("cancelled","project changed");project_.clear();}
@@ -353,6 +435,7 @@ public:
         if(!setBake_||published_||state_!="ready"||active()||inFlight_||matRetirementPending()||setIncomplete()||
            !program_||project.empty()||project_!=project||request!=std::to_string(serial_))
             throw std::runtime_error("no matching completed texture set for material staging");
+        if(gpuTransferRequested_)throw std::runtime_error("GPU texture sets require native completed GPU publication");
         auto plan=render::texture_graph::prepareMaterialImages(*program_,setImages_,generation);
         return render::texture_graph::stageMaterialImages(transaction,model,base,std::move(plan));
     }
@@ -369,8 +452,40 @@ public:
             if(error)*error="no matching completed texture set";
             return false;
         }
+        if(gpuTransferRequested_){if(error)*error="GPU texture sets require native completed GPU publication";return false;}
         return registry.publishTextureGraphMaterial(key,expectedVersion,expectedModelPublication,
             materialIndex,model,device,lease,rollback,*program_,setImages_,generation,error);
+    }
+    // One-shot adoption of the exact textures accepted by this request.
+    // The caller must own a stable live appearance snapshot/model and invoke
+    // at its joined frame boundary. No raw GPU handles are exported by RPC.
+    bool publishCompletedGpuMaterial(const std::string& project,const std::string& request,
+            view::AppearanceAssetRegistry& registry,const std::string& key,
+            uint64_t expectedVersion,uint64_t expectedModelPublication,size_t materialIndex,
+            render::Model& model,gfx::Device& dev,const render::RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,std::string* error=nullptr){
+        if(!gpuCandidatesReady()||!program_||project.empty()||project_!=project||
+           request!=std::to_string(serial_)||!gpuTransferLease_.validFor(dev)||
+           !lease.validFor(dev)||lease.generation()!=gpuTransferLease_.generation()||!dev.gpuHealthy()){
+            if(error)*error="no matching completed GPU texture request";return false;
+        }
+        std::array<GpuCopy*,render::texture_graph::gpu::maxTextureSetImages> candidates{};
+        size_t count=0;
+        for(const auto& [name,node]:setOutputs_){(void)node;if(render::texture_graph::materialSlot(name))++count;}
+        if(count!=gpuCandidates_.size()||count>candidates.size()){
+            if(error)*error="incomplete GPU texture candidate set";return false;
+        }
+        for(size_t i=0;i<count;++i)candidates[i]=gpuCandidates_[i].get();
+        const bool ok=registry.publishGpuTextureGraphMaterial(key,expectedVersion,expectedModelPublication,
+            materialIndex,model,dev,lease,rollback,*program_,
+            std::span<GpuCopy* const>(candidates.data(),count),gpuGeneration_,true,error);
+        if(!ok){
+            // An aborted transaction may have consumed some handles into the
+            // existing rollback pool. Never retry a partially adopted set.
+            discard("failed","GPU material publication rejected");return false;
+        }
+        gpuCandidates_.clear();published_=gpuPublished_=true;setImages_.clear();pixels_.clear();
+        reason_="GPU textures adopted by native material owner";return true;
     }
     Json publish(Workspace& ws,const Json& p){
         checkProject(ws.project.dir);
@@ -387,15 +502,34 @@ public:
         checkProject(project);
         // Request-wide monotonic deadline, evaluated at owner frame boundaries.
         if(active()&&Clock::now()>=deadline_)discard("failed","GPU texture request timed out");
+        if(gpuTransferRequested_&&!gpuTransferLease_.validFor(dev)){
+            abandon();
+            if(!published_&&state_!="cancelled"&&state_!="failed")discard("failed","GPU texture device generation expired");
+            return;
+        }
         if(matCacheDevice_&&matCacheDevice_!=&dev){
             abandon();
             if(state_=="pending")fallback("materialized device replaced");
         }
         if(ownsResources()&&!dev.gpuHealthy()){
             abandon();
-            if(state_=="pending")fallback("GPU device unhealthy");
+            if(gpuTransferRequested_&&!published_)discard("failed","GPU texture device unhealthy");
+            else if(state_=="pending")fallback("GPU device unhealthy");
         }
-        if(read_&&read_->done){
+        if(textureRead_){
+            // A callback may be delivered before the full frame fence.
+            if(!textureRead_->done||!fence_||dev.gpuCompletedFence()<fence_)return;
+            auto read=std::move(textureRead_);inFlight_=false;fence_=0;
+            if(state_=="pending"){
+                auto& image=read->result;
+                if(image.width!=size_||image.height!=size_||image.format!=gfx::PixelFormat::RGBA8||
+                   image.pixels.size()!=size_t(size_)*size_*4u)fallback("invalid copied GPU texture bytes");
+                else{
+                    pixels_=std::move(image.pixels);received_=pixels_.size();finish();
+                    if(state_=="ready"&&backend_==submittedBackend_)++gpuAcceptedTextures_;
+                }
+            }
+        }else if(read_&&read_->done&&(!gpuTransferRequested_||(fence_&&dev.gpuCompletedFence()>=fence_))){
             auto read=std::move(read_);inFlight_=false;fence_=0;
             if(state_=="pending"){
                 if(read->offset!=received_||read->bytes.size()!=read->expected||received_>pixels_.size()||read->expected>pixels_.size()-received_){fallback("invalid GPU readback block");if(!matSources_)release(dev);}
@@ -407,6 +541,7 @@ public:
             }else if(!matSources_)release(dev);
         }else if(inFlight_&&!read_&&fence_&&dev.gpuCompletedFence()>=fence_&&dev.gpuHealthy())release(dev);
         if(matRetirementPending()&&!retireMaterialized(dev))return;
+        if(!matSources_&&!inFlight_&&gpuCleanupPending()&&!clearGpuCandidates(dev))return;
         if(!matSources_&&!inFlight_&&(project_.empty()||state_=="cancelled"||state_=="failed"||
             (matCacheDevice_&&matCacheProject_!=project_)||matFailed_||(queued_&&!matRequested_)))clearMatIdle(dev);
         if(project_.empty()&&!inFlight_&&ownsResources())release(dev);
@@ -498,6 +633,6 @@ public:
         pixels_.assign(bytes,0);state_="pending";
         if(!queueRange(dev))fallback("GPU readback request rejected");
     }
-    void shutdownAfterIdle(gfx::Device& dev){discard("cancelled","owner shutdown");if(dev.gpuHealthy())release(dev);else abandon();}
+    void shutdownAfterIdle(gfx::Device& dev){discard("cancelled","owner shutdown");if(dev.gpuHealthy())release(dev,true);else abandon();}
 };
 } // namespace aiverse::editor
