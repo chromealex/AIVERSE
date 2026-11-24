@@ -79,6 +79,8 @@ void GameView::handleEvents(const GameScene& s) {
             case kEvAttack: {
                 const bool windup = ev.type == kEvAttackWindup;
                 const uint8_t bit = ev.value >= 0 && ev.value < 4 ? uint8_t(1u << ev.value) : 0;
+                const bool hadWindup = it != anims_.end() && (it->second.pendingAttackWindups & bit);
+                if (!windup && it != anims_.end()) it->second.pendingAttackWindups &= uint8_t(~bit);
                 if (!objectsIndexed) {
                     objects.reserve(s.objects.size());
                     for (const auto& o : s.objects)
@@ -91,7 +93,7 @@ void GameView::handleEvents(const GameScene& s) {
                 const auto& a = *source->second; const auto& b = *target->second;
                 if (!a.visible || !b.visible || a.type >= looks_.size() || a.body != b.body) break;
                 EntityAnim& st = anims_[key];
-                if (windup || !(st.pendingAttackWindups & bit)) st.eventAge[kProcEvAttack] = 0;
+                if (windup || !hadWindup) st.eventAge[kProcEvAttack] = 0;
                 if (windup) st.pendingAttackWindups |= bit;
                 else st.pendingAttackWindups &= uint8_t(~bit);
                 float3 dir = b.pos - a.pos;
