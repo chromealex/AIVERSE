@@ -54,8 +54,6 @@ void GameCore::sysTargeting(Simulation& sim) {
                 return;
             }
         }
-        uint8_t layers = 0;
-        for (auto& wd : t.weapons) layers |= wd.targets;
         Fixed sight = stat(sim, e, Stat::Sight);
         const Fixed ownSight = sight;
         if (radarAcq) sight = fxMax(sight, maxWeaponRange(t) + stat(sim, e, Stat::Range));   // beyond sight: seen by allies or on radar
@@ -70,7 +68,7 @@ void GameCore::sysTargeting(Simulation& sim) {
             auto* cu = w.tryGet<Unit>(cand);
             if (!cu || cu->hp.raw <= 0) return;
             const UnitType& ct = rules_.types[cu->type];
-            if (ct.invulnerable || !layerHit(layers, ct.layer)) return;
+            if (ct.invulnerable || std::none_of(t.weapons.begin(), t.weapons.end(), [&](const WeaponDef& wd) { return weaponTargetMatches(wd, ct.layer, ct.tags); })) return;
             if (sensors && !sensors->anyWeaponHits(u.type, cu->type)) return;   // underwater: torpedoes only
             if (!hostile(sim, o.player, w.get<Owner>(cand).player)) return;
             if (rules_.advancedEffects) { uint32_t fl = statusFlags(sim, cand); if (fl & kStUntargetable) return; if ((fl & kStInvisible) && !(fl & kStRevealed) && !(rules_.mech.detection && detected(sim, cand, o.player))) return; }
@@ -165,6 +163,8 @@ void GameCore::sysWeapons(Simulation& sim) {
         const Unit& tu = w.get<Unit>(c.target);
         const UnitType& tt = rules_.types[tu.type];
         if (tu.hp.raw <= 0) return;
+        if (std::any_of(t.weapons.begin(), t.weapons.end(), [](const WeaponDef& wd) { return wd.targetTags || wd.ignoreTags; }) &&
+            std::none_of(t.weapons.begin(), t.weapons.end(), [&](const WeaponDef& wd) { return weaponTargetMatches(wd, tt.layer, tt.tags); })) { c.target = kNullEntity; return; }
         auto* ord = w.tryGet<Orders>(e);
         auto* m = w.tryGet<Mobile>(e);
         Fixed dist = contactDistance(sim, e, c.target);
@@ -190,7 +190,7 @@ void GameCore::sysWeapons(Simulation& sim) {
         if (adv.raw > 0) mult = mult * (kOne + rules_.heights.damagePerLevel * adv);
         for (size_t i = 0; i < t.weapons.size() && i < 4; ++i) {
             const WeaponDef& wd = t.weapons[i];
-            if (!canHit(wd, tt.layer) || c.cooldown[i].raw > 0 || dist > wd.range + rangeBonus || dist < wd.minRange) continue;
+            if (!weaponTargetMatches(wd, tt.layer, tt.tags) || c.cooldown[i].raw > 0 || dist > wd.range + rangeBonus || dist < wd.minRange) continue;
             if (sensors_ && sensors_->active() && !sensors_->weaponHits(u.type, i, tu.type)) continue;   // underwater: torpedoes only
             if (wd.rangeAspect != kOne && !inRangeEllipse(tr.pos, tp, wd.range + rangeBonus, wd.rangeAspect)) continue;
             if (m && m->moving && ord && !ord->queue.empty() && ord->queue.front().type == OrderType::Move) continue;
@@ -433,6 +433,7 @@ void GameCore::applyEffects(Simulation& sim, Entity caster, uint8_t owner, uint1
             state(sim).hash.query(point, ef.radius, [&](Entity s) {
                 auto* su = w.tryGet<Unit>(s);
                 if (!su || su->hp.raw <= 0 || (su->flags & kUnitOffMap) || dist2D(w.get<Transform>(s).pos, point) > ef.radius) return;
+                if (!targetTagsMatch(rules_.types[su->type].tags, ef.filter.tags, ef.filter.ignoreTags)) return;
                 uint8_t so = w.get<Owner>(s).player;
                 bool enemy = hostile(sim, owner, so);
                 bool ally = so == owner || (so != 0 && so != kHostileNeutral && owner != kHostileNeutral && sim.allied(so, owner));
@@ -440,7 +441,7 @@ void GameCore::applyEffects(Simulation& sim, Entity caster, uint8_t owner, uint1
             });
             std::sort(hits.begin(), hits.end(), [](Entity x, Entity y) { return x.packed() < y.packed(); });
         } else if (w.alive(target) && w.has<Unit>(target)) {
-            hits.push_back(target);
+            if (targetTagsMatch(rules_.types[w.get<Unit>(target).type].tags, ef.filter.tags, ef.filter.ignoreTags)) hits.push_back(target);
         }
         const uint32_t until = sim.tick() + uint32_t((ef.duration * int64_t(ticks)).toInt());
         switch (ef.kind) {
@@ -512,6 +513,7 @@ void GameCore::sysAbilities(Simulation& sim) {
                     if (ef.kind != EffectKind::Buff) continue;
                     gs.hash.query(tr.pos, a.auraRadius, [&](Entity s) {
                         if (!w.has<Unit>(s) || dist2D(w.get<Transform>(s).pos, tr.pos) > a.auraRadius) return;
+                        if (!targetTagsMatch(rules_.types[w.get<Unit>(s).type].tags, ef.filter.tags, ef.filter.ignoreTags)) return;
                         uint8_t so = w.get<Owner>(s).player;
                         bool enemy = hostile(sim, o.player, so);
                         bool ally = so == o.player || (so != 0 && so != kHostileNeutral && o.player != kHostileNeutral && sim.allied(so, o.player));
