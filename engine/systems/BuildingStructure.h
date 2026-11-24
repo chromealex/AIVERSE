@@ -266,7 +266,7 @@ inline StyledStructure dressStructureGeometry(const BuildingStyle& st,const std:
         const float bandOut=std::clamp(k.facadeBay*.025f,.04f,.18f);
         for(int row=1;row<rows;++row){
             const float y=base+Hh*row/rows;
-            const int material=style.band.material>=0?style.band.material:frame;
+            const int material=st.band.material>=0?st.band.material:frame;
             if(!k.doors||y>base+std::min(k.doorHeight*(k.height.lo+k.height.hi)*.5f,Hh-.8f)+.5f)
                 m.box(material,0,y-bandH,-bandOut,W,y+bandH,.045f);
             m.box(material,0,y-bandH,D-.045f,W,y+bandH,D+bandOut);
