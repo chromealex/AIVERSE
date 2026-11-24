@@ -18,6 +18,25 @@ int main(){
     CHECK(statuses(module,sim,unit)->active.size()==1);CHECK(effectiveStats(module,sim,unit,stats)->front().value==Fixed::fromInt(2));
     auto save=sim.serialize();auto hash=sim.checksum();for(int i=0;i<60;++i)sim.step();CHECK(statuses(module,sim,unit)->active.empty());CHECK(effectiveStats(module,sim,unit,stats)->front().value==Fixed::fromInt(4));
     std::string error;CHECK(sim.deserialize(save,&error));CHECK(sim.checksum()==hash);CHECK(statuses(module,sim,unit)->active.size()==1);
+    // Optional bounds saturate the final authoritative stat, including status modifiers.
+    {
+        Simulation bounded({},std::make_unique<game::GameCore>());
+        bounded.setup(Json::parse(R"({"minUnitSpeed":2,"maxUnitSpeed":3,"victory":"noUnits","statuses":{"slow":{"mods":[{"stat":"speed","mul":0.25}]}},"types":{"unit":{"health":{"max":100},"move":{"speed":4}}}})"),Json::parse(R"({"size":[8,8],"players":[{"name":"A","team":1},{"name":"B","team":2}],"terrain":{"rows":["........","........","........","........","........","........","........","........"]},"entities":[{"type":"unit","owner":1,"pos":[2,2]},{"type":"unit","owner":2,"pos":[6,6]}]})"));
+        Entity e;bounded.world().each<game::Unit>([&](Entity candidate,auto&){if(!e.valid())e=candidate;});CHECK(e.valid());
+        auto& m=static_cast<game::GameCore&>(bounded.module());
+        CHECK(effectiveStats(m,bounded,e,stats)->front().value==Fixed::fromInt(3));
+        game::EffectCtx ctx;ctx.caster=e;ctx.owner=1;ctx.target=e;
+        CHECK(applyStatus(m,bounded,e,0,Fixed::fromInt(2),ctx));
+        CHECK(effectiveStats(m,bounded,e,stats)->front().value==Fixed::fromInt(2));
+        auto bytes=bounded.serialize();auto h=bounded.checksum();
+        for(int i=0;i<60;++i)bounded.step();
+        CHECK(effectiveStats(m,bounded,e,stats)->front().value==Fixed::fromInt(3));
+        CHECK(bounded.deserialize(bytes,&error));CHECK(bounded.checksum()==h);
+        CHECK(effectiveStats(m,bounded,e,stats)->front().value==Fixed::fromInt(2));
+        for(const char* invalid:{R"({"minUnitSpeed":-1})",R"({"maxUnitSpeed":"fast"})",R"({"minUnitSpeed":4,"maxUnitSpeed":2})"}){
+            bool rejected=false;try{(void)game::loadRules(Json::parse(invalid));}catch(const std::runtime_error&){rejected=true;}CHECK(rejected);
+        }
+    }
     const std::array<LootRow,2> rows{{{1,9,false},{2,1,true}}};LootState a,b;auto snapshot=sim.serialize();std::vector<std::int64_t> first,second;
     for(int i=0;i<30;++i)first.push_back(*rollSimLoot(sim,rows,{3},a));CHECK(sim.deserialize(snapshot,&error));
     for(int i=0;i<30;++i)second.push_back(*rollSimLoot(sim,rows,{3},b));CHECK(first==second&&a.misses==b.misses);
