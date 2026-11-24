@@ -72,3 +72,7 @@ Do not extend this roadmap into engine code until the requested batch is selecte
 ## Active world feature: Caverns Stage54p (2026-11-24)
 
 IN PROGRESS — planetary chart cut/collar preflight on the existing Caverns owner. Use the exact authored coarse body triangles, preserve the solid preview until the matching volume is published, and report rejected cuts. Acceptance: unchanged MapDoc schema, shared cut planner, bounded inputs, no extra gameplay/renderer authority, revision-aware diagnostics, targeted regression tests and a separate handoff. GPU paired publication, full chart LOD, globe picking and game authority loading remain separate follow-up work. Native/Mac and frontend validation pending.
+
+### Stage54q — IN PROGRESS
+
+Connect the certified coarse chart cut to the existing exact collar owner and stage the replacement surface in Studio. Acceptance: a single immutable refined chart plan, Q16 grid and exterior boundary certificate, bounded demand restored on refusal, revision-safe same-frame draw selection, original solid surface on failure, no new physics or gameplay owner. Register regression source in the existing Studio test target. Native GPU/CPU and frontend acceptance remains pending.
