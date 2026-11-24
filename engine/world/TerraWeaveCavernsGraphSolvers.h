@@ -8,6 +8,7 @@
 #include "engine/nav/GraphHierarchy.h"
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
 #include <limits>
 #include <memory>
 #include <stdexcept>
