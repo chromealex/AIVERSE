@@ -14,14 +14,14 @@ import {animationProjection,connectAnimationPose,addAnimationTransition,editAnim
 import type {FxNodeInfo,GraphObject,NativeGraphDomain} from './nativeGraphAdapters';
 
 const errorText=(e:unknown)=>e instanceof Error?e.message:String(e);
-async function op(name:string,params:GraphObject={}):Promise<unknown>{
- return (await invoke('studio.op',{op:name,params})).result;
-}
+
 function requireOk(result:unknown){
  if(!object(result)||result.ok!==true)throw new Error(object(result)?JSON.stringify(result.errors??result.error??result):'Native validation failed');
 }
 export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGraphDomain;projectPath:string}){
  const fx=domain==='spectrafx',prefix=fx?'fx_graph':'animation_graph';
+ const op=async(name:string,params:GraphObject={}):Promise<unknown>=>
+  (await invoke('studio.op',{op:name,params,expectedProject:projectPath})).result;
  const [names,setNames]=useState<string[]>([]),[name,setName]=useState('');
  const [catalog,setCatalog]=useState<FxNodeInfo[]>([]),[nodeType,setNodeType]=useState('');
  const [original,setOriginal]=useState<GraphObject|null>(null),[draft,setDraft]=useState<GraphObject|null>(null);
@@ -130,6 +130,7 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
    <StudioButton size="sm" disabled={!draft||busy} onClick={validate}>Validate</StudioButton>
    <StudioButton size="sm" disabled={!dirty||busy} onClick={save}>Save</StudioButton>
    <StudioButton size="sm" disabled={!dirty||busy} onClick={()=>reset(original)}>Discard</StudioButton>
+   <StudioButton size="sm" disabled={!name||dirty||busy} onClick={()=>open(name)}>Reload</StudioButton>
    <StudioButton size="sm" disabled={busy||!history.current?.canUndo()} onClick={()=>{if(history.current)setDraft(history.current.undo());setPending(null);}}>Undo</StudioButton>
    <StudioButton size="sm" disabled={busy||!history.current?.canRedo()} onClick={()=>{if(history.current)setDraft(history.current.redo());setPending(null);}}>Redo</StudioButton>
    {!fx&&<StudioSelect aria-label="Graph view" value={mode} disabled={busy} onChange={e=>{setMode(e.target.value==='states'?'states':'pose');setSelection([]);setPending(null);}}><option value="pose">Pose DAG</option><option value="states">State transitions</option></StudioSelect>}
