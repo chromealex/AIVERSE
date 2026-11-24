@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Mountain, RefreshCw } from 'lucide-react';
 import { invoke, onNativeEvent } from '../../bridge';
-import type { StudioSnapshot, StudioCavernsPreview } from '../../types';
+import type { StudioSnapshot, StudioCavernsPreview, StudioCavernsBudgets } from '../../types';
 import { StudioPanel, StudioSection, StudioField, StudioInput, StudioSelect, StudioButton, StudioIconButton, StudioAlert, StudioEmptyState, StudioBadge, StudioCheckbox } from '../../ui';
 
 type Stamp = { id: string; xCm: number; yCm: number; zCm: number; radiusCm: number; mode: 'carve' | 'fill' };
@@ -23,6 +23,8 @@ function decode(value: unknown): Document {
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 const fields = ['xCm','yCm','zCm','radiusCm'] as const;
 const recipeFields = ['cellCm','tunnelRadiusCm','chamberRadiusCm','tunnelChance','chamberChance','minYcm','maxYcm'] as const;
+const budgetFields = ['perSourceBytes','perShardBytes','deviceBytes','perSourceUploadBytes','perShardUploadBytes','deviceUploadBytes'] as const;
+const budgetLabels = ['Source index MiB','Shard index MiB','Device index MiB','Source upload MiB/frame','Shard upload MiB/frame','Device upload MiB/frame'];
 const entranceFields = ['xCm','zCm','surfaceYcm','caveYcm','radiusCm'] as const;
 const int = (s:string) => s.trim()!=='' && Number.isSafeInteger(Number(s));
 export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: StudioSnapshot | null; commitSnapshot: (s: StudioSnapshot)=>void }) {
@@ -44,6 +46,7 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
   const [entrancePage,setEntrancePage] = useState(0);
   const [preview,setPreview] = useState<StudioCavernsPreview|null>(null);
   const [previewError,setPreviewError] = useState('');
+  const [budgets,setBudgets] = useState<Record<string,string>>({});
   const epoch=useRef(0);
   const locked=useRef(false);
   const currentProject=useRef(project);
@@ -85,13 +88,15 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
   const valid=fields.every(k=>form[k].trim()!=='' && Number.isSafeInteger(values[k])) &&
     fields.slice(0,3).every(k=>Math.abs(values[k])<=1000000000) && values.radiusCm>=1 && values.radiusCm<=1000000;
   const editable=Boolean(doc && project && snapshot?.mode==='edit' && !busy);
-  async function updatePreview(patch: {enabled?:boolean;isolate?:boolean;paging?:boolean} = {}){
+  const budgetBytes=Object.fromEntries(budgetFields.map(k=>[k,Number(budgets[k])*1048576])) as unknown as StudioCavernsBudgets;
+  const budgetValid=budgetFields.every(k=>Number.isSafeInteger(budgetBytes[k])&&budgetBytes[k]>=4&&budgetBytes[k]<=2147483648&&budgetBytes[k]%4===0) && budgetBytes.perSourceBytes<=budgetBytes.perShardBytes && budgetBytes.perShardBytes<=budgetBytes.deviceBytes && budgetBytes.perSourceUploadBytes<=budgetBytes.perShardUploadBytes && budgetBytes.perShardUploadBytes<=budgetBytes.deviceUploadBytes;
+  async function updatePreview(patch: {enabled?:boolean;isolate?:boolean;paging?:boolean;budgets?:StudioCavernsBudgets} = {}){
     if(!doc||!project||locked.current)return;
     locked.current=true;setBusy(true);setPreviewError('');
     const serial=epoch.current;
     try{
       const next=await invoke('studio.cavernsPreview',{expectedProject:project,expectedMap:map,...patch});
-      if(serial===epoch.current&&currentProject.current===project)setPreview(next);
+      if(serial===epoch.current&&currentProject.current===project){setPreview(next);if(next.budgets)setBudgets(Object.fromEntries(budgetFields.map(k=>[k,String(next.budgets[k]/1048576)])));}
     }catch(e){if(serial===epoch.current&&currentProject.current===project)setPreviewError(message(e));}
     finally{locked.current=false;if(serial===epoch.current)setBusy(false);}
   }
@@ -150,6 +155,11 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
             <StudioCheckbox label="Preview cave geometry" checked={preview.enabled} onChange={e=>void updatePreview({enabled:e.target.checked})}/>
             <StudioCheckbox label="Isolate underground geometry" checked={preview.isolate} onChange={e=>void updatePreview({isolate:e.target.checked})}/>
             <StudioCheckbox label="STRATA index paging (restart preview)" checked={preview.paging} onChange={e=>void updatePreview({paging:e.target.checked})}/>
+            {preview.paging && <>
+              {budgetFields.map((k,i)=><StudioField key={k} label={budgetLabels[i]} htmlFor={'cave-budget-'+k}><StudioInput id={'cave-budget-'+k} type="number" min={0.00390625} max={2048} step="any" value={budgets[k]??''} disabled={busy} onChange={e=>setBudgets(v=>({...v,[k]:e.target.value}))}/></StudioField>)}
+              <StudioButton disabled={busy||!budgetValid} onClick={()=>void updatePreview({budgets:budgetBytes})}>Apply budgets and restart preview</StudioButton>
+              <StudioAlert title="Shared device budget">All live STRATA owners must agree on the device limits. Initial root uploads are outside the incremental page upload budget.</StudioAlert>
+            </>}
             {preview.error && <StudioAlert tone="danger" title="Native preview">{preview.error}</StudioAlert>}
             <StudioBadge tone={preview.visible?'accent':'neutral'}>{preview.visible?'Visual owner open':'No active preview source'}</StudioBadge>
             <div>Ready chunks: {preview.ready ?? '—'} / {preview.tracked ?? '—'}</div>
