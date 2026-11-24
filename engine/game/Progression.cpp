@@ -649,13 +649,16 @@ void Progression::modStat(Simulation& sim, Entity e, Stat s, Fixed& value) const
     }
 }
 
-Fixed Progression::damage(Simulation& sim, Entity target, Entity source, Fixed amount) const {
+Fixed Progression::damage(Simulation& sim, Entity target, Entity source, Fixed amount, bool* critical) const {
+    if (critical) *critical = false;
     const ProgressionStore* st = store(sim);
     if (!st || amount.raw <= 0) return amount;
     if (st->find(source)) {   // crits of the attacker
         const int64_t chance = statOf(sim, source, lg::perk_stat::CritChance, 0);
-        if (chance > 0 && int64_t(sim.rng().below(1000)) < chance)
+        if (chance > 0 && int64_t(sim.rng().below(1000)) < chance) {
+            if (critical) *critical = true;
             amount = amount * statOf(sim, source, lg::perk_stat::CritDamage, R_->critDamageMilli) / 1000;
+        }
     }
     if (st->find(target)) {
         const int64_t mul = statOf(sim, target, lg::perk_stat::IncomingDamage, 1000);
