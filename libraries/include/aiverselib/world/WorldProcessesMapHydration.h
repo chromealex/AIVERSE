@@ -27,15 +27,18 @@ struct MapHydration {
 // A host supplies its exact, ordered map["entities"] -> Entity pairing.
 // All documents, references, budgets and existing component ownership are
 // checked first; only then are schemas registered and ECS components created.
+using EvolveAreaHydrator=bool(*)(Simulation&,Entity,const Json&,std::string*);
 inline MapHydration hydrateMap(Simulation& sim,const Json& map,
                                const std::vector<Entity>& placed,
-                               SuiteFlags requested={},ImprintTrailInstaller trails=nullptr,CrowdInstaller crowdInstaller=nullptr) {
+                               SuiteFlags requested={},ImprintTrailInstaller trails=nullptr,CrowdInstaller crowdInstaller=nullptr,
+                               EvolveAreaInstaller areaInstaller=nullptr,
+                               EvolveAreaHydrator areaHydrator=nullptr) {
     const Json& entities=map["entities"];
     if(!entities.isArray()) {
         if(!placed.empty())throw std::invalid_argument("World Processes: map.entities missing");
         MapHydration enabled;
         enabled.extra=requested;
-        installSuite(sim,requested,trails,crowdInstaller); // explicitly enabled native runtime, empty map
+        installSuite(sim,requested,trails,crowdInstaller,areaInstaller); // explicitly enabled native runtime, empty map
         return enabled;
     }
     if(entities.size()!=placed.size())
@@ -278,7 +281,7 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
     }
     // Install all seven systems in one well-defined order. The map stores no
     // duplicated runtime state; opt-in categories use portable ECS schemas.
-    installSuite(sim,totals.extra,trails,crowdInstaller);
+    installSuite(sim,totals.extra,trails,crowdInstaller,areaInstaller);
     // Root ECS components precede area attachment. The same map entity
     // provides its static world X/Z; this is authoritative map configuration,
     // not merely editor gizmo metadata.
@@ -292,14 +295,15 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
     for(const auto& part:extendedParts){
         if(part.component!="EvolveArea")continue;
         std::string error;
-        if(!extended::apply(sim.world(),part.entity,part.component,*part.settings,&error))
-            throw std::invalid_argument("World Processes: EVOLVE area "+error);
+        const bool ok=areaHydrator?areaHydrator(sim,part.entity,*part.settings,&error):
+            extended::apply(sim.world(),part.entity,part.component,*part.settings,&error);
+        if(!ok)throw std::invalid_argument("World Processes: EVOLVE area "+error);
     }
     // Bind EvolveArea centers from real authored map entity positions in
     // map order. The Area is ECS-persisted and the Native TerraWeave forest
     // sampler consumes exactly these bounds through evolve::extents().
     for(std::size_t i=0;i<entities.size();++i){
-        if(!entities[i]["components"]["EvolveArea"].isObject())continue;
+        if(areaHydrator||!entities[i]["components"]["EvolveArea"].isObject())continue;
         const auto& position=entities[i]["pos"];
         if(!position.isArray()||(position.size()!=2&&position.size()!=3)||
            !position[0].isNumber()||!position[position.size()==3?2:1].isNumber())
