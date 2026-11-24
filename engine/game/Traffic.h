@@ -92,6 +92,8 @@ struct TrafficPopulationRules {
     std::vector<std::pair<uint16_t, uint16_t>> objects;   // (object type, kind): map objects that are places, sorted
     std::vector<TrafficWeighted> types;      // who they are (default: pedestrians.types)
     Fixed walk = Fixed::fromRatio(2, 5);     // cells / s of those nobody watches
+    uint32_t updatePeriodTicks = 0;         // zero: two seconds at simulation tick rate
+    uint32_t maxUpdatesPerTick = 0;        // zero: no explicit cap on scheduled decisions
     int live = 60;                           // citizens on the street as real people at a time, on top of pedestrians.max
     // how they get to work (TrafficCommute.cpp): by their own car, by bus, the rest on foot
     int carShare = 0, busShare = 0;          // percent of the citizens
