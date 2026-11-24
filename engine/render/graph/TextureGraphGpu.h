@@ -212,6 +212,36 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
     const std::string_view op=node.info->id;
     if(isImageSource(op)){
         require(node.image!=nullptr,"missing resolved image source");
+        const auto sampling=imageSampling(*node.image,node.parameters,n);
+        if(sampling.linear||sampling.a.offset!=0){
+            types.push_back(node.image->hdr()?KernelValue::Vector:KernelValue::PackedBytes);
+            body="uint x=tid%n,y=tid/n;";
+            auto load=[&](const std::string& index,const std::string& name){
+                if(node.image->hdr())return "float4 "+name+"=input0["+index+"];";
+                const auto p=name+"Packed";
+                return "uint "+p+"=input0["+index+"];float4 "+name+"=float4(float(("+p+">>16u)&255u)/255.0f,float(("+p+">>8u)&255u)/255.0f,float("+p+"&255u)/255.0f,"+(node.image->hasAlpha?"float("+p+">>24u)/255.0f":"1.0f")+");";
+            };
+            auto level=[&](const ImageMip& m,const std::string& tag){
+                const auto w=std::to_string(m.width),h=std::to_string(m.height),off=std::to_string(m.offset);
+                if(!sampling.linear){body+=load(off+"u+(y*"+h+"u/n)*"+w+"u+x*"+w+"u/n",tag);return;}
+                const auto fx=tag+"fx",fy=tag+"fy",ix=tag+"ix",iy=tag+"iy";
+                body+="float "+fx+"=(float(x)+0.5f)*"+w+".0f/float(n)-0.5f,"+fy+"=(float(y)+0.5f)*"+h+".0f/float(n)-0.5f;int "+ix+"=int(floor("+fx+")),"+iy+"=int(floor("+fy+"));";
+                auto at=[&](int dx,int dy){return off+"u+uint(clamp("+iy+"+"+std::to_string(dy)+",0,"+std::to_string(m.height-1)+"))*"+w+"u+uint(clamp("+ix+"+"+std::to_string(dx)+",0,"+std::to_string(m.width-1)+"))";};
+                body+=load(at(0,0),tag+"A")+load(at(1,0),tag+"B")+load(at(0,1),tag+"C")+load(at(1,1),tag+"D");
+                body+="float4 "+tag+"=mix(mix("+tag+"A,"+tag+"B,"+fx+"-float("+ix+")),mix("+tag+"C,"+tag+"D,"+fx+"-float("+ix+")),"+fy+"-float("+iy+"));";
+            };
+            level(sampling.a,"mipA");
+            if(sampling.blend>0){level(sampling.b,"mipB");body+="float4 raw=mix(mipA,mipB,"+literal(sampling.blend)+");";}else body+="float4 raw=mipA;";
+            if(node.image->hdr()){
+                const auto gain=literal(std::ldexp(1.f,integer(node.parameters["hdrExposure"],0,-12,12)));
+                body+="float3 exposed=max(raw.xyz*"+gain+",float3(0.0f));";
+                body+=node.parameters.getStr("hdrMapping","reinhard")=="reinhard"?"float3 mapped=exposed/(float3(1.0f)+exposed);":"float3 mapped=min(exposed,float3(1.0f));";
+            }else body+="float3 mapped=raw.xyz;";
+            if(op=="imageAssetChannel"){
+                const auto shift=imageChannelShift(node.parameters.getStr("channel","alpha"));
+                body+="float3 value=float3("+std::string(shift==24?"clamp(raw.w,0.0f,1.0f)":shift==16?"mapped.x":shift==8?"mapped.y":"mapped.z")+");\n";
+            }else body+="float3 value=mapped;\n";
+        }else{
         const auto w=std::to_string(node.image->width),h=std::to_string(node.image->height);
         body="uint x=tid%n,y=tid/n;uint index=(y*"+h+"u/n)*"+w+"u+x*"+w+"u/n;";
         if(node.image->hdr()){
@@ -232,6 +262,7 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
                 body+="float3 value=float3("+std::string(shift==24&&!node.image->hasAlpha?"1.0f":"float((rgb>>"+std::to_string(shift)+"u)&255u)/255.0f")+");\n";
             }else body+="float3 value=float3(float((rgb>>16u)&255u),float((rgb>>8u)&255u),float(rgb&255u))/255.0f;\n";
         }
+        } // legacy nearest/base sampling
     }else if(neighborhoodOp(op)){
         body="int x=int(tid%n),y=int(tid/n),side=int(n);\n";
         if(op=="blur"||op=="erosion"){

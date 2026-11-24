@@ -47,16 +47,84 @@ inline Kind outputKind(const std::string& name){
 inline constexpr size_t maxImageSourceBytes=16u*1024u*1024u;
 // Packed words are 0xAARRGGBB when hasAlpha is true; legacy RGB resolvers
 // leave hasAlpha false and are treated as opaque. Storage remains 4 bytes/pixel.
+struct ImageMip {int width=0,height=0;size_t offset=0;};
 struct ImageSource {
     int width=0,height=0;std::vector<uint32_t> rgb;bool hasAlpha=false;
     // Alternative linear RGBA float snapshot (four floats per texel).
     // Exactly one representation may be populated; HDR alpha is linear.
     std::vector<float> rgba32f;
+    // Derived levels are contiguous after level zero, offsets in texels.
+    std::vector<ImageMip> mips;
     bool hdr() const{return !rgba32f.empty();}
     size_t bytes() const{return hdr()?rgba32f.size()*sizeof(float):rgb.size()*sizeof(uint32_t);}
     const void* data() const{return hdr()?static_cast<const void*>(rgba32f.data()):static_cast<const void*>(rgb.data());}
 };
 static_assert(sizeof(float)==4,"texture graph float buffer ABI requires 32-bit floats");
+using RasterPixel=std::array<float,4>;
+inline RasterPixel rasterTexel(const ImageSource& s,size_t i){
+    if(s.hdr()){const auto* v=s.rgba32f.data()+i*4;return {v[0],v[1],v[2],v[3]};}
+    const uint32_t p=s.rgb[i];
+    return {float((p>>16)&255u)/255.f,float((p>>8)&255u)/255.f,float(p&255u)/255.f,s.hasAlpha?float(p>>24)/255.f:1.f};
+}
+inline RasterPixel rasterMix(const RasterPixel& a,const RasterPixel& b,float t){
+    RasterPixel r{};for(size_t c=0;c<4;++c)r[c]=a[c]+(b[c]-a[c])*t;return r;
+}
+inline void buildImageMips(ImageSource& s,size_t budget){
+    const size_t stride=s.hdr()?16u:4u;
+    size_t texels=size_t(s.width)*s.height;
+    int w=s.width,h=s.height;
+    s.mips={{w,h,0}};
+    while(w>1||h>1){
+        w=(w+1)/2;h=(h+1)/2;
+        const size_t count=size_t(w)*h;
+        require(texels<=budget/stride&&count<=budget/stride-texels,"image mip chain exceeds source byte budget");
+        s.mips.push_back({w,h,texels});texels+=count;
+    }
+    if(s.hdr())s.rgba32f.reserve(texels*4);else s.rgb.reserve(texels);
+    for(size_t level=1;level<s.mips.size();++level){
+        const auto a=s.mips[level-1],b=s.mips[level];
+        for(int y=0;y<b.height;++y)for(int x=0;x<b.width;++x){
+            RasterPixel sum{};unsigned count=0;
+            for(int dy=0;dy<2;++dy)for(int dx=0;dx<2;++dx){
+                const int xx=x*2+dx,yy=y*2+dy;if(xx>=a.width||yy>=a.height)continue;
+                const auto v=rasterTexel(s,a.offset+size_t(yy)*a.width+xx);
+                for(size_t c=0;c<4;++c)sum[c]+=v[c];
+                ++count;
+            }
+            for(auto& v:sum)v/=float(count);
+            if(s.hdr())s.rgba32f.insert(s.rgba32f.end(),sum.begin(),sum.end());
+            else{
+                auto byte=[](float v){return uint32_t(std::lround(std::clamp(v,0.f,1.f)*255.f));};
+                s.rgb.push_back((byte(sum[3])<<24)|(byte(sum[0])<<16)|(byte(sum[1])<<8)|byte(sum[2]));
+            }
+        }
+    }
+}
+struct ImageSampling {ImageMip a,b;float blend=0;bool linear=false;};
+inline ImageSampling imageSampling(const ImageSource& s,const Json& p,int n){
+    ImageSampling r;r.a=r.b={s.width,s.height,0};
+    const auto filter=p.getStr("filter","nearest"),mode=p.getStr("mipMode","base");
+    r.linear=filter!="nearest";
+    if(mode=="base")return r;
+    require(!s.mips.empty(),"missing image mip chain");
+    const float maxLevel=float(s.mips.size()-1);
+    const float lod=std::clamp(mode=="auto"?std::log2(float(std::max(s.width,s.height))/float(n))+scalar(p["mipBias"],0,-8,8):scalar(p["mipLevel"],0,0,12),0.f,maxLevel);
+    const size_t a=filter=="trilinear"?size_t(std::floor(lod)):size_t(std::floor(lod+.5f));
+    const size_t b=filter=="trilinear"?std::min(a+1,s.mips.size()-1):a;
+    r.a=s.mips[a];r.b=s.mips[b];r.blend=b==a?0.f:lod-float(a);
+    return r;
+}
+inline RasterPixel sampleRasterLevel(const ImageSource& s,const ImageMip& m,int x,int y,int n,bool linear){
+    auto texel=[&](int xx,int yy){return rasterTexel(s,m.offset+size_t(std::clamp(yy,0,m.height-1))*m.width+std::clamp(xx,0,m.width-1));};
+    if(!linear)return texel(x*m.width/n,y*m.height/n);
+    const float fx=(float(x)+.5f)*float(m.width)/float(n)-.5f,fy=(float(y)+.5f)*float(m.height)/float(n)-.5f;
+    const int ix=int(std::floor(fx)),iy=int(std::floor(fy));
+    return rasterMix(rasterMix(texel(ix,iy),texel(ix+1,iy),fx-ix),rasterMix(texel(ix,iy+1),texel(ix+1,iy+1),fx-ix),fy-iy);
+}
+inline RasterPixel sampleRaster(const ImageSource& s,const ImageSampling& p,int x,int y,int n){
+    const auto a=sampleRasterLevel(s,p.a,x,y,n,p.linear);
+    return p.blend>0?rasterMix(a,sampleRasterLevel(s,p.b,x,y,n,p.linear),p.blend):a;
+}
 inline float mapRadiance(float v,float gain,bool reinhard){
     v=std::max(v*gain,0.f);
     return reinhard?v/(1.f+v):std::min(v,1.f);
@@ -85,7 +153,7 @@ inline size_t imageSourceBytes(const Program& p){
 inline std::string imageSourceIdentity(const Node& n){
     if(!isExternalImageSource(n.info->id))return {};
     require(n.image!=nullptr,"unresolved external image");
-    return std::string(n.image->hdr()?"rgba32f-linear-nearest-v1:":n.image->hasAlpha?"rgba8-nearest-v2:":"rgb8-opaque-nearest-v2:")+std::to_string(n.image->width)+"x"+std::to_string(n.image->height);
+    return std::string(n.image->hdr()?"rgba32f-linear-nearest-v1:":n.image->hasAlpha?"rgba8-nearest-v2:":"rgb8-opaque-nearest-v2:")+std::to_string(n.image->width)+"x"+std::to_string(n.image->height)+":box-ceil-v1:"+std::to_string(n.image->mips.size());
 }
 inline std::vector<std::string> formulaTokens(const std::string& expression){
     require(!expression.empty()&&expression.size()<=256,"invalid formula size");
@@ -137,6 +205,10 @@ inline Json properties(const std::string& id){
         field("asset","text",Json::string(""));field("revision","text",Json::string(""));
         field("hdrExposure","integer",Json::number(int64_t(0)),-12,12);
         options("hdrMapping","reinhard",{"reinhard","clamp"});
+        options("filter","nearest",{"nearest","bilinear","trilinear"});
+        options("mipMode","base",{"base","auto","explicit"});
+        field("mipLevel","number",Json::number(0.0),0,12);
+        field("mipBias","number",Json::number(0.0),-8,8);
     }
     if(id=="imageAssetChannel")options("channel","alpha",{"red","green","blue","alpha"});
     if(id=="formula")field("expression","text",Json::string("a b *"));
@@ -177,6 +249,10 @@ inline void validateParameters(const Node& n){
         require(!asset.empty()&&asset.size()<=512&&revision.size()==64&&revision.find_first_not_of("0123456789abcdef")==std::string::npos,"imageAsset requires a path and pinned SHA-256 revision");
         (void)integer(p["hdrExposure"],0,-12,12);
         require(!p.has("hdrMapping")||(p["hdrMapping"].isString()&&(p.getStr("hdrMapping")=="reinhard"||p.getStr("hdrMapping")=="clamp")),"invalid HDR mapping");
+        const auto filter=p.getStr("filter","nearest"),mode=p.getStr("mipMode","base");
+        require((!p.has("filter")||p["filter"].isString())&&(filter=="nearest"||filter=="bilinear"||filter=="trilinear"),"invalid image filter");
+        require((!p.has("mipMode")||p["mipMode"].isString())&&(mode=="base"||mode=="auto"||mode=="explicit"),"invalid image mip mode");
+        (void)scalar(p["mipLevel"],0,0,12);(void)scalar(p["mipBias"],0,-8,8);
     }
     if(id=="imageAssetChannel"){
         require(!p.has("channel")||p["channel"].isString(),"image asset channel must be text");
@@ -239,6 +315,8 @@ inline Program compileResolved(const Json& g,const ImageResolver& resolver={}){
                 require(data.rgb.empty()&&data.hasAlpha&&data.rgba32f.size()==texels*4,"invalid HDR snapshot layout");
                 for(float v:data.rgba32f)require(std::isfinite(v)&&std::abs(v)<=65504.f,"invalid HDR snapshot value");
             }else require(data.rgb.size()==texels,"invalid RGB snapshot layout");
+            require(data.mips.empty(),"resolver must return base image only");
+            if(n.parameters.getStr("mipMode","base")!="base")buildImageMips(data,maxImageSourceBytes-sourceBytes);
             sourceBytes+=data.bytes();
             n.image=std::make_shared<const ImageSource>(std::move(data));
         }
@@ -399,6 +477,7 @@ inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t
         if(isImageSource(id))require(imported!=nullptr,"missing resolved image source");
         const unsigned imageShift=id=="imageAssetChannel"?imageChannelShift(q.getStr("channel","alpha")):0;
         const bool hdr=imported&&imported->hdr();
+        const auto sampling=imported?imageSampling(*imported,q,n):ImageSampling{};
         const float hdrGain=hdr?std::ldexp(1.f,integer(q["hdrExposure"],0,-12,12)):1.f;
         const bool reinhard=q.getStr("hdrMapping","reinhard")=="reinhard";
         const float value=scalar(q["value"].isArray()?Json():q["value"],.5f);
@@ -423,18 +502,10 @@ inline std::vector<Image> evaluateMany(const Program& p,const std::vector<size_t
                 else for(size_t channel=0;channel<3;++channel)r[channel]=custom_compute::evaluate(node.custom[channel],args);
             }
             else if(isImageSource(id)){
-                const size_t index=size_t(y*imported->height/n)*imported->width+x*imported->width/n;
-                if(hdr){
-                    const auto* v=imported->rgba32f.data()+index*4;
-                    if(id=="imageAssetChannel"){
-                        const unsigned c=imageShift==24?3:2-imageShift/8;
-                        r=gray(c==3?clamp(v[3]):mapRadiance(v[c],hdrGain,reinhard));
-                    }else for(size_t c=0;c<3;++c)r[c]=mapRadiance(v[c],hdrGain,reinhard);
-                }else{
-                    const auto p=imported->rgb[index];
-                    if(id=="imageAssetChannel")r=gray(imageShift==24&&!imported->hasAlpha?1.f:float((p>>imageShift)&255u)/255.f);
-                    else r={float((p>>16)&255u)/255.f,float((p>>8)&255u)/255.f,float(p&255u)/255.f};
-                }
+                const auto v=sampleRaster(*imported,sampling,x,y,n);
+                auto mapped=[&](unsigned c){return c==3?clamp(v[3]):hdr?mapRadiance(v[c],hdrGain,reinhard):v[c];};
+                if(id=="imageAssetChannel")r=gray(mapped(imageShift==24?3:2-imageShift/8));
+                else r={mapped(0),mapped(1),mapped(2)};
             }
             else if(id=="add")r=gray(a()+b());else if(id=="subtract")r=gray(a()-b());else if(id=="multiply")r=gray(a()*b());
             else if(id=="min")r=gray(std::min(a(),b()));else if(id=="max")r=gray(std::max(a(),b()));else if(id=="invert")r=gray(1-a());

@@ -189,6 +189,22 @@ inline int textureGraphGpuAcceptance(gfx::Device& dev,gfx::Backend backend,bool 
         const auto hdrId=owner.start(hdrAsset,project,lifetime.lease(),hdrSource).getStr("request");drain();
         const auto hdrStatus=owner.status();
         require(hdrStatus.getStr("request")==hdrId&&hdrStatus.getStr("state")=="ready"&&hdrStatus.getStr("backend")==expected,"HDR source GPU parity failed");
+        // NPOT mip chain, trilinear interpolation and exact decoded storage accounting.
+        auto mipAsset=external;
+        auto& mipProps=mipAsset.member("graph").member("nodes").at(0).member("properties");
+        mipProps.set("revision",Json::string(std::string(64,'e')));
+        mipProps.set("mipMode",Json::string("explicit"));mipProps.set("mipLevel",Json::number(1.5));mipProps.set("filter",Json::string("trilinear"));
+        const render::texture_graph::ImageResolver mipResolver=[](const std::string&,const std::string&,size_t){
+            render::texture_graph::ImageSource s;s.width=3;s.height=1;s.hasAlpha=true;s.rgb={0xff000000u,0xff000000u,0xffff0000u};return s;
+        };
+        const auto mipProgram=render::texture_graph::compile(mipAsset["graph"],Json::object(),mipResolver);
+        const auto mipImage=render::texture_graph::evaluate(mipProgram,0);
+        require(render::texture_graph::imageSourceBytes(mipProgram)==24&&mipProgram.nodes[0].image->mips.size()==3&&mipImage.rgba[0]==64&&mipImage.rgba[63*4]==192,"NPOT trilinear mip CPU mismatch");
+        const auto mipSources=render::texture_graph::gpu::compileMaterializedDag(mipProgram,{0},64);
+        require(mipSources.imageSourceBytes==24&&mipSources.nodes[0].msl.find("mix(mipA,mipB,")!=std::string::npos,"mip chain GPU layout mismatch");
+        const auto mipId=owner.start(mipAsset,project,lifetime.lease(),mipResolver).getStr("request");drain();
+        const auto mipStatus=owner.status();
+        require(mipStatus.getStr("request")==mipId&&mipStatus.getStr("state")=="ready"&&mipStatus.getStr("backend")==expected,"trilinear mip GPU parity failed");
         // Typed custom expressions: same validated instruction stream on CPU and GPU.
         auto computed=Json::parse(R"JSON({"graph":{"version":1,"size":64,"nodes":[
           {"id":"a","op":"constant","inputs":[],"properties":{"value":0.25}},
