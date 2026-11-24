@@ -481,8 +481,6 @@ void Arsenal::tick(Simulation& sim) {
 
 void Arsenal::neutralKill(Simulation& sim, Entity victim, uint8_t killer) {
     if (!active() || !rules_.payNeutral || killer == 0 || killer == kHostileNeutral) return;
-    World& w = sim.world();
-    (void)w;
     m_->payUnitBounty(sim, victim, killer);
 }
 
