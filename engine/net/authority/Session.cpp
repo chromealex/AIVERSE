@@ -186,9 +186,9 @@ bool Server::pollPersistenceContent(){
         return ready;
     }catch(const std::exception& e){failPersistenceContent(e.what());return false;}
 }
-bool Server::checkpointWorld(){
+bool Server::checkpointWorld(uint64_t retainRevisions){
     if(!persistence_||persistenceFailed_||recoveringPersistence_||contentPending_||inputsStaged_)return false;
-    if(persistence_->checkpoint())return true;
+    if(persistence_->checkpoint(retainRevisions))return true;
     persistenceFailed_=true;
     for(auto& peer:peers_)peer.conn->close();
     return false;
