@@ -24,7 +24,7 @@ REQUIRED = {
     "geometry": ("geometry_catalog", "strata_capabilities"),
     "human": ("human_schema", "human_create"),
     "graphs": ("graph_catalog", "graph_list", "graph_get", "graph_node_catalog", "graph_validate", "graph_edit", "graph_save", "graph_diagnostics", "graph_dependencies", "graph_property_schema", "graph_asset_dependencies", "graph_runtime_capabilities", "graph_runtime_probe", "graph_live_snapshot", "graph_live_watch", "graph_live_profile", "graph_gpu_profile", "graph_debug_session", "texture_graph_catalog", "texture_graph_list", "texture_graph_get", "texture_graph_validate", "texture_graph_set", "texture_graph_preview", "texture_graph_bake", "texture_graph_templates", "texture_graph_bake_set", "texture_graph_cache", "texture_graph_material_variant", "texture_graph_gpu_preview"),
-    "mcp": ("mcp_registry", "feature_readiness_get"),
+    "mcp": ("mcp_registry", "feature_readiness_get", "feature_readiness_query", "feature_readiness_status_get", "feature_readiness_refresh"),
 }
 
 def main():
