@@ -104,6 +104,9 @@ Reuse pack::Sha256 for streaming regular-file / deterministic folder tree digest
 ## Asset soft deletion (S6c.4c.1)
 Use native studio.assetDelete with current project, exact asset history version, path/GUID and explicit confirmation. The owner moves an asset and its root sidecar to a unique .aiverse-cache/studio-asset-trash record using journal v2 restricted to content/trash pairs. Folder trees use streaming digests. Undo/redo uses the same owner and refuses conflicts; deletion/redo checks known map/rules/material references. Trash payloads intentionally survive history reset/eviction/reopen; no permanent purge or automatic cleanup. Import/replace and trash recovery UI remain separate work.
 
+## Staged imports and folder creation (S6c.4c.2)
+Use the existing transfer preview and native picker. For non-replacing imports with history, stage into private project-local recovery slots outside live content; generate metadata with the existing catalog at the final filename, retain preserved sidecars only after GUID validation, sync payloads before publication, and publish the batch through journal v2. History created=true reverses quarantine direction: Undo removes, Redo restores staged bytes and exact sidecars without external source. Folder creation uses the same owner. Undo refuses known map/rules/material references. Explicit replacement remains a history barrier. Staged orphan records are retained for recovery; no automatic purge.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

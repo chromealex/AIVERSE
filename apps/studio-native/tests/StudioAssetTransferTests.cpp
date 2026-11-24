@@ -245,6 +245,45 @@ int main(){
         aiverse::editor::ProjectHistory deletedHistory;
         deletedHistory.recordMove(std::move(deleted),"Delete tree");deletedHistory.reset();
         AIVERSE_TEST_CHECK(fs::exists(backup/"Item.png")); // history eviction must not purge recoverable data
+        // A non-replacing import publishes the entire staged batch with sidecars.
+        fs::create_directories(external/"BatchTree"/"Empty");
+        write(external/"BatchTree"/"Child.png","child pixels");
+        write(external/"Batch.png","batch pixels");
+        auto batch=StudioTransferPlan::external(project,"Other",{external/"Batch.png",external/"BatchTree"});
+        std::optional<aiverse::editor::ProjectHistory::MovePlan> imported;
+        const auto batchResult=batch.apply(batch.token(),{}, {},&imported);
+        AIVERSE_TEST_CHECK(batchResult["files"].size()==2&&imported&&imported->created&&imported->quarantine&&imported->files.size()==4);
+        db.rebuild(false);
+        const auto importedGuid=db.byPath("Other/Batch.png")->guid;
+        const auto importedChildGuid=db.byPath("Other/BatchTree/Child.png")->guid;
+        const auto importedMeta=read(project/"content"/"Other"/"Batch.png.meta");
+        fs::remove(external/"Batch.png");fs::remove_all(external/"BatchTree");
+        bool importRefused=false;
+        try{aiverse::studio::studioReplayAssetQuarantine(project,*imported,true,[]{throw std::runtime_error("Referenced");});}
+        catch(const std::runtime_error&){importRefused=true;}
+        AIVERSE_TEST_CHECK(importRefused&&fs::exists(project/"content"/"Other"/"Batch.png"));
+        aiverse::studio::studioReplayAssetQuarantine(project,*imported,true);
+        AIVERSE_TEST_CHECK(!fs::exists(project/"content"/"Other"/"Batch.png")&&!fs::exists(project/"content"/"Other"/"BatchTree"));
+        db.rebuild(false);AIVERSE_TEST_CHECK(!db.byGuid(importedGuid)&&!db.byGuid(importedChildGuid));
+        // A conflict in the last item must refuse the whole batch.
+        fs::create_directory(project/"content"/"Other"/"BatchTree");
+        bool batchRefused=false;
+        try{aiverse::studio::studioReplayAssetQuarantine(project,*imported,false);}catch(const std::runtime_error&){batchRefused=true;}
+        AIVERSE_TEST_CHECK(batchRefused&&!fs::exists(project/"content"/"Other"/"Batch.png"));
+        fs::remove(project/"content"/"Other"/"BatchTree");
+        aiverse::studio::studioReplayAssetQuarantine(project,*imported,false);
+        db.rebuild(false);
+        AIVERSE_TEST_CHECK(db.byGuid(importedGuid)->path=="Other/Batch.png"&&db.byGuid(importedChildGuid)->path=="Other/BatchTree/Child.png");
+        AIVERSE_TEST_CHECK(read(project/"content"/"Other"/"Batch.png")=="batch pixels");
+        AIVERSE_TEST_CHECK(read(project/"content"/"Other"/"Batch.png.meta")==importedMeta);
+        AIVERSE_TEST_CHECK(fs::is_directory(project/"content"/"Other"/"BatchTree"/"Empty"));
+        aiverse::editor::ProjectHistory::MovePlan createdFolder;
+        AIVERSE_TEST_CHECK(aiverse::studio::studioCreateContentFolder(project,"Other","NewFolder",&createdFolder)=="Other/NewFolder");
+        db.rebuild(false);const auto createdGuid=db.byPath("Other/NewFolder")->guid;
+        aiverse::studio::studioReplayAssetQuarantine(project,createdFolder,true);
+        AIVERSE_TEST_CHECK(!fs::exists(project/"content"/"Other"/"NewFolder"));
+        aiverse::studio::studioReplayAssetQuarantine(project,createdFolder,false);
+        db.rebuild(false);AIVERSE_TEST_CHECK(db.byGuid(createdGuid)->path=="Other/NewFolder");
         std::cout<<"PASS studio conflict resolution and GUID-preserving asset transfers\n";
     }catch(...){fs::remove_all(temp);throw;}
     fs::remove_all(temp);

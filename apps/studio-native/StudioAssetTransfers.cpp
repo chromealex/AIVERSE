@@ -184,7 +184,8 @@ void copyFolderNoSymlinks(const fs::path& source,const fs::path& target) {
 void stageCreatedAsset(const fs::path& project,const std::string& path,
     const fs::path& source,bool directory,bool preserveSidecar,
     editor::ProjectHistory::MovePlan& plan){
-    StudioAssetCatalog live(project); // also validates/creates the cache root
+    // Validate/create the cache root with the existing catalog owner.
+    {StudioAssetCatalog live(project);}
     const auto root=project/".aiverse-cache"/"studio-asset-trash";
     if(!existsOrSymlink(root))fs::create_directory(root);
     if(!fs::is_directory(fs::symlink_status(root)))throw std::runtime_error("Unsafe asset recovery root");
