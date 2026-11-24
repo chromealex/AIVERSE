@@ -153,7 +153,9 @@ inline bool decodeBuildingLiftStateFrame(std::span<const uint8_t> data,
        data.size()>liftWireDetail::kMaxBytes)
         return fail("Truncated or oversized lift state packet");
     liftWireDetail::Reader rd{data};
-    const auto magic=rd.u32(),version=rd.u16(),flags=rd.u16();
+    const uint32_t magic=rd.u32();
+    const uint16_t version=rd.u16();
+    const uint16_t flags=rd.u16();
     BuildingLiftStateFrame candidate;
     candidate.sceneId=rd.u64();
     candidate.serverTick=rd.u64();
