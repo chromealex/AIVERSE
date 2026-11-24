@@ -38,6 +38,37 @@ inline GraphImagePin pinPublishedGraphImage(const Model& model,size_t index){
     const auto& image=model.images[index];
     return image.proceduralGraphImage&&!image.proceduralGraphRetired&&image.tex.valid()?image.proceduralGraphPin:GraphImagePin{};
 }
+// Capture once on the owner thread while the Model is live. A reference is
+// weak: it is safe to retain across slot recycling, but does not keep the
+// Model, device or GPU image alive. Always resolve against a currently owned
+// Model under the existing reader/frame-boundary contract.
+inline GraphImageReference referencePublishedGraphImage(const Model& model,size_t index){
+    return {index,pinPublishedGraphImage(model,index)};
+}
+struct PublishedGraphImageAccess {
+    gfx::TextureHandle texture{};
+    GraphImagePin pin;
+    explicit operator bool()const noexcept{return texture.valid()&&bool(pin);}
+};
+// The returned pin must remain held for every use of the raw texture while
+// the model/device owner remains live. This is NOT a model/device lifetime
+// lease, nor permission to submit concurrently with model mutation.
+inline PublishedGraphImageAccess acquirePublishedGraphImage(const Model& model,
+        const GraphImageReference& reference){
+    const auto index=reference.index();
+    auto current=pinPublishedGraphImage(model,index);
+    auto pin=reference.acquire(index,current);
+    if(!pin)return {};
+    return {model.images[index].tex,std::move(pin)};
+}
+// A material-bound reference must use its original pin, not re-capture a
+// generation from a possibly stale raw index after a slot has been reused.
+inline GraphImageReference referenceGraphMaterialImage(const Material& material,MaterialSlot slot){
+    const auto channel=graphMaterialChannel(slot);
+    const auto index=material.*slot;
+    if(index<0||!material.proceduralGraphPins)return {};
+    return {size_t(index),(*material.proceduralGraphPins)[channel]};
+}
 struct MaterialImagePlan {
     struct Entry { MaterialSlot slot; Image image; };
     std::vector<Entry> entries;
