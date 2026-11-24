@@ -27,3 +27,5 @@ convexContact uses sampled enclosing seed with support provenance and EPA baryce
 GeometryManifold.h: clipContactFaces clips caller-supplied convex planar incident face against reference side planes, projects witnesses and reduces to deepest plus farthest-spread contacts (default four). Incident convexity/planarity is caller precondition. No automatic face selection or persistent cache. No tests.
 
 GeometryContactCache.h: selectContactFace maximizes outward normal alignment; convexFaceManifold selects reference A and incident B from supplied face topology. ContactCache assigns monotonic IDs and matches witnesses one-to-one within radius in a stable common coordinate frame per pair. No solver warm-start, automatic edge-edge manifold, or tests.
+
+GeometrySweep.h: sweepBoxes and sweepConvexAxes return forward overlap time interval for constant translation. Complete SAT axes are caller responsibility; no rotation. Initial overlap returns zero normal. trianglesIntersect handles nondegenerate coplanar triangles with additional in-plane axes; degenerate fallback uses GJK. Floating point; no tests.
