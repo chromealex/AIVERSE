@@ -130,18 +130,24 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 35F shared Building Graph exterior projection, group diagnostics and optional native route callback synchronized with integration owner. Actual owner bridge remains in separate integration branch; acceptance pending. Mac QA: repair case-insensitive diagnostic module collision and material projection typing.",
-      "evidence": []
+      "note": "Shared graph framework is implemented for five native facade domains; Building live bridge exists in separate draft PR #140, not this branch. Caverns read-only bridge is present but actual owner/planet acceptance pending. Stage 50 review records exact owner SHAs.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-stage50-graph-integration-review-2026-11-24.md"
+      ]
     },
     "architecture": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "note": "Reviewed GraphCanvas callbacks, native owner validation/persistence delegation, and bounded facade in GraphOps.h. No independent integrator signoff; owner branches require three-way reconciliation.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-stage50-graph-integration-review-2026-11-24.md"
+      ]
     },
     "native_api": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "note": "Native facade and owner-specific CTest fixtures passed on Mac; live Building bridge absent here and Caverns actual owner integration remains unverified.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-stage50-graph-integration-review-2026-11-24.md"
+      ]
     },
     "skill": {
       "status": "pass",
@@ -163,18 +169,24 @@
     },
     "inspector": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "note": "Graph property schema, selected-node edit and typed draft operations implemented; native tests pass, actual Studio property/Undo interactions not independently verified.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-stage50-graph-integration-review-2026-11-24.md"
+      ]
     },
     "persistence": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "note": "FX/texture save/read-back and draft/overwrite rejection covered by passing native fixtures; MotionWeave expected-document and modeling expectedRevision reviewed. Shader/FX explicit unversioned save; FX preflight non-atomic. Owner-specific reopen/GUI/concurrency acceptance remains pending.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-stage50-graph-integration-review-2026-11-24.md"
+      ]
     },
     "graphs": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "note": "Shared read-only/editable canvas and native domain adapters reviewed; Building route callback needs typed owner bridge from PR #140. Caverns read-only bridge rejects planetary documents; actual owner capture pending.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-stage50-graph-integration-review-2026-11-24.md"
+      ]
     },
     "performance": {
       "status": "not_run",
@@ -188,8 +200,10 @@
     },
     "dependencies": {
       "status": "not_run",
-      "note": "No declared prerequisite cycle or unknown manifest dependency in v10 policy; actual native Building/Caverns owner bridge acceptance remains pending.",
-      "evidence": []
+      "note": "No declared prerequisite cycle/unknown manifest dependency in v10. Stage 50 confirms actual Building owner bridge is on PR #140, not current branch; Caverns owner reconciliation pending. 30/14 overlapping returned paths, not conflict counts.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-stage50-graph-integration-review-2026-11-24.md"
+      ]
     },
     "headless": {
       "status": "pass",
