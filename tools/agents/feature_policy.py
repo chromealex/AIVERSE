@@ -78,7 +78,12 @@ def roadmap_report(registry, policies, systems):
         if len(matches) != 1:
             errors.append(f"{ident}: roadmap link missing or ambiguous")
             continue
-        rows.append({"feature": ident, "system": link["system"], "roadmap": link["id"], "status": matches[0].get("status")})
+        status = matches[0].get("status")
+        if status not in ("planned", "in-progress", "done"):
+            errors.append(f"{ident}: invalid roadmap status")
+        if status == "done" and any(registry[ident].get("checks", {}).get(d, {}).get("status") not in ("pass", "not_applicable") for d in DIMENSIONS):
+            errors.append(f"{ident}: roadmap done with pending manifest checks")
+        rows.append({"feature": ident, "system": link["system"], "roadmap": link["id"], "status": status})
     counts = Counter((r["system"], r["roadmap"]) for r in rows)
     for key, count in sorted(counts.items()):
         if count > 1:
@@ -143,9 +148,9 @@ def ownership_report(claims):
     for path, owners in sorted(by_path.items()):
         if len(owners) > 1:
             conflicts.append({"path": path, "claims": [{"agent": a, "branch": b} for a,b in sorted(owners)]})
-    return {"conflicts": conflicts, "errors": errors, "scope": "explicit active claims only; no remote worktree discovery"}
+    return {"conflicts": conflicts, "errors": errors, "scope": "explicit active claims and supplied Git refs only; no remote worktree discovery"}
 
-def build_report(root, registry, changed=()):
+def build_report(root, registry, changed=(), branch_claims=()):
     data = read(root, POLICY)
     if not isinstance(data, dict) or set(data) != {"schema", "features", "claims"} or type(data["schema"]) is not int or data["schema"] != 1 or not isinstance(data["features"], dict) or not isinstance(data["claims"], list):
         raise ValueError("invalid feature policy")
@@ -157,7 +162,7 @@ def build_report(root, registry, changed=()):
     roadmap = roadmap_report(registry, policies, read(root, "docs/devlog/systems.json")["systems"])
     skills = skills_report(root, read(root, "skills/catalog.json")["skills"])
     api = api_report(policies, set(changed))
-    ownership = ownership_report(data["claims"])
+    ownership = ownership_report(data["claims"] + list(branch_claims))
     for section in (dependencies, roadmap, skills, api, ownership):
         errors.extend(section["errors"])
     return {"dependencies": dependencies, "roadmap": roadmap, "skills": skills,
@@ -208,22 +213,31 @@ def release_report(root, registry, policy, readiness):
             "state": "blocked" if blockers else "requires_integrator_review", "blockers": blockers,
             "inventory_counts": readiness["counts"]}
 
+def branch_claim(root, base, ref):
+    sha = subprocess.check_output(["git", "rev-parse", "--verify", "--end-of-options", ref + "^{commit}"], cwd=root, text=True).strip()
+    paths = subprocess.check_output(["git", "diff", "--name-only", "--no-renames", "-z", base + "..." + sha, "--"], cwd=root).decode().split("\\0")
+    return {"agent": ref, "branch": ref, "paths": sorted(set(paths) - {""})}
+
 def main():
     from feature_registry import load_registry, owner_readiness
     from capability_inventory import inventory as capabilities
     from graph_inventory import inventory as graphs
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base")
+    parser.add_argument("--branch", action="append", default=[], help="Compare an explicit active branch ref to --base for overlap checks")
     parser.add_argument("--output", type=Path, help="Optional report file; use ignored build output")
     parser.add_argument("--require-release-ready", action="store_true", help="Exit nonzero when release has blockers")
     args = parser.parse_args()
+    if args.branch and not args.base:
+        parser.error("--branch requires --base")
     try:
         registry = load_registry(ROOT)
         changed = []
         if args.base:
             base = subprocess.check_output(["git", "rev-parse", "--verify", "--end-of-options", args.base + "^{commit}"], cwd=ROOT, text=True).strip()
             changed = subprocess.check_output(["git", "diff", "--name-only", "--no-renames", "-z", base + "...HEAD"], cwd=ROOT).decode().split("\0")
-        policy = build_report(ROOT, registry, changed)
+        claims = [branch_claim(ROOT, base, ref) for ref in sorted(set(args.branch))]
+        policy = build_report(ROOT, registry, changed, claims)
         readiness = owner_readiness(registry, ROOT, capabilities(ROOT), graphs(ROOT))
         sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
         report = {"schema": 1, "sha": sha, "policy": policy, "readiness": readiness,
