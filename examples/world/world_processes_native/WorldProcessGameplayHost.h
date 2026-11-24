@@ -72,7 +72,7 @@ public:
             terraweave::ForestEcologySettings settings={})const{
         return terraweave::advanceForestEcology(
             forest,rooted,completedTick,species,soilHeight,
-            forestClimate(ecs,std::move(baseline)),settings);
+            makeIndexedEvolveForestClimateSampler(ecs,std::move(baseline)),settings);
     }
     // Preferred authoritative path: TerraWeave already persists its forest
     // history and rooted population through World COW. No extra checkpoint.
