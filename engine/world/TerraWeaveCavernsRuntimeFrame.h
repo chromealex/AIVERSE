@@ -11,6 +11,8 @@
 #include "engine/world/TerraWeaveCavernsNavigationPublication.h"
 #include "engine/world/TerraWeaveCavernsPathRouter.h"
 #include "engine/world/TerraWeaveCavernsGraphSolvers.h"
+#include "engine/world/TerraWeaveCavernsNativeNavSolver.h"
+#include "engine/nav/CaveEcsRouteFollow.h"
 #include <algorithm>
 #include <map>
 #include <set>
@@ -142,6 +144,21 @@ public:
     }
     bool retryNavigationInvalidations(){
         return navigationBus_.dispatchPending();
+    }
+    bool registerNativeNavMeshSolver(CaveNavConfig config,
+                                     const std::string& name="navmesh") {
+        return registerCaveNativeNavSolver(pathRouter_,config,name);
+    }
+    // The ACTUAL authoritative ECS owner calls this on its fixed tick.
+    // It must provide a real same-epoch Box3D/SpatialWorld collision
+    // callback; never invoke this against visual-only client preview.
+    nav::CaveRouteTickStats updateEcsRouteFollowing(
+        World& world,const nav::CaveMovementCollision& collision) {
+        if(closed_||physicsBarrier_.status().recoveryRequired ||
+           navigationBus_.hasPending())return {};
+        const auto data=navigationBus_.active();
+        if(!data)return {};
+        return nav::updateCaveRouteFollowers(world,*data,collision);
     }
     // Default engine/nav solvers registered at construction:
     // "astar", "hpa", "flow", "hybrid". Native NavMesh and custom
