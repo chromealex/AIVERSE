@@ -83,6 +83,7 @@ public:
     }
     bool initAsset(gfx::Device& device,const Asset& asset,const fx::SdfResourceReader& reader={},
                    std::shared_ptr<gfx::GpuAllocationBudget> budget={}){
+        error_.clear();
         if(!asset.simulation.valid()||!asset.material.valid()||asset.sources.size()>kMaxSources){
             error_="Invalid volume asset";return false;
         }

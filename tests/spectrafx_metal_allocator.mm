@@ -4,6 +4,7 @@
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
 #include "engine/fx/SpectraGpuParticles.h"
+#include "engine/fx/SpectraGpuVolumeGrid.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -300,6 +301,75 @@ void packedSdfAtlas(gfx::Device& d){
     require(cache->liveBytes()==0&&budget->stats().charged()==baseline,"all atlas reservations credited");
     std::puts("PASS packed SDF atlas offsets, contacts and fence quarantine");
 }
+void denseVolume(gfx::Device& d){
+    namespace vol=aiverse::spectra::volume;
+    require(vol::supportsGpuVolume(d),"dense GPU volume capability");
+    auto budget=d.acquireGpuAllocationBudget();
+    require(bool(budget),"volume canonical budget");
+    require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"volume initial idle");
+    budget->collect(d.gpuCompletedFence());const size_t baseline=budget->stats().charged();
+    vol::Config cfg;cfg.dimension=8;cfg.cellSize=.25f;cfg.origin={-1,-1,-1};
+    cfg.pressureIterations=6;cfg.gravity={-9.81f,0,0};cfg.wind={0,.3f,0};
+    cfg.ignition=.05f;cfg.burnRate=5;
+    vol::Source source;source.position={.35f,-.2f,0};source.radius=.7f;
+    source.smoke=8;source.temperature=10;source.fuel=5;source.acceleration={.1f,1.f,0};
+    fx::StaticSdfVolume sdf;sdf.dimension=5;sdf.origin={-2,-2,-2};sdf.spacing=1;
+    for(unsigned z=0;z<5;++z)for(unsigned y=0;y<5;++y)for(unsigned x=0;x<5;++x)
+        sdf.samples.push_back(float(x)-2);
+    vol::GasGrid cpu;vol::GpuGasGrid gpu;
+    require(cpu.init(cfg)&&cpu.setObstacle(sdf)&&cpu.setSources({source}),"CPU volume reference");
+    require(gpu.init(d,cfg,sdf,budget)&&gpu.setSources({source}),"GPU volume setup");
+    require(!gpu.published()&&gpu.stats().allocatedBytes==vol::gpuVolumeBytes(8)&&
+        budget->stats().charged()==baseline+vol::gpuVolumeBytes(8),"volume allocation and unpublished initial state");
+    require(!gpu.step()&&gpu.stats().ticks==0,"volume requires active frame");
+    const auto compare=[&](){
+        std::vector<vol::GpuCell> result;
+        require(d.waitIdle()&&d.waitForSubmittedGpuWork()&&gpu.snapshot(result),"GPU volume diagnostic readback");
+        require(result.size()==cpu.cells().size(),"volume cell count");
+        float maxError=0;double density=0,temperature=0,fuel=0;
+        for(size_t i=0;i<result.size();++i){
+            const auto& a=cpu.cells()[i];const auto& b=result[i];
+            const float e[]={std::abs(a.density-b.fields.x),std::abs(a.temperature-b.fields.y),
+                std::abs(a.fuel-b.fields.z),std::abs(a.velocity.x-b.velocity.x),
+                std::abs(a.velocity.y-b.velocity.y),std::abs(a.velocity.z-b.velocity.z)};
+            for(float x:e){require(std::isfinite(x),"finite volume data");maxError=std::max(maxError,x);}
+            if(cpu.solidMask()[i])require(b.fields.x==0&&b.fields.y==0&&b.fields.z==0&&
+                b.velocity.x==0&&b.velocity.y==0&&b.velocity.z==0,"solid GPU cells stay empty");
+            density+=b.fields.x;temperature+=b.fields.y;fuel+=b.fields.z;
+        }
+        require(maxError<.004f&&density>0&&temperature>0&&fuel>0,"CPU/GPU dense volume parity");
+    };
+    for(unsigned tick=0;tick<5;++tick){
+        require(cpu.step(),"CPU volume tick");
+        Frame frame(d);require(gpu.step(),"GPU volume tick");
+        auto view=gpu.view();require(view.valid()&&view.dimension==8&&view.tick==tick+1,"published volume view");
+    }
+    compare();
+    auto impulse=source;impulse.smoke=3;impulse.fuel=2;
+    require(gpu.queueImpulse(impulse,vol::kTick)&&!gpu.queueImpulse(impulse,vol::kTick),"bounded impulse queue");
+    require(!gpu.step()&&gpu.stats().ticks==5,"rejected tick preserves published state and impulse");
+    require(cpu.setSources({source,impulse})&&cpu.step(),"reference queued impulse");
+    {Frame frame(d);require(gpu.step(),"GPU impulse tick");}
+    compare();
+    require(cpu.setSources({source})&&cpu.setWind({0,0,1})&&gpu.setWind({0,0,1}),"volume live wind");
+    require(cpu.step(),"reference wind tick");
+    {Frame frame(d);require(gpu.step(),"GPU wind tick");}
+    compare();
+    auto invalid=cfg;invalid.dimension=65;
+    require(!gpu.init(d,invalid,sdf,budget)&&gpu.stats().ticks==7,"invalid reinit preserves GPU state");
+    const auto oldLimit=budget->stats().limit;
+    budget->setLimit(budget->stats().charged()+1);
+    require(!gpu.init(d,cfg,sdf,budget)&&gpu.stats().ticks==7,"budget denial preserves GPU state");
+    budget->setLimit(oldLimit);
+    {Frame frame(d);require(gpu.clear()&&gpu.view().tick==0,"GPU volume clear");}
+    require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"clear completion");
+    std::vector<vol::GpuCell> zero;
+    require(gpu.snapshot(zero),"clear readback");
+    for(const auto& c:zero)require(c.fields.x==0&&c.fields.y==0&&c.fields.z==0,"cleared GPU density");
+    gpu.shutdown();budget->collect(d.gpuCompletedFence());
+    require(budget->stats().charged()==baseline,"volume reservation returned");
+    std::puts("PASS dense GPU volume parity, SDF mask, impulse, lifecycle and budget");
+}
 void memory(gfx::Device& d){
     auto small=estimateGpuEmitterAllocation(256,false),large=estimateGpuEmitterAllocation(512,false);
     auto budget=std::make_shared<GpuAllocationBudget>(small+large);
@@ -343,6 +413,7 @@ int aiverseMain(int,char**){
             }
             sharedSdf(*d);
             packedSdfAtlas(*d);
+            denseVolume(*d);
             memory(*d);
             std::puts("PASS production Metal allocator acceptance");return 0;
         }catch(const std::exception& e){
