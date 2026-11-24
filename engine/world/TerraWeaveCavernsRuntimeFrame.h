@@ -366,7 +366,7 @@ public:
     }
     // Poll CPU completions at the owner frame boundary. The caller must
     // stage/publish the exact returned ticket through all real native owners
-    // before calling acceptStreaming(ticket). Old generations are discarded.
+    // via publishStreamBuild or publishOwnedStreamRetire. Old generations are discarded.
     std::vector<CaveStreamCpuResult> pollStreamingCpu(
         CaveStreamJobStats* telemetry=nullptr) {
         auto results=streamJobs_.poll(telemetry);
@@ -449,6 +449,37 @@ public:
         (void)navigationBus_.invalidateResidency(navigationBounds);
         return true;
     }
+    // Edit-owned native chunks must be retired by their actual owners.
+    // The caller holds real reader exclusion across GPU staging/activation
+    // and supplies the matching native navigation retirement operation.
+    bool publishOwnedStreamRetire(
+        CaveResidencyTicket ticket,gfx::Device& device,physics::Scene& scene,
+        world::SpatialWorld& spatial,uint64_t nextRenderRevision,
+        const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive,
+        const StreamRetireCommit& retireNavigation,CaveBatchSpec spec={}) {
+        const auto it=pendingRetires_.find(ticket.key);
+        if(closed_||physicsBarrier_.status().recoveryRequired||
+           ticket.action!=CaveResidencyAction::Retire||!exclusive||!exclusive()||
+           !retireNavigation||it==pendingRetires_.end()||!residency_.current(ticket)||
+           it->second.generation!=ticket.generation||
+           it->second.sourceRevision!=ticket.sourceRevision)return false;
+        const auto* old=host_.geometry().catalog().find(ticket.key);
+        if(!old)return false;
+        const auto bounds=navigationChunkBounds(ticket.key,old->resolution,old->spacingCm);
+        try {
+            if(!host_.retireOwnedChunk(device,scene,spatial,ticket.key,
+                old->revision,nextRenderRevision,exclusive,
+                [&]{return retireNavigation(ticket);},spec))return false;
+            if(!exclusive()||!residency_.acknowledge(ticket))
+                throw std::logic_error("Caverns owned retirement ACK refused");
+            pendingRetires_.erase(it);
+            (void)navigationBus_.invalidateResidency(bounds);
+            return true;
+        }catch(...) {
+            physicsBarrier_.requireRecovery();
+            throw;
+        }
+    }
     bool publishStreamRetire(
         CaveResidencyTicket ticket,
         const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive,
@@ -456,6 +487,7 @@ public:
         const auto it=pendingRetires_.find(ticket.key);
         if(closed_||physicsBarrier_.status().recoveryRequired||
            ticket.action!=CaveResidencyAction::Retire ||
+           host_.physicsStages().contains(ticket.key)||
            !exclusive || !exclusive() || !actualNativeCommit ||
            it==pendingRetires_.end() || !residency_.current(ticket) ||
            it->second.generation!=ticket.generation ||
@@ -488,16 +520,8 @@ public:
         }
     }
 
-    bool acceptStreaming(CaveResidencyTicket ticket){
-        if(physicsBarrier_.status().recoveryRequired)return false;
-        const bool confirmed=residency_.acknowledge(ticket);
-        if(confirmed){
-            if(ticket.action==CaveResidencyAction::Retire)
-                pendingRetires_.erase(ticket.key);
-            else readyStreamBuilds_.erase(ticket.key);
-        }
-        return confirmed;
-    }
+    // Retained for source compatibility only. No unverified native ACK.
+    bool acceptStreaming(CaveResidencyTicket){return false;}
     bool failStreaming(CaveResidencyTicket ticket){
         const bool failed=residency_.fail(ticket);
         if(failed){
