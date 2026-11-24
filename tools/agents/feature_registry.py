@@ -111,7 +111,8 @@ def owner_readiness(registry, root, capabilities, graphs, owner=None):
             continue
         for key in ("capabilities", "graphs"):
             bucket[key].sort()
-        bucket["tasks"].sort(key=lambda task: (task["kind"] != "fix_manifest", task["id"]))
+        priorities = {"fix_manifest": 0, "implement_gap": 1, "investigate": 2}
+        bucket["tasks"].sort(key=lambda task: (priorities.get(task["kind"], 3), task["id"]))
         bucket["counts"] = {key: len(bucket[key]) for key in
                             ("manifests", "capabilities", "graphs", "tasks")}
         result.append(bucket)
