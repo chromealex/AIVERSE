@@ -1,3 +1,7 @@
+## Stage 111 — GPU billboard frustum culling (in progress; QA pending)
+
+Scope: GPU-owned Metal allocator only. Preserve full simulation and free/alive accounting for offscreen particles; compact visible billboard records and publish draw arguments from the visible count. Conservative clip-plane tests must retain partially intersecting billboards and bypass invalid views. No new authored graph fields or ECS authority. Acceptance: exact alive/free and visible counts, re-entry without respawn, zero-visible draw, both geometry layouts, no mandatory readback, unchanged host-owned paths. Native/Metal QA deferred.
+
 ## Stage 18 — native FX snapshot capture (2026-11-23; QA deferred)
 
 The independent SpectraFX Graph GPU preview has a one-shot **Capture
