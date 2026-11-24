@@ -2,7 +2,7 @@
 
 Optional FPS skeletal animations are powered by **AIVERSE MotionWeave**.
 New native modules link `AIVERSE::MotionWeave` and include
-`<aiverselib/motionweave/MotionWeave.h>`.
+`"engine/animation/MotionWeave.h"`.
 See [MotionWeave](motionweave.md). The old animation ECS target remains valid.
 
 FPS projects use `game.json` with `module: "fps"` and `genre: "fps"`. Choose FPS in
@@ -14,7 +14,7 @@ Existing copied projects are not overwritten when engine templates change.
 
 The actor-session host (game.json `"module": "actor"`, legacy name) reads its settings from `rules.actor`. The blocks
 that describe capabilities rather than this host - `royale`, `gear`, `crate`, `vehicleTypes`, `bots`, `weapons`,
-`weapon` - may also be written at the top level of the rules (`rules.royale`, ...), which is where shared systems
+`weapon`, `locomotion` - may also be written at the top level of the rules (`rules.royale`, ...), which is where shared systems
 read them as they are extracted from the legacy hosts (docs/no-genre-split-audit.md, G6). A block may sit in only one
 of the two places; both at once is a load error. Existing projects keep `rules.actor.<block>` unchanged.
 
@@ -22,7 +22,7 @@ of the two places; both at once is a load error. Existing projects keep `rules.a
 
 LMB captures the mouse and fires. Short clicks are retained until an input tick is
 submitted. WASD moves, Shift sprints, Ctrl crouches, Space jumps, R reloads, Escape
-releases the cursor. Keys 1–4 select the corresponding entry in `fps.weapons`.
+releases the cursor. Keys 1–4 select the corresponding entry in `actor.weapons`.
 
 The templates provide pistol, automatic rifle, nine-pellet shotgun and sniper rifle.
 Pistol, shotgun and sniper require a new press for each shot. All are hitscan weapons.
@@ -33,7 +33,7 @@ only the missing rounds from reserve. Respawn restores the configured loadout.
 Optional `rules.json` block (1–4 entries):
 
 ```json
-{"fps":{"weapons":[
+{"actor": {"weapons":[
   {"nameKey":"fps.weapon.pistol","damage":28,"magazine":12,"reserve":72,
    "automatic":false,"intervalTicks":15,"reloadTicks":75,"switchTicks":15,"range":150},
   {"nameKey":"fps.weapon.rifle","damage":25,"magazine":30,"reserve":120,
@@ -49,7 +49,7 @@ Optional `rules.json` block (1–4 entries):
 This is an excerpt, not a complete rules file. Times are simulation ticks; these
 values assume 60 Hz. `spread` is a turn offset in the deterministic pellet grid;
 `damage` is per pellet, one shell is consumed for the entire shot. `nameKey` is a
-localization key. The legacy `fps.weapon` block remains supported when `weapons`
+localization key. The legacy `actor.weapon` block remains supported when `weapons`
 is absent. The editor weapon panel edits each loadout entry. Existing projects
 can add the array in the FPS panel's advanced rules editor and Apply.
 
@@ -107,10 +107,10 @@ See [projectile programs](projectile-programs.md) for the JSON schema and trajec
 
 ## Battle royale (opt-in)
 
-`fps.royale` (mode `battleRoyale`) runs the [battle-royale package](mechanics-packages.md#battle-royale-battle-royale-010)
+`actor.royale` (mode `battleRoyale`) runs the [battle-royale package](mechanics-packages.md#battle-royale-battle-royale-010)
 on the FPS actors; a map's own `royale` block replaces the rules block. The JSON is the package format
 (`examples/libraries/mechanics/royale/royale.json`): `bounds`, `zone` phases, optional `flight`, `drop`, `bombardment`,
-`supplyDrops`, `standings`. `fps.crate` lists the items a landed supply drop spawns (item IDs as in `loot`; default
+`supplyDrops`, `standings`. `actor.crate` lists the items a landed supply drop spawns (item IDs as in `loot`; default
 armor, two medkits, magazine, ammo). Without the block the legacy linear `zone` keeps working. `templates/fps_survival`
 uses it (`rules/royale.json`).
 
@@ -119,7 +119,7 @@ uses it (`rules/royale.json`).
 | Insertion | With `flight` every actor starts in the carrier on a seeded path; Jump leaves (door open after `doorOpen` ticks, eject at the end), Jump again opens the chute above `minDeployHeight`, Sprint dives, movement steers; the chute opens itself at `autoDeployHeight`; landing hands the actor to the motor. Ground height = collision cast down | No carrier model / camera; fallback bots jump at seeded points and steer to their spawn |
 | Zone | Seeded nested circles, wait / shrink, per-phase damage to landed actors outside | Damage goes through armor like any hit |
 | Bombardment | Shells hit landed actors in the blast circle unless collision is above their head (roof) | No explosion falloff |
-| Supply drops | Crates announced inside the next circle; `fps.crate` items spawn as loot on landing | Crate is not a physical object |
+| Supply drops | Crates announced inside the next circle; `actor.crate` items spawn as loot on landing | Crate is not a physical object |
 | Standings | Downs, knocks (`mechanics.knockdown`), revives and outs are mirrored into the standings each tick; a team with nobody standing has its knocked members finished; the standings decide the winner (or a draw when the last teams fall on the same tick) | Kill credit = last enemy who damaged the victim |
 
 Snapshots carry `RoyaleView` (current and next circle, stage timer, own skydive phase, carrier position, players
@@ -127,16 +127,16 @@ and teams left, own placement and kills, bombardment area, up to 8 falling crate
 while skydiving. SimEvents: 5 = kill feed (`player` = actor, `value` = victim | kind << 8), 6 = zone stage
 (`value` = phase | kind << 8, `pos` = target centre), 7 = supply drop (`value` = id | kind << 16, `pos` = point),
 8 = shell impact (`value` = damage). FPS save version 8 stores the run (versions 3, 6 and 7 still load for games
-without `fps.royale` / `fps.gear`); snapshot protocol 5 (older peers are rejected). Test: `royale` in `tests/fps/tests.cpp`.
+without `actor.royale` / `actor.gear`); snapshot protocol 5 (older peers are rejected). Test: `royale` in `tests/fps/tests.cpp`.
 The client (`apps/fps/RoyaleHud.h`) draws the zone wall near the viewer, landed crates, a minimap (current and next
 circle, bombardment, crates, carrier, own position and facing), the phase timer with players / teams / kills, jump /
 parachute hints, an outside-the-zone warning, the kill feed (`RoyaleView::feed`, the last six lines) and the result
-banner; strings are `fps.royale.*` in engine/assets/lang. Checked on a screenshot during the flight (Linux, Mesa
+banner; strings are `actor.royale.*` in engine/assets/lang. Checked on a screenshot during the flight (Linux, Mesa
 software GL); the zone wall and the banner have not been looked at on screen yet.
 
 ## Typed vehicles (opt-in)
 
-`fps.vehicleTypes` (requires `mechanics.enabled`) holds [vehicle-controllers](../skills/gameplay/aiverse-vehicle-controllers/SKILL.md)
+`actor.vehicleTypes` (requires `mechanics.enabled`) holds [vehicle-controllers](../skills/gameplay/aiverse-vehicle-controllers/SKILL.md)
 definitions (`examples/libraries/mechanics/vehicles-sports/vehicles.json` format: wheeled / tracked / hover / flight
 controller, damage zones, seats). A map vehicle with `"type": id` (and optional `"yaw"` in turns) drives with that
 controller: the driver's forward / back become throttle / brake (reverse when stopped), right steers, Jump is the
@@ -146,7 +146,7 @@ package's collision response, and a hard crash damages it. Interact enters the n
 Passengers and gunners keep Fire / Aim / Reload / weapon keys; the driver does not shoot. Knocked, killed or
 thrown-out occupants are ejected; a destroyed vehicle kills everyone inside. Vehicles without `type` keep the
 legacy car. Typed vehicles run on the one vehicle system of every host (`engine/vehicles`, docs/driving.md): the
-entity carries `vehicles::VehicleDrive`, `fps.vehicleTypes` become shared vehicle types (metres, seat lists; a hard
+entity carries `vehicles::VehicleDrive`, `actor.vehicleTypes` become shared vehicle types (metres, seat lists; a hard
 crash costs (impact - 8 m/s) x 10 health), and `engine/actor/ActorVehicles.cpp` is only the metre-map world query
 (ground cast, box sweep against the triangle world, seat-list glue). An empty typed vehicle at rest sleeps (not
 stepped) like every parked vehicle. FPS save version 10 stores the shared VehicleDrive record. `templates/fps_survival` has ten four-seat cars
@@ -176,7 +176,7 @@ through the door, climb a floor with the real motor).
 
 ## Library bots (opt-in)
 
-`fps.bots` holds [bots-combatant](../skills/ai/aiverse-bots-combatant/SKILL.md) settings (`{"preset":"normal","sightRange":120}`).
+`actor.bots` holds [bots-combatant](../skills/ai/aiverse-bots-combatant/SKILL.md) settings (`{"preset":"normal","sightRange":120}`).
 Map players with `"bot": true` then run that controller inside the authoritative tick instead of the reference
 fallback bot: perception, reaction, bounded aim, reload, retreat and the battle-royale zone (the announced circle).
 On top of it the module adds goals: wanted loot within 25 m (weapons it lacks, better gear, medkits, ammo) and
@@ -195,21 +195,43 @@ collision ids are allocated from `kRotatedColliderBase`; the navmesh treats it b
 
 ## Gear (opt-in)
 
-`fps.gear` (requires `mechanics.enabled`) is a [gear-tiers](../skills/gameplay/aiverse-gear-tiers/SKILL.md) catalog:
+`actor.gear` (requires `mechanics.enabled`) is a [gear-tiers](../skills/gameplay/aiverse-gear-tiers/SKILL.md) catalog:
 pieces with `id` 1..55, `slot`, `tier`, `durability`, `reduction` / `wear` (milli), `zones` (1 = head shots,
 2 = every other hit) and `capacity` (extra inventory stacks, up to 24 in total). Loot type `200 + id` is a gear piece
-(map `loot`, `fps.crate`); Interact equips it and the replaced piece takes its place on the ground with its
+(map `loot`, `actor.crate`); Interact equips it and the replaced piece takes its place on the ground with its
 durability. With a catalog the gear replaces the legacy flat armor absorption. Broken pieces emit SimEvent 9
 (`player` = wearer, `value` = slot); dying drops every worn piece. The own loadout travels in snapshots
 (`Snapshot::gear`); FPS save version 10 stores loadouts. `templates/fps_survival` ships three helmet, vest and
 backpack levels (`rules/gear.json`) spread near the spawns and in supply crates.
 
+## Locomotion modes (opt-in)
+
+A `locomotion` block (top level of the rules, or `rules.actor.locomotion`) moves characters through the shared
+character-locomotion mode machine (`engine/mechanics/LocomotionModes.h`) instead of the plain motor. Keys are the
+`locomotion.*` settings of docs/gameplay-settings.md (milli-units and ticks, same ranges and relations; `{}` = defaults);
+the motor's `speed` / `sprintSpeed` / `jumpSpeed` / `gravity` and stances still apply. Rules without the block behave
+and hash exactly as before: no locomotion state, no save or network bytes.
+
+| Move | Input | How the host reports the world |
+|---|---|---|
+| Dash | Dash press (desktop **K**, pad RB): along the move direction, else the view | wall ahead from the side probes ends it |
+| Wall slide / wall run | hold the move key into a wall / run along it after a jump | short side probes around the body: wall normal and collider id (same-wall reattach rule) |
+| Grapple (pull or swing) | hold Grapple (middle mouse, **J**, pad LB); release lets go | the view ray up to `grappleMaxLengthMilli`; the hit point is kept while attached |
+| Glide | hold Glide (**Space** held, pad A) while falling | — |
+| Slopes, coyote time, jump buffer | as before | ground normal of the sweep |
+
+The server sends each player its own locomotion state (snapshot-delta record kind 5); the client predicts the modes
+with the same motor and reconciles them with the rest of the pose. Saves (version 10) append the per-character state
+only with the block; the checksum includes it only with the block. Not reported by this host yet: ledges, ladders,
+climbable walls, water and one-way colliders (the map format has no tags for them), so those modes stay idle here.
+Tests: `aiverse_fps_tests` (`locomotionModes`: dash, wall run, grapple, save mid-dash, client prediction).
+
 ## Close combat (opt-in)
 
-`fps.melee.enabled: true` adds an authoritative melee strike, guard, parry and lock-on.
-It is independent of `fps.mechanics`; rules without the block behave as before.
+`actor.melee.enabled: true` adds an authoritative melee strike, guard, parry and lock-on.
+It is independent of `actor.mechanics`; rules without the block behave as before.
 Swing timing, input buffering, chaining and one-hit-per-target-per-swing come from the
-shared `melee-combat` library (`libraries/include/aiverselib/mechanics/Melee.h`).
+shared `melee-combat` library (`engine/mechanics/Melee.h`).
 
 | Behavior | Implementation | Current limits |
 |---|---|---|
@@ -219,7 +241,7 @@ shared `melee-combat` library (`libraries/include/aiverselib/mechanics/Melee.h`)
 | Stagger | A landed hit staggers the target and a parry staggers the attacker for `staggerTicks`; staggered actors cannot strike or fire | — |
 | Lock-on | Holding LockOn selects the nearest living enemy within `lockRange`; strikes aim at the locked target until it dies or moves out of twice the range | Camera does not follow the lock |
 
-Data: `fps.melee` accepts `enabled`, `damage`, `windupTicks`, `activeTicks`,
+Data: `actor.melee` accepts `enabled`, `damage`, `windupTicks`, `activeTicks`,
 `recoveryTicks`, `bufferTicks`, `parryTicks`, `staggerTicks` (ticks; defaults scale with
 tick rate), `range`, `radius`, `lockRange` (world units) and `guardTurns` (half-angle in
 turns, at most 0.25). Simulation events: 3 = swing started, 4 = contact (value = target
@@ -232,7 +254,7 @@ it live before treating the feel as finished.
 
 ## Extended mechanics (opt-in)
 
-`fps.mechanics.enabled: true` enables the extended authoritative systems. Existing
+`actor.mechanics.enabled: true` enables the extended authoritative systems. Existing
 rules without this block retain their single-round behavior. The bundled training,
 arena, survival and tactical templates enable this block.
 
@@ -248,7 +270,7 @@ arena, survival and tactical templates enable this block.
 | Medical | Delayed consumable healing, movement/fire/damage cancellation, teammate knockdown, bleeding and revive | Knockdown requires a living teammate |
 | Tactical rounds | Freeze/buy phase, spawn buy zone, money, plant/defuse timers, dropped bomb recovery, score, round restart | Team 1 attacks; team 2 defends; no halftime or overtime; loadout resets each round |
 | Movement | Prone with ceiling clearance, explicit ladder regions, checked short-obstacle vault | Axis-aligned collision; vault is a discrete move, not a root-motion animation |
-| Vehicles | Legacy: driver admission, exclusive control, steering, swept static collision, safe exit and weapon damage. Typed (`fps.vehicleTypes`, below): package controllers, seats with passengers and gunners | Legacy car: single seat on flat ground. Typed: no suspension geometry, no vehicle-vehicle collisions |
+| Vehicles | Legacy: driver admission, exclusive control, steering, swept static collision, safe exit and weapon damage. Typed (`actor.vehicleTypes`, below): package controllers, seats with passengers and gunners | Legacy car: single seat on flat ground. Typed: no suspension geometry, no vehicle-vehicle collisions |
 | Audio | Synthesized original shot/reload/footstep sounds through the engine audio service; remote shot attenuation and simple cover volume reduction | Placeholder sound design; own-player footsteps only |
 
 `fps_tactical` / **Breach Protocol** is a separate bomb-mode example. Existing copied
@@ -276,7 +298,7 @@ Weapon entries additionally accept `hipSpread`, `moveSpread`, `recoil` (turns),
 `bulletSpeed` (zero = hitscan), `bulletGravity`, `penetration`, `headMultiplier`,
 `limbMultiplier`, and `price`. Defaults preserve legacy accuracy and hitscan behavior.
 
-`fps.mechanics` accepts `knockdown`, `startArmor`, `startMoney`, `killReward`,
+`actor.mechanics` accepts `knockdown`, `startArmor`, `startMoney`, `killReward`,
 `winReward`, `lossReward`, `healTicks`, `reviveTicks`, `bleedTicks`, `freezeTicks`,
 `buyTicks`, `plantTicks`, `defuseTicks`, `bombTicks`, `roundsToWin`, `grenadeFuse`,
 `smokeTicks`, `flashTicks`, `interactRange`, `blastRadius`, `smokeRadius`, `flashRadius`.
@@ -306,12 +328,12 @@ The reference FPS client now supports an optional character model without
 changing authoritative FPS simulation, saves, or network protocol:
 
 ```json
-{ "fps": { "visual": { "model": "models/hero.glb", "scale": 1.0,
+{ "actor": { "visual": { "model": "models/hero.glb", "scale": 1.0,
                        "heightOffset": 0.0 } } }
 ```
 
 Place the model under the FPS project directory. An optional
-`fps.visual.animationGraph` object uses the existing AnimationGraph JSON
+`actor.visual.animationGraph` object uses the existing AnimationGraph JSON
 format; otherwise, the client builds a basic Idle/Walk or Idle/Run blend
 graph from recognized clip names. Input parameters projected from snapshots:
 `speed`, `moving`, `dead`, `grounded`, `reloading`.
@@ -324,8 +346,8 @@ weapon remains unchanged. This path requires a real model and visual testing.
 
 ### Optional instanced GPU crowd skinning
 
-Set `fps.visual.bakedCrowd: true` with a skinned
-`fps.visual.model` and **no custom `fps.visual.animationGraph`**.
+Set `actor.visual.bakedCrowd: true` with a skinned
+`actor.visual.model` and **no custom `actor.visual.animationGraph`**.
 The FPS client then bakes the model's clips into a joint-matrix texture,
 drives per-entity Idle/Walk/Run/Death through the shared
 `AnimationCrowdComponent`, and submits
@@ -339,7 +361,7 @@ rather than hard-coded per-distance pose sampling.
 
 ### Hot-reloadable FPS AnimationGraph
 
-Optional `fps.visual.graphFile: "animations/hero.json"` loads a
+Optional `actor.visual.graphFile: "animations/hero.json"` loads a
 project-relative AnimationGraph file instead of the generated Idle/Walk/Run
 graph. The client polls for changed file timestamps on its presentation
 thread (every 30 rendered frames), recompiles transactionally, retains the
@@ -350,7 +372,7 @@ inside the current project; it must not contain parent-path traversal.
 
 ## Automatic MotionWeave CPU/GPU backend
 
-Under `fps.visual`, optional `animationMode` is `"auto"` (default),
+Under `actor.visual`, optional `animationMode` is `"auto"` (default),
 `"cpu"`, or `"gpu"`. Existing `bakedCrowd: true` remains equivalent
 to forcing `"gpu"` when a suitable animation can be baked. Custom
 `animationGraph` or `graphFile`, native callbacks, IK and layered
@@ -367,7 +389,7 @@ CPU graph animation automatically uses the host-owned persistent
 MotionWeave scheduler when 16 or more remote presentation actors exist.
 Its cost-aware worker jobs avoid custom callback/rig operations, which
 execute on the submitting thread after a barrier. Set
-`fps.visual.animationStats: true` to see CPU/GPU path, worker count,
+`actor.visual.animationStats: true` to see CPU/GPU path, worker count,
 work estimates, jobs, and CPU timings in the FPS HUD. This is
 presentation profiling, not deterministic simulation state.
 
@@ -378,7 +400,7 @@ Optional project-local JSON assets can be authored in the editor
 (`animations/montage/`) or through Workspace/MCP:
 
 ```json
-{"fps":{"visual":{
+{"actor": {"visual":{
   "model":"models/hero.glb",
   "montages":{
     "shot":"animations/montage/fire.json",

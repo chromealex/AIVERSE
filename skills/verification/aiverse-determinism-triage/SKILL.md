@@ -19,6 +19,6 @@ description: Find and fix AIVERSE determinism breaks - checksum mismatches betwe
    - state not saved or not hashed (new field missing from save/hash, `ComputerPlayer::saveState`, NativeState);
    - presentation feeding the simulation (view, UI, audio, fx).
 5. Fix at the cause, never by excluding the field from the hash.
-6. Prove: repeated seeds equal, save/load mid-match equal, `templates/` checksums unchanged (or changed on purpose and recorded with a reason), CI `determinism`.
+6. Prove: repeated seeds equal, save/load mid-match equal, sample-game checksums (`tests/checksums/check.sh`) unchanged (or changed on purpose and recorded with a reason), CI `determinism`.
 
 Code: `tools/determinism/diff.py` (tests `tools/determinism/test_diff.py`) and `aiverse_headless --checksum-log F` (`apps/headless/main.cpp`). No library target.

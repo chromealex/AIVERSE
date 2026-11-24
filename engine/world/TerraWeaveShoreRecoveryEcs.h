@@ -7,7 +7,7 @@
 #include "engine/world/TerraWeaveShoreRecovery.h"
 #include "engine/world/TerraWeaveShorelineRaster.h"
 #include "engine/world/TerraWeaveForestDeadwood.h"
-#include <aiverselib/water/NereidQueryIndex.h>
+#include "engine/world/nereid/NereidQueryIndex.h"
 #include <algorithm>
 #include <array>
 #include <cstdint>

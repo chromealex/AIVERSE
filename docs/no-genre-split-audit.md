@@ -34,7 +34,7 @@ renaming it.
 separate simulations; each project gets only that host's features.
 - `apps/server/GameData.cpp:31` runs only `rts`; `engine/net/server/ServerMatch.cpp:452` defaults `module` to `rts`.
 - `apps/headless/main.cpp:66,453,723` — static cast to `GameCore` by name, separate `playFps`.
-- `engine/actor/Project.h:14`, `modules/voxel/Project.h:13` reject other modules;
+- `engine/actor/Project.h:14`, `engine/voxel/Project.h:13` reject other modules;
   `engine/view/game/GameViewScript.cpp:838` view scripts only when `module().name()=="rts"`.
 - `modules/genres/MotionModule.cpp:38` — `motion.kind` must be `platformer` or `racing` (genre names as a mode).
 - 36 `dynamic_cast<GameCore*>` (campaign, scenario, AI, audio, fx, overlays, view).
@@ -58,22 +58,22 @@ skill objects, settlers, dungeon, planets, fog/vision (`RtsVision`), map generat
 Game-specific code inside the engine host: `modules/rts/Kingston*` (move to the Kingston game's `native/`).
 
 ### G4. Capabilities hosted only by `modules/fps`
-Typed vehicles (`FpsVehicles`, `fps.vehicleTypes`), gear (`fps.gear`), battle royale (`fps.royale`,
+Typed vehicles (`FpsVehicles`, `actor.vehicleTypes`), gear (`actor.gear`), battle royale (`actor.royale`,
 `FpsRoyale`), generated buildings wiring (`FpsBuildings`), melee (`FpsMelee`), combatant bots (`FpsBots`),
-streaming (`FpsStreaming`), animation modes (`fps.visual.*`), ECS authority switches (`fps.ecsAuthority`).
+streaming (`FpsStreaming`), animation modes (`actor.visual.*`), ECS authority switches (`actor.ecsAuthority`).
 `tools/libraries/navmesh_main.cpp:10` refuses non-FPS projects.
 
 ### G5. One capability implemented twice
 - Vehicles: `RtsDriving` and `FpsVehicles` (both over `vehicle-controllers`). Stage B: one system `engine/vehicles`; the two files are host world queries.
 - Bots: `ComputerPlayer` (side commander), `FpsBots` (combatant), `bots/` action bots.
-- Match end: RTS victory, FPS rounds (`fps.mode`), `match-rules` objectives.
+- Match end: RTS victory, FPS rounds (`actor.mode`), `match-rules` objectives.
 - Movement / combat: FPS `moveActor` and RTS `sysMovement`, RTS `sysProjectiles` vs FPS projectiles — partly
   moved onto shared ECS policies (see `aiverse-ecs-*` skills), not finished.
 
 ### G6. Genre-named configuration
 Rules blocks `fps.*` (`mode`, `royale`, `gear`, `vehicleTypes`, `visual`, `ecsAuthority`, ...), `topDown`
 (means direct control, not a camera), `motion.kind: platformer|racing`. Branch
-`feature/aiv20261121_racing` (5fb186599, not on main) adds `fps.mode "race"` and `skills/genres/aiverse-racing` —
+`feature/aiv20261121_racing` (5fb186599, not on main) adds `actor.mode "race"` and `skills/genres/aiverse-racing` —
 both violate the rule and must be reworked before merge (race rules as a shared session usable by any vehicle
 host; the skill goes to `skills/gameplay/` because the `genres` category no longer exists).
 
@@ -100,9 +100,9 @@ editor, server, headless; `tools/citygen` writes only the flat grid format.
 | E One scene document (G2) | built + tested (stage 09): `MapData::fps` replaced by `worldSpace`; a world-space map is one document kept whole |
 | A FPS host on ECS only | built + tested (stage 03): `modules/fps` ECS only, races ported |
 | B One vehicle system (G5) | built + tested (stage 04; CTest 365/367, checksums 95/96, road_race identical): `engine/vehicles` (`AIVERSE::vehicles`: `VehicleDrive` / `VehicleOccupant` components, `stepVehicles` over a `VehicleHost` world query, autopilot / lock API, one race adapter `VehicleRace` + `RaceState`); `RtsDriving` = grid-map world query + enter key + race seats, `FpsVehicles` = metre-map world query + seat-list glue + race seats; `DrivingStore`, `RtsRace.h`, `FpsRace.cpp`, `fps::VehicleDrive`, `CharacterRacer`, `State::race` and the road forwarders deleted. Left: rules `driving` and `vehicleTypes` are still two blocks (one parser each, one `DriveRules` result); getting in on foot keeps two seat models (driver's door vs seat list) inside the shared components |
-| C Shared systems out of `modules/rts` (G3) | done (stages 06-09): every system in `engine/game`, view in `engine/view/game`, audio / fx in `engine/audio` / `engine/fx`; `modules/rts` keeps only BwAI (Bunker Wars bot) and game extensions. GTA2 migration is separate work |
+| C Shared systems out of `modules/rts` (G3) | done (stages 06-12): `modules/` is gone. Every system in `engine/game` (incl. the Bunker Wars computer player `BwAI*`, `GameExtensions.cpp`, `Strategic`), view `engine/view/game`, audio / fx `engine/audio` / `engine/fx`, actor systems `engine/actor`, voxel `engine/voxel`, native-module CMake `engine/game/native/Build.cmake`. GTA2 migration is separate work |
 | 5 Shared blocks (G6) | partly: actor-session host reads `royale`, `gear`, `crate`, `vehicleTypes`, `bots`, `weapons`, `weapon` from the top level of rules |
-| D One simulation (G1) | done in code (stage 10): one `GameModule`, `game::GameCore`; actor systems (`actor::ActorHost`) run on world-space maps; `actor::host(sim)`. Board / Motion / Voxel / Strategic modules are still separate hosts |
+| D One simulation (G1) | done (stages 10-11): one `GameModule`, `game::GameCore`. Whole-match systems chosen by data (`HostSystems`): actor systems on world-space maps (`actor::host(sim)`), voxel worlds on rules `voxelGame` (`voxelgame::host(sim)`, `engine/voxel`). The unbuilt Board / Motion prototypes (`modules/genres`) are deleted; Strategic already runs on GameCore |
 | 7 Template kits (G8) | nothing to do |
 
 Every stage above is unverified until the Mac build and tests in the latest `docs/handoffs/no-genre-split-stage-NN.md` pass.
@@ -115,7 +115,7 @@ KINGSTON, full CTest, template checksums (baseline re-recorded on purpose when a
 handoff `docs/handoffs/no-genre-split-stage-NN.md`, push.
 
 A. **FPS host on ECS only.** `fps::State::actors/projectiles/loot/vehicles/vehicleRuns` become entities with
-   components in `Simulation::world()`; delete the vectors, `fps.ecsAuthority`, `fps.ecsMirror`, compat stages and
+   components in `Simulation::world()`; delete the vectors, `actor.ecsAuthority`, `actor.ecsMirror`, compat stages and
    parity fixtures. Consumers (authority session snapshots, bots, editor runtime view, client view, navmesh tool)
    read components.
 B. **One vehicle system (G5).** `RtsDriving` + `FpsVehicles` -> one ECS driving system in `engine/` over
@@ -125,7 +125,7 @@ C. **Shared gameplay systems out of `modules/rts` (G3).** Move each `Rts*` syste
    sensors, campaign, side commander bot, map generator), one or a few per stage, deleting the module copy.
 D. **One simulation (G1).** `GameCore` and `fps::Module` dissolve into one ECS simulation that runs the systems a
    project's data enables; `game.json` `module` is removed; server, headless, editor, Studio and tools run any
-   project. `modules/rts`, `modules/fps`, `modules/genres`, `modules/strategic`, `modules/voxel` are emptied.
+   project. `modules/rts`, `modules/fps`, `modules/genres`, `modules/strategic`, `engine/voxel` are emptied.
 E. **One scene document (G2b).** Grid and world-space maps become one entity document; `worldSpaceMaps()` /
    `actorSessionPlay()` capability queries are deleted with the second format.
 F. **Names (G7 rest).** Package ids `bots-rts` -> `bots-commander`, `bots-fps` -> `bots-combatant`, `genre-bots` ->

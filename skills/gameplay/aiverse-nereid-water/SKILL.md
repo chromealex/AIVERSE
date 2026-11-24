@@ -19,7 +19,7 @@ Sky stays with PRISMA, climate with PHYSIS, VFX with SpectraFX; compose owners.
 Planets: the sea of cube-sphere bodies draws with NEREID's wave model from `engine/render/NereidWaveShaders.h`
 (shared with plane water; `nereidSphereNormal` / `nereidSpherePatch` / `nereidSphereFoam` sample it triplanar),
 colour by depth and coast foam (`engine/view/game/GamePlanetShaders.h` only calls them). Water bodies on spheres:
-`<aiverselib/water/NereidSphereWater.h>` (`WaterSphereComponent` shells, `sampleSphereWater`,
+`"engine/world/nereid/NereidSphereWater.h"` (`WaterSphereComponent` shells, `sampleSphereWater`,
 `addSphereWaterSamplingSystem` / `addSphereWaterBuoyancySystem`, `registerNereidSphereWaterPersistence`; radial depth
 and up, a current about an axis, optional `WaterSphereWavesComponent` swell, `waterSphereFromJson` / `spawnWaterSpheres`;
 events in `NereidSphereInteractions.h`: `attachSphereWaterActor`, `addSphereWaterInteractionSystem`; or
@@ -36,7 +36,7 @@ Read `AGENTS.md`, `docs/nereid/ARCHITECTURE.md`,
 ## Use the shared package
 
 Link `AIVERSE::lib_nereid_water`, include
-`<aiverselib/water/NereidWaterSystems.h>`, and use
+`"engine/world/nereid/NereidWaterSystems.h"`, and use
 `aiverse::lib::nereid`. Register `registerNereidWaterPersistence(sim)`
 from native `GameModule::setup`. Configure ECS WaterBodyComponent Entities;
 attach WaterProbeComponent+WaterContactComponent to any unit, actor, ship or
@@ -73,7 +73,7 @@ update this skill and `docs/nereid/ARCHITECTURE.md` when API changes.
 ## Stage 2 — buoyancy and drag
 
 For buoyant objects also link `AIVERSE::lib_nereid_buoyancy`, include
-`<aiverselib/water/NereidBuoyancySystems.h>`, and register
+`"engine/world/nereid/NereidBuoyancySystems.h"`, and register
 `registerNereidBuoyancyPersistence(sim)` at setup.
 
 Attach WaterBuoyancyComponent, WaterVelocityInputComponent and
@@ -89,7 +89,7 @@ Test target: `ecs_nereid_buoyancy_test` (unverified).
 
 ## Stage 3 — polygon lakes and spline rivers (experimental)
 
-Use `<aiverselib/water/NereidGeometry.h>` or the
+Use `"engine/world/nereid/NereidGeometry.h"` or the
 `NereidWaterSystems.h` umbrella and register
 `registerNereidGeometryPersistence(sim)` when enabling shape overrides.
 
@@ -111,7 +111,7 @@ NEREID tests before declaring this stage verified.
 
 ## Stage 4 — optional indexed water sampler
 
-Include `<aiverselib/water/NereidQueryIndex.h>`. For large water-body
+Include `"engine/world/nereid/NereidQueryIndex.h"`. For large water-body
 counts, replace `addWaterSamplingSystem` with
 `addIndexedWaterSamplingSystem(sim,"water.sample")`. **Do not register
 both.** It generates an in-tick temporary AABB index, scans infinite oceans
@@ -152,13 +152,13 @@ matches the legacy mask at **cell centres**, not at all sub-cell
 positions; baked `~` cells also lose per-body semantic WaterKind.
 
 The generic raster conversion lives in
-`aiverselib/water/NereidRasterImport.h` and does **not** depend
+`engine/world/nereid/NereidRasterImport.h` and does **not** depend
 on RTS. Test: `ecs_nereid_legacy_raster_test` (authored, NOT RUN).
 Record actual results and any fixes in `docs/nereid/HANDOFF.md`.
 
 ## Stage 6 — easiest opt-in native water setup
 
-Include `<aiverselib/water/NereidNativeWater.h>`, link public
+Include `"engine/world/nereid/NereidNativeWater.h"`, link public
 `AIVERSE::lib_nereid_water` and (when buoyancy is enabled)
 `AIVERSE::lib_nereid_buoyancy`. From native GameModule::setup, call
 `registerNativeWaterPipeline(sim,"water",cfg)` exactly once.
@@ -191,7 +191,7 @@ No measurements were run during stage 7A.
 
 ## Stage 7B — surface meshes for any genre
 
-Include `<aiverselib/water/NereidWaterSurfaceMesh.h>` for a
+Include `"engine/world/nereid/NereidWaterSurfaceMesh.h"` for a
 read-only, backend-agnostic water mesh. Call
 `buildWaterSurfaceMesh(body, optionalGeometry, options)` in
 presentation/assets preparation, NOT authoritative Simulation
@@ -252,8 +252,8 @@ compilation or screenshots.
 
 ## Stage 22 — universal water interactions (feature work, tests deferred)
 
-**Source:** `libraries/include/aiverselib/water/NereidInteractions.h`,
-`libraries/include/aiverselib/water/NereidInteractionPresentation.h`.
+**Source:** `engine/world/nereid/NereidInteractions.h`,
+`engine/world/nereid/NereidInteractionPresentation.h`.
 **Link target:** `AIVERSE::lib_nereid_interactions` (native C++, independent of genre).
 Opt in with `NativeWaterPipelineConfig::enableInteractions=true` before
 `registerNativeWaterPipeline`; this installs the system AFTER water sampling.
@@ -284,7 +284,7 @@ limits and next features.
 
 ## Stage 23 — presentation ripples, expanding wakes and SpectraFX hook
 
-Include `<aiverselib/water/NereidInteractionPresentation.h>` in the native
+Include `"engine/world/nereid/NereidInteractionPresentation.h"` in the native
 game's presentation code. `WorldScene` now also exposes an optional
 bounded `NereidRippleField` visual renderer. Do not put it inside
 Simulation, ECS checksums, rollback state, Box3D or the water physics
@@ -369,7 +369,7 @@ unless profiling justifies up to 64 indexed draws per water body.
 Nonrectangular geometries currently use the legacy draw.
 
 **Waterfall/cascade geometry:** include
-`<aiverselib/water/NereidCascades.h>` and link
+`"engine/world/nereid/NereidCascades.h"` and link
 `AIVERSE::lib_nereid_cascades`. For ECS-native projects set
 `NativeWaterPipelineConfig::enableCascades=true` to persist
 `WaterCascadeComponent`. The component is genre independent:
@@ -447,7 +447,7 @@ tests deferred by explicit user direction.
 
 ## Stage 29 — spatial river/rapids currents (features-first)
 
-Use `<aiverselib/water/NereidCurrentField.h>` and link
+Use `"engine/world/nereid/NereidCurrentField.h"` and link
 `AIVERSE::lib_nereid_currents` in native projects. On a water-body
 Entity with an enabled `RiverSpline` `WaterGeometryComponent`,
 attach `WaterCurrentFieldComponent` with exactly one
@@ -588,7 +588,7 @@ presentation ripples sample wind at their own world X/Z.
 `applyNereidPhysisWindZones(scene,zones)` is a convenience adapter
 but PHYSIS still owns its ECS/physics. No direct PHYSIS dependency.
 
-**Eddies/rapids** (`<aiverselib/water/NereidVortices.h>`):
+**Eddies/rapids** (`"engine/world/nereid/NereidVortices.h"`):
 opt into `AIVERSE::lib_nereid_vortices` and register
 `NativeWaterPipelineConfig::enableVortices`. Add
 `WaterVortexFieldComponent` to an existing water-body Entity
@@ -701,7 +701,7 @@ Use scene `style.rapidDetail` values `"low"`, `"medium"`, `"high"` or native `Wa
 
 ## Stage 41 — confluence current ECS composition
 
-Include `<aiverselib/water/NereidConfluences.h>`; enable `NativeWaterPipelineConfig::enableConfluences`, then attach a `WaterConfluenceComponent` on a dedicated junction Entity with 2..4 distinct inlet water Entity IDs, one distinct outlet and Fixed mouth/radius/blend/speed limit. All linked bodies must cover the authored mouth; invalid/dead link suppresses junction. The same `applyWaterConfluenceFlow` runs in reference/indexed water sampling before cascade continuity. The component has independent persistent schema `nereid.confluence` v1; do not alter old water archives or genre modules. Rendering bridge remains pending. Handoff: `docs/nereid/stage-41-confluence-ecs.md`. **C++/CTest unverified**.
+Include `"engine/world/nereid/NereidConfluences.h"`; enable `NativeWaterPipelineConfig::enableConfluences`, then attach a `WaterConfluenceComponent` on a dedicated junction Entity with 2..4 distinct inlet water Entity IDs, one distinct outlet and Fixed mouth/radius/blend/speed limit. All linked bodies must cover the authored mouth; invalid/dead link suppresses junction. The same `applyWaterConfluenceFlow` runs in reference/indexed water sampling before cascade continuity. The component has independent persistent schema `nereid.confluence` v1; do not alter old water archives or genre modules. Rendering bridge remains pending. Handoff: `docs/nereid/stage-41-confluence-ecs.md`. **C++/CTest unverified**.
 
 
 ## Stage 42 — confluence presentation snapshots
@@ -754,7 +754,7 @@ sampling and presentation consume the same grade. Editor typed operations
 nereid_water_state / nereid_flow_set are Undoable; HTML5 controls belong to Studio.
 Rebuild Terra bank/vegetation masks when changing an exported river's grade.
 
-Native authoring may use `<aiverselib/water/NereidFootprintDistance.h>` for an
+Native authoring may use `"engine/world/nereid/NereidFootprintDistance.h"` for an
 optional signed horizontal clearance (invalid/disabled water => no value).
 Use it with local graded height for terrain sand/wetness/grass masks, as Terra's
 native exporter does. It does not change authoritative footprint membership,

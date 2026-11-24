@@ -1,7 +1,7 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Adapters from the generated `senses` settings section (integer ticks, milli-units, milli-turns) to SensesConfig.
-#include "../gameplay/Configuration.h"
+#include "engine/gameplay/Configuration.h"
 #include "Senses.h"
 #include <string>
 #include <vector>

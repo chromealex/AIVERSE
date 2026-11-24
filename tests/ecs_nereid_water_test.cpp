@@ -1,5 +1,5 @@
 // NEREID shared water-body ECS sampling in two independent native hosts.
-#include <aiverselib/water/NereidWaterSystems.h>
+#include "engine/world/nereid/NereidWaterSystems.h"
 #include <iostream>
 #include <memory>
 #include <stdexcept>

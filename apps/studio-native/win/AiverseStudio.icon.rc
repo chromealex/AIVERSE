@@ -1,0 +1,3 @@
+// Taskbar and Alt-Tab icon. Resource 1 is what WinShell loads; the manifest uses the same number with a different type.
+// Sizes 16–256 from engine/assets/branding/mark.png. The mark is transparent; do not flatten it onto black.
+1 ICON "AiverseStudio.ico"

@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>AIVERSE catalog preview</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #F3EFE8; color: #141210;
+    font: 500 13px/1.3 "Onest", system-ui, -apple-system, "Segoe UI", sans-serif; }
+  canvas { display: block; width: 100vw; height: 100vh; outline: none; touch-action: none; }
+  .row { position: fixed; left: 12px; right: 12px; display: flex; flex-wrap: wrap; gap: 6px;
+    justify-content: center; pointer-events: none; }
+  #bar { bottom: 12px; }
+  #modes { top: 10px; }
+  .row button { pointer-events: auto; font: inherit; border: 1px solid #D6CEC2; background: rgba(251,249,245,.92);
+    color: #141210; border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  .row button[aria-pressed="true"] { background: #141210; color: #F3EFE8; border-color: #141210; }
+  .row button:disabled { opacity: .45; cursor: default; }
+  .row .sep { width: 10px; }
+  #loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; pointer-events: none; --aiv-mark-ink: #141210; --aiv-mark-accent: #E9C3A4; }
+  #loading .aiv-mark { width: 76px; height: auto; }
+  #loading[hidden] { display: none; }
+  #status { font: 500 12px "JetBrains Mono", ui-monospace, monospace; color: #5E574F; text-align: center; max-width: 80vw; }
+  #error { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); font: 500 13px "JetBrains Mono", ui-monospace, monospace;
+    color: #5E574F; text-align: center; max-width: 80vw; }
+  #info { position: fixed; top: 54px; left: 12px; max-width: min(360px, 60vw); background: rgba(251,249,245,.92);
+    border: 1px solid #D6CEC2; border-radius: 10px; padding: 8px 10px; font: 400 12px/1.45 "JetBrains Mono", ui-monospace, monospace;
+    color: #3B3631; }
+  #info b { font-weight: 600; color: #141210; }
+  #info .on { color: #141210; font-weight: 600; }
+  #info .muted { color: #8A8178; }
+  #info[hidden] { display: none; }
+  #hint { position: fixed; top: 58px; right: 12px; font: 400 12px "JetBrains Mono", ui-monospace, monospace; color: #5E574F; }
+  @media (max-width: 640px) { #hint { display: none; } #info { max-width: calc(100vw - 48px); font-size: 11px; } }
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+<div id="loading"><!-- aiverse-loader:begin (tools/branding/logo/loader.py) -->
+<svg class="aiv-mark" viewBox="0 60 1000 880" role="img" aria-label="Loading"><style>.aiv-mark{display:block;overflow:visible}.aiv-mark .aiv-b{fill:var(--aiv-mark-ink,#141210);opacity:0;animation:.55s cubic-bezier(.2,.7,.25,1) forwards}.aiv-mark .aiv-t{animation-name:aiv-t}.aiv-mark .aiv-l{animation-name:aiv-l;animation-delay:.1s}.aiv-mark .aiv-r{animation-name:aiv-r;animation-delay:.2s}.aiv-mark .aiv-d{fill:var(--aiv-mark-accent,#E9C3A4);opacity:0;transform-box:view-box;transform-origin:500px 588px;animation:aiv-d .5s .55s cubic-bezier(.2,.7,.25,1) forwards,aiv-p 1.6s 1.05s ease-in-out infinite}@keyframes aiv-t{from{opacity:0;transform:translate(0,-70px)}to{opacity:1;transform:none}}@keyframes aiv-l{from{opacity:0;transform:translate(-60px,32px)}to{opacity:1;transform:none}}@keyframes aiv-r{from{opacity:0;transform:translate(60px,32px)}to{opacity:1;transform:none}}@keyframes aiv-d{from{opacity:0;transform:rotate(-90deg) scale(.3)}to{opacity:1;transform:none}}@keyframes aiv-p{0%,100%{opacity:1;transform:none}50%{opacity:1;transform:scale(1.07)}}@media (prefers-reduced-motion:reduce){.aiv-mark .aiv-b,.aiv-mark .aiv-d{animation:none;opacity:1}}</style><polygon class="aiv-b aiv-t" points="500,94 373,179 373,476 500,397 627,476 627,179"/><polygon class="aiv-b aiv-l" points="433,741 147,907 23,833 23,719 307,561 307,663"/><polygon class="aiv-b aiv-r" points="567,741 853,907 977,833 977,719 693,561 693,663"/><polygon class="aiv-d" points="500,438 350,588 500,738 650,588"/></svg>
+<!-- aiverse-loader:end --><div id="status"></div></div>
+<div id="error" hidden></div>
+<div id="info" hidden></div>
+<div id="hint">drag · wheel</div>
+<div id="modes" class="row" hidden></div>
+<div id="bar" class="row"></div>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var src = (q.get('src') || '').replace(/\/+$/, '');
+  var first = parseInt(q.get('item') || '0', 10) || 0;
+  var lang = q.get('lang') || navigator.language || 'en';
+  var ru = lang.toLowerCase().indexOf('ru') === 0;
+  // item titles: "title" is English, translations are "title-<lang>" (title-ru, title-zh-CN, ...)
+  function itemTitle(it) {
+    return it['title-' + lang] || it['title-' + lang.split('-')[0]] || it.title || it.id;
+  }
+  var L = ru ? {
+    loading: 'Загружаем…', building: 'Строим кластеры STRATA…', webgl: 'В этом браузере нет WebGL 2', nosrc: 'Не указан пакет (?src=)',
+    error: 'Ошибка: подробности в консоли браузера', hint: 'перетаскивание · колесо',
+    sphere: 'Сфера', cube: 'Куб', cylinder: 'Цилиндр', plane: 'Плоскость', auto: 'Авто LOD', lod: 'LOD ', strata: 'STRATA',
+    wire: 'Сетка', clusters: 'Кластеры', tris: 'треуг.', shown: 'показан', textures: 'Текстуры', noTex: 'без текстур',
+    gen: 'LOD сгенерированы движком', strataReady: 'кластеров', strataMs: 'мс на сборку', strataOff: 'STRATA не включена',
+    maps: { texture: 'Цвет', normalMap: 'Нормали', metallicRoughnessMap: 'ORM', occlusionMap: 'AO', emissiveMap: 'Свечение', image: 'Текстура' }
+  } : {
+    loading: 'Loading…', building: 'Building STRATA clusters…', webgl: 'WebGL 2 is not available in this browser', nosrc: 'No package view (?src=)',
+    error: 'Error: see the browser console', hint: 'drag · wheel',
+    sphere: 'Sphere', cube: 'Cube', cylinder: 'Cylinder', plane: 'Plane', auto: 'Auto LOD', lod: 'LOD ', strata: 'STRATA',
+    wire: 'Wireframe', clusters: 'Clusters', tris: 'tris', shown: 'shown', textures: 'Textures', noTex: 'no textures',
+    gen: 'LODs generated by the engine', strataReady: 'clusters', strataMs: 'ms to build', strataOff: 'STRATA is off',
+    maps: { texture: 'Base colour', normalMap: 'Normal', metallicRoughnessMap: 'ORM', occlusionMap: 'AO', emissiveMap: 'Emissive', image: 'Texture' }
+  };
+  var SHAPES = ['sphere', 'cube', 'cylinder', 'plane'];
+  var loadingEl = document.getElementById('loading'), statusEl = document.getElementById('status'),
+      errorEl = document.getElementById('error'), infoEl = document.getElementById('info'),
+      bar = document.getElementById('bar'), modes = document.getElementById('modes');
+  document.getElementById('hint').textContent = L.hint;
+  function busyOn(t) {   // re-inserting the mark restarts its assembly animation
+    var mark = loadingEl.querySelector('.aiv-mark'); if (mark) loadingEl.replaceChild(mark.cloneNode(true), mark);
+    statusEl.textContent = t || ''; loadingEl.hidden = false; errorEl.hidden = true;
+  }
+  function busyOff() { loadingEl.hidden = true; }
+  function fail(t) { busyOff(); errorEl.textContent = t; errorEl.hidden = false; }
+  if (!document.createElement('canvas').getContext('webgl2')) { fail(L.webgl); return; }
+  if (!/^https:\/\//.test(src) && !/^(\.|\/)/.test(src)) { fail(L.nosrc); return; }
+  busyOn(L.loading);
+  var view = null, loaded = {}, busy = false, info = null;
+  var state = { shape: Math.max(0, SHAPES.indexOf(q.get('shape') || 'sphere')), lod: -1, wire: q.has('wire'), clusters: q.has('clusters') };
+  var lodParam = q.get('lod');
+  if (lodParam === 'strata') state.lod = -2; else if (lodParam && /^\d+$/.test(lodParam)) state.lod = +lodParam;
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function size(b) { return b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : b >= 1024 ? Math.round(b / 1024) + ' KB' : b ? b + ' B' : ''; }
+  function num(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+  function texLines(list) {
+    if (!list || !list.length) return '<div class="muted">' + L.noTex + '</div>';
+    return list.map(function (m) {
+      var name = L.maps[m.map] || m.map, file = (m.file || '').split('/').pop().replace(/#t\d+$/, '');
+      return '<div><b>' + esc(name) + '</b> ' + m.width + '×' + m.height + (m.bytes ? ' · ' + size(m.bytes) : '') +
+        (m.map === 'image' && file ? ' <span class="muted">' + esc(file) + '</span>' : '') + '</div>';
+    }).join('');
+  }
+  function renderInfo() {
+    if (!info) { infoEl.hidden = true; return; }
+    var h = '';
+    if (info.kind === 'material') {
+      h += '<div class="muted">' + L.textures + '</div>' + texLines(info.maps);
+    } else {
+      (info.levels || []).forEach(function (l) {
+        var on = info.mode === 'strata' ? false : (info.mode === 'lod' ? l.level === Math.min(info.lod, info.levels.length - 1) : l.level === info.shownLevel);
+        h += '<div' + (on ? ' class="on"' : '') + '>LOD ' + l.level + ' · ' + num(l.triangles) + ' ' + L.tris + (on ? ' · ' + L.shown : '') + '</div>';
+      });
+      if (info.generatedLevels) h += '<div class="muted">' + L.gen + '</div>';
+      var s = info.strata || {};
+      if (s.state === 'ready') h += '<div' + (info.mode === 'strata' ? ' class="on"' : '') + '>STRATA · ' + num(s.clusters) + ' ' + L.strataReady +
+        (info.mode === 'strata' && s.drawnTriangles ? ' · ' + num(s.drawnTriangles) + ' ' + L.tris + ' · ' + L.shown : '') + ' · ' + s.stageMs + ' ' + L.strataMs + '</div>';
+      else if (s.state === 'declined' || s.state === 'failed') h += '<div class="muted">STRATA: ' + esc(s.reason || s.state) + '</div>';
+      h += '<div class="muted" style="margin-top:4px">' + L.textures + '</div>' + texLines(info.textures);
+    }
+    infoEl.innerHTML = h; infoEl.hidden = false;
+  }
+  window.cvInfo = function (json) {
+    try { info = JSON.parse(json); } catch (e) { return; }
+    renderInfo(); renderModes();
+  };
+
+  function button(row, label, pressed, onclick, disabled) {
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = label;
+    b.setAttribute('aria-pressed', String(!!pressed)); b.disabled = !!disabled; b.onclick = onclick; row.appendChild(b); return b;
+  }
+  function sep(row) { var s = document.createElement('span'); s.className = 'sep'; row.appendChild(s); }
+  function renderModes() {
+    modes.innerHTML = '';
+    if (!view) return;
+    if (view.kind === 'materials') {
+      SHAPES.forEach(function (s, k) { button(modes, L[s], k === state.shape, function () { setShape(k); }); });
+    } else {
+      var levels = info && info.levels ? info.levels.length : 1;
+      button(modes, L.auto, state.lod === -1, function () { setLod(-1); });
+      for (var l = 0; l < levels; ++l) (function (l) { button(modes, L.lod + l, state.lod === l, function () { setLod(l); }); })(l);
+      var s = info && info.strata;
+      button(modes, L.strata, state.lod === -2, function () { setLod(-2); }, s && (s.state === 'declined' || s.state === 'failed'));
+      if (state.lod === -2 && s && s.state === 'ready') {
+        sep(modes);
+        button(modes, L.clusters, state.clusters, function () { state.clusters = !state.clusters; Module._cv_clusters(state.clusters ? 1 : 0); renderModes(); });
+      }
+    }
+    modes.hidden = false;
+  }
+  function setShape(k) {
+    if (busy || k === state.shape) return;
+    state.shape = k; busyOn(''); renderModes();
+    setTimeout(function () { Module._cv_shape(k); busyOff(); }, 30);
+  }
+  function setLod(l) {
+    if (busy) return;
+    state.lod = l; renderModes();
+    var strataFirst = l === -2 && !(info && info.strata && info.strata.state === 'ready');
+    if (strataFirst) busyOn(L.building);
+    setTimeout(function () { Module._cv_lod(l); busyOff(); }, strataFirst ? 60 : 0);   // let the page paint the loader first
+  }
+
+  function get(rel) {
+    return fetch(src + '/' + rel).then(function (r) { if (!r.ok) throw new Error(rel + ': HTTP ' + r.status); return r.arrayBuffer(); });
+  }
+  function put(rel, buf) {
+    var parts = ('/view/' + rel).split('/'), dir = '';
+    for (var i = 1; i < parts.length - 1; ++i) { dir += '/' + parts[i]; try { Module.FS.mkdir(dir); } catch (e) {} }
+    Module.FS.writeFile('/view/' + rel, new Uint8Array(buf));
+    loaded[rel] = true;
+  }
+  function fetchAll(list) {
+    var need = list.filter(function (f) { return !loaded[f]; });
+    return Promise.all(need.map(function (f) { return get(f).then(function (b) { return [f, b]; }); }))
+      .then(function (pairs) { pairs.forEach(function (p) { put(p[0], p[1]); }); });
+  }
+  function select(i) {
+    if (busy || !view) return;
+    busy = true; busyOn(L.loading);
+    fetchAll(view.items[i].files || []).then(function () {
+      Module._cv_select(i); busyOff();
+      if (window.parent !== window) window.parent.postMessage({ cv: 'item', item: i }, '*');   // the catalog page links to it
+      bar.querySelectorAll('button').forEach(function (b, k) { b.setAttribute('aria-pressed', String(k === i)); });
+    }).catch(function (e) { fail(String(e.message || e)); }).then(function () { busy = false; });
+  }
+  var args = ['--item', String(first), '--shape', SHAPES[state.shape], '--lod', state.lod === -2 ? 'strata' : state.lod === -1 ? 'auto' : String(state.lod)];
+  if (state.wire) args.push('--wire');
+  if (state.clusters) args.push('--clusters');
+  window.Module = {
+    canvas: document.getElementById('canvas'),
+    arguments: args,
+    preRun: [function () {
+      Module.addRunDependency('view');
+      fetch(src + '/view.json').then(function (r) { if (!r.ok) throw new Error('view.json: HTTP ' + r.status); return r.text(); })
+        .then(function (text) {
+          view = JSON.parse(text);
+          if (!view.items || !view.items.length) throw new Error('empty view');
+          first = Math.min(Math.max(first, 0), view.items.length - 1);
+          args[1] = String(first);
+          try { Module.FS.mkdir('/view'); } catch (e) {}
+          Module.FS.writeFile('/view/view.json', text);
+          return fetchAll((view.shared || []).concat(view.items[first].files || []));
+        })
+        .then(function () {
+          view.items.forEach(function (it, k) { button(bar, itemTitle(it), k === first, function () { select(k); }); });
+          if (view.items.length < 2) bar.hidden = true;
+          if (state.lod === -2) statusEl.textContent = L.building;
+          renderModes();
+          Module.removeRunDependency('view');
+        })
+        .catch(function (e) { fail(String(e.message || e)); });
+    }],
+    onRuntimeInitialized: function () { setTimeout(busyOff, 0); },
+    print: function (t) { console.log(t); },
+    printErr: function (t) { console.warn(t); },
+    setStatus: function () {}
+  };
+  window.onerror = function () { fail(L.error); };
+})();
+
+  // Phones: one finger orbits (the engine's touch drag), two fingers pinch to zoom. Two-finger touches
+  // are taken here in the capture phase, so the orbit does not jump when the second finger lands.
+  (function () {
+    var cv = document.getElementById('canvas'), d0 = 0;
+    function dist(t) { var x = t[0].clientX - t[1].clientX, y = t[0].clientY - t[1].clientY; return Math.sqrt(x * x + y * y); }
+    function pinch(e) {
+      if (e.target !== cv || e.touches.length < 2) { d0 = 0; return; }
+      e.preventDefault(); e.stopPropagation();
+      var d = dist(e.touches);
+      if (d0 > 0 && Module._cv_zoom) Module._cv_zoom(d / d0);
+      d0 = d;
+    }
+    window.addEventListener('touchstart', pinch, { capture: true, passive: false });
+    window.addEventListener('touchmove', pinch, { capture: true, passive: false });
+    window.addEventListener('touchend', function (e) { if (e.touches.length < 2) d0 = 0; }, { capture: true });
+  })();
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

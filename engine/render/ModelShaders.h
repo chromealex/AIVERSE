@@ -511,7 +511,7 @@ void main() {
         float cornealIor = clamp(m_uv1.z, 1.0, 2.0);
         float iorF0 = pow((cornealIor - 1.0) / (cornealIor + 1.0), 2.0);
         // Schlick grazing response for the wet dielectric coat. Keep the
-        // existing analytic highlight as the finite-cost mobile fallback.
+)" R"(        // existing analytic highlight as the finite-cost mobile fallback.
         float coatFresnel = iorF0 + (1.0 - iorF0) * pow(1.0 - clamp(ndv, 0.0, 1.0), 5.0);
         float cornealGlint = pow(max(ndh, 0.0), 96.0) * (1.0 - rough);
         col += sun * sh * vec3(cornealGlint) *
@@ -1076,7 +1076,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     float ndl = max(dot(n, L), 0.0);
     float ndv = max(dot(n, V), 1e-4);
     // Optional thin diffuse sheet: split incident diffuse energy between
-    // reflection and opposite-hemisphere transmission. No emissive shortcut.
+)" R"(    // reflection and opposite-hemisphere transmission. No emissive shortcut.
     float thin = m.uv1.y > 0.5 ? 0.0 : clamp(floor(m.light.w)/255.0f,0.0f,1.0f)*(1.0f-metallic);
     float sssDepth = fract(m.light.w);
     float backNdl = max(-dot(n,L),0.0);

@@ -75,4 +75,4 @@ python3 -m unittest discover -s tools/studio -p 'test_*.py' -v
 bash tools/studio/verify_mac.sh
 ```
 
-Inspect real HTML5/WKWebView screenshots in desktop and narrow docks; check visible hover, focus, disabled, loading, empty and error states. Document actual results, commit SHA, touched files and next action in a separate numbered file in `docs/handoff/studio-html5/` (NN-name.md) after each stage. Work on `feature/studio-html5`, not `main`; keep legacy ImGui until verified parity.
+Inspect real HTML5/WKWebView screenshots in desktop and narrow docks; check visible hover, focus, disabled, loading, empty and error states. Document actual results, commit SHA, touched files and next action in a separate stage file in `docs/handoff/studio-html5/` (named like `01-web-shell.md`) after each stage. Work on `feature/studio-html5`, not `main`; keep legacy ImGui until verified parity.

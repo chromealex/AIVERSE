@@ -2,8 +2,8 @@
 #include "VehicleRace.h"
 #include "engine/core/Archive.h"
 #include "engine/core/Hash.h"
-#include <aiverselib/mechanics/RaceSessionData.h>
-#include <aiverselib/mechanics/VehiclePersistence.h>
+#include "engine/mechanics/RaceSessionData.h"
+#include "engine/mechanics/VehiclePersistence.h"
 #include <algorithm>
 #include <stdexcept>
 

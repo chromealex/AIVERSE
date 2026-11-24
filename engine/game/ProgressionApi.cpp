@@ -6,7 +6,7 @@
 // Reference: docs/progression.md (keep scriptApiReference() in ScriptApi.cpp in sync).
 #include "ScriptInternal.h"
 #include "Internal.h"
-#include "libraries/include/aiverselib/mechanics/PerksData.h"
+#include "engine/mechanics/PerksData.h"
 
 namespace aiverse::game::script {
 

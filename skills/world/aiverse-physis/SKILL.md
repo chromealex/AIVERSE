@@ -36,12 +36,23 @@ Neither certifies full live-host or reference-image visual acceptance.
 ## Tornadoes (2026-11-22) — data, not code
 
 Add `"tornadoes": [...]` to the map `physis` block (schema and example: docs/physis.md
-"Tornadoes"; sample `templates/skirmish/maps/tornado_valley.json`). It enables storms, the
+"Tornadoes"; sample `~/.aiverse/packages/templates/skirmish/maps/tornado_valley.json`). It enables storms, the
 `physis.tornadoes` system and its persistence. Damage reaches game units only through
 `GameModule::environmentDamage` — override it in a module (RTS does: pure `dealDamage`); never add
 a genre copy of the tornado. Light props: add `NatureCarriable` next to `Transform`. Funnel, debris,
 roar, vegetation and water wind come from `PhysisNatureRuntime` automatically.
 Tests: `ctest -R '^physis_tornado'`.
+
+Fire whirls, water, ground (same day): every map tornado has `TornadoNature`
+(`engine/physis/PhysisTornadoNature.h`). Tune it in the tornado's `"fire"` (intake, decay, halfHeat,
+quench, ignite, embersPerSecond, heatDamagePerSecond; `"whirl": false` = old blow-out only),
+`"surface"` (`auto` / `land` / `water`, waterDecay, spoutStrength, spoutLandDecay) and `"erosion"`
+(rate, maxDepthMeters, deposit; `false` = off) objects — docs/physis.md "Fire whirls, water and
+ground"; sample `~/.aiverse/packages/templates/skirmish/maps/firestorm_valley.json`. Fires for a scene: `physis.ignitions`
+(+ `enableDisasters`, optional `disasterConfig`, `noFuelOnWater`). Water under a vortex comes only from
+`GameModule::environmentWaterDepth` (or PHYSIS local flood) — a module with its own water overrides
+that hook; never special-case water in PHYSIS. Ground change: `groundScourAt` / `GroundScourField`
+(not applied to terrain meshes yet). Tests: `ctest -R '^physis_(firestorm|tornado)'`.
 
 ## Ownership
 
@@ -63,7 +74,8 @@ Tests: `ctest -R '^physis_tornado'`.
 | Uniform/point gravity fields | `PhysisGravity.h` | `GravitySettings`, `GravityField`, `gravityAt` |
 | Hurricane/tornado vortex fields | `PhysisStorm.h` | `StormEvent`, `StormKind`, `windWithStormsAt`, `stormsAt` |
 | Moving tornadoes (path, life, fire, debris, carried objects, host damage) | `PhysisTornado.h`, `PhysisTornadoAssets.h` | `TornadoTrack`, `spawnTornado`, `advanceTornadoes`, `NatureCarriable`, `TornadoDebrisField`, `parseTornadoes`; map `physis.tornadoes` |
-| Tornado funnel/debris FX + roar (host) | `engine/world/PhysisTornadoCues.h` | `TornadoFxPlanner`, `TornadoAudioPlanner`, `addPhysisTornadoSounds` |
+| Tornado fire whirl / water / ground scour | `PhysisTornadoNature.h` | `TornadoNature`, `defaultTornadoNature`, `TornadoEmberField`, `GroundScourField`, `groundScourAt`, `GameModule::environmentWaterDepth`; map tornado `fire`/`surface`/`erosion`, `physis.ignitions` |
+| Tornado funnel/debris/fire/spray/ember/scar FX + roar + flame roar (host) | `engine/world/PhysisTornadoCues.h` | `TornadoFxPlanner`, `TornadoAudioPlanner`, `addPhysisTornadoSounds` |
 | Shared drag/gravity force policy | `PhysisForces.h` | `ForceReceiver`, `ForceOutput`, `evaluateForces`, `advanceForces` |
 | Combined read-only 3D climate + hazard + force fields | `PhysisPresentation.h` | `NatureFieldSample`, `sampleNatureField` |
 | Read-only raster for editor diagnostics | `PhysisDiagnostics.h` | `DiagnosticRequest`, `DiagnosticRaster`, `sampleDiagnosticRaster` |
@@ -1074,7 +1086,7 @@ The PHYSIS branch now contains main NEREID water via true merge
 `7c617d7fbc1a7ff7529e84a8e7e281f5f3298f0b` with main `d71c6d47e532b25fb816a8bb1f96c41e5275a165` as second parent. Do NOT
 implement an independent water-body, buoyancy, river/current or water
 renderer in PHYSIS. Use canonical
-`<aiverselib/water/NereidWaterSystems.h>` and NEREID scene APIs
+`"engine/world/nereid/NereidWaterSystems.h"` and NEREID scene APIs
 from the current main. PHYSIS is authoritative ONLY for weather,
 wind, storms, gravity and environmental hazards. When the native
 host installs NEREID water authority, set PHYSIS flood mode to

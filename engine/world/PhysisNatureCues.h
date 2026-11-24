@@ -150,18 +150,26 @@ private:
 // fx/physis_flame.json / fx/physis_smoke.json (same names). Flames and smoke
 // use "externalForces", so ParticleSystem::setWind (PHYSIS wind) bends them.
 inline const char* physisFlameEffectJson() {
+    // Flame licks from a CC0 flipbook (engine/assets/fx/physis, LICENSE-fx.txt):
+    // small upright quads standing on the ground (pivot at the base), additive
+    // with modest alpha so overlapping flames do not burn out to white; a soft
+    // low glow with the fire light; a few sparks.
     return R"({
   "emitters": [
-    { "texture": "builtin:smoke", "blend": "additive", "align": "camera", "rate": 16, "loop": true, "prewarm": true,
-      "life": [0.45, 0.85], "speed": [1.2, 2.4], "spread": 14, "shape": "disc", "radius": 0.9, "drag": 1.1,
-      "size": [0.7, 1.15], "sizeOverLife": [[0, 0.8], [0.35, 1], [1, 0.25]], "rotation": [0, 360], "spin": [-90, 90],
-      "externalForces": 0.6, "noise": { "strength": 0.7, "frequency": 0.8, "scroll": 0.6 },
-      "color": [[0, "#fff0b0f0"], [0.25, "#ffb040d0"], [0.6, "#ff5a1490"], [1, "#30100000"]],
-      "light": { "color": "#ff9440", "radius": 7, "intensity": 1.6, "ratio": 0.12, "max": 24,
+    { "texture": "engine/fx/physis/flame_16x4.png", "frames": [16, 4], "fps": 0, "startFrame": [0, 15],
+      "blend": "additive", "align": "upright", "aspect": [2, 2], "pivot": [0, 0.5, 0],
+      "rate": 9, "loop": true, "prewarm": true, "life": [0.7, 1.1], "speed": [0.05, 0.25], "spread": 6,
+      "shape": "disc", "radius": 0.75, "size": [0.45, 0.75], "sizeOverLife": [[0, 0.8], [0.25, 1], [1, 0.85]],
+      "externalForces": 0.25,
+      "color": [[0, "#ffffff00"], [0.12, "#ffe4c4c8"], [0.7, "#ffc08aa0"], [1, "#ff7a3000"]],
+      "light": { "color": "#ff9440", "radius": 6, "intensity": 1.2, "ratio": 0.12, "max": 24,
                  "useParticleColor": false, "alphaAffectsIntensity": true } },
-    { "texture": "builtin:spark", "blend": "additive", "align": "velocity", "rate": 5, "loop": true,
-      "life": [1.0, 2.2], "speed": [2.5, 5], "spread": 30, "shape": "disc", "radius": 0.8,
-      "gravity": [0, 0.8, 0], "drag": 0.6, "stretch": 0.05, "size": [0.05, 0.1],
+    { "texture": "builtin:soft", "blend": "additive", "align": "ground", "rate": 2, "loop": true, "prewarm": true,
+      "life": [1.2, 1.6], "speed": [0, 0], "shape": "disc", "radius": 0.4, "size": [1.6, 2.2],
+      "color": [[0, "#ff600000"], [0.3, "#ff6a2024"], [1, "#ff400000"]] },
+    { "texture": "builtin:spark", "blend": "additive", "align": "velocity", "rate": 3, "loop": true,
+      "life": [0.8, 1.6], "speed": [1.5, 3.5], "spread": 30, "shape": "disc", "radius": 0.7,
+      "gravity": [0, 0.8, 0], "drag": 0.6, "stretch": 0.05, "size": [0.03, 0.06],
       "externalForces": 1, "noise": { "strength": 1.4, "frequency": 1.2, "scroll": 0.8 },
       "color": [[0, "#ffe0a0ff"], [0.6, "#ff7020c0"], [1, "#ff200000"]], "minQuality": "medium" }
   ]
@@ -171,12 +179,12 @@ inline const char* physisFlameEffectJson() {
 inline const char* physisSmokeEffectJson() {
     return R"({
   "emitters": [
-    { "texture": "builtin:smoke", "blend": "alpha", "align": "camera", "rate": 3.5, "loop": true, "prewarm": true,
-      "life": [4.5, 7.5], "speed": [1.4, 2.4], "spread": 10, "shape": "disc", "radius": 1.2,
-      "gravity": [0, 0.35, 0], "drag": 0.35, "size": [1.4, 2.2], "sizeOverLife": [[0, 0.5], [1, 3.6]],
-      "rotation": [0, 360], "spin": [-15, 15], "externalForces": 1,
-      "noise": { "strength": 0.5, "frequency": 0.25, "scroll": 0.2 },
-      "color": [[0, "#2c2926a0"], [0.4, "#4a4540" ], [1, "#6e6a6400"]] }
+    { "texture": "engine/fx/physis/smoke_8x8.png", "frames": [8, 8], "fps": 0, "startFrame": [0, 20],
+      "blend": "alpha", "align": "camera", "rate": 3, "loop": true, "prewarm": true,
+      "life": [4.5, 7.5], "speed": [1.2, 2.2], "spread": 10, "shape": "disc", "radius": 1.0,
+      "gravity": [0, 0.35, 0], "drag": 0.35, "size": [1.6, 2.4], "sizeOverLife": [[0, 0.5], [1, 3.4]],
+      "rotation": [0, 360], "spin": [-12, 12], "externalForces": 1,
+      "color": [[0, "#2a262200"], [0.15, "#2e2a26b0"], [0.6, "#4a4540a0"], [1, "#6e6a6400"]] }
   ]
 })";
 }

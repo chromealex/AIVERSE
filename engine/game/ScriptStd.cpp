@@ -1,4 +1,4 @@
-// The `rts` table: low-level access for the engine's standard Lua library (modules/rts/lua/*.lua),
+// The `rts` table: low-level access for the engine's standard Lua library (engine/game/lua/*.lua),
 // which implements rule-level mechanics (victory, waves, triggers, ...) on top of the C++ core.
 // Hot loops stay here as aggregate queries; Lua decides the rules. Everything mirrors the former
 // C++ code exactly (same iteration order, same Fixed operations, same RNG calls), so matches are

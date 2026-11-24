@@ -1,0 +1,60 @@
+{
+  "id": "2026-11-22-physis-firestorm",
+  "date": "2026-11-22",
+  "system": "physis",
+  "title": "PHYSIS: огненный смерч, водяной смерч и размытая земля",
+  "summary": "Смерч, прошедший через пожар, затягивает огонь и становится огненным вихрем; над водой он слабеет и гаснет, на озере рождается водяной смерч, а по суше вихрь оставляет размытый след.",
+  "body": [
+    "Смерч забирает огонь из клеток PHYSIS под ядром и кольцом и копит его как тепло. Чем больше и сильнее пожар, тем выше огненность вихря, от 0 до 1; маленький очаг даёт слабый эффект, без огня огненность затухает. Огненный вихрь больше не задувает огонь в центре, а поджигает траву на своём пути, разбрасывает угли, которые поджигают там, где падают, и обжигает юниты и здания в кольце.",
+    "Вода под смерчем берётся у игры. Сухопутный смерч над рекой или озером теряет силу и, если долго идёт по воде, распадается; огонь в нём гаснет. Смерч, родившийся над водой, становится водяным: он слабее, поднимает столб водяной взвеси, у основания бьют брызги и расходятся кольца, а выйдя на берег, он распадается за пару секунд.",
+    "На суше ядро вихря снимает грунт и уносит его, а сбрасывает рядом. Глубина размытия зависит от силы вихря, след остаётся на земле тёмной полосой. Всё задаётся в данных смерча (fire, surface, erosion), очаги пожара — списком ignitions. Пример — карта «Огненная долина» в шаблоне skirmish."
+  ],
+  "status": "in-progress",
+  "verified": "Клиент игры на Mac (Metal), карта «Огненная долина»: пыльный смерч входит в пожар и становится огненным вихрем (огненность до 0,9), над рекой гаснет почти до нуля, на озере идёт водяной смерч с кольцами на воде, на суше виден размытый след. Партия с одним сидом повторяется с той же контрольной суммой, повтор записи сходится.",
+  "limits": "Размытие пока не опускает сетку рельефа и не меняет проходимость — это данные PHYSIS и след на земле. Кольца на воде сделаны частицами, а не волнами поверхности воды. Огонь горит по крупным клеткам PHYSIS. Звук рёва пламени не прослушивался.",
+  "branch": "agent-physis-firestorm",
+  "commit": "",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-22-physis-firestorm/physis-firestorm-1-dust.jpg",
+      "caption": "До: пыльный смерч подходит к пожару",
+      "captionEn": "Before: a dust tornado approaching the fire"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-22-physis-firestorm/physis-firestorm-2-firewhirl.jpg",
+      "caption": "После: смерч затянул огонь и стал огненным вихрем",
+      "captionEn": "After: the tornado has drawn the fire in and become a fire whirl"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-22-physis-firestorm/physis-firestorm-3-river.jpg",
+      "caption": "Огненный вихрь выходит на реку",
+      "captionEn": "The fire whirl reaching the river"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-22-physis-firestorm/physis-firestorm-4-waterspout.jpg",
+      "caption": "Водяной смерч на озере: брызги и кольца на воде",
+      "captionEn": "A waterspout on the lake: spray and rings on the water"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-22-physis-firestorm/physis-firestorm-5-scour.jpg",
+      "caption": "Размытый след смерча на земле",
+      "captionEn": "The tornado's scoured track on the ground"
+    }
+  ],
+  "links": [
+    {
+      "title": "docs/physis.md",
+      "href": "docs/physis.md"
+    }
+  ],
+  "author": "physis",
+  "titleEn": "PHYSIS: fire whirls, waterspouts and scoured ground",
+  "summaryEn": "A tornado that crosses a wildfire draws the fire in and becomes a fire whirl; over water it weakens and is quenched, a waterspout forms on a lake, and the vortex leaves a scoured track on land.",
+  "bodyEn": [
+    "The tornado takes fire from the PHYSIS cells under its core and ring and stores it as heat. The bigger and stronger the fire, the higher the vortex's fireness, from 0 to 1; a small fire gives a weak effect, and without fire the fireness fades. A fire whirl no longer snuffs fire at its centre: it sets grass alight on its path, throws embers that ignite where they land and burns units and buildings in its ring.",
+    "Water under the tornado comes from the game. A land tornado over a river or lake loses strength and breaks up if it stays over water; its fire goes out. A tornado born over water becomes a waterspout: weaker, with a column of spray, splashes at the base and rings spreading on the water, and it breaks up within seconds after reaching the shore.",
+    "On land the core strips the soil, carries it and drops it nearby. The depth depends on the vortex strength, and the track stays on the ground as a dark band. Everything is set in the tornado data (fire, surface, erosion), and fires in the ignitions list. The example is the Firestorm Valley map of the skirmish template."
+  ],
+  "verifiedEn": "Game client on a Mac (Metal), Firestorm Valley map: a dust tornado enters the fire and becomes a fire whirl (fireness up to 0.9), its fire nearly goes out over the river, a waterspout with rings on the water runs on the lake, and a scoured track shows on land. A match with one seed repeats with the same checksum; replay of a recording matches.",
+  "limitsEn": "Scouring does not lower the terrain mesh or change passability yet: it is PHYSIS data and a ground mark. Water rings are particles, not water surface waves. Fire burns on coarse PHYSIS cells. The flame roar was not listened to."
+}

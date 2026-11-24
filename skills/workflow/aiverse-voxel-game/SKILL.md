@@ -21,13 +21,13 @@ Use when the request is a block-building / mining / survival game. Packages and 
 | Client meshes | `skills/visuals/aiverse-voxel-mesh` |
 | Saves | voxel-world record 120, voxel-ticks record 121, plus the libraries' own records |
 
-A working reference game exists: module `modules/voxel` (simulation `modules/voxel/VoxelGame.h`, session
-`modules/voxel/VoxelSession.h`), client `apps/voxel/client.cpp`, server `apps/voxel/server.cpp`, template
-`templates/voxel_sandbox`. Start a new game by copying the template and changing `rules.json`; change the module
+A working reference game exists: module `engine/voxel` (simulation `engine/voxel/VoxelGame.h`, session
+`engine/voxel/VoxelSession.h`), client `apps/voxel/client.cpp`, server `apps/voxel/server.cpp`, template
+`~/.aiverse/packages/templates/voxel_sandbox`. Start a new game by copying the template and changing `rules.json`; change the module
 only for new rules. Reference: `docs/voxel.md` ("The game").
 
 Steps:
-1. Copy `templates/voxel_sandbox`; edit `blocks` (with `color`), `voxelGen`, `voxelTicks`, `voxelGame`.
+1. Copy `~/.aiverse/packages/templates/voxel_sandbox`; edit `blocks` (with `color`), `voxelGen`, `voxelTicks`, `voxelGame`.
 2. Measure the content with `aiverse_voxel --content <dir with blocks.json, worldgen.json, ticks.json> --verify`
    and run `aiverse_voxel_game_tests <engine root>` after module changes.
 3. Play: `aiverse_voxel_client --project <dir>`; multiplayer `--listen` / `--connect`, or `aiverse_voxel_server`.

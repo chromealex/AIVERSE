@@ -4427,6 +4427,13 @@ Final publication checkpoint: code+handoff ordinary push to origin/feature/terra
 
 User «Заливай в мейн» supersedes the prior defer-main condition for publication. Fresh remote main973b32970654cc5318fa6b6571f35d020501dcdd was an ancestor of TerraWeave ab5d360f4cb2f2f1f2e99b78b0262f596c48f8d9; normal push HEAD:main succeeded and ls-remote confirmed that exact SHA. No merge conflicts/new code. Repeated4NEREIDCTestPASS +440LENSchecks0failed. CI/fullGPU rerun NOTRUN this unchanged-code promotion; previous actual GPU evidence remains above. Details and still-open work: docs/agent-handoffs/terraweave-main-promotion-2026-11-21.md. Original dirty checkout/user editor untouched. This separate docs commit records the completed publication and is also published to main/TerraWeave; no claim that erosion-driven rocks or all broader art goals are done.
 
+## Layering move (2026-11-21, branch feature/aiv20261121_arch-layers)
+NEREID core headers moved from `libraries/include/aiverselib/water/` to `engine/world/nereid/` (same file names,
+namespaces, CMake targets `AIVERSE::lib_nereid_*` and catalog ids). No compatibility headers (owner rule): every
+user includes `engine/world/nereid/X.h`; `<aiverselib/water/X.h>` no longer exists. Reason: `engine/world` bridges
+and `engine/render` include NEREID, and the core depends only on `engine/sim`/`engine/core`
+(docs/architecture-layers.md, L1).
+
 
 ## Turbidity (`style.turbidity`, `style.siltColor`)
 

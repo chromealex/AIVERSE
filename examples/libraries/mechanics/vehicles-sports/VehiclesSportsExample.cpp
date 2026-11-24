@@ -4,9 +4,9 @@
 // (possession, passes, shots, tackles/fouls, restarts, periods with stoppage, golden goal, positioning bots).
 // Both simulations save every record mid-run, continue from the loaded copies and print a final hash.
 // Usage: aiverse_vehicles_sports_example <data dir with vehicles.json, sports.json, settings.json>
-#include <aiverselib/mechanics/VehicleConfigured.h>
-#include <aiverselib/mechanics/VehicleData.h>
-#include <aiverselib/mechanics/VehiclePersistence.h>
+#include "engine/mechanics/VehicleConfigured.h"
+#include "engine/mechanics/VehicleData.h"
+#include "engine/mechanics/VehiclePersistence.h"
 #include <aiverselib/mechanics/SportsConfigured.h>
 #include <aiverselib/mechanics/SportsData.h>
 #include <aiverselib/mechanics/SportsPersistence.h>

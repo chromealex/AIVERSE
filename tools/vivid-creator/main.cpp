@@ -35,7 +35,7 @@
 #include "engine/platform/Platform.h"
 #include "engine/render/Renderer3D.h"
 #include "engine/render/ImGuiLayer.h"
-#include <aiverselib/motionweave/MotionWeave.h>
+#include "engine/animation/MotionWeave.h"
 #include "imgui.h"
 
 #include <algorithm>

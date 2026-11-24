@@ -55,6 +55,13 @@
 .statusbar{background:var(--au-panel-raised);border-color:var(--au-line);color:var(--au-text-faint)}
 @media(prefers-reduced-motion:reduce){.nested-tab,.tool-button{transition:none}}
 
+/* UI scale changes type size. Dock geometry stays in CSS pixels, so the window and the scene view do not grow. */
+.studio .tree-row,.studio .tree-label,.studio .search-box,.studio .search-box input,
+.studio .nested-tab>button:first-child,.studio .nested-toolbar,.studio .au-menu,.studio .au-menu__item,
+.studio .workspace-tabs__tab,.studio .command-search-button,.studio .studio-statusbar,.studio .project-breadcrumb{
+  font-size:calc(12px * var(--au-ui-scale, 1))}
+.studio .panel-heading,.studio .search-box kbd{font-size:calc(10px * var(--au-ui-scale, 1))}
+
 /* Global UI scale is applied at document root; settings surface follows the shell. */
 .studio-editor-settings{position:fixed;right:14px;top:55px;z-index:5000;
   width:290px;padding:16px;display:flex;flex-direction:column;gap:12px;

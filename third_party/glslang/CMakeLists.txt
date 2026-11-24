@@ -1,5 +1,5 @@
 # glslang 16.6.0 (KhronosGroup/glslang e1b562a8bed273a02f30b59b66a5d499793cede5), GLSL front end + SPIR-V
-# generator only: no HLSL, no SPIRV-Tools optimizer, no C interface, no standalone tool. Used by the Vulkan
+# generator only: no HLSL, optional SPIRV-Tools optimizer (third_party/spirv-tools), no C interface, no standalone tool. Used by the Vulkan
 # RHI backend (engine/gfx/vulkan) to compile the engine's GLSL at run time. Licenses: LICENSE.txt.
 # glslang's own CMake is not used: it generates build_info.h with Python; the generated header is in generated/.
 set(_g ${CMAKE_CURRENT_SOURCE_DIR})
@@ -24,6 +24,13 @@ else()
     target_link_libraries(aiverse_glslang PRIVATE Threads::Threads)
 endif()
 target_include_directories(aiverse_glslang PUBLIC ${_g} ${_g}/generated)
+# With the vendored SPIRV-Tools (AIVERSE_SPIRV_OPT) GlslangToSpv can run the optimizer (SpvOptions).
+if(TARGET SPIRV-Tools-opt)
+    target_compile_definitions(aiverse_glslang PUBLIC ENABLE_OPT=1)
+    target_link_libraries(aiverse_glslang PUBLIC SPIRV-Tools-opt)
+else()
+    target_compile_definitions(aiverse_glslang PUBLIC ENABLE_OPT=0)
+endif()
 target_compile_features(aiverse_glslang PUBLIC cxx_std_17)
 if(MSVC)
     target_compile_options(aiverse_glslang PRIVATE /w)

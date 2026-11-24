@@ -1,6 +1,6 @@
 #pragma once
-#include "Config.h"
-#include "Navigation.h"
+#include "engine/bots/Config.h"
+#include "engine/bots/Navigation.h"
 namespace aiverse::lib::bots {
 inline Waypoints readWaypoints(const Json& j){
     if(!j.isArray()||j.size()>512)throw JsonError("bots.waypoints: expected at most 512 nodes");

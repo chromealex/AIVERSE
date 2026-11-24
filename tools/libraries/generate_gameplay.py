@@ -54,7 +54,7 @@ def generate():
         code.append('    }')
     code+=['    if(result.errors.empty()) result.value=settings;','    return result;','}','}']
     doc+=['','## Cross-field constraints','',*constraints]
-    return {'libraries/include/aiverselib/gameplay/Configuration.h':'\n'.join(code)+'\n','libraries/spec/gameplay.schema.json':json.dumps(schema,indent=2)+'\n','docs/gameplay-settings.md':'\n'.join(doc)+'\n'}
+    return {'engine/gameplay/Configuration.h':'\n'.join(code)+'\n','libraries/spec/gameplay.schema.json':json.dumps(schema,indent=2)+'\n','docs/gameplay-settings.md':'\n'.join(doc)+'\n'}
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--check',action='store_true');args=p.parse_args()

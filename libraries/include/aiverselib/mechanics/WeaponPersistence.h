@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Versioned save/load (mechanics::save/load from Persistence.h) and checksum hashing for weapon state.
 // FeedState, ChargeState and LoadoutState are dynamic state: store each in its own NativeState key
 // and bind the immutable FeedConfig/ChargeConfig/frame/attachment definition versions in the save
@@ -7,7 +7,7 @@
 // owners can fold the committed outcome into their simulation checksum.
 #include "Ballistics.h"
 #include "WeaponMods.h"
-#include "Persistence.h"
+#include "engine/mechanics/Persistence.h"
 #include "engine/core/Hash.h"
 #include <string>
 namespace aiverse::lib::mechanics {

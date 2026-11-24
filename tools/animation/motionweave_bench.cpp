@@ -1,7 +1,7 @@
 // Standalone CPU-only MotionWeave performance fixture.
 // Build with AIVERSE_BUILD_TOOLS=ON; results depend on real hardware.
 //   aiverse_motionweave_bench --actors 1000 --frames 120 [--ik]
-#include <aiverselib/motionweave/MotionWeave.h>
+#include "engine/animation/MotionWeave.h"
 #include <charconv>
 #include <chrono>
 #include <cmath>

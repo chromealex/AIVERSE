@@ -1,11 +1,11 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Versioned save/load (mechanics::save/load, version 1) and checksum hashing for sports-rules.
 // Record kinds (shared range 88..95 with vehicle-controllers): SportsState 92, SportsBotState 95; 93 is reserved.
 // Store each record in its own NativeState key, save the RNG state (Random::state/inc) next to it, feed
 // sportsHash(state) into the checksum and bind sportsDefinitionsHash(field, rules, formations) in the save envelope.
 #include "Sports.h"
-#include "Persistence.h"
+#include "engine/mechanics/Persistence.h"
 #include "engine/core/Hash.h"
 #include <string>
 namespace aiverse::lib::mechanics {

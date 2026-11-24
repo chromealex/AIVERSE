@@ -1,0 +1,32 @@
+{
+  "id": "2026-11-22-terraweave-rock-uv",
+  "date": "2026-11-22",
+  "system": "terraweave",
+  "title": "TerraWeave: текстура камней без воронки на макушке",
+  "summary": "Сгенерированные камни TerraWeave получали развёртку как глобус, и на макушке текстура скручивалась в воронку. Теперь каждая грань берёт проекцию по своей главной оси, и камень покрыт текстурой с одинаковой плотностью со всех сторон.",
+  "body": [
+    "Камни строятся из сферы, которую режут плоскостями и деформируют по сиду. Раньше координаты текстуры брались по широте и долготе этой сферы: у полюсов все долготы сходятся в точку, и текстура скалы на верхушке растягивалась в спираль.",
+    "Теперь у каждого треугольника своя плоская проекция по той оси, к которой он больше всего повёрнут, в метрах с учётом повтора текстуры. Вершины у граней и так раздельные, поэтому переключение проекции не добавляет швов в сетку.",
+    "Тест генератора проверяет, что площадь развёртки на единицу площади поверхности у всех треугольников всех LOD лежит в пределах одной проекции — без сжатых полюсов."
+  ],
+  "status": "done",
+  "verified": "Mac (Metal), aiverse_modelview: камни rounded, boulder и shard с сидом 42 сверху и сбоку, текстуры dark-rock 1024²; тесты TerraWeave 4 из 4.",
+  "limits": "Пакет terraweave-rocks в каталоге ещё на старой развёртке: его нужно переэкспортировать и выпустить новой версией. На стыках проекций текстура может слегка менять направление.",
+  "branch": "main",
+  "commit": "",
+  "media": [
+    {"src": "docs/devlog/media/2026-11-22-terraweave-rock-uv/rock-top-after.jpg", "caption": "Камень сверху: текстура ровная, воронки на макушке нет", "captionEn": "A rock from above: even texture, no swirl at the top"},
+    {"src": "docs/devlog/media/2026-11-22-terraweave-rock-uv/rock-side-after.jpg", "caption": "Округлый камень сбоку с той же плотностью текстуры", "captionEn": "A rounded rock from the side with the same texture density"}
+  ],
+  "links": [{"title": "docs/terrain/rocks.md", "href": "docs/terrain/rocks.md"}],
+  "author": "terraweave",
+  "titleEn": "TerraWeave: rock textures without a swirl at the top",
+  "summaryEn": "Generated TerraWeave rocks were unwrapped like a globe, and at the top the texture twisted into a swirl. Each face now takes the projection of its main axis, so the rock is covered with the same texture density on every side.",
+  "bodyEn": [
+    "Rocks are built from a sphere cut by planes and deformed by the seed. Texture coordinates used to come from that sphere's latitude and longitude: at the poles all meridians meet in one point and the rock texture stretched into a spiral at the top.",
+    "Each triangle now gets a planar projection along the axis it faces most, in metres with the texture repeat. Faces already have their own vertices, so switching the projection adds no seams to the mesh.",
+    "The generator test checks that the unwrap area per surface area stays within one projection for every triangle of every LOD - no pinched poles."
+  ],
+  "verifiedEn": "Mac (Metal), aiverse_modelview: rounded, boulder and shard rocks with seed 42 from above and the side, dark-rock 1024² textures; TerraWeave tests 4 of 4.",
+  "limitsEn": "The terraweave-rocks package in the catalog still has the old unwrap: it needs a re-export and a new version. Where projections meet the texture can turn slightly."
+}

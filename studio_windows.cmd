@@ -10,7 +10,7 @@ where node >nul 2>nul || (echo Node.js is missing: https://nodejs.org & exit /b 
 where cmake >nul 2>nul || (echo CMake is missing: https://cmake.org/download & exit /b 1)
 echo == web
 pushd apps\studio-web
-if not exist node_modules call npm ci || (popd & echo WEB BUILD FAILED & exit /b 1)
+if not exist node_modules call npm install --no-audit --no-fund || (popd & echo WEB BUILD FAILED & exit /b 1)
 call npx vite build || (popd & echo WEB BUILD FAILED & exit /b 1)
 popd
 echo == configure

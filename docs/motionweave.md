@@ -13,7 +13,7 @@ target_link_libraries(my_game PRIVATE AIVERSE::MotionWeave)
 ```
 
 ```cpp
-#include <aiverselib/motionweave/MotionWeave.h>
+#include "engine/animation/MotionWeave.h"
 
 // Separate client presentation ECS World; never Simulation::world().
 aiverse::World presentation;
@@ -29,7 +29,7 @@ This is the *same* implementation as the existing library, not a second engine:
 | `AIVERSE::motionweave` | `AIVERSE::animation_ecs` |
 | `aiverse::motionweave` | `aiverse::lib::animation` |
 | `MotionWeave::update(world,dt)` | `stepAnimationPresentation(world,dt)` |
-| `<aiverselib/motionweave/MotionWeave.h>` | `<aiverselib/animation/EcsAnimationSystems.h>` |
+| `"engine/animation/MotionWeave.h"` | `"engine/animation/EcsAnimationSystems.h"` |
 
 All specialist libraries still have their historical
 `<aiverselib/animation/...>` paths. Existing `render::AnimationGraph`,
@@ -38,7 +38,7 @@ All specialist libraries still have their historical
 ## Runtime design
 
 **Presentation:** floats, AnimationGraph instances, IK and skinning reside in
-a dedicated visual ECS World. FPS opts into `fps.visual.model`, configurable
+a dedicated visual ECS World. FPS opts into `actor.visual.model`, configurable
 Graph or baked crowd animation, preserving cube fallback. Existing RTS view
 continues using its original animation path until migrated deliberately.
 
@@ -67,7 +67,7 @@ For a game with many animated characters, create a **persistent host-owned**
 scheduler once and pass it to the three-argument MotionWeave update:
 
 ```cpp
-#include <aiverselib/motionweave/MotionWeave.h>
+#include "engine/animation/MotionWeave.h"
 
 aiverse::motionweave::MotionWeaveScheduler scheduler;
 auto stats = aiverse::motionweave::MotionWeave::update(
@@ -100,14 +100,14 @@ presentation diagnostics; they never affect gameplay lockstep/checksums.
 
 ### Automatic backend for FPS
 
-FPS supports `fps.visual.animationMode: "auto" | "cpu" | "gpu"`
+FPS supports `actor.visual.animationMode: "auto" | "cpu" | "gpu"`
 and legacy `bakedCrowd: true`. With an eligible simple imported,
 skinned model, auto mode enters GPU baked instancing at 24 visible
 remote characters and exits at 12, avoiding frequent toggling.
 Complex custom graphs, IK/controller requirements and `graphFile`
 stay on CPU; the FPS client lazily constructs the persistent scheduler
 when 16+ palette characters are present.
-`fps.visual.animationStats: true` enables optional HUD diagnostics.
+`actor.visual.animationStats: true` enables optional HUD diagnostics.
 
 GPU scene draws and uploads remain on the graphics thread.
 The fast crowd path reuses AIVERSE's existing baked skinning and
@@ -155,7 +155,7 @@ The core doesn't know what "fire", "attack", "move", "cast",
 names in their own graphs; clients project their state into the
 same reusable API.
 
-Generic `<aiverselib/animation/MotionWeaveSourceBridge.h>` exposes
+Generic `"engine/animation/MotionWeaveSourceBridge.h"` exposes
 `AnimationSourceFrame {sourceId,generation,model,graph,inputs}` and
 `MotionWeaveSourceBridge::sync(presentationWorld, sources)`.
 A bridge maintains visual ECS entity identity, resets visual players
@@ -166,7 +166,7 @@ after all input projection and optional view budget configuration.
 
 The original FPS event adapter has been moved out of the animation
 library to `engine/view/ActorAnimationEvents.h`.
-The shared `<aiverselib/animation/AnimationActionEdges.h>` now
+The shared `"engine/animation/AnimationActionEdges.h"` now
 processes only opaque named counters/boolean state transitions, with no
 FPS/RTS/action-type semantics. `playAnimationSlot` lives beside the
 generic ECS `AnimationMontageSlotsComponent` definition.
@@ -716,7 +716,7 @@ The parent pose and bone matrices place the independent child's world transform;
 
 ## Stage 180 — generic compiled facial Control Rig and native IK
 
-The opt-in `<aiverselib/animation/FacialControlRig.h>` /
+The opt-in `"engine/animation/FacialControlRig.h"` /
 `AnimationFacialControlComponent` maps exact importer-authored
 mesh-local 64-channel morph names to named expression controls, applies
 per-character half-life smoothing, and executes existing

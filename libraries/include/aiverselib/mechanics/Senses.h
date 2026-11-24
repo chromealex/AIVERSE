@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Stealth and senses: a generic per-agent perception policy (not RTS fog of war). Sight cones with
 // near/peripheral ranges, hearing with occlusion and budgets, footprint/scent markers, per observer-target
 // suspicion meters, alert propagation to allies, search behaviour, disguises and hiding spots.

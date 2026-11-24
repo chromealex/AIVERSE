@@ -1,4 +1,4 @@
-#include <aiverselib/water/NereidQueryIndex.h>
+#include "engine/world/nereid/NereidQueryIndex.h"
 #include "engine/world/NereidFlowAuthoring.h"
 #include <memory>
 #include <stdexcept>

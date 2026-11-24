@@ -13,7 +13,7 @@ with tempfile.TemporaryDirectory(prefix="rts-native-projects-") as tmp:
     # The real selection/registration code is exercised; no renderer/toolchain is needed.
     (src / "engine/game/Native.cpp").write_text("")
     (src / "stub.cpp").write_text("")
-    module_cmake = (engine / "modules/rts/native/Build.cmake").as_posix()
+    module_cmake = (engine / "engine/game/native/Build.cmake").as_posix()
     protobuf_cmake = (engine / "engine/grpc/Protobuf.cmake").as_posix()
     (src / "CMakeLists.txt").write_text(
         'cmake_minimum_required(VERSION 3.22)\nproject(NativeIsolation LANGUAGES CXX)\n'
@@ -37,8 +37,9 @@ with tempfile.TemporaryDirectory(prefix="rts-native-projects-") as tmp:
         'if(NOT TARGET aiverse_grpc)\n  message(FATAL_ERROR "engine targets are not defined yet")\nendif()\n'
         'aiverse_native_module(ID rpc VERSION 1 ENTRY create_rpc SOURCES Module.cpp)\n'
         'aiverse_native_use_grpc(ID rpc IMPORT_ROOT "${CMAKE_CURRENT_LIST_DIR}/proto" PROTOS svc.proto)\n'
-        'get_target_property(s aiverse_native_rpc SOURCES)\nget_target_property(l aiverse_game INTERFACE_LINK_LIBRARIES)\n'
-        'message(STATUS "rpc sources: ${s}; game links: ${l}")\n')
+        'get_target_property(s aiverse_native_rpc SOURCES)\nget_target_property(l aiverse_native_modules INTERFACE_LINK_LIBRARIES)\n'
+        'get_target_property(g aiverse_game INTERFACE_LINK_LIBRARIES)\n'
+        'message(STATUS "rpc sources: ${s}; native links: ${l}; game links: ${g}")\n')
     (root / "empty").mkdir()
 
     log = {}
@@ -66,5 +67,6 @@ with tempfile.TemporaryDirectory(prefix="rts-native-projects-") as tmp:
     g = configure("g", "-DAIVERSE_NATIVE_DIR=")
     assert "create_rpc" in g, g
     line = next(l for l in log["out"].splitlines() if "rpc sources:" in l)
-    assert "svc.pb.cpp" in line and "aiverse_grpc" in line.split("game links:")[1], line
+    native_links, game_links = line.split("native links:")[1].split("; game links:")
+    assert "svc.pb.cpp" in line and "aiverse_grpc" in native_links and "aiverse_grpc" not in game_links, line   # project code, not the engine
     print("Native modules: project isolation and cache reset passed; engine targets + gRPC helper passed")

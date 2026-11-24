@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // settlement-production: one authoritative colony tick (stepColony) plus setup helpers.
 // Order inside a tick: commands (ascending seq) -> owner facts (incapacitation, alerts raised/cleared) ->
 // need decay/restoration -> mood bands and breaks -> activity choice per colonist (ascending id: critical needs,

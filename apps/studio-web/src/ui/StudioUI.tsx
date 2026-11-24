@@ -7,6 +7,8 @@ import type {
   SelectHTMLAttributes, TextareaHTMLAttributes, LabelHTMLAttributes
 } from 'react';
 
+import { StudioLoader } from './StudioLoader';
+
 const classes = (...values: Array<string | undefined | false>) => values.filter(Boolean).join(' ');
 export type StudioTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger';
 export type StudioButtonVariant = 'secondary' | 'primary' | 'ghost' | 'danger';
@@ -49,7 +51,7 @@ export function StudioButton({ variant='secondary',size='md',loading=false,disab
     aria-busy={loading || undefined}
     className={classes('au-button',variant!=='secondary' && 'au-button--'+variant,
       size!=='md' && 'au-button--'+size,loading && 'au-button--loading',className)}>
-    {loading && <span className="au-spinner" aria-hidden="true"/>}
+    {loading && <StudioLoader size={16} aria-hidden="true"/>}
     {children}
   </button>;
 }

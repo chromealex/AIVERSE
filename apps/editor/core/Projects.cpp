@@ -1,3 +1,4 @@
+#include "engine/platform/TemplatesDir.h"
 #include "Projects.h"
 #include <algorithm>
 #include <cctype>
@@ -7,6 +8,7 @@
 #include <fstream>
 #include "engine/data/Json.h"
 #include "engine/pack/FileCopy.h"
+#include "PackageTool.h"
 #include "ProjectFile.h"
 
 namespace fs = std::filesystem;
@@ -77,10 +79,16 @@ const char* kEmptyMap = R"({"name": "Start", "size": [48, 32], "players": [{"nam
 
 std::vector<TemplateInfo> listTemplates(const std::string& engineDir) {
     std::vector<TemplateInfo> out;
-    out.push_back({"empty", "", "Пустой проект", "Один тип юнита, рудник и пустая карта: начать с нуля.", "rts", "", 1});
+    TemplateInfo empty;
+    empty.id = "empty";
+    empty.name = "Пустой проект";
+    empty.description = "Один тип юнита, рудник и пустая карта: начать с нуля.";
+    empty.genre = "rts";
+    empty.maps = 1;
+    out.push_back(empty);
     std::error_code ec;
     std::vector<TemplateInfo> found;
-    for (auto& e : fs::directory_iterator(fs::path(engineDir) / "templates", ec)) {
+    for (auto& e : fs::directory_iterator(fs::path(aiverse::platform::templatesDir(engineDir)), ec)) {
         if (!e.is_directory() || !fs::exists(e.path() / "game.json")) continue;
         TemplateInfo t;
         t.id = e.path().filename().string();
@@ -101,6 +109,58 @@ std::vector<TemplateInfo> listTemplates(const std::string& engineDir) {
     }
     std::sort(found.begin(), found.end(), [](const TemplateInfo& a, const TemplateInfo& b) { return a.name < b.name; });
     out.insert(out.end(), found.begin(), found.end());
+    return out;
+}
+
+bool isCatalogTemplate(const std::string& templateId) { return templateId.rfind("pkg:", 0) == 0; }
+
+std::vector<TemplateInfo> catalogTemplates(const std::string& engineDir, bool all, const std::string& query,
+                                           bool cachedOnly, bool refresh, std::string* error) {
+    std::vector<TemplateInfo> out;
+    std::vector<std::string> args = {"templates"};
+    if (all) args.push_back("--all");
+    if (cachedOnly) args.push_back("--cached");
+    else if (refresh) args.push_back("--refresh");
+    std::string word;
+    for (char c : query + " ") {   // query words are separate arguments
+        if (c == ' ' || c == '\t') { if (!word.empty()) args.push_back(word); word.clear(); }
+        else word += c;
+    }
+    try {
+        const Json list = runPackageTool(engineDir, args);
+        for (const auto& e : list.items()) {
+            TemplateInfo t;
+            t.source = "catalog";
+            t.id = "pkg:" + e.getStr("id");
+            t.name = e.getStr("title", e.getStr("id"));
+            t.description = e.getStr("summary");
+            t.genre = e.getStr("module");
+            t.maps = int(e["maps"].size());
+            t.official = e.getBool("official");
+            t.version = e.getStr("latest");
+            t.engineTemplate = e.getStr("engineTemplate");
+            t.size = (long long)e["size"].integer(0);
+            t.preview = e.getStr("previewFile");
+            if (e["previews"].isArray() && e["previews"].size()) t.previewUrl = e["previews"][size_t(0)].str("");
+            out.push_back(std::move(t));
+        }
+    } catch (const std::exception& ex) {
+        if (error) *error = ex.what();
+    }
+    return out;
+}
+
+std::vector<TemplateInfo> hubTemplates(const std::string& engineDir, bool cachedOnly, std::string* catalogError) {
+    auto engine = listTemplates(engineDir);
+    const auto catalog = catalogTemplates(engineDir, false, "", cachedOnly, false, catalogError);
+    std::vector<TemplateInfo> out;
+    out.push_back(engine.front());   // "empty"
+    out.insert(out.end(), catalog.begin(), catalog.end());
+    for (size_t i = 1; i < engine.size(); ++i) {
+        const bool replaced = std::any_of(catalog.begin(), catalog.end(),
+                                          [&](const TemplateInfo& c) { return c.engineTemplate == engine[i].id; });
+        if (!replaced) out.push_back(engine[i]);
+    }
     return out;
 }
 
@@ -175,11 +235,20 @@ std::string createProject(const std::string& engineDir, const std::string& templ
     std::error_code ec;
     const fs::path dst = fs::absolute(fs::path(parentDir) / name, ec);
     if (fs::exists(dst, ec) && !fs::is_empty(dst, ec)) return fail("папка уже существует и не пуста: " + dst.string());
+    if (isCatalogTemplate(templateId)) {
+        // a template package: aiverse_pkg.py downloads (or takes from the cache), verifies and unpacks it,
+        // then installs the packages its game.json lists
+        try {
+            runPackageTool(engineDir, {"create", templateId.substr(4), dst.string()});
+        } catch (const std::exception& e) {
+            return fail("шаблон из каталога '" + templateId.substr(4) + "': " + e.what());
+        }
+    }
     fs::create_directories(dst / "maps", ec);
     if (ec) return fail("не удалось создать " + dst.string() + ": " + ec.message());
     try {
-        if (templateId != "empty") {
-            const fs::path src = fs::path(engineDir) / "templates" / templateId;
+        if (templateId != "empty" && !isCatalogTemplate(templateId)) {
+            const fs::path src = fs::path(aiverse::platform::templatesDir(engineDir)) / templateId;
             if (!fs::exists(src / "game.json")) return fail("шаблон '" + templateId + "' не найден");
             // per file: MinGW's recursive fs::copy fails into an existing folder
             for (auto it = fs::recursive_directory_iterator(src); it != fs::recursive_directory_iterator(); ++it) {
@@ -189,7 +258,7 @@ std::string createProject(const std::string& engineDir, const std::string& templ
                 if (it->is_directory()) fs::create_directories(to);
                 else aiverse::pack::copyFileReplaceOrThrow(it->path(), to);
             }
-        } else {
+        } else if (templateId == "empty") {   // a catalog template is already unpacked above
             writeFile(dst / "rules.json", kEmptyRules);
             writeFile(dst / "maps" / "start.json", kEmptyMap);
             writeFile(dst / "game.json", "{}");
@@ -222,15 +291,19 @@ std::string createProject(const std::string& engineDir, const std::string& templ
             maps.push(e);
             m.set("maps", maps);
         }
-        if (templateId != "empty") m.set("template", Json::string(templateId));
+        if (templateId != "empty") m.set("template", Json::string(isCatalogTemplate(templateId) ? templateId.substr(4) : templateId));
         if (templateId == "empty") {
             // New blank projects start with a neutral scale reference, never procedural grass.
-            // Copy runtime assets into the project so packaging stays self-contained.
+            // Copy runtime assets into the project so packaging stays self-contained. The engine
+            // ships only the checkerboard; the full library is the catalog package terrain-pbr
+            // (tools/pkg/aiverse_pkg.py add terrain-pbr). Only textures/ is copied, so that package
+            // installs over it without conflicts (identical checkerboard files and material id).
             const fs::path pack = fs::path(engineDir) / "engine/assets/materials/terrain";
             if (!fs::exists(pack / "default-terrain.json"))
                 return fail("bundled terrain PBR materials are missing: " + pack.string());
-            for (const auto& entry : fs::recursive_directory_iterator(pack)) {
-                const fs::path target = dst / "materials/terrain" / fs::relative(entry.path(), pack);
+            fs::create_directories(dst / "materials/terrain/textures");
+            for (const auto& entry : fs::recursive_directory_iterator(pack / "textures")) {
+                const fs::path target = dst / "materials/terrain/textures" / fs::relative(entry.path(), pack / "textures");
                 if (entry.is_directory()) fs::create_directories(target);
                 else aiverse::pack::copyFileReplaceOrThrow(entry.path(), target);
             }

@@ -1,7 +1,7 @@
 # Races
 
 A race is a capability of any project, not a genre: a map with a `"race"` block makes the map's cars race, in
-whichever module hosts the cars. One data format, one simulation (`libraries/include/aiverselib/mechanics/RaceSession.h`,
+whichever module hosts the cars. One data format, one simulation (`engine/mechanics/RaceSession.h`,
 data `mechanics/RaceSessionData.h`), one HUD (`engine/ui/RaceHud.h`), one chase camera (`engine/render/ChaseCamera.h`).
 Skill: `skills/gameplay/aiverse-racing`.
 
@@ -52,7 +52,7 @@ seat a player or a bot, the racer's own pedals, ask for a respawn, sync its pose
 
 | Host | Cars | Race seats |
 |---|---|---|
-| Metre maps with box colliders (`modules/fps`) | typed map vehicles (`fps.vehicleTypes`), ascending vehicle id | `fps::RaceSeats` in `engine/actor/ActorVehicles.cpp`; starts at setup |
+| Metre maps with box colliders (`modules/fps`) | typed map vehicles (`actor.vehicleTypes`), ascending vehicle id | `fps::RaceSeats` in `engine/actor/ActorVehicles.cpp`; starts at setup |
 | Grid maps with heroes (`modules/rts`) | vehicles of rules `driving`, entity order | `Driving::Seats` in `engine/game/Driving.cpp`; starts on the first tick |
 
 Racers cannot get out while the race runs (`VehicleRace::holds`); crash damage to racers follows rules
@@ -64,9 +64,9 @@ by design), getting in on foot (seat list requests on metre maps, the driver's d
 the vehicle system's components) and the car's look (models with rolling / steering wheels are drawn by the grid-map
 view; the metre-map client still draws boxes).
 
-Samples: `templates/racing` (Oval Sprint: a metre map with walls, `templates/_tools/racegen.py`) and
+Samples: `templates/racing` (Oval Sprint: a metre map with walls, `tools/templates/racegen.py`) and
 `templates/road_race` (Road Circuit: a grid map, the circuit is a spline road — `roadNetwork` + road type `circuit` —
-with the race on the same splines, `templates/_tools/roadracegen.py`; four Kenney CC0 trucks whose wheels roll and steer
+with the race on the same splines, `tools/templates/roadracegen.py`; four Kenney CC0 trucks whose wheels roll and steer
 through the view's `wheel` / `steer` procedurals on the `wheel-*` nodes).
 
 Checks: `raceSession` (library), `raceMode` (`aiverse_fps_tests`), `driving_race_*` (`aiverse_tests`),

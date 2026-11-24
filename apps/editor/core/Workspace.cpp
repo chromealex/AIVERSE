@@ -34,6 +34,7 @@ namespace aiverse::editor { void registerPhysisOps(Workspace&); }
 #include "WaterOps.h"
 #include "WizardOps.h"
 #include "FxOps.h"
+#include "PackageOps.h"
 #include "PortOps.h"
 #include "MaterialOps.h"
 #include "BrandingOps.h"
@@ -222,7 +223,7 @@ bool Project::saveManifest(std::string* err) {
 // ================================================================= workspace
 
 void registerLensOps(Workspace& ws);
-Workspace::Workspace() { registerLensOps(*this); registerGeometryOps(*this); registerModelingOps(*this); registerAnimationOps(*this); registerShaderGraphOps(*this); registerFpsOps(*this); registerCoreOps(); registerPortOps(*this); registerTileOps(*this); registerTerrainOps(*this); registerGenOps(*this); registerDataOps(*this); registerBalanceOps(*this); registerLightOps(*this); registerPhysisOps(*this); registerFxOps(*this); registerOverlayOps(*this); registerBrandingOps(*this); registerPlanetOps(*this); registerScenarioOps(*this); registerCampaignOps(*this); registerSchemaOps(*this); registerMaterialOps(*this); registerPostFxOps(*this); registerScriptOps(*this); registerToolchainOps(*this); registerNativeBuildOps(*this); registerStrategicOps(*this); registerUiOps(*this); registerFieldOps(*this); registerRaidOps(*this); registerRouteOps(*this); registerRoadOps(*this); registerWaterOps(*this); registerWizardOps(*this); registerLightBakeOps(*this); registerHumanCreatorOps(*this);
+Workspace::Workspace() { registerLensOps(*this); registerGeometryOps(*this); registerModelingOps(*this); registerAnimationOps(*this); registerShaderGraphOps(*this); registerFpsOps(*this); registerCoreOps(); registerPortOps(*this); registerPackageOps(*this); registerTileOps(*this); registerTerrainOps(*this); registerGenOps(*this); registerDataOps(*this); registerBalanceOps(*this); registerLightOps(*this); registerPhysisOps(*this); registerFxOps(*this); registerOverlayOps(*this); registerBrandingOps(*this); registerPlanetOps(*this); registerScenarioOps(*this); registerCampaignOps(*this); registerSchemaOps(*this); registerMaterialOps(*this); registerPostFxOps(*this); registerScriptOps(*this); registerToolchainOps(*this); registerNativeBuildOps(*this); registerStrategicOps(*this); registerUiOps(*this); registerFieldOps(*this); registerRaidOps(*this); registerRouteOps(*this); registerRoadOps(*this); registerWaterOps(*this); registerWizardOps(*this); registerLightBakeOps(*this); registerHumanCreatorOps(*this);
 #ifdef AIVERSE_BATTLE_OPS
     registerBattleNetOps(*this);
 #endif
@@ -467,7 +468,7 @@ bool Workspace::openGame(const std::string& idOrDir, std::string* err) {
         const bool isTemplate = dir.rfind(tpl, 0) == 0;
         bool created = false;
         // projects made before project files existed get a .aiverse (migration; a legacy .rtsproj is kept and used);
-        // templates carry a committed one
+        // installed templates (catalog packages) are opened in place and get none
         project.file = isTemplate ? findProjectFile(dir) : ensureProjectFile(dir, &created);
         if (created) log("editor", "Создан файл проекта " + fs::path(project.file).filename().string() + " (двойной клик по нему открывает проект)");
         if (!isTemplate) rememberProject(dir, project.manifest.getStr("name", fs::path(dir).filename().string()), project.file);
@@ -486,6 +487,30 @@ void Workspace::registerCoreOps() {
     auto add = [this](const char* name, const char* desc, const char* sch, OpFn fn) {
         registerOp({name, desc, schema(sch), std::move(fn)});
     };
+    // MCP registry introspection: agents can distinguish registered operations from live/GUI-only support.
+    // This is a source-of-truth snapshot of the Workspace, NOT proof that GPU features are operational.
+    add("mcp_registry", "Inspect registered MCP operations and GUI-only restrictions; filter by prefix. Registration does not prove runtime support.",
+        R"({"type":"object","properties":{"prefix":{"type":"string"}},"additionalProperties":false})",
+        [this](const Json& p) {
+            const std::string prefix = p.getStr("prefix");
+            Json result = Json::object(), entries = Json::array();
+            int total = 0, guiOnly = 0;
+            for (const auto& op : ops_) {
+                if (!prefix.empty() && op.name.rfind(prefix, 0) != 0) continue;
+                Json entry = Json::object();
+                entry.set("name", str(op.name));
+                entry.set("guiOnly", Json::fromBool(op.guiOnly));
+                entry.set("inputSchema", op.schema.isObject() ? op.schema : Json::object());
+                entries.push(entry);
+                ++total;
+                if (op.guiOnly) ++guiOnly;
+            }
+            result.set("tools", entries);
+            result.set("count", Json::number(int64_t(total)));
+            result.set("guiOnlyCount", Json::number(int64_t(guiOnly)));
+            result.set("note", str("Registration only. Verify tools/call against the built MCP executable and active editor; compile-time capabilities and runtime dependencies may differ."));
+            return result;
+        });
     auto needProject = [this] { if (project.dir.empty()) throw std::runtime_error("no game is open: call open_game first"); };
     auto entityRef = [this](const Json& p) {
         int i = -1;
@@ -516,9 +541,12 @@ void Workspace::registerCoreOps() {
     // ---------------------------------------------------------------- games
     auto templatesJson = [this] {
         Json arr = Json::array();
-        for (auto& t : listTemplates(engineDir)) {
+        // official catalog templates (from the package cache) + engine templates the catalog does not replace
+        for (auto& t : hubTemplates(engineDir, true)) {
             Json j = Json::object();
             j.set("id", str(t.id)); j.set("name", str(t.name));j.set("genre",str(t.genre));
+            j.set("source", str(t.source));
+            if (!t.version.empty()) j.set("version", str(t.version));
             if (!t.description.empty()) j.set("description", str(t.description));
             if (!t.dir.empty()) j.set("dir", str(t.dir));
             j.set("maps", Json::number(int64_t(t.maps)));
@@ -577,7 +605,7 @@ void Workspace::registerCoreOps() {
         return r;
     };
     add("create_project", "Create a new game project in a folder of your choice from a template (list_projects shows them; "
-        "'empty' = minimal game) and open it. location: parent folder (default ~/AiverseProjects); folder: name of the new folder (default: from the name).",
+        "'empty' = minimal game; 'pkg:<id>' = a template package of the catalog, package_search {category: templates} finds more) and open it. location: parent folder (default ~/AiverseProjects); folder: name of the new folder (default: from the name).",
         R"({"properties": {"name": {"type": "string"}, "template": {"type": "string"}, "location": {"type": "string"}, "folder": {"type": "string"}}, "required": ["name"]})",
         create);
     add("create_game", "Same as create_project (older name; 'id' = folder).",

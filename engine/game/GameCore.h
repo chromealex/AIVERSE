@@ -35,13 +35,13 @@
 #include "Career.h"
 #include "Prompts.h"
 #include "Sensors.h"
+#include "HostSystems.h"
 #include "FieldOps.h"
 #include "Routes.h"
 #include "Arsenal.h"
 #include "Traffic.h"
 #include <memory>
 
-namespace aiverse::actor { class ActorHost; }
 namespace aiverse::game {
 
 // ---------------------------------------------------------------- module
@@ -63,11 +63,13 @@ public:
     // tooling only (Studio "Keep play changes"); not part of the simulation state or its checksum.
     const std::vector<Entity>& mapPlaced() const { return mapPlaced_; }
     ~GameCore() override;
-    // World-space maps (map "colliders" + "spawns"): the actor systems run the match (engine/actor, ActorHost).
-    // nullptr on grid maps. Every GameModule entry point hands world-space matches to them (GameActorHost.cpp).
-    actor::ActorHost* actor() const { return actor_.get(); }
+    // Systems that run the whole match when the project's data asks for them (HostSystems.h): actor systems on
+    // world-space maps (map "colliders" + "spawns"), voxel worlds (rules "voxelGame"). nullptr on grid maps.
+    HostSystems* systems() const { return systems_.get(); }
     static bool worldSpaceMap(const Json& map) { return map["colliders"].isArray() && map["spawns"].isArray(); }
-    bool readyToStep(Simulation& sim) override;
+    // The HostSystems the data asks for, or nullptr for the grid systems (HostSystems.cpp).
+    static std::shared_ptr<HostSystems> makeHostSystems(const Json& rules, const Json& map);
+    bool readyToStep(Simulation& sim) override { return systems_ ? systems_->readyToStep(sim) : true; }
     std::string name() const override { return "game"; }
     void setup(Simulation& sim, const Json& rules, const Json& map) override;
     void applyCommand(Simulation& sim, const Command& cmd) override;
@@ -82,6 +84,7 @@ public:
     double speedScale(Simulation& sim) override;   // match modes: time limit speed steps, sudden death preview (Modes.cpp)
     // Shared engine hazards (PHYSIS tornadoes): pure damage to on-map units / buildings (Combat.cpp).
     void environmentDamage(Simulation& sim, Entity target, Fixed amount, Entity source) override;
+    Fixed environmentWaterDepth(Simulation& sim, Fixed x, Fixed z) override;
     // ---- match modes (Modes.cpp): the effective modes of this match (rules + matchMode preset + map)
     const ModesRules& modes() const { return modes_; }
     bool modeZone(Simulation& sim, uint8_t player, ModeRect& out) const;   // battle-royal zone of a player (false: none)
@@ -359,13 +362,7 @@ public:
     void mechWaveRoute(Simulation& sim, Entity e, const std::vector<Vec3>& route);
 
 private:
-    std::shared_ptr<actor::ActorHost> actor_;   // world-space match (GameActorHost.cpp)
-    void setupActor(Simulation& sim, const Json& rules, const Json& map);
-    void actorCommand(Simulation& sim, const Command& cmd);
-    void actorHash(Simulation& sim, Hasher& h);
-    bool actorSerialize(Simulation& sim, Archive& a);
-    int actorResult(Simulation& sim);
-    bool actorReady(Simulation& sim);
+    std::shared_ptr<HostSystems> systems_;   // whole-match systems chosen by data (HostSystems.h)
     ModesRules modes_;               // match modes of this match (read-only after setup, Modes.cpp)
     // gameplay time scale (trigger variable "gameplay_scale"): whether this tick runs the gameplay
     // systems; recomputed from the (hashed, saved) variables at the start of every tick

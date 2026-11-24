@@ -5,8 +5,8 @@
 #include "engine/core/Archive.h"
 #include "engine/core/FixedMath.h"
 #include "engine/core/Hash.h"
-#include <aiverselib/mechanics/VehicleData.h>
-#include <aiverselib/mechanics/VehiclePersistence.h>
+#include "engine/mechanics/VehicleData.h"
+#include "engine/mechanics/VehiclePersistence.h"
 #include <algorithm>
 #include <stdexcept>
 

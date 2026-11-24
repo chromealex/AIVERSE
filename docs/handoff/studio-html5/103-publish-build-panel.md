@@ -26,7 +26,7 @@ facial GPU status, main's pose test).
 
 ## Verified on the Mac
 - Rebuild PASS (web, native, session tests, RTS pose test).
-- On a private copy of `templates/lua_lab` (`build/claude/studio-buildtest.command`, KINGSTON):
+- On a private copy of `tests/checksums/games/lua_lab` (`build/claude/studio-buildtest.command`, KINGSTON):
   toolchain table for macOS, Estimate size streamed its log and finished: 141 MB content pack,
   heaviest files listed (engine vegetation textures, stored uncompressed).
 - Bug found and fixed while verifying: the log offset was the JS string length, not UTF-8 bytes; the Russian

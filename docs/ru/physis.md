@@ -99,6 +99,65 @@ aiverse::physis::forEachPresentationCell(sim.world(), [](const auto& cell) {
 - Этап 18: [Оверлей Scene + редактирование в Inspector/Undo](agent-handoffs/physis-editor-scene-inspector-2026-11-18.md)
 - Этап 19: [Ассеты полей, гизмо и редактирование с одним Undo](agent-handoffs/physis-field-assets-gizmos-2026-11-18.md)Каждый следующий этап получает коммит(ы) кода, за которыми следует отдельный коммит handoff с SHA, путями, реальными тестами, пробелами и следующей точной задачей. Ограничения для агентов: `engine/physis/AGENTS.md`.
 
+## Смерчи: огонь, вода и земля (2026-11-22) — `engine/physis/PhysisTornadoNature.h`
+
+Смерч из данных карты (`"physis.tornadoes"`, `engine/physis/PhysisTornado.h`) теперь взаимодействует
+с поверхностью под собой. Рядом с `TornadoTrack` у него лежит `TornadoNature` (в C++ — перегрузка
+`spawnTornado(world, storm, track, nature)`, значения по умолчанию — `defaultTornadoNature(tickRate)`).
+Смерч без `TornadoNature` работает ровно как раньше.
+
+| Что | Как |
+|---|---|
+| Затягивание огня | Каждый тик вихрь забирает долю `fire.intake` (в секунду) × интенсивность × вес кольца от огня каждой клетки PHYSIS под ядром и кольцом (1 в ядре, до 0 у внешнего радиуса). Забранный огонь (в горящих м²) копится в `heat`, тепло теряет `fire.decay` в секунду. Огненность `fireness = heat / (heat + fire.halfHeat)` от 0 до 1: растёт с количеством и силой огня, маленький огонь даёт слабый эффект, без огня гаснет. |
+| Задувание или огненный вихрь | В ядре огонь гасится долей `fire.suppression × (1 − fireness)`: пыльный смерч по-прежнему задувает огонь, огненный — нет. Раздувание в кольце умножается на `1 + fireness`. |
+| Поджог | Клетка с топливом под вихрем (не над водой) загорается с вероятностью `fire.ignite × fireness × интенсивность × вес` в секунду, сила `fire.igniteStrength × fireness`. Случайные числа — из собственного состояния RNG смерча, клетки в порядке сетки. |
+| Угли | Огненный вихрь выбрасывает `fire.embersPerSecond × fireness` углей в секунду (до `fire.maxEmbers`), их несёт ветер вихря, они сгорают в воздухе за `fire.emberLifeSeconds` или поджигают клетку с топливом, куда упали, с вероятностью `fire.emberIgnite`. |
+| Урон от жара | Сущности с `Transform` внутри внешнего радиуса получают `fire.heatDamagePerSecond × fireness × интенсивность` через `GameModule::environmentDamage`, сверх урона от ветра. |
+| Вода | Открытая вода — из `GameModule::environmentWaterDepth(sim, x, z)` (новый хук, по умолчанию 0; общее ядро игр отдаёт 2 м для клеток `~` и 0,3 м для бродов `=`) или из локального паводка PHYSIS. Вихрь над водой, если 3 из 5 точек (центр и 4 на кольце ядра) глубже `surface.waterThresholdMeters`. |
+| Сухопутный смерч над водой | Теряет `surface.waterDecay` силы в секунду, на суше восстанавливает `surface.recover`; на нуле распадается (интенсивность 0, шторм выключен). Огненность гасится долей `fire.quench` в секунду, поджога и углей нет. |
+| Водяной смерч | `surface: "auto"` решает в первый активный тик: родился над водой — водяной (`"water"` / `"land"` задают тип явно). Его ветер — `surface.spoutStrength` от заданного, он поднимает брызги, а на суше теряет `surface.spoutLandDecay` в секунду и распадается за секунды. |
+| Размытие земли | На суше ядро (до 1,5 радиуса ядра) снимает `erosion.rate × интенсивность²` метров в секунду в поле `GroundScourField` (клетки `physis.scourCellMeters`, по умолчанию 1 м, разреженно, до 65536 клеток) до глубины `erosion.maxDepthMeters`. Грунт (до `erosion.capacityCubicMeters`) уносится и оседает долей `erosion.deposit` в секунду в полосе 1,5–2,5 радиуса ядра. Над водой унесённый грунт тонет. `groundScourAt(world, x, z)` — изменение в метрах (минус — размыто). |
+
+Данные внутри смерча (всё в секунду, всё необязательно):
+
+```json
+"fire": { "suppression": 0.8, "fanning": 0.5,
+          "intake": 0.6, "decay": 0.2, "halfHeat": 50, "quench": 1.5,
+          "ignite": 0.4, "igniteStrength": 0.6,
+          "embersPerSecond": 6, "maxEmbers": 48, "emberLifeSeconds": 8, "emberIgnite": 0.5,
+          "heatDamagePerSecond": 3 },              // "whirl": false — только старое задувание
+"surface": { "kind": "auto", "waterThresholdMeters": 0.2, "waterDecay": 0.08, "recover": 0.1,
+             "spoutStrength": 0.55, "spoutLandDecay": 0.6 },   // или "auto" / "land" / "water"
+"erosion": { "rate": 0.04, "maxDepthMeters": 0.6, "deposit": 0.25, "capacityCubicMeters": 40 }  // или false
+```
+
+Новые ключи блока `physis` для сцен с огнём: `"ignitions"` (очаги пожара: центр, радиус, сила, время;
+нужен `enableDisasters`), `"disasterConfig"` (коэффициенты огня за тик, 0..1), `"noFuelOnWater": true`
+(клетки над водой без топлива), `"scourCellMeters"`.
+
+Детерминизм и сохранения: только Fixed, смерчи по номеру сущности, клетки по сетке, угли в порядке
+создания, свой RNG. `physis.tornado_nature`, `physis.tornado_embers`, `physis.ground_scour` входят в
+сохранение и хэш и регистрируются только при включённых смерчах: карты без смерчей не меняются.
+
+Отображение (`PhysisNatureRuntime`, подключать ничего не нужно): пыльная воронка тускнеет по мере
+роста огненности или брызг; `physis_tornado_fire` — вращающийся столб пламени, свечение, свет огня,
+искры, дым сверху (прозрачность по огненности, 6 уровней: новый уровень запускает новый эмиттер, старый
+догорает); `physis_tornado_spray` — столб водяной взвеси, каскад брызг у основания, кольца на воде;
+`physis_tornado_ember` — угли; `physis_tornado_scar` — тёмный след размытой земли. Звук: второй голос
+`physis_firestorm_loop` (рёв пламени), громкость по огненности × интенсивности. Пример —
+`templates/skirmish/maps/firestorm_valley.json` («Огненная долина»). Тесты: `physis_firestorm`,
+`physis_tornado_cues`.
+
+Текстуры огня: встроенные `physis_flame`, `physis_smoke` и `physis_tornado_fire` используют
+флипбуки с лицензией CC0 из бесплатных VFX-последовательностей Unity (`engine/assets/fx/physis/`,
+источник, лицензия и обработка — в `LICENSE-fx.txt`). Языки пламени на земле — небольшие
+вертикальные аддитивные квады, стоящие основанием на земле; в вихре языки вытянуты вдоль спирали;
+дым — альфа-блендинг. Проект может заменить любой эффект своим `fx/<имя>.json`.
+
+Ограничения: размытие — данные PHYSIS и след на земле; сетка рельефа, высоты и навигация не
+опускаются (адаптера к TerraWeave Earthworks пока нет). Кольца на воде — частицы SpectraFX, не волны
+поверхности NEREID. Огонь горит по клеткам PHYSIS (крупная сетка).
+
 ## Межсистемное владение (PHYSIS / NEREID / TerraWeave)
 
 PHYSIS владеет **климатом/погодой, полями природных событий и политиками сил/гравитации окружения**, но никогда не самой интеграцией твёрдых тел Box3D. NEREID (агент воды,

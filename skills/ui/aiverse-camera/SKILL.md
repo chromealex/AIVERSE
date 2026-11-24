@@ -12,7 +12,7 @@ speed zoom and bounds, chase, first-person look) and the named presets live in
 (`"camera": {"preset": "follow-speed"}`) before writing a camera of your own. This package owns the pose
 limits and easing those bodies run on.
 
-Read `docs/gameplay-packages.md`, `libraries/catalog.json` and `libraries/include/aiverselib/gameplay/Camera.h` from the engine root.
+Read `docs/gameplay-packages.md`, `libraries/catalog.json` and `engine/gameplay/Camera.h` from the engine root.
 Read `docs/gameplay-settings.md` for supported settings; do not invent JSON keys or APIs.
 
 ## Workflow

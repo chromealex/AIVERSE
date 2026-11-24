@@ -177,6 +177,8 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 
 どのテンプレートもボット付きで完全にプレイ可能なゲームです。エディターで開いてすぐに改造できます。
 
+テンプレートは[カタログ](https://chromealex.github.io/AIVERSE/catalog.html)のパッケージです。スタート画面に公式テンプレートが並び、**More templates** でほかのテンプレートを検索できます。
+
 | ジャンル | テンプレート |
 |---|---|
 | 古典的な基地建設 RTS | **Iron and Gold**（Warcraft / Red Alert）· **Iron Front**（Red Alert：MCV、鉱石、サイドバー）· **Starfall Sectors**（StarCraft：3 種族）· **Frost Crown**（Warcraft III：ヒーロー、クリープ、地形）· **Four Ages**（Age of Empires II）· **Amber Sands**（Dune II）· **Metal Tide**（Total Annihilation：フロー型経済、レーダー、回収、航空機、核ミサイル） |
@@ -249,7 +251,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 
 ```bash
 ./studio_mac.command                    # AIVERSE Studio（エディタ。Xcode、CMake、Node.js が必要）
-./studio_mac.command templates/mushrooms   # ……別のプロジェクトで
+./studio_mac.command ~/.aiverse/packages/templates/mushrooms   # ……別のプロジェクトで
 ```
 
 Windows：`studio_windows.cmd [project]` で `AiverseStudio.exe` をビルドして開きます（Visual Studio 2022、

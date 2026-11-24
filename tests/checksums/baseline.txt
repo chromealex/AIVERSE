@@ -40,9 +40,6 @@ laneclash 3 991d8be396b0a776
 lastcolony 1 d6a7e545fc1ce8fc
 lastcolony 2 20e4e88c0f8cab59
 lastcolony 3 610b8d8fbe43a8c1
-lua_lab 1 5103603ef4eea1c2
-lua_lab 2 2590d1f1363e138c
-lua_lab 3 62bb0d9b4bee1ea3
 metaltide 1 bd4a2c2307ed6c5a
 metaltide 2 c4bb071fe178199a
 metaltide 3 361802a8e6a73f04
@@ -91,6 +88,9 @@ underlord 3 b7f648e64eafd49a
 wildfire 1 9a677a6cbd8731b2
 wildfire 2 c969575c0ead1d86
 wildfire 3 2c7f263e9b44912e
+lua_lab 1 5103603ef4eea1c2
+lua_lab 2 2590d1f1363e138c
+lua_lab 3 62bb0d9b4bee1ea3
 triggerlab 1 bb3511adea48a687
 triggerlab 2 f9964f3ea20c9e0e
 triggerlab 3 c3f09179484b2330

@@ -38,7 +38,7 @@ struct Reg { Reg(const char* n, std::function<void()> f) { registry().push_back(
 #ifndef AIVERSE_SOURCE_DIR
 #define AIVERSE_SOURCE_DIR "."
 #endif
-static const std::string kMushrooms = std::string(AIVERSE_SOURCE_DIR) + "/templates/mushrooms";
+static const std::string kMushrooms = std::string(AIVERSE_TEMPLATES_DIR) + "/mushrooms";
 static std::string hex(const mp::Bytes& b) { return enc::hexUpper(b.data(), b.size()); }
 static uint64_t wallMs() { return uint64_t(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count()); }
 

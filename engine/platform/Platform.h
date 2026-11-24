@@ -137,6 +137,11 @@ float softKeyboardHeight();
 // Android, preloaded virtual FS on web, folder next to the executable elsewhere.
 std::string contentRoot();
 bool readContentFile(const std::string& relativePath, std::string& out);
+// Folder with the engine's assets (the repository's engine/assets or a package's content/engine). Content
+// paths "engine/x" that the content root does not hold resolve to <dir>/x, so the engine's own art (the
+// default loading screen, fonts, UI) is found when a client runs straight on a project folder.
+void setEngineAssetsDir(const std::string& dir);
+const std::string& engineAssetsDir();
 // Resource packs: `<content>/content.rpak` is mounted automatically; files in packs win over
 // loose files. mountPack adds another pack on top (patch, DLC); path is relative to the content
 // root or absolute. Returns false (and logs why) if the pack can't be opened.

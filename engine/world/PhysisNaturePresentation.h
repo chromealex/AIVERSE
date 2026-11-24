@@ -22,6 +22,7 @@
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <stdexcept>
 #include <vector>
 
@@ -81,6 +82,26 @@ struct NatureTornado {
     float tangentialWind = 0, updraft = 0; // current m/s (already * intensity)
     float moveX = 0, moveZ = 0;      // metres per tick
     bool clockwise = false;
+    // TornadoNature (0 / false for tornadoes without one)
+    float fireness = 0;              // 0..1 fire whirl share
+    float spray = 0;                 // 0..1 water spray at the base
+    float soil = 0;                  // m^3 of soil carried
+    bool waterspout = false, overWater = false;
+};
+
+// A burning ember thrown by a fire whirl (TornadoEmberField).
+struct NatureEmberPoint {
+    std::uint64_t key = 0;
+    float x = 0, y = 0, z = 0;
+    float vx = 0, vy = 0, vz = 0;
+};
+
+// Ground changed by tornadoes (GroundScourField), aggregated to blocks of
+// `size` metres around (x, z). depth > 0 = scoured, < 0 = deposited.
+struct NatureScourPoint {
+    std::uint64_t key = 0;
+    float x = 0, z = 0, size = 1;
+    float depth = 0;
 };
 
 // One airborne / resting debris piece (TornadoDebrisField).
@@ -109,6 +130,9 @@ struct NaturePresentationFrame {
     bool hasDisasters = false;
     std::vector<NatureTornado> tornadoes;     // sorted by key
     std::vector<NatureDebrisPoint> debris;    // field order (stable ids)
+    std::vector<NatureEmberPoint> embers;     // field order (stable ids)
+    std::vector<NatureScourPoint> scour;      // sorted by key
+    std::uint32_t scourRevision = 0;
 
     NatureGroundSample sample(float x, float z) const {
         NatureGroundSample out;
@@ -285,6 +309,13 @@ inline NaturePresentationFrame buildNaturePresentation(
             n.updraft = toF(st->updraft);
             n.moveX = toF(t.lastMove.x); n.moveZ = toF(t.lastMove.z);
             n.clockwise = st->clockwise;
+            if (const auto* nat = world.tryGetConst<physis::TornadoNature>(e)) {
+                n.fireness = clamp01(toF(nat->fireness));
+                n.spray = clamp01(toF(nat->spray));
+                n.soil = std::max(0.f, toF(nat->soil));
+                n.waterspout = nat->waterspout;
+                n.overWater = nat->overWater;
+            }
             const float reach = n.outerRadius + policy.radiusMeters;
             if (n.x < minX - reach || n.x > maxX + reach || n.z < minZ - reach || n.z > maxZ + reach) return;
             if (!std::isfinite(n.x) || !std::isfinite(n.z)) return;
@@ -308,6 +339,46 @@ inline NaturePresentationFrame buildNaturePresentation(
                 f.debris.push_back(d);
                 if (f.debris.size() >= 256) break;
             }
+        if (const auto* field = world.resourceConst<physis::TornadoEmberField>())
+            for (const auto& p : field->embers) {
+                NatureEmberPoint d;
+                d.key = p.id;
+                d.x = toF(p.position.x); d.y = toF(p.position.y); d.z = toF(p.position.z);
+                if (d.x < minX || d.x > maxX || d.z < minZ || d.z > maxZ) continue;
+                d.vx = toF(p.velocity.x); d.vy = toF(p.velocity.y); d.vz = toF(p.velocity.z);
+                f.embers.push_back(d);
+                if (f.embers.size() >= 256) break;
+            }
+        // Scour blocks (>= 2 m): mean change of the touched scour cells.
+        if (const auto* field = world.resourceConst<physis::GroundScourField>();
+            field && field->cellMeters > 0 && !field->cells.empty()) {
+            f.scourRevision = field->revision;
+            const std::int64_t cm = field->cellMeters;
+            const std::int64_t per = std::max<std::int64_t>(1, (2 + cm - 1) / cm);   // cells per block
+            const float block = float(cm * per);
+            std::map<std::pair<std::int64_t, std::int64_t>, std::pair<float, int>> acc;
+            for (const auto& c : field->cells) {
+                const float cx = (float(c.x) + 0.5f) * float(cm), cz = (float(c.z) + 0.5f) * float(cm);
+                if (cx < minX || cx > maxX || cz < minZ || cz > maxZ) continue;
+                const auto bx = nature_detail::floorDivF(float(c.x), float(per));
+                const auto bz = nature_detail::floorDivF(float(c.z), float(per));
+                auto& slot = acc[{bz, bx}];
+                slot.first += -toF(c.delta);
+                ++slot.second;
+                if (acc.size() > 4096) break;
+            }
+            for (const auto& [k, v] : acc) {
+                NatureScourPoint p;
+                p.key = key2(0x53434f5552ull, k.second, k.first);
+                p.size = block;
+                p.x = (float(k.second) + 0.5f) * block;
+                p.z = (float(k.first) + 0.5f) * block;
+                p.depth = v.first / float(per * per);
+                if (std::abs(p.depth) < 0.01f) continue;
+                f.scour.push_back(p);
+            }
+            std::sort(f.scour.begin(), f.scour.end(), [](const auto& a, const auto& b) { return a.key < b.key; });
+        }
     }
     if (!f.hasDisasters) return f;
 

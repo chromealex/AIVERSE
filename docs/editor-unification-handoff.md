@@ -186,7 +186,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 - Next: run actual editor build and targeted component adapter tests; inspect CI queue/runner availability before claiming functional readiness.
 
 ### 2026-11-17 — macOS build failure reported and fixed (awaiting rerun)
-- User ran `cmake --build build-metal -j 8` on macOS; compiler failed at `apps/editor/EditorEntityAdapter.h:69`: cannot convert `const Json*` to `Json*` when using `fps.member(collection)[ref.index]`.
+- User ran `cmake --build build-metal -j 8` on macOS; compiler failed at `apps/editor/EditorEntityAdapter.h:69`: cannot convert `const Json*` to `Json*` when using `actor.member(collection)[ref.index]`.
 - Verified `engine/data/Json.h`: `operator[](size_t)` is const-only; `Json::at(size_t)` returns mutable `Json&`.
 - Fix commit `9f4493e`: changed to `&fps.member(collection).at(ref.index)`.
 - Verification: API signature inspected in source; **macOS rebuild NOT YET RUN after fix**. Ask user to pull branch and rerun `cmake --build build-metal -j 8`; collect subsequent errors.
@@ -428,7 +428,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — FPS real ECS entity migration, compatibility stage 1
 - User requested moving ALL RTS/FPS runtime data to ECS. This stage starts with FPS without changing deterministic gameplay, network framing, or published save v9.
-- Commits: `0b3ff8be` (`engine/actor/ActorModule.h`) and `1e885bdd` (`engine/actor/ActorModule.cpp`) add actual `World::Entity` identities and ECS component pools `fps::ActorEntityIdentity`, `fps::ActorEntityTransform`, `fps::ActorEntityVitals`, plus `ActorEntityIndex` (slot→Entity resource). Every FPS player is assigned a stable ECS Entity at `fps::Module::setup`. `fps.ecsMirror` runs after FPS tick and updates components, including when match is over. Save loading rehydrates ECS values; rollback snapshots clone ECS pools with the World.
+- Commits: `0b3ff8be` (`engine/actor/ActorModule.h`) and `1e885bdd` (`engine/actor/ActorModule.cpp`) add actual `World::Entity` identities and ECS component pools `fps::ActorEntityIdentity`, `fps::ActorEntityTransform`, `fps::ActorEntityVitals`, plus `ActorEntityIndex` (slot→Entity resource). Every FPS player is assigned a stable ECS Entity at `fps::Module::setup`. `actor.ecsMirror` runs after FPS tick and updates components, including when match is over. Save loading rehydrates ECS values; rollback snapshots clone ECS pools with the World.
 - Critical compatibility: legacy `State::actors` is still authoritative and unchanged for gameplay, lag compensation (`HistoryFrame`), network packets and save v9. ECS components are a **real but derived** world view, not yet a source-of-truth migration. Never imply the gameplay uses ECS pools exclusively. No hash/checksum format changes were made.
 - Old FPS save allocator compatibility: `e4e7db20` recreates missing actor ECS identities when a save predating these pools loads. `7f0f2167` extends the tests to exercise a pre-ECS empty allocator. Validation still pending real execution.
 - Editor: `f0c084ac` (`apps/editor/EditorFps.cpp`) reads real ActorIdentity/Transform/Vitals from the runtime ECS World, placing each in the `components` snapshot rather than copying from `State::actors`. `d5de5c36` (`DetailsPanel.cpp`) draws these ECS component cards for FPS actors. Tests `3e8c073f` (`tests/fps/tests.cpp`) validate identity, pose, vitals, ticks, save/load, and `SimSnapshot` rollback.
@@ -468,42 +468,42 @@ After EVERY stage or substantial commit, update the sections above **and append*
 - **Verification:** not compiled/tested. No changes to main.
 
 ### 2026-11-18 — FPS ECS authority migration: stage B (command + tick bridge)
-- Commit `e1a5da2` (`engine/actor/ActorModule.cpp`): parse `fps.ecsAuthority` (OFF by default). `syncActorEntities` now creates/updates full `ActorRuntime` components when enabled, while preserving Editor ActorIdentity/Transform/Vitals projections. `applyCommand` validates and writes the full ECS ActorRuntime first (then updates compatibility vector for callers). New deterministic system `fps.ecsHydrate` reads canonical ActorRuntime into the legacy contiguous actor working vector immediately before `fps` tick; `fps.ecsMirror` commits the tick results back to ECS afterwards.
+- Commit `e1a5da2` (`engine/actor/ActorModule.cpp`): parse `actor.ecsAuthority` (OFF by default). `syncActorEntities` now creates/updates full `ActorRuntime` components when enabled, while preserving Editor ActorIdentity/Transform/Vitals projections. `applyCommand` validates and writes the full ECS ActorRuntime first (then updates compatibility vector for callers). New deterministic system `actor.ecsHydrate` reads canonical ActorRuntime into the legacy contiguous actor working vector immediately before `fps` tick; `actor.ecsMirror` commits the tick results back to ECS afterwards.
 - **Precise migration status:** canonical Actor data lives in ECS **between ticks**, and commands mutate the ECS component, but existing motor/combat/AI algorithms still access the `State::actors` tick workspace. This is a staged ECS authority bridge, **not** full direct component-based gameplay yet. Do not describe it as complete migration.
 - Legacy `State` save v9, history/replay, network snapshots, editor runtime views remain unchanged with opt-in OFF. Deserialization already calls syncActorEntities to rebuild ECS ActorRuntime from save v9; SimSnapshot includes both since stored in World.
-- Next stage: consistency and rollback parity tests, then migrate one system at a time to query/mutate ActorRuntime directly, remove mirror dependency, then migrate other object types. Validate with `fps.ecsAuthority=true` side-by-side checksums against old mode.
+- Next stage: consistency and rollback parity tests, then migrate one system at a time to query/mutate ActorRuntime directly, remove mirror dependency, then migrate other object types. Validate with `actor.ecsAuthority=true` side-by-side checksums against old mode.
 - **Verification:** not built/run. Keep this commit isolated from main until tested.
 
 ### 2026-11-18 — FPS ECS authority migration: stage C (parity regression)
-- Commit `01055b4` adds `ecsActorAuthorityParity` to `tests/fps/tests.cpp`, invoked by the existing `aiverse_fps_tests` runner. Runs old vector-authoritative vs `fps.ecsAuthority=true` under the same 160-tick command stream, compares authoritative ECS ActorRuntime full Actor payload with the legacy workspace, checks legacy v9 save/reload and SimSnapshot rollback continuation, and exercises direct ECS mutation across a tick barrier.
-- **Important finding:** `Module::setup` originally hashes the entire rules JSON into `contentHash_`. The opt-in implementation flag would incorrectly change checksum/save compatibility even when gameplay is byte-identical. Next commit must exclude only `fps.ecsAuthority` from the gameplay content hash, while preserving all actual game rules. This is a deterministic compatibility fix.
+- Commit `01055b4` adds `ecsActorAuthorityParity` to `tests/fps/tests.cpp`, invoked by the existing `aiverse_fps_tests` runner. Runs old vector-authoritative vs `actor.ecsAuthority=true` under the same 160-tick command stream, compares authoritative ECS ActorRuntime full Actor payload with the legacy workspace, checks legacy v9 save/reload and SimSnapshot rollback continuation, and exercises direct ECS mutation across a tick barrier.
+- **Important finding:** `Module::setup` originally hashes the entire rules JSON into `contentHash_`. The opt-in implementation flag would incorrectly change checksum/save compatibility even when gameplay is byte-identical. Next commit must exclude only `actor.ecsAuthority` from the gameplay content hash, while preserving all actual game rules. This is a deterministic compatibility fix.
 - Validation pending; the new test has not run on Mac Studio or CI and will expose any state divergence.
 
 ### 2026-11-18 — FPS ECS authority migration: stage D (content hash parity)
-- Commit `cf561b1` in `engine/actor/ActorModule.cpp`: `fps.ecsAuthority` is removed from a temporary rules JSON copy **only** before computing `contentHash_`. The actual rules object remains unchanged. The toggle is an implementation/storage choice and must not change legacy save v9 content checks or authoritative cross-worker/network hashes. All other game-rule fields are still hashed exactly as before.
+- Commit `cf561b1` in `engine/actor/ActorModule.cpp`: `actor.ecsAuthority` is removed from a temporary rules JSON copy **only** before computing `contentHash_`. The actual rules object remains unchanged. The toggle is an implementation/storage choice and must not change legacy save v9 content checks or authoritative cross-worker/network hashes. All other game-rule fields are still hashed exactly as before.
 - No changes to the binary save format, command protocol, or actual gameplay rules. `ecsActorAuthorityParity` from stage C should now compare identical checksums across authority modes.
 - **Validation:** compile/execute tests pending. Next migration target is full ECS dynamic object ownership (projectile, loot, vehicle), preserving their original order explicitly before changing gameplay algorithms.
 
 ### 2026-11-18 — FPS ECS authority migration: stage E (dynamic payload schema)
 - Commit `1cb6283` (`engine/actor/ActorModule.h`): declares full payload components `ProjectileRuntime{Projectile value, uint32_t order}`, `LootRuntime{Loot value, order}`, and `VehicleRuntime{Vehicle value, order}`. The order is essential because existing projectile/loot/vehicle vectors are deterministic and gameplay behavior depends on iteration order. Declares `hydrateDynamicsFromEcs`.
-- This commit is **only API/schema**, not a running authority migration yet. Next implementation commit will integrate it into `syncDynamicEntities` and `fps.ecsHydrate`, preserving save v9 and existing inspector projection components.
+- This commit is **only API/schema**, not a running authority migration yet. Next implementation commit will integrate it into `syncDynamicEntities` and `actor.ecsHydrate`, preserving save v9 and existing inspector projection components.
 - **Verification:** not compiled or tested.
 
 ### 2026-11-18 — FPS ECS authority migration: stage F (dynamic objects live)
-- Commit `8883e0a` (`engine/actor/ActorModule.cpp`): when `fps.ecsAuthority=true`, `syncDynamicEntities` commits the **full** Projectile, Loot and Vehicle value into their matching ECS runtime payload component and stores the original deterministic `order`. `hydrateDynamicsFromEcs` reconstructs the legacy contiguous gameplay arrays from ECS runtime components immediately before the FPS tick, sorting by `order` with deterministic ID tie-break. ECS object **membership, values, and order are authoritative between ticks**; vector arrays are compatibility workspaces during the FPS tick.
+- Commit `8883e0a` (`engine/actor/ActorModule.cpp`): when `actor.ecsAuthority=true`, `syncDynamicEntities` commits the **full** Projectile, Loot and Vehicle value into their matching ECS runtime payload component and stores the original deterministic `order`. `hydrateDynamicsFromEcs` reconstructs the legacy contiguous gameplay arrays from ECS runtime components immediately before the FPS tick, sorting by `order` with deterministic ID tie-break. ECS object **membership, values, and order are authoritative between ticks**; vector arrays are compatibility workspaces during the FPS tick.
 - On recycled Entity indices the sync removes mismatched runtime component kinds along with former inspector components; stale vanished dynamic objects are destroyed in deterministic source-ID order. On save v9 load, the existing `syncActorEntities/syncDynamicEntities` creates all authoritative payloads again from the deserialized legacy state; SimSnapshot includes the ECS pools.
 - Does **not** yet rewrite projectile collision/damage, loot pickup or vehicle simulation algorithms to operate directly on ECS pools; these continue using State arrays in the tick. Does not change default behavior or FPS save format. This is **stage F**, not final complete migration.
 - **Verification:** compilation, CI, FPS deterministic checks, save/restore parity pending. Next add direct ECS dynamics mutation+rollback tests, then eliminate gameplay dependency on temporary arrays system by system.
 
 ### 2026-11-18 — FPS ECS authority migration: stage G (canonical save/hash interface)
 - Commit `8ca50de`: declares `Module::authoritativeStateCopy(Simulation&)` to construct legacy save v9 / checksum state **from authoritative ECS ActorRuntime/ProjectileRuntime/LootRuntime/VehicleRuntime components**, while preserving non-entity round/history/meta data from `State`.
-- This commit is declaration only; next action must implement and route `hashState` and `serializeState` through the materialized canonical snapshot under `fps.ecsAuthority`.
+- This commit is declaration only; next action must implement and route `hashState` and `serializeState` through the materialized canonical snapshot under `actor.ecsAuthority`.
 - **Verification:** not run. Do not turn the storage option on by default until paired runtime and save/load checks pass.
 
 ### 2026-11-18 — FPS ECS authority migration: stage H (canonical hash and save v9)
-- Commit `117b4e9` in `engine/actor/ActorModule.cpp`: implemented `authoritativeStateCopy`. In `fps.ecsAuthority`, it reads full `ActorRuntime` by deterministic slot, and builds projectile/loot/vehicle vectors from **ECS runtime component pools** sorted by explicit source order (+ID tie break). Non-entity data (round, rewind history, gear/bot state, match, royale) comes from compatibility `State`.
+- Commit `117b4e9` in `engine/actor/ActorModule.cpp`: implemented `authoritativeStateCopy`. In `actor.ecsAuthority`, it reads full `ActorRuntime` by deterministic slot, and builds projectile/loot/vehicle vectors from **ECS runtime component pools** sorted by explicit source order (+ID tie break). Non-entity data (round, rewind history, gear/bot state, match, royale) comes from compatibility `State`.
 - `Module::hashState` now hashes the materialized canonical ECS payloads in authority mode, preserving the old wire/save layout and previous checksum algorithm; `Module::serializeState` writes the canonical materialized values in the existing FPS save v9 format, and on read the prior `syncActorEntities/syncDynamicEntities` creates the ECS payloads.
-- Important: direct mutation of an authoritative ECS entity between ticks now affects hash/save immediately, whereas the temporary legacy working vector is ignored for entity payloads. Direct mutation through State vectors in `fps.ecsAuthority` mode is no longer a reliable write path: use ECS runtime components or move the algorithm into an ECS system.
+- Important: direct mutation of an authoritative ECS entity between ticks now affects hash/save immediately, whereas the temporary legacy working vector is ignored for entity payloads. Direct mutation through State vectors in `actor.ecsAuthority` mode is no longer a reliable write path: use ECS runtime components or move the algorithm into an ECS system.
 - FPS physics/combat/AI still access ordered `State` working vectors *during* the tick; full elimination of these buffers remains. This commits a testable ECS canonical boundary rather than pretending full FPS gameplay ECS rewrite is done.
 - **Verification:** no native build or CI PASS yet. Next stage: expand parity tests for dynamic objects and direct ECS edits, then migrate a selected gameplay subsystem.
 
@@ -520,11 +520,11 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — FPS ECS authority migration: stage K (Inspector runtime fields)
 - Commit `a160612` in `apps/editor/EditorFps.cpp`: shared FPS Runtime snapshot now includes actual `ActorRuntime` fields (kills, shots, hits, weapon index, reload/fire timers, input sequence, vehicle, etc.) alongside legacy ActorIdentity/Transform/Vitals projections; projectile/loot/vehicle runtime payload component cards show source order and additional authoritative fields if present. The existing EditorRuntimeEntityProvider/Hierarchy stable Entity IDs and selection logic remain unchanged.
-- UI is read-only; mutations must go through ECS-authoritative gameplay APIs rather than direct editor-side mutation of simulation memory. For projects without `fps.ecsAuthority`, full runtime components are absent and existing mirror panels continue to work.
+- UI is read-only; mutations must go through ECS-authoritative gameplay APIs rather than direct editor-side mutation of simulation memory. For projects without `actor.ecsAuthority`, full runtime components are absent and existing mirror panels continue to work.
 - Verification: source code committed, no Metal editor visual test or native build yet.
 
 ### 2026-11-18 — FPS ECS authority migration: stage L (clear ownership contract)
-- Commits `a3772e9` (`engine/actor/ActorModule.h`) and `cf37e04` (`apps/editor/EditorRuntimeEntityProvider.h`) correct stale comments that said `State::actors` is *always* the gameplay authority. With `fps.ecsAuthority=false` (default), that remains true. With `fps.ecsAuthority=true`, the full `ActorRuntime` / `ProjectileRuntime` / `LootRuntime` / `VehicleRuntime` components are authoritative **between ticks**, and `State` vectors are temporary ordered gameplay workspaces.
+- Commits `a3772e9` (`engine/actor/ActorModule.h`) and `cf37e04` (`apps/editor/EditorRuntimeEntityProvider.h`) correct stale comments that said `State::actors` is *always* the gameplay authority. With `actor.ecsAuthority=false` (default), that remains true. With `actor.ecsAuthority=true`, the full `ActorRuntime` / `ProjectileRuntime` / `LootRuntime` / `VehicleRuntime` components are authoritative **between ticks**, and `State` vectors are temporary ordered gameplay workspaces.
 - Stable ECS IDs and lightweight ActorEntity* / dynamic *Entity projections remain dedicated to Editor/Inspector. Legacy save/network stays v9; `authoritativeStateCopy` marshals ECS data into the old v9 wire/save layout.
 - Key next step: remove remaining `State` gameplay workspace dependency one subsystem at a time; avoid parallelizing actor interactions/damage without canonical gather/apply barriers. No native build/CI PASS reported for recent commits.
 
@@ -533,12 +533,12 @@ After EVERY stage or substantial commit, update the sections above **and append*
 - Declaration only in this commit. Implementation and collision/determinism tests must follow. No change to default FPS mode.
 
 ### 2026-11-18 — FPS ECS authority migration: stage N (first direct gameplay system)
-- Commit `f9a254e` (`engine/actor/ActorModule.cpp`) implements `Module::moveActorEcs`: in `fps.ecsAuthority=true` and when the speculative parallel-motor shortcut is not taking over, the actual fixed-point `moveActor` algorithm runs on **writable `ActorRuntime::value` in the ECS pool**, not on `State::actors[i]`. Only motor input/output state (position, velocity, yaw/pitch, health/vehicle/stance flags) crosses the bridge; no expensive whole Actor bag/melee copies per move. The result's motor fields are reflected into `State::actors[i]` for later canonical-order combat, target selection, network projection and old save v9 algorithms.
+- Commit `f9a254e` (`engine/actor/ActorModule.cpp`) implements `Module::moveActorEcs`: in `actor.ecsAuthority=true` and when the speculative parallel-motor shortcut is not taking over, the actual fixed-point `moveActor` algorithm runs on **writable `ActorRuntime::value` in the ECS pool**, not on `State::actors[i]`. Only motor input/output state (position, velocity, yaw/pitch, health/vehicle/stance flags) crosses the bridge; no expensive whole Actor bag/melee copies per move. The result's motor fields are reflected into `State::actors[i]` for later canonical-order combat, target selection, network projection and old save v9 algorithms.
 - Compatibility: OFF mode continues calling legacy `moveActor` directly. With experimental parallel motor ON, precomputed actor results are still applied through the old buffer and committed to ECS at the end-of-tick; the direct motor method is used on the safe sequential fallback. This is **a real migrated gameplay subsystem**, but shooting/AI/loot/projectile/vehicle logic still use workspace arrays.
 - Existing `ecsActorAuthorityParity` drives movement/jump/sprint and compares complete 160-tick authoritative checksum histories; full native compilation and sanitizer checks remain pending. Preserve original actor iteration and combat ordering.
 
 ### 2026-11-18 — FPS ECS authority migration: stage O (direct combat damage and scoring)
-- Commit `e59b298` (`engine/actor/ActorSystems.cpp`): `Module::damage` now calculates authoritative damage directly into `ActorRuntime::value` for the target and (if distinct) attacker when `fps.ecsAuthority=true`. Pre-damage actor workspaces are copied into ECS to preserve same-tick interaction order, and results are immediately reflected back into legacy State actor slots for subsequent targeting, knockdown/team queries, FPS snapshots and net prediction.
+- Commit `e59b298` (`engine/actor/ActorSystems.cpp`): `Module::damage` now calculates authoritative damage directly into `ActorRuntime::value` for the target and (if distinct) attacker when `actor.ecsAuthority=true`. Pre-damage actor workspaces are copied into ECS to preserve same-tick interaction order, and results are immediately reflected back into legacy State actor slots for subsequent targeting, knockdown/team queries, FPS snapshots and net prediction.
 - Preserves existing damage sequence: friendly fire, gear/armor absorption, action cancel, lastAttacker/weapon, hit counter, knockdown, death/kill/money, drops and SimEvents. Lambda wrapping preserves early-return cases while ensuring authoritative ECS results are committed to the temporary workspace.
 - Default `ecsAuthority=false` still operates exclusively on legacy State. The centralized damage method is one **direct gameplay** ECS subsystem, alongside direct actor motor and command validation; other FPS systems still use tick workspace arrays.
 - Verification: compile/firing parity tests and ASan not yet run. Next add a two-team damage/kill regression under both authority modes, check same-tick event ordering, and update read-only editor schema as needed.
@@ -549,7 +549,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 - Next: add explicit independent cross-genre ECS policy consumer tests + reusable adapter API; audit genre-bound `GameCore&`/ `fps::Actor` dependencies; report remaining blockers without claiming complete universality.
 
 ### 2026-11-18 — FPS ECS authority migration: stage P (direct damage parity regression)
-- Commit `2413b7a` (`tests/fps/tests.cpp`) adds `ecsDamageAuthorityParity`. Creates identical two-team deathmatch simulations in default and `fps.ecsAuthority=true` mode, sends 30 ticks of deterministic fire, compares `Simulation::checksum` after each tick, target health, attacker hits/kills, and the complete `ActorRuntime::value` of both participants against the compatibility workspace. Explicitly verifies the victim dies and the attacker is credited with a kill.
+- Commit `2413b7a` (`tests/fps/tests.cpp`) adds `ecsDamageAuthorityParity`. Creates identical two-team deathmatch simulations in default and `actor.ecsAuthority=true` mode, sends 30 ticks of deterministic fire, compares `Simulation::checksum` after each tick, target health, attacker hits/kills, and the complete `ActorRuntime::value` of both participants against the compatibility workspace. Explicitly verifies the victim dies and the attacker is credited with a kill.
 - This tests the newly migrated direct ECS `Module::damage` and earlier direct ECS motor/command paths together, while retaining canonical save v9/network semantics. No tested performance advantage is claimed; legacy API compatibility remains.
 - **Verification status:** code pushed but still uncompiled on Mac Studio; run FPS CTest, FPS network transport, and ECS normal/ASan suites before merging or changing the default flag.
 
@@ -560,7 +560,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 - Tests must verify native runtime spawn without pre-registered index and duplicate-ID failure. Native compile/CI not yet confirmed.
 
 ### 2026-11-18 — Cross-genre audit: stage 1, ECS policy adapter
-- Commit `cb9a43e`: `libraries/include/aiverselib/genre/EcsMechanicSystems.h` introduces genre-independent `eachEcsMechanic<Component>(World&,policy)` and `addEcsMechanicSystem<Component>(Simulation&,name,policy)`. Game code chooses an arbitrary ECS component type, binds its existing policy, and gets deterministic dense-order iteration and COW write preparation. No dependency on `GameCore` or `fps::Module`.
+- Commit `cb9a43e`: `engine/mechanics/EcsMechanicSystems.h` introduces genre-independent `eachEcsMechanic<Component>(World&,policy)` and `addEcsMechanicSystem<Component>(Simulation&,name,policy)`. Game code chooses an arbitrary ECS component type, binds its existing policy, and gets deterministic dense-order iteration and COW write preparation. No dependency on `GameCore` or `fps::Module`.
 - This is **an adapter, not universalization of all FPS/RTS functions**. Any mechanic requiring `GameCore&`, `fps::Actor`, global RNG, actor ownership, collision or format-specific state must be extracted/refactored separately. No native compilation yet.
 - Next: compile and run the same pure policies against two different GameModules via this common adapter; add coverage and an explicit capability matrix for each mechanic.
 
@@ -570,7 +570,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 - **Verification:** test code committed; no native compile/CI PASS yet. Next add error-path duplicate-ID coverage and audit save v9 old allocator behavior.
 
 ### 2026-11-18 — FPS ECS authority migration: stage S (save-crossmode and duplicate-ID rejection)
-- Commit `2e8de0c` adds two negative/compatibility regressions to `tests/fps/tests.cpp`: `ecsDuplicateDynamicIdRejected` creates two LootRuntime ECS entities with identical typed ID and asserts `sim.step` rejects the ambiguity before tick advances; `ecsActorAuthorityParity` now writes legacy FPS save v9 in default storage mode, loads it into a fresh `fps.ecsAuthority=true` simulation, and compares checksums.
+- Commit `2e8de0c` adds two negative/compatibility regressions to `tests/fps/tests.cpp`: `ecsDuplicateDynamicIdRejected` creates two LootRuntime ECS entities with identical typed ID and asserts `sim.step` rejects the ambiguity before tick advances; `ecsActorAuthorityParity` now writes legacy FPS save v9 in default storage mode, loads it into a fresh `actor.ecsAuthority=true` simulation, and compares checksums.
 - This explicitly covers the storage-only toggle's unchanged `contentHash_`, save version and Entity rehydration semantics. The replay contract is still ordered by original slot / dynamic object's explicit source order.
 - Tests remain **unverified by native compilation/CI**. If they fail, fix within PR #7 and document exact failure/commit before considering main merge.
 
@@ -580,7 +580,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 - New test is not yet wired into build/test runners; no native compilation or passing CI observed.
 
 ### 2026-11-18 — Cross-genre audit: stage 3, public header contract
-- Commit `561bafa`: cross-genre test imports `<aiverselib/genre/EcsMechanicSystems.h>`, `Locomotion.h`, `Weapons.h`, `Match.h` via published `AIVERSE::libraries` include conventions instead of repository-internal relative include paths. This makes the test a useful native-project consumer contract.
+- Commit `561bafa`: cross-genre test imports `"engine/mechanics/EcsMechanicSystems.h"`, `Locomotion.h`, `Weapons.h`, `Match.h` via published `AIVERSE::libraries` include conventions instead of repository-internal relative include paths. This makes the test a useful native-project consumer contract.
 - Build and execution still pending. Next action: register the test in root CMake and standalone ECS runner.
 
 ### 2026-11-18 — Cross-genre audit: stage 4, CMake consumer target
@@ -588,7 +588,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 - Build/CTest has not been run on native toolchain. The absence of genre linkage is a source/CMake check, not proof of runtime correctness until CI passes.
 
 ### 2026-11-18 — FPS ECS authority migration: stage T (agent instructions)
-- Commit `0c57aff` updates `AGENTS.md` with current integrated PR #7 branch, the staged `fps.ecsAuthority` source-of-truth contract, already-migrated direct ECS systems (command, motor, damage), and explicit acknowledgement that unconverted AI/projectiles/vehicles/loot still use `State` as a tick workspace.
+- Commit `0c57aff` updates `AGENTS.md` with current integrated PR #7 branch, the staged `actor.ecsAuthority` source-of-truth contract, already-migrated direct ECS systems (command, motor, damage), and explicit acknowledgement that unconverted AI/projectiles/vehicles/loot still use `State` as a tick workspace.
 - It instructs any successor agent to update **this exact handoff after every implementation commit**, preserve save v9/net compatibility and deterministic side-effect order, and avoid replacing merged PR7 Editor/FPS code with stale PR8 file copies.
 - New code remains unverified by a completed native CI/Metal/FPS test run. Future tasks: compile, inspect any actual failures, migrate remaining FPS systems directly to ECS and eventually remove temporary ordered workspace vectors.
 
@@ -620,7 +620,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 - **Next agent:** use the shared-library registry first; do not create duplicate RTS/FPS projectile/damage implementations. Follow the updated skill and `AGENTS.md` for all new game mechanics.
 
 ### 2026-11-18 — Universal ECS projectile + damage resolution, stage A
-- Commit `3dfe73e`: added `libraries/include/aiverselib/genre/EcsDamageSystems.h`, a genre-neutral **Components + Systems** damage layer. Components: `HitPointsComponent`, `ProjectileDamageComponent`, `ColliderEntityIndex` (collision ID→generation-safe Entity), `DamageQueue`; event `DamageRequest`; applied report `DamageApplied`.
+- Commit `3dfe73e`: added `engine/mechanics/EcsDamageSystems.h`, a genre-neutral **Components + Systems** damage layer. Components: `HitPointsComponent`, `ProjectileDamageComponent`, `ColliderEntityIndex` (collision ID→generation-safe Entity), `DamageQueue`; event `DamageRequest`; applied report `DamageApplied`.
 - `enqueueProjectileDamage` translates a `ProjectileImpactEvent` from the existing common `addProjectileFlightSystem` into an ordered damage request. `addDamageResolutionSystem` consumes requests at a later fixed system barrier in insertion order; callbacks can emit events but not mutate projectile traversal or structural state. Default policy applies direct damage; custom policies can add armor/factions/resistance without modifying the shared system.
 - **No RTS/FPS includes**, public `AIVERSE::libraries` header. Supports any genre using ECS projectile/health components. This creates the shared capability; genre-specific implementations have NOT yet been ported and no tests/build have passed.
 - Next: executable shooter/strategy host test using the SAME flight/damage systems, rollback/COW checks, CMake and standalone runner wiring, then measure parity before adapting actual RTS/FPS gameplay.
@@ -636,7 +636,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 - Commit `76d7a69` (`docs/ecs-mechanic-composition.md`): detailed architecture, per-mechanic deliverables/acceptance gates and concrete launch -> flight -> collision -> damage -> effects/despawn design, plus candid migration status.
 - Commit `035aae4` (`skills/workflow/aiverse-new-mechanic/SKILL.md`): rewrote older RTS-only instructions. All future features must follow shared ECS component + system + policy + host-adapter architecture.
 - Commit `bc6ff19` (`skills/gameplay/aiverse-weapon-policies/SKILL.md`) requires shared ECS weapon/projectile systems for all genres. Commit `3cd63b6` created `skills/gameplay/aiverse-ecs-projectile-systems/SKILL.md` for the new shared flight API.
-- Commit `8f36243` (`libraries/include/aiverselib/genre/EcsProjectileSystems.h`) adds reusable `ProjectileFlightComponent`, `BallisticFlightPolicy`, `ProjectileImpactEvent`, `addProjectileFlightSystem`: deterministic ECS ballistic updates, read-only collision source provided by ANY game, ordered impact sink after component iteration, deferred despawn. This is a reusable **flight stage**, not complete combat/damage/AI migration.
+- Commit `8f36243` (`engine/mechanics/EcsProjectileSystems.h`) adds reusable `ProjectileFlightComponent`, `BallisticFlightPolicy`, `ProjectileImpactEvent`, `addProjectileFlightSystem`: deterministic ECS ballistic updates, read-only collision source provided by ANY game, ordered impact sink after component iteration, deferred despawn. This is a reusable **flight stage**, not complete combat/damage/AI migration.
 - Commit `68d92e0` (`tests/ecs_projectile_composition_test.cpp`) exercises the same flight ECS system in unrelated Shooter and Strategy GameModule hosts, with stable ordered impacts and deep-vs-page-COW rollback checksum comparison. Commits `bd94083`, `786941f` register it in CTest and the standalone ECS suite, without linking aiverse_game or aiverse_fps.
 - Commit `741c292` registers package `ecs-projectile-systems` and its public `AIVERSE::lib_ecs_projectile_systems` target in `libraries/catalog.json`. Commit `41d6fb3` updates the composition guide to point to actual implementations.
 - **Native build and shader test results are NOT confirmed.** These are code, test and guideline changes, NOT proof every legacy RTS/FPS mechanic is universal. Outstanding: replace genre-specific projectile/collision/damage logic with shared systems, extract RTS-only NativeModule hooks, FPS Actor State workspace migration, generic Inspector/persistence integration, and pass cross-genre/native/ASan/TSan tests.
@@ -681,7 +681,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 - **Verification:** source-level inspection only; native test builds still pending. Keep both CTest and standalone suite as required gates.
 
 ### 2026-11-18 — Universal ECS weapon launch, stage A
-- Commit `3e146a3`: added shared `libraries/include/aiverselib/genre/EcsWeaponLaunchSystems.h`. Data-only ECS components: `WeaponParametersComponent` (Fixed speed/gravity/radius, lifetime, cooldown, damage), `WeaponStateComponent` (ammo/nextFireTick), `FireIntentComponent` (origin/direction/one-shot request), `ProjectileSpawnQueue` and `ProjectileSpawnCommand`.
+- Commit `3e146a3`: added shared `engine/mechanics/EcsWeaponLaunchSystems.h`. Data-only ECS components: `WeaponParametersComponent` (Fixed speed/gravity/radius, lifetime, cooldown, damage), `WeaponStateComponent` (ammo/nextFireTick), `FireIntentComponent` (origin/direction/one-shot request), `ProjectileSpawnQueue` and `ProjectileSpawnCommand`.
 - `addWeaponLaunchSystem` validates settings, cooldown/ammo, consumes requests in stable `WeaponState` dense order and emits spawn commands without structural changes during iteration. `addProjectileSpawnSystem` consumes them in a separate deterministic barrier and creates `ProjectileFlightComponent`/`ProjectileDamageComponent` pairs for the shared flight→impact→damage chain. Host genre adapters supply inputs and configuration; no `GameCore` or `fps::Module` dependencies.
 - **Status:** initial implementation only, not compiled/run or integrated with legacy RTS/FPS gameplay. Next: full cross-genre weapon→spawn→flight→damage test, CMake/standalone registration, catalog, skill and documentation. Keep existing host combat untouched until equivalence is proven.
 
@@ -751,21 +751,21 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — FPS ECS authority post-tick invariant
 - Implementation commits: `671c5e9680438bbf9aac4285cbc3d3bf66d7a292` and corrective `ec34d1c0b4735311b605da1f2518c1b8b3655f8f`.
-- Changed: `engine/actor/ActorModule.cpp`, the `fps.ecsMirror` system. When `fps.ecsAuthority` is ON, after syncing actors and dynamic objects it now checks that every actor slot has an `ActorRuntime` component whose slot, position, velocity, health, armor, weapon index, ammo and reserve agree with the just-committed legacy tick workspace. A missing/divergent runtime throws `std::logic_error` instead of silently allowing authority drift. No extra checks run with the default OFF gate. The second commit corrects an initially mistaken `Actor::magazine` member to the real `Actor::ammo` member.
+- Changed: `engine/actor/ActorModule.cpp`, the `actor.ecsMirror` system. When `actor.ecsAuthority` is ON, after syncing actors and dynamic objects it now checks that every actor slot has an `ActorRuntime` component whose slot, position, velocity, health, armor, weapon index, ammo and reserve agree with the just-committed legacy tick workspace. A missing/divergent runtime throws `std::logic_error` instead of silently allowing authority drift. No extra checks run with the default OFF gate. The second commit corrects an initially mistaken `Actor::magazine` member to the real `Actor::ammo` member.
 - Verification: checked `Actor` declaration in `engine/actor/ActorModule.h` and committed source; **no compilation or runtime test**. The invariant checks selected fields, not every nested actor field; it is a migration guard, **not** completion of direct ECS combat or actor-system migration.
 - Next: verify `aiverse_fps_tests` with ecsAuthority both OFF and ON, save v9 and transport checksum parity; expand direct ECS systems and then remove the legacy tick workspace once complete. Check Editor regressions before merge.
 
 
 ### 2026-11-18 — Full actor payload ECS commit invariant
 - Implementation SHA: `18104af8d6b2b3ee51ec06444bb03abbeb4af230`.
-- Changed: `engine/actor/ActorModule.cpp`. Replaced the selective field checks in `fps.ecsMirror` with `Actor::operator==` against the complete `ActorRuntime::value`. `engine/actor/ActorModule.h` already declares defaulted `Actor::operator==`. This covers inventory, melee state, input, timers, weapon slots, actions and movement alongside the previous vitals, under the opt-in `fps.ecsAuthority` gate. No save/network wire-format changes.
+- Changed: `engine/actor/ActorModule.cpp`. Replaced the selective field checks in `actor.ecsMirror` with `Actor::operator==` against the complete `ActorRuntime::value`. `engine/actor/ActorModule.h` already declares defaulted `Actor::operator==`. This covers inventory, melee state, input, timers, weapon slots, actions and movement alongside the previous vitals, under the opt-in `actor.ecsAuthority` gate. No save/network wire-format changes.
 - Verification: GitHub source inspection and commit only; native compile and runtime behavior **not verified**. Potential compile dependency: all nested Actor members must support equality, as required by its defaulted operator. Do not claim actual FPS/RTS migration is complete.
 - Next: validate native build, replay and transport; migrate remaining tick algorithms to direct ECS components, while keeping versioned save/network compatibility.
 
 
 ### 2026-11-18 — FPS Editor ECS projection consistency guard
 - Implementation SHAs: `75b3673b55ac10d6028130bf570d42277b9e718f`, correction `a1e6dacfc3af1db18dde1241944a4dc2f08c7745`.
-- Changed `engine/actor/ActorModule.cpp`: after the full ActorRuntime equality guard, `fps.ecsMirror` now also verifies the derived `ActorEntityIdentity`, `ActorEntityTransform` and `ActorEntityVitals` projections against canonical Actor state (slot/team/life, position/velocity/yaw/pitch, health/armor/ammo/reserve and stance flags). This detects editor-facing stale projections while `fps.ecsAuthority` is enabled. Default OFF path unchanged. Corrective SHA uses actual `ActorEntityTransform::position` field, verified in `engine/actor/ActorModule.h`.
+- Changed `engine/actor/ActorModule.cpp`: after the full ActorRuntime equality guard, `actor.ecsMirror` now also verifies the derived `ActorEntityIdentity`, `ActorEntityTransform` and `ActorEntityVitals` projections against canonical Actor state (slot/team/life, position/velocity/yaw/pitch, health/armor/ammo/reserve and stance flags). This detects editor-facing stale projections while `actor.ecsAuthority` is enabled. Default OFF path unchanged. Corrective SHA uses actual `ActorEntityTransform::position` field, verified in `engine/actor/ActorModule.h`.
 - Verification: source inspection and GitHub commits only. Native C++ compilation, runtime save/replay/network tests and visual editor regression **not run**.
 - CI observation: at inspection, commit `858c575d31bc91f5efdf649600263ea9b6ffea22` had four queued Actions workflows (ECS 2.0, CI, Studio, GPU batching); no success reported.
 - Next: run native build/CI and FPS ecsAuthority on/off replay tests. Complete actual direct ECS systems and RTS integration; Editor Inspector live ECS writeback, hierarchy/gizmo and rollback remain separate unfinished gates.
@@ -789,7 +789,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Generic ECS timed mechanics header
 - Implementation SHA: `5907d5f893f91bd4e7989ed2eb8eaa3109ba2959`.
-- Added `libraries/include/aiverselib/genre/EcsTimedMechanics.h`: `WeaponReloadComponent`/`ReloadIntentComponent` with reload and fire-intent gate stages; `HealthRegenerationComponent` over the canonical shared `HitPointsComponent`; `EnergyRegenerationComponent`; `TimedExpiryComponent`, all independently registered with `Simulation` and without RTS/FPS dependencies.
+- Added `engine/mechanics/EcsTimedMechanics.h`: `WeaponReloadComponent`/`ReloadIntentComponent` with reload and fire-intent gate stages; `HealthRegenerationComponent` over the canonical shared `HitPointsComponent`; `EnergyRegenerationComponent`; `TimedExpiryComponent`, all independently registered with `Simulation` and without RTS/FPS dependencies.
 - Verification: source uploaded via GitHub; **native compile and CTest not run**, host integrations not yet switched. Shared health/weapon components remain additive/opt-in and are not asserted to replace legacy modules.
 - Next: add two-host COW/save/rollback fixture, package registration, skill, catalog and CMake, then verify natively before any default host switch.
 
@@ -817,7 +817,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Universal ECS locomotion policy adapter
 - Implementation SHA: `7e48fd23d31cc82fbd791c755f7301bb18635a48`.
-- Added `libraries/include/aiverselib/genre/EcsLocomotionSystems.h`: `LocomotionParametersComponent`, `LocomotionStateComponent`, `LocomotionInputComponent`, `LocomotionOutputComponent` and `addLocomotionPolicySystem`. Uses the existing shared `stepMotion` fixed-point policy instead of duplicating movement math. Consumes jump edge, leaves persistent movement wishes, returns velocity; host collision/position integration is intentionally separate.
+- Added `libraries/include/aiverselib/mechanics/EcsLocomotionSystems.h`: `LocomotionParametersComponent`, `LocomotionStateComponent`, `LocomotionInputComponent`, `LocomotionOutputComponent` and `addLocomotionPolicySystem`. Uses the existing shared `stepMotion` fixed-point policy instead of duplicating movement math. Consumes jump edge, leaves persistent movement wishes, returns velocity; host collision/position integration is intentionally separate.
 - Verification: GitHub source committed, **native compiler and behavioral tests not executed**. Does not replace FPS `moveActor` or RTS `sysMovement` yet.
 - Next: native cross-genre tests and CMake/catalog/skill registration; then integrate collision sampling and movement into actual hosts behind parity gates.
 
@@ -838,7 +838,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Shared ECS inventory transaction system
 - Implementation SHA: `bbda102d6635edf170d83fe5a79280351a53d159`.
-- Added `libraries/include/aiverselib/genre/EcsInventorySystems.h`: per-Entity `InventoryComponent`; immutable `InventoryCatalog` world resource; ordered `InventoryCommandQueue`, `InventoryResultQueue`, generation-safe source/destination entities, and `addInventoryTransactionSystem`. Reuses transactional `gameplay::addItem/removeItem/transferItem` policies, preserving capacity and no-partial-write guarantees without FPS/RTS dependencies.
+- Added `libraries/include/aiverselib/mechanics/EcsInventorySystems.h`: per-Entity `InventoryComponent`; immutable `InventoryCatalog` world resource; ordered `InventoryCommandQueue`, `InventoryResultQueue`, generation-safe source/destination entities, and `addInventoryTransactionSystem`. Reuses transactional `gameplay::addItem/removeItem/transferItem` policies, preserving capacity and no-partial-write guarantees without FPS/RTS dependencies.
 - Verification: source committed; **not compiled or run**, not yet integrated into legacy built-in FPS `Actor::bag` or RTS inventories.
 - Next: cross-genre transaction/rollback tests, public package and CMake runner, skill; then migrate FPS loot/pickups and RTS item transfer by explicit authority cutover.
 
@@ -887,15 +887,15 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — First live FPS Editor projection read from ECS authority
 - Implementation SHA: `b781438fd76808a24cda6de944bb1db97376c9c4`.
-- Changed: `engine/actor/ActorModule.cpp::syncActorEntities`. After the authoritative `ActorRuntime` commit, `ActorEntityIdentity`, `ActorEntityTransform` and `ActorEntityVitals` are now populated from the ECS runtime payload when `fps.ecsAuthority` is enabled. Default legacy OFF mode still reads the legacy Actor. This removes a second read path for editor-facing actor projections and establishes ECS as their input source. The legacy gameplay tick and save v9 workspace are **still present**.
+- Changed: `engine/actor/ActorModule.cpp::syncActorEntities`. After the authoritative `ActorRuntime` commit, `ActorEntityIdentity`, `ActorEntityTransform` and `ActorEntityVitals` are now populated from the ECS runtime payload when `actor.ecsAuthority` is enabled. Default legacy OFF mode still reads the legacy Actor. This removes a second read path for editor-facing actor projections and establishes ECS as their input source. The legacy gameplay tick and save v9 workspace are **still present**.
 - Verification: source change pushed to GitHub; **not compiled or executed**. Existing post-mirror projection guard should catch divergence when ECS authority is enabled, but its actual test outcome is unverified.
 - Next: migrate another actual gameplay stage (weapon launch / damage) to shared ECS components behind parity gate, preserving FPS-specific hitscan/rewind rules; do not replace those with ballistic flight without matching legacy semantics. Independently migrate RTS adapter, then validate save v9, network rollback and Editor.
 
 
 ### 2026-11-18 — FPS live fire accounting writes canonical ActorRuntime
 - Implementation SHA: `0a17b92c808db73fc39877004bef3c2ed4e4e0d3`.
-- Changed: `engine/actor/ActorModule.cpp::shoot`. Under opt-in `fps.ecsAuthority`, the actual gameplay firing path locates the shooter ECS Entity and its `ActorRuntime`, seeds its ammo/shots/nextFire from the current compatibility workspace (which may contain same-tick reload or other changes), applies the shot accounting to the runtime component, then writes the three resulting values back to the legacy workspace. Default OFF branch preserves the previous exact `--ammo; ++shots; nextFire=tick+interval` sequence. Existing hitscan/lag compensation, ballistic projectile creation, RNG, damage and save v9 remain untouched.
-- This is **partial direct ECS mutation**, not adoption of the shared `EcsWeaponLaunchSystems` yet. The same-tick legacy workspace still carries the rest of combat, and `fps.ecsMirror` commits the full actor at the end. Do not describe this as universal RTS/FPS shooting.
+- Changed: `engine/actor/ActorModule.cpp::shoot`. Under opt-in `actor.ecsAuthority`, the actual gameplay firing path locates the shooter ECS Entity and its `ActorRuntime`, seeds its ammo/shots/nextFire from the current compatibility workspace (which may contain same-tick reload or other changes), applies the shot accounting to the runtime component, then writes the three resulting values back to the legacy workspace. Default OFF branch preserves the previous exact `--ammo; ++shots; nextFire=tick+interval` sequence. Existing hitscan/lag compensation, ballistic projectile creation, RNG, damage and save v9 remain untouched.
+- This is **partial direct ECS mutation**, not adoption of the shared `EcsWeaponLaunchSystems` yet. The same-tick legacy workspace still carries the rest of combat, and `actor.ecsMirror` commits the full actor at the end. Do not describe this as universal RTS/FPS shooting.
 - Verification: GitHub source commit only; no C++ compilation, replay checksum, FPS transport, save v9 or Editor test executed. Pay particular attention to same-tick reload and weapon switch ordering.
 - Next: extract common weapon state/launch logic with real ECS systems and adapt FPS hitscan/rewind without changing behavior; add parity tests and integrate RTS. Run native build before production use.
 
@@ -909,35 +909,35 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Shared reload policy extracted for direct native host integration
 - Implementation SHA: `930cdf4ae80aa0cc80a845d3c5d2a31f086119fa`.
-- Changed `libraries/include/aiverselib/genre/EcsTimedMechanics.h` to extract `stepWeaponReload(WeaponStateComponent&,WeaponReloadComponent&,tick,request)`; `addWeaponReloadSystem` now calls the same deterministic function. Explicitly preserves normal FPS behavior including completion before a same-tick new request. No added system-level double-owner.
+- Changed `engine/mechanics/EcsTimedMechanics.h` to extract `stepWeaponReload(WeaponStateComponent&,WeaponReloadComponent&,tick,request)`; `addWeaponReloadSystem` now calls the same deterministic function. Explicitly preserves normal FPS behavior including completion before a same-tick new request. No added system-level double-owner.
 - Verification: static source modification only. **Native compiler/CTest unavailable so far**, no live FPS parity yet. The shared function uses the pre-existing FPS transfer arithmetic, so any invalid negative state handling must be checked in host validators.
 - Next: convert the legacy FPS reload step to a temporary typed adapter invoking this policy with canonical fields, then add native golden parity fixtures covering weapon switching, ammo/reserve, replay and save v9.
 
 
 ### 2026-11-18 — First real built-in FPS mechanic uses the universal shared reload policy
 - Implementation SHA: `a497f62f553680a456e1d7db645188204e677cad`.
-- Changed `engine/actor/ActorModule.cpp`: the FPS actor's real per-tick reload completion, reserve transfer and reload-request decision now run via `lib::genre::stepWeaponReload` defined in `EcsTimedMechanics.h`, which is also used by generic `addWeaponReloadSystem`. Adapted `Actor::ammo/reserve/nextFire/reloadUntil` to temporary value structs in the same place inside tick, preserving weapon selection and shoot ordering and retaining legacy save v9 bytes. There is **no second mutable canonical reload ECS component** yet; under `fps.ecsAuthority`, `ActorRuntime` remains canonical at tick boundaries. This is actual shared-algorithm adoption, **not completion of full FPS ECS system extraction**.
+- Changed `engine/actor/ActorModule.cpp`: the FPS actor's real per-tick reload completion, reserve transfer and reload-request decision now run via `lib::genre::stepWeaponReload` defined in `EcsTimedMechanics.h`, which is also used by generic `addWeaponReloadSystem`. Adapted `Actor::ammo/reserve/nextFire/reloadUntil` to temporary value structs in the same place inside tick, preserving weapon selection and shoot ordering and retaining legacy save v9 bytes. There is **no second mutable canonical reload ECS component** yet; under `actor.ecsAuthority`, `ActorRuntime` remains canonical at tick boundaries. This is actual shared-algorithm adoption, **not completion of full FPS ECS system extraction**.
 - Verification: GitHub edit committed; **native compilation, FPS tests, direct reload parity, save/network and rollback not yet executed**. Generic policy used same legacy reload transfer expression and finish-then-request ordering; boundary cases near uint32 tick overflow remain a known parity gate.
 - Next: add an FPS ECS-authority ON/OFF reload-fire-switch replay fixture, run native FPS/CTest and resolve any compiler behavior differences before switching authoritative weapon state to standalone ECS components.
 
 
 ### 2026-11-18 — Real FPS reload tick parity regression added
 - Implementation SHA: `92a165d34c865a26955d551d2a1919946c9ea9b7`.
-- Changed `tests/fps/tests.cpp`: new `ecsReloadAuthorityParity` drives 25 tick-accurate FPS inputs in two independent built-in modules, one legacy and one with `fps.ecsAuthority=true`. It checks authoritative ActorRuntime after every tick, source-state equality, shared reload start/completion/fire suppression and reserve accounting, weapon selection, v9 save cross-mode load, pre-reload-completion snapshot restoration, replay checksums and per-tick parity.
+- Changed `tests/fps/tests.cpp`: new `ecsReloadAuthorityParity` drives 25 tick-accurate FPS inputs in two independent built-in modules, one legacy and one with `actor.ecsAuthority=true`. It checks authoritative ActorRuntime after every tick, source-state equality, shared reload start/completion/fire suppression and reserve accounting, weapon selection, v9 save cross-mode load, pre-reload-completion snapshot restoration, replay checksums and per-tick parity.
 - Verification: static authored fixture/commit only. **No native compile or actual assertions executed**. Evaluate its tick-0 and weapon-switch expectations through the native test runner, and resolve any failure before claiming parity.
 - Next: compile `aiverse_fps_tests` and run FPS tests; then continue separating the real FPS fire/damage and dynamic state systems from `State::actors` behind explicit per-feature gates.
 
 
 ### 2026-11-18 — Shared accepted-shot accounting extraction
 - Implementation SHA: `f8b41cf113dc9042824716192073068fb429a9e8`.
-- Changed `libraries/include/aiverselib/genre/EcsWeaponLaunchSystems.h`: extracted pure `commitAcceptedShot(ammo,nextFireTick,now,interval,shots?)` policy, used by generic ECS weapon launch after its existing acceptance checks. No RNG or structural writes, and no new validation inside the helper. Existing generic accepted-shot semantics remain decrement ammo and set nextFireTick.
+- Changed `engine/mechanics/EcsWeaponLaunchSystems.h`: extracted pure `commitAcceptedShot(ammo,nextFireTick,now,interval,shots?)` policy, used by generic ECS weapon launch after its existing acceptance checks. No RNG or structural writes, and no new validation inside the helper. Existing generic accepted-shot semantics remain decrement ammo and set nextFireTick.
 - Verification: GitHub commit only; native C++ compilation and test execution **not run**.
 - Next: call the same policy from real FPS `Module::shoot` while preserving its prior validation/hitscan/rewind and save v9 ordering; then document that separate commit.
 
 
 ### 2026-11-18 — Real FPS shot accounting now calls shared weapon policy
 - Implementation SHA: `25917da11cf6cb5a2ea32c436ae891f6b4c2ee0d`.
-- Changed `engine/actor/ActorModule.cpp`: includes the public shared weapon launch header and replaces duplicated post-acceptance ammo/cooldown/shots mutation in both `fps.ecsAuthority` ON and OFF paths of real `Module::shoot` with `lib::genre::commitAcceptedShot`. ON path still writes `ActorRuntime` first and copies three fields back to the legacy tick workspace. OFF path still mutates the legacy actor. The helper performs the same arithmetic as the removed inline statements; shot eligibility, RNG, pellets, hitscan, lag compensation, projectile creation, impact/damage, save v9 and network formats are unchanged.
+- Changed `engine/actor/ActorModule.cpp`: includes the public shared weapon launch header and replaces duplicated post-acceptance ammo/cooldown/shots mutation in both `actor.ecsAuthority` ON and OFF paths of real `Module::shoot` with `lib::genre::commitAcceptedShot`. ON path still writes `ActorRuntime` first and copies three fields back to the legacy tick workspace. OFF path still mutates the legacy actor. The helper performs the same arithmetic as the removed inline statements; shot eligibility, RNG, pellets, hitscan, lag compensation, projectile creation, impact/damage, save v9 and network formats are unchanged.
 - Verification: GitHub source commits only; C++ compile and runtime tests **not executed**. Shared policy may expose include/link issues; check native FPS target and cross-genre weapon test before merge.
 - This is a **real shared gameplay algorithm**, but FPS/RTS are NOT yet fully consuming common ECS WeaponLaunch/Flight/Damage systems. Next: connect actual RTS fire accounting and/or extract shared collision/damage stages with parity fixtures; then migrate authoritative ECS state and test rollback.
 
@@ -951,21 +951,21 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Genre-independent fixed-point regen policy foundation
 - Implementation SHA: `d6ae0b68fe23762b567735c8a613a91d58693d3e`.
-- Added `libraries/include/aiverselib/genre/FixedRegeneration.h`: pure `stepFixedResourceRegeneration(current,maximum,rate,dt)`; exact fixed-point operation order matches existing RTS `Unit` regen. No ECS or genre-module dependency, so multiple ECS systems can reuse it without duplicating math.
+- Added `engine/mechanics/FixedRegeneration.h`: pure `stepFixedResourceRegeneration(current,maximum,rate,dt)`; exact fixed-point operation order matches existing RTS `Unit` regen. No ECS or genre-module dependency, so multiple ECS systems can reuse it without duplicating math.
 - Verification: GitHub source commit only, **no native compiler or runtime executed**.
 - Next: wire `addEnergyRegenerationSystem` and real RTS `sysEconomy` into the same policy while keeping `Unit` canonical; then add a focused cross-host policy smoke regression.
 
 
 ### 2026-11-18 — First kinematic projectile ECS system implementation
 - Implementation SHA: `55a9ecc5c074b75e63907cd41db7cfb0af1d138d`.
-- Added `libraries/include/aiverselib/genre/EcsKinematicProjectileSystems.h`: `KinematicProjectileComponent` (origin/current/destination, owner/target, shotId, elapsed/duration, alive), pure `stepKinematicProjectile` fixed-point endpoint interpolation per simulation tick, `KinematicArrivalEvent`, and `addKinematicProjectileSystem`. The system iterates the ECS pool in dense order, stages arrival events, emits them after iteration, and defers destruction. No collision world, physics forces or RNG. Target tracking is **not** implemented: the endpoint is fixed at launch, and the arrival sink must resolve stale/dead targets.
+- Added `engine/mechanics/EcsKinematicProjectileSystems.h`: `KinematicProjectileComponent` (origin/current/destination, owner/target, shotId, elapsed/duration, alive), pure `stepKinematicProjectile` fixed-point endpoint interpolation per simulation tick, `KinematicArrivalEvent`, and `addKinematicProjectileSystem`. The system iterates the ECS pool in dense order, stages arrival events, emits them after iteration, and defers destruction. No collision world, physics forces or RNG. Target tracking is **not** implemented: the endpoint is fixed at launch, and the arrival sink must resolve stale/dead targets.
 - Verification: GitHub source commit only, no native compilation or CTest. Not registered as a standalone library package or connected to RTS yet. Physics and hitscan systems remain separate existing/planned paths.
 - Next: add independent host tests for travel duration, event ordering, expiry and snapshot rollback; register public package/skill and CMake; connect real RTS adapter behind parity gate.
 
 
 ### 2026-11-18 — ECS energy regeneration policy deduplication
 - Implementation SHA: `9f1fd207014a4b223e47ab3df885b769da95d550`.
-- Changed `libraries/include/aiverselib/genre/EcsTimedMechanics.h` to call the shared pure `stepFixedResourceRegeneration` rather than maintaining independent Fixed arithmetic. Its existing zero floor, valid rate gate and maximum cap are unchanged, and authoritative EnergyRegenerationComponent continues to live in ECS.
+- Changed `engine/mechanics/EcsTimedMechanics.h` to call the shared pure `stepFixedResourceRegeneration` rather than maintaining independent Fixed arithmetic. Its existing zero floor, valid rate gate and maximum cap are unchanged, and authoritative EnergyRegenerationComponent continues to live in ECS.
 - Verification: static source reasoning/edit only; **not compiled/tested**. Existing `ecs_cross_genre_timed_mechanics_test` is the validation gate.
 - Next: port direct RTS Unit health/energy policy calls without moving their existing authoritative component storage.
 
@@ -1038,7 +1038,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Kinematic ECS adds nonphysical pursuit mode
 - Implementation SHA: `58ca3b611a059b38146416a5d21f9a8bef211d55`.
-- `libraries/include/aiverselib/genre/EcsKinematicProjectileSystems.h` now supports two **nonphysical** movement policies: existing deterministic `TimedEndpoint` interpolation and `Pursuit` travel by a fixed distance per tick toward a resolvable destination. Added `advanceKinematicPursuit` with existing `moveTowards` fixed-point semantics; `addKinematicProjectileSystem` accepts an optional destination resolver for moving targets and distinguishes hit arrival from lifetime expiry (expiry emits no hit event).
+- `engine/mechanics/EcsKinematicProjectileSystems.h` now supports two **nonphysical** movement policies: existing deterministic `TimedEndpoint` interpolation and `Pursuit` travel by a fixed distance per tick toward a resolvable destination. Added `advanceKinematicPursuit` with existing `moveTowards` fixed-point semantics; `addKinematicProjectileSystem` accepts an optional destination resolver for moving targets and distinguishes hit arrival from lifetime expiry (expiry emits no hit event).
 - Default TimedEndpoint call sites remain source-compatible. Target resolver receives `Simulation&` and `const KinematicProjectileComponent&` and returns `Vec3`; missed/dead targets can keep the last known destination by default.
 - **Unverified:** GitHub source commit only, no C++ build, no actual RTS module integration or snapshot execution yet. Next: replace nonphysical RTS movement calls with this same shared policy, then test moving-target and timeout behavior.
 
@@ -1089,7 +1089,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Shared deterministic ordered projectile impact policy
 - Implementation SHA: `c44f3638788e4b18d62e4724082bd58b9d9574db`.
-- Added public `libraries/include/aiverselib/genre/EcsOrderedImpactSystems.h` with `OrderedProjectileImpact` (ECS projectile, shooter, target, Fixed damage, location and splash radius) and `resolveOrderedProjectileImpact` which preserves canonical per-projectile order: resolve direct target, stage direct-hit effects, visit eligible splash candidates in the host spatial query's order. Prevents applying splash twice to the primary target. All armor/status/faction/distance logic remains injected by caller callbacks. No `SpatialWorld`, RTS/FPS module, or rigid-body dependency.
+- Added public `engine/mechanics/EcsOrderedImpactSystems.h` with `OrderedProjectileImpact` (ECS projectile, shooter, target, Fixed damage, location and splash radius) and `resolveOrderedProjectileImpact` which preserves canonical per-projectile order: resolve direct target, stage direct-hit effects, visit eligible splash candidates in the host spatial query's order. Prevents applying splash twice to the primary target. All armor/status/faction/distance logic remains injected by caller callbacks. No `SpatialWorld`, RTS/FPS module, or rigid-body dependency.
 - Intent: extract the live RTS direct+splash impact block without batching/reordering damage (which could change shields, callbacks and network replay). This generic resolver is a policy used from an ECS gameplay system, not yet a separately scheduled impact system.
 - Verification: GitHub source commit only; no compilation or CTest observed. Next: integrate into `Combat.cpp::sysProjectiles` and add portable callback-order regressions.
 
@@ -1142,7 +1142,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Shared deterministic hitscan candidate query policy
 - Implementation SHA: `ae9ee7b975139250674c952876a28994bddff5ca`.
-- New public `libraries/include/aiverselib/genre/EcsHitscanSystems.h` exports `HitscanCandidate<T>` and `selectClosestHitscanCandidate`. Inputs: candidate range (live ECS-derived view or immutable rewind snapshot), origin, delta, maximum allowed fraction, eligible predicate and hitbox provider. Uses existing `world::intersect` fixed-point slab query and strict `fraction < best`, retaining original source range order for equal-distance ties. No projectile motion integration or extra RNG; real source and target identities remain the caller's.
+- New public `engine/mechanics/EcsHitscanSystems.h` exports `HitscanCandidate<T>` and `selectClosestHitscanCandidate`. Inputs: candidate range (live ECS-derived view or immutable rewind snapshot), origin, delta, maximum allowed fraction, eligible predicate and hitbox provider. Uses existing `world::intersect` fixed-point slab query and strict `fraction < best`, retaining original source range order for equal-distance ties. No projectile motion integration or extra RNG; real source and target identities remain the caller's.
 - This is a **shared raycast selection policy**, not an independently registered `HitscanSystem` or a replacement for environment/vehicle obstruction. Next connect real FPS `traceShot` to this policy without touching rewind selection or damage order.
 - Verification: connector GitHub commit only; native compilation/CTest have not run.
 
@@ -1150,7 +1150,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 ### 2026-11-18 — Live FPS hitscan and lag compensation use shared deterministic selection
 - Implementation SHA: `bbd22a2e34d11a5600d08c742968cefe6e9e9b15`.
 - Changed `engine/actor/ActorSystems.cpp::traceShot` to invoke `lib::genre::selectClosestHitscanCandidate` for victim Actor intersection instead of duplicating the per-target slab query/nearest-fraction loop. The caller supplies the original eligibility test (exclude source/dead actor or stale life), original `actorBounds(target,config_.motor)`, and *unchanged* `targets` collection, which may be FPS rewind history chosen earlier in `Module::shoot`. The helper retains strict `fraction < best`, equal-distance tie semantics, and best fraction initialization of `1_fx`.
-- Unchanged: vehicle intersection order, static collider and material-penetration traversal, hit event emission, zone multipliers, armor, knockdown, lethal effects, and pre-existing `fps.ecsAuthority` direct `ActorRuntime` damage path. This makes live FPS use the same public hitscan policy that native projects of any genre can reuse; it is not yet a separately registered ECS hitscan system.
+- Unchanged: vehicle intersection order, static collider and material-penetration traversal, hit event emission, zone multipliers, armor, knockdown, lethal effects, and pre-existing `actor.ecsAuthority` direct `ActorRuntime` damage path. This makes live FPS use the same public hitscan policy that native projects of any genre can reuse; it is not yet a separately registered ECS hitscan system.
 - Verification: GitHub source committed, C++ compilation and in-game rewind/network parity **not performed**. Next: add cross-host hitscan regression tests covering ties, invalid candidates, and no-hit, then expose package/skill and run native build.
 
 
@@ -1172,7 +1172,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Universal ECS ordered-impact queue system (new, opt-in)
 - **Code SHA:** `bf80c4f272564a78c33af8fcfe6fde801a18c4ef`.
-- Added `libraries/include/aiverselib/genre/EcsImpactQueueSystems.h`. New `OrderedImpactQueue` World resource (bounded pending list, monotonic sequence), `enqueueOrderedImpact` and `addOrderedImpactResolutionSystem` bridge the existing generic `resolveOrderedProjectileImpact` policy to a registered ECS Simulation stage. The queue is drained with a swap: requests submitted from damage callbacks execute at the **next barrier**, not recursively.
+- Added `libraries/include/aiverselib/mechanics/EcsImpactQueueSystems.h`. New `OrderedImpactQueue` World resource (bounded pending list, monotonic sequence), `enqueueOrderedImpact` and `addOrderedImpactResolutionSystem` bridge the existing generic `resolveOrderedProjectileImpact` policy to a registered ECS Simulation stage. The queue is drained with a swap: requests submitted from damage callbacks execute at the **next barrier**, not recursively.
 - All gameplay rules (friendly fire, armor, shields, statuses, target liveness, spatial radius and splash) remain host-injected callbacks, with no FPS/RTS dependency and no second authoritative HP/projectile state. It respects caller-controlled order, not a false global same-tick sort. **Compatibility warning:** the existing RTS immediate per-projectile damage path must not be wholesale replaced with a single end-of-tick barrier without proving identical effects ordering.
 - **Verification:** GitHub file creation only, native C++ compile and tests **not executed**. This is a new public source header, not yet a catalog package or built-in FPS/RTS integration.
 - **Next:** add shooter+strategy regression for callback/queue ordering and COW snapshots, publish the native catalog package and agent skill, register CTest and standalone runner. Verify native build before any legacy adoption.
@@ -1275,7 +1275,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — New composable ECS hitscan request-resolution system
 - Implementation SHA: `268518ca82f9efafe66376d028aa53cc1d059aac`.
-- New `libraries/include/aiverselib/genre/EcsHitscanResolutionSystems.h` implements `HitscanIntentComponent` (origin/delta/maximumFraction/shotId/requested), `HitscanResolvedEvent` (source/target entity, shotId, point/fraction), and `addHitscanResolutionSystem`. Consumes one-shot ECS requests even when invalid, queries host-selected current or rewind candidates, checks eligibility/hitbox through shared nearest-ray policy, stages successful hits in stable source pool order and calls hit sink **after** traversal. No simulated projectile movement, new RNG, or internal damage application.
+- New `engine/mechanics/EcsHitscanResolutionSystems.h` implements `HitscanIntentComponent` (origin/delta/maximumFraction/shotId/requested), `HitscanResolvedEvent` (source/target entity, shotId, point/fraction), and `addHitscanResolutionSystem`. Consumes one-shot ECS requests even when invalid, queries host-selected current or rewind candidates, checks eligibility/hitbox through shared nearest-ray policy, stages successful hits in stable source pool order and calls hit sink **after** traversal. No simulated projectile movement, new RNG, or internal damage application.
 - This is a true separate ECS **system**, but it is not yet wired into the live FPS authoritative fire path. Existing FPS rewind hitscan stays on `ActorSystems.cpp::traceShot` using the shared policy; this new system's post-traversal damage callback order would differ from that legacy path if enabled without parity tests. No compiled/tested production guarantee.
 - Next: add cross-host ECS fire-intent/snapshot tests; register catalog target and skill; then compare same-tick FPS and RTS hit ordering before changing live scheduling.
 
@@ -1351,7 +1351,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Shared integer health commit for ECS damage resolution
 - Implementation SHA: `e9990503283b3bfe8ead7994a387f15f8551007b`.
-- `libraries/include/aiverselib/genre/EcsDamageSystems.h` adds `applyIntegerHitPointDamage(int32_t&,int32_t)`, an immediate, allocation-free deterministic HP update after armor/faction/shield and other host policies are already applied. `addDamageResolutionSystem` now calls the same primitive. Handles nonpositive damage/current without mutation and large damage without signed subtraction overflow.
+- `engine/mechanics/EcsDamageSystems.h` adds `applyIntegerHitPointDamage(int32_t&,int32_t)`, an immediate, allocation-free deterministic HP update after armor/faction/shield and other host policies are already applied. `addDamageResolutionSystem` now calls the same primitive. Handles nonpositive damage/current without mutation and large damage without signed subtraction overflow.
 - Verification: GitHub source edit only; **native compiler, CTest, real FPS/RTS parity NOT run**. Next: adopt same helper in live FPS `damage` after knockdown resolution with the old event ordering unchanged; add edge-case regression and run FPS save/rollback checks.
 
 
@@ -1382,7 +1382,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Real FPS programmable-projectile phase split out of monolithic tick
 - **Implementation SHA:** `28218ca43083764103dc43ee4cfbc0b32435e0d5`.
-- Changed `engine/actor/ActorModule.cpp`: registered `fps.compat.projectilePrograms` as an independent ordered `Simulation::addSystem` stage immediately after optional `fps.ecsHydrate` and before `fps` (which still calls `tickSystems`, royale, rewind history and actor movement). Removed duplicate `tickProjectilePrograms` call from the main `tick`. The new stage guards on winner like the previous early return; it shares the same `State` workspace and calls the **same projectile algorithm**, retaining its per-pellet collision, split, damage, events and exact update order. No save v9/network schema changes.
+- Changed `engine/actor/ActorModule.cpp`: registered `actor.compat.projectilePrograms` as an independent ordered `Simulation::addSystem` stage immediately after optional `actor.ecsHydrate` and before `fps` (which still calls `tickSystems`, royale, rewind history and actor movement). Removed duplicate `tickProjectilePrograms` call from the main `tick`. The new stage guards on winner like the previous early return; it shares the same `State` workspace and calls the **same projectile algorithm**, retaining its per-pellet collision, split, damage, events and exact update order. No save v9/network schema changes.
 - **Scope limitation:** this is a real scheduling boundary extraction but remains an explicit **compatibility system** over legacy State vectors. Not yet a universal `ProjectileFlightComponent` ECS authority conversion. Built-in FPS will use canonical `ProjectileRuntime` pools between ticks only with `ecsAuthority` gate, hydrated before this stage and committed at the existing mirror stage.
 - **Verification:** GitHub source commit only, no compiler, CTest, FPS save, replay, transport or rollback proof yet. Existing `tests/fps/projectiles.inc` and `ecsDynamicAuthorityParity` are required, plus a new cross-storage programmed projectile fixture.
 - **Next:** add actual FPS parity test with ECS authority ON/OFF over projectile flight and target damage, snapshot restore and save v9 cross-load; then run native FPS suite and fix failures.
@@ -1396,28 +1396,28 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — FPS real programmed projectile phase parity regression source
 - **Implementation SHA:** `5ce137a9aac331e4e23834cdd5dd77338e6f1f81`.
-- Extended `tests/fps/projectiles.inc` with `ecsProjectileProgramStageParity`: executes a real four-player FPS programmed fly-through bullet after the newly separated `fps.compat.projectilePrograms` stage, compares actor and projectile state plus full checksums on every tick between default State and `ecsAuthority=true` hosts, confirms deterministic damage and despawn, saves a pre-flight snapshot, reloads v9 bytes across both storage configurations, then restores and replays to the exact original checksum.
+- Extended `tests/fps/projectiles.inc` with `ecsProjectileProgramStageParity`: executes a real four-player FPS programmed fly-through bullet after the newly separated `actor.compat.projectilePrograms` stage, compares actor and projectile state plus full checksums on every tick between default State and `ecsAuthority=true` hosts, confirms deterministic damage and despawn, saves a pre-flight snapshot, reloads v9 bytes across both storage configurations, then restores and replays to the exact original checksum.
 - **Verification:** GitHub source committed; **native compile and test not yet executed**, test function not yet invoked by `tests/fps/tests.cpp` main until next implementation step. Source is grounded on existing `projectilePrograms` fixture's known flyThrough health expectations; verify at runtime.
 - **Next:** call the fixture from existing FPS test main, then run native `aiverse_fps_tests`, `fps_transport` and relevant CTest before further authority cutover.
 
 
 ### 2026-11-18 — Generic ECS DamageQueue versioned bytes and complete checksum
 - Implementation SHA: `fb9542e0474f2903b93776b438ead0e6fe9b9241`.
-- Extended `libraries/include/aiverselib/genre/EcsDamageSystems.h` with explicit `Archive` IO for `DamageRequest` and `DamageQueue`, versioned v1 layout, bounded 16,384-request input, `saveDamageQueue`, transactional `loadDamageQueue` and `hashDamageQueue` covering both generation-safe Entity IDs, shot ID and damage amount in enqueue order. This completes a shared persistence primitive needed by real host rollback/save integrations.
+- Extended `engine/mechanics/EcsDamageSystems.h` with explicit `Archive` IO for `DamageRequest` and `DamageQueue`, versioned v1 layout, bounded 16,384-request input, `saveDamageQueue`, transactional `loadDamageQueue` and `hashDamageQueue` covering both generation-safe Entity IDs, shot ID and damage amount in enqueue order. This completes a shared persistence primitive needed by real host rollback/save integrations.
 - Verification: source committed only, **native C++ compilation, save round-trip and live game/save parity still not executed**. Adding a serializer alone does not automatically wire `GameModule::serializeState` or hash to this resource.
 - Next: add CTest round-trip/truncation/checksum mutation checks in the existing integer-damage fixture, update AI skill and complete native test gates before using it as authoritative pending damage in FPS/RTS.
 
 
 ### 2026-11-18 — Shared synchronous hitscan intent policy for live FPS and scheduled ECS
 - Implementation SHA: `801ad2a943031cf83cbd781c0c2f71664ccfe5d3`.
-- Changed `libraries/include/aiverselib/genre/EcsHitscanResolutionSystems.h`: added `resolveHitscanIntent` pure generic policy taking `HitscanIntentComponent`, shooter entity, current or immutable historical target range, eligibility, hitboxes and live-entity mapping. Returns both `HitscanResolvedEvent` and a pointer to the matched immutable pose, preserving FPS historical head/limb checks. The scheduled `addHitscanResolutionSystem` now calls this **same** policy, copying a request before clearing `requested`, and still batches callbacks after ECS iteration; no change to intended order or one-shot semantics.
+- Changed `engine/mechanics/EcsHitscanResolutionSystems.h`: added `resolveHitscanIntent` pure generic policy taking `HitscanIntentComponent`, shooter entity, current or immutable historical target range, eligibility, hitboxes and live-entity mapping. Returns both `HitscanResolvedEvent` and a pointer to the matched immutable pose, preserving FPS historical head/limb checks. The scheduled `addHitscanResolutionSystem` now calls this **same** policy, copying a request before clearing `requested`, and still batches callbacks after ECS iteration; no change to intended order or one-shot semantics.
 - **No gameplay migration claim yet**: live FPS still calls the shared nearest-candidate helper directly until its own `traceShot` is migrated in a separate implementation commit. This helper enables in-tick immediate resolution without postponing damage to the next system barrier.
 - Verification: GitHub code commit only, not compiled or exercised. Follow-up tests must check invalid/blocked intents, rewind pose lifetime, snapshot/rollback and multiple sources.
 
 
 ### 2026-11-18 — FPS programmed-projectile parity fixture enabled in test main
 - **Implementation SHA:** `bd4c7f43f43c17742741e18329149883bdc2c366`.
-- Changed `tests/fps/tests.cpp` to execute `ecsProjectileProgramStageParity()` directly after existing `projectilePrograms()` during `aiverse_fps_tests`. This ensures the live `fps.compat.projectilePrograms` stage is covered against both ECS authority and legacy storage in normal native FPS test runs.
+- Changed `tests/fps/tests.cpp` to execute `ecsProjectileProgramStageParity()` directly after existing `projectilePrograms()` during `aiverse_fps_tests`. This ensures the live `actor.compat.projectilePrograms` stage is covered against both ECS authority and legacy storage in normal native FPS test runs.
 - **Verification:** source edit committed, **C++ compilation, actual FPS suite, COW/sanitizer and network tests unverified**. Tests may identify ordering or save parity differences that must be resolved before production status.
 - **Next:** inspect CI, verify latest branch source, and run `ctest --output-on-failure -R 'fps|ecs_'` plus transport/Editor gates on a native checkout.
 
@@ -1445,7 +1445,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 - **Implementation SHA:** `d4fd11dc5984f4ceebbf4c427a4517c5ba113504`.
 - Updated `tests/fps/projectiles.inc`: extracted `ecsProjectileProgramStageParityCase(bool cow)`; the `ecsProjectileProgramStageParity` entrypoint now tests both default deep snapshots and explicit ECS COW snapshots. Both validate tick-by-tick default-versus-`ecsAuthority` programmed projectile state/health, v9 cross-load and replay restore.
 - **Verification:** source committed only; native compile, FPS CTest, COW and platform parity **not run**. COW enablement uses supported `World::enableCowSnapshots` API.
-- **Next:** native compile/CTest and transport/Editor regression; resolve any differences before replacing `fps.compat.projectilePrograms` workspace with direct `ProjectileRuntime` ECS iteration.
+- **Next:** native compile/CTest and transport/Editor regression; resolve any differences before replacing `actor.compat.projectilePrograms` workspace with direct `ProjectileRuntime` ECS iteration.
 
 
 ### 2026-11-18 — Engine-wide ECS migration plan checkpoint
@@ -1456,7 +1456,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Real FPS two-shooter rewind, save and rollback authority regression
 - Implementation SHA: `c2ea67c2d089426e1fdcaa89012b4d9a4f40307b`.
-- Extended `tests/fps/tests.cpp` with `ecsSimultaneousHitscanRollbackParity` and called it in the standard `fps` CTest suite. Configures two opposing players aiming at each other, an explicitly nonphysical hitscan weapon (3 pellets, 8 damage, zero bullet speed, one-tick interval), and both source inputs each tick with deliberately rewound `viewTick`. Runs 12 ticks under legacy and opt-in `fps.ecsAuthority`, compares checksums and entire Actor vectors each tick, verifies every authoritative `ActorRuntime` equals its compatibility view, and requires actual shooting/hits. Takes snapshots after tick 2, compares cross-mode v9 save reload in both directions, replays ticks 3..11 and asserts final checksums are identical.
+- Extended `tests/fps/tests.cpp` with `ecsSimultaneousHitscanRollbackParity` and called it in the standard `fps` CTest suite. Configures two opposing players aiming at each other, an explicitly nonphysical hitscan weapon (3 pellets, 8 damage, zero bullet speed, one-tick interval), and both source inputs each tick with deliberately rewound `viewTick`. Runs 12 ticks under legacy and opt-in `actor.ecsAuthority`, compares checksums and entire Actor vectors each tick, verifies every authoritative `ActorRuntime` equals its compatibility view, and requires actual shooting/hits. Takes snapshots after tick 2, compares cross-mode v9 save reload in both directions, replays ticks 3..11 and asserts final checksums are identical.
 - This fixture is intended to catch incorrect deferred same-tick hits, snapshot ownership mistakes, and lag-compensated damage regressions when changing live FPS. **No native compile or execution has occurred**, so expected target hit outcomes and all asserted equalities remain unverified.
 - Next: run `ctest -R '^fps$'` on native debug+Release, confirm fixture, then compare real transport replay. Do not change the save v9 network wire or synchronously dispatched damage while this is unverified.
 
@@ -1490,7 +1490,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Shared swept projectile-target collision policy (physical path)
 - Implementation SHA: `97ad4670832714ba2c324c88cf2f5f6224653a09`.
-- New public `libraries/include/aiverselib/genre/EcsSweepQuerySystems.h` defines `SweptProjectileContact<Candidate>` (stable pointer/fraction/normal) and `selectSweptProjectileContact`. Performs deterministic fixed-point swept segment against AABB expanded by projectile extents with injectable bounds and stable tie preference. Unlike the strict legacy actor hitscan selector, endpoint fraction=1 contacts are accepted. No physics integration, RNG or damage; this is shared collision selection to compose with physical/ballistic projectile solver and impact policies. No genre check.
+- New public `engine/mechanics/EcsSweepQuerySystems.h` defines `SweptProjectileContact<Candidate>` (stable pointer/fraction/normal) and `selectSweptProjectileContact`. Performs deterministic fixed-point swept segment against AABB expanded by projectile extents with injectable bounds and stable tie preference. Unlike the strict legacy actor hitscan selector, endpoint fraction=1 contacts are accepted. No physics integration, RNG or damage; this is shared collision selection to compose with physical/ballistic projectile solver and impact policies. No genre check.
 - Verification: connector GitHub source commit only; no C++ compilation, no gameplay usage yet. Next migrate the actual FPS programmed projectile sweep loop preserving its stable target-ID ordering and wall collision precedence, then add tests.
 
 
@@ -1546,8 +1546,8 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Real FPS programmed projectiles now run directly on ECS ProjectileRuntime (experimental)
 - **Code SHA:** `24d9ce958a56d6db179aa9b88471923772313b92`.
-- Refactored `engine/actor/ActorProjectiles.cpp` into a single `Module::stepProgrammedProjectile(Simulation&,Projectile&,children,liveCount)` solver, reused by the default legacy vector loop and `fps.ecsAuthority` path. The **ECS-authoritative path** now enumerates live `ProjectileRuntime` entities in explicit saved `order`/ID order, advances the *component's* `Projectile value` in place, applies original immediate hit/damage/split/penetration callbacks, queues expired ECS Entity handles, and performs structural destroys only after traversal. It then creates child `ProjectileRuntime` entities in stable branch-spawn order and updates `DynamicEntityIndex` keys. Original vector order/capacity check is preserved through a per-iteration live-count tracked across logical expiration. External native projects can directly alter `ProjectileRuntime` before the stage.
-- For compatibility, after the ECS traversal, rebuilds `State::projectiles` as a **projection** of ECS values. Other FPS grenade/round/loot systems are still legacy and may mutate this vector during the following main `fps` tick; existing `fps.ecsMirror` reconciles these mutations. Therefore **full exclusive ECS projectile authority for the entire frame is not yet complete**; this commit eliminates the legacy vector as the *programmable projectile flight stage's* mutable source.
+- Refactored `engine/actor/ActorProjectiles.cpp` into a single `Module::stepProgrammedProjectile(Simulation&,Projectile&,children,liveCount)` solver, reused by the default legacy vector loop and `actor.ecsAuthority` path. The **ECS-authoritative path** now enumerates live `ProjectileRuntime` entities in explicit saved `order`/ID order, advances the *component's* `Projectile value` in place, applies original immediate hit/damage/split/penetration callbacks, queues expired ECS Entity handles, and performs structural destroys only after traversal. It then creates child `ProjectileRuntime` entities in stable branch-spawn order and updates `DynamicEntityIndex` keys. Original vector order/capacity check is preserved through a per-iteration live-count tracked across logical expiration. External native projects can directly alter `ProjectileRuntime` before the stage.
+- For compatibility, after the ECS traversal, rebuilds `State::projectiles` as a **projection** of ECS values. Other FPS grenade/round/loot systems are still legacy and may mutate this vector during the following main `fps` tick; existing `actor.ecsMirror` reconciles these mutations. Therefore **full exclusive ECS projectile authority for the entire frame is not yet complete**; this commit eliminates the legacy vector as the *programmable projectile flight stage's* mutable source.
 - No game rule/config change, new component type or v9 save schema. Legacy mode keeps the original immediate source-vector loop, but invokes the same solver to avoid two divergent algorithms.
 - **Verification:** GitHub source commit only; native compiler, `fps` tests, deep/COW rollback, dynamic Entity allocator ordering, network and save v9 parity **NOT executed**. Added method declaration in preceding SHA `b853ab8fd414375e76b99c40e5ac3b3a32df1c9a`. Check consistency of `DynamicEntityIndex` after projectile expired/recreated, especially snapshot restore and branch split budget.
 - **Next:** add direct-ECS authority tests showing an in-place `ProjectileRuntime` change survives into the next stage, add deterministic mixed programmed/non-programmed order/branch tests and compile `aiverse_fps_tests` before any default flip.
@@ -1580,7 +1580,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 ### 2026-11-18 — Extract FPS ordinary projectile stage from round mechanics
 - Implementation SHA: `030c814405beda3293967f1127547bcacd26d3c2`.
 - `engine/actor/ActorSystems.cpp` split the previous `tickSystems` projectile iteration into `Module::tickOrdinaryProjectiles`, preserving the same per-projectile tick loop, traceShot collision/impact timing, grenade bounce/fuse/flash/smoke rules, order, and immediate effect callbacks. `tickSystems` now owns round/bomb logic only.
-- **Transitional code state:** declaration and Simulation registration of `tickOrdinaryProjectiles` are still required in the following code commits; do not build the intermediate SHA alone. Preserve original order `fps.compat.projectilePrograms -> fps.compat.ordinaryProjectiles -> fps` (round mechanics, royale, actor tick). No native build run yet.
+- **Transitional code state:** declaration and Simulation registration of `tickOrdinaryProjectiles` are still required in the following code commits; do not build the intermediate SHA alone. Preserve original order `actor.compat.projectilePrograms -> fps.compat.ordinaryProjectiles -> fps` (round mechanics, royale, actor tick). No native build run yet.
 
 ### 2026-11-18 — Ordinary FPS projectile system declared
 - Implementation SHA: `de1c9842115cadfe716096773be642eed95fc8f1`.
@@ -1588,14 +1588,14 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Ordinary FPS bullets/grenades now registered as separate Simulation stage
 - Implementation SHA: `9812d420052e5157d7bc03cdc41b71621143087a`.
-- `engine/actor/ActorModule.cpp::setup` registers `fps.compat.ordinaryProjectiles` after the programmed projectile stage and before the main `fps` stage. When mechanics are enabled and no winner has been latched, it executes `tickOrdinaryProjectiles` from the extracted `ActorSystems.cpp` method. This preserves the original gameplay sequence: program flight/impacts -> ordinary bullet/grenade flight/impacts -> bomb/round rules -> royale -> actor update.
-- This first extraction uses legacy `State::projectiles` as its workspace; it is a genuinely separate ECS Simulation stage, but still needs direct `ProjectileRuntime` ownership in `fps.ecsAuthority` to complete the next migration wave. No new fields or save/transport schema.
+- `engine/actor/ActorModule.cpp::setup` registers `actor.compat.ordinaryProjectiles` after the programmed projectile stage and before the main `fps` stage. When mechanics are enabled and no winner has been latched, it executes `tickOrdinaryProjectiles` from the extracted `ActorSystems.cpp` method. This preserves the original gameplay sequence: program flight/impacts -> ordinary bullet/grenade flight/impacts -> bomb/round rules -> royale -> actor update.
+- This first extraction uses legacy `State::projectiles` as its workspace; it is a genuinely separate ECS Simulation stage, but still needs direct `ProjectileRuntime` ownership in `actor.ecsAuthority` to complete the next migration wave. No new fields or save/transport schema.
 - Verification: GitHub source commits only; native build, FPS/RTS game tests, v9 rollback and editor checks not run.
 
 
 ### 2026-11-18 — Mixed physical program + nonprogrammed direct ECS projectile source test
 - **Code SHA:** `54cd9fa586ac190f762603c391a562e62f47ae85`.
-- Extended `ecsProjectileBranchAuthorityParityCase` in `tests/fps/projectiles.inc`: before the first FPS tick it inserts a passive, nonprogrammed projectile into the legacy `State` and **only into the ECS `ProjectileRuntime` pool** for the authoritative host, leaving its legacy `State::projectiles` projection intentionally stale. This checks `fps.ecsHydrate` index discovery, direct-ECS stage handling of mixed nonprogrammed/programmed bullets, original ordering of branch children, Entity IDs and projections across COW/deep snapshots and save v9, while ensuring the passive object remains after active branches expire.
+- Extended `ecsProjectileBranchAuthorityParityCase` in `tests/fps/projectiles.inc`: before the first FPS tick it inserts a passive, nonprogrammed projectile into the legacy `State` and **only into the ECS `ProjectileRuntime` pool** for the authoritative host, leaving its legacy `State::projectiles` projection intentionally stale. This checks `actor.ecsHydrate` index discovery, direct-ECS stage handling of mixed nonprogrammed/programmed bullets, original ordering of branch children, Entity IDs and projections across COW/deep snapshots and save v9, while ensuring the passive object remains after active branches expire.
 - **Verification:** GitHub source committed; native compilation/CTest/assertions **not run**. Validate the runtime `DynamicEntityIndex` reconciliation before claiming fully authoritative ECS projectile ownership. Compatibility paths still mutate vector later in main tick.
 
 
@@ -1607,8 +1607,8 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Ordinary FPS projectiles now advance directly in ECS authority components
 - Implementation SHA: `8e54368f80cf14319968f0e806521297e9fa388a`.
-- `engine/actor/ActorSystems.cpp` extracts the existing bullet/grenade/smoke/flash impact behavior into shared `Module::stepOrdinaryProjectile(Simulation&,Projectile&)` (same logic, original immediate events and damage order). Default `fps.ecsAuthority=OFF` calls this policy over the original State vector and erases expired objects in place. With authority ON, `tickOrdinaryProjectiles` enumerates `ProjectileRuntime` ECS components sorted by stable `order,id`, mutates each real ECS payload directly, skips programmed projectiles (handled by the preceding system), stages expired entities, destroys/erases their dynamic keys only after iteration, and rebuilds State::projectiles as the ordered compatibility projection.
-- This is the next **actual live FPS ECS ownership transfer**: both programmed and non-programmed shot flight systems now read/write ECS `ProjectileRuntime` with authority ON. The following `fps` tick still runs legacy round and actor subsystems that may modify State vectors; the `fps.ecsMirror` barrier reconciles them. Save v9 and command/network payloads unchanged.
+- `engine/actor/ActorSystems.cpp` extracts the existing bullet/grenade/smoke/flash impact behavior into shared `Module::stepOrdinaryProjectile(Simulation&,Projectile&)` (same logic, original immediate events and damage order). Default `actor.ecsAuthority=OFF` calls this policy over the original State vector and erases expired objects in place. With authority ON, `tickOrdinaryProjectiles` enumerates `ProjectileRuntime` ECS components sorted by stable `order,id`, mutates each real ECS payload directly, skips programmed projectiles (handled by the preceding system), stages expired entities, destroys/erases their dynamic keys only after iteration, and rebuilds State::projectiles as the ordered compatibility projection.
+- This is the next **actual live FPS ECS ownership transfer**: both programmed and non-programmed shot flight systems now read/write ECS `ProjectileRuntime` with authority ON. The following `fps` tick still runs legacy round and actor subsystems that may modify State vectors; the `actor.ecsMirror` barrier reconciles them. Save v9 and command/network payloads unchanged.
 - **Intermediate compilation gate:** add declaration `stepOrdinaryProjectile` to ActorModule.h in the next implementation commit. Native C++ compile, CTest, real v9 deep/COW and UDP/WebSocket rollback still unverified. Check grenade bounce, target death, smoke expiration and Source ID ordering.
 
 
@@ -1632,7 +1632,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Agent contract for direct ECS programmed-projectile authority
 - **Code/docs SHA:** `0819547185c1f4fb4ed042237c480b03d83a98fa`.
-- Updated `AGENTS.md` to require the real `fps.compat.projectilePrograms` stage to treat `ProjectileRuntime` as the authoritative owner in ECS mode, use the same `stepProgrammedProjectile` solver as legacy mode, preserve source `order` and immediate effects, and keep `State::projectiles` writable only for other yet-unmigrated FPS stages. Cites new deep/COW mixed projectile and v9 test fixtures.
+- Updated `AGENTS.md` to require the real `actor.compat.projectilePrograms` stage to treat `ProjectileRuntime` as the authoritative owner in ECS mode, use the same `stepProgrammedProjectile` solver as legacy mode, preserve source `order` and immediate effects, and keep `State::projectiles` writable only for other yet-unmigrated FPS stages. Cites new deep/COW mixed projectile and v9 test fixtures.
 - **Verification:** docs-only commit; native C++ compilation still unverified.
 
 
@@ -1663,7 +1663,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Reusable deterministic physical bouncing projectile policy
 - Implementation SHA: `d2504f112e8455160e715f80cd9fa926f2f9db5b`.
-- `libraries/include/aiverselib/genre/EcsProjectileSystems.h` now defines `BounceMotionConfig` (gravity, bounce velocity divisor, contact-fraction inset, collision box half-extent) and `stepBouncingProjectile`. This is a pure physics-motion policy over explicit position, velocity and a read-only `SpatialWorld` collision provider. It does not own a timer, apply damage, spawn/despawn or change projectile Entity ownership. Its default values intentionally match existing FPS grenade bounce: gravity 10, half-extent 0.1, contact inset 0.01, reflection divided by 2 exactly (fixed-point division, not multiplication by 0.5).
+- `engine/mechanics/EcsProjectileSystems.h` now defines `BounceMotionConfig` (gravity, bounce velocity divisor, contact-fraction inset, collision box half-extent) and `stepBouncingProjectile`. This is a pure physics-motion policy over explicit position, velocity and a read-only `SpatialWorld` collision provider. It does not own a timer, apply damage, spawn/despawn or change projectile Entity ownership. Its default values intentionally match existing FPS grenade bounce: gravity 10, half-extent 0.1, contact inset 0.01, reflection divided by 2 exactly (fixed-point division, not multiplication by 0.5).
 - Native result **unverified**; next implementation commit replaces only the real FPS ordinary grenade bounce branch with this shared policy, keeping effects/fuses and nonphysical RTS projectiles independent.
 
 ### 2026-11-18 — Native ECS migration integrity and failed-load rollback
@@ -1695,7 +1695,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Public AI projectile skill documents direct ECS ordinary FPS and physical bounce
 - Documentation SHA: `6ec99f2955fb5a728cd37bf06b2ddf97001ffc85`.
-- `skills/gameplay/aiverse-ecs-projectile-systems/SKILL.md` now teaches reuse of `BounceMotionConfig` and `stepBouncingProjectile`, independent physical vs RTS nonphysical kinematic policies, and the new real `fps.compat.ordinaryProjectiles` stage with direct `ProjectileRuntime` authority when `fps.ecsAuthority` is ON. Explicitly lists its FPS deep/COW/v9 and cross-genre formula-equivalence test gates, with native results not yet established.
+- `skills/gameplay/aiverse-ecs-projectile-systems/SKILL.md` now teaches reuse of `BounceMotionConfig` and `stepBouncingProjectile`, independent physical vs RTS nonphysical kinematic policies, and the new real `actor.compat.ordinaryProjectiles` stage with direct `ProjectileRuntime` authority when `actor.ecsAuthority` is ON. Explicitly lists its FPS deep/COW/v9 and cross-genre formula-equivalence test gates, with native results not yet established.
 
 ### 2026-11-18 — Mandatory per-stage handoff checkpoint and native ECS ownership
 - **Branch:** `feature/universal-entity-inspector-fps` (PR #7), sharing the working tree with other agents. This is a docs/process stage; prior code commits are `b416dd4c4ab9a72d43d7d9d805c44e49c4161d62` and `acba58bf9f3c4d7cea69c039540f203aa99abbc3`.
@@ -1715,13 +1715,13 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — FPS direct ECS projectile spawn adapter declaration
 - **Implementation SHA:** `a2ff11554b972e1dcf44d9c7dcc2225eccd4ab0a`.
-- Added private `Module::spawnProjectile(Simulation&,Projectile)` declaration in `engine/actor/ActorModule.h`. The next implementation step will connect *actual built-in FPS weapon and grenade spawns* to this common adapter; with `fps.ecsAuthority` enabled it will create a canonical `ProjectileRuntime` immediately and keep legacy `State::projectiles` as a same-tick compatibility view.
+- Added private `Module::spawnProjectile(Simulation&,Projectile)` declaration in `engine/actor/ActorModule.h`. The next implementation step will connect *actual built-in FPS weapon and grenade spawns* to this common adapter; with `actor.ecsAuthority` enabled it will create a canonical `ProjectileRuntime` immediately and keep legacy `State::projectiles` as a same-tick compatibility view.
 - **Verification:** header source commit only; declaration intentionally requires follow-up definition before native build. No CMake/CTest execution yet. Preserve source ID generation, 256-capacity rules, legacy event order and v9 save format.
 
 
 ### 2026-11-18 — Real FPS weapon projectile spawns now create authoritative ECS components immediately
 - **Implementation SHA:** `a2fb9481492f978c103f769e99ab4bb87c8cc4ea`.
-- Implemented `Module::spawnProjectile(Simulation&,Projectile)` in `engine/actor/ActorModule.cpp` and replaced the actual weapon `shoot()` projectile-vector insertion with a call to it. In default mode the same legacy `State::projectiles` push preserves behavior. Under `fps.ecsAuthority`, the helper validates stable projectile ID, capacity (256) and `DynamicEntityIndex`, allocates an ECS Entity, attaches full authoritative `ProjectileRuntime` with the original sequential `order`, registers the kind/ID index, and updates `ProjectileEntity` editor projection **on spawn**, before pushing a same-tick legacy compatibility view. This removes the next-tick mirror as the original *creator* of weapon-projectile authority and makes the new ECS entity visible to later native game logic immediately.
+- Implemented `Module::spawnProjectile(Simulation&,Projectile)` in `engine/actor/ActorModule.cpp` and replaced the actual weapon `shoot()` projectile-vector insertion with a call to it. In default mode the same legacy `State::projectiles` push preserves behavior. Under `actor.ecsAuthority`, the helper validates stable projectile ID, capacity (256) and `DynamicEntityIndex`, allocates an ECS Entity, attaches full authoritative `ProjectileRuntime` with the original sequential `order`, registers the kind/ID index, and updates `ProjectileEntity` editor projection **on spawn**, before pushing a same-tick legacy compatibility view. This removes the next-tick mirror as the original *creator* of weapon-projectile authority and makes the new ECS entity visible to later native game logic immediately.
 - Legacy ordering unchanged: projectiles are created within the accepted shot loop, after existing ammo/fire accounting and weapon flight program initialization; no new RNG, network messages or save v9 fields. The projectile stage still executes earlier that tick; newly fired bullets are advanced next tick just as before. Remaining ECS mirror stages still reconcile writes by other FPS consumers.
 - **Verification:** source push only; no C++ compiler, FPS tests, COW/deep snapshot, rollback or live parity executed. Next: route actual grenade action spawns through this helper, assert same-tick ECS runtime identity/order in FPS tests, and verify native compile + v9/transport.
 
@@ -1734,14 +1734,14 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Real grenade action spawns now create authoritative ECS ProjectileRuntime
 - **Implementation SHA:** `c121d7ef5e53bdf577fee5dcb1ebd328ea18e2b3`.
-- Changed `engine/actor/ActorSystems.cpp::action` for actual `Frag`, `Smoke` and `Flash` commands to call the same `Module::spawnProjectile` as accepted weapon shots. Legacy inventory consumption, projectile ID allocation, fuse, initial velocity, damage, count limit and tick order are unchanged; under `fps.ecsAuthority`, grenades now receive a canonical ECS Entity and `ProjectileRuntime` as soon as the input action succeeds, not only during `fps.ecsMirror`. Default-off mode still appends the legacy vector.
+- Changed `engine/actor/ActorSystems.cpp::action` for actual `Frag`, `Smoke` and `Flash` commands to call the same `Module::spawnProjectile` as accepted weapon shots. Legacy inventory consumption, projectile ID allocation, fuse, initial velocity, damage, count limit and tick order are unchanged; under `actor.ecsAuthority`, grenades now receive a canonical ECS Entity and `ProjectileRuntime` as soon as the input action succeeds, not only during `actor.ecsMirror`. Default-off mode still appends the legacy vector.
 - **Verification:** GitHub source commit only. No C++ compilation, grenade behavior/round parity, v9 save/load, network transport, snapshot rollback or Editor checks run. Next: native FPS regression for both weapon/throwable paths, plus round-reset/source-of-truth migration.
 
 
 ### 2026-11-18 — Live FPS weapon+throwable immediate ECS spawn parity fixture
 - **Implementation SHA:** `91a80fbab26ddbe5f7a28e4a45b7f12e4866944d`.
 - Added `tests/fps/projectile_spawn.inc` with `ecsProjectileSpawnAuthorityParity` run in both deep and COW snapshot modes. Uses production input commands to fire an ordinary bullet and throw Frag/Smoke/Flash actions, and compares legacy vs `ecsAuthority` state/checksums/actor fields and every `ProjectileRuntime` kind/ID/order/velocity/position/damage via `DynamicEntityIndex` after each tick. Verifies all three throwables existed, object ID counter advanced, v9 cross-mode save load, pre-fuse rollback, 10-tick continuation and replay checksum.
-- **Verification:** GitHub test source added, **not yet referenced from `tests/fps/tests.cpp` main**, native C++ compilation and execution not performed. Requires normal FPS test data and CTest. The helper's immediate creation is verified in source; after-tick fixture alone cannot distinguish whether an entity was created before `fps.ecsMirror`.
+- **Verification:** GitHub test source added, **not yet referenced from `tests/fps/tests.cpp` main**, native C++ compilation and execution not performed. Requires normal FPS test data and CTest. The helper's immediate creation is verified in source; after-tick fixture alone cannot distinguish whether an entity was created before `actor.ecsMirror`.
 - **Next:** include and invoke new fixture in `aiverse_fps_tests`, add a mid-tick spawn visibility invariant if needed, check native CI and test status.
 
 
@@ -1761,20 +1761,20 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Direct ECS projectile round-reset cleanup declaration
 - **Implementation SHA:** `957fdd8d4e329df855b0aca59cbca474c12a7dba`.
-- Added `Module::clearProjectiles(Simulation&)` declaration to `engine/actor/ActorModule.h`, intended to remove authoritative `ProjectileRuntime` ECS entities synchronously at bomb-round reset rather than leaving stale entities until `fps.ecsMirror`. The default legacy path must retain its existing vector reset behavior.
+- Added `Module::clearProjectiles(Simulation&)` declaration to `engine/actor/ActorModule.h`, intended to remove authoritative `ProjectileRuntime` ECS entities synchronously at bomb-round reset rather than leaving stale entities until `actor.ecsMirror`. The default legacy path must retain its existing vector reset behavior.
 - **Verification:** declaration committed; definition + actual call are pending. **Native compilation not yet performed**. Next implementation must keep stable Entity destroy/source ID ordering and v9 compatibility.
 
 
 ### 2026-11-18 — ECS authoritative projectile round-reset cleanup implemented
 - **Implementation SHA:** `b874140ca50336544cb47a66892812a5708cb17b`.
-- Implemented `Module::clearProjectiles(Simulation&)` in `engine/actor/ActorModule.cpp`. Default FPS still clears legacy `State::projectiles`. Under `fps.ecsAuthority`, collects all live `ProjectileRuntime` entities, sorts by source projectile ID for deterministic retirement order, destroys them directly in World, removes indexed projectile kind/ID mappings while retaining loot/vehicle indices, then clears the same-tick State compatibility projection. Unlike the former mirror-only behavior, no stale projectile Runtime remains between the reset and `fps.ecsMirror`.
+- Implemented `Module::clearProjectiles(Simulation&)` in `engine/actor/ActorModule.cpp`. Default FPS still clears legacy `State::projectiles`. Under `actor.ecsAuthority`, collects all live `ProjectileRuntime` entities, sorts by source projectile ID for deterministic retirement order, destroys them directly in World, removes indexed projectile kind/ID mappings while retaining loot/vehicle indices, then clears the same-tick State compatibility projection. Unlike the former mirror-only behavior, no stale projectile Runtime remains between the reset and `actor.ecsMirror`.
 - **Verification:** code committed but **call site is not yet rewired**; C++ native build and gameplay tests not run. Destroying Entities earlier may change allocator reuse versus historical compatibility behavior, so verify save/replay and stable event order under both storage modes.
 - **Next:** replace `tickSystems` round-reset vector clear with this helper, then add native round-reset regression across deep/COW and v9 saves before default-enabling ECS authority.
 
 
 ### 2026-11-18 — Live bomb-round reset now clears canonical projectile ECS components
 - **Implementation SHA:** `6fb59b267c9ab882ca9b03a8a4f23474b8dc21b2`.
-- Changed the actual `engine/actor/ActorSystems.cpp::tickSystems` bomb-round reset branch to invoke `clearProjectiles(sim)` rather than writing only `State::projectiles.clear()`. Under `fps.ecsAuthority`, all existing projectile Runtime entities and source-ID keys are retired at the round-reset barrier. Legacy mode retains its vector clear. Loot/vehicle reset logic and actor/bomb/round event ordering remain at their previous source location, no new save field.
+- Changed the actual `engine/actor/ActorSystems.cpp::tickSystems` bomb-round reset branch to invoke `clearProjectiles(sim)` rather than writing only `State::projectiles.clear()`. Under `actor.ecsAuthority`, all existing projectile Runtime entities and source-ID keys are retired at the round-reset barrier. Legacy mode retains its vector clear. Loot/vehicle reset logic and actor/bomb/round event ordering remain at their previous source location, no new save field.
 - **Verification:** source committed; **native compilation, bomb round resets, same-tick player input, v9 cross-mode save, deep/COW rollback and network parity not yet run**. Full authority remains default-OFF, and external World allocator lifetime must be checked.
 - **Next:** add FPS regression focused on immediate reset of Runtime/index, ordering, and cross-storage snapshot parity.
 
@@ -1801,7 +1801,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Whole-engine migration plan updated for live FPS projectile creation and reset
 - **Documentation SHA:** `dd726cdd2cfb5d78aefc27da348202733b59c1e4`.
-- Added explicit source-of-truth tracking to `docs/ecs-all-features-migration-plan.md` for live FPS weapon shots, Frag/Smoke/Flash actions and bomb-round projectile reset using direct ECS runtime entities at their original stage. Defines remaining transitional State projection writers, World Entity ID/allocator ordering gates, native test fixtures and v9/network acceptance requirements. Keeps legacy mode and default-OFF `fps.ecsAuthority`.
+- Added explicit source-of-truth tracking to `docs/ecs-all-features-migration-plan.md` for live FPS weapon shots, Frag/Smoke/Flash actions and bomb-round projectile reset using direct ECS runtime entities at their original stage. Defines remaining transitional State projection writers, World Entity ID/allocator ordering gates, native test fixtures and v9/network acceptance requirements. Keeps legacy mode and default-OFF `actor.ecsAuthority`.
 - **Verification:** documentation commit only; no native compilation/CTest.
 
 
@@ -1813,7 +1813,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Agents contract updated for direct ECS weapon/grenade projectile producers
 - **Implementation SHA:** `7d741c1407822cf49b84a84639f4042fe7cce963`.
-- Updated `AGENTS.md` to reflect that weapon projectiles, throwable action projectiles and bomb-round cleanup are no longer legacy-only producers under `fps.ecsAuthority`. They now call a single `spawnProjectile` / `clearProjectiles` adapter to create/destroy canonical `ProjectileRuntime` ECS entities at their actual gameplay stage. The State vector remains for other legacy readers/writers until the complete migration, with exact game source ID, save v9, COW, network and event ordering gates.
+- Updated `AGENTS.md` to reflect that weapon projectiles, throwable action projectiles and bomb-round cleanup are no longer legacy-only producers under `actor.ecsAuthority`. They now call a single `spawnProjectile` / `clearProjectiles` adapter to create/destroy canonical `ProjectileRuntime` ECS entities at their actual gameplay stage. The State vector remains for other legacy readers/writers until the complete migration, with exact game source ID, save v9, COW, network and event ordering gates.
 - **Verification:** documentation committed, native build and FPS test execution not performed.
 
 
@@ -1864,7 +1864,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — FPS end-of-tick projectile mirror converted to one-way ECS → State projection
 - **Implementation SHA:** `bbf42ceaa8974216dda3a0a0404d33c2377b23ad`.
-- Changed `engine/actor/ActorModule.cpp::syncDynamicEntities(sim,bool)` and the **live** `fps.ecsMirror` call. Under `fps.ecsAuthority`, the mirror now obtains **canonical live `ProjectileRuntime` components** (stable `order`/ID sort), validates unique nonzero source IDs and matching `DynamicEntityIndex` Entity links, refreshes the read-only `ProjectileEntity` Editor view, and derives `State::projectiles` as a compatibility presentation. It **never writes `ProjectileRuntime` from `State::projectiles` at this barrier**. Thus stale legacy vector mutations cannot silently overwrite the canonical ProjectileRuntime after the native flight or actor stages.
+- Changed `engine/actor/ActorModule.cpp::syncDynamicEntities(sim,bool)` and the **live** `actor.ecsMirror` call. Under `actor.ecsAuthority`, the mirror now obtains **canonical live `ProjectileRuntime` components** (stable `order`/ID sort), validates unique nonzero source IDs and matching `DynamicEntityIndex` Entity links, refreshes the read-only `ProjectileEntity` Editor view, and derives `State::projectiles` as a compatibility presentation. It **never writes `ProjectileRuntime` from `State::projectiles` at this barrier**. Thus stale legacy vector mutations cannot silently overwrite the canonical ProjectileRuntime after the native flight or actor stages.
 - Setup and existing legacy v9 `deserialize` still call the default `syncDynamicEntities(sim)` mode: State → ECS reconstruction remains mandatory for old saves. Default `ecsAuthority=false` still uses the original source-vector sync. Loot and vehicle mirror paths are unchanged and still legacy workspace writers; this change is limited to projectiles.
 - This is the key **single-writer end-of-tick ownership** cutover for FPS projectile state. Actual shooting, grenade actions, programmed flight, ordinary flight and bomb-round reset have already been routed through direct `ProjectileRuntime` ECS paths when the gate is ON. Existing synchronous damage/hit/round stages and v9 format are retained.
 - **Verification:** source committed only; **no successful native compiler, CTest, FPS simultaneous hits, serialized entity allocator replay, network rollback or Editor regression yet**. The one-way mirror may expose remaining undocumented native/legacy projectile writes: investigate failures rather than reverting ownership. Must add fixture deliberately poisoning the State vector then invoking `syncDynamicEntities(sim,true)` to prove a canonical ECS value survives.
@@ -1884,7 +1884,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — Backward-compatible FPS dynamic sync overload implemented
 - **Implementation SHA:** `3d1d28401dd963be062197629e153b951149e07d`.
-- Added the original `Module::syncDynamicEntities(Simulation&) const` native method body as an overload wrapper in `engine/actor/ActorModule.cpp`, forwarding to the extended `syncDynamicEntities(sim,false)`. Legacy v9 save/load, setup, Editor/native project invocations keep the old source and C++ symbol, while the actual `fps.ecsMirror` uses `syncDynamicEntities(s,true)` under `fps.ecsAuthority` to enforce one-way Runtime→State projectile projection.
+- Added the original `Module::syncDynamicEntities(Simulation&) const` native method body as an overload wrapper in `engine/actor/ActorModule.cpp`, forwarding to the extended `syncDynamicEntities(sim,false)`. Legacy v9 save/load, setup, Editor/native project invocations keep the old source and C++ symbol, while the actual `actor.ecsMirror` uses `syncDynamicEntities(s,true)` under `actor.ecsAuthority` to enforce one-way Runtime→State projectile projection.
 - **Verification:** GitHub source committed; binary ABI/native compilation and gameplay fixtures remain unexecuted. Next: static wiring audit, documentation/epic update, native FPS and ECS tests.
 
 
@@ -1896,7 +1896,7 @@ After EVERY stage or substantial commit, update the sections above **and append*
 
 ### 2026-11-18 — AGENTS mandate one-way FPS ProjectileRuntime writer and legacy v9 import
 - **Implementation SHA:** `4de40df4c9194624595d6526e2ed27cacd6122be`.
-- Updated `AGENTS.md` with a mandatory single-writer rule: all known live projectile lifecycle operations write canonical `ProjectileRuntime` with `fps.ecsAuthority=true`; end-of-tick `syncDynamicEntities(sim,true)` derives the State editor/save view only; only setup/legacy v9 deserialization retains the original `syncDynamicEntities(sim)` State→Runtime import. The stale-State 777 vs Runtime 17 mirror fixture is documented.
+- Updated `AGENTS.md` with a mandatory single-writer rule: all known live projectile lifecycle operations write canonical `ProjectileRuntime` with `actor.ecsAuthority=true`; end-of-tick `syncDynamicEntities(sim,true)` derives the State editor/save view only; only setup/legacy v9 deserialization retains the original `syncDynamicEntities(sim)` State→Runtime import. The stale-State 777 vs Runtime 17 mirror fixture is documented.
 - **Verification:** source documentation committed, native compiler/CTest/Editor/network still not run.
 
 

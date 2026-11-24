@@ -1,7 +1,7 @@
 // Proof that RTS-like artillery and FPS-like ballistics run the same ECS
 // flight, collision, damage queue and resolution systems, with identical
 // deterministic replay and COW rollback. No genre module headers or linkage.
-#include <aiverselib/mechanics/EcsDamageSystems.h>
+#include "engine/mechanics/EcsDamageSystems.h"
 #include <cassert>
 #include <cstdint>
 #include <iostream>

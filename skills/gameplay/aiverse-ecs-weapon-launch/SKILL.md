@@ -9,7 +9,7 @@ Read `AGENTS.md`, `docs/ecs-mechanic-composition.md`,
 `skills/gameplay/aiverse-ecs-projectile-systems/SKILL.md`, and
 `skills/gameplay/aiverse-ecs-impact-damage/SKILL.md`.
 
-1. Include `<aiverselib/mechanics/EcsWeaponLaunchSystems.h>`.
+1. Include `"engine/mechanics/EcsWeaponLaunchSystems.h"`.
    Components: `WeaponParametersComponent` (Fixed muzzle speed, gravity,
    radius, shot lifetime, interval, damage), `WeaponStateComponent` (ammo,
    cooldown), `FireIntentComponent` (one-tick fire request, origin, direction)

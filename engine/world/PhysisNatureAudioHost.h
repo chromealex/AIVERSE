@@ -65,12 +65,13 @@ private:
                 audio::PlayParams p;
                 p.volume = c.volume; p.pitch = c.pitch; p.loop = 1;
                 p.positional = true; p.x = c.x; p.y = c.y; p.z = c.z;
-                const auto v = engine.play(tornadoSoundName(), p);
-                if (v != audio::kNoVoice) roars_[c.key] = v;
+                const auto v = engine.play(c.sound == TornadoSound::FireRoar ? tornadoFireSoundName()
+                                                                             : tornadoSoundName(), p);
+                if (v != audio::kNoVoice) roars_[{std::uint8_t(c.sound), c.key}] = v;
                 break;
             }
             case TornadoAudioOp::Update:
-                if (auto it = roars_.find(c.key); it != roars_.end()) {
+                if (auto it = roars_.find({std::uint8_t(c.sound), c.key}); it != roars_.end()) {
                     audio::VoiceParams vp;
                     vp.volume = c.volume; vp.pitch = c.pitch;
                     engine.setVoice(it->second, vp);
@@ -78,7 +79,7 @@ private:
                 }
                 break;
             case TornadoAudioOp::Stop:
-                if (auto it = roars_.find(c.key); it != roars_.end()) {
+                if (auto it = roars_.find({std::uint8_t(c.sound), c.key}); it != roars_.end()) {
                     engine.stop(it->second, 1.2f);
                     roars_.erase(it);
                 }
@@ -88,7 +89,7 @@ private:
     }
     NatureAudioPlanner planner_;
     TornadoAudioPlanner tornado_;
-    std::map<std::uint64_t, audio::VoiceId> roars_;
+    std::map<std::pair<std::uint8_t, std::uint64_t>, audio::VoiceId> roars_;
     std::map<std::pair<std::uint8_t, std::uint64_t>, audio::VoiceId> voices_;
 };
 

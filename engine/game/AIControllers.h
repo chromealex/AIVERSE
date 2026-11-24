@@ -38,7 +38,7 @@ struct AIControllerKind {
 void registerAIController(AIControllerKind kind);             // replaces a kind of the same name
 const AIControllerKind* findAIController(const std::string& name);
 std::vector<std::string> aiControllerNames();                  // builtin, scripted, then registered kinds
-// Defined by the code that links the core (modules/rts/RtsGameExtensions.cpp now, a game's native/ later):
+// Defined by the code that links the core (engine/game/GameExtensions.cpp now, a game's native/ later):
 // registers its controllers. Called once, before the first lookup.
 void registerGameExtensions();
 

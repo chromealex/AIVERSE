@@ -1,6 +1,6 @@
 """Page generators for the AIVERSE website, one call per language (stdlib only).
 
-Russian pages are written to the site root, other languages to <lang>/ with the same
+English pages are written to the site root, other languages (ru) to <lang>/ with the same
 file names. Shared assets (style.css, favicon.svg, media/) stay at the root; `B` is
 the relative prefix to them. Data fields are localised by suffix: `title` (ru) and
 `titleEn` (en); a missing translation falls back to the Russian text.
@@ -13,6 +13,20 @@ import re
 from mdhtml import Converter
 
 _ARM = '-72,-220 0,-262 71,-220 71,-58 0,-100 -72,-58'
+# Animated AIVERSE mark for every loading state of the site (copy kept in sync by tools/branding/logo/loader.py).
+LOADER_SVG = (
+    # aiverse-loader:begin (tools/branding/logo/loader.py)
+"<svg class=\"aiv-mark\" viewBox=\"0 60 1000 880\" role=\"img\" aria-label=\"Loading\"><style>.aiv-mark{display:block;overflow:visible}.aiv-mark .aiv-b{fill:var(--aiv-mark-ink,#141210);opacity:0;animation:.55s cubic-bezier(.2,.7,.25,1) forwards}.aiv-mark .aiv-t{animation-name:aiv-t}.aiv-mark .aiv-l{animation-name:aiv-l;animation-delay:.1s}.aiv-mark .aiv-r{animation-name:aiv-r;animation-delay:.2s}.aiv-mark .aiv-d{fill:var(--aiv-mark-accent,#E9C3A4);opacity:0;transform-box:view-box;transform-origin:500px 588px;animation:aiv-d .5s .55s cubic-bezier(.2,.7,.25,1) forwards,aiv-p 1.6s 1.05s ease-in-out infinite}@keyframes aiv-t{from{opacity:0;transform:translate(0,-70px)}to{opacity:1;transform:none}}@keyframes aiv-l{from{opacity:0;transform:translate(-60px,32px)}to{opacity:1;transform:none}}@keyframes aiv-r{from{opacity:0;transform:translate(60px,32px)}to{opacity:1;transform:none}}@keyframes aiv-d{from{opacity:0;transform:rotate(-90deg) scale(.3)}to{opacity:1;transform:none}}@keyframes aiv-p{0%,100%{opacity:1;transform:none}50%{opacity:1;transform:scale(1.07)}}@media (prefers-reduced-motion:reduce){.aiv-mark .aiv-b,.aiv-mark .aiv-d{animation:none;opacity:1}}</style><polygon class=\"aiv-b aiv-t\" points=\"500,94 373,179 373,476 500,397 627,476 627,179\"/><polygon class=\"aiv-b aiv-l\" points=\"433,741 147,907 23,833 23,719 307,561 307,663\"/><polygon class=\"aiv-b aiv-r\" points=\"567,741 853,907 977,833 977,719 693,561 693,663\"/><polygon class=\"aiv-d\" points=\"500,438 350,588 500,738 650,588\"/></svg>"
+    # aiverse-loader:end
+)
+
+
+def loader(cls='aiv-loader', label=''):
+    """Loading indicator: the animated mark, optionally with a caption under it."""
+    cap = f'<span>{label}</span>' if label else ''
+    return f'<span class="{cls}" role="status">{LOADER_SVG}{cap}</span>'
+
+
 MARK_LIGHT = ('<svg width="72" height="68" viewBox="-280 -280 560 530"><g fill="#F3EFE8">'
               f'<polygon points="{_ARM}"/><polygon points="{_ARM}" transform="rotate(120)"/>'
               f'<polygon points="{_ARM}" transform="rotate(240)"/></g>'
@@ -23,12 +37,16 @@ def esc(text):
     return html.escape(str(text or ''), quote=True)
 
 
+ROOT_LANG = 'en'  # language served at the site root
+
+
 class Ctx:
     def __init__(self, lang, strings, langs):
         self.lang = lang
         self.T = strings
-        self.B = '' if lang == 'ru' else '../'
-        self.other = 'en' if lang == 'ru' else 'ru'
+        # The site root is English; every other language lives in its own folder (ru/).
+        self.B = '' if lang == ROOT_LANG else '../'
+        self.other = 'ru' if lang == ROOT_LANG else ROOT_LANG
         self.langs = langs
         self.rel = {'released': set(), 'next': ''}
 
@@ -43,7 +61,7 @@ class Ctx:
         return f'{self.B}media/{src}'
 
     def other_href(self, page):
-        return (f'en/{page}' if self.lang == 'ru' else f'../{page}')
+        return (f'{self.other}/{page}' if self.lang == ROOT_LANG else f'../{page}')
 
     def fmt_date(self, iso):
         y, m, d = iso.split('-')
@@ -492,7 +510,57 @@ def docs_nav(manifest, ctx, current=None):
         links = ''.join(f'<a href="docs-{esc(p["id"])}.html"{" aria-current=\"page\"" if p["id"] == current else ""}>'
                         f'{esc(ctx.loc(p, "title"))}</a>' for p in sec['pages'])
         parts.append(f'<div class="dn-sec"><span>{esc(ctx.loc(sec, "title"))}</span>{links}</div>')
-    return f'<nav class="docs-nav" aria-label="{ctx.T["navDocs"]}">{"".join(parts)}</nav>'
+    search = (f'<div class="ds-box"><input class="ds-input" type="search" placeholder="{esc(ctx.T["docsSearch"])}" '
+              f'aria-label="{esc(ctx.T["docsSearch"])}" autocomplete="off" spellcheck="false">'
+              f'<div class="ds-results" hidden></div></div>')
+    return f'<nav class="docs-nav" aria-label="{ctx.T["navDocs"]}">{search}{"".join(parts)}</nav>'
+
+
+def doc_sections(page_id, title, body_html):
+    """Search records of one doc page: one per heading (h1..h4) with the plain text under it."""
+    out = []
+    parts = re.split(r'<h([1-4])(?: [^>]*)? id="([^"]+)"[^>]*>(.*?)</h\1>', body_html, flags=re.S)
+    def plain(h):
+        t = re.sub(r'<a class="anchor"[^>]*>.*?</a>', '', h)
+        t = re.sub(r'</?(?:span|code|a|em|strong|b|i|mark|kbd)\b[^>]*>', '', t)   # inline: no gap
+        t = re.sub(r'<[^>]+>', ' ', t)
+        return re.sub(r'\s+', ' ', html.unescape(t)).strip()
+    if plain(parts[0]):
+        out.append({'p': page_id, 't': title, 'h': '', 'a': '', 'x': plain(parts[0])[:4000]})
+    for i in range(1, len(parts) - 3, 4):
+        out.append({'p': page_id, 't': title, 'h': plain(parts[i + 2]), 'a': parts[i + 1],
+                    'x': plain(parts[i + 3])[:4000]})
+    return out
+
+
+MENU_SPY_JS = """<script>
+(function(){var map=[['systems','systems'],['core','systems'],['genres','genres'],['roadmap','roadmap']],links={};
+document.querySelectorAll('.menu a[data-nav]').forEach(function(a){links[a.dataset.nav]=a;});
+var secs=map.map(function(m){return [document.getElementById(m[0]),m[1]];}).filter(function(m){return m[0]&&links[m[1]];});if(!secs.length)return;
+function spy(){var y=innerHeight*.35,cur=null;secs.forEach(function(m){var r=m[0].getBoundingClientRect();if(r.top<=y&&r.bottom>y)cur=m[1];});
+Object.keys(links).forEach(function(k){if(k===cur)links[k].setAttribute('aria-current','page');else if(links[k].getAttribute('aria-current')==='page')links[k].removeAttribute('aria-current');});}
+addEventListener('scroll',spy,{passive:true});addEventListener('resize',spy);addEventListener('hashchange',function(){setTimeout(spy,50);});spy();})();
+</script>"""
+
+
+DOCS_SEARCH_JS = """<script>
+(function(){var boxes=document.querySelectorAll('.ds-box');if(!boxes.length)return;var idx=null,loading=null,L=window.DS_L||{};
+function load(){if(idx)return Promise.resolve(idx);if(!loading)loading=fetch('docs-search.json').then(function(r){return r.json();}).then(function(d){idx=d.map(function(s){s.lt=(s.t+' '+s.h).toLowerCase();s.lx=s.x.toLowerCase();return s;});return idx;});return loading;}
+function esc(t){return t.replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function mark(t,ws){var h=esc(t);ws.forEach(function(w){if(w.length<2)return;h=h.replace(new RegExp('('+w.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\$&')+')','gi'),'<mark>$1</mark>');});return h;}
+function snip(s,ws){var x=s.x,i=-1;ws.some(function(w){i=s.lx.indexOf(w);return i>=0;});if(i<0)return x.slice(0,140);var a=Math.max(0,i-60);return (a?'…':'')+x.slice(a,a+170)+(a+170<x.length?'…':'');}
+function search(q){var ws=q.toLowerCase().split(/\\s+/).filter(Boolean);if(!ws.length)return [];var r=[];
+idx.forEach(function(s){var sc=0;for(var k=0;k<ws.length;k++){var w=ws[k],inT=s.lt.indexOf(w)>=0,inX=s.lx.indexOf(w)>=0;if(!inT&&!inX)return;sc+=inT?10:1;if(inX)sc+=Math.min(3,s.lx.split(w).length-1)*.2;}
+if(!s.h)sc-=.5;r.push([sc,s]);});r.sort(function(a,b){return b[0]-a[0];});return r.slice(0,14).map(function(x){return x[1];});}
+boxes.forEach(function(box){var inp=box.querySelector('.ds-input'),res=box.querySelector('.ds-results'),sel=-1;
+function render(){var q=inp.value.trim();if(!q){res.hidden=true;return;}load().then(function(){var ws=q.toLowerCase().split(/\\s+/).filter(Boolean),hits=search(q);sel=-1;
+res.innerHTML=hits.length?hits.map(function(s){return '<a class="ds-hit" href="docs-'+s.p+'.html'+(s.a?'#'+s.a:'')+'"><strong>'+mark(s.t,ws)+(s.h?' <span>› '+mark(s.h,ws)+'</span>':'')+'</strong><em>'+mark(snip(s,ws),ws)+'</em></a>';}).join(''):'<p class="ds-none">'+esc(L.none||'')+'</p>';res.hidden=false;});}
+inp.addEventListener('input',render);inp.addEventListener('focus',function(){load();if(inp.value.trim())render();});
+inp.addEventListener('keydown',function(e){var hs=res.querySelectorAll('.ds-hit');if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(!hs.length)return;sel=(sel+(e.key==='ArrowDown'?1:-1)+hs.length)%hs.length;hs.forEach(function(h,i){h.classList.toggle('on',i===sel);});hs[sel].scrollIntoView({block:'nearest'});}
+else if(e.key==='Enter'){var h=hs[sel>=0?sel:0];if(h){e.preventDefault();location.href=h.href;}}else if(e.key==='Escape'){res.hidden=true;inp.blur();}});
+document.addEventListener('click',function(e){if(!box.contains(e.target))res.hidden=true;});});
+document.addEventListener('keydown',function(e){if(e.key==='/'&&!/input|textarea/i.test((document.activeElement||{}).tagName||'')){e.preventDefault();boxes[0].querySelector('.ds-input').focus();}});})();
+</script>"""
 
 
 def doc_page(page, manifest, ctx, root, repo, doc_pages):
@@ -555,8 +623,11 @@ def docs_index(manifest, ctx):
                         f'<span>{esc(ctx.loc(p, "lead") or "")}</span><code>{esc(p["source"])}</code></a>'
                         for p in sec['pages'])
         secs.append(f'<section class="sp-sec"><h2 class="h2">{esc(ctx.loc(sec, "title"))}</h2><div class="doc-cards">{cards}</div></section>')
+    search = (f'<div class="ds-box ds-hero"><input class="ds-input" type="search" placeholder="{esc(ctx.T["docsSearch"])}" '
+              f'aria-label="{esc(ctx.T["docsSearch"])}" autocomplete="off" spellcheck="false">'
+              f'<div class="ds-results" hidden></div></div>')
     return (f'<section class="dl-hero"><div><p class="eyebrow">{ctx.T["docsEyebrow"]}</p><h1>{ctx.T["docsTitle"]}</h1>'
-            f'<p>{ctx.T["docsLead"]}</p></div></section>' + ''.join(secs) + '<div style="height:96px"></div>')
+            f'<p>{ctx.T["docsLead"]}</p>{search}</div></section>' + ''.join(secs) + '<div style="height:96px"></div>')
 
 
 def localized_entries(entries, ctx):
@@ -601,7 +672,8 @@ def releases_page(data, entries, systems, ctx, repo):
         if sid in pages:
             return f'<a class="rm-sys" href="system-{esc(sid)}.html">{label}</a>'
         return f'<span class="rm-sys">{label}</span>'
-    fresh = [e for e in entries if e['date'] > since]
+    shipped = data.get('_shipped')
+    fresh = [e for e in entries if (e['id'] not in shipped if shipped is not None else e['date'] > since)]
     head = (f'<section class="dl-hero"><div><p class="eyebrow">{ctx.T["relEyebrow"]}</p><h1>{ctx.T["relTitle"]}</h1>'
             f'<p>{ctx.T["relLead"]}</p></div>'
             f'<div class="dl-stats"><div><strong>{esc(latest["version"]) if latest else "—"}</strong><span>{ctx.T["relLatest"]}</span></div>'
@@ -643,7 +715,7 @@ def releases_page(data, entries, systems, ctx, repo):
             + (f'<ul class="rel-hl">{hl}</ul>' if hl else '')
             + (f'<p class="rel-verified"><b>{ctx.T["relVerified"]}</b> {esc(ver)}</p>' if ver else '') +
             f'<div class="rel-dl" data-version="{esc(r["version"])}"><span class="rel-dl-title">{ctx.T["relDownloads"]}</span>'
-            f'<div class="rel-dl-list"><a class="btn btn-line btn-sm" href="{esc(builds["branch"])}">{ctx.T["relBuildsBranch"]}</a></div></div>'
+            f'<div class="rel-dl-list">{loader("aiv-loader aiv-loader-inline")}<a class="btn btn-line btn-sm" href="{esc(builds["branch"])}">{ctx.T["relBuildsBranch"]}</a></div></div>'
             f'<a class="rel-notes" href="{notes}">{ctx.T["relNotes"]}</a></div></article>')
     other = (f'<section class="rel-other" hidden><h2>{ctx.T["relOtherTitle"]}</h2><p>{ctx.T["relOtherLead"]}</p>'
              f'<div class="rel-other-list"></div></section>')
@@ -705,5 +777,94 @@ if(other.length){var box=document.querySelector('.rel-other'),list=box.querySele
 other.forEach(function(p){var k=p.version+' · '+p.commit;(g[k]=g[k]||[]).push(p);});
 Object.keys(g).forEach(function(k){var row=document.createElement('div');row.className='rel-other-row';
 var c=document.createElement('code');c.textContent=k;row.appendChild(c);g[k].forEach(function(p){row.appendChild(btn(p));});list.appendChild(row);});
-box.hidden=false;}}).catch(function(){});})();
+box.hidden=false;}}).catch(function(){}).then(function(){document.querySelectorAll('.rel-dl .aiv-loader').forEach(function(e){e.remove();});});})();
+</script>"""
+
+
+def catalog_page(cfg, ctx):
+    """Package catalog: the cards are filled in the browser from AIVERSE-PACKAGES index.json."""
+    T = ctx.T
+    return (f'<section class="dl-hero"><div><p class="eyebrow">{T["catEyebrow"]}</p><h1>{T["catTitle"]}</h1>'
+            f'<p>{T["catLead"]}</p></div>'
+            f'<div class="dl-stats"><div><strong class="cat-n">—</strong><span>{T["catCount"]}</span></div>'
+            f'<div><strong class="cat-c">—</strong><span>{T["catCategories"]}</span></div></div></section>'
+            f'<div class="cat-bar"><div class="dl-filters cat-filters" role="group" aria-label="{T["catFilter"]}">'
+            f'<button class="filter" type="button" data-cat="" aria-pressed="true">{T["catAll"]}</button></div>'
+            f'<label class="dl-search cat-search"><span aria-hidden="true">⌕</span>'
+            f'<input type="search" placeholder="{T["catSearch"]}" aria-label="{T["catSearch"]}"></label></div>'
+            f'<p class="cat-status">{loader("aiv-loader", T["catLoading"])}</p>'
+            f'<div class="cat-grid"></div>'
+            f'<section class="cat-howto"><div><h2>{T["catHowTitle"]}</h2><p>{T["catHowLead"]}</p>'
+            f'<pre><code>python3 tools/pkg/aiverse_pkg.py search terrain\n'
+            f'python3 tools/pkg/aiverse_pkg.py add terrain-pbr --project ~/Games/MyGame</code></pre></div>'
+            f'<div id="add"><h2>{T["catAddTitle"]}</h2><p>{T["catAddLead"]}</p>'
+            f'<ol class="cat-steps">{"".join(f"<li>{x}</li>" for x in T["catAddSteps"])}</ol>'
+            f'<p><a class="btn btn-ink btn-sm" href="docs-packages.html#{T["catAddAnchor"]}">{T["catAddBtn"]}</a> '
+            f'<a class="btn btn-line btn-sm" href="{esc(cfg["repo"])}/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a> '
+            f'<a class="btn btn-line btn-sm" href="{esc(cfg["repo"])}">GitHub</a></p></div></section>')
+
+
+CATALOG_JS = """<script>
+(function(){var cfg=window.CAT_CFG;if(!cfg)return;var T=cfg.t,lang=cfg.lang;
+function loc(o,k){return (lang!=='en'&&o[k+'-'+lang])||o[k]||'';}
+function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;}
+function mb(n){return n>=1048576?(n/1048576).toFixed(n>=104857600?0:1)+' MB':Math.max(1,Math.round(n/1024))+' KB';}
+var grid=document.querySelector('.cat-grid'),status=document.querySelector('.cat-status'),bar=document.querySelector('.cat-filters'),
+search=document.querySelector('.cat-search input'),cur='',cards=[];
+function apply(){var q=(search.value||'').toLowerCase().trim(),n=0;cards.forEach(function(c){var ok=(!cur||c.cat===cur)&&(!q||c.hay.indexOf(q)>=0);
+c.el.hidden=!ok;if(ok)n++;});status.textContent=n?'':T.none;status.hidden=!!n;}
+function card(p){var v=p.versions[p.latest],a=el('article','cat-card');a.id='pkg-'+p.id;
+var media=el('div','cat-media'),img=el('img');img.loading='lazy';img.alt=loc(p,'title');img.src=(p.previews||[])[0]||'';media.appendChild(img);
+if((p.previews||[]).length>1){var th=el('div','cat-thumbs');p.previews.forEach(function(src,i){var b=el('button','cat-thumb');b.type='button';
+b.setAttribute('aria-label',(i+1)+'/'+p.previews.length);var t=el('img');t.src=src;t.alt='';t.loading='lazy';b.appendChild(t);
+b.onclick=function(){img.src=src;};th.appendChild(b);});media.appendChild(th);}a.appendChild(media);
+var body=el('div','cat-body'),meta=el('div','cat-meta');meta.appendChild(el('span','chip',cfg.cats[p.category]||p.category));
+meta.appendChild(el('span','cat-ver','v'+p.latest));body.appendChild(meta);
+body.appendChild(el('h2',null,loc(p,'title')));body.appendChild(el('p','cat-summary',loc(p,'summary')));
+var d=loc(p,'description');if(d){var det=el('details','cat-more');det.appendChild(el('summary',null,T.more));det.appendChild(el('p',null,d));body.appendChild(det);}
+var facts=el('dl','cat-facts');[[T.engine,(v.minEngine||'—')+'+'],[T.size,mb(v.size)],[T.license,p.license||'—'],[T.kind,cfg.kinds[p.kind]||p.kind]].forEach(function(f){
+var w=el('div');w.appendChild(el('dt',null,f[0]));w.appendChild(el('dd',null,f[1]));facts.appendChild(w);});body.appendChild(facts);
+var cmd=(p.kind==='content'?'add '+p.id+' --project <project>':p.kind==='template'?'create '+p.id+' <folder>':'fetch '+p.id);
+var pre=el('div','cat-cmd'),code=el('code',null,'python3 tools/pkg/aiverse_pkg.py '+cmd),cp=el('button','cat-copy',T.copy);cp.type='button';
+cp.onclick=function(){navigator.clipboard&&navigator.clipboard.writeText(code.textContent).then(function(){cp.textContent=T.copied;setTimeout(function(){cp.textContent=T.copy;},1500);});};
+pre.appendChild(code);pre.appendChild(cp);body.appendChild(pre);
+var act=el('div','cat-actions'),dl=el('a','btn btn-ink btn-sm',T.download+' · '+mb(v.size));dl.href=v.url;dl.title='sha256 '+v.sha256;act.appendChild(dl);
+if(p.readme){var r=el('a','btn btn-line btn-sm',T.readme);r.href=p.readme;act.appendChild(r);}
+a.item=0;a.link=function(){return location.origin+location.pathname+'#pkg-'+p.id+(a.classList.contains('is-open')&&a.item?'/'+a.item:'');};
+if(p.viewer){var v3=el('button','btn btn-accent btn-sm cat-3d',T.view3d);v3.type='button';
+a.open3d=function(item){var f=media.querySelector('iframe');if(f){f.remove();img.hidden=false;v3.textContent=T.view3d;a.classList.remove('is-open');
+history.replaceState(null,'','#pkg-'+p.id);a.scrollIntoView({block:'nearest'});return;}
+cards.forEach(function(c){if(c.el!==a&&c.el.querySelector('.cat-frame'))c.el.open3d();});
+a.item=item||0;a.classList.add('is-open');setTimeout(function(){a.scrollIntoView({behavior:'smooth',block:'start'});},30);
+f=el('iframe','cat-frame');f.src=p.viewer+(p.viewer.indexOf('?')<0?'?':'&')+'lang='+lang+(a.item?'&item='+a.item:'');f.title=loc(p,'title')+' — 3D';f.setAttribute('allow','fullscreen');f.loading='lazy';
+img.hidden=true;media.appendChild(f);v3.textContent=T.view3dClose;history.replaceState(null,'','#pkg-'+p.id+(a.item?'/'+a.item:''));};
+v3.onclick=function(){a.open3d(0);};act.insertBefore(v3,act.firstChild);}
+var ln=el('button','btn btn-line btn-sm',T.link);ln.type='button';ln.title=T.link;
+ln.onclick=function(){var u=a.link();history.replaceState(null,'','#'+u.split('#')[1]);navigator.clipboard&&navigator.clipboard.writeText(u).then(function(){ln.textContent=T.linkCopied;setTimeout(function(){ln.textContent=T.link;},1500);});};
+act.appendChild(ln);
+body.appendChild(act);a.appendChild(body);
+cards.push({el:a,cat:p.category,hay:[p.id].concat(Object.keys(p).filter(function(k){return /^(title|summary)(-|$)/.test(k);}).map(function(k){return p[k];}),
+(p.tags||[]).join(' '),JSON.stringify(p.provides||{})).join(' ').toLowerCase()});
+return a;}
+function json(u){return fetch(u,{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.json();});}
+var base=cfg.index.replace(/[^/]*$/,'');
+// index.json lists {id, category, path}; each package folder has aiverse.package.json + versions.json
+json(cfg.index).then(function(d){return Promise.all((d.packages||[]).map(function(it){
+return Promise.all([json(base+it.path+'/aiverse.package.json'),json(base+it.path+'/versions.json')]).then(function(r){
+var p=r[0];['latest','versions','previews','readme','viewer'].forEach(function(k){if(r[1][k]!=null)p[k]=r[1][k];});p.category=it.category;return p;},
+function(){return null;});}));}).then(function(list){
+var pk=list.filter(function(p){return p&&p.versions&&p.versions[p.latest];}),used={};pk.forEach(function(p){used[p.category]=1;grid.appendChild(card(p));});
+Object.keys(cfg.cats).forEach(function(c){if(!used[c])return;var b=el('button','filter',cfg.cats[c]);b.type='button';b.dataset.cat=c;b.setAttribute('aria-pressed','false');bar.appendChild(b);});
+bar.querySelectorAll('.filter').forEach(function(b){b.onclick=function(){cur=b.dataset.cat;bar.querySelectorAll('.filter').forEach(function(x){x.setAttribute('aria-pressed',String(x===b));});
+history.replaceState(null,'',cur?'#cat='+cur:location.pathname);apply();};});
+document.querySelector('.cat-n').textContent=pk.length;document.querySelector('.cat-c').textContent=Object.keys(used).length;
+var h=location.hash.match(/^#cat=([a-z]+)/);if(h){var b=bar.querySelector('[data-cat="'+h[1]+'"]');if(b)b.click();}
+status.textContent='';apply();
+var m=location.hash.match(/^#pkg-([a-z0-9-]+)(?:[/]([0-9]+))?/);if(m){var t=document.getElementById('pkg-'+m[1]);
+if(t){if(t.open3d)t.open3d(parseInt(m[2]||'0',10));else t.scrollIntoView();}}
+// the 3D viewer tells which model it shows: the address points to it (#pkg-<id>/<model>)
+window.addEventListener('message',function(e){var d=e.data;if(!d||d.cv!=='item')return;cards.forEach(function(c){
+var f=c.el.querySelector('.cat-frame');if(f&&f.contentWindow===e.source){c.el.item=d.item;history.replaceState(null,'','#'+c.el.link().split('#')[1]);}});});
+}).catch(function(){status.textContent=T.error;});
+search.addEventListener('input',apply);})();
 </script>"""

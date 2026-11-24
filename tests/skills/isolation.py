@@ -54,7 +54,7 @@ int main() {{
 ''')
     # A real header-only package must not acquire FPS/world/meta through an umbrella.
     cmake+=['add_executable(check_header EXCLUDE_FROM_ALL header.cpp)','target_link_libraries(check_header PRIVATE AIVERSE::lib_melee_combat)']
-    (root/'header.cpp').write_text('#include <aiverselib/mechanics/Melee.h>\nint main(){return 0;}\n')
+    (root/'header.cpp').write_text('#include "engine/mechanics/Melee.h"\nint main(){return 0;}\n')
     (root/'CMakeLists.txt').write_text('\n'.join(cmake)+'\n')
     run(['cmake','-S',root,'-B',build])
     run(['cmake','--build',build,'-j','6'])

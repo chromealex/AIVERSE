@@ -1,0 +1,18 @@
+PHYSIS fire / smoke flipbooks (engine/assets/fx/physis)
+
+Source: Unity Technologies, "Free VFX image sequences and flipbooks"
+        https://unity.com/blog/engine-platform/free-vfx-image-sequences-flipbooks
+        downloads https://unity3d.com/files/labs/downloads/vfx/assets01/<Name>/<Name>-flipbooks.zip
+License: CC0 1.0 Universal (public domain dedication)
+         https://creativecommons.org/publicdomain/zero/1.0/
+
+Files (downscaled with Lanczos, converted TGA -> PNG on 2026-11-22):
+  flame_16x4.png       <- SmallFlame01-flipbooks/SmallFlame01_16x4.tga  (2048x1024 -> 1024x512, 16x4 frames)
+  flame_tall_16x4.png  <- Flame02-flipbooks/Flame02_16x4.tga            (2048x1024 -> 1024x512, 16x4 frames)
+  fireball_8x8.png     <- FireBall01-flipbooks/FireBall01_8x8.tga       (1024x1024 -> 512x512, 8x8 frames,
+                          RGB without alpha: alpha = luminance added for additive blending)
+  smoke_8x8.png        <- WispySmoke01-flipbooks/WispySmoke01_8x8.tga   (1024x1024 -> 512x512, 8x8 frames)
+
+Processing: each frame's alpha fades to 0 near its left/right (flames 18 %, others 10 %)
+and top/bottom edges so flames cut by the source frame do not show hard quad edges;
+a small alpha floor (flames 0.08) removes the faint haze around the flames.

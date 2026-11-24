@@ -3,7 +3,7 @@
 #pragma once
 #include "Platform.h"
 #include "Gamepad.h"
-#include <aiverselib/gameplay/InputFlow.h>
+#include "input/InputFlowCore.h"
 #include "engine/data/Json.h"
 #include <algorithm>
 #include <array>

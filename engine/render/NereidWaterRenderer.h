@@ -3,7 +3,7 @@
 // content/LOD/quality change or device loss. Never called from Simulation.
 #pragma once
 #include "Renderer3D.h"
-#include <aiverselib/water/NereidWaterSurfaceMesh.h>
+#include "engine/world/nereid/NereidWaterSurfaceMesh.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>

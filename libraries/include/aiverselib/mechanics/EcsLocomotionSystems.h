@@ -2,9 +2,9 @@
 // Provides velocity/state only. The collision/character owner integrates
 // position and supplies grounded/ceiling feedback in a separate system.
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
-#include "EcsMechanicSystems.h"
-#include "Locomotion.h"
+#include "engine/mechanics/Namespace.h"
+#include "engine/mechanics/EcsMechanicSystems.h"
+#include "engine/mechanics/Locomotion.h"
 #include <string>
 #include <utility>
 

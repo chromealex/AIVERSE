@@ -38,15 +38,23 @@ def blur_periodic(a,r):
 def png(path,a):
     Image.fromarray(np.rint(np.clip(a,0,1)*255).astype('uint8')).save(path,optimize=True)
 
-def bake(root):
+def catalog_package(pid):
+    """Folder of an AIVERSE-PACKAGES catalog package in the shared cache (downloaded when missing)."""
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'pkg'))
+    from aiverse_pkg import package_dir
+    return package_dir(pid)
+
+def bake(root,sources=None):
+    sources=Path(sources) if sources else catalog_package('terrain-pbr-sources')
     textures=root/'textures';textures.mkdir(parents=True,exist_ok=True);library={};catalog=[]
     for name,(meters,height_m,rough_mean) in MATERIALS.items():
         if name=='checkerboard':
             yy,xx=np.indices((SIZE,SIZE));c=((xx//128+yy//128)%2)*.23+.24
             base=np.repeat(c[...,None],3,axis=2);height=np.full((SIZE,SIZE),.5)
         else:
-            base=np.asarray(Image.open(Path(__file__).resolve().parent/'pbr_sources'/f'{name}_basecolor.png').convert('RGB').resize((SIZE,SIZE),Image.Resampling.LANCZOS),dtype=float)/255
-            height=np.asarray(Image.open(Path(__file__).resolve().parent/'pbr_sources'/f'{name}_height.png').convert('L').resize((SIZE,SIZE),Image.Resampling.LANCZOS),dtype=float)/255
+            base=np.asarray(Image.open(sources/f'{name}_basecolor.png').convert('RGB').resize((SIZE,SIZE),Image.Resampling.LANCZOS),dtype=float)/255
+            height=np.asarray(Image.open(sources/f'{name}_height.png').convert('L').resize((SIZE,SIZE),Image.Resampling.LANCZOS),dtype=float)/255
             base=tile(base);height=tile(height)
             if name=='schist_rock':
                 # A broad plate crossed the first overlap cut. A second
@@ -80,4 +88,7 @@ def bake(root):
     (root/'default-terrain.json').write_text(json.dumps(config,indent=2)+'\n')
     print(f'Baked {len(MATERIALS)} PBR materials / {len(MATERIALS)*9} texture maps')
 if __name__=='__main__':
-    ap=argparse.ArgumentParser();ap.add_argument('--root',type=Path,default=Path(__file__).resolve().parents[2]/'engine/assets/materials/terrain');bake(ap.parse_args().root)
+    ap=argparse.ArgumentParser(description='Bake the terrain-pbr package from terrain-pbr-sources.')
+    ap.add_argument('--root',type=Path,required=True,help='output: a working copy of the terrain-pbr package (catalog payload)')
+    ap.add_argument('--sources',type=Path,help='default: terrain-pbr-sources from the package catalog')
+    a=ap.parse_args();bake(a.root,a.sources)

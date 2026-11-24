@@ -62,8 +62,23 @@ Rules for shader authors (they already hold for GL and Metal):
 - textures only as `sampler2D` / `sampler2DShadow` named `tex0`..`tex31`;
 - one fragment output.
 
-SPIR-V is cached in memory by source hash (a shader recreated with the same text compiles once). There
-is no disk cache yet; on lavapipe the skirmish map reaches its first frame faster than GL on llvmpipe.
+### Optimizer and disk cache
+
+Every program goes through the SPIRV-Tools performance passes (vendored `third_party/spirv-tools` +
+`third_party/spirv-headers`, glslang `ENABLE_OPT`; CMake option `AIVERSE_SPIRV_OPT`, ON; the grammar tables are
+generated at build time and need Python >= 3.9 on the build host). Mobile drivers barely optimise SPIR-V
+themselves: on a Galaxy A05s (Adreno 610) unoptimised shaders cost ~30% of GPU time (main pass 19.9 → 14.7 ms,
+STRATA 20-sphere test 47 → 60 fps). `AIVERSE_VK_SPV_OPT=0` turns the passes off at run time for comparisons.
+
+SPIR-V is cached in memory by source hash (a shader recreated with the same text compiles once) and on disk when
+the platform gives a folder (`VulkanWindow::shaderCacheDir`; Android: `<internal data>/vk-shader-cache`). An entry
+is keyed by the GLSL, the target, the optimizer setting and `kSpirvCacheVersion` (bump it when the translation or
+the compiler output changes). Galaxy A05s, STRATA test: first frame 15.7 s on the first launch, 9.4 s with the cache.
+
+Diagnostics: `AIVERSE_VK_GPU_TIMING=1` logs GPU time per render pass and present every 120 frames (`[vk-gpu]`);
+`AIVERSE_VK_DEPS=narrow`, `AIVERSE_VK_DEPTH_STORE=0` are A/B switches for pass dependencies and depth write-back;
+`AIVERSE_VK_SPV_DIR=<dir>` writes every program's SPIR-V there and loads `<key>.vert.opt.spv` / `.frag.opt.spv`
+replacements (offline `spirv-opt` experiments).
 
 ## Resources and frames
 

@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Cinematic cue requests emitted by narrative scenes (narrative-graphs 0.2.0). Pure data: the narrative policy
 // never plays, times, skips or blocks on a cue. A cinematic/presentation owner consumes them in `sequence` order.
 // `sequence` is strictly increasing per NarrativeState (it is saved), so after restore/rollback a consumer that

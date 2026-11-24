@@ -5,10 +5,10 @@ import sys,json,argparse
 import numpy as np
 from PIL import Image
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'terrain'))
-from bake_pbr_pack import tile,blur_periodic,png
+from bake_pbr_pack import tile,blur_periodic,png,catalog_package
 ROOT=Path(__file__).resolve().parents[2]
-SOURCE=Path(__file__).resolve().parent/'pbr_sources'
-OUT=ROOT/'engine/assets/materials/vegetation'
+SOURCE=None  # vegetation-pbr-sources package (catalog), or --sources
+OUT=None     # --root: working copy of the vegetation-pbr package payload
 N=1024
 
 def bake(names=None):
@@ -49,4 +49,7 @@ def bake(names=None):
     print('Baked',len(entries),'PBR vegetation materials /',sum(9 if m['layout']=='2x2 sprig atlas' else 7 for m in entries),'texture maps')
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--only',nargs='+',help='bake these materials and preserve existing pack entries')
-    bake(parser.parse_args().only)
+    parser.add_argument('--root',type=Path,required=True,help='output: a working copy of the vegetation-pbr package payload')
+    parser.add_argument('--sources',type=Path,help='default: vegetation-pbr-sources from the package catalog')
+    a=parser.parse_args();OUT=a.root;SOURCE=a.sources or catalog_package('vegetation-pbr-sources')
+    bake(a.only)

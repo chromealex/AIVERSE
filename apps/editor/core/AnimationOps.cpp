@@ -3,11 +3,11 @@
 #include "engine/render/AnimationAsset.h"
 #include "engine/render/AnimationGraph.h"
 #include "engine/render/ModelClips.h"
-#include "libraries/include/aiverselib/motionweave/MotionWeave.h"
+#include "engine/animation/MotionWeave.h"
 #include "libraries/include/aiverselib/animation/HumanoidProfile.h"
 #include "libraries/include/aiverselib/animation/RagdollAsset.h"
 #include "libraries/include/aiverselib/animation/RootMotionBaker.h"
-#include "libraries/include/aiverselib/animation/AnimationMontage.h"
+#include "engine/animation/AnimationMontage.h"
 #include <set>
 #include <cmath>
 #include <filesystem>

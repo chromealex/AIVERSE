@@ -11,7 +11,7 @@
 #include "engine/world/NereidRipples.h"
 #include "engine/world/NereidWindPresentation.h"
 #include "engine/world/NereidWindField.h"
-#include <aiverselib/water/NereidFlowObstacles.h>
+#include "engine/world/nereid/NereidFlowObstacles.h"
 #include <cmath>
 #include <algorithm>
 #include "engine/world/TerraWeave.h"

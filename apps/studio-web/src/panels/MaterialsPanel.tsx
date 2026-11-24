@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Eye, Layers, RefreshCw, Save, Search, ShieldAlert } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import PropertyField from '../components/PropertyField';
+import { StudioLoader } from '../ui';
 import { editablePatch, materialFields, materialNames, materialSwatchColor, MATERIAL_PRESETS } from './materialSchema';
 import type { MaterialData, MaterialKey, MaterialLibrary, MaterialPatch, MaterialPreset } from './materialSchema';
 import './MaterialsPanel.css';
@@ -122,7 +123,7 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
      <input placeholder="Filter materials…" aria-label="Filter materials"
       value={query} onChange={e=>setQuery(e.target.value)}/>
     </label>
-    {loading?<p className="materials-empty">Loading…</p>:
+    {loading?<p className="materials-empty"><StudioLoader size={30} label="Loading…"/></p>:
      names.length===0?<p className="materials-empty">No library materials. Create one with the native editor.</p>:
      names.filter(n=>n.toLowerCase().includes(query.toLowerCase())).map(n=>
       <button key={n} type="button" aria-pressed={name===n}

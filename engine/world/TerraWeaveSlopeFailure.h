@@ -5,7 +5,7 @@
 // All values are integer centimetres and no random/float state is used.
 #pragma once
 #include "engine/world/TerraWeaveEarthworks.h"
-#include <aiverselib/water/NereidErosion.h>
+#include "engine/world/nereid/NereidErosion.h"
 #include <algorithm>
 #include <array>
 #include <cstddef>

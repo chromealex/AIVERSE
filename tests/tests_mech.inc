@@ -566,7 +566,7 @@ static Json mechLoadMap(const std::string& dir, const std::string& file) {
 TEST(mech_save_states_all_games) {
     namespace fs = std::filesystem;
     std::vector<std::string> games;
-    for (auto& e : fs::directory_iterator(std::string(AIVERSE_SOURCE_DIR) + "/templates"))
+    for (auto& e : fs::directory_iterator(std::string(AIVERSE_TEMPLATES_DIR)))
         if (e.is_directory() && fs::exists(e.path() / "rules.json") && e.path().filename().string()[0] != '_') games.push_back(e.path().string());
     std::sort(games.begin(), games.end());
     CHECK(games.size() >= 20);
@@ -1129,7 +1129,7 @@ TEST(mech_turns) {
 }
 
 // ---------------------------------------------------------------- TB: strategic map (Total War campaign layer)
-#include "modules/strategic/Strategic.h"
+#include "engine/game/Strategic.h"
 TEST(mech_strategic) {
     Json rules = Json::parse(std::string(R"({"resources": {"gold": {}}, )") + kVic + R"(,
       "types": {"spear": {"move": {"speed": 3}, "sight": 30, "radius": 0.4, "health": {"max": 100}, "weapons": [{"range": 1, "damage": 10, "cooldown": 1}], "cost": {"gold": 20}},

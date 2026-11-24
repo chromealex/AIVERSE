@@ -88,7 +88,7 @@ export function saveActiveWorkspace(id: StudioWorkspace, store: Storage | null =
   try { store?.setItem(ACTIVE_KEY, id); } catch { /* private mode */ }
 }
 const WORKSPACE_ADDED: Partial<Record<StudioWorkspace, StudioPanel[]>> = {
-  publish: ['build', 'branding', 'asset_audit', 'project_import', 'snapshot_diff', 'frame_capture', 'extensions'], look: ['wind', 'postfx', 'effects', 'lightbake', 'models', 'modeling', 'fx_graph', 'fx_functions', 'texture_resources'], scene: ['history', 'agent'],
+  publish: ['build', 'branding', 'asset_audit', 'project_import', 'catalog', 'snapshot_diff', 'frame_capture', 'extensions'], look: ['wind', 'postfx', 'effects', 'lightbake', 'models', 'modeling', 'fx_graph', 'fx_functions', 'texture_resources', 'catalog'], scene: ['history', 'agent'],
   world: ['terrain', 'water', 'roads', 'tiles', 'fog', 'generate', 'fields', 'physis'], logic: ['scripts', 'input', 'overlays', 'agent', 'actor', 'raid', 'balance', 'stats'],
   animate: ['anim_assets', 'anim_graph', 'anim_rig', 'model_anim', 'attachments'],
 };

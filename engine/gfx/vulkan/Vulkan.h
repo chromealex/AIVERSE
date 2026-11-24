@@ -17,6 +17,9 @@ struct VulkanWindow {
     void* display = nullptr;     // Xlib: Display*        Win32: HINSTANCE
     uint64_t window = 0;         // Xlib: Window (XID)     Win32: HWND      Android: ANativeWindow*
     bool vsync = true;
+    // Writable folder for compiled (optimized) SPIR-V; empty = no disk cache. The first launch compiles and
+    // optimizes every program (seconds on a phone), later launches load the results.
+    std::string shaderCacheDir;
 };
 
 // nullptr (with the reason in *error) when there is no loader, no suitable GPU or no surface support:

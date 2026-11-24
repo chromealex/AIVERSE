@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // sports-rules: role-based team formations. Slots are authored in the attacking frame (x forward toward the
 // opponent goal, y to the left of that direction) as fractions of the half-field (-1..1), with offsets used while
 // the team attacks or defends and a pull toward the ball. sportsSlotTarget converts a slot to a field position;

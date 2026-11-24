@@ -1,6 +1,7 @@
 ---
 name: aiverse-terraweave
 description: Implement, configure or extend AIVERSE genre-independent procedural terrain, biomes, trees, vegetation placement and ecosystem streaming without breaking existing terrain or deterministic ECS rules.
+packages: terrain-pbr, vegetation-pbr
 ---
 
 For every game/world creation task, first follow `skills/workflow/aiverse-terra-first/SKILL.md`. Use native Terra capabilities before custom environment implementations; vegetation routing is `skills/world/aiverse-terra-vegetation/SKILL.md`.
@@ -102,7 +103,7 @@ When the game uses a **flat RTS grid map**, open the editor's
 3. Generator metadata is stored under map `terraweave` with
    `version:1`, but is not automatically re-evaluated on map load.
 
-Do not invoke flat MapDoc operations for world-space (legacy `data.fps`) or planet maps (map formats, debt G2). The
+Do not invoke flat MapDoc operations for world-space (`data.worldSpace`) or planet maps (map formats, debt G2). The
 generic C++ generation API works across genres but those formats
 need separate scene adapters. Preview is currently numeric, not
 a GPU screenshot. Before reporting success, verify the map can undo,
@@ -1372,7 +1373,7 @@ See `docs/nereid/TERRAIN_EROSION.md` and handoff for exact status.
 ### Stage57–59 (2026-11-19): real NEREID coastline → erosion → transported sediment
 
 - `engine/world/TerraWeaveShorelineRaster.h` has `discoverNereidShoreline(World&,EarthworksLayer&,ShorelineRasterSettings,soilAt,rootBindingAt)`, relying on authoritative `WaterQueryIndex` for full NEREID polygon/river/ocean footprints. Only up to 16,384 grid cells per discovery window. `includeWetBedCells=true` (opt-in) adds submerged bed carriers for broad rivers/estuaries; without this, only banks erode/transport. `refreshAutoShorelineBanks` registers/upserts stable ECS bank cells (and does not overwrite manual banks), preserving sediment on dry/dormant banks. Register `terraweave.auto_bank` before simulation setup.
-- `libraries/include/aiverselib/water/NereidSedimentTransport.h`: pure sorted integer mass-conserving advection using NEREID Fixed current, contiguous grid neighbours, time step and persistent **micro-cm** carry. Only same water body or NEREID-authored directed confluence/cascade links; no guessing body connectivity, no removal of suspended mass at unmodelled boundary.
+- `engine/world/nereid/NereidSedimentTransport.h`: pure sorted integer mass-conserving advection using NEREID Fixed current, contiguous grid neighbours, time step and persistent **micro-cm** carry. Only same water body or NEREID-authored directed confluence/cascade links; no guessing body connectivity, no removal of suspended mass at unmodelled boundary.
 - `engine/world/TerraWeaveSedimentEcs.h`: `registerNereidSedimentEcsPersistence` and `addNereidSedimentTransportSystem` between NEREID bank erosion and TerraWeave soil commit. Source `WaterBankSedimentTransportComponent` is one ECS component PER BANK CELL, not per grass blade. The NEREID bank sediment system does not call erosion a second time, and only transports sediment mass (not ground height).
 - Example registration and area scans: `examples/world/terraweave_native/{Integration.h,README.md}`. Read each Stage57–59 handoff under `docs/terrain/` for commits, limits and next work.
 - Direct writable ECS access must use `World::pool<T>()` to detach pool COW ownership before `Pool::tryGet()/dataAt()`. Native NEREID water sampling/erosion and TerraWeave bank/transport writers were adjusted accordingly.
@@ -1391,7 +1392,7 @@ See `docs/nereid/TERRAIN_EROSION.md` and handoff for exact status.
 ### Stage62 — landslide debris and current obstruction / return feedback (2026-11-19)
 
 - Source: `engine/world/TerraWeaveSlopeDebrisPhysics.h` creates finite-lifetime, bounded dynamic Box3D rigid fragments from authoritative `SlopeFailurePlan` (stage60/61) at the host physics owner barrier. These are visual/collision proxies and cannot add/subtract already moved Earthworks soil. `FallenPlantPhysics` handles uprooted trees/shrubs with stable identity.
-- NEREID water alone decides current. NEW `libraries/include/aiverselib/water/NereidFlowObstacles.h` (and `NereidWaterSystems.h`/`NereidQueryIndex.h` integrations) applies optional persistent Fixed current attenuation/deflection around physically present fallen plants and debris after river/current-field/vortex/confluence/cascade sampling. `NativeWaterPipelineConfig::enableFlowObstructions` opts in; native WaterBody remains unchanged.
+- NEREID water alone decides current. NEW `engine/world/nereid/NereidFlowObstacles.h` (and `NereidWaterSystems.h`/`NereidQueryIndex.h` integrations) applies optional persistent Fixed current attenuation/deflection around physically present fallen plants and debris after river/current-field/vortex/confluence/cascade sampling. `NativeWaterPipelineConfig::enableFlowObstructions` opts in; native WaterBody remains unchanged.
 - `engine/world/TerraWeaveFlowObstructionEcs.h` is Box3D-independent `AutoFlowObstructionComponent` persistence/publication, touching ONLY generated obstruction ECS entities (never authored ones). `engine/world/TerraWeaveNereidObstacleBridge.h` (opt-in Box3D) captures authoritative server physics poses and immutable NEREID source WaterSample/WaterBody IDs at the completed physics step, then publishes current obstruction records to native ECS before the next NEREID sample.
 - `WorldScene::setNereidFlowObstructions` consumes a native mapping from ECS WaterBody Entity to stable `NereidSceneSurface.id` and applies the same fixed-point deflection to water whitewater and ripple movement. WorldScene is presentation only and never simulates ECS/Box3D. Source keys make current deflection ordering independent from ECS recycling.
 - Native example `examples/world/terraweave_native/Integration.h` requires no Box3D, while `PhysicsIntegration.h` offers Box3D post-tick effects and water-obstacle publication. Read `docs/terrain/stage-62-debris-water-feedback-handoff.md` for actual commits, limits, API, timing, and remaining tasks.
@@ -1400,7 +1401,7 @@ See `docs/nereid/TERRAIN_EROSION.md` and handoff for exact status.
 
 ### Stage63 — NEREID flood volume, overtopping and TerraWeave terrain feedback (2026-11-19)
 
-- `libraries/include/aiverselib/water/NereidFloodRouting.h` is an opt-in **NEREID-owned** bounded equal-area flood reservoir (`WaterFloodResource`, ECS schema `nereid.flood` v1; max 16,384 cells). `stepNereidFlood` transfers finite source water volume by hydraulic head to adjacent grid cells with obstruction edge permeability and strictly checks sum of column volume before/after. `WaterFloodResource::wetnessRevision` tracks newly wet/dry cells for downstream shoreline regeneration. `applyNereidFloodSample` exposes water beyond original NEREID polygons/splines in both reference and indexed water samplers; original higher water surface still wins.
+- `engine/world/nereid/NereidFloodRouting.h` is an opt-in **NEREID-owned** bounded equal-area flood reservoir (`WaterFloodResource`, ECS schema `nereid.flood` v1; max 16,384 cells). `stepNereidFlood` transfers finite source water volume by hydraulic head to adjacent grid cells with obstruction edge permeability and strictly checks sum of column volume before/after. `WaterFloodResource::wetnessRevision` tracks newly wet/dry cells for downstream shoreline regeneration. `applyNereidFloodSample` exposes water beyond original NEREID polygons/splines in both reference and indexed water samplers; original higher water surface still wins.
 - `engine/world/TerraWeaveNereidFloodBridge.h` seeds a finite grid ONCE from NEREID WaterBody footprints and canonical Earthworks heights. `synchronizeNereidFloodGround` and its optional native ECS system update grid-bottom elevation after digging/erosion/landslide without adding/removing stored water volume. Register the NEREID flood system BEFORE water probes and the TerraWeave ground synchronizer AFTER the last soil commit.
 - `engine/world/TerraWeaveFloodShorelineSystem.h` offers persistent auto-raster revision and optional structural ECS bank refresh when water wetness or soil revision changes, not each graphics frame. Native WorldScene owner receives up to 2048 visible grid cells through `NereidFloodVisualScene.h`; a bounded single-model transparent fallback draws extra floodwater beyond/above authored water. This is not yet full NEREID foam/refraction material.
 - Example: `examples/world/terraweave_native/{Integration.h,README.md}` (opt-in native flood enabled, explicit seedFloodReservoir, optional autoFloodShoreline scan bounds). Read `docs/terrain/stage-63a-nereid-flood-volume-handoff.md` and `stage-63b-flood-visual-native-handoff.md`.

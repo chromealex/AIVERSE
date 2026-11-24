@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // card-games: setup (seeded shuffles, deal) and the single authoritative step for every command:
 // mulligan, play (cards go on the stack and priority passes), attack (on the stack too), pass (all living seats
 // passing in a row resolves the top item; passing with an empty stack advances the phase/turn).

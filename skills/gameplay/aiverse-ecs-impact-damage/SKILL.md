@@ -9,7 +9,7 @@ Read `AGENTS.md`, `docs/ecs-mechanic-composition.md`,
 `skills/gameplay/aiverse-ecs-projectile-systems/SKILL.md`, and
 `docs/editor-unification-handoff.md` before editing shared mechanics.
 
-1. **Components, not genre names.** Include `<aiverselib/mechanics/EcsDamageSystems.h>`.
+1. **Components, not genre names.** Include `"engine/mechanics/EcsDamageSystems.h"`.
    Use `HitPointsComponent` for an entity's health,
    `ProjectileDamageComponent` for shot damage,
    `ColliderEntityIndex` to map collision IDs to generation-safe entities,

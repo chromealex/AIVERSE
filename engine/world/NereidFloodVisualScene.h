@@ -5,8 +5,8 @@
 // This is a lightweight temporary water material, not the full NEREID
 // refraction/shore-foam shader; ordinary water bodies keep their renderer.
 #pragma once
-#include <aiverselib/water/NereidFloodRouting.h>
-#include <aiverselib/water/NereidGeometry.h>
+#include "engine/world/nereid/NereidFloodRouting.h"
+#include "engine/world/nereid/NereidGeometry.h"
 #include "engine/render/Model.h"
 #include "engine/render/Renderer3D.h"
 #include <algorithm>

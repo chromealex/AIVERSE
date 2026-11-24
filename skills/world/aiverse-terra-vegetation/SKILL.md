@@ -1,6 +1,7 @@
 ---
 name: aiverse-terra-vegetation
 description: Build AIVERSE trees, grass, rocks and forest scenes through native TerraWeave Arbor/Flora and shared PBR/LOD APIs; diagnose sparse cover, repeated silhouettes and disconnected foliage before writing custom vegetation.
+packages: vegetation-pbr, terrain-pbr
 ---
 
 # Native Terra vegetation
@@ -87,8 +88,11 @@ Keep renderer-owned LOD, bounded CPU generation and per-stage handoffs.
 Runtime library: none. Workflow over existing native TerraWeave APIs and host tools.
 
 
-For close native bark, prefer the bundled opt-in `*_bark_projected` materials
+For close native bark, prefer the opt-in `*_bark_projected` materials
 from `materials/vegetation/bark_projection`, assigned ONLY to TerraWeave Bark.
+The PBR libraries are catalog packages, not engine files: install them with
+`python3 tools/pkg/aiverse_pkg.py skill aiverse-terra-vegetation --project <project>`
+(or `add vegetation-pbr` / `add terrain-pbr`); bake sources: `fetch vegetation-pbr-sources`.
 Read vegetation-authoring.md before installation; merge both material libraries.
 They share family textures across prototypes; do not bake a huge unique atlas
 for every tree by default. Graph92nodes/sixsamples, rigid Metal High/Low/yaw/macro

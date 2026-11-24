@@ -4,8 +4,8 @@
 #include "engine/world/NereidConfluenceManifest.h"
 #include "engine/world/NereidConfluenceEcsPresentation.h"
 #include "engine/world/NereidEcsPresentation.h"
-#include <aiverselib/water/NereidQueryIndex.h>
-#include <aiverselib/water/NereidWaterSystems.h>
+#include "engine/world/nereid/NereidQueryIndex.h"
+#include "engine/world/nereid/NereidWaterSystems.h"
 #include <cstdint>
 #include <iostream>
 #include <stdexcept>

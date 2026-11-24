@@ -1849,6 +1849,7 @@ void Editor::renderScene(Viewport& vp, const Camera& cam, bool editOverlays) {
                 std::abs(zCm) > double(terraweave::kWorldLimitCm))
                 throw std::out_of_range("TerraWeave forest camera outside world extent");
             terraWeaveForestPreview_.setEngineDir(ws_.engineDir);
+            terraWeaveForestPreview_.setProjectDir(ws_.project.dir);
             terraWeaveForestPreview_.draw(*dev_, r3d_, doc(),
                 int64_t(std::llround(xCm)), int64_t(std::llround(zCm)),
                 [this](int64_t x, int64_t z) -> int32_t {

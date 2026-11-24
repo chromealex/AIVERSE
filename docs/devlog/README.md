@@ -106,7 +106,7 @@ it from `next` into `releases` and set the next planned number; new systems merg
 
 ## Languages
 
-The site is Russian at the root and English under `en/` (switch in the header). Every text field
+The site is English at the root and Russian under `ru/` (old `en/` links redirect to the root) (switch in the header). Every text field
 has an English twin with the `En` suffix; fill both, or the English page falls back to Russian:
 
 - entries: `titleEn`, `summaryEn`, `bodyEn`, `verifiedEn`, `limitsEn`, `media[].captionEn`;
@@ -116,7 +116,7 @@ has an English twin with the `En` suffix; fill both, or the English page falls b
 
 Interface strings (navigation, labels, statuses) live in `site/i18n/ru.json` and `site/i18n/en.json`;
 page chrome comes from `site/_layout.html`. The hand-written main and devlog pages exist twice:
-`site/index.html`, `site/devlog.html` and `site/en/index.html`, `site/en/devlog.html` — change both.
+`site/index.html`, `site/devlog.html` and `site/ru/index.html`, `site/ru/devlog.html` — change both.
 
 ## Documentation pages
 
@@ -131,7 +131,7 @@ system whose `article` is listed links to its docs page. `build.py check` fails 
 ```sh
 python3 tools/site/build.py add --system render --title "…" --media path/to/shot.png
 python3 tools/site/build.py check            # required before commit
-python3 tools/site/build.py build            # → build/site (RU at the root, EN in build/site/en)
+python3 tools/site/build.py build            # → build/site (EN at the root, RU in build/site/ru)
 python3 -m http.server -d build/site 8000
 ```
 

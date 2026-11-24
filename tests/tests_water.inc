@@ -119,7 +119,7 @@ TEST(water_editor_bake_and_restore) {
     namespace fs = std::filesystem;
     const fs::path root = fs::temp_directory_path() / ("aiverse_water_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(root);
-    fs::copy(fs::path(AIVERSE_SOURCE_DIR) / "templates" / "skirmish", root / "skirmish", fs::copy_options::recursive);
+    fs::copy(fs::path(AIVERSE_TEMPLATES_DIR) / "skirmish", root / "skirmish", fs::copy_options::recursive);
     editor::Workspace ws;
     ws.engineDir = AIVERSE_SOURCE_DIR;
     std::string err;

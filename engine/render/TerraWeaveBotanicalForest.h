@@ -1,8 +1,8 @@
 // Textured botanical species for ArborForestAdapter / TerraWeaveForestScene:
 // presets from TerraWeaveTreePresets.h (oak, birch, spruce...), their
 // botanical mesh recipe and PBR bark/leaf maps
-// (<dir>/<stem>_basecolor|normal|orm.png, as engine/assets/materials/
-// vegetation/textures ships them). Used by the editor forest overlay and the
+// (<dir>/<stem>_basecolor|normal|orm.png, as the vegetation-pbr catalog
+// package ships them in textures/). Used by the editor forest overlay and the
 // WorldScene "terraweaveForest" manifest, so both draw the same trees.
 #pragma once
 

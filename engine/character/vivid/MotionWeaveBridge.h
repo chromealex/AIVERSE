@@ -7,7 +7,7 @@
 #pragma once
 
 #include "MorphBinding.h"
-#include <aiverselib/motionweave/MotionWeave.h>
+#include "engine/animation/MotionWeave.h"
 
 namespace aiverse::vivid {
 

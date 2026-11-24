@@ -10,7 +10,7 @@ description: Reuse AIVERSE seeded spread, recoil, swept projectiles, material pe
 Follow `AGENTS.md` and `docs/ecs-mechanic-composition.md`.
 Weapons must be built from reusable ECS components and systems, not separate
 RTS/FPS projectile calculations. The public integration reference is
-`<aiverselib/mechanics/EcsProjectileSystems.h>`, which binds a shared
+`"engine/mechanics/EcsProjectileSystems.h"`, which binds a shared
 `ProjectileFlightComponent` and `BallisticFlightPolicy` into any
 `Simulation` and delivers ordered `ProjectileImpactEvent` records.
 

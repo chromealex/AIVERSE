@@ -21,7 +21,7 @@ engine/
 modules/rts/ generic RTS layer: types from data, orders, A*, combat, economy, construction,
              production, garrisons (Mushroom Wars), roads, fog of war, AI
              view/ — draws any type from the "view" block in rules.json
-modules/fps/ FPS module (in development): movement, combat and match state
+engine/actor/ actor host on ECS (former modules/fps): movement, combat, vehicles, streaming and match state for any project
 apps/
   fps/       standalone FPS client and server
   client/    the game (menu, match with bots, HUD, minimap, mouse and touch)
@@ -42,13 +42,13 @@ platform/    packaging templates (Info.plist, Gradle project, HTML shell)
 ```bash
 cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release      # requires Xcode and CMake
 cmake --build build/mac -j 8
-open build/mac/AiverseEditor.app                              # editor (project templates/skirmish)
+open build/mac/AiverseEditor.app                              # editor (project ~/.aiverse/packages/templates/skirmish)
 open build/mac/AiverseGame.app                                # game
 ./build/mac/aiverse_tests
 ```
 
-Un autre jeu dans l’éditeur : `AiverseEditor.app/Contents/MacOS/AiverseEditor --project templates/mushrooms`.
-Pour que le jeu démarre avec un autre jeu de données, passez `-DAIVERSE_CONTENT_DIR=.../templates/mushrooms`.
+Un autre jeu dans l’éditeur : `AiverseEditor.app/Contents/MacOS/AiverseEditor --project ~/.aiverse/packages/templates/mushrooms`.
+Pour que le jeu démarre avec un autre jeu de données, passez `-DAIVERSE_CONTENT_DIR=~/.aiverse/packages/templates/mushrooms`.
 
 ### Plusieurs éditeurs à la fois
 
@@ -61,12 +61,12 @@ peut changer après un redémarrage de l’éditeur. `--listen <port>` fixe un p
 ## Compiler pour les plateformes — aiversebuild
 
 ```bash
-./build/mac/aiversebuild --project templates/skirmish --target macos     # Builds/macos/<Name>.app (ad-hoc signed)
-./build/mac/aiversebuild --project templates/skirmish --target ios       # Builds/ios/xcode/AIVERSE.xcodeproj + simulator build
-./build/mac/aiversebuild --project templates/skirmish --target android   # Builds/android/<Name>-release.apk when SDK/NDK and gradle are present
-./build/mac/aiversebuild --project templates/skirmish --target web       # Builds/web (requires emsdk)
-./build/mac/aiversebuild --project templates/skirmish --target windows   # .exe via mingw-w64 (brew install mingw-w64) or sources + build.bat
-./build/mac/aiversebuild --project templates/skirmish --target all
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target macos     # Builds/macos/<Name>.app (ad-hoc signed)
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target ios       # Builds/ios/xcode/AIVERSE.xcodeproj + simulator build
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target android   # Builds/android/<Name>-release.apk when SDK/NDK and gradle are present
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target web       # Builds/web (requires emsdk)
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target windows   # .exe via mingw-w64 (brew install mingw-w64) or sources + build.bat
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target all
 ```
 
 Le résultat va dans `<projet>/Builds/<plateforme>/` — uniquement les builds terminés et le rapport de taille. Tout
@@ -130,7 +130,7 @@ monte un paquet par-dessus (patch, DLC). Chaque build affiche un rapport de tail
 aiversebuild ... --no-pack          # ship folders as is (debugging)
 aiversebuild ... --pack-level 9     # zstd level (default 19 for Release, 3 for Debug)
 
-assetpipe pack -o content.rpak templates/skirmish engine/assets=engine   # build a pack by hand
+assetpipe pack -o content.rpak ~/.aiverse/packages/templates/skirmish engine/assets=engine   # build a pack by hand
 assetpipe list content.rpak       # files, sizes, compression
 assetpipe verify content.rpak     # unpack everything and check hashes
 assetpipe extract content.rpak out/
@@ -302,8 +302,8 @@ n’importe laquelle.
 ```
 
 ```bash
-./build/mac/aiverse_i18n extract --project templates/skirmish --lang de --write   # lang/de.json skeleton, new strings marked // TODO
-./build/mac/aiverse_i18n check   --project templates/skirmish                     # placeholders, plural forms, untranslated strings
+./build/mac/aiverse_i18n extract --project ~/.aiverse/packages/templates/skirmish --lang de --write   # lang/de.json skeleton, new strings marked // TODO
+./build/mac/aiverse_i18n check   --project ~/.aiverse/packages/templates/skirmish                     # placeholders, plural forms, untranslated strings
 ```
 
 La langue est choisie ainsi : le choix du joueur dans le menu (mémorisé) → la langue du système → la langue source du jeu. Pour
@@ -386,8 +386,8 @@ la simulation est déterministe, donc tout le monde a le même état.
 
 ```bash
 ./build/mac/aiverse_server --config apps/server/server.json            # UDP 27015, WebSocket 27016
-./build/mac/aiverse_netbot --server 127.0.0.1 --project templates/mushrooms --queue 1v1   # a bot in the queue
-./build/mac/aiverse_netbot --server ws://127.0.0.1:27016 --project templates/mushrooms --queue 1v1
+./build/mac/aiverse_netbot --server 127.0.0.1 --project ~/.aiverse/packages/templates/mushrooms --queue 1v1   # a bot in the queue
+./build/mac/aiverse_netbot --server ws://127.0.0.1:27016 --project ~/.aiverse/packages/templates/mushrooms --queue 1v1
 ./build/mac/aiverse_net_tests                                          # network tests
 docker build -f apps/server/Dockerfile -t aiverse-server .             # server in a container
 ```
@@ -398,7 +398,7 @@ Pour `wss://` (une page de jeu servie en HTTPS), placez un proxy TLS (nginx, Cad
 
 `engine/audio` est un mixeur, des banques de sons issues des données, une synthèse procédurale et la musique ; la sortie
 passe par [miniaudio](../../third_party/miniaudio) (CoreAudio, AAudio/OpenSL ES, Web Audio, WASAPI, ALSA/PulseAudio).
-`modules/rts/audio` transforme les événements de simulation en sons ; il n’écrit rien dans la simulation. Pas de
+`engine/audio` transforme les événements de simulation en sons ; il n’écrit rien dans la simulation. Pas de
 périphérique — le jeu tourne en silence. Pas d’`audio.json` — le jeu n’a simplement pas de son.
 
 Le son d’un jeu est le fichier `audio.json` à côté de `game.json` (autre nom : `"audio"` dans game.json). Le format complet est
@@ -477,9 +477,9 @@ Un type est dessiné d’après son bloc `"view"` : une forme intégrée (`"shap
   `texture_generate` pour les agents.
 
 Un modèle cassé ne casse pas le jeu : le type est dessiné comme une forme et la raison va dans la console de l’éditeur.
-Visualisation : `aiverse_modelview model.glb@Walk` ou `aiverse_modelview --game templates/showcase` (tous les types d’un jeu
+Visualisation : `aiverse_modelview model.glb@Walk` ou `aiverse_modelview --game ~/.aiverse/packages/templates/showcase` (tous les types d’un jeu
 tels que le jeu les dessine) ; dans l’éditeur — la fenêtre **Models** (clips, nœuds, matériaux, portrait, rechargement à
-l’enregistrement du fichier de modèle). Exemple : `templates/showcase` ; format complet : [models.md](../models.md).
+l’enregistrement du fichier de modèle). Exemple : `~/.aiverse/packages/templates/showcase` ; format complet : [models.md](../models.md).
 
 ## Éclairage
 

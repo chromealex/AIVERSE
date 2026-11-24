@@ -142,9 +142,9 @@ bool projectUsesRoads(const Options& o) {
     return false;
 }
 
-// engine/assets/materials (terrain + vegetation PBR libraries, ~145 MB) is an authoring source:
-// projects copy what they use into their own materials/ (tools/terrain/install_pbr_pack.py, the
-// editor's empty-project template) and the runtime never reads engine/materials. Ship it only to a
+// engine/assets/materials holds only the checkerboard terrain the editor's empty project copies;
+// the PBR libraries are catalog packages installed into the project (tools/pkg/aiverse_pkg.py add
+// terrain-pbr / vegetation-pbr). The runtime never reads engine/materials. Ship it only to a
 // project whose own data names an engine/materials/ path.
 bool projectUsesEngineMaterials(const Options& o) {
     std::error_code ec;

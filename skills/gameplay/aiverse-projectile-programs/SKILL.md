@@ -12,7 +12,7 @@ Authority: `docs/projectile-programs.md`. Kernel shared by RTS and FPS: `engine/
 Data-only example: `examples/projectiles` (straight, ballistic and planetary maps).
 
 1. Put `flight` on an RTS weapon, inside an ability `delivery` of type projectile, inside a nested projectile
-   effect, or in `fps.weapon` / an `fps.weapons` entry (FPS: `docs/fps.md`).
+   effect, or in `actor.weapon` / an `actor.weapons` entry (FPS: `docs/fps.md`).
 2. `modifiers` are an ordered program, not flags: scalars bake at birth; split / ricochet are gates and later
    entries wait for them. Bound fan-out with `splitBudget`; `blockTerrain: false` ignores terrain.
 3. Damage and on-hit payloads stay with the existing combat / effect owners - do not duplicate damage code.

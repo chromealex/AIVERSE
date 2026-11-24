@@ -1,5 +1,6 @@
 // Project hub (like Unity Hub): recent projects anywhere on disk, "new project" from a template into
 // a folder the user picks, and a folder browser (ImGui, works the same on every desktop OS).
+#include "engine/platform/TemplatesDir.h"
 #include <algorithm>
 #include <cstring>
 #include <ctime>
@@ -23,7 +24,7 @@ struct HubState {
     char search[128] = "";
     char title[128] = "Моя игра";
     char location[1024] = "";
-    int templ = 1;                     // index into listTemplates (0 = empty)
+    int templ = 1;                     // index into hubTemplates (0 = empty)
     std::string error;
     // folder browser
     bool browsing = false;
@@ -143,7 +144,8 @@ void Editor::drawGamePicker() {
     ImGuiIO& io = ImGui::GetIO();
     HubState& H = g_hub;
     if (H.location[0] == 0) std::snprintf(H.location, sizeof H.location, "%s", defaultProjectsDir().c_str());
-    if (H.templates.empty() || ImGui::GetTime() - H.templatesAt > 10) { H.templates = listTemplates(ws_.engineDir); H.templatesAt = ImGui::GetTime(); }
+    // official catalog templates from the package cache (no network on the UI thread) + engine templates
+    if (H.templates.empty() || ImGui::GetTime() - H.templatesAt > 60) { H.templates = hubTemplates(ws_.engineDir, true); H.templatesAt = ImGui::GetTime(); }
     ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     const bool wide = H.tab == 2;   // the game wizard has many answers: a bigger hub
     ImGui::SetNextWindowSize(ImVec2(std::min(wide ? 1240.f : 1160.f, io.DisplaySize.x - 40), std::min(wide ? 880.f : 780.f, io.DisplaySize.y - 40)));
@@ -263,7 +265,7 @@ void Editor::drawGamePicker() {
     } else {
         ui::heading("Новый проект");
         ui::heading(engineText(ws_, "hub.template").c_str());
-        ImGui::SetItemTooltip("Шаблоны: %s", (fs::path(ws_.engineDir) / "templates").string().c_str());
+        ImGui::SetItemTooltip("Шаблоны: %s", aiverse::platform::templatesDir(ws_.engineDir).c_str());
         ImGui::Separator();
         const float formH = 150;
         ImGui::BeginChild("##templates", ImVec2(0, -formH));

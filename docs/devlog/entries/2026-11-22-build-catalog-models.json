@@ -1,0 +1,45 @@
+{
+  "id": "2026-11-22-build-catalog-models",
+  "date": "2026-11-22",
+  "system": "build",
+  "title": "Каталог: камни и деревья TerraWeave, пакеты с зависимостями, переводы",
+  "summary": "В каталоге первые наборы моделей: 12 камней и 10 пород деревьев TerraWeave, по три LOD. Пакет может брать текстуры другого пакета вместо копий. Тексты каталога — английские с переводами вроде title-ru; на странице каталога есть инструкция, как добавить свой пакет.",
+  "body": [
+    "`terraweave-rocks` и `terraweave-trees` сделаны инструментами движка aiverse_terraweave_rocks и aiverse_terraweave_vegetation. Модели ссылаются на текстуры пакетов terrain-pbr и vegetation-pbr, поэтому набор деревьев весит 17 МБ вместо 52. `aiverse_pkg.py add` сначала ставит зависимости, 3D-просмотр на сайте берёт текстуры из них же.",
+    "Индекс каталога стал коротким: в корне только разделы и путь к папке каждого пакета, описание лежит в его aiverse.package.json, опубликованные версии и хеши — в versions.json рядом. Тексты без суффикса — английские, переводы — title-ru, summary-zh-CN и т. д.; README каталога есть на девяти языках.",
+    "На странице «Каталог» — пять шагов, как предложить пакет, и ссылка на подробную инструкцию в документации."
+  ],
+  "status": "done",
+  "verified": "Модели с текстурами из пакетов-зависимостей сняты в настольной сборке просмотрщика (Linux, OpenGL), включая STRATA на дубе; установка с зависимостями проверена тестом aiverse_pkg; страница каталога с новым индексом проверена в Chrome на локальной копии каталога.",
+  "limits": "Деревья — для ручной расстановки; лес, который движок сам растит и расставляет, по-прежнему строит TerraWeave. Переводы описаний пакетов пока только на русский.",
+  "branch": "feature/aiv20261122_model_packages",
+  "commit": "6bc2fd9ed",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-22-build-catalog-models/01.jpg",
+      "caption": "Десять пород деревьев: ель, сосна, пихта, лиственница, дуб, берёза, клён, яблоня, ива, тополь",
+      "captionEn": "Ten tree species: spruce, pine, fir, larch, oak, birch, maple, apple, willow, poplar"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-22-build-catalog-models/02.jpg",
+      "caption": "12 камней четырёх форм: округлые, угловатые, плиты, осколки",
+      "captionEn": "12 rocks in four shapes: rounded, boulder, slab, shard"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-22-build-catalog-models/03.jpg",
+      "caption": "Страница каталога: как добавить свой пакет",
+      "captionEn": "The catalog page: how to add your own package"
+    }
+  ],
+  "links": [],
+  "author": null,
+  "titleEn": "Catalog: TerraWeave rocks and trees, packages with dependencies, translations",
+  "summaryEn": "The catalog has its first model packs — 12 TerraWeave rocks and 10 tree species, three LODs each. A package can depend on another and use its textures instead of copies. Catalog texts are English with translations such as title-ru, and the catalog page explains how to add your own package.",
+  "bodyEn": [
+    "`terraweave-rocks` and `terraweave-trees` come from the engine tools aiverse_terraweave_rocks and aiverse_terraweave_vegetation. The models refer to the textures of terrain-pbr and vegetation-pbr, so the tree pack is 17 MB instead of 52. `aiverse_pkg.py add` installs the dependencies first, and the site's 3D preview takes the textures from them too.",
+    "The catalog index is short now: the root lists only the sections and the folder of each package; the description is its aiverse.package.json and the published versions and hashes are in versions.json next to it. Plain keys are English, translations are title-ru, summary-zh-CN and so on; the catalog README exists in nine languages.",
+    "The Catalog page has five steps for offering a package and a link to the full instructions in the docs."
+  ],
+  "verifiedEn": "Models with textures from their dependency packages were captured in the desktop viewer (Linux, OpenGL), including STRATA on the oak; installing with dependencies is covered by the aiverse_pkg test; the catalog page with the new index was checked in Chrome against a local copy of the catalog.",
+  "limitsEn": "The trees are for hand placement; the forest the engine grows and places itself is still built by TerraWeave. Package descriptions are translated into Russian only so far."
+}

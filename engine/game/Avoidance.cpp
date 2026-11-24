@@ -7,7 +7,7 @@
 // linearProgram1/2/3) picks the velocity closest to the preferred one. Cost is O(agents * K^2).
 #include "Internal.h"
 #include "Driving.h"
-#include <aiverselib/SweptShapes.h>
+#include "engine/core/SweptShapes.h"
 #include <algorithm>
 
 namespace aiverse::game {

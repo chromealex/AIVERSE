@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Generic constraint puzzles over small grids (puzzle-solvers): cell domains are bit masks of values 0..31,
 // constraints are data (AllDifferent, Sum, Count, Runs = nonogram line clues), propagation runs to a fixpoint in
 // constraint order, and bounded backtracking (smallest domain first, lowest cell on ties, values ascending) solves

@@ -1,6 +1,6 @@
 #include <aiverselib/bots/NavMeshData.h>
 #include "engine/game/GameCore.h"
-#include <aiverselib/bots/Fps.h>
+#include "engine/bots/Fps.h"
 #include <iostream>
 #include <stdexcept>
 using namespace aiverse;using namespace aiverse::lib::bots;

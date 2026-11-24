@@ -225,7 +225,7 @@ aiverse_native_module(ID my_game VERSION 1 ENTRY createMyGame SOURCES MyGame.cpp
 target_link_libraries(aiverse_native_my_game PRIVATE AIVERSE::libraries)
 ```
 
-Используйте `#include <aiverselib/Graphs.h>` (и другие headers из `libraries/include/aiverselib`).
+Используйте `#include "engine/core/Graphs.h"` (и другие headers из `libraries/include/aiverselib`).
 Не копируйте алгоритмы и не правьте engine CMake ради конкретной игры: target уже
 объявлен до загрузки native проекта. `aiversebuild` переносит библиотеки в source exports.
 Полный пример: `examples/native/libraries`; API и ограничения: `docs/libraries.md`.

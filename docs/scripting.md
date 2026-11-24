@@ -562,7 +562,7 @@ historical bursts on load; requests are drained once per presentation update.
 
 ## Engine standard library (rule-level mechanics in Lua)
 
-Part of the engine's own mechanics is written in Lua: `modules/rts/lua/*.lua`, compiled into the
+Part of the engine's own mechanics is written in Lua: `engine/game/lua/*.lua`, compiled into the
 engine (`embed.cmake` turns them into a header, so every platform loads them without file access)
 and run by every game, before the game's own scripts, in the same deterministic VM. The C++ core
 keeps everything hot (ECS, commands, movement, pathfinding, avoidance, targeting and weapons,

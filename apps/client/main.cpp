@@ -9,6 +9,8 @@
 #include "engine/platform/GraphicsSettings.h"
 #include "engine/platform/WindowSettings.h"
 #include "ClientSplash.h"
+#include "HostBoot.h"
+#include "engine/platform/EngineDir.h"
 #include "GameClient.h"
 
 using namespace aiverse;
@@ -48,6 +50,9 @@ int aiverseMain(int argc, char** argv) {
 #endif
 #if defined(AIVERSE_CLIENT_VOXEL)
     if (module == "voxel") return voxelClientMain(argc, argv);
+#endif
+#if defined(AIVERSE_SOURCE_DIR)
+    useEngineAssets(platform::resolveEngineDir(AIVERSE_SOURCE_DIR, argv[0]));   // the engine's loading screen art in dev runs on a project folder
 #endif
     static GameClient client;
     static ClientBoot boot;   // splash / loading screen (ClientSplash.h)

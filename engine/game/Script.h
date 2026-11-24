@@ -120,7 +120,7 @@ std::string checkScriptSyntax(const std::string& name, const std::string& text, 
 // The API reference for agents and the editor (functions, events, rules) as JSON.
 Json scriptApiReference();
 
-// Systems implemented by the engine's standard Lua library (modules/rts/lua/<name>.lua defines
+// Systems implemented by the engine's standard Lua library (engine/game/lua/<name>.lua defines
 // std.<name>(tick)); a game overrides one with scripts/std/<name>.lua.
 enum class StdFn : uint8_t { Victory, Waves, Triggers, AutoBuild, Sell, Count };
 

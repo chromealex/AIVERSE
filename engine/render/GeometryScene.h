@@ -445,7 +445,7 @@ private:
     bool strataMergeClusters_=false; // scene "strata" block turns it on
     // Sun shadow pass error tolerance multiplier (the shadow map covers the
     // whole map; per-branch detail there forces the finest frontier).
-    float strataShadowErrorScale_=1.f;
+    float strataShadowErrorScale_=0.f;   // 0: shadows reuse the camera cut; >0: the shadow map is a selection view
     // "strata.select": auto = per-source choice (StrataAutoSelect.h), all =
     // every source. minTriangles overrides the auto threshold (0 = default).
     bool strataAutoSelect_=true;

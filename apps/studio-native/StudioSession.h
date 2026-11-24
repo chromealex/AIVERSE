@@ -149,4 +149,5 @@ private:
     size_t strokeDepth_=0; bool stroking_=false; double strokeX_=0, strokeY_=0;   // History position when the current conversation started (Undo all)
     Json agentRequest(const std::string& method, const Json& params);
 };
+Json hubTemplatesJson(const std::string& engineDir, const Json& params);
 }

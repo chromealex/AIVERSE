@@ -1,6 +1,6 @@
 #include <aiverselib/mechanics/PerksConfigured.h>
-#include <aiverselib/mechanics/PerksData.h>
-#include <aiverselib/mechanics/PerksPersistence.h>
+#include "engine/mechanics/PerksData.h"
+#include "engine/mechanics/PerksPersistence.h"
 #include "engine/game/Native.h"
 // match-progression: battle deck from the match start payload, one kill -> xp orb -> pickup -> level-up offer ->
 // choice, and the three persisted states (perks, orbs, summons) in NativeState. Stat values are read back with

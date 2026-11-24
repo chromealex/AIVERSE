@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // JSON tactics scenario (example: examples/libraries/mechanics/cards-turns/skirmish.json):
 // {"grid":{"shape":"hex","rows":["..h..","....."],"legend":{"r":{"cost":2}}},          shape: square|hex
 //  "rules":{"roundLimit":30,"attackEndsTurn":true,"halfCoverMilli":200,"fullCoverMilli":400,"flankBonusMilli":150,

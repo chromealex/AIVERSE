@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Strict JSON readers shared by settlement-production (ColonyData.h, bots/ColonyPlannerData.h) and survival-ecology
 // (EcologyData.h): integers only (no fractions), unknown keys rejected, every error path-qualified.
 #include "engine/data/Json.h"

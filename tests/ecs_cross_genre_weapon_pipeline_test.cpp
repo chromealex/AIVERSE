@@ -1,7 +1,7 @@
 // One complete ECS shooting mechanic in two independent game genres:
 // input -> weapon cooldown/ammo -> spawn -> flight -> hit -> health damage.
 // No FPS/RTS include or library link. Snapshot/COW replay parity is required.
-#include <aiverselib/mechanics/EcsWeaponLaunchSystems.h>
+#include "engine/mechanics/EcsWeaponLaunchSystems.h"
 #include <cstdint>
 #include <iostream>
 #include <memory>

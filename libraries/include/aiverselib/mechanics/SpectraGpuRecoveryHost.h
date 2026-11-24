@@ -3,7 +3,7 @@
 // The host owns BOTH graphics Devices and must keep the OLD Device alive
 // through pool.shutdown() while it recreates graphics.
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 
 #include "SpectraGpuAttachmentEcsAdapter.h"
 #include "SpectraEcsRenderPose.h"

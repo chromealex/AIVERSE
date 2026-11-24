@@ -8,8 +8,8 @@
 #include "engine/world/TerraWeaveSlopeDebrisPhysics.h"
 #include "engine/world/TerraWeaveFlowObstructionEcs.h"
 #include "engine/world/WorldScene.h"
-#include <aiverselib/water/NereidWaterSystems.h>
-#include <aiverselib/water/NereidFlowObstacles.h>
+#include "engine/world/nereid/NereidWaterSystems.h"
+#include "engine/world/nereid/NereidFlowObstacles.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>

@@ -3,6 +3,7 @@
 // agent makes goes through `call()`, so the GUI shows it live, records it in the activity feed and
 // in undo history. No UI or rendering in here.
 #pragma once
+#include "engine/platform/TemplatesDir.h"
 #include <atomic>
 #include <functional>
 #include <mutex>
@@ -83,7 +84,7 @@ public:
 
     std::vector<GameInfo> listGames() const;
     bool openGame(const std::string& idOrDir, std::string* err);   // folder, .aiverse, game.json or template id
-    std::string gamesDir() const { return engineDir + "/templates"; }   // project templates (sample games)
+    std::string gamesDir() const { return aiverse::platform::templatesDir(engineDir); }   // project templates (catalog packages)
     std::string mapsDir() const { return project.dir + "/maps"; }
     std::string relative(const std::string& file) const;
     void note(Change c) { changes.push_back(std::move(c)); }

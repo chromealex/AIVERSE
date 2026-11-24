@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Match-3 rules (puzzle-solvers): swap validation, line / L / T match detection, special pieces from data rules,
 // gravity + refill from the caller's seeded Random, cascades with a fixed resolution order, no-move detection,
 // a shuffle that always leaves a legal move, goal tracking and hints. Players and bots submit the same Match3Swap.

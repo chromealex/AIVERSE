@@ -180,6 +180,8 @@ Le rapport marque chaque élément comme transféré exactement, approximativeme
 
 Chaque modèle est un jeu entièrement jouable avec des bots. Ouvrez-le dans l’éditeur et modifiez-le aussitôt.
 
+Les modèles sont des paquets du [catalogue](https://chromealex.github.io/AIVERSE/catalog.html) : l'écran d'accueil affiche les modèles officiels, **More templates** cherche les autres.
+
 | Genre | Modèles |
 |---|---|
 | RTS classique avec base | **Iron and Gold** (Warcraft / Red Alert) · **Iron Front** (Red Alert : MCV, minerai, barre latérale) · **Starfall Sectors** (StarCraft : trois races) · **Frost Crown** (Warcraft III : héros, creeps, terrain) · **Four Ages** (Age of Empires II) · **Amber Sands** (Dune II) · **Metal Tide** (Total Annihilation : économie de flux, radar, récupération, avions, missiles nucléaires) |
@@ -252,7 +254,7 @@ Chaque modèle est un jeu entièrement jouable avec des bots. Ouvrez-le dans l�
 
 ```bash
 ./studio_mac.command                    # AIVERSE Studio, l'éditeur (requiert Xcode, CMake, Node.js)
-./studio_mac.command templates/mushrooms   # ...sur un autre projet
+./studio_mac.command ~/.aiverse/packages/templates/mushrooms   # ...sur un autre projet
 ```
 
 Windows : `studio_windows.cmd [project]` compile et ouvre `AiverseStudio.exe` (requiert Visual Studio 2022,

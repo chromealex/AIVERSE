@@ -2,7 +2,7 @@
 // ECS owns data-only effect declarations; renderer owns FxHandles.
 // Never write renderer state into World or affect gameplay checksums.
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 
 #include "engine/core/ECS.h"
 #include "engine/sim/Simulation.h"

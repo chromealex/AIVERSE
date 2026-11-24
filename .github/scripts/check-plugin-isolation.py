@@ -10,6 +10,8 @@ from pathlib import Path
 
 aiversebuild, work = Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve()
 engine = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(engine / "tools/pkg"))
+from fetch_templates import default_dir as templates_dir  # noqa: E402
 plugins = {p.parent.name: json.loads(p.read_text(encoding="utf-8")) for p in sorted((engine / "plugins").glob("*/plugin.json"))}
 
 def android_bits(name):
@@ -28,7 +30,7 @@ work.mkdir(parents=True, exist_ok=True)
 game = work / "game"
 if game.exists():
     shutil.rmtree(game)
-shutil.copytree(engine / "templates" / "skirmish", game)
+shutil.copytree(templates_dir() / "skirmish", game)
 text = (game / "game.json").read_text(encoding="utf-8")
 cfg = json.loads(re.sub(r"^\s*//.*$", "", text, flags=re.M))
 cfg.pop("plugins", None)

@@ -1,0 +1,36 @@
+{
+  "id": "2026-11-22-build-package-catalog",
+  "date": "2026-11-22",
+  "system": "build",
+  "title": "Каталог пакетов: контент скачивается отдельно от движка",
+  "titleEn": "Package catalog: content is downloaded separately from the engine",
+  "summary": "Библиотеки PBR-материалов ландшафта и растительности и их исходники переехали из движка в каталог пакетов. Проект ставит только то, что ему нужно, одной командой; на сайте появилась страница «Каталог».",
+  "summaryEn": "The terrain and vegetation PBR material libraries and their sources moved out of the engine into a package catalog. A project installs only what it needs with one command; the website has a new Catalog page.",
+  "body": [
+    "Каталог — отдельный репозиторий AIVERSE-PACKAGES с разделами: шаблоны, материалы, текстуры, модели, звук, эффекты, интерфейс, скрипты, плагины, инструменты. У каждого пакета есть описание, превью, лицензия и минимальная версия движка.",
+    "Команда `aiverse_pkg.py add terrain-pbr --project <проект>` скачивает пакет, проверяет его хеш, кладёт файлы в проект и добавляет материалы в его библиотеку. Версия и хеши файлов записываются в `aiverse.lock`, так что клон проекта восстанавливается командой `install`. Скачанный пакет хранится на компьютере один раз для всех проектов.",
+    "Навыки движка указывают, какие пакеты им нужны, и агент ставит их сам.",
+    "Новые пакеты добавляются через pull request в каталог. После принятия пакет сам появляется в движке и на странице «Каталог»: превью, описание, версия движка, кнопка скачивания и команда установки."
+  ],
+  "bodyEn": [
+    "The catalog is a separate repository, AIVERSE-PACKAGES, with sections: templates, materials, textures, models, audio, effects, UI, scripts, plugins, tools. Every package has a description, previews, a licence and the minimum engine version.",
+    "`aiverse_pkg.py add terrain-pbr --project <project>` downloads the package, checks its hash, puts the files into the project and adds the materials to its library. The version and file hashes go to `aiverse.lock`, so a cloned project is restored with `install`. A downloaded package is kept once per computer for all projects.",
+    "Engine skills name the packages they need, and an agent installs them by itself.",
+    "New packages are added by pull request to the catalog. Once merged, a package appears in the engine and on the Catalog page by itself: previews, description, engine version, a download button and the install command."
+  ],
+  "status": "done",
+  "verified": "Четыре пакета опубликованы в каталоге и скачаны по сети на Linux; текстуры из них побайтно совпадают с прежними файлами движка, проверки карт материалов проходят. Страница «Каталог» открыта в Chrome на компьютере и телефоне и показывает пакеты из каталога.",
+  "verifiedEn": "Four packages are published in the catalog and downloaded over the network on Linux; their textures are byte-identical to the former engine files, and the material map checks pass. The Catalog page was opened in Chrome at desktop and phone width and shows the packages from the catalog.",
+  "limits": "Окна каталога в Studio и команд MCP пока нет: поиск и установка — из командной строки. Сборка редактора с изменённым пустым проектом на macOS не проверялась.",
+  "limitsEn": "There is no catalog window in Studio and no MCP commands yet: search and install run from the command line. The editor build with the changed empty project was not checked on macOS.",
+  "branch": "feature/aiv20261122_packages",
+  "commit": "a304cd753",
+  "media": [],
+  "links": [
+    {
+      "title": "Пакеты и каталог",
+      "href": "docs/packages.md"
+    }
+  ],
+  "author": null
+}

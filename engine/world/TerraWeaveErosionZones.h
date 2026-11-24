@@ -12,7 +12,7 @@
 // (omitted = keep the probe's soil). Later zones override earlier ones.
 #pragma once
 #include "engine/data/Json.h"
-#include <aiverselib/water/NereidErosion.h>
+#include "engine/world/nereid/NereidErosion.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>

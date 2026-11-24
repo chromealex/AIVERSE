@@ -3,8 +3,8 @@
 // wrecks, depleted extractors).
 #include "Damage.h"
 #include "Internal.h"
-#include "../../libraries/include/aiverselib/mechanics/EcsKinematicProjectileSystems.h"
-#include "../../libraries/include/aiverselib/mechanics/EcsOrderedImpactSystems.h"
+#include "engine/mechanics/EcsKinematicProjectileSystems.h"
+#include "engine/mechanics/EcsOrderedImpactSystems.h"
 #include <algorithm>
 #include <map>
 
@@ -98,10 +98,23 @@ void GameCore::sysTargeting(Simulation& sim) {
 // Damage from genre-neutral engine hazards (PHYSIS tornadoes call it through GameModule::environmentDamage).
 // Units off the map (carried, in cargo) are not reached; invulnerable types (trees) are skipped by dealDamage.
 void GameCore::environmentDamage(Simulation& sim, Entity target, Fixed amount, Entity /*source*/) {
-    if (actor_) return;
+    if (systems_) return;
     const auto* u = sim.world().tryGetConst<Unit>(target);
     if (!u || u->hp.raw <= 0 || (u->flags & kUnitOffMap) || amount.raw <= 0) return;
     dealDamage(sim, target, amount, kDamagePure, kNullEntity, 0);
+}
+
+// Open water for PHYSIS tornadoes (waterspouts, weakening over water): map cells that are water and not ground
+// ('~' deep water: 2 m, '=' shallow ford: 0.3 m). World units are map cells (PHYSIS metres in the samples).
+Fixed GameCore::environmentWaterDepth(Simulation& sim, Fixed x, Fixed z) {
+    const auto* gs = sim.world().resourceConst<GameState>();
+    if (!gs || gs->grid.sphere() || gs->grid.flags.empty()) return Fixed{};
+    int cx = 0, cy = 0;
+    gs->grid.cellXY(Vec3{x, Fixed{}, z}, cx, cy);
+    if (!gs->grid.inside(cx, cy)) return Fixed{};
+    const uint8_t f = gs->grid.flags[size_t(gs->grid.index(cx, cy))];
+    if (!(f & kCellWater)) return Fixed{};
+    return (f & kCellGround) ? Fixed::fromRatio(3, 10) : Fixed::fromInt(2);
 }
 
 void GameCore::dealDamage(Simulation& sim, Entity target, Fixed dmg, uint16_t dmgType, Entity source, uint8_t sourceOwner, const WeaponDef* wd) {

@@ -1,7 +1,7 @@
 #include "engine/net/authority/Session.h"
 #include "engine/game/GameCore.h"
 #include "engine/net/Rollback.h"
-#include "libraries/include/aiverselib/bots/Persistence.h"
+#include "engine/bots/Persistence.h"
 #include <cstdio>
 #include <algorithm>
 #include <array>
@@ -527,7 +527,8 @@ void network(Json rules,Json map) {
 #include "gear.inc"
 #include "vehicles.inc"
 #include "buildings.inc"
+#include "locomotion.inc"
 int main(int argc,char** argv) {
-    try {std::string root=argc>1?argv[1]:"examples/fps/arena";auto rules=Json::parseFile(root+"/rules.json"),map=Json::parseFile(root+"/map.json");audioBank(root+"/../../../engine/assets/fps_audio.json");spatial();cameraControls();latestChannel();chunks();parallelMotorParityFixture(rules,map);cowSnapshotsFps(rules,map);incrementalRollbackFps(rules,map);reloadTimeline(rules,map);damageScoring(rules,map);simultaneousHitscanRollback(rules,map);dynamicObjectEntities(rules,map);deterministic(rules,map);combat(rules,map);weapons(rules,map);systems();projectilePrograms();projectileProgramStage();projectileSpawns();projectileRoundReset();ordinaryProjectiles();projectileBranches();melee();royale();gear();typedVehicles(root);raceMode(root);buildings();rotatedColliders();houseBots();houseNavigation();upstairsBot();network(rules,map);auto br=root+"/../battle-royale";stress(Json::parseFile(br+"/rules.json"),Json::parseFile(br+"/map.json"));std::puts("FPS spatial, motor, combat, save/rollback and authority tests passed");}
+    try {std::string root=argc>1?argv[1]:"examples/fps/arena";auto rules=Json::parseFile(root+"/rules.json"),map=Json::parseFile(root+"/map.json");audioBank(root+"/../../../engine/assets/fps_audio.json");spatial();cameraControls();locomotionModes();latestChannel();chunks();parallelMotorParityFixture(rules,map);cowSnapshotsFps(rules,map);incrementalRollbackFps(rules,map);reloadTimeline(rules,map);damageScoring(rules,map);simultaneousHitscanRollback(rules,map);dynamicObjectEntities(rules,map);deterministic(rules,map);combat(rules,map);weapons(rules,map);systems();projectilePrograms();projectileProgramStage();projectileSpawns();projectileRoundReset();ordinaryProjectiles();projectileBranches();melee();royale();gear();typedVehicles(root);raceMode(root);buildings();rotatedColliders();houseBots();houseNavigation();upstairsBot();network(rules,map);auto br=root+"/../battle-royale";stress(Json::parseFile(br+"/rules.json"),Json::parseFile(br+"/map.json"));std::puts("FPS spatial, motor, combat, save/rollback and authority tests passed");}
     catch(const std::exception& e){std::fprintf(stderr,"%s\n",e.what());return 1;}
 }

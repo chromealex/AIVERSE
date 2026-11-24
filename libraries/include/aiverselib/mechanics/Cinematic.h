@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // cinematic-gameplay: authoritative, deterministic scene-flow policies. Time-scale domains (CinematicTime.h),
 // QTE judging (CinematicQte.h), scene definitions/state (CinematicScene.h) and the per-tick runner
 // (CinematicRunner.h). JSON: CinematicData.h; settings: CinematicConfigured.h; save/hash: CinematicPersistence.h.

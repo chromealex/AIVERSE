@@ -6,10 +6,12 @@ import shutil
 import sys
 
 root = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(root / 'tools/pkg'))
+from fetch_templates import default_dir as templates_dir  # noqa: E402  (sample games are catalog packages)
 out = Path(sys.argv[1]).resolve()
 if out.exists():
     raise SystemExit('Destination must not exist')
-shutil.copytree(root / 'templates/showcase', out)
+shutil.copytree(templates_dir() / 'showcase', out)
 shutil.copytree(root / 'engine/assets', out / 'engine')
 # Preserve JSON-with-comments; insert an override into the golem view object.
 p = out / 'rules.json'

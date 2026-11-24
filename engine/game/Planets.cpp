@@ -3,7 +3,7 @@
 // here: every entry point is guarded by GameState::surface.
 #include "Internal.h"
 #include "engine/core/FixedMath.h"
-#include <aiverselib/water/NereidSphereInteractions.h>
+#include "engine/world/nereid/NereidSphereInteractions.h"
 #include <algorithm>
 #include <stdexcept>
 

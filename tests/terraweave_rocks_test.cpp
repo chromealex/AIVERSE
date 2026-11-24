@@ -16,6 +16,10 @@ int main(int argc,char** argv){
             for(uint32_t i=prim.firstIndex;i<prim.firstIndex+prim.indexCount;i+=3){
                 const auto a=m->vertices[m->indices[i]],b=m->vertices[m->indices[i+1]],c=m->vertices[m->indices[i+2]];
                 const auto n=rcross(b.pos-a.pos,c.pos-a.pos);assert(rdot(n,n)>1e-14f);assert(rdot(n,a.nrm+b.nrm+c.nrm)>0);
+                // texel density: UV area per world area stays within the box-mapping range (no pinched poles)
+                const float uvArea=std::abs((b.uv.x-a.uv.x)*(c.uv.y-a.uv.y)-(c.uv.x-a.uv.x)*(b.uv.y-a.uv.y));
+                const float density=uvArea/std::sqrt(rdot(n,n))*float(p.textureRepeatCm*p.textureRepeatCm)/10000.f;
+                assert(density>.55f && density<1.01f);
             }
         }
         for(size_t i=0;i<m->vertices.size();++i){const auto& v=m->vertices[i];assert(std::isfinite(v.uv.x)&&std::isfinite(v.uv.y));assert(std::abs(rdot(v.nrm,v.nrm)-1)<.002f);assert(v.pos.x==again->vertices[i].pos.x&&v.pos.y==again->vertices[i].pos.y);}

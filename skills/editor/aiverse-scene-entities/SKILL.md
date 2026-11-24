@@ -21,7 +21,7 @@ an array position. Lights and authored Transform+StaticModel entities have stabl
 objects retain provisional IDs. Re-list after structural edits to those objects.
 
 `scene_component_set` takes entityId, componentId and patch. Transform position
-is [x,y,z]; in the flat grid map format light Y is height above terrain, in the world-space map format (legacy `data.fps`) it is world position (two formats: debt G2).
+is [x,y,z]; in the flat grid map format light Y is height above terrain, in the world-space map format (`data.worldSpace`) it is world position (two formats: debt G2).
 Light type/radius/intensity/color/flags belong to Light, not Transform. Read the
 returned component data before choosing a patch. Unsupported fields or read-only
 components must not be bypassed by directly modifying project JSON.

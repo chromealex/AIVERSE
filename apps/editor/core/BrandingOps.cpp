@@ -40,7 +40,7 @@ Json check(const Json& manifest, const std::string& dir) {
     branding::IconSpec icons = branding::parseIcons(manifest);
     if (icons.master.empty() && fs::exists(fs::path(dir) / "icon.png")) icons.master = "icon.png";
     for (auto& w : branding::validateIcons(icons, dir)) warnings.push_back(w);
-    splash::Spec sp = splash::parseSpec(manifest["splash"], &warnings);
+    splash::Spec sp = splash::projectSpec(manifest["splash"], &warnings);   // missing = the engine screen, false = none
     for (auto& img : sp.images())
         if (!fs::exists(fs::path(dir) / img)) warnings.push_back("splash: image not found: " + img);
     branding::NativeSplash n = branding::nativeSplash(manifest);
@@ -48,6 +48,7 @@ Json check(const Json& manifest, const std::string& dir) {
     Json res = Json::object();
     res.set("iconMaster", Json::string(icons.master.empty() ? "(built-in default icon)" : icons.master));
     res.set("splashEnabled", Json::fromBool(sp.enabled));
+    res.set("splashMode", Json::string(!sp.enabled ? "none" : manifest["splash"].isObject() && !manifest["splash"].has("base") ? "custom" : manifest["splash"].isObject() ? "engine+changes" : "engine"));
     if (sp.enabled) {
         res.set("splashLayers", Json::number(int64_t(sp.layers.size())));
         res.set("splashSequenceSeconds", Json::number(double(sp.sequenceLength()), 2));

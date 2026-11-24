@@ -2,7 +2,7 @@
 // for the pooled GPU/CPU visual presenter. Never place PoolSourceId, Metal
 // handles, particle state, or render timing in authoritative ECS World.
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 
 #include "EcsVfxPresentation.h"
 #include "engine/fx/SpectraGpuPoolWorld.h"

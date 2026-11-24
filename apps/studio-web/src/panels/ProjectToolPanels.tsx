@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
-import { AlertTriangle, CheckCircle2, FilePlus2, Loader2, Play, Plus, RefreshCw, RotateCcw, Save, ScanSearch, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FilePlus2, Play, Plus, RefreshCw, RotateCcw, Save, ScanSearch, Trash2 } from 'lucide-react';
 import { invoke } from '../bridge';
 import type { StudioInputAsset, StudioInputInfo, StudioSnapshot } from '../types';
 import './ToolPanel.css';
 import './ProjectToolPanels.css';
+import { StudioLoader } from '../ui';
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 const op = async (name: string, params: Record<string, unknown> = {}) => (await invoke('studio.op', { op: name, params })).result as Record<string, any>;
@@ -163,7 +164,7 @@ export function ScriptsPanel(ctx: Ctx) {
         <b>{current || 'No script open'}{dirty && ' •'}</b>
         <button type="button" className="au-button au-button--sm au-button--primary" disabled={!current || !dirty || busy} onClick={() => void save()}><Save size={13}/>Save</button>
         <button type="button" className="au-button au-button--sm" disabled={busy} onClick={() => void runCheck()} title="Compile every script and run a 30 s bot match on the open map">
-          {busy ? <Loader2 size={13} className="tool__spin"/> : <Play size={13}/>}Check</button>
+          {busy ? <StudioLoader size={16}/> : <Play size={13}/>}Check</button>
       </div>
       {status && <div className={'ptp__status ' + (status.ok ? 'is-ok' : 'is-error')} role={status.ok ? 'status' : 'alert'}>{status.text}</div>}
       <div className="ptp__code">
@@ -284,7 +285,7 @@ export function AuditPanel(ctx: Ctx) {
   return <div className="ptp">
     <div className="ptp__edhead">
       <button type="button" className="au-button au-button--sm au-button--primary" disabled={busy} onClick={() => void scan()}>
-        {busy ? <Loader2 size={13} className="tool__spin"/> : <ScanSearch size={13}/>}Scan references</button>
+        {busy ? <StudioLoader size={16}/> : <ScanSearch size={13}/>}Scan references</button>
       {result && <span className="ptp__meta">{result.scanned} files checked · {result.missing.length} missing{result.truncated && ' · limit reached, partial'}</span>}
     </div>
     {error && <div className="tool__error" role="alert">{error}</div>}

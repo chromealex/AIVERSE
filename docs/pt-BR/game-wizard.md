@@ -7,7 +7,7 @@ recompensa diária, perfil, configurações, resultado), compras e anúncios qua
 verificação com bots. Tudo o que ele escreve são dados de jogo comuns, que podem ser editados depois.
 
 Código: `apps/editor/core/GameWizard*.cpp` (sem UI), `apps/editor/core/WizardOps.cpp` (MCP), `apps/editor/EditorGameWizard.cpp`
-(a página do hub). Kit de execução copiado para cada jogo: `templates/_wizard/` (Lua + RmlUi, veja o README dele).
+(a página do hub). Kit de execução copiado para cada jogo: `tools/wizard/kit/` (Lua + RmlUi, veja o README dele).
 
 ## Respostas (`WizardSpec`, todas opcionais)
 

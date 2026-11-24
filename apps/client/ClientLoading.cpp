@@ -149,9 +149,13 @@ void GameClient::beginMapLoading() {
     std::printf("[streaming] initial=%zu background=%zu radius=%.1f focus=%.1f,%.1f\n",loadingTypes_.size(),backgroundTypes_.size(),assetRadius(),cam_.target.x,cam_.target.z);
     if (!mapLoading_) return;
     loadingSplash_.shutdown();
-    Json block = manifest_["splash"];
-    if (!block.isObject()) block = splash::defaultBlock();
-    loadingSplash_.init(*dev_, block, [](const std::string& path, std::string& out) { return platform::readContentFile(path, out); });
+    // The project decides (game.json "splash" / "splash.mapLoading", splash::resolveMapBlock): engine screen,
+    // changed, own, or none - then the map loads behind a plain background without labels.
+    splash::Choice choice;
+    try { choice = splash::resolveMapBlock(manifest_["splash"]); }
+    catch (const std::exception& e) { std::fprintf(stderr, "%s\n", e.what()); choice.block = splash::defaultBlock(); }
+    mapSplashOff_ = choice.off;
+    if (!mapSplashOff_) loadingSplash_.init(*dev_, choice.block, [](const std::string& path, std::string& out) { return platform::readContentFile(path, out); });
     std::printf("[loading] map=%s types=%zu/%zu\n", maps_[mapIndex_].file.c_str(), loadingTypes_.size(), rules_.types.size());
 }
 
@@ -188,11 +192,13 @@ void GameClient::frameMapLoading(gfx::Device& dev, double dt) {
     if (platform::hostedView()) {
         gfx::PassDesc pass; pass.colorTarget = hostColor_; pass.depthTarget = hostDepth_;
         dev.beginPass(pass); dev.endPass();
+    } else if (mapSplashOff_) {
+        gfx::PassDesc pass; pass.clearColor[0] = pass.clearColor[1] = pass.clearColor[2] = 0; dev.beginPass(pass); dev.endPass();
     } else loadingSplash_.draw(dev, 1, true, platform::dpiScale());
     const auto label = loadingCursor_ < loadingTypes_.size()
         ? tr("loading.resource", i18n::Args().str("name", (view_.preparingResource().empty() ? view_.typeResource(loadingTypes_[loadingCursor_]) : view_.preparingResource()))) : tr(shadersReady ? "loading.ready" : "loading.shaders");
-    drawLoadingStatus(dev, dt, loadingSplash_.shownProgress(), label);
-    if (shadersReady && loadingCursor_ == loadingTypes_.size() && loadingSplash_.imagesLoaded() && loadingSplash_.shownProgress() >= 0.98f) {
+    if (!mapSplashOff_) drawLoadingStatus(dev, dt, loadingSplash_.shownProgress(), label);
+    if (shadersReady && loadingCursor_ == loadingTypes_.size() && (mapSplashOff_ || (loadingSplash_.imagesLoaded() && loadingSplash_.shownProgress() >= 0.98f))) {
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadingStarted_).count();
         std::printf("[loading] map assets ready in %.1f ms (%zu types)\n", ms, loadingTypes_.size());
         loadingSplash_.shutdown();

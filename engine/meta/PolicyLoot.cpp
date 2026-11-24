@@ -1,6 +1,6 @@
 #include "LiveOpsInternal.h"
 #include "Modules.h"
-#include "libraries/include/aiverselib/systems/Loot.h"
+#include "engine/core/progression/Loot.h"
 namespace aiverse::meta::live {
 namespace {
 void merge(Bundle &to, const Bundle &from) {

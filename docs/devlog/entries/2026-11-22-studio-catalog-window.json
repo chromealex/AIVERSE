@@ -1,0 +1,35 @@
+{
+  "id": "2026-11-22-studio-catalog-window",
+  "date": "2026-11-22",
+  "system": "studio",
+  "title": "Окно Catalog в Studio и пакеты через MCP",
+  "summary": "В Studio появилось окно Catalog: поиск по каталогу пакетов, карточка пакета и установка в открытый проект одной кнопкой. Агенты делают то же через MCP-команды package_*.",
+  "body": [
+    "Окно открывается в рабочих пространствах Look и Publish или через поиск команд. Список показывает раздел, размер и версию; установленные пакеты отмечены. В карточке — описание, версия, минимальная версия движка, лицензия, куда пакет ставится и какие пакеты придут вместе с ним. Кнопка Install ставит пакет с зависимостями, Remove убирает его файлы.",
+    "Если у пакетов проекта пропали или изменились файлы, окно предупреждает и одной кнопкой восстанавливает их из aiverse.lock.",
+    "Для агентов: package_search, package_info, package_status, package_add, package_remove, package_install и package_skill — те же действия на открытом проекте."
+  ],
+  "status": "in-progress",
+  "verified": "Окно показано в браузерном предпросмотре Studio с демонстрационными данными; MCP-команды собраны в редакторе на Linux.",
+  "limits": "В нативном Studio на macOS окно ещё не проверялось. Превью пакетов подгружаются с GitHub и без сети не показываются.",
+  "branch": "feature/aiv20261122_catalog_studio",
+  "commit": null,
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-22-studio-catalog-window/01.jpg",
+      "caption": "Окно Catalog: список пакетов и карточка набора деревьев",
+      "captionEn": "The Catalog window: the package list and the tree pack card"
+    }
+  ],
+  "links": [],
+  "author": null,
+  "titleEn": "Catalog window in Studio and packages over MCP",
+  "summaryEn": "Studio has a Catalog window: search the package catalog, see a package and install it into the open project with one button. Agents do the same through the package_* MCP commands.",
+  "bodyEn": [
+    "The window opens in the Look and Publish workspaces or from command search. The list shows section, size and version; installed packages are marked. The card shows the description, version, minimum engine version, licence, where the package goes and which packages come with it. Install adds the package with its dependencies, Remove takes its files out.",
+    "When the project's packages have missing or changed files, the window warns and restores them from aiverse.lock with one button.",
+    "For agents: package_search, package_info, package_status, package_add, package_remove, package_install and package_skill do the same on the open project."
+  ],
+  "verifiedEn": "The window is shown in the Studio browser preview with demo data; the MCP commands were built into the editor on Linux.",
+  "limitsEn": "The window has not been checked in the native macOS Studio yet. Package previews load from GitHub and do not show offline."
+}

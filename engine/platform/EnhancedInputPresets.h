@@ -2,7 +2,7 @@
 // Use this as a starting project asset; gameplay rules remain in Commands/ECS systems.
 #pragma once
 #include "EnhancedInputConfig.h"
-#include <aiverselib/gameplay/InputFlow.h>
+#include "input/InputFlowCore.h"
 #include <cstdint>
 #include <utility>
 
@@ -26,7 +26,7 @@ inline ecfg::Asset fpsReference() {
         for(const char* name : {"Fire","Aim","Jump","Sprint","Crouch","Reload","Melee","Block",
                                  "LockOn","Prone","ShowInventory","Frag","Smoke","Flash","Heal",
                                  "Interact","Drop","Plant","Vault","Buy","Weapon1","Weapon2",
-                                 "Weapon3","Weapon4","Attach1","Attach2","Attach3"}) define(name);
+                                 "Weapon3","Weapon4","Attach1","Attach2","Attach3","Dash","Grapple","Glide"}) define(name);
         MappingContext fpsContext{"FPS"};
         fpsContext.bind("Move",key(K::W),{Modifier::swapXY()});
         fpsContext.bind("Move",key(K::S),{Modifier::swapXY(),Modifier::negate()});
@@ -63,6 +63,14 @@ inline ecfg::Asset fpsReference() {
         for(const auto& [name,button]:oneShots)
             fpsContext.bind(name,key(button),{},{Trigger::pressed()});
         fpsContext.bind("Interact",pad(platform::PadButton::Y),{},{Trigger::pressed()});
+        // Locomotion modes (rules `locomotion`): held buttons, the simulation takes the edges.
+        fpsContext.bind("Dash",key(K::K));
+        fpsContext.bind("Dash",pad(platform::PadButton::RB));
+        fpsContext.bind("Grapple",pad(platform::PadButton::LB));
+        fpsContext.bind("Glide",key(K::Space));
+        fpsContext.bind("Glide",pad(platform::PadButton::A));
+        fpsContext.bind("Grapple",{Device::MouseButton,2});
+        fpsContext.bind("Grapple",key(K::J));
         std::uint64_t id=1;
         for(auto& mapping:fpsContext.mappings) mapping.id=id++;
         result.contexts.push_back({std::move(fpsContext),0,true});

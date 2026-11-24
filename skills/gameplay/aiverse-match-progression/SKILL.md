@@ -10,7 +10,7 @@ offer N choices (recruit a deck unit, a perk for one deck slot, a player-wide pe
 modifiers, allies are summoned/restored at circles, and the loadout comes from a pre-match battle deck. Not for
 meta progression between matches (talent trees, shops, unlocks): use `engine/meta`. If the project's host already owns hero xp
 (`xpLevels`/`perLevel` in RtsData) or stat mods, that owner stays authoritative (one owner per state).
-Projects on the data-driven `modules/rts` host get the whole package on real units through the rules block `progression`
+Projects on the data-driven `engine/game` host get the whole package on real units through the rules block `progression`
 (`docs/progression.md`: orbs from kills, `kCmdProgression` choices, perk stats on unit pipelines, bullet perks,
 on-hit payloads, summon circles, battle deck from the map's `players[i].deck`, Lua `progression`); do not rewire it
 in game scripts.

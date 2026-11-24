@@ -47,7 +47,7 @@
       "version": "0.2.1",
       "layer": "simulation",
       "status": "cpp-foundation",
-      "source": "libraries/include/aiverselib/Graphs.h",
+      "source": "engine/core/Graphs.h",
       "skill": "skills/core/aiverse-graphs/SKILL.md",
       "summary": "BFS and topological ordering",
       "notes": "Use dense IDs. Test unreachable nodes, cycles and duplicate edges. Weighted search and flows remain planned.",
@@ -163,7 +163,7 @@
       "version": "0.2.1",
       "layer": "simulation",
       "status": "cpp-foundation",
-      "source": "libraries/include/aiverselib/Progression.h",
+      "source": "engine/core/progression/Progression.h",
       "skill": "skills/gameplay/aiverse-progression/SKILL.md",
       "summary": "Weighted selection and level thresholds",
       "notes": "Supply simulation RNG as draw(total), integer 1..total. Zero total returns nullopt. Test zero weights and endpoints. Pity systems remain planned.",
@@ -247,17 +247,17 @@
       "version": "0.2.0",
       "layer": "presentation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/gameplay/InputFlow.h",
+      "source": "engine/platform/input/InputFlowCore.h",
       "skill": "skills/ui/aiverse-input/SKILL.md",
       "summary": "AIVerse InputFlow: typed Input Actions, mapping contexts, modifiers, triggers, local multiplayer, user profiles and legacy Input.h compatibility",
-      "notes": "AIVerse InputFlow canonical API: aiverselib/gameplay/InputFlow.h, aiverse::lib::gameplay::inputflow::InputFlow; platform facade engine/platform/InputFlow.h. Keep EnhancedInput.h and enhanced::InputSystem as compatibility aliases. Use AIVERSE::InputFlow (or AIVERSE::lib_inputflow); legacy AIVERSE::lib_input remains stable. Presentation-only: gameplay consumes validated Commands. See docs/enhanced-input.md and the agent handoff.",
+      "notes": "AIVerse InputFlow canonical API: engine/platform/input/InputFlowCore.h, aiverse::lib::gameplay::inputflow::InputFlow; platform facade engine/platform/InputFlow.h. Keep EnhancedInput.h and enhanced::InputSystem as compatibility aliases. Use AIVERSE::InputFlow (or AIVERSE::lib_inputflow); legacy AIVERSE::lib_input remains stable. Presentation-only: gameplay consumes validated Commands. See docs/enhanced-input.md and the agent handoff.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_input",
       "dependencies": [
         "libraries/spec/gameplay.json",
-        "libraries/include/aiverselib/gameplay/Configuration.h",
-        "libraries/include/aiverselib/gameplay/EnhancedInput.h",
-        "libraries/include/aiverselib/gameplay/InputFlow.h",
+        "engine/gameplay/Configuration.h",
+        "engine/platform/input/EnhancedInputCore.h",
+        "engine/platform/input/InputFlowCore.h",
         "engine/platform/InputFlow.h",
         "engine/platform/EnhancedInputPresets.h",
         "engine/platform/EnhancedInputProfileIO.h",
@@ -277,7 +277,7 @@
       "version": "0.2.0",
       "layer": "presentation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/gameplay/Camera.h",
+      "source": "engine/gameplay/Camera.h",
       "skill": "skills/ui/aiverse-camera/SKILL.md",
       "summary": "Ground camera pose limits and exponential easing (target, zoom, yaw, pitch); the engine follow camera runs on it",
       "notes": "Use delta time only in presentation. Apply resulting Pose to the existing client/editor camera. World-to-sphere mapping remains the planet camera responsibility.",
@@ -285,7 +285,7 @@
       "cmakeTarget": "AIVERSE::lib_camera",
       "dependencies": [
         "libraries/spec/gameplay.json",
-        "libraries/include/aiverselib/gameplay/Configuration.h"
+        "engine/gameplay/Configuration.h"
       ],
       "runtime": "header",
       "linkDependencies": [],
@@ -298,13 +298,13 @@
       "status": "cpp-subsystem",
       "source": "libraries/include/aiverselib/gameplay/Construction.h",
       "skill": "skills/gameplay/aiverse-construction/SKILL.md",
-      "summary": "Placement checks, resource explanations, refunds and native construction commands",
+      "summary": "Construction grids, placement checks, resource explanations, refunds and native construction commands",
       "notes": "Call checkPlacement with authoritative map/territory/slope queries. Render its Decision as preview, then submit buildCommand. The engine must revalidate the command at execution time; previews never reserve or debit resources.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_construction",
       "dependencies": [
         "libraries/spec/gameplay.json",
-        "libraries/include/aiverselib/gameplay/Configuration.h"
+        "engine/gameplay/Configuration.h"
       ],
       "runtime": "header",
       "linkDependencies": [],
@@ -325,7 +325,7 @@
       "cmakeTarget": "AIVERSE::lib_abilities",
       "dependencies": [
         "libraries/spec/gameplay.json",
-        "libraries/include/aiverselib/gameplay/Configuration.h"
+        "engine/gameplay/Configuration.h"
       ],
       "runtime": "header",
       "linkDependencies": [],
@@ -338,7 +338,7 @@
       "version": "0.1.1",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/gameplay/Inventory.h",
+      "source": "engine/gameplay/Inventory.h",
       "skill": "skills/gameplay/aiverse-inventory/SKILL.md",
       "summary": "Stacked inventory, weight/slot limits, atomic transfer, equipment and crafting",
       "notes": "Prefer built-in engine item mechanics for existing item types. For custom native inventories validate item definitions, provide stable IDs, serialize each stack/equipment field, and require ownership checks in commands.",
@@ -346,7 +346,7 @@
       "cmakeTarget": "AIVERSE::lib_inventory",
       "dependencies": [
         "libraries/spec/gameplay.json",
-        "libraries/include/aiverselib/gameplay/Configuration.h"
+        "engine/gameplay/Configuration.h"
       ],
       "runtime": "header",
       "linkDependencies": [],
@@ -359,7 +359,7 @@
       "version": "0.1.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/systems/Gear.h",
+      "source": "engine/systems/Gear.h",
       "skill": "skills/gameplay/aiverse-gear-tiers/SKILL.md",
       "summary": "Tiered protective gear for any genre: slot pieces (helmet, vest, shield, backpack) that absorb a share of damage to the zones they cover, wear with the absorbed damage, break, add carry capacity, replace each other on equip and compare for automatic pickups",
       "notes": "Integer milli-shares, deterministic, bounded. The owner picks the hit zone bit, applies the returned damage and drops the replaced piece as loot with its durability. Persist GearLoadout with io (Archive) and fold gearHash into the checksum. Used by the FPS module (fps.gear). No visuals, no item database or inventory ownership beyond the slots.",
@@ -387,7 +387,7 @@
       "cmakeTarget": "AIVERSE::lib_squads",
       "dependencies": [
         "libraries/spec/gameplay.json",
-        "libraries/include/aiverselib/gameplay/Configuration.h"
+        "engine/gameplay/Configuration.h"
       ],
       "runtime": "header",
       "linkDependencies": [],
@@ -409,7 +409,7 @@
       "cmakeTarget": "AIVERSE::lib_feedback",
       "dependencies": [
         "libraries/spec/gameplay.json",
-        "libraries/include/aiverselib/gameplay/Configuration.h"
+        "engine/gameplay/Configuration.h"
       ],
       "runtime": "header",
       "linkDependencies": [],
@@ -428,7 +428,7 @@
       "cmakeTarget": "AIVERSE::lib_tutorial",
       "dependencies": [
         "libraries/spec/gameplay.json",
-        "libraries/include/aiverselib/gameplay/Configuration.h"
+        "engine/gameplay/Configuration.h"
       ],
       "runtime": "header",
       "linkDependencies": [],
@@ -449,7 +449,7 @@
       "cmakeTarget": "AIVERSE::lib_save_migrations",
       "dependencies": [
         "libraries/spec/gameplay.json",
-        "libraries/include/aiverselib/gameplay/Configuration.h"
+        "engine/gameplay/Configuration.h"
       ],
       "runtime": "header",
       "linkDependencies": [],
@@ -462,7 +462,7 @@
       "version": "0.1.1",
       "layer": "tools",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/gameplay/Diagnostics.h",
+      "source": "engine/gameplay/Diagnostics.h",
       "skill": "skills/core/aiverse-diagnostics/SKILL.md",
       "summary": "Structured refusal codes, values and bounded decision traces",
       "notes": "Use reasonKey with Localization::tr; pass subject/required/available as parameters. Traces are diagnostic outputs only; never depend on trace capacity for simulation outcomes.",
@@ -470,7 +470,7 @@
       "cmakeTarget": "AIVERSE::lib_diagnostics",
       "dependencies": [
         "libraries/spec/gameplay.json",
-        "libraries/include/aiverselib/gameplay/Configuration.h"
+        "engine/gameplay/Configuration.h"
       ],
       "runtime": "header",
       "linkDependencies": [],
@@ -488,7 +488,7 @@
       "verifiedPlatforms": [],
       "dependencies": [
         "libraries/spec/gameplay.json",
-        "libraries/include/aiverselib/gameplay/Configuration.h"
+        "engine/gameplay/Configuration.h"
       ],
       "runtime": "none",
       "cmakeTarget": null
@@ -505,7 +505,7 @@
       "verifiedPlatforms": [],
       "dependencies": [
         "libraries/spec/gameplay.json",
-        "libraries/include/aiverselib/gameplay/Configuration.h"
+        "engine/gameplay/Configuration.h"
       ],
       "runtime": "none",
       "cmakeTarget": null
@@ -522,7 +522,7 @@
       "verifiedPlatforms": [],
       "dependencies": [
         "libraries/spec/gameplay.json",
-        "libraries/include/aiverselib/gameplay/Configuration.h"
+        "engine/gameplay/Configuration.h"
       ],
       "runtime": "none",
       "cmakeTarget": null
@@ -532,7 +532,7 @@
       "version": "0.3.5",
       "layer": "tools",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/gameplay/Configuration.h",
+      "source": "engine/gameplay/Configuration.h",
       "skill": "skills/core/aiverse-configuration/SKILL.md",
       "summary": "Generated C++ settings, JSON Schema, defaults and strict config parsing",
       "notes": "Edit libraries/spec/gameplay.json and regenerate. C++ loader and CLI reject unknown fields, wrong types and cross-field violations. Do not edit generated files by hand.",
@@ -540,7 +540,7 @@
       "cmakeTarget": "AIVERSE::lib_configuration",
       "dependencies": [
         "libraries/spec/gameplay.json",
-        "libraries/include/aiverselib/gameplay/Configuration.h"
+        "engine/gameplay/Configuration.h"
       ],
       "runtime": "header",
       "linkDependencies": [],
@@ -919,7 +919,7 @@
       "version": "0.1.1",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/systems/Tags.h",
+      "source": "engine/systems/Tags.h",
       "skill": "skills/core/aiverse-tag-conditions/SKILL.md",
       "summary": "All/any/none tag filters and bounded-value conditions",
       "notes": "Resolve type tags using Rules.tagMask; reject unknown names with resolveTags. Keep type tags separate from status/dispel tags. Missing condition inputs fail closed. Built-in EffectDef target filters remain authoritative.",
@@ -992,7 +992,7 @@
       "version": "0.1.1",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/systems/Loot.h",
+      "source": "engine/core/progression/Loot.h",
       "skill": "skills/gameplay/aiverse-loot-tables/SKILL.md",
       "summary": "Weighted loot with exclusions and a guaranteed rare threshold",
       "notes": "Reuse weighted selection through rollLoot. Draw must return an integer in [1,total]; use rollSimLoot to consume sim.rng with a validated uint32 total. Guarantee N forces eligible rare loot on attempt N after N-1 misses. Impossible guarantees fail without drawing. Persist pity state and validate/exclude before sampling; reward granting remains separate.",
@@ -1013,7 +1013,7 @@
       "version": "0.1.1",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/systems/Curves.h",
+      "source": "engine/systems/Curves.h",
       "skill": "skills/gameplay/aiverse-progression-curves/SKILL.md",
       "summary": "Nonnegative integer step/linear progression tables and CLI preview",
       "notes": "Author strictly increasing nonnegative x and nonnegative y. Endpoints clamp; linear rounding is toward the left value, including descending segments. Unsafe intermediate products return failure. Use aiverse_app_tools curve to preview exact runtime results; use engine/meta progression owners for built-in experience/rewards.",
@@ -1091,7 +1091,7 @@
       "version": "0.1.4",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/bots/Fps.h",
+      "source": "engine/bots/Fps.h",
       "skill": "skills/ai/aiverse-bots-combatant/SKILL.md",
       "summary": "Command-driven FPS bots with perception, reaction, aiming, reload, retreat, zone and patrol",
       "notes": "Run on one authoritative host with map bot:false for owned slots. Use fpsCommand then sim.submit; never mutate character components. Persist FpsState with the simulation. Supply generated navmesh or authored waypoint graph; no bomb, loot or vehicle mechanics are implied. 0.1.4: with fps.royale the zone goal is the announced battle-royale circle (Module::royaleView); FPS rules fps.bots host this controller inside the module for map bots (docs/fps.md § Library bots).",
@@ -1099,7 +1099,7 @@
       "cmakeTarget": "AIVERSE::lib_bots_combatant",
       "dependencies": [
         "docs/bots.md",
-        "libraries/include/aiverselib/bots/Persistence.h",
+        "engine/bots/Persistence.h",
         "libraries/include/aiverselib/bots/Waypoints.h",
         "engine/actor/ActorModule.h"
       ],
@@ -1117,7 +1117,7 @@
       "version": "0.2.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/bots/NavMesh.h",
+      "source": "engine/bots/NavMesh.h",
       "skill": "skills/world/aiverse-navmesh/SKILL.md",
       "summary": "Automatic deterministic layered AABB navigation mesh with clearance, erosion and any-angle routing on the engine navmesh",
       "notes": "FPS adapter over the genre-independent engine/nav mesh (docs/navmesh.md): collision spans merge into rectangles, A* + funnel give any-angle routes. Build immutable regional meshes from current collision and motor dimensions. Rebuild on geometry changes. Bound cell/polygon/candidate/search budgets. No triangle/slope importer or cross-region streaming links. Use navPath/navStep, real motor tests and aiverse_navmesh exporter.",
@@ -1144,7 +1144,7 @@
       "version": "0.1.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/systems/BuildingGen.h",
+      "source": "engine/systems/BuildingGen.h",
       "skill": "skills/world/aiverse-building-gen/SKILL.md",
       "summary": "Procedural enterable buildings from axis-aligned boxes: 1..10 floors, slabs, outer walls with a seeded door side and windows, interior partition with a doorway, switchback stairwell with slab holes, roof, loot spots, door points; quarter-turn yaw; validated against the agent size and step height; stair halls (nav goals beside each flight end)",
       "notes": "Fixed math, deterministic per definition + seed. Output boxes go into the owner's static collision (FPS map `buildings`, AABB navmesh, cover maps). Agent radius / height / max step rise come from the owner's motor; generateBuilding returns nullopt when the doorway, stairwell or windows do not fit. No meshes, materials, rotated walls or furniture.",
@@ -1175,19 +1175,19 @@
     },
     {
       "id": "character-locomotion",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/mechanics/Locomotion.h",
+      "source": "engine/mechanics/Locomotion.h",
       "skill": "skills/gameplay/aiverse-character-locomotion/SKILL.md",
-      "summary": "Fixed character movement policy: ground/air acceleration, jump buffer, coyote time, slopes, ledges, ladders, swimming, climbing and mantle/vault modes",
-      "notes": "Read docs/mechanics-packages.md for exact coverage and authority boundaries. 0.2.0 adds LocomotionModes.h: a Ground/Air/Ledge/Ladder/Swim/Climb/Mantle state machine driven by owner-reported environment queries (no physics inside), optional locomotion.* settings, versioned/hashable LocomotionState; stepMotion is unchanged. Policies do not automatically replace existing engine movement/combat/victory or wire presentation. Persist versioned state and bind immutable definitions. Use actual native/host owners for commands, collision and damage.",
+      "summary": "Fixed character movement policy: ground/air acceleration, jump buffer, coyote time, slopes, ledges, ladders, swimming, climbing, mantle/vault, dash, wall slide, wall run, grapple and one-way platform modes",
+      "notes": "Read docs/mechanics-packages.md for exact coverage and authority boundaries. 0.2.0 adds LocomotionModes.h: a Ground/Air/Ledge/Ladder/Swim/Climb/Mantle state machine driven by owner-reported environment queries (no physics inside), optional locomotion.* settings, versioned/hashable LocomotionState; stepMotion is unchanged. 0.3.0 adds Dash/WallSlide/WallRun/Grapple modes, one-way drop-through with LocomotionResult::ignoreOneWay and oneWaySupports, new locomotion.* settings and state kind 21 (kind 20 still loads; 0.2.0 config/state hashes unchanged at defaults). Policies do not automatically replace existing engine movement/combat/victory or wire presentation. Persist versioned state and bind immutable definitions. Use actual native/host owners for commands, collision and damage.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_character_locomotion",
       "dependencies": [
-        "libraries/include/aiverselib/mechanics/LocomotionModes.h",
+        "engine/mechanics/LocomotionModes.h",
         "libraries/include/aiverselib/mechanics/Configured.h",
-        "libraries/include/aiverselib/mechanics/Persistence.h",
+        "engine/mechanics/Persistence.h",
         "libraries/include/aiverselib/mechanics/Data.h",
         "docs/mechanics-packages.md"
       ],
@@ -1202,7 +1202,7 @@
       "version": "0.1.2",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/mechanics/Melee.h",
+      "source": "engine/mechanics/Melee.h",
       "skill": "skills/gameplay/aiverse-melee-combat/SKILL.md",
       "summary": "Custom melee timing, buffered combos, active-window hit deduplication and defense outcomes",
       "notes": "Read docs/mechanics-packages.md for exact coverage and authority boundaries. Policies do not automatically replace existing engine movement/combat/victory or wire presentation. Persist versioned state and bind immutable definitions. Use actual native/host owners for commands, collision and damage.",
@@ -1210,7 +1210,7 @@
       "cmakeTarget": "AIVERSE::lib_melee_combat",
       "dependencies": [
         "libraries/include/aiverselib/mechanics/Configured.h",
-        "libraries/include/aiverselib/mechanics/Persistence.h",
+        "engine/mechanics/Persistence.h",
         "libraries/include/aiverselib/mechanics/Data.h",
         "docs/mechanics-packages.md"
       ],
@@ -1223,7 +1223,7 @@
       "version": "0.1.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/mechanics/CombatActions.h",
+      "source": "engine/mechanics/CombatActions.h",
       "skill": "skills/gameplay/aiverse-combat-actions/SKILL.md",
       "summary": "Frame-keyed hitboxes/hurtboxes (sphere/capsule/box), dodge invulnerability, directional guard and perfect parry, poise/stagger and lock-on targeting composed over melee-combat",
       "notes": "Read docs/mechanics-packages.md (combat-actions) for exact coverage and authority boundaries. Produces contacts and outcomes only: damage, stamina, health and statuses stay with the existing combat owner. Fixed math and integer ticks; repeated/backwards ticks are rejected. Persist CombatActorState via genre::save/load (record kinds 32..36) and hash it with combatHash.",
@@ -1232,7 +1232,7 @@
       "dependencies": [
         "libraries/include/aiverselib/mechanics/CombatConfigured.h",
         "libraries/include/aiverselib/mechanics/CombatData.h",
-        "libraries/include/aiverselib/mechanics/Persistence.h",
+        "engine/mechanics/Persistence.h",
         "docs/mechanics-packages.md"
       ],
       "runtime": "header",
@@ -1258,7 +1258,7 @@
         "libraries/include/aiverselib/mechanics/SensesConfigured.h",
         "libraries/include/aiverselib/mechanics/SensesData.h",
         "libraries/include/aiverselib/mechanics/SensesPersistence.h",
-        "libraries/include/aiverselib/mechanics/Persistence.h",
+        "engine/mechanics/Persistence.h",
         "examples/libraries/mechanics/senses.json",
         "examples/libraries/mechanics/senses-settings.json",
         "docs/mechanics-packages.md"
@@ -1289,7 +1289,7 @@
         "libraries/include/aiverselib/mechanics/CinematicConfigured.h",
         "libraries/include/aiverselib/mechanics/CinematicData.h",
         "libraries/include/aiverselib/mechanics/CinematicPersistence.h",
-        "libraries/include/aiverselib/mechanics/Persistence.h",
+        "engine/mechanics/Persistence.h",
         "examples/libraries/mechanics/scene.json",
         "examples/libraries/mechanics/cinematic-settings.json",
         "docs/mechanics-packages.md"
@@ -1298,6 +1298,21 @@
       "linkDependencies": [
         "aiverse_engine"
       ],
+      "packageDependencies": []
+    },
+    {
+      "id": "motionweave",
+      "version": "0.1.0",
+      "layer": "presentation",
+      "status": "cpp-subsystem",
+      "source": "engine/animation/MotionWeave.h",
+      "skill": "skills/gameplay/aiverse-motionweave/SKILL.md",
+      "summary": "MotionWeave presentation animation for any project: graph player, blend trees, IK, motion matching, sectioned montages with slots and bone masks, clip notifies, root motion extraction and baking with a fixed-point motor adapter, motion warping, humanoid and generic retargeting, pose inertialization, crowd budgets and jobs, facial control rig, optional Box3D ragdoll bridge",
+      "notes": "Headers live in libraries/include/aiverselib/animation/ (AnimationMontage.h, AnimationPlayback.h, EcsRootMotionSystems.h, RootMotionBaker.h, AnimationMotionWarp.h, HumanoidRetarget.h, GenericRetarget.h, PoseInertialization.h, AnimationCrowdSystems.h, FacialControlRig.h, PhysicsRagdollBridge.h). Presentation World only: never put float graph state or poses in Simulation::world(); authoritative root motion goes through the fixed-point motor adapter. Legacy target AIVERSE::animation_ecs stays valid; ragdoll needs AIVERSE_ENABLE_PHYSICS=ON (AIVERSE::animation_physics). Tests: tests/animation. Not done: audio-driven lip-sync, live game-scene/prefab binding, HTML5 Studio viewport. Read docs/motionweave.md.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::MotionWeave",
+      "linkDependencies": [],
       "packageDependencies": []
     },
     {
@@ -1316,7 +1331,7 @@
         "libraries/include/aiverselib/mechanics/CardGameData.h",
         "libraries/include/aiverselib/mechanics/CardGamePersistence.h",
         "libraries/include/aiverselib/mechanics/CardGameConfigured.h",
-        "libraries/include/aiverselib/mechanics/Persistence.h",
+        "engine/mechanics/Persistence.h",
         "examples/libraries/mechanics/cards-turns/duel.json",
         "docs/mechanics-packages.md"
       ],
@@ -1346,7 +1361,7 @@
         "libraries/include/aiverselib/mechanics/TacticsData.h",
         "libraries/include/aiverselib/mechanics/TacticsPersistence.h",
         "libraries/include/aiverselib/mechanics/TacticsConfigured.h",
-        "libraries/include/aiverselib/mechanics/Persistence.h",
+        "engine/mechanics/Persistence.h",
         "examples/libraries/mechanics/cards-turns/skirmish.json",
         "docs/mechanics-packages.md"
       ],
@@ -1389,7 +1404,7 @@
       "version": "0.2.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/mechanics/Weapons.h",
+      "source": "engine/mechanics/Weapons.h",
       "skill": "skills/gameplay/aiverse-weapon-policies/SKILL.md",
       "summary": "Seeded spread, recoil, swept projectiles with ricochets, material penetration, radial explosions, ammo feeds/overheat, charge tiers, attachment stacking and ballistic aim/lead solving",
       "notes": "Read docs/mechanics-packages.md for exact coverage and authority boundaries. Policies do not automatically replace existing engine movement/combat/victory or wire presentation. Persist versioned state and bind immutable definitions. Use actual native/host owners for commands, collision and damage. 0.2.0 adds genre/Ballistics.h (penetration, explosions, launch/intercept solver), genre/WeaponMods.h (ammo feeds, charge modes, attachments), genre/WeaponData.h (settings adapters and weapons JSON) and genre/WeaponPersistence.h (save/load kinds 16-18 and hashing); Weapons.h API is unchanged. Built-in FPS ammo/reload stays authoritative.",
@@ -1397,7 +1412,7 @@
       "cmakeTarget": "AIVERSE::lib_weapon_policies",
       "dependencies": [
         "libraries/include/aiverselib/mechanics/Configured.h",
-        "libraries/include/aiverselib/mechanics/Persistence.h",
+        "engine/mechanics/Persistence.h",
         "libraries/include/aiverselib/mechanics/Data.h",
         "libraries/include/aiverselib/mechanics/Ballistics.h",
         "libraries/include/aiverselib/mechanics/WeaponMods.h",
@@ -1456,7 +1471,7 @@
       "version": "0.2.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/mechanics/Match.h",
+      "source": "engine/mechanics/Match.h",
       "skill": "skills/gameplay/aiverse-match-rules/SKILL.md",
       "summary": "Team score events, rounds, overtime, draws and objective modes: capture/hold zones and king of the hill, payload, elimination with lives and respawn waves, extraction, bomb/defuse, ordered route gates, contested overtime clock and spectator transitions",
       "notes": "Read docs/mechanics-packages.md for exact coverage and authority boundaries. Policies do not automatically replace existing engine movement/combat/victory or wire presentation. Persist versioned state and bind immutable definitions. Use actual native/host owners for commands, collision and damage. 0.2.0 adds genre/MatchObjectives.h (objective policies returning ObjectiveEvents, awardObjectiveEvents/awardObjectiveWin through awardScore, save/load kinds 40-47 and hashObjective), genre/MatchObjectivesConfigured.h (objectives settings adapters and cross-field errors) and genre/MatchObjectivesData.h (zones/payload path/route gates JSON); Match.h API is unchanged. Presence, deaths, pickups and gate crossings come from the authoritative owner; built-in victory modes stay with their modules.",
@@ -1464,10 +1479,10 @@
       "cmakeTarget": "AIVERSE::lib_match_rules",
       "dependencies": [
         "libraries/include/aiverselib/mechanics/Configured.h",
-        "libraries/include/aiverselib/mechanics/Persistence.h",
+        "engine/mechanics/Persistence.h",
         "libraries/include/aiverselib/mechanics/Data.h",
         "docs/mechanics-packages.md",
-        "libraries/include/aiverselib/mechanics/MatchObjectives.h",
+        "engine/mechanics/MatchObjectives.h",
         "libraries/include/aiverselib/mechanics/MatchObjectivesConfigured.h",
         "libraries/include/aiverselib/mechanics/MatchObjectivesData.h",
         "examples/libraries/mechanics/objectives.json",
@@ -1484,22 +1499,22 @@
       "version": "0.1.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/mechanics/royale/BattleRoyale.h",
+      "source": "engine/mechanics/royale/BattleRoyale.h",
       "skill": "skills/gameplay/aiverse-battle-royale/SKILL.md",
       "summary": "Battle-royale / last-team-standing policies for any genre: phased safe zone with seeded nested circles, wait/shrink timers and per-phase damage; bombardment (red zone) strikes; supply drops; air insertion (seeded carrier path, door, forced eject) with free fall, dive, manual/auto parachute and landing; standings with knockdowns, revives, finishing knocked teammates on a wipe, kill credit, damage, shared same-tick placements, winner or draw and kill-feed events; pre-match lobby with countdown and bot fill",
       "notes": "Read skills/gameplay/aiverse-battle-royale/SKILL.md. Every stepper is Fixed/integer, keeps its own PCG32 stream in its state, rejects repeated/backward ticks and invalid input with std::nullopt without mutation and returns events for the authoritative owner. The owner reports downs/outs/revives/damage, ground height under skydivers and which actors a shell or the zone hits; the package never reads health or collision. Persist with royaleSave/royaleLoad (record kinds 120..126) and hash with hashRoyale; bind royaleDataHash of the JSON (genre/royale/Data.h). Example: examples/libraries/mechanics/royale/royale.json. No rendering, HUD, loot sampling or bot behaviour.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_battle_royale",
       "dependencies": [
-        "libraries/include/aiverselib/mechanics/royale/Common.h",
-        "libraries/include/aiverselib/mechanics/royale/SafeZone.h",
-        "libraries/include/aiverselib/mechanics/royale/Bombardment.h",
-        "libraries/include/aiverselib/mechanics/royale/SupplyDrops.h",
-        "libraries/include/aiverselib/mechanics/royale/Insertion.h",
-        "libraries/include/aiverselib/mechanics/royale/Standings.h",
-        "libraries/include/aiverselib/mechanics/royale/Lobby.h",
-        "libraries/include/aiverselib/mechanics/royale/Persistence.h",
-        "libraries/include/aiverselib/mechanics/royale/Data.h",
+        "engine/mechanics/royale/Common.h",
+        "engine/mechanics/royale/SafeZone.h",
+        "engine/mechanics/royale/Bombardment.h",
+        "engine/mechanics/royale/SupplyDrops.h",
+        "engine/mechanics/royale/Insertion.h",
+        "engine/mechanics/royale/Standings.h",
+        "engine/mechanics/royale/Lobby.h",
+        "engine/mechanics/royale/Persistence.h",
+        "engine/mechanics/royale/Data.h",
         "examples/libraries/mechanics/royale/royale.json",
         "tests/libraries/royale_tests.cpp"
       ],
@@ -1514,7 +1529,7 @@
       "version": "0.2.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/mechanics/Narrative.h",
+      "source": "engine/mechanics/Narrative.h",
       "skill": "skills/gameplay/aiverse-narrative-graphs/SKILL.md",
       "summary": "Localized narrative graphs with conditional choices and atomic fact transactions; 0.2.0 social scenes: typed int/bool/enum facts with persistent world state, per-character affinity/trust/fear meters, per-character knowledge and reveals, AND/OR/NOT conditions, one-shot flags, chapter/act state, deferred consequences (N ticks or scenes later), speakers/participants, cinematic CueRequest events, prioritized ambient barks with cooldowns and visual-novel backlog/skip-read/auto-advance",
       "notes": "Read docs/mechanics-packages.md (Narrative scenes) for exact coverage and authority boundaries. Legacy Story/readStory/StoryState (record kind 7) are unchanged; readNarrativeWorld also loads the legacy story JSON. NarrativeScenes.h runs one stepNarrative per authoritative tick (strictly increasing ticks, commands deduplicated by increasing ID, invalid commands rejected atomically) and returns events, CueRequest records (NarrativeCues.h, consumed by a cinematic/UI owner; no playback here) and bark lines. Strict JSON validation with path-qualified errors (NarrativeSceneData.h). Persist NarrativeState via genre::save/load (record kinds 64..71 reserved, 64..65 used), check narrativeStateError after load and bind narrativeWorldHash/narrativeConfigHash. Optional `narrative` settings section (NarrativeConfigured.h). Text is localization keys only; rewards go through their transactional owner.",
@@ -1522,7 +1537,7 @@
       "cmakeTarget": "AIVERSE::lib_narrative_graphs",
       "dependencies": [
         "libraries/include/aiverselib/mechanics/Configured.h",
-        "libraries/include/aiverselib/mechanics/Persistence.h",
+        "engine/mechanics/Persistence.h",
         "libraries/include/aiverselib/mechanics/Data.h",
         "libraries/include/aiverselib/mechanics/NarrativeCues.h",
         "libraries/include/aiverselib/mechanics/NarrativeScenes.h",
@@ -1625,7 +1640,7 @@
         "libraries/include/aiverselib/mechanics/PuzzleSokoban.h",
         "libraries/include/aiverselib/mechanics/PuzzleData.h",
         "libraries/include/aiverselib/mechanics/PuzzlePersistence.h",
-        "libraries/include/aiverselib/mechanics/Persistence.h",
+        "engine/mechanics/Persistence.h",
         "libraries/include/aiverselib/bots/PuzzleBot.h",
         "examples/libraries/mechanics/puzzles/levels.json",
         "examples/libraries/mechanics/puzzles/PuzzlesExample.cpp",
@@ -1722,7 +1737,7 @@
       "dependencies": [
         "libraries/include/aiverselib/strategy/Persistence.h",
         "docs/strategy-libraries.md",
-        "libraries/include/aiverselib/Graphs.h"
+        "engine/core/Graphs.h"
       ],
       "runtime": "header",
       "linkDependencies": [],
@@ -1766,8 +1781,8 @@
       "cmakeTarget": "AIVERSE::lib_run_graph",
       "dependencies": [
         "libraries/include/aiverselib/strategy/Persistence.h",
-        "libraries/include/aiverselib/Graphs.h",
-        "libraries/include/aiverselib/Progression.h",
+        "engine/core/Graphs.h",
+        "engine/core/progression/Progression.h",
         "docs/strategy-libraries.md"
       ],
       "runtime": "header",
@@ -1828,7 +1843,7 @@
       "version": "0.1.0",
       "layer": "presentation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/net/SnapshotDelta.h",
+      "source": "engine/net/SnapshotDelta.h",
       "skill": "skills/network/aiverse-snapshot-delta/SKILL.md",
       "summary": "Delta compression of authoritative snapshots for any game: stable record IDs, removed / new / changed records, XOR runs against an acknowledged baseline, per-peer sender history and receiver history over lossy latest-only channels",
       "notes": "Host-side networking, not simulation. The server converts its snapshot to a RecordSet (0 = globals, kind bits | entity id), DeltaSender::encode per peer with increasing sequences, acknowledge() from the client's ack (FPS: input viewTick); DeltaReceiver::decode on the client. Lost packets fall back to older acknowledged baselines or a full snapshot. Decoding is bounded and rejects malformed or unknown-baseline packets; validate the rebuilt snapshot as before. Used by the FPS authority session (protocol 5). No encryption, reliability or bandwidth scheduling.",
@@ -1865,7 +1880,7 @@
         "libraries/include/aiverselib/mechanics/InteractionConfigured.h",
         "libraries/include/aiverselib/mechanics/InteractionData.h",
         "libraries/include/aiverselib/mechanics/InteractionPersistence.h",
-        "libraries/include/aiverselib/mechanics/Persistence.h",
+        "engine/mechanics/Persistence.h",
         "examples/libraries/mechanics/interactables.json",
         "examples/libraries/mechanics/interaction-settings.json",
         "docs/mechanics-packages.md"
@@ -1884,26 +1899,26 @@
       "version": "0.2.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/mechanics/Vehicles.h",
+      "source": "engine/mechanics/Vehicles.h",
       "skill": "skills/gameplay/aiverse-vehicle-controllers/SKILL.md",
       "summary": "Deterministic kinematic vehicle controllers: wheeled arcade-sim (torque curve, auto/manual gears with shift time, per-wheel traction with slip/grip curves, weight transfer, handbrake, drift), tracked differential steering, hover altitude hold with drift damping, arcade flight with banked turns and stall; damage zones with per-zone performance penalties and critical disable; driver/passenger/gunner seats with validated enter/exit/switch/eject and owner-checked exit points; ordered checkpoints, laps, race positions, wrong-way detection and respawn at the last checkpoint; race bot (racing line, corner braking, overtaking lanes, rubber band); race session from grid to results (countdown, bot/player pedals, phases, finish grace, timeout, winner)",
       "notes": "Read docs/mechanics-packages.md (vehicle-controllers) for the determinism/network model. The controllers are the authoritative Fixed/integer state: the owner reports ground/wheel contacts (VehicleContacts) and resolves collisions after the step with vehicleResolveCollision; no physics backend is authoritative (Box3D may only mirror poses). stepVehicle/stepVehicleDamage/stepVehicleSeats/stepRace once per strictly increasing tick; invalid input returns nullopt with state untouched. Checkpoints reuse match-rules route gates (RouteGate, crossesGate, stepRoute). mechanics/VehicleDrive.h is the one controls -> pedals mapping of every host (axes; screen stick tank / steer). bots/RaceBot.h returns a VehicleInput like a player. mechanics/RaceSession.h runs a whole race for any host: raceSessionInputs before the vehicles step, stepRaceSession after the collisions (any project: rules and map \"race\", docs/races.md; adapters in the FPS and driving hosts); mechanics/RaceSessionData.h reads the shared race data. Persist VehicleState 88, VehicleDamageState 89, VehicleSeatState 90, RaceState 91, RaceBotState 94, RaceSessionState 128 via genre::save/load (88..95 shared with sports-rules); hash with vehicleHash and bind vehicleDefinitionHash/raceCourseHash/raceLineHash. Optional `vehicles` settings section. Executable example: examples/libraries/mechanics/vehicles-sports (4-car race). No rendering, audio, suspension geometry or tyre thermal model.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_vehicle_controllers",
       "dependencies": [
-        "libraries/include/aiverselib/mechanics/VehicleControllers.h",
-        "libraries/include/aiverselib/mechanics/VehicleDamage.h",
-        "libraries/include/aiverselib/mechanics/VehicleSeats.h",
-        "libraries/include/aiverselib/mechanics/RaceCourse.h",
-        "libraries/include/aiverselib/bots/RaceBot.h",
-        "libraries/include/aiverselib/mechanics/RaceSession.h",
-        "libraries/include/aiverselib/mechanics/RaceSessionData.h",
-        "libraries/include/aiverselib/mechanics/VehicleDrive.h",
-        "libraries/include/aiverselib/mechanics/VehicleConfigured.h",
-        "libraries/include/aiverselib/mechanics/VehicleData.h",
-        "libraries/include/aiverselib/mechanics/VehiclePersistence.h",
-        "libraries/include/aiverselib/mechanics/MatchObjectives.h",
-        "libraries/include/aiverselib/mechanics/Persistence.h",
+        "engine/mechanics/VehicleControllers.h",
+        "engine/mechanics/VehicleDamage.h",
+        "engine/mechanics/VehicleSeats.h",
+        "engine/mechanics/RaceCourse.h",
+        "engine/bots/RaceBot.h",
+        "engine/mechanics/RaceSession.h",
+        "engine/mechanics/RaceSessionData.h",
+        "engine/mechanics/VehicleDrive.h",
+        "engine/mechanics/VehicleConfigured.h",
+        "engine/mechanics/VehicleData.h",
+        "engine/mechanics/VehiclePersistence.h",
+        "engine/mechanics/MatchObjectives.h",
+        "engine/mechanics/Persistence.h",
         "examples/libraries/mechanics/vehicles-sports/vehicles.json",
         "examples/libraries/mechanics/vehicles-sports/settings.json",
         "examples/libraries/mechanics/vehicles-sports/VehiclesSportsExample.cpp",
@@ -1936,7 +1951,7 @@
         "libraries/include/aiverselib/mechanics/SportsConfigured.h",
         "libraries/include/aiverselib/mechanics/SportsData.h",
         "libraries/include/aiverselib/mechanics/SportsPersistence.h",
-        "libraries/include/aiverselib/mechanics/Persistence.h",
+        "engine/mechanics/Persistence.h",
         "examples/libraries/mechanics/vehicles-sports/sports.json",
         "examples/libraries/mechanics/vehicles-sports/settings.json",
         "examples/libraries/mechanics/vehicles-sports/VehiclesSportsExample.cpp",
@@ -1969,7 +1984,7 @@
         "libraries/include/aiverselib/mechanics/ColonyConfigured.h",
         "libraries/include/aiverselib/mechanics/ColonyPersistence.h",
         "libraries/include/aiverselib/mechanics/SettlementJson.h",
-        "libraries/include/aiverselib/mechanics/Persistence.h",
+        "engine/mechanics/Persistence.h",
         "libraries/include/aiverselib/bots/ColonyPlanner.h",
         "libraries/include/aiverselib/bots/ColonyPlannerData.h",
         "examples/libraries/mechanics/production-survival/colony.json",
@@ -2010,7 +2025,7 @@
         "libraries/include/aiverselib/mechanics/SurvivalConfigured.h",
         "libraries/include/aiverselib/mechanics/SurvivalPersistence.h",
         "libraries/include/aiverselib/mechanics/SettlementJson.h",
-        "libraries/include/aiverselib/mechanics/Persistence.h",
+        "engine/mechanics/Persistence.h",
         "libraries/include/aiverselib/mechanics/Senses.h",
         "examples/libraries/mechanics/production-survival/ecology.json",
         "examples/libraries/mechanics/production-survival/settings.json",
@@ -2031,22 +2046,22 @@
       "version": "0.1.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/mechanics/Telegraphs.h",
+      "source": "engine/mechanics/Telegraphs.h",
       "skill": "skills/gameplay/aiverse-boss-encounters/SKILL.md",
       "summary": "Telegraphed area attacks (windup/active/recovery, circle/cone/line/ring fixed-point hit tests, periodic and sweeping strikes, falloff, statuses on the strike tick, progress-telegraph view records and ground decals), slow/root/stun/burn status instances with stacking and immunity, boss phases by HP or time with range-band/sequence/weighted attack patterns, enrage and add waves, encounter windows with personal requests and archetype rotation, and mob wander/hunt/flee/leash/swarm behaviour",
-      "notes": "Read docs/mechanics-packages.md (boss-encounters) for exact coverage and authority boundaries. Decisions and outcomes only: the owner applies damage, moves bodies (steering, flow field or navmesh), places bosses/adds and renders the TelegraphView / StatusViewEvent records (TelegraphDecals.h -> GameGroundCanvas or view.draw_ground). Inside GameCore games the engine statuses stay authoritative (rtsStatusRules maps the definitions). Fixed math, integer ticks, repeated/backwards ticks rejected, RNG only through the passed Random&. Persist states via genre::save/load (record kinds 112..119, 112..117 used), hash with encounterHash and bind encounterDataHash. aiverse_encounter validates data and runs the headless hero-vs-boss reference fight.",
+      "notes": "Read docs/mechanics-packages.md (boss-encounters) for exact coverage and authority boundaries. Decisions and outcomes only: the owner applies damage, moves bodies (steering, flow field or navmesh), places bosses/adds and renders the TelegraphView / StatusViewEvent records (TelegraphDecals.h -> GameGroundCanvas or view.draw_ground). Inside GameCore games the engine statuses stay authoritative (gameStatusRules maps the definitions). Fixed math, integer ticks, repeated/backwards ticks rejected, RNG only through the passed Random&. Persist states via genre::save/load (record kinds 112..119, 112..117 used), hash with encounterHash and bind encounterDataHash. aiverse_encounter validates data and runs the headless hero-vs-boss reference fight.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_boss_encounters",
       "dependencies": [
-        "libraries/include/aiverselib/mechanics/StatusEffects.h",
-        "libraries/include/aiverselib/mechanics/BossEncounter.h",
-        "libraries/include/aiverselib/mechanics/BossSchedule.h",
-        "libraries/include/aiverselib/mechanics/MobBehaviour.h",
+        "engine/mechanics/StatusEffects.h",
+        "engine/mechanics/BossEncounter.h",
+        "engine/mechanics/BossSchedule.h",
+        "engine/mechanics/MobBehaviour.h",
         "libraries/include/aiverselib/mechanics/EncounterData.h",
-        "libraries/include/aiverselib/mechanics/EncounterPersistence.h",
+        "engine/mechanics/EncounterPersistence.h",
         "libraries/include/aiverselib/mechanics/EncounterScenario.h",
-        "libraries/include/aiverselib/mechanics/TelegraphDecals.h",
-        "libraries/include/aiverselib/mechanics/Persistence.h",
+        "engine/mechanics/TelegraphDecals.h",
+        "engine/mechanics/Persistence.h",
         "examples/libraries/mechanics/boss-encounter.json",
         "tools/libraries/encounter_main.cpp",
         "docs/mechanics-packages.md"
@@ -2064,21 +2079,21 @@
       "version": "0.1.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/mechanics/Perks.h",
+      "source": "engine/mechanics/Perks.h",
       "skill": "skills/gameplay/aiverse-match-progression/SKILL.md",
       "summary": "In-match progression: perk/modifier packages with an ordered Set/Add/Multiply stat pipeline (incoming/outgoing damage, speed, fire interval, max health rescale), hero/player xp with a level table or curve, seeded level-up offers of N alternatives (recruit a deck slot, slot perk, player perk, explicit picks, rerolls, revisions), stacking limits, prerequisites, exclusions and upgrade chains, xp orb pickups (radius, magnet, homing attraction, orb budget), summon circles, charges and summoned ally lifecycle, and the pre-match battle deck with limits from the match start payload",
       "notes": "Read docs/mechanics-packages.md (match-progression) for exact coverage and authority boundaries. Pure policy: the owner applies effect values to its units through evaluateStat (never a parallel evaluator for built-in GameCore stats), spawns recruits and summons and confirms them with entity ids, and dispatches PerkEvent hooks (e.g. to Lua). Offers draw from the state's own PCG32 stream (seedPerks) with ascending-id candidate order; stale revisions and invalid choices are rejected without changes. Level curves reuse progression-curves (systems/Curves.h) and weighted choice semantics from Progression.h. Persist PerkState/PickupState/SummonState via genre::save/load (record kinds 104..111 reserved, 104..106 used) and hash with progressionHash; bind perkDefinitionsHash and progressionConfigHash. Optional `perks` settings section; definitions/deck JSON via genre/PerksData.h. Headless check: aiverse_progression --verify.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_match_progression",
       "dependencies": [
-        "libraries/include/aiverselib/mechanics/BattleDeck.h",
-        "libraries/include/aiverselib/mechanics/XpPickups.h",
-        "libraries/include/aiverselib/mechanics/Summons.h",
-        "libraries/include/aiverselib/mechanics/PerksData.h",
+        "engine/mechanics/BattleDeck.h",
+        "engine/mechanics/XpPickups.h",
+        "engine/mechanics/Summons.h",
+        "engine/mechanics/PerksData.h",
         "libraries/include/aiverselib/mechanics/PerksConfigured.h",
-        "libraries/include/aiverselib/mechanics/PerksPersistence.h",
-        "libraries/include/aiverselib/mechanics/Persistence.h",
-        "libraries/include/aiverselib/systems/Curves.h",
+        "engine/mechanics/PerksPersistence.h",
+        "engine/mechanics/Persistence.h",
+        "engine/systems/Curves.h",
         "examples/libraries/mechanics/perks.json",
         "examples/libraries/mechanics/perks-deck.json",
         "examples/libraries/mechanics/perks-settings.json",
@@ -2176,7 +2191,7 @@
       "version": "0.1.0",
       "layer": "simulation",
       "status": "cpp-foundation",
-      "source": "libraries/include/aiverselib/SweptShapes.h",
+      "source": "engine/core/SweptShapes.h",
       "skill": "skills/core/aiverse-swept-shapes/SKILL.md",
       "summary": "Fixed-point swept tests: circle versus moving oriented box with entry/exit window (pedestrian crossing danger), axis-aligned box slide of short walker moves (walls, furniture), conservative polyline bounds broad phase",
       "notes": "Fixed only, no state. Grow boxes by the walker radius with inflate before slideMove; slideMove clamps x first, then z. polylineBounds of an empty line is invalid and touches everything (a broad phase never rejects what it cannot judge). Exact narrow-phase tests stay with the owner.",
@@ -2210,7 +2225,7 @@
         "vehicle-controllers"
       ],
       "dependencies": [
-        "libraries/include/aiverselib/mechanics/traffic/TrafficRoutes.h",
+        "engine/mechanics/traffic/TrafficRoutes.h",
         "docs/traffic.md",
         "tests/libraries/city_tests.cpp"
       ],
@@ -2218,10 +2233,10 @@
       "version": "0.1.1",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/mechanics/Traffic.h",
+      "source": "engine/mechanics/Traffic.h",
       "skill": "skills/gameplay/aiverse-city-traffic/SKILL.md",
       "summary": "City traffic kernels: road network from a cell mask or curved spline pieces, lanes, junction turns, signal phases and pedestrian walk windows, bot driver pedals, sidewalk walker paths; routes for large/emergency vehicles (wide-street exit choice, bounded local detour around a blockage)",
-      "notes": "Header kernels used by modules/rts/RtsTraffic (rules traffic, docs/traffic.md) and usable from a native module without the RTS module. Fixed / integers and the immutable net only. trafficWideExit always allows the first and the last piece so stations on narrow streets stay reachable; trafficLocalDetour is bounded by its lattice and must be followed by the normal collision checks.",
+      "notes": "Header kernels used by engine/game/Traffic (rules traffic, docs/traffic.md) and usable from a native module without the RTS module. Fixed / integers and the immutable net only. trafficWideExit always allows the first and the last piece so stations on narrow streets stay reachable; trafficLocalDetour is bounded by its lattice and must be followed by the normal collision checks.",
       "cmakeTarget": "AIVERSE::lib_city_traffic"
     },
     {
@@ -2412,7 +2427,7 @@
       "version": "0.1.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/mechanics/EcsHitscanSystems.h",
+      "source": "engine/mechanics/EcsHitscanSystems.h",
       "skill": "skills/gameplay/aiverse-ecs-hitscan/SKILL.md",
       "summary": "Shared deterministic hitscan candidate ray intersection with eligibility, immutable rewind poses and nearest-hit tie consistency for FPS, RTS and native games",
       "notes": "Live FPS traceShot uses this policy over lag-compensated CharacterSnapshot rewind frames. The policy chooses nearest candidate only; environment/vehicle obstruction and downstream damage remain host-specific. C++ native builds and replay parity remain unverified.",
@@ -2421,7 +2436,7 @@
       "dependencies": [
         "tests/ecs_hitscan_selection_test.cpp",
         "docs/ecs-mechanic-composition.md",
-        "libraries/include/aiverselib/mechanics/EcsOrderedImpactSystems.h"
+        "engine/mechanics/EcsOrderedImpactSystems.h"
       ],
       "runtime": "header",
       "linkDependencies": [
@@ -2434,7 +2449,7 @@
       "version": "0.1.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/mechanics/EcsHitscanResolutionSystems.h",
+      "source": "engine/mechanics/EcsHitscanResolutionSystems.h",
       "skill": "skills/gameplay/aiverse-ecs-hitscan-resolution/SKILL.md",
       "summary": "Independent reusable ECS hitscan resolution system: one-shot intents, deterministic nearest-target callbacks, stable hit records and deferred hit application for native games",
       "notes": "The real FPS traceShot still uses synchronous shared closest-target and ordered-impact policies; this newly schedulable stage is opt-in only until multi-hit same-tick damage and save/rollback parity have been proven. Does not simulate projectile physics.",
@@ -2443,7 +2458,7 @@
       "dependencies": [
         "tests/ecs_hitscan_resolution_test.cpp",
         "docs/ecs-mechanic-composition.md",
-        "libraries/include/aiverselib/mechanics/EcsHitscanSystems.h"
+        "engine/mechanics/EcsHitscanSystems.h"
       ],
       "runtime": "header",
       "linkDependencies": [],
@@ -2456,7 +2471,7 @@
       "version": "0.1.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/mechanics/EcsOrderedImpactSystems.h",
+      "source": "engine/mechanics/EcsOrderedImpactSystems.h",
       "skill": "skills/gameplay/aiverse-ecs-ordered-impact/SKILL.md",
       "summary": "Genre-independent ordered ECS projectile impact dispatch for direct damage, queued on-hit effects and splash candidates with injected faction, armor and damage policies",
       "notes": "Live ordinary RTS weapon projectiles use this shared policy. It is a synchronous policy inside the existing RTS ECS tick, not a separate scheduled damage stage; FPS and RTS ability adapters remain pending.",
@@ -2465,7 +2480,7 @@
       "dependencies": [
         "tests/ecs_kinematic_projectile_test.cpp",
         "docs/ecs-mechanic-composition.md",
-        "libraries/include/aiverselib/mechanics/EcsMechanicSystems.h"
+        "engine/mechanics/EcsMechanicSystems.h"
       ],
       "runtime": "header",
       "linkDependencies": [
@@ -2478,7 +2493,7 @@
       "version": "0.1.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/mechanics/EcsKinematicProjectileSystems.h",
+      "source": "engine/mechanics/EcsKinematicProjectileSystems.h",
       "skill": "skills/gameplay/aiverse-ecs-kinematic-projectiles/SKILL.md",
       "summary": "Shared nonphysical ECS projectiles with deterministic fixed-tick endpoint arrival or moving-target pursuit; canonical arrival events and deferred despawn",
       "notes": "Header-only motion without SpatialWorld or ballistics. Real RTS uses the common pursuit policy but still owns legacy damage/effect ordering. Full RTS migration and native build parity remain pending.",
@@ -2487,7 +2502,7 @@
       "dependencies": [
         "docs/ecs-mechanic-composition.md",
         "tests/ecs_kinematic_projectile_test.cpp",
-        "libraries/include/aiverselib/mechanics/EcsMechanicSystems.h"
+        "engine/mechanics/EcsMechanicSystems.h"
       ],
       "runtime": "header",
       "linkDependencies": [
@@ -2500,7 +2515,7 @@
       "version": "0.1.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/mechanics/EcsProjectileSystems.h",
+      "source": "engine/mechanics/EcsProjectileSystems.h",
       "skill": "skills/gameplay/aiverse-ecs-projectile-systems/SKILL.md",
       "summary": "Genre-independent ECS projectile motion/impact assembly: shared flight components, deterministic ballistic or injected guidance policy, read-only collision provider, ordered hit records and deferred despawn",
       "notes": "Opt-in composable flight/impact stage only, NOT full FPS/RTS combat migration. Bind separate weapon launch, damage/status and presentation systems; no genre module dependencies. Run cross-genre CTest and native builds before production enablement.",
@@ -2509,8 +2524,8 @@
       "dependencies": [
         "docs/ecs-mechanic-composition.md",
         "tests/ecs_projectile_composition_test.cpp",
-        "libraries/include/aiverselib/mechanics/Weapons.h",
-        "libraries/include/aiverselib/mechanics/EcsMechanicSystems.h"
+        "engine/mechanics/Weapons.h",
+        "engine/mechanics/EcsMechanicSystems.h"
       ],
       "runtime": "header",
       "linkDependencies": [
@@ -2525,7 +2540,7 @@
       "version": "0.1.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/mechanics/EcsDamageSystems.h",
+      "source": "engine/mechanics/EcsDamageSystems.h",
       "skill": "skills/gameplay/aiverse-ecs-impact-damage/SKILL.md",
       "summary": "Genre-independent ECS projectile-impact to damage resolution: health/damage components, collider-entity mapping, ordered damage queue, configurable damage policy and applied-event callback",
       "notes": "Composable impact/damage stage. Shared with any shooter, artillery, vehicle or spell host. Does not automatically replace legacy FPS/RTS combat logic. Native C++/COW/rollback verification pending.",
@@ -2534,7 +2549,7 @@
       "dependencies": [
         "docs/ecs-mechanic-composition.md",
         "tests/ecs_cross_genre_projectile_test.cpp",
-        "libraries/include/aiverselib/mechanics/EcsProjectileSystems.h"
+        "engine/mechanics/EcsProjectileSystems.h"
       ],
       "runtime": "header",
       "linkDependencies": [],
@@ -2547,7 +2562,7 @@
       "version": "0.1.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/mechanics/EcsWeaponLaunchSystems.h",
+      "source": "engine/mechanics/EcsWeaponLaunchSystems.h",
       "skill": "skills/gameplay/aiverse-ecs-weapon-launch/SKILL.md",
       "summary": "Universal ECS fire intent, weapon ammo/cooldown, deterministic deferred projectile creation, integrated with shared ballistic flight and impact/damage pipeline",
       "notes": "Reusable weapon launch/shot composition for any genre or native host. Legacy FPS/RTS weapon systems still require parity-checked migration; does not claim complete replacement. Native/CI tests pending.",
@@ -2556,7 +2571,7 @@
       "dependencies": [
         "docs/ecs-mechanic-composition.md",
         "tests/ecs_cross_genre_weapon_pipeline_test.cpp",
-        "libraries/include/aiverselib/mechanics/EcsDamageSystems.h"
+        "engine/mechanics/EcsDamageSystems.h"
       ],
       "runtime": "header",
       "linkDependencies": [],
@@ -2569,7 +2584,7 @@
       "version": "0.1.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
-      "source": "libraries/include/aiverselib/mechanics/EcsTimedMechanics.h",
+      "source": "engine/mechanics/EcsTimedMechanics.h",
       "skill": "skills/gameplay/aiverse-ecs-timed-mechanics/SKILL.md",
       "summary": "Reusable ECS weapon reload/fire gating, hit-point and energy regeneration, and deterministic entity expiration systems for any genre.",
       "notes": "Opt-in native mechanics. Reuses shared ECS weapon/health states, no FPS/RTS dependency. Built-in FPS/RTS authority integration, native CTest and serialization/network parity still pending.",
@@ -2578,7 +2593,7 @@
       "dependencies": [
         "docs/ecs-all-features-migration-plan.md",
         "tests/ecs_cross_genre_timed_mechanics_test.cpp",
-        "libraries/include/aiverselib/mechanics/FixedRegeneration.h",
+        "engine/mechanics/FixedRegeneration.h",
         "tests/ecs_fixed_regeneration_policy_test.cpp"
       ],
       "runtime": "header",
@@ -2601,7 +2616,7 @@
       "dependencies": [
         "docs/ecs-all-features-migration-plan.md",
         "tests/ecs_cross_genre_locomotion_test.cpp",
-        "libraries/include/aiverselib/mechanics/Locomotion.h"
+        "engine/mechanics/Locomotion.h"
       ],
       "runtime": "header",
       "linkDependencies": [],
@@ -2644,7 +2659,7 @@
       "dependencies": [
         "tests/ecs_cross_genre_impact_queue_test.cpp",
         "docs/ecs-all-features-migration-plan.md",
-        "libraries/include/aiverselib/mechanics/EcsOrderedImpactSystems.h"
+        "engine/mechanics/EcsOrderedImpactSystems.h"
       ],
       "runtime": "header",
       "linkDependencies": [],
@@ -2657,7 +2672,7 @@
       "version": "0.1.0",
       "layer": "simulation",
       "status": "experimental",
-      "source": "libraries/include/aiverselib/water/NereidWaterSystems.h",
+      "source": "engine/world/nereid/NereidWaterSystems.h",
       "skill": "skills/gameplay/aiverse-nereid-water/SKILL.md",
       "summary": "NEREID deterministic fixed-point ECS water volume sampling across game genres",
       "notes": "Stages 1-6: fixed-point bodies/probes, polygon/spline footprints, indexed/adaptive sampling, optional native setup and read-only legacy raster import. Legacy RTS/editor remains authoritative; no production runtime or water rendering adoption. Native tests unverified.",
@@ -2674,7 +2689,7 @@
       "version": "0.1.0",
       "layer": "simulation",
       "status": "experimental",
-      "source": "libraries/include/aiverselib/water/NereidBuoyancySystems.h",
+      "source": "engine/world/nereid/NereidBuoyancySystems.h",
       "skill": "skills/gameplay/aiverse-nereid-buoyancy/SKILL.md",
       "summary": "NEREID shared deterministic buoyancy and flow drag output for host physics",
       "notes": "Stage 2 policy only; host owns gravity, canonical velocity, collision and force integration. Requires same-tick contact sample. Sphere seas (planets): NereidSphereWater.h, radial sampling/buoyancy/current, test ecs_nereid_sphere_water_test.",
@@ -2693,7 +2708,7 @@
       "version": "0.1.0",
       "layer": "simulation",
       "status": "experimental",
-      "source": "libraries/include/aiverselib/water/NereidInteractions.h",
+      "source": "engine/world/nereid/NereidInteractions.h",
       "skill": "skills/gameplay/aiverse-nereid-interactions/SKILL.md",
       "summary": "NEREID deterministic ECS entry/exit/wake events with ordered read-only VFX/audio presentation snapshots",
       "notes": "Optional native pipeline stage after same-tick water contact sampling; outputs are single-tick events, host owns physics and VFX/audio playback. Native execution has not been verified.",
@@ -2712,45 +2727,433 @@
       "version": "0.1.0",
       "layer": "simulation",
       "status": "experimental",
-      "source": "libraries/include/aiverselib/water/NereidCascades.h",
+      "source": "engine/world/nereid/NereidCascades.h",
       "skill": "skills/gameplay/aiverse-nereid-cascades/SKILL.md",
       "summary": "NEREID genre-independent waterfall/cascade ECS geometry, persistence and visual ribbon mesh",
       "notes": "Stage 27: opt-in descending cascade components, double-sided CPU ribbons and WorldScene graphics; host owns terrain, physics and particle effects. Build/GPU tests deferred by owner.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_nereid_cascades",
       "runtime": "header",
-      "linkDependencies": ["aiverse_engine"],
-      "packageDependencies": ["nereid-water"]
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": [
+        "nereid-water"
+      ]
     },
     {
       "id": "nereid-currents",
       "version": "0.1.0",
       "layer": "simulation",
       "status": "experimental",
-      "source": "libraries/include/aiverselib/water/NereidCurrentField.h",
+      "source": "engine/world/nereid/NereidCurrentField.h",
       "skill": "skills/gameplay/aiverse-nereid-currents/SKILL.md",
       "summary": "NEREID fixed-point per-river spatial flow field with downstream, lateral and shear currents",
       "notes": "Optional NEREID WaterCurrentFieldComponent: one profile node per RiverSpline point; reference and indexed ECS sampling share deterministic flow. Build/tests deferred.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_nereid_currents",
       "runtime": "header",
-      "linkDependencies": ["aiverse_engine"],
-      "packageDependencies": ["nereid-water"]
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": [
+        "nereid-water"
+      ]
     },
     {
       "id": "nereid-vortices",
       "version": "0.1.0",
       "layer": "simulation",
       "status": "experimental",
-      "source": "libraries/include/aiverselib/water/NereidVortices.h",
+      "source": "engine/world/nereid/NereidVortices.h",
       "skill": "skills/gameplay/aiverse-nereid-vortices/SKILL.md",
       "summary": "NEREID deterministic bounded vortex/eddy currents for water contacts and visuals",
       "notes": "Optional per-water body WaterVortexFieldComponent, fixed-point additive swirl and radial current with shared reference/indexed sampling. Tests deferred.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_nereid_vortices",
       "runtime": "header",
-      "linkDependencies": ["aiverse_engine"],
-      "packageDependencies": ["nereid-water"]
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": [
+        "nereid-water"
+      ]
+    },
+    {
+      "id": "follow-camera",
+      "version": "0.1.0",
+      "layer": "presentation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/gameplay/ThirdPersonCamera.h",
+      "skill": "skills/gameplay/aiverse-follow-camera/SKILL.md",
+      "summary": "Third-person camera boom: orbit, shoulder offset and swap, obstacle avoidance by owner sphere sweep, recenter behind the target, profile stack with blends",
+      "notes": "Capability P2. LENS (engine/render/CameraBehavior.h, docs/camera-behaviors.md) owns view cameras: register this boom as a LENS body (`shoulder`) and an ECS rig mode before using it in a game - not done yet. No collision with moving bodies unless the sweep reports them. Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_follow_camera",
+      "linkDependencies": [],
+      "packageDependencies": []
+    },
+    {
+      "id": "nav-links",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/bots/NavLinks.h",
+      "skill": "skills/ai/aiverse-nav-links/SKILL.md",
+      "summary": "Off-mesh navigation links (jump, drop, ladder, climb, door, teleport) planned together with any walking mesh, link traversal over ticks, cover spot generation from boxes",
+      "notes": "Capability F2. Links are not extracted from geometry automatically; the planner calls meshCost for node pairs (fine for hundreds of links). Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_nav_links",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
+      "id": "volume-nav",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/bots/VolumeNav.h",
+      "skill": "skills/ai/aiverse-volume-nav/SKILL.md",
+      "summary": "3D navigation for flyers, ships and swimmers: occupancy grid from boxes, deterministic 26-neighbour A* with smoothing, flock avoidance and 3D formation slots",
+      "notes": "Capability R5. Dense grid (up to 4M cells); no hierarchical or streamed volumes yet. Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_volume_nav",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
+      "id": "structure-destruction",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/mechanics/StructureDestruction.h",
+      "skill": "skills/gameplay/aiverse-structure-destruction/SKILL.md",
+      "summary": "Destructible structures of box pieces: area damage, fracture into fragments, support graph collapse, authoritative debris and dirty regions for collision/navmesh/visibility",
+      "notes": "Capability F3. Box pieces only (no arbitrary mesh slicing); support is connectivity, not stress analysis; no soft bodies. Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_structure_destruction",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": [
+        "configuration"
+      ]
+    },
+    {
+      "id": "portals-rewind",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/mechanics/PortalsRewind.h",
+      "skill": "skills/gameplay/aiverse-portals-rewind/SKILL.md",
+      "summary": "Linked portals with position/velocity/facing transfer and recursive view transforms, plus gameplay time rewind over a bounded snapshot history with an energy budget",
+      "notes": "Capability Q4. No portal-in-portal physics for bodies larger than the opening; rewind of single objects (local time bubbles) is left to the owner. Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_portals_rewind",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
+      "id": "item-affixes",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/mechanics/ItemAffixes.h",
+      "skill": "skills/gameplay/aiverse-item-affixes/SKILL.md",
+      "summary": "Seeded item generation with prefix/suffix affix pools, tiers, groups and item level, crafting rerolls, coloured sockets and gems, elemental auras and reactions, item migration",
+      "notes": "Capability A2. No UI; affix text and balance are content. Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_item_affixes",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
+      "id": "quest-journal",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/mechanics/QuestJournal.h",
+      "skill": "skills/gameplay/aiverse-quest-journal/SKILL.md",
+      "summary": "Quests as data: stages, counted and optional objectives, branches, prerequisites, time limits, abandon/fail/repeat, tracked quest, bounded journal and versioned migration",
+      "notes": "Capability A4. No quest UI widgets yet; journal text is content. Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_quest_journal",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
+      "id": "wounds-disease",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/mechanics/WoundsDisease.h",
+      "skill": "skills/gameplay/aiverse-wounds-disease/SKILL.md",
+      "summary": "Wounds by type and body part with bleeding, pain, healing, infection and treatments; diseases with incubation, symptoms, contagion, cures and immunity",
+      "notes": "Capability S1. No per-limb loss of function; medical UI is not included. Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_wounds_disease",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
+      "id": "herds-taming",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/mechanics/HerdsTaming.h",
+      "skill": "skills/gameplay/aiverse-herds-taming/SKILL.md",
+      "summary": "Herds with leader, cohesion, spreading panic and succession, off-screen aggregate herds, and taming by trust with follow/stay/guard orders",
+      "notes": "Capability S2. No breeding of tamed animals or saddles/riding. Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_herds_taming",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
+      "id": "colonist-relations",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/mechanics/ColonistRelations.h",
+      "skill": "skills/gameplay/aiverse-colonist-relations/SKILL.md",
+      "summary": "Colonist families, memories with decay and stacking, opinions, friendships and rivalries with hysteresis, partnerships, item ownership and social mood",
+      "notes": "Capability C1. Births and ageing belong to the owner; no conversation generator. Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_colonist_relations",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
+      "id": "utility-networks",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/mechanics/UtilityNetworks.h",
+      "skill": "skills/gameplay/aiverse-utility-networks/SKILL.md",
+      "summary": "Pressure-driven pipe networks with sources, sinks, tanks, pumps and valves, and heat exchange between rooms with doors, outdoor boundary and thermostats",
+      "notes": "Capability C2. Pressure is a relaxed approximation, not a hydraulic solver; no gas mixing. Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_utility_networks",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
+      "id": "railways",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/mechanics/Railways.h",
+      "skill": "skills/gameplay/aiverse-railways/SKILL.md",
+      "summary": "Trains on a track graph with block signalling, acceleration and braking, looping routes and station stops with dwell times",
+      "notes": "Capability C2. No junction pathfinding (routes are explicit), no chain signals, no train length. Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_railways",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
+      "id": "city-policy",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/mechanics/CityPolicy.h",
+      "skill": "skills/gameplay/aiverse-city-policy/SKILL.md",
+      "summary": "City economy and politics: zoned lots that grow by demand, residents and jobs, taxes, service coverage, budget with loans, policies, faction approval and elections",
+      "notes": "Capability C3. Aggregated lots (no individual citizens); land value is data the owner sets. Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_city_policy",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
+      "id": "transit-schedules",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/mechanics/TransitSchedules.h",
+      "skill": "skills/gameplay/aiverse-transit-schedules/SKILL.md",
+      "summary": "Public transport and freight lines with timetables, earliest-arrival route planning with transfers, boarding by capacity and stop congestion diagnostics",
+      "notes": "Capability C4. Vehicles are timetable entities (the owner moves bodies along roads/rails); no fares. Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_transit_schedules",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
+      "id": "tactics-levels",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/mechanics/TacticsLevels.h",
+      "skill": "skills/gameplay/aiverse-tactics-levels/SKILL.md",
+      "summary": "Multi-storey tactical boards: stacked tactics-grid levels with stairs and ladders, movement across levels, sight through open floors, height advantage and undoable move plans",
+      "notes": "Capability T2. Destructible floors are left to structure-destruction plus a board rebuild. Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_tactics_levels",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": [
+        "tactics-grid"
+      ]
+    },
+    {
+      "id": "diplomacy",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/mechanics/Diplomacy.h",
+      "skill": "skills/gameplay/aiverse-diplomacy/SKILL.md",
+      "summary": "Relations from decaying modifiers, treaties with truce and break penalties, defensive alliances that join wars, deal evaluation and a strategy advisor for AI factions",
+      "notes": "Capability T3. No espionage or vassal tribute flows; the economic value of items comes from the owner. Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_diplomacy",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
+      "id": "turn-search",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/bots/TurnSearch.h",
+      "skill": "skills/ai/aiverse-turn-search/SKILL.md",
+      "summary": "Generic game-tree search for any turn rules: iterative-deepening alpha-beta with a node budget and seeded MCTS, both explaining the chosen move",
+      "notes": "Capability T4. Two-sided games; hidden information needs determinization by the owner (see card-games CardBot). Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_turn_search",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
+      "id": "hero-match",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/mechanics/HeroMatch.h",
+      "skill": "skills/gameplay/aiverse-hero-match/SKILL.md",
+      "summary": "Hero match rules: pick/ban draft with timeouts, in-match shop with recipes, sell-back and courier delivery, recall channel, last hits, denies, assists, bounties and respawn timers",
+      "notes": "Capability M1. Lanes, creeps and towers are ordinary units of the host; no MMR here (see meta-matchmaking). Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_hero_match",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
+      "id": "watercraft",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/mechanics/Watercraft.h",
+      "skill": "skills/gameplay/aiverse-watercraft/SKILL.md",
+      "summary": "Boats and ships from assembled hull blocks with point buoyancy, water drag, thrust and rudder, capsize and sinking, plus an aircraft model with lift, drag, stall and control surfaces",
+      "notes": "Capability V2. Simplified rigid model (no wave slamming, no propeller wash); multi-seat network play is not verified here. Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_watercraft",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
+      "id": "secret-state",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/mechanics/SecretState.h",
+      "skill": "skills/network/aiverse-secret-state/SKILL.md",
+      "summary": "Hidden information for authoritative servers: zones with visibility rules, per-seat opaque handles re-keyed on shuffle, reveal events, reconnect snapshots and commit/reveal rounds",
+      "notes": "Capability K2. Transport and encryption belong to engine/net; the default FNV commitment is not cryptographic. Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_secret_state",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
+      "id": "lip-sync",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/animation/LipSync.h",
+      "skill": "skills/visuals/aiverse-lip-sync/SKILL.md",
+      "summary": "Lip-sync viseme tracks from recorded speech (loudness, zero crossings, band energy, closed-lip gaps) or from text, with attack/release smoothing and sampling for the face rig",
+      "notes": "Capability A3. Energy/spectral heuristics, not a phoneme recogniser; Latin text only. Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_lip_sync",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
+    },
+    {
+      "id": "touch-accessibility",
+      "version": "0.1.0",
+      "layer": "simulation",
+      "status": "cpp-subsystem",
+      "source": "libraries/include/aiverselib/gameplay/TouchAccessibility.h",
+      "skill": "skills/ui/aiverse-touch-accessibility/SKILL.md",
+      "summary": "Touch controls (fixed and floating sticks, hold/toggle buttons, tap, double tap, long press, swipe, pinch, rotate, pan) and accessibility settings (colour vision, scales, subtitles, reduced motion, remapping with conflicts)",
+      "notes": "Capability U1. No on-screen widgets (draw them with the UI layer); colour compensation is per colour, not a post-process pass. Tests: tests/libraries/policy_mechanics_tests.cpp.",
+      "verifiedPlatforms": [],
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_touch_accessibility",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": []
     }
   ]
 }

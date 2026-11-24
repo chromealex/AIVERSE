@@ -97,7 +97,7 @@ Entities spawned/teleported by payloads enter the RTS spatial hash on its next n
 
 ### FPS
 
-Put the same `flight` block in `fps.weapon` or an entry of `fps.weapons`, alongside positive
+Put the same `flight` block in `actor.weapon` or an entry of `actor.weapons`, alongside positive
 `bulletSpeed`. It works with or without `mechanics.enabled`. Missing `flight.gravity` inherits
 `bulletGravity`; explicit zero disables gravity. Pitch is preserved, including vertical fire.
 The range is the smaller of weapon `range` and flight `maxDistance`.

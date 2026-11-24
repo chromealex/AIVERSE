@@ -1,0 +1,26 @@
+.layout-menu-button {
+  display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; flex: none;
+  border: 1px solid var(--au-line); border-radius: 8px; background: var(--au-panel);
+  color: var(--au-text); font-size: 12px; cursor: pointer;
+}
+.layout-menu-button span { white-space: nowrap; }
+.layout-menu-button:hover, .layout-menu-button[aria-expanded="true"] { background: var(--au-hover); }
+.layout-menu-button:focus-visible { outline: 2px solid var(--au-accent); outline-offset: 2px; }
+.layout-name-backdrop { position: fixed; inset: 0; z-index: 6000; }
+.layout-name {
+  position: fixed; width: 240px; padding: 10px; display: flex; flex-direction: column; gap: 8px;
+  background: var(--au-overlay); border: 1px solid var(--au-line-strong);
+  border-radius: var(--au-radius-sm); box-shadow: var(--au-shadow-md); color: var(--au-text);
+}
+.layout-name strong { font-size: var(--au-font-sm); font-weight: 650; }
+.layout-name input {
+  width: 100%; background: var(--au-field); border: 1px solid var(--au-line-strong);
+  border-radius: var(--au-radius-sm); padding: 4px 8px; color: var(--au-text); font: inherit;
+  font-size: var(--au-font-sm);
+}
+.layout-name__actions { display: flex; justify-content: flex-end; gap: 6px; }
+.layout-name__actions button {
+  height: 26px; padding: 0 10px; background: var(--au-field); border: 1px solid var(--au-line-strong);
+  border-radius: var(--au-radius-sm); color: var(--au-text); cursor: pointer;
+}
+.layout-name__actions button:disabled { color: var(--au-text-faint); cursor: default; }

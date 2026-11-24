@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Loader2, Play, RefreshCw, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, Play, RefreshCw, Search } from 'lucide-react';
 import { invoke } from '../bridge';
 import type { StudioSnapshot } from '../types';
 import { buildParams, fieldDraft, opLabel, resultLine, schemaFields, stateOps, type ToolField, type ToolOpInfo } from './toolSchema';
@@ -8,6 +8,7 @@ import JsonTree from './JsonTree';
 import SceneBrushBar, { type BrushKind } from './SceneBrushBar';
 import './ProjectToolPanels.css';
 import './ToolPanel.css';
+import { StudioLoader } from '../ui';
 
 /** Panels with a Scene brush and the brush tools each offers. */
 const BRUSHES: Partial<Record<ToolPanelId, BrushKind[]>> = {
@@ -74,7 +75,7 @@ function OpCard({ op, prefix, initiallyOpen, onDone }: { op: ToolOpInfo; prefix:
       </div>}
       <div className="tool__run">
         <button type="button" className="au-button au-button--sm au-button--primary" disabled={running} onClick={() => void run()}>
-          {running ? <Loader2 size={13} className="tool__spin"/> : <Play size={13}/>}{op.readOnly ? 'Read' : 'Apply'}</button>
+          {running ? <StudioLoader size={16}/> : <Play size={13}/>}{op.readOnly ? 'Read' : 'Apply'}</button>
         {result && <span className={'tool__result ' + (result.ok ? 'is-ok' : 'is-error')} role={result.ok ? 'status' : 'alert'}>{result.text}</span>}
       </div>
       {result?.ok && result.value !== undefined && <div className="tool__answer"><JsonTree value={result.value} name="answer"/></div>}

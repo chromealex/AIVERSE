@@ -1,8 +1,8 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Adapters from the generated optional `cinematic` settings section (integer ticks, milli scales) to QTE options
 // and the hit-stop / slow-motion time-scale presets.
-#include "../gameplay/Configuration.h"
+#include "engine/gameplay/Configuration.h"
 #include "CinematicTime.h"
 #include "CinematicQte.h"
 #include <string>

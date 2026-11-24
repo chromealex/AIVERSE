@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ход разработки — AIVERSE</title>
+<meta name="description" content="Что нового в движке AIVERSE: снимки и описания по каждой системе — рендер, свет, эффекты, мир, сеть, редактор.">
+<link rel="alternate" hreflang="en" href="../devlog.html">
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<link rel="icon" href="../favicon-32.png" type="image/png" sizes="32x32">
+<link rel="alternate icon" href="../favicon.ico">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<meta name="theme-color" content="#F3EFE8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<header class="top">
+<nav class="wrap" aria-label="Главное меню">
+<a class="brand" href="./"><img src="../favicon.svg" width="34" height="32" alt=""><span>AIVERSE</span></a>
+<div class="menu">
+<a href="./#systems">Системы</a>
+<a href="./#genres">Жанры</a>
+<a href="roadmap.html">Роадмап</a>
+<a href="releases.html">Релизы</a>
+<a href="devlog.html" aria-current="page">Ход разработки</a>
+<a href="docs.html">Документация</a>
+</div>
+<a class="lang-switch" href="../devlog.html" hreflang="en" lang="en">EN</a>
+<a class="btn btn-ink btn-sm" href="https://github.com/chromealex/AIVERSE">GitHub</a>
+</nav>
+</header>
+
+<main class="wrap">
+<section class="dl-hero">
+<div>
+<p class="eyebrow">Ход разработки</p>
+<h1>Что нового в движке</h1>
+<p>Снимки и короткие описания по каждой системе: что сделано, честный статус и что ещё не проверено.</p>
+</div>
+<div class="dl-stats" aria-live="polite">
+<div><strong id="stat-entries">—</strong><span>записей</span></div>
+<div><strong id="stat-systems">—</strong><span>систем</span></div>
+<div><strong id="stat-date">—</strong><span>последняя</span></div>
+</div>
+</section>
+
+<div class="dl-layout">
+<aside class="dl-side" aria-label="Системы">
+<h2>Системы</h2>
+<div id="systems" style="display:contents"></div>
+</aside>
+
+<div class="dl-main">
+<div class="dl-filters" role="group" aria-label="Статус">
+<button class="filter" type="button" data-status="" aria-pressed="true">Все</button>
+<button class="filter" type="button" data-status="done" aria-pressed="false">Готово</button>
+<button class="filter" type="button" data-status="in-progress" aria-pressed="false">В работе</button>
+<button class="filter" type="button" data-status="experimental" aria-pressed="false">Эксперимент</button>
+<label class="dl-search">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+<span class="sr" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Поиск по записям</span>
+<input id="q" type="search" placeholder="Поиск: SSS, пробы, дороги…">
+</label>
+</div>
+<div id="feed" aria-live="polite"><p class="empty">Загружаем записи…</p></div>
+</div>
+</div>
+</main>
+
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Снимок">
+<button type="button" id="lb-close" aria-label="Закрыть">×</button>
+<img id="lb-img" alt="">
+<p id="lb-cap"></p>
+</div>
+
+<footer class="dark">
+<div class="wrap foot">
+<a class="brand" href="./" style="color:var(--on-ink)"><span>AIVERSE</span></a>
+<div class="foot-cols">
+<div><span>Сайт</span><a href="./">Главная</a><a href="roadmap.html">Роадмап</a><a href="releases.html">Релизы</a><a href="devlog.html">Ход разработки</a><a href="docs.html">Документация</a></div>
+<div><span>Сообщество</span><a href="https://github.com/chromealex/AIVERSE">GitHub</a><a href="https://t.me/aiverseengine">Telegram</a></div>
+</div>
+<small id="generated">MIT License · AIVERSE</small>
+</div>
+</footer>
+<script src="../devlog.js"></script>
+</body>
+</html>

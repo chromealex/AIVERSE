@@ -7,7 +7,7 @@
 #include "engine/world/TerraWeaveForestEcology.h"
 #include "engine/world/TerraWeaveForestHarvestEcs.h"
 #include "engine/world/TerraWeaveForestDeadwood.h"
-#include <aiverselib/water/NereidQueryIndex.h>
+#include "engine/world/nereid/NereidQueryIndex.h"
 #include <functional>
 #include <optional>
 #include <stdexcept>

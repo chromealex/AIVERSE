@@ -9,7 +9,7 @@ Use when a map needs many enterable houses without hand-placed walls (towns, rai
 `engine/actor` map format wires it from data (`buildings`, docs/fps.md § Generated buildings); other hosts call the library
 directly until the map block is shared (debt G2/G4 in `docs/no-genre-split-audit.md`).
 
-1. Read `libraries/include/aiverselib/systems/BuildingGen.h` (namespace `aiverse::lib::systems`).
+1. Read `engine/systems/BuildingGen.h` (namespace `aiverse::lib::systems`).
 2. Definition: `BuildingDef` or `readBuildingDef(json, "path")` - `width` / `depth` (6..200 m), `floors` 1..10,
    `floorHeight`, `wall`, `slab`, `door` [width, height], `window` [width, height, sill, spacing], `stair`
    [width, run, max rise], `partition`, `roof`. Always overwrite `agentRadius`, `agentHeight` and `maxStepRise`
@@ -31,3 +31,18 @@ directly until the map block is shared (debt G2/G4 in `docs/no-genre-split-audit
 
 Build selection: `AIVERSE::lib_building_gen` (depends on `aiverse_engine`); native OBJECT modules call
 `aiverse_native_use_libraries(target building-gen)`.
+
+## Capability-based building specification (current extension target)
+
+Buildings should be assembled from **physical capabilities**, not genre or setting names. Describe a structure using the requirements actually needed by the game: wide vehicle gate, two small gates, pedestrian access, opening/closing roof, doors, windows, room connectivity, stairs, floors, loading clearance, and collision/nav affordances. A fantasy fortress, spacecraft hangar or warehouse can share these same requirements.
+
+**Do not claim the existing `BuildingDef` understands all of those capabilities.** The baseline `engine/systems/BuildingGen.h` only guarantees the box/floor/door/window/stair/roof controls listed above. For any feature outside that schema, inspect the newest procedural building grammar branch, confirm the actual parser/exports and write a clear gap report before promising results. Avoid inventing JSON fields or MCP operation names.
+
+Authoring checklist:
+1. Translate the request into measurable affordances: count, opening size, clearance, access side, movement envelope and transitions.
+2. Check the supported schema/API in `engine/systems/BuildingGen.h` and project-specific building docs, and select the smallest valid implementation.
+3. Verify walkable and vehicle paths, collision shape, roof state and navigation transitions independently. For opening components verify both closed and open configurations.
+4. Preserve deterministic generation, stable IDs, unrelated capabilities and existing project assets.
+5. Keep setting-specific skins and materials separate from structural/collision constraints. Record unsupported requirements and the branch containing any experimental extension.
+
+This skill remains a **building generation library** contract; new branch-local grammar capabilities must be merged and tested before documenting them as shipped in `main`.

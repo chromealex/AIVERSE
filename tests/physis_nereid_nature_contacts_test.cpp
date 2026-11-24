@@ -2,7 +2,7 @@
 // This is a real same-World Simulation fixture, not two independent worlds.
 #include "engine/physis/PhysisIntegration.h"
 #include "engine/world/PhysisNereidNatureBridge.h"
-#include <aiverselib/water/NereidQueryIndex.h>
+#include "engine/world/nereid/NereidQueryIndex.h"
 #include <iostream>
 #include <memory>
 #include <stdexcept>

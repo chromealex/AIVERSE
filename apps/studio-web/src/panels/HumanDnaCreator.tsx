@@ -4,11 +4,11 @@
 // the Metal viewport regenerates the VIVID human from it. React never writes
 // project files and never decides that GPU output is correct.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Redo2, Undo2, UserRound } from 'lucide-react';
+import { Redo2, Undo2 } from 'lucide-react';
 import type { HumanCreatorDocument, HumanCreatorField, HumanCreatorInfo, HumanCreatorSection, HumanCreatorUndoTarget, StudioSnapshot } from '../types';
 import { invoke, nativeConnected } from '../bridge';
 import { StudioSection, StudioBadge, StudioAlert, StudioEmptyState, StudioButton,
-  StudioField, StudioInput, StudioSelect, StudioTabs, StudioCheckbox } from '../ui';
+  StudioField, StudioInput, StudioSelect, StudioTabs, StudioCheckbox, StudioLoader } from '../ui';
 import { activeExpressionCount, creatorWireValue, hexToRgb, readCreatorValue, rgbToHex } from './humanCreatorSchema';
 
 type Info = Required<HumanCreatorInfo>;
@@ -120,7 +120,7 @@ export default function HumanDnaCreator({ snapshot }: { snapshot: StudioSnapshot
   if (!nativeConnected()) return <StudioAlert>Откройте нативный Studio: браузерная демо-версия не запускает VIVID.</StudioAlert>;
   if (!info)
     return error ? <StudioAlert tone="danger">{error}</StudioAlert> :
-      <StudioEmptyState icon={<UserRound size={22}/>} title="Загрузка VIVID DNA" description="Читаю схему DNA из нативного Studio."/>;
+      <StudioEmptyState icon={<StudioLoader size={30}/>} title="Загрузка VIVID DNA" description="Читаю схему DNA из нативного Studio."/>;
 
   const historyButtons = (target: HumanCreatorUndoTarget, canUndo: boolean, canRedo: boolean) => <>
     <StudioButton size="sm" disabled={busy || !canUndo} onClick={() => void history(target, true)} aria-label="Undo"><Undo2 size={14}/></StudioButton>

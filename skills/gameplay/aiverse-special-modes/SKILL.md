@@ -7,12 +7,12 @@ description: Route and verify AIVERSE data-enabled play systems - directly contr
 
 These are capabilities enabled by rules blocks, not genres; a project may enable several at once. Pick the block,
 read its document fully, start from its sample template, change data only. Current host for all three: legacy
-`modules/rts` (debt G3 in `docs/no-genre-split-audit.md`).
+`engine/game`.
 
 | mode | document | sample | code |
 |---|---|---|---|
-| Top-down heroes: one directly controlled hero per player, sticks, aim, abilities, respawn | `docs/topdown.md` | `templates/topdown_arena` | `engine/game/TopDown.*` |
-| Extraction raids: containers, loot, objectives, extraction points, receipts for meta | `docs/raid.md` | `templates/extraction` | `engine/game/Raid*.cpp` |
+| Top-down heroes: one directly controlled hero per player, sticks, aim, abilities, respawn | `docs/topdown.md` | `~/.aiverse/packages/templates/topdown_arena` | `engine/game/TopDown.*` |
+| Extraction raids: containers, loot, objectives, extraction points, receipts for meta | `docs/raid.md` | `~/.aiverse/packages/templates/extraction` | `engine/game/Raid*.cpp` |
 | Road traffic: lane cars, signalised junctions, pedestrians | `docs/traffic.md` (+ `docs/driving.md`) | `tools/citygen` projects | `engine/game/Traffic.*` |
 
 Steps:

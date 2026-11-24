@@ -5,9 +5,9 @@
 // and per-bank fractional carry are updated in persistent ECS components.
 #pragma once
 #include "engine/world/TerraWeaveEcsBankBridge.h"
-#include <aiverselib/water/NereidSedimentTransport.h>
-#include <aiverselib/water/NereidConfluences.h>
-#include <aiverselib/water/NereidCascades.h>
+#include "engine/world/nereid/NereidSedimentTransport.h"
+#include "engine/world/nereid/NereidConfluences.h"
+#include "engine/world/nereid/NereidCascades.h"
 #include <algorithm>
 #include <map>
 #include <stdexcept>

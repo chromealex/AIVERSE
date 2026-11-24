@@ -4,7 +4,7 @@ All new environment generation uses TerraWeave for terrain, plants and rocks,
 and NEREID for water. Project recipes choose composition; they must not contain
 replacement terrain/noise/water solvers.
 
-`aiverse_terraweave_landscape --recipe recipe.json --out NEW_DIR --materials engine/assets/materials/terrain/textures`
+`aiverse_terraweave_landscape --recipe recipe.json --out NEW_DIR --materials "$(python3 tools/pkg/aiverse_pkg.py fetch terrain-pbr)/textures"`
 uses TerrainSettings, Earthworks brushes and bakeEarthworksTerrainPatch. Tiles
 are 64 metres with 65 samples. The output is ordinary glTF terrain, a shared
 PBR pack, vegetation/rock placements and a ground snapshot. This offline export
@@ -129,7 +129,7 @@ masks with continuous bilinear interpolation; grass checks the same sand sample
 before placing each tuft/blade root. Older ground snapshots keep their legacy
 water-plane filter. No automatic change to existing exported maps or game saves.
 
-`<aiverselib/water/NereidFootprintDistance.h>` exposes optional signed horizontal
+`"engine/world/nereid/NereidFootprintDistance.h"` exposes optional signed horizontal
 clearance for native authoring. Negative inside, positive outside; invalid or
 disabled water returns no value. Polygon/box/disc use boundary distance; tapered
 rivers use the existing centreline projection/half-width margin, not a certified

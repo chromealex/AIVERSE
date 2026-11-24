@@ -5,7 +5,7 @@ description: Reuse AIVERSE C++ weighted loot with exclusions and a guaranteed ra
 
 # loot-tables
 
-Read `docs/gameplay-systems.md`, `libraries/include/aiverselib/systems/Loot.h` and this package's catalog entry.
+Read `docs/gameplay-systems.md`, `engine/core/progression/Loot.h` and this package's catalog entry.
 
 1. Reuse weighted selection through rollLoot. Draw must return an integer in [1,total]; use rollSimLoot to consume sim.rng with a validated uint32 total. Guarantee N forces eligible rare loot on attempt N after N-1 misses. Impossible guarantees fail without drawing. Persist pity state and validate/exclude before sampling; reward granting remains separate.
 2. Prefer existing engine mechanics and data settings before custom state. Keep all new outcome-affecting data in NativeState; no mutable module members.

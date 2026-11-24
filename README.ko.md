@@ -174,6 +174,8 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 
 모든 템플릿은 봇과 함께 완전히 플레이할 수 있는 게임입니다. 에디터에서 열고 바로 수정하면 됩니다.
 
+템플릿은 [카탈로그](https://chromealex.github.io/AIVERSE/catalog.html)의 패키지입니다. 시작 화면에 공식 템플릿이 표시되고, **More templates**로 나머지를 검색합니다.
+
 | 장르 | 템플릿 |
 |---|---|
 | 클래식 기지 건설 RTS | **Iron and Gold**(Warcraft / Red Alert) · **Iron Front**(Red Alert: MCV, 광석, 사이드바) · **Starfall Sectors**(StarCraft: 세 종족) · **Frost Crown**(Warcraft III: 영웅, 크립, 지형) · **Four Ages**(Age of Empires II) · **Amber Sands**(Dune II) · **Metal Tide**(Total Annihilation: 흐름 경제, 레이더, 회수, 항공기, 핵미사일) |
@@ -246,7 +248,7 @@ python3 tools/importers/port/aiverse_port.py /path/to/UnityProject --out /path/t
 
 ```bash
 ./studio_mac.command                    # AIVERSE Studio 에디터 (Xcode, CMake, Node.js 필요)
-./studio_mac.command templates/mushrooms   # ...다른 프로젝트로
+./studio_mac.command ~/.aiverse/packages/templates/mushrooms   # ...다른 프로젝트로
 ```
 
 Windows: `studio_windows.cmd [project]`가 `AiverseStudio.exe`를 빌드하고 엽니다 (Visual Studio 2022,

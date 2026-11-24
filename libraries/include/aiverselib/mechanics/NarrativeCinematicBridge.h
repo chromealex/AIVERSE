@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Bridge narrative-graphs cue requests (NarrativeCues.h) into cinematic-gameplay scene commands (CinematicScene.h).
 // Authoritative and deterministic: the owner calls queueNarrativeCues() with each tick's narrative report cues and
 // releaseNarrativeCues() once per tick before stepScene(); due cues become TriggerCue commands ordered by
@@ -8,7 +8,7 @@
 // Persist NarrativeCueQueue with mechanics::save/load (record kind 76, inside cinematic-gameplay's reserved 72..79).
 #include "CinematicScene.h"
 #include "NarrativeCues.h"
-#include "Persistence.h"
+#include "engine/mechanics/Persistence.h"
 #include <algorithm>
 #include <span>
 #include <vector>

@@ -4,7 +4,7 @@
 #pragma once
 #include "engine/render/Renderer3D.h"
 #include "engine/world/NereidWindPresentation.h"
-#include <aiverselib/water/NereidInteractionPresentation.h>
+#include "engine/world/nereid/NereidInteractionPresentation.h"
 #include <algorithm>
 #include <array>
 #include <cmath>

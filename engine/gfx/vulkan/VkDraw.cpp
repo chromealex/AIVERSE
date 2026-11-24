@@ -75,6 +75,23 @@ void VulkanDevice::destroyPipeline(PipelineHandle h) {
 }
 
 // ---------- render passes ----------
+namespace {
+// AIVERSE_VK_DEPS=narrow. Into the pass: earlier writes of any stage become visible
+// before this pass's fragment work, but its vertex work (binning on tilers)
+// does not wait for them. Out of the pass: only the stages that write attachments
+// (and shader stores) are waited on by later work.
+void narrowDependencies(VkSubpassDependency (&deps)[2]) {
+    constexpr VkPipelineStageFlags fragment = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT |
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    deps[0].srcStageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+    deps[0].dstStageMask = fragment;
+    deps[1].srcStageMask = fragment | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+    deps[1].dstStageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+}
+} // namespace
+
+
 VkRenderPass VulkanDevice::renderPassFor(VkFormat color, VkFormat depth, bool clearColor, bool clearDepth) {
     const uint64_t key = uint64_t(uint32_t(color)) | (uint64_t(uint32_t(depth) & 0x3FFFFFFFu) << 32) | (uint64_t(clearColor) << 62) | (uint64_t(clearDepth) << 63);
     for (const auto& r : renderPasses_) if (r.key == key) return r.pass;
@@ -101,9 +118,9 @@ VkRenderPass VulkanDevice::renderPassFor(VkFormat color, VkFormat depth, bool cl
         a.format = depth;
         a.samples = VK_SAMPLE_COUNT_1_BIT;
         a.loadOp = clearDepth ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
-        a.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        a.storeOp = depthStore_ ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE;
         a.stencilLoadOp = clearDepth ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
-        a.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
+        a.stencilStoreOp = depthStore_ ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE;
         a.initialLayout = a.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         depthRef.attachment = n++;
         sub.pDepthStencilAttachment = &depthRef;
@@ -117,6 +134,7 @@ VkRenderPass VulkanDevice::renderPassFor(VkFormat color, VkFormat depth, bool cl
         deps[i].srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
         deps[i].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
     }
+    if (narrowDeps_) narrowDependencies(deps);
     auto ci = vkStruct<VkRenderPassCreateInfo>(VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO);
     ci.attachmentCount = n;
     ci.pAttachments = att;
@@ -190,9 +208,9 @@ VkRenderPass VulkanDevice::renderPassForMrt(
         a.format = depth;
         a.samples = VkSampleCountFlagBits(samples);
         a.loadOp = clearDepth ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
-        a.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        a.storeOp = depthStore_ ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE;
         a.stencilLoadOp = clearDepth ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
-        a.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
+        a.stencilStoreOp = depthStore_ ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE;
         a.initialLayout = samples > 1 ? VK_IMAGE_LAYOUT_UNDEFINED :
                                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         a.finalLayout = samples > 1 ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
@@ -215,6 +233,7 @@ VkRenderPass VulkanDevice::renderPassForMrt(
         deps[i].srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
         deps[i].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
     }
+    if (narrowDeps_) narrowDependencies(deps);
     auto ci = vkStruct<VkRenderPassCreateInfo>(VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO);
     ci.attachmentCount = uint32_t(count);
     ci.pAttachments = attachments;
@@ -502,7 +521,15 @@ bool VulkanDevice::beginRenderTargets(const RenderTargetPassDesc& desc) {
 
 void VulkanDevice::endPass() {
     if (!inPass_) return;
-    if (!passSkipped_) vkCmdEndRenderPass(slots_[size_t(slot_)].main);
+    if (!passSkipped_) {
+        vkCmdEndRenderPass(slots_[size_t(slot_)].main);
+        if (gpuTiming_) {
+            char label[64];
+            std::snprintf(label, sizeof label, "pass%dx%d%s%s%s", passW_, passH_, passColors_ > 1 ? "-mrt" : "",
+                          passDepth_ != VK_FORMAT_UNDEFINED ? "-d" : "", hdrPass_ ? "-hdr" : "");
+            timestamp(label, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+        }
+    }
     if (scopedPassFb_) {
         // A framebuffer must outlive command execution; destroy its views
         // only after destroying the framebuffer, on frame completion.

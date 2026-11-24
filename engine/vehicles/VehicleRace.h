@@ -9,7 +9,7 @@
 // immutable (VehicleRace, owned by the host).
 #pragma once
 #include "Vehicles.h"
-#include <aiverselib/mechanics/RaceSession.h>
+#include "engine/mechanics/RaceSession.h"
 #include <memory>
 #include <optional>
 #include <vector>

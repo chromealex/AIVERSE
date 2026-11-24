@@ -351,6 +351,28 @@ def load_releases():
     return json.loads(RELEASES.read_text(encoding='utf-8'))
 
 
+def shipped_entries(rel_data):
+    """Ids of devlog entries already in the latest release (present in its tagged commit).
+
+    Entries written on the release day after the tag are new work, so the date alone cannot tell
+    them apart. None when git or the tag is unavailable (then the page falls back to dates)."""
+    rels = rel_data.get('releases') or []
+    if not rels:
+        return None
+    ref = rels[0].get('tag') or rels[0].get('commit')
+    try:
+        out = subprocess.run(['git', 'ls-tree', '--name-only', ref, 'docs/devlog/entries/'],
+                             cwd=ROOT, capture_output=True, text=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        try:
+            out = subprocess.run(['git', 'ls-tree', '--name-only', rels[0].get('commit', ''),
+                                  'docs/devlog/entries/'], cwd=ROOT, capture_output=True, text=True,
+                                 check=True).stdout
+        except (OSError, subprocess.CalledProcessError):
+            return None
+    return {Path(p).stem for p in out.split() if p.endswith('.json')}
+
+
 def check_releases():
     p = 'releases.json'
     try:
@@ -404,7 +426,7 @@ def check_releases():
     return errors
 
 
-from render import (Ctx, roadmap_lines, FEATURE_JS, GALLERY_JS, gallery_page, MARK_LIGHT, RELEASES_JS, ROADMAP_JS, TRACK_JS, BLOG_JS, Converter, blog_page, devblog_page, feature_page, docs_index, doc_page, esc, localized_entries,  # noqa: E402
+from render import (Ctx, ROOT_LANG, MENU_SPY_JS, roadmap_lines, FEATURE_JS, DOCS_SEARCH_JS, doc_sections, GALLERY_JS, gallery_page, CATALOG_JS, catalog_page, MARK_LIGHT, RELEASES_JS, ROADMAP_JS, TRACK_JS, BLOG_JS, Converter, blog_page, devblog_page, feature_page, docs_index, doc_page, esc, localized_entries,  # noqa: E402
                     release_chip, releases_page, render_page, roadmap_page, showcase_html, system_page,
                     systems_html, core_html, fill_tokens)
 
@@ -532,6 +554,7 @@ def cmd_build(args):
                 link['href'] = f'{manifest["repoBlob"]}/{link["href"]}'
     layout = (SITE / '_layout.html').read_text(encoding='utf-8')
     rel_data = load_releases()
+    rel_data['_shipped'] = shipped_entries(rel_data)
     for r in rel_data.get('releases') or []:
         for h in r.get('highlights') or []:
             for m in h.get('media') or []:
@@ -544,15 +567,28 @@ def cmd_build(args):
         ctx = Ctx(lang, T, LANGS)
         ctx.rel = {'released': {r['version'] for r in rel_data.get('releases') or []},
                    'next': (rel_data.get('next') or {}).get('version', '')}
-        d = out if lang == 'ru' else out / lang
+        d = out if lang == ROOT_LANG else out / lang
         d.mkdir(parents=True, exist_ok=True)
         loc_entries = localized_entries(entries, ctx)
-        # static pages per language: site/<page>.html (ru) and site/<lang>/<page>.html
+        # static pages per language: site/<page>.html (English, the root) and site/<lang>/<page>.html
         for name in ('index.html', 'devlog.html'):
             f = d / name
             if not f.is_file():
                 sys.exit(f'site page missing: {f.relative_to(out)}')
             text = fill_tokens(f.read_text(encoding='utf-8'), ctx, name)
+            # One menu for every page: the static pages take the header of _layout.html, so a new
+            # menu item (gallery, blog, ...) cannot go missing from them.
+            head_re = re.compile(r'<header class="top">.*?</header>', re.S)
+            shared = head_re.search(fill_tokens(layout, ctx, name)).group(0)
+            nav_id = 'devlog' if name == 'devlog.html' else None
+            if nav_id:
+                shared = shared.replace(f'data-nav="{nav_id}"', f'data-nav="{nav_id}" aria-current="page"')
+            text, n = head_re.subn(lambda _m: shared, text, count=1)
+            if n != 1:
+                sys.exit(f'{lang}/{name} lost its <header class="top">')
+            if name == 'index.html':
+                # The main page is one long page: the menu item of the section in view is current.
+                text = text.replace('</body>', MENU_SPY_JS + '</body>', 1)
             if name == 'index.html':
                 for mark in ('<!--SHOWCASE-->', '<!--SYSTEMS-->', '<!--CORE_SYSTEMS-->', '<!--ROADMAP_LINES-->'):
                     if mark not in text:
@@ -631,22 +667,44 @@ def cmd_build(args):
             layout, ctx, 'releases.html', T['relPageTitle'], T['relLead'],
             releases_page(rel_data, loc_entries, systems, ctx, manifest['repo']), nav='releases', script=rel_script),
             encoding='utf-8')
+        cat = manifest['catalog']
+        cat_cfg = {'index': cat['index'], 'lang': lang, 't': T['catJs'], 'cats': T['catNames'], 'kinds': T['catKinds']}
+        cat_script = f'<script>window.CAT_CFG={json.dumps(cat_cfg, ensure_ascii=False)};</script>' + CATALOG_JS
+        (d / 'catalog.html').write_text(render_page(layout, ctx, 'catalog.html', T['catPageTitle'], T['catLead'],
+                                                    catalog_page(cat, ctx), nav='catalog', script=cat_script),
+                                        encoding='utf-8')
+        ds_script = (f'<script>window.DS_L={json.dumps({"none": T["docsSearchNone"]}, ensure_ascii=False)};</script>'
+                     + DOCS_SEARCH_JS)
         (d / 'docs.html').write_text(render_page(layout, ctx, 'docs.html', T['docsPageTitle'], T['docsLead'],
-                                                 docs_index(manifest_docs, ctx), nav='docs'), encoding='utf-8')
+                                                 docs_index(manifest_docs, ctx), nav='docs', script=ds_script), encoding='utf-8')
+        search_index = []
         for sec in manifest_docs['sections']:
             for pg in sec['pages']:
                 body, heads = doc_page(pg, manifest_docs, ctx, ROOT, manifest['repo'], doc_pages)
                 title = ctx.loc(pg, 'title')
+                art = re.search(r'<article class="doc"[^>]*>(.*)</article>', body, re.S)
+                search_index += doc_sections(pg['id'], title, art.group(1) if art else body)
                 (d / f'docs-{pg["id"]}.html').write_text(render_page(
                     layout, ctx, f'docs-{pg["id"]}.html', f'{title} — AIVERSE', ctx.loc(pg, 'lead') or title,
-                    body, nav='docs', main_class=' docs-main'), encoding='utf-8')
+                    body, nav='docs', main_class=' docs-main', script=ds_script), encoding='utf-8')
                 pages += 1
+        (d / 'docs-search.json').write_text(json.dumps(search_index, ensure_ascii=False, separators=(',', ':')),
+                                            encoding='utf-8')
         public = [{'id': s['id'], 'name': ctx.loc(s, 'name')} for s in systems]
         data = {'generated': generated, 'lang': lang, 'repo': manifest['repo'], 'systems': public,
                 'entries': loc_entries}
         (d / 'devlog.json').write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding='utf-8')
         pages += 6
     (out / '.nojekyll').write_text('', encoding='utf-8')
+    # English moved from en/ to the site root: old en/<page> links redirect to the same page.
+    legacy = out / 'en'
+    legacy.mkdir(exist_ok=True)
+    for page in sorted(out.glob('*.html')):
+        (legacy / page.name).write_text(
+            f'<!doctype html><meta charset="utf-8"><title>AIVERSE</title>'
+            f'<link rel="canonical" href="../{page.name}">'
+            f'<meta http-equiv="refresh" content="0; url=../{page.name}">'
+            f'<script>location.replace("../{page.name}"+location.hash)</script>', encoding='utf-8')
     # Cache busting: the CDN and browsers keep style.css / devlog.js for minutes, so a fresh page
     # could meet a stale stylesheet. Every page asks for the exact version it was built with.
     for asset in ('style.css', 'devlog.js'):

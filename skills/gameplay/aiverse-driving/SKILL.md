@@ -5,7 +5,7 @@ description: Let directly controlled characters of any AIVERSE project get into 
 
 # driving
 
-Behaviour and format: `docs/driving.md`. Simulation: the one vehicle system `engine/vehicles/Vehicles.*` + `VehicleRace.*` (components `vehicles::VehicleDrive` / `VehicleOccupant`, `stepVehicles` over a host `VehicleHost`); grid-map host `engine/game/Driving.*`, metre-map host `engine/actor/ActorVehicles.cpp` (dynamics: `libraries/include/aiverselib/mechanics/VehicleControllers.h`, `skills/gameplay/aiverse-vehicle-controllers`). Client camera: `apps/client/ClientTopDown.cpp`. Tests: `aiverse_tests driving_`.
+Behaviour and format: `docs/driving.md`. Simulation: the one vehicle system `engine/vehicles/Vehicles.*` + `VehicleRace.*` (components `vehicles::VehicleDrive` / `VehicleOccupant`, `stepVehicles` over a host `VehicleHost`); grid-map host `engine/game/Driving.*`, metre-map host `engine/actor/ActorVehicles.cpp` (dynamics: `engine/mechanics/VehicleControllers.h`, `skills/gameplay/aiverse-vehicle-controllers`). Client camera: `apps/client/ClientTopDown.cpp`. Tests: `aiverse_tests driving_`.
 
 1. Needs directly controlled characters (rules `topDown`, legacy block name; `docs/topdown.md`). Vehicle logic lives
    only in `engine/vehicles` (stage B of `docs/no-genre-split-audit.md`): a host implements `vehicles::VehicleHost`

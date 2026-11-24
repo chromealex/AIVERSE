@@ -1,8 +1,8 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Adapters from the generated `combat` settings section (integer ticks, milli-units) to combat-actions configs.
-#include "../gameplay/Configuration.h"
-#include "CombatActions.h"
+#include "engine/gameplay/Configuration.h"
+#include "engine/mechanics/CombatActions.h"
 namespace aiverse::lib::mechanics {
 inline DodgeConfig dodgeConfig(const gameplay::GameplaySettings& s){const auto& p=s.combat;return {uint32_t(p.dodgeTicks),uint32_t(p.dodgeInvulnFrom),uint32_t(p.dodgeInvulnTo),uint32_t(p.dodgeCooldown)};}
 inline GuardConfig guardConfig(const gameplay::GameplaySettings& s){const auto& p=s.combat;return {Fixed::fromRatio(p.blockHalfArcMilli,1000),uint32_t(p.parryTicks),uint32_t(p.parryRearmTicks)};}

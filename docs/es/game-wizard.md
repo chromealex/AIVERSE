@@ -7,7 +7,7 @@ mejoras, tienda, recompensa diaria, perfil, ajustes, resultado), compras y anunc
 una comprobación con bots. Todo lo que escribe son datos de juego normales que luego se pueden editar.
 
 Código: `apps/editor/core/GameWizard*.cpp` (sin UI), `apps/editor/core/WizardOps.cpp` (MCP), `apps/editor/EditorGameWizard.cpp`
-(la página del centro de proyectos). Kit de ejecución que se copia a cada juego: `templates/_wizard/` (Lua + RmlUi, ver su README).
+(la página del centro de proyectos). Kit de ejecución que se copia a cada juego: `tools/wizard/kit/` (Lua + RmlUi, ver su README).
 
 ## Respuestas (`WizardSpec`, todas opcionales)
 

@@ -368,10 +368,12 @@ void GameClient::natureUpdate(float dt) {
     static const bool dbg = std::getenv("AIVERSE_PHYSIS_DEBUG") != nullptr;
     static int frames = 0;
     if (dbg && stats.active && ++frames % 60 == 0)
-        std::fprintf(stderr, "[physis] tick %llu flames %zu smoke %zu voices %zu wind %.1f,%.1f tornadoes %zu debris %zu\n",
+        std::fprintf(stderr, "[physis] tick %llu flames %zu smoke %zu voices %zu wind %.1f,%.1f tornadoes %zu debris %zu"
+                     " fire %zu (%.2f) spray %zu (%.2f) embers %zu scars %zu\n",
                      static_cast<unsigned long long>(stats.tick), stats.flames, stats.smoke,
                      stats.voices, double(stats.meanWindX), double(stats.meanWindZ),
-                     stats.tornadoes, stats.debris);
+                     stats.tornadoes, stats.debris, stats.fireFunnels, double(stats.maxFireness),
+                     stats.sprays, double(stats.maxSpray), stats.embers, stats.scars);
 }
 
 void GameClient::natureStop() { nature_.stop(natureTargets()); }

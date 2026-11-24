@@ -6,7 +6,7 @@
 // reservoir migration (not by blindly reseeding water).
 #pragma once
 #include "engine/world/TerraWeaveEcsAuthority.h"
-#include <aiverselib/water/NereidWaterSystems.h>
+#include "engine/world/nereid/NereidWaterSystems.h"
 #include <cstdint>
 #include <stdexcept>
 #include <string>

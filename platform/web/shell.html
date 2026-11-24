@@ -19,6 +19,9 @@
                     background: rgba(255, 255, 255, .18); }
   #aiverse-splash-bar div { width: 0; height: 100%; background: var(--aiverse-splash-bar, #e0b040); transition: width .2s; }
   @keyframes aiverse-pulse { 50% { transform: scale(1.04); } }
+  /* Games without their own splash: the animated AIVERSE mark, as the engine's default loading screen draws it. */
+  #aiverse-mark { display: none; width: 26vmin; --aiv-mark-ink: #ffffff; --aiv-mark-accent: #fe6f03; }
+  #aiverse-mark .aiv-mark { width: 100%; height: auto; }
 </style>
 <script>
   // Native-plugin registry stub: plugin scripts may load before the engine; the engine takes over
@@ -32,7 +35,9 @@
 </head>
 <body>
 <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
-<div id="aiverse-splash"><img id="aiverse-splash-logo" alt=""><div id="aiverse-splash-bar"><div></div></div></div>
+<div id="aiverse-splash"><img id="aiverse-splash-logo" alt=""><div id="aiverse-mark"><!-- aiverse-loader:begin (tools/branding/logo/loader.py) -->
+<svg class="aiv-mark" viewBox="0 60 1000 880" role="img" aria-label="Loading"><style>.aiv-mark{display:block;overflow:visible}.aiv-mark .aiv-b{fill:var(--aiv-mark-ink,#141210);opacity:0;animation:.55s cubic-bezier(.2,.7,.25,1) forwards}.aiv-mark .aiv-t{animation-name:aiv-t}.aiv-mark .aiv-l{animation-name:aiv-l;animation-delay:.1s}.aiv-mark .aiv-r{animation-name:aiv-r;animation-delay:.2s}.aiv-mark .aiv-d{fill:var(--aiv-mark-accent,#E9C3A4);opacity:0;transform-box:view-box;transform-origin:500px 588px;animation:aiv-d .5s .55s cubic-bezier(.2,.7,.25,1) forwards,aiv-p 1.6s 1.05s ease-in-out infinite}@keyframes aiv-t{from{opacity:0;transform:translate(0,-70px)}to{opacity:1;transform:none}}@keyframes aiv-l{from{opacity:0;transform:translate(-60px,32px)}to{opacity:1;transform:none}}@keyframes aiv-r{from{opacity:0;transform:translate(60px,32px)}to{opacity:1;transform:none}}@keyframes aiv-d{from{opacity:0;transform:rotate(-90deg) scale(.3)}to{opacity:1;transform:none}}@keyframes aiv-p{0%,100%{opacity:1;transform:none}50%{opacity:1;transform:scale(1.07)}}@media (prefers-reduced-motion:reduce){.aiv-mark .aiv-b,.aiv-mark .aiv-d{animation:none;opacity:1}}</style><polygon class="aiv-b aiv-t" points="500,94 373,179 373,476 500,397 627,476 627,179"/><polygon class="aiv-b aiv-l" points="433,741 147,907 23,833 23,719 307,561 307,663"/><polygon class="aiv-b aiv-r" points="567,741 853,907 977,833 977,719 693,561 693,663"/><polygon class="aiv-d" points="500,438 350,588 500,738 650,588"/></svg>
+<!-- aiverse-loader:end --></div><div id="aiverse-splash-bar"><div></div></div></div>
 <div id="status">Loading…</div>
 <script>
   // URL query → command line, e.g. index.html?map=0&spectate → --map 0 --spectate
@@ -45,6 +50,10 @@
   if (window.AIVERSE_SPLASH && AIVERSE_SPLASH.logo) {
     var logo = document.getElementById('aiverse-splash-logo');
     logo.src = AIVERSE_SPLASH.logo; logo.style.display = 'block';
+  } else if (!window.AIVERSE_SPLASH) {   // no "splash" block in game.json: the engine's own mark and colours
+    document.getElementById('aiverse-mark').style.display = 'block';
+    splash.style.background = '#0e0f11';
+    splashBar.style.background = '#fe6f03';
   }
   // "Downloading data... (12345/67890)" from the .data preload drives the bar
   function splashProgress(t) {

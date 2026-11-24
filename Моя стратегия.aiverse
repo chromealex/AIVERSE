@@ -1,0 +1,8 @@
+{
+  "format": 1,
+  "name": "Моя стратегия",
+  "custom": {"k": 3},
+  "engine": "3.0.0",
+  "manifest": "game.json",
+  "created": "2026-11-22"
+}

@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // survival-ecology: animal behavior states (Wander / Graze / Flee / Hunt / Sleep) for individual animals.
 // Decisions come only from senses-like inputs: mechanics::PerceivedTarget records (stealth-senses, observer = animal
 // id) plus owner facts about each perceived target (species, current position). Priority per tick: flee a feared

@@ -1,0 +1,45 @@
+{
+  "id": "2026-11-22-build-catalog-viewer-lod",
+  "date": "2026-11-22",
+  "system": "build",
+  "title": "Просмотрщик каталога: формы, LOD и STRATA, анимированный знак загрузки",
+  "titleEn": "Catalog viewer: shapes, LOD and STRATA, animated loading mark",
+  "summary": "3D-просмотр пакетов каталога показывает материалы на сфере, кубе, цилиндре или плоскости с текстурами в исходном размере, а модели — по уровням LOD или через STRATA. Все загрузки на сайте, в Studio и веб-сборках теперь показывают анимированный знак AIVERSE.",
+  "summaryEn": "The 3D preview of catalog packages shows materials on a sphere, cube, cylinder or plane with textures at their own size, and models by LOD level or through STRATA. Every loading state on the site, in Studio and in web builds now shows the animated AIVERSE mark.",
+  "body": [
+    "Над окном просмотра — переключатель формы для материалов. Плотность текстуры одинакова на всех формах, на сфере и цилиндре число повторов целое, поэтому шва больше нет. Текстуры приходят такими, какими их опубликовал автор пакета: тонкие края листвы с вырезом по альфе больше не превращаются в кляксы. Панель слева показывает каждую карту — цвет, нормали, ORM, AO — с размером в пикселях и весом файла.",
+    "Для моделей: Авто LOD (подсвечен уровень, который рендер выбрал на этом расстоянии), любой уровень вручную или STRATA — кластеры строятся из модели при первом выборе, кнопка «Кластеры» их раскрашивает. «Сетка» показывает рёбра текущего уровня. Панель пишет треугольники по уровням, сгенерировал ли LOD движок, число кластеров и время сборки STRATA.",
+    "Знак загрузки — та же сборка лопастей и ромба, что в заставке движка: на сайте (каталог, сборки на странице релизов), в просмотрщике, в Studio вместо крутилок и в веб-сборках игр без своей заставки."
+  ],
+  "bodyEn": [
+    "Materials get a shape switch above the view. Texel density is the same on every shape, and spheres and cylinders get a whole number of repeats around, so the seam is gone. Textures arrive exactly as the package author published them: thin alpha-cut leaf edges no longer turn into blobs. The panel on the left lists every map — colour, normal, ORM, AO — with its size in pixels and its file size.",
+    "Models: Auto LOD (the level the renderer picked at this distance is highlighted), any level by hand, or STRATA — clusters are built from the model on first request and the Clusters button colours them. Wireframe shows the edges of the shown level. The panel lists triangles per level, whether the engine generated the LODs, and STRATA's cluster count and build time.",
+    "The loading mark is the same assembly of blades and diamond as the engine's splash: on the site (catalog, builds on the releases page), in the viewer, in Studio instead of spinners, and in web builds of games without their own splash."
+  ],
+  "status": "done",
+  "verified": "Кадры сняты в настольной сборке просмотрщика (Linux, OpenGL) на пакетах terrain-pbr и vegetation-pbr и на тестовом камне в 20 тыс. треугольников; знак загрузки снят на собранном сайте в Chrome.",
+  "verifiedEn": "Frames come from the desktop build of the viewer (Linux, OpenGL) on the terrain-pbr and vegetation-pbr packages and a 20k-triangle test rock; the loading mark was captured on the built site in Chrome.",
+  "limits": "Веб-версия просмотрщика собирается в каталоге и проверяется после выкладки. В каталоге пока нет пакетов с моделями, поэтому LOD и STRATA на сайте появятся с первым таким пакетом. STRATA собирается при первом выборе, на крупной модели это заметная пауза.",
+  "limitsEn": "The web viewer is built in the catalog and checked after it is deployed. The catalog has no model packages yet, so LOD and STRATA appear on the site with the first one. STRATA is built on first request, which is a noticeable pause on a large model.",
+  "branch": "feature/aiv20261122_packages",
+  "commit": "a304cd753",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-22-build-catalog-viewer-lod/01.jpg",
+      "caption": "Материалы на сфере, кубе, цилиндре и плоскости: листва кустарника, скала, почва, еловая хвоя",
+      "captionEn": "Materials on a sphere, cube, cylinder and plane: shrub leaves, rock, soil, spruce needles"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-22-build-catalog-viewer-lod/02.jpg",
+      "caption": "Камень: сетка LOD 0 (20 480 треугольников) и LOD 3 (2 560), сетка кластеров STRATA и раскраска кластеров",
+      "captionEn": "A rock: wireframe of LOD 0 (20,480 triangles) and LOD 3 (2,560), STRATA cluster wireframe and cluster colours"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-22-build-catalog-viewer-lod/03.jpg",
+      "caption": "Каталог на сайте во время загрузки: анимированный знак AIVERSE",
+      "captionEn": "The site catalog while loading: the animated AIVERSE mark"
+    }
+  ],
+  "links": [],
+  "author": null
+}

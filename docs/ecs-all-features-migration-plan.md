@@ -8,7 +8,7 @@ Goal: **every authoritative gameplay feature is an opt-in composition of reusabl
 
 ### Present state, grounded in source
 - `engine/game/GameCore.cpp` registers 41 named ordered system stages, but module-aware systems still use `GameCore&`, `GameState` and `Unit`, with a large `applyCommand` dispatcher.
-- `engine/actor/ActorModule.cpp` stages `fps.ecsHydrate -> fps -> fps.ecsMirror` when `fps.ecsAuthority` is on, with `ActorRuntime`, `ProjectileRuntime`, `LootRuntime` and `VehicleRuntime` storage. The `fps` tick itself still runs many algorithms through `State::actors` and dynamic vectors; legacy saves are v9.
+- `engine/actor/ActorModule.cpp` stages `actor.ecsHydrate -> fps -> fps.ecsMirror` when `actor.ecsAuthority` is on, with `ActorRuntime`, `ProjectileRuntime`, `LootRuntime` and `VehicleRuntime` storage. The `fps` tick itself still runs many algorithms through `State::actors` and dynamic vectors; legacy saves are v9.
 - Generic public components/systems exist in three opt-in packages: `ecs-weapon-launch`, `ecs-projectile-systems`, `ecs-impact-damage`. These have not replaced real FPS/RTS gameplay. Native test success is **unverified**.
 - `engine/core/ECS.h` supports deterministic sparse-set World and experimental COW; `engine/sim/CommonComponents.h` has `Transform`, `Owner`, `Parent`, `LocalTransform`, `WorldTransform`. ECS is the substrate, not evidence that a module is fully universal.
 - In-match `GameCore` and `fps::Module` must become composition/adapters. `modules/rts` and `modules/fps` remain for template compatibility until snapshots/replays/network pass.
@@ -48,15 +48,15 @@ Work from command dispatch, queues and phase ordering toward small neutral syste
 | ID | Existing code | Disposition | Action |
 |---|---|---|---|
 | `abilities` | `libraries/include/aiverselib/gameplay/Abilities.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `gear-tiers` | `libraries/include/aiverselib/systems/Gear.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `gear-tiers` | `engine/systems/Gear.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `attribute-modifiers` | `libraries/include/aiverselib/systems/EngineMechanics.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `status-effects` | `libraries/include/aiverselib/systems/EngineMechanics.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `melee-combat` | `libraries/include/aiverselib/mechanics/Melee.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `combat-actions` | `libraries/include/aiverselib/mechanics/CombatActions.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `weapon-policies` | `libraries/include/aiverselib/mechanics/Weapons.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `ecs-projectile-systems` | `libraries/include/aiverselib/mechanics/EcsProjectileSystems.h` | ECS | Already generic; integrate legacy hosts and verify |
-| `ecs-impact-damage` | `libraries/include/aiverselib/mechanics/EcsDamageSystems.h` | ECS | Already generic; integrate legacy hosts and verify |
-| `ecs-weapon-launch` | `libraries/include/aiverselib/mechanics/EcsWeaponLaunchSystems.h` | ECS | Already generic; integrate legacy hosts and verify |
+| `melee-combat` | `engine/mechanics/Melee.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `combat-actions` | `engine/mechanics/CombatActions.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `weapon-policies` | `engine/mechanics/Weapons.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `ecs-projectile-systems` | `engine/mechanics/EcsProjectileSystems.h` | ECS | Already generic; integrate legacy hosts and verify |
+| `ecs-impact-damage` | `engine/mechanics/EcsDamageSystems.h` | ECS | Already generic; integrate legacy hosts and verify |
+| `ecs-weapon-launch` | `engine/mechanics/EcsWeaponLaunchSystems.h` | ECS | Already generic; integrate legacy hosts and verify |
 
 ### P2 — 11 packages
 | ID | Existing code | Disposition | Action |
@@ -64,13 +64,13 @@ Work from command dispatch, queues and phase ordering toward small neutral syste
 | `spatial` | `engine/game/GameCore.h` | POLICY + ECS adapter | Inspect existing implementation; do not duplicate |
 | `grid` | `libraries/include/aiverselib/Grid.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
 | `navigation` | `docs/pathfinding.md` | POLICY + ECS adapter | Inspect existing implementation; do not duplicate |
-| `navmesh` | `libraries/include/aiverselib/bots/NavMesh.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `character-locomotion` | `libraries/include/aiverselib/mechanics/Locomotion.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `navmesh` | `engine/bots/NavMesh.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `character-locomotion` | `engine/mechanics/Locomotion.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `zone-graph` | `libraries/include/aiverselib/strategy/ZoneGraph.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `physical-interactions` | `libraries/include/aiverselib/mechanics/PhysicalInteractions.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `vehicle-controllers` | `libraries/include/aiverselib/mechanics/Vehicles.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `swept-shapes` | `libraries/include/aiverselib/SweptShapes.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
-| `city-traffic` | `libraries/include/aiverselib/mechanics/Traffic.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `vehicle-controllers` | `engine/mechanics/Vehicles.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `swept-shapes` | `engine/core/SweptShapes.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
+| `city-traffic` | `engine/mechanics/Traffic.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `voxel-nav` | `libraries/include/aiverselib/bots/voxelnav/VoxelNav.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 
 ### P3 — 15 packages
@@ -78,16 +78,16 @@ Work from command dispatch, queues and phase ordering toward small neutral syste
 |---|---|---|---|
 | `tasks` | `libraries/include/aiverselib/Tasks.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
 | `logistics` | `libraries/include/aiverselib/Logistics.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
-| `progression` | `libraries/include/aiverselib/Progression.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
+| `progression` | `engine/core/progression/Progression.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
 | `objectives` | `libraries/include/aiverselib/Objectives.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
 | `construction` | `libraries/include/aiverselib/gameplay/Construction.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `inventory` | `libraries/include/aiverselib/gameplay/Inventory.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `inventory` | `engine/gameplay/Inventory.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `squads` | `libraries/include/aiverselib/gameplay/Squads.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `tutorial` | `libraries/include/aiverselib/gameplay/Tutorial.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `object-interactions` | `libraries/include/aiverselib/systems/Interactions.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `reservations` | `libraries/include/aiverselib/systems/Reservations.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `action-sequences` | `libraries/include/aiverselib/systems/Sequence.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `loot-tables` | `libraries/include/aiverselib/systems/Loot.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `loot-tables` | `engine/core/progression/Loot.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `offline-production` | `libraries/include/aiverselib/strategy/Offline.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `production-networks` | `libraries/include/aiverselib/strategy/Production.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `settlement-production` | `libraries/include/aiverselib/mechanics/Colony.h` | ECS | Extract state+systems; preserve and reuse existing policy |
@@ -96,8 +96,8 @@ Work from command dispatch, queues and phase ordering toward small neutral syste
 | ID | Existing code | Disposition | Action |
 |---|---|---|---|
 | `save-migrations` | `libraries/include/aiverselib/gameplay/Saves.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `tag-conditions` | `libraries/include/aiverselib/systems/Tags.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `progression-curves` | `libraries/include/aiverselib/systems/Curves.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `tag-conditions` | `engine/systems/Tags.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `progression-curves` | `engine/systems/Curves.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `ai-perception` | `libraries/include/aiverselib/systems/Perception.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `bots-commander` | `libraries/include/aiverselib/bots/Rts.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `bots-combatant` | `libraries/include/aiverselib/bots/Fps.h` | ECS | Extract state+systems; preserve and reuse existing policy |
@@ -120,8 +120,8 @@ Work from command dispatch, queues and phase ordering toward small neutral syste
 | `puzzle-machine` | `libraries/include/aiverselib/strategy/PuzzleMachine.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `sports-rules` | `libraries/include/aiverselib/mechanics/Sports.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `survival-ecology` | `libraries/include/aiverselib/mechanics/SurvivalEcology.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `boss-encounters` | `libraries/include/aiverselib/mechanics/Telegraphs.h` | ECS | Extract state+systems; preserve and reuse existing policy |
-| `match-progression` | `libraries/include/aiverselib/mechanics/Perks.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `boss-encounters` | `engine/mechanics/Telegraphs.h` | ECS | Extract state+systems; preserve and reuse existing policy |
+| `match-progression` | `engine/mechanics/Perks.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `world-calendar` | `libraries/include/aiverselib/systems/Calendar.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `voxel-world` | `libraries/include/aiverselib/systems/voxel/VoxelWorld.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `voxel-light` | `libraries/include/aiverselib/systems/voxellight/VoxelLight.h` | ECS | Extract state+systems; preserve and reuse existing policy |
@@ -134,21 +134,21 @@ Work from command dispatch, queues and phase ordering toward small neutral syste
 | `geometry` | `engine/render/Geometry.h` | ADAPTER | Inspect existing implementation; do not duplicate |
 | `math` | `engine/core/FixedMath.h` | POLICY + ECS adapter | Inspect existing implementation; do not duplicate |
 | `collections` | `libraries/include/aiverselib/Collections.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
-| `graphs` | `libraries/include/aiverselib/Graphs.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
+| `graphs` | `engine/core/Graphs.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
 | `behavior` | `libraries/include/aiverselib/Behavior.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
 | `rules` | `libraries/include/aiverselib/Rules.h` | POLICY + ECS adapter | Extract state+systems; preserve and reuse existing policy |
 | `generation` | `engine/game/gen/MapGen.h` | POLICY + ECS adapter | Inspect existing implementation; do not duplicate |
 | `presentation` | `libraries/include/aiverselib/Presentation.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
 | `ui-patterns` | `engine/ui/templates/README.md` | ADAPTER | Inspect existing implementation; do not duplicate |
 | `verification` | `tests/check_headless_restore.py` | KEEP | Inspect existing implementation; do not duplicate |
-| `input` | `libraries/include/aiverselib/gameplay/Input.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
-| `camera` | `libraries/include/aiverselib/gameplay/Camera.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
+| `input` | `engine/gameplay/Input.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
+| `camera` | `engine/gameplay/Camera.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
 | `feedback` | `libraries/include/aiverselib/gameplay/Feedback.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
-| `diagnostics` | `libraries/include/aiverselib/gameplay/Diagnostics.h` | KEEP | Extract state+systems; preserve and reuse existing policy |
+| `diagnostics` | `engine/gameplay/Diagnostics.h` | KEEP | Extract state+systems; preserve and reuse existing policy |
 | `content-pipeline` | `tools/libraries/gameplay.py` | KEEP | Extract state+systems; preserve and reuse existing policy |
 | `game-verification` | `tools/libraries/gameplay.py` | KEEP | Extract state+systems; preserve and reuse existing policy |
 | `project-recipes` | `tools/libraries/gameplay.py` | KEEP | Extract state+systems; preserve and reuse existing policy |
-| `configuration` | `libraries/include/aiverselib/gameplay/Configuration.h` | KEEP | Extract state+systems; preserve and reuse existing policy |
+| `configuration` | `engine/gameplay/Configuration.h` | KEEP | Extract state+systems; preserve and reuse existing policy |
 | `ui-binding` | `libraries/include/aiverselib/app/Binding.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
 | `screens` | `libraries/include/aiverselib/app/Screens.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
 | `themes` | `libraries/include/aiverselib/app/Theme.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
@@ -175,7 +175,7 @@ Work from command dispatch, queues and phase ordering toward small neutral syste
 | `bot-matches` | `examples/libraries/bots/main.cpp` | KEEP | Extract state+systems; preserve and reuse existing policy |
 | `big-numbers` | `libraries/include/aiverselib/strategy/BigNumber.h` | ECS | Extract state+systems; preserve and reuse existing policy |
 | `session-admission` | `libraries/include/aiverselib/net/Admission.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
-| `snapshot-delta` | `libraries/include/aiverselib/net/SnapshotDelta.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
+| `snapshot-delta` | `engine/net/SnapshotDelta.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
 | `physics` | `engine/physics/World.h` | ADAPTER | Inspect existing implementation; do not duplicate |
 | `weather-timeline` | `libraries/include/aiverselib/systems/WeatherTimeline.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
 | `vehicle-fx` | `libraries/include/aiverselib/mechanics/vehicle-fx/VehicleLights.h` | ADAPTER | Extract state+systems; preserve and reuse existing policy |
@@ -238,7 +238,7 @@ tests before switching source ownership or system barriers.
   knockdown, kill credit, loot and event ordering are preserved by calling
   the shared helper at the prior immediate HP commit point. This is
   **shared-policy adoption**, not separate FPS `HitPointsComponent`
-  authority: `ActorRuntime` remains canonical in `fps.ecsAuthority`.
+  authority: `ActorRuntime` remains canonical in `actor.ecsAuthority`.
 - The generic `DamageQueue` now provides explicit v1 endian-independent
   `saveDamageQueue` / transactional `loadDamageQueue` /
   `hashDamageQueue` helpers with size bounds and generation-safe Entity
@@ -266,7 +266,7 @@ fps.ecsMirror               [editor projection and ECS canonical commit]
 ```
 
 The previously first statement of `Module::tick`, `tickProjectilePrograms`,
-was moved into `fps.compat.projectilePrograms`, with the same winner guard.
+was moved into `actor.compat.projectilePrograms`, with the same winner guard.
 This is an independently named `Simulation` stage and a **real extraction
 from the monolithic game loop**, but it still uses legacy `State::projectiles`
 and `State::actors` as compatibility workspaces. In ECS-authority mode
@@ -299,8 +299,8 @@ and editor integration tests pass natively.
 
 ## FPS direct ProjectileRuntime flight ownership checkpoint (2026-11-18)
 
-The live `fps.compat.projectilePrograms` stage has now been updated on the
-`fps.ecsAuthority=true` path: the **simulation of programmed projectile
+The live `actor.compat.projectilePrograms` stage has now been updated on the
+`actor.ecsAuthority=true` path: the **simulation of programmed projectile
 flight, collision, immediate impact and branch spawn mutates the canonical
 `ProjectileRuntime` ECS component**, not `State::projectiles`.
 Original source order is restored from the `ProjectileRuntime.order` plus
@@ -324,7 +324,7 @@ stage; these existing consumers can still modify the vector, which is
 mirrored back into ECS at the end-of-tick barrier. Full exclusive
 `ProjectileRuntime` authority for all FPS projectile operations requires
 converting these remaining consumers and spawn paths next. Do not remove
-`fps.ecsHydrate`/`fps.ecsMirror` until that work, v9 binary save
+`actor.ecsHydrate`/`actor.ecsMirror` until that work, v9 binary save
 compatibility, network prediction, replay and Editor tests all pass.
 
 **Verification source:** `tests/fps/projectiles.inc` adds live FPS
@@ -339,7 +339,7 @@ save v9 between legacy and ECS storage configurations.
 **Not yet verified:** native compilation/execution of this branch and
 all assertions, load/replay across networking, performance and editor
 regression. The code stays behind existing default-OFF
-`fps.ecsAuthority`. Next wave is to convert remaining nonprogrammed
+`actor.ecsAuthority`. Next wave is to convert remaining nonprogrammed
 grenade/mode updates and direct in-tick spawns before making the entire
 frame ECS-only.
 
@@ -350,7 +350,7 @@ Following the direct `ProjectileRuntime` flight-stage migration, both
 **actual accepted FPS weapon projectiles** (`Module::shoot`) and
 **actual Frag, Smoke and Flash throwable actions** (`Module::action`)
 now call one `Module::spawnProjectile(Simulation&,Projectile)`. On the
-`fps.ecsAuthority` path, that helper creates a canonical live ECS
+`actor.ecsAuthority` path, that helper creates a canonical live ECS
 `ProjectileRuntime` Entity immediately at the *source action*, with
 source ID, stable `order`, `DynamicEntityIndex` mapping and Editor
 `ProjectileEntity` projection, before synchronizing the same-tick
@@ -362,7 +362,7 @@ The **bomb-round reset** `Module::tickSystems` now invokes
 `ProjectileRuntime` entities in source-ID order and clears projectile
 index keys at the reset barrier (while preserving loot/vehicle keys);
 the legacy/default mode retains the original vector clear. The ECS
-stage is no longer waiting for the final `fps.ecsMirror` to materialize
+stage is no longer waiting for the final `actor.ecsMirror` to materialize
 new weapon/grenade projectiles or retire projectile entities on reset.
 
 **Remaining transitional constraint:** other FPS systems still read and
@@ -387,14 +387,14 @@ snapshot replay. Source tests have been written and registered, but
 **Follow-up:** finish converting all secondary projectile State writers
 and readers, including smoke/cloud visibility and other round-mode
 consumers, to ECS components and structured read projections; then
-retire `fps.ecsMirror` as a writeback source for projectiles. Carry
+retire `actor.ecsMirror` as a writeback source for projectiles. Carry
 through native compiler/CTest, FPS networking, Editor lifecycle and RTS
 shared-mechanics integration before any default enablement.
 
 
 ## FPS projectile end-of-tick one-way ECS mirror (2026-11-18)
 
-The live `fps.ecsMirror` in `engine/actor/ActorModule.cpp` now calls
+The live `actor.ecsMirror` in `engine/actor/ActorModule.cpp` now calls
 `syncDynamicEntities(sim,config_.ecsAuthority)` instead of always
 importing `State::projectiles` into `ProjectileRuntime`.
 
@@ -414,7 +414,7 @@ importing `State::projectiles` into `ProjectileRuntime`.
   ECS → State direction applies only during the live mirror barrier.
 
 All known built-in FPS projectile **producers and mutators** have now
-been routed to ECS when `fps.ecsAuthority` is enabled: accepted weapon
+been routed to ECS when `actor.ecsAuthority` is enabled: accepted weapon
 shots, Frag/Smoke/Flash actions, programmed flight, ordinary ballistic
 bullets/grenade bounce/smoke expiry, and bomb-round projectile cleanup.
 The one shared physical solver and synchronous impact/damage ordering

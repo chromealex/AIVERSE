@@ -144,7 +144,7 @@ device.endFrame();
 - `apps/editor/Editor.h::Viewport` уже содержит независимую пару render-целей для окон Сцена/Игра.
 - `engine/render/PortraitRenderer.h` — независимый от жанра хост внеэкранного Renderer3D + захвата позы модели (этап 2); `modules/rts/view/RtsPortrait.cpp` — его адаптер для RTS.
 - `engine/render/Prisma`, `ScreenLighting`, `Lights`, существующие RHI Metal, GL, Vulkan используются повторно, а не заменяются.
-- Общий `aiverselib/gameplay/Camera.h` — помощник контроллера камеры, а не планировщик отрисовки/захвата; не смешивайте эти понятия.
+- Общий `engine/gameplay/Camera.h` — помощник контроллера камеры, а не планировщик отрисовки/захвата; не смешивайте эти понятия.
 
 ## 3. Реализованные основы и предлагаемые модули
 - **Реализовано на этапе 3:** `engine/sim/CameraComponents.h` — нативные ECS `CameraComponent`, `CameraOutputComponent` и `CameraUpdateComponent` со значениями объектива в фиксированной точке и стабильными ключами ассетов вывода, никогда не RHI-дескрипторами. Все заданные автором камеры — ECS-сущности в `World`; их трансформами владеет `SceneHierarchy`.

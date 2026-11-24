@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeftRight, Loader2, RefreshCw } from 'lucide-react';
+import { ArrowLeftRight, RefreshCw } from 'lucide-react';
 import { invoke } from '../bridge';
 import type { StudioGpuStats, StudioProjectState, StudioSnapshot, StudioStats } from '../types';
 import { formatBytes, frameSummary, jsonDiff, previewValue, type JsonChange } from './jsonDiff';
 import './ToolPanel.css';
 import './ProjectToolPanels.css';
+import { StudioLoader } from '../ui';
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 type Ctx = { snapshot: StudioSnapshot | null };
@@ -77,7 +78,7 @@ export function SnapshotDiffPanel({ snapshot }: Ctx) {
       <input className="au-input" list="diff-maps" value={b} onChange={e => setB(e.target.value)} placeholder="maps/b.json"/>
       <datalist id="diff-maps">{maps.map(m => <option key={m} value={m}/>)}</datalist>
       <button type="button" className="au-button au-button--sm au-button--primary" disabled={busy || !a || !b} onClick={() => void compare()}>
-        {busy ? <Loader2 size={13} className="tool__spin"/> : <RefreshCw size={13}/>}Compare</button>
+        {busy ? <StudioLoader size={16}/> : <RefreshCw size={13}/>}Compare</button>
     </div>
     {error && <div className="tool__error" role="alert">{error}</div>}
     <div className="ptp__scroll">

@@ -14,6 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # sample games: official template packages of the catalog, installed by tools/pkg/fetch_templates.py
+  AIVERSE_TEMPLATES_DIR: ${{ github.workspace }}/.aiverse-templates
   CMAKE_BUILD_PARALLEL_LEVEL: 4
   # Every CTest case runs on the desktop jobs (aiverse_tests is one of them). Only tests that need a
   # real GPU device are excluded, by their CMake label (GPU / METAL / Metal / MetalGPU); tests without
@@ -21,6 +23,15 @@ env:
   CTEST_GPU_LABELS: '^(GPU|METAL|Metal|MetalGPU)$'
 
 jobs:
+  # ---------------------------------------------------------------- Layers (no build)
+  layers:
+    name: Layer dependencies
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: engine < libraries < modules < apps (docs/architecture-layers.md)
+        run: python3 tools/layers/check_layers.py
+
   # ---------------------------------------------------------------- Linux
   linux:
     name: Linux ${{ matrix.arch }} ${{ matrix.cc }}
@@ -34,6 +45,9 @@ jobs:
           - { os: ubuntu-24.04-arm, arch: arm64, cc: gcc,   cxx: g++ }
     steps:
       - uses: actions/checkout@v4
+      - name: Template packages (sample games from the package catalog)
+        shell: bash
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/pkg/fetch_templates.py
       - name: Dependencies
         run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build libx11-dev libegl-dev libgles-dev xvfb mesa-vulkan-drivers
       - name: Configure
@@ -51,7 +65,7 @@ jobs:
         run: |
           Xvfb :97 -screen 0 1280x800x24 & sleep 1
           for g in skirmish mushrooms; do
-            DISPLAY=:97 AIVERSE_CONTENT=templates/$g AIVERSE_SHADOWS=medium AIVERSE_SCREENSHOT=shot-$g.ppm AIVERSE_EXIT_AFTER_FRAMES=300 \
+            DISPLAY=:97 AIVERSE_CONTENT=$AIVERSE_TEMPLATES_DIR/$g AIVERSE_SHADOWS=medium AIVERSE_SCREENSHOT=shot-$g.ppm AIVERSE_EXIT_AFTER_FRAMES=300 \
               timeout 300 build/linux-release/AiverseGame --map 0 --spectate
           done
           python3 .github/scripts/check-screenshot.py shot-*.ppm
@@ -60,7 +74,7 @@ jobs:
         run: |
           build/linux-release/aiverse_vulkan_tests
           Xvfb :98 -screen 0 1280x800x24 & sleep 1
-          DISPLAY=:98 AIVERSE_GFX=vulkan AIVERSE_CONTENT=templates/skirmish AIVERSE_SHADOWS=medium AIVERSE_SCREENSHOT=vk-skirmish.ppm \
+          DISPLAY=:98 AIVERSE_GFX=vulkan AIVERSE_CONTENT=$AIVERSE_TEMPLATES_DIR/skirmish AIVERSE_SHADOWS=medium AIVERSE_SCREENSHOT=vk-skirmish.ppm \
             AIVERSE_EXIT_AFTER_FRAMES=300 timeout 300 build/linux-release/AiverseGame --map 0 --spectate 2>&1 | tee vk.log
           grep -q "\[gfx\] Vulkan" vk.log
           python3 .github/scripts/check-screenshot.py vk-skirmish.ppm
@@ -80,6 +94,9 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
+      - name: Template packages (sample games from the package catalog)
+        shell: bash
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/pkg/fetch_templates.py
       - name: Configure
         run: cmake --preset windows-msvc
       - name: Build
@@ -91,7 +108,8 @@ jobs:
         shell: bash
         run: .github/scripts/headless-checksums.sh build/windows-msvc/Release/aiverse_headless.exe checksums-windows-msvc.txt
       - name: Package (aiversebuild)
-        run: build/windows-msvc/Release/aiversebuild.exe --project templates/skirmish --target windows --out dist
+        shell: bash
+        run: build/windows-msvc/Release/aiversebuild.exe --project "$AIVERSE_TEMPLATES_DIR/skirmish" --target windows --out dist
       - uses: actions/upload-artifact@v4
         with: { name: checksums-windows-msvc, path: checksums-*.txt }
       - uses: actions/upload-artifact@v4
@@ -102,6 +120,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Template packages (sample games from the package catalog)
+        shell: bash
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/pkg/fetch_templates.py
       - name: Dependencies
         run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build mingw-w64 wine64
       - name: Build
@@ -124,6 +145,9 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Template packages (sample games from the package catalog)
+        shell: bash
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/pkg/fetch_templates.py
       - name: Build (universal, Xcode)
         run: |
           cmake --preset macos
@@ -134,8 +158,8 @@ jobs:
         run: .github/scripts/headless-checksums.sh build/macos/Release/aiverse_headless checksums-macos-arm64.txt
       - name: Package .app and iOS project (aiversebuild)
         run: |
-          build/macos/Release/aiversebuild --project templates/skirmish --target macos --out dist
-          build/macos/Release/aiversebuild --project templates/skirmish --target ios --out dist
+          build/macos/Release/aiversebuild --project "$AIVERSE_TEMPLATES_DIR/skirmish" --target macos --out dist
+          build/macos/Release/aiversebuild --project "$AIVERSE_TEMPLATES_DIR/skirmish" --target ios --out dist
       - uses: actions/upload-artifact@v4
         with: { name: checksums-macos-arm64, path: checksums-*.txt }
       - uses: actions/upload-artifact@v4
@@ -147,6 +171,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Template packages (sample games from the package catalog)
+        shell: bash
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/pkg/fetch_templates.py
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 17 }
       - uses: gradle/actions/setup-gradle@v4
@@ -162,7 +189,7 @@ jobs:
           cmake --preset android-arm64 -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TOOLS=OFF -DAIVERSE_BUILD_HEADLESS=OFF -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
           cmake --build build/android-arm64
       - name: APK (aiversebuild → Gradle)
-        run: build/host/aiversebuild --project templates/skirmish --target android --out dist
+        run: build/host/aiversebuild --project "$AIVERSE_TEMPLATES_DIR/skirmish" --target android --out dist
       - uses: actions/upload-artifact@v4
         with: { name: game-android, path: dist/android/*.apk }
       - name: Enable KVM
@@ -188,6 +215,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Template packages (sample games from the package catalog)
+        shell: bash
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/pkg/fetch_templates.py
       - uses: mymindstorm/setup-emsdk@v14
         with: { version: 3.1.74 }
       - name: Build
@@ -214,6 +244,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Template packages (sample games from the package catalog)
+        shell: bash
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/pkg/fetch_templates.py
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 17 }
       - uses: gradle/actions/setup-gradle@v4
@@ -240,6 +273,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Template packages (sample games from the package catalog)
+        shell: bash
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/pkg/fetch_templates.py
       - name: Steamworks SDK (from the steamworks-sys crate)
         run: |
           curl -sSfL https://static.crates.io/crates/steamworks-sys/steamworks-sys-0.12.0.crate | tar xz -C "$RUNNER_TEMP"
@@ -261,6 +297,9 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Template packages (sample games from the package catalog)
+        shell: bash
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/pkg/fetch_templates.py
       # Current ad SDKs (ironSource 9.5) are built with Swift 6.2 and need Xcode 26 to link: use the newest
       # Xcode on the image (the default may be an older one)
       - name: Select the newest Xcode
@@ -303,6 +342,9 @@ jobs:
       CXX: clang++
     steps:
       - uses: actions/checkout@v4
+      - name: Template packages (sample games from the package catalog)
+        shell: bash
+        run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/pkg/fetch_templates.py
       - name: Dependencies
         run: sudo apt-get update -q && sudo apt-get install -y -q clang libx11-dev libegl-dev libgles-dev
       - name: Public library contracts

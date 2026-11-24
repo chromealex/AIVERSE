@@ -1,7 +1,7 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Adapter from the generated optional `colony` settings section to ColonyConfig (tick rate, mood bands, work speeds).
-#include "../gameplay/Configuration.h"
+#include "engine/gameplay/Configuration.h"
 #include "ColonyTypes.h"
 #include <string>
 #include <vector>

@@ -76,25 +76,31 @@ inline std::unique_ptr<render::Model> makeRockModel(const RockProfile& profile,u
     render::Material material;material.name="TerraWeave Rock";material.baseColor={.65f,.65f,.65f,1};material.metallic=0;material.roughness=.88f;
     model->materials.push_back(material);
     Surface surface(profile,seed);
-    const float uScale=3.14159265f*float(std::max(profile.widthCm,profile.depthCm))/float(profile.textureRepeatCm);
-    const float vScale=1.57079633f*float(profile.heightCm)/float(profile.textureRepeatCm);
+    // Box mapping: each triangle takes the planar projection of its dominant axis, in metres / repeat.
+    // Uniform texel density everywhere; a latitude/longitude mapping pinched the texture into a swirl at the
+    // top and bottom poles. Vertices are per face already, so the projection switch needs no extra seams.
+    const float perMetre=100.f/float(profile.textureRepeatCm);
     for(uint32_t division:{3u,2u,1u}) {
         const auto sphere=rock_detail::sphere(division);
         render::Primitive prim;prim.material=0;prim.firstVertex=uint32_t(model->vertices.size());prim.firstIndex=uint32_t(model->indices.size());
         for(auto face:sphere.faces){
-            std::array<render::ModelVertex,3> vs;std::array<float,3> us;
+            std::array<render::ModelVertex,3> vs;
             for(size_t k=0;k<3;++k){
                 const auto n=sphere.points[face[k]];auto& v=vs[k];v.pos=surface.at(n);
                 const auto helper=std::abs(n.y)<.9f?float3{0,1,0}:float3{1,0,0};
                 const auto a=runit(rcross(helper,n)),b=rcross(n,a);constexpr float e=.001f;
                 v.nrm=runit(rcross(surface.at(runit(n+a*e))-surface.at(runit(n-a*e)),surface.at(runit(n+b*e))-surface.at(runit(n-b*e))));
-                us[k]=std::atan2(n.z,n.x)/6.2831853f+.5f;
-                v.uv.y=(std::asin(std::clamp(n.y,-1.f,1.f))/3.14159265f+.5f)*vScale;
             }
-            // Duplicate only per-face attributes; wrap U across the longitude cut.
-            const auto [lo,hi]=std::minmax_element(us.begin(),us.end());
-            if(*hi-*lo>.5f)for(auto& u:us)if(u<.5f)u+=1;
-            for(size_t k=0;k<3;++k){vs[k].uv.x=us[k]*uScale;model->indices.push_back(uint32_t(model->vertices.size()));model->vertices.push_back(vs[k]);}
+            const auto fn=rcross(vs[1].pos-vs[0].pos,vs[2].pos-vs[0].pos);
+            const float ax=std::abs(fn.x),ay=std::abs(fn.y),az=std::abs(fn.z);
+            for(size_t k=0;k<3;++k){
+                const auto q=vs[k].pos*perMetre;
+                // sign flips keep each projection unmirrored seen from outside
+                if(ay>=ax && ay>=az)vs[k].uv={fn.y>0?q.x:-q.x,q.z};
+                else if(ax>=az)vs[k].uv={fn.x>0?-q.z:q.z,-q.y};
+                else vs[k].uv={fn.z>0?q.x:-q.x,-q.y};
+                model->indices.push_back(uint32_t(model->vertices.size()));model->vertices.push_back(vs[k]);
+            }
         }
         prim.vertexCount=uint32_t(model->vertices.size())-prim.firstVertex;prim.indexCount=uint32_t(model->indices.size())-prim.firstIndex;
         render::MeshDef mesh;mesh.name="Rock LOD"+std::to_string(model->meshes.size());mesh.primitives.push_back(prim);model->meshes.push_back(std::move(mesh));

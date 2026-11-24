@@ -32,8 +32,9 @@
 #include "engine/core/Archive.h"
 #include "engine/world/SpatialWorld.h"
 #include "ActorSystems.h"
-#include "libraries/include/aiverselib/mechanics/Melee.h"
-#include "libraries/include/aiverselib/mechanics/VehicleData.h"
+#include "engine/mechanics/Melee.h"
+#include "engine/mechanics/LocomotionModes.h"
+#include "engine/mechanics/VehicleData.h"
 #include "engine/vehicles/Vehicles.h"
 #include <algorithm>
 #include <cstddef>
@@ -44,8 +45,9 @@
 
 namespace aiverse::actor {
 constexpr uint16_t kInputCommand=1;
-enum Buttons : uint32_t { Fire=1, Jump=2, Crouch=4, Reload=8, Sprint=16, WeaponMask=224, Aim=256, Prone=512, Melee=1024, Block=2048, LockOn=4096 };
-constexpr uint32_t kButtonBits=8191;
+// Dash / Grapple / Glide (held) are read only with the opt-in locomotion modes (rules `locomotion`); other projects ignore them.
+enum Buttons : uint32_t { Fire=1, Jump=2, Crouch=4, Reload=8, Sprint=16, WeaponMask=224, Aim=256, Prone=512, Melee=1024, Block=2048, LockOn=4096, Dash=8192, Grapple=16384, Glide=32768 };
+constexpr uint32_t kButtonBits=65535;
 constexpr uint32_t selectWeapon(uint32_t index) { return (index+1)<<5; }
 // Weapon selection occupies bits 5..7; zero means keep the equipped weapon.
 struct Input {
@@ -181,8 +183,11 @@ void io(Archive&,CharacterSnapshot&);
 void ioMelee(Archive&,CharacterSnapshot&);
 
 namespace detail {
-template<class T> void copyField(T& to,const T& from){to=from;}
-template<class T,std::size_t N> void copyField(T (&to)[N],const T (&from)[N]){std::copy(from,from+N,to);}
+// One function: MSVC treats the array overload and `T = U[N]` as equally good.
+template<class T> void copyField(T& to,const T& from){
+    if constexpr(std::is_array_v<T>) std::copy_n(from,std::extent_v<T>,to);
+    else to=from;
+}
 }
 template<bool Const> CharacterSnapshot snapshot(const BasicCharacterRef<Const>& r) {
     CharacterSnapshot s;
@@ -217,7 +222,7 @@ inline world::Bounds bodyBounds(Vec3 pos,Fixed height,const MotorConfig& c){retu
 template<class C> world::Bounds actorBounds(const C& a,const MotorConfig& c){return bodyBounds(a.pos,stanceHeight(a,c),c);}
 // Fields read and written by the character motor.
 struct MotorBody {
-    Vec3 pos{},velocity{};Fixed yaw{},pitch{};int32_t health=100;uint32_t vehicle=0;
+    Vec3 pos{},velocity{};Fixed yaw{},pitch{};int32_t health=100;uint32_t vehicle=0,life=0;
     bool grounded=false,crouched=false,prone=false,climbing=false,frozen=false,downed=false;
 };
 void moveBody(MotorBody&,const Input&,const MotorConfig&,const world::SpatialWorld&,Fixed dt,Fixed limit);
@@ -225,6 +230,27 @@ template<class C> void moveActor(C&& a,const Input& input,const MotorConfig& con
     MotorBody b;b.pos=a.pos;b.velocity=a.velocity;b.yaw=a.yaw;b.pitch=a.pitch;b.health=a.health;b.vehicle=a.vehicle;
     b.grounded=a.grounded;b.crouched=a.crouched;b.prone=a.prone;b.climbing=a.climbing;b.frozen=a.frozen;b.downed=a.downed;
     moveBody(b,input,config,world,dt,limit);
+    a.pos=b.pos;a.velocity=b.velocity;a.yaw=b.yaw;a.pitch=b.pitch;a.grounded=b.grounded;a.crouched=b.crouched;a.prone=b.prone;
+}
+// Opt-in character-locomotion mode machine (rules `locomotion`, docs/fps.md § Locomotion modes). Optional component
+// on every character entity of a project that enables it (absent otherwise): the library state plus what the host
+// keeps around it - the attached grapple point, the previous buttons (edges), the last ground normal / ceiling
+// report of the sweep and the life the state belongs to (a respawn starts a fresh state).
+struct LocomotionBody {
+    lib::mechanics::LocomotionState state;
+    Vec3 anchor{},groundNormal{Fixed{},1_fx,Fixed{}};
+    uint32_t buttons=0,life=0;bool anchored=false,ceiling=false;
+};
+void io(Archive&,LocomotionBody&);
+bool valid(const LocomotionBody&);
+void hashLocomotionBody(Hasher&,const LocomotionBody&);
+// Same stance, speed and sweep rules as moveBody; velocity comes from lib::mechanics::stepLocomotion instead.
+// The motor reports ground / ceiling / side walls (short probes) and the grapple hit (view ray) to the policy.
+void moveBodyModes(MotorBody&,LocomotionBody&,const Input&,const MotorConfig&,const lib::mechanics::LocomotionModeConfig&,const world::SpatialWorld&,Fixed dt,Fixed limit);
+template<class C> void moveActorModes(C&& a,LocomotionBody& l,const Input& input,const MotorConfig& config,const lib::mechanics::LocomotionModeConfig& modes,const world::SpatialWorld& world,Fixed dt,Fixed limit) {
+    MotorBody b;b.pos=a.pos;b.velocity=a.velocity;b.yaw=a.yaw;b.pitch=a.pitch;b.health=a.health;b.vehicle=a.vehicle;b.life=a.life;
+    b.grounded=a.grounded;b.crouched=a.crouched;b.prone=a.prone;b.climbing=a.climbing;b.frozen=a.frozen;b.downed=a.downed;
+    moveBodyModes(b,l,input,config,modes,world,dt,limit);
     a.pos=b.pos;a.velocity=b.velocity;a.yaw=b.yaw;a.pitch=b.pitch;a.grounded=b.grounded;a.crouched=b.crouched;a.prone=b.prone;
 }
 }

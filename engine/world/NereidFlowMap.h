@@ -1,8 +1,8 @@
 #pragma once
 // Bounded, camera-independent PRESENTATION snapshot of canonical NEREID flow.
 // No simulation state, GPU handles, saved world, or independent water solver.
-#include <aiverselib/water/NereidRiverGrade.h>
-#include <aiverselib/water/NereidVortices.h>
+#include "engine/world/nereid/NereidRiverGrade.h"
+#include "engine/world/nereid/NereidVortices.h"
 #include "engine/render/Math3D.h"
 #include <algorithm>
 #include <cmath>

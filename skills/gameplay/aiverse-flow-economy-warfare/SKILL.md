@@ -7,10 +7,10 @@ description: Add AIVERSE flow-economy warfare systems to any project's rules - r
 
 Use when a game needs radar contacts, reclaim, nukes and anti-nukes, wind income or aircraft passes on top of the
 flow economy (`flow` resources, `costModel: "progressive"`). Data only: no game code in the engine. Current host: legacy
-`modules/rts` (debt G3 in `docs/no-genre-split-audit.md`).
+`engine/game`.
 
 Authority: `docs/game-format.md` § Radar, sonar and jammers and § Field operations; engine code
-`engine/game/Sensors.cpp`, `engine/game/FieldOps.cpp`; sample `templates/metaltide`.
+`engine/game/Sensors.cpp`, `engine/game/FieldOps.cpp`; sample `~/.aiverse/packages/templates/metaltide`.
 
 1. Rules: `radar.targeting`, `repair`, `reclaim`, `selfDestruct`, `ambient` (map `ambient` overrides it). Types:
    `radar` / `sonar` / `jammer` / `stealth` / `underwater` (+ weapon `underwater`), builders `assist` + `patrolWork`,

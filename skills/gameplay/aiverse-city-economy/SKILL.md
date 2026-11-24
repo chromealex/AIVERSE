@@ -7,7 +7,7 @@ description: Add AIVERSE economy systems to any project - commerce (premises, bu
 
 Use when a project needs premises and businesses, rank ladders or a per-character arsenal. The systems are enabled by
 their rules blocks, not by a game type; they act on directly controlled characters (rules `topDown`, a legacy block
-name for direct control, not a camera). Current host: legacy `modules/rts` only (debt G3 in `docs/no-genre-split-audit.md`). Hero control, raids and traffic are
+name for direct control, not a camera). Current host: `engine/game` (GameCore, the one host). Hero control, raids and traffic are
 `skills/gameplay/aiverse-special-modes`; the city map itself is `skills/world/aiverse-city-planner`; a persistent
 multiplayer city is `docs/city-server.md`.
 

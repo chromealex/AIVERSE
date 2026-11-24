@@ -8,8 +8,8 @@
 // Vehicles without a type keep the arcade car (ActorSystems actorSystems). Passengers and gunners may shoot; the driver
 // steers. A destroyed vehicle ejects and kills its occupants.
 #include "ActorModule.h"
-#include "libraries/include/aiverselib/mechanics/VehiclePersistence.h"
-#include "libraries/include/aiverselib/mechanics/VehicleDrive.h"
+#include "engine/mechanics/VehiclePersistence.h"
+#include "engine/mechanics/VehicleDrive.h"
 #include "engine/core/FixedMath.h"
 #include <algorithm>
 namespace aiverse::actor {

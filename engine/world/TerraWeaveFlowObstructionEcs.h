@@ -2,7 +2,7 @@
 // NEREID flow obstructions. No Box3D, renderer or genre dependency.
 // Physics/source adapters may feed this through a structural-write barrier.
 #pragma once
-#include <aiverselib/water/NereidFlowObstacles.h>
+#include "engine/world/nereid/NereidFlowObstacles.h"
 #include "engine/sim/Simulation.h"
 #include <cstdint>
 #include <map>

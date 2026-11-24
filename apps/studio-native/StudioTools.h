@@ -59,6 +59,8 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
             "world_save_create", "world_save_checkpoint", "world_save_retention_preview", "world_save_retention_apply", "world_save_fork",
             "world_job_start", "world_job_status", "world_job_cancel", "world_job_release"}},
         {"project_import", {"port_scan", "port_report", "port_item", "port_resolve", "port_import"}},
+        // Package catalog (AIVERSE-PACKAGES): search and install content into the open project.
+        {"catalog", {"package_search", "package_info", "package_status", "package_add", "package_remove", "package_install"}},
         // TerraWeave Generator panel (landscape heightfield + Arbor forest recipe).
         {"terraweave_generator", {"map_info", "terraweave_preview", "terraweave_generate", "terraweave_forest_get",
                                   "terraweave_forest_set"}},
@@ -84,7 +86,8 @@ inline bool studioToolReadOnly(const std::string& op) {
     static const char* suffixes[] = {"_get", "_list", "_info", "_types", "_network", "_catalog", "_templates",
                                      "_presets", "_validate", "_ascii", "_estimate", "_api", "_read", "_check",
                                      "_preview", "_analyze", "_state", "_export", "_run", "_scan", "_report", "_sample",
-                                     "_stats", "_duel", "_matrix", "_batch", "_suggest", "_patterns", "_item", "_lint"};
+                                     "_stats", "_duel", "_matrix", "_batch", "_suggest", "_patterns", "_item", "_lint",
+                                     "_search", "_status"};
     for (const char* s : suffixes) {
         const std::string suf = s;
         if (op.size() > suf.size() && op.compare(op.size() - suf.size(), suf.size(), suf) == 0) return true;

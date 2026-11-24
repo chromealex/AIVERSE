@@ -4,7 +4,7 @@
 // Existing EnhancedInput* headers and names remain available for older projects.
 #pragma once
 
-#include <aiverselib/gameplay/InputFlow.h>
+#include "input/InputFlowCore.h"
 #include "EnhancedInputAdapter.h"
 #include "EnhancedInputConfig.h"
 #include "EnhancedInputFileIO.h"

@@ -40,7 +40,7 @@ Future opt-in path: GPU simulation/backend + advanced Niagara dataflow nodes
 ## Публичные точки входа C++
 
 - `engine/fx/SpectraFX.h`: `aiverse::spectra::Runtime`, `Effect`, `Handle`, `GraphAssets`, `GraphLoadResult`, `compileGraph`.
-- `libraries/include/aiverselib/genre/SpectraFX.h`: `aiverse::spectra::SourceComponent`, `EventBinding`, `PresentationSystem`.
+- `libraries/include/aiverselib/mechanics/SpectraFX.h`: `aiverse::spectra::SourceComponent`, `EventBinding`, `PresentationSystem`.
 - `AIVERSE::spectrafx`: цель линковки CMake, псевдоним существующей `aiverse_fx`; старая цель остаётся рабочей для других агентов и проектов.
 
 ### Создание графа
@@ -93,7 +93,7 @@ auto cold = assets.load("engine_fire",
 ### Необязательное нативное ECS-представление
 
 ```cpp
-#include <aiverselib/genre/SpectraFX.h>
+#include <aiverselib/mechanics/SpectraFX.h>
 using namespace aiverse;
 
 auto entity = world.create();
@@ -721,7 +721,7 @@ CTest: `vfx_shared_batch_world`, цель
 детерминированных хэшей и состояния отката.
 
 Используйте канонический заголовок `engine/fx/SpectraFX.h` для чистого API
-представления или `<aiverselib/genre/SpectraFX.h>` в нативных
+представления или `<aiverselib/mechanics/SpectraFX.h>` в нативных
 ECS-проектах, чтобы также получить доступ к `syncEcsCueSources` и
 `acceptSimCueTick`. ECS-адаптер **переиспользует**
 `SpectraSourceComponent` (без нового типа или ID ECS-компонента).
@@ -731,7 +731,7 @@ ECS-проектах, чтобы также получить доступ к `sy
 не могут переиспользовать старый хэндл эффекта.
 
 ```cpp
-#include <aiverselib/genre/SpectraFX.h>
+#include <aiverselib/mechanics/SpectraFX.h>
 
 // BatchWorld and CueScheduler must outlive each other's handles in this
 // order: shared BatchWorld initialized first, CueScheduler destroyed first.
@@ -1923,7 +1923,7 @@ VM GPU/CPU и рендерера не было продемонстрирова�
 `BatchWorld` для неподдерживаемых эффектов.
 
 ```cpp
-#include <aiverselib/genre/SpectraFX.h>
+#include <aiverselib/mechanics/SpectraFX.h>
 aiverse::spectra::GpuPoolWorld pool;
 pool.init(device);
 pool.defineGraph("impact", graphJson, aiverse::Json::object(), options);
@@ -1968,7 +1968,7 @@ if (!cues.resetForRollback()) { /* handle cues.reason() */ }
 представления.
 
 Нативные проекты ECS используют
-`libraries/include/aiverselib/genre/SpectraGpuCueEcsAdapter.h`
+`libraries/include/aiverselib/mechanics/SpectraGpuCueEcsAdapter.h`
 и `acceptSimGpuCueTick` для существующего типа `SimEvent`.
 Адаптер работает только на чтение и не делает никаких предположений о FPS/RTS/жанре.
 
@@ -2247,9 +2247,9 @@ Stage 35 теперь ставит записи уничтожения в оче
 
 ### Общий мост привязок для нативного ECS
 
-`<aiverselib/genre/SpectraFX.h>` теперь экспортирует заголовочный
+`<aiverselib/mechanics/SpectraFX.h>` теперь экспортирует заголовочный
 `spectra::GpuEcsAttachmentPresenter`, реализованный в
-`libraries/include/aiverselib/genre/SpectraGpuAttachmentEcsAdapter.h`.
+`libraries/include/aiverselib/mechanics/SpectraGpuAttachmentEcsAdapter.h`.
 Он читает **существующий**
 `lib::genre::SpectraSourceComponent` из `const World&` с помощью
 `eachExistingConst`. Каждый источник адресуется ключом `Entity::packed()`, поэтому
@@ -2543,9 +2543,9 @@ bool ok=recovered.importRecoveryManifest(&newHealthyDevice,snapshot);
 ### Интерполяция позы рендера для ECS-источников
 
 Публичный нативный заголовок
-`<aiverselib/genre/SpectraFX.h>` экспортирует
+`<aiverselib/mechanics/SpectraFX.h>` экспортирует
 `GpuEcsPoseInterpolator` из
-`libraries/include/aiverselib/genre/SpectraEcsRenderPose.h`.
+`libraries/include/aiverselib/mechanics/SpectraEcsRenderPose.h`.
 Нативный хост передаёт тот же обратный вызов `ResolvePose`, что используется
 `GpuEcsAttachmentPresenter`. Интерполятор хранит не более двух
 снимков поз на стороне рендерера, захватываемых один раз за **зафиксированный** тик ECS
@@ -2607,9 +2607,9 @@ Clang, компиляция шейдеров Objective-C++/MSL, CTest,
 ### Нативные уведомления о восстановлении GPU и явная замена Device
 
 Жанрово-нейтральный нативный заголовок презентации
-`<aiverselib/genre/SpectraFX.h>` теперь экспортирует
+`<aiverselib/mechanics/SpectraFX.h>` теперь экспортирует
 `GpuPoolRecoveryHost` из
-`libraries/include/aiverselib/genre/SpectraGpuRecoveryHost.h`.
+`libraries/include/aiverselib/mechanics/SpectraGpuRecoveryHost.h`.
 Этот объект хранит **только ссылки** на инициализированный
 `GpuPoolWorld`, принадлежащий презентации
 `GpuEcsAttachmentPresenter` и, при необходимости, интерполятор
@@ -2881,9 +2881,9 @@ V2 и код 2 для неверного вызова или ошибок вво
 
 ### Нативный захват в потоке-владельце и время жизни обратных вызовов
 
-Новая публичная интеграция `<aiverselib/genre/SpectraFX.h>`
+Новая публичная интеграция `<aiverselib/mechanics/SpectraFX.h>`
 `spectra::GpuPoolCaptureHost` (реализована в
-`libraries/include/aiverselib/genre/SpectraGpuCaptureHost.h`)
+`libraries/include/aiverselib/mechanics/SpectraGpuCaptureHost.h`)
 предоставляет ограниченный API запросов **по одному за раз**:
 
 ```cpp
@@ -3130,9 +3130,9 @@ GPU-кадра, и отказывается перезаписывать сущ�
 
 ### Нативный почтовый ящик захвата без владения
 
-Публичный `<aiverselib/genre/SpectraFX.h>` включает
+Публичный `<aiverselib/mechanics/SpectraFX.h>` включает
 `GpuCaptureRequestMailbox` из
-`libraries/include/aiverselib/genre/SpectraGpuCaptureMailbox.h`.
+`libraries/include/aiverselib/mechanics/SpectraGpuCaptureMailbox.h`.
 Почтовый ящик — это хранилище намерения/статуса для того же потока-владельца
 с состояниями
 `Idle / Requested / Claimed / InFlight / Ready / Failed /

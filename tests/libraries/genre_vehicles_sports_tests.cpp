@@ -1,9 +1,9 @@
 // vehicle-controllers + sports-rules: controllers, damage zones, seats, race checkpoints/positions, race bot,
 // ball sports rules, formations, sports bot, persistence, JSON data and settings. Argument: repository root.
-#include <aiverselib/mechanics/VehicleConfigured.h>
-#include <aiverselib/mechanics/VehicleData.h>
-#include <aiverselib/mechanics/VehiclePersistence.h>
-#include <aiverselib/mechanics/RaceSessionData.h>
+#include "engine/mechanics/VehicleConfigured.h"
+#include "engine/mechanics/VehicleData.h"
+#include "engine/mechanics/VehiclePersistence.h"
+#include "engine/mechanics/RaceSessionData.h"
 #include <aiverselib/mechanics/SportsConfigured.h>
 #include <aiverselib/mechanics/SportsData.h>
 #include <aiverselib/mechanics/SportsPersistence.h>

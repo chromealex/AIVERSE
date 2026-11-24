@@ -58,7 +58,7 @@ view.animation_define("loop",{nodes={{id="bind",kind="bind"},{id="stack",kind="s
     Json map=Json::parseFile(kSkirmish+"/maps/valley.json");Simulation sim(SimConfig{},std::make_unique<game::GameCore>());sim.setup(rules,map);
     auto hash=sim.checksum();game::ViewScripts view;CHECK(view.load(sim,rules,map,1));CHECK(view.log().empty());
     auto store=view.entityFx();CHECK(store->animations.size()==1);CHECK(store->animationDefinitions.size()==3);
-    auto model=render::loadModel(std::string(AIVERSE_SOURCE_DIR)+"/templates/showcase/models/golem.glb",modeltest::diskReader(),nullptr);
+    auto model=render::loadModel(std::string(AIVERSE_TEMPLATES_DIR)+"/showcase/models/golem.glb",modeltest::diskReader(),nullptr);
     auto asset=store->animationDefinitions.at("locomotion");render::AnimationGraphInstance graph;
     graph.reset(render::AnimationGraph::compile(*model,asset->definition,{},asset->traits));graph.parameters().set("height",3.f);graph.update(.5f);render::Pose pose;graph.evaluate(pose);
     CHECK(graph.healthy());CHECK(std::abs(pose[0].t.y-1.5f)<.001f);CHECK(std::abs(pose[0].t.x-1.f)<.001f);CHECK(sim.checksum()==hash);
@@ -76,7 +76,7 @@ assert(not pcall(view.animation_load,"invalid","broken"))
 view.animation_load("loaded","fullbody")
 )LUA"));rules.set("$scriptSources",sources);
     Json map=Json::parseFile(kSkirmish+"/maps/valley.json");Simulation sim(SimConfig{},std::make_unique<game::GameCore>());sim.setup(rules,map);auto hash=sim.checksum();game::ViewScripts view;view.setContentReader([](const std::string& path,std::string& out){if(path=="animations/fullbody.json")out=Json::parseFile(std::string(AIVERSE_SOURCE_DIR)+"/examples/animation/fullbody.json").dump();else out="{broken";return true;});CHECK(view.load(sim,rules,map,1));CHECK(view.log().empty());CHECK(view.entityFx()->animationDefinitions.count("loaded")==1);
-    auto m=render::loadModel(std::string(AIVERSE_SOURCE_DIR)+"/templates/showcase/models/golem.glb",modeltest::diskReader(),nullptr);auto asset=view.entityFx()->animationDefinitions.at("fbik");render::AnimationGraphInstance instance;instance.reset(render::AnimationGraph::compile(*m,asset->definition));render::Pose pose;instance.evaluate(pose);std::vector<render::mat4> world;render::worldMatrices(*m,pose,world);int hand=m->findNode("arm.L");auto& w=world[size_t(hand)];CHECK(std::abs(w.at(0,3)-.6f)<.03f);CHECK(std::abs(w.at(1,3)-1.6f)<.03f);CHECK(std::abs(w.at(2,3)-.2f)<.03f);CHECK(instance.healthy());CHECK(sim.checksum()==hash);
+    auto m=render::loadModel(std::string(AIVERSE_TEMPLATES_DIR)+"/showcase/models/golem.glb",modeltest::diskReader(),nullptr);auto asset=view.entityFx()->animationDefinitions.at("fbik");render::AnimationGraphInstance instance;instance.reset(render::AnimationGraph::compile(*m,asset->definition));render::Pose pose;instance.evaluate(pose);std::vector<render::mat4> world;render::worldMatrices(*m,pose,world);int hand=m->findNode("arm.L");auto& w=world[size_t(hand)];CHECK(std::abs(w.at(0,3)-.6f)<.03f);CHECK(std::abs(w.at(1,3)-1.6f)<.03f);CHECK(std::abs(w.at(2,3)-.2f)<.03f);CHECK(instance.healthy());CHECK(sim.checksum()==hash);
 }
 
 TEST(animation_contacts_lua_and_status) {
@@ -98,7 +98,7 @@ ui.on("contact_status",function()
 end)
 )LUA"));rules.set("$scriptSources",sources);
     Json map=Json::parseFile(kSkirmish+"/maps/valley.json");Simulation sim(SimConfig{},std::make_unique<game::GameCore>());sim.setup(rules,map);auto hash=sim.checksum();game::ViewScripts view;CHECK(view.load(sim,rules,map,1));CHECK(view.log().empty());
-    auto store=view.entityFx();auto m=render::loadModel(std::string(AIVERSE_SOURCE_DIR)+"/templates/showcase/models/golem.glb",modeltest::diskReader(),nullptr);auto asset=store->animationDefinitions.at("contacts");render::AnimationGraphInstance graph;graph.reset(render::AnimationGraph::compile(*m,asset->definition));render::Pose pose;graph.evaluate(pose);auto report=graph.contactReport();CHECK(report.stable);CHECK(report.supports==2);store->animations.begin()->second.contacts=report;
+    auto store=view.entityFx();auto m=render::loadModel(std::string(AIVERSE_TEMPLATES_DIR)+"/showcase/models/golem.glb",modeltest::diskReader(),nullptr);auto asset=store->animationDefinitions.at("contacts");render::AnimationGraphInstance graph;graph.reset(render::AnimationGraph::compile(*m,asset->definition));render::Pose pose;graph.evaluate(pose);auto report=graph.contactReport();CHECK(report.stable);CHECK(report.supports==2);store->animations.begin()->second.contacts=report;
     view.uiEvent(sim,"contact_status",Json::array());CHECK(view.log().empty());CHECK(store->animations.begin()->second.parameters.values.at("plant")==0);CHECK(sim.checksum()==hash);
 }
 

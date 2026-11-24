@@ -26,7 +26,7 @@ A mechanic is done only when the AI can use it at least basically.
 3. Ordinary commands via `sim.submit`; integer/Fixed; the bot's own RNG; new state goes into `ComputerPlayer::saveState` with a version bump and old saves still load.
 4. Active only when the mechanic is in the game's data - old games keep their checksums.
 5. Proof: `scenario_run` with bots and pass/fail (mechanic used within N s), a test in `tests/tests.cpp`, a prototype game built through MCP only (its own project, outside the engine repo).
-6. Regression: `aiverse_tests`, headless matches of all `templates/` with unchanged checksums, mid-match save/load.
+6. Regression: `aiverse_tests`, headless matches of all sample games (`tests/checksums/check.sh`) with unchanged checksums, mid-match save/load.
 7. A line in `docs/game-format.md` "Computer player".
 
 Report: cause with evidence, change, seeds before/after, unverified parts.

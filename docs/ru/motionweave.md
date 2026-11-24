@@ -13,7 +13,7 @@ target_link_libraries(my_game PRIVATE AIVERSE::MotionWeave)
 ```
 
 ```cpp
-#include <aiverselib/motionweave/MotionWeave.h>
+#include "engine/animation/MotionWeave.h"
 
 // Separate client presentation ECS World; never Simulation::world().
 aiverse::World presentation;
@@ -29,7 +29,7 @@ aiverse::motionweave::MotionWeave::update(presentation, frameDt);
 | `AIVERSE::motionweave` | `AIVERSE::animation_ecs` |
 | `aiverse::motionweave` | `aiverse::lib::animation` |
 | `MotionWeave::update(world,dt)` | `stepAnimationPresentation(world,dt)` |
-| `<aiverselib/motionweave/MotionWeave.h>` | `<aiverselib/animation/EcsAnimationSystems.h>` |
+| `"engine/animation/MotionWeave.h"` | `"engine/animation/EcsAnimationSystems.h"` |
 
 Все специализированные библиотеки по-прежнему доступны по историческим путям
 `<aiverselib/animation/...>`. Существующие имена `render::AnimationGraph`,
@@ -38,7 +38,7 @@ aiverse::motionweave::MotionWeave::update(presentation, frameDt);
 ## Устройство среды выполнения
 
 **Представление:** числа с плавающей точкой, экземпляры AnimationGraph, IK и скиннинг живут
-в отдельном визуальном ECS World. FPS подключает `fps.visual.model`, настраиваемый
+в отдельном визуальном ECS World. FPS подключает `actor.visual.model`, настраиваемый
 Graph или запечённую анимацию толпы, сохраняя запасной вариант с кубом. Существующий RTS view
 продолжает использовать свой исходный путь анимации, пока его не перенесут осознанно.
 
@@ -67,7 +67,7 @@ Graph или запечённую анимацию толпы, сохраняя 
 планировщик и передавайте его в трёхаргументный вызов обновления MotionWeave:
 
 ```cpp
-#include <aiverselib/motionweave/MotionWeave.h>
+#include "engine/animation/MotionWeave.h"
 
 aiverse::motionweave::MotionWeaveScheduler scheduler;
 auto stats = aiverse::motionweave::MotionWeave::update(
@@ -100,14 +100,14 @@ auto stats = aiverse::motionweave::MotionWeave::update(
 
 ### Автоматический выбор бэкенда для FPS
 
-FPS поддерживает `fps.visual.animationMode: "auto" | "cpu" | "gpu"`
+FPS поддерживает `actor.visual.animationMode: "auto" | "cpu" | "gpu"`
 и устаревший `bakedCrowd: true`. Для подходящей простой импортированной
 скиннинговой модели режим auto переходит на запечённый GPU-инстансинг при 24 видимых
 удалённых персонажах и выходит из него при 12, избегая частых переключений.
 Сложные пользовательские графы, требования к IK/контроллерам и `graphFile`
 остаются на CPU; клиент FPS лениво создаёт постоянный планировщик,
 когда присутствует 16+ персонажей с палитрой.
-`fps.visual.animationStats: true` включает необязательную диагностику в HUD.
+`actor.visual.animationStats: true` включает необязательную диагностику в HUD.
 
 Отрисовка сцены и загрузки на GPU остаются в графическом потоке.
 Быстрый путь для толпы переиспользует существующий в AIVERSE запечённый скиннинг и
@@ -155,7 +155,7 @@ Host rendering, audio/VFX and host-owned gameplay motor
 в собственных графах; клиенты проецируют своё состояние в
 один и тот же переиспользуемый API.
 
-Универсальный `<aiverselib/animation/MotionWeaveSourceBridge.h>` предоставляет
+Универсальный `"engine/animation/MotionWeaveSourceBridge.h"` предоставляет
 `AnimationSourceFrame {sourceId,generation,model,graph,inputs}` и
 `MotionWeaveSourceBridge::sync(presentationWorld, sources)`.
 Мост поддерживает идентичность визуальных ECS-сущностей, сбрасывает визуальные плееры
@@ -166,7 +166,7 @@ Host rendering, audio/VFX and host-owned gameplay motor
 
 Исходный адаптер событий FPS вынесен из библиотеки анимации
 в `modules/fps/view/FpsAnimationEvents.h`.
-Общий `<aiverselib/animation/AnimationActionEdges.h>` теперь
+Общий `"engine/animation/AnimationActionEdges.h"` теперь
 обрабатывает только непрозрачные именованные счётчики и переходы булевых состояний, без
 семантики FPS/RTS или типов действий. `playAnimationSlot` находится рядом с
 определением универсального ECS-компонента `AnimationMontageSlotsComponent`.
@@ -716,7 +716,7 @@ Studio теперь использует этот ECS World/мост напря�
 
 ## Stage 180 — универсальный скомпилированный лицевой Control Rig и нативный IK
 
-Подключаемые по желанию `<aiverselib/animation/FacialControlRig.h>` /
+Подключаемые по желанию `"engine/animation/FacialControlRig.h"` /
 `AnimationFacialControlComponent` отображают точные, заданные импортёром
 локальные для меша имена 64 каналов морфов на именованные элементы управления мимикой, применяют
 сглаживание с периодом полураспада для каждого персонажа и выполняют существующие

@@ -5,7 +5,7 @@ description: Share deterministic hitscan target selection across FPS/RTS and nat
 
 # Shared ECS hitscan policies
 
-Include `<aiverselib/mechanics/EcsHitscanSystems.h>` and use
+Include `"engine/mechanics/EcsHitscanSystems.h"` and use
 `AIVERSE::lib_ecs_hitscan` from a native target:
 `aiverse_native_use_libraries(your_target ecs-hitscan)`.
 

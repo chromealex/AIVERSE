@@ -17,7 +17,17 @@
 //          // {"mode": "waypoints", "speed": 2.5, "points": [[10,10],[50,30]], "loop": true}
 //          // {"mode": "drift", "velocity": [1, 0, 0]}     (m/s)
 //     "damagePerSecond": 8, "damageRadiusMeters": 6,
-//     "fire": {"suppression": 0.6, "fanning": 0.4},       // shares per second
+//     "fire": {"suppression": 0.6, "fanning": 0.4,        // shares per second
+//              // fire whirl (TornadoNature, on by default; "whirl": false = off):
+//              "intake": 0.5, "decay": 0.2, "halfHeat": 60, "quench": 1.5,
+//              "ignite": 0.4, "igniteStrength": 0.6, "embersPerSecond": 6,
+//              "maxEmbers": 48, "emberLifeSeconds": 8, "emberIgnite": 0.5,
+//              "heatDamagePerSecond": 4},
+//     "surface": "auto",       // or "land" / "water" or {"kind": "auto",
+//              // "waterThresholdMeters": 0.2, "waterDecay": 0.08, "recover": 0.1,
+//              // "spoutStrength": 0.55, "spoutLandDecay": 0.6}   (per second)
+//     "erosion": {"rate": 0.04, "maxDepthMeters": 0.6, "deposit": 0.25,
+//                 "capacityCubicMeters": 40},             // or false
 //     "debris": {"max": 48, "perSecond": 8, "massKg": 0.5,
 //                "areaSqMeters": 0.05, "lifeSeconds": 20}
 //   }]
@@ -36,6 +46,16 @@ struct AuthoredTornado {
     std::string id;
     StormEvent storm{};
     TornadoTrack track{};
+    TornadoNature nature{};          // fire whirl / water / ground scour
+};
+
+// "physis.ignitions": fires started by the map at a tick (needs enableDisasters).
+//   [{"center": [x, z], "radiusMeters": 6, "strength": 1, "startSeconds": 0}]
+struct AuthoredIgnition {
+    Vec3 center{};
+    Fixed radiusMeters = Fixed::fromInt(2);
+    Fixed strength = Fixed::fromInt(1);
+    std::uint64_t tick = 1;          // climate tick it is applied on (>= 1)
 };
 
 namespace tornado_asset_detail {
@@ -210,6 +230,68 @@ inline std::vector<AuthoredTornado> parseTornadoes(const Json& physisBlock,
                     ticks(d, "lifeTicks", "lifeSeconds", std::uint64_t(rate) * 20u, rate, a.id), 1u, 1000000u));
             }
         }
+        // Fire whirl, water and soil (TornadoNature).
+        TornadoNature& n = a.nature;
+        n = defaultTornadoNature(rate);
+        n.rng = mix64(std::uint64_t(out.size()) ^ 0x46495245ull);
+        for (unsigned char c : a.id) n.rng = mix64(n.rng ^ c);
+        if (const Json& f = o["fire"]; f.isObject()) {
+            n.fire = flag(f, "whirl", true, a.id);
+            const auto rateOf = [&](const char* key, Fixed& field) {
+                if (!f[key].isNull()) field = perTick(number(f, key, zero, zero, Fixed::fromInt(100), a.id), rate);
+            };
+            rateOf("intake", n.intakePerTick);
+            rateOf("decay", n.heatDecayPerTick);
+            rateOf("quench", n.quenchPerTick);
+            rateOf("ignite", n.ignitePerTick);
+            rateOf("embersPerSecond", n.emberPerTick);
+            n.intakePerTick = fxMin(one, n.intakePerTick);
+            n.halfHeat = number(f, "halfHeat", n.halfHeat, Fixed::fromRatio(1, 10), Fixed::fromInt(1000000), a.id);
+            n.igniteStrength = number(f, "igniteStrength", n.igniteStrength, zero, one, a.id);
+            n.emberIgnite = number(f, "emberIgnite", n.emberIgnite, zero, one, a.id);
+            n.maxEmbers = std::uint32_t(integer(f, "maxEmbers", n.maxEmbers, 512, a.id));
+            n.emberLifeTicks = std::uint32_t(std::clamp<std::uint64_t>(
+                ticks(f, "emberLifeTicks", "emberLifeSeconds", n.emberLifeTicks, rate, a.id), 1u, 100000u));
+            n.heatDamagePerTick = perTick(number(f, "heatDamagePerSecond", n.heatDamagePerTick * std::int64_t(rate),
+                                                 zero, Fixed::fromInt(100000), a.id), rate);
+        }
+        if (const Json& sf = o["surface"]; !sf.isNull()) {
+            const auto kindOf = [&](const std::string& k) {
+                if (k == "auto") return TornadoSurfaceKind::Auto;
+                if (k == "land") return TornadoSurfaceKind::Land;
+                if (k == "water") return TornadoSurfaceKind::Water;
+                fail(a.id, "surface kind must be auto, land or water");
+                return TornadoSurfaceKind::Auto;
+            };
+            if (sf.isString()) n.kind = kindOf(sf.str());
+            else if (sf.isObject()) {
+                if (!sf["kind"].isNull() && !sf["kind"].isString()) fail(a.id, "surface.kind must be a string");
+                n.kind = kindOf(sf.getStr("kind", "auto"));
+                n.waterThresholdMeters = number(sf, "waterThresholdMeters", n.waterThresholdMeters,
+                                                Fixed::fromRatio(1, 100), Fixed::fromInt(100), a.id);
+                const auto rateOf = [&](const char* key, Fixed& field) {
+                    if (!sf[key].isNull()) field = perTick(number(sf, key, zero, zero, Fixed::fromInt(100), a.id), rate);
+                };
+                rateOf("waterDecay", n.waterDecayPerTick);
+                rateOf("recover", n.recoverPerTick);
+                rateOf("spoutLandDecay", n.spoutLandDecayPerTick);
+                n.spoutStrength = number(sf, "spoutStrength", n.spoutStrength, Fixed::fromRatio(1, 100), one, a.id);
+            } else fail(a.id, "surface must be a string or an object");
+        }
+        if (const Json& er = o["erosion"]; !er.isNull()) {
+            if (er.type() == Json::Type::Bool) {
+                if (!er.boolean()) { n.scourPerTick = zero; n.depositPerTick = zero; }
+            } else if (er.isObject()) {
+                n.scourPerTick = perTick(number(er, "rate", n.scourPerTick * std::int64_t(rate), zero,
+                                                Fixed::fromInt(10), a.id), rate);
+                n.maxScourMeters = number(er, "maxDepthMeters", n.maxScourMeters, Fixed::fromRatio(1, 100),
+                                          Fixed::fromInt(50), a.id);
+                n.depositPerTick = fxMin(one, perTick(number(er, "deposit", n.depositPerTick * std::int64_t(rate),
+                                                             zero, Fixed::fromInt(100), a.id), rate));
+                n.soilCapacity = number(er, "capacityCubicMeters", n.soilCapacity, zero,
+                                        Fixed::fromInt(1000000), a.id);
+            } else fail(a.id, "erosion must be an object or boolean");
+        }
         prepareTornado(s, t);
         out.push_back(std::move(a));
     }
@@ -221,7 +303,57 @@ inline std::vector<AuthoredTornado> parseTornadoes(const Json& physisBlock,
 }
 
 inline void spawnTornadoes(World& world, const std::vector<AuthoredTornado>& list) {
-    for (const auto& a : list) (void)spawnTornado(world, a.storm, a.track);
+    for (const auto& a : list) (void)spawnTornado(world, a.storm, a.track, a.nature);
+}
+
+// Parses physisBlock["ignitions"] (absent = empty), sorted by tick then input order.
+inline std::vector<AuthoredIgnition> parseIgnitions(const Json& physisBlock,
+                                                    std::uint32_t ticksPerSecond = 20) {
+    using namespace tornado_asset_detail;
+    std::vector<AuthoredIgnition> out;
+    if (!physisBlock.isObject()) return out;
+    const Json& list = physisBlock["ignitions"];
+    if (list.isNull()) return out;
+    if (!list.isArray() || list.size() > 256)
+        throw std::invalid_argument("PHYSIS ignitions must be an array (<=256)");
+    const std::uint32_t rate = std::max<std::uint32_t>(1, ticksPerSecond);
+    for (const Json& o : list.items()) {
+        if (!o.isObject()) throw std::invalid_argument("PHYSIS ignition must be an object");
+        AuthoredIgnition g;
+        const std::string id = "ignition";
+        g.center = point(o["center"], id, "center");
+        g.radiusMeters = number(o, "radiusMeters", g.radiusMeters, Fixed{}, Fixed::fromInt(100000), id);
+        g.strength = number(o, "strength", g.strength, Fixed::fromRatio(1, 100), Fixed::fromInt(1), id);
+        g.tick = std::max<std::uint64_t>(1, ticks(o, "startTick", "startSeconds", 1, rate, id));
+        out.push_back(g);
+    }
+    std::stable_sort(out.begin(), out.end(), [](const auto& a, const auto& b) { return a.tick < b.tick; });
+    return out;
+}
+
+// Sets every PHYSIS cell whose centre is within the radius (and at least the
+// cell under the centre) on fire. Returns the number of cells ignited.
+inline std::uint32_t applyIgnition(World& world, const AuthoredIgnition& g) {
+    const auto* state = world.resourceConst<State>();
+    if (!state || !world.resourceConst<DisasterState>()) return 0;
+    const auto cs = std::int64_t(state->settings.cellSizeMeters);
+    std::uint32_t n = 0;
+    const Entity centre = cellAtPosition(world, g.center);
+    const std::int64_t x0 = floorDiv((g.center.x - g.radiusMeters).floorInt(), cs);
+    const std::int64_t x1 = floorDiv((g.center.x + g.radiusMeters).floorInt(), cs);
+    const std::int64_t z0 = floorDiv((g.center.z - g.radiusMeters).floorInt(), cs);
+    const std::int64_t z1 = floorDiv((g.center.z + g.radiusMeters).floorInt(), cs);
+    if (x1 - x0 > 1024 || z1 - z0 > 1024) return 0;
+    for (std::int64_t gz = z0; gz <= z1; ++gz)
+        for (std::int64_t gx = x0; gx <= x1; ++gx) {
+            const Entity e = cellAt(world, std::int32_t(gx), std::int32_t(gz));
+            if (e == kNullEntity) continue;
+            const Vec3 mid{Fixed::fromInt(gx * cs) + Fixed::fromRatio(cs, 2), Fixed{},
+                           Fixed::fromInt(gz * cs) + Fixed::fromRatio(cs, 2)};
+            if (e != centre && tornado_detail::horizontalDistance(mid, g.center) > g.radiusMeters) continue;
+            if (ignite(world, std::int32_t(gx), std::int32_t(gz), g.strength)) ++n;
+        }
+    return n;
 }
 
 } // namespace aiverse::physis

@@ -1,9 +1,9 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // JSON hitbox definitions: {"attacks":[{"attack":1,"hitboxes":[{"id":1,"from":2,"to":4,"shape":"capsule",
 //   "a":[0,1000,500],"b":[0,1000,1500],"radiusMilli":300}]}]}. Coordinates are attacker-local milli-metres
 // (+Z forward, +X right, +Y up); "half" (box half extents) and "yawMilli" (turns) are optional; frames are attack ages.
-#include "CombatActions.h"
+#include "engine/mechanics/CombatActions.h"
 #include "engine/data/Json.h"
 #include <charconv>
 #include <initializer_list>

@@ -19,6 +19,7 @@ struct State {
     bool quit = false;
     bool touch = false;
     std::string contentRoot = ".";
+    std::string engineAssets;   // setEngineAssetsDir: fallback for "engine/x" content paths
     std::string userDir = ".";
     std::string clipboard; // fallback clipboard
     pack::PackSet packs;   // mounted .rpak files, searched before loose content files

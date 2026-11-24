@@ -2176,10 +2176,10 @@ The standalone FPS remote-character path now actually publishes the
 initial graph, materials, node assignments and variant via
 `AppearanceAssetRegistry`, and supplies those snapshot-owned values
 to its `render::ModelDraw`. Project-authored
-`fps.visual.materials`, `fps.visual.assign` and
-`fps.visual.variant` follow this shared policy, with optional
-`fps.visual.materialLibrary` for named material definitions.
-A non-empty `fps.visual.graphFile` is still validated to remain in
+`actor.visual.materials`, `actor.visual.assign` and
+`actor.visual.variant` follow this shared policy, with optional
+`actor.visual.materialLibrary` for named material definitions.
+A non-empty `actor.visual.graphFile` is still validated to remain in
 the project. Its timestamp is polled every 30 frames: when changed,
 the registry invalidates the source and compiles the external
 AnimationGraph through the same generic service. Failed edits retain

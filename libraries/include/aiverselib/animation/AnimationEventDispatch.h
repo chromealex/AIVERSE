@@ -1,7 +1,7 @@
 // Presentation animation event bus: Graph Clip notifies + Montage cues.
 // Routes cosmetic events to a host callback only, never simulation commands.
 #pragma once
-#include "EcsAnimationSystems.h"
+#include "engine/animation/EcsAnimationSystems.h"
 #include <algorithm>
 #include <string>
 #include <vector>

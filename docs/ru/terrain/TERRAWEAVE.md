@@ -3190,7 +3190,7 @@ NEREID остаётся единственным владельцем ECS, те�
 
 ```sh
 aiverse_terraweave_landscape --recipe examples/terraweave/alpine-valley.json \
-  --out NEW_PACK --materials engine/assets/materials/terrain/textures
+  --out NEW_PACK --materials "$(python3 tools/pkg/aiverse_pkg.py fetch terrain-pbr)/textures"
 python3 tests/terrain/check_landscape_export.py NEW_PACK
 ```
 

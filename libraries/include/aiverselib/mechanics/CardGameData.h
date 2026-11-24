@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // JSON card library for card-games (example: examples/libraries/mechanics/cards-turns/duel.json):
 // {"rules":{"seats":2,"startingHand":4,"maxHand":10,"startingHealth":20,"energy":[1,1,10],"drawPerTurn":1,
 //   "boardLimit":6,"turnLimit":60,"deck":[10,40],"mulligan":"partial","mulliganPenalty":0,"firstPlayerSkipsDraw":true,

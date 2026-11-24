@@ -5,7 +5,7 @@
 #include "engine/render/NereidWaterRenderer.h"
 #include "engine/world/WorldAssets.h"
 #include "engine/world/NereidWaterScene.h"
-#include <aiverselib/water/NereidCascades.h>
+#include "engine/world/nereid/NereidCascades.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>

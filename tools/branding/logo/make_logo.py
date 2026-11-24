@@ -11,11 +11,17 @@ Outputs (committed):
   apps/editor/branding/AppIcon.icns, AiverseEditor.ico, icon_1024.png   editor application icon
   docs/images/icon.png                         README
 
+The animated loading mark of the web surfaces (site, Studio, web builds, catalog viewer) is built from
+the same polygons by loader.py.
+
 The default game icon is drawn from the same polygons in C++ (tools/branding/Icons.cpp,
 defaultIcon) so host tools need no file; keep both in sync when the mark changes.
 """
 import os
-from PIL import Image, ImageDraw
+try:  # loader.py imports the polygons only
+    from PIL import Image, ImageDraw
+except ImportError:
+    Image = ImageDraw = None
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 

@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // vehicle-fx: tyre marks. Each wheel leaves short segments while it slips (drift, wheel-spin, hard cornering);
 // segments live a fixed time and fade at the end; the total count is bounded. The view samples the wheel contact
 // points every frame and draws the segments (two quads: a soft wide one and a dark narrow one look right from

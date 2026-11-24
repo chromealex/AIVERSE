@@ -1,6 +1,6 @@
 #include "Session.h"
 #include "engine/game/GameCore.h"
-#include "libraries/include/aiverselib/mechanics/VehiclePersistence.h"
+#include "engine/mechanics/VehiclePersistence.h"
 #include <algorithm>
 #include <utility>
 
@@ -49,7 +49,8 @@ bool decodeSnapshot(const Bytes& b,Snapshot& out) {
     return true;
 }
 namespace {
-constexpr uint32_t kGlobals=0,kActor=1u<<28,kProjectile=2u<<28,kLoot=3u<<28,kVehicle=4u<<28,kIdMask=(1u<<28)-1;
+// kLocomotion: the receiver's own locomotion bytes, present only with rules `locomotion` (no bytes otherwise).
+constexpr uint32_t kGlobals=0,kActor=1u<<28,kProjectile=2u<<28,kLoot=3u<<28,kVehicle=4u<<28,kLocomotion=5u<<28,kIdMask=(1u<<28)-1;
 template<class T> std::string record(T value){std::string out;Archive a(&out);a(value);return out;}
 }
 lib::delta::RecordSet snapshotRecords(const Snapshot& snapshot) {
@@ -59,14 +60,17 @@ lib::delta::RecordSet snapshotRecords(const Snapshot& snapshot) {
     for(const auto& p:c.projectiles)r[kProjectile|(p.id&kIdMask)]=record(p);
     for(const auto& l:c.loot)r[kLoot|(l.id&kIdMask)]=record(l);
     for(const auto& v:c.vehicles)r[kVehicle|(v.id&kIdMask)]=record(v);
+    if(!c.locomotion.empty())r[kLocomotion]=c.locomotion;
     return r;
 }
 bool recordsSnapshot(const lib::delta::RecordSet& records,Snapshot& out) {
     // Rebuild the classic packet and reuse its validation so both paths accept exactly the same snapshots.
-    Snapshot v;auto g=records.find(kGlobals);if(g==records.end())return false;
+    Snapshot v;std::string locomotion;auto g=records.find(kGlobals);if(g==records.end())return false;
     {Archive a(g->second);a(v.tick,v.ack,v.localSlot,v.winner,v.match,v.round,v.royale,v.gear,v.race);if(!a.ok()||a.remaining())return false;}
     for(const auto& [id,bytes]:records){
-        if(id==kGlobals)continue;Archive a(bytes);auto kind=id&~kIdMask;
+        if(id==kGlobals)continue;
+        if(id==kLocomotion){actor::LocomotionBody l;Archive check(bytes);actor::io(check,l);if(!check.ok()||check.remaining()||!actor::valid(l))return false;locomotion=bytes;continue;}
+        Archive a(bytes);auto kind=id&~kIdMask;
         if(kind==kActor){actor::CharacterSnapshot x;a(x);v.characters.push_back(x);}
         else if(kind==kProjectile){actor::Projectile x;a(x);v.projectiles.push_back(x);}
         else if(kind==kLoot){actor::Loot x;a(x);v.loot.push_back(x);}
@@ -74,7 +78,8 @@ bool recordsSnapshot(const lib::delta::RecordSet& records,Snapshot& out) {
         else return false;
         if(!a.ok()||a.remaining())return false;
     }
-    return decodeSnapshot(encodeSnapshot(v),out);
+    if(!decodeSnapshot(encodeSnapshot(v),out))return false;
+    out.locomotion=std::move(locomotion);return true;
 }
 Server::Server(const Json& rules,const Json& map,uint64_t seed,world::AssetReader reader):
     simulation_({seed,actor::readConfig(rules).tickRate,0,false},std::make_unique<game::GameCore>()),content_(contentId(rules,map)) {simulation_.setup(rules,map);if(map["world"].getBool("async")){if(!reader)throw JsonError("world: server content reader required");module().setContentReader(std::move(reader));}}
@@ -141,6 +146,7 @@ void Server::broadcast() {
             s.characters.push_back(actor);
         }
         const auto& state=module().state(simulation_);
+        if(const auto* l=module().locomotion(simulation_,p.slot)){auto copy=*l;Archive w(&s.locomotion);actor::io(w,copy);}
         s.round=state.round;s.match=state.match;s.royale=module().royaleView(simulation_,p.slot);s.race=module().raceView(simulation_,p.slot);if(auto* gear=module().gear(std::as_const(simulation_),p.slot))s.gear=*gear;
         auto nearby=[&](const auto& objects,auto& out,size_t limit){for(const auto& object:objects)if(out.size()<limit&&(object.pos-own.pos).lengthSq()<=radius*radius)out.push_back(object);};
         nearby(projectiles,s.projectiles,128);nearby(loot,s.loot,128);nearby(vehicles,s.vehicles,32);
@@ -170,7 +176,8 @@ void Client::predict(const actor::Input& input) {
     if(streamedCollision_&&!streamedCollision_->covers({predicted_.pos-extent,predicted_.pos+extent}))return;
     if(latest_.royale.enabled&&latest_.royale.divePhase!=3)return;   // skydive is server-driven: keep the authoritative pose
     if(predicted_.vehicle)return;   // a seated actor rides with its vehicle: the server drives the pose
-    actor::moveActor(predicted_,input,config_.motor,collision_,Fixed::fromRatio(1,config_.tickRate),config_.worldLimit);
+    if(config_.locomotion)actor::moveActorModes(predicted_,predictedLocomotion_,input,config_.motor,*config_.locomotion,collision_,Fixed::fromRatio(1,config_.tickRate),config_.worldLimit);
+    else actor::moveActor(predicted_,input,config_.motor,collision_,Fixed::fromRatio(1,config_.tickRate),config_.worldLimit);
 }
 void Client::poll(uint64_t now) {
     conn_->update(now);
@@ -189,6 +196,11 @@ void Client::poll(uint64_t now) {
         latest_=std::move(s);
         auto own=std::find_if(latest_.characters.begin(),latest_.characters.end(),[&](const auto& p){return p.slot==latest_.localSlot;});
         predicted_=*own;
+        if(config_.locomotion){   // reconcile the mode machine too: the server's state, then the unacknowledged inputs
+            actor::LocomotionBody l;Archive a(latest_.locomotion);actor::io(a,l);
+            predictedLocomotion_=(!latest_.locomotion.empty()&&a.ok()&&!a.remaining()&&actor::valid(l))?l:actor::LocomotionBody{};
+            if(latest_.locomotion.empty())predictedLocomotion_.life=predicted_.life;
+        }
         if(!ready_)sequence_=latest_.ack;
         while(!pending_.empty()&&pending_.front().sequence<=latest_.ack)pending_.pop_front();
         for(const auto& input:pending_)predict(input);

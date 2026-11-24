@@ -147,7 +147,7 @@ formats.
 
 The asynchronous format divides the world into X/Z columns: the cell's Y coordinate is zero, object height inside a
 column is free. Up to 32768 chunks. For collision, the `SpatialWorld` ranges (±1000000 units) and the narrower
-`fps.worldLimit` still apply. Column size 16..4096, data coordinates are local. Mesh and collision bounds on X/Z must fit
+`actor.worldLimit` still apply. Column size 16..4096, data coordinates are local. Mesh and collision bounds on X/Z must fit
 in their column; an object crossing the border must be split in advance.
 
 ### Chunk file

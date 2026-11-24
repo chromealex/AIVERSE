@@ -2,8 +2,8 @@
 // Does not simulate water or change the authoritative water-body definition.
 #pragma once
 #include "engine/world/TerraWeaveEarthworks.h"
-#include <aiverselib/water/NereidGeometry.h>
-#include <aiverselib/water/NereidRiverGrade.h>
+#include "engine/world/nereid/NereidGeometry.h"
+#include "engine/world/nereid/NereidRiverGrade.h"
 namespace aiverse::terraweave {
 inline EarthworkChange carveNereidRiverbed(EarthworksLayer& earth,
         const lib::nereid::WaterBodyComponent& body,

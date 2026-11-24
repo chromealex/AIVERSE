@@ -50,7 +50,7 @@ void copyKit(GameMaker::Ctx& c) {
     const std::string old = readText(mainLua);
     if (old.find("wizard_meta") == std::string::npos)
         writeText(mainLua, "-- Game wizard: the meta game (ui/wizard_meta.lua, config ui/wizard.json)\nrequire('wizard_meta')\n" + old);
-    c.did("набор мастера: " + std::to_string(n) + " файлов (templates/_wizard)");
+    c.did("набор мастера: " + std::to_string(n) + " файлов (tools/wizard/kit)");
 }
 
 void makeLevels(GameMaker::Ctx& c) {

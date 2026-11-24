@@ -9,6 +9,7 @@
 #include "engine/world/TerraWeaveBotanicalAppearance.h"
 #include "engine/render/TerraWeaveBotanicalForest.h"
 #include "engine/render/TerraWeaveHorizonScene.h"
+#include "engine/pack/Packages.h"
 #include <fstream>
 #include <iterator>
 #include <unordered_map>
@@ -34,7 +35,8 @@ public:
     bool hierarchicalWind() const { return hierarchicalWind_; }
     void setHierarchicalWind(bool on) { hierarchicalWind_ = on; }
     // Botanical catalog (oak, birch, maple, spruce, pine) with the PBR bark and
-    // leaf maps of engine/assets/materials/vegetation/textures, else the two
+    // leaf maps of the vegetation-pbr catalog package (the project's
+    // materials/vegetation/textures, else the package cache), else the two
     // classic untextured prototypes. Takes effect after release().
     bool botanical() const { return botanical_; }
     void setBotanical(bool on) { botanical_ = on; }
@@ -45,6 +47,20 @@ public:
     terraweave::ArborTreeGeometry treeGeometry() const { return treeGeometry_; }
     void setTreeGeometry(terraweave::ArborTreeGeometry geometry) { treeGeometry_ = geometry; }
     void setEngineDir(std::string dir) { engineDir_ = std::move(dir); }
+    void setProjectDir(std::string dir) { projectDir_ = std::move(dir); }
+    // Where the vegetation-pbr textures are: installed into the project
+    // (aiverse_pkg.py add vegetation-pbr) or in the package cache (fetch).
+    std::string vegetationTextureDir() const {
+        namespace fs = std::filesystem;
+        std::error_code ec;
+        if (!projectDir_.empty()) {
+            const fs::path p = fs::path(projectDir_) / "materials/vegetation/textures";
+            if (fs::is_directory(p, ec)) return p.string();
+        }
+        const fs::path cached = aiverse::pack::cachedPackageDir("vegetation-pbr");
+        if (!cached.empty() && fs::is_directory(cached / "textures", ec)) return (cached / "textures").string();
+        return {};
+    }
     size_t visibleInstances() const { return visibleCount_; }
     size_t generatedInstances() const { return placements_.size(); }
 
@@ -247,7 +263,7 @@ private:
         const auto& presets = terraweave::botanicalTreePresets();
         // Shared Terra recipe (also used by the WorldScene manifest).
         terraweave::BotanicalMaterialTable table;
-        table.dir = engineDir_.empty() ? std::string() : engineDir_ + "/engine/assets/materials/vegetation/textures";
+        table.dir = vegetationTextureDir();
         table.read = [](const std::string& path, std::string& bytes) {
             std::ifstream f(path, std::ios::binary);
             if (!f) return false;
@@ -255,7 +271,7 @@ private:
             return true;
         };
         for (const auto& pick : kPick) table.add(presets[pick.slot].profile.speciesId, presets[pick.slot]);
-        if (!engineDir_.empty()) forest_->setPrototypeDecorator(table.decorator());
+        if (!table.dir.empty()) forest_->setPrototypeDecorator(table.decorator());
         speciesWeights_.clear();
         for (const auto& pick : kPick) {
             const auto& preset = presets[pick.slot];
@@ -275,6 +291,7 @@ private:
     std::unique_ptr<terraweave::TerraWeaveHorizonScene> horizon_;
     terraweave::ArborTreeGeometry treeGeometry_ = terraweave::ArborTreeGeometry::Auto;
     std::string engineDir_;
+    std::string projectDir_;
     std::vector<std::pair<uint32_t, uint32_t>> speciesWeights_;
     uint64_t cachedRevision_ = std::numeric_limits<uint64_t>::max();
     int64_t cachedTileX_ = std::numeric_limits<int64_t>::max();

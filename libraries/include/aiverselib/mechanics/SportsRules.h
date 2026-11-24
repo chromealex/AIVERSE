@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // sports-rules: deterministic ball-sport rules for football, hockey, handball-like and arcade games.
 // Ball possession (pickup radius, possession lock, tackles contested with the passed RNG), passes and shots
 // (target leading, power, seeded accuracy error), interception at the closest approach along the ball path,

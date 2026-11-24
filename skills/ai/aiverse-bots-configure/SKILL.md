@@ -61,4 +61,4 @@ Engine code: `parseAIPlayerRules` (`engine/game/GameData.cpp`), `applyAIPreset` 
 
 `rules_lint` clean, `map_validate` clean; `match_run` on every map: commands issued, winner before the limit (or an honest draw by limit); same seed -> same checksum; save/load (`--save`/`--load`, `.ai` file) plays on identically. Report knobs, seeds, match count, what is unverified.
 
-Code: per-slot presets in `modules/rts` (map `players[i].ai`), editor `player_set {ai}`. No separate library target.
+Code: per-slot presets in `engine/game` (map `players[i].ai`), editor `player_set {ai}`. No separate library target.

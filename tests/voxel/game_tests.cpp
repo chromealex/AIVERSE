@@ -1,7 +1,8 @@
 // Voxel sandbox module + session tests (CTest: voxel_game): determinism, walking, digging and building,
 // saves, night mobs, and the authoritative session over a loopback connection.
-#include "modules/voxel/VoxelSession.h"
-#include "modules/voxel/Project.h"
+#include "engine/game/GameCore.h"
+#include "engine/voxel/VoxelSession.h"
+#include "engine/voxel/Project.h"
 #include <aiverselib/systems/voxellight/VoxelLight.h>
 #include <fstream>
 #include <iostream>
@@ -11,9 +12,9 @@ using namespace aiverse;using namespace aiverse::voxelgame;using namespace aiver
 #define CHECK(x) do{if(!(x))throw std::runtime_error(std::string(__FILE__)+":"+std::to_string(__LINE__)+": " #x);}while(false)
 namespace {
 std::string root;
-Project load(){return readProject([](const std::string& f,std::string& t){std::ifstream in(root+"/templates/voxel_sandbox/"+f);if(!in)return false;t.assign(std::istreambuf_iterator<char>(in),{});return true;});}
-std::unique_ptr<Simulation> make(const Project& p,uint64_t seed=1){auto sim=std::make_unique<Simulation>(SimConfig{seed,0,0},std::make_unique<Module>());sim->setup(p.rules,p.map);return sim;}
-Module& mod(Simulation& s){return static_cast<Module&>(s.module());}
+Project load(){return readProject([](const std::string& f,std::string& t){std::ifstream in(std::string(AIVERSE_TEMPLATES_DIR)+"/voxel_sandbox/"+f);if(!in)return false;t.assign(std::istreambuf_iterator<char>(in),{});return true;});}
+std::unique_ptr<Simulation> make(const Project& p,uint64_t seed=1){auto sim=std::make_unique<Simulation>(SimConfig{seed,0,0},std::make_unique<game::GameCore>());sim->setup(p.rules,p.map);return sim;}
+VoxelHost& mod(Simulation& s){return host(s);}
 void send(Simulation& sim,uint8_t slot,Input in){static uint32_t seq=0;in.sequence=++seq;auto c=command(slot,in);c.tick=sim.tick();sim.inject(c);}
 void basics(){
     auto p=load();auto a=make(p),b=make(p);CHECK(a->checksum()==b->checksum());

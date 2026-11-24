@@ -43,7 +43,10 @@ def bake_bark_atlas_parts(parts, output, name, resolution=2048, material="oak_ba
         offset += len(p)
     p, n, uv = np.vstack(positions), np.vstack(normals), np.vstack(coordinates)
     indices = np.vstack(triangles)
-    source = Path(__file__).resolve().parents[2] / 'engine/assets/materials/vegetation/textures'
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'pkg'))
+    from aiverse_pkg import package_dir
+    source = package_dir('vegetation-pbr') / 'textures'  # AIVERSE-PACKAGES catalog
     catalog=json.loads((source.parent/'catalog.json').read_text())
     entry=next(m for m in catalog['materials'] if m['id']==material and m['layout']=='repeat')
     repeat_m=entry['repeatMeters']; relief_m=entry['heightMeters']*.35

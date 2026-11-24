@@ -11,7 +11,7 @@
           open: 'Open frame: ', verified: 'Verified', limits: 'Limitations', more: 'Details', all: 'All systems',
           none: 'No entries match these filters.', failed: 'Could not load devlog.json.', updated: 'MIT License · updated ' }
   };
-  var L = I18N[document.documentElement.lang] || I18N.ru;
+  var L = I18N[document.documentElement.lang] || I18N.en;
   var STATUS = L.status;
   var MONTHS = L.months;
   var state = { system: '', status: '', q: '' };

@@ -1,6 +1,6 @@
 // FPS programmed projectiles (projectile programs: homing, split, bounce, pierce) over Projectile entities.
 #include "ActorModule.h"
-#include "libraries/include/aiverselib/mechanics/EcsSweepQuerySystems.h"
+#include "engine/mechanics/EcsSweepQuerySystems.h"
 #include <algorithm>
 #include <stdexcept>
 #include <utility>

@@ -76,6 +76,24 @@ inline std::optional<InstallOptions> optionsFromMap(const Json& map) {
             throw std::invalid_argument("PHYSIS tornadoes must be an array");
         if (tornadoes.size() > 0) options.enableTornadoes = options.enableStorms = true;
     }
+    // Optional fire / flood coefficients (DisasterConfig, per tick).
+    if (const Json& dc = config["disasterConfig"]; !dc.isNull()) {
+        if (!dc.isObject()) throw std::invalid_argument("PHYSIS disasterConfig must be an object");
+        const auto rate = [&](const char* key, Fixed& field) {
+            const Json& v = dc[key];
+            if (v.isNull()) return;
+            if (!v.isNumber() || v.fx() < Fixed{} || v.fx() > Fixed::fromInt(1))
+                throw std::invalid_argument(std::string("PHYSIS disasterConfig 0..1 number: ") + key);
+            field = v.fx();
+        };
+        rate("fireSpreadRate", options.disasters.fireSpreadRate);
+        rate("fireGrowthRate", options.disasters.fireGrowthRate);
+        rate("fuelConsumptionRate", options.disasters.fuelConsumptionRate);
+        rate("rainSuppressionRate", options.disasters.rainSuppressionRate);
+        rate("wetnessSuppressionRate", options.disasters.wetnessSuppressionRate);
+    }
+    if (!config["scourCellMeters"].isNull())
+        options.scourCellMeters = std::int32_t(integer(config, "scourCellMeters", 1, 64));
     if (const Json& st = config["streaming"]; !st.isNull()) {
         if (!st.isObject()) throw std::invalid_argument("PHYSIS streaming must be an object");
         options.streamingChunkCells = std::int32_t(integer(st, "chunkCells", 4, 1024));
@@ -115,6 +133,41 @@ inline std::optional<InstallOptions> optionsFromMap(const Json& map) {
     return options;
 }
 
+// "physis.noFuelOnWater": true — cells whose centre the host reports as open
+// water (GameModule::environmentWaterDepth) start without fuel, so lakes and
+// rivers do not burn. Applied once at install; off by default.
+inline void clearFuelOnWater(Simulation& sim, const Json& physisBlock) {
+    const Json& flag = physisBlock["noFuelOnWater"];
+    if (flag.isNull()) return;
+    if (flag.type() != Json::Type::Bool) throw std::invalid_argument("PHYSIS noFuelOnWater must be boolean");
+    if (!flag.boolean()) return;
+    const auto* state = sim.world().resourceConst<State>();
+    if (!state || !sim.world().resourceConst<DisasterState>()) return;
+    const auto cs = std::int64_t(state->settings.cellSizeMeters);
+    std::vector<Entity> wet;
+    for (const Entity e : state->cells) {
+        const auto* c = sim.world().tryGetConst<Cell>(e);
+        if (!c) continue;
+        const Fixed x = Fixed::fromInt(std::int64_t(c->x) * cs) + Fixed::fromRatio(cs, 2);
+        const Fixed z = Fixed::fromInt(std::int64_t(c->z) * cs) + Fixed::fromRatio(cs, 2);
+        if (sim.module().environmentWaterDepth(sim, x, z) >= Fixed::fromRatio(1, 5)) wet.push_back(e);
+    }
+    for (const Entity e : wet)
+        if (auto* hz = sim.world().tryGet<HazardCell>(e)) { hz->fuel = Fixed{}; hz->fire = Fixed{}; }
+}
+
+// Authored fires: stateless, applied after the tick whose climate tick
+// matches (so saves / replays need no extra state). No system when empty.
+inline void addIgnitionSystem(Simulation& sim, const std::vector<AuthoredIgnition>& ignitions) {
+    if (ignitions.empty()) return;
+    sim.addSystem("physis.ignitions", [ignitions](Simulation& s) {
+        const auto* st = s.world().resourceConst<State>();
+        if (!st) return;
+        for (const auto& g : ignitions)
+            if (g.tick == st->tick) (void)applyIgnition(s.world(), g);
+    });
+}
+
 // Explicit opt-in from GameModule::setup, before persistence registration seals.
 // Returns false if PHYSIS is absent or disabled. Never advances ECS frames.
 inline bool installFromMap(Simulation& sim, const Json& map) {
@@ -129,9 +182,14 @@ inline bool installFromMap(Simulation& sim, const Json& map) {
         throw std::logic_error("PHYSIS authored fields already installed");
     const auto fields = parseFieldAssets(map["physis"], *options);
     const auto tornadoes = parseTornadoes(map["physis"], sim.tickRate());
+    const auto ignitions = parseIgnitions(map["physis"], sim.tickRate());
+    if (!ignitions.empty() && !options->enableDisasters)
+        throw std::invalid_argument("PHYSIS ignitions require enableDisasters");
     install(sim, *options);
     spawnFieldAssets(sim.world(), fields);
     spawnTornadoes(sim.world(), tornadoes);   // after fields: stable entity order
+    clearFuelOnWater(sim, map["physis"]);
+    addIgnitionSystem(sim, ignitions);
     sim.world().setResource<AuthoredFieldInstallMode>(AuthoredFieldInstallMode{AuthoredFieldMode::Static});
     return true;
 }
@@ -149,11 +207,16 @@ inline bool installTrackedFromMap(Simulation& sim, const Json& map) {
         throw std::logic_error("PHYSIS authored fields already installed");
     const auto fields = parseFieldAssets(map["physis"], *options);
     const auto tornadoes = parseTornadoes(map["physis"], sim.tickRate());
+    const auto ignitions = parseIgnitions(map["physis"], sim.tickRate());
+    if (!ignitions.empty() && !options->enableDisasters)
+        throw std::invalid_argument("PHYSIS ignitions require enableDisasters");
     install(sim, *options);
     sim.registerPersistentResource<RuntimeFieldRegistry>(
         "physis.authored_field_registry", 1);
     reconcileTrackedRuntimeFields(sim.world(), fields);
     spawnTornadoes(sim.world(), tornadoes);
+    clearFuelOnWater(sim, map["physis"]);
+    addIgnitionSystem(sim, ignitions);
     sim.world().setResource<AuthoredFieldInstallMode>(AuthoredFieldInstallMode{AuthoredFieldMode::Tracked});
     return true;
 }

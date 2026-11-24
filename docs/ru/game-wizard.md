@@ -7,7 +7,7 @@
 Всё, что он пишет, — обычные данные игры, которые потом можно править.
 
 Код: `apps/editor/core/GameWizard*.cpp` (без UI), `apps/editor/core/WizardOps.cpp` (MCP), `apps/editor/EditorGameWizard.cpp`
-(страница хаба). Набор для игры, который копируется в каждую игру: `templates/_wizard/` (Lua + RmlUi, см. его README).
+(страница хаба). Набор для игры, который копируется в каждую игру: `tools/wizard/kit/` (Lua + RmlUi, см. его README).
 
 ## Ответы (`WizardSpec`, всё необязательно)
 

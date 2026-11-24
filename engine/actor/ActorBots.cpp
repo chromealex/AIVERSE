@@ -5,8 +5,8 @@
 // loot nearby (weapons not owned, better gear, medkits / ammo), healing when hurt and out of combat.
 // Bot state is the BotMemory component (ActorState bytes, saved and hashed); meshes are derived from collision at setup.
 #include "ActorModule.h"
-#include "libraries/include/aiverselib/bots/Fps.h"
-#include "libraries/include/aiverselib/bots/Persistence.h"
+#include "engine/bots/Fps.h"
+#include "engine/bots/Persistence.h"
 #include <algorithm>
 namespace aiverse::actor {
 struct BotHost { lib::bots::ActorConfig config;std::vector<lib::bots::NavMesh> meshes; };

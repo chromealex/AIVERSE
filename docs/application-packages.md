@@ -139,5 +139,5 @@ SDK builds and actual RmlUi screenshots remain separate platform/integration che
 Each recipe names catalog packages, acceptance checks, a family and required host
 integration. The application CLI reports `coverage: "recipe"`; it does not install
 client/editor bindings. Tower Defense and lane battlers remain RTS subgenres.
-The four non-RTS prototypes under `modules/genres` are independent recovery work,
-not dependencies of this header-only package.
+The card, match-3, platformer and racing prototypes that once lived in `modules/genres` are removed;
+their mechanics are library packages (`aiverselib/mechanics`) on the one host.

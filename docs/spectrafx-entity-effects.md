@@ -33,7 +33,7 @@ The same rule object can also sit **inline** on a data entry as `"spectraFx": { 
 | rules `types.<id>`                       | `type:<id>`                | RTS client           |
 | rules `types.<id>.weapons[i]` (`id`)     | `weapon:<id>`              | RTS client           |
 | rules `types.<id>.abilities[i]` (`id`)   | `ability:<id>`             | RTS client           |
-| rules `fps.weapons[i]`                   | `weapon:<i>` (index)       | FPS client           |
+| rules `actor.weapons[i]`                   | `weapon:<i>` (index)       | FPS client           |
 
 ### Rule
 

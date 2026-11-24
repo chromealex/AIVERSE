@@ -15,6 +15,7 @@
 #endif
 #include <windows.h>
 #include <windowsx.h>
+#include <dwmapi.h>
 #include <objbase.h>
 #include <shellapi.h>
 #include <shlobj.h>
@@ -124,10 +125,43 @@ private:
 template <class I, class... Args, class F> I* makeCallback(const IID& iid, F&& fn) {
     return new Callback<I, Args...>(iid, std::function<HRESULT(Args...)>(std::forward<F>(fn)));
 }
+// Same key rules as the page (floating.ts): a window id and the panel ids it is born with.
+bool floatKeyOk(const std::string& s) {
+    if (s.empty() || s.size() > 40) return false;
+    for (unsigned char c : s)
+        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-')) return false;
+    return true;
+}
+bool floatPanelOk(const std::string& s) {
+    if (s.empty() || s.size() > 32 || s[0] < 'a' || s[0] > 'z') return false;
+    for (unsigned char c : s)
+        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')) return false;
+    return true;
+}
+struct FloatPane {
+    std::string key;
+    HWND hwnd = nullptr;
+    Com<ICoreWebView2Controller> controller;
+    Com<ICoreWebView2> web;
+    POINT press{};
+    bool overMain = false;
+    bool moved = false;
+};
+
+// WS_SYSMENU / WS_MINIMIZEBOX / WS_MAXIMIZEBOX make Windows paint a caption even when WS_CAPTION
+// is left out. Keep those styles (snap, Alt+Space, the taskbar) and give the client the whole window.
+void extendClientOverCaption(HWND hwnd) {
+    const MARGINS shadow{0, 0, 0, 1};
+    DwmExtendFrameIntoClientArea(hwnd, &shadow);
+    const DWM_WINDOW_CORNER_PREFERENCE corners = DWMWCP_ROUND;
+    DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corners, sizeof(corners));
+    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
 
 constexpr UINT kRunTask = WM_APP + 1; // lParam: std::function<void()>* to run on the UI thread
 constexpr UINT_PTR kTickTimer = 1;
 constexpr wchar_t kMainClass[] = L"AiverseStudioWindow";
+constexpr wchar_t kFloatClass[] = L"AiverseStudioFloat";
 constexpr wchar_t kSurfaceClass[] = L"AiverseStudioSurface";
 constexpr wchar_t kVirtualHost[] = L"studio.aiverse";
 constexpr char kTrustedOrigin[] = "https://studio.aiverse/";
@@ -158,9 +192,22 @@ public:
         wc.hInstance = instance;
         wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
         wc.hbrBackground = CreateSolidBrush(RGB(14, 17, 23));
-        wc.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(1));
+        // The resource holds 16–256 with alpha. LoadIcon keeps one 32px frame and drops that alpha.
+        wc.hIcon = reinterpret_cast<HICON>(LoadImageW(instance, MAKEINTRESOURCEW(1), IMAGE_ICON, 256, 256, LR_DEFAULTCOLOR));
+        wc.hIconSm = reinterpret_cast<HICON>(LoadImageW(instance, MAKEINTRESOURCEW(1), IMAGE_ICON,
+            GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR));
         wc.lpszClassName = kMainClass;
         RegisterClassExW(&wc);
+        WNDCLASSEXW fc{sizeof(fc)};
+        fc.style = CS_HREDRAW | CS_VREDRAW;
+        fc.lpfnWndProc = floatProc;
+        fc.hInstance = instance;
+        fc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+        fc.hbrBackground = wc.hbrBackground;
+        fc.hIcon = wc.hIcon;
+        fc.hIconSm = wc.hIconSm;
+        fc.lpszClassName = kFloatClass;
+        RegisterClassExW(&fc);
         WNDCLASSEXW sc{sizeof(sc)};
         sc.style = CS_OWNDC | CS_DBLCLKS;
         sc.lpfnWndProc = surfaceProc;
@@ -170,11 +217,14 @@ public:
         RegisterClassExW(&sc);
 
         const UINT dpi = GetDpiForSystem();
-        RECT r{0, 0, MulDiv(1440, int(dpi), 96), MulDiv(900, int(dpi), 96)};
-        AdjustWindowRectExForDpi(&r, WS_OVERLAPPEDWINDOW, FALSE, 0, dpi);
-        main_ = CreateWindowExW(0, kMainClass, L"AIVERSE", WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
-                                r.right - r.left, r.bottom - r.top, nullptr, nullptr, instance, nullptr);
+        // The HTML title bar is the chrome. The client fills the frame; WM_NCCALCSIZE drops the system caption.
+        constexpr DWORD kFrame = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
+        const int width = MulDiv(1440, int(dpi), 96);
+        const int height = MulDiv(900, int(dpi), 96);
+        main_ = CreateWindowExW(0, kMainClass, L"AIVERSE", kFrame, CW_USEDEFAULT, CW_USEDEFAULT,
+                                width, height, nullptr, nullptr, instance, nullptr);
         if (!main_) { fatal("The main window could not be created"); return 1; }
+        extendClientOverCaption(main_);
         for (int i = 0; i < 2; ++i) {
             surfaces_[i] = CreateWindowExW(0, kSurfaceClass, nullptr, WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, 0, 0, 16, 16,
                                            main_, nullptr, instance, nullptr);
@@ -214,8 +264,11 @@ public:
 
     // ------------------------------------------------------------ StudioHostPlatform
     void evaluateScript(const std::string& js, bool currentOnly) override {
-        (void)currentOnly; // one web view: the main window's
-        if (web_) web_->ExecuteScript(widen(js).c_str(), nullptr);
+        const std::wstring wide = widen(js);
+        auto run = [&](ICoreWebView2* web) { if (web) web->ExecuteScript(wide.c_str(), nullptr); };
+        if (currentOnly) { run(currentWeb_ ? currentWeb_ : web_.p); return; }
+        run(web_.p);
+        for (const auto& pane : floats_) run(pane->web.p);
     }
     std::unique_ptr<aiverse::gfx::Device> createDevice(studio::StudioSurface surface) override {
         aiverse::gfx::VulkanWindow window;
@@ -228,31 +281,42 @@ public:
         return device;
     }
     bool surfaceDrawable(studio::StudioSurface surface) override {
-        return IsWindowVisible(surfaces_[index(surface)]) && !IsIconic(main_);
+        HWND child = surfaces_[index(surface)];
+        HWND host = GetParent(child);
+        return IsWindowVisible(child) && host && IsWindowVisible(host) && !IsIconic(host);
     }
     bool gameFocused() override {
-        return GetForegroundWindow() == main_ && GetFocus() == surfaces_[1];
+        HWND host = GetParent(surfaces_[1]);
+        return host && GetForegroundWindow() == host && GetFocus() == surfaces_[1];
     }
     // The DOM rect is in CSS pixels (= DIPs, the web view is not zoomed); the child window takes physical pixels.
     bool placeSurface(studio::StudioSurface surface, const studio::ViewportRect& rect, studio::NativeViewportPlacement& out) override {
-        HWND h = surfaces_[index(surface)];
+        HWND child = surfaces_[index(surface)];
+        HWND host = windowForWeb(currentWeb_);
+        if (!host || !IsWindow(host)) host = main_;
+        // A hide from a window that no longer hosts the view is stale (the other window just showed it).
+        if (GetParent(child) != host) {
+            if (!rect.visible) return false;
+            ShowWindow(child, SW_HIDE);
+            SetParent(child, host);
+        }
         RECT client{};
-        GetClientRect(main_, &client);
-        const double scale = double(GetDpiForWindow(main_)) / 96.0;
+        GetClientRect(host, &client);
+        const double scale = double(GetDpiForWindow(host)) / 96.0;
         const double hostW = double(client.right) / scale, hostH = double(client.bottom) / scale;
         out = studio::viewportPlacement(rect, hostW, hostH, scale);
         if (!out.visible) {
-            if (IsWindowVisible(h)) ShowWindow(h, SW_HIDE);
+            if (IsWindowVisible(child)) ShowWindow(child, SW_HIDE);
             return true;
         }
         const int left = int(std::lround(out.x * scale));
         const int top = int(std::lround((hostH - out.y - out.height) * scale));
         RECT now{};
-        GetWindowRect(h, &now);
-        MapWindowPoints(HWND_DESKTOP, main_, reinterpret_cast<POINT*>(&now), 2);
+        GetWindowRect(child, &now);
+        MapWindowPoints(HWND_DESKTOP, host, reinterpret_cast<POINT*>(&now), 2);
         const bool moved = now.left != left || now.top != top || now.right - now.left != out.pixelsW || now.bottom - now.top != out.pixelsH;
         // Above the WebView2 window (a sibling child): the native view covers its DOM rect.
-        SetWindowPos(h, HWND_TOP, left, top, out.pixelsW, out.pixelsH,
+        SetWindowPos(child, HWND_TOP, left, top, out.pixelsW, out.pixelsH,
                      SWP_NOACTIVATE | SWP_SHOWWINDOW | (moved ? 0 : SWP_NOMOVE | SWP_NOSIZE));
         return true;
     }
@@ -337,20 +401,59 @@ public:
         RegCloseKey(key);
     }
     Json windowRequest(const std::string& method, const Json& params) override {
-        (void)params;
         Json result = Json::object();
+        // A caption-less frame ignores WM_NCLBUTTONDOWN HTCAPTION. SC_MOVE / SC_SIZE still run the system loop while the button is down.
+        const bool buttonDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
         if (method == "studio.windowDrag") {
-            // Title-bar drag from HTML: the system moves the window while the button is held.
+            if (!buttonDown) return result;
             ReleaseCapture();
-            SendMessageW(main_, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+            SendMessageW(main_, WM_SYSCOMMAND, SC_MOVE | HTCAPTION, 0);
             return result;
         }
-        if (method == "studio.windowZoom") { ShowWindow(main_, IsZoomed(main_) ? SW_RESTORE : SW_MAXIMIZE); return result; }
-        // Floating panel windows are macOS-only for now: the UI keeps the tab docked.
-        if (method == "studio.windowOpen") { result.set("opened", Json::fromBool(false)); return result; }
-        if (method == "studio.windowClose") { result.set("closed", Json::fromBool(false)); return result; }
-        throw std::runtime_error("Floating windows are not available on Windows yet");
+        if (method == "studio.windowResize") {
+            // SC_SIZE runs a modal loop inside this web callback, so the page cannot move the
+            // Scene child until the button comes up. Follow the cursor from the UI timer instead.
+            if (!buttonDown || IsZoomed(main_) || windowForWeb(currentWeb_) != main_) return result;
+            int edge = 0;
+            const std::string which = params.getStr("edge");
+            if (which.find("left") != std::string::npos) edge |= 1;
+            if (which.find("right") != std::string::npos) edge |= 2;
+            if (which.find("top") != std::string::npos) edge |= 4;
+            if (which.find("bottom") != std::string::npos) edge |= 8;
+            if (!edge) return result;
+            size_.on = true;
+            size_.edge = edge;
+            GetCursorPos(&size_.origin);
+            GetWindowRect(main_, &size_.start);
+            return result;
+        }
+        HWND target = windowForWeb(currentWeb_);
+        if (method == "studio.windowZoom") { ShowWindow(target, IsZoomed(target) ? SW_RESTORE : SW_MAXIMIZE); return result; }
+        if (method == "studio.windowMinimize") { ShowWindow(target, SW_MINIMIZE); return result; }
+        if (method == "studio.windowClose") {
+            const std::string key = params.getStr("window");
+            if (!key.empty()) {
+                FloatPane* pane = findFloat(key);
+                result.set("closed", Json::fromBool(pane && pane->hwnd));
+                if (pane && pane->hwnd) PostMessageW(pane->hwnd, WM_CLOSE, 0, 0);
+                return result;
+            }
+            PostMessageW(main_, WM_CLOSE, 0, 0);
+            result.set("closed", Json::fromBool(true));
+            return result;
+        }
+        if (method == "studio.windowOpen") return openFloating(params);
+        if (method == "studio.windowTitle") {
+            if (target == main_ || !IsWindow(target)) throw std::runtime_error("Invalid window title");
+            const std::string title = params.getStr("title");
+            if (title.size() > 64) throw std::runtime_error("Invalid window title");
+            SetWindowTextW(target, title.empty() ? L"AIVERSE" : widen(title).c_str());
+            result.set("ok", Json::fromBool(true));
+            return result;
+        }
+        throw std::runtime_error("Unknown window request");
     }
+    bool hasFloatingWindows() override { return !floats_.empty(); }
     void log(const std::string& message) override { logLine(message); }
 
     // ------------------------------------------------------------ window procedures
@@ -359,7 +462,10 @@ public:
         if (!s) return DefWindowProcW(h, msg, wp, lp);
         switch (msg) {
         case WM_TIMER:
-            if (wp == kTickTimer && s->core_) s->core_->tick();
+            if (wp == kTickTimer) {
+                if (s->size_.on) s->stepSize();
+                if (s->core_) s->core_->tick();
+            }
             return 0;
         case kRunTask: {
             std::unique_ptr<std::function<void()>> task(reinterpret_cast<std::function<void()>*>(lp));
@@ -369,6 +475,56 @@ public:
         case WM_SIZE:
             s->resizeWeb();
             return 0;
+        case WM_NCCALCSIZE:
+            if (wp) {
+                // The proposed window rect becomes the client, so Windows does not reserve a caption.
+                if (IsZoomed(h)) {
+                    HMONITOR mon = MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST);
+                    MONITORINFO info{sizeof(info)};
+                    if (GetMonitorInfoW(mon, &info)) reinterpret_cast<NCCALCSIZE_PARAMS*>(lp)->rgrc[0] = info.rcWork;
+                }
+                return 0;
+            }
+            break;
+        case WM_NCPAINT:
+            return 0;
+        case WM_NCACTIVATE:
+            // -1 keeps the active state without asking Windows to repaint a caption.
+            return DefWindowProcW(h, msg, wp, -1);
+        case WM_NCHITTEST: {
+            if (IsZoomed(h)) return HTCLIENT;
+            POINT pt{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            RECT rc{};
+            GetWindowRect(h, &rc);
+            const UINT frameDpi = GetDpiForWindow(h);
+            const int border = GetSystemMetricsForDpi(SM_CXFRAME, frameDpi) + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, frameDpi);
+            const bool left = pt.x < rc.left + border;
+            const bool right = pt.x >= rc.right - border;
+            const bool top = pt.y < rc.top + border;
+            const bool bottom = pt.y >= rc.bottom - border;
+            if (top && left) return HTTOPLEFT;
+            if (top && right) return HTTOPRIGHT;
+            if (bottom && left) return HTBOTTOMLEFT;
+            if (bottom && right) return HTBOTTOMRIGHT;
+            if (left) return HTLEFT;
+            if (right) return HTRIGHT;
+            if (top) return HTTOP;
+            if (bottom) return HTBOTTOM;
+            return HTCLIENT;
+        }
+        case WM_GETMINMAXINFO: {
+            // Without a caption the maximized window would cover the taskbar.
+            HMONITOR mon = MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST);
+            MONITORINFO info{sizeof(info)};
+            if (GetMonitorInfoW(mon, &info)) {
+                auto* mmi = reinterpret_cast<MINMAXINFO*>(lp);
+                mmi->ptMaxPosition.x = info.rcWork.left - info.rcMonitor.left;
+                mmi->ptMaxPosition.y = info.rcWork.top - info.rcMonitor.top;
+                mmi->ptMaxSize.x = info.rcWork.right - info.rcWork.left;
+                mmi->ptMaxSize.y = info.rcWork.bottom - info.rcWork.top;
+            }
+            return 0;
+        }
         case WM_DPICHANGED: {
             const RECT* r = reinterpret_cast<const RECT*>(lp);
             SetWindowPos(h, nullptr, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_NOZORDER | SWP_NOACTIVATE);
@@ -383,6 +539,7 @@ public:
             break;
         case WM_CLOSE:
             if (s->core_ && !s->core_->confirmClose()) return 0;
+            s->closeAllFloats(); // reparent Scene/Game back before the owned windows are destroyed
             DestroyWindow(h);
             return 0;
         case WM_DESTROY:
@@ -411,6 +568,95 @@ public:
         case WM_MOUSEACTIVATE: return MA_ACTIVATE;
         default: return DefWindowProcW(h, msg, wp, lp);
         }
+    }
+    // A dock tab torn out of the editor. Real caption (dark) so it moves, resizes and closes on its own.
+    // Scene and Game stay the same child windows: placeSurface reparents them into whichever window shows the panel.
+    static LRESULT CALLBACK floatProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
+        if (msg == WM_NCCREATE) {
+            auto* created = reinterpret_cast<CREATESTRUCTW*>(lp);
+            SetWindowLongPtrW(h, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(created->lpCreateParams));
+            return DefWindowProcW(h, msg, wp, lp);
+        }
+        WinShell* s = gShell;
+        auto* pane = reinterpret_cast<FloatPane*>(GetWindowLongPtrW(h, GWLP_USERDATA));
+        if (!s || !pane) return DefWindowProcW(h, msg, wp, lp);
+        switch (msg) {
+        case WM_SIZE:
+            if (pane->controller && wp != SIZE_MINIMIZED) {
+                RECT bounds{};
+                GetClientRect(h, &bounds);
+                if (bounds.right > 0 && bounds.bottom > 0) {
+                    pane->controller->put_Bounds(bounds);
+                    if (pane->web) pane->web->ExecuteScript(L"window.dispatchEvent(new Event('resize'))", nullptr);
+                }
+            }
+            return 0;
+        case WM_MOVE:
+            if (pane->controller) pane->controller->NotifyParentWindowPositionChanged();
+            return 0;
+        case WM_ENTERSIZEMOVE:
+            GetCursorPos(&pane->press);
+            pane->overMain = false;
+            pane->moved = false;
+            return 0;
+        case WM_MOVING: {
+            POINT cursor{};
+            GetCursorPos(&cursor);
+            const int dx = cursor.x - pane->press.x, dy = cursor.y - pane->press.y;
+            if (dx > 12 || dx < -12 || dy > 12 || dy < -12) pane->moved = true;
+            RECT main{};
+            GetWindowRect(s->main_, &main);
+            const bool over = pane->moved && PtInRect(&main, cursor);
+            if (over != pane->overMain && s->core_ && !s->closingFloats_) {
+                pane->overMain = over;
+                Json payload = Json::object();
+                payload.set("over", Json::fromBool(over));
+                s->core_->sendEventPayload("window.dockHover", payload);
+            }
+            return DefWindowProcW(h, msg, wp, lp);
+        }
+        case WM_EXITSIZEMOVE:
+            s->sendFloatFrame(pane);
+            if (pane->overMain && !s->closingFloats_) {
+                pane->overMain = false;
+                if (s->core_) {
+                    Json payload = Json::object();
+                    payload.set("over", Json::fromBool(false));
+                    s->core_->sendEventPayload("window.dockHover", payload);
+                }
+                PostMessageW(h, WM_CLOSE, 0, 0); // release docks every tab back into the main window
+            }
+            return 0;
+        case WM_GETMINMAXINFO: {
+            auto* info = reinterpret_cast<MINMAXINFO*>(lp);
+            const UINT dpi = GetDpiForWindow(h);
+            info->ptMinTrackSize.x = MulDiv(280, int(dpi), 96);
+            info->ptMinTrackSize.y = MulDiv(180, int(dpi), 96);
+            return 0;
+        }
+        case WM_DPICHANGED: {
+            const RECT* suggested = reinterpret_cast<const RECT*>(lp);
+            SetWindowPos(h, nullptr, suggested->left, suggested->top, suggested->right - suggested->left, suggested->bottom - suggested->top,
+                         SWP_NOZORDER | SWP_NOACTIVATE);
+            return 0;
+        }
+        case WM_CLOSE:
+            s->releaseSurfaces(h); // the GPU child must not die with this window
+            DestroyWindow(h);
+            return 0;
+        case WM_DESTROY: {
+            const std::string key = pane->key;
+            const bool tell = !s->closingFloats_;
+            if (pane->controller) pane->controller->Close();
+            pane->web.reset();
+            pane->controller.reset();
+            s->eraseFloat(h);
+            if (tell && s->core_) s->core_->sendEvent("window.floatClosed", key);
+            return 0;
+        }
+        default: break;
+        }
+        return DefWindowProcW(h, msg, wp, lp);
     }
 
 private:
@@ -483,6 +729,8 @@ private:
                     PostQuitMessage(1);
                     return S_OK;
                 }
+                env->AddRef();
+                env_.reset(env);
                 auto* controllerDone = makeCallback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, HRESULT, ICoreWebView2Controller*>(
                     IID_ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, [this](HRESULT result, ICoreWebView2Controller* controller) -> HRESULT {
                         if (FAILED(result) || !controller) { fatal("The WebView2 control could not be created"); PostQuitMessage(1); return S_OK; }
@@ -539,14 +787,8 @@ private:
         }
         EventRegistrationToken token{};
         web_->add_WebMessageReceived(makeCallback<ICoreWebView2WebMessageReceivedEventHandler, ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs*>(
-            IID_ICoreWebView2WebMessageReceivedEventHandler, [this](ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT {
-                LPWSTR source = nullptr, json = nullptr;
-                if (FAILED(args->get_Source(&source))) return S_OK;
-                const std::string origin = takeString(source);
-                if (!trusted(origin)) return S_OK;
-                if (FAILED(args->get_WebMessageAsJson(&json))) return S_OK;
-                const std::string body = takeString(json);
-                if (core_ && body.size() <= 1024 * 1024) core_->handleMessage(body);
+            IID_ICoreWebView2WebMessageReceivedEventHandler, [this](ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT {
+                takeMessage(sender, args);
                 return S_OK;
             }), &token);
         web_->add_NavigationStarting(makeCallback<ICoreWebView2NavigationStartingEventHandler, ICoreWebView2*, ICoreWebView2NavigationStartingEventArgs*>(
@@ -590,6 +832,256 @@ private:
         RECT r{};
         GetClientRect(main_, &r);
         controller_->put_Bounds(r);
+    }
+    // The page measures the Scene on its own frames. A system size loop started from the web
+    // callback never reaches those frames until the button is released, so the timer moves the
+    // frame itself and asks the page to measure while the button is still down.
+    void stepSize() {
+        if (!size_.on || size_.busy || !IsWindow(main_)) return;
+        if ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) == 0) { size_.on = false; return; }
+        POINT now{};
+        GetCursorPos(&now);
+        RECT next = size_.start;
+        const int dx = now.x - size_.origin.x, dy = now.y - size_.origin.y;
+        if (size_.edge & 1) next.left += dx;
+        if (size_.edge & 2) next.right += dx;
+        if (size_.edge & 4) next.top += dy;
+        if (size_.edge & 8) next.bottom += dy;
+        const UINT dpi = GetDpiForWindow(main_);
+        const int minW = MulDiv(480, int(dpi), 96), minH = MulDiv(320, int(dpi), 96);
+        if (next.right - next.left < minW) {
+            if (size_.edge & 1) next.left = next.right - minW;
+            else next.right = next.left + minW;
+        }
+        if (next.bottom - next.top < minH) {
+            if (size_.edge & 4) next.top = next.bottom - minH;
+            else next.bottom = next.top + minH;
+        }
+        RECT cur{};
+        GetWindowRect(main_, &cur);
+        if (cur.left == next.left && cur.top == next.top && cur.right == next.right && cur.bottom == next.bottom) return;
+        size_.busy = true;
+        SetWindowPos(main_, nullptr, next.left, next.top, next.right - next.left, next.bottom - next.top, SWP_NOZORDER | SWP_NOACTIVATE);
+        size_.busy = false;
+        if (web_) web_->ExecuteScript(L"window.dispatchEvent(new Event('resize'))", nullptr);
+    }
+    void takeMessage(ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args) {
+        LPWSTR source = nullptr, json = nullptr;
+        if (FAILED(args->get_Source(&source))) return;
+        const std::string origin = takeString(source);
+        if (!trusted(origin)) return;
+        if (FAILED(args->get_WebMessageAsJson(&json))) return;
+        const std::string body = takeString(json);
+        if (!core_ || body.size() > 1024 * 1024) return;
+        currentWeb_ = sender;
+        core_->handleMessage(body);
+        currentWeb_ = nullptr;
+    }
+    HWND windowForWeb(ICoreWebView2* web) const {
+        if (web && web != web_.p)
+            for (const auto& pane : floats_)
+                if (pane->web.p == web && pane->hwnd) return pane->hwnd;
+        return main_;
+    }
+    FloatPane* findFloat(const std::string& key) {
+        for (auto& pane : floats_) if (pane->key == key) return pane.get();
+        return nullptr;
+    }
+    void eraseFloat(HWND hwnd) {
+        for (auto it = floats_.begin(); it != floats_.end(); ++it)
+            if ((*it)->hwnd == hwnd) { floats_.erase(it); return; }
+    }
+    void releaseSurfaces(HWND host) {
+        for (int i = 0; i < 2; ++i) {
+            HWND child = surfaces_[i];
+            if (!child || GetParent(child) != host) continue;
+            ShowWindow(child, SW_HIDE);
+            SetParent(child, main_);
+            if (core_) core_->surfaceDetached(i == 0 ? studio::StudioSurface::Scene : studio::StudioSurface::Game);
+        }
+    }
+    void closeAllFloats() {
+        closingFloats_ = true;
+        std::vector<HWND> hwnds;
+        for (const auto& pane : floats_) if (pane->hwnd) hwnds.push_back(pane->hwnd);
+        for (HWND hwnd : hwnds) if (IsWindow(hwnd)) SendMessageW(hwnd, WM_CLOSE, 0, 0);
+    }
+    void sendFloatFrame(FloatPane* pane) {
+        if (!pane || !pane->hwnd || closingFloats_ || !core_) return;
+        RECT frame{};
+        GetWindowRect(pane->hwnd, &frame);
+        Json payload = Json::object();
+        payload.set("window", Json::string(pane->key));
+        payload.set("x", Json::number(double(frame.left), 1));
+        payload.set("y", Json::number(double(frame.top), 1));
+        payload.set("width", Json::number(double(frame.right - frame.left), 1));
+        payload.set("height", Json::number(double(frame.bottom - frame.top), 1));
+        core_->sendEventPayload("window.floatFrame", payload);
+    }
+    bool cursorOverStudio() const {
+        POINT pt{};
+        if (!GetCursorPos(&pt)) return false;
+        HWND hit = WindowFromPoint(pt);
+        while (hit) {
+            if (hit == main_) return true;
+            for (const auto& pane : floats_) if (pane->hwnd == hit) return true;
+            HWND next = GetParent(hit);
+            if (!next || next == hit) break;
+            hit = next;
+        }
+        return false;
+    }
+    static void applyFloatChrome(HWND hwnd) {
+        const BOOL dark = TRUE;
+        DwmSetWindowAttribute(hwnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+        const COLORREF ink = RGB(14, 17, 23);
+        const COLORREF text = RGB(232, 228, 220);
+        DwmSetWindowAttribute(hwnd, 35 /* DWMWA_CAPTION_COLOR */, &ink, sizeof(ink));
+        DwmSetWindowAttribute(hwnd, 36 /* DWMWA_TEXT_COLOR */, &text, sizeof(text));
+        DwmSetWindowAttribute(hwnd, 34 /* DWMWA_BORDER_COLOR */, &ink, sizeof(ink));
+    }
+    void attachFloat(FloatPane* pane, ICoreWebView2Controller* controller, const std::wstring& url) {
+        controller->AddRef();
+        pane->controller.reset(controller);
+        pane->controller->get_CoreWebView2(pane->web.put());
+        Com<ICoreWebView2Controller2> c2;
+        if (SUCCEEDED(pane->controller->QueryInterface(IID_ICoreWebView2Controller2, reinterpret_cast<void**>(c2.put())))) {
+            COREWEBVIEW2_COLOR dark{255, 14, 17, 23};
+            c2->put_DefaultBackgroundColor(dark);
+        }
+        Com<ICoreWebView2Controller4> c4;
+        if (SUCCEEDED(pane->controller->QueryInterface(IID_ICoreWebView2Controller4, reinterpret_cast<void**>(c4.put()))))
+            c4->put_AllowExternalDrop(FALSE);
+        Com<ICoreWebView2Settings> settings;
+        if (pane->web && SUCCEEDED(pane->web->get_Settings(settings.put()))) {
+            settings->put_AreDevToolsEnabled(dev_ ? TRUE : FALSE);
+            settings->put_AreDefaultContextMenusEnabled(dev_ ? TRUE : FALSE);
+            settings->put_IsStatusBarEnabled(FALSE);
+            settings->put_IsZoomControlEnabled(FALSE);
+            settings->put_AreHostObjectsAllowed(FALSE);
+        }
+        if (!pane->web) return;
+        pane->web->AddScriptToExecuteOnDocumentCreated(kBridgeShim, nullptr);
+        if (!dev_) {
+            Com<ICoreWebView2_3> web3;
+            if (FAILED(pane->web->QueryInterface(IID_ICoreWebView2_3, reinterpret_cast<void**>(web3.put()))) ||
+                FAILED(web3->SetVirtualHostNameToFolderMapping(kVirtualHost, webRoot().wstring().c_str(), COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS))) {
+                logLine("[studio-web] floating window could not map its UI");
+                PostMessageW(pane->hwnd, WM_CLOSE, 0, 0);
+                return;
+            }
+        }
+        EventRegistrationToken token{};
+        const std::string key = pane->key;
+        pane->web->add_WebMessageReceived(makeCallback<ICoreWebView2WebMessageReceivedEventHandler, ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs*>(
+            IID_ICoreWebView2WebMessageReceivedEventHandler, [this](ICoreWebView2* sender, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT {
+                takeMessage(sender, args);
+                return S_OK;
+            }), &token);
+        pane->web->add_NavigationStarting(makeCallback<ICoreWebView2NavigationStartingEventHandler, ICoreWebView2*, ICoreWebView2NavigationStartingEventArgs*>(
+            IID_ICoreWebView2NavigationStartingEventHandler, [this](ICoreWebView2*, ICoreWebView2NavigationStartingEventArgs* args) -> HRESULT {
+                LPWSTR uri = nullptr;
+                if (SUCCEEDED(args->get_Uri(&uri)) && !trusted(takeString(uri))) args->put_Cancel(TRUE);
+                return S_OK;
+            }), &token);
+        pane->web->add_NewWindowRequested(makeCallback<ICoreWebView2NewWindowRequestedEventHandler, ICoreWebView2*, ICoreWebView2NewWindowRequestedEventArgs*>(
+            IID_ICoreWebView2NewWindowRequestedEventHandler, [](ICoreWebView2*, ICoreWebView2NewWindowRequestedEventArgs* args) -> HRESULT {
+                args->put_Handled(TRUE);
+                return S_OK;
+            }), &token);
+        pane->web->add_NavigationCompleted(makeCallback<ICoreWebView2NavigationCompletedEventHandler, ICoreWebView2*, ICoreWebView2NavigationCompletedEventArgs*>(
+            IID_ICoreWebView2NavigationCompletedEventHandler, [this, key](ICoreWebView2*, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT {
+                BOOL ok = FALSE;
+                args->get_IsSuccess(&ok);
+                logLine(std::string("[studio-web] float ") + key + (ok ? " ready" : " failed to load"));
+                return S_OK;
+            }), &token);
+        RECT bounds{};
+        GetClientRect(pane->hwnd, &bounds);
+        pane->controller->put_Bounds(bounds);
+        pane->controller->put_IsVisible(TRUE);
+        pane->web->Navigate(url.c_str());
+    }
+    Json openFloating(const Json& params) {
+        Json result = Json::object();
+        const std::string key = params.getStr("window");
+        if (!floatKeyOk(key)) throw std::runtime_error("Invalid floating window");
+        if (FloatPane* existing = findFloat(key)) {
+            if (existing->hwnd && IsWindow(existing->hwnd)) {
+                ShowWindow(existing->hwnd, SW_SHOW);
+                SetForegroundWindow(existing->hwnd);
+                result.set("opened", Json::fromBool(true));
+                return result;
+            }
+        }
+        if (!env_ || floats_.size() >= 8) { result.set("opened", Json::fromBool(false)); return result; }
+        if (params.getBool("ifOutside") && cursorOverStudio()) { result.set("opened", Json::fromBool(false)); return result; }
+        std::string panels;
+        const auto& list = params["panels"].items();
+        for (size_t i = 0; i < list.size() && i < 16; ++i) {
+            const std::string panel = list[i].str();
+            if (!floatPanelOk(panel)) throw std::runtime_error("Invalid floating panel");
+            if (!panels.empty()) panels += ',';
+            panels += panel;
+        }
+        if (panels.empty()) throw std::runtime_error("A floating window needs a panel");
+        const std::string titleUtf = params.getStr("title");
+        if (titleUtf.size() > 64) throw std::runtime_error("Invalid window title");
+        const std::wstring title = titleUtf.empty() ? std::wstring(L"AIVERSE") : widen(titleUtf);
+        POINT cursor{};
+        GetCursorPos(&cursor);
+        const UINT dpi = GetDpiForWindow(main_);
+        const bool big = panels.find("scene") != std::string::npos || panels.find("game") != std::string::npos;
+        int x = cursor.x - MulDiv(40, int(dpi), 96);
+        int y = cursor.y - MulDiv(16, int(dpi), 96);
+        int w = MulDiv(big ? 960 : 440, int(dpi), 96);
+        int h = MulDiv(big ? 640 : 560, int(dpi), 96);
+        if (params["x"].isNumber() && params["y"].isNumber() && params["width"].isNumber() && params["height"].isNumber()) {
+            const int aw = std::clamp(int(params["width"].toDouble()), 220, 8000);
+            const int ah = std::clamp(int(params["height"].toDouble()), 160, 6000);
+            RECT asked{LONG(params["x"].toDouble()), LONG(params["y"].toDouble()), 0, 0};
+            asked.right = asked.left + aw;
+            asked.bottom = asked.top + ah;
+            if (MonitorFromRect(&asked, MONITOR_DEFAULTTONULL)) { x = asked.left; y = asked.top; w = aw; h = ah; }
+        } else {
+            MONITORINFO work{sizeof(work)};
+            if (GetMonitorInfoW(MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST), &work)) {
+                if (x < work.rcWork.left) x = work.rcWork.left;
+                if (y < work.rcWork.top) y = work.rcWork.top;
+                if (x + w > work.rcWork.right) x = std::max(int(work.rcWork.left), int(work.rcWork.right) - w);
+                if (y + h > work.rcWork.bottom) y = std::max(int(work.rcWork.top), int(work.rcWork.bottom) - h);
+            }
+        }
+        auto pane = std::make_unique<FloatPane>();
+        pane->key = key;
+        FloatPane* raw = pane.get();
+        raw->hwnd = CreateWindowExW(WS_EX_APPWINDOW, kFloatClass, title.c_str(), WS_OVERLAPPEDWINDOW,
+                                     x, y, w, h, main_, nullptr, GetModuleHandleW(nullptr), raw);
+        if (!raw->hwnd) { result.set("opened", Json::fromBool(false)); return result; }
+        applyFloatChrome(raw->hwnd);
+        floats_.push_back(std::move(pane));
+        ShowWindow(raw->hwnd, SW_SHOW);
+        SetForegroundWindow(raw->hwnd);
+        const std::wstring url = dev_
+            ? widen(std::string(kDevOrigin) + "?window=" + key + "&panels=" + panels)
+            : std::wstring(L"https://") + kVirtualHost + L"/index.html?window=" + widen(key) + L"&panels=" + widen(panels);
+        auto* done = makeCallback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, HRESULT, ICoreWebView2Controller*>(
+            IID_ICoreWebView2CreateCoreWebView2ControllerCompletedHandler,
+            [this, key, url](HRESULT hr, ICoreWebView2Controller* controller) -> HRESULT {
+                FloatPane* live = findFloat(key);
+                if (!live || !IsWindow(live->hwnd) || FAILED(hr) || !controller) {
+                    if (controller) controller->Close();
+                    if (live && IsWindow(live->hwnd)) PostMessageW(live->hwnd, WM_CLOSE, 0, 0);
+                    else logLine("[studio-web] floating window could not be created");
+                    return S_OK;
+                }
+                attachFloat(live, controller, url);
+                return S_OK;
+            });
+        env_->CreateCoreWebView2Controller(raw->hwnd, done);
+        done->Release();
+        result.set("opened", Json::fromBool(true));
+        return result;
     }
 
     // ------------------------------------------------------------ input
@@ -775,6 +1267,18 @@ private:
     bool tracking_ = false;
     std::pair<double, double> last_{0, 0}, lastGame_{0, 0};
     uint32_t highSurrogate_ = 0;
+    Com<ICoreWebView2Environment> env_;
+    std::vector<std::unique_ptr<FloatPane>> floats_;
+    ICoreWebView2* currentWeb_ = nullptr;
+    bool closingFloats_ = false;
+    struct SizeDrag {
+        bool on = false;
+        bool busy = false;
+        int edge = 0; // 1 left, 2 right, 4 top, 8 bottom
+        POINT origin{};
+        RECT start{};
+    };
+    SizeDrag size_;
 };
 } // namespace
 

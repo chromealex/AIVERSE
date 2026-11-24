@@ -1,16 +1,18 @@
 #!/bin/sh
-# Bit-exactness guard for the Lua port (scripting agent): every sample game (templates/), seeds 1-3, must print
+# Bit-exactness guard for the Lua port (scripting agent): every sample game (catalog template packages), seeds 1-3, must print
 # the checksum recorded in baseline.txt (fixtures in tests/checksums/games too: recorded with the C++
 # implementation before each port). Usage: tests/checksums/check.sh [build dir] [--record]
-# templates/scripted needs Lua (not in a pre-scripting build): its lines come from the scripting build.
+# the scripted template needs Lua (not in a pre-scripting build): its lines come from the scripting build.
 # Prints sim time per match too (perf comparison). Exit 1 on any difference.
 set -u
 B=${1:-build/lin}
 DIR=$(dirname "$0")
 OUT=$(mktemp)
 fail=0
-# sample games (templates/) + fixtures that exercise mechanics the samples don't (tests/checksums/games)
-for gd in templates/* "$DIR"/games/*; do
+# sample games: the official template packages of the catalog (installed on first use, then cached)
+TPL=${AIVERSE_TEMPLATES_DIR:-$(python3 tools/pkg/fetch_templates.py)} || { echo "cannot install the template packages"; exit 1; }
+# sample games + fixtures that exercise mechanics the samples don't (tests/checksums/games)
+for gd in "$TPL"/* "$DIR"/games/*; do
   [ -f "$gd/game.json" ] || continue
   # This baseline guards the deterministic RTS module; other genres have separate suites.
   module=$(python3 .github/scripts/game-info.py "$gd" | sed -n 's/^MODULE=//p')

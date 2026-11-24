@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Shared pieces of the puzzle-solvers package: grid limits, the tri-state search result and the explicit node
 // budget every solver takes. Cells are row-major (index = y*width + x, y grows downward); neighbours are visited
 // in the fixed order left, right, up, down. Integer-only, no hidden randomness: callers pass aiverse::Random&.

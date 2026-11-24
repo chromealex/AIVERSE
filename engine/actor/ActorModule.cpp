@@ -1,9 +1,9 @@
 #include "ActorModule.h"
-#include "libraries/include/aiverselib/mechanics/EcsWeaponLaunchSystems.h"
+#include "engine/mechanics/EcsWeaponLaunchSystems.h"
 #include <algorithm>
 #include <set>
 #include "engine/core/FixedMath.h"
-#include "libraries/include/aiverselib/mechanics/EcsTimedMechanics.h"
+#include "engine/mechanics/EcsTimedMechanics.h"
 #include "engine/world/OrientedBox.h"
 #include <stdexcept>
 
@@ -36,7 +36,7 @@ Config readConfig(const Json& root) {
     // Capability blocks that are not specific to this host may sit at the top level of the rules (shared names,
     // docs/no-genre-split-audit.md G6); the legacy place rules.actor.<key> still loads. One place per block.
     Json j=root["actor"];
-    for(const char* key:{"royale","gear","crate","vehicleTypes","bots","weapons","weapon"}){
+    for(const char* key:{"royale","gear","crate","vehicleTypes","bots","weapons","weapon","locomotion"}){
         if(!root.has(key))continue;
         if(j.has(key))throw JsonError(std::string("rules.")+key+" and rules.actor."+key+": keep one of them");
         j.set(key,root[key]);
@@ -54,6 +54,16 @@ Config readConfig(const Json& root) {
     c.friendlyFire=j.getBool("friendlyFire",false);
     c.roundTicks=uint32_t(integer(j,"roundTicks",7200,1,10000000));
     c.respawnTicks=uint32_t(integer(j,"respawnTicks",180,1,100000));
+    if(j.has("locomotion")){
+        // Same keys, ranges and relations as the generated gameplay settings section `locomotion`.
+        if(!j["locomotion"].isObject())throw JsonError("rules.locomotion: expected object");
+        Json settings=Json::object();settings.set("schemaVersion",Json::number(int64_t(1)));settings.set("locomotion",j["locomotion"]);
+        auto parsed=lib::gameplay::readGameplaySettings(settings);
+        if(!parsed.value)throw JsonError("rules."+parsed.errors.at(0));
+        auto modes=lib::mechanics::locomotionModeConfig(*parsed.value);
+        if(auto error=lib::mechanics::locomotionModeError(modes);!error.empty())throw JsonError("rules."+error);
+        c.locomotion=modes;
+    }
     const auto& m=j["motor"];
     c.motor.radius=number(m,"radius",c.motor.radius,Fixed::fromRatio(1,10),2_fx);
     c.motor.height=number(m,"height",c.motor.height,c.motor.radius*2,4_fx);
@@ -209,6 +219,9 @@ std::vector<HitPose> ActorHost::livePoses(Simulation& sim) const {
 lib::systems::GearLoadout* ActorHost::gear(Simulation& sim,uint8_t slot) const {
     return sim.world().tryGet<lib::systems::GearLoadout>(characterEntity(sim,slot));
 }
+const LocomotionBody* ActorHost::locomotion(const Simulation& sim,uint8_t slot) const {
+    const Entity e=characterEntity(sim,slot);return e.valid()?sim.world().tryGetConst<LocomotionBody>(e):nullptr;
+}
 const lib::systems::GearLoadout* ActorHost::gear(const Simulation& sim,uint8_t slot) const {
     return sim.world().tryGetConst<lib::systems::GearLoadout>(characterEntity(sim,slot));
 }
@@ -306,7 +319,10 @@ void ActorHost::setup(Simulation& sim,const Json& rules,const Json& map) {
     world.setResource<State>();
     // One character entity per player slot, never destroyed during the match.
     CharacterIndex index;
-    for(const auto& a:characters){const Entity e=world.create();addCharacterComponents(world,e,a);index.bySlot.push_back(e);}
+    for(const auto& a:characters){
+        const Entity e=world.create();addCharacterComponents(world,e,a);index.bySlot.push_back(e);
+        if(config_.locomotion){LocomotionBody l;l.life=a.life;world.add<LocomotionBody>(e,l);}
+    }
     world.setResource<CharacterIndex>(std::move(index));
     auto& s=state(sim);
     setupSystems(sim,map);
@@ -434,7 +450,10 @@ void ActorHost::tick(Simulation& sim) {
         Input input=a.input;
         if(sim.tick()-a.lastInputTick>config_.inputTimeout){input.forward=input.right=0;input.buttons=0;input.action=Action::None;}
         if(config_.systems.enabled)actorSystems(sim,a,input);
-        if(!a.vehicle)moveActor(a,input,config_.motor,collision_,sim.dt(),config_.worldLimit);
+        if(!a.vehicle){
+            if(config_.locomotion)moveActorModes(a,*sim.world().tryGet<LocomotionBody>(a.entity),input,config_.motor,*config_.locomotion,collision_,sim.dt(),config_.worldLimit);
+            else moveActor(a,input,config_.motor,collision_,sim.dt(),config_.worldLimit);
+        }
         if(config_.melee.enabled)tickMelee(sim,a,input);
         // Jump is an edge, movement/fire are held; loss of input eventually releases them.
         a.input.buttons&=~uint32_t(Jump);
@@ -505,6 +524,7 @@ void ActorHost::hashState(Simulation& sim,Hasher& hash) {
     if(w.countExisting<vehicles::VehicleDrive>())vehicles::hashVehicles(w,hash,false);   // typed vehicles (the shared vehicle system)
     if(race_)race_->hash(w,hash);
     if(botHost_)for(const Entity e:w.resourceConst<CharacterIndex>()->bySlot)if(const auto* m=w.tryGetConst<BotMemory>(e))hash.str(m->bytes);
+    if(config_.locomotion)for(const Entity e:w.resourceConst<CharacterIndex>()->bySlot)if(const auto* l=w.tryGetConst<LocomotionBody>(e))hashLocomotionBody(hash,*l);
 }
 // FPS save version 10: written from the components (characters in slot order, dynamic objects in id order,
 // each with its entity handle); older versions are not readable. Typed vehicles write the shared VehicleDrive record
@@ -519,6 +539,7 @@ bool ActorHost::serializeState(Simulation& sim,Archive& archive) {
     struct SavedVehicle : Object { Vehicle value;bool typed=false;vehicles::VehicleDrive drive; };
     State s;std::vector<Character> characters;std::vector<SavedProjectile> shots;std::vector<SavedLoot> items;std::vector<SavedVehicle> cars;
     std::vector<lib::systems::GearLoadout> gears;std::vector<std::string> bots;
+    std::vector<LocomotionBody> locos;   // rules `locomotion` only
     vehicles::RaceState race;   // race maps only
     World& world=sim.world();
     if(archive.writing()){
@@ -529,6 +550,7 @@ bool ActorHost::serializeState(Simulation& sim,Archive& archive) {
             characters.push_back({characterEntity(view,uint8_t(slot)),snapshot(view,uint8_t(slot))});
             if(const auto* g=gear(view,uint8_t(slot)))gears.push_back(*g);
             if(const auto* m=w.tryGetConst<BotMemory>(characters.back().entity))bots.push_back(m->bytes);
+            if(const auto* l=w.tryGetConst<LocomotionBody>(characters.back().entity))locos.push_back(*l);
         }
         for(const Entity e:projectileEntities(view))shots.push_back({{e},*w.tryGetConst<Projectile>(e)});
         for(const Entity e:lootEntities(view))items.push_back({{e},*w.tryGetConst<Loot>(e)});
@@ -567,10 +589,12 @@ bool ActorHost::serializeState(Simulation& sim,Archive& archive) {
     for(auto& g:gears)lib::systems::io(archive,g);
     archive(bots);
     if(race_)vehicles::VehicleRace::io(archive,race);   // only maps with a race carry the race block
+    if(config_.locomotion){if(!sized(locos,256))return false;for(auto& l:locos)io(archive,l);}   // only rules `locomotion` append it
     if(!archive.ok())return false;
     // Validation (also when writing: a corrupt in-memory state must not produce a save).
     const size_t n=spawns_.size();
-    if(characters.size()!=n||bots.size()!=(botHost_?n:0)||gears.size()!=(config_.gear.empty()?0:n))return false;
+    if(characters.size()!=n||bots.size()!=(botHost_?n:0)||gears.size()!=(config_.gear.empty()?0:n)||locos.size()!=(config_.locomotion?n:0))return false;
+    for(const auto& l:locos)if(!valid(l))return false;
     for(const auto& g:gears)if(!lib::systems::valid(config_.gear,g))return false;
     if(s.royale.enabled!=bool(config_.royale))return false;
     if(race_){
@@ -627,12 +651,13 @@ bool ActorHost::serializeState(Simulation& sim,Archive& archive) {
     world.pool<CharacterWeapons>().clear();world.pool<CharacterInventory>().clear();world.pool<CharacterControl>().clear();
     world.pool<CharacterAction>().clear();world.pool<CharacterMelee>().clear();world.pool<lib::systems::GearLoadout>().clear();
     world.pool<BotMemory>().clear();world.pool<Projectile>().clear();world.pool<Loot>().clear();world.pool<Vehicle>().clear();
-    world.pool<vehicles::VehicleDrive>().clear();
+    world.pool<vehicles::VehicleDrive>().clear();world.pool<LocomotionBody>().clear();
     CharacterIndex index;
     for(size_t i=0;i<characters.size();++i){
         const Entity e=characters[i].entity;addCharacterComponents(world,e,characters[i].value);index.bySlot.push_back(e);
         if(!gears.empty())world.add<lib::systems::GearLoadout>(e,gears[i]);
         if(!bots.empty())world.add<BotMemory>(e,BotMemory{bots[i]});
+        if(!locos.empty())world.add<LocomotionBody>(e,locos[i]);
     }
     for(auto& o:shots)world.add<Projectile>(o.entity,std::move(o.value));
     for(auto& o:items)world.add<Loot>(o.entity,std::move(o.value));

@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Versioned save/load (mechanics::save/load from Persistence.h) and checksum hashing for puzzle-solvers state.
 // Record kinds 112..119 are reserved for this package (all used): Match3State 112, PuzzleFloodState 113,
 // PuzzlePipeState 114, PuzzleTilesState 115, PuzzleBlocksState 116, PuzzlePackState 117, PuzzleCspState 118,
@@ -7,7 +7,7 @@
 // Store each state under its own NativeState key, feed puzzleHash(state) into the simulation checksum, and after
 // loading re-check it against the level with the matching *Compatible / valid(level) helper.
 #include "PuzzleData.h"
-#include "Persistence.h"
+#include "engine/mechanics/Persistence.h"
 #include "engine/core/Hash.h"
 #include <string>
 namespace aiverse::lib::mechanics {

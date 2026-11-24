@@ -12,7 +12,7 @@
 #if defined(__GNUC__)
 #pragma GCC diagnostic pop
 #endif
-#include "../../../libraries/include/aiverselib/gameplay/Input.h"
+#include "engine/gameplay/Input.h"
 
 namespace aiverse::game {
 

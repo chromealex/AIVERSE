@@ -238,6 +238,80 @@ planners, built-in effects and sound parse). Limits: no Lua API; debris is a poi
 collisions with units/buildings); damage reaches only entities with `Transform`; vortex is an
 authored analytic field, not CFD; the editor nature preview does not draw funnels yet.
 
+### Fire whirls, water and ground (2026-11-22) — `engine/physis/PhysisTornadoNature.h`
+
+Every map tornado carries a `TornadoNature` next to its `TornadoTrack` (C++: the
+`spawnTornado(world, storm, track, nature)` overload, defaults from
+`defaultTornadoNature(tickRate)`). A tornado without it keeps exactly the rules above.
+
+| Part | Rule |
+|---|---|
+| Fire drawn in | Each tick the vortex takes `fire.intake` (share per second) × intensity × ring weight of the fire of every PHYSIS cell under its core and ring (1 in the core, linear to 0 at the outer radius). The drawn fire (in burning m²) is added to `heat`, which loses `fire.decay` per second. `fireness = heat / (heat + fire.halfHeat)` (0..1): it grows with the amount and strength of the fire, a small fire gives a weak whirl, without fire it fades. |
+| Blow-out vs. fire whirl | Core blow-out is `fire.suppression × (1 − fireness)`: a dust tornado still snuffs fire in its core, a fire whirl no longer does. Ring fanning is multiplied by `1 + fireness`. |
+| Ignition | Every fuel cell under the vortex (not over water) catches fire with chance `fire.ignite × fireness × intensity × weight` per second, strength `fire.igniteStrength × fireness`. Random numbers come from the tornado's own RNG state (`TornadoNature::rng`), in grid order. |
+| Embers | `fire.embersPerSecond × fireness` burning embers are thrown from the ring (up to `fire.maxEmbers`), carried by the vortex wind like debris (`TornadoEmberField`), burn out after `fire.emberLifeSeconds`, and set a fuel cell on fire with chance `fire.emberIgnite` where they land. |
+| Heat damage | Entities with a `Transform` inside the outer radius take `fire.heatDamagePerSecond × fireness × intensity` (full in the core, linear to 0 at the outer radius) through `GameModule::environmentDamage`, in addition to the wind damage. |
+| Water | Open water comes from `GameModule::environmentWaterDepth(sim, x, z)` (new, default 0; the generic game core returns 2 m for `~` cells and 0.3 m for `=` fords) or the PHYSIS local flood depth. The vortex is over water when 3 of 5 samples (centre + 4 on the core ring) are deeper than `surface.waterThresholdMeters`. |
+| Land tornado over water | Loses `surface.waterDecay` vigor per second, recovers `surface.recover` on land; at 0 it dissipates (intensity 0, storm disabled). Heat is quenched by `fire.quench` per second, no ignition, no embers. |
+| Waterspout | `surface: "auto"` decides at the first active tick: born over water = waterspout (`"water"` / `"land"` force it). Its wind is `surface.spoutStrength` × the authored wind, it raises spray (presentation) and loses `surface.spoutLandDecay` vigor per second on land, so it breaks up within seconds ashore. |
+| Ground scour | On land the core (out to 1.5 core radii) removes `erosion.rate × intensity²` metres per second from `GroundScourField` cells (`physis.scourCellMeters`, default 1 m, sparse, at most 65536 cells) down to `erosion.maxDepthMeters`; the soil (up to `erosion.capacityCubicMeters`) is carried and dropped (`erosion.deposit` share per second) in a band 1.5–2.5 core radii around the centre. Over water the carried soil sinks. `groundScourAt(world, x, z)` gives the change in metres (negative = scoured). |
+
+Map data (inside a tornado; all values per second, all optional):
+
+```json
+"fire": { "suppression": 0.8, "fanning": 0.5,
+          "intake": 0.6, "decay": 0.2, "halfHeat": 50, "quench": 1.5,
+          "ignite": 0.4, "igniteStrength": 0.6,
+          "embersPerSecond": 6, "maxEmbers": 48, "emberLifeSeconds": 8, "emberIgnite": 0.5,
+          "heatDamagePerSecond": 3 },              // "whirl": false = old blow-out only
+"surface": { "kind": "auto", "waterThresholdMeters": 0.2, "waterDecay": 0.08, "recover": 0.1,
+             "spoutStrength": 0.55, "spoutLandDecay": 0.6 },   // or "auto" / "land" / "water"
+"erosion": { "rate": 0.04, "maxDepthMeters": 0.6, "deposit": 0.25, "capacityCubicMeters": 40 }  // or false
+```
+Defaults: intake 0.5, decay 0.2, halfHeat 60 m², quench 1.5, ignite 0.4, igniteStrength 0.6, embers 6/s
+(max 48, 8 s, ignite 0.5), heat damage 4/s, waterDecay 0.08, recover 0.1, spoutStrength 0.55,
+spoutLandDecay 0.6, erosion 0.04 m/s, max 0.6 m, deposit 0.25, capacity 40 m³.
+
+New `physis` keys for fire scenes: `"ignitions": [{"center": [x, z], "radiusMeters": 6, "strength": 1,
+"startSeconds": 1}]` (needs `enableDisasters`; applied by the stateless `physis.ignitions` system on
+that climate tick), `"disasterConfig": {"fireSpreadRate", "fireGrowthRate", "fuelConsumptionRate",
+"rainSuppressionRate", "wetnessSuppressionRate"}` (per tick, 0..1), `"noFuelOnWater": true` (cells the
+host reports as water start without fuel), `"scourCellMeters": 1`.
+
+Determinism and saves: Fixed-point only, tornadoes in entity order, cells in grid order, embers in
+creation order, own RNG. `physis.tornado_nature`, `physis.tornado_embers`, `physis.ground_scour` are
+persistent and hashed, registered only when tornadoes are enabled — maps without tornadoes keep their
+save manifest and checksums.
+
+Presentation (`PhysisNatureRuntime`, no extra wiring): the frame carries `fireness`, `spray`,
+`waterspout`, embers and scour blocks (≥ 2 m). SpectraFX layers: the dust funnel fades as fireness
+or spray rise; `physis_tornado_fire` (spinning flame column, glow, fire light, sparks, smoke on top,
+alpha = fireness, 6 levels — a level change starts the new emitter while the old one fades out),
+`physis_tornado_spray` (spray column, base cascade, rings on the water), `physis_tornado_ember`
+(spark + small light per ember), `physis_tornado_scar` (flat dark soil mark per scoured block, up to
+160). Sound: a second voice `physis_firestorm_loop` (synth fallback added by
+`addPhysisTornadoSounds`), volume by fireness × intensity. Projects override any of them in `fx/` /
+`audio.json`.
+
+Fire textures: the built-in `physis_flame`, `physis_smoke` and `physis_tornado_fire` use CC0
+flipbooks from Unity's free VFX image sequences (`engine/assets/fx/physis/`: `flame_16x4.png`,
+`flame_tall_16x4.png`, `fireball_8x8.png`, `smoke_8x8.png`; source, licence and processing in
+`LICENSE-fx.txt`). Ground flames are small upright additive licks standing on the ground (base pivot),
+the whirl's tongues are aligned to their spiral motion, smoke is alpha-blended. A project overrides any
+of them with `fx/<name>.json`.
+
+Sample: `templates/skirmish/maps/firestorm_valley.json` ("Firestorm Valley", map index 3): a meadow
+fire, a tornado that becomes a fire whirl, crosses the river and dies over the north-east lake, and a
+waterspout on the lake that breaks up ashore. Tests: `physis_firestorm` (growth by amount, small fire
+= weak, decay, ignition on the path, embers, heat damage, land tornado over water, waterspout, scour,
+determinism, map install, save/load/continue checksums, parser), `physis_tornado_cues` (fire / spray /
+ember / scar layers, flame roar).
+
+Limits: the scour is PHYSIS data and a ground mark; the terrain mesh / heightfield / navigation is not
+lowered (a TerraWeave Earthworks host may apply `GroundScourField`; no adapter yet). Water rings are
+SpectraFX particles, not NEREID surface waves. Fire burns on PHYSIS cells (coarse grid); the fire
+whirl's flames follow the vortex, not individual plants.
+
 ## Cross-system ownership (PHYSIS / NEREID / TerraWeave)
 
 PHYSIS owns **climate/weather, natural event fields and environmental force/gravity policies**, but never Box3D rigid-body integration itself. NEREID (Water agent,

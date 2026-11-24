@@ -1,10 +1,10 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Settings adapters for the optional `objectives` section of libraries/spec/gameplay.json (ticks and
 // milli-units). The clock limit comes from matchRules.roundTicks. objectiveSettingsErrors reports
 // cross-field problems the generated loader cannot express, as readable "objectives.<field>: ..." lines.
-#include "../gameplay/Configuration.h"
-#include "MatchObjectives.h"
+#include "engine/gameplay/Configuration.h"
+#include "engine/mechanics/MatchObjectives.h"
 #include <string>
 #include <vector>
 namespace aiverse::lib::mechanics {

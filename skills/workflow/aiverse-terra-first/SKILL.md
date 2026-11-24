@@ -35,7 +35,7 @@ source present, native compiled, host connected and visually verified are distin
   Follow `examples/world/terraweave_native/README.md`; configure the existing host.
 - Flat editor heightfield: use TerraWeave preview/generate through
   `skills/world/aiverse-terrain/SKILL.md`. Preserve authored edits and Undo.
-  Never run flat MapDoc operations on world-space (legacy `data.fps`) or planet formats.
+  Never run flat MapDoc operations on world-space (`data.worldSpace`) or planet formats.
 - Authored models/offline showcase: follow `docs/terrain/native-landscape-authoring.md`;
   use `aiverse_terraweave_landscape`, then the native vegetation/rock exporters.
   Import ordinary assets and keep the real NEREID manifest alongside them.

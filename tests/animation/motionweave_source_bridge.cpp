@@ -1,5 +1,5 @@
-#include <aiverselib/animation/MotionWeaveSourceBridge.h>
-#include <aiverselib/motionweave/MotionWeave.h>
+#include "engine/animation/MotionWeaveSourceBridge.h"
+#include "engine/animation/MotionWeave.h"
 #include "../AlwaysCheck.h"
 #include <stdexcept>
 #include <vector>

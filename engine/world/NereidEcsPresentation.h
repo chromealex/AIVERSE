@@ -2,7 +2,7 @@
 // genre-specific state; the caller chooses when to publish the snapshot.
 #pragma once
 #include "engine/world/NereidWaterScene.h"
-#include <aiverselib/water/NereidWaterSystems.h>
+#include "engine/world/nereid/NereidWaterSystems.h"
 #include <algorithm>
 #include <cstdint>
 #include <stdexcept>

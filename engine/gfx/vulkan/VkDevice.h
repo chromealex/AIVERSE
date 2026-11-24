@@ -155,6 +155,10 @@ struct FrameSlot {
     VkBuffer uniforms = VK_NULL_HANDLE;
     Allocation uniformAlloc;
     size_t uniformSize = 0, uniformOffset = 0;
+    // AIVERSE_VK_GPU_TIMING: GPU timestamps of this slot's frame (labels per query)
+    VkQueryPool timing = VK_NULL_HANDLE;
+    uint32_t timingCount = 0;
+    std::vector<std::string> timingLabels;   // one per query, "" = frame start
 };
 
 class VulkanDevice final : public Device {
@@ -397,6 +401,19 @@ private:
     // present() rotates the frame with a compute pass, so the compositor
     // does not rotate every frame. 0 = off, 1 = ROTATE_90, 2 = ROTATE_270.
     int rotatePresent_ = 0;
+    // Backend experiment switches (read once at device creation):
+    // AIVERSE_VK_GPU_TIMING=1  logs GPU time per render pass / present every 120 frames
+    // AIVERSE_VK_DEPS=narrow   render pass dependencies limited to the stages that really touch attachments
+    // AIVERSE_VK_DEPTH_STORE=0 depth/stencil are not written back to memory after a pass
+    bool gpuTiming_ = false, narrowDeps_ = false, depthStore_ = true;
+    bool preUploadAllowed_ = false;   // updateTexture() inside a pass: upload via the pre-frame buffer
+    double timestampNs_ = 1.0;
+    uint64_t timestampMask_ = ~0ull;
+    std::map<std::string, std::pair<double, int>> timingAcc_;
+    int timingFrames_ = 0;
+    double timingFrameMs_ = 0.0;
+    void timestamp(const std::string& label, VkPipelineStageFlagBits stage);
+    void collectTiming(FrameSlot& s);
     std::vector<VkImageView> swapViews_;
     VkDescriptorSetLayout rotLayout_ = VK_NULL_HANDLE;
     VkPipelineLayout rotPipeLayout_ = VK_NULL_HANDLE;

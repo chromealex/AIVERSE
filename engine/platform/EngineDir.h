@@ -1,6 +1,6 @@
-// Where the engine's files are (templates/, engine/assets, sources for aiversebuild) for host tools: the editor,
+// Where the engine's files are (engine/assets, tools, sources for aiversebuild) for host tools: the editor,
 // aiversebuild, assetpipe. A developer build uses the source tree it was compiled from; a packaged engine
-// (e.g. the Windows build: <root>/bin/*.exe next to <root>/templates) is found next to the executable,
+// (e.g. the Windows build: <root>/bin/*.exe next to <root>/engine) is found next to the executable,
 // so the folder can be moved or unpacked anywhere. AIVERSE_ENGINE_DIR overrides both.
 #pragma once
 #include <cstdlib>
@@ -11,7 +11,9 @@ namespace aiverse::platform {
 
 inline bool looksLikeEngineDir(const std::filesystem::path& d) {
     std::error_code ec;
-    return std::filesystem::is_directory(d / "templates", ec) && std::filesystem::is_directory(d / "engine" / "assets", ec);
+    // tools/pkg: the package tool (sample games are catalog packages now); templates/: older engine folders
+    return std::filesystem::is_directory(d / "engine" / "assets", ec) &&
+           (std::filesystem::is_directory(d / "tools" / "pkg", ec) || std::filesystem::is_directory(d / "templates", ec));
 }
 
 inline std::string resolveEngineDir(const std::string& compiled, const char* argv0) {

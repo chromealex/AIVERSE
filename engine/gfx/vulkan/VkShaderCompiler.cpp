@@ -1,6 +1,9 @@
 #include <algorithm>
 #include <cstdlib>
 #include "VkShaderCompiler.h"
+#ifndef ENABLE_OPT
+#define ENABLE_OPT 0
+#endif
 #include "../ColorSpace.h"
 
 #include <glslang/Public/ResourceLimits.h>
@@ -8,6 +11,8 @@
 #include <SPIRV/GlslangToSpv.h>
 
 #include <cctype>
+#include <filesystem>
+#include <cstdio>
 #include <cstring>
 #include <memory>
 #include <mutex>
@@ -201,10 +206,97 @@ std::string translateGlsl(const std::string& body, bool vertex, bool linearTarge
     return "#version 450\n#define AIVERSE_VULKAN 1\n" + colorShaderPrefix(false, linearTarget) + s;
 }
 
+// AIVERSE_VK_SPV_DIR=<dir> (experiment): every program's SPIR-V is written there as
+// <key>.vert.spv / <key>.frag.spv; when <key>.vert.opt.spv and <key>.frag.opt.spv exist
+// (e.g. made offline with spirv-opt -O) they are used instead.
+void exchangeSpirv(uint64_t key, SpirvProgram& p) {
+    static const char* dir = std::getenv("AIVERSE_VK_SPV_DIR");
+    if (!dir || !*dir) return;
+    char base[1024];
+    std::snprintf(base, sizeof base, "%s/%016llx", dir, static_cast<unsigned long long>(key));
+    auto read = [](const std::string& path, std::vector<uint32_t>& out) {
+        std::FILE* f = std::fopen(path.c_str(), "rb");
+        if (!f) return false;
+        std::vector<uint32_t> words;
+        uint32_t w;
+        while (std::fread(&w, 4, 1, f) == 1) words.push_back(w);
+        std::fclose(f);
+        if (words.size() < 5 || words[0] != 0x07230203u) return false;
+        out = std::move(words);
+        return true;
+    };
+    auto write = [](const std::string& path, const std::vector<uint32_t>& words) {
+        if (std::FILE* f = std::fopen(path.c_str(), "wb")) { std::fwrite(words.data(), 4, words.size(), f); std::fclose(f); }
+    };
+    std::vector<uint32_t> v, f;
+    if (read(std::string(base) + ".vert.opt.spv", v) && read(std::string(base) + ".frag.opt.spv", f)) {
+        std::fprintf(stderr, "[vk-spv] %016llx: optimized SPIR-V (%zu+%zu words, was %zu+%zu)\n",
+                     static_cast<unsigned long long>(key), v.size(), f.size(), p.vertex.size(), p.fragment.size());
+        p.vertex = std::move(v);
+        p.fragment = std::move(f);
+        return;
+    }
+    write(std::string(base) + ".vert.spv", p.vertex);
+    write(std::string(base) + ".frag.spv", p.fragment);
+}
+
+// ---- on-disk program cache ----
+constexpr uint32_t kSpirvCacheVersion = 1;
+std::string g_cacheDir;
+void setShaderCacheDir(const std::string& dir) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    g_cacheDir = dir;
+    if (!dir.empty()) { std::error_code ec; std::filesystem::create_directories(dir, ec); }
+}
+namespace {
+std::string cachePath(uint64_t key, bool optimized) {
+    if (g_cacheDir.empty()) return {};
+    char name[64];
+    std::snprintf(name, sizeof name, "/%016llx-%u%s.spvc", static_cast<unsigned long long>(key), kSpirvCacheVersion, optimized ? "o" : "");
+    return g_cacheDir + name;
+}
+// Layout: magic, vertex words, fragment words, shadowSlots, then the words.
+bool loadCached(const std::string& path, SpirvProgram& p) {
+    if (path.empty()) return false;
+    std::FILE* f = std::fopen(path.c_str(), "rb");
+    if (!f) return false;
+    uint32_t h[4] = {};
+    bool ok = std::fread(h, 4, 4, f) == 4 && h[0] == 0x41565350u && h[1] > 4 && h[2] > 4 && h[1] < (1u << 24) && h[2] < (1u << 24);
+    if (ok) {
+        p.vertex.resize(h[1]); p.fragment.resize(h[2]); p.shadowSlots = h[3];
+        ok = std::fread(p.vertex.data(), 4, h[1], f) == h[1] && std::fread(p.fragment.data(), 4, h[2], f) == h[2] &&
+             p.vertex[0] == 0x07230203u && p.fragment[0] == 0x07230203u;
+    }
+    std::fclose(f);
+    if (!ok) { p = SpirvProgram{}; }
+    return ok;
+}
+void storeCached(const std::string& path, const SpirvProgram& p) {
+    if (path.empty() || !p.error.empty()) return;
+    const std::string tmp = path + ".tmp";
+    std::FILE* f = std::fopen(tmp.c_str(), "wb");
+    if (!f) return;
+    const uint32_t h[4] = {0x41565350u, uint32_t(p.vertex.size()), uint32_t(p.fragment.size()), p.shadowSlots};
+    bool ok = std::fwrite(h, 4, 4, f) == 4 && std::fwrite(p.vertex.data(), 4, p.vertex.size(), f) == p.vertex.size() &&
+              std::fwrite(p.fragment.data(), 4, p.fragment.size(), f) == p.fragment.size();
+    ok = std::fclose(f) == 0 && ok;
+    std::error_code ec;
+    if (ok) std::filesystem::rename(tmp, path, ec);
+    if (!ok || ec) std::filesystem::remove(tmp, ec);
+}
+}
+
 bool compileProgram(const std::string& vertexBody, const std::string& fragmentBody, bool linearTarget, SpirvProgram& out) {
     const uint64_t key = fnv(vertexBody, fragmentBody, linearTarget);
     std::lock_guard<std::mutex> lock(g_mutex);
     if (auto it = g_cache.find(key); it != g_cache.end()) { out = *it->second; return out.error.empty(); }
+    static const bool optimize = [] { const char* e = std::getenv("AIVERSE_VK_SPV_OPT"); return ENABLE_OPT && !(e && e[0] == '0'); }();
+    const std::string cached = std::getenv("AIVERSE_VK_SPV_DIR") ? std::string() : cachePath(key, optimize);
+    if (SpirvProgram hit; loadCached(cached, hit)) {
+        g_cache.emplace(key, std::make_shared<SpirvProgram>(hit));
+        out = std::move(hit);
+        return true;
+    }
     std::call_once(g_init, [] { glslang::InitializeProcess(); });
 
     uint32_t shadow = 0;
@@ -237,12 +329,17 @@ bool compileProgram(const std::string& vertexBody, const std::string& fragmentBo
         }
         if (result.error.empty()) {
             glslang::SpvOptions opt;
-            opt.disableOptimizer = true;
+            // SPIRV-Tools performance passes when built in (ENABLE_OPT, AIVERSE_SPIRV_OPT);
+            // AIVERSE_VK_SPV_OPT=0 turns them off at run time for comparisons.
+            opt.disableOptimizer = !optimize;
+            opt.optimizePerformance = !opt.disableOptimizer;
             opt.validate = false;
             glslang::GlslangToSpv(*program.getIntermediate(EShLangVertex), result.vertex, &opt);
             glslang::GlslangToSpv(*program.getIntermediate(EShLangFragment), result.fragment, &opt);
+            exchangeSpirv(key, result);
         }
     }
+    storeCached(cached, result);
     g_cache.emplace(key, std::make_shared<SpirvProgram>(result));
     out = std::move(result);
     return out.error.empty();

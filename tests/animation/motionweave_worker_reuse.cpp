@@ -1,5 +1,5 @@
 // Deferred repeated-dispatch/exception contract for persistent worker pool.
-#include <aiverselib/animation/MotionWeaveWorkers.h>
+#include "engine/animation/MotionWeaveWorkers.h"
 #include <atomic>
 #include "../AlwaysCheck.h"
 #include <stdexcept>

@@ -5,7 +5,7 @@ description: Reuse the AIVERSE side-commander bot (economy, build/research, wave
 
 # Side commander bot (package `bots-commander`, legacy id)
 
-Current host: the side commander runs on the legacy `modules/rts` simulation (`ComputerPlayer`); other hosts need the extraction listed as debt G3/G5 in `docs/no-genre-split-audit.md`.
+Host: the side commander (`ComputerPlayer`) is a system of `engine/game` (GameCore, the one host for every project).
 
 1. Read `docs/bots.md` and this catalog entry. Read `libraries/include/aiverselib/bots/Rts.h` for exact APIs.
 2. Use existing ComputerPlayer for economy, build/research, combat, garrisons and terrain/planet play. Host calls update before sim.step. rules.ai may override profiles. Preserve the legacy knowledge policy; do not claim fog-fairness. Save bot state with simulation; exact player/seed/settings must match.

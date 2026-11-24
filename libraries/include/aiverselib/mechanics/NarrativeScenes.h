@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Narrative and social scenes (narrative-graphs 0.2.0): typed facts (int/bool/enum) with persistent world-state
 // facts, per-character relationship meters (affinity/trust/fear) with bounds, per-character knowledge sets, one-shot
 // flags, chapter/act state, AND/OR/NOT conditions, deferred consequences (N ticks or N scenes later), speakers and

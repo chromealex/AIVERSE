@@ -9,7 +9,7 @@ Use when an authoritative host sends full world snapshots to clients and most of
 one. The FPS authority session already uses it (`engine/net/authority/Session.cpp`, protocol 5); follow these steps
 for another host (a native module's server, a custom battle server).
 
-1. Read `libraries/include/aiverselib/net/SnapshotDelta.h` (namespace `aiverse::lib::delta`).
+1. Read `engine/net/SnapshotDelta.h` (namespace `aiverse::lib::delta`).
 2. Snapshot -> `RecordSet`: one record per stable thing, keyed by a 32-bit ID that stays the same between snapshots
    (0 = globals such as tick / score / phase; `kind << 28 | id` for entities, as `snapshotRecords` in
    `engine/net/authority/Session.cpp` does). Record bytes come from the owner's `Archive` `io`, so equal state gives

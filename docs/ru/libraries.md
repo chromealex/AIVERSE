@@ -17,7 +17,7 @@ target_link_libraries(aiverse_native_my_game PRIVATE AIVERSE::libraries)
 
 ```cpp
 #include "engine/game/Native.h"
-#include <aiverselib/Graphs.h>
+#include "engine/core/Graphs.h"
 
 // For example, inside setup():
 // auto route = aiverse::lib::bfs({{1}, {2}, {}}, 0);

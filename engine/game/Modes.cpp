@@ -174,7 +174,7 @@ void GameCore::modesSetup(Simulation& sim, const Json& rulesJson, const Json& ma
 // ================================================================= queries
 
 double GameCore::speedScale(Simulation& sim) {
-    if (actor_) return 1.0;
+    if (systems_) return 1.0;
     if (!modes_.any) return 1.0;
     auto* gs = sim.world().resource<GameState>();
     return gs ? gs->modes.speed.toDouble() : 1.0;

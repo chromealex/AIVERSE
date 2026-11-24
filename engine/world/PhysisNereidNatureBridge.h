@@ -4,7 +4,7 @@
 // own, simulate or overwrite authoritative NEREID water bodies.
 #pragma once
 #include "engine/physis/PhysisNatureSampling.h"
-#include <aiverselib/water/NereidWaterSystems.h>
+#include "engine/world/nereid/NereidWaterSystems.h"
 
 namespace aiverse::world {
 

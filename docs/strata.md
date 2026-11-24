@@ -18,6 +18,11 @@ default — see [Hardware acceptance and default-on decision](#hardware-acceptan
 | Vulkan GPU indirect rendering | Explicitly gated per-material/instance/pass packets consumed by Renderer3D | Recording contracts and GLSL/SPIR-V compilation pass; real Vulkan compute/indirect/temporal and raster/depth/reflection acceptance is not certified |
 | Production readiness | Experimental flags and manual parity gates stay OFF by default | Native arm64 and device acceptance done 2026-11-22; default-on blocked by synchronous staging (37 s desktop, ~6.5 min phone) and memory (criteria below); spot-shadow, lossy seam ROI and hardware pressure/popping still open |
 
+**Shadows and the cut (2026-11-22).** By default (`strata.shadowErrorScale` absent or 0) the shadow pass
+draws the cut chosen for the camera. A positive `shadowErrorScale` (1..64) adds the shadow map as a selection
+view with that error multiplier; a shadow map covering the model at full resolution then keeps the finest
+clusters at any camera distance (seen in the catalog viewer: the triangle count did not change with zoom).
+
 The latest [system QA report](qa/strata-system-2026-11-20.md) records the
 tested SHA, actual device, evidence and failures. That Mac run used x86_64
 binaries under Rosetta on Apple M3 Ultra, not native arm64 binaries. Successful

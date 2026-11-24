@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // tactics-grid: unit turns on a TacticsGrid. Action points, a per-round initiative order (effective initiative =
 // base + speed modifiers, ties by ascending stable unit id), delay (re-queue at the end of the round once), overwatch
 // reservations that fire reaction shots at enemies moving through their line of fire, attacks with cover/flanking,

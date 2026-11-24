@@ -19,7 +19,7 @@ New tests and GUI interaction have not yet been verified as passing.
 
 Presentation-only particle effects: CPU simulation (`engine/fx/ParticleSystem`), drawn through the
 RHI with one dynamic vertex buffer per frame. The simulation never sees them; effects are started from
-`SimEvent`s by `modules/rts/fx/GameFx` (the same read-only event collector as `GameAudio`).
+`SimEvent`s by `engine/fx/GameFx` (the same read-only event collector as `GameAudio`).
 
 ## Data (per game)
 

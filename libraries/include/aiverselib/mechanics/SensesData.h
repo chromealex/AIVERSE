@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // JSON definitions for stealth-senses: {"disguises":[{"id":1,"factions":[2],"zones":[10],"blownBy":[1],
 //   "scaleMilli":200,"trespassScaleMilli":1000}],"hidingSpots":[{"id":5,"position":[0,0,4000],"capacity":1}]}.
 // Positions are milli-metres; lists are positive IDs (sorted on load, duplicates rejected). Errors are

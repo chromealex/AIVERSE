@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CheckCircle2, CircleAlert, FolderOpen, Hammer, Loader2, Ruler, Save, ScrollText, XCircle } from 'lucide-react';
+import { CheckCircle2, CircleAlert, FolderOpen, Hammer, Ruler, Save, ScrollText, XCircle } from 'lucide-react';
 import { invoke } from '../bridge';
 import type { StudioBuildEstimate, StudioBuildInfo, StudioSnapshot, StudioToolchain } from '../types';
-import { StudioAlert, StudioBadge, StudioButton, StudioCheckbox, StudioField, StudioSelect } from '../ui';
+import { StudioAlert, StudioBadge, StudioButton, StudioCheckbox, StudioField, StudioSelect, StudioLoader } from '../ui';
 import { buildErrors, buildPhase, buildSteps, formatBytes, missingToolchain, runTarget } from './buildLogic';
 import './BuildPanel.css';
 
@@ -132,7 +132,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
         onChange={e => setInstallMissing(e.target.checked)}/>
       <div className="build__actions">
         <StudioButton variant="primary" disabled={!info?.toolFound || state.running || !!info?.dirty} onClick={() => void start('build')}>
-          {state.running && !run.estimate ? <Loader2 size={14} className="build__spin"/> : <Hammer size={14}/>}Build {selected?.name ?? target}</StudioButton>
+          {state.running && !run.estimate ? <StudioLoader size={17}/> : <Hammer size={14}/>}Build {selected?.name ?? target}</StudioButton>
         <StudioButton disabled={!info?.toolFound || state.running || !!info?.dirty} onClick={() => void start('estimate')}
           title="Pack the content only and report the size (no app build)"><Ruler size={14}/>Estimate size</StudioButton>
         <StudioButton disabled={!selected?.built} onClick={() => reveal({ target })}><FolderOpen size={14}/>Show build</StudioButton>
@@ -146,7 +146,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
       {info?.dirty && <StudioAlert tone="warning" title="Unsaved changes">A build packs the files on disk.
         <StudioButton size="sm" onClick={() => void save()}><Save size={13}/>Save and continue</StudioButton></StudioAlert>}
       <div className={'build__status build__status--' + phase} role="status">
-        {phase === 'running' ? <Loader2 size={16} className="build__spin"/> : phase === 'ok' ? <CheckCircle2 size={16}/> :
+        {phase === 'running' ? <StudioLoader size={19}/> : phase === 'ok' ? <CheckCircle2 size={16}/> :
           phase === 'idle' ? <Hammer size={16}/> : phase === 'missing-toolchain' ? <CircleAlert size={16}/> : <XCircle size={16}/>}
         <b>{phase === 'running' ? (run.estimate ? 'Estimating size' : 'Building ' + (run.target || target)) :
             phase === 'ok' ? (run.estimate ? 'Estimate ready' : 'Build succeeded') :
@@ -163,7 +163,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
         <StudioButton size="sm" onClick={() => void start('build', true)}>Install and build</StudioButton></StudioAlert>}
       <div className="build__cards">
         <section className="build__card" aria-label="Toolchain">
-          <h3>Toolchain · {selected?.name ?? target}{checking && <Loader2 size={12} className="build__spin"/>}</h3>
+          <h3>Toolchain · {selected?.name ?? target}{checking && <StudioLoader size={15}/>}</h3>
           {toolchain && !toolchain.hostSupported && <p className="build__note">{toolchain.hostNote || 'Not buildable on this computer'}</p>}
           {toolchain?.requirements.map(r => <div key={r.id} className={'build__req' + (r.found ? ' is-found' : r.required ? ' is-missing' : '')}>
             {r.found ? <CheckCircle2 size={13}/> : r.required ? <XCircle size={13}/> : <CircleAlert size={13}/>}

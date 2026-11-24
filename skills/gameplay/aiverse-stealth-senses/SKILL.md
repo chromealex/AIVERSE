@@ -7,7 +7,7 @@ description: Reuse AIVERSE stealth senses (sight cones, hearing with occlusion a
 
 Use when a native/host owner needs per-agent perception for guards, monsters or bots: who sees/hears/smells
 whom, how suspicious they are, who gets alerted, where they search. Side-wide fog of war is a separate
-owner (`modules/rts` vision, `aiverse::view::VisibilityField`); do not run both for the same question. Bounded long-term memory/threat ranking can additionally use `ai-perception`
+owner (`engine/game` vision, `aiverse::view::VisibilityField`); do not run both for the same question. Bounded long-term memory/threat ranking can additionally use `ai-perception`
 (`systems/Perception.h`): feed it from `PerceivedTarget` records, never from omniscient queries.
 
 1. Read `docs/mechanics-packages.md` (stealth-senses section) and the catalog entry. Inspect

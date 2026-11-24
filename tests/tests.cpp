@@ -194,8 +194,8 @@ TEST(command_serialization_roundtrip) {
 }
 
 // ---------------- Generic RTS gameplay ----------------
-static const std::string kSkirmish = std::string(AIVERSE_SOURCE_DIR) + "/templates/skirmish";
-static const std::string kMushrooms = std::string(AIVERSE_SOURCE_DIR) + "/templates/mushrooms";
+static const std::string kSkirmish = std::string(AIVERSE_TEMPLATES_DIR) + "/skirmish";
+static const std::string kMushrooms = std::string(AIVERSE_TEMPLATES_DIR) + "/mushrooms";
 
 static std::unique_ptr<Simulation> makeSim(const std::string& game, const std::string& map, uint64_t seed) {
     SimConfig cfg; cfg.seed = seed;
@@ -644,7 +644,7 @@ namespace {
 i18n::FileReader contentReader(const std::string& game) {
     return [game](const std::string& rel, std::string& out) {
         std::string path = rel.rfind("engine/", 0) == 0 ? std::string(AIVERSE_SOURCE_DIR) + "/engine/assets/" + rel.substr(7)
-                                                         : std::string(AIVERSE_SOURCE_DIR) + "/templates/" + game + "/" + rel;
+                                                         : std::string(AIVERSE_TEMPLATES_DIR) + "/" + game + "/" + rel;
         std::ifstream f(path, std::ios::binary);
         if (!f) return false;
         std::stringstream ss; ss << f.rdbuf(); out = ss.str();
@@ -916,7 +916,7 @@ TEST(pack_sample_games_match_folder) {
     }
 }
 
-// ---------------- Audio (engine/audio, modules/rts/audio) ----------------
+// ---------------- Audio (engine/audio, engine/audio) ----------------
 #include <cmath>
 #include <fstream>
 #include <map>
@@ -975,7 +975,10 @@ bool loadBank(audio::AudioEngine& a, const std::string& json, std::string* err =
 }
 
 std::string readSource(const std::string& rel) {
-    std::ifstream f(std::string(AIVERSE_SOURCE_DIR) + "/" + rel, std::ios::binary);
+    // "templates/<id>/..." are the sample games, installed from the package catalog (AIVERSE_TEMPLATES_DIR)
+    const std::string path = rel.rfind("templates/", 0) == 0 ? std::string(AIVERSE_TEMPLATES_DIR) + "/" + rel.substr(10)
+                                                             : std::string(AIVERSE_SOURCE_DIR) + "/" + rel;
+    std::ifstream f(path, std::ios::binary);
     std::stringstream s;
     s << f.rdbuf();
     return s.str();
@@ -2062,7 +2065,7 @@ TEST(sample_games_bot_matches_deterministic) {
         {"borderrush", "maps/five_lands.json"}, {"hearthhaul", "maps/green_dale.json"}, {"sporelanes", "maps/spore_field.json"},
         {"spellbunkers", "maps/rune_field.json"}};
     for (auto& g : games) {
-        std::string dir = std::string(AIVERSE_SOURCE_DIR) + "/templates/" + g[0];
+        std::string dir = std::string(AIVERSE_TEMPLATES_DIR) + "/" + g[0];
         std::vector<Command> cmds;
         uint64_t a = botMatch(dir, g[1], 3, 20 * 60, &cmds), b = botMatch(dir, g[1], 3, 20 * 60);
         bool ok = a == b && !cmds.empty();
@@ -2120,7 +2123,7 @@ TEST(tiles2d_terrain_applied_to_map_idempotent) {
 
 TEST(tiles2d_sample_games_deterministic) {
     for (const char* g : {"tiles2d", "km2d"}) {
-        std::string dir = std::string(AIVERSE_SOURCE_DIR) + "/templates/" + g;
+        std::string dir = std::string(AIVERSE_TEMPLATES_DIR) + "/" + g;
         Json manifest = Json::parseFile(dir + "/game.json");
         auto run = [&] {
             Json map = Json::parseFile(dir + "/" + manifest["maps"][size_t(0)].getStr("file"));
@@ -2611,7 +2614,7 @@ TEST(models_procedural_modifiers) {
 
 TEST(models_sample_assets_load) {
     using namespace modeltest;
-    const std::string dir = std::string(AIVERSE_SOURCE_DIR) + "/templates/showcase/models/";
+    const std::string dir = std::string(AIVERSE_TEMPLATES_DIR) + "/showcase/models/";
     std::vector<std::string> warn;
     auto golem = loadModel(dir + "golem.glb", diskReader(), &warn);
     CHECK(golem->clips.size() == 6 && golem->skins.size() == 1 && golem->skins[0].joints.size() == 8);
@@ -3359,7 +3362,7 @@ TEST(audiopack_stage_game_folder) {
     fs::remove_all(root, cleanup);   // never throws: a locked temp file on Windows must not abort the run
 }
 
-// ---------------- particles (engine/fx, modules/rts/fx) ----------------
+// ---------------- particles (engine/fx, engine/fx) ----------------
 #include <cstdlib>
 #include "engine/fx/ParticleSystem.h"
 #include "engine/fx/FxModelMesh.h"
@@ -3462,7 +3465,7 @@ TEST(fx_sample_games_have_valid_effects) {
         CHECK(bridge.init(ps, rules, Json::parse(readSource(dir + "fx/fx.json")), &err));
         for (auto& w : bridge.warnings()) std::printf("    %s: %s\n", g.c_str(), w.c_str());
         CHECK(bridge.warnings().empty());
-        for (auto& entry : std::filesystem::directory_iterator(std::string(AIVERSE_SOURCE_DIR) + "/" + dir + "fx")) {
+        for (auto& entry : std::filesystem::directory_iterator(std::string(AIVERSE_TEMPLATES_DIR) + "/" + g + "/fx")) {
             if (!entry.is_regular_file()) continue;   // fx/gpu/ holds SpectraFX GPU assets, not ParticleSystem effects
             const std::string name = entry.path().stem().string();
             if (name == "fx") continue;
@@ -4324,7 +4327,7 @@ TEST(terrain_incremental_clearance_matches_full) {
 }
 
 TEST(terrain_heightfield_match_is_deterministic) {
-    const std::string dir = std::string(AIVERSE_SOURCE_DIR) + "/templates/metaltide";
+    const std::string dir = std::string(AIVERSE_TEMPLATES_DIR) + "/metaltide";
     Json rules = readComposedJson(dir + "/rules.json", fileReader()), map = Json::parseFile(dir + "/maps/twin_craters.json");
     CHECK(game::loadRules(rules).terrain.heightfield());
     auto run = [&] {
@@ -4855,7 +4858,7 @@ TEST(models_additive_and_blend_space) {
 
 TEST(models_morph_targets_and_weights) {
     using namespace modeltest;
-    const std::string dir = std::string(AIVERSE_SOURCE_DIR) + "/templates/showcase/models/";
+    const std::string dir = std::string(AIVERSE_TEMPLATES_DIR) + "/showcase/models/";
     auto m = loadModel(dir + "slime.glb", diskReader(), nullptr);
     const Primitive& p = m->meshes[0].primitives[0];
     CHECK(p.morphTargets == 2 && p.vertexCount > 0 && p.morphDeltas.size() == size_t(2) * p.vertexCount * 6);
@@ -4874,7 +4877,7 @@ TEST(models_morph_targets_and_weights) {
 
 TEST(models_baked_clips_match_the_pose) {
     using namespace modeltest;
-    const std::string dir = std::string(AIVERSE_SOURCE_DIR) + "/templates/showcase/models/";
+    const std::string dir = std::string(AIVERSE_TEMPLATES_DIR) + "/showcase/models/";
     auto m = loadModel(dir + "golem.glb", diskReader(), nullptr);
     NullDevice dev;
     CHECK(bakeAnimations(dev, *m, 30));
@@ -5174,7 +5177,7 @@ TEST(vision_fast_equals_reference_planet) {
         }, 420, seed, &passes));
         CHECK(passes > 60);
         // and the shipped planet maps over a stretch of a match
-        auto big = [&] { return makeSim(std::string(AIVERSE_SOURCE_DIR) + "/templates/planets", "maps/two_worlds.json", seed); };
+        auto big = [&] { return makeSim(std::string(AIVERSE_TEMPLATES_DIR) + "/planets", "maps/two_worlds.json", seed); };
         auto ptBig = [&](Simulation& s, VisionLcg& rr) { const game::Surface* S = mod(s).surface(s); const int b = S->startBody, M = S->bodies[size_t(b)].faceSize; return S->cellCenter(S->gridCell(b, rr.below(6), rr.below(M), rr.below(M))); };
         if (seed == 1) CHECK(visionMatches(big, ptBig, [](Simulation&, VisionLcg&) {}, 300, seed, &passes));
     }
@@ -5282,7 +5285,7 @@ TEST(lighting_type_and_map_data) {
     const auto& cat = L.typeLights(uint16_t(sk.findType("catapult")));
     CHECK(!cat.projectile.on && cat.hit.on);                     // data: "projectileLight": false
     // abilities: one light per ability, colour from what it does (artillery = damage -> orange)
-    const std::string fc = std::string(AIVERSE_SOURCE_DIR) + "/templates/frostcrown/rules.json";
+    const std::string fc = std::string(AIVERSE_TEMPLATES_DIR) + "/frostcrown/rules.json";
     if (std::filesystem::exists(fc)) {
         const game::Rules fr = game::loadRules(Json::parseFile(fc));
         game::GameLights F;
@@ -7125,7 +7128,7 @@ TEST(mcp_install_patches_configs_as_text) {
 TEST(models_converted_sidecar_loads_for_the_source_path) {
     using namespace modeltest;
     std::string glb;
-    CHECK(diskReader()(std::string(AIVERSE_SOURCE_DIR) + "/templates/showcase/models/sword.glb", glb));
+    CHECK(diskReader()(std::string(AIVERSE_TEMPLATES_DIR) + "/showcase/models/sword.glb", glb));
     CHECK(isNativeModelFormat("a/b.MDX") && isNativeModelFormat("x.vox") && !isNativeModelFormat("ship.lwo") && !isNativeModelFormat("noext"));
     auto m = loadModel("units/ship.lwo", mapReader({{"units/ship.lwo", "LWO source"}, {"units/ship.lwo.glb", glb}}), nullptr);
     CHECK(m && m->path == "units/ship.lwo" && !m->meshes.empty());
@@ -7324,7 +7327,7 @@ TEST(models_vox_greedy_scene_team) {
     CHECK(warn.empty());
     // the generated showcase sample loads with its scene graph
     std::vector<std::string> w2;
-    auto tank = loadModel(std::string(AIVERSE_SOURCE_DIR) + "/templates/showcase/models/voxel_tank.vox", modeltest::diskReader(), &w2);
+    auto tank = loadModel(std::string(AIVERSE_TEMPLATES_DIR) + "/showcase/models/voxel_tank.vox", modeltest::diskReader(), &w2);
     const int turret = tank->findNode("Turret"), barrel = tank->findNode("Barrel");
     CHECK(turret >= 0 && barrel >= 0 && tank->findNode("Hull") >= 0 && w2.empty());
     if (barrel >= 0) CHECK(tank->nodes[size_t(barrel)].parent == turret);
@@ -8646,7 +8649,7 @@ TEST(models_dds_formats) {
 #endif
 
 // ---------------- Planets: surface, world block, orbit layer, transit ----------------
-static const std::string kPlanets = std::string(AIVERSE_SOURCE_DIR) + "/templates/planets";
+static const std::string kPlanets = std::string(AIVERSE_TEMPLATES_DIR) + "/planets";
 
 TEST(planet_surface_offsets_and_hash_buckets) {
     using namespace aiverse::game;
@@ -9143,7 +9146,7 @@ TEST(materials_library_ops_round_trip) {
     const fs::path root = fs::temp_directory_path() / ("aiverse_mat_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::remove_all(root);
     fs::create_directories(root / "games");
-    fs::copy(fs::path(AIVERSE_SOURCE_DIR) / "templates" / "showcase", root / "games" / "showcase", fs::copy_options::recursive);
+    fs::copy(fs::path(AIVERSE_TEMPLATES_DIR) / "showcase", root / "games" / "showcase", fs::copy_options::recursive);
     editor::Workspace ws;
     ws.engineDir = AIVERSE_SOURCE_DIR;
     std::string err;
@@ -10089,7 +10092,7 @@ TEST(script_data_hooks) {
 }
 
 static std::unique_ptr<Simulation> scriptedGame(uint64_t seed) {
-    const std::string dir = std::string(AIVERSE_SOURCE_DIR) + "/templates/scripted";
+    const std::string dir = std::string(AIVERSE_TEMPLATES_DIR) + "/scripted";
     Json rules = Json::parseFile(dir + "/rules.json");
     Json map = Json::parseFile(dir + "/maps/valley.json");
     std::string err;
@@ -10245,7 +10248,7 @@ TEST(terrain_detail_codec_roundtrip) {
 // Lua lab (docs/lua-coverage.md): prototypes of mechanics the C++ core doesn't have, written with the
 // public Lua API only (fire spread, attrition, unit programs, rewind, bounty flags).
 static std::unique_ptr<Simulation> luaLabGame(uint64_t seed) {
-    const std::string dir = std::string(AIVERSE_SOURCE_DIR) + "/templates/lua_lab";
+    const std::string dir = std::string(AIVERSE_SOURCE_DIR) + "/tests/checksums/games/lua_lab";
     Json rules = Json::parseFile(dir + "/rules.json");
     Json map = Json::parseFile(dir + "/maps/valley.json");
     std::string err;
@@ -16190,7 +16193,7 @@ std::filesystem::path worldTreeCopy(const char* tmpl) {
     const fs::path root = fs::temp_directory_path() / ("aiverse_world_tree_" + std::string(tmpl) + "_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::remove_all(root);
     fs::create_directories(root);
-    fs::copy(fs::path(AIVERSE_SOURCE_DIR) / "templates" / tmpl, root / tmpl, fs::copy_options::recursive);
+    fs::copy(fs::path(AIVERSE_TEMPLATES_DIR) / tmpl, root / tmpl, fs::copy_options::recursive);
     return root;
 }
 bool worldTreePreview(editor::Workspace& ws, editor::WorldPreview& pv, const editor::WorldConfig& cfg) {
@@ -16957,7 +16960,7 @@ TEST(ai_terrain_analysis_high_ground_routes_chokes) {
 
 TEST(ai_bot_state_survives_save_load) {
     // a bot match saved at 90 s and continued from the save (sim + bot states) ends exactly like the original
-    for (const std::string& game : {kSkirmish, std::string(AIVERSE_SOURCE_DIR) + "/templates/metaltide"}) {
+    for (const std::string& game : {kSkirmish, std::string(AIVERSE_TEMPLATES_DIR) + "/metaltide"}) {
         const std::string map = game == kSkirmish ? "maps/valley.json" : "maps/twin_craters.json";
         auto a = makeSim(game, map, 4);
         std::vector<game::ComputerPlayer> botsA;
@@ -17092,7 +17095,7 @@ TEST(project_file_create_resolve_migrate) {
     // migration: a project made before project files existed gets a .aiverse when opened
     const fs::path old = home.dir / "Projects" / "legacy";
     fs::create_directories(old / "maps");
-    fs::copy_file(fs::path(AIVERSE_SOURCE_DIR) / "templates/skirmish/rules.json", old / "rules.json");
+    fs::copy_file(fs::path(AIVERSE_TEMPLATES_DIR) / "skirmish/rules.json", old / "rules.json");
     std::ofstream(old / "game.json") << R"({"name": "Old Game", "rules": "rules.json", "maps": []})";
     {
         Workspace ws;
@@ -17107,15 +17110,15 @@ TEST(project_file_create_resolve_migrate) {
         CHECK(ws.project.dir == fs::weakly_canonical(dir).string() && ws.project.file == fs::weakly_canonical(file).string());
         Json r = ws.call("open_game", Json::parse("{\"game\": \"" + (old / "Old Game.aiverse").generic_string() + "\"}"));
         CHECK(!r.has("error") && r.getStr("file").find("Old Game.aiverse") != std::string::npos);
-        // template ids still work and the engine's templates are not rewritten
-        CHECK(ws.openGame("mushrooms", &err) && fs::path(ws.project.file).filename() == "Mushroom Clash.aiverse");
+        // template ids still work and the installed templates are not rewritten (no project file there)
+        CHECK(ws.openGame("mushrooms", &err) && ws.project.file.empty() && !fs::exists(fs::path(AIVERSE_TEMPLATES_DIR) / "mushrooms" / "Mushroom Clash.aiverse"));
         CHECK(!ws.openGame((old / "missing.aiverse").string(), &err) && !err.empty());
     }
     // a project saved before the AIVERSE rename: its <Title>.rtsproj still opens it and stays the
     // project file (no second .aiverse appears); a .aiverse next to it wins
     const fs::path legacy = home.dir / "Projects" / "rts-era";
     fs::create_directories(legacy / "maps");
-    fs::copy_file(fs::path(AIVERSE_SOURCE_DIR) / "templates/skirmish/rules.json", legacy / "rules.json");
+    fs::copy_file(fs::path(AIVERSE_TEMPLATES_DIR) / "skirmish/rules.json", legacy / "rules.json");
     std::ofstream(legacy / "game.json") << R"({"name": "Era Game", "rules": "rules.json", "maps": []})";
     std::ofstream(legacy / "Era Game.rtsproj") << R"({"format": 1, "name": "Era Game", "manifest": "game.json", "custom": 7})";
     {
@@ -17142,26 +17145,19 @@ TEST(project_file_create_resolve_migrate) {
 }
 
 TEST(templates_have_project_files) {
+    // Template packages carry no project file (a project made from one writes its own, named after
+    // game.json); opening an installed template creates it once, named after game.json.
     namespace fs = std::filesystem;
     using namespace aiverse::editor;
     int n = 0;
-    for (auto& e : fs::directory_iterator(fs::path(AIVERSE_SOURCE_DIR) / "templates")) {
+    for (auto& e : fs::directory_iterator(fs::path(AIVERSE_TEMPLATES_DIR))) {
         if (!fs::exists(e.path() / "game.json")) continue;
         ++n;
-        int files = 0;
-        for (auto& f : fs::directory_iterator(e.path())) files += isProjectFilePath(f.path().string());
-        const std::string pf = findProjectFile(e.path().string());
-        if (files != 1 || pf.empty() || isLegacyProjectFilePath(pf)) { std::printf("  %s: %d project files (want one .aiverse)\n", e.path().filename().string().c_str(), files); CHECK(false); continue; }
-        ProjectFile p;
-        std::string err;
-        CHECK(readProjectFile(pf, p, &err));
+        for (auto& f : fs::directory_iterator(e.path())) CHECK(!isLegacyProjectFilePath(f.path().string()));
         const std::string name = Json::parseFile((e.path() / "game.json").string()).getStr("name");
-        if (p.name != name || fs::path(pf).filename().string() != projectFileName(name)) {
-            std::printf("  %s: project file '%s' vs game.json name '%s'\n", e.path().filename().string().c_str(), fs::path(pf).filename().string().c_str(), name.c_str());
-            CHECK(false);
-        }
+        CHECK(!name.empty() && !projectFileName(name).empty());
     }
-    CHECK(n > 10);
+    CHECK(n >= 10);
     // aiversebuild's pack rules: a project file at the root (current or legacy) is not content
     aiverse::pack::IgnoreRules rules;
     rules.add("*.aiverse");

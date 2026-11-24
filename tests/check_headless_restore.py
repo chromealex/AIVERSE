@@ -5,12 +5,14 @@ import shutil
 import subprocess
 import sys
 import tempfile
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / 'tools/pkg'))
+from fetch_templates import default_dir as templates_dir  # noqa: E402
 
 repo = pathlib.Path(__file__).resolve().parents[1]
 binary = str(pathlib.Path(sys.argv[1]).resolve())
 with tempfile.TemporaryDirectory(prefix='rts-restore-check-') as tmp:
     root = pathlib.Path(tmp) / 'fixture'
-    shutil.copytree(repo / 'templates/skirmish', root)
+    shutil.copytree(templates_dir() / 'skirmish', root)
     rules = root / 'rules.json'
     rules.write_text(re.sub(r'^\{', '{\n  "scripts": ["probe.lua"],', rules.read_text(), count=1, flags=re.M))
     probe = root / 'probe.lua'

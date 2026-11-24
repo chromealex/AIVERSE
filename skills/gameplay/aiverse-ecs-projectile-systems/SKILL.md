@@ -9,7 +9,7 @@ Read `AGENTS.md`, `docs/ecs-mechanic-composition.md`,
 `docs/mechanics-packages.md`, and
 `skills/gameplay/aiverse-weapon-policies/SKILL.md`.
 
-1. Include `<aiverselib/mechanics/EcsProjectileSystems.h>`. Use public
+1. Include `"engine/mechanics/EcsProjectileSystems.h"`. Use public
    `ProjectileFlightComponent` (`ProjectileConfig` + `ProjectileState`
    + generation-safe `owner` + stable `shotId`) on project Entities.
 2. Register `addProjectileFlightSystem(sim,name,collisionProvider,onImpact)`
@@ -37,9 +37,9 @@ Read `AGENTS.md`, `docs/ecs-mechanic-composition.md`,
 7. This flight skill is **one part** of the complete common shooting pipeline.
    For weapon inputs/ammo/cooldown and deterministic deferred projectile creation,
    use `skills/gameplay/aiverse-ecs-weapon-launch/SKILL.md` and
-   `<aiverselib/mechanics/EcsWeaponLaunchSystems.h>`. For health, impacts and
+   `"engine/mechanics/EcsWeaponLaunchSystems.h"`. For health, impacts and
    ordered damage, use `skills/gameplay/aiverse-ecs-impact-damage/SKILL.md`
-   and `<aiverselib/mechanics/EcsDamageSystems.h>`.
+   and `"engine/mechanics/EcsDamageSystems.h"`.
 8. Run `ecs_projectile_composition_test` (flight-only),
    `ecs_cross_genre_projectile_test` (flight + health) and
    `ecs_cross_genre_weapon_pipeline_test` (full launch-to-damage)
@@ -51,7 +51,7 @@ Read `AGENTS.md`, `docs/ecs-mechanic-composition.md`,
 ## Physical versus kinematic projectiles
 
 The public `EcsProjectileSystems.h` now also exports
-`<aiverselib/mechanics/EcsSweepQuerySystems.h>`. Use
+`"engine/mechanics/EcsSweepQuerySystems.h"`. Use
 `selectSweptProjectileContact(candidates,origin,displacement,extent,bounds,preferTie)`
 for dynamic-target collision of a moving projectile, with expanded AABB and
 fixed-point nearest contact. A swept endpoint fraction of 1 is a valid hit;
@@ -90,7 +90,7 @@ half-extent=0.1, contact fraction inset=0.01, divisor=2) reproduces the
 pre-ECS FPS grenade bounce arithmetic exactly.
 
 The live FPS ordinary projectile stage is registered as
-`fps.ordinaryProjectiles`, after `fps.projectilePrograms` and before `fps`
+`actor.ordinaryProjectiles`, after `actor.projectilePrograms` and before `fps`
 (round / character tick). It advances the `Projectile` components of the
 projectile entities in ascending `id` order and emits the original immediate
 hit effects; the cross-genre `ecs_projectile_composition_test` compares
@@ -109,11 +109,11 @@ When implementing another mechanic, repeat the same decomposition:
 The FPS host is ECS-only (`engine/actor/ActorComponents.h`): every projectile,
 loot item and vehicle is an entity with a `Projectile` / `Loot` / `Vehicle`
 component; there is no `State::projectiles` vector, mirror stage or
-`fps.ecsAuthority` switch. Deterministic order is ascending `id`
+`actor.ecsAuthority` switch. Deterministic order is ascending `id`
 (`fps::State::nextObject`), read through `Module::projectileEntities` or the
 `Module::projectiles` copies.
 
-* `fps.projectilePrograms` (`Module::stepProgrammedProjectile` in
+* `actor.projectilePrograms` (`Module::stepProgrammedProjectile` in
   `engine/actor/ActorProjectiles.cpp`) composes the projectile modifier policy
   with `selectSweptProjectileContact`; no second physical solver. Collision,
   damage, on-hit / loot side effects and branching happen synchronously while

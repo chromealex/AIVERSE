@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // physical-interactions: kinematic moving platforms on waypoint paths (Loop, PingPong, Once) with constant
 // speed and per-waypoint wait times. Translation only (no rotation). Arriving at a waypoint discards the
 // rest of that tick's travel. The collision owner reports which platform each rider stands on (the same

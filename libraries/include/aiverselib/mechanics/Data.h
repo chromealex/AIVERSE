@@ -1,6 +1,6 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
-#include "Narrative.h"
+#include "engine/mechanics/Namespace.h"
+#include "engine/mechanics/Narrative.h"
 #include "engine/data/Json.h"
 #include <charconv>
 namespace aiverse::lib::mechanics {

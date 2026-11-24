@@ -32,7 +32,7 @@ static Entity findAt(Simulation& sim, float x, float z) {
 }
 // aiverse_runtime (renderer, platform) supplies main() and calls aiverseMain, like tests/deferred_loading.cpp.
 int aiverseMain(int, char**) {
-    const std::string base = std::string(AIVERSE_SOURCE_DIR) + "/templates/mushrooms/";
+    const std::string base = std::string(AIVERSE_TEMPLATES_DIR) + "/mushrooms/";
     // Plain map: no pose component registered, save format unchanged (v9).
     {
         auto plain = make(baseMap(base), base);

@@ -5,7 +5,7 @@ description: Reuse AIVERSE C++ nonnegative integer step/linear progression table
 
 # progression-curves
 
-Read `docs/gameplay-systems.md`, `libraries/include/aiverselib/systems/Curves.h` and this package's catalog entry.
+Read `docs/gameplay-systems.md`, `engine/systems/Curves.h` and this package's catalog entry.
 
 1. Author strictly increasing nonnegative x and nonnegative y. Endpoints clamp; linear rounding is toward the left value, including descending segments. Unsafe intermediate products return failure. Use aiverse_app_tools curve to preview exact runtime results; use engine/meta progression owners for built-in experience/rewards.
 2. Prefer existing engine mechanics and data settings before custom state. Keep all new outcome-affecting data in NativeState; no mutable module members.

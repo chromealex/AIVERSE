@@ -7,17 +7,18 @@
 #include "ActorSystems.h"
 #include "ActorComponents.h"
 #include "engine/world/CollisionStream.h"
-#include "libraries/include/aiverselib/mechanics/Melee.h"
-#include "libraries/include/aiverselib/mechanics/royale/BattleRoyale.h"
-#include "libraries/include/aiverselib/systems/Gear.h"
-#include "libraries/include/aiverselib/systems/BuildingGen.h"
-#include "libraries/include/aiverselib/mechanics/VehicleData.h"
-#include "libraries/include/aiverselib/mechanics/RaceSessionData.h"
+#include "engine/mechanics/Melee.h"
+#include "engine/mechanics/royale/BattleRoyale.h"
+#include "engine/systems/Gear.h"
+#include "engine/systems/BuildingGen.h"
+#include "engine/mechanics/VehicleData.h"
+#include "engine/mechanics/RaceSessionData.h"
 #include "engine/vehicles/VehicleRace.h"
 #include <optional>
 #include <span>
 #include <utility>
 
+#include "../game/HostSystems.h"
 namespace aiverse::actor {
 constexpr uint32_t kBuildingColliderBase=0x40000000;
 constexpr uint32_t kRotatedColliderBase=0x50000000;   // triangles of map colliders with a "yaw" (12 per box)   // collider ids of map `buildings` (building-gen)
@@ -52,6 +53,10 @@ struct Config {
     // Opt-in `fps.royale` (battle-royale package; a map's own `royale` block replaces it): phased zone, air
     // insertion, bombardment, supply drops and standings. `crate` = items of a landed supply drop.
     std::optional<lib::mechanics::RoyaleRules> royale;
+    // Opt-in rules `locomotion` (character-locomotion package, the locomotion.* keys of docs/gameplay-settings.md):
+    // characters move through the mode machine (dash, wall slide, wall run, grapple, slopes) instead of the plain
+    // motor. The motor's speed, jumpSpeed and gravity still apply; absent = the plain motor, unchanged bytes.
+    std::optional<lib::mechanics::LocomotionModeConfig> locomotion;
     std::vector<Item> crate;
     // Opt-in `fps.gear` (gear-tiers package): tiered helmets / vests / backpacks as loot type 200 + id.
     lib::systems::GearCatalog gear;
@@ -96,21 +101,21 @@ bool decodeInput(const Command& command,Input& input);
 Vec3 direction(Fixed yaw,Fixed pitch);
 struct BotHost;   // ActorBots.cpp: bot settings and regional navmeshes (derived from collision, never saved)
 // Actor systems (characters, weapons, projectiles, vehicles, royale, race, bots) on world-space maps.
-// Not a GameModule: game::GameCore owns one and runs it when the map is world-space (colliders + spawns).
-class ActorHost final {
+// game::GameCore owns one and runs it when the map is world-space (colliders + spawns).
+class ActorHost final : public game::HostSystems {
 public:
     // Limits of the dynamic object pools (spawns beyond them are dropped).
     static constexpr size_t kMaxProjectiles=256,kMaxLoot=256,kMaxVehicles=32;
-    void setup(Simulation&,const Json&,const Json&);
-    void applyCommand(Simulation&,const Command&);
-    void hashState(Simulation&,Hasher&);
-    bool serializeState(Simulation&,Archive&);
-    int result(Simulation& sim) { return state(sim).winner; }
+    void setup(Simulation&,const Json&,const Json&) override;
+    void applyCommand(Simulation&,const Command&) override;
+    void hashState(Simulation&,Hasher&) override;
+    bool serializeState(Simulation&,Archive&) override;
+    int result(Simulation& sim) override { return state(sim).winner; }
     const Config& config() const { return config_; }
 
     const world::SpatialWorld& collision() const { return collision_; }
     void setContentReader(world::AssetReader);
-    bool readyToStep(Simulation&);
+    bool readyToStep(Simulation&) override;
     const world::AsyncChunkStream::Status* streamingStatus()const{return streamedCollision_?&streamedCollision_->status():nullptr;}
     // Match-level data (round, winner, nextObject, match, royale, history).
     State& state(Simulation& sim) const { return *sim.world().resource<State>(); }
@@ -131,6 +136,8 @@ public:
     // Per-slot gear (nullptr without `fps.gear`).
     lib::systems::GearLoadout* gear(Simulation& sim,uint8_t slot) const;
     const lib::systems::GearLoadout* gear(const Simulation& sim,uint8_t slot) const;
+    // Locomotion mode state of a character (rules `locomotion`); nullptr without it.
+    const LocomotionBody* locomotion(const Simulation& sim,uint8_t slot) const;
     // Dynamic objects in ascending id (= creation order). Entities carry Projectile / Loot / Vehicle
     // (+ VehicleDrive on typed vehicles); the value variants return copies for read-only consumers.
     std::vector<Entity> projectileEntities(const Simulation& sim) const;

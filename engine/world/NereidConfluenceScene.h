@@ -3,7 +3,7 @@
 // Scene publication must follow an ECS read barrier; no gameplay writes.
 #pragma once
 #include "engine/world/NereidWaterScene.h"
-#include <aiverselib/water/NereidConfluenceFlow.h>
+#include "engine/world/nereid/NereidConfluenceFlow.h"
 #include <algorithm>
 #include <array>
 #include <cstddef>

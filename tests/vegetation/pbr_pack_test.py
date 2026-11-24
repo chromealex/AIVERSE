@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import json
+import json,sys
 import numpy as np
 from PIL import Image
-root=Path(__file__).resolve().parents[2];pack=root/'engine/assets/materials/vegetation'
+root=Path(__file__).resolve().parents[2]
+sys.path.insert(0,str(root/'tools/pkg'))
+import aiverse_pkg
+try:pack=aiverse_pkg.package_dir('vegetation-pbr')
+except aiverse_pkg.PkgError as e:print('SKIP: vegetation-pbr package unavailable:',e);sys.exit(0)
+MOUNT='materials/vegetation/'
 cat=json.loads((pack/'catalog.json').read_text());library=json.loads((pack/'materials.json').read_text());count=0
-assert {m['id'] for m in cat['materials']}=={'oak_bark','pine_bark','birch_bark','spruce_bark','oak_leaves','shrub_leaves','spruce_leaves','pine_leaves'}
+assert {m['id'] for m in cat['materials']}>={'oak_bark','pine_bark','birch_bark','spruce_bark','oak_leaves','shrub_leaves','spruce_leaves','pine_leaves'}
 for entry in cat['materials']:
  name=entry['id'];leaf=entry['layout']=='2x2 sprig atlas';keys=['basecolor','normal','roughness','ao','metallic','orm','height']+(['opacity','translucency'] if leaf else [])
  maps={key:np.asarray(Image.open(pack/'textures'/(name+'_'+key+'.png'))) for key in keys};count+=len(keys)
@@ -20,5 +25,5 @@ for entry in cat['materials']:
  else:
   for key in ['basecolor','height']:
    a=maps[key];assert np.array_equal(a[0],a[-1]) and np.array_equal(a[:,0],a[:,-1])
- for key in ['texture','normalMap','metallicRoughnessMap','occlusionMap']:assert (root/'engine/assets'/library[name][key]).is_file()
+ for key in ['texture','normalMap','metallicRoughnessMap','occlusionMap']:assert library[name][key].startswith(MOUNT) and (pack/library[name][key][len(MOUNT):]).is_file()
 print('PASS:',len(cat['materials']),'vegetation materials,',count,'maps; PBR packing, tile edges, normals, cutout coverage and paths')

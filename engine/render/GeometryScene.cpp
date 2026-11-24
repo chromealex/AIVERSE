@@ -453,7 +453,9 @@ void GeometryScene::loadImpl(gfx::Device& dev,const Json& json,const FileReader&
         const bool off=env&&(std::string(env)=="off"||std::string(env)=="0");
         strataPortableRenderingEnabled_=!off&&json["strata"].getBool("enabled");
         strataMergeClusters_=json["strata"].getBool("mergeClusters",true);
-        strataShadowErrorScale_=float(json["strata"]["shadowErrorScale"].toDouble(1.0));
+        // 0 (default): the shadow pass uses the camera's cut. With a shadow view in the selection a shadow map
+        // that covers the model at full resolution pinned STRATA to its finest clusters at any camera distance.
+        strataShadowErrorScale_=float(json["strata"]["shadowErrorScale"].toDouble(0.0));
         strataAutoSelect_=json["strata"].getStr("select","auto")!="all";
         strataAutoMinTriangles_=uint64_t(std::max(0.0,json["strata"]["minTriangles"].toDouble(0.0)));
         strataCookedDir_=json["strata"].getStr("cooked");
@@ -1480,7 +1482,7 @@ void GeometryScene::drawInstance(Renderer3D& r,const Instance& i){
             std::vector<strata::PortablePassView> views;
             views.push_back({r.viewProj(), r.sceneWidth(), r.sceneHeight(),
                              r.clipDepthZeroToOne(), errorPixels_*strataBudgetScale_});
-            if (r.shadowQuality() != ShadowQuality::Off &&
+            if (strataShadowErrorScale_ > 0 && r.shadowQuality() != ShadowQuality::Off &&
                 r.shadowMapSize() > 0)
                 views.push_back({r.lightViewProj(), r.shadowMapSize(),
                                  r.shadowMapSize(), r.clipDepthZeroToOne(),

@@ -1,0 +1,55 @@
+{
+  "id": "2026-11-22-build-catalog-templates",
+  "date": "2026-11-22",
+  "system": "build",
+  "title": "Шаблоны проектов из каталога пакетов",
+  "summary": "Все 36 примеров игр движка теперь — официальные пакеты-шаблоны в каталоге AIVERSE-PACKAGES. Стартовый экран Studio показывает их первыми, а кнопка «More templates» ищет по всем шаблонам каталога, включая шаблоны других авторов.",
+  "body": [
+    "Шаблон теперь может расти: свои текстуры, модели и код живут в его пакете, а не в репозитории движка. Каталог отмечает официальные пакеты флагом official — его ставят только авторы AIVERSE.",
+    "Проект из пакета-шаблона скачивается, проверяется по хэшу и распаковывается в выбранную папку, затем ставятся пакеты, которые указаны в его game.json. Стартовый экран открывается сразу из кэша и обновляет список в фоне. Агенты делают то же через MCP: create_project с шаблоном pkg:<пакет>.",
+    "У каждого шаблона в каталоге есть превью — настоящий кадр движка, снятый с этого шаблона."
+  ],
+  "status": "in-progress",
+  "verified": "Проект «Mushroom Clash» создан из пакета mushrooms через MCP create_project и запущен в клиенте (Linux, OpenGL): первый кадр. Остальные кадры — превью шаблонов, снятые клиентом движка для каталога.",
+  "limits": "Новый стартовый экран Studio собран и проверен типами, но не запускался в нативном Studio на macOS. Папка templates/ пока остаётся в движке для работы без сети и для тестов.",
+  "branch": "feature/aiv20261122_template_packages",
+  "commit": null,
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-22-build-catalog-templates/01.jpg",
+      "caption": "Проект, созданный из пакета-шаблона mushrooms, в клиенте движка",
+      "captionEn": "A project created from the mushrooms template package, in the engine client"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-22-build-catalog-templates/02.jpg",
+      "caption": "Превью шаблона Hearth and Haul в каталоге",
+      "captionEn": "Catalog preview of the Hearth and Haul template"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-22-build-catalog-templates/03.jpg",
+      "caption": "Превью шаблона Oval Sprint (гонка на овале)",
+      "captionEn": "Catalog preview of the Oval Sprint template (oval race)"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-22-build-catalog-templates/04.jpg",
+      "caption": "Превью шаблона Breach Protocol (тактические раунды)",
+      "captionEn": "Catalog preview of the Breach Protocol template (tactical rounds)"
+    }
+  ],
+  "links": [
+    {
+      "title": "docs/packages.md",
+      "href": "docs/packages.md"
+    }
+  ],
+  "author": null,
+  "titleEn": "Project templates from the package catalog",
+  "summaryEn": "All 36 sample games of the engine are now official template packages in the AIVERSE-PACKAGES catalog. The Studio start screen lists them first, and More templates searches every template in the catalog, other authors' included.",
+  "bodyEn": [
+    "A template can now grow: its own textures, models and code live in its package, not in the engine repository. The catalog marks official packages with the official flag, which only the AIVERSE authors set.",
+    "A project made from a template package is downloaded, checked against its hash and unpacked into the folder you pick; then the packages its game.json lists are installed. The start screen opens at once from the cache and refreshes the list in the background. Agents do the same through MCP: create_project with the template pkg:<package>.",
+    "Every template in the catalog has a preview: a real engine frame of that template."
+  ],
+  "verifiedEn": "A Mushroom Clash project was created from the mushrooms package through MCP create_project and run in the client (Linux, OpenGL): first frame. The other frames are template previews taken by the engine client for the catalog.",
+  "limitsEn": "The new Studio start screen builds and passes type checks but has not been run in the native Studio on macOS. The templates/ folder stays in the engine for offline use and tests for now."
+}

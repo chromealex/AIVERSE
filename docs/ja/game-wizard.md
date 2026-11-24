@@ -7,7 +7,7 @@
 ものはすべて通常のゲームデータなので、あとから自由に編集できます。
 
 コード：`apps/editor/core/GameWizard*.cpp`（UI なし）、`apps/editor/core/WizardOps.cpp`（MCP）、`apps/editor/EditorGameWizard.cpp`
-（ハブのページ）。各ゲームにコピーされるランタイムキット：`templates/_wizard/`（Lua + RmlUi、README を参照）。
+（ハブのページ）。各ゲームにコピーされるランタイムキット：`tools/wizard/kit/`（Lua + RmlUi、README を参照）。
 
 ## 回答（`WizardSpec`、すべて任意）
 

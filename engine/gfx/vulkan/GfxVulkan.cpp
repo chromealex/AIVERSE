@@ -241,7 +241,28 @@ bool VulkanDevice::init(const VulkanWindow& window, std::string& error) {
     pl.pSetLayouts = &setLayout_;
     vkCreatePipelineLayout(device_, &pl, nullptr, &pipelineLayout_);
 
+    gpuTiming_ = envOn("AIVERSE_VK_GPU_TIMING");
+    if (const char* d = std::getenv("AIVERSE_VK_DEPS"); d && std::strcmp(d, "narrow") == 0) narrowDeps_ = true;
+    if (const char* d = std::getenv("AIVERSE_VK_DEPTH_STORE"); d && d[0] == '0') depthStore_ = false;
+    if (gpuTiming_) {
+        uint32_t qn = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(gpu_, &qn, nullptr);
+        std::vector<VkQueueFamilyProperties> qs(qn);
+        vkGetPhysicalDeviceQueueFamilyProperties(gpu_, &qn, qs.data());
+        const uint32_t bits = queueFamily_ < qn ? qs[queueFamily_].timestampValidBits : 0;
+        if (!bits || gpuProps_.limits.timestampPeriod <= 0.f) gpuTiming_ = false;
+        timestampNs_ = gpuProps_.limits.timestampPeriod;
+        timestampMask_ = bits >= 64 ? ~0ull : ((1ull << bits) - 1ull);
+    }
+    std::fprintf(stderr, "[gfx] Vulkan experiments: gpuTiming=%d deps=%s depthStore=%d\n",
+                 int(gpuTiming_), narrowDeps_ ? "narrow" : "wide", int(depthStore_));
     for (auto& s : slots_) {
+        if (gpuTiming_) {
+            auto qi = vkStruct<VkQueryPoolCreateInfo>(VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO);
+            qi.queryType = VK_QUERY_TYPE_TIMESTAMP;
+            qi.queryCount = 128;
+            vkCreateQueryPool(device_, &qi, nullptr, &s.timing);
+        }
         auto ci = vkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
         ci.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
         ci.queueFamilyIndex = queueFamily_;
@@ -366,6 +387,7 @@ void VulkanDevice::destroyDeviceObjects() {
         for (auto p : s.descriptorPools) vkDestroyDescriptorPool(device_, p, nullptr);
         vkDestroyBuffer(device_, s.uniforms, nullptr); memory_.release(s.uniformAlloc);
         vkDestroyFence(device_, s.fence, nullptr);
+        if (s.timing) vkDestroyQueryPool(device_, s.timing, nullptr);
         vkDestroySemaphore(device_, s.acquired, nullptr);
         vkDestroyCommandPool(device_, s.pool, nullptr);
     }
@@ -614,6 +636,7 @@ void VulkanDevice::prepareSlot() {
     const VkResult waited=vkWaitForFences(device_,1,&s.fence,VK_TRUE,UINT64_MAX);
     if(waited!=VK_SUCCESS){healthy_=false;return;}
     completed_=std::max(completed_,s.serial);
+    collectTiming(s);
     completeTextureCaptures(s,true);
     collectGarbage();
     deliverComputeReadbacks();
@@ -864,6 +887,12 @@ void VulkanDevice::beginFrame(int w, int h) {
     bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     vkBeginCommandBuffer(s.main, &bi);
     recording_ = true;
+    if (s.timing) {
+        vkCmdResetQueryPool(s.main, s.timing, 0, 128);
+        s.timingCount = 0;
+        s.timingLabels.clear();
+        timestamp("", VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+    }
     uniformOffsets_.fill(0);
     descriptorsDirty_ = true;
     ensureBackBuffer(std::max(1, w), std::max(1, h));
@@ -954,6 +983,8 @@ void main() {
 }
 
 void VulkanDevice::present() {
+    timestamp("~", VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);   // end of the last pass's work
+    struct Stamp { VulkanDevice* d; ~Stamp() { d->timestamp(d->rotatePresent_ ? "present-rotate" : "present-blit", VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT); } } stamp{this};
     VkCommandBuffer cb = slots_[size_t(slot_)].main;
     VkImage dst = swapImages_[swapIndex_];
     if (rotatePresent_ && swapIndex_ < swapViews_.size() && swapViews_[swapIndex_] && ensureRotatePipeline()) {
@@ -995,6 +1026,40 @@ void VulkanDevice::present() {
     barrierImage(cb, back_.image, false, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
+void VulkanDevice::timestamp(const std::string& label, VkPipelineStageFlagBits stage) {
+    FrameSlot& s = slots_[size_t(slot_)];
+    if (!s.timing || !recording_ || s.timingCount >= 128) return;
+    vkCmdWriteTimestamp(s.main, stage, s.timing, s.timingCount++);
+    s.timingLabels.push_back(label);
+}
+
+// Each label's time is the GPU time from the previous stamp to its own.
+void VulkanDevice::collectTiming(FrameSlot& s) {
+    if (!s.timing || s.timingCount < 2) return;
+    std::vector<uint64_t> v(s.timingCount);
+    if (vkGetQueryPoolResults(device_, s.timing, 0, s.timingCount, v.size() * 8, v.data(), 8,
+                              VK_QUERY_RESULT_64_BIT) != VK_SUCCESS) { s.timingCount = 0; return; }
+    auto ms = [&](uint64_t a, uint64_t b) { return double((b - a) & timestampMask_) * timestampNs_ * 1e-6; };
+    for (uint32_t i = 1; i < s.timingCount; ++i) {
+        auto& acc = timingAcc_[s.timingLabels[i]];
+        acc.first += ms(v[i - 1], v[i]);
+        acc.second += 1;
+    }
+    timingFrameMs_ += ms(v[0], v[s.timingCount - 1]);
+    s.timingCount = 0;
+    if (++timingFrames_ < 120) return;
+    std::string line;
+    char buf[160];
+    for (const auto& [label, acc] : timingAcc_) {
+        std::snprintf(buf, sizeof buf, " %s=%.2fms/x%.1f", label.c_str(), acc.first / timingFrames_, double(acc.second) / timingFrames_);
+        line += buf;
+    }
+    std::fprintf(stderr, "[vk-gpu] frames=%d gpuFrame=%.2fms%s\n", timingFrames_, timingFrameMs_ / timingFrames_, line.c_str());
+    timingAcc_.clear();
+    timingFrames_ = 0;
+    timingFrameMs_ = 0.0;
+}
+
 void VulkanDevice::endFrame() {
     if (!recording_) return;
     if (inPass_) endPass();
@@ -1019,7 +1084,9 @@ void VulkanDevice::endFrame() {
     cbs[count++] = s.main;
     recording_ = false;
     auto si = vkStruct<VkSubmitInfo>(VK_STRUCTURE_TYPE_SUBMIT_INFO);
-    const VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    // present() writes the swapchain image with a blit, or a compute pass when pre-rotating
+    const VkPipelineStageFlags waitStage = rotatePresent_ ? VkPipelineStageFlags(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT)
+                                                          : VkPipelineStageFlags(VK_PIPELINE_STAGE_TRANSFER_BIT);
     if (swapAcquired_) {
         si.waitSemaphoreCount = 1; si.pWaitSemaphores = &s.acquired; si.pWaitDstStageMask = &waitStage;
         si.signalSemaphoreCount = 1; si.pSignalSemaphores = &swapRendered_[swapIndex_];
@@ -1060,6 +1127,7 @@ namespace aiverse::gfx {
 
 std::unique_ptr<Device> createVulkanDevice(const VulkanWindow& window, std::string* error) {
     auto d = std::make_unique<vk::VulkanDevice>();
+    if (!window.shaderCacheDir.empty()) vk::setShaderCacheDir(window.shaderCacheDir);
     std::string err;
     if (!d->init(window, err)) { if (error) *error = err; return nullptr; }
     return d;

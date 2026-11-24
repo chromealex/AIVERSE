@@ -888,7 +888,15 @@ void VulkanDevice::updateTexture(TextureHandle h, int x, int y, int w, int hh,
     u.rowPitchBytes=rowPitch;
     u.slicePitchBytes=0;
     u.data=pixels;
-    if (!updateTextureRegion(h,u) && error_.empty())
+    // Whole-texture style updates (the ImGui font atlas rasterising new glyphs while
+    // the UI pass records) may arrive inside a render pass. They go to the pre-frame
+    // command buffer, which runs before this frame's passes: correct here because the
+    // updated rectangles are new atlas space no earlier draw of this frame samples.
+    // updateTextureRegion() itself still refuses in-pass uploads (page streamers).
+    preUploadAllowed_ = true;
+    const bool ok = updateTextureRegion(h,u);
+    preUploadAllowed_ = false;
+    if (!ok && error_.empty())
         error_="Vulkan texture update failed";
 }
 
@@ -898,7 +906,7 @@ bool VulkanDevice::updateTextureRegion(TextureHandle handle, const TextureUpload
     // to overwrite a virtual atlas slice after earlier draw commands.
     // Fail closed instead of reordering an overwrite ahead of its readers.
     // Streamers must drain on the graphics thread BETWEEN render passes.
-    if (inPass_) {
+    if (inPass_ && !preUploadAllowed_) {
         error_ = "Vulkan texture region upload requires no active render pass";
         return false;
     }

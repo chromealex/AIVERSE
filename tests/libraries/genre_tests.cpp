@@ -1,8 +1,8 @@
 #include <aiverselib/mechanics/NarrativeCinematicBridge.h>
 #include <aiverselib/mechanics/Configured.h>
-#include <aiverselib/mechanics/Persistence.h>
+#include "engine/mechanics/Persistence.h"
 #include <aiverselib/mechanics/Data.h>
-#include <aiverselib/mechanics/LocomotionModes.h>
+#include "engine/mechanics/LocomotionModes.h"
 #include <aiverselib/mechanics/CombatConfigured.h>
 #include <aiverselib/mechanics/CombatData.h>
 #include <aiverselib/mechanics/NarrativeConfigured.h>
@@ -189,8 +189,8 @@ void rejection(const std::string& root){
     in=grounded();in.env.waterDepth=-1_fx;CHECK(!stepLocomotion(c,s,in,6,dt));CHECK(!stepLocomotion(c,s,grounded(),6,Fixed{}));CHECK(save(s)==before);
     auto bad=c;bad.swimExitDepth=2_fx;CHECK(locomotionModeError(bad).find("swimExitDepth")!=std::string::npos&&!stepLocomotion(bad,s,grounded(),6,dt));
     bad=c;bad.mantleTicks=1;CHECK(!valid(bad));bad=c;bad.vaultMaxHeight=2_fx;CHECK(locomotionModeError(bad).find("vaultMaxHeight")!=std::string::npos);
-    LocomotionState broken=s;broken.mode=LocomotionMode(9);CHECK(save(broken).empty());broken=s;broken.mode=M::Mantle;CHECK(save(broken).empty());
-    auto bytes=before;CHECK(bytes.size()>49);bytes[49]=char(9);LocomotionState copy;CHECK(!load(bytes,copy));MotionState other;CHECK(!load(before,other));
+    LocomotionState broken=s;broken.mode=LocomotionMode(12);CHECK(save(broken).empty());broken=s;broken.mode=M::Mantle;CHECK(save(broken).empty());
+    auto bytes=before;CHECK(bytes.size()>49);bytes[49]=char(12);LocomotionState copy;CHECK(!load(bytes,copy));MotionState other;CHECK(!load(before,other));
     auto parse=[](const char* text){return aiverse::lib::gameplay::readGameplaySettings(Json::parse(text));};
     auto defaults=parse("{\"schemaVersion\":1}");CHECK(defaults.value&&locomotionConfigHash(locomotionModeConfig(*defaults.value))==locomotionConfigHash(c));
     auto relation=parse("{\"schemaVersion\":1,\"locomotion\":{\"swimExitDepthMilli\":1500}}");CHECK(!relation.value&&relation.errors.at(0)=="locomotion.swimExitDepthMilli: must not exceed swimEnterDepthMilli");
@@ -200,8 +200,173 @@ void rejection(const std::string& root){
     auto example=aiverse::lib::gameplay::readGameplaySettings(Json::parseFile(root+"/examples/libraries/mechanics/settings.json"));CHECK(example.value);
     auto configured=locomotionModeConfig(*example.value);CHECK(valid(configured)&&configured.motion.maxJumps==2&&configured.staminaMax==240&&configured.maxSlope==Fixed::fromRatio(50000,360000)&&!configured.autoLedgeGrab);
 }
+// 0.3.0 moves: dash, wall slide, wall run, grapple (pull and swing), one-way drop-through.
+LocomotionInput air(){return {};}
+Vec3 wallAtPlusX(){return {Fixed{}-1_fx,{},{}};} // normal from a wall at +x toward the body
+void dashes(){
+    LocomotionModeConfig c;LocomotionState s;auto in=grounded();in.wish={1_fx,{}};in.dashPressed=true;
+    auto r=step(c,s,in,0);CHECK((r.mode==M::Dash&&(r.events&LocoDashStart)&&r.velocity==Vec3{14_fx,{},{}}));
+    in.dashPressed=false;
+    for(uint32_t t=1;t<10;++t){r=step(c,s,in,t);CHECK((r.mode==M::Dash&&r.velocity==Vec3{14_fx,{},{}}));}
+    r=step(c,s,in,10);CHECK(r.mode==M::Ground&&(r.events&LocoDashEnd)&&r.velocity.x==6_fx&&r.velocity.y==Fixed{});
+    in.dashPressed=true;r=step(c,s,in,11);CHECK(r.mode==M::Ground&&!(r.events&LocoDashStart)); // cooldown: ready at 0+10+30
+    r=step(c,s,in,40);CHECK(r.mode==M::Dash);
+    // Air dashes: one per airborne stretch, facing is used without wish, landing refills.
+    LocomotionState a;auto fly=air();step(c,a,fly,0);fly.dashPressed=true;fly.facing={{},1_fx};
+    r=step(c,a,fly,1);CHECK((r.mode==M::Dash&&r.velocity==Vec3{{},{},14_fx}&&a.airDashesUsed==1));fly.dashPressed=false;
+    for(uint32_t t=2;t<=11;++t)r=step(c,a,fly,t);CHECK(r.mode==M::Air&&(r.events&LocoDashEnd)&&r.velocity.z==6_fx-c.motion.braking*dt);
+    fly.dashPressed=true;r=step(c,a,fly,50);CHECK(r.mode==M::Air&&!(r.events&LocoDashStart));
+    auto land=grounded();r=step(c,a,land,51);CHECK(r.mode==M::Ground&&a.airDashesUsed==0);
+    r=step(c,a,fly,60);CHECK(r.mode==M::Dash&&a.airDashesUsed==1);
+    // A wall ahead ends the dash with no momentum; no direction means no dash; disabled means no dash.
+    LocomotionState b;in=grounded();in.wish={1_fx,{}};in.dashPressed=true;step(c,b,in,0);in.dashPressed=false;in.env.wallContact=true;in.env.contactNormal=wallAtPlusX();
+    r=step(c,b,in,1);CHECK(r.mode==M::Ground&&(r.events&LocoDashEnd));
+    LocomotionState none;in=grounded();in.dashPressed=true;CHECK(!(step(c,none,in,0).events&LocoDashStart));
+    auto off=c;off.dashEnabled=false;LocomotionState d;in.wish={1_fx,{}};CHECK(step(off,d,in,0).mode==M::Ground);
 }
-void locomotionModes(const std::string& root){loco::compatibilityAndSlopes();loco::ledges();loco::ladders();loco::swimming();loco::climbing();loco::mantles();loco::determinismAndRestore();loco::rejection(root);}
+void wallSlides(){
+    LocomotionModeConfig c;LocomotionState s;step(c,s,air(),0);
+    auto in=air();in.env.wallContact=true;in.env.contactNormal=wallAtPlusX();in.wish={1_fx,{}}; // pushing into the wall
+    auto r=step(c,s,in,1);CHECK(r.mode==M::WallSlide&&(r.events&LocoWallSlideStart)&&r.velocity.x==Fixed{});
+    for(uint32_t t=2;t<200;++t){r=step(c,s,in,t);CHECK(r.mode==M::WallSlide&&r.velocity.y>=Fixed{}-c.wallSlideSpeed);}
+    CHECK(r.velocity.y==Fixed{}-c.wallSlideSpeed);
+    in.jumpPressed=true;r=step(c,s,in,200);CHECK((r.mode==M::Air&&(r.events&LocoWallJump)&&(r.events&LocoWallSlideEnd)&&r.jumped&&r.velocity==Vec3{Fixed{}-4_fx,7_fx,{}}));
+    LocomotionState q;step(c,q,air(),0);in.jumpPressed=false;step(c,q,in,1);in.wish={};r=step(c,q,in,2);CHECK(r.mode==M::Air&&(r.events&LocoWallSlideEnd));
+    LocomotionState g;step(c,g,air(),0);in.wish={1_fx,{}};step(c,g,in,1);in.env.grounded=true;r=step(c,g,in,2);CHECK(r.mode==M::Ground&&(r.events&LocoWallSlideEnd));
+}
+void wallRuns(){
+    LocomotionModeConfig c;LocomotionState s;auto run=grounded();run.wish={{},1_fx};
+    for(uint32_t t=0;t<60;++t)step(c,s,run,t);
+    auto in=air();in.wish={{},1_fx};auto r=step(c,s,in,60);CHECK(r.mode==M::Air&&r.velocity.z==6_fx);
+    in.env.wallContact=true;in.env.contactNormal=wallAtPlusX();
+    r=step(c,s,in,61);CHECK(r.mode==M::WallRun&&(r.events&LocoWallRunStart)&&r.velocity.z==8_fx&&r.velocity.y==Fixed{});
+    Fixed last=r.velocity.y;
+    for(uint32_t t=62;t<151;++t){r=step(c,s,in,t);CHECK(r.mode==M::WallRun&&r.velocity.z==8_fx&&r.velocity.y<last);last=r.velocity.y;}
+    CHECK(last> -8_fx&&last< -7_fx); // a quarter of gravity (5 m/s^2) for 89 ticks: about -7.42 m/s, full gravity would give -29.7
+    r=step(c,s,in,151);CHECK(r.mode==M::Air&&(r.events&LocoWallRunEnd));
+    r=step(c,s,in,152);CHECK(r.mode==M::Air); // cooldown until 151+12
+    r=step(c,s,in,163);CHECK(r.mode==M::WallRun);
+    in.jumpPressed=true;r=step(c,s,in,164);CHECK((r.mode==M::Air&&(r.events&LocoWallJump)&&r.velocity==Vec3{Fixed{}-4_fx,7_fx,8_fx}));
+    // Running the other way keeps the sign; too slow is not a wall run; drop ends it.
+    LocomotionState back;run.wish={{},Fixed{}-1_fx};for(uint32_t t=0;t<60;++t)step(c,back,run,t);in=air();in.wish={{},Fixed{}-1_fx};step(c,back,in,60);
+    in.env.wallContact=true;in.env.contactNormal=wallAtPlusX();r=step(c,back,in,61);CHECK(r.mode==M::WallRun&&r.velocity.z==Fixed{}-8_fx);
+    in.dropPressed=true;r=step(c,back,in,62);CHECK(r.mode==M::Air&&(r.events&LocoWallRunEnd));
+    LocomotionState slow;step(c,slow,air(),0);in=air();in.env.wallContact=true;in.env.contactNormal=wallAtPlusX();CHECK(step(c,slow,in,1).mode==M::Air);
+}
+void grapples(){
+    LocomotionModeConfig c;LocomotionState s;Vec3 p{};const Vec3 anchor{{},10_fx,10_fx};step(c,s,air(),0);
+    auto at=[&](bool press){LocomotionInput in;in.env.grappleAnchor=true;in.env.grappleOffset=anchor-p;in.grapplePressed=press;return in;};
+    auto far=air();far.grapplePressed=true;far.env.grappleAnchor=true;far.env.grappleOffset={{},40_fx,{}};CHECK(step(c,s,far,1).mode==M::Air);
+    auto r=step(c,s,at(true),2);CHECK(r.mode==M::Grapple&&(r.events&LocoGrappleAttach)&&s.ropeLength>14_fx&&s.ropeLength<15_fx);
+    uint32_t t=3;for(;t<80&&r.mode==M::Grapple;++t){p+=r.velocity*dt;r=step(c,s,at(false),t);}
+    CHECK((r.mode==M::Air&&(r.events&LocoGrappleRelease)&&s.ropeLength==Fixed{}&&(anchor-p).length()<=c.grappleArrive+Fixed::fromRatio(1,10)&&t<60));
+    // Swing: the rope holds the length (small stretch is corrected), reeling shortens it, jump/release/timeout let go.
+    auto sc=c;sc.grappleSwing=true;sc.grappleTicks=400;LocomotionState w;p={};const Vec3 pivot{5_fx,5_fx,{}};step(sc,w,air(),0);
+    auto hang=[&](bool press){LocomotionInput in;in.env.grappleAnchor=true;in.env.grappleOffset=pivot-p;in.grapplePressed=press;return in;};
+    r=step(sc,w,hang(true),1);const Fixed rope=w.ropeLength;CHECK(r.mode==M::Grapple);Fixed lowest=p.y,excess{},minX=p.x,maxX=p.x;
+    for(t=2;t<300;++t){p+=r.velocity*dt;excess=fxMax(excess,(pivot-p).length()-w.ropeLength);lowest=fxMin(lowest,p.y);minX=fxMin(minX,p.x);maxX=fxMax(maxX,p.x);r=step(sc,w,hang(false),t);CHECK(r.mode==M::Grapple&&w.ropeLength==rope);}
+    CHECK(excess<Fixed::fromRatio(1,4)&&lowest< -1_fx&&maxX-minX>5_fx);
+    auto reel=hang(false);reel.vertical=1_fx;for(uint32_t k=0;k<30;++k,++t){p+=r.velocity*dt;reel.env.grappleOffset=pivot-p;r=step(sc,w,reel,t);}
+    CHECK(fxAbs(w.ropeLength-(rope-2_fx))<Fixed::fromRatio(1,100));
+    auto jump=hang(false);jump.jumpPressed=true;r=step(sc,w,jump,t++);CHECK(r.mode==M::Air&&r.jumped&&(r.events&LocoGrappleRelease)&&r.velocity.y>=7_fx&&w.ropeLength==Fixed{});
+    LocomotionState u;p={};step(sc,u,air(),0);step(sc,u,hang(true),1);auto let=hang(false);let.grappleReleased=true;r=step(sc,u,let,2);CHECK(r.mode==M::Air&&(r.events&LocoGrappleRelease));
+    auto brief=sc;brief.grappleTicks=20;LocomotionState v;p={};step(brief,v,air(),0);step(brief,v,hang(true),1);
+    for(t=2;t<21;++t)CHECK(step(brief,v,hang(false),t).mode==M::Grapple);CHECK(step(brief,v,hang(false),21).mode==M::Air);
+    LocomotionState lost;p={};step(sc,lost,air(),0);step(sc,lost,hang(true),1);CHECK(step(sc,lost,air(),2).mode==M::Air); // anchor gone
+}
+void oneWay(){
+    LocomotionModeConfig c;LocomotionState s;auto in=grounded();in.env.groundOneWay=true;step(c,s,in,0);
+    in.dropPressed=true;auto r=step(c,s,in,1);CHECK(r.mode==M::Air&&(r.events&LocoDropThrough)&&r.ignoreOneWay);
+    for(uint32_t t=2;t<=13;++t)CHECK(step(c,s,air(),t).ignoreOneWay);
+    CHECK(!step(c,s,air(),14).ignoreOneWay&&!s.dropping);
+    LocomotionState solid;in=grounded();step(c,solid,in,0);in.dropPressed=true;r=step(c,solid,in,1);CHECK(r.mode==M::Ground&&!(r.events&LocoDropThrough)&&!r.ignoreOneWay);
+    CHECK((oneWaySupports(1_fx,Fixed::fromRatio(12,10),Fixed::fromRatio(9,10),Fixed{}-1_fx,false)));
+    CHECK((!oneWaySupports(1_fx,Fixed::fromRatio(5,10),Fixed::fromRatio(9,10),Fixed{}-1_fx,false))); // came from below
+    CHECK(!oneWaySupports(1_fx,Fixed::fromRatio(12,10),Fixed::fromRatio(9,10),1_fx,false));        // rising
+    CHECK((!oneWaySupports(1_fx,Fixed::fromRatio(12,10),Fixed::fromRatio(9,10),Fixed{}-1_fx,true))); // dropping through
+}
+void glides(){
+    LocomotionModeConfig c;LocomotionState s;step(c,s,air(),0);
+    auto in=air();in.jumpHeld=true;in.facing={{},1_fx};
+    auto r=step(c,s,in,1);CHECK(r.mode==M::Glide&&(r.events&LocoGlideStart)&&r.velocity.z==c.glideForwardSpeed);
+    for(uint32_t t=2;t<120;++t){r=step(c,s,in,t);CHECK(r.mode==M::Glide&&r.velocity.y>=Fixed{}-c.glideFallSpeed);}
+    CHECK(r.velocity.y==Fixed{}-c.glideFallSpeed);
+    r=step(c,s,air(),120);CHECK(r.mode==M::Air&&(r.events&LocoGlideEnd));
+    // A jump press is not a glide; rising is not a glide; a wall or the ground ends it; disabled means none.
+    LocomotionState g;auto start=grounded();start.jumpPressed=true;start.jumpHeld=true;step(c,g,start,0);
+    auto held=air();held.jumpHeld=true;CHECK(step(c,g,held,1).mode==M::Air);
+    LocomotionState w;step(c,w,air(),0);step(c,w,held,1);auto touch=held;touch.env.wallContact=true;touch.env.contactNormal=wallAtPlusX();
+    CHECK((step(c,w,touch,2).events&LocoGlideEnd));
+    auto off=c;off.glideEnabled=false;LocomotionState o;step(off,o,air(),0);CHECK(step(off,o,held,1).mode==M::Air);
+}
+void sameWall(){
+    LocomotionModeConfig c;LocomotionState s;auto run=grounded();run.wish={{},1_fx};
+    for(uint32_t t=0;t<60;++t)step(c,s,run,t);
+    auto in=air();in.wish={{},1_fx};step(c,s,in,60);
+    in.env.wallContact=true;in.env.contactNormal=wallAtPlusX();in.env.wallId=7;
+    CHECK(step(c,s,in,61).mode==M::WallRun);
+    auto jump=in;jump.jumpPressed=true;auto r=step(c,s,jump,62);CHECK((r.events&LocoWallJump)&&s.lastWall==7&&s.wallBlockedUntil==62+c.wallReattachTicks);
+    auto back=in;back.wish={1_fx,{}};          // pushing back into the same wall right away: no slide, no run
+    for(uint32_t t=63;t<62+c.wallReattachTicks;++t)CHECK(step(c,s,back,t).mode==M::Air);
+    auto other=back;other.env.wallId=8;CHECK(step(c,s,other,62+c.wallReattachTicks).mode!=M::Air||s.motion.velocity.y>=Fixed{}); // another wall is free
+    // A run that times out blocks that wall until the body lands.
+    LocomotionState t2;for(uint32_t t=0;t<60;++t)step(c,t2,run,t);step(c,t2,air(),60);
+    auto wall=air();wall.wish={{},1_fx};wall.env.wallContact=true;wall.env.contactNormal=wallAtPlusX();wall.env.wallId=9;
+    for(uint32_t t=61;t<=61+c.wallRunTicks;++t)step(c,t2,wall,t);
+    CHECK(t2.mode==M::Air&&t2.lastWall==9&&t2.wallBlockedUntil==UINT32_MAX);
+    CHECK(step(c,t2,wall,200).mode==M::Air);
+    step(c,t2,grounded(),201);CHECK(t2.wallBlockedUntil==0);
+    // Walls tagged not runnable only allow sliding.
+    LocomotionState slick;for(uint32_t t=0;t<60;++t)step(c,slick,run,t);step(c,slick,air(),60);
+    auto plain=wall;plain.env.wallRunnable=false;plain.env.wallId=0;CHECK(step(c,slick,plain,61).mode!=M::WallRun);
+}
+LocomotionInput movesCourse(uint32_t t,const Vec3& p){
+    LocomotionInput in;in.env.grounded=p.y<=Fixed{};in.wish={{},1_fx};
+    if(t==20||t==130)in.dashPressed=true;
+    if(t>=60&&t<120&&p.y>Fixed{}){in.env.wallContact=true;in.env.contactNormal=wallAtPlusX();}
+    if(t==59)in.jumpPressed=true;
+    if(t>=200&&t<260){in.env.grappleAnchor=true;in.env.grappleOffset=Vec3{{},8_fx,40_fx}-p;in.grapplePressed=t==200;}
+    return in;
+}
+void movesRestore(){
+    LocomotionModeConfig c;c.grappleSwing=true;LocomotionState a,b,restored;Vec3 pa{},pb{},pr{};uint32_t modes=0;
+    for(uint32_t t=0;t<320;++t){
+        auto x=stepLocomotion(c,a,movesCourse(t,pa),t,dt),y=stepLocomotion(c,b,movesCourse(t,pb),t,dt);CHECK(x&&y&&x->velocity==y->velocity&&x->events==y->events);
+        modes|=1u<<uint32_t(x->mode);pa+=x->velocity*dt;pb+=y->velocity*dt;if(pa.y<Fixed{})pa.y={};if(pb.y<Fixed{})pb.y={};CHECK(locomotionHash(a)==locomotionHash(b));
+        if(t==125||t==230){CHECK(load(save(a),restored));pr=pa;}
+        if(t>125&&t!=230){auto z=stepLocomotion(c,restored,movesCourse(t,pr),t,dt);CHECK(z&&z->velocity==x->velocity);pr+=z->velocity*dt;if(pr.y<Fixed{})pr.y={};CHECK(locomotionHash(restored)==locomotionHash(a));}
+        roundtrip(a);
+    }
+    for(auto m:{M::Dash,M::WallRun,M::Grapple})CHECK(modes&(1u<<uint32_t(m)));
+    // 0.2.0 records (kind 20) still load; the next save writes kind 21.
+    LocomotionState old;auto g=grounded();g.wish={1_fx,{}};for(uint32_t t=0;t<5;++t)step(c,old,g,t);
+    std::string legacy;Archive w(&legacy);uint32_t version=1;uint16_t kind=20;w(version,kind);locomotionDetail::ioLegacy(w,old);
+    LocomotionState back;CHECK(load(legacy,back)&&locomotionHash(back)==locomotionHash(old)&&save(back)!=legacy&&load(save(back),back));
+    CHECK(!load(legacy+"x",back));
+    // Invalid move states never serialize; invalid move inputs are rejected with the state untouched.
+    LocomotionState bad=old;bad.mode=M::Dash;CHECK(save(bad).empty());bad=old;bad.mode=M::Grapple;CHECK(save(bad).empty());
+    bad=old;bad.ropeLength=1_fx;CHECK(save(bad).empty());bad=old;bad.mode=LocomotionMode(12);CHECK(save(bad).empty());
+    const auto before=save(old);auto in=air();in.env.grappleAnchor=true;CHECK(!stepLocomotion(c,old,in,9,dt));
+    in=air();in.env.wallContact=true;in.env.contactNormal={{},1_fx,{}};CHECK(!stepLocomotion(c,old,in,9,dt));
+    in=air();in.facing={2_fx,{}};CHECK(!stepLocomotion(c,old,in,9,dt));CHECK(save(old)==before);
+}
+void movesConfig(){
+    LocomotionModeConfig c;CHECK(valid(c));
+    // The 0.2.0 configuration identity is unchanged while the moves keep their defaults.
+    CHECK(locomotionConfigHash(c)==0x7e07c990976bcb22ULL); // value of character-locomotion 0.2.0
+    auto changed=c;changed.dashSpeed=15_fx;CHECK(locomotionConfigHash(changed)!=locomotionConfigHash(c));
+    auto bad=c;bad.dashEndSpeed=20_fx;CHECK(locomotionModeError(bad).find("dashEndSpeed")!=std::string::npos);
+    bad=c;bad.wallRunMinSpeed=9_fx;CHECK(locomotionModeError(bad).find("wallRunMinSpeed")!=std::string::npos);
+    bad=c;bad.grappleArrive=2_fx;bad.grappleMaxLength=1_fx;CHECK(locomotionModeError(bad).find("grappleArrive")!=std::string::npos);
+    bad=c;bad.airDashes=17;CHECK(!valid(bad));bad=c;bad.dashTicks=0;CHECK(!valid(bad));
+    auto parse=[](const char* text){return aiverse::lib::gameplay::readGameplaySettings(Json::parse(text));};
+    auto set=parse("{\"schemaVersion\":1,\"locomotion\":{\"dashSpeedMilli\":20000,\"airDashes\":2,\"grappleSwing\":true,\"wallRunTicks\":45,\"oneWayDropTicks\":6}}");
+    CHECK(set.value);auto m=locomotionModeConfig(*set.value);CHECK(valid(m)&&m.dashSpeed==20_fx&&m.airDashes==2&&m.grappleSwing&&m.wallRunTicks==45&&m.oneWayDropTicks==6);
+    auto rel=parse("{\"schemaVersion\":1,\"locomotion\":{\"dashEndSpeedMilli\":15000}}");CHECK(!rel.value&&rel.errors.at(0)=="locomotion.dashEndSpeedMilli: must not exceed dashSpeedMilli");
+}
+}
+void locomotionModes(const std::string& root){loco::compatibilityAndSlopes();loco::ledges();loco::ladders();loco::swimming();loco::climbing();loco::mantles();loco::determinismAndRestore();loco::rejection(root);
+    loco::dashes();loco::wallSlides();loco::wallRuns();loco::grapples();loco::oneWay();loco::glides();loco::sameWall();loco::movesRestore();loco::movesConfig();}
 // ---- combat-actions: hit/hurt shapes per frame, iframes, guard/parry, poise, lock-on, persistence, invalid data.
 CombatShape sphereAt(Vec3 c,Fixed r){CombatShape s;s.a=c;s.b=c;s.radius=r;return s;}
 CombatShape capsuleOf(Vec3 a,Vec3 b,Fixed r){CombatShape s;s.kind=ShapeKind::Capsule;s.a=a;s.b=b;s.radius=r;return s;}

@@ -73,6 +73,10 @@ public:
     // ignores entities it does not damage. Called inside a simulation system, in stable entity order; it
     // must be deterministic. Default: the game takes no environmental damage.
     virtual void environmentDamage(Simulation&, Entity /*target*/, Fixed /*amount*/, Entity /*source*/) {}
+    // Open surface water (lakes, rivers, sea; metres of depth, 0 = dry land) at world point (x, z), for shared
+    // engine systems that know no genre (PHYSIS tornadoes weaken over water, waterspouts form on it). Must be a
+    // deterministic function of simulation state. Default: no water known to the module.
+    virtual Fixed environmentWaterDepth(Simulation&, Fixed /*x*/, Fixed /*z*/) { return Fixed{}; }
 };
 
 // Everything that changes while the simulation runs (rollback netcode saves one per tick).

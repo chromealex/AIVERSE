@@ -46,6 +46,8 @@ public:
         std::uint64_t tick = 0;
         std::size_t flames = 0, smoke = 0, voices = 0;
         std::size_t tornadoes = 0, debris = 0;   // live funnel / debris effects
+        std::size_t fireFunnels = 0, sprays = 0, embers = 0, scars = 0;
+        float maxFireness = 0, maxSpray = 0;     // of tornadoes in the frame
         float meanWindX = 0, meanWindZ = 0;
     };
 
@@ -128,6 +130,14 @@ public:
         s.voices = audio_.voices();
         s.tornadoes = fx_.activeFunnels();
         s.debris = fx_.activeDebris();
+        s.fireFunnels = fx_.activeTornadoLayer(TornadoFxLayer::FireFunnel);
+        s.sprays = fx_.activeTornadoLayer(TornadoFxLayer::Spray);
+        s.embers = fx_.activeTornadoLayer(TornadoFxLayer::Ember);
+        s.scars = fx_.activeTornadoLayer(TornadoFxLayer::Scar);
+        for (const auto& t : frame_->tornadoes) {
+            s.maxFireness = std::max(s.maxFireness, t.fireness);
+            s.maxSpray = std::max(s.maxSpray, t.spray);
+        }
         return s;
     }
 

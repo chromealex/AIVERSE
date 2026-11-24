@@ -6,18 +6,18 @@ description: Add or change a race in any AIVERSE project - map and rules "race" 
 # races
 
 A race is a capability of any project with cars, never a genre mode. Format and behaviour: `docs/races.md`.
-Simulation: `libraries/include/aiverselib/mechanics/RaceSession.h` (data: `mechanics/RaceSessionData.h`; dynamics and the race
+Simulation: `engine/mechanics/RaceSession.h` (data: `mechanics/RaceSessionData.h`; dynamics and the race
 bot: `skills/gameplay/aiverse-vehicle-controllers`). Presentation: `engine/ui/RaceHud.h`, `engine/render/CameraBehavior.h`.
 
-1. The project needs cars its host already steps: typed map vehicles (`fps.vehicleTypes` + map `vehicles` with
+1. The project needs cars its host already steps: typed map vehicles (`actor.vehicleTypes` + map `vehicles` with
    `"type"`) on a metre map, or rules `driving` vehicles on a grid map. Racer `i` = the `i`-th car = player `i + 1`.
 2. Map `"race"` in the map's own units: `checkpoints` in driving order (`x`, `z`, `yaw` = direction of travel in
    turns, `width`; the last one is the finish), optional `grid` (one slot per racer), `line` (closed racing line;
    required when a racer is a bot). Players with `"bot": true` race with the race bot.
 3. Rules `"race"` (optional): `countdownTicks`, `finishGraceTicks`, `timeoutTicks`, `laps`, `crashDamage`, `vehicles`
    (generated settings: `wrongWayTicks`, `respawnWrongWayTicks`, `stuckTicks`, `stuckSpeedMilli`, `bot*`).
-4. A ready oval for a metre map: `python3 templates/_tools/racegen.py --out <game> [--racers N --bots B --straight M
-   --radius M --width M --laps N]` (walls, cars, the map race block, the car and the knobs); sample `templates/racing`.
+4. A ready oval for a metre map: `python3 tools/templates/racegen.py --out <game> [--racers N --bots B --straight M
+   --radius M --width M --laps N]` (walls, cars, the map race block, the car and the knobs); sample `~/.aiverse/packages/templates/racing`.
 5. The race adapter is shared engine code: `vehicles::VehicleRace` (`engine/vehicles/VehicleRace.h`; state
    `vehicles::RaceState`). A new host for cars runs its cars on the vehicle system (`engine/vehicles`,
    `vehicles::VehicleHost`) and implements only `vehicles::RaceHost` (grid placement, seating a player / bot, the

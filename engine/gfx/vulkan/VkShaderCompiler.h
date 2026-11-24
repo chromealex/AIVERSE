@@ -25,6 +25,9 @@ struct SpirvProgram {
     uint32_t shadowSlots = 0;   // texture slots declared as sampler2DShadow (unset ones get a depth dummy)
     std::string error;
 };
+// Folder for the on-disk program cache (created when missing); empty disables it. Entries are keyed by the
+// GLSL, the target, the optimizer setting and kSpirvCacheVersion (bump when translation/compiler output changes).
+void setShaderCacheDir(const std::string& dir);
 // Compiles and links both stages (varyings get matching locations by name). Thread-safe.
 bool compileProgram(const std::string& vertexBody, const std::string& fragmentBody, bool linearTarget, SpirvProgram& out);
 // Explicit Vulkan compute shader: caller writes GLSL 4.50 body with

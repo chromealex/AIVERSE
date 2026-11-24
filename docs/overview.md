@@ -21,7 +21,7 @@ engine/
 modules/rts/ generic RTS layer: types from data, orders, A*, combat, economy, construction,
              production, garrisons (Mushroom Wars), roads, fog of war, AI
              view/ — draws any type from the "view" block in rules.json
-modules/fps/ FPS module (in development): movement, combat and match state
+engine/actor/ actor host on ECS (former modules/fps): movement, combat, vehicles, streaming and match state for any project
 apps/
   fps/       standalone FPS client and server
   client/    the game (menu, match with bots, HUD, minimap, mouse and touch)
@@ -55,13 +55,13 @@ Floating panel windows and drag-and-drop from Explorer are macOS-only for now.
 ```bash
 cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release      # requires Xcode and CMake
 cmake --build build/mac -j 8
-open build/mac/AiverseEditor.app                              # editor (project templates/skirmish)
+open build/mac/AiverseEditor.app                              # editor (project ~/.aiverse/packages/templates/skirmish)
 open build/mac/AiverseGame.app                                # game
 ./build/mac/aiverse_tests
 ```
 
-Another game in the editor: `AiverseEditor.app/Contents/MacOS/AiverseEditor --project templates/mushrooms`.
-To make the game start with a different data set, pass `-DAIVERSE_CONTENT_DIR=.../templates/mushrooms`.
+Another game in the editor: `AiverseEditor.app/Contents/MacOS/AiverseEditor --project ~/.aiverse/packages/templates/mushrooms`.
+To make the game start with a different data set, pass `-DAIVERSE_CONTENT_DIR=~/.aiverse/packages/templates/mushrooms`.
 
 ### Several editors at once
 
@@ -77,12 +77,12 @@ Existing MCP clients do not switch between windows on their own.
 ## Building for platforms — aiversebuild
 
 ```bash
-./build/mac/aiversebuild --project templates/skirmish --target macos     # Builds/macos/<Name>.app (ad-hoc signed)
-./build/mac/aiversebuild --project templates/skirmish --target ios       # Builds/ios/xcode/AIVERSE.xcodeproj + simulator build
-./build/mac/aiversebuild --project templates/skirmish --target android   # Builds/android/<Name>-release.apk when SDK/NDK and gradle are present
-./build/mac/aiversebuild --project templates/skirmish --target web       # Builds/web (requires emsdk)
-./build/mac/aiversebuild --project templates/skirmish --target windows   # .exe via mingw-w64 (brew install mingw-w64) or sources + build.bat
-./build/mac/aiversebuild --project templates/skirmish --target all
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target macos     # Builds/macos/<Name>.app (ad-hoc signed)
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target ios       # Builds/ios/xcode/AIVERSE.xcodeproj + simulator build
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target android   # Builds/android/<Name>-release.apk when SDK/NDK and gradle are present
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target web       # Builds/web (requires emsdk)
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target windows   # .exe via mingw-w64 (brew install mingw-w64) or sources + build.bat
+./build/mac/aiversebuild --project ~/.aiverse/packages/templates/skirmish --target all
 ```
 
 Output goes to `<project>/Builds/<platform>/` — only finished builds and the size report. Everything
@@ -146,7 +146,7 @@ mounts a pack on top (patch, DLC). Every build prints a size report and writes i
 aiversebuild ... --no-pack          # ship folders as is (debugging)
 aiversebuild ... --pack-level 9     # zstd level (default 19 for Release, 3 for Debug)
 
-assetpipe pack -o content.rpak templates/skirmish engine/assets=engine   # build a pack by hand
+assetpipe pack -o content.rpak ~/.aiverse/packages/templates/skirmish engine/assets=engine   # build a pack by hand
 assetpipe list content.rpak       # files, sizes, compression
 assetpipe verify content.rpak     # unpack everything and check hashes
 assetpipe extract content.rpak out/
@@ -214,7 +214,7 @@ conversion tools retain BLP support.
 Declare `city-client` if the game uses the `AIVERSE_CITY` server connection.
 With the module excluded, setting `AIVERSE_CITY` produces an error when a match starts.
 Declare the simulation systems the data uses (or use `auto`). Each excluded
-system is replaced by an adapter in `modules/rts/disabled/` (CMake
+system is replaced by an adapter in `engine/game/disabled/` (CMake
 `aiverse_game_module`, options `AIVERSE_GAME_WITH_*`). The adapter keeps the
 system inactive, so games that do not use it run, hash and save exactly as
 with the full module; data that needs it fails at match start with a readable
@@ -224,7 +224,7 @@ Lua tables `encounters`, `commerce` and `career` keep only `active()` (false);
 `game.traffic_*` queries return nil. These switches are for packaged clients
 only; the editor, tests, headless runner, servers and HTML5 Studio always
 build every system.
-Measured Web Release `index.wasm` (Emscripten 3.1.50, `templates/skirmish`,
+Measured Web Release `index.wasm` (Emscripten 3.1.50, `~/.aiverse/packages/templates/skirmish`,
 2026-11-21): legacy defaults 17.22 MB (brotli 4.10 MB); the eleven
 earlier switches off 15.43 MB (brotli 3.62 MB); `[]` including `traffic` off
 14.95 MB (brotli 3.50 MB); every module off, including the simulation systems,
@@ -234,11 +234,11 @@ A `"module": "scene"` project (docs/game-format.md) ships about 150 KB.
 The content pack leaves out `engine/roads/markings.png` (328 KB, stored
 uncompressed) when the project has no `roads/` folder, rules `roadTypes` or map
 `roadNetwork`; the road view then draws its generated paint atlas.
-It also leaves out `engine/materials` (terrain and vegetation PBR libraries,
-about 145 MB): projects copy the materials they use into their own `materials/`
-(`tools/terrain/install_pbr_pack.py`, the editor's empty project) and the runtime
-never reads `engine/materials`. A project whose data names an `engine/materials/`
-path keeps the folder.
+It also leaves out `engine/materials` (only the checkerboard terrain the editor's
+empty project copies): the terrain and vegetation PBR libraries are catalog packages
+installed into the project's own `materials/` (`tools/pkg/aiverse_pkg.py add terrain-pbr`,
+docs/packages.md) and the runtime never reads `engine/materials`. A project whose data
+names an `engine/materials/` path keeps the folder.
 This selection affects the executable, not the content pack. Core client,
 renderer, and gameplay modules still follow their C++ dependency graph.
 
@@ -416,8 +416,8 @@ Menu and HUD strings are in `engine/assets/lang/` (currently English and Russian
 ```
 
 ```bash
-./build/mac/aiverse_i18n extract --project templates/skirmish --lang de --write   # lang/de.json skeleton, new strings marked // TODO
-./build/mac/aiverse_i18n check   --project templates/skirmish                     # placeholders, plural forms, untranslated strings
+./build/mac/aiverse_i18n extract --project ~/.aiverse/packages/templates/skirmish --lang de --write   # lang/de.json skeleton, new strings marked // TODO
+./build/mac/aiverse_i18n check   --project ~/.aiverse/packages/templates/skirmish                     # placeholders, plural forms, untranslated strings
 ```
 
 The language is chosen as follows: the player's choice in the menu (remembered) → the system language → the game's
@@ -498,8 +498,8 @@ the simulation is deterministic, so everyone has the same state.
 
 ```bash
 ./build/mac/aiverse_server --config apps/server/server.json            # UDP 27015, WebSocket 27016
-./build/mac/aiverse_netbot --server 127.0.0.1 --project templates/mushrooms --queue 1v1   # a bot in the queue
-./build/mac/aiverse_netbot --server ws://127.0.0.1:27016 --project templates/mushrooms --queue 1v1
+./build/mac/aiverse_netbot --server 127.0.0.1 --project ~/.aiverse/packages/templates/mushrooms --queue 1v1   # a bot in the queue
+./build/mac/aiverse_netbot --server ws://127.0.0.1:27016 --project ~/.aiverse/packages/templates/mushrooms --queue 1v1
 ./build/mac/aiverse_net_tests                                          # network tests
 docker build -f apps/server/Dockerfile -t aiverse-server .             # server in a container
 ```
@@ -510,7 +510,7 @@ For `wss://` (a game page served over HTTPS), put a TLS proxy (nginx, Caddy) in 
 
 `engine/audio` is a mixer, sound banks from data, procedural synthesis and music; output goes through
 [miniaudio](../third_party/miniaudio) (CoreAudio, AAudio/OpenSL ES, Web Audio, WASAPI, ALSA/PulseAudio).
-`modules/rts/audio` turns simulation events into sounds; it writes nothing into the simulation.
+`engine/audio` turns simulation events into sounds; it writes nothing into the simulation.
 No device — the game runs silently. No `audio.json` — the game simply has no sound.
 
 A game's audio is the `audio.json` file next to `game.json` (another name: `"audio"` in game.json). The full format
@@ -586,9 +586,9 @@ A type is drawn from its `"view"` block: a built-in shape (`"shape"`) or a model
   the **Materials** window with a preview and the MCP operations `material_*` / `texture_generate` for agents.
 
 A broken model does not break the game: the type is drawn as a shape and the reason goes to the editor console.
-Viewing: `aiverse_modelview model.glb@Walk` or `aiverse_modelview --game templates/showcase` (every type of a game, as
+Viewing: `aiverse_modelview model.glb@Walk` or `aiverse_modelview --game ~/.aiverse/packages/templates/showcase` (every type of a game, as
 the game draws it); in the editor — the **Models** window (clips, nodes, materials, portrait, reload when the model file
-is saved). Example: `templates/showcase`; full format: [models.md](models.md).
+is saved). Example: `~/.aiverse/packages/templates/showcase`; full format: [models.md](models.md).
 
 ## Lighting
 

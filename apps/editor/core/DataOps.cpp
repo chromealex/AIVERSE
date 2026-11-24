@@ -204,7 +204,7 @@ void registerDataOps(Workspace& ws) {
             Json r = Json::parse(R"J({
   "documents": {"menu.rml": "main menu, settings, map list", "lobby.rml": "network lobby", "hud.rml": "in-game HUD, pause, game over",
                 "keyboard.rml": "on-screen keyboard (phones)", "theme.rcss": "shared engine styles", "skin.rcss": "per-game skin (colours, fonts, frames): the usual file to override"},
-  "override": "templates/<id>/ui/<file> replaces engine/ui/<file>; a document may link its own .rcss. Fonts: fonts/*.ttf of the game, @font-face via font-family in rcss.",
+  "override": "<game>/ui/<file> replaces engine/ui/<file>; a document may link its own .rcss. Fonts: fonts/*.ttf of the game, @font-face via font-family in rcss.",
   "dataModel": "game",
   "variables": {
     "screen": "menu | lobby | playing | paused | over", "gameName": "string", "error": "string", "platformInfo": "string",

@@ -29,7 +29,7 @@ Projects can register systems through public targets, without linking
 `aiverse_game` or `aiverse_fps` merely to call a common mechanic.
 `AIVERSE::libraries` and `AIVERSE::gameplay_native` are the existing
 public CMake entry points. For a simple generic adapter, see
-`libraries/include/aiverselib/mechanics/EcsMechanicSystems.h`.
+`engine/mechanics/EcsMechanicSystems.h`.
 
 A system must **not** assume an Entity is a soldier or a player. It should
 depend on `Position`, `Velocity`, `Health`, `WeaponState`, etc., and on
@@ -69,7 +69,7 @@ ballistic, hitscan, rocket/homing, splash and magic effects. Never
 `if (genre == FPS)` inside the shared motion algorithm.
 
 Implemented cross-genre ECS flight adapter:
-`libraries/include/aiverselib/mechanics/EcsProjectileSystems.h`. It exposes
+`engine/mechanics/EcsProjectileSystems.h`. It exposes
 `ProjectileFlightComponent`, a pluggable `BallisticFlightPolicy`, the
 `addProjectileFlightSystem` ECS system and canonical `ProjectileImpactEvent`
 records. Register it through the public
@@ -80,7 +80,7 @@ stage; legacy RTS/FPS shooting/damage adapters are not yet migrated.**
 
 ### Full reusable ECS shooting chain
 
-`libraries/include/aiverselib/mechanics/EcsWeaponLaunchSystems.h` adds the
+`engine/mechanics/EcsWeaponLaunchSystems.h` adds the
 missing **WeaponLaunch** and **ProjectileSpawn** systems to the existing
 ballistic flight / impact / damage libraries:
 
@@ -94,7 +94,7 @@ ballistic flight / impact / damage libraries:
 Register stages in this exact order:
 
 ```cpp
-#include <aiverselib/mechanics/EcsWeaponLaunchSystems.h>
+#include "engine/mechanics/EcsWeaponLaunchSystems.h"
 namespace lg = aiverse::lib::genre;
 
 // Create WeaponParametersComponent, WeaponStateComponent and
@@ -137,7 +137,7 @@ those adapters and tests exist.
 
 ### Shared ECS impact and damage stage
 
-`libraries/include/aiverselib/mechanics/EcsDamageSystems.h` builds on the same
+`engine/mechanics/EcsDamageSystems.h` builds on the same
 `ProjectileFlightComponent` and `ProjectileImpactEvent` rather than making
 separate shooter/artillery damage solvers.
 
@@ -152,7 +152,7 @@ separate shooter/artillery damage solvers.
 Native host registration, for either RTS-like or FPS-like gameplay:
 
 ```cpp
-#include <aiverselib/mechanics/EcsDamageSystems.h>
+#include "engine/mechanics/EcsDamageSystems.h"
 namespace lg = aiverse::lib::genre;
 
 // In setup(): create projectile and target entities with their components,
@@ -190,7 +190,7 @@ replaced by merely registering the library.
 
 Existing reusable building blocks:
 `engine/sim/ProjectileData.h` (projectile programs),
-`libraries/include/aiverselib/mechanics/Weapons.h` (trajectory, recoil, spread),
+`engine/mechanics/Weapons.h` (trajectory, recoil, spread),
 `engine/world/SpatialWorld.h` (a collision adapter). Extract adapters
 incrementally; do not pretend that existing `fps::Module::shoot` and
 `GameCore` combat implementations are already one system.
@@ -326,8 +326,8 @@ need physics, while an FPS hitscan weapon may not simulate a flying entity.
 
 ## NEREID: shared water ECS primitives (experimental)
 
-Public headers: `<aiverselib/water/NereidWaterSystems.h>` and
-`<aiverselib/water/NereidWater.h>`; package: `AIVERSE::lib_nereid_water`.
+Public headers: `"engine/world/nereid/NereidWaterSystems.h"` and
+`"engine/world/nereid/NereidWater.h"`; package: `AIVERSE::lib_nereid_water`.
 `WaterBodyComponent` defines deterministic bodies, `WaterProbeComponent`
 supplies a query point, `WaterContactComponent` stores sampled water
 immersion/velocity; the host registers water persistence. The same pure

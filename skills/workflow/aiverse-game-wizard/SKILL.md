@@ -8,7 +8,7 @@ For every game/world creation task, first follow `skills/workflow/aiverse-terra-
 
 # Game wizard
 
-Reference: `docs/game-wizard.md`. Code: `apps/editor/core/GameWizard*.cpp`, `WizardOps.cpp`; runtime kit `templates/_wizard/`.
+Reference: `docs/game-wizard.md`. Code: `apps/editor/core/GameWizard*.cpp`, `WizardOps.cpp`; runtime kit `tools/wizard/kit/`.
 
 1. `game_make_options` - templates, genres, keys the wizard understands (`WizardSpec`, all optional).
 2. Collect the user's idea and inputs: art, models, music, sounds, languages, monetization (purchases, ads) only when asked.

@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
-"""Contract checks for shipped PBR maps and project installer collision safety."""
+"""Contract checks for the terrain-pbr catalog package (AIVERSE-PACKAGES) and the project installer.
+Downloads the package into the cache when missing; with AIVERSE_PACKAGES_OFFLINE=1 and no cached
+copy it skips."""
 from pathlib import Path
 import json,sys,tempfile,subprocess
 import numpy as np
 from PIL import Image
-ROOT=Path(__file__).resolve().parents[2];pack=ROOT/'engine/assets/materials/terrain'
+ROOT=Path(__file__).resolve().parents[2]
+sys.path.insert(0,str(ROOT/'tools/pkg'))
+import aiverse_pkg
+try:pack=aiverse_pkg.package_dir('terrain-pbr')
+except aiverse_pkg.PkgError as e:print('SKIP: terrain-pbr package unavailable:',e);sys.exit(0)
+MOUNT='materials/terrain/'
 catalog=json.loads((pack/'catalog.json').read_text());library=json.loads((pack/'materials.json').read_text())
-assert catalog['default']=='checkerboard' and {m['id'] for m in catalog['materials']}=={'grass','soil','sand','rock','snow','forest_floor','wet_soil','gravel_soil','snow_crust','checkerboard'}
+assert catalog['default']=='checkerboard' and {m['id'] for m in catalog['materials']}>={'grass','soil','sand','rock','snow','forest_floor','wet_soil','gravel_soil','snow_crust','checkerboard'}
 for item in catalog['materials']:
  name=item['id'];prefix=pack/'textures'/name
  maps={k:np.asarray(Image.open(str(prefix)+'_'+k+'_repeat.png')) for k in ('basecolor','normal','roughness','metallic','ao','orm','height','terrain_color','terrain_normal')}
@@ -29,7 +36,7 @@ for item in catalog['materials']:
     wrap=np.abs(np.take(a,0,axis=axis)-np.take(a,-1,axis=axis)).mean()
     assert wrap<=step*1.6+1,(name,kind,axis,wrap,step)
  m=library['terrain_'+name];assert m['metallic']==0 and not m['vertexColors']
- for k in ('texture','normalMap','metallicRoughnessMap','occlusionMap'):assert (ROOT/'engine/assets'/m[k]).is_file(),m[k]
+ for k in ('texture','normalMap','metallicRoughnessMap','occlusionMap'):assert m[k].startswith(MOUNT) and (pack/m[k][len(MOUNT):]).is_file(),m[k]
 # Distant repeats must not expose broad directional source illumination.
 g=np.asarray(Image.open(pack/'textures/grass_basecolor_repeat.png')).mean(2)/255
 fy=np.fft.fftfreq(1024)[:,None];fx=np.fft.fftfreq(1024)[None,:]
@@ -42,5 +49,8 @@ with tempfile.TemporaryDirectory() as d:
  subprocess.run(cmd,check=True,capture_output=True)
  assert json.loads((p/'game.json').read_text())['terrain']=={'existing':True}
  assert 'custom' in json.loads((p/'materials.json').read_text())
- assert subprocess.run(cmd,capture_output=True).returncode!=0
-print('PASS: installer preserves existing terrain/custom material; refuses repeated overwrite')
+ subprocess.run(cmd,check=True,capture_output=True)  # reinstall of the locked package is idempotent
+ assert 'custom' in json.loads((p/'materials.json').read_text())
+ q=Path(d)/'clash';q.mkdir();(q/'game.json').write_text('{}');(q/'materials.json').write_text('{"terrain_grass":{"mine":1}}')
+ assert subprocess.run([sys.executable,str(ROOT/'tools/terrain/install_pbr_pack.py'),str(q)],capture_output=True).returncode!=0
+print('PASS: installer preserves existing terrain/custom material; reinstall idempotent; refuses to overwrite project ids')

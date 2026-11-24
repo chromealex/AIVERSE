@@ -1,7 +1,7 @@
 // NEREID: reproducible sampler benchmark (diagnostic, not a flaky CTest gate).
 // Rebuilds the transient index once per tick, then samples an identical batch.
 // Timers stay entirely in this tool and never affect deterministic gameplay.
-#include <aiverselib/water/NereidQueryIndex.h>
+#include "engine/world/nereid/NereidQueryIndex.h"
 #include <chrono>
 #include <cstdint>
 #include <iostream>

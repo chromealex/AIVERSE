@@ -1,9 +1,9 @@
 #include "ActorModule.h"
-#include "libraries/include/aiverselib/gameplay/Inventory.h"
-#include "libraries/include/aiverselib/mechanics/EcsHitscanResolutionSystems.h"
-#include "libraries/include/aiverselib/mechanics/EcsOrderedImpactSystems.h"
-#include "libraries/include/aiverselib/mechanics/EcsProjectileSystems.h"
-#include "libraries/include/aiverselib/mechanics/EcsDamageSystems.h"
+#include "engine/gameplay/Inventory.h"
+#include "engine/mechanics/EcsHitscanResolutionSystems.h"
+#include "engine/mechanics/EcsOrderedImpactSystems.h"
+#include "engine/mechanics/EcsProjectileSystems.h"
+#include "engine/mechanics/EcsDamageSystems.h"
 #include <algorithm>
 #include <optional>
 namespace aiverse::actor {

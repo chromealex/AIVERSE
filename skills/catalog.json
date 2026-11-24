@@ -16,7 +16,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/gameplay/Abilities.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-action-bots",
@@ -57,7 +58,8 @@
         "роль",
         "формаци",
         "цел"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-action-sequences",
@@ -72,7 +74,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/systems/Sequence.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-agent-branch",
@@ -95,7 +98,8 @@
         "агент",
         "ветк",
         "коммит"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-ai-perception",
@@ -110,7 +114,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/systems/Perception.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-animation-ecs",
@@ -123,7 +128,7 @@
       "target": null,
       "dependencies": [],
       "backendDependencies": [],
-      "source": "libraries/include/aiverselib/animation/EcsAnimationSystems.h",
+      "source": "engine/animation/EcsAnimationSystems.h",
       "keywords": [
         "animation",
         "ecs",
@@ -139,7 +144,8 @@
         "анимация",
         "бюджет",
         "корневая"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-app-lifecycle",
@@ -154,7 +160,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/app/Lifecycle.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-assets-import",
@@ -182,7 +189,8 @@
         "текстур",
         "импорт",
         "анимац"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-attribute-modifiers",
@@ -199,7 +207,8 @@
       "backendDependencies": [],
       "requiresOwner": "aiverse_game",
       "source": "libraries/include/aiverselib/systems/EngineMechanics.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-audio",
@@ -222,7 +231,8 @@
         "звук",
         "музык",
         "озвучк"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-autolod",
@@ -246,7 +256,8 @@
         "упрощен",
         "уровни",
         "детализац"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-balance-lab",
@@ -261,7 +272,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/app/Balance.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-battle-royale",
@@ -277,7 +289,7 @@
         "aiverse_engine"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/mechanics/royale/BattleRoyale.h",
+      "source": "engine/mechanics/royale/BattleRoyale.h",
       "keywords": [
         "battle",
         "royale",
@@ -327,7 +339,8 @@
         "киллфид",
         "лобби",
         "отсчет"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-behavior",
@@ -342,7 +355,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/Behavior.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-big-numbers",
@@ -357,7 +371,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/strategy/BigNumber.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-boss-encounters",
@@ -375,7 +390,7 @@
         "aiverse_engine"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/mechanics/Telegraphs.h",
+      "source": "engine/mechanics/Telegraphs.h",
       "keywords": [
         "boss",
         "telegraph",
@@ -412,7 +427,8 @@
         "охот",
         "бегств",
         "рой"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-bot-matches",
@@ -427,7 +443,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "examples/libraries/bots/main.cpp",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-bots-combatant",
@@ -446,13 +463,14 @@
         "aiverse_world"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/bots/Fps.h",
+      "source": "engine/bots/Fps.h",
       "keywords": [
         "fps",
         "bot",
         "фпс",
         "бот"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-bots-commander",
@@ -472,7 +490,8 @@
         "bot",
         "ртс",
         "бот"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-bots-configure",
@@ -506,7 +525,8 @@
         "сложност",
         "стиль",
         "характер"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-bots-debug",
@@ -535,7 +555,8 @@
         "застрял",
         "команд",
         "механик"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-bots-tune",
@@ -563,7 +584,8 @@
         "винрейт",
         "прогон",
         "карт"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-bounded-memory",
@@ -578,7 +600,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/runtime/Bounded.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-building-gen",
@@ -594,7 +617,7 @@
         "aiverse_engine"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/systems/BuildingGen.h",
+      "source": "engine/systems/BuildingGen.h",
       "keywords": [
         "building",
         "house",
@@ -616,7 +639,8 @@
         "окно",
         "комнат",
         "интерьер"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-bunkerwars-skills",
@@ -641,7 +665,8 @@
         "скилл",
         "энерг",
         "конвертер"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-cables",
@@ -666,7 +691,8 @@
         "провод",
         "кабель",
         "лэп"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-camera",
@@ -680,11 +706,12 @@
       "dependencies": [],
       "backendDependencies": [],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/gameplay/Camera.h",
+      "source": "engine/gameplay/Camera.h",
       "keywords": [
         "camera",
         "камер"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-campaign",
@@ -710,7 +737,8 @@
         "брифинг",
         "цел",
         "диалог"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-capability-audit",
@@ -725,6 +753,19 @@
       "backendDependencies": [],
       "source": "docs/capability-status.json",
       "keywords": [
+        "mechanics",
+        "status",
+        "what",
+        "exists",
+        "code",
+        "audit",
+        "stale",
+        "механики",
+        "пробелы",
+        "что",
+        "есть",
+        "статус",
+        "устарел",
         "capability",
         "audit",
         "gap",
@@ -752,7 +793,41 @@
         "жанр",
         "движок",
         "умеет"
-      ]
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-capability-request",
+      "package": null,
+      "path": "skills/workflow/aiverse-capability-request/SKILL.md",
+      "domain": "workflow",
+      "summary": "Prepare and submit consented, minimal missing-capability requests to AIVERSE GitHub Issues",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "source": "tools/feedback/capability_request.py",
+      "keywords": [
+        "feature",
+        "request",
+        "missing",
+        "capability",
+        "feedback",
+        "report",
+        "engine",
+        "gap",
+        "github",
+        "issue",
+        "запрос",
+        "фичи",
+        "не",
+        "хватает",
+        "движок",
+        "отправить",
+        "пожелание"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-card-games",
@@ -795,7 +870,8 @@
         "контр",
         "настольн",
         "скрыт"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-card-runtime",
@@ -815,7 +891,8 @@
         "deck",
         "карточ",
         "колод"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-cards-turns-bots",
@@ -852,7 +929,8 @@
         "ход",
         "тактик",
         "противник"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-change-planner",
@@ -869,14 +947,15 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/app/Planner.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-character-locomotion",
       "package": "character-locomotion",
       "path": "skills/gameplay/aiverse-character-locomotion/SKILL.md",
       "domain": "gameplay",
-      "summary": "Fixed character movement policy: ground/air acceleration, jump buffer, coyote time, slopes, ledges, ladders, swimming, climbing and mantle/vault modes",
+      "summary": "Fixed character movement policy: ground/air acceleration, jump buffer, coyote time, slopes, ledges, ladders, swimming, climbing, mantle/vault, dash, wall slide, wall run, grapple and one-way platform modes",
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_character_locomotion",
@@ -885,8 +964,55 @@
         "aiverse_engine"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/mechanics/Locomotion.h",
-      "keywords": []
+      "source": "engine/mechanics/Locomotion.h",
+      "keywords": [
+        "wallrun",
+        "wall-run",
+        "wall",
+        "slide",
+        "walljump",
+        "dash",
+        "air",
+        "dash",
+        "grapple",
+        "hook",
+        "glide",
+        "glider",
+        "one-way",
+        "platform",
+        "drop",
+        "through",
+        "parkour",
+        "паркур",
+        "бег",
+        "по",
+        "стене",
+        "рывок",
+        "крюк",
+        "кошка",
+        "планирование",
+        "односторонн",
+        "платформ",
+        "locomotion",
+        "movement",
+        "jump",
+        "coyote",
+        "slope",
+        "ledge",
+        "ladder",
+        "swim",
+        "climb",
+        "mantle",
+        "vault",
+        "движение",
+        "прыжок",
+        "склон",
+        "уступ",
+        "лестница",
+        "плавание",
+        "лазание"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-cinematic-gameplay",
@@ -921,7 +1047,8 @@
         "синхрон",
         "постановк",
         "чекпоинт"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-city-blocks",
@@ -953,7 +1080,8 @@
         "тротуар",
         "клумб",
         "мощение"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-city-economy",
@@ -987,7 +1115,8 @@
         "оружие",
         "патрон",
         "деньг"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-city-planner",
@@ -1013,7 +1142,50 @@
         "улиц",
         "квартал",
         "генератор"
-      ]
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-city-policy",
+      "package": "city-policy",
+      "path": "skills/gameplay/aiverse-city-policy/SKILL.md",
+      "domain": "gameplay",
+      "summary": "City economy and politics: zoned lots that grow by demand, residents and jobs, taxes, service coverage, budget with loans, policies, faction approval and elections",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_city_policy",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/mechanics/CityPolicy.h",
+      "keywords": [
+        "city",
+        "builder",
+        "zoning",
+        "residential",
+        "commercial",
+        "industrial",
+        "taxes",
+        "budget",
+        "services",
+        "police",
+        "fire",
+        "election",
+        "politics",
+        "simcity",
+        "cities",
+        "skylines",
+        "tropico",
+        "градострой",
+        "зонирование",
+        "налоги",
+        "бюджет",
+        "выборы",
+        "политика"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-city-server",
@@ -1044,7 +1216,8 @@
         "игроков",
         "билет",
         "счет"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-city-traffic",
@@ -1062,7 +1235,7 @@
         "aiverse_engine"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/mechanics/Traffic.h",
+      "source": "engine/mechanics/Traffic.h",
       "keywords": [
         "traffic",
         "cars",
@@ -1089,7 +1262,8 @@
         "эвакуатор",
         "банд",
         "жител"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-cloth",
@@ -1115,7 +1289,8 @@
         "плащ",
         "занавес",
         "парус"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-collections",
@@ -1130,7 +1305,47 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/Collections.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-colonist-relations",
+      "package": "colonist-relations",
+      "path": "skills/gameplay/aiverse-colonist-relations/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Colonist families, memories with decay and stacking, opinions, friendships and rivalries with hysteresis, partnerships, item ownership and social mood",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_colonist_relations",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/mechanics/ColonistRelations.h",
+      "keywords": [
+        "relationships",
+        "family",
+        "friends",
+        "rivals",
+        "partner",
+        "marriage",
+        "opinion",
+        "memories",
+        "thoughts",
+        "ownership",
+        "colonist",
+        "social",
+        "отношения",
+        "семья",
+        "друзья",
+        "соперники",
+        "партнер",
+        "мнение",
+        "воспоминания",
+        "колонист"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-combat-actions",
@@ -1148,7 +1363,7 @@
         "aiverse_engine"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/mechanics/CombatActions.h",
+      "source": "engine/mechanics/CombatActions.h",
       "keywords": [
         "hitbox",
         "hurtbox",
@@ -1162,7 +1377,8 @@
         "парир",
         "стаггер",
         "захват"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-configuration",
@@ -1176,15 +1392,16 @@
       "dependencies": [],
       "backendDependencies": [],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/gameplay/Configuration.h",
-      "keywords": []
+      "source": "engine/gameplay/Configuration.h",
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-construction",
       "package": "construction",
       "path": "skills/gameplay/aiverse-construction/SKILL.md",
       "domain": "gameplay",
-      "summary": "Placement checks, resource explanations, refunds and native construction commands",
+      "summary": "Construction grids, placement checks, resource explanations, refunds and native construction commands",
       "side": "simulation",
       "runtime": "header",
       "target": "AIVERSE::lib_construction",
@@ -1194,7 +1411,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/gameplay/Construction.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-content-mods",
@@ -1211,7 +1429,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/app/Content.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-content-pipeline",
@@ -1226,7 +1445,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "tools/libraries/gameplay.py",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-controls",
@@ -1251,7 +1471,8 @@
         "джойстик",
         "свайп",
         "управлен"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-decision-explanations",
@@ -1268,7 +1489,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/systems/Decisions.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-derived-keys",
@@ -1295,7 +1517,8 @@
         "переменн",
         "поиск",
         "производительн"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-determinism-triage",
@@ -1318,7 +1541,8 @@
         "рассинхрон",
         "контрольн",
         "сумм"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-devlog",
@@ -1351,7 +1575,8 @@
         "кадр",
         "обложка",
         "витрина"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-diagnostics",
@@ -1365,8 +1590,50 @@
       "dependencies": [],
       "backendDependencies": [],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/gameplay/Diagnostics.h",
-      "keywords": []
+      "source": "engine/gameplay/Diagnostics.h",
+      "keywords": [],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-diplomacy",
+      "package": "diplomacy",
+      "path": "skills/gameplay/aiverse-diplomacy/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Relations from decaying modifiers, treaties with truce and break penalties, defensive alliances that join wars, deal evaluation and a strategy advisor for AI factions",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_diplomacy",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/mechanics/Diplomacy.h",
+      "keywords": [
+        "diplomacy",
+        "treaty",
+        "alliance",
+        "war",
+        "peace",
+        "truce",
+        "trade",
+        "deal",
+        "relations",
+        "4x",
+        "civilization",
+        "stellaris",
+        "strategy",
+        "ai",
+        "дипломатия",
+        "договор",
+        "союз",
+        "война",
+        "мир",
+        "сделка",
+        "отношения",
+        "стратегия"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-docs-upkeep",
@@ -1388,7 +1655,8 @@
         "документац",
         "ридми",
         "перевод"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-driving",
@@ -1422,7 +1690,8 @@
         "туннел",
         "мост",
         "авари"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-ecs-hitscan",
@@ -1438,8 +1707,9 @@
         "aiverse_world"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/mechanics/EcsHitscanSystems.h",
-      "keywords": []
+      "source": "engine/mechanics/EcsHitscanSystems.h",
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-ecs-hitscan-resolution",
@@ -1455,8 +1725,9 @@
       ],
       "backendDependencies": [],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/mechanics/EcsHitscanResolutionSystems.h",
-      "keywords": []
+      "source": "engine/mechanics/EcsHitscanResolutionSystems.h",
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-ecs-impact-damage",
@@ -1472,8 +1743,9 @@
       ],
       "backendDependencies": [],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/mechanics/EcsDamageSystems.h",
-      "keywords": []
+      "source": "engine/mechanics/EcsDamageSystems.h",
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-ecs-impact-queue",
@@ -1490,7 +1762,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/mechanics/EcsImpactQueueSystems.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-ecs-inventory",
@@ -1507,7 +1780,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/mechanics/EcsInventorySystems.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-ecs-kinematic-projectiles",
@@ -1523,8 +1797,9 @@
         "aiverse_engine"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/mechanics/EcsKinematicProjectileSystems.h",
-      "keywords": []
+      "source": "engine/mechanics/EcsKinematicProjectileSystems.h",
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-ecs-locomotion",
@@ -1541,7 +1816,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/mechanics/EcsLocomotionSystems.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-ecs-ordered-impact",
@@ -1557,8 +1833,9 @@
         "aiverse_engine"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/mechanics/EcsOrderedImpactSystems.h",
-      "keywords": []
+      "source": "engine/mechanics/EcsOrderedImpactSystems.h",
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-ecs-projectile-systems",
@@ -1576,8 +1853,9 @@
         "aiverse_world"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/mechanics/EcsProjectileSystems.h",
-      "keywords": []
+      "source": "engine/mechanics/EcsProjectileSystems.h",
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-ecs-shared-static",
@@ -1621,7 +1899,8 @@
         "дедупликация",
         "снапшот",
         "откат"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-ecs-timed-mechanics",
@@ -1637,8 +1916,9 @@
       ],
       "backendDependencies": [],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/mechanics/EcsTimedMechanics.h",
-      "keywords": []
+      "source": "engine/mechanics/EcsTimedMechanics.h",
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-ecs-weapon-launch",
@@ -1654,8 +1934,9 @@
       ],
       "backendDependencies": [],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/mechanics/EcsWeaponLaunchSystems.h",
-      "keywords": []
+      "source": "engine/mechanics/EcsWeaponLaunchSystems.h",
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-editor-extension",
@@ -1680,7 +1961,8 @@
         "окно",
         "иерарх",
         "инспектор"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-feedback",
@@ -1695,7 +1977,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/gameplay/Feedback.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-flow-economy-warfare",
@@ -1751,7 +2034,45 @@
         "геотерм",
         "бомбардировщ",
         "самоуничтож"
-      ]
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-follow-camera",
+      "package": "follow-camera",
+      "path": "skills/gameplay/aiverse-follow-camera/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Third-person camera boom: orbit, shoulder offset and swap, obstacle avoidance by owner sphere sweep, recenter behind the target, profile stack with blends",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_follow_camera",
+      "dependencies": [],
+      "backendDependencies": [],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/gameplay/ThirdPersonCamera.h",
+      "keywords": [
+        "third",
+        "person",
+        "camera",
+        "follow",
+        "camera",
+        "orbit",
+        "camera",
+        "boom",
+        "shoulder",
+        "obstacle",
+        "avoidance",
+        "aim",
+        "camera",
+        "камера",
+        "от",
+        "третьего",
+        "лица",
+        "плечо",
+        "камера",
+        "препятствия"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-fx",
@@ -1773,7 +2094,8 @@
         "эффект",
         "частиц",
         "взрыв"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-game-screens",
@@ -1799,7 +2121,8 @@
         "меню",
         "худ",
         "магазин"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-game-verification",
@@ -1814,7 +2137,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "tools/libraries/gameplay.py",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-game-wizard",
@@ -1838,7 +2162,8 @@
         "сделать",
         "игру",
         "идея"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-gear-tiers",
@@ -1854,7 +2179,7 @@
         "aiverse_engine"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/systems/Gear.h",
+      "source": "engine/systems/Gear.h",
       "keywords": [
         "gear",
         "armor",
@@ -1879,7 +2204,8 @@
         "износ",
         "вместимость",
         "экипировк"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-geometry",
@@ -1894,7 +2220,42 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "engine/render/Geometry.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-gpu-batching",
+      "package": null,
+      "path": "skills/visuals/aiverse-gpu-batching/SKILL.md",
+      "domain": "workflow",
+      "summary": "Profile renderer instance/material batching, Metal GPU counters and A/B capture parity",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "source": "docs/geometry-performance.md",
+      "keywords": [
+        "gpu",
+        "batching",
+        "material",
+        "batches",
+        "instancing",
+        "metal",
+        "icb",
+        "draw",
+        "calls",
+        "performance",
+        "profiling",
+        "counters",
+        "renderer",
+        "батчинг",
+        "батчи",
+        "инстансинг",
+        "производительность",
+        "отрисовка"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-graphs",
@@ -1908,8 +2269,9 @@
       "dependencies": [],
       "backendDependencies": [],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/Graphs.h",
-      "keywords": []
+      "source": "engine/core/Graphs.h",
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-grid",
@@ -1924,7 +2286,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/Grid.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-grid-puzzles",
@@ -1943,7 +2306,91 @@
         "sokoban",
         "deadlock",
         "сокобан"
-      ]
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-herds-taming",
+      "package": "herds-taming",
+      "path": "skills/gameplay/aiverse-herds-taming/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Herds with leader, cohesion, spreading panic and succession, off-screen aggregate herds, and taming by trust with follow/stay/guard orders",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_herds_taming",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/mechanics/HerdsTaming.h",
+      "keywords": [
+        "herd",
+        "herds",
+        "flock",
+        "pack",
+        "animals",
+        "panic",
+        "taming",
+        "tame",
+        "pet",
+        "follow",
+        "stay",
+        "off-screen",
+        "simulation",
+        "стадо",
+        "стая",
+        "паника",
+        "приручение",
+        "питомец"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-hero-match",
+      "package": "hero-match",
+      "path": "skills/gameplay/aiverse-hero-match/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Hero match rules: pick/ban draft with timeouts, in-match shop with recipes, sell-back and courier delivery, recall channel, last hits, denies, assists, bounties and respawn timers",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_hero_match",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/mechanics/HeroMatch.h",
+      "keywords": [
+        "moba",
+        "dota",
+        "league",
+        "draft",
+        "pick",
+        "ban",
+        "shop",
+        "items",
+        "recipe",
+        "recall",
+        "courier",
+        "last",
+        "hit",
+        "deny",
+        "assist",
+        "bounty",
+        "respawn",
+        "моба",
+        "драфт",
+        "пик",
+        "бан",
+        "магазин",
+        "курьер",
+        "ластхит",
+        "денай",
+        "ассист",
+        "респаун"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-hot-reload",
@@ -1958,7 +2405,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/runtime/HotReload.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-human-creator",
@@ -1996,7 +2444,8 @@
         "волосы",
         "причёска",
         "цифровой"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-input",
@@ -2010,8 +2459,9 @@
       "dependencies": [],
       "backendDependencies": [],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/gameplay/InputFlow.h",
-      "keywords": []
+      "source": "engine/platform/input/InputFlowCore.h",
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-inventory",
@@ -2027,8 +2477,54 @@
       ],
       "backendDependencies": [],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/gameplay/Inventory.h",
-      "keywords": []
+      "source": "engine/gameplay/Inventory.h",
+      "keywords": [],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-item-affixes",
+      "package": "item-affixes",
+      "path": "skills/gameplay/aiverse-item-affixes/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Seeded item generation with prefix/suffix affix pools, tiers, groups and item level, crafting rerolls, coloured sockets and gems, elemental auras and reactions, item migration",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_item_affixes",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/mechanics/ItemAffixes.h",
+      "keywords": [
+        "affix",
+        "affixes",
+        "prefix",
+        "suffix",
+        "item",
+        "generation",
+        "diablo",
+        "path",
+        "of",
+        "exile",
+        "sockets",
+        "gems",
+        "runes",
+        "crafting",
+        "reroll",
+        "elemental",
+        "reaction",
+        "aura",
+        "аффиксы",
+        "префикс",
+        "суффикс",
+        "сокеты",
+        "камни",
+        "крафт",
+        "реакции",
+        "стихий"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-lens",
@@ -2052,7 +2548,8 @@
         "камер",
         "захват",
         "линз"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-lens-native",
@@ -2077,7 +2574,8 @@
         "натив",
         "камер",
         "захват"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-library-showcase",
@@ -2092,7 +2590,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "examples/libraries/showcase/main.cpp",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-library-upgrades",
@@ -2107,7 +2606,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "tools/libraries/project_checks.py",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-lighting",
@@ -2132,7 +2632,45 @@
         "свет",
         "лампа",
         "пробы"
-      ]
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-lip-sync",
+      "package": "lip-sync",
+      "path": "skills/visuals/aiverse-lip-sync/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Lip-sync viseme tracks from recorded speech (loudness, zero crossings, band energy, closed-lip gaps) or from text, with attack/release smoothing and sampling for the face rig",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_lip_sync",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/animation/LipSync.h",
+      "keywords": [
+        "lip",
+        "sync",
+        "lipsync",
+        "viseme",
+        "mouth",
+        "talking",
+        "speech",
+        "dialogue",
+        "face",
+        "animation",
+        "vivid",
+        "липсинк",
+        "виземы",
+        "рот",
+        "речь",
+        "диалог",
+        "лицо",
+        "анимация"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-localization",
@@ -2155,7 +2693,8 @@
         "локализац",
         "перевод",
         "язык"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-logistics",
@@ -2170,7 +2709,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/Logistics.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-look",
@@ -2199,7 +2739,8 @@
         "материал",
         "текстур",
         "вид"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-loot-tables",
@@ -2215,8 +2756,9 @@
       ],
       "backendDependencies": [],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/systems/Loot.h",
-      "keywords": []
+      "source": "engine/core/progression/Loot.h",
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-lua-gameplay",
@@ -2238,7 +2780,8 @@
         "луа",
         "скрипт",
         "механик"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-main-merge",
@@ -2260,7 +2803,8 @@
         "мердж",
         "слияни",
         "интеграц"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-map-build",
@@ -2288,7 +2832,8 @@
         "рельеф",
         "старт",
         "симметр"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-map-generation",
@@ -2303,7 +2848,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "engine/game/gen/MapGen.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-match-bridge",
@@ -2318,7 +2864,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/app/MatchBridge.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-match-progression",
@@ -2337,7 +2884,7 @@
         "aiverse_engine"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/mechanics/Perks.h",
+      "source": "engine/mechanics/Perks.h",
       "keywords": [
         "perk",
         "modifier",
@@ -2363,7 +2910,8 @@
         "колод",
         "лут",
         "магнит"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-match-rules",
@@ -2379,8 +2927,9 @@
         "aiverse_engine"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/mechanics/Match.h",
-      "keywords": []
+      "source": "engine/mechanics/Match.h",
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-math",
@@ -2395,7 +2944,41 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "engine/core/FixedMath.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-mcp-coverage",
+      "package": null,
+      "path": "skills/workflow/aiverse-mcp-coverage/SKILL.md",
+      "domain": "workflow",
+      "summary": "Audit real MCP tools/list, GUI-only restrictions and verified capability calls",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "source": "docs/agents/mcp-coverage.md",
+      "keywords": [
+        "mcp",
+        "protocol",
+        "server",
+        "tools",
+        "registry",
+        "capabilities",
+        "coverage",
+        "audit",
+        "tools/list",
+        "tools/call",
+        "introspection",
+        "registration",
+        "agents",
+        "проверка",
+        "скиллы",
+        "инструменты",
+        "мсп"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-melee-combat",
@@ -2409,8 +2992,9 @@
       "dependencies": [],
       "backendDependencies": [],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/mechanics/Melee.h",
-      "keywords": []
+      "source": "engine/mechanics/Melee.h",
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-mobile-perf",
@@ -2437,7 +3021,8 @@
         "телефон",
         "мобильн",
         "бюджет"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-modeling",
@@ -2464,20 +3049,22 @@
         "модел",
         "риг",
         "анимац"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-motionweave",
-      "package": null,
+      "package": "motionweave",
       "path": "skills/gameplay/aiverse-motionweave/SKILL.md",
-      "domain": "workflow",
-      "summary": "Universal multithreaded MotionWeave animation scheduler and native integration",
-      "side": "tools",
-      "runtime": "none",
-      "target": null,
+      "domain": "gameplay",
+      "summary": "MotionWeave presentation animation for any project: graph player, blend trees, IK, motion matching, sectioned montages with slots and bone masks, clip notifies, root motion extraction and baking with a fixed-point motor adapter, motion warping, humanoid and generic retargeting, pose inertialization, crowd budgets and jobs, facial control rig, optional Box3D ragdoll bridge",
+      "side": "presentation",
+      "runtime": "header",
+      "target": "AIVERSE::MotionWeave",
       "dependencies": [],
       "backendDependencies": [],
-      "source": "docs/motionweave.md",
+      "requiresOwner": null,
+      "source": "engine/animation/MotionWeave.h",
       "keywords": [
         "motionweave",
         "animation",
@@ -2490,8 +3077,25 @@
         "universal",
         "анимация",
         "риг",
-        "потоки"
-      ]
+        "потоки",
+        "montage",
+        "notify",
+        "root",
+        "motion",
+        "warp",
+        "warping",
+        "ragdoll",
+        "inertialization",
+        "crowd",
+        "facial",
+        "viseme",
+        "монтаж",
+        "ретаргет",
+        "рэгдолл",
+        "варпинг",
+        "лицо"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-narrative-graphs",
@@ -2509,7 +3113,7 @@
         "aiverse_engine"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/mechanics/Narrative.h",
+      "source": "engine/mechanics/Narrative.h",
       "keywords": [
         "story",
         "narrative",
@@ -2527,7 +3131,8 @@
         "реплик",
         "визуальная",
         "новелла"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-native-scaffold",
@@ -2542,7 +3147,49 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "tools/libraries/native_codegen.py",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-nav-links",
+      "package": "nav-links",
+      "path": "skills/ai/aiverse-nav-links/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Off-mesh navigation links (jump, drop, ladder, climb, door, teleport) planned together with any walking mesh, link traversal over ticks, cover spot generation from boxes",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_nav_links",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/bots/NavLinks.h",
+      "keywords": [
+        "offmesh",
+        "off-mesh",
+        "link",
+        "navlink",
+        "jump",
+        "link",
+        "ladder",
+        "door",
+        "teleport",
+        "navmesh",
+        "links",
+        "cover",
+        "generation",
+        "cover",
+        "points",
+        "ссылки",
+        "навмеш",
+        "прыжок",
+        "лестница",
+        "дверь",
+        "укрытия",
+        "генерация"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-navmesh",
@@ -2560,8 +3207,9 @@
         "aiverse_world"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/bots/NavMesh.h",
-      "keywords": []
+      "source": "engine/bots/NavMesh.h",
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-nereid-buoyancy",
@@ -2579,7 +3227,7 @@
         "aiverse_engine"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/water/NereidBuoyancySystems.h",
+      "source": "engine/world/nereid/NereidBuoyancySystems.h",
       "keywords": [
         "buoyancy",
         "float",
@@ -2589,7 +3237,8 @@
         "плавучесть",
         "сила",
         "вода"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-nereid-cascades",
@@ -2607,7 +3256,7 @@
         "aiverse_engine"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/water/NereidCascades.h",
+      "source": "engine/world/nereid/NereidCascades.h",
       "keywords": [
         "cascade",
         "waterfall",
@@ -2617,7 +3266,8 @@
         "водопад",
         "каскад",
         "соединение"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-nereid-currents",
@@ -2635,7 +3285,7 @@
         "aiverse_engine"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/water/NereidCurrentField.h",
+      "source": "engine/world/nereid/NereidCurrentField.h",
       "keywords": [
         "current",
         "river",
@@ -2645,7 +3295,8 @@
         "течени",
         "река",
         "скорость"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-nereid-interactions",
@@ -2663,7 +3314,7 @@
         "aiverse_engine"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/water/NereidInteractions.h",
+      "source": "engine/world/nereid/NereidInteractions.h",
       "keywords": [
         "water",
         "splash",
@@ -2674,7 +3325,8 @@
         "брызги",
         "волны",
         "след"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-nereid-vortices",
@@ -2692,7 +3344,7 @@
         "aiverse_engine"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/water/NereidVortices.h",
+      "source": "engine/world/nereid/NereidVortices.h",
       "keywords": [
         "vortex",
         "water",
@@ -2702,7 +3354,8 @@
         "вихрь",
         "водоворот",
         "течение"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-nereid-water",
@@ -2718,7 +3371,7 @@
         "aiverse_engine"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/water/NereidWaterSystems.h",
+      "source": "engine/world/nereid/NereidWaterSystems.h",
       "keywords": [
         "water",
         "ocean",
@@ -2729,7 +3382,8 @@
         "вода",
         "река",
         "океан"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-network-session",
@@ -2744,7 +3398,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/app/Session.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-new-mechanic",
@@ -2766,7 +3421,8 @@
         "механик",
         "фича",
         "движок"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-niagara-vfx",
@@ -2790,7 +3446,8 @@
         "анриал",
         "старая",
         "совместимость"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-object-interactions",
@@ -2808,7 +3465,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/systems/Interactions.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-objectives",
@@ -2823,7 +3481,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/Objectives.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-offline-production",
@@ -2840,7 +3499,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/strategy/Offline.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-online-battles",
@@ -2866,7 +3526,8 @@
         "сеть",
         "мультиплеер",
         "откат"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-orchestrator",
@@ -2887,7 +3548,48 @@
         "скилл",
         "каталог",
         "оркестратор"
-      ]
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-packages",
+      "package": null,
+      "path": "skills/workflow/aiverse-packages/SKILL.md",
+      "domain": "workflow",
+      "summary": "Optional content from the AIVERSE-PACKAGES catalog: search, install into projects, lock, verify, publish by PR",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "source": "docs/packages.md",
+      "keywords": [
+        "package",
+        "packages",
+        "catalog",
+        "plugins",
+        "download",
+        "install",
+        "asset",
+        "store",
+        "marketplace",
+        "pbr",
+        "textures",
+        "materials",
+        "template",
+        "пакет",
+        "пакеты",
+        "каталог",
+        "плагины",
+        "скачать",
+        "установить",
+        "магазин",
+        "ассетов",
+        "материалы",
+        "текстуры",
+        "шаблон"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-paint-layers",
@@ -2913,7 +3615,8 @@
         "рисован",
         "след",
         "маск"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-pathfinding",
@@ -2928,7 +3631,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "docs/pathfinding.md",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-performance-budgets",
@@ -2943,7 +3647,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/app/Performance.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-physical-interactions",
@@ -2993,7 +3698,8 @@
         "лифт",
         "разруш",
         "обломк"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-physics",
@@ -3032,7 +3738,8 @@
         "push",
         "персонаж",
         "предсказание"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-physis",
@@ -3074,7 +3781,8 @@
         "ураган",
         "гравитац",
         "климат"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-physis-authoring",
@@ -3101,7 +3809,8 @@
         "настройка",
         "погода",
         "карта"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-place-server",
@@ -3132,7 +3841,8 @@
         "хостинг",
         "билет",
         "переподключение"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-planets",
@@ -3156,7 +3866,8 @@
         "орбит",
         "луна",
         "космос"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-play-scenarios",
@@ -3171,7 +3882,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/app/Scenario.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-port-game",
@@ -3193,7 +3905,48 @@
         "перенос",
         "импорт",
         "порт"
-      ]
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-portals-rewind",
+      "package": "portals-rewind",
+      "path": "skills/gameplay/aiverse-portals-rewind/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Linked portals with position/velocity/facing transfer and recursive view transforms, plus gameplay time rewind over a bounded snapshot history with an energy budget",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_portals_rewind",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/mechanics/PortalsRewind.h",
+      "keywords": [
+        "portal",
+        "portals",
+        "teleport",
+        "velocity",
+        "transfer",
+        "recursive",
+        "portal",
+        "rewind",
+        "time",
+        "rewind",
+        "braid",
+        "prince",
+        "of",
+        "persia",
+        "time",
+        "travel",
+        "портал",
+        "порталы",
+        "перемотка",
+        "времени",
+        "отмотка"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-presentation",
@@ -3208,7 +3961,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/Presentation.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-prisma",
@@ -3246,7 +4000,8 @@
         "постэффект",
         "призма",
         "камера"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-production-networks",
@@ -3263,7 +4018,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/strategy/Production.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-progression",
@@ -3277,8 +4033,9 @@
       "dependencies": [],
       "backendDependencies": [],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/Progression.h",
-      "keywords": []
+      "source": "engine/core/progression/Progression.h",
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-progression-curves",
@@ -3292,8 +4049,9 @@
       "dependencies": [],
       "backendDependencies": [],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/systems/Curves.h",
-      "keywords": []
+      "source": "engine/systems/Curves.h",
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-project-recipes",
@@ -3308,7 +4066,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "tools/libraries/gameplay.py",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-projectile-programs",
@@ -3337,7 +4096,8 @@
         "разделен",
         "дуга",
         "самонавод"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-publish-builds",
@@ -3361,7 +4121,8 @@
         "публикац",
         "сборк",
         "редактор"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-puzzle-machine",
@@ -3376,7 +4137,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/strategy/PuzzleMachine.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-puzzle-solvers",
@@ -3421,7 +4183,44 @@
         "судоку",
         "японский",
         "кроссворд"
-      ]
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-quest-journal",
+      "package": "quest-journal",
+      "path": "skills/gameplay/aiverse-quest-journal/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Quests as data: stages, counted and optional objectives, branches, prerequisites, time limits, abandon/fail/repeat, tracked quest, bounded journal and versioned migration",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_quest_journal",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/mechanics/QuestJournal.h",
+      "keywords": [
+        "quest",
+        "quests",
+        "journal",
+        "quest",
+        "log",
+        "objectives",
+        "quest",
+        "stages",
+        "branching",
+        "quest",
+        "tracker",
+        "квест",
+        "квесты",
+        "журнал",
+        "задания",
+        "цели",
+        "трекер"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-racing",
@@ -3458,7 +4257,47 @@
         "старт",
         "заезд",
         "кольцев"
-      ]
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-railways",
+      "package": "railways",
+      "path": "skills/gameplay/aiverse-railways/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Trains on a track graph with block signalling, acceleration and braking, looping routes and station stops with dwell times",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_railways",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/mechanics/Railways.h",
+      "keywords": [
+        "railway",
+        "railways",
+        "trains",
+        "rail",
+        "track",
+        "signals",
+        "block",
+        "signal",
+        "station",
+        "timetable",
+        "openttd",
+        "factorio",
+        "trains",
+        "железная",
+        "дорога",
+        "поезда",
+        "рельсы",
+        "семафор",
+        "блок",
+        "станция"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-reference-validation",
@@ -3473,7 +4312,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "tools/libraries/project_checks.py",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-release-build",
@@ -3501,7 +4341,8 @@
         "сборк",
         "релиз",
         "платформ"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-replica",
@@ -3532,7 +4373,8 @@
         "авторитетный",
         "снапшот",
         "предсказание"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-reservations",
@@ -3547,7 +4389,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/systems/Reservations.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-rhythm-timing",
@@ -3565,7 +4408,8 @@
       "keywords": [
         "rhythm",
         "ритм"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-roads",
@@ -3605,7 +4449,8 @@
         "карман",
         "шоссе",
         "грунтовк"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-rules",
@@ -3620,7 +4465,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/Rules.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-rules-files",
@@ -3643,7 +4489,8 @@
         "правила",
         "разбить",
         "include"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-run-graph",
@@ -3661,7 +4508,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/strategy/RunGraph.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-save-migrations",
@@ -3678,7 +4526,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/gameplay/Saves.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-scene-entities",
@@ -3704,7 +4553,8 @@
         "компоненты",
         "лампа",
         "свет"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-screens",
@@ -3721,7 +4571,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/app/Screens.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-script-hud",
@@ -3748,7 +4599,52 @@
         "счётчик",
         "подпис",
         "кнопк"
-      ]
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-secret-state",
+      "package": "secret-state",
+      "path": "skills/network/aiverse-secret-state/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Hidden information for authoritative servers: zones with visibility rules, per-seat opaque handles re-keyed on shuffle, reveal events, reconnect snapshots and commit/reveal rounds",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_secret_state",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/mechanics/SecretState.h",
+      "keywords": [
+        "hidden",
+        "information",
+        "secret",
+        "cards",
+        "hand",
+        "fog",
+        "commit",
+        "reveal",
+        "simultaneous",
+        "turns",
+        "anti",
+        "cheat",
+        "reconnect",
+        "server",
+        "authority",
+        "скрытая",
+        "информация",
+        "карты",
+        "рука",
+        "коммит",
+        "раскрытие",
+        "одновременные",
+        "ходы",
+        "античит",
+        "переподключение"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-session-admission",
@@ -3765,7 +4661,8 @@
       ],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/net/Admission.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-settlement-production",
@@ -3825,7 +4722,8 @@
         "вода",
         "авари",
         "бедстви"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-shader-graph",
@@ -3850,7 +4748,8 @@
         "граф",
         "запекан",
         "лайтмап"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-shared-capability",
@@ -3893,7 +4792,8 @@
         "перенести",
         "модуль",
         "адаптер"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-site-publish",
@@ -3929,7 +4829,8 @@
         "дорожная",
         "карта",
         "скрины"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-skill-authoring",
@@ -3955,7 +4856,8 @@
         "добав",
         "каталог",
         "аудит"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-snapshot-delta",
@@ -3969,7 +4871,7 @@
       "dependencies": [],
       "backendDependencies": [],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/net/SnapshotDelta.h",
+      "source": "engine/net/SnapshotDelta.h",
       "keywords": [
         "snapshot",
         "delta",
@@ -3986,7 +4888,8 @@
         "трафик",
         "канал",
         "репликац"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-spatial-queries",
@@ -4001,7 +4904,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "engine/game/GameCore.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-special-modes",
@@ -4030,7 +4934,8 @@
         "трафик",
         "машин",
         "пешеход"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-spectrafx",
@@ -4064,7 +4969,8 @@
         "частицы",
         "граф",
         "универсальн"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-sports-rules",
@@ -4108,7 +5014,8 @@
         "фол",
         "пенальти",
         "расстановк"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-squads",
@@ -4126,7 +5033,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/gameplay/Squads.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-state-diff",
@@ -4141,7 +5049,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/runtime/StateDiff.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-status-effects",
@@ -4158,7 +5067,8 @@
       "backendDependencies": [],
       "requiresOwner": "aiverse_game",
       "source": "libraries/include/aiverselib/systems/EngineMechanics.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-stealth-senses",
@@ -4195,7 +5105,8 @@
         "тревог",
         "маскиров",
         "укрыт"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-strata",
@@ -4220,7 +5131,8 @@
         "batching",
         "батчинг",
         "геометрия"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-strategic-campaign",
@@ -4246,7 +5158,44 @@
         "карта",
         "регион",
         "ход"
-      ]
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-structure-destruction",
+      "package": "structure-destruction",
+      "path": "skills/gameplay/aiverse-structure-destruction/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Destructible structures of box pieces: area damage, fracture into fragments, support graph collapse, authoritative debris and dirty regions for collision/navmesh/visibility",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_structure_destruction",
+      "dependencies": [
+        "aiverse-configuration"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/mechanics/StructureDestruction.h",
+      "keywords": [
+        "destruction",
+        "destructible",
+        "wall",
+        "building",
+        "collapse",
+        "fracture",
+        "debris",
+        "structural",
+        "support",
+        "demolition",
+        "разрушение",
+        "разрушаемые",
+        "стены",
+        "обрушение",
+        "обломки"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-survival-ecology",
@@ -4306,7 +5255,8 @@
         "волк",
         "восстановлен",
         "ресурс"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-swept-shapes",
@@ -4322,7 +5272,7 @@
         "aiverse_engine"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/SweptShapes.h",
+      "source": "engine/core/SweptShapes.h",
       "keywords": [
         "swept",
         "sweep",
@@ -4337,7 +5287,8 @@
         "столкновен",
         "скольжен",
         "стен"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-tactics-grid",
@@ -4382,7 +5333,48 @@
         "инициатив",
         "очки",
         "действ"
-      ]
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-tactics-levels",
+      "package": "tactics-levels",
+      "path": "skills/gameplay/aiverse-tactics-levels/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Multi-storey tactical boards: stacked tactics-grid levels with stairs and ladders, movement across levels, sight through open floors, height advantage and undoable move plans",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_tactics_levels",
+      "dependencies": [
+        "aiverse-tactics-grid"
+      ],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/mechanics/TacticsLevels.h",
+      "keywords": [
+        "xcom",
+        "multi",
+        "level",
+        "floors",
+        "stairs",
+        "ladder",
+        "rooftop",
+        "height",
+        "advantage",
+        "tactics",
+        "plan",
+        "undo",
+        "многоэтажн",
+        "этажи",
+        "лестница",
+        "высота",
+        "тактика",
+        "отмена",
+        "хода"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-tag-conditions",
@@ -4396,8 +5388,9 @@
       "dependencies": [],
       "backendDependencies": [],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/systems/Tags.h",
-      "keywords": []
+      "source": "engine/systems/Tags.h",
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-tasks",
@@ -4412,7 +5405,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/Tasks.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-template-kits",
@@ -4427,7 +5421,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/app/Genre.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-terra-first",
@@ -4457,7 +5452,8 @@
         "мир",
         "окружение",
         "терра"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-terra-vegetation",
@@ -4489,6 +5485,10 @@
         "валуны",
         "растительность",
         "лес"
+      ],
+      "contentPackages": [
+        "vegetation-pbr",
+        "terrain-pbr"
       ]
     },
     {
@@ -4517,6 +5517,9 @@
         "скульпт",
         "обрыв",
         "ландшафт"
+      ],
+      "contentPackages": [
+        "terrain-pbr"
       ]
     },
     {
@@ -4554,6 +5557,10 @@
         "деревья",
         "биомы",
         "ландшафт"
+      ],
+      "contentPackages": [
+        "terrain-pbr",
+        "vegetation-pbr"
       ]
     },
     {
@@ -4568,7 +5575,8 @@
       "dependencies": [],
       "backendDependencies": [],
       "source": "docs/texture-rhi.md",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-themes",
@@ -4583,7 +5591,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/app/Theme.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-tiles-2d",
@@ -4607,7 +5616,89 @@
         "тайлы",
         "тайлсет",
         "спрайт"
-      ]
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-touch-accessibility",
+      "package": "touch-accessibility",
+      "path": "skills/ui/aiverse-touch-accessibility/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Touch controls (fixed and floating sticks, hold/toggle buttons, tap, double tap, long press, swipe, pinch, rotate, pan) and accessibility settings (colour vision, scales, subtitles, reduced motion, remapping with conflicts)",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_touch_accessibility",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/gameplay/TouchAccessibility.h",
+      "keywords": [
+        "touch",
+        "mobile",
+        "virtual",
+        "joystick",
+        "stick",
+        "buttons",
+        "gestures",
+        "swipe",
+        "pinch",
+        "accessibility",
+        "colorblind",
+        "subtitles",
+        "remap",
+        "reduced",
+        "motion",
+        "тач",
+        "мобильн",
+        "джойстик",
+        "жесты",
+        "доступность",
+        "дальтонизм",
+        "субтитры",
+        "переназначение"
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-transit-schedules",
+      "package": "transit-schedules",
+      "path": "skills/gameplay/aiverse-transit-schedules/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Public transport and freight lines with timetables, earliest-arrival route planning with transfers, boarding by capacity and stop congestion diagnostics",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_transit_schedules",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/mechanics/TransitSchedules.h",
+      "keywords": [
+        "public",
+        "transport",
+        "bus",
+        "tram",
+        "metro",
+        "timetable",
+        "schedule",
+        "headway",
+        "transfer",
+        "passengers",
+        "freight",
+        "cargo",
+        "congestion",
+        "общественный",
+        "транспорт",
+        "автобус",
+        "расписание",
+        "пересадка",
+        "пассажиры",
+        "груз"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-turn-scheduler",
@@ -4626,7 +5717,51 @@
         "turn",
         "пошаг",
         "ход"
-      ]
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-turn-search",
+      "package": "turn-search",
+      "path": "skills/ai/aiverse-turn-search/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Generic game-tree search for any turn rules: iterative-deepening alpha-beta with a node budget and seeded MCTS, both explaining the chosen move",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_turn_search",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/bots/TurnSearch.h",
+      "keywords": [
+        "minimax",
+        "alpha",
+        "beta",
+        "mcts",
+        "monte",
+        "carlo",
+        "tree",
+        "search",
+        "game",
+        "tree",
+        "bot",
+        "ai",
+        "board",
+        "game",
+        "chess",
+        "move",
+        "explanation",
+        "минимакс",
+        "поиск",
+        "дерево",
+        "бот",
+        "настольн",
+        "объяснение",
+        "хода"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-tutorial",
@@ -4643,7 +5778,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/gameplay/Tutorial.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-typed-commands",
@@ -4658,7 +5794,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "tools/libraries/native_codegen.py",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-typed-state",
@@ -4673,7 +5810,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "tools/libraries/native_codegen.py",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-ui-binding",
@@ -4688,7 +5826,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/app/Binding.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-ui-patterns",
@@ -4703,7 +5842,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "engine/ui/templates/README.md",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-unit-balance",
@@ -4732,7 +5872,49 @@
         "контр",
         "дуэл",
         "матриц"
-      ]
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-utility-networks",
+      "package": "utility-networks",
+      "path": "skills/gameplay/aiverse-utility-networks/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Pressure-driven pipe networks with sources, sinks, tanks, pumps and valves, and heat exchange between rooms with doors, outdoor boundary and thermostats",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_utility_networks",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/mechanics/UtilityNetworks.h",
+      "keywords": [
+        "pipes",
+        "pressure",
+        "pump",
+        "valve",
+        "water",
+        "supply",
+        "fluid",
+        "network",
+        "heat",
+        "temperature",
+        "rooms",
+        "heating",
+        "cooling",
+        "thermostat",
+        "трубы",
+        "давление",
+        "насос",
+        "клапан",
+        "водопровод",
+        "тепло",
+        "отопление",
+        "термостат"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-vehicle-controllers",
@@ -4751,7 +5933,7 @@
         "aiverse_engine"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/mechanics/Vehicles.h",
+      "source": "engine/mechanics/Vehicles.h",
       "keywords": [
         "vehicle",
         "car",
@@ -4779,7 +5961,8 @@
         "чекпоинт",
         "сиден",
         "дрифт"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-vehicle-fx",
@@ -4813,7 +5996,8 @@
         "сирен",
         "следы",
         "шин"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-verification",
@@ -4828,7 +6012,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "tests/check_headless_restore.py",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-view",
@@ -4856,7 +6041,8 @@
         "отображение",
         "сцена",
         "видимость"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-visual-qa",
@@ -4880,7 +6066,48 @@
         "снимок",
         "визуальн",
         "проверк"
-      ]
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-volume-nav",
+      "package": "volume-nav",
+      "path": "skills/ai/aiverse-volume-nav/SKILL.md",
+      "domain": "gameplay",
+      "summary": "3D navigation for flyers, ships and swimmers: occupancy grid from boxes, deterministic 26-neighbour A* with smoothing, flock avoidance and 3D formation slots",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_volume_nav",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/bots/VolumeNav.h",
+      "keywords": [
+        "3d",
+        "navigation",
+        "flying",
+        "pathfinding",
+        "volumetric",
+        "navigation",
+        "space",
+        "ship",
+        "drone",
+        "swarm",
+        "flock",
+        "boids",
+        "3d",
+        "formation",
+        "полет",
+        "3d",
+        "навигация",
+        "корабли",
+        "дроны",
+        "стая",
+        "формация"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-voxel-game",
@@ -4909,7 +6136,8 @@
         "выживан",
         "крафт",
         "шахт"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-voxel-gen",
@@ -4946,7 +6174,8 @@
         "дерев",
         "бесконечн",
         "мир"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-voxel-light",
@@ -4978,7 +6207,8 @@
         "факел",
         "тень",
         "воксел"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-voxel-mesh",
@@ -5009,7 +6239,8 @@
         "затенен",
         "рендер",
         "чанк"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-voxel-nav",
@@ -5040,7 +6271,8 @@
         "спавн",
         "монстр",
         "воксел"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-voxel-replication",
@@ -5072,7 +6304,8 @@
         "чанк",
         "сервер",
         "реплик"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-voxel-ticks",
@@ -5107,7 +6340,8 @@
         "песок",
         "рост",
         "тик"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-voxel-world",
@@ -5145,7 +6379,42 @@
         "копат",
         "ставит",
         "регион"
-      ]
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-warcraft3-import",
+      "package": null,
+      "path": "skills/workflow/aiverse-warcraft3-import/SKILL.md",
+      "domain": "workflow",
+      "summary": "Import licensed Warcraft III map archives and assets using the bounded MPQ/Studio pipeline",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "backendDependencies": [],
+      "source": "docs/warcraft3-import.md",
+      "keywords": [
+        "warcraft",
+        "warcraft3",
+        "wc3",
+        "wc3x",
+        "mpq",
+        "w3x",
+        "w3m",
+        "mdx",
+        "mdl",
+        "blp",
+        "map",
+        "importer",
+        "stormlib",
+        "reforged",
+        "варкрафт",
+        "импорт",
+        "карта",
+        "архив"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-water",
@@ -5175,7 +6444,52 @@
         "берег",
         "пляж",
         "набережн"
-      ]
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-watercraft",
+      "package": "watercraft",
+      "path": "skills/gameplay/aiverse-watercraft/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Boats and ships from assembled hull blocks with point buoyancy, water drag, thrust and rudder, capsize and sinking, plus an aircraft model with lift, drag, stall and control surfaces",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_watercraft",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/mechanics/Watercraft.h",
+      "keywords": [
+        "boat",
+        "ship",
+        "ferry",
+        "hull",
+        "buoyancy",
+        "rudder",
+        "sail",
+        "capsize",
+        "sink",
+        "aircraft",
+        "plane",
+        "lift",
+        "drag",
+        "stall",
+        "aerodynamics",
+        "лодка",
+        "корабль",
+        "корпус",
+        "плавучесть",
+        "руль",
+        "самолет",
+        "подъемная",
+        "сила",
+        "сваливание",
+        "аэродинамика"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-weapon-policies",
@@ -5191,8 +6505,9 @@
         "aiverse_world"
       ],
       "requiresOwner": null,
-      "source": "libraries/include/aiverselib/mechanics/Weapons.h",
-      "keywords": []
+      "source": "engine/mechanics/Weapons.h",
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-weather-timeline",
@@ -5221,7 +6536,8 @@
         "лужи",
         "мокр",
         "небо"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-wind-masks",
@@ -5249,7 +6565,8 @@
         "дерево",
         "ветка",
         "листва"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-work-budget",
@@ -5264,7 +6581,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/runtime/WorkBudget.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "aiverse-world-calendar",
@@ -5298,7 +6616,47 @@
         "распорядок",
         "потребност",
         "поручен"
-      ]
+      ],
+      "contentPackages": []
+    },
+    {
+      "id": "aiverse-wounds-disease",
+      "package": "wounds-disease",
+      "path": "skills/gameplay/aiverse-wounds-disease/SKILL.md",
+      "domain": "gameplay",
+      "summary": "Wounds by type and body part with bleeding, pain, healing, infection and treatments; diseases with incubation, symptoms, contagion, cures and immunity",
+      "side": "simulation",
+      "runtime": "header",
+      "target": "AIVERSE::lib_wounds_disease",
+      "dependencies": [],
+      "backendDependencies": [
+        "aiverse_engine"
+      ],
+      "requiresOwner": null,
+      "source": "libraries/include/aiverselib/mechanics/WoundsDisease.h",
+      "keywords": [
+        "wounds",
+        "injury",
+        "bleeding",
+        "infection",
+        "disease",
+        "illness",
+        "contagion",
+        "epidemic",
+        "medicine",
+        "bandage",
+        "splint",
+        "immunity",
+        "раны",
+        "кровотечение",
+        "инфекция",
+        "болезни",
+        "зараза",
+        "эпидемия",
+        "лечение",
+        "иммунитет"
+      ],
+      "contentPackages": []
     },
     {
       "id": "aiverse-zone-graph",
@@ -5315,7 +6673,8 @@
       "backendDependencies": [],
       "requiresOwner": null,
       "source": "libraries/include/aiverselib/strategy/ZoneGraph.h",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "meta-ads",
@@ -5335,7 +6694,8 @@
         "rewarded",
         "ads",
         "реклам"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-albums",
@@ -5358,7 +6718,8 @@
         "альбом",
         "коллекц",
         "обмен"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-async-pvp",
@@ -5380,7 +6741,8 @@
         "рейд",
         "месть",
         "асинхрон"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-backend",
@@ -5401,7 +6763,8 @@
         "subscription",
         "подписк",
         "прав"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-clans",
@@ -5422,7 +6785,8 @@
         "guild",
         "клан",
         "гильди"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-client",
@@ -5442,7 +6806,8 @@
         "retry",
         "клиент",
         "повтор"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-compose",
@@ -5456,7 +6821,8 @@
       "dependencies": [],
       "backendDependencies": [],
       "source": "tools/skills/catalog.py",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "meta-database",
@@ -5480,7 +6846,8 @@
         "баз",
         "данных",
         "миграц"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-economy",
@@ -5505,7 +6872,8 @@
         "валют",
         "кошелек",
         "покупк"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-events",
@@ -5525,7 +6893,8 @@
         "event",
         "событ",
         "ивент"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-game",
@@ -5539,7 +6908,8 @@
       "dependencies": [],
       "backendDependencies": [],
       "source": "tools/skills/catalog.py",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     },
     {
       "id": "meta-items",
@@ -5560,7 +6930,8 @@
         "instance",
         "экипиров",
         "предмет"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-jobs",
@@ -5581,7 +6952,8 @@
         "crafting",
         "очередь",
         "крафт"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-loot",
@@ -5602,7 +6974,8 @@
         "loot",
         "сундук",
         "лут"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-matchmaking",
@@ -5622,7 +6995,8 @@
         "matchmaking",
         "матчмейкинг",
         "подбор"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-notifications",
@@ -5642,7 +7016,8 @@
         "notification",
         "badge",
         "уведомлен"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-offer-chains",
@@ -5661,7 +7036,8 @@
       "keywords": [
         "chain",
         "цепочк"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-offline",
@@ -5682,7 +7058,8 @@
         "income",
         "оффлайн",
         "доход"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-progression",
@@ -5708,7 +7085,8 @@
         "достижен",
         "боевой",
         "пропуск"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-quests",
@@ -5728,7 +7106,8 @@
         "quest",
         "квест",
         "задан"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-ratings",
@@ -5749,7 +7128,8 @@
         "glicko",
         "эло",
         "глико"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-referrals",
@@ -5770,7 +7150,8 @@
         "promo",
         "реферал",
         "промокод"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-research",
@@ -5791,7 +7172,8 @@
         "prestige",
         "исследован",
         "престиж"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-server",
@@ -5811,7 +7193,8 @@
         "server",
         "сервер",
         "сервак"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-social",
@@ -5836,7 +7219,8 @@
         "рейтинг",
         "таблица",
         "чат"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-tournaments",
@@ -5857,7 +7241,8 @@
         "league",
         "турнир",
         "лиг"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-ui",
@@ -5878,7 +7263,8 @@
         "interface",
         "экран",
         "интерфейс"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "meta-wars",
@@ -5897,7 +7283,8 @@
       "keywords": [
         "clanwar",
         "войн"
-      ]
+      ],
+      "contentPackages": []
     },
     {
       "id": "studio-ui",
@@ -5911,7 +7298,8 @@
       "dependencies": [],
       "backendDependencies": [],
       "source": "docs/studio-design-system.md",
-      "keywords": []
+      "keywords": [],
+      "contentPackages": []
     }
   ]
 }

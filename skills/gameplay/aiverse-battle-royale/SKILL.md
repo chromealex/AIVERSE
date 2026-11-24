@@ -7,11 +7,11 @@ description: Reuse AIVERSE battle-royale policies (phased safe zone with seeded 
 
 Use when a match is won by the last team standing in a shrinking play space, or when a game needs any one of the
 pieces alone (a timed shrinking circle, random area bombardment, scheduled crate drops, a skydive insertion, a
-placement table with knockdowns). The `engine/actor` host wires it from rules (`royale` at the top level or legacy `fps.royale`, docs/fps.md); the same block on
+placement table with knockdowns). The `engine/actor` host wires it from rules (`royale` at the top level or legacy `actor.royale`, docs/fps.md); the same block on
 other hosts is debt G4/G6 in `docs/no-genre-split-audit.md`. The steps below are for native/host owners.
 
 1. Read the catalog entry (`python3 tools/libraries/catalog.py search royale`) and the headers in
-   `libraries/include/aiverselib/mechanics/royale/`: `SafeZone.h`, `Bombardment.h`, `SupplyDrops.h`, `Insertion.h`,
+   `engine/mechanics/royale/`: `SafeZone.h`, `Bombardment.h`, `SupplyDrops.h`, `Insertion.h`,
    `Standings.h`, `Lobby.h`; `Data.h` reads the JSON, `Persistence.h` saves and hashes; `BattleRoyale.h` includes all.
 2. Data first: copy `examples/libraries/mechanics/royale/royale.json` (bounds, zone phases, flight, drop, bombardment,
    supplyDrops, standings, lobby). Distances are metres (decimal literals, parsed as Fixed), times are ticks. Only

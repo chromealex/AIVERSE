@@ -8,6 +8,11 @@ README listing them, plus index.json — the same list for programs that downloa
 docs/overview.md § Готовые сборки движка). It always is ONE commit that is force-pushed: the newest --keep versions per
 platform stay in it, older ones disappear from the branch, so the repository does not grow with every
 build. Work happens in build/.temp/builds (git-ignored). Authorship as the repo's git config.
+
+GitHub refuses files over 100 MB in a branch. A package larger than --max-mb is not committed: with
+--release <tag> it is listed in index.json with the download URL of that GitHub release's asset (attach
+the zip to the release under the same name), and external.json in the branch keeps such entries for
+later publishes.
 """
 import argparse, hashlib, json, os, re, shutil, struct, subprocess, sys, zipfile
 
@@ -67,10 +72,12 @@ def package_entry(work, rel, repo, branch):
             "headless": found.get("headless")}
 
 
-def write_index(work, kept, repo, branch="builds"):
-    """index.json next to README.md: every kept package, newest first (the order of index.txt)."""
+def write_index(work, kept, repo, branch="builds", external=None):
+    """index.json next to README.md: every kept package, newest first (the order of index.txt).
+    `external`: rel -> ready entry of a package that lives outside the branch (a release asset)."""
+    external = external or {}
     index = {"schema": INDEX_SCHEMA, "repository": repo, "branch": branch,
-             "packages": [package_entry(work, rel, repo, branch) for rel in kept]}
+             "packages": [external[rel] if rel in external else package_entry(work, rel, repo, branch) for rel in kept]}
     with open(os.path.join(work, "index.json"), "w", encoding="utf-8") as fh:
         json.dump(index, fh, indent=2)
         fh.write("\n")
@@ -93,6 +100,8 @@ def main():
     ap.add_argument("--keep", type=int, default=5)
     ap.add_argument("--remote", default="origin")
     ap.add_argument("--no-push", action="store_true")
+    ap.add_argument("--release", help="tag of the GitHub release whose assets hold packages over --max-mb")
+    ap.add_argument("--max-mb", type=float, default=95.0, help="largest package committed to the branch")
     a = ap.parse_args()
     for z in a.zips:
         if not NAME.match(os.path.basename(z)) or not os.path.isfile(z):
@@ -108,15 +117,30 @@ def main():
     # previous contents of the branch (if any): keep their zips
     if subprocess.run(["git", "fetch", "-q", "--depth=1", "origin", "builds"], cwd=WORK, capture_output=True).returncode == 0:
         run("git", "checkout", "-q", "FETCH_HEAD", "--", ".", cwd=WORK)
+    ext_path = os.path.join(WORK, "external.json")
+    external = json.load(open(ext_path, encoding="utf-8")) if os.path.exists(ext_path) else {}
+    slug = repo_slug(url)
     for z in a.zips:
         plat = NAME.match(os.path.basename(z)).group(3)
+        rel = plat + "/" + os.path.basename(z)
+        if os.path.getsize(z) > a.max_mb * 1048576:
+            if not a.release:
+                sys.exit(f"{os.path.basename(z)} is over {a.max_mb:.0f} MB (GitHub's branch limit is 100 MB): "
+                         "pass --release <tag> and attach the zip to that GitHub release")
+            entry = package_entry(os.path.dirname(os.path.abspath(z)), os.path.basename(z), slug, "builds")
+            entry.update(file=rel, external=True,
+                         url=f"https://github.com/{slug}/releases/download/{a.release}/{os.path.basename(z)}")
+            external[rel] = entry
+            continue
+        external.pop(rel, None)
         os.makedirs(os.path.join(WORK, plat), exist_ok=True)
         shutil.copy2(z, os.path.join(WORK, plat, os.path.basename(z)))
+    present = lambda o: o in external or os.path.exists(os.path.join(WORK, o))
     # order: index.txt keeps "<platform>/<zip>" newest first; the zips published now go on top
     idx = os.path.join(WORK, "index.txt")
     order = [l.strip() for l in open(idx, encoding="utf-8")] if os.path.exists(idx) else []
     new = [NAME.match(os.path.basename(z)).group(3) + "/" + os.path.basename(z) for z in a.zips]
-    order = new + [o for o in order if o and o not in new and os.path.exists(os.path.join(WORK, o))]
+    order = new + [o for o in order if o and o not in new and present(o)]
     lines = ["# AIVERSE builds", "",
              "Ready-to-run editor + tools. Unpack the zip anywhere and start `AIVERSE/bin/aiverse_editor.exe` (Windows), "
              "`AIVERSE/bin/AiverseEditor.app` (macOS) or `AIVERSE/bin/aiverse_editor` (Linux, when the package has it). "
@@ -130,19 +154,33 @@ def main():
     for plat in sorted({o.split("/")[0] for o in order}):
         mine = [o for o in order if o.startswith(plat + "/")]
         for old in mine[a.keep:]:
-            os.remove(os.path.join(WORK, old))
+            if old in external:
+                external.pop(old)
+            else:
+                os.remove(os.path.join(WORK, old))
         lines += [f"## {plat}", ""]
         for o in mine[:a.keep]:
             ver, commit, _ = NAME.match(os.path.basename(o)).groups()
-            size = os.path.getsize(os.path.join(WORK, o)) / 1048576
-            lines.append(f"- [{os.path.basename(o)}]({o}) — {ver}, commit `{commit}`, {size:.0f} MB")
+            if o in external:
+                size = external[o]["size"] / 1048576
+                lines.append(f"- [{os.path.basename(o)}]({external[o]['url']}) — {ver}, commit `{commit}`, {size:.0f} MB (release asset)")
+            else:
+                size = os.path.getsize(os.path.join(WORK, o)) / 1048576
+                lines.append(f"- [{os.path.basename(o)}]({o}) — {ver}, commit `{commit}`, {size:.0f} MB")
             kept.append(o)
         lines.append("")
     with open(idx, "w", encoding="utf-8") as fh:
         fh.write("\n".join(o for o in order if o in kept) + "\n")
     with open(os.path.join(WORK, "README.md"), "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines))
-    write_index(WORK, [o for o in order if o in kept], repo_slug(url))
+    external = {k: v for k, v in external.items() if k in kept}
+    if external:
+        with open(ext_path, "w", encoding="utf-8") as fh:
+            json.dump(external, fh, indent=2)
+            fh.write("\n")
+    elif os.path.exists(ext_path):
+        os.remove(ext_path)
+    write_index(WORK, [o for o in order if o in kept], slug, external=external)
     run("git", "add", "-A", cwd=WORK)
     names = ", ".join(os.path.basename(z) for z in a.zips)
     run("git", "commit", "-q", "-m", f"Builds: {names}", cwd=WORK)

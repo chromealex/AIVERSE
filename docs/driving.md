@@ -3,7 +3,7 @@
 The hero of a top-down game (docs/topdown.md) gets into vehicles and drives them. There is **one vehicle system**
 for every host (AGENTS.md "no genre split"): `engine/vehicles/Vehicles.{h,cpp}` (target `AIVERSE::vehicles`) and the
 race adapter `engine/vehicles/VehicleRace.{h,cpp}`. The vehicle dynamics are the controllers of the
-vehicle-controllers library (`libraries/include/aiverselib/mechanics/VehicleControllers.h`, docs/mechanics-packages.md
+vehicle-controllers library (`engine/mechanics/VehicleControllers.h`, docs/mechanics-packages.md
 § Vehicles). Tests: `aiverse_tests driving_`, `traffic_`; FPS `typedVehicles`, `raceMode`.
 
 ## The vehicle system (engine/vehicles)
@@ -15,7 +15,7 @@ vehicle-controllers library (`libraries/include/aiverselib/mechanics/VehicleCont
   car entity disappears.
 - **Types.** `vehicles::VehicleType` (`type` = the host's id, `length` / `width` in host units, controller def,
   optional seat list) in `vehicles::DriveRules`: the rules block `driving` (`parseDriving`, grid maps) or
-  `fps.vehicleTypes` (metre maps: metres, seat lists, crash 8 m/s x 10) become the same list.
+  `actor.vehicleTypes` (metre maps: metres, seat lists, crash 8 m/s x 10) become the same list.
 - **One step** (`vehicles::stepVehicles`, ascending entity index): pedals = race session > the driver's controls
   (shared mappings, mechanics/VehicleDrive.h) > a host bot (traffic) > autopilot > parked; empty resting vehicles
   sleep; controller step; the host's sweep; crash / run-over damage (`VehicleImpacts`).

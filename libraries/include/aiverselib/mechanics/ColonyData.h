@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // JSON for settlement-production (example: examples/libraries/mechanics/production-survival/colony.json):
 // {"restNeed":2,
 //  "needs":[{"id":1,"decayPerTick":30,"initial":80000,"lowAt":35000,"criticalAt":10000,"recoveredAt":90000,"mood":[{"below":10000,"mood":-40000}]}],

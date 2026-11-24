@@ -1,5 +1,5 @@
 #pragma once
-#include "../gameplay/Diagnostics.h"
+#include "engine/gameplay/Diagnostics.h"
 #include <span>
 #include <string>
 #include <vector>

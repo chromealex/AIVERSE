@@ -7,7 +7,7 @@
 #include "engine/world/TerraWeaveRootEvents.h"
 #include "engine/world/TerraWeaveGrassCover.h"
 #include "engine/world/TerraWeaveSlopeFailure.h"
-#include <aiverselib/water/NereidShorelineSystems.h>
+#include "engine/world/nereid/NereidShorelineSystems.h"
 #include "engine/sim/Simulation.h"
 #include <cstdint>
 #include <map>

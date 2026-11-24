@@ -28,7 +28,7 @@ Full reference: `docs/spectrafx-entity-effects.md`.
 
 - To give units, buildings, characters, vehicles, projectiles, weapons or abilities effects WITHOUT game code, write a
   `"spectraFx": {"entities": {"<selector>": {"attach": [...], "on": {...}}}}` block in rules.json or the map, or an
-  inline `"spectraFx"` rule on rules `types.<id>`, their `weapons[]` / `abilities[]` (RTS) or `fps.weapons[i]` (FPS).
+  inline `"spectraFx"` rule on rules `types.<id>`, their `weapons[]` / `abilities[]` (RTS) or `actor.weapons[i]` (FPS).
   Selectors: `*`, `unit|structure|projectile|actor|vehicle`, `type:<id>`, `weapon:<id|index>`, `ability:<id>`,
   `player:<n>|player:local|player:remote`, `team:<n>`. Cues: `spawned`, `died`, `despawned`, `fired`, `hit`, `ability`.
 - Both the RTS client (`apps/client/ClientFx.cpp`) and the FPS client (`SpectraFxSceneHost`) feed the same presenter

@@ -1,8 +1,8 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Adapter from the generated optional `tactics` settings section to TacticsRules defaults; scenario JSON `rules`
 // then overrides individual values (readTacticsScenario(json, tacticsRulesFromSettings(settings))).
-#include "../gameplay/Configuration.h"
+#include "engine/gameplay/Configuration.h"
 #include "TacticsTurns.h"
 namespace aiverse::lib::mechanics {
 inline TacticsRules tacticsRulesFromSettings(const gameplay::GameplaySettings& settings,TacticsRules base=TacticsRules{}){

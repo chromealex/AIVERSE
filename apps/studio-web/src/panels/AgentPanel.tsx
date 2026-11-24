@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Bot, CheckCircle2, CircleAlert, Loader2, MessageSquarePlus, RotateCcw, Send, Square, Wrench } from 'lucide-react';
+import { Bot, CheckCircle2, CircleAlert, MessageSquarePlus, RotateCcw, Send, Square, Wrench } from 'lucide-react';
 import { invoke, onNativeEvent } from '../bridge';
 import type { StudioAgentInfo, StudioSnapshot } from '../types';
 import { agentLineKind } from './agentLogic';
 import './AgentPanel.css';
+import { StudioLoader } from '../ui';
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 
@@ -91,7 +92,7 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
             <span>{kind === 'user' ? line.replace(/^› /, '') : kind === 'tool' ? line.replace(/^→ /, '') : line}</span>
           </div>;
         })}
-        {info?.running && <div className="agent__line agent__line--status"><Loader2 size={11} className="agent__spin"/><span>Working…</span></div>}
+        {info?.running && <div className="agent__line agent__line--status"><StudioLoader size={14}/><span>Working…</span></div>}
       </div>
       {changes.length > 0 && <aside className="agent__changes">
         <b>Changes · {edits.length}</b>
@@ -107,7 +108,7 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
       {info?.running
         ? <button type="button" className="au-button au-button--sm" onClick={() => void stop()}><Square size={12}/>Stop</button>
         : <button type="button" className="au-button au-button--sm au-button--primary" disabled={busy || !prompt.trim()} onClick={() => void send()}>
-            {busy ? <Loader2 size={13} className="agent__spin"/> : <Send size={13}/>}Send</button>}
+            {busy ? <StudioLoader size={16}/> : <Send size={13}/>}Send</button>}
     </div>
   </div>;
 }

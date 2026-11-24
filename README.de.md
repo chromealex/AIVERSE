@@ -179,6 +179,8 @@ Der Bericht markiert jedes Element als exakt, näherungsweise oder nicht überno
 
 Jede Vorlage ist ein vollständig spielbares Spiel mit Bots. Im Editor öffnen und direkt loslegen.
 
+Vorlagen sind Pakete des [Katalogs](https://chromealex.github.io/AIVERSE/catalog.html): Der Startbildschirm zeigt die offiziellen, **More templates** durchsucht die übrigen.
+
 | Genre | Vorlagen |
 |---|---|
 | Klassisches RTS mit Basisbau | **Iron and Gold** (Warcraft / Red Alert) · **Iron Front** (Red Alert: MCV, Erz, Seitenleiste) · **Starfall Sectors** (StarCraft: drei Völker) · **Frost Crown** (Warcraft III: Helden, Creeps, Terrain) · **Four Ages** (Age of Empires II) · **Amber Sands** (Dune II) · **Metal Tide** (Total Annihilation: Flusswirtschaft, Radar, Recycling, Flugzeuge, Atomraketen) |
@@ -251,7 +253,7 @@ Jede Vorlage ist ein vollständig spielbares Spiel mit Bots. Im Editor öffnen u
 
 ```bash
 ./studio_mac.command                    # AIVERSE Studio, der Editor (braucht Xcode, CMake, Node.js)
-./studio_mac.command templates/mushrooms   # ...mit einem anderen Projekt
+./studio_mac.command ~/.aiverse/packages/templates/mushrooms   # ...mit einem anderen Projekt
 ```
 
 Windows: `studio_windows.cmd [project]` baut und öffnet `AiverseStudio.exe` (braucht Visual Studio 2022,

@@ -1,5 +1,5 @@
 // gear-tiers: absorption by zone, wear and breaking, equip / replace, capacity, ordering, JSON, persistence.
-#include <aiverselib/systems/Gear.h>
+#include "engine/systems/Gear.h"
 #include <cstdio>
 #include <stdexcept>
 using namespace aiverse;using namespace aiverse::lib::systems;

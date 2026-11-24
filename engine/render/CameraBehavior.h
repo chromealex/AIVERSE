@@ -21,7 +21,7 @@
 #include "../data/Json.h"
 #include "CameraPresets.h"
 #include "Math3D.h"
-#include "../../libraries/include/aiverselib/gameplay/Camera.h"
+#include "engine/gameplay/Camera.h"
 
 namespace aiverse::render {
 

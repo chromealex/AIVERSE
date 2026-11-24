@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // settlement-production: colony definitions, dynamic state, commands and validation.
 // Integer math only (needs/mood in 0..100000, work in "ticks at normal speed" x 1000), stable positive ids,
 // std::map iteration for deterministic order. Jobs reuse lib::Task claiming (Tasks.h) and stock reservations

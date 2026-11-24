@@ -1,0 +1,55 @@
+{
+  "id": "2026-11-22-physis-fire-textures",
+  "date": "2026-11-22",
+  "system": "physis",
+  "title": "PHYSIS: реалистичный огонь на земле и в огненном смерче",
+  "summary": "Пожар и огненный смерч PHYSIS теперь рисуются анимированными текстурами настоящего пламени вместо размытых оранжевых пятен.",
+  "body": [
+    "Горящая трава — это теперь небольшие языки пламени из анимированного флипбука. Они стоят основанием на земле, светятся аддитивно, но не выгорают в белое. Под ними мягкое свечение и свет огня, а дым идёт отдельным полупрозрачным флипбуком.",
+    "В огненном смерче языки пламени вытянуты вдоль спирали, у основания горит кольцо огня. Ядро светится и освещает всё вокруг, наружу летят искры, а сверху вихрь укрывает тёмный дым.",
+    "Текстуры взяты из бесплатного набора VFX-флипбуков Unity с лицензией CC0 и лежат в ассетах движка, поэтому огонь PHYSIS выглядит так в любой игре. Проект может заменить любой из эффектов своим."
+  ],
+  "status": "in-progress",
+  "verified": "Клиент игры на Mac (Metal), карта «Огненная долина»: пожар на земле крупным планом, огненный вихрь и общий план до и после замены текстур. Симуляция не изменилась: контрольные суммы прежние.",
+  "limits": "Огонь по-прежнему горит по крупным клеткам PHYSIS. Текстуры уменьшены до 1024 пикселей; на очень близком плане видно размытие кадров флипбука.",
+  "branch": "agent-physis-firestorm",
+  "commit": "",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-22-physis-fire-textures/fire-before-ground-fire.jpg",
+      "caption": "До: пожар из размытых пятен",
+      "captionEn": "Before: the fire as blurry blobs"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-22-physis-fire-textures/fire-after-ground-fire.jpg",
+      "caption": "После: языки пламени на земле",
+      "captionEn": "After: flame licks on the ground"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-22-physis-fire-textures/fire-after-firewhirl.jpg",
+      "caption": "Огненный смерч с новыми текстурами",
+      "captionEn": "The fire whirl with the new textures"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-22-physis-fire-textures/fire-after-wide.jpg",
+      "caption": "Общий план: пожар, огненный вихрь и водяной смерч на озере",
+      "captionEn": "Wide view: the fire, the fire whirl and a waterspout on the lake"
+    }
+  ],
+  "links": [
+    {
+      "title": "docs/physis.md",
+      "href": "docs/physis.md"
+    }
+  ],
+  "author": "physis",
+  "titleEn": "PHYSIS: realistic fire on the ground and in fire whirls",
+  "summaryEn": "PHYSIS wildfires and fire whirls are now drawn with animated textures of real flame instead of blurry orange blobs.",
+  "bodyEn": [
+    "Burning grass is now made of small flame licks from an animated flipbook. They stand on the ground, glow additively without burning out to white, with a soft glow and fire light below them, and smoke comes as a separate translucent flipbook.",
+    "In a fire whirl the flame tongues are stretched along the spiral, with a ring of fire at the base. The core glows and lights its surroundings, sparks fly out, and dark smoke covers the top of the vortex.",
+    "The textures come from Unity's free VFX flipbook set under CC0 and live in the engine assets, so PHYSIS fire looks like this in every game. A project can replace any of the effects with its own."
+  ],
+  "verifiedEn": "Game client on a Mac (Metal), Firestorm Valley map: ground fire close-up, the fire whirl and a wide view before and after the texture change. The simulation is unchanged: checksums are the same.",
+  "limitsEn": "Fire still burns on coarse PHYSIS cells. The textures are downscaled to 1024 pixels, so flipbook frames look soft in extreme close-ups."
+}

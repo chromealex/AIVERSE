@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Loader2 } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { onNativeEvent } from '../bridge';
 import type { ProjectLoadState } from './ProjectLoading';
 import { pickSky, splashStages } from './projectSplashLogic';
@@ -10,6 +10,7 @@ import skyDay from '../assets/splash/sky-day.jpg';
 import skyDusk from '../assets/splash/sky-dusk.jpg';
 import skyStorm from '../assets/splash/sky-storm.jpg';
 import './ProjectSplash.css';
+import { StudioLoader } from '../ui';
 
 /** Engine renders of the PhysicalSky (build/claude/studio-sky-shots.command): the default background when a game has no splash art. */
 const SKIES = [skyDawn, skyGolden, skyDay, skyDusk, skyStorm];
@@ -83,7 +84,7 @@ export default function ProjectSplash({ state, onClose, onHub }: { state: Projec
       </div> : <>
         <div className="psplash__stages">
           {stages.steps.map(s => <span key={s.label} className={'is-' + s.state}>
-            {s.state === 'done' ? <Check size={11}/> : s.state === 'active' ? <Loader2 size={11} className="psplash__spin"/> : null}{s.label}</span>)}
+            {s.state === 'done' ? <Check size={11}/> : s.state === 'active' ? <StudioLoader size={14}/> : null}{s.label}</span>)}
           <em>{elapsed.toFixed(1)} s</em>
         </div>
         <div className="psplash__bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(stages.ratio * 100)}>

@@ -22,8 +22,14 @@
 //         from windWithStormsAt (forces -> nature stress -> fracture outbox).
 // Fixed-point only, stable entity-index order, explicit RNG: lockstep / replay
 // safe. No renderer, audio, Box3D, NEREID, TerraWeave or genre dependency.
+//
+// Optional TornadoNature on the same entity (PhysisTornadoNature.h, every map
+// tornado has one) adds the fire whirl (drawn fire -> fireness, ignition,
+// embers, heat damage), water (land tornado weakens over water, waterspouts)
+// and ground scour. Without it the pass is exactly the one above.
 #pragma once
 #include "PhysisStorm.h"
+#include "PhysisTornadoNature.h"
 #include "engine/core/Archive.h"
 #include "engine/core/FixedMath.h"
 #include "engine/sim/CommonComponents.h"
@@ -116,14 +122,18 @@ inline void io(Archive& a, NatureCarriable& v) {
 
 // Host damage: target entity (has a Transform), amount (host units, e.g. hp),
 // source = the tornado entity. Called in stable entity-index order.
+// waterDepth: open surface water at (x, z) in metres (0 = dry), from the host
+// (Simulation: GameModule::environmentWaterDepth). Must be deterministic.
 struct TornadoHooks {
     Fixed secondsPerTick = Fixed::fromRatio(1, 20);
     void* user = nullptr;
     void (*damage)(void* user, Entity target, Fixed amount, Entity source) = nullptr;
+    Fixed (*waterDepth)(void* user, Fixed x, Fixed z) = nullptr;
 };
 
 struct TornadoTickStats {
     std::uint32_t active = 0, debris = 0, carried = 0, damaged = 0;
+    std::uint32_t embers = 0, ignitions = 0, scoured = 0;
 };
 
 namespace tornado_detail {
@@ -224,6 +234,19 @@ inline Entity spawnTornado(World& world, StormEvent storm, TornadoTrack track) {
     return e;
 }
 
+// Same, with fire / water / soil behaviour (PhysisTornadoNature.h). Register
+// persistence with InstallOptions::enableTornadoes (it covers TornadoNature).
+inline Entity spawnTornado(World& world, StormEvent storm, TornadoTrack track,
+                           const TornadoNature& nature) {
+    const Entity e = spawnTornado(world, std::move(storm), std::move(track));
+    TornadoNature n = nature;
+    if (n.rng == 0) n.rng = 1;
+    world.add<TornadoNature>(e, n);
+    if (!world.resourceConst<GroundScourField>()) world.setResource<GroundScourField>(GroundScourField{});
+    if (!world.resourceConst<TornadoEmberField>()) world.setResource<TornadoEmberField>(TornadoEmberField{});
+    return e;
+}
+
 namespace tornado_detail {
 inline void moveTornado(const World& world, StormEvent& storm, TornadoTrack& t) {
     const Vec3 before = storm.center;
@@ -315,6 +338,224 @@ inline void fireEffects(World& world, const StormEvent& storm, const TornadoTrac
             }
         }
 }
+
+// ---------------------------------------------------------------- nature
+
+// Open water depth at a point: host water (NEREID / map water through the
+// hook) or the PHYSIS local shallow-flood depth, whichever is deeper.
+inline Fixed waterDepthAt(const World& world, const TornadoHooks& hooks, Vec3 p) {
+    Fixed d{};
+    if (hooks.waterDepth) d = fxMax(d, hooks.waterDepth(hooks.user, p.x, p.z));
+    const Entity cell = cellAtPosition(world, p);
+    if (cell != kNullEntity)
+        if (const auto* hz = world.tryGetConst<HazardCell>(cell)) d = fxMax(d, hz->waterDepth);
+    return d;
+}
+
+// Over water when at least 3 of 5 samples (centre + 4 on the core ring) are.
+inline bool vortexOverWater(const World& world, const TornadoHooks& hooks,
+                            const StormEvent& storm, const TornadoNature& n) {
+    const Fixed r = storm.eyeRadiusMeters;
+    const Vec3 c = storm.center;
+    const Vec3 pts[5] = {c, {c.x + r, c.y, c.z}, {c.x - r, c.y, c.z},
+                         {c.x, c.y, c.z + r}, {c.x, c.y, c.z - r}};
+    int wet = 0;
+    for (const Vec3& p : pts)
+        if (waterDepthAt(world, hooks, p) >= n.waterThresholdMeters) ++wet;
+    return wet >= 3;
+}
+
+// Surface factor: classification, vigor loss on the hostile surface, recovery
+// on its own, dissipation. Returns the wind scale (vigor x type strength).
+inline Fixed natureSurface(TornadoNature& n, bool overWater) {
+    if (!n.classified) {
+        n.waterspout = n.kind == TornadoSurfaceKind::Water ||
+                       (n.kind == TornadoSurfaceKind::Auto && overWater);
+        n.classified = true;
+    }
+    if (overWater != n.overWater) n.surfaceTicks = 0;
+    else if (n.surfaceTicks < 0xffffffffu) ++n.surfaceTicks;
+    n.overWater = overWater;
+    const bool hostile = n.waterspout ? !overWater : overWater;
+    const Fixed one = Fixed::fromInt(1);
+    if (hostile) n.vigor -= n.waterspout ? n.spoutLandDecayPerTick : n.waterDecayPerTick;
+    else n.vigor += n.recoverPerTick;
+    n.vigor = fxClamp(n.vigor, Fixed{}, one);
+    if (n.vigor <= Fixed{}) n.dissipated = true;
+    return n.waterspout ? n.vigor * n.spoutStrength : n.vigor;
+}
+
+struct NatureCellVisit {
+    Entity cell;
+    std::int64_t gx, gz;
+    Fixed weight;   // 1 in the core, linear to 0 at the outer ring
+    bool core;
+};
+
+// PHYSIS grid cells under the vortex (core + ring), row-major order.
+inline std::vector<NatureCellVisit> cellsUnder(const World& world, const StormEvent& storm) {
+    std::vector<NatureCellVisit> out;
+    const auto* state = world.resourceConst<State>();
+    if (!state) return out;
+    const auto cs = std::int64_t(state->settings.cellSizeMeters);
+    const Fixed outer = storm.outerRadiusMeters, core = storm.eyeRadiusMeters;
+    const std::int64_t gx0 = std::max<std::int64_t>(floorDiv((storm.center.x - outer).floorInt(), cs), state->settings.originX);
+    const std::int64_t gz0 = std::max<std::int64_t>(floorDiv((storm.center.z - outer).floorInt(), cs), state->settings.originZ);
+    const std::int64_t gx1 = std::min<std::int64_t>(floorDiv((storm.center.x + outer).floorInt(), cs),
+                                                    std::int64_t(state->settings.originX) + state->settings.width - 1);
+    const std::int64_t gz1 = std::min<std::int64_t>(floorDiv((storm.center.z + outer).floorInt(), cs),
+                                                    std::int64_t(state->settings.originZ) + state->settings.height - 1);
+    const Fixed half = Fixed::fromRatio(cs, 2);
+    for (std::int64_t gz = gz0; gz <= gz1; ++gz)
+        for (std::int64_t gx = gx0; gx <= gx1; ++gx) {
+            const Entity e = cellAt(world, std::int32_t(gx), std::int32_t(gz));
+            if (e == kNullEntity) continue;
+            const Vec3 mid{Fixed::fromInt(gx * cs) + half, Fixed{}, Fixed::fromInt(gz * cs) + half};
+            const Fixed d = horizontalDistance(mid, storm.center);
+            if (d >= outer + half) continue;
+            const bool inCore = d <= core + half;
+            out.push_back({e, gx, gz, inCore ? Fixed::fromInt(1) : falloff(d, core + half, outer + half), inCore});
+        }
+    return out;
+}
+
+// Fire whirl: draws fire into heat, blows out (scaled by 1 - fireness) or
+// fans it, ignites fuel on the path; then updates heat / fireness.
+inline std::uint32_t natureFire(World& world, const StormEvent& storm, const TornadoTrack& t,
+                                TornadoNature& n, Fixed intensity) {
+    std::uint32_t ignitions = 0;
+    const Fixed one = Fixed::fromInt(1);
+    n.absorbed = Fixed{};
+    const auto* state = world.resourceConst<State>();
+    if (n.fire && state && world.resourceConst<DisasterState>() && intensity > Fixed{}) {
+        const auto cs = std::int64_t(state->settings.cellSizeMeters);
+        const Fixed area = Fixed::fromInt(cs * cs);
+        const Fixed fireness = n.fireness;
+        for (const auto& v : cellsUnder(world, storm)) {
+            auto* hz = world.tryGet<HazardCell>(v.cell);
+            if (!hz) continue;
+            // Over water the vortex draws no fire (it is quenched instead).
+            if (hz->fire > Fixed{} && !n.overWater) {
+                const Fixed drawn = fxMin(hz->fire, hz->fire * fxClamp(n.intakePerTick * intensity * v.weight, Fixed{}, one));
+                hz->fire -= drawn;
+                n.absorbed += drawn * area;
+                if (v.core) {
+                    const Fixed cut = fxClamp(t.fireSuppression * intensity * (one - fireness), Fixed{}, one);
+                    hz->fire = fxClamp(hz->fire - hz->fire * cut, Fixed{}, one);
+                } else if (hz->fuel > Fixed{}) {
+                    const Fixed gain = t.fireFanning * intensity * v.weight * (one + fireness);
+                    hz->fire = fxClamp(hz->fire + hz->fire * gain, Fixed{}, one);
+                }
+            }
+            // A burning vortex sets fuel on fire on its path (not over water).
+            const Fixed strength = fxClamp(n.igniteStrength * fireness, Fixed{}, one);
+            if (!n.overWater && fireness > Fixed::fromRatio(1, 50) && hz->fuel > Fixed{} &&
+                hz->waterDepth < n.waterThresholdMeters && hz->fire < strength &&
+                n.ignitePerTick > Fixed{}) {
+                const Fixed chance = n.ignitePerTick * fireness * intensity * v.weight;
+                if (unit(n.rng) < chance) { hz->fire = strength; ++ignitions; }
+            }
+        }
+    }
+    // Heat balance: drawn fire in, relative decay out, quenched over water.
+    Fixed loss = n.heat * n.heatDecayPerTick;
+    if (n.overWater) loss += n.heat * n.quenchPerTick;
+    n.heat = fxClamp(n.heat + n.absorbed - loss, Fixed{}, Fixed::fromInt(1000000));
+    if (n.heat < Fixed::fromRatio(1, 1000)) n.heat = Fixed{};
+    n.fireness = n.heat > Fixed{} ? fxClamp(n.heat / (n.heat + fxMax(n.halfHeat, Fixed::fromRatio(1, 100))),
+                                            Fixed{}, one) : Fixed{};
+    return ignitions;
+}
+
+// Scour under the core (land only), soil carried, dropped in a band around it.
+inline std::uint32_t natureScour(World& world, const StormEvent& storm, TornadoNature& n,
+                                 Fixed intensity) {
+    auto* field = world.resource<GroundScourField>();
+    if (!field || field->cellMeters <= 0) return 0;
+    const Fixed one = Fixed::fromInt(1);
+    if (n.overWater) {   // what it carried falls into the water
+        n.soil = fxMax(Fixed{}, n.soil - n.soil * fxClamp(n.depositPerTick * 4, Fixed{}, one));
+        return 0;
+    }
+    if (intensity <= Fixed{} || (n.scourPerTick <= Fixed{} && n.soil <= Fixed{})) return 0;
+    const std::int32_t cm = field->cellMeters;
+    const Fixed area = Fixed::fromInt(std::int64_t(cm) * cm);
+    const Fixed core = storm.eyeRadiusMeters;
+    const Fixed inner = core / 2, scourEdge = core + core / 2, bandEdge = core * 5 / 2;
+    const Fixed halfCell = Fixed::fromRatio(cm, 2);
+    const auto gx0 = scour_detail::floorDivFixed(storm.center.x - bandEdge, cm);
+    const auto gx1 = scour_detail::floorDivFixed(storm.center.x + bandEdge, cm);
+    const auto gz0 = scour_detail::floorDivFixed(storm.center.z - bandEdge, cm);
+    const auto gz1 = scour_detail::floorDivFixed(storm.center.z + bandEdge, cm);
+    if (gx1 - gx0 > 512 || gz1 - gz0 > 512) return 0;   // vortex far larger than the scour grid
+    std::vector<ScourChange> removal;
+    std::vector<std::pair<std::int32_t, std::int32_t>> band;
+    const Fixed strength = intensity * intensity;
+    const bool room = n.soil < n.soilCapacity;
+    for (std::int64_t gz = gz0; gz <= gz1; ++gz)
+        for (std::int64_t gx = gx0; gx <= gx1; ++gx) {
+            const Vec3 mid{Fixed::fromInt(gx * cm) + halfCell, Fixed{}, Fixed::fromInt(gz * cm) + halfCell};
+            const Fixed d = horizontalDistance(mid, storm.center);
+            if (d < scourEdge) {
+                if (!room || n.scourPerTick <= Fixed{}) continue;
+                // Standing water under the point (puddle / flood) is not scoured.
+                const Entity cell = cellAtPosition(world, mid);
+                if (cell != kNullEntity)
+                    if (const auto* hz = world.tryGetConst<HazardCell>(cell);
+                        hz && hz->waterDepth >= n.waterThresholdMeters) continue;
+                const Fixed w = falloff(d, inner, scourEdge);
+                const Fixed depth = n.scourPerTick * strength * w;
+                if (depth > Fixed{}) removal.push_back({std::int32_t(gx), std::int32_t(gz), -depth});
+            } else if (d < bandEdge) {
+                band.push_back({std::int32_t(gx), std::int32_t(gz)});
+            }
+        }
+    std::uint32_t touched = std::uint32_t(removal.size());
+    const Fixed removed = -applyScour(*field, std::move(removal), n.maxScourMeters);   // m^3, >= 0
+    n.soil = fxMin(n.soilCapacity, n.soil + fxMax(Fixed{}, removed));
+    if (!band.empty() && n.soil > Fixed{} && n.depositPerTick > Fixed{}) {
+        const Fixed drop = n.soil * fxClamp(n.depositPerTick, Fixed{}, one);
+        const Fixed each = drop / (area * std::int64_t(band.size()));
+        if (each > Fixed{}) {
+            std::vector<ScourChange> deposit;
+            deposit.reserve(band.size());
+            for (const auto& [x, z] : band) deposit.push_back({x, z, each});
+            const Fixed put = applyScour(*field, std::move(deposit), n.maxScourMeters);
+            n.soil = fxMax(Fixed{}, n.soil - fxMax(Fixed{}, put));
+            touched += std::uint32_t(band.size());
+        }
+    }
+    return touched;
+}
+
+// Embers thrown from the fire ring; carried by the vortex wind.
+inline void spawnEmbers(World& world, Entity e, const StormEvent& storm, TornadoNature& n,
+                        Fixed intensity, std::uint32_t alive) {
+    if (n.emberPerTick <= Fixed{} || n.maxEmbers == 0 || n.overWater ||
+        n.fireness < Fixed::fromRatio(1, 20) || !world.resourceConst<DisasterState>()) return;
+    auto* field = world.resource<TornadoEmberField>();
+    if (!field) return;
+    n.emberAccumulator = fxMin(n.emberAccumulator + n.emberPerTick * n.fireness * intensity,
+                               Fixed::fromInt(64));
+    while (n.emberAccumulator >= Fixed::fromInt(1) && alive < n.maxEmbers && field->embers.size() < 1024) {
+        n.emberAccumulator -= Fixed::fromInt(1);
+        TornadoEmber p;
+        p.id = field->nextId++;
+        if (field->nextId == 0) field->nextId = 1;
+        p.owner = e;
+        const Fixed angle = unit(n.rng);
+        const Fixed r = storm.eyeRadiusMeters * (Fixed::fromInt(1) + unit(n.rng));
+        p.position = storm.center;
+        p.position.x = p.position.x + fxCosTurns(angle) * r;
+        p.position.z = p.position.z + fxSinTurns(angle) * r;
+        p.position.y = groundAt(world, p.position, storm.center.y) + storm.eyeRadiusMeters * 2 +
+                       unit(n.rng) * storm.eyeRadiusMeters * 4;
+        p.velocity = windWithStormsAt(world, p.position) * Fixed::fromRatio(1, 2);
+        p.lifeTicks = n.emberLifeTicks;
+        field->embers.push_back(p);
+        ++alive;
+    }
+}
 } // namespace tornado_detail
 
 // The tornado pass. Runs once per committed PHYSIS tick, after the climate /
@@ -368,21 +609,78 @@ inline TornadoTickStats advanceTornadoes(World& world, const TornadoHooks& hooks
         field->pieces = std::move(kept);
     }
 
+    // 1b) Embers of fire whirls: carried, burn out in the air, ignite fuel
+    // where they land (chance from the owner's TornadoNature, own RNG).
+    std::vector<std::pair<Entity, std::uint32_t>> embersAlive;
+    if (auto* embers = world.resource<TornadoEmberField>(); embers && !embers->embers.empty()) {
+        std::vector<TornadoEmber> kept;
+        kept.reserve(embers->embers.size());
+        for (auto p : embers->embers) {
+            ++p.ageTicks;
+            carryStep(world, p.position, p.velocity, Fixed::fromRatio(1, 20), Fixed::fromRatio(1, 100),
+                      Fixed::fromInt(1), dt);
+            const Fixed ground = groundAt(world, p.position, Fixed{});
+            if (p.position.y <= ground) {
+                auto* owner = world.tryGet<TornadoNature>(p.owner);
+                const Entity cell = cellAtPosition(world, p.position);
+                auto* hz = cell != kNullEntity ? world.tryGet<HazardCell>(cell) : nullptr;
+                if (owner && hz && hz->fuel > Fixed{} && hz->fire < Fixed::fromRatio(1, 2) &&
+                    waterDepthAt(world, hooks, p.position) < owner->waterThresholdMeters &&
+                    world.resourceConst<DisasterState>() && unit(owner->rng) < owner->emberIgnite) {
+                    hz->fire = Fixed::fromRatio(1, 2);
+                    ++embers->ignitions;
+                    ++stats.ignitions;
+                }
+                continue;   // landed: gone
+            }
+            if (p.ageTicks >= p.lifeTicks) continue;   // burned out in the air
+            auto it = std::find_if(embersAlive.begin(), embersAlive.end(),
+                                   [&](const auto& a) { return a.first == p.owner; });
+            if (it == embersAlive.end()) embersAlive.push_back({p.owner, 1}); else ++it->second;
+            kept.push_back(p);
+        }
+        embers->embers = std::move(kept);
+    }
+
     // 2) Each tornado: life envelope, effects at the current centre, move.
     std::vector<std::pair<Entity, Fixed>> hits;
     for (const Entity e : tornadoes) {
         auto* storm = world.tryGet<StormEvent>(e);
         auto* track = world.tryGet<TornadoTrack>(e);
         if (!storm || !track) continue;
-        const Fixed intensity = tornadoEnvelope(*storm, *track, now);
+        Fixed intensity = tornadoEnvelope(*storm, *track, now);
+        auto* nature = world.tryGet<TornadoNature>(e);
+        if (nature) {
+            if (nature->dissipated) intensity = Fixed{};
+            else if (intensity > Fixed{}) {
+                const bool wet = vortexOverWater(world, hooks, *storm, *nature);
+                const Fixed env = intensity;
+                intensity = env * natureSurface(*nature, wet);
+                nature->spray = wet ? fxClamp(env * nature->vigor, Fixed{}, Fixed::fromInt(1)) : Fixed{};
+                if (nature->dissipated) { intensity = Fixed{}; storm->enabled = false; }
+            }
+            if (intensity <= Fixed{}) nature->spray = Fixed{};
+        }
         track->intensity = intensity;
         storm->tangentialWind = track->baseTangential * intensity;
         storm->updraft = track->baseUpdraft * intensity;
         storm->radialInflow = track->baseInflow * intensity;
-        if (intensity <= Fixed{}) { track->lastMove = {}; continue; }
+        if (intensity <= Fixed{}) {
+            track->lastMove = {};
+            if (nature) (void)natureFire(world, *storm, *track, *nature, Fixed{});   // heat decays
+            continue;
+        }
         ++stats.active;
 
-        fireEffects(world, *storm, *track, intensity);
+        if (nature) {
+            stats.ignitions += natureFire(world, *storm, *track, *nature, intensity);
+            stats.scoured += natureScour(world, *storm, *nature, intensity);
+            std::uint32_t mine = 0;
+            for (const auto& a : embersAlive) if (a.first == e) mine = a.second;
+            spawnEmbers(world, e, *storm, *nature, intensity, mine);
+        } else {
+            fireEffects(world, *storm, *track, intensity);
+        }
 
         // Debris torn up inside the core.
         if (track->maxDebris > 0 && track->debrisPerTick > Fixed{}) {
@@ -446,6 +744,30 @@ inline TornadoTickStats advanceTornadoes(World& world, const TornadoHooks& hooks
             if (!storm || !track) continue;
         }
 
+        // Heat of a fire whirl: burns host entities within the outer ring.
+        nature = world.tryGet<TornadoNature>(e);
+        if (hooks.damage && nature && nature->heatDamagePerTick > Fixed{} &&
+            nature->fireness > Fixed::fromRatio(1, 50)) {
+            const Fixed core = storm->eyeRadiusMeters, reach = storm->outerRadiusMeters;
+            const Fixed scale = nature->heatDamagePerTick * nature->fireness * intensity;
+            world.eachExistingConst<Transform>([&](Entity target, const Transform& tr) {
+                if (fxAbs(tr.pos.x - storm->center.x) > reach ||
+                    fxAbs(tr.pos.z - storm->center.z) > reach) return;
+                if (world.tryGetConst<StormEvent>(target)) return;
+                const Fixed amount = scale * falloff(horizontalDistance(tr.pos, storm->center), core, reach);
+                if (amount > Fixed{}) hits.push_back({target, amount});
+            });
+            std::sort(hits.begin(), hits.end(), [](const auto& a, const auto& b) {
+                return a.first.packed() < b.first.packed();
+            });
+            for (const auto& [target, amount] : hits) hooks.damage(hooks.user, target, amount, e);
+            stats.damaged += std::uint32_t(hits.size());
+            hits.clear();
+            storm = world.tryGet<StormEvent>(e);
+            track = world.tryGet<TornadoTrack>(e);
+            if (!storm || !track) continue;
+        }
+
         moveTornado(world, *storm, *track);
     }
 
@@ -484,6 +806,8 @@ inline TornadoTickStats advanceTornadoes(World& world, const TornadoHooks& hooks
         tr->pos = p;
     }
     if (field) stats.debris = std::uint32_t(field->pieces.size());
+    if (const auto* embers = world.resourceConst<TornadoEmberField>())
+        stats.embers = std::uint32_t(embers->embers.size());
     return stats;
 }
 

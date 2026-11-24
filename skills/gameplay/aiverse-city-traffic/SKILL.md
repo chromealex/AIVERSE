@@ -5,7 +5,7 @@ description: Set up and extend road traffic in any AIVERSE project - lane cars, 
 
 # city-traffic
 
-Behaviour and format: `docs/traffic.md`. Simulation: `engine/game/Traffic.*`, `engine/game/TrafficCity.cpp` (incidents, services), `engine/game/TrafficPopulation.cpp` / `engine/game/TrafficCommute.cpp` (population), `engine/game/TrafficGangs.cpp`, `engine/game/TrafficRoads.cpp` (spline roads). Kernels: `libraries/include/aiverselib/mechanics/Traffic.h` and `libraries/include/aiverselib/mechanics/traffic/TrafficRoutes.h` (`AIVERSE::lib_city_traffic`). Tests: `aiverse_tests traffic_`, `tests/libraries/city_tests.cpp`.
+Behaviour and format: `docs/traffic.md`. Simulation: `engine/game/Traffic.*`, `engine/game/TrafficCity.cpp` (incidents, services), `engine/game/TrafficPopulation.cpp` / `engine/game/TrafficCommute.cpp` (population), `engine/game/TrafficGangs.cpp`, `engine/game/TrafficRoads.cpp` (spline roads). Kernels: `engine/mechanics/Traffic.h` and `engine/mechanics/traffic/TrafficRoutes.h` (`AIVERSE::lib_city_traffic`). Tests: `aiverse_tests traffic_`, `tests/libraries/city_tests.cpp`.
 
 1. Prerequisites: vehicles in `driving.vehicles` (`skills/gameplay/aiverse-driving`), roads as tiles listed in `traffic.roads.tiles` or a spline `roadNetwork` (`skills/world/aiverse-roads`, `"roads": {"network": true}`).
 2. Rules `traffic`: `cars`, `buses` (stop types or bays), `emergency`, `signals` (+ `lights` prop types with `view.light`), `pedestrians` (walk tiles, `panic`). Loader errors name the key; fix them before anything else.
@@ -14,7 +14,6 @@ Behaviour and format: `docs/traffic.md`. Simulation: `engine/game/Traffic.*`, `e
 5. Native modules: build a net with `buildTrafficNet` (or read the engine's), signals with `trafficLight` / `trafficWalk`, pedals with `trafficDriverInput`, sidewalks with `trafficWalkRoute`; large vehicles: `trafficWideExit` (prefers carriageways of `minWidth`, first and last piece always allowed), blockages: `trafficLocalDetour` (bounded lattice, then the normal collision checks). Give cars pedals through `vehicles::setAutopilot` (engine/vehicles; grid map: `Driving::setAutopilot`), never by moving them.
 6. Checks: same seed, same checksum; maps without `traffic` keep theirs; screenshots of a junction (lights, stop lines) and of a crossing on "walk".
 
-Current host: the traffic simulation runs on the legacy `modules/rts` host only; running it elsewhere needs the
-extraction listed as debt G3 in `docs/no-genre-split-audit.md` - extract, do not reimplement.
+Host: the traffic simulation is a system of `engine/game` (GameCore, the one host for every project).
 
-Game-specific type ids or variable names never go into `modules/rts`: put them in rules data or the game's `native/`.
+Game-specific type ids or variable names never go into `engine/game`: put them in rules data or the game's `native/`.

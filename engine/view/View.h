@@ -2,9 +2,9 @@
 // View owns ONLY rendered scene state. Gameplay modules adapt their entities
 // into ViewObjects; the scene doesn't know what genre produced those objects.
 #pragma once
-#include <aiverselib/animation/MotionWeaveSourceBridge.h>
-#include <aiverselib/animation/AnimationBudgetPolicy.h>
-#include <aiverselib/motionweave/MotionWeave.h>
+#include "engine/animation/MotionWeaveSourceBridge.h"
+#include "engine/animation/AnimationBudgetPolicy.h"
+#include "engine/animation/MotionWeave.h"
 #include "engine/render/Renderer3D.h"
 #include "SceneLayerProviders.h"
 #include "ModelComposition.h"

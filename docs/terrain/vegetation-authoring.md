@@ -22,7 +22,7 @@ Build target `aiverse_terraweave_vegetation`. Example:
 
 ```sh
 aiverse_terraweave_vegetation --out /new/forest-pack \
-  --materials /engine/engine/assets/materials/vegetation/textures \
+  --materials "$(python3 tools/pkg/aiverse_pkg.py fetch vegetation-pbr)/textures" \
   --seed 2718 --ground /project/ground.json
 ```
 
@@ -111,7 +111,7 @@ explicitDeciduous fixes larch without treating every conifer as evergreen.
 Native ForestAdapter consumes this habit for seasonal materials.
 
 ```
-aiverse_terraweave_vegetation --out NEW_DIR --materials engine/assets/materials/vegetation/textures --catalog botanical --variants 4 --seed 2718 --season summer --age-ticks 100 --mature-ticks 100
+aiverse_terraweave_vegetation --out NEW_DIR --materials "$(python3 tools/pkg/aiverse_pkg.py fetch vegetation-pbr)/textures" --catalog botanical --variants 4 --seed 2718 --season summer --age-ticks 100 --mature-ticks 100
 ```
 
 `--season winter` removes deciduous foliage while preserving bark; evergreen
@@ -140,7 +140,7 @@ acceptance remains required. Branch junction welding and mature roots remain
 separate unfinished art work; do not call these source recipes SpeedTree parity.
 
 Four new bundled1024px PBR leaf families:birch/maple/apple/willow. Original
-AI-generated2x2 cutouts and prompt provenance are in tools/vegetation/pbr_sources.
+AI-generated2x2 cutouts and prompt provenance are in the `vegetation-pbr-sources` catalog package.
 Bake new families without replacing existing tuned bark:
 
 ```
@@ -326,7 +326,7 @@ five-layer normal-atlas authoring modes remain available. Height mode needs the
 terrain catalog alongside the source textures for per-family physical amplitudes.
 No geometry displacement, erosion or real GPU speedup follows from sample count.
 Dominant-axis projection remains; severe cliff transitions still need acceptance.
-Granite/schist source prompts and seam processing are in pbr_sources/README.md.
+Granite/schist source prompts and seam processing are in the README of the `terrain-pbr-sources` catalog package.
 
 For a long-distance showcase, explicitly author existing lighting.fogDensity
 in the project. Renderer default.0025 can wash out a small alpine scene; the
@@ -341,7 +341,7 @@ the existing patches from them:
 
 ```sh
 # 1. prototypes: a flat ground.json with 6..8 patches of ~120x120 cm, ~160 blades
-aiverse_terraweave_vegetation --out /new/clumps --materials $ENGINE/engine/assets/materials/vegetation/textures \
+aiverse_terraweave_vegetation --out /new/clumps --materials "$(python3 tools/pkg/aiverse_pkg.py fetch vegetation-pbr)/textures" \
   --ground clumps-ground.json --seed 4242
 # 2. replace the patch entities of a map (run on a copy: map and rules are rewritten)
 python3 tools/terrain/grass_clump_field.py --project P --map maps/valley.json --clumps /new/clumps \

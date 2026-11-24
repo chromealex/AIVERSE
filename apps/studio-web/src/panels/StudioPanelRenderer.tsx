@@ -50,6 +50,8 @@ import HumanCreatorPanel from './generated/HumanCreatorPanel';
 import WorldPersistencePanel from './WorldPersistencePanel';
 import TerraweaveGeneratorPanel from './generated/TerraweaveGeneratorPanel';
 
+import CatalogPanel from './generated/CatalogPanel';
+
 export interface StudioPanelContext {
   snapshot: StudioSnapshot | null;
   busy: boolean;
@@ -161,6 +163,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'human_creator': return <HumanCreatorPanel snapshot={snapshot}/>;
       case 'terraweave_generator': return <TerraweaveGeneratorPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'world_persistence': return <WorldPersistencePanel projectPath={snapshot?.project.path ?? ''}/>;
+      case 'catalog': return <CatalogPanel snapshot={snapshot}/>;
       // AI_PANEL_CASES: add new panel renderers above this line.
       case 'game': return <GamePanel {...ctx}/>;
       case 'animation': return <AnimationTimeline snapshot={snapshot} showPanel={ctx.showPanel}/>;

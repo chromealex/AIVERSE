@@ -100,6 +100,32 @@ Generated from `libraries/spec/gameplay.json`. Integer values are literal intege
 | locomotion | vaultMinSpeedMilli | integer | 4000 | 0..100000 |
 | locomotion | vaultTicks | integer | 14 | 2..3600 |
 | locomotion | mantleTicks | integer | 30 | 2..3600 |
+| locomotion | dashEnabled | boolean | true |  |
+| locomotion | dashSpeedMilli | integer | 14000 | 0..100000 |
+| locomotion | dashEndSpeedMilli | integer | 6000 | 0..100000 |
+| locomotion | dashTicks | integer | 10 | 1..3600 |
+| locomotion | dashCooldownTicks | integer | 30 | 0..3600 |
+| locomotion | airDashes | integer | 1 | 0..16 |
+| locomotion | wallSlideEnabled | boolean | true |  |
+| locomotion | wallSlideSpeedMilli | integer | 2500 | 0..100000 |
+| locomotion | wallRunEnabled | boolean | true |  |
+| locomotion | wallRunSpeedMilli | integer | 8000 | 0..100000 |
+| locomotion | wallRunMinSpeedMilli | integer | 4000 | 0..100000 |
+| locomotion | wallRunGravityScaleMilli | integer | 250 | 0..2000 |
+| locomotion | wallRunTicks | integer | 90 | 1..3600 |
+| locomotion | wallRunCooldownTicks | integer | 12 | 0..3600 |
+| locomotion | grappleEnabled | boolean | true |  |
+| locomotion | grappleSwing | boolean | false |  |
+| locomotion | grappleMaxLengthMilli | integer | 30000 | 0..1000000 |
+| locomotion | grappleSpeedMilli | integer | 18000 | 0..100000 |
+| locomotion | grappleArriveMilli | integer | 1000 | 0..10000 |
+| locomotion | grappleReelSpeedMilli | integer | 4000 | 0..100000 |
+| locomotion | grappleTicks | integer | 300 | 1..36000 |
+| locomotion | oneWayDropTicks | integer | 12 | 0..3600 |
+| locomotion | wallReattachTicks | integer | 12 | 0..3600 |
+| locomotion | glideEnabled | boolean | true |  |
+| locomotion | glideFallSpeedMilli | integer | 1500 | 0..100000 |
+| locomotion | glideForwardSpeedMilli | integer | 8000 | 0..100000 |
 | melee | windup | integer | 6 | 0..3600 |
 | melee | active | integer | 4 | 1..3600 |
 | melee | recovery | integer | 12 | 0..3600 |
@@ -474,6 +500,9 @@ Constraint: `locomotion.swimEnterDepthMilli <= locomotion.swimFloatDepthMilli` (
 Constraint: `locomotion.swimFloatDepthMilli <= locomotion.swimDiveDepthMilli` (checked by loader and CLI).
 Constraint: `locomotion.mantleMinHeightMilli <= locomotion.vaultMaxHeightMilli` (checked by loader and CLI).
 Constraint: `locomotion.vaultMaxHeightMilli <= locomotion.mantleMaxHeightMilli` (checked by loader and CLI).
+Constraint: `locomotion.dashEndSpeedMilli <= locomotion.dashSpeedMilli` (checked by loader and CLI).
+Constraint: `locomotion.wallRunMinSpeedMilli <= locomotion.wallRunSpeedMilli` (checked by loader and CLI).
+Constraint: `locomotion.grappleArriveMilli <= locomotion.grappleMaxLengthMilli` (checked by loader and CLI).
 Constraint: `combat.dodgeInvulnFrom <= combat.dodgeInvulnTo` (checked by loader and CLI).
 Constraint: `combat.dodgeInvulnTo <= combat.dodgeTicks` (checked by loader and CLI).
 Constraint: `combat.lockRangeMilli <= combat.lockBreakMilli` (checked by loader and CLI).

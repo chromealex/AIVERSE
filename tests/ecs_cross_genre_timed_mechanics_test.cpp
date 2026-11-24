@@ -1,6 +1,6 @@
 // Cross-genre ECS reload, regeneration and time-to-live contract.
 // Same systems run in a shooter, an RTS-like host and optional COW snapshots.
-#include <aiverselib/mechanics/EcsTimedMechanics.h>
+#include "engine/mechanics/EcsTimedMechanics.h"
 #include <cstdint>
 #include <iostream>
 #include <memory>

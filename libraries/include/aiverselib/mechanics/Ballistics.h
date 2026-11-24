@@ -1,10 +1,10 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Penetration through material layers, radial explosions and ballistic launch/lead solving.
 // Composes Weapons.h; damage, health, impulses and ownership stay with the authoritative owner.
 // All functions are pure (no hidden state): call them from the owning tick/handler with integer
 // ticks and Fixed values. Invalid inputs return std::nullopt without invoking callbacks.
-#include "Weapons.h"
+#include "engine/mechanics/Weapons.h"
 #include <algorithm>
 #include <cstdint>
 #include <map>

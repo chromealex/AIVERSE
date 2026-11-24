@@ -6,7 +6,7 @@
 之后可以随意修改。
 
 代码：`apps/editor/core/GameWizard*.cpp`（无 UI）、`apps/editor/core/WizardOps.cpp`（MCP）、`apps/editor/EditorGameWizard.cpp`
-（项目中心页面）。复制到每个游戏中的运行时套件：`templates/_wizard/`（Lua + RmlUi，见其 README）。
+（项目中心页面）。复制到每个游戏中的运行时套件：`tools/wizard/kit/`（Lua + RmlUi，见其 README）。
 
 ## 回答（`WizardSpec`，全部可选）
 

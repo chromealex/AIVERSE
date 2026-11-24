@@ -1,7 +1,7 @@
 // Host-managed AnimationGraph hot reload with last-good fallback.
 // No global singleton, no mutation of simulation or compiled graph.
 #pragma once
-#include "EcsAnimationSystems.h"
+#include "engine/animation/EcsAnimationSystems.h"
 #include "engine/render/AnimationAsset.h"
 #include <cstdint>
 #include <exception>

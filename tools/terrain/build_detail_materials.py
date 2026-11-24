@@ -71,7 +71,7 @@ def build(root, materials, asset_root, metres=4.0, transparency=.12, sand_layer=
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('root', type=Path)
-    parser.add_argument('--materials', type=Path, default=Path(__file__).resolve().parents[2] / 'engine/assets/materials/terrain/textures')
+    parser.add_argument('--materials', type=Path, help='terrain PBR textures folder (default: terrain-pbr from the package catalog)')
     parser.add_argument('--asset-root', required=True, help='project-relative path of installed pack')
     parser.add_argument('--metres', type=float, default=4)
     parser.add_argument('--noise-transparency', type=float, default=.12)
@@ -83,5 +83,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.asset_root.startswith('/') or '..' in args.asset_root or '\\' in args.asset_root:
         parser.error('asset-root must be project relative')
+    if args.materials is None:
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'pkg'))
+        from aiverse_pkg import package_dir
+        args.materials = package_dir('terrain-pbr') / 'textures'
     result = build(args.root, args.materials, args.asset_root, args.metres, args.noise_transparency, args.sand_layer, args.secondary_sand, args.rock_layer, args.secondary_rock, args.height_normals)
     print(f"Shared 1K/{args.metres}m PBR: {len(result['materials'])} tiles, {len(result['layers'])} layers")

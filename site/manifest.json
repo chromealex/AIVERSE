@@ -5,5 +5,9 @@
     "docs/images/readme/sponza.jpg",
     "docs/images/readme/city-roads.jpg",
     "docs/images/readme/sponza-light-shafts.png"
-  ]
+  ],
+  "catalog": {
+    "repo": "https://github.com/chromealex/AIVERSE-PACKAGES",
+    "index": "https://raw.githubusercontent.com/chromealex/AIVERSE-PACKAGES/main/index.json"
+  }
 }

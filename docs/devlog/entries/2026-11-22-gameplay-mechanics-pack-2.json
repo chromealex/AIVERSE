@@ -1,0 +1,36 @@
+{
+  "id": "2026-11-22-gameplay-mechanics-pack-2",
+  "date": "2026-11-22",
+  "system": "gameplay",
+  "title": "Ещё десять механик: город, транспорт, тактика, дипломатия, герои, корабли, тайные карты, речь и тач",
+  "titleEn": "Ten more mechanics: city, transit, tactics, diplomacy, heroes, ships, secret cards, speech and touch",
+  "summary": "Градостроительная экономика с выборами, транспорт по расписанию, многоэтажная тактика, дипломатия с ИИ, бот, объясняющий ход, драфт и магазин для матчей героев, корабли из блоков и самолёты, скрытые карты без утечек, губы по речи и тач-управление с доступностью.",
+  "summaryEn": "A city economy with elections, scheduled transport, multi-storey tactics, diplomacy with AI, a bot that explains its move, draft and shop for hero matches, block-built ships and aircraft, hidden cards without leaks, lips that follow speech, and accessible touch controls.",
+  "body": [
+    "Город растёт по спросу: жилые, торговые и промышленные участки поднимаются уровнем, когда хватает работы и людей, службы покрывают кварталы, налоги и содержание сводятся в бюджет с займами, а фракции голосуют на выборах. Автобусы, трамваи и грузовые линии ходят по расписанию, пассажиры строят путь с пересадками, а перегруженные остановки видны сразу.",
+    "Тактика поднялась на этажи: лестницы и люки соединяют уровни, перекрытия закрывают обзор, высота даёт бонус к попаданию, а план хода можно отменять шаг за шагом. Державы ведут дипломатию: отношения, договоры, перемирия, союзники, которые вступают в войну, и ИИ, который решает, мириться или вооружаться. Для любой пошаговой игры есть бот с поиском, который показывает, почему выбрал ход.",
+    "Матчи героев получили драфт с банами, магазин с рецептами и курьером, возвращение на базу, ластхиты, денаи, ассисты и таймеры возрождения. Корабли собираются из блоков, держатся на воде по точкам корпуса, поворачивают рулём, опрокидываются и тонут; у самолётов есть подъёмная сила и сваливание.",
+    "Карты в руке соперника остаются тайной: сервер отдаёт каждому игроку только своё, а после тасовки карты нельзя отследить. Одновременные решения закрываются через commit/reveal. Лица говорят: губы двигаются по записанной речи или по тексту реплики. Для телефонов есть джойстики, кнопки и жесты, а в настройках есть режимы для дальтоников, размер текста, субтитры, меньше тряски и переназначение кнопок."
+  ],
+  "bodyEn": [
+    "The city grows with demand: residential, commercial and industrial lots level up when there are enough jobs and people, services cover districts, taxes and upkeep form a budget with loans, and factions vote in elections. Buses, trams and freight lines run on timetables, passengers plan trips with transfers, and overloaded stops show up at once.",
+    "Tactics went multi-storey: stairs and hatches join levels, floors block sight, height gives a hit bonus, and a move plan can be undone step by step. Powers run diplomacy: relations, treaties, truces, allies who join wars, and an AI that decides whether to make peace or arm. Any turn-based game gets a search bot that shows why it chose a move.",
+    "Hero matches get a draft with bans, a shop with recipes and a courier, recall, last hits, denies, assists and respawn timers. Ships are built from blocks, float on their hull points, steer with a rudder, capsize and sink; aircraft have lift and stalls.",
+    "An opponent's hand stays secret: the server sends each player only their own view, and cards cannot be tracked through a shuffle. Simultaneous decisions close with commit/reveal. Faces talk: lips move with recorded speech or the line's text. Phones get sticks, buttons and gestures, and settings offer colour-blind modes, text size, subtitles, less shake and button remapping."
+  ],
+  "status": "in-progress",
+  "verified": "Каждая механика проверена своим тестом: рост города, поездки с пересадкой, бои с высоты, мир и война держав, правильный ход бота, драфт и покупки, плавание и тонущий корабль, тайна карт после тасовки, речь и жесты.",
+  "verifiedEn": "Each mechanic has its own test: city growth, trips with a transfer, fights from above, peace and war between powers, the right bot move, draft and purchases, a floating and a sinking ship, card secrecy after a shuffle, speech and gestures.",
+  "limits": "Это правила без готовых экранов и примеров уровней; подключение к игровым хостам, сетевую проверку матчей героев и тайных карт и замеры на телефонах ещё предстоит сделать.",
+  "limitsEn": "These are rules without ready screens or sample levels; wiring into game hosts, network checks for hero matches and secret cards, and phone measurements are still ahead.",
+  "branch": "agent-mechanics-audit",
+  "commit": null,
+  "media": [],
+  "links": [
+    {
+      "title": "Пакеты механик",
+      "titleEn": "Mechanics packages",
+      "href": "docs/mechanics-packages.md"
+    }
+  ]
+}

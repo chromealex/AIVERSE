@@ -6,6 +6,7 @@ inline code, bold/italic, links, images and autolinks. Raw HTML in the source is
 escaped, never passed through.
 """
 import html
+from highlight import highlight
 import re
 
 _INLINE_CODE = re.compile(r'(`+)(.+?)\1', re.S)
@@ -89,7 +90,7 @@ class Converter:
                     i += 1
                 i += 1
                 cls = f' class="lang-{html.escape(lang)}"' if lang else ''
-                out.append(f'<pre><code{cls}>' + html.escape('\n'.join(code)) + '</code></pre>')
+                out.append(f'<pre><code{cls}>' + highlight('\n'.join(code), lang) + '</code></pre>')
                 continue
             if not s:
                 flush()

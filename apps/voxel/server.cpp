@@ -1,8 +1,9 @@
 // aiverse_voxel_server: dedicated authoritative server of the voxel sandbox.
 //   aiverse_voxel_server [--project DIR] [--port 27200] [--ticks N] [--loopback]
 // UDP on --port, WebSocket on --port + 1; one slot per map player; prints the checksum when --ticks ends the run.
-#include "modules/voxel/VoxelSession.h"
-#include "modules/voxel/Project.h"
+#include "engine/platform/TemplatesDir.h"
+#include "engine/voxel/VoxelSession.h"
+#include "engine/voxel/Project.h"
 #include "engine/net/Udp.h"
 #include "engine/net/WebSocket.h"
 #include <chrono>
@@ -14,7 +15,7 @@
 int main(int argc,char** argv){
     using namespace aiverse;
     try{
-        std::string project="templates/voxel_sandbox";uint16_t port=27200;uint32_t ticks=0;bool loopback=false;
+        std::string project=aiverse::platform::templatesDir(".")+"/voxel_sandbox";uint16_t port=27200;uint32_t ticks=0;bool loopback=false;
         for(int i=1;i<argc;++i){std::string a=argv[i];
             if(a=="--project"&&i+1<argc)project=argv[++i];else if(a=="--port"&&i+1<argc)port=uint16_t(std::stoi(argv[++i]));
             else if(a=="--ticks"&&i+1<argc)ticks=uint32_t(std::stoul(argv[++i]));else if(a=="--loopback")loopback=true;

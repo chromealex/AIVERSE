@@ -2,9 +2,9 @@
 // bot choices -> recruits as allies -> deaths -> summon circle restores) over the example definitions.
 // --verify replays the run twice and once through a mid-match save/restore and requires identical checksums.
 //   aiverse_progression [--root DIR] [--defs F] [--deck F] [--settings F] [--seed N] [--ticks N] [--verify] [--json]
-#include <aiverselib/mechanics/PerksData.h>
+#include "engine/mechanics/PerksData.h"
 #include <aiverselib/mechanics/PerksConfigured.h>
-#include <aiverselib/mechanics/PerksPersistence.h>
+#include "engine/mechanics/PerksPersistence.h"
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>

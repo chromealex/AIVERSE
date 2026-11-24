@@ -6,6 +6,8 @@
 #include "engine/world/PhysisNatureCues.h"
 #include "engine/world/PhysisTornadoCues.h"
 #include "engine/fx/ParticleSystem.h"
+#include <algorithm>
+#include <iterator>
 #include <map>
 #include <string>
 #include <vector>
@@ -26,6 +28,16 @@ public:
         smokeFx_ = resolve(ps, projectFiles, "physis_smoke", physisSmokeEffectJson(), errors);
         tornadoFx_ = resolve(ps, projectFiles, "physis_tornado", physisTornadoEffectJson(), errors);
         debrisFx_ = resolve(ps, projectFiles, "physis_tornado_debris", physisTornadoDebrisEffectJson(), errors);
+        layerFx_[std::size_t(TornadoFxLayer::Funnel)] = tornadoFx_;
+        layerFx_[std::size_t(TornadoFxLayer::Debris)] = debrisFx_;
+        layerFx_[std::size_t(TornadoFxLayer::FireFunnel)] =
+            resolve(ps, projectFiles, "physis_tornado_fire", physisTornadoFireEffectJson(), errors);
+        layerFx_[std::size_t(TornadoFxLayer::Spray)] =
+            resolve(ps, projectFiles, "physis_tornado_spray", physisTornadoSprayEffectJson(), errors);
+        layerFx_[std::size_t(TornadoFxLayer::Ember)] =
+            resolve(ps, projectFiles, "physis_tornado_ember", physisTornadoEmberEffectJson(), errors);
+        layerFx_[std::size_t(TornadoFxLayer::Scar)] =
+            resolve(ps, projectFiles, "physis_tornado_scar", physisTornadoScarEffectJson(), errors);
         return flameFx_ >= 0 && smokeFx_ >= 0;   // tornado effects are optional
     }
 
@@ -33,11 +45,12 @@ public:
     // since the frame's tick, for smooth extrapolation).
     void updateTornadoes(fx::ParticleSystem& ps, const NaturePresentationFrame& frame,
                          float since, double secondsPerTick) {
-        if (tornadoFx_ < 0 && debrisFx_ < 0) return;
+        if (std::all_of(std::begin(layerFx_), std::end(layerFx_), [](int id) { return id < 0; })) return;
         applyTornado(ps, tornado_.plan(frame, since, secondsPerTick));
     }
-    std::size_t activeFunnels() const { return funnels_.size(); }
-    std::size_t activeDebris() const { return debris_.size(); }
+    std::size_t activeFunnels() const { return layer(TornadoFxLayer::Funnel).size(); }
+    std::size_t activeDebris() const { return layer(TornadoFxLayer::Debris).size(); }
+    std::size_t activeTornadoLayer(TornadoFxLayer l) const { return layer(l).size(); }
 
     // Once per render frame after a new presentation frame (or the same one).
     // windScale maps PHYSIS m/s onto the particle wind force.
@@ -60,12 +73,12 @@ public:
         }
         flames_.clear(); smoke_.clear();
         for (const auto& c : tornado_.clear()) {
-            auto& map = c.layer == TornadoFxLayer::Funnel ? funnels_ : debris_;
+            auto& map = layer(c.layer);
             const auto it = map.find(c.key);
             if (it == map.end()) continue;
             if (kill) ps.kill(it->second); else ps.stop(it->second);
         }
-        funnels_.clear(); debris_.clear();
+        for (auto& m : tornadoHandles_) m.clear();
         ps.setWind({0, 0, 0});
     }
 
@@ -113,8 +126,8 @@ private:
 
     void applyTornado(fx::ParticleSystem& ps, const std::vector<TornadoFxCommand>& commands) {
         for (const auto& c : commands) {
-            auto& map = c.layer == TornadoFxLayer::Funnel ? funnels_ : debris_;
-            const int effect = c.layer == TornadoFxLayer::Funnel ? tornadoFx_ : debrisFx_;
+            auto& map = layer(c.layer);
+            const int effect = layerFx_[std::size_t(c.layer)];
             switch (c.op) {
             case TornadoFxOp::Start: {
                 if (auto it = map.find(c.key); it != map.end()) ps.stop(it->second);
@@ -136,8 +149,12 @@ private:
 
     NatureFxPlanner planner_;
     TornadoFxPlanner tornado_;
+    std::map<std::uint64_t, fx::FxHandle>& layer(TornadoFxLayer l) { return tornadoHandles_[std::size_t(l)]; }
+    const std::map<std::uint64_t, fx::FxHandle>& layer(TornadoFxLayer l) const { return tornadoHandles_[std::size_t(l)]; }
     int flameFx_ = -1, smokeFx_ = -1, tornadoFx_ = -1, debrisFx_ = -1;
-    std::map<std::uint64_t, fx::FxHandle> flames_, smoke_, funnels_, debris_;
+    int layerFx_[kTornadoFxLayers] = {-1, -1, -1, -1, -1, -1};
+    std::map<std::uint64_t, fx::FxHandle> flames_, smoke_;
+    std::map<std::uint64_t, fx::FxHandle> tornadoHandles_[kTornadoFxLayers];
 };
 
 } // namespace aiverse::world

@@ -6,7 +6,7 @@ import {
 import type { StudioComponentCatalogItem, StudioInspectorComponent, StudioProperty } from '../types';
 import { invoke } from '../bridge';
 import PropertyField from '../components/PropertyField';
-import { StudioContextMenu, StudioEmptyState, StudioIconButton, type StudioMenuItem } from '../ui';
+import { StudioContextMenu, StudioEmptyState, StudioIconButton, StudioLoader, type StudioMenuItem } from '../ui';
 import { canRemove, canReset, copyValues, mergeInspectors, missingOption, pasteValues, resetValues, type CopiedComponent, type FieldValue } from './inspectorActions';
 import type { StudioInspector } from '../types';
 import { fuzzyScore } from '../commandSearch';
@@ -220,7 +220,7 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
   return <div className="insp">
     {!inspector ? <div className="insp__empty">
       {inspectorPinned && <div className="insp__empty-bar">{lock}</div>}
-      <StudioEmptyState title={selected ? 'Loading…' : 'Nothing selected'}
+      <StudioEmptyState icon={selected ? <StudioLoader size={30}/> : undefined} title={selected ? 'Loading…' : 'Nothing selected'}
         description={selected ? 'Reading entity components.' : 'Select an entity in the Hierarchy or Scene.'}/>
     </div> : <div className="insp__scroll">
       <div className="insp__header">

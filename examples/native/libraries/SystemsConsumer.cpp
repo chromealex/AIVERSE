@@ -2,7 +2,7 @@
 #include <aiverselib/systems/Persistence.h>
 #include <aiverselib/systems/Configured.h>
 #include <aiverselib/systems/Interactions.h>
-#include <aiverselib/systems/Curves.h>
+#include "engine/systems/Curves.h"
 #include <array>
 // Custom workshop state only: built-in RTS inventories/statuses remain owned by the engine.
 // Caller uses a module's NativeState; no persistent library object is stored on the module instance.

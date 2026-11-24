@@ -43,7 +43,7 @@ static void check(bool yes,const std::string& error){
     if(!yes)throw std::runtime_error(error);
 }
 static std::unique_ptr<Simulation> make(bool native){
-    const std::string base=std::string(AIVERSE_SOURCE_DIR)+"/templates/mushrooms/";
+    const std::string base=std::string(AIVERSE_TEMPLATES_DIR)+"/mushrooms/";
     Json rules=readComposedJson(base+"rules.json",fileReader());
     const Json map=Json::parseFile(base+"maps/duel.json");
     std::vector<g::NativeDefinition> definitions;

@@ -4,11 +4,13 @@
 # The CI "determinism" job compares these files across platforms: they must be byte-identical.
 set -euo pipefail
 bin="$1"; out="$2"; : > "$out"
-for dir in templates/*/; do
+# the sample games are the official template packages of the catalog (tools/pkg/fetch_templates.py)
+tpl=${AIVERSE_TEMPLATES_DIR:-$(python3 tools/pkg/fetch_templates.py)}
+for dir in "$tpl"/*/; do
   game=$(basename "$dir")
   [ -f "$dir/game.json" ] || continue
   for seed in 1 3 7; do
-    log=$($bin --project "templates/$game" --seed "$seed" 2>&1) || { echo "$log"; echo "::error::$game seed $seed: headless failed"; exit 1; }
+    log=$($bin --project "$tpl/$game" --seed "$seed" 2>&1) || { echo "$log"; echo "::error::$game seed $seed: headless failed"; exit 1; }
     sum=$(grep -o 'Checksum: [0-9a-f]*' <<<"$log" | awk '{print $2}')
     win=$(grep -o 'winner=[^ ]*' <<<"$log" | head -1 || true)
     [ -n "$sum" ] || { echo "$log"; echo "::error::$game seed $seed: no checksum"; exit 1; }

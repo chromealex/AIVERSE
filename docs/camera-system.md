@@ -166,7 +166,7 @@ For per-camera PostFX, retain a distinct `PostProcess` instance per Entity and c
 - `apps/editor/Editor.h::Viewport` already contains independent render-target pair for Scene/Game windows.
 - `engine/render/PortraitRenderer.h` is a genre-free offscreen Renderer3D + model-pose capture host (Stage 2); `engine/view/game/GamePortrait.cpp` is its RTS-specific adapter.
 - `engine/render/Prisma`, `ScreenLighting`, `Lights`, existing Metal, GL, Vulkan RHI are reused rather than replaced.
-- Shared `aiverselib/gameplay/Camera.h` is a camera controller helper, not a render/capture scheduler; avoid conflating the concepts.
+- Shared `engine/gameplay/Camera.h` is a camera controller helper, not a render/capture scheduler; avoid conflating the concepts.
 
 ## 3. Implemented foundations and proposed modules
 - **Implemented Stage 3:** `engine/sim/CameraComponents.h` — native ECS `CameraComponent`, `CameraOutputComponent` and `CameraUpdateComponent` with fixed-point lens values and stable output asset keys, never RHI handles. All authored cameras are ECS entities in `World`; `SceneHierarchy` owns their transforms.

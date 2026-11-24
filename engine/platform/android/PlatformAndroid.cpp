@@ -242,6 +242,7 @@ void onCmd(android_app* app, int32_t cmd) {
             gfx::VulkanWindow vw;
             vw.kind = gfx::VulkanWindow::Kind::Android;
             vw.window = uint64_t(reinterpret_cast<uintptr_t>(app->window));
+            if (app->activity && app->activity->internalDataPath) vw.shaderCacheDir = std::string(app->activity->internalDataPath) + "/vk-shader-cache";
             if (const char* u = std::getenv("AIVERSE_BENCH_UNCAPPED"); u && *u == '1') vw.vsync = false;   // benchmarks: MAILBOX / IMMEDIATE when offered
             if (g_device) gfx::vulkanSetWindow(*g_device, &vw);
             else {

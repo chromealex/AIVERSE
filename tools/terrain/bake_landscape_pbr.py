@@ -124,6 +124,9 @@ def bake(root,materials,size,part=0,parts=1,detail=False):
   if detail:Image.fromarray(detail_weights[::-1]).save(root/'textures'/f'{stem}_weights.png')
   print(stem,flush=True)
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('root',type=Path);p.add_argument('--materials',type=Path,default=Path(__file__).resolve().parents[2]/'engine/assets/materials/terrain/textures');p.add_argument('--size',type=int,default=2048);p.add_argument('--part',type=int,default=0);p.add_argument('--parts',type=int,default=1);p.add_argument('--detail',action='store_true');a=p.parse_args();
+ p=argparse.ArgumentParser();p.add_argument('root',type=Path);p.add_argument('--materials',type=Path,help='default: terrain-pbr textures from the package catalog');p.add_argument('--size',type=int,default=2048);p.add_argument('--part',type=int,default=0);p.add_argument('--parts',type=int,default=1);p.add_argument('--detail',action='store_true');a=p.parse_args();
  if a.parts<1 or not 0<=a.part<a.parts:raise ValueError('invalid partition')
+ if a.materials is None:
+  import sys;sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'pkg'))
+  from aiverse_pkg import package_dir;a.materials=package_dir('terrain-pbr')/'textures'
  bake(a.root,a.materials,a.size,a.part,a.parts,a.detail)

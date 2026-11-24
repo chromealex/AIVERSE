@@ -1,8 +1,8 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Adapter from the generated optional `cardGame` settings section to CardRules defaults; card JSON `rules` then
 // overrides individual variants (readCardLibrary(json, cardRulesFromSettings(settings))).
-#include "../gameplay/Configuration.h"
+#include "engine/gameplay/Configuration.h"
 #include "CardGame.h"
 namespace aiverse::lib::mechanics {
 inline CardRules cardRulesFromSettings(const gameplay::GameplaySettings& settings,CardRules base=CardRules{}){

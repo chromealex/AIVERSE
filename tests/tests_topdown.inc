@@ -388,7 +388,7 @@ TEST(topdown_controls_sticks_keys_quantize_and_camera) {
 }
 
 TEST(topdown_arena_template_bots_finish) {
-    auto sim = makeSim(std::string(AIVERSE_SOURCE_DIR) + "/templates/topdown_arena", "maps/arena.json", 1);
+    auto sim = makeSim(std::string(AIVERSE_TEMPLATES_DIR) + "/topdown_arena", "maps/arena.json", 1);
     game::ComputerPlayer a(1, 1), b(2, 1);
     for (int i = 0; i < 20 * 900 && sim->result() == 0; ++i) { a.update(*sim); b.update(*sim); sim->step(); }
     CHECK(sim->result() != 0);

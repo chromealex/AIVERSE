@@ -1,6 +1,6 @@
 // One vehicle system for every host (AGENTS.md "NO GENRE SPLIT", docs/driving.md, docs/no-genre-split-audit.md
 // stage B). A vehicle is an entity with the VehicleDrive component: the vehicle-controllers state
-// (libraries/include/aiverselib/mechanics/VehicleControllers.h), who sits at the wheel, its autopilot pedals, lock,
+// (engine/mechanics/VehicleControllers.h), who sits at the wheel, its autopilot pedals, lock,
 // door timer, level (deck) and its seat list. Whoever drives carries VehicleOccupant (the car it sits in and the
 // car's last pose, so the driver can be put out when the car disappears).
 //
@@ -16,8 +16,8 @@
 #include "engine/core/ECS.h"
 #include "engine/core/Fixed.h"
 #include "engine/data/Json.h"
-#include <aiverselib/mechanics/VehicleDrive.h>
-#include <aiverselib/mechanics/VehicleSeats.h>
+#include "engine/mechanics/VehicleDrive.h"
+#include "engine/mechanics/VehicleSeats.h"
 #include <cstdint>
 #include <span>
 #include <string>

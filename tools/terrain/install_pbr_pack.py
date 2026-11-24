@@ -1,25 +1,36 @@
 #!/usr/bin/env python3
-"""Install bundled terrain PBR assets in an existing project without overwriting materials.
-Use --default-checkerboard to opt into the neutral default for that project.
+"""Install the terrain PBR library (catalog package terrain-pbr) into an existing project.
+
+Same as `python3 tools/pkg/aiverse_pkg.py add terrain-pbr --project P`: files go to
+<project>/materials/terrain, the material library merges into materials.json (existing ids are
+never overwritten), game.json "packages" and aiverse.lock record the version.
+Use --default-checkerboard to also switch the project's terrain to the neutral checkerboard.
 """
 from pathlib import Path
-import argparse,json,shutil
+import argparse
+import json
+import sys
 
-def install(project,default=False):
-    project=Path(project);source=Path(__file__).resolve().parents[2]/'engine/assets/materials/terrain'
-    manifest=project/'game.json'
-    if not manifest.is_file():raise ValueError('Destination must contain game.json')
-    target=project/'materials/terrain'
-    if target.exists():raise ValueError('materials/terrain already exists; refusing to overwrite')
-    existing=json.loads((project/'materials.json').read_text()) if (project/'materials.json').exists() else {}
-    bundled=json.loads((source/'materials.json').read_text())
-    collisions=set(existing)&set(bundled)
-    if collisions:raise ValueError('Material IDs already exist: '+', '.join(sorted(collisions)))
-    game=json.loads(manifest.read_text())
-    if default:game['terrain']=json.loads((source/'default-terrain.json').read_text())
-    shutil.copytree(source,target)
-    (project/'materials.json').write_text(json.dumps(dict(existing,**bundled),indent=2)+'\n')
-    if default:manifest.write_text(json.dumps(game,indent=2)+'\n')
-    print('Installed',len(bundled),'PBR materials in',project)
-if __name__=='__main__':
-    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('project',type=Path);ap.add_argument('--default-checkerboard',action='store_true');a=ap.parse_args();install(a.project,a.default_checkerboard)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'pkg'))
+import aiverse_pkg  # noqa: E402
+
+
+def install(project, default=False):
+    project = Path(project).resolve()
+    r = aiverse_pkg.install_into(project, 'terrain-pbr', None, False, lambda s: print(s, file=sys.stderr))
+    if default:
+        game = json.loads((project / 'game.json').read_text())
+        game['terrain'] = json.loads((project / r['mount'] / 'default-terrain.json').read_text())
+        (project / 'game.json').write_text(json.dumps(game, indent=2) + '\n')
+    print('Installed', r['merged'].get('materials.json', 0), 'PBR materials in', project)
+
+
+if __name__ == '__main__':
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument('project', type=Path)
+    ap.add_argument('--default-checkerboard', action='store_true')
+    a = ap.parse_args()
+    try:
+        install(a.project, a.default_checkerboard)
+    except aiverse_pkg.PkgError as e:
+        sys.exit(f'install_pbr_pack: {e}')

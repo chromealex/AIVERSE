@@ -57,8 +57,9 @@ texture repeat are configurable and validated. A nested icosphere samples that
 same surface at **1280 / 320 / 80 triangles**. Standard Renderer3D screen-size
 LOD thresholds are 100 / 28 pixels. No custom renderer, empty impostor or geometry
 regeneration on camera movement. Normals and surface samples are independent of
-LOD; UV longitude is unwrapped per triangle and tangents generated for normal maps.
-Spherical mapping can pinch at poles; this is not triplanar texturing.
+LOD; UVs are box-mapped per triangle: the planar projection of the face's dominant axis, in metres divided by
+`textureRepeatCm` (uniform texel density, no pinched poles); tangents are generated for normal maps. Where two
+projections meet the texture direction can change; this is not shader triplanar blending.
 
 Native fallback is a dielectric PBR material; hosts supply their texture owner.
 The offline tool binds the shipped rock albedo, +Y normal, ORM and AO and copies
@@ -69,7 +70,7 @@ same native three-mesh LOD chain in `extras.rtsLods`.
 cmake --build /path/to/build --target aiverse_terraweave_rocks
 /path/to/build/aiverse_terraweave_rocks \
   --out /absolute/path/to/new-rock-pack \
-  --materials /path/to/AIVERSE/engine/assets/materials/terrain/textures \
+  --materials "$(python3 tools/pkg/aiverse_pkg.py fetch terrain-pbr)/textures" \
   --seed 42 --count 12
 ```
 

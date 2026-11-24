@@ -3,7 +3,7 @@
 // All methods run on the SAME presentation/Editor owner thread. The editor
 // may write request intent; only the native host may execute GPU commands.
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 
 #include "SpectraGpuCaptureHost.h"
 #include <cstddef>

@@ -1,5 +1,5 @@
 /** Persistable nested docking geometry; no React, renderer or genre dependencies. */
-export const STUDIO_PANELS = ['hierarchy','assets','scene','game','materials','animation','facial_rig','inspector','console','lighting','shader_graph','project','runtime','nereid_flow','rules','human_appearance','build','human_creator','wind','history','terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','scripts','input','overlays','branding','asset_audit','agent','fields','physis','actor','raid','balance','fx_graph','fx_functions','modeling','anim_assets','anim_graph','anim_rig','model_anim','project_import','stats','snapshot_diff','frame_capture','texture_resources','extensions','attachments','terraweave_generator','world_persistence'] as const;
+export const STUDIO_PANELS = ['hierarchy','assets','scene','game','materials','animation','facial_rig','inspector','console','lighting','shader_graph','project','runtime','nereid_flow','rules','human_appearance','build','human_creator','wind','history','terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','scripts','input','overlays','branding','asset_audit','agent','fields','physis','actor','raid','balance','fx_graph','fx_functions','modeling','anim_assets','anim_graph','model_anim','project_import','stats','snapshot_diff','frame_capture','texture_resources','extensions','attachments','terraweave_generator','world_persistence','catalog'] as const;
 export type StudioPanel = typeof STUDIO_PANELS[number];
 /** Single metadata source for the UI shell and AI-authored panel integrations. */
 export const STUDIO_PANEL_TITLES: Record<StudioPanel,string> = {
@@ -49,7 +49,8 @@ export const STUDIO_PANEL_TITLES: Record<StudioPanel,string> = {
   project_import: "Import Project",
   human_creator: "Character Creator",
   world_persistence: "World Persistence",
-  terraweave_generator: "TerraWeave Generator"
+  terraweave_generator: "TerraWeave Generator",
+  catalog: "Catalog"
 };
 export const STUDIO_PANEL_HOME: Record<StudioPanel,string> = {
   hierarchy: 'dock-left', assets: 'dock-bottom', scene: 'dock-center', game: 'dock-center',
@@ -98,7 +99,8 @@ export const STUDIO_PANEL_HOME: Record<StudioPanel,string> = {
   project_import: "dock-right",
   human_creator: "dock-right",
   world_persistence: "dock-right",
-  terraweave_generator: "dock-right"
+  terraweave_generator: "dock-right",
+  catalog: "dock-right"
 };
 
 export type DockAxis = 'horizontal' | 'vertical';
@@ -254,6 +256,20 @@ export function resizeDockSplit(tree: DockTree, id: string, ratio: number): Dock
   const t=normalizeDockTree(tree);
   if(!Number.isFinite(ratio))return t;
   return {version:3,root:update(t.root,id,n=>n.kind==='split'?{...n,ratio:size(ratio,.5,MIN_RATIO,MAX_RATIO)}:n)};
+}
+/** Dock a panel against the whole workspace, so a bottom strip can become a full-height column. */
+export function splitDockRoot(tree: DockTree, panel: StudioPanel, side: DockEdge): DockTree {
+  const t=normalizeDockTree(tree);
+  if(!known(panel) || !panelStack(t,panel))return t;
+  if(t.root.kind==='stack' && t.root.tabs.length===1 && t.root.tabs[0]===panel)return t;
+  if(dockStacks(t).length>=24)return t;
+  const splitId=newId(t,'split'), stackIdNew=newId(t,'dock');
+  const next=compactDockTree({version:3,root:remove(t.root,panel)});
+  const axis:DockAxis=side==='left'||side==='right'?'horizontal':'vertical';
+  const early=side==='left'||side==='top';
+  const portion=axis==='horizontal'?.22:.28;
+  const fresh=stack(stackIdNew,[panel],panel);
+  return normalizeDockTree({version:3,root:split(splitId,axis,early?portion:1-portion,early?fresh:next.root,early?next.root:fresh)});
 }
 export function splitDockStack(tree: DockTree, panel: StudioPanel, stackId: string, side: DockEdge): DockTree {
   const t=normalizeDockTree(tree),target=findDockStack(t,stackId);

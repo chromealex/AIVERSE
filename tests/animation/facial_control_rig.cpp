@@ -1,9 +1,9 @@
 // MotionWeave Stage 180 — native semantic facial control + existing IK.
 // All checks execute in Release (NDEBUG) via AlwaysCheck.
-#include <aiverselib/animation/FacialControlRig.h>
+#include "engine/animation/FacialControlRig.h"
 #include "apps/modelview/NativeFacialPreview.h"
-#include <aiverselib/animation/EcsAnimationSystems.h>
-#include <aiverselib/animation/MotionWeaveScheduler.h>
+#include "engine/animation/EcsAnimationSystems.h"
+#include "engine/animation/MotionWeaveScheduler.h"
 #include "tests/AlwaysCheck.h"
 #include <cmath>
 #include <limits>

@@ -12,7 +12,7 @@ as occluders; never invent solid bounds for hollow buildings. HLOD manifests con
 scenery, not units, destructible buildings, collisions or objects hidden by fog-of-war.
 
 Apply RTS type policies with `geometry_policy_set`, static scenery with `geometry_scene_set`.
-World-space maps (legacy `data.fps` format) activate scenery by the map's geometryScene path; flat grid maps use game-wide scenery (two formats: debt G2).
+World-space maps (`data.worldSpace`) activate scenery by the map's geometryScene path; flat grid maps use game-wide scenery (two formats: debt G2).
 Use `geometry_stats` and screenshots at identical cameras, near/far and orthographic/perspective.
 Verify holes, silhouette, shadows and camera cuts. Compare timings and memory on the target.
 Recommendations and counters are not proof of speedup. No streamed pages or GPU Hi-Z are provided.

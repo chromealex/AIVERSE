@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIVERSE — игровой движок, где игру собирает ИИ-агент</title>
+<meta name="description" content="C++20-движок для игр любого жанра: игра — это данные, ИИ-агент собирает её через MCP. 88 библиотек механик, ~190 MCP-инструментов, 6 платформ.">
+<meta property="og:title" content="AIVERSE — игру описывают, а не пишут с нуля">
+<meta property="og:description" content="Движок, в котором ИИ-агент собирает игру из данных и сам её проверяет.">
+<meta property="og:image" content="../media/docs/images/readme/sponza.jpg">
+<link rel="alternate" hreflang="en" href="../index.html">
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<link rel="icon" href="../favicon-32.png" type="image/png" sizes="32x32">
+<link rel="alternate icon" href="../favicon.ico">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<meta name="theme-color" content="#F3EFE8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<header class="top">
+<nav class="wrap" aria-label="Главное меню">
+<a class="brand" href="./"><img src="../favicon.svg" width="34" height="32" alt=""><span>AIVERSE</span></a>
+<div class="menu">
+<a href="#systems">Системы</a>
+<a href="#genres">Жанры</a>
+<a href="roadmap.html">Роадмап</a>
+<a href="releases.html">Релизы</a>
+<a href="devlog.html">Ход разработки</a>
+<a href="docs.html">Документация</a>
+</div>
+<a class="lang-switch" href="../index.html" hreflang="en" lang="en">EN</a>
+<a class="btn btn-ink btn-sm" href="https://github.com/chromealex/AIVERSE">GitHub</a>
+</nav>
+</header>
+
+<main>
+<section class="hero wrap">
+<div class="chips">
+<span class="chip">C++20</span><span class="chip">MIT</span><span class="chip">детерминированная симуляция</span><span class="chip chip-ink">MCP · агенты</span><!--RELEASE_CHIP-->
+</div>
+<h1>Игру любого жанра <span class="mark">описывают</span>, а&nbsp;не&nbsp;пишут с&nbsp;нуля</h1>
+<div class="hero-row">
+<p>AIVERSE — движок, в котором игра — это папка данных, а ИИ-агент собирает её через MCP: правила, уровни, интерфейс, эффекты, баланс и сборку под шесть платформ.</p>
+<div class="actions">
+<a class="btn btn-ink" href="#start">Собрать первую игру</a>
+<a class="btn btn-line" href="https://github.com/chromealex/AIVERSE">GitHub</a>
+</div>
+</div>
+<div class="hero-visual">
+<figure><img src="../media/docs/images/readme/city-roads.jpg" alt="Город со сплайновыми дорогами и кварталами, собранный агентом в AIVERSE" width="1280" height="800"></figure>
+<div class="console" aria-label="Пример сессии агента">
+<div class="console-head"><span class="dot"></span>агент · aiversemcp · пример сессии</div>
+<div class="console-body">
+<div><b>›</b> rules_set <i>peasant.cost.gold = 75</i></div>
+<div><b>›</b> map_generate <i>2 игрока · 128×128</i></div>
+<div><b>›</b> rules_lint <em>ok · 0 ошибок</em></div>
+<div><b>›</b> scenario_run <i>tutorial</i> <em>все проверки пройдены</em></div>
+<div><b>›</b> balance_matrix <i>матчи ботов</i></div>
+<div><b>›</b> build_start <i>ios · android · web</i></div>
+</div>
+</div>
+<p class="shot-caption">Город собрал агент навыками aiverse-roads и aiverse-city-blocks</p>
+</div>
+</section>
+
+<section class="facts" aria-label="Цифры">
+<div class="wrap">
+<div class="fact"><strong>88</strong><span>библиотек механик</span></div>
+<div class="fact"><strong>~190</strong><span>MCP-инструментов</span></div>
+<div class="fact"><strong>30+</strong><span>играбельных шаблонов</span></div>
+<div class="fact"><strong>200+</strong><span>навыков для агентов</span></div>
+<div class="fact"><strong>6</strong><span>платформ одной командой</span></div>
+</div>
+</section>
+
+<!--SHOWCASE-->
+
+<section id="systems" class="section wrap" aria-labelledby="systems-title">
+<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:24px;margin-bottom:48px">
+<div style="display:flex;flex-direction:column;gap:18px;max-width:760px">
+<p class="eyebrow">Системы движка</p>
+<h2 class="h2" id="systems-title">Каждая система — отдельный движок внутри движка</h2>
+</div>
+<p style="margin:0;color:var(--muted);max-width:380px">Независимые, каждая со своим контрактом. Собираются вместе в любую игру.</p>
+</div>
+<div class="sys-grid">
+<!--SYSTEMS-->
+</div>
+</section>
+
+<section id="core" class="section wrap" aria-labelledby="core-title">
+<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:24px;margin-bottom:40px">
+<div style="display:flex;flex-direction:column;gap:18px;max-width:760px">
+<p class="eyebrow">Основа движка</p>
+<h2 class="h2" id="core-title">Всё, на чём стоят игры</h2>
+</div>
+<p style="margin:0;color:var(--muted);max-width:380px">Навигация, сеть, физика, звук, интерфейс, сборка и другие большие системы, которые есть в каждом проекте.</p>
+</div>
+<div class="core-grid">
+<!--CORE_SYSTEMS-->
+</div>
+</section>
+
+<!--ROADMAP_LINES-->
+
+<section id="pillars" class="section wrap">
+<div class="pillars">
+<div class="pillars-head">
+<p class="eyebrow">Как устроен движок</p>
+<h2 class="h2">Три опоры вокруг одной игры</h2>
+<img src="../favicon.svg" width="300" height="284" alt="Знак AIVERSE: три луча вокруг ромба">
+</div>
+<div class="grid">
+<article class="card"><span class="tag">01 · данные</span><h3 class="h3">Проект — это текст</h3><p>game.json, rules.json, уровни, UI, звук и эффекты — читаемые файлы. Никаких бинарных сцен: человек и агент правят одно и то же.</p></article>
+<article class="card"><span class="tag">02 · механики</span><h3 class="h3">Геймплей уже внутри</h3><p>Армии, персонажи, транспорт и гонки, бой, движение, стелс, диалоги, карты, головоломки, экономика — 88 детерминированных библиотек, которые работают в любом проекте.</p></article>
+<article class="card card-ink"><span class="tag">03 · агент</span><h3 class="h3">ИИ проверяет сам себя</h3><p>Матчи ботов, сценарии с проверками, матрицы баланса, линтер правил и скриншоты — агент видит результат, а не работает вслепую.</p></article>
+</div>
+</div>
+</section>
+
+<section class="sand">
+<div class="wrap section">
+<p class="eyebrow" style="margin-bottom:18px">От идеи до стора</p>
+<h2 class="h2" style="max-width:820px;margin-bottom:56px">Опишите идею и укажите папку с артом — дальше работает конвейер</h2>
+<ol class="steps">
+<li><span class="n">1</span><strong>Идея, арт, музыка</strong><span>Текстовое описание и ассеты — всё, что нужно на входе.</span></li>
+<li><span class="n">2</span><strong>Мастер «Сделать игру»</strong><span>Или агент через MCP: уровни, туториал, мета, магазин, иконка, сплэш.</span></li>
+<li><span class="n">3</span><strong>Проект = данные</strong><span>game.json · rules.json · levels · ui · fx · audio.</span></li>
+<li><span class="n">4</span><strong>Проверка ↺</strong><span>Боты проходят туториал и каждый уровень; найденное уходит в правки.</span></li>
+<li class="ink"><span class="n">5</span><strong>aiversebuild</strong><span>.app, Xcode, Gradle/APK, web и .exe — одной командой.</span></li>
+</ol>
+</div>
+</section>
+
+<section class="dark">
+<div class="wrap section split">
+<div style="display:flex;flex-direction:column;gap:24px">
+<p class="eyebrow">Данные вместо кода</p>
+<h2 class="h2">Объект — это описание</h2>
+<p style="margin:0;font-size:18px;color:var(--on-ink-2)">Рабочий из RTS-шаблона skirmish: добывает золото и дерево, строит пять зданий и дерётся киркой. Ни строчки C++.</p>
+<p style="margin:8px 0 0;font-size:15px;color:var(--muted-dark)">Когда данных мало — три ступени вверх:</p>
+<div class="ladder"><span>триггеры JSON</span><span class="arrow" aria-hidden="true">→</span><span>Lua 5.4</span><span class="arrow" aria-hidden="true">→</span><span class="hl">нативный C++</span></div>
+</div>
+<div class="code">
+<div class="code-head">templates/skirmish/rules.json</div>
+<pre><span class="a">"peasant"</span>: {
+  <span class="k">"health"</span>:  { <span class="k">"max"</span>: <span class="v">220</span>, <span class="k">"armorType"</span>: <span class="s">"light"</span> },
+  <span class="k">"move"</span>:    { <span class="k">"speed"</span>: <span class="v">2.4</span>, <span class="k">"radius"</span>: <span class="v">0.35</span> },
+  <span class="k">"sight"</span>:   <span class="v">7</span>,
+  <span class="k">"weapons"</span>: [{ <span class="k">"id"</span>: <span class="s">"pick"</span>, <span class="k">"range"</span>: <span class="v">0.5</span>, <span class="k">"damage"</span>: <span class="v">5</span>, <span class="k">"cooldown"</span>: <span class="v">1.5</span> }],
+  <span class="k">"cost"</span>:    { <span class="k">"gold"</span>: <span class="v">75</span>, <span class="k">"time"</span>: <span class="v">12</span>, <span class="k">"supply"</span>: <span class="v">1</span> },
+  <span class="k">"gather"</span>:  { <span class="k">"gold"</span>: { <span class="k">"carry"</span>: <span class="v">10</span>, <span class="k">"time"</span>: <span class="v">2.0</span> }, <span class="k">"wood"</span>: { <span class="k">"carry"</span>: <span class="v">10</span>, <span class="k">"time"</span>: <span class="v">3.0</span> } },
+  <span class="k">"builds"</span>:  [<span class="s">"townhall"</span>, <span class="s">"farm"</span>, <span class="s">"barracks"</span>, <span class="s">"workshop"</span>, <span class="s">"tower"</span>],
+  <span class="k">"view"</span>:    { <span class="k">"shape"</span>: <span class="s">"worker"</span>, <span class="k">"scale"</span>: <span class="v">0.8</span> }
+}</pre>
+</div>
+</div>
+</section>
+
+<section id="genres" class="section wrap">
+<div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:24px;margin-bottom:48px">
+<div style="display:flex;flex-direction:column;gap:18px;max-width:760px">
+<p class="eyebrow">Жанры</p>
+<h2 class="h2">Готовые механики</h2>
+</div>
+<p style="margin:0;color:var(--muted);max-width:420px">Механики подключаются данными и сочетаются как угодно. Каждая библиотека детерминирована, протестирована, умеет сохраняться и валидирует свой конфиг.</p>
+</div>
+<div class="grid genres">
+<article class="card genre"><div class="genre-top"><h3>Армии, здания, экономика</h3></div><p>Юниты и здания из данных, A*/HPA*/flow fields для тысяч юнитов на картах до 2048², ресурсы, туман войны, ИИ-командир стороны.</p><code>26 шаблонов · aiverse-bots-commander</code></article>
+<article class="card genre"><div class="genre-top"><h3>Персонаж и сетевой бой</h3></div><p>Авторитетный сервер с откатом попаданий, большие стримящиеся миры до 100 игроков, отдача и баллистика, боты.</p><code>weapon-policies · match-rules</code></article>
+<article class="card genre"><div class="genre-top"><h3>Транспорт и гонки</h3></div><p>Колёсные, гусеничные, ховер и летающие машины с местами; трассы на сплайновых дорогах, старт, чекпоинты, круги, гоночные боты.</p><code>vehicle-controllers · aiverse-races</code></article>
+<article class="card genre"><div class="genre-top"><h3>Ближний бой</h3></div><p>Хитбоксы, комбо и окна отмены, i-frames уклонения, парирование, захват цели.</p><code>combat-actions · melee-combat</code></article>
+<article class="card genre"><div class="genre-top"><h3>Движение и мир</h3></div><p>Coyote time, буфер прыжка, уступы, лестницы, плавание; гейты способностей и проверка на софтлоки.</p><code>character-locomotion · zone-graph</code></article>
+<article class="card genre"><div class="genre-top"><h3>Восприятие и взаимодействие</h3></div><p>Конусы зрения, слух, подозрение и тревога, маскировка; перенос, броски, верёвки, двери.</p><code>stealth-senses · physical-interactions</code></article>
+<article class="card genre"><div class="genre-top"><h3>Сюжет и постановка</h3></div><p>Диалоги с условиями, отношения и последствия, бэклог; таймлайны, QTE, замедление.</p><code>narrative-graphs · cinematic-gameplay</code></article>
+<article class="card genre"><div class="genre-top"><h3>Ходы, карты, скрытая информация</h3></div><p>Инициатива, очки действий, реакции; зоны, стек приоритета, тактическая сетка.</p><code>turn-scheduler · card-runtime</code></article>
+<article class="card genre"><div class="genre-top"><h3>Головоломки, ритм, спорт</h3></div><p>Правила сокобана, undo/redo и решатель, VM для задач; темповые карты; владение мячом, пасы, удары, периоды.</p><code>grid-puzzles · rhythm-timing · sports-rules</code></article>
+<article class="card genre"><div class="genre-top"><h3>Забеги и лут</h3></div><p>Сидированные забеги, бюджеты встреч, таблицы лута с гарантированной редкостью.</p><code>run-graph · loot-tables</code></article>
+<article class="card genre"><div class="genre-top"><h3>Большие числа и производство</h3></div><p>Точный офлайн-прогресс, многослойный престиж, производственные сети и логистика.</p><code>big-numbers · offline-production</code></article>
+<article class="card genre"><div class="genre-top"><h3>Мета мобильной игры</h3></div><p>Магазин, валюты, квесты, пассы, энергия, кланы, турниры, сундуки — в JSON.</p><code>aiverse::meta · LiveOps</code></article>
+</div>
+<div class="card card-ink plugins" style="margin-top:20px">
+<span class="tag">своя механика</span>
+<h3 class="h3">Нет готовой механики — ИИ напишет плагин для вашей игры</h3>
+<div class="plugins-cols">
+<div><h4>Lua</h4><p>Скрипты лежат в папке игры и подключаются в rules.json. Работают внутри детерминированной симуляции — в сетевой игре и в реплеях — или только на экране игрока. Правятся в редакторе с горячей перезагрузкой, движок пересобирать не нужно.</p></div>
+<div><h4>C++</h4><p>Модули игры в папке native/ со своими компонентами, системами и хуками движка. Собираются вместе с игрой, редактором и сервером — на всех платформах, включая iOS, Android и веб. Исходники движка при этом не меняются.</p></div>
+</div>
+</div>
+</section>
+
+<section class="wrap" style="padding-bottom:120px">
+<div class="gallery">
+<div class="gpu wide">
+<h3 class="h3">Красиво — даже на слабом мобильном GPU</h3>
+<p>Тени, частицы, террейн и постэффекты имеют уровни качества и подстраиваются под GPU — от старых Mali и Adreno до Apple Silicon. Свой RHI: Metal, GLES3/WebGL2, GL 3.3, Vulkan.</p>
+<div class="pills"><span>PBR</span><span>PRISMA постобработка</span><span>SpectraFX</span><span>Shader Graph</span><span>объёмные облака</span></div>
+<a href="devlog.html" style="font-weight:600">Все снимки по системам — в ходе разработки →</a>
+</div>
+</div>
+</section>
+
+<section id="network" class="dark">
+<div class="wrap section">
+<div class="net-top">
+<div style="display:flex;flex-direction:column;gap:22px">
+<p class="eyebrow">Сеть, сервер и мета</p>
+<h2 class="h2">Бит в бит на&nbsp;каждой платформе</h2>
+<p style="margin:0;font-size:18px;color:var(--on-ink-2)">Fixed-point вместо float, свой RNG и контрольные суммы: один и тот же матч на iPhone, Android-телефоне и в браузере даёт один и тот же хэш. Поэтому можно выбрать сетевую модель под жанр — и поднять свой сервер.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;justify-content:center">
+<p class="mono" style="margin:0 0 6px;font-size:13px;color:var(--muted-dark)">один матч — один хэш</p>
+<div class="hashes">
+<div>iOS<span>= hash</span></div><div>Android<span>= hash</span></div><div>Web<span>= hash</span></div>
+<div>Windows<span>= hash</span></div><div>macOS<span>= hash</span></div><div>Linux x64 / ARM64<span>= hash</span></div>
+</div>
+</div>
+</div>
+<div class="grid net-cards">
+<article class="card"><span class="tag">сеть · модель 1</span><h3>Rollback lockstep</h3><p>По сети идут только команды. Откат по вводу со сверкой хэшей, сглаживание коррекций, реконнект и поздний вход.</p></article>
+<article class="card"><span class="tag">сеть · модель 2</span><h3>Авторитетный сервер</h3><p>Клиент и сервер, который решает всё сам: большие стримящиеся миры до 100 игроков и боты прямо на сервере.</p></article>
+<article class="card"><span class="tag">свой хостинг</span><h3>Свой сервер битв</h3><p>aiverse_server на вашей машине: шифрованный UDP и WebSocket, билеты на матч, пинг до серверов, матчмейкинг по Elo, вердикты по реплеям.</p></article>
+<article class="card meta"><span class="tag">мета · LiveOps</span><h3>Мета-сервис</h3><p>Магазин, валюты, квесты, пассы, энергия, лидерборды, чат, друзья и кланы, турниры — из JSON, со своим бэкендом и готовым клиентом.</p></article>
+</div>
+</div>
+</section>
+
+<section id="templates" class="section wrap">
+<div style="display:flex;flex-direction:column;gap:18px;margin-bottom:44px;max-width:760px">
+<p class="eyebrow">Готовые шаблоны</p>
+<h2 class="h2">Новая игра начинается с работающей</h2>
+<p style="margin:0;font-size:18px;color:var(--text-2)">Каждый шаблон — полностью играбельная игра с ботами. Откройте в редакторе и меняйте.</p>
+</div>
+<div class="list">
+<div class="list-row"><h3>Классические RTS</h3><p>Iron and Gold · Iron Front · Starfall Sectors · Frost Crown · Four Ages · Amber Sands · Metal Tide</p></div>
+<div class="list-row"><h3>Захват и гарнизоны</h3><p>Mushroom Clash · Shroom Wars · Spore Lanes · Spell Bunkers · Border Rush · Clan Lands · Flag Sectors</p></div>
+<div class="list-row"><h3>Отряды, волны, выживание</h3><p>Hold the Line · Last Colony · Lane Clash</p></div>
+<div class="list-row"><h3>Экономика и стройка</h3><p>Hearth and Haul · Underlord</p></div>
+<div class="list-row"><h3>2D и эксперименты</h3><p>Crystal Dunes · Green Hills · Planets · Wildfire</p></div>
+<div class="list-row"><h3>FPS</h3><p>Crossfire Arena · Breach Protocol · Last Survivor (100 игроков) · Aim Lab</p></div>
+</div>
+</section>
+
+<section class="sand">
+<div class="wrap" style="padding:100px 32px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));gap:48px">
+<div style="display:flex;flex-direction:column;gap:20px">
+<h2 style="font:600 36px/1.15 var(--display)">Шесть платформ. Одна команда.</h2>
+<p style="margin:0;font-size:17px;color:var(--text-2)">aiversebuild подписывает, генерирует иконки и сплэши и кладёт в сборку только те плагины, которые выбрала игра.</p>
+<div class="platforms"><span>iOS</span><span>Android</span><span>Web</span><span>Windows</span><span>macOS</span><span>Linux</span></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:16px">
+<p class="eyebrow">Плагины сторов и рекламы</p>
+<p style="margin:0;font-size:22px;line-height:1.7;font-weight:500">App Store · Google Play · RuStore · Yandex Games · Steam · Xsolla · AdMob · AppLovin · ironSource · Yandex Ads · AppMetrica · AppsFlyer · GameAnalytics · Push · Deeplinks</p>
+</div>
+</div>
+</section>
+
+<section id="start" class="section wrap">
+<h2 class="h2" style="margin-bottom:48px">Быстрый старт</h2>
+<div class="start">
+<div><span class="tag">01 — Собрать движок</span>
+<pre>cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release
+cmake --build build/mac -j 8
+open build/mac/AiverseEditor.app</pre>
+<span style="font-size:14px;color:var(--muted)">Не хотите компилировать — <a href="releases.html">скачайте готовый редактор</a>.</span></div>
+<div><span class="tag">02 — Сделать игру</span><div class="box">В хабе нажмите <strong>«Сделать игру»</strong> или создайте проект из шаблона. В окне Game сразу играйте против ботов.</div></div>
+<div><span class="tag">03 — Подключить агента</span><div class="box accent">Окно <strong>Agent</strong> в редакторе показывает готовый конфиг aiversemcp — вставьте его в Claude Code или другой MCP-клиент.</div></div>
+</div>
+</section>
+</main>
+
+<footer class="dark">
+<div class="wrap">
+<div class="cta">
+<h2>Опишите игру.<br>Остальное — <em>данные</em>.</h2>
+<div class="actions">
+<a class="btn btn-accent" href="#start">Начать</a>
+<a class="btn btn-line-light" href="https://t.me/aiverseengine">Telegram</a>
+</div>
+</div>
+<div class="foot">
+<a class="brand" href="./" style="color:var(--on-ink)"><span>AIVERSE</span></a>
+<div class="foot-cols">
+<div><span>Движок</span><a href="#pillars">Возможности</a><a href="#genres">Жанры</a><a href="#templates">Шаблоны</a></div>
+<div><span>Разработчикам</span><a href="docs.html">Документация</a><a href="devlog.html">Ход разработки</a><a href="roadmap.html">Роадмап</a><a href="releases.html">Релизы</a></div>
+<div><span>Сообщество</span><a href="https://github.com/chromealex/AIVERSE">GitHub</a><a href="https://t.me/aiverseengine">Telegram</a></div>
+</div>
+<small>MIT License · AIVERSE</small>
+</div>
+</div>
+</footer>
+</body>
+</html>

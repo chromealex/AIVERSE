@@ -1274,7 +1274,8 @@ bool StudioHost::handleHostMethod(const Json& req) {
         sendReply(reply);
         return true;
     };
-    if (method == "studio.windowDrag" || method == "studio.windowZoom") {
+    if (method == "studio.windowDrag" || method == "studio.windowZoom" ||
+        method == "studio.windowMinimize" || method == "studio.windowResize") {
         try { (void)platform_.windowRequest(method, params); } catch (const std::exception&) {}
         return true;
     }
@@ -1379,6 +1380,27 @@ bool StudioHost::handleHostMethod(const Json& req) {
         }
         return gameState();
     });
+    if (method == "studio.hubTemplates") {
+        // The catalog query runs aiverse_pkg.py over the network: keep the UI thread free.
+        const int64_t requestId = req["id"].integer();
+        auto result = std::make_shared<Json>();
+        auto error = std::make_shared<std::string>();
+        auto alive = alive_;
+        platform_.runInBackground(
+            [engineDir = session_->workspace().engineDir, params, result, error] {
+                try { *result = hubTemplatesJson(engineDir, params); }
+                catch (const std::exception& e) { *error = e.what(); }
+            },
+            [this, alive, requestId, result, error] {
+                if (!*alive) return;
+                Json reply = Json::object();
+                reply.set("id", Json::number(requestId));
+                if (!error->empty()) reply.set("error", Json::string(*error));
+                else reply.set("result", *result);
+                sendReply(reply);
+            });
+        return true;
+    }
     if (method == "studio.hubOpen" || method == "studio.hubCreate") {
         // Project hub: open a RECENT project (only folders the registry lists, never a path from JavaScript
         // alone), or copy a template into a folder the user picks in a native dialog, then open it.
@@ -1396,6 +1418,10 @@ bool StudioHost::handleHostMethod(const Json& req) {
         const std::string name = params.getStr("name"), templ = params.getStr("template");
         if (name.empty() || name.size() > 120) { sendError(req["id"], "Give the project a name"); return true; }
         bool known = false;
+        if (editor::isCatalogTemplate(templ)) {   // a catalog template package: its id is checked by aiverse_pkg.py
+            known = templ.size() > 4 && templ.size() < 70 &&
+                    templ.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789-", 4) == std::string::npos;
+        }
         for (const auto& t : editor::listTemplates(session_->workspace().engineDir)) if (t.id == templ) known = true;
         if (!known) { sendError(req["id"], "Unknown template"); return true; }
         const std::string location = editor::defaultProjectsDir();
@@ -1405,10 +1431,22 @@ bool StudioHost::handleHostMethod(const Json& req) {
         platform_.chooseFolder("Choose where to create “" + name + "”", location, [this, alive, requestId, name, templ](std::string folder) {
             if (!*alive) return;
             if (folder.empty()) { sendProjectCancelled(requestId); return; }
-            std::string error;
-            const std::string dir = editor::createProject(session_->workspace().engineDir, templ, name, folder, "", &error);
-            if (dir.empty()) { sendError(Json::number(requestId), error.empty() ? "Could not create the project" : error); return; }
-            openProject(dir, requestId);
+            // Copying or downloading a template package can take a while: do it off the UI thread.
+            auto dir = std::make_shared<std::string>();
+            auto error = std::make_shared<std::string>();
+            platform_.runInBackground(
+                [engineDir = session_->workspace().engineDir, templ, name, folder, dir, error] {
+                    try { *dir = editor::createProject(engineDir, templ, name, folder, "", error.get()); }
+                    catch (const std::exception& e) { *error = e.what(); }
+                },
+                [this, alive, requestId, dir, error] {
+                    if (!*alive) return;
+                    if (dir->empty()) {
+                        sendError(Json::number(requestId), error->empty() ? "Could not create the project" : *error);
+                        return;
+                    }
+                    openProject(*dir, requestId);
+                });
         });
         return true;
     }

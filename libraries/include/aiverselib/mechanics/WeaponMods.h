@@ -1,5 +1,5 @@
 #pragma once
-#include <aiverselib/mechanics/Namespace.h>
+#include "engine/mechanics/Namespace.h"
 // Ammo feeds, charge modes and attachment stat stacking for custom weapon owners.
 // Existing FPS module ammo/reload/cadence stays authoritative for built-in FPS weapons; use these
 // policies only for an explicit custom owner and never mirror the same magazine in both places.

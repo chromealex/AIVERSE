@@ -5,7 +5,7 @@
     python3 tools/release/package_engine.py --platform macos   --bin build/mac
     python3 tools/release/package_engine.py --platform linux   --bin build/linux-release
 
-The zip holds AIVERSE/ = a snapshot of the sources at HEAD (git archive: templates, engine assets,
+The zip holds AIVERSE/ = a snapshot of the sources at HEAD (git archive: engine assets, tools,
 everything aiversebuild needs to build games) + AIVERSE/bin/ with the executables. The editor and the
 tools find the engine next to themselves (engine/platform/EngineDir.h), so the folder works anywhere.
 Intermediates go to <out>/.temp; <out> gets only AIVERSE-<version>-<commit>-<platform>.zip.
@@ -22,7 +22,9 @@ BINARIES = {
 }
 # source paths left out of packages: benchmark screenshots are not needed to run the engine and
 # would push a zip past GitHub's 100 MB file limit on the builds branch
-EXCLUDE = ("docs/benchmarks/",)
+EXCLUDE = ("docs/benchmarks/", "docs/devlog/media/",
+           # source photos the bake scripts turn into engine/assets/materials; nothing reads them at run time
+           "tools/terrain/pbr_sources/", "tools/vegetation/pbr_sources/")
 # a package needs one of these; Linux may be tools only (aiversemcp + aiverse_headless, no editor: CI hosts, MCP clients)
 REQUIRED = {"windows": ["aiverse_editor.exe"], "macos": ["AiverseEditor.app"], "linux": ["aiverse_editor", "aiversemcp"]}
 

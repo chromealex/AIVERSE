@@ -3,7 +3,7 @@
 Seven header packages for Minecraft-like games: a mutable world of 16x16x16 block chunks, its light, meshes,
 generation, block updates, mob navigation and network streaming. They close the core of gap W2 in
 `docs/capability-status.json` (mutable volumetric world) and part of W1 (regional saves, streaming of mutable
-state). A playable game on top of them is the `voxel` module (`modules/voxel`, template `templates/voxel_sandbox`,
+state). A playable game on top of them is the `voxel` module (`engine/voxel`, template `templates/voxel_sandbox`,
 section "The game" below).
 
 | Package | Header | Layer | Skill |
@@ -80,15 +80,15 @@ Simulation packages use integers, `Fixed` and the engine `Random` only, `std::ma
 neighbour order. The generator is pinned by a golden hash in `tests/libraries/voxel_tests.cpp`: a change of the
 algorithm changes every unsaved chunk of existing worlds, so it must be deliberate and recorded here.
 
-## The game: `modules/voxel` (template `templates/voxel_sandbox`)
+## The game: `engine/voxel` (template `templates/voxel_sandbox`)
 
 A playable sandbox on top of the packages: `game.json` `"module": "voxel"`.
 
 | Part | Where | What |
 |---|---|---|
-| Simulation | `modules/voxel/VoxelGame.h` | players (walk, sprint, sneak without falling off edges, swim, automatic step up one block, fall damage), digging with break time and drops into a 9-slot hotbar, placing (not into bodies), torches and light, fluids and falling blocks, day and night (`dayTicks`), mobs that spawn in the dark, chase players along voxel paths, attack and burn in daylight, respawn, column streaming around players with parking of edited chunks, hash and save (`Simulation::serialize`) |
-| Session | `modules/voxel/VoxelSession.h` | authoritative server and client over any `net::Conn`: hello with content id, inputs, snapshots (own player in full, nearby players and mobs), chunk streaming and edits through voxel-replication, client prediction by replaying unacked inputs on the mirror world |
-| Client | `apps/voxel/client.cpp`, `modules/voxel/view/VoxelView.h` | chunk meshes through `Renderer3D` (unlit, vertex colours from block `color`, face shade, AO, sky light scaled by daylight, warm block light; translucent water), fog and sky colour by time of day, mobs and players as boxes, block outline, crosshair, hotbar, health, break progress, F3 debug |
+| Simulation | `engine/voxel/VoxelGame.h` | players (walk, sprint, sneak without falling off edges, swim, automatic step up one block, fall damage), digging with break time and drops into a 9-slot hotbar, placing (not into bodies), torches and light, fluids and falling blocks, day and night (`dayTicks`), mobs that spawn in the dark, chase players along voxel paths, attack and burn in daylight, respawn, column streaming around players with parking of edited chunks, hash and save (`Simulation::serialize`) |
+| Session | `engine/voxel/VoxelSession.h` | authoritative server and client over any `net::Conn`: hello with content id, inputs, snapshots (own player in full, nearby players and mobs), chunk streaming and edits through voxel-replication, client prediction by replaying unacked inputs on the mirror world |
+| Client | `apps/voxel/client.cpp`, `engine/voxel/view/VoxelView.h` | chunk meshes through `Renderer3D` (unlit, vertex colours from block `color`, face shade, AO, sky light scaled by daylight, warm block light; translucent water), fog and sky colour by time of day, mobs and players as boxes, block outline, crosshair, hotbar, health, break progress, F3 debug |
 | Server | `apps/voxel/server.cpp` | `aiverse_voxel_server --project templates/voxel_sandbox [--port 27200]`: UDP 27200, WebSocket 27201 |
 | Tests | `tests/voxel/game_tests.cpp` | determinism, walking, digging and building, torch light, save and identical continuation, night mobs, loopback session (mirror equals server, prediction, edits, wrong content rejected) |
 

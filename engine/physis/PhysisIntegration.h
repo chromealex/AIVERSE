@@ -124,6 +124,10 @@ inline void registerPersistence(Simulation& simulation, bool disasters = false,
         simulation.registerPersistentComponent<TornadoTrack>("physis.tornado_track", 1);
         simulation.registerPersistentComponent<NatureCarriable>("physis.nature_carriable", 1);
         simulation.registerPersistentResource<TornadoDebrisField>("physis.tornado_debris", 1);
+        // Fire whirl / water / ground scour (PhysisTornadoNature.h, 2026-11-22).
+        simulation.registerPersistentComponent<TornadoNature>("physis.tornado_nature", 1);
+        simulation.registerPersistentResource<TornadoEmberField>("physis.tornado_embers", 1);
+        simulation.registerPersistentResource<GroundScourField>("physis.ground_scour", 1);
     }
     if (forces) {
         simulation.registerPersistentComponent<ForceReceiver>("physis.force_receiver", 1);
@@ -164,6 +168,9 @@ struct InstallOptions {
     // debris, NatureCarriable objects and host damage through
     // GameModule::environmentDamage. Implies enableStorms. Map: "tornadoes".
     bool enableTornadoes = false;
+    // Cell edge (metres) of the ground scour field tornadoes write
+    // (GroundScourField). Map: "physis.scourCellMeters". 1..64.
+    std::int32_t scourCellMeters = 1;
     bool enableForces = false;
     // Publish read-only per-entity weather/gravity/storm snapshots after
     // each climate tick. Defaults off for strict older-save compatibility.
@@ -201,6 +208,8 @@ inline void install(Simulation& simulation, const InstallOptions& options = {}) 
         (!options.enableForces || !options.enableNatureContacts))
         throw std::invalid_argument(
             "PHYSIS nature stress requires forces and nature contacts");
+    if (options.scourCellMeters < 1 || options.scourCellMeters > 64)
+        throw std::invalid_argument("PHYSIS scourCellMeters must be 1..64");
     if (options.streamingChunkCells != 0 &&
         (options.streamingChunkCells < 4 || options.streamingChunkCells > 1024))
         throw std::invalid_argument("PHYSIS streaming chunkCells must be 4..1024");
@@ -220,8 +229,13 @@ inline void install(Simulation& simulation, const InstallOptions& options = {}) 
                         options.enableStorms, options.enableForces,
                         options.enableNatureContacts, options.enableNatureStress,
                         options.enableFractureOutbox, options.enableTornadoes);
-    if (options.enableTornadoes)
+    if (options.enableTornadoes) {
         simulation.world().setResource<TornadoDebrisField>(TornadoDebrisField{});
+        simulation.world().setResource<TornadoEmberField>(TornadoEmberField{});
+        GroundScourField scour;
+        scour.cellMeters = options.scourCellMeters;
+        simulation.world().setResource<GroundScourField>(std::move(scour));
+    }
     if (options.streamingChunkCells != 0) {
         enableStreaming(simulation.world(), options.streamingChunkCells);
         for (const auto& anchor : options.anchors)
@@ -256,6 +270,10 @@ inline void install(Simulation& simulation, const InstallOptions& options = {}) 
             hooks.damage = [](void* user, Entity target, Fixed amount, Entity source) {
                 auto& s = *static_cast<Simulation*>(user);
                 s.module().environmentDamage(s, target, amount, source);
+            };
+            hooks.waterDepth = [](void* user, Fixed x, Fixed z) {
+                auto& s = *static_cast<Simulation*>(user);
+                return s.module().environmentWaterDepth(s, x, z);
             };
             (void)advanceTornadoes(sim.world(), hooks);
         });

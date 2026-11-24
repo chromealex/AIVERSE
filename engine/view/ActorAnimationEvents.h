@@ -1,7 +1,7 @@
 // FPS-only translation of authoritative actor counters to animation cues.
 // This header belongs to the host, never to the MotionWeave library.
 #pragma once
-#include <aiverselib/animation/AnimationActionEdges.h>
+#include "engine/animation/AnimationActionEdges.h"
 #include <cstdint>
 namespace aiverse::actor::view {
 struct ReplicatedAnimationState {

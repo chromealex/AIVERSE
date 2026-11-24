@@ -1,7 +1,7 @@
 // AIVerse InputFlow: shared, presentation-side semantic RTS shortcuts. Input rules are independent of ECS and Commands.
 // The UI owns text/modal capture; no raw key state may enter the deterministic simulation.
 #pragma once
-#include <aiverselib/gameplay/InputFlow.h>
+#include "engine/platform/input/InputFlowCore.h"
 #include "engine/platform/Platform.h"
 #include "engine/platform/InputFlow.h"
 #include <string>

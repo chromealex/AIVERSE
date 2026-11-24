@@ -1,6 +1,0 @@
-{
-  "version": 1, "preference": "auto", "particles": 64,
-  "appearance": { "additive": true, "radius": 0.035, "color": [1.0, 0.78, 0.35] },
-  "spawn": { "rate": 0, "burst": 36, "life": 0.25, "speed": 5.0, "spread": 0.5, "seed": 13 },
-  "environment": { "acceleration": [0, -6, 0], "damping": 0.9 }
-}
