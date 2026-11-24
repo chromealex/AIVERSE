@@ -7,6 +7,7 @@
 #include "aiverselib/world/WorldProcessReportJobs.h"
 #include "apps/studio-native/StudioWorldProcessDiagnostics.h"
 #include <array>
+#include <queue>
 #include "tests/AlwaysCheck.h"
 #include <iostream>
 #include <memory>
@@ -421,7 +422,95 @@ static void checkGranularActivity(){
     AIVERSE_TEST_CHECK(granular::advance(ecs,2));
     AIVERSE_TEST_CHECK((ecs.get<granular::Field>(field).mass==std::vector<int64_t>{10,50}));
 }
+// Previous global per-generator BFS as independent exact oracle.
+static std::vector<bool> referencePower(const std::vector<lib::PowerVertex>& input,lib::Graph graph){
+    for(auto& row:graph){std::sort(row.begin(),row.end());row.erase(std::unique(row.begin(),row.end()),row.end());}
+    std::vector<bool> powered(input.size(),false);
+    for(size_t root=0;root<input.size();++root){
+        if(!input[root].enabled||input[root].supply<=0)continue;
+        auto budget=input[root].supply;
+        std::vector<bool> seen(input.size(),false);
+        std::queue<size_t> queue;queue.push(root);seen[root]=true;
+        while(!queue.empty()){
+            const auto u=queue.front();queue.pop();
+            if(!input[u].enabled)continue;
+            if(!powered[u]&&input[u].demand<=budget&&budget>0){
+                budget-=input[u].demand;powered[u]=true;
+            }
+            for(auto v:graph[u])if(input[v].enabled&&!seen[v]){
+                seen[v]=true;queue.push(v);
+            }
+        }
+    }
+    return powered;
+}
+static void checkCircuitComponentCache(){
+    lib::GraphPowerAllocation cache;
+    lib::PowerAllocationActivity stats{};
+    std::vector<lib::PowerVertex> input{{10,0,true},{0,6,true},{0,6,true},
+                                      {20,0,true},{0,8,true},{0,8,true}};
+    lib::Graph graph{{1},{2},{},{4},{5},{}};
+    auto check=[&](){
+        const auto result=cache.update(input,graph,&stats);
+        AIVERSE_TEST_CHECK(result&&*result==referencePower(input,graph));
+    };
+    check();AIVERSE_TEST_CHECK(stats.recomputedComponents==2&&stats.recomputedVertices==6);
+    check();AIVERSE_TEST_CHECK(stats.recomputedVertices==0&&stats.generatorTraversals==0);
+    input[1].demand=2;check();AIVERSE_TEST_CHECK(stats.recomputedVertices==3&&stats.topologyVertices==0);
+    // Directed reversal changes power even though weak connectivity is identical.
+    graph[1].clear();graph[2].push_back(1);
+    check();AIVERSE_TEST_CHECK(stats.recomputedVertices==3&&stats.topologyVertices==0);
+    graph[2].clear();check();AIVERSE_TEST_CHECK(stats.recomputedVertices==3&&stats.topologyVertices==3);
+    graph[2].push_back(5);check();AIVERSE_TEST_CHECK(stats.recomputedVertices==4);
+    graph[2].push_back(5);check();AIVERSE_TEST_CHECK(stats.recomputedVertices==0);
+    input[5].enabled=false;check();
+    auto previous=stats;
+    graph[0].push_back(999);
+    AIVERSE_TEST_CHECK(!cache.update(input,graph,&stats));
+    AIVERSE_TEST_CHECK(stats.recomputedVertices==previous.recomputedVertices);
+    graph[0].pop_back();check();AIVERSE_TEST_CHECK(stats.recomputedVertices==0);
+    uint64_t rng=0x9175ab3cULL;
+    auto next=[&](){rng=rng*6364136223846793005ULL+1;return rng>>32;};
+    input.assign(64,{});graph.assign(64,{});cache.reset();
+    for(size_t i=0;i<512;++i){
+        const size_t u=next()%64,v=next()%64;
+        switch(i%5){
+            case 0:input[u].supply=int64_t(next()%20);break;
+            case 1:input[u].demand=int64_t(next()%15);break;
+            case 2:input[u].enabled=!input[u].enabled;break;
+            case 3:graph[u].push_back(v);break;
+            default:if(!graph[u].empty())graph[u].pop_back();break;
+        }
+        check();
+    }
+}
+static void checkCircuitCachedLogic(){
+    World ecs;
+    const auto source=ecs.create(),relay=ecs.create(),gate=ecs.create(),wire=ecs.create();
+    circuit::Node generator{};generator.supply=10;
+    ecs.add<circuit::Node>(source,generator);
+    ecs.add<circuit::Node>(relay);
+    ecs.add<circuit::Wire>(wire,circuit::Wire{source,relay,true,true});
+    ecs.add<circuit::Gate>(gate,circuit::Gate{relay,kNullEntity,relay,circuit::Op::Not,true});
+    circuit::PowerCache cache;lib::PowerAllocationActivity stats{};
+    AIVERSE_TEST_CHECK(circuit::advance(ecs,1,cache,&stats));
+    AIVERSE_TEST_CHECK(ecs.get<circuit::Node>(relay).signal);
+    ecs.enableCowSnapshots();const World before=ecs;
+    AIVERSE_TEST_CHECK(circuit::advance(ecs,2,cache,&stats));
+    AIVERSE_TEST_CHECK(!ecs.get<circuit::Node>(relay).signal&&stats.recomputedVertices==0);
+    AIVERSE_TEST_CHECK(circuit::advance(ecs,3,cache,&stats));
+    AIVERSE_TEST_CHECK(ecs.get<circuit::Node>(relay).signal&&stats.recomputedVertices==0);
+    ecs.get<circuit::Wire>(wire).enabled=false;
+    AIVERSE_TEST_CHECK(circuit::advance(ecs,4,cache,&stats));
+    AIVERSE_TEST_CHECK(!ecs.get<circuit::Node>(relay).powered);
+    ecs=before;
+    AIVERSE_TEST_CHECK(circuit::advance(ecs,2,cache,&stats));
+    AIVERSE_TEST_CHECK(ecs.get<circuit::Node>(relay).powered&&!ecs.get<circuit::Node>(relay).signal);
+    AIVERSE_TEST_CHECK(stats.recomputedVertices==2);
+}
 int main(){
+    checkCircuitComponentCache();
+    checkCircuitCachedLogic();
     checkGranularActivity();
     checkRegionLod();
     checkRegionBudget();
