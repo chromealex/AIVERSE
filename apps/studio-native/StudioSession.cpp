@@ -1826,8 +1826,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 return op.name=="terraweave_caverns_paint" && !op.guiOnly;
             });
             if (!registered) out.set("status",str("unavailable"));
-            else if (ws_.map.data.planet()) out.set("status",str("unsupported"));
-            else if (static_cast<const Json&>(ws_.map.data.extra)["terraweaveCaverns"].isNull())
+            else if (!ws_.map.data.planet() && static_cast<const Json&>(ws_.map.data.extra)["terraweaveCaverns"].isNull())
                 out.set("status",str("absent"));
             else {
                 const size_t undo=ws_.map.undoDepth();
@@ -1837,7 +1836,16 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 if (report.has("error")) throw std::runtime_error(report.getStr("error"));
                 if (!(scope==graphDocumentScope()) || undo!=ws_.map.undoDepth() || dirty!=ws_.map.dirty)
                     throw std::runtime_error("Caverns read violated document scope");
-                out.set("status",str("ready"));out.set("report",report);
+                if (ws_.map.data.planet() && !report.getBool("planetary"))
+                    out.set("status",str("unsupported"));
+                else if (ws_.map.data.planet() && report.getStr("activeRegionId").empty())
+                    out.set("status",str("absent"));
+                else {
+                    if(!report.getBool("ok") || report.getBool("changed") || !report["snapshot"].isObject() ||
+                        (ws_.map.data.planet() && (!report["planetAnchor"].isObject() || !report["planetRegions"].isArray())))
+                        throw std::runtime_error("Invalid native Caverns inspection report");
+                    out.set("status",str("ready"));out.set("report",report);
+                }
             }
             reply.set("result",std::move(out));
         } else if (method == "studio.ops") {
