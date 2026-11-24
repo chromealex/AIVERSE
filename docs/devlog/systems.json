@@ -1792,10 +1792,10 @@
           "textEn": "Renderer and LENS root inspection, opt-in certified automatic slot recycling. Default off; integrated verification pending."
         },
         {
-          "name": "Texture Graph GPU — Stage 38O (в работе)",
-          "text": "Единая проверка ссылок для ручного и автоматического освобождения GPU-изображений; безопасный отказ при незавершённых транзакциях.",
-          "nameEn": "Texture Graph GPU — Stage 38O (in progress)",
-          "textEn": "Unify explicit and automatic root inspection; refuse collection during active transactions."
+          "name": "Texture Graph GPU — Stage 38O (частично)",
+          "text": "Ручная и автоматическая очистка используют общую проверку ссылок Renderer3D и LENS. Неполное подтверждение и невыданные результаты блокируют освобождение; интеграционная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38O (partial)",
+          "textEn": "Explicit and automatic collection share Renderer3D/LENS root inspection. Unreleased results and incomplete proofs refuse retirement; integration verification pending."
         }
       ],
       "enables": [
