@@ -218,6 +218,9 @@ Individual and coordinated Asset Undo/Redo use outer studio-history-batch journa
 ## Atomic recording of staged Asset mutations (S6f.4b.3b.1)
 Metadata patch, folder creation, reversible deletion, external import and replacement prepare detached history and payload operations, then publish via paired-cursor outer journal v4/v5. v5 distinguishes absent checkpoint from empty existing bytes; recovery may remove a first checkpoint only after a valid readiness marker and exact after bytes. Do not bypass the owner. Internal move/rename with material repair and explicit Trash operations retain the legacy dirty-marker path. Private staged recovery records may survive rejection; never auto-purge. No new MCP endpoint.
 
+## Atomic internal Asset transfer (S6f.4b.3b.2)
+Use staged StudioTransferPlan::apply with no live commit callback for internal Move/Rename as well as external transfers. Resolve actual conflict decisions first; prepare typed URI edits, exact material snapshots (preserve unrelated document fields), GUID and tree digests through the existing ordinary chain planner. Recheck actual endpoints against map/rules before journal v4/v5 publication with the detached Asset cursor. Refresh disposable index and material view only after commit. Oversized/unrecordable internal moves refuse before mutation; legacy direct callers retain their prior path. Explicit Trash restore/purge and batch cleanup remain separate. No new MCP endpoint.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web
