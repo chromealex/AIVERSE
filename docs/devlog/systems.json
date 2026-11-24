@@ -116,6 +116,14 @@
           "target": null,
           "title": "Автоматический стриминг, коллизии деревьев и панель генератора в Studio",
           "titleEn": "Automatic streaming, tree collisions and a Studio generator panel"
+        },
+        {
+          "id": "terraweave-caverns",
+          "status": "in-progress",
+          "title": "Подземные полости TerraWeave",
+          "titleEn": "TerraWeave Caverns",
+          "text": "Проверка подземной геометрии, навигации, входов и восстановления на объединённой ветке.",
+          "textEn": "Verify underground geometry, navigation, entrances and restore on the integrated branch."
         }
       ],
       "taglineEn": "Procedural terrain and nature",
@@ -1833,7 +1841,8 @@
           "title": "Building StructureGraph: точные координаты проёмов, опоры и стабильные сокеты",
           "titleEn": "Building StructureGraph: explicit opening positions and stable sockets",
           "text": "Единый граф для меша и коллизий с фиксированными и автоматическими элементами. Координаты проёмов редактируются и сохраняются в Studio.",
-          "textEn": "A shared graph generates meshes and collision from exact and automatic positions. Studio edits and persists placement data."
+          "textEn": "A shared graph generates meshes and collision from exact and automatic positions. Studio edits and persists placement data.",
+          "id": "building-graph-integration"
         },
         {
           "status": "in-progress",
