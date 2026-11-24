@@ -44,8 +44,10 @@ public:
     bool reconcileGroup(const World& frozen,const CaveAuthorityConfig& cfg,
             TerrainMutationCoordinator& terrain,std::span<const world::Cell> pinned,
             const std::function<bool()>& exclusive,
-            const std::function<bool(uint64_t)>& volumeReady,bool force=false){
-        if(!exclusive||!exclusive()||!volumeReady)return false;
+            const std::function<bool(uint64_t)>& volumeReady,
+            const std::function<bool(const CaveSurfaceGroupPlan&)>& volumeRimsReady,
+            bool force=false){
+        if(!exclusive||!exclusive()||!volumeReady||!volumeRimsReady)return false;
         if(owner_&&owner_!=&terrain)throw std::logic_error("Caverns surface binding owner changed");
         auto snapshot=freezeCaveAuthority(frozen,cfg);
         if(!volumeReady(snapshot->sourceRevision))return false;
@@ -55,13 +57,16 @@ public:
         if(!force&&groupPlan_&&owner_==&terrain&&authorRevision_==snapshot->sourceRevision&&
            surfaceEpoch_==terrain.surfaceEpoch()&&groupPlan_->soilRevision==terrain.soilRevision()&&
            cells.size()==groupPlan_->patches.size()&&std::all_of(cells.begin(),cells.end(),
-                [&](const auto& cell){return groupPlan_->patches.contains(cell);}))return true;
+                [&](const auto& cell){return groupPlan_->patches.contains(cell);}))return volumeRimsReady(*groupPlan_);
         if(terrain.surfaceEpoch()==UINT64_MAX)throw std::overflow_error("Caverns surface epoch");
         const auto epoch=terrain.surfaceEpoch()+1;
         const auto soil=terrain.presentationSnapshot();
         auto plan=std::make_shared<const CaveSurfaceGroupPlan>(planCaveSurfaceGroup(*soil,*snapshot,pinned,
             terrain.terrainCellSizeMetres(),terrain.terrainResolution(),epoch));
-        if(!exclusive()||!volumeReady(snapshot->sourceRevision))return false;
+        // The native volume owner must certify its actual final rim edges
+        // (or a staged transition collar) against the exact terrain rims.
+        // A numeric SDF revision alone is not seam proof.
+        if(!exclusive()||!volumeReady(snapshot->sourceRevision)||!volumeRimsReady(*plan)||!exclusive())return false;
         terrain.setSurfaceGroupTopology(epoch,plan->soilRevision,std::move(cells),[plan](TerrainPatch source){
             const auto it=plan->patches.find(source.cell);
             if(it==plan->patches.end()||source.sourceRevision!=plan->soilRevision||
