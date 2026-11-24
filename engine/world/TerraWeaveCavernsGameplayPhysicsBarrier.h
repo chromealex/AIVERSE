@@ -60,12 +60,16 @@ public:
         installed.reserve(owners.size());
         try {
         for(const auto owner:owners) {
-            if(!exclusive()||!owner.spatial->installCandidate(spatial,revision)) {
+            if(!exclusive()){requireRecovery();return false;}
+            if(!owner.spatial->installCandidate(spatial,revision)) {
+                if(!exclusive()){requireRecovery();return false;}
                 rollback(installed,spatial,boxScene,revision);
                 return false;
             }
             installed.push_back(owner);
+            if(!exclusive()){requireRecovery();return false;}
             if(!owner.box->installCandidate(boxScene,revision)) {
+                if(!exclusive()){requireRecovery();return false;}
                 rollback(installed,spatial,boxScene,revision);
                 return false;
             }
@@ -75,7 +79,7 @@ public:
             // An exception may originate inside a native insertion before
             // its candidate-installed flag is set. Roll back known leases,
             // then quarantine rather than assuming the unknown call was clean.
-            try{rollback(installed,spatial,boxScene,revision);}catch(...){}
+            try{if(exclusive())rollback(installed,spatial,boxScene,revision);}catch(...){}
             requireRecovery();throw;
         }
         if(!exclusive()){
