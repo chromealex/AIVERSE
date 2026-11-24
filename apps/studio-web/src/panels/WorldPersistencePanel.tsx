@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Database, RefreshCw } from 'lucide-react';
 import { invoke, nativeConnected } from '../bridge';
-import type { StudioWorldOps, StudioWorldStatus, StudioWorldBackup, StudioWorldRetention, StudioWorldPage, StudioWorldJob } from '../types';
+import type { StudioWorldOps, StudioWorldStatus, StudioWorldBackup, StudioWorldRetention, StudioWorldPage, StudioWorldJob, StudioSimulationLodConfig, StudioSimulationLodSettings } from '../types';
 import {
   StudioPanel, StudioSection, StudioButton, StudioIconButton, StudioField, StudioInput, StudioSelect,
   StudioBadge, StudioAlert, StudioEmptyState, StudioProgress, StudioTabs
@@ -47,9 +47,67 @@ function JobProgress({job,onCancel,onRelease,detached}:{job:StudioWorldJob;onCan
     {detached&&terminal&&<StudioButton onClick={onRelease}>Release result</StudioButton>}
   </StudioSection>;
 }
-type Tab = 'overview'|'backups'|'retention'|'entities';
+type Tab = 'overview'|'backups'|'retention'|'entities'|'simulation';
 type ConfirmPlan = {world:string;seed:string;keepPrevious:string;maxBytes:string;plan:StudioWorldRetention};
 
+const lodFields = [
+  ['hotCells','Hot radius (cells)',0,4096],
+  ['warmCells','Warm radius (cells)',0,4096],
+  ['warmTicks','Warm decision interval (ticks)',1,120],
+  ['coldTicks','Cold decision interval (ticks)',1,120]
+] as const;
+type LodKey=typeof lodFields[number][0];
+const lodOnly=(value:StudioSimulationLodConfig):StudioSimulationLodConfig=>({
+  enabled:value.enabled,hotCells:value.hotCells,warmCells:value.warmCells,
+  warmTicks:value.warmTicks,coldTicks:value.coldTicks
+});
+function SimulationLodSettings({projectPath,disabled,onSaved}:{projectPath:string;disabled:boolean;onSaved:()=>void}){
+  const [current,setCurrent]=useState<StudioSimulationLodConfig|null>(null);
+  const [enabled,setEnabled]=useState(false);
+  const [draft,setDraft]=useState<Record<LodKey,string>>({hotCells:'4',warmCells:'16',warmTicks:'4',coldTicks:'16'});
+  const [pending,setPending]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
+  const alive=useRef(true),lock=useRef(false);
+  useEffect(()=>{alive.current=true;return()=>{alive.current=false}},[]);
+  function adopt(value:StudioSimulationLodSettings){
+    setCurrent(lodOnly(value));setEnabled(value.enabled);
+    setDraft({hotCells:String(value.hotCells),warmCells:String(value.warmCells),warmTicks:String(value.warmTicks),coldTicks:String(value.coldTicks)});
+  }
+  async function run(fn:()=>Promise<void>){
+    if(lock.current||disabled)return;
+    lock.current=true;setPending(true);setError('');setNotice('');
+    try{await fn();}catch(e){if(alive.current)setError(message(e));}
+    finally{lock.current=false;if(alive.current)setPending(false);}
+  }
+  const config:StudioSimulationLodConfig={enabled,hotCells:Number(draft.hotCells),warmCells:Number(draft.warmCells),
+    warmTicks:Number(draft.warmTicks),coldTicks:Number(draft.coldTicks)};
+  const valid=lodFields.every(([key,,min,max])=>/^(0|[1-9][0-9]*)$/.test(draft[key])&&
+    Number.isInteger(config[key])&&config[key]>=min&&config[key]<=max)&&config.hotCells<=config.warmCells&&config.warmTicks<=config.coldTicks;
+  const dirty=current!==null&&JSON.stringify(current)!==JSON.stringify(config);
+  return <StudioSection title="Simulation LOD">
+    <StudioAlert tone="warning">Authored settings only. Save changes with the server stopped. Changing rules changes content identity and can make existing saves incompatible. Restart or create a compatible new world.</StudioAlert>
+    <StudioButton disabled={disabled||pending} onClick={()=>void run(async()=>{
+      const result=await jobOp<StudioSimulationLodSettings>('world_simulation_lod_get',{},projectPath);
+      if(alive.current)adopt(result);
+    })}>{current?'Reload settings':'Load project settings'}</StudioButton>
+    {current&&<>
+      <StudioField label="Decision scheduling" htmlFor="wp-lod-enabled"><StudioSelect id="wp-lod-enabled" disabled={disabled||pending} value={enabled?'on':'off'} onChange={e=>setEnabled(e.target.value==='on')}><option value="off">Disabled</option><option value="on">Enabled</option></StudioSelect></StudioField>
+      {lodFields.map(([key,label,min,max])=><StudioField key={key} label={label} htmlFor={'wp-lod-'+key}>
+        <StudioInput id={'wp-lod-'+key} type="number" min={min} max={max} step={1} value={draft[key]} disabled={disabled||pending}
+          onChange={e=>setDraft(prev=>({...prev,[key]:e.target.value}))}/>
+      </StudioField>)}
+      <small>Only supported AI decision adapters use this policy. Physics and authoritative interactions remain full-rate.</small>
+      {!valid&&<StudioAlert tone="warning">Use valid integers and ordered radii / tick intervals.</StudioAlert>}
+      <StudioButton variant="primary" disabled={disabled||pending||!valid||!dirty} onClick={()=>void run(async()=>{
+        await jobOp<StudioSimulationLodConfig>('world_simulation_lod_validate',{config},projectPath);
+        const result=await jobOp<StudioSimulationLodSettings>('world_simulation_lod_set',{config,expected:current},projectPath);
+        if(alive.current){adopt(result);setNotice('Saved. Restart required; live adoption is not verified.');onSaved();}
+      })}>Save simulation policy</StudioButton>
+    </>}
+    {pending&&<small>Applying validated project settings…</small>}
+    {error&&<StudioAlert tone="danger">{error}</StudioAlert>}
+    {notice&&<StudioAlert>{notice}</StudioAlert>}
+  </StudioSection>;
+}
 function RegionMap({status}:{status:StudioWorldStatus}) {
   if (!status.regions.length) return <StudioEmptyState title="No occupied regions"/>;
   const rows=status.regions;
@@ -210,7 +268,8 @@ function WorldPersistenceBody({projectPath}:{projectPath:string}) {
           </div>
         </StudioSection>
         <StudioTabs<Tab> label="World maintenance sections" selected={tab} onChange={setTab}
-          items={[{id:'overview',label:'Overview'},{id:'backups',label:'Backups'},{id:'retention',label:'Retention'},{id:'entities',label:'Entities'}]}/>
+          items={[{id:'overview',label:'Overview'},{id:'backups',label:'Backups'},{id:'retention',label:'Retention'},{id:'entities',label:'Entities'},{id:'simulation',label:'Simulation LOD'}]}/>
+        {tab==='simulation'&&<SimulationLodSettings projectPath={projectPath} disabled={!!busy||!!jobState} onSaved={clearSelectionData}/>}
         {tab==='overview'&&<StudioSection title="Finalized state">
           {!status?<StudioEmptyState title="No inspected save" description="Select a world and inspect it."/>:<>
             <dl className="world-persistence-stats">

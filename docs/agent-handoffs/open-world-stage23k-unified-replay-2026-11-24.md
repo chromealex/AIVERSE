@@ -1,0 +1,3 @@
+# W1.23k — unified atomic replay
+
+UnifiedWorldReplay.h owns a staged State (ledger, World, sequence), checks contiguous sequence, decodes UWT1, replays ledger, invokes host materializer, restores component batch and optional validator, publishes via unique_ptr swap at quiescent barrier. Failure leaves original state unchanged assuming callbacks have no external side effects. Host materializer not implemented; must reconcile identity/allocator and residency. Full World copies currently expensive. No disk session integration or native tests. Next unified WAL writer/recovery session and checkpoint format. PR #116 Draft; no main merge.

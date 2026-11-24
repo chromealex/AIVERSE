@@ -7,6 +7,10 @@
 #include "ActorSystems.h"
 #include "ActorComponents.h"
 #include "engine/world/CollisionStream.h"
+#include "engine/world/VehicleRegionTransfer.h"
+#include "engine/world/RegionMoveRequests.h"
+#include "engine/world/RegionDirtyQueue.h"
+#include "engine/world/SimulationLod.h"
 #include "engine/mechanics/Melee.h"
 #include "engine/mechanics/royale/BattleRoyale.h"
 #include "engine/systems/Gear.h"
@@ -66,6 +70,7 @@ struct Config {
     // Opt-in `fps.bots` (bots-combatant settings): map players with "bot": true use the library controller with
     // regional navmeshes, loot / heal / zone goals instead of the reference fallback bot.
     Json bots;
+    world::SimulationLodConfig simulationLod;
 };
 // Battle-royale run (empty when fps.royale is absent). Slot i-1 indexes divers / credit.
 struct RoyaleRun {
@@ -95,6 +100,8 @@ struct State {
     RoundState match;
     RoyaleRun royale;
 };
+// Portable resource codec: same canonical match fields, no runtime handles.
+void io(Archive&,State&);
 Config readConfig(const Json& rules);
 Command command(uint8_t slot,const Input& input);
 bool decodeInput(const Command& command,Input& input);
@@ -112,11 +119,22 @@ public:
     bool serializeState(Simulation&,Archive&) override;
     int result(Simulation& sim) override { return state(sim).winner; }
     const Config& config() const { return config_; }
+    // Runtime-only storage audit and content-specific portable validation.
+    static std::vector<uint32_t> portableDerivedResourceTypes();
+    bool validatePortableWorld(const World&,uint32_t tick)const;
 
     const world::SpatialWorld& collision() const { return collision_; }
     void setContentReader(world::AssetReader);
     bool readyToStep(Simulation&) override;
     const world::AsyncChunkStream::Status* streamingStatus()const{return streamedCollision_?&streamedCollision_->status():nullptr;}
+    // Derived navigation generation for diagnostic/acceptance tests only.
+    // No mutable simulation state is affected by rebuilding a navmesh.
+    uint64_t navigationRebuilds()const{return navigationRebuilds_;}
+    bool streamedContentIntegrityFailed()const{return streamedCollision_&&streamedCollision_->contentIntegrityFailed();}
+    uint64_t navigationCollisionRevision()const{return navigationCollisionRevision_;}
+    const std::string& navigationReadinessError()const{return navigationReadinessError_;}
+    const std::string& collisionAdmissionError()const{return collisionAdmissionError_;}
+
     // Match-level data (round, winner, nextObject, match, royale, history).
     State& state(Simulation& sim) const { return *sim.world().resource<State>(); }
     const State& state(const Simulation& sim) const { return *sim.world().resourceConst<State>(); }
@@ -147,10 +165,52 @@ public:
     std::vector<Loot> loot(const Simulation& sim) const;
     std::vector<Vehicle> vehicles(const Simulation& sim) const;
     Entity vehicleEntity(const Simulation& sim,uint32_t id) const;   // kNullEntity when absent
+    // Thin world-space host adapter: resolve integer seat slots to real
+    // CharacterIndex ECS entities, then use shared vehicle group validation.
+    bool vehicleRegionGroup(const Simulation& sim,Entity vehicle,
+                            world::VehicleRegionGroup& out,
+                            std::string* error=nullptr) const;
+    // Resolves the actual world-space components; no duplicate Transform.
+    static world::RegionPositionReader regionPositionReader();
+    // Requires opt-in regionOwnership in rules and destination collision/nav
+    // readiness, then transfers the complete shared-vehicle occupant group.
+    bool transferVehicleRegion(Simulation& sim,Entity vehicle,
+                               world::Cell from,world::Cell to,
+                               std::string* error=nullptr);
+    // Run at a structural ECS tick boundary after actor and vehicle systems.
+    // Opt-in only; tracks live spawn/retire/movement in the region ledger.
+    void synchronizeRegionOwnership(Simulation& sim);
+    void invalidateRegionOwnershipCaches(Simulation& sim);
+    // Explicit lifecycle observations from authoritative game/owner systems.
+    // Does not replace legacy full-pool scanning until every writer migrates.
+    bool reportRegionChange(Simulation& sim,Entity entity,
+                            world::RegionDirtyKind kind);
+    // Hot owner callback: mark Move only when the canonical position crosses
+    // the actor's current stable ledger cell. Avoid per-frame dirty churn.
+    bool reportRegionMoveIfCrossed(Simulation& sim,Entity entity);
+    // Authoritative host-only staged movement. The destination is requested
+    // BEFORE a simulation tick; collision/nav admission runs in readyToStep.
+    bool requestRegionMove(Simulation& sim,Entity entity,Vec3 destination,
+                           std::string* error=nullptr);
+    // Trusted native/script gameplay entry point: stable W1 identity rather
+    // than a transient Entity. Callers must authorize the action first.
+    bool requestRegionMoveByStableId(Simulation& sim,
+                                     world::RegionEntityId stableId,
+                                     Vec3 destination,
+                                     std::string* error=nullptr);
+    // Validate a typed vehicle's seat/controller schema before staging.
+    // No mutation; uses the shared VehicleRegionTransfer group.
+    bool typedRegionMoveGroup(const Simulation&,Entity,
+                              std::vector<Entity>&,std::string* error=nullptr)const;
+
+
     RoyaleView royaleView(Simulation&,uint8_t slot) const;
     lib::mechanics::RaceView raceView(Simulation&,uint8_t slot) const;   // racer id = slot
     bool racing() const { return race_!=nullptr; }   // this map has a race (map "race": vehicles::RaceState resource)
 private:
+    // Commit one already pre-admitted typed vehicle pose and all real seats.
+    bool placeTypedRegionMove(Simulation&,Entity,Vec3,std::string* error=nullptr);
+    void applyRegionMoves(Simulation&);
     void tick(Simulation&);
     void shoot(Simulation&,CharacterRef);
     void spawnProjectile(Simulation&,Projectile);   // caller checks kMaxProjectiles
@@ -194,6 +254,7 @@ private:
     friend class RaceSeats;
     bool canFireFromVehicle(Simulation&,const CharacterRef&) const;
     void setupBots(Simulation&,const Json&);
+    bool rebuildBotNavigation(std::string* error=nullptr);
     bool thinkBot(Simulation&,CharacterRef);
     template<class T> std::vector<Entity> orderedById(const Simulation&) const;
     std::shared_ptr<BotHost> botHost_;
@@ -216,6 +277,14 @@ private:
     uint64_t contentHash_=0;
     Json streamManifest_;
     std::unique_ptr<world::CollisionStream> streamedCollision_;
+    uint64_t navigationCollisionRevision_=UINT64_MAX;
+    uint64_t navigationRebuilds_=0;
+    std::string navigationReadinessError_;
+    std::string collisionAdmissionError_;
+    // Host-local derived admission from the most recent readyToStep.
+    // Never saved/hashed; refreshed before every tick and after rollback.
+    std::map<uint64_t,Vec3> admittedRegionMoves_;
+
 };
 // The actor systems of a simulation run by game::GameCore (engine/game/GameCore.cpp); throws when the map is not world-space.
 ActorHost& host(Simulation&);

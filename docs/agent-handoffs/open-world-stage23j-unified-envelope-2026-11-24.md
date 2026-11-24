@@ -1,0 +1,3 @@
+# W1.23j — unified world transaction envelope
+
+UnifiedWorldTransaction.h introduces UWT1 payload (24-byte header, base ledger revision, lengths, legacy ledger transaction and DCT1 component transaction). Supports ledger-only, component-only and mixed changes, bounded by outer WAL payload. Decode stages output; replayLedger checks base revision and uses existing atomic ledger replay. Full atomic world replay still needs host materialization/allocator reconciliation and staged component restore; existing ledger-only session must not write UWT1 yet. No native tests run. Next staged mixed replay and explicit WAL session version integration. PR #116 Draft; no main merge.

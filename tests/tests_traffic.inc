@@ -666,6 +666,29 @@ TEST(traffic_population_far_from_the_hero_runs_on_the_schedule_alone) {
     CHECK(citizensIn(*sim, game::kCitizenHome) == 12);
 }
 
+TEST(traffic_population_recurring_budget_and_restore) {
+    const std::string marker=R"("population": {)";
+    auto rules=populationRules();
+    rules.insert(rules.find(marker)+marker.size(),R"("updatePeriodTicks": 1,"maxUpdatesPerTick": 3,)");
+    auto sim=makeSimJson(rules,populationMap(),5);
+    sim->step();
+    CHECK(tstore(*sim).citizens.size()==12);
+    CHECK(trf(*sim).rules().population.updatePeriodTicks==1);
+    CHECK(trf(*sim).rules().population.maxUpdatesPerTick==3);
+    const auto before=tstore(*sim).citizenCursor;
+    sim->step();
+    CHECK(tstore(*sim).citizenCursor==before+3);
+    tstore(*sim).citizenCursor=UINT32_MAX-1;
+    sim->step();
+    CHECK(tstore(*sim).citizenCursor==5); // indices 2,3,4 visited, next is 5
+    auto saved=sim->serialize();
+    auto restored=makeSimJson(rules,populationMap(),5);
+    std::string error;
+    CHECK(restored->deserialize(saved,&error));
+    CHECK(restored->checksum()==sim->checksum());
+    for(int i=0;i<80;++i){sim->step();restored->step();}
+    CHECK(restored->checksum()==sim->checksum());
+}
 TEST(traffic_population_determinism_and_saves) {
     auto s1 = makeSimJson(populationRules(), populationMap(), 5), s2 = makeSimJson(populationRules(), populationMap(), 5);
     std::vector<uint64_t> c1, c2;

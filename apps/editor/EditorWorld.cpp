@@ -11,6 +11,8 @@
 #include "EditorSelectionAdapter.h"
 #include "EditorRuntimeEntityProvider.h"
 #include "core/SimTools.h"
+#include "engine/world/WorldPersistenceDiagnostics.h"
+#include "engine/world/SimulationLod.h"
 
 namespace fs = std::filesystem;
 
@@ -475,6 +477,22 @@ void Editor::registerWorldOps() {
         j.set("components", c);
         return j;
     };
+    add("world_regions_status",
+        "Read region ownership diagnostics from the current editor preview or play simulation. Not a disk-save or collision residency report.",
+        R"J({"properties":{}})J",
+        [this](const Json&){
+            ensureWorld();
+            const Simulation* sim=worldSim();
+            if(!sim)throw std::runtime_error("world simulation not ready");
+            const auto* ledger=sim->world().resourceConst<world::RegionEntityLedger>();
+            if(!ledger)throw std::runtime_error("region ownership is not enabled");
+            auto result=world::ledgerStatus(*ledger,sim->world());
+            result.set("mode",Json::string(worldLive_?"play":"preview"));
+            result.set("tick",Json::number(int64_t(sim->tick())));
+            result.set("durabilityKnown",Json::fromBool(false));
+            result.set("simulationLod",world::simulationLodDiagnosticsJson(sim->world().resourceConst<world::SimulationLodDiagnostics>()));
+            return result;
+        });
     add("world_entities",
         "Every object of the game world as the Hierarchy shows it: edit mode = the open map set up with the game's "
         "scripts / C++ modules (map entities have 'doc' = index in the map; origin 'setup' = created by the game at start), "

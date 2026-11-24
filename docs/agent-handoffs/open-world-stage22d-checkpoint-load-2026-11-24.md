@@ -1,0 +1,3 @@
+# W1.22d — checkpoint loader
+
+RegionCheckpointLoad.h reads the active manifest, verifies expected world identity, bounded exact checkpoint size, caller-provided digest verification and private ledger decode, then replays WAL from checkpoint sequence. Publishes ledger only after accepted complete scan or explicitly accepted incomplete tail. Requires external exclusive recovery barrier; no automatic file repair, digest implementation, WAL file identity binding or ECS restore. Native tests not run. Next concrete digest and archive adapters, Windows publisher, generation session lock. PR #116 Draft; no main merge.
