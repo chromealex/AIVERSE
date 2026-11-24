@@ -89,9 +89,26 @@ public:
             syncStreamingEditPins();
         }catch(...) {physicsBarrier_.requireRecovery();throw;}
     }
+    bool configureRimSurfaceGroup(std::shared_ptr<const CaveSurfaceGroupPlan> plan,
+            std::vector<CaveOwnedRimRequest> requests,const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive){
+        if(closed_||physicsBarrier_.status().recoveryRequired||!exclusive||!exclusive())return false;
+        if(!host_.configureRimGroup(std::move(plan),std::move(requests),exclusive))return false;
+        try{
+            readyStreamBuilds_.clear();pendingRetires_.clear();invalidateNavigationRouteCache();syncStreamingEditPins();
+        }catch(...){physicsBarrier_.requireRecovery();throw;}
+        return true;
+    }
+    // Owner keeps the same exclusive world lease across volume staging,
+    // surface publication and final downstream acknowledgement.
+    bool finishRimSurfacePublication(const std::function<bool(const CaveSurfaceGroupPlan&)>& allOwnersReady,
+            const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive){
+        if(closed_||physicsBarrier_.status().recoveryRequired||navigationBus_.hasPending()||!allOwnersReady)return false;
+        try{return host_.finishRimGroup(allOwnersReady,exclusive);}
+        catch(...){physicsBarrier_.requireRecovery();throw;}
+    }
     bool finishAuthoredRestore(const CaveGameplayPhysicsBarrier::ExclusiveProof& exclusive) {
         const auto s=host_.stats();
-        if(!restoring_||closed_||physicsBarrier_.status().recoveryRequired||
+        if(!restoring_||closed_||host_.rimPublicationBlocked()||physicsBarrier_.status().recoveryRequired||
            !exclusive||!exclusive()||!s.requestedRevision||
            s.requestedRevision!=s.committedRevision||navigationBus_.hasPending()||
            !navigationBus_.active()||!navigationBus_.active()->environmentRevision())return false;
@@ -155,6 +172,7 @@ public:
             published=host_.commitAtOwnerBarrier([&](const CaveGameplayCommitView& view){
                 if(!exclusive())return false;
                 physicsFinalized=physicsBarrier_.apply(view,box3D,spatial,exclusive);
+                if(physicsFinalized&&!exclusive())throw std::logic_error("Caverns lost world exclusion after physics commit");
                 return physicsFinalized;
             });
         }catch(...) {
@@ -191,7 +209,7 @@ public:
     // A*/HPA*/FlowField/Hybrid/Custom consumers query this shared data.
     // The NavMesh shadow still uses its existing nav::Source projection.
     std::shared_ptr<const CaveNavigationDataProvider>
-    publishedNavigation()const{return navigationBus_.active();}
+    publishedNavigation()const{return host_.rimPublicationBlocked()?nullptr:navigationBus_.active();}
     bool navigationInvalidationsPending()const noexcept{
         return navigationBus_.hasPending();
     }
@@ -220,7 +238,7 @@ public:
     // suppress both movement requests and solver reads until recovered.
     std::shared_ptr<const CaveNavigationDataProvider>
     gameplayNavigationSource()const {
-        if(closed_||restoring_||physicsBarrier_.status().recoveryRequired||
+        if(closed_||restoring_||host_.rimPublicationBlocked()||physicsBarrier_.status().recoveryRequired||
            navigationBus_.hasPending())return nullptr;
         return navigationBus_.active();
     }
@@ -373,7 +391,7 @@ public:
     // to bounded immutable CPU workers; no GPU work starts on those threads.
     std::vector<CaveResidencyTicket> dispatchStreamingCpu(
         ChunkKey3 cameraChunk,uint32_t resolution=0,int32_t spacingCm=0) {
-        if(closed_||restoring_||physicsBarrier_.status().recoveryRequired)return {};
+        if(closed_||restoring_||host_.rimPublicationBlocked()||physicsBarrier_.status().recoveryRequired)return {};
         if(!resolution)resolution=chunkResolution_;
         if(!spacingCm)spacingCm=chunkSpacingCm_;
         if(resolution!=chunkResolution_||spacingCm!=chunkSpacingCm_)
@@ -451,6 +469,7 @@ public:
         const StreamBuildCommit& actualNativeCommit) {
         const auto it=readyStreamBuilds_.find(ticket.key);
         if(closed_||restoring_||physicsBarrier_.status().recoveryRequired||
+           host_.rimPublicationBlocked()||host_.ownsRimChunk(ticket.key)||
            ticket.action!=CaveResidencyAction::Build ||
            !exclusive || !exclusive() || !actualNativeCommit ||
            it==readyStreamBuilds_.end() ||
@@ -498,6 +517,7 @@ public:
         const StreamRetireCommit& retireNavigation,CaveBatchSpec spec={}) {
         const auto it=pendingRetires_.find(ticket.key);
         if(closed_||restoring_||physicsBarrier_.status().recoveryRequired||
+           host_.rimPublicationBlocked()||host_.ownsRimChunk(ticket.key)||
            ticket.action!=CaveResidencyAction::Retire||!exclusive||!exclusive()||
            !retireNavigation||it==pendingRetires_.end()||!residency_.current(ticket)||
            it->second.generation!=ticket.generation||
@@ -525,6 +545,7 @@ public:
         const StreamRetireCommit& actualNativeCommit) {
         const auto it=pendingRetires_.find(ticket.key);
         if(closed_||restoring_||physicsBarrier_.status().recoveryRequired||
+           host_.rimPublicationBlocked()||host_.ownsRimChunk(ticket.key)||
            ticket.action!=CaveResidencyAction::Retire ||
            host_.physicsStages().contains(ticket.key)||
            !exclusive || !exclusive() || !actualNativeCommit ||
@@ -681,7 +702,8 @@ private:
         if(residency_.stats().sourceRevision!=source)
             residency_.sourceRevision(source);
         const auto pending=host_.pendingEditKeys();
-        const std::set<ChunkKey3,KeyLess> wanted(pending.begin(),pending.end());
+        std::set<ChunkKey3,KeyLess> wanted(pending.begin(),pending.end());
+        wanted.insert(host_.activeRimKeys().begin(),host_.activeRimKeys().end());
         for(auto it=editPins_.begin();it!=editPins_.end();) {
             if(!wanted.contains(it->first)) {
                 residency_.unpin(it->first,it->second);
