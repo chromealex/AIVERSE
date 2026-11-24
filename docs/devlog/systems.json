@@ -1756,10 +1756,10 @@
           "textEn": "Incremental GPU DAG supports pointwise fusion. Isolated policy tests passed."
         },
         {
-          "name": "Texture Graph GPU — Stage 38I (в работе)",
-          "text": "Инкрементальная генерация конечных текстур для одного материала.",
-          "nameEn": "Texture Graph GPU — Stage 38I (in progress)",
-          "textEn": "Incremental final textures for a matching live material."
+          "name": "Texture Graph GPU — Stage 38I",
+          "text": "Инкрементальная генерация конечных текстур: неизменённые привязки сохраняются, изменённые текстуры публикуются отдельно. Изолированный тест пройден.",
+          "nameEn": "Texture Graph GPU — Stage 38I",
+          "textEn": "Incremental final textures preserve unchanged bindings and publish only changed textures. Isolated policy test passed."
         }
       ],
       "enables": [
