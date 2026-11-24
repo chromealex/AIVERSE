@@ -5,6 +5,7 @@
 #pragma once
 #include "aiverselib/world/WorldProcessesQueries.h"
 #include "aiverselib/world/MorphPlanetModelFrame.h"
+#include "MorphVertexDeformation.h"
 #include "engine/render/Renderer3D.h"
 #include "engine/render/ModelVertexStreamOverride.h"
 #include <algorithm>
@@ -18,20 +19,6 @@
 #include <vector>
 
 namespace aiverse::examples::world_processes_native {
-
-struct MorphVertexBinding {
-    std::uint32_t vertex=0;  // index into the actual ModelVertex GPU stream
-    std::array<Entity,4> node{};
-    // 65535 = full influence. Sum of active weights must equal 65535.
-    std::array<std::uint16_t,4> weight{};
-};
-
-struct MorphModelStreamConfig {
-    // One quantized MorphNode displacement unit in metres (e.g., 0.001 = mm).
-    float metresPerUnit=0.001f;
-    float maxDisplacementMetres=5.f;
-    bool recomputeNormals=true;
-};
 
 class MorphModelStream {
 public:
@@ -60,28 +47,8 @@ public:
         for(auto index:indices)if(index>=pristine.size()){
             error_="MORPH: index outside source vertex buffer";return false;
         }
-        std::vector<std::uint8_t> used(pristine.size(),0);
-        for(const auto& influence:influences){
-            if(influence.vertex>=pristine.size()||used[influence.vertex]++){
-                error_="MORPH: duplicate or out-of-bounds vertex binding";return false;
-            }
-            std::uint32_t total=0;
-            for(std::size_t j=0;j<4;++j){
-                const auto weight=influence.weight[j];
-                if(!weight)continue;
-                if(!influence.node[j].valid()){
-                    error_="MORPH: influence without Entity";return false;
-                }
-                for(std::size_t k=0;k<j;++k)
-                    if(influence.weight[k]&&
-                       influence.node[k]==influence.node[j]){
-                        error_="MORPH: repeated influence Entity";return false;
-                    }
-                total+=weight;
-            }
-            if(total!=65535){
-                error_="MORPH: vertex weights must sum to 65535";return false;
-            }
+        if(!validMorphVertexBindings(pristine.size(),influences)){
+            error_="MORPH: invalid vertex binding";return false;
         }
         // VIVID uses precisely this dedicated, full 60B vertex stream:
         // snapshotUpdates prevents overwriting in-flight GPU frames.
@@ -183,25 +150,10 @@ private:
         float largest=0;
         for(const auto& bind:bindings_){
             render::float3 delta{};
-            for(std::size_t i=0;i<4;++i){
-                if(!bind.weight[i])continue;
-                const auto* n=world.tryGetConst<morph::Node>(bind.node[i]);
-                if(!n||!n->enabled||!morph::valid(*n)){
-                    error_="MORPH: missing, stale or invalid ECS influence";
-                    return false;
-                }
-                const float factor=(float(bind.weight[i])/65535.f)*
-                                   config_.metresPerUnit;
-                delta.x+=float(n->x-n->restX)*factor;
-                delta.y+=float(n->y-n->restY)*factor;
-                delta.z+=float(n->z-n->restZ)*factor;
+            if(!morphVertexDisplacement(world,bind,config_,delta)){
+                error_="MORPH: missing influence or displacement exceeds renderer budget";return false;
             }
             const float displacement=render::length(delta);
-            if(!std::isfinite(displacement)||
-               displacement>config_.maxDisplacementMetres){
-                error_="MORPH: vertex displacement exceeds renderer budget";
-                return false;
-            }
             largest=std::max(largest,displacement);
             next[bind.vertex].pos+=delta;
         }

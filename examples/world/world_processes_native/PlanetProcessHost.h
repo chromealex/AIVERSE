@@ -4,6 +4,7 @@
 #pragma once
 #include "PhysicalSceneHost.h"
 #include "PlanetTerrainCollision.h"
+#include "PlanetMorphCollision.h"
 #include "aiverselib/world/EvolvePlanetRootClimate.h"
 #include <optional>
 #include <set>
@@ -29,6 +30,8 @@ public:
     const PlanetHostStamp& stamp()const{return stamp_;}
     size_t physicsTiles()const{return physical_.granularPhysicsTiles();}
     size_t terrainPhysicsTiles()const{return terrain_.count();}
+    size_t morphPhysicsCount()const{return morphCollision_.count();}
+    physics::BodyHandle morphPhysicsHandle(uint64_t id)const{return morphCollision_.handle(id);}
     physics::BodyHandle terrainHandle(int face,int x,int y)const{return terrain_.handle(face,x,y);}
     bool terrainCovers(Vec3 position)const{return terrain_.covers(position);}
     physics::BodyHandle debrisHandle(Entity member)const{return physical_.planetDebris().handle(member);}
@@ -51,7 +54,8 @@ public:
                  std::shared_ptr<const game::Surface> surface,PlanetHostStamp stamp,
                  std::span<const GranularResidentTile> tiles,
                  const std::map<uint64_t,PlanetGranularPlacement>& placements,
-                 GranularFrameBudget budget={},PlanetTerrainCollisionConfig terrainConfig={}){
+                 GranularFrameBudget budget={},PlanetTerrainCollisionConfig terrainConfig={},
+                 std::span<const PlanetMorphCollisionRequest> morphColliders={}){
         if(phase_!=Phase::Idle&&phase_!=Phase::Complete)return false;
         if(!surface||!surface->tab||!stamp.epoch||stamp.completedTick>=UINT32_MAX-1||stamp.body.empty())return false;
         if(scene_&&(terrainEnabled_!=terrainConfig.enabled||surface->tab!=surface_->tab||
@@ -65,9 +69,19 @@ public:
         if(terrainConfig.enabled&&!planPlanetTerrainTiles(*surface,body,terrainConfig))return false;
         auto frame=physical_.preparePlanetGranularBody(ecs,*surface,stamp.body,stamp.terrainRevision,
             tiles,placements,stamp.completedTick,budget);
+        if(morphColliders.size()>256)return false;
+        std::vector<PlanetMorphPreparedCollider> prepared;prepared.reserve(morphColliders.size());
+        std::set<uint64_t> ids;size_t vertices=0,indices=0;
+        for(const auto& request:morphColliders){
+            if(!ids.insert(request.id).second||request.pristine.size()>262144-vertices||request.indices.size()>1572864-indices)return false;
+            vertices+=request.pristine.size();indices+=request.indices.size();
+            auto collider=preparePlanetMorphCollider(ecs,*surface,stamp.body,stamp.completedTick,request);
+            if(!collider)return false;
+            prepared.push_back(std::move(*collider));
+        }
         World snapshot=ecs;
         snapshot_=std::move(snapshot);surface_=std::move(surface);
-        frame_=std::move(frame);stamp_=std::move(stamp);
+        frame_=std::move(frame);morphPrepared_=std::move(prepared);stamp_=std::move(stamp);
         scene_=&scene;sceneTick_=scene.tick();bodyIndex_=body;terrainEnabled_=terrainConfig.enabled;terrainConfig_=std::move(terrainConfig);
         physical_.invalidateMorphPublications();
         renderDone_=false;recorded_=false;contacts_.clear();debrisStates_.clear();
@@ -80,6 +94,7 @@ public:
         phase_=Phase::Fault;
         if(terrainEnabled_&&!terrain_.publish(*scene_,surface_,bodyIndex_,stamp_.terrainRevision,terrainConfig_))return false;
         if(!physical_.publishPhysics(*scene_,frame_))return false;
+        if(!morphCollision_.publish(*scene_,std::move(morphPrepared_)))return false;
         phase_=Phase::PhysicsPublished;return true;
     }
     bool publishDebris(const PlanetDebrisProjection& request){
@@ -211,7 +226,7 @@ public:
     bool resetAfterRollback(){
         if(!scene_)return phase_==Phase::Idle;
         phase_=Phase::Fault;
-        if(!terrain_.reset(*scene_))return false;
+        if(!terrain_.reset(*scene_)||!morphCollision_.reset(*scene_))return false;
         if(device_){if(!physical_.resetAfterRollback(*scene_,*device_))return false;}
         else if(!physical_.resetPhysicsOnly(*scene_))return false;
         auto* retainedDevice=device_;
@@ -223,7 +238,7 @@ public:
             device_=nullptr;return true;
         }
         phase_=Phase::Fault;
-        if(!terrain_.reset(*scene_))return false;
+        if(!terrain_.reset(*scene_)||!morphCollision_.reset(*scene_))return false;
         if(device_){if(!physical_.shutdownAfterIdle(*scene_,*device_))return false;}
         else if(!physical_.resetPhysicsOnly(*scene_))return false;
         clear();return true;
@@ -232,12 +247,14 @@ private:
     bool sceneCurrent()const{return scene_&&scene_->tick()==sceneTick_;}
     void finish(){if(phase_==Phase::PhysicsStepped&&renderDone_&&recorded_)phase_=Phase::Complete;}
     void clear(){
-        snapshot_.reset();surface_.reset();frame_={};stamp_={};contacts_.clear();debrisStates_.clear();
+        snapshot_.reset();surface_.reset();frame_={};morphPrepared_.clear();stamp_={};contacts_.clear();debrisStates_.clear();
         scene_=nullptr;device_=nullptr;sceneTick_=0;bodyIndex_=-1;
         renderDone_=recorded_=terrainEnabled_=false;terrainConfig_={};phase_=Phase::Idle;
     }
     PhysicalSceneHost physical_;
     PlanetTerrainCollision terrain_;
+    PlanetMorphCollisionPublisher morphCollision_;
+    std::vector<PlanetMorphPreparedCollider> morphPrepared_;
     bool terrainEnabled_=false;
     PlanetTerrainCollisionConfig terrainConfig_;
     Phase phase_=Phase::Idle;

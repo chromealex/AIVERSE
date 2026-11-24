@@ -65,10 +65,35 @@ static void checkStreamedTerrain(){
     check(!terrain.publish(scene,surface,0,0,cfg),"foreign body rejected");
     check(terrain.reset(scene)&&scene.bodyCount()==0,"stream shutdown");
 }
+static void checkMorphCollisionPublication(){
+    // Actual static mesh owner: changed geometry replaces the handle,
+    // identical geometry retains it, failed capacity preserves old mesh.
+    physics::SceneConfig cfg;cfg.maxBodies=2;
+    physics::Scene scene(cfg);PlanetMorphCollisionPublisher publisher;
+    PlanetMorphPreparedCollider mesh;mesh.id=1;
+    mesh.desc.motion=physics::Motion::Static;mesh.desc.shape=physics::ShapeKind::Mesh;
+    mesh.desc.vertices={{-1,0,-1},{-1,0,1},{1,0,1},{1,0,-1}};
+    mesh.desc.indices={0,1,2,0,2,3};
+    check(publisher.publish(scene,{mesh}),"MORPH initial mesh");
+    const auto old=publisher.handle(1);
+    check(publisher.publish(scene,{mesh})&&publisher.handle(1)==old,"MORPH unchanged handle");
+    const auto before=scene.raycast({0,3,0},{0,-5,0});
+    check(before.body==old,"MORPH old collider hit");
+    for(auto& p:mesh.desc.vertices)p.y=1;
+    check(publisher.publish(scene,{mesh}),"MORPH replace mesh");
+    const auto next=publisher.handle(1);
+    check(next!=old&&!scene.valid(old)&&scene.raycast({0,3,0},{0,-5,0}).fraction<before.fraction,"MORPH deformed collider");
+    auto other=mesh;other.id=2;
+    check(publisher.publish(scene,{mesh,other}),"MORPH two colliders");
+    mesh.desc.vertices[0].y=2;
+    check(!publisher.publish(scene,{mesh,other})&&scene.valid(next)&&scene.bodyCount()==2,"MORPH atomic capacity reject");
+    check(publisher.reset(scene)&&scene.bodyCount()==0,"MORPH rollback retire");
+}
 int main(){
     try{
         checkTerrainCollision();
         checkStreamedTerrain();
+        checkMorphCollisionPublication();
         auto surface=std::make_shared<game::Surface>();
         game::BodyDef def;def.id="terra";def.radius=Fixed::fromInt(64);def.faceSize=8;
         surface->bodies.push_back(def);def.id="moon";surface->bodies.push_back(def);surface->build();
