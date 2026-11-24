@@ -2181,8 +2181,13 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         planetLiveSnapshot_.getStr("topology")=="planet"&&
         !planetLivePath_.empty()&&planetLivePath_==doc.path&&
         planetLiveProject_==projectPath&&planetLiveRevision_==doc.revision&&!doc.dirty;
-    const bool liveImprint=livePlanet&&planetLiveSnapshot_["imprint"].isObject();
-    const bool liveGranular=livePlanet&&planetLiveSnapshot_["granular"].getBool("available");
+    const bool liveImprint=livePlanet&&planetLiveLayer_!="off"&&planetLiveSnapshot_["imprint"].isObject();
+    const bool liveGranular=livePlanet&&planetLiveLayer_!="off"&&planetLiveSnapshot_["granular"].getBool("available");
+    const bool liveGravity=livePlanet&&planetLiveSnapshot_["gravity"].getBool("available");
+    if(livePlanet&&planetLiveSnapshot_["gravity"].isObject()){
+        if(liveGravity)lightingStatus_+=" · effective PHYSIS gravity (cyan inward, orange outward, violet tangent, grey zero)";
+        else lightingStatus_+=" · live PHYSIS gravity unavailable (budget/context)";
+    }
     const bool liveEvolve=livePlanet&&planetLiveLayer_!="off"&&planetLiveSnapshot_["evolve"].isObject();
     if(liveEvolve){
         lightingStatus_+=" · live EVOLVE "+planetLiveLayer_+" tick "+std::to_string(planetLiveSnapshot_["evolve"].getInt("sampleTick"));
@@ -2222,8 +2227,49 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         }
         if(gizmosVisible_){
             for(const auto& line:planetProcessOverlays_.lines)
-                if(line.owner.empty()||!hidden_.count(line.owner))
+                if((!liveGravity||!line.owner.empty())&&(line.owner.empty()||!hidden_.count(line.owner)))
                     renderer_.line(line.a,line.b,line.color);
+            if(liveGravity){
+                // Effective gravity replaces authored per-field arrows in this
+                // view. Length is an indicative clamped display scale only.
+                const auto readVec=[](const Json& j)->std::optional<render::float3>{
+                    const auto& xyz=j.items();if(xyz.size()!=3)return {};
+                    return render::float3{float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
+                };
+                for(const auto& body:planetLiveSnapshot_["gravity"]["bodies"].items()){
+                    if(body.getStr("body")!=planetPreview_->bodyId)continue;
+                    size_t count=0;
+                    for(const auto& row:body["samples"].items()){
+                        if(count++>=96)break;
+                        const auto ground=readVec(row["position"]),up=readVec(row["up"]),acc=readVec(row["acceleration"]);
+                        if(!ground||!up||!acc)continue;
+                        const float radius=planetPreview_->radius;
+                        const float lift=std::clamp(radius*.008f,.15f,2.f);
+                        const float magnitude=float(row["magnitude"].toDouble());
+                        const auto kind=row.getStr("kind");
+                        if(kind=="zero"||magnitude<=.01f){
+                            const auto axis=normalize(cross(*up,std::abs(up->y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
+                            const auto side=normalize(cross(*up,axis));
+                            const auto center=*ground+*up*lift;
+                            const float extent=std::clamp(radius*.012f,.1f,1.5f);
+                            renderer_.line(center-axis*extent,center+axis*extent,rgba(160,174,185));
+                            renderer_.line(center-side*extent,center+side*extent,rgba(160,174,185));
+                            continue;
+                        }
+                        const auto direction=normalize(*acc);
+                        const float len=std::clamp(magnitude*.2f,.1f,std::max(.1f,radius*.12f));
+                        const float inward=std::max(0.f,-dot(direction,*up));
+                        const auto start=*ground+*up*(lift+inward*len);
+                        const auto end=start+direction*len;
+                        const auto side=normalize(cross(direction,std::abs(direction.y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
+                        const auto color=kind=="inward"?rgba(80,225,255):kind=="outward"?rgba(255,170,80):rgba(205,145,255);
+                        renderer_.line(start,end,color);
+                        renderer_.line(end,end-direction*(len*.25f)+side*(len*.14f),color);
+                        renderer_.line(end,end-direction*(len*.25f)-side*(len*.14f),color);
+                    }
+                    break;
+                }
+            }
             if(liveEvolve){
                 size_t count=0;
                 for(const auto& row:planetLiveSnapshot_["evolve"]["regions"].items()){

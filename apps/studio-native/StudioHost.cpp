@@ -309,7 +309,7 @@ void StudioHost::tickGame() {
                  dt, platform_.gameFocused());
     if(wpLiveEcology_ && now-wpLiveRefresh_>=.25){
         wpLiveRefresh_=now;
-        wpLiveSnapshot_=game_->ecologyState(wpGranularCellCm_);
+        wpLiveSnapshot_=game_->ecologyState(wpGranularCellCm_,wpLiveGravity_);
         rebuildOverlay();
     }
 }
@@ -1106,7 +1106,7 @@ void StudioHost::rebuildOverlay() {
     }
     onScene([&] {
         preview_->setOverlayShapes(std::move(shapes));
-        preview_->setPlanetLiveSnapshot(wpLiveEcology_&&wpEcologyLayer_!="off"&&
+        preview_->setPlanetLiveSnapshot(wpLiveEcology_&&(wpEcologyLayer_!="off"||wpLiveGravity_)&&
             wpLiveSnapshot_.getBool("active")&&wpLiveSnapshot_.getStr("topology")=="planet"
             ?wpLiveSnapshot_:Json{},wpLivePlanetProject_,wpLivePlanetMapPath_,wpLivePlanetRevision_,wpEcologyLayer_);
     });
@@ -2062,17 +2062,21 @@ bool StudioHost::handleHostMethod(const Json& req) {
         }
         if(params.has("live")&&params["live"].type()!=Json::Type::Bool)
             throw std::runtime_error("Live overlay must be boolean");
+        if(params.has("liveGravity")&&params["liveGravity"].type()!=Json::Type::Bool)
+            throw std::runtime_error("Live gravity overlay must be boolean");
         if(!layer.empty())wpEcologyLayer_=layer;
-        if(params.has("live")||params.has("granularCellCm")){
+        if(params.has("live")||params.has("granularCellCm")||params.has("liveGravity")){
+            wpLiveGravity_=params.getBool("liveGravity",wpLiveGravity_);
             wpGranularCellCm_=cellCm;
             wpLiveEcology_=params.getBool("live",wpLiveEcology_);
-            wpLiveSnapshot_=wpLiveEcology_&&game_?game_->ecologyState(wpGranularCellCm_):Json();
+            wpLiveSnapshot_=wpLiveEcology_&&game_?game_->ecologyState(wpGranularCellCm_,wpLiveGravity_):Json();
         }
-        if(!layer.empty()||params.has("live")||params.has("granularCellCm"))rebuildOverlay();
+        if(!layer.empty()||params.has("live")||params.has("granularCellCm")||params.has("liveGravity"))rebuildOverlay();
         Json result=Json::object();
         result.set("layer",Json::string(wpEcologyLayer_));
         result.set("live",Json::fromBool(wpLiveEcology_));
         result.set("granularCellCm",Json::number(int64_t(wpGranularCellCm_)));
+        result.set("liveGravity",Json::fromBool(wpLiveGravity_));
         return result;
     });
     if(method=="studio.worldProcessAreaPreview")return answer([&]{

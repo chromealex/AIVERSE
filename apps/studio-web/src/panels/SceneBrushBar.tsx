@@ -81,6 +81,9 @@ function EcologyLiveMap({layer}:{layer:EvolveLayer}){
   if(error)return <span role="alert">{error}</span>;
   if(!state?.active)return <small>Live ecology: start Play mode</small>;
   if(state.topology==='planet')return <div><small>Planetary live snapshot · tick {state.tick}</small>
+    {state.gravity&&<div><small>PHYSIS effective gravity · {state.gravity.fieldCount} fields{state.gravity.usesDefaultSettings?" · default baseline":""}{state.gravity.available?"": " · unavailable"}</small>
+      {state.gravity.bodies.map(b=><div key={b.body}><small>{b.body}: {b.minMagnitude.toFixed(2)}–{b.maxMagnitude.toFixed(2)} m/s² · inward {b.inward} · outward {b.outward} · tangent {b.tangent} · zero {b.zero}</small></div>)}
+      <small>Cyan inward · orange outward · violet tangent · grey zero. Sampled surface points only.</small></div>}
     {state.evolve&&<div><small>EVOLVE: {state.evolve.regions.length} / {state.evolve.regionCount} regions · {layer}{state.evolve.truncated?' · capped':''} · clipped {state.evolve.clipped} · rejected {state.evolve.rejected}</small>
       {state.evolve.regions.slice(0,12).map(r=><div key={r.id}><small>{r.body} · {r.id}{r.chartClipped?' · chart clipped':''} · F {(r.fertility/1e7).toFixed(1)}% · P {(r.pollution/1e7).toFixed(1)}% · S {(r.succession/1e7).toFixed(1)}% · D {(r.durability/1e7).toFixed(1)}%</small></div>)}
       {state.evolve.regions.length>12&&<small>Showing first 12 sampled regions</small>}</div>}
@@ -134,14 +137,15 @@ export function EcologyLayerPicker(){
   const [layer,setLayer]=useState<EvolveLayer>('combined');
   const [live,setLive]=useState(false);
   const [granularCellCm,setGranularCellCm]=useState(0);
+  const [liveGravity,setLiveGravity]=useState(false);
   const [pending,setPending]=useState(true);
   const [error,setError]=useState('');
-  useEffect(()=>{let active=true;void invoke('studio.evolveLayer',{}).then(r=>{if(active){setLayer(r.layer);setLive(r.live);setGranularCellCm(r.granularCellCm??0);}}).catch(e=>{if(active)setError(message(e));}).finally(()=>{if(active)setPending(false);});return()=>{active=false;};},[]);
+  useEffect(()=>{let active=true;void invoke('studio.evolveLayer',{}).then(r=>{if(active){setLayer(r.layer);setLive(r.live);setGranularCellCm(r.granularCellCm??0);setLiveGravity(r.liveGravity??false);}}).catch(e=>{if(active)setError(message(e));}).finally(()=>{if(active)setPending(false);});return()=>{active=false;};},[]);
   return <div><label className="ptp__row"><span>EVOLVE (authored)</span><select className="au-input" value={layer} disabled={pending} onChange={e=>{
     const next=e.target.value as EvolveLayer;
     setPending(true);
     void invoke('studio.evolveLayer',{layer:next}).then(r=>{setLayer(r.layer);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));
-  }}>{(['combined','fertility','pollution','succession','durability','off'] as EvolveLayer[]).map(v=><option key={v} value={v}>{v}</option>)}</select>{error&&<span role="alert">{error}</span>}</label><label><input type="checkbox" checked={live} disabled={pending} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{live:e.target.checked}).then(r=>{setLive(r.live);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>Live 3D overlay</label><label className="ptp__row"><span>GRANULAR planet diagnostic cell/depth (cm)</span><select className="au-input" disabled={pending||!live} value={granularCellCm} onChange={e=>{
+  }}>{(['combined','fertility','pollution','succession','durability','off'] as EvolveLayer[]).map(v=><option key={v} value={v}>{v}</option>)}</select>{error&&<span role="alert">{error}</span>}</label><label><input type="checkbox" checked={live} disabled={pending} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{live:e.target.checked}).then(r=>{setLive(r.live);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>Live 3D overlay</label><label><input type="checkbox" checked={liveGravity} disabled={pending||!live} onChange={e=>{setPending(true);void invoke('studio.evolveLayer',{liveGravity:e.target.checked}).then(r=>{setLiveGravity(r.liveGravity??false);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));}}/>Effective PHYSIS gravity (planet)</label><label className="ptp__row"><span>GRANULAR planet diagnostic cell/depth (cm)</span><select className="au-input" disabled={pending||!live} value={granularCellCm} onChange={e=>{
     setPending(true);void invoke('studio.evolveLayer',{granularCellCm:Number(e.target.value)}).then(r=>{setGranularCellCm(r.granularCellCm??0);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));
   }}>{Array.from(new Set([0,10,25,50,100,200,500,1000,2000,5000,10000,granularCellCm])).sort((a,b)=>a-b).map(n=><option key={n} value={n}>{n===0?'Off':n}</option>)}</select></label><small>Display scale only; ground-relative tops, no physical geometry changes.</small><EcologyLiveMap layer={layer}/><WorldProcessDiagnostics/></div>;
 }

@@ -105,6 +105,36 @@ static void checkPlanetGravitySupport(){
     ecs=saved;
     AIVERSE_TEST_CHECK(wp::samplePlanetGravitySupport(ecs,surface,p)->supported());
 }
+static void checkPlanetLiveGravity(){
+    game::Surface surface;
+    game::BodyDef body;body.id="terra";body.faceSize=8;body.radius=Fixed::fromInt(64);
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    World ecs;physis::GravitySettings settings;settings.baseline={};ecs.setResource<physis::GravitySettings>(settings);
+    const auto empty=aiverse::studio::samplePlanetGravity(ecs,surface,7);
+    AIVERSE_TEST_CHECK(empty.getBool("available")&&empty["bodies"].size()==2);
+    AIVERSE_TEST_CHECK(empty["bodies"][size_t(0)].getInt("zero")==96);
+    physis::GravityField gravity;gravity.mode=physis::GravityMode::Attract;
+    gravity.center=game::Surface::anchor(0);gravity.radiusMeters=Fixed::fromInt(200);
+    gravity.radialMagnitude=Fixed::fromInt(10);gravity.overrideBaseline=true;
+    const auto field=ecs.create();ecs.add<physis::GravityField>(field,gravity);
+    const auto radial=aiverse::studio::samplePlanetGravity(ecs,surface,8);
+    AIVERSE_TEST_CHECK(radial["bodies"][size_t(0)].getInt("inward")==96);
+    AIVERSE_TEST_CHECK(radial["bodies"][size_t(1)].getStr("body")=="moon");
+    AIVERSE_TEST_CHECK(radial["bodies"][size_t(1)].getInt("zero")==96);
+    physis::GravityField additive;additive.acceleration={Fixed::fromInt(2),{},{}};
+    ecs.add<physis::GravityField>(ecs.create(),additive);
+    const auto combined=aiverse::studio::samplePlanetGravity(ecs,surface,9);
+    const auto& row=combined["bodies"][size_t(0)]["samples"][size_t(0)];
+    const auto position=game::Surface::anchor(0)+surface.facePoint(0,0,Fixed::fromInt(1),Fixed::fromInt(1));
+    const auto actual=physis::gravityAt(ecs,position);
+    AIVERSE_TEST_CHECK(std::abs(row["acceleration"][size_t(0)].toDouble()-actual.x.toDouble())<.001);
+    AIVERSE_TEST_CHECK(combined["bodies"][size_t(1)]["samples"][size_t(0)]["magnitude"].toDouble()==2.);
+    ecs.get<physis::GravityField>(field).mode=physis::GravityMode::Repel;
+    const auto reversed=aiverse::studio::samplePlanetGravity(ecs,surface,10);
+    AIVERSE_TEST_CHECK(reversed["bodies"][size_t(0)].getInt("outward")==96);
+    const auto cap=aiverse::studio::samplePlanetGravity(ecs,surface,10,1);
+    AIVERSE_TEST_CHECK(!cap.getBool("available")&&cap.getBool("truncated")&&cap["bodies"].size()==0);
+}
 static void checkPlanetGravity(){
     namespace wp=aiverse::lib::worldprocess;
     game::Surface surface;
@@ -923,6 +953,7 @@ int main(){
     checkPlanetEvolveHydration();
     checkPlanetGravitySupport();
     checkPlanetGravity();
+    checkPlanetLiveGravity();
     checkPlanetImprint();
     checkPlanetCrowdSlots();
     checkPlanetEvolveRegions();

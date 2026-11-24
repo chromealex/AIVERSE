@@ -3,6 +3,7 @@
 #pragma once
 #include "aiverselib/world/PlanetProcessGeometry.h"
 #include "aiverselib/world/EvolveSurfaceRegions.h"
+#include "engine/physis/PhysisGravity.h"
 #include "engine/data/Json.h"
 #include <algorithm>
 #include <string>
@@ -206,6 +207,78 @@ inline Json samplePlanetEvolve(const World& ecs,const game::Surface& surface,
     out.set("rejected",Json::number(int64_t(rejected)));
     out.set("clipped",Json::number(int64_t(clipped)));
     out.set("regions",std::move(rows));
+    return out;
+}
+// Effective acceleration from the canonical PHYSIS policy. No individual
+// field summation here, no implicit radial baseline, no second solver.
+// Face samples are actual surface positions, not render-space positions.
+inline Json samplePlanetGravity(const World& ecs,const game::Surface& surface,
+        uint32_t completedTick,size_t maxFields=1024){
+    namespace wp=lib::worldprocess;
+    Json out=Json::object(),bodies=Json::array();
+    const auto total=ecs.countExisting<physis::GravityField>();
+    const bool hasSettings=ecs.resourceConst<physis::GravitySettings>()!=nullptr;
+    const bool capped=total>std::min(maxFields,size_t(1024));
+    const bool available=!capped&&completedTick!=UINT32_MAX&&surface.sphere()&&surface.tab&&
+        surface.bodies.size()<=size_t(game::Surface::kMaxBodies);
+    out.set("available",Json::fromBool(available));
+    out.set("fieldCount",Json::number(int64_t(total)));
+    out.set("usesDefaultSettings",Json::fromBool(!hasSettings));
+    out.set("sampleTick",Json::number(int64_t(completedTick)));
+    out.set("truncated",Json::fromBool(capped));
+    size_t rejected=0;
+    constexpr int resolution=4;
+    if(available)for(size_t bi=0;bi<surface.bodies.size();++bi){
+        const auto& body=surface.bodies[bi];
+        if(!body.hasSurface())continue;
+        const int index=int(bi);
+        const auto anchor=game::Surface::anchor(index);
+        Json record=Json::object(),samples=Json::array();
+        size_t zero=0,inward=0,outward=0,tangent=0;
+        Fixed lo=Fixed::fromInt(1000),hi{};
+        for(int face=0;face<6;++face)for(int y=0;y<resolution;++y)for(int x=0;x<resolution;++x){
+            const auto a=Fixed::fromRatio((2*x+1)*body.faceSize,2*resolution);
+            const auto b=Fixed::fromRatio((2*y+1)*body.faceSize,2*resolution);
+            const auto position=anchor+surface.facePoint(index,face,a,b);
+            const auto frame=wp::surfaceFrame(&surface,position);
+            if(!frame||frame->body!=index){++rejected;continue;}
+            const auto gravity=physis::gravityAt(ecs,position);
+            const auto magnitude=gravity.length();
+            const auto radial=gravity.dot(frame->up);
+            const auto threshold=Fixed::fromRatio(1,100);
+            const char* kind="tangent";
+            if(magnitude<=threshold){kind="zero";++zero;}
+            else if(radial< -threshold){kind="inward";++inward;}
+            else if(radial>threshold){kind="outward";++outward;}
+            else ++tangent;
+            lo=fxMin(lo,magnitude);hi=fxMax(hi,magnitude);
+            const auto vec=[](Vec3 v){
+                Json xyz=Json::array();
+                for(auto c:{v.x,v.y,v.z})xyz.push(Json::number(c.toDouble(),5));
+                return xyz;
+            };
+            Json row=Json::object();
+            row.set("face",Json::number(int64_t(face)));
+            row.set("x",Json::number(a.toDouble(),4));row.set("y",Json::number(b.toDouble(),4));
+            row.set("position",vec(position-anchor));row.set("up",vec(frame->up));
+            row.set("acceleration",vec(gravity));
+            row.set("magnitude",Json::number(magnitude.toDouble(),5));
+            row.set("radial",Json::number(radial.toDouble(),5));
+            row.set("kind",Json::string(kind));
+            samples.push(std::move(row));
+        }
+        record.set("body",Json::string(body.id));
+        record.set("minMagnitude",Json::number(samples.size()?lo.toDouble():0.,5));
+        record.set("maxMagnitude",Json::number(hi.toDouble(),5));
+        record.set("zero",Json::number(int64_t(zero)));
+        record.set("inward",Json::number(int64_t(inward)));
+        record.set("outward",Json::number(int64_t(outward)));
+        record.set("tangent",Json::number(int64_t(tangent)));
+        record.set("samples",std::move(samples));
+        bodies.push(std::move(record));
+    }
+    out.set("rejected",Json::number(int64_t(rejected)));
+    out.set("bodies",std::move(bodies));
     return out;
 }
 } // namespace aiverse::studio

@@ -108,7 +108,9 @@ export interface EvolveLiveRegion { id:string; minXcm:number; minZcm:number; max
 export interface PlanetLiveProcessSummary {sampleTick:number;truncated:boolean;rejected:number;cells:unknown[]}
 export interface PlanetEvolveLiveRegion {id:string;body:string;fertility:number;pollution:number;succession:number;durability:number;chartClipped:boolean;edges:(number[]|null)[][]}
 export interface PlanetEvolveLiveState {sampleTick:number;regionCount:number;truncated:boolean;rejected:number;clipped:number;regions:PlanetEvolveLiveRegion[]}
-export interface EvolveLiveState {evolve?:PlanetEvolveLiveState;topology?:'planet';epoch?:string;imprint?:PlanetLiveProcessSummary;granular?:PlanetLiveProcessSummary & {available:boolean;cellSizeCm:number;fieldCount:number;tiles:number};logs?:{x:number;z:number;ratio:number}[];soil?:{x:number;z:number;units:string}[];absorbedUnits?:string;respiredUnits?:string;active:boolean;tick?:number;regions:EvolveLiveRegion[];plantCount?:number;plants?:{id:string;x:number;z:number;fallen:boolean;dead?:boolean;recruited?:boolean;mature?:boolean;ageTicks?:string;matureTicks?:string;shadeStress?:string;floodStress?:string;droughtStress?:string}[];weather?:{x:number;z:number;size:number;rain:number;temperature:number;wetness:number}[]}
+export interface PlanetGravityLiveBody {body:string;minMagnitude:number;maxMagnitude:number;zero:number;inward:number;outward:number;tangent:number;samples:{face:number;x:number;y:number;position:number[];up:number[];acceleration:number[];magnitude:number;radial:number;kind:'zero'|'inward'|'outward'|'tangent'}[]}
+export interface PlanetGravityLiveState {available:boolean;fieldCount:number;usesDefaultSettings:boolean;sampleTick:number;truncated:boolean;rejected:number;bodies:PlanetGravityLiveBody[]}
+export interface EvolveLiveState {gravity?:PlanetGravityLiveState;evolve?:PlanetEvolveLiveState;topology?:'planet';epoch?:string;imprint?:PlanetLiveProcessSummary;granular?:PlanetLiveProcessSummary & {available:boolean;cellSizeCm:number;fieldCount:number;tiles:number};logs?:{x:number;z:number;ratio:number}[];soil?:{x:number;z:number;units:string}[];absorbedUnits?:string;respiredUnits?:string;active:boolean;tick?:number;regions:EvolveLiveRegion[];plantCount?:number;plants?:{id:string;x:number;z:number;fallen:boolean;dead?:boolean;recruited?:boolean;mature?:boolean;ageTicks?:string;matureTicks?:string;shadeStress?:string;floodStress?:string;droughtStress?:string}[];weather?:{x:number;z:number;size:number;rain:number;temperature:number;wetness:number}[]}
 export type WorldProcessDiagnosticLane = {available:false;error:string} | {
   available:true;tick:number;hot:number;warm:number;cold:number;executed:number;deferred:number;
   budget:number;selected:number;pending:number;urgent:number;urgentSelected:number;queued:number;removed:number;
@@ -278,7 +280,7 @@ export interface StudioParams {
   'studio.agentInfo': { from?: number };
   'studio.worldProcessDiagnostics': {budget:number;focus?:string};
   'studio.evolveState': Record<string, never>;
-  'studio.evolveLayer': {layer?: EvolveLayer;live?:boolean;granularCellCm?:number};
+  'studio.evolveLayer': {layer?: EvolveLayer;live?:boolean;granularCellCm?:number;liveGravity?:boolean};
   'studio.sceneBrush': Partial<StudioSceneBrush>;
   'studio.splineEdit': { kind: '' | 'road' | 'river' };
   'studio.hub': Record<string,never>;
@@ -445,7 +447,7 @@ export interface StudioResult {
   'studio.agentInfo': StudioAgentInfo;
   'studio.worldProcessDiagnostics': WorldProcessDiagnostics;
   'studio.evolveState': EvolveLiveState;
-  'studio.evolveLayer': {layer: EvolveLayer;live:boolean;granularCellCm?:number};
+  'studio.evolveLayer': {layer: EvolveLayer;live:boolean;granularCellCm?:number;liveGravity?:boolean};
   'studio.sceneBrush': StudioSceneBrush;
   'studio.hub': StudioHub;
   'studio.hubTemplates': { templates: StudioTemplate[]; error?: string };
