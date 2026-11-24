@@ -141,6 +141,16 @@ inline void registerCaveAuthorityResource(Simulation& sim,const CaveAuthorityCon
     }
     requireCaveRecipe(resource,cfg);
     sim.registerPersistentResource<CaveAuthorityResource>("terraweave.caverns.authority",1);
+    // Reject incompatible saves on the registry's staged World, BEFORE
+    // replacement of live ECS state. This also rejects absent resources.
+    sim.addPersistentLoadValidator("terraweave.caverns.authority.recipe",
+        [cfg](const World& staged,std::string& error){
+            const auto* restored=staged.resourceConst<CaveAuthorityResource>();
+            if(!restored){error="missing authored SDF authority";return false;}
+            try{requireCaveRecipe(*restored,cfg);}
+            catch(const std::exception& e){error=e.what();return false;}
+            return true;
+        });
     sim.world().setResource<CaveAuthorityResource>(std::move(resource));
 }
 enum class CaveStampEditKind:uint8_t { Add,Replace,Remove };
