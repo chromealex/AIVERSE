@@ -1,6 +1,7 @@
 #include "apps/editor/AuthoringWater.h"
 #include "apps/studio-native/StudioScene.h"
 #include "apps/editor/core/TextureGraphGpuPreview.h"
+#include "engine/view/AppearanceAssetRegistry.h"
 #include "apps/studio-native/StudioFont6x11.h"
 #include "engine/render/CameraPng.h"
 #include "apps/studio-native/StudioLightingPreview.h"
@@ -26,6 +27,120 @@
 
 namespace aiverse::studio {
 using namespace aiverse::render;
+
+// A single presentation owner on the Scene render thread. The preview renderer
+// is isolated from the Scene's camera, lighting, packet cache and post-FX.
+struct StudioScene::GraphPresentation {
+    using Snapshot=view::AppearanceAssetRegistry::Snapshot;
+    struct Capture {
+        std::string state="pending",error,hex;
+        int width=0,height=0;
+        std::chrono::steady_clock::time_point deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);
+    };
+    std::map<const Model*,Snapshot> scene;
+    std::map<std::string,std::vector<Material>> merged;
+    ModelImageRollbackPool rollback;
+    std::unique_ptr<Model> sample;
+    Snapshot sampleAppearance;
+    std::unique_ptr<Renderer3D> sampleRenderer;
+    gfx::TextureHandle color{},depth{};
+    std::shared_ptr<Capture> capture;
+    bool draw=false;
+    float yaw=.65f,pitch=.42f,zoom=1.f,light=1.25f,lightYaw=.6f;
+    uint64_t captureSerial=0;
+    size_t sampleMaterial=0;
+    std::string sampleShape;
+    static Snapshot snapshot(const Model& model){
+        auto p=std::make_shared<view::AppearanceAssetRegistry::Asset>();
+        p->model=&model;p->materials=model.materials;p->version=1;
+        p->modelPublicationGeneration=view::ModelPublicationEpoch::next();
+        return p;
+    }
+    Snapshot& target(Model& model){
+        auto& s=scene[&model];if(!s)s=snapshot(model);return s;
+    }
+    void forget(const Model& model){scene.erase(&model);merged.clear();}
+    const std::vector<Material>* materials(const Model& model,const std::string& id,const std::vector<Material>* authored){
+        auto it=scene.find(&model);if(it==scene.end())return authored;
+        const auto& live=it->second->materials;
+        if(!authored)return &live;
+        // Preserve existing per-instance factors and any unrelated imported bindings.
+        auto& result=merged[id];result=*authored;
+        constexpr int Material::* slots[]={&Material::baseTex,&Material::normalTex,&Material::mrTex,&Material::occlusionTex,&Material::emissiveTex,&Material::teamTex};
+        for(size_t i=0;i<std::min(result.size(),live.size());++i){
+            if(!live[i].proceduralGraphPins)continue;
+            for(size_t c=0;c<6;++c)if(const auto& pin=(*live[i].proceduralGraphPins)[c]){
+                result[i].*slots[c]=live[i].*slots[c];
+                result[i].proceduralGraphPins=withGraphMaterialPin(result[i].proceduralGraphPins,c,pin);
+            }
+        }
+        return &result;
+    }
+    void resetSample(gfx::Device& dev){
+        if(sample){if(sampleRenderer)sampleRenderer->invalidateModelCachesFor(sample.get());sampleAppearance.reset();releaseModel(dev,*sample);sample.reset();}
+        capture.reset();draw=false;
+    }
+    void shutdown(gfx::Device& dev){
+        scene.clear();merged.clear();resetSample(dev);
+        if(sampleRenderer){sampleRenderer->shutdown();sampleRenderer.reset();}
+        if(color.valid())dev.destroyTexture(color);
+        if(depth.valid())dev.destroyTexture(depth);
+        color={};depth={};(void)rollback.drain(dev);
+    }
+    static Json info(const Snapshot& s,size_t index){
+        Json r=Json::object();r.set("ok",Json::fromBool(true));
+        r.set("expectedVersion",Json::string(std::to_string(s->version)));
+        r.set("expectedModelPublication",Json::string(std::to_string(s->modelPublicationGeneration)));
+        r.set("materialIndex",Json::number(int64_t(index)));
+        r.set("materialName",Json::string(s->materials.at(index).name));return r;
+    }
+    static view::LiveAppearanceMaterialTarget stamp(const Json& p,size_t index){
+        return {view::parseAppearanceIdentity(p.getStr("expectedModelPublication")),view::parseAppearanceIdentity(p.getStr("expectedVersion")),index};
+    }
+    static size_t index(const Json& p,const Model& m){
+        const auto i=p["materialIndex"].integer(-1);
+        if(!p["materialIndex"].isNumber()||i<0||size_t(i)>=m.materials.size())throw std::invalid_argument("Invalid material index");
+        return size_t(i);
+    }
+    Json captureStatus()const {
+        Json r=Json::object();r.set("ok",Json::fromBool(true));
+        r.set("capture",Json::string(std::to_string(captureSerial)));
+        r.set("state",Json::string(capture?capture->state:"idle"));
+        if(capture){r.set("reason",Json::string(capture->error));if(capture->state=="ready"){
+            r.set("width",Json::number(int64_t(capture->width)));r.set("height",Json::number(int64_t(capture->height)));r.set("rgbaHex",Json::string(capture->hex));
+        }}
+        return r;
+    }
+    void renderSample(gfx::Device& dev){
+        if(!draw||!sample||!sampleAppearance||!capture)return;
+        draw=false;
+        constexpr int side=256;
+        Camera cam;const auto lo=sample->boundsMin,hi=sample->boundsMax,size=hi-lo;
+        const float radius=std::max(.05f,.5f*std::sqrt(dot(size,size)));
+        cam.target=(lo+hi)*.5f;cam.yaw=yaw;cam.pitch=pitch;cam.ortho=false;
+        cam.distance=radius/std::sin(cam.fovY*.5f)*zoom;
+        cam.zNear=std::max(.01f,cam.distance-radius*2.f);cam.zFar=cam.distance+radius*4.f;
+        sampleRenderer->beginScene(cam,side,side);
+        sampleRenderer->lighting=Lighting{};
+        sampleRenderer->lighting.sunIntensity=light;
+        sampleRenderer->lighting.sunDir=normalize(float3{std::cos(lightYaw),1.f,std::sin(lightYaw)});
+        sampleRenderer->lighting.skyColor={.46f,.54f,.68f};sampleRenderer->lighting.groundColor={.29f,.29f,.32f};
+        sampleRenderer->lighting.fogDensity=0;
+        ModelDraw d;d.model=sample.get();d.materials=&sampleAppearance->materials;
+        sampleRenderer->drawModel(d);
+        gfx::PassDesc pass;pass.colorTarget=color;pass.depthTarget=depth;
+        pass.clearColor[0]=.075f;pass.clearColor[1]=.09f;pass.clearColor[2]=.12f;pass.clearColor[3]=1.f;
+        sampleRenderer->render(pass);dev.endPass();
+        auto result=capture;
+        if(!dev.captureTexture(color,[result](int w,int h,std::vector<uint8_t> rgba){
+            if(w!=side||h!=side||rgba.size()!=size_t(side)*side*4){result->state="failed";result->error="Native PBR capture returned invalid pixels";return;}
+            result->hex.reserve(rgba.size()*2);
+            for(size_t i=0;i<rgba.size();++i){const auto v=i%4==3?uint8_t(255):rgba[i];result->hex+="0123456789abcdef"[v>>4];result->hex+="0123456789abcdef"[v&15];}
+            result->width=w;result->height=h;result->state="ready";
+        })){capture->state="failed";capture->error="Native texture capture rejected";}
+    }
+};
+
 namespace { struct StudioFrameScope {
     gfx::Device& device;
     ~StudioFrameScope(){device.endPass();device.endFrame();}
@@ -202,6 +317,7 @@ void StudioScene::clearTransformPreview() { drag_ = TransformDrag{}; }
 void StudioScene::releasePreviewModel(render::Model& model) {
     // Retire CPU packets/layouts before the Model and its geometry disappear.
     renderer_.invalidateModelCachesFor(&model);
+    if(graphPresentation_)graphPresentation_->forget(model);
     windRigs_.erase(&model);
     render::releaseModel(*device_,model);
 }
@@ -578,22 +694,111 @@ Json StudioScene::textureGraphCapabilities() const {
     Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("available",Json::fromBool(available));
     if(device_)r.set("backend",Json::string(device_->info().backend==gfx::Backend::Metal?"metal":device_->info().backend==gfx::Backend::Vulkan?"vulkan":"unsupported"));
     r.set("reason",Json::string(available?"Native offscreen GPU preview and validated bake":"Offscreen compute unavailable on current device"));
-    r.set("residentApply",Json::fromBool(false));return r;
+    r.set("residentApply",Json::fromBool(false));
+    r.set("studioResidentApply",Json::fromBool(available&&device_->supportsStorageBufferTextureCopy()));
+    r.set("studioPbrPreview",Json::fromBool(available&&device_->supportsStorageBufferTextureCopy()));return r;
 }
 Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
     if(!device_ || !deviceLifetime_ || !device_->supportsOffscreenFrames() || !device_->gpuHealthy())
         throw std::runtime_error("Studio offscreen GPU device unavailable");
     if(ws.project.dir.empty())throw std::runtime_error("Open a project first");
     const auto action=p.getStr("action");
-    // Studio document models do not use the legacy editor appearance registry.
-    if(action=="materialTarget"||action=="applyMaterial"||action=="materialApplyStatus"||
-       p.getBool("gpuTextureTransfer")||p.getBool("gpuTextureFenceOnly")||
-       p.getBool("incrementalOutputs")||p.getBool("gpuTextureMipmaps"))
-        throw std::runtime_error("Studio resident material application is not available; use validated GPU bake and assign PNGs");
+    // Legacy type/choice targeting is distinct from the Studio document host.
+    if(action=="materialTarget"||action=="applyMaterial"||action=="materialApplyStatus"||p.getBool("incrementalOutputs"))
+        throw std::runtime_error("Use Studio model or PBR preview targets; legacy type/choice reuse is not supported here");
     if(!textureGraph_)textureGraph_=std::make_unique<editor::TextureGraphGpuPreview>();
     auto& owner=*textureGraph_;
     owner.checkProject(ws.project.dir);
     const auto lease=deviceLifetime_->lease();
+    if(action.rfind("studio",0)==0){
+        if(!graphPresentation_)graphPresentation_=std::make_unique<GraphPresentation>();
+        auto& presentation=*graphPresentation_;
+        if(action=="studioModelTargets"){
+            Json list=Json::array();
+            for(auto& [path,model]:documentModels_)if(model&&model->materials.size()){
+                auto& snap=presentation.target(*model);
+                Json row=Json::object(),materials=Json::array();row.set("asset",Json::string(path));
+                for(size_t i=0;i<snap->materials.size();++i)materials.push(GraphPresentation::info(snap,i));
+                row.set("materials",materials);list.push(row);
+            }
+            Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("models",list);return r;
+        }
+        if(action=="studioModelApply"){
+            const auto found=documentModels_.find(p.getStr("asset"));
+            if(found==documentModels_.end()||!found->second)throw std::runtime_error("Studio target model not resident");
+            auto& model=*found->second;auto& snap=presentation.target(model);
+            const auto index=GraphPresentation::index(p,model);std::string error;
+            if(!owner.publishCompletedGpuSnapshot(ws.project.dir,p.getStr("request"),snap,GraphPresentation::stamp(p,index),model,*device_,lease,presentation.rollback,nullptr,&error))
+                throw std::runtime_error(error);
+            renderer_.invalidateModelCachesFor(&model);presentation.merged.clear();lastFrameSignature_=0;
+            auto r=GraphPresentation::info(snap,index);r.set("state",Json::string("applied"));return r;
+        }
+        if(action=="studioPbrPrepare"){
+            const auto shape=p.getStr("shape","sphere");
+            if(shape!="sphere"&&shape!="cube"&&shape!="plane"&&shape!="model")throw std::invalid_argument("Invalid preview shape");
+            if(!device_->waitForResourceIdle())throw std::runtime_error("PBR preview retirement failed");
+            std::unique_ptr<Model> model;
+            if(shape=="model")model=loadContentModel(ws.project.dir,p.getStr("asset"));
+            else{
+                MeshBuilder mesh;mesh.color(rgba(255,255,255));
+                if(shape=="sphere")mesh.sphere({0,0,0},1.f,32,48);
+                else if(shape=="cube")mesh.box({0,0,0},{1.7f,1.7f,1.7f});
+                else mesh.quad({-1,0,-1},{-1,0,1},{1,0,1},{1,0,-1});
+                Material base;base.name="Graph PBR";base.vertexColors=false;base.baseColor={1,1,1,1};base.metallic=1.f;base.roughness=1.f;base.doubleSided=shape=="plane";
+                model=modelFromParts("studio/texture-graph-preview",{{shape,&mesh,base,mat4{}}});
+                if(model){
+                    for(auto& v:model->vertices){
+                        if(shape=="sphere")v.uv={.5f+std::atan2(v.pos.z,v.pos.x)/6.2831853f,.5f-std::asin(std::clamp(v.pos.y,-1.f,1.f))/3.14159265f};
+                        else if(shape=="plane")v.uv={(v.pos.x+1.f)*.5f,(v.pos.z+1.f)*.5f};
+                        else if(std::abs(v.nrm.x)>.5f)v.uv={v.pos.z/1.7f+.5f,v.pos.y/1.7f+.5f};
+                        else if(std::abs(v.nrm.y)>.5f)v.uv={v.pos.x/1.7f+.5f,v.pos.z/1.7f+.5f};
+                        else v.uv={v.pos.x/1.7f+.5f,v.pos.y/1.7f+.5f};
+                    }
+                    generateTangents(model->vertices,model->indices,0,uint32_t(model->indices.size()));
+                    model->batching.autoLod=false;prepareModelUpload(*model);
+                    if(!uploadModel(*device_,*model)){releaseModel(*device_,*model);model.reset();}
+                }
+            }
+            if(!model||model->materials.empty())throw std::runtime_error("PBR preview model unavailable");
+            const size_t index=p.has("materialIndex")?GraphPresentation::index(p,*model):0;
+            if(!presentation.sampleRenderer){
+                auto renderer=std::make_unique<Renderer3D>();renderer->setGpuDeviceLease(lease);
+                if(!renderer->init(*device_)){renderer->shutdown();releaseModel(*device_,*model);throw std::runtime_error("PBR renderer unavailable");}
+                renderer->setShadowQuality(ShadowQuality::Off);presentation.sampleRenderer=std::move(renderer);
+            }
+            if(!presentation.color.valid()||!presentation.depth.valid()){
+                gfx::TextureDesc td;td.width=td.height=256;td.format=gfx::PixelFormat::RGBA8;td.renderTarget=true;td.label="Texture Graph PBR preview";
+                if(!presentation.color.valid())presentation.color=device_->createTexture(td);
+                td.format=gfx::PixelFormat::Depth;td.label="Texture Graph PBR preview depth";
+                if(!presentation.depth.valid())presentation.depth=device_->createTexture(td);
+                if(!presentation.color.valid()||!presentation.depth.valid()){releaseModel(*device_,*model);throw std::runtime_error("PBR preview target unavailable");}
+            }
+            presentation.resetSample(*device_);presentation.sample=std::move(model);
+            presentation.sampleAppearance=GraphPresentation::snapshot(*presentation.sample);
+            presentation.sampleMaterial=index;presentation.sampleShape=shape;
+            return GraphPresentation::info(presentation.sampleAppearance,index);
+        }
+        if(action=="studioPbrApply"){
+            if(!presentation.sample||!presentation.sampleAppearance)throw std::runtime_error("Prepare PBR model first");
+            std::string error;
+            if(!owner.publishCompletedGpuSnapshot(ws.project.dir,p.getStr("request"),presentation.sampleAppearance,
+                 GraphPresentation::stamp(p,presentation.sampleMaterial),*presentation.sample,*device_,lease,presentation.rollback,nullptr,&error))
+                throw std::runtime_error(error);
+            presentation.sampleRenderer->invalidateModelCachesFor(presentation.sample.get());
+            auto r=GraphPresentation::info(presentation.sampleAppearance,presentation.sampleMaterial);r.set("state",Json::string("applied"));return r;
+        }
+        if(action=="studioPbrRender"){
+            if(!presentation.sample||!presentation.sampleAppearance||presentation.sampleAppearance->version<2)throw std::runtime_error("Apply GPU PBR set first");
+            if(presentation.capture&&presentation.capture->state=="pending")throw std::runtime_error("PBR capture pending");
+            presentation.yaw=previewScalar(p["yaw"],.65f,-100.f,100.f);presentation.pitch=previewScalar(p["pitch"],.42f,-1.4f,1.4f);
+            presentation.zoom=previewScalar(p["zoom"],1.f,.6f,3.f);presentation.light=previewScalar(p["light"],1.25f,0.f,8.f);
+            presentation.lightYaw=previewScalar(p["lightYaw"],.6f,-6.3f,6.3f);
+            presentation.capture=std::make_shared<GraphPresentation::Capture>();++presentation.captureSerial;presentation.draw=true;
+            return presentation.captureStatus();
+        }
+        if(action=="studioPbrRead")return presentation.captureStatus();
+        throw std::invalid_argument("Unknown Studio graph presentation action");
+    }
     if(action=="start")return owner.start(p,ws.project.dir,lease);
     if(action=="read")return owner.status();
     if(action=="cancel")return owner.cancel(p,ws.project.dir);
@@ -606,15 +811,29 @@ Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
 }
 void StudioScene::invalidateTextureGraphProject() {
     if(textureGraph_)textureGraph_->checkProject("");
+    if(graphPresentation_){
+        if(!device_->waitForResourceIdle())throw std::runtime_error("Graph presentation retirement failed");
+        graphPresentation_->shutdown(*device_);graphPresentation_.reset();
+        lastFrameSignature_=0;
+    }
 }
 bool StudioScene::serviceTextureGraph(const std::string& project) {
     if(!textureGraph_)return false;
     textureGraph_->checkProject(project);
+    if(graphPresentation_&&graphPresentation_->rollback.pendingImages())(void)graphPresentation_->rollback.collect(*device_);
     if(!device_->beginOffscreenFrame())throw std::runtime_error("Studio GPU offscreen frame unavailable");
-    try { textureGraph_->tick(*device_,project); }
-    catch(...) {device_->endFrame();throw;}
+    try {
+        textureGraph_->tick(*device_,project);
+        if(graphPresentation_&&graphPresentation_->draw)graphPresentation_->renderSample(*device_);
+    }catch(...) {device_->endPass();device_->endFrame();throw;}
     device_->endFrame();
-    return textureGraph_->needsFrame();
+    bool more=false;
+    if(graphPresentation_){
+        auto& p=*graphPresentation_;
+        if(p.capture&&p.capture->state=="pending"&&std::chrono::steady_clock::now()>p.capture->deadline){p.capture->state="failed";p.capture->error="Native PBR capture timed out";}
+        more=p.draw||(p.capture&&p.capture->state=="pending")||p.rollback.pendingImages()!=0;
+    }
+    return textureGraph_->needsFrame()||more;
 }
 StudioScene::~StudioScene() {
     if (device_) {
@@ -624,6 +843,7 @@ StudioScene::~StudioScene() {
             else std::fprintf(stderr,"Studio Texture Graph: idle barrier failed; GPU pools left to device teardown\n");
             textureGraph_.reset();
         }
+        if(graphPresentation_){if(idle)graphPresentation_->shutdown(*device_);graphPresentation_.reset();}
         clearDocumentModels();
         lightingRuntime_.shutdown(*device_,renderer_);
         if(lightingModel_) {
@@ -1819,6 +2039,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         }
 
     }
+    if(graphPresentation_)graphPresentation_->merged.clear();
     riggedInstances_=0; riggedParts_=0;
     const double windSeconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-windClock_).count();
     for(const auto& instance:modelInstances_) {
@@ -1829,6 +2050,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         if(!drag_.id.empty() && instance.id==drag_.id) draw.world=dragPreview()*instance.world;
         if(auto custom=instanceMaterials_.find(instance.id);custom!=instanceMaterials_.end())
             draw.materials=&custom->second.materials;
+        if(graphPresentation_&&instance.model)draw.materials=graphPresentation_->materials(*instance.model,instance.id,draw.materials);
         if(auto team=instanceTeams_.find(instance.id);team!=instanceTeams_.end())draw.team=team->second;
         if(instance.id!=selectedId && selection_.count(instance.id))draw.outline={.25f,.62f,1.0f,.035f};
         else if(instance.id!=selectedId && instance.id==hover_)draw.outline={.62f,.8f,1.0f,.02f};

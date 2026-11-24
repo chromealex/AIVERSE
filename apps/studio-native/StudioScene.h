@@ -169,6 +169,8 @@ private:
     std::unique_ptr<gfx::Device> device_;
     std::unique_ptr<render::RenderDeviceLifetime> deviceLifetime_;
     std::unique_ptr<editor::TextureGraphGpuPreview> textureGraph_;
+    struct GraphPresentation;
+    std::unique_ptr<GraphPresentation> graphPresentation_;
     render::Renderer3D renderer_;
     world::NereidManifestHost nereid_;
     double underwaterFrameTime_=0;

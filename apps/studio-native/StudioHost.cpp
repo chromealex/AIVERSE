@@ -402,7 +402,7 @@ Json StudioHost::textureGraphGpu(editor::Workspace& ws,const Json& p) {
     }
     if(projectLoading_||ws.project.dir.empty())throw std::runtime_error("Open a project first");
     if(!textureGraphError_.empty())throw std::runtime_error(textureGraphError_);
-    if(action=="start"||action=="enqueue")ensureScene();
+    if(action=="start"||action=="enqueue"||action=="studioModelTargets"||action=="studioPbrPrepare")ensureScene();
     if(!preview_)throw std::runtime_error("Start a Studio GPU preview first");
     Json result;
     onScene([&]{platform_.sceneThreadScope([&]{result=preview_->textureGraphOperation(ws,p);});});
