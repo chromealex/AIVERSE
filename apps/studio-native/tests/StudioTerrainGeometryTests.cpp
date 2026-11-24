@@ -55,6 +55,10 @@ int main() {
     grid.set("patches",Json::parse(R"([{"face":0,"x":1,"y":1,"corners":[0,0,0,0,16,0,0,0,0]}])"));
     const auto refined=buildStudioLivePlanetTerrain(grid,body,*preview);
     AIVERSE_TEST_CHECK(refined&&refined->indices().size()==low->indices().size()+18);
+    size_t splitIndices=0;for(int f=0;f<6;++f){const auto face=buildStudioLivePlanetTerrain(grid,body,*preview,f);AIVERSE_TEST_CHECK(face);splitIndices+=face->indices().size();}
+    AIVERSE_TEST_CHECK(splitIndices==refined->indices().size());
+    const auto face0=studioLiveTerrainFaceSignature(grid,0),face1=studioLiveTerrainFaceSignature(grid,1);
+    AIVERSE_TEST_CHECK(face0["patches"].size()==1&&face1["patches"].size()==0);
     bool peak=false;for(const auto& v:refined->vertices())if(dot(v.pos,v.pos)>64.5f*64.5f)peak=true;
     AIVERSE_TEST_CHECK(peak);
     grid.set("patches",Json::parse(R"([{"face":0,"x":1,"y":1,"corners":[1,0,0,0,16,0,0,0,0]}])"));

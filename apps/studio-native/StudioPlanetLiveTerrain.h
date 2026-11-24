@@ -11,7 +11,7 @@
 #include <cmath>
 namespace aiverse::studio {
 inline Json sampleStudioPlanetTerrain(const game::Surface& surface,uint32_t tick,
-        const std::string& bodyId,size_t maxBytes,const std::optional<StudioForestCameraFocus>& camera={}){
+        const std::string& bodyId,size_t maxBytes,const std::optional<StudioForestCameraFocus>& camera={},const Json* previousGrid=nullptr){
     Json out=Json::object();out.set("active",Json::fromBool(false));
     const int bi=surface.findBody(bodyId);
     if(!surface.tab||bi<0||tick==UINT32_MAX)return out;
@@ -37,12 +37,16 @@ inline Json sampleStudioPlanetTerrain(const game::Surface& surface,uint32_t tick
         const auto clip=camera->viewProjection();
         struct Candidate { int f,x,y,group; float distance,target; };
         std::vector<Candidate> candidates;
+        std::set<std::tuple<int,int,int>> previous;
+        if(previousGrid&&previousGrid->getStr("body")==bodyId&&previousGrid->getInt("step")==step&&previousGrid->getInt("faceSize")==n)
+            for(const auto& patch:(*previousGrid)["patches"].items())previous.emplace(int(patch.getInt("face",-1)),int(patch.getInt("x",-1)),int(patch.getInt("y",-1)));
         for(int f=0;f<6;++f)for(int y=0;y<side-1;++y)for(int x=0;x<side-1;++x){
             const int x0=x*step,y0=y*step,x1=std::min(n,x0+step),y1=std::min(n,y0+step);
             const auto dir=StudioPlanetPreview::f3(cube.dirFromFace(f,Fixed::fromRatio(x0+x1,2),Fixed::fromRatio(y0+y1,2)));
             const auto p=dir*float(body.radius.toDouble());
             const auto [group,distance,target]=camera->rank(p,float(body.radius.toDouble()),clip);
-            if(group==0)candidates.push_back({f,x,y,group,distance,target});
+            const bool resident=previous.count({f,x,y})!=0;
+            if(group==0)candidates.push_back({f,x,y,group,resident?distance*.7225f:distance,resident?target*.7225f:target});
         }
         std::sort(candidates.begin(),candidates.end(),[](const Candidate& a,const Candidate& b){
             return std::tie(a.group,a.distance,a.target,a.f,a.y,a.x)<std::tie(b.group,b.distance,b.target,b.f,b.y,b.x);
@@ -60,13 +64,18 @@ inline Json sampleStudioPlanetTerrain(const game::Surface& surface,uint32_t tick
             for(int y=y0;y<=y1;++y)for(int x=x0;x<=x1;++x)fine.push(Json::number(int64_t(surface.corner(bi,c.f,x,y))));
             patch.set("corners",std::move(fine));patches.push(std::move(patch));remaining-=cost;
         }
+        // Canonical identity order prevents ranking changes alone from triggering uploads.
+        auto& ordered=patches.itemsMut();
+        std::sort(ordered.begin(),ordered.end(),[](const Json& a,const Json& b){
+            return std::make_tuple(a.getInt("face"),a.getInt("y"),a.getInt("x"))<std::make_tuple(b.getInt("face"),b.getInt("y"),b.getInt("x"));
+        });
         data.set("patches",std::move(patches));
     }
     out.set("active",Json::fromBool(true));out.set("tick",Json::number(int64_t(tick)));
     out.set("grid",std::move(data));return out;
 }
 inline std::optional<render::MeshBuilder> buildStudioLivePlanetTerrain(const Json& grid,
-        const editor::DocBody& body,const StudioPlanetPreview& authored){
+        const editor::DocBody& body,const StudioPlanetPreview& authored,int onlyFace=-1){
     const int n=body.faceSize;
     const auto step=grid.getInt("step",0),side=grid.getInt("side",0);
     const double radius=grid["radius"].toDouble(NAN);
@@ -113,7 +122,8 @@ inline std::optional<render::MeshBuilder> buildStudioLivePlanetTerrain(const Jso
         }
         mesh.addTriangle(base,base+1,base+2);mesh.addTriangle(base,base+2,base+3);return true;
     };
-    for(int f=0;f<6;++f)for(int y=0;y<side-1;++y)for(int x=0;x<side-1;++x){
+    if(onlyFace<-1||onlyFace>=6)return {};
+    for(int f=0;f<6;++f)if(onlyFace<0||onlyFace==f)for(int y=0;y<side-1;++y)for(int x=0;x<side-1;++x){
         const auto it=patches.find({f,x,y});
         if(it==patches.end()){
             if(!emit({point(f,x,y),point(f,x+1,y),point(f,x+1,y+1),point(f,x,y+1)},f,int(x*step),int(y*step)))return {};
@@ -137,5 +147,17 @@ inline std::optional<render::MeshBuilder> buildStudioLivePlanetTerrain(const Jso
             if(!emit({local(i,j),local(i+1,j),local(i+1,j+1),local(i,j+1)},f,x0+i,y0+j))return {};
     }
     return mesh;
+}
+// Exact per-face input signature. Other faces may change without invalidating
+// this face: cross-face boundaries always use the common coarse chord.
+inline Json studioLiveTerrainFaceSignature(const Json& grid,int face){
+    Json sig=Json::object(),corners=Json::array(),patches=Json::array();
+    const auto side=grid.getInt("side");
+    if(face<0||face>=6||side<2||side>65||grid["corners"].size()!=size_t(6)*side*side)return {};
+    for(const char* key:{"body","faceSize","radius","step","side"})sig.set(key,grid[key]);
+    const auto& all=grid["corners"].items();
+    for(size_t i=0;i<size_t(side)*side;++i)corners.push(all[size_t(face)*side*side+i]);
+    for(const auto& patch:grid["patches"].items())if(patch.getInt("face",-1)==face)patches.push(patch);
+    sig.set("corners",std::move(corners));sig.set("patches",std::move(patches));return sig;
 }
 } // namespace aiverse::studio

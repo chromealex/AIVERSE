@@ -219,7 +219,8 @@ private:
     render::Mesh studioCyclorama_;
     render::Mesh terrain_;
     render::Mesh planetTerrain_;
-    render::Mesh planetLiveTerrain_;
+    std::array<render::Mesh,6> planetLiveTerrainFaces_{};
+    std::array<Json,6> planetLiveTerrainFaceSignatures_{};
     Json planetLiveTerrainGrid_;
     // CPU triangles from the same successful upload used by the Scene.
     std::optional<render::MeshBuilder> planetLiveTerrainCpu_;

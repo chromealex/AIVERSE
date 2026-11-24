@@ -619,9 +619,12 @@ static bool studioPlanetOccludesSphere(const render::Camera& view,render::float3
     return angle+std::asin(std::clamp(bound/d,0.f,1.f))<std::asin(std::clamp(inner/e,0.f,1.f));
 }
 void StudioScene::clearLivePlanetTerrain(){
-    if(planetLiveTerrain_.vb.valid())device_->destroyBuffer(planetLiveTerrain_.vb);
-    if(planetLiveTerrain_.ib.valid())device_->destroyBuffer(planetLiveTerrain_.ib);
-    planetLiveTerrain_={};planetLiveTerrainGrid_=Json{};
+    for(auto& face:planetLiveTerrainFaces_){
+        if(face.vb.valid())device_->destroyBuffer(face.vb);
+        if(face.ib.valid())device_->destroyBuffer(face.ib);
+        face={};
+    }
+    planetLiveTerrainFaceSignatures_={};planetLiveTerrainGrid_=Json{};
     planetLiveTerrainCpu_.reset();planetLiveTerrainVisible_=false;planetLiveOccluderRadius_=0.f;
 }
 bool StudioScene::syncLivePlanetTerrain(const editor::MapDoc& doc,const std::string& projectPath){
@@ -630,17 +633,36 @@ bool StudioScene::syncLivePlanetTerrain(const editor::MapDoc& doc,const std::str
        layer.getInt("tick",-1)!=planetLiveSnapshot_["forest"].getInt("tick",-2)||
        layer["grid"].getStr("body")!=planetPreview_->bodyId)return false;
     const auto& grid=layer["grid"];
-    if(grid==planetLiveTerrainGrid_&&planetLiveTerrainCpu_&&planetLiveTerrain_.vb.valid()&&planetLiveTerrain_.ib.valid())return true;
+    const auto ready=[](const render::Mesh& m){return m.vb.valid()&&m.ib.valid();};
+    if(grid==planetLiveTerrainGrid_&&planetLiveTerrainCpu_&&std::all_of(planetLiveTerrainFaces_.begin(),planetLiveTerrainFaces_.end(),ready))return true;
     const int bi=doc.data.findBody(planetPreview_->bodyId);if(bi<0)return false;
-    auto mesh=buildStudioLivePlanetTerrain(grid,doc.data.bodies[size_t(bi)],*planetPreview_);
+    const auto& body=doc.data.bodies[size_t(bi)];
+    auto mesh=buildStudioLivePlanetTerrain(grid,body,*planetPreview_);
     if(!mesh||!device_->waitForResourceIdle())return false;
-    auto next=mesh->upload(*device_);
-    if(!next.vb.valid()||!next.ib.valid()){
-        if(next.vb.valid())device_->destroyBuffer(next.vb);
-        if(next.ib.valid())device_->destroyBuffer(next.ib);
-        return false;
+    std::array<render::Mesh,6> replacements{};
+    std::array<Json,6> signatures{};
+    std::array<bool,6> changed{};
+    const auto release=[&](render::Mesh& m){
+        if(m.vb.valid())device_->destroyBuffer(m.vb);
+        if(m.ib.valid())device_->destroyBuffer(m.ib);m={};
+    };
+    for(int f=0;f<6;++f){
+        signatures[f]=studioLiveTerrainFaceSignature(grid,f);
+        changed[f]=!ready(planetLiveTerrainFaces_[f])||!(signatures[f]==planetLiveTerrainFaceSignatures_[f]);
+        if(!changed[f])continue;
+        const auto face=buildStudioLivePlanetTerrain(grid,body,*planetPreview_,f);
+        if(face)replacements[f]=face->upload(*device_);
+        if(!ready(replacements[f])){
+            for(auto& m:replacements)release(m);
+            return false;
+        }
     }
-    clearLivePlanetTerrain();planetLiveTerrain_=next;planetLiveTerrainGrid_=grid;
+    // Commit all face replacements and CPU picking mesh together, never mix
+    // successful new faces with a failed upload from the same completed tick.
+    for(int f=0;f<6;++f)if(changed[f]){
+        release(planetLiveTerrainFaces_[f]);planetLiveTerrainFaces_[f]=replacements[f];
+    }
+    planetLiveTerrainFaceSignatures_=std::move(signatures);planetLiveTerrainGrid_=grid;
     planetLiveOccluderRadius_=studioPlanetInnerRadius(*mesh);
     planetLiveTerrainCpu_=std::move(mesh);return true;
 }
@@ -2927,7 +2949,8 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         if(planetLiveSnapshot_["imprint"].getBool("truncated"))lightingStatus_+=" (sample capped)";
     }
     if(planetPreview_&&planetTerrain_.vb.valid()&&planetTerrain_.ib.valid()){
-        renderer_.drawMesh(useLiveTerrain?planetLiveTerrain_:planetTerrain_,mat4{},{1,1,1,1},kDrawNoCastShadow);
+        if(useLiveTerrain){for(const auto& face:planetLiveTerrainFaces_)renderer_.drawMesh(face,mat4{},{1,1,1,1},kDrawNoCastShadow);}
+        else renderer_.drawMesh(planetTerrain_,mat4{},{1,1,1,1},kDrawNoCastShadow);
         if(liveForest)drawLivePlanetForestMeshes(doc,projectPath,width,height);
         if(!liveForest&&planetForestModelProject_==projectPath&&planetForestModelCatalog_==doc.data.worldExtra["terraweaveForest"]){
             static const std::vector<uint8_t> barkOnly{1,0};
