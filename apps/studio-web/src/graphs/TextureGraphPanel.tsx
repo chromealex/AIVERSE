@@ -42,7 +42,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
  const [queuePriority,setQueuePriority]=useState('1'),[queueTicket,setQueueTicket]=useState(''),[queueInfo,setQueueInfo]=useState<Obj|null>(null);
  const [queueDrafts,setQueueDrafts]=useState<Record<string,{source:string;overrides:string;output:string;resolution:number}>>({});
  const [residentReady,setResidentReady]=useState(false),[liveType,setLiveType]=useState('0'),[liveChoice,setLiveChoice]=useState('0'),[liveMaterial,setLiveMaterial]=useState('0');
- const [liveTarget,setLiveTarget]=useState<{typeIndex:number;choiceIndex:number;materialIndex:number;expectedVersion:string;expectedModelPublication:string;modelPath:string;materialName:string}|null>(null);
+ const [liveTarget,setLiveTarget]=useState<{typeIndex:number;choiceIndex:number;materialIndex:number;expectedVersion:string;expectedModelPublication:string;modelPath:string;materialName:string;proceduralLiveImages:number;proceduralTombstones:number;pendingImageRetirement:number}|null>(null);
  const [liveApply,setLiveApply]=useState('');
  const [preview,setPreview]=useState<{hex:string;width:number;height:number;source:string}|null>(null),[asset,setAsset]=useState<{guid:string;path:string;key:MaterialKey}|null>(null);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState('');
@@ -85,7 +85,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
         typeof r.expectedVersion!=='string'||typeof r.expectedModelPublication!=='string'||
         !/^[1-9]\d{0,19}$/.test(r.expectedVersion)||!/^[1-9]\d{0,19}$/.test(r.expectedModelPublication)||
         typeof r.modelPath!=='string'||typeof r.materialName!=='string')throw new Error('Live editor appearance target unavailable');
-     setLiveTarget({typeIndex,choiceIndex,materialIndex,expectedVersion:r.expectedVersion,expectedModelPublication:r.expectedModelPublication,modelPath:r.modelPath,materialName:r.materialName});
+     setLiveTarget({typeIndex,choiceIndex,materialIndex,expectedVersion:r.expectedVersion,expectedModelPublication:r.expectedModelPublication,modelPath:r.modelPath,materialName:r.materialName,proceduralLiveImages:Number(r.proceduralLiveImages??0),proceduralTombstones:Number(r.proceduralTombstones??0),pendingImageRetirement:Number(r.pendingImageRetirement??0)});
      setLiveApply('');return;
    }
    if(action==='gpuMaterialApply'){
@@ -304,7 +304,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
     <div className="au-row"><StudioInput aria-label="Resident model type index" value={liveType} onChange={e=>{setLiveType(e.target.value);setLiveTarget(null)}} disabled={busy||disabled}/><StudioInput aria-label="Resident model choice index" value={liveChoice} onChange={e=>{setLiveChoice(e.target.value);setLiveTarget(null)}} disabled={busy||disabled}/><StudioInput aria-label="Resident material index" value={liveMaterial} onChange={e=>{setLiveMaterial(e.target.value);setLiveTarget(null)}} disabled={busy||disabled}/></div>
     <small>Type index / choice index / material index</small>
     <div className="au-row"><StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('gpuMaterialTarget')}>Inspect live material</StudioButton><StudioButton size="sm" disabled={busy||disabled||!liveTarget||!residentReady||gpuRequest?.source!==text||gpuRequest?.overrides!==overrideText} onClick={()=>void run('gpuMaterialApply')}>Apply GPU set</StudioButton><StudioButton size="sm" disabled={busy||disabled||!gpuRequest} onClick={()=>void run('gpuMaterialStatus')}>Read apply status</StudioButton></div>
-    {liveTarget&&<small>{liveTarget.modelPath} · {liveTarget.materialName||'unnamed material'} · revision {liveTarget.expectedVersion}</small>}
+    {liveTarget&&<small>{liveTarget.modelPath} · {liveTarget.materialName||'unnamed material'} · revision {liveTarget.expectedVersion} · procedural images {liveTarget.proceduralLiveImages} / 24 · retired slots {liveTarget.proceduralTombstones} · host pending retirement {liveTarget.pendingImageRetirement}</small>}
     {liveApply&&<small>{liveApply}</small>}
    </StudioSection>
    {materialized&&gpuTextureTransfer&&<small>Full set bake only. Default validates copied pixels. Fence-only mode generates bindable maps without CPU parity or export. Apply to a material or cancel before starting another resident set.</small>}

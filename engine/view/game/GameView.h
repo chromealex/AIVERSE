@@ -401,6 +401,7 @@ public:
         view::LiveAppearanceMaterialTarget identity;
         std::string modelPath,materialName;
         int variant=-1;
+        size_t proceduralLive=0,proceduralTombstones=0,pendingImageRetirement=0;
     };
     std::optional<GraphMaterialTargetInfo> graphMaterialTarget(size_t type,size_t choice,size_t material) const;
     using GraphMaterialApply=std::function<bool(view::AppearanceAssetRegistry::Snapshot&,

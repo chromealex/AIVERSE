@@ -930,7 +930,9 @@ std::optional<GameView::GraphMaterialTargetInfo> GameView::graphMaterialTarget(
     const uint64_t version=snapshot?snapshot->version:1;
     const view::LiveAppearanceMaterialTarget identity{publication,version,material};
     if(!identity.matches(publication,version,materials.size()))return {};
-    return GraphMaterialTargetInfo{identity,live.model->path,materials[material].name,live.variant};
+    const auto stats=render::texture_graph::graphImageStats(*live.model,imageRollback_);
+    return GraphMaterialTargetInfo{identity,live.model->path,materials[material].name,live.variant,
+        stats.live,stats.tombstones,stats.pendingRetirement};
 }
 
 bool GameView::applyGraphMaterial(size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,

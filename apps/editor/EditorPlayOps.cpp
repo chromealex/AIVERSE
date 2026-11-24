@@ -44,6 +44,9 @@ Json Editor::graphMaterialOp(const Json& p){
         r.set("variant",Json::number(int64_t(current->variant)));
         r.set("expectedModelPublication",Json::string(std::to_string(current->identity.publication)));
         r.set("expectedVersion",Json::string(std::to_string(current->identity.version)));
+        r.set("proceduralLiveImages",Json::number(int64_t(current->proceduralLive)));
+        r.set("proceduralTombstones",Json::number(int64_t(current->proceduralTombstones)));
+        r.set("pendingImageRetirement",Json::number(int64_t(current->pendingImageRetirement)));
         r.set("persistent",Json::fromBool(false));return r;
     }
     if(action!="applyMaterial")throw std::invalid_argument("unknown live material action");
