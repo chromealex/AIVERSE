@@ -850,7 +850,7 @@ int StudioScene::transformGizmoHit(float x,float y,float width,float height) con
 }
 bool StudioScene::beginTransformDrag(float x,float y,float width,float height) {
     if(planetMode_){
-        if(!planetPreview_||tool_!=TransformTool::Move||selectedId_.empty()||selection_.size()>1)return false;
+        if(!gizmosVisible_||!planetPreview_||tool_!=TransformTool::Move||selectedId_.empty()||selection_.size()>1)return false;
         float3 o,d;if(!viewCamera().screenRay(x,y,width,height,o,d))return false;
         if(planetPreview_->pick(o,d,hidden_,locked_)!=selectedId_)return false;
         const auto at=planetPreview_->placements.find(selectedId_);
@@ -1915,10 +1915,11 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     const bool changedBody=!planetPreview_||planetDoc_!=&doc||body<0||
         planetPreview_->bodyId!=doc.data.bodies[size_t(body)].id;
     if(changedBody||planetRevision_!=doc.revision){
+        if(!device_->waitForResourceIdle())return;
         auto next=StudioPlanetPreview::build(doc,body);
         Mesh replacement;
         if(next)replacement=next->mesh.upload(*device_);
-        if(!device_->waitForResourceIdle())return;
+        if(!changedBody && planetRevision_!=doc.revision)clearTransformPreview();
         if(planetTerrain_.vb.valid())device_->destroyBuffer(planetTerrain_.vb);
         if(planetTerrain_.ib.valid())device_->destroyBuffer(planetTerrain_.ib);
         planetTerrain_=replacement;planetPreview_=std::move(next);planetDoc_=&doc;planetRevision_=doc.revision;
@@ -1942,6 +1943,25 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
             if(marker.id==selectedId||selection_.count(marker.id))
                 renderer_.drawSelectionMesh(cube_,world,marker.color,{.25f,.62f,1.f,1.f});
             else renderer_.drawMesh(cube_,world,marker.color,kDrawNoCastShadow);
+        }
+        if(gizmosVisible_){
+            std::map<std::string,const StudioDocumentProxy*> byId;
+            for(const auto& marker:planetPreview_->markers)byId.emplace(marker.id,&marker);
+            for(const auto& link:planetPreview_->links){
+                if(hidden_.count(link.from)||hidden_.count(link.to))continue;
+                const auto* a=byId.at(link.from);const auto* b=byId.at(link.to);
+                const auto da=normalize(a->center),db=normalize(b->center);
+                if(dot(da,db)<-.99f)continue; // ambiguous antipodal route
+                auto prev=a->center;
+                for(int i=1;i<=16;++i){
+                    const float t=float(i)/16.f;
+                    const auto dir=normalize(da*(1.f-t)+db*t);
+                    const float radial=std::sqrt(dot(a->center,a->center))*(1.f-t)+
+                        std::sqrt(dot(b->center,b->center))*t;
+                    const auto next=dir*(radial+std::sin(t*3.14159265f)*std::min(planetPreview_->radius*.05f,3.f));
+                    renderer_.line(prev,next,link.color);prev=next;
+                }
+            }
         }
         if(planetDragPlacement_.isObject()){
             game::CubeSphere cube(planetPreview_->faceSize);

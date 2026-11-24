@@ -82,6 +82,13 @@ void planetWorldProcessAuthoringWorkflow(){
     AIVERSE_TEST_CHECK(call("studio.setProperty",R"({"entityId":"entity:@region","componentId":"SurfacePlacement","key":"face","value":6})").has("error"));
     AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
     AIVERSE_TEST_CHECK(session.workspace().map.data.entities[0].at.getStr("body")=="terra");
+    const auto oldPlacement=session.workspace().map.data.entities[0].at;
+    AIVERSE_TEST_CHECK(!call("studio.setProperty",R"({"entityId":"entity:@region","componentId":"SurfacePlacement","key":"placement","value":{"body":"terra","face":3,"x":2.5,"y":1.5}})").has("error"));
+    AIVERSE_TEST_CHECK(session.workspace().map.data.entities[0].at.getInt("face")==3);
+    AIVERSE_TEST_CHECK(session.workspace().map.data.entities[0].x==2.5f);
+    AIVERSE_TEST_CHECK(call("studio.setProperty",R"({"entityId":"entity:@region","componentId":"SurfacePlacement","key":"placement","value":{"body":"terra","face":2,"x":999,"y":1}})").has("error"));
+    AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
+    AIVERSE_TEST_CHECK(session.workspace().map.data.entities[0].at==oldPlacement);
     AIVERSE_TEST_CHECK(!call("studio.setProperty",R"({"entityId":"entity:@region","componentId":"EvolveArea","key":"offsetXcm","value":-250})").has("error"));
     AIVERSE_TEST_CHECK(session.workspace().map.data.entities[0].extra["components"]["EvolveArea"].getInt("offsetXcm")==-250);
     AIVERSE_TEST_CHECK(!call("studio.setProperty",R"({"entityId":"entity:@region","componentId":"MorphNode","key":"gravityRelative","value":false})").has("error"));

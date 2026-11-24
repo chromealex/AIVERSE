@@ -4,6 +4,9 @@
 #include "apps/studio-native/StudioVisualPicking.h"
 #include "engine/game/Sphere.h"
 #include <optional>
+#include <array>
+#include <map>
+#include <set>
 #include <limits>
 
 namespace aiverse::studio {
@@ -15,6 +18,8 @@ struct StudioPlanetPreview {
     std::vector<StudioDocumentProxy> markers;
     std::map<std::string,Json> placements;
     std::map<std::string,std::string> authoredIds;
+    struct Link { std::string from,to; uint32_t color=0; };
+    std::vector<Link> links;
     static render::float3 f3(Vec3 v){return {float(v.x.toDouble()),float(v.y.toDouble()),float(v.z.toDouble())};}
     static Fixed fixed(float v){return Fixed::fromRaw(int64_t(std::llround(double(v)*Fixed::kOne)));}
     static float height(const editor::DocBody& body,int face,float a,float b){
@@ -73,6 +78,24 @@ struct StudioPlanetPreview {
             out.placements.emplace(marker.id,e.at);
             if(!e.id.empty())out.authoredIds.emplace(e.id,marker.id);
             out.markers.push_back(std::move(marker));
+        }
+        // Authored stable references only, restricted to this body.
+        const auto link=[&](const Json& c,const char* a,const char* b,uint32_t color){
+            if(!c.isObject()||!c.getBool("enabled",true)||out.links.size()>=4096)return;
+            const auto first=out.authoredIds.find(c.getStr(a)),second=out.authoredIds.find(c.getStr(b));
+            if(first==out.authoredIds.end()||second==out.authoredIds.end()||first->second==second->second)return;
+            out.links.push_back({first->second,second->second,color});
+        };
+        for(const auto& e:doc.data.entities){
+            if(e.at.getStr("body")!=body.id)continue;
+            const auto& c=e.extra["components"];
+            link(c["CircuitWire"],"from","to",render::rgba(255,210,70));
+            link(c["AetherDuct"],"from","to",render::rgba(115,210,255));
+            link(c["FractureBond"],"first","second",render::rgba(255,130,90));
+            link(c["EchoPortal"],"from","to",render::rgba(180,140,255));
+            link(c["MorphSpring"],"a","b",render::rgba(60,210,245));
+            link(c["ImprintLink"],"a","b",render::rgba(210,160,90));
+            link(c["SocietyContact"],"source","target",render::rgba(100,240,155));
         }
         return out;
     }
