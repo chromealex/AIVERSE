@@ -62,6 +62,14 @@
     {
      "status": "in-progress",
      "target": null,
+     "title": "Планетарный лес: авторские виды ARBOR",
+     "titleEn": "Planetary forest: authored ARBOR species",
+     "text": "Stage 154: общая схема видов TerraWeave, пользовательские профили и текстуры, привязка по ID.",
+     "textEn": "Stage 154: shared TerraWeave species schema, custom profiles and textures, binding by ID."
+    },
+    {
+     "status": "in-progress",
+     "target": null,
      "title": "Планетарный лес: видимость по Fog of War",
      "titleEn": "Planetary forest: fog-of-war visibility",
      "text": "Stage 153: отображать текущее состояние только в видимых ячейках, без истории и без раскрытия скрытых изменений через декоративные деревья.",
