@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Mountain, RefreshCw } from 'lucide-react';
 import { invoke, onNativeEvent } from '../../bridge';
 import type { StudioSnapshot } from '../../types';
+import { CaveNativeInspection, CaveInspectionImport } from '../../graphs/CaveStructureGraphView';
 import { StudioPanel, StudioSection, StudioField, StudioInput, StudioSelect, StudioButton, StudioIconButton, StudioAlert, StudioEmptyState, StudioBadge } from '../../ui';
 
 type Stamp = { id: string; xCm: number; yCm: number; zCm: number; radiusCm: number; mode: 'carve' | 'fill' };
@@ -131,6 +132,8 @@ export default function CavernsPanel({ snapshot, commitSnapshot }: { snapshot: S
           <StudioAlert title="Native diagnostics">Viewport mesh, collision, streaming and paging telemetry are not exposed by this Studio build. Settings and entrances are read only here.</StudioAlert>
         </StudioSection>
       </>}
+      {project && <CaveNativeInspection scope={snapshot?.graphDocument}/>}
+      <CaveInspectionImport/>
     </div>
   </StudioPanel>;
 }

@@ -223,3 +223,7 @@ The shared BuildingRoomTopologyView and BuildingStructureGraphView consume optio
 ## Stage 36A — Building Graph geometry inspection
 
 Shared BuildingStructureGraphView and BuildingGeometryGraphView project the optional native geometry DTO using GraphCanvas. Source-level owner inventory is not live registration. The integration branch owns native generation, live monitor, material dependencies and Workspace bridge. Do not infer runtime completion or create a separate graph evaluator; preserve existing adapters. Geometry fixture added; acceptance pending.
+
+## Stage 55 — mount shared Caverns inspection on the Building integration base
+
+On pinned Building Stage 36B base, the existing Caverns panel mounts CaveNativeInspection with the native snapshot graphDocument scope and CaveInspectionImport with explicit offline provenance. Native flat-only capture and its document/undo/dirty guard remain unchanged until the current planetary owner is reconciled. Stage 53 planetary report parser, projection, view and regression fixtures are ported from 80902238; no new generator, route solver, writer or fake runtime telemetry. Actual owner integration and tests pending.
