@@ -135,3 +135,6 @@ Studio Save/Save As now stages the Map history checkpoint v2 with map JSON, terr
 
 ### S6f.4b.3a — durable asset history navigation
 Native individual Asset Undo/Redo and coordinated agent history navigation now use the outer history journal v4 for paired current/next asset cursors. The prior checkpoint is verified against the current disk state. Before relocation it is retained durably; after file publication the new checkpoint is calculated from the actual final content/material/Trash state and staged with a transaction-bound readiness marker. The outer commit selects both payload and cursor; recovery restores both. Metadata-only navigation uses the same journal. New asset mutation recording still uses the existing dirty-marker publication and is not yet atomic with its cursor. No new MCP action.
+
+### S6f.4b.3b.1 — atomic recording of staged asset operations
+The native metadata patch, folder creation, quarantine deletion, external import and replacement paths prepare a detached Asset history and file plan before publishing live bytes. Outer journal v5 supports first checkpoint creation; v4 remains the existing-checkpoint path. Internal move/rename with material repair and explicit Trash recovery/purge still use legacy dirty-marker recording. Private staging slots may survive a rejected operation. No new MCP action.
