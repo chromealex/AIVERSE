@@ -16,6 +16,24 @@ inline Json templates(){
         if(std::string(recipe.name)=="brick"){nodes.at(1).set("op",Json::string("patternMask"));nodes.at(1).set("properties",Json::parse(R"({"pattern":"brick","scale":8,"seed":1})"));nodes.at(0).member("properties").set("scale",Json::number(int64_t(8)));nodes.push(Json::parse(R"({"id":"brickRelief","op":"invert","inputs":["height"]})"));nodes.at(2).set("inputs",Json::parse(R"(["brickRelief"])"));g.member("outputs").set("height",Json::string("brickRelief"));}
         compile(g);Json row=Json::object();row.set("name",Json::string(recipe.name));row.set("graph",g);out.push(row);
     }
+    {
+        const auto g=Json::parse(R"({"version":1,"size":256,"nodes":[
+          {"id":"u","op":"gradient","inputs":[],"properties":{"axis":"x"}},
+          {"id":"v","op":"gradient","inputs":[],"properties":{"axis":"y"}},
+          {"id":"zenith","op":"hdrConstant","inputs":[],"properties":{"radiance":[0.35,0.7,1.5]}},
+          {"id":"ground","op":"hdrConstant","inputs":[],"properties":{"radiance":[0.06,0.04,0.025]}},
+          {"id":"sky","op":"hdrBlend","inputs":["zenith","ground","v"]},
+          {"id":"distance","op":"formula","inputs":["u","v"],"properties":{"expression":"a 0.5 - a 0.5 - * b 0.5 - b 0.5 - * +"}},
+          {"id":"outside","op":"threshold","inputs":["distance"],"properties":{"threshold":0.0008}},
+          {"id":"disc","op":"invert","inputs":["outside"]},
+          {"id":"dark","op":"hdrConstant","inputs":[],"properties":{"radiance":[0,0,0]}},
+          {"id":"light","op":"hdrConstant","inputs":[],"properties":{"radiance":[35,25,14]}},
+          {"id":"key","op":"hdrBlend","inputs":["dark","light","disc"]},
+          {"id":"environment","op":"hdrAdd","inputs":["sky","key"]},
+          {"id":"display","op":"hdrToneMap","inputs":["environment"],"properties":{"mapping":"reinhard","ev":0}}
+        ],"outputs":{"radiance":"environment","color":"display"}})");
+        compile(g);Json row=Json::object();row.set("name",Json::string("hdr_studio_environment"));row.set("graph",g);out.push(row);
+    }
     return out;
 }
 } // namespace aiverse::render::texture_graph

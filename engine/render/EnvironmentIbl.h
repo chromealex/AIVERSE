@@ -5,6 +5,7 @@
 #pragma once
 #include "HdrTexture.h"
 #include <stdexcept>
+#include <span>
 namespace aiverse::render::environment_ibl {
 inline constexpr int width=128,height=64,bandWidth=width+2,bandHeight=height+2,bands=5;
 inline constexpr float pi=3.14159265358979323846f;
@@ -127,6 +128,25 @@ inline const std::vector<uint16_t>& brdfLut(){
         return pixels;
     }();
     return lut;
+}
+// Full-sphere UV domain; box-filter V into a 2:1 lat-long image.
+// Lighting uses nonnegative radiance and ignores material alpha.
+inline RadianceImage fromGraphLatLong(int side,std::span<const float> rgba){
+    if(side<8||side>1024||side%2||rgba.size()!=size_t(side)*side*4u)
+        throw std::invalid_argument("Invalid square HDR graph environment");
+    RadianceImage result;result.width=side;result.height=side/2;
+    result.rgba16f.resize(size_t(result.width)*result.height*4u);
+    for(int y=0;y<result.height;++y)for(int x=0;x<side;++x){
+        const auto a=(size_t(2*y)*side+x)*4u,b=a+size_t(side)*4u,o=(size_t(y)*side+x)*4u;
+        for(size_t c=0;c<3;++c){
+            const float v=rgba[a+c],w=rgba[b+c];
+            if(!std::isfinite(v)||!std::isfinite(w)||std::abs(v)>65504.f||std::abs(w)>65504.f)
+                throw std::invalid_argument("Invalid HDR environment radiance");
+            result.rgba16f[o+c]=hdr_detail::toHalf((std::max(0.f,v)+std::max(0.f,w))*.5f);
+        }
+        result.rgba16f[o+3]=0x3c00u;
+    }
+    return result;
 }
 inline RadianceImage convolve(const RadianceImage& source){
     if(source.width<2||source.height<1||source.width!=2*source.height||

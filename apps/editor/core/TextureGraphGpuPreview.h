@@ -6,8 +6,12 @@
 namespace aiverse::editor {
 class TextureGraphGpuPreview final : public render::texture_graph::TextureGraphGpuOwner {
 public:
+    template<class Publish>
+    Json consumeRadiance(const std::string& scope,const std::string& request,Publish&& publish){
+        return publishRadianceBaked(scope,request,std::forward<Publish>(publish));
+    }
     Json publish(Workspace& ws,const Json& p){
-        if(isRadianceBake())return publishRadianceBaked(ws.project.dir,p.getStr("request"),[&](int size,std::span<const float> rgba){return publishTextureGraphRadiance(ws,p.getStr("textureName"),size,rgba);});
+        if(isRadianceBake())return publishRadianceBaked(ws.project.dir,p.getStr("request"),[&](int size,std::span<const float> rgba){return p.getBool("environment")?publishTextureGraphEnvironment(ws,p.getStr("textureName"),size,rgba):publishTextureGraphRadiance(ws,p.getStr("textureName"),size,rgba);});
         return publishBaked(ws.project.dir,p.getStr("request"),
             [&](const Json& graph,const Json& overrides,const std::vector<render::Image>& images,
                 const std::vector<std::string>& backends){

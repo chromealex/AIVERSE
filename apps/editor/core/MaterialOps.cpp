@@ -12,6 +12,7 @@
 #include "engine/render/Model.h"
 #include "engine/render/ExrTexture.h"
 #include "engine/render/CameraExr.h"
+#include "engine/render/EnvironmentIbl.h"
 #include "engine/render/TextureGen.h"
 #include "engine/render/graph/TextureGraph.h"
 #include "engine/render/graph/TextureGraphContainerSource.h"
@@ -213,16 +214,13 @@ void saveMaterialLibrary(Workspace& ws, const Json& lib, const std::string& what
     ws.note({Change::Rules, 0, 0, -1, -1, -1, what});   // views rebuild with the library
 }
 
-Json publishTextureGraphRadiance(Workspace& ws,const std::string& name,int size,std::span<const float> rgba){
+static Json publishGraphExr(Workspace& ws,const std::string& name,int width,int height,const char* suffix,const char* output,const std::vector<uint8_t>& exr){
     needProject(ws);
-    if(!render::texture_graph::safeId(name)||size<8||size>1024||rgba.size()!=size_t(size)*size*4)throw std::invalid_argument("invalid HDR texture result");
-    for(size_t i=0;i<rgba.size();++i)if(!std::isfinite(rgba[i])||std::abs(rgba[i])>65504.f||(i%4==3&&(rgba[i]<0.f||rgba[i]>1.f)))throw std::invalid_argument("invalid HDR texture sample");
-    std::vector<uint8_t> exr;
-    if(!render::cameraEncodeExrFloat(size,size,rgba,exr))throw std::runtime_error("EXR encode failed");
+    if(!render::texture_graph::safeId(name)||exr.empty())throw std::invalid_argument("invalid EXR publication");
     const auto root=fs::canonical(ws.project.dir),dir=root/"content"/"textures";
     if(fs::is_symlink(root/"content")||fs::is_symlink(dir))throw std::runtime_error("texture destination symlink rejected");
     fs::create_directories(dir);
-    const std::string rel="content/textures/"+name+"_radiance.exr";
+    const std::string rel="content/textures/"+name+suffix+".exr";
     const auto dest=root/rel,stage=fs::path(dest.string()+".stage");
     if(fs::exists(dest)||fs::is_symlink(dest)||!fs::create_directory(stage))throw std::runtime_error("EXR already exists or staging busy");
     struct Cleanup {fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}} cleanup{stage};
@@ -230,7 +228,22 @@ Json publishTextureGraphRadiance(Workspace& ws,const std::string& name,int size,
     {std::ofstream stream(temp,std::ios::binary);stream.write(reinterpret_cast<const char*>(exr.data()),std::streamsize(exr.size()));stream.close();if(!stream)throw std::runtime_error("EXR write failed");}
     fs::create_hard_link(temp,dest);
     ws.note({Change::Rules,0,0,-1,-1,-1,"Texture graph HDR bake: "+rel});
-    Json r=okJson();r.set("path",Json::string(rel));r.set("output",Json::string("radiance"));r.set("size",Json::number(int64_t(size)));r.set("format",Json::string("exr-rgba16f"));return r;
+    Json r=okJson();r.set("path",Json::string(rel));r.set("output",Json::string(output));r.set("size",Json::number(int64_t(width)));r.set("width",Json::number(int64_t(width)));r.set("height",Json::number(int64_t(height)));r.set("format",Json::string("exr-rgba16f"));return r;
+}
+Json publishTextureGraphRadiance(Workspace& ws,const std::string& name,int size,std::span<const float> rgba){
+    needProject(ws);
+    if(!render::texture_graph::safeId(name)||size<8||size>1024||rgba.size()!=size_t(size)*size*4)throw std::invalid_argument("invalid HDR texture result");
+    for(size_t i=0;i<rgba.size();++i)if(!std::isfinite(rgba[i])||std::abs(rgba[i])>65504.f||(i%4==3&&(rgba[i]<0.f||rgba[i]>1.f)))throw std::invalid_argument("invalid HDR texture sample");
+    std::vector<uint8_t> exr;
+    if(!render::cameraEncodeExrFloat(size,size,rgba,exr))throw std::runtime_error("EXR encode failed");
+    return publishGraphExr(ws,name,size,size,"_radiance","radiance",exr);
+}
+Json publishTextureGraphEnvironment(Workspace& ws,const std::string& name,int size,std::span<const float> rgba){
+    needProject(ws);
+    const auto image=render::environment_ibl::fromGraphLatLong(size,rgba);
+    std::vector<uint8_t> exr;
+    if(!render::cameraEncodeExrHalf(image.width,image.height,image.rgba16f,exr))throw std::runtime_error("HDR environment EXR encode failed");
+    return publishGraphExr(ws,name,image.width,image.height,"_environment","environment",exr);
 }
 Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::string& output,const render::Image& image){
     needProject(ws);
@@ -621,6 +634,16 @@ void registerMaterialOps(Workspace& ws) {
         textureCache->selectProject(w->project.dir);bool cacheHit=false;
         auto img=textureCache->evaluate(program,{it->second},0,cacheHit).front();
         auto r=publishTextureGraphImage(*w,name,output,img);r.set("cacheHit",Json::fromBool(cacheHit));return r;
+    });
+
+    add("texture_graph_bake_environment","Bake graph radiance into a new 2:1 linear EXR lat-long environment; never overwrite.",graphSchema,[w](const Json& p){
+        needProject(*w);
+        const auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object(),textureGraphImageResolver(*w));
+        const auto target=program.outputs.find("radiance");
+        if(target==program.outputs.end())throw std::invalid_argument("Bind a radiance output first");
+        const auto rgba=render::texture_graph::evaluateRadiance(program,target->second);
+        auto r=publishTextureGraphEnvironment(*w,p.getStr("textureName"),program.size,rgba);
+        r.set("backend",Json::string("cpu"));return r;
     });
 
     add("texture_graph_bake_set","Bake all declared outputs into a new named directory; stage all PNGs before publication, no overwrite of existing set.",graphSchema,[w,textureCache](const Json& p){

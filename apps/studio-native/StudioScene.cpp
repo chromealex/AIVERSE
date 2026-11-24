@@ -5,6 +5,7 @@
 #include "apps/studio-native/StudioFont6x11.h"
 #include "engine/render/CameraPng.h"
 #include "engine/render/EnvironmentIbl.h"
+#include "engine/render/ExrTexture.h"
 #include "apps/studio-native/StudioLightingPreview.h"
 #include "engine/render/GiModelGeometry.h"
 #include "apps/editor/SceneRenderable.h"
@@ -86,8 +87,23 @@ struct StudioScene::GraphPresentation {
         if(sample){if(sampleRenderer)sampleRenderer->invalidateModelCachesFor(sample.get());sampleAppearance.reset();releaseModel(dev,*sample);sample.reset();}
         capture.reset();draw=false;
     }
+    void replaceEnvironment(gfx::Device& dev,const RadianceImage& hdr,std::string identity){
+        if(dev.maxFragmentTextureSlots()<14||!dev.supports(gfx::PixelFormat::RGBA16F))throw std::runtime_error("Native HDR environment unsupported by this GPU");
+        const auto atlas=environment_ibl::convolveWithBrdf(hdr);
+        if(!dev.waitForResourceIdle())throw std::runtime_error("HDR environment retirement failed");
+        std::string error;auto candidate=uploadRadianceHdr(dev,atlas,error);
+        if(!candidate.valid())throw std::runtime_error(error);
+        if(sampleRenderer)sampleRenderer->setModelEnvironment({});
+        if(environment.valid())dev.destroyTexture(environment);
+        environment=candidate;environmentPath=std::move(identity);
+    }
     void setEnvironment(gfx::Device& dev,const std::string& project,const std::string& relative,bool reload){
         namespace fs=std::filesystem;
+        if(relative=="@graph"){
+            if(environmentPath!=relative||!environment.valid())throw std::runtime_error("Generate graph environment first");
+            if(reload)throw std::invalid_argument("Regenerate graph environment instead of reloading a file");
+            return;
+        }
         if(relative==environmentPath&&!reload)return;
         if(relative.empty()){
             if(environment.valid()){
@@ -108,15 +124,9 @@ struct StudioScene::GraphPresentation {
         std::string encoded(size_t(bytes),'\0');std::ifstream stream(path,std::ios::binary);
         if(!stream.read(encoded.data(),std::streamsize(encoded.size()))||stream.peek()!=std::char_traits<char>::eof())throw std::runtime_error("HDR environment changed during read");
         RadianceImage hdr;std::string error;
-        if(!parseRadianceHdr(encoded,hdr,error,64u*1024u*1024u))throw std::runtime_error(error);
-        const auto atlas=environment_ibl::convolveWithBrdf(hdr);
-        // The old atlas remains visible until the replacement is successfully uploaded.
-        if(!dev.waitForResourceIdle())throw std::runtime_error("HDR environment retirement failed");
-        auto candidate=uploadRadianceHdr(dev,atlas,error);
-        if(!candidate.valid())throw std::runtime_error(error);
-        if(sampleRenderer)sampleRenderer->setModelEnvironment({});
-        if(environment.valid())dev.destroyTexture(environment);
-        environment=candidate;environmentPath=relative;
+        const bool exr=encoded.size()>=4&&encoded.compare(0,4,"\x76\x2f\x31\x01",4)==0;
+        if(!(exr?parseOpenExr(encoded,hdr,error,64u*1024u*1024u):parseRadianceHdr(encoded,hdr,error,64u*1024u*1024u)))throw std::runtime_error(error);
+        replaceEnvironment(dev,hdr,relative);
     }
     void shutdown(gfx::Device& dev){
         scene.clear();merged.clear();resetSample(dev);
@@ -796,6 +806,22 @@ Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
     if(action.rfind("studio",0)==0){
         if(!graphPresentation_)graphPresentation_=std::make_unique<GraphPresentation>();
         auto& presentation=*graphPresentation_;
+        if(action=="studioEnvironmentGenerate"||action=="studioEnvironmentApplyGpu"){
+            if(presentation.capture&&presentation.capture->state=="pending")throw std::runtime_error("PBR capture pending");
+            auto install=[&](int size,std::span<const float> rgba){
+                auto source=environment_ibl::fromGraphLatLong(size,rgba);
+                presentation.replaceEnvironment(*device_,source,"@graph");
+                Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("state",Json::string("ready"));
+                r.set("environment",Json::string("@graph"));r.set("width",Json::number(int64_t(source.width)));r.set("height",Json::number(int64_t(source.height)));
+                r.set("prefilterBackend",Json::string("cpu"));return r;
+            };
+            if(action=="studioEnvironmentApplyGpu")return owner.consumeRadiance(ws.project.dir,p.getStr("request"),install);
+            const auto program=texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object(),editor::textureGraphImageResolver(ws));
+            const auto target=program.outputs.find("radiance");
+            if(target==program.outputs.end())throw std::invalid_argument("Bind a radiance output first");
+            const auto rgba=texture_graph::evaluateRadiance(program,target->second);
+            auto r=install(program.size,rgba);r.set("backend",Json::string("cpu"));return r;
+        }
         if(action=="studioHdrApplyPbr"||action=="studioHdrApplyModel"){
             const auto channel=p.getStr("channel","emissive");
             if(channel!="color"&&channel!="emissive")throw std::invalid_argument("Invalid HDR material channel");
@@ -953,7 +979,7 @@ Json StudioScene::textureGraphOperation(editor::Workspace& ws,const Json& p) {
             auto r=GraphPresentation::info(presentation.sampleAppearance,presentation.sampleMaterial);r.set("state",Json::string("applied"));return r;
         }
         if(action=="studioPbrRender"){
-            if(!presentation.sample||!presentation.sampleAppearance||presentation.sampleAppearance->version<2)throw std::runtime_error("Apply GPU PBR set first");
+            if(!presentation.sample||!presentation.sampleAppearance)throw std::runtime_error("Prepare PBR preview first");
             if(presentation.capture&&presentation.capture->state=="pending")throw std::runtime_error("PBR capture pending");
             presentation.yaw=previewScalar(p["yaw"],.65f,-100.f,100.f);presentation.pitch=previewScalar(p["pitch"],.42f,-1.4f,1.4f);
             presentation.zoom=previewScalar(p["zoom"],1.f,.6f,3.f);presentation.light=previewScalar(p["light"],1.25f,0.f,8.f);
