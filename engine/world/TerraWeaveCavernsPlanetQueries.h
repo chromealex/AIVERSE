@@ -9,6 +9,7 @@ struct CavePlanetGravitySample {
     Vec3 chartAcceleration{};
     Vec3 chartUp{};
     bool groundedChartCompatible=false;
+    bool groundedCompatible=false;
 };
 // No second gravity policy. The PHYSIS fields must be authored in the
 // simulation anchor coordinates, NOT in the moving orbit/render space.
@@ -21,9 +22,8 @@ inline CavePlanetGravitySample sampleCavePlanetGravity(const CavePlanetFrame& fr
     const auto magnitude=out.chartAcceleration.length();
     if(magnitude>Fixed::fromRatio(1,100)){
         out.chartUp=fxNormalize(out.chartAcceleration*Fixed::fromInt(-1));
-        // Existing ground support stencil is Y-up within this chart.
-        // Refuse significantly tilted/zero/reversed fields rather than
-        // silently permitting a route unsupported by the local gravity.
+        out.groundedCompatible=true;
+        // The legacy 2.5D NavMesh still requires chart-Y support.
         out.groundedChartCompatible=out.chartUp.y>=Fixed::fromRatio(99,100);
     }
     return out;
@@ -38,10 +38,12 @@ inline std::shared_ptr<const CaveNavigationDataProvider> makeCavePlanetNavigatio
     if(!index||!frozen||!environmentRevision||!nativeResidency)
         throw std::invalid_argument("Caverns planetary navigation owner proof");
     validateCavePlanetVolume(frame,index->snapshot());
-    auto prior=std::move(callbacks.groundSupportAllowed);
-    callbacks.groundSupportAllowed=[frame,frozen,prior=std::move(prior)](PointCm p){
-        return frame.contains(p)&&(!prior||prior(p))&&
-            sampleCavePlanetGravity(frame,*frozen,p).groundedChartCompatible;
+    if(callbacks.groundUp)throw std::invalid_argument("Caverns PHYSIS is the ground-up owner");
+    callbacks.groundUp=[frame,frozen](PointCm p)->std::optional<Vec3>{
+        if(!frame.contains(p))return {};
+        const auto gravity=sampleCavePlanetGravity(frame,*frozen,p);
+        if(!gravity.groundedCompatible)return {};
+        return gravity.chartUp;
     };
     return std::make_shared<const CaveNavigationDataProvider>(std::move(index),std::move(callbacks),
         environmentRevision,[frame,nativeResidency=std::move(nativeResidency)](PointCm lo,PointCm hi){
@@ -88,7 +90,7 @@ public:
     // check intermediate support and real native collision, not just ends.
     std::optional<PointCm> groundedPoint(Vec3 simPoint,const World& frozen)const{
         auto p=CavePlanetFrame::centimetres(frame_.fromSimulation(simPoint));
-        if(!sampleCavePlanetGravity(frame_,frozen,p).groundedChartCompatible)return {};
+        if(!sampleCavePlanetGravity(frame_,frozen,p).groundedCompatible)return {};
         return p;
     }
 private:

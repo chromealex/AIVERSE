@@ -48,6 +48,7 @@ inline CavePathResult findCaveNativeNavPath(
                 p.y.raw*100/Fixed::kOne,
                 p.z.raw*100/Fixed::kOne});
         }
+        if(!caveRouteSegmentsValid(query,result,*provider,true))return {};
         return result;
     }catch(const std::exception&) {
         return result;

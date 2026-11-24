@@ -41,6 +41,7 @@ class CaveNativeNavMeshCache {
     };
     struct Entry {
         std::unique_ptr<nav::Mesh> mesh;
+        std::shared_ptr<const CaveNavigationDataProvider> source;
         uint64_t lastUse=0;
     };
 public:
@@ -64,6 +65,9 @@ public:
         Key key{source->revision(),source->environmentRevision(),config,
                 query.agent};
         auto it=meshes_.find(key);
+        // Different regions/rollback can reuse numeric epochs. Retain the
+        // immutable provider identity; never reuse another chart's mesh.
+        if(it!=meshes_.end()&&it->second.source!=source){meshes_.erase(it);it=meshes_.end();}
         if(it==meshes_.end()){
             CaveSharedNavSource surface(source,config,query.agent);
             auto candidate=std::make_unique<nav::Mesh>();
@@ -71,7 +75,7 @@ public:
             if(!candidate->build(surface,caveNavMeshConfig(config),&error))
                 return result;
             while(meshes_.size()>=capacity_)evictOne();
-            it=meshes_.emplace(key,Entry{std::move(candidate),++clock_}).first;
+            it=meshes_.emplace(key,Entry{std::move(candidate),source,++clock_}).first;
         } else it->second.lastUse=++clock_;
         nav::Query params;
         params.maxVisits=query.maxVisits;
@@ -90,6 +94,7 @@ public:
                 p.x.raw*100/Fixed::kOne,
                 p.y.raw*100/Fixed::kOne,
                 p.z.raw*100/Fixed::kOne});
+        if(!caveRouteSegmentsValid(query,result,*source,true))return {};
         return result;
     }
     void invalidate(){meshes_.clear();}

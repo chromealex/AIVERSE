@@ -47,7 +47,7 @@ public:
         if(a>=from.size()||b>=to.size())return false;
         if(std::abs(from[a].y-to[b].y)>config_.maxStepCm)
             return false;
-        return provider_->canTraverse(from[a],to[b],agent_);
+        return provider_->canTraverse(from[a],to[b],agent_,true);
     }
     uint64_t sourceRevision()const noexcept{return provider_->revision();}
 private:
@@ -62,7 +62,7 @@ private:
         for(int64_t y=config_.minYcm;y<=config_.maxYcm;
             y+=config_.verticalStepCm){
             const PointCm p{px,y,pz};
-            const bool yes=provider_->sample(p,agent_).traversable;
+            const bool yes=provider_->chartYCompatible(p,agent_)&&provider_->sample(p,agent_).traversable;
             if(yes&&!previous){
                 out.push_back(p);
                 if(out.size()>config_.maxSpansPerColumn)

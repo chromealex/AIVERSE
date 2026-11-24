@@ -29,6 +29,20 @@ struct CavePathResult {
     uint32_t totalCost=0;
     bool reached=false;
 };
+// Validate exact endpoints and every segment, including native smoothing.
+// Keep historical flat, nonresident route projection behavior unchanged.
+inline bool caveRouteSegmentsValid(const CavePathQuery& query,const CavePathResult& result,
+        const CaveNavigationDataProvider& provider,bool requireChartY=false){
+    if(!result.reached)return true;
+    if(!provider.hasResidencyFilter()&&!provider.orientedGround(query.agent))return true;
+    if(result.waypoints.empty()||result.waypoints.size()>65536)return false;
+    auto previous=query.start;
+    for(const auto& point:result.waypoints){
+        if(!provider.canTraverse(previous,point,query.agent,requireChartY))return false;
+        previous=point;
+    }
+    return provider.canTraverse(previous,query.goal,query.agent,requireChartY);
+}
 class CavePathRouter {
 public:
     using Solver=std::function<CavePathResult(
@@ -74,18 +88,7 @@ public:
            (result.environmentRevision &&
             result.environmentRevision!=provider->environmentRevision()))
             return {};
-        // Native smoothing and custom algorithms may bypass graph edges.
-        // Validate residency of every returned segment, including endpoint
-        // projections, before exposing a successful route to gameplay.
-        if(result.reached&&provider->hasResidencyFilter()) {
-            if(result.waypoints.empty()||result.waypoints.size()>65536)return {};
-            auto previous=query.start;
-            for(const auto& point:result.waypoints) {
-                if(!provider->residentSegment(previous,point,query.agent))return {};
-                previous=point;
-            }
-            if(!provider->residentSegment(previous,query.goal,query.agent))return {};
-        }
+        if(!caveRouteSegmentsValid(query,result,*provider,it->second.kind==CavePathBackend::NavMesh))return {};
         result.environmentRevision=provider->environmentRevision();
         return result;
     }
