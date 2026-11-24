@@ -54,6 +54,7 @@ namespace kingston { struct CabinResidentDraw; }
 #include "GameModelResourceCache.h"
 #include "GameModelPreparationService.h"
 #include "GameTerrainRender.h"
+#include "ProjectileAppearance.h"
 #include "EntityFx.h"
 
 namespace aiverse::render { class CameraModelSnapshot; }
@@ -746,6 +747,12 @@ private:
         bool tracer = false;                      // optional visual bullets for attack events
         std::vector<float> projectileScale;       // "projectileScale": size of the projectile ball by weapon index (missing: 1; 0: not drawn)
         float projectileScaleDefault = 1;
+        struct ProjectileLook {
+            view_adapter::ProjectileAppearance config;
+            render::Model* model = nullptr; // borrowed from resources_
+            int clip = -1;
+        };
+        std::vector<ProjectileLook> projectiles; // authored by weapon slot
         float corpse = 2.5f;                      // seconds a dead object stays visible
         float corpseFade = 0.6f;                  // its last seconds fade out (0: drawn whole until removed)
         float corpseAlpha(float age) const { return GameView::corpseAlpha(corpse, corpseFade, age); }
@@ -899,7 +906,8 @@ private:
     // placement (planets): object frame in the view world (local +Y = up); null = flat (pos, ground)
     void drawObject(render::Renderer3D& r, EntityAnim& st, const SceneObject& o, float ground, float alpha, const render::float4* tintOverride = nullptr,
                     const render::mat4* placement = nullptr);
-    void drawProjectile(render::Renderer3D& r, uint64_t key, const SceneObject& o, float dt);
+    void drawProjectile(render::Renderer3D& r, uint64_t key, const SceneObject& o, float dt,
+                        render::float3 up = {0,1,0}, bool useMuzzle = true);
     void emitClipEvents(EntityAnim& st, const ModelChoice& ch, const SceneObject& o);
     render::float3 nodeWorldPos(const EntityAnim& st, const ModelChoice& ch, int node, render::float3 offset) const;
     uint32_t stateBits(const EntityAnim& st, const SceneObject& o, bool moving) const;
