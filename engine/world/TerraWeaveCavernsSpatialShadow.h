@@ -21,7 +21,7 @@ public:
     bool prepare(const CaveCollisionPrepared& source,
                  uint32_t firstColliderId,
                  const world::SpatialWorld& spatial){
-        if(!source.revision||
+        if(installed_||!source.revision||
            source.triangles.size()>65534||
            (!source.triangles.empty()&&!firstColliderId)||
            source.revision<=activeRevision_||
@@ -76,6 +76,10 @@ public:
     bool finalizeInstalled(world::SpatialWorld& spatial,uint64_t revision) {
         if(!installed_||revision!=stagedRevision_||!staged_)return false;
         for(size_t i=0;i<activeCount_;++i)
+            if(!spatial.colliders().contains(activeId_+uint32_t(i)))return false;
+        for(size_t i=0;i<staged_->size();++i)
+            if(!spatial.colliders().contains(stagedId_+uint32_t(i)))return false;
+        for(size_t i=0;i<activeCount_;++i)
             spatial.remove(activeId_+uint32_t(i));
         activeId_=stagedId_;
         activeCount_=staged_->size();
@@ -87,36 +91,17 @@ public:
     // Called only between simulation updates/queries. The fresh range is
     // disjoint from the old range and owned by this lease.
     bool commit(world::SpatialWorld& spatial,uint64_t revision){
-        if(!staged_||revision!=stagedRevision_||installed_)return false;
-        // Revalidate reservation just before insert; another owner may have
-        // occupied the IDs during the CPU staging interval.
-        for(size_t i=0;i<staged_->size();++i)
-            if(spatial.colliders().contains(stagedId_+uint32_t(i)))return false;
-        size_t added=0;
-        try {
-            for(const auto& tri:*staged_){
-                if(!spatial.addTriangle(stagedId_+uint32_t(added),tri))
-                    throw std::runtime_error("Caverns collider insertion failed");
-                ++added;
-            }
-        }catch(...){
-            for(size_t i=0;i<added;++i)
-                spatial.remove(stagedId_+uint32_t(i));
-            return false;
-        }
-        for(size_t i=0;i<activeCount_;++i)
-            spatial.remove(activeId_+uint32_t(i));
-        activeId_=stagedId_;
-        activeCount_=staged_->size();
-        activeRevision_=stagedRevision_;
-        staged_.reset();stagedId_=0;stagedRevision_=0;
-        return true;
+        if(!installCandidate(spatial,revision))return false;
+        if(finalizeInstalled(spatial,revision))return true;
+        (void)revertCandidate(spatial,revision);
+        return false;
     }
     bool abort(uint64_t revision){
         if(!staged_||revision!=stagedRevision_||installed_)return false;
         staged_.reset();stagedId_=0;stagedRevision_=0;return true;
     }
     void unload(world::SpatialWorld& spatial){
+        if(installed_)throw std::logic_error("Caverns cannot unload installed candidate");
         for(size_t i=0;i<activeCount_;++i)
             spatial.remove(activeId_+uint32_t(i));
         activeId_=0;activeCount_=0;activeRevision_=0;
