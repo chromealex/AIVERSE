@@ -69,11 +69,14 @@ inline std::optional<CavePlanetMotorIntent> cavePlanetMotorIntent(
         const CaveNavigationDataProvider& provider,Vec3 simulationPosition,uint32_t tick,
         const CavePlanetMotionAdmission& admitted){
     const auto* entry=findPlanetCaveRegion(ecs,regionId);
-    if(!entry||!admitted||!sameCavePlanetAnchor(entry->region.anchor,frame.anchor())||
+    if(!entry||!admitted||provider.scopeId()!=regionId||nav::caveRouteScope(ecs,entity)!=regionId||!sameCavePlanetAnchor(entry->region.anchor,frame.anchor())||
        entry->authority.volume.sourceRevision!=provider.revision()||!admitted(ecs,regionId))return {};
     const auto* request=nav::caveMotorRequest(ecs,entity,provider);
     if(!request)return {};
     try{
+        const auto* route=ecs.tryGetConst<nav::CaveRouteFollower>(entity);
+        const auto start=CavePlanetFrame::centimetres(frame.fromSimulation(simulationPosition));
+        if(!route||!provider.canTraverse(start,request->destination,route->agent))return {};
         CavePlanetMotorIntent out;
         out.regionId=regionId;out.sourceRevision=request->sourceRevision;
         out.environmentRevision=request->environmentRevision;out.tick=tick;

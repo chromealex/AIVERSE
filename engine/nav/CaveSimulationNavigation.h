@@ -171,7 +171,7 @@ inline CaveRepathTickStats repathCaveEntities(
         auto result=scoped?hooks.scopedSearch(intent.algorithm,request,provider):hooks.search(intent.algorithm,request);
         if(scoped&&result.reached){
             if(result.waypoints.empty()||!terraweave::caverns::caveRouteSegmentsValid(request,result,*provider))result.reached=false;
-            else if(result.waypoints.back()!=request.goal){
+            else if(const auto& end=result.waypoints.back();end.x!=request.goal.x||end.y!=request.goal.y||end.z!=request.goal.z){
                 if(result.waypoints.size()>=65536)result.reached=false;
                 else result.waypoints.push_back(request.goal);
             }

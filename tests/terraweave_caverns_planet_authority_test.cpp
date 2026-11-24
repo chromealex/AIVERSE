@@ -3,6 +3,7 @@
 #include "engine/world/TerraWeaveCavernsPlanetDemand.h"
 #include "engine/world/TerraWeaveCavernsPlanetMotion.h"
 #include "engine/world/TerraWeaveCavernsPlanetNavigation.h"
+#include "engine/world/TerraWeaveCavernsGraphSolvers.h"
 #include "engine/world/TerraWeaveCavernsNavigationGraph.h"
 #include "engine/world/TerraWeaveCavernsPathRouter.h"
 #include <iostream>
@@ -157,7 +158,7 @@ static void checkNavigationCoverage(const std::shared_ptr<const game::Surface>& 
     const auto frame=CavePlanetFrame::make(surface,anchor);
     auto frozen=std::make_shared<const World>();
     const auto provider=makeResidentCavePlanetNavigation(frame,index,frozen,7,coverage,
-        [](PointCm)->std::optional<std::pair<int32_t,int32_t>>{return {};});
+        [](PointCm)->std::optional<std::pair<int32_t,int32_t>>{return {};},{},{},2);
     CaveAgentProfile agent;agent.traversal=CaveTraversal::Flying;
     agent.radiusCm=0;agent.heightCm=1;
     check(provider->residentSegment({0,0,0},{0,0,0},agent),"resident provider interior");
@@ -182,7 +183,7 @@ static void checkOrientedNavigation(const std::shared_ptr<const game::Surface>& 
     canonicalizeCaveSnapshot(*snapshot);
     const auto index=std::make_shared<const CaveSnapshotSpatialIndex>(snapshot);
     const auto frame=CavePlanetFrame::make(surface,{"planet",0,8_fx,8_fx,800});
-    const auto provider=[&](Vec3 up){
+    const auto provider=[&](Vec3 up,uint64_t scope=0){
         auto world=std::make_shared<World>();
         physis::GravitySettings settings;
         settings.baseline=frame.vectorToBody(up)*Fixed::fromInt(-10);
@@ -191,13 +192,13 @@ static void checkOrientedNavigation(const std::shared_ptr<const game::Surface>& 
             [](PointCm lo,PointCm hi){
                 return lo.x>=-799&&lo.y>=-799&&lo.z>=-799&&
                        hi.x<=799&&hi.y<=799&&hi.z<=799;
-            });
+            },scope);
     };
     CaveAgentProfile agent;
     agent.radiusCm=10;agent.heightCm=100;agent.sampleCm=25;
     agent.groundProbeCm=75;agent.maxStepCm=10;
     const auto floor=provider({0_fx,1_fx,0_fx});
-    const auto wall=provider({1_fx,0_fx,0_fx});
+    const auto wall=provider({1_fx,0_fx,0_fx},2);
     const auto ceiling=provider({0_fx,-1_fx,0_fx});
     const auto zero=provider({});
     const PointCm wallStart{-250,-350,0},wallGoal{-250,-325,0};
@@ -224,6 +225,29 @@ static void checkOrientedNavigation(const std::shared_ptr<const game::Surface>& 
     check(!caveRouteSegmentsValid(query,route,*wall,true),"2.5D wall route refused");
     route.waypoints={{0,-350,0},wallGoal};
     check(!caveRouteSegmentsValid(query,route,*wall),"unsupported shortcut refused");
+    CavePathRouter router;
+    CaveGraphSolverSettings cfg;cfg.cellCm=10;cfg.regionMarginCells=2;
+    cfg.hpaClusterCells=2;cfg.hybridThreshold=1;
+    registerCaveSharedGraphSolvers(router,cfg);
+    for(const auto* name:{"astar","hpa","flow","hybrid"}){
+        const auto found=router.queryWithProvider(name,query,wall);
+        check(found.reached,"shared oriented solver reached wall goal");
+    }
+    World ecs;
+    const auto entity=ecs.create();
+    check(nav::assignScopedCaveMotorGoal(ecs,entity,2,wallGoal,agent),"assign region scope");
+    const auto routeResult=router.queryWithProvider("astar",query,wall);
+    check(nav::assignCaveRoute(ecs,entity,routeResult,agent,25),"assign shared route");
+    const nav::CaveWorldPositionSource position=[wallStart](const World&,Entity){return std::optional<PointCm>{wallStart};};
+    const auto foreign=provider({1_fx,0_fx,0_fx},9);
+    auto& request=ecs.get<nav::CaveSteeringRequest>(entity);
+    request.valid=true;request.sourceRevision=wall->revision();request.environmentRevision=wall->environmentRevision();
+    check(!nav::caveMotorRequest(ecs,entity,*foreign),"equal epochs wrong region refused");
+    (void)nav::prepareScopedCaveSteering(ecs,[foreign](const World&,Entity){return foreign;},position);
+    check(ecs.get<nav::CaveRouteFollower>(entity).needsRepath,"wrong region forces repath");
+    check(!ecs.get<nav::CaveSteeringRequest>(entity).valid,"wrong region clears request");
+    check(nav::assignScopedCaveMotorGoal(ecs,entity,9,wallGoal,agent),"switch scope");
+    check(nav::caveRouteScope(ecs,entity)==9&&ecs.get<nav::CaveRouteFollower>(entity).waypoints.empty(),"scope switch discards old route");
 }
 int main(){
     const auto surface=makeSurface();
