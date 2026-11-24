@@ -1748,6 +1748,12 @@
           "text": "Подключены GPU scopes с идентификатором запроса и выходом графа. Аппаратные измерения и автоматическое освобождение ещё не подтверждены.",
           "nameEn": "Texture Graph GPU — Stage 38G (partial)",
           "textEn": "GPU scope capture with request/output attribution implemented. Hardware measurements and automatic reclamation remain pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38H (в работе)",
+          "text": "Совместная работа incremental DAG и pointwise fusion.",
+          "nameEn": "Texture Graph GPU — Stage 38H (in progress)",
+          "textEn": "Combined incremental DAG and pointwise fusion."
         }
       ],
       "enables": [
