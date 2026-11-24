@@ -97,6 +97,14 @@ public:
         if(error)error->clear();return true;
     }
     bool retire(std::string* error=nullptr){return synchronize({}, {},error);}
+    // Same existing Scene binding for a destructible static instance. Keep
+    // a dedicated binding per owner; never share its shape map with intact
+    // building/lift owners. Debris remains simulation-owned visual poses.
+    auto destructionPublication(){
+        return [this](const std::map<uint32_t,world::Bounds>& shapes,const std::set<uint32_t>& movable,std::string* error){
+            return synchronize(shapes,movable,error);
+        };
+    }
     size_t bodyCount()const noexcept{return bodies_.size();}
     Json telemetry()const{
         Json j=Json::object();
