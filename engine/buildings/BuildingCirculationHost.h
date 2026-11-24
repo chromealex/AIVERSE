@@ -4,8 +4,8 @@
 // owner consumes lift movement commands and publishes transformed dynamic
 // colliders and render instance poses in its normal update phase.
 #include "engine/buildings/BuildingNavMeshBridge.h"
-#include <aiverselib/systems/BuildingRouteExecutor.h>
-#include <aiverselib/systems/RuntimeBuildingGenerator.h>
+#include <engine/systems/BuildingRouteExecutor.h>
+#include <engine/systems/RuntimeBuildingGenerator.h>
 #include <map>
 #include <set>
 #include <string>

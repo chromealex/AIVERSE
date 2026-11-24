@@ -10,7 +10,7 @@
 #include "engine/buildings/BuildingPngEncoder.h"
 #include "engine/buildings/BuildingMaterialAssets.h"
 #include "engine/render/Model.h"
-#include <aiverselib/systems/BuildingFeatureGenerator.h>
+#include <engine/systems/BuildingFeatureGenerator.h>
 #include "engine/data/Json.h"
 #include <algorithm>
 #include <cmath>

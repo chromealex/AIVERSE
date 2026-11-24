@@ -3,7 +3,7 @@
 Generated buildings (`building-gen`, `libraries/include/aiverselib/systems/BuildingGen.h`) are collision:
 axis-aligned boxes with floors, a door, windows and stairs. A **building style** gives them the look of a
 setting. The style is a data file, `engine/assets/building-styles/<id>.json`; the code that reads it
-(`building-style`, `libraries/include/aiverselib/systems/BuildingStyle.h`) knows only generic elements, so a
+(`building-style`, `engine/systems/BuildingStyle.h`) knows only generic elements, so a
 new setting is a new file. Shipped styles: `scifi` and `modern`.
 
 A style dresses two kinds of buildings:

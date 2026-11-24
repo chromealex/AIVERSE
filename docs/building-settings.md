@@ -58,7 +58,7 @@ A style chooses all visual characteristics through the strict
 
 ## Real generated PBR textures
 
-`libraries/include/aiverselib/systems/BuildingSurfacePattern.h`
+`engine/systems/BuildingSurfacePattern.h`
 implements 16 generic procedural surface types: `stone`, `brick`,
 `wood`, `metal`, `concrete`, `ceramic`, `fabric`,
 `organic`, `rust`, `coral`, `glass`, `soil`,

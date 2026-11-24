@@ -1,6 +1,6 @@
 // Portable runtime building generator smoke/regression. No Studio, GPU or GLB
 // exporter in the tested dependency graph. Packageable native game API.
-#include <aiverselib/systems/RuntimeBuildingGenerator.h>
+#include <engine/systems/RuntimeBuildingGenerator.h>
 #include <cstdio>
 #include <fstream>
 #include <sstream>

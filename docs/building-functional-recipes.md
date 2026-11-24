@@ -48,8 +48,8 @@ and actual aperture/collision geometry remain identical. The appearance changes.
 
 ## Native game API
 
-CPU implementation: libraries/include/aiverselib/systems/BuildingFeatureGenerator.h.
-Runtime API: libraries/include/aiverselib/systems/RuntimeBuildingGenerator.h.
+CPU implementation: engine/systems/BuildingFeatureGenerator.h.
+Runtime API: engine/systems/RuntimeBuildingGenerator.h.
 Use generateFunctionalBuilding(style,recipe,origin,yaw) directly, or register
 a style with RuntimeBuildingGenerator and call generateRecipe(styleId,recipe).
 The latter returns geometry, conservative collision solids, gate anchors and
@@ -229,7 +229,7 @@ vertical actions. Nav links are revisioned and invalid when navmesh becomes
 dirty. Games must refresh native nav::Mesh from authoritative collision before
 routing again.
 
-The portable libraries/include/aiverselib/systems/BuildingCirculationRuntime.h
+The portable engine/systems/BuildingCirculationRuntime.h
 contains deterministic lift state (integer mm/ms), pickup/boarding/destination/
 disembark actions, passenger capacity, replicated revisioned snapshots,
 and integer platform movements. It is NOT a separate physics or ECS engine.
@@ -237,7 +237,7 @@ A single lift platform is authored as a dedicated dynamic Model rather than
 included in the game's immutable static building geometry. Studio's GLB still
 includes it to make a complete model for offline viewing.
 
-libraries/include/aiverselib/systems/BuildingRouteExecutor.h is a portable
+engine/systems/BuildingRouteExecutor.h is a portable
 per-agent action state machine with steps Walk, TraverseStairs, CallLift,
 WaitLift, BoardLift, SelectDestination, RidingLift, DisembarkLift. The owning
 agent/Motor system must explicitly acknowledge reaching a real room, boarding

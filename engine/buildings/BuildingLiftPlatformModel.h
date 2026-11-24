@@ -3,7 +3,7 @@
 // omits that platform in runtime mode; the renderer owner creates this
 // dedicated model once and moves its instance transform with platformPose().
 #include "engine/buildings/RuntimeBuildingModel.h"
-#include <aiverselib/systems/BuildingCirculationRuntime.h>
+#include <engine/systems/BuildingCirculationRuntime.h>
 #include <memory>
 #include <stdexcept>
 #include <string>

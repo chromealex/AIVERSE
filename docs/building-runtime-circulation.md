@@ -7,7 +7,7 @@ NO second pathfinding engine or standalone scene physics simulator.
 
 ## Native headers
 
-- libraries/include/aiverselib/systems/BuildingCirculationRuntime.h:
+- engine/systems/BuildingCirculationRuntime.h:
   deterministic room BFS and authoritative lift controller.
 - engine/buildings/BuildingNavMeshBridge.h: resolves room floor positions
   and vertical edge endpoints onto nav::Mesh polygon IDs. All horizontal

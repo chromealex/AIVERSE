@@ -8,7 +8,7 @@
 //   --structure KIND: one whole structure of that kind from the style's `structures` block.
 //   --street N: N buildings of seeded sizes (1..5 floors) along both sides of a street, each with its own seed.
 #include "engine/buildings/BuildingGlbWriter.h"
-#include <aiverselib/systems/BuildingFeatureGenerator.h>
+#include <engine/systems/BuildingFeatureGenerator.h>
 #include <cmath>
 #include <cstdio>
 #include <cstring>

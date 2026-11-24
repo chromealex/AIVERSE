@@ -1,7 +1,7 @@
 #pragma once
 // Shared CPU GLB serializer for the procedural building asset pipeline.
 // No rendering backend, process invocation or Studio dependencies.
-#include <aiverselib/systems/BuildingStructure.h>
+#include <engine/systems/BuildingStructure.h>
 #include "engine/buildings/BuildingPngEncoder.h"
 #include <cstdint>
 #include <cstdio>

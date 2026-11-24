@@ -7,7 +7,7 @@
 #include "engine/buildings/BuildingCirculationHost.h"
 #include "engine/buildings/BuildingLiftColliderOwner.h"
 #include "engine/buildings/BuildingLiftDoorOwner.h"
-#include <aiverselib/systems/RuntimeBuildingGenerator.h>
+#include <engine/systems/RuntimeBuildingGenerator.h>
 #include <functional>
 #include <map>
 #include <set>

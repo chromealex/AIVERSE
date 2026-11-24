@@ -17,7 +17,7 @@ as city buildings.
 0. Structure: `dressStructure(style, "barracks", seed, origin, yaw)` → `mesh`, `boxes` (collision), `gates`
    (ground points in front of the gates). Export: `aiverse_building_export --style <style> --out b.glb --structure barracks --seed 3 --ground`.
    New kind = new entry in `structures` (size, height, taper, chamfer, bands, modules, tower, door, legs, thrusters, props).
-1. Read `libraries/include/aiverselib/systems/BuildingStyle.h` (namespace `aiverse::lib::systems`) and the
+1. Read `engine/systems/BuildingStyle.h` (namespace `aiverse::lib::systems`) and the
    reference style `engine/assets/building-styles/scifi.json`.
 2. Load: `readBuildingStyle(json, "path")` - errors name the path (`style.panels.material: unknown material 'x'`).
 3. Definition: build the `BuildingDef` as for building-gen (agent radius / height / step from the owner's
@@ -1593,7 +1593,7 @@ docs/agent-handoffs/building-verification-stage23u-2026-11-24.md.
 
 ## Stage 23U.1 — rollback and authored physical state hardening
 
-- `libraries/include/aiverselib/systems/BuildingStyle.h` now appends
+- `engine/systems/BuildingStyle.h` now appends
   `surfacePattern`/`surfaceSeed` after all legacy StyleMaterial
   fields. This preserves the meaning of existing C++ positional
   aggregate material constructors and old style data.

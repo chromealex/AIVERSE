@@ -1,7 +1,7 @@
 // building-style: the sci-fi style file loads, the dressed mesh matches building-gen (the door corridor is free,
 // windows hold only glass), determinism per seed, palettes and seeds vary the look, quarter-turn yaw, style
 // proportions, triangle budget and readable style errors. argv[1] = repository root (style files).
-#include <aiverselib/systems/BuildingStructure.h>
+#include <engine/systems/BuildingStructure.h>
 #include <cstdio>
 #include <fstream>
 #include <sstream>

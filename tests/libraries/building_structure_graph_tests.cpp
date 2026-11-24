@@ -1,7 +1,7 @@
 // Standalone C++20 test. BuildingStructureGraph is independent of engine
 // materials, rendering, game modules and editor runtime.
-#include <aiverselib/systems/BuildingStructureGraph.h>
-#include <aiverselib/systems/BuildingCirculationRuntime.h>
+#include <engine/systems/BuildingStructureGraph.h>
+#include <engine/systems/BuildingCirculationRuntime.h>
 #include <cmath>
 #include <cstdio>
 #include <stdexcept>

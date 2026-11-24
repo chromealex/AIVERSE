@@ -7,7 +7,7 @@
 // Server -> client ONLY: do not accept this payload as a client command.
 // Requests to interact with lifts must go through the game's established
 // actor-ownership/permission path and authoritative circulation owner.
-#include <aiverselib/systems/BuildingCirculationRuntime.h>
+#include <engine/systems/BuildingCirculationRuntime.h>
 #include "engine/buildings/BuildingCirculationHost.h"
 #include <algorithm>
 #include <cstdint>

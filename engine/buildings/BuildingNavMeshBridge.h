@@ -4,7 +4,7 @@
 // BuildingStructureGraph vertical links onto that Mesh's polygon IDs and
 // leaves stair traversal/lift action as an explicit route segment for the
 // game movement owner. Never inject a fake horizontal nav portal.
-#include <aiverselib/systems/BuildingCirculationRuntime.h>
+#include <engine/systems/BuildingCirculationRuntime.h>
 #include "engine/nav/NavMesh.h"
 #include <algorithm>
 #include <array>

@@ -7,7 +7,7 @@ Windows, Linux, mobile and (subject to compilation verification) Web/WASM.
 ## Game C++ API
 
 ~~~cpp
-#include <aiverselib/systems/RuntimeBuildingGenerator.h>
+#include <engine/systems/RuntimeBuildingGenerator.h>
 #include "engine/buildings/RuntimeBuildingModel.h"
 
 using namespace aiverse::lib::systems;
@@ -55,7 +55,7 @@ target_link_libraries(my_game PRIVATE AIVERSE::lib_building_style)
 # Renderer3D upload/conversion also needs your existing renderer runtime link.
 ~~~
 
-Runtime API: libraries/include/aiverselib/systems/RuntimeBuildingGenerator.h
+Runtime API: engine/systems/RuntimeBuildingGenerator.h
 Renderer CPU adapter: engine/buildings/RuntimeBuildingModel.h
 Tests: tests/libraries/building_runtime_tests.cpp (CTest library_building_runtime),
 tests/render/runtime_building_model_compile.cpp (compile-only).

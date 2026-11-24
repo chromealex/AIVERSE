@@ -2978,7 +2978,7 @@ endif()
 if(AIVERSE_BUILD_TESTS)
     add_executable(aiverse_building_structure_graph_tests tests/libraries/building_structure_graph_tests.cpp)
     target_compile_features(aiverse_building_structure_graph_tests PRIVATE cxx_std_20)
-    target_include_directories(aiverse_building_structure_graph_tests PRIVATE libraries/include)
+    target_include_directories(aiverse_building_structure_graph_tests PRIVATE ${PROJECT_SOURCE_DIR})
     add_test(NAME library_building_structure_graph COMMAND aiverse_building_structure_graph_tests)
 endif()
 # Genre-neutral native integration executable: actual Simulation, world

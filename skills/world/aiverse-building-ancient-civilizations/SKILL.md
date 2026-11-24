@@ -6,7 +6,7 @@ description: Ancient Civilizations architecture style, portable AIVERSE building
 # Ancient Civilizations — building setting
 
 Style: `engine/assets/building-styles/ancient-civilizations.json`.
-Parser: `libraries/include/aiverselib/systems/BuildingStyle.h`.
+Parser: `engine/systems/BuildingStyle.h`.
 Portable surface textures: `BuildingSurfacePattern.h`.
 All construction gameplay, collision/PHYSIS, door movement and graph systems remain in the common engine independent of this setting.
 

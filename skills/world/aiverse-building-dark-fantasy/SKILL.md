@@ -6,7 +6,7 @@ description: Author Dark Fantasy buildings using data-only architectural grammar
 # Dark Fantasy building setting
 
 Canonical style asset: `engine/assets/building-styles/dark-fantasy.json`.
-Shared parser and geometry: `libraries/include/aiverselib/systems/BuildingStyle.h`, `BuildingStructure.h`, `BuildingFeatureGenerator.h`.
+Shared parser and geometry: `engine/systems/BuildingStyle.h`, `BuildingStructure.h`, `BuildingFeatureGenerator.h`.
 Shared surface maps: `BuildingSurfacePattern.h`. Existing asset GUIDs override procedural surfaces per PBR channel. All shapes, materials and assets are **visual**; commands, physics, rooms, NavMesh, doors and lift semantics remain the common building systems.
 
 ## Architectural grammar

@@ -4,7 +4,7 @@
 // device thread, publishes it via the existing Model owner, and releases it
 // ONLY through the engine's normal GPU retirement/lifetime protocol.
 // Never upload, release or draw GPU resources inside ECS simulation ticks.
-#include <aiverselib/systems/RuntimeBuildingGenerator.h>
+#include <engine/systems/RuntimeBuildingGenerator.h>
 #include "engine/render/Model.h"
 #include <cstdint>
 #include <limits>

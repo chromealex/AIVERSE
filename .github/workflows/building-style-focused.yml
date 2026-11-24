@@ -3,9 +3,9 @@ name: Building Style Focused
 on:
   pull_request:
     paths:
-      - 'libraries/include/aiverselib/systems/Building*.h'
-      - 'libraries/include/aiverselib/systems/RuntimeBuildingGenerator.h'
-      - 'libraries/include/aiverselib/systems/BuildingFeatureGenerator.h'
+      - 'engine/systems/Building*.h'
+      - 'engine/systems/RuntimeBuildingGenerator.h'
+      - 'engine/systems/BuildingFeatureGenerator.h'
       - 'engine/assets/building-recipes/*.json'
       - 'tests/libraries/building_feature_tests.cpp'
       - 'tests/libraries/building_structure_graph_tests.cpp'
@@ -128,11 +128,11 @@ jobs:
           g++ $FLAGS tests/libraries/building_style_tests.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_style_tests
           g++ $FLAGS tools/buildings/building_style_export.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_export
           g++ $FLAGS tests/libraries/building_runtime_tests.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_runtime_tests
-          g++ -std=c++20 -O1 -Wall -Wextra -Werror -Ilibraries/include \
+          g++ -std=c++20 -O1 -Wall -Wextra -Werror -I. \
             tests/libraries/building_surface_pattern_tests.cpp -o /tmp/aiverse_building_surface_pattern_tests
           g++ $FLAGS tests/libraries/building_feature_tests.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_feature_tests
           # Independent of any engine object/library linkage:
-          g++ -std=c++20 -O1 -Wall -Wextra -Werror -Ilibraries/include \
+          g++ -std=c++20 -O1 -Wall -Wextra -Werror -I. \
             tests/libraries/building_structure_graph_tests.cpp -o /tmp/aiverse_building_structure_graph_tests
           # Compile the Renderer3D adapter even without a live GPU in CI.
           g++ $FLAGS tests/libraries/building_dual_leaf_restore_tests.cpp \

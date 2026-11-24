@@ -1,6 +1,6 @@
 // Focused, platform-free PBR image generation contract for all building settings.
 // Compiles with C++20 and libraries/include only; no gfx, ECS or Box3D device.
-#include <aiverselib/systems/BuildingSurfacePattern.h>
+#include <engine/systems/BuildingSurfacePattern.h>
 #include <array>
 #include <cstdint>
 #include <cstdio>

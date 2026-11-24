@@ -8,7 +8,7 @@
 // front (-Z) edge. A normal static building has no opaque facade across the
 // lift core; these colliders are the sole gameplay barrier at the landing.
 #include "engine/buildings/BuildingLiftColliderOwner.h"
-#include <aiverselib/systems/BuildingCirculationRuntime.h>
+#include <engine/systems/BuildingCirculationRuntime.h>
 #include <algorithm>
 #include <cmath>
 #include <compare>

@@ -4,7 +4,7 @@
 // The authored fraction and stepped motion share one physical AABB formula.
 // Graph traversal is authorized only at the fully open, acknowledged endpoint.
 #include "engine/buildings/BuildingGraphChanges.h"
-#include <aiverselib/systems/RuntimeBuildingGenerator.h>
+#include <engine/systems/RuntimeBuildingGenerator.h>
 #include <cmath>
 #include <algorithm>
 #include <cstdint>
