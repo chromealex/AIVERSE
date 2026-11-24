@@ -80,6 +80,7 @@ struct ArsenalHand {
     bool aimActive = false, aimTrigger = false, aimPending = false;
     int16_t aimSlot = -1;
     uint32_t aimUntil = 0;
+    Fixed preciseRemaining{}; // shared hand cooldown, in unscaled weapon seconds
 };
 
 struct ArsenalCrate {
@@ -123,6 +124,7 @@ private:
 
     GameHost* m_ = nullptr;
     ArsenalRules rules_;
+    bool preciseCadence_ = false;
 };
 
 } // namespace aiverse::game
