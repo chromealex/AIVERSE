@@ -915,7 +915,7 @@ Rules loadRules(const Json& j) {
     // anything beyond the original instant effects switches the effect engine on (old games stay bit-identical)
     bool adv = r.userStatuses > 0 || r.loadoutSlots > 0 || !r.traps.empty();
     for (auto& t : r.types) if (t.onDeath >= 0) adv = true;
-    for (auto& pl : r.payloads) for (auto& e : pl) if (e.kind > EffectKind::Blink || e.chance < Fixed::fromInt(1) || e.targetChance < Fixed::fromInt(1) || e.randomAmount || e.limit > 0 || e.filter.explicitShape) adv = true;
+    for (auto& pl : r.payloads) for (auto& e : pl) if (e.kind > EffectKind::Blink || e.chance < Fixed::fromInt(1) || e.targetChance < Fixed::fromInt(1) || e.randomAmount || e.useWeaponDamage || e.limit > 0 || e.filter.explicitShape) adv = true;
     for (auto& rs : r.resources) if (rs.regen.raw != 0) adv = true;
     for (auto& t : r.types) {
         if (!t.statuses.empty() || t.blocksLanes || t.level != 1) adv = true;
