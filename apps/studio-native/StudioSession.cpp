@@ -759,6 +759,12 @@ bool StudioSession::caveBrushPoint(double ox,double oy,double oz,double dx,doubl
     if(!std::isfinite(length)||length<1e-8||!std::isfinite(ox)||!std::isfinite(oy)||!std::isfinite(oz)||
        std::abs(ox)>1e7||std::abs(oy)>1e7||std::abs(oz)>1e7)return false;
     dx/=length;dy/=length;dz/=length;
+    if(ws_.map.data.planet())try{
+        if(brush_.caveRegionId!=editor::planet_caves::activeRegionId(ws_.map.data)){
+            if(error)*error="Caverns region changed; rearm the brush";
+            return false;
+        }
+    }catch(const std::exception& e){if(error)*error=e.what();return false;}
     if(!brush_.caveSurface&&brush_.caveMode!="shaft"){
         if(std::abs(dy)<1e-8)return false;
         const double t=(brush_.caveY-oy)/dy;
@@ -812,6 +818,7 @@ bool StudioSession::strokeDab(double x, double z, std::string* error,double y) {
         }
         if(b.caveMode=="shaft"&&strokeDabs_>0)return true;
         op="terraweave_caverns_paint";p.set("mode",str(b.caveMode=="shaft"?"planet_entrance":b.caveMode));
+        if(ws_.map.data.planet())p.set("expectedRegionId",str(b.caveRegionId));
         if(b.caveMode=="shaft")p.set("depthCm",num(std::llround(b.caveDepth*100)));
         p.set("xCm",num(std::llround(x*100)));p.set("yCm",num(std::llround(y*100)));
         p.set("zCm",num(std::llround(z*100)));p.set("radiusCm",num(std::llround(b.radius*100)));
@@ -2547,7 +2554,10 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 bool paint=false,pick=false;
                 for(const auto& op:ws_.ops()){paint|=op.name=="terraweave_caverns_paint";pick|=op.name=="terraweave_caverns_pick";}
                 if(!paint||!pick)throw std::runtime_error("Caverns native backend unavailable");
-                if(ws_.map.data.planet())(void)editor::planet_caves::read(ws_.map.data);
+                if(ws_.map.data.planet()){
+                    (void)editor::planet_caves::read(ws_.map.data);
+                    b.caveRegionId=editor::planet_caves::activeRegionId(ws_.map.data);
+                }
                 else if(b.caveMode=="shaft")throw std::runtime_error("Planetary chart required for shaft brush");
             }
             brush_=std::move(next);
