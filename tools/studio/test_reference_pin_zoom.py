@@ -157,10 +157,11 @@ class StudioReferencePinZoomTests(unittest.TestCase):
         self.assertIn("Lock import settings", settings)
 
     def test_shader_graph_pointer_drag_accounts_for_editor_zoom(self):
-        graph = self.source("panels/ShaderGraphPanel.tsx")
-        self.assertIn("document.documentElement.style.zoom", graph)
-        self.assertIn("(event.clientX-current.x)/zoom", graph)
-        self.assertIn("(event.clientY-current.y)/zoom", graph)
+        graph = self.source("graphs/GraphCanvas.tsx")
+        self.assertIn("getScreenCTM()", graph)
+        self.assertIn("new DOMPoint(event.clientX,event.clientY).matrixTransform(ctm.inverse())", graph)
+        self.assertIn("p.x-d.origin.x,p.y-d.origin.y", graph)
+        self.assertIn("readOnly", graph)
 
     def test_native_move_recovery_integration_targets_exist(self):
         cmake=(ROOT/"apps/studio-native/CMakeLists.txt").read_text(encoding="utf-8")
@@ -174,14 +175,15 @@ class StudioReferencePinZoomTests(unittest.TestCase):
         self.assertIn("AIVERSE_TEST_CHECK(replaceRejected)",transfer)
 
     def test_model_release_invalidates_renderer_caches_first(self):
-        scene=(ROOT/"apps/studio-native/mac/StudioMetalScene.cpp").read_text(encoding="utf-8")
+        scene=(ROOT/"apps/studio-native/StudioScene.cpp").read_text(encoding="utf-8")
         self.assertEqual(scene.count("render::releaseModel("),1)
-        release=scene[scene.index("void StudioMetalScene::releasePreviewModel"):scene.index("void StudioMetalScene::clearDocumentModels")]
+        start=scene.index("void StudioScene::releasePreviewModel")
+        release=scene[start:scene.index("\n}",start)]
         self.assertLess(release.index("invalidateModelCachesFor(&model)"),release.index("render::releaseModel"))
 
     def test_real_scene_model_render_and_pick_share_instances(self):
-        scene=(ROOT/"apps/studio-native/mac/StudioMetalScene.cpp").read_text(encoding="utf-8")
-        api=(ROOT/"apps/studio-native/mac/StudioMetalScene.h").read_text(encoding="utf-8")
+        scene=(ROOT/"apps/studio-native/StudioScene.cpp").read_text(encoding="utf-8")
+        api=(ROOT/"apps/studio-native/StudioScene.h").read_text(encoding="utf-8")
         host=(ROOT/"apps/studio-native/mac/Main.mm").read_text(encoding="utf-8")
         self.assertIn('editor::authoredModelAsset(entity)',scene)
         self.assertIn('const auto& view=rules["types"][entity.type]["view"]',scene)
@@ -189,12 +191,12 @@ class StudioReferencePinZoomTests(unittest.TestCase):
         self.assertIn('fs::is_symlink(status)',scene)
         self.assertIn('render::loadModel(path,read)',scene)
         self.assertIn('render::uploadModel(*device_,*model,true)',scene)
-        self.assertIn('syncDocumentModels(doc,projectPath,rules,proxies)',scene)
+        self.assertIn('syncDocumentModels(doc,projectPath,rules,proxies_)',scene)
         self.assertIn('studioPickSceneSurfaces(modelInstances_,proxies,origin,direction)',scene)
         self.assertIn('renderer_.drawModel(draw)',scene)
         self.assertIn('draw.world=instance.world',scene)
         self.assertIn('modelInstances_.push_back({proxy.id',scene)
-        self.assertIn('if (hasModel) continue;',scene)
+        self.assertIn('if(cached.water || cached.hasModel)continue;',scene)
         self.assertIn('clearDocumentModels();',scene)
         self.assertIn('model->skinned()',scene)
         self.assertIn('material.alpha==render::AlphaMode::Blend',scene)  # masked rigid models are allowed
@@ -203,7 +205,9 @@ class StudioReferencePinZoomTests(unittest.TestCase):
         self.assertIn('documentModelTimes_',api)
         self.assertIn('fs::last_write_time(current,modifiedError)',scene)
         self.assertIn('previousTime->second!=modified',scene)
-        self.assertIn('session_->workspace().project.rulesJson',host)
+        shared=(ROOT/"apps/studio-native/StudioHost.cpp").read_text(encoding="utf-8")
+        self.assertIn('ws.project.rulesJson',shared)
+        self.assertIn('in.rules = rulesSnapshot_',shared)
 
     def test_rigid_cpu_model_triangle_picking_adapter(self):
         adapter=(ROOT/"apps/studio-native/StudioModelPicking.h").read_text(encoding="utf-8")
@@ -226,7 +230,7 @@ class StudioReferencePinZoomTests(unittest.TestCase):
         self.assertIn("add_test(NAME studio_model_picking",cmake)
 
     def test_scene_selection_hits_rendered_oriented_proxy_not_aabb(self):
-        renderer=(ROOT/"apps/studio-native/mac/StudioMetalScene.cpp").read_text(encoding="utf-8")
+        renderer=(ROOT/"apps/studio-native/StudioScene.cpp").read_text(encoding="utf-8")
         picker=(ROOT/"apps/studio-native/StudioVisualPicking.h").read_text(encoding="utf-8")
         cases=(ROOT/"apps/studio-native/tests/StudioVisualPickingTests.cpp").read_text(encoding="utf-8")
         cmake=(ROOT/"apps/studio-native/CMakeLists.txt").read_text(encoding="utf-8")
@@ -242,19 +246,19 @@ class StudioReferencePinZoomTests(unittest.TestCase):
     def test_scene_camera_navigation_is_editor_only(self):
         web=self.source("components/ViewportPlaceholder.tsx")
         types=self.source("types.ts")
-        renderer=(ROOT/"apps/studio-native/mac/StudioMetalScene.cpp").read_text(encoding="utf-8")
-        host=(ROOT/"apps/studio-native/mac/Main.mm").read_text(encoding="utf-8")
+        renderer=(ROOT/"apps/studio-native/StudioScene.cpp").read_text(encoding="utf-8")
+        host=(ROOT/"apps/studio-native/StudioHost.cpp").read_text(encoding="utf-8")
         panel=self.source("panels/StudioPanelRenderer.tsx")
         camera=self.source("panels/sceneCamera.ts")
         gizmo=self.source("components/SceneAxisGizmo.tsx")
         for kind in ("orbit","pan","look","move","focus","reset","view","projection"):
-            self.assertIn("kind==\""+kind+"\"",host)
-        self.assertIn("void StudioMetalScene::pan(",renderer)
-        self.assertIn("void StudioMetalScene::look(",renderer)
+            self.assertIn('kind == "'+kind+'"',host)
+        self.assertIn("void StudioScene::pan(",renderer)
+        self.assertIn("void StudioScene::look(",renderer)
         self.assertIn("camera_.target=position-fromTarget*camera_.distance",renderer)
-        self.assertIn("void StudioMetalScene::move(",renderer)
-        self.assertIn("void StudioMetalScene::focusSelected(",renderer)
-        self.assertIn("void StudioMetalScene::resetView()",renderer)
+        self.assertIn("void StudioScene::move(",renderer)
+        self.assertIn("void StudioScene::focusSelected(",renderer)
+        self.assertIn("void StudioScene::resetView()",renderer)
         # Unity mapping: LMB select, Alt+LMB orbit, MMB pan, RMB fly, Alt+RMB zoom.
         self.assertIn("if (button === 1) return 'pan'",camera)
         self.assertIn("return mods.alt ? 'zoom' : 'look'",camera)
@@ -266,9 +270,9 @@ class StudioReferencePinZoomTests(unittest.TestCase):
         self.assertIn("event === 'viewport.camera' && isSceneCameraState(payload)",web)
         self.assertIn("<SceneAxisGizmo camera={camera}",web)
         self.assertIn("viewForAxis(arm.axis, arm.sign)",gizmo)
-        self.assertIn("[self sendStudioEventPayload:\"viewport.camera\" payload:payload]",host)
-        self.assertIn("void StudioMetalScene::setOrientation(",renderer)
-        self.assertIn("render::Camera StudioMetalScene::viewCamera() const",renderer)
+        self.assertIn('sendEventPayload("viewport.camera", payload)',host)
+        self.assertIn("void StudioScene::setOrientation(",renderer)
+        self.assertIn("render::Camera StudioScene::viewCamera() const",renderer)
         self.assertIn("viewCamera().screenRay(",renderer)
         self.assertIn("window.addEventListener('keyup',keyup)",web)
         self.assertIn("window.addEventListener('blur',blur)",web)
@@ -284,7 +288,9 @@ class StudioReferencePinZoomTests(unittest.TestCase):
         app = self.source("App.tsx")
         self.assertIn("aiverse.studio.uiScale", app)
         self.assertIn("document.documentElement.style.zoom", app)
-        self.assertIn("window.dispatchEvent(new Event('resize'))", app)
+        self.assertIn("style.setProperty('--au-ui-scale', String(uiScale))", app)
+        self.assertIn("document.documentElement.style.zoom = ''", app)
+        self.assertIn("new ResizeObserver(update)", self.source("components/ViewportPlaceholder.tsx"))
         self.assertIn('min="75" max="200" step="5"', app)
         viewport = self.source("components/ViewportPlaceholder.tsx")
         self.assertIn("window.addEventListener('resize', update)", viewport)
