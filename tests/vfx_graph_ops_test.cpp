@@ -538,9 +538,9 @@ int main() {
     unsafe.set("graphName",Json::string("../escape"));
     requireGraphTest(call("fx_graph_preview",unsafe).has("error")&&
             previewCalls==forwarded,"unsafe graph name reached native preview");
-    Json ambiguous=previewLoad;
-    ambiguous.set("graph",graph);
-    requireGraphTest(call("fx_graph_preview",ambiguous).has("error")&&
+    Json ambiguousPreview=previewLoad;
+    ambiguousPreview.set("graph",graph);
+    requireGraphTest(call("fx_graph_preview",ambiguousPreview).has("error")&&
             previewCalls==forwarded,"ambiguous source reached native preview");
     // A harmless-looking graphName cannot cross the project boundary via
     // a symlink to an external JSON file. Platforms that forbid symlink
