@@ -4,7 +4,7 @@
 #include "engine/gfx/vulkan/VkShaderCompiler.h"
 #include "engine/fx/SpectraGpuShaders.h"
 #include "engine/fx/SpectraGpuParticles.h"
-#include "engine/fx/SpectraGpuVolumeRenderer.h"
+#include "engine/fx/SpectraSceneVolumeWorld.h"
 #include <cstring>
 #include <algorithm>
 #include <chrono>
@@ -395,6 +395,42 @@ void volumeHdr(gfx::Device& d){
     require(budget->stats().charged()==baseline,"HDR volume allocation released");
     std::puts("PASS dense volume HDR emission, depth clipping and empty field");
 }
+void sceneVolumeLifecycle(gfx::Device& d){
+    namespace vol=aiverse::spectra::volume;
+    if(!vol::supportsVolumeRender(d)){std::puts("SKIP scene volume HDR capability");return;}
+    auto budget=d.acquireGpuAllocationBudget();require(bool(budget),"scene volume ledger");
+    require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"scene volume initial idle");
+    budget->collect(d.gpuCompletedFence());const auto before=budget->stats().charged();
+    vol::Asset asset;asset.simulation.dimension=8;asset.simulation.cellSize=.25f;
+    asset.simulation.origin={-1,-1,-1};asset.simulation.pressureIterations=0;
+    asset.simulation.gravity={0,0,0};
+    vol::Source pulse;pulse.radius=.8f;pulse.smoke=8;pulse.temperature=12;pulse.fuel=4;
+    pulse.radialAcceleration=10;pulse.acceleration={0,0,0};
+    asset.impulse=pulse;asset.impulseSeconds=.5f;
+    vol::VolumeInstance instance;
+    require(instance.init(d,asset,{10,0,0})&&instance.grid()->config().origin.x==9,"local volume anchor");
+    {Frame frame(d);require(instance.step(),"one-shot volume tick");}
+    require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"volume impulse complete");
+    std::vector<vol::GpuCell> fields;
+    require(instance.grid()->snapshot(fields)&&fields.size()==512,"volume impulse snapshot");
+    const auto right=fields[(4u*8+4)*8+5],left=fields[(4u*8+4)*8+2];
+    require(right.fields.x>0&&right.velocity.x>0&&left.velocity.x<0,"radial outward impulse");
+    {Frame frame(d);require(instance.clear(true)&&instance.step(),"retrigger volume");}
+    require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"retrigger complete");
+    vol::SceneVolumeWorld world;
+    std::vector<vol::SceneVolumeSource> rows;
+    for(int i=0;i<5;++i)rows.push_back({std::to_string(i),"explosion",1,{float(i)*3,0,0},&asset});
+    world.synchronize(d,rows,{});
+    require(world.size()==vol::SceneVolumeWorld::capacity&&!world.error().empty(),"scene volume admission cap");
+    {Frame frame(d);world.step(vol::kTick);require(world.renderable(),"scene volume published");}
+    rows.resize(1);rows[0].revision=2;
+    world.synchronize(d,rows,{});
+    require(world.size()==1&&!world.renderable(),"source revision recreates volume");
+    world.synchronize(d,{},{});
+    require(!world.active(),"detach destroys volume");
+    require(d.waitIdle()&&d.waitForSubmittedGpuWork(),"scene volume final idle");
+    std::puts("PASS scene volume anchors, impulse, revision and detach");
+}
 void memory(gfx::Device& d){
     auto small=estimateGpuEmitterAllocation(256,false),large=estimateGpuEmitterAllocation(512,false);
     auto budget=std::make_shared<GpuAllocationBudget>(small+large);
@@ -450,6 +486,7 @@ int main(){
         packedSdfAtlas(*d);
         denseVolume(*d);
         volumeHdr(*d);
+        sceneVolumeLifecycle(*d);
         memory(*d);
         std::puts("PASS Vulkan allocator acceptance");return 0;
     }catch(const std::exception& e){

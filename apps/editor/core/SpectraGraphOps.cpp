@@ -1115,7 +1115,13 @@ void registerSpectraGraphOps(Workspace& ws) {
             else {
                 Json props=(*n)["properties"];
                 if(!props.isObject())props=Json::object();
-                ok=fx::vfx2::nestedSet(props,p.getStr("property"),p["value"]);
+                const auto key=p.getStr("property");
+                if(n->getStr("type")=="VolumeDomain"&&key=="obstacle"&&p["value"].isString()&&p["value"].str().empty()){
+                    props.erase(key);ok=true;
+                }else{
+                    ok=fx::vfx2::nestedSet(props,key,p["value"]);
+                    if(ok&&n->getStr("type")=="VolumeSource"&&key=="mode"&&p["value"].str()=="continuous")props.erase("duration");
+                }
                 if(ok)n->set("properties",std::move(props));
             }
         } else {ok=false;error="unknown graph edit action";}

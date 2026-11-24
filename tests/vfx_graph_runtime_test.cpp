@@ -764,5 +764,20 @@ int main() {
         hybrid.find("links")->push(cross);
         require(!vol::compilePresentationGraph(hybrid,Json::object(),compiled,errors),"cross-domain execution rejected");
     }
+    {
+        namespace vol=sp::volume;
+        auto explosion=Json::parse(R"({"version":2,"nodes":[],"links":[],"outputs":[]})");
+        std::string error;vol::PresentationGraph compiled;
+        require(vol::appendPreset(explosion,"explosion",error)&&vol::compilePresentationGraph(explosion,Json::object(),compiled,errors),"explosion graph");
+        require(compiled.volumeAsset.impulse&&compiled.volumeAsset.sources.empty()&&
+            compiled.volumeAsset.impulse->radialAcceleration>0,"one-shot radial explosion");
+        vol::Asset restored;
+        require(vol::readAsset(vol::writeAsset(compiled.volumeAsset),restored,error)&&restored.impulse&&
+            restored.impulse->radialAcceleration==35,"impulse asset roundtrip");
+        restored.simulation.dimension=8;restored.simulation.cellSize=.5f;
+        vol::GasGrid grid;require(vol::initAsset(restored,grid,error)&&grid.stats().density>0,"CPU impulse injection");
+        auto invalid=vol::writeAsset(restored);invalid.set("impulseSeconds",Json::number(2.0));
+        require(!vol::readAsset(invalid,restored,error),"invalid impulse duration rejected");
+    }
     std::cout<<"PASS SpectraFX graph GPU eligibility, strict CPU preservation and host fallback\n";
 }
