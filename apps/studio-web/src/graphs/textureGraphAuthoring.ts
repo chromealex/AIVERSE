@@ -317,3 +317,52 @@ export function detachTextureFunctionAsset(graph:Obj,alias:string):Obj {
  const links={...textureFunctionLinks(graph)};delete links[alias];
  return {...graph,functionLinks:links};
 }
+
+// A dependency refresh is a draft transaction, never an implicit save.
+// Scan root and every embedded definition so nested calls share new pins.
+export function textureImageDependencyPaths(graph:Obj):string[] {
+ const documents=[graph,...Object.values(textureFunctionLibrary(graph)).filter(obj)];
+ const paths=new Set<string>();
+ for(const doc of documents){
+  for(const node of rows(doc.nodes))if(node.op==='imageAsset'||node.op==='imageAssetChannel'){
+   const p=node.properties;
+   if(!obj(p)||typeof p.asset!=='string'||!p.asset||typeof p.revision!=='string'||! /^[0-9a-f]{64}$/.test(p.revision))throw new Error('Unpinned image dependency');
+   paths.add(p.asset);
+  }
+  for(const param of Object.values(obj(doc.parameters)?doc.parameters:{}))if(obj(param))
+   for(const binding of rows(param.bindings))if(binding.property==='asset'||binding.property==='revision')
+    throw new Error('Automatic refresh cannot rewrite parameter-controlled image pins');
+ }
+ if(paths.size>64)throw new Error('Dependency scan exceeds 64 distinct image sources');
+ return [...paths].sort();
+}
+export function refreshTextureImagePins(graph:Obj,revisions:ReadonlyMap<string,string>):Obj {
+ const paths=textureImageDependencyPaths(graph);
+ for(const path of paths)if(!/^[0-9a-f]{64}$/.test(revisions.get(path)??''))throw new Error('Missing verified image revision: '+path);
+ let changed=false;
+ const update=(doc:Obj):Obj=>{
+  const nodes=rows(doc.nodes).map(n=>{
+   if(n.op!=='imageAsset'&&n.op!=='imageAssetChannel')return n;
+   const p=n.properties as Obj,revision=revisions.get(String(p.asset))!;
+   if(p.revision===revision)return n;
+   changed=true;return {...n,properties:{...p,revision}};
+  });
+  return {...doc,nodes};
+ };
+ const next=update(graph),defs=textureFunctionLibrary(graph);
+ if(Object.keys(defs).length)next.functions=Object.fromEntries(Object.entries(defs).map(([name,def])=>[name,obj(def)?update(def):def]));
+ return changed?next:graph;
+}
+// Exact structural snapshot for safe in-session linked function refresh.
+// Ignore image revisions, since their independent refresh is intentional.
+export function textureLinkedSnapshot(graph:Obj,alias:string):string {
+ const closure=functionClosure(graph,alias);
+ const normalized=Object.fromEntries(Object.entries(closure).sort(([x],[y])=>x.localeCompare(y)).map(([key,def])=>{
+  if(!obj(def))throw new Error('Invalid linked definition');
+  return [key,{...def,nodes:rows(def.nodes).map(n=>{
+   if((n.op!=='imageAsset'&&n.op!=='imageAssetChannel')||!obj(n.properties))return n;
+   const {revision:_,...properties}=n.properties;return {...n,properties};
+  })}];
+ }));
+ return JSON.stringify(normalized);
+}

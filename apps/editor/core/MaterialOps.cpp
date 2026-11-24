@@ -242,7 +242,7 @@ float decodeGraphHalf(uint16_t h){
     const float v=exponent?std::ldexp(1.f+float(mantissa)/1024.f,int(exponent)-15):std::ldexp(float(mantissa),-24);
     return (h&0x8000u)?-v:v;
 }
-PinnedRaster readPinnedRaster(const Workspace& ws,const std::string& rel,const std::string& expected,size_t maxBytes){
+std::string readPinnedEncoded(const Workspace& ws,const std::string& rel,size_t cap=16u*1024u*1024u){
     needProject(ws);
     const fs::path relative(rel);
     if(rel.size()>512||rel.find('\0')!=std::string::npos||rel.find('\\')!=std::string::npos||rel.find(':')!=std::string::npos||relative.is_absolute()||relative.empty()||*relative.begin()!="content")throw std::invalid_argument("image asset must be inside project content");
@@ -253,11 +253,18 @@ PinnedRaster readPinnedRaster(const Workspace& ws,const std::string& rel,const s
     }
     if(!fs::is_regular_file(path))throw std::runtime_error("image asset missing");
     const auto length=fs::file_size(path);
-    if(!length||length>16u*1024u*1024u)throw std::runtime_error("image asset exceeds 16 MiB encoded file cap");
+    if(!length||length>16u*1024u*1024u||length>cap)throw std::runtime_error("image asset exceeds encoded read budget");
     std::string bytes(size_t(length),'\0');std::ifstream stream(path,std::ios::binary);
     if(!stream.read(bytes.data(),std::streamsize(bytes.size()))||stream.peek()!=std::char_traits<char>::eof())throw std::runtime_error("image asset changed during read");
+    return bytes;
+}
+std::string encodedRevision(const std::string& bytes){
     const auto digest=pack::sha256(bytes.data(),bytes.size());
-    PinnedRaster result;result.revision=pack::toHex(digest.data(),digest.size());
+    return pack::toHex(digest.data(),digest.size());
+}
+PinnedRaster readPinnedRaster(const Workspace& ws,const std::string& rel,const std::string& expected,size_t maxBytes){
+    const auto bytes=readPinnedEncoded(ws,rel);
+    PinnedRaster result;result.revision=encodedRevision(bytes);
     if(!expected.empty()&&expected!=result.revision)throw std::runtime_error("image asset revision changed; explicitly reselect or refresh source");
     const bool hdr=bytes.compare(0,10,"#?RADIANCE")==0||bytes.compare(0,6,"#?RGBE")==0;
     const bool exr=bytes.size()>=4&&bytes.compare(0,4,"\x76\x2f\x31\x01",4)==0;
@@ -535,6 +542,22 @@ void registerMaterialOps(Workspace& ws) {
         r.set("format",Json::string(image.source.hdr()?"rgba32f-linear":image.source.authoredMips?"rgba8-container":"rgba8"));
         r.set("mipLevels",Json::number(int64_t(image.source.authoredMips?image.source.mips.size():1)));
         r.set("decodedBytes",Json::number(int64_t(image.source.bytes())));return r;
+    });
+    add("texture_graph_dependency_revisions","Read current SHA-256 revisions of bounded project image dependencies, without decoding or writing.",R"({"type":"object","properties":{"assets":{"type":"array","items":{"type":"string"}}},"required":["assets"]})",[w](const Json& p){
+        needProject(*w);
+        const auto& assets=p["assets"];
+        if(!assets.isArray()||assets.size()>64)throw std::invalid_argument("dependency scan requires at most 64 assets");
+        size_t remaining=64u*1024u*1024u;std::set<std::string> seen;Json revisions=Json::array();
+        for(const auto& v:assets.items()){
+            if(!v.isString()||!seen.insert(v.str()).second)throw std::invalid_argument("invalid or duplicate dependency asset");
+            Json row=Json::object();row.set("asset",v);
+            try{
+                const auto bytes=readPinnedEncoded(*w,v.str(),remaining);remaining-=bytes.size();
+                row.set("revision",Json::string(encodedRevision(bytes)));row.set("status",Json::string("ready"));
+            }catch(const std::exception& e){row.set("status",Json::string("unavailable"));row.set("error",Json::string(e.what()));}
+            revisions.push(row);
+        }
+        Json r=okJson();r.set("revisions",revisions);return r;
     });
     add("texture_graph_catalog","Native typed procedural CPU node catalog.",R"({"type":"object"})",[](const Json&){return render::texture_graph::describeCatalog();});
     add("texture_graph_templates","Validated native PBR starter graph documents.",R"({"type":"object"})",[](const Json&){Json r=okJson();r.set("templates",render::texture_graph::templates());return r;});
