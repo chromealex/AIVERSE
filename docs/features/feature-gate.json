@@ -87,7 +87,7 @@
     },
     "architecture": {
       "status": "not_run",
-      "note": "Pending actual execution and integration review.",
+      "note": "Mac v10 report had zero lexical findings and five known legacy compatibility notes; native host registration fixture PASS. Trusted policy and shared native build architecture still require integrator review; lexical audit is not ECS proof.",
       "evidence": []
     },
     "native_api": {
@@ -158,9 +158,12 @@
       "evidence": []
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending actual execution and integration review.",
-      "evidence": []
+      "status": "pass",
+      "note": "Documented working report-generation and persistent MCP refresh/status/get/dependency query example, actually executed twice in Mac v10. No visual or publishing claim.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-stage49-acceptance-2026-11-24.md",
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-refresh.log.txt"
+      ]
     },
     "tests": {
       "status": "pass",
