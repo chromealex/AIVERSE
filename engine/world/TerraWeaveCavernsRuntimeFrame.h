@@ -10,6 +10,7 @@
 #include "engine/world/TerraWeaveCavernsStreamJobs.h"
 #include "engine/world/TerraWeaveCavernsNavigationPublication.h"
 #include "engine/world/TerraWeaveCavernsPathRouter.h"
+#include "engine/world/TerraWeaveCavernsGraphSolvers.h"
 #include <algorithm>
 #include <map>
 #include <set>
@@ -28,7 +29,9 @@ public:
                                       StreamSettings streaming={})
         :residency_(streaming),
          streamJobs_(workers),
-         host_(resolution,spacingCm,shards,pending,workers) {}
+         host_(resolution,spacingCm,shards,pending,workers) {
+        registerCaveSharedGraphSolvers(pathRouter_);
+    }
     // Explicit per-world entry point. Instances are single-world owners:
     // after closeWorldAfterGpuIdle succeeds, construct a new one for a new
     // world/device. No GPU shutdown happens in the C++ destructor itself.
@@ -139,6 +142,14 @@ public:
     }
     bool retryNavigationInvalidations(){
         return navigationBus_.dispatchPending();
+    }
+    // Default engine/nav solvers registered at construction:
+    // "astar", "hpa", "flow", "hybrid". Native NavMesh and custom
+    // algorithms use the same registerPathSolver endpoint.
+    void setGraphSolverSettings(CaveGraphSolverSettings settings){
+        for(const auto* name:{"astar","hpa","flow","hybrid"})
+            (void)pathRouter_.unregisterSolver(name);
+        registerCaveSharedGraphSolvers(pathRouter_,settings);
     }
     bool registerPathSolver(std::string name,CavePathBackend kind,
                             CavePathRouter::Solver solver){
