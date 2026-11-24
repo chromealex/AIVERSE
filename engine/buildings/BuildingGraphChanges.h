@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <optional>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -48,6 +50,14 @@ struct BuildingGraphChange {
     bool open=false;
 };
 
+// Owner-thread diagnostic snapshot. ACK means accepted invalidation, not
+// completed async rebuild. At most the latest accepted event per scene.
+struct BuildingGraphDiagnostics {
+    uint32_t registeredDomains=0,requestedDomains=0,pendingDomains=0;
+    uint32_t acknowledgedDomains=0,missingOwners=0,refusedDomains=0;
+    uint64_t attempts=0;
+    std::optional<BuildingGraphChange> lastChange;
+};
 struct BuildingGraphDispatch {
     bool complete=false;
     uint32_t deliveredDomains=0;
@@ -72,6 +82,25 @@ public:
     }
     void unregisterConsumer(BuildingGraphDomain domain){
         consumers_.erase(buildingGraphBit(domain));
+    }
+    uint32_t registeredDomains()const noexcept{
+        uint32_t mask=0;
+        for(const auto& [domain,consumer]:consumers_)if(consumer)mask|=domain;
+        return mask;
+    }
+    BuildingGraphDiagnostics diagnostics(uint64_t sceneId)const{
+        BuildingGraphDiagnostics out;
+        out.registeredDomains=registeredDomains();
+        const auto it=diagnostics_.find(sceneId);
+        if(it==diagnostics_.end())return out;
+        out.lastChange=it->second.change;
+        out.attempts=it->second.attempts;
+        out.requestedDomains=it->second.change.domains;
+        out.pendingDomains=pendingDomains(sceneId,it->second.change.revision);
+        out.acknowledgedDomains=out.requestedDomains&~out.pendingDomains;
+        out.missingOwners=out.pendingDomains&~out.registeredDomains;
+        out.refusedDomains=it->second.refused&out.pendingDomains;
+        return out;
     }
     // Input must originate from a successful authoritative physics/
     // geometry commit, never an untrusted client request or UI preview.
@@ -98,6 +127,7 @@ public:
             }
             latest=change.revision;
             pending_[{change.sceneId,change.revision}]=change.domains;
+            diagnostics_[change.sceneId]={change,0,0};
         }
         auto it=pending_.find({change.sceneId,change.revision});
         if(it==pending_.end()){
@@ -108,9 +138,13 @@ public:
             out.error="Retry cannot reduce original graph domain mask";
             return out;
         }
+        auto& diag=diagnostics_.at(change.sceneId);
+        if(diag.attempts<std::numeric_limits<uint64_t>::max())++diag.attempts;
+        diag.refused=0;
         for(const auto& [domain,consumer]:consumers_){
             if(!(it->second&domain))continue;
             if(!consumer(change)){
+                diag.refused=domain;
                 out.error="A graph owner refused committed building invalidation";
                 return out;
             }
@@ -133,12 +167,15 @@ public:
     // Only call on authoritative world teardown after owners are detached.
     void forgetScene(uint64_t sceneId){
         latest_.erase(sceneId);
+        diagnostics_.erase(sceneId);
         for(auto it=pending_.begin();it!=pending_.end();){
             if(it->first.first==sceneId)it=pending_.erase(it);
             else ++it;
         }
     }
 private:
+    struct DiagnosticRecord {BuildingGraphChange change;uint64_t attempts=0;uint32_t refused=0;};
+    std::map<uint64_t,DiagnosticRecord> diagnostics_;
     std::map<uint32_t,Consumer> consumers_;
     std::map<uint64_t,uint64_t> latest_;
     std::map<std::pair<uint64_t,uint64_t>,uint32_t> pending_;
