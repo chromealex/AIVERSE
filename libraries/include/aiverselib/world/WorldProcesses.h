@@ -1,6 +1,7 @@
 #pragma once
 // Experimental integer-only world policies. ECS authority/save/scheduling belongs to the caller.
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <limits>
 #include <queue>
@@ -34,6 +35,65 @@ inline bool diffuse(std::vector<I>& mass,const std::vector<Flow>& flows){
  for(std::size_t i=0;i<mass.size();++i)if(change[i]>0&&mass[i]>std::numeric_limits<I>::max()-change[i])return false;
  for(std::size_t i=0;i<mass.size();++i)mass[i]+=change[i];
  return true;
+}
+// Shared multi-species diffusion over a single stable directed edge list.
+// Every species reads its own start-of-tick mass. Incoming mass cannot
+// finance outgoing transfers until the next tick. Zero-flow edges/fields
+// never allocate scratch. Validate all species before any output write.
+struct DiffusionActivity {
+    std::size_t directedFlows=0,activeFlows=0,transfers=0,activeSpecies=0;
+};
+template<std::size_t N>
+inline bool diffuseSpecies(std::array<std::vector<I>,N>& mass,
+        const std::vector<Flow>& flows,DiffusionActivity* activity=nullptr){
+    static_assert(N>0);
+    const auto count=mass[0].size();
+    for(const auto& field:mass){
+        if(field.size()!=count)return false;
+        for(I m:field)if(m<0)return false;
+    }
+    for(auto f:flows)if(f.from>=count||f.to>=count||f.cap<0)return false;
+    struct Scratch {std::vector<I> change,remaining;bool active=false;};
+    std::array<Scratch,N> scratch{};
+    DiffusionActivity stats{};
+    stats.directedFlows=flows.size();
+    for(auto f:flows){
+        if(f.from==f.to||!f.cap)continue;
+        bool moved=false;
+        for(std::size_t s=0;s<N;++s){
+            const auto& field=mass[s];
+            const I head=field[f.from]-field[f.to];
+            if(head<=1)continue;
+            auto& work=scratch[s];
+            const I available=work.active?work.remaining[f.from]:field[f.from];
+            const I amount=std::min({head/2,f.cap,available});
+            if(!amount)continue;
+            if(!work.active){
+                work.change.assign(count,0);
+                work.remaining=field;
+                work.active=true;++stats.activeSpecies;
+            }
+            if(work.change[f.from]<std::numeric_limits<I>::min()+amount||
+               work.change[f.to]>std::numeric_limits<I>::max()-amount)return false;
+            work.change[f.from]-=amount;
+            work.change[f.to]+=amount;
+            work.remaining[f.from]-=amount;
+            moved=true;++stats.transfers;
+        }
+        if(moved)++stats.activeFlows;
+    }
+    // The scalar reference checks overflow at the end of each species.
+    // Check every species before mutating even one input field.
+    for(std::size_t s=0;s<N;++s)if(scratch[s].active)
+        for(std::size_t i=0;i<count;++i){
+            const I delta=scratch[s].change[i];
+            if(delta>0&&mass[s][i]>std::numeric_limits<I>::max()-delta)return false;
+        }
+    for(std::size_t s=0;s<N;++s)if(scratch[s].active)
+        for(std::size_t i=0;i<count;++i)
+            mass[s][i]+=scratch[s].change[i];
+    if(activity)*activity=stats;
+    return true;
 }
 inline bool relax(I& pos,I rest,I stiffness){
  if(stiffness<0||stiffness>1000)return false;
