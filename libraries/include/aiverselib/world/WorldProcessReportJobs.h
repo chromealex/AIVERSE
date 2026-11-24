@@ -32,6 +32,7 @@ inline auto analyzeReportValues(std::span<const Input> inputs,
     static_assert(std::is_trivially_copyable_v<Input>);
     static_assert(std::is_trivially_copyable_v<Output> && !std::is_same_v<Output,bool>);
     static_assert(!std::is_pointer_v<Output> && !std::is_pointer_v<Input>);
+    (void)options; // serial-only WebAssembly build
     ReportJobResult<Output> out;
     out.values.resize(inputs.size());
     if(inputs.empty())return out;
