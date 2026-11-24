@@ -39,7 +39,7 @@ inline bool hydrateGameCoreSurfaceArea(Simulation& sim,Entity e,const Json& doc,
     const auto* host=dynamic_cast<const game::GameCore*>(&sim.module());
     const auto* surface=host?host->surface(sim):nullptr;
     const auto* tr=static_cast<const World&>(sim.world()).tryGetConst<Transform>(e);
-    if(!surface||!tr||!authoring::extended::validate("EvolveArea",doc,error))return false;
+    if(!surface||!tr||sim.world().has<evolve::SurfaceArea>(e)||!extended::validate("EvolveArea",doc,error))return false;
     evolve::Area local;
     local.centerXcm=doc.has("offsetXcm")?doc["offsetXcm"].integer():0;
     local.centerZcm=doc.has("offsetZcm")?doc["offsetZcm"].integer():0;
