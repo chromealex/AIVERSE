@@ -1763,7 +1763,8 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     const auto chartGroup=planetaryChart&&planetCutTerrain_.vb.valid()&&planetCutTerrain_.ib.valid()
         ?planetCutPlan_:nullptr;
     cavernsPreview_.syncRimGroup(planetaryChart?chartGroup:surfaceGroup);
-    cavernsPreview_.beforeRender(*device_,brushVisible_&&brushVolume_?brushCenter_:camera_.target);
+    cavernsPreview_.beforeRender(*device_,planetaryChart?view.eye():
+        brushVisible_&&brushVolume_?brushCenter_:camera_.target);
     if(surfaceGroup&&!surfaceGroup->rims.empty()&&cavernsPreview_.rimRejected(surfaceGroup)){
         const auto why=cavernsPreview_.rimError();
         sparseTerrainPreview_.rejectSurfaceGroup(retireSparse,why.empty()?"Caverns matching volume unavailable":why);
