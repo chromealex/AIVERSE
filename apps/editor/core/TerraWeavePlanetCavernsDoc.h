@@ -3,6 +3,9 @@
 #include "engine/world/TerraWeaveCavernsPlanetAuthority.h"
 #include "engine/world/TerraWeaveCavernsPlanetSurface.h"
 #include "engine/world/TerraWeaveCavernsArchive.h"
+#include "engine/world/TerraWeaveCavernsRaycast.h"
+#include <array>
+#include <cmath>
 
 namespace aiverse::editor {
 namespace planet_caves {
@@ -83,6 +86,33 @@ inline CavePlanetSurfacePatch captureLocalSurface(const MapData& map,const CaveP
         if(inside){if(cells.size()>=8192)throw std::length_error("Caverns planetary chart surface cell budget");cells.push_back({f,x,z});}
     }
     return captureCavePlanetSurface(frame,cells,revision?revision:1);
+}
+// Presentation-only picking against the exact same coarse triangle source
+// as the chart viewport. The authoritative edit re-samples the surface
+// height at the quantized centimetre point before committing the shaft.
+inline std::optional<PointCm> pickLocalSurface(const CavePlanetSurfacePatch& patch,CaveRayCm ray){
+    using D=std::array<double,3>;
+    const auto sub=[](D a,D b){return D{a[0]-b[0],a[1]-b[1],a[2]-b[2]};};
+    const auto cross=[](D a,D b){return D{a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]};};
+    const auto dot=[](D a,D b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];};
+    const auto point=[](Vec3 v){return D{v.x.toDouble()*100.,v.y.toDouble()*100.,v.z.toDouble()*100.};};
+    const D origin{double(ray.origin.x),double(ray.origin.y),double(ray.origin.z)};
+    const D direction{ray.dxQ20/double(1<<20),ray.dyQ20/double(1<<20),ray.dzQ20/double(1<<20)};
+    if(std::abs(dot(direction,direction)-1.)>.008)throw std::invalid_argument("Caverns surface ray direction");
+    double best=50000.;bool hit=false;
+    for(const auto& tri:patch.chartTriangles){
+        const auto a=point(tri.a),u=sub(point(tri.b),a),v=sub(point(tri.c),a);
+        const auto h=cross(direction,v);const auto det=dot(u,h);
+        if(std::abs(det)<1e-8)continue;
+        const auto s=sub(origin,a);const auto b=dot(s,h)/det;
+        if(b<0||b>1)continue;
+        const auto q=cross(s,u);const auto c=dot(direction,q)/det;
+        if(c<0||b+c>1)continue;
+        const auto t=dot(v,q)/det;
+        if(t>=0&&t<best){best=t;hit=true;}
+    }
+    if(!hit)return {};
+    return PointCm{int64_t(std::llround(origin[0]+direction[0]*best)),int64_t(std::llround(origin[1]+direction[1]*best)),int64_t(std::llround(origin[2]+direction[2]*best))};
 }
 inline Json describeBodies(const MapData& map){
     Json out=Json::array();
