@@ -18,10 +18,12 @@ inline bool sameDocument(const Json& original, const Json& expected) {
     if (original.isObject() && expected.isObject()) {
         if (original.size() != expected.size()) return false;
         std::map<std::string_view, const Json*> fields;
-        for (const auto& [key, value] : expected.members()) fields.emplace(key, &value);
+        for (const auto& [key, value] : expected.members())
+            if (!fields.emplace(key, &value).second) return false;
         for (const auto& [key, value] : original.members()) {
             const auto it = fields.find(key);
             if (it == fields.end() || !sameDocument(value, *it->second)) return false;
+            fields.erase(it);
         }
         return true;
     }

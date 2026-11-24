@@ -150,6 +150,9 @@ int main() {
     // A browser round trip reorders both the graph and its nested node keys.
     shaderSave.set("expected",Json::parse(R"({"outputs":{"color":"input"},"nodes":[{"op":"input","id":"input"}],"domain":"material","version":1})"));
     shaderSave.set("graph",shaderEdited["result"]["graph"]);
+    auto ambiguous=shaderSave;
+    ambiguous.set("expected",Json::parse(R"({"version":1,"domain":"material","nodes":[{"id":"input","id":"input"}],"outputs":{"color":"input"}})"));
+    requireGraphTest(call("shader_graph_set",ambiguous).has("error"),"ambiguous shader original accepted");
     const auto shaderFile=root/"shaders"/"cas_shader.json";
     const auto lockPath=fs::path(shaderFile.string()+".aiverse-write-lock");
     fs::create_directory(lockPath);
