@@ -21,7 +21,8 @@ public:
         if (confirmedOnly_) pending_.erase(pending_.lower_bound(tick), pending_.end());
         else immediate_.clear();
     }
-    // confirmedNext is exclusive: events of tick T may be drained when T < confirmedNext.
+    // Exclusive boundary: min(confirmedNext, simulatedNext) for a network session.
+    // Never pass confirmed-but-not-yet-simulated ticks, or their later events will be discarded.
     std::vector<Event> drain(uint32_t confirmedNext = 0) {
         std::vector<Event> out;
         if (!confirmedOnly_) { out.swap(immediate_); return out; }
