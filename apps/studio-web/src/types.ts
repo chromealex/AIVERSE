@@ -243,6 +243,7 @@ export interface StudioBuildingFeature {
   floor: number; // zero-indexed storey for windows
   sill: number; // window sill above its storey's floor
 }
+export type StudioBuildingRoomUse='lounge'|'bedroom'|'kitchen'|'office'|'meeting'|'workshop'|'storage'|'retail'|'circulation'|'empty';
 export interface StudioBuildingRequest {
   setting: string; style: string; function: string;
   width: number; height: number; depth: number; seed: number;
@@ -251,6 +252,9 @@ export interface StudioBuildingRequest {
   floorFootprints?:string[][];
   walkableSetbacks?:boolean;
   cornerChamfers?:[number,number,number,number];
+  interiorProfile?:'none'|'residential'|'office'|'industrial'|'commercial'|'mixed';
+  furnitureDensity?:number;
+  roomUses?:Array<{floor:number;x:number;z:number;use:StudioBuildingRoomUse}>;
   mode?: 'features' | 'preset';
   features?: StudioBuildingFeature[];
   materialBindings?: Record<string,string>; // authored style slot -> project materials.json name
@@ -263,6 +267,8 @@ export interface StudioBuildingPreview {
   width: number; height: number; depth: number;
   solids?:number; connections?:number; floors?:number; roomsX?:number; roomsZ?:number; footprint?:string[]; floorFootprints?:string[][];
   footprintPolygon?:Array<[number,number]>;
+  roomUses?:Array<{roomId:string;use:StudioBuildingRoomUse}>;
+  furniture?:Array<{id:string;roomId:string;floor:number;kind:string;x0:number;z0:number;x1:number;z1:number}>;
   roofSections?:Array<{x0:number;z0:number;x1:number;z1:number;base:number;rise:number;ridgeAlongX:boolean}>;
   terraces?:Array<{floor:number;x:number;z:number;height:number}>;
   terraceAccess?:Array<{socketId:string;roomId:string;floor:number;x:number;z:number}>;

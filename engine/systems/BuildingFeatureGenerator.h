@@ -81,6 +81,34 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
         if(std::string(key)=="roomsX")recipe.roomsX=uint32_t(n);
         else recipe.roomsZ=uint32_t(n);
     }
+    if(json.has("interiorProfile")){
+        bool found=false;
+        for(int i=0;i<=int(BuildingInteriorProfile::Mixed);++i)if(json.getStr("interiorProfile")==buildingInteriorProfileName(BuildingInteriorProfile(i))){
+            recipe.interiorProfile=BuildingInteriorProfile(i);found=true;break;}
+        if(!found)throw JsonError(path+".interiorProfile: unknown profile");
+    }
+    if(json.has("furnitureDensity")){
+        const auto& v=json["furnitureDensity"];const double n=v.toDouble(-1);
+        if(!v.isNumber()||n<0||n>4||std::floor(n)!=n)throw JsonError(path+".furnitureDensity: expected integer 0..4");
+        recipe.furnitureDensity=uint32_t(n);
+    }
+    if(json.has("roomUses")){
+        const auto& list=json["roomUses"];
+        if(!list.isArray()||list.size()>128)throw JsonError(path+".roomUses: expected bounded array");
+        for(const auto& item:list.items()){
+            if(!item.isObject())throw JsonError(path+".roomUses: expected object");
+            BuildingRoomUseOverride edit;
+            auto index=[&](const char* key){const auto& v=item[key];const double n=v.toDouble(-1);
+                if(!v.isNumber()||n<0||n>7||std::floor(n)!=n)throw JsonError(path+".roomUses: invalid cell index");
+                return uint32_t(n);};
+            edit.floor=index("floor");edit.x=index("x");edit.z=index("z");
+            bool found=false;
+            for(int i=0;i<=int(BuildingRoomUse::Empty);++i)if(item.getStr("use")==buildingRoomUseName(BuildingRoomUse(i))){
+                edit.use=BuildingRoomUse(i);found=true;break;}
+            if(!found)throw JsonError(path+".roomUses: unknown room use");
+            recipe.roomUses.push_back(edit);
+        }
+    }
     if(json.has("cornerChamfers")){
         const auto& cuts=json["cornerChamfers"];
         if(!cuts.isArray()||cuts.size()!=4)throw JsonError(path+".cornerChamfers: expected four cut distances");
@@ -374,6 +402,38 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
           case BuildingGraphPart::StairLanding:material=sm.pad>=0?sm.pad:trim;break;
           case BuildingGraphPart::ElevatorPlatform:material=sm.plate>=0?sm.plate:trim;break;
           case BuildingGraphPart::ElevatorGuide:material=sm.dark>=0?sm.dark:hull;break;
+        }
+        if(solid.furnitureIndex<graph.furniture.size()){
+            const auto& item=graph.furniture[solid.furnitureIndex];
+            // Style-selected finish and structure, with deterministic local
+            // geometry. Collision deliberately reserves the entire footprint.
+            const int finish=style.interior>=0?style.interior:hull;
+            const int detail=style.panels.accent>=0?style.panels.accent:trim;
+            using K=BuildingFurnitureKind;
+            const float x=solid.x0,y=solid.y0,z=solid.z0,X=solid.x1,Y=solid.y1,Z=solid.z1;
+            const float w=X-x,d=Z-z,h=Y-y;
+            auto box=[&](int mat,float a,float b,float c,float A,float B,float C){
+                mesh.box(mat,x+w*a,y+h*b,z+d*c,x+w*A,y+h*B,z+d*C);
+            };
+            if(item.kind==K::Desk||item.kind==K::Table||item.kind==K::Bench){
+                box(finish,0,.86f,0,1,1,1);
+                for(float a:{.04f,.84f})for(float c:{.06f,.8f})box(detail,a,0,c,a+.12f,.86f,c+.14f);
+            }else if(item.kind==K::Bed){
+                box(detail,0,0,0,1,.43f,1);box(finish,.04f,.43f,.04f,.96f,.67f,.96f);
+                box(detail,.04f,.67f,.06f,.96f,.82f,.28f);box(finish,0,.43f,0,1,1,.07f);
+            }else if(item.kind==K::Sofa){
+                box(finish,0,0,0,1,.48f,1);box(detail,0,.48f,0,1,1,.19f);
+                box(detail,0,.48f,.19f,.12f,.78f,1);box(detail,.88f,.48f,.19f,1,.78f,1);
+            }else if(item.kind==K::Shelf){
+                for(float a:{0.f,.9f})box(detail,a,0,0,a+.1f,1,1);
+                for(float b:{0.f,.3f,.6f,.94f})box(finish,0,b,0,1,b+.06f,1);
+            }else{
+                box(finish,0,0,0,1,.9f,1);box(detail,0,.9f,0,1,1,1);
+                if(item.kind==K::Machine)box(dark,.1f,.3f,0,.9f,.65f,.05f);
+                else box(detail,.2f,.4f,0,.8f,.46f,.04f);
+            }
+            addBox(material,x,y,z,X,Y,Z,true,false);
+            continue;
         }
         const bool dressed=solid.collisionOnly||dressFunctionalWall(mesh,style,solid,W,D,recipe.seed,hull,trim)||
             dressFunctionalRoofCell(mesh,recipe,solid,style.roof>=0?style.roof:material);
