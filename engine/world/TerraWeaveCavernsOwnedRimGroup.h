@@ -8,6 +8,47 @@ struct CaveOwnedRimGroupRequest {
     Fixed lowerPlane{};
     std::vector<ChunkKey3> keys;
 };
+// Conservative automatic slot selection from a frozen mouth and a host
+// selected trim plane. Include the entire padded shaft envelope; missing
+// dirty slots refuse rather than silently narrowing the affected region.
+inline std::vector<CaveOwnedRimRequest> selectOwnedRimRequests(
+        const CaveSurfaceGroupPlan& surface,const CaveVolumeSnapshot& snapshot,
+        const std::map<uint64_t,Fixed>& lowerPlanes,uint32_t resolution,int32_t spacingCm,
+        size_t maxSlots=64){
+    if(!resolution||resolution>64||spacingCm<=0||spacingCm>10000||
+       !maxSlots||maxSlots>64||lowerPlanes.size()!=surface.rims.size())
+        throw std::invalid_argument("Caverns automatic rim slot budget");
+    const int64_t span=int64_t(resolution)*spacingCm;
+    // Native chunk grid is defined in signed integer centimetres.
+    const auto floorCm=[](Fixed x){return floorDiv(x.raw*100,Fixed::kOne);};
+    std::vector<CaveOwnedRimRequest> result;
+    std::set<ChunkKey3,KeyLess> occupied;
+    for(const auto& rim:surface.rims){
+        const auto e=std::find_if(snapshot.entrances.begin(),snapshot.entrances.end(),
+            [&](const auto& item){return item.id==rim.entranceId;});
+        const auto plane=lowerPlanes.find(rim.entranceId);
+        if(e==snapshot.entrances.end()||plane==lowerPlanes.end())
+            throw std::invalid_argument("Caverns automatic rim selection identity");
+        if(plane->second<Fixed::fromRatio(e->caveYcm,100)||
+           plane->second>=Fixed::fromRatio(e->surfaceYcm,100))
+            throw std::invalid_argument("Caverns automatic rim plane outside shaft");
+        const int64_t radial=(int64_t(e->radiusCm)*3+1)/2+spacingCm;
+        const int64_t lowY=floorCm(plane->second)-spacingCm;
+        const int64_t highY=e->surfaceYcm+int64_t(e->radiusCm)+spacingCm;
+        const ChunkKey3 lo{floorDiv(e->xCm-radial,span),floorDiv(lowY,span),floorDiv(e->zCm-radial,span)};
+        const ChunkKey3 hi{floorDiv(e->xCm+radial,span),floorDiv(highY,span),floorDiv(e->zCm+radial,span)};
+        const uint64_t nx=uint64_t(hi.x-lo.x+1),ny=uint64_t(hi.y-lo.y+1),nz=uint64_t(hi.z-lo.z+1);
+        if(nx>maxSlots||ny>maxSlots||nz>maxSlots||nx*ny*nz>maxSlots-result.size())
+            throw std::length_error("Caverns automatic shaft exceeds slot budget");
+        for(int64_t z=lo.z;z<=hi.z;++z)for(int64_t y=lo.y;y<=hi.y;++y)for(int64_t x=lo.x;x<=hi.x;++x){
+            const ChunkKey3 key{x,y,z};
+            if(!occupied.insert(key).second)
+                throw std::invalid_argument("Caverns automatic shaft owner groups overlap");
+            result.push_back({key,rim.entranceId,plane->second});
+        }
+    }
+    return result;
+}
 struct CaveOwnedRimSlot {
     CaveCertifiedChunk candidate;
     CaveCollisionPrepared collision;
