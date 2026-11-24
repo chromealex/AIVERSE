@@ -38,7 +38,7 @@ public:
     uint64_t activeRevision()const noexcept{return activeRevision_;}
     uint64_t surfaceEpoch()const noexcept{return activePlan_?activePlan_->surfaceEpoch:0;}
     bool recoveryRequired()const noexcept{return barrier_.status().recoveryRequired;}
-    bool ready()const noexcept{return activeRevision_&&!blocked_&&!recoveryRequired();}
+    bool ready()const noexcept{return activeRevision_&&!blocked_&&!recoveryRequired()&&planet_&&planet_->caveSurfaceCutEpoch(frame_.body())==surfaceEpoch();}
     bool staged()const noexcept{return pendingRevision_!=0;}
     size_t residentSlots()const noexcept{return activeSlots_.size();}
     size_t collect(gfx::Device& device){return geometry_.collectCompletedWithoutIdle(device);}
@@ -88,7 +88,13 @@ public:
         // candidate ID before installation. Nothing live changes here.
         std::vector<CaveVolumePhysicsStage*> prepared;prepared.reserve(slots.size());
         CaveBatchPrepared batch;Json instances=Json::array();
-        const auto cancel=[&]{for(auto* p:prepared)(void)p->abort(nativeRevision);};
+        const auto cancel=[&]{
+            for(auto* p:prepared)if(!p->abort(nativeRevision))barrier_.requireRecovery();
+            for(auto it=physics_.begin();it!=physics_.end();){
+                if(!activeSlots_.contains(it->first)&&!it->second->spatialOwner().prepared()&&!it->second->boxOwner().prepared())it=physics_.erase(it);
+                else ++it;
+            }
+        };
         device_=&device;spatial_=&spatial;
         try{
             size_t ordinal=0;
@@ -97,7 +103,8 @@ public:
                 auto& stage=physics_[slot.id];if(!stage)stage=std::make_unique<CaveVolumePhysicsStage>();
                 // Rebuild from the canonical fixed triangles instead of
                 // trusting caller-supplied native body or Model buffers.
-                p.collision.body={};p.model=buildExactCavePayload(p.collision,p.simulationOrigin);
+                const auto userData=p.collision.body.userData;
+                p.collision.body={};p.model=buildExactCavePayload(p.collision,p.simulationOrigin,userData);
                 const auto first=p.collision.triangles.empty()?0:reserveIds(slot.id,p.collision.triangles.size());
                 if(!stage->prepareExact(p.collision,first,spatial)){cancel();return false;}
                 prepared.push_back(stage.get());
@@ -131,6 +138,7 @@ public:
         if(!staged()||recoveryRequired()||!exclusive||!exclusive()||!originalsRetired||
            !commitNavigationAndGi||spatial_!=&spatial||(box_&&box_!=&box)||
            planet.caveSurfaceRevision()!=pendingPlan_->surfaceRevision||
+           planet.caveSurfaceCutEpoch(frame_.body())!=surfaceEpoch()||
            (planet_&&planet_!=&planet))return false;
         const auto revision=pendingRevision_;
         std::vector<CaveVolumePhysicsStage*> owners;owners.reserve(pendingSlots_.size());
@@ -164,8 +172,9 @@ public:
     }
     bool cancelStaged(){
         if(!staged()||recoveryRequired()||blocked_)return false;
-        for(const auto& key:pendingSlots_)if(!physics_.at(key)->abort(pendingRevision_))return false;
-        if(!geometry_.cancelStage())return false;
+        for(const auto& key:pendingSlots_)if(!physics_.at(key)->abort(pendingRevision_)){barrier_.requireRecovery();return false;}
+        if(!geometry_.cancelStage()){barrier_.requireRecovery();return false;}
+        for(auto it=physics_.begin();it!=physics_.end();){if(!activeSlots_.contains(it->first))it=physics_.erase(it);else ++it;}
         pendingSlots_.clear();pendingPlan_.reset();pendingRevision_=0;return true;
     }
     void draw(render::Renderer3D& renderer,const render::SphereViewFrame& view,Fixed seconds){
@@ -182,7 +191,7 @@ public:
             const std::function<bool()>& restoreOriginalsAndRetireNavGi){
         if(recoveryRequired()||!exclusive||!exclusive()||!restoreOriginalsAndRetireNavGi||
            (device_&&device_!=&device)||(box_&&box_!=&box)||(spatial_&&spatial_!=&spatial)||
-           (planet_&&planet_!=&planet))return false;
+           (planet_&&planet_!=&planet)||planet.caveSurfaceCutEpoch(frame_.body())!=surfaceEpoch())return false;
         if(staged()&&!cancelStaged())return false;
         for(const auto& key:activeSlots_){
             const auto& stage=*physics_.at(key);
