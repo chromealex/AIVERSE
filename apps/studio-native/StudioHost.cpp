@@ -1641,6 +1641,14 @@ void StudioHost::handleMessage(const std::string& json) {
             reply.set("id", req["id"]);
             try { reply.set("result", assetThumbnail(req["params"].getStr("path"))); }
             catch (const std::exception& e) { reply.set("error", Json::string(e.what())); }
+        } else if (method == "studio.cavernsPreview" && req["id"].isNumber()) {
+            const auto& ws=session_->workspace();const auto& params=req["params"];
+            if(ws.project.dir.empty()||params.getStr("expectedProject")!=ws.project.dir||
+               !params["expectedMap"].isString()||params.getStr("expectedMap")!=(ws.map.path.empty()?"":ws.relative(ws.map.path)))
+                throw std::runtime_error("Caverns preview project/map changed");
+            if(!preview_)throw std::runtime_error("Open the native Scene panel first");
+            reply=Json::object();reply.set("id",req["id"]);
+            reply.set("result",onScene([&]{return preview_->cavernsPreview(params);}));
         } else if (method == "studio.gpuStats" && req["id"].isNumber()) {
             // Frame Capture / Texture Resources: Scene frame history (CPU frame time, draw calls) and live GPU textures.
             reply = Json::object();
