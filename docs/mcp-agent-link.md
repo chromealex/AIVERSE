@@ -108,3 +108,6 @@ Linked agent batch apply now plans ordinary exact-endpoint move chains and stati
 
 ### S6f.3.2 — moving-owner repair chains
 Existing linked agent batch apply supports ordinary exact-endpoint chains with changed moved model/file/tree digests. Virtual repair overlays validate the original physical identity and intermediate recorded bytes; journal v3 publishes final edits and recovers partial publication using reverse overlays. Nested endpoints and mixed dependent operations remain fenced.
+
+### S6f.3.3 — mixed file history chains
+Linked agent batch uses mixed file planner for supported texture/audio/.bin import, move, settings, replacement and quarantine chains. Sidecar identity follows content/Trash endpoints; v3 journal recovers exact metadata. Unsupported mixed model or nested-directory chains remain conservative.

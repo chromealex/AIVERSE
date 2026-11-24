@@ -1108,6 +1108,84 @@ int main(){
             catch(const std::runtime_error&){rejected=true;}
             AIVERSE_TEST_CHECK(rejected&&fs::exists(destination));
         }
+        // S6f.3.3: import -> move -> settings -> replace -> delete.
+        // Metadata follows its identity across content and exact Trash slots.
+        {
+            using namespace aiverse;using namespace aiverse::studio;
+            const auto p=fs::canonical(temp)/"MixedChain";
+            fs::create_directories(p/"content"/"A");fs::create_directories(p/"content"/"B");
+            const auto imported=external/"Mixed.png";write(imported,"old pixels");
+            StudioAssetCatalog index(p);index.rebuild();
+            editor::ProjectHistory history;
+            std::optional<editor::ProjectHistory::MovePlan> plan;
+            auto import=StudioTransferPlan::external(p,"A",{imported});
+            (void)import.apply(import.token(),{},{},&plan);
+            AIVERSE_TEST_CHECK(plan&&plan->created);
+            const auto createdSlot=plan->files[0].to;
+            history.recordMove(std::move(*plan),"Import");
+            index.rebuild(false);const auto guid=index.byPath("A/Mixed.png")->guid;
+            auto move=StudioTransferPlan::internal(p,"B",{"A/Mixed.png"});
+            (void)move.apply(move.token(),{},{},&plan,true);
+            AIVERSE_TEST_CHECK(plan);history.recordMove(std::move(*plan),"Move");
+            index.rebuild(false);
+            const auto originalMeta=read(p/"content"/"B"/"Mixed.png.meta");
+            index.patchSettings(guid,"compression",Json::string("high"),&history);
+            const auto changedMeta=read(p/"content"/"B"/"Mixed.png.meta");
+            AIVERSE_TEST_CHECK(originalMeta!=changedMeta);
+            write(imported,"new pixels");
+            auto replace=StudioTransferPlan::external(p,"B",{imported});
+            (void)replace.apply(replace.token(),{{0,"replace"}},{},&plan);
+            AIVERSE_TEST_CHECK(plan&&plan->replacement);
+            history.recordMove(std::move(*plan),"Replace");
+            auto deletion=studioQuarantineAsset(p,"B/Mixed.png",guid);
+            const auto deletedSlot=deletion.files[0].to;
+            history.recordMove(std::move(deletion),"Delete");
+            AIVERSE_TEST_CHECK(history.steps().size()==5&&!fs::exists(p/"content"/"B"/"Mixed.png"));
+            auto reversed=history.steps();std::reverse(reversed.begin(),reversed.end());
+            AIVERSE_TEST_CHECK(studioCanPlanMixedAssetChain(reversed));
+            const auto undo=studioPlanMixedAssetChain(p,reversed,false);
+            AIVERSE_TEST_CHECK(undo.relocations.size()==8&&undo.movingResources.size()==1);
+            AIVERSE_TEST_CHECK(undo.movingResources[0].destination==createdSlot+".meta");
+            // Exercise quota accounting on sources that exist only virtually.
+            (void)studioSetRecoveryQuota(p,0,1);
+            studioApplyHistoryBatch(p,undo.relocations,undo.documents,undo.movingResources);
+            AIVERSE_TEST_CHECK(read(p/createdSlot)=="old pixels"&&read(p/(createdSlot+".meta"))==originalMeta);
+            index.rebuild(false);AIVERSE_TEST_CHECK(!index.byGuid(guid));
+            const auto redo=studioPlanMixedAssetChain(p,history.steps(),true);
+            AIVERSE_TEST_CHECK(redo.movingResources.size()==1&&redo.movingResources[0].destination==deletedSlot+".meta");
+            studioApplyHistoryBatch(p,redo.relocations,redo.documents,redo.movingResources);
+            AIVERSE_TEST_CHECK(read(p/deletedSlot)=="new pixels"&&read(p/(deletedSlot+".meta"))==changedMeta);
+            AIVERSE_TEST_CHECK(!fs::exists(p/"content"/"B"/"Mixed.png"));
+            // Crash after final sidecar publication in a recovery slot.
+            const auto pending=studioPlanMixedAssetChain(p,reversed,false);
+            const auto folder=p/".aiverse-cache"/"studio-history-batch";
+            Json body=Json::object(),moves=Json::array(),resources=Json::array();
+            for(const auto& m:pending.relocations){
+                Json row=Json::object();row.set("from",Json::string(m.from));row.set("to",Json::string(m.to));
+                row.set("digest",Json::string(m.digest));row.set("directory",Json::fromBool(m.directory));moves.push(std::move(row));
+            }
+            for(const auto& resource:pending.movingResources){
+                Json row=Json::object();row.set("metadata",Json::fromBool(true));
+                row.set("path",Json::string(resource.edit.path.generic_string()));
+                row.set("destination",Json::string(resource.destination));
+                row.set("before",Json::string(resource.edit.before));row.set("after",Json::string(resource.edit.after));
+                resources.push(std::move(row));
+            }
+            body.set("moves",std::move(moves));body.set("documents",Json::array());body.set("movingResources",std::move(resources));
+            const auto payload=body.dump(-1);const auto hash=pack::sha256(payload.data(),payload.size());
+            Json envelope=Json::object();envelope.set("version",Json::number(int64_t(3)));
+            envelope.set("payload",Json::string(payload));envelope.set("sha256",Json::string(pack::toHex(hash.data(),hash.size())));
+            fs::create_directory(folder);write(folder/"pending.json",envelope.dump(-1));
+            for(const auto& m:pending.relocations)fs::rename(p/m.from,p/m.to);
+            auto edit=pending.movingResources[0].edit;edit.path=fs::canonical(p/pending.movingResources[0].destination);
+            StudioMoveJournal(p).applyResources({edit},true);
+            studioRecoverHistoryBatch(p);
+            AIVERSE_TEST_CHECK(read(p/deletedSlot)=="new pixels"&&read(p/(deletedSlot+".meta"))==changedMeta&&!fs::exists(folder));
+            write(p/(deletedSlot+".meta"),changedMeta+"\n");
+            bool refused=false;try{(void)studioPlanMixedAssetChain(p,reversed,false);}
+            catch(const std::runtime_error&){refused=true;}
+            AIVERSE_TEST_CHECK(refused&&fs::exists(p/deletedSlot));
+        }
         std::cout<<"PASS studio conflict resolution and GUID-preserving asset transfers\n";
     }catch(...){fs::remove_all(temp);throw;}
     fs::remove_all(temp);

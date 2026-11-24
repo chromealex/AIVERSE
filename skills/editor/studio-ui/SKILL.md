@@ -185,6 +185,9 @@ An agent batch made of ordinary asset moves can now compose exact-endpoint chain
 ## Moving-owner chain coordination (S6f.3.2)
 Ordinary asset chains now simulate each recorded directional digest using virtual repair overlays on initial file/tree identities. Resource edits follow physical identity across exact-endpoint folder/file moves and compose exact intermediate bytes. Validate the net projected graph before publication. Journal v3 relocates initial bytes, publishes final stationary and moved resources once, and verifies normalized original payload identities during recovery before reversing moves. Includes compact GLB. Nested relocation endpoints, ambiguous cycles, mixed dependent Trash/replacement/metadata, and interleaved map/rules changes remain fenced.
 
+## Mixed file-chain coordination (S6f.3.3)
+File-only mixed chains of texture/audio/.bin assets support import, ordinary move, metadata settings, replacement and reversible deletion/restoration. Virtual file/sidecar identity and GUID occupancy are validated in order; final metadata edits follow exact content or Trash sidecar endpoints, journal v3 retains those snapshots. Exact Trash asset.meta targets are allowed by the existing-document journal, not general cache writes. Quota arithmetic follows virtual source sizes. Model topology, model URI repairs in mixed chains, nested directory endpoints and ambiguous repeated states remain fenced; disjoint legacy operations retain their previous path.
+
 ## Verification and mandatory handoff
 ```bash
 cd apps/studio-web

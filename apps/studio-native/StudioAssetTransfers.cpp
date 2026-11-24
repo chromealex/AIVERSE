@@ -2103,8 +2103,15 @@ bool studioCanPlanMixedAssetChain(const std::vector<editor::ProjectHistory::Step
         hasMove=true;
         const auto& move=*step.move;
         if(!move.resourceEdits.empty()||move.files.empty()||move.files.size()%2)return false;
-        for(size_t i=0;i<move.files.size();i+=2)
-            if(!simple(move.files[i]))return false;
+        for(size_t i=0;i<move.files.size();i+=2){
+            const auto& file=move.files[i];
+            if(!simple(file))return false;
+            if(!move.quarantine&&!move.replacement){
+                auto destination=file;destination.from=file.to;
+                if(!simple(destination)||studioImporterForPath(fs::path(file.from),false)!=
+                    studioImporterForPath(fs::path(file.to),false))return false;
+            }
+        }
     }
     return hasMove;
 }
@@ -2164,7 +2171,7 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
             auto edit=step.files.front();
             validateHistoryMetadata(edit);
             if(!redo)std::swap(edit.before,edit.after);
-            const auto rel=metadataRelative(root,edit.path);
+            const auto rel=metadataRelative(project,edit.path);
             edit.path=fs::path(rel);logical.edits.push_back(std::move(edit));
         }
         for(const auto& m:logical.moves){
@@ -2206,8 +2213,11 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
             if(currentBytes(path)!=expected)throw std::runtime_error("Mixed history metadata baseline changed");
             const auto meta=Json::parse(expected);
             const auto guid=meta.getStr("guid");
+            if(!studioValidGuid(guid))throw std::runtime_error("Invalid mixed history GUID");
             if(path.starts_with("content/")){
                 const auto live=path.substr(0,path.size()-5);
+                if(meta.getStr("importer")!=studioImporterForPath(fs::path(live),false))
+                    throw std::runtime_error("Mixed history importer changed");
                 const auto it=liveGuids.find(guid);
                 if(it==liveGuids.end()||it->second!=live)throw std::runtime_error("Mixed history GUID changed");
             }else if(liveGuids.count(guid))throw std::runtime_error("Restored mixed asset GUID conflict");
@@ -2221,8 +2231,12 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
                 const auto meta=Json::parse(currentBytes(m.from));const auto guid=meta.getStr("guid");
                 if(!studioValidGuid(guid))throw std::runtime_error("Invalid mixed sidecar GUID");
                 if(m.from.starts_with("content/"))liveGuids.erase(guid);
-                if(m.to.starts_with("content/")&&!liveGuids.emplace(guid,m.to.substr(0,m.to.size()-5)).second)
-                    throw std::runtime_error("Mixed chain creates duplicate GUID");
+                if(m.to.starts_with("content/")){
+                    const auto live=m.to.substr(0,m.to.size()-5);
+                    if(meta.getStr("importer")!=studioImporterForPath(fs::path(live),false)||
+                       !liveGuids.emplace(guid,live).second)
+                        throw std::runtime_error("Mixed chain importer mismatch or duplicate GUID");
+                }
             }
             out.relocations.push_back({m.from,m.to,initial.at(origin).substr(1),false});
             origins.erase(it);origins.emplace(m.to,origin);
