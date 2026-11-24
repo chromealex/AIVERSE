@@ -53,7 +53,7 @@
 .au-section__header{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;
   gap:var(--au-space-2);padding:var(--au-space-3) 0 var(--au-space-2);
   border-bottom:1px solid var(--au-line);margin-bottom:var(--au-space-3)}
-.au-section__title{min-width:0;font-size:var(--au-font-sm);font-weight:750;letter-spacing:.095em;
+.au-section__title{overflow-wrap:anywhere;min-width:0;font-size:var(--au-font-sm);font-weight:750;letter-spacing:.095em;
   color:var(--au-text-soft);text-transform:uppercase;margin:0}
 @container (max-width: 190px){
   .au-section__title{letter-spacing:.03em}
@@ -178,7 +178,7 @@
   animation:au-skeleton 1.3s ease-in-out infinite}
 @keyframes au-skeleton{to{background-position-x:-200%}}
 .au-scroll{min-height:0;min-width:0;overflow:auto}
-@media(max-width:840px){
+@container (max-width:480px){
   .au-panel__header{padding:var(--au-space-2) var(--au-space-3)}
   .au-panel__body{padding:var(--au-space-3)}
   .au-panel__body--flush{padding:0}
@@ -187,4 +187,13 @@
 @media(prefers-reduced-motion:reduce){
   .au-button,.au-input,.au-select,.au-textarea,.au-progress__bar{transition:none}
   .au-spinner,.au-skeleton{animation:none}
+}
+
+@container (max-width: 360px) {
+  .au-panel__header { gap: var(--au-space-2); min-height: 0; }
+  .au-panel__heading { flex-basis: 100%; min-width: 0; }
+  .au-panel__title { white-space: normal; overflow-wrap: anywhere; }
+  .au-panel__actions { justify-content: flex-start; margin: 0; }
+  .au-panel__footer { flex-wrap: wrap; min-height: 0; }
+  .au-empty { min-height: 96px; }
 }

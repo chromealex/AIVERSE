@@ -12,6 +12,7 @@ export const KIND_TITLES: Record<CommandKind, string> = {
 export function parseQuery(raw: string): { text: string; only: CommandKind[] | null } {
   const q = raw.trimStart();
   if (q.startsWith('>')) return { text: q.slice(1).trim(), only: ['command', 'workspace', 'window'] };
+  if (q.startsWith('/')) return { text: q.slice(1).trim(), only: ['window'] };
   if (q.startsWith('@')) return { text: q.slice(1).trim(), only: ['entity'] };
   if (q.startsWith('#')) return { text: q.slice(1).trim(), only: ['asset'] };
   return { text: q.trim(), only: null };
@@ -47,8 +48,8 @@ export function searchCommands(entries: CommandEntry[], raw: string, recent: str
       const r = recent.indexOf(e.id);
       return { e, ok: s >= 0, s: s + (r >= 0 ? 400 - r * 10 : 0) - (e.disabled ? 150 : 0) };
     })
-    .filter(x => x.ok && (text || x.e.kind !== 'entity' && x.e.kind !== 'asset' || recent.includes(x.e.id)));
+    .filter(x => x.ok && (only || text || x.e.kind !== 'entity' && x.e.kind !== 'asset' || recent.includes(x.e.id)));
   return KIND_ORDER.map(kind => ({ kind, title: KIND_TITLES[kind],
     items: scored.filter(x => x.e.kind === kind).sort((a, b) => b.s - a.s || a.e.title.localeCompare(b.e.title))
-      .slice(0, perGroup).map(x => x.e) })).filter(g => g.items.length > 0);
+      .slice(0, only?.length === 1 && kind === 'window' ? undefined : perGroup).map(x => x.e) })).filter(g => g.items.length > 0);
 }
