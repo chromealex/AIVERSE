@@ -1890,11 +1890,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
     const auto method=request.getStr("method");
     // These three staged owners publish their own paired-cursor batch.
     // Keep the legacy dirty-marker wrapper only for operations not yet staged.
-    static const std::set<std::string> assetWrites={"studio.assetTransferCommit",
-        "studio.assetTrashApply","studio.assetTrashBatchApply"};
+    static const std::set<std::string> assetWrites={"studio.assetTrashApply","studio.assetTrashBatchApply"};
     if(ws_.project.dir.empty()||!assetWrites.count(method))return dispatchImplCore(request);
-    if(method=="studio.assetTransferCommit"&&pendingAssetTransfer_&&
-       pendingAssetTransfer_->describe().getStr("source")=="external")return dispatchImplCore(request);
     // This wrapper is also used by explicit agent adapters; do not bypass it.
     try{
         StudioAssetHistoryPublication publication(ws_.project.dir);
@@ -2985,69 +2982,24 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 }
                 studioCheckMapAssetPaths(ws_.project.dir,ws_.map.toJson(),ws_.project.rulesJson,ws_.project.manifest,paths,false);
             }
-            // Preload material document before touching assets, so malformed
-            // JSON cannot trigger a partially completed internal move.
             const bool internal=currentPlan.getStr("source")=="internal";
-            Json library=internal ? editor::loadMaterialLibrary(ws_) : Json::object();
-            std::map<std::string,std::string> oldPathByGuid;
-            if (internal) {
-                StudioAssetCatalog beforeCatalog(ws_.project.dir);
-                beforeCatalog.rebuild();
-                for (const auto& asset:beforeCatalog.all())
-                    if (!asset.directory) oldPathByGuid.emplace(asset.guid,asset.path);
-            }
-            std::size_t repaired=0;
-            // This hook executes while internal file/.meta moves are still
-            // reversible. If the material write throws, apply() reverses
-            // every completed rename before returning an error.
-            const auto repair=[&]() {
-                StudioAssetCatalog afterCatalog(ws_.project.dir);
-                afterCatalog.rebuild();
-                std::map<std::string,std::string> relocated;
-                for (const auto& asset:afterCatalog.all()) {
-                    if (asset.directory) continue;
-                    const auto found=oldPathByGuid.find(asset.guid);
-                    if (found!=oldPathByGuid.end() && found->second!=asset.path)
-                        relocated.emplace("content/"+found->second,"content/"+asset.path);
-                }
-                const std::size_t updates=studioRemapMaterialReferences(library,relocated);
-                if (updates) editor::saveMaterialLibrary(ws_,library,
-                    "Studio Assets: repair material paths after move");
-                repaired=updates;
-            };
-            const std::function<void()> commitHook =
-                internal ? std::function<void()>(repair) : std::function<void()>{};
+            StudioBatchAssetPlan staged;
             std::optional<editor::ProjectHistory::MovePlan> moveHistory;
-            agentHistoryUnsafe_=true;
-            Json result;
-            if(!internal){
-                StudioBatchAssetPlan staged;
-                result=pendingAssetTransfer_->apply(token,decisions,{},&moveHistory,false,&staged);
-                const auto beforeHistory=assetHistory_.version();
-                if(moveHistory){
-                    auto next=assetHistory_;
-                    const auto label=moveHistory->replacement?"Replace assets":"Import assets";
-                    next.recordMove(std::move(*moveHistory),label);
-                    studioApplyHistoryBatch(ws_.project.dir,staged.relocations,staged.documents,staged.movingResources,&assetHistory_,&next);
-                    assetHistory_=std::move(next);assetHistoryPersistenceWarning_.clear();
-                    try{StudioAssetCatalog catalog(ws_.project.dir);catalog.rebuild(false);}
-                    catch(const std::exception& e){assetHistoryPersistenceWarning_="Asset index refresh required: "+std::string(e.what());}
-                }
-                result.set("historyRecorded",Json::fromBool(assetHistory_.version()!=beforeHistory&&assetHistory_.canUndo()&&moveHistory.has_value()));
-                pendingAssetTransfer_.reset();reply.set("result",std::move(result));return reply;
-            }
-            try{result=pendingAssetTransfer_->apply(token,decisions,commitHook,&moveHistory,internal);}
-            catch(...){assetHistory_.reset();throw;}
+            auto result=pendingAssetTransfer_->apply(token,decisions,{},&moveHistory,internal,&staged);
             const auto beforeHistory=assetHistory_.version();
             if(moveHistory){
-                const std::string label=moveHistory->replacement?"Replace assets":internal?"Move assets":"Import assets";
-                assetHistory_.recordMove(std::move(*moveHistory),label);
+                auto next=assetHistory_;
+                const auto label=moveHistory->replacement?"Replace assets":internal?"Move assets":"Import assets";
+                next.recordMove(std::move(*moveHistory),label);
+                studioApplyHistoryBatch(ws_.project.dir,staged.relocations,staged.documents,staged.movingResources,&assetHistory_,&next);
+                assetHistory_=std::move(next);assetHistoryPersistenceWarning_.clear();agentHistoryUnsafe_=true;
+                try{StudioAssetCatalog catalog(ws_.project.dir);catalog.rebuild(false);}
+                catch(const std::exception& e){assetHistoryPersistenceWarning_="Asset index refresh required: "+std::string(e.what());}
+                if(internal&&result.getInt("repairedMaterialReferences")>0)
+                    ws_.note({editor::Change::Rules,0,0,-1,-1,-1,"Studio Assets: repair material paths after move"});
             }
-            else if(result["files"].size()!=0||result["issues"].size()!=0)assetHistory_.reset();
             result.set("historyRecorded",Json::fromBool(assetHistory_.version()!=beforeHistory&&assetHistory_.canUndo()&&moveHistory.has_value()));
-            pendingAssetTransfer_.reset();
-            if (internal) result.set("repairedMaterialReferences",num(int64_t(repaired)));
-            reply.set("result",std::move(result));
+            pendingAssetTransfer_.reset();reply.set("result",std::move(result));
         } else if (method == "studio.assetByGuid") {
             if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
             const std::string guid=params.getStr("guid");
