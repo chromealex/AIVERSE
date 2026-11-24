@@ -110,7 +110,7 @@ std::vector<Entity> GameCore::effectTargets(Simulation& sim, const EffectDef& e,
     case Shape::Target:
         if (f.self && !f.enemies && !f.allies) { if (w.alive(ctx.caster) && w.has<Unit>(ctx.caster) && targetTagsMatch(rules_.types[w.get<Unit>(ctx.caster).type].tags, f.tags, f.ignoreTags)) out.push_back(ctx.caster); }
         else if (w.alive(ctx.target) && w.has<Unit>(ctx.target)) {
-            if ((legacyKind(e.kind) && !f.ignoreTags && !f.tags) || filterOk(sim, f, ctx.target, ctx.owner, ctx.caster)) out.push_back(ctx.target);
+            if (legacyKind(e.kind) ? targetTagsMatch(rules_.types[w.get<Unit>(ctx.target).type].tags, f.tags, f.ignoreTags) : filterOk(sim, f, ctx.target, ctx.owner, ctx.caster)) out.push_back(ctx.target);
         }
         break;
     case Shape::Group: {
