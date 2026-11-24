@@ -450,7 +450,7 @@ void Editor::registerGuiOps() {
             r.set("horizon",Json::fromBool(terraWeaveForestPreview_.horizon()));
             r.set("nature",Json::fromBool(nature.enabled));
             r.set("grassMeadow",Json::string(nature.grassMeadow));
-            r.set("grassPatches",Json::number(int64_t(nature.grassPatches())));
+            r.set("grassPatches",Json::number(int64_t(physisNaturePreview_.grassPatches())));
             r.set("summary",Json::string("Ветер: "+std::to_string(int(speed))+" м/с"));
             return r;
         });
