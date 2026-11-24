@@ -34,12 +34,16 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
                                EvolveAreaInstaller areaInstaller=nullptr,
                                EvolveAreaHydrator areaHydrator=nullptr,
                                GranularInstaller granularInstaller=nullptr,
-                               MorphGravityInstaller morphGravityInstaller=nullptr) {
+                               MorphGravityInstaller morphGravityInstaller=nullptr,
+                               AetherStratificationInstaller aetherInstaller=nullptr) {
+    if(requested.aetherStratification&&!aetherInstaller)
+        throw std::invalid_argument("World Processes: AETHER stratification needs a native spatial owner");
     const Json& entities=map["entities"];
     if(!entities.isArray()) {
         if(!placed.empty())throw std::invalid_argument("World Processes: map.entities missing");
         MapHydration enabled;
         enabled.extra=requested;
+        if(requested.aetherStratification)aetherInstaller(sim);
         installSuite(sim,requested,trails,crowdInstaller,areaInstaller,granularInstaller,morphGravityInstaller); // explicitly enabled native runtime, empty map
         return enabled;
     }
@@ -264,6 +268,7 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
     // Explicit native-module flags may also enable an empty category: its
     // producer can create ECS components after setup. An authored category
     // always enables the same system, without duplicate registration.
+    totals.extra.aetherStratification=requested.aetherStratification;
     totals.extra.morphGravity |= requested.morphGravity;
     totals.extra.morph |= requested.morph||totals.extra.morphGravity;
     if(totals.extra.morphGravity&&!morphGravityInstaller)
@@ -279,7 +284,8 @@ inline MapHydration hydrateMap(Simulation& sim,const Json& map,
     if(totals.zones||totals.portals||totals.emitters||totals.receivers)
         echo::install(sim);
     if(totals.members||totals.bonds)fracture::install(sim);
-    if(totals.gasCells||totals.ducts||totals.fluxes)aether::install(sim);
+    if(requested.aetherStratification)aetherInstaller(sim);
+    else if(totals.gasCells||totals.ducts||totals.fluxes)aether::install(sim);
 
     for(const auto& part:basic){
         std::string error;
