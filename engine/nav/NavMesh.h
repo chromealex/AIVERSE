@@ -159,6 +159,12 @@ public:
         return true;
     }
     uint64_t revision() const { return revision_; }
+    // Only after rebuilding the exact source at a deterministic snapshot
+    // barrier; retain the saved revision used by persisted path cursors.
+    bool restoreRebuiltRevision(uint64_t revision){
+        if(!built_||anyDirty_||!revision)return false;
+        revision_=revision;return true;
+    }
     size_t lastVisits() const { return lastVisits_; }   // rectangles the last rectangle search expanded (diagnostics)
 
     // Tiles (classification, statistics). merged: rectangles the merge produced (also for coarse tiles).

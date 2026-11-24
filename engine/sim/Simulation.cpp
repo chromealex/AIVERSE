@@ -111,8 +111,11 @@ void Simulation::present(std::vector<SimEvent> events) {
         if (sys.name.size() >= 8 && sys.name.compare(sys.name.size() - 8, 8, ".collect") == 0) sys.fn(*this);
 }
 
-void Simulation::step() {
-    if(!readyToStep())return;
+void Simulation::step() { (void)stepWithInput({}); }
+
+bool Simulation::stepWithInput(const std::function<void()>& prepareInput) {
+    if(!readyToStep())return false;
+    if(prepareInput)prepareInput();
     events_.clear();
 
     auto it = pending_.find(tick_);
@@ -147,6 +150,7 @@ void Simulation::step() {
         }
     }
     ++tick_;
+    return true;
 }
 
 int Simulation::advance(double realSeconds, int maxTicks) {

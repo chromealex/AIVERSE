@@ -49,3 +49,9 @@ static_assert(std::is_same_v<decltype(aiverse::building::BuildingWorldRuntime::i
     std::declval<aiverse::scene::SceneCollisionNamespaces&>(),uint16_t{},
     std::declval<aiverse::building::BuildingWorldRuntime::OwnsActor>())),
     std::shared_ptr<aiverse::building::BuildingWorldRuntime>>);
+
+#include "engine/buildings/BuildingReplicaRenderScene.h"
+static_assert(!std::is_copy_constructible_v<aiverse::building::BuildingReplicaRenderScene>);
+
+#include "engine/buildings/BuildingAgentLocomotion.h"
+static_assert(std::is_copy_constructible_v<aiverse::building::BuildingAgentRoute>);

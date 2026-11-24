@@ -99,6 +99,12 @@ public:
         acceptedSequence_[cmd.actorId]=cmd.sequence;
         return {true,cmd.sequence,{}};
     }
+    const std::map<uint64_t,uint64_t>& acceptedSequences()const noexcept{return acceptedSequence_;}
+    bool restoreSequences(const std::map<uint64_t,uint64_t>& saved){
+        if(saved.size()>65536)return false;
+        for(const auto& [id,seq]:saved)if(!seq||!Entity::fromPacked(id).valid())return false;
+        acceptedSequence_=saved;return true;
+    }
     void clearActor(uint64_t actorId){
         acceptedSequence_.erase(actorId);
     }

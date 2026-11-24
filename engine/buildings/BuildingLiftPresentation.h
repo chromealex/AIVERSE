@@ -113,7 +113,7 @@ inline BuildingLiftVisualAssets makeBuildingLiftVisualAssets(
 }
 
 inline BuildingLiftPresentationFrame buildingLiftVisualFrame(
-    const BuildingCirculationHost& host,const BuildingLiftDoorOwner& doors,
+    const BuildingCirculationHost& host,const std::vector<BuildingLiftDoorPose>& doors,
     float buildingW,float buildingD,Vec3 origin,uint32_t yaw){
     BuildingLiftPresentationFrame frame;
     if(yaw>3||!std::isfinite(buildingW)||!std::isfinite(buildingD)||
@@ -129,7 +129,7 @@ inline BuildingLiftPresentationFrame buildingLiftVisualFrame(
                 pose.z0,buildingW,buildingD,origin,yaw),
             yaw,controller.snapshot().revision});
     }
-    for(const auto& door:doors.poses()){
+    for(const auto& door:doors){
         auto it=host.lifts().find(door.key.feature);
         if(it==host.lifts().end()){
             frame.error="Missing lift controller for authored landing door";
@@ -163,5 +163,24 @@ inline BuildingLiftPresentationFrame buildingLiftVisualFrame(
     }
     frame.valid=true;
     return frame;
+}
+// Pure authored landing layout for remote renderers; no SpatialWorld
+// or fake physical scene is created on a replica client.
+inline std::vector<BuildingLiftDoorPose> buildingLiftVisualDoorLayout(
+                        const BuildingCirculationHost& host){
+    std::vector<BuildingLiftDoorPose> result;
+    for(const auto& [feature,lift]:host.lifts()){
+        const auto& pose=lift.platformPose();
+        for(uint32_t floor=0;floor<lift.floorCount();++floor)
+            if(auto height=lift.floorHeightMm(floor))
+                result.push_back({{feature,floor},lift.readyAt(floor),
+                    pose.x0,pose.z0,pose.x1,*height,lift.snapshot().revision});
+    }
+    return result;
+}
+inline BuildingLiftPresentationFrame buildingLiftVisualFrame(
+    const BuildingCirculationHost& host,const BuildingLiftDoorOwner& doors,
+    float buildingW,float buildingD,Vec3 origin,uint32_t yaw){
+    return buildingLiftVisualFrame(host,doors.poses(),buildingW,buildingD,origin,yaw);
 }
 } // namespace aiverse::building

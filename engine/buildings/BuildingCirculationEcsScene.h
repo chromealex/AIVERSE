@@ -230,6 +230,12 @@ public:
         return encodeBuildingLiftStateFrame(frame,out,error);
     }
 
+    std::map<uint64_t,uint64_t> captureCommandSequences()const{
+        return commandAuthority_?commandAuthority_->acceptedSequences():std::map<uint64_t,uint64_t>{};
+    }
+    bool restoreCommandSequences(const std::map<uint64_t,uint64_t>& saved){
+        return commandAuthority_?commandAuthority_->restoreSequences(saved):saved.empty();
+    }
     bool captureCheckpoint(BuildingCirculationCheckpoint& out)const{
         if(!ecs_||!scene_.attached()||scene_.faulted()||!lastPublishComplete_)
             return false;

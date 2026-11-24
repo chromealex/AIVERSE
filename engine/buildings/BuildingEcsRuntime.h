@@ -212,7 +212,7 @@ public:
                             BuildingDualLeafOwner& physics,
                             world::SpatialWorld& spatial,
                             BuildingGraphChangeRouter& router,
-                            std::string* error=nullptr){
+                            std::string* error=nullptr,bool preserveMotion=false){
         auto reject=[&](const char* reason){
             if(error)*error=reason;
             return false;
@@ -234,7 +234,8 @@ public:
             const auto& pose=poses[i];
             if(expected.socketId!=pose.socketId||
                expected.physicalPermille!=pose.physicalPermille||
-               expected.open!=pose.open||pose.moving)
+               expected.open!=pose.open||
+               (preserveMotion?(expected.moving!=pose.moving||expected.revision!=pose.revision):pose.moving))
                 return reject("Restored collider position or phase differs");
         }
         const auto owned=physics.ownedColliderIds();

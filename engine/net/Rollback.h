@@ -84,7 +84,7 @@ public:
 
 private:
     bool canStep() const { return sim_.tick() < confirmedNext_ + window_; }
-    void stepTick(bool resim);
+    bool stepTick(bool resim);
     void rollback();
     uint32_t submitLocal(Command&& c);
 

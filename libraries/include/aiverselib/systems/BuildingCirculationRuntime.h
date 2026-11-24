@@ -149,6 +149,10 @@ public:
     const BuildingLiftSnapshot& snapshot()const noexcept{return state_;}
     const BuildingLiftPlatformPose& platformPose()const noexcept{return pose_;}
     uint32_t floorCount()const{return uint32_t(floorsMm_.size());}
+    std::optional<int64_t> floorHeightMm(uint32_t floor)const{
+        if(floor>=floorsMm_.size())return {};
+        return floorsMm_[floor];
+    }
     // Consumed by the existing ECS/physics owner, after one or more ticks.
     // A continuous series of movements coalesces to old -> newest pose.
     std::optional<BuildingLiftPlatformMotion> takePlatformMotion(){

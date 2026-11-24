@@ -24,6 +24,12 @@ struct BuildingDualLeafState {
     bool moving=false;
     BuildingDualLeafIds ids{};
 };
+struct BuildingLeafMotionCheckpoint {
+    std::string socketId;
+    uint64_t poseRevision=0;
+    uint32_t domains=0;
+    bool targetOpen=false,moving=false;
+};
 struct BuildingDualLeafStep {
     bool committed=false,graphsAcknowledged=false,finished=false;
     uint64_t revision=0;
@@ -252,6 +258,34 @@ public:
         return result;
     }
 
+    bool captureMotionCheckpoint(std::vector<BuildingLeafMotionCheckpoint>& out)const{
+        if(!attached_||faulted_||pending_)return false;
+        std::vector<BuildingLeafMotionCheckpoint> next;
+        for(const auto& [id,e]:entries_)
+            next.push_back({id,e.state.pose.revision,e.domains,e.state.targetOpen,e.state.moving});
+        out=std::move(next);return true;
+    }
+    // The caller has already restored exact physical positions and
+    // reserved IDs. Rehydrate command target and per-leaf revision without
+    // moving a collider, advancing time, or allocating a model.
+    bool restoreMotionCheckpoint(const std::vector<BuildingLeafMotionCheckpoint>& saved){
+        if(!attached_||faulted_||pending_||saved.size()!=entries_.size())return false;
+        std::set<std::string> seen;size_t moving=0;
+        for(const auto& item:saved){
+            const auto it=entries_.find(item.socketId);
+            if(it==entries_.end()||!seen.insert(item.socketId).second||
+               item.poseRevision>revision_||(item.domains&~kBuildingGraphAll)||
+               (item.moving&&(!item.domains||++moving>1||
+                    it->second.state.position==(item.targetOpen?1000:0))))return false;
+        }
+        for(const auto& item:saved){
+            auto& e=entries_.at(item.socketId);
+            e.state.pose.revision=item.poseRevision;e.domains=item.domains;
+            e.state.targetOpen=item.targetOpen;e.state.moving=item.moving;
+            e.state.pose.moving=item.moving;
+        }
+        return true;
+    }
     uint64_t sceneId()const noexcept{return sceneId_;}
     bool attached()const noexcept{return attached_;}
     bool moving()const{

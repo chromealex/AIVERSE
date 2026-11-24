@@ -12,8 +12,8 @@ inline bool buildingPhysisSweptOccupied(
     const world::Bounds& second,
     const physics::QueryFilter& filter={}){
     const auto occupied=[&](const world::Bounds& b){
-        const Vec3 mid=(b.min+b.max)/2;
-        const Vec3 half=(b.max-b.min)/2;
+        const Vec3 mid=(b.min+b.max)/2_fx;
+        const Vec3 half=(b.max-b.min)/2_fx;
         return !physicsScene.overlapBox(
             {float(mid.x.toDouble()),float(mid.y.toDouble()),
              float(mid.z.toDouble())},
