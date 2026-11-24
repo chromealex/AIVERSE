@@ -696,6 +696,7 @@ bool StudioSession::splineMove(const std::string& id, double x, double z, std::s
     if(!std::isfinite(x)||!std::isfinite(z)){if(error)*error="invalid position";return false;}
     syncHistoryLabels();
     const auto before=ws_.map.historyMark();
+    editor::MapDoc::CompoundEdit batch(ws_.map);
     Json r;std::string label;
     if(id.rfind("road:",0)==0){
         Json p=Json::object();p.set("node",num(int64_t(std::stoll(id.substr(5)))));
@@ -723,6 +724,7 @@ bool StudioSession::splineMove(const std::string& id, double x, double z, std::s
         r=ws_.call("water_set",p,"studio");label="Move river point";
     } else {if(error)*error="unknown handle";return false;}
     if(r.has("error")){if(error)*error=r.getStr("error");return false;}
+    batch.commit();
     labelNewHistory(before,label);
     return true;
 }
