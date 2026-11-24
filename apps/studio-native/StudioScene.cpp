@@ -1629,13 +1629,13 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         else {renderCaveGlobe(framebufferWidth,framebufferHeight,doc);return;}
     }
     cavernsPreview_.syncDocument(*device_,doc,projectPath);
-    std::optional<editor::planet_caves::Region> selectedChart;
+    std::optional<terraweave::caverns::CavePlanetAnchor> selectedChart;
     std::string chartIdentity;
     if(map.planet())try{
         const auto id=editor::planet_caves::activeRegionId(map);
         if(!id.empty()){
-            selectedChart=editor::planet_caves::read(map);
-            chartIdentity=id+":"+terraweave::caverns::cavePlanetAnchorToJson(selectedChart->anchor).dump(-1);
+            selectedChart=editor::planet_caves::readAnchor(map);
+            chartIdentity=id+":"+terraweave::caverns::cavePlanetAnchorToJson(*selectedChart).dump(-1);
         }
     }catch(const std::exception&){selectedChart.reset();chartIdentity.clear();}
     const bool planetaryChart=selectedChart.has_value();
@@ -1804,7 +1804,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         camera_.target = {map.w * .5f, 0.0f, map.h * .5f};
         camera_.distance = std::clamp(float(std::max(map.w, map.h)) * 1.4f, 16.0f, 100000.0f);
         if(planetaryChart){
-            const auto cap=selectedChart->anchor.halfExtentCm;
+            const auto cap=selectedChart->halfExtentCm;
             camera_.target={0,0,0};camera_.distance=std::clamp(float(cap)*.035f,3.f,100000.f);
         }else if(fpsProject && lightingModel_) {
             const auto lo=lightingModel_->boundsMin,hi=lightingModel_->boundsMax;
