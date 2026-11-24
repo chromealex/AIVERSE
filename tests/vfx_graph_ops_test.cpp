@@ -145,9 +145,12 @@ int main() {
     checkGraphRequirement(!fs::exists(root/"shaders"),"shader draft wrote files");
     auto badBatch=shaderDraft;badBatch.member("edits").push(Json::parse(R"({"action":"add","value":{"id":"tint","op":"constant"}})"));
     checkGraphRequirement(call("graph_edit",badBatch).has("error"),"duplicate ID batch accepted");
-    const auto motionDraft=Json::parse(R"({"domain":"motionweave","graph":{"nodes":[{"id":"bind","kind":"bind"}],"output":"bind"},"edits":[{"action":"addState","value":{"id":"idle","output":"bind","transitions":[]}},{"action":"setInitial","node":"idle"},{"action":"addTransition","state":"idle","value":{"to":"idle","fade":0.2,"when":[]}}]})");
+    const auto motionDraft=Json::parse(R"({"domain":"motionweave","graph":{"nodes":[{"id":"bind","kind":"bind"}],"output":"bind"},"edits":[{"action":"addState","value":{"id":"idle","output":"bind"}},{"action":"setInitial","node":"idle"},{"action":"addTransition","state":"idle","value":{"to":"idle","fade":0.2,"when":[]}}]})");
     const auto motionEdited=call("graph_edit",motionDraft);
     checkGraphRequirement(motionEdited.getBool("ok")&&motionEdited["result"]["graph"]["states"][size_t(0)]["transitions"].size()==1,"animation state draft failed");
+    checkGraphRequirement(!motionDraft["graph"].has("states"),"motion edit mutated input");
+    auto invalidMotion=motionDraft;invalidMotion.member("graph").set("states",Json::object());
+    checkGraphRequirement(call("graph_edit",invalidMotion).has("error"),"non-array state collection accepted");
     checkGraphRequirement(!motionEdited["result"].getBool("valid"),"model-less motion graph unexpectedly validated");
     checkGraphRequirement(!fs::exists(root/"animations"),"animation draft wrote files");
     const auto modelDraft=Json::parse(R"({"domain":"modeling","document":{"version":1,"parameters":{},"materials":[],"nodes":[{"id":"root"}],"clips":[],"skins":[],"graph":null},"edits":[{"op":"put","collection":"nodes","id":"body","value":{"parent":"root"}},{"op":"parameters","values":{"size":1}}]})");
