@@ -757,14 +757,14 @@ void vmRun(uint stage,inout Particle p,
         return;
     }
     for(uint i=0u;i<vmProgram.statementCount;++i) {
-        const VmStatement s=vmProgram.statements[i];
+        VmStatement s=vmProgram.statements[i];
         if(s.stage!=stage)continue;
         float value=0.0;
         if(!vmEvaluate(s,p,params,attrs,dt,value)) {
             atomicAdd(vmErrors,1u);
             continue;
         }
-        const float before=vmRead(s.target,p,params,attrs,dt);
+        float before=vmRead(s.target,p,params,attrs,dt);
         float next=value;
         if(s.action==1u)next=before+value;
         else if(s.action==2u)next=before+value*dt;

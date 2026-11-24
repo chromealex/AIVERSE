@@ -5,17 +5,19 @@ on:
     branches:
       - feature/spectrafx-generic-cue-queue
       - feature/spectrafx-significance-data-20261123
+      - feature/spectrafx-html5-data-interfaces-20261123
     paths:
       - ".github/workflows/spectrafx-validation.yml"
       - "tools/spectrafx/**"
       - "CMakeLists.txt"
       - "engine/fx/**"
-      - "engine/gfx/Gfx.h"
-      - "engine/gfx/metal/GfxMetal.mm"
+      - "engine/gfx/**"
       - "apps/client/ClientFx*"
       - "apps/fps/client.cpp"
       - "apps/editor/windows/SpectraFx*"
       - "tests/spectrafx*"
+      - "tests/vfx*"
+      - "tests/render/vulkan*"
   workflow_dispatch:
 
 permissions:

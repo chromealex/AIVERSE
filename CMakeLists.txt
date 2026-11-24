@@ -4374,6 +4374,13 @@ if(AIVERSE_BUILD_TESTS)
     target_link_libraries(aiverse_vfx_gpu_tests PRIVATE aiverse_fx)
     add_test(NAME vfx_gpu_backend COMMAND aiverse_vfx_gpu_tests)
     set_tests_properties(vfx_gpu_backend PROPERTIES LABELS "SpectraFX")
+    if(TARGET aiverse_gfx_vulkan)
+        add_executable(aiverse_spectrafx_vulkan_allocator_test tests/spectrafx_vulkan_allocator.cpp)
+        target_include_directories(aiverse_spectrafx_vulkan_allocator_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+        target_link_libraries(aiverse_spectrafx_vulkan_allocator_test PRIVATE aiverse_fx aiverse_gfx_vulkan)
+        add_test(NAME spectrafx_vulkan_allocator COMMAND aiverse_spectrafx_vulkan_allocator_test)
+        set_tests_properties(spectrafx_vulkan_allocator PROPERTIES LABELS "SpectraFX;VulkanGPU;RHI" SKIP_RETURN_CODE 77 TIMEOUT 300)
+    endif()
 endif()
 
 # PHYSIS authoritative environment simulation is independent of all genre modules.
