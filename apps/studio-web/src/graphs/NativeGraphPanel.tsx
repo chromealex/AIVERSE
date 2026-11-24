@@ -2,7 +2,7 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import {invoke,nativeConnected} from '../bridge';
 import {StudioAlert,StudioButton,StudioEmptyState,StudioInput,StudioPanel,StudioSection,StudioSelect,StudioTextarea} from '../ui';
 import GraphCanvas from './GraphCanvas';
-import GraphDiagnostics from './GraphDiagnostics';
+import GraphDiagnosticsPanel from './GraphDiagnosticsPanel';
 import GraphRuntimeProbePanel from './GraphRuntimeProbePanel';
 import GraphLiveSnapshotPanel from './GraphLiveSnapshotPanel';
 import GraphDebugSessionPanel from './GraphDebugSessionPanel';
@@ -150,7 +150,7 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
    <GraphRuntimeProbePanel domain={domain} graph={draft} disabled={busy}/>
    <GraphLiveSnapshotPanel domain={domain} projectPath={projectPath}/>
    <GraphDebugSessionPanel domain={domain} graph={draft} projectPath={projectPath} disabled={busy}/>
-   <GraphDiagnostics view={view} policy={fx?{cycles:'reject',cycleGroups:['exec','data']}:{cycles:mode==='states'?'allow':'reject'}}/>
+   <GraphDiagnosticsPanel view={view} policy={fx?{cycles:'reject',cycleGroups:['exec','data']}:{cycles:mode==='states'?'allow':'reject'}}/>
    {!fx&&<AnimationParameters doc={draft} disabled={busy} onEdit={edit}/>}
    {entry&&<StudioSection title={'Selected: '+active}>
     {fx?<><pre>{JSON.stringify(entry,null,2)}</pre>

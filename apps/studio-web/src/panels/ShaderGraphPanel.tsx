@@ -6,7 +6,7 @@ import { addShaderGraphNode, removeShaderGraphNode, shaderNodeCatalog, connectSh
 import type {ShaderClipboard} from './shaderGraphLayout';
 import GraphCanvas from '../graphs/GraphCanvas';
 import GraphGpuProfilePanel from '../graphs/GraphGpuProfilePanel';
-import GraphDiagnostics from '../graphs/GraphDiagnostics';
+import GraphDiagnosticsPanel from '../graphs/GraphDiagnosticsPanel';
 import {shaderAdapters,shaderProjection} from '../graphs/shaderAdapter';
 import type {PortRef} from '../graphs/graphGeometry';
 import {samePort} from '../graphs/graphGeometry';
@@ -205,7 +205,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
         {id:'template',label:'Insert tint template',disabled:!template,run:insertTemplate}
        ]}
        onMove={(id,x,y)=>{if(draft)editDraft(shaderAdapters.get(draft.domain??'material')?.move(draft,id,x,y)??draft)}}/>
-      <GraphDiagnostics view={view} policy={{cycles:'reject'}}/>
+      <GraphDiagnosticsPanel view={view} policy={{cycles:'reject'}}/>
       <GraphGpuProfilePanel projectPath={projectPath}/>
       {pendingOutput&&<StudioButton size="sm" onClick={()=>setPendingOutput(null)}>Cancel connection from {pendingOutput.node}</StudioButton>}
       {activeNode&&draft&&<StudioSection title={'Node: '+activeNode.id}>

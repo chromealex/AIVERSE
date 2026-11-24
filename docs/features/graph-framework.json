@@ -35,7 +35,7 @@
     "apps/studio-web/src/graphs/strataAnalysis.ts",
     "apps/studio-web/src/graphs/StrataAnalysisPanel.tsx",
     "apps/studio-web/src/graphs/graphDiagnostics.ts",
-    "apps/studio-web/src/graphs/GraphDiagnostics.tsx",
+    "apps/studio-web/src/graphs/GraphDiagnosticsPanel.tsx",
     "apps/editor/core/GraphOps.h",
     "apps/editor/core/Workspace.cpp",
     "tools/mcp/audit_registry.py",
@@ -223,7 +223,7 @@
     },
     "studio": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification.",
+      "note": "Pending implementation or actual verification. Stage 38AL: native Studio launch user-reported; stale web bundle lacked graph button. Fresh npm build failed with 9 TS errors. Rename diagnostic component to avoid case-insensitive extensionless resolution collision; explicitly type effective material as MaterialData. Full rebuild pending.",
       "evidence": []
     },
     "inspector": {
