@@ -58,7 +58,11 @@ struct StudioBatchAssetPlan {
     std::vector<StudioBatchRelocation> relocations;
     std::vector<editor::ProjectFileEdit> documents;
 };
-// Coordinator supports disjoint relocation groups and existing document edits.
+// Plan ordinary move chains from retained byte identities. Stationary model
+// repairs are composed and checked against the complete projected graph.
+StudioBatchAssetPlan studioPlanAssetMoveChain(const std::filesystem::path& project,
+    const std::vector<editor::ProjectHistory::MovePlan>& ordered,bool redo);
+// Coordinator supports exact endpoint chains and disjoint document edits.
 void studioApplyHistoryBatch(const std::filesystem::path& project,
     const std::vector<StudioBatchRelocation>& relocations,
     const std::vector<editor::ProjectFileEdit>& documents);

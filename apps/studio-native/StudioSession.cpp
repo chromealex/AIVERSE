@@ -1225,7 +1225,7 @@ void StudioSession::applyAgentBatch(bool redo,const std::string& expectedToken){
     if(!preview.getBool("available")||expectedToken.empty()||preview.getStr("token")!=expectedToken)
         throw std::runtime_error("Batch preview changed or unavailable: "+preview.getStr("reason"));
     // Stage all owner state before touching the filesystem. The outer batch
-    // journal coordinates disjoint relocations with the existing-file journal.
+    // journal coordinates exact endpoint chains with existing-file edits.
     std::optional<editor::MapDoc> stagedMap;
     std::optional<editor::Project> stagedProject;
     std::optional<editor::ProjectHistory> stagedAssets;
@@ -1233,6 +1233,16 @@ void StudioSession::applyAgentBatch(bool redo,const std::string& expectedToken){
     HistoryFileBatch files;
     std::vector<StudioBatchRelocation> relocations;
     std::set<std::string> relocationEndpoints;
+    std::vector<editor::ProjectHistory::MovePlan> ordinaryMoves;
+    bool ordinaryChain=true;
+    {
+        auto probe=assetHistory_;
+        for(const auto& row:preview["steps"].items())if(row.getStr("scope")=="assets"){
+            const auto& entry=probe.next(redo);
+            if(!entry.move||entry.move->quarantine||entry.move->replacement||entry.move->created)ordinaryChain=false;
+            probe.advance(redo);
+        }
+    }
     std::vector<std::pair<std::string,bool>> referencePaths;
     std::vector<std::pair<std::string,bool>> removedPaths;
     for(const auto& row:preview["steps"].items()){
@@ -1248,6 +1258,21 @@ void StudioSession::applyAgentBatch(bool redo,const std::string& expectedToken){
             const auto& entry=stagedAssets->next(redo);
             if(entry.move){
                 const auto& move=*entry.move;StudioBatchAssetPlan staged;
+                if(ordinaryChain){
+                    ordinaryMoves.push_back(move);
+                    const auto& before=redo?move.materialsBefore:move.materialsAfter;
+                    const auto& after=redo?move.materialsAfter:move.materialsBefore;
+                    const auto material=std::filesystem::path(ws_.project.dir)/"materials.json";
+                    if(bool(before)!=bool(after)||bool(before)!=std::filesystem::exists(material))
+                        throw std::runtime_error("Material topology changed since move");
+                    if(before)files.append({{material,*before,*after}});
+                    for(size_t i=0;i<move.files.size();i+=2){
+                        const auto& f=move.files[i];referencePaths.emplace_back(f.from,f.directory);
+                        referencePaths.emplace_back(f.to,f.directory);
+                    }
+                    stagedAssets->advance(redo);
+                    continue;
+                }
                 const auto check=[&]{
                     std::vector<std::pair<std::string,bool>> paths;
                     const auto materials=editor::loadMaterialLibrary(ws_);
@@ -1282,13 +1307,18 @@ void StudioSession::applyAgentBatch(bool redo,const std::string& expectedToken){
             stagedAssets->advance(redo);
         }else throw std::runtime_error("Unknown batch owner");
     }
+    if(!ordinaryMoves.empty()){
+        auto chain=studioPlanAssetMoveChain(ws_.project.dir,ordinaryMoves,redo);
+        relocations=std::move(chain.relocations);files.append(chain.documents);
+        studioCheckMapAssetPaths(ws_.project.dir,ws_.map.toJson(),ws_.project.rulesJson,ws_.project.manifest,referencePaths,false);
+    }
     // References must be safe in both the original and the prepared target
     // owner state. This deliberately refuses dependencies that would require
     // interleaving a map/rules write with a relocation.
     if(!referencePaths.empty()){
         const auto& map=stagedMap?*stagedMap:ws_.map;
         const auto& project=stagedProject?*stagedProject:ws_.project;
-        studioCheckMapAssetPaths(project.dir,map.toJson(),project.rulesJson,project.manifest,referencePaths);
+        studioCheckMapAssetPaths(project.dir,map.toJson(),project.rulesJson,project.manifest,referencePaths,ordinaryMoves.empty());
     }
     auto plan=files.plan(); // validate EVERY exact on-disk baseline before writes
     for(const auto& edit:plan)if(edit.path.filename()=="materials.json"){

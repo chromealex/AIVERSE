@@ -2,6 +2,7 @@
 #include "apps/studio-native/StudioContentDirectory.h"
 #include "apps/studio-native/StudioAssetReferences.h"
 #include "apps/studio-native/StudioMoveJournal.h"
+#include "apps/studio-native/StudioHistoryCoordinator.h"
 #include "apps/editor/core/ProjectDocumentJournal.h"
 #include "engine/pack/Sha256.h"
 #include <algorithm>
@@ -1765,6 +1766,8 @@ BatchTimeline batchTimeline(const fs::path& root,const std::vector<StudioBatchRe
     simulated=timeline.initial;timeline.phases.push_back(simulated);
     for(const auto& m:moves){
         simulated[m.to]=simulated[m.from];simulated[m.from]="";
+        if(std::find(timeline.phases.begin(),timeline.phases.end(),simulated)!=timeline.phases.end())
+            throw std::runtime_error("Ambiguous coordinated relocation cycle");
         timeline.phases.push_back(simulated);
     }
     return timeline;
@@ -1790,6 +1793,10 @@ void validateBatchDocuments(const fs::path& root,const BatchTimeline& timeline,
         const auto rel=edit.path.lexically_relative(root).generic_string();
         (void)editor::project_file_detail::safeTarget(root,rel);
         if(!unique.insert(rel).second)throw std::runtime_error("Duplicate coordinated document");
+        if(!edit.tailDigest.empty()||edit.tailBytes){
+            if(!rel.starts_with("content/")||!studioStreamingResource(edit))throw std::runtime_error("Invalid coordinated streaming resource");
+            studioValidateModelRepairBytes(edit);
+        }
         for(const auto& [endpoint,identity]:timeline.initial){
             (void)identity;if(batchOverlap(rel,endpoint))throw std::runtime_error("Document overlaps relocation; navigate separately");
         }
@@ -1812,11 +1819,11 @@ void reverseBatch(const fs::path& root,const fs::path& folder,
     validateBatchDocuments(root,timeline,docs);
     std::vector<editor::ProjectFileEdit> reverse;
     for(const auto& f:docs){
-        const auto actual=editor::readProjectFileBytes(f.path);
-        if(actual!=f.before&&actual!=f.after)throw std::runtime_error("Coordinated document recovery conflict: "+f.path.string());
-        if(actual!=f.before)reverse.push_back({f.path,actual,f.before});
+        if(studioResourceMatches(f.path,f))continue;
+        if(!studioResourceMatches(f.path,f,true))throw std::runtime_error("Coordinated document recovery conflict: "+f.path.string());
+        auto undo=f;std::swap(undo.before,undo.after);reverse.push_back(std::move(undo));
     }
-    editor::applyProjectFileEdits(root,reverse);
+    StudioMoveJournal(root).applyResources(reverse,true);
     for(size_t i=phase;i>0;--i){
         const auto& m=moves[i-1];
         const auto from=batchPath(root,m.to),to=batchPath(root,m.from);
@@ -1828,6 +1835,81 @@ void reverseBatch(const fs::path& root,const fs::path& folder,
     StudioMoveJournal::renamePath(folder/"pending.json",folder/"rolledback.json");
     retireBatch(folder);
 }
+}
+StudioBatchAssetPlan studioPlanAssetMoveChain(const fs::path& project,
+    const std::vector<editor::ProjectHistory::MovePlan>& ordered,bool redo){
+    const auto root=fs::canonical(project);
+    if(ordered.empty()||ordered.size()>64)throw std::runtime_error("Invalid ordinary move chain count");
+    StudioBatchAssetPlan out;
+    HistoryFileBatch repairs;
+    const auto bytesDigest=[](const std::string& bytes){
+        pack::Sha256 hash;
+        const auto field=[&](const std::string& value){
+            const auto prefix=std::to_string(value.size())+":";
+            hash.update(prefix.data(),prefix.size());hash.update(value.data(),value.size());
+        };
+        field("file-v1");field(std::to_string(bytes.size()));hash.update(bytes.data(),bytes.size());
+        const auto digest=hash.finish();return pack::toHex(digest.data(),digest.size());
+    };
+    std::set<std::string> assetEndpoints;
+    for(const auto& plan:ordered){
+        validateHistoryMove(root,plan);
+        if(plan.quarantine||plan.replacement||plan.created)
+            throw std::runtime_error("Ordinary move chain cannot include Trash or replacement");
+        for(size_t i=0;i<plan.files.size();++i){
+            const auto& f=plan.files[i];
+            if(!f.digestAfter.empty())throw std::runtime_error("Moved model byte repair requires a separate history transaction");
+            const auto from="content/"+(redo?f.from:f.to),to="content/"+(redo?f.to:f.from);
+            const auto digest=i%2?bytesDigest(f.bytes):f.digest;
+            out.relocations.push_back({from,to,digest,f.directory});
+            if(i%2==0){assetEndpoints.insert(from);assetEndpoints.insert(to);}
+        }
+        auto edits=redo?plan.resourceEdits:editor::reverseProjectFileEdits(plan.resourceEdits);
+        for(auto& edit:edits)edit.path=root/edit.path;
+        repairs.append(edits);
+    }
+    const auto timeline=batchTimeline(root,out.relocations);
+    if(batchPhase(root,timeline)!=0)throw std::runtime_error("Ordinary move chain baseline changed");
+    // Track each physical identity from its first live path to the final path.
+    // The full sequence is still retained by the crash-recovery journal.
+    std::map<std::string,std::string> origins;
+    for(const auto& [path,identity]:timeline.initial)
+        if(!identity.empty())origins.emplace(path,path);
+    for(const auto& move:out.relocations){
+        const auto it=origins.find(move.from);
+        if(it==origins.end()||origins.count(move.to))throw std::runtime_error("Invalid move chain identity");
+        auto origin=it->second;origins.erase(it);origins.emplace(move.to,std::move(origin));
+    }
+    std::vector<StudioReferenceRelocation> net;
+    for(const auto& [path,origin]:origins){
+        if(path==origin||!assetEndpoints.count(origin))continue;
+        net.push_back({origin,path,timeline.initial.at(origin).front()=='d'});
+    }
+    // Do not transiently adopt a reference to an initially vacant waypoint.
+    for(const auto& ref:studioCollectGltfReferences(root,{})){
+        for(const auto& endpoint:assetEndpoints){
+            if(!timeline.initial.at(endpoint).empty()||
+               !timeline.phases.back().at(endpoint).empty())continue;
+            if(studioReferenceMatchesPath(ref.path,endpoint,true))
+                throw std::runtime_error("Move chain crosses an unresolved intermediate reference");
+        }
+    }
+    out.documents=repairs.plan();
+    validateBatchDocuments(root,timeline,out.documents);
+    auto retained=out.documents;
+    for(auto& edit:retained)edit.path=edit.path.lexically_relative(root);
+    const auto generated=studioPlanGltfRepairs(root,net,&retained);
+    if(generated.size()!=retained.size())throw std::runtime_error("Coordinated resource repair set changed");
+    for(size_t i=0;i<retained.size();++i){
+        const auto& saved=retained[i];const auto& expected=generated[i];
+        const auto path=saved.path.generic_string();
+        if(saved.path!=expected.path||saved.before!=expected.before||
+           saved.tailDigest!=expected.tailDigest||saved.tailBytes!=expected.tailBytes||
+           studioCanonicalGltfRepair(path,saved.after,saved.tailDigest,saved.tailBytes)!=
+           studioCanonicalGltfRepair(path,expected.after,expected.tailDigest,expected.tailBytes))
+            throw std::runtime_error("Coordinated resource chain no longer matches typed dependencies");
+    }
+    return out;
 }
 void studioRecoverHistoryBatch(const fs::path& project){
     const auto root=fs::canonical(project),folder=batchFolder(root);
@@ -1845,7 +1927,8 @@ void studioRecoverHistoryBatch(const fs::path& project){
     if(!fs::is_regular_file(fs::symlink_status(pending))||fs::file_size(pending)>256u*1024u*1024u)
         throw std::runtime_error("Invalid coordinated history journal");
     const auto envelope=Json::parseFile(pending.string());const auto payload=envelope.getStr("payload");
-    if(envelope.getInt("version")!=1||historyHash(payload)!=envelope.getStr("sha256"))
+    const auto version=envelope.getInt("version");
+    if((version!=1&&version!=2)||historyHash(payload)!=envelope.getStr("sha256"))
         throw std::runtime_error("Coordinated journal checksum mismatch");
     const auto body=Json::parse(payload);
     if(!body["moves"].isArray()||body["moves"].size()>256||!body["documents"].isArray()||body["documents"].size()>4096)
@@ -1857,7 +1940,13 @@ void studioRecoverHistoryBatch(const fs::path& project){
     for(const auto& row:body["documents"].items()){
         if(!row["before"].isString()||!row["after"].isString())throw std::runtime_error("Invalid coordinated document snapshot");
         const auto path=editor::project_file_detail::safeTarget(root,row.getStr("path"));
-        docs.push_back({path,row.getStr("before"),row.getStr("after")});
+        if(version==2&&row.getBool("resource")){
+            auto edit=studioDecodeResourceEdit(row,true);edit.path=path;docs.push_back(std::move(edit));
+        }else{
+            if(row.has("encoding")||row.has("tailDigest")||row.has("tailBytes"))
+                throw std::runtime_error("Invalid coordinated document encoding");
+            docs.push_back({path,row.getStr("before"),row.getStr("after")});
+        }
     }
     // Resolve the nested existing-file journal before examining its baseline.
     editor::recoverProjectFileEdits(root);
@@ -1875,8 +1964,12 @@ void studioApplyHistoryBatch(const fs::path& project,const std::vector<StudioBat
     std::vector<editor::ProjectFileEdit> docs=documents;
     for(auto& f:docs)f.path=fs::canonical(f.path);
     validateBatchDocuments(root,timeline,docs);
-    for(const auto& f:docs)if(editor::readProjectFileBytes(f.path)!=f.before)
-        throw std::runtime_error("Coordinated document baseline changed");
+    for(const auto& f:docs){
+        if(!studioResourceMatches(f.path,f))throw std::runtime_error("Coordinated document baseline changed");
+        if(studioStreamingResource(f)&&fs::space(root).available<
+           std::max<uint64_t>(f.before.size(),f.after.size())+f.tailBytes+16ull*1024*1024)
+            throw std::runtime_error("Insufficient disk for coordinated streamed repair");
+    }
     if(existsOrSymlink(folder)||!fs::create_directory(folder))throw std::runtime_error("Previous coordinated history journal needs recovery");
     try{
         Json body=Json::object(),rows=Json::array(),files=Json::array();
@@ -1885,11 +1978,19 @@ void studioApplyHistoryBatch(const fs::path& project,const std::vector<StudioBat
             row.set("digest",Json::string(m.digest));row.set("directory",Json::fromBool(m.directory));rows.push(std::move(row));
         }
         for(const auto& f:docs){
-            Json row=Json::object();row.set("path",Json::string(f.path.lexically_relative(root).generic_string()));
-            row.set("before",Json::string(f.before));row.set("after",Json::string(f.after));files.push(std::move(row));
+            auto relative=f;relative.path=f.path.lexically_relative(root);
+            Json row=Json::object();
+            if(relative.path.generic_string().starts_with("content/")&&studioRepairModelExtension(relative.path)){
+                studioValidateModelRepairBytes(relative);
+                row=studioEncodeResourceEdit(relative);row.set("resource",Json::fromBool(true));
+            }else{
+                row.set("path",Json::string(relative.path.generic_string()));
+                row.set("before",Json::string(f.before));row.set("after",Json::string(f.after));
+            }
+            files.push(std::move(row));
         }
         body.set("moves",std::move(rows));body.set("documents",std::move(files));
-        const auto payload=body.dump(-1);Json envelope=Json::object();envelope.set("version",Json::number(int64_t(1)));
+        const auto payload=body.dump(-1);Json envelope=Json::object();envelope.set("version",Json::number(int64_t(2)));
         envelope.set("sha256",Json::string(historyHash(payload)));envelope.set("payload",Json::string(payload));
         const auto text=envelope.dump(-1)+"\n";
         if(text.size()>256u*1024u*1024u)throw std::runtime_error("Coordinated journal exceeds disk budget");
@@ -1903,7 +2004,7 @@ void studioApplyHistoryBatch(const fs::path& project,const std::vector<StudioBat
             StudioMoveJournal::renamePath(from,to);
         }
         if(batchPhase(root,timeline)!=moves.size())throw std::runtime_error("Coordinated relocation result mismatch");
-        editor::applyProjectFileEdits(root,docs);
+        StudioMoveJournal(root).applyResources(docs,true);
         // The outer marker is authoritative even after the inner journal commits.
         StudioMoveJournal::renamePath(folder/"pending.json",folder/"committed.json");
     }catch(const std::exception& e){

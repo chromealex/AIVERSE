@@ -125,7 +125,8 @@ public:
     // Outer pending marker owns the compact snapshots. Stream to a private
     // sibling-cache file and atomically replace the live file only after the
     // complete source and staged bytes are validated. Recovery can retry.
-    void applyResources(const std::vector<editor::ProjectFileEdit>& edits){
+    void applyResources(const std::vector<editor::ProjectFileEdit>& edits,bool coordinated=false){
+        const auto staging=coordinated?fs::canonical(project_)/".aiverse-cache"/"studio-history-batch":folder_;
         std::vector<editor::ProjectFileEdit> ordinary;
         const auto root=fs::canonical(project_);
         std::set<fs::path> unique;
@@ -140,15 +141,16 @@ public:
             if(!studioStreamingResource(edit))ordinary.push_back(edit);
         }
         for(const auto& edit:edits)if(studioStreamingResource(edit)){
-            if(!fs::is_regular_file(fs::symlink_status(folder_/"pending.json")))
-                throw std::runtime_error("Streaming resource requires pending move journal");
-            const auto temp=folder_/"resource-stream.tmp";
+            if(!fs::is_directory(fs::symlink_status(staging))||
+               !fs::is_regular_file(fs::symlink_status(staging/"pending.json")))
+                throw std::runtime_error("Streaming resource requires pending move or batch journal");
+            const auto temp=staging/"resource-stream.tmp";
             if(fs::exists(fs::symlink_status(temp))){
                 if(!fs::is_regular_file(fs::symlink_status(temp)))throw std::runtime_error("Unsafe resource stream staging file");
                 fs::remove(temp);
             }
             const auto required=studioResourceProjectedSize(edit);
-            if(fs::space(folder_).available<required)throw std::runtime_error("Insufficient disk for streamed GLB publication");
+            if(fs::space(staging).available<required)throw std::runtime_error("Insufficient disk for streamed GLB publication");
             std::ofstream out(temp,std::ios::binary|std::ios::trunc);
             if(!out)throw std::runtime_error("Cannot stage streamed GLB");
             studioStreamProjectedResource(edit.path,edit,[&](const char* data,size_t count){

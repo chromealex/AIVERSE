@@ -3,6 +3,7 @@
 // an inconsistent intermediate state.
 #pragma once
 #include "apps/editor/core/ProjectFileEdits.h"
+#include "apps/studio-native/StudioModelRepairBytes.h"
 #include <map>
 #include <set>
 #include <array>
@@ -36,9 +37,11 @@ public:
         for(const auto& edit:edits){
             const auto path=std::filesystem::canonical(edit.path);
             auto it=files_.find(path);
-            if(it==files_.end())files_.emplace(path,editor::ProjectFileEdit{path,edit.before,edit.after});
-            else{
-                if(it->second.after!=edit.before)throw std::runtime_error("Inconsistent history file chain: "+path.string());
+            if(it==files_.end()){
+                auto copy=edit;copy.path=path;files_.emplace(path,std::move(copy));
+            }else{
+                if(it->second.after!=edit.before||it->second.tailDigest!=edit.tailDigest||it->second.tailBytes!=edit.tailBytes)
+                    throw std::runtime_error("Inconsistent history file chain: "+path.string());
                 it->second.after=edit.after;
             }
         }
@@ -46,7 +49,7 @@ public:
     std::vector<editor::ProjectFileEdit> plan()const{
         std::vector<editor::ProjectFileEdit> result;
         for(const auto& [path,edit]:files_){
-            if(editor::readProjectFileBytes(path)!=edit.before)throw std::runtime_error("External file change: "+path.string());
+            if(!studioResourceMatches(path,edit))throw std::runtime_error("External file change: "+path.string());
             result.push_back(edit);
         }
         return result;

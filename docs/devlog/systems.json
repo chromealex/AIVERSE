@@ -2423,7 +2423,7 @@
           "title": "Транзакции и история редактора",
           "titleEn": "Editor history and transactions",
           "text": "Атомарные составные изменения карты, устойчивые метки истории и защита от устаревших переходов.",
-          "textEn": "Atomic compound map edits, stable history labels and stale history navigation guards.",
+          "textEn": "S6f.3.1: exact-endpoint ordinary asset move chains, composed stationary resource repairs and durable coordinated journal v2; map/project history fences retained.",
           "status": "in-progress"
         },
         {
