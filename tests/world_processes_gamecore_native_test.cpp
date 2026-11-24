@@ -29,6 +29,7 @@
 #include "aiverselib/world/EvolvePlanetRootSupport.h"
 #include "engine/game/PlanetTerrainWater.h"
 #include "aiverselib/world/NereidPlanetBankErosion.h"
+#include "aiverselib/world/NereidPlanetSedimentTransport.h"
 #include <array>
 #include "engine/data/JsonCompose.h"
 #include "tests/AlwaysCheck.h"
@@ -732,6 +733,43 @@ static void checkPlanetLiveFracture(){
     const auto cap=samplePlanetFracture(ecs,surface,8,1);
     AIVERSE_TEST_CHECK(cap.getBool("truncated")&&cap["members"].size()==1&&cap.getInt("pending")==1);
     AIVERSE_TEST_CHECK(!samplePlanetFracture(ecs,surface,UINT32_MAX).getBool("available"));
+}
+static void checkPlanetSedimentTransport(){
+    namespace nw=aiverse::lib::nereid;
+    game::Surface surface;game::BodyDef body;body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    World ecs;const auto sea=ecs.create();
+    const int cell=surface.gridCell(0,0,7,3),target=surface.neighbor(cell,0);
+    int b=-1,f=-1,x=-1,y=-1;
+    AIVERSE_TEST_CHECK(surface.cellFace(target,b,f,x,y)&&b==0&&f!=0);
+    const auto up=surface.cellDir(cell),next=surface.cellDir(target);
+    const auto tangent=fxNormalize(next-up*next.dot(up));
+    nw::WaterSphereComponent ocean;ocean.center=game::Surface::anchor(0);
+    ocean.surfaceRadius=Fixed::fromInt(70);ocean.floorRadius=Fixed::fromInt(50);
+    ocean.axis=fxCross(up,tangent);ocean.currentSpeed=Fixed::fromInt(10);
+    ecs.add<nw::WaterSphereComponent>(sea,ocean);
+    const auto source=ecs.create(),dest=ecs.create();
+    nw::PlanetBankSoilComponent bank;bank.bodyId="terra";bank.waterBody=sea;
+    bank.surfaceCell=cell;bank.lastTick=7;bank.suspendedCm3=1000000000000ull;
+    ecs.add<nw::PlanetBankSoilComponent>(source,bank);
+    ecs.add<nw::PlanetBankSedimentTransportComponent>(source,{});
+    bank.surfaceCell=target;bank.suspendedCm3=0;
+    ecs.add<nw::PlanetBankSoilComponent>(dest,bank);
+    ecs.add<nw::PlanetBankSedimentTransportComponent>(dest,{});
+    ecs.enableCowSnapshots();const World before=ecs;
+    const auto result=nw::transportPlanetSediment(ecs,surface,7,100,Fixed{});
+    AIVERSE_TEST_CHECK(result&&result->transfers.size()==1&&result->transfers[0].target==dest);
+    AIVERSE_TEST_CHECK(result->movedCm3>0&&result->beforeCm3==result->afterCm3);
+    AIVERSE_TEST_CHECK(ecs.get<nw::PlanetBankSoilComponent>(dest).suspendedCm3==result->movedCm3);
+    AIVERSE_TEST_CHECK(!nw::transportPlanetSediment(ecs,surface,7,100,Fixed{}));
+    ecs=before;
+    ecs.get<nw::PlanetBankSoilComponent>(dest).suspendedCm3=nw::kPlanetSedimentCapacityCm3;
+    const auto full=nw::transportPlanetSediment(ecs,surface,7,100,Fixed{});
+    AIVERSE_TEST_CHECK(full&&full->movedCm3==0&&full->beforeCm3==full->afterCm3);
+    ecs=before;
+    ecs.get<nw::PlanetBankSoilComponent>(dest).surfaceCell=cell;
+    AIVERSE_TEST_CHECK(!nw::transportPlanetSediment(ecs,surface,7,100,Fixed{}));
+    AIVERSE_TEST_CHECK(ecs.get<nw::PlanetBankSoilComponent>(source).suspendedCm3==1000000000000ull);
 }
 static void checkPlanetBankErosion(){
     namespace nw=aiverse::lib::nereid;
@@ -1671,6 +1709,7 @@ int main(){
     checkPlanetRootSupport();
     checkPlanetTerrainWater();
     checkPlanetBankErosion();
+    checkPlanetSedimentTransport();
     checkPlanetLiveFracture();
     checkPlanetMorphModelFrame();
     checkPlanetMorphContactFrame();
