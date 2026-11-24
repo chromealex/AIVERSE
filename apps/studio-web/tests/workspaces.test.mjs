@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { WORKSPACES, WORKSPACE_INFO, workspaceDockTree, legacyWorkspace, readWorkspaceDock, saveWorkspaceDock, readActiveWorkspace, saveActiveWorkspace } from '../src/workspaces.ts';
-import { dockStacks, panelStack, STUDIO_PANELS } from '../src/nestedDock.ts';
+import { dockStacks, panelStack, STUDIO_PANELS, STUDIO_PANEL_TITLES } from '../src/nestedDock.ts';
+import { windowPanelGroups, PANEL_WINDOW_GROUP } from '../src/windowGroups.ts';
 import { LEGACY_WINDOWS_NOT_MIGRATED } from '../src/legacyWindows.ts';
 import { fuzzyScore, parseQuery, searchCommands } from '../src/commandSearch.ts';
 
@@ -52,4 +53,20 @@ test('fuzzy search ranks prefix and word starts first', () => {
   assert.deepEqual(searchCommands(entries, '').map(g => g.kind), ['command', 'window'], 'entities/assets need a query');
   assert.deepEqual(searchCommands(entries, '@bar').flatMap(g => g.items.map(i => i.id)), ['e1']);
   assert.deepEqual(searchCommands(entries, '', ['e1']).find(g => g.kind === 'entity').items[0].id, 'e1');
+});
+
+test('Window groups contain every registered panel exactly once and use English Wind title', () => {
+  const groups = windowPanelGroups();
+  const panels = groups.flatMap(group => group.panels);
+  assert.equal(new Set(groups.map(group => group.id)).size, groups.length);
+  assert.equal(new Set(panels).size, panels.length);
+  assert.deepEqual([...panels].sort(), [...STUDIO_PANELS].sort());
+  for (const group of groups) {
+    assert.ok(group.panels.length > 0, group.id);
+    for (const panel of group.panels) assert.equal(PANEL_WINDOW_GROUP[panel], group.id);
+    const titles = group.panels.map(panel => STUDIO_PANEL_TITLES[panel]);
+    assert.deepEqual(titles, [...titles].sort((a, b) => a.localeCompare(b, 'en')));
+  }
+  assert.equal(STUDIO_PANEL_TITLES.wind, 'Wind');
+  assert.equal(PANEL_WINDOW_GROUP.wind, 'fx');
 });
