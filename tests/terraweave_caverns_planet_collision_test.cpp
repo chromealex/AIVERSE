@@ -99,6 +99,21 @@ static void checkTravelPins(){
     check(cancelCavePlanetCrossing(world,actor,[](const auto&,auto,const auto&){return true;})&&
           cavePlanetTravelPins(world).contains(9),"exit cancel preserves occupancy");
 }
+static void checkTravelReceipts(){
+    using P=CavePlanetCrossingPhase;using S=CavePlanetCapsuleSide;
+    const CavePlanetTravel start{0,9,7,10};
+    check(!advanceCavePlanetTravelReceipt(start,10,3,false,false,S::Destination),"no cap bypass");
+    auto approach=advanceCavePlanetTravelReceipt(start,10,3,false,false,S::Original);
+    check(approach&&approach->phase==P::Approach,"approach receipt");
+    auto cross=advanceCavePlanetTravelReceipt(*approach,11,3,true,false,S::Straddling);
+    check(cross&&cross->phase==P::Clearance&&cross->crossedSourceRevision==3,"partial crossing receipt");
+    check(!advanceCavePlanetTravelReceipt(*cross,11,3,false,false,S::Destination),"duplicate tick refused");
+    check(!advanceCavePlanetTravelReceipt(*cross,12,4,false,false,S::Destination),"edited cap receipt refused");
+    auto clear=advanceCavePlanetTravelReceipt(*cross,12,3,false,false,S::Destination);
+    check(clear&&clear->pendingRegion==9&&clear->phase==P::Clearance,"clearance retains pin until motor handoff");
+    auto back=advanceCavePlanetTravelReceipt(*cross,12,3,false,true,S::Original);
+    check(back&&back->phase==P::Approach&&!back->crossedSourceRevision,"reverse crossing resets receipt");
+}
 static void checkTravelRim(){
     Entrance mouth;mouth.id=7;mouth.radiusCm=200;
     CaveSurfaceRim rim;rim.entranceId=7;
@@ -260,6 +275,7 @@ int main(){
     checkDrive();
     checkVolumeSweep();
     checkTravelRim();
+    checkTravelReceipts();
     checkTravelPins();
     checkOrientedMotor();
     checkCandidateIdentity();
