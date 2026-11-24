@@ -1,4 +1,5 @@
 #include "apps/studio-native/StudioHost.h"
+#include "apps/studio-native/StudioSpectraPackageImport.h"
 #include "apps/studio-native/StudioHumanLookDocument.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/studio-native/StudioTerrainGeometry.h"
@@ -233,6 +234,7 @@ void StudioHost::webReady() {
 void StudioHost::openProject(const std::string& path, int64_t requestId) {
     if (projectLoading_) return;
     projectLoading_ = true;
+    ++packageProjectEpoch_;
     cancelSpectraCapture(); // invalidate old project callbacks before opening
     if (game_) game_->stop();
     sendProjectSplash(path);
@@ -1031,8 +1033,13 @@ void StudioHost::select(double x, double y, double w, double h, const std::strin
     if (!request("studio.select", std::move(params)).has("error")) sendEvent("selection.changed", "");
 }
 void StudioHost::importDroppedFiles(const std::vector<fs::path>& files, const std::string& folder) {
-    if (files.empty() || files.size() > 64 || session_->workspace().project.dir.empty()) return;
+    if (projectLoading_ || files.empty() || files.size() > 64 || session_->workspace().project.dir.empty()) return;
     try {
+        if(std::any_of(files.begin(),files.end(),isSpectraPackagePath)){
+            if(files.size()!=1)throw std::runtime_error("Drop one VFX package at a time");
+            sendEventPayload("spectrafx.packageStaged",stageSpectraPackage(session_->workspace().project.dir,files.front()));
+            return;
+        }
         sendEventPayload("assets.importPreview", session_->previewExternalAssets(files, folder));
     } catch (const std::exception& ex) {
         Json payload = Json::object();
@@ -1851,6 +1858,33 @@ bool StudioHost::handleHostMethod(const Json& req) {
             sendReply(session_->dispatch(cancelled));
             return true;
         }
+    }
+    if(method=="studio.spectraPackageChoose"){
+        if(projectLoading_||session_->workspace().project.dir.empty()){
+            sendError(req["id"],"Open a project first");return true;
+        }
+        const auto project=session_->workspace().project.dir;
+        const auto epoch=packageProjectEpoch_;
+        const auto requestId=req["id"].integer();
+        auto alive=alive_;
+        platform_.chooseImportSources(project,[this,alive,project,epoch,requestId](std::vector<fs::path> sources){
+            if(!*alive)return;
+            Json reply=Json::object();reply.set("id",Json::number(requestId));
+            try{
+                if(projectLoading_||epoch!=packageProjectEpoch_||session_->workspace().project.dir!=project)
+                    throw std::runtime_error("Project changed while choosing package");
+                Json result=Json::object();
+                if(sources.empty())result.set("cancelled",Json::fromBool(true));
+                else{
+                    if(sources.size()!=1)throw std::runtime_error("Select one .aivfx package");
+                    result=stageSpectraPackage(project,sources.front());
+                    sendEventPayload("spectrafx.packageStaged",result);
+                }
+                reply.set("result",std::move(result));
+            }catch(const std::exception& e){reply.set("error",Json::string(e.what()));}
+            sendReply(reply);
+        });
+        return true;
     }
     if (method == "studio.assetImportPreview") {
         // The browser can choose a verified relative DESTINATION only. Source paths come from a native dialog.

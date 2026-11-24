@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Eye, Pause, Play, RotateCcw, SkipForward, Square, ZoomIn, ZoomOut, Focus } from 'lucide-react';
-import { invoke, nativeConnected } from '../bridge';
+import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import type { StudioParams, StudioSpectraPreviewState, StudioSpectraCameraSnapshot } from '../types';
 import { StudioAlert, StudioBadge, StudioButton, StudioCheckbox, StudioField, StudioInput, StudioSection, StudioSelect } from '../ui';
 import type { SpectraGraphV2 } from './spectraDataInterfaceModel';
@@ -13,6 +13,7 @@ import type { SpectraReplayPreset } from './spectraReplayPreset';
 import { SpectraCommandQueue } from './spectraCommandQueue';
 import SpectraAssetPicker from './SpectraAssetPicker';
 import type { SpectraIndexedAsset } from './SpectraAssetPicker';
+import { indexedSpectraAssets } from './spectraStudioAssetIndex';
 
 type Action='status'|'load'|'play'|'pause'|'restart'|'step'|'seek'|'parameter'|'stop'|'cameraReset'|'cameraOrbit'|'cameraZoom'|'stage'|'cameraPreset'|'playback'|'burst'|'clear';
 const message=(e:unknown)=>e instanceof Error?e.message:String(e);
@@ -74,6 +75,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
   const [relocationPlan,setRelocationPlan]=useState<{source:string;state:string;planRevision?:string;detail?:string;changes:Array<{from:string;to:string;state:string;detail?:string}>}|null>(null);
   const [presetLibraryBusy,setPresetLibraryBusy]=useState(false);
   const [packageName,setPackageName]=useState('');
+  const [packageCatalog,setPackageCatalog]=useState<Array<{name:string;bytes:number}>>([]);
+  const [packageAutoPreview,setPackageAutoPreview]=useState(false);
   const [packagePlan,setPackagePlan]=useState<{name:string;state:string;planRevision:string;files:Array<{path:string;state:string}>;remapped:Record<string,string>}|null>(null);
   const [packageReuse,setPackageReuse]=useState<Record<string,string>>({});
   const [packageAssets,setPackageAssets]=useState<SpectraIndexedAsset[]>([]);
@@ -356,6 +359,31 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       setPresetCompatibility('Portable copy saved in target project');
     }catch(e){setError(message(e));setPortableImport(null);}finally{setPresetLibraryBusy(false);}
   };
+  const refreshPackageCatalog=async()=>{
+    const result=await presetOp('fx_replay_package_list');
+    if(!Array.isArray(result.packages))throw new Error('Invalid package catalog');
+    setPackageCatalog(result.packages.filter((p):p is {name:string;bytes:number}=>
+      !!p&&typeof p.name==='string'&&typeof p.bytes==='number'));
+  };
+  const acceptStagedPackage=(payload:unknown)=>{
+    if(!payload||typeof payload!=='object'||!('projectPath' in payload)||payload.projectPath!==projectPath||
+      !('name' in payload)||typeof payload.name!=='string'||!(/^[a-z0-9_]{1,48}$/).test(payload.name))return;
+    setPackageName(payload.name);setPackagePlan(null);setPackageReuse({});setPackageAutoPreview(true);
+    void refreshPackageCatalog().catch(e=>setError(message(e)));
+  };
+  useEffect(()=>{
+    if(!active)return;
+    void refreshPackageCatalog().catch(e=>setError(message(e)));
+    return onNativeEvent((event,payload)=>{if(event==='spectrafx.packageStaged')acceptStagedPackage(payload);});
+  },[active,projectPath]);
+  const choosePackage=async()=>{
+    if(!active||busy||presetLibraryBusy)return;
+    setPresetLibraryBusy(true);
+    try{
+      const result=await invoke('studio.spectraPackageChoose',{});
+      if(!('cancelled' in result))acceptStagedPackage(result);
+    }catch(e){setError(message(e));}finally{setPresetLibraryBusy(false);}
+  };
   const validPackageName=/^[a-z0-9_]{1,48}$/.test(packageName)&&packageName!=='fx';
   const runReplayPackage=async(action:'export'|'preview'|'apply')=>{
     if(!active||busy||presetLibraryBusy||!validPackageName)return;
@@ -364,14 +392,12 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       if(action==='export'){
         const result=await presetOp('fx_replay_package_export',{name:presetSelected,package:packageName});
         setPresetCompatibility('Package saved: '+String(result.path));
+        await refreshPackageCatalog();
       }else if(action==='preview'){
         setPackagePlan(null);
         const result=await presetOp('fx_replay_package_preview',{package:packageName,reuse:packageReuse});
         const assets=await invoke('studio.assets',{});
-        // The authoritative native catalog supplies GUIDs; path hints are not trusted by the installer.
-        const rows=(assets as unknown as {assets?:unknown;entries?:unknown;files?:unknown});
-        const raw=rows.assets??rows.entries??rows.files??[];
-        setPackageAssets(Array.isArray(raw)?raw.filter(a=>a&&typeof a.guid==='string'&&typeof a.path==='string').map(a=>({guid:a.guid,path:a.path,name:String(a.name??a.path),kind:String(a.kind??a.type??'asset')})):[]);
+        setPackageAssets(indexedSpectraAssets(assets));
         if(typeof result.state!=='string'||typeof result.planRevision!=='string'||!Array.isArray(result.files))
           throw new Error('Invalid package plan');
         setPackagePlan({name:packageName,state:result.state,planRevision:result.planRevision,
@@ -393,6 +419,11 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
       }
     }catch(e){setError(message(e));setPackagePlan(null);}finally{setPresetLibraryBusy(false);}
   };
+  useEffect(()=>{
+    if(packageAutoPreview&&!busy&&!presetLibraryBusy&&validPackageName){
+      setPackageAutoPreview(false);void runReplayPackage('preview');
+    }
+  },[packageAutoPreview,busy,presetLibraryBusy,packageName]);
   const exportReplayPreset=()=>{
     if(!replayPreset)return;
     const blob=new Blob([JSON.stringify(replayPreset,null,2)],{type:'application/json'});
@@ -774,6 +805,17 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false}:
           onClick={()=>void applyPortablePreset()}>Save portable copy with new name</StudioButton>
         <StudioButton size="sm" disabled={presetLibraryBusy} onClick={()=>setPortableImport(null)}>Discard import</StudioButton>
       </div>}
+      <StudioButton size="sm" disabled={!active||busy||presetLibraryBusy}
+        onClick={()=>void choosePackage()}>Open external .aivfx</StudioButton>
+      <small>Drop a single .aivfx into the Assets panel to open the import wizard.</small>
+      <StudioField label="Project VFX packages" htmlFor="spectra-package-catalog">
+        <StudioSelect id="spectra-package-catalog" value={packageCatalog.some(p=>p.name===packageName)?packageName:''}
+          disabled={busy||presetLibraryBusy} onChange={e=>{setPackageName(e.target.value);setPackagePlan(null);setPackageReuse({});}}>
+          <option value="">Select package…</option>
+          {packageCatalog.map(p=><option key={p.name} value={p.name}>{p.name} · {Math.ceil(p.bytes/1024)} KiB</option>)}
+        </StudioSelect>
+      </StudioField>
+      <StudioButton size="sm" disabled={!active||busy||presetLibraryBusy} onClick={()=>void refreshPackageCatalog().catch(e=>setError(message(e)))}>Refresh packages</StudioButton>
       <StudioField label="VFX package name (packages/*.aivfx)" htmlFor="spectra-package-name">
         <StudioInput id="spectra-package-name" value={packageName} onChange={e=>{setPackageName(e.target.value);setPackagePlan(null);setPackageReuse({});}}/>
       </StudioField>

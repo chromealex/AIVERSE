@@ -736,6 +736,29 @@ void registerSpectraGraphOps(Workspace& ws) {
         validateReplayPreset(candidate,ws);
         return publishReplayPreset(ws,name,candidate);
     });
+    add("fx_replay_package_list","List project-local .aivfx transfer archives; payload validation occurs at preview.",
+        R"({"properties":{"expectedProjectPath":{"type":"string"}}})",[&ws](const Json& p){
+        requireReplayProject(ws,p);
+        const auto dir=fs::path(ws.project.dir)/"packages";
+        Json rows=Json::array();
+        std::vector<std::string> names;
+        if(fs::exists(replayFileStatus(dir))){
+            if(!fs::is_directory(replayFileStatus(dir)))throw std::runtime_error("Invalid package directory");
+            for(const auto& e:fs::directory_iterator(dir)){
+                if(!fs::is_regular_file(e.symlink_status())||e.path().extension()!=".aivfx")continue;
+                const auto name=e.path().stem().string();
+                if(validFxName(name)&&name!="fx")names.push_back(name);
+                if(names.size()>256)throw std::runtime_error("Too many VFX packages");
+            }
+        }
+        std::sort(names.begin(),names.end());
+        for(const auto& name:names){
+            Json row=Json::object();row.set("name",strGraph(name));
+            row.set("bytes",Json::number(int64_t(fs::file_size(dir/(name+".aivfx")))));
+            rows.push(std::move(row));
+        }
+        Json out=Json::object();out.set("packages",std::move(rows));return out;
+    });
     add("fx_replay_package_export","Export a verified named preset and recorded dependency bytes to project/packages/<package>.aivfx.",
         R"({"properties":{"name":{"type":"string"},"package":{"type":"string"},"expectedProjectPath":{"type":"string"}},"required":["name","package"]})",
         [&ws](const Json& p){
