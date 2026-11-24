@@ -168,7 +168,7 @@ int main() {
         corrupt=bytes;corrupt[4]=2;
         require(!fx::decodeSdfBinary(corrupt,restored),"SDF version rejected");
         sdf.samples.pop_back();
-        require(!fx::inspectGraphGpuEligibility(volume,options).eligible,"invalid SDF rejected");
+        require(!sp::inspectGraphGpuEligibility(volume,options).eligible,"invalid SDF rejected");
         require(!fx::encodeSdfBinary(sdf,bytes)&&bytes.size()==131108,"invalid encode preserves output");
         sdf.dimension=33;sdf.samples.resize(33u*33u*33u);
         require(!sdf.valid()&&!fx::parseEffect(fx::effectToJson(volume),"sdf33",decoded,errors),

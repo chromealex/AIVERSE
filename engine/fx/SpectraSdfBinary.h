@@ -2,12 +2,30 @@
 #pragma once
 #include "SpectraStaticSdfVolume.h"
 #include <cstring>
+#include <functional>
 #include <limits>
 #include <string>
 #include <string_view>
 #include <utility>
 
 namespace aiverse::fx {
+using SdfResourceReader=std::function<bool(const std::string&,std::string&)>;
+inline bool validSdfResourcePath(std::string_view path){
+    if(path.size()<16||path.size()>512||path.substr(0,8)!="content/"||
+       path.substr(path.size()-7)!=".sdfbin")return false;
+    size_t start=0;
+    for(size_t i=0;i<=path.size();++i){
+        if(i==path.size()||path[i]=='/'){
+            const auto part=path.substr(start,i-start);
+            if(part.empty()||part=="."||part=="..")return false;
+            start=i+1;
+        }else{
+            const auto c=static_cast<unsigned char>(path[i]);
+            if(c<32||c==127||c=='\\'||c==':')return false;
+        }
+    }
+    return true;
+}
 inline constexpr size_t kSdfBinaryHeaderBytes=32;
 inline constexpr size_t kSdfBinaryMaxBytes=kSdfBinaryHeaderBytes+4*kStaticSdfMaxSamples+4;
 namespace sdf_binary_detail {

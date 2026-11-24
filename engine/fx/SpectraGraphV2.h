@@ -119,7 +119,7 @@ namespace aiverse::fx {
 // Static expression DAGs are compile-time evaluated, not per-particle GPU
 // kernels. Only explicitly sampled $curve expressions vary over life.
 inline bool compileSpectraGraphV2(const Json& graph,const Json& overrides,
-                                 EffectDef& out,std::vector<std::string>& errors) {
+                                 EffectDef& out,std::vector<std::string>& errors,const SdfResourceReader& sdfReader) {
     errors.clear();
     out={};
     auto fail=[&](const std::string& why) {
@@ -352,7 +352,7 @@ inline bool compileSpectraGraphV2(const Json& graph,const Json& overrides,
         v1.set("forceFields",std::move(fields));
     }
     // Call the existing authoritative v1 compiler and FxEffect parser.
-    return compileSpectraGraph(v1,Json::object(),out,errors);
+    return compileSpectraGraph(v1,Json::object(),out,errors,sdfReader);
 }
 inline bool compileSpectraGraphV2(const Json& graph,EffectDef& out,
                                  std::vector<std::string>& errors) {

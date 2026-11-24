@@ -90,7 +90,7 @@
 //   "forceFields": [{ "position": [0, 1, 0], "shape": "sphere" | "cylinder", "radius": 5, "startRadius": 0, "length": 4,
 //                     "direction": [0, 0, 0], "gravity": 2, "gravityFocus": 0, "rotation": 90, "rotationAttraction": 0.5, "drag": 0 }]
 #pragma once
-#include "SpectraStaticSdfVolume.h"
+#include "SpectraSdfBinary.h"
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -347,7 +347,8 @@ struct EffectDef {
 
 // Parses an effect. `where` prefixes error messages ("fx/boom.json"). Returns false on errors;
 // `out` is still filled with everything that parsed.
-bool parseEffect(const Json& j, const std::string& where, EffectDef& out, std::vector<std::string>& errors);
+bool parseEffect(const Json& j, const std::string& where, EffectDef& out, std::vector<std::string>& errors,
+                 const SdfResourceReader& sdfReader = {});
 // Writes only the fields that differ from the defaults, in a stable order (editor save, diffs).
 Json effectToJson(const EffectDef& def);
 

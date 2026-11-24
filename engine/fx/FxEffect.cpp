@@ -343,7 +343,7 @@ void parseBySpeed(const Json& e, Reader& r, const char* key, const char* valueKe
     });
 }
 
-void parseModules(const Json& e, Reader& r, EmitterDef& d) {
+void parseModules(const Json& e, Reader& r, EmitterDef& d, const SdfResourceReader& sdfReader) {
     r.range("aspect", d.aspect, 0.01f, 100);
     r.vec3("offset", d.offset);
     if (e.has("bursts")) {
@@ -449,7 +449,13 @@ void parseModules(const Json& e, Reader& r, EmitterDef& d) {
                 const auto& grid=c["staticSdf"];
                 Reader sr{grid,cr.where+".staticSdf",r.errors};
                 auto& sdf=col.staticSdf;
-                if(!grid.isObject())sr.fail("staticSdf","expected object");
+                if(grid.isString()){
+                    const auto path=grid.str();
+                    std::string error;
+                    if(!validSdfResourcePath(path))sr.fail("staticSdf","unsafe SDF resource path");
+                    else if(!sdfReader)sr.fail("staticSdf","external SDF requires a resource reader");
+                    else if(!loadSdfBinary(path,sdfReader,sdf,error))sr.fail("staticSdf",error);
+                }else if(!grid.isObject())sr.fail("staticSdf","expected object or content .sdfbin path");
                 else {
                     unknownKeys(grid,{"origin","spacing","dimension","samples"},sr.where,r.errors,sr.ok);
                     sr.vec3("origin",sdf.origin);
@@ -993,7 +999,8 @@ bool FxTrail::operator==(const FxTrail& o) const {
            minQuality == o.minQuality;
 }
 
-bool parseEffect(const Json& j, const std::string& where, EffectDef& out, std::vector<std::string>& errors) {
+bool parseEffect(const Json& j, const std::string& where, EffectDef& out, std::vector<std::string>& errors,
+                 const SdfResourceReader& sdfReader) {
     out = {};
     const size_t before = errors.size();
     if (!j.isObject()) { errors.push_back(where + ": expected an object with \"emitters\""); return false; }
@@ -1077,7 +1084,7 @@ bool parseEffect(const Json& j, const std::string& where, EffectDef& out, std::v
 
         if (e.has("sizeOverLife") && !keysIn(e["sizeOverLife"], d.sizeOverLife, 0, 1e6f)) r.fail("sizeOverLife", "expected [[t, k], ...]");
         if (e.has("color") && !colorKeys(e["color"], d.color)) r.fail("color", "expected \"#rrggbbaa\" or [[t, \"#rrggbbaa\"], ...]");
-        parseModules(e, r, d);
+        parseModules(e, r, d, sdfReader);
         if (d.burst == 0 && d.bursts.empty() && !d.continuous()) r.fail("burst", "emitter creates no particles: set burst, bursts, rate or perMeter");
         if (d.rate.max > 0 && !d.loop && d.duration <= 0) r.fail("duration", "rate needs a duration (or \"loop\": true)");
         if (d.loop && !d.bursts.empty() && d.duration <= 0) r.fail("duration", "looping bursts repeat every \"duration\": set it");

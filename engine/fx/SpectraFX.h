@@ -41,8 +41,8 @@ inline constexpr int kGraphVersion = 2; // latest authoring format
 inline constexpr int kLegacyGraphVersion = 1; // still supported
 
 inline bool compileGraph(const Json& graph, const Json& overrides, Effect& out,
-                         std::vector<std::string>& errors) {
-    return fx::compileSpectraGraph(graph, overrides, out, errors);
+                         std::vector<std::string>& errors,const fx::SdfResourceReader& sdfReader = {}) {
+    return fx::compileSpectraGraph(graph, overrides, out, errors,sdfReader);
 }
 inline bool compileGraph(const Json& graph, Effect& out,
                          std::vector<std::string>& errors) {
