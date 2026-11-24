@@ -179,6 +179,72 @@ void copyFolderNoSymlinks(const fs::path& source,const fs::path& target) {
         if(ec)throw std::runtime_error("Cannot complete external folder copy");
     }catch(...){std::error_code ec;fs::remove_all(target,ec);throw;}
 }
+// Stage inside a private project so the existing catalog creates canonical
+// sidecars using the final filename/importer. No live content is published here.
+void stageCreatedAsset(const fs::path& project,const std::string& path,
+    const fs::path& source,bool directory,bool preserveSidecar,
+    editor::ProjectHistory::MovePlan& plan){
+    StudioAssetCatalog live(project); // also validates/creates the cache root
+    const auto root=project/".aiverse-cache"/"studio-asset-trash";
+    if(!existsOrSymlink(root))fs::create_directory(root);
+    if(!fs::is_directory(fs::symlink_status(root)))throw std::runtime_error("Unsafe asset recovery root");
+    const auto id=nonce();
+    const auto slot=root/id;
+    if(!fs::create_directory(slot))throw std::runtime_error("Cannot reserve import recovery slot");
+    try{
+        const auto staging=slot/"staging";
+        const auto content=staging/"content";
+        fs::create_directories(content);
+        const auto staged=content/fs::path(path).filename();
+        if(directory){
+            if(source.empty())fs::create_directory(staged);
+            else copyFolderNoSymlinks(source,staged);
+        }else{
+            if(!fs::is_regular_file(fs::symlink_status(source)))throw std::runtime_error("Import source changed");
+            fs::copy_file(source,staged,fs::copy_options::none);
+            if(preserveSidecar){
+                const auto meta=studioMetaPath(source);
+                if(!fs::is_regular_file(fs::symlink_status(meta)))throw std::runtime_error("Import sidecar changed");
+                fs::copy_file(meta,studioMetaPath(staged),fs::copy_options::none);
+            }
+        }
+        {
+            StudioAssetCatalog catalog(staging);catalog.rebuild();
+            const auto entry=catalog.byPath(staged.filename().generic_string());
+            if(!entry||entry->directory!=directory)throw std::runtime_error("Staged asset metadata unavailable");
+        }
+        const auto meta=studioMetaPath(staged);
+        if(fs::file_size(meta)>1024*1024)throw std::runtime_error("Asset metadata too large for history");
+        const auto bytes=editor::readProjectFileBytes(meta);
+        const auto digest=moveDigest(staged,directory);
+        const auto relative=".aiverse-cache/studio-asset-trash/"+id+"/asset";
+        fs::rename(staged,slot/"asset");
+        fs::rename(meta,slot/"asset.meta");
+        // Flush the imported bytes before the journal can publish them.
+        if(directory){
+            std::vector<fs::path> dirs;
+            for(const auto& item:fs::recursive_directory_iterator(slot/"asset")){
+                if(fs::is_directory(item.symlink_status()))dirs.push_back(item.path());
+                else StudioMoveJournal::syncPath(item.path());
+            }
+            for(auto it=dirs.rbegin();it!=dirs.rend();++it)StudioMoveJournal::syncPath(*it);
+        }
+        StudioMoveJournal::syncPath(slot/"asset");StudioMoveJournal::syncPath(slot/"asset.meta");
+        Json record=Json::object();record.set("path",Json::string(path));
+        record.set("guid",Json::string(Json::parse(bytes).getStr("guid")));
+        record.set("directory",Json::fromBool(directory));record.set("digest",Json::string(digest));
+        record.set("kind",Json::string("created"));
+        {std::ofstream out(slot/"record.json",std::ios::binary);out<<record.dump(2)<<"\n";out.close();if(!out)throw std::runtime_error("Cannot write import recovery record");}
+        StudioMoveJournal::syncPath(slot/"record.json");
+        fs::remove_all(staging);
+        StudioMoveJournal::syncPath(slot);StudioMoveJournal::syncPath(root);StudioMoveJournal::syncPath(root.parent_path());
+        plan.files.push_back({path,relative,{},digest,directory});
+        plan.files.push_back({path+".meta",relative+".meta",bytes,{},false});
+    }catch(...){
+        // This slot has not been published or journaled yet.
+        std::error_code ec;fs::remove_all(slot,ec);throw;
+    }
+}
 void movePair(const fs::path& source,const fs::path& dest) {
     fs::rename(source,dest);
     const auto metaSrc=studioMetaPath(source),metaDst=studioMetaPath(dest);
@@ -189,11 +255,18 @@ void movePair(const fs::path& source,const fs::path& dest) {
 }
 }
 std::string studioCreateContentFolder(const fs::path& project,const std::string& parent,
-                                     const std::string& name) {
+                                     const std::string& name,editor::ProjectHistory::MovePlan* history) {
     validateSegment(name);
     const fs::path destination=checkedFolder(project,parent)/name;
     if(existsOrSymlink(destination)||existsOrSymlink(studioMetaPath(destination)))
         throw std::runtime_error("Folder already exists or has a metadata collision");
+    if(history){
+        editor::ProjectHistory::MovePlan plan;plan.quarantine=true;plan.created=true;
+        const auto relative=parent.empty()?name:parent+"/"+name;
+        stageCreatedAsset(project,relative,{},true,false,plan);
+        studioReplayAssetQuarantine(project,plan,false);
+        *history=std::move(plan);return relative;
+    }
     if(!fs::create_directory(destination))
         throw std::runtime_error("Could not create content folder");
     try{StudioAssetCatalog catalog(project);catalog.rebuild();}
@@ -449,6 +522,59 @@ Json StudioTransferPlan::apply(const std::string& token,
         return result;
     }
 
+    // Non-replacing imports are one staged publication, including their GUIDs.
+    // Existing explicit replacement remains a history barrier until its own
+    // reversible old/new payload owner is introduced.
+    if(history){
+        std::map<int,std::string> actions;
+        for(const auto& d:decisions){
+            if(d.id<0||size_t(d.id)>=entries_.size()||!actions.emplace(d.id,d.action).second)
+                throw std::runtime_error("Unknown or duplicate import decision");
+        }
+        bool replacement=false;
+        for(const auto& [id,action]:actions){(void)id;if(action=="replace")replacement=true;}
+        if(!replacement){
+            const auto root=studioContentRoot(project_);
+            editor::ProjectHistory::MovePlan plan;plan.quarantine=true;plan.created=true;
+            std::set<fs::path> reserved;
+            struct Import {const StudioTransferEntry* entry;fs::path destination;bool preserve;};
+            std::vector<Import> imports;
+            for(const auto& e:entries_){
+                const auto action=actions.count(e.id)?actions.at(e.id):(e.conflict.empty()?"import":"skip");
+                if(action=="skip")continue;
+                if(action!="import"&&action!="keep-both"&&action!="new-guid")
+                    throw std::runtime_error("Unknown import decision");
+                if(action=="import"&&!e.conflict.empty())throw std::runtime_error("Import conflict requires decision");
+                if(action=="new-guid"&&(e.directory||e.conflict.find("name")!=std::string::npos))
+                    throw std::runtime_error("New GUID cannot resolve this conflict");
+                const auto parent=e.destination.parent_path().lexically_relative(root).generic_string();
+                (void)checkedFolder(project_,parent=="."?"":parent);
+                const auto status=fs::symlink_status(e.source);
+                if(e.directory?!fs::is_directory(status):!fs::is_regular_file(status))
+                    throw std::runtime_error("Import source changed since preview");
+                auto destination=action=="keep-both"?keepBothName(e.destination,e.directory):e.destination;
+                if(existsOrSymlink(destination)||existsOrSymlink(studioMetaPath(destination))||
+                   !reserved.insert(destination).second||!reserved.insert(studioMetaPath(destination)).second)
+                    throw std::runtime_error("Import destinations collide; refresh the preview");
+                const bool preserve=!e.directory&&action=="import"&&!e.guid.empty();
+                if(preserve){
+                    bool invalid=false;
+                    if(guidFromSidecar(e.source,invalid)!=e.guid||invalid)
+                        throw std::runtime_error("Import source GUID changed since preview");
+                }
+                imports.push_back({&e,destination,preserve});
+            }
+            for(const auto& i:imports)
+                stageCreatedAsset(project_,i.destination.lexically_relative(root).generic_string(),
+                    i.entry->source,i.entry->directory,i.preserve,plan);
+            if(!plan.files.empty()){
+                studioReplayAssetQuarantine(project_,plan,false);
+                for(const auto& i:imports)copied.push(Json::string(i.destination.lexically_relative(root).generic_string()));
+                *history=std::move(plan);
+            }
+            result.set("files",std::move(copied));result.set("issues",std::move(errors));return result;
+        }
+    }
     std::set<int> used;
     for(const auto& e:entries_){
         std::string action=e.conflict.empty()?"import":"skip";
@@ -643,33 +769,41 @@ fs::path quarantineFolder(const fs::path& project,const std::string& relative) {
 }
 void studioReplayAssetQuarantine(const fs::path& project,
     const editor::ProjectHistory::MovePlan& plan,bool deleted,const std::function<void()>& validateReferences){
-    if(!plan.quarantine||plan.files.size()!=2)throw std::runtime_error("Invalid asset quarantine plan");
-    const auto& asset=plan.files[0];const auto& meta=plan.files[1];
-    if(meta.from!=asset.from+".meta"||meta.to!=asset.to+".meta"||asset.digest.empty())
-        throw std::runtime_error("Invalid asset quarantine pair");
-    const auto root=studioContentRoot(project);
-    const auto trash=quarantineFolder(project,asset.to);
-    const auto relative=fs::path(asset.from);
-    validateSegment(relative.filename().string());
-    const auto parent=relative.parent_path().generic_string();
-    const auto live=checkedFolder(project,parent=="."?"":parent)/relative.filename();
-    const auto stored=trash/"asset";
-    const auto guid=Json::parse(meta.bytes).getStr("guid");
-    if(!studioValidGuid(guid))throw std::runtime_error("Invalid quarantined GUID");
+    if(!plan.quarantine||plan.files.empty()||plan.files.size()>128||plan.files.size()%2)
+        throw std::runtime_error("Invalid asset quarantine plan");
+    const auto root=studioContentRoot(project);(void)root;
     StudioAssetCatalog catalog(project);catalog.rebuild(false);
-    const auto indexed=catalog.byGuid(guid);
-    if(deleted?(!indexed||indexed->path!=asset.from||indexed->directory!=asset.directory):bool(indexed))
-        throw std::runtime_error("Asset quarantine GUID conflict");
-    const auto source=deleted?live:stored,destination=deleted?stored:live;
-    if(deleted&&indexed->importer!=Json::parse(meta.bytes).getStr("importer"))throw std::runtime_error("Asset quarantine importer changed");
-    if(existsOrSymlink(destination)||existsOrSymlink(studioMetaPath(destination))||
-       !matchesMoveFile(source,asset)||!matchesMoveFile(studioMetaPath(source),meta))
-        throw std::runtime_error("Asset quarantine source or destination changed");
+    std::vector<StudioMoveJournalOperation> operations;
+    std::set<std::string> paths,guids;
+    for(size_t i=0;i<plan.files.size();i+=2){
+        const auto& asset=plan.files[i];const auto& meta=plan.files[i+1];
+        if(meta.from!=asset.from+".meta"||meta.to!=asset.to+".meta"||asset.digest.empty())
+            throw std::runtime_error("Invalid asset quarantine pair");
+        const auto trash=quarantineFolder(project,asset.to);
+        const auto relative=fs::path(asset.from);
+        validateSegment(relative.filename().string());
+        const auto parent=relative.parent_path().generic_string();
+        const auto live=checkedFolder(project,parent=="."?"":parent)/relative.filename();
+        const auto stored=trash/"asset";
+        const auto document=Json::parse(meta.bytes);
+        const auto guid=document.getStr("guid");
+        if(!studioValidGuid(guid)||!guids.insert(guid).second)
+            throw std::runtime_error("Invalid or duplicate quarantined GUID");
+        const auto indexed=catalog.byGuid(guid);
+        if(deleted?(!indexed||indexed->path!=asset.from||indexed->directory!=asset.directory||
+             indexed->importer!=document.getStr("importer")):bool(indexed))
+            throw std::runtime_error("Asset quarantine GUID conflict");
+        if(!paths.insert(asset.from).second||!paths.insert(asset.to).second)
+            throw std::runtime_error("Duplicate quarantine path");
+        const auto source=deleted?live:stored,destination=deleted?stored:live;
+        if(existsOrSymlink(destination)||existsOrSymlink(studioMetaPath(destination))||
+           !matchesMoveFile(source,asset)||!matchesMoveFile(studioMetaPath(source),meta))
+            throw std::runtime_error("Asset quarantine source or destination changed");
+        const std::string liveRel="content/"+asset.from;
+        operations.push_back(deleted?StudioMoveJournalOperation{liveRel,asset.to}:StudioMoveJournalOperation{asset.to,liveRel});
+        operations.push_back(deleted?StudioMoveJournalOperation{liveRel+".meta",meta.to}:StudioMoveJournalOperation{meta.to,liveRel+".meta"});
+    }
     if(deleted&&validateReferences)validateReferences();
-    const std::string liveRel="content/"+asset.from;
-    const std::vector<StudioMoveJournalOperation> operations=deleted?
-        std::vector<StudioMoveJournalOperation>{{liveRel,asset.to},{liveRel+".meta",meta.to}}:
-        std::vector<StudioMoveJournalOperation>{{asset.to,liveRel},{meta.to,liveRel+".meta"}};
     StudioMoveJournal journal(project);journal.begin(operations,true);
     try{
         for(size_t i=0;i<operations.size();++i){
@@ -680,9 +814,12 @@ void studioReplayAssetQuarantine(const fs::path& project,
             StudioMoveJournal::syncPath(from.parent_path());StudioMoveJournal::syncPath(to.parent_path());
         }
         catalog.rebuild(false);
-        const auto after=catalog.byGuid(guid);
-        if(deleted?bool(after):(!after||after->path!=asset.from))
-            throw std::runtime_error("Asset quarantine index mismatch");
+        for(size_t i=0;i<plan.files.size();i+=2){
+            const auto& asset=plan.files[i];const auto& meta=plan.files[i+1];
+            const auto after=catalog.byGuid(Json::parse(meta.bytes).getStr("guid"));
+            if(deleted?bool(after):(!after||after->path!=asset.from||after->directory!=asset.directory))
+                throw std::runtime_error("Asset quarantine index mismatch");
+        }
         journal.commit();
     }catch(...){
         const auto failure=std::current_exception();

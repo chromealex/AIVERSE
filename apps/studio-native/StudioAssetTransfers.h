@@ -60,5 +60,6 @@ editor::ProjectHistory::MovePlan studioQuarantineAsset(const std::filesystem::pa
 void studioReplayAssetQuarantine(const std::filesystem::path& project,
     const editor::ProjectHistory::MovePlan& plan,bool deleted,const std::function<void()>& validateReferences={});
 std::string studioCreateContentFolder(const std::filesystem::path& project,
-                                     const std::string& parent,const std::string& name);
+                                     const std::string& parent,const std::string& name,
+                                     editor::ProjectHistory::MovePlan* history=nullptr);
 }

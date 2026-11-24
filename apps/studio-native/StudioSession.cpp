@@ -1178,12 +1178,17 @@ Json StudioSession::dispatch(const Json& request) {
                 const bool redo=direction=="redo";
                 const auto& entry=assetHistory_.next(redo);
                 if(entry.move&&entry.move->quarantine){
-                    const auto& f=entry.move->files.front();
                     const auto check=[&]{
-                        studioCheckMapAssetPaths(ws_.project.dir,ws_.map.toJson(),ws_.project.rulesJson,ws_.project.manifest,{{f.from,f.directory}});
-                        if(studioDocumentNamesAsset(editor::loadMaterialLibrary(ws_),f.from,f.directory))throw std::runtime_error("Asset is referenced by materials");
+                        std::vector<std::pair<std::string,bool>> paths;
+                        const auto materials=editor::loadMaterialLibrary(ws_);
+                        for(size_t i=0;i<entry.move->files.size();i+=2){
+                            const auto& f=entry.move->files[i];
+                            paths.emplace_back(f.from,f.directory);
+                            if(studioDocumentNamesAsset(materials,f.from,f.directory))throw std::runtime_error("Asset is referenced by materials");
+                        }
+                        studioCheckMapAssetPaths(ws_.project.dir,ws_.map.toJson(),ws_.project.rulesJson,ws_.project.manifest,paths);
                     };
-                    studioReplayAssetQuarantine(ws_.project.dir,*entry.move,redo,check);
+                    studioReplayAssetQuarantine(ws_.project.dir,*entry.move,entry.move->created?!redo:redo,check);
                 }else if(entry.move){
                     // Recheck known read-only rules references before reversing paths.
                     const auto check=[&]{
@@ -2145,8 +2150,10 @@ Json StudioSession::dispatchImpl(const Json& request) {
             reply.set("result",std::move(r));
         } else if (method == "studio.assetFolderCreate") {
             if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
+            editor::ProjectHistory::MovePlan history;
             const std::string path=studioCreateContentFolder(ws_.project.dir,
-                params.getStr("parent"),params.getStr("name"));
+                params.getStr("parent"),params.getStr("name"),&history);
+            assetHistory_.recordMove(std::move(history),"Create folder: "+path);agentHistoryUnsafe_=true;
             Json r=Json::object();
             r.set("path",str(path));reply.set("result",std::move(r));
         } else if (method == "studio.assetMovePreview") {
@@ -2257,7 +2264,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
             try{result=pendingAssetTransfer_->apply(token,decisions,commitHook,&moveHistory);}
             catch(...){assetHistory_.reset();throw;}
             const auto beforeHistory=assetHistory_.version();
-            if(moveHistory)assetHistory_.recordMove(std::move(*moveHistory),"Move assets");
+            if(moveHistory)assetHistory_.recordMove(std::move(*moveHistory),internal?"Move assets":"Import assets");
             else if(result["files"].size()!=0||result["issues"].size()!=0)assetHistory_.reset();
             result.set("historyRecorded",Json::fromBool(assetHistory_.version()!=beforeHistory&&assetHistory_.canUndo()&&moveHistory.has_value()));
             pendingAssetTransfer_.reset();
