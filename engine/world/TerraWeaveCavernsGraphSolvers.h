@@ -61,8 +61,12 @@ inline CavePathResult solveCaveGraph(
     cfg.depth=dimension(first.z,last.z);
     cfg.cellCm=settings.cellCm;
     cfg.maxCells=settings.maxNodes;
-    const uint64_t count=uint64_t(cfg.width)*cfg.height*cfg.depth;
-    if(count==0||count>settings.maxNodes)return result;
+    // Use division bounds: multiplying three arbitrary uint32_t values
+    // can overflow uint64_t before testing the configured node budget.
+    if(cfg.width>settings.maxNodes ||
+       cfg.height>settings.maxNodes/cfg.width ||
+       cfg.depth>settings.maxNodes/(uint64_t(cfg.width)*cfg.height))
+        return result;
     auto source=std::make_shared<CaveNavigationGridView>(data,cfg,query.agent);
     const auto project=[pitch](int64_t x,int64_t origin,uint32_t dimension){
         return int32_t(std::min<int64_t>(
