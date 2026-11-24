@@ -63,6 +63,11 @@ int aiverseMain(int,char**) { @autoreleasepool {
         require(state.getInt("tick",-1)==0,"preview starts at zero tick");
         const Json started=scene.spectraPreviewCommand(action("play"),"");
         require(started.getBool("playing"),"play did not start clock");
+        const auto transferRejected=scene.spectraPreviewCommand(action("checkpointFileBegin"),"");
+        require(!transferRejected.getStr("error").empty()&&transferRejected.getBool("playing"),
+                "checkpoint import while playing must report request-local rejection");
+        require(scene.spectraPreviewCommand(action("status"),"").getStr("error").empty(),
+                "file transport rejection poisoned simulation error latch");
         for(int i=0;i<3;++i){frame();mapFrame();}
         require(mapScene.cameraState().distance==independentMapCamera.distance,
                 "map camera was hijacked by the separate FX preview");
@@ -75,6 +80,10 @@ int aiverseMain(int,char**) { @autoreleasepool {
         const Json rejected=scene.spectraPreviewCommand(invalid,"");
         require(rejected.getBool("ready") && !rejected.getStr("error").empty(),
                 "invalid graph destroyed a working preview or hid diagnostics");
+        const auto staleCancel=scene.spectraPreviewCommand(action("checkpointFileCancel"),"");
+        require(!staleCancel.getStr("error").empty(),"stale transfer cancellation must be rejected");
+        require(scene.spectraPreviewCommand(action("status"),"").getStr("error")==rejected.getStr("error"),
+                "file transport rejection replaced existing error");
         scene.spectraPreviewCommand(action("pause"),"");
         frame();
         require(scene.spectraPreviewCommand(action("status"),"").getInt("tick")==3,

@@ -28,64 +28,64 @@ public:
     // never run inside an active render/compute pass.
     Json command(gfx::Device& device,const Json& input) {
         const std::string action=input.getStr("action","status");
-        if(action=="status")return status();
         const auto now=std::chrono::steady_clock::now();
         if(importTransferId_&&!fileImportPending_&&now-importTouched_>std::chrono::seconds(30)){importTransferId_=0;fileImport_.clear();}
         if(exportTransferId_&&now-exportTouched_>std::chrono::seconds(30)){exportTransferId_=0;fileExport_.clear();}
+        if(action=="status")return status();
         const auto transferId=input["transferId"].integer(-1);
         if(action=="checkpointFileCancel"){
             if(transferId>0&&uint64_t(transferId)==importTransferId_){fileImport_.clear();fileImportPending_=false;importTransferId_=0;}
             else if(transferId>0&&uint64_t(transferId)==exportTransferId_){fileExport_.clear();exportTransferId_=0;}
-            else return errorStatus("Unknown transfer ID");
-            error_.clear();return status();
+            else return transferStatus("Unknown transfer ID");
+            return transferStatus();
         }
         if(action=="checkpointFileRead"){
-            if(transferId<=0||uint64_t(transferId)!=exportTransferId_)return errorStatus("Stale export transfer ID");
-            exportTouched_=now;
+            if(transferId<=0||uint64_t(transferId)!=exportTransferId_)return transferStatus("Stale export transfer ID");
             const auto offset=input["offset"].integer(-1);
-            if(offset<0||uint64_t(offset)>fileExport_.size())return errorStatus("Invalid checkpoint offset");
+            if(offset<0||uint64_t(offset)>fileExport_.size())return transferStatus("Invalid checkpoint offset");
+            exportTouched_=now;
             static constexpr char hex[]="0123456789abcdef";
             std::string chunk;
             const size_t end=std::min(fileExport_.size(),size_t(offset)+size_t(32768));
             for(size_t i=size_t(offset);i<end;++i){chunk+=hex[fileExport_[i]>>4];chunk+=hex[fileExport_[i]&15];}
-            Json out=status();out.set("fileChunk",Json::string(chunk));out.set("fileSize",Json::number(int64_t(fileExport_.size())));return out;
+            Json out=transferStatus();out.set("fileChunk",Json::string(chunk));out.set("fileSize",Json::number(int64_t(fileExport_.size())));return out;
         }
         if(action=="checkpointFileBegin"){
-            if(!ready_||playing_||checkpointRequest_||rollbackId_||fileImportPending_)return errorStatus("Checkpoint requires settled paused preview");
-            if(importTransferId_)return errorStatus("Import transfer already active");
-            if(exportTransferId_)return errorStatus("Export transfer active");
-            fileImport_.clear();importTransferId_=nextTransferId_++;importTouched_=now;error_.clear();
-            Json out=status();out.set("transferId",Json::number(int64_t(importTransferId_)));return out;
+            if(!ready_||playing_||checkpointRequest_||rollbackId_||fileImportPending_)return transferStatus("Checkpoint requires settled paused preview");
+            if(importTransferId_)return transferStatus("Import transfer already active");
+            if(exportTransferId_)return transferStatus("Export transfer active");
+            fileImport_.clear();importTransferId_=nextTransferId_++;importTouched_=now;
+            Json out=transferStatus();out.set("transferId",Json::number(int64_t(importTransferId_)));return out;
         }
         if(action=="checkpointFileAppend"){
-            if(fileImportPending_||transferId<=0||uint64_t(transferId)!=importTransferId_)return errorStatus("Stale or pending import transfer");
-            importTouched_=now;
+            if(fileImportPending_||transferId<=0||uint64_t(transferId)!=importTransferId_)return transferStatus("Stale or pending import transfer");
             const auto chunk=input.getStr("chunk");
-            if(chunk.empty()||chunk.size()>65536||chunk.size()%2||fileImport_.size()+chunk.size()/2>spectra::kRestoreCheckpointMaxBytes+sizeof(spectra::TimelineCheckpointHeader))return errorStatus("Invalid checkpoint chunk size");
-            if(input["offset"].integer(-1)!=int64_t(fileImport_.size()))return errorStatus("Checkpoint chunk offset mismatch");
+            if(chunk.empty()||chunk.size()>65536||chunk.size()%2||fileImport_.size()+chunk.size()/2>spectra::kRestoreCheckpointMaxBytes+sizeof(spectra::TimelineCheckpointHeader))return transferStatus("Invalid checkpoint chunk size");
+            if(input["offset"].integer(-1)!=int64_t(fileImport_.size()))return transferStatus("Checkpoint chunk offset mismatch");
             auto digit=[](char c)->int{return c>='0'&&c<='9'?c-'0':c>='a'&&c<='f'?c-'a'+10:-1;};
             std::vector<uint8_t> decoded;
-            for(size_t i=0;i<chunk.size();i+=2){int a=digit(chunk[i]),b=digit(chunk[i+1]);if(a<0||b<0)return errorStatus("Invalid checkpoint hex");decoded.push_back(uint8_t(a*16+b));}
-            fileImport_.insert(fileImport_.end(),decoded.begin(),decoded.end());return status();
+            for(size_t i=0;i<chunk.size();i+=2){int a=digit(chunk[i]),b=digit(chunk[i+1]);if(a<0||b<0)return transferStatus("Invalid checkpoint hex");decoded.push_back(uint8_t(a*16+b));}
+            importTouched_=now;
+            fileImport_.insert(fileImport_.end(),decoded.begin(),decoded.end());return transferStatus();
         }
         if(action=="checkpointFileExport"){
-            if(exportTransferId_)return errorStatus("Export transfer already active");
-            if(importTransferId_)return errorStatus("Import transfer active");
-            if(!exportTimelineCheckpoint(fileExport_))return errorStatus("Save a fresh paused checkpoint first");
-            exportTransferId_=nextTransferId_++;exportTouched_=now;error_.clear();
-            Json out=status();out.set("transferId",Json::number(int64_t(exportTransferId_)));out.set("fileSize",Json::number(int64_t(fileExport_.size())));return out;
+            if(exportTransferId_)return transferStatus("Export transfer already active");
+            if(importTransferId_)return transferStatus("Import transfer active");
+            if(!exportTimelineCheckpoint(fileExport_))return transferStatus("Save a fresh paused checkpoint first");
+            exportTransferId_=nextTransferId_++;exportTouched_=now;
+            Json out=transferStatus();out.set("transferId",Json::number(int64_t(exportTransferId_)));out.set("fileSize",Json::number(int64_t(fileExport_.size())));return out;
         }
         if(action=="checkpointFileImport"){
-            if(transferId<=0||uint64_t(transferId)!=importTransferId_)return errorStatus("Stale import transfer ID");
-            if(fileImport_.empty()||fileImportPending_||checkpointRequest_||rollbackId_||playing_)return errorStatus("Import requires paused preview and uploaded bytes");
-            fileImportPending_=true;error_.clear();return status();
+            if(transferId<=0||uint64_t(transferId)!=importTransferId_)return transferStatus("Stale import transfer ID");
+            if(fileImport_.empty()||fileImportPending_||checkpointRequest_||rollbackId_||playing_)return transferStatus("Import requires paused preview and uploaded bytes");
+            fileImportPending_=true;return transferStatus();
         }
         if(action=="checkpointCancel"){
             checkpointRequest_=false;rollbackId_=0;checkpointWaitFrames_=0;fileImportPending_=false;fileImport_.clear();importTransferId_=0;
             error_.clear();return status();
         }
         if((checkpointRequest_||rollbackId_||fileImportPending_||importTransferId_)&&action!="stop")
-            return errorStatus("Checkpoint operation pending; cancel or wait");
+            return transferStatus("Checkpoint operation pending; cancel or wait");
 
         if(action=="playback") {
             // Preview-only playback settings: no graph file or gameplay
@@ -528,6 +528,13 @@ public:
         ++generation_;
     }
 private:
+    // Transport responses carry request-local errors without poisoning the
+    // simulation error latch or clearing an existing runtime failure.
+    Json transferStatus(const std::string& reason = {}) const {
+        Json out=status();
+        out.set("error",Json::string(reason));
+        return out;
+    }
     Json errorStatus(std::string reason) {
         error_=std::move(reason);
         return status();
