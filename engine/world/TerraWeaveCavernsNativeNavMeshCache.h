@@ -53,6 +53,7 @@ public:
         CaveNavConfig config) {
         CavePathResult result;
         result.sourceRevision=query.sourceRevision;
+        result.environmentRevision=source?source->environmentRevision():0;
         if(!source||source->revision()!=query.sourceRevision||
            (query.agent.traversal!=CaveTraversal::Ground &&
             query.agent.traversal!=CaveTraversal::Climbing))
