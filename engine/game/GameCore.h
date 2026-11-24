@@ -191,7 +191,8 @@ public:
         uint64_t expectedRevision,const Surface& candidate) const;
     // After the terrain/soil transaction but before its staged World is
     // published. Re-anchor existing ground units; other owners stay explicit.
-    bool reconcilePlanetGroundUnits(World& staged,const Surface& previous) const;
+    bool reconcilePlanetGroundUnits(World& staged,const Surface& previous,
+        const std::vector<uint64_t>& preservePose={}) const;
     int bodyOf(Simulation& sim, Vec3 p) const;                     // 0 on flat maps
     // Body centre in world space at a sim tick (circular orbits, Fixed). View: float(world) at tick + alpha.
     Vec3 bodyWorldPosition(Simulation& sim, int body, uint32_t tick) const;

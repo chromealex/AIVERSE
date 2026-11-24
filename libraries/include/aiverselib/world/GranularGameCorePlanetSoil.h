@@ -2,13 +2,15 @@
 // completed-tick barrier. The caller opts into the discrete volume policy.
 #pragma once
 #include "aiverselib/world/GranularPlanetSoilGeometry.h"
+#include "aiverselib/world/FracturePlanetFoundation.h"
 #include "engine/game/GameCore.h"
 #include "engine/game/GameState.h"
 
 namespace aiverse::granular {
 inline std::optional<PlanetSoilTransferResult> transferGameCorePlanetSoil(
         game::GameCore& core,World& world,const PlanetSoilRequest& request,
-        uint32_t completedTick,int32_t quanta,int16_t bedrock16,int16_t ceiling16){
+        uint32_t completedTick,int32_t quanta,int16_t bedrock16,int16_t ceiling16,
+        std::span<const fracture::PlanetFoundation> foundations={}){
     const auto* gs=world.resourceConst<game::GameState>();
     if(!gs||!gs->surface||!gs->grid.hf||
        gs->planetTerrainRevision!=request.expectedTerrainRevision)return {};
@@ -23,10 +25,14 @@ inline std::optional<PlanetSoilTransferResult> transferGameCorePlanetSoil(
         });
     if(!result)return {};
     if(result->terrain.movedVolumeCm3){
-        if(!core.reconcilePlanetGroundUnits(stagedWorld,*surface))return {};
+        const auto* current=stagedWorld.resourceConst<game::GameState>();
+        const auto nextSurface=current->surface;
+        const auto support=fracture::reconcilePlanetFoundations(stagedWorld,*surface,*nextSurface,foundations,completedTick);
+        if(!support||!core.reconcilePlanetGroundUnits(stagedWorld,*surface,support->preservePose))return {};
         // Non-Unit native fields also need to remain attached to the soil.
         // Ground Unit fields were already reconciled above; do not move twice.
-        if(!stagedWorld.tryGetConst<game::Unit>(request.field)){
+        if(!stagedWorld.tryGetConst<game::Unit>(request.field)&&
+           !std::binary_search(support->preservePose.begin(),support->preservePose.end(),request.field.packed())){
             auto& tr=stagedWorld.get<Transform>(request.field);
             const auto* next=stagedWorld.resourceConst<game::GameState>();
             tr.pos=tr.pos+surface->up(tr.pos)*(next->surface->heightAt(tr.pos)-surface->heightAt(tr.pos));

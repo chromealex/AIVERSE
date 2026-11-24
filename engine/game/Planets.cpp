@@ -50,14 +50,17 @@ bool GameCore::stagePlanetTerrain(World& staged,const Surface& expected,
     gs->lanesDirty=true;
     return true;
 }
-bool GameCore::reconcilePlanetGroundUnits(World& staged,const Surface& previous) const {
+bool GameCore::reconcilePlanetGroundUnits(World& staged,const Surface& previous,
+        const std::vector<uint64_t>& preservePose) const {
     const auto* gs=staged.resourceConst<GameState>();
-    if(systems_||!gs||!gs->surface||gs->surface->tab!=previous.tab)return false;
+    if(systems_||!gs||!gs->surface||gs->surface->tab!=previous.tab||
+       !std::is_sorted(preservePose.begin(),preservePose.end()))return false;
     const auto next=gs->surface;
     struct Move {Entity entity;Vec3 position;};
     std::vector<Move> moves;
     staged.eachExistingConst<Unit>([&](Entity e,const Unit& u){
-        if(u.type>=rules_.types.size()||u.hp.raw<=0||
+        if(std::binary_search(preservePose.begin(),preservePose.end(),e.packed())||
+           u.type>=rules_.types.size()||u.hp.raw<=0||
            (u.flags&(kUnitOffMap|kUnitInTransit|kUnitPossessed)))return;
         const auto& type=rules_.types[u.type];
         if(!(type.layer&(kLayerGround|kLayerSandOnly))||

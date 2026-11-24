@@ -15,6 +15,7 @@
 #include "aiverselib/world/PlanetGranularPhysicalFrame.h"
 #include "aiverselib/world/MorphPlanetModelFrame.h"
 #include "aiverselib/world/PlanetFractureDelivery.h"
+#include "aiverselib/world/FracturePlanetFoundation.h"
 #include "aiverselib/world/SurfaceGravitySupport.h"
 #include "aiverselib/world/PlanetCharacterGravityFrame.h"
 #include "aiverselib/world/GranularPlanetTerrainTransfer.h"
@@ -728,6 +729,51 @@ static void checkPlanetLiveFracture(){
     const auto cap=samplePlanetFracture(ecs,surface,8,1);
     AIVERSE_TEST_CHECK(cap.getBool("truncated")&&cap["members"].size()==1&&cap.getInt("pending")==1);
     AIVERSE_TEST_CHECK(!samplePlanetFracture(ecs,surface,UINT32_MAX).getBool("available"));
+}
+static void checkPlanetFoundationLoss(){
+    using namespace fracture;
+    game::Surface surface;game::BodyDef body;body.id="terra";body.radius=Fixed::fromInt(64);body.faceSize=8;
+    surface.bodies.push_back(body);body.id="moon";surface.bodies.push_back(body);surface.build();
+    const int cell=surface.gridCell(0,0,7,7);
+    const auto footprint=wp::planetTerrainFootprint(surface,0,cell);
+    AIVERSE_TEST_CHECK(footprint);
+    auto lowered=surface;
+    for(const auto& corner:footprint->corners)for(int k=0;k<corner.aliasCount;++k)
+        lowered.corners[size_t(corner.aliases[size_t(k)])]=-16;
+    World ecs;
+    const auto root=ecs.create(),child=ecs.create(),other=ecs.create(),moon=ecs.create(),bond=ecs.create();
+    const auto pos=surface.cellCenter(cell);
+    const auto safe=surface.cellCenter(surface.gridCell(0,1,3,3));
+    const auto lunar=surface.cellCenter(surface.gridCell(1,0,7,7));
+    for(const auto& item:std::array<std::pair<Entity,Vec3>,4>{{{root,pos},{child,pos},{other,safe},{moon,lunar}}}){
+        Transform tr{};tr.pos=item.second;ecs.add<Transform>(item.first,tr);
+        ecs.add<Member>(item.first,Member{item.first!=child,false,false});
+        ecs.add<Collapse>(item.first,Collapse{});
+    }
+    ecs.add<Bond>(bond,Bond{root,child,100,0,true});
+    std::vector<PlanetFoundation> supports{{root,"terra",{pos},1,Fixed::fromRatio(1,8)},
+        {other,"terra",{safe},1,Fixed::fromRatio(1,8)},
+        {moon,"moon",{lunar},1,Fixed::fromRatio(1,8)}};
+    ecs.enableCowSnapshots();const World before=ecs;
+    auto malformed=supports;malformed.push_back(supports.front());
+    AIVERSE_TEST_CHECK(!reconcilePlanetFoundations(ecs,surface,lowered,malformed,7));
+    AIVERSE_TEST_CHECK(ecs.get<Member>(root).anchored);
+    const auto result=reconcilePlanetFoundations(ecs,surface,lowered,supports,7);
+    AIVERSE_TEST_CHECK(result&&result->lostAnchors.size()==1&&result->lostAnchors[0]==root&&result->newlyDetached.size()==2);
+    AIVERSE_TEST_CHECK(!ecs.get<Member>(root).anchored&&ecs.get<Member>(root).detached&&ecs.get<Member>(child).detached);
+    AIVERSE_TEST_CHECK(!ecs.get<Member>(other).detached&&!ecs.get<Member>(moon).detached);
+    AIVERSE_TEST_CHECK(ecs.get<Transform>(root).pos==pos&&ecs.get<Transform>(child).pos==pos);
+    const auto events=pending(ecs);
+    AIVERSE_TEST_CHECK(events.size()==2);
+    AIVERSE_TEST_CHECK(projectPlanetCollapse(ecs,lowered,events.front()));
+    const auto again=reconcilePlanetFoundations(ecs,surface,lowered,supports,7);
+    AIVERSE_TEST_CHECK(again&&again->lostAnchors.empty()&&pending(ecs).size()==2);
+    ecs=before;
+    AIVERSE_TEST_CHECK(ecs.get<Member>(root).anchored&&pending(ecs).empty());
+    // A redundant remaining foundation contact prevents loss.
+    supports[0].feet.push_back(safe);
+    const auto redundant=reconcilePlanetFoundations(ecs,surface,lowered,supports,7);
+    AIVERSE_TEST_CHECK(redundant&&redundant->lostAnchors.empty()&&!ecs.get<Member>(child).detached);
 }
 static void checkPlanetCollapseDelivery(){
     game::Surface surface;game::BodyDef body;
@@ -1535,6 +1581,7 @@ int main(){
     checkPlanetSoilTransfer();
     checkPlanetSoilGeometry();
     checkPlanetCollapseDelivery();
+    checkPlanetFoundationLoss();
     checkPlanetLiveFracture();
     checkPlanetMorphModelFrame();
     checkPlanetMorphContactFrame();
