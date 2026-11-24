@@ -963,7 +963,17 @@ void ViewScripts::update(Simulation& sim, float dt) {
                 lua_pushnumber(L, ev.pos.z.toDouble()); lua_setfield(L, -2, "z");
                 const bool typed = ev.type == kEvDied || ev.type == kEvSpawned || ev.type == kEvBuildDone || ev.type == kEvTrainDone || ev.type == kEvUpgraded;
                 if (typed && ev.value >= 0 && size_t(ev.value) < r.types.size()) { lua_pushstring(L, r.types[size_t(ev.value)].id.c_str()); lua_setfield(L, -2, "unit_type"); }
-                if (ev.type == kEvHit) { lua_pushnumber(L, Fixed::fromRaw(ev.value).toDouble()); lua_setfield(L, -2, "amount"); }
+                if (ev.type == kEvHit || ev.type == kEvBounty) {
+                    lua_pushnumber(L, Fixed::fromRaw(ev.value).toDouble()); lua_setfield(L, -2, "amount");
+                }
+                if (ev.type == kEvHit) {
+                    lua_pushboolean(L, (ev.flags & kHitCritical) != 0); lua_setfield(L, -2, "critical");
+                }
+                if (ev.type == kEvBounty) {
+                    if (ev.resource < r.resources.size()) { lua_pushstring(L, r.resources[ev.resource].id.c_str()); lua_setfield(L, -2, "resource"); }
+                    if (ev.subjectType < r.types.size()) { lua_pushstring(L, r.types[ev.subjectType].id.c_str()); lua_setfield(L, -2, "unit_type"); }
+                    if (ev.subjectOwner <= UINT8_MAX) { lua_pushinteger(L, ev.subjectOwner); lua_setfield(L, -2, "victim_owner"); }
+                }
                 if (ev.type == kEvMessage) {
                     auto& msgs = im.vm.module->state(sim).trig.messages;
                     if (ev.value >= 0 && size_t(ev.value) < msgs.size()) { lua_pushstring(L, msgs[size_t(ev.value)].c_str()); lua_setfield(L, -2, "text"); }
