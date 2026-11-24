@@ -10,6 +10,44 @@ using namespace aiverse;using namespace aiverse::lib::systems;
 int main(){
     {
         using namespace game;
+        Simulation grouped({},std::make_unique<GameCore>());
+        grouped.setup(Json::parse(R"({"victory":"noUnits","statuses":{"slow":{"mods":[{"stat":"speed","mul":0.25,"stackingGroup":"slow"}]},"haste":{"mods":[{"stat":"speed","mul":2,"stackingGroup":"haste"}]}},"types":{"unit":{"health":{"max":100},"move":{"speed":4}}}})"),Json::parse(R"({"size":[8,8],"players":[{"name":"A","team":1},{"name":"B","team":2}],"terrain":{"rows":["........","........","........","........","........","........","........","........"]},"entities":[{"type":"unit","owner":1,"pos":[2,2]},{"type":"unit","owner":2,"pos":[6,6]}]})"));
+        Entity e;grouped.world().each<Unit>([&](Entity candidate,auto&){if(!e.valid())e=candidate;});CHECK(e.valid());
+        auto& m=static_cast<GameCore&>(grouped.module());
+        const auto& groups=m.rules().modifierGroups;
+        CHECK(groups.size()==2);
+        uint16_t slow=0,haste=0;
+        for(size_t i=0;i<groups.size();++i){if(groups[i]=="slow")slow=uint16_t(i+1);if(groups[i]=="haste")haste=uint16_t(i+1);}
+        CHECK(slow&&haste);
+        auto& buffs=grouped.world().get<Buffs>(e);
+        upsertTimedBuff(buffs,{Stat::Speed,{},Fixed::fromRatio(1,2),100,0,slow});
+        upsertTimedBuff(buffs,{Stat::Speed,{},Fixed::fromRatio(3,4),80,0,slow});
+        upsertTimedBuff(buffs,{Stat::Speed,{},Fixed::fromRatio(1,2),90,0,slow});
+        CHECK(buffs.list.size()==2);CHECK(buffs.list.front().until==100);
+        CHECK(m.stat(grouped,e,Stat::Speed)==Fixed::fromInt(2));
+        const auto id=m.rules().findType("unit");CHECK(id>=0);
+        EffectCtx ctx;ctx.caster=e;ctx.target=e;ctx.owner=1;ctx.sourceType=uint16_t(id);
+        int statusId=-1;
+        for(size_t i=0;i<m.rules().statuses.size();++i)if(m.rules().statuses[i].id=="slow")statusId=int(i);
+        CHECK(statusId>=0);
+        CHECK(applyStatus(m,grouped,e,statusId,Fixed::fromInt(1),ctx));
+        CHECK(m.stat(grouped,e,Stat::Speed)==Fixed::fromInt(1));
+        upsertTimedBuff(buffs,{Stat::Speed,{},Fixed::fromInt(2),200,0,haste});
+        CHECK(m.stat(grouped,e,Stat::Speed)==Fixed::fromInt(2));
+        auto bytes=grouped.serialize();CHECK(!bytes.empty());auto hash=grouped.checksum();
+        SimSnapshot snapshot;grouped.saveState(snapshot);
+        for(int i=0;i<40;++i)grouped.step();
+        CHECK(m.stat(grouped,e,Stat::Speed)==Fixed::fromInt(4));
+        grouped.loadState(snapshot);CHECK(grouped.checksum()==hash);
+        CHECK(m.stat(grouped,e,Stat::Speed)==Fixed::fromInt(2));
+        std::string error;CHECK(grouped.deserialize(bytes,&error));CHECK(grouped.checksum()==hash);
+        CHECK(m.stat(grouped,e,Stat::Speed)==Fixed::fromInt(2));
+        for(const char* invalid:{R"({"statuses":{"bad":{"mods":[{"stat":"speed","mul":0.5,"stackingGroup":""}]}}})",R"({"statuses":{"bad":{"mods":[{"stat":"speed","mul":0.5,"stackingGroup":"slow","floor":0.2}]}}})"}){
+            bool rejected=false;try{(void)loadRules(Json::parse(invalid));}catch(const std::runtime_error&){rejected=true;}CHECK(rejected);
+        }
+    }
+    {
+        using namespace game;
         WeaponDef weapon;weapon.targets=kLayerGround;weapon.targetTags=1|2;weapon.ignoreTags=4;
         CHECK(weaponTargetMatches(weapon,kLayerGround,1));
         CHECK(weaponTargetMatches(weapon,kLayerGround,2));
