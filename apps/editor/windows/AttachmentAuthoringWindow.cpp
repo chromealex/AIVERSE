@@ -586,7 +586,10 @@ public:
         ui::inputString("New child",newChild_);
         ui::inputString("New socket",newSocket_);
         if(ImGui::Button("Attach") && !newChild_.empty() && !newSocket_.empty()) {
-            authored_.push_back({newChild_,newSocket_,true});
+            AuthoredChild child;
+            child.model=newChild_;
+            child.socket=newSocket_;
+            authored_.push_back(std::move(child));
             newChild_.clear();
             newSocket_.clear();
             dirty_=true;
