@@ -317,7 +317,7 @@ export interface StudioParams {
   'studio.assetAudit': Record<string,never>;
   /** Agent panel: transcript lines from `from`, change list, link status. */
   'studio.agentInfo': { from?: number };
-  'studio.sceneBrush': Partial<StudioSceneBrush>;
+  'studio.sceneBrush': Partial<StudioSceneBrush> & { expectedProject?: string; expectedMap?: string };
   'studio.splineEdit': { kind: '' | 'road' | 'river' };
   'studio.hub': Record<string,never>;
   'studio.hubTemplates': { all?: boolean; query?: string; refresh?: boolean };
