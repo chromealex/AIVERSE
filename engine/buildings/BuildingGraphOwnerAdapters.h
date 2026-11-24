@@ -46,6 +46,29 @@ struct BuildingGridGraphAdapter {
         out.set("lastHpaLayer",Json::number(int64_t(t.lastHpaLayer)));
         out.set("gridWidth",Json::number(int64_t(grid.w)));
         out.set("gridHeight",Json::number(int64_t(grid.h)));
+        // Flat grid footprints at Y=0 are a projection, not terrain heights.
+        // Do not project cube-sphere IDs as flat world coordinates.
+        if(!grid.sphere()&&grid.w>0&&grid.h>0){
+            Json bounds=Json::array();
+            auto add=[&](const char* kind,int id,int x,int z,int w,int h){
+                Json row=Json::object(),lo=Json::array(),hi=Json::array();
+                row.set("kind",Json::string(kind));
+                row.set("id",Json::string(std::to_string(id)));
+                for(int v:{x,0,z})lo.push(Json::number(int64_t(v)));
+                for(int v:{x+w,0,z+h})hi.push(Json::number(int64_t(v)));
+                row.set("min",std::move(lo));row.set("max",std::move(hi));bounds.push(std::move(row));
+            };
+            std::set<int> seen;
+            for(int id:t.recentCellIds)if(id>=0&&int64_t(id)<int64_t(grid.w)*grid.h&&seen.insert(id).second)
+                add("grid-cells",id,id%grid.w,id/grid.w,1,1);
+            const int k=game::HpaGraph::kC,cw=(grid.w-1)/k+1,ch=(grid.h-1)/k+1;
+            for(int id:t.lastHpaClusterIds)if(id>=0&&int64_t(id)<int64_t(cw)*ch){
+                const int x=(id%cw)*k,z=(id/cw)*k;
+                add("hpa-clusters",id,x,z,std::min(k,grid.w-x),std::min(k,grid.h-z));
+            }
+            out.set("overlayScope",Json::string("grid-wide flat XZ projection at Y=0, not terrain height"));
+            out.set("overlayBounds",std::move(bounds));
+        }
         out.set("flatHpa",work(t.flatHpa));
         out.set("fullFlowFields",work(t.flowFull));
         out.set("flowClusterBlocks",work(t.flowCluster));
