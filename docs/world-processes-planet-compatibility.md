@@ -54,3 +54,6 @@ Stage 89: native planetary IMPRINT uses ImprintSurfaceTrails.h and canonical Gam
 
 ## Stage 95: CIRCUIT
 Explicit electrical/logic graphs are independent of surface geometry. Component-local power cache preserves directed supply allocation and per-tick gates. CircuitSurfaceWiring.h exposes read-only local wire candidates on planes and planets, including seams, rejecting proximity across bodies. Actual wire mutations remain explicit owner commands. Studio/MCP wiring UI and real planet scene acceptance pending. No direct gravity term.
+
+## Stage 96: Studio topology-aware diagnostics and numeric authoring
+The existing HTML5 Inspector can edit canonical SurfacePlacement and local EVOLVE/MORPH settings. Local Play diagnostics use real Surface/PHYSIS, report same-body distance bands and focus coordinates. The authoring Scene currently falls back to a plane on planet maps; planar world-process handles and group transforms are guarded. Full spherical authoring viewport, visual gravity fields, region/connection overlays and native physics/render acceptance remain open. See Stage96 handoff. No tests run.
