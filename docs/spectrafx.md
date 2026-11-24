@@ -1,6 +1,6 @@
-## Stage 115 — production Metal allocator acceptance (in progress; QA pending)
+## Stage 115 — production Metal allocator acceptance (test source registered; NOT RUN)
 
-Exercise real ComputeParticles and Metal RHI, not mock GPU: 256/65536/262144 slots, both geometry paths, exact free/alive/visible/LOD counters and unique slot ownership, kill/reuse, growth, reset/idle shrink, memory budget fences. Register Mac CTest and repair older standalone smoke bindings to current shader ABI. Device absent is SKIP, not PASS. Record execution separately from source registration.
+Exercise real ComputeParticles and Metal RHI, not mock GPU: 256/65536/262144 slots, both geometry paths, exact free/alive/visible/LOD counters and unique slot ownership, kill/reuse, growth, reset/idle shrink, memory budget fences. Register Mac CTest and repair older standalone smoke bindings to current shader ABI. Device absent is SKIP, not PASS. Record execution separately from source registration. New `spectrafx_metal_allocator` CTest links production RHI, reports exact partition/draw ownership via blocking QA-only `auditGpuAllocation`, includes capacity/LOD/memory cases. Updated legacy standalone compaction smoke to bind current VM/material/kill buffers and uniform ABI. Hardware run still required.
 
 ## Stage 114 — shared adaptive GPU allocation budget (source implemented; QA pending)
 

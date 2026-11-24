@@ -1289,6 +1289,42 @@ bool ComputeParticles::requestAllocationCounters(std::function<void(bool,Allocat
     }
     return true;
 }
+bool ComputeParticles::auditGpuAllocation(AllocationAudit& out){
+    out={};
+    if(!gpuActive()||!gpuAllocationActive_||!device_||!device_->gpuHealthy()||
+       gpuResetDirty_||gpuStagingDirty_||!device_->canUpdateSharedBuffers())return false;
+    const auto cap=allocatedCapacity();
+    std::array<uint32_t,8> raw{};
+    AllocationAudit result;
+    if(!device_->readBuffer(aliveCounter_,raw.data(),sizeof(raw))||
+       !device_->readBuffer(gpuDrawArgs_,&result.draw,sizeof(result.draw))||
+       !device_->readBuffer(vmErrors_,&result.vmErrors,sizeof(result.vmErrors)))return false;
+    if(raw[0]>cap||raw[1]!=cap-raw[0]||raw[6]>raw[0]||raw[7]>raw[0]-raw[6]||
+       raw[2]>cap||raw[3]>cap-raw[2])return false;
+    result.capacity=cap;
+    result.counters.alive=raw[0];result.counters.free=raw[1];
+    result.counters.reservedBase=raw[2];result.counters.admitted=raw[3];
+    result.counters.visible=raw[6];result.counters.lodRejected=raw[7];
+    result.counters.revision=vmFrameRevision_;
+    // Reset may leave previously published draw args unreferenced. Only
+    // validate them for a currently submitted allocator frame.
+    if(gpuAllocationSubmitted_ && (result.draw.indexCount!=(proceduralActive_?6u:raw[6]*6u)||
+       result.draw.instanceCount!=(proceduralActive_?raw[6]:1u)||
+       result.draw.firstIndex||result.draw.baseVertex||result.draw.firstInstance))return false;
+    std::vector<uint32_t> alive(raw[0]),free(raw[1]);
+    std::vector<uint32_t> owners(size_t(cap)*2);
+    if((!alive.empty()&&!device_->readBuffer(gpuAliveCurrent_,alive.data(),alive.size()*4))||
+       (!free.empty()&&!device_->readBuffer(liveSlots_,free.data(),free.size()*4))||
+       (!alive.empty()&&!device_->readBuffer(gpuSourceOwners_,owners.data(),owners.size()*4)))return false;
+    std::vector<uint8_t> seen(cap,0);
+    for(uint32_t slot:alive){
+        if(slot>=cap||seen[slot]++)return false;
+        result.liveOwners.push_back(uint64_t(owners[size_t(slot)*2])|(uint64_t(owners[size_t(slot)*2+1])<<32));
+    }
+    for(uint32_t slot:free)if(slot>=cap||seen[slot]++)return false;
+    out=std::move(result);
+    return true;
+}
 bool ComputeParticles::readGpuVmErrors(uint32_t& count) {
     stats_.gpuVmErrorsKnown=false;
     if(!initialized_ || backend_!=ComputeBackend::Metal || !device_ ||

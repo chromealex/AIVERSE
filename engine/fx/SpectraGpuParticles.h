@@ -213,6 +213,15 @@ public:
         uint32_t lodRejected=0; // in-frustum population omitted by Medium quality
     };
     bool requestAllocationCounters(std::function<void(bool,AllocationCounters)> callback);
+    // Blocking QA diagnostic, between completed frames only. No normal-frame
+    // readback. Checks exact partition of physical slots and draw arguments.
+    struct AllocationAudit {
+        AllocationCounters counters{};
+        uint32_t capacity=0,vmErrors=0;
+        gfx::DrawIndexedIndirectCommand draw{};
+        std::vector<uint64_t> liveOwners;
+    };
+    bool auditGpuAllocation(AllocationAudit& out);
     // Asynchronous 4-byte diagnostics. Accepted requests invoke callback
     // after a later frame; shutdown invalidates callbacks safely.
     bool requestGpuVmErrors(std::function<void(bool,uint32_t)> callback);

@@ -4231,6 +4231,19 @@ if(AIVERSE_BUILD_TESTS AND AIVERSE_PLATFORM STREQUAL "macos")
         SKIP_RETURN_CODE 77)
 endif()
 
+# Production GPU-owned allocator acceptance (Stages 110–115).
+if(AIVERSE_BUILD_TESTS AND AIVERSE_PLATFORM STREQUAL "macos")
+    add_executable(aiverse_spectrafx_metal_allocator_test
+        tests/spectrafx_metal_allocator.mm $<TARGET_OBJECTS:aiverse_runtime>)
+    target_include_directories(aiverse_spectrafx_metal_allocator_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_options(aiverse_spectrafx_metal_allocator_test PRIVATE "-fobjc-arc")
+    target_link_libraries(aiverse_spectrafx_metal_allocator_test PRIVATE
+        aiverse_runtime aiverse_fx aiverse_render2d)
+    add_test(NAME spectrafx_metal_allocator COMMAND aiverse_spectrafx_metal_allocator_test)
+    set_tests_properties(spectrafx_metal_allocator PROPERTIES
+        LABELS "SpectraFX;MetalGPU;RHI" SKIP_RETURN_CODE 77 TIMEOUT 300)
+endif()
+
 # Data-driven entity effects shared by every host (table + presenter).
 if(AIVERSE_BUILD_TESTS AND AIVERSE_DESKTOP)
     add_executable(aiverse_spectrafx_entity_effects_tests
