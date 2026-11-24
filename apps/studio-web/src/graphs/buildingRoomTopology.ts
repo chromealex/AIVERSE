@@ -95,3 +95,22 @@ export function roomComponentMembers(data:BuildingRoomTopology,roomId:string,wit
  const key=withoutElevators?'withoutElevatorsComponent':'component';
  return data.rooms.filter(r=>r[key]===room[key]);
 }
+
+export interface BuildingRouteQuery {start:string;goal:string;allowStairs:boolean;allowElevators:boolean}
+export interface BuildingRouteResult extends BuildingRouteQuery {reachable:boolean;steps:{edgeId:string;from:string;to:string}[]}
+/** Validate a native path, never solve one. */
+export function parseBuildingRoute(value:unknown,query:BuildingRouteQuery,data:BuildingRoomTopology):BuildingRouteResult {
+ const r=obj(value);
+ if(!data.rooms.some(x=>x.id===query.start)||!data.rooms.some(x=>x.id===query.goal)||
+ r.start!==query.start||r.goal!==query.goal||r.allowStairs!==query.allowStairs||r.allowElevators!==query.allowElevators||typeof r.reachable!=='boolean')throw Error('Route response does not match request');
+ const byEdge=new Map(data.connections.map(e=>[e.id,e])),seen=new Set([query.start]);
+ let current=query.start;
+ const steps=arr(r.steps,127).map(v=>{
+  const s=obj(v),edgeId=id(s.edgeId),from=id(s.from),to=id(s.to),edge=byEdge.get(edgeId);
+  if(!edge||from!==current||seen.has(to)||!((edge.from===from&&edge.to===to)||(edge.to===from&&edge.from===to))||
+     (edge.kind==='stair'&&!query.allowStairs)||(edge.kind==='elevator'&&!query.allowElevators))throw Error('Invalid native route step');
+  current=to;seen.add(to);return {edgeId,from,to};
+ });
+ if(r.reachable?current!==query.goal:steps.length!==0||query.start===query.goal)throw Error('Invalid native route destination');
+ return {...query,reachable:r.reachable,steps};
+}
