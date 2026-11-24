@@ -1855,7 +1855,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
         } else if (method == "studio.op") {
             const std::string op=params.getStr("op");
             if (!studioToolAllowed(op)) throw std::runtime_error("This operation is not available in Studio panels: "+op);
-            if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
+            if (op != "feature_readiness_get" && ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
             const Json input=params["params"].isObject()?params["params"]:Json::object();
             const bool wasDirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
             const size_t depth=ws_.map.undoDepth(),entityCount=ws_.map.data.entities.size();
