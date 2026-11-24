@@ -1,6 +1,7 @@
 // Synthetic Radiance RGBE fixtures and native RHI contract tests.
 // Test SOURCE ONLY: this file does not claim a test execution result.
 #include "engine/render/HdrTexture.h"
+#include "engine/render/EnvironmentIbl.h"
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -119,6 +120,27 @@ void rleAndOrientation() {
     require(image.rgba16f[0] == 0 && image.rgba16f[1] == 0x3c00u &&
             image.rgba16f[4] == 0x3c00u, "horizontal orientation flipped");
 }
+void environmentConvolution(){
+    using namespace render::environment_ibl;
+    std::string pixels;pixel(pixels,128,64,32,130);pixel(pixels,128,64,32,130);
+    render::RadianceImage image;std::string error;
+    const auto encoded=hdr("-Y 1 +X 2",pixels);
+    require(!render::parseRadianceHdr(encoded,image,error,8),"decode budget must reject before allocation");
+    require(render::parseRadianceHdr(encoded,image,error,16),"decode exact byte budget");
+    const auto atlas=convolve(image);
+    require(atlas.width==bandWidth&&atlas.height==bands*bandHeight,"IBL atlas geometry");
+    for(size_t i=0;i<atlas.rgba16f.size();i+=4)
+        require(atlas.rgba16f[i]==image.rgba16f[0]&&atlas.rgba16f[i+1]==image.rgba16f[1]&&atlas.rgba16f[i+2]==image.rgba16f[2]&&atlas.rgba16f[i+3]==0x3c00u,"constant HDR must preserve radiance in all bands and gutters");
+    render::RadianceImage nonuniform;nonuniform.width=8;nonuniform.height=4;nonuniform.rgba16f.resize(8*4*4);
+    for(int y=0;y<4;++y)for(int x=0;x<8;++x){
+        const size_t i=size_t(y*8+x)*4;nonuniform.rgba16f[i]=x<4?0x4400u:0;nonuniform.rgba16f[i+3]=0x3c00u;
+    }
+    const auto filtered=convolve(nonuniform);
+    const auto at=[&](int band,int x,int y){return filtered.rgba16f[(size_t(band*bandHeight+y)*bandWidth+x)*4];};
+    require(at(0,16,32)>at(0,112,32),"directional radiance preserved");
+    require(at(0,0,32)==at(0,width,32)&&at(0,width+1,32)==at(0,1,32),"longitude gutters wrap");
+    require(at(3,16,32)<at(0,16,32)&&at(3,112,32)>at(0,112,32),"roughness convolution changes directional radiance");
+}
 void errorsAndBoundary() {
     using render::hdr_detail::toHalf;
     require(toHalf(1.0f) == 0x3c00u && toHalf(0.0f) == 0 &&
@@ -145,6 +167,7 @@ int main() {
         flatAndUpload();
         rleAndOrientation();
         errorsAndBoundary();
+        environmentConvolution();
     } catch (const std::exception& e) {
         std::fprintf(stderr,"HDR texture contract FAILED: %s\n",e.what());
         return 1;

@@ -89,7 +89,8 @@ struct StudioScene::GraphPresentation {
         if(relative.empty()){
             if(environment.valid()){
                 if(!dev.waitForResourceIdle())throw std::runtime_error("HDR environment retirement failed");
-                if(sampleRenderer)sampleRenderer->setModelEnvironment({});dev.destroyTexture(environment);
+                if(sampleRenderer)sampleRenderer->setModelEnvironment({});
+                dev.destroyTexture(environment);
             }
             environment={};environmentPath.clear();return;
         }

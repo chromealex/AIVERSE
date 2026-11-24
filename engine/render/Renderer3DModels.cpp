@@ -516,6 +516,7 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
     const ModelShaderKey pkey{pipeKey, selectedGraph};
     for (auto& [k, p] : modelPipes_) if (k == pkey) {
         if(warmingPipelines_ && !p.valid())warmingFailed_=true;
+        if(environment&&!p.valid())modelError_="HDR environment model pipeline unavailable";
         return p;
     }
 
@@ -707,11 +708,12 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
         gfx::ShaderDesc sd;
         sd.glslVertex = vs.c_str(); sd.glslFragment = fs.c_str(); sd.msl = msl.c_str();
         // tex11/tex12: SSR scene colour/depth; graph textures follow at kGraphTextureSlot.
-        sd.uniformSlots = dynamicGi ? (vtSampling ? 8 : 7) : vtSampling ? 7 : (shadow ? 5 : 6);
+        sd.uniformSlots = dynamicGi ? (vtSampling ? 8 : 7) : (vtSampling||environment) ? 7 : (shadow ? 5 : 6);
         sd.textureSlots = alphaR8 ? 16 : vtSampling ? virtualTableSlot+1 :
             (graph && !graph->textures.empty() ?
             graphTextureSlot+int(graph->textures.size()) : shadow ? 9 : 13);
         sd.textureSlots=std::max(sd.textureSlots,dynamicGi ? dynamicGiTextureSlot+1 : 0);
+        if(environment)sd.textureSlots=std::max(sd.textureSlots,14);
         sd.label = shadow ? "model shadow" : "model"; // U5/tex9: lights, tex10: height field
         ShaderEntry e;
         if (warmingPipelines_) e.job=dev_->createShaderAsync(sd);
