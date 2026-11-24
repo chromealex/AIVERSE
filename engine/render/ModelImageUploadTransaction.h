@@ -148,6 +148,7 @@ public:
             throw std::runtime_error("staged material texture GPU upload failed");
         image.rgba.clear();
         image.sharedRgba.reset();
+        image.sharedRadiance16f.reset();
         image.compressed.reset();
         entry->images.push_back(std::move(image)); // nothrow move
         entry->indices.push_back(index);
@@ -167,7 +168,7 @@ public:
             throw std::runtime_error("GPU image copy is not retired in the transaction device generation");
         if(image.name.empty()||image.width<=0||image.height<=0||!image.tex.valid()||
            image.borrowedTexture||image.textureCache||image.textureLease||!image.textureKey.empty()||
-           !image.rgba.empty()||image.sharedRgba||image.compressed||image.gpuCompressed||
+           !image.rgba.empty()||image.sharedRgba||image.sharedRadiance16f||image.importedLinearRadiance||image.compressed||image.gpuCompressed||
            image.virtualFallbackMaxDimension!=0||image.virtualFallbackPreserveAlpha||
            image.virtualAlphaMask.valid()||image.alphaCoverageThreshold||image.alphaCoverageMipmaps)
             throw std::invalid_argument("GPU image must be an exclusively owned ordinary texture");

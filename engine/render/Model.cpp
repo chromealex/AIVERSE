@@ -4,6 +4,8 @@
 #include "AlphaCoverageMips.h"
 #include <filesystem>
 #include "Model.h"
+#include "ExrTexture.h"
+#include "HdrTexture.h"
 #include "../data/Json.h"
 #include "ModelClips.h"
 #include "ModelMerge.h"
@@ -382,9 +384,10 @@ bool ModelTextureCache::read(const std::string& path, const FileReader& reader, 
     auto it = decoded_.find(key);
     if (it == decoded_.end()) {
         std::string bytes; Image image;
-        if (!reader(key, bytes) || !decodeImage(bytes, image)) return false;
+        if (!reader(key, bytes) || !decodeMaterialImage(bytes, image)) return false;
         image.sharedRgba = std::make_shared<const std::vector<uint8_t>>(std::move(image.rgba));
         size_t size = image.sharedRgba->size();
+        if(image.sharedRadiance16f)size+=image.sharedRadiance16f->size()*sizeof(uint16_t);
         if (image.compressed) for (const auto& level : image.compressed->levels) size += level.size();
         while (!decoded_.empty() && bytes_ + size > kCpuBudget) {
             auto oldest = std::min_element(decoded_.begin(), decoded_.end(), [](const auto& a, const auto& b) { return a.second.used < b.second.used; });
@@ -413,6 +416,19 @@ bool decodeTextureGraphRaster(const std::string& bytes,size_t maxPixels,Image& o
     std::unique_ptr<stbi_uc,decltype(&stbi_image_free)> guard(pixels,&stbi_image_free);
     if(w!=expectedW||h!=expectedH)return false;
     out.width=w;out.height=h;out.rgba.assign(pixels,pixels+size_t(w)*h*4);
+    return true;
+}
+bool decodeMaterialImage(const std::string& bytes, Image& out) {
+    const bool exr=bytes.size()>=4&&bytes.compare(0,4,"\x76\x2f\x31\x01",4)==0;
+    const bool hdr=bytes.rfind("#?RADIANCE",0)==0||bytes.rfind("#?RGBE",0)==0;
+    if(!exr&&!hdr)return decodeImage(bytes,out);
+    if(bytes.size()>32u*1024u*1024u)return false;
+    RadianceImage radiance;std::string error;
+    if(!(exr?parseOpenExr(bytes,radiance,error,32u*1024u*1024u):parseRadianceHdr(bytes,radiance,error,32u*1024u*1024u)))return false;
+    out.width=radiance.width;out.height=radiance.height;
+    out.rgba.clear();out.sharedRgba.reset();out.compressed.reset();
+    out.sharedRadiance16f=std::make_shared<const std::vector<uint16_t>>(std::move(radiance.rgba16f));
+    out.importedLinearRadiance=true;out.preserveAlphaCoverage=false;
     return true;
 }
 bool decodeImage(const std::string& bytes, Image& out) {
@@ -532,6 +548,15 @@ gfx::PixelFormat gpuFormat(const CompressedImage& c) {
 
 void uploadImage(gfx::Device& dev, Image& img) {
     if (img.tex.valid()) return;
+    if(img.importedLinearRadiance){
+        if(!img.sharedRadiance16f||img.width<=0||img.height<=0||
+           img.sharedRadiance16f->size()!=size_t(img.width)*size_t(img.height)*4u||
+           !dev.supports(gfx::PixelFormat::RGBA16F)||img.virtualFallbackMaxDimension>0)return;
+        gfx::TextureDesc td;td.width=img.width;td.height=img.height;
+        td.format=gfx::PixelFormat::RGBA16F;td.data=img.sharedRadiance16f->data();
+        td.filter=img.nearest?gfx::Filter::Nearest:gfx::Filter::Linear;td.repeat=img.repeat;
+        td.label=img.name.c_str();img.tex=dev.createTexture(td);return;
+    }
     // Virtualized base-colour images can retain a small fallback *instead*
     // of uploading their full-resolution source. This must be configured
     // before upload; never replace shared/cached GPU texture handles.
@@ -758,6 +783,7 @@ void ModelTextureCache::upload(gfx::Device& dev, Image& image) {
             }
             it->second.rgba.clear();
             it->second.sharedRgba.reset();
+            it->second.sharedRadiance16f.reset();
             it->second.compressed.reset();
         }
     }
@@ -790,6 +816,7 @@ ModelTextureCache::prepareGpuPromotion(
                 prepared.textureLease=std::make_shared<int>(0);
                 prepared.rgba.clear();
                 prepared.sharedRgba.reset();
+                prepared.sharedRadiance16f.reset();
                 prepared.compressed.reset();
                 it->second=std::move(prepared);
             }
@@ -1090,6 +1117,7 @@ bool uploadModel(gfx::Device& dev, Model& m, bool keepCpu,
             std::vector<uint8_t>{}.swap(img.rgba);
             img.compressed.reset();
             img.sharedRgba.reset();
+            img.sharedRadiance16f.reset();
         }
         ++imageIndex;
     }
@@ -1187,6 +1215,7 @@ int addImage(gfx::Device& dev, Model& m, Image img) {
     // Empty-vector swap frees CPU pixels without a potentially throwing
     // shrink_to_fit after the new GPU resource has been allocated.
     std::vector<uint8_t>{}.swap(img.rgba);
+    img.sharedRadiance16f.reset();
     m.images.push_back(std::move(img));
     m.markMaterialChanged(); // new texture may be selected by model materials
     return int(m.images.size() - 1);

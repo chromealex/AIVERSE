@@ -212,6 +212,12 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
     edit(instance.graph);setSelection(instance.ids);setSelected(instance.ids.at(-1)??'');setPending(null);
     setStatus('Inserted independent graph '+reuseName+' · outputs: '+Object.entries(instance.outputs).map(([k,v])=>k+' → '+v).join(', ')+' · '+Object.keys(instance.parameters).length+' exposed parameters. Existing output bindings unchanged.');return;
    }
+   if(action==='hdrVariant'){
+    if(!textureName||!variantName||!baseMaterial)throw new Error('Enter baked HDR texture name, base and new material name');
+    const r=await op('texture_graph_hdr_material_variant',{textureName,materialName:variantName,base:baseMaterial,channel:hdrChannel});if(token!==epoch.current)return;
+    if(!object(r)||r.ok!==true)throw new Error('HDR variant creation failed');
+    setStatus('Created persistent HDR material '+variantName+'; assign it from the material library');return;
+   }
    if(action==='variant'){
     if(!bakedSet)throw new Error('Bake a set and configure its importer first');
     const r=await op('texture_graph_material_variant',{textureName:bakedSet,materialName:variantName,base:baseMaterial});if(token!==epoch.current)return;
@@ -742,6 +748,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
     </div>
    </details>
    <details className="tg-advanced"><summary>Source JSON</summary>  <textarea aria-label="Texture graph JSON" value={text} disabled={busy||disabled} rows={12} onChange={e=>{changeText(e.target.value);setPending(null)}}/></details>
+     {output==='radiance'&&<StudioSection title="Create persistent HDR material"><small>Export EXR first (CPU or GPU). Uses the named bake on disk, including after reopening the project. Assign the new library material explicitly.</small><StudioSelect aria-label="Persistent HDR channel" value={hdrChannel} disabled={busy||disabled} onChange={e=>setHdrChannel(e.target.value==='color'?'color':'emissive')}><option value="emissive">Linear emissive</option><option value="color">Linear base color</option></StudioSelect><StudioInput aria-label="HDR base material" value={baseMaterial} disabled={busy||disabled} onChange={e=>setBaseMaterial(e.target.value)}/><StudioInput aria-label="New HDR material name" value={variantName} disabled={busy||disabled} onChange={e=>setVariantName(e.target.value)}/><StudioButton disabled={busy||disabled||!textureName||!baseMaterial||!variantName} onClick={()=>void run('hdrVariant')}>Create HDR material from {textureName||'EXR bake'}</StudioButton></StudioSection>}
      {bakedSet&&<StudioSection title="Create baked material variant"><small>Inherit an existing material; override only baked channels. No runtime regeneration.</small><StudioInput aria-label="Base material" value={baseMaterial} disabled={busy||disabled} onChange={e=>setBaseMaterial(e.target.value)}/><StudioInput aria-label="New material name" value={variantName} disabled={busy||disabled} onChange={e=>setVariantName(e.target.value)}/><StudioButton disabled={busy||disabled||!baseMaterial||!variantName} onClick={()=>void run('variant')}>Create variant from {bakedSet}</StudioButton></StudioSection>}
   {assets.map(a=><StudioButton key={a.guid} disabled={busy||disabled} onClick={()=>onEdit(a.key,a.guid)}>Assign {a.path} to {a.key}</StudioButton>)}
   {asset&&<StudioButton disabled={busy||disabled} onClick={()=>onEdit(asset.key,asset.guid)}>Assign {asset.path} to material draft</StudioButton>}

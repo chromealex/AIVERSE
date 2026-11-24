@@ -88,6 +88,9 @@ struct Image {
     std::string textureKey;
     std::shared_ptr<int> textureLease;
     std::shared_ptr<const std::vector<uint8_t>> sharedRgba;
+    // File-authored linear HDR, independent of session-only graph provenance.
+    std::shared_ptr<const std::vector<uint16_t>> sharedRadiance16f;
+    bool importedLinearRadiance = false;
     std::string name;               // file name or "#index" for embedded images
     int width = 0, height = 0;
     std::vector<uint8_t> rgba;      // CPU copy, released after upload
@@ -395,7 +398,7 @@ inline const Image* resolveMaterialImage(const Model& model,const Material& mate
 }
 inline bool resolvedLinearColor(const Model& model,const Material& material,int Material::* slot) noexcept {
     const auto* image=resolveMaterialImage(model,material,slot);
-    return image&&image->tex.valid()&&image->proceduralLinearRadiance;
+    return image&&image->tex.valid()&&(image->proceduralLinearRadiance||image->importedLinearRadiance);
 }
 inline bool resolvedLinearEmissive(const Model& model,const Material& material) noexcept {
     return resolvedLinearColor(model,material,&Material::emissiveTex);
@@ -457,6 +460,8 @@ bool decodeDds(const std::string& bytes, Image& out);
 
 // PNG / JPEG / TGA from memory into RGBA8. Returns false on failure.
 bool decodeImage(const std::string& bytes, Image& out);
+// Explicit material loader preserves EXR/RGBE in linear half float; ordinary raster decoding stays unchanged.
+bool decodeMaterialImage(const std::string& bytes, Image& out);
 // Bounded standard raster decode; refuses non-PNG/JPEG and preflights extent before allocation.
 bool decodeTextureGraphRaster(const std::string& bytes, size_t maxPixels, Image& out);
 

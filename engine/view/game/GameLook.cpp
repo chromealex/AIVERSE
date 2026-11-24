@@ -1351,8 +1351,8 @@ int GameView::loadTexture(gfx::Device& dev, const UnitType& t, Model& m, const s
         warn(t,"texture '"+path+"' not found");
         return -1;
     }
-    if(!decodeImage(bytes,img)) {
-        warn(t,"texture '"+path+"': unsupported format (PNG, JPEG, TGA)");
+    if(!decodeMaterialImage(bytes,img)) {
+        warn(t,"texture '"+path+"': unsupported format (PNG, JPEG, TGA, linear EXR/RGBE)");
         return -1;
     }
     return addImage(dev,m,std::move(img));

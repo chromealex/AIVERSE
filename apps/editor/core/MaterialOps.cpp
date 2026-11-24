@@ -633,6 +633,27 @@ void registerMaterialOps(Workspace& ws) {
         r.set("cacheHit",Json::fromBool(cacheHit));return r;
     });
 
+    add("texture_graph_hdr_material_variant","Create an inherited persistent PBR material referencing an existing linear EXR bake; does not overwrite assets.",R"({"properties":{"textureName":{"type":"string"},"materialName":{"type":"string"},"base":{"type":"string"},"channel":{"enum":["color","emissive"]}},"required":["textureName","materialName","base","channel"]})",[w](const Json& p){
+        needProject(*w);
+        const auto set=p.getStr("textureName"),name=p.getStr("materialName"),base=p.getStr("base"),channel=p.getStr("channel");
+        if(!render::texture_graph::safeId(set)||!render::texture_graph::safeId(name)||!render::texture_graph::safeId(base)||name==base||(channel!="color"&&channel!="emissive"))throw std::invalid_argument("invalid HDR variant arguments");
+        const auto root=fs::canonical(w->project.dir);
+        const auto rel="content/textures/"+set+"_radiance.exr";
+        const auto file=root/rel;
+        if(fs::is_symlink(root/"content")||fs::is_symlink(root/"content"/"textures")||fs::is_symlink(file)||!fs::is_regular_file(file)||fs::file_size(file)>32u*1024u*1024u)throw std::runtime_error("missing or invalid HDR bake");
+        std::ifstream stream(file,std::ios::binary);
+        const std::string bytes((std::istreambuf_iterator<char>(stream)),std::istreambuf_iterator<char>());
+        render::RadianceImage hdr;std::string error;
+        if(!render::parseOpenExr(bytes,hdr,error,32u*1024u*1024u))throw std::runtime_error(error);
+        const auto lib=loadMaterialLibrary(*w);
+        if(lib.has(name)||!lib[base].isObject())throw std::runtime_error("variant name exists or base material missing");
+        Json material=Json::object();material.set("base",Json::string(base));
+        material.set(channel=="color"?"texture":"emissiveMap",Json::string(rel));
+        if(channel=="emissive"){material.set("emissive",Json::parse("[1,1,1]"));material.set("emissiveStrength",Json::number(1.0));}
+        Json args=Json::object();args.set("name",Json::string(name));args.set("material",material);
+        return w->call("material_set",args,"texture-graph-hdr");
+    });
+
     add("texture_graph_material_variant","Create a new inherited library material from a baked set manifest. Requires explicit new material and base names; no regeneration or overwrite.",R"({"properties":{"textureName":{"type":"string"},"materialName":{"type":"string"},"base":{"type":"string"}},"required":["textureName","materialName","base"]})",[w](const Json& p){
         needProject(*w);
         const auto set=p.getStr("textureName"),name=p.getStr("materialName"),base=p.getStr("base");
