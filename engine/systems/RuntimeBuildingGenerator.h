@@ -41,6 +41,7 @@ struct RuntimeBuildingRequest {
     uint32_t furnitureDensity=3;
     bool interiorLighting=false,interiorDecor=false;
     std::vector<BuildingRoomUseOverride> roomUses;
+    std::vector<BuildingDamageZone> damageZones;
 };
 
 enum class RuntimeBuildingError : uint8_t {
@@ -152,7 +153,7 @@ public:
             recipe.floors=request.floors;recipe.roomsX=request.roomsX;recipe.roomsZ=request.roomsZ;
             recipe.footprint=request.footprint;recipe.floorFootprints=request.floorFootprints;
             recipe.walkableSetbacks=request.walkableSetbacks;recipe.cornerChamfers=request.cornerChamfers;
-            recipe.interiorProfile=request.interiorProfile;recipe.furnitureDensity=request.furnitureDensity;recipe.roomUses=request.roomUses;
+            recipe.interiorProfile=request.interiorProfile;recipe.furnitureDensity=request.furnitureDensity;recipe.roomUses=request.roomUses;recipe.damageZones=request.damageZones;
             recipe.interiorLighting=request.interiorLighting;recipe.interiorDecor=request.interiorDecor;
             return generateRecipe(request.style,recipe,request.origin,request.yaw);
         }

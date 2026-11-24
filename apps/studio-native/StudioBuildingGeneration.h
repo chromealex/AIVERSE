@@ -522,6 +522,15 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
             furniture.push(std::move(row));
         }
         out.set("roomUses",std::move(roomUses));out.set("furniture",std::move(furniture));
+        Json damage=Json::array();for(const auto& item:detailed.graph.removedDamage){
+            Json row=Json::object(),lo=Json::array(),hi=Json::array();
+            row.set("zone",Json::number(int64_t(item.zone)));
+            row.set("kind",string(buildingDamageKindName(req.functionalRecipe.damageZones[item.zone].kind)));
+            for(float n:{item.solid.x0,item.solid.y0,item.solid.z0})lo.push(Json::number(double(n),3));
+            for(float n:{item.solid.x1,item.solid.y1,item.solid.z1})hi.push(Json::number(double(n),3));
+            row.set("minimum",std::move(lo));row.set("maximum",std::move(hi));damage.push(std::move(row));
+        }
+        out.set("removedDamage",std::move(damage));
         Json interactionSockets=Json::array();for(const auto& item:detailed.graph.furnitureSockets){
             Json row=Json::object();row.set("id",string(item.id));row.set("furnitureId",string(item.furnitureId));
             row.set("roomId",string(item.roomId));row.set("floor",Json::number(int64_t(item.floor)));
@@ -804,6 +813,16 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
             saved.set("floors",Json::number(int64_t(req.functionalRecipe.floors)));
             saved.set("roomsX",Json::number(int64_t(req.functionalRecipe.roomsX)));
             saved.set("roomsZ",Json::number(int64_t(req.functionalRecipe.roomsZ)));
+            if(!req.functionalRecipe.damageZones.empty()){
+                Json zones=Json::array();for(const auto& zone:req.functionalRecipe.damageZones){
+                    Json row=Json::object(),lo=Json::array(),hi=Json::array();
+                    row.set("kind",string(buildingDamageKindName(zone.kind)));
+                    for(float v:zone.minimum)lo.push(Json::number(double(v),3));
+                    for(float v:zone.maximum)hi.push(Json::number(double(v),3));
+                    row.set("minimum",std::move(lo));row.set("maximum",std::move(hi));zones.push(std::move(row));
+                }
+                saved.set("damageZones",std::move(zones));
+            }
             if(req.functionalRecipe.interiorProfile!=BuildingInteriorProfile::None){
                 saved.set("interiorProfile",string(buildingInteriorProfileName(req.functionalRecipe.interiorProfile)));
                 saved.set("furnitureDensity",Json::number(int64_t(req.functionalRecipe.furnitureDensity)));

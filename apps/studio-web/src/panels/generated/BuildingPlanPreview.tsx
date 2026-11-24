@@ -58,6 +58,10 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
       {(preview.interiorDecor??[]).filter(i=>i.floor===selectedFloor).map(i=><rect key={i.id} x={i.x-.12} y={i.z-.12} width={.24} height={.24} fill="var(--au-text)"><title>{i.id}</title></rect>)}
       {(preview.furnitureSockets??[]).filter(i=>i.floor===selectedFloor).map(i=>
         <circle key={i.id} cx={i.x} cy={i.z} r={.18} fill="none" stroke="var(--au-accent)" strokeWidth={.1}><title>{i.action} · {i.furnitureId}</title></circle>)}
+      {(preview.removedDamage??[]).map((r,i)=>
+        <rect key={'damage-'+i} x={r.minimum[0]} y={r.minimum[2]} width={Math.max(.1,r.maximum[0]-r.minimum[0])}
+          height={Math.max(.1,r.maximum[2]-r.minimum[2])} fill="#c16b50" fillOpacity={.35} stroke="#c16b50" strokeWidth={.1}>
+          <title>{r.kind} damage · Y {r.minimum[1]}–{r.maximum[1]}m</title></rect>)}
       {sockets.map(socket=>{
         const [x,,z]=socket.outside;
         const isSelected=socket.socketId===selected;
@@ -84,6 +88,7 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
       {!!preview.roomUses?.length&&<small>{preview.roomUses.filter(r=>r.roomId.startsWith('room/'+selectedFloor+'/')).map(r=>r.roomId.split('/').slice(2).join(',')+': '+r.use).join(' · ')}</small>}
       {!!preview.furnitureSockets?.length&&<small>{preview.furnitureSockets.filter(s=>s.floor===selectedFloor).length} furniture interaction sockets</small>}
       {!!preview.furniture?.length&&<small>{preview.furniture.filter(f=>f.floor===selectedFloor).length} static furniture items</small>}
+      {!!preview.removedDamage?.length&&<small>{preview.removedDamage.length} removed solid pieces (all heights overlaid)</small>}
       {!!preview.roofSections?.length&&<small>{preview.roofSections.length} composed upper roof sections</small>}
       {!!preview.balconies?.length&&<small>{preview.balconies.filter(t=>t.floor===selectedFloor).length} projecting balconies</small>}
       {!!(preview.terraces?.length||preview.balconies?.length)&&<small>{(preview.terraces??[]).filter(t=>t.floor===selectedFloor).length} terrace cells · {(preview.terraceAccess??[]).filter(t=>t.floor===selectedFloor).length} authored terrace access links</small>}

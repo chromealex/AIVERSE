@@ -52,6 +52,15 @@ inline const char* buildingFurnitureName(BuildingFurnitureKind p){
     return uint8_t(p)<10?names[uint8_t(p)]:"unknown";
 }
 struct BuildingRoomUseOverride {uint32_t floor=0,x=0,z=0;BuildingRoomUse use=BuildingRoomUse::Empty;};
+enum class BuildingDamageKind : uint8_t { Wall, Window, Roof };
+inline const char* buildingDamageKindName(BuildingDamageKind kind){
+    switch(kind){case BuildingDamageKind::Wall:return "wall";case BuildingDamageKind::Window:return "window";case BuildingDamageKind::Roof:return "roof";}
+    return "unknown";
+}
+struct BuildingDamageZone {
+    BuildingDamageKind kind=BuildingDamageKind::Wall;
+    std::array<float,3> minimum{},maximum{};
+};
 struct FunctionalBuildingRecipe {
     float width=16.f,height=8.f,depth=12.f;
     uint64_t seed=1;
@@ -71,6 +80,7 @@ struct FunctionalBuildingRecipe {
     uint32_t furnitureDensity=3;
     bool interiorLighting=false,interiorDecor=false;
     std::vector<BuildingRoomUseOverride> roomUses;
+    std::vector<BuildingDamageZone> damageZones;
 };
 inline bool functionalCell(const FunctionalBuildingRecipe& r,int x,int z,uint32_t floor=0){
     if(x<0||z<0||x>=int(r.roomsX)||z>=int(r.roomsZ)||floor>=r.floors)return false;
@@ -127,6 +137,7 @@ struct BuildingGraphSolid {
     std::array<float,4> roofTop{-1.f,-1.f,-1.f,-1.f};
     bool collisionOnly=false;
     uint32_t furnitureIndex=UINT32_MAX;
+    bool damageCut=false;
 };
 struct BuildingGraphSocket {
     std::string id; // stable within one recipe: entrance/<feature>/<copy> or roof/<feature>
@@ -165,6 +176,7 @@ inline const char* buildingFurnitureActionName(BuildingFurnitureAction a){
 struct BuildingFurnitureSocket {std::string id,furnitureId,roomId;uint32_t floor;BuildingFurnitureAction action;float x,y,z,targetX,targetY,targetZ;};
 struct BuildingGraphInteriorLight {std::string id,roomId;uint32_t floor;float x,y,z,ceiling;std::array<float,3> color;float intensity,range;};
 struct BuildingGraphDecor {std::string id,roomId;uint32_t floor;float x0,y0,z0,x1,y1,z1;};
+struct BuildingRemovedDamage {uint32_t zone=0;BuildingGraphSolid solid;};
 struct BuildingStructureGraph {
     std::vector<BuildingGraphSolid> solids;
     std::vector<BuildingGraphSocket> sockets;
@@ -183,6 +195,7 @@ struct BuildingStructureGraph {
     std::vector<BuildingFurnitureSocket> furnitureSockets;
     std::vector<BuildingGraphInteriorLight> interiorLights;
     std::vector<BuildingGraphDecor> interiorDecor;
+    std::vector<BuildingRemovedDamage> removedDamage;
     explicit operator bool() const noexcept {return error.empty();}
 };
 inline const char* buildingFeatureName(BuildingFeatureKind kind) {
@@ -262,6 +275,17 @@ inline std::string validateFunctionalRecipe(const FunctionalBuildingRecipe& reci
         return "Corner cut must be zero or .5..4 metres and fit its corner room";
     if(chamfered&&(nonRectangularFootprint(recipe)||recipe.roofProfile!=FunctionalRoofProfile::Flat||recipe.walkableSetbacks))
         return "Chamfers currently require a rectangular room mask and flat roof";
+    if(recipe.damageZones.size()>16)return "At most sixteen authored damage zones";
+    if(chamfered&&!recipe.damageZones.empty())return "Damage zones currently require orthogonal walls";
+    for(const auto& zone:recipe.damageZones){
+        if(uint8_t(zone.kind)>uint8_t(BuildingDamageKind::Roof))return "Unknown damage target";
+        if(zone.kind==BuildingDamageKind::Roof&&recipe.roofProfile!=FunctionalRoofProfile::Flat)
+            return "Authored roof damage requires a flat roof";
+        const std::array<float,3> limits{recipe.width,recipe.height,recipe.depth};
+        for(size_t i=0;i<3;++i)if(!finite(zone.minimum[i])||!finite(zone.maximum[i])||
+            zone.minimum[i]<0.f||zone.maximum[i]>limits[i]||zone.maximum[i]-zone.minimum[i]<.01f)
+            return "Damage zone bounds must be inside the building envelope";
+    }
     if(recipe.walkableSetbacks&&(recipe.floorFootprints.empty()||recipe.floors<2))
         return "Walkable setbacks require independent floors";
     if(recipe.walkableSetbacks){
@@ -584,6 +608,61 @@ inline void buildFurnitureSockets(BuildingStructureGraph& graph){
             break;
         }
     }
+}
+
+// Deterministic authored damage, separate from the authoritative runtime
+// fracture policy. Subtract an axis-aligned region into at most six disjoint
+// remaining pieces; both rendering and static collision consume these.
+inline bool applyBuildingDamage(BuildingStructureGraph& graph,const FunctionalBuildingRecipe& recipe){
+    constexpr float eps=.001f;
+    auto intersection=[&](const BuildingGraphSolid& s,const BuildingDamageZone& z){
+        auto q=s;
+        q.x0=std::max(s.x0,z.minimum[0]);q.y0=std::max(s.y0,z.minimum[1]);q.z0=std::max(s.z0,z.minimum[2]);
+        q.x1=std::min(s.x1,z.maximum[0]);q.y1=std::min(s.y1,z.maximum[1]);q.z1=std::min(s.z1,z.maximum[2]);return q;
+    };
+    auto valid=[&](const BuildingGraphSolid& s){return s.x1-s.x0>=eps&&s.y1-s.y0>=eps&&s.z1-s.z0>=eps;};
+    for(size_t index=0;index<recipe.damageZones.size();++index){
+        const auto& zone=recipe.damageZones[index];
+        const auto part=zone.kind==BuildingDamageKind::Wall?BuildingGraphPart::Wall:
+            zone.kind==BuildingDamageKind::Window?BuildingGraphPart::WindowPane:BuildingGraphPart::Roof;
+        std::vector<BuildingGraphSolid> next;
+        bool removed=false;
+        for(const auto& s:graph.solids){
+            const auto q=intersection(s,zone);
+            if(!valid(q)){next.push_back(s);continue;}
+            // Do not sever a door, moving roof panel, or circulation core
+            // while their independent runtime owners still reference it.
+            if(s.part==BuildingGraphPart::DoorLeaf||s.part==BuildingGraphPart::RoofPanel||
+               s.part==BuildingGraphPart::StairTread||s.part==BuildingGraphPart::StairLanding||
+               s.part==BuildingGraphPart::ElevatorGuide||s.part==BuildingGraphPart::ElevatorPlatform||
+               (zone.kind==BuildingDamageKind::Wall&&s.part==BuildingGraphPart::Trim&&s.featureIndex!=UINT32_MAX)){
+                graph.error="Damage zone intersects a protected functional feature";return false;
+            }
+            if(s.part!=part){next.push_back(s);continue;}
+            if(zone.kind==BuildingDamageKind::Window){
+                // A shattered pane is removed as one authored piece.
+                graph.removedDamage.push_back({uint32_t(index),s});removed=true;continue;
+            }
+            if(s.roofTop[0]>=0||s.collisionOnly){
+                graph.error="Damage requires ordinary rectangular solids";return false;
+            }
+            auto add=[&](float x0,float y0,float z0,float x1,float y1,float z1){
+                auto p=s;p.x0=x0;p.y0=y0;p.z0=z0;p.x1=x1;p.y1=y1;p.z1=z1;p.damageCut=true;
+                if(valid(p))next.push_back(p);
+            };
+            add(s.x0,s.y0,s.z0,q.x0,s.y1,s.z1);
+            add(q.x1,s.y0,s.z0,s.x1,s.y1,s.z1);
+            add(q.x0,s.y0,s.z0,q.x1,q.y0,s.z1);
+            add(q.x0,q.y1,s.z0,q.x1,s.y1,s.z1);
+            add(q.x0,q.y0,s.z0,q.x1,q.y1,q.z0);
+            add(q.x0,q.y0,q.z1,q.x1,q.y1,s.z1);
+            graph.removedDamage.push_back({uint32_t(index),q});removed=true;
+        }
+        if(!removed){graph.error="Damage zone did not intersect an undamaged target";return false;}
+        if(next.size()>20000||graph.removedDamage.size()>4096){graph.error="Damaged building exceeds piece budget";return false;}
+        graph.solids=std::move(next);
+    }
+    return true;
 }
 
 // Fixtures are attached to real ceiling slabs; decor sits on static furniture.
@@ -1239,6 +1318,7 @@ inline BuildingStructureGraph buildFunctionalStructureGraph(
     }
     if(std::any_of(recipe.cornerChamfers.begin(),recipe.cornerChamfers.end(),[](float c){return c>0.f;}))
         buildingChamferDetail::apply(graph,recipe);
+    if(graph&&!applyBuildingDamage(graph,recipe))return graph;
     if(graph){furnishFunctionalBuilding(graph,recipe);buildFurnitureSockets(graph);decorateFunctionalBuilding(graph,recipe);}
     return graph;
 }

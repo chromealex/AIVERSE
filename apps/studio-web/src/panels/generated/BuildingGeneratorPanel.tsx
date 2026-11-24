@@ -165,6 +165,7 @@ export default function BuildingGeneratorPanel({
   const [floorFootprints,setFloorFootprints]=useState<string[][]>([]);
   const [walkableSetbacks,setWalkableSetbacks]=useState(false);
   const [cornerChamfers,setCornerChamfers]=useState<[number,number,number,number]>([0,0,0,0]);
+  const [damageZones,setDamageZones]=useState<NonNullable<StudioBuildingRequest['damageZones']>>([]);
   const [interiorProfile,setInteriorProfile]=useState<NonNullable<StudioBuildingRequest['interiorProfile']>>('none');
   const [furnitureDensity,setFurnitureDensity]=useState(3);
   const [interiorLighting,setInteriorLighting]=useState(false);
@@ -285,7 +286,7 @@ export default function BuildingGeneratorPanel({
       setWidth(String(item.width));setHeight(String(item.height));
       setDepth(String(item.depth));setSeed(String(item.seed));
       setFloors(String(item.floors??1));
-      setRoomsX(String(item.roomsX??1));setRoomsZ(String(item.roomsZ??1));setFootprint(item.footprint??[]);setFloorFootprints(item.floorFootprints??[]);setWalkableSetbacks(item.walkableSetbacks??false);setCornerChamfers(item.cornerChamfers??[0,0,0,0]);setEditFloor(0);
+      setRoomsX(String(item.roomsX??1));setRoomsZ(String(item.roomsZ??1));setFootprint(item.footprint??[]);setFloorFootprints(item.floorFootprints??[]);setWalkableSetbacks(item.walkableSetbacks??false);setCornerChamfers(item.cornerChamfers??[0,0,0,0]);setDamageZones(item.damageZones??[]);setEditFloor(0);
       setInteriorProfile(item.interiorProfile??'none');setFurnitureDensity(item.furnitureDensity??3);setInteriorLighting(item.interiorLighting??false);setInteriorDecor(item.interiorDecor??false);setRoomUses(item.roomUses??[]);
       setFeatures((item.features??[]).map(f=>({...makeFeature(f.kind),...f})));
       setMaterialBindings(item.materialBindings??{});
@@ -323,6 +324,13 @@ export default function BuildingGeneratorPanel({
       if(floorFootprints.length&&(floorFootprints.length!==f||floorFootprints.some(mask=>mask.length!==rz||mask.some(row=>row.length!==rx||!/^[01]+$/.test(row)))))return 'Floor footprint grid does not match dimensions.';
       if(interiorProfile!=='none'&&cornerChamfers.some(c=>c>0))return 'Furnishing currently requires orthogonal rooms.';
       if(interiorProfile!=='none'&&roomUses.some(r=>r.floor>=f||r.x>=rx||r.z>=rz||(floorFootprints[r.floor]??footprint)[r.z]?.[r.x]==='0'))return 'A room use override references an absent room; remove it first.';
+      if(damageZones.length&&cornerChamfers.some(c=>c>0))return 'Damage zones require orthogonal walls.';
+      for(const zone of damageZones){
+        if(zone.kind==='roof'&&roofProfile!=='flat')return 'Roof damage requires a flat roof.';
+        const limits=[asNumber(width),asNumber(height),asNumber(depth)];
+        if(zone.minimum.some((v,i)=>!Number.isFinite(v)||!Number.isFinite(zone.maximum[i])||v<0||zone.maximum[i]>limits[i]||zone.maximum[i]-v<.01))
+          return 'Damage zone bounds must fit the building envelope.';
+      }
       const maxCut=Math.min(4,.4*Math.min(asNumber(width)/rx,asNumber(depth)/rz));
       if(cornerChamfers.some(c=>!Number.isFinite(c)||c<0||c>maxCut||(c>0&&c<.5)))return 'Corner cuts must be zero or 0.5–'+maxCut.toFixed(2)+'m.';
       if(cornerChamfers.some(c=>c>0)&&(shaped||roofProfile!=='flat'||walkableSetbacks||features.some(f=>f.kind==='sliding-roof')))
@@ -443,7 +451,7 @@ export default function BuildingGeneratorPanel({
       }
     }
     return '';
-  },[selectedStyle,selectedFunction,mode,features,width,height,depth,seed,floors,roomsX,roomsZ,roofProfile,roofRise,footprint,shaped,floorFootprints,walkableSetbacks,cornerChamfers,interiorProfile,furnitureDensity,roomUses]);
+  },[selectedStyle,selectedFunction,mode,features,width,height,depth,seed,floors,roomsX,roomsZ,roofProfile,roofRise,footprint,shaped,floorFootprints,walkableSetbacks,cornerChamfers,interiorProfile,furnitureDensity,roomUses,damageZones]);
 
   const request=(useSeed:number):StudioBuildingRequest=>({
     setting,style,function:mode==='preset'?role:'',mode,textureResolution,uniqueAtlas,
@@ -457,6 +465,7 @@ export default function BuildingGeneratorPanel({
     floorFootprints:mode==='features'&&floorFootprints.length?floorFootprints:undefined,
     walkableSetbacks:mode==='features'&&walkableSetbacks?true:undefined,
     cornerChamfers:mode==='features'&&cornerChamfers.some(c=>c!==0)?cornerChamfers:undefined,
+    damageZones:mode==='features'&&damageZones.length?damageZones:undefined,
     interiorProfile:mode==='features'?interiorProfile:undefined,
     furnitureDensity:mode==='features'&&interiorProfile!=='none'?furnitureDensity:undefined,
     interiorLighting:mode==='features'&&interiorProfile!=='none'?interiorLighting:undefined,
@@ -516,7 +525,7 @@ export default function BuildingGeneratorPanel({
     const p=presets[id];if(!p)return;
     setMode('features');setWidth(String(p.size[0]));setHeight(String(p.size[1]));setDepth(String(p.size[2]));
     setFloors(String(p.rooms[0]));setRoomsX(String(p.rooms[1]));setRoomsZ(String(p.rooms[2]));
-    setFeatures(p.features);setFootprint([]);setFloorFootprints([]);setWalkableSetbacks(false);setCornerChamfers([0,0,0,0]);setEditFloor(0);setRoomUses([]);
+    setFeatures(p.features);setFootprint([]);setFloorFootprints([]);setWalkableSetbacks(false);setCornerChamfers([0,0,0,0]);setEditFloor(0);setRoomUses([]);setDamageZones([]);
     const profile=p.features.some(f=>f.kind==='sliding-roof')?'flat':selectedStyle?.recommendedRoof??'flat';
     const rise=profile==='flat'?0:Math.min(3,Math.max(1.5,p.size[0]*.12));
     setRoofProfile(profile);setRoofRise(String(rise));setHeight(String(p.size[1]+rise));
@@ -986,6 +995,38 @@ export default function BuildingGeneratorPanel({
           </div>}
         <small className="abg__note">Click cells to add or remove rooms in the selected plan. Independent upper floors must be supported by the floor below; removed cells can form walkable terraces with parapets. To add an upper personnel door, select its floor, facade line and explicit wall position; native validation requires a deck immediately outside, or a projecting balcony into a clear recessed cell. The top row is Front. Custom shapes support composed upper roofs; select a facade grid line for openings on recessed or courtyard walls. Existing incompatible features must be edited explicitly.</small>
         <small className="abg__note">Internal room partitions, stair and lift geometry follow the selected functional recipe. Native ECS/PHYSIS and graph owners handle dynamic traversal separately; changing setting never changes gameplay permissions.</small>
+      </StudioSection>}
+      {mode==='features'&&<StudioSection title="Architectural damage">
+        <small className="abg__note">Remove real solid geometry using local XYZ bounds in metres. Roof cuts require a flat roof; panes are removed entirely. Functional moving panels and cores are protected.</small>
+        <div className="abg__actions">
+          <StudioButton variant="secondary" disabled={busy||damageZones.length>=16} onClick={()=>{
+            const w=asNumber(width),h=asNumber(height);
+            if(!Number.isFinite(w)||!Number.isFinite(h)||w<8||h<4)return;
+            setDamageZones(old=>[...old,{kind:'wall',minimum:[w*.22,.24,0],maximum:[w*.22+1.5,Math.min(2.8,h),.36]}]);clearGenerated();
+          }}>+ Wall breach</StudioButton>
+          <StudioButton variant="secondary" disabled={busy||damageZones.length>=16||roofProfile!=='flat'} onClick={()=>{
+            const w=asNumber(width),d=asNumber(depth),h=asNumber(height);
+            if(![w,d,h].every(Number.isFinite)||w<8||d<8||h<4)return;
+            setDamageZones(old=>[...old,{kind:'roof',minimum:[w*.4,h-.28,d*.4],maximum:[w*.6,h,d*.6]}]);clearGenerated();
+          }}>+ Roof hole</StudioButton>
+          <StudioButton variant="secondary" disabled={busy||!damageZones.length} onClick={()=>{setDamageZones([]);clearGenerated();}}>Clear damage</StudioButton>
+        </div>
+        {damageZones.map((zone,i)=><div className="abg__fields" key={i}>
+          <StudioField label={'Damage '+(i+1)} htmlFor={'abg-damage-kind-'+i}>
+            <StudioSelect id={'abg-damage-kind-'+i} disabled={busy} value={zone.kind} onChange={e=>{
+              const kind=e.target.value as typeof zone.kind;setDamageZones(old=>old.map((v,j)=>j===i?{...v,kind}:v));clearGenerated();
+            }}>{['wall','window','roof'].map(k=><option key={k} value={k}>{k}</option>)}</StudioSelect>
+          </StudioField>
+          <StudioButton variant="secondary" disabled={busy} onClick={()=>{setDamageZones(old=>old.filter((_,j)=>j!==i));clearGenerated();}}>Remove</StudioButton>
+          {(['minimum','maximum'] as const).flatMap(key=>['X','Y','Z'].map((axis,a)=>
+            <StudioField key={key+axis} label={key+' '+axis+', m'} htmlFor={'abg-damage-'+i+'-'+key+axis}>
+              <StudioInput id={'abg-damage-'+i+'-'+key+axis} type="number" step={.01} value={String(zone[key][a])} disabled={busy} onChange={e=>{
+                const value=Number(e.target.value);setDamageZones(old=>old.map((v,j)=>{
+                  if(j!==i)return v;const next:[number,number,number]=[...v[key]];next[a]=value;return {...v,[key]:next};
+                }));clearGenerated();
+              }}/>
+            </StudioField>))}
+        </div>)}
       </StudioSection>}
       {mode==='features'&&<StudioSection title="Procedural interior">
         <StudioField label="Interior profile" htmlFor="abg-interior-profile">

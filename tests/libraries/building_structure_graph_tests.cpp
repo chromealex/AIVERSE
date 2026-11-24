@@ -151,6 +151,22 @@ int main(){
         const auto accessible=buildFunctionalStructureGraph(furnished);CHECK(accessible);
         CHECK(accessible.roomUses[0].use==BuildingRoomUse::Circulation&&accessible.furniture.size()==12);
         furnished.interiorProfile=BuildingInteriorProfile::None;CHECK(!buildFunctionalStructureGraph(furnished));
+        FunctionalBuildingRecipe damaged;damaged.width=24;damaged.depth=24;damaged.height=8;
+        damaged.damageZones={{BuildingDamageKind::Wall,{10,.24f,0},{14,2.8f,.36f}},
+                             {BuildingDamageKind::Roof,{9,7.72f,9},{15,8,15}}};
+        const auto ruin=buildFunctionalStructureGraph(damaged);CHECK(ruin&&ruin.removedDamage.size()==2);
+        CHECK(!intersects(ruin,12,1,.18f,BuildingGraphPart::Wall));
+        CHECK(intersects(ruin,8,1,.18f,BuildingGraphPart::Wall));
+        CHECK(intersects(ruin,12,3.2f,.18f,BuildingGraphPart::Wall));
+        CHECK(!intersects(ruin,12,7.9f,12,BuildingGraphPart::Roof));
+        CHECK(intersects(ruin,7,7.9f,12,BuildingGraphPart::Roof));
+        damaged.damageZones.push_back(damaged.damageZones.front());
+        CHECK(!buildFunctionalStructureGraph(damaged));
+        damaged.damageZones.clear();
+        BuildingFeature pane;pane.kind=BuildingFeatureKind::Window;pane.position=12;pane.width=1.6f;pane.height=1.1f;
+        damaged.features={pane};damaged.damageZones={{BuildingDamageKind::Window,{11,1,0},{13,3,.36f}}};
+        const auto broken=buildFunctionalStructureGraph(damaged);CHECK(broken&&broken.removedDamage.size()==1);
+        CHECK(broken.sockets.size()==1&&!intersects(broken,12,1.5f,.18f,BuildingGraphPart::WindowPane));
         FunctionalBuildingRecipe disconnected;disconnected.roomsX=disconnected.roomsZ=3;
         disconnected.footprint={"100","010","001"};CHECK(!buildFunctionalStructureGraph(disconnected));
         FunctionalBuildingRecipe r;

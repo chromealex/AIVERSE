@@ -86,6 +86,26 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
         if(json[key].type()!=Json::Type::Bool)throw JsonError(path+"."+key+": expected boolean");
         if(std::string(key)=="interiorLighting")recipe.interiorLighting=json.getBool(key);else recipe.interiorDecor=json.getBool(key);
     }
+    if(json.has("damageZones")){
+        const auto& list=json["damageZones"];
+        if(!list.isArray()||list.size()>16)throw JsonError(path+".damageZones: expected up to sixteen zones");
+        for(const auto& item:list.items()){
+            if(!item.isObject())throw JsonError(path+".damageZones: expected object");
+            BuildingDamageZone zone;
+            const auto kind=item.getStr("kind");
+            if(kind=="wall")zone.kind=BuildingDamageKind::Wall;
+            else if(kind=="window")zone.kind=BuildingDamageKind::Window;
+            else if(kind=="roof")zone.kind=BuildingDamageKind::Roof;
+            else throw JsonError(path+".damageZones: unknown target");
+            for(const char* key:{"minimum","maximum"}){
+                const auto& a=item[key];
+                if(!a.isArray()||a.size()!=3)throw JsonError(path+".damageZones: expected XYZ bounds");
+                auto& dst=std::string(key)=="minimum"?zone.minimum:zone.maximum;
+                for(size_t i=0;i<3;++i)dst[i]=number(a[i],path+".damageZones."+key);
+            }
+            recipe.damageZones.push_back(zone);
+        }
+    }
     if(json.has("interiorProfile")){
         bool found=false;
         for(int i=0;i<=int(BuildingInteriorProfile::Mixed);++i)if(json.getStr("interiorProfile")==buildingInteriorProfileName(BuildingInteriorProfile(i))){
@@ -420,7 +440,7 @@ inline FunctionalBuildingResult generateFunctionalBuilding(
             addBox(material,x,y,z,X,Y,Z,true,false);
             continue;
         }
-        const bool dressed=solid.collisionOnly||dressFunctionalWall(mesh,style,solid,W,D,recipe.seed,hull,trim)||
+        const bool dressed=solid.collisionOnly||(!solid.damageCut&&dressFunctionalWall(mesh,style,solid,W,D,recipe.seed,hull,trim))||
             dressFunctionalRoofCell(mesh,recipe,solid,style.roof>=0?style.roof:material);
         addBox(material,solid.x0,solid.y0,solid.z0,
                solid.x1,solid.y1,solid.z1,true,!dressed);

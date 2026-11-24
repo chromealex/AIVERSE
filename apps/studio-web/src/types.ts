@@ -244,6 +244,7 @@ export interface StudioBuildingFeature {
   sill: number; // window sill above its storey's floor
 }
 export type StudioBuildingRoomUse='lounge'|'bedroom'|'kitchen'|'office'|'meeting'|'workshop'|'storage'|'retail'|'circulation'|'empty';
+export interface StudioBuildingDamageZone {kind:'wall'|'window'|'roof';minimum:[number,number,number];maximum:[number,number,number]}
 export interface StudioBuildingRequest {
   setting: string; style: string; function: string;
   width: number; height: number; depth: number; seed: number;
@@ -252,6 +253,7 @@ export interface StudioBuildingRequest {
   floorFootprints?:string[][];
   walkableSetbacks?:boolean;
   cornerChamfers?:[number,number,number,number];
+  damageZones?:StudioBuildingDamageZone[];
   interiorProfile?:'none'|'residential'|'office'|'industrial'|'commercial'|'mixed';
   furnitureDensity?:number;
   interiorLighting?:boolean; interiorDecor?:boolean;
@@ -268,6 +270,7 @@ export interface StudioBuildingPreview {
   width: number; height: number; depth: number;
   solids?:number; connections?:number; floors?:number; roomsX?:number; roomsZ?:number; footprint?:string[]; floorFootprints?:string[][];
   footprintPolygon?:Array<[number,number]>;
+  removedDamage?:Array<StudioBuildingDamageZone & {zone:number}>;
   roomUses?:Array<{roomId:string;use:StudioBuildingRoomUse}>;
   interiorLights?:Array<{id:string;roomId:string;floor:number;x:number;z:number;intensity:number;range:number}>;
   interiorDecor?:Array<{id:string;roomId:string;floor:number;x:number;z:number}>;
