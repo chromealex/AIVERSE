@@ -38,6 +38,9 @@ struct Project {
     bool load(const std::string& dir, std::string* err);
     bool saveRules(std::string* err,const std::string& historyLabel={});
     bool saveManifest(std::string* err,const std::string& historyLabel={});
+    // Detached owner: prepare both dirty documents and the history checkpoint.
+    // The caller publishes the returned existing-file plan before swapping owners.
+    std::vector<ProjectFileEdit> stageDirtySave();
     Json historyStatus() const;
     bool historyStep(bool redo,const std::string& expectedVersion,std::string* err);
     // Validate and advance a detached Project copy without writing any file.
