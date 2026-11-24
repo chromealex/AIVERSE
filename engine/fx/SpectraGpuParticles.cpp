@@ -207,14 +207,23 @@ bool ComputeParticles::initGpu() {
                             cap*sizeof(ProgramAttributes),
                             initialAttributes.data(),
                             "SpectraFX GPU VM particle custom attributes");
+    std::vector<uint32_t> initialFree;
+    if(gpuAllocationActive_){
+        initialFree.resize(cap);
+        for(uint32_t i=0;i<cap;++i)initialFree[i]=cap-1-i;
+    }
     liveSlots_=buffer(*device_,gfx::BufferType::Storage,cap*sizeof(uint32_t),
-                      nullptr,"SpectraFX GPU live-slot gather map");
+                      gpuAllocationActive_?initialFree.data():nullptr,
+                      gpuAllocationActive_?"SpectraFX persistent GPU free stack":"SpectraFX GPU live-slot gather map");
     graphSources_=buffer(*device_,gfx::BufferType::Storage,sizeof(graphChannels),
                          graphChannels.data(),"SpectraFX GPU material vertex sources");
     const uint32_t zero=0;
     const gfx::DrawIndexedIndirectCommand zeroArgs{0,1,0,0,0};
-    aliveCounter_=buffer(*device_,gfx::BufferType::Storage,sizeof(zero),
-                         &zero,"SpectraFX GPU atomic alive count");
+    const std::array<uint32_t,4> allocatorCounters{0,cap,0,0};
+    aliveCounter_=buffer(*device_,gfx::BufferType::Storage,
+                         gpuAllocationActive_?sizeof(allocatorCounters):sizeof(zero),
+                         gpuAllocationActive_?static_cast<const void*>(allocatorCounters.data()):static_cast<const void*>(&zero),
+                         "SpectraFX GPU atomic alive count");
     vmErrors_=buffer(*device_,gfx::BufferType::Storage,sizeof(zero),
                      &zero,"SpectraFX GPU VM error counter");
     gpuDrawArgs_=buffer(*device_,gfx::BufferType::Storage,sizeof(zeroArgs),
@@ -309,13 +318,14 @@ bool ComputeParticles::initGpu() {
                     +size_t(n*n*4)+2*sizeof(zero)+sizeof(zeroArgs)
                     +size_t(cap)*2*sizeof(ProgramParams)+sizeof(vmPayload)
                     +size_t(cap)*sizeof(ProgramAttributes)+sizeof(graphChannels)
-                    +(gpuAllocationActive_?size_t(cap)*12u:0u);
+                    +(gpuAllocationActive_?size_t(cap)*12u+3u*sizeof(uint32_t):0u);
     return true;
 }
 void ComputeParticles::releaseGpu() {
     checkpointHistory_.clear();
     readbackLifetime_.reset();
     asyncErrorPending_=false;
+    asyncAllocationCountersPending_=false;
     asyncCheckpointPending_=false;
     if(device_) {
         if(pipeline_.valid())device_->destroyPipeline(pipeline_);
@@ -435,7 +445,15 @@ bool ComputeParticles::tryClear() {
     const bool attributeOk=paramOk && device_->updateStorageBufferChecked(
         stateAttributes_,resetAttributes.data(),
         resetAttributes.size()*sizeof(ProgramAttributes));
-    if(!attributeOk) {
+    bool allocatorOk=attributeOk;
+    if(allocatorOk&&gpuAllocationActive_){
+        std::vector<uint32_t> free(cap);
+        for(uint32_t i=0;i<cap;++i)free[i]=cap-1-i;
+        const std::array<uint32_t,4> counters{0,cap,0,0};
+        allocatorOk=device_->updateStorageBufferChecked(liveSlots_,free.data(),free.size()*sizeof(uint32_t))&&
+            device_->updateStorageBufferChecked(aliveCounter_,counters.data(),sizeof(counters));
+    }
+    if(!allocatorOk) {
         ++stats_.gpuResetFailures;
         reason_="SpectraFX checked GPU reset rejected; previous slot ownership "
                 "retained; retry reset before any new GPU frame: "+
@@ -902,6 +920,7 @@ bool ComputeParticles::stepGpuAllocated(float dt){
     for(uint32_t i=0;i<frame.count;++i){
         const auto& phase=frame.dispatches[i];dispatch(phase.shaderMode,phase.threads);
         if(phase.phase==gpu_pipeline::Phase::Compact)++stats_.gpuCompactDispatches;
+        if(phase.phase==gpu_pipeline::Phase::ReserveFreeSlots)++stats_.gpuFreeReservationDispatches;
     }
     device_->endCompute();
     gpuAllocationSubmitted_|=count!=0;
@@ -954,6 +973,33 @@ void ComputeParticles::draw(const fx::FxFog& fog) {
         else device_->drawIndexed(drawCount_*6);
     }
     stats_.drawCalls=1;
+}
+bool ComputeParticles::requestAllocationCounters(std::function<void(bool,AllocationCounters)> callback){
+    if(!callback||!gpuAllocationActive_||!gpuActive()||!device_||!device_->gpuHealthy()||
+       !device_->canUpdateSharedBuffers()||gpuResetDirty_||gpuStagingDirty_||
+       asyncAllocationCountersPending_||!readbackLifetime_)return false;
+    const auto revision=vmFrameRevision_;
+    const auto capacity=desc_.capacity;
+    std::weak_ptr<uint64_t> lifetime(readbackLifetime_);
+    asyncAllocationCountersPending_=true;
+    if(!device_->readBufferAsync(aliveCounter_,4*sizeof(uint32_t),
+        [this,lifetime,revision,capacity,callback=std::move(callback)](std::vector<uint8_t> bytes) mutable{
+            if(!lifetime.lock())return;
+            asyncAllocationCountersPending_=false;
+            AllocationCounters result{};result.revision=revision;
+            bool ok=bytes.size()==4*sizeof(uint32_t);
+            if(ok){
+                std::array<uint32_t,4> raw{};
+                std::memcpy(raw.data(),bytes.data(),bytes.size());
+                result.alive=raw[0];result.free=raw[1];result.reservedBase=raw[2];result.admitted=raw[3];
+                ok=result.free<=capacity&&result.alive<=capacity&&result.reservedBase<=capacity&&
+                   result.admitted<=capacity-result.reservedBase&&result.alive==capacity-result.free;
+            }
+            callback(ok,result);
+        })){
+        asyncAllocationCountersPending_=false;return false;
+    }
+    return true;
 }
 bool ComputeParticles::readGpuVmErrors(uint32_t& count) {
     stats_.gpuVmErrorsKnown=false;

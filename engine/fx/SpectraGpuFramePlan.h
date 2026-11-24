@@ -9,7 +9,7 @@ namespace aiverse::spectra::gpu_pipeline {
 
 enum class Phase : uint8_t {
     ResetCounter, Spawn, Integrate, Compact, PublishIndirectArgs, Gather,
-    CollectFreeSlots, AllocateSpawn
+    CollectFreeSlots, AllocateSpawn, ReserveFreeSlots
 };
 struct Dispatch {
     Phase phase{};
@@ -52,14 +52,13 @@ inline FramePlan plan(uint32_t capacity,uint32_t births,
     }
     return p;
 }
-// GPU owns physical slots. Rebuild the free list before births, then reset
-// the shared counter before compaction. Source kills precede this plan.
+// GPU owns physical slots. Reserve a range from the persistent free stack,
+// then allocate independent births. Source kills precede this plan.
 inline FramePlan gpuAllocationPlan(uint32_t capacity,uint32_t births,bool integrate){
     FramePlan p;
     if(!capacity||births>capacity)return p;
     if(births){
-        p.push(Phase::ResetCounter,1,3);
-        p.push(Phase::CollectFreeSlots,capacity,7);
+        p.push(Phase::ReserveFreeSlots,1,10);
         p.push(Phase::AllocateSpawn,births,8);
     }
     if(integrate)p.push(Phase::Integrate,capacity,1);

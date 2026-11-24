@@ -110,6 +110,7 @@ struct ComputeStats {
     uint32_t gpuDispatches = 0, drawCalls = 0;
     bool gpuOwnedAllocation = false; // alive is a conservative host estimate, not readback
     uint32_t gpuAllocationRequests=0;
+    uint32_t gpuFreeReservationDispatches=0;
     uint32_t hostActiveSlotVisits = 0, hostOccupiedPages = 0; // latest step, no GPU readback
     uint32_t submittedSlots = 0; // dense GPU quads published from live-slot map
     uint32_t gpuFallbacks = 0, lostOnFallback = 0;
@@ -183,6 +184,13 @@ public:
     // Between completed frames only. Returns false when unavailable; failure
     // must never be interpreted as zero VM errors.
     bool readGpuVmErrors(uint32_t& count);
+    // Optional 16-byte async counter snapshot. Results describe the captured
+    // submission, not the current frame. No mandatory per-frame readback.
+    struct AllocationCounters {
+        uint32_t alive=0,free=0,reservedBase=0,admitted=0;
+        uint64_t revision=0;
+    };
+    bool requestAllocationCounters(std::function<void(bool,AllocationCounters)> callback);
     // Asynchronous 4-byte diagnostics. Accepted requests invoke callback
     // after a later frame; shutdown invalidates callbacks safely.
     bool requestGpuVmErrors(std::function<void(bool,uint32_t)> callback);
@@ -300,6 +308,7 @@ private:
     std::string reason_;
     std::shared_ptr<uint64_t> readbackLifetime_ = std::make_shared<uint64_t>(0);
     bool asyncErrorPending_ = false;
+    bool asyncAllocationCountersPending_=false;
     uint64_t vmFrameRevision_ = 0;
     uint64_t checkpointRevision_ = 0;
     GpuCheckpoint lastCheckpoint_;

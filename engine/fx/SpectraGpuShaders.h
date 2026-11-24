@@ -218,25 +218,36 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
                      ) {
     uint id=gid.x;
 #ifdef SPECTRA_GPU_OWNED_ALLOCATION
+    // Counter ABI: [0] compacted alive, [1] free stack size,
+    // [2] reserved stack base, [3] admitted births in this submission.
+    // RHI dispatch barriers separate push, reservation and pop phases.
     if(u.meta.x==9u){
         if(id<u.meta.y&&particles[id].positionAge.w>=0.0f&&
            all(owners[id]==uint2(u.meta.z,u.meta.w))){
             particles[id].positionAge.w=-1.0f;owners[id]=uint2(0);
+            uint at=atomic_fetch_add_explicit(&aliveCounter[1],1u,memory_order_relaxed);
+            if(at<u.meta.y)liveSlots[at]=id;
+            else atomic_fetch_add_explicit(vmErrors,1u,memory_order_relaxed);
         }
         return;
     }
-    if(u.meta.x==7u){
-        if(id<u.meta.y&&particles[id].positionAge.w<0.0f){
-            uint ordinal=atomic_fetch_add_explicit(&aliveCounter[0],1u,memory_order_relaxed);
-            if(ordinal<u.meta.y)liveSlots[ordinal]=id;
+    if(u.meta.x==10u){
+        if(id==0u){
+            const uint freeCount=min(atomic_load_explicit(&aliveCounter[1],memory_order_relaxed),u.meta.y);
+            const uint admitted=min(freeCount,u.meta.z);
+            const uint base=freeCount-admitted;
+            atomic_store_explicit(&aliveCounter[1],base,memory_order_relaxed);
+            atomic_store_explicit(&aliveCounter[2],base,memory_order_relaxed);
+            atomic_store_explicit(&aliveCounter[3],admitted,memory_order_relaxed);
         }
         return;
     }
     if(u.meta.x==8u){
-        const uint freeCount=min(atomic_load_explicit(&aliveCounter[0],memory_order_relaxed),u.meta.y);
-        // One thread per admitted birth, unique list index; overflows drop.
-        if(id>=u.meta.z||id>=freeCount)return;
-        uint slot=liveSlots[id];
+        const uint admitted=atomic_load_explicit(&aliveCounter[3],memory_order_relaxed);
+        if(id>=admitted||id>=u.meta.z)return;
+        const uint base=atomic_load_explicit(&aliveCounter[2],memory_order_relaxed);
+        if(base>=u.meta.y||id>=u.meta.y-base)return;
+        uint slot=liveSlots[base+id];
         if(slot>=u.meta.y)return;
         Particle p=spawns[id];VmParams params=seedParams[id];VmAttributes attrs{};
         vmRun(vmProgram[0],0u,p,params,attrs,0.0f,vmErrors);
@@ -294,8 +305,17 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
         p.velocityLife.xyz*=max(0.0f,1.0f-u.gravityDt.z*dt);
         p.positionAge.xyz+=p.velocityLife.xyz*dt;
         p.positionAge.w+=dt;
-        if(p.positionAge.w>=p.velocityLife.w)p.positionAge.w=-1.0f;
-        else {
+        if(p.positionAge.w>=p.velocityLife.w){
+            p.positionAge.w=-1.0f;
+#ifdef SPECTRA_GPU_OWNED_ALLOCATION
+            // Only a live -> dead transition returns a slot. Subsequent
+            // integration/kill passes see the dead marker and skip it.
+            owners[id]=uint2(0);
+            uint at=atomic_fetch_add_explicit(&aliveCounter[1],1u,memory_order_relaxed);
+            if(at<u.meta.y)liveSlots[at]=id;
+            else atomic_fetch_add_explicit(vmErrors,1u,memory_order_relaxed);
+#endif
+        }else {
             VmParams params=stateParams[id];
             VmAttributes attrs=stateAttributes[id];
             vmRun(vmProgram[0],1u,p,params,attrs,dt,vmErrors);
