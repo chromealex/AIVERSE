@@ -300,3 +300,42 @@ entity absence. Candidate copy/audit costs scale with total parked
 payload; not an every-entity/every-tick fast path. Native tests and
 cross-host acceptance NOT RUN. See
 `docs/agent-handoffs/open-world-stage29a-cold-advancement-2026-11-24.md`.
+
+## W1.29b — complete cold plan and guarded park/wake
+
+Prefer the complete plan for new native hosts. Register each parkable ECS type
+once under its portable name/version, then explicitly mark each type as safe to
+pause or provide a portable clock and deterministic catch-up policy. A plan may
+cover heterogeneous groups, but every parked component needs a policy.
+
+```cpp
+world::RegionDormancyController::ColdAdvancePlan plan;
+plan.addAdvance<NeedsState>("myproject.needs",
+    [](const NeedsState& s) -> uint64_t { return s.lastTick; },
+    [](NeedsState& s, world::RegionEntityId id, uint64_t from, uint64_t to) {
+        return advanceNeedsDeterministically(s, id, from, to);
+    });
+plan.addPaused<StaticProfile>("myproject.profile");
+// Both names/types must match controller.registerComponent<T>().
+controller.parkGroupGuarded(ecs, ledger, cold, group, cell,
+    authoritativeTick, plan, mayPark, &error);
+controller.advanceGroup(ecs, ledger, cold, group, cell,
+    authoritativeTick, plan, &error);
+controller.advanceAndWakeGroup(ecs, ledger, cold, group, cell,
+    authoritativeTick, plan, mayWake, &error);
+```
+
+Check every return value and handle failure at the authoritative owner.
+Admission predicates receive a read-only World, Cell and stable-ID ordered
+span of entities. The owner must check complete linked groups, pins, active
+actions, references, navigation/collision readiness and all live consumers.
+Clocked components must encode their current authoritative tick at parking.
+Catch-up policies must be copyable, pure, bounded, independent per component,
+and preserve domain references/invariants. The shared controller orders work
+by stable ID and codec name, validates all blobs before catch-up, checks
+portable clock roundtrip and stages one candidate before publishing. Unknown
+or missing policy refuses the whole complete-plan operation. Same-tick
+advancement does not write the store. Existing pause-only and single-type
+APIs are not a way to bypass a required complete policy. No automatic host
+integration, true absence or performance claim yet. Schema 1 unchanged.
+Native builds and tests NOT RUN; see stage29b handoff.
