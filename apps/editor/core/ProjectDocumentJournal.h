@@ -131,6 +131,11 @@ inline fs::path safeTarget(const fs::path& root,const std::string& relative,bool
     const auto trashRest=relative.starts_with(trashPrefix)?relative.substr(trashPrefix.size()):std::string{};
     const bool trashMeta=trashRest.size()==24+11&&trashRest.substr(24)=="/asset.meta"&&
         trashRest.substr(0,24).find_first_not_of("0123456789abcdef")==std::string::npos;
+    const auto filename=rel.filename().string();
+    const std::string mapPrefix="map-history-";
+    const bool mapCheckpoint=relative.starts_with("maps/")&&rel.parent_path().filename()==".aiverse-cache"&&
+        filename.size()==mapPrefix.size()+64+5&&filename.starts_with(mapPrefix)&&filename.ends_with(".json")&&
+        filename.substr(mapPrefix.size(),64).find_first_not_of("0123456789abcdef")==std::string::npos;
     if(allowCreation){
         const auto ext=rel.extension().string();
         if(!relative.starts_with("maps/")||(ext!=".json"&&ext!=".r16"&&ext!=".splat"))
@@ -139,7 +144,8 @@ inline fs::path safeTarget(const fs::path& root,const std::string& relative,bool
     fs::path p=root;
     for(const auto& segment:rel){
         const auto name=segment.string();
-        const bool historyCache=relative==".aiverse-cache/project-history.json"&&p==root&&name==".aiverse-cache";
+        const bool historyCache=(relative==".aiverse-cache/project-history.json"&&p==root&&name==".aiverse-cache")||
+            (mapCheckpoint&&name==".aiverse-cache"&&p/segment==root/rel.parent_path());
         if(name.empty()||name=="."||name==".."||(name==".aiverse-cache"&&!historyCache&&!(trashMeta&&p==root))||name==".git"||
            name.starts_with(".aiverse-save-")||name.find('\0')!=std::string::npos)
             throw std::runtime_error("Unsafe project document journal segment");
