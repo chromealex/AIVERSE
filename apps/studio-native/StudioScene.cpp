@@ -2225,6 +2225,11 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         lightingStatus_+=" · AETHER "+planetLiveAetherLayer_+(liveAether?" mass / duct potential":" unavailable");
         if(planetLiveSnapshot_["aether"].getBool("truncated"))lightingStatus_+=" (sample capped)";
     }
+    const bool liveForest=livePlanet&&planetLiveSnapshot_["forest"].getBool("active");
+    if(livePlanet&&planetLiveSnapshot_["forest"].isObject()){
+        lightingStatus_+=liveForest?" · live forest roots / actual capsule poses":" · live forest unavailable";
+        if(planetLiveSnapshot_["forest"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+    }
     const bool liveSociety=livePlanet&&planetLiveSnapshot_["society"].getBool("available");
     if(livePlanet&&planetLiveSnapshot_["society"].isObject()){
         lightingStatus_+=liveSociety?" · SOCIETY knowledge / trust / triggers":" · SOCIETY unavailable";
@@ -2293,15 +2298,88 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
             else renderer_.drawMesh(cube_,world,marker.color,kDrawNoCastShadow);
         }
         if(gizmosVisible_){
-            for(const auto& line:planetForestOverlays_.lines)renderer_.line(line.a,line.b,line.color);
+            if(!liveForest)for(const auto& line:planetForestOverlays_.lines)renderer_.line(line.a,line.b,line.color);
             for(const auto& line:planetProcessOverlays_.lines)
                 if((!liveGravity||!line.owner.empty())&&(line.owner.empty()||!hidden_.count(line.owner)))
                     renderer_.line(line.a,line.b,line.color);
             PlanetLiveLineBudget liveLineBudget;
-            const size_t liveLineShare=planetLiveShare(kPlanetLiveLines,size_t(liveGravity)+size_t(liveAether)+size_t(liveSociety)+size_t(liveCircuit)+size_t(liveCrowd)+size_t(liveEcho)+size_t(liveMorph)+size_t(liveFracture)+size_t(liveEvolve)+size_t(liveGranular)+size_t(liveImprint));
+            const size_t liveLineShare=planetLiveShare(kPlanetLiveLines,size_t(liveForest)+size_t(liveGravity)+size_t(liveAether)+size_t(liveSociety)+size_t(liveCircuit)+size_t(liveCrowd)+size_t(liveEcho)+size_t(liveMorph)+size_t(liveFracture)+size_t(liveEvolve)+size_t(liveGranular)+size_t(liveImprint));
             const auto liveLine=[&](render::float3 a,render::float3 b,uint32_t color){
                 if(liveLineBudget.take())renderer_.line(a,b,color);
             };
+            if(liveForest){
+                liveLineBudget.beginLayer(liveLineShare);
+                const auto readVec=[](const Json& j)->std::optional<render::float3>{
+                    if(!j.isArray()||j.size()!=3)return {};
+                    const auto& a=j.items();
+                    render::float3 v{float(a[0].toDouble(NAN)),float(a[1].toDouble(NAN)),float(a[2].toDouble(NAN))};
+                    if(!std::isfinite(v.x)||!std::isfinite(v.y)||!std::isfinite(v.z))return {};
+                    return v;
+                };
+                const auto basis=[](render::float3 up){
+                    const auto a=render::normalize(render::cross(up,std::abs(up.y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
+                    return std::pair{a,render::normalize(render::cross(up,a))};
+                };
+                const auto ring=[&](render::float3 p,render::float3 a,render::float3 b,float r,uint32_t color){
+                    auto prev=p+a*r;
+                    for(int i=1;i<=8;++i){
+                        const float t=6.28318530718f*float(i)/8.f;
+                        const auto next=p+(a*std::cos(t)+b*std::sin(t))*r;
+                        liveLine(prev,next,color);prev=next;
+                    }
+                };
+                const float marker=std::clamp(planetPreview_->radius*.008f,.12f,1.f);
+                size_t count=0;
+                for(const auto& row:planetLiveSnapshot_["forest"]["plants"].items()){
+                    if(count++>=128)break;
+                    if(row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto& capsule=row["capsule"];
+                    if(row.getBool("physical")&&!row.getBool("spent")&&capsule.isObject()){
+                        const auto center=readVec(capsule["center"]),axis=readVec(capsule["axis"]);
+                        const float r=float(capsule["radius"].toDouble()),h=float(capsule["halfHeight"].toDouble());
+                        if(center&&axis&&render::dot(*axis,*axis)>.5f&&r>0&&r<=1000&&h>0&&h<=1000){
+                            const auto up=render::normalize(*axis);
+                            const auto [a,b]=basis(up);
+                            const auto p=*center-up*h,q=*center+up*h;
+                            const auto color=row.getBool("awake")?render::rgba(255,165,90):render::rgba(120,190,255);
+                            ring(p,a,b,r,color);ring(q,a,b,r,color);
+                            for(const auto side:{a,b}){
+                                liveLine(p+side*r,q+side*r,color);liveLine(p-side*r,q-side*r,color);
+                                for(int cap=0;cap<2;++cap){
+                                    const auto c=cap?q:p,v=up*(cap?1.f:-1.f);
+                                    auto prev=c+side*r;
+                                    for(int j=1;j<=4;++j){
+                                        const float t=3.14159265359f*float(j)/4.f;
+                                        const auto next=c+(side*std::cos(t)+v*std::sin(t))*r;
+                                        liveLine(prev,next,color);prev=next;
+                                    }
+                                }
+                            }
+                            continue;
+                        }
+                    }
+                    const auto position=readVec(row["position"]),normal=readVec(row["up"]);
+                    if(!position||!normal||render::dot(*normal,*normal)<.5f)continue;
+                    const auto up=render::normalize(*normal);
+                    const auto [a,b]=basis(up);
+                    const auto p=*position+up*.025f;
+                    const auto support=std::clamp(float(row.getInt("supportPermille"))/1000.f,0.f,1.f);
+                    const bool retired=row.getBool("spent")||row.getBool("harvested");
+                    const auto color=retired?render::rgba(125,125,135):
+                        row.getBool("physical")?render::rgba(255,125,100):
+                        row.getBool("pending")?render::rgba(255,210,90):
+                        row.getBool("fallen")?render::rgba(190,115,80):
+                        row.getBool("dead")?render::rgba(160,115,95):
+                        render::rgba(uint8_t(230-145*support),uint8_t(90+145*support),100);
+                    // Marker only, never invent a standing mesh or fallen orientation.
+                    liveLine(p-a*marker,p+a*marker,color);liveLine(p-b*marker,p+b*marker,color);
+                    if(!retired&&!row.getBool("fallen")){
+                        liveLine(p,p+up*marker,color);
+                        const float radius=float(row.getInt("rootRadiusCm"))*.01f;
+                        if(radius>0&&radius<=100.f)ring(p,a,b,radius,color);
+                    }
+                }
+            }
             if(liveGravity){
                 liveLineBudget.beginLayer(liveLineShare);
                 // Effective gravity replaces authored per-field arrows in this

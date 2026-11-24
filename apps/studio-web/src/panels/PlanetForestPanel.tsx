@@ -59,6 +59,9 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
     const d=await invoke('studio.planetForestSet',{mapPath:base.mapPath,expectedRevision:base.revision,forest:override?forest:null,catalog});
     accept(d);onChanged();
   }catch(e){setError(err(e));}finally{busyRef.current=false;setBusy(false);}}
+  async function setLiveOverlay(enabled:boolean){setError('');try{
+    await invoke('studio.evolveLayer',enabled?{live:true,liveForest:true}:{liveForest:false});
+  }catch(e){setError(err(e));}}
   async function sample(){setError('');try{setLive(await invoke('studio.planetForestLive',{}));}catch(e){setError(err(e));}}
   if(!base)return <section className="rules__form">{error||'Loading planet forest…'} <button onClick={()=>void reload()}>Reload</button></section>;
   if(!base.available)return <section className="rules__form">Planetary map required. <button onClick={()=>void reload()}>Reload</button></section>;
@@ -148,7 +151,7 @@ export default function PlanetForestPanel({historyVersion,onChanged}:{historyVer
       <button disabled={profiles.length>=64} onClick={()=>editCatalog({...catalog,species:[...profiles,{id:nextId(profiles,'id'),preset:'oak'}]})}>Add ARBOR profile</button>
       <button onClick={()=>editCatalog(null)}>Remove catalogue</button></>}
     </fieldset>
-    <fieldset className="rules__group"><legend>Live forest inspector</legend><button onClick={()=>void sample()}>Sample completed tick</button>
+    <fieldset className="rules__group"><legend>Live forest inspector</legend><button onClick={()=>void setLiveOverlay(true)}>Show live forest in Scene</button><button onClick={()=>void setLiveOverlay(false)}>Hide live forest overlay</button><p className="pf-note">Live overlay requires the current saved local Play map and Scene gizmos. Green/red: root support; yellow: pending; orange/blue: awake/sleeping capsule; grey: spent or harvested. Shared sample budget may omit plants.</p><button onClick={()=>void sample()}>Sample completed tick</button>
       {live&&!live.active&&<p className="pf-note">Start local Play with the current saved planetary map.</p>}
       {live?.active&&<><p>Tick {live.tick} · plants {live.plantCount} · dead {live.deadCount} · fallen {live.fallenCount} · spent {live.spentCount} · physical {live.physicalCount} · pending {live.pendingCount}</p>
       {live.truncated&&<p className="pf-note">First 128 plants only.</p>}

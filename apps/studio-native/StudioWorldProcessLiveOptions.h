@@ -10,10 +10,10 @@ struct StudioWorldProcessLiveOptions {
     int32_t granularCellCm=0;
     bool gravity=false;
     std::string aetherLayer="off";
-    bool fracture=false, morph=false, echo=false, crowd=false, circuit=false, society=false;
+    bool fracture=false, morph=false, echo=false, crowd=false, circuit=false, society=false, forest=false;
 
     bool anyPlanetLayer() const {
-        return layer!="off"||gravity||aetherLayer!="off"||fracture||morph||echo||crowd||circuit||society;
+        return layer!="off"||gravity||aetherLayer!="off"||fracture||morph||echo||crowd||circuit||society||forest;
     }
     bool operator==(const StudioWorldProcessLiveOptions&) const = default;
     struct Flag { const char* key; bool StudioWorldProcessLiveOptions::*member; };
@@ -25,7 +25,8 @@ struct StudioWorldProcessLiveOptions {
         {"liveEcho",&StudioWorldProcessLiveOptions::echo},
         {"liveCrowd",&StudioWorldProcessLiveOptions::crowd},
         {"liveCircuit",&StudioWorldProcessLiveOptions::circuit},
-        {"liveSociety",&StudioWorldProcessLiveOptions::society}
+        {"liveSociety",&StudioWorldProcessLiveOptions::society},
+        {"liveForest",&StudioWorldProcessLiveOptions::forest}
     };
     StudioWorldProcessLiveOptions patched(const Json& params) const {
         auto next=*this;

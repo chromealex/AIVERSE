@@ -142,7 +142,7 @@ Json StudioGameSurface::ecologyState(const StudioWorldProcessLiveOptions& option
                 const bool ecology=!options.live||options.layer!="off";
                 const bool granular=options.granularCellCm>0;
                 const size_t layers=size_t(ecology)*2+granular+options.gravity+options.fracture+
-                    options.echo+options.circuit+options.society+options.crowd+options.morph+(options.aetherLayer!="off");
+                    options.echo+options.circuit+options.society+options.forest+options.crowd+options.morph+(options.aetherLayer!="off");
                 if(layers){
                     PlanetLivePayloadBudget budget(layers);
                     const auto cap=[&](size_t n){return budget.ownerLimit(n);};
@@ -155,6 +155,7 @@ Json StudioGameSurface::ecologyState(const StudioWorldProcessLiveOptions& option
                     if(options.fracture)budget.add(out,"fracture",samplePlanetFracture(sim->world(),*surface,tick,cap(256),cap(512)));
                     if(options.echo)budget.add(out,"echo",samplePlanetEcho(sim->world(),*surface,tick,cap(256),cap(512),cap(256),cap(256)));
                     if(options.circuit)budget.add(out,"circuit",samplePlanetCircuit(sim->world(),*surface,tick,cap(256),cap(512),cap(128)));
+                    if(options.forest)budget.add(out,"forest",sampleStudioPlanetForest(sim->world(),*surface,tick,cap(128)));
                     if(options.society)budget.add(out,"society",samplePlanetSociety(sim->world(),*surface,tick,cap(256),cap(512),cap(128)));
                     if(options.crowd){
                         const auto config=game->native().loadedConfiguration("world_processes");
