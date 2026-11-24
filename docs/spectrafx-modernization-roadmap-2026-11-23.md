@@ -370,3 +370,7 @@ Existing SubEmitterModule on=collision with one unconditional safe child name an
 ## Stage 142 — static mesh SDF baking (in progress)
 
 Add bounded reusable triangle-mesh signed distance baking in engine/bake; exact-position seam weld, closed consistently oriented edge validation, nearest triangle distance and solid-angle winding sign. Adapt existing model mesh loader and output current staticSdf lattice without new GPU format. Native CLI, regression fixtures, explicit bounds/padding and cost limit. No automatic dynamic scene SDF, high-resolution texture atlas or editor/MCP tool yet. Execution deferred.
+
+## Stage 142 — static mesh SDF baking (source; QA deferred)
+
+`engine/bake/MeshDistanceGrid.h` adds reusable offline bounded indexed-triangle distance baking, double precision closest-triangle distance and nonzero solid-angle winding sign. Exact seam weld and closed directed-edge checks reject open/inconsistent/nonmanifold edges and degenerate faces; no self-intersection or nonmanifold-vertex certification. Auto cubic bounds pad one cell around largest extent, 4..16 nodes per axis, max 8192 triangles and 16 Mi sample-triangle pairs. `engine/fx/SpectraSdfBaker.h` reuses existing model bind-pose mesh extraction, accepts affine transform, produces current staticSdf JSON. Native `aiverse_sdf_bake MODEL DIMENSION OUT.json` tool; paste output into CollisionModule staticSdf. No new GPU ABI, runtime mesh scanning, high-resolution texture atlas or Studio/MCP baking button. Regression source only, no build/tests run.

@@ -1,6 +1,7 @@
 // SpectraFX graph-v1 host routing: conservative GPU subset or lossless CPU.
 // No FPS/RTS imports, RHI mock or real device required for these checks.
 #include "engine/fx/SpectraGraphRuntime.h"
+#include "engine/bake/MeshDistanceGrid.h"
 #include "engine/fx/SpectraStaticSphereCollision.h"
 #include "engine/fx/SpectraTerrainCollision.h"
 #include "engine/fx/SpectraGpuPoolWorld.h"
@@ -183,6 +184,27 @@ int main() {
         emitter.subEmitters[0].chance=.5f;
         require(!sp::inspectPoolGraphGpuEligibility(parent,poolOptions,&child).eligible&&child.empty(),
                 "unsupported chance remains CPU");
+    }
+    {
+        const std::vector<render::float3> p{
+            {-1,-1,-1},{1,-1,-1},{1,1,-1},{-1,1,-1},
+            {-1,-1,1},{1,-1,1},{1,1,1},{-1,1,1}};
+        const std::vector<uint32_t> indices{
+            0,2,1,0,3,2,4,5,6,4,6,7,0,1,5,0,5,4,
+            3,7,6,3,6,2,0,4,7,0,7,3,1,2,6,1,6,5};
+        bake::MeshDistanceGrid grid;std::string error;
+        require(bake::bakeMeshDistanceGrid(p,indices,7,render::mat4{},grid,error),"closed cube SDF bake");
+        const auto at=[&](unsigned x,unsigned y,unsigned z){return grid.samples[(z*7+y)*7+x];};
+        require(std::abs(at(3,3,3)+1.f)<1e-4f&&std::abs(at(6,3,3)-.5f)<1e-4f,
+                "signed cube distances");
+        auto open=indices;open.resize(open.size()-3);
+        require(!bake::bakeMeshDistanceGrid(p,open,7,render::mat4{},grid,error)&&grid.samples.size()==343,
+                "open mesh rejected without mutating previous result");
+        auto reversed=indices;std::swap(reversed[0],reversed[1]);
+        require(!bake::bakeMeshDistanceGrid(p,reversed,7,render::mat4{},grid,error),
+                "inconsistent winding rejected");
+        require(!bake::bakeMeshDistanceGrid(p,indices,17,render::mat4{},grid,error),
+                "unsupported volume dimension rejected");
     }
     options.capacity=4; // burst requires five slots
     require(!sp::inspectGraphGpuEligibility(basic,options).eligible,
