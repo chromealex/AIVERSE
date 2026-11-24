@@ -1,0 +1,5 @@
+# Stage 35F.3 — exterior graph projection
+
+Parent abddfff5d238ff7ce1bad41f3bbb0947b3f81d8f. Projection ae11af0f00cf01b939f318c2516af8c654d01661, UI c748609f1a75c8c9099176f4e3c83f47c83b7129, fixtures e2609c4c7bda5db30d3e9b9cc86d5b61c8c82e67.
+
+One exterior node per authored socket, links to overlapping ground-floor rooms, visible only in all-floors or ground-floor view. Reuses GraphCanvas, no additional solver or runtime edges. Selection shows exact overlap and focuses owner feature. Diagnostics count distinct entrances and native room groups without entrance overlap (stairs allowed, optional elevator exclusion); legacy missing field is unknown, explicit empty array is zero. Not a physical egress or accessibility certification. Route policy remains independent of group diagnostics. Tests authored, NOT RUN; feature manifest updated without claiming passing gates. Common graph skill/docs not present in integration tree; reconcile exact shared sources with common/owner branches before merge. Next: exact-head validation, shared branch reconciliation, PR status review. No main change.
