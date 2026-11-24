@@ -2,6 +2,7 @@
 #include "Workspace.h"
 #include "ShaderGraphOps.h"
 #include "GraphOps.h"
+#include "FeatureGateOps.h"
 #include "AnimationOps.h"
 #include "GeometryOps.h"
 #include "engine/actor/ActorModule.h"
@@ -512,6 +513,9 @@ void Workspace::registerCoreOps() {
             result.set("note", str("Registration only. Verify tools/call against the built MCP executable and active editor; compile-time capabilities and runtime dependencies may differ."));
             return result;
         });
+    add("feature_readiness_get", "Read an existing engine readiness report snapshot; not live verification.",
+        R"({"type":"object","additionalProperties":false})",
+        [this](const Json&) { return featureReadinessSnapshot(*this); });
     auto needProject = [this] { if (project.dir.empty()) throw std::runtime_error("no game is open: call open_game first"); };
     auto entityRef = [this](const Json& p) {
         int i = -1;
