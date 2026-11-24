@@ -65,3 +65,5 @@ auto result=noiseBatchValues<2>(NoiseBatchPoints<2>::aos(p),out,7,{8,8},o);
 ```
 
 Run `library_noise` on each ISA, and separately with `-DAIVERSE_NOISE_DISABLE_SIMD` for the fallback. Package 0.6.0. Performance and full platform gates remain separate.
+
+Stage 50 benchmark: compile the standalone `tests/libraries/noise_benchmark.cpp` with C++20, -O3 -DNDEBUG and -I libraries/include; run with CPU/OS description as the first argument. CSV reports requested/actual backend, median/min/max ns/sample, and scalar parity checksum for 2D/3D, AoS/SoA, three sizes, periodic/aperiodic and both policies. Unavailable backends are explicit; valid inputs only. No timing or Auto policy change has been verified yet. See docs/handoffs/algorithms-stage50-noise-benchmark.md.
