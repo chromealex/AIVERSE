@@ -254,3 +254,5 @@ Use the canonical `engine/world/SimulationLod.h` (same blob as simulation cadenc
 
 ## Stage 81: bounded wake requests
 Use `RegionBudgetOptions{maxVisitsPerTick, wakeSpan}` with prepareRegionBudget/prepareRegionReports. Wake requests bypass the LOD due phase, not the operation cap. Duplicate IDs coalesce, inactive IDs are counted and ignored, invalid IDs reject. Pending urgent work retains firstDueTick until served; ordinary and urgent lanes each use shared WorkBudget and independent stable-ID cursors. Contested slots alternate across ticks, even cap=1. No strict latency guarantee under overload or churn. Persist/copy all RegionBudgetState fields with owner state if gameplay uses the plan; no automatic archive registration. A wake is an advisory refresh, not a lifecycle event. No build/test execution. See docs/handoffs/world-processes-stage81-priority-wake-2026-11-24.md.
+
+Stage 82: EVOLVE's existing RegionBudgetState/Batch/Options and prepareRegionBudget remain source-compatible through the shared `WorldProcessEntityBudget.h`. Do not copy the queue algorithm. CROWD and SOCIETY use independent owner-scoped EntityBudgetState instances. See stage82 handoff.
