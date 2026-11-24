@@ -23,6 +23,7 @@ public:
     Json dispatch(const Json& request);   // labels undo steps for the History panel, then dispatchImpl
     const editor::Workspace& workspace() const { return ws_; }
     void setBuildingGraphReader(std::function<Json(uint64_t)> reader){ws_.buildingGraphDiagnosticsProvider=std::move(reader);}
+    Json buildingGraphSnapshot(uint64_t scene)const{return ws_.buildingGraphDiagnosticsProvider?ws_.buildingGraphDiagnosticsProvider(scene):Json{};}
     int selectedEntityIndex() const;
     const std::string& selectedObjectId() const { return selected_; }
     // Multi-selection (primary = selectedObjectId(), always last) and editor-only
