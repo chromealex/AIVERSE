@@ -81,6 +81,14 @@ inline FunctionalBuildingRecipe readFunctionalBuildingRecipe(
         if(std::string(key)=="roomsX")recipe.roomsX=uint32_t(n);
         else recipe.roomsZ=uint32_t(n);
     }
+    if(json.has("footprint")){
+        const auto& rows=json["footprint"];
+        if(!rows.isArray()||rows.size()>6)throw JsonError(path+".footprint: expected up to six binary rows");
+        for(const auto& row:rows.items()){
+            if(!row.isString()||row.str().size()>6)throw JsonError(path+".footprint: invalid row");
+            recipe.footprint.push_back(row.str());
+        }
+    }
     if(json.has("features")){
         const auto& list=json["features"];
         if(!list.isArray())throw JsonError(path+".features: expected array");

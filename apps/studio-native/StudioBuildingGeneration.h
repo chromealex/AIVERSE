@@ -465,6 +465,8 @@ inline Json studioBuildingInspect(const std::filesystem::path& engine,const Json
         out.set("floors",Json::number(int64_t(req.functionalRecipe.floors)));
         out.set("roomsX",Json::number(int64_t(req.functionalRecipe.roomsX)));
         out.set("roomsZ",Json::number(int64_t(req.functionalRecipe.roomsZ)));
+        Json footprint=Json::array();for(const auto& row:req.functionalRecipe.footprint)footprint.push(string(row));
+        out.set("footprint",std::move(footprint));
         out.set("sockets",std::move(sockets));
         out.set("solids",Json::number(int64_t(detailed.graph.solids.size())));
         out.set("connections",Json::number(int64_t(detailed.graph.connections.size())));
@@ -726,6 +728,10 @@ inline Json studioBuildingGenerate(const std::filesystem::path& engine,
             saved.set("floors",Json::number(int64_t(req.functionalRecipe.floors)));
             saved.set("roomsX",Json::number(int64_t(req.functionalRecipe.roomsX)));
             saved.set("roomsZ",Json::number(int64_t(req.functionalRecipe.roomsZ)));
+            if(!req.functionalRecipe.footprint.empty()){
+                Json footprint=Json::array();for(const auto& row:req.functionalRecipe.footprint)footprint.push(string(row));
+                saved.set("footprint",std::move(footprint));
+            }
         }
         if(req.composeFeatures){
             Json features=Json::array();

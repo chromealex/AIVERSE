@@ -19,6 +19,29 @@ static bool intersects(const BuildingStructureGraph& g,float x,float y,float z,
 }
 int main(){
     try{
+        for(const auto& rows:std::vector<std::vector<std::string>>{
+            {"100","100","111"},{"111","010","010"},{"101","101","111"},
+            {"101","111","101"},{"111","101","111"}}){
+            FunctionalBuildingRecipe shape;shape.width=24;shape.depth=24;shape.height=10;
+            shape.floors=2;shape.roomsX=shape.roomsZ=3;shape.footprint=rows;
+            const auto graph=buildFunctionalStructureGraph(shape);CHECK(graph);
+            size_t active=0;
+            for(int z=0;z<3;++z)for(int x=0;x<3;++x){
+                const bool present=rows[size_t(z)][size_t(x)]=='1';active+=present?1:0;
+                const float cx=(x+.5f)*8,cz=(z+.5f)*8;
+                CHECK(intersects(graph,cx,.12f,cz,BuildingGraphPart::Floor)==present);
+                CHECK(intersects(graph,cx,5.f,cz,BuildingGraphPart::Floor)==present);
+                CHECK(intersects(graph,cx,9.9f,cz,BuildingGraphPart::Roof)==present);
+            }
+            CHECK(graph.rooms.size()==active*2);
+            for(const auto& edge:graph.connections){
+                bool from=false,to=false;
+                for(const auto& room:graph.rooms){from|=room.id==edge.from;to|=room.id==edge.to;}
+                CHECK(from&&to);
+            }
+        }
+        FunctionalBuildingRecipe disconnected;disconnected.roomsX=disconnected.roomsZ=3;
+        disconnected.footprint={"100","010","001"};CHECK(!buildFunctionalStructureGraph(disconnected));
         FunctionalBuildingRecipe r;
         r.width=24;r.height=14;r.depth=18;r.floors=2;r.roomsX=2;r.roomsZ=2;
         BuildingFeature gate;gate.kind=BuildingFeatureKind::LargeGate;gate.width=4.5f;

@@ -21,6 +21,10 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
     <svg role="img" aria-label="Generated building footprint, rooms and actual opening anchors"
       viewBox={`${sx} ${sz} ${planWidth} ${planDepth}`}
       preserveAspectRatio="xMidYMid meet">
+      {preview.footprint?.length?preview.footprint.flatMap((row,z)=>[...row].map((cell,x)=>cell==='1'?
+        <rect key={x+':'+z} x={width*x/(preview.roomsX??1)} y={depth*z/(preview.roomsZ??1)}
+          width={width/(preview.roomsX??1)} height={depth/(preview.roomsZ??1)}
+          fill="var(--au-panel-raised)" stroke="var(--au-text)" strokeWidth={.12}/>:null)):<>
       <rect x={0} y={0} width={width} height={depth}
         fill="var(--au-panel-raised)" stroke="var(--au-text)" strokeWidth={.12}/>
       {Array.from({length:Math.max(0,Math.min(5,preview.roomsX??1)-1)},(_,i)=>
@@ -31,7 +35,7 @@ export default function BuildingPlanPreview({preview,onSelectFeature}:Props) {
         <line key={'z'+i} x1={0} x2={width}
           y1={depth*(i+1)/(preview.roomsZ??1)}
           y2={depth*(i+1)/(preview.roomsZ??1)}
-          stroke="var(--au-line)" strokeDasharray=".35 .25" strokeWidth={.07}/>)}
+          stroke="var(--au-line)" strokeDasharray=".35 .25" strokeWidth={.07}/>)}</>}
       {sockets.map(socket=>{
         const [x,,z]=socket.outside;
         const isSelected=socket.socketId===selected;

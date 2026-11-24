@@ -32,6 +32,8 @@ struct RuntimeBuildingRequest {
     std::vector<BuildingFeature> features;
     FunctionalRoofProfile roofProfile=FunctionalRoofProfile::Flat;
     float roofRise=0.f;
+    uint32_t floors=1,roomsX=1,roomsZ=1;
+    std::vector<std::string> footprint;
 };
 
 enum class RuntimeBuildingError : uint8_t {
@@ -140,6 +142,8 @@ public:
             recipe.seed=request.seed;
             recipe.features=request.features;
             recipe.roofProfile=request.roofProfile;recipe.roofRise=request.roofRise;
+            recipe.floors=request.floors;recipe.roomsX=request.roomsX;recipe.roomsZ=request.roomsZ;
+            recipe.footprint=request.footprint;
             return generateRecipe(request.style,recipe,request.origin,request.yaw);
         }
         const auto* kind=it->second.structureKind(request.function);
