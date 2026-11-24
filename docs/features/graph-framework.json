@@ -118,7 +118,11 @@
     "apps/studio-web/tests/buildingRoomTopology.test.mjs",
     "apps/studio-web/src/graphs/GraphDiagnosticsPanel.tsx",
     "apps/editor/core/GraphAssetTransaction.h",
-    "apps/editor/core/SpectraGraphOps.cpp"
+    "apps/editor/core/SpectraGraphOps.cpp",
+    "apps/editor/core/ShaderGraphOps.cpp",
+    "apps/editor/windows/ShaderGraphWindow.cpp",
+    "apps/editor/windows/SpectraGraphWindow.cpp",
+    "skills/visuals/aiverse-spectrafx/SKILL.md"
   ],
   "traits": {
     "editable": true,

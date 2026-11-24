@@ -1,0 +1,169 @@
+{
+  "schema": 1,
+  "id": "recurring-work-budget",
+  "owner": "Shared WorkBudget and Traffic population",
+  "changed_paths": [
+    "CMakeLists.txt",
+    "apps/editor/core/Workspace.cpp",
+    "apps/studio-native/StudioTools.h",
+    "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md",
+    "docs/devlog/systems.json",
+    "docs/native-toolkit.md",
+    "docs/traffic.md",
+    "engine/game/Traffic.h",
+    "engine/game/TrafficPopulation.cpp",
+    "libraries/catalog.json",
+    "libraries/include/aiverselib/runtime/WorkBudget.h",
+    "skills/catalog.json",
+    "skills/core/aiverse-work-budget/SKILL.md",
+    "skills/gameplay/aiverse-city-traffic/SKILL.md",
+    "tests/libraries/runtime_tests.cpp",
+    "tests/simulation_budget_mcp_test.py",
+    "tests/tests_traffic.inc",
+    "tools/mcp/audit_registry.py"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": true,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "architecture": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "native_api": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "skill": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "mcp": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "studio": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "inspector": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "persistence": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "graphs": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "headless": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "examples": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "The owner handoff records the implementation, verification scope and follow-up work.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "documentation": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-work-budget",
+      "aiverse-city-traffic"
+    ],
+    "mcp_tools": [],
+    "studio_methods": [],
+    "studio_panels": []
+  },
+  "test_reports": []
+}

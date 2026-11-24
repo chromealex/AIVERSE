@@ -1,0 +1,363 @@
+{
+  "schema": 1,
+  "id": "terraweave-caverns",
+  "owner": "TerraWeave Caverns",
+  "changed_paths": [
+    ".github/workflows/caverns-stage55.yml",
+    "apps/client/HostedClient.cpp",
+    "apps/client/HostedClient.h",
+    "apps/editor/core/TerraWeaveCavernsOps.h",
+    "apps/editor/core/TerraWeaveOps.h",
+    "apps/editor/core/TerraWeavePlanetCavernsDoc.h",
+    "apps/editor/windows/TerrainWindow.cpp",
+    "apps/studio-native/StudioCavernsPreview.h",
+    "apps/studio-native/StudioLightingPreview.h",
+    "apps/studio-native/StudioPlanetCavernsRim.h",
+    "apps/studio-native/StudioPlanetGlobe.h",
+    "apps/studio-native/StudioTerrainGeometry.h",
+    "apps/studio-native/tests/StudioTerrainGeometryTests.cpp",
+    "apps/studio-web/src/graphs/CaveStructureGraphView.tsx",
+    "apps/studio-web/src/graphs/caveGraphInspection.ts",
+    "apps/studio-web/src/panels/SceneBrushBar.tsx",
+    "apps/studio-web/src/panels/generated/CavernsPanel.tsx",
+    "apps/studio-web/tests/caveGraphInspection.test.mjs",
+    "engine/game/GameCore.cpp",
+    "engine/game/GameCore.h",
+    "engine/nav/CaveEcsRouteFollow.h",
+    "engine/nav/CaveEcsSteering.h",
+    "engine/nav/CaveMovementPhysics.h",
+    "engine/nav/CavePathQueryCache.h",
+    "engine/nav/CaveSimulationNavigation.h",
+    "engine/nav/GraphHierarchy.h",
+    "engine/nav/GraphRegionCache.h",
+    "engine/nav/GraphSearch.h",
+    "engine/physics/Character.cpp",
+    "engine/physics/Character.h",
+    "engine/physics/Scene.cpp",
+    "engine/physics/Scene.h",
+    "engine/physics/TerraWeaveCavernsNativeCheckpoint.h",
+    "engine/physics/TerraWeaveCavernsPlanetMotorBridge.h",
+    "engine/physics/TerraWeaveCavernsPlanetMotorDispatch.h",
+    "engine/physics/TerraWeaveCavernsPlanetPhysics.h",
+    "engine/render/GeometryScene.cpp",
+    "engine/render/GeometryScene.h",
+    "engine/render/GiGeometryScene.h",
+    "engine/render/NativePresentationRetirement.h",
+    "engine/render/TerraWeaveCavernsBatchGeometry.h",
+    "engine/render/TerraWeaveCavernsEditPresentation.h",
+    "engine/render/TerraWeaveCavernsEditedSceneTransaction.h",
+    "engine/render/TerraWeaveCavernsGeometryScene.h",
+    "engine/render/TerraWeaveCavernsGpuSwap.h",
+    "engine/render/TerraWeaveCavernsGpuUploadBudget.h",
+    "engine/render/TerraWeaveCavernsMixedLodShardBatch.h",
+    "engine/render/TerraWeaveCavernsPlanetPayload.h",
+    "engine/render/TerraWeaveCavernsPresentationLeases.h",
+    "engine/render/TerraWeaveCavernsPreviewPacer.h",
+    "engine/render/TerraWeaveCavernsResident.h",
+    "engine/render/TerraWeaveCavernsRimPayload.h",
+    "engine/render/TerraWeaveCavernsShardCatalog.h",
+    "engine/render/TerraWeaveCavernsShardGpuHost.h",
+    "engine/render/TerraWeaveCavernsStrata.h",
+    "engine/render/TerraWeaveCavernsSwapPolicy.h",
+    "engine/render/TerraWeaveTerrainPatchRender.h",
+    "engine/view/game/GamePlanetRender.cpp",
+    "engine/view/game/GamePlanetRender.h",
+    "engine/view/game/GamePlanetView.cpp",
+    "engine/world/GiTerraWeaveResidentBridge.h",
+    "engine/world/GiWorldGeometryBridge.h",
+    "engine/world/SpatialWorld.cpp",
+    "engine/world/SpatialWorld.h",
+    "engine/world/TerraWeaveBox3DTerrain.h",
+    "engine/world/TerraWeaveCaverns.h",
+    "engine/world/TerraWeaveCavernsArchive.h",
+    "engine/world/TerraWeaveCavernsAsyncRebuild.h",
+    "engine/world/TerraWeaveCavernsAuthoredNav.h",
+    "engine/world/TerraWeaveCavernsAuthoredNavStage.h",
+    "engine/world/TerraWeaveCavernsBox3D.h",
+    "engine/world/TerraWeaveCavernsBox3DShadow.h",
+    "engine/world/TerraWeaveCavernsChartPreview.h",
+    "engine/world/TerraWeaveCavernsClientVisualHost.h",
+    "engine/world/TerraWeaveCavernsColliderLeases.h",
+    "engine/world/TerraWeaveCavernsDirtyQueue.h",
+    "engine/world/TerraWeaveCavernsDistanceLod.h",
+    "engine/world/TerraWeaveCavernsEcsAuthority.h",
+    "engine/world/TerraWeaveCavernsEcsCommand.h",
+    "engine/world/TerraWeaveCavernsEcsFrameBridge.h",
+    "engine/world/TerraWeaveCavernsEcsNavigationAuthority.h",
+    "engine/world/TerraWeaveCavernsEditRuntime.h",
+    "engine/world/TerraWeaveCavernsEntrances.h",
+    "engine/world/TerraWeaveCavernsGameplayEditHost.h",
+    "engine/world/TerraWeaveCavernsGameplayPhysicsBarrier.h",
+    "engine/world/TerraWeaveCavernsGraphSolvers.h",
+    "engine/world/TerraWeaveCavernsHeadlessWorldSource.h",
+    "engine/world/TerraWeaveCavernsLodPolicy.h",
+    "engine/world/TerraWeaveCavernsLodTransition.h",
+    "engine/world/TerraWeaveCavernsLodWeld.h",
+    "engine/world/TerraWeaveCavernsMesh.h",
+    "engine/world/TerraWeaveCavernsMixedLodPlan.h",
+    "engine/world/TerraWeaveCavernsMultiNav.h",
+    "engine/world/TerraWeaveCavernsNativeNavMeshCache.h",
+    "engine/world/TerraWeaveCavernsNativeNavSolver.h",
+    "engine/world/TerraWeaveCavernsNav.h",
+    "engine/world/TerraWeaveCavernsNavigationAdapters.h",
+    "engine/world/TerraWeaveCavernsNavigationData.h",
+    "engine/world/TerraWeaveCavernsNavigationEnvironment.h",
+    "engine/world/TerraWeaveCavernsNavigationGraph.h",
+    "engine/world/TerraWeaveCavernsNavigationInvalidation.h",
+    "engine/world/TerraWeaveCavernsNavigationPublication.h",
+    "engine/world/TerraWeaveCavernsNavigationRegionCache.h",
+    "engine/world/TerraWeaveCavernsOwnedRimChunk.h",
+    "engine/world/TerraWeaveCavernsOwnedRimGroup.h",
+    "engine/world/TerraWeaveCavernsOwnerBarrier.h",
+    "engine/world/TerraWeaveCavernsPathRouter.h",
+    "engine/world/TerraWeaveCavernsPlanetAuthority.h",
+    "engine/world/TerraWeaveCavernsPlanetBaselineCollision.h",
+    "engine/world/TerraWeaveCavernsPlanetBodyCut.h",
+    "engine/world/TerraWeaveCavernsPlanetCollisionBinding.h",
+    "engine/world/TerraWeaveCavernsPlanetCut.h",
+    "engine/world/TerraWeaveCavernsPlanetDemand.h",
+    "engine/world/TerraWeaveCavernsPlanetEcsNavigation.h",
+    "engine/world/TerraWeaveCavernsPlanetEnvironmentEpoch.h",
+    "engine/world/TerraWeaveCavernsPlanetExteriorCollision.h",
+    "engine/world/TerraWeaveCavernsPlanetFrame.h",
+    "engine/world/TerraWeaveCavernsPlanetGiPublication.h",
+    "engine/world/TerraWeaveCavernsPlanetGiViewFrame.h",
+    "engine/world/TerraWeaveCavernsPlanetMotion.h",
+    "engine/world/TerraWeaveCavernsPlanetNativeHost.h",
+    "engine/world/TerraWeaveCavernsPlanetNativeOwner.h",
+    "engine/world/TerraWeaveCavernsPlanetNavigation.h",
+    "engine/world/TerraWeaveCavernsPlanetQueries.h",
+    "engine/world/TerraWeaveCavernsPlanetRegion.h",
+    "engine/world/TerraWeaveCavernsPlanetRegionSet.h",
+    "engine/world/TerraWeaveCavernsPlanetResidency.h",
+    "engine/world/TerraWeaveCavernsPlanetRuntimeBuild.h",
+    "engine/world/TerraWeaveCavernsPlanetRuntimeFrame.h",
+    "engine/world/TerraWeaveCavernsPlanetSurface.h",
+    "engine/world/TerraWeaveCavernsPlanetTravel.h",
+    "engine/world/TerraWeaveCavernsPublication.h",
+    "engine/world/TerraWeaveCavernsRaycast.h",
+    "engine/world/TerraWeaveCavernsRimTransition.h",
+    "engine/world/TerraWeaveCavernsRimWorldPublication.h",
+    "engine/world/TerraWeaveCavernsRuntimeFrame.h",
+    "engine/world/TerraWeaveCavernsSdfSpatialIndex.h",
+    "engine/world/TerraWeaveCavernsSeamAudit.h",
+    "engine/world/TerraWeaveCavernsSeamGate.h",
+    "engine/world/TerraWeaveCavernsShadowOwners.h",
+    "engine/world/TerraWeaveCavernsShaftMesh.h",
+    "engine/world/TerraWeaveCavernsShards.h",
+    "engine/world/TerraWeaveCavernsSnapshotWorkers.h",
+    "engine/world/TerraWeaveCavernsSpatialRevisionOwner.h",
+    "engine/world/TerraWeaveCavernsSpatialShadow.h",
+    "engine/world/TerraWeaveCavernsStreamJobs.h",
+    "engine/world/TerraWeaveCavernsStreaming.h",
+    "engine/world/TerraWeaveCavernsSurfaceCut.h",
+    "engine/world/TerraWeaveCavernsSurfaceGroup.h",
+    "engine/world/TerraWeaveCavernsTerrainBinding.h",
+    "engine/world/TerraWeaveCavernsVolumeCollision.h",
+    "engine/world/TerraWeaveCavernsVolumePhysicsStage.h",
+    "engine/world/TerraWeaveCavernsVolumeSnapshot.h",
+    "engine/world/TerraWeaveCavernsWorldRecovery.h",
+    "engine/world/TerraWeaveCavernsWorldResidency.h",
+    "engine/world/TerraWeaveNativeWorldBinding.h",
+    "engine/world/TerraWeaveNavMeshBridge.h",
+    "engine/world/TerraWeaveTerrainPatch.h",
+    "engine/world/TerraWeaveTerrainRuntime.h",
+    "engine/world/TerraWeaveWorldSceneBinding.h",
+    "examples/world/terraweave_native/PlanetCavernsDemo.cpp",
+    "skills/gameplay/aiverse-physics/SKILL.md",
+    "skills/world/aiverse-pathfinding/SKILL.md",
+    "skills/world/aiverse-terraweave-caverns/SKILL.md",
+    "tests/caverns/CMakeLists.txt",
+    "tests/caverns/IntegrationTests.cmake",
+    "tests/caverns/native_demo_smoke.py",
+    "tests/terraweave_caverns_async_rebuild_test.cpp",
+    "tests/terraweave_caverns_authored_nav_stage_test.cpp",
+    "tests/terraweave_caverns_batch_geometry_test.cpp",
+    "tests/terraweave_caverns_box3d_test.cpp",
+    "tests/terraweave_caverns_dirty_queue_test.cpp",
+    "tests/terraweave_caverns_edit_presentation_test.cpp",
+    "tests/terraweave_caverns_edit_runtime_test.cpp",
+    "tests/terraweave_caverns_editor_test.cpp",
+    "tests/terraweave_caverns_editor_visual_preview_test.cpp",
+    "tests/terraweave_caverns_empty_tile_test.cpp",
+    "tests/terraweave_caverns_entrances_test.cpp",
+    "tests/terraweave_caverns_geometry_scene_test.cpp",
+    "tests/terraweave_caverns_lod_policy_test.cpp",
+    "tests/terraweave_caverns_lod_transition_test.cpp",
+    "tests/terraweave_caverns_lod_weld_test.cpp",
+    "tests/terraweave_caverns_mesh_test.cpp",
+    "tests/terraweave_caverns_mixed_shard_test.cpp",
+    "tests/terraweave_caverns_multinav_test.cpp",
+    "tests/terraweave_caverns_owner_barrier_test.cpp",
+    "tests/terraweave_caverns_planet_authority_test.cpp",
+    "tests/terraweave_caverns_planet_collision_test.cpp",
+    "tests/terraweave_caverns_presentation_test.cpp",
+    "tests/terraweave_caverns_preview_pacer_test.cpp",
+    "tests/terraweave_caverns_publication_test.cpp",
+    "tests/terraweave_caverns_raycast_test.cpp",
+    "tests/terraweave_caverns_resident_test.cpp",
+    "tests/terraweave_caverns_seam_gate_test.cpp",
+    "tests/terraweave_caverns_shadow_owners_test.cpp",
+    "tests/terraweave_caverns_shard_gpu_host_test.cpp",
+    "tests/terraweave_caverns_shard_seam_test.cpp",
+    "tests/terraweave_caverns_snapshot_workers_test.cpp",
+    "tests/terraweave_caverns_stage6_test.cpp",
+    "tests/terraweave_caverns_streaming_test.cpp",
+    "tests/terraweave_caverns_surface_cut_test.cpp",
+    "tests/terraweave_caverns_swap_policy_test.cpp",
+    "tests/terraweave_caverns_test.cpp",
+    "tests/terraweave_caverns_volume_collision_nav_test.cpp",
+    "tools/caverns-stage33-verify.sh",
+    "tools/caverns-stage59-mac.sh"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": true,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    },
+    "architecture": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    },
+    "native_api": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    },
+    "skill": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    },
+    "mcp": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    },
+    "studio": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    },
+    "inspector": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    },
+    "persistence": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    },
+    "graphs": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    },
+    "headless": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    },
+    "examples": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "The owner handoff records the implementation, verification scope and follow-up work.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    },
+    "documentation": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-terraweave-caverns"
+    ],
+    "mcp_tools": [
+      "terraweave_caverns_pick",
+      "terraweave_caverns_paint"
+    ],
+    "studio_methods": [
+      "studio.cavernsGraphInspect"
+    ],
+    "studio_panels": [
+      "caverns"
+    ]
+  },
+  "test_reports": []
+}
