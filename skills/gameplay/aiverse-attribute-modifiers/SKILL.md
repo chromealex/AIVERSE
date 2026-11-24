@@ -8,6 +8,8 @@ description: Reuse AIVERSE C++ authoritative effective stat snapshots through ex
 Read `docs/gameplay-systems.md`, `libraries/include/aiverselib/systems/EngineMechanics.h` and this package's catalog entry.
 
 1. Call effectiveStats after checking the entity. Configure existing StatMod/tech/level/status rules; never evaluate a parallel modifier stack. The snapshot returns final values, not an invented per-source breakdown. Missing units and invalid stats fail.
+For optional final movement speed bounds use top-level rules.json `minUnitSpeed` / `maxUnitSpeed` (nonnegative, ordered). They apply after the authoritative stat pipeline for types with positive base movement speed; absent keys keep previous behavior. They do not bypass movement permissions or hard immobilization controls.
+
 2. Prefer existing engine mechanics and data settings before custom state. Keep all new outcome-affecting data in NativeState; no mutable module members.
 3. Read `Persistence.h` for reservation/sequence/pity/perception adapters. Use separate keys per subsystem and validate failed loads explicitly; never silently reset a corrupt save.
 4. For scalar defaults read `docs/gameplay-settings.md`; use generated readGameplaySettings and systems/Configured.h. Do not invent engine game.json keys.
