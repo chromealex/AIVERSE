@@ -6,7 +6,7 @@ import { addShaderGraphNode, removeShaderGraphNode, shaderNodeCatalog, connectSh
 import type {ShaderClipboard} from './shaderGraphLayout';
 import GraphCanvas from '../graphs/GraphCanvas';
 import GraphGpuProfilePanel from '../graphs/GraphGpuProfilePanel';
-import GraphDiagnostics from '../graphs/GraphDiagnostics';
+import GraphDiagnostics from '../graphs/GraphDiagnosticsPanel';
 import {shaderAdapters,shaderProjection} from '../graphs/shaderAdapter';
 import type {PortRef} from '../graphs/graphGeometry';
 import {samePort} from '../graphs/graphGeometry';
