@@ -981,13 +981,16 @@ bool GameView::applyCompletedGraphMaterial(size_t type,size_t choice,const view:
 }
 
 render::texture_graph::GraphImageReclaimResult GameView::collectGraphMaterialImages(size_t type,size_t choice,size_t material,
-        const view::LiveAppearanceMaterialTarget& target,const render::texture_graph::GraphImageRoots& external){
+        const view::LiveAppearanceMaterialTarget& target,const render::texture_graph::GraphImageRoots& external,
+        const GraphImageRootProvider& inspectHost){
     const auto current=graphMaterialTarget(type,choice,material);
     if(!current||target.material!=material||target.publication!=current->identity.publication||target.version!=current->identity.version||
        !external.complete||external.activeReaders!=0||cameraPreparedCapture_||activeStagedModels_)
         throw std::runtime_error("graph reclamation target or external root proof unavailable");
     auto& model=*looks_[type].models[choice].model;
     std::vector<std::span<const render::Material>> roots(external.extra.begin(),external.extra.end());
+    if(inspectHost&&!inspectHost(model,roots))
+        throw std::runtime_error("graph reclamation has unresolved host material roots");
     appendGraphImageRoots(model,roots);
     return render::texture_graph::reclaimGraphImages(model,*dev_,gpuDeviceLease_,imageRollback_,
         {true,resources_.activeModelReaders(),roots,external.trackedOnly,external.recycleSlots});

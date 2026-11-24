@@ -315,11 +315,23 @@ std::optional<GameView::GraphMaterialTargetInfo> GameClient::runtimeTextureMater
 }
 render::texture_graph::GraphImageReclaimResult GameClient::collectRuntimeTextureMaterialImages(size_t type,size_t choice,size_t material,
         const view::LiveAppearanceMaterialTarget& target,const render::texture_graph::GraphImageRoots& external){
-    if(!dev_||!gpuDeviceLease_.validFor(*dev_)||!inMatch()||runtimeTextureTask_||runtimeTextureGraph_.status().getBool("busy"))
+    if(!dev_||!gpuDeviceLease_.validFor(*dev_)||!inMatch()||runtimeTextureTask_)
         throw std::runtime_error("runtime texture collection requires an idle live presentation host");
-    const auto result=view_.collectGraphMaterialImages(type,choice,material,target,external);
+    const auto graphState=runtimeTextureGraph_.status();
+    if(graphState.getBool("busy")||graphState.getBool("gpuTextureSetReady"))
+        throw std::runtime_error("runtime texture collection requires released graph results");
+    const auto result=view_.collectGraphMaterialImages(type,choice,material,target,external,
+        [this](const render::Model& model,std::vector<std::span<const render::Material>>& roots){
+            return appendRuntimeGraphImageRoots(model,roots);
+        });
     if(result.detached)runtimeTextureGraph_.invalidateOutputReuseReceipt();
     return result;
+}
+bool GameClient::appendRuntimeGraphImageRoots(const render::Model& model,
+        std::vector<std::span<const render::Material>>& roots)const{
+    return r3d_.appendGraphImageRoots(model,roots)&&
+        (!insetR3d_||insetR3d_->appendGraphImageRoots(model,roots))&&
+        lensModelSnapshot_.appendGraphImageRoots(model,roots);
 }
 void GameClient::setAutomaticRuntimeGraphImageCollection(GameView::GraphImageRootProvider provider,
         bool recycleSlots,bool detachCompletedReplay){
@@ -335,9 +347,7 @@ void GameClient::setAutomaticRuntimeGraphImageCollection(GameView::GraphImageRoo
                 if(insetR3d_&&!insetR3d_->detachCompletedGraphImageReplay())return false;
                 lensModelSnapshot_.clear();
             }
-            return r3d_.appendGraphImageRoots(model,roots)&&
-                (!insetR3d_||insetR3d_->appendGraphImageRoots(model,roots))&&
-                lensModelSnapshot_.appendGraphImageRoots(model,roots);
+            return appendRuntimeGraphImageRoots(model,roots);
         },recycleSlots);
 }
 Json GameClient::runtimeTextureMaterialStatus()const{

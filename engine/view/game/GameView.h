@@ -414,10 +414,13 @@ public:
     bool applyCompletedGraphMaterial(size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
         render::texture_graph::TextureGraphGpuOwner& owner,const std::string& scope,const std::string& request,
         std::string* error=nullptr);
-    // Explicit external root proof required: the adapter only enumerates its
-    // own current choices, not renderer caches, external pins or packets.
+    using GraphImageRootProvider=std::function<bool(const render::Model&,std::vector<std::span<const render::Material>>&)>;
+    // Explicit external root proof required. The optional host inspection
+    // enumerates additional owner roots after the live target is resolved;
+    // false refuses reclamation. No reentry or mutation of returned spans.
     render::texture_graph::GraphImageReclaimResult collectGraphMaterialImages(size_t type,size_t choice,size_t material,
-        const view::LiveAppearanceMaterialTarget& target,const render::texture_graph::GraphImageRoots& external);
+        const view::LiveAppearanceMaterialTarget& target,const render::texture_graph::GraphImageRoots& external,
+        const GraphImageRootProvider& inspectHost={});
     bool typeCurrent(uint16_t t) const { return typeLoaded(t) && requestedModels_[t]==loadedModels_[t]; }
     bool detailRequested(uint16_t t) const { return t<requestedModels_.size() && requestedModels_[t].empty(); }
     void requestDetail(uint16_t type, bool detailed);
@@ -440,7 +443,6 @@ public:
     // Opt-in native owner only. The callback certifies raw-index/handle
     // consumers have been detached or are represented by the returned spans.
     // Spans must remain valid through the synchronous sweep; no reentry.
-    using GraphImageRootProvider=std::function<bool(const render::Model&,std::vector<std::span<const render::Material>>&)>;
     struct GraphImageSweepStats {uint64_t inspected=0,detached=0,deferred=0;};
     // Recycling additionally certifies that all stale raw index/handle
     // references are permanently detached; no future replay of them is legal.

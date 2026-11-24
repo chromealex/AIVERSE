@@ -130,6 +130,8 @@ public:
     void setAutomaticRuntimeGraphImageCollection(GameView::GraphImageRootProvider provider,
         bool recycleSlots=false,bool detachCompletedReplay=false);
     std::optional<GameView::GraphMaterialTargetInfo> runtimeTextureMaterialTarget(size_t type,size_t choice,size_t material) const;
+    // The external certificate covers consumers outside this client; its own
+    // renderer and LENS roots are always checked, without detaching replay.
     render::texture_graph::GraphImageReclaimResult collectRuntimeTextureMaterialImages(size_t type,size_t choice,size_t material,
         const view::LiveAppearanceMaterialTarget& target,const render::texture_graph::GraphImageRoots& external);
     bool cancelRuntimeTextureMaterial(const std::string& request);
@@ -179,6 +181,8 @@ public:
     bool requestHostStep();
 
 private:
+    bool appendRuntimeGraphImageRoots(const render::Model& model,
+        std::vector<std::span<const render::Material>>& roots)const;
     bool hostPaused_ = false, hostStep_ = false;
     enum class Screen { Menu, Lobby, Playing, Paused, Over };
     enum class Mode { Normal, AttackMove, Patrol, Place, Rally, Ability, Claim, Skill, Dig, Undig, Room, Road, Unroad, Drop, ScriptCmd, Repair, Reclaim };
