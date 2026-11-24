@@ -6,6 +6,7 @@
 #include "MorphBox3DContactBridge.h"
 #include "GranularWorldIntegration.h"
 #include "PlanetGranularIntegration.h"
+#include "PlanetDebrisPublisher.h"
 #include "GranularTerraWeaveTransfer.h"
 #include <cstdint>
 #include <map>
@@ -18,6 +19,8 @@ namespace aiverse::examples::world_processes_native {
 class PhysicalSceneHost {
 public:
     using InstanceId=std::uint64_t;
+    PlanetDebrisPublisher& planetDebris(){return debris_;}
+    const PlanetDebrisPublisher& planetDebris()const{return debris_;}
 
     // Call on the rendering owner thread after the source Model has a
     // dedicated GPU upload; one stream per *render instance*, never global
@@ -134,6 +137,7 @@ public:
     bool resetAfterRollback(physics::Scene& scene,gfx::Device& device) {
         if(!render_.shutdownAfterIdle(device))return false;
         physics_.shutdown(scene);
+        if(!debris_.reset(scene))return false;
         // The MORPH models remain valid if the source asset revision did
         // not change; the next update() reconstructs every vertex from
         // the restored ECS Node positions and unchanged pristine sources.
@@ -155,6 +159,7 @@ public:
     std::size_t granularRenderTiles()const{return render_.count();}
 private:
     std::map<InstanceId,std::unique_ptr<MorphModelStream>> morphVisuals_;
+    PlanetDebrisPublisher debris_;
     GranularBox3DPublisher physics_;
     GranularRenderPublisher render_;
 };

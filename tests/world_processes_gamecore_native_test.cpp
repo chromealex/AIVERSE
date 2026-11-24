@@ -694,8 +694,26 @@ static void checkPlanetCollapseDelivery(){
     ecs.add<physis::NatureFractureOutboxComponent>(member,nature);
     AIVERSE_TEST_CHECK(!fracture::projectPlanetCollapse(ecs,surface,event));
     ecs.remove<physis::NatureFractureOutboxComponent>(member);
-    AIVERSE_TEST_CHECK(fracture::acknowledge(ecs,event));
+    AIVERSE_TEST_CHECK(!fracture::commitPlanetCollapse(ecs,surface,event,6,
+        [](World&,const auto&){return true;}));
+    ecs.enableCowSnapshots();const World before=ecs;
+    const auto failed=fracture::commitPlanetCollapse(ecs,surface,event,7,
+        [&](World& staged,const auto&){staged.get<Transform>(member).pos={};return false;});
+    AIVERSE_TEST_CHECK(!failed&&ecs.get<Transform>(member).pos==tr.pos);
+    AIVERSE_TEST_CHECK(!fracture::planetCollapseReceipt(ecs,event));
+    // Fixture owner explicitly stages a durable consequence on the same
+    // entity. Production owners must persist shape/pose and support removal.
+    const auto committed=fracture::commitPlanetCollapse(ecs,surface,event,7,
+        [&](World& staged,const auto& delivery){
+            staged.get<fracture::Member>(member).broken=true;
+            return delivery.frame.body==1;
+        });
+    AIVERSE_TEST_CHECK(committed&&fracture::planetCollapseReceipt(ecs,event));
     AIVERSE_TEST_CHECK(!fracture::projectPlanetCollapse(ecs,surface,event));
+    AIVERSE_TEST_CHECK(!fracture::commitPlanetCollapse(ecs,surface,event,8,
+        [](World&,const auto&){return true;}));
+    AIVERSE_TEST_CHECK(!fracture::planetCollapseReceipt(before,event));
+    ecs=before;AIVERSE_TEST_CHECK(fracture::projectPlanetCollapse(ecs,surface,event));
 }
 static void checkPlanetMorphContactFrame(){
     game::Surface surface;game::BodyDef body;
