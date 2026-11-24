@@ -2090,7 +2090,7 @@ StudioBatchAssetPlan studioPlanAssetMoveChain(const fs::path& project,
     return out;
 }
 // Mixed chains reuse exact-endpoint relocation and virtual identity. Model
-// versions may refer to stable, indexed local resources; graph-changing moves remain fenced.
+// dependency edges are checked against virtual content occupancy at each step.
 bool studioCanPlanMixedAssetChain(const std::vector<editor::ProjectHistory::Step>& ordered){
     if(ordered.empty()||ordered.size()>64)return false;
     const auto simple=[](const editor::ProjectHistory::MoveFile& file){
@@ -2132,7 +2132,7 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
         field("file-v1");field(std::to_string(bytes.size()));hash.update(bytes.data(),bytes.size());
         const auto digest=hash.finish();return pack::toHex(digest.data(),digest.size());
     };
-    struct LogicalMove{std::string from,to,digest;bool directory=false;std::string logicalName;bool version=false;};
+    struct LogicalMove{std::string from,to,digest;bool directory=false;std::string logicalName;};
     struct MetaCheck{std::string path,bytes;bool directory=false;};
     struct LogicalStep{
         std::vector<LogicalMove> moves;
@@ -2152,8 +2152,8 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
                 const auto live="content/"+asset.from;
                 if(plan.replacement){
                     const auto& outgoing=redo?asset:meta;const auto& incoming=redo?meta:asset;
-                    logical.moves.push_back({live,outgoing.to,outgoing.digest,false,asset.from,true});
-                    logical.moves.push_back({incoming.to,live,incoming.digest,false,asset.from,true});
+                    logical.moves.push_back({live,outgoing.to,outgoing.digest,false,asset.from});
+                    logical.moves.push_back({incoming.to,live,incoming.digest,false,asset.from});
                     logical.metaChecks.push_back({live+".meta",asset.bytes,false});
                 }else if(plan.quarantine){
                     const bool deleted=plan.created?!redo:redo;
@@ -2215,19 +2215,25 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
             throw std::runtime_error("Invalid mixed metadata source");
         return editor::readProjectFileBytes(path);
     };
-    std::map<std::pair<fs::path,std::string>,bool> verifiedPayloads;
+    std::map<std::pair<fs::path,std::string>,std::vector<std::string>> verifiedPayloads;
     std::uintmax_t modelBytes=0;
     size_t treeEntries=0;
-    const auto verifyFile=[&](const fs::path& file,const fs::path& logical,bool version=false){
+    const auto modelExtension=[](const fs::path& path){
+        auto ext=path.extension().string();
+        for(auto& c:ext)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return ext==".glb"||ext==".gltf";
+    };
+    const std::vector<std::string> noUris;
+    const auto verifyFile=[&](const fs::path& file,const fs::path& logical)->const std::vector<std::string>&{
         auto ext=logical.extension().string();
         for(auto& c:ext)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         const auto importer=studioImporterForPath(logical,false);
-        if(importer=="texture"||importer=="audio"||ext==".bin")return;
+        if(importer=="texture"||importer=="audio"||ext==".bin")return noUris;
         if(ext!=".glb"&&ext!=".gltf")throw std::runtime_error("Unsupported mixed directory payload: "+logical.generic_string());
-        // The same physical version can appear at a different logical owner.
-        // Cache only an identical owner and inspection policy.
-        const auto inspectionKey=ext+"|"+logical.generic_string()+(version?"|version":"|embedded");
-        if(!verifiedPayloads.emplace(std::make_pair(file,inspectionKey),true).second)return;
+        const auto key=std::make_pair(file,ext);
+        const auto cached=verifiedPayloads.find(key);
+        if(cached!=verifiedPayloads.end())return cached->second;
+        std::vector<std::string> uris;
         const auto doc=studioReadModelJson(file,modelBytes,ext==".glb");
         if(!doc||!doc->isObject()||!(*doc)["asset"].isObject()||
            (*doc)["asset"].getStr("version")!="2.0")
@@ -2256,29 +2262,57 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
                     if(!entry["uri"].isString())throw std::runtime_error("Invalid mixed model resource URI");
                     const auto uri=entry.getStr("uri");
                     if(uri.starts_with("data:"))continue;
-                    if(!version)throw std::runtime_error("Mixed model has external resource dependencies");
-                    // Resolve recovery bytes at the logical content owner, never
-                    // at the physical Trash slot. Until mixed graph repair is
-                    // available, require the target to retain one physical
-                    // identity over the entire coordinated relocation chain.
-                    const auto target=studioGltfResourcePath("content/"+logical.generic_string(),uri);
-                    if(target.empty())throw std::runtime_error("Unsafe external mixed model resource URI");
-                    for(const auto& endpoint:endpoints)
-                        if(batchOverlap(target,endpoint))
-                            throw std::runtime_error("External model version resource has a mixed relocation endpoint");
-                    validateHistoryContentPath(target.substr(8));
-                    const auto resource=catalog.byPath(target.substr(8));
-                    if(!resource||resource->directory||!studioValidGuid(resource->guid)||
-                       !studioSafeModelResourceFile(root,target))
-                        throw std::runtime_error("External model version resource is missing or unindexed: "+target);
-                    const auto live=liveGuids.find(resource->guid);
-                    if(live==liveGuids.end()||live->second!=target)
-                        throw std::runtime_error("External model version resource GUID changed: "+target);
+                    if(uris.size()>=32768)throw std::runtime_error("Mixed model URI budget exceeded");
+                    uris.push_back(uri);
                 }else if(std::string(group)=="buffers"? !binary : !entry["bufferView"].isNumber())
                     throw std::runtime_error("Mixed model resource has no embedded source");
             }
         }
+        return verifiedPayloads.emplace(key,std::move(uris)).first->second;
     };
+    // Manage every glTF owner that can appear at an exact relocation root
+    // or within a relocated directory. Other formats and stationary owners
+    // keep their existing conservative incoming/outgoing reference fence.
+    const auto managed=[&](const std::string& path){
+        if(!modelExtension(fs::path(path)))return false;
+        for(const auto& endpoint:endpoints)
+            if(path==endpoint||path.starts_with(endpoint+"/"))return true;
+        return false;
+    };
+    using EdgeKey=std::pair<fs::path,size_t>;
+    using EdgeGraph=std::map<EdgeKey,std::string>;
+    const auto graph=[&](){
+        EdgeGraph result;
+        std::map<std::string,std::string> byPath;
+        for(const auto& [guid,path]:liveGuids)
+            if(!byPath.emplace(path,guid).second)throw std::runtime_error("Duplicate mixed content path");
+        for(const auto& [path,guid]:byPath){
+            (void)guid;
+            if(!managed(path))continue;
+            const auto owner=physical(path);
+            if(fs::is_directory(fs::symlink_status(owner)))continue;
+            if(!studioSafeModelResourceFile(root,owner.lexically_relative(root).generic_string()))
+                throw std::runtime_error("Missing mixed model owner: "+path);
+            const auto& uris=verifyFile(owner,fs::path(path));
+            for(size_t slot=0;slot<uris.size();++slot){
+                if(result.size()>=32768)throw std::runtime_error("Mixed projected graph budget exceeded");
+                const auto target=studioGltfResourcePath(path,uris[slot]);
+                if(target.empty())throw std::runtime_error("Unsafe external mixed model resource URI");
+                validateHistoryContentPath(target.substr(8));
+                const auto found=byPath.find(target);
+                if(found==byPath.end())throw std::runtime_error("External mixed model resource is unindexed: "+target);
+                const auto resource=physical(target);
+                if(!studioSafeModelResourceFile(root,resource.lexically_relative(root).generic_string()))
+                    throw std::runtime_error("Missing external mixed model resource: "+target);
+                result.emplace(EdgeKey{owner,slot},found->second);
+            }
+        }
+        return result;
+    };
+    bool hasPathChanges=false;
+    for(const auto& step:steps)if(!step.paths.empty())hasPathChanges=true;
+    const auto baselineRefs=hasPathChanges?studioCollectGltfReferences(root,{}):std::vector<StudioAssetReference>{};
+    auto priorGraph=graph();
     const auto nestedGuids=[&](const std::string& origin){
         std::vector<std::pair<std::string,std::string>> result;
         const auto tree=root/origin;
@@ -2342,7 +2376,7 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
                     if(m.to.starts_with("content/")&&!liveGuids.emplace(guid,m.to+"/"+relative).second)
                         throw std::runtime_error("Nested destination GUID collision");
                 }
-            }else if(!m.logicalName.empty())verifyFile(root/origin,fs::path(m.logicalName),m.version);
+            }else if(!m.logicalName.empty())verifyFile(root/origin,fs::path(m.logicalName));
             if(batchMetadataPath(m.from)&&batchMetadataPath(m.to)){
                 const auto meta=Json::parse(currentBytes(m.from));const auto guid=meta.getStr("guid");
                 if(!studioValidGuid(guid))throw std::runtime_error("Invalid mixed sidecar GUID");
@@ -2377,11 +2411,24 @@ StudioBatchAssetPlan studioPlanMixedAssetChain(const fs::path& project,
             if(it==overlay.end())overlay.emplace(path,std::move(edit));
             else it->second.after=std::move(edit.after);
         }
-        // Existing model dependencies must not be broken by deletion,
-        // restoration or renaming in this mixed non-repairing topology.
-        std::vector<std::pair<std::string,bool>> paths;
-        for(const auto& [path,directory]:step.paths)paths.emplace_back(path.substr(8),directory);
-        studioCheckGltfAssetPaths(root,paths);
+        // Check only complete logical steps, not transient states between
+        // a payload and its sidecar or the two halves of a version exchange.
+        // A surviving physical model must keep every external slot bound
+        // to the same asset GUID, even when both endpoints moved.
+        auto nextGraph=graph();
+        for(const auto& [edge,target]:nextGraph){
+            const auto old=priorGraph.find(edge);
+            if(old!=priorGraph.end()&&old->second!=target)
+                throw std::runtime_error("Mixed model resource identity changed");
+        }
+        priorGraph=std::move(nextGraph);
+        for(const auto& ref:baselineRefs){
+            if(ref.owner=="glTF resource"&&managed(ref.document))continue;
+            for(const auto& [path,directory]:step.paths)
+                if(studioReferenceMatchesPath(ref.path,path,directory)||
+                   studioReferenceMatchesPath(ref.document,path,directory))
+                    throw std::runtime_error("Asset operation blocked by unmanaged model resource: "+ref.document+" "+ref.field);
+        }
     }
     const auto timeline=batchTimeline(root,out.relocations);
     if(batchPhase(root,timeline)!=0)throw std::runtime_error("Mixed history baseline changed");
