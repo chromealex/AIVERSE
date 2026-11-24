@@ -17,6 +17,7 @@ Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::s
 Json publishTextureGraphCompressed(Workspace& ws,const std::string& name,const std::string& output,const render::Image& image,const std::string& format,bool mipmaps);
 Json publishTextureGraphBcBlocks(Workspace& ws,const std::string& name,const std::string& output,int size,const std::string& format,std::span<const uint8_t> blocks);
 Json publishTextureGraphRadiance(Workspace& ws,const std::string& name,int size,std::span<const float> rgba);
+Json publishTextureGraphRadianceFormat(Workspace& ws,const std::string& name,int size,std::span<const float> rgba,const std::string& format,bool mipmaps);
 Json publishTextureGraphEnvironment(Workspace& ws,const std::string& name,int size,std::span<const float> rgba);
 // Images/backends in native Program::outputs sorted order; trusted native owner only.
 Json publishTextureGraphSet(Workspace& ws,const std::string& name,const Json& graph,const Json& overrides,const std::vector<render::Image>& images,const std::vector<std::string>& backends);

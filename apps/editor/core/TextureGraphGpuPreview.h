@@ -12,7 +12,7 @@ public:
     }
     Json publish(Workspace& ws,const Json& p){
         if(isBcBake())return publishBcBaked(ws.project.dir,p.getStr("request"),[&](int size,const std::string& output,const std::string& format,std::span<const uint8_t> blocks){return publishTextureGraphBcBlocks(ws,p.getStr("textureName"),output,size,format,blocks);});
-        if(isRadianceBake())return publishRadianceBaked(ws.project.dir,p.getStr("request"),[&](int size,std::span<const float> rgba){return p.getBool("environment")?publishTextureGraphEnvironment(ws,p.getStr("textureName"),size,rgba):publishTextureGraphRadiance(ws,p.getStr("textureName"),size,rgba);});
+        if(isRadianceBake())return publishRadianceBaked(ws.project.dir,p.getStr("request"),[&](int size,std::span<const float> rgba){return p.getBool("environment")?publishTextureGraphEnvironment(ws,p.getStr("textureName"),size,rgba):publishTextureGraphRadianceFormat(ws,p.getStr("textureName"),size,rgba,p.getStr("format","exr"),p.getBool("mipmaps",true));});
         return publishBaked(ws.project.dir,p.getStr("request"),
             [&](const Json& graph,const Json& overrides,const std::vector<render::Image>& images,
                 const std::vector<std::string>& backends){

@@ -2314,7 +2314,7 @@ endif()
 # Material library and procedural textures (models agent): material_* / texture_* editor operations
 # (materials.json, rules view "materials" / "assign"); the Materials window previews them.
 if(TARGET aiverse_editor_core)
-    target_sources(aiverse_editor_core PRIVATE apps/editor/core/AnimationOps.cpp apps/editor/core/AnimationDocument.cpp apps/editor/core/MaterialOps.cpp apps/editor/core/ShaderGraphOps.cpp apps/editor/core/GeometryOps.cpp)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/AnimationOps.cpp apps/editor/core/AnimationDocument.cpp apps/editor/core/MaterialOps.cpp apps/editor/core/ShaderGraphOps.cpp apps/editor/core/GeometryOps.cpp tools/aiversebuild/TextureCompress.cpp)
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_models aiverse_pack)
 endif()
 if(TARGET aiversemcp)   # KTX2 zstd in aiverse_models: aiversemcp links no pack writer, so it takes the decoder
