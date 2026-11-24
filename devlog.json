@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-24T07:52:35+00:00",
+ "generated": "2026-11-24T23:02:50+00:00",
  "lang": "en",
  "repo": "https://github.com/chromealex/AIVERSE",
  "systems": [
@@ -121,6 +121,215 @@
   }
  ],
  "entries": [
+  {
+   "id": "2026-11-25-spectrafx-smoke-flow",
+   "date": "2026-11-25",
+   "system": "spectrafx",
+   "title": "Motion inside the smoke plume",
+   "summary": "Grey billows travel up the plume with thinner gaps between them.",
+   "body": [
+    "In fire_smoke_v2 the volume material sets the direction of detail motion. Internal shadows and the shadow on the stage follow the same moving density pattern.",
+    "The cast shadow softens as smoke rises above the receiving surface. Small gaps between billows produce gradual changes on the ground.",
+    "One source supplies fuel and heat. Sparks rise from the base and follow undulating paths along the plume."
+   ],
+   "status": "experimental",
+   "verified": "Captured with a stationary camera in Studio on macOS with Metal.",
+   "limits": "Detail velocity is shared across the material.",
+   "branch": "codex/spectrafx-volumetric-scene",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-spectrafx-smoke-flow/01.png",
+     "caption": "Gaps between billows above the stage."
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-25-spectrafx-smoke-flow/02.png",
+     "caption": "Soft shadow of the moving plume on the stage."
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-25-spectrafx-smoke-flow/03.png",
+     "caption": "Sparks rise from a single fire base along the plume."
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-25-spectrafx-smoke-flow/04.png",
+     "caption": "Looking along the plume at the same simulation tick and camera angle. Previous smoke on the left, wider smoke on the right."
+    }
+   ],
+   "links": [],
+   "author": "render"
+  },
+  {
+   "id": "2026-11-25-spectrafx-moving-source",
+   "date": "2026-11-25",
+   "system": "spectrafx",
+   "title": "Smoke trails from moving sources",
+   "summary": "Smoke remains in the air and continues rising after its source passes.",
+   "body": [
+    "Choose Moving smoke trail in the SpectraFX graph editor and attach the graph to a moving entity. Its nozzle and light travel with it while previously emitted smoke dissipates."
+   ],
+   "status": "experimental",
+   "verified": "Captured in the native Studio preview on macOS with Metal.",
+   "limits": "Injection stops when the nozzle moves entirely outside the authored domain.",
+   "branch": "feature/spectrafx-html5-data-interfaces-20261123",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-spectrafx-moving-source/01.png",
+     "caption": "The lit nozzle on the right and smoke from earlier positions to its left."
+    }
+   ],
+   "links": [],
+   "author": "render"
+  },
+  {
+   "id": "2026-11-24-spectrafx-studio",
+   "date": "2026-11-24",
+   "system": "spectrafx",
+   "title": "Volumetric particles in scenes and Studio",
+   "summary": "Volumetric particle graphs now appear in game scenes and Studio preview. Depth-aware particles join the HDR frame after geometry rendering.",
+   "body": [
+    "A SpectraSource places the particle graph in the scene. The same material opens in the native Studio preview; a combined gas and particle graph follows the shared scene rendering path."
+   ],
+   "status": "in-progress",
+   "verified": "Shown on macOS in the native Studio preview with Metal; the frame was captured from the running GPU pass.",
+   "limits": "Currently limited to flat scenes and a fixed placement point. Planet scenes and Vulkan rendering have not been verified.",
+   "branch": "codex/spectrafx-volumetric-scene",
+   "commit": "49e581547",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-24-spectrafx-studio/01.png",
+     "caption": "A volumetric particle in Studio preview above the scene grid."
+    }
+   ],
+   "links": [
+    {
+     "title": "SpectraFX volumetrics",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/spectrafx-volumetrics.md"
+    },
+    {
+     "title": "Stage 155 handoff",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/agent-handoffs/spectrafx-stage155-volumetric-scene-2026-11-24.md"
+    }
+   ],
+   "author": "SpectraFX"
+  },
+  {
+   "id": "2026-11-24-spectrafx-layered-fire-smoke",
+   "date": "2026-11-24",
+   "system": "spectrafx",
+   "title": "Volumetric smoke and layered fire",
+   "summary": "SpectraFX now has a fire example with a volumetric smoke plume, layered flames and sparks. The visible vertical banding is absent from the captured frame.",
+   "body": [
+    "The effect combines a gas volume with separately animated textured particles. Open the fire_smoke_v2 graph in Studio; PRISMA adds the glow.",
+    "The volume supports local lights and a finer grid. Smoke trails diagonally from the source while flames and sparks remain separate layers.",
+    "Four heat sources flicker at different rates. The hot regions expand and contract as fuel input changes, while the base stays in place.",
+    "Dense billows shade nearby smoke. The light stage reveals a soft sun shadow that moves with the plume."
+   ],
+   "status": "experimental",
+   "verified": "Shown in native Studio on macOS with Metal: a 1024×576 frame captures the volumetric smoke, fire and sparks.",
+   "limits": "This is experimental: internal smoke lighting and flame shape do not yet reach the cinematic quality of the references.",
+   "branch": "codex/spectrafx-volumetric-scene",
+   "commit": "6f45883aa",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-24-spectrafx-layered-fire-smoke/01.png",
+     "caption": "Fire, sparks and volumetric dark smoke in the native Metal viewport"
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-24-spectrafx-layered-fire-smoke/02.png",
+     "caption": "Close-up of the burning core."
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-24-spectrafx-layered-fire-smoke/03.png",
+     "caption": "Smoke billows and their shadow on the light stage."
+    }
+   ],
+   "links": [
+    {
+     "title": "SpectraFX",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/spectrafx.md"
+    },
+    {
+     "title": "Stage 158 handoff",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/agent-handoffs/spectrafx-stage158-layered-fire-smoke-2026-11-24.md"
+    }
+   ],
+   "author": "render"
+  },
+  {
+   "id": "2026-11-24-spectrafx-fire-smoke-plume",
+   "date": "2026-11-24",
+   "system": "spectrafx",
+   "title": "Angled fire and smoke plume",
+   "summary": "The fire stays near its source while a dense dark smoke plume rises diagonally, with occasional glowing embers inside.",
+   "body": [
+    "The graph uses two volume sources: one sustains the flame, the other forms smoke. Lateral wind, buoyancy and material controls shape the plume, soft billows and embers."
+   ],
+   "status": "in-progress",
+   "verified": "Shown in the native Studio preview on macOS with Metal; the frame was captured after simulation warm-up.",
+   "limits": "This editable effect is not an exact recreation of the reference: fire and smoke have not been checked against a specific game scene’s lighting. Vulkan has not been tested on a device.",
+   "branch": "codex/spectrafx-volumetric-scene",
+   "commit": "706df45d4",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-24-spectrafx-fire-smoke-plume/01.png",
+     "caption": "Flame at the source, a diagonal dark smoke plume and scattered embers in native preview."
+    }
+   ],
+   "links": [
+    {
+     "title": "Fire and smoke graph",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/examples/spectrafx/fire_smoke_v2.vfx.json"
+    },
+    {
+     "title": "Volumetrics guide",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/spectrafx-volumetrics.md"
+    },
+    {
+     "title": "Stage 157 handoff",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/agent-handoffs/spectrafx-stage157-reference-fire-smoke-2026-11-24.md"
+    }
+   ],
+   "author": "SpectraFX"
+  },
+  {
+   "id": "2026-11-24-spectrafx-fire-smoke",
+   "date": "2026-11-24",
+   "system": "spectrafx",
+   "title": "Fire and smoke in SpectraFX",
+   "summary": "A ready-to-edit SpectraFX graph shows flame and smoke in one volumetric effect. It can be opened in Studio and placed in a scene through SpectraSource.",
+   "body": [
+    "The fire starts at the base of the volume; heated gas rises and smoke spreads above the flame. Source, combustion, motion and material settings remain editable graph nodes."
+   ],
+   "status": "in-progress",
+   "verified": "Shown in the native Studio preview on macOS with Metal; the frames were captured from the running effect after simulation warm-up.",
+   "limits": "The native preview is verified. Integration into a specific game, Vulkan rendering and performance with many sources have not been verified.",
+   "branch": "codex/spectrafx-volumetric-scene",
+   "commit": "f1fa520cb",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-24-spectrafx-fire-smoke/01.png",
+     "caption": "Early flame as the smoke begins to form."
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-24-spectrafx-fire-smoke/02.png",
+     "caption": "Smoke rising above a sustained flame."
+    }
+   ],
+   "links": [
+    {
+     "title": "Fire and smoke graph",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/examples/spectrafx/fire_smoke_v2.vfx.json"
+    },
+    {
+     "title": "Volumetrics guide",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/spectrafx-volumetrics.md"
+    },
+    {
+     "title": "Stage 156 handoff",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/agent-handoffs/spectrafx-stage156-fire-smoke-2026-11-24.md"
+    }
+   ],
+   "author": "SpectraFX"
+  },
   {
    "id": "2026-11-22-vulkan-spirv-optimizer",
    "date": "2026-11-22",
