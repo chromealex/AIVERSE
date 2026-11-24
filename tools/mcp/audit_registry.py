@@ -57,18 +57,34 @@ def main():
     except (OSError, subprocess.TimeoutExpired) as exc:
         print("ERROR: MCP executable failed:", exc, file=sys.stderr)
         return 2
+    if done.returncode != 0:
+        print("ERROR: MCP executable exited", done.returncode, done.stderr[-1000:], file=sys.stderr)
+        return 2
     responses = {}
     for line in done.stdout.splitlines():
         try:
             msg = json.loads(line)
-            if "id" in msg:
+            if isinstance(msg, dict) and type(msg.get("id")) is int:
+                if msg["id"] in responses:
+                    print("ERROR: duplicate MCP response id", msg["id"], file=sys.stderr)
+                    return 2
                 responses[msg["id"]] = msg
         except ValueError:
             continue
-    if 2 not in responses or "result" not in responses[2]:
+    if not isinstance(responses.get(1, {}).get("result"), dict):
+        print("ERROR: initialize failed", file=sys.stderr)
+        return 2
+    if not isinstance(responses.get(2, {}).get("result"), dict):
         print("ERROR: tools/list failed", done.stderr[-1000:], file=sys.stderr)
         return 2
-    listed = {t["name"] for t in responses[2]["result"].get("tools", [])}
+    tools = responses[2]["result"].get("tools")
+    if not isinstance(tools, list) or any(not isinstance(t, dict) or not isinstance(t.get("name"), str) or not t["name"] for t in tools):
+        print("ERROR: malformed tools/list", file=sys.stderr)
+        return 2
+    listed = {t["name"] for t in tools}
+    if len(listed) != len(tools) or responses[2]["result"].get("nextCursor"):
+        print("ERROR: duplicate or incomplete tools/list", file=sys.stderr)
+        return 2
     missing = {group: [n for n in names if n not in listed]
                for group, names in REQUIRED.items()}
     missing = {k:v for k,v in missing.items() if v}
@@ -81,19 +97,32 @@ def main():
         print("MISSING:", json.dumps(missing, sort_keys=True))
     # This is a real tools/call smoke check, not merely static source matching.
     response = responses.get(3, {})
-    content = response.get("result", {}).get("content", [])
+    result = response.get("result")
+    if not isinstance(result, dict) or result.get("isError") or "error" in response:
+        print("ERROR: mcp_registry tools/call failed", file=sys.stderr)
+        return 2
+    content = result.get("content")
+    if not isinstance(content, list):
+        print("ERROR: malformed MCP content", file=sys.stderr)
+        return 2
     payload = None
     for item in content:
-        if item.get("type") == "text":
+        if isinstance(item, dict) and item.get("type") == "text":
             try:
                 payload = json.loads(item["text"])
                 break
-            except (ValueError, KeyError):
+            except (ValueError, KeyError, TypeError):
                 pass
     if not isinstance(payload, dict) or not isinstance(payload.get("tools"), list):
         print("ERROR: mcp_registry tools/call did not return a registry object", file=sys.stderr)
         return 2
+    if any(not isinstance(t, dict) or not isinstance(t.get("name"), str) or not t["name"] for t in payload["tools"]):
+        print("ERROR: malformed registry entry", file=sys.stderr)
+        return 2
     registry = {t["name"]:t for t in payload["tools"]}
+    if len(registry) != len(payload["tools"]):
+        print("ERROR: duplicate registry names", file=sys.stderr)
+        return 2
     if registry.keys() != listed or payload.get("count") != len(listed):
         print("ERROR: tools/list and mcp_registry disagree", file=sys.stderr)
         return 2
