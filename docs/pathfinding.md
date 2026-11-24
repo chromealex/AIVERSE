@@ -199,3 +199,53 @@ Stage42 is a source implementation awaiting native compilation and
 acceptance; no CMake/CTest or gameplay physics tests have been run under
 the user's features-before-tests instruction. See
 `docs/agent-handoffs/caverns-stage42-2026-11-24.md`.
+
+## Caverns Stage43: authoritative ECS route lifecycle and environment epochs
+
+An actual game or simulated authority can opt into
+`engine/nav/CaveSimulationNavigation.h` during `GameModule::setup` using
+`CaveGameplayRuntimeFrame::installNavigationInSimulation`. This registers
+persistent `CaveRouteFollower` **schema v2**, `CaveRouteIntent` v1,
+`caverns.navigation.repath` and `caverns.navigation.follow` as ordered
+`Simulation::addSystem` fixed-tick systems and a rollback restore hook.
+`assignCaveGoal` writes a goal and backend name into a real ECS entity.
+Deterministic repath uses at most the configured number of entities per
+simulation tick, with per-agent cooldown and bounded solver visits. On source
+or environment epoch changes the agent marks `needsRepath`, and on stale
+native collision it does not cross the obstacle. The host MUST provide a
+same-epoch native collision callback; GameClient visual previews cannot do so.
+
+`engine/nav/CaveMovementPhysics.h` provides an optional adapter to the
+game's real `SpatialWorld::cast/blocked` (deterministic `Fixed`) and
+`physics::Scene::raycast/overlapCapsule` (Box3D float, SERVER-AUTHORITY ONLY,
+not deterministic across independent lockstep clients). Either way it uses
+the original native collision owners, not a duplicate cave physics scene.
+
+`engine/world/TerraWeaveCavernsNavigationEnvironment.h` provides
+read-only NEREID `lib::nereid::sampleWater` and PHYSIS
+`physis::environmentAt` callbacks from a copied immutable ECS World
+snapshot. Swim passability follows published water state; snow, wetness and
+ice affect integer traction costs. `CaveNavigationPublication` now tracks
+`environmentRevision` independently of authored SDF `sourceRevision`,
+and `CaveGameplayRuntimeFrame::publishNavigationEnvironmentFromSimulation`
+allows a fixed-tick owner to publish that immutable state with dirty bounds.
+All such notifications invalidate the derived solver caches.
+
+`engine/nav/CavePathQueryCache.h` memoizes successful A*/HPA/Flow/Hybrid
+route results with bounded LRU (256 entries / 8MiB default) and a key
+including source revision, environment epoch, solver, endpoints, full agent
+profile and visit budget; `Custom` solvers bypass this cache. Native
+`CaveNativeNavMeshCache` reuses the actual nav::Mesh build across queries
+within an identical SDF/environment epoch and agent/config tuple (max four
+instances by default). A failed physics step, new SDF, water/weather epoch,
+stream residency update, rollback or graph-policy change invalidates
+relevant cache data. These are NONAUTHORITATIVE derived structures and never
+belong in the game checksum.
+
+The default `GameCore` is not modified to unconditionally install cave
+navigation, since many projects and the Editor Play presentation do not
+own a compatible native physical collision epoch. Explicit opt-in from
+the ACTUAL game authority is required; any route/component saves created
+with schema v1 require an explicit migration to v2. Stage43 source changes
+have not been compiled or runtime-tested under the features-first policy;
+see `docs/agent-handoffs/caverns-stage43-2026-11-24.md`.
