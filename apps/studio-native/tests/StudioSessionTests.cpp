@@ -592,6 +592,21 @@ void agentScopedHistoryContract(){
     AIVERSE_TEST_CHECK(agent("studio_asset_recovery_quota_set",quota).getInt("quotaMiB")==8);
     AIVERSE_TEST_CHECK(agent("studio_asset_recovery_quota_set",quota).has("error"));
     AIVERSE_TEST_CHECK(agent("studio_asset_trash_purge",restore).has("error"));
+    const auto owners=agent("studio_owner_history",recovery);
+    AIVERSE_TEST_CHECK(!owners.has("error")&&owners["map"].isObject()&&owners["assets"].isObject());
+    AIVERSE_TEST_CHECK(!owners.getStr("ownerVersion").empty());
+    Json navigation=recovery;navigation.set("scope",Json::string("map"));
+    navigation.set("direction",Json::string("undo"));navigation.set("expectedVersion",Json::string("stale"));
+    navigation.set("confirmed",Json::fromBool(true));
+    AIVERSE_TEST_CHECK(agent("studio_owner_history_step",navigation).has("error"));
+    Json save=recovery;save.set("expectedMap",owners["mapPath"]);
+    save.set("expectedOwnerVersion",Json::string("stale"));save.set("confirmed",Json::fromBool(true));
+    AIVERSE_TEST_CHECK(agent("studio_save_documents",save).has("error"));
+    save.set("expectedOwnerVersion",owners["ownerVersion"]);save.set("confirmed",Json::fromBool(false));
+    AIVERSE_TEST_CHECK(agent("studio_save_documents",save).has("error"));
+    AIVERSE_TEST_CHECK(agent("studio_asset_history_reset_review",recovery).has("error")); // healthy history
+    AIVERSE_TEST_CHECK(agent("studio_asset_history_reset_apply",recovery).has("error")); // native-only
+
     client.close();session.openProject(root.string());
     AIVERSE_TEST_CHECK(step(assetEdit,"undo",assetEdit.getStr("historyVersion")).has("error"));
     fs::remove_all(root);
