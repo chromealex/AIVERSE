@@ -1,0 +1,5 @@
+# Stage 49 — SIMD value noise delivery (in progress)
+
+Branch: `feature/world-processes-stage31-bidirectional-handles`; starting HEAD `cff56172e7fe62f28494c9ad916d0a44cafbe45b`. Main `71aa5c93afa5993c4e45ba39f1bf5454343389ea` was already an ancestor.
+
+Scope: deterministic SIMD interpolation of periodic Value Noise for noiseBatchValues in 2D/3D; keep scalar lattice wrapping, hashing and fade and all other kernels unchanged. SSE2, runtime-gated AVX2 (GCC/Clang x86), AArch64 NEON when compiled, scalar fallback. Explicit backend preference and actual executed backend report, preserve existing batch options and Atomic/MarkInvalid semantics; no global ISA flags, no heap. Unsupported kernels/preferences fall back; invalid enum rejects without writes. Exact signed Q16 truncation, tails, input layout, invalid masks, bounds and seed parity. Existing C++20 target and registered fixture; metadata and docs. Native Linux x86 evidence, cross-target NEON only if actually run/compiled; no throughput claim until measured. Full platform, native module, CMake and catalog acceptance pending. No ECS/scene/persistence/visual publishing for pure arithmetic.

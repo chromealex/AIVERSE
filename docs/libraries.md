@@ -200,3 +200,5 @@ Noise 0.4.0 adds Cartesian `simplexNoiseSample` / `simplexNoise` and `simplexSke
 - Stage 48 (implemented; isolated verification, full gate pending): allocation-free batch sampling with AoS/SoA input, typed caller-owned outputs and explicit invalid-element policies. See [delivery plan](handoffs/algorithms-stage48-delivery.md).
 
 Noise 0.5.0 provides `NoiseBatch.h` on `AIVERSE::lib_noise`: borrowed AoS/SoA points, typed contiguous caller outputs, exact scalar parity, Atomic (two-pass, all-or-nothing) and MarkInvalid (single pass, full byte mask, invalid results unchanged). Reject invalid shape/config/overlap without writes. See the skill for functions and examples. Scalar kernels and saved-world sequences unchanged. SIMD dispatch and measured throughput remain next stages.
+
+- Stage 49 (in progress): SIMD Value Noise batch interpolation with explicit backend selection and scalar parity. See [delivery plan](handoffs/algorithms-stage49-delivery.md).
