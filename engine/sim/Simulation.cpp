@@ -50,6 +50,9 @@ void Simulation::setup(const Json& rules, const Json& map) {
         p.slot = uint8_t(i + 1);
         p.name = ps[i].getStr("name", "Player " + std::to_string(i + 1));
         p.team = uint8_t(ps[i].getInt("team", int64_t(i + 1)));
+        const std::string controller = ps[i].getStr("controller", controllerName(defaultController(p.slot)));
+        p.controller = controller == "human" ? SeatController::Human :
+                       controller == "computer" ? SeatController::Computer : SeatController::Empty;
         players_.push_back(p);
     }
     module_->setup(*this, rules, map);
@@ -199,15 +202,32 @@ constexpr uint32_t kSaveMagic = 0x56535452;   // "RTSV"
 // Version 7 (agent-bw-skills): skill objects (Area goal / arrived / deaths, Pulled pool); 4..6 remain readable.
 // Version 8 (agent-bw-skills): effect budgets, transfers (Transfer pool), status groups, loadout slots.
 // Version 9: the RTS module's frozen match outcome (a load after the match end restored no result: bots stopped).
-constexpr uint32_t kSaveVersion = 10;
+constexpr uint32_t kSaveVersion = 11;
+void hashControllers(Hasher& h, const std::vector<PlayerInfo>& players) {
+    for (const auto& p : players) if (p.controller != defaultController(p.slot)) {
+        h.u32(0x53454154); h.u32(p.slot); h.u32(uint32_t(p.controller));
+    }
+}
 } // namespace
 void io(Archive& a, Command& c) { a(c.tick, c.player, c.flags, c.type, c.seq, c.units, c.target, c.point, c.param, c.args); }   // found by ADL
-void io(Archive& a, PlayerInfo& p) { a(p.slot, p.name, p.team, p.alive); }
+void io(Archive& a, PlayerInfo& p) {
+    a(p.slot, p.name, p.team, p.alive);
+    if (a.formatVersion >= 11) {
+        uint8_t kind = uint8_t(p.controller);
+        a(kind);
+        if (kind > uint8_t(SeatController::Computer)) a.fail();
+        else p.controller = SeatController(kind);
+    } else if (!a.writing()) p.controller = defaultController(p.slot);
+}
 
 std::string Simulation::serialize() {
     std::string out;
     Archive a(&out);
-    uint32_t magic = kSaveMagic, version = persistentEcs_.empty()?9:kSaveVersion, rate = tickRate_;
+    const bool nondefaultSeats = std::any_of(players_.begin(), players_.end(), [](const auto& p) {
+        return p.controller != defaultController(p.slot);
+    });
+    uint32_t magic = kSaveMagic, version = nondefaultSeats ? kSaveVersion : (persistentEcs_.empty() ? 9 : 10), rate = tickRate_;
+    a.formatVersion = version;
     uint64_t seed = cfg_.seed, st = rng_.state(), inc = rng_.increment();
     a(magic, version, seed, rate, tick_, st, inc, players_, pending_, executed_, seqByPlayer_);
     World::EntityState es = world_.entityState();
@@ -289,24 +309,13 @@ bool Simulation::deserialize(const std::string& bytes, std::string* err) {
         uint64_t savedChecksum=0; a(savedChecksum);
         if(!a.ok() || a.remaining()!=0)
             return restore("truncated save state or trailing bytes");
-        if(sourceHash.migrated) {
-            // The original checksum includes the original field stream, not
-            // the upgraded in-memory representation. Never silently disable
-            // verification when a schema migration runs.
-            Hasher original;
-            original.u32(tick_);
-            original.u64(rng_.state());
-            for(const auto& player:players_) {
-                original.u32(player.slot);
-                original.u32(player.team);
-                original.u32(player.alive?1:0);
-            }
-            module_->hashState(*this,original);
-            sourceHash.hash(original);
-            if(original.value()!=savedChecksum)
-                return restore("original checksum mismatch during native ECS migration");
-        } else if(checksum()!=savedChecksum)
-            return restore("state checksum mismatch after loading (different rules or map?)");
+        Hasher original = checksumHeader();
+        module_->hashArchivedState(*this, original, a.moduleHashVersion);
+        if (sourceHash.migrated) sourceHash.hash(original);
+        else persistentEcs_.hash(world_, original);
+        if (original.value() != savedChecksum)
+            return restore(sourceHash.migrated ? "original checksum mismatch during native ECS migration"
+                                               : "state checksum mismatch after loading (different rules or map?)");
         for(auto& hook:stateRestoredHooks_)hook(*this);
     } catch(const std::exception& e) {
         return restore(std::string("failed to deserialize state: ")+e.what());
@@ -315,11 +324,17 @@ bool Simulation::deserialize(const std::string& bytes, std::string* err) {
     return true;
 }
 
-uint64_t Simulation::checksum() {
+Hasher Simulation::checksumHeader() const {
     Hasher h;
     h.u32(tick_);
     h.u64(rng_.state());
     for (auto& p : players_) { h.u32(p.slot); h.u32(p.team); h.u32(p.alive ? 1 : 0); }
+    hashControllers(h, players_);
+    return h;
+}
+
+uint64_t Simulation::checksum() {
+    Hasher h = checksumHeader();
     module_->hashState(*this, h);
     persistentEcs_.hash(world_,h);
     return h.value();

@@ -1,0 +1,33 @@
+{
+  "ai": {"controller": "scripted"},
+  "victory": "keyUnits",
+  "fogOfWar": {"mode": "none"},
+  "possession": {"firstPerson": true},
+  "types": {
+    "scout": {
+      "name": "Scout",
+      "stance": "passive",
+      "health": {"max": 120},
+      "move": {"speed": 3},
+      "sight": 10,
+      "weapons": [{"range": 6, "damage": 3, "cooldown": 1}],
+      "view": {"shape": "soldier", "portrait": {"focusHeight": 0.7, "zoom": 1.3}}
+    },
+    "outpost": {
+      "name": "Outpost",
+      "key": true,
+      "structure": {"footprint": [2, 2]},
+      "health": {"max": 200},
+      "view": {"shape": "tower", "portrait": {"zoom": 1}}
+    },
+    "guard": {
+      "name": "Guard",
+      "stance": "hold",
+      "health": {"max": 120},
+      "sight": 9,
+      "weapons": [{"range": 6, "damage": 3, "cooldown": 1}],
+      "view": {"shape": "soldier"}
+    }
+  },
+  "scripts": ["scripts/encounter.lua"]
+}

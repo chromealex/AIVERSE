@@ -133,3 +133,7 @@ bounded capability stage at a time; audit existing owners and external GTA2
 generic policy before adding a new system. Do not launch a separate genre runtime,
 import project-specific assets, mark W1 core, merge main, or publish success
 claims before the deferred merged-tree Mac gate.
+
+### OW-01 continuation — traffic residency with occupied vehicles
+
+Exercise distance-based retirement of live traffic and citizen-owned parked vehicles. Preserve driver, seat and transported-unit references until the last occupant leaves. Verify through GameCore's population tick. Measure tick latency separately on a seated ActorHost vehicle with stable identities across repeated migrations and fresh saves.

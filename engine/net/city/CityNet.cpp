@@ -30,6 +30,11 @@ struct Out {
     void u8(uint8_t v) { b.push_back(v); }
     void u16(uint16_t v) { b.push_back(uint8_t(v)); b.push_back(uint8_t(v >> 8)); }
     void u32(uint32_t v) { u16(uint16_t(v)); u16(uint16_t(v >> 16)); }
+    void text(const std::string& value, size_t limit) {
+        size_t n = std::min(value.size(), limit);
+        while (n && n < value.size() && (uint8_t(value[n]) & 0xc0) == 0x80) --n;
+        u16(uint16_t(n)); b.insert(b.end(), value.begin(), value.begin() + n);
+    }
     void u64(uint64_t v) { u32(uint32_t(v)); u32(uint32_t(v >> 32)); }
 };
 struct In {
@@ -39,6 +44,13 @@ struct In {
     uint16_t u16() { const uint16_t lo = u8(); return uint16_t(lo | uint16_t(u8()) << 8); }
     uint32_t u32() { const uint32_t lo = u16(); return lo | uint32_t(u16()) << 16; }
     uint64_t u64() { const uint64_t lo = u32(); return lo | uint64_t(u32()) << 32; }
+    std::string text(size_t limit) {
+        const size_t n = u16();
+        if (!ok || n > limit || n > b.size() - at) { ok = false; return {}; }
+        std::string result(reinterpret_cast<const char*>(b.data() + at), n);
+        at += n;
+        return result;
+    }
     bool end() const { return ok && at == b.size(); }
 };
 uint16_t q64(Fixed v) { return uint16_t(std::clamp<int64_t>((v.raw * 64) >> Fixed::kFracBits, 0, 65535)); }
@@ -50,6 +62,7 @@ uint64_t contentId(const Json& rules, const Json& map) {
     Hasher h;
     h.u32(kProtocol);
     if (rules["types"].isObject()) for (auto& [id, def] : rules["types"].members()) { (void)def; h.str(id); }
+    if (rules["resources"].isObject()) for (auto& [id, def] : rules["resources"].members()) { (void)def; h.str(id); }
     h.str(map["size"].dump(-1)); h.str(map["players"].dump(-1)); h.str(map["entities"].dump(-1));
     return h.value();
 }
@@ -132,6 +145,7 @@ Server::Server(const Json& rules, const Json& map, uint64_t seed, Options option
             if (doc.isObject()) c->importAccount(*sim_, accountId(player), doc["commerce"]);
     game::TopDown* td = module().topDown();
     for (auto& p : sim_->players()) if (td->heroOf(*sim_, p.slot).valid()) seats_.push_back(p.slot);
+    for (uint8_t slot : seats_) queueController(slot, SeatController::Empty, true);
     if (opt_.emptySeats) {   // nobody is in the city yet
         for (uint8_t slot : seats_) {
             game::TopDownPilot& pilot = td->store(*sim_)->pilots[slot];
@@ -191,7 +205,15 @@ void Server::admit(std::unique_ptr<Conn> conn) {
     waiting_.push_back(std::move(p));
 }
 
+void Server::queueController(uint8_t slot, SeatController kind, bool initial) {
+    Command cmd = seatControllerCommand(slot, kind, initial);
+    cmd.tick = sim_->tick();
+    cmd.seq = ++controllerSequence_;
+    sim_->inject(std::move(cmd));
+}
+
 void Server::welcome(Peer& p) {
+    if (!p.ready) queueController(p.slot, SeatController::Human);
     p.ready = true;
     p.premises.clear();
     Out w(Msg::Welcome);
@@ -247,6 +269,7 @@ void Server::store(Peer& p, bool leaving) {
 }
 
 void Server::leave(Peer& p) {
+    if (p.ready) queueController(p.slot, SeatController::Empty);
     Command release = heroInputCommand(p.slot, topdown::Input{});   // never leave a stick or a trigger held
     release.tick = sim_->tick();
     sim_->inject(release);
@@ -370,11 +393,29 @@ void Server::collectEvents() {
         if (!placed && ev.a.valid() && w.alive(ev.a) && w.has<Transform>(ev.a)) { at = w.get<Transform>(ev.a).pos; placed = true; }
         RemoteEvent r;
         r.type = ev.type; r.player = ev.player; r.value = ev.value;
+        r.flags = ev.flags; r.resource = ev.resource; r.subjectType = ev.subjectType;
+        r.subjectOwner = ev.subjectOwner; r.subjectKey = ev.subjectKey;
+        if (ev.chain) {
+            r.chainX = q64(ev.chain->origin.x); r.chainZ = q64(ev.chain->origin.z);
+            r.chainPayload = uint16_t(ev.chain->payload);
+        }
+        if (ev.type == game::kEvMessage || ev.type == game::kEvChat) {
+            r.message = ev.message;
+            if (!r.message) {
+                const auto& texts = module().state(*sim_).trig.messages;
+                if (ev.value < 0 || size_t(ev.value) >= texts.size()) continue;
+                auto msg = std::make_shared<MatchMessage>();
+                msg->text = texts[size_t(ev.value)];
+                r.message = std::move(msg);
+            }
+        }
         r.a = ev.a.valid() ? ev.a.index : UINT32_MAX; r.b = ev.b.valid() ? ev.b.index : UINT32_MAX;
         r.x = q64(ev.pos.x); r.z = q64(ev.pos.z);   // as the simulation gave it (0, 0: no place)
         for (Eye& e : eyes) {
             const bool his = ev.player != 0 && ev.player == e.p->slot;
-            if (!his && !(placed && e.has && (Vec2{at.x, at.z} - e.at).lengthSq() <= r2)) continue;
+            if (ev.type == game::kEvMessage) {
+                if (ev.player != 0 && !his) continue;
+            } else if (ev.type != game::kEvChat && ev.type != game::kEvPlayerLeft && !his && !(placed && e.has && (Vec2{at.x, at.z} - e.at).lengthSq() <= r2)) continue;
             if (e.p->events.size() < 96) e.p->events.push_back(r);
         }
     }
@@ -554,10 +595,26 @@ void Server::broadcast() {
 
         if (!p.events.empty()) {   // what the simulation said since the last snapshot
             Out ev(Msg::Sim);
-            ev.u32(tick); ev.u8(uint8_t(p.events.size()));
-            for (const RemoteEvent& r : p.events) { ev.u16(r.type); ev.u8(r.player); ev.u32(r.a); ev.u32(r.b); ev.u64(uint64_t(r.value)); ev.u16(r.x); ev.u16(r.z); }
-            p.conn->send(ev.b);
-            stats_.reliableBytes += ev.b.size(); stats_.simEvents += p.events.size();
+            ev.u32(tick); ev.u8(0);
+            auto flush = [&] {
+                if (!ev.b[5]) return;
+                p.conn->send(ev.b);
+                stats_.reliableBytes += ev.b.size();
+                ev.b.resize(6); ev.b[5] = 0;
+            };
+            for (const RemoteEvent& r : p.events) {
+                if (ev.b.size() + 39 + (r.type == game::kEvChainJump ? 6 : 0) + (r.message ? 8272 : 0) > 64000) flush();
+                ++ev.b[5];
+                ev.u16(r.type); ev.u8(r.player); ev.u32(r.a); ev.u32(r.b); ev.u64(uint64_t(r.value)); ev.u16(r.x); ev.u16(r.z);
+                ev.u16(r.flags); ev.u16(r.resource); ev.u16(r.subjectType); ev.u16(r.subjectOwner); ev.u64(r.subjectKey);
+                if (r.type == game::kEvChainJump) { ev.u16(r.chainX); ev.u16(r.chainZ); ev.u16(r.chainPayload); }
+                if (r.message) {
+                    ev.u32(uint32_t(std::clamp(double(r.message->duration) * 1000, 0.0, 4294967295.0)));
+                    ev.text(r.message->text, 8192); ev.text(r.message->style, 64);
+                }
+            }
+            flush();
+            stats_.simEvents += p.events.size();
             p.events.clear();
         }
         if (tick % sim.tickRate() == (uint32_t(p.slot) * 2) % sim.tickRate() || tick % sim.tickRate() == (uint32_t(p.slot) * 2 + 1) % sim.tickRate()) tellPremises(p);   // once a second, the players in turn
@@ -682,12 +739,25 @@ void Client::poll(uint64_t now) {
         case Msg::Sim: {
             (void)in.u32();
             const uint8_t n = in.u8();
-            if (!in.ok || packet.size() != 6 + size_t(n) * 23) break;
+            if (!in.ok || n > 96 || packet.size() < 6 + size_t(n) * 39) break;
+            std::vector<RemoteEvent> batch;
+            batch.reserve(n);
             for (uint8_t i = 0; i < n; ++i) {
                 RemoteEvent r;
                 r.type = in.u16(); r.player = in.u8(); r.a = in.u32(); r.b = in.u32(); r.value = int64_t(in.u64()); r.x = in.u16(); r.z = in.u16();
-                if (simEvents_.size() < 4096) simEvents_.push_back(r);
+                r.flags = in.u16(); r.resource = in.u16(); r.subjectType = in.u16(); r.subjectOwner = in.u16(); r.subjectKey = in.u64();
+                if (r.type == game::kEvChainJump) { r.chainX = in.u16(); r.chainZ = in.u16(); r.chainPayload = in.u16(); }
+                if (r.type == game::kEvMessage || r.type == game::kEvChat) {
+                    auto msg = std::make_shared<MatchMessage>();
+                    msg->duration = float(in.u32()) / 1000.f;
+                    msg->text = in.text(8192); msg->style = in.text(64);
+                    r.message = std::move(msg);
+                }
+                if (!in.ok) break;
+                batch.push_back(std::move(r));
             }
+            if (in.end() && simEvents_.size() + batch.size() <= 4096)
+                simEvents_.insert(simEvents_.end(), batch.begin(), batch.end());
             break;
         }
         case Msg::Premises: {

@@ -213,7 +213,7 @@ uint16_t ParticleSystem::Impl::batchFor(const FxTexture& t, FxBlend blend, const
 void ParticleSystem::Impl::build(EffectRT& e, std::vector<std::string>& errors) {
     e.em.clear();
     e.looping = e.def.looping();
-    e.emitEnd = 0;
+    e.emitEnd = e.def.model.source.empty() ? 0 : e.def.model.duration;
     e.extent = 0.5f;
     for (size_t i = 0; i < e.def.emitters.size(); ++i) {
         const EmitterDef& d = e.def.emitters[i];
@@ -715,7 +715,7 @@ bool ParticleSystem::init(gfx::Device* dev) {
     shutdown();
     auto& I = *impl_;
     I.dev = dev;
-    I.limits = limitsFor(quality_);
+    I.limits = effectiveLimits(quality_);
     I.quality = quality_;
     I.particles.reserve(size_t(I.limits.maxParticles));
     if (!dev) return true;
@@ -828,14 +828,29 @@ void ParticleSystem::shutdown() {
     impl_->wind = wind;
     impl_->lightDir = light;
     impl_->quality = quality_;
-    impl_->limits = limitsFor(quality_);
+    impl_->limits = effectiveLimits(quality_);
+}
+
+QualityLimits ParticleSystem::effectiveLimits(FxQuality q) const {
+    QualityLimits limits = limitsFor(q);
+    if (q >= FxQuality::Low && q <= FxQuality::High) {
+        const int budget = particleBudgets_[size_t(q) - size_t(FxQuality::Low)];
+        if (budget >= 0) limits.maxParticles = budget;
+    }
+    return limits;
+}
+
+void ParticleSystem::setParticleBudgets(std::array<int,3> budgets) {
+    for (int& budget : budgets) budget = std::clamp(budget, -1, maxConfiguredParticles);
+    particleBudgets_ = budgets;
+    setQuality(quality_);
 }
 
 void ParticleSystem::setQuality(FxQuality q) {
     quality_ = q;
     auto& I = *impl_;
     I.quality = q;
-    I.limits = limitsFor(q);
+    I.limits = effectiveLimits(q);
     while (int(I.particles.size()) > I.limits.maxParticles) I.die(I.particles.size() - 1, false);
     if (q == FxQuality::Off) clear();
 }
@@ -892,7 +907,7 @@ int ParticleSystem::define(const std::string& name, const EffectDef& def) {
     e.name = name;
     e.def = def;
     if (e.def.emitters.size() > size_t(kMaxEmitters)) e.def.emitters.resize(size_t(kMaxEmitters));
-    e.valid = !def.emitters.empty();
+    e.valid = !def.emitters.empty() || !def.model.source.empty();
     I.build(e, errors_);
     return e.valid ? id : -1;
 }
@@ -1075,6 +1090,25 @@ bool ParticleSystem::setProgramParameter(FxHandle h, uint32_t slot, float value,
             }
     return changed;
 }
+void ParticleSystem::modelInstances(std::vector<ModelInstance>& out) const {
+    out.clear();
+    for (size_t slot=0; slot<impl_->instances.size(); ++slot) {
+        const auto& instance = impl_->instances[slot];
+        if (!instance.used || instance.stopped || !instance.emitting) continue;
+        const auto& model = impl_->effects[size_t(instance.effect)].def.model;
+        if (model.source.empty() || (!model.loop && instance.time >= model.duration)) continue;
+        auto world = render::mat4::translate(instance.pos);
+        const float3 axes[] = {{1,0,0},{0,1,0},{0,0,1}};
+        for (int col=0; col<3; ++col) {
+            const auto axis = upRotate(instance.dir,axes[col]) * instance.scale;
+            world.at(0,col) = axis.x; world.at(1,col) = axis.y; world.at(2,col) = axis.z;
+        }
+        if (impl_->haveSpace) world = impl_->space * world;
+        out.push_back({{(uint32_t(instance.gen)<<16)|uint32_t(slot+1)},instance.effect,
+            world,instance.time,instance.tint});
+    }
+}
+
 void ParticleSystem::move(FxHandle h, float3 pos) { if (auto* in = findInstance(*impl_, h)) in->pos = pos; }
 void ParticleSystem::move(FxHandle h, float3 pos, float3 dir) {
     if (auto* in = findInstance(*impl_, h)) { in->pos = pos; if (render::length(dir) > 1e-5f) in->setDir(render::normalize(dir)); }

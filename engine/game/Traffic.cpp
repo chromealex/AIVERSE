@@ -141,6 +141,17 @@ void showType(GameHost& m, Simulation& sim, Entity e, uint16_t type) {
     }
     u.type = type;
 }
+bool citizenHoldsBody(const TrafficStore& store, int32_t id, Entity entity) {
+    if (id < 0 || size_t(id) >= store.citizens.size()) return false;
+    const auto& citizen = store.citizens[size_t(id)];
+    return citizen.held && citizen.e == entity;
+}
+
+bool personPinned(const World& world, const TrafficStore& store, const TrafficPerson& person) {
+    const auto* service = world.tryGetConst<ServicePassenger>(person.e);
+    return (service && service->claim) || citizenHoldsBody(store, person.citizen, person.e);
+}
+
 void silentRemove(Simulation& sim, Entity e) {
     World& w = sim.world();
     if (!w.alive(e)) return;
@@ -821,11 +832,12 @@ void Traffic::collect(Simulation& sim) {
     if (!st) return;
     st->blows.erase(std::remove_if(st->blows.begin(), st->blows.end(), [&](const TrafficBlow& b) { return b.tick + 3 < sim.tick(); }), st->blows.end());
     for (const SimEvent& ev : sim.events()) {
-        if (ev.type != kEvAttack && ev.type != kEvHit && ev.type != kEvDied) continue;
+        const uint16_t cue = weaponCueEventType(ev.type, ev.flags);
+        if (cue != kEvAttack && ev.type != kEvHit && ev.type != kEvDied) continue;
         Fixed blow{};
         if (ev.type == kEvHit && st->blows.size() < 1024) st->blows.push_back({ev.a, Fixed::fromRaw(ev.value), sim.tick()});
         if (ev.type == kEvDied) for (auto& b : st->blows) if (b.e == ev.a) blow = fxMax(blow, b.damage);
-        if (st->happened.size() < 4096) st->happened.push_back({ev.type, ev.type == kEvDied ? uint16_t(ev.value) : uint16_t(0), ev.pos, ev.a, ev.b, blow});
+        if (st->happened.size() < 4096) st->happened.push_back({cue, ev.type == kEvDied ? uint16_t(ev.value) : uint16_t(0), ev.pos, ev.a, ev.b, blow});
     }
 }
 
@@ -1228,7 +1240,12 @@ void Traffic::cars(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& f
             const bool stuckAway = c.stopped > sim.tickRate() * 30 && d2 > rules_.spawnMin * rules_.spawnMin;
             const bool lostAway = c.lostSince && sim.tick() - c.lostSince > sim.tickRate() * 5 && d2 > rules_.spawnMin * rules_.spawnMin;
             // a depot bus wedged or off the road out of sight is towed in: its driver brings the next one out of the depot
-            if ((!depotBus && d2 > rules_.despawn * rules_.despawn) || stuckAway || lostAway) { tripGone(sim, st, c); if (c.kind == kTrafficBus) busGone(sim, st, c.e); silentRemove(sim, c.e); }
+            if ((!depotBus && d2 > rules_.despawn * rules_.despawn) || stuckAway || lostAway) {
+                if (hasLivePassengers(w, c.e) || citizenHoldsBody(st, c.citizen, c.e)) continue;
+                tripGone(sim, st, c);
+                if (c.kind == kTrafficBus) busGone(sim, st, c.e);
+                silentRemove(sim, c.e);
+            }
         }
     for (size_t i = 0; i < st.cars.size();) {
         if (w.get<Unit>(st.cars[i].e).hp.raw <= 0) { dropCall(sim, st, st.cars[i]); st.cars.erase(st.cars.begin() + long(i)); continue; }
@@ -1265,7 +1282,7 @@ void Traffic::cars(Simulation& sim, TrafficStore& st, const std::vector<Vec2>& f
                 const Vec2 at = v2(w.get<Transform>(c.e).pos);
                 const Fixed reach = Fixed::fromInt(int(P.length()) / 2 + 2);
                 const Vec2 mid = tl::trafficLanePoint(net_, P, ds->dir, 0, (Fixed::fromInt(P.along0) + Fixed::fromInt(P.along1)) / 2);
-                if ((at - mid).lengthSq() > reach * reach) continue;
+                if ((at - mid).lengthSq() > reach * reach || hasLivePassengers(w, c.e)) continue;
                 tripGone(sim, st, c); busGone(sim, st, c.e); silentRemove(sim, c.e);
                 st.cars.erase(st.cars.begin() + long(i));
                 --count[kTrafficBus];
@@ -1682,6 +1699,7 @@ void Traffic::passengers(Simulation& sim, TrafficStore& st, const BusStop& stop,
     const int stopIndex = int(&stop - stops_.data());
     int on = int(sim.rng().below(uint32_t(rules_.passengers + 1)));
     for (auto& p : st.people) {
+        if (personPinned(w, st, p)) continue;
         if (p.citizen >= 0) { busCitizen(sim, st, stopIndex, &p, bus); continue; }   // citizens take the bus at their own stop only
         if (on <= 0) continue;
         if (p.panic || p.state != PedState::Pause || !w.alive(p.e) || w.get<Unit>(p.e).hp.raw <= 0) continue;
@@ -1952,7 +1970,7 @@ void Traffic::people(Simulation& sim, TrafficStore& st, const std::vector<Vec2>&
     }
     if (!foci.empty())
         for (auto& p : st.people)
-            if (!claimed(p.e) && nearestSq(foci, v2(w.get<Transform>(p.e).pos)) > rules_.peopleDespawn * rules_.peopleDespawn) {
+            if (!personPinned(w, st, p) && nearestSq(foci, v2(w.get<Transform>(p.e).pos)) > rules_.peopleDespawn * rules_.peopleDespawn) {
                 citizenUnseen(sim, st, p, v2(w.get<Transform>(p.e).pos));   // a citizen goes on unseen, from where he is
                 silentRemove(sim, p.e);
             }
@@ -2037,7 +2055,7 @@ void Traffic::people(Simulation& sim, TrafficStore& st, const std::vector<Vec2>&
         if (!mb) continue;
         switch (p.state) {
         case PedState::Pause:
-            if(claimed(p.e)) break;
+            if(personPinned(w, st, p)) break;
             if (sim.tick() < p.until) break;
             if (p.citizen >= 0 && size_t(p.citizen) >= st.citizens.size()) p.citizen = -1;
             if (p.citizen >= 0 && !p.panic) {   // on his way to an address: the next stretch, the bus stop, the door

@@ -432,7 +432,8 @@ deformed on the GPU from a float texture; weights come from the node / mesh defa
 - **dissolve**: `dissolveSpawn` burns new units in, `dissolveDeath` burns corpses away (instead of
   fading); `"dissolve": true` sets both.
 
-Selected and hovered objects get an outline (`GameView::setSelectionOutline`). The client shows the
+Selected and hovered objects get an outline (`GameView::setSelectionOutline`). Set `"selectionOutline": false` in
+`game.json` to suppress both model silhouettes while retaining authored rings and other HUD overlays. The client shows the
 building to place as a translucent model (`GameView::drawGhost`), and `game::Portrait`
 (`engine/view/game/GamePortrait.h`) renders any type into a texture for HUD portraits and buttons.
 
@@ -531,6 +532,21 @@ for each attack event. It defaults to false, so melee attacks and existing proje
 effects stay unchanged. Tracers travel to the event target in 90–240 ms, respect
 visible source/target objects, and are capped at 512 simultaneous streaks. They
 use the existing RHI triangle/line renderer on flat terrain and planets.
+
+### Per-weapon projectile models
+
+In a unit type's `view`, define `projectiles` keyed by the weapon's authored ID:
+
+```json
+{
+  "projectiles": {
+    "bow": {"model":"models/arrow.glb","forward":"+z","scale":0.45},
+    "rocket": {"model":"models/rocket.glb","forward":"+x","clip":"flight","clipSpeed":1.2,"scale":0.7,"tint":[1,0.7,0.3,1]}
+  }
+}
+```
+
+A string path is shorthand for a model with default settings. `forward` names the model's longitudinal axis (default +x; any signed Cartesian axis is accepted). The model is oriented along the simulated displacement, including pitch on ballistic arcs. On planets the orientation uses radial up. `scale` is a uniform multiplier of original model units; if absent the existing `projectileScale` value applies. Zero hides it. Optional `tint` is linear RGB or RGBA (0–1). `clip` names an imported looping animation; `clipSpeed` scales its presentation clock. Without a clip the bind pose is drawn. Imported materials and textures are retained. Missing/invalid assets fall back to the built-in projectile ball; a missing clip warns and uses bind pose. The same shared model cache, streaming and hot-reload owner is used; projectile assets are retained while their type is resident. Custom models follow the simulated height instead of retaining the legacy muzzle-height offset. Source type and weapon slot are resolved from the projectile itself, including progression variants and dead shooters. This is presentation only, not a collision-size or projectile physics setting.
 
 ### Team colour from territory
 
@@ -1714,3 +1730,7 @@ destroyed old Model.
 [Stage 145 handoff](agent-handoffs/animation-stage145-generic-ecs-source-epoch-playback-2026-11-19.md).
 **NOT RUN:** native CMake/C++/CTest, Metal/Vulkan/GL, sanitizer, source
 hot-reload visual test, GPU failure injection or benchmarks.
+
+A status can attach a particle effect to its holder for its active lifetime. For example, set `"view": {"effect":"heal_glow","offset":[0,0.5,0]}` on the status definition. Named model nodes use socket-local offsets. Removing the status stops emission.
+
+For chain delivery, the ability ID selects an entry in `fx/fx.json` under `chainJumps`. Override it with `chainFx` on a chain effect or its delivery. `events.chainJump` supplies the fallback. For example, `"chainJumps":{"lightning":{"mode":"beam","scale":2,"lifetime":0.25,"height":1}}` draws a ribbon between each pair of hits. Set `"mode":"projectile","effect":"spark"` to move an emitter along the link during its lifetime. Beam color uses the renderer's packed RGBA integer.

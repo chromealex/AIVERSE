@@ -3,6 +3,7 @@
 // pathfinder. Integer / fixed only.
 #include "GenInternal.h"
 #include "engine/core/FixedMath.h"
+#include <cstdlib>
 #include <map>
 
 namespace aiverse::gen {

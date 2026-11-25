@@ -2978,6 +2978,13 @@
       "roadmap": [
         {
           "status": "in-progress",
+          "title": "Точная перезарядка оружия",
+          "text": "Положительный период оружия переносит остаток времени между выстрелами. Проверяем чтение прежних сохранений Arsenal.",
+          "titleEn": "Fractional weapon cooldowns",
+          "textEn": "Positive weapon periods carry elapsed time between shots. Verify compatibility with existing Arsenal saves."
+        },
+        {
+          "status": "in-progress",
           "title": "Строительная сетка",
           "text": "Координаты и привязка ячеек, поворот footprint и проверка размещения через общую библиотеку construction.",
           "titleEn": "Construction grid",

@@ -243,12 +243,65 @@ bool GameCore::serializeState(Simulation& sim, Archive& a) {
         kPools::touch(w);   // creates the listed pools that don't exist yet
     }
     uint32_t pools = uint32_t(kPools::count);
+    // The high bit versions the module hash independently of the outer save and
+    // native ECS formats. Original files omit the weapon cooldown hash stream.
+    constexpr uint32_t cadenceHash = 1u << 31;
+    if (a.writing()) {
+        for (const auto& type : rules_.types)
+            for (const auto& weapon : type.weapons)
+                if (weapon.preciseCooldown || weapon.hasAttackTiming()) pools |= cadenceHash;
+    }
     io(a, pools);
+    a.moduleHashVersion = (pools & cadenceHash) ? 1 : 0;
+    pools &= ~cadenceHash;
     // Native C++ extra pools are allowed only when registered for deterministic persistence.
     if (a.writing() && w.poolCount() != kPools::count + sim.persistentEcs().componentCount()) return false;
     const size_t expect = a.writing() ? kPools::count : a.formatVersion < 7 ? kPoolsBefore7 : a.formatVersion < 8 ? kPoolsBefore8 : kPools::count;
     if (!a.writing() && pools != expect) { a.fail(); return false; }
     kPools::run(a, w, expect);
+    // Opt-in versioned module extension, following the built-in pool stream.
+    // Projects without groups retain the byte-identical legacy Buff encoding.
+    if (!rules_.modifierGroups.empty()) {
+        uint32_t magic = 0x47525031u, version = 1;
+        a(magic, version);
+        if (magic != 0x47525031u || version != 1) { a.fail(); return false; }
+        uint32_t count = uint32_t(rules_.modifierGroups.size());
+        a(count);
+        if (count != rules_.modifierGroups.size()) { a.fail(); return false; }
+        for (const auto& expected : rules_.modifierGroups) {
+            std::string name = a.writing() ? expected : std::string{};
+            a(name);
+            if (name != expected) { a.fail(); return false; }
+        }
+        auto& buffs = w.pool<Buffs>();
+        for (size_t i = 0; i < buffs.size() && a.ok(); ++i) {
+            auto& row = buffs.dataAt(i);
+            for (auto& buff : row.list) {
+                a(buff.stackingGroup);
+                if (buff.stackingGroup > count) { a.fail(); return false; }
+            }
+        }
+    }
+    // Opt-in attack timing extension; old rules retain their previous save layout.
+    bool timedWeapons = false;
+    for (const auto& type : rules_.types)
+        for (const auto& weapon : type.weapons) timedWeapons |= weapon.hasAttackTiming();
+    if (timedWeapons) {
+        uint32_t magic = 0x41545031u, version = 1; // ATP1
+        a(magic, version);
+        if (magic != 0x41545031u || version != 1) { a.fail(); return false; }
+        auto& pool = w.pool<Combat>();
+        for (size_t i = 0; i < pool.size() && a.ok(); ++i)
+            for (auto& phase : pool.dataAt(i).attackTiming) {
+                a(phase.phase, phase.target, phase.remaining);
+                if (uint32_t(phase.phase) > uint32_t(lib::mechanics::WeaponAttackPhase::Recovery) ||
+                    phase.remaining.raw < 0 || phase.remaining > Fixed::fromInt(60) ||
+                    (phase.phase == lib::mechanics::WeaponAttackPhase::Idle && (phase.remaining.raw || phase.target.valid())) ||
+                    (phase.phase != lib::mechanics::WeaponAttackPhase::Idle && (!phase.remaining.raw || !phase.target.valid()))) {
+                    a.fail(); return false;
+                }
+            }
+    }
     if (!a.writing()) {
         w.each<Projectile>([&](Entity, Projectile& p) {
             const auto& s = p.program;
@@ -258,6 +311,9 @@ bool GameCore::serializeState(Simulation& sim, Archive& a) {
                 p.speed <= Fixed{} || p.speed > 2000_fx || s.radius < Fixed{} || s.radius > 4_fx ||
                 s.damageScale < Fixed{} || s.damageScale > 64_fx || s.distanceLeft < Fixed{} || s.distanceLeft > 4096_fx ||
                 s.lifetimeLeft < Fixed{} || s.lifetimeLeft > 120_fx || s.age < Fixed{} || s.age > 120_fx) { a.fail(); return; }
+            if (f->arc && (p.total.raw<0 || p.travel.raw<0 || p.travel>128_fx ||
+                (p.total.raw>0 && (!s.ballistic || s.age>=p.total)) ||
+                (p.total.raw==0 && p.travel.raw!=0))) { a.fail(); return; }
             for (size_t i=0; i<s.remaining.size(); ++i) if (s.remaining[i] > f->modifiers[i].count) a.fail();
         });
     }

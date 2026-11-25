@@ -19,7 +19,8 @@ public:
     bool init(gfx::Device& dev);
     void shutdown();
     void beginFrame(int fbW, int fbH);
-    void setDynamicTexture(const std::string& name, gfx::TextureHandle tex, int w, int h);
+    void setDynamicTexture(const std::string& name, gfx::TextureHandle tex, int w, int h, bool renderTarget);
+    bool usesDynamicTexture(const std::string& name) const;
     // Linear blending (UiLinear.h): images become RGBA8_sRGB premultiplied in linear light and the linear
     // pipeline draws into an sRGB layer. Applies to textures loaded afterwards. False if unsupported.
     bool setLinear(bool on);
@@ -46,7 +47,7 @@ private:
     struct Geometry { gfx::BufferHandle vb, ib; uint32_t count = 0; float lo[2] = {0, 0}, hi[2] = {0, 0}; };
     void applyScissor();
     // linear: RGBA8_sRGB premultiplied in linear light (no decode in the shader)
-    struct Texture { gfx::TextureHandle tex; bool owned = false; bool linear = false; std::string dynamicName; };
+    struct Texture { gfx::TextureHandle tex; bool owned = false; bool linear = false; std::string dynamicName; bool flipY = false; };
     Rml::TextureHandle createLinearImage(unsigned char* rgba, Rml::Vector2i dims);
     template <class T> static uintptr_t put(std::vector<T>& v, std::vector<uintptr_t>& freeList, T item);
 
@@ -62,7 +63,7 @@ private:
     std::vector<uintptr_t> freeGeos_;
     std::vector<Texture> texs_;
     std::vector<uintptr_t> freeTexs_;
-    struct Dyn { gfx::TextureHandle tex; int w = 0, h = 0; };
+    struct Dyn { gfx::TextureHandle tex; int w = 0, h = 0; bool flipY = false; };
     std::map<std::string, Dyn> dynamic_;
     ImageSource imageSource_;
     float proj_[16] = {};

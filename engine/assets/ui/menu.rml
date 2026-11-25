@@ -27,6 +27,12 @@
 
         <button class="map online" data-event-click="net('open')">{{ 'ui.online' | tr(lang) }}</button>
 
+        <div data-if="saveSlots.size > 0"><h2>{{ 'matchfiles.load' | tr(lang) }}</h2>
+            <button data-for="slot : saveSlots" data-event-click="matchFile('load',slot)">{{slot}}</button>
+        </div>
+        <div data-if="replaySlots.size > 0"><h2>{{ 'matchfiles.watch' | tr(lang) }}</h2>
+            <button data-for="slot : replaySlots" data-event-click="matchFile('watch',slot)">{{slot}}</button>
+        </div>
         <div data-if="languages.size > 0">
             <h2>{{ 'menu.language' | tr(lang) }}</h2>
             <div class="choice">

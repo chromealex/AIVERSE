@@ -16,6 +16,7 @@ constexpr const char* kCueNames[] = {
     "captured", "lost", "playerDefeated", "victory", "defeat", "notEnough", "notEnoughSupply", "noRoom",
     "researched", "levelUp", "ability", "readyToPlace", "sold", "regionClaimed", "wave", "lowPower", "upgraded",
     "message", "underAttack", "baseUnderAttack", "select", "move", "attackOrder", "buildOrder", "click", "error",
+    "menuClick", "topClick", "cardClick", "ping", "rally",
 };
 static_assert(sizeof(kCueNames) / sizeof(kCueNames[0]) == size_t(Cue::Count), "cue names out of sync");
 
@@ -53,9 +54,12 @@ SoundId GameAudio::resolve(const Json& name, const std::string& where) {
 }
 
 bool GameAudio::init(audio::AudioEngine& engine, const Rules& rules, const Json& bank, std::string* error) {
+    stopConstructionLoops();
+    hasConstructionLoops_ = false;
     engine_ = &engine;
     rules_ = &rules;
     warnings_.clear();
+    resetSelectionClicks();
     global_.fill(kNoSound);
     auto fail = [&](const std::string& m) { if (error) *error = "audio: " + m; return false; };
     for (const char* section : {"events", "types", "weapons", "abilities"})
@@ -106,7 +110,22 @@ bool GameAudio::init(audio::AudioEngine& engine, const Rules& rules, const Json&
         for (auto& [key, v] : tj.members()) {
             const std::string where = "types." + typeId + "." + key;
             Cue c;
-            if (key == "weapons") {
+            if (key == "constructionLoop") {
+                ts.constructionLoop = resolve(v, where);
+                hasConstructionLoops_ |= ts.constructionLoop != kNoSound;
+            } else if (key == "repeatSelect") {
+                const auto count = v.getInt("count", 3);
+                const double window = v.has("window") ? v["window"].toDouble() : 2.0;
+                if (!v.isObject() || !v["sound"].isString() || count < 2 || count > 64 ||
+                    (v.has("count") && (!v["count"].isNumber() || v["count"].toDouble() != count)) ||
+                    !(window > 0) || (v.has("window") && !v["window"].isNumber())) {
+                    warnings_.push_back(where + ": expected sound, count 2..64 and positive window in seconds");
+                    continue;
+                }
+                ts.repeatSound = resolve(v["sound"], where + ".sound");
+                ts.repeatCount = int(count);
+                ts.repeatWindow = window;
+            } else if (key == "weapons") {
                 for (auto& [wid, wj] : v.members()) {
                     auto it = std::find_if(ut.weapons.begin(), ut.weapons.end(), [&](auto& w) { return w.id == wid; });
                     if (it == ut.weapons.end()) { warnings_.push_back(where + ": type has no weapon '" + wid + "'"); continue; }
@@ -169,6 +188,7 @@ void GameAudio::attach(Simulation& sim, uint8_t viewer, const std::string& map) 
     sim.addSystem("audio.collect", [weak](Simulation& s) {
         if (auto c = weak.lock(); c && c->enabled) c->events.insert(c->events.end(), s.events().begin(), s.events().end());
     });
+    resetSelectionClicks();
     time_ = 0;
     lastAlert_ = -1e9;
     intensity_ = 0;
@@ -182,7 +202,13 @@ void GameAudio::attach(Simulation& sim, uint8_t viewer, const std::string& map) 
     if (!engine_->playMusic(musicName("match"))) engine_->stopMusic(1.0f);
 }
 
+void GameAudio::stopConstructionLoops() {
+    for (const auto& entry : constructionVoices_) engine_->stop(entry.second.voice, 0.15f);
+    constructionVoices_.clear();
+}
+
 void GameAudio::detach() {
+    stopConstructionLoops();
     if (collector_) collector_->enabled = false;
     collector_.reset();
 }
@@ -209,7 +235,7 @@ void GameAudio::handle(Simulation& sim, const SimEvent& ev, bool worldSounds) {
     auto own = [&](Cue c, int type, bool positional) { if (mine) playAt(cueFor(type, c), ev.pos, positional, y); };
     auto either = [&](Cue first, Cue fallback) { SoundId s = cueFor(-1, first); return s != kNoSound ? s : cueFor(-1, fallback); };
 
-    switch (ev.type) {
+    switch (weaponCueEventType(ev.type, ev.flags)) {
     case kEvAttack: {
         const int t = typeOf(ev.a);
         SoundId s = kNoSound;
@@ -272,10 +298,7 @@ void GameAudio::handle(Simulation& sim, const SimEvent& ev, bool worldSounds) {
         if (!mine) break;
         if (ev.value == 255) playAt(either(Cue::NotEnoughSupply, Cue::NotEnough), ev.pos, false);
         else if (ev.value == 254) playAt(either(Cue::NoRoom, Cue::Error), ev.pos, false);
-        else {
-            SoundId s = ev.value >= 0 && size_t(ev.value) < notEnoughRes_.size() ? notEnoughRes_[size_t(ev.value)] : kNoSound;
-            playAt(s != kNoSound ? s : cueFor(-1, Cue::NotEnough), ev.pos, false);
-        }
+        else onMissingResource(ev.value);
         break;
     case kEvCaptured: // player = new owner, value = previous owner
         if (mine) playAt(cueFor(typeOf(ev.a), Cue::Captured), ev.pos, false);
@@ -293,16 +316,51 @@ void GameAudio::handle(Simulation& sim, const SimEvent& ev, bool worldSounds) {
     }
 }
 
+void GameAudio::updateConstructionLoops(Simulation& sim) {
+    auto* core = dynamic_cast<GameCore*>(&sim.module());
+    if (!hasConstructionLoops_ || !core) return;
+    for (auto& entry : constructionVoices_) entry.second.seen = false;
+    sim.world().each<Unit, Transform, Owner>([&](Entity e, Unit& unit, Transform& tr, Owner& owner) {
+        if (!(unit.flags & kUnitUnderConstruction) || unit.hp.raw <= 0 || unit.type >= types_.size()) return;
+        const SoundId sound = types_[unit.type].constructionLoop;
+        if (sound == kNoSound || (viewer_ && owner.player != viewer_ && !core->isVisible(sim, viewer_, tr.pos))) return;
+        const float x = fl(tr.pos.x), y = fl(tr.pos.y), z = fl(tr.pos.z);
+        auto it = constructionVoices_.find(e.packed());
+        if (it != constructionVoices_.end()) {
+            if (it->second.sound == sound && engine_->voiceState(it->second.voice).playing) {
+                if (it->second.position.x != tr.pos.x || it->second.position.y != tr.pos.y || it->second.position.z != tr.pos.z) {
+                    engine_->setVoicePosition(it->second.voice, x, y, z);
+                    it->second.position = tr.pos;
+                }
+                it->second.seen = true;
+                return;
+            }
+            engine_->stop(it->second.voice, 0.15f);
+            constructionVoices_.erase(it);
+        }
+        audio::PlayParams params;
+        params.positional = true; params.x = x; params.y = y; params.z = z; params.loop = 1;
+        const auto voice = engine_->play(sound, params);
+        if (voice != audio::kNoVoice) constructionVoices_.emplace(e.packed(), ConstructionVoice{voice, sound, tr.pos, true});
+    });
+    for (auto it = constructionVoices_.begin(); it != constructionVoices_.end();) {
+        if (it->second.seen) { ++it; continue; }
+        engine_->stop(it->second.voice, 0.15f);
+        it = constructionVoices_.erase(it);
+    }
+}
+
 void GameAudio::update(Simulation& sim, double dt) {
     time_ += dt;
     if (!collector_ || !engine_) return;
+    updateConstructionLoops(sim);
     std::vector<SimEvent> events;
     events.swap(collector_->events);
     // A flood (big battle, several ticks in one frame) is capped here only to bound the work per
     // frame; per-sound cooldowns and instance limits do the audible thinning.
     int combat = 0;
     for (auto& ev : events) {
-        const bool isCombat = ev.type == kEvAttack || ev.type == kEvHit || ev.type == kEvMiss;
+        const bool isCombat = weaponCueEventType(ev.type, ev.flags) == kEvAttack || ev.type == kEvHit || ev.type == kEvMiss;
         handle(sim, ev, !isCombat || ++combat <= kMaxCombatSoundsPerFrame);
     }
 
@@ -322,6 +380,24 @@ void GameAudio::update(Simulation& sim, double dt) {
     }
 }
 
+bool GameAudio::onSelectionClick(Simulation& sim, Entity unit) {
+    const auto* u = sim.world().alive(unit) ? sim.world().tryGet<Unit>(unit) : nullptr;
+    if (!u || u->type >= types_.size() || types_[u->type].repeatSound == kNoSound) {
+        resetSelectionClicks();
+        return false;
+    }
+    const auto& voice = types_[u->type];
+    if (clickedUnit_ != unit) resetSelectionClicks();
+    clickedUnit_ = unit;
+    while (!selectionClicks_.empty() && time_ - selectionClicks_.front() > voice.repeatWindow)
+        selectionClicks_.pop_front();
+    selectionClicks_.push_back(time_);
+    if (selectionClicks_.size() > size_t(voice.repeatCount)) selectionClicks_.pop_front();
+    const bool repeated = selectionClicks_.size() == size_t(voice.repeatCount);
+    playAt(repeated ? voice.repeatSound : cueFor(int(u->type), Cue::Select), {}, false);
+    return true;
+}
+
 void GameAudio::onSelect(Simulation& sim, Entity unit) {
     auto* u = sim.world().alive(unit) ? sim.world().tryGet<Unit>(unit) : nullptr;
     if (u) playAt(cueFor(int(u->type), Cue::Select), {}, false);
@@ -334,7 +410,8 @@ void GameAudio::onCommand(Simulation& sim, Entity firstUnit, uint16_t commandTyp
     Cue c;
     switch (commandType) {
     case kCmdMove: case kCmdStop: case kCmdHold: case kCmdPatrol: case kCmdGather: case kCmdSmart:
-    case kCmdSend: case kCmdDeploy: case kCmdRally: c = Cue::Move; break;
+    case kCmdSend: case kCmdDeploy: c = Cue::Move; break;
+    case kCmdRally: c = Cue::Rally; break;
     case kCmdAttack: c = Cue::AttackOrder; break;
     case kCmdBuild: c = Cue::BuildOrder; break;
     default: return;
@@ -353,7 +430,19 @@ void GameAudio::onMatchEnd(bool won) {
     else engine_->stopMusic(2.0f);
 }
 
-void GameAudio::play(Cue c) { playAt(cueFor(-1, c), {}, false); }
+void GameAudio::onMissingResource(int64_t resource) {
+    const SoundId specific = resource >= 0 && size_t(resource) < notEnoughRes_.size()
+        ? notEnoughRes_[size_t(resource)] : kNoSound;
+    SoundId sound = specific == kNoSound ? cueFor(-1, Cue::NotEnough) : specific;
+    playAt(sound == kNoSound ? cueFor(-1, Cue::Error) : sound, {}, false);
+}
+
+void GameAudio::play(Cue c) {
+    SoundId sound = cueFor(-1, c);
+    if (sound == kNoSound && (c == Cue::MenuClick || c == Cue::TopClick || c == Cue::CardClick))
+        sound = cueFor(-1, Cue::Click);
+    playAt(sound, {}, false);
+}
 
 audio::ListenerPose GameAudio::cameraListener(const float target[3], const float eye[3], float referenceDistance) {
     float v[3] = {eye[0] - target[0], eye[1] - target[1], eye[2] - target[2]};

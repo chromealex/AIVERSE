@@ -383,7 +383,7 @@ The platform adapter also exposes gesture channels under `Device::Touch`, `devic
 
 ### RTS camera Actions
 
-Default RTS mapping includes `RTS.Camera` context with `CameraPan` (arrow keys) and `IdleCameraPan` (WASD when there is no unit selection). Both actions are Axis2D and do not consume the underlying key, so other RTS hotkeys continue to work. Arrow and WASD input are combined with edge scrolling and legacy gamepad camera pan in the presentation layer, and never written directly to ECS. Old `RTS.Gameplay` mapping IDs remain stable.
+Default RTS mapping includes `RTS.Camera` context with `CameraPan` (arrow keys) and `IdleCameraPan` (WASD when there is no unit selection). Both actions are Axis2D and do not consume the underlying key, so other RTS hotkeys continue to work. Arrow and WASD input are combined with edge scrolling and legacy gamepad camera pan in the presentation layer, and never written directly to ECS. Set `game.json.edgeScroll` to tune the desktop pointer zone (`zonePx`), dwell time (`delaySeconds`) and relative speed (`speed`). Old `RTS.Gameplay` mapping IDs remain stable.
 
 ### Editor GameWindow camera bindings
 

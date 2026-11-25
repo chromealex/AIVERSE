@@ -98,6 +98,8 @@ bool isTouchDevice();
 // Desktop FPS input; web requests must originate from a user gesture. Mobile returns false.
 bool setPointerLock(bool enabled);
 bool pointerLocked();
+// Top-down straight RGBA8. Passing nullptr restores the window's default cursor.
+bool setCursorImage(const uint8_t* rgba, int width, int height, int hotX, int hotY);
 const char* name();       // "macos", "ios", "android", "web", "windows", "linux"
 void requestQuit();        // Android's Back button arrives as Key::Escape; quit from your own menu
 void setTitle(const std::string& title);

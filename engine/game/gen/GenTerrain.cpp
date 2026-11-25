@@ -1,6 +1,7 @@
 // Terrain stage of the generator: heights (noise + shape + erosion + rivers), base flattening, water,
 // cliff levels / heightfield corners, biomes, caves and lanes, connectivity repair. Integer only.
 #include "GenInternal.h"
+#include <cstdlib>
 #include <queue>
 
 namespace aiverse::gen {

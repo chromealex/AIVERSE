@@ -152,6 +152,55 @@ TEST(projectile_program_ricochet_overlapping_targets) {
     CHECK(damaged==2);
 }
 
+TEST(projectile_program_fitted_weapon_arc_policy) {
+    const auto f=projectile::parseProjectileFlight(Json::parse(R"({"arc":true,"arcHeight":3})"),"flight");
+    CHECK(f.arc&&f.homing&&f.arcHeight==3_fx&&f.arcHeightPerDistance==Fixed{});
+    const auto proportional=projectile::parseProjectileFlight(Json::parse(R"({"arc":true})"),"flight");
+    const auto arc=projectile::fitTargetArc(proportional,8_fx,4_fx);
+    CHECK(arc.duration==2_fx&&arc.peak==2_fx);
+    CHECK(projectile::arcOffset(arc,Fixed{})==Fixed{});
+    CHECK(projectile::arcOffset(arc,1_fx)==2_fx);
+    CHECK(projectile::arcOffset(arc,2_fx)==Fixed{});
+    const auto step=projectile::targetArcStep(arc,Fixed{},1_fx);
+    CHECK(step.fraction==Fixed::fromRatio(1,2)&&step.heightCorrection==2_fx);
+    CHECK(projectile::targetArcStep(arc,1_fx,1_fx).fraction==1_fx);
+    for (const char* bad:{R"({"arc":true,"gravity":2})",R"({"arcHeight":2})",R"({"arc":true,"arcHeight":129})",R"({"arc":true,"arcHeightPerDistance":-1})"}) {
+        bool rejected=false;
+        try{(void)projectile::parseProjectileFlight(Json::parse(bad),"flight");}catch(const std::exception&){rejected=true;}
+        CHECK(rejected);
+    }
+}
+TEST(projectile_program_fitted_weapon_arc_tracks_target_and_restores) {
+    const auto targets=dummy(8,10);
+    for (const bool homing:{true,false}) {
+        const auto flight=homing?R"({"arc":true,"arcHeight":3,"homing":true,"maxDistance":40})":
+            R"({"arc":true,"arcHeight":3,"homing":false,"maxDistance":40})";
+        auto a=programSim(flight,targets,2,true), b=programSim(flight,targets,2,true);
+        fireProgram(*a,true);
+        run(*a,0.25);
+        const auto ids=programEntities(*a);
+        CHECK(ids.size()==1);
+        if(ids.size()!=1)continue;
+        auto& p=a->world().get<game::Projectile>(ids[0]);
+        CHECK(p.total>Fixed{}&&p.travel==3_fx&&p.program.ballistic);
+        const Entity target=p.target;
+        CHECK(target.valid());
+        CHECK(a->world().get<Transform>(ids[0]).pos.y>Fixed::fromRatio(6,10));
+        // Move the target perpendicular to the original line after launch.
+        auto& tr=a->world().get<Transform>(target);
+        tr.pos.z+=4_fx;tr.prevPos=tr.pos;
+        auto saved=a->serialize();
+        CHECK(!saved.empty()&&b->deserialize(saved));
+        CHECK(a->checksum()==b->checksum());
+        SimSnapshot snapshot;a->saveState(snapshot);
+        for(int i=0;i<80;++i){a->step();b->step();CHECK(a->checksum()==b->checksum());}
+        CHECK(programEntities(*a).empty());
+        CHECK(a->world().get<game::Unit>(target).hp==(homing?990_fx:1000_fx));
+        a->loadState(snapshot);
+        for(int i=0;i<80;++i)a->step();
+        CHECK(a->checksum()==b->checksum());
+    }
+}
 TEST(projectile_program_ballistic_arc_and_restore) {
     auto json=Json::parse(programRules(R"({"modifiers":[{"kind":"split","trigger":"time","after":0.25,"angle":0},{"kind":"flyThrough","count":2}]})",10));
     auto& d=json.member("types").member("mage").member("abilities").at(0).member("delivery");

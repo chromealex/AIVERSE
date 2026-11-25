@@ -1,5 +1,6 @@
 // LENS camera behaviours: presets, the overhead / follow / chase / first-person bodies and the ECS rig modes that
 // run the same chase / look math. CPU only.
+#include "engine/render/CameraEdgeScroll.h"
 #include "engine/render/CameraRig.h"
 #include "engine/sim/CameraSceneAsset.h"
 #include <cmath>
@@ -10,7 +11,58 @@ static void check(bool value, const char* why) { if (!value) throw std::runtime_
 static bool near(float a, float b, float e = 1e-3f) { return std::fabs(a - b) <= e; }
 static bool near(render::float3 a, render::float3 b, float e = 1e-3f) { return near(a.x, b.x, e) && near(a.y, b.y, e) && near(a.z, b.z, e); }
 
+static void edgeScrollCases() {
+    render::EdgeScrollPointer pointer;
+    const auto defaults = render::CameraEdgeScroll::fromManifest(Json::object());
+    auto sample = [&](const render::CameraEdgeScroll& settings, float x, float y, float dt) {
+        return pointer.sample(settings, x, y, 100, 100, dt, true);
+    };
+    check(sample(defaults, 2, 50, .01f).x == -1, "legacy left edge");
+    check(sample(defaults, 3, 50, .01f).x == 0, "legacy strict three pixel boundary");
+    const auto custom = render::CameraEdgeScroll::fromManifest(Json::parse(
+        R"({"edgeScroll":{"zonePx":16,"delaySeconds":0.25,"speed":2}})"));
+    check(sample(custom, 90, 50, .125f).x == 0, "right edge dwell");
+    auto corner = sample(custom, 90, 10, .25f);
+    check(near(corner.x, 1) && corner.y == 0, "partial activation frame and independent corner dwell");
+    corner = sample(custom, 90, 10, .125f);
+    check(near(corner.x, 2) && near(corner.y, 2), "custom diagonal speed");
+    check(sample(custom, 101, 10, .5f).y == 0, "outside window suppresses both axes");
+    check(sample(custom, 90, 10, .125f).x == 0, "reentry requires fresh dwell");
+    pointer.sample(custom, 90, 10, 100, 100, .5f, false);
+    check(sample(custom, 90, 10, .125f).y == 0, "disabled input clears dwell");
+    check(sample({0,0,1}, 0, 0, 1).x == 0, "zero zone disables scrolling");
+}
+
+static void designAspectCases() {
+    const auto config = render::overheadCameraFrom(Json::parse(R"({"camera":{"designAspect":1.333333}})"));
+    render::Camera camera;
+    render::applyOverheadCamera(config, camera, 900);
+    constexpr float design = 4.f / 3.f, wide = 16.f / 9.f;
+    for (const bool ortho : {false, true}) {
+        camera.ortho = ortho;
+        render::Camera reference = camera;
+        reference.designAspect = 0;
+        for (const bool zeroToOne : {false, true}) {
+            const auto expected = reference.proj(design, zeroToOne);
+            check(near(camera.proj(wide, zeroToOne).at(0,0), expected.at(0,0)), "wide fixed design projection");
+            check(near(camera.proj(.75f, zeroToOne).at(0,0), expected.at(0,0)), "narrow fixed design projection");
+            check(!near(reference.proj(wide, zeroToOne).at(0,0), expected.at(0,0)), "default follows viewport");
+        }
+        render::float3 hit, expectedHit;
+        check(camera.screenToGround(1200, 450, 1600, 900, hit) &&
+              reference.screenToGround(900, 450, 1200, 900, expectedHit) &&
+              near(hit, expectedHit, .002f), "pointer picks equivalent point of stretched design frame");
+    }
+    camera.ortho = false;
+    check(camera.setFrustumTangents(-.75f, 1.f, -.8f, .9f), "asymmetric XR frustum");
+    const auto xr = camera.proj(wide, true);
+    camera.designAspect = 0;
+    check(near(xr.at(0,0), camera.proj(wide, true).at(0,0)), "explicit XR frustum takes precedence");
+}
+
 int main() {
+    designAspectCases();
+    edgeScrollCases();
     // presets: every one parses and the block's own keys win
     check(render::cameraPresetNames().size() >= 8, "preset table");
     std::string error;

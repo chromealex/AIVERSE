@@ -1,0 +1,13 @@
+# OW-01 traffic residency acceptance
+
+Base 69a1189c4. Scope: existing traffic lifecycle, seat/cargo ownership, normal simulation entry point, deterministic opt-out and resumed retirement when empty. Exercise parked and moving traffic and record Mac test evidence. The change requires no new save schema, authored setting, Studio operation or MCP tool.
+
+Implementation 54d777d3d7f352ba5c4a68d041c61b5dd8814da1. Traffic.cpp and TrafficCommute.cpp consult existing VehicleDrive seat/driver state, Transport cargo, service claims and native citizen holds at the applicable retirement or boarding points. The existing TrafficCitizen record remains authoritative while unseen. Empty, released vehicles and pedestrians resume their usual lifecycle. Native API, skill, save format and project configuration are unchanged.
+
+Three normal GameCore regression filters in tests/tests_traffic.inc passed on Mac: traffic_population_held_walker (11 assertions including absence, fresh restore, one new body and peer checksum), traffic_population_occupied_parked (5, including seat and cargo release), traffic_moving_car_with_passenger (3). No new physics or scheduler. General foreign-component references and arbitrary ActorHost entity eviction are outside this implementation.
+
+Separate acceptance on the W1 main tree, Debug x86_64 on Mac with KINGSTON outputs:
+- Real ActorHost via GameCore: 60,000 simulation ticks at a configured 60 Hz, one configured vehicle with driver and passenger, 600 region move requests cycling through 100 regions, six fresh deserializations with equal checksums. p95 wall time 1.01021 ms across all ticks and 1.11883 ms for ticks with migration (includes the request); maxima 11.1205 and 2.88 ms. Static collision fixture. No rendering, heterogeneous crowd or streamed-world frame benchmark. Source and executable: /Volumes/KINGSTON/AIVERSE-builds/open-world-acceptance-20261124/tmp/ow01-seated-soak/.
+- Actual Studio web bundle in WKWebView, linked to production StudioSession and Workspace in an isolated native test host. Window > World Persistence > Generate UUID > Create > Create checkpoint > Inspect / recover offline. Generation 2, revision 2, two live/materialized entities and zero tombstones. Fresh project and screenshot under /Volumes/KINGSTON/AIVERSE-builds/open-world-acceptance-20261124/tmp/ow01-studio/. The full Metal viewport was outside this panel check.
+
+Next acceptance gate: complete Mac quick on this branch combined with current main. Further OW-01 runtime work includes general reference admission and persisted unloading/reification across mixed actor, vehicle and destructible groups.

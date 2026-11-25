@@ -15,6 +15,7 @@
 // "<name>.<map>" for one map. A layered "match" gets the fighting intensity instead of switching.
 #pragma once
 #include <array>
+#include <deque>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -30,6 +31,7 @@ enum class Cue : uint8_t {
     Captured, Lost, PlayerDefeated, Victory, Defeat, NotEnough, NotEnoughSupply, NoRoom,
     Researched, LevelUp, Ability, ReadyToPlace, Sold, RegionClaimed, Wave, LowPower, Upgraded,
     Message, UnderAttack, BaseUnderAttack, Select, Move, AttackOrder, BuildOrder, Click, Error,
+    MenuClick, TopClick, CardClick, Ping, Rally,
     Count
 };
 const char* cueName(Cue c);
@@ -50,8 +52,11 @@ public:
 
     // Acknowledgements from the client's input.
     void onSelect(Simulation& sim, Entity unit);
+    bool onSelectionClick(Simulation& sim, Entity unit);
+    void resetSelectionClicks() { clickedUnit_ = kNullEntity; selectionClicks_.clear(); }
     void onCommand(Simulation& sim, Entity firstUnit, uint16_t commandType);
     void onMatchEnd(bool won);
+    void onMissingResource(int64_t resource);
 
     // Listener for an RTS camera (eye looking at a ground target). The ear hangs on the view ray
     // above the target: zooming out raises it, so the battle sounds farther (quieter, duller,
@@ -67,11 +72,20 @@ private:
     struct WeaponSounds { audio::SoundId attack = audio::kNoSound, hit = audio::kNoSound, end = audio::kNoSound; };
     struct TypeSounds {
         std::array<audio::SoundId, size_t(Cue::Count)> cue;
+        audio::SoundId repeatSound = audio::kNoSound;
+        audio::SoundId constructionLoop = audio::kNoSound;
+        int repeatCount = 3;
+        double repeatWindow = 2;
         std::vector<WeaponSounds> weapons;      // by weapon index
         std::vector<audio::SoundId> abilities;  // by ability index
     };
     struct Collector;
 
+    void stopConstructionLoops();
+    void updateConstructionLoops(Simulation& sim);
+    struct ConstructionVoice { audio::VoiceId voice; audio::SoundId sound; Vec3 position; bool seen; };
+    std::unordered_map<uint64_t, ConstructionVoice> constructionVoices_;
+    bool hasConstructionLoops_ = false;
     audio::SoundId resolve(const Json& name, const std::string& where);
     audio::SoundId cueFor(int type, Cue c) const;
     bool playAt(audio::SoundId s, const Vec3& pos, bool positional, float height = 0);
@@ -86,6 +100,8 @@ private:
     std::vector<audio::SoundId> notEnoughRes_;   // by resource index
     std::vector<std::string> warnings_;
     std::shared_ptr<Collector> collector_;
+    Entity clickedUnit_ = kNullEntity;
+    std::deque<double> selectionClicks_;
     uint8_t viewer_ = 0;
     double time_ = 0, lastAlert_ = -1e9;
     float intensity_ = 0;

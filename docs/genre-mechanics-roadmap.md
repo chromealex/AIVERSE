@@ -200,3 +200,60 @@ Bounded native demo checkpoint joins Simulation serialization with exact airborn
 ### Stage59a — IN PROGRESS (native acceptance wiring)
 
 Register optional desktop native demo smoke tests in CTest; exercise chamber, portal, swim, orbit and restore, require explicit scenario and teardown markers and a nonzero failure for premature exit. Enable the demo and smoke matrix in existing Caverns CI with software GL/Xvfb; keep native and Studio artifacts. Add KINGSTON-only Mac launcher and source fixes identified during review. No success until actual CI/merged-tree Mac evidence; main untouched.
+Resource HUD (#131), in progress: allow a project to set each resource label format.
+
+Selection outlines (#174), in progress: let projects disable selection and hover silhouettes independently of authored overlays.
+
+Camera edge scrolling (#128), in progress: configurable desktop pointer zone, dwell time and speed.
+
+Camera projection (#175), in progress: support an authored design aspect and matching pointer projection on any viewport size.
+
+Build placement feedback (#167), in progress: check the immediate construction charge when the player chooses a building.
+
+Repeated selection audio (#169), in progress: unit-specific cue, repeat count and timing window for explicit selection clicks.
+
+Game FX budgets (#152), in progress: configure combat events per frame and particle capacity by quality tier; expose skipped events for tuning.
+
+#171 — configurable hit feedback on unit models. Carry authored strength, duration and colour through the existing model renderer, with a per-entity intensity multiplier in view scripting.
+
+#173 — paint a flat map overview in game or map data and composite existing fog, scene marks and camera framing over it.
+
+#172 and #179 — keyboard shortcuts for production actions, named command keys and view-script HUD handlers.
+
+#170 — HUD click classes, error feedback, map pings and rally orders through the existing game audio bank.
+
+#168 — positional script voice handles and per-type construction loops with visibility and match-lifetime cleanup.
+
+#158 — durable-in-match message history, per-message lifetime and project style classes in the HUD.
+
+#161 — in-match chat enters the ordered simulation command stream, drives script handlers and appears in match history.
+
+#162 — authoritative slot controller state, persisted in snapshots and saves; server control transitions recorded in confirmed input and observable by Lua.
+
+#129 — project-configured unit selection shortcut adjoining the minimap, with repeat press to focus.
+
+#157 — typed HUD selection rows and local view-script selection handles.
+
+#130 — Play authored model effect anchors in the primary client particle pass and retire missing emitters.
+
+#145 — Drive looping particles from visible holders’ active ECS statuses.
+
+#151 — Expose script-owned particle handles and entity attachment to view Lua.
+
+#150 — Preserve chain endpoints at impact and resolve ability/effect-specific two-point FX.
+
+#156 — Main-camera shake reuses the LENS noise sampler, driven by visible confirmed events or presentation Lua.
+
+#159 — Display project cursor images, hotspots and animated states across desktop and browser clients.
+
+#160 — Add authored command-card cells and nested selection-specific pages to the normal HUD.
+
+#164 — Local single-player match slots and a replay viewer using the simulation snapshot, bot state and native replay timeline.
+
+#163 — Start an embedded lockstep relay from the native lobby and discover matching games on the local network.
+
+#127 — Bind the selected unit to the existing GamePortrait renderer and RmlUi dynamic image path.
+
+#144 — Animated model effects use the shared FX instance lifetime, native model assets, skeletal clips and material tracks.
+
+#125 Campaign first-person encounter in progress. Reuse possession commands and CameraLook. Campaign results, wounds, perception and integrated acceptance pending.

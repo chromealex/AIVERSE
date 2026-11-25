@@ -2,6 +2,7 @@
 // territory-war front lines), painted rooms, portal recruitment, creature needs and morale, the
 // hand (pick up / drop / slap), possession, auto-training structures and player abilities.
 #include "Internal.h"
+#include "CampaignFight.h"
 #include <algorithm>
 
 namespace aiverse::game {
@@ -71,11 +72,7 @@ bool adjacentOwned(const MapGrid& g, int c, uint8_t player) {
     return false;
 }
 
-void addBuffTo(Buffs& b, const Buff& nb) {
-    for (auto& x : b.list)
-        if (x.stat == nb.stat && x.sourceType == nb.sourceType) { x = nb; return; }
-    b.list.push_back(nb);
-}
+void addBuffTo(Buffs& b, const Buff& nb) { upsertTimedBuff(b, nb); }
 constexpr uint16_t kSlapSource = kNoType - 1;
 } // namespace
 
@@ -141,6 +138,8 @@ void GameCore::setupDungeon(Simulation& sim, const Json& map) {
     gs.territoryCells.assign(np, 0);
     gs.hand.assign(np, {});
     gs.possessed.assign(np, kNullEntity);
+    if (rules_.possession.firstPerson)
+        sim.registerPersistentComponent<CampaignFight>("game.campaign_fight", 1);
     gs.roomCells.assign(np, std::vector<int>(rules_.rooms.size(), 0));
     gs.playerAbilities.assign(np, std::vector<PlayerAbilityState>(rules_.playerAbilities.size()));
     for (auto& pl : gs.playerAbilities)
@@ -470,6 +469,8 @@ void GameCore::applyDungeonCommand(Simulation& sim, const Command& cmd) {
             if (auto* c = w.tryGet<Combat>(cur)) c->target = kNullEntity;
             stopMoving(sim, cur);
         }
+        if (rules_.possession.firstPerson)
+            sim.emit({kEvCampaignFightEnd, pl, cur, kNullEntity, 0, {}});
         sim.emit({kEvPossessed, pl, kNullEntity, cur, 0, {}});
     };
     int rw = 0, rh = 0, extra = 0;
@@ -598,6 +599,16 @@ void GameCore::applyDungeonCommand(Simulation& sim, const Command& cmd) {
         if (auto* ord = w.tryGet<Orders>(e)) ord->queue.clear();
         stopMoving(sim, e);
         w.add<Possessed>(e, Possessed{{}, kNullEntity, false, sim.tick()});
+        if (rules_.possession.firstPerson) {
+            auto* fight = w.tryGet<CampaignFight>(e);
+            if (!fight) fight = &w.add<CampaignFight>(e, CampaignFight{});
+            fight->senses = {};
+            fight->lastHp = u->hp;
+            fight->crouching = false;
+            fight->previousPosition = w.get<Transform>(e).pos;
+            fight->shotNoisePending = false;
+            fight->aimYaw = fxAtan2Turns(u->facing.x, u->facing.z);
+        }
         gs.possessed[pl] = e;
         sim.emit({kEvPossessed, pl, e, kNullEntity, 1, w.get<Transform>(e).pos});
         return;
@@ -609,6 +620,11 @@ void GameCore::applyDungeonCommand(Simulation& sim, const Command& cmd) {
         ps->dir = {cmd.point.x, Fixed{}, cmd.point.z};
         Fixed len = ps->dir.length();
         if (len > kOne) ps->dir = ps->dir / len;
+        if (rules_.possession.firstPerson) {
+            auto& fight = w.get<CampaignFight>(e);
+            fight.crouching = (cmd.param & 2) != 0;
+            fight.aimYaw = fxClamp(cmd.point.y, -1_fx, 1_fx);
+        }
         ps->fire = cmd.param & 1;
         ps->target = w.alive(cmd.target) ? cmd.target : kNullEntity;
         ps->lastTick = sim.tick();
@@ -649,7 +665,13 @@ void GameCore::movePossessed(Simulation& sim) {
         auto* b = w.tryGet<Buffs>(e);
         const bool stunned = (b && b->stunUntil > sim.tick()) || (rules_.advancedEffects && (statusFlags(sim, e) & (kStStun | kStRoot)));
         if (ps.dir.length().raw > 0 && !stunned) {
-            Vec3 d = ps.dir * (stat(sim, e, Stat::Speed) * dt);
+            Fixed speed = stat(sim, e, Stat::Speed);
+            if (rules_.possession.firstPerson) {
+                const auto& fight = w.get<CampaignFight>(e);
+                if (fight.crouching) speed = speed * Fixed::fromRatio(2, 5);
+                speed = speed * Fixed::fromRatio(1000 - fight.penaltyMilli, 1000);
+            }
+            Vec3 d = ps.dir * (speed * dt);
             auto ok = [&](Vec3 np) {
                 if ((t.layer & kLayerAir) && !g.airSolid) return true;
                 int cx0 = g.cellX(tr.pos.x), cy0 = g.cellY(tr.pos.z), cx = g.cellX(np.x), cy = g.cellY(np.z);
@@ -666,6 +688,10 @@ void GameCore::movePossessed(Simulation& sim) {
         auto* c = w.tryGet<Combat>(e);
         if (!c) return;
         c->autoTarget = false;
+        if (rules_.possession.firstPerson) {
+            const auto yaw = w.get<CampaignFight>(e).aimYaw;
+            u.facing = {fxSinTurns(yaw), Fixed{}, fxCosTurns(yaw)};
+        }
         if (!ps.fire) { c->target = kNullEntity; return; }
         const uint8_t owner = w.get<Owner>(e).player;
         if (w.alive(ps.target) && w.has<Unit>(ps.target) && hostile(sim, owner, w.get<Owner>(ps.target).player)) { c->target = ps.target; return; }
@@ -685,6 +711,69 @@ void GameCore::movePossessed(Simulation& sim) {
     });
 }
 
+bool GameCore::campaignGuardCanTarget(World& world, Entity guard, Entity target) const {
+    if (!rules_.possession.firstPerson || !world.has<Possessed>(target) || world.has<Possessed>(guard)) return true;
+    const auto* fight = world.tryGet<CampaignFight>(target);
+    if (!fight) return true;
+    const auto* awareness = lib::mechanics::awarenessRecord(fight->senses, int64_t(guard.packed()) + 1,
+                                                            int64_t(target.packed()) + 1);
+    return awareness && awareness->level == lib::mechanics::Awareness::Alert;
+}
+
+Entity GameCore::stepCampaignFight(Simulation& sim, Entity fighter, uint8_t owner) {
+    namespace policy = lib::mechanics;
+    auto& world = sim.world();
+    auto& fight = world.get<CampaignFight>(fighter);
+    const auto& unit = world.get<Unit>(fighter);
+    const Vec3 pos = world.get<Transform>(fighter).pos;
+    const int64_t id = int64_t(fighter.packed()) + 1;
+    const uint32_t tick = sim.tick();
+
+    policy::HealthData healthRules;
+    healthRules.wounds.emplace(1, policy::WoundTypeDef{1});
+    std::vector<policy::NewWound> wounds;
+    if (unit.hp < fight.lastHp) {
+        // Without a collision hit region, use a deterministic campaign wound location.
+        const int64_t part = 1 + (uint64_t(tick) + unit.lastHitBy.packed()) % 3;
+        const auto severity = fxClamp((fight.lastHp - unit.hp) * 10_fx, 1_fx, 1000_fx);
+        wounds.push_back({id, 1, part, severity.floorInt()});
+        sim.emit({kEvCampaignWound, owner, fighter, unit.lastHitBy, part, pos});
+    }
+    fight.lastHp = unit.hp;
+    if (auto report = policy::stepHealth(healthRules, fight.health, tick, wounds, {}, {}))
+        for (const auto& body : report->bodies) fight.penaltyMilli = body.penaltyMilli;
+
+    policy::SensesInput input;
+    policy::SenseTarget target;
+    target.id = id;
+    target.team = owner;
+    target.position = pos;
+    target.position.y += fight.crouching ? 1_fx : Fixed::fromRatio(17, 10);
+    target.stanceMilli = fight.crouching ? 450 : 1000;
+    input.targets.push_back(target);
+    if (fight.shotNoisePending || fight.previousPosition != pos) {
+        const Fixed radius = fight.shotNoisePending ? 20_fx : fight.crouching ? 2_fx : 8_fx;
+        input.noises.push_back({1, id, owner, pos, radius, fight.shotNoisePending ? 1000 : fight.crouching ? 120 : 600});
+    }
+    fight.shotNoisePending = false;
+    fight.previousPosition = pos;
+    state(sim).hash.query(pos, 20_fx, [&](Entity guard) {
+        const auto* other = world.tryGet<Unit>(guard);
+        const auto* team = world.tryGet<Owner>(guard);
+        if (!team || !other || other->hp.raw <= 0 || !world.has<Combat>(guard) || !hostile(sim, owner, team->player)) return;
+        input.observers.push_back({int64_t(guard.packed()) + 1, team->player, world.get<Transform>(guard).pos,
+                                   fxAtan2Turns(other->facing.x, other->facing.z)});
+    });
+    if (auto report = policy::stepSensesOpen({}, {}, fight.senses, tick, input)) {
+        for (const auto& seen : report->perceived) {
+            if (seen.target != id || seen.level != policy::Awareness::Alert || !seen.sensedNow) continue;
+            Entity guard = Entity::fromPacked(uint64_t(seen.observer - 1));
+            if (flat(world.get<Transform>(guard).pos - pos).length() <= Fixed::fromRatio(3, 2)) return guard;
+        }
+    }
+    return kNullEntity;
+}
+
 // ================================================================= per-tick system
 
 void GameCore::sysDungeon(Simulation& sim) {
@@ -701,6 +790,11 @@ void GameCore::sysDungeon(Simulation& sim) {
         Entity e = gs.possessed[p];
         if (!e.valid()) continue;
         bool drop = !w.alive(e) || !w.has<Possessed>(e);
+        Entity captor = kNullEntity;
+        if (!drop && rules_.possession.firstPerson) {
+            captor = stepCampaignFight(sim, e, uint8_t(p));
+            drop = captor.valid();
+        }
         if (!drop && !rules_.possession.drain.empty()) {
             std::vector<Amount> c = rules_.possession.drain;
             for (auto& a : c) a.value = a.value * dt;
@@ -709,6 +803,8 @@ void GameCore::sysDungeon(Simulation& sim) {
         if (drop) {
             if (w.alive(e)) { w.get<Unit>(e).flags &= kKeepFlags(~kUnitPossessed); w.remove<Possessed>(e); }
             gs.possessed[p] = kNullEntity;
+            if (rules_.possession.firstPerson)
+                sim.emit({kEvCampaignFightEnd, uint8_t(p), e, captor, captor.valid() ? 1 : 0, {}});
             sim.emit({kEvPossessed, uint8_t(p), kNullEntity, e, 0, {}});
         }
     }

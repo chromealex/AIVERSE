@@ -1,0 +1,11 @@
+{
+  "id": "org.aiverse.demos.campaign_encounter",
+  "name": "Border outpost",
+  "version": "1.0",
+  "module": "game",
+  "rules": "rules.json",
+  "maps": [{"file": "maps/outpost.json", "title": "Border outpost"}],
+  "selectionShortcut": {"type": "scout", "label": "Select scout"},
+  "ui": {"portrait": {"enabled": true, "size": 192}},
+  "camera": {"firstPerson": {"fov": 72}}
+}

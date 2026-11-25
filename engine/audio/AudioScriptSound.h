@@ -11,6 +11,7 @@ public:
     bool available() const override;
     uint32_t play(const std::string& name, const ScriptSoundPlay& p) override;
     void set(uint32_t voice, float gain, float pan, float pitch) override;
+    void position(uint32_t voice, float x, float y, float z) override { e_.setVoicePosition(voice, x, y, z); }
     void stop(uint32_t voice, float fade) override;
     void pause(uint32_t voice, bool paused) override;
     void seek(uint32_t voice, float seconds) override;

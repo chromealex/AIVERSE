@@ -333,6 +333,7 @@ struct ModelDraw {
     // Explicit all-pass visibility for ephemeral rigid draws. Caller must
     // certify visibility in every view (including shadow/reflection).
     const std::vector<uint8_t>* nodeMask = nullptr;
+    uint32_t flashColor = 0; // 0 = legacy warm highlight, otherwise packed RGB8 + 1
 };
 
 enum DrawFlags : uint32_t {
@@ -1693,7 +1694,7 @@ private:
         gfx::DrawIndexedIndirectCommand gpuLodNear{}, gpuLodFar{};
         float gpuLodMaxPixels = 0, gpuLodError = 0;
         float3 gpuLodBoundsMin{}, gpuLodBoundsMax{};
-        mat4 world; float4 tint; float3 team; float flash; uint32_t flags;
+        mat4 world; float4 tint; float3 team; float flash; uint32_t flags; uint32_t flashColor = 0;
         uint64_t motionPersistentId = 0; // 0: transient, never tracked
         int motionNodeIndex = -1;
         int32_t joints;     // offset into jointData_ (floats), -1 when not palette-skinned

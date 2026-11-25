@@ -33,6 +33,11 @@ void discoverModelPaths(const Json& source,bool geometry,
                         if(choice.isString())add(choice.str());
                         else add(choice.getStr("file"));
                 }
+                if(name=="projectiles" && child.isObject())
+                    for(const auto& [weapon,entry]:child.members()) {
+                        (void)weapon;
+                        if(entry.isString())add(entry.str());
+                    }
                 visit(child);
             }
         } else {

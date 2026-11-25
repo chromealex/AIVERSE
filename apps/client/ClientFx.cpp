@@ -15,6 +15,7 @@ void ClientFx::init(gfx::Device& dev, const game::Rules& rules) {
     dev_ = &dev;
     rules_ = &rules;
     ps_.setQuality(fx::defaultQualityFor(dev, platform::isTouchDevice()));
+    modelView_.setReader([](const std::string& path, std::string& out) { return platform::readContentFile(path, out); });
     ps_.setFileReader([](const std::string& path, std::string& out) { return platform::readContentFile(path, out); });
     textures_.init(dev);
     ps_.setTextureLoader([this](const std::string& name, fx::FxTexture& out) {
@@ -182,6 +183,7 @@ void ClientFx::shutdown() {
     gpuPlayback_.reset(); // destroy RHI handles before ParticleSystem/device
     gpuLibrary_.reset();
     gpuRoutes_.clear();
+    if (dev_) modelView_.shutdown(*dev_);
     ps_.shutdown();
     textures_.shutdown();
 }
@@ -211,7 +213,10 @@ void ClientFx::startMatch(Simulation& sim, uint8_t viewer, const game::GameView&
     ps_.setGroundHeight([&view, &grid](float x, float z) { return view.heightAt(grid, x, z); });   // "collision" module
     bridge_.setPlayerColorFn([](int p) { return game::GameView::playerColor(p); });
     bridge_.setAttackOriginFn([&view](Entity e, fx::float3& pos, fx::float3& dir) { return view.muzzleOf(e, pos, dir); });   // shots leave the model's muzzle
+    bridge_.setNodeFn([&view](Entity e,const std::string& node,render::mat4& frame){return view.effectNodeOf(e,node,frame);});
     bridge_.attach(sim, viewer);
+    matchView_ = &view;
+    scriptEmitters_.clear();
     attached_ = true;
     entities_.reset(true);
     if(entities_.enabled()) {
@@ -222,12 +227,13 @@ void ClientFx::startMatch(Simulation& sim, uint8_t viewer, const game::GameView&
             const auto inbox=weak.lock();
             if(!inbox || !inbox->active) return;
             for(const auto& event:observed.events()) {
-                if(event.type!=game::kEvDied && event.type!=game::kEvHit &&
-                   event.type!=game::kEvAttack && event.type!=game::kEvAbility) continue;
+                const auto cue = game::weaponCueEventType(event.type, event.flags);
+                if(cue!=game::kEvDied && cue!=game::kEvHit &&
+                   cue!=game::kEvAttack && cue!=game::kEvAbility) continue;
                 if(inbox->pending.size()>=4096) inbox->pending.pop_front();
                 World& w=observed.world();
                 const auto* unit=w.alive(event.a)?w.tryGet<game::Unit>(event.a):nullptr;
-                inbox->pending.push_back({event.type,event.a.packed(),event.b.packed(),
+                inbox->pending.push_back({cue,event.a.packed(),event.b.packed(),
                                           event.value,unit?int32_t(unit->type):-1});
             }
         });
@@ -276,6 +282,8 @@ void ClientFx::stopMatch() {
     preparedLightsValid_ = false;
     if (attached_) bridge_.detach();
     attached_ = false;
+    matchView_ = nullptr;
+    scriptEmitters_.clear();
     if(gpuInbox_) {
         gpuInbox_->active=false;
         gpuInbox_->pending.clear();
@@ -284,6 +292,43 @@ void ClientFx::stopMatch() {
     if(gpuPlayback_) gpuPlayback_->reset();
     entities_.flushGpu([](const fx::SpectraFxCue&) {}); // playback reset dropped them
     ps_.clear();
+}
+
+void ClientFx::drawChainBeams(render::Renderer3D& renderer, const render::Camera& camera) const {
+    for (const auto& link : bridge_.chainLinks()) {
+        if (!link.beam) continue;
+        const auto delta = link.to - link.from;
+        auto side = render::cross(delta, camera.eye() - link.from);
+        if (render::length(side) < 1e-5f) { renderer.line(link.from, link.to, link.color); continue; }
+        side = render::normalize(side) * (.05f * link.scale);
+        renderer.triangle(link.from - side, link.to - side, link.to + side, link.color);
+        renderer.triangle(link.from - side, link.to + side, link.from + side, link.color);
+    }
+}
+
+void ClientFx::scriptEffect(const game::ViewRequest& request) {
+    using Request = game::ViewRequest;
+    const fx::float3 pos{request.x, request.y, request.z};
+    if (request.kind == Request::StartFx) {
+        const auto handle = ps_.play(request.text, pos, request.direction);
+        if (handle.valid()) scriptEmitters_[request.handle] = {handle};
+        return;
+    }
+    auto it = scriptEmitters_.find(request.handle);
+    if (it == scriptEmitters_.end()) return;
+    auto& emitter = it->second;
+    if (request.kind == Request::AttachFx) {
+        emitter.holder = request.entity;
+        emitter.offset = pos;
+        emitter.direction = request.direction;
+    } else if (request.kind == Request::MoveFx) {
+        emitter.holder = kNullEntity;
+        ps_.move(emitter.handle, pos, request.direction);
+    } else {
+        if (request.kind == Request::KillFx) ps_.kill(emitter.handle);
+        else ps_.stop(emitter.handle);
+        scriptEmitters_.erase(it);
+    }
 }
 
 void ClientFx::setPlanetView(const game::GameView* view) {
@@ -613,7 +658,29 @@ void ClientFx::update(Simulation& sim, const game::GameScene& scene, const rende
     // GPU feedback arrives asynchronously at a later beginFrame. Keep
     // presentation sub-effects bounded and submit after current camera setup.
     if(gpuPlayback_ && !planet_) gpuPlayback_->playGpuImpactEffects(32);
-    if (attached_ && dt > 0) bridge_.update(sim, &scene.objects, dt);
+    if (attached_ && dt > 0) {
+        bridge_.update(sim, &scene.objects, dt);
+        bridge_.updateViewAnchors(matchView_->effects());
+    }
+    for (auto it = scriptEmitters_.begin(); it != scriptEmitters_.end();) {
+        auto& emitter = it->second;
+        if (!ps_.alive(emitter.handle)) { it = scriptEmitters_.erase(it); continue; }
+        if (emitter.holder.valid()) {
+            auto holder = std::find_if(scene.objects.begin(), scene.objects.end(), [&](const auto& object) {
+                return object.entity == emitter.holder && object.visible;
+            });
+            if (holder == scene.objects.end()) {
+                ps_.stop(emitter.handle);
+                it = scriptEmitters_.erase(it);
+                continue;
+            }
+            render::mat4 frame;
+            const auto pos = matchView_ && matchView_->effectNodeOf(emitter.holder, "origin", frame)
+                ? frame.transformPoint(emitter.offset) : holder->pos + emitter.offset;
+            ps_.move(emitter.handle, pos, emitter.direction);
+        }
+        ++it;
+    }
     if (attached_) presentEntityEffects(sim, scene, dt);
     if(!graphSourcesPrepared_)presentGraphSources(sim,scene,cam);
     graphSourcesPrepared_=false;
@@ -624,8 +691,8 @@ void ClientFx::update(Simulation& sim, const game::GameScene& scene, const rende
     static int frames = 0;
     if(dbg && ++frames%30==0) {
         std::fprintf(stderr,
-            "[fx] played %d rejected %d particles %d culled %d drawn %d\n",
-            bridge_.played(),bridge_.rejected(),ps_.stats().particles,
+            "[fx] played %d rejected %d skippedCombat %lld particles %d culled %d drawn %d\n",
+            bridge_.played(),bridge_.rejected(),(long long)bridge_.skippedCombatEvents(),ps_.stats().particles,
             ps_.stats().culled,ps_.stats().drawn);
         if(entities_.enabled()) {
             const auto& es=entities_.stats();

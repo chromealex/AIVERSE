@@ -462,6 +462,7 @@ private:
     bool kerbFree(Simulation& sim, int32_t piece, int dir, Fixed along, Entity self) const;
     bool exitBlocked(Simulation& sim, const TrafficCar& c, size_t i, Fixed halfLen) const;
     bool kerbSpot(Simulation& sim, const Place& pl, int dir, Fixed& along, Entity self, const Fixed* from, Fixed ahead) const;
+    static bool hasLivePassengers(const World& world, Entity vehicle);
     void keepCar(Simulation& sim, TrafficStore& st, TrafficCitizen& c, const std::vector<Vec2>& foci, int& parked);
     bool startTrip(Simulation& sim, TrafficStore& st, int32_t id, Entity car);          // out of the parking lane
     bool spawnTrip(Simulation& sim, TrafficStore& st, int32_t id, Vec2 at);             // into sight, already driving

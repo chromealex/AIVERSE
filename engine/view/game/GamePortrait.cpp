@@ -180,7 +180,15 @@ void Portrait::shutdown() {
     dev_ = nullptr;
 }
 
-void Portrait::render(GameView& view, uint16_t type, uint8_t owner, double time, float yaw) {
+void Portrait::clear() {
+    if (!dev_ || !color_.valid()) return;
+    gfx::PassDesc pass;
+    pass.colorTarget = color_; pass.depthTarget = depth_;
+    std::fill_n(pass.clearColor,4,0.f);
+    dev_->beginPass(pass); dev_->endPass();
+}
+
+void Portrait::render(GameView& view, uint16_t type, uint8_t owner, double time, float yaw, float zoom, float focusHeight) {
     if (!dev_ || !color_.valid()) return;
     // frame the bind-pose bounds (look scale and fit are applied by the view; approximate with the model)
     float radius = 0.8f, height = 1.0f;
@@ -192,8 +200,8 @@ void Portrait::render(GameView& view, uint16_t type, uint8_t owner, double time,
     const float s = view.selectionRadius(type);
     radius = std::max(radius, s);
     Camera cam;
-    cam.target = {0, std::min(height, radius * 1.4f) * 0.45f, 0};
-    cam.distance = radius * 3.2f;
+    cam.target = {0, std::min(height, radius * 1.4f) * std::clamp(focusHeight,0.f,1.f), 0};
+    cam.distance = radius * 3.2f / std::clamp(zoom,.25f,8.f);
     cam.minDistance = 0.1f;
     cam.pitch = 0.32f;
     cam.yaw = 0.5f;

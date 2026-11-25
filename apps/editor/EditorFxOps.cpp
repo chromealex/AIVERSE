@@ -124,6 +124,7 @@ void Editor::registerFxPreviewOps() {
             r.set("z", Json::number(double(pos.z), 2));
             r.set("view", Json::string(playing() ? "game" : "scene"));
             r.set("particles", Json::number(int64_t(gameFx_.stats().particles)));
+            r.set("skippedCombatEvents", Json::number(gameFxBridge_.skippedCombatEvents()));
             r.set("quality", Json::string(fx::qualityName(gameFx_.quality())));
             if (d) {
                 r.set("emitters", Json::number(int64_t(d->emitters.size())));

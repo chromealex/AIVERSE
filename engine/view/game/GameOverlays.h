@@ -18,6 +18,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <utility>
 #include "../../render/Renderer3D.h"
 #include "../../render/NativePresentationRetirement.h"
 #include "../../render/TextureCache.h"
@@ -148,6 +149,8 @@ private:
         int16_t res = -1;
         uint8_t owner = 0, player = 0;
         uint16_t type = kNoType, kind = 0;
+        bool critical = false;
+        std::vector<std::pair<uint16_t, Fixed>> bounty;
         float jx = 0, jz = 0;
     };
     struct DefState { double since = -1, lastTrue = -1; bool on = false; };
