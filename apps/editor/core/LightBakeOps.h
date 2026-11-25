@@ -15,5 +15,6 @@ std::string lightBakeMapRel(const Workspace& ws);
 bake::BakeSettings lightBakeSettings(const Workspace& ws);
 // Info about the bake folder of the open map (exists, hash, mode, pages, regions, probes, stats).
 Json lightBakeInfo(const Workspace& ws);
+Json lightBakeAtlasPreview(const std::string& project,const std::string& relativeMap,const Json& params);
 
 } // namespace aiverse::editor

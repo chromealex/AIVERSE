@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/LightBakeAtlas.tsx",
     "engine/bake/CapturedBake.cpp",
     "engine/bake/CapturedBake.h",
     "tests/bake/bake_tests.cpp",

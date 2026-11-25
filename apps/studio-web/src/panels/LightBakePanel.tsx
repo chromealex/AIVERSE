@@ -1,11 +1,12 @@
 import './LightBakePanel.css';
+import { LightBakeAtlas, type AtlasPage } from './LightBakeAtlas';
 import { useEffect, useState } from 'react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import type { StudioGraphDocumentScope } from '../types';
 import { StudioAlert, StudioButton, StudioCheckbox, StudioField, StudioInput, StudioPanel, StudioSection, StudioSelect } from '../ui';
 
 type Settings = Record<string, string | number | boolean>;
-interface BakeInfo { exists: boolean; folder?: string; mode?: string; stats?: Record<string, number> }
+interface BakeInfo { hash?:string; atlasPages?:AtlasPage[]; exists: boolean; folder?: string; mode?: string; stats?: Record<string, number> }
 interface BakeState { settings: Settings; bake: BakeInfo }
 
 const sampling = [
@@ -93,6 +94,8 @@ export default function LightBakePanel({scope}:{scope?:StudioGraphDocumentScope}
         {state.bake.exists ? <>
           <p>{state.bake.mode} · {state.bake.folder}</p>
           <dl>{['pages','regions','texels','probes'].map(key=><div key={key}><dt>{key}</dt><dd>{state.bake.stats?.[key] ?? 0}</dd></div>)}</dl>
+          {epoch && state.bake.hash && !!state.bake.atlasPages?.length &&
+            <LightBakeAtlas key={state.bake.hash} epoch={epoch} hash={state.bake.hash} pages={state.bake.atlasPages}/>}
           <StudioButton variant="danger" disabled={busy} onClick={()=>confirmClear?void write('lightbake_clear',{}):setConfirmClear(true)}>
             {confirmClear?'Confirm clear':'Clear baked files'}</StudioButton>
           {confirmClear && <StudioButton disabled={busy} onClick={()=>setConfirmClear(false)}>Cancel</StudioButton>}

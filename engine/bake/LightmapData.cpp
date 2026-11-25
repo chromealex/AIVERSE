@@ -114,9 +114,9 @@ bool parseHeader(const std::string& folder, const ReadFn& read, LightmapData& ou
 }
 } // namespace
 
-bool readLightmapHeader(const std::string& folder, const ReadFn& read, LightmapData& out, std::string& error) {
+bool readLightmapHeader(const std::string& folder, const ReadFn& read, LightmapData& out, std::string& error, Json* index) {
     Json j;
-    return parseHeader(folder, read, out, error, j);
+    return parseHeader(folder, read, out, error, index ? *index : j);
 }
 
 bool loadLightmapData(const std::string& folder, const ReadFn& read, LightmapData& out, std::string& error) {

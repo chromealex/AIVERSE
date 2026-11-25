@@ -266,3 +266,5 @@ Lighting placement: add lights at the Scene orbit target on a half-unit grid; re
 Light Bake transfer: map-scoped settings, quality presets and generated output inspection in a dedicated HTML panel. Resolve bake folders alongside the actual map for nested and root map paths. Background baking and renderer consumption require separate native parity verification.
 
 Light Bake migration: extract captured-scene preparation and job execution into the existing CPU bake library so both desktop hosts can submit immutable scene samples. Verify real output, content hash reuse and cancellation before HTML integration.
+
+Light Bake output inspection: display individual baked irradiance and shadow-mask atlas pages inside the HTML panel. Verify native decoding, page switching and isolation from Scene.

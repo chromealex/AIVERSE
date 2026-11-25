@@ -1,4 +1,5 @@
 #include "StudioHierarchyGroups.h"
+#include "apps/editor/core/LightBakeOps.h"
 #include "StudioDocumentIds.h"
 #include "engine/view/game/GameLights.h"
 #include "StudioFpsLightingDocument.h"
@@ -3313,6 +3314,27 @@ bool StudioHost::handleHostMethod(const Json& req) {
         const std::string note = params.getStr("message");
         if (note.size() <= 1200) platform_.log("[studio-web] JS: " + note);
         return true; // diagnostics never touch Workspace or the filesystem
+    }
+    if(method=="studio.lightBakeAtlas" && hasId){
+        const auto& ws=session_->workspace();
+        const auto map=editor::lightBakeMapRel(ws);
+        const auto epoch=params.getStr("expectedDocumentEpoch");
+        if(projectLoading_ || map.empty() || epoch!=session_->graphDocumentScope().getStr("epoch")){
+            sendError(req["id"],"Map changed. Reopen the atlas.");return true;
+        }
+        if(atlasPreviewBusy_){sendError(req["id"],"Another atlas page is loading.");return true;}
+        auto reply=std::make_shared<Json>(Json::object());reply->set("id",req["id"]);
+        atlasPreviewBusy_=true;
+        platform_.runInBackground([project=ws.project.dir,map,params,reply]{
+            try { reply->set("result",editor::lightBakeAtlasPreview(project,map,params)); }
+            catch(const std::exception& e){reply->set("error",Json::string(e.what()));}
+        },[this,alive=alive_,reply,epoch]{
+            if(!*alive)return;
+            atlasPreviewBusy_=false;
+            if(epoch!=session_->graphDocumentScope().getStr("epoch"))sendError((*reply)["id"],"Map changed. Reopen the atlas.");
+            else sendReply(*reply);
+        });
+        return true;
     }
     if(method=="studio.lightingPreview")return answer([&]{
         const auto& ws=session_->workspace();

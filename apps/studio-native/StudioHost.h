@@ -323,6 +323,7 @@ private:
     StudioWizardDictation wizardDictation_;
     bool wizardCreating_ = false;
     bool readyEmitted_ = false, projectLoading_ = false, loadingShown_ = false, surfaceSnap_ = false;
+    bool atlasPreviewBusy_=false;
     std::shared_ptr<bool> alive_ = std::make_shared<bool>(true); // background completions after shutdown
     double nextGizmoPoll_ = 0, nextAgentPoll_ = 0, lastSceneFrame_ = 0, sceneFrameMs_ = 0;
     uint64_t sceneFrameCount_ = 0;

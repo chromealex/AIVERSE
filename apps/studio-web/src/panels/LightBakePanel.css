@@ -3,3 +3,5 @@
 .light-bake details summary{cursor:pointer;padding:8px 0}
 .light-bake dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(68px,1fr));gap:8px}
 .light-bake dd{margin:4px 0;font-weight:650}
+
+.bake-atlas img{display:block;width:min(100%,320px);image-rendering:pixelated;height:auto;margin:10px auto;background:#121822}
