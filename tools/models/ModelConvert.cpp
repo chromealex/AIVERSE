@@ -49,7 +49,7 @@ std::string extOf(const std::string& path) {
 }
 
 // Read natively by render::loadModel (engine/render/Model.cpp, kFormats); never converted.
-const std::set<std::string> kNative = {".gltf", ".glb", ".obj", ".fbx", ".vox", ".vxl", ".ply", ".stl", ".3ds",
+const std::set<std::string> kNative = {".bsp", ".gltf", ".glb", ".obj", ".fbx", ".vox", ".vxl", ".ply", ".stl", ".3ds",
                                        ".dae", ".mdx", ".mdl", ".3do", ".w3d"};
 // Model formats assimp imports, recognised even in builds without assimp (so packing can leave the
 // sources out and report them). Ambiguous extensions (.raw, .ter, .xml, .txt, .pk3) are omitted.

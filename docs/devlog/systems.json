@@ -1399,6 +1399,11 @@
           "target": null,
           "title": "DLSS: сборка и проверка адаптера NGX на Windows с RTX",
           "titleEn": "DLSS: build and check the NGX adapter on Windows with RTX"
+        },
+        {
+          "status": "planned",
+          "title": "Пользовательские цепочки проходов и временных текстур",
+          "titleEn": "Author pass chains and intermediate render textures"
         }
       ],
       "taglineEn": "Post-processing and atmosphere",
@@ -3390,6 +3395,31 @@
           "text": "Вывод объектов сцены и отдельно анимированных моделей в элементы UI через внеэкранную текстуру.",
           "titleEn": "3D objects in UI",
           "textEn": "Render scene objects and independently animated models into UI elements through an offscreen texture."
+        },
+        {
+          "status": "in-progress",
+          "title": "Загрузка уровней Quake III BSP с видимостью по кластерам",
+          "titleEn": "Load Quake III BSP levels with cluster visibility"
+        },
+        {
+          "status": "planned",
+          "title": "Техники материалов по расстоянию и возможностям GPU",
+          "titleEn": "Select material techniques by distance and GPU capabilities"
+        },
+        {
+          "status": "planned",
+          "title": "Программный рендерер на CPU",
+          "titleEn": "Software rendering on the CPU"
+        },
+        {
+          "status": "planned",
+          "title": "Доступ к рендереру из Python, C# и Java",
+          "titleEn": "Use the renderer from Python, C# and Java"
+        },
+        {
+          "status": "planned",
+          "title": "Бэкенды Direct3D 11 и Direct3D 9 для Windows",
+          "titleEn": "Direct3D 11 and Direct3D 9 backends for Windows"
         }
       ]
     },

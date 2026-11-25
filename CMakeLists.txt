@@ -618,7 +618,7 @@ endif()
 option(AIVERSE_LEGACY_MODELS "Runtime VOX/VXL, PLY/STL, 3DS, DAE, MDX/MDL, 3DO and W3D import" ON)
 if(AIVERSE_LEGACY_MODELS)
     target_sources(aiverse_models PRIVATE
-        engine/render/ModelVox.cpp engine/render/ModelPly.cpp
+        engine/render/ModelVox.cpp engine/render/ModelPly.cpp engine/render/ModelBsp.cpp
         engine/render/Model3ds.cpp engine/render/ModelDae.cpp
         engine/render/ModelMdx.cpp engine/render/ModelMdl.cpp
         engine/render/Model3do.cpp engine/render/ModelW3d.cpp)
@@ -663,6 +663,11 @@ if(AIVERSE_BUILD_TESTS)
     add_executable(aiverse_adaptive_shadow_resolution_tests tests/render/adaptive_shadow_resolution.cpp)
     target_include_directories(aiverse_adaptive_shadow_resolution_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     add_test(NAME adaptive_shadow_resolution COMMAND aiverse_adaptive_shadow_resolution_tests)
+    if(AIVERSE_LEGACY_MODELS)
+        add_executable(aiverse_quake3_bsp_tests tests/render/quake3_bsp.cpp)
+        target_link_libraries(aiverse_quake3_bsp_tests PRIVATE aiverse_models aiverse_zstd_dec)
+        add_test(NAME quake3_bsp COMMAND aiverse_quake3_bsp_tests)
+    endif()
     add_executable(aiverse_model_batching_policy_tests tests/render/model_batching_policy.cpp)
     target_link_libraries(aiverse_model_batching_policy_tests PRIVATE aiverse_models aiverse_zstd_dec)
     add_test(NAME model_batching_policy COMMAND aiverse_model_batching_policy_tests)
