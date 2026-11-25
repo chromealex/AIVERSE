@@ -57,10 +57,16 @@ void validateAll(const Workspace& ws, const Json& rulesList, const Json& gameLis
 
 void store(Workspace& ws, bool toGame, const Json& list, const std::string& what) {
     Json& doc = toGame ? ws.project.manifest : ws.project.rulesJson;
+    const bool hadOverlays = doc.has("overlays");
+    Json previous = doc["overlays"];
     if (list.size() == 0) doc.erase("overlays");
     else doc.set("overlays", list);
     std::string err;
-    if (toGame ? !ws.project.saveManifest(&err) : !ws.project.saveRules(&err)) throw std::runtime_error(err);
+    if (toGame ? !ws.project.saveManifest(&err, what) : !ws.project.saveRules(&err, what)) {
+        if (hadOverlays) doc.set("overlays", std::move(previous));
+        else doc.erase("overlays");
+        throw std::runtime_error(err);
+    }
     // the views re-read rules.json / game.json "overlays" on a rules change (live in the play-test)
     ws.note({Change::Rules, 0, 0, -1, -1, -1, what});
 }

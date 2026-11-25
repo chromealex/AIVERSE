@@ -38,3 +38,13 @@ test('projectile impact height is editable on a new type, including zero', () =>
   assert.equal(parseRuleInput(row.field, '-1').ok, false);
   assert.deepEqual(parseRuleInput(row.field, ''), { ok: true, value: null });
 });
+
+test('upgrade appearance uses inherited structure settings and writes the local type', () => {
+  const source = { structure: { footprint: [2, 2] }, upgrades: ['tower'], view: { showUpgradeTarget: true } };
+  const rows = typeValues('outpost', { extends: 'base' }, source, []);
+  const option = rows.find(row => row.path === 'types.outpost.view.showUpgradeTarget');
+  assert.equal(option.field.type, 'boolean');
+  assert.equal(option.inherited, true);
+  assert.equal(option.resolved, true);
+  assert.ok(!typeValues('scout', {}, {}, []).some(row => row.field.path === 'view.showUpgradeTarget'));
+});
