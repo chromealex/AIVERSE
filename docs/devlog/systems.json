@@ -3075,7 +3075,7 @@
           "target": null,
           "title": "HTML Studio — единственный редактор",
           "titleEn": "HTML Studio as the sole editor",
-          "detail": "Окно Project в HTML5 Studio объединяет карты, типы, ресурсы, технологии и фракции проекта."
+          "detail": "Окно Project в HTML5 Studio объединяет карты, типы, ресурсы, технологии и фракции проекта. Project Hub поддерживает поиск по пути и создание проекта из шаблона в выбранной папке."
         },
         {
           "id": "studio-graph-legibility",
