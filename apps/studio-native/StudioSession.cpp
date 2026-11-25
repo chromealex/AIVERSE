@@ -4088,8 +4088,8 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 if(!area.has("offsetXcm"))area.set("offsetXcm",Json::number(int64_t(0)));
                 if(!area.has("offsetZcm"))area.set("offsetZcm",Json::number(int64_t(0)));
                 const auto old=area[key].integer();
-                if(delta>0&&old>evolve::kAreaCoordinateCm-delta||
-                   delta<0&&old< -evolve::kAreaCoordinateCm-delta)
+                if((delta>0&&old>evolve::kAreaCoordinateCm-delta)||
+                   (delta<0&&old< -evolve::kAreaCoordinateCm-delta))
                     throw std::runtime_error("EVOLVE batch offset outside bounds");
                 area.set(key,Json::number(old+delta));
                 if(!lib::worldprocess::extended::validate("EvolveArea",area))

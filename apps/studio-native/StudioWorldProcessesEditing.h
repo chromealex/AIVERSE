@@ -444,9 +444,6 @@ inline bool extent(const editor::DocEntity& owner,const Handle& handle,
             -double(evolve::kAreaCoordinateCm),double(evolve::kAreaCoordinateCm)));
         return true;
     }
-    const auto& area=owner.extra["components"]["EvolveArea"];
-    const double cx=double(owner.x)+double(area.getInt("offsetXcm",0))/100.;
-    const double cz=double(owner.z)+double(area.getInt("offsetZcm",0))/100.;
     // The pointer gives the dragged edge in centimetres relative to map pos.
     // StudioSession atomically derives both half-extent and center offset,
     // holding the opposite edge fixed (Stage33 asymmetric resize).

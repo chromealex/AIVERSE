@@ -48,7 +48,7 @@ void mapCompoundHistoryContract(){
 }
 void mapHistoryPersistenceContract(){
     using namespace aiverse;using namespace aiverse::editor;namespace fs=std::filesystem;
-    const auto root=fs::temp_directory_path()/("studio-map-history-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto root=fs::canonical(fs::temp_directory_path())/("studio-map-history-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(root/"maps");
     const auto file=(root/"maps"/"scene.json").string();
     MapDoc doc;doc.reset(8,8);std::string error;
@@ -131,7 +131,7 @@ void mapHistoryPersistenceContract(){
 }
 void projectFileEditContract(){
     using namespace aiverse::editor;namespace fs=std::filesystem;
-    const auto root=fs::temp_directory_path()/("studio-project-files-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto root=fs::canonical(fs::temp_directory_path())/("studio-project-files-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(root);
     const auto a=root/"a.json",b=root/"b.json";
     std::ofstream(a)<<"before A";std::ofstream(b)<<"before B";
@@ -152,7 +152,7 @@ void projectFileEditContract(){
 }
 void projectDocumentJournalContract(){
     using namespace aiverse::editor;namespace fs=std::filesystem;
-    const auto root=fs::temp_directory_path()/("studio-doc-journal-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto root=fs::canonical(fs::temp_directory_path())/("studio-doc-journal-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(root);
     const auto a=root/"game.json",b=root/"rules.json",dep=root/"include.json";
     const std::string beforeA=R"({"name":"Before","rules":"rules.json"})",afterA=R"({"name":"After","rules":"rules.json"})";
@@ -207,7 +207,7 @@ void projectDocumentJournalContract(){
 }
 void projectOwnerSaveContract(){
     using namespace aiverse;using namespace aiverse::editor;namespace fs=std::filesystem;
-    const auto root=fs::temp_directory_path()/("studio-project-owner-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto root=fs::canonical(fs::temp_directory_path())/("studio-project-owner-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(root);
     const auto manifest=root/"game.json",rules=root/"rules.json",extra=root/"extra.json";
     const std::string manifestBytes=R"({ "name": "Fixture", "module": "game", "rules": "rules.json" })";
@@ -236,7 +236,7 @@ void projectOwnerSaveContract(){
 }
 void projectHistoryContract(){
     using namespace aiverse;using namespace aiverse::editor;namespace fs=std::filesystem;
-    const auto root=fs::temp_directory_path()/("studio-project-history-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto root=fs::canonical(fs::temp_directory_path())/("studio-project-history-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(root);
     const auto manifest=root/"game.json",rules=root/"rules.json",extra=root/"extra.json";
     const std::string m=R"({ "name": "Fixture", "module": "game", "rules": "rules.json" })";
@@ -305,7 +305,7 @@ void projectHistoryContract(){
 }
 void projectHistoryPersistenceContract(){
     using namespace aiverse;using namespace aiverse::editor;namespace fs=std::filesystem;
-    const auto root=fs::temp_directory_path()/("studio-persistent-history-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto root=fs::canonical(fs::temp_directory_path())/("studio-persistent-history-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(root);
     const auto manifest=root/"game.json",rules=root/"rules.json";
     const auto checkpoint=root/".aiverse-cache"/"project-history.json";
@@ -363,7 +363,7 @@ void projectHistoryPersistenceContract(){
 }
 void assetHistorySessionContract(){
     using namespace aiverse;namespace fs=std::filesystem;
-    const auto root=fs::temp_directory_path()/("studio-asset-history-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto root=fs::canonical(fs::temp_directory_path())/("studio-asset-history-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(root/"content");
     std::ofstream(root/"game.json")<<R"({"name":"Fixture","module":"game","rules":"rules.json"})";
     std::ofstream(root/"rules.json")<<R"({"types":{"unit":{"health":{"max":100}}}})";
@@ -397,7 +397,7 @@ void assetHistorySessionContract(){
 }
 void agentScopedHistoryContract(){
     using namespace aiverse;namespace fs=std::filesystem;
-    const auto root=fs::temp_directory_path()/("studio-agent-scopes-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto root=fs::canonical(fs::temp_directory_path())/("studio-agent-scopes-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(root/"content");
     std::ofstream(root/"game.json")<<R"({"name":"Fixture","module":"game","rules":"rules.json"})";
     std::ofstream(root/"rules.json")<<R"({"types":{"unit":{"health":{"max":100}}}})";
@@ -636,7 +636,7 @@ void projectHistoryBudgetContract(){
 void projectFileRecoveryWorkflow() {
     using namespace aiverse;
     namespace fs=std::filesystem;
-    const auto root=fs::temp_directory_path()/("studio-open-recovery-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto root=fs::canonical(fs::temp_directory_path())/("studio-open-recovery-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     const auto project=root/"templates"/"fixture";
     fs::create_directories(project/"content"/"A");
     fs::create_directories(project/"content"/"B");
@@ -668,7 +668,7 @@ void projectFileRecoveryWorkflow() {
 }
 void planetWorldProcessAuthoringWorkflow(){
     using namespace aiverse;namespace fs=std::filesystem;
-    const auto root=fs::temp_directory_path()/("studio-planet-wp-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto root=fs::canonical(fs::temp_directory_path())/("studio-planet-wp-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     const auto project=root/"fixture";fs::create_directories(project/"maps");
     std::ofstream(project/"game.json")<<R"({"module":"game","rules":"rules.json","maps":[{"file":"maps/scene.json"}]})";
     std::ofstream(project/"rules.json")<<R"({"types":{"tree":{"health":{"max":100}}}})";
@@ -771,7 +771,7 @@ void planetWorldProcessAuthoringWorkflow(){
 }
 void authoredEntityWorkflow() {
    using namespace aiverse;namespace fs=std::filesystem;
-   const auto root=fs::temp_directory_path()/("studio-authored-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+   const auto root=fs::canonical(fs::temp_directory_path())/("studio-authored-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
    const auto project=root/"fixture";fs::create_directories(project/"maps");
    std::ofstream(project/"game.json")<<R"({"module":"game","rules":"rules.json","maps":[{"file":"maps/scene.json"}]})";
    std::ofstream(project/"rules.json")<<R"({"types":{"tree":{"health":{"max":100}}}})";
@@ -1356,7 +1356,7 @@ void authoredEntityWorkflow() {
 void entityWorkflow() {
     using namespace aiverse;
     namespace fs=std::filesystem;
-    const auto root=fs::temp_directory_path()/("studio-entities-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto root=fs::canonical(fs::temp_directory_path())/("studio-entities-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     const auto project=root/"templates"/"fixture";
     fs::create_directories(project/"maps");
     std::ofstream(project/"game.json") << R"({"name":"Studio fixture","module":"game","rules":"rules.json","maps":[{"file":"maps/scene.json"}]})";

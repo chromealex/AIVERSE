@@ -59,7 +59,7 @@ int main() {
     d.bodies.emplace_back();
     MeshBuilder planet;
     AIVERSE_TEST_CHECK(buildTerrainPreview(d,planet).quads==0);
-    AIVERSE_TEST_CHECK(!buildStudioSpectraFields(d,1.5f,true,nullptr)->sample("terraweave","height",{0,0,0},field));
+    AIVERSE_TEST_CHECK(!buildStudioSpectraFields(d,1.5f,true,nullptr)->sample("terraweave","height",{0,0,0},sampledValue));
     d.bodies.clear();
     d.corners.clear();
     d.levels={2,2,2,2};
