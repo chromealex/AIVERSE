@@ -3,9 +3,11 @@ import { Check, FilePlus2, FolderOpen, Map as MapIcon, Plus, RefreshCw, Save, Se
 import { invoke } from '../../bridge';
 import type { ProjectRuleGroup, StudioProjectState, StudioSnapshot } from '../../types';
 import type { StudioPanelContext } from '../StudioPanelRenderer';
-import { StudioPanel, StudioSection, StudioAlert, StudioEmptyState, StudioButton, StudioField, StudioInput } from '../../ui';
+import { StudioPanel, StudioSection, StudioAlert, StudioEmptyState, StudioButton, StudioField, StudioInput, StudioSelect } from '../../ui';
+import typeBlocks from '../../../../editor/core/type-blocks.json';
 import './ProjectPanel.css';
 
+const blockGroups = [...new Set(Object.values(typeBlocks).map(block=>block.group))];
 const singular = {types:'type',resources:'resource',techs:'technology',factions:'faction'};
 const sections = {maps:'Maps',types:'Types',resources:'Resources',techs:'Technologies',factions:'Factions'} as const;
 type Section = keyof typeof sections;
@@ -23,6 +25,7 @@ export default function ProjectPanel({snapshot,busy,connected,openProject,update
   const [error,setError]=useState('');
   const [revision,setRevision]=useState(0);
   const request=useRef(0);
+  const blockDetails=useRef<HTMLDetailsElement>(null);
   useEffect(()=>{
     let live=true;
     if(connected && path) void invoke('studio.project',{}).then(state=>{if(live)setProject(state);})
@@ -106,7 +109,23 @@ export default function ProjectPanel({snapshot,busy,connected,openProject,update
           {draft.original===null && <StudioField label="Item ID" htmlFor="project-rule-id"><StudioInput id="project-rule-id" autoFocus required value={draft.id} onChange={e=>setDraft({...draft,id:e.target.value})}/></StudioField>}
           <StudioField label="Display name" htmlFor="project-rule-name"><StudioInput id="project-rule-name" disabled={!properties || busy} placeholder={draft.id}
             value={typeof properties?.name==='string'?properties.name:''} onChange={e=>setDraft({...draft,text:JSON.stringify({...properties,name:e.target.value},null,2)})}/></StudioField>
-          <details><summary>All properties</summary><textarea aria-label="Rule properties" rows={6} spellCheck={false} value={draft.text} onChange={e=>setDraft({...draft,text:e.target.value})}/></details>
+          {section==='types' && <StudioField label="Add property block" htmlFor="project-type-block">
+            <StudioSelect id="project-type-block" value="" disabled={busy || !properties} onChange={e=>{
+              const key=e.target.value as keyof typeof typeBlocks;
+              if(!properties || !Object.hasOwn(typeBlocks,key) || Object.hasOwn(properties,key))return;
+              setDraft({...draft,text:JSON.stringify({...properties,[key]:typeBlocks[key].value},null,2)});
+              if(blockDetails.current)blockDetails.current.open=true;
+            }}>
+              <option value="">Choose a block…</option>
+              {blockGroups.map(group=>{
+                const available=Object.entries(typeBlocks).filter(([key,block])=>block.group===group && (!properties || !Object.hasOwn(properties,key)));
+                return available.length>0 && <optgroup key={group} label={group}>
+                  {available.map(([key,block])=><option key={key} value={key}>{block.label}</option>)}
+                </optgroup>;
+              })}
+            </StudioSelect>
+          </StudioField>}
+          <details ref={blockDetails}><summary>All properties</summary><textarea aria-label="Rule properties" rows={6} spellCheck={false} value={draft.text} onChange={e=>setDraft({...draft,text:e.target.value})}/></details>
           <div><StudioButton type="submit" disabled={busy || (draft.original===null?!draft.id.trim():draft.text===draft.initial)}>{draft.original===null?'Create item':'Save item'}</StudioButton>
           <StudioButton disabled={busy} onClick={()=>{if(leave())setDraft(null);}}>Close</StudioButton></div>
         </form></StudioSection>}

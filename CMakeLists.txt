@@ -1819,6 +1819,12 @@ if(AIVERSE_BUILD_EDITOR)
     file(GLOB AIVERSE_EDITOR_WINDOWS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/windows/*.cpp)
     add_executable(aiverse_editor apps/editor/main.cpp apps/editor/Editor.cpp apps/editor/EditorShell.cpp apps/editor/EditorAgent.cpp apps/editor/EditorPlayOps.cpp apps/editor/EditorTheme.cpp apps/editor/EditorProjects.cpp apps/editor/EditorNativeBuild.cpp apps/editor/EditorGameWizard.cpp apps/editor/EditorMcpConnect.cpp apps/editor/EditorWorld.cpp apps/editor/DetailsPanel.cpp
                    ${AIVERSE_EDITOR_WINDOWS} $<TARGET_OBJECTS:aiverse_runtime>)
+    set(type_blocks_file "${CMAKE_CURRENT_SOURCE_DIR}/apps/editor/core/type-blocks.json")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${type_blocks_file}")
+    file(READ "${type_blocks_file}" type_blocks_json)
+    file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/aiverse_type_blocks.h"
+        CONTENT [=[constexpr char kTypeBlockTemplatesJson[] = R"aiverse(@type_blocks_json@)aiverse";]=] @ONLY)
+    target_include_directories(aiverse_editor PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
     target_link_libraries(aiverse_editor PRIVATE aiverse_runtime aiverse_game_view aiverse_editor_core)
     target_link_libraries(aiverse_editor PRIVATE aiverse_game_fx AIVERSE::InputFlow)
     target_compile_definitions(aiverse_editor PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")

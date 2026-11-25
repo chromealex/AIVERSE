@@ -1,6 +1,7 @@
 // Inspector: properties of the current selection — map object, player, area, region, wave,
 // trigger, map, or a rules item (type / resource / tech / faction) with block templates.
 #include <algorithm>
+#include "aiverse_type_blocks.h"
 #include "../Editor.h"
 #include "../EditorGenreUi.h"
 #include "../EditorUtil.h"
@@ -10,47 +11,7 @@
 
 namespace aiverse::editor {
 
-namespace {
-struct BlockTemplate { const char* key; const char* json; const char* hint; };
-const BlockTemplate kTypeBlocks[] = {
-    {"health", R"({"max": 100, "armor": 0, "armorType": "none"})", "Здоровье и броня"},
-    {"move", R"({"speed": 2.5, "radius": 0.4, "layer": "ground"})", "Движение: ground / air / naval / sand"},
-    {"weapons", R"([{"range": 1, "damage": 10, "cooldown": 1.0, "targets": ["ground"]}])", "Оружие"},
-    {"cost", R"({"gold": 100, "time": 20, "supply": 1})", "Стоимость, время, лимит"},
-    {"structure", R"({"footprint": [2, 2]})", "Здание: размер; on / takesOverNode / terrain"},
-    {"produces", R"([])", "Что тренирует (здания здесь = стройка как в C&C)"},
-    {"builds", R"([])", "Что строит рабочий"},
-    {"researches", R"([])", "Какие техи исследует"},
-    {"upgrades", R"([])", "Во что улучшается на месте (уровни)"},
-    {"requires", R"([])", "Требования: типы или техи"},
-    {"gather", R"({"gold": {"carry": 10, "time": 2}})", "Что добывает"},
-    {"resourceNode", R"({"resource": "gold", "amount": 10000})", "Источник ресурса (amount < 0 — бесконечный)"},
-    {"dropoff", R"(["gold"])", "Куда сдавать ресурсы"},
-    {"supply", "10", "Даёт лимит"},
-    {"income", R"({"gold": 1})", "Доход в секунду"},
-    {"storage", R"({"gold": 500})", "Увеличивает хранилище"},
-    {"provides", R"({"power": 100})", "Даёт мощность (энергия)"},
-    {"consumes", R"({"power": 20})", "Потребляет мощность"},
-    {"energy", R"({"max": 100, "regen": 0.5, "start": 50})", "Мана для способностей"},
-    {"abilities", R"([{"id": "heal", "name": "Лечение", "target": "unit", "range": 6, "cooldown": 8, "energy": 25, "effects": [{"type": "heal", "amount": 50}]}])", "Способности"},
-    {"hero", R"({"levels": [200, 500, 900], "perLevel": [{"stat": "maxHp", "add": 50}]})", "Герой: уровни и прирост"},
-    {"squad", R"({"members": 4, "reinforceCost": {"gold": 25}, "reinforceTime": 4})", "Отряд (CoH)"},
-    {"charges", R"({"max": 3, "interval": 11})", "Личинки: параллельное производство"},
-    {"buildMode", R"("walk")", "walk / warp / morph"},
-    {"creep", "6", "Распространяет слизь"},
-    {"fieldSpawner", R"({"resource": "ore", "rate": 10, "radius": 3})", "Выращивает поле ресурса"},
-    {"deploysTo", R"("yard")", "Разворачивается в здание (MCV)"},
-    {"wreck", R"({"metal": 100})", "Оставляет обломки"},
-    {"garrison", R"({"max": 20, "unit": "unit_id", "interval": 1.0})", "Гарнизон (Mushroom Wars)"},
-    {"capture", R"({"time": 10, "radius": 3, "victoryPoint": false, "region": false})", "Точка захвата / флаг"},
-    {"neutral", R"({"leash": 10, "wander": false})", "Поведение нейтралов"},
-    {"waveSpawn", R"({"unit": "unit_id", "count": 2})", "Выпускает волну (lane battler)"},
-    {"bounty", R"({"gold": 10})", "Награда за убийство"},
-    {"tags", R"(["infantry"])", "Теги для техов и триггеров"},
-    {"key", "true", "Ключевой объект (потеря = поражение)"},
-    {"view", R"({"shape": "soldier", "scale": 1.0})", "Внешний вид"},
-};
-} // namespace
+
 
 class InspectorWindow : public EditorWindow {
 public:
@@ -334,14 +295,15 @@ private:
         if (isType) {
             ImGui::SetNextItemWidth(-FLT_MIN);
             if (ImGui::BeginCombo("##addblock", ICON_PLUS "  Добавить блок…", ImGuiComboFlags_HeightLarge)) {
-                for (auto& b : kTypeBlocks) {
-                    if (cur->has(b.key)) continue;
-                    if (ImGui::Selectable((std::string(b.key) + "##" + b.key).c_str())) {
-                        try { Json edited = Json::parse(text_); edited.set(b.key, Json::parse(b.json)); text_ = edited.dump(); }
+                static const Json blocks = Json::parse(kTypeBlockTemplatesJson);
+                for (const auto& [key, block] : blocks.members()) {
+                    if (cur->has(key)) continue;
+                    if (ImGui::Selectable((key + "##" + key).c_str())) {
+                        try { Json edited = Json::parse(text_); edited.set(key, block["value"]); text_ = edited.dump(); }
                         catch (...) { message_ = "Сначала исправьте JSON"; }
                     }
                     ImGui::SameLine(ImGui::GetFontSize() * 8);
-                    ImGui::TextDisabled("%s", b.hint);
+                    ImGui::TextDisabled("%s", block.getStr("hint").c_str());
                 }
                 ImGui::EndCombo();
             }
