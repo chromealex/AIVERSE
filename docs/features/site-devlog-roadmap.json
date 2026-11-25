@@ -10,6 +10,8 @@
     "docs/devlog/systems.json",
     "docs/evidence/site-devlog-roadmap-build.json",
     "docs/evidence/site-devlog-roadmap-build.log.txt",
+    "docs/evidence/site-devlog-roadmap-current.json",
+    "docs/evidence/site-devlog-roadmap-current.log.txt",
     "docs/features/site-devlog-roadmap.json",
     "site/_layout.html",
     "site/devlog.js",
@@ -112,7 +114,7 @@
       "status": "pass",
       "note": "Built both locales with 72 entries and pinned demo bundles.",
       "evidence": [
-        "docs/evidence/site-devlog-roadmap-build.json"
+        "docs/evidence/site-devlog-roadmap-current.json"
       ]
     },
     "handoff": {
@@ -147,6 +149,6 @@
     "studio_methods": []
   },
   "test_reports": [
-    "docs/evidence/site-devlog-roadmap-build.json"
+    "docs/evidence/site-devlog-roadmap-current.json"
   ]
 }
