@@ -3,6 +3,7 @@
   "id": "direct3d-renderer",
   "owner": "render",
   "changed_paths": [
+    ".github/workflows/direct3d-windows.yml",
     "CMakeLists.txt",
     "apps/modelview/HeadlessModelCapture.cpp",
     "apps/modelview/HeadlessModelCapture.h",
