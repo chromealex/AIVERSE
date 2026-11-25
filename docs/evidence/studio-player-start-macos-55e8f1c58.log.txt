@@ -1,0 +1,4 @@
+2026-11-25 20:42:38.160 AiverseStudioHTML5[31044:80671160] APPKIT TEST hit StudioMetalView at {731.60109375000002, 511.3828125}, accepts first click 1
+2026-11-25 20:42:38.160 AiverseStudioHTML5[31044:80671160] APPKIT TEST drag preserved the pending pick
+2026-11-25 20:42:38.675 AiverseStudioHTML5[31044:80671160] [studio-web] JS: CROSS planetstartproof saved slot 2 start {"body":"p","y":3.6875,"face":4,"x":14.4287}; undo restored both slots
+2026-11-25 20:42:38.676 AiverseStudioHTML5[31044:80671160] [studio-web] JS: CROSS planetstartproof READY_FOR_CAPTURE
