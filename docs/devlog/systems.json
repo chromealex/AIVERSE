@@ -3407,7 +3407,7 @@
           "titleEn": "Select material techniques by distance and GPU capabilities"
         },
         {
-          "status": "planned",
+          "status": "in-progress",
           "title": "Программный рендерер на CPU",
           "titleEn": "Software rendering on the CPU"
         },
@@ -3417,7 +3417,7 @@
           "titleEn": "Use the renderer from Python, C# and Java"
         },
         {
-          "status": "planned",
+          "status": "in-progress",
           "title": "Бэкенды Direct3D 11 и Direct3D 9 для Windows",
           "titleEn": "Direct3D 11 and Direct3D 9 backends for Windows"
         }

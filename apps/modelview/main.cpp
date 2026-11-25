@@ -26,6 +26,7 @@
 #include "../../engine/view/AnimatedSceneAttachmentSources.h"
 #include "imgui.h"
 #include "Gallery.h"
+#include "HeadlessModelCapture.h"
 #include "NativeScenePreview.h"
 #include "NativeFacialPreview.h"
 
@@ -1319,6 +1320,13 @@ float3 parse3(const std::string& s) {
 } // namespace
 
 int aiverseMain(int argc, char** argv) {
+    if(argc>1 && std::string_view(argv[1])=="--headless-capture") {
+        if(argc!=5) {
+            std::fprintf(stderr,"usage: aiverse_modelview --headless-capture BACKEND MODEL OUTPUT.png\n");
+            return 2;
+        }
+        return modelview::captureHeadlessModel(argv[2],argv[3],argv[4]);
+    }
     static Viewer v;
     g_viewer = &v;
     for (int i = 1; i < argc; ++i) {
@@ -1457,6 +1465,7 @@ int aiverseMain(int argc, char** argv) {
     }
     if (v.files.empty() && v.gameDir.empty() && v.sceneRoot.empty()) {
         std::printf("usage: aiverse_modelview model.glb [model2.gltf@Clip ...] [--clip C] [--time T] [--variant V] [--quality low|medium|high] [--no-merge] [--provider]\n"
+                    "       aiverse_modelview --headless-capture cpu|d3d9|d3d11|d3d11-warp MODEL OUTPUT.png\n"
                     "       aiverse_modelview parent.glb@Walk --attach child.glb@Hand.R [--attachments-file file.json]\n"
                     "       aiverse_modelview --game templates/<id> [--types a,b] [--start T] [--fixed-dt S]\n"
                     "       aiverse_modelview --scene-preview templates/showcase [--scene-start scenes/motionweave-global]\n"

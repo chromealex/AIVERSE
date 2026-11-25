@@ -1,0 +1,135 @@
+{
+  "schema": 1,
+  "id": "direct3d-renderer",
+  "owner": "render",
+  "changed_paths": [
+    "CMakeLists.txt",
+    "apps/modelview/HeadlessModelCapture.cpp",
+    "apps/modelview/HeadlessModelCapture.h",
+    "apps/modelview/cpu_capture.cpp",
+    "apps/modelview/main.cpp",
+    "docs/agent-handoffs/direct3d-renderer-initial.md",
+    "docs/agent-handoffs/direct3d-renderer-stage1.md",
+    "docs/agent-handoffs/direct3d-renderer-stage2.md",
+    "docs/agent-handoffs/direct3d-window-resize.md",
+    "docs/agent-handoffs/render-backends-sampled-textures.md",
+    "docs/devlog/systems.json",
+    "docs/direct3d.md",
+    "docs/features/direct3d-renderer.json",
+    "engine/gfx/Gfx.h",
+    "engine/gfx/d3d/Direct3D.cpp",
+    "engine/gfx/d3d/Direct3D.h",
+    "engine/gfx/d3d/GfxDirect3D.cpp",
+    "engine/render/graph/GraphGpuProfile.h",
+    "tests/render/direct3d_device.cpp",
+    "tests/render/direct3d_rhi.cpp",
+    "tests/render/headless_model_capture.py"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": false,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "architecture": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "native_api": {
+      "status": "not_run",
+      "note": "D3D11 and D3D9 RHI and both native render targets cross-built. Native Windows execution pending.",
+      "evidence": [
+        "docs/agent-handoffs/direct3d-renderer-stage2.md"
+      ]
+    },
+    "skill": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "mcp": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "headless": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "handoff": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "documentation": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [],
+    "mcp_tools": [],
+    "studio_panels": [],
+    "studio_methods": []
+  },
+  "test_reports": []
+}

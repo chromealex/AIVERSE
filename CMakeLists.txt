@@ -1913,13 +1913,55 @@ if(AIVERSE_BUILD_TOOLS)
     target_link_libraries(aiversebuild PRIVATE aiverse_modelconv)
 endif()
 
+# Native Windows offscreen targets for engine integration and render probes.
+if(WIN32)
+    add_library(aiverse_gfx_direct3d STATIC engine/gfx/d3d/Direct3D.cpp engine/gfx/d3d/GfxDirect3D.cpp)
+    target_include_directories(aiverse_gfx_direct3d PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(aiverse_gfx_direct3d PRIVATE d3d11 d3d9 user32 d3dcompiler)
+    if(AIVERSE_BUILD_TESTS)
+        add_executable(aiverse_direct3d_device_tests tests/render/direct3d_device.cpp)
+        target_link_libraries(aiverse_direct3d_device_tests PRIVATE aiverse_gfx_direct3d d3dcompiler)
+        add_test(NAME render_direct3d11_warp COMMAND aiverse_direct3d_device_tests 11)
+        add_test(NAME render_direct3d9_hal COMMAND aiverse_direct3d_device_tests 9)
+        add_executable(aiverse_direct3d_rhi_tests tests/render/direct3d_rhi.cpp)
+        target_link_libraries(aiverse_direct3d_rhi_tests PRIVATE aiverse_gfx_direct3d)
+        add_test(NAME render_direct3d11_rhi COMMAND aiverse_direct3d_rhi_tests 11)
+        add_test(NAME render_direct3d9_rhi COMMAND aiverse_direct3d_rhi_tests 9)
+        add_test(NAME render_direct3d11_window COMMAND aiverse_direct3d_rhi_tests 11 --window)
+        add_test(NAME render_direct3d9_window COMMAND aiverse_direct3d_rhi_tests 9 --window)
+        set_tests_properties(render_direct3d9_hal render_direct3d9_rhi render_direct3d9_window render_direct3d11_window PROPERTIES LABELS "GPU")
+    endif()
+endif()
+
+# Self-contained headless software device. Native consumers opt in explicitly.
+add_library(aiverse_gfx_cpu STATIC engine/gfx/cpu/GfxCpu.cpp)
+target_include_directories(aiverse_gfx_cpu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+if(AIVERSE_BUILD_TOOLS AND AIVERSE_DESKTOP)
+    add_executable(aiverse_cpu_capture apps/modelview/cpu_capture.cpp)
+    add_library(aiverse_headless_model_capture STATIC apps/modelview/HeadlessModelCapture.cpp)
+    target_link_libraries(aiverse_headless_model_capture PRIVATE aiverse_gfx_cpu aiverse_models aiverse_zstd_dec)
+    if(WIN32)
+        target_link_libraries(aiverse_headless_model_capture PRIVATE aiverse_gfx_direct3d)
+    endif()
+    target_link_libraries(aiverse_cpu_capture PRIVATE aiverse_headless_model_capture)
+endif()
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
+    add_executable(aiverse_cpu_device_tests tests/render/cpu_device.cpp)
+    target_link_libraries(aiverse_cpu_device_tests PRIVATE aiverse_gfx_cpu)
+    add_test(NAME render_cpu_device COMMAND aiverse_cpu_device_tests)
+    if(TARGET aiverse_cpu_capture AND Python3_Interpreter_FOUND AND AIVERSE_OBJ)
+        add_test(NAME render_cpu_textured_model
+                 COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/render/headless_model_capture.py $<TARGET_FILE:aiverse_cpu_capture>)
+    endif()
+endif()
+
 # Model viewer (models agent): models, materials, clips and quality tiers as the game renders them.
 if(AIVERSE_BUILD_TOOLS AND AIVERSE_DESKTOP)
     add_executable(aiverse_modelview
         apps/modelview/main.cpp apps/modelview/Gallery.cpp
         apps/modelview/NativeScenePreview.cpp
         $<TARGET_OBJECTS:aiverse_runtime>)
-    target_link_libraries(aiverse_modelview PRIVATE aiverse_runtime aiverse_game_view AIVERSE::View AIVERSE::libraries)
+    target_link_libraries(aiverse_modelview PRIVATE aiverse_headless_model_capture aiverse_runtime aiverse_game_view AIVERSE::View AIVERSE::libraries)
 endif()
 
 # Catalog preview (docs/packages.md § Web viewer): materials / models of catalog packages through
