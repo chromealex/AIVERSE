@@ -140,7 +140,7 @@
       "note": "Mac CPU generation and Metal rendering were exercised.",
       "evidence": [
         "docs/agent-handoffs/meadow-grass-integration.md",
-        "docs/evidence/meadow-grass-2920a1645.json"
+        "docs/evidence/meadow-grass-74d457115.json"
       ]
     },
     "dependencies": {
@@ -154,7 +154,7 @@
       "status": "pass",
       "note": "The meadow mesh and frozen legacy reference are exercised by a native CPU test.",
       "evidence": [
-        "docs/evidence/meadow-grass-2920a1645.json",
+        "docs/evidence/meadow-grass-74d457115.json",
         "tests/terraweave_grass_meadow_test.cpp"
       ]
     },
@@ -169,7 +169,7 @@
       "status": "pass",
       "note": "Focused native CTest passed on Mac.",
       "evidence": [
-        "docs/evidence/meadow-grass-2920a1645.json"
+        "docs/evidence/meadow-grass-74d457115.json"
       ]
     },
     "handoff": {
@@ -195,6 +195,6 @@
     }
   },
   "test_reports": [
-    "docs/evidence/meadow-grass-2920a1645.json"
+    "docs/evidence/meadow-grass-74d457115.json"
   ]
 }
