@@ -5,6 +5,7 @@
 
 namespace aiverse::editor {
 
+void patchMapLighting(Json& document, const Json& patch);
 void registerLightOps(Workspace& ws);
 // Copies the known light fields (x, z, height, color, radius, intensity, flicker, halo, name) from
 // params into a light object, keeping any other fields.

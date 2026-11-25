@@ -29,6 +29,12 @@ int main() {
     doc=editFpsLighting(doc,"studio.lightingSet",scalar);
     AIVERSE_TEST_CHECK(doc["lighting"]["storm"].toDouble()==0.45);
     AIVERSE_TEST_CHECK(fpsLightingView(doc)["lighting"]["storm"].toDouble()==0.45);
+    doc=editFpsLighting(doc,"studio.lightingSet",Json::parse(R"({"key":"preset","value":"cave"})"));
+    AIVERSE_TEST_CHECK(doc["lighting"].getStr("preset")=="cave" && doc["lighting"]["storm"].toDouble()==0.45);
+    doc=editFpsLighting(doc,"studio.lightingSet",Json::parse(R"({"key":"preset","value":""})"));
+    AIVERSE_TEST_CHECK(!doc["lighting"].has("preset") && doc["lighting"].has("storm"));
+    auto inherited=editFpsLighting(doc,"studio.lightingSet",Json::parse(R"({"key":"remove","value":true})"));
+    AIVERSE_TEST_CHECK(!inherited.has("lighting") && inherited["lights"]==doc["lights"]);
     const Json before=doc;
     bool rejected=false;
     try { (void)editFpsLighting(doc,"studio.lightingSet",Json::parse(R"({"key":"storm","value":2})")); }

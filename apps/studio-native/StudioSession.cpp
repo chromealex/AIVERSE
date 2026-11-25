@@ -3472,6 +3472,9 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                    method == "studio.lightAdd" || method == "studio.lightUpdate" ||
                    method == "studio.lightDelete") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
+            if (method=="studio.lightingSet" && params.has("expectedDocumentEpoch") &&
+                params.getStr("expectedDocumentEpoch")!=std::to_string(graphDocumentEpoch_))
+                throw std::runtime_error("Map changed; reopen Lighting before editing");
             if (ws_.map.data.worldSpace) {
                 // FPS maps serialize MapData.fps, NOT MapData.extra. Apply to a copy,
                 // then validate/commit the full candidate through actor_set.
@@ -3489,13 +3492,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 return reply;
             }
             if (method == "studio.lightingSet") {
-                const std::string key = params.getStr("key");
-                const Json& value = params["value"];
-                if (!value.isNumber() || !validLightingScalar(key, value.toDouble()))
-                    throw std::runtime_error("Invalid lighting parameter");
-                Json input = Json::object();
-                input.set(key, value);
-                const Json updated = ws_.call("lighting_set", input, "studio");
+                const Json updated = ws_.call("lighting_set", studioMapLightingPatch(params), "studio");
                 if (updated.has("error")) throw std::runtime_error(updated.getStr("error"));
             } else if (method == "studio.lightAdd") {
                 Json input = Json::object();

@@ -725,7 +725,7 @@ export interface StudioParams {
   'studio.renderLighting': Record<string, never>;
   'studio.renderLightingSet': { patch: Partial<RenderLightingSettings> };
   'studio.lighting': Record<string, never>;
-  'studio.lightingSet': { key: import('./panels/lightingSchema').LightingScalarKey; value: number };
+  'studio.lightingSet': ({ key: import('./panels/lightingSchema').LightingScalarKey; value: number } | { key:'preset'; value:string } | { key:'remove'; value:true }) & {expectedDocumentEpoch?:string};
   'studio.lightAdd': { x?: number; z?: number };
   'studio.lightUpdate': { index: number; entityId?: string; key: import('./panels/lightingSchema').LightEditableKey; value: string | number | boolean };
   'studio.lightDelete': { index: number; entityId?: string };

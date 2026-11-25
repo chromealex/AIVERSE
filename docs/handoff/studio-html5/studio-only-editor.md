@@ -499,3 +499,5 @@ Shader Graph retained drafts, implementation 731e1d636. ShaderGraphPanel.tsx ret
 Lighting transfer: expose authored point/spot patterns, frequencies and searchlight orientation/sweep through the existing light-update API. Verify conditional controls, undo and persistence.
 
 Map Lighting implementation d12a52abf: lightingSchema.ts and StudioLightingValidation.h share the existing light_update path across grid and actor documents. Seven schema tests and studio_fps_lighting_document passed; typecheck and production build passed. Detached macOS Lighting authored a 2.5 Hz beacon, 45-degree sweep and 35 degrees/s, checked Undo/Redo, saved, reopened and compared map JSON. Report docs/evidence/studio-light-beacon-authoring.json; window docs/evidence/studio-project-catalog/studio-beacon.png. Remaining lighting work includes environment overrides and viewport comparison.
+
+Map environment transfer: expose palette preset and removal of the map lighting block, preserving other properties and native map Undo.

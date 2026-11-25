@@ -176,7 +176,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'console':
         return <ConsolePanel openScript={ctx.openScript} key={snapshot?.project.path} project={snapshot?.project.path ?? ''} logs={snapshot?.logs ?? []} scriptErrors={ctx.scriptErrors} select={id => select(id)}/>;
       case 'lighting':
-        return <LightingPanel key={JSON.stringify([snapshot?.project.path,snapshot?.graphDocument?.epoch])} projectPath={snapshot?.project.path ?? ''} selectedId={snapshot?.selectedId ?? null} onSelect={select}/>;
+        return <LightingPanel documentEpoch={snapshot?.graphDocument?.epoch} key={JSON.stringify([snapshot?.project.path,snapshot?.graphDocument?.epoch])} projectPath={snapshot?.project.path ?? ''} selectedId={snapshot?.selectedId ?? null} onSelect={select}/>;
       case 'materials':
         return <MaterialsPanel documentEpoch={snapshot?.graphDocument?.epoch} projectPath={snapshot?.project.path ?? ''}
           previewMaterial={snapshot?.previewMaterial} openTextureGraph={()=>ctx.showPanel('texture_graph')}/>;

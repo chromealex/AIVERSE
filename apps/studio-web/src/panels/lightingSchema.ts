@@ -9,7 +9,7 @@ export interface LightEntry {
   name?: string; type?: string; nightOnly?: boolean; electric?: boolean; bake?: string;
 }
 export interface LightingState {
-  lighting: Partial<Record<LightingScalarKey, number>> | null;
+  lighting: (Partial<Record<LightingScalarKey, number>> & {preset?:string}) | null;
   lights: LightEntry[];
 }
 export const LIGHTING_KEYS: readonly LightingScalarKey[] = ['time', 'dayLength', 'nightLevel', 'clouds', 'storm'];

@@ -254,3 +254,5 @@ Shader Graph project switching requires restoring the unsaved graph and retainin
 Confirmed in a detached Mac Shader Graph window across map changes; two projects with the same shader name and explicit discard verified in the browser bridge fixture.
 
 Lighting transfer: expose authored point/spot patterns, frequencies and searchlight orientation/sweep through the existing light-update API. Verify conditional controls, undo and persistence.
+
+Map environment transfer: expose palette preset and removal of the map lighting block, preserving other properties and native map Undo.

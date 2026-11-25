@@ -7,10 +7,10 @@ import type { LightEditableKey, LightingScalarKey, LightingState } from './light
 import './LightingPanel.css';
 import RenderLightingControls from './RenderLightingControls';
 
-interface LightingPanelProps { projectPath: string; selectedId: string | null; onSelect: (id: string | null) => Promise<void> }
+interface LightingPanelProps { projectPath: string; documentEpoch?: string; selectedId: string | null; onSelect: (id: string | null) => Promise<void> }
 const empty: LightingState = { lighting: null, lights: [] };
 
-export default function LightingPanel({ projectPath, selectedId, onSelect }: LightingPanelProps) {
+export default function LightingPanel({ projectPath, documentEpoch, selectedId, onSelect }: LightingPanelProps) {
   const [state, setState] = useState<LightingState>(empty);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -60,7 +60,7 @@ export default function LightingPanel({ projectPath, selectedId, onSelect }: Lig
   const lightFields = useMemo(() => activeLight ? lightProperties(activeLight) : [], [activeLight]);
   const editSetting = (key: string, value: string | number | boolean) => {
     if (typeof value !== 'number' || !(LIGHTING_KEYS as readonly string[]).includes(key)) return;
-    void perform(() => invoke('studio.lightingSet', { key: key as LightingScalarKey, value }));
+    void perform(() => invoke('studio.lightingSet', { key: key as LightingScalarKey, value, expectedDocumentEpoch:documentEpoch }));
   };
   const editLight = (key: string, value: string | number | boolean) => {
     if (!(LIGHT_EDITABLE_KEYS as readonly string[]).includes(key) || !activeLight) return;
@@ -83,9 +83,23 @@ export default function LightingPanel({ projectPath, selectedId, onSelect }: Lig
     {error && <p role="alert" className="lighting-error">{error}</p>}
     {loading ? <div className="lighting-state">Loading map lighting…</div> :
       <div className="lighting-scroll">
-        <div className="lighting-section-heading">Environment</div>
+        <div className="lighting-section-heading lighting-list-heading">
+          <span>Environment</span>
+          {state.lighting && <button className="lighting-add" disabled={busy || !available || !nativeConnected()}
+            title="Remove all map lighting overrides" onClick={()=>void perform(()=>invoke('studio.lightingSet',{key:'remove',value:true,expectedDocumentEpoch:documentEpoch}))}>
+            Use project lighting
+          </button>}
+        </div>
         <div className="lighting-fields">
-          {settings.map(property => <PropertyField key={property.key} property={property}
+          <label className="property-row"><span>Palette preset</span>
+            <select aria-label="Palette preset" value={state.lighting?.preset ?? ''} disabled={busy || !available || !nativeConnected()}
+              onChange={event=>{const value=event.target.value;void perform(()=>invoke('studio.lightingSet',{key:'preset',value,expectedDocumentEpoch:documentEpoch}));}}>
+              <option value="">Project palette</option>
+              {['Desert','Snow','Volcanic','Overcast','Cave'].map(label=><option key={label} value={label.toLowerCase()}>{label}</option>)}
+            </select>
+          </label>
+          <p className="property-description">Empty fields use the palette or project settings.</p>
+          {settings.map(property => <PropertyField key={property.key} property={state.lighting?.[property.key as LightingScalarKey] === undefined ? {...property,mixed:true} : property}
             disabled={busy || !available || !nativeConnected()} onChange={value => editSetting(property.key, value)}/>)}
         </div>
         <RenderLightingControls projectPath={projectPath}/>
