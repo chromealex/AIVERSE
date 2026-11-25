@@ -6,6 +6,7 @@ import { LIGHTING_KEYS, LIGHT_EDITABLE_KEYS, lightingProperties, lightColor, lig
 import type { LightEditableKey, LightingScalarKey, LightingState } from './lightingSchema';
 import {hexToRgb,rgbToHex} from './humanCreatorSchema';
 import './LightingPanel.css';
+import LightingWeatherPreview from './LightingWeatherPreview';
 import RenderLightingControls from './RenderLightingControls';
 
 interface LightingPanelProps { projectPath: string; documentEpoch?: string; selectedId: string | null; onSelect: (id: string | null) => Promise<void> }
@@ -103,6 +104,8 @@ export default function LightingPanel({ projectPath, documentEpoch, selectedId, 
           {settings.map(property => <PropertyField key={property.key} property={state.lighting?.[property.key as LightingScalarKey] === undefined ? {...property,mixed:true} : property}
             disabled={busy || !available || !nativeConnected()} onChange={value => editSetting(property.key, value)}/>)}
         </div>
+        {nativeConnected() && documentEpoch && <LightingWeatherPreview epoch={documentEpoch} lighting={state.lighting}
+          busy={busy} apply={value=>perform(()=>invoke('studio.lightingSet',{key:'weather',value,expectedDocumentEpoch:documentEpoch}))}/>}
         <RenderLightingControls projectPath={projectPath}/>
         <div className="lighting-section-heading lighting-list-heading">
           <span>Local lights ({state.lights.length})</span>

@@ -38,6 +38,17 @@ inline bool validStudioLightProperty(const std::string& key,const Json& value) {
 inline Json studioMapLightingPatch(const Json& params) {
     const auto key=params.getStr("key");
     const auto& value=params["value"];
+    if (key=="weather") {
+        if (!value.isObject() || value.size()!=3) throw std::runtime_error("Invalid weather settings");
+        Json patch=Json::object();
+        for (const char* field:{"time","clouds","storm"}) {
+            if (!value[field].isNumber() || !validLightingScalar(field,value[field].toDouble()))
+                throw std::runtime_error("Invalid weather setting");
+            patch.set(field,value[field]);
+        }
+        patch.set("dayLength",Json::number(int64_t(0)));
+        return patch;
+    }
     const bool preset=key=="preset" && value.isString() &&
         (value.str().empty() || value.str()=="desert" || value.str()=="snow" ||
          value.str()=="volcanic" || value.str()=="overcast" || value.str()=="cave");

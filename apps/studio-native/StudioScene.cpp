@@ -3496,12 +3496,13 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         lastFrameSignature_=0;
     }
     const Json& settings=lightingSettings_;
-    const bool useLighting=useLighting_&&!planetaryChart;
+    const bool useLighting=(useLighting_||weatherEnvironment_.has_value())&&!planetaryChart;
     const auto& activeLights=activeLights_;
     Lighting environment;
-    const auto& day=day_;
+    const auto& day=weatherEnvironment_?weatherDay_:day_;
     const Json& lightingSource=doc.data.extra["lighting"];
-    if(lightingSource.isObject()) {
+    if(weatherEnvironment_) environment=*weatherEnvironment_;
+    else if(lightingSource.isObject()) {
         environment.sunIntensity=day.sun;
         environment.skyColor={.5f*day.ambient,.58f*day.ambient,.7f*day.ambient};
     }
@@ -3651,7 +3652,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             render::wind::WindDebugView::Off : wind_.debug);
     }
     renderer_.lighting=environment;
-    if (lightingSource.isObject()) {
+    if (weatherEnvironment_ || lightingSource.isObject()) {
         renderer_.lights.setNightGlow(day.night*1.5f);
         renderer_.lights.setClouds(day.clouds,.6f,16.f,0,0);
     }

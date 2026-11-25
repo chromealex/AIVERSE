@@ -258,3 +258,5 @@ Lighting transfer: expose authored point/spot patterns, frequencies and searchli
 Map environment transfer: expose palette preset and removal of the map lighting block, preserving other properties and native map Undo.
 
 Local light color and halo transfer: verify legacy defaults, range checks, native Undo, map persistence and detached Lighting controls.
+
+Lighting weather preview: dedicated GPU drawable, time/cloud/storm controls, one undoable map override and independent Scene camera.

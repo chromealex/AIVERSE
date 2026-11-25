@@ -1,4 +1,6 @@
 #include "StudioHierarchyGroups.h"
+#include "engine/view/game/GameLights.h"
+#include "StudioFpsLightingDocument.h"
 #include "apps/editor/core/LegacyCameraBookmarks.h"
 #include "StudioNetworkPlay.h"
 #include "StudioGameWizard.h"
@@ -139,7 +141,7 @@ void StudioHost::shutdown() {
     game_.reset(); // hosted client and its device retire before the native surface
     if (renderThread_) {
         // The Scene and its GPU resources are released on their owner thread, then the thread stops.
-        try { renderThread_->invoke([&] { lensSurface_.renderer.reset(); attachmentSurface_.renderer.reset(); animationGraphSurface_.renderer.reset(); animationRigSurface_.renderer.reset(); appearanceSurface_.renderer.reset(); characterSurface_.renderer.reset(); facialRigSurface_.renderer.reset(); materialSurface_.renderer.reset(); shaderSurface_.renderer.reset(); fxPreview_.reset(); preview_.reset(); }); } catch (const std::exception&) {}
+        try { renderThread_->invoke([&] { lightingSurface_.renderer.reset(); lensSurface_.renderer.reset(); attachmentSurface_.renderer.reset(); animationGraphSurface_.renderer.reset(); animationRigSurface_.renderer.reset(); appearanceSurface_.renderer.reset(); characterSurface_.renderer.reset(); facialRigSurface_.renderer.reset(); materialSurface_.renderer.reset(); shaderSurface_.renderer.reset(); fxPreview_.reset(); preview_.reset(); }); } catch (const std::exception&) {}
         renderThread_->stop();
         renderThread_.reset();
     }
@@ -555,6 +557,7 @@ void StudioHost::pollAgentRequests() {
 }
 StudioHost::AssetSurface& StudioHost::assetSurface(StudioSurface surface) {
     switch(surface){
+    case StudioSurface::Lighting:return lightingSurface_;
     case StudioSurface::LensCamera:return lensSurface_;
     case StudioSurface::Attachments:return attachmentSurface_;
     case StudioSurface::AnimationGraph:return animationGraphSurface_;
@@ -863,6 +866,29 @@ void StudioHost::tick() {
     tickAgentScreenshot();
     pollAgentRequests();
     finishLensCapture();
+    if(weatherEnvironment_ && lightingSurface_.placement.visible && platform_.surfaceDrawable(StudioSurface::Lighting)) {
+        if(session_->graphDocumentScope().getStr("epoch")!=weatherEpoch_) {
+            weatherEnvironment_.reset();
+            surfaceDetached(StudioSurface::Lighting);
+        } else try {
+            if(!renderThread_){
+                const char* threaded=std::getenv("AIVERSE_STUDIO_RENDER_THREAD");
+                renderThread_=std::make_unique<StudioRenderThread>([this]{renderSceneFrame();},!(threaded&&std::string(threaded)=="0"));
+            }
+            onScene([&]{platform_.sceneThreadScope([&]{
+                auto& asset=lightingSurface_;
+                if(!asset.renderer)asset.renderer=std::make_unique<StudioScene>(platform_.createDevice(StudioSurface::Lighting));
+                asset.renderer->setWeatherPreview(*weatherEnvironment_,weatherDay_);
+                const auto& ws=session_->workspace();
+                asset.renderer->frame(asset.placement.pixelsW,asset.placement.pixelsH,ws.map,ws.map.data.worldSpace,
+                    "","",Json{},0,float(ws.project.rules.levelHeight.toDouble()),ws.project.dir,ws.project.rulesJson);
+            });});
+        } catch(const std::exception& e) {
+            weatherEnvironment_.reset();
+            sendEvent("lighting.previewError",e.what());
+            surfaceDetached(StudioSurface::Lighting);
+        }
+    }
     if(lensSurface_.renderer && lensProject_!=session_->workspace().project.dir) surfaceDetached(StudioSurface::LensCamera);
     if(lensSurface_.renderer && lensSurface_.placement.visible && platform_.surfaceDrawable(StudioSurface::LensCamera)) {
         try {
@@ -2954,8 +2980,8 @@ void StudioHost::applyViewport(const Json& params) {
         else if (game_) game_->suspend();
         return;
     }
-    if(id=="shader"||id=="material"||id=="facialRig"||id=="character"||id=="appearance"||id=="animationGraph"||id=="animationRig"||id=="attachments"||id=="lensCamera") {
-        const auto surface=id=="lensCamera"?StudioSurface::LensCamera:id=="attachments"?StudioSurface::Attachments:id=="animationRig"?StudioSurface::AnimationRig:id=="animationGraph"?StudioSurface::AnimationGraph:id=="character"?StudioSurface::Character:id=="appearance"?StudioSurface::Appearance:id=="facialRig"?StudioSurface::FacialRig:id=="shader"?StudioSurface::Shader:StudioSurface::Material;
+    if(id=="lighting"||id=="shader"||id=="material"||id=="facialRig"||id=="character"||id=="appearance"||id=="animationGraph"||id=="animationRig"||id=="attachments"||id=="lensCamera") {
+        const auto surface=id=="lighting"?StudioSurface::Lighting:id=="lensCamera"?StudioSurface::LensCamera:id=="attachments"?StudioSurface::Attachments:id=="animationRig"?StudioSurface::AnimationRig:id=="animationGraph"?StudioSurface::AnimationGraph:id=="character"?StudioSurface::Character:id=="appearance"?StudioSurface::Appearance:id=="facialRig"?StudioSurface::FacialRig:id=="shader"?StudioSurface::Shader:StudioSurface::Material;
         auto& asset=assetSurface(surface);
         NativeViewportPlacement placed;
         if(platform_.placeSurface(surface,rect,placed)){
@@ -3265,6 +3291,24 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if (note.size() <= 1200) platform_.log("[studio-web] JS: " + note);
         return true; // diagnostics never touch Workspace or the filesystem
     }
+    if(method=="studio.lightingPreview")return answer([&]{
+        const auto& ws=session_->workspace();
+        const auto epoch=session_->graphDocumentScope().getStr("epoch");
+        if(ws.project.dir.empty() || epoch!=params.getStr("expectedDocumentEpoch"))
+            throw std::runtime_error("Map changed; reopen Lighting");
+        auto patch=studioMapLightingPatch(params);
+        if(params.getStr("key")!="weather")throw std::runtime_error("Expected preview weather");
+        const float time=float(patch["time"].toDouble()), clouds=float(patch["clouds"].toDouble()), storm=float(patch["storm"].toDouble());
+        game::GameLights lights;
+        const auto block=ws.map.data.worldSpace?ws.map.toJson()["lighting"]:ws.map.data.extra["lighting"];
+        lights.configure(ws.project.manifest["lighting"],block);
+        lights.setPreview(true,time,clouds,storm);
+        render::Lighting environment;
+        lights.updateSky(environment,0);
+        weatherEnvironment_=environment;weatherEpoch_=epoch;
+        weatherDay_.night=lights.night();weatherDay_.clouds=clouds;
+        return Json::object();
+    });
     if(method=="studio.worldProcessGroupPivot")return answer([&]{
         Json result=Json::object();
         const auto selection=session_->selectedObjectIds();
