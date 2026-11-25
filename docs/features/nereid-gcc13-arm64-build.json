@@ -6,6 +6,8 @@
     "apps/fps/client.cpp",
     "docs/agents/feature-policy.json",
     "docs/devlog/systems.json",
+    "engine/gfx/vulkan/VkCompute.cpp",
+    "engine/gfx/vulkan/VkDevice.h",
     "engine/game/Economy.cpp",
     "engine/game/Effects.cpp",
     "engine/game/GameCore.cpp",
