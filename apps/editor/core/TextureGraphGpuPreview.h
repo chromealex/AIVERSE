@@ -6,6 +6,7 @@
 namespace aiverse::editor {
 class TextureGraphGpuPreview final : public render::texture_graph::TextureGraphGpuOwner {
 public:
+    void invalidateProjectLifetime(){checkProject({});}
     template<class Publish>
     Json consumeRadiance(const std::string& scope,const std::string& request,Publish&& publish){
         return publishRadianceBaked(scope,request,std::forward<Publish>(publish));
