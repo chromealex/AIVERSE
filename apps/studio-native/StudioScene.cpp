@@ -327,7 +327,10 @@ bool planeQuad(const Camera& view,float3 pivot,const float3* axes,int n,float wo
     const float s0=worldLength*0.18f,s1=worldLength*0.42f;
     const float3 c[4]={pivot+a*s0+b*s0,pivot+a*s1+b*s0,pivot+a*s1+b*s1,pivot+a*s0+b*s1};
     for(int i=0;i<4;++i)if(!view.worldToScreen(c[i],W,H,out[i]))return false;
-    return true;
+    // An edge-on plane collapses to a line. Suppress it in both drawing and picking.
+    const auto a2=out[1]-out[0],b2=out[3]-out[0];
+    const float area=std::abs(a2.x*b2.y-a2.y*b2.x);
+    return area>std::max(std::hypot(a2.x,a2.y),std::hypot(b2.x,b2.y));
 }
 bool insideQuad(const float2* q,float x,float y){
     bool pos=false,neg=false;
@@ -2191,6 +2194,7 @@ int StudioScene::transformGizmoHit(float x,float y,float width,float height) con
     float3 axes[3];handleAxes(axes);
     const auto h=axisHandles(view,selectedPivot_,axes,width,height);
     if(!h.valid)return -1;
+    if(tool_==TransformTool::Scale && std::hypot(x-h.px,y-h.py)<h.pick*1.4f)return 3;
     int best=-1;float bestD=h.pick;
     // Plane squares (all tools): Move = drag in the plane, Scale = both plane axes,
     // Rotate = turn about the plane's normal (same as that axis's ring).
@@ -2214,7 +2218,6 @@ int StudioScene::transformGizmoHit(float x,float y,float width,float height) con
         return best;
     }
     for(int a=0;a<3;++a){const float d=segmentDistance(x,y,h.px,h.py,h.tip[a][0],h.tip[a][1]);if(d<bestD){bestD=d;best=a;}}
-    if(tool_==TransformTool::Scale && std::hypot(x-h.px,y-h.py)<h.pick*1.4f)best=3; // centre: uniform
     return best;
 }
 bool StudioScene::beginTransformDrag(float x,float y,float width,float height) {
