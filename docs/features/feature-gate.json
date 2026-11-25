@@ -108,8 +108,8 @@
       "evidence": [
         "skills/workflow/aiverse-new-feature/SKILL.md",
         "docs/evidence/integration-acceptance-d5608fb7f.json",
-        "docs/evidence/feature-gate-cda38a15c-catalog.log.txt",
-        "docs/evidence/feature-gate-cda38a15c-skill-audit.log.txt"
+        "docs/evidence/feature-gate-8a0d96716-catalog.log.txt",
+        "docs/evidence/feature-gate-8a0d96716-skill-audit.log.txt"
       ]
     },
     "mcp": {
@@ -185,9 +185,9 @@
       "evidence": [
         "docs/evidence/integration-tools-b954cd47a.json",
         "docs/evidence/feature-readiness-stdio-b954cd47a.json",
-        "docs/evidence/feature-gate-cda38a15c-feature-suite.log.txt",
-        "docs/evidence/feature-gate-cda38a15c-native-project.log.txt",
-        "docs/evidence/feature-gate-cda38a15c-contracts.log.txt"
+        "docs/evidence/feature-gate-8a0d96716-feature-suite.log.txt",
+        "docs/evidence/feature-gate-8a0d96716-native-project.log.txt",
+        "docs/evidence/feature-gate-8a0d96716-contracts.log.txt"
       ]
     },
     "handoff": {
@@ -233,13 +233,13 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-cda38a15c-contracts.json",
-    "docs/evidence/feature-gate-cda38a15c-catalog.json",
-    "docs/evidence/feature-gate-cda38a15c-skill-audit.json",
-    "docs/evidence/feature-gate-cda38a15c-feature-suite.json",
-    "docs/evidence/feature-gate-cda38a15c-native-project.json",
-    "docs/evidence/feature-gate-cda38a15c-web.json",
-    "docs/evidence/feature-gate-cda38a15c-studio-contracts.json",
-    "docs/evidence/feature-gate-cda38a15c-typecheck.json"
+    "docs/evidence/feature-gate-8a0d96716-contracts.json",
+    "docs/evidence/feature-gate-8a0d96716-catalog.json",
+    "docs/evidence/feature-gate-8a0d96716-skill-audit.json",
+    "docs/evidence/feature-gate-8a0d96716-feature-suite.json",
+    "docs/evidence/feature-gate-8a0d96716-native-project.json",
+    "docs/evidence/feature-gate-8a0d96716-web.json",
+    "docs/evidence/feature-gate-8a0d96716-studio-contracts.json",
+    "docs/evidence/feature-gate-8a0d96716-typecheck.json"
   ]
 }

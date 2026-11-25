@@ -33,7 +33,7 @@
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/runtime.png",
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
-        "docs/evidence/feature-gate-cda38a15c-web.json"
+        "docs/evidence/feature-gate-8a0d96716-web.json"
       ]
     },
     "architecture": {
@@ -51,7 +51,7 @@
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/runtime.png",
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
-        "docs/evidence/feature-gate-cda38a15c-web.json"
+        "docs/evidence/feature-gate-8a0d96716-web.json"
       ]
     },
     "skill": {
@@ -142,7 +142,7 @@
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/runtime.png",
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
-        "docs/evidence/feature-gate-cda38a15c-web.json"
+        "docs/evidence/feature-gate-8a0d96716-web.json"
       ]
     },
     "handoff": {
@@ -185,9 +185,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-cda38a15c-studio-contracts.json",
-    "docs/evidence/feature-gate-cda38a15c-web.json",
-    "docs/evidence/feature-gate-cda38a15c-typecheck.json",
-    "docs/evidence/feature-gate-cda38a15c-skill-audit.json"
+    "docs/evidence/feature-gate-8a0d96716-studio-contracts.json",
+    "docs/evidence/feature-gate-8a0d96716-web.json",
+    "docs/evidence/feature-gate-8a0d96716-typecheck.json",
+    "docs/evidence/feature-gate-8a0d96716-skill-audit.json"
   ]
 }

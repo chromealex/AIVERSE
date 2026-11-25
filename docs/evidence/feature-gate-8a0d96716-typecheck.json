@@ -1,0 +1,13 @@
+{
+  "sha": "8a0d967161e69aa685144537171512a4af57d1a0",
+  "argv": [
+    "npm",
+    "--prefix",
+    "apps/studio-web",
+    "run",
+    "typecheck"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/feature-gate-8a0d96716-typecheck.log.txt",
+  "sha256": "faf69e7ecfd8c20b33792830e507724d015f288b5a790fdd527065901f77533f"
+}
