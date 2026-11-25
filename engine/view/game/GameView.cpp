@@ -1647,7 +1647,7 @@ void GameView::draw(Renderer3D& r, const GameScene& input, double time, const st
         const SceneObject& o = s.objects[i];
         if (!o.isProjectile && o.type < replacedByRoads.size() && replacedByRoads[o.type]) continue;
         if (o.isProjectile) {
-            if (o.visible && o.entity.valid()) drawProjectile(r, o.entity.packed(), o, dt);
+            if (o.visible && o.entity.valid()) drawProjectile(r, o.entity.packed(), o, dt, {0,1,0}, true, &grid);
             else if(o.visible) {
                 ::aiverse::view::MeshObject packet;
                 packet.mesh=&projectile_;
@@ -2222,6 +2222,21 @@ void sceneFromSim(Simulation& sim, GameScene& out, float alpha, uint8_t viewer) 
         if(pr.sourceType<R.types.size())so.shooterType=pr.sourceType;
         else if(auto* su=w.tryGet<Unit>(pr.source))so.shooterType=su->type;
         so.shotWeapon=int8_t(view_adapter::projectileAppearanceSlot(R,pr));
+        const bool linear = !pr.program.enabled && (pr.effList < 0 ||
+            (size_t(pr.effList) < R.payloads.size() && size_t(pr.effIndex) < R.payloads[size_t(pr.effList)].size() &&
+             !R.payloads[size_t(pr.effList)][size_t(pr.effIndex)].delivery.arc));
+        if (linear && w.alive(pr.target)) {
+            const auto* target = w.tryGet<Unit>(pr.target);
+            const auto* transform = w.tryGet<Transform>(pr.target);
+            if (target && transform) {
+                so.shotTargetType = target->type;
+                so.target = lerp(toF(transform->prevPos), toF(transform->pos), alpha);
+                if (const auto* pose = w.tryGet<AuthoredPose>(pr.target); pose && pose->hasY) {
+                    so.poseHasY = true;
+                    so.poseY = float(pose->y.toDouble());
+                }
+            }
+        }
         const Vec3 delta=t.pos-t.prevPos;
         so.facing=toF(delta.lengthSq().raw>0?delta:pr.aim-t.pos);
         so.pos = lerp(toF(t.prevPos), toF(t.pos), alpha);

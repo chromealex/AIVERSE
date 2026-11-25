@@ -3,6 +3,7 @@
 #include "engine/render/Math3D.h"
 #include "engine/game/Components.h"
 #include "engine/game/ProgressionData.h"
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <string>
@@ -53,6 +54,17 @@ inline ProjectileAppearance parseProjectileAppearance(const Json& j) {
     if(out.model.empty())throw std::runtime_error("empty projectile model path");
     return out;
 }
+// Use the interpolated simulation position to measure progress across the map.
+// This keeps the presentation independent of render frame rate and pause.
+inline render::float3 straightShotPoint(render::float3 first, render::float3 muzzle,
+                                         render::float3 current, render::float3 impact) {
+    const render::float3 direction{impact.x-first.x, 0, impact.z-first.z};
+    const float squared = render::dot(direction, direction);
+    const float t = squared > 1e-8f
+        ? std::clamp(render::dot(current-first, direction)/squared, 0.f, 1.f) : 1.f;
+    return muzzle + (impact-muzzle)*t;
+}
+
 // Model +X points along actual flight; choose a stable perpendicular when
 // flight is vertical. Works in either flat or radial-up view coordinates.
 inline render::mat4 projectileFlightFrame(render::float3 pos,render::float3 direction,render::float3 up) {

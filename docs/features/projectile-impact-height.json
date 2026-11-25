@@ -1,0 +1,161 @@
+{
+  "schema": 1,
+  "id": "projectile-impact-height",
+  "owner": "Game View",
+  "changed_paths": [
+    "apps/client/ClientFx.cpp",
+    "apps/editor/Editor.cpp",
+    "apps/studio-web/src/panels/rulesSchema.ts",
+    "apps/studio-web/tests/rulesSchema.test.mjs",
+    "demos/projectile-impact-height/fx/fx.json",
+    "demos/projectile-impact-height/fx/trace.json",
+    "demos/projectile-impact-height/game.json",
+    "demos/projectile-impact-height/maps/range.json",
+    "demos/projectile-impact-height/models/launcher.obj",
+    "demos/projectile-impact-height/models/target.obj",
+    "demos/projectile-impact-height/rules.json",
+    "docs/agent-handoffs/projectile-impact-height-initial.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/systems.json",
+    "docs/features/projectile-impact-height.json",
+    "docs/models.md",
+    "engine/fx/GameFx.cpp",
+    "engine/fx/GameFx.h",
+    "engine/view/game/GameLook.cpp",
+    "engine/view/game/GameView.cpp",
+    "engine/view/game/GameView.h",
+    "engine/view/game/GameViewDraw.cpp",
+    "engine/view/game/ProjectileAppearance.h",
+    "skills/visuals/aiverse-look/SKILL.md",
+    "tests/deferred_loading.cpp"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": false,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "The ECS projectile remains authoritative. Presentation interpolates existing scene transforms, and particles read the displayed point.",
+      "evidence": [
+        "engine/view/game/GameView.cpp",
+        "engine/fx/GameFx.cpp"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "GameView::projectileImpactPathPoint and straightShotPoint expose current presentation data and interpolation.",
+      "evidence": [
+        "engine/view/game/GameView.h",
+        "engine/view/game/ProjectileAppearance.h"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "The look authoring recipe specifies the target setting and side-view check.",
+      "evidence": [
+        "skills/visuals/aiverse-look/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "headless": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "pass",
+      "note": "A small interactive range has two targets and a bright trail. The existing headless host ran the scene for 10s and reported 7 attacks.",
+      "evidence": [
+        "demos/projectile-impact-height/rules.json",
+        "demos/projectile-impact-height/maps/range.json"
+      ]
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "handoff": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "The models guide documents units, defaults and supported flight paths.",
+      "evidence": [
+        "docs/models.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-look"
+    ],
+    "mcp_tools": [
+      "rules_get",
+      "rules_merge"
+    ],
+    "studio_panels": [
+      "rules"
+    ],
+    "studio_methods": [
+      "studio.rulesSet"
+    ]
+  },
+  "test_reports": [
+    "docs/evidence/projectile-impact-height-studio.json"
+  ]
+}

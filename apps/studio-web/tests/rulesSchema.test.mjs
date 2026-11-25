@@ -30,3 +30,11 @@ test('selection flag defaults on and preserves inherited false', () => {
   assert.equal(row({}, { selectable: false }).inherited, true);
   assert.equal(row({ selectable: true }, { selectable: true }).own, true);
 });
+
+test('projectile impact height is editable on a new type, including zero', () => {
+  const row = typeValues('target', {}, {}, []).find(v => v.field.path === 'view.impactHeight');
+  assert.equal(row.path, 'types.target.view.impactHeight');
+  assert.deepEqual(parseRuleInput(row.field, '0'), { ok: true, value: 0 });
+  assert.equal(parseRuleInput(row.field, '-1').ok, false);
+  assert.deepEqual(parseRuleInput(row.field, ''), { ok: true, value: null });
+});

@@ -285,6 +285,11 @@ int aiverseMain(int, char**) {
         using namespace game::view_adapter;
         using namespace render;
         auto appearance=parseProjectileAppearance(Json::parse(R"({"model":"b.obj","forward":"+z","scale":0.5})"));
+        const float3 launch{0,2,0}, muzzle{1,5,0}, impact{10,1,0};
+        check(length(straightShotPoint(launch,muzzle,launch,impact)-muzzle)<1e-5f,"straight shot starts at muzzle");
+        check(length(straightShotPoint(launch,muzzle,{5,2,0},impact)-float3{5.5f,3,0})<1e-5f,"straight shot half height");
+        check(length(straightShotPoint(launch,muzzle,{12,2,0},impact)-impact)<1e-5f,"straight shot clamps to target height");
+        check(length(straightShotPoint(launch,muzzle,launch,{0,1,0})-float3{0,1,0})<1e-5f,"coincident shot footprint");
         auto matrix=projectileFlightFrame({1,2,3},{0,1,0},{0,1,0})*appearance.axisFix;
         auto front=matrix.transformPoint({0,0,1})-matrix.transformPoint({0,0,0});
         check(length(front-float3{0,1,0})<0.001f,"vertical projectile orientation");

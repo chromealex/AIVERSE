@@ -1,0 +1,12 @@
+{
+  "sha": "9c280af93708b77c8fbfb1961d9b4c746b82e50c",
+  "argv": [
+    "node",
+    "--experimental-strip-types",
+    "--test",
+    "apps/studio-web/tests/rulesSchema.test.mjs"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/projectile-impact-height-studio.log.txt",
+  "sha256": "c998891ecf03eda14f36257b40c55f60da97b7a3182203418f71c1534b0caa17"
+}
