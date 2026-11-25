@@ -1,0 +1,182 @@
+{
+  "version": 1,
+  "parameters": {
+    "radius": 0.9,
+    "bore": 0.3
+  },
+  "materials": [
+    {
+      "id": "stone",
+      "color": [
+        0.58,
+        0.34,
+        0.19,
+        1
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "id": "sculpture",
+      "material": "stone",
+      "geometry": {
+        "kind": "volumeCsg",
+        "resolution": 20,
+        "min": [
+          -1.2,
+          -1.2,
+          -1.2
+        ],
+        "max": [
+          1.2,
+          1.2,
+          1.2
+        ],
+        "fields": [
+          {
+            "id": "body",
+            "op": "sphere",
+            "radius": {
+              "param": "radius"
+            }
+          },
+          {
+            "id": "weathered",
+            "op": "noise",
+            "input": "body",
+            "frequency": 3,
+            "amplitude": 0.08,
+            "seed": 7
+          },
+          {
+            "id": "vein",
+            "op": "densityTexture",
+            "center": [
+              0.62,
+              0.16,
+              0
+            ],
+            "size": [
+              1.05,
+              0.8,
+              0.8
+            ],
+            "dimension": 4,
+            "texels": [
+              0,
+              32,
+              32,
+              0,
+              32,
+              85,
+              85,
+              32,
+              32,
+              85,
+              85,
+              32,
+              0,
+              32,
+              32,
+              0,
+              32,
+              85,
+              85,
+              32,
+              85,
+              166,
+              166,
+              85,
+              85,
+              166,
+              166,
+              85,
+              32,
+              85,
+              85,
+              32,
+              32,
+              85,
+              85,
+              32,
+              85,
+              166,
+              166,
+              85,
+              85,
+              166,
+              166,
+              85,
+              32,
+              85,
+              85,
+              32,
+              0,
+              32,
+              32,
+              0,
+              32,
+              85,
+              85,
+              32,
+              32,
+              85,
+              85,
+              32,
+              0,
+              32,
+              32,
+              0
+            ],
+            "threshold": 0.28
+          },
+          {
+            "id": "union",
+            "op": "union",
+            "a": "weathered",
+            "b": "vein"
+          },
+          {
+            "id": "trim",
+            "op": "box",
+            "size": [
+              2.1,
+              1.45,
+              2.1
+            ]
+          },
+          {
+            "id": "solid",
+            "op": "intersect",
+            "a": "union",
+            "b": "trim"
+          },
+          {
+            "id": "bore",
+            "op": "cylinder",
+            "radius": {
+              "param": "bore"
+            },
+            "size": [
+              1,
+              3,
+              1
+            ],
+            "center": [
+              0.15,
+              0,
+              0
+            ]
+          },
+          {
+            "id": "result",
+            "op": "subtract",
+            "a": "solid",
+            "b": "bore"
+          }
+        ],
+        "root": "result"
+      }
+    }
+  ]
+}

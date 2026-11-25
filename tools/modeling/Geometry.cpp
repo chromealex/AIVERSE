@@ -103,7 +103,9 @@ Mesh geometry(const Json &s, const std::atomic<bool> *cancel) {
     int seg = kind == "cable" ? 24 : count("segments", 24, 3, 128);
     float r = number(s["radius"], .5f, "radius"), h = number(s["height"], 1, "height");
     require(r > 0 && h > 0, "radius and height must be positive");
-    if (kind == "cable") {
+    if (kind == "volumeCsg") {
+        m = volumeCsgGeometry(s, cancel);
+    } else if (kind == "cable") {
         m = cableGeometry(s, cancel);
     } else if (kind == "box" || kind == "bevelBox") {
         auto size = vector3(s["size"], {1, 1, 1}, "size");

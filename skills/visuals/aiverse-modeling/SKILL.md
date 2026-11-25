@@ -23,3 +23,5 @@ Limits (from the doc): self-intersecting profiles are not supported; Euler joint
 unrestricted rotations.
 
 Workflow recipe over existing tools and MCP operations; no runtime library.
+
+For editable solid models, start with `examples/modeling/volume-csg.json`. In Studio use **Add volume CSG part**, Geometry dependencies and **Volume CSG**. Wire earlier fields into Boolean or noise inputs. For a density source, call `modeling_volume_texture_import` with a project-relative SPVT path and frame. Merge its returned texels into an existing densityTexture field. Save the source with `modeling_edit` and pass its returned revision to `modeling_export`. See the field and sampling limits in `docs/modeling.md`.

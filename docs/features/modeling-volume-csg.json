@@ -1,0 +1,185 @@
+{
+  "schema": 1,
+  "id": "modeling-volume-csg",
+  "owner": "modeling",
+  "changed_paths": [
+    "CMakeLists.txt",
+    "apps/editor/core/ModelingOps.cpp",
+    "apps/studio-native/StudioTools.h",
+    "apps/studio-web/src/graphs/ModelGraphPanel.tsx",
+    "apps/studio-web/src/graphs/VolumeCsgEditor.tsx",
+    "docs/agent-handoffs/modeling-volume-csg-initial.md",
+    "docs/agent-handoffs/modeling-volume-csg-native.md",
+    "docs/agent-handoffs/modeling-volume-csg-studio.md",
+    "docs/devlog/systems.json",
+    "docs/evidence/.gitattributes",
+    "docs/evidence/modeling-volume-csg-editor.png",
+    "docs/evidence/modeling-volume-csg-rebuild-20261125.json",
+    "docs/evidence/modeling-volume-csg-rebuild-20261125.log.txt",
+    "docs/features/modeling-volume-csg.json",
+    "docs/handoff/studio-html5/modeling-volume-csg.md",
+    "docs/modeling.md",
+    "examples/modeling/volume-csg.json",
+    "skills/visuals/aiverse-modeling/SKILL.md",
+    "tests/modeling/volume_csg.py",
+    "tools/modeling/Document.cpp",
+    "tools/modeling/Geometry.cpp",
+    "tools/modeling/Modeling.h",
+    "tools/modeling/VolumeCsg.cpp"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": false,
+    "visible": true,
+    "runtime": false
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Native volume field compiler, sampled solid and regular GLB export verified.",
+      "evidence": [
+        "docs/evidence/modeling-volume-csg-rebuild-20261125.log.txt",
+        "tools/modeling/VolumeCsg.cpp"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Modeling owns object sources and calls the shared Caverns extraction and noise library.",
+      "evidence": [
+        "tools/modeling/VolumeCsg.cpp"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "Existing native Modeling workspace successfully created, loaded, edited and exported the example.",
+      "evidence": [
+        "docs/evidence/modeling-volume-csg-rebuild-20261125.log.txt"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "Modeling skill documents density import, editable source and GLB export.",
+      "evidence": [
+        "skills/visuals/aiverse-modeling/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "pass",
+      "note": "Real headless tools/list and create/export calls passed.",
+      "evidence": [
+        "docs/agent-handoffs/modeling-volume-csg-studio.md"
+      ]
+    },
+    "studio": {
+      "status": "pass",
+      "note": "Production Studio React Modeling panel exercised through a browser bridge to native CLI. Desktop WKWebView remains unverified.",
+      "evidence": [
+        "docs/agent-handoffs/modeling-volume-csg-studio.md",
+        "docs/evidence/modeling-volume-csg-editor.png"
+      ]
+    },
+    "inspector": {
+      "status": "pass",
+      "note": "Playwright selected the cylinder, edited its center, applied and saved revision 2.",
+      "evidence": [
+        "docs/agent-handoffs/modeling-volume-csg-studio.md",
+        "docs/evidence/modeling-volume-csg-editor.png"
+      ]
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "Independent processes reopened and edited the model; undo restored byte-identical GLB.",
+      "evidence": [
+        "docs/evidence/modeling-volume-csg-rebuild-20261125.log.txt"
+      ]
+    },
+    "graphs": {
+      "status": "pass",
+      "note": "GraphCanvas connected to persisted ordered fields and native revision-checked builds.",
+      "evidence": [
+        "apps/studio-web/src/graphs/VolumeCsgEditor.tsx",
+        "docs/agent-handoffs/modeling-volume-csg-studio.md"
+      ]
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Resolution and sample counts bounded. Comparative benchmark pending.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Mac focused checks passed. Other platforms and merged-tree Mac gate pending.",
+      "evidence": []
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Used existing Caverns mesh extractor, lib_noise and SPVT decoder.",
+      "evidence": [
+        "tools/modeling/VolumeCsg.cpp",
+        "apps/editor/core/ModelingOps.cpp"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "Native CLI persisted authoring input and exported GLB.",
+      "evidence": [
+        "docs/evidence/modeling-volume-csg-rebuild-20261125.log.txt"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "Worked model uses every field operation.",
+      "evidence": [
+        "examples/modeling/volume-csg.json",
+        "docs/evidence/modeling-volume-csg-rebuild-20261125.log.txt"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Mac roundtrip passed and checked revision, texture decoding and undo.",
+      "evidence": [
+        "docs/evidence/modeling-volume-csg-rebuild-20261125.log.txt"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Stage SHAs, focused checks and outstanding integration gates recorded.",
+      "evidence": [
+        "docs/agent-handoffs/modeling-volume-csg-studio.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Source fields, texture order, limits and persistence covered.",
+      "evidence": [
+        "docs/modeling.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Studio capture present. Public demo and rendered example publication pending.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-modeling"
+    ],
+    "mcp_tools": [
+      "modeling_create",
+      "modeling_get",
+      "modeling_edit",
+      "modeling_export",
+      "modeling_volume_texture_import"
+    ],
+    "studio_panels": [
+      "modeling"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
+  },
+  "test_reports": [
+    "docs/evidence/modeling-volume-csg-rebuild-20261125.json"
+  ]
+}
