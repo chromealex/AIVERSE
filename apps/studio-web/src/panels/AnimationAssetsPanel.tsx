@@ -1,3 +1,4 @@
+import MontagePanel from './MontagePanel';
 import RootMotionPanel from './RootMotionPanel';
 import RagdollPanel from './RagdollPanel';
 import { useEffect, useId, useState, type ReactNode } from 'react';
@@ -13,7 +14,7 @@ async function operation<T>(project:string, op:string, params:Record<string,unkn
 }
 
 export default function AnimationAssetsPanel({project,tools}:{project:string;tools:ReactNode}) {
-  const [tab,setTab]=useState<'avatar'|'ragdoll'|'root'|'tools'>('avatar');
+  const [tab,setTab]=useState<'avatar'|'ragdoll'|'root'|'montage'|'tools'>('avatar');
   const advanced=tab==='tools';
   const [catalog,setCatalog]=useState<Catalog>({names:[],roles:[]});
   const [models,setModels]=useState<string[]>([]);
@@ -73,8 +74,9 @@ export default function AnimationAssetsPanel({project,tools}:{project:string;too
     <button aria-pressed={tab==='avatar'} onClick={()=>setTab('avatar')}>Humanoid avatar</button>
     <button disabled={busy} aria-pressed={tab==='ragdoll'} onClick={()=>setTab('ragdoll')}>Ragdoll</button>
     <button disabled={busy} aria-pressed={tab==='root'} onClick={()=>setTab('root')}>Root Motion</button>
+    <button disabled={busy} aria-pressed={tab==='montage'} onClick={()=>setTab('montage')}>Montage</button>
     <button disabled={dirty||busy} aria-pressed={advanced} onClick={()=>setTab('tools')}>Asset tools</button>
-  </nav></header><RootMotionPanel project={project} models={models} initialModel={model} active={tab==='root'}/><RagdollPanel project={project} avatar={draft} avatarName={name} active={tab==='ragdoll'}/>{advanced ? tools : tab==='avatar' && <>
+  </nav></header><MontagePanel key={project} project={project} models={models} active={tab==='montage'}/><RootMotionPanel project={project} models={models} initialModel={model} active={tab==='root'}/><RagdollPanel project={project} avatar={draft} avatarName={name} active={tab==='ragdoll'}/>{advanced ? tools : tab==='avatar' && <>
     <fieldset disabled={busy}><div className="avatar-source">
       <section><h3>Avatar file</h3><label>Asset name<input list={listId+'-files'} placeholder="hero" value={name} onChange={e=>setName(e.target.value)}/></label>
         <datalist id={listId+'-files'}>{catalog.names.map(n=><option key={n} value={n}/>)}</datalist>

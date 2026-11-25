@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/MontagePanel.tsx",
     "apps/studio-web/src/ui/studio-ui.css",
     "apps/studio-web/src/panels/RootMotionPanel.tsx",
     "apps/studio-web/src/panels/RagdollPanel.tsx",

@@ -287,3 +287,5 @@ Root Motion authoring 7cd8768ec88c001523022781d53f5b3f1805800c. RootMotionPanel 
 Shared dropdown and slider styles. Verify native selection, keyboard stepping, focus and disabled states across docked and detached panels.
 
 Shared Studio form controls 59640e287a1f9a47895fa909b27d8e541ae4db49. apps/studio-web/src/ui/studio-ui.css applies single-select and range chrome across panels. Verified typecheck, production build, native macOS detached window (docs/evidence/studio-project-catalog/shared-select-slider.png) and browser keyboard typeahead, decimal steps, focus, multiple select, disabled and forced colors. Initial ArrowDown-only browser check did not commit the selection on macOS; confirmed native typeahead selection instead. Exact web suite evidence docs/evidence/studio-controls-59640e287.json. Windows visual verification is pending alongside Montage and remaining migration stages.
+
+Active Montage stage. Edit section clips, bounds, transitions, slot, bone mask and source-time notifies. Verify native validation and guarded file round trip.
