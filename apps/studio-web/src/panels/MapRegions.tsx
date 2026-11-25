@@ -65,6 +65,12 @@ export function MapRegions({scope,busy,onApply}:{
     try{setBrush(await invoke('studio.sceneBrush',{scope,kind:'region',regionLetter:letter,armed:!armed}));}
     catch(e){setError(String(e));}finally{setPending(false);}
   }
+  async function showBorders(visible:boolean){
+    setPending(true);setError('');
+    try{setBrush(await invoke('studio.sceneBrush',{scope,regionBorders:visible}));}
+    catch(e){setError(String(e));}finally{setPending(false);}
+  }
+  const paintingRegions=brush?.armed && brush.kind==='region';
   return <section className="insp-map insp-regions" aria-label="Map regions">
     <header><MapIcon size={19}/><div><h2>Map regions</h2>{map && <small>{map.width} × {map.height} cells</small>}</div></header>
     {map && region && <fieldset disabled={busy||pending}>
@@ -78,6 +84,8 @@ export function MapRegions({scope,busy,onApply}:{
         </svg>
         <figcaption>{region.cells.toLocaleString()} painted cells{map.stride>1 && ` · Overview grouped in ${map.stride} × ${map.stride} cells`}</figcaption>
       </figure>}
+      <label className="insp-map__toggle"><input type="checkbox" checked={!!(brush?.regionBorders||paintingRegions)}
+        disabled={!current||!brush||paintingRegions} onChange={e=>void showBorders(e.target.checked)}/>Show borders in Scene</label>
       <label>Display name<StudioInput value={draft?.name??region.name} placeholder={`Region ${letter}`}
         disabled={!current} onChange={e=>setDraft({name:e.target.value,scope:draft?.scope??scope})}/></label>
       {stale && <p role="alert">The map changed. Discard the draft to load the current name.</p>}

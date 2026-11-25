@@ -910,6 +910,9 @@ void StudioHost::tickScene() {
     FrameInputs in;
     in.width = placement_.pixelsW; in.height = placement_.pixelsH;
     in.map = mapSnapshot_; in.rules = rulesSnapshot_;
+    const auto& brush=session_->sceneBrush();
+    if(brush.armed && brush.kind=="region")in.regionBorderLetter=brush.regionLetter.front();
+    else if(brush.regionBorders)in.regionBorderLetter='.';
     in.fps = ws.map.data.worldSpace;
     in.selected = session_->selectedObjectId();
     in.levelHeight = float(ws.project.rules.levelHeight.toDouble());
@@ -944,6 +947,7 @@ void StudioHost::renderSceneFrame() {
     try {
         platform_.sceneThreadScope([&] {
             preview_->setEditorState(std::move(in.selection), std::move(in.hidden), std::move(in.locked), std::move(in.hover));
+            preview_->setRegionBorders(in.regionBorderLetter);
             preview_->setWindPreview(in.wind);
             preview_->frame(in.width, in.height, *in.map, in.fps, in.selected, "", Json::object(), 0,
                             in.levelHeight, in.project, *in.rules, nullptr);

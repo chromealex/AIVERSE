@@ -17,6 +17,7 @@
 #include <mutex>
 #include <chrono>
 #include <optional>
+#include "apps/studio-native/StudioRegionBorders.h"
 #include "apps/studio-native/StudioModelPicking.h"
 #include "apps/studio-native/StudioDocumentVisuals.h"
 #include "apps/studio-native/StudioPlanetPreview.h"
@@ -367,6 +368,9 @@ public:
     void setLocalSpace(bool local) { localSpace_ = local; }
     bool localSpace() const { return localSpace_; }
     void setSnap(bool enabled, float move, float rotate, float scale);
+    void setRegionBorders(char letter) {
+        if(regionBorderLetter_!=letter){regionBorderLetter_=letter;regionBordersDirty_=true;}
+    }
     void setGizmosVisible(bool visible) { gizmosVisible_ = visible; }
     // Hold V while moving: the object's pivot snaps to the nearest other object's pivot on screen.
     void setPivotSnap(bool on) { pivotSnap_ = on; }
@@ -693,6 +697,9 @@ private:
     render::Camera viewCamera() const;
     bool orientationGizmo_ = false;
     TransformTool tool_ = TransformTool::Move;
+    StudioRegionBorders regionBorders_;
+    char regionBorderLetter_=0;
+    bool regionBordersDirty_=true;
     bool localSpace_ = false, gizmosVisible_ = true, snapEnabled_ = false;
     float snapMove_ = 1.0f, snapRotate_ = 15.0f, snapScale_ = 0.1f;
     struct TransformDrag {

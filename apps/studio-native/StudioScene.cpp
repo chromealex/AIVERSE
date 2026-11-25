@@ -3455,6 +3455,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         terrainCutStats_=std::move(cutStats);
         terrainLevelHeight_=levelHeight;
         terrainWasShown_=showTerrain;terrainCavernsAuthored_=caveAuthored;
+        regionBordersDirty_=true;
         terrainRevision_=doc.revision;
         planetTerrainDoc_=planetaryChart?&doc:nullptr;
         planetTerrainProject_=planetaryChart?projectPath:std::string{};
@@ -3774,6 +3775,20 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         renderer_.line({at.x-extent,at.y,at.z},{at.x+extent,at.y,at.z},color);
         renderer_.line({at.x,at.y-extent,at.z},{at.x,at.y+extent,at.z},color);
         renderer_.line({at.x,at.y,at.z-extent},{at.x,at.y,at.z+extent},color);
+    }
+    if(regionBorderLetter_ && !fpsProject && !planetaryChart){
+        if(regionBordersDirty_)regionBorders_.measure(map,levelHeight,showTerrain);
+        const auto bounds=regionBorders_.visible(map,view,framebufferWidth,framebufferHeight);
+        if(regionBordersDirty_ || bounds!=regionBorders_.bounds){
+            regionBorders_.build(map,bounds,levelHeight,showTerrain,regionBorderLetter_);
+            regionBordersDirty_=false;
+        }
+        for(const auto& edge:regionBorders_.edges){
+            const unsigned c=static_cast<unsigned char>(edge.letter);
+            const uint32_t color=edge.letter==regionBorderLetter_?rgba(125,215,255):
+                rgba(80+(c*47)%175,80+(c*91)%175,80+(c*23)%175);
+            renderer_.line(edge.a,edge.b,color);
+        }
     }
     if(gizmosVisible_)drawSelectionBox(view,framebufferWidth,framebufferHeight);
     drawBrushCursor(view,framebufferWidth,framebufferHeight);
@@ -4909,7 +4924,7 @@ uint64_t StudioScene::frameSignature(int width,int height,const editor::MapDoc& 
     value(marquee_.on);value(marquee_.x0);value(marquee_.y0);value(marquee_.x1);value(marquee_.y1);
     value(wind_.revision);value(wind_.enabled);value(wind_.speed);value(wind_.directionDeg);
     value(wind_.gust);value(wind_.scale);value(wind_.debug);
-    value(brushVisible_);vec(brushCenter_);value(brushRadius_);
+    value(regionBorderLetter_);value(brushVisible_);vec(brushCenter_);value(brushRadius_);
     value(overlayShapes_.size());
     for(const auto& shape:overlayShapes_){value(shape.kind);vec(shape.a);vec(shape.b);value(shape.radius);
         value(shape.thickness);value(shape.r);value(shape.g);value(shape.bl);}

@@ -1713,6 +1713,11 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Fixture co
        AIVERSE_TEST_CHECK(steps.size()>0 && steps[steps.size()-1].getStr("label")=="Terrain brush");
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && session.workspace().map.undoDepth()==depth);
        const auto originalRegions=session.workspace().map.data.regions;
+       const auto borderDepth=session.workspace().map.undoDepth();
+       AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"regionBorders":true})")["result"].getBool("regionBorders"));
+       AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"regionBorders":1})").has("error"));
+       AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"regionBorders":false})")["result"].getBool("regionBorders"));
+       AIVERSE_TEST_CHECK(session.workspace().map.undoDepth()==borderDepth);
        AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"kind":"region","regionLetter":"B","radius":0.5})").has("error"));
        AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"regionLetter":"BC"})").has("error"));
        AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err) && session.strokeDab(5,4,&err) && session.strokeEnd(&err));

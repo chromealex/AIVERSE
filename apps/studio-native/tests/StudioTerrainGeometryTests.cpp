@@ -7,6 +7,7 @@
 #include "apps/studio-native/StudioPlanetProcessOverlays.h"
 #include "apps/studio-native/StudioPlanetRegionEditing.h"
 #include "apps/studio-native/StudioPlanetGravityEditing.h"
+#include "apps/studio-native/StudioRegionBorders.h"
 #include "tests/TestCheck.h"
 #include <cmath>
 #include <iostream>
@@ -15,6 +16,34 @@ using namespace aiverse::studio;
 using namespace aiverse::render;
 
 int main() {
+    {
+        editor::MapDoc doc;doc.reset(16,16);
+        auto& map=doc.data;
+        map.regions[map.idx(0,0)]='A';map.regions[map.idx(1,0)]='A';map.regions[map.idx(2,0)]='B';
+        StudioRegionBorders borders;
+        auto build=[&]{borders.build(map,{0,0,map.w,map.h},1.5f,false,'B');};
+        build();
+        AIVERSE_TEST_CHECK(borders.edges.size()==7);
+        const auto shared=std::count_if(borders.edges.begin(),borders.edges.end(),[](const auto& e){
+            return e.a.x==2 && e.b.x==2 && e.a.z==0 && e.b.z==1 && e.letter=='B';
+        });
+        AIVERSE_TEST_CHECK(shared==1);
+        doc.beginEdit();doc.paintRegionRect(0,0,2,0,'.');build();
+        AIVERSE_TEST_CHECK(borders.edges.empty());
+        doc.undo();build();AIVERSE_TEST_CHECK(borders.edges.size()==7);
+        map.corners.assign(size_t(map.w+1)*(map.h+1),0);
+        map.corners[1]=16;
+        borders.build(map,{0,0,map.w,map.h},1.5f,true,'.');
+        AIVERSE_TEST_CHECK(std::any_of(borders.edges.begin(),borders.edges.end(),[](const auto& e){
+            return e.a.x==1 && e.a.z==0 && std::abs(e.a.y-1.05f)<.001f;
+        }));
+        doc.reset(260,260);
+        for(int z=0;z<map.h;++z)for(int x=0;x<map.w;++x)
+            map.regions[map.idx(x,z)]=(x+z)%2?'A':'B';
+        build();AIVERSE_TEST_CHECK(borders.stride>1 && borders.edges.size()<=32768);
+        borders.build(map,{32,32,40,40},1.5f,false,'B');
+        AIVERSE_TEST_CHECK(borders.stride==1 && !borders.edges.empty());
+    }
     {
         // The trunk lies along world +X. The capsule has radius .5 m,
         // total length 6 m; the prototype trunk is 3 m by .25 m radius.

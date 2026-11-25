@@ -1074,7 +1074,7 @@ Json StudioSession::saveMapAs(const std::string& path) {
 }
 Json StudioSession::openProject(const std::string& path) {
     if(agentRun_.running())throw std::runtime_error("Stop the running agent before opening a project");
-    strokeCancel();brush_.armed=false;
+    strokeCancel();brush_.armed=false;brush_.regionBorders=false;
     agentHistoryUnsafe_=true;agentBatchFenced_=true;
     if (path.empty()) throw std::runtime_error("Project path is empty");
     const auto directory=recoveredProjectDir(ws_,path);
@@ -1635,6 +1635,7 @@ Json StudioSession::sceneBrushJson() const {
     o.set("armed",Json::fromBool(b.armed));o.set("kind",str(b.kind));o.set("op",str(b.op));
     o.set("radius",Json::number(b.radius,3));o.set("strength",Json::number(b.strength,3));
     o.set("layer",num(int64_t(b.layer)));o.set("tile",str(b.tile));o.set("field",str(b.field));o.set("fieldMode",str(b.fieldMode));
+    o.set("regionBorders",Json::fromBool(b.regionBorders));
     o.set("regionLetter",str(b.regionLetter));
     o.set("value",Json::number(b.value,3));o.set("type",str(b.type));o.set("owner",num(int64_t(b.owner)));
     o.set("count",num(int64_t(b.count)));o.set("spread",Json::number(b.spread,3));
@@ -2376,7 +2377,7 @@ Json StudioSession::assetHistoryJson() const {
 Json StudioSession::dispatch(const Json& request) {
     const std::string method=request.getStr("method");
     const bool switching=method=="studio.openProject"||method=="studio.openMap"||method=="studio.newMap"||method=="studio.hubOpen"||method=="studio.hubCreate";
-    if(switching){strokeCancel();brush_.armed=false;agentHistoryUnsafe_=true;agentBatchFenced_=true;}
+    if(switching){strokeCancel();brush_.armed=false;brush_.regionBorders=false;agentHistoryUnsafe_=true;agentBatchFenced_=true;}
     if(stroking_){
         // The stroke owns the MapDoc transaction across frames. Only explicit
         // observational requests can enter; other edits retry after release.
@@ -4583,6 +4584,10 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             if (params.has("layer")) b.layer=int(number("layer",0,15));
             if (params.has("tile")) b.tile=text("tile");
             if (params.has("field")) b.field=text("field");
+            if(params.has("regionBorders")){
+                if(params["regionBorders"].type()!=Json::Type::Bool)throw std::runtime_error("Expected a border visibility flag");
+                b.regionBorders=params.getBool("regionBorders");
+            }
             if (params.has("regionLetter")) {
                 const auto letter=params.getStr("regionLetter");
                 if(letter.size()!=1 || (letter!="." && (letter[0]<'A' || letter[0]>'Z')))
