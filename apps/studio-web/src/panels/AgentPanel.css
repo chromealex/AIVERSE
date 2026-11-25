@@ -52,4 +52,4 @@
 .agent--draft .agent__body{display:none}
 .agent--draft .agent__composer{flex:1;min-height:0;flex-direction:column;align-items:stretch;border:0}
 .agent--draft .agent__composer textarea{width:100%;min-height:32px;max-height:none;resize:none;line-height:1.55}
-.agent--draft .agent__composer button{align-self:flex-end}
+.agent__composer-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px}

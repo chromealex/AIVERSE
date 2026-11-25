@@ -3,6 +3,7 @@ import { Bot, CheckCircle2, CircleAlert, MessageSquarePlus, RotateCcw, Send, Squ
 import { invoke, onNativeEvent } from '../bridge';
 import type { StudioAgentInfo, StudioAgentChange, StudioAgentBatch, StudioSnapshot } from '../types';
 import { StudioIconButton, StudioButton, StudioAlert } from '../ui';
+import { copyText } from '../clipboard';
 import { agentLineKind } from './agentLogic';
 import './AgentPanel.css';
 import { StudioLoader } from '../ui';
@@ -18,6 +19,7 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
   const [info, setInfo] = useState<StudioAgentInfo | null>(null);
   const [lines, setLines] = useState<string[]>([]);
   const [prompt, setPrompt] = useState('');
+  const [copied, setCopied] = useState(false);
   const [editingBrief, setEditingBrief] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -54,6 +56,7 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
     try {
       const response = await invoke('studio.agentInfo', { from: total.current, briefForProject: projectPath });
       if (!response.wizardBrief) throw new Error('Wizard brief unavailable');
+      setCopied(false);
       setEditingBrief(true);
       setPrompt(response.wizardBrief);
       requestAnimationFrame(() => {
@@ -67,9 +70,14 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
     } catch (e) { setError(message(e)); }
     finally { setBusy(false); }
   };
+  const copyBrief = async () => {
+    const success = await copyText(prompt);
+    setCopied(success);
+    setError(success ? '' : 'Select the draft and copy it with the system shortcut.');
+  };
   const send = async () => {
     const text = prompt.trim();
-    if (!text || busy || promptBytes > 20000 || info?.running) return;
+    if (!text || busy || !info?.cli || !info.mcp || promptBytes > 20000 || info.running) return;
     setBusy(true);
     try { apply(await invoke('studio.agentStart', { prompt: text, from: total.current })); setPrompt(''); setEditingBrief(false); setError(''); }
     catch (e) { setError(message(e)); }
@@ -190,11 +198,15 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
     {editingBrief && <div className="agent__draft-title"><strong>Game wizard brief</strong><small>WIZARD_TASK.md</small></div>}
     <div className="agent__composer">
       <textarea ref={composer} aria-label="Agent request" className="au-input" rows={prompt.includes('\n') ? 5 : 2} placeholder={info?.conversation ? 'Follow up… (⌘↩ to send)' : 'Ask the agent… (⌘↩ to send)'}
-        value={prompt} onChange={e => { setPrompt(e.target.value); if (!e.target.value) setEditingBrief(false); }} onKeyDown={onKey} disabled={busy || !!info?.running}/>
+        value={prompt} onChange={e => { setPrompt(e.target.value); setCopied(false); if (!e.target.value) setEditingBrief(false); }} onKeyDown={onKey} disabled={busy || !!info?.running}/>
+      <div className="agent__composer-actions">
+      {editingBrief && <StudioButton size="sm" onClick={() => void copyBrief()}>{copied ? 'Copied' : 'Copy draft'}</StudioButton>}
       {info?.running
         ? <button type="button" className="au-button au-button--sm" onClick={() => void stop()}><Square size={12}/>Stop</button>
-        : <button type="button" className="au-button au-button--sm au-button--primary" disabled={busy || !prompt.trim() || promptBytes > 20000} onClick={() => void send()}>
+        : <button type="button" className="au-button au-button--sm au-button--primary" title={!info?.cli ? 'Claude Code CLI is unavailable' : !info.mcp ? 'Studio MCP executable is unavailable' : undefined}
+            disabled={busy || !info?.cli || !info.mcp || !prompt.trim() || promptBytes > 20000} onClick={() => void send()}>
             {busy ? <StudioLoader size={16}/> : <Send size={13}/>}Send</button>}
+      </div>
     </div>
   </div>;
 }

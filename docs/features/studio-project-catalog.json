@@ -4,6 +4,7 @@
   "owner": "HTML5 Studio",
   "changed_paths": [
     "apps/studio-web/src/components/ProjectHub.tsx",
+    "apps/studio-web/src/components/ProjectHub.css",
     "apps/studio-web/src/components/GameWizard.tsx",
     "apps/studio-web/src/panels/AgentPanel.tsx",
     "apps/studio-web/src/components/GameWizardSettings.tsx",
