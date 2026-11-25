@@ -2,3 +2,4 @@
 *.bash text eol=lf
 docs/evidence/pr124-*.log.txt text eol=lf
 docs/evidence/selection-targeting-*.log.txt text eol=lf
+docs/evidence/issues-197-202-integrated-mac.log.txt text eol=lf

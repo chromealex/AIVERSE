@@ -3164,7 +3164,7 @@
         "Connect Claude Code or another MCP client."
       ],
       "roadmap": [
-        {"id": "native-simulation-checks", "status": "in-progress", "title": "Диагностика C++-модулей перед проверкой симуляции", "titleEn": "Report missing native modules before simulation checks", "text": "MCP перечисляет отсутствующие модули проекта перед запуском проверки.", "textEn": "MCP lists missing project modules before running a simulation check."},
+        {"id": "native-simulation-checks", "status": "done", "title": "Диагностика C++-модулей перед проверкой симуляции", "titleEn": "Report missing native modules before simulation checks", "text": "MCP перечисляет отсутствующие модули проекта перед запуском проверки.", "textEn": "MCP lists missing project modules before running a simulation check.", "date": "2026-11-25"},
         {
           "id": "feature-gate",
           "title": "Единый контракт готовности фич",
@@ -3402,7 +3402,8 @@
         },
         {
           "id": "projectile-impact-height",
-          "status": "in-progress",
+          "date": "2026-11-25",
+          "status": "done",
           "title": "Высота попадания снарядов",
           "titleEn": "Projectile impact height",
           "text": "Привязка прямого выстрела и его следа к высоте цели.",
