@@ -32,12 +32,12 @@ export default function MovementRoadTool({scope}: {scope:StudioGraphDocumentScop
     };
   }, [pick]);
   return <>
-    <button type="button" className="viewport-control" aria-label="Movement roads" aria-pressed={!!pick}
+    <button type="button" className={'viewport-control'+(pick?' selected':'')} aria-label="Movement roads" aria-pressed={!!pick}
       title="Connect or disconnect objects with movement roads" onClick={() => {
         setError(''); setHasOrigin(false);
         setPick(pick ? null : {token:'road-'+Date.now()+'-'+Math.random().toString(36).slice(2),scope});
-      }}><Route size={14}/>Roads</button>
-    {pick && <span role="status">{hasOrigin ? 'Pick endpoint · Shift to continue' : 'Pick first object'}</span>}
-    {error && <span role="alert">{error}</span>}
+      }}><Route size={14}/></button>
+    {pick && <span className="road-pick-guide" role="status">{hasOrigin ? 'Pick endpoint · Shift to continue' : 'Pick first object'}</span>}
+    {error && <span className="road-pick-guide" role="alert">{error}</span>}
   </>;
 }

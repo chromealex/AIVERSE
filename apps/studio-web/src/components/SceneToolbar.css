@@ -22,3 +22,8 @@
 .viewport-toolbar{gap:8px;overflow:visible}
 .viewport-toolbar .viewport-tools{min-width:0;flex:1 1 auto}
 .viewport-toolbar>:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.viewport-toolbar:has(.road-pick-guide){height:auto;min-height:41px;padding-block:4px}
+.viewport-tools:has(.road-pick-guide){flex-wrap:wrap}
+.viewport-toolbar:has(.road-pick-guide) .render-badge{display:none}
+.road-pick-guide{order:1;color:var(--au-text-soft);font-size:var(--au-font-xs)}

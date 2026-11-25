@@ -1,0 +1,10 @@
+{
+  "sha": "1c460af0e888c65948a998f980fd3504a5720117",
+  "argv": [
+    "bash",
+    "/tmp/road-chain-qa.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-road-chain-canonical.log.txt",
+  "sha256": "8e76cf4c352518d64ef35b2245ba64c1b1c6c181fb41e14adc5ca5ebdc2891ab"
+}
