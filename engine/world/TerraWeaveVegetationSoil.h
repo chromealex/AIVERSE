@@ -157,8 +157,8 @@ inline RootState evaluateRootSupport(const RootAnchor& anchor,
             loss,anchor.roots.depthCm));
         maxLost=std::max(maxLost,limited);
         totalLost+=limited;
-        weightedX+=limited*dir[0];
-        weightedZ+=limited*dir[1];
+        weightedX+=int64_t(limited)*dir[0];
+        weightedZ+=int64_t(limited)*dir[1];
         ++count;
     }
     // Require several known positions before concluding the tree fell.

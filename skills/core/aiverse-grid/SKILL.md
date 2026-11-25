@@ -40,3 +40,9 @@ category is implemented when only its foundational API exists.
 Build selection: `AIVERSE::lib_grid`; native OBJECT modules call
 `aiverse_native_use_libraries(target grid)`. Only this header library and its
 declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.
+
+Grid.h now provides gridFloodFill, gridComponents (minimum row-major ID labels), gridMorphology (dilate/erode, outside treated as zero), gridBoundary. Four/eight connectivity, bounded dimensions and iterations. No build/tests yet.
+
+GridFields.h adds exact integer squared Euclidean distance, signed squared distance (not linear SDF; infinity sentinel for absent class), and bounded max propagation with attenuation. No build/tests yet.
+
+GridVolume.h: 6/18/26 connectivity, volumeDistance (hop distance), volumeFloodFill, volumeComponents, cap 1048576 voxels. GridWatershed.h: seeded priority flood with fixed seeds and deterministic lexicographic relaxation; not physical hydrology. No tests yet.

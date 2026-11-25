@@ -70,7 +70,7 @@ inline void wounds(){
     Treatment cure{3,0,TreatSurgery,1};stepHealth(d,s,1240,{},std::span(&cure,1),{});CHECK(!s.bodies[3].diseases.contains(1));
     roundtrip(s);auto copy=s;stepHealth(d,s,1300,{},{},{});stepHealth(d,copy,1300,{},{},{});CHECK(policyHash(s)==policyHash(copy));
     NewWound fatal{4,1,1,1000};HealthState x;stepHealth(d,x,1,std::span(&fatal,1),{},{});bool died=false;
-    for(uint32_t t=2;t<300&&!died;++t){auto rr=stepHealth(d,x,t,{},{},{});for(auto& e:rr->events)died|=e.kind==HealthEventKind::Died;}CHECK(died&&x.bodies[4].dead);
+    for(uint32_t t=2;t<300&&!died;++t){auto rr=stepHealth(d,x,t,{},{},{});CHECK(rr);for(auto& e:rr->events)died|=e.kind==HealthEventKind::Died;}CHECK(died&&x.bodies[4].dead);
 }
 inline void herds(){
     HerdConfig c;HerdState s;CHECK(addHerd(s,{1,7,0,{},{},{3,1,2}}));CHECK(s.herds[1].leader==1);
@@ -96,9 +96,9 @@ inline void social(){
     CHECK(stepSocial(c,m,s,1,add));CHECK(opinion(c,m,s,1,2)==50&&s.relations[2][1].bits&RelSibling);CHECK(moodOf(c,m,s,3)==-10);
     std::vector<SocialEvent> all;for(uint32_t t=2;t<=12;++t){auto e=stepSocial(c,m,s,t,{});all.insert(all.end(),e->begin(),e->end());}
     CHECK(std::any_of(all.begin(),all.end(),[](auto& e){return e.kind==SocialEventKind::BecameFriends;}));CHECK(s.relations[1][2].bits&RelFriend);
-    SocialCommand propose{SocialCommandKind::Propose,1,2};auto e=stepSocial(c,m,s,13,std::span(&propose,1));CHECK(e->back().kind==SocialEventKind::ProposalRejected);
+    SocialCommand propose{SocialCommandKind::Propose,1,2};auto e=stepSocial(c,m,s,13,std::span(&propose,1));CHECK(e&&e->back().kind==SocialEventKind::ProposalRejected);
     std::vector<SocialCommand> more{{SocialCommandKind::Remember,1,2,1},{SocialCommandKind::Remember,2,1,1},{SocialCommandKind::Propose,1,2}};
-    e=stepSocial(c,m,s,14,more);CHECK(e->back().kind==SocialEventKind::Partnered&&(s.relations[2][1].bits&RelPartner));
+    e=stepSocial(c,m,s,14,more);CHECK(e&&e->back().kind==SocialEventKind::Partnered&&(s.relations[2][1].bits&RelPartner));
     std::vector<SocialCommand> bed{{SocialCommandKind::Claim,1,0,77},{SocialCommandKind::UseItem,3,0,77}};e=stepSocial(c,m,s,15,bed);
     CHECK(e->back().kind==SocialEventKind::ItemUsedByOther&&opinion(c,m,s,1,3)==-30);
     std::vector<SocialCommand> feud{{SocialCommandKind::Remember,1,3,2},{SocialCommandKind::Remember,3,1,2},{SocialCommandKind::Remember,3,1,2}};stepSocial(c,m,s,16,feud);

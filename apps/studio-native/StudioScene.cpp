@@ -1,5 +1,12 @@
 #include "apps/editor/AuthoringWater.h"
 #include "apps/studio-native/StudioScene.h"
+#include "apps/studio-native/StudioPlanetLiveBudget.h"
+#include "apps/studio-native/StudioPlanetLiveTerrain.h"
+#include "engine/render/TerraWeaveModelAdapter.h"
+#include "engine/render/TerraWeaveRootModel.h"
+#include "engine/render/TerraWeaveArborWind.h"
+#include "engine/render/TerraWeaveBotanicalForest.h"
+#include "engine/world/TerraWeaveForestSpeciesManifest.h"
 #include "apps/studio-native/StudioFont6x11.h"
 #include "engine/render/CameraPng.h"
 #include "apps/studio-native/StudioLightingPreview.h"
@@ -196,8 +203,8 @@ StudioScene::StudioScene(std::unique_ptr<gfx::Device> device)
     camera_.pitch = 0.85f;
     camera_.yaw = 0.55f;
 }
-void StudioScene::setTransformTool(TransformTool tool) { tool_ = tool; drag_ = TransformDrag{}; }
-void StudioScene::clearTransformPreview() { drag_ = TransformDrag{}; }
+void StudioScene::setTransformTool(TransformTool tool) { tool_ = tool; clearTransformPreview(); }
+void StudioScene::clearTransformPreview() { cancelPlanetRegionDrag(); cancelPlanetGravityDrag(); drag_ = TransformDrag{}; planetDragId_.clear(); planetDragPlacement_=Json{}; planetDragOriginal_=Json{}; }
 bool StudioScene::setBuildingPreview(
     std::unique_ptr<render::Model> next,std::string* error){
     // Called only by StudioHost::onScene outside GPU passes.
@@ -423,6 +430,13 @@ void StudioScene::syncDocumentModels(
         const int index=studioMapEntityIndex(proxy.id,doc);
        if(index<0)continue;
        const auto& entity=entities[size_t(index)];
+       const render::mat4* planetFrame=nullptr;
+       if(planetMode_){
+           if(!planetPreview_)continue;
+           const auto it=planetPreview_->modelFrames.find(proxy.id);
+           if(it==planetPreview_->modelFrames.end())continue;
+           planetFrame=&it->second;
+       }
        if(entity.extra["components"].has("NereidWater"))continue;
        const auto& view=rules["types"][entity.type]["view"];
        const Json& raw=view["model"];
@@ -448,7 +462,7 @@ void StudioScene::syncDocumentModels(
                 const float sz=float(std::clamp(footprint.isArray() && footprint.size()>1 ? footprint[size_t(1)].toDouble() : 1.0,.25,64.0));
                 scale=render::mat4::scale({sx*k,k*std::max(sx,sz)*.75f,sz*k});
             }
-            const render::mat4 placement=editor::authoredEntity(entity) ? editor::authoredModelMatrix(entity) :
+            const render::mat4 placement=planetFrame?*planetFrame:editor::authoredEntity(entity) ? editor::authoredModelMatrix(entity) :
                 render::mat4::translate({proxy.center.x,proxy.center.y-proxy.half.y,proxy.center.z})*
                 (structure ? render::mat4{} : render::mat4::rotateY(proxy.yaw));
             modelInstances_.push_back({proxy.id,shape,placement*scale});
@@ -590,7 +604,7 @@ void StudioScene::syncDocumentModels(
             overridden.insert(proxy.id);
         }
         modelInstances_.push_back({proxy.id,found->second.get(),
-           editor::authoredEntity(entity)?editor::authoredModelMatrix(entity):
+           planetFrame?*planetFrame:editor::authoredEntity(entity)?editor::authoredModelMatrix(entity):
            render::mat4::translate({proxy.center.x,proxy.center.y-proxy.half.y,proxy.center.z})*
            render::mat4::rotateY(proxy.yaw)});
     }
@@ -623,6 +637,639 @@ void StudioScene::syncDocumentModels(
     }
 }
 
+// The preview terrain is a closed cube-sphere shell. A sphere contained
+// inside all its triangle planes is a conservative occluder even with relief.
+static float studioPlanetInnerRadius(const render::MeshBuilder& mesh){
+    const auto& vertices=mesh.vertices();const auto& indices=mesh.indices();
+    if(indices.empty()||indices.size()%3)return 0.f;
+    float inner=std::numeric_limits<float>::infinity();
+    for(size_t i=0;i<indices.size();i+=3){
+        if(indices[i]>=vertices.size()||indices[i+1]>=vertices.size()||indices[i+2]>=vertices.size())return 0.f;
+        const auto a=vertices[indices[i]].pos,b=vertices[indices[i+1]].pos,c=vertices[indices[i+2]].pos;
+        const auto n=render::cross(b-a,c-a);const float len=std::sqrt(render::dot(n,n));
+        if(!std::isfinite(len)||len<=1e-8f)return 0.f;
+        const float distance=std::abs(render::dot(n,a))/len;
+        if(!std::isfinite(distance))return 0.f;
+        inner=std::min(inner,distance);
+    }
+    return std::isfinite(inner)?std::max(0.f,inner*.995f-.01f):0.f;
+}
+static bool studioPlanetOccludesSphere(const render::Camera& view,render::float3 center,float bound,float inner){
+    if(!(inner>0.f&&bound>=0.f))return false;
+    const auto eye=view.eye();
+    if(view.ortho){
+        const auto axis=render::normalize(eye-view.target);
+        const float along=render::dot(center,axis);
+        const auto perpendicular=center-axis*along;
+        return along+bound<0.f&&std::sqrt(render::dot(perpendicular,perpendicular))+bound<inner;
+    }
+    const auto toCenter=center-eye;
+    const float e=std::sqrt(render::dot(eye,eye)),d=std::sqrt(render::dot(toCenter,toCenter));
+    if(!(e>inner&&d>bound&&d-bound>std::sqrt(e*e-inner*inner)))return false;
+    const float angle=std::acos(std::clamp(render::dot(toCenter,eye*(-1.f))/(d*e),-1.f,1.f));
+    return angle+std::asin(std::clamp(bound/d,0.f,1.f))<std::asin(std::clamp(inner/e,0.f,1.f));
+}
+void StudioScene::clearLivePlanetTerrain(){
+    for(auto& face:planetLiveTerrainFaces_){
+        if(face.vb.valid())device_->destroyBuffer(face.vb);
+        if(face.ib.valid())device_->destroyBuffer(face.ib);
+        face={};
+    }
+    planetLiveTerrainFaceSignatures_={};planetLiveTerrainGrid_=Json{};
+    planetLiveTerrainCpu_.reset();planetLiveTerrainVisible_=false;planetLiveOccluderRadius_=0.f;
+}
+bool StudioScene::syncLivePlanetTerrain(const editor::MapDoc& doc,const std::string& projectPath){
+    const auto& layer=planetLiveSnapshot_["forestTerrain"];
+    if(!planetForestLiveCurrent(doc,projectPath)||!layer.getBool("active")||
+       layer.getInt("tick",-1)!=planetLiveSnapshot_["forest"].getInt("tick",-2)||
+       layer["grid"].getStr("body")!=planetPreview_->bodyId)return false;
+    const auto& grid=layer["grid"];
+    const auto ready=[](const render::Mesh& m){return m.vb.valid()&&m.ib.valid();};
+    if(grid==planetLiveTerrainGrid_&&planetLiveTerrainCpu_&&std::all_of(planetLiveTerrainFaces_.begin(),planetLiveTerrainFaces_.end(),ready))return true;
+    const int bi=doc.data.findBody(planetPreview_->bodyId);if(bi<0)return false;
+    const auto& body=doc.data.bodies[size_t(bi)];
+    auto mesh=buildStudioLivePlanetTerrain(grid,body,*planetPreview_);
+    if(!mesh||!device_->waitForResourceIdle())return false;
+    std::array<render::Mesh,6> replacements{};
+    std::array<Json,6> signatures{};
+    std::array<bool,6> changed{};
+    const auto release=[&](render::Mesh& m){
+        if(m.vb.valid())device_->destroyBuffer(m.vb);
+        if(m.ib.valid())device_->destroyBuffer(m.ib);m={};
+    };
+    for(int f=0;f<6;++f){
+        signatures[f]=studioLiveTerrainFaceSignature(grid,f);
+        changed[f]=!ready(planetLiveTerrainFaces_[f])||!(signatures[f]==planetLiveTerrainFaceSignatures_[f]);
+        if(!changed[f])continue;
+        const auto face=buildStudioLivePlanetTerrain(grid,body,*planetPreview_,f);
+        if(face)replacements[f]=face->upload(*device_);
+        if(!ready(replacements[f])){
+            for(auto& m:replacements)release(m);
+            return false;
+        }
+    }
+    // Commit all face replacements and CPU picking mesh together, never mix
+    // successful new faces with a failed upload from the same completed tick.
+    for(int f=0;f<6;++f)if(changed[f]){
+        release(planetLiveTerrainFaces_[f]);planetLiveTerrainFaces_[f]=replacements[f];
+    }
+    planetLiveTerrainFaceSignatures_=std::move(signatures);planetLiveTerrainGrid_=grid;
+    planetLiveOccluderRadius_=studioPlanetInnerRadius(*mesh);
+    planetLiveTerrainCpu_=std::move(mesh);return true;
+}
+void StudioScene::clearPlanetForestFarMesh(){
+    if(device_)for(auto& [cell,chunk]:planetForestFarChunks_){
+        if(chunk.mesh.vb.valid())device_->destroyBuffer(chunk.mesh.vb);
+        if(chunk.mesh.ib.valid())device_->destroyBuffer(chunk.mesh.ib);
+    }
+    planetForestFarChunks_.clear();planetForestFarBody_.clear();planetForestFarProject_.clear();
+    planetForestFarPath_.clear();planetForestFarEpoch_.clear();planetForestFarRevision_=0;
+}
+void StudioScene::clearPlanetForestModels(){
+    clearPlanetForestFarMesh();
+    if(device_&&planetForestBlendProxy_.vb.valid())device_->destroyBuffer(planetForestBlendProxy_.vb);
+    if(device_&&planetForestBlendProxy_.ib.valid())device_->destroyBuffer(planetForestBlendProxy_.ib);
+    planetForestBlendProxy_={};planetForestDetailWeights_.clear();planetForestBlendTime_={};planetForestBlendIdentity_.clear();
+    if(device_)for(auto& [id,model]:planetForestModels_)if(model)releasePreviewModel(*model);
+    if(device_)for(auto& [key,model]:planetForestRootModels_)if(model)releasePreviewModel(*model);
+    if(device_)for(auto& [id,model]:planetForestLogModels_)if(model)releasePreviewModel(*model);
+    planetForestRootModels_.clear();planetForestRejectedRoots_.clear();planetForestLogModels_.clear();planetForestRejectedLogs_.clear();
+    planetForestTextureStamp_.clear();planetForestTextureCheck_={};
+    planetForestModels_.clear();planetForestRejectedModels_.clear();planetForestEvergreen_.clear();planetForestSeasonMaterials_.clear();
+    planetForestModelBytes_=0;planetForestModelCatalog_=Json{};planetForestModelProject_.clear();planetForestModelsPending_=false;
+}
+bool StudioScene::planetForestLiveCurrent(const editor::MapDoc& doc,const std::string& projectPath)const{
+    return planetPreview_&&planetLiveSnapshot_.getBool("active")&&planetLiveSnapshot_.getStr("topology")=="planet"&&
+        planetLiveSnapshot_["forest"].getBool("active")&&
+        (planetLiveSnapshot_["forest"].getStr("focusBody").empty()||planetLiveSnapshot_["forest"].getStr("focusBody")==planetPreview_->bodyId)&&planetLiveProject_==projectPath&&
+        planetLivePath_==doc.path&&planetLiveRevision_==doc.revision&&!doc.dirty;
+}
+namespace {
+std::optional<render::float3> studioForestVec(const Json& value){
+    if(!value.isArray()||value.size()!=3)return {};
+    const auto& a=value.items();
+    render::float3 v{float(a[0].toDouble(NAN)),float(a[1].toDouble(NAN)),float(a[2].toDouble(NAN))};
+    if(!std::isfinite(v.x)||!std::isfinite(v.y)||!std::isfinite(v.z))return {};
+    return v;
+}
+std::optional<render::mat4> studioForestFrame(render::float3 origin,render::float3 up,render::float3 east){
+    if(render::dot(up,up)<.5f)return {};
+    up=render::normalize(up);east=east-up*render::dot(east,up);
+    if(render::dot(east,east)<.0001f)return {};
+    east=render::normalize(east);
+    const auto forward=render::normalize(render::cross(east,up));
+    render::mat4 basis;
+    const render::float3 axes[3]={east,up,forward};
+    for(int i=0;i<3;++i){basis.at(0,i)=axes[i].x;basis.at(1,i)=axes[i].y;basis.at(2,i)=axes[i].z;}
+    return render::mat4::translate(origin)*basis;
+}
+uint32_t studioForestRootTier(const Json& row){
+    if(!row.getBool("visibleRoots"))return 0;
+    const auto depth=row.getInt("rootDepthCm"),exposed=row.getInt("exposedCm");
+    if(depth<=0||depth>10000||exposed<=0||exposed>depth)return 0;
+    // Same three depth tiers as ArborForestAdapter::exposedRootTier.
+    return uint32_t(std::clamp<int64_t>((exposed*3+depth-1)/depth,1,3));
+}
+}
+void StudioScene::syncPlanetForestModels(const editor::MapDoc& doc,const std::string& projectPath){
+    namespace fs=std::filesystem;namespace tw=terraweave;
+    const auto& catalog=doc.data.worldExtra["terraweaveForest"];
+    const auto now=std::chrono::steady_clock::now();
+    const bool identityChanged=planetForestModelProject_!=projectPath||!(planetForestModelCatalog_==catalog);
+    if(identityChanged||now>=planetForestTextureCheck_){
+        auto stamp=studioForestTextureStamp(projectPath,catalog);
+        if(identityChanged||stamp!=planetForestTextureStamp_){
+            if((!planetForestModels_.empty()||!planetForestRootModels_.empty()||!planetForestLogModels_.empty())&&!device_->waitForResourceIdle())return;
+            clearPlanetForestModels();planetForestModelProject_=projectPath;planetForestModelCatalog_=catalog;
+            planetForestTextureStamp_=std::move(stamp);
+        }
+        planetForestTextureCheck_=now+std::chrono::seconds(1);
+    }
+    planetForestModelsPending_=false;
+    if(projectPath.empty()||!planetPreview_)return;
+    const bool live=planetForestLiveCurrent(doc,projectPath);
+    std::set<uint32_t> needed;
+    std::set<ForestRootModelKey> rootsNeeded;
+    std::set<uint32_t> logsNeeded;
+    if(live){
+        for(const auto& row:planetLiveSnapshot_["forest"]["plants"].items()){
+            if(row.getStr("body")!=planetPreview_->bodyId||row.getBool("spent"))continue;
+            if(row.getBool("physical")&&row["capsule"].isObject()){
+                const auto species=uint32_t(row.getInt("species"));
+                if(planetForestOverlays_.arborTrunks.count(species)&&!planetForestRejectedModels_.count(species))
+                    needed.insert(species);
+                else logsNeeded.insert(species);
+                continue;
+            }
+            if(row.getBool("fallen")||row.getBool("harvested"))continue;
+            const auto id=uint32_t(row.getInt("species"));if(!id)continue;
+            needed.insert(id);
+            if(const auto tier=studioForestRootTier(row);tier)rootsNeeded.emplace(id,row.getStr("habit")=="shrub",tier);
+        }
+    }else if(!planetForestOverlays_.invalid)for(const auto& plant:planetForestOverlays_.picks)needed.insert(plant.species);
+    const auto dir=catalog.getStr("botanicalTextures");
+    constexpr size_t budget=192u*1024u*1024u;
+    // Generate at most one new model per Scene frame. Shared renderer owns LOD and batching.
+    const auto read=studioForestTextureReader(projectPath);
+    for(const auto id:logsNeeded){
+        if(planetForestLogModels_.count(id)||planetForestRejectedLogs_.count(id))continue;
+        if(planetForestLogModels_.size()>=16||planetForestModelBytes_>=budget){planetForestRejectedLogs_.insert(id);continue;}
+        std::unique_ptr<render::Model> model;
+        try{
+            constexpr int segments=16;
+            render::MeshBuilder side,ends;
+            side.color(render::rgba(255,255,255));side.cylinder({0,-.5f,0},.5f,1.f,segments,false);
+            ends.color(render::rgba(255,255,255));
+            ends.disc({0,.5f,0},.5f,segments);
+            ends.transform(render::mat4::translate({0,-.5f,0})*render::mat4::rotateX(3.14159265359f)).disc({0,0,0},.5f,segments);
+            render::Material bark;bark.name="Forest consequence bark";bark.baseColor={.31f,.18f,.11f,1};bark.roughness=.9f;
+            render::Material wood;wood.name="Forest exposed wood";wood.baseColor={.61f,.41f,.22f,1};wood.roughness=.85f;
+            model=render::modelFromParts("studio/forest/log/"+std::to_string(id),{{"Bark",&side,bark,render::mat4{}},{"Wood ends",&ends,wood,render::mat4{}}});
+            if(!model||model->vertices.size()<size_t(segments)*4)throw std::runtime_error("Forest log mesh");
+            // MeshBuilder cylinder emits four independent vertices per segment.
+            // Unwrap the seam explicitly; leave end faces on their own material.
+            for(int i=0;i<segments;++i){
+                const float a=float(i)/segments,b=float(i+1)/segments;
+                auto* v=model->vertices.data()+i*4;
+                v[0].uv={a,0};v[1].uv={b,0};v[2].uv={a,1};v[3].uv={b,1};
+            }
+            render::generateTangents(model->vertices,model->indices,0,uint32_t(model->indices.size()));
+            if(!dir.empty()&&catalog["species"].isArray()&&catalog["species"].size()<=64){
+                for(const auto& def:catalog["species"].items())if(def.getInt("id")==int64_t(id)){
+                    const auto* preset=tw::findBotanicalPreset(def.getStr("preset"));
+                    if(preset)tw::applyBotanicalTexture(*model,0,dir,std::string(preset->barkMaterial),read);
+                    break;
+                }
+            }
+            size_t bytes=model->vertices.size()*sizeof(render::ModelVertex)+model->indices.size()*sizeof(uint32_t);
+            for(auto& image:model->images){bytes+=size_t(image.width)*size_t(image.height)*8u;image.name=(fs::path(projectPath)/"content"/image.name).generic_string();}
+            if(bytes>budget-planetForestModelBytes_)throw std::length_error("Forest log cache budget");
+            model->path=projectPath+"/"+model->path;
+            render::prepareModelUpload(*model);
+            if(!render::uploadModel(*device_,*model,false,false))throw std::runtime_error("Forest log upload");
+            planetForestLogModels_.emplace(id,std::move(model));planetForestModelBytes_+=bytes;
+        }catch(const std::exception&){if(model)releasePreviewModel(*model);planetForestRejectedLogs_.insert(id);}
+        planetForestModelsPending_=true;return;
+    }
+    if(!catalog["species"].isArray()||catalog["species"].size()>64)return;
+    for(const auto& def:catalog["species"].items()){
+        const auto id=uint32_t(def.getInt("id",0));
+        if(!needed.count(id)||planetForestModels_.count(id)||planetForestRejectedModels_.count(id))continue;
+        if(planetForestModels_.size()>=16||planetForestModelBytes_>=budget){planetForestRejectedModels_.insert(id);continue;}
+        std::unique_ptr<render::Model> model;
+        try{
+            const auto recipe=world::parseForestSpeciesRecipe(def);
+            tw::TreeLodSettings settings;settings.mesh=recipe.mesh;
+            std::vector<int32_t> owners;
+            model=tw::makeArborTreeLodModel(recipe.profile,recipe.seed,settings,&owners);
+            if(!model||model->vertices.size()>1000000||model->indices.size()>6000000)
+                throw std::length_error("Studio forest prototype geometry budget");
+            if(recipe.preset&&!dir.empty()&&world::safeAssetPath(dir)){
+                tw::applyBotanicalTexture(*model,0,dir,std::string(recipe.preset->barkMaterial),read);
+                tw::applyBotanicalTexture(*model,1,dir,std::string(recipe.preset->leafMaterial),read);
+            }
+            // Existing shared GPU branch hierarchy; explicit per-draw tangent wind.
+            const render::wind::WindMaskLibrary masks;
+            const auto atlas=render::wind::WindMaskAtlas::fromLibrary(masks);
+            tw::applyArborWind(*model,tw::generateTree(recipe.profile,recipe.seed,tw::TreeLOD::High),owners,render::wind::WindProfile{},masks,*atlas);
+            size_t bytes=model->vertices.size()*sizeof(render::ModelVertex)+model->indices.size()*sizeof(uint32_t);
+            for(auto& image:model->images){
+                bytes+=size_t(image.width)*size_t(image.height)*8u; // conservative mip estimate
+                image.name=(fs::path(projectPath)/"content"/image.name).generic_string();
+            }
+            if(bytes>budget-planetForestModelBytes_)throw std::length_error("Studio forest model cache budget");
+            model->path=projectPath+"/"+model->path;
+            render::prepareModelUpload(*model);
+            if(!render::uploadModel(*device_,*model,false,false))throw std::runtime_error("Studio forest model upload");
+            planetForestModels_.emplace(id,std::move(model));planetForestEvergreen_[id]=tw::treeIsEvergreen(recipe.profile);planetForestModelBytes_+=bytes;
+        }catch(const std::exception&){
+            if(model)releasePreviewModel(*model);
+            planetForestRejectedModels_.insert(id);
+        }
+        planetForestModelsPending_=true;
+        return;
+    }
+    for(const auto& key:rootsNeeded){
+        if(planetForestRootModels_.count(key)||planetForestRejectedRoots_.count(key))continue;
+        if(planetForestRootModels_.size()>=32||planetForestModelBytes_>=budget){planetForestRejectedRoots_.insert(key);continue;}
+        const auto [id,shrub,tier]=key;
+        const auto& defs=catalog["species"].items();
+        const auto def=std::find_if(defs.begin(),defs.end(),[&](const Json& j){return j.getInt("id")==int64_t(id);});
+        if(def==defs.end()){planetForestRejectedRoots_.insert(key);continue;}
+        std::unique_ptr<render::Model> model;
+        try{
+            const auto recipe=world::parseForestSpeciesRecipe(*def);
+            model=tw::makeExposedRootModel(id,recipe.seed,tw::defaultRootProfile(shrub?tw::PlantHabit::Shrub:tw::PlantHabit::Tree),tier);
+            const size_t bytes=model->vertices.size()*sizeof(render::ModelVertex)+model->indices.size()*sizeof(uint32_t);
+            if(bytes>budget-planetForestModelBytes_)throw std::length_error("Forest root cache budget");
+            model->path=projectPath+"/"+model->path+(shrub?"/shrub":"/tree");
+            render::prepareModelUpload(*model);
+            if(!render::uploadModel(*device_,*model,false,false))throw std::runtime_error("Forest root upload");
+            planetForestRootModels_.emplace(key,std::move(model));planetForestModelBytes_+=bytes;
+        }catch(const std::exception&){if(model)releasePreviewModel(*model);planetForestRejectedRoots_.insert(key);}
+        planetForestModelsPending_=true;return;
+    }
+}
+void StudioScene::drawPlanetForestFarChunks(const Json& rows,float flora,int width,int height){
+    const auto body=planetPreview_->bodyId;
+    const auto epoch=planetLiveSnapshot_.getStr("epoch");
+    const bool changed=planetForestFarBody_!=body||planetForestFarProject_!=planetLiveProject_||
+        planetForestFarPath_!=planetLivePath_||planetForestFarEpoch_!=epoch||planetForestFarRevision_!=planetLiveRevision_;
+    bool idle=false;
+    const auto acquireIdle=[&](){if(!idle)idle=device_->waitForResourceIdle();return idle;};
+    if(changed){
+        if(!acquireIdle())return;
+        clearPlanetForestFarMesh();planetForestFarBody_=body;planetForestFarProject_=planetLiveProject_;
+        planetForestFarPath_=planetLivePath_;planetForestFarEpoch_=epoch;planetForestFarRevision_=planetLiveRevision_;
+    }
+    std::map<int64_t,Json> requested;
+    for(const auto& row:rows.items()){
+        const auto cell=row.getInt("cell",-1);if(cell<0)continue;
+        auto it=requested.find(cell);
+        if(it==requested.end())it=requested.emplace(cell,Json::array()).first;
+        it->second.push(row);
+    }
+    // Bound the actual proxy geometry, rather than culling a cell centre.
+    // Clip planes are extracted from the same view/projection as the Scene.
+    const auto view=viewCamera();
+    const auto clip=view.proj(float(std::max(1,width))/float(std::max(1,height)),false)*view.view();
+    const auto eye=view.eye();
+    struct Candidate { int64_t cell; bool horizon; float distance; size_t bytes; };
+    std::vector<Candidate> order;
+    size_t frustumRejected=0,horizonRejected=0;
+    const float inner=planetLiveTerrainVisible_?planetLiveOccluderRadius_:planetAuthoredOccluderRadius_;
+    constexpr size_t gpuBudget=64u*1024u*1024u;
+    // Each proxy is six vertices and twelve uint32 indices. Use the actual
+    // CPU upload vertex type and a conservative overhead per resident chunk.
+    render::MeshBuilder layout;
+    const size_t proxyBytes=6*sizeof(layout.vertices()[0])+12*sizeof(uint32_t);
+    for(const auto& [cell,chunkRows]:requested){
+        render::float3 lo{INFINITY,INFINITY,INFINITY},hi{-INFINITY,-INFINITY,-INFINITY};
+        for(const auto& row:chunkRows.items()){
+            const auto p=studioForestVec(row["position"]);if(!p)continue;
+            const float h=flora*float(std::clamp<int64_t>(row.getInt("sizePermille"),0,1000))*.006f;
+            lo={std::min(lo.x,p->x-h),std::min(lo.y,p->y-h),std::min(lo.z,p->z-h)};
+            hi={std::max(hi.x,p->x+h),std::max(hi.y,p->y+h),std::max(hi.z,p->z+h)};
+        }
+        if(!std::isfinite(lo.x))continue;
+        const auto center=(lo+hi)*.5f,half=(hi-lo)*.5f;
+        bool outside=false;
+        for(int axis=0;axis<3&&!outside;++axis)for(const float sign:{-1.f,1.f}){
+            const float a=clip.at(3,0)+sign*clip.at(axis,0),b=clip.at(3,1)+sign*clip.at(axis,1);
+            const float c=clip.at(3,2)+sign*clip.at(axis,2),d=clip.at(3,3)+sign*clip.at(axis,3);
+            // Small padded frustum to prefetch at viewport boundaries.
+            const float margin=planetForestFarChunks_.count(cell)?.08f:.04f;
+            const float pad=margin*(std::abs(a)+std::abs(b)+std::abs(c))*std::max(1.f,view.distance);
+            if(a*center.x+b*center.y+c*center.z+d+std::abs(a)*half.x+std::abs(b)*half.y+std::abs(c)*half.z+pad<0)outside=true;
+        }
+        if(outside){++frustumRejected;continue;}
+        if(studioPlanetOccludesSphere(view,center,std::sqrt(render::dot(half,half)),inner)){++horizonRejected;continue;}
+        const auto delta=center-eye;
+        // Non-occluded back-facing relief remains eligible, at lower priority.
+        const bool behind=render::dot(center,view.ortho?eye-view.target:eye-center)<0.f;
+        order.push_back({cell,behind,render::dot(delta,delta),chunkRows.size()*proxyBytes+4096u});
+    }
+    std::sort(order.begin(),order.end(),[](const Candidate& a,const Candidate& b){
+        return std::tie(a.horizon,a.distance,a.cell)<std::tie(b.horizon,b.distance,b.cell);
+    });
+    std::set<int64_t> resident;
+    size_t plannedBytes=0,budgetRejected=0;
+    for(const auto& c:order){
+        if(c.bytes>gpuBudget-plannedBytes){++budgetRejected;continue;}
+        plannedBytes+=c.bytes;resident.insert(c.cell);
+    }
+    // Stable identity order prevents camera ranking alone from invalidating a mesh.
+    for(auto& [cell,chunkRows]:requested){
+        auto sorted=chunkRows.items();
+        std::sort(sorted.begin(),sorted.end(),[](const Json& a,const Json& b){
+            return std::make_pair(a.getInt("species"),a.getStr("key"))<std::make_pair(b.getInt("species"),b.getStr("key"));
+        });
+        chunkRows=Json::array();for(auto& row:sorted)chunkRows.push(std::move(row));
+    }
+    for(auto it=planetForestFarChunks_.begin();it!=planetForestFarChunks_.end();){
+        if(resident.count(it->first)){++it;continue;}
+        if(!acquireIdle()){++it;continue;}
+        if(it->second.mesh.vb.valid())device_->destroyBuffer(it->second.mesh.vb);
+        if(it->second.mesh.ib.valid())device_->destroyBuffer(it->second.mesh.ib);
+        it=planetForestFarChunks_.erase(it);
+    }
+    size_t drawn=0,pending=0,uploads=0;
+    constexpr size_t maxUploadsPerFrame=16;
+    size_t residentBytes=0;
+    for(const auto& [cell,chunk]:planetForestFarChunks_)residentBytes+=chunk.bytes;
+    std::vector<int64_t> drawCells,pendingCells;
+    for(const auto& candidate:order){
+        const auto cell=candidate.cell;if(!resident.count(cell))continue;
+        const auto& chunkRows=requested.at(cell);
+        auto found=planetForestFarChunks_.find(cell);
+        if(found==planetForestFarChunks_.end()||!(found->second.rows==chunkRows)||found->second.scale!=flora){
+            if(uploads>=maxUploadsPerFrame||!acquireIdle()){++pending;pendingCells.push_back(cell);continue;}
+            // Prefer allocating the replacement before releasing the old mesh.
+            if(candidate.bytes>gpuBudget-std::min(gpuBudget,residentBytes)){
+                // If temporary double allocation cannot fit, free only this
+                // obsolete mesh and use the current-tick fallback until retry.
+                if(found!=planetForestFarChunks_.end()){
+                    if(found->second.mesh.vb.valid())device_->destroyBuffer(found->second.mesh.vb);
+                    if(found->second.mesh.ib.valid())device_->destroyBuffer(found->second.mesh.ib);
+                    residentBytes-=found->second.bytes;planetForestFarChunks_.erase(found);
+                }
+                if(candidate.bytes>gpuBudget-std::min(gpuBudget,residentBytes)){++pending;pendingCells.push_back(cell);continue;}
+            }
+            render::MeshBuilder builder;
+            for(const auto& row:chunkRows.items()){
+                const auto p=studioForestVec(row["position"]),up=studioForestVec(row["up"]),east=studioForestVec(row["east"]);
+                const auto size=row.getInt("sizePermille");
+                if(!p||!up||!east||size<=0||size>1000)continue;
+                const auto frame=studioForestFrame(*p,*up,*east);if(!frame)continue;
+                const float h=flora*float(size)*.001f*(row.getBool("shrub")?1.5f:6.f);
+                const float cover=float(std::clamp<int64_t>(row.getInt("foliagePermille"),0,1000))*.001f;
+                const auto u=render::normalize(*up),e=render::normalize(*east),n=render::normalize(render::cross(u,e));
+                const float w=h*(.035f+.24f*cover);
+                const auto color=cover>0.f?render::rgba(55,105,48):render::rgba(100,72,48);
+                // Two crossed, double-sided tapered silhouettes in the local tangent frame.
+                for(const auto side:{e,n}){
+                    const auto normal=render::normalize(render::cross(side,u));
+                    const auto b=uint32_t(builder.vertexCount());
+                    builder.addVertex(*p-side*w,normal,color);builder.addVertex(*p+side*w,normal,color);builder.addVertex(*p+u*h,normal,color);
+                    builder.addTriangle(b,b+1,b+2);builder.addTriangle(b+2,b+1,b);
+                }
+            }
+
+            ++uploads;
+            if(builder.vertexCount()==0)continue;
+            auto next=builder.upload(*device_);
+            if(!next.vb.valid()||!next.ib.valid()){
+                if(next.vb.valid())device_->destroyBuffer(next.vb);
+                if(next.ib.valid())device_->destroyBuffer(next.ib);
+                ++pending;pendingCells.push_back(cell);continue;
+            }
+            auto& chunk=planetForestFarChunks_[cell];
+            if(chunk.mesh.vb.valid())device_->destroyBuffer(chunk.mesh.vb);
+            if(chunk.mesh.ib.valid())device_->destroyBuffer(chunk.mesh.ib);
+            residentBytes-=chunk.bytes;chunk.mesh=next;chunk.rows=chunkRows;chunk.scale=flora;chunk.bytes=candidate.bytes;residentBytes+=chunk.bytes;
+            found=planetForestFarChunks_.find(cell);
+        }
+        if(found!=planetForestFarChunks_.end()&&found->second.mesh.vb.valid()&&found->second.mesh.ib.valid()){
+            drawCells.push_back(cell);
+            drawn+=chunkRows.size();
+        }
+    }
+    // Do not destroy or upload a chunk after submitting a draw for it.
+    for(const auto cell:drawCells)renderer_.drawMesh(planetForestFarChunks_.at(cell).mesh,render::mat4{},{1,1,1,1},render::kDrawNoCastShadow);
+    // A stale chunk can contain harvested plants or newly promoted detail.
+    // Never draw it while a rebuild is pending. Draw bounded, current-tick
+    // tangent proxies using the already resident primitive instead.
+    size_t pendingProxies=0;
+    constexpr size_t maxPendingProxies=2048;
+    for(const auto cell:pendingCells){
+        for(const auto& row:requested.at(cell).items()){
+            if(pendingProxies>=maxPendingProxies)break;
+            const auto p=studioForestVec(row["position"]),up=studioForestVec(row["up"]),east=studioForestVec(row["east"]);
+            const auto size=row.getInt("sizePermille");
+            if(!p||!up||!east||size<=0||size>1000)continue;
+            const auto frame=studioForestFrame(*p,*up,*east);if(!frame)continue;
+            const float h=flora*float(size)*.001f*(row.getBool("shrub")?1.5f:6.f);
+            const float cover=float(std::clamp<int64_t>(row.getInt("foliagePermille"),0,1000))*.001f;
+            const float w=h*(.035f+.24f*cover);
+            const render::float4 color=cover>0.f?render::float4{.13f,.31f,.10f,1}:render::float4{.27f,.15f,.08f,1};
+            renderer_.drawMesh(cube_,*frame*render::mat4::translate({0,h*.5f,0})*render::mat4::scale({w*2,h,w*2}),color,render::kDrawNoCastShadow);
+            ++pendingProxies;
+        }
+        if(pendingProxies>=maxPendingProxies)break;
+    }
+    lightingStatus_+=" · far forest proxies "+std::to_string(drawn)+" · resident chunks "+std::to_string(drawCells.size())+"/"+std::to_string(requested.size());
+    if(pendingProxies)lightingStatus_+=" · temporary proxies "+std::to_string(pendingProxies);
+    lightingStatus_+=" · frustum rejected "+std::to_string(frustumRejected)+" · horizon rejected "+std::to_string(horizonRejected)+" · budget rejected "+std::to_string(budgetRejected)+" · estimated GPU KiB "+std::to_string(residentBytes/1024);
+    if(pending)lightingStatus_+=" · pending far chunks "+std::to_string(pending);
+}
+void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std::string& projectPath,int width,int height){
+    if(!planetForestLiveCurrent(doc,projectPath)||planetForestModelProject_!=projectPath||
+       !(planetForestModelCatalog_==doc.data.worldExtra["terraweaveForest"]))return;
+    const auto index=doc.data.findBody(planetPreview_->bodyId);
+    if(index<0)return;
+    const auto& scale=doc.data.bodies[size_t(index)].meta["visual"]["flora"]["scale"];
+    const float flora=scale.isNumber()?std::clamp(float(scale.toDouble()),.001f,10.f):.06f;
+    const auto now=std::chrono::steady_clock::now();
+    const std::string identity=planetLiveProject_+"\n"+planetLivePath_+"\n"+planetPreview_->bodyId+"\n"+
+        planetLiveSnapshot_.getStr("epoch")+"\n"+std::to_string(planetLiveRevision_);
+    const bool first=planetForestBlendIdentity_!=identity||planetForestBlendTime_==std::chrono::steady_clock::time_point{}||
+        now-planetForestBlendTime_>std::chrono::seconds(1);
+    if(first){planetForestDetailWeights_.clear();planetForestBlendIdentity_=identity;}
+    const float dt=first?0.f:std::clamp(std::chrono::duration<float>(now-planetForestBlendTime_).count(),0.f,.1f);
+    planetForestBlendTime_=now;
+    const auto visualId=[](const Json& row){return ForestVisualId{row.getInt("species"),row.getStr("key")};};
+    const auto standing=[&](const Json& row){
+        return row.getStr("body")==planetPreview_->bodyId&&!row.getBool("spent")&&!row.getBool("physical")&&
+            !row.getBool("fallen")&&!row.getBool("harvested")&&row.getStr("habit")!="grass";
+    };
+    const auto proxyRow=[](const Json& row){
+        Json proxy=Json::object();
+        for(const char* key:{"cell","species","key","position","up","east","sizePermille","foliagePermille"})proxy.set(key,row[key]);
+        proxy.set("shrub",Json::fromBool(row.getStr("habit")=="shrub"));return proxy;
+    };
+    // Shared unit silhouette. Transitional draws do not rebuild the cell mesh
+    // each frame and do not retain any previous ECS pose or retirement state.
+    if(!planetForestBlendProxy_.vb.valid()&&device_->waitForResourceIdle()){
+        render::MeshBuilder mesh;
+        for(const auto side:{render::float3{1,0,0},render::float3{0,0,1}}){
+            const auto n=render::normalize(render::cross(side,render::float3{0,1,0}));
+            const auto b=uint32_t(mesh.vertexCount());const auto c=render::rgba(255,255,255);
+            mesh.addVertex(side*(-1.f),n,c);mesh.addVertex(side,n,c);mesh.addVertex({0,1,0},n,c);
+            mesh.addTriangle(b,b+1,b+2);mesh.addTriangle(b+2,b+1,b);
+        }
+        auto next=mesh.upload(*device_);
+        if(next.vb.valid()&&next.ib.valid())planetForestBlendProxy_=next;
+        else{if(next.vb.valid())device_->destroyBuffer(next.vb);if(next.ib.valid())device_->destroyBuffer(next.ib);}
+    }
+    const bool canBlend=planetForestBlendProxy_.vb.valid()&&planetForestBlendProxy_.ib.valid();
+    Json far=Json::array(),detail=Json::array();
+    std::map<ForestVisualId,float> nextWeights;
+    std::vector<std::pair<Json,float>> fadingProxies;
+    constexpr size_t maxTransitions=256;
+    constexpr float blendSeconds=.30f;
+    const auto weight=[&](const ForestVisualId& id,float target){
+        const auto it=planetForestDetailWeights_.find(id);
+        const float previous=it==planetForestDetailWeights_.end()?0.f:it->second;
+        if(first||!canBlend||fadingProxies.size()>=maxTransitions)return target;
+        return previous+std::clamp(target-previous,-dt/blendSeconds,dt/blendSeconds);
+    };
+    size_t fallback=0;
+    for(const auto& row:planetLiveSnapshot_["forest"]["plants"].items()){
+        if(!standing(row)){detail.push(row);continue;}
+        const auto id=visualId(row);
+        if(!planetForestModels_.count(uint32_t(id.first))){far.push(proxyRow(row));++fallback;continue;}
+        const float w=weight(id,1.f);nextWeights.emplace(id,w);
+        if(w<.999f){fadingProxies.emplace_back(proxyRow(row),1.f-w);}
+        detail.push(row);
+    }
+    for(const auto& row:planetLiveSnapshot_["forest"]["farPlants"].items()){
+        const auto id=visualId(row);
+        const float w=planetForestModels_.count(uint32_t(id.first))?weight(id,0.f):0.f;
+        if(w<=.001f){far.push(row);continue;}
+        nextWeights.emplace(id,w);
+        fadingProxies.emplace_back(row,1.f-w);
+        Json outgoing=row;
+        outgoing.set("body",Json::string(planetPreview_->bodyId));
+        outgoing.set("habit",Json::string(row.getBool("shrub")?"shrub":"tree"));
+        outgoing.set("dead",Json::fromBool(row.getInt("foliagePermille")==0));
+        detail.push(std::move(outgoing));
+    }
+    planetForestDetailWeights_=std::move(nextWeights);
+    drawPlanetForestFarChunks(far,flora,width,height);
+    for(const auto& [row,opacity]:fadingProxies){
+        if(opacity<=.001f)continue;
+        const auto p=studioForestVec(row["position"]),up=studioForestVec(row["up"]),east=studioForestVec(row["east"]);
+        const auto size=row.getInt("sizePermille");if(!p||!up||!east||size<=0||size>1000)continue;
+        const auto frame=studioForestFrame(*p,*up,*east);if(!frame)continue;
+        const float h=flora*float(size)*.001f*(row.getBool("shrub")?1.5f:6.f);
+        const float cover=float(std::clamp<int64_t>(row.getInt("foliagePermille"),0,1000))*.001f;
+        const float w=h*(.035f+.24f*cover);
+        const render::float4 color=cover>0.f?render::float4{.13f,.31f,.10f,opacity}:render::float4{.27f,.15f,.08f,opacity};
+        renderer_.drawMesh(planetForestBlendProxy_,*frame*render::mat4::scale({w,h,w}),color,render::kDrawNoCastShadow);
+    }
+    if(fallback)lightingStatus_+=" · prototype fallback "+std::to_string(fallback);
+    if(!fadingProxies.empty())lightingStatus_+=" · LOD blends "+std::to_string(fadingProxies.size());
+    static const std::vector<uint8_t> barkOnly{1,0};
+    planetForestSeasonMaterials_.clear();
+    const auto tick=uint64_t(planetLiveSnapshot_["forest"].getInt("tick",0));
+    size_t rendered=0,missing=0;
+    for(const auto& row:detail.items()){
+        if(row.getStr("body")!=planetPreview_->bodyId||row.getBool("spent"))continue;
+        if(row.getBool("physical")){
+            const auto& cap=row["capsule"];
+            const auto center=studioForestVec(cap["center"]),axis=studioForestVec(cap["axis"]);
+            const float radius=float(cap["radius"].toDouble()),half=float(cap["halfHeight"].toDouble());
+            const auto species=uint32_t(row.getInt("species"));
+            if(!center||!axis||radius<=0||radius>1000||half<=0||half>1000){++missing;continue;}
+            const auto right=studioForestVec(cap["right"]);
+            const auto frame=studioForestFrame(*center,*axis,right.value_or(std::abs(axis->y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
+            if(!frame){++missing;continue;}
+            const auto trunk=planetForestOverlays_.arborTrunks.find(species);
+            const auto prototype=planetForestModels_.find(species);
+            if(trunk!=planetForestOverlays_.arborTrunks.end()&&prototype!=planetForestModels_.end()&&right){
+                render::ModelDraw draw;
+                draw.model=prototype->second.get();
+                draw.materialMask=&barkOnly;
+                draw.world=studioFallenArborTransform(*frame,trunk->second,radius,half);
+                renderer_.drawModel(draw);++rendered;continue;
+            }
+            const auto log=planetForestLogModels_.find(species);
+            if(log==planetForestLogModels_.end()){++missing;continue;}
+            // Explicit capsule recipes have no associated structural branches.
+            render::ModelDraw draw;draw.model=log->second.get();
+            draw.world=*frame*render::mat4::scale({radius*2,(half+radius)*2,radius*2});
+            renderer_.drawModel(draw);++rendered;continue;
+        }
+        if(row.getBool("fallen")||row.getBool("harvested")||row.getStr("habit")=="grass")continue;
+        const auto origin=studioForestVec(row["position"]),up=studioForestVec(row["up"]),east=studioForestVec(row["east"]);
+        const auto size=row.getInt("sizePermille",-1);
+        if(!origin||!up||!east||size<=0||size>1000){++missing;continue;}
+        const auto frame=studioForestFrame(*origin,*up,*east);
+        if(!frame){++missing;continue;}
+        const auto id=uint32_t(row.getInt("species"));
+        const bool shrub=row.getStr("habit")=="shrub";
+        const float factor=flora*float(size)*.001f*(shrub?.25f:1.f);
+        const auto model=planetForestModels_.find(id);
+        if(model!=planetForestModels_.end()){
+            render::ModelDraw draw;draw.model=model->second.get();
+            draw.world=*frame*render::mat4::scale({factor,factor,factor});
+            const auto transition=planetForestDetailWeights_.find(visualId(row));
+            if(transition!=planetForestDetailWeights_.end()&&transition->second<.999f){
+                draw.tint.w=transition->second;draw.flags|=render::kDrawKeepShadow;
+            }
+            if(draw.tint.w<=.001f)continue;
+            const auto foliage=std::clamp<int64_t>(row.getInt("foliagePermille",0),0,1000);
+            int season=10;
+            if(row["seasonPermille"].isNumber())season=int(std::clamp<int64_t>((row.getInt("seasonPermille")+1000)*10/2000,0,10));
+            const bool evergreen=planetForestEvergreen_.count(id)&&planetForestEvergreen_.at(id);
+            // Preview mapping of the actual PHYSIS seasonal signal, not an
+            // independent climate or calendar. Quantized materials shared per species.
+            const int cover=int((foliage*(evergreen?1000:season*100)+99999)/100000);
+            if(row.getBool("dead")||cover==0)draw.materialMask=&barkOnly;
+            if((season<10||cover<10)&&model->second->materials.size()>1){
+                const auto materialKey=std::make_tuple(id,season,cover);
+                auto it=planetForestSeasonMaterials_.find(materialKey);
+                if(it==planetForestSeasonMaterials_.end()){
+                    auto materials=model->second->materials;
+                    const float cold=1.f-float(season)*.1f;
+                    auto& leaf=materials[1];
+                    if(evergreen){leaf.baseColor.x*=1.f-.10f*cold;leaf.baseColor.y*=1.f-.20f*cold;}
+                    else{leaf.baseColor.x=std::min(1.f,leaf.baseColor.x*(1.f+.65f*cold));leaf.baseColor.y*=1.f-.58f*cold;leaf.baseColor.z*=1.f-.65f*cold;}
+                    // Same partial-coverage policy as ArborForestAdapter: alpha fade,
+                    // not opaque summer shadows. Fully bare trees skip the leaf primitive.
+                    if(cover>0&&cover<10){leaf.baseColor.w*=float(cover)*.1f;leaf.alpha=render::AlphaMode::Blend;leaf.transparent=true;leaf.castShadow=false;}
+                    it=planetForestSeasonMaterials_.emplace(materialKey,std::move(materials)).first;
+                }
+                draw.materials=&it->second;
+            }
+            // WindRig uses model-local displacement. The snapshot already
+            // projects PHYSIS into this tree's tangent frame (metres/sec).
+            render::wind::WindDrawParams wind;
+            if(!row.getBool("dead")&&row["windLocal"].isArray()&&row["windLocal"].size()==2){
+                const auto& v=row["windLocal"].items();
+                wind.windX=float(v[0].toDouble())*.035f;
+                wind.windZ=float(v[1].toDouble())*.035f;
+                const auto key=std::stoull(row.getStr("key","0"));
+                constexpr double tau=6.283185307179586;
+                wind.phase=float(std::fmod(tau*double(tick%7680)/120.+double(key%1000)*.001*tau,tau*64.));
+                wind.gust=0.f; // actual local PHYSIS gust already included
+            }
+            draw.useVertexParameters=true;draw.vertexParameters=render::wind::windRigVertexParameters(wind);
+            draw.maxVertexOffsetMetres=std::max(.01f,render::wind::windRigMaxOffsetMetres(wind)*factor);
+            renderer_.drawModel(draw);++rendered;
+        }else ++missing;
+        if(const auto tier=studioForestRootTier(row);tier){
+            const auto root=planetForestRootModels_.find({id,shrub,tier});
+            if(root!=planetForestRootModels_.end()){
+                render::ModelDraw draw;draw.model=root->second.get();
+                // Root support dimensions are actual metres, not flora visual scale.
+                draw.world=*frame;renderer_.drawModel(draw);
+            }else ++missing;
+        }
+    }
+    lightingStatus_+=" · live forest meshes "+std::to_string(rendered);
+    if(missing)lightingStatus_+=" · missing live models "+std::to_string(missing);
+}
 StudioScene::~StudioScene() {
     if (device_) {
         device_->waitForResourceIdle();
@@ -632,6 +1279,8 @@ StudioScene::~StudioScene() {
         discardReplayBackup();
         spectraSources_.shutdown();
         spectraPreview_->stop(*device_); // before gfx Device and renderer are destroyed
+        clearLivePlanetTerrain();
+        clearPlanetForestModels();
         clearDocumentModels();
         if(buildingPreview_){releasePreviewModel(*buildingPreview_);buildingPreview_.reset();}
         lightingRuntime_.shutdown(*device_,renderer_);
@@ -651,6 +1300,8 @@ StudioScene::~StudioScene() {
         }
         for (auto* primitive:{&builtinCube_,&builtinSphere_})
             if (*primitive) { releasePreviewModel(**primitive); primitive->reset(); }
+        terrainRetirement_.retireBuffer(*device_,planetTerrain_.vb);
+        terrainRetirement_.retireBuffer(*device_,planetTerrain_.ib);
         terrainRetirement_.retireBuffer(*device_,terrain_.vb);
         terrainRetirement_.retireBuffer(*device_,terrain_.ib);
         terrainRetirement_.retireBuffer(*device_,planetCutTerrain_.vb);
@@ -691,6 +1342,8 @@ std::string StudioScene::pick(float x, float y, float width, float height,
     // Never route its clicks to unrelated MapDoc entities underneath.
     if (materialMode_ || facialMode_ || buildingPreview_ || !cameraInitialized_ ||
         !viewCamera().screenRay(x,y,width,height,origin,direction)) return {};
+    if(map.data.planet())return planetMode_&&planetPreview_&&planetMapPath_==map.path&&planetRevision_==map.revision?
+        planetPreview_->pick(origin,direction,hidden_,locked_,modelInstances_,visiblePlanetTerrain()):std::string{};
     // Pick the oriented cube mesh that Renderer3D actually draws, not its
     // expanded axis-aligned bounding box. Empty rotated corners are unpickable.
     auto proxies=studioDocumentProxies(map,fpsProject,terrainLevelHeight_);
@@ -709,6 +1362,7 @@ std::vector<std::string> StudioScene::idsInRect(float x0,float y0,float x1,float
                                                      const editor::MapDoc& map,bool fpsProject) const {
     std::vector<std::string> out;
     if(materialMode_||!cameraInitialized_||width<2||height<2)return out;
+    if(map.data.planet())return out; // planetary marquee is not implemented
     const float lx=std::min(x0,x1),hx=std::max(x0,x1),ly=std::min(y0,y1),hy=std::max(y0,y1);
     const auto view=viewCamera();
     for(const auto& proxy:studioDocumentProxies(map,fpsProject,terrainLevelHeight_)) {
@@ -723,13 +1377,48 @@ std::vector<std::string> StudioScene::idsInRect(float x0,float y0,float x1,float
 bool StudioScene::caveScreenRay(float x,float y,float width,float height,float3& origin,float3& direction)const {
     return cameraInitialized_&&width>1&&height>1&&viewCamera().screenRay(x,y,width,height,origin,direction);
 }
+std::optional<Json> StudioScene::forestPick(float x,float y,float w,float h,const std::string& project,const std::string& path,uint64_t revision)const{
+    if(!planetMode_||!planetPreview_||!cameraInitialized_||!gizmosVisible_||planetModelProject_!=project||
+       planetMapPath_!=path||planetRevision_!=revision||w<2||h<2||x<0||y<0||x>w||y>h)return {};
+    if(planetLiveSnapshot_["forest"].getBool("active")&&planetLiveProject_==project&&
+       planetLivePath_==path&&planetLiveRevision_==revision)return {};
+    const auto view=viewCamera();
+    const PlanetForestPick* chosen=nullptr;float best=12.f,bestDepth=std::numeric_limits<float>::infinity();
+    for(const auto& pick:planetForestOverlays_.picks){
+        if(!pick.markerOwner.empty()&&(hidden_.count(pick.markerOwner)||locked_.count(pick.markerOwner)))continue;
+        float2 a,b;if(!view.worldToScreen(pick.ground,w,h,a)||!view.worldToScreen(pick.tip,w,h,b))continue;
+        const float dx=b.x-a.x,dy=b.y-a.y,len=dx*dx+dy*dy;
+        const float t=len>1e-6f?std::clamp(((x-a.x)*dx+(y-a.y)*dy)/len,0.f,1.f):0.f;
+        const float sx=a.x+t*dx,sy=a.y+t*dy;
+        const float error=std::hypot(x-sx,y-sy);
+        if(error>best)continue;
+        float3 o,d;if(!view.screenRay(sx,sy,w,h,o,d))continue;
+        const auto p=pick.ground+(pick.tip-pick.ground)*t;
+        const float depth=dot(p-o,d);
+        if(depth<=0||planetPreview_->terrainHit(o,d,visiblePlanetTerrain())+.05f<depth)continue;
+        if(error==best&&depth>=bestDepth)continue;
+        chosen=&pick;best=error;bestDepth=depth;
+    }
+    if(!chosen)return {};
+    Json result=Json::object();result.set("species",Json::number(int64_t(chosen->species)));
+    result.set("key",Json::number(int64_t(chosen->key)));result.set("direct",Json::fromBool(chosen->direct));
+    result.set("body",Json::string(planetPreview_->bodyId));return result;
+}
+std::optional<Json> StudioScene::forestGroundPlacement(float x,float y,float w,float h,const std::string& path,uint64_t revision)const{
+    if(planetLiveSnapshot_["forest"].getBool("active")&&planetLivePath_==path&&planetLiveRevision_==revision)return {};
+    if(!planetMode_||!planetPreview_||!cameraInitialized_||planetMapPath_!=path||planetRevision_!=revision||
+       w<2||h<2||x<0||y<0||x>w||y>h)return {};
+    float3 o,d;if(!viewCamera().screenRay(x,y,w,h,o,d))return {};
+    return planetPreview_->groundPlacement(o,d,visiblePlanetTerrain());
+}
 bool StudioScene::groundPoint(float x,float y,float width,float height,float3& out) const {
     float3 o,d;
-    if(!cameraInitialized_||!viewCamera().screenRay(x,y,width,height,o,d)||std::fabs(d.y)<1e-5f)return false;
+    if(planetMode_||!cameraInitialized_||!viewCamera().screenRay(x,y,width,height,o,d)||std::fabs(d.y)<1e-5f)return false;
     const float t=-o.y/d.y; if(!(t>0)||!std::isfinite(t))return false;
     out=o+d*t; return true;
 }
 void StudioScene::frameAll(const editor::MapDoc& map,bool fpsProject) {
+    if(map.data.planet()){if(planetPreview_)startTween({},std::max(2.f,planetPreview_->extent*3.f),camera_.yaw,camera_.pitch);return;}
     const auto proxies=studioDocumentProxies(map,fpsProject,terrainLevelHeight_);
     float3 lo{1e30f,1e30f,1e30f},hi{-1e30f,-1e30f,-1e30f};
     for(const auto& p:proxies){lo={std::min(lo.x,p.boundsMin.x),std::min(lo.y,p.boundsMin.y),std::min(lo.z,p.boundsMin.z)};
@@ -882,11 +1571,11 @@ void StudioScene::setSnap(bool enabled,float move,float rotate,float scale) {
 void StudioScene::handleAxes(float3 out[3]) const {
     // Scale always uses the object's own axes (a world-axis scale of a rotated
     // object would shear); Move/Rotate follow the Global/Local toggle.
-    const bool local=(tool_==TransformTool::Scale||localSpace_)&&selectedAxesValid_;
+    const bool local=(planetMode_||tool_==TransformTool::Scale||localSpace_)&&selectedAxesValid_;
     for(int a=0;a<3;++a)out[a]=local?selectedAxes_[a]:float3{a==0?1.f:0.f,a==1?1.f:0.f,a==2?1.f:0.f};
 }
 int StudioScene::transformGizmoHit(float x,float y,float width,float height) const {
-    if(materialMode_||!gizmosVisible_||tool_==TransformTool::View||!selectedPivotValid_||width<4||height<4)return -1;
+    if((planetMode_&&tool_==TransformTool::Move)||materialMode_||!gizmosVisible_||tool_==TransformTool::View||!selectedPivotValid_||width<4||height<4)return -1;
     if(selectedIsLight_&&tool_!=TransformTool::Move)return -1;
     const auto view=viewCamera();
     float3 axes[3];handleAxes(axes);
@@ -896,12 +1585,14 @@ int StudioScene::transformGizmoHit(float x,float y,float width,float height) con
     // Plane squares (all tools): Move = drag in the plane, Scale = both plane axes,
     // Rotate = turn about the plane's normal (same as that axis's ring).
     for(int n=0;n<3;++n){
+        if(planetMode_&&tool_==TransformTool::Rotate&&n!=1)continue;
         float2 q[4];
         if(planeQuad(view,selectedPivot_,axes,n,h.worldLength,width,height,q)&&insideQuad(q,x,y))
             return tool_==TransformTool::Rotate?n:4+n;
     }
     if(tool_==TransformTool::Rotate) {
         for(int a=0;a<3;++a){
+            if(planetMode_&&a!=1)continue;
             float3 u,v;ringBasis(axes[a],u,v);float2 prev{};bool hasPrev=false;
             for(int i=0;i<=kRingSegments;++i){
                 const float t=6.2831853f*float(i)/float(kRingSegments);
@@ -917,6 +1608,16 @@ int StudioScene::transformGizmoHit(float x,float y,float width,float height) con
     return best;
 }
 bool StudioScene::beginTransformDrag(float x,float y,float width,float height) {
+    if(planetMode_&&tool_==TransformTool::Move){
+        if(!gizmosVisible_||!planetPreview_||tool_!=TransformTool::Move||selectedId_.empty()||selection_.size()>1)return false;
+        float3 o,d;if(!viewCamera().screenRay(x,y,width,height,o,d))return false;
+        if(planetPreview_->pick(o,d,hidden_,locked_,modelInstances_,visiblePlanetTerrain())!=selectedId_)return false;
+        const auto at=planetPreview_->placements.find(selectedId_);
+        if(at==planetPreview_->placements.end())return false;
+        planetTransformRevision_=planetRevision_;
+        planetDragId_=selectedId_;planetDragOriginal_=at->second;planetDragPlacement_=Json{};
+        tween_.active=false;return true;
+    }
     const int axis=transformGizmoHit(x,y,width,height);
     if(axis<0)return false;
     const auto view=viewCamera();
@@ -945,9 +1646,16 @@ bool StudioScene::beginTransformDrag(float x,float y,float width,float height) {
     }
     tween_.active=false;
     drag_=d;
+    if(planetMode_)planetTransformRevision_=planetRevision_;
     return true;
 }
 void StudioScene::updateTransformDrag(float x,float y,float width,float height,bool invertSnap) {
+    if(!planetDragId_.empty()){
+        float3 o,d;planetDragPlacement_=Json{};
+        if(planetPreview_&&viewCamera().screenRay(x,y,width,height,o,d))
+            if(auto at=planetPreview_->groundPlacement(o,d,visiblePlanetTerrain()))planetDragPlacement_=std::move(*at);
+        return;
+    }
     if(drag_.axis<0)return;
     const bool snap=snapEnabled_!=invertSnap;
     drag_.snapping=snap;
@@ -1031,6 +1739,7 @@ render::mat4 StudioScene::dragPreview() const {
     return mat4::translate(p)*basis*mat4::scale(k)*basisT*mat4::translate(p*-1.0f);
 }
 std::string StudioScene::transformCaption() const {
+    if(!planetDragId_.empty())return planetDragPlacement_.isObject()?"Surface move · face "+std::to_string(planetDragPlacement_.getInt("face")):"Surface move · no hit";
     if(drag_.axis<0)return {};
     static const char* names[7]={"X","Y","Z","XYZ","YZ","XZ","XY"};
     char text[96];
@@ -1043,8 +1752,15 @@ std::string StudioScene::transformCaption() const {
     return text;
 }
 std::optional<StudioScene::TransformCommit> StudioScene::endTransformDrag() {
+    if(!planetDragId_.empty()){
+        TransformCommit c;c.id=planetDragId_;c.tool=TransformTool::Move;
+        c.surfacePlacement=planetDragPlacement_;c.expectedRevision=planetTransformRevision_;
+        const bool changed=c.surfacePlacement.isObject()&&c.surfacePlacement!=planetDragOriginal_;
+        clearTransformPreview();if(changed)return c;return std::nullopt;
+    }
     if(drag_.axis<0)return std::nullopt;
     TransformCommit c;c.id=drag_.id;c.tool=drag_.tool;c.axis=drag_.axis;
+    if(planetMode_)c.expectedRevision=planetTransformRevision_;
     if(drag_.tool==TransformTool::Move)c.move=drag_.moveOffset;
     else if(drag_.tool==TransformTool::Rotate)c.degrees=drag_.value;
     else c.factor=drag_.value;
@@ -1067,6 +1783,7 @@ void StudioScene::drawTransformGizmo(const render::Camera& view,int width,int he
     const float u=std::min(W,H)*0.16f/110.0f;
     auto drawPlanes=[&](){
         for(int n=0;n<3;++n){
+            if(planetMode_&&tool_==TransformTool::Rotate&&n!=1)continue;
             float2 q[4];if(!planeQuad(view,pivot,axes,n,h.worldLength,W,H,q))continue;
             const bool hot=dragging&&(drag_.axis==4+n||(tool_==TransformTool::Rotate&&drag_.axis==n));
             const uint32_t base=hot?active:colors[n];
@@ -1079,6 +1796,7 @@ void StudioScene::drawTransformGizmo(const render::Camera& view,int width,int he
         drawPlanes();
         const float3 toEye=normalize(view.eye()-pivot);
         for(int a=0;a<3;++a){
+            if(planetMode_&&a!=1)continue;
             const bool hot=dragging&&drag_.axis==a;
             float3 bu,bv;ringBasis(axes[a],bu,bv);
             float2 prev{};bool hasPrev=false;
@@ -1354,6 +2072,13 @@ void StudioScene::move(float right, float up, float forward) {
 }
 void StudioScene::focusSelected(const editor::MapDoc& map,bool fpsProject,
                                       const std::string& selectedId) {
+    if(map.data.planet()){
+        if(planetPreview_)for(const auto& p:planetPreview_->markers)if(p.id==selectedId){
+            const auto dir=normalize(p.center);
+            startTween(p.center,std::max(3.f,p.half.x*8.f),std::atan2(dir.x,dir.z),std::asin(std::clamp(dir.y,-1.f,1.f)));break;
+        }
+        return;
+    }
     for (const auto& instance:modelInstances_) {
         if (instance.id!=selectedId || !instance.model) continue;
         const auto lo=instance.model->boundsMin,hi=instance.model->boundsMax;
@@ -1822,6 +2547,16 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
 
         return;
     }
+    if(doc.data.planet()){
+        framePlanet(framebufferWidth,framebufferHeight,doc,selectedId,projectPath,rules);return;
+    }
+    if(planetMode_){
+        if(!device_->waitForResourceIdle())return;
+        clearLivePlanetTerrain();
+        clearPlanetForestModels();
+        planetMode_=false;planetPreview_.reset();planetMapPath_.clear();cameraInitialized_=false;sceneCacheValid_=false;
+        lightingRevision_=std::numeric_limits<uint64_t>::max();clearTransformPreview();
+    }
     const auto& map = doc.data;
     if(caveGlobeRequested()){
         if(projectPath!=globeProject_||doc.path!=globeMap_||!map.planet()||map.findBody(globeBody_)<0)
@@ -2287,6 +3022,1019 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     // StudioFrameScope ends the pass and frame, including on exceptions.
 }
+bool StudioScene::beginPlanetRegionDrag(const editor::MapDoc& doc,const std::string& id,float x,float y,float width,float height){
+    cancelPlanetRegionDrag();
+    if(!planetMode_||!planetPreview_||planetMapPath_!=doc.path||!gizmosVisible_||
+       hidden_.count(id)||locked_.count(id)||doc.revision!=planetRevision_)return false;
+    const auto chart=planetRegionChart(doc,*planetPreview_,id);
+    if(!chart)return false;
+    const auto& body=doc.data.bodies[size_t(doc.data.findBody(chart->body))];
+    const auto view=viewCamera();
+    const float lift=std::clamp(planetPreview_->radius*.009f,.25f,3.f);
+    float best=11.f;std::optional<PlanetRegionHandle> hit;
+    for(auto handle:{PlanetRegionHandle::West,PlanetRegionHandle::East,PlanetRegionHandle::North,
+                     PlanetRegionHandle::South,PlanetRegionHandle::Center}){
+        const auto [cx,cz]=planetRegionHandleCoordinates(chart->area,handle);
+        const auto point=planetRegionHandlePosition(body,*chart,cx,cz,lift);
+        float2 p;if(!point||!view.worldToScreen(*point,width,height,p))continue;
+        float3 o,d;if(!view.screenRay(p.x,p.y,width,height,o,d))continue;
+        const float distance=dot(*point-o,d);
+        if(planetPreview_->terrainHit(o,d,visiblePlanetTerrain())+.05f<distance)continue;
+        const float error=std::hypot(x-p.x,y-p.y);
+        if(error<best){best=error;hit=handle;}
+    }
+    if(!hit)return false;
+    planetRegionDrag_=PlanetRegionDrag{*chart,*hit,planetRevision_,{}};
+    return true;
+}
+std::optional<Json> StudioScene::updatePlanetRegionDrag(const editor::MapDoc& doc,float x,float y,float width,float height,
+        bool symmetric,bool snap,bool finish){
+    if(!planetRegionDrag_)return {};
+    auto& drag=*planetRegionDrag_;drag.candidate.reset();
+    if(planetMode_&&planetPreview_&&planetMapPath_==doc.path&&planetRevision_==drag.revision&&
+       doc.revision==drag.revision&&planetPreview_->bodyId==drag.chart.body&&
+       selectedId_==drag.chart.owner&&!locked_.count(drag.chart.owner)&&!hidden_.count(drag.chart.owner)){
+        float3 o,d;
+        if(viewCamera().screenRay(x,y,width,height,o,d)){
+            const float t=planetPreview_->terrainHit(o,d,visiblePlanetTerrain());
+            if(std::isfinite(t)){
+                const auto direction=normalize(o+d*t);
+                const auto local=planetRegionCoordinates(drag.chart,
+                    {StudioPlanetPreview::fixed(direction.x),StudioPlanetPreview::fixed(direction.y),StudioPlanetPreview::fixed(direction.z)});
+                if(local)drag.candidate=planetRegionDragArea(drag.chart,drag.handle,*local,symmetric,snap);
+            }
+        }
+    }
+    std::optional<Json> out;
+    if(finish){
+        if(drag.candidate){
+            const auto& a=drag.chart.area;const auto& b=*drag.candidate;
+            if(a.centerXcm!=b.centerXcm||a.centerZcm!=b.centerZcm||
+               a.halfWidthCm!=b.halfWidthCm||a.halfDepthCm!=b.halfDepthCm)
+                out=planetRegionEditPayload(drag.chart,b,drag.revision);
+        }
+        cancelPlanetRegionDrag();
+    }
+    return out;
+}
+void StudioScene::drawPlanetRegionHandles(const render::Camera& view,int width,int height,const editor::MapDoc& doc){
+    if(!planetPreview_||!gizmosVisible_||locked_.count(selectedId_)||hidden_.count(selectedId_))return;
+    auto chart=planetRegionChart(doc,*planetPreview_,selectedId_);
+    if(!chart)return;
+    if(planetRegionDrag_&&planetRegionDrag_->chart.owner==selectedId_&&planetRegionDrag_->candidate)
+        chart->area=*planetRegionDrag_->candidate;
+    const auto& body=doc.data.bodies[size_t(doc.data.findBody(chart->body))];
+    const float lift=std::clamp(planetPreview_->radius*.009f,.25f,3.f);
+    Overlay2D overlay{renderer_,view,float(width),float(height),view.ortho?.5f:view.zNear*1.6f};
+    const auto visible=[&](float3 p,float2& screen){
+        if(!view.worldToScreen(p,float(width),float(height),screen))return false;
+        float3 o,d;if(!view.screenRay(screen.x,screen.y,float(width),float(height),o,d))return false;
+        return planetPreview_->terrainHit(o,d,visiblePlanetTerrain())+.05f>=dot(p-o,d);
+    };
+    for(auto handle:{PlanetRegionHandle::West,PlanetRegionHandle::East,PlanetRegionHandle::North,
+                     PlanetRegionHandle::South,PlanetRegionHandle::Center}){
+        const auto [x,z]=planetRegionHandleCoordinates(chart->area,handle);
+        const auto point=planetRegionHandlePosition(body,*chart,x,z,lift);
+        float2 p;if(!point||!visible(*point,p))continue;
+        const bool hot=planetRegionDrag_&&planetRegionDrag_->handle==handle;
+        const auto color=hot?rgba(255,210,90):rgba(120,245,170);
+        const float r=handle==PlanetRegionHandle::Center?6.f:4.f;
+        overlay.segment(p.x-r,p.y,p.x+r,p.y,3.f,color);
+        overlay.segment(p.x,p.y-r,p.x,p.y+r,3.f,color);
+    }
+    if(!planetRegionDrag_||!planetRegionDrag_->candidate)return;
+    const auto& a=chart->area;
+    const std::array<std::pair<int64_t,int64_t>,4> corners{{
+        {a.centerXcm-a.halfWidthCm,a.centerZcm-a.halfDepthCm},
+        {a.centerXcm+a.halfWidthCm,a.centerZcm-a.halfDepthCm},
+        {a.centerXcm+a.halfWidthCm,a.centerZcm+a.halfDepthCm},
+        {a.centerXcm-a.halfWidthCm,a.centerZcm+a.halfDepthCm}}};
+    for(size_t edge=0;edge<4;++edge){
+        const auto [ax,az]=corners[edge];const auto [bx,bz]=corners[(edge+1)%4];
+        std::optional<float2> prev;
+        for(int i=0;i<=16;++i){
+            const auto point=planetRegionHandlePosition(body,*chart,(ax*(16-i)+bx*i)/16,(az*(16-i)+bz*i)/16,lift);
+            float2 p;if(!point||!visible(*point,p)){prev.reset();continue;}
+            if(prev)overlay.segment(prev->x,prev->y,p.x,p.y,2.f,rgba(255,210,90));
+            prev=p;
+        }
+    }
+}
+
+// With no entity selected, Move/Scale exposes authored local gravity
+// field centers/radii in x-ray overlay mode (centers may be underground).
+bool StudioScene::beginPlanetGravityDrag(const editor::MapDoc& doc,float x,float y,float width,float height){
+    cancelPlanetGravityDrag();
+    if(!planetMode_||!planetPreview_||!gizmosVisible_||!selectedId_.empty()||
+       !selection_.empty()||planetMapPath_!=doc.path||planetRevision_!=doc.revision||
+       (tool_!=TransformTool::Move&&tool_!=TransformTool::Scale))return false;
+    const auto view=viewCamera();
+    const auto normal=normalize(view.target-view.eye());
+    auto right=normalize(cross(normal,float3{0,1,0}));
+    if(dot(right,right)<.5f)right={1,0,0};
+    float best=12.f;
+    const bool resize=tool_==TransformTool::Scale;
+    for(const auto& field:planetGravityHandles_){
+        const auto handle=resize?field.center+right*field.radius:field.center;
+        float2 screen;if(!view.worldToScreen(handle,width,height,screen))continue;
+        const float error=std::hypot(x-screen.x,y-screen.y);
+        if(error>=best)continue;
+        float3 o,d,hit;
+        if(!view.screenRay(x,y,width,height,o,d)||!rayPlane(o,d,field.center,normal,hit))continue;
+        if(resize&&dot(hit-field.center,hit-field.center)<1e-6f)continue;
+        best=error;planetGravityDrag_=PlanetGravityDrag{field,field,normal,hit,resize,false,planetRevision_};
+    }
+    return bool(planetGravityDrag_);
+}
+std::optional<Json> StudioScene::updatePlanetGravityDrag(const editor::MapDoc& doc,float x,float y,float width,float height,bool snap,bool finish){
+    if(!planetGravityDrag_)return {};
+    auto& drag=*planetGravityDrag_;drag.valid=false;drag.candidate=drag.original;
+    if(planetMode_&&planetPreview_&&selectedId_.empty()&&selection_.empty()&&
+       planetMapPath_==doc.path&&planetRevision_==drag.revision&&doc.revision==drag.revision&&
+       planetPreview_->bodyId==drag.original.body){
+        float3 o,d,hit;
+        if(viewCamera().screenRay(x,y,width,height,o,d)&&rayPlane(o,d,drag.original.center,drag.normal,hit)){
+            if(drag.resize){
+                const auto before=drag.startHit-drag.original.center,after=hit-drag.original.center;
+                const float delta=std::sqrt(dot(after,after))-std::sqrt(dot(before,before));
+                float r=drag.original.radius+delta;
+                if(snap)r=std::round(r);
+                drag.candidate.radius=std::clamp(r,1.f,100000.f);
+                drag.valid=std::isfinite(r);
+            }else{
+                auto p=drag.original.center+(hit-drag.startHit);
+                if(snap)p={std::round(p.x),std::round(p.y),std::round(p.z)};
+                drag.candidate.center=p;
+                drag.valid=validPlanetGravityCenter(p);
+            }
+        }
+    }
+    std::optional<Json> result;
+    if(finish){
+        if(drag.valid)result=planetGravityEditPayload(doc,drag.original,drag.candidate.center,drag.candidate.radius,drag.revision);
+        cancelPlanetGravityDrag();
+    }
+    return result;
+}
+void StudioScene::drawPlanetGravityHandles(const render::Camera& view,int width,int height){
+    if(!planetPreview_||!gizmosVisible_||!selectedId_.empty()||!selection_.empty()||
+       (tool_!=TransformTool::Move&&tool_!=TransformTool::Scale))return;
+    Overlay2D overlay{renderer_,view,float(width),float(height),view.ortho?.5f:view.zNear*1.6f};
+    const auto normal=normalize(view.target-view.eye());
+    auto right=normalize(cross(normal,float3{0,1,0}));
+    if(dot(right,right)<.5f)right={1,0,0};
+    const auto up=normalize(cross(right,normal));
+    for(const auto& original:planetGravityHandles_){
+        const bool hot=planetGravityDrag_&&planetGravityDrag_->original.id==original.id;
+        const auto& field=hot&&planetGravityDrag_->valid?planetGravityDrag_->candidate:original;
+        const uint32_t color=hot?rgba(255,210,90):rgba(100,180,255);
+        float2 center;if(!view.worldToScreen(field.center,float(width),float(height),center))continue;
+        std::optional<float2> prev;
+        for(int i=0;i<=32;++i){
+            const float angle=6.28318530718f*float(i)/32.f;
+            const auto p=field.center+(right*std::cos(angle)+up*std::sin(angle))*field.radius;
+            float2 screen;if(!view.worldToScreen(p,float(width),float(height),screen)){prev.reset();continue;}
+            if(prev)overlay.segment(prev->x,prev->y,screen.x,screen.y,1.2f,color);
+            prev=screen;
+        }
+        float2 p;
+        const auto handle=tool_==TransformTool::Scale?field.center+right*field.radius:field.center;
+        if(!view.worldToScreen(handle,float(width),float(height),p))continue;
+        overlay.segment(p.x-6,p.y,p.x+6,p.y,3.f,color);
+        overlay.segment(p.x,p.y-6,p.x,p.y+6,3.f,color);
+    }
+}
+
+void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,const std::string& selectedId,
+                              const std::string& projectPath,const Json& rules){
+    const bool entering=!planetMode_;
+    if(entering){
+        if(!lightingRuntime_.shutdown(*device_,renderer_)||!device_->waitForResourceIdle())return;
+        clearDocumentModels();sceneCacheValid_=false;cameraInitialized_=false;
+        if(lightingModel_){renderer_.invalidateModelCachesFor(lightingModel_.get());releaseModel(*device_,*lightingModel_);lightingModel_.reset();}
+        planetMode_=true;planetMapPath_.clear();clearTransformPreview();
+    }
+    int body=-1;
+    const auto explicitBody=planetSceneBodyOverride(projectPath,doc.path);
+    if(!explicitBody.empty()){
+        body=doc.data.findBody(explicitBody);
+        if(body<0||!doc.data.bodies[size_t(body)].surface()){body=-1;planetBodyOverride_.clear();}
+    }
+    const int selected=studioMapEntityIndex(selectedId,doc);
+    if(body<0&&selected>=0)body=doc.data.findBody(doc.data.entities[size_t(selected)].at.getStr("body"));
+    if(body<0&&planetPreview_&&planetMapPath_==doc.path)body=doc.data.findBody(planetPreview_->bodyId);
+    if(body<0)body=doc.data.findBody(doc.data.worldExtra.getStr("start"));
+    if(body<0||!doc.data.bodies[size_t(body)].surface()){
+        body=-1;for(size_t i=0;i<doc.data.bodies.size();++i)if(doc.data.bodies[i].surface()){body=int(i);break;}
+    }
+    const bool changedBody=!planetPreview_||planetMapPath_!=doc.path||planetModelProject_!=projectPath||body<0||
+        planetPreview_->bodyId!=doc.data.bodies[size_t(body)].id;
+    const bool changedDocument=changedBody||planetRevision_!=doc.revision;
+    if(changedDocument){
+        if(!device_->waitForResourceIdle())return;
+        clearLivePlanetTerrain();
+        auto next=StudioPlanetPreview::build(doc,body);
+        Mesh replacement;
+        if(next)replacement=next->mesh.upload(*device_);
+        if(!changedBody && planetRevision_!=doc.revision)clearTransformPreview();
+        if(planetTerrain_.vb.valid())device_->destroyBuffer(planetTerrain_.vb);
+        if(planetTerrain_.ib.valid())device_->destroyBuffer(planetTerrain_.ib);
+        planetTerrain_=replacement;planetPreview_=std::move(next);planetMapPath_=doc.path;planetRevision_=doc.revision;
+        planetAuthoredOccluderRadius_=planetPreview_?studioPlanetInnerRadius(planetPreview_->mesh):0.f;
+        planetProcessOverlays_=planetPreview_?buildPlanetProcessOverlays(doc,body,*planetPreview_):PlanetProcessOverlays{};
+        planetForestOverlayRecipe_=studioForestOverlayRecipe(doc,rules);
+        planetForestOverlays_=planetPreview_?buildPlanetForestOverlays(doc,rules,body,*planetPreview_):PlanetForestOverlays{};
+        planetGravityHandles_=planetPreview_?planetGravityHandles(doc,*planetPreview_):std::vector<PlanetGravityHandle>{};
+        if(changedBody){cameraInitialized_=false;clearTransformPreview();forestDragPreview_=Json{};}
+    }
+    const auto now=std::chrono::steady_clock::now();
+    if(changedDocument||planetModelProject_!=projectPath||planetModelRules_!=&rules||modelsPending_||now>=nextFileCheck_){
+        if(planetModelProject_!=projectPath)clearDocumentModels();
+        if(!changedDocument&&(planetModelRules_!=&rules||now>=nextFileCheck_)){
+            auto recipe=studioForestOverlayRecipe(doc,rules);
+            if(!(recipe==planetForestOverlayRecipe_)){
+                planetForestOverlayRecipe_=std::move(recipe);
+                planetForestOverlays_=planetPreview_?buildPlanetForestOverlays(doc,rules,body,*planetPreview_):PlanetForestOverlays{};
+            }
+        }
+        if(planetPreview_)syncDocumentModels(doc,projectPath,rules,planetPreview_->markers);
+        else clearDocumentModels();
+        planetModelProject_=projectPath;planetModelRules_=&rules;
+        nextFileCheck_=now+std::chrono::seconds(1);
+    }
+    const bool useLiveTerrain=syncLivePlanetTerrain(doc,projectPath)&&planetTerrain_.vb.valid()&&planetTerrain_.ib.valid();
+    planetLiveTerrainVisible_=useLiveTerrain;
+    syncPlanetForestModels(doc,projectPath);
+    if(!cameraInitialized_){
+        camera_.target={};camera_.distance=planetPreview_?std::max(2.f,planetPreview_->extent*3.f):16.f;
+        camera_.yaw=.55f;camera_.pitch=.35f;camera_.ortho=false;tween_.active=false;cameraInitialized_=true;
+    }
+    stepTween();selectedId_=selectedId;selectedPivotValid_=false;selectedBoxValid_=false;
+    selectedAxesValid_=false;selectedIsLight_=false;
+    // Use the existing transform gizmo for authored rigid models. Yaw is
+    // about the radial vertical (not arbitrary global Y); scale is along
+    // actual model axes. Pitch/roll edits remain numeric-only.
+    if(planetPreview_&&selected>=0&&selection_.size()<=1&&
+       !locked_.count(selectedId)&&!hidden_.count(selectedId)&&
+       (tool_==TransformTool::Rotate||tool_==TransformTool::Scale)){
+        const auto& entity=doc.data.entities[size_t(selected)];
+        const auto frame=planetPreview_->modelFrames.find(selectedId);
+        const auto model=std::find_if(modelInstances_.begin(),modelInstances_.end(),
+            [&](const auto& instance){return instance.id==selectedId&&instance.model;});
+        if(editor::authoredEntity(entity)&&frame!=planetPreview_->modelFrames.end()&&model!=modelInstances_.end()){
+            selectedPivot_=frame->second.transformPoint({});
+            const auto radial=normalize(selectedPivot_);
+            const auto view=viewCamera();
+            float2 screen;float3 o,d;
+            if(view.worldToScreen(selectedPivot_,float(width),float(height),screen)&&
+               view.screenRay(screen.x,screen.y,float(width),float(height),o,d)&&
+               planetPreview_->terrainHit(o,d,visiblePlanetTerrain())+.3f>=dot(selectedPivot_-o,d)){
+                selectedPivotValid_=true;selectedAxesValid_=true;
+                for(int i=0;i<3;++i)selectedAxes_[i]=normalize(frame->second.transformDir({i==0?1.f:0.f,i==1?1.f:0.f,i==2?1.f:0.f}));
+                if(tool_==TransformTool::Rotate){
+                    selectedAxes_[1]=radial;
+                    auto right=normalize(cross(radial,float3{0,0,1}));
+                    if(dot(right,right)<.5f)right=normalize(cross(radial,float3{1,0,0}));
+                    selectedAxes_[0]=right;selectedAxes_[2]=normalize(cross(right,radial));
+                }
+            }
+        }
+    }
+    device_->beginFrame(width,height);StudioFrameScope scope{*device_};
+    renderThumbnail();
+    const auto view=viewCamera();renderer_.beginScene(view,width,height);
+    renderer_.setSceneSelectionOutline(true);renderer_.lighting=Lighting{};renderer_.lighting.fogDensity=0;
+    lightingStatus_="Planet authoring preview · rigid models and coarse surface";
+    if(planetProcessOverlays_.invalidPhysis)lightingStatus_+=" · invalid PHYSIS fields";
+    if(planetProcessOverlays_.truncated)lightingStatus_+=" · overlay budget reached";
+    if(planetProcessOverlays_.regionChartClipped)lightingStatus_+=" · EVOLVE chart clipped";
+    if(planetForestOverlays_.invalid)lightingStatus_+=" · invalid authored forest";
+    if(planetForestOverlays_.missingProfile)lightingStatus_+=" · missing ARBOR profile";
+    if(planetForestOverlays_.rejected)lightingStatus_+=" · rejected forest placements";
+    if(planetForestOverlays_.truncated)lightingStatus_+=" · forest overlay budget reached";
+    const bool livePlanet=planetLiveSnapshot_.getBool("active")&&
+        planetLiveSnapshot_.getStr("topology")=="planet"&&
+        !planetLivePath_.empty()&&planetLivePath_==doc.path&&
+        planetLiveProject_==projectPath&&planetLiveRevision_==doc.revision&&!doc.dirty;
+    if(livePlanet&&(planetLiveSnapshot_["diagnosticBudget"]["trimmedLayers"].size()||planetLiveSnapshot_["diagnosticBudget"]["omittedLayers"].size()))
+        lightingStatus_+=" · Live payload budget reached";
+    const bool liveImprint=livePlanet&&planetLiveLayer_!="off"&&planetLiveSnapshot_["imprint"].isObject();
+    const bool liveGranular=livePlanet&&planetLiveLayer_!="off"&&planetLiveSnapshot_["granular"].getBool("available");
+    const bool liveGravity=livePlanet&&planetLiveSnapshot_["gravity"].getBool("available");
+    if(livePlanet&&planetLiveSnapshot_["gravity"].isObject()){
+        if(liveGravity)lightingStatus_+=" · effective PHYSIS gravity (cyan inward, orange outward, violet tangent, grey zero)";
+        else lightingStatus_+=" · live PHYSIS gravity unavailable (budget/context)";
+    }
+    const bool liveAether=livePlanet&&planetLiveAetherLayer_!="off"&&planetLiveSnapshot_["aether"].getBool("available");
+    if(livePlanet&&planetLiveSnapshot_["aether"].isObject()){
+        lightingStatus_+=" · AETHER "+planetLiveAetherLayer_+(liveAether?" mass / duct potential":" unavailable");
+        if(planetLiveSnapshot_["aether"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+    }
+    const bool liveForest=planetForestLiveCurrent(doc,projectPath);
+    if(liveForest){
+        lightingStatus_+=useLiveTerrain?" · completed-tick terrain":" · authored terrain fallback (live unavailable)";
+        if(useLiveTerrain)lightingStatus_+=" · surface grid step "+std::to_string(planetLiveTerrainGrid_.getInt("step"))+" · refined tiles "+std::to_string(planetLiveTerrainGrid_["patches"].size());
+        lightingStatus_+=" · "+std::to_string(planetLiveSnapshot_["forest"]["plants"].size())+"/"+std::to_string(planetLiveSnapshot_["forest"].getInt("focusPlantCount"))+" native render candidates";
+        if(planetLiveSnapshot_["forest"].getBool("cameraPrioritized"))lightingStatus_+=" · camera priority";
+    }
+    if(planetForestModelsPending_)lightingStatus_+=" · ARBOR prototypes loading";
+    if(!planetForestRejectedModels_.empty()||!planetForestRejectedRoots_.empty()||!planetForestRejectedLogs_.empty())lightingStatus_+=" · ARBOR preview budget or upload rejection";
+    if(!liveForest&&planetForestOverlays_.plants)lightingStatus_+=" · authored forest: ARBOR skeleton / root footprint / capsule recipe";
+    if(livePlanet&&planetLiveSnapshot_["forest"].isObject()){
+        lightingStatus_+=liveForest?" · live forest roots / actual capsule poses":" · live forest unavailable";
+        if(planetLiveSnapshot_["forest"].getBool("truncated"))lightingStatus_+=" (detail budget)";
+        if(planetLiveSnapshot_["forest"].getBool("stormsCapped")||planetLiveSnapshot_["forest"].getBool("windZonesCapped"))lightingStatus_+=" · wind field capped";
+    }
+    const bool liveSociety=livePlanet&&planetLiveSnapshot_["society"].getBool("available");
+    if(livePlanet&&planetLiveSnapshot_["society"].isObject()){
+        lightingStatus_+=liveSociety?" · SOCIETY knowledge / trust / triggers":" · SOCIETY unavailable";
+        if(planetLiveSnapshot_["society"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+    }
+    const bool liveCircuit=livePlanet&&planetLiveSnapshot_["circuit"].getBool("available");
+    if(livePlanet&&planetLiveSnapshot_["circuit"].isObject()){
+        lightingStatus_+=liveCircuit?" · CIRCUIT power / logic state":" · CIRCUIT unavailable";
+        if(planetLiveSnapshot_["circuit"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+    }
+    const bool liveCrowd=livePlanet&&planetLiveSnapshot_["crowd"].getBool("available");
+    if(livePlanet&&planetLiveSnapshot_["crowd"].isObject()){
+        lightingStatus_+=liveCrowd?" · CROWD reservations / native routes":" · CROWD unavailable";
+        if(planetLiveSnapshot_["crowd"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+    }
+    const bool liveEcho=livePlanet&&planetLiveSnapshot_["echo"].getBool("available");
+    if(livePlanet&&planetLiveSnapshot_["echo"].isObject()){
+        lightingStatus_+=liveEcho?" · ECHO acoustic graph / hearing":" · ECHO unavailable";
+        if(planetLiveSnapshot_["echo"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+    }
+    const bool liveMorph=livePlanet&&planetLiveSnapshot_["morph"].getBool("available");
+    if(livePlanet&&planetLiveSnapshot_["morph"].isObject()){
+        lightingStatus_+=liveMorph?" · MORPH bound node displacement":" · MORPH unavailable";
+        if(planetLiveSnapshot_["morph"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+    }
+    const bool liveFracture=livePlanet&&planetLiveSnapshot_["fracture"].getBool("available");
+    if(livePlanet&&planetLiveSnapshot_["fracture"].isObject()){
+        lightingStatus_+=liveFracture?" · FRACTURE live structural state":" · FRACTURE unavailable";
+        if(planetLiveSnapshot_["fracture"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+    }
+    const bool liveEvolve=livePlanet&&planetLiveLayer_!="off"&&planetLiveSnapshot_["evolve"].isObject();
+    if(liveEvolve){
+        lightingStatus_+=" · live EVOLVE "+planetLiveLayer_+" tick "+std::to_string(planetLiveSnapshot_["evolve"].getInt("sampleTick"));
+        if(planetLiveSnapshot_["evolve"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+        if(planetLiveSnapshot_["evolve"].getInt("clipped")>0)lightingStatus_+=" (chart clipped)";
+    }
+    if(liveGranular){
+        lightingStatus_+=" · GRANULAR diagnostic "+std::to_string(planetLiveSnapshot_["granular"].getInt("cellSizeCm"))+" cm";
+        if(planetLiveSnapshot_["granular"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+    }
+    if(liveImprint){
+        lightingStatus_+=" · live IMPRINT tick "+std::to_string(planetLiveSnapshot_["imprint"].getInt("sampleTick"));
+        if(planetLiveSnapshot_["imprint"].getBool("truncated"))lightingStatus_+=" (sample capped)";
+    }
+    if(planetPreview_&&planetTerrain_.vb.valid()&&planetTerrain_.ib.valid()){
+        if(useLiveTerrain){for(const auto& face:planetLiveTerrainFaces_)renderer_.drawMesh(face,mat4{},{1,1,1,1},kDrawNoCastShadow);}
+        else renderer_.drawMesh(planetTerrain_,mat4{},{1,1,1,1},kDrawNoCastShadow);
+        if(liveForest)drawLivePlanetForestMeshes(doc,projectPath,width,height);
+        if(!liveForest&&planetForestModelProject_==projectPath&&planetForestModelCatalog_==doc.data.worldExtra["terraweaveForest"]){
+            static const std::vector<uint8_t> barkOnly{1,0};
+            const bool current=forestSelection_.getStr("project")==projectPath&&forestSelection_.getStr("mapPath")==doc.path&&
+                forestSelection_.getStr("expectedRevision")==std::to_string(doc.revision);
+            for(const auto& plant:planetForestOverlays_.picks){
+                if(!plant.markerOwner.empty()&&hidden_.count(plant.markerOwner))continue;
+                const auto model=planetForestModels_.find(plant.species);
+                if(model==planetForestModels_.end())continue;
+                render::ModelDraw draw;draw.model=model->second.get();draw.world=plant.world;
+                const bool dragging=forestDragPreview_.getStr("project")==projectPath&&forestDragPreview_.getStr("mapPath")==doc.path&&
+                    forestDragPreview_.getStr("expectedRevision")==std::to_string(doc.revision)&&
+                    forestDragPreview_.getInt("species")==int64_t(plant.species)&&forestDragPreview_.getInt("key")==int64_t(plant.key)&&
+                    forestDragPreview_["at"].getStr("body")==planetPreview_->bodyId;
+                if(dragging){
+                    const auto& at=forestDragPreview_["at"];
+                    const int face=int(at.getInt("face",-1));
+                    const auto x=at["x"].fx(),y=at["y"].fx();
+                    const int n=planetPreview_->faceSize;
+                    if(face>=0&&face<6&&x>=Fixed{}&&y>=Fixed{}&&x<=Fixed::fromInt(n)&&y<=Fixed::fromInt(n)){
+                        game::CubeSphere cube(n);const auto dir=cube.dirFromFace(face,x,y);
+                        int canonical;Fixed ca,cb;cube.faceFromDir(dir,canonical,ca,cb);
+                        Vec3 east,south;game::CubeSphere::faceTangents(canonical,dir,east,south);
+                        const auto& bodyDoc=doc.data.bodies[size_t(body)];
+                        const float height=StudioPlanetPreview::height(bodyDoc,face,float(x.toDouble()),float(y.toDouble()));
+                        const auto position=StudioPlanetPreview::f3(dir)*(planetPreview_->radius+height);
+                        const auto frame=studioForestFrame(position,StudioPlanetPreview::f3(dir),StudioPlanetPreview::f3(east));
+                        const render::float3 col{plant.world.at(0,0),plant.world.at(1,0),plant.world.at(2,0)};
+                        const float scale=std::sqrt(render::dot(col,col));
+                        if(frame){draw.world=*frame*render::mat4::scale({scale,scale,scale});draw.outline={1.f,.8f,.2f,.025f};}
+                    }
+                }
+                if(!plant.foliagePermille)draw.materialMask=&barkOnly;
+                draw.useVertexParameters=true;draw.vertexParameters={0,0,0,0};draw.maxVertexOffsetMetres=.01f;
+                if(current&&forestSelection_.getInt("species")==int64_t(plant.species)&&forestSelection_.getInt("key")==int64_t(plant.key))
+                    draw.outline={1.f,.8f,.2f,.025f};
+                renderer_.drawModel(draw);
+            }
+        }
+        std::set<std::string> renderedModels;
+        for(const auto& instance:modelInstances_){
+            if(!instance.model)continue;
+            renderedModels.insert(instance.id);
+            if(hidden_.count(instance.id))continue;
+            render::ModelDraw draw;draw.model=instance.model;draw.world=instance.world;
+            if(drag_.axis>=0&&drag_.id==instance.id&&(drag_.tool==TransformTool::Rotate||drag_.tool==TransformTool::Scale))
+                draw.world=dragPreview()*instance.world;
+            if(auto custom=instanceMaterials_.find(instance.id);custom!=instanceMaterials_.end())draw.materials=&custom->second.materials;
+            if(auto team=instanceTeams_.find(instance.id);team!=instanceTeams_.end())draw.team=team->second;
+            if(instance.id==selectedId||selection_.count(instance.id))draw.outline={.25f,.62f,1.f,.035f};
+            else if(instance.id==hover_)draw.outline={.62f,.8f,1.f,.02f};
+            renderer_.drawModel(draw);
+        }
+        for(const auto& marker:planetPreview_->markers){
+            if(hidden_.count(marker.id)||renderedModels.count(marker.id))continue;
+            const auto world=mat4::translate(marker.center)*mat4::scale(marker.half*2.f);
+            if(marker.id==selectedId||selection_.count(marker.id))
+                renderer_.drawSelectionMesh(cube_,world,marker.color,{.25f,.62f,1.f,1.f});
+            else renderer_.drawMesh(cube_,world,marker.color,kDrawNoCastShadow);
+        }
+        if(gizmosVisible_){
+            if(!liveForest){
+                const bool current=forestSelection_.getStr("project")==projectPath&&forestSelection_.getStr("mapPath")==doc.path&&
+                    forestSelection_.getStr("expectedRevision")==std::to_string(doc.revision);
+                const auto selectedForest=current?std::to_string(forestSelection_.getInt("species"))+":"+std::to_string(forestSelection_.getInt("key")):std::string{};
+                for(const auto& line:planetForestOverlays_.lines)
+                    renderer_.line(line.a,line.b,!selectedForest.empty()&&line.owner==selectedForest?render::rgba(255,225,90):line.color);
+            }
+            for(const auto& line:planetProcessOverlays_.lines)
+                if((!liveGravity||!line.owner.empty())&&(line.owner.empty()||!hidden_.count(line.owner)))
+                    renderer_.line(line.a,line.b,line.color);
+            PlanetLiveLineBudget liveLineBudget;
+            const size_t liveLineShare=planetLiveShare(kPlanetLiveLines,size_t(liveForest)+size_t(liveGravity)+size_t(liveAether)+size_t(liveSociety)+size_t(liveCircuit)+size_t(liveCrowd)+size_t(liveEcho)+size_t(liveMorph)+size_t(liveFracture)+size_t(liveEvolve)+size_t(liveGranular)+size_t(liveImprint));
+            const auto liveLine=[&](render::float3 a,render::float3 b,uint32_t color){
+                if(liveLineBudget.take())renderer_.line(a,b,color);
+            };
+            if(liveForest){
+                liveLineBudget.beginLayer(liveLineShare);
+                const auto readVec=[](const Json& j)->std::optional<render::float3>{
+                    if(!j.isArray()||j.size()!=3)return {};
+                    const auto& a=j.items();
+                    render::float3 v{float(a[0].toDouble(NAN)),float(a[1].toDouble(NAN)),float(a[2].toDouble(NAN))};
+                    if(!std::isfinite(v.x)||!std::isfinite(v.y)||!std::isfinite(v.z))return {};
+                    return v;
+                };
+                const auto basis=[](render::float3 up){
+                    const auto a=render::normalize(render::cross(up,std::abs(up.y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
+                    return std::pair{a,render::normalize(render::cross(up,a))};
+                };
+                const auto ring=[&](render::float3 p,render::float3 a,render::float3 b,float r,uint32_t color){
+                    auto prev=p+a*r;
+                    for(int i=1;i<=8;++i){
+                        const float t=6.28318530718f*float(i)/8.f;
+                        const auto next=p+(a*std::cos(t)+b*std::sin(t))*r;
+                        liveLine(prev,next,color);prev=next;
+                    }
+                };
+                const float marker=std::clamp(planetPreview_->radius*.008f,.12f,1.f);
+                size_t count=0;
+                for(const auto& row:planetLiveSnapshot_["forest"]["plants"].items()){
+                    if(count++>=128)break;
+                    if(row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto& capsule=row["capsule"];
+                    if(row.getBool("physical")&&!row.getBool("spent")&&capsule.isObject()){
+                        const auto center=readVec(capsule["center"]),axis=readVec(capsule["axis"]);
+                        const float r=float(capsule["radius"].toDouble()),h=float(capsule["halfHeight"].toDouble());
+                        if(center&&axis&&render::dot(*axis,*axis)>.5f&&r>0&&r<=1000&&h>0&&h<=1000){
+                            const auto up=render::normalize(*axis);
+                            const auto [a,b]=basis(up);
+                            const auto p=*center-up*h,q=*center+up*h;
+                            const auto color=row.getBool("awake")?render::rgba(255,165,90):render::rgba(120,190,255);
+                            ring(p,a,b,r,color);ring(q,a,b,r,color);
+                            for(const auto side:{a,b}){
+                                liveLine(p+side*r,q+side*r,color);liveLine(p-side*r,q-side*r,color);
+                                for(int cap=0;cap<2;++cap){
+                                    const auto c=cap?q:p,v=up*(cap?1.f:-1.f);
+                                    auto prev=c+side*r;
+                                    for(int j=1;j<=4;++j){
+                                        const float t=3.14159265359f*float(j)/4.f;
+                                        const auto next=c+(side*std::cos(t)+v*std::sin(t))*r;
+                                        liveLine(prev,next,color);prev=next;
+                                    }
+                                }
+                            }
+                            continue;
+                        }
+                    }
+                    const auto position=readVec(row["position"]),normal=readVec(row["up"]);
+                    if(!position||!normal||render::dot(*normal,*normal)<.5f)continue;
+                    const auto up=render::normalize(*normal);
+                    const auto [a,b]=basis(up);
+                    const auto p=*position+up*.025f;
+                    const auto support=std::clamp(float(row.getInt("supportPermille"))/1000.f,0.f,1.f);
+                    const bool retired=row.getBool("spent")||row.getBool("harvested");
+                    const auto color=retired?render::rgba(125,125,135):
+                        row.getBool("physical")?render::rgba(255,125,100):
+                        row.getBool("pending")?render::rgba(255,210,90):
+                        row.getBool("fallen")?render::rgba(190,115,80):
+                        row.getBool("dead")?render::rgba(160,115,95):
+                        render::rgba(uint8_t(230-145*support),uint8_t(90+145*support),100);
+                    // Marker only, never invent a standing mesh or fallen orientation.
+                    liveLine(p-a*marker,p+a*marker,color);liveLine(p-b*marker,p+b*marker,color);
+                    if(!retired&&!row.getBool("fallen")){
+                        liveLine(p,p+up*marker,color);
+                        const float radius=float(row.getInt("rootRadiusCm"))*.01f;
+                        if(radius>0&&radius<=100.f)ring(p,a,b,radius,color);
+                    }
+                }
+            }
+            if(liveGravity){
+                liveLineBudget.beginLayer(liveLineShare);
+                // Effective gravity replaces authored per-field arrows in this
+                // view. Length is an indicative clamped display scale only.
+                const auto readVec=[](const Json& j)->std::optional<render::float3>{
+                    const auto& xyz=j.items();if(xyz.size()!=3)return {};
+                    return render::float3{float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
+                };
+                for(const auto& body:planetLiveSnapshot_["gravity"]["bodies"].items()){
+                    if(body.getStr("body")!=planetPreview_->bodyId)continue;
+                    size_t count=0;
+                    for(const auto& row:body["samples"].items()){
+                        if(count++>=96)break;
+                        const auto ground=readVec(row["position"]),up=readVec(row["up"]),acc=readVec(row["acceleration"]);
+                        if(!ground||!up||!acc)continue;
+                        const float radius=planetPreview_->radius;
+                        const float lift=std::clamp(radius*.008f,.15f,2.f);
+                        const float magnitude=float(row["magnitude"].toDouble());
+                        const auto kind=row.getStr("kind");
+                        if(kind=="zero"||magnitude<=.01f){
+                            const auto axis=normalize(cross(*up,std::abs(up->y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
+                            const auto side=normalize(cross(*up,axis));
+                            const auto center=*ground+*up*lift;
+                            const float extent=std::clamp(radius*.012f,.1f,1.5f);
+                            liveLine(center-axis*extent,center+axis*extent,rgba(160,174,185));
+                            liveLine(center-side*extent,center+side*extent,rgba(160,174,185));
+                            continue;
+                        }
+                        const auto direction=normalize(*acc);
+                        const float len=std::clamp(magnitude*.2f,.1f,std::max(.1f,radius*.12f));
+                        const float inward=std::max(0.f,-dot(direction,*up));
+                        const auto start=*ground+*up*(lift+inward*len);
+                        const auto end=start+direction*len;
+                        const auto side=normalize(cross(direction,std::abs(direction.y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
+                        const auto color=kind=="inward"?rgba(80,225,255):kind=="outward"?rgba(255,170,80):rgba(205,145,255);
+                        liveLine(start,end,color);
+                        liveLine(end,end-direction*(len*.25f)+side*(len*.14f),color);
+                        liveLine(end,end-direction*(len*.25f)-side*(len*.14f),color);
+                    }
+                    break;
+                }
+            }
+            if(liveAether){
+                liveLineBudget.beginLayer(liveLineShare);
+                const auto& data=planetLiveSnapshot_["aether"];
+                const size_t species=planetLiveAetherLayer_=="toxin"?1:planetLiveAetherLayer_=="oxygen"?2:0;
+                const auto readVec=[](const Json& j)->std::optional<render::float3>{
+                    const auto& xyz=j.items();if(xyz.size()!=3)return {};
+                    return render::float3{float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
+                };
+                const auto color=species==1?rgba(150,245,85):species==2?rgba(100,205,255):rgba(230,180,245);
+                const float marker=std::clamp(planetPreview_->radius*.012f,.12f,1.8f);
+                size_t count=0;
+                for(const auto& row:data["cells"].items()){
+                    if(count++>=256)break;
+                    if(row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto p=readVec(row["position"]);
+                    if(!p||row["mass"].size()!=3)continue;
+                    const float mass=std::max(0.f,float(row["mass"][species].toDouble()));
+                    const float extent=marker*(.4f+std::clamp(float(std::log1p(mass)/std::log(1000000001.)),0.f,1.f));
+                    const auto c=mass>0?color:rgba(115,125,140);
+                    for(const auto axis:{render::float3{extent,0,0},render::float3{0,extent,0},render::float3{0,0,extent}})
+                        liveLine(*p-axis,*p+axis,c);
+                }
+                count=0;
+                for(const auto& row:data["ducts"].items()){
+                    if(count++>=512)break;
+                    if(row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto a=readVec(row["a"]),b=readVec(row["b"]);
+                    if(!a||!b)continue;
+                    const auto delta=*b-*a;
+                    const float distance=std::sqrt(dot(delta,delta));
+                    if(distance<.001f)continue;
+                    const auto amount=row.getBool("potentialAvailable")&&row["potential"].size()==3?
+                        row["potential"][species].integer():0;
+                    liveLine(*a,*b,amount?color:rgba(105,115,130));
+                    if(!amount)continue;
+                    const auto direction=delta*(amount>0?1.f/distance:-1.f/distance);
+                    const auto tip=(*a+*b)*.5f;
+                    const auto side=normalize(cross(direction,std::abs(direction.y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
+                    const float len=std::min(marker,distance*.24f);
+                    liveLine(tip,tip-direction*len+side*(len*.45f),color);
+                    liveLine(tip,tip-direction*len-side*(len*.45f),color);
+                }
+            }
+            if(liveSociety){
+                liveLineBudget.beginLayer(liveLineShare);
+                const auto& data=planetLiveSnapshot_["society"];
+                const auto readVec=[](const Json& j)->std::optional<render::float3>{
+                    const auto& xyz=j.items();if(xyz.size()!=3)return {};
+                    return render::float3{float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
+                };
+                const float extent=std::clamp(planetPreview_->radius*.012f,.12f,1.5f);
+                const auto marker=[&](render::float3 p,float s,uint32_t color){
+                    for(const auto axis:{render::float3{s,0,0},render::float3{0,s,0},render::float3{0,0,s}})
+                        liveLine(p-axis,p+axis,color);
+                };
+                size_t count=0;
+                for(const auto& row:data["contacts"].items()){
+                    if(count++>=512)break;
+                    if(!row.getBool("placed")||row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto a=readVec(row["a"]),b=readVec(row["b"]);if(!a||!b)continue;
+                    const auto delta=*b-*a;
+                    const float trust=std::clamp(float(row.getInt("trust"))/1000.f,0.f,1.f);
+                    const bool eligible=row.getBool("eligibleNow");
+                    const auto color=eligible?rgba(uint8_t(155-65*trust),uint8_t(180+65*trust),160):rgba(120,125,145);
+                    if(!eligible){
+                        liveLine(*a,*a+delta*.4f,color);liveLine(*a+delta*.6f,*b,color);
+                    }else liveLine(*a,*b,color);
+                    const float distance=std::sqrt(dot(delta,delta));
+                    if(distance>.001f){
+                        const auto dir=delta*(1.f/distance),tip=*a+delta*.65f;
+                        const auto side=normalize(cross(dir,std::abs(dir.y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
+                        const float len=std::min(extent,distance*.2f);
+                        liveLine(tip,tip-dir*len+side*(len*.45f),color);
+                        liveLine(tip,tip-dir*len-side*(len*.45f),color);
+                    }
+                }
+                for(const char* key:{"people","messages","triggers"}){
+                    count=0;const std::string kind=key;
+                    for(const auto& row:data[key].items()){
+                        if(count++>=(kind=="people"?256u:128u))break;
+                        if(!row.getBool("placed")||row.getStr("body")!=planetPreview_->bodyId)continue;
+                        const auto p=readVec(row["position"]);if(!p)continue;
+                        uint32_t color=rgba(110,120,135);float scale=.75f;
+                        if(row.getBool("enabled")){
+                            if(kind=="people"&&row.getBool("knowledgeAvailable")){
+                                const float topics=std::clamp(float(row.getInt("topicCount"))/64.f,0.f,1.f);
+                                color=rgba(120,uint8_t(150+90*topics),245);scale=1.f+topics*.5f;
+                            }else if(kind=="messages"&&row.getBool("sourceValid"))color=rgba(255,195,90);
+                            else if(kind=="triggers"&&row.getBool("outputAvailable"))
+                                color=row.getBool("active")?rgba(110,235,155):row.getBool("fired")?rgba(185,145,245):rgba(170,175,190);
+                        }
+                        marker(*p,extent*scale,color);
+                        if(const auto q=readVec(row["personPosition"])){
+                            const auto d=*q-*p;
+                            for(int i=0;i<4;++i)liveLine(*p+d*(float(i)/4),*p+d*((float(i)+.5f)/4),color);
+                        }
+                    }
+                }
+            }
+            if(liveCircuit){
+                liveLineBudget.beginLayer(liveLineShare);
+                const auto& data=planetLiveSnapshot_["circuit"];
+                const auto readVec=[](const Json& j)->std::optional<render::float3>{
+                    const auto& xyz=j.items();if(xyz.size()!=3)return {};
+                    return render::float3{float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
+                };
+                const float extent=std::clamp(planetPreview_->radius*.012f,.12f,1.5f);
+                const auto marker=[&](render::float3 p,float s,uint32_t color){
+                    for(const auto axis:{render::float3{s,0,0},render::float3{0,s,0},render::float3{0,0,s}})
+                        liveLine(p-axis,p+axis,color);
+                };
+                size_t count=0;
+                for(const auto& row:data["wires"].items()){
+                    if(count++>=512)break;
+                    if(!row.getBool("placed")||row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto a=readVec(row["a"]),b=readVec(row["b"]);if(!a||!b)continue;
+                    const auto delta=*b-*a;
+                    const auto color=!row.getBool("active")?rgba(105,115,130):row.getBool("bothPowered")?rgba(105,225,155):rgba(145,175,205);
+                    if(!row.getBool("active")){
+                        liveLine(*a,*a+delta*.4f,color);liveLine(*a+delta*.6f,*b,color);continue;
+                    }
+                    liveLine(*a,*b,color);
+                    const float distance=std::sqrt(dot(delta,delta));
+                    if(!row.getBool("bidirectional")&&distance>.001f){
+                        const auto dir=delta*(1.f/distance),tip=*a+delta*.6f;
+                        const auto side=normalize(cross(dir,std::abs(dir.y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
+                        const float len=std::min(extent,distance*.2f);
+                        liveLine(tip,tip-dir*len+side*(len*.45f),color);
+                        liveLine(tip,tip-dir*len-side*(len*.45f),color);
+                    }
+                }
+                for(const char* key:{"nodes","gates","switches","devices"}){
+                    count=0;const std::string kind=key;
+                    for(const auto& row:data[key].items()){
+                        if(count++>=(kind=="nodes"?256u:128u))break;
+                        if(!row.getBool("placed")||row.getStr("body")!=planetPreview_->bodyId)continue;
+                        const auto p=readVec(row["position"]);if(!p)continue;
+                        uint32_t color=rgba(110,120,135);
+                        if(row.getBool("enabled")){
+                            if(kind=="nodes"&&row.getBool("outputAvailable"))
+                                color=row.getBool("signal")?rgba(250,220,95):row.getBool("powered")?rgba(100,235,155):rgba(235,115,120);
+                            else if(kind=="gates")color=row.getBool("inputsValid")?rgba(185,145,245):rgba(235,115,120);
+                            else if(kind=="switches")color=row.getBool("closed")?rgba(250,220,95):rgba(120,180,225);
+                            else if(kind=="devices"&&row.getBool("outputAvailable")&&row.getBool("valid"))
+                                color=row.getBool("active")?rgba(100,235,155):rgba(235,115,120);
+                        }
+                        marker(*p,extent*(kind=="nodes"?1.f:.7f),color);
+                        if(kind!="nodes")for(const char* link:{"inputAPosition","inputBPosition","outputPosition","nodePosition"})
+                            if(const auto q=readVec(row[link])){
+                                const auto d=*q-*p;
+                                for(int i=0;i<4;++i)liveLine(*p+d*(float(i)/4),*p+d*((float(i)+.5f)/4),color);
+                            }
+                    }
+                }
+            }
+            if(liveCrowd){
+                liveLineBudget.beginLayer(liveLineShare);
+                const auto& data=planetLiveSnapshot_["crowd"];
+                const auto readVec=[](const Json& j)->std::optional<render::float3>{
+                    const auto& xyz=j.items();if(xyz.size()!=3)return {};
+                    return render::float3{float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
+                };
+                const float extent=std::clamp(planetPreview_->radius*.012f,.12f,1.5f);
+                const auto marker=[&](render::float3 p,float s,uint32_t color){
+                    for(const auto axis:{render::float3{s,0,0},render::float3{0,s,0},render::float3{0,0,s}})
+                        liveLine(p-axis,p+axis,color);
+                };
+                const auto lifted=[&](render::float3 p){return p+normalize(p)*extent*.4f;};
+                size_t count=0;
+                for(const auto& row:data["slots"].items()){
+                    if(count++>=512)break;
+                    if(!row.getBool("placed")||row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto p=readVec(row["position"]);if(!p)continue;
+                    const auto n=row.getInt("occupancy");
+                    const auto color=!row.getBool("enabled")?rgba(110,120,135):n>1?rgba(255,80,90):n?rgba(255,195,80):rgba(100,210,255);
+                    marker(lifted(*p),extent*.75f,color);
+                }
+                count=0;
+                for(const auto& row:data["agents"].items()){
+                    if(count++>=256)break;
+                    if(!row.getBool("placed")||row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto p=readVec(row["position"]);if(!p)continue;
+                    const auto pos=lifted(*p);
+                    const auto support=row["support"].getStr("status");
+                    const auto color=!row.getBool("enabled")?rgba(110,120,135):
+                        !support.empty()&&support!="supported"?rgba(255,105,100):
+                        row.getBool("moving")?rgba(100,235,155):rgba(170,195,255);
+                    marker(pos,extent,color);
+                    if(row.getBool("reservationValid"))if(const auto dst=readVec(row["reservationPosition"])){
+                        const auto d=lifted(*dst)-pos;
+                        for(int i=0;i<6;++i)liveLine(pos+d*(float(i)/6),pos+d*((float(i)+.5f)/6),rgba(255,195,80));
+                    }
+                    if(const auto goal=readVec(row["goal"]))marker(lifted(*goal),extent*.6f,rgba(235,160,255));
+                    std::optional<render::float3> previous=pos;
+                    for(const auto& point:row["route"].items()){
+                        const auto q=readVec(point);if(!q){previous.reset();continue;}
+                        const auto next=lifted(*q);
+                        if(previous)liveLine(*previous,next,rgba(110,230,160));
+                        previous=next;
+                    }
+                }
+            }
+            if(liveEcho){
+                liveLineBudget.beginLayer(liveLineShare);
+                const auto& data=planetLiveSnapshot_["echo"];
+                const auto readVec=[](const Json& j)->std::optional<render::float3>{
+                    const auto& xyz=j.items();if(xyz.size()!=3)return {};
+                    return render::float3{float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
+                };
+                const float extent=std::clamp(planetPreview_->radius*.012f,.12f,1.5f);
+                const auto marker=[&](render::float3 p,float s,uint32_t color){
+                    for(const auto axis:{render::float3{s,0,0},render::float3{0,s,0},render::float3{0,0,s}})
+                        liveLine(p-axis,p+axis,color);
+                };
+                size_t count=0;
+                for(const auto& row:data["portals"].items()){
+                    if(count++>=512)break;
+                    if(!row.getBool("placed")||row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto a=readVec(row["a"]),b=readVec(row["b"]);if(!a||!b)continue;
+                    const auto loss=std::clamp(float(row.getInt("loss"))/1000000.f,0.f,1.f);
+                    const auto color=row.getBool("active")?rgba(uint8_t(110+145*loss),uint8_t(205-95*loss),230):rgba(105,115,130);
+                    const auto delta=*b-*a;
+                    if(!row.getBool("active")){
+                        liveLine(*a,*a+delta*.4f,color);liveLine(*a+delta*.6f,*b,color);continue;
+                    }
+                    liveLine(*a,*b,color);
+                    const float distance=std::sqrt(dot(delta,delta));
+                    if(!row.getBool("bidirectional")&&distance>.001f){
+                        const auto dir=delta*(1.f/distance);
+                        const auto tip=*a+delta*.6f;
+                        const auto side=normalize(cross(dir,std::abs(dir.y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
+                        const float len=std::min(extent,distance*.2f);
+                        liveLine(tip,tip-dir*len+side*(len*.45f),color);
+                        liveLine(tip,tip-dir*len-side*(len*.45f),color);
+                    }
+                }
+                for(const char* key:{"zones","emitters","receivers"}){
+                    count=0;
+                    for(const auto& row:data[key].items()){
+                        if(count++>=256)break;
+                        if(!row.getBool("placed")||row.getStr("body")!=planetPreview_->bodyId)continue;
+                        const auto p=readVec(row["position"]);if(!p)continue;
+                        const std::string kind=key;
+                        if(kind=="zones")marker(*p,extent,row.getBool("enabled")?rgba(115,185,255):rgba(110,120,135));
+                        else if(kind=="emitters"){
+                            const float power=std::clamp(float(std::log1p(std::max<int64_t>(0,row.getInt("intensity")))/std::log(1000001.)),0.f,1.f);
+                            marker(*p,extent*(.6f+power),row.getBool("active")?rgba(255,185,90):rgba(110,120,135));
+                        }else{
+                            const bool valid=row.getBool("hearingAvailable")&&row.getBool("valid");
+                            const bool audible=valid&&row.getBool("audible");
+                            marker(*p,extent*.75f,audible?rgba(115,240,155):valid?rgba(210,120,135):rgba(110,120,135));
+                            if(audible)if(const auto src=readVec(row["sourcePosition"])){
+                                const auto delta=*src-*p;
+                                // Dashed winner relation, never a portal path.
+                                for(int i=0;i<8;++i)liveLine(*p+delta*(float(i)/8),*p+delta*((float(i)+.5f)/8),rgba(110,220,155));
+                            }
+                        }
+                    }
+                }
+            }
+            if(liveMorph){
+                liveLineBudget.beginLayer(liveLineShare);
+                const auto& data=planetLiveSnapshot_["morph"];
+                const auto readVec=[](const Json& j)->std::optional<render::float3>{
+                    const auto& xyz=j.items();if(xyz.size()!=3)return {};
+                    return render::float3{float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
+                };
+                const float extent=std::clamp(planetPreview_->radius*.008f,.08f,1.f);
+                size_t count=0;
+                for(const auto& row:data["springs"].items()){
+                    if(count++>=512)break;
+                    if(!row.getBool("projected")||row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto a=readVec(row["a"]),b=readVec(row["b"]);if(!a||!b)continue;
+                    const auto stiffness=std::clamp(float(row.getInt("stiffness"))/1000.f,0.f,1.f);
+                    const auto color=row.getBool("enabled")?rgba(uint8_t(115+120*stiffness),120,230):rgba(105,115,130);
+                    liveLine(*a,*b,color);
+                }
+                count=0;
+                for(const auto& row:data["nodes"].items()){
+                    if(count++>=256)break;
+                    if(!row.getBool("projected")||row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto p=readVec(row["position"]),r=readVec(row["restPosition"]);if(!p||!r)continue;
+                    const auto color=!row.getBool("enabled")?rgba(110,120,135):row.getBool("anchored")?rgba(90,220,255):rgba(110,230,155);
+                    liveLine(*r,*p,rgba(255,195,85));
+                    for(const auto axis:{render::float3{extent,0,0},render::float3{0,extent,0},render::float3{0,0,extent}}){
+                        liveLine(*p-axis,*p+axis,color);
+                        liveLine(*r-axis*.45f,*r+axis*.45f,rgba(170,175,185));
+                    }
+                }
+            }
+            if(liveFracture){
+                liveLineBudget.beginLayer(liveLineShare);
+                const auto& data=planetLiveSnapshot_["fracture"];
+                const auto readVec=[](const Json& j)->std::optional<render::float3>{
+                    const auto& xyz=j.items();if(xyz.size()!=3)return {};
+                    return render::float3{float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
+                };
+                const float extent=std::clamp(planetPreview_->radius*.014f,.15f,2.f);
+                size_t count=0;
+                for(const auto& row:data["bonds"].items()){
+                    if(count++>=512)break;
+                    if(row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto a=readVec(row["a"]),b=readVec(row["b"]);if(!a||!b)continue;
+                    const auto fraction=std::clamp(float(row.getInt("damage"))/float(std::max<int64_t>(1,row.getInt("strength"))),0.f,1.f);
+                    const auto delta=*b-*a;
+                    const bool severed=fraction>=1.f;
+                    const auto color=!row.getBool("enabled")?rgba(100,110,125):severed?rgba(255,75,75):
+                        !row.getBool("activeSupportEdge")?rgba(155,115,175):rgba(uint8_t(90+165*fraction),uint8_t(220-120*fraction),85);
+                    if(severed||!row.getBool("activeSupportEdge")){
+                        liveLine(*a,*a+delta*.42f,color);liveLine(*a+delta*.58f,*b,color);
+                    }else liveLine(*a,*b,color);
+                }
+                count=0;
+                for(const auto& row:data["members"].items()){
+                    if(count++>=256)break;
+                    if(row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto p=readVec(row["position"]);if(!p)continue;
+                    const auto color=row.getBool("detached")?rgba(255,80,100):row.getBool("broken")?rgba(255,155,60):
+                        row.getBool("anchored")?rgba(85,220,255):rgba(110,225,125);
+                    for(const auto axis:{render::float3{extent,0,0},render::float3{0,extent,0},render::float3{0,0,extent}})
+                        liveLine(*p-axis,*p+axis,color);
+                    if(row["collapse"].getStr("delivery")=="pending"||row["natureFracture"].getStr("delivery")=="pending"){
+                        const float e=extent*1.6f;
+                        liveLine(*p+render::float3{-e,0,-e},*p+render::float3{e,0,e},rgba(255,230,90));
+                        liveLine(*p+render::float3{-e,0,e},*p+render::float3{e,0,-e},rgba(255,230,90));
+                    }
+                }
+            }
+            if(liveEvolve){
+                liveLineBudget.beginLayer(liveLineShare);
+                size_t count=0;
+                for(const auto& row:planetLiveSnapshot_["evolve"]["regions"].items()){
+                    if(count>=64)break;
+                    if(row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto u=[&](const char* key){return std::clamp(float(row.getInt(key))/1e9f,0.f,1.f);};
+                    float r=u("pollution"),g=u("fertility"),b=.35f;
+                    if(planetLiveLayer_=="fertility")r=.15f;
+                    if(planetLiveLayer_=="pollution")g=.15f;
+                    if(planetLiveLayer_=="succession"){r=.15f;g=u("succession");b=.85f;}
+                    if(planetLiveLayer_=="durability"){g=u("durability");r=1-g;}
+                    const auto color=rgba(uint8_t(r*255),uint8_t(g*255),uint8_t(b*255));
+                    const auto& edges=row["edges"].items();
+                    if(edges.size()!=4)continue;
+                    for(const auto& edge:edges){
+                        if(edge.size()!=17)continue;
+                        std::optional<render::float3> previous;
+                        for(const auto& point:edge.items()){
+                            const auto& xyz=point.items();
+                            if(xyz.size()!=3){previous.reset();continue;}
+                            const render::float3 current{float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
+                            if(previous)liveLine(*previous,current,color);
+                            previous=current;
+                        }
+                    }
+                    ++count;
+                }
+            }
+            if(liveGranular){
+                liveLineBudget.beginLayer(liveLineShare);
+                size_t count=0;
+                for(const auto& row:planetLiveSnapshot_["granular"]["cells"].items()){
+                    if(count>=512)break;
+                    if(row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto& vertices=row["vertices"].items();
+                    if(vertices.size()!=4)continue;
+                    std::array<render::float3,4> points{};
+                    bool valid=true;
+                    for(size_t i=0;i<4;++i){
+                        const auto& xyz=vertices[i].items();
+                        if(xyz.size()!=3){valid=false;break;}
+                        points[i]={float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
+                    }
+                    if(!valid)continue;
+                    const float fill=std::clamp(float(row.getInt("mass"))/float(std::max<int64_t>(1,row.getInt("capacity"))),0.f,1.f);
+                    const auto color=rgba(uint8_t(150+105*fill),uint8_t(105+85*fill),uint8_t(65+45*fill));
+                    for(size_t i=0;i<4;++i)liveLine(points[i],points[(i+1)%4],color);
+                    ++count;
+                }
+            }
+            if(liveImprint){
+                liveLineBudget.beginLayer(liveLineShare);
+                // Snapshot contains canonical, already body-local vertices.
+                // Draw read-only outlines, not another physical mesh or collider.
+                size_t count=0;
+                for(const auto& row:planetLiveSnapshot_["imprint"]["cells"].items()){
+                    if(count>=1024)break;
+                    if(row.getStr("body")!=planetPreview_->bodyId)continue;
+                    const auto& vertices=row["vertices"].items();
+                    if(vertices.size()!=4)continue;
+                    std::array<render::float3,4> points{};
+                    bool valid=true;
+                    for(size_t i=0;i<4;++i){
+                        const auto& xyz=vertices[i].items();
+                        if(xyz.size()!=3){valid=false;break;}
+                        points[i]={float(xyz[0].toDouble()),float(xyz[1].toDouble()),float(xyz[2].toDouble())};
+                    }
+                    if(!valid)continue;
+                    const auto f=row.getInt("footprint"),s=row.getInt("scent"),r=row.getInt("residue");
+                    const auto color=f>=s&&f>=r?rgba(255,190,90):s>=r?rgba(105,215,255):rgba(215,130,255);
+                    for(size_t i=0;i<4;++i)liveLine(points[i],points[(i+1)%4],color);
+                    ++count;
+                }
+            }
+            if(liveLineBudget.dropped)lightingStatus_+=" · Live line budget reached";
+            if(const auto it=planetPreview_->modelFrames.find(selectedId);it!=planetPreview_->modelFrames.end()){
+                const auto origin=it->second.transformPoint({});
+                const float length=std::clamp(planetPreview_->radius*.045f,1.f,12.f);
+                const uint32_t colors[3]={rgba(232,82,72),rgba(120,205,85),rgba(70,135,240)};
+                for(int i=0;i<3;++i){
+                    const auto direction=normalize(it->second.transformDir({i==0?1.f:0.f,i==1?1.f:0.f,i==2?1.f:0.f}));
+                    renderer_.line(origin,origin+direction*length,colors[i]);
+                }
+            }
+            std::map<std::string,const StudioDocumentProxy*> byId;
+            for(const auto& marker:planetPreview_->markers)byId.emplace(marker.id,&marker);
+            for(const auto& link:planetPreview_->links){
+                if(hidden_.count(link.from)||hidden_.count(link.to))continue;
+                const auto* a=byId.at(link.from);const auto* b=byId.at(link.to);
+                const auto da=normalize(a->center),db=normalize(b->center);
+                if(dot(da,db)<-.99f)continue; // ambiguous antipodal route
+                auto prev=a->center;
+                for(int i=1;i<=16;++i){
+                    const float t=float(i)/16.f;
+                    const auto dir=normalize(da*(1.f-t)+db*t);
+                    const float radial=std::sqrt(dot(a->center,a->center))*(1.f-t)+
+                        std::sqrt(dot(b->center,b->center))*t;
+                    const auto next=dir*(radial+std::sin(t*3.14159265f)*std::min(planetPreview_->radius*.05f,3.f));
+                    renderer_.line(prev,next,link.color);prev=next;
+                }
+            }
+        }
+        if(planetDragPlacement_.isObject()){
+            game::CubeSphere cube(planetPreview_->faceSize);
+            const auto dir=StudioPlanetPreview::f3(cube.dirFromFace(int(planetDragPlacement_.getInt("face")),
+                planetDragPlacement_["x"].fx(),planetDragPlacement_["y"].fx()));
+            const auto eye=view.eye();
+            // Display a ray-hit preview, not a committed entity.
+            const float t=planetPreview_->terrainHit(eye,normalize(dir*planetPreview_->radius-eye),visiblePlanetTerrain());
+            if(std::isfinite(t)){
+                const auto hit=eye+normalize(dir*planetPreview_->radius-eye)*t;
+                renderer_.drawMesh(cube_,mat4::translate(hit+dir*.6f)*mat4::scale({.6f,.6f,.6f}),{.25f,.9f,.8f,1},kDrawNoCastShadow);
+            }
+        }
+    }
+    drawPlanetRegionHandles(view,width,height,doc);
+    drawPlanetGravityHandles(view,width,height);
+    if(tool_==TransformTool::Rotate||tool_==TransformTool::Scale)drawTransformGizmo(view,width,height);
+    if(orientationGizmo_&&gizmosVisible_)drawOrientationGizmo(view,width,height);
+    gfx::PassDesc pass;pass.clearColor[0]=.038f;pass.clearColor[1]=.064f;pass.clearColor[2]=.098f;pass.clearColor[3]=1;
+    renderer_.render(pass,&antialiasing_);renderer_.resolvePostFx();++framesDrawn_;
+}
+
 void StudioScene::rebuildProxyDraws(const editor::MapDoc& doc) {
     std::set<std::string> withModel;
     for(const auto& instance:modelInstances_)withModel.insert(instance.id);

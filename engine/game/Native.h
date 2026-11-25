@@ -1,6 +1,7 @@
 // Statically linked game extensions. Mutable state lives in World for rollback.
 #pragma once
 #include "../sim/Simulation.h"
+#include <optional>
 
 struct lua_State;
 
@@ -109,6 +110,11 @@ public:
     void tick(GameCore&, Simulation&) const;
     void command(GameCore&, Simulation&, const Command&) const;
     uint32_t hooks() const { return hooks_; }   // union of the loaded modules' NativeHook bits
+    // Read-only copy of immutable configuration actually loaded by this host.
+    std::optional<Json> loadedConfiguration(const std::string& id) const {
+        for(const auto& entry:entries_)if(entry.id==id)return Json::parse(entry.config);
+        return {};
+    }
     bool filterCommand(GameCore&, Simulation&, Command&) const;
     void garrisonGrowth(GameCore&, Simulation&, Entity, uint8_t owner, Fixed& rate, int& cap) const;
     bool upgradeOrder(GameCore&, Simulation&, Entity, uint8_t player, uint16_t& type, Fixed& cost, Fixed& time) const;

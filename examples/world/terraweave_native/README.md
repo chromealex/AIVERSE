@@ -712,6 +712,8 @@ were committed, but have NOT been built or executed in this authoring
 environment**. See [Stage70 agent handoff](../../../docs/terrain/stage-70-sparse-micro-nutrients-handoff.md)
 for exact commits, testing commands and integration gates.
 
+## EVOLVE forest climate (opt-in)
+Register the World Processes suite with `evolve=true` after the project's PHYSIS producer and before `terraweave_native::registerSystems`. Supply authored `rootedForestSpecies` and set its final `enableEvolveForestClimate` argument to true. The composition checks that exactly one `evolve.succession` exists and no forest ecology stage is already registered. The existing NEREID/terrain stages run before the single forest stage. Author EvolveRegion and EvolveArea on the same map entity. Use existing World persistence; do not add a separate checkpoint or call advanceEcology manually. This is a composition recipe, not a standalone executable demo. Source-only; not compiled or runtime verified.
 ## Planetary Caverns: native host frame
 
 Include `engine/world/TerraWeaveCavernsPlanetRuntimeFrame.h` in a native host already owning a GameView, a Box3D Scene and a SpatialWorld in Surface simulation-anchor coordinates. Link the existing game view/models/world and optional `AIVERSE::physics` targets. Register `registerPlanetCaveMap` during simulation setup if the host does not already load this ECS resource.

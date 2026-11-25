@@ -1,0 +1,5 @@
+# Stage 110 — planetary AETHER live diagnostics
+
+Base b96c71af. In progress. Read actual completed-tick GasCell masses, current duct topology and configured source/sink rates. Use loaded native module configuration to identify stock diffusion/stratification; share canonical stratified head calculation with the existing solver. Show signed isolated-duct transport potential, explicitly not historical realized flux (which is not retained by the owner). Unknown policy/over-budget gravity disables potential, not mass readback. Stable bounded same-body geometry, species selector, existing Scene and local Play identity guards. No new persistent state, solver, or force application. Build/tests deferred, no main merge.
+
+Status: native c3febc0e, UI and fixture 928e7fb0fdde3a35299cf01a7f0c2b56b03787cc. Build/test/visual acceptance NOT RUN. Next FRACTURE diagnostics.

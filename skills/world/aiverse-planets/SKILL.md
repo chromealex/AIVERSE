@@ -36,3 +36,6 @@ Contract: `docs/planets.md`. A map without `world` / `generate` behaves exactly 
 8. Determinism: same seed -> same checksum; sample-game checksums (`tests/checksums/check.sh`) unchanged when engine code is touched.
 
 Runtime library: none. Workflow over the engine MCP map and planet tools.
+
+## World Processes on planets
+All World Processes must respect canonical body/face/cell coordinates, seam neighbors, local tangent frames and PHYSIS gravity where applicable. Read `docs/world-processes-planet-compatibility.md`. Shared frame and opt-in gravity APIs are authored; do not claim all mechanics already support planets. Configure radial PHYSIS fields explicitly with correct units and baseline; geometric radial up alone is not actual gravity. Verify flat parity, all faces, seams, distinct bodies and rollback.

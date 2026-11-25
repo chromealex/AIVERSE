@@ -5,9 +5,11 @@ import type { StudioRules } from '../types';
 import { RULE_GROUPS, parseRuleInput, typeValues, type RuleValue } from './rulesSchema';
 import { fuzzyScore } from '../commandSearch';
 import './RulesPanel.css';
+import PlanetForestPanel from './PlanetForestPanel';
 
 /** Rules: unit types as a form of known fields (validated by the game loader on every write). */
-export default function RulesPanel({ projectPath, onChanged }: { projectPath: string; onChanged: () => void }) {
+export default function RulesPanel({ projectPath, historyVersion, onChanged }: { projectPath: string; historyVersion?: string; onChanged: () => void }) {
+  const [forestOpen,setForestOpen]=useState(false);
   const [rules, setRules] = useState<StudioRules | null>(null);
   const [typeId, setTypeId] = useState('');
   const [query, setQuery] = useState('');
@@ -16,12 +18,12 @@ export default function RulesPanel({ projectPath, onChanged }: { projectPath: st
   const [raw, setRaw] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
-    setRules(null); setError('');
+    setRules(null); setError(''); setRaw(null);
     if (!projectPath) return;
     void invoke('studio.rules', {}).then(r => { if (live) { setRules(r); setTypeId(id => id && id in r.types ? id : Object.keys(r.types)[0] ?? ''); } })
       .catch(e => { if (live) setError(e instanceof Error ? e.message : String(e)); });
     return () => { live = false; };
-  }, [projectPath]);
+  }, [projectPath, historyVersion]);
   const ids = useMemo(() => {
     const all = Object.keys(rules?.types ?? {});
     if (!query.trim()) return all;
@@ -30,9 +32,11 @@ export default function RulesPanel({ projectPath, onChanged }: { projectPath: st
   }, [rules, query]);
   // Inspector → "Edit type in Rules" selects that type.
   useEffect(() => {
-    const pick = (e: Event) => { const id = String((e as CustomEvent<unknown>).detail ?? ''); if (id) { setTypeId(id); setQuery(''); setRaw(null); } };
+    const pick = (e: Event) => { const id = String((e as CustomEvent<unknown>).detail ?? ''); if (id) { setForestOpen(false);setTypeId(id); setQuery(''); setRaw(null); } };
+    const forest=()=>setForestOpen(true);
     window.addEventListener('studio:rules-type', pick);
-    return () => window.removeEventListener('studio:rules-type', pick);
+    window.addEventListener('studio:rules-forest',forest);
+    return () => {window.removeEventListener('studio:rules-type', pick);window.removeEventListener('studio:rules-forest',forest);};
   }, []);
   const values = useMemo(() => rules && typeId ? typeValues(typeId, rules.types[typeId], rules.resolved[typeId], rules.resources) : [], [rules, typeId]);
   const write = async (path: string, value: unknown) => {
@@ -52,6 +56,7 @@ export default function RulesPanel({ projectPath, onChanged }: { projectPath: st
   const extendsBase = typeId && rules ? (rules.types[typeId] as { extends?: unknown })?.extends : undefined;
   return <div className="rules">
     <aside className="rules__list">
+      <button type="button" className={'rules__type'+(forestOpen?' is-active':'')} onClick={()=>setForestOpen(true)}>Planet forest</button>
       <label className="rules__search"><Search size={12} aria-hidden="true"/>
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search types" aria-label="Search unit types"/></label>
       <div role="listbox" aria-label="Unit types" className="rules__types">
@@ -59,12 +64,12 @@ export default function RulesPanel({ projectPath, onChanged }: { projectPath: st
           return <button key={id} type="button" role="option" aria-selected={id === typeId} draggable
             title="Drag into the Scene to place a new object of this type"
             onDragStart={e => { e.dataTransfer.setData('text/plain', 'aiverse-type:' + id); e.dataTransfer.effectAllowed = 'copy'; }}
-            className={'rules__type' + (id === typeId ? ' is-active' : '')} onClick={() => { setTypeId(id); setRaw(null); }}>
+            className={'rules__type' + (id === typeId && !forestOpen ? ' is-active' : '')} onClick={() => { setForestOpen(false);setTypeId(id); setRaw(null); }}>
             <b>{name}</b>{name !== id && <small>{id}</small>}</button>; })}
         {rules && !ids.length && <p className="rules__empty">No types.</p>}
       </div>
     </aside>
-    <section className="rules__form" aria-label={'Type ' + typeId}>
+    {forestOpen ? <PlanetForestPanel key={projectPath} historyVersion={historyVersion} onChanged={onChanged}/> : <section className="rules__form" aria-label={'Type ' + typeId}>
       {error && <div className="rules__error" role="alert">{error}<button type="button" aria-label="Dismiss" onClick={() => setError('')}>×</button></div>}
       {!rules ? <p className="rules__empty">Loading rules…</p> : !typeId ? <p className="rules__empty">rules.json has no types.</p> : <>
         <div className="rules__head">
@@ -86,7 +91,7 @@ export default function RulesPanel({ projectPath, onChanged }: { projectPath: st
           </fieldset>;
         })}
       </>}
-    </section>
+    </section>}
   </div>;
 }
 

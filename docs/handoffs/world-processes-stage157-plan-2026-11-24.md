@@ -1,0 +1,2 @@
+# Stage 157 plan
+Base 608682e2446b186f7ae5acb654dd1f24dbb5746d. Retire exact acknowledged plant consequences only at zero ledger mass, matching historic planting/body and current fallen root identity. Preserve receipt, root, ledger and structure consequences. Integrate in existing forest pipeline before creating new natural bodies; use existing native publisher to destroy removed handles on next publication. Add CPU and Box3D source regression for rollback/idempotence; no tests executed. Pending unacknowledged receipts and standing static source cleanup outside this scope.

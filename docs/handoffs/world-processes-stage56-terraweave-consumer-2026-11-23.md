@@ -1,0 +1,4 @@
+# Stage56 — EVOLVE TerraWeave consumer
+Branch: feature/world-processes-stage31-bidirectional-handles; main unchanged.
+Audited examples/world/world_processes_native/EvolveTerraEcologyBridge.h and WorldProcessGameplayHost.h. Canonical forestClimate derives region identities from persisted ECS extents; baseline remains PHYSIS/NEREID/biome. Commit 661112f6 rechecks live Area and Region before applying climate, uses current half-open bounds, and replaces duplicated coordinate limits with canonical constants. Removed/disabled areas no longer contribute when a sampler is reused. Newly added or newly enabled regions require rebuilding sampler at the next ecology step. World must remain alive and stable during synchronous sampling; no async safety claimed. Legacy external-zone overload remains unchanged except constants.
+No build/tests. Next: audit actual production forest step call sites, sampler lifetime and refresh after rollback, then acceptance when authorized.

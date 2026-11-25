@@ -31,10 +31,40 @@ int main(){
         AIVERSE_TEST_CHECK(texture->settings.getStr("compression")=="auto");
         AIVERSE_TEST_CHECK(fs::exists(dir/"content"/"Steel.png.meta"));
         const auto retainedGuid=texture->guid;
-        const auto updated=db.patchSettings(retainedGuid,"compression",aiverse::Json::string("high"));
+        aiverse::editor::ProjectHistory history;
+        const auto metadata=dir/"content"/"Steel.png.meta";
+        const auto initial=aiverse::editor::readProjectFileBytes(metadata);
+        const auto updated=db.patchSettings(retainedGuid,"compression",aiverse::Json::string("high"),&history);
         AIVERSE_TEST_CHECK(updated.guid==retainedGuid);
         AIVERSE_TEST_CHECK(updated.settings.getStr("compression")=="high");
         AIVERSE_TEST_CHECK(db.byGuid(retainedGuid)->settings.getStr("compression")=="high");
+        AIVERSE_TEST_CHECK(history.position()==1);
+        const auto changed=aiverse::editor::readProjectFileBytes(metadata);
+        const auto version=history.version();
+        (void)db.patchSettings(retainedGuid,"compression",aiverse::Json::string("high"),&history);
+        AIVERSE_TEST_CHECK(history.version()==version);
+        const auto undo=aiverse::editor::reverseProjectFileEdits(history.next(false).files);
+        std::ofstream(metadata)<<changed<<"\n";
+        bool conflict=false;try{db.applyMetadataEdit(undo.front());}catch(const std::runtime_error&){conflict=true;}
+        AIVERSE_TEST_CHECK(conflict&&history.position()==1&&aiverse::editor::readProjectFileBytes(metadata)==changed+"\n");
+        std::ofstream(metadata)<<changed;
+        // Existing-only rebuild must not create unrelated metadata.
+        std::ofstream(dir/"content"/"unindexed.png")<<"new";
+        db.applyMetadataEdit(undo.front());history.advance(false);
+        AIVERSE_TEST_CHECK(aiverse::editor::readProjectFileBytes(metadata)==initial);
+        AIVERSE_TEST_CHECK(db.byGuid(retainedGuid)->settings.getStr("compression")=="auto");
+        AIVERSE_TEST_CHECK(!fs::exists(dir/"content"/"unindexed.png.meta"));
+        db.applyMetadataEdit(history.next(true).files.front());history.advance(true);
+        AIVERSE_TEST_CHECK(aiverse::editor::readProjectFileBytes(metadata)==changed);
+        AIVERSE_TEST_CHECK(db.byGuid(retainedGuid)->settings.getStr("compression")=="high");
+        fs::remove(dir/"content"/"unindexed.png");
+        fs::rename(dir/"content"/"Steel.png",dir/"content"/"MovedSteel.png");
+        fs::rename(metadata,dir/"content"/"MovedSteel.png.meta");
+        conflict=false;try{db.applyMetadataEdit(undo.front());}catch(const std::runtime_error&){conflict=true;}
+        AIVERSE_TEST_CHECK(conflict&&!fs::exists(metadata));
+        fs::rename(dir/"content"/"MovedSteel.png",dir/"content"/"Steel.png");
+        fs::rename(dir/"content"/"MovedSteel.png.meta",metadata);
+        db.rebuild();
         bool settingRejected=false;
         try{(void)db.patchSettings(retainedGuid,"maxSize",aiverse::Json::number(int64_t(123)));}
         catch(const std::runtime_error&){settingRejected=true;}

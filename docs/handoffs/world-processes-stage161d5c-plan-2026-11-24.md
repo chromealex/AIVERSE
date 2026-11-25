@@ -1,0 +1,2 @@
+# Stage 161D5c — scope
+Move existing document validation into editor core, preserve Studio wrappers, register headless Workspace forest get/set/plant/move/remove, use expected map path/revision and explicit full config, no runtime mutations. Add built MCP fixture and registry baseline. Live ECS remains Studio-only until authenticated live query is wired. No compiler or binary available in remote connector; acceptance deferred.

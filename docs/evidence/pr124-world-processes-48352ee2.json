@@ -1,0 +1,11 @@
+{
+  "sha": "48352ee2d76fc21ceeefa45adc5126e458680f94",
+  "argv": [
+    "bash",
+    "-ec",
+    "export TMPDIR=/Volumes/KINGSTON/AIVERSE-builds/pr124-current-studio-8511\nctest --test-dir /Volumes/KINGSTON/AIVERSE-builds/pr124-current-studio-8511 --no-tests=error --output-on-failure -R \"^(world_processes_(inspector|authoring|map_hydration|linked|gamecore_native|planet_host)_test|physics_scene|physics_runtime|physis_box3d|studio_session|studio_terrain_geometry)$\"\nctest --test-dir /Volumes/KINGSTON/AIVERSE-builds/pr124-current-mac-8511 --no-tests=error --output-on-failure -R \"^library_noise$\"\n/Volumes/KINGSTON/AIVERSE-builds/pr124-current-mac-8511/pr124-noise-bench \"macOS arm64 Apple Silicon\"\npython3.12 tools/site/build.py check\npython3.12 tools/skills/catalog.py check"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/pr124-world-processes-48352ee2.log.txt",
+  "sha256": "f7c96c45fe414492a3645345f096dad957a9f8613f16bac4a4e0848b1912292f"
+}

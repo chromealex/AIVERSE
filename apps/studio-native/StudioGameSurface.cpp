@@ -1,4 +1,21 @@
+#include "aiverselib/world/EvolveVisualization.h"
+#include "engine/world/TerraWeaveEcsAuthority.h"
+#include "engine/world/TerraWeaveForestEcology.h"
+#include "engine/world/TerraWeaveForestDeadwood.h"
+#include "engine/physis/Physis.h"
 #include "apps/studio-native/StudioGameSurface.h"
+#include "apps/studio-native/StudioPlanetWorldProcesses.h"
+#include "apps/studio-native/StudioPlanetLiveSnapshot.h"
+#include "apps/studio-native/StudioPlanetForestSnapshot.h"
+#include "apps/studio-native/StudioPlanetLiveTerrain.h"
+#include "apps/studio-native/StudioPlanetLiveBudget.h"
+#include "apps/studio-native/StudioPlanetAetherSnapshot.h"
+#include "apps/studio-native/StudioPlanetFractureSnapshot.h"
+#include "apps/studio-native/StudioPlanetMorphSnapshot.h"
+#include "apps/studio-native/StudioPlanetEchoSnapshot.h"
+#include "apps/studio-native/StudioPlanetCrowdSnapshot.h"
+#include "apps/studio-native/StudioPlanetCircuitSnapshot.h"
+#include "apps/studio-native/StudioPlanetSocietySnapshot.h"
 #include "engine/sim/Simulation.h"
 #include "engine/sim/CommonComponents.h"
 #include "engine/game/GameCore.h"
@@ -22,7 +39,7 @@ StudioGameSurface::~StudioGameSurface() {
     lifetime_->retire();
 }
 void StudioGameSurface::start(const StudioGameLaunch& plan,const std::string& assets) {
-    error_.clear();launch_=plan;assets_=assets;matchObserved_=false;runtimeDebugEdited_=false;++runtimeEpoch_;
+    error_.clear();launch_=plan;assets_=assets;matchObserved_=false;runtimeDebugEdited_=false;++runtimeEpoch_;worldProcessDiagnostics_.reset();
     if (plan.actorSession) {
         stop();
         actor_=client::HostedActorClient::open(*device_,plan.project,assets,plan.map.value_or(0));
@@ -32,7 +49,7 @@ void StudioGameSurface::start(const StudioGameLaunch& plan,const std::string& as
     host_->start(*device_,plan.project,assets,lifetime_->lease(),plan.map);
     if (plan.camera) { const auto& c=*plan.camera; host_->setStartCamera(c[0],c[1],c[2],c[3],c[4]); }
 }
-void StudioGameSurface::stop() { actor_.reset();matchObserved_=false;runtimeDebugEdited_=false;++runtimeEpoch_; host_->suspendInput();host_->stop();host_->collectGpuRetirements(); }
+void StudioGameSurface::stop() { actor_.reset();matchObserved_=false;runtimeDebugEdited_=false;++runtimeEpoch_;worldProcessDiagnostics_.reset(); host_->suspendInput();host_->stop();host_->collectGpuRetirements(); }
 void StudioGameSurface::setDevice(const StudioGameDevice& profile) {
     (void)profile.profile();suspend();profile_=profile;
 }
@@ -45,6 +62,15 @@ void StudioGameSurface::control(const std::string& action) {
         if (action=="pause" || action=="resume") actor_->pause(action=="pause");
         else if (action=="step" && actor_->paused()) actor_->step();
         else throw std::runtime_error("Step requires a paused local actor session");
+        return;
+    }
+    if(action=="checkpointSave"||action=="checkpointRestore"){
+        if(!host_->checkpoint(action=="checkpointRestore"))throw std::runtime_error("Checkpoint requires a paused local match and valid saved state");
+        if(action=="checkpointRestore"){++runtimeEpoch_;worldProcessDiagnostics_.reset();}
+        return;
+    }
+    if(action=="speed1"||action=="speed2"||action=="speed5"||action=="speed10"||action=="speed25"||action=="speed50"||action=="speed100"){
+        if(!host_->setSpeed(std::stoi(action.substr(5))))throw std::runtime_error("Speed requires a local match");
         return;
     }
     const bool ok=action=="pause"?host_->setPaused(true):action=="resume"?host_->setPaused(false):
@@ -90,6 +116,7 @@ void StudioGameSurface::frame(int w,int h,float pw,float ph,double dt,bool focus
         device_->endFrame();
         const bool match=host_->inMatch();
         if(match && !matchObserved_){++runtimeEpoch_;runtimeDebugEdited_=false;}
+        if(!match&&matchObserved_)worldProcessDiagnostics_.reset();
         matchObserved_=match;
         if (host_->quitRequested()) stop();
         if (!host_->errorText().empty()) error_=host_->errorText();
@@ -104,6 +131,194 @@ Simulation* StudioGameSurface::liveSimulation() const {
 bool StudioGameSurface::paused() const {return actor_?actor_->paused():host_->paused();}
 bool StudioGameSurface::canControl() const {return actor_ || host_->canControl();}
 bool StudioGameSurface::canStep() const {return actor_?actor_->paused():host_->canStep();}
+Json StudioGameSurface::planetForestState(const std::string& focusBody,const std::optional<StudioForestCameraFocus>& camera){
+    Simulation* sim=host_&&host_->inMatch()&&host_->canControl()?host_->simulation():nullptr;
+    if(sim&&sim->tick()>0)if(const auto* game=dynamic_cast<const game::GameCore*>(&sim->module()))
+        if(const auto* surface=game->surface(*sim))
+            {
+                const auto config=game->native().loadedConfiguration("world_processes");
+                const auto weather=studioForestWeatherMappings(sim->world(),*surface,config?*config:Json{},game->matchMap());
+                return sampleStudioPlanetForest(sim->world(),*surface,sim->tick()-1,128,weather,focusBody,camera);
+            }
+    Json out=Json::object();out.set("active",Json::fromBool(false));return out;
+}
+Json StudioGameSurface::worldProcessDiagnostics(int cap,const std::string& focus){
+    // Restrict diagnostics to a loaded local match, no remote world inspection.
+    Simulation* sim=host_&&host_->inMatch()&&host_->canControl()?host_->simulation():nullptr;
+    if(sim)if(const auto* game=dynamic_cast<const game::GameCore*>(&sim->module()))
+        if(const auto* surface=game->surface(*sim))
+            return planet_wp::sample(worldProcessDiagnostics_,sim->world(),*surface,
+                std::to_string(runtimeEpoch_),sim->tick(),cap,focus);
+    return worldProcessDiagnostics_.sample(sim?&sim->world():nullptr,
+        std::to_string(runtimeEpoch_),sim?sim->tick():0,cap,focus);
+}
+bool StudioGameSurface::planetMatch() const {
+    auto* sim=host_&&host_->inMatch()?host_->simulation():nullptr;
+    if(sim)if(const auto* game=dynamic_cast<const game::GameCore*>(&sim->module()))
+        return game->surface(*sim)!=nullptr;
+    return false;
+}
+bool StudioGameSurface::launchedMapCurrent() const {
+    return host_&&launch_.map.has_value()&&host_->currentMapIndex()==launch_.map;
+}
+bool StudioGameSurface::planetSnapshotCurrent(const Json& snapshot) const {
+    return host_&&host_->canControl()&&planetMatch()&&launchedMapCurrent()&&
+        snapshot.getBool("active")&&snapshot.getStr("topology")=="planet"&&
+        snapshot.getStr("epoch")==std::to_string(runtimeEpoch_);
+}
+Json StudioGameSurface::ecologyState(const StudioWorldProcessLiveOptions& options,const std::string& focusBody,const std::optional<StudioForestCameraFocus>& camera,Json* forestRender){
+    Json previousForestRender;
+    if(forestRender){previousForestRender=std::move(*forestRender);*forestRender=Json{};}
+    Simulation* sim=host_&&host_->inMatch()?host_->simulation():nullptr;
+    Json out=Json::object(),regions=Json::array();
+    out.set("active",Json::fromBool(sim!=nullptr));
+    if(sim)if(const auto* game=dynamic_cast<const game::GameCore*>(&sim->module()))
+        if(const auto* surface=game->surface(*sim)){
+            // Planar ecology rows cannot be interpreted as spherical positions.
+            // No remote world inspection and no sample before the first completed tick.
+            out.set("topology",Json::string("planet"));
+            out.set("active",Json::fromBool(host_->canControl()));
+            out.set("tick",Json::number(int64_t(sim->tick())));
+            out.set("epoch",Json::string(std::to_string(runtimeEpoch_)));
+            for(const char* key:{"regions","plants","weather","logs","soil"})
+                out.set(key,Json::array());
+            if(host_->canControl()&&sim->tick()>0){
+                const bool ecology=!options.live||options.layer!="off";
+                const bool granular=options.granularCellCm>0;
+                const bool forestTerrain=options.forest&&!focusBody.empty();
+                const size_t layers=size_t(ecology)*2+granular+options.gravity+options.fracture+forestTerrain+
+                    options.echo+options.circuit+options.society+options.forest+options.crowd+options.morph+(options.aetherLayer!="off");
+                if(layers){
+                    PlanetLivePayloadBudget budget(layers);
+                    const auto cap=[&](size_t n){return budget.ownerLimit(n);};
+                    const auto tick=sim->tick()-1;
+                    if(ecology){
+                        budget.add(out,"imprint",samplePlanetImprint(sim->world(),*surface,tick,cap(1024)));
+                        budget.add(out,"evolve",samplePlanetEvolve(sim->world(),*surface,tick,cap(64)));
+                    }
+                    if(options.gravity)budget.add(out,"gravity",samplePlanetGravity(sim->world(),*surface,tick));
+                    if(options.fracture)budget.add(out,"fracture",samplePlanetFracture(sim->world(),*surface,tick,cap(256),cap(512)));
+                    if(options.echo)budget.add(out,"echo",samplePlanetEcho(sim->world(),*surface,tick,cap(256),cap(512),cap(256),cap(256)));
+                    if(options.circuit)budget.add(out,"circuit",samplePlanetCircuit(sim->world(),*surface,tick,cap(256),cap(512),cap(128)));
+                    if(options.forest){
+                        const auto config=game->native().loadedConfiguration("world_processes");
+                        const auto weather=studioForestWeatherMappings(sim->world(),*surface,config?*config:Json{},game->matchMap());
+                        budget.add(out,"forest",sampleStudioPlanetForest(sim->world(),*surface,tick,cap(kStudioForestDiagnosticLimit),weather,focusBody,camera));
+                        // Native Scene only: independent budget, same completed tick and body.
+                        if(forestRender&&!focusBody.empty()){
+                            const bool sameEpoch=previousForestRender.getStr("epoch")==std::to_string(runtimeEpoch_);
+                            *forestRender=sampleStudioPlanetForest(sim->world(),*surface,tick,kStudioForestRenderLimit,weather,focusBody,camera,true,sameEpoch?&previousForestRender:nullptr);
+                            forestRender->set("epoch",Json::string(std::to_string(runtimeEpoch_)));
+                            // Independent native terrain payload; never forwarded to MCP or browser.
+                            if(forestTerrain)forestRender->set("nativeTerrain",sampleStudioPlanetTerrain(*surface,tick,focusBody,384u*1024u,camera,sameEpoch?&previousForestRender["nativeTerrain"]["grid"]:nullptr));
+                        }
+                        if(forestTerrain)budget.add(out,"forestTerrain",sampleStudioPlanetTerrain(*surface,tick,focusBody,planetLiveShare(kPlanetLivePayloadBytes-kPlanetLiveRootReserve,layers)));
+                    }
+                    if(options.society)budget.add(out,"society",samplePlanetSociety(sim->world(),*surface,tick,cap(256),cap(512),cap(128)));
+                    if(options.crowd){
+                        const auto config=game->native().loadedConfiguration("world_processes");
+                        budget.add(out,"crowd",samplePlanetCrowd(sim->world(),*surface,tick,config&&config->getBool("crowdGravitySupport"),game,cap(256),cap(512),cap(2048)));
+                    }
+                    if(options.morph){
+                        const auto config=game->native().loadedConfiguration("world_processes");
+                        budget.add(out,"morph",samplePlanetMorph(sim->world(),*surface,tick,config&&config->getBool("morphGravity"),cap(256),cap(512)));
+                    }
+                    if(options.aetherLayer!="off"){
+                        auto policy=AetherDiagnosticPolicy::Unknown;
+                        if(const auto config=game->native().loadedConfiguration("world_processes"))
+                            policy=config->getBool("aetherStratification")?AetherDiagnosticPolicy::Stratified:AetherDiagnosticPolicy::Diffusion;
+                        budget.add(out,"aether",samplePlanetAether(sim->world(),*surface,tick,policy,cap(256),cap(512)));
+                    }
+                    if(granular)budget.add(out,"granular",samplePlanetGranular(sim->world(),*surface,tick,options.granularCellCm,cap(512)));
+                    budget.finish(out);
+                }
+            }
+            return out;
+        }
+    if(sim){
+        out.set("tick",Json::number(int64_t(sim->tick())));
+        for(const auto& v:evolve::visualRegions(sim->world())){
+            Json r=Json::object();
+            r.set("id",Json::string(std::to_string(v.bounds.region.packed())));
+            r.set("minXcm",Json::number(v.bounds.minXcm));r.set("minZcm",Json::number(v.bounds.minZcm));
+            r.set("maxXcm",Json::number(v.bounds.maxXcm));r.set("maxZcm",Json::number(v.bounds.maxZcm));
+            r.set("fertility",Json::number(v.fertility));r.set("pollution",Json::number(v.pollution));
+            r.set("succession",Json::number(v.succession));r.set("durability",Json::number(v.durability));
+            regions.push(std::move(r));
+        }
+    }
+    Json plants=Json::array(),weather=Json::array();
+    if(sim){
+        const auto& world=sim->world();
+        if(const auto* authority=world.resourceConst<terraweave::TerraWeaveAuthorityResource>()){
+            const auto* ecology=world.resourceConst<terraweave::ForestEcologyResource>();
+            for(const auto& p:authority->rooted){
+                if(plants.size()>=4096)break;
+                Json row=Json::object();
+                row.set("x",Json::number(p.anchor.xCm));row.set("z",Json::number(p.anchor.zCm));
+                row.set("fallen",Json::fromBool(p.fallen));
+                row.set("ageTicks",Json::string(std::to_string(p.environment.ageTicks)));
+                row.set("matureTicks",Json::string(std::to_string(p.environment.matureTicks)));
+                row.set("mature",Json::fromBool(p.environment.ageTicks>=p.environment.matureTicks));
+                row.set("id",Json::string(std::to_string(p.anchor.speciesId)+":"+std::to_string(p.anchor.plantKey)));
+                if(ecology){
+                    const terraweave::AnchoredPlantId id{p.anchor.speciesId,p.anchor.plantKey};
+                    const auto it=std::lower_bound(ecology->plants.begin(),ecology->plants.end(),id,
+                        [](const auto& a,const auto& b){return a.id<b;});
+                    if(it!=ecology->plants.end()&&it->id==id){
+                        row.set("dead",Json::fromBool(it->dead));
+                        row.set("recruited",Json::fromBool(it->recruited));
+                        row.set("shadeStress",Json::string(std::to_string(it->shadeStressTicks)));
+                        row.set("floodStress",Json::string(std::to_string(it->floodStressTicks)));
+                        row.set("droughtStress",Json::string(std::to_string(it->droughtStressTicks)));
+                    }
+                }
+                plants.push(std::move(row));
+            }
+            out.set("plantCount",Json::number(int64_t(authority->rooted.size())));
+        }
+        if(const auto* state=world.resourceConst<physis::State>()){
+            for(int z=0;z<state->settings.height&&weather.size()<4096;++z)
+                for(int x=0;x<state->settings.width&&weather.size()<4096;++x){
+                    physis::Sample sample;
+                    const int gx=x+state->settings.originX,gz=z+state->settings.originZ;
+                    if(!physis::sample(world,gx,gz,sample))continue;
+                    const int64_t size=int64_t(state->settings.cellSizeMeters)*100;
+                    Json row=Json::object();
+                    row.set("x",Json::number(gx*size));row.set("z",Json::number(gz*size));
+                    row.set("size",Json::number(size));
+                    row.set("rain",Json::number(sample.atmosphere.rain.toDouble(),3));
+                    row.set("temperature",Json::number(sample.atmosphere.temperature.toDouble(),2));
+                    row.set("wetness",Json::number(sample.surface.wetness.toDouble(),3));
+                    weather.push(std::move(row));
+                }
+        }
+    }
+    Json logs=Json::array(),soil=Json::array();
+    if(sim)if(const auto* d=sim->world().resourceConst<terraweave::ForestDeadwoodResource>()){
+        for(const auto& log:d->logs){
+            if(logs.size()>=4096)break;
+            if(!log.remainingUnits)continue;
+            Json row=Json::object();
+            row.set("x",Json::number(log.xCm));row.set("z",Json::number(log.zCm));
+            row.set("ratio",Json::number(log.initialUnits?double(log.remainingUnits)/double(log.initialUnits):0.,4));
+            logs.push(std::move(row));
+        }
+        for(const auto& cell:d->soil){
+            if(soil.size()>=4096)break;
+            Json row=Json::object();
+            row.set("x",Json::number(cell.x*terraweave::ForestDeadwoodResource::kNutrientCellCm));
+            row.set("z",Json::number(cell.z*terraweave::ForestDeadwoodResource::kNutrientCellCm));
+            row.set("units",Json::string(std::to_string(cell.availableUnits)));
+            soil.push(std::move(row));
+        }
+        out.set("absorbedUnits",Json::string(std::to_string(d->totalAbsorbedUnits)));
+        out.set("respiredUnits",Json::string(std::to_string(d->totalRespiredUnits)));
+    }
+    out.set("logs",std::move(logs));out.set("soil",std::move(soil));
+    out.set("plants",std::move(plants));out.set("weather",std::move(weather));
+    out.set("regions",std::move(regions));return out;
+}
 std::function<Json(uint64_t)> StudioGameSurface::buildingGraphReader(){
     auto* sim=liveSimulation();
     return sim?sim->openDiagnosticSource("building.graph"):std::function<Json(uint64_t)>{};

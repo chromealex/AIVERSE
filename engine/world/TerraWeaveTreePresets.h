@@ -73,6 +73,12 @@ inline const std::array<TreePreset, 10>& botanicalTreePresets() {
     return values;
 }
 
+inline const TreePreset* findBotanicalPreset(std::string_view name) {
+    for (const auto& preset : botanicalTreePresets())
+        if (preset.name == name) return &preset;
+    return nullptr;
+}
+
 // Offline/presentation recipe only. Live ForestScene already applies this
 // ecology policy at instance submission: do not apply the size twice there.
 inline TreeProfile treeProfileAtAge(const TreePreset& preset,const PlantEnvironment& environment) {

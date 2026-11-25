@@ -21,9 +21,9 @@ TOP = ('apps', 'engine', 'modules', 'tools', 'docs', 'libraries', 'tests', 'temp
 MCP_PROTOCOL_METHODS = {'tools/list', 'tools/call'}
 ROOT_FILES = ('AGENTS.md', 'README.md', 'CMakeLists.txt', 'CLAUDE.md', 'CMakePresets.json')
 TICK = re.compile(r'`([^`\n]+)`')
-REG = re.compile(r'(?:registerOp\(\{|\badd\(|ed\.ws\(\)\.registerOp\(\{)"([a-z][a-z0-9_]+)"')
+REG = re.compile(r'(?:registerOp\(\{|\badd\(|\baddForest\(|\baddLinked\(|ed\.ws\(\)\.registerOp\(\{)"([a-z][a-z0-9_]+)"')
 # snake_case words that are CMake targets or test names, not MCP tools
-NOT_TOOLS = {'game_meta', 'game_meta_rpc', 'game_client', 'road_network_geometry_and_decks', 'traffic_drives_spline_roads', 'animation_assets', 'animation_budget_policy', 'animation_ecs_presentation', 'animation_generic_retarget', 'animation_graphs', 'animation_inertialization', 'animation_montage', 'animation_motion_warp', 'animation_physical_pose', 'animation_playback'}
+NOT_TOOLS = {'game_meta', 'game_meta_rpc', 'game_client', 'road_network_geometry_and_decks', 'traffic_drives_spline_roads', 'animation_assets', 'animation_budget_policy', 'animation_ecs_presentation', 'animation_generic_retarget', 'animation_graphs', 'animation_inertialization', 'animation_montage', 'animation_motion_warp', 'animation_physical_pose', 'animation_playback', 'simulation_profiler', 'world_explorer', 'world_persistence', 'world_processes'}
 TOOL = re.compile(r'^([a-z][a-z0-9]*(?:_[a-z0-9]+)+)(?:\s*\{.*\})?$')
 
 
@@ -38,6 +38,8 @@ def mcp_tools(root=ROOT):
 def path_candidates(token):
     token = token.strip().split()[0].rstrip('.,;:)')
     token = re.sub(r':\d+$', '', token)
+    if token in ('tools/call','tools/list'):
+        return None  # MCP protocol methods, not repository paths.
     if token.startswith('./'):
         token = token[2:]
     if any(c in token for c in '<>$') or token.startswith(('-', 'http')):

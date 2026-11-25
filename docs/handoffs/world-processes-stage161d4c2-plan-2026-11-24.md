@@ -1,0 +1,2 @@
+# Stage 161D4c2 — scope
+Bounded content texture file metadata poll; shared native GPU cache refresh after idle; per-species physical log bark and endgrain geometry, seasonal opacity using existing ARBOR material policy; read-only same-body PHYSIS storm contribution in local tangent chart. No separate simulation, no main merge. Runtime terrain and body-prioritized sampling separate. Mac acceptance deferred.

@@ -165,8 +165,23 @@ public:
                                          const EarthworkChange& change,
                                          uint64_t tick) {
         if(!ground)throw std::invalid_argument("TerraWeave missing ground snapshot");
+        if(change.vertices.empty())return {};
+        return applySelectedSupport([&](const AnchoredPlant& p)->std::optional<RootState>{
+            const auto& anchor=p.anchor;
+            const int64_t radius=anchor.roots.radiusCm;
+            if(anchor.xCm+radius<change.dirty.minX ||
+               anchor.xCm-radius>=change.dirty.maxX ||
+               anchor.zCm+radius<change.dirty.minZ ||
+               anchor.zCm-radius>=change.dirty.maxZ)return {};
+            return evaluateRootSupport(anchor,ground);
+        },change.revision,tick);
+    }
+
+    // Coordinate-neutral transition policy. The terrain owner evaluates
+    // selected roots in its own geometry; the same registry latches falls.
+    template<class Evaluate>
+    PlantSupportUpdate applySelectedSupport(Evaluate&& evaluate,uint64_t revision,uint64_t tick){
         PlantSupportUpdate update;
-        if(change.vertices.empty())return update;
         // Stage decisions before mutating registry state. A failing height
         // sampler or allocation cannot produce a half-updated plant set.
         struct Pending {
@@ -177,13 +192,15 @@ public:
         std::vector<Pending> pending;
         for(const auto& [id,p]:plants_) {
             const auto& anchor=p.anchor;
-            const int64_t radius=anchor.roots.radiusCm;
-            if(anchor.xCm+radius<change.dirty.minX ||
-               anchor.xCm-radius>=change.dirty.maxX ||
-               anchor.zCm+radius<change.dirty.minZ ||
-               anchor.zCm-radius>=change.dirty.maxZ)
-                continue;
-            const auto next=evaluateRootSupport(anchor,ground);
+            const auto evaluated=evaluate(p);
+            if(!evaluated)continue;
+            const auto& next=*evaluated;
+            if(next.plantKey!=anchor.plantKey||next.speciesId!=anchor.speciesId||
+               next.habit!=anchor.roots.habit||next.plantedHeightCm!=anchor.plantedHeightCm||
+               next.exposedCm>anchor.roots.depthCm||next.supportPermille>1000||
+               next.fallDirectionXPermille< -1000||next.fallDirectionXPermille>1000||
+               next.fallDirectionZPermille< -1000||next.fallDirectionZPermille>1000)
+                throw std::invalid_argument("TerraWeave invalid selected root support");
             if(next==p.support)continue;
             // A root visibility change is a lightweight presentation
             // update, independent of whether this tree has fallen.
@@ -207,7 +224,7 @@ public:
                 update.fell.push_back({
                     id,anchor.roots.habit,anchor.xCm,anchor.zCm,
                     anchor.plantedHeightCm,dx,dz,next.supportPermille,
-                    next.exposedCm,change.revision,tick
+                    next.exposedCm,revision,tick
                 });
             }
             pending.push_back({id,next,fallen});

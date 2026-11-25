@@ -1,0 +1,5 @@
+# Stage 118 — aggregate planetary diagnostic budgets
+
+Base 95699328. In progress. Bound combined Live snapshot output and native Live line submissions independently of owner sample caps. Equal deterministic per-enabled-layer allocations, preserve complete rows and sampled counters, report transport trimming separately. Reduce owner row limits under concurrent sampling where possible; no simulation scheduling changes. Gravity canonical field cap remains unchanged. Existing browser RPC and planar flows preserved. Add source fixtures and explicit UI status. No build/test/main merge (owner deferral). CPU time and actual GPU/bridge overhead must be measured later; no hard frame-time guarantee.
+
+Status: source 25d7bb06e5d73ee0f32bb08a4835742807092250; fixture committed, build/tests NOT RUN. Handoff records limitations and next stage.

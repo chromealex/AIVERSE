@@ -57,6 +57,13 @@ const clone = (): StudioSnapshot => ({ ...structuredClone(snapshot), history: { 
  // cannot narrow generic M through a runtime method comparison.
 export function mockInvoke<M extends StudioMethod>(method: M, params: StudioParams[M]): Promise<StudioResult[M]>;
 export async function mockInvoke(method: StudioMethod, params: StudioParams[StudioMethod]): Promise<StudioResult[StudioMethod]> {
+  if (method === 'studio.worldProcessDiagnostics') return {active:false} as StudioResult['studio.worldProcessDiagnostics'];
+  if (method === 'studio.evolveState') return {active:false,regions:[]} as StudioResult['studio.evolveState'];
+  if (method === 'studio.evolveLayer') return {layer: (params as StudioParams['studio.evolveLayer']).layer ?? 'combined',live:(params as StudioParams['studio.evolveLayer']).live??false,granularCellCm:(params as StudioParams['studio.evolveLayer']).granularCellCm??0,liveGravity:(params as StudioParams['studio.evolveLayer']).liveGravity??false,aetherLayer:(params as StudioParams['studio.evolveLayer']).aetherLayer??'off',liveFracture:(params as StudioParams['studio.evolveLayer']).liveFracture??false,liveMorph:(params as StudioParams['studio.evolveLayer']).liveMorph??false,liveEcho:(params as StudioParams['studio.evolveLayer']).liveEcho??false,liveCrowd:(params as StudioParams['studio.evolveLayer']).liveCrowd??false,liveCircuit:(params as StudioParams['studio.evolveLayer']).liveCircuit??false,liveSociety:(params as StudioParams['studio.evolveLayer']).liveSociety??false,liveForest:(params as StudioParams['studio.evolveLayer']).liveForest??false} as StudioResult['studio.evolveLayer'];
+  if (method === 'studio.worldProcessAreaPreview' ||
+      method === 'studio.worldProcessGroupPivot' ||
+      method === 'studio.worldProcessAreaBatchResize')
+    throw Error('EVOLVE group authoring requires the native AIVERSE host');
   if (method === 'studio.gameEntities') return {active:false,epoch:'0',tick:0,rows:[],total:0};
   if (method === 'studio.gameInspect') throw Error('Runtime inspection requires native gameplay');
   if (method === 'studio.gameDevices') return [];
@@ -110,11 +117,13 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
     throw Error('Editing map lights requires the native AIVERSE host');
   }
   if (method === 'studio.assetByGuid' || method === 'studio.assetMetaPatch' ||
-      method === 'studio.assetFolderCreate' ||
+      method === 'studio.assetFolderCreate' || method === 'studio.assetDelete' ||
+      method === 'studio.assetHistoryResetReview' || method === 'studio.assetHistoryResetApply' || method === 'studio.assetRecoveryQuota' || method === 'studio.assetTrashBatchReview' || method === 'studio.assetTrashBatchApply' || method === 'studio.assetTrashList' || method === 'studio.assetTrashReview' || method === 'studio.assetTrashApply' ||
       method === 'studio.assetMovePreview' || method === 'studio.assetImportPreview' ||
       method === 'studio.assetTransferCommit' || method === 'studio.spectraPackageChoose') {
     throw Error('Project asset operations require the native AIVERSE host');
   }
+  if (method === 'studio.assetDependencyPage') throw new Error('Dependency pages require a native project');
   if (method === 'studio.assetReferences') {
     // Demo cannot inspect an actual project's materials/rules.
     return [];
@@ -143,6 +152,11 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
   if (method === 'studio.viewportRect' || method === 'studio.viewportInput') {
     return { ok: true }; // Browser preview has no native surface.
   }
+  if (method === 'studio.planetForest') return {available:false,mapPath:'',revision:'0',moduleEnabled:false,physicsRequested:false,override:false,forest:null,catalog:null,markers:[]};
+  if (method === 'studio.planetSceneBody') throw new Error('Native Scene required');
+  if (method === 'studio.planetForestLive') return {active:false};
+  if (method === 'studio.planetForestArm' || method === 'studio.planetForestPlant' || method === 'studio.planetForestMove') throw new Error('Scene planting requires native Studio');
+  if (method === 'studio.planetForestSet') throw new Error('Open the native Studio to edit a planetary forest');
   if (method === 'studio.rules') return { types: { soldier: { name: 'Soldier', health: { max: 60 }, move: { speed: 2.5 }, sight: 7, cost: { gold: 50, time: 10 }, weapons: [{ id: 'sword', damage: 6, range: 1, cooldown: 1 }] } },
     resolved: { soldier: { name: 'Soldier', health: { max: 60 }, move: { speed: 2.5, radius: 0.4 }, sight: 7, cost: { gold: 50, time: 10 }, weapons: [{ id: 'sword', damage: 6, range: 1, cooldown: 1 }] } },
     resources: ['gold'], summary: [], dirty: false } as StudioResult['studio.rules'];
@@ -164,10 +178,12 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
   if (method === 'studio.ops') return { panel: String((params as { panel?: string })?.panel ?? ''), ops: [] } as StudioResult['studio.ops'];
   if (method === 'studio.op' && String((params as { op?: string })?.op ?? '').startsWith('package_')) return mockPackageOp(params as StudioParams['studio.op']) as StudioResult['studio.op'];
   if (method === 'studio.op' || method === 'studio.inputGet' || method === 'studio.inputSet' || method === 'studio.assetAudit' ||
-    method === 'studio.agentInfo' || method === 'studio.sceneBrush' || method === 'studio.splineEdit' || method === 'studio.stats' || method === 'studio.gpuStats' || method === 'studio.keepPlayChanges' || method === 'studio.extensions' || method === 'studio.extensionAction' || method === 'studio.extensionCreate' || method === 'studio.attachmentsGet' || method === 'studio.attachmentsSet' || method === 'studio.agentStart' || method === 'studio.agentStop' || method === 'studio.agentReset')
+    method === 'studio.agentInfo' || method === 'studio.agentHistoryStep' || method === 'studio.agentUndoAll' || method === 'studio.agentBatchPreview' || method === 'studio.agentBatchApply' || method === 'studio.sceneBrush' || method === 'studio.splineEdit' || method === 'studio.stats' || method === 'studio.gpuStats' || method === 'studio.keepPlayChanges' || method === 'studio.extensions' || method === 'studio.extensionAction' || method === 'studio.extensionCreate' || method === 'studio.attachmentsGet' || method === 'studio.attachmentsSet' || method === 'studio.agentStart' || method === 'studio.agentStop' || method === 'studio.agentReset')
     throw new Error('Open the native Studio');
   if (method === 'studio.history') return { steps: [], position: 0 } as StudioResult['studio.history'];
-  if (method === 'studio.historyJump' || method === 'studio.entitiesAlign') throw new Error('Open the native Studio');
+  if (method === 'studio.projectHistory') return { scope:'project', steps:[], position:0, version:'', strokeActive:false, canUndo:false, canRedo:false, bytes:0, maxBytes:16777216, maxSteps:64, blockedReason:'Project history requires the native Studio' };
+  if (method === 'studio.assetHistory') return { scope:'assets', steps:[], position:0, version:'', strokeActive:false, canUndo:false, canRedo:false, bytes:0, maxBytes:16777216, maxSteps:64, blockedReason:'Asset history requires the native Studio' };
+  if (method === 'studio.assetHistoryStep' || method === 'studio.projectHistoryStep' || method === 'studio.historyJump' || method === 'studio.entitiesAlign') throw new Error('Open the native Studio');
   if (method === 'studio.componentCatalog') return [
     { id: 'MeshRenderer', title: 'Mesh Renderer', group: 'Rendering', hint: 'Model and material slots', action: 'native', available: false, reason: 'Already on this entity' },
     { id: 'Light', title: 'Point Light', group: 'Rendering', hint: 'Adds a light entity at this position', action: 'light', available: true },

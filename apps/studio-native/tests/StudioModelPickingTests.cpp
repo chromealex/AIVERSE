@@ -1,4 +1,4 @@
-#include "apps/studio-native/StudioModelPicking.h"
+#include "apps/studio-native/StudioPlanetPreview.h"
 #include "tests/TestCheck.h"
 #include <cmath>
 #include <iostream>
@@ -108,5 +108,32 @@ int main() {
     AIVERSE_TEST_CHECK(studioPickModelSurface(masked,mat4::identity(),{.25f,.25f,5},direction));
     masked.images[0].rgba.clear();
     AIVERSE_TEST_CHECK(!studioPickModelSurface(masked,mat4::identity(),{.25f,.25f,5},direction));
-    std::cout<<"PASS studio CPU model triangle picking\n";
+    // The terrain used for occlusion must be the rendered mesh, not MapDoc.
+    StudioPlanetPreview planet;
+    const auto plane=[](MeshBuilder& mesh,float z){
+        const auto base=uint32_t(mesh.vertexCount());
+        mesh.addVertex({0,0,z},{0,0,1},rgba(255,255,255));
+        mesh.addVertex({2,0,z},{0,0,1},rgba(255,255,255));
+        mesh.addVertex({0,2,z},{0,0,1},rgba(255,255,255));
+        mesh.addTriangle(base,base+1,base+2);
+    };
+    plane(planet.mesh,-1.f);
+    MeshBuilder raised;plane(raised,1.f);
+    auto surfaceModel=oneTriangle();
+    const std::vector<StudioModelPickInstance> planetModels{{"surface", &surfaceModel, mat4::identity()}};
+    AIVERSE_TEST_CHECK(std::abs(planet.terrainHit(origin,direction)-6.f)<1e-4f);
+    AIVERSE_TEST_CHECK(std::abs(planet.terrainHit(origin,direction,&raised)-4.f)<1e-4f);
+    AIVERSE_TEST_CHECK(planet.pick(origin,direction,{},{},planetModels)=="surface");
+    AIVERSE_TEST_CHECK(planet.pick(origin,direction,{},{},planetModels,&raised).empty());
+    // Erosion exposes geometry occluded by the authored surface.
+    StudioPlanetPreview erodedPlanet;plane(erodedPlanet.mesh,1.f);
+    MeshBuilder eroded;plane(eroded,-1.f);
+    AIVERSE_TEST_CHECK(erodedPlanet.pick(origin,direction,{},{},planetModels).empty());
+    AIVERSE_TEST_CHECK(erodedPlanet.pick(origin,direction,{},{},planetModels,&eroded)=="surface");
+    AIVERSE_TEST_CHECK(erodedPlanet.pick(origin,direction,{"surface"},{},planetModels,&eroded).empty());
+    AIVERSE_TEST_CHECK(erodedPlanet.pick(origin,direction,{},{"surface"},planetModels,&eroded).empty());
+    AIVERSE_TEST_CHECK(!std::isfinite(planet.terrainHit({3,3,5},direction,&raised)));
+    // Reverting to authored geometry restores the old visibility contract.
+    AIVERSE_TEST_CHECK(erodedPlanet.pick(origin,direction,{},{},planetModels).empty());
+    std::cout<<"PASS studio CPU model and rendered planetary terrain picking\n";
 }

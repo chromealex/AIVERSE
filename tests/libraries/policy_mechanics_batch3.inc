@@ -49,7 +49,7 @@ inline void diplomacy(){
     const auto peaceEvents=std::move(e).value();
     CHECK(!peaceEvents.empty()&&peaceEvents.back().kind==DiploEventKind::Rejected);     // the stronger side refuses a plain peace
     peace.deal.items.push_back({1,7,500,0});values[2][7]=1;e=stepDiplomacy(c,s,4,std::span(&peace,1),facts,values);CHECK(!atWar(s,1,2));
-    DiploCommand rewar{DiploCommand::DeclareWar,1,2};e=stepDiplomacy(c,s,5,std::span(&rewar,1),facts,values);CHECK(e->back().kind==DiploEventKind::Rejected);   // truce
+    DiploCommand rewar{DiploCommand::DeclareWar,1,2};e=stepDiplomacy(c,s,5,std::span(&rewar,1),facts,values);CHECK(e&&e->back().kind==DiploEventKind::Rejected);   // truce
     DiploCommand gift{DiploCommand::Modify,2,3,{},Treaty::War,{9,500,0,0}};stepDiplomacy(c,s,6,std::span(&gift,1),facts,values);
     DiploCommand ally{DiploCommand::Propose,0,0,{2,3,{},{Treaty::Alliance}},Treaty::War,{},true};stepDiplomacy(c,s,7,std::span(&ally,1),facts,values);
     DiploCommand attack{DiploCommand::DeclareWar,1,3};e=stepDiplomacy(c,s,20,std::span(&attack,1),facts,values);CHECK(atWar(s,1,3)&&atWar(s,1,2));   // ally joins
@@ -77,7 +77,7 @@ inline void heroMatch(){
     s.heroes[10].team=1;s.heroes[11].team=1;s.heroes[20].team=2;s.heroes[10].gold=2000;
     std::vector<HeroCommand> buy{{HeroCommandKind::Buy,10,0,1,0,1000,true},{HeroCommandKind::Buy,10,0,3,0,1000,true}};auto e=stepHeroMatch(c,s,1,buy);
     CHECK(e&&s.heroes[10].items==std::vector<int64_t>({3})&&s.heroes[10].gold==2000-300-950);  // recipe: 500 + missing 450
-    HeroCommand far{HeroCommandKind::Buy,11,0,2,0,1000,false,false};e=stepHeroMatch(c,s,2,std::span(&far,1));CHECK(e->back().kind==HeroEventKind::BuyRefused);
+    HeroCommand far{HeroCommandKind::Buy,11,0,2,0,1000,false,false};e=stepHeroMatch(c,s,2,std::span(&far,1));CHECK(e&&e->back().kind==HeroEventKind::BuyRefused);
     HeroCommand courier{HeroCommandKind::Buy,11,0,1,0,1000,false,true};stepHeroMatch(c,s,3,std::span(&courier,1));CHECK(s.heroes[11].items.empty());
     for(uint32_t t=4;t<=310;++t)stepHeroMatch(c,s,t,{});CHECK(s.heroes[11].items==std::vector<int64_t>({1}));
     std::vector<HeroCommand> fight{{HeroCommandKind::Damage,11,20},{HeroCommandKind::Damage,10,20},{HeroCommandKind::HeroKilled,10,20},{HeroCommandKind::UnitKilled,10,99,0,2},
