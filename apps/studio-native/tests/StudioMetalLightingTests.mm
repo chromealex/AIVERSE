@@ -50,11 +50,20 @@ int aiverseMain(int argc,char** argv) { @autoreleasepool {
             doc.data.extra.set("lights",lights);
             doc.path=(project/"field.json").string();
             auto draw=[&]{scene.frame(160,160,doc,false,"","",empty,0,1.5f,project.string(),rules);};
+            std::optional<bake::CapturedBake> cold;
+            for(int i=0;i<5 && !cold;++i)cold=scene.prepareLightBake(doc,project.string(),parsed,rules,1.5f);
+            if(!cold || scene.framesDrawn()!=0 || cold->draws.size()!=1 || cold->lights.size()!=2)
+                throw std::runtime_error("Cold bake required a presented frame");
             draw();
             auto input=scene.captureLightBake(doc,project.string(),parsed);
             if(input.nx!=17 || input.nz!=17 || input.heights.size()!=289 || input.draws.size()!=1 ||
                input.draws.front().path!=asset || input.lights.size()!=2 || input.lights[0].bakedOnly || !input.lights[1].bakedOnly)
                 throw std::runtime_error("Unexpected Studio bake capture");
+            if(cold->heights!=input.heights || cold->draws.front().path!=input.draws.front().path ||
+               cold->draws.front().nodeWorld.size()!=input.draws.front().nodeWorld.size() ||
+               cold->sun.color.x!=input.sun.color.x || cold->sky.sky.y!=input.sky.sky.y)
+                throw std::runtime_error("Cold and displayed capture disagree");
+            std::cout<<"Captured a cold Studio map with zero presented frames\n";
             auto copy=doc;
             try {
                 (void)scene.captureLightBake(copy,project.string(),parsed);

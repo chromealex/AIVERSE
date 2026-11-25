@@ -329,6 +329,7 @@ private:
     bool atlasPreviewBusy_=false;
     std::shared_ptr<StudioLightBakeFiles> bakeFiles_;
     StudioLightBakeJob bakeJob_;
+    std::optional<bake::CapturedBake> pendingBake_;
     std::string bakeEpoch_,bakeMessage_;
     uint64_t bakeRevision_=0;
     void tickLightBake();

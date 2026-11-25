@@ -22,6 +22,14 @@ inline PreviewDayLighting previewDocumentDay(const editor::MapDoc& doc) {
     return studioPreviewDayLighting(lightScalar(block,"time",.5f),
         lightScalar(block,"nightLevel",.18f),lightScalar(block,"clouds",0),lightScalar(block,"storm",0));
 }
+inline render::Lighting studioMapEnvironment(const editor::MapDoc& doc,const PreviewDayLighting& day) {
+    render::Lighting environment;
+    if(doc.data.extra["lighting"].isObject()){
+        environment.sunIntensity=day.sun;
+        environment.skyColor={.5f*day.ambient,.58f*day.ambient,.7f*day.ambient};
+    }
+    return environment;
+}
 inline std::vector<render::PointLight> studioAuthoredLights(
     const editor::MapDoc& doc,float levelHeight=1.5f,size_t limit=render::LightSystem::kMaxLights,bool bakedActive=false) {
     const Json& source=doc.data.extra;

@@ -436,6 +436,8 @@ public:
     void drawAnimationPose(int width,int height,const std::shared_ptr<const render::Model>& source,
                            const render::Pose& pose,float yaw);
     bake::CapturedBake captureLightBake(const editor::MapDoc& doc, const std::string& project, const game::Rules& rules);
+    std::optional<bake::CapturedBake> prepareLightBake(const editor::MapDoc& doc,const std::string& project,
+        const game::Rules& rules,const Json& rulesJson,float levelHeight);
     void setBakedSceneEnabled(bool enabled);
     Json bakedSceneStatus() const;
     uint32_t drawCalls() const { return renderer_.drawCalls(); }
@@ -494,6 +496,8 @@ private:
     struct GraphPresentation;
     std::unique_ptr<GraphPresentation> graphPresentation_;
     render::Renderer3D renderer_;
+    bake::CapturedBake collectLightBake(const editor::MapDoc& doc,const game::Rules& rules,
+        const render::Lighting& environment,float levelHeight,bool terrain);
     struct SceneBake;
     std::unique_ptr<SceneBake> sceneBake_;
     void syncSceneBake(const std::string& project,const std::string& mapPath);

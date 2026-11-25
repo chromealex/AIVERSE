@@ -7,6 +7,7 @@
     "apps/studio-web/src/panels/LightBakeAtlas.tsx",
     "apps/studio-native/tests/StudioMetalLightingTests.mm",
     "apps/studio-web/src/panels/LightBakePanel.css",
+    "apps/studio-native/StudioAuthoredLights.h",
     "apps/studio-native/StudioLightBakeFiles.h",
     "apps/studio-native/StudioLightBakeJob.h",
     "apps/editor/core/LightBakeOps.h",

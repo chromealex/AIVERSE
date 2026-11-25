@@ -559,3 +559,5 @@ Mac acceptance: detached WKWebView buttons cancelled, restarted, skipped an unch
 Light Bake transfer: restore the linked lightbake_bake and lightbake_status operations in HTML Studio, including optional settings and renderer counters.
 
 72b6090ea, studio-only-editor: apps/editor/core/LightBakeOps.{h,cpp}, apps/studio-native/StudioHost.{h,cpp}, StudioAgentHistoryPolicy.h and tools/mcp/audit_registry.py. Verified tools/list, mcp_registry, linked lightbake_bake with inline settings, duplicate rejection, invalid quality/force rejection, running to idle, three loaded lightmapped draws, unchanged hash skip and settings undo/redo. Map bytes unchanged. Evidence docs/evidence/studio-light-bake-linked-mcp.json. Cold start and Windows acceptance remain open.
+
+Light Bake transfer: prepare the map from the document while Scene is closed. Capture must not present a frame or change the layout.

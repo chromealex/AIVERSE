@@ -817,8 +817,24 @@ void StudioHost::tickLightBake() {
     if (!bakeFiles_) return;
     const auto& ws=session_->workspace();
     const bool stale=session_->graphDocumentScope().getStr("epoch")!=bakeEpoch_ || ws.map.revision!=bakeRevision_;
-    if (stale) bakeJob_.cancel();
+    if (stale && !pendingBake_) bakeJob_.cancel();
     try {
+        if(pendingBake_){
+            if(stale)throw std::runtime_error("Map changed during capture");
+            ensureScene();
+            const bool current=mapSnapshot_ && rulesSnapshot_ && rulesSnapshotProject_==ws.project.dir &&
+                mapSnapshot_->path==ws.map.path && mapSnapshot_->revision==ws.map.revision && *rulesSnapshot_==ws.project.rulesJson;
+            auto input=onScene([&]{return preview_->prepareLightBake(current?*mapSnapshot_:ws.map,ws.project.dir,ws.project.rules,
+                current?*rulesSnapshot_:ws.project.rulesJson,float(ws.project.rules.levelHeight.toDouble()));});
+            if(!input)return;
+            input->settings=pendingBake_->settings;input->folder=pendingBake_->folder;
+            input->force=pendingBake_->force;input->oldHash=pendingBake_->oldHash;
+            bakeJob_.start(std::move(*input),
+                [files=bakeFiles_](const auto& path,auto& bytes){return files->read(path,bytes);},
+                [files=bakeFiles_](const auto& path,const auto& bytes){return files->stage(path,bytes);});
+            pendingBake_.reset();
+            return;
+        }
         const auto result=bakeJob_.poll();
         if (!result) return;
         bakeFailed_=stale || !result->error.empty();
@@ -836,7 +852,7 @@ void StudioHost::tickLightBake() {
             if(!result->warnings.empty())bakeMessage_+="\n"+result->warnings;
         }
     } catch (const std::exception& e) { bakeFailed_=true; bakeMessage_=e.what(); }
-    bakeFiles_.reset();
+    pendingBake_.reset();bakeFiles_.reset();
     sendEventPayload("lightBake.finished",Json::string(bakeEpoch_));
 }
 Json StudioHost::linkedLightBake(const std::string& name,const Json& params) {
@@ -857,7 +873,7 @@ Json StudioHost::linkedLightBake(const std::string& name,const Json& params) {
     }
     auto status=lightBakeJob(command);
     const auto display=preview_?onScene([&]{return preview_->bakedSceneStatus();}):Json::object();
-    status.set("state",Json::string(status.getBool("running")?"baking":"idle"));
+    status.set("state",Json::string(pendingBake_?"capture":status.getBool("running")?"baking":"idle"));
     status.set("progress",status["fraction"]);
     status.set("failed",Json::fromBool(bakeEpoch_==epoch && bakeFailed_));
     status.set("bake",editor::lightBakeInfo(session_->workspace()));
@@ -878,9 +894,9 @@ Json StudioHost::lightBakeJob(const Json& params,const Json& settings) {
         if (bakeFiles_) throw std::runtime_error("A light bake is already running");
         if (relative.empty()) throw std::runtime_error("Save the active map before baking");
         if (game_ && game_->state().getBool("active")) throw std::runtime_error("Stop the play-test before baking");
-        if (!preview_ || !mapSnapshot_ || mapSnapshot_->revision!=ws.map.revision || mapSnapshot_->path!=ws.map.path)
-            throw std::runtime_error("Scene is still loading the active map");
-        auto input=onScene([&]{return preview_->captureLightBake(*mapSnapshot_,ws.project.dir,ws.project.rules);});
+        if(ws.map.data.planet())throw std::runtime_error("Lightmap capture requires a planar map");
+        ensureScene();
+        bake::CapturedBake input;
         input.folder=bake::bakeFolderFor(relative);
         input.settings=editor::lightBakeSettings(ws);
         if(settings.size()){
@@ -891,11 +907,8 @@ Json StudioHost::lightBakeJob(const Json& params,const Json& settings) {
         const auto info=editor::lightBakeInfo(ws);
         if(info.getBool("exists"))bake::parseHex64(info.getStr("hash"),input.oldHash);
         auto files=std::make_shared<StudioLightBakeFiles>(ws.project.dir,input.folder);
-        const auto applied=input.settings;
-        bakeJob_.start(std::move(input),
-            [files](const auto& path,auto& bytes){return files->read(path,bytes);},
-            [files](const auto& path,const auto& bytes){return files->stage(path,bytes);});
-        if(settings.size())editor::applyLightBakeSettings(session_->workspace(),applied);
+        if(settings.size())editor::applyLightBakeSettings(session_->workspace(),input.settings);
+        pendingBake_=std::move(input);
         bakeFailed_=false;
         bakeFiles_=std::move(files);
         bakeEpoch_=epoch;
@@ -903,13 +916,18 @@ Json StudioHost::lightBakeJob(const Json& params,const Json& settings) {
         bakeMessage_.clear();
         sendEventPayload("lightBake.started",Json::string(epoch));
     } else if (action=="cancel") {
-        if (bakeFiles_ && bakeEpoch_==epoch) bakeJob_.cancel();
+        if (bakeFiles_ && bakeEpoch_==epoch) {
+            if(pendingBake_){
+                pendingBake_.reset();bakeFiles_.reset();bakeFailed_=true;bakeMessage_="cancelled";
+                sendEventPayload("lightBake.finished",Json::string(epoch));
+            } else bakeJob_.cancel();
+        }
     } else if (action!="status") throw std::runtime_error("Unknown light bake action");
     const auto progress=bakeJob_.progress();
     Json reply=Json::object();
     reply.set("running",Json::fromBool(bool(bakeFiles_)));
-    reply.set("stage",Json::string(bakeFiles_?progress.stage:"idle"));
-    reply.set("fraction",Json::number(double(progress.fraction),4));
+    reply.set("stage",Json::string(pendingBake_?"capture":bakeFiles_?progress.stage:"idle"));
+    reply.set("fraction",Json::number(pendingBake_?0.0:double(progress.fraction),4));
     reply.set("message",Json::string(bakeEpoch_==epoch?bakeMessage_:""));
     return reply;
 }

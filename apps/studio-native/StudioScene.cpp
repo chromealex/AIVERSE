@@ -433,11 +433,31 @@ bake::CapturedBake StudioScene::captureLightBake(const editor::MapDoc& doc, cons
     if (!sceneCacheValid_ || modelsPending_ || sceneKey_.doc != &doc ||
         sceneKey_.revision != doc.revision || sceneKey_.project != project)
         throw std::runtime_error("Scene is still loading the active map");
-    if (doc.data.planet()) throw std::runtime_error("Lightmap capture requires a planar map");
+    return collectLightBake(doc,rules,renderer_.lighting,sceneKey_.levelHeight,showTerrain_);
+}
+
+std::optional<bake::CapturedBake> StudioScene::prepareLightBake(const editor::MapDoc& doc,const std::string& project,
+        const game::Rules& rules,const Json& rulesJson,float levelHeight) {
+    if(doc.data.planet())throw std::runtime_error("Lightmap capture requires a planar map");
+    if(sceneCacheValid_ && !modelsPending_ && sceneKey_.doc==&doc && sceneKey_.project==project &&
+       sceneKey_.revision==doc.revision && sceneKey_.levelHeight==levelHeight && sceneKey_.rules==&rulesJson)
+        return captureLightBake(doc,project,rules);
+    const auto proxies=studioDocumentProxies(doc,doc.data.worldSpace,levelHeight);
+    sceneCacheValid_=false; // Scene must rebuild its proxy draw list before its next visible frame.
+    syncDocumentModels(doc,project,rulesJson,proxies);
+    if(modelsPending_)return {};
+    const bool terrain=rulesJson["terrain"].getBool("render",true) && doc.data.extra.getStr("terrainPresentation","legacy")!="entities";
+    const auto environment=weatherEnvironment_.value_or(studioMapEnvironment(doc,previewDocumentDay(doc)));
+    return collectLightBake(doc,rules,environment,levelHeight,terrain);
+}
+
+bake::CapturedBake StudioScene::collectLightBake(const editor::MapDoc& doc,const game::Rules& rules,
+        const render::Lighting& environment,float levelHeight,bool terrain) {
+    if(doc.data.planet())throw std::runtime_error("Lightmap capture requires a planar map");
     bake::CapturedBake capture;
-    editor::captureBakeEnvironment(capture,renderer_.lighting,doc.data.extra["lights"],doc.data.w,doc.data.h,
-        [&](float x,float z){return sceneKey_.fps ? 0.f : terrainPreviewHeight(doc.data,x,z,sceneKey_.levelHeight);},
-        showTerrain_ && !sceneKey_.fps);
+    editor::captureBakeEnvironment(capture,environment,doc.data.extra["lights"],doc.data.w,doc.data.h,
+        [&](float x,float z){return doc.data.worldSpace ? 0.f : terrainPreviewHeight(doc.data,x,z,levelHeight);},
+        terrain && !doc.data.worldSpace);
     for (const auto& instance : modelInstances_) {
         if (!instance.model || !instance.model->path.starts_with("content/")) continue;
         const int index = studioMapEntityIndex(instance.id,doc);
@@ -3629,14 +3649,9 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     const Json& settings=lightingSettings_;
     const bool useLighting=(useLighting_||bakedScene||weatherEnvironment_.has_value())&&!planetaryChart;
     const auto& activeLights=activeLights_;
-    Lighting environment;
     const auto& day=weatherEnvironment_?weatherDay_:day_;
     const Json& lightingSource=doc.data.extra["lighting"];
-    if(weatherEnvironment_) environment=*weatherEnvironment_;
-    else if(lightingSource.isObject()) {
-        environment.sunIntensity=day.sun;
-        environment.skyColor={.5f*day.ambient,.58f*day.ambient,.7f*day.ambient};
-    }
+    Lighting environment=weatherEnvironment_.value_or(studioMapEnvironment(doc,day));
     const bool lightingForced=lightingRevision_==std::numeric_limits<uint64_t>::max();
     const bool lightingDue=lightingForced || continuousRedraw_ || now-lastDocChange_>=std::chrono::milliseconds(200) ||
                            now-lastLightingBuild_>=std::chrono::milliseconds(300);

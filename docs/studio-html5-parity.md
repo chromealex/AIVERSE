@@ -276,3 +276,5 @@ Light Bake transfer: capture the native Studio document placements, terrain and 
 Light Bake transfer: connect the map-scoped job to the HTML panel and publish completed outputs.
 
 Light Bake transfer: restore the linked lightbake_bake and lightbake_status operations in HTML Studio, including optional settings and renderer counters.
+
+Light Bake transfer: prepare the map from the document while Scene is closed. Capture must not present a frame or change the layout.
