@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {LIGHTING_KEYS, LIGHT_EDITABLE_KEYS, lightingProperties, lightProperties} from '../src/panels/lightingSchema.ts';
+import {LIGHTING_KEYS, LIGHT_EDITABLE_KEYS, lightingProperties, lightColor, lightProperties} from '../src/panels/lightingSchema.ts';
 import {parseFieldDraft} from '../src/propertyLogic.ts';
 
 test('lighting schema exposes exactly the native allowlisted keys',()=>{
@@ -52,4 +52,15 @@ test('legacy angle selects spot fields and pattern frequency follows the rendere
   const fields=lightProperties({type:'spot',sweep:30,pattern:'beacon'});
   assert.equal(fields.find(field=>field.key==='sweepSpeed').value,25);
   assert.equal(fields.find(field=>field.key==='rate').value,.5);
+});
+
+test('point and legacy spot light defaults match the renderer, including boolean halos',()=>{
+  const halo=light=>lightProperties(light).find(field=>field.key==='halo').value;
+  assert.deepEqual(lightColor({}),[1,.62,.32]);
+  assert.deepEqual(lightColor({angle:30}),[.95,.97,1]);
+  assert.deepEqual(lightColor({color:[0,.4,1]}),[0,.4,1]);
+  assert.equal(halo({}),.8);
+  assert.equal(halo({type:'spot',radius:10,halo:true}),.5);
+  assert.equal(halo({halo:false}),0);
+  assert.equal(halo({halo:1.25}),1.25);
 });

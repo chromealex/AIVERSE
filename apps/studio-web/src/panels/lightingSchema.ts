@@ -2,7 +2,7 @@
 import type { FieldDescriptor } from '../propertyLogic';
 export type LightingScalarKey = 'time' | 'dayLength' | 'nightLevel' | 'clouds' | 'storm';
 export interface LightEntry {
-  entityId?: string;
+  entityId?: string; color?: number[]; halo?: number | boolean;
   pattern?: string; rate?: number; flicker?: number;
   angle?: number; pitch?: number; yaw?: number; sweep?: number; sweepSpeed?: number;
   x?: number; z?: number; height?: number; radius?: number; intensity?: number;
@@ -13,7 +13,7 @@ export interface LightingState {
   lights: LightEntry[];
 }
 export const LIGHTING_KEYS: readonly LightingScalarKey[] = ['time', 'dayLength', 'nightLevel', 'clouds', 'storm'];
-export const LIGHT_EDITABLE_KEYS = ['name','type','x','z','height','radius','intensity','flicker','pattern','rate','angle','pitch','yaw','sweep','sweepSpeed','nightOnly','electric','bake'] as const;
+export const LIGHT_EDITABLE_KEYS = ['name','type','x','z','height','radius','intensity','halo','flicker','pattern','rate','angle','pitch','yaw','sweep','sweepSpeed','nightOnly','electric','bake'] as const;
 export type LightEditableKey = typeof LIGHT_EDITABLE_KEYS[number];
 
 export function lightingProperties(state: LightingState): FieldDescriptor[] {
@@ -27,6 +27,10 @@ export function lightingProperties(state: LightingState): FieldDescriptor[] {
     { key: 'storm', label: 'Storm', type: 'number', value: values.storm ?? 0, min: 0, max: 1, step: .01 }
   ];
 }
+export function lightColor(light:LightEntry):number[] {
+  if (light.color && light.color.length>=3) return light.color;
+  return light.type==='spot' || light.angle!==undefined ? [.95,.97,1] : [1,.62,.32];
+}
 export function lightProperties(light: LightEntry): FieldDescriptor[] {
   const spot = light.type === 'spot' || light.angle !== undefined;
   const pattern = light.pattern ?? 'steady';
@@ -38,6 +42,8 @@ export function lightProperties(light: LightEntry): FieldDescriptor[] {
     {key:'height',label:'Height',type:'number',value:light.height ?? (spot ? 1.5 : 1),min:-1000,max:10000,step:.1},
     {key:'radius',label:'Radius',type:'number',value:light.radius ?? (spot ? 9 : 4),min:.001,max:100000,step:.1},
     {key:'intensity',label:'Intensity',type:'number',value:light.intensity ?? (spot ? 2.2 : 1.5),min:0,max:10000,step:.1},
+    {key:'halo',label:'Halo size',type:'number',value:typeof light.halo==='number' ? light.halo :
+      light.halo===false ? 0 : (light.radius ?? (spot ? 9 : 4))*(spot ? .05 : .2),min:0,max:5,step:.02},
     {key:'flicker',label:'Flicker',type:'number',value:light.flicker ?? 0,min:0,max:1,step:.01},
     {key:'pattern',label:'Pattern',type:'text',value:pattern,options:[
       {label:'Steady',value:'steady'},{label:'Pulse',value:'pulse'},

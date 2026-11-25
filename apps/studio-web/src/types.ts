@@ -727,7 +727,7 @@ export interface StudioParams {
   'studio.lighting': Record<string, never>;
   'studio.lightingSet': ({ key: import('./panels/lightingSchema').LightingScalarKey; value: number } | { key:'preset'; value:string } | { key:'remove'; value:true }) & {expectedDocumentEpoch?:string};
   'studio.lightAdd': { x?: number; z?: number };
-  'studio.lightUpdate': { index: number; entityId?: string; key: import('./panels/lightingSchema').LightEditableKey; value: string | number | boolean };
+  'studio.lightUpdate': { index: number; entityId?: string } & ({key: import('./panels/lightingSchema').LightEditableKey; value: string | number | boolean} | {key:'color'; value:number[]});
   'studio.lightDelete': { index: number; entityId?: string };
   'studio.select': { id?: string | null; ids?: string[]; mode?: 'replace' | 'add' | 'toggle' };
   'studio.setProperty': { entityId: string; componentId?: string; key: string; value: string | number | boolean };

@@ -503,3 +503,5 @@ Map Lighting implementation d12a52abf: lightingSchema.ts and StudioLightingValid
 Map environment transfer: expose palette preset and removal of the map lighting block, preserving other properties and native map Undo.
 
 Map environment e8c00b363: LightingPanel.tsx exposes palette-only inheritance and full project lighting reset via StudioSession.cpp, StudioFpsLightingDocument.h and shared LightOps.cpp. Production build/typecheck, 297 web tests and studio_fps_lighting_document passed. Detached Mac Lighting selected Cave over project Snow, retained storm and cloudScale, reset, undid/redid, rejected stale document, saved and reopened; game.json byte comparison and parsed map matched. Report docs/evidence/studio-map-environment-inheritance.json, screenshot docs/evidence/studio-project-catalog/map-environment.png. Remaining: temporary lighting preview and runtime visual parity.
+
+Local light color and halo transfer: verify legacy defaults, range checks, native Undo, map persistence and detached Lighting controls.

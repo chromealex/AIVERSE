@@ -17,6 +17,7 @@ inline bool validLightScalar(std::string_view key, double value) {
     if (key == "x" || key == "z") return value >= -1000000 && value <= 1000000;
     if (key == "height") return value >= -1000 && value <= 10000;
     if (key == "radius") return value > 0 && value <= 100000;
+    if (key == "halo") return value >= 0 && value <= 5;
     if (key == "flicker") return value >= 0 && value <= 1;
     if (key == "rate") return value >= .01 && value <= 30;
     if (key == "angle") return value >= 2 && value <= 170;

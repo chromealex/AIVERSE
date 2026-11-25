@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CloudSun, Lightbulb, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import PropertyField from '../components/PropertyField';
-import { LIGHTING_KEYS, LIGHT_EDITABLE_KEYS, lightingProperties, lightProperties } from './lightingSchema';
+import { LIGHTING_KEYS, LIGHT_EDITABLE_KEYS, lightingProperties, lightColor, lightProperties } from './lightingSchema';
 import type { LightEditableKey, LightingScalarKey, LightingState } from './lightingSchema';
+import {hexToRgb,rgbToHex} from './humanCreatorSchema';
 import './LightingPanel.css';
 import RenderLightingControls from './RenderLightingControls';
 
@@ -118,11 +119,21 @@ export default function LightingPanel({ projectPath, documentEpoch, selectedId, 
                 <button key={light.entityId ?? index} type="button" role="option" aria-selected={selected === index}
                   className={'lighting-light-item' + (selected === index ? ' active' : '')}
                   onClick={() => { if (light.entityId) void onSelect(`light:${light.entityId}`); setConfirmDelete(false); }}>
-                  <Lightbulb size={15}/><span>{light.name || (light.type === 'spot' ? 'Spot' : 'Point') + ' #' + (index + 1)}</span>
+                  <Lightbulb size={15} color={rgbToHex(lightColor(light))}/><span>{light.name || (light.type === 'spot' ? 'Spot' : 'Point') + ' #' + (index + 1)}</span>
                   <small>{index + 1}</small>
                 </button>)}
             </div>
             {activeLight && <div className="lighting-fields lighting-light-fields">
+              <label className="property-row"><span>Light color</span>
+                <span className="lighting-color">
+                  <input type="color" aria-label="Light color" value={rgbToHex(lightColor(activeLight))}
+                    disabled={busy || !available || !nativeConnected()} onChange={event=>{
+                      const value=hexToRgb(event.target.value);
+                      if(value) void perform(()=>invoke('studio.lightUpdate',{index:selected,entityId:selectedId ?? undefined,key:'color',value}));
+                    }}/>
+                  <code>{rgbToHex(lightColor(activeLight)).toUpperCase()}</code>
+                </span>
+              </label>
               {lightFields.map(property => <PropertyField key={selected + ':' + property.key}
                 property={property} disabled={busy || !available || !nativeConnected()}
                 onChange={value => editLight(property.key, value)}/>)}

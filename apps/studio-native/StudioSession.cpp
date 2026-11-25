@@ -3519,16 +3519,8 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 if (method == "studio.lightUpdate") {
                     const std::string key = params.getStr("key");
                     const Json& value = params["value"];
-                    if (value.isNumber()) {
-                        if (!validLightScalar(key,value.toDouble()))
-                            throw std::runtime_error("Invalid light numeric property");
-                    } else if (value.isString()) {
-                        if (!validLightText(key,value.str()))
-                            throw std::runtime_error("Invalid light string property");
-                    } else if (value.type() == Json::Type::Bool) {
-                        if (!validLightBoolean(key))
-                            throw std::runtime_error("Invalid light boolean property");
-                    } else throw std::runtime_error("Invalid light property type");
+                    if (!validStudioLightProperty(key,value))
+                        throw std::runtime_error("Invalid light property");
                     input.set(key,value);
                 }
                 const Json updated = ws_.call(method == "studio.lightDelete" ? "light_delete" : "light_update",input,"studio");

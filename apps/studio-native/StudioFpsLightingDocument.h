@@ -24,6 +24,17 @@ inline int64_t fpsLightingIndex(const Json& params, const Json& items) {
         throw std::runtime_error("Unknown light index");
     return index;
 }
+inline bool validStudioLightProperty(const std::string& key,const Json& value) {
+    if (key=="color") {
+        if (!value.isArray() || value.size()!=3) return false;
+        for (const auto& channel:value.items())
+            if (!channel.isNumber() || !std::isfinite(channel.toDouble()) ||
+                channel.toDouble()<0 || channel.toDouble()>1) return false;
+        return true;
+    }
+    return validFpsLightingChange("studio.lightUpdate",key,value.toDouble(),value.isNumber(),
+                                  value.isString(),value.str(),value.type()==Json::Type::Bool);
+}
 inline Json studioMapLightingPatch(const Json& params) {
     const auto key=params.getStr("key");
     const auto& value=params["value"];
@@ -56,8 +67,7 @@ inline Json editFpsLighting(Json document, const std::string& method, const Json
         else {
             const std::string key=params.getStr("key");
             const Json& value=params["value"];
-            if (!validFpsLightingChange(method,key,value.toDouble(),value.isNumber(),
-                                        value.isString(),value.str(),value.type()==Json::Type::Bool))
+            if (!validStudioLightProperty(key,value))
                 throw std::runtime_error("Invalid light property");
             Json patch=Json::object();
             patch.set(key,value);

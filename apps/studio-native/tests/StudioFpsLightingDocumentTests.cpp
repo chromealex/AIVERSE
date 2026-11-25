@@ -25,6 +25,11 @@ int main() {
     try { (void)editFpsLighting(doc,"studio.lightUpdate",Json::parse(R"({"index":0,"key":"rate","value":-1})")); }
     catch (const std::exception&) { invalidRate=true; }
     AIVERSE_TEST_CHECK(invalidRate);
+    doc=editFpsLighting(doc,"studio.lightUpdate",Json::parse(R"({"index":0,"key":"color","value":[0.2,0.4,1]})"));
+    doc=editFpsLighting(doc,"studio.lightUpdate",Json::parse(R"({"index":0,"key":"halo","value":1.25})"));
+    AIVERSE_TEST_CHECK(doc["lights"][0]["color"][1].toDouble()==.4 && doc["lights"][0]["halo"].toDouble()==1.25);
+    for (const char* channels: {"[1,1]","[1,1,1,1]","[1,2,0]","[0,false,0]"})
+        AIVERSE_TEST_CHECK(!validStudioLightProperty("color",Json::parse(channels)));
     Json scalar=Json::parse(R"({"key":"storm","value":0.45})");
     doc=editFpsLighting(doc,"studio.lightingSet",scalar);
     AIVERSE_TEST_CHECK(doc["lighting"]["storm"].toDouble()==0.45);

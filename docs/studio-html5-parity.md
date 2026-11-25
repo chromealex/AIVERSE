@@ -256,3 +256,5 @@ Confirmed in a detached Mac Shader Graph window across map changes; two projects
 Lighting transfer: expose authored point/spot patterns, frequencies and searchlight orientation/sweep through the existing light-update API. Verify conditional controls, undo and persistence.
 
 Map environment transfer: expose palette preset and removal of the map lighting block, preserving other properties and native map Undo.
+
+Local light color and halo transfer: verify legacy defaults, range checks, native Undo, map persistence and detached Lighting controls.

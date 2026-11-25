@@ -22,3 +22,7 @@
 .lighting-state,.lighting-notice{padding:14px;font-size:11px;color:#859bb9;line-height:1.5}
 .lighting-notice{background:#302a1f;color:#d0b38b}
 .lighting-error{margin:8px 12px;padding:9px;border:1px solid #723c4c;border-radius:6px;background:#482b35;color:#ffb4be;font-size:11px}
+
+.lighting-color{display:flex;align-items:center;gap:8px}
+.lighting-color input[type="color"]{width:44px;height:30px;padding:2px;cursor:pointer}
+.lighting-color code{color:var(--au-text-soft)}
