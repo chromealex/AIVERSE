@@ -1,0 +1,11 @@
+{
+  "sha": "1326a67f52a1e409fe06fd74ab5770190a020fb5",
+  "argv": [
+    "env",
+    "AIVERSE_PRISMA_COMPOSITOR_GPU=1",
+    "/Volumes/KINGSTON/AIVERSE-builds/prisma-authored-compositor/compositor_metal"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/prisma-authored-compositor-metal-20261125.log.txt",
+  "sha256": "00a6b06544bc35eb27f8293a472ebf33cd84da066851a789fc7bf310353d2f3d"
+}
