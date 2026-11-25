@@ -45,6 +45,8 @@
     "docs/evidence/material-techniques-web-near.png",
     "docs/evidence/render-seven-combined-preview.json",
     "docs/evidence/render-seven-combined-preview.log.txt",
+    "docs/evidence/render-seven-final-mac.json",
+    "docs/evidence/render-seven-final-mac.log.txt",
     "docs/features/material-techniques.json",
     "docs/models.md",
     "engine/render/MaterialTechnique.h",
@@ -185,7 +187,8 @@
         "docs/evidence/material-techniques-runtime-20261125.json",
         "docs/evidence/material-techniques-runtime-20261125.log.txt",
         "docs/evidence/material-techniques-reviewed.json",
-        "docs/evidence/render-seven-combined-preview.json"
+        "docs/evidence/render-seven-combined-preview.json",
+        "docs/evidence/render-seven-final-mac.json"
       ]
     },
     "handoff": {
@@ -232,6 +235,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/render-seven-combined-preview.json"
+    "docs/evidence/render-seven-final-mac.json"
   ]
 }

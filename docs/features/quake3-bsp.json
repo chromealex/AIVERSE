@@ -33,6 +33,8 @@
     "docs/evidence/quake3-bsp-studio-inspector.png",
     "docs/evidence/render-seven-combined-preview.json",
     "docs/evidence/render-seven-combined-preview.log.txt",
+    "docs/evidence/render-seven-final-mac.json",
+    "docs/evidence/render-seven-final-mac.log.txt",
     "docs/features/quake3-bsp.json",
     "docs/models.md",
     "engine/render/BspShaderImages.h",
@@ -168,7 +170,8 @@
       "evidence": [
         "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.json",
         "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.log.txt",
-        "docs/evidence/render-seven-combined-preview.json"
+        "docs/evidence/render-seven-combined-preview.json",
+        "docs/evidence/render-seven-final-mac.json"
       ]
     },
     "handoff": {
@@ -212,6 +215,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/render-seven-combined-preview.json"
+    "docs/evidence/render-seven-final-mac.json"
   ]
 }

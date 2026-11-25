@@ -57,6 +57,8 @@
     "docs/evidence/modeling-volume-csg-integrated-session.txt",
     "docs/evidence/render-seven-combined-preview.json",
     "docs/evidence/render-seven-combined-preview.log.txt",
+    "docs/evidence/render-seven-final-mac.json",
+    "docs/evidence/render-seven-final-mac.log.txt",
     "docs/features/model-triplanar.json",
     "docs/shader-graph.md",
     "engine/render/graph/TriplanarMaterial.h",
@@ -194,7 +196,8 @@
         "docs/evidence/model-triplanar-metal.json",
         "docs/evidence/model-triplanar-reviewed.json",
         "docs/evidence/model-triplanar-final.json",
-        "docs/evidence/render-seven-combined-preview.json"
+        "docs/evidence/render-seven-combined-preview.json",
+        "docs/evidence/render-seven-final-mac.json"
       ]
     },
     "handoff": {
@@ -244,6 +247,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/render-seven-combined-preview.json"
+    "docs/evidence/render-seven-final-mac.json"
   ]
 }

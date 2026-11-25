@@ -1,0 +1,130 @@
+458246c96cd6ad8e7010d48c351edf7a93d2ea7c
+Full registered Mac quick suite
+EDITOR            =  28.40 sec*proc (12 tests)
+GPU               =   8.91 sec*proc (5 tests)
+IMPORT            =   3.78 sec*proc (1 test)
+LENS              =   9.03 sec*proc (2 tests)
+Lighting          =  12.19 sec*proc (30 tests)
+MCP               =   9.41 sec*proc (5 tests)
+Material          =   1.50 sec*proc (2 tests)
+Metal             =   9.40 sec*proc (6 tests)
+MetalGPU          =  36.87 sec*proc (8 tests)
+NEREID            =   1.07 sec*proc (2 tests)
+NETWORK           =  17.15 sec*proc (7 tests)
+PERSISTENCE       =  25.67 sec*proc (14 tests)
+PHYSIS            =  61.20 sec*proc (39 tests)
+PRISMA            =   1.10 sec*proc (1 test)
+Prisma            =   0.51 sec*proc (2 tests)
+RENDER            =   7.13 sec*proc (1 test)
+RHI               =  41.81 sec*proc (10 tests)
+Renderer3D        =  15.35 sec*proc (12 tests)
+SECURITY          =   1.11 sec*proc (3 tests)
+SpectraFX         =  44.55 sec*proc (24 tests)
+TERRAWEAVE        =  19.47 sec*proc (7 tests)
+TEXTURE_GRAPH     =   2.70 sec*proc (5 tests)
+TOOLS             =   5.27 sec*proc (3 tests)
+TerraWeave        =  22.94 sec*proc (31 tests)
+VFX               =   5.86 sec*proc (3 tests)
+Vehicles          =   9.02 sec*proc (5 tests)
+Volumetrics       =   0.39 sec*proc (1 test)
+WIND              =   7.13 sec*proc (1 test)
+World             =  21.68 sec*proc (15 tests)
+WorldProcesses    =   0.54 sec*proc (1 test)
+
+Total Test time (real) = 1201.21 sec
+
+The following tests did not run:
+	342 - material_technique_frame (Skipped)
+	343 - model_triplanar_frame (Skipped)
+	344 - prisma_compositor_metal (Skipped)
+	345 - quake3_bsp_frame (Skipped)
+	346 - lens_metal_frame (Skipped)
+PASS ctest
+
+========== SUMMARY ==========
+Passed stages: 3 | Failed stages: 0
+Logs: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests/test-reports/20261125-124208-27594
+PASS: all selected test stages
+Metal opt-in tests on the combined source tree
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests/DartConfiguration.tcl
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests/DartConfiguration.tcl
+Test project /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 342
+    Start 342: material_technique_frame
+
+342: Test command: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests/aiverse_material_technique_frame "/Volumes/KINGSTON/aiverse-worktrees/render-seven-integration/demos/material-techniques"
+342: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests
+342: Test timeout computed to be: 90
+342: [metal-assets] libraries=0 sourceMisses=10 pipelines=14 pipelineFailures=0 archive=0 strict=0
+342: near: 7716 selected-material pixels
+342: far: 7716 selected-material pixels
+342: inspection: 7716 selected-material pixels
+1/4 Test #342: material_technique_frame .........   Passed    1.26 sec
+test 343
+    Start 343: model_triplanar_frame
+
+343: Test command: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests/aiverse_model_triplanar_frame
+343: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests
+343: Test timeout computed to be: 90
+343: [metal-assets] libraries=0 sourceMisses=12 pipelines=16 pipelineFailures=0 archive=0 strict=0
+343: OBJ warm=4947 cool=11422 normalDelta=13989 repeatDelta=11799
+343: CSG warm=12317 cool=28184 normalDelta=40550 repeatDelta=30537
+343: cut back warm=912 cool=1729 normalDelta=2657 repeatDelta=2117
+343: cut wall warm=207 cool=381 normalDelta=512 repeatDelta=543
+343: cut floor warm=215 cool=525 normalDelta=728 repeatDelta=518
+2/4 Test #343: model_triplanar_frame ............   Passed    1.42 sec
+test 344
+    Start 344: prisma_compositor_metal
+
+344: Test command: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests/aiverse_prisma_compositor_metal
+344: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests
+344: Test timeout computed to be: 90
+344: [metal-assets] libraries=0 sourceMisses=4 pipelines=4 pipelineFailures=0 archive=0 strict=0
+344: Fallback versus baseline maximum byte error 1
+344: PASS Metal compositor GPU readback: 6144 pixels each for baseline, two passes, camera shader and missing-camera fallback
+3/4 Test #344: prisma_compositor_metal ..........   Passed    1.69 sec
+test 345
+    Start 345: quake3_bsp_frame
+
+345: Test command: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests/aiverse_bsp_metal_frame
+345: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests
+345: Test timeout computed to be: 120
+345: [metal-assets] libraries=0 sourceMisses=11 pipelines=16 pipelineFailures=0 archive=0 strict=0
+345: BSP import 358.14 ms; PVS cluster 211 admits 1408/3073 surfaces
+345: BSP surfaces=3073 textures=43
+345: BSP changed pixels of 400000: diffuse=400000 lightmap=396284
+4/4 Test #345: quake3_bsp_frame .................   Passed    5.29 sec
+
+The following tests passed:
+	material_technique_frame
+	model_triplanar_frame
+	prisma_compositor_metal
+	quake3_bsp_frame
+
+100% tests passed, 0 tests failed out of 4
+
+Label Time Summary:
+BSP         =   5.29 sec*proc (1 test)
+GPU         =   9.67 sec*proc (4 tests)
+Material    =   2.69 sec*proc (2 tests)
+Metal       =   9.67 sec*proc (4 tests)
+PRISMA      =   1.69 sec*proc (1 test)
+
+Total Test time (real) =   9.71 sec
+Apple Silicon shared renderer, three language integrations
+An issue was encountered verifying workloads. For more information, run "dotnet workload update".
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:02.36
+Python, C# and Java RGBA8 match: 27648 bytes; 788 foreground pixels; sha256 7f80e9097477d022b0e1e870dc13596e7f8970d8755d7d675339107ff82a2ae4
+69 entries, 0 errors

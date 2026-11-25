@@ -1,0 +1,32 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests/DartConfiguration.tcl
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests/DartConfiguration.tcl
+Test project /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 346
+    Start 346: lens_metal_frame
+
+346: Test command: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests/aiverse_lens_metal_frame
+346: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests
+346: Test timeout computed to be: 90
+346: [metal-assets] libraries=0 sourceMisses=18 pipelines=46 pipelineFailures=0 archive=0 strict=0
+346: LENS Metal pixels: primary/replay mismatch=0 other-camera changes=12146 nonuniform=25262
+346: PASS LENS native Metal prepared frame and independent camera pixels
+1/1 Test #346: lens_metal_frame .................   Passed    9.08 sec
+
+The following tests passed:
+	lens_metal_frame
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+GPU      =   9.08 sec*proc (1 test)
+LENS     =   9.08 sec*proc (1 test)
+Metal    =   9.08 sec*proc (1 test)
+
+Total Test time (real) =   9.11 sec

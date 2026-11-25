@@ -25,6 +25,8 @@
     "docs/evidence/prisma-compositor-webgl.txt",
     "docs/evidence/render-seven-combined-preview.json",
     "docs/evidence/render-seven-combined-preview.log.txt",
+    "docs/evidence/render-seven-final-mac.json",
+    "docs/evidence/render-seven-final-mac.log.txt",
     "docs/features/prisma-authored-compositor.json",
     "docs/handoffs/prisma-stage-authored-compositor.md",
     "docs/prisma.md",
@@ -161,7 +163,8 @@
       "note": "Native x86_64 Metal pixel comparison of four 96x64 frames. CPU topology/validation test separately run. Full suite and other backends pending.",
       "evidence": [
         "docs/evidence/prisma-authored-compositor-metal-20261125.json",
-        "docs/evidence/render-seven-combined-preview.json"
+        "docs/evidence/render-seven-combined-preview.json",
+        "docs/evidence/render-seven-final-mac.json"
       ]
     },
     "handoff": {
@@ -204,6 +207,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/render-seven-combined-preview.json"
+    "docs/evidence/render-seven-final-mac.json"
   ]
 }
