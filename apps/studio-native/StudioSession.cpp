@@ -773,6 +773,7 @@ Json StudioSession::mapProperties(const Json& params,bool write) {
     out.set("scope",graphDocumentScope());out.set("name",str(data.name));
     out.set("width",num(data.w));out.set("height",num(data.h));out.set("grid",Json::fromBool(!data.planet()));
     out.set("maxSize",num(game::kMaxMapSize));out.set("entities",num(data.entities.size()));out.set("players",num(data.players.size()));
+    out.set("areas",data.extra["areas"].isObject()?data.extra["areas"]:Json::object());
     out.set("roadsOnly",Json::fromBool(data.roadsOnly));out.set("victory",data.extra["victory"]);
     Json roster=Json::array(),factions=Json::array(),resources=Json::array();
     for(const auto& player:data.players){
@@ -2261,7 +2262,7 @@ std::string StudioSession::historyLabel(const std::string& method, const Json& p
         return key.empty() ? "Edit "+(comp.empty()?std::string("properties"):comp) : "Set "+key;
     }
     static const std::pair<const char*,const char*> names[]={
-        {"studio.mapPlayer","Edit map players"},{"studio.mapPropertiesSet","Edit map properties"},{"studio.entityCreate","Create object"},{"studio.entityDelete","Delete"},{"studio.entitiesDelete","Delete"},
+        {"studio.mapArea","Edit map area"},{"studio.mapPlayer","Edit map players"},{"studio.mapPropertiesSet","Edit map properties"},{"studio.entityCreate","Create object"},{"studio.entityDelete","Delete"},{"studio.entitiesDelete","Delete"},
         {"studio.entityDuplicate","Duplicate"},{"studio.entitiesDuplicate","Duplicate"},{"studio.entityMove","Reorder"},
         {"studio.assetPlace","Place asset"},{"studio.componentAdd","Add component"},{"studio.componentRemove","Remove component"},
         {"studio.lightAdd","Add light"},{"studio.lightUpdate","Edit light"},{"studio.lightDelete","Delete light"},
@@ -4125,6 +4126,12 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             }
             ++graphDocumentEpoch_;
             clearSelection();hidden_.clear();locked_.clear();previewGraphTitle_.clear();previewGraphFactors_=Json();previewMaterialName_.clear();refreshMaterialPreview();
+            reply.set("result",snapshot());
+        } else if(method=="studio.mapArea"){
+            if(ws_.project.dir.empty() || !sameDocumentScope(params["scope"],graphDocumentScope()))
+                throw std::runtime_error("Map changed. Reload the area list.");
+            const auto result=ws_.call("map_area",params,"studio");
+            if(result.has("error"))throw std::runtime_error(result.getStr("error"));
             reply.set("result",snapshot());
         } else if(method=="studio.mapPlayer"){
             reply.set("result",mapPlayer(params));

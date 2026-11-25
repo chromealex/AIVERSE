@@ -1575,6 +1575,59 @@ void Workspace::registerCoreOps() {
             r.set("summary", str("Поле ресурса " + res));
             return r;
         });
+    add("map_area","Create, edit or remove a named map rectangle [x,z,width,height]. Renaming updates map triggers and wave routes.",
+        R"({"properties":{"action":{"enum":["create","edit","remove"]},"name":{"type":"string"},"newName":{"type":"string"},"rect":{"type":"array","items":{"type":"number"},"minItems":4,"maxItems":4}},"required":["action","name"]})",
+        [this](const Json& p){
+            const auto action=p.getStr("action"),name=p.getStr("name"),next=p.getStr("newName",name);
+            if(action!="create" && action!="edit" && action!="remove")throw std::runtime_error("Unknown area action");
+            if(map.data.worldSpace || name.empty() || next.empty())throw std::runtime_error("Expected a named map area");
+            auto& extra=map.data.extra;
+            Json areas=extra["areas"];
+            if(areas.isNull())areas=Json::object();
+            if(!areas.isObject())throw std::runtime_error("The map areas block must be an object");
+            if(action=="create" ? areas.has(name) : !areas.has(name))throw std::runtime_error(action=="create"?"Area already exists":"Unknown area");
+            if(name!=next && areas.has(next))throw std::runtime_error("Area name already exists");
+            const auto& rect=p["rect"];
+            if(action!="remove" && (!rect.isArray() || rect.size()!=4 ||
+               !std::all_of(rect.items().begin(),rect.items().end(),[](const Json& n){return n.isNumber() && std::isfinite(n.toDouble());}) ||
+               rect[2].toDouble()<=0 || rect[3].toDouble()<=0))
+                throw std::runtime_error("Use four coordinates and a positive width and height");
+            if(action=="edit" && next==name && areas[name]==rect)return ok();
+            Json triggers,waves;
+            bool changedTriggers=false,changedWaves=false;
+            if(action!="create" && (action=="remove" || name!=next)){
+                const auto referenced=[&](const Json& row){return row.getStr("area")==name;};
+                bool ruleReference=false;
+                for(const auto& trigger:project.rulesJson["triggers"].items()){
+                    ruleReference|=referenced(trigger["event"]);
+                    for(const char* key:{"conditions","actions"})for(const auto& row:trigger[key].items())ruleReference|=referenced(row);
+                }
+                for(const auto& hazard:project.rulesJson["hazards"].items())ruleReference|=referenced(hazard);
+                if(ruleReference)throw std::runtime_error("Project rules reference this area. Update the rules first.");
+                auto updateRef=[&](Json* ref,bool& changed){
+                    if(!ref || !ref->isString() || ref->str()!=name)return;
+                    if(action=="remove")throw std::runtime_error("Remove this area's trigger or wave references first");
+                    *ref=Json::string(next);changed=true;
+                };
+                triggers=extra["triggers"];
+                for(auto& trigger:triggers.itemsMut()){
+                    if(auto* event=trigger.find("event"))updateRef(event->find("area"),changedTriggers);
+                    for(const char* key:{"conditions","actions"})if(auto* rows=trigger.find(key))
+                        for(auto& row:rows->itemsMut())updateRef(row.find("area"),changedTriggers);
+                }
+                waves=extra["waves"];
+                for(auto& wave:waves.itemsMut())if(auto* route=wave.find("route"))
+                    for(auto& point:route->itemsMut())updateRef(&point,changedWaves);
+            }
+            if(action=="remove" || name!=next)areas.erase(name);
+            if(action!="remove")areas.set(next,rect);
+            map.beginEdit();
+            extra.set("areas",std::move(areas));
+            if(changedTriggers)extra.set("triggers",std::move(triggers));
+            if(changedWaves)extra.set("waves",std::move(waves));
+            note({Change::Map,0,0,-1,-1,-1,"Map area: "+name});
+            return ok();
+        });
     add("region_paint", "Paint a region (Northgard-style territory) with a letter (A-Z, '.' erases); optional display name.",
         (std::string(R"({"properties": {"letter": {"type": "string"}, "name": {"type": "string"}, )") + kShapeSchema + R"(}, "required": ["letter"]})").c_str(),
         [this](const Json& p) {

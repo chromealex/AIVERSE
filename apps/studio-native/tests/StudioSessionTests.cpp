@@ -1775,6 +1775,27 @@ void entityWorkflow() {
             auto& playerDoc=session.workspace().map;
             const auto originalOwner=playerDoc.data.entities[0].owner, otherOwner=playerDoc.data.entities[1].owner;
             playerDoc.data.entities[0].owner=1;playerDoc.data.entities[1].owner=2;
+            {
+                auto& doc=session.workspace().map;
+                const auto savedExtra=doc.data.extra;
+                doc.data.extra.set("triggers",Json::parse(R"([{"event":{"type":"enterArea","area":"Harbor"},"actions":[{"area":"Harbor","text":"Harbor"}]}])"));
+                doc.data.extra.set("waves",Json::parse(R"([{"route":["Harbor",[2,3]]}])"));
+                auto area=[&](const char* json){
+                    auto args=Json::parse(json);
+                    args.set("scope",call("studio.snapshot")["result"]["graphDocument"]);
+                    return call("studio.mapArea",std::move(args));
+                };
+                AIVERSE_TEST_CHECK(!area(R"({"action":"create","name":"Harbor","rect":[2,3,4,6]})").has("error"));
+                const auto before=doc.toJson();
+                AIVERSE_TEST_CHECK(area(R"({"action":"remove","name":"Harbor"})").has("error") && doc.toJson()==before);
+                AIVERSE_TEST_CHECK(area(R"({"action":"edit","name":"Harbor","newName":"Port","rect":[1,2,-1,4]})").has("error"));
+                AIVERSE_TEST_CHECK(!area(R"({"action":"edit","name":"Harbor","newName":"Port","rect":[3,4,5,7]})").has("error"));
+                AIVERSE_TEST_CHECK(doc.data.extra["triggers"][0]["event"].getStr("area")=="Port");
+                AIVERSE_TEST_CHECK(doc.data.extra["triggers"][0]["actions"][0].getStr("text")=="Harbor");
+                AIVERSE_TEST_CHECK(doc.data.extra["waves"][0]["route"][0].str()=="Port");
+                call("studio.undo");AIVERSE_TEST_CHECK(doc.toJson()==before);
+                call("studio.undo");doc.data.extra=savedExtra;
+            }
             const auto originalDoc=session.workspace().map.toJson();
             auto playerCall=[&](const Json& request){
                 Json scoped=request;

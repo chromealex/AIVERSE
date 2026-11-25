@@ -91,3 +91,11 @@
 
 .insp-map__size[hidden]{display:none}
 .insp-map[aria-label="Map players"] > label{margin-top:12px}
+.insp__views{flex-wrap:wrap}
+.insp-areas__picker{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px;margin:12px 0}
+.insp-areas__map{padding:8px;border:1px solid var(--au-line);border-radius:var(--au-radius-sm);background:var(--au-field)}
+.insp-areas__map svg{display:block;width:100%;height:128px}
+.insp-areas__map svg.is-drawing{cursor:crosshair;touch-action:none}
+.insp-areas__map rect{fill:var(--au-line-strong);stroke:var(--au-text-muted);vector-effect:non-scaling-stroke}
+.insp-areas__map .map-board{fill:var(--au-field);stroke:var(--au-line)}
+.insp-areas__map .is-selected{fill:var(--au-active);stroke:var(--au-accent);stroke-width:2}

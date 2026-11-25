@@ -9,6 +9,7 @@ description: Build a playable AIVERSE map from scratch through MCP - size, gener
 2. Create: `map_new` (size, terrain model), or `gen_presets` -> `map_generate {preset, seed, players, symmetry, mode}`. `mode: bake` writes a static map; `match` / `fixed` store a `generate` block instead. Read its answer: starts, path lengths between starts, connectivity, warnings.
 3. Shape by hand: `terrain_paint` (map characters), `terrain_level` (cliff levels) or heightfield tools (`terrain_sculpt`, `terrain_heights`, `terrain_detail`, `heightmap_import`), `terrain_paint_material`; fields with `field_paint`, regions with `region_paint`, roads `skills/world/aiverse-roads`.
 4. Content: `entity_place` (resources, neutral buildings, decorations), `player_set` (slots, starts, factions, bot/human), `map_set` for waves, triggers, areas, victory.
+   Use `map_area` with `action` (`create`, `edit`, `remove`), `name` and `rect: [x,z,width,height]` for named rectangles. Supply `newName` when renaming. Map triggers and wave routes update together. The same controls are in HTML Studio under Inspector > Areas.
 5. Fairness: `map_mirror` for symmetric maps; compare path lengths and resources per start from the `map_generate` / `map_validate` answers.
 6. Check: `map_validate` (errors first), `map_ascii` as a quick picture, `view_focus` + `view_screenshot` to look at it.
 7. Bots: `match_run` with 2-3 seeds - every slot gets a winner or loses before the limit; otherwise `skills/ai/aiverse-bots-debug`.

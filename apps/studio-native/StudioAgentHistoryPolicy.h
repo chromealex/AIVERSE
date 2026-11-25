@@ -21,7 +21,7 @@ inline const char* studioAgentHistoryPolicy(const std::string& op){
         "studio_owner_history","studio_asset_history_reset_review"
     };
     static const std::set<std::string> map={
-        "map_set","map_heightfield","map_resize","map_mirror","terrain_paint","terrain_level",
+        "map_set","map_area","map_heightfield","map_resize","map_mirror","terrain_paint","terrain_level",
         "field_paint","region_paint","entity_place","entity_update","entity_delete",
         "road_toggle","player_set","player_remove","planet_forest_set","planet_forest_plant","planet_forest_move","planet_forest_remove"
     };

@@ -225,16 +225,17 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
     title={inspectorPinned ? 'Unlock Inspector' : 'Lock Inspector to current object'}
     aria-pressed={inspectorPinned} disabled={!selected && !inspectorPinned} onClick={toggleInspectorPin}
     icon={inspectorPinned ? <Lock size={12}/> : <LockOpen size={12}/>}/>;
-  const [mapView,setMapView]=useState<"object"|"map"|"players">("object");
+  const [mapView,setMapView]=useState<"object"|"map"|"players"|"areas">("object");
   useEffect(()=>setMapView("object"),[selected?.id,snapshot?.graphDocument?.epoch]);
   const mapScope=snapshot?.scene.mapProperties && snapshot.graphDocument;
   const showMap=mapScope && (mapView!=="object" || (!inspectorPinned && !selected && !inspector));
   return <div className="insp">
     {mapScope && <nav className="insp__views" aria-label="Inspector views">
       <button type="button" aria-pressed={!showMap} disabled={!selected && !inspector} onClick={()=>setMapView("object")}>Object</button>
-      <button type="button" aria-pressed={!!showMap && mapView!=="players"} onClick={()=>setMapView("map")}>Map</button>
-      <button type="button" aria-pressed={mapView==="players"} onClick={()=>setMapView("players")}>Players</button></nav>}
-    {showMap ? <MapInspector players={mapView==="players"} key={JSON.stringify([mapScope.projectPath,mapScope.epoch,mapScope.mapPath])} scope={mapScope} busy={busy}
+      <button type="button" aria-pressed={!!showMap && mapView!=="players" && mapView!=="areas"} onClick={()=>setMapView("map")}>Map</button>
+      <button type="button" aria-pressed={mapView==="players"} onClick={()=>setMapView("players")}>Players</button>
+      <button type="button" aria-pressed={mapView==="areas"} onClick={()=>setMapView("areas")}>Areas</button></nav>}
+    {showMap ? <MapInspector view={mapView} key={JSON.stringify([mapScope.projectPath,mapScope.epoch,mapScope.mapPath])} scope={mapScope} busy={busy}
       onApply={commitSnapshot} onSelect={id=>{if(inspectorPinned)toggleInspectorPin();setMapView("object");void select(id);}}/> : !inspector ? <div className="insp__empty">
       {inspectorPinned && <div className="insp__empty-bar">{lock}</div>}
       <StudioEmptyState icon={selected ? <StudioLoader size={30}/> : undefined} title={selected ? 'Loading…' : 'Nothing selected'}

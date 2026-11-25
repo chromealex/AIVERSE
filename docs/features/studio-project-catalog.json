@@ -3,6 +3,8 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "skills/world/aiverse-map-build/SKILL.md",
+    "apps/studio-native/StudioAgentHistoryPolicy.h",
     "apps/editor/core/Workspace.cpp",
     "apps/studio-web/src/panels/MapAreas.tsx",
     "apps/studio-web/src/panels/MapPlayers.tsx",
@@ -190,7 +192,7 @@
   },
   "integrations": {
     "skills": ["aiverse-map-build"],
-    "mcp_tools": ["player_set", "player_remove"],
+    "mcp_tools": ["player_set", "player_remove", "map_area"],
     "studio_panels": [
       "inspector",
       "project",
