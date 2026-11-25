@@ -1,0 +1,131 @@
+{
+  "schema": 1,
+  "id": "encounter-phase-determinism",
+  "owner": "gameplay",
+  "changed_paths": [
+    ".gitattributes",
+    "docs/agent-handoffs/encounter-phase-determinism-initial.md",
+    "docs/agent-handoffs/game-checksum-baseline-2026-11-25.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/systems.json",
+    "docs/encounters.md",
+    "docs/features/encounter-phase-determinism.json",
+    "engine/game/Encounters.cpp",
+    "skills/gameplay/aiverse-boss-encounters/SKILL.md",
+    "tests/checksums/baseline.txt",
+    "tests/checksums/check.sh",
+    "tests/checksums/runner_test.py",
+    "tests/extra-test-suites.txt",
+    "tests/tests_encounters.inc"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": true,
+    "visible": false,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "architecture": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "native_api": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "skill": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "mcp": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "headless": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "handoff": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "documentation": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-boss-encounters"
+    ],
+    "mcp_tools": [
+      "match_run",
+      "scenario_run"
+    ],
+    "studio_panels": [],
+    "studio_methods": []
+  },
+  "test_reports": []
+}

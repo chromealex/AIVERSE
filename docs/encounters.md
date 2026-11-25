@@ -167,3 +167,5 @@ system before `raid` / `death`, speed stat hook, hash), `Save.cpp` (io), `Combat
 `onAbility`), `ComputerPlayer.cpp` (monster players skipped), `Script.cpp` (event names), `ScriptApi.cpp` /
 `ScriptInternal.h` (`encounters` table + reference), `apps/client/GameClient.cpp` (ground decals),
 `CMakeLists.txt` (sources, `AIVERSE::lib_boss_encounters`), `tests/tests.cpp` (include).
+
+When a boss phase spawns reinforcements, the encounter continues to update the same boss entity on the spawn tick. The boss's stopping and facing decisions are included in deterministic replay and restore checks across that transition.

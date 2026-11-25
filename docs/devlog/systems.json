@@ -3534,6 +3534,14 @@
           "textEn": "Map format tags so the host reports these modes."
         },
         {
+          "id": "encounter-phase-determinism",
+          "status": "in-progress",
+          "title": "Повторяемые фазы боя с боссом",
+          "titleEn": "Deterministic boss phase transitions",
+          "text": "Проверка состояния босса при появлении подкрепления и после загрузки матча.",
+          "textEn": "Verify boss state when reinforcements appear and after restoring a match."
+        },
+        {
           "id": "unit-selection-eligibility",
           "status": "done",
           "title": "Выбор объектов по типу юнита",

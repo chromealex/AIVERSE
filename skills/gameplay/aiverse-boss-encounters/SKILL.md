@@ -46,3 +46,5 @@ owners and for planning the same mechanics as data. The rules block currently ru
 Build selection: `AIVERSE::lib_boss_encounters` (depends on `AIVERSE::lib_combat_actions`, `aiverse_engine`); native
 OBJECT modules call `aiverse_native_use_libraries(target boss-encounters)`. Only this header library and its declared
 dependencies are selected.
+
+When checking a phase that spawns reinforcements, compare repeated headless runs and restore across the spawn tick. The boss should keep its order, facing and health consistently under either ECS component storage mode. The native regression is `encounters_add_wave_stops_boss_on_spawn_tick`.
