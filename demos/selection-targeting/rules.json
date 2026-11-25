@@ -53,6 +53,24 @@
           0.2
         ]
       }
+    },
+    "markedOak": {
+      "extends": "oak",
+      "name": "Selectable oak",
+      "selectable": true
     }
-  }
+  },
+  "commands": {
+    "enable_oaks": {
+      "label": "Select oaks",
+      "hotkey": "E"
+    },
+    "disable_oaks": {
+      "label": "Pass through oaks",
+      "hotkey": "D"
+    }
+  },
+  "scripts": [
+    "scripts/selection.lua"
+  ]
 }
