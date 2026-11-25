@@ -83,7 +83,7 @@ AIVERSE liefert die Mechaniken selbst – und macht das Spiel zu etwas, an dem e
 | **Multiplayer heißt endlose Desyncs.** Ein einziges `float` genügt, damit ein Match zwischen iPhone und Android auseinanderläuft. | Die Simulation ist überall bitgenau identisch: Festkomma statt Gleitkomma, eigener Zufallsgenerator, Prüfsummen. Die CI vergleicht bei jedem Push Matches auf Linux x64/ARM64, Windows und macOS. Über das Netz gehen nur Befehle; es gibt Lockstep mit Rollback und einen Server mit Matchmaking und Entscheidungen anhand von Replays. |
 | **Mobile GPUs sind schwach, das Spiel soll trotzdem gut aussehen.** | Jede teure Funktion – Schatten, Partikel, Terrain, Post-Effekte – hat Qualitätsstufen und passt sich der GPU an, von alten Mali- und Adreno-Chips bis Apple Silicon. |
 | **Die Veröffentlichung auf allen Plattformen ist ein eigenes Projekt.** Signaturen, Icons, Store- und Werbe-SDKs. | `aiversebuild` erzeugt mit einem Befehl eine .app, ein Xcode-Projekt, Gradle/APK, Web und .exe. Icons und Startbildschirme werden generiert. Plugins für App Store, Google Play, RuStore, Yandex Games, Steam, AdMob, AppLovin und mehr – ein Build enthält nur die, die das Spiel auswählt. |
-| **Jedes neue Spiel beginnt bei null.** | Über 30 spielbare Vorlagen, Genre-Kits mit Abnahme-Checklisten, 238 Skills für Agenten. Ein neues Spiel beginnt mit einem, das bereits funktioniert. |
+| **Jedes neue Spiel beginnt bei null.** | Über 30 spielbare Vorlagen, Genre-Kits mit Abnahme-Checklisten, 303 Skills für Agenten. Ein neues Spiel beginnt mit einem, das bereits funktioniert. |
 | **Meta und LiveOps werden in jedem Projekt neu geschrieben.** | `aiverse::meta`: Shop, Währungen, Quests, Pässe, tägliche Belohnungen, Energie, Clans, Turniere, Truhen mit Pity-System – in JSON konfiguriert. |
 
 ---
@@ -227,7 +227,7 @@ Vorlagen sind Pakete des [Katalogs](https://chromealex.github.io/AIVERSE/catalog
 - Andockbarer Editor im Unity-Stil: Szene, Inspector, Terrain, Effekte, Beleuchtung, UI, Testspiel und Gerätesimulator
 - `aiversemcp` – MCP-Server für Agenten – PHYSIS-Kartenkonfiguration, Validierung und Undo/Redo
 - Assistent **Spiel erstellen**
-- 238 Skills für Agenten und Genre-Kits mit Abnahme-Checklisten
+- 303 Skills für Agenten und Genre-Kits mit Abnahme-Checklisten
 - Importer für Assets klassischer Spiele aus Ihrer eigenen Kopie
 
 </td>
