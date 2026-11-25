@@ -3573,6 +3573,8 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             reply.set("result",std::move(out));
         } else if (method == "studio.op") {
             const std::string op=params.getStr("op");
+            if(params.has("expectedDocumentRevision") && params.getStr("expectedDocumentRevision")!=std::to_string(ws_.map.revision))
+                throw std::runtime_error("Map changed. Review the current values before applying.");
             if (!studioToolAllowed(op)) throw std::runtime_error("This operation is not available in Studio panels: "+op);
             if(params.has("expectedDocumentEpoch") && params.getStr("expectedDocumentEpoch")!=std::to_string(graphDocumentEpoch_))
                 throw std::runtime_error("Graph document reopened; refresh the panel");

@@ -3,6 +3,8 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/RoadsPanel.tsx",
+    "apps/studio-web/src/panels/RoadsPanel.css",
     "apps/studio-native/StudioLightingPreview.h",
     "apps/studio-web/src/panels/LightBakeAtlas.tsx",
     "apps/studio-native/tests/StudioMetalLightingTests.mm",

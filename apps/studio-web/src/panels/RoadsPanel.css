@@ -1,0 +1,16 @@
+.road-panel .road-map { display:block; width:100%; height:auto; min-height:150px; max-height:380px; background:var(--au-surface,#152131); border:1px solid var(--au-line); border-radius:var(--au-radius-md); touch-action:none; }
+.road-map path { fill:none; stroke:var(--au-text-muted); stroke-width:4; stroke-linecap:round; }
+.road-map g { cursor:grab; }
+.road-map circle { fill:var(--au-text); stroke:var(--au-line); stroke-width:2; }
+.road-map .selected circle { fill:var(--au-accent); }
+.road-map .road-hit,.road-map .selected .road-hit { fill:transparent; stroke:none; }
+.road-map text { fill:var(--au-text); font-size:15px; paint-order:stroke; stroke:#152131; stroke-width:3px; }
+.road-caption,.road-empty p { color:var(--au-text-muted); }
+.road-coordinates { display:grid; grid-template-columns:repeat(auto-fit,minmax(70px,1fr)); gap:var(--au-space-2); margin:var(--au-space-3) 0; }
+.road-map .road-edge-hit { stroke:transparent; stroke-width:16; cursor:crosshair; }
+.road-new { pointer-events:none; }
+.road-new polyline { fill:none; stroke:var(--au-accent); stroke-width:3; stroke-dasharray:6 4; }
+.road-new circle { fill:var(--au-accent); }
+.road-end { display:flex; flex-wrap:wrap; align-items:end; gap:var(--au-space-2); margin:var(--au-space-3) 0; border:1px solid var(--au-line); border-radius:var(--au-radius-md); }
+.road-end label { display:grid; gap:4px; }
+.road-actions { display:flex; flex-wrap:wrap; gap:var(--au-space-2); }

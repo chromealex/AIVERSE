@@ -1,3 +1,4 @@
+import RoadsPanel from './RoadsPanel';
 import AnimationAssetsPanel from './AnimationAssetsPanel';
 import BrandingPanel from './BrandingPanel';
 import type { StudioScriptMessage } from '../types';
@@ -121,7 +122,8 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
         return ctx.playing ? <PlayInspector ctx={ctx}/> : <InspectorPanel {...ctx}/>;
       case 'postfx': return <PostFxPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'lightbake': return <LightBakePanel key={snapshot?.graphDocument?.epoch} scope={snapshot?.graphDocument}/>;
-      case 'terrain': case 'water': case 'roads': case 'tiles': case 'generate':
+      case 'roads': return <RoadsPanel key={snapshot?.graphDocument?.epoch} scope={snapshot?.graphDocument} advanced={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
+      case 'terrain': case 'water': case 'tiles': case 'generate':
       case 'effects': case 'models': case 'overlays':
       case 'fields': case 'physis': case 'raid': case 'balance': case 'fx_functions': case 'modeling':
       case 'model_anim': case 'project_import':
