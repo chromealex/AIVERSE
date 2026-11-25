@@ -38,7 +38,7 @@
       "note": "The local paused map preview reported eleven removals. The native handler checked the token and applied once. The exact original map and edited map were recovered by one undo and one redo. The Studio suite exercised the panel contract.",
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
-        "docs/evidence/feature-gate-8a0d96716-web.json"
+        "docs/evidence/feature-gate-9feb8dd61-web.json"
       ]
     },
     "architecture": {
@@ -54,7 +54,7 @@
       "note": "The local paused map preview reported eleven removals. The native handler checked the token and applied once. The exact original map and edited map were recovered by one undo and one redo. The Studio suite exercised the panel contract.",
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
-        "docs/evidence/feature-gate-8a0d96716-web.json"
+        "docs/evidence/feature-gate-9feb8dd61-web.json"
       ]
     },
     "skill": {
@@ -150,7 +150,7 @@
       "note": "The local paused map preview reported eleven removals. The native handler checked the token and applied once. The exact original map and edited map were recovered by one undo and one redo. The Studio suite exercised the panel contract.",
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
-        "docs/evidence/feature-gate-8a0d96716-web.json"
+        "docs/evidence/feature-gate-9feb8dd61-web.json"
       ]
     },
     "handoff": {
@@ -193,9 +193,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-8a0d96716-studio-contracts.json",
-    "docs/evidence/feature-gate-8a0d96716-web.json",
-    "docs/evidence/feature-gate-8a0d96716-typecheck.json",
-    "docs/evidence/feature-gate-8a0d96716-skill-audit.json"
+    "docs/evidence/feature-gate-9feb8dd61-studio-contracts.json",
+    "docs/evidence/feature-gate-9feb8dd61-web.json",
+    "docs/evidence/feature-gate-9feb8dd61-typecheck.json",
+    "docs/evidence/feature-gate-9feb8dd61-skill-audit.json"
   ]
 }

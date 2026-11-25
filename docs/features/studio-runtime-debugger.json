@@ -35,7 +35,7 @@
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
         "docs/evidence/studio-play-ad676e70c/runtime.png",
-        "docs/evidence/feature-gate-8a0d96716-web.json"
+        "docs/evidence/feature-gate-9feb8dd61-web.json"
       ]
     },
     "architecture": {
@@ -149,7 +149,7 @@
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
         "docs/evidence/studio-play-ad676e70c/runtime.png",
-        "docs/evidence/feature-gate-8a0d96716-web.json"
+        "docs/evidence/feature-gate-9feb8dd61-web.json"
       ]
     },
     "handoff": {
@@ -191,9 +191,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-8a0d96716-studio-contracts.json",
-    "docs/evidence/feature-gate-8a0d96716-web.json",
-    "docs/evidence/feature-gate-8a0d96716-typecheck.json",
-    "docs/evidence/feature-gate-8a0d96716-skill-audit.json"
+    "docs/evidence/feature-gate-9feb8dd61-studio-contracts.json",
+    "docs/evidence/feature-gate-9feb8dd61-web.json",
+    "docs/evidence/feature-gate-9feb8dd61-typecheck.json",
+    "docs/evidence/feature-gate-9feb8dd61-skill-audit.json"
   ]
 }
