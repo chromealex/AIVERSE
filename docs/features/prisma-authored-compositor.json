@@ -9,6 +9,7 @@
     "apps/studio-web/src/panels/PostFxPanel.tsx",
     "apps/studio-web/src/panels/PrismaCompositorEditor.tsx",
     "docs/agent-handoffs/prisma-authored-compositor-initial.md",
+    "docs/agents/feature-policy.json",
     "docs/devlog/systems.json",
     "docs/en/prisma.md",
     "docs/evidence/prisma-authored-compositor-metal-20261125.json",

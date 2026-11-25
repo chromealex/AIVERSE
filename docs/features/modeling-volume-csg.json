@@ -11,6 +11,7 @@
     "docs/agent-handoffs/modeling-volume-csg-initial.md",
     "docs/agent-handoffs/modeling-volume-csg-native.md",
     "docs/agent-handoffs/modeling-volume-csg-studio.md",
+    "docs/agents/feature-policy.json",
     "docs/devlog/entries/2026-11-25-modeling-volume-csg.json",
     "docs/devlog/systems.json",
     "docs/evidence/.gitattributes",

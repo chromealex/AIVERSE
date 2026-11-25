@@ -1411,7 +1411,8 @@
         {
           "status": "in-progress",
           "title": "Пользовательские цепочки проходов и временных текстур",
-          "titleEn": "Author pass chains and intermediate render textures"
+          "titleEn": "Author pass chains and intermediate render textures",
+          "id": "prisma-authored-compositor"
         }
       ],
       "taglineEn": "Post-processing and atmosphere",
@@ -3119,7 +3120,8 @@
           "title": "Редактируемые объёмные CSG-модели",
           "titleEn": "Editable volumetric CSG models",
           "text": "Построение поверхности объекта из примитивов, текстур плотности и шума.",
-          "textEn": "Build an object surface from primitives, density textures and noise."
+          "textEn": "Build an object surface from primitives, density textures and noise.",
+          "id": "modeling-volume-csg"
         }
       ],
       "enablesEn": [
