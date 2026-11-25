@@ -1,4 +1,5 @@
 #include "StudioHierarchyGroups.h"
+#include "StudioNetworkPlay.h"
 #include "StudioGameWizard.h"
 #include "apps/editor/core/WizardOps.h"
 #include "engine/game/Script.h"
@@ -3462,6 +3463,10 @@ bool StudioHost::handleHostMethod(const Json& req) {
     });
     if (method == "studio.spectraPreview")
         return answer([&]{return runSpectraPreview(params);});
+    if(method=="studio.networkPlay")return answer([&]{
+        platform_.launchNetworkPlayer(studioNetworkArguments(session_->workspace(),params));
+        return Json::object();
+    });
     if (method == "studio.viewportInput") return answer([&] { return viewportInput(params); });
     if (method == "studio.gameSelectEntity" || method == "studio.gameEntities" || method == "studio.gameInspect" || method == "studio.gameRegions" ||
         method == "studio.gameProfile" || method == "studio.gameEdit" ||

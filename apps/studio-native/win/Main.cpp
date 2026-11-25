@@ -4,6 +4,7 @@
 // injected at document creation gives it the window.webkit.messageHandlers.aiverse bridge it already uses.
 // Engine headers first: <windows.h> defines near / far / small / interface as macros.
 #include "apps/studio-native/StudioHost.h"
+#include "apps/studio-native/StudioNetworkPlay.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/editor/core/BuildTool.h"
 #include "engine/gfx/vulkan/Vulkan.h"
@@ -380,6 +381,24 @@ public:
             }
             done(std::move(sources));
         });
+    }
+    void launchNetworkPlayer(const std::vector<std::string>& args) override {
+        const auto exe=studio::studioNetworkPlayer(exeDir()/L"AiverseGame.exe");
+        // CreateProcess receives one command line. Escape quotes and trailing backslashes for the CRT.
+        auto quote=[](const std::wstring& value){
+            std::wstring out(1,L'"');size_t slashes=0;
+            for(wchar_t c:value){
+                if(c==L'\\'){++slashes;continue;}
+                out.append(c==L'"'?2*slashes+1:slashes,L'\\');slashes=0;out+=c;
+            }
+            out.append(2*slashes,L'\\');return out+L'"';
+        };
+        std::wstring command=quote(exe.wstring());
+        for(const auto& arg:args)command+=L" "+quote(widen(arg));
+        STARTUPINFOW startup{};startup.cb=sizeof(startup);PROCESS_INFORMATION process{};
+        if(!CreateProcessW(exe.c_str(),command.data(),nullptr,nullptr,FALSE,0,nullptr,nullptr,&startup,&process))
+            throw std::runtime_error("AiverseGame could not start (Windows error "+std::to_string(GetLastError())+").");
+        CloseHandle(process.hThread);CloseHandle(process.hProcess);
     }
     void revealInFileManager(const fs::path& path, bool openFolder) override {
         if(openFolder){ShellExecuteW(main_, L"open",path.c_str(),nullptr,nullptr,SW_SHOWNORMAL);return;}

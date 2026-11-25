@@ -7,6 +7,7 @@
 #import <QuartzCore/CATransaction.h>
 #import "StudioAssetSchemeHandler.h"
 #include "apps/studio-native/StudioHost.h"
+#include "apps/studio-native/StudioNetworkPlay.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/editor/core/BuildTool.h"
 #include <algorithm>
@@ -291,6 +292,17 @@ public:
             if (code==NSModalResponseOK) for (NSURL* url in panel.URLs) if (url.isFileURL) sources.emplace_back(url.path.UTF8String);
             (*cb)(std::move(sources));
         }];
+    }
+    void launchNetworkPlayer(const std::vector<std::string>& args) override {
+        const std::filesystem::path bundle=NSBundle.mainBundle.bundlePath.UTF8String;
+        const auto exe=studio::studioNetworkPlayer(bundle.parent_path()/"AiverseGame.app/Contents/MacOS/AiverseGame");
+        NSTask* task=[[NSTask alloc] init];
+        task.executableURL=[NSURL fileURLWithPath:ns(exe.string())];
+        NSMutableArray<NSString*>* argv=[NSMutableArray array];
+        for(const auto& arg:args)[argv addObject:ns(arg)];
+        task.arguments=argv;
+        NSError* error=nil;
+        if(![task launchAndReturnError:&error])throw std::runtime_error(error.localizedDescription.UTF8String);
     }
     void revealInFileManager(const std::filesystem::path& path, bool openFolder) override {
         if(openFolder){[[NSWorkspace sharedWorkspace] openURL:[NSURL fileURLWithPath:ns(path.string()) isDirectory:YES]];return;}
