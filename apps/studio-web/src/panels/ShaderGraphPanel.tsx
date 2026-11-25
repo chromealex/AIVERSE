@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { GitBranch, RefreshCw, Save, Search, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import type { StudioShaderGraphDocument, StudioShaderGraphOp } from '../types';
-import { layoutShaderGraph, moveShaderGraphNode, addShaderGraphNode, removeShaderGraphNode, setShaderInput, setShaderOutput, shaderOutputNames } from './shaderGraphLayout';
+import { layoutShaderGraph, moveShaderGraphNode, addShaderGraphNode, removeShaderGraphNode, setShaderInput, setShaderOutput, shaderOutputNames, effectiveShaderValue, setShaderComponent } from './shaderGraphLayout';
 import './graphSurface.css';
 import './ShaderGraphPanel.css';
 
@@ -50,6 +50,12 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  },[selected]);
  const diagram=useMemo(()=>layoutShaderGraph(draft??document?.graph??{}),[draft,document]);
  const inspected=draft?.nodes?.find(node=>node.id===selectedNode);
+ const selectedValue=inspected&&draft?effectiveShaderValue(draft,inspected):undefined;
+ const editField=(field:'name'|'mask'|'texture'|'srgb',value:string|boolean)=>{
+  if(!draft||!inspected)return;
+  setDraft({...draft,nodes:draft.nodes?.map(n=>n===inspected?{...n,[field]:value}:n)});
+  setMessage('');setError('');
+ };
  const sourceOptions=draft?.nodes?.map(node=><option key={node.id} value={node.id}>{node.id} · {node.op}</option>);
  const dirty=!!document&&!!draft&&JSON.stringify(draft)!==JSON.stringify(document.graph);
  const compatibleOps=operations.filter(op=>op.domains.includes(draft?.domain??'material'));
@@ -196,7 +202,20 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
       </div>
       {draft&&<div className="graph-bindings">
        {inspected&&<fieldset><legend>{inspected.id} · {inspected.op}</legend>
-        {!inspected.inputs?.length&&<span>No inputs</span>}
+        {(inspected.op==='constant'||inspected.op==='parameter')&&
+          ['R','G','B','A'].map((channel,index)=><label key={channel}>{channel}
+           <ShaderComponentInput key={inspected.id} channel={channel}
+             value={Array.isArray(selectedValue)?selectedValue[index]??0:selectedValue??0}
+             onEdit={value=>{setDraft(setShaderComponent(draft,inspected.id,index,value));setError('');setMessage('');}}/></label>)}
+        {inspected.op==='parameter'&&<label>Parameter name<input value={inspected.name??inspected.id}
+          maxLength={64} onChange={event=>editField('name',event.target.value)}/></label>}
+        {inspected.op==='swizzle'&&<label>RGBA mask<input value={inspected.mask??'rgba'}
+          maxLength={4} onChange={event=>editField('mask',event.target.value)}/></label>}
+        {(inspected.op==='sampleTexture'||inspected.op==='sampleTextureLod')&&<>
+          <label>Project texture<input value={inspected.texture??''} onChange={event=>editField('texture',event.target.value)}/></label>
+          <label>sRGB<input type="checkbox" checked={inspected.srgb??false} onChange={event=>editField('srgb',event.target.checked)}/></label>
+        </>}
+
         {inspected.inputs?.map((id,slot)=><label key={slot}>Input {slot+1}
          <select value={id} onChange={event=>{
           const next=setShaderInput(draft,inspected.id,slot,event.target.value);
@@ -217,4 +236,18 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
   </div>
   <footer className="panel-footer">Existing project assets only · generated GLSL/MSL is not exposed through this UI</footer>
  </section>;
+}
+
+function ShaderComponentInput({channel,value,onEdit}:{channel:string;value:number;onEdit:(v:number)=>void}){
+ const [text,setText]=useState(String(value));
+ const focused=useRef(false);
+ useEffect(()=>{if(!focused.current)setText(String(value));},[value]);
+ return <input type="number" aria-label={'Value '+channel} min="-1000000" max="1000000"
+   step="any" value={text} onFocus={()=>{focused.current=true;}}
+   onChange={event=>{
+    const input=event.currentTarget;
+    setText(input.value);
+    if(input.validity.valid&&Number.isFinite(input.valueAsNumber))onEdit(input.valueAsNumber);
+   }}
+   onBlur={()=>{focused.current=false;setText(String(value));}}/>;
 }

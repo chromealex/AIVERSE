@@ -1,10 +1,10 @@
 // Pure display/layout adapter. Graphs are authored by AIVERSE, not executed in the browser.
 export interface GraphNode {
- id: string; op: string; inputs?: string[]; position?: number[]; value?: number|number[];
+ id: string; op: string; inputs?: string[]; position?: number[]; value?: number|number[]; name?:string; mask?:string; texture?:string; srgb?:boolean;
 }
 export interface GraphSource {
  version?: number; domain?: string;
- nodes?: GraphNode[]; outputs?: Record<string,string>;
+ parameters?:Record<string,number|number[]>; nodes?: GraphNode[]; outputs?: Record<string,string>;
 }
 export interface PositionedNode { id:string; op:string; x:number; y:number; height:number; inputs:string[]; values:number[]; }
 export interface GraphEdge { key:string; from:string; to:string; x1:number; y1:number; x2:number; y2:number; }
@@ -13,7 +13,8 @@ export function layoutShaderGraph(source:GraphSource):{nodes:PositionedNode[];ed
  const nodes=(source.nodes??[]).slice(0,128).map((node,index)=>{
   const p=node.position;
   const inputs=Array.isArray(node.inputs)?node.inputs.slice(0,16).filter(x=>typeof x==='string'):[];
-  const raw=Array.isArray(node.value)?node.value:[node.value];
+  const value=effectiveShaderValue(source,node);
+  const raw=Array.isArray(value)?value:[value];
   const values=raw.slice(0,4).filter((v):v is number=>typeof v==='number'&&Number.isFinite(v));
   return {id:node.id,op:node.op,x:clamp(p?.[0]??(index%5)*180),y:clamp(p?.[1]??Math.floor(index/5)*110),
    inputs,values,height:Math.max(values.length?73:54,20+9*inputs.length)};
@@ -93,4 +94,23 @@ export function setShaderInput(graph:GraphSource,target:string,slot:number,id:st
  }
  return {...graph,nodes:nodes.map(node=>node.id===target
   ? {...node,inputs:inputs.map((old,index)=>index===slot?id:old)} : node)};
+}
+
+export function effectiveShaderValue(graph:GraphSource,node:GraphNode){
+ const key=node.name??node.id;
+ return node.op==='parameter'&&Object.hasOwn(graph.parameters??{},key)
+  ? graph.parameters?.[key] : node.value;
+}
+
+export function setShaderComponent(graph:GraphSource,id:string,component:number,value:number):GraphSource {
+ const node=graph.nodes?.find(n=>n.id===id);
+ if(!node||!['constant','parameter'].includes(node.op)||!Number.isInteger(component)||
+    component<0||component>3||!Number.isFinite(value)||Math.abs(value)>1000000)return graph;
+ const previous=effectiveShaderValue(graph,node);
+ const rgba=Array.from({length:4},(_,i)=>Array.isArray(previous)?previous[i]??0:previous??0);
+ rgba[component]=value;
+ const name=node.name??id;
+ if(node.op==='parameter'&&Object.hasOwn(graph.parameters??{},name))
+  return {...graph,parameters:{...graph.parameters,[name]:rgba}};
+ return {...graph,nodes:graph.nodes?.map(n=>n===node?{...n,value:rgba}:n)};
 }

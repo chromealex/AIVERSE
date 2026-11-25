@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {moveShaderGraphNode,addShaderGraphNode,removeShaderGraphNode,setShaderInput,setShaderOutput} from '../src/panels/shaderGraphLayout.ts';
+import {moveShaderGraphNode,addShaderGraphNode,removeShaderGraphNode,setShaderInput,setShaderOutput,setShaderComponent,layoutShaderGraph} from '../src/panels/shaderGraphLayout.ts';
 test('dragging changes only the targeted node coordinate',()=>{
  const source={domain:'material',nodes:[{id:'a',op:'input',position:[30,40]},{id:'b',op:'constant',position:[200,70]}],outputs:{color:'b'}};
  const next=moveShaderGraphNode(source,'a',90,110);
@@ -55,4 +55,14 @@ test('output bindings preserve the required color and respect graph domain',()=>
  assert.equal(setShaderOutput(graph,'color','unknown'),graph);
  const particle={...graph,domain:'particle'};
  assert.equal(setShaderOutput(particle,'normal','a'),particle);
+});
+
+test('editing an overridden scalar splats the original across the other components',()=>{
+ const graph={parameters:{tint:0.5},nodes:[{id:'p',op:'parameter',name:'tint',value:[1,1,1,1]}]};
+ const next=setShaderComponent(graph,'p',2,-2);
+ assert.deepEqual(next.parameters.tint,[0.5,0.5,-2,0.5]);
+ assert.deepEqual(next.nodes,graph.nodes);
+ assert.deepEqual(layoutShaderGraph(next).nodes[0].values,[0.5,0.5,-2,0.5]);
+ assert.equal(graph.parameters.tint,0.5);
+ assert.equal(setShaderComponent(graph,'p',0,NaN),graph);
 });
