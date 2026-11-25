@@ -2364,6 +2364,22 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             reply.set("result",hubTemplatesJson(ws_.engineDir,params));
             return reply;
         }
+        if (method == "studio.hubForget") {
+            const std::string dir = params.getStr("dir");
+            if (dir.empty()) throw std::runtime_error("Choose a recent project");
+            auto listed = [&dir]() {
+                const auto projects = editor::recentProjects();
+                return std::any_of(projects.begin(), projects.end(), [&dir](const auto& project) {
+                    return project.dir == dir;
+                });
+            };
+            if (listed()) {
+                editor::forgetProject(dir);
+                if (listed()) throw std::runtime_error("Could not update recent projects");
+            }
+            reply.set("result", Json::object());
+            return reply;
+        }
         if (method == "studio.hub") {
             // Project hub: recent projects (shared with the ImGui editor and aiversemcp) and the engine templates.
             Json out=Json::object(),recent=Json::array(),templates=Json::array();

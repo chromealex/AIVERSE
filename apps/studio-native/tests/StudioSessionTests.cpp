@@ -1534,6 +1534,8 @@ void authoredEntityWorkflow() {
    }
    // Project hub: templates start with "empty"; recent projects come from the shared registry.
    {
+       AIVERSE_TEST_CHECK(call("studio.hubForget", R"({"dir":""})").has("error"));
+       AIVERSE_TEST_CHECK(!call("studio.hubForget", R"({"dir":"unlisted-hub-test-entry"})").has("error"));
        const auto hub=call("studio.hub");
        AIVERSE_TEST_CHECK(!hub.has("error") && hub["result"]["templates"].size()>=1 && hub["result"]["templates"][0].getStr("id")=="empty");
        AIVERSE_TEST_CHECK(hub["result"]["recent"].isArray() && !hub["result"].getStr("defaultLocation").empty());

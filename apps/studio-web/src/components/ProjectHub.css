@@ -14,7 +14,10 @@
 .hub__search { display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin-bottom: 12px; background: var(--au-panel-raised); border: 1px solid var(--au-line); border-radius: 6px; }
 .hub__search:focus-within { border-color: var(--au-accent); }
 .hub__search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: inherit; font: inherit; }
-.hub__item { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 12px; align-items: center; padding: 12px 6px; width: 100%; border: 0; border-bottom: 1px solid var(--au-line); background: none; color: inherit; text-align: start; cursor: pointer; }
+.hub__row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 6px; border-bottom: 1px solid var(--au-line); }
+.hub__forget { display: grid; place-items: center; padding: 8px; border: 0; border-radius: 5px; background: transparent; color: var(--au-text-faint); cursor: pointer; }
+.hub__forget:hover:enabled, .hub__forget:focus-visible { background: var(--au-hover); color: var(--au-text); }
+.hub__item { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 12px; align-items: center; padding: 12px 6px; width: 100%; border: 0; background: none; color: inherit; text-align: start; cursor: pointer; }
 .hub__item:hover:enabled { background: var(--au-hover); }
 .hub__item svg { color: var(--au-accent); }
 .hub__item span { display: grid; gap: 3px; }

@@ -132,7 +132,8 @@
     "studio_methods": [
       "studio.project",
       "studio.openMap",
-      "studio.projectRule"
+      "studio.projectRule",
+      "studio.hubForget"
     ]
   },
   "test_reports": [

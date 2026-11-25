@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Clock, Folder, FolderOpen, Package, Plus, Search } from 'lucide-react';
+import { Check, Clock, Folder, FolderOpen, Package, Plus, Search, X } from 'lucide-react';
 import { invoke } from '../bridge';
 import { StudioLoader } from '../ui';
 import type { StudioHub, StudioSnapshot, StudioTemplate } from '../types';
@@ -71,6 +71,14 @@ export default function ProjectHub({ onOpened, openOther, compact }: {
     setBusy(dir);
     try { done(await invoke('studio.hubOpen', { dir })); setError(''); } catch (e) { setError(message(e)); } finally { setBusy(''); }
   };
+  const forget = async (dir: string) => {
+    setBusy(dir);
+    try {
+      await invoke('studio.hubForget', { dir });
+      setHub(current => current && { ...current, recent: current.recent.filter(project => project.dir !== dir) });
+      setError('');
+    } catch (e) { setError(message(e)); } finally { setBusy(''); }
+  };
   const create = async () => {
     if (!templ || !name.trim()) return;
     setBusy('create');
@@ -98,10 +106,13 @@ export default function ProjectHub({ onOpened, openOther, compact }: {
       <label className="hub__search"><Search size={15}/><input type="search" aria-label="Search recent projects" placeholder="Find by name or folder" value={projectQuery} onChange={e => setProjectQuery(e.target.value)}/></label>
       {!hub && !error && <StudioLoader size={20} label="Loading recent projects…"/>}
       {hub && !recent.length && <p>{needle ? 'No projects match your search.' : 'Your recently opened projects will appear here.'}</p>}
-      {recent.map(p => <button key={p.dir} type="button" className="hub__item" disabled={!!busy || !p.exists} onClick={() => void open(p.dir)} title={p.dir}>
+      {recent.map(p => <div key={p.dir} className="hub__row"><button type="button" className="hub__item" disabled={!!busy || !p.exists} onClick={() => void open(p.dir)} title={p.dir}>
         <Folder size={20}/><span><b>{p.name || p.dir.split('/').pop()}</b><small>{p.dir}</small></span>
         <small>{busy === p.dir ? <StudioLoader size={14}/> : p.exists ? ago(p.lastOpened) : 'Folder missing'}</small>
-      </button>)}
+      </button>
+        <button type="button" className="hub__forget" disabled={!!busy} aria-label={`Remove ${p.name || p.dir} from recent projects`}
+          title="Remove from recent projects" onClick={() => void forget(p.dir)}><X size={15}/></button>
+      </div>)}
     </section> : <section className="hub__workspace" aria-label="Create a project">
       <div><div className="hub__subhead"><h3>{browse ? 'Template catalog' : 'Project templates'}</h3>
         <button type="button" className="au-button au-button--sm" disabled={!!busy} onClick={() => setBrowse(!browse)}><Package size={14}/>{browse ? 'Featured templates' : 'Browse catalog'}</button></div>
