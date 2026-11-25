@@ -2286,7 +2286,7 @@ static void worldSceneInspectorProperties() {
     fs::create_directories(project);
     std::ofstream(project/"game.json")<<R"({"module":"actor","rules":"rules.json","maps":[{"file":"map.json"}]})";
     std::ofstream(project/"rules.json")<<R"({"actor":{}})";
-    const Json original=Json::parse(R"({"players":[{"name":"One","team":1},{"name":"Two","team":2}],"colliders":[{"id":1,"min":[0,0,0],"max":[1,1,1]},{"id":2,"center":[4,1,0],"half":[1,1,1],"yaw":0.25,"marker":7}],"spawns":[[0,0,0],[4,0,4]],"custom":{"marker":7}})");
+    const Json original=Json::parse(R"({"players":[{"name":"One","team":1},{"name":"Two","team":2}],"colliders":[{"id":1,"min":[0,0,0],"max":[1,1,1]},{"id":2,"center":[24,1,0],"half":[1,1,1],"yaw":0.25,"marker":7}],"spawns":[[0,0,0],[4,0,4]],"custom":{"marker":7}})");
     std::ofstream(project/"map.json")<<original.dump();
     {
         studio::StudioSession session(root.string(),project.string());
@@ -2333,7 +2333,9 @@ static void worldSceneInspectorProperties() {
         AIVERSE_TEST_CHECK(!call("studio.undo").has("error")&&session.workspace().map.toJson()==expected);
         Json oriented=Json::parse(R"({"entityId":"collider:1","componentId":"OrientedBoxCollider","values":{"rotationY":-90,"scaleX":6}})");
         oriented.set("scope",call("studio.snapshot")["result"]["graphDocument"]);
-        AIVERSE_TEST_CHECK(!call("studio.setProperties",oriented).has("error"));
+        const auto orientedEdit=call("studio.setProperties",oriented);
+        if(orientedEdit.has("error"))std::cerr<<orientedEdit.getStr("error")<<"\n";
+        AIVERSE_TEST_CHECK(!orientedEdit.has("error"));
         Json expectedPose=expected;
         auto& box=expectedPose.member("colliders").at(1);
         box.member("half").at(0)=Json::number(int64_t(3));
