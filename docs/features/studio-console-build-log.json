@@ -140,6 +140,7 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/studio-console-bfa1673fb.json"
+    "docs/evidence/studio-console-bfa1673fb.json",
+    "docs/evidence/studio-scripts-eba2c76ca.json"
   ]
 }
