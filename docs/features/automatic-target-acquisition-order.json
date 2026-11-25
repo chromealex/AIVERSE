@@ -3,22 +3,33 @@
   "id": "automatic-target-acquisition-order",
   "owner": "gameplay",
   "changed_paths": [
+    ".gitattributes",
     "CMakeLists.txt",
     "apps/studio-native/StudioSession.cpp",
     "apps/studio-native/tests/StudioSessionTests.cpp",
     "apps/studio-web/src/mock.ts",
     "apps/studio-web/src/panels/RulesPanel.tsx",
+    "apps/studio-web/src/panels/rulesSchema.ts",
     "apps/studio-web/src/types.ts",
+    "apps/studio-web/tests/rulesSchema.test.mjs",
     "demos/selection-targeting/README.md",
     "demos/selection-targeting/game.json",
     "demos/selection-targeting/maps/range.json",
     "demos/selection-targeting/rules.json",
     "demos/selection-targeting/scripts/selection.lua",
     "docs/agent-handoffs/automatic-target-acquisition-order-initial.md",
+    "docs/agent-handoffs/selection-acquisition-implementation-2026-11-25.md",
     "docs/agents/feature-policy.json",
+    "docs/devlog/entries/2026-11-25-gameplay-selection-targeting.json",
+    "docs/devlog/media/2026-11-25-gameplay-selection-targeting/scenery-oak.jpg",
+    "docs/devlog/media/2026-11-25-gameplay-selection-targeting/scout.jpg",
+    "docs/devlog/media/2026-11-25-gameplay-selection-targeting/selected-oak.jpg",
     "docs/devlog/systems.json",
+    "docs/evidence/selection-targeting-20261125-mac.json",
+    "docs/evidence/selection-targeting-20261125-mac.log.txt",
     "docs/features/automatic-target-acquisition-order.json",
     "docs/game-format.md",
+    "docs/handoff/studio-html5/selection-targeting-rules-2026-11-25.md",
     "docs/ru/game-format.md",
     "engine/game/Combat.cpp",
     "engine/game/GameData.cpp",
@@ -36,21 +47,27 @@
   "checks": {
     "implementation": {
       "status": "pass",
-      "note": "Engine parser, client selection eligibility and simulation acquisition are implemented.",
+      "note": "The acquisition policy runs inside the existing targeting system and changes only the comparison of eligible candidates.",
       "evidence": [
-        "engine/game/GameData.cpp",
-        "engine/game/Combat.cpp"
+        "engine/game/Combat.cpp",
+        "engine/game/GameData.cpp"
       ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The shared deterministic targeting system reuses the active map grid and packed entity handles. It retains the existing sight, hostility, sensor and overkill filters.",
+      "evidence": [
+        "engine/game/Combat.cpp"
+      ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Rules::acquisitionOrder exposes both policies. Missing values use nearest and unknown values raise a validation error.",
+      "evidence": [
+        "engine/game/GameData.h",
+        "engine/game/GameData.cpp",
+        "docs/evidence/selection-targeting-20261125-mac.log.txt"
+      ]
     },
     "skill": {
       "status": "pass",
@@ -60,24 +77,38 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The real stdio host exposed rules_get, rules_set, rules_lint and scenario_run. Mutation, rollback, reopening and damage to the expected target passed.",
+      "evidence": [
+        "docs/evidence/selection-targeting-20261125-mac.log.txt",
+        "tests/editor/selection_targeting_mcp.py",
+        "docs/agent-handoffs/selection-acquisition-implementation-2026-11-25.md"
+      ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Native StudioSession suite exercised typed reads, writes, invalid/reset handling and resolved values. The production Studio bundle rendered the controls in Chrome.",
+      "evidence": [
+        "docs/evidence/selection-targeting-20261125-mac.log.txt",
+        "apps/studio-native/tests/StudioSessionTests.cpp",
+        "apps/studio-web/src/panels/RulesPanel.tsx"
+      ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Logic → Rules shows the Selectable checkbox with inherited defaults and the Auto-target order selector. The frontend schema and native session both passed.",
+      "evidence": [
+        "docs/evidence/selection-targeting-20261125-mac.log.txt",
+        "apps/studio-web/src/panels/rulesSchema.ts",
+        "apps/studio-web/src/panels/RulesPanel.tsx"
+      ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "A 240-tick recording replayed across 12 checkpoints; three restore paths replayed the next 60 ticks. The MCP project retained the edited order after reopening.",
+      "evidence": [
+        "docs/evidence/selection-targeting-20261125-mac.log.txt"
+      ]
     },
     "graphs": {
       "status": "not_applicable",
@@ -85,24 +116,36 @@
       "evidence": []
     },
     "performance": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "512 stationary units, 240 ticks per run, three repetitions per order. Targeting cost was 0.065–0.092 ms/tick with rowMajor and 0.066–0.145 with nearest. The stack comparison adds no per-candidate heap allocation.",
+      "evidence": [
+        "docs/agent-handoffs/selection-acquisition-implementation-2026-11-25.md",
+        "engine/game/Combat.cpp"
+      ]
     },
     "platforms": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Ran on macOS (x86_64 under Rosetta) and Chrome/WebGL2 with a release Emscripten build. Changed client sources passed MinGW x86_64 syntax checks. No Windows, mobile or console runtime was exercised.",
+      "evidence": [
+        "docs/agent-handoffs/selection-acquisition-implementation-2026-11-25.md",
+        "docs/devlog/entries/2026-11-25-gameplay-selection-targeting.json",
+        "docs/evidence/selection-targeting-20261125-mac.log.txt"
+      ]
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Reuses the existing game rules, map/ECS, native Studio bridge and MCP editor host. No additional runtime libraries or services.",
+      "evidence": [
+        "docs/agent-handoffs/selection-acquisition-implementation-2026-11-25.md",
+        "engine/game/GameData.h"
+      ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The seed-17 training range completed with four shots. Identical fresh and serialized continuations and all replay checkpoints matched.",
+      "evidence": [
+        "docs/evidence/selection-targeting-20261125-mac.log.txt"
+      ]
     },
     "examples": {
       "status": "pass",
@@ -113,14 +156,18 @@
       ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Two native feature filters and the overkill regression passed 22 checks in total. The report also runs the MCP scenario, Studio, frontend schema and replay.",
+      "evidence": [
+        "docs/evidence/selection-targeting-20261125-mac.log.txt"
+      ]
     },
     "handoff": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Stage history, tested SHA, runtime results, limitations and publication route are recorded.",
+      "evidence": [
+        "docs/agent-handoffs/selection-acquisition-implementation-2026-11-25.md"
+      ]
     },
     "documentation": {
       "status": "pass",
@@ -131,9 +178,15 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Standalone web training range exercised in Chrome. Three real gameplay captures and bilingual entry are prepared for publication by the main integrator.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-gameplay-selection-targeting.json",
+        "docs/agent-handoffs/selection-acquisition-implementation-2026-11-25.md",
+        "docs/devlog/media/2026-11-25-gameplay-selection-targeting/scenery-oak.jpg",
+        "docs/devlog/media/2026-11-25-gameplay-selection-targeting/scout.jpg",
+        "docs/devlog/media/2026-11-25-gameplay-selection-targeting/selected-oak.jpg"
+      ]
     }
   },
   "integrations": {
@@ -154,5 +207,7 @@
       "studio.rulesSet"
     ]
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/selection-targeting-20261125-mac.json"
+  ]
 }
