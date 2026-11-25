@@ -17,8 +17,8 @@
   "bodyEn": [
     "Choose Draw in Scene in the Areas Inspector. Release the pointer to review the rectangle, then apply the draft."
   ],
-  "verified": "На macOS проверены отмена рисования, создание зоны, Undo, Redo и координаты в файле карты.",
-  "verifiedEn": "macOS verification covered cancelling, creating an area, Undo, Redo and the coordinates in the saved map.",
+  "verified": "В обычном режиме и с HTML-слоем на macOS проверены отмена рисования, создание зоны, Undo, Redo и координаты в файле карты.",
+  "verifiedEn": "Both native-surface and HTML composite macOS verification covered cancelling, creating an area, Undo, Redo and the coordinates in the saved map.",
   "limits": "Инструмент работает на клеточных плоских картах. Проверка Windows предстоит.",
   "limitsEn": "The tool supports flat grid maps. Windows verification is pending.",
   "media": [
