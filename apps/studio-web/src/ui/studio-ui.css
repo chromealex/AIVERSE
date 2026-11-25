@@ -206,6 +206,12 @@
 
 /* Scope shared field chrome above panel-specific input rules. Keep the native
    widgets in high contrast mode so the platform can draw its own indicators. */
+/* Unstyled form selects match adjacent text fields. Toolbar selectors with
+   an explicit height retain their compact layout. */
+:where(#root select:not([multiple]):is(:not([size]), [size="0"], [size="1"])) {
+  block-size: var(--au-control-height);
+  font-family: var(--studio-font);
+}
 @media (forced-colors: none) {
   #root select:not([multiple]):is(:not([size]), [size="0"], [size="1"]) {
     appearance: none;
@@ -239,7 +245,7 @@
     box-sizing: border-box;
     min-inline-size: 0;
     max-inline-size: 100%;
-    min-block-size: 20px;
+    min-block-size: 24px;
     padding: 0;
     border: 0;
     border-radius: var(--au-radius-xs);
