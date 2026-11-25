@@ -24,6 +24,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -43,6 +44,8 @@
 #include "engine/render/CameraClientAdapter.h"
 #include "engine/render/CameraModelSnapshot.h"
 #include "engine/render/RenderDeviceLifetime.h"
+#include "engine/render/graph/TextureGraphGpuOwner.h"
+#include "engine/view/RuntimeTextureGraphTask.h"
 #include "engine/services/Store.h"
 #include "engine/sim/Simulation.h"
 #include "engine/ui/UiLayer.h"
@@ -128,7 +131,32 @@ public:
     bool mapLoading() const { return mapLoading_; }
     static float initWeight(int step);   // share of the loading progress bar
     void frame(gfx::Device& dev, double dt);
+    // Presentation-only native API. Invoke on the graphics owner thread;
+    // graph generation is asynchronous and the exact target is rechecked at commit.
+    Json startRuntimeTextureMaterial(size_t type,size_t choice,size_t material,
+        const Json& graph,const Json& overrides=Json::object(),
+        const render::texture_graph::ResidentMaterialOptions& options={});
+    Json runtimeTextureMaterialStatus() const;
+    // Provider certifies external roots (not spans into renderer/camera
+    // internals). The client also inspects its own renderer and LENS roots.
+    // detachCompletedReplay permits discarding old CPU scene diagnostics
+    // and replay state only after the provider certifies all use is finished.
+    // recycleSlots requires permanent detachment of stale raw references.
+    void setAutomaticRuntimeGraphImageCollection(GameView::GraphImageRootProvider provider,
+        bool recycleSlots=false,bool detachCompletedReplay=false);
+    std::optional<GameView::GraphMaterialTargetInfo> runtimeTextureMaterialTarget(size_t type,size_t choice,size_t material) const;
+    // Synchronous native borrow. Release before frame(), mutation or shutdown;
+    // never keep the raw handle across the scope.
+    render::texture_graph::NativeGraphImageRead readRuntimeTextureMaterialImage(
+        size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
+        std::string_view output)const;
+    // The external certificate covers consumers outside this client; its own
+    // renderer and LENS roots are always checked, without detaching replay.
+    render::texture_graph::GraphImageReclaimResult collectRuntimeTextureMaterialImages(size_t type,size_t choice,size_t material,
+        const view::LiveAppearanceMaterialTarget& target,const render::texture_graph::GraphImageRoots& external);
+    bool cancelRuntimeTextureMaterial(const std::string& request);
     void event(const platform::Event& e);
+    bool canShutdown() const noexcept { return !view_.modelMutationBlocked(); }
     void shutdown();
     void autostart(size_t i) { startMatch(i); }
     void forceLanguage(std::string tag) { forcedLanguage_ = std::move(tag); }
@@ -185,6 +213,8 @@ public:
     bool requestHostStep();
 
 private:
+    bool appendRuntimeGraphImageRoots(const render::Model& model,
+        std::vector<std::span<const render::Material>>& roots)const;
     bool hostPaused_ = false, hostStep_ = false;
     enum class Screen { Menu, Lobby, Playing, Paused, Over };
     enum class Mode { Normal, AttackMove, Patrol, Place, Rally, Ability, Claim, Skill, Dig, Undig, Room, Road, Unroad, Drop, ScriptCmd, Repair, Reclaim };
@@ -375,6 +405,13 @@ private:
     gfx::Device* dev_ = nullptr;
     std::unique_ptr<render::RenderDeviceLifetime> ownedGpuLifetime_;
     render::RenderDeviceLifetime::Lease gpuDeviceLease_;
+    // Separate presentation host from the editor Scene; never shares mutable
+    // Model snapshots or request handles with that host.
+    render::texture_graph::TextureGraphGpuOwner runtimeTextureGraph_;
+    std::optional<view::RuntimeTextureGraphTask> runtimeTextureTask_;
+    std::string runtimeTextureState_="idle",runtimeTextureReason_,runtimeTextureRequest_;
+    inline static constexpr const char* runtimeTextureScope_="game-client";
+    void tickRuntimeTextureMaterial(gfx::Device& dev);
     gfx::TextureHandle hostColor_, hostDepth_;   // setHostTarget: invalid = the screen
     int hostW_ = 0, hostH_ = 0;
     int fbW() const { return hostColor_.valid() ? hostW_ : dev_->framebufferWidth(); }

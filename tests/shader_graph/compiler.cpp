@@ -3,6 +3,7 @@
 #include "engine/fx/FxEffect.h"
 #include <iostream>
 #include <functional>
+#include <string_view>
 #include <stdexcept>
 using namespace aiverse;
 void require(bool value,const char* message){if(!value)throw std::runtime_error(message);}
@@ -13,7 +14,7 @@ int main(){try {
         auto g=makeDefault(domain);auto p=compile(g,domain);require(p.outputs.at("color")=="sg_n0","identity output");
         for(const auto& op:catalog()) {
             if(!supports(op,domain))continue;
-            auto test=g;Json n=Json::object();n.set("id",Json::string("test"));n.set("op",Json::string(op.id));n.set("texture",Json::string("textures/test.png"));n.set("value",Json::parse("[0.1,0.2,0.3,1]"));Json ins=Json::array();for(int i=0;i<op.inputs;++i)ins.push(Json::string("input"));n.set("inputs",ins);test.find("nodes")->push(n);test.find("outputs")->set("color",Json::string("test"));
+            auto test=g;Json n=Json::object();n.set("id",Json::string("test"));n.set("op",Json::string(op.id));n.set("texture",Json::string(std::string_view(op.id).starts_with("sampleRadiance")?"@radiance":"textures/test.png"));n.set("value",Json::parse("[0.1,0.2,0.3,1]"));Json ins=Json::array();for(int i=0;i<op.inputs;++i)ins.push(Json::string("input"));n.set("inputs",ins);test.find("nodes")->push(n);test.find("outputs")->set("color",Json::string("test"));
             auto c=compile(test);require(c.glsl.find("sg_n1")!=std::string::npos,"GLSL node missing");require(c.msl.find("sg_n1")!=std::string::npos,"MSL node missing");
         }
     }
@@ -72,6 +73,12 @@ int main(){try {
     texture.find("nodes")->at(1).set("texture",Json::string("../outside.png"));rejects(texture);
     texture.find("nodes")->at(1).set("texture",Json::string("textures/a.png"));
     for(int i=0;i<4;++i){auto node=texture["nodes"][1];node.set("id",Json::string("t"+std::to_string(i)));node.set("texture",Json::string("textures/"+std::to_string(i)+".png"));texture.find("nodes")->push(node);}rejects(texture);
+    auto hdr=Json::parse(R"JSON({"version":1,"domain":"material","nodes":[{"id":"uv","op":"uv"},{"id":"t","op":"sampleRadiance","inputs":["uv"],"texture":"@radiance"}],"outputs":{"color":"t","emission":"t"}})JSON");
+    const auto hp=compile(hdr);require(hp.linearRadianceSlots==1&&hp.samples==1&&hp.glsl.find("SG_TEXTURE0")!=std::string::npos&&hp.glsl.find("0.305306011")==std::string::npos,"HDR graph source not linear");
+    auto wrong=hdr;wrong.find("nodes")->at(1).set("srgb",Json::fromBool(true));rejects(wrong);
+    wrong=hdr;wrong.set("domain",Json::string("particle"));wrong.set("outputs",Json::parse(R"({"color":"t"})"));rejects(wrong);
+    wrong=hdr;wrong.find("outputs")->set("vertexOffset",Json::string("t"));rejects(wrong);
+    hdr.find("nodes")->at(1).set("texture",Json::string("content/textures/light.dds"));require(compile(hdr).linearRadianceSlots==1,"BC6H graph source lost");
     auto quality=makeDefault("material");quality.set("minQuality",Json::string("medium"));
     require(compile(quality).minQuality==1,"material quality ignored");
     quality.set("minQuality",Json::string("ultra"));rejects(quality);

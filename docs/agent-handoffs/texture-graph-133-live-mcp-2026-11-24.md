@@ -1,0 +1,7 @@
+# Texture Graph #133 — live MCP authoring and bake
+
+Branch: `fix/texture-133-function-tests-20261124`, PR #133; exercised built MCP binary from clean code SHA `f591f5cbd2313149bb2f49c5c4248dbea1daff2d`. Previous documentation commit `c6ba0262ea1cd84baf658716c30f1fff7fcc2341`.
+
+Ran real JSON-RPC over stdio against `/Volumes/KINGSTON/AIVERSE-builds/texture-graph-hdr-final-f591f5cbd231-arm64/native/aiversemcp --no-editor --port 0 --engine /Users/aleksandrfeer/Projects/AIVERSE/.worktrees/texture-133-review`. The target was `/private/tmp/Texture Graph 133 MCP QA`, a copy of the disposable Studio project. `open_game` PASS; `texture_graph_templates` returned the native stone graph; `texture_graph_validate` PASS (7 nodes, size 256); `texture_graph_set` and `texture_graph_get` PASS for `tg133_mcp_2`; `texture_graph_bake` PASS for `color`, publishing `content/textures/tg133_mcp_2_color.png` at size 256 with cacheHit=false; `texture_graph_list` returned both saved test graphs. No user project was modified.
+
+The first bake probe supplied only a saved name and returned `invalid texture source`; this is the documented API contract because bake requires an explicit `graph` object. The corrected call passed. This validates CPU MCP mutation and publication, not GPU execution through headless MCP. Live Studio Metal GPU preview and PNG PBR publication and the clean 40/40 Mac acceptance are recorded in the preceding handoffs. Remaining: cancel/recovery, resident scene-model binding, Vulkan hardware, external codec matrix, and merged-tree quick gate before main.

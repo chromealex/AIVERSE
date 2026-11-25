@@ -27,7 +27,7 @@ export const WORKSPACE_INFO: Record<StudioWorkspace, WorkspaceInfo> = {
     left: ['hierarchy'], center: ['scene', 'game'], right: ['inspector', 'terrain', 'water', 'roads', 'tiles', 'fog', 'generate', 'fields', 'physis', 'nereid_flow'], bottom: ['assets', 'console'],
     legacy: [] },
   look: { id: 'look', title: 'Look', purpose: 'Materials, light, FX', key: '3',
-    left: ['hierarchy'], center: ['scene', 'materials', 'shader_graph'], right: ['inspector', 'lighting', 'postfx', 'effects', 'lightbake', 'models', 'modeling', 'fx_graph', 'fx_library', 'fx_functions', 'wind'], bottom: ['assets', 'console', 'texture_resources'],
+    left: ['hierarchy'], center: ['scene', 'materials', 'texture_graph', 'shader_graph'], right: ['inspector', 'lighting', 'postfx', 'effects', 'lightbake', 'models', 'modeling', 'fx_graph', 'fx_library', 'fx_functions', 'wind'], bottom: ['assets', 'console', 'texture_resources'],
     legacy: [] },
   animate: { id: 'animate', title: 'Animate', purpose: 'Rigs, clips, graphs', key: '4',
     left: ['hierarchy'], center: ['animation', 'anim_graph', 'anim_rig', 'facial_rig', 'scene'], right: ['inspector', 'anim_assets', 'model_anim', 'attachments'], bottom: ['assets', 'console'],
@@ -88,7 +88,7 @@ export function saveActiveWorkspace(id: StudioWorkspace, store: Storage | null =
   try { store?.setItem(ACTIVE_KEY, id); } catch { /* private mode */ }
 }
 const WORKSPACE_ADDED: Partial<Record<StudioWorkspace, StudioPanel[]>> = {
-  publish: ['build', 'branding', 'asset_audit', 'project_import', 'catalog', 'snapshot_diff', 'frame_capture', 'extensions'], look: ['wind', 'postfx', 'effects', 'lightbake', 'models', 'modeling', 'fx_graph', 'fx_library', 'fx_functions', 'texture_resources', 'catalog'], scene: ['history', 'agent'],
+  publish: ['build', 'branding', 'asset_audit', 'project_import', 'catalog', 'snapshot_diff', 'frame_capture', 'extensions'], look: ['texture_graph', 'wind', 'postfx', 'effects', 'lightbake', 'models', 'modeling', 'fx_graph', 'fx_library', 'fx_functions', 'texture_resources', 'catalog'], scene: ['history', 'agent'],
   world: ['terrain', 'water', 'roads', 'tiles', 'fog', 'generate', 'fields', 'physis'], logic: ['scripts', 'input', 'overlays', 'agent', 'actor', 'raid', 'balance', 'stats'],
   animate: ['anim_assets', 'anim_graph', 'anim_rig', 'model_anim', 'attachments'],
 };

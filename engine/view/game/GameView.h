@@ -2,6 +2,7 @@
 #include "engine/render/RenderDeviceLifetime.h"
 #include "engine/render/FramePublicationEpoch.h"
 #include "engine/render/ModelImageUploadTransaction.h"
+#include "engine/render/graph/TextureGraphNativeImageAccess.h"
 #include "engine/view/AppearanceAssetRegistry.h"
 // LEGACY compatibility adapter for historical RTS/editor scene presentation.
 // Generic game-agnostic View is now <engine/view/View.h> / aiverse::View.
@@ -32,6 +33,7 @@ namespace kingston { struct CabinResidentDraw; }
 #include <future>
 #endif
 #include <string>
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 #include "../../render/Animation.h"
@@ -59,6 +61,7 @@ namespace kingston { struct CabinResidentDraw; }
 #include "EntityFx.h"
 
 namespace aiverse::render { class CameraModelSnapshot; }
+namespace aiverse::render::texture_graph { class TextureGraphGpuOwner; }
 namespace aiverse::view {
 class View;
 struct ModelPoseRetarget;
@@ -280,6 +283,11 @@ public:
     size_t activeModelReadLeases() const noexcept {
         return resources_.activeModelReaders();
     }
+    // Owner-thread host preflight. Callback scope is not a cache reader:
+    // trusted graph publication must still be able to commit its images.
+    bool modelMutationBlocked() const noexcept {
+        return resources_.activeModelReaders()!=0 || nativeGraphCallbackActive_ || strictAppearanceReload_;
+    }
     render::ModelResourceCache::ModelReadSafetyStats modelReadSafetyStats() const noexcept {
         return resources_.modelReadSafetyStats();
     }
@@ -392,13 +400,51 @@ public:
             const render::Model&,const std::vector<render::Material>&)>;
     // The host owns GPU shader caches. Stage all candidate appearance
     // pipelines before committing new materials or Models to the live View.
+    // Synchronous trusted callback: candidate Model/materials may be scratch
+    // objects, not cache residents. Do not retain pointers/handles or reenter
+    // View mutation, publication, frame or teardown APIs from this callback.
     void setAppearancePipelineValidator(AppearancePipelineValidator validator) {
+        if(nativeGraphCallbackActive_ || strictAppearanceReload_)
+            throw std::logic_error("appearance validator replacement during transaction");
         appearancePipelineValidator_=std::move(validator);
     }
     bool gpuAppearancePending() const noexcept {return gpuAppearancePending_;}
     bool reloadAppearanceTypes(const std::set<size_t>& types,
                                bool reloadMaterialLibrary=false,
                                size_t* refreshed=nullptr);
+    // Thin compatibility adapter: the shared engine appearance transaction
+    // owns publication; this adapter only resolves an already resident choice.
+    struct GraphMaterialTargetInfo {
+        view::LiveAppearanceMaterialTarget identity;
+        std::string modelPath,materialName;
+        int variant=-1;
+        size_t proceduralLive=0,proceduralTombstones=0,pendingImageRetirement=0;
+    };
+    std::optional<GraphMaterialTargetInfo> graphMaterialTarget(size_t type,size_t choice,size_t material) const;
+    // Exact appearance identity, owner-thread and synchronous borrow only.
+    // The scope must be released before the next mutation/frame/shutdown.
+    render::texture_graph::NativeGraphImageRead readGraphMaterialImage(
+        size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
+        std::string_view output) const;
+    // Trusted synchronous transaction adapter. Borrowed Model, mirror and
+    // device arguments must not escape; no View reentry or reader acquisition.
+    // The callback owns its transactional success/refusal semantics.
+    using GraphMaterialApply=std::function<bool(view::AppearanceAssetRegistry::Snapshot&,
+        std::vector<render::Material>&,render::Model&,gfx::Device&,
+        const render::RenderDeviceLifetime::Lease&,render::ModelImageRollbackPool&,std::string*)>;
+    bool applyGraphMaterial(size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
+        const GraphMaterialApply& apply,std::string* error=nullptr);
+    // Thin shared adapter for native hosts and editor, never owns GPU work.
+    bool applyCompletedGraphMaterial(size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
+        render::texture_graph::TextureGraphGpuOwner& owner,const std::string& scope,const std::string& request,
+        std::string* error=nullptr);
+    using GraphImageRootProvider=std::function<bool(const render::Model&,std::vector<std::span<const render::Material>>&)>;
+    // Explicit external root proof required. The optional host inspection
+    // enumerates additional owner roots after the live target is resolved;
+    // false refuses reclamation. No reentry or mutation of returned spans.
+    render::texture_graph::GraphImageReclaimResult collectGraphMaterialImages(size_t type,size_t choice,size_t material,
+        const view::LiveAppearanceMaterialTarget& target,const render::texture_graph::GraphImageRoots& external,
+        const GraphImageRootProvider& inspectHost={});
     bool typeCurrent(uint16_t t) const { return typeLoaded(t) && requestedModels_[t]==loadedModels_[t]; }
     bool detailRequested(uint16_t t) const { return t<requestedModels_.size() && requestedModels_[t].empty(); }
     void requestDetail(uint16_t type, bool detailed);
@@ -418,6 +464,24 @@ public:
     // Includes road/shore Models AND SpriteMesh buffers so existing client/
     // editor frame hooks automatically poll every View-owned resource queue.
     size_t pendingModelRetirements() const;
+    // Opt-in native owner only. The callback certifies raw-index/handle
+    // consumers have been detached or are represented by the returned spans.
+    // Spans must remain valid through the synchronous sweep; no reentry.
+    struct GraphImageSweepStats {uint64_t inspected=0,detached=0,deferred=0;};
+    // Recycling additionally certifies that all stale raw index/handle
+    // references are permanently detached; no future replay of them is legal.
+    void setAutomaticGraphImageCollection(GraphImageRootProvider provider,bool recycleSlots=false){
+        if(nativeGraphCallbackActive_ || strictAppearanceReload_)
+            throw std::logic_error("graph root provider replacement during transaction");
+        graphImageRootProvider_=std::move(provider);
+        graphImageRecycleSlots_=bool(graphImageRootProvider_)&&recycleSlots;
+        graphImageSweepCursor_.clear();graphImageSweepStats_={};
+    }
+    bool automaticGraphImageRecyclingEnabled()const noexcept{return graphImageRecycleSlots_;}
+    bool automaticGraphImageCollectionEnabled()const noexcept{return bool(graphImageRootProvider_);}
+    GraphImageSweepStats automaticGraphImageCollectionStats()const noexcept{return graphImageSweepStats_;}
+    // Returns true only when at least one image was detached in this sweep.
+    bool collectAutomaticGraphImages();
     bool collectRetiredModels();
     size_t pendingRolledBackImages() const noexcept {
         return imageRollback_.pendingImages();
@@ -626,6 +690,11 @@ public:
         renderedTris_ = double(cameraTriangles); renderedShadowTris_ = double(shadowTriangles); renderedDraws_ = double(drawCalls);
     }
     bool geometryOnly() const { return geometryOnly_; }
+    // Owner-thread scoped inspection of a resident choice. Release before
+    // loading, publishing, trimming or rendering another transaction.
+    render::ModelReadLease readModelOf(uint16_t type, size_t choice = 0) const;
+    // Legacy borrowed identity; do not dereference or retain image indices/
+    // GPU handles across mutations. Prefer readModelOf for inspection.
     const render::Model* modelOf(uint16_t type, size_t choice = 0) const;
     const render::Model* projectileModelOf(uint16_t type,size_t weapon) const; // borrowed, same lifetime as modelOf
     const std::vector<ViewEvent>& events() const { return events_; }
@@ -1003,10 +1072,16 @@ private:
     uint32_t drawTypeEpoch_ = 0;
     bool deferredLoading_ = false, streamingTypes_ = false;
     bool deferAppearanceVariants_ = true; // client default; editor disables
+    bool nativeGraphCallbackActive_ = false; // owner-thread synchronous callback/graph transaction
     bool strictAppearanceReload_ = false; // temporary CPU preflight during authored reload
     bool gpuAppearancePending_=false; // retry only unfinished async compiler work
     AppearancePipelineValidator appearancePipelineValidator_;
     render::ModelImageRollbackPool imageRollback_;
+    GraphImageRootProvider graphImageRootProvider_;
+    bool graphImageRecycleSlots_=false;
+    std::string graphImageSweepCursor_;
+    GraphImageSweepStats graphImageSweepStats_{};
+    void appendGraphImageRoots(const render::Model& model,std::vector<std::span<const render::Material>>& roots)const;
     render::ModelImageUploadTransaction* activeImageTransaction_ = nullptr; // borrowed during staging only
     // Unpublished Model owners during appearance reload: no model-cache
     // tombstones or speculative GPU residency until the outer transaction

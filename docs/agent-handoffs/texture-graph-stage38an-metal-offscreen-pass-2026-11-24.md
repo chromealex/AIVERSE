@@ -1,0 +1,5 @@
+# Stage 38AN — Metal offscreen hardware acceptance
+
+Stage 38AN hardware acceptance update (2026-11-24): user-supplied Mac CTest summary reports texture_graph_metal_offscreen #441 PASS, 1/1, 1.70 s test, 1.74 s total, 0 failed, labels EDITOR/GPU/Metal/TEXTURE_GRAPH. This confirms the dedicated offscreen fixture passed; no exact tested SHA, verbose timestamp evidence or warning-clean build log supplied. Current branch before documentation update is df7c00e061c9ce953c8012e6a2723d9d8747a27f. Prior 32/32 and MCP registry evidence remains historical. Live HTML5 Studio preview and validated bake/publication, live MCP forwarding, resident material apply, Vulkan offscreen and merged-tree gate still pending.
+
+Next: launch the freshly built Studio, open disposable project, Materials > Texture Graph, select PBR template, GPU preview with Require GPU enabled, confirm ready / metal and image without Scene visible. Exercise cancel/recovery and validated PBR bake/publish/assign; test live MCP. Do not rerun successful fixture solely to record its summary. No main merge.

@@ -1,2 +1,2 @@
-# Preserve the bytes used for the report SHA-256 on all worktrees.
-building-caverns-*.log.txt -text
+# Test evidence is hashed byte-for-byte. Never apply checkout line-ending conversion.
+*.log.txt -text

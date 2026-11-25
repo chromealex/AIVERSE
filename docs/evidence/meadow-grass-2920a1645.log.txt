@@ -1,0 +1,8 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/meadow-gallery-193
+Test project /Volumes/KINGSTON/AIVERSE-builds/meadow-gallery-193
+    Start 390: terraweave_grass_meadow
+1/1 Test #390: terraweave_grass_meadow ..........   Passed    1.04 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   1.08 sec

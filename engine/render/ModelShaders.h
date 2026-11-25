@@ -207,6 +207,20 @@ uniform mediump sampler2D tex3;
 uniform mediump sampler2D tex4;
 uniform mediump sampler2D tex5;
 uniform mediump sampler2D tex6;
+#if defined(AIVERSE_MODEL_ENVIRONMENT)
+uniform highp sampler2D tex13;
+layout(std140) uniform U6 { vec4 u_environment; };
+vec3 environmentBand(vec3 d,float band) {
+    float u=fract(atan(d.z,d.x)/6.28318530718+0.5+u_environment.x/6.28318530718);
+    float v=acos(clamp(d.y,-1.0,1.0))/3.14159265359;
+    float atlasHeight=float(textureSize(tex13,0).y);
+    return texture(tex13,vec2((1.0+u*128.0)/130.0,(band*66.0+1.0+v*64.0)/atlasHeight)).rgb*u_environment.y;
+}
+vec2 environmentBrdf(float ndv,float rough,vec2 fallback) {
+    if(textureSize(tex13,0)!=ivec2(130,460))return fallback;
+    return texture(tex13,vec2((1.0+clamp(ndv,0.0,1.0)*128.0)/130.0,(331.0+clamp(rough,0.0,1.0)*128.0)/460.0)).rg;
+}
+#endif
 #if defined(LIGHTMAP)
 uniform mediump sampler2D tex7;
 uniform mediump sampler2D tex8;
@@ -323,8 +337,8 @@ void main() {
 #if defined(VIRTUAL_ALPHA_MASK)
     tb.a = texture(tex15, v_uv).r;
 #endif
-    vec4 base = PALETTE_BASE * vec4(toLinear(tb.rgb), tb.a);
-    if (mod(m_misc.w,2.0) > 0.5) base *= vec4(v_col.rgb, m_misc.w > 1.5 ? 1.0 : v_col.a);
+    vec4 base = PALETTE_BASE * vec4(mod(m_misc.w,32.0)>=16.0?clamp(tb.rgb,vec3(0.0),vec3(1.0)):toLinear(tb.rgb), tb.a);
+    if (mod(m_misc.w,2.0) > 0.5) base *= vec4(v_col.rgb, mod(m_misc.w,8.0) > 1.5 ? 1.0 : v_col.a);
     int teamMode = int(m_misc.y + 0.5);
     float teamW = 0.0;   // how much of the team colour this point shows (team glow)
     if (teamMode == 1) {
@@ -357,6 +371,7 @@ void main() {
         float footprint2 = max(dot(dx * size, dx * size), dot(dy * size, dy * size));
         float normalFilter = 1.0 + 3.0 * clamp((footprint2 - 1.0) / 3.0, 0.0, 1.0);
         vec3 tn = textureGrad(tex3, v_uv, dx * normalFilter, dy * normalFilter).xyz * 2.0 - 1.0;
+        if(mod(m_misc.w,64.0)>=32.0)tn.z=sqrt(max(0.0,1.0-dot(tn.xy,tn.xy)));
         tn.xy *= m_pbr.z;
         n = normalize(t * tn.x + b * tn.y + n * tn.z);
     }
@@ -367,7 +382,8 @@ void main() {
     vec4 mr = texture(tex2, v_uv);
     rough *= mr.g;
     metallic *= mr.b;
-    emis *= toLinear(texture(tex5, v_uv).rgb);
+    vec3 emissiveSample=texture(tex5,v_uv).rgb;
+    emis *= mod(m_misc.w,16.0)>=8.0?max(emissiveSample,vec3(0.0)):toLinear(emissiveSample);
 #endif
 #if AIVERSE_Q >= 2
     ao = mix(1.0, texture(tex4, v_uv).r, m_pbr.w);
@@ -389,7 +405,7 @@ void main() {
     o_color=vec4(clamp(base.rgb,vec3(0.0),vec3(1.0)),clamp(metallic,0.0,1.0));
     return;
 #endif
-    ao *= m_misc.w > 1.5 ? (m_misc.w > 3.5 && !gl_FrontFacing ? v_col.r : v_col.a) : 1.0;   // +4: back-face AO in red
+    ao *= mod(m_misc.w,8.0) > 1.5 ? (mod(m_misc.w,8.0) > 3.5 && !gl_FrontFacing ? v_col.r : v_col.a) : 1.0;   // +4: back-face AO in red
     rough = clamp(rough, 0.045, 1.0);
     metallic = clamp(metallic, 0.0, 1.0);
 
@@ -410,6 +426,9 @@ void main() {
     vec3 dd,ds;float ambientVisibility;dynLight(v_wpos,n,V,rough,dd,ds,ambientVisibility,ao);
     sky*=ambientVisibility;ground*=ambientVisibility;
     vec3 amb = mix(ground, sky, n.y * 0.5 + 0.5);
+#if defined(AIVERSE_MODEL_ENVIRONMENT)
+    amb=environmentBand(n,4.0)*ambientVisibility;
+#endif
     float giOcc = 1.0;   // specular occlusion from the baked light
     int giMode = 0;
 #if defined(PROBES)
@@ -450,6 +469,12 @@ void main() {
     vec2 AB = vec2(-1.04, 1.04) * a004 + r.zw;
     vec3 R = reflect(-V, n);
     vec3 env = mix(mix(ground, sky, clamp(R.y * 0.5 + 0.5, 0.0, 1.0)), amb, rough);
+#if defined(AIVERSE_MODEL_ENVIRONMENT)
+    // GGX prefilter bands use perceptual roughness (0, 1/3, 2/3, 1).
+    float band=clamp(rough,0.0,1.0)*3.0,lo=floor(band);
+    env=mix(environmentBand(R,lo),environmentBand(R,min(lo+1.0,3.0)),fract(band))*ambientVisibility;
+    AB=environmentBrdf(ndv,rough,AB);
+#endif
     vec3 ambSpec = env * (F0 * AB.x + AB.y);
 #endif
     vec3 direct = sun * ndl * sh;
@@ -864,6 +889,17 @@ struct IcbPbrTextures {
 };
 #endif
 
+#if defined(AIVERSE_MODEL_ENVIRONMENT)
+static float3 environmentBand(texture2d<float> env,sampler smp,float4 params,float3 d,float band){
+    float u=fract(atan2(d.z,d.x)/6.28318530718f+0.5f+params.x/6.28318530718f);
+    float v=acos(clamp(d.y,-1.0f,1.0f))/3.14159265359f;
+    return env.sample(smp,float2((1.0f+u*128.0f)/130.0f,(band*66.0f+1.0f+v*64.0f)/float(env.get_height()))).rgb*params.y;
+}
+static float2 environmentBrdf(texture2d<float> env,sampler smp,float ndv,float rough,float2 fallback){
+    if(env.get_width()!=130u||env.get_height()!=460u)return fallback;
+    return env.sample(smp,float2((1.0f+clamp(ndv,0.0f,1.0f)*128.0f)/130.0f,(331.0f+clamp(rough,0.0f,1.0f)*128.0f)/460.0f)).rg;
+}
+#endif
 fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
                         constant U1& f [[buffer(2)]], constant MU2& sourceMaterial [[buffer(3)]],
                         constant LightU& lu [[buffer(6)]],
@@ -892,6 +928,9 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
 #endif
 #endif
                         GI_FARGS
+#if defined(AIVERSE_MODEL_ENVIRONMENT)
+                        , constant float4& environment [[buffer(7)]], texture2d<float> tex13 [[texture(13)]], sampler s13 [[sampler(13)]]
+#endif
 #if defined(VIRTUAL_ALPHA_MASK) && !defined(AIVERSE_ICB_PBR)
                         , texture2d<float> tex15 [[texture(15)]],
                           sampler s15 [[sampler(15)]]
@@ -1008,8 +1047,8 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
 #if defined(VIRTUAL_ALPHA_MASK)
     tb.a = tex15.sample(s15, in.uv).r;
 #endif
-    float4 base = m.base * float4(toLinear(tb.rgb), tb.a);
-    if (fmod(m.misc.w,2.0) > 0.5) base *= float4(in.col.rgb, m.misc.w > 1.5 ? 1.0 : in.col.a);
+    float4 base = m.base * float4(fmod(m.misc.w,32.0f)>=16.0f?clamp(tb.rgb,float3(0.0f),float3(1.0f)):toLinear(tb.rgb), tb.a);
+    if (fmod(m.misc.w,2.0) > 0.5) base *= float4(in.col.rgb, fmod(m.misc.w,8.0f) > 1.5 ? 1.0 : in.col.a);
     int teamMode = int(m.misc.y + 0.5);
     float teamW = 0.0;
     if (teamMode == 1) {
@@ -1040,6 +1079,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
         float footprint2 = max(dot(dx * size, dx * size), dot(dy * size, dy * size));
         float normalFilter = 1.0 + 3.0 * clamp((footprint2 - 1.0) / 3.0, 0.0, 1.0);
         float3 tn = tex3.sample(s3, in.uv, gradient2d(dx * normalFilter, dy * normalFilter)).xyz * 2.0 - 1.0;
+        if(fmod(m.misc.w,64.0f)>=32.0f)tn.z=sqrt(max(0.0f,1.0f-dot(tn.xy,tn.xy)));
         tn.xy *= m.pbr.z;
         n = normalize(t * tn.x + b * tn.y + n * tn.z);
     }
@@ -1050,7 +1090,8 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     float4 mr = tex2.sample(s2, in.uv);
     rough *= mr.g;
     metallic *= mr.b;
-    emis *= toLinear(tex5.sample(s5, in.uv).rgb);
+    float3 emissiveSample=tex5.sample(s5,in.uv).rgb;
+    emis *= fmod(m.misc.w,16.0f)>=8.0f?max(emissiveSample,float3(0.0f)):toLinear(emissiveSample);
 #endif
 #if AIVERSE_Q >= 2
     ao = mix(1.0, tex4.sample(s4, in.uv).r, m.pbr.w);
@@ -1069,7 +1110,7 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     if(m.uv1.y > 0.5 && m.uv1.y < 1.5) discard_fragment(); // unlit only; VIVID skin/eye/hair stay
     return float4(clamp(base.rgb,float3(0.0),float3(1.0)),clamp(metallic,0.0f,1.0f));
 #endif
-    ao *= m.misc.w > 1.5 ? (m.misc.w > 3.5 && !frontFacing ? in.col.r : in.col.a) : 1.0;   // +4: back-face AO in red
+    ao *= fmod(m.misc.w,8.0f) > 1.5 ? (fmod(m.misc.w,8.0f) > 3.5 && !frontFacing ? in.col.r : in.col.a) : 1.0;   // +4: back-face AO in red
     rough = clamp(rough, 0.045, 1.0);
     metallic = clamp(metallic, 0.0, 1.0);
 
@@ -1090,6 +1131,9 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     float3 dd,ds;float ambientVisibility;dynLight(lu,tex9,s9,in.wpos,n,V,rough,dd,ds,ambientVisibility,ao);
     sky*=ambientVisibility;ground*=ambientVisibility;
     float3 amb = mix(ground, sky, n.y * 0.5 + 0.5);
+#if defined(AIVERSE_MODEL_ENVIRONMENT)
+    amb=environmentBand(tex13,s13,environment,n,4.0f)*ambientVisibility;
+#endif
     float giOcc = 1.0;
     int giMode = 0;
 #if defined(PROBES)
@@ -1130,6 +1174,12 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
     float2 AB = float2(-1.04, 1.04) * a004 + r.zw;
     float3 R = reflect(-V, n);
     float3 env = mix(mix(ground, sky, clamp(R.y * 0.5 + 0.5, 0.0, 1.0)), amb, rough);
+#if defined(AIVERSE_MODEL_ENVIRONMENT)
+    // GGX prefilter bands use perceptual roughness (0, 1/3, 2/3, 1).
+    float band=clamp(rough,0.0f,1.0f)*3.0f,lo=floor(band);
+    env=mix(environmentBand(tex13,s13,environment,R,lo),environmentBand(tex13,s13,environment,R,min(lo+1.0f,3.0f)),fract(band))*ambientVisibility;
+    AB=environmentBrdf(tex13,s13,ndv,rough,AB);
+#endif
     float3 ambSpec = env * (F0 * AB.x + AB.y);
 #endif
     float3 direct = sun * ndl * sh;

@@ -16,6 +16,10 @@ placement predicate accepts signed centimetres and excludes roads/water without
 creating blade entities. Existing live residency owns patch invalidation/upload;
 the CPU predicate is not automatically installed into that host.
 
+Meadow grass (species mix, tufts with gaps, macro dry/lush fields, seed heads
+and flowers) is an opt-in `"meadow"` block: see [grass-meadow.md](grass-meadow.md).
+The ground snapshot accepts a top-level `"meadow"` and a per-patch override.
+
 ## Host exporter
 
 Build target `aiverse_terraweave_vegetation`. Example:

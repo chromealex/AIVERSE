@@ -8,7 +8,7 @@ import { addShaderGraphNode, removeShaderGraphNode, shaderNodeCatalog, connectSh
 import type {ShaderClipboard} from './shaderGraphLayout';
 import GraphCanvas from '../graphs/GraphCanvas';
 import GraphGpuProfilePanel from '../graphs/GraphGpuProfilePanel';
-import GraphDiagnostics from '../graphs/GraphDiagnosticsPanel';
+import GraphDiagnosticsPanel from '../graphs/GraphDiagnosticsPanel';
 import {shaderAdapters,shaderProjection} from '../graphs/shaderAdapter';
 import type {PortRef} from '../graphs/graphGeometry';
 import {samePort} from '../graphs/graphGeometry';
@@ -201,7 +201,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
   if(!draft||!document||!selected||busy||!dirty)return;
   setBusy(true);setError('');setMessage('');
   try{
-   const result=await invoke('studio.shaderGraphSave',{name:selected,graph:draft,expected:document.graph,expectedProject:projectPath});
+   const result=await invoke('studio.shaderGraphSave',{name:selected,graph:draft,expected:document.originalJson??document.graph,expectedProject:projectPath});
    if(saveScope.current.projectPath!==projectPath||saveScope.current.selected!==selected)return;
    setDocument(result);resetDraft(structuredClone(result.graph));
    setMessage('Graph saved to shaders/'+selected+'.json. MapDoc Undo does not apply.');
@@ -283,7 +283,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
         {id:'template',label:'Insert tint template',disabled:!template,run:insertTemplate}
        ]}
        onMove={(id,x,y)=>{if(draft)editDraft(shaderAdapters.get(draft.domain??'material')?.move(draft,id,x,y)??draft)}}/>
-      <GraphDiagnostics view={view} policy={{cycles:'reject'}}/>
+      <GraphDiagnosticsPanel view={view} policy={{cycles:'reject'}}/>
       {previewName===selected&&<SpectraDockViewport id="shader" label="Shader draft GPU preview"/>}
       <GraphGpuProfilePanel projectPath={projectPath}/>
       {pendingOutput&&<StudioButton size="sm" onClick={()=>setPendingOutput(null)}>Cancel connection from {pendingOutput.node}</StudioButton>}
@@ -306,10 +306,10 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
           maxLength={64} onChange={event=>editField('name',event.target.value)}/></label>}
         {activeNode.op==='swizzle'&&<label>RGBA mask<input value={activeNode.mask??'rgba'}
           maxLength={4} onChange={event=>editField('mask',event.target.value)}/></label>}
-        {(activeNode.op==='sampleTexture'||activeNode.op==='sampleTextureLod')&&<>
-          <label>Project texture<input value={activeNode.texture??''} onChange={event=>editField('texture',event.target.value)}/></label>
-          <label>sRGB<input type="checkbox" checked={activeNode.srgb??false} onChange={event=>editField('srgb',event.target.checked)}/></label>
-        </>}
+        {['sampleTexture','sampleTextureLod','sampleRadiance','sampleRadianceLod'].includes(activeNode.op)&&<label className="au-row"><span>Texture source</span><StudioInput aria-label="Shader texture source" placeholder="content/textures/example.exr or @radiance" value={activeNode.texture??''} onChange={e=>editDraft({...draft,nodes:draft.nodes?.map(n=>n.id===activeNode.id?{...n,texture:e.target.value}:n)})}/></label>}
+        {['sampleRadiance','sampleRadianceLod'].includes(activeNode.op)&&<small>Linear HDR RGB and alpha; @radiance is bound explicitly by Texture Graph for this session.</small>}
+        {['sampleTexture','sampleTextureLod'].includes(activeNode.op)&&
+          <label>sRGB<input type="checkbox" checked={activeNode.srgb??false} onChange={event=>editField('srgb',event.target.checked)}/></label>}
        </div>
       </StudioSection>}
       {draft&&<div className="graph-bindings">

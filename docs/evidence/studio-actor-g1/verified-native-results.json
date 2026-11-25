@@ -1,0 +1,30 @@
+{
+  "source": "911e3ceba558b26c3aa3e8c1ba929bc7fae890ca",
+  "linux_focused_before_sampler_fix": true,
+  "verified_markers": {
+    "g1-final.log": [
+      "PASS hosted actor Play, stable pause, exact single step and authenticated native ledger snapshot",
+      "PASS authenticated two-tick profile start, status and stop on paused actor authority"
+    ],
+    "play-final.log": [
+      "Single undo restored exact source map and single redo restored exact applied map",
+      "Applied removals 11",
+      "PASS live native paused map review and runtime edit readback"
+    ],
+    "building-final.log": [
+      "PASS two live scenes with native navigation telemetry; absent scene unavailable"
+    ],
+    "session-final.log": [
+      "studio session contract PASS"
+    ],
+    "linux/vulkan-device-fixed.log": [
+      "[strata-vulkan] GLSL/SPIR-V compiler contract PASS",
+      "[strata-vulkan] compute GPU selection parity PASS"
+    ],
+    "linux/final-focused.log": [
+      "100% tests passed, 0 tests failed out of 11"
+    ]
+  },
+  "region_count": 2,
+  "materialized": 2
+}

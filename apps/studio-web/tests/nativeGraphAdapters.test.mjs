@@ -151,3 +151,15 @@ test('diagnostics honor separate execution and data cycle rules',()=>{
  assert.equal(inspectGraph({nodes,links:loop},{cycles:'reject',cycleGroups:['exec','data']}).issues.some(i=>i.code==='cycle'&&i.subject==='exec'),true);
  assert.equal(inspectGraph({nodes,links:loop},{cycles:'allow'}).issues.some(i=>i.code==='cycle'),false);
 });
+
+test('graph diagnostics component and helper have distinct case-insensitive module stems', async()=>{
+ const {readdirSync,readFileSync}=await import('node:fs');
+ const dir=new URL('../src/graphs/',import.meta.url);
+ const entries=readdirSync(dir).filter(n=>/\.tsx?$/.test(n));
+ const stems=entries.map(n=>n.replace(/\.tsx?$/,'').toLowerCase());
+ assert.equal(new Set(stems).size,stems.length,'extensionless module resolution must be unambiguous on macOS/Windows');
+ assert.ok(entries.includes('GraphDiagnosticsPanel.tsx'));
+ for(const relative of ['../src/graphs/ModelGraphPanel.tsx','../src/graphs/NativeGraphPanel.tsx','../src/panels/ShaderGraphPanel.tsx']){
+  assert.match(readFileSync(new URL(relative,import.meta.url),'utf8'),/import GraphDiagnosticsPanel from '[^']*GraphDiagnosticsPanel';/);
+ }
+});

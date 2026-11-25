@@ -81,6 +81,13 @@ static bool unitChecks() {
     mats[1].normalTex=0;ok&=check(!materialBatchCompatible(m.meshes[0],batch,mats));mats=m.materials;
     mats[1].alpha=AlphaMode::Blend;ok&=check(!materialBatchCompatible(m.meshes[0],batch,mats));mats=m.materials;
     mats[1].receiveShadow=false;ok&=check(!materialBatchCompatible(m.meshes[0],batch,mats));mats=m.materials;
+    // The index-only palette cannot certify procedural generations, even
+    // when both raw slots and all ordinary render state compare equal.
+    const auto graphPin=std::make_shared<const ProceduralImagePin>();
+    mats[0].baseTex=mats[1].baseTex=0;
+    mats[0].proceduralGraphPins=withGraphMaterialPin({},0,graphPin);
+    mats[1].proceduralGraphPins=mats[0].proceduralGraphPins;
+    ok&=check(!materialBatchCompatible(m.meshes[0],batch,mats));mats=m.materials;
     mats.resize(kMaxMaterialPalette+1);ok&=check(!materialBatchCompatible(m.meshes[0],batch,mats));
     ok&=check(m.materials[0].baseColor.x==.137f && m.materials[1].roughness==.213f);
     // A frame-scoped renderer material-group cache must not turn pointer

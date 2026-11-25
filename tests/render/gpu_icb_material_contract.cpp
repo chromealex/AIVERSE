@@ -43,6 +43,8 @@ int main() {
     render::GpuMaterialResourceBinding snapshot;
     check(table.resolve(ticket,snapshot) && snapshot==a,"snapshot round trip");
     check(table.matches(ticket,a),"exact staged match");
+    check(table.referencesTexture({10})&&table.referencesTexture({30})&&table.referencesTexture({40})&&table.referencesTexture({41}),"raw replay texture roots");
+    check(!table.referencesTexture({})&&!table.referencesTexture({999}),"invalid or unrelated handle not a root");
     auto changed=a;
     changed.pbrU2[7]+=0.25f;
     check(!table.matches(ticket,changed),"changed U2 rejects old ticket");
@@ -74,6 +76,7 @@ int main() {
     check(fresh.valid() && fresh.generation!=ticket.generation,"new generation ticket");
     table.reset();
     check(!table.matches(fresh,a),"shutdown resets tickets");
+    check(!table.referencesTexture({10}),"detached generation has no raw texture roots");
 
     gfx::GpuIcbVirtualMaterial material;
     material.physicalAtlas={1};material.pageTable={2};
@@ -98,6 +101,33 @@ int main() {
     plain.graphTextureCount=4;
     plain.graphTextures[3]={};
     check(!plain.valid(),"ICB missing source rejected");
+
+    // Identical raw indices are not enough to bind a tracked graph image.
+    render::Model graphModel;
+    graphModel.images.resize(2);
+    auto& image=graphModel.images[0];
+    image.tex={101};image.virtualAlphaMask={102};image.proceduralGraphImage=true;
+    image.proceduralGraphPin=std::make_shared<const render::ProceduralImagePin>();
+    graphModel.images[1].tex={201};
+    render::Material liveMaterial;liveMaterial.baseTex=0;
+    liveMaterial.proceduralGraphPins=render::withGraphMaterialPin({},0,image.proceduralGraphPin);
+    auto staleMaterial=liveMaterial;
+    staleMaterial.proceduralGraphPins=render::withGraphMaterialPin({},0,std::make_shared<const render::ProceduralImagePin>());
+    check(render::resolvedMaterialTexture(graphModel,liveMaterial,&render::Material::baseTex).id==101,"current pin resolves texture");
+    check(render::resolvedMaterialTexture(graphModel,staleMaterial,&render::Material::baseTex,{99}).id==99,"wrong pin uses fallback");
+    check(!render::resolvedMaterialAlphaCoverage(graphModel,staleMaterial).valid(),"wrong pin rejects alpha");
+    check(!render::equivalentGpuMaterial(graphModel,liveMaterial,graphModel,staleMaterial),"batch equivalence checks generation");
+    check(render::gpuMaterialStateHash(graphModel,liveMaterial)!=render::gpuMaterialStateHash(graphModel,staleMaterial),"batch hash uses resolved textures");
+    liveMaterial.graphTextures[0]=0;
+    check(!render::resolvedGraphSourceTexture(graphModel,liveMaterial,0).valid(),"untracked shader sampler cannot sample tracked image");
+    liveMaterial.graphTextures[0]=1;
+    check(render::resolvedGraphSourceTexture(graphModel,liveMaterial,0).id==201,"imported shader sampler unchanged");
+    auto imported=staleMaterial;imported.baseTex=1;
+    check(render::resolvedMaterialTexture(graphModel,imported,&render::Material::baseTex).id==201,"ordinary index overrides preserve compatibility");
+    image.proceduralGraphRetired=true;
+    check(!render::resolvedMaterialTexture(graphModel,liveMaterial,&render::Material::baseTex).valid(),"tombstone rejects old pin");
+    image.proceduralGraphRetired=false;image.proceduralGraphPin=std::make_shared<const render::ProceduralImagePin>();
+    check(!render::resolvedMaterialTexture(graphModel,liveMaterial,&render::Material::baseTex).valid(),"recycled same index and handle rejects old pin");
 
     render::Material m1,m2;
     check(render::equivalentGpuIcbPbrPipelineMaterial(m1,m2),

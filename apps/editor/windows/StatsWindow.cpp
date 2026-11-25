@@ -76,11 +76,10 @@ public:
         // Unique page identity within this owner, resident AND waiting for
         // a GPU retirement fence. These pages are already in 'pool' above
         // and must never be added to its device-wide allocation total.
-        const auto referencedModels=
-            ed.view().modelResources().geometryPoolModelReferences();
-        const auto ownedPages=render::geometryPoolReferencedStats(
-            ed.device(),std::span<const render::Model* const>(
-                referencedModels.data(),referencedModels.size()));
+        const auto referencedPages=
+            ed.view().modelResources().geometryPoolPageReferences();
+        const auto ownedPages=render::geometryPoolPageReferencedStats(
+            ed.device(),referencedPages);
         const auto residency = ed.view().assetResidencyStats();
         constexpr double mib = 1024.0 * 1024.0;
         ImGui::Text("GPU геометрия (pool): %.1f / %.1f MiB  ·  страниц: %zu",
@@ -291,9 +290,12 @@ public:
                 rendererOwned.unknownTextures,rendererOwned.unknownBuffers,
                 rendererOwned.multiVersionBuffers);
         ImGui::TextDisabled("Renderer direct+subowners includes LightSystem/persistent pools; external models/materials, driver and Prisma excluded.");
+        const auto hosted=ed.clientHost().retirementDiagnostics();
         ImGui::Text("Hosted GameClient ожидают GPU: %zu  ·  ShaderGraph pools: %zu активных / %zu ожидают",
-                    ed.clientHost().pendingRetiredClients(),
-                    post.graphLiveTextures, post.graphRetiredTextures);
+                    hosted.pending, post.graphLiveTextures, post.graphRetiredTextures);
+        if(hosted.busy || hosted.quarantined || hosted.staleEpoch)
+            ImGui::TextDisabled("Hosted teardown: %zu readers/transactions · %zu quarantine · %zu stale epoch",
+                hosted.busy,hosted.quarantined,hosted.staleEpoch);
         ImGui::Text("RenderGraph GPU: %.2f MiB активных, %.2f MiB ожидают, %zu не учтено",
                     double(post.graphLiveKnownBytes) / mib,
                     double(post.graphPendingKnownBytes) / mib,

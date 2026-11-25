@@ -20,6 +20,7 @@
 //   * vertex buffer: one interleaved stream; GLSL attribute location = VertexAttr::location,
 //     MSL [[attribute(location)]] via [[stage_in]] at buffer(0).
 #pragma once
+#include "BufferTextureCopy.h"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -820,6 +821,17 @@ public:
     virtual SamplerHandle createSampler(const SamplerDesc&) { return {}; }
     virtual void destroySampler(SamplerHandle) {}
     virtual bool updateTextureRegion(TextureHandle, const TextureUploadDesc&) { return false; }
+    // Optional GPU-only transfer: copy the full level zero of an ordinary,
+    // RGBA8/RGBA8_sRGB or RGBA16F/RGBA32F 2D sampled texture from a Storage buffer.
+    // RGBA16F mip generation requires explicit backend capability; RGBA32F is single mip. A requested
+    // full mip chain must be allocated for generation; reject incomplete chains.
+    // Inside a recording frame, outside encoders. Raw bytes, no conversion.
+    // Source offset/row pitch follow BufferTextureCopy2D. Caller keeps both
+    // resources live until the covering GPU fence has actually completed.
+    // True means encoded, not completed. Unsupported devices do no work.
+    virtual bool supportsStorageBufferTextureCopy() const { return false; }
+    virtual bool supportsHdrTextureMipGeneration(PixelFormat) const { return false; }
+    virtual bool copyStorageBufferToTexture2D(BufferHandle,TextureHandle,const BufferTextureCopy2D&) { return false; }
     virtual bool bindTextureView(int, TextureViewHandle, SamplerHandle = {}) { return false; }
     // CPU-only RHI metadata lookup; no readback, synchronization or texture
     // sampling. Unsupported providers return false and leave out unchanged.
@@ -1064,7 +1076,11 @@ public:
 
     // Frame (driven by the platform layer)
     virtual void beginFrame(int framebufferWidth, int framebufferHeight) = 0;
-    virtual void endFrame() = 0; // presents
+    // Optional command frame without swapchain acquire/present for native tools.
+    // Same device and owner thread; successful begin must be paired with endFrame.
+    virtual bool supportsOffscreenFrames() const { return false; }
+    virtual bool beginOffscreenFrame() { return false; }
+    virtual void endFrame() = 0; // presents if a drawable was acquired
     // Tools (editor screenshots, MCP): deliver the next presented frame as top-down RGBA8.
     // The callback may run one or two frames later; it always runs on the main thread.
     using CaptureFn = std::function<void(int w, int h, std::vector<uint8_t> rgba)>;

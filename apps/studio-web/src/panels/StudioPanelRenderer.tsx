@@ -163,7 +163,9 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
         return <LightingPanel projectPath={snapshot?.project.path ?? ''} selectedId={snapshot?.selectedId ?? null} onSelect={select}/>;
       case 'materials':
         return <MaterialsPanel projectPath={snapshot?.project.path ?? ''}
-          previewMaterial={snapshot?.previewMaterial}/>;
+          previewMaterial={snapshot?.previewMaterial} openTextureGraph={()=>ctx.showPanel('texture_graph')}/>;
+      case 'texture_graph':
+        return <MaterialsPanel textureOnly projectPath={snapshot?.project.path ?? ''} previewMaterial={snapshot?.previewMaterial}/>;
       case 'shader_graph':
         return <ShaderGraphPanel projectPath={snapshot?.project.path ?? ''}/>;
       case 'project': return <ProjectPanel {...ctx}/>;

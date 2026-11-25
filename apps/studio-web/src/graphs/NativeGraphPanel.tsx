@@ -2,7 +2,7 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import {invoke,nativeConnected} from '../bridge';
 import {StudioAlert,StudioButton,StudioEmptyState,StudioInput,StudioPanel,StudioSection,StudioSelect,StudioTextarea} from '../ui';
 import GraphCanvas from './GraphCanvas';
-import GraphDiagnostics from './GraphDiagnosticsPanel';
+import GraphDiagnosticsPanel from './GraphDiagnosticsPanel';
 import GraphRuntimeProbePanel from './GraphRuntimeProbePanel';
 import GraphLiveSnapshotPanel from './GraphLiveSnapshotPanel';
 import GraphDebugSessionPanel from './GraphDebugSessionPanel';
@@ -25,6 +25,7 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
  const [names,setNames]=useState<string[]>([]),[name,setName]=useState('');
  const [catalog,setCatalog]=useState<FxNodeInfo[]>([]),[nodeType,setNodeType]=useState('');
  const [original,setOriginal]=useState<GraphObject|null>(null),[draft,setDraft]=useState<GraphObject|null>(null);
+ const originalJson=useRef<string|undefined>(undefined);
  const history=useRef<DraftHistory<GraphObject>|null>(null);
  const [mode,setMode]=useState<'pose'|'states'>('pose');
  const [selection,setSelection]=useState<string[]>([]),[pending,setPending]=useState<PortRef|null>(null);
@@ -65,10 +66,15 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
   return Array.isArray(rows)?rows.find(n=>object(n)&&n.id===active):undefined;
  },[draft,active,fx,mode]);
  useEffect(()=>{setJson(entry?(fx?'':JSON.stringify(entry,null,2)):'');},[entry,fx]);
- const open=(asset:string)=>void run(async current=>{
-  if(!asset||dirty)return;
-  const doc=graphReply(await op(prefix+'_get',{name:asset}));if(!current())return;
+ const loadSaved=async(asset:string,current:()=>boolean)=>{
+  const reply=await op(prefix+'_get',{name:asset});
+  if(!current())return;
+  const doc=graphReply(reply);
+  originalJson.current=object(reply)&&typeof reply.originalJson==='string'?reply.originalJson:undefined;
   setName(asset);reset(doc);
+ };
+ const open=(asset:string)=>void run(async current=>{
+  if(asset&&!dirty)await loadSaved(asset,current);
  });
  const nativeEdit=(args:GraphObject)=>void run(async current=>{
   if(!draft||!fx)return;
@@ -110,9 +116,9 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
  const save=()=>void run(async current=>{
   if(!draft||!original||!name||!dirty)return;
   requireOk(await op(prefix+'_validate',{graph:draft}));if(!current())return;
-  const result=await op(prefix+'_set',{name,graph:draft,expected:original});
+  const result=await op(prefix+'_set',{name,graph:draft,expected:originalJson.current??original});
   requireOk(result);if(!current())return;
-  const saved=graphReply(await op(prefix+'_get',{name}));if(!current())return;reset(saved);setStatus('Saved and read back from native asset.');
+  await loadSaved(name,current);if(current())setStatus('Saved and read back from native asset.');
  });
  const applyEntry=()=>{
   if(!draft||!active||fx)return;
@@ -146,7 +152,7 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
    <GraphRuntimeProbePanel domain={domain} graph={draft} disabled={busy}/>
    <GraphLiveSnapshotPanel domain={domain} projectPath={projectPath}/>
    <GraphDebugSessionPanel domain={domain} graph={draft} projectPath={projectPath} disabled={busy}/>
-   <GraphDiagnostics view={view} policy={fx?{cycles:'reject',cycleGroups:['exec','data']}:{cycles:mode==='states'?'allow':'reject'}}/>
+   <GraphDiagnosticsPanel view={view} policy={fx?{cycles:'reject',cycleGroups:['exec','data']}:{cycles:mode==='states'?'allow':'reject'}}/>
    {!fx&&<AnimationParameters doc={draft} disabled={busy} onEdit={edit}/>}
    {entry&&<StudioSection title={'Selected: '+active}>
     {fx?<><pre>{JSON.stringify(entry,null,2)}</pre>

@@ -77,11 +77,12 @@ inline bool appendStaticImpostorLod(Model& m, StaticImpostorSettings s = {},
 
     const auto sample = [&](const Material& mat, float2 uv, float out[4]) {
         out[0] = mat.baseColor.x; out[1] = mat.baseColor.y; out[2] = mat.baseColor.z; out[3] = mat.baseColor.w;
-        if (mat.baseTex < 0 || size_t(mat.baseTex) >= m.images.size()) return;
-        const Image& img = m.images[size_t(mat.baseTex)];
+        const auto* resolved=resolveMaterialImage(m,mat,&Material::baseTex);
+        if(!resolved)return;
+        const Image& img=*resolved;
         const auto* px = static_impostor_detail::pixels(img);
         if (!px || img.width <= 0 || img.height <= 0 ||
-            px->size() < size_t(img.width) * size_t(img.height) * 4) return;
+            size_t(img.width)>px->size()/4/size_t(img.height)) return;
         float u = uv.x * mat.uvScale.x + mat.uvOffset.x, v = uv.y * mat.uvScale.y + mat.uvOffset.y;
         u -= std::floor(u); v -= std::floor(v);
         const int x = std::clamp(int(u * float(img.width)), 0, img.width - 1);

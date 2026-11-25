@@ -18,6 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 TOP = ('apps', 'engine', 'modules', 'tools', 'docs', 'libraries', 'tests', 'templates', 'skills', 'examples',
        'platform', 'plugins', 'third_party', 'games')
+MCP_PROTOCOL_METHODS = {'tools/list', 'tools/call'}
 ROOT_FILES = ('AGENTS.md', 'README.md', 'CMakeLists.txt', 'CLAUDE.md', 'CMakePresets.json')
 TICK = re.compile(r'`([^`\n]+)`')
 REG = re.compile(r'(?:registerOp\(\{|\badd\(|\baddForest\(|\baddLinked\(|ed\.ws\(\)\.registerOp\(\{)"([a-z][a-z0-9_]+)"')
@@ -29,8 +30,9 @@ TOOL = re.compile(r'^([a-z][a-z0-9]*(?:_[a-z0-9]+)+)(?:\s*\{.*\})?$')
 def mcp_tools(root=ROOT):
     names = set()
     for base in (root / 'apps', root / 'tools' / 'mcp'):
-        for p in base.rglob('*.cpp'):
-            names.update(REG.findall(p.read_text(encoding='utf-8', errors='replace')))
+        for pattern in ('*.cpp', '*.h'):
+            for p in base.rglob(pattern):
+                names.update(REG.findall(p.read_text(encoding='utf-8', errors='replace')))
     return names
 
 
@@ -42,6 +44,8 @@ def path_candidates(token):
     if token.startswith('./'):
         token = token[2:]
     if any(c in token for c in '<>$') or token.startswith(('-', 'http')):
+        return None
+    if token in MCP_PROTOCOL_METHODS:
         return None
     head = token.split('/')[0]
     if token in ROOT_FILES or (head in TOP and '/' in token):
@@ -65,6 +69,8 @@ def audit(root=ROOT, only=None, strict=False):
     # CTest identifiers in validation instructions are not MCP operations.
     cmake = (root / 'CMakeLists.txt').read_text(encoding='utf-8')
     test_names = set(re.findall(r'add_test\s*\(\s*NAME\s+([a-z][a-z0-9_]+)', cmake))
+    # Skills also name standalone fixture sources compiled by parameterized CMake loops.
+    test_names.update(p.stem for p in (root / 'tests').rglob('*_test.cpp'))
     errors, warnings = [], []
     for skill in sorted((root / 'skills').glob('*/*/SKILL.md')):
         sid = skill.parent.name

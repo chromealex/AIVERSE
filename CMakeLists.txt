@@ -305,7 +305,6 @@ add_library(aiverse_game STATIC
 target_link_libraries(aiverse_game PUBLIC aiverse_fps aiverse_voxelgame)   # actor / voxel systems: engine/actor, engine/voxel CMakeLists
 target_link_libraries(aiverse_game PUBLIC aiverse_engine)
 # Shared recurring work policy for data-driven population decisions.
-target_link_libraries(aiverse_game PRIVATE AIVERSE::lib_work_budget)
 # The one vehicle system of every host (docs/driving.md, AGENTS.md "no genre split"): components, the per-tick step,
 # the race adapter. The grid-map host (engine/game/Driving.cpp) and the metre-map host (engine/actor/ActorVehicles.cpp)
 # only implement its world queries.
@@ -431,6 +430,7 @@ elseif(AIVERSE_PLATFORM STREQUAL "web")
 elseif(UNIX AND NOT ANDROID)
     target_link_libraries(aiverse_pack PUBLIC ${CMAKE_DL_LIBS})
 endif()
+target_link_libraries(aiverse_pack PRIVATE aiverse_zstd_dec)
 target_include_directories(aiverse_pack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
     add_library(aiverse_pack_writer STATIC engine/pack/PackWriter.cpp engine/pack/Unpacker.cpp)
@@ -640,9 +640,8 @@ if(AIVERSE_FBX)
 else()
     target_compile_definitions(aiverse_models PRIVATE AIVERSE_NO_FBX=1)
 endif()
-# KTX2 zstd supercompression: the decoder comes with aiverse_runtime (aiverse_zstd_dec) or, in host tools,
-# with aiverse_pack_writer (full zstd); linking aiverse_zstd_dec here would pull both into tests and tools.
-target_link_libraries(aiverse_models PUBLIC aiverse_engine)
+# TextureCodec reads KTX2 with the same decoder target used by resource packs.
+target_link_libraries(aiverse_models PUBLIC aiverse_engine PRIVATE aiverse_zstd_dec)
 
 # Programmable presentation animation graphs reuse the existing model sampler and IK.
 target_sources(aiverse_models PRIVATE engine/render/SurfaceLocomotion.cpp engine/render/AnimationContacts.cpp engine/render/FullBodyIK.cpp engine/render/AnimationGraph.cpp engine/render/AnimationRig.cpp engine/render/AnimationMotion.cpp)
@@ -1528,6 +1527,8 @@ add_library(aiverse_game_view STATIC engine/view/game/GameView.cpp engine/view/g
 add_library(aiverse_terrain_detail STATIC engine/view/game/GameTerrainDetail.cpp engine/view/game/GamePlanet.cpp engine/view/game/GamePlanetDetail.cpp)
 target_link_libraries(aiverse_terrain_detail PUBLIC aiverse_game)
 target_link_libraries(aiverse_game_view PUBLIC aiverse_game aiverse_models aiverse_imgui aiverse_roads_view)
+# Public Caverns visual host headers expose the Box3D geometry types.
+target_include_directories(aiverse_game_view INTERFACE "${PROJECT_SOURCE_DIR}/third_party/box3d/include")
 target_link_libraries(aiverse_game_view PUBLIC aiverse_terrain_detail)
 target_link_libraries(aiverse_game_view PUBLIC aiverse_view_visibility)
 # Transitional host adapter consumes the engine View. The dependency points
@@ -1770,7 +1771,7 @@ endif()
 
 if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS)
     # Editor core: project/map documents and the operation registry shared by the editor and aiversemcp.
-    add_library(aiverse_editor_core STATIC apps/editor/core/MapDoc.cpp apps/editor/core/MapDocPlanet.cpp apps/editor/core/Workspace.cpp apps/editor/core/Net.cpp apps/editor/core/McpInstall.cpp apps/editor/core/Projects.cpp
+    add_library(aiverse_editor_core STATIC apps/editor/core/MapDoc.cpp apps/editor/core/MapDocPlanet.cpp apps/editor/core/Workspace.cpp apps/editor/core/StudioPlayTools.cpp apps/editor/core/Net.cpp apps/editor/core/McpInstall.cpp apps/editor/core/Projects.cpp
     apps/editor/core/DataOps.cpp apps/editor/core/BalanceOps.cpp
     apps/editor/core/SimTools.cpp apps/editor/core/ScenarioOps.cpp apps/editor/core/SchemaOps.cpp apps/editor/core/PruneOps.cpp apps/editor/core/CampaignOps.cpp apps/editor/core/StrategicOps.cpp
     apps/editor/core/ToolchainOps.cpp apps/editor/core/WorldInspect.cpp)   # scenario_run, rules_lint, rules_schema keys
@@ -2079,7 +2080,9 @@ if(AIVERSE_BUILD_TESTS)
     add_test(NAME camera_hdr_resolve COMMAND aiverse_camera_hdr_resolve_tests)
     add_executable(aiverse_camera_client_adapter_tests tests/render/camera_client_adapter.cpp)
     target_include_directories(aiverse_camera_client_adapter_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-    target_link_libraries(aiverse_camera_client_adapter_tests PRIVATE aiverse_runtime aiverse_content_reader)
+    # Native host registration injects gen/NativeRegistry.cpp into runtime-linked
+    # executables; the NativeRegistrar implementation belongs to aiverse_game.
+    target_link_libraries(aiverse_camera_client_adapter_tests PRIVATE aiverse_runtime aiverse_game aiverse_content_reader)
     add_test(NAME camera_client_adapter COMMAND aiverse_camera_client_adapter_tests)
     add_executable(aiverse_camera_model_snapshot_tests tests/render/camera_model_snapshot.cpp)
     aiverse_keep_test_asserts(aiverse_camera_model_snapshot_tests)
@@ -2337,8 +2340,8 @@ endif()
 # Material library and procedural textures (models agent): material_* / texture_* editor operations
 # (materials.json, rules view "materials" / "assign"); the Materials window previews them.
 if(TARGET aiverse_editor_core)
-    target_sources(aiverse_editor_core PRIVATE apps/editor/core/AnimationOps.cpp apps/editor/core/AnimationDocument.cpp apps/editor/core/MaterialOps.cpp apps/editor/core/ShaderGraphOps.cpp apps/editor/core/GeometryOps.cpp)
-    target_link_libraries(aiverse_editor_core PUBLIC aiverse_models)
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/AnimationOps.cpp apps/editor/core/AnimationDocument.cpp apps/editor/core/MaterialOps.cpp apps/editor/core/ShaderGraphOps.cpp apps/editor/core/GeometryOps.cpp tools/aiversebuild/TextureCompress.cpp)
+    target_link_libraries(aiverse_editor_core PUBLIC aiverse_models aiverse_pack)
 endif()
 if(TARGET aiversemcp)   # KTX2 zstd in aiverse_models: aiversemcp links no pack writer, so it takes the decoder
     target_link_libraries(aiversemcp PRIVATE aiverse_models aiverse_zstd_dec)
@@ -2510,6 +2513,9 @@ endif()
 
 # builds-branch tooling: index.json, and a packaged aiversemcp run from an unpacked tools-only Linux zip
 if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND)
+    if(TARGET aiversemcp)
+        add_test(NAME terraweave_meadow_mcp COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/terraweave_meadow_mcp.py $<TARGET_FILE:aiversemcp> ${CMAKE_CURRENT_SOURCE_DIR})
+    endif()
     if(TARGET aiversemcp AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
         add_test(NAME release_tools COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/release/test_release.py $<TARGET_FILE:aiversemcp>)
     else()
@@ -2578,9 +2584,6 @@ if(TARGET aiverse_editor OR AIVERSE_BUILD_STUDIO_HTML5)
         target_link_libraries(aiverse_hosted_client PRIVATE aiverse_net_server)
     endif()
     target_include_directories(aiverse_hosted_client PUBLIC "${PROJECT_SOURCE_DIR}")
-    # Caverns visual payloads expose Box3D value types even when the optional
-    # authoritative physics runtime is disabled.
-    target_include_directories(aiverse_hosted_client PUBLIC "${PROJECT_SOURCE_DIR}/third_party/box3d/include")
     target_link_libraries(aiverse_hosted_client PUBLIC aiverse_runtime aiverse_game_view
         aiverse_net_city aiverse_splash aiverse_net aiverse_game_audio aiverse_atlas
         aiverse_ui aiverse_game_fx aiverse_i18n aiverse_content_reader AIVERSE::InputFlow)
@@ -3910,9 +3913,16 @@ if(AIVERSE_BUILD_HDR_TESTS AND AIVERSE_DESKTOP)
     target_link_libraries(aiverse_shadow_batches PRIVATE aiverse_runtime)
 endif()
 
-if(AIVERSE_BUILD_HDR_TESTS AND AIVERSE_DESKTOP)
+# CPU material palette regression is part of ordinary desktop CTest.
+# The visual A/B mode remains a separate manual GPU check.
+if(AIVERSE_DESKTOP AND (AIVERSE_BUILD_HDR_TESTS OR AIVERSE_BUILD_TESTS))
     add_executable(aiverse_material_batches tests/render/material_batches.cpp $<TARGET_OBJECTS:aiverse_runtime>)
-    target_link_libraries(aiverse_material_batches PRIVATE aiverse_runtime)
+    # NativeRegistry.cpp is injected for runtime executables; link its existing owner.
+    target_link_libraries(aiverse_material_batches PRIVATE aiverse_runtime aiverse_game)
+    if(AIVERSE_BUILD_TESTS)
+        add_test(NAME material_batches_unit COMMAND aiverse_material_batches --unit)
+        set_tests_properties(material_batches_unit PROPERTIES LABELS "Renderer3D;TEXTURE_GRAPH" TIMEOUT 60)
+    endif()
 endif()
 
 # Split rules files from Python tools: rules_io (read / write back) and split_rules.
@@ -5004,6 +5014,10 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
     target_link_libraries(aiverse_terraweave_model_test PRIVATE aiverse_models aiverse_zstd_dec)
     aiverse_keep_test_asserts(aiverse_terraweave_model_test)
     add_test(NAME terraweave_model COMMAND aiverse_terraweave_model_test)
+    add_executable(aiverse_terraweave_grass_meadow_test tests/terraweave_grass_meadow_test.cpp)
+    target_link_libraries(aiverse_terraweave_grass_meadow_test PRIVATE aiverse_engine aiverse_models aiverse_zstd_dec)
+    aiverse_keep_test_asserts(aiverse_terraweave_grass_meadow_test)
+    add_test(NAME terraweave_grass_meadow COMMAND aiverse_terraweave_grass_meadow_test)
     add_executable(aiverse_terraweave_heightmap_test tests/terraweave_heightmap_test.cpp)
     target_link_libraries(aiverse_terraweave_heightmap_test PRIVATE aiverse_engine)
     aiverse_keep_test_asserts(aiverse_terraweave_heightmap_test)
@@ -5640,6 +5654,26 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
     target_include_directories(aiverse_texture_graph_dag_lowering_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_compile_features(aiverse_texture_graph_dag_lowering_tests PRIVATE cxx_std_20)
     add_test(NAME texture_graph_dag_lowering COMMAND aiverse_texture_graph_dag_lowering_tests)
+    add_executable(aiverse_texture_graph_output_reuse_tests tests/render/texture_graph_output_reuse.cpp)
+    target_include_directories(aiverse_texture_graph_output_reuse_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_features(aiverse_texture_graph_output_reuse_tests PRIVATE cxx_std_20)
+    add_test(NAME texture_graph_output_reuse COMMAND aiverse_texture_graph_output_reuse_tests)
+    add_executable(aiverse_texture_graph_image_pins_tests tests/render/texture_graph_image_pins.cpp)
+    target_include_directories(aiverse_texture_graph_image_pins_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_features(aiverse_texture_graph_image_pins_tests PRIVATE cxx_std_20)
+    add_test(NAME texture_graph_image_pins COMMAND aiverse_texture_graph_image_pins_tests)
+    add_executable(aiverse_texture_graph_group_profile_tests tests/render/texture_graph_group_profile.cpp)
+    target_include_directories(aiverse_texture_graph_group_profile_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_features(aiverse_texture_graph_group_profile_tests PRIVATE cxx_std_20)
+    add_test(NAME texture_graph_group_profile COMMAND aiverse_texture_graph_group_profile_tests)
+    add_executable(aiverse_vulkan_scope_timing_tests tests/render/vulkan_scope_timing.cpp)
+    target_include_directories(aiverse_vulkan_scope_timing_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_features(aiverse_vulkan_scope_timing_tests PRIVATE cxx_std_20)
+    add_test(NAME vulkan_scope_timing COMMAND aiverse_vulkan_scope_timing_tests)
+    add_executable(aiverse_texture_graph_request_queue_tests tests/render/texture_graph_request_queue.cpp)
+    target_include_directories(aiverse_texture_graph_request_queue_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_features(aiverse_texture_graph_request_queue_tests PRIVATE cxx_std_20)
+    add_test(NAME texture_graph_request_queue COMMAND aiverse_texture_graph_request_queue_tests)
 endif()
 
 if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
@@ -5654,6 +5688,103 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
     target_include_directories(aiverse_texture_graph_materialized_dispatch_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_compile_features(aiverse_texture_graph_materialized_dispatch_tests PRIVATE cxx_std_20)
     add_test(NAME texture_graph_materialized_dispatch COMMAND aiverse_texture_graph_materialized_dispatch_tests)
+endif()
+
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
+    add_executable(aiverse_texture_graph_gpu_resource_cache_tests tests/render/texture_graph_gpu_resource_cache.cpp)
+    target_include_directories(aiverse_texture_graph_gpu_resource_cache_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_features(aiverse_texture_graph_gpu_resource_cache_tests PRIVATE cxx_std_20)
+    add_test(NAME texture_graph_gpu_resource_cache COMMAND aiverse_texture_graph_gpu_resource_cache_tests)
+    set_tests_properties(texture_graph_gpu_resource_cache PROPERTIES LABELS "TEXTURE_GRAPH;RHI")
+endif()
+
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
+    add_executable(aiverse_texture_graph_fusion_tests tests/render/texture_graph_fusion.cpp)
+    target_include_directories(aiverse_texture_graph_fusion_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_features(aiverse_texture_graph_fusion_tests PRIVATE cxx_std_20)
+    add_test(NAME texture_graph_fusion COMMAND aiverse_texture_graph_fusion_tests)
+    set_tests_properties(texture_graph_fusion PROPERTIES LABELS "TEXTURE_GRAPH;RHI")
+endif()
+
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
+    add_executable(aiverse_texture_graph_gpu_texture_transfer_tests tests/render/texture_graph_gpu_texture_transfer.cpp)
+    target_include_directories(aiverse_texture_graph_gpu_texture_transfer_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_features(aiverse_texture_graph_gpu_texture_transfer_tests PRIVATE cxx_std_20)
+    add_test(NAME texture_graph_gpu_texture_transfer COMMAND aiverse_texture_graph_gpu_texture_transfer_tests)
+    set_tests_properties(texture_graph_gpu_texture_transfer PROPERTIES LABELS "TEXTURE_GRAPH;RHI")
+endif()
+
+option(AIVERSE_TEXTURE_GRAPH_GPU_COPY_TESTS "Opt-in real GPU-only storage buffer to texture acceptance" OFF)
+if(AIVERSE_BUILD_TESTS AND AIVERSE_TEXTURE_GRAPH_GPU_COPY_TESTS)
+    if(TARGET aiverse_gfx_vulkan)
+        add_executable(aiverse_texture_graph_gpu_copy_vulkan_test tests/render/texture_graph_gpu_copy_vulkan.cpp)
+        target_link_libraries(aiverse_texture_graph_gpu_copy_vulkan_test PRIVATE aiverse_gfx_vulkan Threads::Threads)
+        target_compile_features(aiverse_texture_graph_gpu_copy_vulkan_test PRIVATE cxx_std_20)
+        add_test(NAME texture_graph_gpu_copy_vulkan COMMAND aiverse_texture_graph_gpu_copy_vulkan_test)
+        set_tests_properties(texture_graph_gpu_copy_vulkan PROPERTIES LABELS "TEXTURE_GRAPH;GPU;Vulkan" TIMEOUT 120 RUN_SERIAL TRUE)
+    endif()
+    if(AIVERSE_PLATFORM STREQUAL "macos")
+        add_executable(aiverse_texture_graph_gpu_copy_metal_test tests/render/texture_graph_gpu_copy_metal.mm engine/gfx/metal/GfxMetal.mm)
+        target_include_directories(aiverse_texture_graph_gpu_copy_metal_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+        target_compile_options(aiverse_texture_graph_gpu_copy_metal_test PRIVATE "-fobjc-arc")
+        target_compile_features(aiverse_texture_graph_gpu_copy_metal_test PRIVATE cxx_std_20)
+        target_link_libraries(aiverse_texture_graph_gpu_copy_metal_test PRIVATE Threads::Threads "-framework Metal" "-framework QuartzCore" "-framework Foundation")
+        add_test(NAME texture_graph_gpu_copy_metal COMMAND aiverse_texture_graph_gpu_copy_metal_test)
+        set_tests_properties(texture_graph_gpu_copy_metal PROPERTIES LABELS "TEXTURE_GRAPH;GPU;Metal" TIMEOUT 120 RUN_SERIAL TRUE)
+    endif()
+    if(NOT TARGET aiverse_texture_graph_gpu_copy_vulkan_test AND NOT TARGET aiverse_texture_graph_gpu_copy_metal_test)
+        message(FATAL_ERROR "GPU texture copy acceptance requested but neither Metal nor Vulkan was configured")
+    endif()
+endif()
+
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
+    add_executable(aiverse_texture_graph_gpu_texture_budget_tests tests/render/texture_graph_gpu_texture_budget.cpp)
+    target_include_directories(aiverse_texture_graph_gpu_texture_budget_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_features(aiverse_texture_graph_gpu_texture_budget_tests PRIVATE cxx_std_20)
+    add_test(NAME texture_graph_gpu_texture_budget COMMAND aiverse_texture_graph_gpu_texture_budget_tests)
+    set_tests_properties(texture_graph_gpu_texture_budget PROPERTIES LABELS "TEXTURE_GRAPH;RHI")
+endif()
+
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
+    add_executable(aiverse_live_appearance_material_target_tests tests/view/live_appearance_material_target.cpp)
+    target_include_directories(aiverse_live_appearance_material_target_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_features(aiverse_live_appearance_material_target_tests PRIVATE cxx_std_20)
+    add_test(NAME view_live_appearance_material_target COMMAND aiverse_live_appearance_material_target_tests)
+endif()
+
+# Opt-in hardware/driver acceptance of the production native texture graph owner.
+# A requested backend without a device is a failure, never a green skip.
+# Public native graph API, header-only; the host supplies its graphics device.
+add_library(aiverse_texture_graph_gpu INTERFACE)
+add_library(AIVERSE::texture_graph_gpu ALIAS aiverse_texture_graph_gpu)
+target_include_directories(aiverse_texture_graph_gpu INTERFACE "${PROJECT_SOURCE_DIR}")
+target_compile_features(aiverse_texture_graph_gpu INTERFACE cxx_std_20)
+target_link_libraries(aiverse_texture_graph_gpu INTERFACE aiverse_models AIVERSE::View aiverse_zstd_dec)
+
+option(AIVERSE_TEXTURE_GRAPH_GPU_TESTS "Opt-in native texture graph GPU acceptance" OFF)
+if(AIVERSE_BUILD_TESTS AND AIVERSE_TEXTURE_GRAPH_GPU_TESTS)
+    if(TARGET aiverse_gfx_vulkan)
+        add_executable(aiverse_texture_graph_vulkan_gpu_test tests/render/texture_graph_gpu_acceptance_vulkan.cpp)
+        target_link_libraries(aiverse_texture_graph_vulkan_gpu_test PRIVATE AIVERSE::texture_graph_gpu aiverse_gfx_vulkan Threads::Threads)
+        target_compile_features(aiverse_texture_graph_vulkan_gpu_test PRIVATE cxx_std_20)
+        add_test(NAME texture_graph_vulkan_gpu COMMAND aiverse_texture_graph_vulkan_gpu_test)
+        set_tests_properties(texture_graph_vulkan_gpu PROPERTIES LABELS "TEXTURE_GRAPH;GPU;Vulkan" TIMEOUT 240 RUN_SERIAL TRUE)
+        add_test(NAME texture_graph_vulkan_offscreen COMMAND aiverse_texture_graph_vulkan_gpu_test --offscreen)
+        set_tests_properties(texture_graph_vulkan_offscreen PROPERTIES LABELS "TEXTURE_GRAPH;GPU;Vulkan;EDITOR" TIMEOUT 240 RUN_SERIAL TRUE)
+    endif()
+    if(AIVERSE_PLATFORM STREQUAL "macos")
+        add_executable(aiverse_texture_graph_metal_gpu_test tests/render/texture_graph_gpu_acceptance_metal.mm engine/gfx/metal/GfxMetal.mm)
+        target_compile_options(aiverse_texture_graph_metal_gpu_test PRIVATE "-fobjc-arc")
+        target_compile_features(aiverse_texture_graph_metal_gpu_test PRIVATE cxx_std_20)
+        target_link_libraries(aiverse_texture_graph_metal_gpu_test PRIVATE AIVERSE::texture_graph_gpu Threads::Threads "-framework Metal" "-framework QuartzCore" "-framework Foundation")
+        add_test(NAME texture_graph_metal_gpu COMMAND aiverse_texture_graph_metal_gpu_test)
+        set_tests_properties(texture_graph_metal_gpu PROPERTIES LABELS "TEXTURE_GRAPH;GPU;Metal" TIMEOUT 240 RUN_SERIAL TRUE)
+        add_test(NAME texture_graph_metal_offscreen COMMAND aiverse_texture_graph_metal_gpu_test --offscreen)
+        set_tests_properties(texture_graph_metal_offscreen PROPERTIES LABELS "TEXTURE_GRAPH;GPU;Metal;EDITOR" TIMEOUT 240 RUN_SERIAL TRUE ENVIRONMENT "AIVERSE_TEXTURE_GRAPH_REQUIRE_GPU_TIMINGS=1")
+    endif()
+    if(NOT TARGET aiverse_texture_graph_vulkan_gpu_test AND NOT TARGET aiverse_texture_graph_metal_gpu_test)
+        message(FATAL_ERROR "Texture graph GPU acceptance requested but no Metal or Vulkan backend was configured")
+    endif()
 endif()
 
 # Stage55: full native Caverns fixtures use the same CTest entry point.

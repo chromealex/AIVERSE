@@ -342,7 +342,132 @@ void GameClient::applyLanguage(const std::string& tag, bool save) {
     luaEmit("language", Json::string(loc_.language()));
 }
 
+Json GameClient::startRuntimeTextureMaterial(size_t type,size_t choice,size_t material,
+        const Json& graph,const Json& overrides,const render::texture_graph::ResidentMaterialOptions& options){
+    if(!dev_||!gpuDeviceLease_.validFor(*dev_)||!inMatch()||runtimeTextureTask_)
+        throw std::runtime_error("runtime texture target unavailable or request active");
+    const auto current=view_.graphMaterialTarget(type,choice,material);
+    if(!current)throw std::runtime_error("runtime texture material not resident");
+    auto result=runtimeTextureGraph_.startResidentMaterial(graph,overrides,runtimeTextureScope_,gpuDeviceLease_,options,current->identity);
+    runtimeTextureRequest_=result.getStr("request");
+    runtimeTextureTask_=view::RuntimeTextureGraphTask{runtimeTextureRequest_,type,choice,current->identity};
+    runtimeTextureState_="queued";runtimeTextureReason_.clear();return runtimeTextureMaterialStatus();
+}
+std::optional<GameView::GraphMaterialTargetInfo> GameClient::runtimeTextureMaterialTarget(size_t type,size_t choice,size_t material)const{
+    if(!dev_||!gpuDeviceLease_.validFor(*dev_)||!inMatch())return {};
+    return view_.graphMaterialTarget(type,choice,material);
+}
+render::texture_graph::NativeGraphImageRead GameClient::readRuntimeTextureMaterialImage(
+        size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
+        std::string_view output)const{
+    if(!dev_||!gpuDeviceLease_.validFor(*dev_)||!inMatch()||mapLoading_||runtimeTextureTask_)return {};
+    const auto state=runtimeTextureGraph_.status();
+    if(state.getBool("busy")||state.getBool("gpuTextureSetReady"))return {};
+    return view_.readGraphMaterialImage(type,choice,target,output);
+}
+render::texture_graph::GraphImageReclaimResult GameClient::collectRuntimeTextureMaterialImages(size_t type,size_t choice,size_t material,
+        const view::LiveAppearanceMaterialTarget& target,const render::texture_graph::GraphImageRoots& external){
+    if(!dev_||!gpuDeviceLease_.validFor(*dev_)||!inMatch()||runtimeTextureTask_)
+        throw std::runtime_error("runtime texture collection requires an idle live presentation host");
+    const auto graphState=runtimeTextureGraph_.status();
+    if(graphState.getBool("busy")||graphState.getBool("gpuTextureSetReady"))
+        throw std::runtime_error("runtime texture collection requires released graph results");
+    const auto result=view_.collectGraphMaterialImages(type,choice,material,target,external,
+        [this](const render::Model& model,std::vector<std::span<const render::Material>>& roots){
+            return appendRuntimeGraphImageRoots(model,roots);
+        });
+    if(result.detached)runtimeTextureGraph_.invalidateOutputReuseReceipt();
+    return result;
+}
+bool GameClient::appendRuntimeGraphImageRoots(const render::Model& model,
+        std::vector<std::span<const render::Material>>& roots)const{
+    return r3d_.appendGraphImageRoots(model,roots)&&
+        (!insetR3d_||insetR3d_->appendGraphImageRoots(model,roots))&&
+        lensModelSnapshot_.appendGraphImageRoots(model,roots);
+}
+void GameClient::setAutomaticRuntimeGraphImageCollection(GameView::GraphImageRootProvider provider,
+        bool recycleSlots,bool detachCompletedReplay){
+    if(!provider){view_.setAutomaticGraphImageCollection({});return;}
+    view_.setAutomaticGraphImageCollection(
+        [this,provider=std::move(provider),detachCompletedReplay](const render::Model& model,
+                std::vector<std::span<const render::Material>>& roots){
+            if(!provider(model,roots))return false;
+            // Caller explicitly certified that no later CPU consumer will
+            // replay the prior frame. No GPU work is destroyed here.
+            if(detachCompletedReplay){
+                // Both owner-thread renderers must be ready before mutating
+                // either. A capture on the inset must not discard main replay.
+                if(!r3d_.canDetachCompletedGraphImageReplay()||
+                   (insetR3d_&&!insetR3d_->canDetachCompletedGraphImageReplay()))return false;
+                if(!r3d_.detachCompletedGraphImageReplay())return false;
+                if(insetR3d_&&!insetR3d_->detachCompletedGraphImageReplay())return false;
+                lensModelSnapshot_.clear();
+            }
+            return appendRuntimeGraphImageRoots(model,roots);
+        },recycleSlots);
+}
+Json GameClient::runtimeTextureMaterialStatus()const{
+    auto r=runtimeTextureGraph_.status();
+    r.set("applicationState",Json::string(runtimeTextureState_));
+    r.set("applicationReason",Json::string(runtimeTextureReason_));
+    r.set("applicationRequest",Json::string(runtimeTextureRequest_));
+    const auto sweep=view_.automaticGraphImageCollectionStats();
+    r.set("activeModelReaders",Json::string(std::to_string(view_.modelResources().activeModelReaders())));
+    r.set("automaticCollectionEnabled",Json::fromBool(view_.automaticGraphImageCollectionEnabled()));
+    r.set("automaticRecyclingEnabled",Json::fromBool(view_.automaticGraphImageRecyclingEnabled()));
+    r.set("automaticCollectionInspected",Json::string(std::to_string(sweep.inspected)));
+    r.set("automaticCollectionDetached",Json::string(std::to_string(sweep.detached)));
+    r.set("automaticCollectionDeferred",Json::string(std::to_string(sweep.deferred)));
+    return r;
+}
+bool GameClient::cancelRuntimeTextureMaterial(const std::string& request){
+    if(!dev_||!gpuDeviceLease_.validFor(*dev_)||!runtimeTextureTask_||runtimeTextureTask_->request!=request)return false;
+    Json p=Json::object();p.set("request",Json::string(request));
+    runtimeTextureGraph_.cancel(p,runtimeTextureScope_);
+    runtimeTextureTask_.reset();runtimeTextureState_="cancelled";runtimeTextureReason_="cancelled by native caller";return true;
+}
+void GameClient::tickRuntimeTextureMaterial(gfx::Device& dev){
+    if(runtimeTextureRequest_.empty())return; // unused feature has no per-frame owner work
+    // No render encoders or Model read scopes are active at this frame hook.
+    // Cancel stale scene tasks before issuing more GPU work.
+    bool targetCurrent=inMatch();
+    if(runtimeTextureTask_&&targetCurrent){
+        const auto& task=*runtimeTextureTask_;
+        const auto current=view_.graphMaterialTarget(task.type,task.choice,task.target.material);
+        targetCurrent=current&&current->identity.publication==task.target.publication&&current->identity.version==task.target.version;
+    }
+    if(runtimeTextureTask_&&!targetCurrent&&gpuDeviceLease_.validFor(dev)){
+        const auto request=runtimeTextureTask_->request;
+        const auto s=runtimeTextureGraph_.status();
+        if(s.getStr("request")==request&&(s.getStr("state")=="queued"||s.getStr("state")=="pending"||s.getStr("state")=="ready"))
+            cancelRuntimeTextureMaterial(request);
+    }
+    runtimeTextureGraph_.tick(dev,runtimeTextureScope_);
+    if(!runtimeTextureTask_)return;
+    const auto s=runtimeTextureGraph_.status();
+    using Decision=view::RuntimeTextureGraphDecision;
+    const auto decision=view::decideRuntimeTextureGraph(*runtimeTextureTask_,s.getStr("request"),s.getStr("state"),
+        s.getBool("busy"),s.getBool("gpuTextureSetReady"),targetCurrent);
+    if(decision==Decision::Wait){runtimeTextureState_="pending";return;}
+    if(decision==Decision::Cancel){cancelRuntimeTextureMaterial(runtimeTextureTask_->request);return;}
+    const auto task=*runtimeTextureTask_;
+    runtimeTextureTask_.reset();
+    if(decision==Decision::Failed){runtimeTextureState_="failed";runtimeTextureReason_=s.getStr("reason");return;}
+    std::string why;
+    const bool ok=view_.applyCompletedGraphMaterial(task.type,task.choice,task.target,
+        runtimeTextureGraph_,runtimeTextureScope_,task.request,&why);
+    runtimeTextureState_=ok?"applied":"failed";runtimeTextureReason_=std::move(why);
+    // A refused target must not leave a completed resident set holding the owner.
+    if(!ok){const auto after=runtimeTextureGraph_.status();
+        if(after.getStr("request")==task.request&&after.getStr("state")=="ready"&&!after.getBool("published")){
+            Json p=Json::object();p.set("request",Json::string(task.request));runtimeTextureGraph_.cancel(p,runtimeTextureScope_);
+        }
+    }
+}
+
 void GameClient::shutdown() {
+    if(view_.modelMutationBlocked())
+        throw std::logic_error("GameClient shutdown: live Model read or graph transaction");
     if (campaignCamera_) {
         platform::setPointerLock(false);
         campaignCamera_.reset();
@@ -382,6 +507,11 @@ void GameClient::shutdown() {
         } else cavernsVisual_.reset();
     }
     if (worldScene_) { worldScene_->shutdown(*dev_); worldScene_.reset(); }
+    if(dev_&&!runtimeTextureRequest_.empty()){
+        if(!dev_->waitForResourceIdle())throw std::runtime_error("runtime texture graph shutdown: GPU idle barrier failed");
+        runtimeTextureGraph_.shutdownAfterIdle(*dev_);
+        runtimeTextureTask_.reset();runtimeTextureState_="idle";runtimeTextureReason_.clear();runtimeTextureRequest_.clear();
+    }
     ui_.setDynamicTexture("portrait",{},portraitSize_,portraitSize_);
     selectionPortrait_.shutdown();
     view_.shutdown(*dev_);
@@ -1577,6 +1707,12 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         r3d_.collectRetiredTargets();
     if(r3d_.hasPendingModelPipelineJobs())
         r3d_.pollPendingModelPipelineJobs();
+    if(inMatch()&&view_.automaticGraphImageCollectionEnabled()&&!runtimeTextureTask_){
+        const auto graphState=runtimeTextureGraph_.status();
+        if(!graphState.getBool("busy")&&!graphState.getBool("gpuTextureSetReady")&&view_.collectAutomaticGraphImages())
+            runtimeTextureGraph_.invalidateOutputReuseReceipt();
+    }
+    tickRuntimeTextureMaterial(dev);
     const auto frameStarted = std::chrono::steady_clock::now();
     if (mapLoading_) {
         horizonFrameTiming_.discard();

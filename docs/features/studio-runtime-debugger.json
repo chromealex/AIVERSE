@@ -14,7 +14,13 @@
     "engine/game/ScriptApi.cpp",
     "engine/game/UnitVitals.h",
     "skills/editor/studio-ui/SKILL.md",
-    "tests/runtime_vitals_test.cpp"
+    "tests/runtime_vitals_test.cpp",
+    "apps/editor/core/StudioPlayTools.h",
+    "apps/editor/core/Workspace.cpp",
+    "apps/studio-native/StudioHost.h",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-native/tests/StudioSessionTests.cpp",
+    "apps/editor/core/StudioPlayTools.cpp"
   ],
   "traits": {
     "editable": true,
@@ -24,24 +30,29 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The authenticated handler rejected stale session, tick and raw-value preconditions. A valid edit followed by fresh inspection succeeded on the paused map. The production panel displayed the selected entity and editable vital.",
       "evidence": [
-        "docs/handoff/studio-html5/s4-runtime-debugger-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
+        "docs/evidence/studio-play-ad676e70c/runtime.png",
+        "docs/evidence/feature-gate-e0b95cf24-web.json"
       ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The authenticated local MCP command and the Studio panel delegate to the same paused native vital-edit operation. Both use the project, entity reference, epoch, tick and expected raw value guards.",
       "evidence": [
-        "docs/handoff/studio-html5/s4-runtime-debugger-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "apps/studio-native/StudioHost.cpp",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native vitals case exercised the simulation field owner, a valid HP update and unchanged HP after rejecting stale ticks, stale raw values, unsupported fields, invalid decimals and a dormant entity.",
       "evidence": [
-        "docs/handoff/studio-html5/s4-runtime-debugger-2026-11-24.md"
+        "tests/runtime_vitals_test.cpp",
+        "docs/evidence/integration-ad5786f5a-linux.log.txt"
       ]
     },
     "skill": {
@@ -53,45 +64,52 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Runtime panel exposed the live entity HP field. Authenticated MCP changed it and read it back. Stale epoch, tick and prior value were rejected.",
       "evidence": [
-        "docs/handoff/studio-html5/s4-runtime-debugger-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/runtime.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Runtime panel exposed the live entity HP field. Authenticated MCP changed it and read it back. Stale epoch, tick and prior value were rejected.",
       "evidence": [
-        "docs/handoff/studio-html5/s4-runtime-debugger-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/runtime.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Runtime panel exposed the live entity HP field. Authenticated MCP changed it and read it back. Stale epoch, tick and prior value were rejected.",
       "evidence": [
-        "docs/handoff/studio-html5/s4-runtime-debugger-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/runtime.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "A real vital edit survived serialization and deserialization into a fresh GameCore simulation with equal checksums. The native panel separately demonstrated stale session and raw-value rejection.",
       "evidence": [
-        "docs/handoff/studio-html5/s4-runtime-debugger-2026-11-24.md"
+        "docs/agent-handoffs/studio-building-budget-archives-2026-11-25.md",
+        "apps/studio-native/StudioRuntimeEdit.h",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "not_applicable",
+      "note": "This panel operates on the current hosted simulation. It does not own or edit a graph document.",
       "evidence": [
-        "docs/handoff/studio-html5/s4-runtime-debugger-2026-11-24.md"
+        "docs/agent-handoffs/feature-gate-native-integration-2026-11-25.md",
+        "apps/studio-native/StudioHost.cpp"
       ]
     },
     "performance": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Twenty-five guarded edits in a paused native match took approximately 1 ms p95 and returned at most 116 bytes each. These are explicit operator requests. Measurements include the real WKWebView bridge at 1 ms clock resolution; the whole Studio host used 256540 KiB resident after sampling.",
       "evidence": [
-        "docs/handoff/studio-html5/s4-runtime-debugger-2026-11-24.md"
+        "docs/agent-handoffs/feature-gate-operator-acceptance-2026-11-25.md",
+        "docs/evidence/studio-building-budget/operator-measurements.json"
       ]
     },
     "platforms": {
@@ -109,24 +127,29 @@
       ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The standalone MCP registry advertised the typed schema and rejected calls requiring a connected local Studio. Both native registries listed the feature tools.",
       "evidence": [
-        "docs/handoff/studio-html5/s4-runtime-debugger-2026-11-24.md"
+        "docs/evidence/integration-ad5786f5a-headless.log.txt",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt",
+        "docs/evidence/integration-ad5786f5a-linux.log.txt"
       ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Runtime panel exposed the live entity HP field. Authenticated MCP changed it and read it back. Stale epoch, tick and prior value were rejected.",
       "evidence": [
-        "docs/handoff/studio-html5/s4-runtime-debugger-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/runtime.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The authenticated handler rejected stale session, tick and raw-value preconditions. A valid edit followed by fresh inspection succeeded on the paused map. The production panel displayed the selected entity and editable vital.",
       "evidence": [
-        "docs/handoff/studio-html5/s4-runtime-debugger-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
+        "docs/evidence/studio-play-ad676e70c/runtime.png",
+        "docs/evidence/feature-gate-e0b95cf24-web.json"
       ]
     },
     "handoff": {
@@ -144,10 +167,11 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Prepared the bilingual Studio diary with real native editor captures. The site checker accepted 59 entries and the local builder generated both languages. The release-site contract documents the native editor tool exception for a separate browser demo. Public deployment follows main integration.",
       "evidence": [
-        "docs/handoff/studio-html5/s4-runtime-debugger-2026-11-24.md"
+        "docs/devlog/entries/2026-11-25-studio-local-play-inspection.json",
+        "docs/agents/contracts/release-site.md"
       ]
     }
   },
@@ -155,7 +179,10 @@
     "skills": [
       "studio-ui"
     ],
-    "mcp_tools": [],
+    "mcp_tools": [
+      "studio_runtime_inspect",
+      "studio_runtime_edit"
+    ],
     "studio_methods": [
       "studio.gameEdit"
     ],
@@ -164,6 +191,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integrated-graph-2a56cbf39.json"
+    "docs/evidence/feature-gate-e0b95cf24-studio-contracts.json",
+    "docs/evidence/feature-gate-e0b95cf24-web.json",
+    "docs/evidence/feature-gate-e0b95cf24-typecheck.json",
+    "docs/evidence/feature-gate-e0b95cf24-skill-audit.json"
   ]
 }

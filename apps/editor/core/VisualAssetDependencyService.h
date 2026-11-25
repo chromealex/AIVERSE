@@ -50,14 +50,20 @@ public:
               const game::view_adapter::GameModelResourceCache& resources,
               Convert&& convert,Log&& log) {
         dependencies_.rebuild(types,materialLibrary);
-        for(const auto& [key,model]:resources.models()) {
-            if(key.rfind("shape:",0)==0)continue;
-            const auto source=
-                game::view_adapter::GameModelResourceCache::sourceForKey(key);
-            dependencies_.addResidentModel(source);
-            if(model)for(const auto& img:model->images)
-                if(!img.textureKey.empty())
-                    dependencies_.addResidentTexture(source,img.textureKey);
+        {
+            // Index owns only source strings. Release the cache reader
+            // BEFORE filesystem conversion/log callbacks can mutate a host.
+            const auto read=resources.acquireFrameReadScope();
+            if(!read)return;
+            for(const auto& [key,model]:resources.models()) {
+                if(key.rfind("shape:",0)==0)continue;
+                const auto source=
+                    game::view_adapter::GameModelResourceCache::sourceForKey(key);
+                dependencies_.addResidentModel(source);
+                if(model)for(const auto& img:model->images)
+                    if(!img.textureKey.empty())
+                        dependencies_.addResidentTexture(source,img.textureKey);
+            }
         }
 
         std::set<std::string> observed;

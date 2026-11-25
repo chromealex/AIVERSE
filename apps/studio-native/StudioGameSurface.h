@@ -1,4 +1,5 @@
 #pragma once
+#include "apps/fps/HostedActorClient.h"
 #include "apps/client/HostedClient.h"
 #include "apps/studio-native/StudioGameLaunch.h"
 #include "engine/data/Json.h"
@@ -41,7 +42,12 @@ public:
 private:
     std::unique_ptr<gfx::Device> device_;
     std::unique_ptr<render::RenderDeviceLifetime> lifetime_;
+    Simulation* liveSimulation() const;
+    bool paused() const;
+    bool canControl() const;
+    bool canStep() const;
     std::unique_ptr<client::HostedClient> host_;
+    std::unique_ptr<client::HostedActorClient> actor_;
     std::string error_, assets_;
     StudioGameLaunch launch_;
     StudioGameDevice profile_;

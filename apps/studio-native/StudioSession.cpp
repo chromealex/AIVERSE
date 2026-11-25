@@ -65,6 +65,16 @@ namespace aiverse::studio {
 namespace {
 Json str(const std::string& s) { return Json::string(s); }
 Json num(int64_t n) { return Json::number(n); }
+
+// Json retains number lexemes. Keep the native baseline intact across WebView number conversion.
+Json graphOriginal(const Json& expected) {
+    if (!expected.isString()) return expected;
+    const auto& source = expected.str();
+    if (source.size() > 1024 * 1024) throw std::invalid_argument("Original graph exceeds bridge limit");
+    auto graph = Json::parse(source);
+    if (!graph.isObject()) throw std::invalid_argument("Original graph object required");
+    return graph;
+}
 Json templateJson(const editor::TemplateInfo& t) {
     Json o=Json::object();
     o.set("id",str(t.id));o.set("name",str(t.name));o.set("description",str(t.description));
@@ -1260,7 +1270,7 @@ bool StudioSession::pollAgentLink() {
         if(ws_.map.data.entities.size()!=entities){clearSelection();dropOrdinalFlags();}
         const bool dirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
         const std::string policy=studioAgentHistoryPolicy(name);
-        const bool readOnly=policy=="read"||(name=="terraweave_caverns_paint"&&args.getStr("mode")=="get");
+        const bool readOnly=policy=="read"||policy=="runtime"||(name=="terraweave_caverns_paint"&&args.getStr("mode")=="get");
         // Known native asset no-ops do not invent an untracked mutation.
         const bool nativeNoop=(name=="studio_asset_meta_patch"||
             (name=="studio_asset_move_commit"&&!result["files"].size()&&!result["issues"].size()))&&
@@ -2832,9 +2842,10 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                     const std::string name=params.getStr("name");
                     if(!validStudioShaderGraphName(name))
                         throw std::runtime_error("Invalid Shader Graph filename");
-                    if(!validStudioShaderGraphDraft(params["expected"]))
+                    const Json original=graphOriginal(params["expected"]);
+                    if(!validStudioShaderGraphDraft(original))
                         throw std::runtime_error("Original Shader Graph document required; reload before saving");
-                    request.set("expected",params["expected"]);
+                    request.set("expected",original);
                     request.set("name",str(name));
                 }
                 const Json raw=ws_.call(method=="studio.shaderGraphSave"?
@@ -2842,6 +2853,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 if(raw.has("error")) throw std::runtime_error(raw.getStr("error"));
                 Json result=Json::object();
                 result.set("graph",raw["graph"]);
+                result.set("originalJson",str(raw["graph"].dump()));
                 result.set("nodes",raw["nodes"]);
                 result.set("samples",raw["samples"]);
                 // Shader source output is deliberately NOT passed to browser.
@@ -2858,6 +2870,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 if(raw.has("error")) throw std::runtime_error(raw.getStr("error"));
                 Json result=Json::object();
                 result.set("graph",raw["graph"]);
+                result.set("originalJson",str(raw["graph"].dump()));
                 result.set("nodes",raw["nodes"]);
                 result.set("samples",raw["samples"]);
                 // Do NOT serialize raw.glsl/msl/vertex* to JS.
@@ -3179,7 +3192,10 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             if((op=="terraweave_caverns_paint"||op=="terraweave_caverns_pick") && (params.getStr("expectedProject")!=ws_.project.dir ||
                !params["expectedMap"].isString() || params.getStr("expectedMap")!=(ws_.map.path.empty()?"":ws_.relative(ws_.map.path))))
                 throw std::runtime_error("Caverns project/map changed; refresh the panel");
-            const Json input=params["params"].isObject()?params["params"]:Json::object();
+            Json input=params["params"].isObject()?params["params"]:Json::object();
+            const bool graphWrite=op=="fx_graph_set" || op=="texture_graph_set" || op=="animation_graph_set";
+            if(graphWrite && input["expected"].isString())
+                input.set("expected",graphOriginal(input["expected"]));
             if(op=="terraweave_caverns_paint" && input.getStr("mode")!="get" &&
                (stroking_ || input.getStr("expectedMapRevision")!=std::to_string(ws_.map.revision) ||
                 !input["expectedRevision"].isString() || input.getBool("withinStroke",false)))
@@ -3187,6 +3203,9 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             const bool wasDirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
             const size_t depth=ws_.map.undoDepth(),entityCount=ws_.map.data.entities.size();
             Json result=ws_.call(op,input,"studio");
+            const bool graphRead=op=="fx_graph_get" || op=="texture_graph_get" || op=="animation_graph_get";
+            if((graphRead || graphWrite) && result["graph"].isObject())
+                result.set("originalJson",str(result["graph"].dump()));
             if(op=="terraweave_caverns_paint"&&!result.has("error"))result.set("mapRevisionText",str(std::to_string(ws_.map.revision)));
             if (result.has("error")) throw std::runtime_error(result.getStr("error"));
             const bool dirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
@@ -4090,20 +4109,31 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             }
             int removed=0;
             if (!dead.empty()) {
-                std::sort(dead.rbegin(),dead.rend());
-                dead.erase(std::unique(dead.begin(),dead.end()),dead.end());
-                begin();
-                for (size_t idx:dead) {
-                    // Roads are entity index pairs: drop the ones that end here, shift the rest.
-                    std::vector<std::pair<int,int>> roads;
-                    for (auto [a,b]:d.roads) {
-                        if (a==int(idx)||b==int(idx)) continue;
-                        roads.push_back({a>int(idx)?a-1:a,b>int(idx)?b-1:b});
-                    }
-                    d.roads=std::move(roads);
-                    d.entities.erase(d.entities.begin()+long(idx));
-                    ++removed;
+                // Map each original ordinal once so every surviving road keeps its endpoints.
+                const size_t originalCount=d.entities.size();
+                std::vector<int> remap(originalCount);
+                for(size_t index:dead)remap[index]=-1;
+                size_t kept=0;
+                for(size_t index=0;index<originalCount;++index){
+                    if(remap[index]<0)continue;
+                    remap[index]=static_cast<int>(kept);
+                    if(kept!=index)d.entities[kept]=std::move(d.entities[index]);
+                    ++kept;
                 }
+                removed=static_cast<int>(originalCount-kept);
+                d.entities.resize(kept);
+                auto deleted=[&](int index){
+                    return index>=0&&size_t(index)<originalCount&&remap[size_t(index)]<0;
+                };
+                auto newIndex=[&](int index){
+                    if(index<0)return index;
+                    return size_t(index)<originalCount?remap[size_t(index)]:index-removed;
+                };
+                std::erase_if(d.roads,[&](const auto& road){
+                    return deleted(road.first)||deleted(road.second);
+                });
+                for(auto& [a,b]:d.roads){a=newIndex(a);b=newIndex(b);}
+                begin();
             }
             if(begun&&!dryRun){
                 ws_.map.beginEdit();ws_.map.data=std::move(staged);

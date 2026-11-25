@@ -1,0 +1,13 @@
+{
+  "sha": "a4a07873518ad38f1d7f08f3d84561021db6a143",
+  "argv": [
+    "npm",
+    "--prefix",
+    "apps/studio-web",
+    "run",
+    "test:web"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/feature-gate-a4a078735-web.log.txt",
+  "sha256": "f11b6bc96d96fa310969c0f5fa07a93334c977780ef78d8d07739c1c164057b3"
+}

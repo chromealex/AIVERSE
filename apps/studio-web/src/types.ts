@@ -92,6 +92,7 @@ export interface StudioShaderGraphList { graphs: string[] }
 export interface StudioShaderGraphOp { id:string; inputs:number; domains:string[] }
 export interface StudioShaderGraphCatalog { nodes:StudioShaderGraphOp[] }
 export interface StudioShaderGraphDocument {
+  originalJson?: string;
   graph: { version?: number; domain?: string; minQuality?:string; nodes?: Array<{id:string;op:string;inputs?:string[];position?:number[];value?:number|number[];name?:string;mask?:string;texture?:string;srgb?:boolean}>; parameters?:Record<string,number|number[]>; outputs?:Record<string,string> };
   nodes: number; samples: number;
 }
@@ -656,7 +657,7 @@ export interface StudioParams {
   'studio.facialPreviewControls': { revision: number; values: Record<string,number>; vectors?: Record<string,[number,number,number]> };
   'studio.facialPreviewInfo': Record<string,never>;
   'studio.shaderGraphValidate': { graph: StudioShaderGraphDocument['graph'] };
-  'studio.shaderGraphSave': { name: string; graph: StudioShaderGraphDocument['graph']; expected?: StudioShaderGraphDocument['graph']; expectedProject?: string };
+  'studio.shaderGraphSave': { name: string; graph: StudioShaderGraphDocument['graph']; expected?: string | StudioShaderGraphDocument['graph']; expectedProject?: string };
   'studio.renderLighting': Record<string, never>;
   'studio.renderLightingSet': { patch: Partial<RenderLightingSettings> };
   'studio.lighting': Record<string, never>;

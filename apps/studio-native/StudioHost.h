@@ -190,6 +190,9 @@ private:
     void tickCharacterPreview(StudioSurface surface);
     StudioScene* activeHumanRenderer();
     void tickAssetPreview(StudioSurface surface);
+    void ensureScene();
+    Json textureGraphGpu(editor::Workspace& ws,const Json& params);
+    void tickTextureGraph(const std::string& project);
     void tickFx();                     // UI thread: independent native FX surface
     void tickScene();                  // UI thread: snapshot inputs, kick the render thread, publish results
     void renderSceneFrame();           // render thread: one map frame
@@ -210,6 +213,8 @@ private:
     Json dispatchSpectraPreview(const Json& params);
     uint64_t spectraDispatchSequence_=0,spectraDispatchFailed_=0;
     uint64_t packageProjectEpoch_=0;
+    Json localPlayOperation(const std::string& method, const Json& params, Json& reviewSlot);
+    void clearPlayReviews();
     Json runSpectraPreview(const Json& params); // shared HTML5 / authenticated MCP bridge
     void cancelSpectraCapture(); // invalidate callback state before dropping ownership
     Json captureSpectraFrame(const Json& params); // bounded asynchronous native GPU readback
@@ -248,6 +253,8 @@ private:
     AssetSurface& assetSurface(StudioSurface surface);
     std::unique_ptr<StudioScene> fxPreview_;           // separate GPU drawable + isolated camera; same owner render thread
     std::unique_ptr<StudioRenderThread> renderThread_;
+    bool textureGraphWork_=false;
+    std::string textureGraphScope_,textureGraphError_;
     std::mutex renderIoMutex_;                         // guards renderInputs_ / renderOutputs_
     FrameInputs renderInputs_;
     FrameOutputs renderOutputs_;
@@ -260,7 +267,7 @@ private:
     double nextMapSnapshot_ = 0, nextRulesCheck_ = 0;
     std::unique_ptr<StudioGameSurface> game_;
     Json playReview_;
-    uint64_t playReviewSerial_=0;
+    Json agentPlayReview_;
     NativeViewportPlacement placement_{}, gamePlacement_{}, fxPlacement_{};
     // Independent native FX drawable/swapchain: no Scene surface reparent,
     // no camera hijack. Both run on the existing native render owner thread.

@@ -1,0 +1,14 @@
+{
+  "sha": "be64591b1087b94fa52311bc1b3065feec6c8545",
+  "argv": [
+    "/opt/homebrew/opt/python@3.10/libexec/bin/python3",
+    "tools/agents/feature_policy.py",
+    "--base",
+    "2be780abdf5fa93844472f34e07e4c6dabae8935",
+    "--output",
+    "/Volumes/KINGSTON/AIVERSE-builds/feature-gate-qa/3929953e2bc9-20261124T074254Z-5856/source/logs/feature-readiness.json"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/feature-gate-mac-v10-be64591b1087-policy.log.txt",
+  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

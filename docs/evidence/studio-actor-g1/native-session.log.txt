@@ -1,0 +1,5 @@
+2026-11-25 11:03:14.146 AiverseStudioHTML5[17996:75767864] [studio-web] top-level navigation finished: http://127.0.0.1:4173/
+studio_runtime_regions passed
+Ledger {"revision": "2", "historyFloor": "0", "retiredFloor": "0", "nextIdentity": "3", "live": 2, "tombstones": 0, "capacity": 1000000, "ledgerArchiveBytes": "90", "materialized": 2, "regionCount": 2, "regionsTruncated": false, "regions": [{"cell": [1, 0, 1], "live": 1, "materialized": 1}, {"cell": [13, 0, 13], "live": 1, "materialized": 1}], "durabilityKnown": false, "simulationLod": {"available": false}, "active": true, "available": true, "epoch": "7", "tick": 3}
+studio_runtime_entities passed
+PASS hosted actor Play, stable pause, exact single step and authenticated native ledger snapshot

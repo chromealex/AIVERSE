@@ -55,6 +55,8 @@ int main() {{
     # A real header-only package must not acquire FPS/world/meta through an umbrella.
     cmake+=['add_executable(check_header EXCLUDE_FROM_ALL header.cpp)','target_link_libraries(check_header PRIVATE AIVERSE::lib_melee_combat)']
     (root/'header.cpp').write_text('#include "engine/mechanics/Melee.h"\nint main(){return 0;}\n')
+    selection_targets = ['check_' + feature.replace('-', '_') for feature in requested]
+    cmake.append('add_custom_target(check_selections DEPENDS ' + ' '.join(selection_targets) + ')')
     (root/'CMakeLists.txt').write_text('\n'.join(cmake)+'\n')
     run(['cmake','-S',root,'-B',build])
     run(['cmake','--build',build,'-j','6'])
@@ -104,9 +106,10 @@ int main() {{
     for key in modules:
         archive='libaiverse_meta_'+key.replace('-','_')+'.a'
         assert (archive in link)==(key in {'economy','social'}),(archive,link)
+    run(['cmake','--build',build,'--target','check_selections','-j','6'])
     for feature in requested:
         name=feature.replace('-','_');exe=build/('check_'+name)
-        run(['cmake','--build',build,'--target',exe.name,'-j','6']);run([exe])
+        run([exe])
         symbols=run([nm,'-C',exe])
         expected=selected(feature)
         for key,definition in modules.items():

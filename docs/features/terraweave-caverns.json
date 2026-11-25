@@ -209,6 +209,7 @@
     "tests/terraweave_caverns_volume_collision_nav_test.cpp",
     "tools/caverns-stage33-verify.sh",
     "tools/caverns-stage59-mac.sh",
+    "apps/studio-native/CMakeLists.txt",
     "examples/world/building-caverns-web/cave.cpp"
   ],
   "traits": {
@@ -219,17 +220,23 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Real ECS planetary authority and Box3D collision fixtures passed on Linux with physics enabled. Native authoring uses the existing Caverns owner and map persistence. The dedicated portal, checkpoint and independent-view fixtures are recorded by the area owner. The read-only Studio projection uses the existing owner snapshot.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "docs/agent-handoffs/feature-gate-planet-readiness-workloads-2026-11-25.md",
+        "docs/agent-handoffs/building-caverns-integration-stage27-2026-11-25.md",
+        "docs/agent-handoffs/feature-gate-native-integration-2026-11-25.md",
+        "tests/terraweave_caverns_planet_collision_test.cpp"
       ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Real ECS planetary authority and Box3D collision fixtures passed on Linux with physics enabled. Native authoring uses the existing Caverns owner and map persistence. The dedicated portal, checkpoint and independent-view fixtures are recorded by the area owner. The read-only Studio projection uses the existing owner snapshot.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "docs/agent-handoffs/feature-gate-planet-readiness-workloads-2026-11-25.md",
+        "docs/agent-handoffs/building-caverns-integration-stage27-2026-11-25.md",
+        "docs/agent-handoffs/feature-gate-native-integration-2026-11-25.md",
+        "tests/terraweave_caverns_planet_collision_test.cpp"
       ]
     },
     "native_api": {
@@ -256,14 +263,18 @@
       "note": "Native stdio carved and filled a map, undid and redid edits, saved it, and read the identical snapshot and stable IDs in a fresh MCP process.",
       "evidence": [
         "docs/evidence/caverns-authoring-b954cd47a.json",
-        "docs/evidence/integration-tools-b954cd47a.json"
+        "docs/evidence/integration-tools-b954cd47a.json",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt"
       ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Native Studio read an unauthored map and recovered a saved volume in a fresh process with exact region and stamp identities. The native MCP carve/fill, undo, redo and fresh-process roundtrip passed. Both planetary authority and collision passed on Linux and the owner ran six graphical scenarios on Mac.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "docs/agent-handoffs/building-caverns-integration-stage27-2026-11-25.md",
+        "docs/agent-handoffs/feature-gate-planet-readiness-workloads-2026-11-25.md",
+        "docs/evidence/studio-play-ad676e70c/caverns.png",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt"
       ]
     },
     "inspector": {
@@ -300,9 +311,10 @@
     },
     "platforms": {
       "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification. Linux ARM64 native focused tests passed on ad5786f5a. Windows execution remains open.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md",
+        "docs/evidence/integration-ad5786f5a-linux.log.txt"
       ]
     },
     "dependencies": {
@@ -332,10 +344,13 @@
       ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Native Studio read an unauthored map and recovered a saved volume in a fresh process with exact region and stamp identities. The native MCP carve/fill, undo, redo and fresh-process roundtrip passed. Both planetary authority and collision passed on Linux and the owner ran six graphical scenarios on Mac.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "docs/agent-handoffs/building-caverns-integration-stage27-2026-11-25.md",
+        "docs/agent-handoffs/feature-gate-planet-readiness-workloads-2026-11-25.md",
+        "docs/evidence/studio-play-ad676e70c/caverns.png",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt"
       ]
     },
     "handoff": {
@@ -354,10 +369,11 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "An offline browser demo, two captured frames and a bilingual devlog entry are staged on PR #190. Site publication awaits main integration.",
+      "status": "pass",
+      "note": "The reproducible browser package uses the C++ owners. Browser captures and a bilingual entry are in main via #190. The integrated replay exercised all thirteen styles and Caverns Carve, Fill and reset. The generated offline bundle is ready for the main integrator to deploy.",
       "evidence": [
-        "docs/evidence/building-caverns-web-a2119fb21.json",
+        "docs/agent-handoffs/building-caverns-integration-stage31-2026-11-25.md",
+        "docs/evidence/building-caverns-integrated-web.log.txt",
         "docs/devlog/entries/2026-11-25-world-building-caverns-web.json"
       ]
     }
@@ -378,6 +394,8 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integrated-graph-2a56cbf39.json"
+    "docs/evidence/feature-gate-e0b95cf24-contracts.json",
+    "docs/evidence/feature-gate-e0b95cf24-catalog.json",
+    "docs/evidence/feature-gate-e0b95cf24-skill-audit.json"
   ]
 }

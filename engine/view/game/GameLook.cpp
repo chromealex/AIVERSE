@@ -8,6 +8,7 @@
 #include "GameModelStreaming.h"
 #include "engine/view/AppearanceAuthoringService.h"
 #include "engine/view/AppearanceChoiceAuthoring.h"
+#include "engine/render/graph/TextureGraphGpuOwner.h"
 
 #include <algorithm>
 #include <chrono>
@@ -24,6 +25,18 @@ namespace aiverse::game {
 using namespace render;
 
 namespace {
+// Prevent synchronous native callbacks from recursively mutating this host.
+// This does not lock the GPU/cache or certify arbitrary external raw roots.
+struct NativeGraphCallbackScope final {
+    bool& active;
+    explicit NativeGraphCallbackScope(bool& flag):active(flag){
+        if(active)throw std::logic_error("nested native graph callback");
+        active=true;
+    }
+    NativeGraphCallbackScope(const NativeGraphCallbackScope&)=delete;
+    NativeGraphCallbackScope& operator=(const NativeGraphCallbackScope&)=delete;
+    ~NativeGraphCallbackScope(){active=false;}
+};
 constexpr float kDeg = 3.14159265358979f / 180.0f;
 // Keep one appearance of each initial model. Remaining material/body variants are appended later.
 std::vector<size_t> initialModelChoices(const Json& view) {
@@ -115,6 +128,15 @@ void GameView::warn(const UnitType& t, const std::string& msg) {
     if (std::find(warnings_.begin(), warnings_.end(), w) != warnings_.end()) return;
     std::fprintf(stderr, "view: %s\n", w.c_str());
     warnings_.push_back(std::move(w));
+}
+
+render::ModelReadLease GameView::readModelOf(uint16_t type, size_t choice) const {
+    if(nativeGraphCallbackActive_ || strictAppearanceReload_)return {};
+    // Validate the cache owner before reading choice storage. The temporary
+    // coarse scope is released on return; only the exact lease survives.
+    const auto scope=resources_.acquireFrameReadScope();
+    if(!scope)return {};
+    return resources_.acquireModelRead(modelOf(type,choice));
 }
 
 const Model* GameView::modelOf(uint16_t type, size_t choice) const {
@@ -364,6 +386,9 @@ static uint32_t parseWhen(const Json& when, const std::function<void(const std::
 }
 
 bool GameView::prepareType(uint16_t type, bool allVariants) {
+    // Do not consume a ready CPU result or advance its publication cursor
+    // while an owner-thread Model reader is alive. Retry on the next tick.
+    if(modelMutationBlocked())return false;
 #ifndef __EMSCRIPTEN__
     if (!asyncReader_ || !rules_ || type >= loadedTypes_.size() || (typeCurrent(type) && !allVariants)) return true;
     const auto& original = rules_->types[type];
@@ -436,7 +461,7 @@ size_t GameView::pendingModelVariants() const {
 }
 
 void GameView::streamModelVariants(double budgetMs) {
-    if (!rules_ || !dev_ || budgetMs <= 0) return;
+    if (!rules_ || !dev_ || budgetMs <= 0 || modelMutationBlocked()) return;
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::microseconds(int64_t(budgetMs * 1000));
     for (size_t type = 0; type < looks_.size(); ++type) {
         auto& look = looks_[type];
@@ -484,7 +509,9 @@ bool GameView::warmPipelines(render::Renderer3D& renderer, uint16_t type) {
 }
 
 void GameView::trimTypes(const std::vector<bool>& keep, bool compact) {
-    if (!dev_ || keep.size()!=looks_.size()) return;
+    // Refuse before clearing TypeLooks or animation sources; the cache
+    // itself also rejects eviction while a scoped reader is active.
+    if (!dev_ || keep.size()!=looks_.size() || modelMutationBlocked()) return;
 #ifndef __EMSCRIPTEN__
     if (resources_.preparation().active()) return; // prepared models do not yet have looks
 #endif
@@ -597,7 +624,7 @@ void GameView::rememberReloadPlayback(uint64_t key,const EntityAnim& state) noex
 // No affected Model/Graph pointers may survive the release barrier. Keep
 // unaffected TypeLooks and MotionWeave players alive to preserve their clocks.
 size_t GameView::reloadModelSources(const std::vector<std::string>& sources) {
-    if(!dev_ || !rules_ || sources.empty())return 0;
+    if(!dev_ || !rules_ || sources.empty() || modelMutationBlocked())return 0;
     std::unordered_set<std::string> changed;
     for(const auto& source:sources)
         if(!source.empty())
@@ -693,6 +720,8 @@ bool GameView::reloadAppearanceTypes(const std::set<size_t>& types,
                                     bool reloadMaterialLibrary,
                                     size_t* refreshed) {
     if(refreshed)*refreshed=0;
+    // Preserve last-good materials, pending shader state and CPU preparation.
+    if(modelMutationBlocked())return false;
     gpuAppearancePending_=false;
     if(!dev_ || !rules_)return false;
 #ifndef __EMSCRIPTEN__
@@ -844,6 +873,7 @@ bool GameView::reloadAppearanceTypes(const std::set<size_t>& types,
                 bool pending=false;
                 const auto warm=[&](const ModelChoice& choice) {
                     if(!choice.model)return;
+                    const NativeGraphCallbackScope callback(nativeGraphCallbackActive_);
                     const auto status=appearancePipelineValidator_(
                         *choice.model,choice.materials);
                     if(status==render::Renderer3D::PipelineWarmStatus::Failed)
@@ -968,8 +998,160 @@ bool GameView::reloadAppearanceTypes(const std::set<size_t>& types,
     return true;
 }
 
+// Compatibility adapter only. It never owns the graph request or textures.
+// No implicit load, type replacement, material asset write or animation reset.
+std::optional<GameView::GraphMaterialTargetInfo> GameView::graphMaterialTarget(
+        size_t type,size_t choice,size_t material) const {
+    if(!dev_||!gpuDeviceLease_.validFor(*dev_)||!dev_->gpuHealthy()||
+       !resources_.boundToResourceDevice(*dev_)||resources_.activeModelReaders()!=0||
+       nativeGraphCallbackActive_||strictAppearanceReload_||activeImageTransaction_||
+       type>std::numeric_limits<uint16_t>::max()||type>=looks_.size()||
+       !typeCurrent(uint16_t(type))||choice>=looks_[type].models.size())return {};
+    const auto& live=looks_[type].models[choice];
+    if(!live.model||!live.modelGeneration)return {};
+    bool owned=false;
+    for(const auto& [key,model]:resources_.models()){
+        (void)key;if(model.get()==live.model){owned=true;break;}
+    }
+    if(!owned)return {};
+    const auto& snapshot=live.appearanceSnapshot;
+    if(snapshot&&snapshot->model!=live.model)return {};
+    const auto& materials=snapshot?snapshot->materials:live.materials;
+    const uint64_t publication=snapshot?snapshot->modelPublicationGeneration:live.modelGeneration;
+    const uint64_t version=snapshot?snapshot->version:1;
+    const view::LiveAppearanceMaterialTarget identity{publication,version,material};
+    if(!identity.matches(publication,version,materials.size()))return {};
+    const auto stats=render::texture_graph::graphImageStats(*live.model,imageRollback_);
+    return GraphMaterialTargetInfo{identity,live.model->path,materials[material].name,live.variant,
+        stats.live,stats.tombstones,stats.pendingRetirement};
+}
+
+render::texture_graph::NativeGraphImageRead GameView::readGraphMaterialImage(
+        size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
+        std::string_view output)const{
+    using namespace render::texture_graph;
+    const auto slot=materialSlot(output);
+    if(!slot||activeStagedModels_||cameraPreparedCapture_)return {};
+    const auto current=graphMaterialTarget(type,choice,target.material);
+    if(!current||target.publication!=current->identity.publication||
+       target.version!=current->identity.version)return {};
+    const auto& live=looks_[type].models[choice];
+    const auto& materials=live.appearanceSnapshot?live.appearanceSnapshot->materials:live.materials;
+    const auto reference=referenceGraphMaterialImage(materials[target.material],slot);
+    return NativeGraphImageRead::acquire(resources_,live.model,reference,*dev_,gpuDeviceLease_);
+}
+
+bool GameView::applyGraphMaterial(size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
+        const GraphMaterialApply& apply,std::string* error){
+    if(error)error->clear();
+    try{
+        const auto current=graphMaterialTarget(type,choice,target.material);
+        if(!apply||!current||!target.matches(current->identity.publication,current->identity.version,
+                looks_[type].models[choice].materials.size()))
+            throw std::runtime_error("live appearance target missing, stale or busy");
+        auto& live=looks_[type].models[choice];
+        // Initial choices may predate snapshot publication. Prepare the
+        // exact already-authored state locally; publish only on success.
+        auto snapshot=live.appearanceSnapshot;
+        if(!snapshot){
+            auto prepared=std::make_shared<view::AppearanceAssetRegistry::Asset>();
+            prepared->model=live.model;prepared->materials=live.materials;
+            prepared->nodeMaterial=live.nodeMaterial;prepared->geometry=live.geometry;
+            prepared->variant=live.variant;prepared->graph=live.graph;
+            prepared->graphDefinition=live.graphSignature;
+            prepared->modelSource=live.model->path;
+            prepared->modelPublicationGeneration=current->identity.publication;
+            prepared->version=current->identity.version;
+            // Existing animation players and their own generation stay
+            // untouched; this snapshot only supplies appearance metadata.
+            prepared->sourceId=live.graph?live.modelGeneration:0;
+            prepared->generation=live.graph?live.modelGeneration:0;
+            snapshot=std::move(prepared);
+        }
+        const NativeGraphCallbackScope callback(nativeGraphCallbackActive_);
+        if(!apply(snapshot,live.materials,*live.model,*dev_,gpuDeviceLease_,imageRollback_,error))
+            return false;
+        live.appearanceSnapshot=std::move(snapshot);
+        return true;
+    }catch(const std::exception& e){
+        if(error)*error=e.what();return false;
+    }
+}
+
+bool GameView::applyCompletedGraphMaterial(size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
+        render::texture_graph::TextureGraphGpuOwner& owner,const std::string& scope,const std::string& request,std::string* error){
+    return applyGraphMaterial(type,choice,target,[&](auto& live,auto& mirror,auto& model,auto& device,
+            const auto& lease,auto& rollback,std::string* why){
+        return owner.publishCompletedGpuSnapshot(scope,request,live,target,model,device,lease,rollback,&mirror,why);
+    },error);
+}
+
+render::texture_graph::GraphImageReclaimResult GameView::collectGraphMaterialImages(size_t type,size_t choice,size_t material,
+        const view::LiveAppearanceMaterialTarget& target,const render::texture_graph::GraphImageRoots& external,
+        const GraphImageRootProvider& inspectHost){
+    const auto current=graphMaterialTarget(type,choice,material);
+    if(!current||target.material!=material||target.publication!=current->identity.publication||target.version!=current->identity.version||
+       !external.complete||external.activeReaders!=0||cameraPreparedCapture_||activeStagedModels_)
+        throw std::runtime_error("graph reclamation target or external root proof unavailable");
+    auto& model=*looks_[type].models[choice].model;
+    std::vector<std::span<const render::Material>> roots(external.extra.begin(),external.extra.end());
+    const NativeGraphCallbackScope callback(nativeGraphCallbackActive_);
+    if(inspectHost&&!inspectHost(model,roots))
+        throw std::runtime_error("graph reclamation has unresolved host material roots");
+    appendGraphImageRoots(model,roots);
+    return render::texture_graph::reclaimGraphImages(model,*dev_,gpuDeviceLease_,imageRollback_,
+        {true,resources_.activeModelReaders(),roots,external.trackedOnly,external.recycleSlots});
+}
+
+void GameView::appendGraphImageRoots(const render::Model& model,std::vector<std::span<const render::Material>>& roots)const{
+    auto scan=[&](const ModelChoice& item){
+        if(item.model==&model)roots.emplace_back(item.materials);
+        if(item.appearanceSnapshot&&item.appearanceSnapshot->model==&model)roots.emplace_back(item.appearanceSnapshot->materials);
+        // An attachment may use the same resident Model as another type's
+        // main choice. Its independent material indices remain roots even
+        // when the main choice no longer references those image slots.
+        for(const auto& attachment:item.attach)
+            if(attachment.model==&model)roots.emplace_back(attachment.materials);
+    };
+    for(const auto& look:looks_){
+        for(const auto& item:look.models)scan(item);
+        for(const auto& item:look.lods)scan(item);
+        for(const auto& stage:look.stages)scan(stage.choice);
+    }
+}
+
+bool GameView::collectAutomaticGraphImages(){
+    if(!graphImageRootProvider_||!dev_||!gpuDeviceLease_.validFor(*dev_)||!dev_->gpuHealthy()||
+       !resources_.boundToResourceDevice(*dev_)||resources_.activeModelReaders()||
+       nativeGraphCallbackActive_||strictAppearanceReload_||activeImageTransaction_||activeStagedModels_||cameraPreparedCapture_)return false;
+    // At most one resident model per owner frame. No borrowed Model pointer
+    // is retained across frames, and no GPU wait is explicitly added here.
+    if(imageRollback_.unrecoverableBatches()||imageRollback_.pendingImages()>=render::texture_graph::maxLiveProceduralImages)return false;
+    try{
+        const auto& models=resources_.models();if(models.empty()){graphImageSweepCursor_.clear();return false;}
+        auto it=models.upper_bound(graphImageSweepCursor_);if(it==models.end())it=models.begin();
+        graphImageSweepCursor_=it->first;
+        if(!it->second)return false;
+        auto& model=*it->second;++graphImageSweepStats_.inspected;
+        bool possible=false;
+        for(const auto& image:model.images)if(image.proceduralGraphImage&&!image.proceduralGraphRetired&&
+            render::graphImageUnpinned(image.proceduralGraphPin)){possible=true;break;}
+        if(!possible)return false;
+        std::vector<std::span<const render::Material>> roots;
+        const NativeGraphCallbackScope callback(nativeGraphCallbackActive_);
+        if(!graphImageRootProvider_(model,roots)){++graphImageSweepStats_.deferred;return false;}
+        appendGraphImageRoots(model,roots);
+        const auto result=render::texture_graph::reclaimGraphImages(model,*dev_,gpuDeviceLease_,imageRollback_,
+            {true,resources_.activeModelReaders(),roots,true,graphImageRecycleSlots_});
+        graphImageSweepStats_.detached+=result.detached;return result.detached!=0;
+    }catch(const std::exception&){
+        // Optional collection cannot fail a frame on backpressure or refusal.
+        ++graphImageSweepStats_.deferred;return false;
+    }
+}
+
 void GameView::requestDetail(uint16_t type, bool detailed) {
-    if(!rules_ || type>=requestedModels_.size())return;
+    if(!rules_ || type>=requestedModels_.size() || modelMutationBlocked())return;
     const auto& t=rules_->types[type];const auto coarse=t.view["streaming"].getStr("coarseModel");
     if(coarse.empty() || t.speed.raw!=0)return;
 #ifndef __EMSCRIPTEN__
@@ -978,7 +1160,7 @@ void GameView::requestDetail(uint16_t type, bool detailed) {
     requestedModels_[type]=detailed ? std::string{} : coarse;
 }
 void GameView::loadType(uint16_t type) {
-    if (!rules_ || type >= loadedTypes_.size() || typeCurrent(type)) return;
+    if (!rules_ || type >= loadedTypes_.size() || typeCurrent(type) || modelMutationBlocked()) return;
     const bool replacing=loadedTypes_[type];
     TypeLook ready;
     const auto path=requestedModels_[type].empty()?rules_->types[type].view["streaming"].getStr("detailModel"):requestedModels_[type];
@@ -1205,8 +1387,16 @@ bool GameView::loadChoice(gfx::Device& dev, const UnitType& t, const Json& view,
 }
 
 int GameView::loadTexture(gfx::Device& dev, const UnitType& t, Model& m, const std::string& path) {
-    for (size_t i = 0; i < m.images.size(); ++i)
-        if (m.images[i].name == path)return int(i);
+    // Runtime publications are not authored file assets. Never mint a raw
+    // imported binding to a procedural generation by its internal name.
+    if(path.rfind("#texture-graph/",0)==0){
+        if(activeImageTransaction_)throw std::runtime_error("runtime procedural image is not an authored texture path");
+        warn(t,"runtime procedural image is not an authored texture path");
+        return -1;
+    }
+    for(size_t i=0;i<m.images.size();++i)
+        if(!m.images[i].proceduralGraphImage&&!m.images[i].proceduralGraphRetired&&
+           m.images[i].name==path)return int(i);
     Image img;
     img.name=path;
     if(activeImageTransaction_) {
@@ -1222,8 +1412,8 @@ int GameView::loadTexture(gfx::Device& dev, const UnitType& t, Model& m, const s
         warn(t,"texture '"+path+"' not found");
         return -1;
     }
-    if(!decodeImage(bytes,img)) {
-        warn(t,"texture '"+path+"': unsupported format (PNG, JPEG, TGA)");
+    if(!decodeMaterialImage(bytes,img)) {
+        warn(t,"texture '"+path+"': unsupported format (PNG, JPEG, TGA, linear EXR/RGBE)");
         return -1;
     }
     return addImage(dev,m,std::move(img));

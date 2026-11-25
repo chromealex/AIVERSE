@@ -4,6 +4,7 @@
 #include <thread>
 #include <future>
 #include "engine/render/Animation.h"
+#include "engine/render/graph/TextureGraphImageReclamation.h"
 #include <stdexcept>
 using namespace aiverse;
 class FakeDevice final : public aiverse::gfx::Device {
@@ -117,7 +118,34 @@ int aiverseMain(int, char**) {
     view.loadType(1);
     const auto beforeTrim = view.assetResidencyStats();
     check(beforeTrim.loadedTypes==2 && beforeTrim.cachedModels>=2,"resident models tracked");
+    {
+        const auto read=view.readModelOf(1);
+        check(read.valid() && view.activeModelReadLeases()==1,"choice reader must retain exact cache lease");
+        check(!view.readModelOf(65535) && !view.readModelOf(1,999),"invalid choices must not acquire reader");
+        check(view.activeModelReadLeases()==1,"invalid choice leaked a reader");
+        view.trimTypes(std::vector<bool>{true,false,false},true);
+        check(view.typeLoaded(1) && read.valid(),"trim must refuse before detaching live choice");
+        const auto generation=view.modelResources().generation();
+        const auto beforeAlive=dev.alive;
+        check(!view.prepareType(2),"reader must defer CPU preparation publication");
+        view.loadType(2);
+        check(!view.typeLoaded(2),"reader must defer type publication");
+        size_t refreshed=99;
+        check(!view.reloadAppearanceTypes({1},false,&refreshed)&&refreshed==0,
+              "reader must refuse appearance staging");
+        check(view.reloadModelSources({"b.obj"})==0,"reader must defer source reload");
+        bool initRefused=false,shutdownRefused=false;
+        try { (void)view.init(dev,rules,reader); }
+        catch(const std::logic_error&) { initRefused=true; }
+        try { view.shutdown(dev); }
+        catch(const std::logic_error&) { shutdownRefused=true; }
+        check(initRefused&&shutdownRefused,"reader must refuse init and shutdown");
+        check(read.valid()&&view.typeLoaded(1)&&view.modelResources().generation()==generation&&dev.alive==beforeAlive,
+              "refused mutations must preserve model generation and GPU owners");
+    }
+    check(view.activeModelReadLeases()==0,"choice reader leaked after scope");
     view.trimTypes(std::vector<bool>{true,false,false},true);
+    check(!view.readModelOf(1),"trimmed choice remained readable");
     const auto afterTrim = view.assetResidencyStats();
     check(view.typeLoaded(0) && !view.typeLoaded(1) && view.modelOf(0)!=nullptr,
           "trimming unused type must not discard the currently edited map type");
@@ -139,6 +167,102 @@ int aiverseMain(int, char**) {
           "lazy editor type must expose every model variant");
     view.shutdown(dev);
     view.setDeferAppearanceVariants(true);
+    // Real cache/device-epoch setup, no GPU graph dispatch. A trusted apply
+    // callback may refuse or throw, but must not reenter the same View.
+    {
+        render::RenderDeviceLifetime lifetime(dev);
+        game::GameView guarded;
+        guarded.setGpuDeviceLease(lifetime.lease());
+        guarded.setDeferredLoading(true);
+        check(guarded.init(dev,rules,reader),"callback guard init");
+        guarded.loadType(0);
+        const auto target=guarded.graphMaterialTarget(0,0,0);
+        check(bool(target),"callback guard fixture target");
+        const auto generation=guarded.modelResources().generation();
+        bool invoked=false;
+        std::string error;
+        const bool applied=guarded.applyGraphMaterial(0,0,target->identity,
+            [&](auto&,auto&,auto&,auto&,const auto&,auto&,std::string*) -> bool {
+                invoked=true;
+                check(guarded.modelMutationBlocked(),"callback mutation flag");
+                check(!guarded.readModelOf(0),"callback must refuse nested reader");
+                check(!guarded.graphMaterialTarget(0,0,0),"callback must refuse nested target");
+                check(!guarded.collectAutomaticGraphImages(),"callback must refuse nested sweep");
+                guarded.trimTypes(std::vector<bool>{false,false,false},true);
+                check(guarded.typeLoaded(0),"callback must not trim live target");
+                bool refused=false;
+                try { guarded.setAutomaticGraphImageCollection({}); }
+                catch(const std::logic_error&) { refused=true; }
+                check(refused,"callback must not replace root provider");
+                throw std::runtime_error("intentional callback refusal");
+            },&error);
+        check(invoked&&!applied&&error=="intentional callback refusal","callback refusal evidence");
+        check(!guarded.modelMutationBlocked()&&guarded.graphMaterialTarget(0,0,0)&&
+              guarded.modelResources().generation()==generation,"callback guard must unwind");
+        guarded.shutdown(dev);
+    }
+    // Legacy raw-index attachment roots are deliberately unpinned here:
+    // a complete explicit collector must still enumerate them. Production
+    // graph publication uses pins; this fixture injects an old-style image
+    // through the trusted transaction callback to exercise the root audit.
+    {
+        using namespace render::texture_graph;
+        render::RenderDeviceLifetime lifetime(dev);
+        game::GameView attached;
+        rules.types[0].view=Json::parse(R"({"model":"a.obj"})");
+        rules.types[1].view=Json::parse(R"({"model":"b.obj","attach":[{"model":"a.obj"}]})");
+        attached.setGpuDeviceLease(lifetime.lease());
+        attached.setDeferredLoading(true);
+        check(attached.init(dev,rules,reader),"attachment root init");
+        attached.loadType(0);
+        auto target=attached.graphMaterialTarget(0,0,0);
+        check(bool(target),"attachment source material target");
+        int slot=-1;
+        std::string error;
+        check(attached.applyGraphMaterial(0,0,target->identity,
+            [&](auto&,auto&,render::Model& model,gfx::Device& device,
+                const auto&,auto&,std::string*) {
+                check(!model.materials.empty(),"attachment source materials");
+                render::Image image;
+                image.name="#texture-graph/legacy-attachment";
+                image.proceduralGraphImage=true;
+                image.width=image.height=1;
+                gfx::TextureDesc desc;
+                desc.width=desc.height=1;
+                image.tex=device.createTexture(desc);
+                slot=int(model.images.size());
+                model.images.push_back(std::move(image));
+                model.materials[0].baseTex=slot;
+                model.markMaterialChanged();
+                return true;
+            },&error),"inject legacy graph image");
+        attached.loadType(1); // copies source model materials into attachment
+        check(attached.typeLoaded(1),"attachment host resident");
+        target=attached.graphMaterialTarget(0,0,0);
+        check(bool(target),"attachment target after copy");
+        check(attached.applyGraphMaterial(0,0,target->identity,
+            [&](auto&,auto&,render::Model& model,auto&,const auto&,auto&,std::string*) {
+                model.materials[0].baseTex=-1;
+                model.markMaterialChanged();
+                return true;
+            },&error),"detach base root");
+        target=attached.graphMaterialTarget(0,0,0);
+        check(bool(target),"attachment target before collection");
+        const GraphImageRoots proof{true,0,{},false,false};
+        const auto retained=attached.collectGraphMaterialImages(0,0,0,target->identity,proof);
+        check(retained.detached==0&&retained.live==1,"live attachment must retain legacy graph image");
+        attached.trimTypes(std::vector<bool>{true,false,false},true);
+        target=attached.graphMaterialTarget(0,0,0);
+        check(bool(target),"attachment target after trim");
+        const auto reclaimed=attached.collectGraphMaterialImages(0,0,0,target->identity,proof);
+        check(reclaimed.detached==1&&reclaimed.tombstones==1,"removed attachment permits image collection");
+        {
+            const auto read=attached.readModelOf(0);
+            check(read.valid()&&slot>=0&&read.get()->images[size_t(slot)].proceduralGraphRetired,
+                  "attachment image tombstone");
+        }
+        attached.shutdown(dev);
+    }
     // Projectile appearance shares the same deferred model owner and trim rules.
     game::WeaponDef weapon;weapon.id="bow";
     rules.types[0].weapons={weapon};

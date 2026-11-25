@@ -9,3 +9,8 @@
 .au-graph-node circle:focus-visible{stroke:var(--au-accent-ink);stroke-width:2}
 
 .au-graph-actions{flex-wrap:wrap;padding:var(--au-space-1)}
+
+.au-graph-canvas--grid{background-color:var(--au-canvas);background-image:radial-gradient(var(--au-line) 1px,transparent 1px);background-size:20px 20px;overscroll-behavior:contain}
+.au-graph-workspace>.au-row>.au-button{flex:0 1 auto}
+
+.au-graph-workspace{position:relative}.au-graph-minimap{position:absolute;bottom:10px;right:10px;width:128px;height:88px;background:var(--au-panel-raised);border:1px solid var(--au-accent);border-radius:5px;cursor:crosshair;opacity:.9;z-index:3}

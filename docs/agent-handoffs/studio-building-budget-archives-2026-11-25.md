@@ -1,0 +1,9 @@
+# Local Studio generation, budget planning and gameplay archives
+
+Implementation 96e08157a33f6fbd2def4e4184ed8a3c359f68f4 corrects the version field in the Studio shader-save regression. Eight independent clean-tree suites passed on that commit. The native Studio app in these checks has the same application source as 647255066; the only subsequent C++ edit was to the test fixture.
+
+In a disposable project, the production Building Generator panel generated a real GLB into the project. Preview 3D displayed a native rendered image for seed 482733, dimensions 24 × 12 × 18. Independently, python3.12 tools/buildings/qa_batch_20.py --compile with an external exporter and output directory built the real C++ exporter and passed all twenty GLB cases, including the original compact factory seed. The earlier two-scene native Building diagnostics test and material/style exports are recorded in the native integration handoffs.
+
+In the Roads panel, the actual three numeric inputs were filled with 200000 entities, period 120 and cap 1000. Clicking Read displayed visitsPerTick 1000, maxRevisitTicks 200 and meetsPeriod false. The two native window captures are under docs/evidence/studio-building-budget. The generated Studio diary includes the budget panel and the guarded graph conflict.
+
+For archive verification, the existing tests/runtime_vitals_test.cpp fixture was compiled and linked against the current Mac native libraries with an extra roundtrip. After StudioRuntimeEdit set HP to 1, Simulation::serialize produced a nonempty archive. A newly constructed GameCore simulation loaded it and matched the edited unit's HP and the source simulation checksum. Two further ticks on each simulation, one with a bounded profiler capture and one without a capture, produced identical gameplay archives and checksums. This test exercised the existing game serializer and excluded profiler timings from durable gameplay state.

@@ -65,7 +65,7 @@ struct Channel {
 } // namespace exr_detail
 
 inline bool parseOpenExr(std::string_view bytes, RadianceImage& out,
-                         std::string& error) {
+                         std::string& error, size_t maxDecodedBytes=size_t(512)<<20) {
     out = {};
     error.clear();
     auto fail = [&](const char* why) {
@@ -158,7 +158,7 @@ inline bool parseOpenExr(std::string_view bytes, RadianceImage& out,
         return fail("EXR: only uncompressed scanline storage is supported");
     const int64_t width=xMax-xMin+1, height=yMax-yMin+1;
     if (width<1 || height<1 || width>16384 || height>16384 ||
-        uint64_t(width)*uint64_t(height)*8u > (uint64_t(512)<<20))
+        uint64_t(width)*uint64_t(height)*8u > std::min<uint64_t>(uint64_t(512)<<20,maxDecodedBytes))
         return fail("EXR: image extent or decoded size exceeds limits");
 
     const size_t count=size_t(height);

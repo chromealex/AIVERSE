@@ -1,0 +1,17 @@
+{
+  "sha": "be64591b1087b94fa52311bc1b3065feec6c8545",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/feature-gate-qa/3929953e2bc9-20261124T074254Z-5856/native",
+    "--config",
+    "Debug",
+    "--no-tests=error",
+    "--output-on-failure",
+    "-R",
+    "^(skill_catalog|skill_routing|skill_audit|native_project_build|aiverse_gameplay_tests|vfx_graph_ops|camera_client_adapter|studio_shader_graph_draft|studio_content_directory)$"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/feature-gate-mac-v10-be64591b1087-ctest-focused.log.txt",
+  "sha256": "c1e4655bdc66e4242e7c3afae1940413bec44cbba1ffe2a816a3988c091092fc"
+}

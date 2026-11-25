@@ -20,7 +20,8 @@
     "tests/libraries/runtime_tests.cpp",
     "tests/simulation_budget_mcp_test.py",
     "tests/tests_traffic.inc",
-    "tools/mcp/audit_registry.py"
+    "tools/mcp/audit_registry.py",
+    "engine/sim/RecurringWork.h"
   ],
   "traits": {
     "editable": true,
@@ -30,17 +31,23 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Traffic population calls the deterministic engine scheduling functions. The public WorkBudget API refers to the same functions. The existing traffic cursor remains the only mutable owner. Native regressions cover fairness, restoration and determinism. The engine no longer links the higher-level work-budget library.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "engine/sim/RecurringWork.h",
+        "libraries/include/aiverselib/runtime/WorkBudget.h",
+        "engine/game/TrafficPopulation.cpp",
+        "docs/evidence/recurring-budget-native-b1bb89949.log.txt"
       ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Traffic population calls the deterministic engine scheduling functions. The public WorkBudget API refers to the same functions. The existing traffic cursor remains the only mutable owner. Native regressions cover fairness, restoration and determinism. The engine no longer links the higher-level work-budget library.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "engine/sim/RecurringWork.h",
+        "libraries/include/aiverselib/runtime/WorkBudget.h",
+        "engine/game/TrafficPopulation.cpp",
+        "docs/evidence/recurring-budget-native-b1bb89949.log.txt"
       ]
     },
     "native_api": {
@@ -70,17 +77,19 @@
       ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Roads panel exposed all three integer inputs and rendered the real planner result. Using 200000 entities, period 120 and cap 1000 yielded 1000 visits per tick, 200 ticks for a full cycle and meetsPeriod false.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "docs/agent-handoffs/studio-building-budget-archives-2026-11-25.md",
+        "docs/evidence/studio-building-budget/roads.png"
       ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Roads panel exposed all three integer inputs and rendered the real planner result. Using 200000 entities, period 120 and cap 1000 yielded 1000 visits per tick, 200 ticks for a full cycle and meetsPeriod false.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "docs/agent-handoffs/studio-building-budget-archives-2026-11-25.md",
+        "docs/evidence/studio-building-budget/roads.png"
       ]
     },
     "persistence": {
@@ -98,10 +107,11 @@
       "evidence": []
     },
     "performance": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "An optimized macOS run scanned ten million scheduled indices across 10000 ticks for 200000 entities at the 1000-visit cap in 0.0443 seconds. The pure planner and cursor use no dynamic allocations. Process peak RSS was 1294336 bytes. This is the scheduling overhead; traffic decisions have their own costs.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "docs/agent-handoffs/feature-gate-vulkan-and-native-play-2026-11-25.md",
+        "engine/sim/RecurringWork.h"
       ]
     },
     "platforms": {
@@ -112,10 +122,11 @@
       ]
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The declared feature policy lists no prerequisite manifests. The integrated report resolved the dependency order and roadmap without policy errors.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "docs/agents/feature-policy.json",
+        "docs/evidence/integration-1209eaa44-policy.log.txt"
       ]
     },
     "headless": {
@@ -161,10 +172,12 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The bilingual Studio devlog explains how to use the recurring decision budget and includes a real Roads panel capture. The local site check accepted the entry. The editor-tool capture exception applies; public deployment follows main.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "docs/devlog/entries/2026-11-25-studio-local-play-inspection.json",
+        "docs/evidence/studio-building-budget/roads.png",
+        "docs/agents/contracts/release-site.md"
       ]
     }
   },
@@ -184,6 +197,8 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integrated-graph-2a56cbf39.json"
+    "docs/evidence/feature-gate-e0b95cf24-contracts.json",
+    "docs/evidence/feature-gate-e0b95cf24-catalog.json",
+    "docs/evidence/feature-gate-e0b95cf24-skill-audit.json"
   ]
 }

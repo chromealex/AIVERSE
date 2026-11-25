@@ -1,0 +1,11 @@
+{
+  "sha": "561c6a1973cbe209e73b237a56bf7a937bcdf608",
+  "argv": [
+    "python3.12",
+    "tools/skills/audit.py",
+    "--strict"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/feature-gate-561c6a197-skill-audit.log.txt",
+  "sha256": "d7208f9f009f437d4af48bfdc29c67bbc0cf9663f9cea8c5ad46655a054e44e8"
+}

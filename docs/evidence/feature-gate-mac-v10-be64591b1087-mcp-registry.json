@@ -1,0 +1,15 @@
+{
+  "sha": "be64591b1087b94fa52311bc1b3065feec6c8545",
+  "argv": [
+    "/opt/homebrew/opt/python@3.10/libexec/bin/python3",
+    "tools/mcp/audit_registry.py",
+    "/Volumes/KINGSTON/AIVERSE-builds/feature-gate-qa/3929953e2bc9-20261124T074254Z-5856/native/aiversemcp",
+    "--engine",
+    "/Volumes/KINGSTON/AIVERSE-builds/feature-gate-qa/3929953e2bc9-20261124T074254Z-5856/source",
+    "--feature-dir",
+    "docs/features"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-registry.log.txt",
+  "sha256": "5fd0313bc49225d1f3ec9f33d8d10b281852896553ce26d95e55bc56a9dd0419"
+}

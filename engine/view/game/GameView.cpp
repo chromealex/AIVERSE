@@ -324,7 +324,7 @@ size_t GameView::pendingModelRetirements() const {
            fog_.pendingGpuRetirements();
 }
 bool GameView::collectRetiredModels() {
-    if(!dev_)return false;
+    if(!dev_ || nativeGraphCallbackActive_ || strictAppearanceReload_)return false;
     const bool models=resources_.collectRetired(*dev_);
     const bool images=imageRollback_.collect(*dev_);
     // Always poll all three queues, even while a previous one is pending.
@@ -355,6 +355,8 @@ void GameView::setRoadMap(const Json& map) {
 float4 GameView::playerColor(int p) { return overlayPlayerColor(p); }   // palette shared with the overlays
 
 bool GameView::init(gfx::Device& dev, const Rules& rules, FileReader reader) {
+    if(modelMutationBlocked())
+        throw std::logic_error("GameView init: active Model readers or appearance transaction");
     pendingSurfaceLease_.reset();
     framePublication_.invalidate();
     // Terrain, fog, roads, shores and overlays also own RHI handles when a
@@ -653,6 +655,9 @@ void GameView::drawNereidLegacyWater(Renderer3D& r,bool terrainReady) {
 }
 
 void GameView::shutdown(gfx::Device& dev) {
+    // Fail before clearing ANY host state or waiting on the GPU.
+    if(modelMutationBlocked())
+        throw std::logic_error("GameView shutdown: active Model readers or appearance transaction");
     // Private unpublished GPU candidates must be released BEFORE the
     // full-device idle boundary or owner kit shutdown.
     pendingSurfaceLease_.reset();
@@ -699,6 +704,7 @@ void GameView::shutdown(gfx::Device& dev) {
     // All model GPU buffers and textures are now released by the same
     // per-host resource owner, after any asynchronous preparation joined.
     resources_.shutdown(dev);
+    setAutomaticGraphImageCollection({}); // do not carry external native callbacks into a new host epoch
     drawTypeStamps_.clear(); drawTypes_.clear(); drawTypeEpoch_ = 0;
     for (Mesh* m : {&projectile_}) { dev.destroyBuffer(m->vb); dev.destroyBuffer(m->ib); *m = Mesh{}; }
     terrain_.shutdown(dev);
@@ -1235,6 +1241,8 @@ private:
 };
 
 void GameView::draw(Renderer3D& r, const GameScene& input, double time, const std::vector<uint8_t>* vision, const MapGrid& grid) {
+    if(nativeGraphCallbackActive_ || strictAppearanceReload_)
+        throw std::logic_error("GameView draw during appearance transaction");
     if(planets_.active()&&!syncSimPlanetTerrain(grid))
         throw std::logic_error("GameView: stale planetary terrain topology");
     if(planets_.active()&&!input.planetForest.plants.empty()&&dev_&&

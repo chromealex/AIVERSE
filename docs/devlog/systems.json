@@ -59,6 +59,7 @@
         "Запрашивать деревья рядом из геймплея и запекать рельеф в карту редактора через MCP."
       ],
       "roadmap": [
+        {"id": "terraweave-meadow-grass", "status": "done", "title": "Виды луговой травы", "titleEn": "Meadow grass species", "text": "Густой луг с солнечными тенями, просвечиванием листьев и детализацией по расстоянию.", "textEn": "Dense meadow canopy with sun shadows, leaf transmission and distance LOD.", "date": "2026-11-25"},
         {
           "status": "done",
           "date": "2026-11-18",
@@ -122,8 +123,8 @@
           "status": "in-progress",
           "title": "Подземные полости TerraWeave",
           "titleEn": "TerraWeave Caverns",
-          "text": "Проверка подземной геометрии, навигации, входов и восстановления на объединённой ветке.",
-          "textEn": "Verify underground geometry, navigation, entrances and restore on the integrated branch."
+          "text": "Проверка подземной геометрии, навигации, входов, восстановления и предпросмотра в Studio на объединённой ветке.",
+          "textEn": "Verify underground geometry, navigation, entrances, restore and Studio preview consumers on the integrated branch."
         },
         {
           "status": "in-progress",
@@ -1966,6 +1967,210 @@
           "text": "Граф правится через MCP, есть готовая библиотека стартовых материалов.",
           "nameEn": "Agents",
           "textEn": "Graphs are edited over MCP, with a starter material library."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38A",
+          "text": "Добавлен opt-in режим генерации текстур для материала без чтения пикселей на CPU. Изолированный тест бюджета пройден; сборка и GPU-проверка ещё не выполнены.",
+          "nameEn": "Texture Graph GPU — Stage 38A",
+          "textEn": "Opt-in material generation without CPU pixel readback implemented. Isolated budget test passed; integrated build and GPU verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38B",
+          "text": "Вынесен общий нативный GPU owner и типизированный API генерации материалов; Studio использует тот же владелец. Интегрированная сборка и аппаратная проверка ожидаются.",
+          "nameEn": "Texture Graph GPU — Stage 38B",
+          "textEn": "Shared native GPU owner and typed material generation API extracted; Studio uses the same owner. Integrated build and hardware verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38C",
+          "text": "Добавлен инкрементальный GPU DAG: неизменённые узлы переиспользуют данные постоянных слотов. Изолированный тест пройден, аппаратная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38C",
+          "textEn": "Incremental GPU DAG with dedicated slots and unchanged-node reuse. Isolated test passed; hardware verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38D",
+          "text": "Добавлена ограниченная асинхронная очередь GPU-запросов с приоритетами, отменой и явной выдачей результата. Изолированный тест пройден; интеграционная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38D",
+          "textEn": "Bounded asynchronous GPU request queue with priorities, cancellation and explicit result release. Isolated test passed; integrated verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38E (частично)",
+          "text": "Добавлен нативный механизм освобождения текстур с сохранением индексов и диагностикой. Автоматический сбор в игровом хосте и тестирование ещё предстоят.",
+          "nameEn": "Texture Graph GPU — Stage 38E (partial)",
+          "textEn": "Native stable-index image reclamation and diagnostics implemented. Automatic game-host collection and tests remain pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38F",
+          "text": "Нативный игровой клиент подключён к общему GPU owner и применению материалов на границе кадра. Изолированный тест прошёл; интеграционная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38F",
+          "textEn": "Native client connected to shared GPU owner and frame-boundary material application. Isolated test passed; integration verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38G (частично)",
+          "text": "Подключены GPU scopes с идентификатором запроса и выходом графа. Аппаратные измерения и автоматическое освобождение ещё не подтверждены.",
+          "nameEn": "Texture Graph GPU — Stage 38G (partial)",
+          "textEn": "GPU scope capture with request/output attribution implemented. Hardware measurements and automatic reclamation remain pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38H",
+          "text": "Инкрементальный GPU DAG теперь работает совместно с объединением pointwise-операций. Изолированные тесты пройдены.",
+          "nameEn": "Texture Graph GPU — Stage 38H",
+          "textEn": "Incremental GPU DAG supports pointwise fusion. Isolated policy tests passed."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38I",
+          "text": "Инкрементальная генерация конечных текстур: неизменённые привязки сохраняются, изменённые текстуры публикуются отдельно. Изолированный тест пройден.",
+          "nameEn": "Texture Graph GPU — Stage 38I",
+          "textEn": "Incremental final textures preserve unchanged bindings and publish only changed textures. Isolated policy test passed."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38J (частично)",
+          "text": "Добавлены неизменяемые токены привязок и автоматический сбор при явном подтверждении ссылок нативным хостом. Сбор по умолчанию отключён; изолированные тесты пройдены.",
+          "nameEn": "Texture Graph GPU — Stage 38J (partial)",
+          "textEn": "Immutable material binding pins and automatic sweep with native host root certification. Disabled by default; isolated tests passed."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38K",
+          "text": "Подтверждённо свободные слоты процедурных текстур можно переиспользовать после GPU retirement. По умолчанию сохраняется append-only; изолированные тесты пройдены.",
+          "nameEn": "Texture Graph GPU — Stage 38K",
+          "textEn": "Certified procedural image slots can be reused after GPU retirement. Append-only remains the default; isolated tests passed."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38L",
+          "text": "Добавлены опциональные замеры отдельных вычислительных групп с идентификаторами узлов. Изолированные тесты пройдены; аппаратные замеры ожидаются.",
+          "nameEn": "Texture Graph GPU — Stage 38L",
+          "textEn": "Optional per-compute-region timings with authored node IDs. Isolated tests passed; hardware measurements pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38M",
+          "text": "Добавлены Vulkan scoped timestamps с асинхронной выдачей по fence. Изолированные тесты пройдены; аппаратная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38M",
+          "textEn": "Vulkan scoped timestamps with fence-confirmed asynchronous delivery. Isolated tests passed; hardware verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38N (частично)",
+          "text": "Добавлен учёт ссылок рендерера и LENS, автоматическое переиспользование при подтверждении внешних ссылок. По умолчанию выключено; интеграционная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38N (partial)",
+          "textEn": "Renderer and LENS root inspection, opt-in certified automatic slot recycling. Default off; integrated verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38O (частично)",
+          "text": "Ручная и автоматическая очистка используют общую проверку ссылок Renderer3D и LENS. Неполное подтверждение и невыданные результаты блокируют освобождение; интеграционная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38O (partial)",
+          "textEn": "Explicit and automatic collection share Renderer3D/LENS root inspection. Unreleased results and incomplete proofs refuse retirement; integration verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38P (частично)",
+          "text": "Добавлены слабые ссылки на поколение изображения и проверяемый захват GPU handle с pin. Повторно занятый слот отклоняет старую ссылку. Изолированные тесты пройдены; миграция потребителей и интеграционная проверка ожидаются.",
+          "nameEn": "Texture Graph GPU — Stage 38P (partial)",
+          "textEn": "Weak generation references and checked native handle acquisition with pin; stale recycled slots rejected. Isolated tests passed; consumer migration and integrated verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38Q (частично)",
+          "text": "Кэш GPU-выходов хранит слабые ссылки на поколение и отклоняет устаревшие привязки. Аппаратная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38Q (partial)",
+          "textEn": "Output reuse receipts use weak generation references and reject stale bindings. Hardware validation pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38R (частично)",
+          "text": "Renderer3D и ICB проверяют поколение текстур материалов; устаревшие привязки используют резервные текстуры. Интеграционная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38R (partial)",
+          "textEn": "Renderer3D and ICB validate material image generations; stale bindings fall back. Integration verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38S (частично)",
+          "text": "Переопределения освобождают старые pin, GI проверяет поколение, добавлен тест освобождения и переиспользования слота. Интеграционная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38S (partial)",
+          "textEn": "Authored overrides release old pins, GI validates generations, transaction/reuse regression authored. Integrated verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38T (частично)",
+          "text": "LENS владеет снимками attachments; процедурные текстуры изолированы от файлового кэша и дедупликации. Интеграционная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38T (partial)",
+          "textEn": "LENS owns attachment snapshots; runtime images isolated from file cache and name deduplication. Integrated verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38U (частично)",
+          "text": "Picking, VT feedback и статический impostor проверяют поколение привязки. Добавлены регрессии устаревшего слота; интеграционная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38U (partial)",
+          "textEn": "Picking, VT feedback and static impostors validate image generation. Stale-slot regression authored; integration pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38V (частично)",
+          "text": "Проверены привязки VIVID Sculpt и TerraWeave; offline bake и Wardrobe не копируют живые GPU-ресурсы. Интеграционная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38V (partial)",
+          "textEn": "Checked VIVID/TerraWeave bindings and offline bake/wardrobe resource boundary. Integration verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38W (частично)",
+          "text": "Нативный scoped-доступ удерживает read lease и pin; HLOD, material palette и экспорт защищены от переноса живых процедурных поколений. Интеграционная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38W (partial)",
+          "textEn": "Scoped native access combines model reader and generation pin; HLOD, palette and offline export guard runtime images. Integration pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38X (частично)",
+          "text": "Client и Editor читают GPU-выходы через scoped-доступ; Studio/MCP получает имена доступных выходов без GPU handles. Интеграционная проверка ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38X (partial)",
+          "textEn": "Scoped native Client/Editor reads and logical output diagnostics without exporting handles. Integrated verification pending."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38Y (частично)",
+          "text": "Аудит raw-ссылок, проверка двух рендереров до удаления CPU replay, единый сценарий приёмки. Автоматическая сертификация пока выключена.",
+          "nameEn": "Texture Graph GPU — Stage 38Y (partial)",
+          "textEn": "Audit raw references, preflight both renderers before CPU replay detachment and consolidate acceptance. Automatic certification remains disabled."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38Z (частично)",
+          "text": "Scoped ModelReadLease для штатных читателей Model, без удержания через мутации.",
+          "nameEn": "Texture Graph GPU — Stage 38Z (partial)",
+          "textEn": "Scoped ModelReadLease for stock model readers, without holding across mutations."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38AA (частично)",
+          "text": "Защита транзакций публикации и teardown при активных читателях; сохранение pending hot reload.",
+          "nameEn": "Texture Graph GPU — Stage 38AA (partial)",
+          "textEn": "Preflight publication and teardown against active readers; preserve pending hot reload."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38AB (частично)",
+          "text": "Защита от повторного входа в callback и ранняя проверка shutdown хостов.",
+          "nameEn": "Texture Graph GPU — Stage 38AB (partial)",
+          "textEn": "Callback reentry guard and early host shutdown preflight."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38AC (частично)",
+          "text": "Безопасное завершение HostedClient, восстановление контекста и scoped индексация источников.",
+          "nameEn": "Texture Graph GPU — Stage 38AC (partial)",
+          "textEn": "HostedClient teardown, context restoration and scoped source indexing."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38AD (частично)",
+          "text": "Учёт страниц без Model-указателей, поколения GPU и диагностика отложенных клиентов.",
+          "nameEn": "Texture Graph GPU — Stage 38AD (partial)",
+          "textEn": "Page accounting without Model pointers, GPU epochs and hosted retirement diagnostics."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38AE (частично, приёмка)",
+          "text": "Учёт материалов вложенных моделей при освобождении текстур и граница безопасной сертификации.",
+          "nameEn": "Texture Graph GPU — Stage 38AE (partial, acceptance checkpoint)",
+          "textEn": "Attachment material roots and safe collection certification boundary."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38AF (исправление, проверка)",
+          "text": "Исправление линковки теста replay на Mac без расширения зависимостей snapshot.",
+          "nameEn": "Texture Graph GPU — Stage 38AF (fix, verification pending)",
+          "textEn": "Fix Mac replay regression linkage without expanding snapshot dependencies."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38AG (исправление, проверка)",
+          "text": "Подключение владельца NativeRegistrar к тесту camera_client_adapter.",
+          "nameEn": "Texture Graph GPU — Stage 38AG (fix, verification pending)",
+          "textEn": "Link the existing NativeRegistrar owner to the camera client adapter fixture."
+        },
+        {
+          "name": "Texture Graph GPU — Stage 38AN (Metal offscreen PASS)",
+          "text": "Исправление аппаратных Metal timestamp-маркеров после 30/31 тестов на M3 Ultra. Stage 38AJ: регистрация CPU-проверки batching в CTest, подготовка 32 тестов; сводка Mac CTest от пользователя: 32/32 прошли; полный лог и SHA ожидаются. Сборка MCP и аудит реестра через stdio: 343 функции, 13/13 групп; GPU в редакторе ещё не проверен. Stage 38AL: исправление TypeScript и конфликта имён модулей на macOS; сборка ожидается. Stage 38AM: переработка интерфейса генератора; подключение GPU owner HTML5 ожидается. Stage 38AN: подключён native offscreen Metal owner Studio; сборка и аппаратная проверка ожидаются. Mac offscreen CTest 1/1 PASS, 1.70 с; проверка Studio ожидается.",
+          "nameEn": "Texture Graph GPU — Stage 38AN (Metal offscreen PASS)",
+          "textEn": "Correct Metal hardware timestamp markers after 30/31 tests on M3 Ultra. Stage 38AJ: register the CPU material batch regression in CTest and prepare a strict 32-test targeted run; Mac CTest summary supplied by user: 32/32 passed; full SHA/log pending. MCP build and live stdio registry audit: 343 tools, 13/13 families; live GPU authoring pending. Stage 38AL: Studio web TypeScript/case-insensitive module resolution fixes; rebuild pending. Stage 38AM: restructure material texture authoring workspace; native HTML5 GPU owner wiring pending. Stage 38AN: Studio native offscreen Metal preview/bake owner wired; hardware and native build pending. Mac offscreen CTest 1/1 PASS, 1.70 s; live Studio pending."
         }
       ],
       "enables": [
@@ -1977,6 +2182,16 @@
         "Make a custom water, lava or hologram material without a shader programmer.",
         "Run one graph on Metal, WebGL and desktop.",
         "Let an agent change the look of a game safely."
+      ],
+      "roadmap": [
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Повторное использование сохранённых параметризованных графов текстур",
+          "titleEn": "Reuse saved parameterized texture graphs",
+          "text": "Проверяем экспорт текстур BC и ASTC с мипами и чтение результатов графа через Vulkan.",
+          "textEn": "Verifying BC and ASTC texture export with mipmaps and Vulkan graph readback."
+        }
       ]
     },
     {
@@ -2134,8 +2349,8 @@
           "id": "world-recurring-simulation-budget",
           "title": "Бюджет фоновой симуляции",
           "titleEn": "Recurring simulation budget",
-          "text": "Детерминированные порции обновлений и настройка бюджета дискретных решений населения.",
-          "textEn": "Deterministic recurring work slices and configurable population decision budget.",
+          "text": "Детерминированные порции обновлений и настройка бюджета дискретных решений населения. Общий планировщик доступен движку и библиотеке без обратной зависимости.",
+          "textEn": "Deterministic recurring work slices and configurable population decision budget. Share the scheduler between engine and library without an upward dependency.",
           "status": "in-progress"
         },
         {
@@ -2780,22 +2995,22 @@
           "id": "graph-framework",
           "titleEn": "Shared graph editor framework",
           "text": "Общие адаптеры и полотно, с сохранением собственных форматов и выполнения каждой системы.",
-          "textEn": "Shared adapters and canvas while preserving each domain's format and runtime; request cancellation implemented in source; Stage 31B native appearance registry publication implemented in source; live host wiring pending; Stage 32A bounded idle pipeline cache and draft-independent status implemented in source; Stage 33A request-local shared scalar GPU scratch implemented in source; Stage 33B CPU DAG lifetime planning implemented in source; Stage 34A bounded GPU pass scheduling implemented in source; Stage 34B typed DAG slot lowering and plan-only inspection implemented in source; Stage 34C typed materialized shader source implemented; Stage 34D opt-in native materialized execution implemented in source; Stage 35A Building Graph report adapter and offline Studio inspection implemented in source; direct owner wiring pending; hardware acceptance pending. Stage 35B in progress: bounded Caverns owner snapshot inspection and imported read-only graph; native owner integration remains separate. Stage 35B Caverns snapshot report projection and paged offline graph implemented in source; owner live wiring pending. Stage 35C in progress: document-scoped, read-only native Caverns capture and stale-response refusal with owner registration checks. Stage 35C scoped native Caverns read and unavailable/absent handling implemented in source; hardware and owner integration pending. Stage 35D in progress: native building candidate request provenance and shared graph integration in an isolated Building owner-based branch. Stage 35D shared candidate provenance gate implemented; Building owner panel wiring on isolated integration branch. Stage 35E in progress: native authored room connectivity report and shared topology inspector. Stage 35E optional native topology inspector implemented in source."
+          "textEn": "Shared adapters and canvas while preserving each domain's format and runtime; request cancellation implemented in source; Stage 31B native appearance registry publication implemented in source; live host wiring pending; Stage 32A bounded idle pipeline cache and draft-independent status implemented in source; Stage 33A request-local shared scalar GPU scratch implemented in source; Stage 33B CPU DAG lifetime planning implemented in source; Stage 34A bounded GPU pass scheduling implemented in source; Stage 34B typed DAG slot lowering and plan-only inspection implemented in source; Stage 34C typed materialized shader source implemented; Stage 34D opt-in native materialized execution implemented in source; hardware acceptance pending; Stage 36A canonical typed GPU owner and retired resource reuse integrated in source; Stage 36B opt-in pointwise pass fusion implemented in source; Stage 37A GPU-only texture transport and native owner adoption implemented in source; Stage 37B GPU texture request lifecycle and optional GPU mip generation integrated in source; Stage 37C shared live snapshot adoption and editor scene application implemented in source; session-only and hardware acceptance pending. Parallel native RHI acceptance fixture authored; hardware acceptance pending. Stage 35A Building Graph report adapter and offline Studio inspection implemented in source; direct owner wiring pending; hardware acceptance pending. Stage 35B in progress: bounded Caverns owner snapshot inspection and imported read-only graph; native owner integration remains separate. Stage 35B Caverns snapshot report projection and paged offline graph implemented in source; owner live wiring pending. Stage 35C in progress: document-scoped, read-only native Caverns capture and stale-response refusal with owner registration checks. Stage 35C scoped native Caverns read and unavailable/absent handling implemented in source; hardware and owner integration pending. Stage 35D in progress: native building candidate request provenance and shared graph integration in an isolated Building owner-based branch. Stage 35D shared candidate provenance gate implemented; Building owner panel wiring on isolated integration branch. Stage 35E in progress: native authored room connectivity report and shared topology inspector. Stage 35E optional native topology inspector implemented in source. Verify mixed Vulkan compute descriptors on Linux Lavapipe. Preserve native graph originals across Studio edits."
         },
         {
           "id": "studio-play-review",
           "title": "Безопасный перенос изменений из Play",
           "titleEn": "Play Mode change review",
-          "text": "Изолированная игровая сессия, проверка исходной карты и выборочный предварительный просмотр переноса изменений.",
-          "textEn": "Isolated local session, source map revision guard and selective preview of play-to-scene changes.",
+          "text": "Изолированная игровая сессия, проверка исходной карты и выборочный предварительный просмотр переноса изменений. Добавляются локальные MCP-команды предпросмотра и однократного применения к той же сохранённой карте. При массовом удалении проверить перенос индексов дорог за один проход.",
+          "textEn": "Isolated local session, source map revision guard and selective preview of play-to-scene changes. Add typed local MCP preview and one-shot apply for the same saved map. Verify single-pass road index remapping for bulk removals.",
           "status": "in-progress"
         },
         {
           "id": "studio-runtime-debugger",
           "title": "Редактирование состояния локальной игры",
           "titleEn": "Runtime Debugger",
-          "text": "Явное редактирование разрешённых полей ECS при остановленном тике локальной игры с проверкой сессии и исходного значения.",
-          "textEn": "Explicit owner-validated ECS field edits at a paused local tick with session and expected-value checks.",
+          "text": "Явное редактирование разрешённых полей ECS при остановленном тике локальной игры с проверкой сессии и исходного значения. Добавляются типизированные локальные MCP-команды с теми же проверками.",
+          "textEn": "Explicit owner-validated ECS field edits at a paused local tick with session and expected-value checks. Add typed local MCP inspection and edits using the same guards.",
           "status": "in-progress"
         },
         {
@@ -2818,8 +3033,8 @@
           "id": "studio-world-explorer-live",
           "title": "Обзор регионов живого мира",
           "titleEn": "Live World Explorer",
-          "text": "Снимок реального игрового ECS: карта регионов по высоте, выбор ячейки и счётчики частоты решений без имитации стриминга.",
-          "textEn": "Real hosted-game ECS snapshot: height-sliced region map, cell selection and decision cadence counters without fabricated streaming metrics.",
+          "text": "Снимок реального игрового ECS: карта регионов по высоте, выбор ячейки и счётчики частоты решений без имитации стриминга. Запуск локального actor-session клиента в Studio и чтение его авторитетного реестра регионов.",
+          "textEn": "Real hosted-game ECS snapshot: height-sliced region map, cell selection and decision cadence counters without fabricated streaming metrics. Host the local actor-session client in Studio and inspect its authoritative region ledger.",
           "status": "in-progress"
         },
         {
@@ -2943,8 +3158,8 @@
           "id": "feature-gate",
           "title": "Единый контракт готовности фич",
           "titleEn": "Unified feature readiness contract",
-          "text": "Манифесты, проверка доказательств и интеграция с каталогом скиллов.",
-          "textEn": "Manifests, evidence checks and skill catalog integration.",
+          "text": "Манифесты, проверка доказательств и интеграция с каталогом скиллов. Проверить линковку инструментов графа на Linux ARM64.",
+          "textEn": "Manifests, evidence checks and skill catalog integration. Verify that graph tools link on Linux ARM64.",
           "status": "in-progress"
         }
       ]

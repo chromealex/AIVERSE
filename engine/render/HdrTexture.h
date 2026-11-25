@@ -63,7 +63,7 @@ inline bool readLine(std::string_view bytes, size_t& at, std::string_view& line)
 // are interpreted as linear radiance; EXPOSURE/GAMMA header tags are not
 // baked into texels (callers may apply scene exposure themselves).
 inline bool parseRadianceHdr(std::string_view bytes, RadianceImage& out,
-                            std::string& error) {
+                            std::string& error, size_t maxDecodedBytes=size_t(512)<<20) {
     out = {};
     error.clear();
     auto fail = [&](const char* why) {
@@ -96,7 +96,7 @@ inline bool parseRadianceHdr(std::string_view bytes, RadianceImage& out,
         (std::strcmp(axisY, "-Y") && std::strcmp(axisY, "+Y")) ||
         (std::strcmp(axisX, "+X") && std::strcmp(axisX, "-X")) ||
         width < 1 || height < 1 || width > 16384 || height > 16384 ||
-        uint64_t(width) * uint64_t(height) * 8u > (uint64_t(512) << 20))
+        uint64_t(width) * uint64_t(height) * 8u > std::min<uint64_t>(uint64_t(512)<<20,maxDecodedBytes))
         return fail("HDR: unsupported orientation, extent or memory budget");
 
     const bool flipY = axisY[0] == '+', flipX = axisX[0] == '-';
