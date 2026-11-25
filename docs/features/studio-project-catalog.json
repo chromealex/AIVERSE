@@ -9,6 +9,8 @@
     "apps/editor/core/MapDoc.cpp",
     "apps/editor/core/ProjectDocumentJournal.h",
     "apps/studio-native/StudioScene.cpp",
+    "apps/studio-native/StudioNetworkPlay.h",
+    "apps/studio-web/src/panels/ActorNetworkPlay.tsx",
     "apps/studio-native/StudioOrientedCollider.h",
     "apps/editor/EditorEntityAdapter.h",
     "apps/studio-web/src/panels/ActorLoadout.tsx",
@@ -211,6 +213,7 @@
       "agent"
     ],
     "studio_methods": [
+      "studio.networkPlay",
       "studio.rulesDocumentSave",
       "studio.rulesDocument",
       "studio.mapProperties",
