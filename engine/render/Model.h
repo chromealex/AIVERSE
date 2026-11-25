@@ -234,7 +234,9 @@ struct ModelLight {
     float innerCone = 0, outerCone = 0.785398163f;
 };
 
+struct BspVisibility;
 struct Model {
+    std::shared_ptr<const BspVisibility> bspVisibility;
     // Engine-wide model batching contract. All loaders / editors / games use the same
     // upload path, regardless of genre or asset naming. Rigid static merging is opt-in:
     // a model containing gameplay-controlled nodes cannot safely infer mutability

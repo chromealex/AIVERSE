@@ -173,6 +173,7 @@ ModelMergeResult mergeStaticPrimitives(Model& m, const ModelMergeOptions& o) {
     auto skip = [&](const char* why) { r.reason = why; return r; };
     if (m.vertices.empty() || m.indices.empty()) return skip("no CPU geometry (merge before uploadModel)");
     if (!m.skins.empty() || !m.clips.empty()) return skip("skinned or animated");
+    if (m.bspVisibility) return skip("BSP visibility refers to original primitives");
     if (!m.variants.empty()) return skip("material variants");
     if (m.geometry) return skip("built geometry data (clusters, occluders)");
     const float3 extent = m.boundsMax - m.boundsMin;

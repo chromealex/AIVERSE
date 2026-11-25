@@ -5,13 +5,17 @@
   "changed_paths": [
     "CMakeLists.txt",
     "docs/agent-handoffs/quake3-bsp-initial.md",
+    "docs/agent-handoffs/quake3-bsp-pvs.md",
     "docs/devlog/systems.json",
     "docs/features/quake3-bsp.json",
+    "engine/render/BspVisibility.h",
     "engine/render/Model.cpp",
     "engine/render/Model.h",
     "engine/render/ModelBsp.cpp",
-    "tools/models/ModelConvert.cpp",
-    "tests/render/quake3_bsp.cpp"
+    "engine/render/ModelMerge.cpp",
+    "engine/render/Renderer3DModels.cpp",
+    "tests/render/quake3_bsp.cpp",
+    "tools/models/ModelConvert.cpp"
   ],
   "traits": {
     "editable": true,

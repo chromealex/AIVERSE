@@ -1,6 +1,7 @@
 // Renderer3D: models (PBR materials, GPU skinning, alpha modes) — shader permutations, culling,
 // sorting and the per-draw uniform blocks. See ModelShaders.h for the uniform layouts.
 #include "Renderer3D.h"
+#include "BspVisibility.h"
 #include "../gfx/GpuTier.h"
 #include "ModelMerge.h"
 #include "GpuMaterialState.h"
@@ -1214,7 +1215,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
     if (!customVertexStream) recordPersistentModel(d);
     // Partial primitive draws and per-instance vertex parameters cannot
     // replay an immutable whole-model static packet/cache.
-    const bool specialDraw = d.primitiveMaterialFilter >= 0 || d.useVertexParameters || d.nodeMask;
+    const bool specialDraw = d.primitiveMaterialFilter >= 0 || d.useVertexParameters || d.nodeMask || m->bspVisibility;
     if (capture_ && (d.flags & kDrawStatic) && d.primitiveMaterialFilter < 0 && !d.materialMask) {   // light baker: the static scene, every node in world space
         const auto& pose = d.nodeWorld && d.nodeWorld->size() == m->nodes.size() ? *d.nodeWorld : m->bindWorld;
         std::vector<mat4> nodeWorld(pose.size());
@@ -1496,6 +1497,13 @@ void Renderer3D::drawModel(const ModelDraw& d) {
                             baseHasMorph && morphWeightsBounded &&
                             morphMappingsReady;
         const mat4 nodeWorld = cache ? cache->transforms[size_t(n)] : d.world * world[size_t(n)];
+        int bspCluster = -1;
+        if (m->bspVisibility && node.mesh == 0 && modelCullingEnabled_ && !cam_.ortho &&
+            !unboundedDisplacement && !customVertexStream && !d.baked) {
+            const float3 localEye = nodeWorld.inverse().transformPoint(camPos_);
+            if (length(nodeWorld.transformPoint(localEye) - camPos_) < 0.01f)
+                bspCluster = m->bspVisibility->cameraCluster(localEye);
+        }
         bool nodeView = inView, nodeShadow = inShadow;
         if (rigid && modelCullingEnabled_) {
             nodeView = inView && modelBoxVisible(viewProj_ * nodeWorld, baseMesh.boundsMin-margin, baseMesh.boundsMax+margin);
@@ -1638,7 +1646,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
                                  !d.nodeMaterial && d.variant < 0 &&
                                  shadowBatchCompatible(drawMesh,mats);
         std::vector<const MaterialBatch*> colourBatches;
-        if (!customVertexStream && !shadowOnly && d.primitiveMaterialFilter < 0 && !d.materialMask && !gpuPacketSource &&
+        if (bspCluster < 0 && !customVertexStream && !shadowOnly && d.primitiveMaterialFilter < 0 && !d.materialMask && !gpuPacketSource &&
             !m->geometry && !d.nodeMaterial &&
             d.variant < 0 && d.tint.w >= .99f && !transparentItem(d.flags))
             for (const auto& batch : drawMesh.materialBatches)
@@ -1756,7 +1764,10 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             it.motionPersistentId = d.persistentId;
             it.motionNodeIndex = n;
             it.castShadow = !(d.flags & kDrawNoCastShadow) && (d.tint.w >= 0.99f || (d.flags & kDrawKeepShadow)) && d.dissolve <= 0 && it.mat->castShadow && it.mat->alpha != AlphaMode::Blend && !transparentItem(it.flags);
-            it.inView = nodeView && !shadowOnly; it.inShadow = nodeShadow && it.castShadow && (shadowOnly||!separateShadow);
+            it.inView = nodeView && !shadowOnly &&
+                (bspCluster < 0 || meshIndex != node.mesh ||
+                 m->bspVisibility->visible(bspCluster, originalPrimitive));
+            it.inShadow = nodeShadow && it.castShadow && (shadowOnly||!separateShadow);
             it.joints = -1; it.baked = false; it.anim = anim; it.morph = -1;
             const bool skinnedPrim = node.skin >= 0 && !p.jointPalette.empty();
             if (skinnedPrim && canBake && node.skin == m->baked.skin) {
