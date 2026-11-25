@@ -1,0 +1,13 @@
+{
+  "sha": "411b730b6a7a812201da7e0d08a358e85c7d825d",
+  "argv": [
+    "/usr/bin/python3",
+    "tests/render_sdk/languages.py",
+    "/Volumes/KINGSTON/AIVERSE-builds/renderer-sdk-20261125/sdk/render/libaiverse_render.dylib",
+    "--work",
+    "/Volumes/KINGSTON/AIVERSE-builds/renderer-sdk-20261125/tmp"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/renderer-sdk-languages.log.txt",
+  "sha256": "ed0aee7998c235c497f9ecae7a20f23aee8530399e71e52d6c133ee12fe76a03"
+}
