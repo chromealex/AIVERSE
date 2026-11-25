@@ -2,6 +2,7 @@
 // Placement and shape must be deterministic and patch-border independent;
 // an absent meadow block must keep the legacy generator byte-identical.
 #include "engine/render/TerraWeaveGrassRender.h"
+#include "engine/render/ModelLodTransition.h"
 #include "engine/world/TerraWeaveGrassSpeciesJson.h"
 #include "tests/terraweave_grass_legacy_reference.h"
 #include <cassert>
@@ -129,7 +130,7 @@ int main() {
         // All three meadow species use three segments (5 main triangles).
         // Four basal leaves grow from each accepted root at this tier.
         assert(uint64_t(triangles(*a,0))*5==uint64_t(triangles(*stems,0))*9);
-        assert(a->materials.size()==1&&a->materials[0].vertexColors&&!a->materials[0].castShadow);
+        assert(a->materials.size()==1&&a->materials[0].vertexColors&&a->materials[0].castShadow&&a->materials[0].receiveShadow&&a->materials[0].thinTransmission>0.f);
         assert(triangles(*a,0)<=uint64_t(q.maxBladesPerPatch)*meadowBladeTriangleBound(q.bladeSegments));
         float minY=1e9f,maxY=-1e9f;std::set<uint32_t> colours;
         for(const auto& v:a->vertices){minY=std::min(minY,v.pos.y);maxY=std::max(maxY,v.pos.y);colours.insert(v.color);}
@@ -156,6 +157,10 @@ int main() {
         std::printf("lod tris %u %u %u\n",triangles(*lod,0),triangles(*lod,1),triangles(*lod,2));
         assert(triangles(*lod,0)>2*triangles(*lod,1)&&triangles(*lod,1)>triangles(*lod,2));
         assert(lod->batching.independentShadowLod);
+        const auto& levels=lod->meshes[0].lods;
+        assert(render::selectModelLod(0,levels,1000.f,0.f).level==0);
+        assert(render::selectModelLod(0,levels,500.f,0.f).level==1);
+        assert(render::selectModelLod(0,levels,200.f,0.f).level==2);
     }
 
     // 7. Tier budgets: mobile is bounded and cheaper than high.

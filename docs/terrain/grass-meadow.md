@@ -97,7 +97,9 @@ sand bands, roads, exporter cover masks, slope masks supplied by the host.
 
 - One opaque, double-sided, vertex-coloured material per patch (pigment in
   linear vertex colour, `baseColor` white); no textures, no per-blade entities,
-  one draw per visible patch and LOD; shadows off as before.
+  one colour draw per visible patch and LOD. Meadow materials cast sun shadows
+  using the shared independent shadow LOD and transmit diffuse backlight through
+  both sides of the blade. The legacy generator keeps its original shadow flags.
 - The `meadow` preset grows an overlapping canopy. Each root carries a central
   blade and four shorter leaves. Set `basalLeaves` (0 to 4) on a species to
   control this lower layer. Each basal leaf costs one triangle and only grows
@@ -105,7 +107,8 @@ sand bands, roads, exporter cover masks, slope masks supplied by the host.
 - Blade = 2*segments-1 triangles; flowering stems add 2 (flower) or 4 (crossed
   panicle/spike diamonds): `meadowBladeTriangleBound(segments)`.
 - LOD: the shared chain keeps the same seeded blades (1/3, 1/8 of them), widens
-  them by their sampling stride and drops segments.
+  them by their sampling stride and drops segments. Meadow switches at patch
+  sizes of 720 and 310 projected pixels to reduce distant subpixel detail.
 - Tiers: `meadowGrassQuality(GrassTier::Mobile|Medium|High, meadow)`.
   Mobile: 1024 blades/patch, 2 segments, 48 patches, 1 upload/frame;
   upper bound `grassTriangleBudget(q)` = 344 064 LOD0 triangles.
@@ -117,5 +120,4 @@ sand bands, roads, exporter cover masks, slope masks supplied by the host.
 
 Far field beyond the grass radius is still terrain shading only (no grass
 cards/impostor texture); terrain ground colour should be tuned to the meadow
-palette by the project. No grass self-shadowing/translucency term beyond the
-up-biased normals and root occlusion in vertex colour.
+palette by the project.

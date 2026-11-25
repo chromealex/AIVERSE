@@ -137,7 +137,9 @@ inline std::unique_ptr<render::Model> makeMeadowGrassPatchModel(
     grass.roughness=.92f;
     grass.doubleSided=true;
     grass.vertexColors=true;
-    grass.castShadow=false;
+    grass.castShadow=true;
+    grass.thinTransmission=.42f;
+    grass.shadowDiffusion=.08f;
     if(sway)grass.shaderGraph=canopyWindGraph();
     model->materials.push_back(grass);
     if(fireSampler) {
@@ -239,7 +241,7 @@ inline std::unique_ptr<render::Model> makeMeadowGrassPatchModel(
         const float dryArea=float(site->dryPermille)/1000.f;
         const float dryMix=std::clamp(dryBlade?.85f:dryArea*.75f,0.f,1.f);
         // Root AO: blades deep inside a dense tuft start darker.
-        const float occlusion=site->clumped?.30f+.25f*radial:.48f;
+        const float occlusion=site->clumped?.60f+.18f*radial:.72f;
         const auto blade=[&](float t){
             LinearRgb base=t<.5f?mix(pal[0],pal[1],t*2.f):mix(pal[1],pal[2],(t-.5f)*2.f);
             const LinearRgb dryTone=mix(mix(pal[0],pal[3],.55f),pal[3],t);
@@ -281,7 +283,7 @@ inline std::unique_ptr<render::Model> makeMeadowGrassPatchModel(
                 render::ModelVertex v;
                 v.pos=seg==segments?p:p+sideDir*((edge?1.f:-1.f)*w);
                 // Folded, up-biased normals: soft light across the blade like a real leaf.
-                v.nrm=render::normalize(normal*.75f+sideDir*(edge?.28f:-.28f)+render::float3{0,.45f,0});
+                v.nrm=render::normalize(normal*.55f+sideDir*(edge?.18f:-.18f)+render::float3{0,.75f,0});
                 v.uv={seg==segments?.5f:float(edge),t};
                 v.color=col;
                 model->vertices.push_back(v);
@@ -633,7 +635,10 @@ inline std::unique_ptr<render::Model> makeGrassPatchLodModel(
         for(auto index:lod->indices)model->indices.push_back(index+vo);
         auto mesh=lod->meshes[0];
         for(auto& primitive:mesh.primitives){primitive.firstVertex+=vo;primitive.firstIndex+=io;}
-        model->meshes[0].lods.push_back({int(model->meshes.size()),divisor==3?220.f:90.f});
+        // A meadow patch spans hundreds of pixels while its individual leaves
+        // are already subpixel. Switch to the wider ribbons at that scale.
+        const float threshold=quality.meadow.enabled()?(divisor==3?720.f:310.f):(divisor==3?220.f:90.f);
+        model->meshes[0].lods.push_back({int(model->meshes.size()),threshold});
         model->meshes.push_back(std::move(mesh));
     }
     model->batching.independentShadowLod=true;
@@ -794,7 +799,8 @@ public:
                 float(-origin.y)*0.01f,
                 float(resident.patch.bounds.minZ-origin.z)*0.01f
             });
-            draw.flags=render::kDrawStatic|render::kDrawNoCastShadow;
+            draw.flags=render::kDrawStatic;
+            if(!resident.model->materials.front().castShadow)draw.flags|=render::kDrawNoCastShadow;
             if(presentation_.windSway) {
                 draw.useVertexParameters=true;
                 draw.vertexParameters=wind_;
