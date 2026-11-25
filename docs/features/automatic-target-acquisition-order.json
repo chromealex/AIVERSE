@@ -25,6 +25,8 @@
     "docs/devlog/media/2026-11-25-gameplay-selection-targeting/scout.jpg",
     "docs/devlog/media/2026-11-25-gameplay-selection-targeting/selected-oak.jpg",
     "docs/devlog/systems.json",
+    "docs/evidence/selection-targeting-20261125-frames/legacy-nearest.jpg",
+    "docs/evidence/selection-targeting-20261125-frames/row-major.jpg",
     "docs/evidence/selection-targeting-20261125-mac.json",
     "docs/evidence/selection-targeting-20261125-mac.log.txt",
     "docs/features/automatic-target-acquisition-order.json",
@@ -125,11 +127,13 @@
     },
     "platforms": {
       "status": "pass",
-      "note": "Ran on macOS (x86_64 under Rosetta) and Chrome/WebGL2 with a release Emscripten build. Changed client sources passed MinGW x86_64 syntax checks. No Windows, mobile or console runtime was exercised.",
+      "note": "Ran on macOS (x86_64 under Rosetta) and Chrome/WebGL2. Matched Metal captures show different projectile trajectories. MinGW x86_64 compiled the changed client sources in syntax-only mode. No Windows, mobile or console runtime was exercised.",
       "evidence": [
         "docs/agent-handoffs/selection-acquisition-implementation-2026-11-25.md",
         "docs/devlog/entries/2026-11-25-gameplay-selection-targeting.json",
-        "docs/evidence/selection-targeting-20261125-mac.log.txt"
+        "docs/evidence/selection-targeting-20261125-mac.log.txt",
+        "docs/evidence/selection-targeting-20261125-frames/legacy-nearest.jpg",
+        "docs/evidence/selection-targeting-20261125-frames/row-major.jpg"
       ]
     },
     "dependencies": {
