@@ -100,9 +100,11 @@
       ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Production catalog validates; realistic Russian and English queries rank the skill first and the client plan selects its recipe.",
+      "evidence": [
+        "docs/evidence/native-sky-discovery.json"
+      ]
     },
     "handoff": {
       "status": "pass",
@@ -132,5 +134,7 @@
     "studio_panels": [],
     "studio_methods": []
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/native-sky-discovery.json"
+  ]
 }
