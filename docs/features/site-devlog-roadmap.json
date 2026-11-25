@@ -8,6 +8,8 @@
     "docs/agents/feature-policy.json",
     "docs/devlog/README.md",
     "docs/devlog/systems.json",
+    "docs/agent-handoffs/site-publish-git233-intake-2026-11-25.md",
+    "docs/agent-handoffs/site-publish-git233-verification-2026-11-25.md",
     "docs/evidence/site-devlog-roadmap-build.json",
     "docs/evidence/site-devlog-roadmap-build.log.txt",
     "docs/evidence/site-devlog-roadmap-current.json",
@@ -113,8 +115,8 @@
       "evidence": []
     },
     "tests": {
-      "status": "pass",
-      "note": "Built both locales with 72 entries and pinned demo bundles on current main plus this site change; the source branch also recorded Chrome navigation in both languages.",
+      "status": "not_run",
+      "note": "Existing site checks passed; Git 2.33 publisher compatibility must be verified on this stage.",
       "evidence": [
         "docs/evidence/site-devlog-roadmap-main203.json"
       ]
@@ -134,8 +136,8 @@
       ]
     },
     "publishing": {
-      "status": "pass",
-      "note": "Verified the localized publication preview and legacy URLs in Chrome. MAIN owns deployment.",
+      "status": "not_run",
+      "note": "The site was published from main using a temporary Git wrapper; the standard publisher must be verified on Git 2.33.",
       "evidence": [
         "docs/agent-handoffs/site-devlog-roadmap-initial.md"
       ]
@@ -150,7 +152,5 @@
     "studio_panels": [],
     "studio_methods": []
   },
-  "test_reports": [
-    "docs/evidence/site-devlog-roadmap-main203.json"
-  ]
+  "test_reports": []
 }

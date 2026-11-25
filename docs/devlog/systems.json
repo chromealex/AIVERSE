@@ -3339,6 +3339,14 @@
           "titleEn": "Shared development log and system roadmaps"
         },
         {
+          "status": "in-progress",
+          "target": null,
+          "title": "Публикация сайта с Git 2.33",
+          "titleEn": "Site publication with Git 2.33",
+          "text": "Проверяем штатную публикацию с версией Git, установленной на Mac.",
+          "textEn": "Verifying the standard publication command with the Git version installed on Mac."
+        },
+        {
           "id": "mac-build-test-runner",
           "status": "done",
           "date": "2026-11-25",
