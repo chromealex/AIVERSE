@@ -1,0 +1,31 @@
+{
+  "id": "2026-11-25-studio-shader-outputs",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "d9c9ad8f4",
+  "author": null,
+  "links": [],
+  "title": "Выходные каналы на узлах шейдера",
+  "titleEn": "Output channels on shader nodes",
+  "summary": "В Shader Graph видно, какие узлы формируют цвет, свечение и другие выходы шейдера.",
+  "summaryEn": "Shader Graph shows which nodes drive color, emission and other shader outputs.",
+  "body": [
+    "Измените источник канала в Graph outputs. Подпись на узле обновится в черновике. Холст и панель команд сохраняют высоту в узком окне."
+  ],
+  "bodyEn": [
+    "Choose a source under Graph outputs to update the node label in the draft. The canvas and action bar retain space in narrow windows."
+  ],
+  "verified": "На macOS проверены привязка и снятие emission, Undo, сохранение и повторное открытие графа.",
+  "verifiedEn": "macOS verification covered assigning and removing emission, undo, saving and reopening the graph.",
+  "limits": "Визуальная проверка Windows предстоит.",
+  "limitsEn": "Windows visual verification remains pending.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-shader-outputs/shader-outputs.png",
+      "caption": "Узел с выходами color и emission",
+      "captionEn": "Node driving color and emission"
+    }
+  ]
+}

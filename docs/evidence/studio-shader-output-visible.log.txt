@@ -1,0 +1,7 @@
+2026-11-25 23:25:47.773 AiverseStudioHTML5[30979:81608495] [studio-web] JS: CROSS bindingproof DONE_1
+2026-11-25 23:25:47.773 AiverseStudioHTML5[30979:81608495] [studio-web] JS: CROSS bindingproof VERIFIED assign, disconnect, undo and explicit save
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/shader-bindings-qa-y6LQde/Catalog.app/Contents/MacOS/aiversemcp: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/shader-bindings-qa-y6LQde/Catalog.app: replacing existing signature
+2026-11-25 23:25:58.874 AiverseStudioHTML5[31060:81609945] [studio-web] JS: CROSS bindingproof DONE_2
+2026-11-25 23:25:52.874 AiverseStudioHTML5[31060:81609945] [studio-web] JS: CROSS bindingproof VERIFIED restored bindings
+Shader edits left game rules unchanged.
