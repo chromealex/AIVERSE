@@ -3,7 +3,7 @@ export interface GraphNode {
  id: string; op: string; inputs?: string[]; position?: number[]; value?: number|number[]; name?:string; mask?:string; texture?:string; srgb?:boolean;
 }
 export interface GraphSource {
- version?: number; domain?: string;
+ version?: number; domain?: string; minQuality?:string;
  parameters?:Record<string,number|number[]>; nodes?: GraphNode[]; outputs?: Record<string,string>;
 }
 export interface PositionedNode { id:string; op:string; x:number; y:number; height:number; inputs:string[]; values:number[]; }
@@ -113,4 +113,14 @@ export function setShaderComponent(graph:GraphSource,id:string,component:number,
  if(node.op==='parameter'&&Object.hasOwn(graph.parameters??{},name))
   return {...graph,parameters:{...graph.parameters,[name]:rgba}};
  return {...graph,nodes:graph.nodes?.map(n=>n===node?{...n,value:rgba}:n)};
+}
+
+export function setShaderDomain(graph:GraphSource,domain:string):GraphSource {
+ if(domain===graph.domain||!['material','postfx','particle'].includes(domain))return graph;
+ const next={...graph,domain};
+ if(domain!=='material'){
+  delete next.minQuality;
+  next.outputs=Object.fromEntries(Object.entries(graph.outputs??{}).filter(([key])=>key==='color'));
+ }
+ return next;
 }

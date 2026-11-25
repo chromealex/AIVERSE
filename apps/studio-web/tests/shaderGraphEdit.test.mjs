@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {moveShaderGraphNode,addShaderGraphNode,removeShaderGraphNode,setShaderInput,setShaderOutput,setShaderComponent,layoutShaderGraph} from '../src/panels/shaderGraphLayout.ts';
+import {moveShaderGraphNode,addShaderGraphNode,removeShaderGraphNode,setShaderInput,setShaderOutput,setShaderComponent,layoutShaderGraph,setShaderDomain} from '../src/panels/shaderGraphLayout.ts';
 test('dragging changes only the targeted node coordinate',()=>{
  const source={domain:'material',nodes:[{id:'a',op:'input',position:[30,40]},{id:'b',op:'constant',position:[200,70]}],outputs:{color:'b'}};
  const next=moveShaderGraphNode(source,'a',90,110);
@@ -80,4 +80,12 @@ test('graph undo groups pointer moves, survives save and drops redo on a new edi
  h=shaderHistory(h,{type:'undo'});
  h=shaderHistory(h,{type:'edit',graph:b});assert.equal(h.future.length,0);
  h=shaderHistory(h,{type:'load',graph:a});assert.equal(h.past.length,0);
+});
+
+test('switching away from material clears only its quality and output channels',()=>{
+ const graph={domain:'material',minQuality:'high',outputs:{color:'node',normal:'node'},nodes:[],parameters:{tint:1}};
+ const next=setShaderDomain(graph,'postfx');
+ assert.deepEqual(next,{domain:'postfx',outputs:{color:'node'},nodes:[],parameters:{tint:1}});
+ assert.equal(graph.outputs.normal,'node');
+ assert.equal(setShaderDomain(graph,'unknown'),graph);
 });

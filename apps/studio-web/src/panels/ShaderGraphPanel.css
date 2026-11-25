@@ -48,3 +48,10 @@
 .graph-edit-port{cursor:crosshair}
 .graph-edit-pin{fill:#90c8e8;stroke:#223649;stroke-width:1px}
 .graph-edit-port:hover .graph-edit-pin,.graph-edit-port:focus .graph-edit-pin,.graph-edit-port[aria-pressed=true] .graph-edit-pin{fill:#fff6cf;stroke:#ffbb61;stroke-width:2px}
+.graph-asset-form{display:flex;flex-wrap:wrap;align-items:end;gap:8px;padding:7px 12px}
+.graph-asset-form label{display:grid;gap:3px;min-width:0;color:var(--au-text-muted)}
+.graph-asset-form input,.graph-asset-form select{max-width:100%;color:var(--au-text);background:var(--studio-background);border:1px solid var(--au-line);border-radius:4px;padding:4px}
+
+.graph-heading{gap:6px}
+.graph-heading>span{margin-right:auto}
+.graph-heading>button:not(.icon-button),.graph-asset-form button{background:#223e59;border:1px solid #496588;color:#d4e6ff;padding:4px 8px;border-radius:4px;font:inherit}

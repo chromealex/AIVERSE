@@ -33,6 +33,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
                     "postfx_preset", "postfx_estimate", "postfx_lut_neutral"}},
         {"effects", {"fx_list", "fx_templates", "fx_get", "fx_set", "fx_bind", "fx_delete"}},
         {"lightbake", {"lightbake_get", "lightbake_set", "lightbake_clear"}},
+        {"shader_graph", {"shader_graph_create","shader_graph_apply"}},
         {"static_geometry", {"geometry_instances_list","geometry_strata_set"}},
         {"models", {"asset_list", "model_info", "geometry_catalog", "geometry_analyze", "geometry_proxy_bake", "geometry_proxy_lod"}},
         {"scripts", {"script_api", "script_list", "script_read", "script_write", "script_check"}},

@@ -3,6 +3,13 @@
 #include <filesystem>
 #include <fstream>
 #include <algorithm>
+#include <random>
+#if defined(__APPLE__)
+#include <stdio.h>
+#include <cerrno>
+#elif defined(_WIN32)
+#include <windows.h>
+#endif
 
 namespace aiverse::editor {
 namespace {
@@ -16,6 +23,35 @@ fs::path graphPath(const Workspace& ws, const std::string& name) {
     const auto relative=path.lexically_relative(root);
     if(relative.empty() || *relative.begin()=="..") throw std::runtime_error("graph path escapes project");
     return path;
+}
+void writeGraph(const fs::path& file,const Json& graph,bool createOnly) {
+    const auto bytes=graph.dump(2)+"\n";
+    if(bytes.size()>256*1024)throw std::runtime_error("graph exceeds 256 KiB");
+    fs::create_directories(file.parent_path());
+    if(createOnly&&fs::exists(file))throw std::runtime_error("Shader Graph already exists");
+    std::random_device random;
+    fs::path directory;
+    do {directory=file.parent_path()/(".shader-write-"+std::to_string(random()));}
+    while(!fs::create_directory(directory));
+    struct Cleanup {
+        fs::path path;
+        ~Cleanup(){std::error_code ec;fs::remove(path/"asset",ec);fs::remove(path,ec);}
+    } cleanup{directory};
+    const auto pending=directory/"asset";
+    std::ofstream stream(pending,std::ios::binary);
+    stream<<bytes;stream.close();
+    if(!stream)throw std::runtime_error("Cannot write Shader Graph");
+    if(!createOnly){fs::rename(pending,file);return;}
+    // Publish the complete new asset without overwriting a concurrent creator.
+#if defined(__APPLE__)
+    if(::renamex_np(pending.c_str(),file.c_str(),RENAME_EXCL)!=0)
+        throw fs::filesystem_error("Create Shader Graph",file,std::error_code(errno,std::generic_category()));
+#elif defined(_WIN32)
+    if(!::MoveFileW(pending.c_str(),file.c_str()))
+        throw fs::filesystem_error("Create Shader Graph",file,std::error_code(int(::GetLastError()),std::system_category()));
+#else
+    fs::create_hard_link(pending,file);
+#endif
 }
 Json load(const Workspace& ws,const std::string& name) {
     const auto path=graphPath(ws,name);
@@ -41,13 +77,17 @@ void registerShaderGraphOps(Workspace& ws) {
     }});
     ws.registerOp({"shader_graph_get","Read and validate a project graph.",schema,[&ws](const Json& p){return result(load(ws,p.getStr("name")));}});
     ws.registerOp({"shader_graph_validate","Validate graph and generate GLSL/MSL statements without writing files.",schema,[](const Json& p){return result(p["graph"]);}});
+    ws.registerOp({"shader_graph_create","Create a new named Shader Graph from the engine default without replacing an existing asset.",
+        Json::parse(R"({"type":"object","properties":{"name":{"type":"string"},"domain":{"enum":["material","postfx","particle"]}},"required":["name","domain"]})"),
+        [&ws](const Json& p){
+            const auto name=p.getStr("name");
+            const auto file=graphPath(ws,name);
+            writeGraph(file,render::graph::makeDefault(p.getStr("domain")),true);
+            Json out=Json::object();out.set("name",Json::string(name));return out;
+        }});
     ws.registerOp({"shader_graph_set","Validate and atomically save shaders/<name>.json. Applying is a separate operation.",schema,[&ws](const Json& p){
         const auto r=result(p["graph"]);const auto path=graphPath(ws,p.getStr("name"));
-        const auto text=p["graph"].dump(2)+"\n";if(text.size()>256*1024)throw std::runtime_error("graph exceeds 256 KiB");
-        fs::create_directories(path.parent_path());auto temp=path;temp+=".tmp";
-        if(fs::is_symlink(temp))throw std::runtime_error("temporary graph path is a symlink");
-        {std::ofstream f(temp,std::ios::binary|std::ios::trunc);f<<text;f.close();if(!f)throw std::runtime_error("cannot save graph");}
-        fs::rename(temp,path);return r;
+        writeGraph(path,p["graph"],false);return r;
     }});
     ws.registerOp({"shader_graph_apply","Apply a saved graph snapshot: target=material library name or existing particle effect name, emitter=0 by default; postfx scope=game|map. Reapply after edits.",schema,[&ws](const Json& p){
         const auto g=load(ws,p.getStr("name"));const auto program=render::graph::compile(g);Json q=Json::object();

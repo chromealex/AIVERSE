@@ -2,7 +2,7 @@ import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { GitBranch, RefreshCw, Save, Search, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import type { StudioShaderGraphDocument, StudioShaderGraphOp } from '../types';
-import { layoutShaderGraph, moveShaderGraphNode, addShaderGraphNode, removeShaderGraphNode, setShaderInput, setShaderOutput, shaderOutputNames, effectiveShaderValue, setShaderComponent } from './shaderGraphLayout';
+import { layoutShaderGraph, moveShaderGraphNode, addShaderGraphNode, removeShaderGraphNode, setShaderInput, setShaderOutput, shaderOutputNames, setShaderDomain, effectiveShaderValue, setShaderComponent } from './shaderGraphLayout';
 import {emptyShaderHistory,shaderHistory} from './shaderGraphHistory';
 import './graphSurface.css';
 import './ShaderGraphPanel.css';
@@ -23,6 +23,12 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  const drag=useRef<{id:string; x:number; y:number; originalX:number; originalY:number}|null>(null);
  const [message,setMessage]=useState('');
  const [search,setSearch]=useState('');
+ const [creating,setCreating]=useState(false);
+ const [newName,setNewName]=useState('');
+ const [newDomain,setNewDomain]=useState('material');
+ const [target,setTarget]=useState('');
+ const [scope,setScope]=useState('game');
+ const [emitter,setEmitter]=useState(0);
  const [error,setError]=useState('');
  const [busy,setBusy]=useState(false);
  const [nonce,setNonce]=useState(0);
@@ -31,7 +37,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  useEffect(()=>{
   let closed=false;
   setSelected('');setDocument(null);dispatch({type:'load',graph:null});setError('');setMessage('');
-  setPendingName('');setOperations([]);setSelectedOp('');
+  setCreating(false);setNewName('');setPendingName('');setOperations([]);setSelectedOp('');
   if(connected&&!projectPath){setNames([]);return;}
   setBusy(true);
   void Promise.all([invoke('studio.shaderGraphs',{}),invoke('studio.shaderGraphCatalog',{})])
@@ -45,6 +51,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  useEffect(()=>{
   let closed=false;
   setDocument(null);dispatch({type:'load',graph:null});setMessage('');setSelectedNode('');setWireSource('');
+  setTarget('');setScope('game');setEmitter(0);
   if(!selected)return;
   setBusy(true);setError('');
   void invoke('studio.shaderGraphGet',{name:selected})
@@ -96,6 +103,23 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
   if(next===draft){setError('This connection would create a cycle.');return;}
   setDraft(next);setSelectedNode(target);setWireSource('');setMessage('');setError('');
  };
+ const createGraph=async()=>{
+  if(busy||dirty)return;
+  setBusy(true);setError('');
+  try{
+   await invoke('studio.op',{op:'shader_graph_create',params:{name:newName,domain:newDomain}});
+   setNames(old=>Array.from(new Set([...old,newName])).sort());setSearch('');
+   setSelected(newName);setCreating(false);setNewName('');
+  }catch(e){setError(String(e));}finally{setBusy(false);}
+ };
+ const applyGraph=async()=>{
+  if(busy||dirty||!draft)return;
+  setBusy(true);setMessage('');setError('');
+  try{
+   await invoke('studio.op',{op:'shader_graph_apply',params:{name:selected,target,scope,emitter}});
+   setMessage('Applied '+selected+' to '+(draft.domain==='postfx'?scope+' post effects':target)+'.');
+  }catch(e){setError(String(e));}finally{setBusy(false);}
+ };
  const validate=async()=>{
   if(!draft||busy)return;
   setBusy(true);setError('');setMessage('');
@@ -118,11 +142,19 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  const discard=()=>{if(document){setDraft(document.graph);setWireSource('');setMessage('Draft discarded.');setError('');}};
  return <section className="studio-shader-graphs">
   <header className="graph-heading"><span><GitBranch size={16}/> Shader Graphs</span>
+   <button disabled={busy||dirty||!projectPath} onClick={()=>setCreating(v=>!v)}>New graph</button>
    <button className="icon-button" aria-label="Reload Shader Graphs"
     disabled={busy||dirty} title={dirty?'Save or discard changes before reloading':'Reload Shader Graphs'} onClick={()=>setNonce(n=>n+1)}><RefreshCw size={15}/></button>
   </header>
   <p className="graph-readonly">{wireSource?<>Choose an input for {wireSource}. <button onClick={()=>setWireSource('')}>Cancel</button></>
    :'Select a node to edit its properties, or connect an output to an input.'}</p>
+  {creating&&<form className="graph-asset-form" onSubmit={e=>{e.preventDefault();void createGraph();}}>
+   <label>Asset name<input required value={newName} pattern="[A-Za-z0-9_\-]{1,64}" maxLength={64}
+    onChange={event=>setNewName(event.target.value)}/></label>
+   <label>Domain<select value={newDomain} onChange={e=>setNewDomain(e.target.value)}>
+    {['material','postfx','particle'].map(d=><option key={d}>{d}</option>)}</select></label>
+   <button disabled={busy||dirty||!newName}>Create graph</button>
+  </form>}
   {error&&<p className="graph-error" role="alert">{error}</p>}
   {pendingName&&<div className="graph-pending">
     <span>Discard unsaved changes and open {pendingName}?</span>
@@ -144,7 +176,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
     {!selected ? <div className="graph-empty">Select a graph to inspect its nodes and connections.</div> :
      busy ? <div className="graph-empty">Compiling and loading graph…</div> :
      document ? <>
-      <div className="graph-summary"><strong>{selected}</strong><span>{document.graph.domain??'Unknown domain'}</span>
+      <div className="graph-summary"><strong>{selected}</strong><span>{draft?.domain}</span>
        <span>{document.nodes} nodes · {document.samples} texture samples</span>
        <span>{dirty?'Unsaved changes':'Saved'}</span>
        <select className="graph-add-select" aria-label="Graph node operation"
@@ -245,6 +277,14 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
           connectInput(inspected.id,slot,event.target.value);
          }}>{sourceOptions}</select></label>)}
        </fieldset>}
+       <details><summary>Graph settings</summary><fieldset>
+        <label>Domain<select value={draft.domain} onChange={event=>{
+          setDraft(setShaderDomain(draft,event.target.value));setMessage('Domain changed. Validate node compatibility before saving.');setError('');
+        }}>{['material','particle','postfx'].map(d=><option key={d}>{d}</option>)}</select></label>
+        {draft.domain==='material'&&<label>Minimum quality<select value={draft.minQuality??'low'}
+          onChange={e=>setDraft({...draft,minQuality:e.target.value})}>
+          {['low','medium','high'].map(q=><option key={q}>{q}</option>)}</select></label>}
+       </fieldset></details>
        <details><summary>Graph outputs</summary><fieldset>
         {shaderOutputNames(draft.domain).map(channel=><label key={channel}>{channel}
          <select value={draft.outputs?.[channel]??''} onChange={event=>{
@@ -252,11 +292,21 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
          }}><option value="" disabled={channel==='color'}>Unassigned</option>{sourceOptions}</select>
         </label>)}
        </fieldset></details>
+       <details><summary>Apply saved graph</summary><form className="graph-asset-form"
+         onSubmit={event=>{event.preventDefault();void applyGraph();}}>
+        {draft.domain==='postfx'?<label>Post effects<select value={scope} onChange={e=>setScope(e.target.value)}>
+         <option value="game">Game</option><option value="map">Current map</option></select></label>
+        :<label>{draft.domain==='particle'?'Particle effect':'Material'}<input required value={target} onChange={e=>setTarget(e.target.value)}/></label>}
+        {draft.domain==='particle'&&<label>Emitter index<input type="number" min="0" step="1" required
+         value={Number.isFinite(emitter)?emitter:''} onChange={e=>setEmitter(e.target.valueAsNumber)}/></label>}
+        <button disabled={busy||dirty||(draft.domain!=='postfx'&&!target.trim())}>Apply graph</button>
+        {dirty&&<span>Save changes before applying.</span>}
+       </form></details>
       </div>}
      </> : <div className="graph-empty">No graph loaded.</div>}
    </main>
   </div>
-  <footer className="panel-footer">Existing project assets only · generated GLSL/MSL is not exposed through this UI</footer>
+  <footer className="panel-footer">{selected?'shaders/'+selected+'.json':'shaders/'}</footer>
  </section>;
 }
 

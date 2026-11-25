@@ -175,6 +175,15 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(call("studio.assetPlace",R"({"asset":"content/missing.glb","x":5,"z":6})").has("error") && map.data.entities.size()==before+1);
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && map.data.entities.size()==before);
    }
+   {
+       const char* create=R"({"op":"shader_graph_create","params":{"name":"studio_tint","domain":"material"}})";
+       AIVERSE_TEST_CHECK(!call("studio.op",create).has("error"));
+       AIVERSE_TEST_CHECK(call("studio.op",create).has("error"));
+       auto graph=call("studio.shaderGraphGet",R"({"name":"studio_tint"})");
+       AIVERSE_TEST_CHECK(graph["result"]["graph"].getStr("domain")=="material");
+       AIVERSE_TEST_CHECK(!call("studio.op",R"({"op":"shader_graph_apply","params":{"name":"studio_tint","target":"studio_brass"}})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.op",R"({"op":"shader_graph_create","params":{"name":"bad_domain","domain":"invalid"}})").has("error"));
+   }
    // Rules form: read own + resolved types, edit a type field (validated and saved), reject other paths.
    {
        auto rules=call("studio.rules");
