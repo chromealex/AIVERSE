@@ -135,12 +135,12 @@
           "textEn": "Verify underground geometry, navigation, entrances, restore and Studio preview consumers on the integrated branch."
         },
         {
-          "status": "in-progress",
-          "target": null,
+          "status": "done",
           "title": "Планетарный лес: MCP Live и камера",
           "titleEn": "Planetary forest: linked MCP live and camera",
-          "text": "Stage 161D5d: авторизованные Live-снимки, выбор тела, камера; операции представления вне истории карты.",
-          "textEn": "Stage 161D5d: authenticated live snapshot, body and camera operations; transient view changes outside map history."
+          "text": "В Studio на Mac через MCP переключали камеру между Землёй и Луной. Во время игры снимок показывал растения на обоих телах; смена камеры сохраняла ревизию карты.",
+          "textEn": "In Studio on Mac, MCP switched the camera between Terra and Moon. During Play, live snapshots showed plants on both bodies. Changing the camera preserved the map revision.",
+          "date": "2026-11-24"
         },
         {
           "status": "in-progress",
@@ -799,7 +799,9 @@
           "status": "in-progress",
           "target": null,
           "title": "Приёмка на реальном железе Vulkan, GLES и WebGL",
-          "titleEn": "Acceptance on real Vulkan, GLES and WebGL hardware"
+          "titleEn": "Acceptance on real Vulkan, GLES and WebGL hardware",
+          "text": "На Galaxy A05s сцена с 20 млн треугольников при бюджете 60 тыс. показала 58,4 кадра/с в пролёте камеры на GLES. На Vulkan с поворотом изображения в движке измерено 48 кадров/с. Осталась проверка WebGL на устройстве.",
+          "textEn": "On a Galaxy A05s, the 20-million-triangle scene with a 60k budget reached 58.4 fps in a GLES camera fly-through. Vulkan reached 48 fps with in-engine image rotation. WebGL device validation remains open."
         },
         {
           "status": "planned",
@@ -2208,12 +2210,12 @@
       ],
       "roadmap": [
         {
-          "status": "in-progress",
-          "target": null,
+          "status": "done",
           "title": "Повторное использование сохранённых параметризованных графов текстур",
           "titleEn": "Reuse saved parameterized texture graphs",
-          "text": "Проверяем экспорт текстур BC и ASTC с мипами и чтение результатов графа через Vulkan.",
-          "textEn": "Verifying BC and ASTC texture export with mipmaps and Vulkan graph readback."
+          "text": "Сохранённый граф можно вставить в другой и настроить параметры копии. В Studio на Mac карты применили к материалу модели на время сессии. Проверены экспорт BC и ASTC с мип-уровнями и чтение результата через Vulkan.",
+          "textEn": "Insert a saved graph into another graph and adjust the copy’s parameters. On Mac, Studio applied its maps to a model material for the session. BC and ASTC mipmap exports and Vulkan readback were verified.",
+          "date": "2026-11-25"
         }
       ]
     },
@@ -2372,10 +2374,10 @@
           "id": "open-world-mixed-residency",
           "title": "Выгрузка смешанных групп региона",
           "titleEn": "Mixed region group residency",
-          "text": "Проверка ссылок на группу при выгрузке, сохранение экипажа и состояния разрушаемых объектов.",
-          "textEn": "Guard region parking against crossing component links and preserve crew and breakable state.",
-          "status": "in-progress",
-          "target": null
+          "text": "При выгрузке региона транспорт сохраняет экипаж и полученные повреждения. В проверке на Mac группа пересекла 100 границ регионов и пять раз восстановилась из сохранения с теми же связями и идентификаторами.",
+          "textEn": "Vehicles keep their crew and damage when a region unloads. On Mac, a group crossed 100 region boundaries and recovered from five cold saves with its links and identities intact.",
+          "status": "done",
+          "date": "2026-11-25"
         },
         {
           "id": "world-recurring-simulation-budget",
@@ -3026,8 +3028,8 @@
           "title": "Общий редактор графов",
           "id": "graph-framework",
           "titleEn": "Shared graph editor framework",
-          "text": "Общие адаптеры и полотно, с сохранением собственных форматов и выполнения каждой системы.",
-          "textEn": "Shared adapters and canvas while preserving each domain's format and runtime; request cancellation implemented in source; Stage 31B native appearance registry publication implemented in source; live host wiring pending; Stage 32A bounded idle pipeline cache and draft-independent status implemented in source; Stage 33A request-local shared scalar GPU scratch implemented in source; Stage 33B CPU DAG lifetime planning implemented in source; Stage 34A bounded GPU pass scheduling implemented in source; Stage 34B typed DAG slot lowering and plan-only inspection implemented in source; Stage 34C typed materialized shader source implemented; Stage 34D opt-in native materialized execution implemented in source; hardware acceptance pending; Stage 36A canonical typed GPU owner and retired resource reuse integrated in source; Stage 36B opt-in pointwise pass fusion implemented in source; Stage 37A GPU-only texture transport and native owner adoption implemented in source; Stage 37B GPU texture request lifecycle and optional GPU mip generation integrated in source; Stage 37C shared live snapshot adoption and editor scene application implemented in source; session-only and hardware acceptance pending. Parallel native RHI acceptance fixture authored; hardware acceptance pending. Stage 35A Building Graph report adapter and offline Studio inspection implemented in source; direct owner wiring pending; hardware acceptance pending. Stage 35B in progress: bounded Caverns owner snapshot inspection and imported read-only graph; native owner integration remains separate. Stage 35B Caverns snapshot report projection and paged offline graph implemented in source; owner live wiring pending. Stage 35C in progress: document-scoped, read-only native Caverns capture and stale-response refusal with owner registration checks. Stage 35C scoped native Caverns read and unavailable/absent handling implemented in source; hardware and owner integration pending. Stage 35D in progress: native building candidate request provenance and shared graph integration in an isolated Building owner-based branch. Stage 35D shared candidate provenance gate implemented; Building owner panel wiring on isolated integration branch. Stage 35E in progress: native authored room connectivity report and shared topology inspector. Stage 35E optional native topology inspector implemented in source. Verify mixed Vulkan compute descriptors on Linux Lavapipe. Preserve native graph originals across Studio edits."
+          "text": "В Studio графы используют общий редактор. Для Texture Graph проверены предпросмотр на Metal, применение карт к модели и восстановление после отмены расчёта. В нативной Studio на Mac проверено восстановление публикации графа. Для строительных и пещерных графов продолжается проверка связи редактора с данными сцены.",
+          "textEn": "Studio graphs share an editor. Texture Graph preview on Metal, applying maps to a model and recovery after cancellation were verified. Graph publication recovery was also tested in native Studio on Mac. Work continues on the connection between the Building and Caverns editors and scene data."
         },
         {
           "id": "studio-play-review",
@@ -3065,8 +3067,8 @@
           "id": "studio-world-explorer-live",
           "title": "Обзор регионов живого мира",
           "titleEn": "Live World Explorer",
-          "text": "Снимок реального игрового ECS: карта регионов по высоте, выбор ячейки и счётчики частоты решений без имитации стриминга. Запуск локального actor-session клиента в Studio и чтение его авторитетного реестра регионов.",
-          "textEn": "Real hosted-game ECS snapshot: height-sliced region map, cell selection and decision cadence counters without fabricated streaming metrics. Host the local actor-session client in Studio and inspect its authoritative region ledger.",
+          "text": "В локальном сеансе Studio на Mac обозреватель прочитал две сущности в двух регионах работающего сервера. Проверены пауза, шаг на один тик и перезапуск. Запуск этого сценария на Windows ещё предстоит проверить.",
+          "textEn": "In a local Studio session on Mac, the explorer read two entities in two regions from the running server. Pause, single-tick stepping and restart were exercised. The Windows run remains open.",
           "status": "in-progress"
         },
         {
@@ -3201,8 +3203,8 @@
           "id": "feature-gate",
           "title": "Единый контракт готовности фич",
           "titleEn": "Unified feature readiness contract",
-          "text": "Манифесты, проверка доказательств и интеграция с каталогом скиллов. Проверить линковку инструментов графа на Linux ARM64.",
-          "textEn": "Manifests, evidence checks and skill catalog integration. Verify that graph tools link on Linux ARM64.",
+          "text": "В Studio можно открыть результаты проверки фичи, через MCP — запросить их для выбранной ревизии. На Linux ARM64 инструменты графов собраны и проверены. Готовность каждой фичи по-прежнему подтверждается её собственными проверками.",
+          "textEn": "Studio displays feature checks, and MCP can query the report for a revision. Graph tools were built and tested on Linux ARM64. Each feature still needs its own verification.",
           "status": "in-progress"
         }
       ]
