@@ -16,7 +16,7 @@ using namespace aiverse::render;
 struct Vertex { float4 clip, color; float2 uv; };
 
 bool readModelBytes(const std::string& path, std::string& data) {
-    std::ifstream file(std::filesystem::u8path(path),std::ios::binary);
+    std::ifstream file(std::filesystem::path(std::u8string(path.begin(), path.end())),std::ios::binary);
     if(!file)return false;
     std::ostringstream bytes;
     bytes << file.rdbuf();
