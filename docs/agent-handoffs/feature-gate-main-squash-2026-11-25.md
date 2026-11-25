@@ -1,0 +1,7 @@
+# Feature Gate main integration
+
+Feature implementation and gate candidate a4a07873518ad38f1d7f08f3d84561021db6a143 includes main a46eda1bd22d956e506e83757fb0bb6d50d5398e, which brought #193 and #195. Studio source-contract tests and the headless journal/link command use the accepted main versions. The focused Building topology executable receives the project catalog directory and links the actual PNG encoder. The candidate's application tree was staged as a single squash in a separate worktree; the original branch history was retained.
+
+The eight clean-checkout suites passed on that exact integration. Recent native Studio validation on the combined World Processes / typed local Play implementation passed StudioSession, G1 authoritative actor diagnostics (two cells, epoch, pause, single step), and the GameCore authenticated edit/preview/apply/undo tests. Owner-history and transfer fixtures confirmed cross-owner undo fencing, external conflict refusal, journal recovery, and GUID-preserving asset updates. The previous 553-case quick run passed with one optional Metal test skipped; the opt-in LENS binary separately passed. This prior run predates integrating the latest main and is distinguished from the final run.
+
+The strict feature readiness dimensions for Windows, some graph owners and independent policy review remain open. The branch includes tested implementation and partial acceptance records for those dimensions. Site assets have been generated locally. Public release and site deployment are independent of the requested main push.

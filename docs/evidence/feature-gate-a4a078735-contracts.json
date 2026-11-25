@@ -1,0 +1,10 @@
+{
+  "sha": "a4a07873518ad38f1d7f08f3d84561021db6a143",
+  "argv": [
+    "python3.12",
+    "tools/agents/check_contracts.py"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/feature-gate-a4a078735-contracts.log.txt",
+  "sha256": "68918e04e24f15a110579f9bd816d07f84633c61068abf289a89f774e2afeb5a"
+}
