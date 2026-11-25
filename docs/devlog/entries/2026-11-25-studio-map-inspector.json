@@ -1,0 +1,33 @@
+{
+  "id": "2026-11-25-studio-map-inspector",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "92556c5bb",
+  "author": null,
+  "links": [],
+  "title": "Параметры и проверка карты в Inspector",
+  "titleEn": "Map properties and validation in Inspector",
+  "summary": "Страница Map объединяет размер игровой сетки, режим движения и условия победы. Изменения формы можно отменить одним шагом.",
+  "summaryEn": "The Map page brings grid dimensions, movement rules and victory conditions together. Undo reverts an applied form in one step.",
+  "body": [
+    "Откройте Map в Inspector. Здесь можно переименовать карту, изменить ширину и высоту в клетках и включить движение только по дорогам. Для особых условий победы раскройте Victory override.",
+    "После Apply нажмите Validate map. Inspector покажет ошибки и предупреждения текущей карты. Если сообщение привязано к объекту, его можно открыть в Inspector. Сохранение файла выполняется обычной командой Save."
+  ],
+  "bodyEn": [
+    "Open Map in Inspector to rename the map, adjust its grid dimensions or restrict movement to roads. Expand Victory override for map-specific win conditions.",
+    "After Apply, choose Validate map to inspect errors and warnings. Issues associated with an object offer a shortcut to inspect it. Save writes the current document to disk."
+  ],
+  "verified": "В отдельном окне Studio на macOS изменены размеры тренировочной карты и условия победы, затем карта сохранена и проверена.",
+  "verifiedEn": "A detached macOS Inspector resized a training map, changed its victory conditions, saved the map and validated it.",
+  "limits": "Страница предназначена для документов карт. Изменение размеров доступно для плоской сетки. Проверка Windows ещё предстоит.",
+  "limitsEn": "The page works with map documents. Resizing is available for flat grids. Windows verification is pending.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-map-inspector/map-inspector.png",
+      "caption": "Inspector показывает свойства тренировочной карты и результат проверки",
+      "captionEn": "The Inspector shows training map properties and validation results"
+    }
+  ]
+}
