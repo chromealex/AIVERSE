@@ -26,7 +26,7 @@ export default function LightingPanel({ projectPath, selectedId, onSelect }: Lig
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    // Keep the scroll position and focused field on same-document refreshes.
     setError('');
     if (!available) {
       setState(empty);

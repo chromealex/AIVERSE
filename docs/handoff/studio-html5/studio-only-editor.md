@@ -495,3 +495,5 @@ Inspector selection acceptance ce968d8471ee461818bc70676603a8c3c98634ee. StudioS
 Shader Graph follow-up: verify unsaved drafts across project and document changes, including two projects with the same shader name and a changed source asset.
 
 Shader Graph retained drafts, implementation 731e1d636. ShaderGraphPanel.tsx retains the original document and undo stack per project and StudioPanelRenderer.tsx resets the view on scope changes. Verified 113 graph tests, typecheck, production build, Mac detached map switch with Undo/Redo and native conflict preserving external file, Chrome same-name project switching and discard. Initial probes raced remount and compared unordered JSON text; final verification uses visible restored status and the native source revision. Report docs/evidence/studio-shader-project-drafts-acceptance.json and capture docs/evidence/studio-project-catalog/shader-project-draft.png. Next: continue outstanding legacy parity rows before retiring ImGui.
+
+Lighting transfer: expose authored point/spot patterns, frequencies and searchlight orientation/sweep through the existing light-update API. Verify conditional controls, undo and persistence.

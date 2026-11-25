@@ -22,7 +22,7 @@ test('project lighting values override defaults without mutating source',()=>{
   assert.deepEqual(source,{lighting:{storm:.6},lights:[]});
 });
 test('light properties match the native API key allowlist',()=>{
-  assert.deepEqual(lightProperties({}).map(x=>x.key),[...LIGHT_EDITABLE_KEYS]);
+  assert.deepEqual(lightProperties({type:"spot",pattern:"beacon",sweep:25}).map(x=>x.key),[...LIGHT_EDITABLE_KEYS]);
 });
 test('enum options reject unsupported modes',()=>{
   const fields=lightProperties({type:'spot',bake:'mixed'});
@@ -40,4 +40,16 @@ test('numeric fields reject invalid values',()=>{
   assert.deepEqual(parseFieldDraft(intensity,'0'),{ok:true,value:0});
   const radius=fields.find(f=>f.key==='radius');
   assert.equal(parseFieldDraft(radius,'0').ok,false);
+});
+
+test('legacy angle selects spot fields and pattern frequency follows the renderer',()=>{
+  const point=lightProperties({});
+  assert.ok(!point.some(field=>['angle','rate','sweepSpeed'].includes(field.key)));
+  const spot=lightProperties({angle:60,pattern:'strobe'});
+  assert.equal(spot.find(field=>field.key==='type').value,'spot');
+  assert.equal(spot.find(field=>field.key==='rate').value,1.5);
+  assert.ok(!spot.some(field=>field.key==='sweepSpeed'));
+  const fields=lightProperties({type:'spot',sweep:30,pattern:'beacon'});
+  assert.equal(fields.find(field=>field.key==='sweepSpeed').value,25);
+  assert.equal(fields.find(field=>field.key==='rate').value,.5);
 });

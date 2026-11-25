@@ -252,3 +252,5 @@ Project Hub now searches the full host-provided recent list by name or folder, m
 
 Shader Graph project switching requires restoring the unsaved graph and retaining its original save precondition when the user returns to the project.
 Confirmed in a detached Mac Shader Graph window across map changes; two projects with the same shader name and explicit discard verified in the browser bridge fixture.
+
+Lighting transfer: expose authored point/spot patterns, frequencies and searchlight orientation/sweep through the existing light-update API. Verify conditional controls, undo and persistence.

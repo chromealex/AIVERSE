@@ -13,6 +13,18 @@ int main() {
     Json p=Json::parse(R"({"index":0,"key":"intensity","value":3.5})");
     doc=editFpsLighting(doc,"studio.lightUpdate",p);
     AIVERSE_TEST_CHECK(doc["lights"][0]["intensity"].toDouble()==3.5);
+    for (const char* patch : {R"({"index":0,"key":"type","value":"spot"})",
+                              R"({"index":0,"key":"pattern","value":"beacon"})",
+                              R"({"index":0,"key":"rate","value":2.5})",
+                              R"({"index":0,"key":"sweep","value":28})"})
+        doc=editFpsLighting(doc,"studio.lightUpdate",Json::parse(patch));
+    const auto& beacon=doc["lights"][0];
+    AIVERSE_TEST_CHECK(beacon.getStr("pattern")=="beacon" && beacon["rate"].toDouble()==2.5);
+    AIVERSE_TEST_CHECK(beacon["sweep"].toDouble()==28 && beacon["intensity"].toDouble()==3.5);
+    bool invalidRate=false;
+    try { (void)editFpsLighting(doc,"studio.lightUpdate",Json::parse(R"({"index":0,"key":"rate","value":-1})")); }
+    catch (const std::exception&) { invalidRate=true; }
+    AIVERSE_TEST_CHECK(invalidRate);
     Json scalar=Json::parse(R"({"key":"storm","value":0.45})");
     doc=editFpsLighting(doc,"studio.lightingSet",scalar);
     AIVERSE_TEST_CHECK(doc["lighting"]["storm"].toDouble()==0.45);
