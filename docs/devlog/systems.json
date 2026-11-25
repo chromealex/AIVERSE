@@ -1416,7 +1416,8 @@
           "title": "Пользовательские цепочки проходов и временных текстур",
           "titleEn": "Author pass chains and intermediate render textures",
           "id": "prisma-authored-compositor"
-        }
+        },
+        {"id": "native-sky-skill", "status": "done", "date": "2026-11-25", "title": "Выбор штатного неба при оформлении карты", "titleEn": "Discover native sky when authoring a map"}
       ],
       "taglineEn": "Post-processing and atmosphere",
       "essenceEn": "HDR, exposure and tone mapping, bloom, DoF, motion blur, TAA, AO and reflections, lens effects, anti-aliasing and upscaling, colour grading and screen-space atmosphere with quality profiles.",

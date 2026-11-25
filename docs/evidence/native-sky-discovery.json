@@ -1,0 +1,11 @@
+{
+  "sha": "2d6afffdb025607e3c0d57f5f69feb8e3d0cd010",
+  "argv": [
+    "python3",
+    "-c",
+    "import json,subprocess as s;tool=[\"python3\",\"tools/skills/catalog.py\"];s.run(tool+[\"check\"],check=True);ident=\"aiverse-physical-sky\";queries=[\"\u043e\u0431\u044b\u0447\u043d\u043e\u0435 \u0434\u043d\u0435\u0432\u043d\u043e\u0435 \u043d\u0435\u0431\u043e\",\"outdoor sky clouds\"];hits=[json.loads(s.check_output(tool+[\"search\",q]))[0][\"id\"] for q in queries];assert hits==[ident,ident],hits;plan=s.check_output(tool+[\"plan\",\"--skills\",ident,\"--side\",\"client\"]);assert b\"aiverse-physical-sky/SKILL.md\" in plan;print(queries,hits,plan.decode())"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/native-sky-discovery.log.txt",
+  "sha256": "1e3870807c8af408b8aa0248600b35d35c5a438cba91f8b753581a9c14df3d20"
+}

@@ -106,6 +106,7 @@ ALIASES = {
 
 # MCP and repository workflows (no runtime library): id, summary, source of truth.
 WORKFLOWS=[
+ ('aiverse-physical-sky','Configure native map sky, daylight, volumetric clouds and sun with PRISMA','docs/physical-sky.md'),
  ('aiverse-graph-authoring','Shared Studio graph canvas and domain adapters without duplicate graph execution','docs/agents/graph-framework.md'),
  ('aiverse-new-feature','Plan, implement and verify feature evidence and integration readiness','docs/agents/feature-contract.md'),
  ('aiverse-mcp-coverage','Audit real MCP tools/list, GUI-only restrictions and verified capability calls','docs/agents/mcp-coverage.md'),
@@ -193,6 +194,7 @@ WORKFLOWS=[
  ('aiverse-autolod','Static model LOD generation with meshoptimizer and LOD transitions in the renderer','docs/autolod.md'),
 ]
 WORKFLOW_ALIASES={
+ 'aiverse-physical-sky':'небо неба небес облак дневно закат рассвет атмосфер sky skies daylight sunset sunrise cloud clouds skydome skybox panorama atmosphere',
  'aiverse-mcp-coverage':'mcp protocol server tools registry capabilities coverage audit tools/list tools/call introspection registration agents проверка скиллы инструменты мсп',
  'aiverse-warcraft3-import':'warcraft warcraft3 wc3 wc3x mpq w3x w3m mdx mdl blp map importer stormlib reforged варкрафт импорт карта архив',
  'aiverse-gpu-batching':'gpu batching material batches instancing metal icb draw calls performance profiling counters renderer батчинг батчи инстансинг производительность отрисовка',
