@@ -274,3 +274,16 @@ For distant surface replacements with baked textures instead of vertex clusterin
 works on exported/imported model files and produces a self-contained GLB for existing LODs.
 The GLB exporter now embeds CPU images and base/normal/metallic-roughness/occlusion/emissive
 texture bindings and alpha-mask settings; the authoring document format is unchanged.
+
+### Volume CSG geometry
+
+Add a volume CSG part in Studio's Model source graph, then select the part in Geometry dependencies. Its field graph uses the same model draft, undo stack, native validation and revision-checked Save as other model parts. Pick a field to edit its parameters, connect a preceding field's output to an operand, or add a primitive or Boolean. A new primitive is combined with the current root by a union. Use Model parameters to change a numeric binding and Save to rebuild.
+
+The example in `examples/modeling/volume-csg.json` describes a clipped, weathered sphere with a cylindrical bore and a volume density inclusion. A `volumeCsg` geometry supplies optional `min`, `max` and integer `resolution` (4–24 cells per axis, default 16). Declare 1–48 named fields in dependency order. Its `root` names the last field. Fields are positive inside their solid. The extraction domain closes at its bounds.
+
+- Sphere uses center and radius. Box uses center and full XYZ size. Cylinder is aligned to Y and uses radius and size.y as its full height.
+- Noise uses frequency, amplitude and seed. Its optional input adds noise to an existing field.
+- Union, subtract and intersect take earlier field IDs in a and b. Subtract removes b from a.
+- Density textures use a cubic R8 array in X-fastest order, dimension 2–64, a threshold in [0,1], center and full size. The model embeds its source texels. To bring in a binary texture, call modeling_volume_texture_import with a project-relative .spvt path and zero-based frame, then merge the returned op, dimension and texels into the field. Studio exposes this operation on a density texture node.
+
+Use modeling_create or modeling_edit to persist the document and modeling_export with expectedRevision to produce models/<name>.glb. Changing a native parameter binding updates the extracted mesh on the next build.

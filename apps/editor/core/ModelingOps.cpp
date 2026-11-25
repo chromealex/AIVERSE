@@ -1,4 +1,5 @@
 #include "ModelingOps.h"
+#include "engine/fx/SpectraParticleVolumeTexture.h"
 #include "tools/modeling/Modeling.h"
 #include <filesystem>
 #include <fstream>
@@ -163,6 +164,39 @@ void registerModelingOps(Workspace &ws) {
             r.set("warnings", notes);
             r.set("path", Json::string(model));
             return r;
+        });
+    add("modeling_volume_texture_import",
+        "Read a project SPVT density texture frame as a portable volumeCsg densityTexture node.",
+        [&ws](const Json& p) {
+            const fs::path requested(p.getStr("path"));
+            require(!ws.project.dir.empty() && !requested.empty() && requested.is_relative() &&
+                requested.extension()==".spvt","expected a project-relative .spvt file");
+            const auto root=fs::canonical(ws.project.dir);
+            const auto file=fs::canonical(root/requested);
+            const auto relative=file.lexically_relative(root);
+            require(!relative.empty() && *relative.begin()!=".." && fs::is_regular_file(file),
+                    "density texture outside project");
+            const auto size=fs::file_size(file);
+            require(size<=spectra::kParticleVolumeTextureMaxBytes,"SPVT size exceeds limit");
+            std::string bytes(size, char{});
+            std::ifstream stream(file,std::ios::binary);
+            require(bool(stream.read(bytes.data(),std::streamsize(size))),"could not read density texture");
+            spectra::ParticleVolumeTexture texture;
+            std::string error;
+            const bool decoded=spectra::decodeParticleVolumeTexture(bytes,texture,error);
+            require(decoded,error);
+            const double requestedFrame=p.has("frame")?p["frame"].toDouble(-1):0;
+            require(std::isfinite(requestedFrame) && requestedFrame==std::floor(requestedFrame) &&
+                    requestedFrame>=0 && requestedFrame<texture.frames,"invalid SPVT frame");
+            const size_t n=texture.dimension, count=n*n*n, start=size_t(requestedFrame)*count;
+            Json texels=Json::array();
+            texels.itemsMut().reserve(count);
+            for(size_t i=0;i<count;++i) texels.push(Json::number(int64_t(texture.density[start+i])));
+            auto field=Json::object();
+            field.set("op",Json::string("densityTexture"));
+            field.set("dimension",Json::number(int64_t(n)));
+            field.set("texels",std::move(texels));
+            return field;
         });
     add("modeling_catalog", "Authoring operation catalog, format limits and exact algorithm coverage.",
         [](const Json &) { return modeling::catalog(); });
