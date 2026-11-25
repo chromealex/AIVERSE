@@ -30,6 +30,8 @@
     "docs/evidence/issues-197-202-final-mac.log.txt",
     "docs/evidence/issues-197-202-integrated-mac.json",
     "docs/evidence/issues-197-202-integrated-mac.log.txt",
+    "docs/evidence/issues-197-202-merged-main-mac.json",
+    "docs/evidence/issues-197-202-merged-main-mac.log.txt",
     "docs/evidence/local-order-upgrade-native-20261125.json",
     "docs/evidence/local-order-upgrade-native-20261125.log.txt",
     "docs/features/structure-upgrade-appearance.json",
@@ -174,7 +176,8 @@
       "evidence": [
         "docs/evidence/local-order-upgrade-native-20261125.json",
         "docs/evidence/local-order-upgrade-native-20261125.log.txt",
-        "docs/evidence/issues-197-202-final-mac.json"
+        "docs/evidence/issues-197-202-final-mac.json",
+        "docs/evidence/issues-197-202-merged-main-mac.json"
       ]
     },
     "handoff": {
@@ -222,6 +225,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/issues-197-202-final-mac.json"
+    "docs/evidence/issues-197-202-merged-main-mac.json"
   ]
 }

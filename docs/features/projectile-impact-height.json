@@ -27,6 +27,8 @@
     "docs/evidence/issues-197-202-final-mac.log.txt",
     "docs/evidence/issues-197-202-integrated-mac.json",
     "docs/evidence/issues-197-202-integrated-mac.log.txt",
+    "docs/evidence/issues-197-202-merged-main-mac.json",
+    "docs/evidence/issues-197-202-merged-main-mac.log.txt",
     "docs/evidence/projectile-impact-height-authoring.json",
     "docs/evidence/projectile-impact-height-authoring.log.txt",
     "docs/evidence/projectile-impact-height-studio.json",
@@ -165,7 +167,8 @@
       "note": "Native interpolation tests, Rules schema, actual MCP and Studio persistence, seven-attack headless range, embedded web content and devlog verification passed. Retested on the integrated Mac tree; see issues-197-202-integrated-mac.json.",
       "evidence": [
         "docs/evidence/projectile-impact-height-verified.json",
-        "docs/evidence/issues-197-202-final-mac.json"
+        "docs/evidence/issues-197-202-final-mac.json",
+        "docs/evidence/issues-197-202-merged-main-mac.json"
       ]
     },
     "handoff": {
@@ -208,6 +211,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/issues-197-202-final-mac.json"
+    "docs/evidence/issues-197-202-merged-main-mac.json"
   ]
 }

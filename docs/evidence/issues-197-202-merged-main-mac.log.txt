@@ -1,0 +1,313 @@
+[ OK ] local_order_feedback_is_delivered_once_without_a_tick
+
+7 checks, 0 failed
+[ OK ] structure_upgrade_appearance_projects_only_active_production
+
+6 checks, 0 failed
+[ OK ] unit_type_selection_eligibility
+
+6 checks, 0 failed
+[ OK ] automatic_target_acquisition_order
+
+13 checks, 0 failed
+[ OK ] sc2_overkill_targeting
+
+3 checks, 0 failed
+[ OK ] encounters_add_wave_stops_boss_on_spawn_tick
+
+6 checks, 0 failed
+Six simulation tools report both missing IDs. Default refusal, static stats, project integrity and real match parity passed.
+rowMajor damaged target at x = 14
+nearest damaged target at x = 11
+MCP rules lint, edit, validation rollback, reopen and both targeting policies passed
+PASS local order template and upgrade appearance authoring, rollback and project reopen
+registered=442, required_families=18
+PASS core: open_game, map_validate
+PASS scene: scene_entity_list, scene_component_set
+PASS camera: lens_scene_get, lens_camera_set
+PASS animation: animation_graph_list, animation_graph_set
+PASS terrain: terrain_sculpt, terrain_material, terraweave_meadow_get, terraweave_meadow_set
+PASS planet_forest: planet_forest_get, planet_forest_set, planet_forest_plant, planet_forest_move, planet_forest_remove
+PASS lighting: light_list, scene_light_create
+PASS physis: physis_get, physis_set
+PASS spectrafx: fx_graph_list, fx_graph_set
+PASS postfx: postfx_get
+PASS geometry: geometry_catalog, strata_capabilities
+PASS human: human_schema, human_create
+PASS building: building_graph_diagnostics
+PASS graphs: graph_catalog, graph_list, graph_get, graph_node_catalog, graph_validate, graph_edit, graph_save, graph_diagnostics, graph_dependencies, graph_property_schema, graph_asset_dependencies, graph_runtime_capabilities, graph_runtime_probe, graph_live_snapshot, graph_live_watch, graph_live_profile, graph_gpu_profile, graph_debug_session, texture_graph_catalog, texture_graph_list, texture_graph_get, texture_graph_validate, texture_graph_set, texture_graph_preview, texture_graph_bake, texture_graph_templates, texture_graph_bake_set, texture_graph_cache, texture_graph_material_variant, texture_graph_gpu_preview
+PASS mcp: mcp_registry, feature_readiness_get, feature_readiness_query, feature_readiness_status_get, feature_readiness_refresh
+PASS simulation: simulation_budget_plan
+PASS studio_planet_view: studio_planet_forest_live, studio_planet_scene_get, studio_planet_scene_body_set, studio_planet_scene_camera_set
+PASS studio_assets: studio_asset_history, studio_asset_catalog, studio_asset_meta_patch, studio_asset_folder_create, studio_asset_dependencies, studio_asset_recovery_storage, studio_asset_trash_list, studio_asset_trash_restore_review, studio_asset_trash_restore, studio_asset_delete, studio_asset_recovery_quota_set, studio_asset_trash_cleanup_review, studio_asset_move_preview, studio_asset_move_commit, studio_agent_history_list, studio_agent_history_step, studio_agent_batch_preview, studio_agent_batch_apply, studio_history_capabilities, studio_owner_history, studio_owner_history_step, studio_save_documents, studio_asset_history_reset_review
+PASS Studio linked-only metadata and standalone refusal
+PASS tools/list == mcp_registry (count, names, guiOnly metadata)
+FEATURE {"declared_status": "pass", "id": "automatic-target-acquisition-order", "missing": [], "registration": "registered", "runtime_verification": "not_run", "tools": ["rules_get", "rules_lint", "rules_set", "scenario_run"]}
+FEATURE {"declared_status": "pass", "id": "encounter-phase-determinism", "missing": [], "registration": "registered", "runtime_verification": "not_run", "tools": ["match_run", "scenario_run"]}
+FEATURE {"declared_status": "pass", "id": "local-order-feedback", "missing": [], "registration": "registered", "runtime_verification": "not_run", "tools": ["overlay_get", "overlay_set", "overlay_templates", "script_write"]}
+FEATURE {"declared_status": "pass", "id": "native-simulation-checks", "missing": [], "registration": "registered", "runtime_verification": "not_run", "tools": ["balance_batch", "balance_duel", "balance_matrix", "match_run", "scenario_run", "script_check"]}
+FEATURE {"declared_status": "pass", "id": "projectile-impact-height", "missing": [], "registration": "registered", "runtime_verification": "not_run", "tools": ["rules_get", "rules_merge"]}
+FEATURE {"declared_status": "pass", "id": "structure-upgrade-appearance", "missing": [], "registration": "registered", "runtime_verification": "not_run", "tools": ["rules_get", "rules_set"]}
+FEATURE {"declared_status": "pass", "id": "unit-selection-eligibility", "missing": [], "registration": "registered", "runtime_verification": "not_run", "tools": ["rules_get", "rules_lint", "rules_set", "scenario_run"]}
+NOTE: authoring and GPU validation still need dedicated per-system tests.
+TAP version 13
+# Subtest: own vs inherited values and weapon paths
+ok 1 - own vs inherited values and weapon paths
+  ---
+  duration_ms: 0.929042
+  type: 'test'
+  ...
+# Subtest: inputs: blank inherits, numbers validated
+ok 2 - inputs: blank inherits, numbers validated
+  ---
+  duration_ms: 0.654666
+  type: 'test'
+  ...
+# Subtest: selection flag defaults on and preserves inherited false
+ok 3 - selection flag defaults on and preserves inherited false
+  ---
+  duration_ms: 0.193666
+  type: 'test'
+  ...
+# Subtest: projectile impact height is editable on a new type, including zero
+ok 4 - projectile impact height is editable on a new type, including zero
+  ---
+  duration_ms: 0.076084
+  type: 'test'
+  ...
+# Subtest: upgrade appearance uses inherited structure settings and writes the local type
+ok 5 - upgrade appearance uses inherited structure settings and writes the local type
+  ---
+  duration_ms: 0.167042
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 103.565291
+.
+----------------------------------------------------------------------
+Ran 1 test in 5.001s
+
+OK
+.
+----------------------------------------------------------------------
+Ran 1 test in 0.338s
+
+OK
+Restore OK (snapshot): 80 per-tick checks, from tick 300
+Restore OK (serialized): 80 per-tick checks, from tick 300
+Restore OK (fresh serialized): 80 per-tick checks, from tick 300
+Result: winner=Hero  61 game-s  commands=25  sim=267 ms (227x realtime)
+Player: slot=1 name=Hero team=1 alive=1 commands=25
+Player: slot=2 name=Golem team=2 alive=0 commands=0
+Events: spawned=6 died=13 attacks=176 trained=0 built=0 gathered=0 captured=0
+Checksum: cdf943e22f8676be
+Checksum: cdf943e22f8676be
+Checksum: cdf943e22f8676be
+Checksum: cdf943e22f8676be
+Checksum: cdf943e22f8676be
+Checksum: cdf943e22f8676be
+Checksum: cdf943e22f8676be
+Checksum: cdf943e22f8676be
+Checksum: cdf943e22f8676be
+ambersands     seed 1  fbee648655d09166    1768 ms  winner=Красные
+ambersands     seed 2  52f244ec8dd41c77    2379 ms  winner=Красные
+ambersands     seed 3  227dde56b4bef453    2273 ms  winner=Красные
+borderrush     seed 1  cdafc827fd84ddb0     165 ms  winner=Синие
+borderrush     seed 2  ebed2231c3835756     293 ms  winner=Красные
+borderrush     seed 3  e22aea63e52a9469     160 ms  winner=Синие
+boss_arena     seed 1  94798dd7275d49c1      17 ms  winner=Hero
+boss_arena     seed 2  cdf943e22f8676be      15 ms  winner=Hero
+boss_arena     seed 3  ff63ad0abd6658a7      17 ms  winner=Hero
+clanlands      seed 1  9d316af670590509     302 ms  winner=Синие
+clanlands      seed 2  94e4b6845e1c3881     790 ms  winner=none
+clanlands      seed 3  227db6f64e3c3184     288 ms  winner=Синие
+extraction     seed 1  51eccaf74a0d5d76       7 ms  winner=Raider
+extraction     seed 2  ca323b82f71556d1      10 ms  winner=Raider
+extraction     seed 3  640bcd9272172b39      10 ms  winner=Raider
+flagsectors    seed 1  8b438107a78cf6db     172 ms  winner=Красные
+flagsectors    seed 2  bc68d3221a63b130     137 ms  winner=Синие
+flagsectors    seed 3  ff1c2a74eb8d15d1     111 ms  winner=Синие
+fourages       seed 1  739bc11cc7aaf6af    3464 ms  winner=none
+fourages       seed 2  37c2fa5534b9b05c    3580 ms  winner=none
+fourages       seed 3  00a9d17395af9aa8    3208 ms  winner=none
+frostcrown     seed 1  1fe144cb28cfe043    2559 ms  winner=Синие
+frostcrown     seed 2  4a99e3637cd29b4c    2256 ms  winner=Синие
+frostcrown     seed 3  0d48fc41b0ad2982    2667 ms  winner=Красные
+hearthhaul     seed 1  b7543f579616f339    1646 ms  winner=Красные
+hearthhaul     seed 2  de661e92c293cbfc    1396 ms  winner=Красные
+hearthhaul     seed 3  7e8723a7e728a497    1225 ms  winner=Красные
+holdtheline    seed 1  0e939528148c9486     293 ms  winner=Красные
+holdtheline    seed 2  6135faf7cc99da3c     276 ms  winner=Красные
+holdtheline    seed 3  f740622530ce8a8b     262 ms  winner=Красные
+ironfront      seed 1  5a03ff37a6456b3b     220 ms  winner=Красные
+ironfront      seed 2  0627e833a3d1e7d4     197 ms  winner=Красные
+ironfront      seed 3  58b6db735ba20cb7     262 ms  winner=Красные
+km2d           seed 1  7482ced0dc453224    1671 ms  winner=Blue
+km2d           seed 2  8865d02d911f0285    2501 ms  winner=Blue
+km2d           seed 3  0bf7fcc2d4660c94    1321 ms  winner=Red
+laneclash      seed 1  396203f0966a9203    1269 ms  winner=Синие
+laneclash      seed 2  867ab1cd1a4b077c     461 ms  winner=Красные
+laneclash      seed 3  c463f8ce97e365da     891 ms  winner=Красные
+lastcolony     seed 1  724fed87d937eb15     624 ms  winner=Орда
+lastcolony     seed 2  e6737669a1614fad     773 ms  winner=Орда
+lastcolony     seed 3  e6f8f6009100944f     737 ms  winner=Орда
+metaltide      seed 1  ad97f4222bd61a2e     431 ms  winner=Синие
+metaltide      seed 2  9d4c0d835a7b75fb    3840 ms  winner=Красные
+metaltide      seed 3  5ce179ad387f0f74    1012 ms  winner=Синие
+mushrooms      seed 1  1c15b6ccf3e963c6     129 ms  winner=Blue
+mushrooms      seed 2  5428c69f64f7a61f     219 ms  winner=Blue
+mushrooms      seed 3  b47525db335d5d88     154 ms  winner=Red
+perk_arena     seed 1  782c919da5b8f2e4      16 ms  winner=Pilot
+perk_arena     seed 2  40e5e07a5e81ecc0      16 ms  winner=Pilot
+perk_arena     seed 3  b3f2a0fa0152c9af      15 ms  winner=Pilot
+planets        seed 1  0d16045ff014193e     605 ms  winner=Синие
+planets        seed 2  74d42aaafc4cbfc4     722 ms  winner=Синие
+planets        seed 3  7505eba98e30c204     469 ms  winner=Синие
+road_race      seed 1  15405ef00964f850      38 ms  winner=Bot
+road_race      seed 2  bbc77ef5a772c854      38 ms  winner=Bot
+road_race      seed 3  2191443575a27e2e      38 ms  winner=Bot
+scripted       seed 1  c05f32739c193c3a    1323 ms  winner=Blue
+scripted       seed 2  e3cca8ac9289eea2    2033 ms  winner=Blue
+scripted       seed 3  5c72d8c5c9e17e78    1192 ms  winner=Blue
+showcase       seed 1  f7361792fc991a8e    2137 ms  winner=Blue
+showcase       seed 2  e75079921208a75a    2030 ms  winner=Blue
+showcase       seed 3  ba54515f085b824e    2060 ms  winner=Blue
+shroomwars     seed 1  235216b4343a3b7e      38 ms  winner=Красные
+shroomwars     seed 2  dd757ceae2f177a4      43 ms  winner=Синие
+shroomwars     seed 3  54ff72fcb3ce528d      53 ms  winner=Красные
+skirmish       seed 1  c6e56256aba93225    1325 ms  winner=Blue
+skirmish       seed 2  5e826fc8d57edfaf    1361 ms  winner=Blue
+skirmish       seed 3  fe7dfb5e710a20ae    1411 ms  winner=Blue
+spellbunkers   seed 1  dadb75ec3a687aff      62 ms  winner=Красные
+spellbunkers   seed 2  5a2a054aff6a3fde      60 ms  winner=Красные
+spellbunkers   seed 3  db45b71e1a2136c3      54 ms  winner=Синие
+sporelanes     seed 1  918ecaf62f20862d      21 ms  winner=Красные
+sporelanes     seed 2  91b87847954f0aed      14 ms  winner=Синие
+sporelanes     seed 3  ced99791c1a1e5a2      10 ms  winner=Синие
+starfall       seed 1  69491b92dadec294    2267 ms  winner=Синие
+starfall       seed 2  246182f0bcca6f1e    2091 ms  winner=Красные
+starfall       seed 3  945df7400f2aa143    1543 ms  winner=Красные
+tiles2d        seed 1  6c00af9b1dd8b984    1258 ms  winner=Blue
+tiles2d        seed 2  5dd28f720eb7f875    1711 ms  winner=Blue
+tiles2d        seed 3  b3d7a976444db080    1323 ms  winner=Red
+topdown_arena  seed 1  bf602b87c87354f7      50 ms  winner=Blue
+topdown_arena  seed 2  fb714dcee200496f      47 ms  winner=Red
+topdown_arena  seed 3  86532fb7aff75a5a      62 ms  winner=Blue
+underlord      seed 1  64cf42afb4c951e7    1465 ms  winner=Синие
+underlord      seed 2  47d822a007c328ea    1398 ms  winner=Красные
+underlord      seed 3  cdbd353c77566632    1543 ms  winner=Синие
+wildfire       seed 1  1fa1f26fb434a3a7    1907 ms  winner=Blue
+wildfire       seed 2  0694e3e2b525bff6    1503 ms  winner=Blue
+wildfire       seed 3  99d40ed3584d9cb1    1634 ms  winner=Blue
+lua_lab        seed 1  83641ec906094002    1385 ms  winner=Blue
+lua_lab        seed 2  54be03adc4f9c9af    2261 ms  winner=Blue
+lua_lab        seed 3  96bd5e21f9a3ef7f    1720 ms  winner=Blue
+triggerlab     seed 1  befaa01e29864d19     909 ms  winner=Blue
+triggerlab     seed 2  7d0a75bb89849912     925 ms  winner=Blue
+triggerlab     seed 3  dec269fd53ddf785     875 ms  winner=Blue
+all checksums identical
+0 error(s), 0 warning(s)
+ambersands     seed 1  fbee648655d09166   22983 ms  winner=Красные
+ambersands     seed 2  52f244ec8dd41c77   30097 ms  winner=Красные
+ambersands     seed 3  227dde56b4bef453   28929 ms  winner=Красные
+borderrush     seed 1  cdafc827fd84ddb0    1974 ms  winner=Синие
+borderrush     seed 2  ebed2231c3835756    3619 ms  winner=Красные
+borderrush     seed 3  e22aea63e52a9469    2036 ms  winner=Синие
+boss_arena     seed 1  94798dd7275d49c1     230 ms  winner=Hero
+boss_arena     seed 2  cdf943e22f8676be     201 ms  winner=Hero
+boss_arena     seed 3  ff63ad0abd6658a7     216 ms  winner=Hero
+clanlands      seed 1  9d316af670590509    5107 ms  winner=Синие
+clanlands      seed 2  94e4b6845e1c3881   13216 ms  winner=none
+clanlands      seed 3  227db6f64e3c3184    4597 ms  winner=Синие
+extraction     seed 1  51eccaf74a0d5d76     112 ms  winner=Raider
+extraction     seed 2  ca323b82f71556d1     161 ms  winner=Raider
+extraction     seed 3  640bcd9272172b39     155 ms  winner=Raider
+flagsectors    seed 1  8b438107a78cf6db    2677 ms  winner=Красные
+flagsectors    seed 2  bc68d3221a63b130    2013 ms  winner=Синие
+flagsectors    seed 3  ff1c2a74eb8d15d1    1663 ms  winner=Синие
+fourages       seed 1  739bc11cc7aaf6af   46389 ms  winner=none
+fourages       seed 2  37c2fa5534b9b05c   47695 ms  winner=none
+fourages       seed 3  00a9d17395af9aa8   42832 ms  winner=none
+frostcrown     seed 1  1fe144cb28cfe043   29547 ms  winner=Синие
+frostcrown     seed 2  4a99e3637cd29b4c   25826 ms  winner=Синие
+frostcrown     seed 3  0d48fc41b0ad2982   30873 ms  winner=Красные
+hearthhaul     seed 1  b7543f579616f339   18484 ms  winner=Красные
+hearthhaul     seed 2  de661e92c293cbfc   15902 ms  winner=Красные
+hearthhaul     seed 3  7e8723a7e728a497   13992 ms  winner=Красные
+holdtheline    seed 1  0e939528148c9486    4548 ms  winner=Красные
+holdtheline    seed 2  6135faf7cc99da3c    4400 ms  winner=Красные
+holdtheline    seed 3  f740622530ce8a8b    4334 ms  winner=Красные
+ironfront      seed 1  5a03ff37a6456b3b    3271 ms  winner=Красные
+ironfront      seed 2  0627e833a3d1e7d4    2751 ms  winner=Красные
+ironfront      seed 3  58b6db735ba20cb7    3574 ms  winner=Красные
+km2d           seed 1  7482ced0dc453224   20139 ms  winner=Blue
+km2d           seed 2  8865d02d911f0285   31124 ms  winner=Blue
+km2d           seed 3  0bf7fcc2d4660c94   16803 ms  winner=Red
+laneclash      seed 1  396203f0966a9203   16529 ms  winner=Синие
+laneclash      seed 2  867ab1cd1a4b077c    6344 ms  winner=Красные
+laneclash      seed 3  c463f8ce97e365da   11495 ms  winner=Красные
+lastcolony     seed 1  724fed87d937eb15    8930 ms  winner=Орда
+lastcolony     seed 2  e6737669a1614fad   10977 ms  winner=Орда
+lastcolony     seed 3  e6f8f6009100944f   10412 ms  winner=Орда
+metaltide      seed 1  ad97f4222bd61a2e    6543 ms  winner=Синие
+metaltide      seed 2  9d4c0d835a7b75fb   45951 ms  winner=Красные
+metaltide      seed 3  5ce179ad387f0f74   15713 ms  winner=Синие
+mushrooms      seed 1  1c15b6ccf3e963c6    1874 ms  winner=Blue
+mushrooms      seed 2  5428c69f64f7a61f    3148 ms  winner=Blue
+mushrooms      seed 3  b47525db335d5d88    2187 ms  winner=Red
+perk_arena     seed 1  782c919da5b8f2e4     246 ms  winner=Pilot
+perk_arena     seed 2  40e5e07a5e81ecc0     252 ms  winner=Pilot
+perk_arena     seed 3  b3f2a0fa0152c9af     235 ms  winner=Pilot
+planets        seed 1  0d16045ff014193e    7707 ms  winner=Синие
+planets        seed 2  74d42aaafc4cbfc4    8953 ms  winner=Синие
+planets        seed 3  7505eba98e30c204    5674 ms  winner=Синие
+road_race      seed 1  15405ef00964f850     495 ms  winner=Bot
+road_race      seed 2  bbc77ef5a772c854     495 ms  winner=Bot
+road_race      seed 3  2191443575a27e2e     495 ms  winner=Bot
+scripted       seed 1  c05f32739c193c3a   16660 ms  winner=Blue
+scripted       seed 2  e3cca8ac9289eea2   25376 ms  winner=Blue
+scripted       seed 3  5c72d8c5c9e17e78   14421 ms  winner=Blue
+showcase       seed 1  f7361792fc991a8e   25917 ms  winner=Blue
+showcase       seed 2  e75079921208a75a   24711 ms  winner=Blue
+showcase       seed 3  ba54515f085b824e   25019 ms  winner=Blue
+shroomwars     seed 1  235216b4343a3b7e     576 ms  winner=Красные
+shroomwars     seed 2  dd757ceae2f177a4     627 ms  winner=Синие
+shroomwars     seed 3  54ff72fcb3ce528d     794 ms  winner=Красные
+skirmish       seed 1  c6e56256aba93225   16472 ms  winner=Blue
+skirmish       seed 2  5e826fc8d57edfaf   16551 ms  winner=Blue
+skirmish       seed 3  fe7dfb5e710a20ae   16856 ms  winner=Blue
+spellbunkers   seed 1  dadb75ec3a687aff    1020 ms  winner=Красные
+spellbunkers   seed 2  5a2a054aff6a3fde     931 ms  winner=Красные
+spellbunkers   seed 3  db45b71e1a2136c3     872 ms  winner=Синие
+sporelanes     seed 1  918ecaf62f20862d     329 ms  winner=Красные
+sporelanes     seed 2  91b87847954f0aed     225 ms  winner=Синие
+sporelanes     seed 3  ced99791c1a1e5a2     146 ms  winner=Синие
+starfall       seed 1  69491b92dadec294   24312 ms  winner=Синие
+starfall       seed 2  246182f0bcca6f1e   23250 ms  winner=Красные
+starfall       seed 3  945df7400f2aa143   17770 ms  winner=Красные
+tiles2d        seed 1  6c00af9b1dd8b984   18311 ms  winner=Blue
+tiles2d        seed 2  5dd28f720eb7f875   24387 ms  winner=Blue
+tiles2d        seed 3  b3d7a976444db080   19338 ms  winner=Red
+topdown_arena  seed 1  bf602b87c87354f7     922 ms  winner=Blue
+topdown_arena  seed 2  fb714dcee200496f     891 ms  winner=Red
+topdown_arena  seed 3  86532fb7aff75a5a    1162 ms  winner=Blue
+underlord      seed 1  64cf42afb4c951e7   21219 ms  winner=Синие
+underlord      seed 2  47d822a007c328ea   20738 ms  winner=Красные
+underlord      seed 3  cdbd353c77566632   23079 ms  winner=Синие
+wildfire       seed 1  1fa1f26fb434a3a7   23395 ms  winner=Blue
+wildfire       seed 2  0694e3e2b525bff6   19076 ms  winner=Blue
+wildfire       seed 3  99d40ed3584d9cb1   20729 ms  winner=Blue
+lua_lab        seed 1  83641ec906094002   16031 ms  winner=Blue
+lua_lab        seed 2  54be03adc4f9c9af   26167 ms  winner=Blue
+lua_lab        seed 3  96bd5e21f9a3ef7f   19425 ms  winner=Blue
+triggerlab     seed 1  befaa01e29864d19   11458 ms  winner=Blue
+triggerlab     seed 2  7d0a75bb89849912   11677 ms  winner=Blue
+triggerlab     seed 3  dec269fd53ddf785   11105 ms  winner=Blue
+all checksums identical
