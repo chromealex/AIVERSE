@@ -37,6 +37,7 @@
     "apps/studio-web/src/mock.ts",
     "apps/studio-web/src/panels/LivePanels.tsx",
     "apps/studio-web/src/panels/LivePanels.css",
+    "apps/studio-web/src/panels/RulesPanel.tsx",
     "apps/studio-web/src/panels/StudioPanelRenderer.tsx",
     "apps/studio-native/tests/StudioSessionTests.cpp",
     "apps/studio-web/src/panels/HierarchyPanel.tsx",
