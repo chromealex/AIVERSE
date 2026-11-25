@@ -1,0 +1,13 @@
+{
+  "sha": "917fb6a21921719749395538e6f0c2b2544b5e3c",
+  "argv": [
+    "npm",
+    "--prefix",
+    "apps/studio-web",
+    "run",
+    "typecheck"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-wizard-copy-917fb6a21.log.txt",
+  "sha256": "faf69e7ecfd8c20b33792830e507724d015f288b5a790fdd527065901f77533f"
+}
