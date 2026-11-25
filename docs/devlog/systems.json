@@ -3020,8 +3020,8 @@
           "title": "Общий редактор графов",
           "id": "graph-framework",
           "titleEn": "Shared graph editor framework",
-          "text": "В Studio графы используют общий редактор. Для Texture Graph проверены предпросмотр на Metal, применение карт к модели и восстановление после отмены расчёта. Для строительных и пещерных графов продолжается проверка связи редактора с данными сцены.",
-          "textEn": "Studio graphs share an editor. Texture Graph preview on Metal, applying maps to a model and recovery after cancellation were verified. Work continues on the connection between the Building and Caverns editors and scene data."
+          "text": "В Studio графы используют общий редактор. Для Texture Graph проверены предпросмотр на Metal, применение карт к модели и восстановление после отмены расчёта. В нативной Studio на Mac проверено восстановление публикации графа. Для строительных и пещерных графов продолжается проверка связи редактора с данными сцены.",
+          "textEn": "Studio graphs share an editor. Texture Graph preview on Metal, applying maps to a model and recovery after cancellation were verified. Graph publication recovery was also tested in native Studio on Mac. Work continues on the connection between the Building and Caverns editors and scene data."
         },
         {
           "id": "studio-play-review",
