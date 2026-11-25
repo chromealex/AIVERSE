@@ -107,10 +107,11 @@
       ]
     },
     "performance": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Six 120-tick capture and baseline pairs on the 23-system mushrooms duel measured timing overhead, storage reuse, process memory and unchanged authoritative checksums.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/agent-handoffs/studio-play-review-bulk-2026-11-25.md",
+        "tests/simulation_profile_test.cpp"
       ]
     },
     "platforms": {
