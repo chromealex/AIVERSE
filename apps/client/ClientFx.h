@@ -196,7 +196,7 @@ private:
     std::shared_ptr<const spectra::DataInterfaceRegistry> graphRegistry_;
     struct ScriptEmitter {
         fx::FxHandle handle;
-        Entity holder;
+        Entity holder = kNullEntity;
         fx::float3 offset{}, direction{0, 1, 0};
     };
     std::unordered_map<int64_t, ScriptEmitter> scriptEmitters_;

@@ -3346,6 +3346,16 @@
       ],
       "roadmap": [
         {
+          "id": "mac-build-test-runner",
+          "status": "done",
+          "date": "2026-11-25",
+          "target": null,
+          "title": "Исправить сборку клиента и полный прогон тестов на Mac",
+          "titleEn": "Repair Mac client builds and full test runs",
+          "text": "Клиент и Studio получают заголовки Box3D, дополнительные тесты используют Python из CMake, а пакет приложения включает лицензии SPIR-V.",
+          "textEn": "Client and Studio builds use the Box3D headers. Standalone tests use the Python interpreter selected by CMake, and the app includes the SPIR-V notices."
+        },
+        {
           "status": "done",
           "date": "2026-11-23",
           "target": null,

@@ -1,0 +1,10 @@
+{
+  "sha": "94c1262b5b90d2ce2df3177eacd834bf78538477",
+  "argv": [
+    "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3",
+    "tests/test_unified_runner.py"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/mac-build-test-runner-b6cbc.log.txt",
+  "sha256": "e784556758d6816eb39d4a3d7857f7ce9ba4d09eaaa30a767606502a9f54ec72"
+}

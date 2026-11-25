@@ -8,6 +8,11 @@
     "projectile-impact-height": {"requires": [], "roadmap": {"system": "render", "id": "projectile-impact-height"}, "api_paths": ["engine/view/game/ProjectileAppearance.h"]},
     "local-order-feedback": {"requires": [], "roadmap": {"system": "gameplay", "id": "local-order-feedback"}, "api_paths": ["engine/view/game/GameViewScript.h"]},
     "structure-upgrade-appearance": {"requires": [], "roadmap": {"system": "gameplay", "id": "structure-upgrade-appearance"}, "api_paths": ["engine/view/game/GameView.h"]},
+    "mac-build-test-runner": {
+      "requires": [],
+      "roadmap": {"system": "build", "id": "mac-build-test-runner"},
+      "api_paths": ["run-tests.sh"]
+    },
     "model-triplanar": {"requires": [], "roadmap": {"system": "render", "id": "model-triplanar"}, "api_paths": ["engine/render/graph/TriplanarMaterial.h"]},
     "direct3d-renderer": {"requires": [], "roadmap": {"system": "render", "id": "direct3d-renderer"}, "api_paths": ["engine/gfx/d3d/Direct3D.h", "engine/gfx/Gfx.h"]},
     "cpu-renderer": {"requires": [], "roadmap": {"system": "render", "id": "cpu-renderer"}, "api_paths": ["engine/gfx/Gfx.h"]},

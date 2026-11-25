@@ -28,7 +28,7 @@ for mode in off on; do
   flag=OFF
   [[ "$mode" == on ]] && flag=ON
   cmake -S . -B "$build" "${COMMON[@]}" "-DAIVERSE_ECS_EXPERIMENTAL_RTS_TRANSFORM_JOBS=$flag"
-  targets=(aiverse_headless aiverse_fps_tests)
+  targets=(aiverse_headless aiverse_fps_tests aiverse_fps_transport_tests)
   if [[ "$FULL" == 1 ]]; then
     targets+=(aiverse_tests aiverse_net_tests
               aiverse_ecs_native_persistence_test

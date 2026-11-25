@@ -66,6 +66,18 @@
       "path": "third_party/smaa/LICENSE.txt"
     },
     {
+      "name": "third_party/spirv-headers",
+      "path": "third_party/spirv-headers/LICENSE"
+    },
+    {
+      "name": "third_party/spirv-tools",
+      "path": "third_party/spirv-tools/LICENSE"
+    },
+    {
+      "name": "third_party/spirv-tools/utils/vscode/src/lsp",
+      "path": "third_party/spirv-tools/utils/vscode/src/lsp/LICENSE"
+    },
+    {
       "name": "third_party/stb",
       "path": "third_party/stb/LICENSE.txt"
     },
