@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-25T20:06:38+00:00",
+ "generated": "2026-11-25T21:37:34+00:00",
  "lang": "en",
  "repo": "https://github.com/chromealex/AIVERSE",
  "systems": [
@@ -101,7 +101,7 @@
   },
   {
    "id": "import",
-   "name": "Import from Unity and Godot"
+   "name": "Project and map import"
   },
   {
    "id": "build",

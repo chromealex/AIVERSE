@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Importing Warcraft III maps — AIVERSE</title>
+<meta name="description" content="Terrain, model resolution and object placement in an AIVERSE project.">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
+<link rel="alternate icon" href="favicon.ico">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#F3EFE8">
+<link rel="alternate" hreflang="ru" href="ru/docs-warcraft3-import.html">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=2aae09d86a">
+</head>
+<body>
+<header class="top">
+<nav class="wrap" aria-label="Main menu">
+<a class="brand" href="./"><img src="favicon.svg" width="34" height="32" alt=""><span>AIVERSE</span></a>
+<div class="menu">
+<a href="./#systems" data-nav="systems">Systems</a>
+<a href="./#genres" data-nav="genres">Genres</a>
+<a href="roadmap.html" data-nav="roadmap">Roadmap</a>
+<a href="releases.html" data-nav="releases">Releases</a>
+<a href="catalog.html" data-nav="catalog">Catalog</a>
+<a href="gallery.html" data-nav="gallery">Gallery</a>
+<a href="devlog.html" data-nav="devlog">Devlog</a>
+<a href="docs.html" data-nav="docs" aria-current="page">Docs</a>
+</div>
+<a class="lang-switch" href="ru/docs-warcraft3-import.html" hreflang="ru" lang="ru">RU</a>
+<a class="btn btn-ink btn-sm" href="https://github.com/chromealex/AIVERSE">GitHub</a>
+</nav>
+</header>
+
+<main class="wrap docs-main">
+<div class="docs-layout"><nav class="docs-nav" aria-label="Docs"><div class="ds-box"><input class="ds-input" type="search" placeholder="Search the docs  /" aria-label="Search the docs  /" autocomplete="off" spellcheck="false"><div class="ds-results" hidden></div></div><div class="dn-sec"><span>Getting started</span><a href="docs-overview.html">Engine overview</a><a href="docs-engine-import.html">Porting a project from another engine</a><a href="docs-warcraft3-import.html" aria-current="page">Importing Warcraft III maps</a></div><div class="dn-sec"><span>Making a game</span><a href="docs-game-format.html">Game data format</a><a href="docs-packages.html">Packages and the catalog</a><a href="docs-scripting.html">Lua scripting</a><a href="docs-mechanics-packages.html">Mechanics packages</a><a href="docs-fps.html">FPS</a><a href="docs-meta-service.html">Meta service</a><a href="docs-battle-net.html">Hosted battles</a><a href="docs-editor-windows.html">Editor windows</a></div><div class="dn-sec"><span>Engine systems</span><a href="docs-terraweave.html">TerraWeave</a><a href="docs-physis.html">PHYSIS</a><a href="docs-nereid.html">NEREID</a><a href="docs-strata.html">STRATA</a><a href="docs-lens.html">LENS</a><a href="docs-camera-behaviors.html">LENS: camera behaviours</a><a href="docs-prisma.html">PRISMA</a><a href="docs-spectrafx.html">SpectraFX</a><a href="docs-motionweave.html">MotionWeave</a><a href="docs-ui-model-view.html">3D models in UI</a><a href="docs-vivid-creator.html">VIVID: Character Creator and MetaHuman</a><a href="docs-dynamic-gi.html">LUMA: dynamic indirect light</a><a href="docs-lightbake.html">Light baking</a></div></nav><article class="doc" lang="en"><h1 id="importing-warcraft-iii-maps-into-aiverse">Importing Warcraft III maps into AIVERSE<a class="anchor" href="#importing-warcraft-iii-maps-into-aiverse" aria-label="#">#</a></h1>
+<p>Use the project importer to register a map with terrain, units and doodads. Supply extracted Warcraft III game data to resolve models referenced from outside the map. Binary map archives require StormLib.</p>
+<pre><code class="lang-bash"><span class="hl-fn">python3</span> tools/importers/warcraft3/cli.py <span class="hl-opt">--source</span> MyMap.w3x <span class="hl-opt">--project</span> /path/to/project <span class="hl-opt">--game-data</span> /path/to/extracted-game-data</code></pre>
+<p>See <strong>Stage 3</strong> below for model resolution, project files and limits.</p>
+<h2 id="extracting-the-map-data-only">Extracting the map data only<a class="anchor" href="#extracting-the-map-data-only" aria-label="#">#</a></h2>
+<p>Given a map archive from <strong>your own</strong> Warcraft III installation or a map you have rights to use:</p>
+<pre><code class="lang-bash"><span class="hl-fn">python3</span> tools/importers/warcraft3/import.py \
+  <span class="hl-fn">--source</span> <span class="hl-str">&quot;/path/to/MyMap.w3x&quot;</span> \
+  <span class="hl-fn">--out</span> <span class="hl-str">&quot;/path/to/AIVERSE-project&quot;</span></code></pre>
+<p>Reforged also supports a folder named <code>MyMap.w3x</code> or <code>MyMap.w3m</code> containing unpacked map resources. Pass the folder to <code>--source</code> in the same command. Folder import uses standard Python 3.8+ and needs no StormLib.</p>
+<p>For an actual binary MPQ archive, install the MIT-licensed <a href="https://github.com/ladislav-zezula/StormLib">StormLib</a> as a <strong>shared</strong> library. On macOS, point <code>AIVERSE_STORMLIB</code> to <code>libstorm.dylib</code>; on Linux use <code>libstorm.so</code>; on Windows use <code>StormLib.dll</code>. This library is not vendored or downloaded by AIVERSE.</p>
+<p>Output:</p>
+<pre><code class="lang-text">&lt;project&gt;/content/Warcraft3/MyMap/
+    war3map.w3e                 original source, preserved
+    war3map.wpm                 original source, preserved
+    war3map.wts                 original source, preserved
+    Units/.../*.mdx             original model files, if present
+    .../*.blp                   original textures, if present
+    terrain.json                decoded W3E v11/v12, if present
+    pathing.json                decoded WPM, if present
+    strings.json                decoded WTS, if present
+    imports.json                decoded IMP, if present
+    import.json                 manifest and source provenance</code></pre>
+<p>Imported files are exposed through the <code>content/</code> Assets tree. Existing native MDX/MDL and BLP decoders can read the corresponding assets without reimplementation.</p>
+<h3 id="archive-plugin">Archive plugin<a class="anchor" href="#archive-plugin" aria-label="#">#</a></h3>
+<p><code>tools/unpackers/mpq/unpacker.json</code> registers <code>.mpq</code>, <code>.w3m</code>, <code>.w3x</code>, <code>.w3n</code> as external sources. <code>assetpipe</code> invokes its <code>info</code> / <code>probe</code> / <code>list</code> / <code>extract</code> methods. The plugin reads known Warcraft map filenames, <code>(listfile)</code>, and <code>war3map.imp</code> imported filenames. An MPQ with an absent <code>(listfile)</code> and unknown hashed filenames cannot be completely enumerated; extraction of a known filename may still work.</p>
+<h3 id="interpreting-decoded-data">Interpreting decoded data<a class="anchor" href="#interpreting-decoded-data" aria-label="#">#</a></h3>
+<ul><li><code>terrain.json</code>: W3E versions 11 (7-byte tilepoints) and 12 (8-byte tilepoints, six-bit ground texture index). Contains tilepoint dimensions, center offsets, author-provided ground/cliff tile IDs and raw data alongside calculated heights. The <code>vertexSchema</code> field documents each array element. Tilepoints are row-major from the bottom-left in Warcraft coordinates.</li><li><code>pathing.json</code>: WPM v0 with lossless base64-encoded cell flags. Restriction bit masks are included.</li><li><code>strings.json</code>: the WTS <code>TRIGSTR_NNN</code> string dictionary.</li><li><code>imports.json</code>: the IMP import path records with their original flags.</li></ul>
+<p>Warcraft uses 128 world units per map cell. The existing native model importer maps Warcraft's Z-up orientation to AIVERSE's Y-up axes. Decoded terrain retains Warcraft coordinates and heights; a later TerraWeave adapter must apply the same transform exactly once.</p>
+<h3 id="explicit-limits">Explicit limits<a class="anchor" href="#explicit-limits" aria-label="#">#</a></h3>
+<p>The standalone extraction command writes intermediate files. The project importer also installs native map entities as described in Stage 3.</p>
+<p>The importer refuses overwriting <code>content/Warcraft3/&lt;name&gt;</code>; import into a new project or rename the input first. Extraction is atomic and bounded. Imported third-party assets are marked <code>external</code>; never commit or distribute game data unless properly licensed.</p>
+<h3 id="tests">Tests<a class="anchor" href="#tests" aria-label="#">#</a></h3>
+<pre><code class="lang-bash"><span class="hl-fn">python3</span> <span class="hl-opt">-m</span> unittest discover <span class="hl-opt">-s</span> tests/tools <span class="hl-opt">-p</span> test_warcraft3_import.py <span class="hl-opt">-v</span></code></pre>
+<p>Tests use generated W3E v11 and v12, WPM, WTS, IMP, bad-size cases, archive signature checks, an unpacked folder, and overwrite protection. Archive reading was also exercised with StormLib 9.26 and a generated MPQ map.</p>
+<h2 id="stage-2-map-metadata-units-doodads-object-overrides-and-studio-preview">Stage 2: map metadata, units, doodads, object overrides and Studio preview<a class="anchor" href="#stage-2-map-metadata-units-doodads-object-overrides-and-studio-preview" aria-label="#">#</a></h2>
+<p>The importer additionally parses:</p>
+<ul><li><code>war3map.w3i</code> -&gt; <code>mapinfo.json</code>: header versions 18 and 23–33 (map name, author, dimensions, tileset, camera bounds). The later player/force/fog and trigger tables remain in the original file and are <strong>not</strong> represented as decoded records.</li><li><code>war3map.doo</code> -&gt; <code>doodads.json</code>: placement records (8/11, both older no-skin and skin-aware layouts), including variation, transforms, flags, item drops and special cliff doodads.</li><li><code>war3mapUnits.doo</code> -&gt; <code>units.json</code>: placement records (8/11), owner, HP/mana overrides, abilities, inventory, hero stats and random unit groups.</li><li><code>war3map.w3u/.w3t/.w3b/.w3d/.w3a/.w3h/.w3q</code> -&gt; <code>objects_&lt;ext&gt;.json</code>: typed v1/v2 object modifications and raw metadata field IDs. This is not yet an SLK-merged or AIVERSE gameplay-ready definition.</li><li><code>placements.json</code>: transformed Warcraft object coordinates and creation IDs; intermediate data for scene installation.</li><li><code>studio-map.json</code>: transposed W3E heightfield using AIVERSE's existing MapDoc <code>terrain.corners</code> representation (signed 1/16 of a map unit). This preview is not native Warcraft splat/cliff/water rendering.</li></ul>
+<p>To register an imported terrain preview in an <strong>existing</strong> AIVERSE project:</p>
+<pre><code class="lang-bash"><span class="hl-fn">python3</span> tools/importers/warcraft3/install_map.py \
+  <span class="hl-fn">--project</span> /path/to/project \
+  <span class="hl-fn">--imported</span> /path/to/project/content/Warcraft3/MyMap</code></pre>
+<p>The installer refuses to overwrite a map or register the same map twice. It adds <code>maps/warcraft3_MyMap.json</code> and a <code>maps</code> entry to <code>game.json</code>, so Studio's Project panel can open the map. The destination project must already have a valid <code>game.json</code> and map support. Set native rules <code>terrain.model</code> to <code>heightfield</code> where needed; the installer deliberately does not modify rules. Import the map into Assets first; register the preview only if desired.</p>
+<p><strong>Unsupported layouts</strong> (notably Warcraft III 3.0 doodad/unit v13) retain their original binary files and write a warning to <code>import.json</code>. Use <code>import.py --strict</code> to fail rather than skip unrecognized decoded formats. No real Warcraft III archive or Studio runtime has been exercised yet.</p>
+<p>Acceptance command (synthetic fixture validation):</p>
+<pre><code class="lang-bash"><span class="hl-fn">python3</span> <span class="hl-opt">-m</span> unittest discover <span class="hl-opt">-s</span> tests/tools <span class="hl-opt">-p</span> <span class="hl-str">&#x27;test_warcraft3*.py&#x27;</span> <span class="hl-opt">-v</span></code></pre>
+<h2 id="stage-3-native-model-backed-scene-entities-2026-11-23">Stage 3 — native model-backed scene entities (2026-11-23)<a class="anchor" href="#stage-3-native-model-backed-scene-entities-2026-11-23" aria-label="#">#</a></h2>
+<p><strong>Single command</strong> for an existing project with <code>game.json</code> and a native <code>rules.json</code>:</p>
+<pre><code class="lang-bash"><span class="hl-com"># macOS (only required when the map input is a binary MPQ archive):</span>
+<span class="hl-fn">brew</span> install stormlib
+
+<span class="hl-fn">python3</span> tools/importers/warcraft3/cli.py \
+  <span class="hl-fn">--source</span> <span class="hl-str">&quot;/path/to/MyMap.w3x&quot;</span> \
+  <span class="hl-fn">--project</span> <span class="hl-str">&quot;/path/to/AIVERSE-project&quot;</span> \
+  <span class="hl-fn">--game-data</span> <span class="hl-str">&quot;/path/to/user-owned/extracted-Warcraft3&quot;</span></code></pre>
+<p><code>--game-data</code> is a folder of <strong>already extracted</strong> game data containing <code>Units/UnitUI.slk</code>, <code>Units/UnitSkin.txt</code>, <code>Doodads/Doodads.slk</code>, <code>Units/.../*.mdx</code>, textures, etc. It is optional; custom map-embedded models can work without it. A Reforged <strong>CASC installation directory itself is not an extracted folder</strong>. The importer cannot currently read CASC indexes.</p>
+<p>The command imports the original map files under <code>content/Warcraft3/MyMap/</code>, decodes the map, resolves model paths, and registers a native MapDoc file <code>maps/warcraft3_MyMap.json</code>. It creates a separate <code>warcraft3_MyMap.json</code> type file next to the project's rules file and appends a <code>rules.include</code> entry. Each mapped object is an ordinary <code>map.entities</code> instance with its own type, deterministic name, native XY position and source metadata. Existing game types and map entries are kept.</p>
+<h3 id="rawcode-resolution">Rawcode resolution<a class="anchor" href="#rawcode-resolution" aria-label="#">#</a></h3>
+<p>The resolver uses the user-supplied <code>UnitUI.slk</code> (classic), <code>UnitSkin.txt</code> (Reforged), relevant Doodad/Destructable tables, and object editor overrides (<code>umdl</code>, <code>dmdl</code>, <code>bfil</code>). Only model files actually found in the imported map or <code>--game-data</code> can become native view models. It copies model files and directly referenced texture assets from the supplied data under <code>content/Warcraft3/MyMap/_game/</code>.</p>
+<p>For a missing or custom rawcode mapping, pass a JSON mapping relative source paths to <code>--model-map</code>, for example:</p>
+<pre><code class="lang-json">{
+  <span class="hl-key">&quot;hfoo&quot;</span>: <span class="hl-str">&quot;Units/Human/Footman/Footman.mdx&quot;</span>,
+  <span class="hl-key">&quot;ATtr&quot;</span>: <span class="hl-str">&quot;Doodads/Terrain/Trees/SomeTree.mdx&quot;</span>
+}</code></pre>
+<p>Paths must be inside the imported map or the provided game-data tree. Missing files are reported; no generic placeholder art is substituted.</p>
+<p><code>--strict</code> stops before installing native content if any placement is unresolved. Without it, resolvable objects are included, while everything unresolved is retained in <code>placements.json</code> and recorded in <code>resolve-report.json</code>. <code>--assets-only</code> imports only original and decoded files. To examine the plan without changing the project after extraction, run <code>install_scene.py --project ... --imported ... --game-data ... --dry-run</code>.</p>
+<h3 id="supported-and-unsupported-formats">Supported and unsupported formats<a class="anchor" href="#supported-and-unsupported-formats" aria-label="#">#</a></h3>
+<ul><li>Warcraft III W3E v11/v12 terrain (heightfield conversion), WPM v0, WTS multiline strings (including inline braces), IMP import lists</li><li>W3I map information <strong>header</strong> v18/23–33/39, not the full player/force data</li><li>W3do v8/11 doodads and units; W3do v13/11 <strong>doodads only</strong>, including raw new color and four extension dwords without guessing their meanings</li><li>Object Editor v1/v2 overrides; object v3 stays unmodified in the original archive and generates a warning</li><li>War3mapUnits.doo v13 is deliberately not interpreted: the populated placement subrecords have incompatible shapes; do not map them as v8</li></ul>
+<h3 id="limits-of-the-result">Limits of the result<a class="anchor" href="#limits-of-the-result" aria-label="#">#</a></h3>
+<p>This is <strong>visual object placement into the standard AIVERSE map schema</strong>, not a full Warcraft III game or a verified Studio GPU scene. Units have no fabricated WC3 health/weapons/AI and are inserted with neutral AIVERSE owner 0; the original owner, height, scale, variation, rotation and creation ID are retained in the <code>warcraft3</code> metadata. The current native MapDoc file stores 2D positions; applying original Y (vertical) and per-instance scaling to live renderer instances still requires native Studio acceptance.</p>
+<p>Warcraft splat tiles, sharp cliffs, water levels and WPM pathing have source JSON but are <strong>not</strong> published into live TerraWeave/NEREID/nav data yet. Runtime particles/ribbons and exact HD material parity remain unsupported.</p>
+<p>Unpacker archive discovery cannot enumerate protected MPQ entries absent from <code>(listfile)</code> or known paths. The archive path has been checked with StormLib and a generated MPQ. Gameplay and rendering on a user-supplied map still need verification. Never redistribute or commit extracted copyrighted game resources unless the rights allow it.</p>
+<p>Run the offline synthetic regression on the AIVERSE checkout:</p>
+<pre><code class="lang-bash"><span class="hl-fn">python3</span> <span class="hl-opt">-m</span> unittest discover <span class="hl-opt">-s</span> tests/tools <span class="hl-opt">-p</span> <span class="hl-str">&#x27;test_warcraft3*.py&#x27;</span> <span class="hl-opt">-v</span></code></pre>
+<p>With CMake tests configured, the same suite is registered as <code>warcraft3_importer_python</code> under the <code>TOOLS;IMPORT</code> labels.</p><p class="doc-src"><a href="https://github.com/chromealex/AIVERSE/blob/main/docs/warcraft3-import.md">Source on GitHub: docs/warcraft3-import.md</a></p></article><aside class="doc-toc" aria-label="On this page"><span>On this page</span><a class="toc-2" href="#extracting-the-map-data-only">Extracting the map data only</a><a class="toc-3" href="#archive-plugin">Archive plugin</a><a class="toc-3" href="#interpreting-decoded-data">Interpreting decoded data</a><a class="toc-3" href="#explicit-limits">Explicit limits</a><a class="toc-3" href="#tests">Tests</a><a class="toc-2" href="#stage-2-map-metadata-units-doodads-object-overrides-and-studio-preview">Stage 2: map metadata, units, doodads, object overrides and Studio preview</a><a class="toc-2" href="#stage-3-native-model-backed-scene-entities-2026-11-23">Stage 3 — native model-backed scene entities (2026-11-23)</a><a class="toc-3" href="#rawcode-resolution">Rawcode resolution</a><a class="toc-3" href="#supported-and-unsupported-formats">Supported and unsupported formats</a><a class="toc-3" href="#limits-of-the-result">Limits of the result</a></aside></div>
+</main>
+
+<footer class="dark">
+<div class="wrap foot">
+<a class="brand" href="./" style="color:var(--on-ink)"><span>AIVERSE</span></a>
+<div class="foot-cols">
+<div><span>Site</span><a href="./">Home</a><a href="roadmap.html">Roadmap</a><a href="releases.html">Releases</a><a href="catalog.html">Catalog</a><a href="devlog.html">Devlog</a><a href="docs.html">Docs</a></div>
+<div><span>Community</span><a href="https://github.com/chromealex/AIVERSE">GitHub</a><a href="https://t.me/aiverseengine">Telegram</a></div>
+</div>
+<small>MIT License · AIVERSE</small>
+</div>
+</footer>
+<script>window.DS_L={"none": "Nothing found"};</script><script>
+(function(){var boxes=document.querySelectorAll('.ds-box');if(!boxes.length)return;var idx=null,loading=null,L=window.DS_L||{};
+function load(){if(idx)return Promise.resolve(idx);if(!loading)loading=fetch('docs-search.json').then(function(r){return r.json();}).then(function(d){idx=d.map(function(s){s.lt=(s.t+' '+s.h).toLowerCase();s.lx=s.x.toLowerCase();return s;});return idx;});return loading;}
+function esc(t){return t.replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function mark(t,ws){var h=esc(t);ws.forEach(function(w){if(w.length<2)return;h=h.replace(new RegExp('('+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'),'<mark>$1</mark>');});return h;}
+function snip(s,ws){var x=s.x,i=-1;ws.some(function(w){i=s.lx.indexOf(w);return i>=0;});if(i<0)return x.slice(0,140);var a=Math.max(0,i-60);return (a?'…':'')+x.slice(a,a+170)+(a+170<x.length?'…':'');}
+function search(q){var ws=q.toLowerCase().split(/\s+/).filter(Boolean);if(!ws.length)return [];var r=[];
+idx.forEach(function(s){var sc=0;for(var k=0;k<ws.length;k++){var w=ws[k],inT=s.lt.indexOf(w)>=0,inX=s.lx.indexOf(w)>=0;if(!inT&&!inX)return;sc+=inT?10:1;if(inX)sc+=Math.min(3,s.lx.split(w).length-1)*.2;}
+if(!s.h)sc-=.5;r.push([sc,s]);});r.sort(function(a,b){return b[0]-a[0];});return r.slice(0,14).map(function(x){return x[1];});}
+boxes.forEach(function(box){var inp=box.querySelector('.ds-input'),res=box.querySelector('.ds-results'),sel=-1;
+function render(){var q=inp.value.trim();if(!q){res.hidden=true;return;}load().then(function(){var ws=q.toLowerCase().split(/\s+/).filter(Boolean),hits=search(q);sel=-1;
+res.innerHTML=hits.length?hits.map(function(s){return '<a class="ds-hit" href="docs-'+s.p+'.html'+(s.a?'#'+s.a:'')+'"><strong>'+mark(s.t,ws)+(s.h?' <span>› '+mark(s.h,ws)+'</span>':'')+'</strong><em>'+mark(snip(s,ws),ws)+'</em></a>';}).join(''):'<p class="ds-none">'+esc(L.none||'')+'</p>';res.hidden=false;});}
+inp.addEventListener('input',render);inp.addEventListener('focus',function(){load();if(inp.value.trim())render();});
+inp.addEventListener('keydown',function(e){var hs=res.querySelectorAll('.ds-hit');if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(!hs.length)return;sel=(sel+(e.key==='ArrowDown'?1:-1)+hs.length)%hs.length;hs.forEach(function(h,i){h.classList.toggle('on',i===sel);});hs[sel].scrollIntoView({block:'nearest'});}
+else if(e.key==='Enter'){var h=hs[sel>=0?sel:0];if(h){e.preventDefault();location.href=h.href;}}else if(e.key==='Escape'){res.hidden=true;inp.blur();}});
+document.addEventListener('click',function(e){if(!box.contains(e.target))res.hidden=true;});});
+document.addEventListener('keydown',function(e){if(e.key==='/'&&!/input|textarea/i.test((document.activeElement||{}).tagName||'')){e.preventDefault();boxes[0].querySelector('.ds-input').focus();}});})();
+</script>
+</body>
+</html>
