@@ -18,6 +18,8 @@
     "docs/evidence/site-devlog-roadmap-main203.log.txt",
     "docs/evidence/site-publish-git233-d35abba0b.json",
     "docs/evidence/site-publish-git233-d35abba0b.log.txt",
+    "docs/evidence/site-publish-git233-ac83a5b88.json",
+    "docs/evidence/site-publish-git233-ac83a5b88.log.txt",
     "docs/features/site-devlog-roadmap.json",
     "site/_layout.html",
     "site/devlog.js",
@@ -155,6 +157,6 @@
     "studio_methods": []
   },
   "test_reports": [
-    "docs/evidence/site-publish-git233-d35abba0b.json"
+    "docs/evidence/site-publish-git233-ac83a5b88.json"
   ]
 }
