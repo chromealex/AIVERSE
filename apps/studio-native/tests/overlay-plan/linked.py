@@ -48,6 +48,7 @@ try:
     assert "error" in preview(ids=[], placeType="unknown")
     assert "error" in preview(z=1000)
     assert preview() == local
+    assert preview(ids=["hud_note"])["preview"] == ["hud_note"]
     cleared = preview(off=True)
     assert cleared["preview"] == [] and cleared["placeType"] == "" and "x" not in cleared
     wait_for("CROSS main LINK_OFF")

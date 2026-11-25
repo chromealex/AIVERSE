@@ -43,6 +43,16 @@ with tempfile.TemporaryDirectory(dir=args.scratch) as temp:
              style=dict(color="#16eaafff", thickness=.15, fadeIn=.4)),
         dict(id="build_site", anchor="ghost", shape=dict(type="footprint", predicate="ok"),
              style=dict(fill=True, outline=False, fadeIn=.4, colors={"true": "#f6bf4aff", "false": "#db3854ff"})),
+        dict(id="map_marker", anchor=dict(type="screen", at=[15,18]), shape=dict(type="circle", radius=6),
+             style=dict(color="#8ac97dff", segments=8)),
+        dict(id="map_badge", anchor=dict(type="screen", at=[32,18]), shape=dict(type="rect", size=[12,8]),
+             style=dict(fill=True, outline=False, rounding=2, color="#efa087ff")),
+        dict(id="hud_note", when="never", anchor=dict(type="screen", at=[-12,12]),
+             shape=dict(type="text", text="Patrol · {selected} selected", size=1.1),
+             style=dict(color="#ffffffff", background="#4a315cff", padding=[7,4], rounding=4, shadow=False)),
+        dict(id="vitality", when="never", anchor="selected",
+             shape=dict(type="bar", value="hp", width=20, widthStructure=28, height=4),
+             style=dict(stops=[[1,"#e5697aff"]], background="#211422ff", offset=[0,-9])),
     ]
     rules.write_text(json.dumps(data))
     bundle = work / "PreviewTest.app"

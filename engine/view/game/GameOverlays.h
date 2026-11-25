@@ -118,7 +118,7 @@ public:
         bool triangle;
     };
     // Capture the ground pass of a private CPU preview using the same shape emitter as drawWorld.
-    std::vector<PlanPrimitive> groundPlan(const GameScene&, const MapGrid&, double time);
+    std::vector<PlanPrimitive> groundPlan(const GameScene&, const MapGrid&, double time, Json* screen = nullptr);
     void drawWorld(render::Renderer3D& r, const GameScene& s, double time, const std::vector<uint8_t>* vision, const MapGrid& grid, const GameView& view);
     void drawScreen(const render::Camera& cam, const GameScene& s, float w, float h, float ox, float oy, void* drawList, const GameView& view);
     // view.draw batches of the view scripts (window points), in layer order; textures through this TextureCache.
@@ -197,7 +197,8 @@ private:
     Bucket& bucket(gfx::TextureHandle tex, uint8_t pipe);
     void flush(render::Renderer3D& r);
     // GameOverlaysDraw.cpp: screen elements
-    void drawScreenInst(const OverlayDef& d, size_t di, const Inst& in, float sx, float sy, void* dl);
+    template<class Visit> void visitScreen(const GameScene&, Visit&&);
+    void drawScreenInst(const OverlayDef& d, size_t di, const Inst& in, float sx, float sy, void* dl, Json* preview = nullptr);
 
     const Rules* rules_ = nullptr;
     gfx::Device* dev_ = nullptr;

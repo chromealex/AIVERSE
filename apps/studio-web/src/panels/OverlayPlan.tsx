@@ -3,7 +3,9 @@ import { invoke } from '../bridge';
 import type { StudioGraphDocumentScope } from '../types';
 import { StudioAlert, StudioSection } from '../ui';
 
-type Plan = {catalog:string[]; terrain:string[]; stride:number; width:number; height:number; objects:number[][]; primitives:number[][]};
+import { drawScreenOverlays, type ScreenOverlay } from './overlayScreen';
+
+type Plan = {catalog:string[]; terrain:string[]; stride:number; width:number; height:number; objects:number[][]; screen:ScreenOverlay[]; primitives:number[][]};
 
 type PickPosition = (x:number,z:number)=>void;
 
@@ -54,11 +56,13 @@ function PlanCanvas({plan,pick}:{plan:Plan;pick:PickPosition}) {
         else {ctx.lineTo(x3,z3);ctx.closePath();if(!opaqueTriangle)ctx.fill();}
       }
       flush();
+      ctx.setTransform(ratio,0,0,ratio,0,0);
+      drawScreenOverlays(ctx,plan.screen,w,h,bounds.current);
     };
     const observer=new ResizeObserver(draw);
     observer.observe(canvas);draw();return ()=>observer.disconnect();
   },[plan]);
-  return <canvas ref={ref} role="img" aria-label="Ground overlays on the open map"
+  return <canvas ref={ref} role="img" aria-label="Project overlays on the open map"
     onClick={event=>{
       const rect=event.currentTarget.getBoundingClientRect(), b=bounds.current;
       const x=(event.clientX-rect.left-b.x)/b.scale, z=(event.clientY-rect.top-b.z)/b.scale;
@@ -87,12 +91,12 @@ export default function OverlayPlan({scope,placeType,x,z,pick,selectionKey,ids,s
     },100);
     return ()=>{live=false;window.clearTimeout(timer);};
   },[epoch,revision,projectPath,ids,placeType,x,z,selectionKey]);
-  return <StudioSection title="Ground overlays">
+  return <StudioSection title="Project overlays">
     <div role="group" aria-label="Preview overlays" style={{display:'flex',flexWrap:'wrap',gap:'6px 14px',marginBottom:10}}>
       {catalog.map(id=><label key={id}><input type="checkbox" checked={ids.includes(id)}
         onChange={e=>setVisible(id,e.target.checked)}/> {id}</label>)}
     </div>
     {error && <StudioAlert tone="danger">{error}</StudioAlert>}
-    {plan && <><PlanCanvas plan={plan} pick={pick}/>{!plan.primitives.length && <p>No visible geometry at this position.</p>}</>}
+    {plan && <><PlanCanvas plan={plan} pick={pick}/>{!plan.primitives.length && !plan.screen.length && <p>No visible geometry at this position.</p>}</>}
   </StudioSection>;
 }

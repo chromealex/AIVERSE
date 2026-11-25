@@ -288,3 +288,5 @@ Overlays transfer: share authored terrain sampling and preview a structure footp
 Overlays transfer: draw selected ground overlays on an independent plan using GameOverlays anchor evaluation and geometry emission. Verify authored colors, forced selection and placement.
 
 Overlays transfer: bind the legacy overlay_preview command to document-scoped HTML panel state, including partial changes, off and linked MCP calls.
+
+Overlays transfer: emit screen anchors and resolved text, bars, circles and rectangles from the game renderer for the independent HTML Studio plan.

@@ -42,12 +42,12 @@
     await wait(() => !checkbox('sensor_radius').checked, 'local change applied');
     log('LINK_LOCAL');
     await wait(() => !checkbox('build_site').checked && document.getElementById('overlay-structure').value==='' &&
-      !document.querySelector('canvas[aria-label="Ground overlays on the open map"]'), 'off clears ghost and overlays');
+      !document.querySelector('canvas[aria-label="Project overlays on the open map"]'), 'off clears ghost and overlays');
     log('LINK_OFF');
     await wait(() => document.getElementById('overlay-structure').value==='outpost', 'linked selection restored');
     const before = (await rpc('studio.snapshot')).graphDocument;
     checkbox('sensor_radius').click();
-    const canvas = await wait(() => document.querySelector('canvas[aria-label="Ground overlays on the open map"]'), 'ground plan');
+    const canvas = await wait(() => document.querySelector('canvas[aria-label="Project overlays on the open map"]'), 'ground plan');
     checkbox('build_site').click();
 
     function hasColor(r,g,b) {
@@ -58,8 +58,30 @@
       return false;
     }
     await wait(() => hasColor(246,191,74) && hasColor(22,234,175), 'gold ghost and turquoise rings');
+    const screenIds=['hud_note','vitality','map_marker','map_badge'];
+    for (const id of screenIds) {
+      checkbox(id).click();
+      await wait(()=>checkbox(id).checked, id+' enabled');
+    }
+    const screenPlan=await plan({ids:screenIds});
+    const note=screenPlan.screen.find(item=>item.shape==='text');
+    const bars=screenPlan.screen.filter(item=>item.shape==='bar');
+    if(screenPlan.primitives.length || note?.text!=='Patrol · 0 selected' || !note.hud ||
+       bars.length<2 || bars.some(item=>item.fraction!==1)) throw Error('Screen-only plan lost project values');
+    function hudAtRightEdge() {
+      const ratio=canvas.width/canvas.clientWidth;
+      const pixel=canvas.getContext('2d').getImageData(Math.floor((canvas.clientWidth-16)*ratio),Math.floor(22*ratio),1,1).data;
+      return pixel[0]===74 && pixel[1]===49 && pixel[2]===92;
+    }
+    await wait(()=>hudAtRightEdge() && hasColor(229,105,122) && hasColor(138,201,125) && hasColor(239,160,135),
+      'HUD, health bars, screen circle and rounded rectangle');
+    canvas.style.width='80%';
+    await wait(()=>canvas.width===Math.round(canvas.clientWidth*devicePixelRatio) && hudAtRightEdge(),'HUD follows resized panel');
+    canvas.style.width='100%';
+    await wait(()=>canvas.width===Math.round(canvas.clientWidth*devicePixelRatio) && hudAtRightEdge(),'HUD follows restored panel');
+    await sleep(1800);
     log('SHOT_plan');
-    await sleep(900);
+    await sleep(1600);
     const rect = canvas.getBoundingClientRect();
     const scale = Math.min((rect.width-16)/24, (rect.height-16)/16);
     canvas.dispatchEvent(new MouseEvent('click',{bubbles:true,
@@ -76,6 +98,9 @@
     await rpc('studio.select',{id:first.id});
     const single = await plan({ids:['sensor_radius']});
     if (!(single.primitives.length>0 && single.primitives.length<all.primitives.length)) throw Error('Hierarchy selection was ignored');
+    const selectedScreen=(await plan({ids:screenIds})).screen;
+    if(selectedScreen.filter(item=>item.shape==='bar').length!==1 ||
+       !selectedScreen.some(item=>item.text==='Patrol · 1 selected'))throw Error('Screen anchors ignored selection');
     const after = (await rpc('studio.snapshot')).graphDocument;
     if (before.revision!==after.revision || window.testSceneWasPresent) throw Error('Document or Scene changed');
     const nextMap=await rpc('studio.openMap',{file:'maps/second.json'});
@@ -86,7 +111,7 @@
     try { await rpc('studio.op',{op:'overlay_preview',params:{ids:['sensor_radius']},expectedDocumentEpoch:before.epoch}); }
     catch { stale=true; }
     if(!stale)throw Error('Stale UI overlay command accepted');
-    log('VERIFIED map isolation and stale command rejection; project colors, forced rings, concurrent overlays, water click, deselection and Hierarchy selection');
+    log('VERIFIED map isolation and stale command rejection; screen HUD resizing, selection text, health bars, circle, rectangle, project colors, forced rings, concurrent overlays, water click, deselection and Hierarchy selection');
     log('DONE_1');
   } catch (error) { log('FAIL '+error.message); }
 })();

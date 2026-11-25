@@ -9,8 +9,11 @@
 
 namespace aiverse::studio {
 
-inline bool groundPlanShape(const game::OverlayDef& def) {
+inline bool studioPlanShape(const game::OverlayDef& def) {
     using game::OvShape;
+    if (def.style.space == game::OvSpace::Screen)
+        return def.shape == OvShape::Text || def.shape == OvShape::Bar || def.shape == OvShape::Circle ||
+               def.shape == OvShape::Ring || def.shape == OvShape::Rect;
     return def.style.space == game::OvSpace::Ground && def.shape != OvShape::Icon &&
            def.shape != OvShape::Text && def.shape != OvShape::Bar;
 }
@@ -21,7 +24,7 @@ inline void registerStudioOverlayPlan(StudioSession& session, std::function<void
     for (const auto& op : ws.ops()) if (op.name == "overlay_preview") { schema = op.schema; break; }
     schema.member("properties").set("reveal", Json::parse(R"({"type":"boolean"})"));
     schema.member("properties").set("entry", Json::parse(R"({"type":"object","properties":{"id":{"type":"string"},"visible":{"type":"boolean"}},"required":["id","visible"]})"));
-    ws.registerOp({"overlay_preview", "Show ground overlays in the HTML Overlays panel. Supply ids, a structure type or map coordinates. off clears the preview. Empty arguments read the current selection.",
+    ws.registerOp({"overlay_preview", "Show project overlays in the HTML Overlays panel. Supply ids, a structure type or map coordinates. off clears the preview. Empty arguments read the current selection.",
         schema, [&session, notify = std::move(notify), state = Json::object()](const Json& patch) mutable {
             const auto& ws = session.workspace();
             if (ws.project.dir.empty()) throw std::runtime_error("Open a project first");
@@ -61,10 +64,10 @@ inline void registerStudioOverlayPlan(StudioSession& session, std::function<void
                     if (!requested.isArray()) throw std::runtime_error("ids must be an array");
                     const auto catalog = game::loadOverlaySet(rules, ws.project.rulesJson["overlays"], ws.project.manifest["overlays"]);
                     std::set<std::string> allowed, seen;
-                    for (const auto& def : catalog.defs) if (groundPlanShape(def)) allowed.insert(def.id);
+                    for (const auto& def : catalog.defs) if (studioPlanShape(def)) allowed.insert(def.id);
                     Json ids = Json::array();
                     for (const auto& id : requested.items()) {
-                        if (!id.isString() || !allowed.count(id.str())) throw std::runtime_error("Unavailable ground overlay: " + id.dump());
+                        if (!id.isString() || !allowed.count(id.str())) throw std::runtime_error("Unavailable preview overlay: " + id.dump());
                         if (seen.insert(id.str()).second) ids.push(id);
                     }
                     next.set("preview", ids);
@@ -90,7 +93,7 @@ inline void registerStudioOverlayPlan(StudioSession& session, std::function<void
             notify(state, patch.getBool("reveal", true) && !patch.getBool("off"));
             return state;
         }, true});
-    ws.registerOp({"overlay_plan_preview", "Preview ground overlay definitions in project draw order on the map plan.",
+    ws.registerOp({"overlay_plan_preview", "Preview ground and screen overlay definitions in project draw order on the map plan.",
         Json::parse(R"({"properties":{"ids":{"type":"array","items":{"type":"string"}},"placeType":{"type":"string"},"x":{"type":"number"},"z":{"type":"number"}}})"),
         [&ws, &session](const Json& args) {
             const auto& map = ws.map.data;
@@ -105,11 +108,11 @@ inline void registerStudioOverlayPlan(StudioSession& session, std::function<void
             game::OverlaySet selected;
             std::vector<std::string> forced;
             for (const auto& def : set.defs) {
-                if (!groundPlanShape(def)) continue;
+                if (!studioPlanShape(def)) continue;
                 catalog.push(Json::string(def.id));
                 if (ids.erase(def.id)) { selected.defs.push_back(def); forced.push_back(def.id); }
             }
-            if (!ids.empty()) throw std::runtime_error("Unavailable ground overlay: " + *ids.begin());
+            if (!ids.empty()) throw std::runtime_error("Unavailable preview overlay: " + *ids.begin());
             result.set("catalog", catalog);
             if (selected.defs.empty()) return result;
             if (map.w <= 0 || map.h <= 0 || map.worldSpace || map.planet()) throw std::runtime_error("Open a planar tile map");
@@ -168,8 +171,8 @@ inline void registerStudioOverlayPlan(StudioSession& session, std::function<void
             game::GameOverlays overlays;
             overlays.initPrepared(rules, std::move(selected), ws.project.dir);
             overlays.setContext(context);
-            Json primitives = Json::array();
-            for (const auto& primitive : overlays.groundPlan(scene, grid, 1.0)) {
+            Json primitives = Json::array(), screen;
+            for (const auto& primitive : overlays.groundPlan(scene, grid, 1.0, &screen)) {
                 Json item = Json::array();
                 item.push(Json::number(int64_t(primitive.color)));
                 auto point = [&](render::float3 p) { item.push(Json::number(double(p.x))); item.push(Json::number(double(p.z))); };
@@ -188,6 +191,7 @@ inline void registerStudioOverlayPlan(StudioSession& session, std::function<void
                 terrain.push(Json::string(row));
             }
             result.set("terrain", terrain);
+            result.set("screen", std::move(screen));
             result.set("stride", Json::number(int64_t(stride)));
             result.set("objects", objects);
             result.set("primitives", primitives);
