@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/LightingPanel.tsx",
     "apps/studio-native/tests/StudioFpsLightingDocumentTests.cpp",
     "apps/studio-web/src/panels/LightingWeatherPreview.tsx",
     "apps/studio-web/src/panels/LightingPanel.css",
@@ -284,6 +285,7 @@
     "docs/evidence/studio-map-environment-inheritance.json",
     "docs/evidence/studio-light-panel-weather-acceptance.json",
     "docs/evidence/studio-light-weather-metal.json",
+    "docs/evidence/studio-light-placement-acceptance.json",
     "docs/evidence/studio-light-game-frame.json",
     "docs/evidence/studio-light-rgb-swatch.json",
     "docs/evidence/studio-light-beacon-authoring.json",

@@ -1,0 +1,10 @@
+{
+  "sha": "f60cded8e93ab0fb1175fe6cd7b8eacd94901835",
+  "argv": [
+    "bash",
+    "/tmp/light-place-accept.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-light-placement-acceptance.log.txt",
+  "sha256": "38db72941e847e40aab254022d1fd0387f25082796c8d2dd648f9891554e2811"
+}
