@@ -1,0 +1,36 @@
+{
+  "id": "2026-11-25-render-model-triplanar",
+  "date": "2026-11-25",
+  "system": "render",
+  "branch": "codex/model-triplanar-20261125",
+  "commit": "541870d27",
+  "author": "render",
+  "title": "Проекция камня на срез модели",
+  "titleEn": "Stone projection on cut model faces",
+  "summary": "Камень покрывает цилиндрический срез и внешние стороны модели без UV-развёртки.",
+  "summaryEn": "Stone covers a cylindrical cut and the outside of the model without a UV layout.",
+  "body": [
+    "В Studio выберите трипланарный материал и задайте цвет, карту нормалей и число повторов на метр."
+  ],
+  "bodyEn": [
+    "Choose the triplanar material in Studio and set the colour map, normal map and repeats per metre."
+  ],
+  "verified": "Metal отрисовал импортированный OBJ и срез GLB. После сохранения Studio восстановила назначение материала.",
+  "verifiedEn": "Metal rendered an imported OBJ and a cut GLB. Studio restored the material assignment after saving.",
+  "limits": "Мировая проекция привязана к координатам сцены. Ступени на крупном срезе задаёт разрешение объёмной сетки.",
+  "limitsEn": "Projection follows world coordinates. Large cuts show the resolution of the volumetric mesh.",
+  "status": "in-progress",
+  "links": [
+    {
+      "title": "Source",
+      "href": "demos/model-triplanar/README.md"
+    }
+  ],
+  "media": [
+    {
+      "src": "docs/evidence/model-triplanar-stone-wider-cut.png",
+      "caption": "Расширенный срез со слоем камня",
+      "captionEn": "Wider cut with the stone material"
+    }
+  ]
+}

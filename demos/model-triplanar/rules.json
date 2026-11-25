@@ -1,0 +1,27 @@
+{
+  "fogOfWar": {
+    "mode": "none"
+  },
+  "types": {
+    "sculpt": {
+      "name": "Carved stone",
+      "health": {
+        "max": 100
+      },
+      "view": {
+        "model": "models/sculpt.glb",
+        "height": 4,
+        "materials": {
+          "*": "stone"
+        }
+      }
+    }
+  },
+  "victory": {
+    "mode": "survive",
+    "seconds": 86400
+  },
+  "viewScripts": [
+    "scripts/view/gallery.lua"
+  ]
+}
