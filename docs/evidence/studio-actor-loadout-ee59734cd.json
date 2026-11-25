@@ -1,0 +1,13 @@
+{
+  "sha": "ee59734cd008cbe0cf2332c4fa92552b1b0cd90f",
+  "argv": [
+    "npm",
+    "--prefix",
+    "apps/studio-web",
+    "run",
+    "test:web"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-actor-loadout-ee59734cd.log.txt",
+  "sha256": "fecb06316a6585e801941787bca7d8c8b58b7365e8b4ba4aca78439404ea7331"
+}
