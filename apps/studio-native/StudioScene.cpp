@@ -328,7 +328,8 @@ bool planeQuad(const Camera& view,float3 pivot,const float3* axes,int n,float wo
     const float3 c[4]={pivot+a*s0+b*s0,pivot+a*s1+b*s0,pivot+a*s1+b*s1,pivot+a*s0+b*s1};
     for(int i=0;i<4;++i)if(!view.worldToScreen(c[i],W,H,out[i]))return false;
     // An edge-on plane collapses to a line. Suppress it in both drawing and picking.
-    const auto a2=out[1]-out[0],b2=out[3]-out[0];
+    const float2 a2{out[1].x-out[0].x,out[1].y-out[0].y};
+    const float2 b2{out[3].x-out[0].x,out[3].y-out[0].y};
     const float area=std::abs(a2.x*b2.y-a2.y*b2.x);
     return area>std::max(std::hypot(a2.x,a2.y),std::hypot(b2.x,b2.y));
 }
