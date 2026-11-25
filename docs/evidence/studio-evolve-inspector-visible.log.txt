@@ -1,0 +1,7 @@
+2026-11-26 00:29:05.064 AiverseStudioHTML5[87529:81908110] [studio-web] JS: CROSS main DONE_1
+2026-11-26 00:29:05.064 AiverseStudioHTML5[87529:81908110] [studio-web] JS: CROSS main VERIFIED scoped multi-selection, mixed selection hidden, group scale in Inspector, phase 1
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/evolve-group-qa-2ZKW8U/Catalog.app/Contents/MacOS/aiversemcp: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/evolve-group-qa-2ZKW8U/Catalog.app: replacing existing signature
+2026-11-26 00:29:12.514 AiverseStudioHTML5[87656:81909245] [studio-web] JS: CROSS main DONE_2
+2026-11-26 00:29:12.514 AiverseStudioHTML5[87656:81909245] [studio-web] JS: CROSS main VERIFIED scoped multi-selection, mixed selection hidden, group scale in Inspector, phase 2
+Both reopened area half-widths 450 cm, both depths 400 cm; ordinary scout unchanged.
