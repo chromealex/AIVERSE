@@ -1193,6 +1193,17 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && map.data.entities.size()==before);
    }
    {
+       const auto avatars=project/"animations"/"avatar";
+       fs::create_directories(avatars);
+       std::ofstream(avatars/"saved_profile.json")<<R"({"format":"aiverse-humanoid-v1","model":"content/avatar.gltf","bones":{}})";
+       const auto files=call("studio.op",R"({"op":"animation_asset_list","params":{"kind":"avatar"}})");
+       const auto& catalog=files["result"]["result"];
+       AIVERSE_TEST_CHECK(!files.has("error") && !files["result"].getBool("changed") &&
+           catalog["names"][0].str()=="saved_profile" && catalog["roles"].size()==23);
+       const auto loaded=call("studio.op",R"({"op":"animation_asset_get","params":{"kind":"avatar","name":"saved_profile"}})");
+       AIVERSE_TEST_CHECK(loaded["result"]["result"].getStr("revision").size()==64);
+       AIVERSE_TEST_CHECK(call("studio.op",R"({"op":"animation_asset_list","params":{"kind":"../"}})").has("error"));
+       fs::remove(avatars/"saved_profile.json");
        const auto branding=call("studio.op",R"({"op":"branding_get","params":{}})");
        AIVERSE_TEST_CHECK(branding["result"]["result"]["iconsVersion"].isString());
        const auto conflict=call("studio.op",R"({"op":"branding_set","params":{"expectedIconsVersion":"outdated","icons":{}}})");

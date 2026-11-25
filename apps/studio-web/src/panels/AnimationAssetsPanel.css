@@ -1,0 +1,13 @@
+.avatar-page{height:100%;min-height:0;box-sizing:border-box;overflow:auto;padding:clamp(12px,3%,28px);color:#dfe8f3;container-type:inline-size;font-size:13px}
+.avatar-page header,.avatar-title,.avatar-page nav,.avatar-page footer{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.avatar-page header,.avatar-title{justify-content:space-between}.avatar-page header{padding-bottom:12px;border-bottom:1px solid #354557;margin-bottom:14px}
+.avatar-page h2,.avatar-page h3{margin:0}.avatar-page h2{font-size:22px}.avatar-page h3{font-size:16px}
+.avatar-page fieldset{min-width:0;margin:0;padding:0;border:0}.avatar-source{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr))}
+.avatar-source section{min-width:0;border:1px solid #344457;border-radius:8px;padding:12px;background:#15202d}
+.avatar-page label{display:grid;gap:4px;color:#b6c8dc;margin:8px 0}.avatar-page input,.avatar-page select,.avatar-page button{min-width:0;box-sizing:border-box;font:inherit;border-radius:6px;border:1px solid #44576d;background:#1c2a3a;color:inherit;padding:6px 8px}
+.avatar-page button{cursor:pointer}.avatar-page button:disabled{opacity:.5;cursor:default}.avatar-page button[aria-pressed=true],.avatar-page .avatar-save:enabled{background:#264d70;border-color:#5683a9}
+.avatar-title{margin-top:20px}.avatar-page small{font-size:11px;color:#9db0c5}.avatar-mapping{border-block:1px solid #354557}.avatar-mapping label{grid-template-columns:minmax(108px,.65fr) minmax(0,1.35fr);align-items:center;margin:0;padding:6px 2px}.avatar-mapping label+label{border-top:1px solid #263545}.avatar-mapping span small{display:block}
+.avatar-page footer{position:sticky;bottom:0;padding:10px 0;background:#121d29}.avatar-page [role=alert]{color:#efba88;overflow-wrap:anywhere}.avatar-page [role=status]{overflow-wrap:anywhere}
+@container(max-width:300px){.avatar-mapping label{grid-template-columns:1fr}.avatar-mapping span small{display:inline;margin-left:8px}}
+
+.avatar-page footer p{flex-basis:100%;margin:0}.avatar-page footer p[role=status]{color:#b9d4cf}

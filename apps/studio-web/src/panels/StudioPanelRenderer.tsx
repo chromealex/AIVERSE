@@ -1,3 +1,4 @@
+import AnimationAssetsPanel from './AnimationAssetsPanel';
 import BrandingPanel from './BrandingPanel';
 import type { StudioScriptMessage } from '../types';
 // AI-friendly rendering surface: keep App.tsx as the application shell.
@@ -118,9 +119,10 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'terrain': case 'water': case 'roads': case 'tiles': case 'generate':
       case 'effects': case 'lightbake': case 'models': case 'overlays':
       case 'fields': case 'physis': case 'raid': case 'balance': case 'fx_functions': case 'modeling':
-      case 'anim_assets': case 'model_anim': case 'project_import':
+      case 'model_anim': case 'project_import':
         return <ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'branding': return <BrandingPanel key={snapshot?.project.path} project={snapshot?.project.path ?? ''} advanced={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
+      case 'anim_assets': return <AnimationAssetsPanel key={snapshot?.project.path} project={snapshot?.project.path??''} tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'actor': return <LensCameraPanel openScene={()=>ctx.showPanel('scene')} key={snapshot?.project.path} project={snapshot?.project.path??''} operations={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'anim_graph': case 'anim_rig': return <AnimationGraphPanel key={panel+snapshot?.project.path} rigMode={panel==='anim_rig'} projectPath={snapshot?.project.path??''} tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'fx_library': return <SpectraLibraryPanel key={snapshot?.project.path ?? ''} projectPath={snapshot?.project.path ?? ''} showPanel={ctx.showPanel}/>;

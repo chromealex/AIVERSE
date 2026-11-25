@@ -120,6 +120,22 @@ void registerAnimationOps(Workspace& ws){auto schema=Json::parse(R"({"type":"obj
             throw std::invalid_argument("invalid animation asset kind/name");
         return contained(ws,"animations/"+kind+"/"+name+".json");
     };
+    ws.registerOp({"animation_asset_list","List authored animation assets of a kind; avatar results include the semantic bone roles.",
+        Json::parse(R"({"properties":{"kind":{"type":"string"}},"required":["kind"]})"),[safeAsset](const Json& p){
+            const auto kind=p.getStr("kind");
+            const auto folder=safeAsset(kind,"placeholder").parent_path();
+            std::set<std::string> names;
+            if(fs::is_directory(folder)) for(const auto& entry:fs::directory_iterator(folder)){
+                const auto name=entry.path().stem().string();
+                if(entry.is_regular_file() && entry.path().extension()==".json" && name.size()<=64 &&
+                   name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")==std::string::npos)
+                    names.insert(name);
+            }
+            Json result=Json::object(),files=Json::array(),roles=Json::array();
+            for(const auto& name:names) files.push(Json::string(name));
+            if(kind=="avatar") for(const auto* role:motionweave::kHumanoidRoleNames) roles.push(Json::string(role));
+            result.set("names",files);result.set("roles",roles);return result;
+        }});
     const auto makeMontage=[&ws](const Json& doc) {
         auto model=loadAnimationModel(ws,doc.getStr("model"));
         motionweave::MontageDefinition spec;
@@ -155,7 +171,13 @@ void registerAnimationOps(Workspace& ws){auto schema=Json::parse(R"({"type":"obj
             auto model=loadAnimationModel(ws,file);
             auto profile=motionweave::humanoidProfileJson(
                 file,motionweave::suggestHumanoidRoles(*model));
-            Json r=Json::object();r.set("document",profile);return r;
+            Json r=Json::object();r.set("document",profile);
+            if(p.getBool("includeNodes")){
+                Json nodes=Json::array();
+                for(size_t i=0;i<model->nodes.size();++i)nodes.push(Json::string(motionweave::bonePath(*model,int(i))));
+                r.set("nodes",nodes);
+            }
+            return r;
         }});
     ws.registerOp({"animation_avatar_validate",
         "Validate explicit humanoid bone roles against a model.",
@@ -237,7 +259,8 @@ void registerAnimationOps(Workspace& ws){auto schema=Json::parse(R"({"type":"obj
             if(!in)throw std::runtime_error("cannot read asset");
             const std::string data((std::istreambuf_iterator<char>(in)),{});
             Json r=Json::object();
-            r.set("document",Json::parse(data));return r;
+            const Json doc=Json::parse(data);r.set("revision",Json::string(graphRevision(doc)));
+            r.set("document",doc);return r;
         }});
     ws.registerOp({"animation_asset_save",
         "Save validated asset with optimistic concurrency. No overwrite without expected.",
@@ -245,14 +268,17 @@ void registerAnimationOps(Workspace& ws){auto schema=Json::parse(R"({"type":"obj
             const auto kind=p.getStr("kind"),name=p.getStr("name");
             const auto doc=p["document"];validateAsset(kind,doc);
             const auto file=safeAsset(kind,name);
+            if(!fs::exists(file) && p.has("expectedRevision"))throw std::runtime_error("asset was removed; reload");
             if(fs::exists(file)){
-                if(!p.has("expected"))
+                if(!p.has("expected") && !p.has("expectedRevision"))
                     throw std::runtime_error("asset already exists; reload first");
                 if(fs::file_size(file)>1024*1024)
                     throw std::runtime_error("existing asset too large");
                 std::ifstream prior(file,std::ios::binary);
                 const std::string old((std::istreambuf_iterator<char>(prior)),{});
-                if(!(Json::parse(old)==p["expected"]))
+                const Json previous=Json::parse(old);
+                if((p.has("expected") && !(previous==p["expected"])) ||
+                   (p.has("expectedRevision") && graphRevision(previous)!=p.getStr("expectedRevision")))
                     throw std::runtime_error("asset changed concurrently; reload");
             }
             const auto data=doc.dump(2)+"\n";
@@ -264,7 +290,7 @@ void registerAnimationOps(Workspace& ws){auto schema=Json::parse(R"({"type":"obj
              out<<data;out.close();if(!out)throw std::runtime_error("cannot save asset");}
             fs::rename(tmp,file);
             Json r=Json::object();r.set("ok",Json::fromBool(true));
-            r.set("document",doc);return r;
+            r.set("revision",Json::string(graphRevision(doc)));r.set("document",doc);return r;
         }});
 
 }

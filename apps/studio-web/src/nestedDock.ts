@@ -43,7 +43,7 @@ export const STUDIO_PANEL_TITLES: Record<StudioPanel,string> = {
   fx_library: "SpectraFX Library",
   fx_functions: "SpectraFX Functions",
   modeling: "Modeling",
-  anim_assets: "Animation Clips",
+  anim_assets: "Animation Assets",
   anim_graph: "Animation Graph",
   anim_rig: "Animation Rig",
   model_anim: "Model Animation",
