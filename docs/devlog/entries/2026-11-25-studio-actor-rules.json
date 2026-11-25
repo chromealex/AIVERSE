@@ -1,0 +1,31 @@
+{
+  "id": "2026-11-25-studio-actor-rules",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "b41a30e57",
+  "author": null,
+  "links": [],
+  "title": "Настройки персонажей из окна Rules",
+  "titleEn": "Actor settings from Rules",
+  "summary": "В проектах персонажей Rules сразу показывает rules.json и открывает Actors & Cameras.",
+  "summaryEn": "Actor projects open their complete rules document and link to Actors & Cameras.",
+  "body": [
+    "Чтобы изменить скорость персонажа, откройте Rules → Open Actors & Cameras → Movement."
+  ],
+  "bodyEn": [
+    "Open Rules → Open Actors & Cameras → Movement to edit actor speed."
+  ],
+  "verified": "На macOS отделённое окно Rules прочитало проект без types и открыло настройки движения в основном окне. После перехода файл правил остался побайтно прежним.",
+  "verifiedEn": "On macOS, detached Rules loaded an actor project without types and routed to the main Movement controls. The rules file remained byte-identical.",
+  "limits": "Визуальная проверка Windows предстоит.",
+  "limitsEn": "Windows visual verification remains pending.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-actor-rules/actor-rules.png",
+      "caption": "Правила проекта персонажей",
+      "captionEn": "Actor project rules"
+    }
+  ]
+}

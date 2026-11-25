@@ -1,0 +1,10 @@
+{
+  "sha": "b41a30e57b792ff9c21abd46738f09d6586f66d2",
+  "argv": [
+    "bash",
+    "/tmp/rules-actor-proof.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-rules-actor-navigation-final.log.txt",
+  "sha256": "4a43f324e60161ba0c48622c457ae893565c4afea64522f28732bce37fbdcfb2"
+}
