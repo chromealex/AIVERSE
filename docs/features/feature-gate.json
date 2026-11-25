@@ -154,9 +154,13 @@
       ]
     },
     "handoff": {
-      "status": "not_run",
-      "note": "Pending actual execution and integration review.",
-      "evidence": []
+      "status": "pass",
+      "note": "The integration handoffs record ownership coverage, both audit modes, native readiness execution, exact revisions and the remaining delivery and platform limits.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage27-2026-11-25.md",
+        "docs/agent-handoffs/building-caverns-integration-stage19-2026-11-25.md",
+        "docs/evidence/integrated-acceptance-3e2a609f0.json"
+      ]
     },
     "documentation": {
       "status": "pass",

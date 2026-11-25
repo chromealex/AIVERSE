@@ -314,9 +314,12 @@
       ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Stage 35D planned; integration verification pending.",
-      "evidence": []
+      "status": "pass",
+      "note": "Native Studio saved the GLB and its editable recipe with an asset GUID. A fresh process restored the saved recipe and the original seed. Reading it preserved the GLB digest.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage27-2026-11-25.md",
+        "docs/evidence/integrated-acceptance-3e2a609f0.json"
+      ]
     },
     "graphs": {
       "status": "pass",
@@ -372,9 +375,15 @@
       ]
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Stage 35D planned; integration verification pending.",
-      "evidence": []
+      "status": "pass",
+      "note": "The developer guides describe the native graph source, socket identity, functional recipe, typed material data and limits. Native topology inspection and GLB export were checked against them.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage27-2026-11-25.md",
+        "docs/building-structure-graph.md",
+        "docs/building-functional-recipes.md",
+        "docs/building-style.md",
+        "docs/evidence/integrated-acceptance-3e2a609f0.json"
+      ]
     },
     "publishing": {
       "status": "not_run",

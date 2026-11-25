@@ -194,9 +194,13 @@
       "evidence": []
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The native Workspace graph regression passed without a GPU or a UI. Real stdio then confirmed project-scoped guarded writes, reordered preconditions, stale rejection and readback for Shader and SpectraFX.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage27-2026-11-25.md",
+        "tests/vfx_graph_ops_test.cpp",
+        "docs/evidence/integrated-acceptance-3e2a609f0.json"
+      ]
     },
     "examples": {
       "status": "not_run",

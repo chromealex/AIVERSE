@@ -232,10 +232,13 @@
       ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Native C++ consumers exercised the planetary frame, volume, collision, portal transitions and checkpoint replay. A project-space region created and saved through the editor owner reopened with its stable region and stamp identities.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "docs/agent-handoffs/building-caverns-integration-stage27-2026-11-25.md",
+        "examples/world/terraweave_native/PlanetCavernsDemo.cpp",
+        "apps/editor/core/TerraWeavePlanetCavernsDoc.h",
+        "docs/evidence/integrated-acceptance-3e2a609f0.json"
       ]
     },
     "skill": {
@@ -271,10 +274,12 @@
       ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Map save, undo, redo and process reopen preserved the flat authored volume. The planetary map also preserved its selected region and chart-local stamp after reopening. Native moving, portal and swim checkpoint fixtures verified replay parity.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "docs/agent-handoffs/building-caverns-integration-stage27-2026-11-25.md",
+        "tests/caverns/native_demo_smoke.py",
+        "docs/evidence/integrated-acceptance-3e2a609f0.json"
       ]
     },
     "graphs": {
@@ -315,10 +320,13 @@
       ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "All six native Metal scenarios passed their required markers. The portal capture recorded entry on tick 154. The runnable examples exercised chamber, portal travel, swimming, frame rebase and checkpoint restore.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "docs/agent-handoffs/building-caverns-integration-stage27-2026-11-25.md",
+        "examples/world/terraweave_native/PlanetCavernsDemo.cpp",
+        "tests/caverns/native_demo_smoke.py",
+        "docs/evidence/integrated-acceptance-3e2a609f0.json"
       ]
     },
     "tests": {
