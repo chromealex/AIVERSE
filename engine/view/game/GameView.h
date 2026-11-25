@@ -674,8 +674,9 @@ public:
     float groundAt(const MapGrid& grid, float x, float z) const;
     // Where a drawn unit's shots leave its model: the look's "muzzle" (node + offset) in world space and the unit's
     // facing; false when the unit is not drawn yet or its model has no muzzle (effects then use the simulation point).
-    bool projectileImpactPathPoint(Entity projectile, render::float3& point) const;
     bool muzzleOf(Entity e, render::float3& pos, render::float3& dir) const;
+    // Current fitted projectile point in particle space, sampled after the view draw.
+    bool projectileImpactPathPoint(Entity projectile, render::float3& point) const;
     // Named node in particle space; no model ownership escapes this query.
     bool effectNodeOf(Entity e, const std::string& node, render::mat4& frame) const;
     // Problems found while loading view blocks ("type 'knight': models/knight.glb: file not found").
