@@ -3,7 +3,15 @@
   "id": "quake3-bsp",
   "owner": "render",
   "changed_paths": [
-    "engine/render/ModelBsp.cpp"
+    "CMakeLists.txt",
+    "docs/agent-handoffs/quake3-bsp-initial.md",
+    "docs/devlog/systems.json",
+    "docs/features/quake3-bsp.json",
+    "engine/render/Model.cpp",
+    "engine/render/Model.h",
+    "engine/render/ModelBsp.cpp",
+    "tools/models/ModelConvert.cpp",
+    "tests/render/quake3_bsp.cpp"
   ],
   "traits": {
     "editable": true,

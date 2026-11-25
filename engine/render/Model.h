@@ -354,6 +354,7 @@ std::unique_ptr<Model> loadFbx(const std::string& path, const std::string& bytes
 std::unique_ptr<Model> loadVox(const std::string& path, const std::string& bytes, const FileReader& read, std::vector<std::string>* warnings);
 std::unique_ptr<Model> loadVxl(const std::string& path, const std::string& bytes, const FileReader& read, std::vector<std::string>* warnings);
 // Interchange: Stanford .ply (ASCII / binary), .stl (ASCII / binary), 3D Studio .3ds, Collada .dae.
+std::unique_ptr<Model> loadBsp(const std::string& path, const std::string& bytes, const FileReader& read, std::vector<std::string>* warnings);
 std::unique_ptr<Model> loadPly(const std::string& path, const std::string& bytes, const FileReader& read, std::vector<std::string>* warnings);
 std::unique_ptr<Model> loadStl(const std::string& path, const std::string& bytes, const FileReader& read, std::vector<std::string>* warnings);
 std::unique_ptr<Model> load3ds(const std::string& path, const std::string& bytes, const FileReader& read, std::vector<std::string>* warnings);
