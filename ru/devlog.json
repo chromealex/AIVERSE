@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-25T00:54:58+00:00",
+ "generated": "2026-11-25T01:31:53+00:00",
  "lang": "ru",
  "repo": "https://github.com/chromealex/AIVERSE",
  "systems": [
@@ -148,6 +148,34 @@
    ],
    "links": [],
    "author": null
+  },
+  {
+   "id": "2026-11-25-studio-graph-visuals",
+   "date": "2026-11-25",
+   "system": "studio",
+   "title": "Узлы и связи Shader Graph и SpectraFX",
+   "summary": "Выбор узла подсвечивает его связи. Карточки материала показывают значения констант, а в SpectraFX значения передаются по пунктирным линиям.",
+   "body": [
+    "В Shader Graph входы расположены на границе карточки. Табуляция переводит фокус между узлами, Enter и пробел выделяют узел. Числа и образцы RGB можно прочитать прямо на холсте.",
+    "В SpectraFX холст расположен перед предпросмотром. Сплошные линии показывают ход исполнения, пунктир обозначает передачу значений."
+   ],
+   "status": "done",
+   "branch": "studio-graph-visuals",
+   "commit": "dbfb3dcd7",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-graph-visuals/01.png",
+     "caption": "Карточки sg_brass показывают тип операции, значение константы и цвет tint."
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-graph-visuals/02.png",
+     "caption": "Граф SpectraFX с линиями исполнения и пунктирными связями значений."
+    }
+   ],
+   "links": [],
+   "author": null,
+   "verified": "Нативные кадры Studio на Mac с графами sg_brass и runtime_math_connected_v2.",
+   "limits": "Проверено на macOS и в Chrome. Нативная Windows-проверка ещё предстоит."
   },
   {
    "id": "2026-11-25-spectrafx-smoke-flow",

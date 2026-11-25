@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-25T00:54:58+00:00",
+ "generated": "2026-11-25T01:31:53+00:00",
  "lang": "en",
  "repo": "https://github.com/chromealex/AIVERSE",
  "systems": [
@@ -148,6 +148,34 @@
    ],
    "links": [],
    "author": null
+  },
+  {
+   "id": "2026-11-25-studio-graph-visuals",
+   "date": "2026-11-25",
+   "system": "studio",
+   "title": "Nodes and connections in Shader Graph and SpectraFX",
+   "summary": "Select a node to highlight its connections. Material nodes show their constants, and dashed wires identify SpectraFX value links.",
+   "body": [
+    "Shader Graph input sockets sit on the edge of each card. Tab moves focus between nodes and Enter or Space selects one. Numeric values and RGB swatches appear directly on the canvas.",
+    "The SpectraFX canvas appears above the preview. Solid wires trace execution and dashed wires carry values."
+   ],
+   "status": "done",
+   "branch": "studio-graph-visuals",
+   "commit": "dbfb3dcd7",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-graph-visuals/01.png",
+     "caption": "The sg_brass cards show the operation, constant value and tint swatch."
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-graph-visuals/02.png",
+     "caption": "SpectraFX execution paths and dashed value connections."
+    }
+   ],
+   "links": [],
+   "author": null,
+   "verified": "Native Studio captures on Mac show sg_brass and runtime_math_connected_v2.",
+   "limits": "Verified on macOS and in Chrome. Native Windows verification is pending."
   },
   {
    "id": "2026-11-25-spectrafx-smoke-flow",
