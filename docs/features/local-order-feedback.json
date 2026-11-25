@@ -3,7 +3,30 @@
   "id": "local-order-feedback",
   "owner": "gameplay",
   "changed_paths": [
-    "apps/client/GameClient.cpp"
+    "apps/client/GameClient.cpp",
+    "apps/client/GameClient.h",
+    "demos/order-upgrade/game.json",
+    "demos/order-upgrade/maps/courtyard.json",
+    "demos/order-upgrade/rules.json",
+    "demos/order-upgrade/scripts/courtyard.lua",
+    "demos/order-upgrade/scripts/view/orders.lua",
+    "docs/agent-handoffs/local-order-feedback-initial.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/systems.json",
+    "docs/features/local-order-feedback.json",
+    "docs/game-format.md",
+    "docs/ru/game-format.md",
+    "docs/ru/scripting.md",
+    "docs/scripting.md",
+    "engine/game/ScriptApi.cpp",
+    "engine/view/game/GameOverlayData.cpp",
+    "engine/view/game/GameOverlayData.h",
+    "engine/view/game/GameOverlays.cpp",
+    "engine/view/game/GameOverlays.h",
+    "engine/view/game/GameViewScript.cpp",
+    "engine/view/game/GameViewScript.h",
+    "skills/gameplay/aiverse-view/SKILL.md",
+    "tests/tests.cpp"
   ],
   "traits": {
     "runtime": true,
@@ -53,9 +76,11 @@
       "evidence": []
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "This option consumes authored view data and the existing animation pipeline; no graph nodes or topology change.",
+      "evidence": [
+        "skills/gameplay/aiverse-view/SKILL.md"
+      ]
     },
     "performance": {
       "status": "not_run",
@@ -104,10 +129,22 @@
     }
   },
   "integrations": {
-    "skills": [],
-    "mcp_tools": [],
-    "studio_panels": [],
-    "studio_methods": []
+    "skills": [
+      "aiverse-view"
+    ],
+    "mcp_tools": [
+      "overlay_set",
+      "overlay_templates",
+      "overlay_get",
+      "script_write"
+    ],
+    "studio_panels": [
+      "overlays",
+      "scripts"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
   },
   "test_reports": []
 }

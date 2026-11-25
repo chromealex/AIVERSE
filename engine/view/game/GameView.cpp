@@ -724,7 +724,7 @@ void GameView::shutdown(gfx::Device& dev) {
 }
 
 bool GameView::spriteHit(const Camera& cam, const SceneObject& o, const MapGrid& grid, float sx, float sy, float w, float h) const {
-    return twoD_ && !o.isProjectile && twoD_->hasSprite(o.type) && twoD_->hit(cam, o, heightAt(grid, o.pos.x, o.pos.z), sx, sy, w, h);
+    return twoD_ && !o.isProjectile && twoD_->hasSprite(o.modelType()) && twoD_->hit(cam, o, heightAt(grid, o.pos.x, o.pos.z), sx, sy, w, h);
 }
 
 float GameView::selectionRadius(uint16_t type) const {
@@ -1307,11 +1307,11 @@ void GameView::draw(Renderer3D& r, const GameScene& input, double time, const st
     }
     drawTypes_.clear();
     for (const auto& o : input.objects) {
-        if (o.isProjectile || o.type >= drawTypeStamps_.size() ||
-            drawTypeStamps_[o.type] == drawTypeEpoch_) continue;
-        drawTypeStamps_[o.type] = drawTypeEpoch_;
-        drawTypes_.push_back(o.type);
-        if (!streamingTypes_) loadType(o.type);
+        if (o.isProjectile || o.modelType() >= drawTypeStamps_.size() ||
+            drawTypeStamps_[o.modelType()] == drawTypeEpoch_) continue;
+        drawTypeStamps_[o.modelType()] = drawTypeEpoch_;
+        drawTypes_.push_back(o.modelType());
+        if (!streamingTypes_) loadType(o.modelType());
     }
     // A projectile can outlive its shooter. Keep its authored type available
     // even when no unit of that type is in the current scene.
@@ -1338,8 +1338,8 @@ void GameView::draw(Renderer3D& r, const GameScene& input, double time, const st
         resolved=input;
         std::map<uint64_t,mat4> bases,effects;
         for(const auto& o:input.objects) {
-            if(!o.entity.valid() || o.type>=looks_.size() || o.body!=-1)continue;
-            const auto& look=looks_[o.type];EntityFxValues fx;input.entityFx->lookup(o.entity.packed(),fx);
+            if(!o.entity.valid() || o.modelType()>=looks_.size() || o.body!=-1)continue;
+            const auto& look=looks_[o.modelType()];EntityFxValues fx;input.entityFx->lookup(o.entity.packed(),fx);
             constexpr float deg=.017453292f;
             auto effect=mat4::translate({0,(look.air?look.flyHeight:0)+fx.v[EntityFxValues::kLift],0})
                 *mat4::rotateZ(-fx.v[EntityFxValues::kPitch]*deg)*mat4::rotateX(-fx.v[EntityFxValues::kRoll]*deg)
@@ -1397,8 +1397,8 @@ void GameView::draw(Renderer3D& r, const GameScene& input, double time, const st
     // Avoid allocating an empty shared map on every ordinary static frame.
     animationSurfaceFrames_ = contacts
         ? std::make_shared<std::map<uint64_t,mat4>>() : nullptr;
-    for(size_t oi=0;contacts&&oi<s.objects.size();++oi){const auto& o=s.objects[oi];if(!o.visible||o.isProjectile||o.body!=-1||o.type>=looks_.size())continue;
-        const auto& look=looks_[o.type];if(look.models.empty())continue;uint64_t key=o.entity.valid()?o.entity.packed():(uint64_t(1)<<63)|oi;auto state=anims_.find(key);
+    for(size_t oi=0;contacts&&oi<s.objects.size();++oi){const auto& o=s.objects[oi];if(!o.visible||o.isProjectile||o.body!=-1||o.modelType()>=looks_.size())continue;
+        const auto& look=looks_[o.modelType()];if(look.models.empty())continue;uint64_t key=o.entity.valid()?o.entity.packed():(uint64_t(1)<<63)|oi;auto state=anims_.find(key);
         size_t choice=state!=anims_.end()&&size_t(state->second.choice)<look.models.size()?size_t(state->second.choice):0;const ModelChoice* ch=&look.models[choice];
         const Stage* stage=nullptr;for(const auto& sg:look.stages){if(o.build<1&&look.construction==Construction::Stages&&sg.build>=0&&sg.build<=o.build&&(!stage||sg.build>stage->build))stage=&sg;if(o.build>=1&&sg.hp>=0&&o.hp<=sg.hp&&(!stage||sg.hp<stage->hp))stage=&sg;}if(stage)ch=&stage->choice;if(!ch->model)continue;
         EntityFxValues values;bool hasFx=fxFor(o,values);float lift=hasFx?values.v[EntityFxValues::kLift]:0;const float groundY=heightAt(grid,o.pos.x,o.pos.z);
@@ -1539,9 +1539,9 @@ void GameView::draw(Renderer3D& r, const GameScene& input, double time, const st
             // Keep those objects on the existing legacy animation path.
             if(!o.entity.valid())continue;
             if(!o.visible || o.isProjectile || o.parented || o.body!=-1 ||
-               o.type>=looks_.size() || !typeLoaded(o.type))continue;
-            if(twoD_ && twoD_->hasSprite(o.type))continue;
-            const auto& look=looks_[o.type];
+               o.modelType()>=looks_.size() || !typeLoaded(o.modelType()))continue;
+            if(twoD_ && twoD_->hasSprite(o.modelType()))continue;
+            const auto& look=looks_[o.modelType()];
             if(!look.stages.empty() || !look.lods.empty() ||
                look.models.empty())continue;
             const uint64_t key=o.entity.valid()?o.entity.packed():
@@ -1575,7 +1575,7 @@ void GameView::draw(Renderer3D& r, const GameScene& input, double time, const st
             if(fx_ && !fx_->animations.empty() &&
                fx_->animations.count(o.entity.packed()))continue;
             ::aiverse::view::Object packet;
-            packet.id=key;packet.generation=(uint64_t(o.type)<<32)|
+            packet.id=key;packet.generation=(uint64_t(o.modelType())<<32)|
                 uint32_t(st.choice);
             packet.draw.model=ch.model;
             // Preserve the authored asset-publication epoch across graph
@@ -1658,14 +1658,14 @@ void GameView::draw(Renderer3D& r, const GameScene& input, double time, const st
             }
             continue;
         }
-        if (twoD_ && twoD_->hasSprite(o.type)) { // 2D games: sprites instead of models
+        if (twoD_ && twoD_->hasSprite(o.modelType())) { // 2D games: sprites instead of models
             float g = heightAt(grid, o.pos.x, o.pos.z);
             EntityFxValues sfx;
             twoD_->addObject(o, g, fxFor(o, sfx) ? &sfx : nullptr);
             bars_[i] = twoD_->barPoint(o, g);
             continue;   // selection rings: overlays
         }
-        if (o.type >= looks_.size() || !typeLoaded(o.type)) continue;
+        if (o.modelType() >= looks_.size() || !typeLoaded(o.modelType())) continue;
         // editor placements have no entity: key them by position in the list
         const uint64_t key = o.entity.valid() ? o.entity.packed() : (1ull << 63) | uint64_t(i);
         EntityAnim& st = stateFor(key, o);
@@ -1689,21 +1689,21 @@ void GameView::draw(Renderer3D& r, const GameScene& input, double time, const st
             }
             continue;
         }
-        const TypeLook& L = looks_[o.type];
-        const bool roadSurface = !rules_->types[o.type].structure && !L.air;
+        const TypeLook& L = looks_[o.modelType()];
+        const bool roadSurface = !rules_->types[o.modelType()].structure && !L.air;
         static const bool cacheGround = [] {
             // On by default; AIVERSE_RTS_GROUND_CACHE=0 samples the ground every frame.
             const char* setting = std::getenv("AIVERSE_RTS_GROUND_CACHE");
             return !(setting && std::strcmp(setting, "0") == 0);
         }();
         const bool groundEligible = cacheGround && !o.moving && !o.parented &&
-            (L.structure || rules_->types[o.type].speed <= Fixed{});
+            (L.structure || rules_->types[o.modelType()].speed <= Fixed{});
         auto& cachedGround = st.ground;
         const uint64_t roadsGeneration = roads_ ? roads_->surfaceGeneration() : 0;
         const bool reuseGround = groundEligible && cachedGround.valid &&
             cachedGround.grid == &grid && cachedGround.terrainGeneration == terrainGeneration_ &&
             cachedGround.roadGeneration == roadsGeneration &&
-            cachedGround.type == o.type && cachedGround.roadSurface == roadSurface &&
+            cachedGround.type == o.modelType() && cachedGround.roadSurface == roadSurface &&
             cachedGround.pos.x == o.pos.x && cachedGround.pos.z == o.pos.z;
         const float ground = reuseGround ? cachedGround.height :
             (roadSurface ? groundAt(grid, o.pos.x, o.pos.z) : heightAt(grid, o.pos.x, o.pos.z));
@@ -1715,7 +1715,7 @@ void GameView::draw(Renderer3D& r, const GameScene& input, double time, const st
                 cachedGround.grid = &grid;
                 cachedGround.terrainGeneration = terrainGeneration_;
                 cachedGround.roadGeneration = roadsGeneration;
-                cachedGround.type = o.type;
+                cachedGround.type = o.modelType();
                 cachedGround.roadSurface = roadSurface;
                 cachedGround.pos = o.pos;
                 cachedGround.height = ground;
@@ -2062,18 +2062,34 @@ void GameView::drawOverlays(const Camera& cam, const GameScene& s, float w, floa
 }
 
 bool GameView::overlayTop(const Camera& cam, const SceneObject& o, size_t oi, float w, float h, float2& sp) const {
-    if (!rules_ || o.type >= rules_->types.size() || o.type >= looks_.size()) return false;
-    const UnitType& t = rules_->types[o.type];
+    if (!rules_ || o.modelType() >= rules_->types.size() || o.modelType() >= looks_.size()) return false;
+    const UnitType& t = rules_->types[o.modelType()];
     if (planets_.active()) // anchors computed by drawPlanets (view world; hidden behind the planet / far away)
         return oi < bars_.size() && oi < barOk_.size() && barOk_[oi] && cam.worldToScreen(bars_[oi], w, h, sp);
-    if (twoD_ && twoD_->hasSprite(o.type) && oi < bars_.size()) {
+    if (twoD_ && twoD_->hasSprite(o.modelType()) && oi < bars_.size()) {
         if (!cam.worldToScreen(bars_[oi], w, h, sp)) return false;
         sp.y -= 4;
         return true;
     }
-    float top = t.structure ? 1.6f * looks_[o.type].scale * std::max(1.0f, std::max(t.footprintW, t.footprintH) * 0.6f) : 1.2f * looks_[o.type].scale;
-    if (looks_[o.type].air) top += 2.4f;
+    float top = t.structure ? 1.6f * looks_[o.modelType()].scale * std::max(1.0f, std::max(t.footprintW, t.footprintH) * 0.6f) : 1.2f * looks_[o.modelType()].scale;
+    if (looks_[o.modelType()].air) top += 2.4f;
     return cam.worldToScreen({o.pos.x, top, o.pos.z}, w, h, sp);
+}
+
+void projectProductionAppearance(SceneObject& object, const Rules& rules, const Production& production) {
+    object.producing = !production.queue.empty();
+    if (!object.producing) return;
+    const UnitType& source = rules.types[object.type];
+    if (!source.structure || !source.view.getBool("showUpgradeTarget", false)) return;
+    const size_t active = source.chargesMax > 0 ? production.queue.size()
+        : std::min(production.queue.size(), size_t(source.queueSlots));
+    for (size_t i = 0; i < active; ++i) {
+        const ProdItem& item = production.queue[i];
+        if (!item.upgrade || item.item < 0 || size_t(item.item) >= rules.types.size()) continue;
+        object.upgradeType = uint16_t(item.item);
+        object.build = std::clamp(float(item.progress.toDouble()), 0.0f, 1.0f);
+        return;
+    }
 }
 
 void sceneFromSim(Simulation& sim, GameScene& out, float alpha, uint8_t viewer) {
@@ -2171,7 +2187,7 @@ void sceneFromSim(Simulation& sim, GameScene& out, float alpha, uint8_t viewer) 
         if (auto* od = w.tryGet<Orders>(e); od && !od->queue.empty()) so.order = uint8_t(od->queue.front().type) + 1;
         if (auto* mb = w.tryGet<Mobile>(e)) so.moving = mb->moving;
         if (drivingCars) if (const vehicles::VehicleDrive* car = drivingCars->car(sim, e)) so.steer = float(car->controller.steer.toDouble()) * 6.2831853f;
-        if (auto* pr = w.tryGet<Production>(e)) so.producing = !pr->queue.empty();
+        if (auto* pr = w.tryGet<Production>(e)) projectProductionAppearance(so, R, *pr);
         if (auto* cb = w.tryGet<Combat>(e); cb && cb->target.valid() && w.alive(cb->target)) {
             if (auto* tt = w.tryGet<Transform>(cb->target)) { so.hasTarget = true; so.target = lerp(toF(tt->prevPos), toF(tt->pos), alpha); }
         }

@@ -1,0 +1,17 @@
+{
+  "id": "org.aiverse.demos.order_upgrade",
+  "name": "Watchtower orders",
+  "version": "1.0",
+  "module": "game",
+  "rules": "rules.json",
+  "maps": [
+    {
+      "file": "maps/courtyard.json",
+      "title": "Watchtower orders"
+    }
+  ],
+  "selectionShortcut": {
+    "type": "scout",
+    "label": "Select scout"
+  }
+}

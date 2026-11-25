@@ -69,8 +69,8 @@ bool GameView::muzzleOf(Entity e, float3& pos, float3& dir) const {
 }
 
 void GameView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, float ground, float alpha, const float4* tintOverride, const mat4* placement) {
-    const UnitType& t = rules_->types[o.type];
-    const TypeLook& L = looks_[o.type];
+    const UnitType& t = rules_->types[o.modelType()];
+    const TypeLook& L = looks_[o.modelType()];
     const ModelChoice& ch = L.models[size_t(st.choice)];
 
     // ---- which model: stage (construction / damage) > LOD > the object's variant
@@ -165,7 +165,7 @@ void GameView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, f
     d.persistentId = o.persistentKey ? o.persistentKey :
         (o.entity.valid() ? o.entity.packed() : 0);
     d.model = show->model;
-    if (!tintOverride && o.type < actorRevealTypes_.size() && actorRevealTypes_[o.type]) d.flags |= kDrawActorReveal;
+    if (!tintOverride && o.modelType() < actorRevealTypes_.size() && actorRevealTypes_[o.modelType()]) d.flags |= kDrawActorReveal;
     // Hot-reloaded choices pin an immutable published appearance snapshot.
     // The owning TypeLook keeps it alive across this synchronous submission.
     const auto& appearance=show->appearanceSnapshot;
@@ -345,7 +345,7 @@ void GameView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, f
         // Mirror the source identity published to genericView_->update().
         // Without generation + publication epoch, submitOne rejects its
         // already evaluated MotionWeave pose and draws the bind pose.
-        packet.generation=(uint64_t(o.type)<<32)|uint32_t(st.choice);
+        packet.generation=(uint64_t(o.modelType())<<32)|uint32_t(st.choice);
         packet.animationModelGeneration=ch.modelGeneration;
         packet.draw=d;
         packet.graph=ch.graph;
@@ -392,7 +392,7 @@ void GameView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, f
                 const auto& f = show->fx[slot];
                 if (f.when && !(state & f.when)) continue;
                 if (o.hp > f.hpBelow) continue;
-                effects_.push_back({f.effect, o.entity, o.type, o.owner, nodeWorldPos(st, ch, f.node, f.offset),
+                effects_.push_back({f.effect, o.entity, o.modelType(), o.owner, nodeWorldPos(st, ch, f.node, f.offset),
                                     f.intensity * (f.hpBelow <= 1 ? std::clamp(1.0f - o.hp / std::max(f.hpBelow, 0.01f), 0.2f, 1.0f) : 1.0f), slot});
             }
     }

@@ -290,7 +290,7 @@ void GameOverlays::processEvents(const GameScene& s) {
         if (w && a.valid()) {
             if (auto* ow = w->tryGet<Owner>(a)) owner = ow->player;
             if (auto* u = w->tryGet<Unit>(a)) type = u->type;
-            if (pos.x.raw == 0 && pos.z.raw == 0) if (auto* tr = w->tryGet<Transform>(a)) pos = tr->pos;
+            if (kind != kViewEventOrder && pos.x.raw == 0 && pos.z.raw == 0) if (auto* tr = w->tryGet<Transform>(a)) pos = tr->pos;
         }
         if (ev.subjectType < rules_->types.size()) type = ev.subjectType;
         if (ev.subjectOwner <= UINT8_MAX) owner = uint8_t(ev.subjectOwner);
@@ -314,7 +314,7 @@ void GameOverlays::processEvents(const GameScene& s) {
             if (type >= rules_->types.size()) return;
             if (!contains(d.event.types.types, type) && !(d.event.types.tags & rules_->types[type].tags)) return;
         }
-        if (grid_ && vision_ && ctx_.player) {   // never reveal what the fog hides
+        if (kind != kViewEventOrder && grid_ && vision_ && ctx_.player) {   // local input is visible even in unexplored terrain
             const int cx = int(pos.x.floorInt()), cy = int(pos.z.floorInt());
             if (!grid_->inside(cx, cy) || vision_->size() <= size_t(grid_->index(cx, cy)) || (*vision_)[size_t(grid_->index(cx, cy))] != 2) return;
         }
@@ -343,6 +343,10 @@ void GameOverlays::processEvents(const GameScene& s) {
                 if (set_.defs[di].hasEvent) spawn(di, ev, s.tick * 977u + uint32_t(ei));
         }
     }
+    if (ctx_.orders)
+        for (size_t i = 0; i < ctx_.orders->size(); ++i)
+            for (size_t di = 0; di < set_.defs.size(); ++di)
+                spawn(di, (*ctx_.orders)[i], uint32_t(time_ * 1000) + uint32_t(i));
     if (ctx_.pings)
         for (size_t pi = 0; pi < ctx_.pings->size(); ++pi) {
             const OverlayPing& pg = (*ctx_.pings)[pi];

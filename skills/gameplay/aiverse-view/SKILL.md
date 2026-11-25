@@ -115,3 +115,10 @@ host components; host callbacks must be read-only outside supplied state.
 A World copy or PlaybackSnapshot alone is not a complete animation checkpoint.
 
 For game selection markers, set `selectionOutline` in game.json through `set_manifest {"path":"selectionOutline","value":false}` to disable the selected and hovered model silhouettes. Verify with `game_info`. Author custom marker rings through the existing overlay data.
+
+
+For project order feedback, use an event overlay with `event.on = "order"` or a view script
+handler `view.on("order", fn)`. The payload includes kind, target, queued flag and 3D position.
+For an in-place structure upgrade set `view.showUpgradeTarget` on the source type. The active
+production item's progress drives the target type's existing construction appearance.
+See `demos/order-upgrade`, `docs/models.md` and `docs/scripting.md`.

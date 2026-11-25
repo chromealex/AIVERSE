@@ -3,7 +3,26 @@
   "id": "structure-upgrade-appearance",
   "owner": "gameplay",
   "changed_paths": [
-    "engine/view/game/GameView.cpp"
+    "apps/client/ClientLoading.cpp",
+    "demos/order-upgrade/game.json",
+    "demos/order-upgrade/maps/courtyard.json",
+    "demos/order-upgrade/rules.json",
+    "demos/order-upgrade/scripts/courtyard.lua",
+    "demos/order-upgrade/scripts/view/orders.lua",
+    "docs/agent-handoffs/structure-upgrade-appearance-initial.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/systems.json",
+    "docs/features/structure-upgrade-appearance.json",
+    "docs/models.md",
+    "engine/game/GameData.cpp",
+    "engine/view/game/GameAnimate.cpp",
+    "engine/view/game/GamePlanetView.cpp",
+    "engine/view/game/GameSprites.cpp",
+    "engine/view/game/GameView.cpp",
+    "engine/view/game/GameView.h",
+    "engine/view/game/GameViewDraw.cpp",
+    "skills/gameplay/aiverse-view/SKILL.md",
+    "tests/tests.cpp"
   ],
   "traits": {
     "runtime": true,
@@ -53,9 +72,11 @@
       "evidence": []
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "This option consumes authored view data and the existing animation pipeline; no graph nodes or topology change.",
+      "evidence": [
+        "skills/gameplay/aiverse-view/SKILL.md"
+      ]
     },
     "performance": {
       "status": "not_run",
@@ -104,10 +125,20 @@
     }
   },
   "integrations": {
-    "skills": [],
-    "mcp_tools": [],
-    "studio_panels": [],
-    "studio_methods": []
+    "skills": [
+      "aiverse-view"
+    ],
+    "mcp_tools": [
+      "rules_set",
+      "rules_get"
+    ],
+    "studio_panels": [
+      "rules"
+    ],
+    "studio_methods": [
+      "studio.rules",
+      "studio.rulesSet"
+    ]
   },
   "test_reports": []
 }

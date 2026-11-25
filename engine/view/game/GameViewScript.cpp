@@ -1,5 +1,6 @@
 // View scripts: presentation-only Lua VM (see GameViewScript.h).
 #include "GameViewScript.h"
+#include "GameOverlayData.h"
 #include "engine/platform/Platform.h"
 #include "engine/render/AnimationAsset.h"
 #include <map>
@@ -13,7 +14,7 @@ namespace aiverse::game {
 using namespace script;
 
 namespace {
-const char* eventName(uint16_t t) { return simEventName(t); }   // every GameEvent (Script.cpp table)
+const char* eventName(uint16_t t) { return t == kViewEventOrder ? "order" : simEventName(t); }   // every GameEvent (Script.cpp table)
 struct Collector { std::vector<SimEvent> events; bool enabled = true; };
 } // namespace
 
@@ -973,6 +974,11 @@ void ViewScripts::attach(Simulation& sim) {
     });
 }
 
+void ViewScripts::queueLocalOrder(const SimEvent& event) {
+    if (impl_->collector && event.type == kViewEventOrder && impl_->handlers.count("order"))
+        impl_->collector->events.push_back(event);
+}
+
 void ViewScripts::detach() {
     if (impl_->collector) impl_->collector->enabled = false;
     impl_->collector.reset();
@@ -1028,6 +1034,12 @@ void ViewScripts::update(Simulation& sim, float dt) {
                 lua_pushinteger(L, ev.value); lua_setfield(L, -2, "value");
                 lua_pushnumber(L, ev.pos.x.toDouble()); lua_setfield(L, -2, "x");
                 lua_pushnumber(L, ev.pos.z.toDouble()); lua_setfield(L, -2, "z");
+                if (ev.type == kViewEventOrder) {
+                    lua_pushstring(L, ev.value == kCmdRepair ? "repair" : commandName(uint16_t(ev.value))); lua_setfield(L, -2, "kind");
+                    lua_pushnumber(L, ev.pos.y.toDouble()); lua_setfield(L, -2, "y");
+                    lua_pushboolean(L, (ev.flags & kCmdQueue) != 0); lua_setfield(L, -2, "queued");
+                    if (ev.b.valid()) { pushEntity(L, ev.b); lua_setfield(L, -2, "target"); }
+                }
                 const bool typed = ev.type == kEvDied || ev.type == kEvSpawned || ev.type == kEvBuildDone || ev.type == kEvTrainDone || ev.type == kEvUpgraded;
                 if (typed && ev.value >= 0 && size_t(ev.value) < r.types.size()) { lua_pushstring(L, r.types[size_t(ev.value)].id.c_str()); lua_setfield(L, -2, "unit_type"); }
                 if (ev.type == kEvHit || ev.type == kEvBounty) {

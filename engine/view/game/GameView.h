@@ -114,7 +114,13 @@ struct SceneObject {
     bool posed = false, poseHasY = false;
     float poseY = 0, poseRotX = 0, poseRotZ = 0;
     render::float3 poseScale{1, 1, 1};
+    uint16_t upgradeType = kNoType; // optional visual replacement while upgrading
+    uint16_t modelType() const { return upgradeType == kNoType ? type : upgradeType; }
 };
+
+// Resolve appearance from the active production slots; selection and simulation retain the source type.
+struct Production;
+void projectProductionAppearance(SceneObject& object, const Rules& rules, const Production& production);
 
 // World-space premultiplier for SceneObject's authored pose. `facingYaw` is the
 // RTS draw yaw (models face +X: yaw = authored Y rotation + 90 degrees), `p`

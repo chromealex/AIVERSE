@@ -10,7 +10,7 @@
 namespace aiverse::client {
 namespace {
 uint16_t appearanceType(const game::SceneObject& o,const game::Rules& rules) {
-    if(!o.isProjectile)return o.type;
+    if(!o.isProjectile)return o.modelType();
     return o.shooterType<rules.types.size() && rules.types[o.shooterType].view.has("projectiles") ?
         o.shooterType : game::kNoType;
 }
@@ -107,7 +107,7 @@ void GameClient::updateBackgroundLoading() {
 }
 
 float GameClient::assetDistance(const SceneObject& o) const {
-    const auto& type = rules_.types[o.type];
+    const auto& type = rules_.types[o.isProjectile ? o.shooterType : o.modelType()];
     // Include large objects whose centres lie outside the loading ring.
     const float extent = std::max({8.0f, float(type.view["streamingRadius"].toDouble()), .5f * std::hypot(float(type.footprintW), float(type.footprintH))});
     return std::max(0.0f, std::hypot(o.pos.x - cam_.target.x, o.pos.z - cam_.target.z) - extent);
@@ -120,9 +120,9 @@ bool GameClient::ensureLocalAssets() {
     if (initialAssetRadius_ <= 0 || planet()) return false;
     // A sudden camera jump/zoom must show loading rather than holes. Normal movement is prefetched.
     const float requiredRadius = visibleRadius(cam_);
-    for (const auto& o : scene_.objects) if (!o.isProjectile && !view_.typeLoaded(o.type) && assetDistance(o) < requiredRadius) {
+    for (const auto& o : scene_.objects) if (!o.isProjectile && !view_.typeLoaded(o.modelType()) && assetDistance(o) < requiredRadius) {
         ++loadingStalls_;
-        std::printf("[streaming] local readiness wait tick=%u type=%u distance=%.2f\n",unsigned(sim_->tick()),unsigned(o.type),assetDistance(o));
+        std::printf("[streaming] local readiness wait tick=%u type=%u distance=%.2f\n",unsigned(sim_->tick()),unsigned(o.modelType()),assetDistance(o));
         beginMapLoading();
         return mapLoading_;
     }

@@ -530,10 +530,10 @@ void Rts2DView::addObject(const SceneObject& o, float groundY, const EntityFxVal
         double& ms; std::chrono::steady_clock::time_point t;
         ~Acc() { ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count(); }
     } acc{cpuMs_, std::chrono::steady_clock::now()};
-    if (!hasSprite(o.type)) return;
-    const SpriteLook& L = looks_[o.type];
+    if (!hasSprite(o.modelType())) return;
+    const SpriteLook& L = looks_[o.modelType()];
     const float3 ground{o.pos.x, groundY, o.pos.z};
-    if (o.entity.valid()) seen_[o.entity.packed()] = {o.type, o.colorOwner(), ground, o.facing, o.visible, frame_};
+    if (o.entity.valid()) seen_[o.entity.packed()] = {o.modelType(), o.colorOwner(), ground, o.facing, o.visible, frame_};
     if (!o.visible) return;
     float4 tc = GameView::playerColor(o.colorOwner());
     uint32_t team = L.team ? rgbaf({tc.x, tc.y, tc.z, 1}) : 0;
@@ -729,7 +729,7 @@ void Rts2DView::submitPrepared(Renderer3D& r) {
 }
 
 float3 Rts2DView::barPoint(const SceneObject& o, float groundY) const {
-    const SpriteLook& L = looks_[o.type];
+    const SpriteLook& L = looks_[o.modelType()];
     float3 c[4];
     float key;
     corners(L, {o.pos.x, groundY, o.pos.z}, c, key);
@@ -737,8 +737,8 @@ float3 Rts2DView::barPoint(const SceneObject& o, float groundY) const {
 }
 
 bool Rts2DView::hit(const Camera& cam, const SceneObject& o, float groundY, float sx, float sy, float w, float h) const {
-    if (!hasSprite(o.type)) return false;
-    const SpriteLook& L = looks_[o.type];
+    if (!hasSprite(o.modelType())) return false;
+    const SpriteLook& L = looks_[o.modelType()];
     float3 c[4];
     float key;
     spriteCorners(L, basisOf(cam), {o.pos.x, groundY, o.pos.z}, c, key);

@@ -1,0 +1,90 @@
+{
+  "ai": {
+    "controller": "scripted"
+  },
+  "victory": "keyUnits",
+  "fogOfWar": {
+    "mode": "none"
+  },
+  "types": {
+    "scout": {
+      "name": "Scout",
+      "health": {
+        "max": 120
+      },
+      "move": {
+        "speed": 3
+      },
+      "sight": 9,
+      "view": {
+        "shape": "soldier"
+      }
+    },
+    "outpost": {
+      "name": "Guard house",
+      "key": true,
+      "structure": {
+        "footprint": [
+          2,
+          2
+        ]
+      },
+      "upgrades": [
+        "watchtower"
+      ],
+      "health": {
+        "max": 250
+      },
+      "view": {
+        "shape": "house",
+        "showUpgradeTarget": true
+      }
+    },
+    "watchtower": {
+      "name": "Watchtower",
+      "key": true,
+      "structure": {
+        "footprint": [
+          2,
+          2
+        ]
+      },
+      "health": {
+        "max": 350
+      },
+      "cost": {
+        "time": 16
+      },
+      "view": {
+        "shape": "tower",
+        "construction": "grow"
+      }
+    }
+  },
+  "scripts": [
+    "scripts/courtyard.lua"
+  ],
+  "viewScripts": [
+    "scripts/view/orders.lua"
+  ],
+  "overlays": [
+    {
+      "id": "order_wave",
+      "event": {
+        "on": "order",
+        "lifetime": 1.4,
+        "rise": 0.15,
+        "grow": 1.8
+      },
+      "shape": {
+        "type": "ring",
+        "radius": 0.4
+      },
+      "style": {
+        "color": "#6effda",
+        "thickness": 0.08,
+        "fadeOut": 0.5
+      }
+    }
+  ]
+}

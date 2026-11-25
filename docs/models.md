@@ -411,6 +411,16 @@ deformed on the GPU from a float texture; weights come from the node / mesh defa
 - **View events** (`GameView::events()`, this frame): clip events, `launch`, `spawn`, `death`, each
   with entity, type, owner and world position — the hook for sounds and particles.
 
+
+### Structure upgrade preview
+
+Set `"showUpgradeTarget": true` in the **source structure's** `view` block to switch to the target
+type's appearance while an in-place upgrade occupies an active production slot. Its model or sprite
+uses the target's normal construction progression. A queued upgrade waits its turn. Cancelling
+restores the source appearance. Without the setting the building keeps its original appearance until
+completion. The simulated unit type, commands and selection continue to use the source throughout
+the upgrade. See the playable `demos/order-upgrade` example.
+
 ## Stages, construction and dissolve
 
 ```json

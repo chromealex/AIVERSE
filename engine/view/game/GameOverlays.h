@@ -49,6 +49,7 @@ struct OverlayContext {
     const char* mode = "normal";          // client input mode: normal, attack, patrol, place, rally, ability, claim
     bool paused = false, over = false;
     const std::vector<OverlayPing>* pings = nullptr;     // pings that happened this frame
+    const std::vector<SimEvent>* orders = nullptr;   // local orders submitted since the preceding frame
     const Json* areas = nullptr;          // map "areas" (name -> [x, z, w, h]) when there is no live match
     const std::vector<std::string>* preview = nullptr;   // editor: overlay ids drawn regardless of `when`
 };

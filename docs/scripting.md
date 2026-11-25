@@ -467,6 +467,14 @@ definitions, `game.command_cooldown(p, id)` gives the remaining seconds; view sc
 
 ## View scripts
 
+`view.on("order", function(e) ... end)` runs once when this client submits a move, smart order,
+attack, patrol, rally, send, follow, guard, gather or repair. `e.kind` is the submitted command name.
+`e.x, e.y, e.z` give the target entity's position at submission, or the ordered point.
+`e.unit` is the first issuing entity, `e.target` the optional target, and `e.queued` the queue flag.
+The handler can request effects with the usual view API. An overlay can use
+`"event": {"on": "order", "lifetime": 1.2, "grow": 1.5}` to animate a ring at the same point.
+These local events are independent of the simulation tick and replay command stream.
+
 ```lua
 -- scripts/view/hud.lua  (rules: "viewScripts": ["scripts/view/hud.lua"])
 view.on("unit_died", function(e)
