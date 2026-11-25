@@ -88,7 +88,7 @@ using ResourceOverlay=std::map<fs::path,editor::ProjectFileEdit>;
 std::string moveDigest(const fs::path& source,bool directory,const ResourceOverlay* overlay=nullptr){
     const auto replacement=[&](const fs::path& path)->const editor::ProjectFileEdit*{
         if(!overlay)return nullptr;
-        const auto it=overlay->find(fs::absolute(path).lexically_normal());
+        const auto it=overlay->find(fs::canonical(path));
         if(it==overlay->end())return nullptr;
         return &it->second;
     };
@@ -614,7 +614,10 @@ Json StudioTransferPlan::apply(const std::string& token,
                 const auto material=project_/"materials.json";
                 if(existsOrSymlink(material))candidate.materialsBefore=capture(material);
                 recorded=std::move(candidate);
-            }catch(const std::exception&){recorded.reset();}
+            }catch(const std::exception&){
+                if(!repairs.empty())throw;
+                recorded.reset();
+            }
         }
         if(!repairs.empty()&&!recorded)throw std::runtime_error("Resource repair requires retained move history");
         if(staged){
@@ -1010,7 +1013,7 @@ void studioReplayAssetMove(const fs::path& project,
     else{
         if(staged)throw std::runtime_error("Resource repair history requires individual navigation");
         const auto generated=studioPlanGltfRepairs(project,referenceMoves,&repairs);
-        if(generated.size()!=repairs.size())throw std::runtime_error("Resource repair history dependencies changed");
+        if(generated.size()!=repairs.size())throw std::runtime_error("Resource repair history dependencies changed for "+repairs.front().path.generic_string()+" ("+std::to_string(generated.size())+" current, "+std::to_string(repairs.size())+" recorded)");
         for(size_t i=0;i<repairs.size();++i){
             const auto& saved=repairs[i];const auto& expected=generated[i];
             const auto destination=studioRelocatedReferencePath(saved.path.generic_string(),referenceMoves);

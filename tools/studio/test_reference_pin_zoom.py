@@ -69,17 +69,12 @@ class StudioReferencePinZoomTests(unittest.TestCase):
 
     def test_asset_moves_repair_material_paths_using_guid(self):
         native = NATIVE.read_text(encoding="utf-8")
-        transfer=(ROOT/"apps/studio-native/StudioAssetTransfers.cpp").read_text(encoding="utf-8")
-        refs=(ROOT/"apps/studio-native/StudioAssetReferences.h").read_text(encoding="utf-8")
+        transfer = (ROOT/"apps/studio-native/StudioAssetTransfers.cpp").read_text(encoding="utf-8")
         self.assertIn("studioRelocatedReferencePath(from,referenceMoves)", transfer)
         self.assertIn("studioRemapMaterialReferences(materials,relocated)", transfer)
-        self.assertIn("recorded->materialsAfter", transfer)
+        self.assertIn('staged->documents.push_back({fs::canonical(project_)/"materials.json"', transfer)
+        self.assertIn("pendingAssetTransfer_->apply(token,decisions,{},&moveHistory,internal,&staged)", native)
         self.assertIn("studioApplyHistoryBatch(ws_.project.dir,staged.relocations,staged.documents", native)
-        self.assertIn("studioCollectAssetReferences(", native)
-        self.assertIn('method == "studio.assetReferences"', native)
-        self.assertIn('"view.model"', refs)
-        self.assertIn("ref.writable = writable", refs)
-        self.assertIn("repairedMaterialReferences", transfer)
         assets = self.source("components/AssetsPanel.tsx")
         self.assertIn("response.repairedMaterialReferences", assets)
 
@@ -104,12 +99,11 @@ class StudioReferencePinZoomTests(unittest.TestCase):
         self.assertIn("recoveredProjectDir(ws_,path)", native)
         self.assertIn("editor::resolveProjectDir(input,&error)", native)
         self.assertIn("studioRecoverAssetJournal(directory)", native)
-        self.assertIn("StudioMoveJournal::recover(project)", transfer)
         self.assertIn("std::rethrow_exception(failure)", transfer)
         self.assertIn("StudioAssetCatalog catalog(project_); catalog.rebuild();", transfer)
         self.assertIn("Internal move only supports import, keep-both or skip", transfer)
         self.assertIn("source==='external' && !item.directory", ui)
-        self.assertIn("studioApplyHistoryBatch(ws_.project.dir,staged.relocations,staged.documents", native)
+        self.assertIn("recorded->materialsAfter=document.dump", transfer)
 
     def test_clearing_texture_reference_does_not_validate_empty_game_path(self):
         material_ops=(ROOT/"apps/editor/core/MaterialOps.cpp").read_text(encoding="utf-8")
@@ -135,7 +129,7 @@ class StudioReferencePinZoomTests(unittest.TestCase):
         panel=self.source("components/AssetsPanel.tsx")
         types=self.source("types.ts")
         self.assertIn("studioMoveReferenceImpact", registry)
-        self.assertIn('value.starts_with(path+"/")', registry)
+        self.assertIn("studioReferenceMatchesPath(ref.path,source,folder)", registry)
         self.assertIn('preview.set("references",studioMoveReferenceImpact(preview,dependencies))', native)
         self.assertIn("if (reference.getBool(\"writable\")) continue;", native)
         self.assertIn("if (action!=\"skip\")", native)

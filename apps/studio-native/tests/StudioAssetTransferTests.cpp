@@ -25,7 +25,7 @@ std::string read(const fs::path& path){
     return {std::istreambuf_iterator<char>(file),{}};
 }
 int main(){
-    const fs::path temp=fs::temp_directory_path()/("studio-transfer-test-"+
+    const fs::path temp=fs::canonical(fs::temp_directory_path())/("studio-transfer-test-"+
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     const fs::path project=temp/"Project", external=temp/"External";
     fs::create_directories(project/"content"/"Models");

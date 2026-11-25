@@ -576,11 +576,15 @@ inline std::vector<editor::ProjectFileEdit> studioPlanGltfRepairs(const std::fil
     for(const auto& ref:studioCollectGltfReferences(project,{},nullptr,true)){
         const bool safe=ref.path.empty()||studioGltfRelocationSafe(ref,moves);
         const auto owner=studioRelocatedReferencePath(ref.document,moves),target=studioRelocatedReferencePath(ref.path,moves);
+        const auto physical=ref.editDocument.empty()?ref.document:ref.editDocument;
+        // An inverse move may keep the repaired URI valid while restoring its
+        // original equivalent spelling. Recheck the retained document's slots.
+        const bool replayMovedOwner=safe&&!ref.path.empty()&&owner!=ref.document&&replay&&
+            std::any_of(replay->begin(),replay->end(),[&](const auto& edit){return edit.path==physical;});
         if(ref.owner=="OBJ resource"||ref.owner=="DAE resource"){
-            const auto physical=ref.editDocument.empty()?ref.document:ref.editDocument;
             const auto key=ref.owner=="DAE resource"?ref.field:std::to_string(ref.editLine)+"/"+ref.editSlot;
             std::string desired=ref.uri;
-            if(!safe){
+            if(!safe||replayMovedOwner){
                 for(const auto& move:moves)
                     if(target==ref.path&&studioReferenceMatchesPath(ref.path,move.to,move.directory))
                         throw std::runtime_error("Move would adopt an existing destination reference");
@@ -596,12 +600,12 @@ inline std::vector<editor::ProjectFileEdit> studioPlanGltfRepairs(const std::fil
             // Keep every consumer's demand, including unchanged/unsupported slots.
             auto& slots=demands[physical];
             const auto it=slots.find(key);
-            if(it==slots.end())slots.emplace(key,TextDemand{ref.uri,desired,!safe});
+            if(it==slots.end())slots.emplace(key,TextDemand{ref.uri,desired,desired!=ref.uri});
             else if(it->second.original!=ref.uri||it->second.desired!=desired)
                 throw std::runtime_error("Shared MTL requires incompatible resource paths: "+physical);
             continue;
         }
-        if(safe)continue;
+        if(safe&&!replayMovedOwner)continue;
         for(const auto& move:moves)
             if(target==ref.path&&studioReferenceMatchesPath(ref.path,move.to,move.directory))
                 throw std::runtime_error("Move would adopt an existing destination reference");

@@ -223,7 +223,7 @@ inline bool readModifiers(const Json& value,std::vector<ei::Modifier>& out,
         }else if(kind=="negate")modifier=ei::Modifier::negate();
         else if(kind=="deadzone"){
             float threshold=0.1f;
-            if(item.has("threshold")&&!number(item["threshold"],threshold,0,0.999,at+".threshold",error))return false;
+            if(item.has("threshold")&&!number(item["threshold"],threshold,0,0.999f,at+".threshold",error))return false;
             modifier=ei::Modifier::deadZone(threshold);
         }else if(kind=="swizzle"){
             const Json& order=item["order"];
