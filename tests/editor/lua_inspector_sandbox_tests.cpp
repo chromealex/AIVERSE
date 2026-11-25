@@ -2,8 +2,7 @@
 // Hostile inspector scripts must not abort, hang or exhaust memory of the editor:
 // metatables on returned tables / _G, __gc finalizers, huge allocations, endless
 // loops, self-referencing result tables, deep values.
-// The inspector's helpers are private; the dependencies are included first so the
-// access trick below only affects the inspector class itself.
+// The inspector's helpers are private; a named friend test harness exercises them.
 #include "apps/editor/Editor.h"
 #include "apps/editor/windows/StudioContextMenus.h"
 #include "apps/editor/EditorUtil.h"
@@ -19,16 +18,16 @@ extern "C" {
 #include <iostream>
 #include <memory>
 #include <string>
-#define class struct
 #include "apps/editor/windows/LuaCustomInspector.h"
-#undef class
 
 using namespace aiverse;
 using namespace aiverse::editor;
 
 #define CHECK(x) do { if (!(x)) { std::cerr << "lua_inspector_sandbox failed line " << __LINE__ << ": " #x "\n"; std::exit(1); } } while (false)
 
-static std::filesystem::path dir;
+namespace aiverse::editor {
+struct LuaCustomInspectorSandboxTest {
+inline static std::filesystem::path dir;
 
 static void load(LuaCustomInspector& ins, const std::string& source) {
     static int n = 0;
@@ -38,7 +37,7 @@ static void load(LuaCustomInspector& ins, const std::string& source) {
     ins.reload();
 }
 
-int main() {
+static int run() {
     dir = std::filesystem::temp_directory_path() / "aiverse_lua_inspector_sandbox";
     std::filesystem::create_directories(dir);
     DocEntity ent;
@@ -130,3 +129,7 @@ int main() {
     std::cout << "Lua Custom Inspector sandbox passed\n";
     return 0;
 }
+};
+} // namespace aiverse::editor
+
+int main() { return aiverse::editor::LuaCustomInspectorSandboxTest::run(); }

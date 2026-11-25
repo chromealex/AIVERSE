@@ -48,6 +48,46 @@ void projectFileRecoveryWorkflow() {
     }
     fs::remove_all(root);
 }
+void caveGraphCaptureWorkflow() {
+    using namespace aiverse;namespace fs=std::filesystem;
+    const auto root=fs::temp_directory_path()/("studio-cave-capture-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto project=root/"fixture";fs::create_directories(project/"maps");
+    std::ofstream(project/"game.json")<<R"({"module":"game","rules":"rules.json","maps":[{"file":"maps/a.json"},{"file":"maps/b.json"}]})";
+    std::ofstream(project/"rules.json")<<R"({"types":{"unit":{"health":{"max":100}}}})";
+    editor::MapDoc map;map.reset(16,16);map.data.name="Same display name";
+    map.data.extra.set("terraweaveCaverns",Json::parse(R"({"version":1,"generatorVersion":1,"sourceRevision":7,"settings":{"seed":2,"cellCm":4800,"tunnelRadiusCm":450,"chamberRadiusCm":1200,"tunnelChance":550,"chamberChance":180,"minYcm":-200000,"maxYcm":-300},"stamps":[{"id":7,"mode":"carve","xCm":10,"yCm":-1000,"zCm":20,"radiusCm":400}],"entrances":[]})"));
+    AIVERSE_TEST_CHECK(map.save((project/"maps/a.json").string(),nullptr));
+    AIVERSE_TEST_CHECK(map.save((project/"maps/b.json").string(),nullptr));
+    {
+        studio::StudioSession session(root.string(),project.string());
+        auto call=[&](const char* method,const Json& params=Json::object()){
+            Json request=Json::object();request.set("id",Json::number(int64_t(1)));request.set("method",Json::string(method));request.set("params",params);return session.dispatch(request);
+        };
+        auto args=[&]{
+            Json p=Json::object();p.set("scope",call("studio.snapshot")["result"]["graphDocument"]);return p;
+        };
+        const auto original=args();const auto bytes=session.workspace().map.toJson();
+        const auto undo=session.workspace().map.undoDepth();const auto dirty=session.workspace().map.dirty;
+        bool registered=false;
+        for(const auto& op:session.workspace().ops())registered|=op.name=="terraweave_caverns_paint"&&!op.guiOnly;
+        const auto r=call("studio.cavernsGraphInspect",original);
+        AIVERSE_TEST_CHECK(!r.has("error"));
+        AIVERSE_TEST_CHECK(r["result"].getStr("status")==(registered?"ready":"unavailable"));
+        if(registered){
+            AIVERSE_TEST_CHECK(r["result"]["report"].getInt("stampCount")==1);
+            AIVERSE_TEST_CHECK(r["result"]["report"].getInt("revision")==7);
+            AIVERSE_TEST_CHECK(r["result"]["report"]["snapshot"]["stamps"][size_t(0)].getInt("id")==7);
+        }else AIVERSE_TEST_CHECK(!r["result"].has("report"));
+        AIVERSE_TEST_CHECK(session.workspace().map.toJson()==bytes && session.workspace().map.undoDepth()==undo && session.workspace().map.dirty==dirty);
+        AIVERSE_TEST_CHECK(!call("studio.openMap",Json::parse(R"({"file":"maps/b.json"})")).has("error"));
+        AIVERSE_TEST_CHECK(call("studio.cavernsGraphInspect",original).has("error"));
+        AIVERSE_TEST_CHECK(!call("studio.cavernsGraphInspect",args()).has("error"));
+        const auto beforeReopen=args();
+        session.openProject(project.string());
+        AIVERSE_TEST_CHECK(call("studio.cavernsGraphInspect",beforeReopen).has("error"));
+    }
+    fs::remove_all(root);
+}
 void authoredEntityWorkflow() {
    using namespace aiverse;namespace fs=std::filesystem;
    const auto root=fs::temp_directory_path()/("studio-authored-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
@@ -547,6 +587,21 @@ void entityWorkflow() {
         AIVERSE_TEST_CHECK(session.workspace().map.data.roads.empty());
         AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
         AIVERSE_TEST_CHECK(session.workspace().map.data.roads.size()==1);
+        // Capture is pinned to a native document identity, not the scene's display name.
+        const Json scope=call("studio.snapshot")["result"]["graphDocument"];
+        AIVERSE_TEST_CHECK(scope.isObject() && scope["revision"].isString() && scope["epoch"].isString());
+        Json captureParams=Json::object();captureParams.set("scope",scope);
+        const auto captureBefore=session.workspace().map.toJson();
+        const auto captureUndo=session.workspace().map.undoDepth();
+        const auto capture=call("studio.cavernsGraphInspect",captureParams);
+        AIVERSE_TEST_CHECK(!capture.has("error"));
+        AIVERSE_TEST_CHECK(capture["result"]["scope"]==scope);
+        bool caveRegistered=false;
+        for(const auto& op:session.workspace().ops()) caveRegistered|=op.name=="terraweave_caverns_paint"&&!op.guiOnly;
+        AIVERSE_TEST_CHECK(capture["result"].getStr("status")==(caveRegistered?"absent":"unavailable"));
+        AIVERSE_TEST_CHECK(session.workspace().map.toJson()==captureBefore && session.workspace().map.undoDepth()==captureUndo);
+        Json malicious=captureParams;malicious.set("mode",Json::string("carve"));
+        AIVERSE_TEST_CHECK(call("studio.cavernsGraphInspect",malicious).has("error"));
         const auto projectState=call("studio.project")["result"];
         AIVERSE_TEST_CHECK(projectState["maps"].size()==1 && projectState.getStr("currentMap")=="maps/scene.json");
         const auto prior=session.workspace().map.toJson();
@@ -558,6 +613,7 @@ void entityWorkflow() {
         AIVERSE_TEST_CHECK(session.workspace().map.data.w==32 && session.workspace().map.dirty);
         AIVERSE_TEST_CHECK(session.workspace().map.path.empty());
         AIVERSE_TEST_CHECK(session.workspace().map.revision>revision);
+        AIVERSE_TEST_CHECK(call("studio.cavernsGraphInspect",captureParams).has("error"));
         bool rejected=false;
         try { session.saveMapAs((project/"game.json").string()); } catch(const std::exception&) { rejected=true; }
         AIVERSE_TEST_CHECK(rejected);
@@ -570,6 +626,7 @@ void entityWorkflow() {
         AIVERSE_TEST_CHECK(call("studio.project")["result"]["maps"].size()==2);
         AIVERSE_TEST_CHECK(!call("studio.openMap",Json::parse(R"({"file":"maps/scene.json"})")).has("error"));
         AIVERSE_TEST_CHECK(session.workspace().map.data.entities.size()==3);
+        AIVERSE_TEST_CHECK(call("studio.cavernsGraphInspect",captureParams).has("error")); // map reopened, old scope stays invalid
         const auto restored=session.workspace().map.toJson();
         std::ofstream(project/"maps"/"new.json") << "invalid map JSON";
         AIVERSE_TEST_CHECK(call("studio.openMap",Json::parse(R"({"file":"maps/new.json"})")).has("error"));
@@ -634,8 +691,10 @@ int main() {
     try { session.openProject("/nonexistent/aiverse-project"); }
     catch (const std::exception&) { openRejected = true; }
     AIVERSE_TEST_CHECK(openRejected);
+    AIVERSE_TEST_CHECK(call(R"({"id":50,"method":"studio.cavernsGraphInspect","params":{}})").has("error"));
     authoredEntityWorkflow();
     entityWorkflow();
     projectFileRecoveryWorkflow();
+    caveGraphCaptureWorkflow();
     std::cout << "studio session contract PASS\n";
 }

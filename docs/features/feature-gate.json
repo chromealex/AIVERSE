@@ -35,43 +35,88 @@
     "docs/agents/legacy-integration-map.json",
     "tools/agents/capability_inventory.py",
     "tools/agents/graph_inventory.py",
-    "docs/agents/graph-inventory.json"
+    "docs/agents/graph-inventory.json",
+    "tools/agents/capability_coverage.py",
+    "docs/evidence/capability-coverage.json",
+    "tools/agents/feature_policy.py",
+    "docs/agents/feature-policy.json",
+    "apps/editor/core/FeatureGateOps.h",
+    "apps/editor/core/Workspace.cpp",
+    "apps/studio-native/StudioTools.h",
+    "apps/studio-web/src/nestedDock.ts",
+    "apps/studio-web/src/panels/StudioPanelRenderer.tsx",
+    "apps/studio-web/src/panels/FeatureReadinessPanel.tsx",
+    "apps/studio-native/StudioSession.cpp",
+    "docs/handoff/studio-html5/feature-readiness-stage20-21-2026-11-24.md",
+    "tools/agents/feature_automation.py",
+    "tools/agents/feature_api.py",
+    "docs/agents/feature-automation.json",
+    "docs/handoff/studio-html5/feature-readiness-stage24-36-2026-11-24.md",
+    "tools/studio/test_design_system.py",
+    "tools/studio/test_build_config.py",
+    "tools/studio/test_content_layout.py",
+    "tools/studio/test_reference_pin_zoom.py",
+    "tools/studio/test_scene_tools.py",
+    "apps/studio-web/tests/nested-dock.mjs",
+    "CMakeLists.txt",
+    "engine/game/native/Build.cmake",
+    "docs/native-modules.md",
+    "engine/game/GameCore.h",
+    "tests/fps/tests.cpp",
+    "tests/fps/vehicles.inc",
+    "tests/native_project_build.py",
+    "tests/libraries/gameplay_tests.cpp",
+    "tools/skills/audit.py",
+    "apps/editor/PhysisAuthoring.h",
+    "apps/studio-native/StudioGameLaunch.h",
+    "apps/editor/windows/AttachmentAuthoringWindow.cpp",
+    "apps/editor/windows/LuaCustomInspector.h",
+    "tests/editor/lua_inspector_sandbox_tests.cpp"
   ],
   "traits": {
     "editable": false,
     "simulation": false,
-    "visible": false,
-    "runtime": false
+    "visible": true,
+    "runtime": true
   },
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Pending actual execution and integration review.",
+      "note": "Stages 24–36 source implementation added: automatic report refresh, paginated MCP, standalone Clang API audit, unregistered integration scaffolds, skill review, deterministic scheduling and assignment export, local/fetched branch discovery and conflict proposals, declared impact closure, explicit release scope, read-only dependency graph, lexical architecture review, history and task context. Verification pending; external agent dispatch, semantic ECS proof, ABI guarantees and remote worktree discovery are not claimed.",
       "evidence": []
     },
     "architecture": {
       "status": "not_run",
-      "note": "Pending actual execution and integration review.",
+      "note": "Mac v10 report had zero lexical findings and five known legacy compatibility notes; native host registration fixture PASS. Trusted policy and shared native build architecture still require integrator review; lexical audit is not ECS proof.",
       "evidence": []
     },
     "native_api": {
-      "status": "not_applicable",
-      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
-      "evidence": []
+      "status": "pass",
+      "note": "On Mac v10 actual built Workspace/MCP readiness refresh, status, get and dependency query exercised twice in one persistent process; successful completion and matching snapshot SHA verified. Other platforms and GUI timer not covered.",
+      "evidence": [
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-refresh.log.txt",
+        "docs/agent-handoffs/feature-gate-stage45-mac-qa-2026-11-24.md"
+      ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending actual execution and integration review.",
-      "evidence": []
+      "status": "pass",
+      "note": "Registered workflow skill exists; Mac QA v7 skill_catalog, skill_routing and skill_audit PASS. Documentation and catalog unchanged by main sync. This does not prove every runtime operation.",
+      "evidence": [
+        "skills/workflow/aiverse-new-feature/SKILL.md",
+        "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md"
+      ]
     },
     "mcp": {
-      "status": "not_applicable",
-      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
-      "evidence": []
+      "status": "pass",
+      "note": "Mac v10 live registry 347 tools / 13 families, all four readiness tools registered and exercised successfully with two refresh cycles. No external-agent execution claimed.",
+      "evidence": [
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-refresh.log.txt",
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-registry.log.txt"
+      ]
     },
     "studio": {
-      "status": "not_applicable",
-      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "status": "not_run",
+      "note": "Mac v7 native Studio launched; operator confirms Feature Readiness panel visible. Mac v10 native MCP report refresh works. UI filters, dependency graph interaction and auto timer not explicitly verified; dashboard screenshot not supplied.",
       "evidence": []
     },
     "inspector": {
@@ -90,19 +135,22 @@
       "evidence": []
     },
     "performance": {
-      "status": "not_applicable",
-      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "status": "not_run",
+      "note": "Shared native-module host build wiring changes; cross-platform and runtime acceptance pending.",
       "evidence": []
     },
     "platforms": {
-      "status": "not_applicable",
-      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "status": "not_run",
+      "note": "Shared native-module host build wiring changes; cross-platform and runtime acceptance pending.",
       "evidence": []
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending actual execution and integration review.",
-      "evidence": []
+      "status": "pass",
+      "note": "Mac v7 policy dependency report: both registered features have empty requires and no dependency declaration errors; partial compliance and native-host build fixture passed. This is declared dependency scope, not release readiness.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md",
+        "docs/evidence/feature-gate-mac-v7-summary.log.txt"
+      ]
     },
     "headless": {
       "status": "not_applicable",
@@ -110,28 +158,45 @@
       "evidence": []
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending actual execution and integration review.",
-      "evidence": []
+      "status": "pass",
+      "note": "Documented working report-generation and persistent MCP refresh/status/get/dependency query example, actually executed twice in Mac v10. No visual or publishing claim.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-stage49-acceptance-2026-11-24.md",
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-refresh.log.txt"
+      ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Pending actual execution and integration review.",
-      "evidence": []
+      "status": "pass",
+      "note": "Mac v10 source be64591b, reused v7 binaries 59558502 (only site and evidence/manifest/handoff changes): 22/22 Python and 9/9 focused CTest PASS. Historical v7 full suite 487 PASS / 0 FAIL / 1 opt-in skip; full merged-tree CTest NOT RUN in v10. Scoped automated verification only. Mac v13 at 74099694: full quick CTest rerun on synced checkout using unchanged-source v7 binaries, 487 PASS / 0 FAIL / 1 opt-in skip, 977.56 seconds; evidence integrity 10/10 and partial compliance PASS. Full log retained in original archive; repository summary excerpt recorded separately.",
+      "evidence": [
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-feature-gate.log.txt",
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-ctest-focused.log.txt",
+        "docs/evidence/feature-gate-mac-v7-summary.log.txt",
+        "docs/agent-handoffs/feature-gate-stage45-mac-qa-2026-11-24.md",
+        "docs/evidence/feature-gate-mac-v13-74099694a317-ctest-summary.log.txt",
+        "docs/agent-handoffs/feature-gate-stage48-mac-qa-2026-11-24.md"
+      ]
     },
     "handoff": {
-      "status": "not_run",
-      "note": "Pending actual execution and integration review.",
-      "evidence": []
+      "status": "pass",
+      "note": "Stage handoffs record actual tested SHA, results, limitations and next integration requirements; latest main sync documented.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md",
+        "docs/agent-handoffs/feature-gate-stage43-mac-qa-2026-11-24.md"
+      ]
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending actual execution and integration review.",
-      "evidence": []
+      "status": "pass",
+      "note": "Reviewed existing feature/graph authoring contract and workflow skill; documented scope and outstanding owner acceptance requirements in stage handoff.",
+      "evidence": [
+        "docs/agents/feature-contract.md",
+        "skills/workflow/aiverse-new-feature/SKILL.md",
+        "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md"
+      ]
     },
     "publishing": {
-      "status": "not_applicable",
-      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "status": "not_run",
+      "note": "Read-only engine readiness report/dashboard implemented in source; native build, real MCP, Studio UI and publishing verification pending.",
       "evidence": []
     }
   },
@@ -139,9 +204,28 @@
     "skills": [
       "aiverse-new-feature"
     ],
-    "mcp_tools": [],
-    "studio_panels": [],
-    "studio_methods": []
+    "mcp_tools": [
+      "feature_readiness_get",
+      "feature_readiness_query",
+      "feature_readiness_status_get",
+      "feature_readiness_refresh"
+    ],
+    "studio_panels": [
+      "feature_readiness"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/feature-gate-mac-v10-be64591b1087-feature-gate.json",
+    "docs/evidence/feature-gate-mac-v10-be64591b1087-ctest-focused.json",
+    "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-refresh.json",
+    "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-registry.json",
+    "docs/evidence/feature-gate-mac-v10-be64591b1087-contracts.json",
+    "docs/evidence/feature-gate-mac-v10-be64591b1087-skill-audit.json",
+    "docs/evidence/feature-gate-mac-v10-be64591b1087-skill-catalog.json",
+    "docs/evidence/feature-gate-mac-v10-be64591b1087-policy.json",
+    "docs/evidence/feature-gate-mac-v13-74099694a317-ctest-summary.json"
+  ]
 }

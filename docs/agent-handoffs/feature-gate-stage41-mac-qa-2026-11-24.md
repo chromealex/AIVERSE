@@ -1,0 +1,9 @@
+# Feature Gate stage 41 — Mac QA v5
+
+Tested HEAD: 35bc27ecfb80ad00350120548bc9dc3ed89fb236. Base: 71aa5c93afa5993c4e45ba39f1bf5454343389ea. User archive: feature-gate-qa-35bc27ecfb80-qa-v5-20261124T081340Z-36177.tar.gz. Source checkout verified and clean before/after. Mac macOS 15.6, Python 3.10.22, Node 22.23.4, CMake 3.27.8, Apple Clang 17.
+
+Actual results: Python 21/21 including empty/nonempty native module CMake host fixture; Web 218/218; Studio contracts 48/48; TypeScript/Vite, native Studio and MCP builds, MCP registry and four actual read-only calls, camera adapter 1/1, all four formerly failing preview/creator link targets PASS. Partial compliance: two manifests, zero errors. Policy: zero errors, zero architecture findings. Strict compliance: 66 diagnostics (pending declarations and repeated checks); no readiness claim. Full build failed near 93% with eight ambiguous require calls in tests/vfx_graph_ops_test.cpp; CTest NOT RUN. Manual Studio refresh and screenshot NOT RUN.
+
+Fixes at 867ad520644b3a6c0014d4b4bc170ad870cbc637: rename local graph test assertion helper to checkGraphRequirement (all call sites, unchanged conditions); annotate 38 GameCore methods overriding GameHost, including covariant scripts accessor; remove two unused test-only FPS lookup helpers and unused raceMode root parameter; set fixture-local Git core.autocrlf=false to avoid user-config-induced line-ending warnings. Record paths and prior QA in manifests. Static comparison against tested base: 152 required changed paths, 0 uncovered. This is not execution of the compliance tool on fixed tree.
+
+Fixed-tree compilation and full CTest NOT RUN. Reuse isolated Mac worktree and build cache, pin new HEAD, first build/run vfx_ops fixture, then full quick runner and other verification. Header annotation changes may trigger recompilation. Do not claim all warnings eliminated until rebuild. No main merge.

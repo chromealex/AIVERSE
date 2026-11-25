@@ -7,7 +7,7 @@ import re
 import sys
 from legacy_inventory import ROOT, read
 
-SURFACES = ("native_api", "mcp", "studio", "skill", "graphs", "tests")
+from capability_coverage import SURFACES, read_coverage, apply_coverage
 
 def source_operations(root):
     # Conservative source scan: literal registrations only, not built registry.
@@ -61,7 +61,10 @@ def inventory(root=ROOT):
                             "Determine applicability of each surface; document exclusions",
                             "Run relevant native, MCP, Studio and graph workflows",
                             "Record actual evidence or create a bounded implementation task for a confirmed gap"]))
-    return dict(scope="Catalog capabilities and literal source declarations; no runtime parity claims",
+    records, coverage_errors = read_coverage(root, seen)
+    errors.extend(coverage_errors)
+    tasks = apply_coverage(rows, tasks, records)
+    return dict(scope="Catalog capabilities, literal declarations and reviewed evidence; not independent runtime proof",
                 capabilities=rows, tasks=tasks, source_operations=operations,
                 studio_panel_ids=sorted(panels), errors=errors)
 
@@ -82,7 +85,7 @@ def main():
         else:
             print(report["scope"])
             for row in report["capabilities"]:
-                print(f"- {row['id']}: {row['title']} — audit required")
+                print(f"- {row['id']}: {row['title']} — " + ", ".join(f"{k}={v}" for k, v in row["coverage"].items()))
             for error in report["errors"]:
                 print("- ERROR: " + error)
         return int(bool(report["errors"]))

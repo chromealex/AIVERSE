@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 import sys
 from check_integrations import validate_integrations
-from evidence import validate_report
+from evidence import validate_report, checkout_errors
 
 ROOT = Path(__file__).resolve().parents[2]
 DIMENSIONS = ("implementation", "architecture", "native_api", "skill", "mcp",
@@ -95,10 +95,23 @@ def main():
     parser.add_argument("manifest", type=Path, nargs="+")
     parser.add_argument("--ready", action="store_true")
     args = parser.parse_args()
+    if args.ready:
+        checkout = checkout_errors(ROOT)
+        if checkout:
+            parser.error("; ".join(checkout))
+        for path in args.manifest:
+            target = path.resolve()
+            if target.parent != (ROOT / "docs/features").resolve() or target.suffix != ".json":
+                parser.error("--ready requires a repository feature manifest")
     failures = 0
     for path in args.manifest:
         try:
-            errors = validate(json.loads(path.read_text(encoding="utf-8")), ready=args.ready)
+            data = json.loads(path.read_text(encoding="utf-8"))
+            errors = validate(data, ready=args.ready, verify_git=args.ready)
+            if args.ready and not errors and isinstance(data, dict) and data.get("id"):
+                from feature_registry import load_registry
+                from feature_policy import readiness_errors
+                errors.extend(readiness_errors(ROOT, load_registry(ROOT), {data["id"]}))
         except (OSError, ValueError) as exc:
             errors = [str(exc)]
         for error in errors:

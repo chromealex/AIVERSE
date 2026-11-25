@@ -1,0 +1,16 @@
+{
+  "sha": "74099694a31728444354ec711c6d5bafb06173ac",
+  "argv": [
+    "bash",
+    "run-tests.sh",
+    "--quick",
+    "--no-build",
+    "--build-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/feature-gate-qa/3929953e2bc9-20261124T074254Z-5856/native",
+    "--ctest-jobs",
+    "4"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/feature-gate-mac-v13-74099694a317-ctest-summary.log.txt",
+  "sha256": "72014745d798877ef3a26ef7fe20717ce8d10030ef389a262f3c4ae0133b17d9"
+}

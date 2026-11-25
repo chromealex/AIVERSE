@@ -122,8 +122,10 @@ aiverse_native_link(ID online LIBRARIES aiverse_net aiverse_plugins)
 `AIVERSE::native_modules`. That target is project code above the engine: it carries the module objects, the generated
 `NativeRegistry.cpp` (one `aiverse::game::NativeRegistrar` with every module of the project) and every library the
 modules use (`aiverse_native_use_libraries`, `_mechanics`, `_bots`, `_session`, `_meta`, `_link`). At the end of
-configuration every executable that links a game host (`aiverse_game`, `aiverse_runtime`, `aiverse_client_runtime`,
-`aiverse_authority`, `aiverse_editor_core`, `aiverse_hosted_client`) links `AIVERSE::native_modules`; engine targets
+configuration every executable that directly links a gameplay host (`aiverse_game`, `aiverse_game_view`,
+`aiverse_net_game`, `aiverse_authority`, `aiverse_editor_core`, `aiverse_hosted_client`) links `AIVERSE::native_modules`.
+Renderer/platform-only targets (`aiverse_runtime`, `aiverse_client_runtime`) are not gameplay hosts and do not
+receive project module objects. Empty projects do not generate or attach a registry translation unit; engine targets
 never link library packages (docs/architecture-layers.md). A binary without modules gets an empty
 `compiledNativeModules()`. `aiverse_native_use_grpc` runs
 `aiverse_protobuf_generate(... GRPC)` on the module target (`NO_STUBS`: messages only; no `PROTOS`: only the link) and

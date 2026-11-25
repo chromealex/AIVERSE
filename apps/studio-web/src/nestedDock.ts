@@ -1,5 +1,5 @@
 /** Persistable nested docking geometry; no React, renderer or genre dependencies. */
-export const STUDIO_PANELS = ['hierarchy','assets','scene','game','materials','texture_graph','animation','facial_rig','inspector','console','lighting','shader_graph','project','runtime','nereid_flow','rules','human_appearance','build','human_creator','wind','history','terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','scripts','input','overlays','branding','asset_audit','agent','fields','physis','actor','raid','balance','fx_graph','fx_functions','modeling','anim_assets','anim_graph','anim_rig','model_anim','project_import','stats','snapshot_diff','frame_capture','texture_resources','extensions','attachments','terraweave_generator','catalog'] as const;
+export const STUDIO_PANELS = ['hierarchy','assets','scene','game','materials','texture_graph','animation','facial_rig','inspector','console','lighting','shader_graph','project','runtime','nereid_flow','rules','human_appearance','build','human_creator','wind','history','terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','scripts','input','overlays','branding','asset_audit','agent','fields','physis','actor','raid','balance','fx_graph','fx_functions','modeling','anim_assets','anim_graph','anim_rig','model_anim','project_import','stats','snapshot_diff','frame_capture','texture_resources','extensions','attachments','terraweave_generator','catalog','feature_readiness'] as const;
 export type StudioPanel = typeof STUDIO_PANELS[number];
 /** Single metadata source for the UI shell and AI-authored panel integrations. */
 export const STUDIO_PANEL_TITLES: Record<StudioPanel,string> = {
@@ -49,7 +49,8 @@ export const STUDIO_PANEL_TITLES: Record<StudioPanel,string> = {
   project_import: "Import Project",
   human_creator: "Character Creator",
   terraweave_generator: "TerraWeave Generator",
-  catalog: "Catalog"
+  catalog: "Catalog",
+  feature_readiness: "Feature Readiness"
 };
 export const STUDIO_PANEL_HOME: Record<StudioPanel,string> = {
   hierarchy: 'dock-left', assets: 'dock-bottom', scene: 'dock-center', game: 'dock-center',
@@ -98,7 +99,8 @@ export const STUDIO_PANEL_HOME: Record<StudioPanel,string> = {
   project_import: "dock-right",
   human_creator: "dock-right",
   terraweave_generator: "dock-right",
-  catalog: "dock-right"
+  catalog: "dock-right",
+  feature_readiness: "dock-center"
 };
 
 export type DockAxis = 'horizontal' | 'vertical';
@@ -133,7 +135,7 @@ export function defaultDockTree(): DockTree {
     split('split-body-left','horizontal',.19,
       stack('dock-left',['hierarchy','project'],'hierarchy'),
       split('split-body-right','horizontal',.72,
-        stack('dock-center',['scene','game','materials','animation','facial_rig','shader_graph','rules','build','scripts','snapshot_diff'],'scene'),
+        stack('dock-center',['scene','game','materials','animation','facial_rig','shader_graph','rules','build','scripts','snapshot_diff','feature_readiness'],'scene'),
         stack('dock-right',['inspector','human_creator','lighting','runtime','nereid_flow','human_appearance','wind','history','terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','input','overlays','branding','asset_audit','fields','physis','actor','raid','balance','fx_graph','fx_functions','modeling','anim_assets','anim_graph','anim_rig','model_anim','project_import','stats','extensions','attachments'],'inspector'))),
     stack('dock-bottom',['assets','console','agent','frame_capture','texture_resources'],'assets')) };
 }

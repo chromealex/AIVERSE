@@ -1,0 +1,10 @@
+Total Test time (real) = 977.56 sec
+
+The following tests did not run:
+	314 - lens_metal_frame (Skipped)
+PASS ctest
+
+========== SUMMARY ==========
+Passed stages: 1 | Failed stages: 0
+Logs: /Volumes/KINGSTON/AIVERSE-builds/feature-gate-qa/3929953e2bc9-20261124T074254Z-5856/native/test-reports/20261124-125330-58759
+PASS: all selected test stages

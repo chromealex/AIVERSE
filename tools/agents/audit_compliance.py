@@ -5,9 +5,10 @@ from pathlib import Path
 import subprocess
 import sys
 from check_feature import ROOT, validate
+from evidence import checkout_errors
 
 PREFIXES = ("engine/", "libraries/", "modules/", "apps/", "tools/", "skills/", "platform/", "plugins/", "demos/", "tests/", ".github/workflows/", "docs/agents/contracts/")
-EXACT = {"AGENTS.md", "CMakeLists.txt", "run-tests.sh", "docs/agents/legacy-integration-map.json", "docs/agents/graph-inventory.json"}
+EXACT = {"AGENTS.md", "CMakeLists.txt", "run-tests.sh", "docs/agents/legacy-integration-map.json", "docs/agents/graph-inventory.json", "docs/agents/feature-policy.json"}
 MANIFEST = "docs/features/"
 
 def covered_paths(changed, manifests):
@@ -46,6 +47,9 @@ def main():
     parser.add_argument("--allow-partial", action="store_true")
     parser.add_argument("--format", choices=["text", "json"], default="text")
     args = parser.parse_args()
+    checkout = checkout_errors(ROOT, args.head, clean=not args.allow_partial)
+    if checkout:
+        parser.error("; ".join(checkout))
     try:
         changed = git_changed(args.base, args.head)
     except (OSError, subprocess.CalledProcessError, UnicodeError) as exc:
@@ -64,6 +68,14 @@ def main():
         except (OSError, ValueError) as exc:
             errors.append(f"{path}: {exc}")
     errors.extend(covered_paths(changed, manifests))
+    if not args.allow_partial and manifests:
+        try:
+            from feature_registry import load_registry
+            from feature_policy import readiness_errors
+            errors.extend(readiness_errors(ROOT, load_registry(ROOT),
+                {Path(path).stem for path in manifests}, changed))
+        except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as exc:
+            errors.append(f"feature policy: {exc}")
     if args.format == "json":
         print(json.dumps({"base": args.base, "head": args.head, "strict": not args.allow_partial, "changed_paths": sorted(changed), "manifests": sorted(manifests), "errors": errors, "passed": not errors}, indent=2))
     else:

@@ -31,7 +31,7 @@ test('on-demand tools reopen in their registered home exactly once',()=>{
 });
 test('move reorders within a tab stack',()=>{
   const t=moveTab(defaultDockTree(),'animation','dock-center','scene');
-  assert.deepEqual(findDockStack(t,'dock-center').tabs,['animation','scene','game','materials','facial_rig','shader_graph','rules','build','scripts','snapshot_diff']);
+  assert.deepEqual(findDockStack(t,'dock-center').tabs,['animation','scene','game','materials','facial_rig','shader_graph','rules','build','scripts','snapshot_diff','feature_readiness']);
   assert.equal(findDockStack(t,'dock-center').active,'animation');
 });
 test('dragging panels across stacks retains identity',()=>{
@@ -127,18 +127,22 @@ test('moving a last tab prunes the source split and expands its neighbor',()=>{
   assert.equal(t.root.first.id,'split-body-right');
 });
 test('closing last right panels removes their obsolete split',()=>{
-  let t=closeTab(defaultDockTree(),'inspector');
-  assert.ok(findDockStack(t,'dock-right'));
-  t=closeTab(closeTab(closeTab(t,'lighting'),'runtime'),'nereid_flow');
-  assert.ok(findDockStack(t,'dock-right'));
-  t=closeTab(closeTab(closeTab(closeTab(t,'human_appearance'),'wind'),'human_creator'),'history');
-  for(const tool of ['terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','input','overlays','branding','asset_audit','fields','physis','actor','raid','balance','fx_graph','fx_functions','modeling','anim_assets','anim_graph','anim_rig','model_anim','project_import','stats','extensions','attachments'])t=closeTab(t,tool);
+  let t=defaultDockTree();
+  const right=[...findDockStack(t,'dock-right').tabs];
+  assert.ok(right.length>1);
+  for(const panel of right.slice(0,-1)){
+    t=closeTab(t,panel);
+    assert.ok(findDockStack(t,'dock-right'));
+  }
+  t=closeTab(t,right.at(-1));
   assert.equal(findDockStack(t,'dock-right'),null);
   assert.equal(dockStacks(t).length,3);
 });
 test('reopening Inspector restores pruned right-hand dock',()=>{
-  let t=closeTab(closeTab(closeTab(closeTab(closeTab(closeTab(closeTab(closeTab(defaultDockTree(),'inspector'),'lighting'),'runtime'),'nereid_flow'),'human_appearance'),'wind'),'human_creator'),'history');
-  for(const tool of ['terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','input','overlays','branding','asset_audit','fields','physis','actor','raid','balance','fx_graph','fx_functions','modeling','anim_assets','anim_graph','anim_rig','model_anim','project_import','stats','extensions','attachments'])t=closeTab(t,tool);
+  let t=defaultDockTree();
+  for(const panel of [...findDockStack(t,'dock-right').tabs])t=closeTab(t,panel);
+  assert.equal(findDockStack(t,'dock-right'),null);
+  assert.equal(dockStacks(t).length,3);
   t=reopenTab(t,'inspector','dock-right');
   assert.equal(panelStack(t,'inspector'),'dock-right');
   assert.equal(dockStacks(t).length,4);

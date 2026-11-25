@@ -1,0 +1,28 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/feature-gate-qa/3929953e2bc9-20261124T074254Z-5856/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/feature-gate-qa/3929953e2bc9-20261124T074254Z-5856/native
+    Start 136: camera_client_adapter
+1/9 Test #136: camera_client_adapter ............   Passed    0.15 sec
+    Start 152: native_project_build
+2/9 Test #152: native_project_build .............   Passed    6.05 sec
+    Start 165: aiverse_gameplay_tests
+3/9 Test #165: aiverse_gameplay_tests ...........   Passed    0.19 sec
+    Start 259: skill_catalog
+4/9 Test #259: skill_catalog ....................   Passed    0.09 sec
+    Start 260: skill_routing
+5/9 Test #260: skill_routing ....................   Passed    0.34 sec
+    Start 261: skill_audit
+6/9 Test #261: skill_audit ......................   Passed    0.18 sec
+    Start 315: vfx_graph_ops
+7/9 Test #315: vfx_graph_ops ....................   Passed    3.54 sec
+    Start 462: studio_content_directory
+8/9 Test #462: studio_content_directory .........   Passed    0.17 sec
+    Start 475: studio_shader_graph_draft
+9/9 Test #475: studio_shader_graph_draft ........   Passed    0.16 sec
+
+100% tests passed, 0 tests failed out of 9
+
+Label Time Summary:
+EDITOR       =   0.33 sec*proc (2 tests)
+SpectraFX    =   3.54 sec*proc (1 test)
+
+Total Test time (real) =  10.90 sec

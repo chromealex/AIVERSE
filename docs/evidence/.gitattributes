@@ -1,0 +1,2 @@
+# Test evidence is hashed byte-for-byte. Never apply checkout line-ending conversion.
+*.log.txt -text

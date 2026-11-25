@@ -32,7 +32,7 @@ void typedVehicles(const std::string& root) {
 // decides the round; twins stay bit-identical and a mid-race save restores into the same continuation.
 // ECS shape (one vehicle system, engine/vehicles): the vehicles::RaceState resource holds the session and racer i's car
 // (racer i = slot i), the cars are Vehicle + vehicles::VehicleDrive entities driven by their character.
-void raceMode(const std::string& root) {
+void raceMode() {
     auto dir=std::string(AIVERSE_TEMPLATES_DIR)+"/racing/";
     auto project=actor::readProject([&](const std::string& f,std::string& text){std::ifstream in(dir+f);if(!in)return false;text.assign(std::istreambuf_iterator<char>(in),{});return true;});
     auto rules=project.rules,map=project.map;

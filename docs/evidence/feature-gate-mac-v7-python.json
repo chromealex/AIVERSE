@@ -1,0 +1,10 @@
+{
+  "sha": "59558502c86b151b412d939559b91571021ca3bc",
+  "argv": [
+    "python3",
+    "tests/feature_gate_test.py"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/feature-gate-mac-v7-python.log.txt",
+  "sha256": "22b2de462f9c11a6fa2404a96876b338e9a3c81c41f53f26fb26ef7a6e16ac6c"
+}

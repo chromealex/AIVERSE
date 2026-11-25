@@ -13,6 +13,20 @@ def digest(path):
 def git(root, *args):
     return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
 
+def checkout_errors(root, head="HEAD", clean=True):
+    """Validation reads the worktree, so it must represent the requested commit."""
+    try:
+        actual = git(root, "rev-parse", "HEAD^{commit}")
+        requested = git(root, "rev-parse", "--verify", "--end-of-options", head + "^{commit}")
+        errors = []
+        if requested != actual:
+            errors.append("requested head differs from checked-out HEAD")
+        if clean and git(root, "status", "--porcelain", "--untracked-files=all"):
+            errors.append("strict verification requires clean checkout")
+        return errors
+    except (OSError, subprocess.CalledProcessError):
+        return ["cannot verify Git checkout"]
+
 def validate_report(report, root, verify_git=False):
     if not isinstance(report, dict) or set(report) != {"sha", "argv", "exit_code", "log", "sha256"}:
         return ["invalid test report fields"]
@@ -21,6 +35,7 @@ def validate_report(report, root, verify_git=False):
     if not isinstance(sha, str) or not re.fullmatch("[0-9a-f]{40}", sha):
         errors.append("invalid tested SHA")
     elif verify_git:
+        errors.extend(checkout_errors(root))
         try:
             if git(root, "rev-parse", sha + "^{commit}") != sha:
                 errors.append("tested SHA is not a commit")

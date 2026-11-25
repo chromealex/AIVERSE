@@ -104,9 +104,9 @@ test('owner recipe projections are bounded and never mutate source',()=>{
  const terrain={seed:7,octaves:5};
  assert.equal(terrainRecipeProjection(terrain,{enabled:true}).links.length,2);
  assert.equal(buildingRecipeProjection({style:'modern'}).nodes.length,5);
- const snapshot={version:1,settings:{seed:7},stamps:Array.from({length:100},(_,i)=>({id:i+1,mode:'carve',radiusCm:400})),entrances:[]};
+ const snapshot={version:1,generatorVersion:1,sourceRevision:1,settings:{seed:7,cellCm:4800,tunnelRadiusCm:450,chamberRadiusCm:1200,tunnelChance:550,chamberChance:180,minYcm:-200000,maxYcm:-300},stamps:Array.from({length:100},(_,i)=>({id:i+1,mode:'carve',xCm:0,yCm:-1000,zCm:0,radiusCm:400})),entrances:[]};
  const view=caveSnapshotProjection(snapshot);
- assert.equal(view.nodes.length,66);assert.equal(snapshot.stamps.length,100);
+ assert.equal(view.nodes.length,26);assert.equal(snapshot.stamps.length,100);
  assert.throws(()=>caveSnapshotProjection({version:2}));
 });
 
