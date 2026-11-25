@@ -40,7 +40,7 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
     window.addEventListener('studio:rules-forest',forest);
     return () => {window.removeEventListener('studio:rules-type', pick);window.removeEventListener('studio:rules-forest',forest);};
   }, []);
-  const values = useMemo(() => rules && typeId ? typeValues(typeId, rules.types[typeId], rules.resolved[typeId], rules.resources) : [], [rules, typeId]);
+  const values = useMemo(() => rules && typeId ? typeValues(typeId, rules.types[typeId], rules.resolved[typeId], rules.resources, rules.bodies?.[typeId]) : [], [rules, typeId]);
   const write = async (path: string, value: unknown) => {
     setBusy(true); setError('');
     try { setRules(await invoke('studio.rulesSet', { path, value })); onChanged(); return true; }

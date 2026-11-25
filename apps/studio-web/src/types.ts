@@ -33,7 +33,7 @@ export interface StudioInspectorComponent { scope?: StudioGraphDocumentScope; id
 /** Add Component entry: `native` adds via studio.componentAdd; `light`/`water` run an editor action. */
 export interface StudioComponentCatalogItem { id: string; title: string; group: string; hint: string; action: 'native' | 'light' | 'water'; available: boolean; reason?: string }
 /** Unit types of rules.json: as written (`types`) and with "extends" applied (`resolved`). */
-export interface StudioRules { acquireOrder: 'nearest' | 'rowMajor'; triggers?:unknown[]; armorTypes?:string[]; damageTable?:Record<string,Record<string,number>>; types: Record<string, unknown>; resolved: Record<string, unknown>; resources: string[]; summary: unknown[]; dirty: boolean }
+export interface StudioRules { bodies?:Record<string,{radius:number;mass:number}>; acquireOrder: 'nearest' | 'rowMajor'; triggers?:unknown[]; armorTypes?:string[]; damageTable?:Record<string,Record<string,number>>; types: Record<string, unknown>; resolved: Record<string, unknown>; resources: string[]; summary: unknown[]; dirty: boolean }
 export interface StudioInspector { id: string; name: string; kind: string; nameEditable?: boolean; components: StudioInspectorComponent[] }
 export interface StudioEntity { preview?:{components:string[];health?:number}; id: string; name: string; kind: string; parentId?: string; visible?: boolean; locked?: boolean; owner?: number }
 export interface StudioLog { level: 'info' | 'warning' | 'error'; text: string; time: string; source?: string }

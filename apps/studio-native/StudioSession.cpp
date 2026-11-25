@@ -4484,6 +4484,14 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 if(resolved.has("error"))throw std::runtime_error(resolved.getStr("error"));
                 out.set("types",authoredTypes);out.set("resolved",resolved["value"]);
             }
+            Json bodies=Json::object();
+            for(const auto& type:ws_.project.rules.types){
+                Json body=Json::object();
+                body.set("radius",Json::number(type.radius));
+                body.set("mass",Json::number(type.mass));
+                bodies.set(type.id,std::move(body));
+            }
+            out.set("bodies",std::move(bodies));
             out.set("resources",list["resources"]);out.set("summary",list["types"]);
             const auto& authored=ws_.project.rulesJson;
             out.set("triggers",authored["triggers"].isNull()?Json::array():authored["triggers"]);

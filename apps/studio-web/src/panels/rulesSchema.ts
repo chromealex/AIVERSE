@@ -1,6 +1,6 @@
 /** Rules form: known unit-type fields of rules.json, read own vs resolved ("extends") values. */
 export type RuleFieldType = 'number' | 'text' | 'boolean';
-export interface RuleField { path: string; label: string; group: string; type: RuleFieldType; min?: number; max?: number; step?: number; hint?: string; defaultValue?: boolean }
+export interface RuleField { path: string; label: string; group: string; type: RuleFieldType; min?: number; max?: number; step?: number; hint?: string; defaultValue?: boolean | number }
 export const RULE_GROUPS = ['General', 'Health', 'Movement', 'Vision', 'Cost', 'Weapons', 'Appearance', 'Flags'] as const;
 
 export const TYPE_FIELDS: RuleField[] = [
@@ -49,11 +49,15 @@ export function getPath(root: unknown, path: string): unknown {
 }
 export interface RuleValue { field: RuleField; path: string; own: unknown; resolved: unknown; inherited: boolean }
 /** Fields of one type: own value (written in this type) and resolved value (what the game loads). */
-export function typeValues(typeId: string, own: unknown, resolved: unknown, resources: string[]): RuleValue[] {
+export function typeValues(typeId: string, own: unknown, resolved: unknown, resources: string[], body?: {radius:number;mass:number}): RuleValue[] {
   const out: RuleValue[] = [];
   const add = (field: RuleField, rel: string) => {
     const o = getPath(own, rel), r = getPath(resolved, rel);
-    if (field.type === 'boolean' || o !== undefined || r !== undefined || ['name', 'health.max', 'sight', 'view.impactHeight'].includes(rel) || rel.startsWith('cost.'))
+    if (body && isObj(getPath(resolved, 'move')) && r === undefined && (rel === 'move.radius' || rel === 'move.mass')) {
+      field = { ...field, defaultValue: rel === 'move.mass' ? body.mass : body.radius,
+        hint: rel === 'move.mass' ? 'Auto · 4 × radius²' : 'Default body radius' };
+    }
+    if (field.defaultValue !== undefined || field.type === 'boolean' || o !== undefined || r !== undefined || ['name', 'health.max', 'sight', 'view.impactHeight'].includes(rel) || rel.startsWith('cost.'))
       out.push({ field, path: 'types.' + typeId + '.' + rel, own: o, resolved: r, inherited: o === undefined && r !== undefined });
   };
   for (const f of TYPE_FIELDS) add(f, f.path);

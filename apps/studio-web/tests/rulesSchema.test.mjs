@@ -48,3 +48,19 @@ test('upgrade appearance uses inherited structure settings and writes the local 
   assert.equal(option.resolved, true);
   assert.ok(!typeValues('scout', {}, {}, []).some(row => row.field.path === 'view.showUpgradeTarget'));
 });
+
+test('body fields expose loaded defaults only for types with movement', () => {
+  const body = {radius: 0.75, mass: 2.25};
+  const rows = (own, resolved) => typeValues('scout', own, resolved, [], body);
+  const mass = values => values.find(v => v.field.path === 'move.mass');
+  const radius = values => values.find(v => v.field.path === 'move.radius');
+  const defaults = rows({move:{}}, {move:{}});
+  assert.equal(radius(defaults).field.defaultValue, 0.75);
+  assert.equal(mass(defaults).field.defaultValue, 2.25);
+  assert.equal(mass(defaults).inherited, false);
+  const inherited = rows({extends:'base'}, {move:{mass:8}});
+  assert.equal(mass(inherited).resolved, 8);
+  assert.equal(mass(inherited).inherited, true);
+  assert.equal(mass(inherited).field.defaultValue, undefined);
+  assert.equal(mass(rows({}, {})), undefined);
+});
