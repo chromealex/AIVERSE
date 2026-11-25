@@ -1,0 +1,10 @@
+{
+  "sha": "ee8b6899c8e3984c9dba71649ac63e6e72ab2ad5",
+  "argv": [
+    "bash",
+    "/tmp/network-proof.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-multiplayer-desktop-4350c3d70.log.txt",
+  "sha256": "2187a84bac649885d717404013e5594d8fca1c777b1759cf7c9a4bfecc8f293b"
+}
