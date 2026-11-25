@@ -1523,7 +1523,7 @@ bool StudioSession::pollAgentLink() {
 namespace {
 bool brushPathKind(const std::string& k){return k=="road"||k=="river";}
 const char* brushLabel(const std::string& k){
-    return k=="terrain"?"Terrain brush":k=="paint"?"Paint terrain":k=="tiles"?"Paint tiles":k=="field"?"Paint field":
+    return k=="terrain"?"Terrain brush":k=="paint"?"Paint terrain":k=="region"?"Paint region":k=="tiles"?"Paint tiles":k=="field"?"Paint field":
            k=="objects"?"Scatter objects":k=="road"?"Draw road":k=="river"?"Draw river":k=="caverns"?"Caverns brush":"Brush";
 }
 }
@@ -1629,6 +1629,7 @@ Json StudioSession::sceneBrushJson() const {
     o.set("armed",Json::fromBool(b.armed));o.set("kind",str(b.kind));o.set("op",str(b.op));
     o.set("radius",Json::number(b.radius,3));o.set("strength",Json::number(b.strength,3));
     o.set("layer",num(int64_t(b.layer)));o.set("tile",str(b.tile));o.set("field",str(b.field));o.set("fieldMode",str(b.fieldMode));
+    o.set("regionLetter",str(b.regionLetter));
     o.set("value",Json::number(b.value,3));o.set("type",str(b.type));o.set("owner",num(int64_t(b.owner)));
     o.set("count",num(int64_t(b.count)));o.set("spread",Json::number(b.spread,3));
     o.set("roadType",str(b.roadType));o.set("width",Json::number(b.width,3));
@@ -1705,6 +1706,17 @@ bool StudioSession::strokeDabImpl(double x, double z, std::string* error,double 
         p.set("radius",Json::number(b.radius,3));p.set("strength",Json::number(b.strength,3));}
     else if(b.kind=="paint"){op="terrain_paint_material";p.set("layer",num(int64_t(b.layer)));p.set("x",Json::number(x,3));p.set("y",Json::number(z,3));
         p.set("radius",Json::number(b.radius,3));p.set("strength",Json::number(std::min(1.0,b.strength),3));}
+    else if(b.kind=="region"){
+        const auto& map=ws_.map.data;
+        if(map.worldSpace || map.planet() || !(x>=0 && x<map.w && z>=0 && z<map.h)){
+            if(error)*error="Region strokes require a cell on a flat map";
+            return false;
+        }
+        op="region_paint";
+        Json circle=Json::array();
+        circle.push(num(int64_t(x)));circle.push(num(int64_t(z)));circle.push(num(int64_t(b.radius)));
+        p.set("circle",std::move(circle));p.set("letter",str(b.regionLetter));
+    }
     else if(b.kind=="tiles"){op="tile_paint";p.set("terrain",str(b.tile));p.set("x",num(int64_t(std::floor(x))));p.set("y",num(int64_t(std::floor(z))));
         p.set("radius",num(int64_t(std::lround(b.radius))));}
     else if(b.kind=="field"){op="field_paint";p.set("id",str(b.field));p.set("x",num(int64_t(std::floor(x))));p.set("z",num(int64_t(std::floor(z))));
@@ -4492,7 +4504,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             // Arm / disarm the Scene brush and set its tool and settings (session only).
             if(stroking_)throw std::runtime_error("Finish the active Scene stroke first");
             auto next=brush_;auto& b=next;
-            static const std::set<std::string> kinds={"terrain","paint","tiles","field","objects","road","river","caverns"};
+            static const std::set<std::string> kinds={"terrain","paint","tiles","region","field","objects","road","river","caverns"};
             static const std::set<std::string> ops={"raise","lower","smooth","flatten","noise","erode"};
             static const std::set<std::string> modes={"set","add","max","erase"};
             auto number=[&](const char* k,double lo,double hi){const double v=params[k].toDouble();
@@ -4505,6 +4517,12 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             if (params.has("layer")) b.layer=int(number("layer",0,15));
             if (params.has("tile")) b.tile=text("tile");
             if (params.has("field")) b.field=text("field");
+            if (params.has("regionLetter")) {
+                const auto letter=params.getStr("regionLetter");
+                if(letter.size()!=1 || (letter!="." && (letter[0]<'A' || letter[0]>'Z')))
+                    throw std::runtime_error("Choose a region A–Z or erase");
+                b.regionLetter=letter;
+            }
             if (params.has("fieldMode")) { const std::string m=params.getStr("fieldMode"); if(!modes.count(m))throw std::runtime_error("Unknown field mode"); b.fieldMode=m; }
             if (params.has("value")) b.value=number("value",-1000,1000);
             if (params.has("type")) b.type=text("type");
@@ -4518,6 +4536,8 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             if(params.has("caveSurface"))b.caveSurface=params.getBool("caveSurface");
             if(params.has("caveDepth"))b.caveDepth=number("caveDepth",.01,10000);
             if (params.has("armed")) b.armed=params.getBool("armed")&&!ws_.project.dir.empty();
+            if(b.armed && b.kind=="region" && (ws_.map.data.worldSpace || ws_.map.data.planet()))
+                throw std::runtime_error("Region painting requires a flat map");
             if(b.armed&&b.kind=="caverns"){
                 if(params.getBool("armed",false)&&(params.getStr("expectedProject")!=ws_.project.dir||
                    !params["expectedMap"].isString()||params.getStr("expectedMap")!=(ws_.map.path.empty()?"":ws_.relative(ws_.map.path))))

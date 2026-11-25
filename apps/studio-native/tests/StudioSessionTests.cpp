@@ -56,6 +56,7 @@ void mapHistoryPersistenceContract(){
     MapDoc doc;doc.reset(8,8);std::string error;
     DocEntity entity;entity.id="unit";entity.type="unit";entity.x=1.2345678f;entity.z=2.3456789f;
     doc.data.entities.push_back(entity);
+    doc.data.regionNames['R']="Ridge";
     doc.data.corners.assign(81,0);doc.data.corners[3]=-321;
     doc.data.detailScale=2;doc.data.detail.assign(17*17,0);doc.data.detail[8]=-1023;
     doc.data.detailSplat.assign(17*17*4,0);doc.data.detailSplat[11]=217;
@@ -75,6 +76,7 @@ void mapHistoryPersistenceContract(){
     AIVERSE_TEST_CHECK(doc.save(file,&error)&&doc.historyPersistenceWarning().empty());
     MapDoc reopened;
     AIVERSE_TEST_CHECK(reopened.load(file,&error)&&reopened.historyPersistenceWarning().empty());
+    AIVERSE_TEST_CHECK(reopened.data.regionNames.at('R')=="Ridge");
     AIVERSE_TEST_CHECK(reopened.undoDepth()==1&&reopened.redoDepth()==1);
     AIVERSE_TEST_CHECK(reopened.historyEpoch()!=epoch&&reopened.undoId(0)!=previousId);
     AIVERSE_TEST_CHECK(reopened.historyLabel(reopened.undoId(0))=="Terrain stroke");
@@ -1606,6 +1608,18 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Fixture co
        const auto steps=call("studio.history")["result"]["steps"];
        AIVERSE_TEST_CHECK(steps.size()>0 && steps[steps.size()-1].getStr("label")=="Terrain brush");
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && session.workspace().map.undoDepth()==depth);
+       const auto originalRegions=session.workspace().map.data.regions;
+       AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"kind":"region","regionLetter":"B","radius":0.5})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"regionLetter":"BC"})").has("error"));
+       AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err) && session.strokeDab(5,4,&err) && session.strokeEnd(&err));
+       const auto& grid=session.workspace().map.data;
+       AIVERSE_TEST_CHECK(grid.regions[grid.idx(4,4)]=='B' && grid.regions[grid.idx(5,4)]=='B');
+       AIVERSE_TEST_CHECK(session.workspace().map.undoDepth()==depth+1);
+       AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"regionLetter":"."})").has("error"));
+       AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err) && session.strokeEnd(&err));
+       AIVERSE_TEST_CHECK(grid.regions[grid.idx(4,4)]=='.' && grid.regions[grid.idx(5,4)]=='B');
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && grid.regions[grid.idx(4,4)]=='B');
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && grid.regions==originalRegions);
        // Object scatter: three dabs far apart place three entities, one History step "Scatter objects".
        const size_t entities=session.workspace().map.data.entities.size(),depth2=session.workspace().map.undoDepth();
        AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"kind":"objects","type":"tree","radius":2})")["result"].getStr("kind")=="objects");

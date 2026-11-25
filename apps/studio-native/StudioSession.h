@@ -77,7 +77,7 @@ public:
     struct SceneBrush {
         bool armed=false; std::string kind="terrain";
         std::string op="raise"; double radius=4, strength=1;   // terrain sculpt; paint uses radius/strength + layer
-        int layer=0; std::string tile, field, fieldMode="add"; double value=1;
+        int layer=0; std::string regionLetter="A", tile, field, fieldMode="add"; double value=1;
         std::string type; int owner=0, count=1; double spread=1;
         std::string roadType; double width=6;
         std::string caveMode="carve",caveRegionId; double caveY=-5,caveDepth=2; bool caveSurface=true;

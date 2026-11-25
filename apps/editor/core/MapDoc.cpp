@@ -384,7 +384,7 @@ Json MapDoc::toJson() const {
         fields.push(f);
     }
     if (fields.size() && !d.planet()) j.set("fields", fields);
-    if (std::any_of(d.regions.begin(), d.regions.end(), [](char c) { return c != '.'; })) {
+    if (!d.regionNames.empty() || std::any_of(d.regions.begin(), d.regions.end(), [](char c) { return c != '.'; })) {
         Json rg = Json::object(), rr = Json::array();
         for (int y = 0; y < d.h; ++y) rr.push(Json::string(std::string(d.regions.begin() + y * d.w, d.regions.begin() + (y + 1) * d.w)));
         rg.set("rows", rr);
