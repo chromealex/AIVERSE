@@ -119,11 +119,12 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
         onClick={()=>void execute({action:'addVolume',preset:volumePreset})}>Add volume branch</StudioButton>
       <StudioButton size="sm" disabled={disabled||working}
         onClick={()=>{if(window.confirm('Replace the current unsaved graph with a volume-only preset?'))void execute({action:'newVolume',preset:volumePreset});}}>New volume graph</StudioButton>
-      <span className="spectra-canvas__spacer"/>
-      <StudioButton size="sm" variant="ghost" aria-label="Zoom out" onClick={()=>setZoom(z=>Math.max(0.5,z-0.1))}><ZoomOut size={14}/></StudioButton>
-      <span className="spectra-canvas__zoom">{Math.round(zoom*100)}%</span>
-      <StudioButton size="sm" variant="ghost" aria-label="Zoom in" onClick={()=>setZoom(z=>Math.min(2,z+0.1))}><ZoomIn size={14}/></StudioButton>
-      <StudioButton size="sm" variant="ghost" onClick={()=>setZoom(1)} title="Reset zoom"><Maximize2 size={14}/></StudioButton>
+      <div className="spectra-canvas__zoom-tools" role="group" aria-label="Graph zoom">
+        <StudioButton size="sm" variant="ghost" aria-label="Zoom out" onClick={()=>setZoom(z=>Math.max(0.5,z-0.1))}><ZoomOut size={14}/></StudioButton>
+        <span className="spectra-canvas__zoom">{Math.round(zoom*100)}%</span>
+        <StudioButton size="sm" variant="ghost" aria-label="Zoom in" onClick={()=>setZoom(z=>Math.min(2,z+0.1))}><ZoomIn size={14}/></StudioButton>
+        <StudioButton size="sm" variant="ghost" onClick={()=>setZoom(1)} title="Reset zoom"><Maximize2 size={14}/></StudioButton>
+      </div>
     </div>
     <div className="spectra-canvas__viewport graph-surface" role="region" aria-label="SpectraFX graph topology and node arrangement">
       <div className="spectra-canvas__extent" style={{width:width*zoom,height:height*zoom}}>
