@@ -863,7 +863,7 @@ Entity GameClient::pick(float sx, float sy) const {
     if (!groundAt(sx, sy, g)) return kNullEntity;
     Entity best; float bestD = 1e9f;
     for (auto& o : scene_.objects) {
-        if (!o.visible || o.isProjectile) continue;
+        if (!o.selectable(rules_)) continue;
         const UnitType& t = rules_.types[o.type];
         if (view_.spriteHit(cam_, o, static_cast<GameCore&>(sim_->module()).state(*sim_).grid, sx, sy, platform::windowWidth(), platform::windowHeight())) {
             if (bestD > 0.01f) { best = o.entity; bestD = 0.01f; } // sprites stand above their ground point
@@ -891,7 +891,10 @@ Entity GameClient::pick(float sx, float sy) const {
 
 void GameClient::cleanSelection() {
     World& w = sim_->world();
-    selection_.erase(std::remove_if(selection_.begin(), selection_.end(), [&](Entity e) { return !w.alive(e) || !w.has<Unit>(e) || (w.get<Unit>(e).flags & kUnitInHand); }), selection_.end()); // hand: off the map
+    selection_.erase(std::remove_if(selection_.begin(), selection_.end(), [&](Entity e) {
+        const auto* unit = w.tryGetConst<Unit>(e);
+        return !unit || (unit->flags & kUnitInHand) || !rules_.types[unit->type].selectable;
+    }), selection_.end());
 }
 
 bool GameClient::selectionHasGarrison() const {
@@ -910,7 +913,7 @@ void GameClient::selectBox(float x0, float y0, float x1, float y1, bool add) {
     if (y0 > y1) std::swap(y0, y1);
     std::vector<Entity> units, structs;
     for (auto& o : scene_.objects) {
-        if (!o.visible || o.isProjectile || o.owner != human_) continue;
+        if (o.owner != human_ || !o.selectable(rules_)) continue;
         float2 sp;
         float y = (rules_.types[o.type].layer & kLayerAir) ? 2.4f : 0.3f;
         if (!objectScreen(o, y, sp)) continue;
@@ -927,7 +930,7 @@ void GameClient::selectSameType(Entity e) {
     if (!u) return;
     selection_.clear();
     for (auto& o : scene_.objects) {
-        if (o.owner != human_ || o.isProjectile || o.type != u->type || !o.visible) continue;
+        if (o.owner != human_ || o.type != u->type || !o.selectable(rules_)) continue;
         float2 sp;
         if (objectScreen(o, o.pos.y, sp) && sp.x >= 0 && sp.y >= 0 &&
             sp.x <= platform::windowWidth() && sp.y <= platform::windowHeight())

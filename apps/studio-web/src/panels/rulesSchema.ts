@@ -1,6 +1,6 @@
 /** Rules form: known unit-type fields of rules.json, read own vs resolved ("extends") values. */
 export type RuleFieldType = 'number' | 'text' | 'boolean';
-export interface RuleField { path: string; label: string; group: string; type: RuleFieldType; min?: number; max?: number; step?: number; hint?: string }
+export interface RuleField { path: string; label: string; group: string; type: RuleFieldType; min?: number; max?: number; step?: number; hint?: string; defaultValue?: boolean }
 export const RULE_GROUPS = ['General', 'Health', 'Movement', 'Vision', 'Cost', 'Weapons', 'Flags'] as const;
 
 export const TYPE_FIELDS: RuleField[] = [
@@ -23,6 +23,7 @@ export const TYPE_FIELDS: RuleField[] = [
   { path: 'cost.time', label: 'Build time', group: 'Cost', type: 'number', min: 0, hint: 'seconds' },
   { path: 'cost.supply', label: 'Supply cost', group: 'Cost', type: 'number', min: 0, step: 1 },
   { path: 'worker', label: 'Worker', group: 'Flags', type: 'boolean' },
+  { path: 'selectable', label: 'Selectable', group: 'Flags', type: 'boolean', defaultValue: true },
   { path: 'invulnerable', label: 'Invulnerable', group: 'Flags', type: 'boolean' },
   { path: 'capturable', label: 'Capturable', group: 'Flags', type: 'boolean' },
   { path: 'sellable', label: 'Sellable', group: 'Flags', type: 'boolean' },

@@ -89,6 +89,9 @@ struct SceneObject {
     int16_t carryRes = -1;       // resource index of the cargo
     int8_t shotWeapon = -1;      // projectiles: weapon index (of the shooter's type) that fired it; -1: unknown
     bool selected = false, hovered = false, visible = true, isProjectile = false;
+    bool selectable(const Rules& rules) const {
+        return visible && !isProjectile && type < rules.types.size() && rules.types[type].selectable;
+    }
     bool blip = false;           // not visible, but a radar / sonar contact of the viewer (Sensors.h): drawn as a dot
     float fade = 1;              // 0..1 opacity from the sim (route walkers fade at the route ends)
     bool unpowered = false;      // disabled by a power deficit / owner in low power (electric lights dim)

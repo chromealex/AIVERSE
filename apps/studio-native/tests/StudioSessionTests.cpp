@@ -1147,6 +1147,13 @@ void authoredEntityWorkflow() {
    {
        auto rules=call("studio.rules");
        AIVERSE_TEST_CHECK(!rules.has("error") && rules["result"]["types"].has("tree"));
+       AIVERSE_TEST_CHECK(rules["result"].getStr("acquireOrder")=="nearest");
+       AIVERSE_TEST_CHECK(call("studio.rulesSet",R"({"path":"targeting.acquireOrder","value":"rowMajor"})")["result"].getStr("acquireOrder")=="rowMajor");
+       AIVERSE_TEST_CHECK(call("studio.rulesSet",R"({"path":"targeting.acquireOrder","value":"invalid"})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.rules")["result"].getStr("acquireOrder")=="rowMajor");
+       AIVERSE_TEST_CHECK(call("studio.rulesSet",R"({"path":"targeting.acquireOrder","value":null})")["result"].getStr("acquireOrder")=="nearest");
+       AIVERSE_TEST_CHECK(!call("studio.rulesSet",R"({"path":"types.tree.selectable","value":false})").has("error"));
+       AIVERSE_TEST_CHECK(!call("studio.rules")["result"]["resolved"]["tree"].getBool("selectable",true));
        AIVERSE_TEST_CHECK(!call("studio.rulesSet",R"({"path":"types.tree.health.max","value":150})").has("error"));
        rules=call("studio.rules");
        AIVERSE_TEST_CHECK(rules["result"]["resolved"]["tree"]["health"]["max"].integer()==150);

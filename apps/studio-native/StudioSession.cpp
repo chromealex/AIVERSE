@@ -3896,7 +3896,8 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             if (method == "studio.rulesSet") {
                 const std::string path=params.getStr("path");
                 static const std::regex allowed(R"(^types\.[A-Za-z0-9_\-]+((\.[A-Za-z0-9_]+)|(\[[0-9]{1,4}\])){0,6}$)");
-                if (path.size()>200 || !std::regex_match(path,allowed)) throw std::runtime_error("Only unit type fields can be edited here");
+                if (path != "targeting.acquireOrder" && (path.size()>200 || !std::regex_match(path,allowed)))
+                    throw std::runtime_error("Expected a unit type field or targeting.acquireOrder");
                 Json args=Json::object();args.set("path",str(path));
                 const bool erase=params["value"].isNull();
                 if (!erase) args.set("value",params["value"]);
@@ -3911,6 +3912,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             Json out=Json::object();
             out.set("types",types["value"]);out.set("resolved",resolved["value"]);
             out.set("resources",list["resources"]);out.set("summary",list["types"]);
+            out.set("acquireOrder", str(ws_.project.rules.acquisitionOrder == game::AcquisitionOrder::RowMajor ? "rowMajor" : "nearest"));
             out.set("dirty",Json::fromBool(ws_.project.rulesDirty));
             reply.set("result",std::move(out));
         } else if (method == "studio.stats") {
