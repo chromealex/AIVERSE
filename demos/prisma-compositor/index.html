@@ -1,0 +1,28 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"><title>PRISMA frame compositor</title>
+<style>
+:root{font:16px system-ui,sans-serif;color:#e5e7ed;background:#161820;color-scheme:dark}main{max-width:800px;margin:4vh auto;padding:1.2rem}h1{font-size:1.6rem}canvas{display:block;width:100%;height:auto;border:1px solid #484959}fieldset{border:0;margin:1rem 0;padding:0;display:flex;flex-wrap:wrap;align-items:center;gap:1rem}output{font-variant-numeric:tabular-nums}
+</style><main><h1>PRISMA frame compositor</h1><canvas id="frame" width="640" height="320" aria-label="Composited WebGL frame"></canvas>
+<fieldset id="controls" disabled><label><input type="checkbox" id="enabled" checked> Enable glow</label><label>Glow intensity <input type="range" id="gain" min="0" max="3" step="0.1" value="1.5"></label><output id="amount">1.5</output><button id="reset">Reset</button></fieldset><p id="status" role="status">Loading WebGL renderer…</p></main>
+<script>
+const node = id => document.getElementById(id);
+var Module = {canvas:node('frame'),onAbort:()=>node('status').textContent='The renderer could not start.'};
+window.startCompositor = () => {
+  const draw = () => {
+    const amount = Number(node('gain').value);
+    const settings = {hdr:'off',effects:[{type:'colorGrade'}]};
+    if (node('enabled').checked) settings.compositor = {
+      targets:[{id:'bright',divisor:2},{id:'horizontal',divisor:2},{id:'glow',divisor:2},{id:'out'}],
+      passes:[{id:'extract',op:'bright',inputs:['scene'],target:'bright',amount:0.3},
+        {id:'horizontalBlur',op:'blurX',inputs:['bright'],target:'horizontal',amount:4},
+        {id:'verticalBlur',op:'blurY',inputs:['horizontal'],target:'glow',amount:4},
+        {id:'combine',op:'add',inputs:['glow','scene'],target:'out',amount}],output:'out'};
+    const passes = Module.ccall('render_compositor','number',['string'],[JSON.stringify(settings)]);
+    node('amount').value = amount.toFixed(1);
+    node('status').textContent = passes < 0 ? 'Render failed.' : passes+' compositor passes';
+  };
+  node('controls').disabled=false;
+  node('controls').oninput=draw;
+  node('reset').onclick=()=>{node('enabled').checked=true;node('gain').value='1.5';draw();};
+  draw();
+};
+</script><script src="prisma.js"></script></html>

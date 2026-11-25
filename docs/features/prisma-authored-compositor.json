@@ -8,12 +8,19 @@
     "apps/studio-native/StudioTools.h",
     "apps/studio-web/src/panels/PostFxPanel.tsx",
     "apps/studio-web/src/panels/PrismaCompositorEditor.tsx",
+    "demos/prisma-compositor/README.md",
+    "demos/prisma-compositor/build.sh",
+    "demos/prisma-compositor/demo.cpp",
+    "demos/prisma-compositor/index.html",
     "docs/agent-handoffs/prisma-authored-compositor-initial.md",
     "docs/agents/feature-policy.json",
+    "docs/devlog/entries/2026-11-25-prisma-frame-compositor.json",
+    "docs/devlog/media/2026-11-25-prisma-frame-compositor/glow.png",
     "docs/devlog/systems.json",
     "docs/en/prisma.md",
     "docs/evidence/prisma-authored-compositor-metal-20261125.json",
     "docs/evidence/prisma-authored-compositor-metal-20261125.log.txt",
+    "docs/evidence/prisma-compositor-webgl.txt",
     "docs/features/prisma-authored-compositor.json",
     "docs/handoffs/prisma-stage-authored-compositor.md",
     "docs/prisma.md",
@@ -47,9 +54,12 @@
       ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "PRISMA owns the screen-space chain; named resources and pass dependencies compile through the existing render graph. Camera inputs flow through the existing LENS target pool.",
+      "evidence": [
+        "engine/render/PrismaCompositor.cpp",
+        "engine/render/CameraRenderPipeline.h"
+      ]
     },
     "native_api": {
       "status": "pass",
@@ -87,29 +97,43 @@
       "evidence": []
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Verified pass sorting, aliasing, rejection of invalid graphs and staged Metal/WebGL dispatch.",
+      "evidence": [
+        "tests/render/prisma_compositor.cpp",
+        "engine/render/PrismaCompositor.cpp",
+        "docs/evidence/prisma-compositor-webgl.txt"
+      ]
     },
     "performance": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Measured a 4-pass 640x320 graph against a zero-pass baseline including readback. Resource bindings use fixed arrays capped at 12 passes and eight camera inputs. Reused targets are keyed by plan slot and resolution.",
+      "evidence": [
+        "docs/evidence/prisma-compositor-webgl.txt",
+        "engine/render/Prisma.cpp"
+      ]
     },
     "platforms": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Actual rendering exercised on macOS Metal and Chromium WebGL2. Other RHI paths are unverified.",
+      "evidence": [
+        "docs/evidence/prisma-compositor-webgl.txt",
+        "docs/evidence/prisma-authored-compositor-metal-20261125.log.txt"
+      ]
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Compiled demo using existing GfxGL, Shader Graph, JSON and PRISMA sources; no new runtime dependency.",
+      "evidence": [
+        "demos/prisma-compositor/build.sh"
+      ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "GPU-free compositor compilation and validation exercised via the native data test.",
+      "evidence": [
+        "tests/render/prisma_compositor.cpp"
+      ]
     },
     "examples": {
       "status": "pass",
@@ -140,9 +164,13 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Bilingual site entry, real WebGL capture and interactive WebAssembly demo built and exercised on Chromium; deployment follows main integration.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-prisma-frame-compositor.json",
+        "demos/prisma-compositor/README.md",
+        "docs/evidence/prisma-compositor-webgl.txt"
+      ]
     }
   },
   "integrations": {
