@@ -84,7 +84,8 @@ export default function LightBakePanel({scope}:{scope?:StudioGraphDocumentScope}
         <details><summary>Advanced sampling</summary>{advanced.map(([key,label,min,max,step])=><StudioField key={key} label={label} htmlFor={'bake-'+key}>
           <StudioInput id={'bake-'+key} type="number" min={min} max={max} step={step} disabled={busy}
             key={String(state.settings[key])} defaultValue={Number(values[key])}
-            onBlur={e=>{if(e.target.value && e.target.validity.valid)change(key,e.target.valueAsNumber);else e.target.value=String(values[key]);}}/>
+            onChange={e=>{if(e.target.value && e.target.validity.valid)change(key,e.target.valueAsNumber);}}
+            onBlur={e=>{if(!e.target.value || !e.target.validity.valid)e.target.value=String(values[key]);}}/>
         </StudioField>)}</details>
         <StudioButton disabled={busy || !dirty} variant="primary" onClick={()=>void write('lightbake_set',patch)}>Apply settings</StudioButton>
       </StudioSection>
