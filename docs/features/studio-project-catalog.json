@@ -37,6 +37,7 @@
     "apps/studio-web/src/mock.ts",
     "apps/studio-web/src/panels/LivePanels.tsx",
     "apps/studio-web/src/panels/LivePanels.css",
+    "apps/studio-web/src/graphs/shaderAdapter.ts",
     "apps/studio-web/src/panels/rulesSchema.ts",
     "apps/editor/core/type-blocks.json",
     "apps/studio-web/src/panels/RulesPanel.tsx",
