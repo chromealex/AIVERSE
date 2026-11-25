@@ -18,6 +18,9 @@ const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: StudioSnapshot | null; commitSnapshot: (s: StudioSnapshot) => void }) {
   const projectPath = snapshot?.project.path ?? '';
   const [info, setInfo] = useState<StudioAgentInfo | null>(null);
+  const [preferredClient, setPreferredClient] = useState<'' | 'claude-code' | 'codex'>('');
+  const client = info?.running && info.runClient ? info.runClient : preferredClient || (!info?.cli && info?.codexCli ? 'codex' : 'claude-code');
+  const cli = client === 'codex' ? info?.codexCli : info?.cli;
   const [lines, setLines] = useState<string[]>([]);
   const draftKey = 'studio.agentDraft:' + projectPath;
   const [draft, setDraft] = useState(() => readAgentDraft(draftKey));
@@ -97,10 +100,10 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
   };
   const send = async () => {
     const text = prompt.trim();
-    if (!text || busy || !info?.cli || !info.mcp || promptBytes > 20000 || info.running) return;
+    if (!text || busy || !cli || !info?.mcp || promptBytes > 20000 || info.running) return;
     setBusy(true);
     try {
-      apply(await invoke('studio.agentStart', { prompt: text, from: total.current }));
+      apply(await invoke('studio.agentStart', { prompt: text, from: total.current, client: client === 'codex' ? 'codex' : 'claude-code', expectedProject: projectPath }));
       const current = readAgentDraft(draftKey);
       if (!current.text || (current.text === prompt && current.brief === editingBrief)) saveDraft(emptyDraft);
       else setDraft(current);
@@ -157,16 +160,20 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
   const canUndoAll = !!info?.historyVersion && info.startPosition >= 0 && edits.some(c => c.undoable) && !info.running && !navigating;
   return <div className={editingBrief && !lines.length ? "agent agent--draft" : "agent"}>
     <div className="agent__head">
-      <Bot size={14}/>
-      <span className={'agent__pill' + (info?.cli ? ' is-ok' : ' is-warn')} title={info?.cli || 'claude CLI not found'}>
-        {info?.cli ? 'Claude Code' : 'claude not found'}</span>
+      <label className="agent__client-field"><Bot size={15}/>
+      <select className="au-input agent__client" aria-label="Agent client" value={client} disabled={busy || !!info?.running}
+        onChange={e => setPreferredClient(e.target.value === 'codex' ? 'codex' : 'claude-code')}>
+        <option value="claude-code" disabled={!info?.cli}>Claude Code{!info?.cli && ' · unavailable'}</option>
+        <option value="codex" disabled={!info?.codexCli}>Codex CLI{!info?.codexCli && ' · unavailable'}</option>
+      </select></label>
       {!!info?.port && <span className="agent__meta" title="Local agent link (aiversemcp connects here)">port {info.port}{info.clients ? ` · ${info.clients} linked` : ''}</span>}
       <span className="agent__fill"/>
+      {(edits.length>0 || info?.batchUndo?.available || info?.batchRedo?.available) && <>
       <StudioButton size="sm" variant="ghost" disabled={navigating||!info?.batchUndo?.available} title={info?.batchUndo?.reason||'Review all tracked edits'} onClick={()=>void reviewBatch('undo')}><Undo2 size={13}/>Undo batch</StudioButton>
       <StudioButton size="sm" variant="ghost" disabled={navigating||!info?.batchRedo?.available} title={info?.batchRedo?.reason||'Review all tracked edits'} onClick={()=>void reviewBatch('redo')}><Redo2 size={13}/>Redo batch</StudioButton>
       <button type="button" className="au-button au-button--sm au-button--ghost" disabled={!canUndoAll}
         title="Undo the agent-only map suffix; other scopes must be undone individually" onClick={() => void navigate()}>
-        <RotateCcw size={13}/>Undo map run</button>
+        <RotateCcw size={13}/>Undo map run</button></>}
       <button type="button" className="au-button au-button--sm au-button--ghost" disabled={!!info?.running} onClick={() => void reset()} title="Start a new conversation">
         <MessageSquarePlus size={13}/>New</button>
     </div>
@@ -179,7 +186,7 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
         <StudioButton size="sm" variant="primary" disabled={navigating||!!info?.running} onClick={()=>void applyBatch()}>Confirm {batchReview.direction}</StudioButton></div>
     </div>}
     {error && <div className="agent__error" role="alert">{error}</div>}
-    {lines.some(l => l.includes('Not logged in')) && !info?.running && <div className="agent__error" role="alert">
+    {info?.runClient==='claude-code' && lines.some(l => l.includes('Not logged in')) && !info?.running && <div className="agent__error" role="alert">
       Claude Code is not signed in on this Mac: open Terminal, run <code>claude</code>, type <code>/login</code>, then send again.</div>}
     <div className="agent__body">
       <div className="agent__log" ref={scroller} aria-live="polite">
@@ -230,8 +237,8 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
       {editingBrief && <StudioButton size="sm" onClick={() => void copyBrief()}>{copied ? 'Copied' : 'Copy draft'}</StudioButton>}
       {info?.running
         ? <button type="button" className="au-button au-button--sm" onClick={() => void stop()}><Square size={12}/>Stop</button>
-        : <button type="button" className="au-button au-button--sm au-button--primary" title={!info?.cli ? 'Claude Code CLI is unavailable' : !info.mcp ? 'Studio MCP executable is unavailable' : undefined}
-            disabled={busy || !info?.cli || !info.mcp || !prompt.trim() || promptBytes > 20000} onClick={() => void send()}>
+        : <button type="button" className="au-button au-button--sm au-button--primary" title={!cli ? 'Selected agent CLI is unavailable' : !info?.mcp ? 'Studio MCP executable is unavailable' : undefined}
+            disabled={busy || !cli || !info?.mcp || !prompt.trim() || promptBytes > 20000} onClick={() => void send()}>
             {busy ? <StudioLoader size={16}/> : <Send size={13}/>}Send</button>}
       </div>
     </div>

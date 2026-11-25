@@ -857,6 +857,7 @@ Json StudioSession::saveMapAs(const std::string& path) {
     return snapshot();
 }
 Json StudioSession::openProject(const std::string& path) {
+    if(agentRun_.running())throw std::runtime_error("Stop the running agent before opening a project");
     strokeCancel();brush_.armed=false;
     agentHistoryUnsafe_=true;agentBatchFenced_=true;
     if (path.empty()) throw std::runtime_error("Project path is empty");
@@ -1845,12 +1846,18 @@ Json StudioSession::agentRequest(const std::string& method, const Json& params) 
         agentStartIds_.clear();agentEditIds_.clear();agentHistoryUnsafe_=false;agentBatchFenced_=false;agentBatchOwnerVersion_.clear();
         agentAssetTransfer_.reset();agentAssetTransferGuids_.clear();
     } else if(method=="studio.agentStart"){
+        const std::string client=params.getStr("client","claude-code");
+        if(client!="claude-code" && client!="codex")throw std::runtime_error("Unknown agent client");
+        if(params.has("expectedProject") && params.getStr("expectedProject")!=ws_.project.dir)
+            throw std::runtime_error("The active project changed");
         const std::string prompt=params.getStr("prompt");
         if(prompt.empty()||prompt.size()>20000)throw std::runtime_error("Write a request for the agent (up to 20000 characters)");
         if(agentRun_.running())throw std::runtime_error("The agent is still working");
         if(mcpTool_.empty()||!fs::exists(mcpTool_))throw std::runtime_error("aiversemcp was not found next to Studio (build the aiversemcp target)");
-        if(editor::agentCliPath("claude-code").empty())throw std::runtime_error("Claude Code CLI (claude) was not found: install it and sign in, then try again");
-        if(!agentRun_.sessionId().empty())agentSession_=agentRun_.sessionId();
+        if(editor::agentCliPath(client).empty())throw std::runtime_error("Selected agent CLI unavailable");
+        agentSession_.clear();
+        if(client=="claude-code" && agentRun_.client()==client && agentRunStart_>=0 && agentHistoryProject_==ws_.project.dir)
+            agentSession_=agentRun_.sessionId();
         syncHistoryLabels();
         if(agentSession_.empty()||agentRunStart_<0){
             agentRunStart_=int64_t(undoLabels_.size());agentStartIds_.clear();agentEditIds_.clear();
@@ -1897,7 +1904,11 @@ Json StudioSession::agentRequest(const std::string& method, const Json& params) 
         std::string extra="--mcp-config "+shellQuote(configFile.string())+" --strict-mcp-config";
         if(!agentSession_.empty())extra+=" --resume "+shellQuote(agentSession_);
         std::string err;
-        if(!agentRun_.start("claude-code",ws_.project.dir,taskFile.string(),logFile.string(),&err,extra))throw std::runtime_error(err);
+        if(client=="codex"){
+            extra="--ignore-user-config -c "+shellQuote("mcp_servers.aiverse.command="+str(mcpTool_).dump())+
+                  " -c "+shellQuote("mcp_servers.aiverse.args="+argv.dump());
+        }
+        if(!agentRun_.start(client,ws_.project.dir,taskFile.string(),logFile.string(),&err,extra))throw std::runtime_error(err);
         agentLines_.push_back("› "+clipText(prompt,2000));
         ws_.log("agent","Агент: "+clipText(prompt,120));
     }
@@ -1936,9 +1947,15 @@ Json StudioSession::agentRequest(const std::string& method, const Json& params) 
     out.set("historyVersion",str(historyVersion()));
     out.set("batchUndo",agentBatchPreview(false));out.set("batchRedo",agentBatchPreview(true));
     static const std::string cli=editor::agentCliPath("claude-code");   // a login-shell lookup: once per run of Studio
-    out.set("cli",str(cli));
+    static const std::string codex=editor::agentCliPath("codex");
+#if defined(_WIN32)
+    out.set("cli",str(""));out.set("codexCli",str(""));
+#else
+    out.set("cli",str(cli));out.set("codexCli",str(codex));
+#endif
+    out.set("runClient",str(agentRun_.client()));
     out.set("mcp",Json::fromBool(!mcpTool_.empty()));
-    out.set("conversation",Json::fromBool(!agentSession_.empty()||!agentRun_.sessionId().empty()));
+    out.set("conversation",Json::fromBool(agentRunStart_>=0 && agentHistoryProject_==ws_.project.dir && (!agentSession_.empty()||!agentRun_.sessionId().empty())));
     if(agentRun_.finished())out.set("result",str(agentRun_.result()));
     return out;
 }

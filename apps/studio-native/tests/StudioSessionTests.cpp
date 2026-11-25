@@ -1407,6 +1407,65 @@ void authoredEntityWorkflow() {
        for(const auto& r:audit["result"]["missing"].items())found|=r.getStr("reference")=="content/missing_icon.png";
        AIVERSE_TEST_CHECK(!audit.has("error") && found);
    }
+#if !defined(_WIN32)
+   // Exercise the actual Agent session bridge without launching a remote client.
+   {
+       const auto bin=project/"fixture-client";
+       fs::create_directories(bin);
+       const auto cli=bin/"codex";
+       std::ofstream(cli)<<R"(#!/bin/sh
+printf '%s\n' "$@" > fixture-args
+cat > fixture-input
+echo '{"type":"item.started","item":{"type":"mcp_tool_call","tool":"rules_list"}}'
+if test -f fixture-wait; then
+  trap '' TERM
+  touch fixture-ready
+  sleep 30
+fi
+echo '{"type":"item.completed","item":{"type":"agent_message","text":"Fixture completed"}}'
+)";
+       fs::permissions(cli,fs::perms::owner_all);
+       const std::string oldPath=std::getenv("PATH");
+       setenv("PATH",(bin.string()+":"+oldPath).c_str(),1);
+       AIVERSE_TEST_CHECK(editor::agentCliPath("codex")==cli.string());
+       session.setMcpTool(cli.string());
+       Json request=Json::object();
+       request.set("client",Json::string("codex"));request.set("prompt",Json::string("Review fixture economy"));
+       request.set("expectedProject",Json::string("wrong-project"));
+       AIVERSE_TEST_CHECK(call("studio.agentStart",request.dump().c_str()).has("error"));
+       request.set("expectedProject",Json::string(session.workspace().project.dir));
+       auto start=[&]{return call("studio.agentStart",request.dump().c_str());};
+       auto finish=[&]{
+           for(int i=0;i<150;++i){
+               const auto result=call("studio.agentInfo")["result"];
+               if(!result.getBool("running"))return result;
+               std::this_thread::sleep_for(std::chrono::milliseconds(30));
+           }
+           throw std::runtime_error("Local agent did not finish");
+       };
+       AIVERSE_TEST_CHECK(!start().has("error"));
+       const auto completed=finish();
+       AIVERSE_TEST_CHECK(completed.getStr("result")=="Fixture completed" && completed.getStr("runClient")=="codex");
+       std::ifstream argvFile(project/"fixture-args"),inputFile(project/"fixture-input");
+       const std::string args{std::istreambuf_iterator<char>(argvFile),{}},input{std::istreambuf_iterator<char>(inputFile),{}};
+       AIVERSE_TEST_CHECK(args.find("mcp_servers.aiverse.args=")!=std::string::npos &&
+           args.find(std::to_string(completed["port"].integer()))!=std::string::npos && input.find("Review fixture economy")!=std::string::npos);
+       std::ofstream(project/"fixture-wait")<<"wait";
+       AIVERSE_TEST_CHECK(!start().has("error"));
+       for(int i=0;i<150 && !fs::exists(project/"fixture-ready");++i)std::this_thread::sleep_for(std::chrono::milliseconds(30));
+       AIVERSE_TEST_CHECK(fs::exists(project/"fixture-ready"));
+       AIVERSE_TEST_CHECK(call("studio.agentInfo")["result"]["lines"].dump().find("rules_list")!=std::string::npos);
+       AIVERSE_TEST_CHECK(!call("studio.agentStop").has("error"));
+       const auto stopped=finish();
+       AIVERSE_TEST_CHECK(!stopped.getBool("running") && stopped["lines"].dump().find("Stopped by user")!=std::string::npos);
+       AIVERSE_TEST_CHECK(!start().has("error"));
+       call("studio.agentStop");
+       AIVERSE_TEST_CHECK(!finish().getBool("running"));
+       call("studio.agentReset");
+       session.setMcpTool("");
+       setenv("PATH",oldPath.c_str(),1);
+   }
+#endif
    // Agent link: aiversemcp's protocol (hello + token, then calls); an edit is a History step "Agent · …" and a change.
    {
        const auto info=call("studio.agentInfo");

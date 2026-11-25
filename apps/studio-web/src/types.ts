@@ -236,7 +236,7 @@ export interface StudioAgentChange { op: string; args: string; ok: boolean; undo
   scope?:'map'|'project'|'assets'|'untracked'; historyId?:string; historyVersion?:string; applied?:boolean; canUndo?:boolean; canRedo?:boolean }
 export interface StudioAgentBatch {direction:'undo'|'redo';available:boolean;reason?:string;token?:string;steps?:Array<{scope:'map'|'project'|'assets';historyId:string}>}
 export interface StudioAgentInfo { hasWizardBrief?: boolean; wizardBrief?: string; lines: string[]; total: number; running: boolean; port: number; clients: number; changes: StudioAgentChange[];
-  startPosition: number; historyVersion?:string; batchUndo?:StudioAgentBatch; batchRedo?:StudioAgentBatch; cli: string; mcp: boolean; conversation: boolean; result?: string }
+  startPosition: number; historyVersion?:string; batchUndo?:StudioAgentBatch; batchRedo?:StudioAgentBatch; cli: string; codexCli?: string; runClient?: string; mcp: boolean; conversation: boolean; result?: string }
 // World maintenance uses decimal strings for uint64 values, never JS numbers.
 export interface StudioWorldRegion {cell:[number,number,number];live:number;materialized:number}
 export interface StudioWorldStatus {
@@ -628,7 +628,7 @@ export interface StudioParams {
   'studio.attachmentsPreview': {project:string;close?:boolean;status?:boolean;document?:StudioAttachmentDoc;playing?:boolean;time?:number;yaw?:number;pitch?:number};
   'studio.attachmentsGet': { path?: string; project?:string };
   'studio.attachmentsSet': { path?: string; project?:string; expected?:StudioAttachmentDoc|null; document: StudioAttachmentDoc };
-  'studio.agentStart': { prompt: string; from?: number };
+  'studio.agentStart': { prompt: string; from?: number; client?: 'claude-code'|'codex'; expectedProject?: string };
   'studio.agentStop': { from?: number };
   'studio.agentReset': { from?: number };
   'studio.buildToolchain': { target: string };

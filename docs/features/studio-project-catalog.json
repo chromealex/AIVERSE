@@ -8,6 +8,7 @@
     "apps/studio-web/src/components/GameWizard.tsx",
     "apps/studio-web/src/panels/AgentPanel.tsx",
     "apps/studio-web/src/panels/agentDraft.ts",
+    "apps/editor/core/WizardAgent.cpp",
     "apps/studio-web/src/components/GameWizardSettings.tsx",
     "apps/studio-web/src/components/WizardDictation.tsx",
     "apps/studio-native/StudioWizardDictation.h",
@@ -156,7 +157,9 @@
       "studio.wizardFetchArt",
       "studio.wizardDictation",
       "studio.wizardCreate",
-      "studio.agentInfo"
+      "studio.agentInfo",
+      "studio.agentStart",
+      "studio.agentStop"
     ]
   },
   "test_reports": [
