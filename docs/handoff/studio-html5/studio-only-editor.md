@@ -49,3 +49,9 @@ macOS Studio Metal tests request two different unsaved swatch programs. The read
 ## Unsaved post effect preview
 
 049b8b5b2 extends the same command and panel action to postfx. StudioScene owns a separate PRISMA compositor for the draft and releases it on preview changes. The map's postfx configuration stays intact. The native Studio Metal test in apps/studio-native/tests/StudioMetalLightingTests.mm now exercises red and green framebuffer readbacks for both material and postfx graphs. The macOS studio_metal_lighting test passed in 7.28 seconds and the updated production HTML5 bundle built. Particle draft preview, desktop UI acceptance, and legacy retirement are outstanding.
+
+## Per-panel GPU preview and file-based materials
+
+a18a64f80 gives Shader Graph and Materials independent drawables and renderers in their own panels on macOS and Windows. Native macOS acceptance captured docked-shader-graph.png, docked-materials.png and scene-with-asset-previews.png on the desktop Survivors fixture. studio_session and studio_metal_lighting passed, as did 201 web tests. Windows remains unverified. The character tools still share a Scene binding.
+
+Next deliverable: authored materials are real content assets. Keep legacy inline libraries readable, use one material definition per file, and resolve the same files from Studio, MCP and game runtime. Verify the Assets panel after creation and after reopening.
