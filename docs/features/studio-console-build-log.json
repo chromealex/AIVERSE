@@ -8,7 +8,8 @@
     "apps/studio-web/src/panels/ConsolePanel.tsx",
     "apps/studio-native/StudioGameSurface.cpp",
     "apps/studio-native/StudioHost.cpp",
-    "apps/studio-web/src/components/StudioStatusBar.tsx"
+    "apps/studio-web/src/components/StudioStatusBar.tsx",
+    "apps/studio-web/src/panels/ProjectToolPanels.tsx"
   ],
   "traits": {
     "editable": false,
@@ -128,12 +129,14 @@
     "skills": [],
     "mcp_tools": [],
     "studio_panels": [
-      "console"
+      "console",
+      "scripts"
     ],
     "studio_methods": [
       "studio.buildLog",
       "studio.buildReveal",
-      "studio.gameState"
+      "studio.gameState",
+      "studio.gameScriptLog"
     ]
   },
   "test_reports": [

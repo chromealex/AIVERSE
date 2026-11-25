@@ -84,6 +84,9 @@ export interface StudioPanelContext {
   /** Apply a snapshot from an Inspector action without dropping the Inspector pin. */
   commitSnapshot: (value: StudioSnapshot) => void;
   /** A game runs in the Game panel: Hierarchy / Inspector offer the live view. */
+  scriptLocation:{path:string;line:number} | null;
+  openScript:(path:string,line:number)=>void;
+  consumeScriptLocation:()=>void;
   scriptErrors?: { tick:number; text:string }[];
   playing?: boolean;
   showPanel: (panel: StudioPanel) => void;
@@ -121,7 +124,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'fx_graph': return <SpectraDataInterfacesPanel projectPath={snapshot?.project.path ?? ''}
         onSaved={()=>void invoke('studio.snapshot',{}).then(ctx.commitSnapshot).catch(()=>{})}/>;
       case 'fog': return <FogPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
-      case 'scripts': return <ScriptsPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
+      case 'scripts': return <ScriptsPanel key={snapshot?.project.path} location={ctx.scriptLocation} consumeLocation={ctx.consumeScriptLocation} playing={!!ctx.playing} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'input': return <InputPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'stats': return <StatsPanel snapshot={snapshot}/>;
       case 'attachments': return <AttachmentsPanel snapshot={snapshot}/>;
@@ -161,7 +164,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
             <ViewportPlaceholder title="Scene viewport" active/>}
         </>;
       case 'console':
-        return <ConsolePanel key={snapshot?.project.path} project={snapshot?.project.path ?? ''} logs={snapshot?.logs ?? []} scriptErrors={ctx.scriptErrors} select={id => select(id)}/>;
+        return <ConsolePanel openScript={ctx.openScript} key={snapshot?.project.path} project={snapshot?.project.path ?? ''} logs={snapshot?.logs ?? []} scriptErrors={ctx.scriptErrors} select={id => select(id)}/>;
       case 'lighting':
         return <LightingPanel projectPath={snapshot?.project.path ?? ''} selectedId={snapshot?.selectedId ?? null} onSelect={select}/>;
       case 'materials':

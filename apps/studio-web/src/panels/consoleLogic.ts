@@ -19,7 +19,7 @@ export function levelCounts(logs: StudioLog[]): Record<'info' | 'warning' | 'err
 export const logSources = (logs: StudioLog[]) => [...new Set(logs.map(logSource).filter(Boolean))].sort();
 
 /** Parts of a log line: plain text, Studio entity ids (select) and project file paths (reveal). */
-export type LogPart = { kind: 'text'; text: string } | { kind: 'entity'; text: string; id: string } | { kind: 'file'; text: string; path: string };
+export type LogPart = { kind: 'text'; text: string } | { kind: 'entity'; text: string; id: string } | { kind: 'file'; text: string; path: string } | { kind: 'script'; text:string; path:string; line:number };
 const REF = /(entity:@?[A-Za-z0-9_.:-]+|(?:maps|content|scripts|ui|materials|lang|fx|rules)\/[^\s'"`,;:()]+\.[A-Za-z0-9]{1,6}|rules\.json|game\.json)/g;
 export function logParts(text: string): LogPart[] {
   const out: LogPart[] = [];
@@ -29,7 +29,13 @@ export function logParts(text: string): LogPart[] {
     if (at > last) out.push({ kind: 'text', text: text.slice(last, at) });
     const ref = m[0];
     if (ref.startsWith('entity:')) out.push({ kind: 'entity', text: ref, id: ref });
-    else out.push({ kind: 'file', text: ref, path: ref });
+    else if (ref.startsWith('scripts/') && ref.endsWith('.lua')) {
+      const suffix = text.slice(at + ref.length).match(/^:(\d+)/);
+      const label = ref + (suffix?.[0] ?? '');
+      out.push({kind:'script', text:label, path:ref, line:Number(suffix?.[1]) || 1});
+      last = at + label.length;
+      continue;
+    } else out.push({ kind: 'file', text: ref, path: ref });
     last = at + ref.length;
   }
   if (last < text.length) out.push({ kind: 'text', text: text.slice(last) });

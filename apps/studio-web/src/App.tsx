@@ -70,6 +70,7 @@ export default function App() {
   const [floating, setFloating] = useState<FloatingWindow[]>(() => FLOAT ? [] : readFloating());
   const [palette, setPalette] = useState<string | null>(null); // null = closed, else initial query
   const [paletteAssets, setPaletteAssets] = useState<StudioAsset[]>([]);
+  const [scriptLocation,setScriptLocation] = useState<{project:string; path:string; line:number} | null>(null);
   const [game, setGame] = useState<StudioGameState | null>(null);
   const [sceneAction, setSceneAction] = useState('');
   const [hoverId, setHoverId] = useState('');
@@ -335,6 +336,9 @@ export default function App() {
       setInspectorPin(null); // create/delete/duplicate or map replacement invalidates positional pins
       setSnapshot(value);
     }, setBusy, commitSnapshot: setSnapshot, showPanel: panel => showPanel(panel), reportError: setError,
+    scriptLocation: scriptLocation?.project === snapshot?.project.path ? scriptLocation : null,
+    openScript: (path,line) => { setScriptLocation({project:snapshot?.project.path ?? '',path,line}); showPanel('scripts'); },
+    consumeScriptLocation: () => setScriptLocation(null),
     scriptErrors: game?.scriptErrors, playing: !!game?.active
   })}</PanelErrorBoundary>;
 

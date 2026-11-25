@@ -8,8 +8,8 @@ import BuildOutput from './ConsoleBuildOutput';
 import './ConsolePanel.css';
 
 /** Console: editor/agent activity with level and source filters; entity ids and files are links. */
-export default function ConsolePanel({ logs, select, project, scriptErrors }: {
-  scriptErrors?: { tick:number; text:string }[]; project: string; logs: StudioLog[]; select: (id: string | null) => Promise<void>;
+export default function ConsolePanel({ logs, select, project, scriptErrors, openScript }: {
+  openScript:(path:string,line:number)=>void; scriptErrors?: { tick:number; text:string }[]; project: string; logs: StudioLog[]; select: (id: string | null) => Promise<void>;
 }) {
   const [mode,setMode] = useState('Activity');
   const [level, setLevel] = useState<ConsoleLevel>('all');
@@ -86,8 +86,8 @@ export default function ConsolePanel({ logs, select, project, scriptErrors }: {
       {shown.map((line, i) => <div className={'log-row log-' + line.level} key={i}>
         <span>{logSource(line)}</span>
         <p>{logParts(line.text).map((part, j) => part.kind === 'text' ? <span key={j} className="console__text">{part.text}</span>
-          : <button key={j} type="button" className="console__link" title={part.kind === 'entity' ? 'Select and frame' : 'Show in Assets'}
-              onClick={() => part.kind === 'entity' ? openEntity(part.id) : openFile(part.path)}>{part.text}</button>)}</p>
+          : <button key={j} type="button" className="console__link" title={part.kind === 'entity' ? 'Select and frame' : part.kind === 'script' ? 'Open in Scripts' : 'Show in Assets'}
+              onClick={() => part.kind === 'entity' ? openEntity(part.id) : part.kind === 'script' ? openScript(part.path,part.line) : openFile(part.path)}>{part.text}</button>)}</p>
         <button type="button" className="console__rowcopy" title="Copy this line" aria-label="Copy this line"
           onClick={() => copy(lineText(line), 'Line copied')}><Copy size={11}/></button>
       </div>)}

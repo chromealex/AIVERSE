@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useLayoutEffect, useState, type KeyboardEvent } from 'react';
 import { AlertTriangle, CheckCircle2, FilePlus2, Play, Plus, RefreshCw, RotateCcw, Save, ScanSearch, Trash2 } from 'lucide-react';
 import { invoke } from '../bridge';
 import type { StudioInputAsset, StudioInputInfo, StudioSnapshot } from '../types';
@@ -90,7 +90,40 @@ export function FogPanel(ctx: Ctx) {
 
 /* ---------------- Scripts (Lua) ---------------- */
 interface ScriptFile { path: string; role: string }
-export function ScriptsPanel(ctx: Ctx) {
+function ScriptPlayLog({playing}:{playing:boolean}) {
+  const [rows,setRows] = useState<{tick:number; text:string; error:boolean}[]>([]);
+  const [errorsOnly,setErrorsOnly] = useState(false);
+  const [failure,setFailure] = useState('');
+  useEffect(() => {
+    let live = true, timer = 0;
+    setRows([]); setFailure('');
+    if (!playing) return;
+    async function refresh() {
+      try {
+        const next = await invoke('studio.gameScriptLog',{});
+        if (live) {setRows(next);setFailure('');}
+      } catch (e) { if (live) setFailure(message(e)); }
+      if (live) timer = window.setTimeout(refresh,750);
+    }
+    void refresh();
+    return () => {live=false;window.clearTimeout(timer);};
+  },[playing]);
+  const list = useRef<HTMLDivElement>(null);
+  const follow = useRef(true);
+  useEffect(() => { if(follow.current && list.current) list.current.scrollTop=list.current.scrollHeight; },[rows,errorsOnly]);
+  const shown = errorsOnly ? rows.filter(row=>row.error) : rows;
+  return <>
+    <div className="ptp__edhead"><b>Play-test log</b><label><input type="checkbox" checked={errorsOnly}
+      onChange={e=>setErrorsOnly(e.target.checked)}/> Errors only</label></div>
+    <div ref={list} className="console__list transcript-lines" aria-label="Lua play-test log"
+      onScroll={e=>{const el=e.currentTarget;follow.current=el.scrollHeight-el.clientHeight-el.scrollTop<24;}}>
+      {shown.map((row,i)=><div key={i} className="transcript-line" data-level={row.error?'Errors':'Info'}>
+        <span title="Simulation tick">{row.tick}</span><code>{row.text}</code></div>)}
+      {(!shown.length || failure) && <p className="ptp__hint">{failure || (!playing ? 'Play the map to see its Lua messages.' : errorsOnly ? 'No Lua errors.' : 'Waiting for Lua messages…')}</p>}
+    </div>
+  </>;
+}
+export function ScriptsPanel(ctx: Ctx & {location:{path:string;line:number}|null;consumeLocation:()=>void;playing:boolean}) {
   const path = ctx.snapshot?.project.path ?? '';
   const [files, setFiles] = useState<ScriptFile[]>([]);
   const [missing, setMissing] = useState<string[]>([]);
@@ -107,11 +140,34 @@ export function ScriptsPanel(ctx: Ctx) {
   }, []);
   useEffect(() => { if (path) void list(); else { setFiles([]); setCurrent(''); } }, [path, list]);
   const dirty = text !== saved;
-  const open = async (p: string) => {
+  const editor = useRef<HTMLTextAreaElement>(null);
+  const loadVersion = useRef(0);
+  const [selection,setSelection] = useState<{line:number}|null>(null);
+  const [view,setView] = useState<'source'|'log'>('source');
+  useLayoutEffect(() => {
+    if (!selection || !editor.current) return;
+    const el = editor.current;
+    const lines = el.value.split('\n');
+    const index = Math.min(lines.length, Math.max(1,selection.line))-1;
+    const start = lines.slice(0,index).reduce((n,line)=>n+line.length+1,0);
+    el.focus();
+    el.setSelectionRange(start,start+lines[index].length);
+    el.scrollTop = Math.max(0,index*parseFloat(getComputedStyle(el).lineHeight)-el.clientHeight/2);
+  }, [selection]);
+  const open = async (p: string, line?:number) => {
+    setView('source');
+    if (p === current) { if (line) setSelection({line}); return; }
     if (dirty && !window.confirm('Discard unsaved changes to ' + current + '?')) return;
-    try { const r = await op('script_read', { path: p }); setCurrent(p); setText(r.text ?? ''); setSaved(r.text ?? ''); setStatus(null); }
+    const version = ++loadVersion.current;
+    try { const r = await op('script_read', { path: p }); if(version !== loadVersion.current)return; if(line)setSelection({line}); setCurrent(p); setText(r.text ?? ''); setSaved(r.text ?? ''); setStatus(null); }
     catch (e) { setStatus({ ok: false, text: message(e) }); }
   };
+  useEffect(() => {
+    if (!ctx.location) return;
+    const {path:file,line} = ctx.location;
+    ctx.consumeLocation();
+    void open(file,line);
+  }, [ctx.location]);
   const save = async (p = current, body = text, register = false) => {
     if (!p) return;
     setBusy(true);
@@ -146,7 +202,7 @@ export function ScriptsPanel(ctx: Ctx) {
   };
   const lines = useMemo(() => text.split('\n').length, [text]);
   if (!path) return <div className="tool__empty">Open a project to edit its Lua scripts.</div>;
-  return <div className="ptp ptp--split">
+  return <div className="ptp ptp--split scripts-page">
     <aside className="ptp__files">
       <div className="ptp__fileshead"><b>Scripts</b>
         <button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="New script" onClick={() => setNewPath('')}><FilePlus2 size={13}/></button>
@@ -160,6 +216,11 @@ export function ScriptsPanel(ctx: Ctx) {
       {!files.length && !missing.length && <p className="ptp__hint">No scripts yet.</p>}
     </aside>
     <section className="ptp__editor">
+      <nav className="console__views" aria-label="Script views">
+        <button type="button" aria-pressed={view==='source'} onClick={()=>setView('source')}>Source</button>
+        <button type="button" aria-pressed={view==='log'} onClick={()=>setView('log')}>Play-test log</button>
+      </nav>
+      {view === 'log' ? <ScriptPlayLog playing={ctx.playing}/> : <>
       <div className="ptp__edhead">
         <b>{current || 'No script open'}{dirty && ' •'}</b>
         <button type="button" className="au-button au-button--sm au-button--primary" disabled={!current || !dirty || busy} onClick={() => void save()}><Save size={13}/>Save</button>
@@ -169,7 +230,7 @@ export function ScriptsPanel(ctx: Ctx) {
       {status && <div className={'ptp__status ' + (status.ok ? 'is-ok' : 'is-error')} role={status.ok ? 'status' : 'alert'}>{status.text}</div>}
       <div className="ptp__code">
         <pre className="ptp__gutter" aria-hidden>{Array.from({ length: lines }, (_, i) => i + 1).join('\n')}</pre>
-        <textarea spellCheck={false} value={text} disabled={!current} onChange={e => setText(e.target.value)} onKeyDown={onKey}
+        <textarea aria-label="Lua source" ref={editor} spellCheck={false} value={text} disabled={!current} onChange={e => setText(e.target.value)} onKeyDown={onKey}
           onScroll={e => { const g = e.currentTarget.previousElementSibling as HTMLElement | null; if (g) g.scrollTop = e.currentTarget.scrollTop; }}/>
       </div>
       {check && <div className={'ptp__check-out ' + (check.ok ? 'is-ok' : 'is-error')}>
@@ -177,6 +238,7 @@ export function ScriptsPanel(ctx: Ctx) {
         {check.errors.map((e, i) => <div key={'e' + i} className="ptp__err">{e}</div>)}
         {check.log.slice(-40).map((l, i) => <div key={'l' + i}>{l}</div>)}
       </div>}
+    </>}
     </section>
   </div>;
 }

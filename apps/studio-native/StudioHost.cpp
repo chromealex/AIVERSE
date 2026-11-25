@@ -3286,6 +3286,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
             return result;
         });
     }
+    if (method == "studio.gameScriptLog") return answer([&] { return game_ ? game_->scriptLog(false) : Json::array(); });
     if (method == "studio.gameDevices") return answer([&] { return studioGameDevices(); });
     if (method == "studio.gameStart" || method == "studio.gameStop" || method == "studio.gameState" ||
         method == "studio.gameControl" || method == "studio.gameDevice") return answer([&] {

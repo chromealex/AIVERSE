@@ -105,3 +105,14 @@ tr.diff__added td:first-child{color:#8ee6a0}tr.diff__removed td:first-child{colo
   .attachment-page .ptp__edhead>.att__path{flex:1 0 100%;width:100%;box-sizing:border-box}
   .attachment-page .ptp__edhead>.au-button{flex:1}
 }
+
+.scripts-page .ptp__files{width:clamp(128px,23%,208px)}
+.scripts-page .ptp__gutter{color:var(--au-text-muted)}
+.scripts-page .ptp__edhead{flex-wrap:wrap;gap:6px;padding:8px 10px}
+.scripts-page .ptp__edhead label{display:flex;align-items:center;gap:4px;color:var(--au-text-muted)}
+.scripts-page .ptp__code{min-height:6rem}
+@container studio-page (max-width:520px){
+  .scripts-page{flex-direction:column}
+  .scripts-page .ptp__files{width:auto;max-height:7rem;border-right:0;border-bottom:1px solid var(--au-line)}
+  .scripts-page .ptp__edhead b{flex:1 0 100%}
+}

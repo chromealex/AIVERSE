@@ -3066,7 +3066,7 @@
           "target": null,
           "title": "HTML Studio — единственный редактор",
           "titleEn": "HTML Studio as the sole editor",
-          "detail": "Console HTML5 показывает вывод сборщика и ошибки Lua во время тестового запуска."
+          "detail": "HTML5 Studio связывает ошибки Console со строками Lua в Scripts и показывает журнал тестового запуска."
         },
         {
           "id": "studio-graph-legibility",

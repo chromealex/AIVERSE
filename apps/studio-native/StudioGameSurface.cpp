@@ -440,6 +440,23 @@ Json StudioGameSurface::editRuntime(const Json& params){
     runtimeDebugEdited_=true;
     Json out=Json::object();out.set("field",changed);out.set("runtimeDebugEdited",Json::fromBool(true));return out;
 }
+Json StudioGameSurface::scriptLog(bool errorsOnly) const {
+    Json rows = Json::array();
+    auto* sim = liveSimulation();
+    if (!sim) return rows;
+    const auto* game = dynamic_cast<const game::GameCore*>(&sim->module());
+    const auto* scripts = game ? game->scripts() : nullptr;
+    if (!scripts || (errorsOnly && !scripts->errorCount())) return rows;
+    for (const auto& entry : scripts->log()) {
+        if (errorsOnly && !entry.error) continue;
+        Json row = Json::object();
+        row.set("tick", Json::number(int64_t(entry.tick)));
+        row.set("text", Json::string(entry.text));
+        row.set("error", Json::fromBool(entry.error));
+        rows.push(std::move(row));
+    }
+    return rows;
+}
 Json StudioGameSurface::state(bool includeScriptErrors) const {
     Json out=Json::object();out.set("device",profile_.json());
     out.set("active",Json::fromBool(actor_ || host_->active()));
@@ -454,21 +471,7 @@ Json StudioGameSurface::state(bool includeScriptErrors) const {
     out.set("error",Json::string(error_));
     auto* sim=liveSimulation();
     out.set("tick",Json::number(int64_t(sim?sim->tick():0)));
-    if (includeScriptErrors && sim) {
-        const auto* game = dynamic_cast<const game::GameCore*>(&sim->module());
-        const auto* scripts = game ? game->scripts() : nullptr;
-        if (scripts && scripts->errorCount() > 0) {
-            Json errors = Json::array();
-            for (const auto& entry : scripts->log()) {
-                if (!entry.error) continue;
-                Json row = Json::object();
-                row.set("tick", Json::number(int64_t(entry.tick)));
-                row.set("text", Json::string(entry.text));
-                errors.push(std::move(row));
-            }
-            out.set("scriptErrors", std::move(errors));
-        }
-    }
+    if (includeScriptErrors) out.set("scriptErrors", scriptLog(true));
     return out;
 }
 }

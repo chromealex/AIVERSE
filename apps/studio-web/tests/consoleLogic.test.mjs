@@ -28,3 +28,11 @@ test('classifies native builder diagnostics in both output languages', async () 
   assert.equal(buildLineLevel('=== OK ==='), 'Success');
   assert.equal(buildLineLevel('0 errors'), 'Info');
 });
+
+test('Lua diagnostics link to the source line and retain adjacent punctuation', () => {
+  assert.deepEqual(logParts('scripts/actors/start.lua:23: missing'), [
+    {kind:'script', text:'scripts/actors/start.lua:23', path:'scripts/actors/start.lua', line:23},
+    {kind:'text', text:': missing'},
+  ]);
+  assert.equal(logParts('scripts/main.lua')[0].line, 1);
+});
