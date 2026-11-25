@@ -209,9 +209,12 @@
       ]
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The declared feature policy lists no prerequisite manifests. The integrated report resolved the dependency order and roadmap without policy errors.",
+      "evidence": [
+        "docs/agents/feature-policy.json",
+        "docs/evidence/integration-1209eaa44-policy.log.txt"
+      ]
     },
     "headless": {
       "status": "pass",

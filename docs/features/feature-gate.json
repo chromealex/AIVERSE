@@ -94,11 +94,11 @@
       "evidence": []
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Native Workspace readiness query and fixed local report generation implemented in source; build and runtime validation pending. Previous Feature Gate branch evidence: On Mac v10 actual built Workspace/MCP readiness refresh, status, get and dependency query exercised twice in one persistent process; successful completion and matching snapshot SHA verified. Other platforms and GUI timer not covered.",
+      "status": "pass",
+      "note": "The compiled Workspace implementation regenerated the report in a persistent native process, returned job completion and served a bounded query for the current source revision.",
       "evidence": [
-        "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-refresh.log.txt",
-        "docs/agent-handoffs/feature-gate-stage45-mac-qa-2026-11-24.md"
+        "docs/agents/feature-contract.md",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt"
       ]
     },
     "skill": {
@@ -146,8 +146,10 @@
     },
     "performance": {
       "status": "not_run",
-      "note": "Shared native-module host build wiring changes; cross-platform and runtime acceptance pending.",
-      "evidence": []
+      "note": "Shared native-module host build wiring changes; cross-platform and runtime acceptance pending. The 10-manifest workload generated a 314959-byte report in 2.02 seconds with 66666496 bytes peak RSS on Mac. GUI rendering and host build performance remain open.",
+      "evidence": [
+        "docs/evidence/integration-1209eaa44-policy.log.txt"
+      ]
     },
     "platforms": {
       "status": "not_run",
@@ -155,11 +157,11 @@
       "evidence": []
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending actual execution and integration review. Previous Feature Gate branch evidence: Mac v7 policy dependency report: both registered features have empty requires and no dependency declaration errors; partial compliance and native-host build fixture passed. This is declared dependency scope, not release readiness.",
+      "status": "pass",
+      "note": "The declared feature policy lists no prerequisite manifests. The integrated report resolved the dependency order and roadmap without policy errors.",
       "evidence": [
-        "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md",
-        "docs/evidence/feature-gate-mac-v7-summary.log.txt"
+        "docs/agents/feature-policy.json",
+        "docs/evidence/integration-1209eaa44-policy.log.txt"
       ]
     },
     "headless": {
@@ -168,11 +170,11 @@
       "evidence": []
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending actual execution and integration review. Previous Feature Gate branch evidence: Documented working report-generation and persistent MCP refresh/status/get/dependency query example, actually executed twice in Mac v10. No visual or publishing claim.",
+      "status": "pass",
+      "note": "Executed the documented refresh, status, snapshot and paginated feature-list workflow through native MCP. The snapshot matched the current revision.",
       "evidence": [
-        "docs/agent-handoffs/feature-gate-stage49-acceptance-2026-11-24.md",
-        "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-refresh.log.txt"
+        "docs/agents/feature-contract.md",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt"
       ]
     },
     "tests": {
