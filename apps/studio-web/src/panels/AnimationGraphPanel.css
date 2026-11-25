@@ -17,3 +17,10 @@
 .rig-subsection,.rig-collection{grid-column:1/-1}
 .rig-subsection[open]>summary{margin-bottom:8px}
 .rig-collection header{margin:0}.rig-collection header strong{font-weight:500}.rig-item{margin-top:5px;padding-top:3px}.rig-unit header strong{overflow-wrap:anywhere}
+.motion-preview{padding:var(--page-gutter);min-width:0}.motion-preview-toolbar,.motion-preview-fields{display:flex;flex-wrap:wrap;gap:8px;align-items:end}
+.motion-preview-page{display:grid;gap:14px;margin-top:12px;align-items:start}.motion-preview-fields{flex-direction:column;align-items:stretch}.motion-preview-fields output{font-variant-numeric:tabular-nums}.motion-preview-fields label{min-width:0}
+.motion-preview-stage{position:relative;background:var(--au-canvas);border:1px solid var(--au-line);border-radius:8px;overflow:hidden}
+.motion-preview-stage svg{display:block;width:100%;height:clamp(180px,36vh,400px)}.motion-preview-stage line{stroke:var(--au-text-soft);stroke-width:3;vector-effect:non-scaling-stroke}.motion-preview-stage line.selected{stroke:var(--au-accent)}
+.motion-joint{fill:var(--au-panel);stroke:var(--au-accent);stroke-width:2;vector-effect:non-scaling-stroke}.motion-preview-stage g{cursor:pointer}.motion-preview-stage [aria-pressed=true] .motion-joint{fill:var(--au-accent)}
+.motion-clock{position:absolute;left:10px;bottom:8px;pointer-events:none;color:var(--au-text-soft);font-variant-numeric:tabular-nums}
+@container studio-page (min-width:550px){.motion-preview-page{grid-template-columns:minmax(0,2fr) minmax(150px,1fr)}}

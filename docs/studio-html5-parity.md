@@ -215,3 +215,5 @@ Entity CRUD (69), packaging (70), map lifecycle (71), shared game host extractio
 Facial Rig preview migration: independent model binding, controls and drawable in the Facial Rig panel. Human Creator viewport migration tracked separately.
 
 Character Creator and VIVID Appearance render on separate native surfaces. The Scene frame receives no character binding. The HTML5 workspace hosts every docked and floating panel inside the same responsive page container. Individual visual acceptance is in progress. Windows preview input and photo overlay acceptance remain open.
+
+Animation Graph and Animation Rig each own a native playback session. Their HTML skeleton previews support play, pause, frame stepping, bind pose, three projections and joint selection. On macOS, picking a wrist and applying it to a rig unit persisted the bone name to the graph asset. GPU skinned mesh playback and interactive ground contacts remain open.

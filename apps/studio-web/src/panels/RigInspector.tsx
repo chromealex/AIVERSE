@@ -5,7 +5,7 @@ export type RigUnit = {op:string; [key:string]:Value};
 export type ItemPresets = Record<string,Value>;
 type RigNode = {id:string; units?:RigUnit[]};
 type Props = {
- presets:ItemPresets; nodes:RigNode[]; selected:string; busy:boolean;
+ pickedBone:string; presets:ItemPresets; nodes:RigNode[]; selected:string; busy:boolean;
  select:(id:string)=>void; addRig:()=>void;
  nativeEdit:(action:string,params:Record<string,unknown>)=>void;
  update:(id:string,units:RigUnit[])=>void;
@@ -49,7 +49,7 @@ function Field({name,value,change,presets}:{name:string;value:Value;change:(v:Va
  return <details className={name==='contacts'||name==='balance'?'rig-subsection':undefined}><summary>{displayName(name)}</summary><div className="rig-fields">{orderedFields(fieldsWithLists(value,name==='contacts'?['feet','capsules','obstacles']:name==='balance'?['masses']:[])).map(([key,v])=><Field presets={presets} key={key} name={key} value={v} change={next=>change({...value,[key]:next})}/>)}</div></details>;
 }
 
-export default function RigInspector({presets,nodes,selected,select,busy,addRig,nativeEdit,update}:Props){
+export default function RigInspector({pickedBone,presets,nodes,selected,select,busy,addRig,nativeEdit,update}:Props){
  const [kind,setKind]=useState('transform');
  const node=nodes.find(n=>n.id===selected)??nodes[0];
  const units=node?.units??[];
@@ -69,6 +69,7 @@ export default function RigInspector({presets,nodes,selected,select,busy,addRig,
     <button disabled={i===units.length-1} aria-label={'Move operation '+(i+1)+' down'} onClick={()=>move(i,i+1)}>↓</button>
     <button aria-label={'Remove operation '+(i+1)} onClick={()=>update(node.id,units.filter((_,j)=>j!==i))}>Remove</button></header>
    <div className="rig-fields">{orderedFields(fieldsWithLists(unit,unit.op==='fullBodyIK'?['effectors','joints']:unit.op==='surfaceLocomotion'?['legs','capsules','obstacles']:[])).filter(([k])=>k!=='op').map(([key,v])=><Field presets={presets} key={key} name={key} value={v} change={next=>update(node.id,units.map((old,j)=>j===i?{...old,[key]:next}:old))}/>)}</div>
+   {pickedBone&&unit.bone!==pickedBone&&<button onClick={()=>update(node.id,units.map((old,j)=>i===j?{...old,bone:pickedBone}:old))}>Use joint {pickedBone}</button>}
    {unit.op==='fullBodyIK'&&!unit.contacts&&<button onClick={()=>nativeEdit('addContacts',{index:i,id:node.id})}>Add contacts</button>}
   </section>)}</>}
  </fieldset>;

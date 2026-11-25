@@ -1,4 +1,5 @@
 #include "AnimationOps.h"
+#include "AnimationPreviewSession.h"
 #include "engine/pack/Sha256.h"
 #include "AnimationDocument.h"
 #include "engine/render/AnimationAsset.h"
@@ -35,6 +36,10 @@ void validate(const Workspace& w,const Json& g){auto m=loadAnimationModel(w,g.ge
 }
 std::unique_ptr<render::Model> loadAnimationModel(const Workspace& w,const std::string& file){if(file.empty())throw std::runtime_error("select a model");auto reader=[&w](const std::string& p,std::string& out){auto f=contained(w,p);std::ifstream stream(f,std::ios::binary);if(!stream)return false;out.assign(std::istreambuf_iterator<char>(stream),{});return true;};auto m=render::loadModel(file,reader);if(!m)throw std::runtime_error("cannot load animation model");return m;}
 void registerAnimationOps(Workspace& ws){auto schema=Json::parse(R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":"object"},"expectedRevision":{"type":"string"},"target":{"type":"string"}}})");
+    auto previews=std::make_shared<AnimationPreviewSessions>();
+    ws.registerOp({"animation_graph_preview","Open a native pose graph preview, advance its clock, change inputs or release it.",
+        Json::parse(R"({"type":"object","properties":{"action":{"type":"string","enum":["open","frame","close"]},"panel":{"type":"string","enum":["graph","rig"]},"graph":{"type":"object"},"scope":{"type":"string"},"bindPose":{"type":"boolean"},"token":{"type":"integer"},"dt":{"type":"number"},"inputs":{"type":"object"}},"required":["action","panel"]})"),
+        [&ws,previews](const Json& p){return previews->command(ws,p);}});
     ws.registerOp({"animation_graph_edit","Edit a graph draft using the native animation document operations without saving it.",
         Json::parse(R"({"type":"object","properties":{"action":{"type":"string"},"graph":{"type":"object"},"scope":{"type":"string"},"id":{"type":"string"},"kind":{"type":"string"},"source":{"type":"string"},"index":{"type":"integer"},"port":{"type":"string"},"name":{"type":"string"}},"required":["action"]})"),
         [](const Json& p){

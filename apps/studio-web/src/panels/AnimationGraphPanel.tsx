@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { invoke } from '../bridge';
+import AnimationSkeletonPreview from './AnimationSkeletonPreview';
 import RigInspector, {type RigUnit,type ItemPresets} from './RigInspector';
 import './graphSurface.css';
 import './AnimationGraphPanel.css';
@@ -25,9 +26,10 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
  const [draft,setDraft]=useState<Graph|null>(restored?.draft??null),[saved,setSaved]=useState<Graph|null>(restored?.saved??null);
  const [revision,setRevision]=useState(restored?.revision??'');
  const [past,setPast]=useState<Graph[]>([]),[scope,setScope]=useState(''),[selection,select]=useState('');
- const [nodeName,setNodeName]=useState('');
+ const [nodeName,setNodeName]=useState(''),[pickedBone,setPickedBone]=useState('');
+ useEffect(()=>setPickedBone(''),[name,draft?.model]);
  useEffect(()=>setNodeName(selection),[selection]);
- const [kind,setKind]=useState('clip'),[tab,setTab]=useState<'nodes'|'states'|'rig'|'tools'>(rigMode?'rig':'nodes');
+ const [kind,setKind]=useState('clip'),[tab,setTab]=useState<'nodes'|'states'|'rig'|'preview'|'tools'>(rigMode?'rig':'nodes');
  const [stateId,setStateId]=useState(''),[stateName,setStateName]=useState('');
  const [parameter,setParameter]=useState(''),[notice,setNotice]=useState('');
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -88,7 +90,7 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
     const id=newName;const initial=await op('edit',{action:'new'});await op('set',{name:id,graph:initial.graph});
     setNames((await op('list')).graphs);await load(id);setNewName('');
    })}>Create graph</button></header>
-  <nav aria-label="Graph views">{(['nodes','states','rig','tools'] as const).map(t=><button key={t} aria-pressed={t===tab} onClick={()=>setTab(t)}>{t==='nodes'?'Pose graph':t==='states'?'States':t==='rig'?'Rig units':'Operations'}</button>)}</nav>
+  <nav aria-label="Graph views">{(['nodes','states','rig','preview','tools'] as const).map(t=><button key={t} aria-pressed={t===tab} onClick={()=>setTab(t)}>{t==='nodes'?'Pose graph':t==='states'?'States':t==='rig'?'Rig units':t==='preview'?'Skeleton preview':'Operations'}</button>)}</nav>
   {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
   {tab==='tools'?tools:!graph?<p>{projectPath?'Open or create an animation graph.':'Open a project to edit animation graphs.'}</p>:<>
    <div className="anim-actions"><select aria-label="Graph scope" value={scope} disabled={busy} onChange={e=>{setScope(e.target.value);select('');setStateId('');}}>
@@ -99,7 +101,7 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
     <button disabled={busy||!dirty} onClick={()=>{setDraft(saved);setPast([]);setScope('');select('');setError('');}}>Discard</button>
     <button disabled={busy||!dirty} onClick={()=>void run(async()=>{const r=await op('set',{name,graph:draft,expectedRevision:revision});setDraft(r.graph);setSaved(r.graph);setRevision(r.revision);setPast([]);})}>Save graph</button>
    </div>
-   {tab==='nodes'?<>
+   {tab==='preview'&&draft?<AnimationSkeletonPreview projectPath={projectPath} graph={draft} scope={scope} panel={rigMode?'rig':'graph'} onPick={setPickedBone}/>:tab==='nodes'?<>
     <div className="anim-canvas graph-surface"><svg width={width} height={height} viewBox={left+' '+top+' '+width+' '+height} aria-label="Pose node connections">
      {graph.nodes.flatMap(n=>ports(n).map((port,i)=>{const start=positions.get(n[port]??''),end=positions.get(n.id);
       if(!start||!end)return null;const x=start.x+144,y=start.y+26,v=end.y+18+i*18;
@@ -122,7 +124,7 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
       <button disabled={current.id===graph.output} onClick={()=>change(inScope({...graph,output:current.id}))}>Use as output</button>
       <button onClick={()=>void run(async()=>{await edit('remove',{id:current.id});select('');})}>Remove node</button></>}
     </fieldset>
-   </>:tab==='rig'?<RigInspector presets={itemPresets} nodes={graph.nodes.filter(n=>n.kind==='rig')} selected={selection} select={select} busy={busy}
+   </>:tab==='rig'?<RigInspector pickedBone={pickedBone} presets={itemPresets} nodes={graph.nodes.filter(n=>n.kind==='rig')} selected={selection} select={select} busy={busy}
     addRig={()=>void run(async()=>{let i=1;while(positions.has('rig'+i))i++;await edit('add',{kind:'rig',id:'rig'+i});select('rig'+i);})}
     nativeEdit={(action,params)=>void run(()=>edit(action,params))}
     update={(id,units)=>patchNode(id,{units})}/>:<fieldset disabled={busy} className="anim-states">
