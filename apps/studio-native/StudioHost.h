@@ -138,6 +138,7 @@ public:
     void hover(double x, double y, double w, double h); // x < 0: left the view
     void select(double x, double y, double w, double h, const std::string& mode);
     void selectionAction(const std::string& method);
+    bool playerStartArmed() const { return !playerStartToken_.empty(); }
     bool brushArmed() const;
     bool resolveBrushPoint(double x,double y,double w,double h,render::float3& at,std::string* error=nullptr);
     bool updateBrushCursor(double x, double y, double w, double h);

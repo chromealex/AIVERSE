@@ -48,12 +48,6 @@ namespace studio = aiverse::studio;
 - (BOOL)isOpaque { return NO; }
 @end
 @interface StudioMetalView : NSView {
-    NSPoint press_;
-    BOOL dragged_;
-    BOOL moveDrag_;
-    BOOL terrainStroke_; // Scene brush stroke in progress
-    BOOL splineDrag_;    // dragging a road node / river point
-    BOOL marquee_;       // plain LMB drag on empty space: rectangle selection
     NSTrackingArea* hoverTracking_;
     NSTimeInterval lastHover_;
 }
@@ -494,68 +488,26 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
         return [self core]->placeType([asset substringFromIndex:kStudioTypeDragPrefix.length].UTF8String,point.x,point.y,[self w],[self h]);
     return [self core]->placeAsset(asset.UTF8String,point.x,point.y,[self w],[self h]);
 }
+- (BOOL)acceptsFirstMouse:(NSEvent*)event {
+    if ([self isMemberOfClass:[StudioMetalView class]] && [self core] && [self core]->playerStartArmed()) return YES;
+    return [super acceptsFirstMouse:event];
+}
+- (void)primaryMouse:(NSEvent*)event phase:(int)phase {
+    auto* core=[self core];
+    if (!core) return;
+    const NSPoint point=[self convertPoint:event.locationInWindow fromView:nil];
+    const auto flags=event.modifierFlags;
+    studio::StudioSceneMods mods;
+    mods.shift=(flags & NSEventModifierFlagShift)!=0; mods.ctrl=(flags & NSEventModifierFlagControl)!=0;
+    mods.alt=(flags & NSEventModifierFlagOption)!=0; mods.command=(flags & NSEventModifierFlagCommand)!=0;
+    core->sceneMouse(phase,0,point.x,point.y,event.deltaX,event.deltaY,[self w],[self h],mods);
+}
 - (void)mouseDown:(NSEvent*)event {
-    press_=[self convertPoint:event.locationInWindow fromView:nil];
-    dragged_=NO;marquee_=NO;terrainStroke_=NO;splineDrag_=NO;
     [self.window makeFirstResponder:self];
-    auto* core=[self core];
-    if (!core) return;
-    const BOOL alt=(event.modifierFlags & NSEventModifierFlagOption)!=0;
-    // Spline handles (Roads / Water "Edit nodes"): LMB on a handle drags it.
-    if (!alt && core->splineDrag(0,press_.x,press_.y,[self w],[self h])) { splineDrag_=YES; return; }
-    // Scene brush armed: plain LMB paints; Alt still orbits.
-    if (!alt && core->brushArmed()) {
-        terrainStroke_=core->terrainStroke(0,press_.x,press_.y,[self w],[self h]);
-        if (terrainStroke_) return;
-    }
-    // Plain LMB on a handle starts a Move / Rotate / Scale drag (Unity W/E/R tools).
-    moveDrag_=!alt && core->moveBegin(press_.x,press_.y,[self w],[self h]);
+    [self primaryMouse:event phase:0];
 }
-// Unity Scene view mapping, shared with the HTML composite path
-// (apps/studio-web/src/panels/sceneCamera.ts) and StudioHost::sceneMouse (Windows):
-// LMB select, Alt+LMB orbit, Alt+Cmd+LMB / MMB pan, RMB flythrough (WASD/QE), Alt+RMB zoom.
-- (void)mouseDragged:(NSEvent*)event {
-    auto* core=[self core];
-    if (!core) return;
-    const NSPoint point=[self convertPoint:event.locationInWindow fromView:nil];
-    if (splineDrag_) { core->splineDrag(1,point.x,point.y,[self w],[self h]); return; }
-    if (terrainStroke_) { core->terrainStroke(1,point.x,point.y,[self w],[self h]); return; }
-    if (moveDrag_) {
-        dragged_=YES;
-        // Ctrl/Cmd held while dragging inverts the snap setting (Unity: Ctrl snaps).
-        const BOOL invert=(event.modifierFlags & (NSEventModifierFlagControl|NSEventModifierFlagCommand))!=0;
-        core->moveUpdate(point.x,point.y,[self w],[self h],invert);
-        return;
-    }
-    const NSEventModifierFlags flags=event.modifierFlags;
-    // Hand tool (Q): plain LMB drag pans the view.
-    if (!(flags & NSEventModifierFlagOption) && core->tool()==0) { dragged_=YES; core->pan(event.deltaX,event.deltaY); return; }
-    if (!(flags & NSEventModifierFlagOption)) {
-        // Plain LMB drag on empty space: rectangle (marquee) selection.
-        if (!marquee_ && std::hypot(double(point.x-press_.x),double(point.y-press_.y))<5.0) return;
-        marquee_=YES;dragged_=YES;
-        core->marquee(press_.x,press_.y,point.x,point.y,[self w],[self h]);
-        return;
-    }
-    dragged_=YES;
-    if (flags & NSEventModifierFlagCommand) core->pan(event.deltaX,event.deltaY);
-    else core->orbit(event.deltaX,event.deltaY);
-}
-- (void)mouseUp:(NSEvent*)event {
-    auto* core=[self core];
-    if (!core) return;
-    if (splineDrag_) { splineDrag_=NO; core->splineDrag(2,0,0,[self w],[self h]); return; }
-    if (terrainStroke_) { terrainStroke_=NO; core->terrainStroke(2,0,0,[self w],[self h]); return; }
-    if (moveDrag_) { moveDrag_=NO; core->moveEnd(); return; }
-    const NSPoint point=[self convertPoint:event.locationInWindow fromView:nil];
-    // Shift adds to the selection, Cmd toggles (Unity / Finder convention).
-    const std::string mode=(event.modifierFlags & NSEventModifierFlagCommand)?"toggle":
-        (event.modifierFlags & NSEventModifierFlagShift)?"add":"replace";
-    if (marquee_) { marquee_=NO; core->marqueeEnd(press_.x,press_.y,point.x,point.y,[self w],[self h],mode); return; }
-    if (dragged_ || std::hypot(double(point.x-press_.x), double(point.y-press_.y)) >= 5.0) return;
-    if (core->gizmoAt(point.x,point.y,[self w],[self h])) return;
-    core->select(point.x,point.y,[self w],[self h],mode);
-}
+- (void)mouseDragged:(NSEvent*)event { [self primaryMouse:event phase:1]; }
+- (void)mouseUp:(NSEvent*)event { [self primaryMouse:event phase:2]; }
 - (void)rightMouseDown:(NSEvent*)event { [self.window makeFirstResponder:self]; (void)event; }
 - (void)rightMouseDragged:(NSEvent*)event {
     if (![self core]) return;
