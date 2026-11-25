@@ -2,6 +2,7 @@
 #import <QuartzCore/CAMetalLayer.h>
 #include "apps/studio-native/StudioScene.h"
 #include "apps/studio-native/StudioLightBakeJob.h"
+#include "apps/studio-native/StudioLightBakeFiles.h"
 #include "apps/studio-native/StudioLightingPreview.h"
 #include <filesystem>
 #include <fstream>
@@ -81,12 +82,41 @@ int aiverseMain(int argc,char** argv) { @autoreleasepool {
             const bool started=entered.get_future().wait_for(std::chrono::seconds(3))==std::future_status::ready;
             job.cancel();release.set_value();
             if(!started || finish().error!="cancelled")throw std::runtime_error("Background cancellation failed");
-            job.start(input,read,
-                [&](const auto& file,const auto& bytes){std::ofstream out(project/file,std::ios::binary);
-                    out.write(bytes.data(),bytes.size());return bool(out);});
+            studio::StudioLightBakeFiles output(project,input.folder);
+            job.start(input,[&](const auto& file,auto& bytes){return output.read(file,bytes);},
+                [&](const auto& file,const auto& bytes){return output.stage(file,bytes);});
             const auto result=finish();
             if(job.progress().fraction<=0)throw std::runtime_error("Missing background bake progress");
             if(!result.error.empty())throw std::runtime_error(result.error);
+            const std::string header=input.folder+"/lightmap.json";
+            std::string previous;
+            const bool hadHeader=read(header,previous);
+            std::ofstream(project/header,std::ios::app)<<" ";
+            try {
+                output.publish();
+                throw std::logic_error("Published over a changed light bake header");
+            } catch(const std::runtime_error& e) {
+                if(std::string(e.what())!="Baked output changed during calculation")throw;
+            }
+            if(std::filesystem::exists(project/(asset+".lmuv")))throw std::runtime_error("Published UVs before conflict check");
+            if(hadHeader)std::ofstream(project/header,std::ios::binary)<<previous;
+            else std::filesystem::remove(project/header);
+            output.publish();
+            std::string published;
+            if(!read(header,published))throw std::runtime_error("Missing published bake");
+            std::filesystem::remove(project/(asset+".lmuv"));
+            studio::StudioLightBakeFiles recovery(project,input.folder);
+            input.oldHash=result.hash;
+            job.start(input,[&](const auto& file,auto& bytes){return recovery.read(file,bytes);},
+                [&](const auto& file,const auto& bytes){return recovery.stage(file,bytes);});
+            const auto recovered=finish();
+            if(!recovered.unchanged || !recovered.generatedUvs)throw std::runtime_error("Did not recover missing UVs");
+            recovery.publishRecoveredUvs();
+            std::string restored;
+            if(!read(header,restored) || restored!=published || !std::filesystem::exists(project/(asset+".lmuv")))
+                throw std::runtime_error("Recovered UV publication changed baked output");
+            std::cout<<"Recovered a missing model UV sidecar on an unchanged bake\n";
+            std::cout<<"Conflicting bake header preserved, staged UV and atlas published on retry\n";
             std::cout<<"Captured static column, excluded moving unit, sampled 289 terrain heights\n";
             scene.setBakedSceneEnabled(true);
             for(int i=0;i<100 && (scene.bakedSceneStatus().getInt("lightmapped")<2 || !scene.bakedSceneStatus().getInt("probed"));++i){

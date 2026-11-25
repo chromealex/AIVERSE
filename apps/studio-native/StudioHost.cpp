@@ -10,6 +10,7 @@
 #include "engine/game/Script.h"
 #include "apps/editor/core/StudioPlayTools.h"
 #include "apps/studio-native/StudioHost.h"
+#include "StudioLightBakeFiles.h"
 #include "apps/editor/core/AnimationPreviewSession.h"
 #include "apps/studio-native/StudioSpectraPackageImport.h"
 #include "apps/studio-native/StudioWorldProcessesGizmos.h"
@@ -808,9 +809,75 @@ void StudioHost::fxCameraZoom(double wheel) {
             fxPreview_->zoom(float(wheel));
     });
 }
+void StudioHost::tickLightBake() {
+    if (!bakeFiles_) return;
+    const auto& ws=session_->workspace();
+    const bool stale=session_->graphDocumentScope().getStr("epoch")!=bakeEpoch_ || ws.map.revision!=bakeRevision_;
+    if (stale) bakeJob_.cancel();
+    try {
+        const auto result=bakeJob_.poll();
+        if (!result) return;
+        if (stale) bakeMessage_="Map changed during baking";
+        else if (!result->error.empty()) bakeMessage_=result->error;
+        else if (result->unchanged) {
+            if(result->generatedUvs)bakeFiles_->publishRecoveredUvs();
+            bakeMessage_="Baked lighting is up to date";
+        }
+        else {
+            bakeFiles_->publish();
+            bakeMessage_="Baked "+std::to_string(result->stats.pages)+
+                (result->stats.pages==1?" atlas page and ":" atlas pages and ")+
+                std::to_string(result->stats.probes)+(result->stats.probes==1?" probe":" probes");
+            if(!result->warnings.empty())bakeMessage_+="\n"+result->warnings;
+        }
+    } catch (const std::exception& e) { bakeMessage_=e.what(); }
+    bakeFiles_.reset();
+    sendEventPayload("lightBake.finished",Json::string(bakeEpoch_));
+}
+Json StudioHost::lightBakeJob(const Json& params) {
+    if (projectLoading_) throw std::runtime_error("Project is loading");
+    const auto& ws=session_->workspace();
+    const auto epoch=session_->graphDocumentScope().getStr("epoch");
+    if (params.getStr("expectedDocumentEpoch")!=epoch) throw std::runtime_error("Map changed");
+    const auto action=params.getStr("action","status");
+    if (action=="start") {
+        const auto relative=editor::lightBakeMapRel(ws);
+        if (bakeFiles_) throw std::runtime_error("A light bake is already running");
+        if (relative.empty()) throw std::runtime_error("Save the active map before baking");
+        if (game_ && game_->state().getBool("active")) throw std::runtime_error("Stop the play-test before baking");
+        if (!preview_ || !mapSnapshot_ || mapSnapshot_->revision!=ws.map.revision || mapSnapshot_->path!=ws.map.path)
+            throw std::runtime_error("Scene is still loading the active map");
+        auto input=onScene([&]{return preview_->captureLightBake(*mapSnapshot_,ws.project.dir,ws.project.rules);});
+        input.folder=bake::bakeFolderFor(relative);
+        input.settings=editor::lightBakeSettings(ws);
+        input.force=params.getBool("force");
+        const auto info=editor::lightBakeInfo(ws);
+        if(info.getBool("exists"))bake::parseHex64(info.getStr("hash"),input.oldHash);
+        auto files=std::make_shared<StudioLightBakeFiles>(ws.project.dir,input.folder);
+        bakeJob_.start(std::move(input),
+            [files](const auto& path,auto& bytes){return files->read(path,bytes);},
+            [files](const auto& path,const auto& bytes){return files->stage(path,bytes);});
+        bakeFiles_=std::move(files);
+        bakeEpoch_=epoch;
+        bakeRevision_=ws.map.revision;
+        bakeMessage_.clear();
+        sendEventPayload("lightBake.started",Json::string(epoch));
+    } else if (action=="cancel") {
+        if (bakeFiles_ && bakeEpoch_==epoch) bakeJob_.cancel();
+    } else if (action!="status") throw std::runtime_error("Unknown light bake action");
+    const auto progress=bakeJob_.progress();
+    Json reply=Json::object();
+    reply.set("running",Json::fromBool(bool(bakeFiles_)));
+    reply.set("stage",Json::string(bakeFiles_?progress.stage:"idle"));
+    reply.set("fraction",Json::number(double(progress.fraction),4));
+    reply.set("message",Json::string(bakeEpoch_==epoch?bakeMessage_:""));
+    return reply;
+}
+
 void StudioHost::tick() {
     publishBuildingPanelFrame();
     if (projectLoading_) return; // the background thread owns the session right now
+    tickLightBake();
     if(!networkPlayers_.empty() && platform_.now()>=nextNetworkPlayerCheck_){
         nextNetworkPlayerCheck_=platform_.now()+0.5;
         std::erase_if(networkPlayers_,[&](const NetworkPlayer& player){
@@ -3316,6 +3383,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if (note.size() <= 1200) platform_.log("[studio-web] JS: " + note);
         return true; // diagnostics never touch Workspace or the filesystem
     }
+    if(method=="studio.lightBakeJob")return answer([&]{return lightBakeJob(params);});
     if(method=="studio.lightBakeDisplay")return answer([&]{
         if(params.has("enabled")){
             if(params["enabled"].type()!=Json::Type::Bool)throw std::runtime_error("Expected baked lighting visibility");

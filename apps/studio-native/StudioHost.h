@@ -5,6 +5,7 @@
 // views, dialogs and the timer, and forward bridge messages, input and frame ticks here.
 #include "apps/studio-native/StudioSession.h"
 #include "apps/studio-native/StudioScene.h"
+#include "apps/studio-native/StudioLightBakeJob.h"
 #include "apps/studio-native/StudioGameSurface.h"
 #include "apps/studio-native/StudioViewportLayout.h"
 #include "apps/studio-native/StudioRenderThread.h"
@@ -30,6 +31,7 @@ namespace aiverse::studio {
 enum class StudioSurface { Scene, Game, Fx, Material, Shader, FacialRig, Character, Appearance, AnimationGraph, AnimationRig, Attachments, LensCamera, Lighting, Count };
 
 // What a shell provides. Called on the main (UI) thread only, except runInBackground's work.
+class StudioLightBakeFiles;
 class StudioHostPlatform {
 public:
     virtual ~StudioHostPlatform() = default;
@@ -325,6 +327,12 @@ private:
     bool readyEmitted_ = false, projectLoading_ = false, loadingShown_ = false, surfaceSnap_ = false;
     bool showSceneBake_=true;
     bool atlasPreviewBusy_=false;
+    std::shared_ptr<StudioLightBakeFiles> bakeFiles_;
+    StudioLightBakeJob bakeJob_;
+    std::string bakeEpoch_,bakeMessage_;
+    uint64_t bakeRevision_=0;
+    void tickLightBake();
+    Json lightBakeJob(const Json& params);
     std::shared_ptr<bool> alive_ = std::make_shared<bool>(true); // background completions after shutdown
     double nextGizmoPoll_ = 0, nextAgentPoll_ = 0, lastSceneFrame_ = 0, sceneFrameMs_ = 0;
     uint64_t sceneFrameCount_ = 0;

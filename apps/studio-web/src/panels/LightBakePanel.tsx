@@ -25,6 +25,8 @@ export default function LightBakePanel({scope}:{scope?:StudioGraphDocumentScope}
   const [state,setState]=useState<BakeState>();
   const [patch,setPatch]=useState<Settings>({});
   const [busy,setBusy]=useState(false);
+  const [job,setJob]=useState<{running:boolean; stage:string; fraction:number; message:string}>();
+  const [force,setForce]=useState(false);
   const [error,setError]=useState('');
   const [display,setDisplay]=useState<boolean>();
   const [outputRevision,setOutputRevision]=useState(0);
@@ -53,6 +55,38 @@ export default function LightBakePanel({scope}:{scope?:StudioGraphDocumentScope}
     const stop=onNativeEvent(event=>{if(event==='lightBake.displayChanged')read();});
     return ()=>{active=false;stop();};
   },[enabled]);
+  useEffect(()=>{
+    setJob(undefined);
+    if(!enabled || !epoch)return;
+    let active=true;
+    let sequence=0;
+    let timer:ReturnType<typeof setTimeout>;
+    const poll=async()=>{
+      const request=++sequence;
+      clearTimeout(timer);
+      try {
+        const reply=await invoke('studio.lightBakeJob',{action:'status',expectedDocumentEpoch:epoch});
+        if(active && request===sequence){setJob(reply);if(reply.running)timer=setTimeout(poll,250);}
+      } catch(reason){if(active)setError(String(reason));}
+
+    };
+    void poll();
+    const stop=onNativeEvent((event,scope)=>{
+      if(scope!==epoch)return;
+      if(event==='lightBake.started' || event==='lightBake.finished')void poll();
+      if(event==='lightBake.finished'){
+        refresh(n=>n+1);setOutputRevision(n=>n+1);
+      }
+    });
+    return ()=>{active=false;clearTimeout(timer);stop();};
+  },[enabled,epoch]);
+  const runJob=async(action:'start'|'cancel')=>{
+    if(!epoch || busy)return;
+    setBusy(true);setError('');
+    try {setJob(await invoke('studio.lightBakeJob',{action,force,expectedDocumentEpoch:epoch}));}
+    catch(reason){setError(String(reason));}
+    finally {setBusy(false);}
+  };
   const write=async(op:string,params:Settings)=>{
     if(busy || !enabled)return;
     setBusy(true);setError('');
@@ -80,7 +114,7 @@ export default function LightBakePanel({scope}:{scope?:StudioGraphDocumentScope}
           <option value="indirect">Indirect only · realtime sun</option><option value="shadowmask">Shadowmask · baked sun shadows</option>
           <option value="subtractive">Subtractive · baked sunlight</option>
         </StudioSelect></StudioField>
-        <StudioField label="Quality preset" htmlFor="bake-quality"><StudioSelect id="bake-quality" value="" disabled={busy || dirty}
+        <StudioField label="Quality preset" htmlFor="bake-quality"><StudioSelect id="bake-quality" value="" disabled={busy || job?.running || dirty}
           onChange={e=>void write('lightbake_set',{quality:e.target.value})}>
           <option value="" disabled>Apply a preset…</option>{['Preview','Medium','High'].map(p=><option key={p} value={p.toLowerCase()}>{p}</option>)}
         </StudioSelect></StudioField>
@@ -99,7 +133,22 @@ export default function LightBakePanel({scope}:{scope?:StudioGraphDocumentScope}
             onChange={e=>{if(e.target.value && e.target.validity.valid)change(key,e.target.valueAsNumber);}}
             onBlur={e=>{if(!e.target.value || !e.target.validity.valid)e.target.value=String(values[key]);}}/>
         </StudioField>)}</details>
-        <StudioButton disabled={busy || !dirty} variant="primary" onClick={()=>void write('lightbake_set',patch)}>Apply settings</StudioButton>
+        <StudioButton disabled={busy || job?.running || !dirty} variant="primary" onClick={()=>void write('lightbake_set',patch)}>Apply settings</StudioButton>
+      </StudioSection>
+      <StudioSection title="Bake lighting">
+        <div className="bake-job">
+        {job?.running ? <>
+          <label className="bake-job-progress">
+            <span>{job.stage==='scene'?'Preparing scene':job.stage}</span><strong>{Math.round(job.fraction*100)}%</strong>
+            <progress max={1} value={job.fraction}/>
+          </label>
+          <StudioButton disabled={busy} onClick={()=>void runJob('cancel')}>Cancel bake</StudioButton>
+        </> : <>
+          <StudioCheckbox label="Rebuild unchanged lighting" checked={force} onChange={e=>setForce(e.target.checked)}/>
+          <StudioButton variant="primary" disabled={busy || dirty || !job} onClick={()=>void runJob('start')}>Bake lighting</StudioButton>
+          {job?.message && <p role="status">{job.message}</p>}
+        </>}
+        </div>
       </StudioSection>
       <StudioSection title="Baked output" actions={<StudioButton size="sm" disabled={busy} onClick={()=>{
         setConfirmClear(false);setOutputRevision(n=>n+1);refresh(n=>n+1);
@@ -112,7 +161,7 @@ export default function LightBakePanel({scope}:{scope?:StudioGraphDocumentScope}
           <dl>{['pages','regions','texels','probes'].map(key=><div key={key}><dt>{key}</dt><dd>{state.bake.stats?.[key] ?? 0}</dd></div>)}</dl>
           {epoch && state.bake.hash && !!state.bake.atlasPages?.length &&
             <LightBakeAtlas key={state.bake.hash+':'+outputRevision} epoch={epoch} hash={state.bake.hash} pages={state.bake.atlasPages}/>}
-          <StudioButton variant="danger" disabled={busy} onClick={()=>confirmClear?void write('lightbake_clear',{}):setConfirmClear(true)}>
+          <StudioButton variant="danger" disabled={busy || job?.running} onClick={()=>confirmClear?void write('lightbake_clear',{}):setConfirmClear(true)}>
             {confirmClear?'Confirm clear':'Clear baked files'}</StudioButton>
           {confirmClear && <StudioButton disabled={busy} onClick={()=>setConfirmClear(false)}>Cancel</StudioButton>}
         </> : <p>No baked lightmaps for this map. Lighting uses realtime sources.</p>}

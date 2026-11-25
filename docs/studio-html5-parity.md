@@ -272,3 +272,5 @@ Light Bake output inspection: display individual baked irradiance and shadow-mas
 Light Bake transfer: the main Scene loads the active planar map’s baked lighting, binds static placements, terrain and probes through Renderer3D, and exposes the legacy visibility toggle. Panel previews keep their own rendering state.
 
 Light Bake transfer: capture the native Studio document placements, terrain and lighting into the background baker input.
+
+Light Bake transfer: connect the map-scoped job to the HTML panel and publish completed outputs.

@@ -549,3 +549,5 @@ Scene consumption 6f0578758: StudioScene asynchronously reads map-local baked da
 Light Bake transfer: capture the native Studio document placements, terrain and lighting into the background baker input.
 
 b836bdce0 captures planar terrain and rigid document instances using applied material overrides and the shared editor environment/light sampler. The Metal fixture verified a 17x17 terrain grid, one static placement, one moving unit excluded, mixed/baked-only filtering and stale document rejection. A gated worker was cancelled, polled and restarted. The completed output bound two lightmapped draws and one probe draw. Evidence docs/evidence/studio-captured-bake-job.json. Next connect job lifecycle and publish results in HTML Light Bake.
+
+Light Bake transfer: connect the map-scoped job to the HTML panel and publish completed outputs.

@@ -5,6 +5,9 @@
   "changed_paths": [
     "apps/studio-native/StudioLightingPreview.h",
     "apps/studio-web/src/panels/LightBakeAtlas.tsx",
+    "apps/studio-native/tests/StudioMetalLightingTests.mm",
+    "apps/studio-web/src/panels/LightBakePanel.css",
+    "apps/studio-native/StudioLightBakeFiles.h",
     "apps/studio-native/StudioLightBakeJob.h",
     "apps/editor/core/LightBakeCapture.h",
     "engine/bake/CapturedBake.cpp",
@@ -300,6 +303,7 @@
     "docs/evidence/studio-light-bake-atlas.json",
     "docs/evidence/studio-baked-scene-metal.json",
     "docs/evidence/studio-baked-scene-receivers.json",
+    "docs/evidence/studio-captured-bake-job.json",
     "docs/evidence/studio-light-game-frame.json",
     "docs/evidence/studio-light-rgb-swatch.json",
     "docs/evidence/studio-light-beacon-authoring.json",
