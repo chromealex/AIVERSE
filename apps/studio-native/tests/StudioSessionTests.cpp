@@ -2286,7 +2286,7 @@ static void worldSceneInspectorProperties() {
     fs::create_directories(project);
     std::ofstream(project/"game.json")<<R"({"module":"actor","rules":"rules.json","maps":[{"file":"map.json"}]})";
     std::ofstream(project/"rules.json")<<R"({"actor":{}})";
-    const Json original=Json::parse(R"({"players":[{"name":"One","team":1},{"name":"Two","team":2}],"colliders":[{"id":1,"min":[0,0,0],"max":[1,1,1]}],"spawns":[[0,0,0],[4,0,4]],"custom":{"marker":7}})");
+    const Json original=Json::parse(R"({"players":[{"name":"One","team":1},{"name":"Two","team":2}],"colliders":[{"id":1,"min":[0,0,0],"max":[1,1,1]},{"id":2,"center":[4,1,0],"half":[1,1,1],"yaw":0.25,"marker":7}],"spawns":[[0,0,0],[4,0,4]],"custom":{"marker":7}})");
     std::ofstream(project/"map.json")<<original.dump();
     {
         studio::StudioSession session(root.string(),project.string());
@@ -2298,7 +2298,7 @@ static void worldSceneInspectorProperties() {
         AIVERSE_TEST_CHECK(initial["scene"].getBool("worldSpace")&&initial["scene"].getBool("mapProperties"));
         Json params=Json::object();params.set("scope",initial["graphDocument"]);
         const auto summary=call("studio.mapProperties",params)["result"];
-        AIVERSE_TEST_CHECK(!summary.getBool("grid")&&summary["worldSpace"].getInt("colliders")==1&&summary["worldSpace"].getInt("spawns")==2);
+        AIVERSE_TEST_CHECK(!summary.getBool("grid")&&summary["worldSpace"].getInt("colliders")==2&&summary["worldSpace"].getInt("spawns")==2);
         params.set("changes",Json::parse(R"({"name":"Partial","size":[20,18]})"));
         AIVERSE_TEST_CHECK(call("studio.mapPropertiesSet",params).has("error")&&session.workspace().map.toJson()==original);
         params.set("changes",Json::parse(R"({"name":"Harbor terminal"})"));
@@ -2330,6 +2330,18 @@ static void worldSceneInspectorProperties() {
         AIVERSE_TEST_CHECK(call("studio.setProperties",bounds).has("error")&&session.workspace().map.toJson()==edited);
         bounds.set("scope",call("studio.snapshot")["result"]["graphDocument"]);
         AIVERSE_TEST_CHECK(!call("studio.setProperties",bounds).has("error")&&session.workspace().map.undoDepth()==boundsDepth+1);
+        AIVERSE_TEST_CHECK(!call("studio.undo").has("error")&&session.workspace().map.toJson()==expected);
+        Json oriented=Json::parse(R"({"entityId":"collider:1","componentId":"OrientedBoxCollider","values":{"rotationY":-90,"scaleX":6}})");
+        oriented.set("scope",call("studio.snapshot")["result"]["graphDocument"]);
+        AIVERSE_TEST_CHECK(!call("studio.setProperties",oriented).has("error"));
+        Json expectedPose=expected;
+        auto& box=expectedPose.member("colliders").at(1);
+        box.member("half").at(0)=Json::number(int64_t(3));
+        box.set("yaw",Json::number(0.75));
+        AIVERSE_TEST_CHECK(session.workspace().map.toJson()==expectedPose);
+        oriented.set("scope",call("studio.snapshot")["result"]["graphDocument"]);
+        oriented.set("values",Json::parse(R"({"rotationY":0,"scaleZ":5000})"));
+        AIVERSE_TEST_CHECK(call("studio.setProperties",oriented).has("error")&&session.workspace().map.toJson()==expectedPose);
         AIVERSE_TEST_CHECK(!call("studio.undo").has("error")&&session.workspace().map.toJson()==expected);
     }
     fs::remove_all(root);
