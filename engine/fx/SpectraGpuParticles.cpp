@@ -2149,8 +2149,10 @@ bool ComputeParticles::restoreOwnedGpuSnapshot(const GpuCheckpoint& source){
         const auto& p=snapshot.slots[i];
         if(snapshot.remainingLifetime[i]<=0.f){states[i].positionAge.w=-1.f;continue;}
         states[i]={p.positionAge,p.velocityLife,p.tint,p.size};
-        std::memcpy(&params[i],p.programParams.data(),sizeof(ProgramParams));
-        std::memcpy(&attrs[i],p.attributes.data(),sizeof(ProgramAttributes));
+        params[i].p0={p.programParams[0],p.programParams[1],p.programParams[2],p.programParams[3]};
+        params[i].p1={p.programParams[4],p.programParams[5],p.programParams[6],p.programParams[7]};
+        attrs[i].a0={p.attributes[0],p.attributes[1],p.attributes[2],p.attributes[3]};
+        attrs[i].a1={p.attributes[4],p.attributes[5],p.attributes[6],p.attributes[7]};
         owners[size_t(i)*2]=uint32_t(snapshot.sourceTokens[i]);
         owners[size_t(i)*2+1]=uint32_t(snapshot.sourceTokens[i]>>32);
         expiry.push_back(snapshot.remainingLifetime[i]);
