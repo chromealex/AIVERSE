@@ -276,7 +276,7 @@ void changeUnitType(GameCore& m, Simulation& sim, Entity e, uint16_t type) {
     }
     u.type = type;
     u.hp = fxMax(Fixed::fromInt(1), nt.maxHp * frac);
-    if (!nt.weapons.empty() && !w.has<Combat>(e)) w.add<Combat>(e);
+    if (!nt.weapons.empty() && !w.has<Combat>(e)) w.add<Combat>(e, Combat{});
     if ((nt.garrisonMax > 0 || nt.spawnUnit != kNoType) && !w.has<Garrison>(e)) w.add<Garrison>(e);
     if (!nt.abilities.empty() && !w.has<AbilityState>(e)) w.add<AbilityState>(e);
     if ((!nt.produces.empty() || !nt.researches.empty() || !nt.upgrades.empty()) && !w.has<Production>(e)) w.add<Production>(e);

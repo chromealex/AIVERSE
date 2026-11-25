@@ -615,7 +615,7 @@ Entity GameCore::spawn(Simulation& sim, uint16_t type, uint8_t owner, Vec3 pos, 
     u.energy = t.startEnergy;
     w.add<Unit>(e, u);
     if (t.speed.raw > 0) { w.add<Mobile>(e); w.add<Orders>(e); }
-    if (!t.weapons.empty()) w.add<Combat>(e);
+    if (!t.weapons.empty()) w.add<Combat>(e, Combat{});
     if (!t.produces.empty() || !t.researches.empty() || t.members > 1) {
         Production p;
         p.charges = t.chargesMax;
