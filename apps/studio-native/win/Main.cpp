@@ -239,11 +239,7 @@ public:
 #else
         core_->session().setBuildTool(aiverse::editor::findBuildTool(exe, root));
 #endif
-#ifdef AIVERSE_STUDIO_MCP_TOOL
-        core_->session().setMcpTool(AIVERSE_STUDIO_MCP_TOOL);
-#else
         core_->session().setMcpTool(exe + "\\aiversemcp.exe");
-#endif
         if (project_.empty()) project_ = lastProject();
         else rememberLastProject(project_);
         core_->setPendingProject(project_);

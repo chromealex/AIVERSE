@@ -85,13 +85,10 @@ if(TARGET aiversebuild)
     add_dependencies(aiverse_studio aiversebuild)
     target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_BUILD_TOOL="$<TARGET_FILE:aiversebuild>")
 endif()
-# Agent panel: the MCP server the in-editor Claude Code run talks to.
-if(TARGET aiversemcp)
-    add_dependencies(aiverse_studio aiversemcp)
-    target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_MCP_TOOL="$<TARGET_FILE:aiversemcp>")
-endif()
 # The UI and the WebView2 loader next to the exe; runs every build so UI-only changes are picked up.
 add_custom_target(aiverse_studio_web_assets
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:aiverse_studio>"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:aiversemcp>" "$<TARGET_FILE_DIR:aiverse_studio>/$<TARGET_FILE_NAME:aiversemcp>"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory "${AIVERSE_STUDIO_WEB_DIST}" "$<TARGET_FILE_DIR:aiverse_studio>/studio-web"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_aiverse_wv2_loader}" "$<TARGET_FILE_DIR:aiverse_studio>"
     VERBATIM)

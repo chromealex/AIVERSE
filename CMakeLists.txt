@@ -1762,7 +1762,7 @@ endif()
 # Light baker (agent-lightbake): offline CPU path tracer (BVH, threads) for lightmaps + light probes,
 # automatic lightmap UVs (xatlas, MIT), bake folder writer. Host only: editor, MCP, tests.
 # ---------------------------------------------------------------------------
-if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
+if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS OR AIVERSE_BUILD_STUDIO_HTML5)
     find_package(Threads REQUIRED)
     add_library(aiverse_xatlas STATIC third_party/xatlas/xatlas.cpp)
     target_include_directories(aiverse_xatlas PUBLIC third_party/xatlas)
@@ -1781,7 +1781,7 @@ if(AIVERSE_BUILD_TESTS)
     add_test(NAME bake_tests COMMAND aiverse_bake_tests)
 endif()
 
-if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS)
+if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_STUDIO_HTML5)
     # Editor core: project/map documents and the operation registry shared by the editor and aiversemcp.
     add_library(aiverse_editor_core STATIC apps/editor/core/MapDoc.cpp apps/editor/core/MapDocPlanet.cpp apps/editor/core/Workspace.cpp apps/editor/core/StudioPlayTools.cpp apps/editor/core/Net.cpp apps/editor/core/McpInstall.cpp apps/editor/core/Projects.cpp
     apps/editor/core/DataOps.cpp apps/editor/core/BalanceOps.cpp
@@ -1875,6 +1875,9 @@ if(AIVERSE_BUILD_TOOLS)
     if(TARGET aiverse_editor)
         add_dependencies(aiverse_editor aiversebuild)
     endif()
+endif()
+
+if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_STUDIO_HTML5)
     # MCP server for AI agents: drives the running editor live, or edits project files directly.
     add_executable(aiversemcp tools/mcp/main.cpp)
     target_link_libraries(aiversemcp PRIVATE aiverse_editor_core)
@@ -2365,7 +2368,7 @@ if(TARGET aiverse_client AND AIVERSE_PLATFORM STREQUAL "ios" AND AIVERSE_GEN_DIR
     set_property(TARGET aiverse_client APPEND PROPERTY RESOURCE "${AIVERSE_GEN_DIR}/LaunchScreen.storyboard")
     set(AIVERSE_IOS_LAUNCH_STORYBOARD "<key>UILaunchStoryboardName</key><string>LaunchScreen</string>")
 endif()
-if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
+if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS OR TARGET aiverse_editor_core)
     add_library(aiverse_branding STATIC tools/branding/BrandImage.cpp tools/branding/Icons.cpp tools/branding/Splash.cpp)
     target_include_directories(aiverse_branding PRIVATE third_party/stb_image_write)
     target_link_libraries(aiverse_branding PUBLIC aiverse_splash)
@@ -5507,13 +5510,13 @@ if(AIVERSE_BUILD_TESTS AND TARGET aiverse_renderbench)
 endif()
 
 # ---------------------------------------------------------------------------
-# Experimental HTML5 Studio host. Production editor still uses its existing UI.
+# Desktop HTML5 Studio host.
 # ---------------------------------------------------------------------------
 if(AIVERSE_BUILD_STUDIO_HTML5)
-    if((APPLE OR WIN32) AND TARGET aiverse_editor_core)
+    if((APPLE AND NOT IOS) OR WIN32)
         add_subdirectory(apps/studio-native)
     else()
-        message(WARNING "AIVERSE Studio HTML5 requires macOS or Windows and aiverse_editor_core (AIVERSE_BUILD_TOOLS or AIVERSE_BUILD_EDITOR)")
+        message(WARNING "AIVERSE Studio HTML5 requires macOS or Windows")
     endif()
 endif()
 

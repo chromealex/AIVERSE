@@ -732,11 +732,7 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
 #else
         core_->session().setBuildTool(aiverse::editor::findBuildTool(exeDir,root));
 #endif
-#ifdef AIVERSE_STUDIO_MCP_TOOL
-        core_->session().setMcpTool(AIVERSE_STUDIO_MCP_TOOL);
-#else
         core_->session().setMcpTool(exeDir+"/aiversemcp");
-#endif
         core_->setPendingProject(project);
         NSURL* bundled=[[NSBundle mainBundle] URLForResource:@"index" withExtension:@"html" subdirectory:@"studio-web"];
         dist_=bundled ? [[[bundled URLByDeletingLastPathComponent] path] stringByStandardizingPath]

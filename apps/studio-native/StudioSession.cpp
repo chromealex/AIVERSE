@@ -1888,7 +1888,7 @@ Json StudioSession::agentRequest(const std::string& method, const Json& params) 
         // (the ImGui editor's port) is not loaded for this run.
         Json server=Json::object(),argv=Json::array(),servers=Json::object(),config=Json::object();
         server.set("command",str(mcpTool_));
-        for(const std::string& a:{std::string("--engine"),ws_.engineDir,std::string("--port"),std::to_string(agentServer_.port())})argv.push(str(a));
+        for(const std::string& a:{std::string("--no-editor"),std::string("--engine"),ws_.engineDir,std::string("--port"),std::to_string(agentServer_.port())})argv.push(str(a));
         server.set("args",argv);servers.set("aiverse",server);config.set("mcpServers",servers);
         const fs::path configFile=dir/"mcp.json",taskFile=dir/"task.md",logFile=dir/"run.log";
         {std::ofstream(configFile)<<config.dump(2);}

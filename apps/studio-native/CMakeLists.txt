@@ -24,11 +24,6 @@ else()
         add_dependencies(aiverse_studio aiversebuild)
         target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_BUILD_TOOL="$<TARGET_FILE:aiversebuild>")
     endif()
-    # Agent panel: the MCP server the in-editor Claude Code run talks to (forwards to this Studio's port).
-    if(TARGET aiversemcp)
-        add_dependencies(aiverse_studio aiversemcp)
-        target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_MCP_TOOL="$<TARGET_FILE:aiversemcp>")
-    endif()
     set_source_files_properties(mac/Main.mm mac/StudioAssetSchemeHandler.mm ../editor/EditorSpeech_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
     set_target_properties(aiverse_studio PROPERTIES
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/mac/StudioInfo.plist.in"
@@ -39,6 +34,8 @@ else()
         # NEW, so TARGET_BUNDLE_CONTENT_DIR does not introduce a reverse dependency.
         add_custom_target(aiverse_studio_web_assets
             DEPENDS "${AIVERSE_STUDIO_WEB_DIST}/index.html"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/MacOS"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:aiversemcp>" "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/MacOS/$<TARGET_FILE_NAME:aiversemcp>"
             COMMAND "${CMAKE_COMMAND}" -E copy_directory
                 "${AIVERSE_STUDIO_WEB_DIST}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Resources/studio-web"
@@ -296,6 +293,15 @@ if(AIVERSE_BUILD_TESTS)
     add_test(NAME studio_owner_history COMMAND aiverse_studio_owner_history_tests)
     set_tests_properties(studio_owner_history PROPERTIES LABELS "EDITOR")
     if(Python3_Interpreter_FOUND)
+        if(APPLE)
+            set(studio_distribution "$<TARGET_BUNDLE_DIR:aiverse_studio>")
+        else()
+            set(studio_distribution "$<TARGET_FILE_DIR:aiverse_studio>")
+        endif()
+        add_test(NAME studio_standalone_bundle
+            COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/tests/standalone_bundle.py"
+                "${studio_distribution}")
+        set_tests_properties(studio_standalone_bundle PROPERTIES LABELS "EDITOR;MCP")
         add_test(NAME studio_wizard_art_download
             COMMAND "${Python3_EXECUTABLE}" -B "${PROJECT_SOURCE_DIR}/tests/wizard_art_download.py")
     endif()

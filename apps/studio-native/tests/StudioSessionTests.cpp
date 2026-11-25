@@ -1477,7 +1477,7 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Fixture co
        AIVERSE_TEST_CHECK(completed.getStr("result")=="Fixture completed" && completed.getStr("runClient")=="codex");
        std::ifstream argvFile(project/"fixture-args"),inputFile(project/"fixture-input");
        const std::string args{std::istreambuf_iterator<char>(argvFile),{}},input{std::istreambuf_iterator<char>(inputFile),{}};
-       AIVERSE_TEST_CHECK(args.find("mcp_servers.aiverse.args=")!=std::string::npos &&
+       AIVERSE_TEST_CHECK(args.find("mcp_servers.aiverse.args=")!=std::string::npos && args.find("--no-editor")!=std::string::npos &&
            args.find(std::to_string(completed["port"].integer()))!=std::string::npos && input.find("Review fixture economy")!=std::string::npos);
        request.set("useWizardBrief",Json::fromBool(true));
        AIVERSE_TEST_CHECK(start().has("error"));
