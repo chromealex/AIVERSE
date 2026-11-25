@@ -35,7 +35,7 @@ export interface StudioComponentCatalogItem { id: string; title: string; group: 
 /** Unit types of rules.json: as written (`types`) and with "extends" applied (`resolved`). */
 export interface StudioRules { acquireOrder: 'nearest' | 'rowMajor'; triggers?:unknown[]; armorTypes?:string[]; damageTable?:Record<string,Record<string,number>>; types: Record<string, unknown>; resolved: Record<string, unknown>; resources: string[]; summary: unknown[]; dirty: boolean }
 export interface StudioInspector { id: string; name: string; kind: string; nameEditable?: boolean; components: StudioInspectorComponent[] }
-export interface StudioEntity { id: string; name: string; kind: string; parentId?: string; visible?: boolean; locked?: boolean; owner?: number }
+export interface StudioEntity { preview?:{components:string[];health?:number}; id: string; name: string; kind: string; parentId?: string; visible?: boolean; locked?: boolean; owner?: number }
 export interface StudioLog { level: 'info' | 'warning' | 'error'; text: string; time: string; source?: string }
 export interface StudioAsset {
   path: string;
@@ -501,7 +501,7 @@ export interface StudioParams {
   'studio.newMap': {width: number; height: number; name: string};
   'studio.openMap': {file: string};
   'studio.saveAs': Record<string, never>;
-  'studio.hierarchyGroups': {expectedProject:string;scope:StudioGraphDocumentScope;group:number;refresh?:boolean};
+  'studio.hierarchyGroups': {expectedProject:string;scope:StudioGraphDocumentScope;group?:number;refresh?:boolean};
   'studio.entityCatalog': Record<string, never>;
   'studio.entityCreate': {type: string; x: number; z: number; owner: number};
   'studio.entityDelete': {entityId: string};
@@ -739,7 +739,7 @@ export interface StudioResult {
   'studio.newMap': StudioSnapshot;
   'studio.openMap': StudioSnapshot;
   'studio.saveAs': StudioSnapshot;
-  'studio.hierarchyGroups': {pending:boolean;paths?:StudioHierarchyPaths;parents?:Record<string,string>};
+  'studio.hierarchyGroups': {pending:boolean;preview?:StudioEntity[];paths?:StudioHierarchyPaths;parents?:Record<string,string>};
   'studio.entityCatalog': StudioEntityCatalog;
   'studio.entityCreate': StudioSnapshot;
   'studio.entityDelete': StudioSnapshot;

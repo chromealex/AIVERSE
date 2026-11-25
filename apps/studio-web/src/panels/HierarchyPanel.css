@@ -50,3 +50,11 @@
 .hier__disclosure{display:inline-grid;place-items:center;flex:none;width:22px;height:22px;border:0;border-radius:4px;padding:0;background:none;color:var(--au-text-muted);cursor:pointer}
 .hier__disclosure:hover{color:var(--au-text);background:var(--au-hover)}
 .hier__row[data-nested-leaf]::before{content:"";flex:0 0 22px}
+.hier-preview{display:flex;align-items:flex-start;padding-right:6px;color:var(--au-text-muted)}
+.hier-preview details{flex:1;min-width:0}
+.hier-preview summary{display:flex;align-items:center;gap:6px;min-height:25px;cursor:pointer}
+.hier-preview summary::-webkit-details-marker{display:none}
+.hier-preview summary span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hier-preview summary small{margin-left:auto;color:var(--au-text-faint)}
+.hier-preview dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 10px;margin:0 0 8px;padding:8px;border-left:2px solid var(--au-accent);background:var(--au-field)}
+.hier-preview dd{margin:0;color:var(--au-text);overflow-wrap:anywhere}

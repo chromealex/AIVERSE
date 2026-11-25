@@ -741,7 +741,7 @@ Json StudioSession::hierarchyGroups(const Json& params) {
        !sameDocumentScope(params["scope"],graphDocumentScope()))throw std::runtime_error("Hierarchy document changed");
     const auto config=studioHierarchyConfig(ws_.project.manifest);
     const auto index=params.getInt("group",-1);
-    if(index<0 || size_t(index)>=config.groupings.size())throw std::runtime_error("Unknown Hierarchy grouping");
+    if(params.has("group") && (index<0 || size_t(index)>=config.groupings.size()))throw std::runtime_error("Unknown Hierarchy grouping");
     const auto version=graphDocumentScope().dump(-1)+"|"+ws_.project.historyVersion();
     if(version!=hierarchyPreviewVersion_ || params.getBool("refresh")){
         editor::startDocumentWorldPreview(hierarchyPreview_,ws_.map,ws_.project,config);
@@ -756,16 +756,35 @@ Json StudioSession::hierarchyGroups(const Json& params) {
     if(!sim || !module || !hierarchyPreview_.error().empty())throw std::runtime_error("Hierarchy preview: "+hierarchyPreview_.error());
     editor::WorldModel world;
     editor::readWorld(*sim,*module,config,hierarchyPreview_.links(),hierarchyPreview_.setupRefs(),&ws_.map.data,world);
-    if(config.groupings[size_t(index)].by==std::vector<std::string>{"parent"}){
-        std::vector<const editor::WorldRow*> matched;
-        std::unordered_map<uint64_t,std::string> ids;
-        for(const auto& node:editor::enumerateDocumentSceneNodes(ws_.map)){
-            if(node.ref.source!=editor::DocumentEntityRef::Source::MapEntity)continue;
-            if(const auto* row=world.findDoc(int(node.ref.index))){
-                matched.push_back(row);
-                ids.emplace(row->ref,nodeId(ws_.map,node.ref));
-            }
+    std::unordered_map<uint64_t,std::string> ids;
+    for(const auto& node:editor::enumerateDocumentSceneNodes(ws_.map)){
+        if(node.ref.source!=editor::DocumentEntityRef::Source::MapEntity)continue;
+        if(const auto* row=world.findDoc(int(node.ref.index)))ids.emplace(row->ref,nodeId(ws_.map,node.ref));
+    }
+    Json preview=Json::array();
+    std::vector<const editor::WorldRow*> matched;
+    for(const auto& row:world.rows){
+        if(!ids.contains(row.ref)){
+            if(row.doc>=0)continue;
+            const auto id="preview:"+std::to_string(row.ref);
+            ids.emplace(row.ref,id);
+            Json item=Json::object(),details=Json::object(),components=Json::array();
+            item.set("id",str(id));
+            item.set("name",str(editor::worldRowName(world,module->rules(),&ws_.map.data,row)));
+            item.set("kind",str(row.type>=0 && size_t(row.type)<module->rules().types.size() ?
+                module->rules().types[size_t(row.type)].id : editor::worldKindId(row.kind)));
+            item.set("owner",num(int64_t(row.owner)));
+            row.eachComp([&](int c){ components.push(str(editor::worldComponents()[size_t(c)].id)); });
+            details.set("components",std::move(components));
+            if(row.maxHp>0)details.set("health",Json::number(double(row.hp)));
+            item.set("preview",std::move(details));
+            preview.push(std::move(item));
         }
+        matched.push_back(&row);
+    }
+    result.set("preview",std::move(preview));
+    if(index<0)return result;
+    if(config.groupings[size_t(index)].by==std::vector<std::string>{"parent"}){
         Json parents=Json::object();
         for(const auto& row:nestedEntities(matched,sim->world()))
             if(row.parent)parents.set(ids.at(row.entity->ref),str(ids.at(row.parent)));
@@ -773,10 +792,7 @@ Json StudioSession::hierarchyGroups(const Json& params) {
         return result;
     }
     Json paths=Json::object();
-    for(const auto& node:editor::enumerateDocumentSceneNodes(ws_.map)){
-        if(node.ref.source!=editor::DocumentEntityRef::Source::MapEntity)continue;
-        const auto* row=world.findDoc(int(node.ref.index));
-        if(!row)continue;
+    for(const auto* row:matched){
         Json path=Json::array();
         for(const auto& key:config.groupings[size_t(index)].by){
             if(key=="component"){
@@ -785,7 +801,7 @@ Json StudioSession::hierarchyGroups(const Json& params) {
                 path.push(std::move(labels));
             }else path.push(str(editor::worldGroupValue(world,module->rules(),*row,key)));
         }
-        paths.set(nodeId(ws_.map,node.ref),std::move(path));
+        paths.set(ids.at(row->ref),std::move(path));
     }
     result.set("paths",std::move(paths));
     return result;

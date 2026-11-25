@@ -1752,7 +1752,9 @@ void entityWorkflow() {
     const auto project=root/"templates"/"fixture";
     fs::create_directories(project/"maps");
     std::ofstream(project/"game.json") << R"({"name":"Studio fixture","module":"game","editor":{"hierarchy":{"groupings":[{"title":"By type and origin","by":["type","origin"]}]}},"rules":"rules.json","maps":[{"file":"maps/scene.json"}]})";
-    std::ofstream(project/"rules.json") << R"({"types":{"unit":{"health":{"max":100}}}})";
+    fs::create_directories(project/"scripts");
+    std::ofstream(project/"scripts"/"preview.lua") << "function on_start() game.spawn('unit',0,8,8) end";
+    std::ofstream(project/"rules.json") << R"({"scripts":["scripts/preview.lua"],"types":{"unit":{"health":{"max":100}}}})";
     editor::MapDoc map;
     map.reset(16,16);
     editor::DocEntity entity; entity.type="unit";entity.id="original";entity.x=2;entity.z=3;
@@ -1793,6 +1795,13 @@ void entityWorkflow() {
             const auto byComponent=call("studio.hierarchyGroups",params);
             const auto& components=byComponent["result"]["paths"][snapshot["scene"]["entities"][0].getStr("id")][0];
             AIVERSE_TEST_CHECK(components.isArray() && components.size()>1);
+            AIVERSE_TEST_CHECK(session.workspace().map.toJson()==unchanged);
+            const auto previews=byComponent["result"]["preview"];
+            AIVERSE_TEST_CHECK(previews.size()==1 && previews[0].getStr("id").starts_with("preview:"));
+            AIVERSE_TEST_CHECK(previews[0]["preview"]["components"].size()>1);
+            AIVERSE_TEST_CHECK(byComponent["result"]["paths"].has(previews[0].getStr("id")));
+            Json flat=Json::object();flat.set("scope",params["scope"]);flat.set("expectedProject",params["expectedProject"]);
+            AIVERSE_TEST_CHECK(call("studio.hierarchyGroups",flat)["result"]["preview"]==previews);
             AIVERSE_TEST_CHECK(session.workspace().map.toJson()==unchanged);
             params.member("scope").set("revision",Json::string("stale"));
             AIVERSE_TEST_CHECK(call("studio.hierarchyGroups",params).has("error"));
