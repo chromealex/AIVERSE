@@ -173,7 +173,7 @@
       "modeling_volume_texture_import"
     ],
     "studio_panels": [
-      "ModelGraphPanel"
+      "modeling"
     ],
     "studio_methods": [
       "studio.op"
