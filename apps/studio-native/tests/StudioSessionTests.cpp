@@ -1453,6 +1453,11 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(call("studio.attachmentsSet",R"({"document":{"parent":"content/a.glb","attachments":[{"model":"content/b.glb"}]}})").has("error"));
        AIVERSE_TEST_CHECK(call("studio.attachmentsGet",R"({"path":"../x.json"})").has("error"));
        const auto saved=call("studio.attachmentsSet",R"({"document":{"parent":"content/a.glb","attachments":[{"model":"content/b.glb","socket":"hand_r","id":"sword"}]}})");
+       AIVERSE_TEST_CHECK(call("studio.attachmentsSet",R"({"expected":null,"document":{"parent":"changed","attachments":[]}})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.attachmentsSet",R"({"expected":{"parent":"wrong","attachments":[]},"document":{"parent":"changed","attachments":[]}})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.attachmentsGet",R"({"project":"wrong-project"})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.attachmentsGet")["result"]["document"]==saved["result"]["document"]);
+
        AIVERSE_TEST_CHECK(!saved.has("error") && saved["result"].getBool("exists") && saved["result"]["document"]["attachments"][0].getStr("socket")=="hand_r");
    }
    // Spline editing: a river's point moves by handle id as one History step.

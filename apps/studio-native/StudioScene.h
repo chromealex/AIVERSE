@@ -411,6 +411,8 @@ public:
     // Scene brush ring under the cursor (radius in world units); hidden when visible=false.
     // Texture Resources / Frame Capture panels: live GPU textures (format-based size estimate) and draw calls.
     Json textureResources() const;
+    Json attachmentCommand(const std::string& project,const Json& params);
+    void drawAttachments(int width,int height);
     void drawAnimationPose(int width,int height,const std::shared_ptr<const render::Model>& source,
                            const render::Pose& pose,float yaw);
     uint32_t drawCalls() const { return renderer_.drawCalls(); }
@@ -573,6 +575,7 @@ private:
     std::string planetChartIdentity_;
     std::string sparseTerrainError_;
     bool terrainWasShown_=false,terrainCavernsAuthored_=false;
+    std::unique_ptr<class StudioAttachmentPreview> attachmentPreview_;
     std::shared_ptr<const render::Model> animationSource_;
     std::unique_ptr<render::Model> animationModel_;
     std::unique_ptr<render::Model> materialSphere_;

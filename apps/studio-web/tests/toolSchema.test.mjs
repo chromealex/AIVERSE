@@ -72,7 +72,15 @@ test('frame summary and byte formatting', () => {
   assert.equal(frameSummary([]).count, 0);
   assert.equal(formatBytes(2 * 1024 * 1024), '2.0 MB');
 });
-import { fromTrs, toTrs, IDENTITY } from '../src/panels/attachMath.ts';
+import { fromTrs, toTrs, IDENTITY, editAffine } from '../src/panels/attachMath.ts';
+test('editing a socket offset or one basis component preserves the rest of a custom affine matrix',()=>{
+ const source=[1,.25,0,0,-.3,2,.1,0,0,.2,3,0,4,5,6,1];
+ const changed=editAffine(source,3,1,-.75);
+ assert.deepEqual(changed,source.map((value,i)=>i===13?-.75:value));
+ assert.equal(source[13],5);
+ assert.deepEqual(editAffine(changed,1,2,8),changed.map((value,i)=>i===6?8:value));
+});
+
 test('attachment transforms: TRS round trip, custom matrices flagged', () => {
   const m = fromTrs([1, 2, 3], 90, 2);
   const t = toTrs(m);

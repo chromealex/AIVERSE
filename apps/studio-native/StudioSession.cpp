@@ -1,5 +1,6 @@
 #include "aiverselib/world/EvolveAreaScaleMath.h"
 #include <regex>
+#include "apps/editor/core/GraphAssetTransaction.h"
 #include <fstream>
 #include "apps/editor/AuthoringWater.h"
 #include "StudioHumanCharacterBuild.h"
@@ -4009,18 +4010,32 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             // written through the engine codec, so invalid layouts are refused with its message.
             namespace fs=std::filesystem;
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
+            if(params.has("project")&&params.getStr("project")!=ws_.project.dir)throw std::runtime_error("Attachment project changed");
             const std::string rel=params.getStr("path","attachments.json");
             const fs::path relPath=fs::path(rel).lexically_normal();
             if (rel.empty()||rel.size()>300||relPath.is_absolute()||rel.find("..")!=std::string::npos||relPath.extension()!=".json")
                 throw std::runtime_error("Choose a .json file inside the project");
-            const fs::path file=fs::path(ws_.project.dir)/relPath;
+            const auto root=fs::weakly_canonical(ws_.project.dir);
+            const fs::path file=root/relPath;
+            const auto local=fs::weakly_canonical(file).lexically_relative(root);
+            if(local.empty()||*local.begin()==".."||fs::is_symlink(fs::symlink_status(file)))
+                throw std::runtime_error("Attachment layout is outside the project or is a symlink");
             view::AttachmentLayout layout;
             if (method=="studio.attachmentsSet") {
                 view::AttachmentLayoutCodec::read(params["document"],layout);   // throws on invalid data
                 const Json canonical=view::AttachmentLayoutCodec::write(layout);
-                std::error_code ec;fs::create_directories(file.parent_path(),ec);
-                std::ofstream out(file,std::ios::binary|std::ios::trunc);
-                if (!out || !(out<<canonical.dump(2)<<"\n")) throw std::runtime_error("Unable to write "+rel);
+                editor::graph_asset::Transaction transaction(file,root);
+                if(params.has("expected")){
+                    if(params["expected"].isNull()){
+                        if(fs::exists(file))throw std::runtime_error("Attachment file already exists; reopen it");
+                    }else{
+                        view::AttachmentLayout previous;
+                        view::AttachmentLayoutCodec::read(Json::parseFile(file.string()),previous);
+                        if(!editor::graph_asset::sameDocument(params["expected"],view::AttachmentLayoutCodec::write(previous)))
+                            throw std::runtime_error("Attachment layout changed on disk; reload before saving");
+                    }
+                }
+                transaction.replace(canonical.dump(2)+"\n",4*1024*1024);
             }
             Json result=Json::object();
             std::error_code ec;

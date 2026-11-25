@@ -1,5 +1,13 @@
 # AIVERSE Studio — MotionWeave attachment authoring (Stage 155)
 
+## HTML5 Studio
+
+Open **Attachments** using the command palette. Open a project-relative layout file, select the parent and child model paths and enter the socket name. **Preview layout** imports the current draft into the window. After import, the Socket field suggests named model nodes. Pause or scrub the parent clip and use Orbit and Elevation to inspect the child. **Reimport preview** applies draft changes to the model. **Save** writes the layout to the open project file.
+
+**Socket transform** and **Child model transform** each expose translation and the three basis vectors. Use the basis fields for nonuniform scale or shear. Changing an offset preserves the existing basis.
+
+## Earlier editor stages
+
 The **MotionWeave — Attachments** window lives under the Studio **Look / Graphics** workspace,
 is closed by default, and can be opened from the existing Modeling and Animation Graph toolbars
 via their **Attachments** buttons. The window is deliberately independent of game genres.

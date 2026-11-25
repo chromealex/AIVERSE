@@ -142,7 +142,7 @@ Derived from actual AIVERSE_EDITOR_WINDOW registrations in apps/editor/windows. 
 | `animation_graph` | `apps/editor/windows/AnimationGraphWindow.cpp` | Visual pose nodes and wiring, graph scopes, state outputs, transitions and conditions, draft undo, native model validation, and revision-checked saves. Model playback in the panel and full rig tooling are pending. |
 | `animation_rig` | `apps/editor/windows/AnimationRigWindow.cpp` | Ordered rig units with native presets, nested parameter editing, contact setup, graph validation and save. Workspace operations available. Add and remove effectors, joints, legs, feet, capsules, balance masses and obstacles. Interactive skeleton preview remains open. |
 | `assets` | `apps/editor/windows/AssetsWindow.cpp` | Partial: GUID catalog/import/moves/conflict handling/import settings merged and native-tested (78–79); visual and full legacy parity pending |
-| `animation_attachments` | `apps/editor/windows/AttachmentAuthoringWindow.cpp` | Attachments panel: layout JSON via the engine codec; no live GPU preview (111) |
+| `animation_attachments` | `apps/editor/windows/AttachmentAuthoringWindow.cpp` | Attachments edits both transforms and previews the parent, socket and static or MotionWeave child on its own native surface. Mac docked layouts and failed reimport verified. |
 | `branding` | `apps/editor/windows/BrandingWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) |
 | `build` | `apps/editor/windows/BuildWindow.cpp` | Build panel: toolchain, estimate, build, log (103) |
 | `console` | `apps/editor/windows/ConsoleWindow.cpp` | Partial; native visual parity pending |
@@ -191,7 +191,7 @@ Derived from actual AIVERSE_EDITOR_WINDOW registrations in apps/editor/windows. 
 
 **2026-11-25 inventory check.** The original table covered 49 C++ registration files. Scanning apps/editor/windows for lines beginning with AIVERSE_EDITOR_WINDOW found 51, including the two rows above. HTML panel counts measure a different inventory: the workspace redesign checked 59 registered HTML panels at desktop and narrow widths. The acceptance gallery verifies opening and layout. See [workspace verification](handoff/studio-html5/workspace-redesign-2026-11-25.md) for fixture and platform limits.
 
-Later stages added runtime inspection, Scene transforms and marquee selection, a separate animation timeline, Post FX controls and road/river spline gizmos. See [runtime](handoff/studio-html5/83-live-runtime-inspection.md), [Scene](handoff/studio-html5/99-multi-select-marquee-hierarchy-flags-asset-drop.md) and [timeline and splines](handoff/studio-html5/112-spline-gizmos-hub-postfx-timeline-splash.md). Animation Graph has a dedicated visual authoring panel. Rig still routes through ToolPanel. RulesPanel edits unit types, rules-level triggers and the damage matrix (b8250d349). Global settings and complete rules.json editing use native validation and stale-document checks (069d814e8). AttachmentsPanel edits sockets and transforms; live placement preview still needs acceptance.
+Later stages added runtime inspection, Scene transforms and marquee selection, a separate animation timeline, Post FX controls and road/river spline gizmos. See [runtime](handoff/studio-html5/83-live-runtime-inspection.md), [Scene](handoff/studio-html5/99-multi-select-marquee-hierarchy-flags-asset-drop.md) and [timeline and splines](handoff/studio-html5/112-spline-gizmos-hub-postfx-timeline-splash.md). Animation Graph has a dedicated visual authoring panel. Rig still routes through ToolPanel. RulesPanel edits unit types, rules-level triggers and the damage matrix (b8250d349). Global settings and complete rules.json editing use native validation and stale-document checks (069d814e8). AttachmentsPanel edits sockets and transforms. See the attachment preview acceptance below.
 
 ## Workflow gates and execution order
 
@@ -225,3 +225,5 @@ Rig vector parameters appear as draggable targets in the skeleton view. Keep con
 Skinned preview stage: publish the evaluated native pose and draw its imported model on dedicated Graph and Rig GPU surfaces. Verify an actual weighted mesh in two poses.
 
 Animation Graph and Animation Rig now render the selected skinned model in their own native drawables beside the evaluated skeleton in wide panels. In bundled Mac Studio the weighted arm followed the wrist through 15 frame steps to 0.50 s, with Scene hidden. Both windows were separately opened and captured. Windows runtime and the independent attachment authoring preview remain open.
+
+Attachments stage: preserve both affine transforms while editing, publish draft parent and socket children to the owning HTML window, verify on a real imported model and retain last good publication on failure.

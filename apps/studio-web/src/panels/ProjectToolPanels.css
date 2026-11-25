@@ -86,3 +86,22 @@ tr.diff__added td:first-child{color:#8ee6a0}tr.diff__removed td:first-child{colo
 .att__grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:4px 8px}
 .att__num{display:flex;flex-direction:column;gap:2px;font-size:var(--au-font-xs);color:var(--au-text-muted)}
 .att__num .au-input{width:100%;min-width:0}
+
+.attachment-body{display:grid;align-content:start;align-items:start;gap:14px}
+.attachment-view,.attachment-form{min-width:0;margin:0}
+.attachment-view header,.att-controls{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.attachment-view .asset-native-surface{height:clamp(190px,32vh,340px);border-radius:8px}
+.attachment-view>label{display:flex;align-items:center;gap:8px;margin-top:8px}
+.attachment-form{border:0;padding:0}.att-triple{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.att-transform{min-width:0;border:1px solid var(--au-line);border-radius:6px;margin:8px 0;padding:8px}
+.att-transform input{min-width:0;width:100%;box-sizing:border-box}
+.attachment-form details summary{cursor:pointer;padding:6px 0;color:var(--au-text-soft)}
+@container studio-page (min-width:640px){.attachment-body{grid-template-columns:minmax(220px,1fr) minmax(260px,1fr)}.attachment-view{position:sticky;top:0}}
+.attachment-page .ptp__edhead{flex-wrap:wrap}
+.attachment-view>label{display:grid;grid-template-columns:minmax(6em,auto) minmax(0,1fr);color:var(--au-text-soft)}
+.attachment-view input[type=range]{width:100%;margin:0;accent-color:var(--au-accent)}
+.attachment-view .att-controls{margin:10px 0;color:var(--au-text-muted)}
+@container studio-page (max-width:390px){
+  .attachment-page .ptp__edhead>.att__path{flex:1 0 100%;width:100%;box-sizing:border-box}
+  .attachment-page .ptp__edhead>.au-button{flex:1}
+}

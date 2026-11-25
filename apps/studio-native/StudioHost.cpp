@@ -122,7 +122,7 @@ void StudioHost::shutdown() {
     game_.reset(); // hosted client and its device retire before the native surface
     if (renderThread_) {
         // The Scene and its GPU resources are released on their owner thread, then the thread stops.
-        try { renderThread_->invoke([&] { animationGraphSurface_.renderer.reset(); animationRigSurface_.renderer.reset(); appearanceSurface_.renderer.reset(); characterSurface_.renderer.reset(); facialRigSurface_.renderer.reset(); materialSurface_.renderer.reset(); shaderSurface_.renderer.reset(); fxPreview_.reset(); preview_.reset(); }); } catch (const std::exception&) {}
+        try { renderThread_->invoke([&] { attachmentSurface_.renderer.reset(); animationGraphSurface_.renderer.reset(); animationRigSurface_.renderer.reset(); appearanceSurface_.renderer.reset(); characterSurface_.renderer.reset(); facialRigSurface_.renderer.reset(); materialSurface_.renderer.reset(); shaderSurface_.renderer.reset(); fxPreview_.reset(); preview_.reset(); }); } catch (const std::exception&) {}
         renderThread_->stop();
         renderThread_.reset();
     }
@@ -441,6 +441,7 @@ void StudioHost::pollAgentRequests() {
 }
 StudioHost::AssetSurface& StudioHost::assetSurface(StudioSurface surface) {
     switch(surface){
+    case StudioSurface::Attachments:return attachmentSurface_;
     case StudioSurface::AnimationGraph:return animationGraphSurface_;
     case StudioSurface::AnimationRig:return animationRigSurface_;
     case StudioSurface::Material:return materialSurface_;
@@ -668,6 +669,11 @@ void StudioHost::tick() {
     }
     tickAgentScreenshot();
     pollAgentRequests();
+    if(attachmentSurface_.renderer&&attachmentProject_!=session_->workspace().project.dir)surfaceDetached(StudioSurface::Attachments);
+    if(attachmentSurface_.renderer&&attachmentSurface_.placement.visible&&platform_.surfaceDrawable(StudioSurface::Attachments)){
+        try{onScene([&]{platform_.sceneThreadScope([&]{attachmentSurface_.renderer->drawAttachments(attachmentSurface_.placement.pixelsW,attachmentSurface_.placement.pixelsH);});});}
+        catch(const std::exception& e){sendEvent("attachments.previewError",e.what());surfaceDetached(StudioSurface::Attachments);}
+    }
     tickAnimationPreview(StudioSurface::AnimationGraph);
     tickAnimationPreview(StudioSurface::AnimationRig);
     tickCharacterPreview(StudioSurface::FacialRig);
@@ -2648,13 +2654,13 @@ void StudioHost::applyViewport(const Json& params) {
         else if (game_) game_->suspend();
         return;
     }
-    if(id=="shader"||id=="material"||id=="facialRig"||id=="character"||id=="appearance"||id=="animationGraph"||id=="animationRig") {
-        const auto surface=id=="animationRig"?StudioSurface::AnimationRig:id=="animationGraph"?StudioSurface::AnimationGraph:id=="character"?StudioSurface::Character:id=="appearance"?StudioSurface::Appearance:id=="facialRig"?StudioSurface::FacialRig:id=="shader"?StudioSurface::Shader:StudioSurface::Material;
+    if(id=="shader"||id=="material"||id=="facialRig"||id=="character"||id=="appearance"||id=="animationGraph"||id=="animationRig"||id=="attachments") {
+        const auto surface=id=="attachments"?StudioSurface::Attachments:id=="animationRig"?StudioSurface::AnimationRig:id=="animationGraph"?StudioSurface::AnimationGraph:id=="character"?StudioSurface::Character:id=="appearance"?StudioSurface::Appearance:id=="facialRig"?StudioSurface::FacialRig:id=="shader"?StudioSurface::Shader:StudioSurface::Material;
         auto& asset=assetSurface(surface);
         NativeViewportPlacement placed;
         if(platform_.placeSurface(surface,rect,placed)){
             asset.placement=placed;
-            if(!placed.visible){asset.error.clear();if(asset.renderer)onScene([&]{asset.renderer.reset();});}
+            if(!placed.visible){asset.error.clear();if(surface!=StudioSurface::Attachments&&asset.renderer)onScene([&]{asset.renderer.reset();});}
         }
         return;
     }
@@ -3452,6 +3458,37 @@ void StudioHost::handleMessage(const std::string& json) {
                 result.set("drawCalls", Json::number(int64_t(onScene([&] { return preview_->drawCalls(); }))));
                 if (req["params"].getBool("textures")) result.set("gpu", onScene([&] { return preview_->textureResources(); }));
             } else result.set("error", Json::string("The Scene panel is not visible"));
+            reply.set("result", std::move(result));
+        } else if (method == "studio.attachmentsPreview") {
+            const auto& params = req["params"];
+            const auto& project = session_->workspace().project.dir;
+            if (project.empty() || params.getStr("project") != project)
+                throw std::runtime_error("Project changed");
+            Json result = Json::object();
+            if (params.getBool("close")) {
+                onScene([&] { attachmentSurface_.renderer.reset(); });
+                attachmentProject_.clear();
+            } else {
+                const bool publishing = params["document"].isObject();
+                if (!renderThread_) {
+                    if (!publishing) throw std::runtime_error("Open the attachment preview first");
+                    const char* threaded = std::getenv("AIVERSE_STUDIO_RENDER_THREAD");
+                    renderThread_ = std::make_unique<StudioRenderThread>([this] { renderSceneFrame(); },
+                        !(threaded && std::string(threaded) == "0"));
+                }
+                onScene([&] {
+                    platform_.sceneThreadScope([&] {
+                        if (!attachmentSurface_.renderer || attachmentProject_ != project) {
+                            if (!publishing) throw std::runtime_error("Open the attachment preview first");
+                            attachmentSurface_.renderer = std::make_unique<StudioScene>(platform_.createDevice(StudioSurface::Attachments));
+                            attachmentProject_ = project;
+                        }
+                        result = attachmentSurface_.renderer->attachmentCommand(project, params);
+                    });
+                });
+            }
+            reply = Json::object();
+            reply.set("id", req["id"]);
             reply.set("result", std::move(result));
         } else if (method == "studio.viewportRect" && req["id"].isNumber()) {
             applyViewport(req["params"]);

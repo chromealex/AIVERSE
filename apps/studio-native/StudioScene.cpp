@@ -3,6 +3,7 @@
 #include "engine/render/TextureCache.h"
 #include "apps/editor/AuthoringWater.h"
 #include "apps/studio-native/StudioScene.h"
+#include "apps/studio-native/StudioAttachmentPreview.h"
 #include "apps/studio-native/StudioPlanetLiveBudget.h"
 #include "apps/studio-native/StudioPlanetLiveTerrain.h"
 #include "engine/render/TerraWeaveModelAdapter.h"
@@ -1297,6 +1298,7 @@ void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std
     if(missing)lightingStatus_+=" · missing live models "+std::to_string(missing);
 }
 StudioScene::~StudioScene() {
+    attachmentPreview_.reset();
     if (device_) {
         device_->waitForResourceIdle();
         try {
@@ -2250,6 +2252,24 @@ void StudioScene::finishReplayTransaction() {
         rollbackReplayTransaction("failed",reason.empty()?"Replay candidate failed":reason);
     }
 }
+Json StudioScene::attachmentCommand(const std::string& project,const Json& params){
+    if(!attachmentPreview_)attachmentPreview_=std::make_unique<StudioAttachmentPreview>(*device_,renderer_,deviceLifetime_->lease());
+    if(params.has("document")){
+        auto result=attachmentPreview_->publish(project,params["document"]);
+        attachmentPreview_->controls(params);
+        return result;
+    }
+    if(params.getBool("status")){
+        Json result=Json::object();result.set("time",Json::number(double(attachmentPreview_->time()),4));return result;
+    }
+    attachmentPreview_->controls(params);return Json::object();
+}
+void StudioScene::drawAttachments(int width,int height){
+    if(!attachmentPreview_||!attachmentPreview_->ready()||width<2||height<2)return;
+    device_->beginFrame(width,height);StudioFrameScope frame{*device_};
+    attachmentPreview_->draw(width,height);
+}
+
 void StudioScene::drawAnimationPose(int width,int height,const std::shared_ptr<const render::Model>& source,
                                     const render::Pose& pose,float yaw) {
     if(!device_||width<2||height<2)return;

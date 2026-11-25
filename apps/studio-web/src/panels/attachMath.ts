@@ -17,3 +17,9 @@ export function toTrs(m: number[] | undefined | null): Trs {
   const custom = x.some((v, i) => Math.abs(v - back[i]) > 1e-4);
   return { t: [x[12], x[13], x[14]], yaw: +yaw.toFixed(3), scale: +(scale || 1).toFixed(4), custom };
 }
+
+export function editAffine(matrix:number[],column:number,row:number,value:number):number[] {
+ const next=[...matrix];
+ next[column*4+row]=value;
+ return next;
+}

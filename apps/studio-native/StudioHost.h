@@ -23,7 +23,7 @@
 
 namespace aiverse::studio {
 
-enum class StudioSurface { Scene, Game, Fx, Material, Shader, FacialRig, Character, Appearance, AnimationGraph, AnimationRig, Count };
+enum class StudioSurface { Scene, Game, Fx, Material, Shader, FacialRig, Character, Appearance, AnimationGraph, AnimationRig, Attachments, Count };
 
 // What a shell provides. Called on the main (UI) thread only, except runInBackground's work.
 class StudioHostPlatform {
@@ -243,7 +243,8 @@ private:
         std::string error;
         NativeViewportPlacement placement;
         std::unique_ptr<StudioScene> renderer;
-    } materialSurface_, shaderSurface_, facialRigSurface_, characterSurface_, appearanceSurface_, animationGraphSurface_, animationRigSurface_;
+    } materialSurface_, shaderSurface_, facialRigSurface_, characterSurface_, appearanceSurface_, animationGraphSurface_, animationRigSurface_, attachmentSurface_;
+    std::string attachmentProject_;
     AssetSurface& assetSurface(StudioSurface surface);
     std::unique_ptr<StudioScene> fxPreview_;           // separate GPU drawable + isolated camera; same owner render thread
     std::unique_ptr<StudioRenderThread> renderThread_;
