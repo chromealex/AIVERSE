@@ -1364,7 +1364,10 @@ void GameClient::event(const Event& incoming) {
             int gi = int(e.key) - int(Key::Num0);
             if (ctrl) groups_[size_t(gi)] = selection_;
             else if (selectionHasGarrison() && gi <= 4) sendPercent_ = gi * 25; // garrison games: 1-4 = 25..100%
-            else if (!groups_[size_t(gi)].empty()) selection_ = groups_[size_t(gi)];
+            else if (!groups_[size_t(gi)].empty()) {
+                selection_ = groups_[size_t(gi)];
+                cleanSelection();
+            }
         }
         applyRtsActions(inputActions,!ctrl);
         break;
@@ -1852,6 +1855,8 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         sceneFromSim(*sim_, scene_, alpha, spectator_ ? 0 : human_);
         scene_.paintLayers = viewScripts_.paintLayers();
         scene_.entityFx = viewScripts_.entityFx();
+        if (const auto* unit = sim_->world().tryGetConst<Unit>(hover_); unit && !rules_.types[unit->type].selectable)
+            hover_ = ui_.pointerOverUi() ? kNullEntity : pick(mouseX_, mouseY_);
         cleanSelection();
         for (auto& o : scene_.objects) {
             o.selected = std::find(selection_.begin(), selection_.end(), o.entity) != selection_.end();
