@@ -1,0 +1,7 @@
+# Rebuildable offline Building Graph and Caverns demo
+
+Source a2119fb214a651549605b3549071ad1ba4d20b98 under examples/world/building-caverns-web builds both WebAssembly owners with CMake and bundles the Three.js viewer. The output runs from a local file without a server. Studio generates the initial model from a 2 KiB recipe. Its 16,848,632-byte GLB matches the original native export, SHA-256 abb13efee7f37696cd8ccccc50076e9d2d8d565c476e488ea8f48f2bc2fabb8f.
+
+The [test report](../evidence/building-caverns-web-a2119fb21.json) covers all 13 styles and stable Caverns reset after Carve and Fill. A separate offline Chrome run exported a steampunk functional building, a modern residence with width 28 and seed 1234, and a warehouse with a gable roof. The two cave modes showed 8738 and 8642 triangles at radius 150 cm. Browser captures are under docs/devlog/media/2026-11-25-world-building-caverns-web. Local web bundle: /Volumes/KINGSTON/AIVERSE/Building-Caverns-Web/Building-Caverns-Web.zip. Archive integrity passed. Windows execution and strict integration acceptance remain open. Site publication belongs to the main integrator.
+
+GitHub Linux arm64 job 139022086091 reached two GCC 13.3 internal compiler errors in ECS.h while building Economy.cpp and GameCore.cpp. The source for this separate failure is unchanged from main. The owner approved diagnosis and a repair on PR #190. Next run the release compiler on both translation units and the native pool regressions.
