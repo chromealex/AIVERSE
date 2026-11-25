@@ -18069,7 +18069,7 @@ TEST(game_wizard_makes_a_playable_project) {
     Json m = Json::parseFile((dir / "game.json").string());
     CHECK(m["maps"].size() == 3 + Json::parse(readSource("templates/skirmish/game.json"))["maps"].size() && m["maps"][0].getStr("file") == "maps/wiz_level_1.json" && m["maps"][2].getStr("file") == "maps/wiz_tutorial.json");
     CHECK(m.getStr("name") == "Wizard Test" && m["store"]["products"].size() == 3 && m["ads"].isObject() && m["plugins"].has("mock-ads"));
-    CHECK(m["icons"].getStr("default") == "branding/wiz_icon.png" && m["splash"].getStr("image") == "art/key_art.png");
+    CHECK(m["icons"].getStr("default") == "branding/wiz_icon.png" && m["splash"].getStr("image") == "content/art/key_art.png");
     Json lv = Json::parseFile((dir / "maps/wiz_level_1.json").string());
     CHECK(lv["generate"].getStr("preset") == "classic" && lv["generate"].getStr("template") == "maps/valley.json");
     // the tutorial: steps from the rules, its scripts, hidden panel commands
@@ -18090,7 +18090,7 @@ TEST(game_wizard_makes_a_playable_project) {
     Json sj = Json::parseFile((dir / "ui/screens.json").string());
     CHECK(sj.getStr("start") == "home" && sj.getStr("afterMatch") == "result");
     for (const char* f : {"ui/screens/home.rml", "ui/screens/levels.rml", "ui/screens/upgrades.rml", "ui/screens/result.rml", "ui/wizard_meta.lua",
-                          "ui/hud/wiz_tutorial.rml", "ui/hud/wiz_hint.rml", "ui/main.lua", "WIZARD.md", "art/key_art.png", "docs/gdd.md"})
+                          "ui/hud/wiz_tutorial.rml", "ui/hud/wiz_hint.rml", "ui/main.lua", "WIZARD.md", "content/art/key_art.png", "docs/gdd.md"})
         CHECK(fs::exists(dir / f));
     Json ru = Json::parseFile((dir / "lang/ru.json").string());
     CHECK(ru.getStr("game.name") == "Wizard Test" && ru.has("wiz.tut.gather") && ru.has("wiz.hint.camera") && ru.has("wiz.levels"));

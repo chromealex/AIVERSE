@@ -15,6 +15,7 @@
 #include "engine/world/NereidFlowAuthoring.h"
 #include "apps/editor/core/ProjectFile.h"
 #include "apps/editor/core/Projects.h"
+#include "StudioGameWizard.h"
 #include "engine/game/MapGrid.h"
 #include "apps/editor/EditorWorldEdit.h"
 #include "apps/studio-native/StudioContentDirectory.h"
@@ -2362,6 +2363,15 @@ Json StudioSession::dispatchImplCore(const Json& request) {
         }
         if (method == "studio.hubTemplates") {   // StudioHost runs this off the UI thread; kept for other hosts
             reply.set("result",hubTemplatesJson(ws_.engineDir,params));
+            return reply;
+        }
+        if (method == "studio.wizardOptions") {
+            reply.set("result", editor::wizardCatalog(ws_.engineDir));
+            return reply;
+        }
+        if (method == "studio.wizardPlan") {
+            auto spec = studioWizardSpec(ws_.engineDir, params, wizardArtDir_);
+            reply.set("result", editor::planGame(ws_.engineDir, spec));
             return reply;
         }
         if (method == "studio.hubForget") {

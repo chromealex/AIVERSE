@@ -1536,6 +1536,15 @@ void authoredEntityWorkflow() {
    {
        AIVERSE_TEST_CHECK(call("studio.hubForget", R"({"dir":""})").has("error"));
        AIVERSE_TEST_CHECK(!call("studio.hubForget", R"({"dir":"unlisted-hub-test-entry"})").has("error"));
+       const auto wizard = call("studio.wizardOptions")["result"];
+       AIVERSE_TEST_CHECK(wizard["features"].size() > 0 && wizard["defaults"].has("levels"));
+       AIVERSE_TEST_CHECK(call("studio.wizardPlan", R"({"genre":"../bad"})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.wizardPlan", R"({"artDir":"unselected-folder"})").has("error"));
+       if (wizard["templates"].size()) {
+           auto plan = call("studio.wizardPlan", R"({"idea":"economy","levels":3,"tutorial":"none","mapPreset":"islands"})");
+           AIVERSE_TEST_CHECK(!plan.has("error") && plan["result"].getInt("levels")==3);
+           AIVERSE_TEST_CHECK(plan["result"].getStr("levelPreset")=="islands" && plan["result"].getStr("tutorialArchetype")=="none");
+       }
        const auto hub=call("studio.hub");
        AIVERSE_TEST_CHECK(!hub.has("error") && hub["result"]["templates"].size()>=1 && hub["result"]["templates"][0].getStr("id")=="empty");
        AIVERSE_TEST_CHECK(hub["result"]["recent"].isArray() && !hub["result"].getStr("defaultLocation").empty());

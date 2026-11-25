@@ -74,7 +74,7 @@ export async function invoke<M extends StudioMethod>(method: M, params: StudioPa
   return new Promise<StudioResult[M]>((resolve, reject) => {
     const id = nextId++;
     // Interactive native sheets wait for a person, including dirty-document prompts.
-    const interactive = ['studio.openProject','studio.openMap','studio.newMap','studio.saveAs','studio.save','studio.assetImportPreview','studio.spectraPackageChoose'].includes(method);
+    const interactive = ['studio.openProject','studio.openMap','studio.newMap','studio.saveAs','studio.save','studio.assetImportPreview','studio.spectraPackageChoose','studio.wizardArt','studio.wizardCreate'].includes(method);
     // No RPC timeout: the host answers every request (with an error if it fails), and long operations
     // (generation, builds, a busy main thread while a project streams in) are legitimate. A very slow reply
     // only leaves a note in the host log; the call keeps waiting and resolves when the answer comes.

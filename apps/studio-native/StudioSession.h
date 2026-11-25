@@ -20,6 +20,8 @@
 namespace aiverse::studio {
 class StudioSession {
 public:
+    void setWizardArtDir(const std::string& dir) { wizardArtDir_ = dir; }
+    const std::string& wizardArtDir() const { return wizardArtDir_; }
     explicit StudioSession(const std::string& engineRoot, const std::string& project = {});
     Json dispatch(const Json& request);   // labels undo steps for the History panel, then dispatchImpl
     editor::Workspace& workspace() { return ws_; }
@@ -197,6 +199,7 @@ private:
     double sceneFrameMs_=0; uint64_t sceneFrames_=0;
     std::unique_ptr<editor::MapDoc::CompoundEdit> strokeTransaction_;
     uint64_t strokeHistoryMark_=0; bool stroking_=false; double strokeX_=0, strokeY_=0, strokeHeight_=0;
+    std::string wizardArtDir_;
     bool strokeDabImpl(double x,double z,std::string* error,double y);
     Json agentRequest(const std::string& method, const Json& params);
     Json agentLinkedCall(const std::string& name,const Json& args);

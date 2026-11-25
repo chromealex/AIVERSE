@@ -4,6 +4,9 @@
   "owner": "HTML5 Studio",
   "changed_paths": [
     "apps/studio-web/src/components/ProjectHub.tsx",
+    "apps/studio-web/src/components/GameWizard.tsx",
+    "apps/editor/core/GameWizardContent.cpp",
+    "apps/studio-native/StudioHost.cpp",
     "apps/studio-native/StudioSession.cpp",
     "apps/studio-web/src/panels/generated/ProjectPanel.tsx"
   ],
@@ -133,7 +136,11 @@
       "studio.project",
       "studio.openMap",
       "studio.projectRule",
-      "studio.hubForget"
+      "studio.hubForget",
+      "studio.wizardOptions",
+      "studio.wizardPlan",
+      "studio.wizardArt",
+      "studio.wizardCreate"
     ]
   },
   "test_reports": [

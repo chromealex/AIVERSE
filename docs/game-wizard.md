@@ -93,3 +93,7 @@ Tests: `game_wizard_plan_picks_a_template_by_the_idea`, `game_wizard_makes_a_pla
 
 Script commands take `"card": false` (no button / hotkey; sent by view scripts, HUD documents, MCP) — the tutorial's
 Next / Skip (`engine/game/ScriptCommands.cpp`, client and editor command cards).
+
+## HTML5 Studio
+
+Open File → Project Hub → Game wizard. Enter the idea, optionally choose a folder of artwork and design notes, and select mechanics, tutorial and level settings. Preview game plan displays the chosen template and map preset. Create game in folder opens the native parent-folder picker and then opens the generated project. Its WIZARD.md records import decisions and bot checks. New pictures, models, audio and source fonts are stored under content and appear in Assets. Design documents are copied to docs.

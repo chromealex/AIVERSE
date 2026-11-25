@@ -1,3 +1,4 @@
+#include "StudioGameWizard.h"
 #include "engine/game/Script.h"
 #include "apps/editor/core/StudioPlayTools.h"
 #include "apps/studio-native/StudioHost.h"
@@ -3394,15 +3395,18 @@ bool StudioHost::handleHostMethod(const Json& req) {
         }
         return gameState(method == "studio.gameState" && params.getBool("scriptErrors"));
     });
-    if (method == "studio.hubTemplates") {
-        // The catalog query runs aiverse_pkg.py over the network: keep the UI thread free.
+    if (method == "studio.hubTemplates" || method == "studio.wizardPlan") {
+        // Catalog requests and scanning the chosen artwork folder can both take time.
         const int64_t requestId = req["id"].integer();
         auto result = std::make_shared<Json>();
         auto error = std::make_shared<std::string>();
         auto alive = alive_;
         platform_.runInBackground(
-            [engineDir = session_->workspace().engineDir, params, result, error] {
-                try { *result = hubTemplatesJson(engineDir, params); }
+            [engineDir = session_->workspace().engineDir, approvedArt = session_->wizardArtDir(), method, params, result, error] {
+                try {
+                    if (method == "studio.wizardPlan") *result = editor::planGame(engineDir, studioWizardSpec(engineDir, params, approvedArt));
+                    else *result = hubTemplatesJson(engineDir, params);
+                }
                 catch (const std::exception& e) { *error = e.what(); }
             },
             [this, alive, requestId, result, error] {
@@ -3412,6 +3416,58 @@ bool StudioHost::handleHostMethod(const Json& req) {
                 if (!error->empty()) reply.set("error", Json::string(*error));
                 else reply.set("result", *result);
                 sendReply(reply);
+            });
+        return true;
+    }
+    if (method == "studio.wizardArt") {
+        const auto id = req["id"];
+        auto alive = alive_;
+        platform_.chooseFolder("Choose a folder with artwork, models or audio", session_->wizardArtDir(),
+            [this, alive, id](std::string folder) {
+                if (!*alive) return;
+                if (!folder.empty()) session_->setWizardArtDir(folder);
+                Json result = Json::object(); result.set("dir", Json::string(folder));
+                Json reply = Json::object(); reply.set("id", id); reply.set("result", result); sendReply(reply);
+            });
+        return true;
+    }
+    if (method == "studio.wizardCreate") {
+        const auto id = req["id"];
+        if (wizardCreating_) { sendError(id, "A game is already being created"); return true; }
+        const auto engine = session_->workspace().engineDir;
+        auto spec = studioWizardSpec(engine, params, session_->wizardArtDir());
+        if (spec.title.empty() || spec.title.size() > 120) { sendError(id, "Give the game a title of up to 120 bytes"); return true; }
+        wizardCreating_ = true;
+        auto alive = alive_;
+        const auto epoch = packageProjectEpoch_;
+        platform_.chooseFolder("Choose the parent folder for " + spec.title, editor::defaultProjectsDir(),
+            [this, alive, id, engine, epoch, spec](std::string parent) mutable {
+                if (!*alive) return;
+                if (parent.empty()) { wizardCreating_ = false; sendProjectCancelled(id.integer()); return; }
+                spec.location = parent;
+                auto dir = std::make_shared<std::string>();
+                auto error = std::make_shared<std::string>();
+                platform_.runInBackground([engine, spec, dir, error] {
+                    try {
+                        editor::Workspace workspace;
+                        workspace.engineDir = engine;
+                        editor::GameMaker maker(workspace, spec);
+                        const auto report = maker.runAll();
+                        if (maker.failed()) {
+                            *error = report.getStr("error", "Game generation failed");
+                            if (!maker.projectDir().empty()) *error += " (project folder: " + maker.projectDir() + ")";
+                        }
+                        else *dir = maker.projectDir();
+                    } catch (const std::exception& e) { *error = e.what(); }
+                }, [this, alive, id, dir, error, epoch] {
+                    if (!*alive) return;
+                    wizardCreating_ = false;
+                    if (dir->empty()) { sendError(id, error->empty() ? "Game generation failed" : *error); return; }
+                    if (epoch != packageProjectEpoch_ || projectLoading_ || !confirmClose()) {
+                        sendError(id, "Game created at " + *dir + ". Open it from Project Hub."); return;
+                    }
+                    openProject(*dir, id.integer());
+                });
             });
         return true;
     }

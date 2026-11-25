@@ -3,6 +3,7 @@ import { Check, Clock, Folder, FolderOpen, Package, Plus, Search, X } from 'luci
 import { invoke } from '../bridge';
 import { StudioLoader } from '../ui';
 import type { StudioHub, StudioSnapshot, StudioTemplate } from '../types';
+import GameWizard from './GameWizard';
 import './ProjectHub.css';
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
@@ -35,7 +36,8 @@ export default function ProjectHub({ onOpened, openOther, compact }: {
   const [templ, setTempl] = useState<StudioTemplate | null>(null);
   const [name, setName] = useState('');
   const [browse, setBrowse] = useState(false);
-  const [page, setPage] = useState<'projects' | 'templates'>('projects');
+  const [page, setPage] = useState<'projects' | 'templates' | 'wizard'>('projects');
+  const [wizardVisited, setWizardVisited] = useState(false);
   const [projectQuery, setProjectQuery] = useState('');
   const [query, setQuery] = useState('');
   const [found, setFound] = useState<StudioTemplate[] | null>(null);
@@ -99,10 +101,12 @@ export default function ProjectHub({ onOpened, openOther, compact }: {
     <nav className="hub__nav" aria-label="Project Hub pages">
       <button aria-current={page === 'projects' ? 'page' : undefined} disabled={!!busy} onClick={() => setPage('projects')}><Clock size={15}/>Recent projects</button>
       <button aria-current={page === 'templates' ? 'page' : undefined} disabled={!!busy} onClick={() => setPage('templates')}><Plus size={15}/>New project</button>
+      <button aria-current={page === 'wizard' ? 'page' : undefined} disabled={!!busy} onClick={() => { setWizardVisited(true); setPage('wizard'); }}>Game wizard</button>
     </nav>
     {error && <p className="hub__error" role="alert">{error}</p>}
     <div className="hub__body">
-    {page === 'projects' ? <section aria-label="Recent projects">
+    {wizardVisited && <div hidden={page !== 'wizard'}><GameWizard onOpened={onOpened} onBusy={active => setBusy(active ? 'wizard' : '')}/></div>}
+    {page === 'wizard' ? null : page === 'projects' ? <section aria-label="Recent projects">
       <label className="hub__search"><Search size={15}/><input type="search" aria-label="Search recent projects" placeholder="Find by name or folder" value={projectQuery} onChange={e => setProjectQuery(e.target.value)}/></label>
       {!hub && !error && <StudioLoader size={20} label="Loading recent projects…"/>}
       {hub && !recent.length && <p>{needle ? 'No projects match your search.' : 'Your recently opened projects will appear here.'}</p>}

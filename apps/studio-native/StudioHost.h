@@ -299,6 +299,7 @@ private:
     std::shared_ptr<FxShot> fxShot_; // one bounded in-flight FX capture per host
     double fxShotStartedAt_=0;
     uint64_t nextFxShotId_=1;
+    bool wizardCreating_ = false;
     bool readyEmitted_ = false, projectLoading_ = false, loadingShown_ = false, surfaceSnap_ = false;
     std::shared_ptr<bool> alive_ = std::make_shared<bool>(true); // background completions after shutdown
     double nextGizmoPoll_ = 0, nextAgentPoll_ = 0, lastSceneFrame_ = 0, sceneFrameMs_ = 0;

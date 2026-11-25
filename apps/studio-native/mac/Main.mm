@@ -265,7 +265,7 @@ public:
     void chooseFolder(const std::string& message, const std::string& startDir, std::function<void(std::string)> done) override {
         NSOpenPanel* panel=[NSOpenPanel openPanel];
         panel.canChooseFiles=NO;panel.canChooseDirectories=YES;panel.canCreateDirectories=YES;panel.allowsMultipleSelection=NO;
-        panel.prompt=@"Create Here";
+        panel.prompt=@"Choose Folder";
         panel.message=ns(message);
         if (!startDir.empty()) panel.directoryURL=[NSURL fileURLWithPath:ns(startDir)];
         auto cb=std::make_shared<std::function<void(std::string)>>(std::move(done));

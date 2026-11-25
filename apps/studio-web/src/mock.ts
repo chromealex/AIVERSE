@@ -170,6 +170,7 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
   if (method.startsWith('studio.build')) throw new Error('Builds run in the native Studio');
   if (method === 'studio.assetThumbnail') return { none: true } as StudioResult['studio.assetThumbnail'];
   if (method === 'studio.assetUsage') return { unused: [], mentions: [] } as StudioResult['studio.assetUsage'];
+  if (method.startsWith('studio.wizard')) throw new Error('Open the desktop Studio to use the installed game templates');
   if (method === 'studio.hubForget') return {};
   if (method === 'studio.hub') return { recent: [], templates: [{ id: 'empty', name: 'Empty', description: '', genre: '', maps: 1 }], defaultLocation: '~/AiverseProjects' } as StudioResult['studio.hub'];
   if (method === 'studio.hubTemplates') return { templates: [
