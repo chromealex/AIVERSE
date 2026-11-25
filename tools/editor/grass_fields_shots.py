@@ -94,7 +94,7 @@ call("terraweave_generate", seed=20261122, baseHeightCm=0, reliefCm=500,
      basePeriodCm=16000, octaves=4, cellSizeCm=100, overwrite=True)
 call("map_set", path="terrainPresentation", value="legacy")
 call("lighting_set", time=0.38, dayLength=0, clouds=0.3)
-call("postfx_add", scope="map", type="fxaa")
+call("map_set", path="postfx", value={"replace": True, "effects": [{"type": "fxaa"}]})
 cx, cz = 128, 128
 call("view_focus", x=cx, z=cz, distance=30)
 time.sleep(3)
