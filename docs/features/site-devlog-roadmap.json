@@ -1,0 +1,114 @@
+{
+  "schema": 1,
+  "id": "site-devlog-roadmap",
+  "owner": "build",
+  "changed_paths": [
+    "tools/site/build.py",
+    "tools/site/render.py"
+  ],
+  "traits": {
+    "visible": true,
+    "simulation": false,
+    "runtime": false,
+    "editable": false
+  },
+  "checks": {
+    "implementation": {
+      "status": "not_run",
+      "note": "Pending site verification.",
+      "evidence": []
+    },
+    "architecture": {
+      "status": "not_run",
+      "note": "Pending site verification.",
+      "evidence": []
+    },
+    "native_api": {
+      "status": "not_run",
+      "note": "Pending site verification.",
+      "evidence": []
+    },
+    "skill": {
+      "status": "not_run",
+      "note": "Pending site verification.",
+      "evidence": []
+    },
+    "mcp": {
+      "status": "not_run",
+      "note": "Pending site verification.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_run",
+      "note": "Pending site verification.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_run",
+      "note": "Pending site verification.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_run",
+      "note": "Pending site verification.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_run",
+      "note": "Pending site verification.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Pending site verification.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Pending site verification.",
+      "evidence": []
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Pending site verification.",
+      "evidence": []
+    },
+    "headless": {
+      "status": "not_run",
+      "note": "Pending site verification.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "not_run",
+      "note": "Pending site verification.",
+      "evidence": []
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Pending site verification.",
+      "evidence": []
+    },
+    "handoff": {
+      "status": "not_run",
+      "note": "Pending site verification.",
+      "evidence": []
+    },
+    "documentation": {
+      "status": "not_run",
+      "note": "Pending site verification.",
+      "evidence": []
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Pending site verification.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [],
+    "mcp_tools": [],
+    "studio_panels": [],
+    "studio_methods": []
+  },
+  "test_reports": []
+}

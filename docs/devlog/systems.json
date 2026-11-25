@@ -3330,6 +3330,12 @@
       ],
       "roadmap": [
         {
+          "id": "site-devlog-roadmap",
+          "status": "in-progress",
+          "title": "Общий дневник и дорожные карты систем",
+          "titleEn": "Shared development log and system roadmaps"
+        },
+        {
           "status": "done",
           "date": "2026-11-23",
           "target": null,
