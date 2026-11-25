@@ -176,6 +176,16 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && map.data.entities.size()==before);
    }
    {
+       const auto materials=call("studio.materialCreate",R"({"name":"docked_steel","preset":"metal"})");
+       const auto assetPath=materials["result"]["files"].getStr("docked_steel");
+       AIVERSE_TEST_CHECK(assetPath=="content/materials/docked_steel.material.json");
+       AIVERSE_TEST_CHECK(Json::parseFile((project/assetPath).string()).isObject());
+       AIVERSE_TEST_CHECK(Json::parseFile((project/"materials.json").string())["materials"].getStr("docked_steel")==assetPath);
+       AIVERSE_TEST_CHECK(call("studio.assets")["result"]["files"].dump().find("materials/docked_steel.material.json")!=std::string::npos);
+       const auto legacyFile=project/"content/materials/stone.material.json";
+       auto stone=Json::parseFile(legacyFile.string());stone.set("roughness",Json::number(0.125));
+       std::ofstream(legacyFile)<<stone.dump();
+       AIVERSE_TEST_CHECK(call("studio.materials")["result"]["library"]["stone"]["roughness"].toDouble()==0.125);
        const char* create=R"({"op":"shader_graph_create","params":{"name":"studio_tint","domain":"material"}})";
        AIVERSE_TEST_CHECK(!call("studio.op",create).has("error"));
        AIVERSE_TEST_CHECK(call("studio.op",create).has("error"));

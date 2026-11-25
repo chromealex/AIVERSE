@@ -1,3 +1,4 @@
+#include "engine/view/MaterialLibraryFiles.h"
 // "view" blocks of types: model loading (with shape fallback), placement fix-up, material
 // overrides, clip mapping and procedural animation presets. Problems become warnings with the
 // type id, never errors: a broken model must not stop a game from starting.
@@ -703,7 +704,7 @@ bool GameView::reloadAppearanceTypes(const std::set<size_t>& types,
             std::string text;
             Json next=Json::object();
             if(read_ && read_("materials.json",text)) {
-                next=Json::parse(text)["materials"];
+                next=view::materialLibraryFromIndex(Json::parse(text),read_);
                 if(!next.isObject())
                     throw std::runtime_error("materials.json must have a materials object");
             }

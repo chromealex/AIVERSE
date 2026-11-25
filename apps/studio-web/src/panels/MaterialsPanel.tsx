@@ -7,8 +7,8 @@ import { editablePatch, materialFields, materialNames, materialSwatchColor, MATE
 import type { MaterialData, MaterialKey, MaterialLibrary, MaterialPatch, MaterialPreset } from './materialSchema';
 import './MaterialsPanel.css';
 
-const EMPTY:MaterialLibrary={library:{}};
 import SpectraDockViewport from './SpectraDockViewport';
+const EMPTY:MaterialLibrary={library:{}};
 export default function MaterialsPanel({projectPath,previewMaterial}:{projectPath:string;previewMaterial?:string|null}){
  const [library,setLibrary]=useState<MaterialLibrary>(EMPTY);
  const [name,setName]=useState('');
@@ -31,9 +31,18 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
  const props=useMemo(()=>materialFields(selected,draft),[selected,draft]);
  const reload=()=>setNonce(n=>n+1);
 
- useEffect(()=>onNativeEvent(event=>{
-  if(event==='workspace.changed')reload();
- }),[]);
+ useEffect(()=>{
+  let revision=0;
+  const unsubscribe=onNativeEvent(event=>{
+   if(event==='workspace.changed'){reload();return;}
+   if(event!=='assets.changed'||!connected||!projectPath)return;
+   const request=++revision;
+   void invoke('studio.materials',{}).then(data=>{
+    if(request===revision)setLibrary(data);
+   }).catch(e=>{if(request===revision)setError(String(e));});
+  });
+  return ()=>{++revision;unsubscribe();};
+ },[connected,projectPath]);
  useEffect(()=>{
   let canceled=false;
   setLoading(true);setError('');setMessage('');setDraft({});setPending(null);
@@ -67,7 +76,7 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
   try{
    const response=await invoke('studio.materialCreate',{name:newName,preset:newPreset});
    setLibrary(response);setName(newName);setDraft({});setPending(null);setNewName('');setCreating(false);
-   setMessage('New material saved to materials.json. MapDoc Undo does not include this edit.');
+   setMessage('Material file created in content/materials.');
   }catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{setBusy(false);}
  };
@@ -77,10 +86,25 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
   try {
    const response=await invoke('studio.materialPatch',{name,patch:editablePatch(draft)});
    setLibrary(response);setDraft({});setPending(null);
-   setMessage('Saved to materials.json. MapDoc Undo does not include this edit.');
+   setMessage('Material file saved.');
   } catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{setBusy(false);}
  };
+ const convert=async()=>{
+  setBusy(true);setError('');
+  try{setLibrary(await invoke('studio.materialsToFiles',{}));setMessage('Material files saved in content/materials.');}
+  catch(e){setError(String(e));}finally{setBusy(false);}
+ };
+ useEffect(()=>{
+  const open=()=>{
+   const key='studio.materialToOpen:'+projectPath;
+   const path=sessionStorage.getItem(key);
+   const match=Object.entries(library.files??{}).find(([,file])=>file===path);
+   if(match){sessionStorage.removeItem(key);switchTo(match[0]);}
+  };
+  open();window.addEventListener('studio:open-material',open);
+  return ()=>window.removeEventListener('studio:open-material',open);
+ },[library,projectPath,changes]);
  const preview=async()=>{
   if(busy||previewing||!connected||!projectPath||!name||changes>0)return;
   setPreviewing(true);setError('');
@@ -101,8 +125,9 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
    <button className="icon-button" aria-label="Reload materials" title="Reload materials"
     disabled={busy||loading||changes>0} onClick={reload}><RefreshCw size={15}/></button>
   </div>
+  {names.some(n=>!library.files?.[n])&&<button disabled={busy||changes>0} onClick={()=>void convert()}>Convert library to material files</button>}
   <p className="materials-warning"><ShieldAlert size={15}/>
-   Apply writes directly to materials.json. The MapDoc Undo stack cannot revert these edits.</p>
+   Apply saves the material file. Map Undo applies to scene edits.</p>
   {!connected&&<p className="materials-notice">DEMO — no native material library; editing is disabled.</p>}
   {connected&&!projectPath&&<p className="materials-notice">Open a project to view the material library.</p>}
   {error&&<p role="alert" className="materials-error">{error}</p>}
@@ -139,7 +164,11 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
     {!name?<div className="materials-empty">Select a material from the library.</div>:
      <><div className="materials-selected">
       <span className="materials-swatch" style={{background:materialSwatchColor(selected)}}/>
-      <strong>{name}</strong><small>Library PBR factors</small>
+      <strong>{name}</strong>{library.files?.[name]&&<button title={library.files[name]} onClick={()=>{
+       window.dispatchEvent(new CustomEvent('studio:show-panel',{detail:'assets'}));
+       const path=library.files![name].slice('content/'.length);
+       window.setTimeout(()=>window.dispatchEvent(new CustomEvent('studio:reveal-asset',{detail:{path}})),80);
+      }}>Show in Assets</button>}
      </div>
      <div className="materials-fields">
       {props.map(field=><PropertyField key={name+':'+field.key} property={field}

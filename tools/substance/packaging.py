@@ -35,6 +35,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
     try:
         material = json.loads((args.project / 'materials.json').read_text())['materials'][args.name]
+        if isinstance(material, str):
+            target = (args.project / material).resolve()
+            if not target.is_relative_to((args.project / 'content').resolve()) or not target.name.endswith('.material.json'):
+                raise ValueError('Invalid material file path')
+            material = json.loads(target.read_text())
         print(json.dumps({'packaging': {'targets': {args.target: {'files': rules_for(material)}}}}, indent=2))
     except (ValueError, OSError, KeyError, TypeError) as error:
         parser.exit(1, f'Packaging rules failed: {error}\n')

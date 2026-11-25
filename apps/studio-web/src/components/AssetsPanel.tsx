@@ -178,7 +178,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
   const native=nativeConnected();
   const reload=useCallback(()=>setRefreshToken(t=>t+1),[]);
   useEffect(()=>onNativeEvent((event,payload)=>{
-    if(event==='workspace.changed')reload();
+    if(event==='workspace.changed'||event==='assets.changed')reload();
     if(event==='assets.importPreview' && payload &&
        typeof payload==='object' && 'token' in payload && 'items' in payload){
       const candidate=payload as StudioAssetTransferPlan;
@@ -312,7 +312,8 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     try{
       await invoke('studio.materialCreate',{name,preset:materialPreset});
       setCreatingMaterial(false);setMaterialName('');
-      setMessage('Created material "'+name+'" in materials.json');
+      setFolder('materials');setSearch('');setSelected('materials/'+name+'.material.json');reload();
+      setMessage('Created '+name+'.material.json');
     }catch(e){setError(String(e instanceof Error?e.message:e))}
     finally{setBusy(false)}
   };
@@ -325,7 +326,13 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     {id:'copy',label:'Copy Folder Path',icon:<Search size={13}/>,separator:true,onSelect:()=>copyPath(folder)},
     {id:'reload',label:'Reload',icon:<RefreshCw size={13}/>,onSelect:reload},
   ];
+  const openMaterial=(path:string)=>{
+    sessionStorage.setItem('studio.materialToOpen:'+projectPath,'content/'+path);
+    window.dispatchEvent(new CustomEvent('studio:show-panel',{detail:'materials'}));
+    window.dispatchEvent(new Event('studio:open-material'));
+  };
   const menuItems=(target:{path:string;directory:boolean}):StudioMenuItem[]=>[
+    ...(!target.directory&&target.path.endsWith('.material.json')?[{id:'edit-material',label:'Edit Material',onSelect:()=>openMaterial(target.path)}]:[]),
     target.directory
       ?{id:'open',label:'Open Folder',icon:<FolderOpen size={13}/>,onSelect:()=>goTo(target.path)}
       :{id:'settings',label:'Import Settings',icon:<Library size={13}/>,disabled:!native,onSelect:()=>setSelected(target.path)},
@@ -393,7 +400,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     {creatingMaterial&&<form className="studio-assets-create-folder" onSubmit={event=>{
       event.preventDefault();void createMaterial();
     }}>
-      <Library size={13}/><span>New material in materials.json</span>
+      <Library size={13}/><span>New material in content/materials</span>
       <input autoFocus aria-label="New material name" value={materialName}
         onChange={event=>setMaterialName(event.target.value)} placeholder="Material name"/>
       <select aria-label="Material preset" value={materialPreset}
@@ -456,6 +463,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
                   onDragStart={e=>dragStart(e,asset.path)}
                   className={'studio-assets-item'+(selected===asset.path?' active':'')}
                   data-kind={kind} aria-selected={selected===asset.path}
+                  onDoubleClick={()=>{if(asset.path.endsWith('.material.json'))openMaterial(asset.path);}}
                   title={'content/'+asset.path} onClick={()=>setSelected(asset.path)}
                   onContextMenu={event=>openMenu(event,asset.path,false)}>
                   <span className="studio-assets-icon">{mode==='grid' && (kind==='model'||kind==='image')
@@ -473,6 +481,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
         onSaved={reload} onError={setError}/>}
     </div>
     <footer className="studio-assets-footer">
+      {selected?.endsWith('.material.json')&&<button onClick={()=>openMaterial(selected)}>Edit material</button>}
       <span>{catalog.files.length} assets</span>
       <span className="studio-assets-current">{selected?
         'content/'+selected:search?'Search in content/':folder?'content/'+folder:'content/'}</span>

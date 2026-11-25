@@ -1,7 +1,7 @@
 // Browser-only material authoring schema. Native MaterialOps remains authoritative.
 export type FieldValue=string|number|boolean;
 export type MaterialData=Record<string,unknown>;
-export interface MaterialLibrary {library:Record<string,MaterialData>}
+export interface MaterialLibrary {library:Record<string,MaterialData>;files?:Record<string,string>}
 export const MATERIAL_EDIT_KEYS=[
   'metallic','roughness','thinTransmission','shadowDiffusion','sssStrength','sssScale','sssThickness','sssColor','cutoff','teamStrength','occlusionStrength',
   'emissiveStrength','normalScale','doubleSided','unlit','castShadow',

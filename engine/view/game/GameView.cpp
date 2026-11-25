@@ -1,3 +1,4 @@
+#include "engine/view/MaterialLibraryFiles.h"
 #include "GameView.h"
 #include "GameSelectionPresentation.h"
 #include "engine/view/View.h"
@@ -397,7 +398,7 @@ bool GameView::init(gfx::Device& dev, const Rules& rules, FileReader reader) {
     {
         std::string text;
         if(incomingRead("materials.json",text)) {
-            try { incomingMaterials=Json::parse(text)["materials"]; }
+            try { incomingMaterials=view::materialLibraryFromIndex(Json::parse(text),incomingRead); }
             catch(const std::exception& e) {
                 incomingMaterialWarnings.push_back(std::string("materials.json: ")+e.what());
             }

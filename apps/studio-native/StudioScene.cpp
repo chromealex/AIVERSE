@@ -1,3 +1,4 @@
+#include "engine/view/MaterialLibraryFiles.h"
 #include "engine/view/AppearanceAuthoringService.h"
 #include "engine/render/TextureCache.h"
 #include "apps/editor/AuthoringWater.h"
@@ -363,7 +364,7 @@ void StudioScene::syncDocumentModels(
             std::ifstream input(libraryPath,std::ios::binary);
             if(input) {
                 const std::string text((std::istreambuf_iterator<char>(input)),std::istreambuf_iterator<char>());
-                try { const Json parsed=Json::parse(text)["materials"]; if(parsed.isObject())materialLibrary_=parsed; }
+                try { const Json parsed=view::materialLibraryFromIndex(Json::parse(text),[&](const std::string& path,std::string& bytes){return readPreviewAsset(project,path,bytes);}); if(parsed.isObject())materialLibrary_=parsed; }
                 catch(const std::exception&) {}
             }
             instanceMaterials_.clear();

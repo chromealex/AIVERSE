@@ -1,3 +1,5 @@
+#include "engine/view/MaterialLibraryFiles.h"
+#include <random>
 #include "MaterialOps.h"
 
 #include <algorithm>
@@ -178,30 +180,101 @@ std::vector<std::string> checkMaterial(const Json& m) {
     return out;
 }
 
-Json loadMaterialLibrary(const Workspace& ws) {
-    std::string text;
-    if (ws.project.dir.empty() || !readDisk(ws.project.dir + "/materials.json", text)) return Json::object();
-    try {
-        Json j = Json::parse(text)["materials"];
-        return j.isObject() ? j : Json::object();
-    } catch (const std::exception& e) {
-        throw std::runtime_error(std::string("materials.json: ") + e.what());
+namespace {
+fs::path materialFile(const fs::path& root,const std::string& relative) {
+    if(!view::materialAssetPath(relative))throw std::runtime_error("Invalid material asset path: "+relative);
+    fs::path file=root;
+    for(const auto& part:fs::path(relative)){
+        file/=part;
+        if(fs::is_symlink(file))throw std::runtime_error("Material asset crosses a symbolic link");
     }
+    return file;
+}
+Json readMaterialIndex(const fs::path& root){
+    std::string bytes;
+    if(!readDisk((root/"materials.json").string(),bytes)){
+        if(fs::exists(root/"materials.json"))throw std::runtime_error("Cannot read materials.json");
+        Json doc=Json::object();doc.set("materials",Json::object());return doc;
+    }
+    return Json::parse(bytes);
+}
+std::string materialFileName(const std::string& name){
+    static constexpr char hex[]="0123456789abcdef";
+    std::string stem;
+    for(unsigned char c:name){
+        if((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')||c=='-'||c=='_')stem+=char(c);
+        else {stem+='%';stem+=hex[c>>4];stem+=hex[c&15];}
+    }
+    return "content/materials/"+stem+".material.json";
+}
 }
 
-void saveMaterialLibrary(Workspace& ws, const Json& lib, const std::string& what) {
-    Json doc = Json::object();
-    doc.set("materials", lib);
-    const fs::path f = fs::path(ws.project.dir) / "materials.json";
-    {
-        std::ofstream o(f.string() + ".tmp", std::ios::binary);
-        o << doc.dump(2) << "\n";
-        if (!o) throw std::runtime_error("cannot write " + f.string());
+Json materialFilePaths(const Workspace& ws){
+    const Json index=readMaterialIndex(ws.project.dir);
+    Json paths=Json::object();
+    for(const auto& [name,value]:index["materials"].members())
+        if(value.isString())paths.set(name,value);
+    return paths;
+}
+
+Json loadMaterialLibrary(const Workspace& ws) {
+    if(ws.project.dir.empty())return Json::object();
+    return view::materialLibraryFromIndex(readMaterialIndex(ws.project.dir),[&](const std::string& path,std::string& bytes){
+        return readDisk(materialFile(ws.project.dir,path).string(),bytes);
+    });
+}
+
+void saveMaterialLibrary(Workspace& ws,const Json& lib,const std::string& what,
+                         const std::map<std::string,std::string>& relocated) {
+    const fs::path root=ws.project.dir;
+    Json index=readMaterialIndex(root);
+    const Json old=index["materials"];
+    if(!old.isObject()||!lib.isObject())throw std::runtime_error("Invalid material library");
+    Json entries=Json::object();
+    struct ChangeFile {fs::path file,backup;bool created;};
+    std::vector<ChangeFile> written;
+    fs::path staging;
+    std::random_device random;
+    do {staging=root/(".material-save-"+std::to_string(random()));}while(!fs::create_directory(staging));
+    struct Cleanup {fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}} cleanup{staging};
+    const auto publish=[&](const fs::path& file,const std::string& bytes,bool remove=false){
+        const bool exists=fs::exists(file);
+        if(exists&&!fs::is_regular_file(file))throw std::runtime_error("Invalid material destination: "+file.string());
+        const fs::path backup=staging/std::to_string(written.size());
+        if(exists)fs::copy_file(file,backup);
+        if(remove){if(exists)fs::remove(file);}
+        else{
+            const fs::path pending=staging/"pending";
+            std::ofstream stream(pending,std::ios::binary);stream<<bytes;stream.close();
+            if(!stream)throw std::runtime_error("Cannot write "+file.string());
+            fs::create_directories(file.parent_path());
+            fs::rename(pending,file);
+        }
+        written.push_back({file,backup,!exists});
+    };
+    try {
+        for(const auto& [name,material]:lib.members()){
+            const bool indexed=old[name].isString();
+            std::string path=indexed?old[name].str():materialFileName(name);
+            if(auto move=relocated.find(path);move!=relocated.end())path=move->second;
+            const auto file=materialFile(root,path);
+            if(!indexed&&fs::exists(file))throw std::runtime_error("Material asset already exists: "+path);
+            std::string previous;
+            if(!readDisk(file.string(),previous)||Json::parse(previous)!=material)publish(file,material.dump(2)+"\n");
+            entries.set(name,Json::string(path));
+        }
+        for(const auto& [name,entry]:old.members())if(!lib.has(name)&&entry.isString())
+            publish(materialFile(root,entry.str()),"",true);
+        index.set("materials",std::move(entries));
+        publish(root/"materials.json",index.dump(2)+"\n");
+    }catch(...){
+        for(auto it=written.rbegin();it!=written.rend();++it){
+            if(it->created)fs::remove(it->file);
+            else fs::copy_file(it->backup,it->file,fs::copy_options::overwrite_existing);
+        }
+        throw;
     }
-    std::error_code ec;
-    fs::rename(f.string() + ".tmp", f, ec);
-    if (ec) throw std::runtime_error("cannot write " + f.string() + ": " + ec.message());
-    ws.note({Change::Rules, 0, 0, -1, -1, -1, what});   // views rebuild with the library
+    ws.note({Change::Rules,0,0,-1,-1,-1,what});
 }
 
 void registerMaterialOps(Workspace& ws) {

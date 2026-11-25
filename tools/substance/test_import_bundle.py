@@ -21,6 +21,9 @@ class ImportTest(unittest.TestCase):
             self.assertTrue((project / material['metallicRoughnessMap']).exists())
             document = json.loads(library.read_text())
             self.assertEqual(document['extra'], 42)
+            asset = document['materials']['stone']
+            self.assertEqual(asset, 'content/materials/stone.material.json')
+            self.assertEqual(json.loads((project / asset).read_text()), material)
             self.assertEqual(document['materials']['old']['roughness'], .3)
             before = library.read_bytes()
             with self.assertRaises(ValueError):

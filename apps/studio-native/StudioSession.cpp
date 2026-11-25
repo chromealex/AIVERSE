@@ -1667,9 +1667,12 @@ Json StudioSession::dispatchImpl(const Json& request) {
             result.set("name",str(name));
             reply.set("result",std::move(result));
         } else if (method == "studio.materials" || method == "studio.materialPatch" ||
-                   method == "studio.materialCreate") {
+                   method == "studio.materialCreate" || method=="studio.materialsToFiles") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
-            if (method == "studio.materialCreate") {
+            if(method=="studio.materialsToFiles"){
+                const auto materials=editor::loadMaterialLibrary(ws_);
+                editor::saveMaterialLibrary(ws_,materials,"Convert material library to files");
+            } else if (method == "studio.materialCreate") {
                 const std::string name=params.getStr("name");
                 const std::string preset=params.getStr("preset");
                 if (!validStudioMaterialName(name) || !validStudioMaterialPreset(preset))
@@ -1766,6 +1769,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
             const Json library=editor::loadMaterialLibrary(ws_);
             Json result=Json::object();
             result.set("library",library);
+            result.set("files",editor::materialFilePaths(ws_));
             reply.set("result",std::move(result));
         } else if(method=="studio.nereidFlow"||method=="studio.nereidFlowSet"){
             if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
@@ -2149,8 +2153,9 @@ Json StudioSession::dispatchImpl(const Json& request) {
                         relocated.emplace("content/"+found->second,"content/"+asset.path);
                 }
                 const std::size_t updates=studioRemapMaterialReferences(library,relocated);
-                if (updates) editor::saveMaterialLibrary(ws_,library,
-                    "Studio Assets: repair material paths after move");
+                const bool movedMaterial=std::any_of(relocated.begin(),relocated.end(),[](const auto& item){return item.first.ends_with(".material.json");});
+                if (updates||movedMaterial) editor::saveMaterialLibrary(ws_,library,
+                    "Studio Assets: repair material paths after move",relocated);
                 repaired=updates;
             };
             const std::function<void()> commitHook =

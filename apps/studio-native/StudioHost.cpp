@@ -1963,6 +1963,8 @@ void StudioHost::afterSessionReply(const Json& req, const Json& reply) {
         onScene([&] { preview_->resetCamera(); });
         mapSnapshot_.reset(); rulesSnapshot_.reset();
     }
+    if(method=="studio.materialCreate"||method=="studio.materialsToFiles"||method=="studio.materialPatch"||
+       (method=="studio.op"&&req["params"].getStr("op")=="shader_graph_apply"))sendEvent("assets.changed","");
     if (method == "studio.materialPreview") sendEvent("material.preview", req["params"].getStr("name"));
     if (documentChangingMethods().count(method) || (method == "studio.op" && reply["result"].getBool("changed")))
         sendEvent("document.changed", "");
