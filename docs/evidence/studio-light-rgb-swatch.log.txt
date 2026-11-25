@@ -1,0 +1,3 @@
+2026-11-26 00:51:58.009 AiverseStudioHTML5[6365:82004916] [studio-web] JS: CROSS bindingproof DONE_1
+2026-11-26 00:51:58.008 AiverseStudioHTML5[6365:82004916] [studio-web] JS: CROSS bindingproof VERIFIED point defaults, color and halo edits, two independent undo steps, redo, save and reopen
+Verified saved RGB and halo in courtyard.json
