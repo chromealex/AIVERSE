@@ -222,6 +222,12 @@ export interface StudioTemplate { id: string; name: string; description: string;
   source?: 'engine' | 'catalog'; official?: boolean; version?: string; size?: number; preview?: string }
 export interface WizardPlanInput {
   artDir: string; verifyLevels: boolean;
+  studio: string; version: string; languages: string[]; platforms: string[]; seed: number;
+  mapSize: string; difficultyCurve: string; bossEvery: number; keepTemplateMaps: boolean; startResourcesPercent: number;
+  tutorialForced: boolean; tutorialSkippable: boolean; tutorialDim: boolean; hints: boolean;
+  metaIdea: string; currencies: string[]; upgrades: boolean; shop: boolean; daily: boolean; profileScreen: boolean;
+  xpPerLevel: number; ads: boolean; interstitialEvery: number; purchases: boolean; stores: string[];
+  paletteFromArt: boolean; brandingFromArt: boolean;
   title: string; idea: string; genre: string; features: string[]; orientation: string; tutorial: string; mapPreset: string; levels: number;
 }
 export interface StudioHub { recent: Array<{ dir: string; name: string; lastOpened: number; exists: boolean }>;
@@ -831,7 +837,7 @@ export interface StudioResult {
   'studio.hubTemplates': { templates: StudioTemplate[]; error?: string };
   'studio.wizardArt': { dir: string };
   'studio.wizardCreate': { snapshot?: StudioSnapshot; cancelled?: boolean };
-  'studio.wizardOptions': { templates: { id: string; name: string }[]; features: { id: string; description: string }[]; tutorialModes: string[]; mapPresets: string[]; defaults: WizardPlanInput };
+  'studio.wizardOptions': { templates: { id: string; name: string }[]; features: { id: string; description: string }[]; tutorialModes: string[]; mapPresets: string[]; mapSizes: string[]; languages: string[]; platforms: string[]; stores: string[]; defaults: WizardPlanInput };
   'studio.wizardPlan': { template: string; templateName: string; reason: string; levelPreset: string; orientation: string; tutorialArchetype: string; levels: number; meta: string[] };
   'studio.hubForget': Record<string, never>;
   'studio.hubOpen': { snapshot?: StudioSnapshot | null; cancelled?: boolean };

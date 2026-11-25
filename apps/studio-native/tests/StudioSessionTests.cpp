@@ -1537,6 +1537,8 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(call("studio.hubForget", R"({"dir":""})").has("error"));
        AIVERSE_TEST_CHECK(!call("studio.hubForget", R"({"dir":"unlisted-hub-test-entry"})").has("error"));
        const auto wizard = call("studio.wizardOptions")["result"];
+       AIVERSE_TEST_CHECK(call("studio.wizardPlan", R"({"languages":["../bad"]})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.wizardPlan", R"({"stores":["unknown-store"]})").has("error"));
        AIVERSE_TEST_CHECK(wizard["features"].size() > 0 && wizard["defaults"].has("levels"));
        AIVERSE_TEST_CHECK(call("studio.wizardPlan", R"({"genre":"../bad"})").has("error"));
        AIVERSE_TEST_CHECK(call("studio.wizardPlan", R"({"artDir":"unselected-folder"})").has("error"));

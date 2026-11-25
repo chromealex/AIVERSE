@@ -5,6 +5,7 @@
   "changed_paths": [
     "apps/studio-web/src/components/ProjectHub.tsx",
     "apps/studio-web/src/components/GameWizard.tsx",
+    "apps/studio-web/src/components/GameWizardSettings.tsx",
     "apps/editor/core/GameWizardContent.cpp",
     "apps/studio-native/StudioHost.cpp",
     "apps/studio-native/StudioSession.cpp",

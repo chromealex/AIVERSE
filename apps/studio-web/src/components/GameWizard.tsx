@@ -3,7 +3,10 @@ import { invoke } from '../bridge';
 import type { StudioResult, StudioSnapshot, WizardPlanInput } from '../types';
 import { StudioLoader } from '../ui';
 
+import { GameWizardSettings, wizardPages, type WizardPage } from './GameWizardSettings';
+
 export default function GameWizard({ onOpened, onBusy }: { onOpened: (snapshot: StudioSnapshot) => void; onBusy: (busy: boolean) => void }) {
+  const [page, setPage] = useState<WizardPage>('Concept');
   const [creating, setCreating] = useState(false);
   const [options, setOptions] = useState<StudioResult['studio.wizardOptions']>();
   const [draft, setDraft] = useState<WizardPlanInput>();
@@ -51,7 +54,11 @@ export default function GameWizard({ onOpened, onBusy }: { onOpened: (snapshot: 
   if (!draft || !options) return error ? <p role="alert">{error}</p> : <StudioLoader label="Loading game wizard…" size={18}/>;
   return <div className="hub__workspace wizard">
     <form className="wizard__form" onSubmit={event => { event.preventDefault(); void preview(); }}>
-      <fieldset className="wizard__fields" disabled={creating}><h3>Game concept</h3>
+      <fieldset className="wizard__fields" disabled={creating}>
+      <nav className="wizard__pages" aria-label="Game settings">{wizardPages.map(item =>
+        <button key={item} type="button" aria-current={item === page ? 'page' : undefined}
+          onClick={e => { if (e.currentTarget.form?.reportValidity()) setPage(item); }}>{item}</button>)}</nav>
+      {page === 'Concept' ? <><h3>Game concept</h3>
       <label>Game title<input className="au-input" required value={draft.title} onChange={e => edit('title', e.target.value)}/></label>
       <label>Game idea<textarea rows={3} placeholder="Describe what the player does" value={draft.idea} onChange={e => edit('idea', e.target.value)}/></label>
       <fieldset className="wizard__art"><legend>Artwork, models and audio</legend>
@@ -70,12 +77,7 @@ export default function GameWizard({ onOpened, onBusy }: { onOpened: (snapshot: 
       <div className="wizard__grid">
         <label>Orientation<select value={draft.orientation} onChange={e => edit('orientation', e.target.value)}>
           {['auto','portrait','landscape'].map(id => <option key={id}>{id}</option>)}</select></label>
-        <label>Tutorial<select value={draft.tutorial} onChange={e => edit('tutorial', e.target.value)}>
-          {options.tutorialModes.map(id => <option key={id}>{id}</option>)}</select></label>
-        <label>Level count<input className="au-input" type="number" min="0" max="40" required value={Number.isFinite(draft.levels) ? draft.levels : ''} onChange={e => edit('levels', e.target.valueAsNumber)}/></label>
-        <label>Map preset<select value={draft.mapPreset} onChange={e => edit('mapPreset', e.target.value)}>
-          {options.mapPresets.map(id => <option key={id}>{id}</option>)}</select></label>
-      </div>
+      </div></> : <GameWizardSettings page={page} draft={draft} options={options} edit={edit}/>}
       <button className="au-button au-button--primary" disabled={running || !draft.title.trim()}>{running && <StudioLoader size={14}/>}Preview game plan</button>
       </fieldset>
       {error && <p className="hub__error" role="alert">{error}</p>}
