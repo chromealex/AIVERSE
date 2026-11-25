@@ -1,0 +1,200 @@
+{
+  "schema": 1,
+  "id": "terraweave-meadow-grass",
+  "owner": "TerraWeave vegetation",
+  "changed_paths": [
+    "CMakeLists.txt",
+    "apps/editor/EditorAgent.cpp",
+    "apps/editor/PhysisNaturePreview.h",
+    "apps/editor/core/TerraWeaveOps.h",
+    "apps/studio-native/StudioTools.h",
+    "apps/studio-native/tests/StudioSessionTests.cpp",
+    "docs/agent-handoffs/meadow-grass-integration.md",
+    "docs/agent-handoffs/media/meadow-grass/auto-1-close.jpg",
+    "docs/agent-handoffs/media/meadow-grass/auto-2-mid.jpg",
+    "docs/agent-handoffs/media/meadow-grass/dense-1-close.jpg",
+    "docs/agent-handoffs/media/meadow-grass/dense-2-mid.jpg",
+    "docs/agent-handoffs/media/meadow-grass/lit-close.jpg",
+    "docs/agent-handoffs/media/meadow-grass/lit-low-sun.jpg",
+    "docs/agent-handoffs/media/meadow-grass/lit-mid.jpg",
+    "docs/agent-handoffs/media/meadow-grass/meadow-1-close.jpg",
+    "docs/agent-handoffs/media/meadow-grass/meadow-2-mid.jpg",
+    "docs/agent-handoffs/media/meadow-grass/medium-1-close.jpg",
+    "docs/agent-handoffs/media/meadow-grass/medium-2-mid.jpg",
+    "docs/agent-handoffs/media/meadow-grass/shadow-off.jpg",
+    "docs/agent-handoffs/media/meadow-grass/shadow-on.jpg",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/systems.json",
+    "docs/terrain/grass-meadow.md",
+    "docs/terrain/vegetation-authoring.md",
+    "engine/render/TerraWeaveGrassRender.h",
+    "engine/world/TerraWeaveGrassSpecies.h",
+    "engine/world/TerraWeaveGrassSpeciesJson.h",
+    "skills/world/aiverse-terra-vegetation/SKILL.md",
+    "tests/terraweave_grass_legacy_reference.h",
+    "tests/terraweave_grass_meadow_test.cpp",
+    "tests/terraweave_meadow_mcp.py",
+    "tools/editor/grass_fields_shots.py",
+    "tools/mcp/audit_registry.py",
+    "tools/terrain/landscape.cpp",
+    "tools/terrain/vegetation.cpp"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": false,
+    "visible": true,
+    "runtime": true
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-terra-vegetation"
+    ],
+    "mcp_tools": [
+      "terraweave_meadow_get",
+      "terraweave_meadow_set"
+    ],
+    "studio_panels": [
+      "terrain"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Seeded species and clumps generate budgeted patch meshes.",
+      "evidence": [
+        "engine/world/TerraWeaveGrassSpecies.h",
+        "engine/render/TerraWeaveGrassRender.h"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Uses the existing vegetation and rendering owners and the shared wind parameters.",
+      "evidence": [
+        "docs/terrain/grass-meadow.md",
+        "engine/world/TerraWeaveGrassSpecies.h"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "Native preset, placement and JSON entry points.",
+      "evidence": [
+        "engine/world/TerraWeaveGrassSpecies.h",
+        "engine/world/TerraWeaveGrassSpeciesJson.h"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "Vegetation authoring covers the opt-in meadow presets.",
+      "evidence": [
+        "skills/world/aiverse-terra-vegetation/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "pass",
+      "note": "Read and write map meadow settings through the registered operations.",
+      "evidence": [
+        "tests/terraweave_meadow_mcp.py"
+      ]
+    },
+    "studio": {
+      "status": "pass",
+      "note": "Studio Terrain delegates meadow settings to the map owner.",
+      "evidence": [
+        "apps/studio-native/StudioTools.h",
+        "apps/studio-native/tests/StudioSessionTests.cpp"
+      ]
+    },
+    "inspector": {
+      "status": "pass",
+      "note": "The Terrain panel exposes the meadow operation for editing the selected map.",
+      "evidence": [
+        "docs/terrain/grass-meadow.md",
+        "apps/studio-native/StudioTools.h"
+      ]
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "Map JSON stores meadow parameters through the TerraWeave operations.",
+      "evidence": [
+        "apps/editor/core/TerraWeaveOps.h",
+        "tests/terraweave_meadow_mcp.py"
+      ]
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "Meadow placement and shading reuse the existing wind input and introduce no graph nodes.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "pass",
+      "note": "Fixed-camera Metal timings, triangle budgets and shadow comparison are recorded in the handoff.",
+      "evidence": [
+        "docs/agent-handoffs/meadow-grass-integration.md"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "Mac CPU generation and Metal rendering were exercised.",
+      "evidence": [
+        "docs/agent-handoffs/meadow-grass-integration.md",
+        "docs/evidence/meadow-grass-2920a1645.json"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "The native generator uses existing project data types and needs no new package.",
+      "evidence": [
+        "engine/world/TerraWeaveGrassSpecies.h"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "The meadow mesh and frozen legacy reference are exercised by a native CPU test.",
+      "evidence": [
+        "docs/evidence/meadow-grass-2920a1645.json",
+        "tests/terraweave_grass_meadow_test.cpp"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "The authoring guide contains a custom species and clump example.",
+      "evidence": [
+        "docs/terrain/grass-meadow.md"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Focused native CTest passed on Mac.",
+      "evidence": [
+        "docs/evidence/meadow-grass-2920a1645.json"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "The stage log records implementation revisions, visual comparisons, test outcomes and platform scope.",
+      "evidence": [
+        "docs/agent-handoffs/meadow-grass-integration.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "The guide covers presets, JSON overrides and compatibility.",
+      "evidence": [
+        "docs/terrain/grass-meadow.md"
+      ]
+    },
+    "publishing": {
+      "status": "pass",
+      "note": "The gallery entry contains the approved close, mid and low-sun frames.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-terraweave-meadow-light.json"
+      ]
+    }
+  },
+  "test_reports": [
+    "docs/evidence/meadow-grass-2920a1645.json"
+  ]
+}
