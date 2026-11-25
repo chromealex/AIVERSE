@@ -381,8 +381,8 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-96e08157a-contracts.json",
-    "docs/evidence/feature-gate-96e08157a-catalog.json",
-    "docs/evidence/feature-gate-96e08157a-skill-audit.json"
+    "docs/evidence/feature-gate-cda38a15c-contracts.json",
+    "docs/evidence/feature-gate-cda38a15c-catalog.json",
+    "docs/evidence/feature-gate-cda38a15c-skill-audit.json"
   ]
 }

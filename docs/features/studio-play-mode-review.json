@@ -37,7 +37,7 @@
       "note": "The local paused map preview reported eleven removals. The native handler checked the token and applied once. The exact original map and edited map were recovered by one undo and one redo. The Studio suite exercised the panel contract.",
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
-        "docs/evidence/feature-gate-96e08157a-web.json"
+        "docs/evidence/feature-gate-cda38a15c-web.json"
       ]
     },
     "architecture": {
@@ -53,7 +53,7 @@
       "note": "The local paused map preview reported eleven removals. The native handler checked the token and applied once. The exact original map and edited map were recovered by one undo and one redo. The Studio suite exercised the panel contract.",
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
-        "docs/evidence/feature-gate-96e08157a-web.json"
+        "docs/evidence/feature-gate-cda38a15c-web.json"
       ]
     },
     "skill": {
@@ -148,7 +148,7 @@
       "note": "The local paused map preview reported eleven removals. The native handler checked the token and applied once. The exact original map and edited map were recovered by one undo and one redo. The Studio suite exercised the panel contract.",
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
-        "docs/evidence/feature-gate-96e08157a-web.json"
+        "docs/evidence/feature-gate-cda38a15c-web.json"
       ]
     },
     "handoff": {
@@ -191,9 +191,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-96e08157a-studio-contracts.json",
-    "docs/evidence/feature-gate-96e08157a-web.json",
-    "docs/evidence/feature-gate-96e08157a-typecheck.json",
-    "docs/evidence/feature-gate-96e08157a-skill-audit.json"
+    "docs/evidence/feature-gate-cda38a15c-studio-contracts.json",
+    "docs/evidence/feature-gate-cda38a15c-web.json",
+    "docs/evidence/feature-gate-cda38a15c-typecheck.json",
+    "docs/evidence/feature-gate-cda38a15c-skill-audit.json"
   ]
 }

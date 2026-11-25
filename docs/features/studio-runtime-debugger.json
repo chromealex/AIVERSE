@@ -35,7 +35,7 @@
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
         "docs/evidence/studio-play-ad676e70c/runtime.png",
-        "docs/evidence/feature-gate-96e08157a-web.json"
+        "docs/evidence/feature-gate-cda38a15c-web.json"
       ]
     },
     "architecture": {
@@ -105,10 +105,11 @@
       ]
     },
     "performance": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Twenty-five guarded edits in a paused native match took approximately 1 ms p95 and returned at most 116 bytes each. These are explicit operator requests. Measurements include the real WKWebView bridge at 1 ms clock resolution; the whole Studio host used 256540 KiB resident after sampling.",
       "evidence": [
-        "docs/handoff/studio-html5/s4-runtime-debugger-2026-11-24.md"
+        "docs/agent-handoffs/feature-gate-operator-acceptance-2026-11-25.md",
+        "docs/evidence/studio-building-budget/operator-measurements.json"
       ]
     },
     "platforms": {
@@ -148,7 +149,7 @@
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
         "docs/evidence/studio-play-ad676e70c/runtime.png",
-        "docs/evidence/feature-gate-96e08157a-web.json"
+        "docs/evidence/feature-gate-cda38a15c-web.json"
       ]
     },
     "handoff": {
@@ -190,9 +191,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-96e08157a-studio-contracts.json",
-    "docs/evidence/feature-gate-96e08157a-web.json",
-    "docs/evidence/feature-gate-96e08157a-typecheck.json",
-    "docs/evidence/feature-gate-96e08157a-skill-audit.json"
+    "docs/evidence/feature-gate-cda38a15c-studio-contracts.json",
+    "docs/evidence/feature-gate-cda38a15c-web.json",
+    "docs/evidence/feature-gate-cda38a15c-typecheck.json",
+    "docs/evidence/feature-gate-cda38a15c-skill-audit.json"
   ]
 }

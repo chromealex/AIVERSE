@@ -109,10 +109,12 @@
       "evidence": []
     },
     "performance": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Measured the on-demand native projection and JSON serialization on 20000 materialized entities in 1000 regions. Five runs took 10.40–11.36 ms and returned 256 rows in 14768 bytes. Peak process RSS was 13041664 bytes. The panel refresh is explicit.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/agent-handoffs/feature-gate-operator-acceptance-2026-11-25.md",
+        "docs/evidence/studio-building-budget/operator-measurements.json",
+        "engine/world/WorldPersistenceDiagnostics.h"
       ]
     },
     "platforms": {
@@ -195,9 +197,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-96e08157a-studio-contracts.json",
-    "docs/evidence/feature-gate-96e08157a-web.json",
-    "docs/evidence/feature-gate-96e08157a-typecheck.json",
-    "docs/evidence/feature-gate-96e08157a-skill-audit.json"
+    "docs/evidence/feature-gate-cda38a15c-studio-contracts.json",
+    "docs/evidence/feature-gate-cda38a15c-web.json",
+    "docs/evidence/feature-gate-cda38a15c-typecheck.json",
+    "docs/evidence/feature-gate-cda38a15c-skill-audit.json"
   ]
 }

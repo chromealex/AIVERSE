@@ -153,9 +153,13 @@
       ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The native graph facade enumerated all five domains over stdio. The three-node graph validated, exposed two dependencies, refused a blind write and read back a guarded save. Typed Shader, animation and modeling drafts and the bounded runtime probe and debugger were exercised. Four native domain save paths separately rejected stale edits in Studio.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-operator-acceptance-2026-11-25.md",
+        "docs/agent-handoffs/studio-guarded-graph-roundtrip-2026-11-25.md",
+        "tests/vfx_graph_ops_test.cpp"
+      ]
     },
     "skill": {
       "status": "pass",
@@ -163,15 +167,19 @@
       "evidence": [
         "skills/workflow/aiverse-graph-authoring/SKILL.md",
         "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md",
-        "docs/evidence/feature-gate-96e08157a-catalog.log.txt",
-        "docs/evidence/feature-gate-96e08157a-skill-audit.log.txt",
+        "docs/evidence/feature-gate-cda38a15c-catalog.log.txt",
+        "docs/evidence/feature-gate-cda38a15c-skill-audit.log.txt",
         "skills/workflow/aiverse-graph-authoring/SKILL.md"
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The native graph facade enumerated all five domains over stdio. The three-node graph validated, exposed two dependencies, refused a blind write and read back a guarded save. Typed Shader, animation and modeling drafts and the bounded runtime probe and debugger were exercised. Four native domain save paths separately rejected stale edits in Studio.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-operator-acceptance-2026-11-25.md",
+        "docs/agent-handoffs/studio-guarded-graph-roundtrip-2026-11-25.md",
+        "tests/vfx_graph_ops_test.cpp"
+      ]
     },
     "studio": {
       "status": "pass",
@@ -203,9 +211,13 @@
       ]
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The native graph facade enumerated all five domains over stdio. The three-node graph validated, exposed two dependencies, refused a blind write and read back a guarded save. Typed Shader, animation and modeling drafts and the bounded runtime probe and debugger were exercised. Four native domain save paths separately rejected stale edits in Studio.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-operator-acceptance-2026-11-25.md",
+        "docs/agent-handoffs/studio-guarded-graph-roundtrip-2026-11-25.md",
+        "tests/vfx_graph_ops_test.cpp"
+      ]
     },
     "performance": {
       "status": "not_run",
@@ -373,13 +385,13 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-96e08157a-contracts.json",
-    "docs/evidence/feature-gate-96e08157a-catalog.json",
-    "docs/evidence/feature-gate-96e08157a-skill-audit.json",
-    "docs/evidence/feature-gate-96e08157a-feature-suite.json",
-    "docs/evidence/feature-gate-96e08157a-native-project.json",
-    "docs/evidence/feature-gate-96e08157a-web.json",
-    "docs/evidence/feature-gate-96e08157a-studio-contracts.json",
-    "docs/evidence/feature-gate-96e08157a-typecheck.json"
+    "docs/evidence/feature-gate-cda38a15c-contracts.json",
+    "docs/evidence/feature-gate-cda38a15c-catalog.json",
+    "docs/evidence/feature-gate-cda38a15c-skill-audit.json",
+    "docs/evidence/feature-gate-cda38a15c-feature-suite.json",
+    "docs/evidence/feature-gate-cda38a15c-native-project.json",
+    "docs/evidence/feature-gate-cda38a15c-web.json",
+    "docs/evidence/feature-gate-cda38a15c-studio-contracts.json",
+    "docs/evidence/feature-gate-cda38a15c-typecheck.json"
   ]
 }
