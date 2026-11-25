@@ -3290,9 +3290,9 @@ endif()
 
 # Host authoring: shared by the editor, MCP and CPU tests.
 if(AIVERSE_DESKTOP AND (TARGET aiverse_editor_core OR AIVERSE_BUILD_TESTS))
-    add_library(aiverse_modeling STATIC tools/modeling/Cable.cpp tools/modeling/Geometry.cpp tools/modeling/Boolean.cpp tools/modeling/Advanced.cpp
+    add_library(aiverse_modeling STATIC tools/modeling/VolumeCsg.cpp tools/modeling/Cable.cpp tools/modeling/Geometry.cpp tools/modeling/Boolean.cpp tools/modeling/Advanced.cpp
         tools/modeling/Document.cpp tools/modeling/Export.cpp tools/modeling/Clips.cpp tools/modeling/Recipes.cpp)
-    target_link_libraries(aiverse_modeling PUBLIC aiverse_models AIVERSE::cables)
+    target_link_libraries(aiverse_modeling PUBLIC aiverse_models AIVERSE::cables PRIVATE AIVERSE::lib_noise)
     target_include_directories(aiverse_modeling PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
