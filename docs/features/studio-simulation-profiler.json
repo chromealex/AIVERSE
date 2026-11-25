@@ -91,10 +91,11 @@
       ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "A profiled and an unprofiled GameCore advanced from the same saved state. After two ticks both gameplay archives and checksums were identical. The two-tick native timing history was populated only for the profiled session.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/agent-handoffs/studio-building-budget-archives-2026-11-25.md",
+        "tests/simulation_profile_test.cpp"
       ]
     },
     "graphs": {
@@ -192,9 +193,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-647255066-studio-contracts.json",
-    "docs/evidence/feature-gate-647255066-web.json",
-    "docs/evidence/feature-gate-647255066-typecheck.json",
-    "docs/evidence/feature-gate-647255066-skill-audit.json"
+    "docs/evidence/feature-gate-96e08157a-studio-contracts.json",
+    "docs/evidence/feature-gate-96e08157a-web.json",
+    "docs/evidence/feature-gate-96e08157a-typecheck.json",
+    "docs/evidence/feature-gate-96e08157a-skill-audit.json"
   ]
 }

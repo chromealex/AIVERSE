@@ -195,9 +195,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-647255066-studio-contracts.json",
-    "docs/evidence/feature-gate-647255066-web.json",
-    "docs/evidence/feature-gate-647255066-typecheck.json",
-    "docs/evidence/feature-gate-647255066-skill-audit.json"
+    "docs/evidence/feature-gate-96e08157a-studio-contracts.json",
+    "docs/evidence/feature-gate-96e08157a-web.json",
+    "docs/evidence/feature-gate-96e08157a-typecheck.json",
+    "docs/evidence/feature-gate-96e08157a-skill-audit.json"
   ]
 }

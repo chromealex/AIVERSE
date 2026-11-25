@@ -35,7 +35,7 @@
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
         "docs/evidence/studio-play-ad676e70c/runtime.png",
-        "docs/evidence/feature-gate-647255066-web.json"
+        "docs/evidence/feature-gate-96e08157a-web.json"
       ]
     },
     "architecture": {
@@ -88,10 +88,12 @@
       ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "A real vital edit survived serialization and deserialization into a fresh GameCore simulation with equal checksums. The native panel separately demonstrated stale session and raw-value rejection.",
       "evidence": [
-        "docs/handoff/studio-html5/s4-runtime-debugger-2026-11-24.md"
+        "docs/agent-handoffs/studio-building-budget-archives-2026-11-25.md",
+        "apps/studio-native/StudioRuntimeEdit.h",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "graphs": {
@@ -146,7 +148,7 @@
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
         "docs/evidence/studio-play-ad676e70c/runtime.png",
-        "docs/evidence/feature-gate-647255066-web.json"
+        "docs/evidence/feature-gate-96e08157a-web.json"
       ]
     },
     "handoff": {
@@ -188,9 +190,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-647255066-studio-contracts.json",
-    "docs/evidence/feature-gate-647255066-web.json",
-    "docs/evidence/feature-gate-647255066-typecheck.json",
-    "docs/evidence/feature-gate-647255066-skill-audit.json"
+    "docs/evidence/feature-gate-96e08157a-studio-contracts.json",
+    "docs/evidence/feature-gate-96e08157a-web.json",
+    "docs/evidence/feature-gate-96e08157a-typecheck.json",
+    "docs/evidence/feature-gate-96e08157a-skill-audit.json"
   ]
 }

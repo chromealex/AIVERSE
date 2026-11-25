@@ -163,8 +163,8 @@
       "evidence": [
         "skills/workflow/aiverse-graph-authoring/SKILL.md",
         "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md",
-        "docs/evidence/feature-gate-647255066-catalog.log.txt",
-        "docs/evidence/feature-gate-647255066-skill-audit.log.txt",
+        "docs/evidence/feature-gate-96e08157a-catalog.log.txt",
+        "docs/evidence/feature-gate-96e08157a-skill-audit.log.txt",
         "skills/workflow/aiverse-graph-authoring/SKILL.md"
       ]
     },
@@ -174,13 +174,13 @@
       "evidence": []
     },
     "studio": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification. Native Studio on Mac generated a building GLB and displayed its independent preview and authored room graph. The Caverns inspector was verified after a document identity fix. At 460ce965c the Studio TypeScript check, 256 web cases and 55 Python contract cases (one skipped) passed. Live native acceptance is tracked separately.",
+      "status": "pass",
+      "note": "The native Shader Graph inspector saved a draft and retained it after a real external version change. Studio graph owner calls also completed verified saves, conflicts and readbacks on SpectraFX, texture and animation. Building and Caverns use their own scope-aware inspectors.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md",
-        "docs/evidence/feature-gate-647255066-typecheck.log.txt",
-        "docs/evidence/feature-gate-647255066-web.log.txt",
-        "docs/evidence/feature-gate-647255066-studio-contracts.log.txt"
+        "docs/agent-handoffs/studio-guarded-graph-roundtrip-2026-11-25.md",
+        "docs/evidence/studio-graph-647255066/stale-edit.png",
+        "docs/evidence/studio-play-ad676e70c/caverns.png",
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
       ]
     },
     "inspector": {
@@ -278,9 +278,13 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The bilingual Studio diary shows the guarded graph workflow and the additional Shader Graph and SpectraFX visual entry shows node and connection editing. The native editor tool publishing exception is documented in the release-site contract.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-studio-local-play-inspection.json",
+        "docs/devlog/entries/2026-11-25-studio-graph-visuals.json",
+        "docs/agents/contracts/release-site.md"
+      ]
     }
   },
   "integrations": {
@@ -369,13 +373,13 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-647255066-contracts.json",
-    "docs/evidence/feature-gate-647255066-catalog.json",
-    "docs/evidence/feature-gate-647255066-skill-audit.json",
-    "docs/evidence/feature-gate-647255066-feature-suite.json",
-    "docs/evidence/feature-gate-647255066-native-project.json",
-    "docs/evidence/feature-gate-647255066-web.json",
-    "docs/evidence/feature-gate-647255066-studio-contracts.json",
-    "docs/evidence/feature-gate-647255066-typecheck.json"
+    "docs/evidence/feature-gate-96e08157a-contracts.json",
+    "docs/evidence/feature-gate-96e08157a-catalog.json",
+    "docs/evidence/feature-gate-96e08157a-skill-audit.json",
+    "docs/evidence/feature-gate-96e08157a-feature-suite.json",
+    "docs/evidence/feature-gate-96e08157a-native-project.json",
+    "docs/evidence/feature-gate-96e08157a-web.json",
+    "docs/evidence/feature-gate-96e08157a-studio-contracts.json",
+    "docs/evidence/feature-gate-96e08157a-typecheck.json"
   ]
 }

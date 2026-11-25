@@ -9,12 +9,14 @@
   "body": [
     "Откройте карту проекта с модулем actor и запустите Play. Чтобы увидеть реестр, включите regionOwnership в правилах проекта. После шага нажмите обновление в World Explorer. Снимок содержит тик, номер сессии и число сущностей в каждой ячейке.",
     "В панели Runtime можно выбрать сущность и прочесть её компоненты. В локальной игре с поддержкой редактирования можно на паузе изменить здоровье или энергию. Профилировщик показывает длительность тиков и время отдельных систем.",
-    "В Play Mode Review для поддерживаемых карт можно просмотреть изменения, применить выбранную группу и отменить её одним действием. Feature Readiness показывает состояние проверок проекта."
+    "В Play Mode Review для поддерживаемых карт можно просмотреть изменения, применить выбранную группу и отменить её одним действием. Feature Readiness показывает состояние проверок проекта.",
+    "В Roads укажите число сущностей, период обновления и лимит посещений за тик. Панель покажет, успевает ли симуляция вернуться к каждой сущности за выбранный период. При редактировании Shader Graph Studio проверяет исходную версию ассета перед сохранением."
   ],
   "bodyEn": [
     "Open a map in an actor project and start Play. Enable regionOwnership in the project rules to expose the ledger. After stepping, refresh World Explorer. The snapshot includes the tick, session epoch and entity count for each cell.",
     "Select an entity in Runtime to inspect its components. Supported local games allow health or energy edits while paused. The simulation profiler displays tick durations and per-system timings.",
-    "On supported maps, Play Mode Review previews changes and applies the selection as one undoable edit. Feature Readiness displays the project's delivery checks."
+    "On supported maps, Play Mode Review previews changes and applies the selection as one undoable edit. Feature Readiness displays the project's delivery checks.",
+    "In Roads, enter the entity count, desired update period and maximum visits per tick to see whether the simulation can revisit each entity in time. When saving a Shader Graph edit, Studio checks the original asset version."
   ],
   "status": "in-progress",
   "branch": "feature/aiv20261123_feature_gate",
@@ -25,11 +27,46 @@
   "limits": "Эти панели работают в нативном редакторе и показаны на кадрах Studio. Просмотр изменений карты использует GameCore. Для actor-сессий доступен просмотр реестра.",
   "limitsEn": "These panels run in the native editor and are shown in Studio captures. Map change review uses GameCore. Actor sessions support ledger inspection.",
   "media": [
-    {"src":"docs/evidence/studio-actor-g1/world-explorer-final.png","caption":"World Explorer на тике 123. Две ячейки содержат по одной активной сущности.","captionEn":"World Explorer at tick 123. Two cells each contain one live entity."},
-    {"src":"docs/evidence/studio-play-ad676e70c/runtime.png","caption":"Выбранная сущность и поля редактирования в Runtime.","captionEn":"A selected entity and its editable fields in Runtime."},
-    {"src":"docs/evidence/studio-play-ad676e70c/simulation_profiler.png","caption":"Время восьми тиков и вклад отдельных систем.","captionEn":"Eight tick timings and the contribution from individual systems."},
-    {"src":"docs/evidence/studio-play-ad676e70c/game.png","caption":"Панель просмотра изменений рядом с запущенной картой.","captionEn":"The change review panel alongside the running map."},
-    {"src":"docs/evidence/studio-play-ad676e70c/feature_readiness.png","caption":"Проверки зарегистрированных функций в Feature Readiness.","captionEn":"Delivery checks for registered features in Feature Readiness."}
+    {
+      "src": "docs/evidence/studio-actor-g1/world-explorer-final.png",
+      "caption": "World Explorer на тике 123. Две ячейки содержат по одной активной сущности.",
+      "captionEn": "World Explorer at tick 123. Two cells each contain one live entity."
+    },
+    {
+      "src": "docs/evidence/studio-play-ad676e70c/runtime.png",
+      "caption": "Выбранная сущность и поля редактирования в Runtime.",
+      "captionEn": "A selected entity and its editable fields in Runtime."
+    },
+    {
+      "src": "docs/evidence/studio-play-ad676e70c/simulation_profiler.png",
+      "caption": "Время восьми тиков и вклад отдельных систем.",
+      "captionEn": "Eight tick timings and the contribution from individual systems."
+    },
+    {
+      "src": "docs/evidence/studio-play-ad676e70c/game.png",
+      "caption": "Панель просмотра изменений рядом с запущенной картой.",
+      "captionEn": "The change review panel alongside the running map."
+    },
+    {
+      "src": "docs/evidence/studio-play-ad676e70c/feature_readiness.png",
+      "caption": "Проверки зарегистрированных функций в Feature Readiness.",
+      "captionEn": "Delivery checks for registered features in Feature Readiness."
+    },
+    {
+      "src": "docs/evidence/studio-building-budget/roads.png",
+      "caption": "При 200 000 сущностей и лимите 1 000 посещений за тик повторный обход занимает 200 тиков вместо желаемых 120.",
+      "captionEn": "For 200,000 entities with a cap of 1,000 visits per tick, a full cycle takes 200 ticks against a target of 120."
+    },
+    {
+      "src": "docs/evidence/studio-graph-647255066/stale-edit.png",
+      "caption": "Shader Graph предупреждает об изменении файла другим редактором. Черновик остаётся открыт.",
+      "captionEn": "Shader Graph reports an external file change and keeps the draft open."
+    }
   ],
-  "links": [{"title":"Studio ECS inspector","href":"docs/editor-native-ecs-inspector.md"}]
+  "links": [
+    {
+      "title": "Studio ECS inspector",
+      "href": "docs/editor-native-ecs-inspector.md"
+    }
+  ]
 }

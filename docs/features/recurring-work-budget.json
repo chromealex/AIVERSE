@@ -77,17 +77,19 @@
       ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Roads panel exposed all three integer inputs and rendered the real planner result. Using 200000 entities, period 120 and cap 1000 yielded 1000 visits per tick, 200 ticks for a full cycle and meetsPeriod false.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "docs/agent-handoffs/studio-building-budget-archives-2026-11-25.md",
+        "docs/evidence/studio-building-budget/roads.png"
       ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Roads panel exposed all three integer inputs and rendered the real planner result. Using 200000 entities, period 120 and cap 1000 yielded 1000 visits per tick, 200 ticks for a full cycle and meetsPeriod false.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "docs/agent-handoffs/studio-building-budget-archives-2026-11-25.md",
+        "docs/evidence/studio-building-budget/roads.png"
       ]
     },
     "persistence": {
@@ -170,10 +172,12 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The bilingual Studio devlog explains how to use the recurring decision budget and includes a real Roads panel capture. The local site check accepted the entry. The editor-tool capture exception applies; public deployment follows main.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "docs/devlog/entries/2026-11-25-studio-local-play-inspection.json",
+        "docs/evidence/studio-building-budget/roads.png",
+        "docs/agents/contracts/release-site.md"
       ]
     }
   },
@@ -193,8 +197,8 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-647255066-contracts.json",
-    "docs/evidence/feature-gate-647255066-catalog.json",
-    "docs/evidence/feature-gate-647255066-skill-audit.json"
+    "docs/evidence/feature-gate-96e08157a-contracts.json",
+    "docs/evidence/feature-gate-96e08157a-catalog.json",
+    "docs/evidence/feature-gate-96e08157a-skill-audit.json"
   ]
 }
