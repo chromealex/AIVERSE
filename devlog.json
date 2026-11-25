@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-24T23:02:50+00:00",
+ "generated": "2026-11-25T00:54:58+00:00",
  "lang": "en",
  "repo": "https://github.com/chromealex/AIVERSE",
  "systems": [
@@ -121,6 +121,34 @@
   }
  ],
  "entries": [
+  {
+   "id": "2026-11-25-studio-workspace-redesign",
+   "date": "2026-11-25",
+   "system": "studio",
+   "title": "Finding windows and working in narrow Studio panels",
+   "summary": "Find any panel from the Window menu. Scene tools, forms and lists adapt to the width of their dock.",
+   "body": [
+    "Choose Find Window from the Window menu, type a panel name and press Enter. An open panel takes focus. The arrow keys switch between tabs in a dock, and Home and End select the first and last tab.",
+    "In a narrow Terrain panel, brush controls wrap onto another row. Editing fields stay visible and each operation has an expandable technical description. In Assets the folder tree moves above the files. In Scripts the file list moves above the editor."
+   ],
+   "status": "done",
+   "verified": "The screenshots show the Survivors project in Studio on macOS, including the scene, Terrain brush settings and window search.",
+   "limits": "Native Windows verification is pending.",
+   "branch": "studio-workspace-redesign",
+   "commit": "7c1b741c2",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-workspace-redesign/01.png",
+     "caption": "Terrain settings beside the Survivors scene"
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-25-studio-workspace-redesign/02.png",
+     "caption": "Finding Terrain in the Studio window list"
+    }
+   ],
+   "links": [],
+   "author": null
+  },
   {
    "id": "2026-11-25-spectrafx-smoke-flow",
    "date": "2026-11-25",

@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-24T23:02:50+00:00",
+ "generated": "2026-11-25T00:54:58+00:00",
  "lang": "ru",
  "repo": "https://github.com/chromealex/AIVERSE",
  "systems": [
@@ -121,6 +121,34 @@
   }
  ],
  "entries": [
+  {
+   "id": "2026-11-25-studio-workspace-redesign",
+   "date": "2026-11-25",
+   "system": "studio",
+   "title": "Поиск окон и работа в узких панелях Studio",
+   "summary": "В меню Window появился поиск по всем панелям. При изменении ширины дока инструменты сцены, поля и списки перестраиваются в пределах своего окна.",
+   "body": [
+    "Выберите Find Window в меню Window, введите имя панели и нажмите Enter. Открытая панель получит фокус. Вкладки одного дока переключаются стрелками, а Home и End ведут к первой и последней вкладке.",
+    "В узком Terrain кнопки кисти переходят на следующую строку. Параметры операции видны сразу, а её техническое описание можно раскрыть отдельно. В Assets дерево папок встаёт над файлами, в Scripts список файлов располагается над редактором."
+   ],
+   "status": "done",
+   "verified": "На снимках открыт проект Survivors в Studio на macOS. Видны сцена, параметры кисти Terrain и поиск этого окна.",
+   "limits": "Нативная проверка на Windows ещё предстоит.",
+   "branch": "studio-workspace-redesign",
+   "commit": "7c1b741c2",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-workspace-redesign/01.png",
+     "caption": "Параметры Terrain рядом со сценой проекта Survivors"
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-studio-workspace-redesign/02.png",
+     "caption": "Поиск Terrain в списке окон Studio"
+    }
+   ],
+   "links": [],
+   "author": null
+  },
   {
    "id": "2026-11-25-spectrafx-smoke-flow",
    "date": "2026-11-25",
