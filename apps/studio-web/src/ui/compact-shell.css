@@ -94,7 +94,7 @@ html.studio-edge-nesw, html.studio-edge-nesw * {cursor:nesw-resize !important}
 /* Layout follows the dock, including a narrow pane inside a wide window. */
 .nested-stack[data-narrow] {
   .console__bar, .ptp__edhead, .ptp__actions, .diff__summary,
-  .graph-summary, .materials-footer, .anim__transport { flex-wrap: wrap; }
+  .materials-footer, .anim__transport { flex-wrap: wrap; }
   .console__search:focus-within, .hier__search:focus-within { outline: 2px solid var(--au-accent); }
   .console__search { flex: 1 1 9rem; }
   .ptp__row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
