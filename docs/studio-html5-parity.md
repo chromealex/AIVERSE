@@ -234,4 +234,4 @@ Camera navigation parity stage. Cover the Follow-body toggle, native preset list
 
 Current camera acceptance covers authoring from the active Scene projection and native physical-lens readouts for finite and infinite focus intervals.
 
-Console in the Mac bundle displayed 49 lines from a successful size estimate. Copy full log matched all 3103 bytes on disk. The Errors filter was exercised on that successful run. Windows and a real failed build remain pending.
+Console in the Mac bundle displayed 49 lines from a successful size estimate. Copy full log matched all 3103 bytes on disk. The Errors filter was exercised on that successful run. A second estimate failed on a deliberate output-path collision in the disposable project. The Errors view showed the native audio copy diagnostic and terminal failure on lines 9 and 11, exit 1. Finder opened the logs window containing editor.log and build-estimate.log. Windows desktop verification and live Lua play-test diagnostics remain pending.
