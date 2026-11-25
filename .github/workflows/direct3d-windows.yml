@@ -32,8 +32,10 @@ jobs:
           $inventory = ctest --test-dir build/windows-msvc -C Release -N -R '^render_direct3d'
           $inventory
           if (!($inventory -match 'Total Tests: 6$')) { throw 'Expected six registered Direct3D cases' }
-          ctest --test-dir build/windows-msvc -C Release --verbose --output-on-failure --no-tests=error -R '^render_direct3d' --output-junit d3d-results.xml
-          exit $LASTEXITCODE
+          python tools/agents/evidence.py --id direct3d-windows-native -- ctest --test-dir build/windows-msvc -C Release --verbose --output-on-failure --no-tests=error -R '^render_direct3d' --output-junit "${{ runner.temp }}/d3d-results.xml"
+          $result = $LASTEXITCODE
+          Get-Content docs/evidence/direct3d-windows-native.log.txt
+          exit $result
       - name: Save CTest results and native process output
         if: always()
         uses: actions/upload-artifact@v4
@@ -41,6 +43,6 @@ jobs:
           name: direct3d-windows-results
           path: |
             build/windows-msvc/Testing/Temporary/LastTest.log
-            build/windows-msvc/d3d-results.xml
-            d3d-results.xml
+            docs/evidence/direct3d-windows-native*
+            ${{ runner.temp }}/d3d-results.xml
           if-no-files-found: warn

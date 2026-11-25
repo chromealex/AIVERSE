@@ -45,6 +45,7 @@ bool capture(gfx::Device& device,const Model& model,const std::string& output) {
 #endif
     gfx::PipelineDesc pipeline;
     pipeline.shader=device.createShader(shader);
+    if(!pipeline.shader.valid())return false;
     pipeline.attrs[0]={0,gfx::VertexFormat::Float4,offsetof(Vertex,clip)};
     pipeline.attrs[1]={1,gfx::VertexFormat::Float4,offsetof(Vertex,color)};
     pipeline.attrs[2]={2,gfx::VertexFormat::Float2,offsetof(Vertex,uv)};
