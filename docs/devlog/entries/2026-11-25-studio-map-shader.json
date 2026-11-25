@@ -1,0 +1,31 @@
+{
+  "id": "2026-11-25-studio-map-shader",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "bd3688af9",
+  "author": null,
+  "links": [],
+  "title": "Постэффект отдельной карты",
+  "titleEn": "Map-specific shader application",
+  "summary": "Shader Graph указывает карту назначения и напоминает сохранить её после применения.",
+  "summaryEn": "Shader Graph names the destination map and indicates when the override needs a map save.",
+  "body": [
+    "Выберите карту в Apply to target. Применение постэффекта входит в историю изменений карты."
+  ],
+  "bodyEn": [
+    "Choose the map in Apply to target. Its post-effect override participates in map history."
+  ],
+  "verified": "На macOS проверены Undo, Redo, сохранение и повторное открытие второй карты. Первая карта и game.json совпали с исходными побайтно.",
+  "verifiedEn": "macOS verified undo, redo, save and reopen on the second map. The first map and game.json stayed byte-identical.",
+  "limits": "Визуальная проверка Windows предстоит.",
+  "limitsEn": "Windows visual verification remains pending.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-map-shader/map-shader.png",
+      "caption": "Постэффект для harbor.json",
+      "captionEn": "Post-effect override for harbor.json"
+    }
+  ]
+}

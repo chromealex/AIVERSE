@@ -1,0 +1,4 @@
+2026-11-25 23:34:25.996 AiverseStudioHTML5[36285:81649823] [studio-web] JS: CROSS bindingproof DONE_1
+2026-11-25 23:34:25.995 AiverseStudioHTML5[36285:81649823] [studio-web] JS: CROSS bindingproof VERIFIED map destination, pending save, undo, redo, stale target and reopen
+Shader edits left game rules unchanged.
+Second map contains the exact saved graph. First map and global settings remain byte-identical.

@@ -1,0 +1,10 @@
+{
+  "sha": "bd3688af974aefcbdf4fcaa7d89114b7b9b5a134",
+  "argv": [
+    "bash",
+    "/tmp/map-shader-qa.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-shader-map-scope-bd3688af9.log.txt",
+  "sha256": "d22dff0c002ae007df89e2c290321c26ff9a44a2642dae680d5115afca55071e"
+}
