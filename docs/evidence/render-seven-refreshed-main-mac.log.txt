@@ -1,0 +1,82 @@
+56a2d9131c7b013e4e4da92e1cc34c97872f2be8
+-- AIVERSE platform: macos
+-- Found SQLite3: /Library/Frameworks/Mono.framework/Headers (found version "3.26.0") 
+-- Configuring done (8.2s)
+-- Generating done (4.3s)
+-- Build files have been written to: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests
+Full registered Mac quick suite
+[ OK ] view_screen_host_state
+[ OK ] view_script_ui_call
+[ OK ] view_script_sound_table
+[ OK ] view_draw_ground_world_triangles
+[ OK ] view_ground_shadow_option
+[ OK ] view_entity_parent_frames
+[ OK ] view_entity_parent_api
+[ OK ] view_entity_fx_script_api
+[ OK ] rts_view_commits_visual_epoch_only_after_primary_and_invalidates_on_map_edit
+[ OK ] lens_late_overlay_failure_rolls_back_animation_frame_and_clears_packets
+[ OK ] frame_publication_epoch_requires_every_owner_before_secondary_camera
+[ OK ] frame_publication_epoch_aborts_late_owner_failure_and_never_replays_previous
+[ OK ] frame_publication_epoch_rejects_incomplete_and_nested_publications
+[ OK ] native_mesh_batch_second_upload_failure_preserves_all_published_handles
+[ OK ] native_mesh_batch_success_retires_old_buffers_only_on_publish
+[ OK ] native_mesh_batch_same_target_replacement_is_coalesced
+[ OK ] lens_stage47_groundfx_late_owner_rejection_preserves_published_frame
+[ OK ] lens_stage47_groundfx_resize_candidate_discard_keeps_old_gpu_meshes
+[ OK ] lens_stage47_groundfx_draw_prepared_never_allocates_material_textures
+
+
+99% tests passed, 3 tests failed out of 587
+
+Label Time Summary:
+AUDIO             =   1.19 sec*proc (2 tests)
+Architecture      =   0.82 sec*proc (5 tests)
+BSP               =   3.94 sec*proc (1 test)
+CPU               =  12.13 sec*proc (30 tests)
+Caverns           =  16.64 sec*proc (31 tests)
+ECS               =  33.53 sec*proc (24 tests)
+EDITOR            = 184.03 sec*proc (49 tests)
+GPU               =  39.60 sec*proc (9 tests)
+IMPORT            =   4.03 sec*proc (1 test)
+LENS              =  10.02 sec*proc (2 tests)
+LIGHTING          =  11.01 sec*proc (1 test)
+Lighting          =   5.69 sec*proc (30 tests)
+MCP               =  13.38 sec*proc (6 tests)
+Material          =   3.51 sec*proc (2 tests)
+Metal             =  20.42 sec*proc (7 tests)
+MetalGPU          =  35.59 sec*proc (8 tests)
+NEREID            =   0.78 sec*proc (2 tests)
+NETWORK           =  18.38 sec*proc (7 tests)
+PERSISTENCE       =  27.26 sec*proc (14 tests)
+PHYSIS            =  66.65 sec*proc (39 tests)
+PRISMA            =   1.41 sec*proc (1 test)
+Prisma            =   0.29 sec*proc (2 tests)
+RENDER            =   7.42 sec*proc (1 test)
+RHI               =  38.05 sec*proc (10 tests)
+Renderer3D        =  12.22 sec*proc (12 tests)
+SECURITY          =   0.62 sec*proc (3 tests)
+SpectraFX         =  58.65 sec*proc (27 tests)
+TERRAWEAVE        =  19.80 sec*proc (7 tests)
+TEXTURE_GRAPH     =   2.25 sec*proc (5 tests)
+TOOLS             =   5.97 sec*proc (4 tests)
+TerraWeave        =  16.64 sec*proc (31 tests)
+VFX               =   6.30 sec*proc (3 tests)
+Vehicles          =   6.66 sec*proc (5 tests)
+Volumetrics       =  11.24 sec*proc (2 tests)
+WIND              =   7.42 sec*proc (1 test)
+World             =  18.95 sec*proc (15 tests)
+WorldProcesses    =   0.68 sec*proc (1 test)
+
+Total Test time (real) = 455.75 sec
+
+The following tests FAILED:
+	121 - aiverse_tests (Subprocess terminated)
+	574 - studio_bridge (Failed)
+	575 - studio_material_schema (Failed)
+Errors while running CTest
+FAIL ctest (exit 8)
+
+========== SUMMARY ==========
+Passed stages: 2 | Failed stages: 1
+Logs: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests/test-reports/20261125-131651-90029
+Failed: ctest
