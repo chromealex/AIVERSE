@@ -51,7 +51,7 @@ bool materialBatchCompatible(const MeshDef& mesh, const MaterialBatch& batch, co
 }
 
 size_t prepareMaterialBatches(Model& m) {
-    if (m.vertices.empty() || m.indices.empty() || m.vb.valid() || m.ib.valid() || m.geometry ||
+    if (m.bspVisibility || m.vertices.empty() || m.indices.empty() || m.vb.valid() || m.ib.valid() || m.geometry ||
         !m.variants.empty() || !m.skins.empty() || m.materials.size() > kMaxMaterialPalette) return 0;
     // weights[0] is spare only in rigid models. Shared vertices may also belong to another mesh.
     for (const auto& mesh : m.meshes) {

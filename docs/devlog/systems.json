@@ -3174,6 +3174,7 @@
         },
         {
           "status": "in-progress",
+          "id": "quake3-bsp",
           "title": "Уровни Quake III BSP с видимостью по кластерам, текстурами и запечённым светом",
           "titleEn": "Load Quake III BSP levels with cluster visibility, textures and baked lightmaps"
         },

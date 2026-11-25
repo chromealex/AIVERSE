@@ -27,6 +27,7 @@ std::string triangle() {
     put(bytes, 368, 1);
     put(bytes, 376, 3);
     put(bytes, 384, 3);
+    put(bytes, 388, -1);
     return bytes;
 }
 // Both leaves initially reference the single triangle through distinct PVS rows.
@@ -85,6 +86,28 @@ int main() {
     auto model = load(bytes);
     if (model->materials.at(0).name != "stone" || model->vertices.at(2).pos.y != 1.f ||
         model->indices != std::vector<uint32_t>{0, 2, 1}) return 1;
+    auto lit=bytes;
+    const size_t start=lit.size(), pageSize=128*128*3;
+    lit.resize(start+pageSize, char(91));
+    lump(lit,14,int(start),int(pageSize));
+    put(lit,388,0);
+    lit.replace(144,20,std::string("textures/test/stone")+char(0));
+    const auto loaded=aiverse::render::loadModel("pack/maps/test.bsp",[&](const std::string& file,std::string& out){
+        if(file=="pack/maps/test.bsp"){out=lit;return true;}
+        if(file=="pack/scripts/shaderlist.txt"){out="// enabled scripts\ncustom";return true;}
+        if(file=="pack/scripts/custom.shader"){out="textures/test/stone { { map $lightmap } { map textures/tiles/red.tga } }";return true;}
+        if(file!="pack/textures/tiles/red.tga")return false;
+        out.assign(21,char(0));out[2]=2;out[12]=out[14]=1;out[16]=24;out[20]=char(252);return true;
+    });
+    const auto& p=loaded->meshes.at(0).primitives.at(0);
+    const auto& mat=loaded->materials.at(p.material);
+    if (!p.lightmapUv || mat.vertexColors || mat.baseTex<0 ||
+        loaded->images.at(mat.baseTex).rgba.at(0)!=252)return 9;
+    const auto& page=loaded->images.at(loaded->bspVisibility->lightmapImages.at(0));
+    if (page.width!=128 || page.height!=128 || page.repeat ||
+        page.rgba.at(0)!=91 || page.rgba.at(3)!=255)return 10;
+    put(lit,388,1);
+    try{load(lit);return 11;}catch(const std::runtime_error&){}
     auto patch = curvedPatch();
     auto curved = load(patch);
     const auto& surface = curved->meshes.at(0).primitives.at(0);

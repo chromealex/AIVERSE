@@ -1,6 +1,17 @@
 {
   "schema": 1,
   "features": {
+    "quake3-bsp": {
+      "requires": [],
+      "roadmap": {
+        "system": "render",
+        "id": "quake3-bsp"
+      },
+      "api_paths": [
+        "engine/render/BspVisibility.h",
+        "engine/render/Model.h"
+      ]
+    },
     "nereid-gcc13-arm64-build": {
       "requires": [],
       "roadmap": {

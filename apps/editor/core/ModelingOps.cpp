@@ -1,9 +1,11 @@
 #include "ModelingOps.h"
+#include "engine/render/BspVisibility.h"
 #include "tools/modeling/Modeling.h"
 #include <filesystem>
 #include <fstream>
 #include <future>
 #include <mutex>
+#include <set>
 #include <chrono>
 #if defined(_WIN32)
 #include <windows.h>
@@ -161,6 +163,17 @@ void registerModelingOps(Workspace &ws) {
             r.set("clips", clips);
             r.set("materials", materials);
             r.set("warnings", notes);
+            if (const auto& bsp=m->bspVisibility) {
+                std::set<int> pages;
+                size_t illuminated=0;
+                for (int page:bsp->lightmapImages)if(page>=0){pages.insert(page);++illuminated;}
+                auto info=Json::object();
+                info.set("surfaces",Json::number(int64_t(bsp->lightmapImages.size())));
+                info.set("lightmappedSurfaces",Json::number(int64_t(illuminated)));
+                info.set("lightmapPages",Json::number(int64_t(pages.size())));
+                info.set("visibilityClusters",Json::number(int64_t(bsp->rowBytes?bsp->rows.size()/bsp->rowBytes:0)));
+                r.set("bsp",std::move(info));
+            }
             r.set("path", Json::string(model));
             return r;
         });

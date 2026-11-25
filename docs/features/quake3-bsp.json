@@ -4,22 +4,33 @@
   "owner": "render",
   "changed_paths": [
     "CMakeLists.txt",
+    "apps/editor/core/ModelingOps.cpp",
+    "apps/studio-native/StudioAssetCatalog.cpp",
+    "apps/studio-native/StudioTools.h",
     "docs/agent-handoffs/quake3-bsp-initial.md",
+    "docs/agent-handoffs/quake3-bsp-materials.md",
     "docs/agent-handoffs/quake3-bsp-patches.md",
     "docs/agent-handoffs/quake3-bsp-pvs.md",
+    "docs/agents/feature-policy.json",
     "docs/devlog/systems.json",
     "docs/features/quake3-bsp.json",
+    "docs/models.md",
+    "engine/render/BspShaderImages.h",
     "engine/render/BspVisibility.h",
     "engine/render/Model.cpp",
     "engine/render/Model.h",
     "engine/render/ModelBsp.cpp",
     "engine/render/ModelMerge.cpp",
+    "engine/render/Renderer3DBaked.cpp",
     "engine/render/Renderer3DModels.cpp",
+    "skills/visuals/aiverse-assets-import/SKILL.md",
+    "tests/render/prepare_openarena_bsp.py",
     "tests/render/quake3_bsp.cpp",
+    "tests/render/quake3_bsp_frame.cpp",
     "tools/models/ModelConvert.cpp"
   ],
   "traits": {
-    "editable": true,
+    "editable": false,
     "simulation": false,
     "visible": true,
     "runtime": true
@@ -31,19 +42,25 @@
       "evidence": []
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Static model import and rendering share Model image ownership, typed GPU handles, PVS and the baked-lighting pipeline.",
+      "evidence": [
+        "engine/render/Renderer3DBaked.cpp"
+      ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "loadModel and Renderer3D consume IBSP v46, diffuse images and per-face lightmap pages.",
+      "evidence": [
+        "engine/render/ModelBsp.cpp"
+      ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The asset import skill explains how to preserve the game-relative texture and shader paths.",
+      "evidence": [
+        "skills/visuals/aiverse-assets-import/SKILL.md"
+      ]
     },
     "mcp": {
       "status": "not_run",
@@ -66,8 +83,8 @@
       "evidence": []
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "Imported immutable level geometry has no authoring graph.",
       "evidence": []
     },
     "performance": {
@@ -81,9 +98,11 @@
       "evidence": []
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Uses the existing image decoders, asset reader, texture upload and lightmap shaders.",
+      "evidence": [
+        "engine/render/ModelBsp.cpp"
+      ]
     },
     "headless": {
       "status": "not_run",
@@ -91,9 +110,11 @@
       "evidence": []
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Reproducible external Debian/OpenArena fixture.",
+      "evidence": [
+        "tests/render/prepare_openarena_bsp.py"
+      ]
     },
     "tests": {
       "status": "not_run",
@@ -106,9 +127,11 @@
       "evidence": []
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Static shader translation, import layout, credits and optical test reproduction documented.",
+      "evidence": [
+        "docs/models.md"
+      ]
     },
     "publishing": {
       "status": "not_run",
@@ -117,10 +140,19 @@
     }
   },
   "integrations": {
-    "skills": [],
-    "mcp_tools": [],
-    "studio_panels": [],
-    "studio_methods": []
+    "skills": [
+      "aiverse-assets-import"
+    ],
+    "mcp_tools": [
+      "asset_import",
+      "model_info"
+    ],
+    "studio_panels": [
+      "models"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
   },
   "test_reports": []
 }

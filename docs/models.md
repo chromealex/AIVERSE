@@ -1734,3 +1734,21 @@ hot-reload visual test, GPU failure injection or benchmarks.
 A status can attach a particle effect to its holder for its active lifetime. For example, set `"view": {"effect":"heal_glow","offset":[0,0.5,0]}` on the status definition. Named model nodes use socket-local offsets. Removing the status stops emission.
 
 For chain delivery, the ability ID selects an entry in `fx/fx.json` under `chainJumps`. Override it with `chainFx` on a chain effect or its delivery. `events.chainJump` supplies the fallback. For example, `"chainJumps":{"lightning":{"mode":"beam","scale":2,"lifetime":0.25,"height":1}}` draws a ribbon between each pair of hits. Set `"mode":"projectile","effect":"spark"` to move an emitter along the link during its lifetime. Beam color uses the renderer's packed RGBA integer.
+
+### Quake III IBSP v46
+
+Import the unmodified level as maps/<name>.bsp and its extracted diffuse files under the project's textures/ tree. asset_import accepts individual files. Include scripts/shaderlist.txt and the named .shader files to resolve material aliases. If the package omits its shader list, list the script stems one per line. Studio classifies .bsp files as models. The usual type view.model path, model_info and native loadModel use the same importer. Scale Quake units with the entity transform; the example uses 1/32.
+
+The importer supports planar faces, triangle soups and quadratic patches; original face IDs are retained for cluster PVS, diffuse selection and independent 128×128 RGB lightmap pages. Base maps use their first UV set and each embedded irradiance page uses the face's second UV set. Set the renderer's baked quality to Off to inspect vertex and scene lighting separately. Shader translation chooses a static map/clampmap image, the editor image or a material-name image in TGA/JPEG/PNG format. Animated stages, blend-stage compositing, sky portals, collision brushes and game logic are outside this model importer.
+
+The optical regression uses **Egyptian Trouble** by Akom74 and Neon_Knight, with Egyptian textures by Simon “sock” O'Callaghan, from OpenArena Community Map Pack 1 v3. Map and textures are distributed under GPL-2.0-or-later. The capture uses the intermission camera authored in the level. The unmodified [Debian distribution and corresponding source](https://deb.debian.org/debian/pool/main/o/openarena-oacmp1/) contain the map, original artwork, notices and license.
+
+To reproduce, extract z_oacmp-volume1-v3.pk3 from openarena-oacmp1_3-17_all.deb, then run the following with the appropriate paths on a Mac with Metal.
+
+```sh
+python3 tests/render/prepare_openarena_bsp.py "$PK3" "$FIXTURE"
+export AIVERSE_OPENARENA_BSP="$FIXTURE/maps/oacmpdm3.bsp"
+export AIVERSE_BSP_FRAME_PNG="$OUTPUT/egyptian-trouble.png"
+cmake --build "$BUILD" --target aiverse_quake3_bsp_tests aiverse_bsp_metal_frame
+ctest --test-dir "$BUILD" -R '^quake3_bsp(_frame)?$' -V
+```
