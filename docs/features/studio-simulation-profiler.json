@@ -46,10 +46,11 @@
       ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The production panel in a native Studio window rendered the completed eight-tick native capture with tick timings and individual system measurements.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/simulation_profiler.png",
+        "apps/studio-native/StudioGameSurface.cpp"
       ]
     },
     "skill": {
@@ -76,10 +77,11 @@
       ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The production panel in a native Studio window rendered the completed eight-tick native capture with tick timings and individual system measurements.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/simulation_profiler.png",
+        "apps/studio-native/StudioGameSurface.cpp"
       ]
     },
     "persistence": {
@@ -179,9 +181,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-ad5786f5a-studio-contracts.json",
-    "docs/evidence/feature-gate-ad5786f5a-web.json",
-    "docs/evidence/feature-gate-ad5786f5a-typecheck.json",
-    "docs/evidence/feature-gate-ad5786f5a-skill-audit.json"
+    "docs/evidence/feature-gate-fbadae3ca-studio-contracts.json",
+    "docs/evidence/feature-gate-fbadae3ca-web.json",
+    "docs/evidence/feature-gate-fbadae3ca-typecheck.json",
+    "docs/evidence/feature-gate-fbadae3ca-skill-audit.json"
   ]
 }

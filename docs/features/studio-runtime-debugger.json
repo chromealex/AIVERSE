@@ -30,10 +30,12 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The authenticated handler rejected stale session, tick and raw-value preconditions. A valid edit followed by fresh inspection succeeded on the paused map. The production panel displayed the selected entity and editable vital.",
       "evidence": [
-        "docs/handoff/studio-html5/s4-runtime-debugger-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
+        "docs/evidence/studio-play-ad676e70c/runtime.png",
+        "docs/evidence/feature-gate-fbadae3ca-web.json"
       ]
     },
     "architecture": {
@@ -137,10 +139,12 @@
       ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The authenticated handler rejected stale session, tick and raw-value preconditions. A valid edit followed by fresh inspection succeeded on the paused map. The production panel displayed the selected entity and editable vital.",
       "evidence": [
-        "docs/handoff/studio-html5/s4-runtime-debugger-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
+        "docs/evidence/studio-play-ad676e70c/runtime.png",
+        "docs/evidence/feature-gate-fbadae3ca-web.json"
       ]
     },
     "handoff": {
@@ -181,9 +185,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-ad5786f5a-studio-contracts.json",
-    "docs/evidence/feature-gate-ad5786f5a-web.json",
-    "docs/evidence/feature-gate-ad5786f5a-typecheck.json",
-    "docs/evidence/feature-gate-ad5786f5a-skill-audit.json"
+    "docs/evidence/feature-gate-fbadae3ca-studio-contracts.json",
+    "docs/evidence/feature-gate-fbadae3ca-web.json",
+    "docs/evidence/feature-gate-fbadae3ca-typecheck.json",
+    "docs/evidence/feature-gate-fbadae3ca-skill-audit.json"
   ]
 }

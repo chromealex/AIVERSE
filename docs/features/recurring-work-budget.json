@@ -31,17 +31,23 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Traffic population calls the deterministic engine scheduling functions. The public WorkBudget API refers to the same functions. The existing traffic cursor remains the only mutable owner. Native regressions cover fairness, restoration and determinism. The engine no longer links the higher-level work-budget library.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "engine/sim/RecurringWork.h",
+        "libraries/include/aiverselib/runtime/WorkBudget.h",
+        "engine/game/TrafficPopulation.cpp",
+        "docs/evidence/recurring-budget-native-b1bb89949.log.txt"
       ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Remove the upward engine-to-library dependency while keeping the public library API and the original deterministic cursor logic.",
+      "status": "pass",
+      "note": "Traffic population calls the deterministic engine scheduling functions. The public WorkBudget API refers to the same functions. The existing traffic cursor remains the only mutable owner. Native regressions cover fairness, restoration and determinism. The engine no longer links the higher-level work-budget library.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "engine/sim/RecurringWork.h",
+        "libraries/include/aiverselib/runtime/WorkBudget.h",
+        "engine/game/TrafficPopulation.cpp",
+        "docs/evidence/recurring-budget-native-b1bb89949.log.txt"
       ]
     },
     "native_api": {
@@ -186,8 +192,8 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-ad5786f5a-contracts.json",
-    "docs/evidence/feature-gate-ad5786f5a-catalog.json",
-    "docs/evidence/feature-gate-ad5786f5a-skill-audit.json"
+    "docs/evidence/feature-gate-fbadae3ca-contracts.json",
+    "docs/evidence/feature-gate-fbadae3ca-catalog.json",
+    "docs/evidence/feature-gate-fbadae3ca-skill-audit.json"
   ]
 }

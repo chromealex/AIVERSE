@@ -71,17 +71,19 @@
       ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native World Explorer displayed the authority epoch, tick, ledger revision and two distinct materialized cells for a streamed actor project with region ownership enabled.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/world-explorer.png",
+        "docs/evidence/studio-actor-g1/native-session.log.txt"
       ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native World Explorer displayed the authority epoch, tick, ledger revision and two distinct materialized cells for a streamed actor project with region ownership enabled.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/world-explorer.png",
+        "docs/evidence/studio-actor-g1/native-session.log.txt"
       ]
     },
     "persistence": {
@@ -126,10 +128,11 @@
       ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Started a disposable copy of examples/world/streamed with the documented regionOwnership opt-in, captured the live ledger and compared against the authenticated MCP response.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/native-session.log.txt",
+        "skills/editor/studio-ui/SKILL.md"
       ]
     },
     "tests": {
@@ -176,9 +179,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-ad5786f5a-studio-contracts.json",
-    "docs/evidence/feature-gate-ad5786f5a-web.json",
-    "docs/evidence/feature-gate-ad5786f5a-typecheck.json",
-    "docs/evidence/feature-gate-ad5786f5a-skill-audit.json"
+    "docs/evidence/feature-gate-fbadae3ca-studio-contracts.json",
+    "docs/evidence/feature-gate-fbadae3ca-web.json",
+    "docs/evidence/feature-gate-fbadae3ca-typecheck.json",
+    "docs/evidence/feature-gate-fbadae3ca-skill-audit.json"
   ]
 }

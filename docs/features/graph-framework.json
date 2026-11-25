@@ -159,8 +159,8 @@
       "evidence": [
         "skills/workflow/aiverse-graph-authoring/SKILL.md",
         "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md",
-        "docs/evidence/feature-gate-ad5786f5a-catalog.log.txt",
-        "docs/evidence/feature-gate-ad5786f5a-skill-audit.log.txt",
+        "docs/evidence/feature-gate-fbadae3ca-catalog.log.txt",
+        "docs/evidence/feature-gate-fbadae3ca-skill-audit.log.txt",
         "skills/workflow/aiverse-graph-authoring/SKILL.md"
       ]
     },
@@ -174,9 +174,9 @@
       "note": "Pending implementation or actual verification. Native Studio on Mac generated a building GLB and displayed its independent preview and authored room graph. The Caverns inspector was verified after a document identity fix. At 460ce965c the Studio TypeScript check, 256 web cases and 55 Python contract cases (one skipped) passed. Live native acceptance is tracked separately.",
       "evidence": [
         "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md",
-        "docs/evidence/feature-gate-ad5786f5a-typecheck.log.txt",
-        "docs/evidence/feature-gate-ad5786f5a-web.log.txt",
-        "docs/evidence/feature-gate-ad5786f5a-studio-contracts.log.txt"
+        "docs/evidence/feature-gate-fbadae3ca-typecheck.log.txt",
+        "docs/evidence/feature-gate-fbadae3ca-web.log.txt",
+        "docs/evidence/feature-gate-fbadae3ca-studio-contracts.log.txt"
       ]
     },
     "inspector": {
@@ -226,12 +226,12 @@
       ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification. Previous Feature Gate branch evidence: Documented concrete disposable SpectraFX graph validation, dependency query, save/readback and CPU probe example from actual passing native Workspace fixture. Other owner examples and visual publishing not certified.",
+      "status": "pass",
+      "note": "The material_tint project opened in the production Shader Graph panel with three saved nodes. The native SpectraFX fixture validated, saved, read back and executed its bounded probe.",
       "evidence": [
-        "docs/agent-handoffs/feature-gate-stage49-acceptance-2026-11-24.md",
-        "tests/vfx_graph_ops_test.cpp",
-        "docs/evidence/feature-gate-mac-v10-be64591b1087-ctest-focused.log.txt"
+        "docs/evidence/studio-play-ad676e70c/shader-graph.png",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt",
+        "docs/agent-handoffs/feature-gate-stage49-acceptance-2026-11-24.md"
       ]
     },
     "tests": {
@@ -356,13 +356,13 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-ad5786f5a-contracts.json",
-    "docs/evidence/feature-gate-ad5786f5a-catalog.json",
-    "docs/evidence/feature-gate-ad5786f5a-skill-audit.json",
-    "docs/evidence/feature-gate-ad5786f5a-feature-suite.json",
-    "docs/evidence/feature-gate-ad5786f5a-native-project.json",
-    "docs/evidence/feature-gate-ad5786f5a-web.json",
-    "docs/evidence/feature-gate-ad5786f5a-studio-contracts.json",
-    "docs/evidence/feature-gate-ad5786f5a-typecheck.json"
+    "docs/evidence/feature-gate-fbadae3ca-contracts.json",
+    "docs/evidence/feature-gate-fbadae3ca-catalog.json",
+    "docs/evidence/feature-gate-fbadae3ca-skill-audit.json",
+    "docs/evidence/feature-gate-fbadae3ca-feature-suite.json",
+    "docs/evidence/feature-gate-fbadae3ca-native-project.json",
+    "docs/evidence/feature-gate-fbadae3ca-web.json",
+    "docs/evidence/feature-gate-fbadae3ca-studio-contracts.json",
+    "docs/evidence/feature-gate-fbadae3ca-typecheck.json"
   ]
 }

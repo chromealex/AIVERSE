@@ -33,10 +33,11 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The local paused map preview reported eleven removals. The native handler checked the token and applied once. The exact original map and edited map were recovered by one undo and one redo. The Studio suite exercised the panel contract.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
+        "docs/evidence/feature-gate-fbadae3ca-web.json"
       ]
     },
     "architecture": {
@@ -47,10 +48,11 @@
       ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The local paused map preview reported eleven removals. The native handler checked the token and applied once. The exact original map and edited map were recovered by one undo and one redo. The Studio suite exercised the panel contract.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
+        "docs/evidence/feature-gate-fbadae3ca-web.json"
       ]
     },
     "skill": {
@@ -141,10 +143,11 @@
       ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The local paused map preview reported eleven removals. The native handler checked the token and applied once. The exact original map and edited map were recovered by one undo and one redo. The Studio suite exercised the panel contract.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
+        "docs/evidence/feature-gate-fbadae3ca-web.json"
       ]
     },
     "handoff": {
@@ -186,9 +189,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-ad5786f5a-studio-contracts.json",
-    "docs/evidence/feature-gate-ad5786f5a-web.json",
-    "docs/evidence/feature-gate-ad5786f5a-typecheck.json",
-    "docs/evidence/feature-gate-ad5786f5a-skill-audit.json"
+    "docs/evidence/feature-gate-fbadae3ca-studio-contracts.json",
+    "docs/evidence/feature-gate-fbadae3ca-web.json",
+    "docs/evidence/feature-gate-fbadae3ca-typecheck.json",
+    "docs/evidence/feature-gate-fbadae3ca-skill-audit.json"
   ]
 }
