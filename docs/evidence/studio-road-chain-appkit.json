@@ -1,0 +1,10 @@
+{
+  "sha": "a1d7a0b3406486ed6942d2606d9f9a0f661e9fcc",
+  "argv": [
+    "bash",
+    "/tmp/road-chain-appkit.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-road-chain-appkit.log.txt",
+  "sha256": "cd53d324ab2b355a1038d9f2add5d6f181657e8f87b6637bbec95322a663af88"
+}

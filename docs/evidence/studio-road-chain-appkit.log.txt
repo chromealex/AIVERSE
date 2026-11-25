@@ -1,0 +1,7 @@
+2026-11-26 00:14:27.797 AiverseStudioHTML5[68478:81816490] [studio-web] JS: CROSS main DONE_1
+2026-11-26 00:14:27.797 AiverseStudioHTML5[68478:81816490] [studio-web] JS: CROSS main VERIFIED native A, Shift-B, C, Escape, undo, redo, save
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/road-chain-qa-Lg4kXK/Catalog.app/Contents/MacOS/aiversemcp: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/road-chain-qa-Lg4kXK/Catalog.app: replacing existing signature
+2026-11-26 00:14:35.019 AiverseStudioHTML5[68953:81818959] [studio-web] JS: CROSS main DONE_2
+2026-11-26 00:14:35.019 AiverseStudioHTML5[68953:81818959] [studio-web] JS: CROSS main VERIFIED reopened map
+Saved and reopened chain [['outpost_1', 'scout_1'], ['scout_1', 'outpost_2']]
